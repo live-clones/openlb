@@ -259,7 +259,7 @@ int findVelocity(const int v[DESCRIPTORBASE::d]) any_platform
 
 /// Compute opposites of wall-incoming population indices
 template <typename DESCRIPTOR, int direction, int orientation>
-constexpr auto subIndexOutgoing() {
+constexpr auto subIndexOutgoing() any_platform {
   // Should be expressed in terms of populationsContributingToVelocity
   // but std::array / std::index_sequence distinction makes this ugly
   // To be revisitited
@@ -271,7 +271,67 @@ constexpr auto subIndexOutgoing() {
   };
   return meta::array_from_index_sequence(
     meta::map_index_sequence(opposite_population,
-                                        descriptors::filter_population_indices<DESCRIPTOR>(velocity_matches_value)));
+                             descriptors::filter_population_indices<DESCRIPTOR>(velocity_matches_value)));
+}
+
+template <typename DESCRIPTOR, int direction, int orientation>
+constexpr auto subIndexOutgoingRemaining() any_platform {
+  constexpr auto velocity_matches = [](unsigned iPop) {
+    for (unsigned jPop : subIndexOutgoing<DESCRIPTOR,direction,orientation>()) {
+      if (iPop == jPop) {
+        return false;
+      }
+    }
+    return true;
+  };
+  return meta::array_from_index_sequence(
+    descriptors::filter_population_indices<DESCRIPTOR>(velocity_matches));
+}
+
+template <typename DESCRIPTOR, int plane, int normal1, int normal2>
+constexpr auto subIndexOutgoing3DonEdges() any_platform {
+  constexpr auto velocity_matches = [](unsigned iPop) {
+           if constexpr (plane == 0) {
+      return ( descriptors::c<DESCRIPTOR>(iPop,0) * 0
+             + descriptors::c<DESCRIPTOR>(iPop,1) * (normal1 == 1 ? 1 : -1)
+             + descriptors::c<DESCRIPTOR>(iPop,2) * (normal2 == 1 ? 1 : -1)) < 0;
+    } else if constexpr (plane == 1) {
+      return ( descriptors::c<DESCRIPTOR>(iPop,0) * (normal1 == 1 ? 1 : -1)
+             + descriptors::c<DESCRIPTOR>(iPop,1) * 0
+             + descriptors::c<DESCRIPTOR>(iPop,2) * (normal2 == 1 ? 1 : -1)) < 0;
+    } else if constexpr (plane == 2) {
+      return ( descriptors::c<DESCRIPTOR>(iPop,0) * (normal1 == 1 ? 1 : -1)
+             + descriptors::c<DESCRIPTOR>(iPop,1) * (normal2 == 1 ? 1 : -1)
+             + descriptors::c<DESCRIPTOR>(iPop,2) * 0) < 0;
+    } else {
+      return false;
+    }
+  };
+  return meta::array_from_index_sequence(
+    descriptors::filter_population_indices<DESCRIPTOR>(velocity_matches));
+}
+
+// For 2D Corners
+template <typename DESCRIPTOR, int normalX, int normalY>
+constexpr auto subIndexOutgoing2DonCorners() any_platform {
+  constexpr auto velocity_matches = [](unsigned iPop) {
+    return ( descriptors::c<DESCRIPTOR>(iPop,0) * normalX
+           + descriptors::c<DESCRIPTOR>(iPop,1) * normalY) < 0;
+  };
+  return meta::array_from_index_sequence(
+    descriptors::filter_population_indices<DESCRIPTOR>(velocity_matches));
+}
+
+// For 3D Corners
+template <typename DESCRIPTOR, int normalX, int normalY, int normalZ>
+constexpr auto subIndexOutgoing3DonCorners() any_platform {
+  constexpr auto velocity_matches = [](unsigned iPop) {
+    return ( descriptors::c<DESCRIPTOR>(iPop,0) * normalX
+           + descriptors::c<DESCRIPTOR>(iPop,1) * normalY
+           + descriptors::c<DESCRIPTOR>(iPop,2) * normalZ) < 0;
+  };
+  return meta::array_from_index_sequence(
+    descriptors::filter_population_indices<DESCRIPTOR>(velocity_matches));
 }
 
 ///finds all the remaining indexes of a lattice given some other indexes
@@ -293,145 +353,6 @@ std::vector<int> remainingIndexes(const std::vector<int> &indices)
   return remaining;
 }
 
-template <typename DESCRIPTORBASE, int plane, int normal1, int normal2>
-class SubIndexOutgoing3DonEdges {
-private:
-  SubIndexOutgoing3DonEdges()
-  {
-    int normalX,normalY,normalZ;
-    typedef DESCRIPTORBASE L;
-
-    switch (plane) {
-    case 0: {
-      normalX=0;
-      if (normal1==1) {
-        normalY= 1;
-      }
-      else {
-        normalY=-1;
-      }
-      if (normal2==1) {
-        normalZ= 1;
-      }
-      else {
-        normalZ=-1;
-      }
-    }
-    case 1: {
-      normalY=0;
-      if (normal1==1) {
-        normalX= 1;
-      }
-      else {
-        normalX=-1;
-      }
-      if (normal2==1) {
-        normalZ= 1;
-      }
-      else {
-        normalZ=-1;
-      }
-    }
-    case 2: {
-      normalZ=0;
-      if (normal1==1) {
-        normalX= 1;
-      }
-      else {
-        normalX=-1;
-      }
-      if (normal2==1) {
-        normalY= 1;
-      }
-      else {
-        normalY=-1;
-      }
-    }
-    }
-
-    // add zero velocity
-    //knownIndexes.push_back(0);
-    // compute scalar product with boundary normal for all other velocities
-    for (int iP=1; iP<L::q; ++iP) {
-      if (descriptors::c<L>(iP,0)*normalX + descriptors::c<L>(iP,1)*normalY + descriptors::c<L>(iP,2)*normalZ<0) {
-        indices.push_back(iP);
-      }
-    }
-  }
-  std::vector<int> indices;
-
-  template <typename DESCRIPTORBASE_,  int plane_, int normal1_, int normal2_>
-  friend std::vector<int> const& subIndexOutgoing3DonEdges();
-};
-
-template <typename DESCRIPTORBASE,  int plane, int normal1, int normal2>
-std::vector<int> const& subIndexOutgoing3DonEdges()
-{
-  static SubIndexOutgoing3DonEdges<DESCRIPTORBASE,  plane, normal1, normal2> subIndexOutgoing3DonEdgesSingleton;
-  return subIndexOutgoing3DonEdgesSingleton.indices;
-}
-
-// For 2D Corners
-template <typename DESCRIPTORBASE, int normalX, int normalY>
-class SubIndexOutgoing2DonCorners {
-private:
-  SubIndexOutgoing2DonCorners()
-  {
-    typedef DESCRIPTORBASE L;
-
-    // add zero velocity
-    //knownIndexes.push_back(0);
-    // compute scalar product with boundary normal for all other velocities
-    for (int iPop=1; iPop<L::q; ++iPop) {
-      if (descriptors::c<L>(iPop,0)*normalX + descriptors::c<L>(iPop,1)*normalY<0) {
-        indices.push_back(iPop);
-      }
-    }
-  }
-
-  std::vector<int> indices;
-
-  template <typename DESCRIPTORBASE_,  int normalX_, int normalY_>
-  friend std::vector<int> const& subIndexOutgoing2DonCorners();
-};
-
-template <typename DESCRIPTORBASE,  int normalX, int normalY>
-std::vector<int> const& subIndexOutgoing2DonCorners()
-{
-  static SubIndexOutgoing2DonCorners<DESCRIPTORBASE, normalX, normalY> subIndexOutgoing2DonCornersSingleton;
-  return subIndexOutgoing2DonCornersSingleton.indices;
-}
-
-// For 3D Corners
-template <typename DESCRIPTORBASE, int normalX, int normalY, int normalZ>
-class SubIndexOutgoing3DonCorners {
-private:
-  SubIndexOutgoing3DonCorners()
-  {
-    typedef DESCRIPTORBASE L;
-
-    // add zero velocity
-    //knownIndexes.push_back(0);
-    // compute scalar product with boundary normal for all other velocities
-    for (int iP=1; iP<L::q; ++iP) {
-      if (descriptors::c<L>(iP,0)*normalX + descriptors::c<L>(iP,1)*normalY + descriptors::c<L>(iP,2)*normalZ<0) {
-        indices.push_back(iP);
-      }
-    }
-  }
-
-  std::vector<int> indices;
-
-  template <typename DESCRIPTORBASE_,  int normalX_, int normalY_, int normalZ_>
-  friend std::vector<int> const& subIndexOutgoing3DonCorners();
-};
-
-template <typename DESCRIPTORBASE,  int normalX, int normalY, int normalZ>
-std::vector<int> const& subIndexOutgoing3DonCorners()
-{
-  static SubIndexOutgoing3DonCorners<DESCRIPTORBASE, normalX, normalY, normalZ> subIndexOutgoing3DonCornersSingleton;
-  return subIndexOutgoing3DonCornersSingleton.indices;
-}
 
 /// Util Function for Wall Model of Malaspinas
 /// get link with smallest angle to a vector

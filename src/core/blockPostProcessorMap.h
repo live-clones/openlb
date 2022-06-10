@@ -50,7 +50,7 @@ protected:
   std::type_index _id;
   int _priority;
   OperatorScope _scope;
-  std::function<AbstractBlockO<T,DESCRIPTOR>*(Platform)> _constructor;
+  std::function<AbstractBlockO*(Platform)> _constructor;
 
 public:
   template <typename POST_PROCESSOR>
@@ -58,7 +58,7 @@ public:
     _id(typeid(POST_PROCESSOR)),
     _priority(POST_PROCESSOR().getPriority()),
     _scope(POST_PROCESSOR::scope),
-    _constructor([](Platform platform) -> AbstractBlockO<T,DESCRIPTOR>* {
+    _constructor([](Platform platform) -> AbstractBlockO* {
       switch (platform) {
       #ifdef PLATFORM_CPU_SISD
       case Platform::CPU_SISD:

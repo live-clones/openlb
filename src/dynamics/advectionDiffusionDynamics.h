@@ -100,7 +100,7 @@ public:
   }
 
   template <typename CELL, typename PARAMETERS, typename V=typename CELL::value_t>
-  CellStatistic<V> apply(CELL& cell, PARAMETERS& parameters) {
+  CellStatistic<V> apply(CELL& cell, PARAMETERS& parameters) any_platform {
     V jNeq[DESCRIPTOR::d] { };
 
     const V rho = MomentaF().computeRho(cell);
@@ -119,7 +119,7 @@ public:
     return typename DYNAMICS::CollisionO().apply(cell, parameters);
   };
 
-  T computeEquilibrium(int iPop, T rho, const T u[DESCRIPTOR::d]) const override {
+  T computeEquilibrium(int iPop, T rho, const T u[DESCRIPTOR::d]) const override any_platform {
     return equilibrium<DESCRIPTOR>::template firstOrder(iPop, rho, u);
   };
 
@@ -244,7 +244,7 @@ struct TotalEnthalpyAdvectionDiffusionBGKdynamics final : public dynamics::Custo
   }
 
   template<typename V, typename PARAMETERS, typename ENTHALPY>
-  V computeTemperature(const PARAMETERS& parameters, const ENTHALPY& enthalpy) const
+  V computeTemperature(const PARAMETERS& parameters, const ENTHALPY& enthalpy) const any_platform
   {
     using namespace TotalEnthalpy;
 
@@ -270,7 +270,7 @@ struct TotalEnthalpyAdvectionDiffusionBGKdynamics final : public dynamics::Custo
   }
 
   template<typename V, typename PARAMETERS, typename ENTHALPY>
-  V computeLiquidFraction(const PARAMETERS& parameters, const ENTHALPY& enthalpy) const
+  V computeLiquidFraction(const PARAMETERS& parameters, const ENTHALPY& enthalpy) const any_platform
   {
     using namespace TotalEnthalpy;
 
@@ -295,13 +295,13 @@ struct TotalEnthalpyAdvectionDiffusionBGKdynamics final : public dynamics::Custo
     return liquid_fraction;
   }
 
-  T computeEquilibrium(int iPop, T rho, const T u[DESCRIPTOR::d]) const override
+  T computeEquilibrium(int iPop, T rho, const T u[DESCRIPTOR::d]) const override any_platform
   {
     return equilibrium<DESCRIPTOR>::template firstOrder(iPop, rho, u);
   }
 
   template <typename CELL, typename PARAMETERS, typename V=typename CELL::value_t>
-  CellStatistic<V> apply(CELL& cell, PARAMETERS& parameters) {
+  CellStatistic<V> apply(CELL& cell, PARAMETERS& parameters) any_platform {
     using namespace TotalEnthalpy;
 
     const V lambda_s = parameters.template get<LAMBDA_S>();

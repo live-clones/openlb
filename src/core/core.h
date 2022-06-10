@@ -38,6 +38,8 @@
 #include "cell.h"
 #include "cell.hh"
 
+#include "superLatticeCoupling.h"
+
 #include "latticeStatistics.h"
 #include "postProcessing.h"
 #include "serializer.h"

@@ -39,6 +39,7 @@
 #include "mrtDynamics.h"
 #include "mrtLatticeDescriptors.h"
 #include "navierStokesAdvectionDiffusionCouplingPostProcessor3D.h"
+#include "navierStokesAdvectionDiffusionCoupling.h"
 #include "legacy/porousBGKdynamics.h"
 #include "powerLawBGKdynamics.h"
 #include "rtlbmDescriptors.h"

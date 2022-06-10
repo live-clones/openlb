@@ -77,6 +77,9 @@ public:
     _customFieldsD(lattice.getDataRegistry().deviceData())
   { }
 
+  DeviceContext(const DeviceContext&) any_platform = default;
+  DeviceContext(DeviceContext&& rhs) any_platform = default;
+
   std::size_t getNcells() const any_platform {
     return _nCells;
   }
@@ -87,7 +90,7 @@ public:
       return std::get<(DESCRIPTOR::fields_t::template index<FIELD>())>(_staticFieldsD).data();
     } else {
       return reinterpret_cast<typename FIELD::template value_type<T>**>(
-        _customFieldsD[field_type_index<void,Array<FIELD>>]);
+        _customFieldsD[field_type_index<FieldTypeRegistry<T,DESCRIPTOR,Platform::GPU_CUDA>, Array<FIELD>>]);
     }
   }
 
@@ -222,6 +225,9 @@ public:
       _projection = {size[1], 1};
     }
   }
+
+  DeviceBlockLattice(const DeviceBlockLattice&) any_platform = default;
+  DeviceBlockLattice(DeviceBlockLattice&&) any_platform = default;
 
   CellID getCellId(LatticeR<DESCRIPTOR::d> loc) const __device__ {
     return (loc+_padding) * _projection;

@@ -30,7 +30,6 @@ template <typename T, typename DESCRIPTOR, Platform PLATFORM> class ConcreteBloc
 template <typename T, typename DESCRIPTOR, Platform PLATFORM> class ConcreteBlockMask;
 
 /// Base of any block operator
-template <typename T, typename DESCRIPTOR>
 struct AbstractBlockO {
   virtual ~AbstractBlockO() = default;
 
@@ -39,7 +38,7 @@ struct AbstractBlockO {
 
 /// Base of block-wide operators such as post processors
 template <typename T, typename DESCRIPTOR, Platform PLATFORM>
-struct BlockO : public AbstractBlockO<T,DESCRIPTOR> {
+struct BlockO : public AbstractBlockO {
   /// Set whether iCell is covered by the operator (optional)
   virtual void set(CellID iCell, bool state) = 0;
   /// Setup operator context
@@ -62,11 +61,12 @@ enum struct OperatorScope {
 };
 
 /// Block application of concrete OPERATOR called using SCOPE on PLATFORM
-template<typename T, typename DESCRIPTOR, Platform PLATFORM, typename OPERATOR, OperatorScope SCOPE> class ConcreteBlockO;
+template<typename T, typename DESCRIPTOR, Platform PLATFORM, typename OPERATOR, OperatorScope SCOPE>
+class ConcreteBlockO;
 
 /// Base of collision operations performed by BlockDynamicsMap
 template <typename T, typename DESCRIPTOR>
-struct AbstractCollisionO : public AbstractBlockO<T,DESCRIPTOR> {
+struct AbstractCollisionO : public AbstractBlockO {
   virtual Dynamics<T,DESCRIPTOR>* getDynamics() = 0;
 
   /// Returns number of assigned cells
@@ -83,7 +83,6 @@ struct AbstractCollisionO : public AbstractBlockO<T,DESCRIPTOR> {
    **/
   virtual void set(CellID iCell, bool state, bool overlap) = 0;
 };
-
 
 /// Collision dispatch strategy
 enum struct CollisionDispatchStrategy {
@@ -110,6 +109,32 @@ struct BlockCollisionO : public AbstractCollisionO<T,DESCRIPTOR> {
 /// Collision operation of concrete DYNAMICS on concrete block lattices of PLATFORM
 template<typename T, typename DESCRIPTOR, Platform PLATFORM, typename DYNAMICS>
 class ConcreteBlockCollisionO;
+
+/// Base of block-wide coupling operators executed by SuperLatticeCoupling
+template <typename COUPLEES>
+struct AbstractCouplingO : public AbstractBlockO {
+  /// Value type used for coupling parameters
+  using value_t      = typename COUPLEES::values_t::template get<0>::value_t;
+  /// Descriptor type used for coupling parameters
+  using descriptor_t = typename COUPLEES::values_t::template get<0>::descriptor_t;
+
+  using AbstractParameters = olb::AbstractParameters<value_t,descriptor_t>;
+  using ParametersD = olb::ParametersD<value_t,descriptor_t>;
+  using LatticeR = olb::LatticeR<descriptor_t::d>;
+
+  template <typename FIELD>
+  using FieldD = olb::FieldD<value_t,descriptor_t,FIELD>;
+
+  /// Execute coupling operation
+  virtual void execute() = 0;
+  /// Return reference to parameters of coupling operator
+  virtual AbstractParameters& getParameters() = 0;
+
+};
+
+/// Coupling of COUPLEES using concrete OPERATOR with SCOPE on PLATFORM lattices
+template<typename COUPLEES, Platform PLATFORM, typename OPERATOR, OperatorScope SCOPE>
+class ConcreteBlockCouplingO;
 
 
 }

@@ -35,6 +35,8 @@ class Cell;
 /// Virtual interface for dynamically-dispatched dynamics access on CPU targets
 template <typename T, typename DESCRIPTOR, Platform PLATFORM>
 struct Dynamics {
+  virtual ~Dynamics() { }
+
   virtual CellStatistic<T> collide(Cell<T,DESCRIPTOR,PLATFORM>& cell) = 0;
 
   virtual T    computeRho (Cell<T,DESCRIPTOR,PLATFORM>& cell              ) = 0;
@@ -68,15 +70,19 @@ struct DYNAMICS : public descriptors::TYPED_FIELD_BASE<Dynamics<T,DESCRIPTOR,PLA
 template <typename T, typename DESCRIPTOR, Platform PLATFORM>
 class Cell {
 private:
-  ConcreteBlockLattice<T,DESCRIPTOR,PLATFORM>& _lattice;
+  ConcreteBlockLattice<T,DESCRIPTOR,PLATFORM>* _lattice;
   std::size_t _iCell;
 
 public:
   using value_t = T;
   using descriptor_t = DESCRIPTOR;
 
+  Cell():
+    _lattice(nullptr),
+    _iCell(0) { }
+
   Cell(ConcreteBlockLattice<T,DESCRIPTOR,PLATFORM>& lattice, std::size_t iCell=0):
-    _lattice(lattice),
+    _lattice(&lattice),
     _iCell(iCell) { }
 
   CellID getCellId() const {
@@ -88,31 +94,31 @@ public:
   }
 
   T& operator[](unsigned iPop) {
-    return _lattice.template getField<descriptors::POPULATION>()[iPop][_iCell];
+    return _lattice->template getField<descriptors::POPULATION>()[iPop][_iCell];
   }
 
   template <typename FIELD>
   auto getField() const {
-    return _lattice.template getField<FIELD>().getRow(_iCell);
+    return _lattice->template getField<FIELD>().getRow(_iCell);
   }
 
   template <typename FIELD>
   void setField(const FieldD<T,DESCRIPTOR,FIELD>& v) {
-    return _lattice.template getField<FIELD>().setRow(_iCell, v);
+    return _lattice->template getField<FIELD>().setRow(_iCell, v);
   }
 
   template <typename FIELD>
   auto getFieldPointer() {
-    return _lattice.template getField<FIELD>().getRowPointer(_iCell);
+    return _lattice->template getField<FIELD>().getRowPointer(_iCell);
   }
 
   template <typename FIELD>
   auto& getFieldComponent(unsigned iD) {
-    return _lattice.template getField<FIELD>()[iD][_iCell];
+    return _lattice->template getField<FIELD>()[iD][_iCell];
   }
 
   Cell<T,DESCRIPTOR,PLATFORM> neighbor(LatticeR<DESCRIPTOR::d> offset) {
-    return {_lattice, _iCell + _lattice.getNeighborDistance(offset)};
+    return {*_lattice, _iCell + _lattice->getNeighborDistance(offset)};
   }
 
   Dynamics<T,DESCRIPTOR,PLATFORM>& getDynamics() {

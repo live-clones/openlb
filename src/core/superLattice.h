@@ -77,6 +77,9 @@ private:
 public:
   constexpr static unsigned d = DESCRIPTOR::d;
 
+  using value_t = T;
+  using descriptor_t = DESCRIPTOR;
+
   using block_t = ConcretizableBlockLattice<T,DESCRIPTOR>;
 
   /// Construct lattice for the cuboid decomposition of superGeometry

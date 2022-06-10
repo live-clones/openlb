@@ -51,42 +51,24 @@ struct AdvectionDiffusionBoundariesDynamics final : public dynamics::CustomColli
   }
 
   template <typename CELL, typename PARAMETERS, typename V=typename CELL::value_t>
-  CellStatistic<V> apply(CELL& cell, PARAMETERS& parameters) {
-    typedef DESCRIPTOR L;
-
+  CellStatistic<V> apply(CELL& cell, PARAMETERS& parameters) any_platform {
     V dirichletTemperature = MomentaF().computeRho(cell);
 
     // Placeholder - the index calculation of this section can and should be done at compile time
-    constexpr auto tmpUnknownIndexes = util::subIndexOutgoing<L, direction, orientation>();
-    std::vector<int> unknownIndexes(tmpUnknownIndexes.cbegin(), tmpUnknownIndexes.cend());
-    std::vector<int> knownIndexes = util::remainingIndexes<L>(unknownIndexes);
+    constexpr auto unknownIndices = util::subIndexOutgoing<DESCRIPTOR, direction, orientation>();
+    constexpr auto knownIndices = util::subIndexOutgoingRemaining<DESCRIPTOR, direction, orientation>();
 
-    int missingNormal = 0;
-
-    if constexpr ((L::d == 3 && L::q == 7)||(L::d == 2 && L::q == 5)) {
+    if constexpr ((DESCRIPTOR::d == 3 && DESCRIPTOR::q == 7)||(DESCRIPTOR::d == 2 && DESCRIPTOR::q == 5)) {
+      static_assert(unknownIndices.size() == 1 && knownIndices.size() == DESCRIPTOR::q - 1,
+                    "More than one population missing");
       V sum = V{0};
-      for (unsigned i = 0; i < knownIndexes.size(); ++i) {
-        sum += cell[knownIndexes[i]];
+      for (unsigned iPop : knownIndices) {
+        sum += cell[iPop];
       }
 
-      V difference = dirichletTemperature - V{1} - sum; // on cell there are non-shiftet values -> temperature has to be changed
-
-      // here I know all missing and non missing f_i
-      for (unsigned i = 0; i < unknownIndexes.size(); ++i) {
-        int numOfNonNullComp = 0;
-        for (int iDim = 0; iDim < L::d; ++iDim) {
-          numOfNonNullComp += util::abs(descriptors::c<L>(unknownIndexes[i],iDim));
-        }
-        if (numOfNonNullComp == 1) {
-          missingNormal = unknownIndexes[i];
-          // here missing diagonal directions are erased
-          // just the normal direction stays (D3Q7)
-          unknownIndexes.erase(unknownIndexes.begin() + i);
-          break;
-
-        }
-      }
-      cell[missingNormal] = difference; // on cell there are non-shiftet values -> temperature has to be changed
+      // on cell there are non-shifted values -> temperature has to be changed
+      V difference = dirichletTemperature - V{1} - sum;
+      cell[unknownIndices[0]] = difference;
       return typename DYNAMICS::template exchange_momenta<MOMENTA>::CollisionO().apply(cell, parameters);
     }
     else {
@@ -94,20 +76,19 @@ struct AdvectionDiffusionBoundariesDynamics final : public dynamics::CustomColli
       // part for q=19 copied from AdvectionDiffusionEdgesDynamics.collide()
       // but here just all missing directions, even at border of inlet area
       // has to be checked!
-      for (unsigned iteratePop = 0; iteratePop < unknownIndexes.size();
-           ++iteratePop) {
-        cell[unknownIndexes[iteratePop]] =
-          equilibrium<DESCRIPTOR>::template firstOrder(unknownIndexes[iteratePop], dirichletTemperature, u)
-          - (cell[util::opposite<L>(unknownIndexes[iteratePop])]
+      for (unsigned iPop : unknownIndices) {
+        cell[iPop] =
+          equilibrium<DESCRIPTOR>::template firstOrder(iPop, dirichletTemperature, u)
+          - (cell[util::opposite<DESCRIPTOR>(iPop)]
              - equilibrium<DESCRIPTOR>::template firstOrder(
-               util::opposite<L>(unknownIndexes[iteratePop]),
+               util::opposite<DESCRIPTOR>(iPop),
                dirichletTemperature, u));
       }
       return {-1,-1};
     }
   };
 
-  T computeEquilibrium(int iPop, T rho, const T u[DESCRIPTOR::d]) const override {
+  T computeEquilibrium(int iPop, T rho, const T u[DESCRIPTOR::d]) const override any_platform {
     return equilibrium<DESCRIPTOR>::template firstOrder(iPop, rho, u);
   };
 
@@ -138,30 +119,30 @@ public:
   }
 
   template <typename CELL, typename PARAMETERS, typename V=typename CELL::value_t>
-  CellStatistic<V> apply(CELL& cell, PARAMETERS& parameters) {
-    typedef DESCRIPTOR L;
-
+  CellStatistic<V> apply(CELL& cell, PARAMETERS& parameters) any_platform {
     V temperature = MomentaF().computeRho(cell);
     auto u = cell.template getField<descriptors::VELOCITY>();
     // I need to get Missing information on the corners !!!!
-    std::vector<int> unknownIndexes = util::subIndexOutgoing3DonEdges<L,plane,normal1,normal2>();
+    constexpr auto unknownIndexes = util::subIndexOutgoing3DonEdges<DESCRIPTOR,plane,normal1,normal2>();
     // here I know all missing and non missing f_i
 
     // The collision procedure for D2Q5 and D3Q7 lattice is the same ...
     // Given the rule f_i_neq = -f_opposite(i)_neq
     // I have the right number of equations for the number of unknowns using these lattices
 
-    for (unsigned iPop = 0; iPop < unknownIndexes.size(); ++iPop) {
-      cell[unknownIndexes[iPop]] = equilibrium<DESCRIPTOR>::template firstOrder(unknownIndexes[iPop], temperature, u)
-                                   -(cell[util::opposite<L>(unknownIndexes[iPop])]
-                                     - equilibrium<DESCRIPTOR>::template firstOrder(util::opposite<L>(unknownIndexes[iPop]), temperature, u) );
+    for (unsigned iPop : unknownIndexes) {
+      cell[iPop] = equilibrium<DESCRIPTOR>::template firstOrder(iPop, temperature, u)
+                 - (  cell[util::opposite<DESCRIPTOR>(iPop)]
+                    - equilibrium<DESCRIPTOR>::template firstOrder(util::opposite<DESCRIPTOR>(iPop),
+                                                                   temperature,
+                                                                   u));
     }
 
     // Once all the f_i are known, I can call the collision for the Regularized Model.
-    return typename DYNAMICS::CollisionO().apply(cell, parameters);
+    return typename DYNAMICS::template exchange_momenta<MOMENTA>::CollisionO().apply(cell, parameters);
   };
 
-  T computeEquilibrium(int iPop, T rho, const T u[DESCRIPTOR::d]) const override {
+  T computeEquilibrium(int iPop, T rho, const T u[DESCRIPTOR::d]) const override any_platform {
     return equilibrium<DESCRIPTOR>::template firstOrder(iPop, rho, u);
   };
 
@@ -191,31 +172,30 @@ struct AdvectionDiffusionCornerDynamics2D final : public dynamics::CustomCollisi
   }
 
   template <typename CELL, typename PARAMETERS, typename V=typename CELL::value_t>
-  CellStatistic<V> apply(CELL& cell, PARAMETERS& parameters) {
-    typedef DESCRIPTOR L;
-
+  CellStatistic<V> apply(CELL& cell, PARAMETERS& parameters) any_platform {
     V temperature = MomentaF().computeRho(cell);
     auto u = cell.template getField<descriptors::VELOCITY>();
     // I need to get Missing information on the corners !!!!
-    std::vector<int> unknownIndexes = util::subIndexOutgoing2DonCorners<L,xNormal,yNormal>();
+    constexpr auto unknownIndexes = util::subIndexOutgoing2DonCorners<DESCRIPTOR,xNormal,yNormal>();
     // here I know all missing and non missing f_i
-
 
     // The collision procedure for D2Q5 and D3Q7 lattice is the same ...
     // Given the rule f_i_neq = -f_opposite(i)_neq
     // I have the right number of equations for the number of unknowns using these lattices
 
-    for (unsigned iPop = 0; iPop < unknownIndexes.size(); ++iPop) {
-      cell[unknownIndexes[iPop]] = equilibrium<DESCRIPTOR>::template firstOrder(unknownIndexes[iPop], temperature, u)
-                                   -(cell[util::opposite<L>(unknownIndexes[iPop])]
-                                     - equilibrium<DESCRIPTOR>::template firstOrder(util::opposite<L>(unknownIndexes[iPop]), temperature, u) ) ;
+    for (unsigned iPop : unknownIndexes) {
+      cell[iPop] = equilibrium<DESCRIPTOR>::template firstOrder(iPop, temperature, u)
+                 - (  cell[util::opposite<DESCRIPTOR>(iPop)]
+                    - equilibrium<DESCRIPTOR>::template firstOrder(util::opposite<DESCRIPTOR>(iPop),
+                                                                   temperature,
+                                                                   u));
     }
 
     // Once all the f_i are known, I can call the collision for the Regularized Model.
     return typename DYNAMICS::CollisionO().apply(cell, parameters);
   };
 
-  T computeEquilibrium(int iPop, T rho, const T u[DESCRIPTOR::d]) const override {
+  T computeEquilibrium(int iPop, T rho, const T u[DESCRIPTOR::d]) const override any_platform {
     return equilibrium<DESCRIPTOR>::template firstOrder(iPop, rho, u);
   };
 
@@ -246,30 +226,32 @@ struct AdvectionDiffusionCornerDynamics3D final : public dynamics::CustomCollisi
   }
 
   template <typename CELL, typename PARAMETERS, typename V=typename CELL::value_t>
-  CellStatistic<V> apply(CELL& cell, PARAMETERS& parameters) {
+  CellStatistic<V> apply(CELL& cell, PARAMETERS& parameters) any_platform {
     typedef DESCRIPTOR L;
 
     V temperature = MomentaF().computeRho(cell);
     auto u = cell.template getField<descriptors::VELOCITY>();
     // I need to get Missing information on the corners !!!!
-    std::vector<int> unknownIndexes = util::subIndexOutgoing3DonCorners<L,xNormal,yNormal,zNormal>();
+    constexpr auto unknownIndexes = util::subIndexOutgoing3DonCorners<L,xNormal,yNormal,zNormal>();
     // here I know all missing and non missing f_i
 
     // The collision procedure for D2Q5 and D3Q7 lattice is the same ...
     // Given the rule f_i_neq = -f_opposite(i)_neq
     // I have the right number of equations for the number of unknowns using these lattices
 
-    for (unsigned iPop = 0; iPop < unknownIndexes.size(); ++iPop) {
-      cell[unknownIndexes[iPop]] = equilibrium<DESCRIPTOR>::template firstOrder(unknownIndexes[iPop], temperature, u)
-                                   -(cell[util::opposite<L>(unknownIndexes[iPop])]
-                                     - equilibrium<DESCRIPTOR>::template firstOrder(util::opposite<L>(unknownIndexes[iPop]), temperature, u) ) ;
+    for (unsigned iPop : unknownIndexes) {
+      cell[iPop] = equilibrium<DESCRIPTOR>::template firstOrder(iPop, temperature, u)
+                 - (  cell[util::opposite<L>(iPop)]
+                    - equilibrium<DESCRIPTOR>::template firstOrder(util::opposite<L>(iPop),
+                                                                   temperature,
+                                                                   u));
     }
 
     // Once all the f_i are known, I can call the collision for the Regularized Model.
     return typename DYNAMICS::template exchange_momenta<MOMENTA>::CollisionO().apply(cell, parameters);
   };
 
-  T computeEquilibrium(int iPop, T rho, const T u[DESCRIPTOR::d]) const override {
+  T computeEquilibrium(int iPop, T rho, const T u[DESCRIPTOR::d]) const override any_platform {
     return equilibrium<DESCRIPTOR>::template firstOrder(iPop, rho, u);
   };
 

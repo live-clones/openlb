@@ -83,12 +83,16 @@ struct id {
   }
 
   TYPE get() const {
-    return TYPE();
+    return TYPE{};
   }
 };
 
 template <typename TYPE>
 using id_t = typename id<TYPE>::type;
+
+/// Identity type to wrap non-type template arguments
+template <auto VALUE, typename TYPE = decltype(VALUE)>
+using value = typename std::integral_constant<TYPE, VALUE>::type;
 
 /// Returns distinct name on GCC, Clang and ICC but may return arbitrary garbage as per the standard
 template <typename T>
@@ -282,6 +286,12 @@ struct list {
    **/
   template <template<typename...> class COLLECTION>
   using decompose_into = COLLECTION<TYPES...>;
+
+  template <template<typename> class F>
+  using map = list<F<TYPES>...>;
+
+  template <typename F>
+  using map_to_callable_result = list<decltype(std::declval<F&>()(meta::id<TYPES>{}))...>;
 
   template <typename TYPE>
   using push = list<TYPE, TYPES...>;

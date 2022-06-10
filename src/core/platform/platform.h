@@ -27,6 +27,8 @@
 
 #include <stdexcept>
 
+#include "core/meta.h"
+
 /// Top level namespace for all of OpenLB
 namespace olb {
 
@@ -92,6 +94,30 @@ inline auto callUsingConcretePlatform(Platform platform, typename CONCRETIZABLE:
 #ifdef PLATFORM_GPU_CUDA
   case Platform::GPU_CUDA:
     return f(static_cast<typename CONCRETIZABLE::template type<Platform::GPU_CUDA>*>(ptr));
+#endif
+  default:
+    throw std::invalid_argument("Invalid PLATFORM");
+  }
+}
+
+template <typename F>
+inline void callUsingConcretePlatform(Platform platform, F f)
+{
+  switch (platform) {
+#ifdef PLATFORM_CPU_SISD
+  case Platform::CPU_SISD:
+    f(meta::value<Platform::CPU_SISD>{});
+    break;
+#endif
+#ifdef PLATFORM_CPU_SIMD
+  case Platform::CPU_SIMD:
+    f(meta::value<Platform::CPU_SIMD>{});
+    break;
+#endif
+#ifdef PLATFORM_GPU_CUDA
+  case Platform::GPU_CUDA:
+    f(meta::value<Platform::GPU_CUDA>{});
+    break;
 #endif
   default:
     throw std::invalid_argument("Invalid PLATFORM");

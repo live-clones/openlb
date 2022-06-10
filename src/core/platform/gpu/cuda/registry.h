@@ -104,7 +104,7 @@ public:
 
     // Copy host-side field index to device-side field index
     std::size_t index = _index.template index<FIELD_TYPE>();
-    cudaMemcpyToSymbol(gpu::cuda::field_type_index<void,FIELD_TYPE>, &index, sizeof(std::size_t));
+    cudaMemcpyToSymbol(gpu::cuda::field_type_index<FieldTypeRegistry,FIELD_TYPE>, &index, sizeof(std::size_t));
     gpu::cuda::device::check();
     if (index >= _indexOnHost.size()) {
       _indexOnHost.resize(2*index);

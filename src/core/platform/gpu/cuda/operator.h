@@ -175,6 +175,46 @@ public:
 
 };
 
+/// Unrestricted application of COUPLING::apply
+template <typename COUPLER>
+struct UnmaskedCoupling {
+  template <typename CONTEXT>
+  bool operator()(CONTEXT& lattices,
+                  CellID iCell) __device__ {
+    auto cells = lattices.exchange_values([&](auto name) -> auto {
+      return Cell{lattices.get(name), iCell};
+    });
+    COUPLER().apply(cells);
+    return true;
+  }
+};
+
+/// Unrestricted application of COUPLING::apply with parameters
+template <typename COUPLER, typename COUPLEES>
+class UnmaskedCouplingWithParameters {
+private:
+  typename COUPLER::parameters::template decompose_into<
+    AbstractCouplingO<COUPLEES>::ParametersD::template include_fields
+  > _parameters;
+
+public:
+  template <typename PARAMETERS>
+  UnmaskedCouplingWithParameters(PARAMETERS& parameters) any_platform:
+    _parameters{parameters}
+  { }
+
+  template <typename CONTEXT>
+  bool operator()(CONTEXT& lattices,
+                  CellID iCell) __device__ {
+    auto cells = lattices.exchange_values([&](auto name) -> auto {
+      return Cell{lattices.get(name), iCell};
+    });
+    COUPLER().apply(cells, _parameters);
+    return true;
+  }
+
+};
+
 /// CUDA kernels to execute collisions and post processors
 namespace kernel {
 
@@ -186,6 +226,16 @@ void call_operators(CONTEXT lattice, bool* subdomain, OPERATORS... ops) __global
     return;
   }
   (ops(lattice, iCell) || ... );
+}
+
+template <typename CONTEXTS, typename... OPERATORS>
+void call_coupling_operators(CONTEXTS lattices, bool* subdomain, OPERATORS... ops) __global__ {
+  const CellID iCell = blockIdx.x * blockDim.x + threadIdx.x;
+  const auto nCells = std::get<0>(lattices.tuple).getNcells();
+  if (!(iCell < nCells) || !subdomain[iCell]) {
+    return;
+  }
+  (ops(lattices, iCell) || ... );
 }
 
 /// CUDA kernel for applying purely local collision steps while tracking statistics
@@ -264,6 +314,16 @@ void call_operators(CONTEXT& lattice, bool* subdomain, ARGS&&... args) {
   const auto block_count = (lattice.getNcells() + block_size - 1) / block_size;
   kernel::call_operators<CONTEXT,ARGS...><<<block_count,block_size>>>(
     lattice, subdomain, std::forward<decltype(args)>(args)...);
+  device::check();
+}
+
+template <typename CONTEXT, typename... ARGS>
+void call_coupling_operators(CONTEXT& lattices, bool* subdomain, ARGS&&... args) {
+  const auto nCells = std::get<0>(lattices.tuple).getNcells();
+  const auto block_size = 32;
+  const auto block_count = (nCells + block_size - 1) / block_size;
+  kernel::call_coupling_operators<CONTEXT,ARGS...><<<block_count,block_size>>>(
+    lattices, subdomain, std::forward<decltype(args)>(args)...);
   device::check();
 }
 
@@ -698,6 +758,95 @@ public:
   void apply(ConcreteBlockLattice<T,DESCRIPTOR,Platform::GPU_CUDA>& block) override
   {
     OPERATOR().apply(block);
+  }
+
+};
+
+
+/// Application of a block-wise COUPLER on concrete CUDA COUPLEES
+template <typename COUPLER, typename COUPLEES>
+class ConcreteBlockCouplingO<COUPLEES,Platform::GPU_CUDA,COUPLER,OperatorScope::PerCell>
+  final : public AbstractCouplingO<COUPLEES> {
+private:
+  template <typename VALUED_DESCRIPTOR>
+  using ptr_to_lattice = ConcreteBlockLattice<typename VALUED_DESCRIPTOR::value_t,
+                                              typename VALUED_DESCRIPTOR::descriptor_t,
+                                              Platform::GPU_CUDA>*;
+
+  utilities::TypeIndexedTuple<typename COUPLEES::template map_values<
+    ptr_to_lattice
+  >> _lattice;
+
+  typename AbstractCouplingO<COUPLEES>::ParametersD _parameters;
+
+public:
+  template <typename LATTICE>
+  ConcreteBlockCouplingO(LATTICE&& lattice):
+    _lattice{lattice}
+  { }
+
+  std::type_index id() const override {
+    return typeid(COUPLER);
+  }
+
+  typename AbstractCouplingO<COUPLEES>::AbstractParameters& getParameters() override {
+    return _parameters;
+  }
+
+  void execute() override
+  {
+    auto deviceLattice = _lattice.exchange_values([&](auto name) -> auto {
+      return gpu::cuda::DeviceBlockLattice{*_lattice.get(name)};
+    });
+    auto& mask = std::get<0>(_lattice.tuple)->template getData<CollisionSubdomainMask>();
+    gpu::cuda::call_coupling_operators(
+      deviceLattice, mask.deviceData(),
+      gpu::cuda::UnmaskedCoupling<COUPLER>{});
+  }
+
+};
+
+/// Application of a block-wise COUPLER on two concrete CUDA COUPLEES with parameters
+template <typename COUPLER, typename COUPLEES>
+class ConcreteBlockCouplingO<COUPLEES,Platform::GPU_CUDA,COUPLER,OperatorScope::PerCellWithParameters>
+  final : public AbstractCouplingO<COUPLEES> {
+private:
+  template <typename VALUED_DESCRIPTOR>
+  using ptr_to_lattice = ConcreteBlockLattice<typename VALUED_DESCRIPTOR::value_t,
+                                              typename VALUED_DESCRIPTOR::descriptor_t,
+                                              Platform::GPU_CUDA>*;
+
+  utilities::TypeIndexedTuple<typename COUPLEES::template map_values<
+    ptr_to_lattice
+  >> _lattice;
+
+  typename COUPLER::parameters::template decompose_into<
+    AbstractCouplingO<COUPLEES>::ParametersD::template include_fields
+  > _parameters;
+
+public:
+  template <typename LATTICE>
+  ConcreteBlockCouplingO(LATTICE&& lattice):
+    _lattice{lattice}
+  { }
+
+  std::type_index id() const override {
+    return typeid(COUPLER);
+  }
+
+  typename AbstractCouplingO<COUPLEES>::AbstractParameters& getParameters() override {
+    return _parameters;
+  }
+
+  void execute() override
+  {
+    auto deviceLattice = _lattice.exchange_values([&](auto name) -> auto {
+      return gpu::cuda::DeviceBlockLattice{*_lattice.get(name)};
+    });
+    auto& mask = std::get<0>(_lattice.tuple)->template getData<CollisionSubdomainMask>();
+    gpu::cuda::call_coupling_operators(
+      deviceLattice, mask.deviceData(),
+      gpu::cuda::UnmaskedCouplingWithParameters<COUPLER,COUPLEES>{_parameters});
   }
 
 };

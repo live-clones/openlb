@@ -120,7 +120,7 @@ struct AdvectionDiffusionRLB {
     using EquilibriumF = typename EQUILIBRIUM::template type<DESCRIPTOR,MOMENTA>;
 
     template <typename CELL, typename PARAMETERS, typename V=typename CELL::value_t>
-    CellStatistic<V> apply(CELL& cell, PARAMETERS& parameters) {
+    CellStatistic<V> apply(CELL& cell, PARAMETERS& parameters) any_platform {
       V fEq[DESCRIPTOR::q] { };
       const auto statistic = EquilibriumF().compute(cell, parameters, fEq);
       V j1[DESCRIPTOR::d] { };

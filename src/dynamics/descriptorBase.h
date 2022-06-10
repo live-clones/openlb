@@ -165,6 +165,24 @@ struct LATTICE_DESCRIPTOR : public CONCRETE_FIELD_TUPLE<PARAMETER_TUPLE<D,Q>, FI
 
 };
 
+/// Pair of base value and descriptor type
+template <typename T, typename DESCRIPTOR>
+struct VALUED_DESCRIPTOR {
+  using value_t = T;
+  using descriptor_t = DESCRIPTOR;
+};
+
+/// Return pair of base value and descriptor type declared by TYPE
+/**
+ * Used to extract descriptor and associated value type from cell and lattice types.
+ **/
+template <typename TYPE>
+using extract_valued_descriptor_t = VALUED_DESCRIPTOR<
+  typename std::remove_reference_t<TYPE>::value_t,
+  typename std::remove_reference_t<TYPE>::descriptor_t
+>;
+
+
 /// Base descriptor of a particle system
 template <unsigned D, typename... FIELDS>
 struct PARTICLE_DESCRIPTOR : public CONCRETE_FIELD_TUPLE<PARAMETER_TUPLE<D>, FIELDS...> {
@@ -172,9 +190,6 @@ struct PARTICLE_DESCRIPTOR : public CONCRETE_FIELD_TUPLE<PARAMETER_TUPLE<D>, FIE
   using type = TYPE_PARTICLE;
   /// Number of dimensions
   static constexpr int d = D;
-
-
-
 
 };
 
