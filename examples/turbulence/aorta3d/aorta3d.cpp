@@ -177,9 +177,9 @@ void setBoundaryValues( SuperLattice<T, DESCRIPTOR>& sLattice,
 // Computes flux at inflow and outflow
 void getResults( SuperLattice<T, DESCRIPTOR>& sLattice,
                  UnitConverter<T,DESCRIPTOR>& converter, int iT,
-                 SuperGeometry<T,3>& superGeometry, util::Timer<T>& timer, STLreader<T>& stlReader )
+                 SuperGeometry<T,3>& superGeometry, util::Timer<T>& timer, STLreader<T>& stlReader,
+                 SuperLatticeF3D<T,DESCRIPTOR>& wssF )
 {
-
   OstreamManager clout( std::cout,"getResults" );
 
   const int vtkIter  = converter.getLatticeTime( .1 );
@@ -210,6 +210,26 @@ void getResults( SuperLattice<T, DESCRIPTOR>& sLattice,
       vtmWriter.addFunctor(pressure);
       task(vtmWriter, iT);
     });
+
+    {
+      vtkSurfaceWriter<T> vtkSurfaceWriter(stlReader, "aortaSurface");
+
+      SuperLatticePhysVelocity3D velocityF(sLattice, converter);
+      AnalyticalFfromSuperF3D smoothVelocityF(velocityF);
+      smoothVelocityF.getName() = "u";
+      vtkSurfaceWriter.addFunctor(smoothVelocityF);
+
+      SuperLatticePhysPressure3D pressureF(sLattice, converter);
+      AnalyticalFfromSuperF3D smoothPressureF(pressureF);
+      smoothPressureF.getName() = "p";
+      vtkSurfaceWriter.addFunctor(smoothPressureF);
+
+      AnalyticalFfromSuperF3D smoothWssF(wssF);
+      smoothWssF.getName() = "wss";
+      vtkSurfaceWriter.addFunctor(smoothWssF);
+
+      vtkSurfaceWriter.write(iT);
+    }
   }
 
   // Writes output on the console
@@ -310,6 +330,8 @@ int main( int argc, char* argv[] )
 
   prepareLattice( sLattice, converter, stlReader, superGeometry );
 
+  SuperLatticePhysWallShearStress3D wssF(sLattice, superGeometry, 2, converter, stlReader);
+
   timer1.stop();
   timer1.printSummary();
 
@@ -326,7 +348,7 @@ int main( int argc, char* argv[] )
     sLattice.collideAndStream();
 
     // === 7th Step: Computation and Output of the Results ===
-    getResults( sLattice, converter, iT, superGeometry, timer, stlReader );
+    getResults( sLattice, converter, iT, superGeometry, timer, stlReader, wssF );
   }
 
   timer.stop();

@@ -207,6 +207,43 @@
         '';
       };
 
+      env-gcc-openmpi-cuda-with-vtk = pkgs.mkShell {
+        name = "openlb-env-gcc-openmpi-cuda-vtk";
+        buildInputs = common-env ++ (with pkgs; [
+          gcc11
+          cudatoolkit_11
+          (openmpi.override {
+            cudaSupport = true;
+            cudatoolkit = cudatoolkit_11;
+          })
+        ]);
+        shellHook = ''
+          export CXX=mpic++
+          export CC=gcc
+
+          export CXXFLAGS="-O3 -Wall -march=native -mtune=native -std=c++17"
+
+          export PARALLEL_MODE=MPI
+
+          export PLATFORMS="CPU_SISD GPU_CUDA"
+
+          export CUDA_CXX=nvcc
+          export CUDA_CXXFLAGS="-O3 -std=c++17"
+          export CUDA_LDFLAGS="-L/run/opengl-driver/lib"
+          # try to auto-fill CUDA_ARCH for first GPU (override when in doubt)
+          export CUDA_ARCH=$(nvidia-smi --query-gpu=compute_cap --format=csv,noheader | head -n 1 | grep -o [0-9] | tr -d '\n')
+
+          export FLOATING_POINT_TYPE=float
+
+          export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/run/opengl-driver/lib
+
+          export FEATURES=VTK
+          export VTK_VERSION=
+          export CXXFLAGS="$CXXFLAGS -I${pkgs.vtk_9}/include/vtk"
+          export LDFLAGS="$LDFLAGS -L${pkgs.vtk_9}/lib"
+        '';
+      };
+
       env-heterogeneity = pkgs.mkShell {
         name = "openlb-heterogeneity";
         buildInputs = common-env ++ (with pkgs; [

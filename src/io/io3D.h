@@ -43,6 +43,7 @@
 #include "cliReader.h"
 #include "octree.h"
 #include "vtkWriter.h"
+#include "vtkSurfaceWriter.h"
 #include "consoleWriter.h"
 #include "blockLatticeSTLreader.h"
 #include "plainWriter.h"
