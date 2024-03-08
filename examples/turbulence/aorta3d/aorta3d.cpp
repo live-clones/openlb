@@ -51,6 +51,113 @@ const int M = 20;             // time discretization refinement
 const bool bouzidiOn = true;  // choice of boundary condition
 const T maxPhysT = 2.;        // max. simulation time in s, SI unit
 
+template <typename T, typename DESCRIPTOR>
+class SuperLatticeStress3D final : public SuperLatticeF3D<T,DESCRIPTOR> {
+public:
+  SuperLatticeStress3D(SuperLattice<T,DESCRIPTOR>& sLattice);
+};
+
+template <typename T, typename DESCRIPTOR>
+class BlockLatticeStress3D final : public BlockLatticeF3D<T,DESCRIPTOR> {
+public:
+  BlockLatticeStress3D(BlockLattice<T,DESCRIPTOR>& blockLattice);
+  bool operator() (T output[], const int input[]) override;
+};
+
+template<typename T, typename DESCRIPTOR>
+SuperLatticeStress3D<T, DESCRIPTOR>::SuperLatticeStress3D(
+  SuperLattice<T, DESCRIPTOR>& sLattice) : SuperLatticeF3D<T, DESCRIPTOR>(sLattice, 6)
+{
+  this->getName() = "stress";
+  int maxC = this->_sLattice.getLoadBalancer().size();
+  for (int iC = 0; iC < maxC; iC++) {
+    this->_blockF.emplace_back(new BlockLatticeStress3D<T, DESCRIPTOR>(this->_sLattice.getBlock(iC)));
+  }
+}
+
+template<typename T, typename DESCRIPTOR>
+BlockLatticeStress3D<T, DESCRIPTOR>::BlockLatticeStress3D(
+  BlockLattice<T, DESCRIPTOR>& blockLattice)
+  : BlockLatticeF3D<T, DESCRIPTOR>(blockLattice, 6)
+{
+  this->getName() = "stress";
+}
+
+template<typename T, typename DESCRIPTOR>
+bool BlockLatticeStress3D<T, DESCRIPTOR>::operator()(T output[], const int input[])
+{
+  this->_blockLattice.get(input[0], input[1], input[2]).computeStress(output);
+  return true;
+}
+
+template <typename T, typename DESCRIPTOR>
+class InterpolatedWssF final: public AnalyticalF<3,T,T> {
+private:
+  UnitConverter<T,DESCRIPTOR>& _converter;
+  AnalyticalF3D<T,T>& _densityF;
+  AnalyticalF3D<T,T>& _stressF;
+  STLreader<T>& _stlReader;
+  T _physFactor;
+
+public:
+  InterpolatedWssF(UnitConverter<T,DESCRIPTOR>& converter,
+                   AnalyticalF3D<T,T>& densityF,
+                   AnalyticalF3D<T,T>& stressF,
+                   STLreader<T>& stlReader):
+    AnalyticalF<3,T,T>(3),
+    _converter(converter),
+    _densityF(densityF),
+    _stressF(stressF),
+    _stlReader(stlReader) {
+    const T omega = 1. / _converter.getLatticeRelaxationTime();
+    const T dt = _converter.getConversionFactorTime();
+    _physFactor = -omega
+                * descriptors::invCs2<T,DESCRIPTOR>() / dt
+                * _converter.getPhysDensity() * _converter.getPhysViscosity();
+  }
+
+  bool operator() (T output[], const T physR[]) override {
+    Vector<T,3> origin(physR);
+    auto normal = _stlReader.surfaceNormal(physR);
+    normal = normalize(normal);
+
+    T traction[3] { };
+    T stress[6] { };
+    T rho{};
+
+    Vector<T,3> neighbor = origin - 0.5*_converter.getPhysDeltaX() * normal;
+    _densityF(&rho, neighbor.data());
+    _stressF(stress, neighbor.data());
+
+    traction[0] = stress[0]/_physFactor*rho*normal[0] +
+                  stress[1]/_physFactor*rho*normal[1] +
+                  stress[2]/_physFactor*rho*normal[2];
+    traction[1] = stress[1]/_physFactor*rho*normal[0] +
+                  stress[3]/_physFactor*rho*normal[1] +
+                  stress[4]/_physFactor*rho*normal[2];
+    traction[2] = stress[2]/_physFactor*rho*normal[0] +
+                  stress[4]/_physFactor*rho*normal[1] +
+                  stress[5]/_physFactor*rho*normal[2];
+
+    T traction_normal_SP;
+    T tractionNormalComponent[3];
+    // scalar product of traction and normal vector
+    traction_normal_SP = traction[0] * normal[0] +
+                         traction[1] * normal[1] +
+                         traction[2] * normal[2];
+    tractionNormalComponent[0] = traction_normal_SP * normal[0];
+    tractionNormalComponent[1] = traction_normal_SP * normal[1];
+    tractionNormalComponent[2] = traction_normal_SP * normal[2];
+
+    output[0] = traction[0] - tractionNormalComponent[0];
+    output[1] = traction[1] - tractionNormalComponent[1];
+    output[2] = traction[2] - tractionNormalComponent[2];
+
+    return true;
+  }
+
+};
+
 
 // Stores data from stl file in geometry in form of material numbers
 void prepareGeometry( UnitConverter<T,DESCRIPTOR> const& converter, IndicatorF3D<T>& indicator,
@@ -227,6 +334,16 @@ void getResults( SuperLattice<T, DESCRIPTOR>& sLattice,
       AnalyticalFfromSuperF3D smoothWssF(wssF);
       smoothWssF.getName() = "wss";
       vtkSurfaceWriter.addFunctor(smoothWssF);
+
+      SuperLatticeDensity3D densityF(sLattice);
+      AnalyticalFfromSuperF3D smoothDensityF(densityF);
+
+      SuperLatticeStress3D stressF(sLattice);
+      AnalyticalFfromSuperF3D smoothStressF(stressF);
+
+      InterpolatedWssF<T,DESCRIPTOR> interpolatedWssF(converter, smoothDensityF, smoothStressF, stlReader);
+      interpolatedWssF.getName() = "interpolatedWss";
+      vtkSurfaceWriter.addFunctor(interpolatedWssF);
 
       vtkSurfaceWriter.write(iT);
     }
