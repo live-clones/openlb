@@ -88,7 +88,7 @@ void STLtriangle<T>::init()
 }
 
 template<typename T>
-Vector<T,3> STLtriangle<T>::getCenter()
+Vector<T,3> STLtriangle<T>::getCenter() const
 {
   Vector<T,3> center( T(0) );
 

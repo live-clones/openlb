@@ -132,7 +132,7 @@ public:
     return normal;
   }
   /// Returns center
-  Vector<T,3> getCenter();
+  Vector<T,3> getCenter() const;
   /// Returns Pt0-Pt1
   std::vector<T> getE0();
   /// Returns Pt0-Pt2

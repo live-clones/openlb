@@ -319,7 +319,10 @@ void getResults( SuperLattice<T, DESCRIPTOR>& sLattice,
     });
 
     {
-      vtkSurfaceWriter<T> vtkSurfaceWriter(stlReader, "aortaSurface");
+      vtkSurfaceWriter<T> vtkSurfaceWriter(stlReader,
+                                           sLattice.getCuboidGeometry(),
+                                           sLattice.getLoadBalancer(),
+                                           "aortaSurface");
 
       SuperLatticePhysVelocity3D velocityF(sLattice, converter);
       AnalyticalFfromSuperF3D smoothVelocityF(velocityF);

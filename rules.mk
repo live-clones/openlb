@@ -52,7 +52,7 @@ ifneq ($(filter VTK,$(FEATURES)),)
 	ifdef VTK_VERSION
 		VTK_VERSION := -$(VTK_VERSION)
 	endif
-	LDFLAGS += $(if $(filter $(FEATURES), VTK),-lvtkIOLegacy$(VTK_VERSION) -lvtkCommonCore$(VTK_VERSION) -lvtkCommonExecutionModel$(VTK_VERSION) -lvtkCommonDataModel$(VTK_VERSION) -lvtkIOCore$(VTK_VERSION) -lvtkIOXML$(VTK_VERSION) -lvtksys$(VTK_VERSION))
+	LDFLAGS += $(if $(filter $(FEATURES), VTK),-lvtkIOLegacy$(VTK_VERSION) -lvtkCommonCore$(VTK_VERSION) -lvtkCommonExecutionModel$(VTK_VERSION) -lvtkCommonDataModel$(VTK_VERSION) -lvtkIOCore$(VTK_VERSION) -lvtkIOXML$(VTK_VERSION) -lvtkIOParallelXML$(VTK_VERSION) -lvtksys$(VTK_VERSION))
 endif
 
 ifneq ($(filter GPU_CUDA,$(PLATFORMS)),)
