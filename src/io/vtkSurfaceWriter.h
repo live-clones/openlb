@@ -33,11 +33,6 @@
 #include <vtkUnstructuredGrid.h>
 #include <vtkPoints.h>
 #include <vtkCellArray.h>
-#include <vtkFloatArray.h>
-#include <vtkPointData.h>
-#include <vtkTriangle.h>
-#include <vtkXMLUnstructuredGridWriter.h>
-#include <vtkXMLPUnstructuredGridWriter.h>
 
 namespace olb {
 
@@ -51,6 +46,13 @@ private:
   const std::string _fileName;
   std::vector<FunctorPtr<AnalyticalF3D<T,T>>> _f;
 
+  vtkSmartPointer<vtkUnstructuredGrid> _grid;
+  vtkSmartPointer<vtkPoints> _points;
+  vtkSmartPointer<vtkCellArray> _cells;
+  std::vector<const STLtriangle<T>*> _localTriangles;
+
+  void init();
+
 public:
   vtkSurfaceWriter(STLreader<T>& surfaceI,
                    CuboidGeometry3D<T>& cuboidGeometry,
@@ -60,7 +62,9 @@ public:
     _cuboidGeometry(cuboidGeometry),
     _loadBalancer(loadBalancer),
     _fileName(fileName)
-  { }
+  {
+    init();
+  }
 
   void addFunctor(FunctorPtr<AnalyticalF3D<T,T>>&& f) {
     _f.emplace_back(std::move(f));
@@ -69,82 +73,6 @@ public:
   void write(int iT);
 
 };
-
-template<typename T>
-void vtkSurfaceWriter<T>::write(int iT)
-{
-  vtkSmartPointer<vtkUnstructuredGrid> grid = vtkSmartPointer<vtkUnstructuredGrid>::New();
-  vtkSmartPointer<vtkPoints> points = vtkSmartPointer<vtkPoints>::New();
-  vtkSmartPointer<vtkCellArray> cells = vtkSmartPointer<vtkCellArray>::New();
-
-  std::vector<const STLtriangle<T>*> localTriangles;
-  std::size_t pointId = 0;
-  for (const STLtriangle<T>& triangle : _surfaceI.getMesh().getTriangles()) {
-    int globC{};
-    if (_cuboidGeometry.getC(triangle.getCenter(), globC)) {
-      if (_loadBalancer.isLocal(globC)) {
-        localTriangles.emplace_back(&triangle);
-        for (const auto& point : triangle.point) {
-          points->InsertNextPoint(point.coords[0], point.coords[1], point.coords[2]);
-        }
-
-        vtkSmartPointer<vtkTriangle> cell = vtkSmartPointer<vtkTriangle>::New();
-        cell->GetPointIds()->SetId(0, pointId++);
-        cell->GetPointIds()->SetId(1, pointId++);
-        cell->GetPointIds()->SetId(2, pointId++);
-        cells->InsertNextCell(cell);
-      }
-    }
-  }
-
-  grid->SetPoints(points);
-  grid->SetCells(VTK_TRIANGLE, cells);
-
-  std::vector<vtkSmartPointer<vtkFloatArray>> data(_f.size());
-  for (std::size_t iF=0; iF < _f.size(); ++iF) {
-    data[iF] = vtkSmartPointer<vtkFloatArray>::New();
-    data[iF]->SetName(_f[iF]->getName().c_str());
-    data[iF]->SetNumberOfComponents(_f[iF]->getTargetDim());
-    grid->GetPointData()->AddArray(data[iF]);
-  }
-
-  std::string filePath = singleton::directories().getVtkOutDir()
-                       + createFileName(_fileName, iT)
-                       + ".pvtu";
-
-  if (singleton::mpi().isMainProcessor()) {
-    vtkSmartPointer<vtkXMLPUnstructuredGridWriter> multiWriter = vtkSmartPointer<vtkXMLPUnstructuredGridWriter>::New();
-    multiWriter->SetInputData(grid);
-    multiWriter->SetNumberOfPieces(singleton::mpi().getSize());
-    multiWriter->SetFileName(filePath.c_str());
-    multiWriter->SetUseSubdirectory(true);
-    multiWriter->SetStartPiece(0);
-    multiWriter->SetEndPiece(singleton::mpi().getSize()-1);
-    multiWriter->SetWriteSummaryFile(1);
-    multiWriter->Write();
-  }
-
-  for (const STLtriangle<T>* triangle : localTriangles) {
-    for (const auto& point : triangle->point) {
-      for (std::size_t iF=0; iF < _f.size(); ++iF) {
-        auto physR = point.coords;
-        std::vector<T> result(_f[iF]->getTargetDim(), 0);
-        _f[iF](result.data(), physR.data());
-        data[iF]->InsertNextTuple(result.data());
-      }
-    }
-  }
-
-  vtkSmartPointer<vtkXMLPUnstructuredGridWriter> multiWriter = vtkSmartPointer<vtkXMLPUnstructuredGridWriter>::New();
-  multiWriter->SetWriteSummaryFile(0);
-  multiWriter->SetInputData(grid);
-  multiWriter->SetNumberOfPieces(singleton::mpi().getSize());
-  multiWriter->SetFileName(filePath.c_str());
-  multiWriter->SetUseSubdirectory(true);
-  multiWriter->SetStartPiece(singleton::mpi().getRank());
-  multiWriter->SetEndPiece(singleton::mpi().getRank());
-  multiWriter->Write();
-}
 
 }
 

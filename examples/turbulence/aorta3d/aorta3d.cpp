@@ -285,7 +285,7 @@ void setBoundaryValues( SuperLattice<T, DESCRIPTOR>& sLattice,
 void getResults( SuperLattice<T, DESCRIPTOR>& sLattice,
                  UnitConverter<T,DESCRIPTOR>& converter, int iT,
                  SuperGeometry<T,3>& superGeometry, util::Timer<T>& timer, STLreader<T>& stlReader,
-                 SuperLatticeF3D<T,DESCRIPTOR>& wssF )
+                 vtkSurfaceWriter<T>& vtkSurfaceWriter )
 {
   OstreamManager clout( std::cout,"getResults" );
 
@@ -319,11 +319,6 @@ void getResults( SuperLattice<T, DESCRIPTOR>& sLattice,
     });
 
     {
-      vtkSurfaceWriter<T> vtkSurfaceWriter(stlReader,
-                                           sLattice.getCuboidGeometry(),
-                                           sLattice.getLoadBalancer(),
-                                           "aortaSurface");
-
       SuperLatticePhysVelocity3D velocityF(sLattice, converter);
       AnalyticalFfromSuperF3D smoothVelocityF(velocityF);
       smoothVelocityF.getName() = "u";
@@ -333,10 +328,6 @@ void getResults( SuperLattice<T, DESCRIPTOR>& sLattice,
       AnalyticalFfromSuperF3D smoothPressureF(pressureF);
       smoothPressureF.getName() = "p";
       vtkSurfaceWriter.addFunctor(smoothPressureF);
-
-      AnalyticalFfromSuperF3D smoothWssF(wssF);
-      smoothWssF.getName() = "wss";
-      vtkSurfaceWriter.addFunctor(smoothWssF);
 
       SuperLatticeDensity3D densityF(sLattice);
       AnalyticalFfromSuperF3D smoothDensityF(densityF);
@@ -450,7 +441,11 @@ int main( int argc, char* argv[] )
 
   prepareLattice( sLattice, converter, stlReader, superGeometry );
 
-  SuperLatticePhysWallShearStress3D wssF(sLattice, superGeometry, 2, converter, stlReader);
+  //SuperLatticePhysWallShearStress3D wssF(sLattice, superGeometry, 2, converter, stlReader);
+  vtkSurfaceWriter<T> vtkSurfaceWriter(stlReader,
+                                       sLattice.getCuboidGeometry(),
+                                       sLattice.getLoadBalancer(),
+                                       "aortaSurface");
 
   timer1.stop();
   timer1.printSummary();
@@ -468,7 +463,7 @@ int main( int argc, char* argv[] )
     sLattice.collideAndStream();
 
     // === 7th Step: Computation and Output of the Results ===
-    getResults( sLattice, converter, iT, superGeometry, timer, stlReader, wssF );
+    getResults( sLattice, converter, iT, superGeometry, timer, stlReader, vtkSurfaceWriter );
   }
 
   timer.stop();
