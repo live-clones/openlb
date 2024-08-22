@@ -260,6 +260,10 @@ public:
     return {getBlock(), CellID(this->_iCell + getBlock().getNeighborDistance(offset))};
   }
 
+  void setCellId(std::size_t iCell) __device__ {
+    this->_iCell = iCell;
+  }
+
   Dynamics<T,DESCRIPTOR>& getDynamics() __device__ {
     return *this->template getField<DYNAMICS<T,DESCRIPTOR>>();
   }
