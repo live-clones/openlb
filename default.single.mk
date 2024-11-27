@@ -34,8 +34,13 @@ INCLUDE_FLAGS := -I$(subst $(EMPTY) $(EMPTY), -I,$(INCLUDE_DIRS))
 %.o: %.cpp
 	$(CXX) $(CXXFLAGS) $(INCLUDE_FLAGS) -c -o $@ $<
 
+ifeq ($(CUDA_ARCH), 75)
+$(EXAMPLE): $(OBJ_FILES)
+	$(CXX) $(OBJ_FILES) -o $@ -lolbcore $(LDFLAGS) -arch=sm_75
+else
 $(EXAMPLE): $(OBJ_FILES)
 	$(CXX) $(OBJ_FILES) -o $@ -lolbcore $(LDFLAGS)
+endif
 
 .PHONY: onlysample
 onlysample: $(EXAMPLE)

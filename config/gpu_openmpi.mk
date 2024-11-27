@@ -30,7 +30,7 @@ MPIFLAGS        := -lmpi_cxx -lmpi
 PLATFORMS       := CPU_SISD GPU_CUDA
 
 # for e.g. RTX 30* (Ampere), see table in `rules.mk` for other options
-CUDA_ARCH       := 86
+CUDA_ARCH       := 75
 
 FLOATING_POINT_TYPE := float
 

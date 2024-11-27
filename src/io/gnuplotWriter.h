@@ -67,6 +67,15 @@ public:
   /// set labels of the plot: xLabel and yLabel
   void setLabel(std::string xLabel = "", std::string yLabel = "");
 
+  /// set ranges of the plot
+  void setXmin(T xmin);
+  void setXmax(T xmax);
+  void setYmin(T ymin);
+  void setYmax(T ymax);
+  void setXrange(T xmin, T xmax);
+  void setYrange(T ymin, T ymax);
+  void setLogScale(size_t dim, size_t n=10);
+
   /// writes an PDF
   void writePDF(std::string plotName = "");
 
@@ -92,6 +101,14 @@ private:
   std::string _preCommand;
   AxisType _axisType;
   Regression _regressionType;
+  std::string _xmin="*";
+  std::string _xmax="*";
+  std::string _ymin="*";
+  std::string _ymax="*";
+  bool xlog=false;
+  bool ylog=false;
+  std::size_t xlogn=0;
+  std::size_t ylogn=0;
 
   /// the creation of the datafile and writing of the data in the CSV format datafile
   /// is now done by the CSV Writer. The functions setData call the CSV Writer writeDataFile function

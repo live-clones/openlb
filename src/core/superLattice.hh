@@ -98,6 +98,11 @@ void SuperLattice<T,DESCRIPTOR>::collectStatistics()
 }
 
 template<typename T, typename DESCRIPTOR>
+SuperLattice<T,DESCRIPTOR>::SuperLattice(SuperGeometry<T,DESCRIPTOR::d>& superGeometry, bool debug)
+  : SuperLattice<T,DESCRIPTOR>( superGeometry )
+  { this->_debug = debug; }
+
+template<typename T, typename DESCRIPTOR>
 SuperLattice<T,DESCRIPTOR>::SuperLattice(SuperGeometry<T,DESCRIPTOR::d>& superGeometry)
   : SuperStructure<T,DESCRIPTOR::d>(superGeometry.getCuboidGeometry(),
                                     superGeometry.getLoadBalancer(),

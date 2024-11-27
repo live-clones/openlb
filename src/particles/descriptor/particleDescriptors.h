@@ -44,7 +44,7 @@ struct ROT_MATRIX {};
 
 //Common
 struct POSITION          : public FIELD_BASE<0,  1, 0> { };
-struct DENSITY           : public FIELD_BASE<1,  0, 0> { };
+// struct DENSITY           : public FIELD_BASE<1,  0, 0> { };
 struct INVALID           : public FIELD_BASE<1,  0, 0> {  //Storage invalidation, filtered in particleManager
   template <typename T, typename DESCRIPTOR>
   static constexpr auto getInitialValue() {

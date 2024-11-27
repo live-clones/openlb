@@ -11,6 +11,13 @@ zlib:
 clean_zlib:
 	make -C zlib clean
 
+#getopt:
+#	make -C getopt
+#	cp getopt/build/ lib/
+#
+#clean_getopt:
+#	make -C getopt clean
+
 tinyxml:
 	make -C tinyxml
 	cp tinyxml/build/libtinyxml.a lib/

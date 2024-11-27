@@ -183,6 +183,11 @@ struct STATISTIC           : public FIELD_BASE<2> { };
 
 // Field types need to be distinct (i.e. not aliases)
 // (Field size parametrized: Cs + Ds*D + Qs*Q)  Cs Ds Qs
+struct DAMPING              : public FIELD_BASE<1,  0, 0> { };
+struct DENSITY              : public FIELD_BASE<1,  0, 0> { };
+struct UX                   : public FIELD_BASE<1,  0, 0> { };
+struct UY                   : public FIELD_BASE<1,  0, 0> { };
+struct UZ                   : public FIELD_BASE<1,  0, 0> { };
 struct VELOCITY             : public FIELD_BASE<0,  1, 0> { };
 struct VELOCITY2            : public FIELD_BASE<0,  1, 0> { };
 struct AVERAGE_VELOCITY     : public FIELD_BASE<0,  1, 0> { };

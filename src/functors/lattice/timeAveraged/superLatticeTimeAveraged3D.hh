@@ -123,8 +123,8 @@ void SuperLatticeTimeAveragedF3D<T>::addEnsemble()
       i[2] = iY;
       i[3] = iZ;
       //BaseType<T> tmp[_sFunctor.getTargetDim()];
-      std::vector<BaseType<T>> tmp(_sFunctor.getTargetDim(), 0);
-      _sFunctor(tmp.data(), i);
+      T tmp[_sFunctor.getTargetDim()];
+      _sFunctor(tmp, i);
       for (int iDim=0; iDim<_sFunctor.getTargetDim(); iDim++) {
         _sData.getBlock(iCloc).get({iX, iY, iZ}, iDim) += (BaseType<T>)(tmp[iDim]) ;
         _sDataP2.getBlock(iCloc).get({iX, iY, iZ}, iDim) += (BaseType<T>)(tmp[iDim]) *(BaseType<T>)(tmp[iDim]) ;

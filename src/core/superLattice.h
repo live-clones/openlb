@@ -68,6 +68,7 @@ private:
 
 public:
   constexpr static unsigned d = DESCRIPTOR::d;
+  bool _debug = false;
 
   /// Base value type of the lattice
   using value_t = T;
@@ -78,6 +79,7 @@ public:
 
   /// Construct lattice for the cuboid decomposition of superGeometry
   SuperLattice(SuperGeometry<T,DESCRIPTOR::d>& superGeometry);
+  SuperLattice(SuperGeometry<T,DESCRIPTOR::d>& superGeometry, bool debug );
   SuperLattice(const SuperLattice&) = delete;
   ~SuperLattice() = default;
 

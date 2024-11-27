@@ -15,14 +15,17 @@ CC              := nvcc
 
 CXXFLAGS        := -O3
 CXXFLAGS        += -std=c++17 --forward-unknown-to-host-compiler
+CXXFLAGS		+= -L/home/hbrs/openmpi/bin
 
 PARALLEL_MODE   := NONE
+MPIFLAGS		:= -lmpi
+# -lmpi_cxx -lmpi
 
 PLATFORMS       := CPU_SISD GPU_CUDA
 
-# for e.g. RTX 30* (Ampere), see table in `rules.mk` for other options
-CUDA_ARCH       := 86
+# for e.g. RTX 20* (Turing), see table in `rules.mk` for other options
+CUDA_ARCH       := 75
 
-FLOATING_POINT_TYPE := float
+FLOATING_POINT_TYPE := double
 
 USE_EMBEDDED_DEPENDENCIES := ON

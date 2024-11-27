@@ -21,7 +21,9 @@ DEFAULT_TARGETS += config.mk
 endif
 endif
 
+# export PATH := /home/philipp/opt/openmpi/bin:$(PATH)
 # Include config.mk environment (optional)
+#-include $(OLB_ROOT)/config/gpu_only.mk#cpu_gcc_openmpi.mk#gpu_hybrid_mixed.mk#
 -include config.mk
 
 include rules.mk
@@ -75,7 +77,7 @@ CLEAN_TARGETS += clean-core
 ###########################################################################
 ## Examples
 
-EXAMPLES := $(dir $(shell find examples -name 'Makefile'))
+EXAMPLES := $(dir $(shell find examples/noise -name 'Makefile'))
 
 CLEAN_SAMPLES_TARGETS :=
 

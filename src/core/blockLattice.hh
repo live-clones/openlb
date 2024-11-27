@@ -139,7 +139,7 @@ void BlockLattice<T,DESCRIPTOR>::definePopulations(BlockIndicatorF<T,DESCRIPTOR:
     T pop[DESCRIPTOR::q];
     this->forSpatialLocations([&](LatticeR<DESCRIPTOR::d> loc) {
       if (indicator(loc)) {
-        popF(pop, loc.data());
+        popF(pop, loc);
         get(loc).definePopulations(pop);
       }
     });

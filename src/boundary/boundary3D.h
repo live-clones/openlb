@@ -66,5 +66,6 @@
 #include "setNewSlipBoundary3D.h"
 #include "setRobinBoundary3D.h"
 #include "vortexMethod.h"
+#include "setDampingBoundary3D.h"
 
 #include "boundary3D.hh"

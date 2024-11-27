@@ -58,3 +58,4 @@
 #include "setRtlbmDirectedTemperatureBoundary3D.hh"
 #include "setNewSlipBoundary3D.hh"
 #include "setRobinBoundary3D.hh"
+#include "setDampingBoundary3D.hh"

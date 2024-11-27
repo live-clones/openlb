@@ -153,10 +153,8 @@ void setBoundaryValues( SuperLattice<T, DESCRIPTOR>& sLattice,
                         UnitConverter<T, DESCRIPTOR> const& converter, int iT,
                         SuperGeometry<T,2>& superGeometry )
 {
-
   OstreamManager clout( std::cout,"setBoundaryValues" );
 
-  // No of time steps for smooth start-up
   int iTmaxStart = converter.getLatticeTime( maxPhysT*0.4 );
   int iTupdate = 5;
 

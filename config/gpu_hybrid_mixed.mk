@@ -38,6 +38,6 @@ CUDA_CXXFLAGS   := -O3 -std=c++17
 CUDA_LDFLAGS    := -L/run/opengl-driver/lib
 CUDA_LDFLAGS    += -fopenmp
 # for e.g. RTX 30* (Ampere), see table in `rules.mk` for other options
-CUDA_ARCH       := 86
+CUDA_ARCH       := 75
 
 USE_EMBEDDED_DEPENDENCIES := ON
