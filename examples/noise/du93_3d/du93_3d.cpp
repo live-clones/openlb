@@ -290,11 +290,12 @@ int main( int argc, char* argv[] )
 
   // === 1st Step: Initialization ===
   olbInit( &argc, &argv );
-  singleton::directories().setOutputDir( "./tmp/" );
   OstreamManager clout( std::cout,"main" );
   // display messages from every single mpi process
   //clout.setMultiOutput(true);
   CLIreader args(argc, argv);
+  std::string outdir = args.getValueOrFallback<std::string>( "--outdir", "./tmp" );
+  singleton::directories().setOutputDir( outdir+"/" );
   const T lengthDomain = args.getValueOrFallback( "--lengthDomain", 6);
   const size_t res = args.getValueOrFallback( "--res", 10);
   T heightDomain            = .5*lengthDomain;
