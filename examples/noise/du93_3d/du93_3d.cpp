@@ -41,8 +41,8 @@ using DESCRIPTOR = D3Q19<>;
 
 // Parameters for the simulation setup
 // const int N = 10;        // resolution of the model
-const T Re = 20.;       // Reynolds number
-const T maxPhysT = 50.; // max. simulation time in s, SI unit
+// const T Re = 20.;       // Reynolds number
+// const T maxPhysT = 50.; // max. simulation time in s, SI unit
 
 // Stores data from stl file in geometry in form of material numbers
 void prepareGeometry( UnitConverter<T,DESCRIPTOR> const& converter, //std::shared_ptr<IndicatorF3D<T>> domain,
@@ -151,8 +151,8 @@ void setBoundaryValues( SuperLattice<T, DESCRIPTOR>& sLattice,
   OstreamManager clout( std::cout,"setBoundaryValues" );
 
   // No of time steps for smooth start-up
-  int iTmaxStart = converter.getLatticeTime( maxPhysT*0.4 );
-  int iTupdate = 30;
+  int iTmaxStart = converter.getLatticeTime( 5 );
+  int iTupdate = int(iTmaxStart/200/10)*10;
 
   if ( iT%iTupdate == 0 && iT <= iTmaxStart ) {
     // Smooth start curve, sinus
@@ -172,7 +172,7 @@ void setBoundaryValues( SuperLattice<T, DESCRIPTOR>& sLattice,
     AnalyticalComposed3D<T,T> u( ux, uy, uz );
     sLattice.defineU( superGeometry, 3, u );
 
-    clout << "step=" << iT << "; ux=" << ux_i[0] << "; ux_max=" << ux_max << std::endl;
+    clout << "startup step=" << iT << "/" << iTmaxStart << "; ux=" << ux_i[0] << "; ux_max=" << ux_max << std::endl;
 
     sLattice.setProcessingContext<Array<momenta::FixedVelocityMomentumGeneric::VELOCITY>>(
       ProcessingContext::Simulation);
@@ -287,26 +287,43 @@ void getResults( SuperLattice<T, DESCRIPTOR>& sLattice,
 
 int main( int argc, char* argv[] )
 {
-
   // === 1st Step: Initialization ===
   olbInit( &argc, &argv );
   OstreamManager clout( std::cout,"main" );
   // display messages from every single mpi process
   //clout.setMultiOutput(true);
   CLIreader args(argc, argv);
-  std::string outdir = args.getValueOrFallback<std::string>( "--outdir", "./tmp" );
+  std::string outdir        = args.getValueOrFallback<std::string>( "--outdir", "./tmp" );
+  const T lengthDomain      = args.getValueOrFallback( "--lengthDomain", 6);
+  const size_t res          = args.getValueOrFallback( "--res", 10);
+  T maxPhysT                = args.getValueOrFallback( "--tmax", 20.);
+  T charV                   = args.getValueOrFallback( "--umax", 1.);
+  T Re                      = args.getValueOrFallback( "--Re", 200.);
+  T tau                     = args.getValueOrFallback( "--tau", 0.);  // previously tau=0.53 fixed
   singleton::directories().setOutputDir( outdir+"/" );
-  const T lengthDomain = args.getValueOrFallback( "--lengthDomain", 6);
-  const size_t res = args.getValueOrFallback( "--res", 10);
   T heightDomain            = .5*lengthDomain;
   T depthDomain             = .2*lengthDomain;
+  T charL                   = 1.;
+  const T cs_LU             = 1 / std::sqrt(3.0);
+  T viscosity;
+  if ( tau == 0 ) {
+    if ( Re == 0 ) {
+      viscosity             = 1.48e-5; // 1e-2;
+      Re                    = charV * charL / viscosity;
+    } else viscosity        = charV * charL / Re;
+    tau                     = viscosity / (cs_LU*cs_LU) + 0.5;
+  }
+  else {
+    if ( Re == 0 ) Re       = 20000;
+    viscosity               = charV * charL / Re;
+  }
 
   UnitConverterFromResolutionAndRelaxationTime<T, DESCRIPTOR> const converter(
     (size_t)  res,            // resolution: number of voxels per charPhysL
-    (T)       0.53,           // latticeRelaxationTime: relaxation time, have to be greater than 0.5!
-    (T)       0.1,            // charPhysLength: reference length of simulation geometry
-    (T)       0.2,            // charPhysVelocity: maximal/highest expected velocity during simulation in __m / s__
-    (T)       0.2*2.*0.05/Re, // physViscosity: physical kinematic viscosity in __m^2 / s__
+    (T)       tau,            // latticeRelaxationTime: relaxation time, have to be greater than 0.5!
+    (T)       charL,          // charPhysLength: reference length of simulation geometry
+    (T)       charV,          // charPhysVelocity: maximal/highest expected velocity during simulation in __m / s__
+    (T)       viscosity,      // physViscosity: physical kinematic viscosity in __m^2 / s__
     (T)       1.0             // physDensity: physical density in __kg / m^3__
   );
   // Prints the converter log as console output
