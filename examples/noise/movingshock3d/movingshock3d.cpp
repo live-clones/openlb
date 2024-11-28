@@ -63,33 +63,25 @@ void prepareGeometry(UnitConverter<T,DESCRIPTOR> const& converter,
         << "Materials:" << std::endl
         << "1 = Fluid" << std::endl
         << "2 = Check (should be empty)" << std::endl
-        << "3 = Damping Boundary (far field)" << std::endl
-        << "4 = Local EQ Boundary (far field)" << std::endl;
+        << "3 = Boundary (far field)" << std::endl;
 
   superGeometry.rename( 0, 2 );   // all nodes to temporary type
 
   T bd_pu = converter.getPhysLength(boundary_depth);
+  Vector<T,3> origin = superGeometry.getStatistics().getMinPhysR(2) + bd_pu;  // ( -domain_lengths[0]/2+bd_pu, -domain_lengths[1]/2+bd_pu, -domain_lengths[2]/2+bd_pu );
+  Vector<T,3> extend = superGeometry.getStatistics().getMaxPhysR(2) - superGeometry.getStatistics().getMinPhysR(2) - 2*bd_pu;  // ( domain_lengths[0]-2*bd_pu, domain_lengths[1]-2*bd_pu, domain_lengths[2]-2*bd_pu );
+  std::shared_ptr<IndicatorF3D<T>> fluid_domain = std::make_shared<IndicatorCuboid3D<T>>( extend, origin );
+  superGeometry.rename( 2, 1, fluid_domain );  // all nodes except boundary length
+  // superGeometry.rename( 2, 1, {boundary_depth,boundary_depth,boundary_depth} );  // all nodes except boundary length
   if ( boundarytype == damping ) {
-    bd_pu = converter.getPhysLength(boundary_depth);
-    Vector<T,3> origin = superGeometry.getStatistics().getMinPhysR(2) + bd_pu;  // ( -domain_lengths[0]/2+bd_pu, -domain_lengths[1]/2+bd_pu, -domain_lengths[2]/2+bd_pu );
-    // origin[0] += bd_pu; origin[1] += bd_pu; origin[2] += bd_pu;
-    clout << "origin=" << origin << std::endl;
-    Vector<T,3> extend = superGeometry.getStatistics().getMaxPhysR(2) - superGeometry.getStatistics().getMinPhysR(2) - 2*bd_pu;  // ( domain_lengths[0]-2*bd_pu, domain_lengths[1]-2*bd_pu, domain_lengths[2]-2*bd_pu );
-    // extend[0] -= 2*bd_pu; extend[1] -= 2*bd_pu; extend[2] -= 2*bd_pu;
-    clout << "extend=" << extend << std::endl;
-    std::shared_ptr<IndicatorF3D<T>> fluid_domain = std::make_shared<IndicatorCuboid3D<T>>( extend, origin );
-    superGeometry.rename( 2, 1, fluid_domain );  // all nodes except boundary length
-    superGeometry.rename( 2, 3, domain );   // remaining to outer/reflecting/far-field boundaries
-    // Removes all not needed boundary voxels outside the surface
-    // superGeometry.clean(true, {1,3});
-  } else if ( boundarytype == local ) {
-    superGeometry.rename( 2, 1, {1,1,1} );  // all nodes except boundary layer
-    superGeometry.rename( 2, 4, 1, domain);   // remaining to outer/reflecting/far-field boundaries
-    // Removes all not needed boundary voxels outside the surface
+    superGeometry.rename( 2, 3); // , 1, domain );   // remaining to outer/reflecting/far-field boundaries
+  }
+  if ( boundarytype == local ) {
+    superGeometry.rename( 2, 3, 1, domain );   // remaining to outer/reflecting/far-field boundaries
     superGeometry.clean();
-  } else if ( boundarytype == periodic ) {
-    superGeometry.rename(2, 1);  // all nodes are fluid
-    // Removes all not needed boundary voxels outside the surface
+  }
+  if ( boundarytype == periodic ) {
+    superGeometry.rename(3, 1);  // all nodes are fluid
     superGeometry.clean();
   }
 
@@ -109,6 +101,7 @@ protected:
   T rho0;
   T amplitude;
   T alpha;
+  T scaling=50;  // shock is too large otherwise -> scaling it to 1/50 extend
   UnitConverter<T, DESCRIPTOR> _converter;
 public:
   AcousticPulse3D(UnitConverter<T, DESCRIPTOR> converter, T rho0, T amplitude, T alpha )
@@ -117,9 +110,9 @@ public:
 
   bool operator()(T output[], const T input[]) override
   {
-    T x = input[0]*50+0.1;
-    T y = input[1]*50+0.1;
-    T z = input[2]*50+0.1;
+    T x = input[0]*scaling;
+    T y = input[1]*scaling;
+    T z = input[2]*scaling;
     output[0] = rho0+amplitude*util::exp(-alpha*(x*x+y*y+z*z));
     return true;
   };
@@ -151,12 +144,12 @@ public:
     Vector<T,3> x, distance_from_border;
     bool is_boundary = false;
     for (size_t d=0; d<3; d++) {
-      x[d] = ( std::abs(input[d]) - (Lx[d] - _boundary_depth_pu) ) / _boundary_depth_pu;  // x_0 becomes 0
+      x[d] = ( std::abs(input[d]) - x_0[d] ) / _boundary_depth_pu;  // x_0 becomes 0
       x[d] = std::max(x[d], 0.);  // if x[d]<0, ignore for X; if x[d]>1, set to one to avoid negative values of sigma
       if ( x[d] > 0 ) {
         is_boundary = true;
       }
-      distance_from_border[d] = Lx[d] - input[d];
+      distance_from_border[d] = Lx[d] - std::abs(input[d]);
     }
     if ( !is_boundary ) { output[0] = 0; return true; }
 
@@ -200,9 +193,9 @@ void prepareLattice(UnitConverter<T,DESCRIPTOR> const& converter,
   sLattice.defineDynamics<BulkDynamics>(bulkIndicator);
 
   // Material=3 --> dynamics depend..
-  // if ( boundarytype == periodic ) {
-  //   sLattice.defineDynamics<BulkDynamics>(superGeometry.getMaterialIndicator({3}));
-  // }
+  if ( boundarytype == periodic ) {
+    sLattice.defineDynamics<BulkDynamics>(superGeometry.getMaterialIndicator({3}));
+  }
   if ( boundarytype == local ) {
     setLocalPressureBoundary<T,DESCRIPTOR>(sLattice, omega, superGeometry, 3);
     setLocalVelocityBoundary<T,DESCRIPTOR>(sLattice, omega, superGeometry, 3);
@@ -211,9 +204,6 @@ void prepareLattice(UnitConverter<T,DESCRIPTOR> const& converter,
     clout << "Setting damping boundary" << std::endl;
     bulkIndicator = superGeometry.getMaterialIndicator({1, 3});
     setDampingBoundary<T,DESCRIPTOR>(sLattice, superGeometry, 3);
-  }
-  else {
-    clout << "Invalid boundarytype specified!" << std::endl;
   }
 
   // Initial conditions
@@ -250,54 +240,39 @@ void prepareLattice(UnitConverter<T,DESCRIPTOR> const& converter,
   } else if ( source == pointsource ) {
     AnalyticalConst3D<T,T> rho(rho0);
     //Initialize all values of distribution functions to their local equilibrium
-    sLattice.defineRhoU( superGeometry.getMaterialIndicator({4}), rho, u );
-    sLattice.iniEquilibrium( superGeometry.getMaterialIndicator({4}), rho, u );
+    sLattice.defineRhoU( superGeometry.getMaterialIndicator({3}), rho, u );
+    sLattice.iniEquilibrium( superGeometry.getMaterialIndicator({3}), rho, u );
   }
 
   // Define fields
   sLattice.setParameter<descriptors::OMEGA>( omega );
+  sLattice.defineField<descriptors::UX>( bulkIndicator, ux );
+  sLattice.defineField<descriptors::UY>( bulkIndicator, uy );
+  sLattice.defineField<descriptors::UZ>( bulkIndicator, uz );
   AnalyticalConst3D<T,T> rhoField( rho0 );
-  sLattice.defineField<descriptors::DENSITY>( superGeometry.getMaterialIndicator({2,3}), rhoField );
-  clout << "Rho is set to " << rho0 << " on Materials 1,3" << std::endl;
-  T actualV(0.);
-  if ( source == shock ) {
-    actualV = Ma;
-  } else if ( source == pointsource ) {
-    actualV = 0.;
-  }
-  AnalyticalConst3D<T,T> uxField( actualV );
-  sLattice.defineField<descriptors::UX>( superGeometry.getMaterialIndicator({2,3}), uxField );
-  clout << "UX is set to " << actualV << " on Materials 2,3" << std::endl;
-  superGeometry.updateStatistics();
-  superGeometry.getStatistics().print();
-  AnalyticalConst3D<T,T> uyField( 0. );
-  sLattice.defineField<descriptors::UY>( superGeometry, 3, uyField );
-  AnalyticalConst3D<T,T> uzField( 0. );
-  sLattice.defineField<descriptors::UZ>( superGeometry, 3, uzField );  
+  sLattice.defineField<descriptors::DENSITY>( bulkIndicator, rhoField );
 
-  if ( boundarytype == damping ) {
-    // output damping layer parameter
-    DampingTerm3D<T> sigma_plot( converter, boundary_depth, domain_lengths );
-    Gnuplot<T> gplot_hline( "sigma_hline");
-    Gnuplot<T> gplot_diag( "sigma_diag");
-    gplot_hline.setLabel("distance [m]", "density [LU]");
-    gplot_diag.setLabel("distance [m]", "density [LU]");
-    for (int n = 0; n <= int(ndatapoints/2); n++) {
-      T input_hline[3] =  {n*dist, 0, 0};
-      T output_hline[3];
-      sigma_plot(output_hline, input_hline);
-      gplot_hline.setData(input_hline[0], output_hline[0]);
-      T input_diag[3] =  {n*dist, n*dist, 0};
-      T output_diag[3];
-      sigma_plot(output_diag, input_diag);
-      gplot_diag.setData(input_diag[0], output_diag[0]);
-    }
-    gplot_hline.writePNG(-1, -1, "sigma_hline");
-    gplot_diag.writePNG(-1, -1, "sigma_diag");
-
-    DampingTerm3D<T> sigma( converter, boundary_depth, domain_lengths );
-    sLattice.defineField<descriptors::DAMPING>( superGeometry.getMaterialIndicator({2,3}), sigma );
+  // output damping layer parameter
+  DampingTerm3D<T> sigma_plot( converter, boundary_depth, domain_lengths );
+  Gnuplot<T> gplot_hline( "sigma_hline");
+  Gnuplot<T> gplot_diag( "sigma_diag");
+  gplot_hline.setLabel("distance [m]", "density [LU]");
+  gplot_diag.setLabel("distance [m]", "density [LU]");
+  for (int n = 0; n <= int(ndatapoints/2); n++) {
+    T input_hline[3] =  {n*dist, 0, 0};
+    T output_hline[3];
+    sigma_plot(output_hline, input_hline);
+    gplot_hline.setData(input_hline[0], output_hline[0]);
+    T input_diag[3] =  {n*dist, n*dist, 0};
+    T output_diag[3];
+    sigma_plot(output_diag, input_diag);
+    gplot_diag.setData(input_diag[0], output_diag[0]);
   }
+  gplot_hline.writePNG(-1, -1, "sigma_hline");
+  gplot_diag.writePNG(-1, -1, "sigma_diag");
+
+  DampingTerm3D<T> sigma( converter, boundary_depth, domain_lengths );
+  sLattice.defineField<descriptors::DAMPING>( superGeometry.getMaterialIndicator({3}), sigma );
   
   // Make the lattice ready for simulation
   sLattice.initialize();
@@ -440,12 +415,8 @@ void getResults(SuperLattice<T,DESCRIPTOR>& sLattice,
       interpolation_udiagonal(velocities_diagonal, input_diagonal);
       gplot_udiagonal.setData(input_diagonal[0], velocities_diagonal[0]);
     }
-    T ymin(converter.getPhysPressure(-amplitude/200));//-amplitude/10000);
-    T ymax(converter.getPhysPressure(+amplitude/200));//+amplitude/10000);
-    if ( sourcetype == pointsource ) {
-      ymin = converter.getPhysPressure(-amplitude/10000);
-      ymax = converter.getPhysPressure(+amplitude/10000);
-    }
+    T ymin(converter.getPhysPressure(-amplitude/200));
+    T ymax(converter.getPhysPressure(+amplitude/200));
     gplot_hline.setYrange(ymin, ymax);
     gplot_vline.setYrange(ymin, ymax);
     gplot_diagonal.setYrange(ymin, ymax);
@@ -456,21 +427,6 @@ void getResults(SuperLattice<T,DESCRIPTOR>& sLattice,
     gplot_diagonal.writePNG(-1, -1, "pressure_diagonal");
     gplot_udiagonal.writePNG(-1, -1, "velocity_diagonal");
     // gplot_diagonal.writePDF("densities_diagonal");
-
-    if ( iT == 0 ) {
-      SuperVTMwriter3D<T> vtmWriter_init( "movingshock3d_init" );
-      vtmWriter_init.createMasterFile();
-      SuperLatticePhysField3D<T,DESCRIPTOR,DAMPING> damping( sLattice, 1. );
-      damping.getName() = "dampingField";
-      SuperLatticePhysField3D<T,DESCRIPTOR,UX> ux( sLattice, 1. );
-      ux.getName() = "uxField";
-      SuperLatticePhysField3D<T,DESCRIPTOR,DENSITY> density( sLattice, 1. );
-      ux.getName() = "densityField";
-      vtmWriter_init.addFunctor( damping );
-      vtmWriter_init.addFunctor( ux );
-      vtmWriter_init.addFunctor( density );
-      vtmWriter_init.write( 0 );
-    }
 
     // get VTK and images
     if ( iT%(iout*2)==0) {
@@ -485,13 +441,8 @@ void getResults(SuperLattice<T,DESCRIPTOR>& sLattice,
       // pressure image
       BlockReduction3D2D<T> pressureReduction( pressure, Vector<T,3>({0, 0, 1}) );
       heatmap::plotParam<T> jpeg_ParamP;
-      if ( sourcetype == pointsource ) {
-        jpeg_ParamP.maxValue = converter.getPhysPressure(+amplitude/100000);
-        jpeg_ParamP.minValue = converter.getPhysPressure(-amplitude/100000);
-      } else {
-        jpeg_ParamP.maxValue = converter.getPhysPressure(+amplitude/200);
-        jpeg_ParamP.minValue = converter.getPhysPressure(-amplitude/200);
-      }
+      jpeg_ParamP.maxValue = converter.getPhysPressure(+amplitude/200);
+      jpeg_ParamP.minValue = converter.getPhysPressure(-amplitude/200);
       jpeg_ParamP.colour = "rainbow";
       jpeg_ParamP.fullScreenPlot = true;
       heatmap::write(pressureReduction, iT, jpeg_ParamP);
@@ -548,7 +499,7 @@ int main( int argc, char* argv[], char *envp[] )
   const int boundary_condition = args.getValueOrFallback( "--boundary_condition", 3);
   const int source_type = args.getValueOrFallback( "--source_type", 1);
   const bool debug = args.contains("--debug");
-  const int boundary_depth = args.getValueOrFallback( "--boundary_depth", 10);
+  const size_t boundary_depth = args.getValueOrFallback( "--boundary_depth", 10);
   const T amplitude = args.getValueOrFallback( "--amplitude", 0.1);
   size_t overlap = args.getValueOrFallback( "--overlap", 3);
 
@@ -574,6 +525,7 @@ int main( int argc, char* argv[], char *envp[] )
 
   singleton::directories().setOutputDir( outdir_mod.str()+"/" );  // set output directory
   OstreamManager clout( std::cout, "main" );
+  clout << "outdir set to " << outdir_mod.str() << std::endl;
 
   /* default values */
   BoundaryType boundarytype;
@@ -591,6 +543,10 @@ int main( int argc, char* argv[], char *envp[] )
     default: source = shock; clout << "Source type not specified. Default to shock." << std::endl; break;
   }
 
+  // clout << "overlap=" << overlap << "; boundary_depth_LU=" << boundary_depth << "; setting overlap to >=boundary_depth." << std::endl;
+  // overlap = std::max(overlap, boundary_depth);
+
+  // determining Reynolds regime (incl. viscosity and relaxation time)
   const T charL             = lengthDomain;
   T charV                   = std::max(Ma*1.1, 0.1);  // /targetMa;
   const T cs_LU             = 1 / std::sqrt(3.0);
@@ -648,11 +604,7 @@ int main( int argc, char* argv[], char *envp[] )
                                      converter.getConversionFactorLength(),
                                      noOfCuboids
                                      );
-  if ( boundarytype == periodic || boundarytype == damping ) {
-    cuboidGeometry.setPeriodicity(true, true, true);
-  } else {
-    cuboidGeometry.setPeriodicity(false, false, false);
-  }
+  cuboidGeometry.setPeriodicity(true, true, true);
 
   // Instantiation of a loadBalancer
   HeuristicLoadBalancer<T> loadBalancer( cuboidGeometry );
@@ -691,6 +643,19 @@ int main( int argc, char* argv[], char *envp[] )
   gplot_l2_abs.setLabel("time []", "absolute L2 norm []");
   T Lp0 = L2Norm( sLattice, superGeometry, 0, converter );
 
+  SuperVTMwriter3D<T> vtmWriter_init( "movingshock3d_init" );
+  vtmWriter_init.createMasterFile();
+  SuperLatticePhysField3D<T,DESCRIPTOR,DAMPING> damping( sLattice, 1. );
+  damping.getName() = "dampingField";
+  SuperLatticePhysField3D<T,DESCRIPTOR,UX> ux( sLattice, 1. );
+  ux.getName() = "uxField";
+  SuperLatticePhysField3D<T,DESCRIPTOR,DENSITY> density( sLattice, 1. );
+  density.getName() = "densityField";
+  vtmWriter_init.addFunctor( damping );
+  vtmWriter_init.addFunctor( ux );
+  vtmWriter_init.addFunctor( density );
+  vtmWriter_init.write( 0 );
+
   clout << "tmax=" << tmax << "[PU]=" << converter.getLatticeTime( tmax ) << "[PU], while imax=" << imax << " as input." << std::endl;
   imax = std::min( converter.getLatticeTime( tmax ), imax );
   tmax = converter.getPhysTime( imax );
@@ -707,7 +672,7 @@ int main( int argc, char* argv[], char *envp[] )
   size_t iT = 0;
   while ( iT < imax ) {
     // === 5th Step: Definition of Initial and Boundary Conditions ===
-    if ( boundarytype != periodic and boundarytype != damping ) {
+    if ( boundarytype == local ) {
       setBoundaryValues( converter, sLattice, iT, superGeometry, rho0, Ma, boundarytype, source, amplitude );
     }
     // === 6th Step: Collide and Stream Execution ===
