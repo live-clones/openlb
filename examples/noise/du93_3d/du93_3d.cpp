@@ -295,10 +295,10 @@ int main( int argc, char* argv[] )
   CLIreader args(argc, argv);
   std::string outdir        = args.getValueOrFallback<std::string>( "--outdir", "./tmp" );
   const T lengthDomain      = args.getValueOrFallback( "--lengthDomain", 6);
-  const size_t res          = args.getValueOrFallback( "--res", 10);
+  const size_t res          = args.getValueOrFallback( "--res", 100);
   T maxPhysT                = args.getValueOrFallback( "--tmax", 20.);
   T charV                   = args.getValueOrFallback( "--umax", 1.);
-  T Re                      = args.getValueOrFallback( "--Re", 200.);
+  T Re                      = args.getValueOrFallback( "--Re", 0.);
   T tau                     = args.getValueOrFallback( "--tau", 0.);  // previously tau=0.53 fixed
   singleton::directories().setOutputDir( outdir+"/" );
   T heightDomain            = .5*lengthDomain;
@@ -314,7 +314,7 @@ int main( int argc, char* argv[] )
     tau                     = viscosity / (cs_LU*cs_LU) + 0.5;
   }
   else {
-    if ( Re == 0 ) Re       = 20000;
+    if ( Re == 0 ) Re       = 200;
     viscosity               = charV * charL / Re;
   }
 
