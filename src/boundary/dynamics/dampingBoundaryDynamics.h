@@ -63,8 +63,8 @@ struct DampingBoundaryDynamics final : public dynamics::CustomCollision<T,DESCRI
     const V uzRef = cell.template getField<descriptors::UZ>();
     const V uRef[3] = {uxRef, uyRef, uzRef};
 
-    assert (uxRef == 0.1); // TODO: remove this debug check
-    assert (rhoRef == 1.); // TODO: remove this debug check
+    // assert (uxRef == 0.1); // TODO: remove this debug check
+    // assert (rhoRef == 1.); // TODO: remove this debug check
     
     const V omega = parameters.template get<descriptors::OMEGA>();
     const V sigma = cell.template getField<descriptors::DAMPING>();
