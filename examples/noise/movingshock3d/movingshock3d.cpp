@@ -125,10 +125,11 @@ protected:
   int A=4;
   int n=4;
   T _boundary_depth_pu;
+  T _damping_strength;
   UnitConverter<T, DESCRIPTOR> _converter;
 public:
-  DampingTerm3D(UnitConverter<T, DESCRIPTOR> converter, int boundary_depth_lu, Vector<T,3> domain_lengths )
-      : AnalyticalF3D<T,T>(1), _converter(converter)
+  DampingTerm3D(UnitConverter<T, DESCRIPTOR> converter, int boundary_depth_lu, Vector<T,3> domain_lengths, T damping_strength = 1. )
+      : AnalyticalF3D<T,T>(1), _converter(converter), _damping_strength(damping_strength)
       {
         _boundary_depth_pu = converter.getPhysLength(boundary_depth_lu);
         for (size_t d=0; d<3; d++) {
@@ -164,6 +165,7 @@ public:
     sigma /= 9.8304 / std::pow(_boundary_depth_pu, 6);  // calculated as max of function (at X=0.8) for A=n=4
     sigma = std::max(sigma, 0.);
     sigma = std::min(sigma, 1.);  // hard set 0<sigma<1
+    sigma *= _damping_strength;
     output[0] = sigma;
     return true;
   };
@@ -180,7 +182,8 @@ void prepareLattice(UnitConverter<T,DESCRIPTOR> const& converter,
                     BoundaryType boundarytype,
                     SourceType source,
                     int boundary_depth,
-                    Vector<T,3> domain_lengths
+                    Vector<T,3> domain_lengths,
+                    T damping_strength
                     )
 {
   OstreamManager clout( std::cout,"prepareLattice" );
@@ -252,26 +255,26 @@ void prepareLattice(UnitConverter<T,DESCRIPTOR> const& converter,
   AnalyticalConst3D<T,T> rhoField( rho0 );
   sLattice.defineField<descriptors::DENSITY>( bulkIndicator, rhoField );
 
-  // output damping layer parameter
-  DampingTerm3D<T> sigma_plot( converter, boundary_depth, domain_lengths );
-  Gnuplot<T> gplot_hline( "sigma_hline");
-  Gnuplot<T> gplot_diag( "sigma_diag");
-  gplot_hline.setLabel("distance [m]", "density [LU]");
-  gplot_diag.setLabel("distance [m]", "density [LU]");
-  for (int n = 0; n <= int(ndatapoints/2); n++) {
-    T input_hline[3] =  {n*dist, 0, 0};
-    T output_hline[3];
-    sigma_plot(output_hline, input_hline);
-    gplot_hline.setData(input_hline[0], output_hline[0]);
-    T input_diag[3] =  {n*dist, n*dist, 0};
-    T output_diag[3];
-    sigma_plot(output_diag, input_diag);
-    gplot_diag.setData(input_diag[0], output_diag[0]);
-  }
-  gplot_hline.writePNG(-1, -1, "sigma_hline");
-  gplot_diag.writePNG(-1, -1, "sigma_diag");
+  // // output damping layer parameter
+  // DampingTerm3D<T> sigma_plot( converter, boundary_depth, domain_lengths );
+  // Gnuplot<T> gplot_hline( "sigma_hline");
+  // Gnuplot<T> gplot_diag( "sigma_diag");
+  // gplot_hline.setLabel("distance [m]", "density [LU]");
+  // gplot_diag.setLabel("distance [m]", "density [LU]");
+  // for (int n = 0; n <= int(ndatapoints/2); n++) {
+  //   T input_hline[3] =  {n*dist, 0, 0};
+  //   T output_hline[3];
+  //   sigma_plot(output_hline, input_hline);
+  //   gplot_hline.setData(input_hline[0], output_hline[0]);
+  //   T input_diag[3] =  {n*dist, n*dist, 0};
+  //   T output_diag[3];
+  //   sigma_plot(output_diag, input_diag);
+  //   gplot_diag.setData(input_diag[0], output_diag[0]);
+  // }
+  // gplot_hline.writePNG(-1, -1, "sigma_hline");
+  // gplot_diag.writePNG(-1, -1, "sigma_diag");
 
-  DampingTerm3D<T> sigma( converter, boundary_depth, domain_lengths );
+  DampingTerm3D<T> sigma( converter, boundary_depth, domain_lengths, damping_strength );
   sLattice.defineField<descriptors::DAMPING>( superGeometry.getMaterialIndicator({3}), sigma );
   
   // Make the lattice ready for simulation
@@ -501,6 +504,7 @@ int main( int argc, char* argv[], char *envp[] )
   const bool debug = args.contains("--debug");
   const size_t boundary_depth = args.getValueOrFallback( "--boundary_depth", 10);
   const T amplitude = args.getValueOrFallback( "--amplitude", 0.1);
+  const T damping_strength = args.getValueOrFallback( "--damping_strength", 1.);
   size_t overlap = args.getValueOrFallback( "--overlap", 3);
 
   // initialize arguments
@@ -521,7 +525,7 @@ int main( int argc, char* argv[], char *envp[] )
     case 3: outdir_mod << "_damping"; break;
     default: outdir_mod << "_damping"; break;
   }
-  outdir_mod << Ma << "_Re" << Re << "_a" << amplitude << "_" << lengthDomain << "x" << heightDomain << "x" << depthDomain << "_res" << res << "_overlap" << overlap;
+  outdir_mod << Ma << "_Re" << Re << "_a" << amplitude << "_" << lengthDomain << "x" << heightDomain << "x" << depthDomain << "_res" << res << "_overlap" << overlap << "_bd" << boundary_depth << "x" << damping_strength;
 
   singleton::directories().setOutputDir( outdir_mod.str()+"/" );  // set output directory
   OstreamManager clout( std::cout, "main" );
@@ -620,7 +624,7 @@ int main( int argc, char* argv[], char *envp[] )
   SuperLattice<T,DESCRIPTOR> sLattice( superGeometry, debug );
 
   //prepare Lattice and set boundaryConditions
-  prepareLattice( converter, sLattice, superGeometry, rho0, Ma, amplitude, alpha_shock, boundarytype, source, boundary_depth, domain_lengths );
+  prepareLattice( converter, sLattice, superGeometry, rho0, Ma, amplitude, alpha_shock, boundarytype, source, boundary_depth, domain_lengths, damping_strength );
 
   // instantiate reusable functors
   SuperPlaneIntegralFluxVelocity3D<T> velocityFlux(

@@ -7,7 +7,7 @@
             "args": [],
             "problemMatcher": [],
             // ,
-            "dependsOn": "clean movingshock3d"
+            // "dependsOn": "clean movingshock3d"
         },
         {
             "type": "shell",
