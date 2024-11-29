@@ -11,7 +11,7 @@ protected:
   UnitConverter<T, DESCRIPTOR> _converter;
 public:
   DampingTerm(UnitConverter<T, DESCRIPTOR> converter, int boundary_depth_lu, Vector<T,ndim> domain_lengths, T damping_strength = 1. )
-      : AnalyticalF<ndim,T,T>(1), _converter(converter), _damping_strength(damping_strength)
+      : AnalyticalF<ndim,T,T>(1), _damping_strength(damping_strength), _converter(converter)
       {
         _boundary_depth_pu = converter.getPhysLength(boundary_depth_lu);
         for (size_t d=0; d<ndim; d++) {

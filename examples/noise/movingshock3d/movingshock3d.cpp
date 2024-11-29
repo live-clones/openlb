@@ -280,7 +280,7 @@ void getResults(SuperLattice<T,DESCRIPTOR>& sLattice,
 
   // Writes to console 10 times
   if ( iT%iout==0 ) {
-    // sLattice.setProcessingContext(ProcessingContext::Evaluation);
+    sLattice.setProcessingContext(ProcessingContext::Evaluation);  // important for synchronization (?) on GPU
     // velocityFlux.print();
     // pressureFlux.print();
     // write to terminal
@@ -288,15 +288,12 @@ void getResults(SuperLattice<T,DESCRIPTOR>& sLattice,
     timer.printStep();
     // Lattice statistics console output
     sLattice.getStatistics().print( iT,converter.getPhysTime( iT ) );
-  }
 
-  if ( iT%std::max(int(iout/10), 1)==0 ) {
-    gplot_l2_abs.setData(T(iT), L2Norm(sLattice, superGeometry, iT,
-                                       converter) / Lp0 );
-  }
+    if ( iT%std::max(int(iout/10), 1)==0 ) {
+      gplot_l2_abs.setData(T(iT), L2Norm(sLattice, superGeometry, iT,
+                                        converter) / Lp0 );
+    }
 
-  // often get LU density plot along x
-  if ( iT%iout == 0 ) {
     SuperLatticePhysPressure3D<T,DESCRIPTOR> pressure( sLattice, converter );
     SuperLatticePhysVelocity3D<T,DESCRIPTOR> velocity( sLattice, converter );
 
@@ -514,10 +511,10 @@ int main( int argc, char* argv[], char *envp[] )
 #ifdef PARALLEL_MODE_MPI
   const int noOfCuboids = singleton::mpi().getSize();
 #else
-  const int noOfCuboids = 1;
+  const int noOfCuboids = 6;
 #endif
 
-  if ( noOfCuboids > 0 && boundarytype == damping ) {
+  if ( noOfCuboids > 1 && boundarytype == damping ) {
     clout << "overlap=" << overlap << "; boundary_depth_LU=" << boundary_depth << "; setting overlap to >=boundary_depth." << std::endl;
     overlap = std::max(overlap, boundary_depth);
   }
@@ -587,10 +584,12 @@ int main( int argc, char* argv[], char *envp[] )
   clout << "tmax=" << tmax << "[PU]=" << converter.getLatticeTime( tmax ) << "[PU], while imax=" << imax << " as input." << std::endl;
   imax = std::min( converter.getLatticeTime( tmax ), imax );
   tmax = converter.getPhysTime( imax );
-  if ( debug ) { imax=100; iout=10;  }
+  clout << "tmax=" << tmax << ", while imax=" << imax << " recalculated." << std::endl;
+  clout << "nout=" << nout << "; iout=" << iout << " as input." << std::endl;
+  nout = std::max(1, nout);
   if ( iout == 0 ) iout = int(imax / nout);
   iout = std::min(iout, int(imax / nout));
-  clout << "tmax=" << tmax << ", while imax=" << imax << " recalculated. iout=" << iout << std::endl;
+  clout << "nout=" << nout << "; iout=" << iout << " recalculated." << std::endl;
 
   // === 4th Step: Main Loop with Timer ===
   clout << "starting simulation..." << std::endl;

@@ -11,6 +11,7 @@ examples/porousMedia/porousPoiseuille3d/porousPoiseuille3d
 *.o
 *.a
 examples/laminar/cavity2d/cavity2d
+examples/laminar/cavity3d/cavity3d
 examples/laminar/cavity3dBenchmark/cavity3d
 examples/laminar/cylinder3d/cylinder3d
 examples/noise/movingshock3d/movingshock3d
