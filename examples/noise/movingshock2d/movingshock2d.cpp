@@ -96,28 +96,6 @@ void prepareGeometry(UnitConverter<T,DESCRIPTOR> const& converter,
   clout << "Prepare Geometry ... OK" << std::endl;
 }
 
-
-template <typename T>
-class AcousticPulse2D : public AnalyticalF2D<T,T> {
-
-protected:
-  T rho0;
-  T amplitude;
-  UnitConverter<T, DESCRIPTOR> converter;
-public:
-  AcousticPulse2D(UnitConverter<T, DESCRIPTOR> converter, T rho0, T amplitude)
-      : AnalyticalF2D<T,T>(1), rho0(rho0), amplitude(amplitude),
-      converter(converter) {};
-
-  bool operator()(T output[], const T input[]) override
-  {
-    T x = input[0]*100;
-    T y = input[1]*100;
-    output[0] = rho0+amplitude*util::exp(-alpha*(x*x+y*y));
-    return true;
-  };
-};
-
 // Set up the geometry of the simulation
 void prepareLattice(UnitConverter<T,DESCRIPTOR> const& converter,
                     SuperLattice<T,DESCRIPTOR>& sLattice,
@@ -163,7 +141,7 @@ void prepareLattice(UnitConverter<T,DESCRIPTOR> const& converter,
   }
   AnalyticalConst2D<T,T> uy( 0. );
   AnalyticalComposed2D<T,T> u( *ux, uy );
-  AcousticPulse2D<T> pressureProfile( converter, rho0, amplitude );
+  AcousticPulse<2,T> pressureProfile( rho0, amplitude, alpha );
   //Initialize all values of distribution functions to their local equilibrium
   sLattice.defineRhoU( bulkIndicator, pressureProfile, u );
   sLattice.iniEquilibrium( bulkIndicator, pressureProfile, u );

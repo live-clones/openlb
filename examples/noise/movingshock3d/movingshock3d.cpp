@@ -94,83 +94,6 @@ void prepareGeometry(UnitConverter<T,DESCRIPTOR> const& converter,
   clout << "Prepare Geometry ... OK" << std::endl;
 }
 
-
-template <typename T>
-class AcousticPulse3D : public AnalyticalF3D<T,T> {
-protected:
-  T rho0;
-  T amplitude;
-  T alpha;
-  T scaling=50;  // shock is too large otherwise -> scaling it to 1/50 extend
-  UnitConverter<T, DESCRIPTOR> _converter;
-public:
-  AcousticPulse3D(UnitConverter<T, DESCRIPTOR> converter, T rho0, T amplitude, T alpha )
-      : AnalyticalF3D<T,T>(1), rho0(rho0), amplitude(amplitude), alpha(alpha),
-      _converter(converter) {};
-
-  bool operator()(T output[], const T input[]) override
-  {
-    T x = input[0]*scaling;
-    T y = input[1]*scaling;
-    T z = input[2]*scaling;
-    output[0] = rho0+amplitude*util::exp(-alpha*(x*x+y*y+z*z));
-    return true;
-  };
-};
-
-template <typename T>
-class DampingTerm3D : public AnalyticalF3D<T,T> {
-protected:
-  Vector<T,3> x_0, Lx;
-  int A=4;
-  int n=4;
-  T _boundary_depth_pu;
-  T _damping_strength;
-  UnitConverter<T, DESCRIPTOR> _converter;
-public:
-  DampingTerm3D(UnitConverter<T, DESCRIPTOR> converter, int boundary_depth_lu, Vector<T,3> domain_lengths, T damping_strength = 1. )
-      : AnalyticalF3D<T,T>(1), _converter(converter), _damping_strength(damping_strength)
-      {
-        _boundary_depth_pu = converter.getPhysLength(boundary_depth_lu);
-        for (size_t d=0; d<3; d++) {
-          Lx[d] = domain_lengths[d]/2;  // Lx is usually half the domain
-          x_0[d] = Lx[d] - _boundary_depth_pu;  // subtract boundary depth from domain length
-          // x_0[d] /= Lx[d];  // normalize x_0 (Lx is still needed in operator() to normalize x; Lx will be replaced by 1)
-        }
-      };
-
-  bool operator()(T output[], const T input[]) override
-  {
-    // normalize x to [0,1]
-    Vector<T,3> x, distance_from_border;
-    bool is_boundary = false;
-    for (size_t d=0; d<3; d++) {
-      x[d] = ( std::abs(input[d]) - x_0[d] ) / _boundary_depth_pu;  // x_0 becomes 0
-      x[d] = std::max(x[d], 0.);  // if x[d]<0, ignore for X; if x[d]>1, set to one to avoid negative values of sigma
-      if ( x[d] > 0 ) {
-        is_boundary = true;
-      }
-      distance_from_border[d] = Lx[d] - std::abs(input[d]);
-    }
-    if ( !is_boundary ) { output[0] = 0; return true; }
-
-    T X=0.;
-    for ( size_t d=0; d<3; d++ ) {
-      if ( distance_from_border[d] == *std::min_element(std::begin(distance_from_border), std::end(distance_from_border)) ) {
-        X = x[d];
-      }
-    }
-    T sigma;
-    sigma = A * ( ( (std::pow(X, n))*(1-X)*(n+1)*(n+2) ) / std::pow(_boundary_depth_pu,n+2) );  // x_0 left out
-    sigma /= 9.8304 / std::pow(_boundary_depth_pu, 6);  // calculated as max of function (at X=0.8) for A=n=4
-    sigma = std::max(sigma, 0.);
-    sigma = std::min(sigma, 1.);  // hard set 0<sigma<1
-    sigma *= _damping_strength;
-    output[0] = sigma;
-    return true;
-  };
-};
-
 // Set up the geometry of the simulation
 void prepareLattice(UnitConverter<T,DESCRIPTOR> const& converter,
                     SuperLattice<T,DESCRIPTOR>& sLattice,
@@ -218,7 +141,7 @@ void prepareLattice(UnitConverter<T,DESCRIPTOR> const& converter,
   T ndatapoints = converter.getResolution();
   T dist = converter.getPhysDeltaX();
   if ( source == shock ) {
-    AcousticPulse3D<T> pressureProfile( converter, rho0, amplitude, alpha );
+    AcousticPulse<3,T> pressureProfile( rho0, amplitude, alpha );
     
     Gnuplot<T> gplot_hline_p( "shock_hline");
     Gnuplot<T> gplot_diag_p( "shock_diag");
@@ -247,34 +170,34 @@ void prepareLattice(UnitConverter<T,DESCRIPTOR> const& converter,
     sLattice.iniEquilibrium( superGeometry.getMaterialIndicator({3}), rho, u );
   }
 
-  // Define fields
   sLattice.setParameter<descriptors::OMEGA>( omega );
+  // Define fields; could also use setParameter as for omega, but then I could not use a flow profile
   sLattice.defineField<descriptors::UX>( bulkIndicator, ux );
   sLattice.defineField<descriptors::UY>( bulkIndicator, uy );
   sLattice.defineField<descriptors::UZ>( bulkIndicator, uz );
   AnalyticalConst3D<T,T> rhoField( rho0 );
   sLattice.defineField<descriptors::DENSITY>( bulkIndicator, rhoField );
 
-  // // output damping layer parameter
-  // DampingTerm3D<T> sigma_plot( converter, boundary_depth, domain_lengths );
-  // Gnuplot<T> gplot_hline( "sigma_hline");
-  // Gnuplot<T> gplot_diag( "sigma_diag");
-  // gplot_hline.setLabel("distance [m]", "density [LU]");
-  // gplot_diag.setLabel("distance [m]", "density [LU]");
-  // for (int n = 0; n <= int(ndatapoints/2); n++) {
-  //   T input_hline[3] =  {n*dist, 0, 0};
-  //   T output_hline[3];
-  //   sigma_plot(output_hline, input_hline);
-  //   gplot_hline.setData(input_hline[0], output_hline[0]);
-  //   T input_diag[3] =  {n*dist, n*dist, 0};
-  //   T output_diag[3];
-  //   sigma_plot(output_diag, input_diag);
-  //   gplot_diag.setData(input_diag[0], output_diag[0]);
-  // }
-  // gplot_hline.writePNG(-1, -1, "sigma_hline");
-  // gplot_diag.writePNG(-1, -1, "sigma_diag");
+  // output damping layer parameter
+  DampingTerm<3,T,DESCRIPTOR> sigma_plot( converter, boundary_depth, domain_lengths );
+  Gnuplot<T> gplot_hline( "sigma_hline");
+  Gnuplot<T> gplot_diag( "sigma_diag");
+  gplot_hline.setLabel("distance [m]", "density [LU]");
+  gplot_diag.setLabel("distance [m]", "density [LU]");
+  for (int n = 0; n <= int(ndatapoints/2); n++) {
+    T input_hline[3] =  {n*dist, 0, 0};
+    T output_hline[3];
+    sigma_plot(output_hline, input_hline);
+    gplot_hline.setData(input_hline[0], output_hline[0]);
+    T input_diag[3] =  {n*dist, n*dist, 0};
+    T output_diag[3];
+    sigma_plot(output_diag, input_diag);
+    gplot_diag.setData(input_diag[0], output_diag[0]);
+  }
+  gplot_hline.writePNG(-1, -1, "sigma_hline");
+  gplot_diag.writePNG(-1, -1, "sigma_diag");
 
-  DampingTerm3D<T> sigma( converter, boundary_depth, domain_lengths, damping_strength );
+  DampingTerm<3,T,DESCRIPTOR> sigma( converter, boundary_depth, domain_lengths, damping_strength );
   sLattice.defineField<descriptors::DAMPING>( superGeometry.getMaterialIndicator({3}), sigma );
   
   // Make the lattice ready for simulation
@@ -342,7 +265,6 @@ void getResults(SuperLattice<T,DESCRIPTOR>& sLattice,
   gpu::cuda::device::synchronize();
 #endif
   OstreamManager clout( std::cout,"getResults" );
-  // clout << "getResults startet at iT=" << iT << ", iout=" << iout << std::endl;
   SuperVTMwriter3D<T> vtmWriter( "movingshock3d" );
 
   if ( iT==0 ) {
@@ -477,12 +399,12 @@ int main( int argc, char* argv[], char *envp[] )
 {
   // === 1st Step: Initialization ===
   olbInit( &argc, &argv );
-  if ( singleton::mpi().isMainProcessor() ) {
-    std::copy(argv, argv + argc, std::ostream_iterator<char *>(std::cout, " "));
-    printf("\n");
-  }
-  std::copy(argv, argv + argc, std::ostream_iterator<char *>(std::cout, " "));
-  printf("\n");
+  // if ( singleton::mpi().isMainProcessor() ) {
+  //   std::copy(argv, argv + argc, std::ostream_iterator<char *>(std::cout, " "));
+  //   printf("\n");
+  // }
+  // std::copy(argv, argv + argc, std::ostream_iterator<char *>(std::cout, " "));
+  // printf("\n");
   CLIreader args(argc, argv);
   std::string outdir = args.getValueOrFallback<std::string>( "--outdir", "./tmp" );
 
@@ -547,9 +469,6 @@ int main( int argc, char* argv[], char *envp[] )
     default: source = shock; clout << "Source type not specified. Default to shock." << std::endl; break;
   }
 
-  // clout << "overlap=" << overlap << "; boundary_depth_LU=" << boundary_depth << "; setting overlap to >=boundary_depth." << std::endl;
-  // overlap = std::max(overlap, boundary_depth);
-
   // determining Reynolds regime (incl. viscosity and relaxation time)
   const T charL             = lengthDomain;
   T charV                   = std::max(Ma*1.1, 0.1);  // /targetMa;
@@ -597,6 +516,11 @@ int main( int argc, char* argv[], char *envp[] )
 #else
   const int noOfCuboids = 1;
 #endif
+
+  if ( noOfCuboids > 0 && boundarytype == damping ) {
+    clout << "overlap=" << overlap << "; boundary_depth_LU=" << boundary_depth << "; setting overlap to >=boundary_depth." << std::endl;
+    overlap = std::max(overlap, boundary_depth);
+  }
 
   // setup domain
   Vector<T,3> domain_lengths = {lengthDomain, heightDomain, depthDomain};

@@ -30,3 +30,5 @@
 #include "analytical/functors2D.h"
 #include "lattice/functors2D.h"
 #include "particles/particleFunctors.h"
+#include "noise_auxiliary/dampingTerm.h"
+#include "noise_auxiliary/acousticPulse.h"
