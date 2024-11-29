@@ -46,24 +46,25 @@ using DESCRIPTOR = D3Q19<>;
 
 // Stores data from stl file in geometry in form of material numbers
 void prepareGeometry( UnitConverter<T,DESCRIPTOR> const& converter, //std::shared_ptr<IndicatorF3D<T>> domain,
-                      STLreader<T>& stlReader, SuperGeometry<T,3>& superGeometry )
+                      STLreader<T>& stlReader, SuperGeometry<T,3>& superGeometry, bool withTrailingEdge )
 {
   OstreamManager clout( std::cout,"prepareGeometry" );
 
   superGeometry.rename( 0,2 );
 
   Vector<T,3> origin = superGeometry.getStatistics().getMinPhysR( 2 );
-  // origin[1] += converter.getConversionFactorLength()/2.;
-  // origin[2] += converter.getConversionFactorLength()/2.;
-
   Vector<T,3> extend = superGeometry.getStatistics().getMaxPhysR( 2 ) - superGeometry.getStatistics().getMinPhysR( 2 );
-  // extend[1] = extend[1]-origin[1]-converter.getConversionFactorLength()/2.;
-  // extend[2] = extend[2]-origin[2]-converter.getConversionFactorLength()/2.;
 
-  // all remaining are fluid
+  // all nodes except x-boundaries to fluid
   superGeometry.rename( 2,1,{1,0,0} );
   // du93 profile
   superGeometry.rename( 1,5,stlReader );
+  if ( withTrailingEdge ) {
+    // trailing edge area
+    origin[0] = 0.7;
+    IndicatorCuboid3D<T> trailingEdge( extend, origin );
+    superGeometry.rename( 5,6,trailingEdge );
+  }
 
   // Set material number for inflow
   origin[0] = superGeometry.getStatistics().getMinPhysR( 2 )[0]-converter.getConversionFactorLength();
@@ -86,7 +87,8 @@ void prepareGeometry( UnitConverter<T,DESCRIPTOR> const& converter, //std::share
         << "2 = Check (should be empty!)" << std::endl
         << "3 = Inflow" << std::endl
         << "4 = Outflow" << std::endl
-        << "5 = Airfoil Bounce Back or Bouzidi" << std::endl;
+        << "5 = Airfoil Bounce Back or Bouzidi" << std::endl
+        << "6 = Airfoil porous trailing edge" << std::endl;
   superGeometry.print();
   clout << "Prepare Geometry ... OK" << std::endl;
 }
@@ -95,7 +97,8 @@ void prepareGeometry( UnitConverter<T,DESCRIPTOR> const& converter, //std::share
 void prepareLattice( SuperLattice<T,DESCRIPTOR>& sLattice,
                      UnitConverter<T,DESCRIPTOR> const& converter,
                      STLreader<T>& stlReader,
-                     SuperGeometry<T,3>& superGeometry )
+                     SuperGeometry<T,3>& superGeometry,
+                     bool withTrailingEdge )
 {
   OstreamManager clout( std::cout,"prepareLattice" );
   clout << "Prepare Lattice ..." << std::endl;
@@ -109,15 +112,10 @@ void prepareLattice( SuperLattice<T,DESCRIPTOR>& sLattice,
   // Material=2 -->bounce back
   setBounceBackBoundary(sLattice, superGeometry, 2);
 
-  // Setting of the boundary conditions
-
-  //if local boundary conditions are chosen
-  //setLocalVelocityBoundary(sLattice, omega, superGeometry, 3);
-  //setLocalPressureBoundary(sLattice, omega, superGeometry, 4);
-
-  //if interpolated boundary conditions are chosen
-  setInterpolatedVelocityBoundary(sLattice, omega, superGeometry, 3);
-  setInterpolatedPressureBoundary(sLattice, omega, superGeometry, 4);
+  // Material=3 -->inlet
+  setLocalVelocityBoundary(sLattice, omega, superGeometry, 3);
+  // Material=4 -->outlet
+  setInterpolatedConvectionBoundary(sLattice, omega, superGeometry, 4);
 
   // Material=5 -->bouzidi / bounce back
   #ifdef BOUZIDI
@@ -125,6 +123,24 @@ void prepareLattice( SuperLattice<T,DESCRIPTOR>& sLattice,
   #else
   setBounceBackBoundary(sLattice, superGeometry, 5);
   #endif
+
+  if ( withTrailingEdge ) {
+    // Material=6 --> porous media
+    sLattice.defineDynamics<PorousBGKdynamics>(superGeometry, 6);
+    T tau = converter.getLatticeRelaxationTime();
+    T Kin = 1e-2;               // Permeability
+    T nu = (tau-0.5)/3.;
+    T h = converter.getPhysDeltaX();
+    T d = 1. - (h*h*nu*tau/Kin);
+    clout << "Lattice Porosity: " << d << std::endl;
+    clout << "Kmin: " << h*h*nu*tau << std::endl;
+    if (Kin < h*h*nu*tau) {
+      clout << "WARNING: Chosen K is too small!" << std::endl;
+      exit(1);
+    }
+    AnalyticalConst3D<T,T> porosity(d);
+    sLattice.defineField<POROSITY>(superGeometry, 6, porosity);
+  }
 
   // Initial conditions
   AnalyticalConst3D<T,T> rhoF( 1 );
@@ -295,15 +311,15 @@ int main( int argc, char* argv[] )
   CLIreader args(argc, argv);
   std::string outdir        = args.getValueOrFallback<std::string>( "--outdir", "./tmp" );
   const T lengthDomain      = args.getValueOrFallback( "--lengthDomain", 6);
-  const size_t res          = args.getValueOrFallback( "--res", 100);
+  const size_t res          = args.getValueOrFallback( "--res", 20);
   T maxPhysT                = args.getValueOrFallback( "--tmax", 20.);
-  T charV                   = args.getValueOrFallback( "--umax", 1.);
+  T charV                   = args.getValueOrFallback( "--umax", .5);
   T Re                      = args.getValueOrFallback( "--Re", 0.);
   T tau                     = args.getValueOrFallback( "--tau", 0.);  // previously tau=0.53 fixed
-  singleton::directories().setOutputDir( outdir+"/" );
+  const bool withTrailingEdge = !args.contains("--no-porous");
   T heightDomain            = .5*lengthDomain;
   T depthDomain             = .2*lengthDomain;
-  T charL                   = 1.;
+  T charL                   = args.getValueOrFallback( "--charL", 1.);
   const T cs_LU             = 1 / std::sqrt(3.0);
   T viscosity;
   if ( tau == 0 ) {
@@ -317,6 +333,8 @@ int main( int argc, char* argv[] )
     if ( Re == 0 ) Re       = 200;
     viscosity               = charV * charL / Re;
   }
+
+  singleton::directories().setOutputDir( outdir+"/" );
 
   UnitConverterFromResolutionAndRelaxationTime<T, DESCRIPTOR> const converter(
     (size_t)  res,            // resolution: number of voxels per charPhysL
@@ -361,13 +379,13 @@ int main( int argc, char* argv[] )
   // Instantiation of a superGeometry
   SuperGeometry<T,3> superGeometry( cuboidGeometry, loadBalancer );
 
-  prepareGeometry( converter, stlReader, superGeometry );
+  prepareGeometry( converter, stlReader, superGeometry, withTrailingEdge );
 
   // === 3rd Step: Prepare Lattice ===
   SuperLattice<T, DESCRIPTOR> sLattice( superGeometry );
 
   //prepareLattice and set boundaryCondition
-  prepareLattice( sLattice, converter, stlReader, superGeometry );
+  prepareLattice( sLattice, converter, stlReader, superGeometry, withTrailingEdge );
 
   // === 4th Step: Main Loop with Timer ===
   clout << "starting simulation..." << std::endl;
