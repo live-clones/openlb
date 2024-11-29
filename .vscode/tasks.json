@@ -25,6 +25,15 @@
         },
         {
             "type": "shell",
+            "label": "make du93_3d",
+            "command": "/usr/bin/make",
+            "args": [],
+            "problemMatcher": [],
+            // ,
+            // "dependsOn": "clean du93_3d"
+        },
+        {
+            "type": "shell",
             "label": "clean cylinder3dnoise",
             "command": "cd $HOME/OpenLB/examples/noise/cylinder3dnoise && /usr/bin/make clean"
         },

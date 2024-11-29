@@ -22,6 +22,26 @@
       "preLaunchTask": "make movingshock3d"
     },
     {
+      "name": "Debug du93_3d laptop",
+      "type": "cppdbg",
+      "request": "launch",
+      "args": [], // "--debug", 
+      "stopAtEntry": false,
+      "externalConsole": false,
+      "cwd": "/home/hbrs/OpenLB/examples/noise/du93_3d",
+      "program": "/home/hbrs/OpenLB/examples/noise/du93_3d/du93_3d",
+      "MIMode": "gdb",
+      "miDebuggerPath": "gdb",
+      "setupCommands": [
+        {
+          "description": "Enable pretty-printing for gdb",
+          "text": "-enable-pretty-printing",
+          "ignoreFailures": true
+        }
+      ],
+      "preLaunchTask": "make du93_3d"
+    },
+    {
       "name": "Debug movingshock3d workstation",
       "type": "cppdbg",
       "request": "launch",
