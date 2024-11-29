@@ -23,6 +23,9 @@ CC              := gcc
 CXXFLAGS        := -O3 -Wall -march=native -mtune=native
 CXXFLAGS        += -std=c++17
 
+# allow debugging, for now (?)
+CXXFLAGS        += -g
+
 # HYBRID mode is also possible but more complex to run correctly
 PARALLEL_MODE   := MPI
 

@@ -1,9 +1,11 @@
 # You may need to add to the PATH variable! (but better configure in your terminal depending on machine)
-export PATH := /usr/local/cuda-12.1/bin:$(PATH)
-export PATH := ${HOME}/openmpi/bin:$(PATH)
+#export PATH := /usr/local/cuda-12.6/bin:$(PATH)
+#export LIBRARY_PATH := $(LIBRARY_PATH):/usr/local/cuda-12.6/lib64
+export MPI_ROOT := ${MPI_ROOT}#/home/hbrs/openmpi#/usr/lib/x86_64-linux-gnu/openmpi
+# export PATH := ${HOME}/openmpi/include:$(PATH)
 
 # Include config.mk environment (optional)
--include $(OLB_ROOT)/config.mk#/cpu_gcc_openmpi.mk#/config/gpu_only.mk#gpu_hybrid_mixed.mk#
+-include $(OLB_ROOT)/config.mk#config.mk#/cpu_gcc_openmpi.mk#/config/gpu_hybrid_mixed.mk#
 # LIBS = -L/lib/x86_64-linux-gnu/ -lhwloc  # libhwloc.so.15:$(LD_LIBRARY_PATH)
 
 # Select mixed compilation mode if separate CUDA compiler is given

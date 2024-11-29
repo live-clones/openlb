@@ -26,6 +26,6 @@ PLATFORMS       := CPU_SISD GPU_CUDA
 # Workstation: Geforce RTX 20...    7.5 (?)	Turing
 CUDA_ARCH       := 86
 
-FLOATING_POINT_TYPE := float
+FLOATING_POINT_TYPE := double
 
 USE_EMBEDDED_DEPENDENCIES := ON
