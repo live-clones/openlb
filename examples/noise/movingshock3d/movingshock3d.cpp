@@ -448,7 +448,7 @@ void getResults(SuperLattice<T,DESCRIPTOR>& sLattice,
 }
 
 
-int main( int argc, char* argv[], char *envp[] )
+int main( int argc, char* argv[] )
 {
   // === 1st Step: Initialization ===
   olbInit( &argc, &argv );

@@ -1,45 +1,40 @@
-# Example build config for OpenLB using CUDA and OpenMPI
-#
-# Tested using CUDA 11.4 and OpenMPI 4.1 (CUDA aware)
+# Example build config for OpenLB using GNU C++ and OpenMPI
 #
 # Usage:
 #  - Copy this file to OpenLB root as `config.mk`
-#  - Adjust CUDA_ARCH to match your specifc GPU
 #  - Run `make clean; make`
 #  - Switch to example directory, e.g. `examples/laminar/cavity3dBenchmark`
 #  - Run `make`
-#  - Start the simulation using `mpirun -np 2 ./cavity3d` (All processes share default GPU, not optimal)
+#  - Start the simulation using `mpirun ./cavity3d`
 #
-# Usage on a multi GPU system: (recommended when using MPI, use non-MPI version on single GPU systems)
-#  - Run `mpirun -np 4 bash -c 'export CUDA_VISIBLE_DEVICES=${OMPI_COMM_WORLD_LOCAL_RANK}; ./cavity3d'
-#    (for a 4 GPU system, further process mapping advisable, consult cluster documentation)
+# Usage of the Intel C++ compiler is recommended for Intel CPU clusters.
+# See `config/cpu_simd_intel_mpi.mk` for guidance.
+
+CXX             := mpic++
+CC              := gcc
+
+# The `march=native` flag enables AVX2 / AVX-512 instructions if available.
+# However, actually using them requires adding the `CPU_SIMD` platform.
 #
-# CXXFLAGS and LDFLAGS may need to be adjusted depending on the specific MPI installation.
-# Compare to `mpicxx --showme:compile` and `mpicxx --showme:link` when in doubt.
-
-CXX             := nvcc
-CC              := nvcc
-
-CXXFLAGS        := -O3
+# Note that on some clusters the head node for compilation may differ from
+# the compute nodes, necessitating manual selection of the correct
+# architecture / SIMD flags. Alternatively, compilation at the start of
+# the HPC jobs is a common option.
+CXXFLAGS        := -O3 -Wall -march=native -mtune=native
 CXXFLAGS        += -std=c++17
 
-CXXFLAGS		+= -I${MPI_ROOT}/include
-CXXFLAGS		+= -diag-suppress 20012
-LDFLAGS   		+= -L${MPI_ROOT}/lib # $$ mpicxx --showme:link $$ -L${MPI_ROOT}/lib -Wl,-rpath -Wl, ${MPI_ROOT}/lib -Wl,--enable-new-dtags -lmpi
+# allow debugging, for now (?)
+CXXFLAGS        += -g
 
-#LDFLAGS += -L/usr/lib/x86_64-linux-gnu/openmpi/lib
-
+# HYBRID mode is also possible but more complex to run correctly
 PARALLEL_MODE   := MPI
 
-MPIFLAGS        := -lmpi -lmpi_cxx # may need to use openmpi 4.1!
+# optional MPI and OpenMP flags
+OMPFLAGS        := -fopenmp
 
-PLATFORMS       := CPU_SISD GPU_CUDA
+# SIMD support may optionally be enabled by adding the `CPU_SIMD` platform
+PLATFORMS       := CPU_SISD # CPU_SIMD
 
-# for e.g. RTX 30* (Ampere), see table in `rules.mk` for other options
-# Laptop: Geforce RTX 3060    		8.6
-# Workstation: Geforce RTX 20...    7.5 (?)
-CUDA_ARCH       := 86
-
-FLOATING_POINT_TYPE := float
+FLOATING_POINT_TYPE := double
 
 USE_EMBEDDED_DEPENDENCIES := ON

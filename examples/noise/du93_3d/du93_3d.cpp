@@ -37,6 +37,8 @@ using namespace olb::graphics;
 using T = FLOATING_POINT_TYPE;
 using DESCRIPTOR = D3Q19<>;
 
+// T* uAverage = NULL;
+
 #define BOUZIDI
 
 // Parameters for the simulation setup
@@ -62,8 +64,13 @@ void prepareGeometry( UnitConverter<T,DESCRIPTOR> const& converter, //std::share
   if ( withTrailingEdge ) {
     // trailing edge area
     origin[0] = 0.7;
+    // origin[1] = -0.25;
+    extend[0] = 0.3;
+    // extend[1] = 0.2;
     IndicatorCuboid3D<T> trailingEdge( extend, origin );
-    superGeometry.rename( 5,6,trailingEdge );
+    clout << "Trailing edge from " << origin << " to " << extend << std::endl;
+    superGeometry.rename( 5, 6, trailingEdge );
+    superGeometry.getStatistics().print();
   }
 
   // Set material number for inflow
@@ -335,6 +342,7 @@ int main( int argc, char* argv[] )
   }
 
   singleton::directories().setOutputDir( outdir+"/" );
+  if ( withTrailingEdge ) clout << "Calculating with trailing edge" << std::endl;
 
   UnitConverterFromResolutionAndRelaxationTime<T, DESCRIPTOR> const converter(
     (size_t)  res,            // resolution: number of voxels per charPhysL
