@@ -43,46 +43,92 @@ using BulkDynamics = KBCdynamics<T,DESCRIPTOR>;
 // using DESCRIPTOR = D3Q27<>;
 // using BulkDynamics = BGKdynamics<T,DESCRIPTOR>;
 
-typedef enum {periodic, bounceBack, local, damping} BoundaryType;
+const int noMat   = 0;
+const int checMat = 2;
+const int dampMat = 1;
+const int fluiMat = 3;
+const int inflMat = 4;
+const int outfMat = 5;
+const unsigned int ndim = 3;
+
+typedef enum {periodic, bounceBack, local, damping, dampingAndLocal} BoundaryType;
 typedef enum {shock, pointsource} SourceType;
 
 // Stores geometry information in form of material numbers
 void prepareGeometry(UnitConverter<T,DESCRIPTOR> const& converter,
-                     SuperGeometry<T,3>& superGeometry,
-                     std::shared_ptr<IndicatorF3D<T>> domain,
+                     SuperGeometry<T,ndim>& superGeometry,
+                     std::shared_ptr<IndicatorF<T,ndim>> domain,
                      BoundaryType boundarytype,
                      SourceType source,
                      int res,
                      bool debug,
-                     int boundary_depth,
-                     Vector<T,3> domain_lengths
+                     int boundary_depth
                      )
 {
   OstreamManager clout( std::cout,"prepareGeometry" );
   clout << "Prepare Geometry ..." << std::endl
         << "Materials:" << std::endl
-        << "1 = Fluid" << std::endl
-        << "2 = Check (should be empty)" << std::endl
-        << "3 = Boundary (far field)" << std::endl;
+        << noMat   << " = no Material (default, should be immediately renamed to Check)" << std::endl
+        << fluiMat << " = Fluid" << std::endl
+        << checMat << " = Check (should be empty)" << std::endl
+        << dampMat << " = far field" << std::endl
+        << inflMat << " = inflow" << std::endl
+        << outfMat << " = outflow" << std::endl;
 
-  superGeometry.rename( 0, 2 );   // all nodes to temporary type
+  superGeometry.rename( noMat, checMat );   // all nodes to temporary type
 
+  // if ( boundarytype == dampingAndLocal ) {
+
+  //   superGeometry.rename( checMat, noMat, {1,0,0} );  // temporarily set inside except outlet/inlet to 0
+  //   superGeometry.rename( noMat, checMat );  // set inside except outlet/inlet back to noMat
+  // }
+
+  if ( boundarytype == dampingAndLocal ) {
+    boundary_depth += 1;
+  }
   T bd_pu = converter.getPhysLength(boundary_depth);
-  Vector<T,3> origin = superGeometry.getStatistics().getMinPhysR(2) + bd_pu;  // ( -domain_lengths[0]/2+bd_pu, -domain_lengths[1]/2+bd_pu, -domain_lengths[2]/2+bd_pu );
-  Vector<T,3> extend = superGeometry.getStatistics().getMaxPhysR(2) - superGeometry.getStatistics().getMinPhysR(2) - 2*bd_pu;  // ( domain_lengths[0]-2*bd_pu, domain_lengths[1]-2*bd_pu, domain_lengths[2]-2*bd_pu );
-  std::shared_ptr<IndicatorF3D<T>> fluid_domain = std::make_shared<IndicatorCuboid3D<T>>( extend, origin );
-  superGeometry.rename( 2, 1, fluid_domain );  // all nodes except boundary length
-  // superGeometry.rename( 2, 1, {boundary_depth,boundary_depth,boundary_depth} );  // all nodes except boundary length
-  if ( boundarytype == damping ) {
-    superGeometry.rename( 2, 3); // , 1, domain );   // remaining to outer/reflecting/far-field boundaries
-  }
-  if ( boundarytype == local ) {
-    superGeometry.rename( 2, 3, 1, domain );   // remaining to outer/reflecting/far-field boundaries
-    superGeometry.clean();
-  }
-  if ( boundarytype == periodic ) {
-    superGeometry.rename(3, 1);  // all nodes are fluid
-    superGeometry.clean();
+  Vector<T,ndim> originFluid = superGeometry.getStatistics().getMinPhysR( checMat ) + bd_pu;
+  Vector<T,ndim> extendFluid = superGeometry.getStatistics().getMaxPhysR( checMat ) - superGeometry.getStatistics().getMinPhysR( checMat ) - 2*bd_pu;
+  std::shared_ptr<IndicatorF<T,ndim>> fluid_domain = std::make_shared<IndicatorCuboid<T,ndim>>( extendFluid, originFluid );
+  if ( boundarytype != dampingAndLocal ) superGeometry.rename( noMat, checMat, fluid_domain );
+  superGeometry.getStatistics().print();
+  switch ( boundarytype ) {
+    case periodic: superGeometry.rename( noMat, fluiMat ); superGeometry.clean(); break; // all nodes are fluidbreak;
+    case bounceBack: superGeometry.rename( noMat, dampMat, fluiMat, domain ); superGeometry.clean(); break;
+    case local: superGeometry.rename( noMat, dampMat, fluiMat, domain ); superGeometry.clean(); break;
+    case damping: superGeometry.rename( noMat, dampMat ); break;  // all remaining nodes are far-field
+    case dampingAndLocal:
+      // fluid domain including damping layer to damping layer
+      Vector<T,ndim> origin = superGeometry.getStatistics().getMinPhysR( checMat );
+      Vector<T,ndim> extend = superGeometry.getStatistics().getMaxPhysR( checMat ) - superGeometry.getStatistics().getMinPhysR( checMat );
+      origin[0] += converter.getConversionFactorLength();
+      extend[0] -= 2*converter.getConversionFactorLength();
+      std::shared_ptr<IndicatorF<T,ndim>> dampingField = std::make_shared<IndicatorCuboid<T,ndim>>( extend, origin );
+      // clout << "checMat=" << checMat << " to dampMat=" << dampMat << " from " << origin << " to " << extend  << std::endl;
+      superGeometry.rename( checMat, dampMat, dampingField );  // all remaining nodes are far-field, except...
+      // superGeometry.getStatistics().print();
+
+      // fluid domain part to fluid
+      // clout << "dampMat=" << dampMat << " to fluidMat=" << fluiMat << " from " << originFluid << " to " << extendFluid  << std::endl;
+      superGeometry.rename( dampMat, fluiMat, fluid_domain );  // all nodes except boundary length
+      // superGeometry.getStatistics().print();
+  
+      // Set material number for inflow
+      origin[0] -= 2*converter.getConversionFactorLength();
+      extend[0] = 2*converter.getConversionFactorLength();
+      std::shared_ptr<IndicatorF<T,ndim>> inflow = std::make_shared<IndicatorCuboid<T,ndim>>( extend, origin );
+      // clout << "checMat=" << checMat << " to inflMat=" << inflMat << " pointing to dampMat=" << dampMat << " from " << origin << " to " << extend  << std::endl;
+      superGeometry.rename( checMat, inflMat, dampMat, inflow );  // inflow to bc, pointing to porous
+      // superGeometry.getStatistics().print();
+      #
+      // Set material number for outflow
+      origin[0] = superGeometry.getStatistics().getMaxPhysR( checMat )[0]-converter.getConversionFactorLength();
+      std::shared_ptr<IndicatorF<T,ndim>> outflow = std::make_shared<IndicatorCuboid<T,ndim>>( extend, origin );
+      // superGeometry.rename( noMat, noMat, outflow );  // outflow back to temporary
+      // clout << "checMat=" << checMat << " to outfMat=" << outfMat << " pointing to dampMat=" << dampMat << " from " << origin << " to " << extend  << std::endl;
+      superGeometry.rename( checMat, outfMat, dampMat, outflow );  // outflow to bc, pointing to porous
+      // superGeometry.getStatistics().print();
+      break;
   }
 
   superGeometry.communicate();
@@ -97,7 +143,7 @@ void prepareGeometry(UnitConverter<T,DESCRIPTOR> const& converter,
 // Set up the geometry of the simulation
 void prepareLattice(UnitConverter<T,DESCRIPTOR> const& converter,
                     SuperLattice<T,DESCRIPTOR>& sLattice,
-                    SuperGeometry<T,3>& superGeometry,
+                    SuperGeometry<T,ndim>& superGeometry,
                     T rho0,
                     T Ma,
                     T amplitude,
@@ -105,7 +151,7 @@ void prepareLattice(UnitConverter<T,DESCRIPTOR> const& converter,
                     BoundaryType boundarytype,
                     SourceType source,
                     int boundary_depth,
-                    Vector<T,3> domain_lengths,
+                    Vector<T,ndim> domain_lengths,
                     T damping_strength
                     )
 {
@@ -114,29 +160,37 @@ void prepareLattice(UnitConverter<T,DESCRIPTOR> const& converter,
 
   const T omega = converter.getLatticeRelaxationFrequency();
 
-  // Material=1 --> bulk dynamics
-  auto bulkIndicator = superGeometry.getMaterialIndicator({1});
+  // Material=fluiMat --> bulk dynamics
+  auto bulkIndicator = superGeometry.getMaterialIndicator({fluiMat});
   sLattice.defineDynamics<BulkDynamics>(bulkIndicator);
 
-  // Material=3 --> dynamics depend..
-  if ( boundarytype == periodic ) {
-    sLattice.defineDynamics<BulkDynamics>(superGeometry.getMaterialIndicator({3}));
-  }
-  if ( boundarytype == local ) {
-    setLocalPressureBoundary<T,DESCRIPTOR>(sLattice, omega, superGeometry, 3);
-    setLocalVelocityBoundary<T,DESCRIPTOR>(sLattice, omega, superGeometry, 3);
-  }
-  else if ( boundarytype == damping ) {
-    clout << "Setting damping boundary" << std::endl;
-    bulkIndicator = superGeometry.getMaterialIndicator({1, 3});
-    setDampingBoundary<T,DESCRIPTOR>(sLattice, superGeometry, 3);
+  // Material=dampMat --> dynamics depend..
+  switch ( boundarytype ) {
+    case periodic: sLattice.defineDynamics<BulkDynamics>(superGeometry.getMaterialIndicator({dampMat})); break;
+    case local:
+      setLocalPressureBoundary<T,DESCRIPTOR>(sLattice, omega, superGeometry, dampMat);
+      setLocalVelocityBoundary<T,DESCRIPTOR>(sLattice, omega, superGeometry, dampMat);
+      break;
+    case bounceBack: setBounceBackBoundary<T,DESCRIPTOR>(sLattice, superGeometry.getMaterialIndicator({dampMat})); break;
+    case damping:
+      bulkIndicator = superGeometry.getMaterialIndicator({fluiMat, dampMat});
+      setDampingBoundary<T,DESCRIPTOR>(sLattice, superGeometry, dampMat);
+      break;
+    case dampingAndLocal:
+      domain_lengths -= 2*converter.getConversionFactorLength();
+      bulkIndicator = superGeometry.getMaterialIndicator({fluiMat, dampMat});
+      setDampingBoundary<T,DESCRIPTOR>(sLattice, superGeometry, dampMat);
+      // Material=inflMat -->inlet
+      setLocalVelocityBoundary(sLattice, omega, superGeometry, inflMat);
+      // Material=outfMat -->outlet
+      setInterpolatedConvectionBoundary(sLattice, omega, superGeometry, outfMat);
   }
 
   // Initial conditions
-  AnalyticalConst3D<T,T> ux = AnalyticalConst3D<T,T>( Ma );
-  AnalyticalConst3D<T,T> uy = AnalyticalConst3D<T,T>( 0. );
-  AnalyticalConst3D<T,T> uz = AnalyticalConst3D<T,T>( 0. );
-  AnalyticalComposed3D<T,T> u( ux, uy, uz );
+  AnalyticalConst<ndim,T,T> ux = AnalyticalConst<ndim,T,T>( Ma );
+  AnalyticalConst<ndim,T,T> uy = AnalyticalConst<ndim,T,T>( 0. );
+  AnalyticalConst<ndim,T,T> uz = AnalyticalConst<ndim,T,T>( 0. );
+  AnalyticalComposed<ndim,T,T> u( ux, uy, uz );
 
   T ndatapoints = converter.getResolution();
   T dist = converter.getPhysDeltaX();
@@ -164,7 +218,7 @@ void prepareLattice(UnitConverter<T,DESCRIPTOR> const& converter,
     sLattice.defineRhoU( bulkIndicator, pressureProfile, u );
     sLattice.iniEquilibrium( bulkIndicator, pressureProfile, u );
   } else if ( source == pointsource ) {
-    AnalyticalConst3D<T,T> rho(rho0);
+    AnalyticalConst<ndim,T,T> rho(rho0);
     //Initialize all values of distribution functions to their local equilibrium
     sLattice.defineRhoU( superGeometry.getMaterialIndicator({3}), rho, u );
     sLattice.iniEquilibrium( superGeometry.getMaterialIndicator({3}), rho, u );
@@ -175,7 +229,7 @@ void prepareLattice(UnitConverter<T,DESCRIPTOR> const& converter,
   sLattice.defineField<descriptors::UX>( bulkIndicator, ux );
   sLattice.defineField<descriptors::UY>( bulkIndicator, uy );
   sLattice.defineField<descriptors::UZ>( bulkIndicator, uz );
-  AnalyticalConst3D<T,T> rhoField( rho0 );
+  AnalyticalConst<ndim,T,T> rhoField( rho0 );
   sLattice.defineField<descriptors::DENSITY>( bulkIndicator, rhoField );
 
   // output damping layer parameter
@@ -198,7 +252,7 @@ void prepareLattice(UnitConverter<T,DESCRIPTOR> const& converter,
   gplot_diag.writePNG(-1, -1, "sigma_diag");
 
   DampingTerm<3,T,DESCRIPTOR> sigma( converter, boundary_depth, domain_lengths, damping_strength );
-  sLattice.defineField<descriptors::DAMPING>( superGeometry.getMaterialIndicator({3}), sigma );
+  sLattice.defineField<descriptors::DAMPING>( superGeometry.getMaterialIndicator({ dampMat }), sigma );
   
   // Make the lattice ready for simulation
   sLattice.initialize();
@@ -216,32 +270,34 @@ void setBoundaryValues( UnitConverter<T,DESCRIPTOR> const& converter,
                         T amplitude )
 {
   OstreamManager clout( std::cout,"setBoundaryValues" );
-  AnalyticalConst3D<T,T> ux( Ma );
-  AnalyticalConst3D<T,T> uy( 0. );
-  AnalyticalConst3D<T,T> uz( 0. );
-  AnalyticalComposed3D<T,T> u( ux, uy, uz );
-  AnalyticalConst3D<T,T> rho( rho0 );
+  AnalyticalConst<ndim,T,T> ux( Ma );
+  AnalyticalConst<ndim,T,T> uy( 0. );
+  AnalyticalConst<ndim,T,T> uz( 0. );
+  AnalyticalComposed<ndim,T,T> u( ux, uy, uz );
+  AnalyticalConst<ndim,T,T> rho( rho0 );
 
-  sLattice.defineRhoU( superGeometry, 3, rho, u );
-  sLattice.iniEquilibrium( superGeometry.getMaterialIndicator({3}), rho, u );
+  auto farFieldIndicator = superGeometry.getMaterialIndicator({dampMat});
+  if ( boundarytype == dampingAndLocal ) farFieldIndicator = superGeometry.getMaterialIndicator({inflMat,outfMat});
+  sLattice.defineRhoU( farFieldIndicator, rho, u );
+  sLattice.iniEquilibrium( farFieldIndicator, rho, u );
 
   sLattice.setProcessingContext<Array<momenta::FixedVelocityMomentumGeneric::VELOCITY>>(ProcessingContext::Simulation);
 }
 
 T L2Norm(SuperLattice<T,DESCRIPTOR>& sLattice,
-         SuperGeometry<T,3>& superGeometry,
+         SuperGeometry<T,ndim>& superGeometry,
          int iT,
          UnitConverter<T,DESCRIPTOR> const& converter) {
   OstreamManager clout(std::cout, "L2Norm");
 
-  T result[3] = {T(), T(), T()};
+  T result[ndim];
   int tmp[] = {int()};
 
-  SuperLatticePhysPressure3D<T,DESCRIPTOR> pressure3D(sLattice, converter);
-  AnalyticalConst<3,T,T> rho03D( 0. );
+  SuperLatticePhysPressure3D<T,DESCRIPTOR> pressurenD(sLattice, converter);
+  AnalyticalConst<ndim,T,T> rho0nD( 0. );
 
-  auto indicatorF = superGeometry.getMaterialIndicator({1});
-  SuperAbsoluteErrorL2Norm3D <T> absPressureErrorL2Norm(pressure3D, rho03D, indicatorF);
+  auto indicatorF = superGeometry.getMaterialIndicator({fluiMat});
+  SuperAbsoluteErrorL2Norm3D<T> absPressureErrorL2Norm(pressurenD, rho0nD, indicatorF);
 
   absPressureErrorL2Norm(result, tmp);
   T l2_abs = result[0];
@@ -252,7 +308,7 @@ T L2Norm(SuperLattice<T,DESCRIPTOR>& sLattice,
 // write data to termimal and file system
 void getResults(SuperLattice<T,DESCRIPTOR>& sLattice,
                 UnitConverter<T,DESCRIPTOR> const& converter, int iT,
-                SuperGeometry<T,3>& superGeometry, util::Timer<T>& timer,
+                SuperGeometry<T,ndim>& superGeometry, util::Timer<T>& timer,
                 SuperPlaneIntegralFluxVelocity3D<T>& velocityFlux,
                 SuperPlaneIntegralFluxPressure3D<T>& pressureFlux,
                 T rho0, T amplitude,
@@ -414,7 +470,7 @@ int main( int argc, char* argv[], char *envp[] )
   const T heightDomain = args.getValueOrFallback( "--heightDomain", 4.);
   const T depthDomain = args.getValueOrFallback( "--depthDomain", 4.);
   T tau = args.getValueOrFallback( "--tau", 0.);
-  size_t imax = args.getValueOrFallback( "--imax", 1000);
+  size_t imax = args.getValueOrFallback( "--imax", 300);
   T tmax = args.getValueOrFallback( "--tmax", 1.);
   int iout = args.getValueOrFallback( "--iout", 0);
   int nout = args.getValueOrFallback( "--nout", 20);
@@ -442,9 +498,10 @@ int main( int argc, char* argv[], char *envp[] )
     case 1: outdir_mod << "_periodic"; break;
     case 2: outdir_mod << "_local"; break;
     case 3: outdir_mod << "_damping"; break;
+    case 4: outdir_mod << "_dampingAndLocal"; break;
     default: outdir_mod << "_damping"; break;
   }
-  outdir_mod << Ma << "_Re" << Re << "_a" << amplitude << "_" << lengthDomain << "x" << heightDomain << "x" << depthDomain << "_res" << res << "_overlap" << overlap << "_bd" << boundary_depth << "x" << damping_strength;
+  outdir_mod << "_" << Ma << "_Re" << Re << "_a" << amplitude << "_" << lengthDomain << "x" << heightDomain << "x" << depthDomain << "_res" << res << "_overlap" << overlap << "_bd" << boundary_depth << "x" << damping_strength;
 
   singleton::directories().setOutputDir( outdir_mod.str()+"/" );  // set output directory
   OstreamManager clout( std::cout, "main" );
@@ -456,6 +513,7 @@ int main( int argc, char* argv[], char *envp[] )
     case 1: boundarytype = periodic; clout << "Boundary condition type specified to periodic." << std::endl; break;
     case 2: boundarytype = local; clout << "Boundary condition type specified to local." << std::endl; break;
     case 3: boundarytype = damping; clout << "Boundary condition type specified to damping." << std::endl; break;
+    case 4: boundarytype = dampingAndLocal; clout << "Boundary condition type specified to damping with local outside bc." << std::endl; break;
     default: boundarytype = damping; clout << "Boundary condition type not specified. Default to damping." << std::endl; break;
   }
 
@@ -514,33 +572,34 @@ int main( int argc, char* argv[], char *envp[] )
   const int noOfCuboids = 6;
 #endif
 
-  if ( noOfCuboids > 1 && boundarytype == damping ) {
+  if ( noOfCuboids > 1 && ( boundarytype == damping || boundarytype == dampingAndLocal) ) {
     clout << "overlap=" << overlap << "; boundary_depth_LU=" << boundary_depth << "; setting overlap to >=boundary_depth." << std::endl;
     overlap = std::max(overlap, boundary_depth);
   }
 
   // setup domain
-  Vector<T,3> domain_lengths = {lengthDomain, heightDomain, depthDomain};
-  Vector<T,3> originDomain( - lengthDomain/2, - heightDomain/2, - depthDomain/2 );  //
-  Vector<T,3> extendDomain( lengthDomain, heightDomain, depthDomain );  // size of the domain
-  std::shared_ptr<IndicatorF3D<T>> domain = std::make_shared<IndicatorCuboid3D<T>>( extendDomain, originDomain );
+  Vector<T,ndim> domain_lengths = {lengthDomain, heightDomain, depthDomain};
+  Vector<T,ndim> originDomain( - lengthDomain/2, - heightDomain/2, - depthDomain/2 );  //
+  Vector<T,ndim> extendDomain( lengthDomain, heightDomain, depthDomain );  // size of the domain
+  std::shared_ptr<IndicatorF<T,ndim>> domain = std::make_shared<IndicatorCuboid<T,ndim>>( extendDomain, originDomain );
 
-  CuboidGeometry3D<T> cuboidGeometry(*(domain),
-                                     converter.getConversionFactorLength(),
-                                     noOfCuboids
-                                     );
-  cuboidGeometry.setPeriodicity(true, true, true);
+  CuboidGeometry<T,ndim> cuboidGeometry(*(domain),
+                                        converter.getConversionFactorLength(),
+                                        noOfCuboids
+                                        );
+  if ( boundarytype == dampingAndLocal ) cuboidGeometry.setPeriodicity(false,true,true);
+  else cuboidGeometry.setPeriodicity(true, true, true);
 
   // Instantiation of a loadBalancer
   HeuristicLoadBalancer<T> loadBalancer( cuboidGeometry );
 
   // Instantiation of a superGeometry
-  SuperGeometry<T,3> superGeometry( cuboidGeometry, loadBalancer, overlap );
+  SuperGeometry<T,ndim> superGeometry( cuboidGeometry, loadBalancer, overlap );
 
   T boundary_depth_pu = converter.getPhysLength(boundary_depth);
   clout << "Setup: debug=" << debug << "; boundary_depth=" << boundary_depth << "; bd_depth_pu=" << boundary_depth_pu << "; overlap=" << superGeometry.getOverlap() << std::endl;
-  prepareGeometry( converter, superGeometry, domain, boundarytype, source, res, debug, boundary_depth, domain_lengths );
-
+  prepareGeometry( converter, superGeometry, domain, boundarytype, source, res, debug, boundary_depth );
+  
   // === 3rd Step: Prepare Lattice ===
   SuperLattice<T,DESCRIPTOR> sLattice( superGeometry, debug );
 
@@ -553,7 +612,7 @@ int main( int argc, char* argv[], char *envp[] )
       converter,
       superGeometry,
       { lengthDomain/T(2), heightDomain/T(2), depthDomain/T(2) },
-      Vector<T, 3>( 0., 1., 1. )
+      Vector<T, ndim>( 0., 1., 1. )
   );
 
   SuperPlaneIntegralFluxPressure3D<T> pressureFlux(
@@ -561,14 +620,14 @@ int main( int argc, char* argv[], char *envp[] )
       converter,
       superGeometry,
       { lengthDomain/T(2), heightDomain/T(2), depthDomain/T(2) },
-      Vector<T, 3>( 0., 1., 1. )
+      Vector<T, ndim>( 0., 1., 1. )
   );
 
   Gnuplot<T> gplot_l2_abs("l2_absolute");//, Gnuplot<T>::LOGLOG, Gnuplot<T>::OFF);
   gplot_l2_abs.setLabel("time []", "absolute L2 norm []");
   T Lp0 = L2Norm( sLattice, superGeometry, 0, converter );
 
-  SuperVTMwriter3D<T> vtmWriter_init( "movingshock3d_init" );
+  SuperVTMwriter<T,ndim> vtmWriter_init( "movingshock3d_init" );
   vtmWriter_init.createMasterFile();
   SuperLatticePhysField3D<T,DESCRIPTOR,DAMPING> damping( sLattice, 1. );
   damping.getName() = "dampingField";
@@ -599,7 +658,7 @@ int main( int argc, char* argv[], char *envp[] )
   size_t iT = 0;
   while ( iT < imax ) {
     // === 5th Step: Definition of Initial and Boundary Conditions ===
-    if ( boundarytype == local ) {
+    if ( boundarytype == local || boundarytype == dampingAndLocal ) {
       setBoundaryValues( converter, sLattice, iT, superGeometry, rho0, Ma, boundarytype, source, amplitude );
     }
     // === 6th Step: Collide and Stream Execution ===
@@ -611,6 +670,7 @@ int main( int argc, char* argv[], char *envp[] )
                gplot_l2_abs, Lp0,
                iout, tmax, imax,
                source );
+
     // test density failure
     if (sLattice.getStatistics().getAverageRho() > 2.) {
       clout << "breaking simulation loop because density is too high: "

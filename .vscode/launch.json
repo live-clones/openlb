@@ -5,7 +5,7 @@
       "name": "Debug movingshock3d laptop",
       "type": "cppdbg",
       "request": "launch",
-      "args": ["--b", "4", "--res", "50"], // "--debug", 
+      "args": ["--boundary_condition", "4"], // "--debug", 
       "stopAtEntry": false,
       "externalConsole": false,
       "cwd": "/home/hbrs/OpenLB/examples/noise/movingshock3d",
@@ -45,7 +45,7 @@
       "name": "Debug movingshock3d workstation",
       "type": "cppdbg",
       "request": "launch",
-      "args": ["--boundarycondition", "4", "--sc_type", "2", "--tmax", "0.04", "--Re", "200", "--Ma", "0.20", "--nout", "10", "--amplitude", "0.1", "--damping_strength", "1", "--boundarydepth", "10"],  // , "--debug"], // , "--tmax", "1"
+      "args": ["--boundarycondition", "4", "--imax", "50", "--iout", "10"],  // , "--debug"], // , "--tmax", "1"
       "stopAtEntry": false,
       "externalConsole": false,
       "cwd": "/home/philipp/OpenLB/examples/noise/movingshock3d",
