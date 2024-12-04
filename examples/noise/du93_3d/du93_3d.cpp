@@ -56,21 +56,20 @@ void prepareGeometry( UnitConverter<T,DESCRIPTOR> const& converter, //std::share
 
   Vector<T,3> origin = superGeometry.getStatistics().getMinPhysR( 2 );
   Vector<T,3> extend = superGeometry.getStatistics().getMaxPhysR( 2 ) - superGeometry.getStatistics().getMinPhysR( 2 );
+  origin[0] += converter.getConversionFactorLength();
+  extend[0] -= 2*converter.getConversionFactorLength();
+  IndicatorCuboid3D<T> domain( extend, origin );
 
   // all nodes except x-boundaries to fluid
-  superGeometry.rename( 2,1,{1,0,0} );
+  superGeometry.rename( 2, 1, domain );
   // du93 profile
   superGeometry.rename( 1,5,stlReader );
   if ( withTrailingEdge ) {
     // trailing edge area
     origin[0] = 0.7;
-    // origin[1] = -0.25;
     extend[0] = 0.3;
-    // extend[1] = 0.2;
     IndicatorCuboid3D<T> trailingEdge( extend, origin );
-    clout << "Trailing edge from " << origin << " to " << extend << std::endl;
     superGeometry.rename( 5, 6, trailingEdge );
-    superGeometry.getStatistics().print();
   }
 
   // Set material number for inflow
@@ -86,7 +85,7 @@ void prepareGeometry( UnitConverter<T,DESCRIPTOR> const& converter, //std::share
   superGeometry.rename( 2,4,1,outflow );
 
   // Removes all not needed boundary voxels outside the surface
-  superGeometry.clean();
+  // superGeometry.clean(5);
   superGeometry.checkForErrors();
   clout << "Prepare Geometry ..." << std::endl
         << "Materials:" << std::endl
@@ -105,7 +104,8 @@ void prepareLattice( SuperLattice<T,DESCRIPTOR>& sLattice,
                      UnitConverter<T,DESCRIPTOR> const& converter,
                      STLreader<T>& stlReader,
                      SuperGeometry<T,3>& superGeometry,
-                     bool withTrailingEdge )
+                     bool withTrailingEdge,
+                     T Kin )
 {
   OstreamManager clout( std::cout,"prepareLattice" );
   clout << "Prepare Lattice ..." << std::endl;
@@ -135,7 +135,6 @@ void prepareLattice( SuperLattice<T,DESCRIPTOR>& sLattice,
     // Material=6 --> porous media
     sLattice.defineDynamics<PorousBGKdynamics>(superGeometry, 6);
     T tau = converter.getLatticeRelaxationTime();
-    T Kin = 1e-2;               // Permeability
     T nu = (tau-0.5)/3.;
     T h = converter.getPhysDeltaX();
     T d = 1. - (h*h*nu*tau/Kin);
@@ -146,7 +145,7 @@ void prepareLattice( SuperLattice<T,DESCRIPTOR>& sLattice,
       exit(1);
     }
     AnalyticalConst3D<T,T> porosity(d);
-    sLattice.defineField<POROSITY>(superGeometry, 6, porosity);
+    sLattice.defineField<POROSITY>(superGeometry.getMaterialIndicator({0,1,2,3,4,5,6}), porosity);
   }
 
   // Initial conditions
@@ -169,13 +168,13 @@ void prepareLattice( SuperLattice<T,DESCRIPTOR>& sLattice,
 // Generates a slowly increasing inflow for the first iTMaxStart timesteps
 void setBoundaryValues( SuperLattice<T, DESCRIPTOR>& sLattice,
                         UnitConverter<T,DESCRIPTOR> const& converter, int iT,
-                        SuperGeometry<T,3>& superGeometry )
+                        SuperGeometry<T,3>& superGeometry,
+                        size_t iTmaxStart )
 {
   OstreamManager clout( std::cout,"setBoundaryValues" );
 
-  // No of time steps for smooth start-up
-  int iTmaxStart = converter.getLatticeTime( 5 );
-  int iTupdate = int(iTmaxStart/200/10)*10;
+  // No of time steps for smooth start-up#
+  int iTupdate = int(iTmaxStart/50/10)*10;  // --> about 50 updates, rounded to 10 iterations
 
   if ( iT%iTupdate == 0 && iT <= iTmaxStart ) {
     // Smooth start curve, sinus
@@ -195,7 +194,7 @@ void setBoundaryValues( SuperLattice<T, DESCRIPTOR>& sLattice,
     AnalyticalComposed3D<T,T> u( ux, uy, uz );
     sLattice.defineU( superGeometry, 3, u );
 
-    clout << "startup step=" << iT << "/" << iTmaxStart << "; ux=" << ux_i[0] << "; ux_max=" << ux_max << std::endl;
+    clout << "startup step=" << iT << "/" << iTmaxStart << "; t=" << converter.getPhysTime(iT) << "; ux=" << ux_i[0] << "; ux_max=" << ux_max << std::endl;
 
     sLattice.setProcessingContext<Array<momenta::FixedVelocityMomentumGeneric::VELOCITY>>(
       ProcessingContext::Simulation);
@@ -206,7 +205,8 @@ void setBoundaryValues( SuperLattice<T, DESCRIPTOR>& sLattice,
 void getResults( SuperLattice<T, DESCRIPTOR>& sLattice,
                  UnitConverter<T,DESCRIPTOR> const& converter, int iT,
                  SuperGeometry<T,3>& superGeometry, util::Timer<T>& timer,
-                 STLreader<T>& stlReader )
+                 STLreader<T>& stlReader,
+                 size_t iTmax, size_t iTmaxStart )
 {
 
   OstreamManager clout( std::cout,"getResults" );
@@ -224,8 +224,8 @@ void getResults( SuperLattice<T, DESCRIPTOR>& sLattice,
   vtmWriter.addFunctor( pressure );
   vtmWriter.addFunctor( yPlus );
 
-  const int vtkIter  = converter.getLatticeTime( 2. );
-  const int statIter = converter.getLatticeTime( .5 );
+  const int vtkIter  = std::max( converter.getLatticeTime( 2.), iTmax );
+  const int statIter = iTmaxStart;
 
   if ( iT==0 ) {
     // Writes the geometry, cuboid no. and rank no. as vti file for visualization
@@ -252,7 +252,7 @@ void getResults( SuperLattice<T, DESCRIPTOR>& sLattice,
 
     // Drag, lift, pressure drop
     AnalyticalFfromSuperF3D<T> intpolatePressure( pressure, true );
-    SuperLatticePhysDrag3D<T,DESCRIPTOR> drag( sLattice, superGeometry, 5, converter );
+    SuperLatticePhysDrag3D<T,DESCRIPTOR> drag( sLattice, superGeometry.getMaterialIndicator({5,6}), converter );
 
     olb::Vector<T, 3> point1V = superGeometry.getStatistics().getCenterPhysR( 5 );
     olb::Vector<T, 3> point2V = superGeometry.getStatistics().getCenterPhysR( 5 );
@@ -262,8 +262,8 @@ void getResults( SuperLattice<T, DESCRIPTOR>& sLattice,
       point1[i] = point1V[i];
       point2[i] = point2V[i];
     }
-    point1[0] = superGeometry.getStatistics().getMinPhysR( 5 )[0] - converter.getConversionFactorLength();
-    point2[0] = superGeometry.getStatistics().getMaxPhysR( 5 )[0] + converter.getConversionFactorLength();
+    point1[0] = std::min(superGeometry.getStatistics().getMinPhysR( 5 )[0], superGeometry.getStatistics().getMinPhysR( 6 )[0]) - converter.getConversionFactorLength();
+    point2[0] = std::max(superGeometry.getStatistics().getMaxPhysR( 5 )[0], superGeometry.getStatistics().getMaxPhysR( 6 )[0]) + converter.getConversionFactorLength();
 
     T p1, p2;
     intpolatePressure( &p1,point1 );
@@ -271,6 +271,12 @@ void getResults( SuperLattice<T, DESCRIPTOR>& sLattice,
 
     clout << "pressure1=" << p1;
     clout << "; pressure2=" << p2;
+
+    if ( p1 != p1 || p2 != p2 ) {
+      timer.stop();
+      timer.printSummary();
+      exit(1);
+    }
 
     T pressureDrop = p1-p2;
     clout << "; pressureDrop=" << pressureDrop;
@@ -317,16 +323,18 @@ int main( int argc, char* argv[] )
   //clout.setMultiOutput(true);
   CLIreader args(argc, argv);
   std::string outdir        = args.getValueOrFallback<std::string>( "--outdir", "./tmp" );
-  const T lengthDomain      = args.getValueOrFallback( "--lengthDomain", 6);
+  const T lengthDomain      = args.getValueOrFallback( "--lx", 6);
+  const T heightDomain      = args.getValueOrFallback( "--ly", 3);
+  const T depthDomain       = args.getValueOrFallback( "--lz", 1.2);
   const size_t res          = args.getValueOrFallback( "--res", 20);
-  T maxPhysT                = args.getValueOrFallback( "--tmax", 20.);
-  T charV                   = args.getValueOrFallback( "--umax", .5);
-  T Re                      = args.getValueOrFallback( "--Re", 0.);
-  T tau                     = args.getValueOrFallback( "--tau", 0.);  // previously tau=0.53 fixed
+  T maxPhysT                = args.getValueOrFallback( "--tmax", 20);
+  T charV                   = args.getValueOrFallback( "--umax", .01);
+  T Re                      = args.getValueOrFallback( "--Re", 0);
+  T tau                     = args.getValueOrFallback( "--tau", 0);  // previously tau=0.53 fixed
+  const T Kin               = args.getValueOrFallback( "--permeability", 1e-2);
+  const T tMaxInit          = args.getValueOrFallback( "--tmaxinit", 2);
   const bool withTrailingEdge = !args.contains("--no-porous");
-  T heightDomain            = .5*lengthDomain;
-  T depthDomain             = .2*lengthDomain;
-  T charL                   = args.getValueOrFallback( "--charL", 1.);
+  T charL                   = args.getValueOrFallback( "--charL", 1);
   const T cs_LU             = 1 / std::sqrt(3.0);
   T viscosity;
   if ( tau == 0 ) {
@@ -341,8 +349,15 @@ int main( int argc, char* argv[] )
     viscosity               = charV * charL / Re;
   }
 
-  singleton::directories().setOutputDir( outdir+"/" );
+  std::stringstream outdir_mod;
+  outdir_mod << outdir;
+  if ( !withTrailingEdge ) outdir_mod << "_noPorous";
+  else outdir_mod << "_" << Kin << "porous";
+  outdir_mod << "_u" << charV << "_Re" << Re << "_" << lengthDomain << "x" << heightDomain << "x" << depthDomain << "_res" << res;
+
+  singleton::directories().setOutputDir( outdir_mod.str()+"/" );  // set output directory
   if ( withTrailingEdge ) clout << "Calculating with trailing edge" << std::endl;
+  else clout << "Calculating without trailing edge" << std::endl;
 
   UnitConverterFromResolutionAndRelaxationTime<T, DESCRIPTOR> const converter(
     (size_t)  res,            // resolution: number of voxels per charPhysL
@@ -393,22 +408,24 @@ int main( int argc, char* argv[] )
   SuperLattice<T, DESCRIPTOR> sLattice( superGeometry );
 
   //prepareLattice and set boundaryCondition
-  prepareLattice( sLattice, converter, stlReader, superGeometry, withTrailingEdge );
+  prepareLattice( sLattice, converter, stlReader, superGeometry, withTrailingEdge, Kin );
 
   // === 4th Step: Main Loop with Timer ===
   clout << "starting simulation..." << std::endl;
-  util::Timer<T> timer( converter.getLatticeTime( maxPhysT ), superGeometry.getStatistics().getNvoxel() );
+  size_t iTmax = converter.getLatticeTime( maxPhysT );
+  size_t iTmaxStart = converter.getLatticeTime( tMaxInit );
+  util::Timer<T> timer( iTmax, superGeometry.getStatistics().getNvoxel() );
   timer.start();
 
-  for (std::size_t iT = 0; iT < converter.getLatticeTime( maxPhysT ); ++iT) {
+  for (std::size_t iT = 0; iT < iTmax; ++iT) {
     // === 5th Step: Definition of Initial and Boundary Conditions ===
-    setBoundaryValues( sLattice, converter, iT, superGeometry );
+    setBoundaryValues( sLattice, converter, iT, superGeometry, iTmaxStart );
 
     // === 6th Step: Collide and Stream Execution ===
     sLattice.collideAndStream();
 
     // === 7th Step: Computation and Output of the Results ===
-    getResults( sLattice, converter, iT, superGeometry, timer, stlReader );
+    getResults( sLattice, converter, iT, superGeometry, timer, stlReader, iTmax, iTmaxStart );
   }
 
   timer.stop();
