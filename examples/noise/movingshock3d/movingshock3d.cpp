@@ -38,14 +38,14 @@
 using namespace olb;
 using namespace olb::descriptors;
 using T = FLOATING_POINT_TYPE;
-using DESCRIPTOR = D3Q19<>;
-using BulkDynamics = KBCdynamics<T,DESCRIPTOR>;
-// using DESCRIPTOR = D3Q27<>;
+// using DESCRIPTOR = D3Q19<>;
+// using BulkDynamics = KBCdynamics<T,DESCRIPTOR>;
+using DESCRIPTOR = D3Q27<>;
 // using BulkDynamics = BGKdynamics<T,DESCRIPTOR>;
 
 const int noMat   = 0;
-const int checMat = 2;
 const int dampMat = 1;
+const int checMat = 2;
 const int fluiMat = 3;
 const int inflMat = 4;
 const int outfMat = 5;
@@ -69,19 +69,13 @@ void prepareGeometry(UnitConverter<T,DESCRIPTOR> const& converter,
   clout << "Prepare Geometry ..." << std::endl
         << "Materials:" << std::endl
         << noMat   << " = no Material (default, should be immediately renamed to Check)" << std::endl
-        << fluiMat << " = Fluid" << std::endl
-        << checMat << " = Check (should be empty)" << std::endl
         << dampMat << " = far field" << std::endl
+        << checMat << " = check (should be empty)" << std::endl
+        << fluiMat << " = fluid" << std::endl
         << inflMat << " = inflow" << std::endl
         << outfMat << " = outflow" << std::endl;
 
   superGeometry.rename( noMat, checMat );   // all nodes to temporary type
-
-  // if ( boundarytype == dampingAndLocal ) {
-
-  //   superGeometry.rename( checMat, noMat, {1,0,0} );  // temporarily set inside except outlet/inlet to 0
-  //   superGeometry.rename( noMat, checMat );  // set inside except outlet/inlet back to noMat
-  // }
 
   if ( boundarytype == dampingAndLocal ) {
     boundary_depth += 1;
@@ -90,13 +84,12 @@ void prepareGeometry(UnitConverter<T,DESCRIPTOR> const& converter,
   Vector<T,ndim> originFluid = superGeometry.getStatistics().getMinPhysR( checMat ) + bd_pu;
   Vector<T,ndim> extendFluid = superGeometry.getStatistics().getMaxPhysR( checMat ) - superGeometry.getStatistics().getMinPhysR( checMat ) - 2*bd_pu;
   std::shared_ptr<IndicatorF<T,ndim>> fluid_domain = std::make_shared<IndicatorCuboid<T,ndim>>( extendFluid, originFluid );
-  if ( boundarytype != dampingAndLocal ) superGeometry.rename( noMat, checMat, fluid_domain );
-  superGeometry.getStatistics().print();
+  if ( boundarytype != dampingAndLocal ) superGeometry.rename( checMat, fluiMat, fluid_domain );
   switch ( boundarytype ) {
-    case periodic: superGeometry.rename( noMat, fluiMat ); superGeometry.clean(); break; // all nodes are fluidbreak;
-    case bounceBack: superGeometry.rename( noMat, dampMat, fluiMat, domain ); superGeometry.clean(); break;
-    case local: superGeometry.rename( noMat, dampMat, fluiMat, domain ); superGeometry.clean(); break;
-    case damping: superGeometry.rename( noMat, dampMat ); break;  // all remaining nodes are far-field
+    case periodic:    superGeometry.rename( checMat, fluiMat );                   superGeometry.clean();  break; // all nodes are fluidbreak;
+    case bounceBack:  superGeometry.rename( checMat, dampMat, fluiMat, domain );  superGeometry.clean();  break;
+    case local:       superGeometry.rename( checMat, dampMat, fluiMat, domain );  superGeometry.clean();  break;
+    case damping:     superGeometry.rename( checMat, dampMat );                                           break;  // all remaining nodes are far-field
     case dampingAndLocal:
       // fluid domain including damping layer to damping layer
       Vector<T,ndim> origin = superGeometry.getStatistics().getMinPhysR( checMat );
@@ -106,28 +99,20 @@ void prepareGeometry(UnitConverter<T,DESCRIPTOR> const& converter,
       std::shared_ptr<IndicatorF<T,ndim>> dampingField = std::make_shared<IndicatorCuboid<T,ndim>>( extend, origin );
       // clout << "checMat=" << checMat << " to dampMat=" << dampMat << " from " << origin << " to " << extend  << std::endl;
       superGeometry.rename( checMat, dampMat, dampingField );  // all remaining nodes are far-field, except...
-      // superGeometry.getStatistics().print();
 
       // fluid domain part to fluid
-      // clout << "dampMat=" << dampMat << " to fluidMat=" << fluiMat << " from " << originFluid << " to " << extendFluid  << std::endl;
       superGeometry.rename( dampMat, fluiMat, fluid_domain );  // all nodes except boundary length
-      // superGeometry.getStatistics().print();
   
       // Set material number for inflow
       origin[0] -= 2*converter.getConversionFactorLength();
       extend[0] = 2*converter.getConversionFactorLength();
       std::shared_ptr<IndicatorF<T,ndim>> inflow = std::make_shared<IndicatorCuboid<T,ndim>>( extend, origin );
-      // clout << "checMat=" << checMat << " to inflMat=" << inflMat << " pointing to dampMat=" << dampMat << " from " << origin << " to " << extend  << std::endl;
       superGeometry.rename( checMat, inflMat, dampMat, inflow );  // inflow to bc, pointing to porous
-      // superGeometry.getStatistics().print();
-      #
+      
       // Set material number for outflow
       origin[0] = superGeometry.getStatistics().getMaxPhysR( checMat )[0]-converter.getConversionFactorLength();
       std::shared_ptr<IndicatorF<T,ndim>> outflow = std::make_shared<IndicatorCuboid<T,ndim>>( extend, origin );
-      // superGeometry.rename( noMat, noMat, outflow );  // outflow back to temporary
-      // clout << "checMat=" << checMat << " to outfMat=" << outfMat << " pointing to dampMat=" << dampMat << " from " << origin << " to " << extend  << std::endl;
       superGeometry.rename( checMat, outfMat, dampMat, outflow );  // outflow to bc, pointing to porous
-      // superGeometry.getStatistics().print();
       break;
   }
 
@@ -313,8 +298,9 @@ void getResults(SuperLattice<T,DESCRIPTOR>& sLattice,
                 SuperPlaneIntegralFluxPressure3D<T>& pressureFlux,
                 T rho0, T amplitude,
                 Gnuplot<T>& gplot_l2_abs, T Lp0,
-                size_t iout, T tmax, size_t imax,
-                SourceType sourcetype
+                size_t iTvtk, size_t imax,
+                size_t iTplot,
+                BoundaryType boundarytype
                 )
 {
 #ifdef PLATFORM_GPU_CUDA
@@ -322,6 +308,12 @@ void getResults(SuperLattice<T,DESCRIPTOR>& sLattice,
 #endif
   OstreamManager clout( std::cout,"getResults" );
   SuperVTMwriter3D<T> vtmWriter( "movingshock3d" );
+
+  SuperLatticePhysVelocity3D<T, DESCRIPTOR> velocity( sLattice, converter );
+  SuperLatticePhysPressure3D<T, DESCRIPTOR> pressure( sLattice, converter );
+
+  vtmWriter.addFunctor( velocity );
+  vtmWriter.addFunctor( pressure );
 
   if ( iT==0 ) {
     // Writes geometry, cuboid no. and rank no. to file system
@@ -334,14 +326,18 @@ void getResults(SuperLattice<T,DESCRIPTOR>& sLattice,
     vtmWriter.createMasterFile();
   }
 
-  // Writes to console 10 times
-  if ( iT%iout==0 ) {
+  // Writes to plot 100 times
+  if ( iT%iTplot==0 ) {
     sLattice.setProcessingContext(ProcessingContext::Evaluation);  // important for synchronization (?) on GPU
-    // velocityFlux.print();
-    // pressureFlux.print();
+
+    if ( iT%( iTplot*5 ) == 0 ) {
+      velocityFlux.print();
+      pressureFlux.print();
+      
     // write to terminal
     timer.update( iT );
     timer.printStep();
+
     // Lattice statistics console output
     sLattice.getStatistics().print( iT,converter.getPhysTime( iT ) );
 
@@ -407,13 +403,11 @@ void getResults(SuperLattice<T,DESCRIPTOR>& sLattice,
     // gplot_diagonal.writePDF("densities_diagonal");
 
     // get VTK and images
-    if ( iT%(iout*2)==0) {
+  if ( iT%iTvtk==0 || sLattice.getStatistics().getAverageRho() > 2. ) {
+    sLattice.setProcessingContext(ProcessingContext::Evaluation);  // important for synchronization (?) on GPU
+
       clout << "vtmWriter startet" << std::endl;
-      SuperLatticePhysVelocity3D<T,DESCRIPTOR> velocity( sLattice, converter );
-      SuperLatticePhysPressure3D<T,DESCRIPTOR> pressure( sLattice, converter );
       // VTK
-      vtmWriter.addFunctor( velocity );
-      vtmWriter.addFunctor( pressure );
       vtmWriter.write( iT );
 
       // pressure image
@@ -430,12 +424,13 @@ void getResults(SuperLattice<T,DESCRIPTOR>& sLattice,
       // BlockReduction3D2D<T> planeReduction( normVel, origin, u, v, 600, BlockDataSyncMode::ReduceOnly );
       BlockReduction3D2D<T> planeReduction( normVel, Vector<T,3>({0, 0, 1}) );
       heatmap::plotParam<T> plotParam;
-      jpeg_ParamP.maxValue = converter.getCharPhysVelocity()*1.1;
-      jpeg_ParamP.minValue = converter.getCharPhysVelocity()*0.9;
+    // jpeg_ParamP.maxValue = converter.getCharPhysVelocity()*1.1;
+    // jpeg_ParamP.minValue = 0;
       jpeg_ParamP.colour = "rainbow";
       jpeg_ParamP.fullScreenPlot = true;
       heatmap::write(planeReduction, iT, plotParam);
-    }
+
+    sLattice.setProcessingContext<Array<momenta::FixedVelocityMomentumGeneric::VELOCITY>>(ProcessingContext::Simulation);
   }
 
   // Saves lattice data
@@ -462,25 +457,27 @@ int main( int argc, char* argv[] )
   std::string outdir = args.getValueOrFallback<std::string>( "--outdir", "./tmp" );
 
   // === get Command Line Arguments
-  const int res = args.getValueOrFallback( "--res", 81);
-  const T rho0 = args.getValueOrFallback( "--rho0", 1.);
-  const T Ma = args.getValueOrFallback( "--Ma", 0.1);
-  T Re = args.getValueOrFallback( "--Re", 0.);
-  const T lengthDomain = args.getValueOrFallback( "--lengthDomain", 2.);
-  const T heightDomain = args.getValueOrFallback( "--heightDomain", 4.);
-  const T depthDomain = args.getValueOrFallback( "--depthDomain", 4.);
-  T tau = args.getValueOrFallback( "--tau", 0.);
-  size_t imax = args.getValueOrFallback( "--imax", 300);
-  T tmax = args.getValueOrFallback( "--tmax", 1.);
-  int iout = args.getValueOrFallback( "--iout", 0);
-  int nout = args.getValueOrFallback( "--nout", 20);
-  const int boundary_condition = args.getValueOrFallback( "--boundary_condition", 3);
-  const int source_type = args.getValueOrFallback( "--source_type", 1);
-  const bool debug = args.contains("--debug");
-  const size_t boundary_depth = args.getValueOrFallback( "--boundary_depth", 10);
-  const T amplitude = args.getValueOrFallback( "--amplitude", 0.1);
-  const T damping_strength = args.getValueOrFallback( "--damping_strength", 1.);
-  size_t overlap = args.getValueOrFallback( "--overlap", 3);
+  const int res                 = args.getValueOrFallback( "--res",           121  );
+  const T rho0                  = args.getValueOrFallback( "--rho0",          1   );
+  const T Ma                    = args.getValueOrFallback( "--Ma",            0.1 );
+  T Re                          = args.getValueOrFallback( "--Re",            0   );
+  const T lengthDomain          = args.getValueOrFallback( "--lengthDomain",  2   );
+  const T heightDomain          = args.getValueOrFallback( "--heightDomain",  4   );
+  const T depthDomain           = args.getValueOrFallback( "--depthDomain",   4   );
+  T tau                         = args.getValueOrFallback( "--tau",           0   );
+  T maxPhysT                    = args.getValueOrFallback( "--tmax",          0.01);
+  size_t iTmax                  = args.getValueOrFallback( "--imax",          0   );
+  size_t nout                   = args.getValueOrFallback( "--nout",          5   );  // minimum number of vtk outputs
+  size_t iout                   = args.getValueOrFallback( "--iout",          0   );  // iterations for vtk outputs
+  T tout                        = args.getValueOrFallback( "--tout",          0   );  // timestep for vtk outputs
+  size_t nplot                  = args.getValueOrFallback( "--nplot",         100 );  // minimum number of plot points
+  const int boundary_condition  = args.getValueOrFallback( "--boundary_condition", 3 );
+  const int source_type         = args.getValueOrFallback( "--source_type",   1   );
+  const bool debug              = args.contains("--debug");
+  const size_t boundary_depth   = args.getValueOrFallback( "--boundary_depth", 20 );
+  const T amplitude             = args.getValueOrFallback( "--amplitude",     1e-4 );
+  const T damping_strength      = args.getValueOrFallback( "--damping_strength", 1.);
+  size_t overlap                = args.getValueOrFallback( "--overlap",       3   );
 
   // initialize arguments
   const T b_shock           = 3;
@@ -526,7 +523,7 @@ int main( int argc, char* argv[] )
 
   // determining Reynolds regime (incl. viscosity and relaxation time)
   const T charL             = lengthDomain;
-  T charV                   = std::max(Ma*1.1, 0.1);  // /targetMa;
+  T charV                   = 1;
   const T cs_LU             = 1 / std::sqrt(3.0);
   T viscosity;
   if ( tau == 0 ) {
@@ -640,23 +637,24 @@ int main( int argc, char* argv[] )
   vtmWriter_init.addFunctor( density );
   vtmWriter_init.write( 0 );
 
-  clout << "tmax=" << tmax << "[PU]=" << converter.getLatticeTime( tmax ) << "[PU], while imax=" << imax << " as input." << std::endl;
-  imax = std::min( converter.getLatticeTime( tmax ), imax );
-  tmax = converter.getPhysTime( imax );
-  clout << "tmax=" << tmax << ", while imax=" << imax << " recalculated." << std::endl;
-  clout << "nout=" << nout << "; iout=" << iout << " as input." << std::endl;
-  nout = std::max(1, nout);
-  if ( iout == 0 ) iout = int(imax / nout);
-  iout = std::min(iout, int(imax / nout));
-  clout << "nout=" << nout << "; iout=" << iout << " recalculated." << std::endl;
+  // === 3a-rd Step: calculate iterations from input ===
+  // iTmax depends on maximum physical time. If iTmax is provided in command line, it is an upper bound
+  if ( iTmax == 0 ) iTmax = converter.getLatticeTime( maxPhysT );
+  else iTmax = std::min( iTmax, converter.getLatticeTime( maxPhysT ) );
+  // nout is the minimum number of vtk outputs --> take max between nout and nout derived from iout or tout
+  size_t nout_from_iout = 0, nout_from_tout = 0;
+  if ( iout != 0 ) { nout_from_iout = size_t( iTmax / iout ); nout = std::max( nout, nout_from_iout ); }
+  if ( tout != 0 ) { nout_from_tout = size_t( iTmax / tout ); nout = std::max( nout, nout_from_tout ); }
+  size_t iTvtk    = std::max(int( iTmax / nout ), 1);
+  size_t iTplot   = std::max(int( iTmax / nplot ), 1);
 
   // === 4th Step: Main Loop with Timer ===
   clout << "starting simulation..." << std::endl;
-  util::Timer<T> timer(converter.getLatticeTime( tmax ), superGeometry.getStatistics().getNvoxel() );
+  util::Timer<T> timer( iTmax, superGeometry.getStatistics().getNvoxel() );
   timer.start();
 
   size_t iT = 0;
-  while ( iT < imax ) {
+  while ( iT < iTmax ) {
     // === 5th Step: Definition of Initial and Boundary Conditions ===
     if ( boundarytype == local || boundarytype == dampingAndLocal ) {
       setBoundaryValues( converter, sLattice, iT, superGeometry, rho0, Ma, boundarytype, source, amplitude );
@@ -668,11 +666,11 @@ int main( int argc, char* argv[] )
                velocityFlux, pressureFlux,
                rho0, amplitude,
                gplot_l2_abs, Lp0,
-               iout, tmax, imax,
-               source );
+               iTvtk, iTmax, iTplot,
+               boundarytype );
 
     // test density failure
-    if (sLattice.getStatistics().getAverageRho() > 2.) {
+    if ( sLattice.getStatistics().getAverageRho() > 2. ) {
       clout << "breaking simulation loop because density is too high: "
             << sLattice.getStatistics().getAverageRho() << std::endl;
       break;
@@ -684,6 +682,7 @@ int main( int argc, char* argv[] )
     // }
     iT++;
   }
+  
   clout << "Simulation stopped after " << iT << " iterations." << std::endl;
 
   gplot_l2_abs.setYrange(1e-3, 1);
