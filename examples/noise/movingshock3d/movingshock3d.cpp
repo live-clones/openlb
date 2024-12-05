@@ -132,6 +132,33 @@ void prepareGeometry(UnitConverter<T,DESCRIPTOR> const& converter,
   clout << "Prepare Geometry ... OK" << std::endl;
 }
 
+void plotSamplings( AnalyticalF3D<T,T>& data, size_t ndatapoints, T dist,
+                    std::string title, std::string ylabel,
+                    SamplingDirection direction, bool halfDomain = true,
+                    bool setRange = false, T ymin=0, T ymax=0 )
+{
+  Gnuplot<T> gplot( title);
+  gplot.setLabel("distance [m]", ylabel);
+  int nmin = 0;
+  if ( !halfDomain ) nmin = -int(ndatapoints/2);
+  for (int n = nmin; n <= int(ndatapoints/2); n++) {
+    T input[3];
+    T distance;
+    switch ( direction ) {
+      case horizontal:  input[0] = n*dist; distance = input[0]; break;
+      case vertical:    input[1] = n*dist; distance = input[1]; break;
+      case diagonal2d:  input[0] = n*dist; input[1] = n*dist;                     distance = std::sqrt(input[0]*input[0]+input[1]*input[1]); break;
+      case diagonal3d:  input[0] = n*dist; input[1] = n*dist; input[2] = n*dist;  distance = std::sqrt(input[0]*input[0]+input[1]*input[1]+input[2]*input[2]); break;
+      default: input[0] = n*dist; break;
+    }
+    T output[3];
+    data(output, input);
+    gplot.setData(distance, output[0]);
+  }
+  if ( setRange ) gplot.setYrange(ymin, ymax);
+  gplot.writePNG(-1, -1, title);
+}
+
 // Set up the geometry of the simulation
 void prepareLattice(UnitConverter<T,DESCRIPTOR> const& converter,
                     SuperLattice<T,DESCRIPTOR>& sLattice,
@@ -190,23 +217,8 @@ void prepareLattice(UnitConverter<T,DESCRIPTOR> const& converter,
   T dist = converter.getPhysDeltaX();
   if ( source == shock ) {
     AcousticPulse<3,T> pressureProfile( rho0, amplitude, alpha );
-    
-    Gnuplot<T> gplot_hline_p( "shock_hline");
-    Gnuplot<T> gplot_diag_p( "shock_diag");
-    gplot_hline_p.setLabel("distance [m]", "density [LU]");
-    gplot_diag_p.setLabel("distance [m]", "density [LU]");
-    for (int n = 0; n <= int(ndatapoints/2); n++) {
-      T input_hline[3] =  {n*dist, 0, 0};
-      T output_hline[3];
-      pressureProfile(output_hline, input_hline);
-      gplot_hline_p.setData(input_hline[0], output_hline[0]);
-      T input_diag[3] =  {n*dist, n*dist, 0};
-      T output_diag[3];
-      pressureProfile(output_diag, input_diag);
-      gplot_diag_p.setData(input_diag[0], output_diag[0]);
-    }
-    gplot_hline_p.writePNG(-1, -1, "shock_hline");
-    gplot_diag_p.writePNG(-1, -1, "shock_diag");
+    plotSamplings( pressureProfile, ndatapoints, dist, "shock_diag", "density [LU]", diagonal2d );
+    plotSamplings( pressureProfile, ndatapoints, dist, "shock_hline", "density [LU]", horizontal );
 
     //Initialize all values of distribution functions to their local equilibrium
     sLattice.defineRhoU( bulkIndicator, pressureProfile, u );
@@ -228,22 +240,8 @@ void prepareLattice(UnitConverter<T,DESCRIPTOR> const& converter,
 
   // output damping layer parameter
   DampingTerm<3,T,DESCRIPTOR> sigma_plot( converter, boundary_depth, domain_lengths );
-  Gnuplot<T> gplot_hline( "sigma_hline");
-  Gnuplot<T> gplot_diag( "sigma_diag");
-  gplot_hline.setLabel("distance [m]", "density [LU]");
-  gplot_diag.setLabel("distance [m]", "density [LU]");
-  for (int n = 0; n <= int(ndatapoints/2); n++) {
-    T input_hline[3] =  {n*dist, 0, 0};
-    T output_hline[3];
-    sigma_plot(output_hline, input_hline);
-    gplot_hline.setData(input_hline[0], output_hline[0]);
-    T input_diag[3] =  {n*dist, n*dist, 0};
-    T output_diag[3];
-    sigma_plot(output_diag, input_diag);
-    gplot_diag.setData(input_diag[0], output_diag[0]);
-  }
-  gplot_hline.writePNG(-1, -1, "sigma_hline");
-  gplot_diag.writePNG(-1, -1, "sigma_diag");
+  plotSamplings( sigma_plot, ndatapoints, dist, "sigma_hline", "sigma", horizontal );
+  plotSamplings( sigma_plot, ndatapoints, dist, "sigma_diag", "sigma", diagonal2d );
 
   DampingTerm<3,T,DESCRIPTOR> sigma( converter, boundary_depth, domain_lengths, damping_strength );
   sLattice.defineField<descriptors::DAMPING>( superGeometry.getMaterialIndicator({ dampMat }), sigma );
@@ -343,61 +341,32 @@ void getResults(SuperLattice<T,DESCRIPTOR>& sLattice,
       velocityFlux.print();
       pressureFlux.print();
       
-    // write to terminal
-    timer.update( iT );
-    timer.printStep();
+      // write to terminal
+      timer.update( iT );
+      timer.printStep();
 
-    // Lattice statistics console output
-    sLattice.getStatistics().print( iT,converter.getPhysTime( iT ) );
-
-    if ( iT%std::max(int(iout/10), 1)==0 ) {
-      gplot_l2_abs.setData(T(iT), L2Norm(sLattice, superGeometry, iT,
-                                        converter) / Lp0 );
+      // Lattice statistics console output
+      sLattice.getStatistics().print( iT,converter.getPhysTime( iT ) );
     }
 
-    SuperLatticePhysPressure3D<T,DESCRIPTOR> pressure( sLattice, converter );
-    SuperLatticePhysVelocity3D<T,DESCRIPTOR> velocity( sLattice, converter );
+    gplot_l2_abs.setData(T(iT), L2Norm(sLattice, superGeometry, iT,
+                                      converter) / Lp0 );
 
     std::stringstream ss;
     ss << std::setw(4) << std::setfill('0') << iT;
-    Gnuplot<T> gplot_hline( "pressure_hline_" + ss.str());
-    Gnuplot<T> gplot_vline( "pressure_vline_" + ss.str());
-    Gnuplot<T> gplot_diagonal( "pressure_diagonal_" + ss.str());
-    Gnuplot<T> gplot_udiagonal( "velocity_diagonal_" + ss.str());
-    gplot_hline.setLabel("distance [m]", "density [LU]");
-    gplot_vline.setLabel("distance [m]", "density [LU]");
-    gplot_diagonal.setLabel("distance [m]", "density [LU]");
-    gplot_udiagonal.setLabel("distance [m]", "velocity [LU]");
-    // Vectors for simulated solution
-    T densities_hline[1] = {T()};
-    T densities_vline[1] = {T()};
-    T densities_diagonal[1] = {T()};
-    T velocities_diagonal[1] = {T()};
     T dist = converter.getPhysDeltaX();
     T ndatapoints = converter.getResolution(); // number of data points on line
-    // CSV<T> csvWriterConcentration;
-    // save concentration along the middle of the PRF
-    for (int n = -int(ndatapoints/2); n <= int(ndatapoints/2); n++) {
-      T input_hline[3] =  {n*dist, 0, 0};
-      AnalyticalFfromSuperF3D<T> interpolation_hline( pressure, true, true );
-      interpolation_hline(densities_hline, input_hline);
-    // csvWriterConcentration.writeDataFile(input_hline[0], densities_hline[0], "simulation" , 16);
-      gplot_hline.setData(input_hline[0], densities_hline[0]);
+    AnalyticalFfromSuperF3D<T> pressure_interpolation( pressure, true, true );
+    T pmin(converter.getPhysPressure(-amplitude/200));
+    T pmax(converter.getPhysPressure(+amplitude/200));
+    AnalyticalFfromSuperF3D<T> velocity_interpolation( velocity, true, true );
+    plotSamplings( pressure_interpolation, ndatapoints, dist, "pressure_hline_" + ss.str(), "density [LU]", horizontal, false, true, pmin, pmax );
+    plotSamplings( pressure_interpolation, ndatapoints, dist, "pressure_vline_" + ss.str(), "density [LU]", vertical, false, true, pmin, pmax );
+    plotSamplings( pressure_interpolation, ndatapoints, dist, "pressure_diagonal_" + ss.str(), "density [LU]", diagonal2d, false, true, pmin, pmax );
+    plotSamplings( velocity_interpolation, ndatapoints, dist, "velocity_diagonal_" + ss.str(), "velocity [LU]", diagonal2d, false );
 
-      T input_vline[3] =  {0, n*dist, 0};
-      AnalyticalFfromSuperF3D<T> interpolation_vline( pressure, true, true );
-      interpolation_vline(densities_vline, input_vline);
-      gplot_vline.setData(input_vline[1], densities_vline[0]);
-
-      T input_diagonal[3] =  {n*dist, n*dist, n*dist};
-      AnalyticalFfromSuperF3D<T> interpolation_diagonal( pressure, true, true );
-      interpolation_diagonal(densities_diagonal, input_diagonal);
-      // csvWriterConcentration.writeDataFile(input_diagonal[0], densities_diagonal[0], "simulation" , 16);
-      gplot_diagonal.setData(input_diagonal[0], densities_diagonal[0]);
-      AnalyticalFfromSuperF3D<T> interpolation_udiagonal( velocity, true, true );
-      interpolation_udiagonal(velocities_diagonal, input_diagonal);
-      gplot_udiagonal.setData(input_diagonal[0], velocities_diagonal[0]);
-    }
+    sLattice.setProcessingContext<Array<momenta::FixedVelocityMomentumGeneric::VELOCITY>>(ProcessingContext::Simulation);
+  }
 
   if ( ( boundarytype == dampingAndLocal || boundarytype == local ) && ( iT%50 == 0 ) ) {
     sLattice.setProcessingContext(ProcessingContext::Evaluation);  // important for synchronization (?) on GPU
@@ -413,33 +382,33 @@ void getResults(SuperLattice<T,DESCRIPTOR>& sLattice,
     sLattice.setProcessingContext<Array<momenta::FixedVelocityMomentumGeneric::VELOCITY>>(ProcessingContext::Simulation);
   }
 
-    // get VTK and images
+  // get VTK and images
   if ( iT%iTvtk==0 || sLattice.getStatistics().getAverageRho() > 2. ) {
     sLattice.setProcessingContext(ProcessingContext::Evaluation);  // important for synchronization (?) on GPU
 
-      clout << "vtmWriter startet" << std::endl;
-      // VTK
-      vtmWriter.write( iT );
+    clout << "vtmWriter startet" << std::endl;
+    // VTK
+    vtmWriter.write( iT );
 
-      // pressure image
-      BlockReduction3D2D<T> pressureReduction( pressure, Vector<T,3>({0, 0, 1}) );
-      heatmap::plotParam<T> jpeg_ParamP;
-      jpeg_ParamP.maxValue = converter.getPhysPressure(+amplitude/200);
-      jpeg_ParamP.minValue = converter.getPhysPressure(-amplitude/200);
-      jpeg_ParamP.colour = "rainbow";
-      jpeg_ParamP.fullScreenPlot = true;
-      heatmap::write(pressureReduction, iT, jpeg_ParamP);
+    // pressure image
+    BlockReduction3D2D<T> pressureReduction( pressure, Vector<T,3>({0, 0, 1}) );
+    heatmap::plotParam<T> jpeg_ParamP;
+    jpeg_ParamP.maxValue = converter.getPhysPressure(+amplitude/200);
+    jpeg_ParamP.minValue = converter.getPhysPressure(-amplitude/200);
+    jpeg_ParamP.colour = "rainbow";
+    jpeg_ParamP.fullScreenPlot = true;
+    heatmap::write(pressureReduction, iT, jpeg_ParamP);
 
-      // velocity image
-      SuperEuklidNorm3D<T> normVel( velocity );
-      // BlockReduction3D2D<T> planeReduction( normVel, origin, u, v, 600, BlockDataSyncMode::ReduceOnly );
-      BlockReduction3D2D<T> planeReduction( normVel, Vector<T,3>({0, 0, 1}) );
-      heatmap::plotParam<T> plotParam;
+    // velocity image
+    SuperEuklidNorm3D<T> normVel( velocity );
+    // BlockReduction3D2D<T> planeReduction( normVel, origin, u, v, 600, BlockDataSyncMode::ReduceOnly );
+    BlockReduction3D2D<T> planeReduction( normVel, Vector<T,3>({0, 0, 1}) );
+    heatmap::plotParam<T> plotParam;
     // jpeg_ParamP.maxValue = converter.getCharPhysVelocity()*1.1;
     // jpeg_ParamP.minValue = 0;
-      jpeg_ParamP.colour = "rainbow";
-      jpeg_ParamP.fullScreenPlot = true;
-      heatmap::write(planeReduction, iT, plotParam);
+    jpeg_ParamP.colour = "rainbow";
+    jpeg_ParamP.fullScreenPlot = true;
+    heatmap::write(planeReduction, iT, plotParam);
 
     sLattice.setProcessingContext<Array<momenta::FixedVelocityMomentumGeneric::VELOCITY>>(ProcessingContext::Simulation);
   }
