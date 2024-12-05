@@ -331,9 +331,10 @@ void getResults( SuperLattice<T, DESCRIPTOR>& sLattice,
   }
 
   if ( lastIteration ) {
-      timer.stop();
-      timer.printSummary();
-      exit(1);
+    clout << "Stopping earyl after " << iT << " iterations due to too high average pressure. Sorry..." << std::endl;
+    timer.stop();
+    timer.printSummary();
+    exit(1);
   }
 }
 

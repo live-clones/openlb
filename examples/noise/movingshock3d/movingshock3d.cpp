@@ -149,7 +149,6 @@ void plotSamplings( AnalyticalF3D<T,T>& data, size_t ndatapoints, T dist,
       case vertical:    input[1] = n*dist; distance = input[1]; break;
       case diagonal2d:  input[0] = n*dist; input[1] = n*dist;                     distance = std::sqrt(input[0]*input[0]+input[1]*input[1]); break;
       case diagonal3d:  input[0] = n*dist; input[1] = n*dist; input[2] = n*dist;  distance = std::sqrt(input[0]*input[0]+input[1]*input[1]+input[2]*input[2]); break;
-      default: input[0] = n*dist; break;
     }
     T output[3];
     data(output, input);
@@ -206,7 +205,6 @@ void prepareLattice(UnitConverter<T,DESCRIPTOR> const& converter,
       uAverage = &tmp;  //*uAverage = 0.0;
       setInterpolatedConvectionBoundary(sLattice, omega, superGeometry, outfMat, uAverage);
       break;
-    default: break;
   }
 
   // Initial conditions
@@ -472,7 +470,6 @@ int main( int argc, char* argv[] )
   switch ( source_type ) {
     case 1: outdir_mod << "_shock"; break;
     case 2: outdir_mod << "_pointsource"; break;
-    default: outdir_mod << "_shock"; break;
   }
   switch ( boundary_condition ) {
     case 1: outdir_mod << "_periodic"; break;
@@ -497,11 +494,10 @@ int main( int argc, char* argv[] )
     default:  boundarytype = damping;         clout << "Boundary condition type not specified. Default to damping."           << std::endl; break;
   }
 
-  SourceType source;
+  SourceType source = shock;
   switch ( source_type ) {
     case 1:   source = shock;       clout << "Source type specified to shock."              << std::endl; break;
     case 2:   source = pointsource; clout << "Source type specified to point source."       << std::endl; break;
-    default:  source = shock;       clout << "Source type not specified. Default to shock." << std::endl; break;
   }
 
   // determining Reynolds regime (incl. viscosity and relaxation time)
