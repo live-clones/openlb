@@ -42,6 +42,10 @@ using T = FLOATING_POINT_TYPE;
 // using BulkDynamics = KBCdynamics<T,DESCRIPTOR>;
 using DESCRIPTOR = D3Q27<>;
 // using BulkDynamics = BGKdynamics<T,DESCRIPTOR>;
+using BulkDynamics = olb::dynamics::Tuple<T, DESCRIPTOR,
+                     momenta::BulkTuple,
+                     equilibria::Incompressible,
+                     collision::BGK>;
 
 const int noMat   = 0;
 const int dampMat = 1;
@@ -53,6 +57,9 @@ const unsigned int ndim = 3;
 
 typedef enum {periodic, bounceBack, local, damping, dampingAndLocal} BoundaryType;
 typedef enum {shock, pointsource} SourceType;
+typedef enum {horizontal, vertical, diagonal2d, diagonal3d} SamplingDirection;
+
+T* uAverage = NULL;
 
 // Stores geometry information in form of material numbers
 void prepareGeometry(UnitConverter<T,DESCRIPTOR> const& converter,
@@ -168,7 +175,9 @@ void prepareLattice(UnitConverter<T,DESCRIPTOR> const& converter,
       // Material=inflMat -->inlet
       setLocalVelocityBoundary(sLattice, omega, superGeometry, inflMat);
       // Material=outfMat -->outlet
-      setInterpolatedConvectionBoundary(sLattice, omega, superGeometry, outfMat);
+      T tmp = T();
+      uAverage = &tmp;  //*uAverage = 0.0;
+      setInterpolatedConvectionBoundary(sLattice, omega, superGeometry, outfMat, uAverage);
   }
 
   // Initial conditions
@@ -389,18 +398,20 @@ void getResults(SuperLattice<T,DESCRIPTOR>& sLattice,
       interpolation_udiagonal(velocities_diagonal, input_diagonal);
       gplot_udiagonal.setData(input_diagonal[0], velocities_diagonal[0]);
     }
-    T ymin(converter.getPhysPressure(-amplitude/200));
-    T ymax(converter.getPhysPressure(+amplitude/200));
-    gplot_hline.setYrange(ymin, ymax);
-    gplot_vline.setYrange(ymin, ymax);
-    gplot_diagonal.setYrange(ymin, ymax);
-    // plot is generated
-    gplot_hline.writePNG(-1, -1, "pressure_hline");
-    gplot_vline.writePNG(-1, -1, "pressure_vline");
-    // gplot_hline.writePDF("densities_hline");
-    gplot_diagonal.writePNG(-1, -1, "pressure_diagonal");
-    gplot_udiagonal.writePNG(-1, -1, "velocity_diagonal");
-    // gplot_diagonal.writePDF("densities_diagonal");
+
+  if ( ( boundarytype == dampingAndLocal || boundarytype == local ) && ( iT%50 == 0 ) ) {
+    sLattice.setProcessingContext(ProcessingContext::Evaluation);  // important for synchronization (?) on GPU
+
+    // update outflow boundary value (adaptive convection boundary for smaller domains)
+    SuperLatticeVelocity3D<T, DESCRIPTOR> velocity( sLattice );
+    SuperSum3D<T> sum( velocity, superGeometry, fluiMat );
+    int input[1];
+    T output[3];
+    sum(output, input);
+    *uAverage = output[0]/superGeometry.getStatistics().getNvoxel( fluiMat );
+
+    sLattice.setProcessingContext<Array<momenta::FixedVelocityMomentumGeneric::VELOCITY>>(ProcessingContext::Simulation);
+  }
 
     // get VTK and images
   if ( iT%iTvtk==0 || sLattice.getStatistics().getAverageRho() > 2. ) {
