@@ -352,18 +352,20 @@ void getResults(SuperLattice<T,DESCRIPTOR>& sLattice,
     gplot_l2_abs.setData(T(iT), L2Norm(sLattice, superGeometry, iT,
                                       converter) / Lp0 );
 
-    std::stringstream ss;
-    ss << std::setw(4) << std::setfill('0') << iT;
-    T dist = converter.getPhysDeltaX();
-    T ndatapoints = converter.getResolution(); // number of data points on line
-    AnalyticalFfromSuperF3D<T> pressure_interpolation( pressure, true, true );
-    T pmin(converter.getPhysPressure(-amplitude/200));
-    T pmax(converter.getPhysPressure(+amplitude/200));
-    AnalyticalFfromSuperF3D<T> velocity_interpolation( velocity, true, true );
-    plotSamplings( pressure_interpolation, ndatapoints, dist, "pressure_hline_" + ss.str(), "density [LU]", horizontal, false, true, pmin, pmax );
-    plotSamplings( pressure_interpolation, ndatapoints, dist, "pressure_vline_" + ss.str(), "density [LU]", vertical, false, true, pmin, pmax );
-    plotSamplings( pressure_interpolation, ndatapoints, dist, "pressure_diagonal_" + ss.str(), "density [LU]", diagonal2d, false, true, pmin, pmax );
-    plotSamplings( velocity_interpolation, ndatapoints, dist, "velocity_diagonal_" + ss.str(), "velocity [LU]", diagonal2d, false );
+    if ( iT%( iTplot*10 ) == 0 ) {
+      std::stringstream ss;
+      ss << std::setw(4) << std::setfill('0') << iT;
+      T dist = converter.getPhysDeltaX();
+      T ndatapoints = converter.getResolution(); // number of data points on line
+      AnalyticalFfromSuperF3D<T> pressure_interpolation( pressure, true, true );
+      T pmin(converter.getPhysPressure(-amplitude/200));
+      T pmax(converter.getPhysPressure(+amplitude/200));
+      AnalyticalFfromSuperF3D<T> velocity_interpolation( velocity, true, true );
+      plotSamplings( pressure_interpolation, ndatapoints, dist, "pressure_hline_" + ss.str(), "density [LU]", horizontal, false, true, pmin, pmax );
+      plotSamplings( pressure_interpolation, ndatapoints, dist, "pressure_vline_" + ss.str(), "density [LU]", vertical, false, true, pmin, pmax );
+      plotSamplings( pressure_interpolation, ndatapoints, dist, "pressure_diagonal_" + ss.str(), "density [LU]", diagonal2d, false, true, pmin, pmax );
+      plotSamplings( velocity_interpolation, ndatapoints, dist, "velocity_diagonal_" + ss.str(), "velocity [LU]", diagonal2d, false );
+    }
 
     sLattice.setProcessingContext<Array<momenta::FixedVelocityMomentumGeneric::VELOCITY>>(ProcessingContext::Simulation);
   }
@@ -451,7 +453,7 @@ int main( int argc, char* argv[] )
   size_t nout                   = args.getValueOrFallback( "--nout",          5   );  // minimum number of vtk outputs
   size_t iout                   = args.getValueOrFallback( "--iout",          0   );  // iterations for vtk outputs
   T tout                        = args.getValueOrFallback( "--tout",          0   );  // timestep for vtk outputs
-  size_t nplot                  = args.getValueOrFallback( "--nplot",         100 );  // minimum number of plot points
+  size_t nplot                  = args.getValueOrFallback( "--nplot",         100 );  // minimum number of plot points // number of plots will be 1/10th
   const int boundary_condition  = args.getValueOrFallback( "--boundary_condition", 3 );
   const int source_type         = args.getValueOrFallback( "--source_type",   1   );
   const bool debug              = args.contains("--debug");
@@ -476,7 +478,6 @@ int main( int argc, char* argv[] )
     case 2: outdir_mod << "_local"; break;
     case 3: outdir_mod << "_damping"; break;
     case 4: outdir_mod << "_dampingAndLocal"; break;
-    default: outdir_mod << "_damping"; break;
   }
   outdir_mod << "_" << Ma << "_Re" << Re << "_a" << amplitude << "_" << lengthDomain << "x" << heightDomain << "x" << depthDomain << "_res" << res << "_overlap" << overlap << "_bd" << boundary_depth << "x" << damping_strength;
 
