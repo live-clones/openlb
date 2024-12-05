@@ -10,7 +10,7 @@
 # Usage of the Intel C++ compiler is recommended for Intel CPU clusters.
 # See `config/cpu_simd_intel_mpi.mk` for guidance.
 
-CXX             := mpic++
+CXX             := ${MPI_ROOT}/bin/mpic++
 CC              := gcc
 
 # The `march=native` flag enables AVX2 / AVX-512 instructions if available.

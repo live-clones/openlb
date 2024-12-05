@@ -1,7 +1,7 @@
 # You may need to add to the PATH variable! (but better configure in your terminal depending on machine)
-#export PATH := /usr/local/cuda-12.6/bin:$(PATH)
-#export LIBRARY_PATH := $(LIBRARY_PATH):/usr/local/cuda-12.6/lib64
-export MPI_ROOT := ${MPI_ROOT}#/home/hbrs/openmpi#/usr/lib/x86_64-linux-gnu/openmpi
+# export PATH := /usr/local/cuda-12.6/bin:$(PATH)
+# export LIBRARY_PATH := $(LIBRARY_PATH):/usr/local/cuda-12.6/lib64
+# export MPI_ROOT := ${MPI_ROOT}#/home/hbrs/openmpi#/usr/lib/x86_64-linux-gnu/openmpi
 # export PATH := ${MPI_ROOT}/include:$(PATH)
 
 # Include config.mk environment (optional)

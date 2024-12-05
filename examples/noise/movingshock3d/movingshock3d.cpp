@@ -142,8 +142,8 @@ void plotSamplings( AnalyticalF3D<T,T>& data, size_t ndatapoints, T dist,
   int nmin = 0;
   if ( !halfDomain ) nmin = -int(ndatapoints/2);
   for (int n = nmin; n <= int(ndatapoints/2); n++) {
-    T input[3];
-    T distance;
+    T input[3] = {0,0,0};
+    T distance = 0;
     switch ( direction ) {
       case horizontal:  input[0] = n*dist; distance = input[0]; break;
       case vertical:    input[1] = n*dist; distance = input[1]; break;
@@ -205,6 +205,8 @@ void prepareLattice(UnitConverter<T,DESCRIPTOR> const& converter,
       T tmp = T();
       uAverage = &tmp;  //*uAverage = 0.0;
       setInterpolatedConvectionBoundary(sLattice, omega, superGeometry, outfMat, uAverage);
+      break;
+    default: break;
   }
 
   // Initial conditions
@@ -488,18 +490,18 @@ int main( int argc, char* argv[] )
   /* default values */
   BoundaryType boundarytype;
   switch ( boundary_condition ) {
-    case 1: boundarytype = periodic; clout << "Boundary condition type specified to periodic." << std::endl; break;
-    case 2: boundarytype = local; clout << "Boundary condition type specified to local." << std::endl; break;
-    case 3: boundarytype = damping; clout << "Boundary condition type specified to damping." << std::endl; break;
-    case 4: boundarytype = dampingAndLocal; clout << "Boundary condition type specified to damping with local outside bc." << std::endl; break;
-    default: boundarytype = damping; clout << "Boundary condition type not specified. Default to damping." << std::endl; break;
+    case 1:   boundarytype = periodic;        clout << "Boundary condition type specified to periodic."                       << std::endl; break;
+    case 2:   boundarytype = local;           clout << "Boundary condition type specified to local."                          << std::endl; break;
+    case 3:   boundarytype = damping;         clout << "Boundary condition type specified to damping."                        << std::endl; break;
+    case 4:   boundarytype = dampingAndLocal; clout << "Boundary condition type specified to damping with local outside bc."  << std::endl; break;
+    default:  boundarytype = damping;         clout << "Boundary condition type not specified. Default to damping."           << std::endl; break;
   }
 
   SourceType source;
   switch ( source_type ) {
-    case 1: source = shock; clout << "Source type specified to shock." << std::endl; break;
-    case 2: source = pointsource; clout << "Source type specified to point source." << std::endl; break;
-    default: source = shock; clout << "Source type not specified. Default to shock." << std::endl; break;
+    case 1:   source = shock;       clout << "Source type specified to shock."              << std::endl; break;
+    case 2:   source = pointsource; clout << "Source type specified to point source."       << std::endl; break;
+    default:  source = shock;       clout << "Source type not specified. Default to shock." << std::endl; break;
   }
 
   // determining Reynolds regime (incl. viscosity and relaxation time)
