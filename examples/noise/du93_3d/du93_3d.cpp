@@ -133,12 +133,12 @@ void prepareLattice( SuperLattice<T,DESCRIPTOR>& sLattice,
 
   if ( withTrailingEdge ) {
     // Material=6 --> porous media
-    sLattice.defineDynamics<PorousBGKdynamics>(superGeometry, 6);
+    sLattice.defineDynamics<PorousBGKdynamics>(superGeometry, 6);  // velocity will always be multiplied by d
     T tau = converter.getLatticeRelaxationTime();
     T nu = (tau-0.5)/3.;
     T h = converter.getPhysDeltaX();
     T d = 1. - (h*h*nu*tau/Kin);
-    clout << "Lattice Porosity: " << d << std::endl;
+    clout << "Lattice Porosity: " << d << "(1 = permeable , 0 = not permeable)" << std::endl;
     clout << "Kmin: " << h*h*nu*tau << std::endl;
     if (Kin < h*h*nu*tau) {
       clout << "WARNING: Chosen K is too small!" << std::endl;
@@ -167,9 +167,12 @@ void prepareLattice( SuperLattice<T,DESCRIPTOR>& sLattice,
 
 // Generates a slowly increasing inflow for the first iTMaxStart timesteps
 void setBoundaryValues( SuperLattice<T, DESCRIPTOR>& sLattice,
-                        UnitConverter<T,DESCRIPTOR> const& converter, int iT,
+                        UnitConverter<T,DESCRIPTOR> const& converter,
+                        size_t iT,
                         SuperGeometry<T,3>& superGeometry,
-                        size_t iTmaxStart )
+                        size_t iTmaxStart,
+                        T ux_max_LU,
+                        T maxPhysU )
 {
   OstreamManager clout( std::cout,"setBoundaryValues" );
 
@@ -178,14 +181,13 @@ void setBoundaryValues( SuperLattice<T, DESCRIPTOR>& sLattice,
 
   if ( iT%iTupdate == 0 && iT <= iTmaxStart ) {
     // Smooth start curve, sinus
-    // SinusStartScale<T,int> StartScale(iTmaxStart, T(1));
+    // SinusStartScale<T,int> StartScale(iTmaxStart, T( ux_max_LU ));
 
     // Smooth start curve, polynomial
-    const T ux_max = converter.getCharPhysVelocity();
-    PolynomialStartScale<T,int> StartScale( iTmaxStart, T( ux_max ) );
+    PolynomialStartScale<T, size_t> StartScale( iTmaxStart, T( ux_max_LU ) );
 
     // Creates and sets the Poiseuille inflow profile using functors
-    int iTvec[1] = {iT};
+    size_t iTvec[1] = { iT };
     T ux_i[1] = {};
     StartScale( ux_i,iTvec );
     AnalyticalConst3D<T,T> ux( ux_i[0] );
@@ -194,10 +196,33 @@ void setBoundaryValues( SuperLattice<T, DESCRIPTOR>& sLattice,
     AnalyticalComposed3D<T,T> u( ux, uy, uz );
     sLattice.defineU( superGeometry, 3, u );
 
-    clout << "startup step=" << iT << "/" << iTmaxStart << "; t=" << converter.getPhysTime(iT) << "; ux=" << ux_i[0] << "; ux_max=" << ux_max << std::endl;
+    clout << "startup step=" << iT << "/" << iTmaxStart << "; t=" << converter.getPhysTime(iT)
+          << "; ux_LU=" << ux_i[0] << "; ux_max_LU=" << ux_max_LU
+          << "; ux_PU=" << converter.getPhysVelocity( ux_i[0] ) << "; ux_max_LU=" << maxPhysU << std::endl;
 
-    sLattice.setProcessingContext<Array<momenta::FixedVelocityMomentumGeneric::VELOCITY>>(
-      ProcessingContext::Simulation);
+    sLattice.setProcessingContext<Array<momenta::FixedVelocityMomentumGeneric::VELOCITY>>(ProcessingContext::Simulation);
+  }
+}
+
+void vtkOutput( SuperVTMwriter3D<T> vtmWriter, int iT,
+                SuperLatticePhysVelocity3D<T, DESCRIPTOR>& velocity,
+                SuperLatticePhysPressure3D<T, DESCRIPTOR>& pressure,
+                SuperDiscretizationF3D<T>& discretization ) {
+  vtmWriter.write( iT );
+
+  {
+    SuperEuklidNorm3D<T> normVel( velocity );
+    BlockReduction3D2D<T> planeReduction( normVel, Vector<T,3>({0, 0, 1}) );
+    // write output as JPEG
+    heatmap::write(planeReduction, iT);
+  }
+
+  {
+    BlockReduction3D2D<T> planeReduction( discretization, Vector<T,3>({0, 0, 1}) );
+    heatmap::plotParam<T> jpeg_scale;
+    jpeg_scale.colour = "blackbody";
+    jpeg_scale.name = "quality";
+    heatmap::write( planeReduction, iT, jpeg_scale );
   }
 }
 
@@ -206,7 +231,7 @@ void getResults( SuperLattice<T, DESCRIPTOR>& sLattice,
                  UnitConverter<T,DESCRIPTOR> const& converter, int iT,
                  SuperGeometry<T,3>& superGeometry, util::Timer<T>& timer,
                  STLreader<T>& stlReader,
-                 size_t iTmax, size_t iTmaxStart )
+                 size_t iTmax, size_t iTmaxStart, size_t iTvtk )
 {
 
   OstreamManager clout( std::cout,"getResults" );
@@ -224,8 +249,9 @@ void getResults( SuperLattice<T, DESCRIPTOR>& sLattice,
   vtmWriter.addFunctor( pressure );
   vtmWriter.addFunctor( yPlus );
 
-  const int vtkIter  = std::max( converter.getLatticeTime( 2.), iTmax );
-  const int statIter = iTmaxStart;
+  const size_t statIter = iTmaxStart;
+  const size_t iTcheck  = 500;
+  bool lastIteration = false;
 
   if ( iT==0 ) {
     // Writes the geometry, cuboid no. and rank no. as vti file for visualization
@@ -237,6 +263,12 @@ void getResults( SuperLattice<T, DESCRIPTOR>& sLattice,
     vtmWriter.write( rank );
 
     vtmWriter.createMasterFile();
+  }
+
+  if ( iT%iTcheck == 0 ) {
+    if ( sLattice.getStatistics().getAverageRho() > 2. ) {
+      lastIteration = true;
+    }
   }
 
   // Writes output on the console
@@ -272,12 +304,6 @@ void getResults( SuperLattice<T, DESCRIPTOR>& sLattice,
     clout << "pressure1=" << p1;
     clout << "; pressure2=" << p2;
 
-    if ( p1 != p1 || p2 != p2 ) {
-      timer.stop();
-      timer.printSummary();
-      exit(1);
-    }
-
     T pressureDrop = p1-p2;
     clout << "; pressureDrop=" << pressureDrop;
 
@@ -291,26 +317,23 @@ void getResults( SuperLattice<T, DESCRIPTOR>& sLattice,
     T yPlusMax[1];
     yPlusMaxF( yPlusMax,input );
     clout << "yPlusMax=" << yPlusMax[0] << std::endl;
+
+    if ( p1 != p1 ) lastIteration = true;
+
+    sLattice.setProcessingContext<Array<momenta::FixedVelocityMomentumGeneric::VELOCITY>>(ProcessingContext::Simulation);
   }
 
   // Writes the vtk files
-  if ( iT%vtkIter == 0 ) {
-    vtmWriter.write( iT );
+  if ( iT%iTvtk == 0 || lastIteration ) {
+    sLattice.setProcessingContext(ProcessingContext::Evaluation);
+    vtkOutput( vtmWriter, iT, velocity, pressure, discretization );
+    sLattice.setProcessingContext<Array<momenta::FixedVelocityMomentumGeneric::VELOCITY>>(ProcessingContext::Simulation);
+  }
 
-    {
-      SuperEuklidNorm3D<T> normVel( velocity );
-      BlockReduction3D2D<T> planeReduction( normVel, Vector<T,3>({0, 0, 1}) );
-      // write output as JPEG
-      heatmap::write(planeReduction, iT);
-    }
-
-    {
-      BlockReduction3D2D<T> planeReduction( discretization, Vector<T,3>({0, 0, 1}) );
-      heatmap::plotParam<T> jpeg_scale;
-      jpeg_scale.colour = "blackbody";
-      jpeg_scale.name = "quality";
-      heatmap::write( planeReduction, iT, jpeg_scale );
-    }
+  if ( lastIteration ) {
+      timer.stop();
+      timer.printSummary();
+      exit(1);
   }
 }
 
@@ -323,19 +346,25 @@ int main( int argc, char* argv[] )
   //clout.setMultiOutput(true);
   CLIreader args(argc, argv);
   std::string outdir        = args.getValueOrFallback<std::string>( "--outdir", "./tmp" );
-  const T lengthDomain      = args.getValueOrFallback( "--lx", 6);
-  const T heightDomain      = args.getValueOrFallback( "--ly", 3);
-  const T depthDomain       = args.getValueOrFallback( "--lz", 1.2);
-  const size_t res          = args.getValueOrFallback( "--res", 20);
-  T maxPhysT                = args.getValueOrFallback( "--tmax", 20);
-  T charV                   = args.getValueOrFallback( "--umax", .01);
-  T Re                      = args.getValueOrFallback( "--Re", 0);
-  T tau                     = args.getValueOrFallback( "--tau", 0);  // previously tau=0.53 fixed
-  const T Kin               = args.getValueOrFallback( "--permeability", 1e-2);
-  const T tMaxInit          = args.getValueOrFallback( "--tmaxinit", 2);
+  const T lengthDomain      = args.getValueOrFallback( "--lx",            6);   // in m
+  const T heightDomain      = args.getValueOrFallback( "--ly",            3);   // in m
+  const T depthDomain       = args.getValueOrFallback( "--lz",            1.2); // in m
+  const size_t res          = args.getValueOrFallback( "--res",           50);  // voxel/m (dx_LU/m)
+  T maxPhysT                = args.getValueOrFallback( "--tmax",          10);  // in s
+  size_t iTmax              = args.getValueOrFallback( "--imax",          0);
+  size_t nout               = args.getValueOrFallback( "--nout",          5);   // minimum number of vtk outputs
+  size_t iout               = args.getValueOrFallback( "--iout",          0);   // iterations for vtk outputs
+  T tout                    = args.getValueOrFallback( "--tout",          0);   // timestep for vtk outputs
+  T maxPhysU                = args.getValueOrFallback( "--umax",          1);   // in m/s
+  T Re                      = args.getValueOrFallback( "--Re",            0);
+  T tau                     = args.getValueOrFallback( "--tau",           0);   // previously tau=0.53 fixed
+  const T Kin               = args.getValueOrFallback( "--permeability",  1e-8);
+  const T tMaxInit          = args.getValueOrFallback( "--tmaxinit",      2);
+  T charL                   = args.getValueOrFallback( "--charL",         1);
   const bool withTrailingEdge = !args.contains("--no-porous");
-  T charL                   = args.getValueOrFallback( "--charL", 1);
+
   const T cs_LU             = 1 / std::sqrt(3.0);
+  T charV                   = 2 * maxPhysU;
   T viscosity;
   if ( tau == 0 ) {
     if ( Re == 0 ) {
@@ -365,8 +394,9 @@ int main( int argc, char* argv[] )
     (T)       charL,          // charPhysLength: reference length of simulation geometry
     (T)       charV,          // charPhysVelocity: maximal/highest expected velocity during simulation in __m / s__
     (T)       viscosity,      // physViscosity: physical kinematic viscosity in __m^2 / s__
-    (T)       1.0             // physDensity: physical density in __kg / m^3__
+    (T)       1.204           // physDensity: physical density in __kg / m^3__; air at 101.325 kPa and 20 °C
   );
+  T umax_LU                 = converter.getLatticeVelocity( maxPhysU );
   // Prints the converter log as console output
   converter.print();
   // Writes the converter log in a file
@@ -410,22 +440,31 @@ int main( int argc, char* argv[] )
   //prepareLattice and set boundaryCondition
   prepareLattice( sLattice, converter, stlReader, superGeometry, withTrailingEdge, Kin );
 
+  // === 3a-rd Step: calculate iterations from input ===
+  // iTmax depends on maximum physical time. If iTmax is provided in command line, it is an upper bound
+  if ( iTmax == 0 ) iTmax = converter.getLatticeTime( maxPhysT );
+  else iTmax = std::min( iTmax, converter.getLatticeTime( maxPhysT ) );
+  size_t iTmaxStart = converter.getLatticeTime( tMaxInit );
+  // nout is the minimum number of vtk outputs --> take max between nout and nout derived from iout or tout
+  size_t nout_from_iout = 0, nout_from_tout = 0;
+  if ( iout != 0 ) { nout_from_iout = size_t( iTmax / iout ); nout = std::max( nout, nout_from_iout ); }
+  if ( tout != 0 ) { nout_from_tout = size_t( iTmax / tout ); nout = std::max( nout, nout_from_tout ); }
+  size_t iTvtk = size_t( iTmax / nout );
+
   // === 4th Step: Main Loop with Timer ===
   clout << "starting simulation..." << std::endl;
-  size_t iTmax = converter.getLatticeTime( maxPhysT );
-  size_t iTmaxStart = converter.getLatticeTime( tMaxInit );
   util::Timer<T> timer( iTmax, superGeometry.getStatistics().getNvoxel() );
   timer.start();
 
-  for (std::size_t iT = 0; iT < iTmax; ++iT) {
+  for (size_t iT = 0; iT < iTmax; ++iT) {
     // === 5th Step: Definition of Initial and Boundary Conditions ===
-    setBoundaryValues( sLattice, converter, iT, superGeometry, iTmaxStart );
+    setBoundaryValues( sLattice, converter, iT, superGeometry, iTmaxStart, umax_LU, maxPhysU );
 
     // === 6th Step: Collide and Stream Execution ===
     sLattice.collideAndStream();
 
     // === 7th Step: Computation and Output of the Results ===
-    getResults( sLattice, converter, iT, superGeometry, timer, stlReader, iTmax, iTmaxStart );
+    getResults( sLattice, converter, iT, superGeometry, timer, stlReader, iTmax, iTmaxStart, iTvtk );
   }
 
   timer.stop();
