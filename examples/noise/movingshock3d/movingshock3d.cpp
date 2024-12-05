@@ -439,13 +439,14 @@ int main( int argc, char* argv[] )
   // === get Command Line Arguments
   const int res                 = args.getValueOrFallback( "--res",           121  );
   const T rho0                  = args.getValueOrFallback( "--rho0",          1   );
-  const T Ma                    = args.getValueOrFallback( "--Ma",            0.1 );
+  const T Ma                    = args.getValueOrFallback( "--Ma",            0.2 );
+  const T charV                 = args.getValueOrFallback( "--charV",         1 );
   T Re                          = args.getValueOrFallback( "--Re",            0   );
   const T lengthDomain          = args.getValueOrFallback( "--lengthDomain",  2   );
   const T heightDomain          = args.getValueOrFallback( "--heightDomain",  4   );
   const T depthDomain           = args.getValueOrFallback( "--depthDomain",   4   );
   T tau                         = args.getValueOrFallback( "--tau",           0   );
-  T maxPhysT                    = args.getValueOrFallback( "--tmax",          0.01);
+  T maxPhysT                    = args.getValueOrFallback( "--tmax",          0.1 );
   size_t iTmax                  = args.getValueOrFallback( "--imax",          0   );
   size_t nout                   = args.getValueOrFallback( "--nout",          5   );  // minimum number of vtk outputs
   size_t iout                   = args.getValueOrFallback( "--iout",          0   );  // iterations for vtk outputs
@@ -503,7 +504,6 @@ int main( int argc, char* argv[] )
 
   // determining Reynolds regime (incl. viscosity and relaxation time)
   const T charL             = lengthDomain;
-  T charV                   = 1;
   const T cs_LU             = 1 / std::sqrt(3.0);
   T viscosity;
   if ( tau == 0 ) {
@@ -511,7 +511,7 @@ int main( int argc, char* argv[] )
       viscosity             = 1.48e-5; // 1e-2;
       Re                    = charV * charL / viscosity;
     } else {
-      viscosity        = charV * charL / Re;
+      viscosity             = charV * charL / Re;
     }
     tau                     = viscosity / (cs_LU*cs_LU) + 0.5;
   }
@@ -519,12 +519,12 @@ int main( int argc, char* argv[] )
     if ( Re == 0 ) Re       = 20000;
     viscosity               = charV * charL / Re;
   }
-  if ( debug ) {
-    Re                      = 200;
-    charV                   = 0.25;
-    viscosity               = charV * charL / Re;
-    tau                     = viscosity / (cs_LU*cs_LU) + 0.5;
-  }
+  // if ( debug ) {
+  //   Re                      = 200;
+  //   charV                   = 0.25;
+  //   viscosity               = charV * charL / Re;
+  //   tau                     = viscosity / (cs_LU*cs_LU) + 0.5;
+  // }
 
   clout << "Input to unitconverter: res=" << res << ", tau=" << tau << ", lengthDomain=" << lengthDomain << ", charV=" << charV << ", viscosity=" << viscosity << ", rho0=" << rho0 << std::endl;
   UnitConverterFromResolutionAndRelaxationTime<T, DESCRIPTOR> converter(
