@@ -257,7 +257,7 @@ struct INTERPHASE_NORMAL    : public FIELD_BASE<0,  1, 0> { };
 struct MASS                 : public FIELD_BASE<1,  0, 0> { };
 struct CELL_TYPE            : public FIELD_BASE<1,  0, 0> { };
 struct BOUNDARY             : public FIELD_BASE<1,  0, 0> { };
-struct CONTACT_DETECTION  : public TYPED_FIELD_BASE<size_t, 1,  0, 0> { };
+struct CONTACT_DETECTION    : public TYPED_FIELD_BASE<size_t, 1,  0, 0> { };
 struct POROSITY             : public FIELD_BASE<1,  0, 0> {
   template <typename T, typename DESCRIPTOR>
   static constexpr auto getInitialValue() {

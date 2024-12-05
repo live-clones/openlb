@@ -1,3 +1,3 @@
 EXAMPLE = du93_3d
-OLB_ROOT := ../../..
+OLB_ROOT := ${HOME}/OpenLB
 include $(OLB_ROOT)/default.mk
