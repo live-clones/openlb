@@ -5,7 +5,7 @@
       "name": "Debug movingshock3d laptop",
       "type": "cppdbg",
       "request": "launch",
-      "args": [], // "--debug", "--boundary_condition", "3"
+      "args": ["--boundary_condition", "2"], // "--debug", "--boundary_condition", "3"
       "stopAtEntry": false,
       "externalConsole": false,
       "cwd": "/home/hbrs/OpenLB/examples/noise/movingshock3d",
