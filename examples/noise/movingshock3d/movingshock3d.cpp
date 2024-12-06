@@ -99,33 +99,40 @@ void prepareGeometry(UnitConverter<T,DESCRIPTOR> const& converter,
       superGeometry.rename( checMat, 1 );
       break; // all nodes are fluid
     case local:
+      origin = superGeometry.getStatistics().getMinPhysR( checMat ) - converter.getConversionFactorLength();
+      extend = superGeometry.getStatistics().getMaxPhysR( checMat ) - superGeometry.getStatistics().getMinPhysR( checMat ) - 2*converter.getConversionFactorLength();
+      fluid_domain = std::make_shared<IndicatorCuboid<T,ndim>>( extend, origin );
       superGeometry.rename( checMat, 1, {1, 1, 0} );
+      superGeometry.getStatistics().print();
+      superGeometry.rename( checMat, 3);
+      superGeometry.getStatistics().print();
+      exit(1);
 
-      origin = superGeometry.getStatistics().getMinPhysR( checMat );
-      extend = superGeometry.getStatistics().getMaxPhysR( checMat ) - superGeometry.getStatistics().getMinPhysR( checMat );
+      // origin = superGeometry.getStatistics().getMinPhysR( checMat );
+      // extend = superGeometry.getStatistics().getMaxPhysR( checMat ) - superGeometry.getStatistics().getMinPhysR( checMat );
       
-      origin[0] -= converter.getConversionFactorLength();
-      extend[0] = 2*converter.getConversionFactorLength();
-      inflow = std::make_shared<IndicatorCuboid<T,ndim>>( extend, origin );
-      superGeometry.rename( checMat, 3, 1, inflow );
+      // origin[0] -= converter.getConversionFactorLength();
+      // extend[0] = 2*converter.getConversionFactorLength();
+      // inflow = std::make_shared<IndicatorCuboid<T,ndim>>( extend, origin );
+      // superGeometry.rename( checMat, 3, 1, inflow );
 
-      origin[0] = superGeometry.getStatistics().getMaxPhysR( checMat )[0]-converter.getConversionFactorLength();
-      outflow = std::make_shared<IndicatorCuboid<T,ndim>>( extend, origin );
-      superGeometry.rename( checMat, 3, 1, outflow );
+      // origin[0] = superGeometry.getStatistics().getMaxPhysR( checMat )[0]-converter.getConversionFactorLength();
+      // outflow = std::make_shared<IndicatorCuboid<T,ndim>>( extend, origin );
+      // superGeometry.rename( checMat, 3, 1, outflow );
 
-      origin[0] = superGeometry.getStatistics().getMaxPhysR( checMat )[0];
-      extend[0] = superGeometry.getStatistics().getMaxPhysR( checMat )[0] - superGeometry.getStatistics().getMinPhysR( checMat )[0];
+      // origin[0] = superGeometry.getStatistics().getMaxPhysR( checMat )[0];
+      // extend[0] = superGeometry.getStatistics().getMaxPhysR( checMat )[0] - superGeometry.getStatistics().getMinPhysR( checMat )[0];
       
-      origin[1] -= converter.getConversionFactorLength();
-      extend[1] = 2*converter.getConversionFactorLength();
-      bottomflow = std::make_shared<IndicatorCuboid<T,ndim>>( extend, origin );
-      superGeometry.rename( checMat, 3, 1, bottomflow );
+      // origin[1] -= converter.getConversionFactorLength();
+      // extend[1] = 2*converter.getConversionFactorLength();
+      // bottomflow = std::make_shared<IndicatorCuboid<T,ndim>>( extend, origin );
+      // superGeometry.rename( checMat, 3, 1, bottomflow );
 
-      origin[1] = superGeometry.getStatistics().getMaxPhysR( checMat )[0]-converter.getConversionFactorLength();
-      topflow = std::make_shared<IndicatorCuboid<T,ndim>>( extend, origin );
-      superGeometry.rename( checMat, 3, 1, topflow );
+      // origin[1] = superGeometry.getStatistics().getMaxPhysR( checMat )[0]-converter.getConversionFactorLength();
+      // topflow = std::make_shared<IndicatorCuboid<T,ndim>>( extend, origin );
+      // superGeometry.rename( checMat, 3, 1, topflow );
 
-      superGeometry.clean();
+      // superGeometry.clean();
       break;
     case damping:
       superGeometry.rename( checMat, fluiMat, fluid_domain );
@@ -152,7 +159,7 @@ void prepareGeometry(UnitConverter<T,DESCRIPTOR> const& converter,
       
       // Set material number for outflow
       origin[0] = superGeometry.getStatistics().getMaxPhysR( checMat )[0]-converter.getConversionFactorLength();
-      std::make_shared<IndicatorCuboid<T,ndim>>( extend, origin );
+      outflow = std::make_shared<IndicatorCuboid<T,ndim>>( extend, origin );
       superGeometry.rename( checMat, outfMat, dampMat, outflow );  // outflow to bc, pointing to porous
       break;
   }
@@ -176,7 +183,7 @@ void plotSamplings( AnalyticalF3D<T,T>& data, size_t ndatapoints, T dist,
   int nmin = 0;
   if ( !halfDomain ) nmin = -int(ndatapoints/2);
   for (int n = nmin; n <= int(ndatapoints/2); n++) {
-    T input[3] = {0,0,0};
+    T input[ndim] = {0,0,0};
     T distance = 0;
     switch ( direction ) {
       case horizontal:  input[0] = n*dist; distance = input[0]; break;
@@ -184,7 +191,7 @@ void plotSamplings( AnalyticalF3D<T,T>& data, size_t ndatapoints, T dist,
       case diagonal2d:  input[0] = n*dist; input[1] = n*dist;                     distance = std::sqrt(input[0]*input[0]+input[1]*input[1]); break;
       case diagonal3d:  input[0] = n*dist; input[1] = n*dist; input[2] = n*dist;  distance = std::sqrt(input[0]*input[0]+input[1]*input[1]+input[2]*input[2]); break;
     }
-    T output[3];
+    T output[1];
     data(output, input);
     gplot.setData(distance, output[0]);
   }
@@ -422,7 +429,8 @@ void getResults(SuperLattice<T,DESCRIPTOR>& sLattice,
     int input[1];
     T output[3];
     sum(output, input);
-    *uAverage = output[0]/superGeometry.getStatistics().getNvoxel( fluidMaterial );
+    clout << "Number of voxels in Fluid (matNr=" << fluidMaterial << "): " << superGeometry.getStatistics().getNvoxel( fluidMaterial ) << "; velocity sum: " << output[0] << std::endl;
+    *uAverage = output[0] / superGeometry.getStatistics().getNvoxel( fluidMaterial );
 
     sLattice.setProcessingContext<Array<momenta::FixedVelocityMomentumGeneric::VELOCITY>>(ProcessingContext::Simulation);
   }
@@ -501,7 +509,7 @@ int main( int argc, char* argv[] )
   const int source_type         = args.getValueOrFallback( "--source_type",   1   );
   const bool debug              = args.contains("--debug");
   const size_t boundary_depth   = args.getValueOrFallback( "--boundary_depth", 20 );
-  const T amplitude             = args.getValueOrFallback( "--amplitude",     1e-6 ); // physical pressure amplitude
+  const T amplitude             = args.getValueOrFallback( "--amplitude",     1e-6 );  // physical pressure amplitude
   const T damping_strength      = args.getValueOrFallback( "--damping_strength", 1.);
   size_t overlap                = args.getValueOrFallback( "--overlap",       3   );
 
@@ -643,6 +651,7 @@ int main( int argc, char* argv[] )
 
   clout << "Setup: debug=" << debug << "; boundary_depth=" << boundary_depth << "; bd_depth_pu=" << boundary_depth_pu << "; overlap=" << superGeometry.getOverlap() << std::endl;
   prepareGeometry( converter, superGeometry, domain, boundarytype, source, res, debug, boundary_depth );
+  clout << "Number of fluid voxels: " << superGeometry.getStatistics().getNvoxel( fluidMaterial );
   
   // === 3rd Step: Prepare Lattice ===
   SuperLattice<T,DESCRIPTOR> sLattice( superGeometry, debug );
