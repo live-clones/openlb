@@ -51,8 +51,16 @@ void prepareGeometry( UnitConverter<T,DESCRIPTOR> const& converter, //std::share
                       STLreader<T>& stlReader, SuperGeometry<T,3>& superGeometry, bool withTrailingEdge )
 {
   OstreamManager clout( std::cout,"prepareGeometry" );
+  clout << "Prepare Geometry ..." << std::endl
+        << "Materials:" << std::endl
+        << "1 = Fluid" << std::endl
+        << "2 = Check (should be empty!)" << std::endl
+        << "3 = Inflow" << std::endl
+        << "4 = Outflow" << std::endl
+        << "5 = Airfoil Bounce Back or Bouzidi" << std::endl
+        << "6 = Airfoil porous trailing edge" << std::endl;
 
-  superGeometry.rename( 0,2 );
+  superGeometry.rename( 0, 2 );
 
   Vector<T,3> origin = superGeometry.getStatistics().getMinPhysR( 2 );
   Vector<T,3> extend = superGeometry.getStatistics().getMaxPhysR( 2 ) - superGeometry.getStatistics().getMinPhysR( 2 );
@@ -63,7 +71,7 @@ void prepareGeometry( UnitConverter<T,DESCRIPTOR> const& converter, //std::share
   // all nodes except x-boundaries to fluid
   superGeometry.rename( 2, 1, domain );
   // du93 profile
-  superGeometry.rename( 1,5,stlReader );
+  superGeometry.rename( 1, 5, stlReader );
   if ( withTrailingEdge ) {
     // trailing edge area
     origin[0] = 0.7;
@@ -76,25 +84,17 @@ void prepareGeometry( UnitConverter<T,DESCRIPTOR> const& converter, //std::share
   origin[0] = superGeometry.getStatistics().getMinPhysR( 2 )[0]-converter.getConversionFactorLength();
   extend[0] = 2*converter.getConversionFactorLength();
   IndicatorCuboid3D<T> inflow( extend,origin );
-  superGeometry.rename( 2,3,1,inflow );
+  superGeometry.rename( 2, 3, 1, inflow );
 
   // Set material number for outflow
   origin[0] = superGeometry.getStatistics().getMaxPhysR( 2 )[0]-converter.getConversionFactorLength();
   extend[0] = 2*converter.getConversionFactorLength();
   IndicatorCuboid3D<T> outflow( extend,origin );
-  superGeometry.rename( 2,4,1,outflow );
+  superGeometry.rename( 2, 4, 1, outflow );
 
   // Removes all not needed boundary voxels outside the surface
   // superGeometry.clean(5);
   superGeometry.checkForErrors();
-  clout << "Prepare Geometry ..." << std::endl
-        << "Materials:" << std::endl
-        << "1 = Fluid" << std::endl
-        << "2 = Check (should be empty!)" << std::endl
-        << "3 = Inflow" << std::endl
-        << "4 = Outflow" << std::endl
-        << "5 = Airfoil Bounce Back or Bouzidi" << std::endl
-        << "6 = Airfoil porous trailing edge" << std::endl;
   superGeometry.print();
   clout << "Prepare Geometry ... OK" << std::endl;
 }

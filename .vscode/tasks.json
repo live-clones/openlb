@@ -3,10 +3,7 @@
         {
             "type": "shell",
             "label": "make movingshock3d",
-            "command": "export PATH=$HOME/opt/openmpi/bin:$PATH && cd $HOME/OpenLB/examples/noise/movingshock3d && /usr/bin/make",
-            "args": [],
-            "problemMatcher": [],
-            // ,
+            "command": "export MPI_ROOT=$HOME/.openmpi && cd $HOME/OpenLB/examples/noise/movingshock3d && /usr/bin/make",
             // "dependsOn": "clean movingshock3d"
         },
         {
@@ -16,40 +13,9 @@
         },
         {
             "type": "shell",
-            "label": "make cylinder3dnoise",
-            "command": "export PATH=$HOME/opt/openmpi/bin:$PATH && cd $HOME/OpenLB/examples/noise/cylinder3dnoise && /usr/bin/make",
-            "args": [],
-            "problemMatcher": [],
-            // ,
-            // "dependsOn": "clean cylinder3dnoise"
-        },
-        {
-            "type": "shell",
             "label": "make du93_3d",
             "command": "/usr/bin/make",
-            "args": [],
-            "problemMatcher": [],
-            // ,
             // "dependsOn": "clean du93_3d"
-        },
-        {
-            "type": "shell",
-            "label": "clean cylinder3dnoise",
-            "command": "cd $HOME/OpenLB/examples/noise/cylinder3dnoise && /usr/bin/make clean"
-        },
-        {
-            "type": "shell",
-            "label": "make movingshock3drefinement",
-            "command": "export PATH=$HOME/opt/openmpi/bin:$PATH && cd $HOME/OpenLB/examples/noise/movingshock3drefinement && /usr/bin/make",
-            "args": [],
-            "problemMatcher": [],
-            // ,
-            "dependsOn": "clean movingshock3drefinement"
-        },
-        {
-            "type": "shell",
-            "label": "clean movingshock3drefinement",
-            "command": "cd $HOME/OpenLB/examples/noise/movingshock3drefinement && /usr/bin/make clean"
         }
     ],
     "version": "2.0.0"

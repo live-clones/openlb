@@ -2,14 +2,14 @@
   "version": "0.2.0",
   "configurations": [
     {
-      "name": "Debug movingshock3d laptop",
+      "name": "Debug movingshock3d ws",
       "type": "cppdbg",
       "request": "launch",
       "args": ["--boundary_condition", "2"], // "--debug", "--boundary_condition", "3"
       "stopAtEntry": false,
       "externalConsole": false,
-      "cwd": "/home/hbrs/OpenLB/examples/noise/movingshock3d",
-      "program": "/home/hbrs/OpenLB/examples/noise/movingshock3d/movingshock3d",
+      "cwd": "/home/philipp/OpenLB/examples/noise/movingshock3d",
+      "program": "/home/philipp/OpenLB/examples/noise/movingshock3d/movingshock3d",
       "MIMode": "gdb",
       "miDebuggerPath": "gdb",
       "setupCommands": [
@@ -60,47 +60,6 @@
         }
       ],
       "preLaunchTask": "make movingshock3d"
-    },
-    {
-      "name": "Debug cylinder3dnoise workstation",
-      "type": "cppdbg",
-      "request": "launch",
-      "args": ["--tmax", "0.1", "--Re", "200", "--Ma", "0.05", "--nout", "20", "--damping_strength", "1", "--boundarydepth", "10", "--boundarycondition", "2", "--res", "200"],
-      // mpirun -np 8 cylinder3dnoise --res 200 --Re 200 --tmax 1 --Ma 0.05 --boundarydepth 10
-      "stopAtEntry": false,
-      "externalConsole": false,
-      "cwd": "/home/philipp/OpenLB/examples/noise/cylinder3dnoise",
-      "program": "/home/philipp/OpenLB/examples/noise/cylinder3dnoise/cylinder3dnoise",
-      "MIMode": "gdb",
-      "miDebuggerPath": "gdb",
-      "setupCommands": [
-        {
-          "description": "Enable pretty-printing for gdb",
-          "text": "-enable-pretty-printing",
-          "ignoreFailures": true
-        }
-      ],
-      "preLaunchTask": "make cylinder3dnoise"
-    },
-    {
-      "name": "Debug movingshock3drefinement workstation",
-      "type": "cppdbg",
-      "request": "launch",
-      "args": ["--boundarycondition", "3", "--tmax", "0.04", "--Re", "200", "--Ma", "0.20", "--nout", "10", "--damping_strength", "1", "--boundarydepth", "10"],
-      "stopAtEntry": false,
-      "externalConsole": false,
-      "cwd": "/home/philipp/OpenLB/examples/noise/movingshock3drefinement",
-      "program": "/home/philipp/OpenLB/examples/noise/movingshock3drefinement/movingshock3drefinement",
-      "MIMode": "gdb",
-      "miDebuggerPath": "gdb",
-      "setupCommands": [
-        {
-          "description": "Enable pretty-printing for gdb",
-          "text": "-enable-pretty-printing",
-          "ignoreFailures": true
-        }
-      ],
-      "preLaunchTask": "make movingshock3drefinement"
     }
   ]
 }
