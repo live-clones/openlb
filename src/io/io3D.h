@@ -48,3 +48,4 @@
 #include "plainWriter.h"
 #include "analyticalPorosityVolumeF.h"
 #include "analyticalVelocityVolumeF.h"
+#include "consoleToFileWriter.h"

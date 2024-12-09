@@ -533,6 +533,10 @@ int main( int argc, char* argv[] )
   outdir_mod << "_" << Ma << "_Re" << Re << "_a" << amplitude << "_" << lengthDomain << "x" << heightDomain << "x" << depthDomain << "_res" << res << "_overlap" << overlap << "_bd" << boundary_depth << "x" << damping_strength;
 
   singleton::directories().setOutputDir( outdir_mod.str()+"/" );  // set output directory
+  std::ofstream fileStream(outdir_mod.str()+"/output.txt");
+  // Create a TeeBuffer that writes to both the console and the file
+  DoubleBuffer doubleBuffer(std::cout.rdbuf(), fileStream.rdbuf());
+  std::streambuf* originalCoutBuffer = std::cout.rdbuf(&doubleBuffer);
   OstreamManager clout( std::cout, "main" );
   clout << "outdir set to " << outdir_mod.str() << std::endl;
 
@@ -746,4 +750,5 @@ int main( int argc, char* argv[] )
   gplot_l2_abs.writePNG(-1, -1, "gplot_l2_abs");
   timer.stop();
   timer.printSummary();
+  std::cout.rdbuf(originalCoutBuffer);
 }
