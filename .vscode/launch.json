@@ -5,7 +5,7 @@
       "name": "Debug movingshock3d ws",
       "type": "cppdbg",
       "request": "launch",
-      "args": ["--boundary_condition", "2"], // "--debug", "--boundary_condition", "3"
+      "args": ["--boundary_condition", "2", "--boundary_depth", "0", "--res", "2"], // "--debug", "--boundary_condition", "3"
       "stopAtEntry": false,
       "externalConsole": false,
       "cwd": "/home/philipp/OpenLB/examples/noise/movingshock3d",
