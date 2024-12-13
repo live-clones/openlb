@@ -48,7 +48,7 @@ using DESCRIPTOR = D3Q19<>;
 
 // Stores data from stl file in geometry in form of material numbers
 void prepareGeometry( UnitConverter<T,DESCRIPTOR> const& converter, //std::shared_ptr<IndicatorF3D<T>> domain,
-                      STLreader<T>& stlReader, SuperGeometry<T,3>& superGeometry, bool withTrailingEdge )
+                      STLreader<T>& foilBody, STLreader<T>& foilTail, SuperGeometry<T,3>& superGeometry )
 {
   OstreamManager clout( std::cout,"prepareGeometry" );
   clout << "Prepare Geometry ..." << std::endl
@@ -71,14 +71,8 @@ void prepareGeometry( UnitConverter<T,DESCRIPTOR> const& converter, //std::share
   // all nodes except x-boundaries to fluid
   superGeometry.rename( 2, 1, domain );
   // du93 profile
-  superGeometry.rename( 1, 5, stlReader );
-  if ( withTrailingEdge ) {
-    // trailing edge area
-    origin[0] = 0.7;
-    extend[0] = 0.3;
-    IndicatorCuboid3D<T> trailingEdge( extend, origin );
-    superGeometry.rename( 5, 6, trailingEdge );
-  }
+  superGeometry.rename( 1, 5, foilBody );
+  superGeometry.rename( 1, 6, foilTail );
 
   // Set material number for inflow
   origin[0] = superGeometry.getStatistics().getMinPhysR( 2 )[0]-converter.getConversionFactorLength();
@@ -102,10 +96,12 @@ void prepareGeometry( UnitConverter<T,DESCRIPTOR> const& converter, //std::share
 // Set up the geometry of the simulation
 void prepareLattice( SuperLattice<T,DESCRIPTOR>& sLattice,
                      UnitConverter<T,DESCRIPTOR> const& converter,
-                     STLreader<T>& stlReader,
+                     STLreader<T>& foilBody,
+                     STLreader<T>& foilTail,
                      SuperGeometry<T,3>& superGeometry,
-                     bool withTrailingEdge,
-                     T Kin )
+                     bool porousTE,
+                     T Kin,
+                     T initialUx )
 {
   OstreamManager clout( std::cout,"prepareLattice" );
   clout << "Prepare Lattice ..." << std::endl;
@@ -126,12 +122,12 @@ void prepareLattice( SuperLattice<T,DESCRIPTOR>& sLattice,
 
   // Material=5 -->bouzidi / bounce back
   #ifdef BOUZIDI
-  setBouzidiBoundary<T,DESCRIPTOR>(sLattice, superGeometry, 5, stlReader);
+  setBouzidiBoundary<T,DESCRIPTOR>(sLattice, superGeometry, 5, foilBody);
   #else
   setBounceBackBoundary(sLattice, superGeometry, 5);
   #endif
 
-  if ( withTrailingEdge ) {
+  if ( porousTE ) {
     // Material=6 --> porous media
     sLattice.defineDynamics<PorousBGKdynamics>(superGeometry, 6);  // velocity will always be multiplied by d
     T tau = converter.getLatticeRelaxationTime();
@@ -145,12 +141,19 @@ void prepareLattice( SuperLattice<T,DESCRIPTOR>& sLattice,
       exit(1);
     }
     AnalyticalConst3D<T,T> porosity(d);
-    sLattice.defineField<POROSITY>(superGeometry.getMaterialIndicator({0,1,2,3,4,5,6}), porosity);
+    sLattice.defineField<POROSITY>(superGeometry.getMaterialIndicator({6}), porosity);
+  } else {
+    #ifdef BOUZIDI
+    setBouzidiBoundary<T,DESCRIPTOR>(sLattice, superGeometry, 6, foilTail);
+    #else
+    setBounceBackBoundary(sLattice, superGeometry, 5);
+    #endif
   }
 
   // Initial conditions
   AnalyticalConst3D<T,T> rhoF( 1 );
   Vector<T,3> velocityV;
+  velocityV[0] = initialUx;
   AnalyticalConst3D<T,T> uF(velocityV);
 
   // Initialize all values of distribution functions to their local equilibrium
@@ -172,7 +175,8 @@ void setBoundaryValues( SuperLattice<T, DESCRIPTOR>& sLattice,
                         SuperGeometry<T,3>& superGeometry,
                         size_t iTmaxStart,
                         T ux_max_LU,
-                        T maxPhysU )
+                        T maxPhysU,
+                        T iniPhysU )
 {
   OstreamManager clout( std::cout,"setBoundaryValues" );
 
@@ -184,13 +188,13 @@ void setBoundaryValues( SuperLattice<T, DESCRIPTOR>& sLattice,
     // SinusStartScale<T,int> StartScale(iTmaxStart, T( ux_max_LU ));
 
     // Smooth start curve, polynomial
-    PolynomialStartScale<T, size_t> StartScale( iTmaxStart, T( ux_max_LU ) );
+    PolynomialStartScale<T, size_t> StartScale( iTmaxStart, T( ux_max_LU - iniPhysU ) );
 
     // Creates and sets the Poiseuille inflow profile using functors
     size_t iTvec[1] = { iT };
     T ux_i[1] = {};
-    StartScale( ux_i,iTvec );
-    AnalyticalConst3D<T,T> ux( ux_i[0] );
+    StartScale( ux_i, iTvec );
+    AnalyticalConst3D<T,T> ux( ux_i[0] + iniPhysU );
     AnalyticalConst3D<T,T> uy( 0. );
     AnalyticalConst3D<T,T> uz( 0. );
     AnalyticalComposed3D<T,T> u( ux, uy, uz );
@@ -230,7 +234,7 @@ void vtkOutput( SuperVTMwriter3D<T> vtmWriter, int iT,
 void getResults( SuperLattice<T, DESCRIPTOR>& sLattice,
                  UnitConverter<T,DESCRIPTOR> const& converter, int iT,
                  SuperGeometry<T,3>& superGeometry, util::Timer<T>& timer,
-                 STLreader<T>& stlReader,
+                 STLreader<T>& foilBody,
                  size_t iTmax, size_t iTmaxStart, size_t iTvtk )
 {
 
@@ -239,7 +243,7 @@ void getResults( SuperLattice<T, DESCRIPTOR>& sLattice,
   SuperVTMwriter3D<T> vtmWriter( "du93_3d" );
   SuperLatticePhysVelocity3D<T, DESCRIPTOR> velocity( sLattice, converter );
   SuperLatticePhysPressure3D<T, DESCRIPTOR> pressure( sLattice, converter );
-  SuperLatticeYplus3D<T, DESCRIPTOR> yPlus( sLattice, converter, superGeometry, stlReader, 5 );
+  SuperLatticeYplus3D<T, DESCRIPTOR> yPlus( sLattice, converter, superGeometry, foilBody, 5 );
   SuperLatticeRefinementMetricKnudsen3D<T, DESCRIPTOR> quality( sLattice, converter );
   SuperRoundingF3D<T, T> roundedQuality ( quality, RoundingMode::NearestInteger );
   SuperDiscretizationF3D<T> discretization ( roundedQuality, 0., 2. );
@@ -255,13 +259,10 @@ void getResults( SuperLattice<T, DESCRIPTOR>& sLattice,
 
   if ( iT==0 ) {
     // Writes the geometry, cuboid no. and rank no. as vti file for visualization
-    SuperLatticeGeometry3D<T, DESCRIPTOR> geometry( sLattice, superGeometry );
     SuperLatticeCuboid3D<T, DESCRIPTOR> cuboid( sLattice );
     SuperLatticeRank3D<T, DESCRIPTOR> rank( sLattice );
-    vtmWriter.write( geometry );
     vtmWriter.write( cuboid );
     vtmWriter.write( rank );
-
     vtmWriter.createMasterFile();
   }
 
@@ -347,6 +348,8 @@ int main( int argc, char* argv[] )
   //clout.setMultiOutput(true);
   CLIreader args(argc, argv);
   std::string outdir        = args.getValueOrFallback<std::string>( "--outdir", "./tmp" );
+  std::string foilName      = args.getValueOrFallback<std::string>( "--foilname", "DU93W210TET05");
+  const int angle           = args.getValueOrFallback( "--angle",         2);   // in deg
   const T lengthDomain      = args.getValueOrFallback( "--lx",            6);   // in m
   const T heightDomain      = args.getValueOrFallback( "--ly",            3);   // in m
   const T depthDomain       = args.getValueOrFallback( "--lz",            1.2); // in m
@@ -362,7 +365,10 @@ int main( int argc, char* argv[] )
   const T Kin               = args.getValueOrFallback( "--permeability",  1e-8);
   const T tMaxInit          = args.getValueOrFallback( "--tmaxinit",      2);
   T charL                   = args.getValueOrFallback( "--charL",         1);
-  const bool withTrailingEdge = !args.contains("--no-porous");
+  T iniPhysU                = args.getValueOrFallback( "--iniPhysU",      0);
+  const bool debug          = args.contains("--debug");
+  const bool debug_geometry = args.contains("--debug-geometry");
+  const bool porousTE       = !args.contains("--no-porous");                    // --no-porous = no porous material in trailing edge
 
   const T cs_LU             = 1 / std::sqrt(3.0);
   T charV                   = 2 * maxPhysU;
@@ -378,15 +384,18 @@ int main( int argc, char* argv[] )
     if ( Re == 0 ) Re       = 200;
     viscosity               = charV * charL / Re;
   }
+  if ( debug ) {
+    iTmax                   = 100;
+  }
 
   std::stringstream outdir_mod;
   outdir_mod << outdir;
-  if ( !withTrailingEdge ) outdir_mod << "_noPorous";
+  if ( !porousTE ) outdir_mod << "_noPorous";
   else outdir_mod << "_" << Kin << "porous";
-  outdir_mod << "_u" << charV << "_Re" << Re << "_" << lengthDomain << "x" << heightDomain << "x" << depthDomain << "_res" << res;
+  outdir_mod << "_" << angle << "deg_u" << charV << "_Re" << Re << "_" << lengthDomain << "x" << heightDomain << "x" << depthDomain << "_res" << res;
 
   singleton::directories().setOutputDir( outdir_mod.str()+"/" );  // set output directory
-  if ( withTrailingEdge ) clout << "Calculating with trailing edge" << std::endl;
+  if ( porousTE ) clout << "Calculating with porous trailing edge" << std::endl;
   else clout << "Calculating without trailing edge" << std::endl;
 
   UnitConverterFromResolutionAndRelaxationTime<T, DESCRIPTOR> const converter(
@@ -407,8 +416,11 @@ int main( int argc, char* argv[] )
 
   // Instantiation of the STLreader class
   // file name, voxel size in meter, stl unit in meter, outer voxel no., inner voxel no.
-  STLreader<T> stlReader( "extruded_shape.stl", converter.getConversionFactorLength() );
-  IndicatorLayer3D<T> extendedDomain( stlReader, converter.getConversionFactorLength() );
+  std::string foilBodyFilename = foilName + "_" + std::to_string(angle) + "deg_body.stl";
+  std::string foilTailFilename = foilName + "_" + std::to_string(angle) + "deg_tail.stl";
+  clout << "Loading airfoil body from " << foilBodyFilename << " and airfoil tail from " << foilTailFilename << std::endl;
+  STLreader<T> foilBody( foilBodyFilename, converter.getConversionFactorLength() );
+  STLreader<T> foilTail( foilTailFilename, converter.getConversionFactorLength() );
 
   // Instantiation of a cuboidGeometry with weights
 #ifdef PARALLEL_MODE_MPI
@@ -433,13 +445,19 @@ int main( int argc, char* argv[] )
   // Instantiation of a superGeometry
   SuperGeometry<T,3> superGeometry( cuboidGeometry, loadBalancer );
 
-  prepareGeometry( converter, stlReader, superGeometry, withTrailingEdge );
+  prepareGeometry( converter, foilBody, foilTail, superGeometry );
+  SuperVTMwriter3D<T> vtmInit("du93_3d_init");
+  // Writes the geometry, cuboid no. and rank no. as vti file for visualization
+  SuperLatticeGeometry3D<T, DESCRIPTOR> geometry( superGeometry );
+  vtmInit.write( geometry );
+
+  if ( debug_geometry ) exit(1);
 
   // === 3rd Step: Prepare Lattice ===
   SuperLattice<T, DESCRIPTOR> sLattice( superGeometry );
 
   //prepareLattice and set boundaryCondition
-  prepareLattice( sLattice, converter, stlReader, superGeometry, withTrailingEdge, Kin );
+  prepareLattice( sLattice, converter, foilBody, foilTail, superGeometry, porousTE, Kin, iniPhysU );
 
   // === 3a-rd Step: calculate iterations from input ===
   // iTmax depends on maximum physical time. If iTmax is provided in command line, it is an upper bound
@@ -459,13 +477,13 @@ int main( int argc, char* argv[] )
 
   for (size_t iT = 0; iT < iTmax; ++iT) {
     // === 5th Step: Definition of Initial and Boundary Conditions ===
-    setBoundaryValues( sLattice, converter, iT, superGeometry, iTmaxStart, umax_LU, maxPhysU );
+    setBoundaryValues( sLattice, converter, iT, superGeometry, iTmaxStart, umax_LU, maxPhysU, iniPhysU );
 
     // === 6th Step: Collide and Stream Execution ===
     sLattice.collideAndStream();
 
     // === 7th Step: Computation and Output of the Results ===
-    getResults( sLattice, converter, iT, superGeometry, timer, stlReader, iTmax, iTmaxStart, iTvtk );
+    getResults( sLattice, converter, iT, superGeometry, timer, foilBody, iTmax, iTmaxStart, iTvtk );
   }
 
   timer.stop();
