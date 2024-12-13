@@ -22,8 +22,8 @@ CC              := nvcc
 
 CXXFLAGS        := -O3
 CXXFLAGS        += -std=c++17
-CXXFLAGS		+= -I${MPI_ROOT}/include
-LDFLAGS   		+= -L${MPI_ROOT}/lib # $$ mpicxx --showme:link $$ -L${MPI_ROOT}/lib -Wl,-rpath -Wl, ${MPI_ROOT}/lib -Wl,--enable-new-dtags -lmpi
+CXXFLAGS		    += -I${MPI_ROOT}/include
+LDFLAGS   		  += -L${MPI_ROOT}/lib # $$ mpicxx --showme:link $$ -L${MPI_ROOT}/lib -Wl,-rpath -Wl, ${MPI_ROOT}/lib -Wl,--enable-new-dtags -lmpi
 
 PARALLEL_MODE   := MPI
 

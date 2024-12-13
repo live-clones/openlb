@@ -17,7 +17,7 @@ CXXFLAGS        := -O3
 CXXFLAGS        += -std=c++17 --forward-unknown-to-host-compiler
 
 PARALLEL_MODE   := NONE
-MPIFLAGS		:= -lmpi_cxx -lmpi
+MPIFLAGS		    := -lmpi_cxx -lmpi
 
 PLATFORMS       := CPU_SISD GPU_CUDA
 

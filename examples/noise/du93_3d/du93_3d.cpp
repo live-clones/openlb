@@ -48,17 +48,22 @@ using DESCRIPTOR = D3Q19<>;
 
 // Stores data from stl file in geometry in form of material numbers
 void prepareGeometry( UnitConverter<T,DESCRIPTOR> const& converter, //std::shared_ptr<IndicatorF3D<T>> domain,
-                      STLreader<T>& foilBody, STLreader<T>& foilTail, SuperGeometry<T,3>& superGeometry )
+                      STLreader<T>& foilBody,
+                      STLreader<T>& foilTail,
+                      SuperGeometry<T,3>& superGeometry,
+                      bool dampingLayer,
+                      T boundaryDepth )
 {
   OstreamManager clout( std::cout,"prepareGeometry" );
   clout << "Prepare Geometry ..." << std::endl
         << "Materials:" << std::endl
-        << "1 = Fluid" << std::endl
+        << "1 = Fluid if no damping layer, else damping layer" << std::endl
         << "2 = Check (should be empty!)" << std::endl
         << "3 = Inflow" << std::endl
         << "4 = Outflow" << std::endl
         << "5 = Airfoil Bounce Back or Bouzidi" << std::endl
-        << "6 = Airfoil porous trailing edge" << std::endl;
+        << "6 = Airfoil porous trailing edge" << std::endl
+        << "7 = Fluid if 1 is damping layer" << std::endl;
 
   superGeometry.rename( 0, 2 );
 
@@ -70,9 +75,21 @@ void prepareGeometry( UnitConverter<T,DESCRIPTOR> const& converter, //std::share
 
   // all nodes except x-boundaries to fluid
   superGeometry.rename( 2, 1, domain );
+
   // du93 profile
   superGeometry.rename( 1, 5, foilBody );
   superGeometry.rename( 1, 6, foilTail );
+
+  if ( dampingLayer ) {
+    // fluid domain part to fluid
+    T bd_pu = converter.getPhysLength( boundaryDepth );
+    origin = superGeometry.getStatistics().getMinPhysR( 2 );
+    extend = superGeometry.getStatistics().getMaxPhysR( 2 ) - superGeometry.getStatistics().getMinPhysR( 2 );
+    origin[0] += bd_pu;
+    extend[0] -= 2*bd_pu;
+    IndicatorCuboid3D<T> fluid_domain( extend, origin );
+    superGeometry.rename( 1, 7, fluid_domain );  // all nodes except boundary length
+  }
 
   // Set material number for inflow
   origin[0] = superGeometry.getStatistics().getMinPhysR( 2 )[0]-converter.getConversionFactorLength();
@@ -101,7 +118,10 @@ void prepareLattice( SuperLattice<T,DESCRIPTOR>& sLattice,
                      SuperGeometry<T,3>& superGeometry,
                      bool porousTE,
                      T Kin,
-                     T initialUx )
+                     T initialUx,
+                     bool dampingLayer,
+                     T boundaryDepth,
+                     T dampingStrength )
 {
   OstreamManager clout( std::cout,"prepareLattice" );
   clout << "Prepare Lattice ..." << std::endl;
@@ -110,7 +130,19 @@ void prepareLattice( SuperLattice<T,DESCRIPTOR>& sLattice,
 
   // Material=1 -->bulk dynamics
   auto bulkIndicator = superGeometry.getMaterialIndicator({1});
-  sLattice.defineDynamics<BGKdynamics>(bulkIndicator);
+  if ( dampingLayer ) {
+    setDampingBoundary<T,DESCRIPTOR>(sLattice, superGeometry, 1);
+
+    bulkIndicator = superGeometry.getMaterialIndicator({1,7});
+    Vector<T,3> extend = superGeometry.getStatistics().getMaxPhysR( 2 ) - superGeometry.getStatistics().getMinPhysR( 2 );
+    DampingTerm<3,T,DESCRIPTOR> sigma( converter, boundaryDepth, extend, dampingStrength );
+    sLattice.defineField<descriptors::DAMPING>( bulkIndicator, sigma );
+
+    bulkIndicator = superGeometry.getMaterialIndicator({7});
+    sLattice.defineDynamics<BGKdynamics>(bulkIndicator);
+  } else {
+    sLattice.defineDynamics<BGKdynamics>(bulkIndicator);
+  }
 
   // Material=2 -->bounce back
   setBounceBackBoundary(sLattice, superGeometry, 2);
@@ -118,7 +150,7 @@ void prepareLattice( SuperLattice<T,DESCRIPTOR>& sLattice,
   // Material=3 -->inlet
   setLocalVelocityBoundary(sLattice, omega, superGeometry, 3);
   // Material=4 -->outlet
-  setInterpolatedConvectionBoundary(sLattice, omega, superGeometry, 4);
+  setZeroGradientBoundary(sLattice, superGeometry, 4);
 
   // Material=5 -->bouzidi / bounce back
   #ifdef BOUZIDI
@@ -253,7 +285,7 @@ void getResults( SuperLattice<T, DESCRIPTOR>& sLattice,
   vtmWriter.addFunctor( pressure );
   vtmWriter.addFunctor( yPlus );
 
-  const size_t statIter = iTmaxStart;
+  const size_t statIter = int( iTvtk/10 );
   const size_t iTcheck  = 500;
   bool lastIteration = false;
 
@@ -350,10 +382,11 @@ int main( int argc, char* argv[] )
   std::string outdir        = args.getValueOrFallback<std::string>( "--outdir", "./tmp" );
   std::string foilName      = args.getValueOrFallback<std::string>( "--foilname", "DU93W210TET05");
   const int angle           = args.getValueOrFallback( "--angle",         2);   // in deg
-  const T lengthDomain      = args.getValueOrFallback( "--lx",            6);   // in m
+  T lengthDomain            = args.getValueOrFallback( "--lx",            6);   // in m
   const T heightDomain      = args.getValueOrFallback( "--ly",            3);   // in m
   const T depthDomain       = args.getValueOrFallback( "--lz",            1.2); // in m
   const size_t res          = args.getValueOrFallback( "--res",           50);  // voxel/m (dx_LU/m)
+  size_t boundaryDepth      = args.getValueOrFallback( "--bd",            20);  // depth of damping layer in LU
   T maxPhysT                = args.getValueOrFallback( "--tmax",          10);  // in s
   size_t iTmax              = args.getValueOrFallback( "--imax",          0);
   size_t nout               = args.getValueOrFallback( "--nout",          5);   // minimum number of vtk outputs
@@ -363,15 +396,17 @@ int main( int argc, char* argv[] )
   T Re                      = args.getValueOrFallback( "--Re",            0);
   T tau                     = args.getValueOrFallback( "--tau",           0);   // previously tau=0.53 fixed
   const T Kin               = args.getValueOrFallback( "--permeability",  1e-8);
+  const T dampingStrength   = args.getValueOrFallback( "--dampingStrength", .5);
   const T tMaxInit          = args.getValueOrFallback( "--tmaxinit",      2);
   T charL                   = args.getValueOrFallback( "--charL",         1);
   T iniPhysU                = args.getValueOrFallback( "--iniPhysU",      0);
   const bool debug          = args.contains("--debug");
   const bool debug_geometry = args.contains("--debug-geometry");
   const bool porousTE       = !args.contains("--no-porous");                    // --no-porous = no porous material in trailing edge
+  const bool dampingLayer   = !args.contains("--no-damping");                   // --no-damping = no damping layer around domain
 
   const T cs_LU             = 1 / std::sqrt(3.0);
-  T charV                   = 2 * maxPhysU;
+  T charV                   = 4 * maxPhysU;
   T viscosity;
   if ( tau == 0 ) {
     if ( Re == 0 ) {
@@ -392,7 +427,7 @@ int main( int argc, char* argv[] )
   outdir_mod << outdir;
   if ( !porousTE ) outdir_mod << "_noPorous";
   else outdir_mod << "_" << Kin << "porous";
-  outdir_mod << "_" << angle << "deg_u" << charV << "_Re" << Re << "_" << lengthDomain << "x" << heightDomain << "x" << depthDomain << "_res" << res;
+  outdir_mod << "_" << angle << "deg_u" << maxPhysU << "_Re" << Re << "_" << lengthDomain << "x" << heightDomain << "x" << depthDomain << "_res" << res << "_bd" << boundaryDepth << "x" << dampingStrength;;
 
   singleton::directories().setOutputDir( outdir_mod.str()+"/" );  // set output directory
   if ( porousTE ) clout << "Calculating with porous trailing edge" << std::endl;
@@ -429,6 +464,7 @@ int main( int argc, char* argv[] )
   const int noOfCuboids = 7;
 #endif
   // setup domain
+  if ( dampingLayer ) lengthDomain += converter.getPhysLength( boundaryDepth );
   Vector<T,3> originDomain( -lengthDomain/3, -heightDomain/2, 0.1 );  //
   Vector<T,3> extendDomain( lengthDomain, heightDomain, depthDomain );  // size of the domain
   std::shared_ptr<IndicatorF3D<T>> domain = std::make_shared<IndicatorCuboid3D<T>>( extendDomain, originDomain );
@@ -445,7 +481,7 @@ int main( int argc, char* argv[] )
   // Instantiation of a superGeometry
   SuperGeometry<T,3> superGeometry( cuboidGeometry, loadBalancer );
 
-  prepareGeometry( converter, foilBody, foilTail, superGeometry );
+  prepareGeometry( converter, foilBody, foilTail, superGeometry, dampingLayer, boundaryDepth );
   SuperVTMwriter3D<T> vtmInit("du93_3d_init");
   // Writes the geometry, cuboid no. and rank no. as vti file for visualization
   SuperLatticeGeometry3D<T, DESCRIPTOR> geometry( superGeometry );
@@ -457,7 +493,7 @@ int main( int argc, char* argv[] )
   SuperLattice<T, DESCRIPTOR> sLattice( superGeometry );
 
   //prepareLattice and set boundaryCondition
-  prepareLattice( sLattice, converter, foilBody, foilTail, superGeometry, porousTE, Kin, iniPhysU );
+  prepareLattice( sLattice, converter, foilBody, foilTail, superGeometry, porousTE, Kin, iniPhysU, dampingLayer, boundaryDepth, dampingStrength);
 
   // === 3a-rd Step: calculate iterations from input ===
   // iTmax depends on maximum physical time. If iTmax is provided in command line, it is an upper bound
@@ -469,6 +505,7 @@ int main( int argc, char* argv[] )
   if ( iout != 0 ) { nout_from_iout = size_t( iTmax / iout ); nout = std::max( nout, nout_from_iout ); }
   if ( tout != 0 ) { nout_from_tout = size_t( iTmax / tout ); nout = std::max( nout, nout_from_tout ); }
   size_t iTvtk = size_t( iTmax / nout );
+  clout << "Set nout to " << nout << ", so iTvtk=" << iTvtk;
 
   // === 4th Step: Main Loop with Timer ===
   clout << "starting simulation..." << std::endl;
