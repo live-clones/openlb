@@ -51,7 +51,7 @@ void prepareGeometry( UnitConverter<T,DESCRIPTOR> const& converter, //std::share
                       STLreader<T>& foilBody,
                       STLreader<T>& foilTail,
                       SuperGeometry<T,3>& superGeometry,
-                      bool dampingLayer,
+                      bool withDampingLayer,
                       T boundaryDepth )
 {
   OstreamManager clout( std::cout,"prepareGeometry" );
@@ -80,7 +80,7 @@ void prepareGeometry( UnitConverter<T,DESCRIPTOR> const& converter, //std::share
   superGeometry.rename( 1, 5, foilBody );
   superGeometry.rename( 1, 6, foilTail );
 
-  if ( dampingLayer ) {
+  if ( withDampingLayer ) {
     // fluid domain part to fluid
     T bd_pu = converter.getPhysLength( boundaryDepth );
     origin = superGeometry.getStatistics().getMinPhysR( 2 );
@@ -119,7 +119,7 @@ void prepareLattice( SuperLattice<T,DESCRIPTOR>& sLattice,
                      bool porousTE,
                      T Kin,
                      T initialUx,
-                     bool dampingLayer,
+                     bool withDampingLayer,
                      T boundaryDepth,
                      T dampingStrength )
 {
@@ -130,16 +130,16 @@ void prepareLattice( SuperLattice<T,DESCRIPTOR>& sLattice,
 
   // Material=1 -->bulk dynamics
   auto bulkIndicator = superGeometry.getMaterialIndicator({1});
-  if ( dampingLayer ) {
+  if ( withDampingLayer ) {
     setDampingBoundary<T,DESCRIPTOR>(sLattice, superGeometry, 1);
-
-    bulkIndicator = superGeometry.getMaterialIndicator({1,7});
     Vector<T,3> extend = superGeometry.getStatistics().getMaxPhysR( 2 ) - superGeometry.getStatistics().getMinPhysR( 2 );
     DampingTerm<3,T,DESCRIPTOR> sigma( converter, boundaryDepth, extend, dampingStrength );
     sLattice.defineField<descriptors::DAMPING>( bulkIndicator, sigma );
 
     bulkIndicator = superGeometry.getMaterialIndicator({7});
     sLattice.defineDynamics<BGKdynamics>(bulkIndicator);
+
+    bulkIndicator = superGeometry.getMaterialIndicator({1,7});
   } else {
     sLattice.defineDynamics<BGKdynamics>(bulkIndicator);
   }
@@ -187,6 +187,16 @@ void prepareLattice( SuperLattice<T,DESCRIPTOR>& sLattice,
   Vector<T,3> velocityV;
   velocityV[0] = initialUx;
   AnalyticalConst3D<T,T> uF(velocityV);
+  AnalyticalConst3D<T,T> ux(velocityV[0]);
+  AnalyticalConst3D<T,T> uy(velocityV[1]);
+  AnalyticalConst3D<T,T> uz(velocityV[2]);
+
+  if ( withDampingLayer ) {
+    sLattice.defineField<descriptors::UX>( bulkIndicator, ux );
+    sLattice.defineField<descriptors::UY>( bulkIndicator, uy );
+    sLattice.defineField<descriptors::UZ>( bulkIndicator, uz );
+    sLattice.defineField<descriptors::DENSITY>( bulkIndicator, rhoF );
+  }
 
   // Initialize all values of distribution functions to their local equilibrium
   sLattice.defineRhoU( bulkIndicator, rhoF, uF );
@@ -208,7 +218,8 @@ void setBoundaryValues( SuperLattice<T, DESCRIPTOR>& sLattice,
                         size_t iTmaxStart,
                         T maxLatticeU,
                         T maxPhysU,
-                        T iniPhysU )
+                        T iniPhysU,
+                        bool withDampingLayer )
 {
   OstreamManager clout( std::cout,"setBoundaryValues" );
 
@@ -231,6 +242,11 @@ void setBoundaryValues( SuperLattice<T, DESCRIPTOR>& sLattice,
     AnalyticalConst3D<T,T> uz( 0. );
     AnalyticalComposed3D<T,T> u( ux, uy, uz );
     sLattice.defineU( superGeometry, 3, u );
+
+    if ( withDampingLayer ) {
+      auto bulkIndicator = superGeometry.getMaterialIndicator({1,7});
+      sLattice.defineField<descriptors::UX>( bulkIndicator, ux );
+    }
 
     clout << "startup step=" << iT << "/" << iTmaxStart << "; t=" << converter.getPhysTime(iT)
           << "; ux_LU=" << ux_i[0] << "; maxLatticeU=" << maxLatticeU
@@ -403,7 +419,7 @@ int main( int argc, char* argv[] )
   const bool debug          = args.contains("--debug");
   const bool debug_geometry = args.contains("--debug-geometry");
   const bool porousTE       = !args.contains("--no-porous");                    // --no-porous = no porous material in trailing edge
-  const bool dampingLayer   = !args.contains("--no-damping");                   // --no-damping = no damping layer around domain
+  const bool withDampingLayer   = !args.contains("--no-damping");                   // --no-damping = no damping layer around domain
 
   const T cs_LU             = 1 / std::sqrt(3.0);
   T charV                   = 4 * maxPhysU;
@@ -464,7 +480,7 @@ int main( int argc, char* argv[] )
   const int noOfCuboids = 7;
 #endif
   // setup domain
-  if ( dampingLayer ) lengthDomain += converter.getPhysLength( boundaryDepth );
+  if ( withDampingLayer ) lengthDomain += converter.getPhysLength( boundaryDepth );
   Vector<T,3> originDomain( -lengthDomain/3, -heightDomain/2, 0.1 );  //
   Vector<T,3> extendDomain( lengthDomain, heightDomain, depthDomain );  // size of the domain
   std::shared_ptr<IndicatorF3D<T>> domain = std::make_shared<IndicatorCuboid3D<T>>( extendDomain, originDomain );
@@ -481,7 +497,7 @@ int main( int argc, char* argv[] )
   // Instantiation of a superGeometry
   SuperGeometry<T,3> superGeometry( cuboidGeometry, loadBalancer );
 
-  prepareGeometry( converter, foilBody, foilTail, superGeometry, dampingLayer, boundaryDepth );
+  prepareGeometry( converter, foilBody, foilTail, superGeometry, withDampingLayer, boundaryDepth );
   SuperVTMwriter3D<T> vtmInit("du93_3d_init");
   // Writes the geometry, cuboid no. and rank no. as vti file for visualization
   SuperLatticeGeometry3D<T, DESCRIPTOR> geometry( superGeometry );
@@ -493,7 +509,7 @@ int main( int argc, char* argv[] )
   SuperLattice<T, DESCRIPTOR> sLattice( superGeometry );
 
   //prepareLattice and set boundaryCondition
-  prepareLattice( sLattice, converter, foilBody, foilTail, superGeometry, porousTE, Kin, iniPhysU, dampingLayer, boundaryDepth, dampingStrength);
+  prepareLattice( sLattice, converter, foilBody, foilTail, superGeometry, porousTE, Kin, iniPhysU, withDampingLayer, boundaryDepth, dampingStrength);
 
   // === 3a-rd Step: calculate iterations from input ===
   // iTmax depends on maximum physical time. If iTmax is provided in command line, it is an upper bound
@@ -514,7 +530,7 @@ int main( int argc, char* argv[] )
 
   for (size_t iT = 0; iT < iTmax; ++iT) {
     // === 5th Step: Definition of Initial and Boundary Conditions ===
-    setBoundaryValues( sLattice, converter, iT, superGeometry, iTmaxStart, maxLatticeU, maxPhysU, iniPhysU );
+    setBoundaryValues( sLattice, converter, iT, superGeometry, iTmaxStart, maxLatticeU, maxPhysU, iniPhysU, withDampingLayer );
 
     // === 6th Step: Collide and Stream Execution ===
     sLattice.collideAndStream();
