@@ -206,7 +206,7 @@ void setBoundaryValues( SuperLattice<T, DESCRIPTOR>& sLattice,
                         size_t iT,
                         SuperGeometry<T,3>& superGeometry,
                         size_t iTmaxStart,
-                        T ux_max_LU,
+                        T maxLatticeU,
                         T maxPhysU,
                         T iniPhysU )
 {
@@ -217,10 +217,10 @@ void setBoundaryValues( SuperLattice<T, DESCRIPTOR>& sLattice,
 
   if ( iT%iTupdate == 0 && iT <= iTmaxStart ) {
     // Smooth start curve, sinus
-    // SinusStartScale<T,int> StartScale(iTmaxStart, T( ux_max_LU ));
+    // SinusStartScale<T,int> StartScale(iTmaxStart, T( maxLatticeU ));
 
     // Smooth start curve, polynomial
-    PolynomialStartScale<T, size_t> StartScale( iTmaxStart, T( ux_max_LU - iniPhysU ) );
+    PolynomialStartScale<T, size_t> StartScale( iTmaxStart, T( maxLatticeU - iniPhysU ) );
 
     // Creates and sets the Poiseuille inflow profile using functors
     size_t iTvec[1] = { iT };
@@ -233,8 +233,8 @@ void setBoundaryValues( SuperLattice<T, DESCRIPTOR>& sLattice,
     sLattice.defineU( superGeometry, 3, u );
 
     clout << "startup step=" << iT << "/" << iTmaxStart << "; t=" << converter.getPhysTime(iT)
-          << "; ux_LU=" << ux_i[0] << "; ux_max_LU=" << ux_max_LU
-          << "; ux_PU=" << converter.getPhysVelocity( ux_i[0] ) << "; ux_max_LU=" << maxPhysU << std::endl;
+          << "; ux_LU=" << ux_i[0] << "; maxLatticeU=" << maxLatticeU
+          << "; ux_PU=" << converter.getPhysVelocity( ux_i[0] ) << "; ux_max_PU=" << maxPhysU << std::endl;
 
     sLattice.setProcessingContext<Array<momenta::FixedVelocityMomentumGeneric::VELOCITY>>(ProcessingContext::Simulation);
   }
@@ -375,7 +375,7 @@ int main( int argc, char* argv[] )
 {
   // === 1st Step: Initialization ===
   olbInit( &argc, &argv );
-  OstreamManager clout( std::cout,"main" );
+  OstreamManager clout( std::cout, "main" );
   // display messages from every single mpi process
   //clout.setMultiOutput(true);
   CLIreader args(argc, argv);
@@ -441,7 +441,7 @@ int main( int argc, char* argv[] )
     (T)       viscosity,      // physViscosity: physical kinematic viscosity in __m^2 / s__
     (T)       1.204           // physDensity: physical density in __kg / m^3__; air at 101.325 kPa and 20 °C
   );
-  T umax_LU                 = converter.getLatticeVelocity( maxPhysU );
+  T maxLatticeU                 = converter.getLatticeVelocity( maxPhysU );
   // Prints the converter log as console output
   converter.print();
   // Writes the converter log in a file
@@ -514,7 +514,7 @@ int main( int argc, char* argv[] )
 
   for (size_t iT = 0; iT < iTmax; ++iT) {
     // === 5th Step: Definition of Initial and Boundary Conditions ===
-    setBoundaryValues( sLattice, converter, iT, superGeometry, iTmaxStart, umax_LU, maxPhysU, iniPhysU );
+    setBoundaryValues( sLattice, converter, iT, superGeometry, iTmaxStart, maxLatticeU, maxPhysU, iniPhysU );
 
     // === 6th Step: Collide and Stream Execution ===
     sLattice.collideAndStream();
