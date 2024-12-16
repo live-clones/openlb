@@ -1,6 +1,7 @@
 .idea/
 .git/
 tmp/
+config.mk
 examples/**/tmp/
 examples/**/tmp*/
 examples/noise/pointsource2d/pointsource2d
