@@ -6,7 +6,6 @@ protected:
   T rho0;
   T amplitude;
   T alpha;
-  T scaling=2500;  // shock is too large otherwise -> scaling it to 1/50 extend
 public:
   AcousticPulse(T rho0, T amplitude, T alpha ) : AnalyticalF<ndim,T,T>(1),
     rho0(rho0), amplitude(amplitude), alpha(alpha) {};
@@ -15,9 +14,10 @@ public:
   {
     T distance=0;
     for ( unsigned d=0; d<ndim; d++ ) {
-      distance += input[d]*input[d]*scaling;
+      distance += input[d]*input[d];  // actually, distance would be square root, but would be squared in exponent
     }
     output[0] = rho0+amplitude*util::exp(-alpha*distance);
+    // if ( output[0] > rho0 ) std::cout << "input=[" << input[0] << "," << input[1] << "," << input[2] << "], distance=" << distance << ", output=" << output[0] << std::endl;
     return true;
   };
 };
