@@ -37,14 +37,9 @@ using namespace olb::graphics;
 using T = FLOATING_POINT_TYPE;
 using DESCRIPTOR = D3Q19<>;
 
-// T* uAverage = NULL;
+T* uAverage = NULL;
 
 #define BOUZIDI
-
-// Parameters for the simulation setup
-// const int N = 10;        // resolution of the model
-// const T Re = 20.;       // Reynolds number
-// const T maxPhysT = 50.; // max. simulation time in s, SI unit
 
 // Stores data from stl file in geometry in form of material numbers
 void prepareGeometry( UnitConverter<T,DESCRIPTOR> const& converter, //std::shared_ptr<IndicatorF3D<T>> domain,
@@ -110,6 +105,24 @@ void prepareGeometry( UnitConverter<T,DESCRIPTOR> const& converter, //std::share
   clout << "Prepare Geometry ... OK" << std::endl;
 }
 
+void setUAverage( SuperLattice<T,DESCRIPTOR>& sLattice,
+                  SuperGeometry<T,3>& superGeometry
+                  )
+{
+  sLattice.setProcessingContext(ProcessingContext::Evaluation);  // important for synchronization (?) on GPU
+
+  // update outflow boundary value (adaptive convection boundary for smaller domains)
+  SuperLatticeVelocity3D<T, DESCRIPTOR> velocity( sLattice );
+  std::unique_ptr<SuperIndicatorF<T,3>> fluidIndicator = superGeometry.getMaterialIndicator({1});
+  SuperSum3D<T> sum( velocity, fluidIndicator );
+  int input[1];
+  T output[3];
+  sum(output, input);
+  *uAverage = output[0] / superGeometry.getStatistics().getNvoxel( 1 );
+
+  sLattice.setProcessingContext<Array<momenta::FixedVelocityMomentumGeneric::VELOCITY>>(ProcessingContext::Simulation);
+}
+
 // Set up the geometry of the simulation
 void prepareLattice( SuperLattice<T,DESCRIPTOR>& sLattice,
                      UnitConverter<T,DESCRIPTOR> const& converter,
@@ -126,6 +139,9 @@ void prepareLattice( SuperLattice<T,DESCRIPTOR>& sLattice,
   OstreamManager clout( std::cout,"prepareLattice" );
   clout << "Prepare Lattice ..." << std::endl;
 
+  T tmp = T();
+  uAverage = &tmp;  //*uAverage = 0.0;
+  setUAverage( sLattice, superGeometry );
   const T omega = converter.getLatticeRelaxationFrequency();
 
   // Material=1 -->bulk dynamics
@@ -150,7 +166,9 @@ void prepareLattice( SuperLattice<T,DESCRIPTOR>& sLattice,
   // Material=3 -->inlet
   setLocalVelocityBoundary(sLattice, omega, superGeometry, 3);
   // Material=4 -->outlet
-  setZeroGradientBoundary(sLattice, superGeometry, 4);
+  // setZeroGradientBoundary(sLattice, superGeometry, 4);
+  setInterpolatedConvectionBoundary(sLattice, omega, superGeometry, 4, uAverage);
+  // setLocalConvectionBoundary(sLattice, omega, superGeometry, 4, uAverage);
 
   // Material=5 -->bouzidi / bounce back
   #ifdef BOUZIDI
@@ -266,7 +284,9 @@ void vtkOutput( SuperVTMwriter3D<T> vtmWriter, int iT,
     SuperEuklidNorm3D<T> normVel( velocity );
     BlockReduction3D2D<T> planeReduction( normVel, Vector<T,3>({0, 0, 1}) );
     // write output as JPEG
-    heatmap::write(planeReduction, iT);
+    heatmap::plotParam<T> uScale;
+    uScale.minValue = 0;
+    heatmap::write(planeReduction, iT, uScale);
   }
 
   {
@@ -285,8 +305,7 @@ void getResults( SuperLattice<T, DESCRIPTOR>& sLattice,
                  STLreader<T>& foilBody,
                  size_t iTmax, size_t iTmaxStart, size_t iTvtk )
 {
-
-  OstreamManager clout( std::cout,"getResults" );
+  OstreamManager clout( std::cout, "getResults, iT=" + std::to_string(iT) );
 
   SuperVTMwriter3D<T> vtmWriter( "du93_3d" );
   SuperLatticePhysVelocity3D<T, DESCRIPTOR> velocity( sLattice, converter );
@@ -379,6 +398,11 @@ void getResults( SuperLattice<T, DESCRIPTOR>& sLattice,
     sLattice.setProcessingContext<Array<momenta::FixedVelocityMomentumGeneric::VELOCITY>>(ProcessingContext::Simulation);
   }
 
+  if ( iT%50 == 0 ) {
+    setUAverage( sLattice, superGeometry );
+    clout << "uAverage(" << iT << ")= " << *uAverage << std::endl;
+  }
+
   if ( lastIteration ) {
     clout << "Stopping earyl after " << iT << " iterations due to too high average pressure. Sorry..." << std::endl;
     timer.stop();
@@ -391,7 +415,6 @@ int main( int argc, char* argv[] )
 {
   // === 1st Step: Initialization ===
   olbInit( &argc, &argv );
-  OstreamManager clout( std::cout, "main" );
   // display messages from every single mpi process
   //clout.setMultiOutput(true);
   CLIreader args(argc, argv);
@@ -446,6 +469,11 @@ int main( int argc, char* argv[] )
   outdir_mod << "_" << angle << "deg_u" << maxPhysU << "_Re" << Re << "_" << lengthDomain << "x" << heightDomain << "x" << depthDomain << "_res" << res << "_bd" << boundaryDepth << "x" << dampingStrength;;
 
   singleton::directories().setOutputDir( outdir_mod.str()+"/" );  // set output directory
+  std::ofstream fileStream( outdir_mod.str() + "/output.txt" );
+  DoubleBuffer doubleBuffer( std::cout.rdbuf(), fileStream.rdbuf() );
+  std::streambuf* originalCoutBuffer = std::cout.rdbuf( &doubleBuffer );
+  OstreamManager clout( std::cout, "main" );
+
   if ( porousTE ) clout << "Calculating with porous trailing edge" << std::endl;
   else clout << "Calculating without trailing edge" << std::endl;
 
@@ -541,4 +569,5 @@ int main( int argc, char* argv[] )
 
   timer.stop();
   timer.printSummary();
+  std::cout.rdbuf(originalCoutBuffer);
 }
