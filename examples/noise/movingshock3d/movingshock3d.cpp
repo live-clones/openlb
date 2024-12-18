@@ -42,10 +42,11 @@ using T = FLOATING_POINT_TYPE;
 // using BulkDynamics = KBCdynamics<T,DESCRIPTOR>;
 using DESCRIPTOR = D3Q27<>;
 // using BulkDynamics = BGKdynamics<T,DESCRIPTOR>;
-using BulkDynamics = olb::dynamics::Tuple<T, DESCRIPTOR,
-                     momenta::BulkTuple,
-                     equilibria::Incompressible,
-                     collision::BGK>;
+using BulkDynamics = olb::dynamics::Tuple<T,
+                                          DESCRIPTOR,
+                                          momenta::BulkTuple,
+                                          equilibria::Incompressible,
+                                          collision::TRT>;
 
 const int noMat   = 0;
 const int dampMat = 1;
