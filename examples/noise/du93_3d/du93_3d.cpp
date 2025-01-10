@@ -39,6 +39,8 @@ using DESCRIPTOR = D3Q19<>;
 
 T* uAverage = NULL;
 
+typedef enum {localpressure, localvelocity, interpressure, intervelocity, zerogradient, localconvection, interconvection} OutletType;
+
 #define BOUZIDI
 
 // Stores data from stl file in geometry in form of material numbers
@@ -99,21 +101,22 @@ void prepareGeometry( UnitConverter<T,DESCRIPTOR> const& converter, //std::share
   superGeometry.rename( 2, 4, 1, outflow );
 
   // Removes all not needed boundary voxels outside the surface
-  // superGeometry.clean(5);
+  // superGeometry.clean();
   superGeometry.checkForErrors();
   superGeometry.print();
   clout << "Prepare Geometry ... OK" << std::endl;
 }
 
 void setUAverage( SuperLattice<T,DESCRIPTOR>& sLattice,
-                  SuperGeometry<T,3>& superGeometry
+                  SuperGeometry<T,3>& superGeometry,
+                  int fluidNumber
                   )
 {
   sLattice.setProcessingContext(ProcessingContext::Evaluation);  // important for synchronization (?) on GPU
 
   // update outflow boundary value (adaptive convection boundary for smaller domains)
   SuperLatticeVelocity3D<T, DESCRIPTOR> velocity( sLattice );
-  std::unique_ptr<SuperIndicatorF<T,3>> fluidIndicator = superGeometry.getMaterialIndicator({1});
+  std::unique_ptr<SuperIndicatorF<T,3>> fluidIndicator = superGeometry.getMaterialIndicator({fluidNumber});
   SuperSum3D<T> sum( velocity, fluidIndicator );
   int input[1];
   T output[3];
@@ -134,14 +137,17 @@ void prepareLattice( SuperLattice<T,DESCRIPTOR>& sLattice,
                      T initialUx,
                      bool withDampingLayer,
                      T boundaryDepth,
-                     T dampingStrength )
+                     T dampingStrength,
+                     OutletType outlettype )
 {
   OstreamManager clout( std::cout,"prepareLattice" );
   clout << "Prepare Lattice ..." << std::endl;
 
   T tmp = T();
   uAverage = &tmp;  //*uAverage = 0.0;
-  setUAverage( sLattice, superGeometry );
+  int fluidNumber = 1;
+  if ( withDampingLayer ) fluidNumber = 7;
+  setUAverage( sLattice, superGeometry, fluidNumber );
   const T omega = converter.getLatticeRelaxationFrequency();
 
   // Material=1 -->bulk dynamics
@@ -165,10 +171,17 @@ void prepareLattice( SuperLattice<T,DESCRIPTOR>& sLattice,
 
   // Material=3 -->inlet
   setLocalVelocityBoundary(sLattice, omega, superGeometry, 3);
+
   // Material=4 -->outlet
-  // setZeroGradientBoundary(sLattice, superGeometry, 4);
-  setInterpolatedConvectionBoundary(sLattice, omega, superGeometry, 4, uAverage);
-  // setLocalConvectionBoundary(sLattice, omega, superGeometry, 4, uAverage);
+  switch ( outlettype ) {
+    case localpressure:   setLocalPressureBoundary(sLattice, omega, superGeometry, 4);
+    case localvelocity:   setLocalVelocityBoundary(sLattice, omega, superGeometry, 4);
+    case interpressure:   setInterpolatedPressureBoundary(sLattice, omega, superGeometry, 4);
+    case intervelocity:   setInterpolatedVelocityBoundary(sLattice, omega, superGeometry, 4);
+    case zerogradient:    setZeroGradientBoundary(sLattice, superGeometry, 4);
+    case localconvection: setLocalConvectionBoundary(sLattice, omega, superGeometry, 4, uAverage);
+    case interconvection: setInterpolatedConvectionBoundary(sLattice, omega, superGeometry, 4, uAverage);
+  }
 
   // Material=5 -->bouzidi / bounce back
   #ifdef BOUZIDI
@@ -237,7 +250,8 @@ void setBoundaryValues( SuperLattice<T, DESCRIPTOR>& sLattice,
                         T maxLatticeU,
                         T maxPhysU,
                         T iniPhysU,
-                        bool withDampingLayer )
+                        bool withDampingLayer,
+                        OutletType outlet )
 {
   OstreamManager clout( std::cout,"setBoundaryValues" );
 
@@ -269,9 +283,25 @@ void setBoundaryValues( SuperLattice<T, DESCRIPTOR>& sLattice,
     clout << "startup step=" << iT << "/" << iTmaxStart << "; t=" << converter.getPhysTime(iT)
           << "; ux_LU=" << ux_i[0] << "; maxLatticeU=" << maxLatticeU
           << "; ux_PU=" << converter.getPhysVelocity( ux_i[0] ) << "; ux_max_PU=" << maxPhysU << std::endl;
-
-    sLattice.setProcessingContext<Array<momenta::FixedVelocityMomentumGeneric::VELOCITY>>(ProcessingContext::Simulation);
   }
+
+  // AnalyticalConst3D<T,T> rho_out( 1. );
+  // AnalyticalConst3D<T,T> ux_out( maxLatticeU );
+  // AnalyticalConst3D<T,T> uy_out( 0. );
+  // AnalyticalConst3D<T,T> uz_out( 0. );
+  // AnalyticalComposed3D<T,T> u_out( ux_out, uy_out, uz_out );
+  // switch ( outlet )
+  // {
+  // case localpressure:
+  // case interpressure:
+  //   sLattice.defineRho( superGeometry, 4, rho_out );
+  //   break;
+  // case localvelocity:
+  // case intervelocity:
+  //   sLattice.defineU( superGeometry, 4, u_out );
+  // }
+
+  sLattice.setProcessingContext<Array<momenta::FixedVelocityMomentumGeneric::VELOCITY>>(ProcessingContext::Simulation);
 }
 
 void vtkOutput( SuperVTMwriter3D<T> vtmWriter, int iT,
@@ -303,7 +333,8 @@ void getResults( SuperLattice<T, DESCRIPTOR>& sLattice,
                  UnitConverter<T,DESCRIPTOR> const& converter, int iT,
                  SuperGeometry<T,3>& superGeometry, util::Timer<T>& timer,
                  STLreader<T>& foilBody,
-                 size_t iTmax, size_t iTmaxStart, size_t iTvtk )
+                 size_t iTmax, size_t iTmaxStart, size_t iTvtk,
+                 bool withDampingLayer )
 {
   OstreamManager clout( std::cout, "getResults, iT=" + std::to_string(iT) );
 
@@ -399,7 +430,9 @@ void getResults( SuperLattice<T, DESCRIPTOR>& sLattice,
   }
 
   if ( iT%50 == 0 ) {
-    setUAverage( sLattice, superGeometry );
+    int fluidNumber = 1;
+    if ( withDampingLayer ) fluidNumber = 7;
+    setUAverage( sLattice, superGeometry, fluidNumber );
     clout << "uAverage(" << iT << ")= " << *uAverage << std::endl;
   }
 
@@ -439,6 +472,7 @@ int main( int argc, char* argv[] )
   const T tMaxInit          = args.getValueOrFallback( "--tmaxinit",      2);
   T charL                   = args.getValueOrFallback( "--charL",         1);
   T iniPhysU                = args.getValueOrFallback( "--iniPhysU",      0);
+  const int outlet          = args.getValueOrFallback( "--outlet",        1);
   const bool debug          = args.contains("--debug");
   const bool debug_geometry = args.contains("--debug-geometry");
   const bool porousTE       = !args.contains("--no-porous");                    // --no-porous = no porous material in trailing edge
@@ -466,13 +500,24 @@ int main( int argc, char* argv[] )
   outdir_mod << outdir;
   if ( !porousTE ) outdir_mod << "_noPorous";
   else outdir_mod << "_" << Kin << "porous";
-  outdir_mod << "_" << angle << "deg_u" << maxPhysU << "_Re" << Re << "_" << lengthDomain << "x" << heightDomain << "x" << depthDomain << "_res" << res << "_bd" << boundaryDepth << "x" << dampingStrength;;
+  outdir_mod << "_" << angle << "deg_u" << maxPhysU << "_Re" << Re << "_" << lengthDomain << "x" << heightDomain << "x" << depthDomain << "_res" << res << "_bd" << boundaryDepth << "x" << dampingStrength << "_outlet" << outlet;
 
   singleton::directories().setOutputDir( outdir_mod.str()+"/" );  // set output directory
   std::ofstream fileStream( outdir_mod.str() + "/output.txt" );
   DoubleBuffer doubleBuffer( std::cout.rdbuf(), fileStream.rdbuf() );
   std::streambuf* originalCoutBuffer = std::cout.rdbuf( &doubleBuffer );
   OstreamManager clout( std::cout, "main" );
+
+  OutletType outlettype;
+  switch ( outlet ) {
+    case 1:   outlettype = localpressure;     clout << "Outlet boundary condition type specified to local pressure."      << std::endl; break;
+    case 2:   outlettype = localvelocity;     clout << "Outlet boundary condition type specified to local velocity."      << std::endl; break;
+    case 3:   outlettype = interpressure;     clout << "Outlet boundary condition type specified to interpolated pressure."      << std::endl; break;
+    case 4:   outlettype = intervelocity;     clout << "Outlet boundary condition type specified to interpolated velocity."      << std::endl; break;
+    case 5:   outlettype = zerogradient;      clout << "Outlet boundary condition type specified to zero gradient." << std::endl; break;
+    case 6:   outlettype = localconvection;   clout << "Outlet boundary condition type specified to local convection."    << std::endl; break;
+    case 7:   outlettype = interconvection;   clout << "Outlet boundary condition type specified to interpolated convection."    << std::endl; break;
+  }
 
   if ( porousTE ) clout << "Calculating with porous trailing edge" << std::endl;
   else clout << "Calculating without trailing edge" << std::endl;
@@ -537,7 +582,7 @@ int main( int argc, char* argv[] )
   SuperLattice<T, DESCRIPTOR> sLattice( superGeometry );
 
   //prepareLattice and set boundaryCondition
-  prepareLattice( sLattice, converter, foilBody, foilTail, superGeometry, porousTE, Kin, iniPhysU, withDampingLayer, boundaryDepth, dampingStrength);
+  prepareLattice( sLattice, converter, foilBody, foilTail, superGeometry, porousTE, Kin, iniPhysU, withDampingLayer, boundaryDepth, dampingStrength, outlettype);
 
   // === 3a-rd Step: calculate iterations from input ===
   // iTmax depends on maximum physical time. If iTmax is provided in command line, it is an upper bound
@@ -558,13 +603,13 @@ int main( int argc, char* argv[] )
 
   for (size_t iT = 0; iT < iTmax; ++iT) {
     // === 5th Step: Definition of Initial and Boundary Conditions ===
-    setBoundaryValues( sLattice, converter, iT, superGeometry, iTmaxStart, maxLatticeU, maxPhysU, iniPhysU, withDampingLayer );
+    setBoundaryValues( sLattice, converter, iT, superGeometry, iTmaxStart, maxLatticeU, maxPhysU, iniPhysU, withDampingLayer, outlettype );
 
     // === 6th Step: Collide and Stream Execution ===
     sLattice.collideAndStream();
 
     // === 7th Step: Computation and Output of the Results ===
-    getResults( sLattice, converter, iT, superGeometry, timer, foilBody, iTmax, iTmaxStart, iTvtk );
+    getResults( sLattice, converter, iT, superGeometry, timer, foilBody, iTmax, iTmaxStart, iTvtk, withDampingLayer );
   }
 
   timer.stop();
