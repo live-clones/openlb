@@ -138,7 +138,7 @@ void prepareLattice( SuperLattice<T,DESCRIPTOR>& sLattice,
                      bool withDampingLayer,
                      T boundaryDepth,
                      T dampingStrength,
-                     OutletType outlettype )
+                     OutletType outlet )
 {
   OstreamManager clout( std::cout,"prepareLattice" );
   clout << "Prepare Lattice ..." << std::endl;
@@ -173,14 +173,14 @@ void prepareLattice( SuperLattice<T,DESCRIPTOR>& sLattice,
   setLocalVelocityBoundary(sLattice, omega, superGeometry, 3);
 
   // Material=4 -->outlet
-  switch ( outlettype ) {
-    case localpressure:   setLocalPressureBoundary(sLattice, omega, superGeometry, 4);
-    case localvelocity:   setLocalVelocityBoundary(sLattice, omega, superGeometry, 4);
-    case interpressure:   setInterpolatedPressureBoundary(sLattice, omega, superGeometry, 4);
-    case intervelocity:   setInterpolatedVelocityBoundary(sLattice, omega, superGeometry, 4);
-    case zerogradient:    setZeroGradientBoundary(sLattice, superGeometry, 4);
-    case localconvection: setLocalConvectionBoundary(sLattice, omega, superGeometry, 4, uAverage);
-    case interconvection: setInterpolatedConvectionBoundary(sLattice, omega, superGeometry, 4, uAverage);
+  switch ( outlet ) {
+    case localpressure:   setLocalPressureBoundary(sLattice, omega, superGeometry, 4); break;
+    case localvelocity:   setLocalVelocityBoundary(sLattice, omega, superGeometry, 4); break;
+    case interpressure:   setInterpolatedPressureBoundary(sLattice, omega, superGeometry, 4); break;
+    case intervelocity:   setInterpolatedVelocityBoundary(sLattice, omega, superGeometry, 4); break;
+    case zerogradient:    setZeroGradientBoundary(sLattice, superGeometry, 4); break;
+    case localconvection: setLocalConvectionBoundary(sLattice, omega, superGeometry, 4, uAverage); break;
+    case interconvection: setInterpolatedConvectionBoundary(sLattice, omega, superGeometry, 4, uAverage); break;
   }
 
   // Material=5 -->bouzidi / bounce back
@@ -285,21 +285,26 @@ void setBoundaryValues( SuperLattice<T, DESCRIPTOR>& sLattice,
           << "; ux_PU=" << converter.getPhysVelocity( ux_i[0] ) << "; ux_max_PU=" << maxPhysU << std::endl;
   }
 
-  // AnalyticalConst3D<T,T> rho_out( 1. );
-  // AnalyticalConst3D<T,T> ux_out( maxLatticeU );
-  // AnalyticalConst3D<T,T> uy_out( 0. );
-  // AnalyticalConst3D<T,T> uz_out( 0. );
-  // AnalyticalComposed3D<T,T> u_out( ux_out, uy_out, uz_out );
-  // switch ( outlet )
-  // {
-  // case localpressure:
-  // case interpressure:
-  //   sLattice.defineRho( superGeometry, 4, rho_out );
-  //   break;
-  // case localvelocity:
-  // case intervelocity:
-  //   sLattice.defineU( superGeometry, 4, u_out );
-  // }
+  AnalyticalConst3D<T,T> rho_out( 1. );
+  AnalyticalConst3D<T,T> ux_out( maxLatticeU );
+  AnalyticalConst3D<T,T> uy_out( 0. );
+  AnalyticalConst3D<T,T> uz_out( 0. );
+  AnalyticalComposed3D<T,T> u_out( ux_out, uy_out, uz_out );
+  switch ( outlet )
+  {
+  case localpressure:
+  case interpressure:
+    sLattice.defineRho( superGeometry, 4, rho_out );
+    break;
+  case localvelocity:
+  case intervelocity:
+    sLattice.defineU( superGeometry, 4, u_out );
+    break;
+  case zerogradient:
+  case localconvection:
+  case interconvection:
+    break;
+  }
 
   sLattice.setProcessingContext<Array<momenta::FixedVelocityMomentumGeneric::VELOCITY>>(ProcessingContext::Simulation);
 }
@@ -500,23 +505,33 @@ int main( int argc, char* argv[] )
   outdir_mod << outdir;
   if ( !porousTE ) outdir_mod << "_noPorous";
   else outdir_mod << "_" << Kin << "porous";
-  outdir_mod << "_" << angle << "deg_u" << maxPhysU << "_Re" << Re << "_" << lengthDomain << "x" << heightDomain << "x" << depthDomain << "_res" << res << "_bd" << boundaryDepth << "x" << dampingStrength << "_outlet" << outlet;
+  outdir_mod << "_" << angle << "deg_u" << maxPhysU << "_Re" << Re << "_" << lengthDomain << "x" << heightDomain << "x" << depthDomain << "_res" << res << "_bd" << boundaryDepth << "x" << dampingStrength;
+  switch ( outlet ) {
+    case 1: outdir_mod << "_outletLocalPressure";         break;
+    case 2: outdir_mod << "_outletLocalVelocity";         break;
+    case 3: outdir_mod << "_outletInterpolatedPressure";  break;
+    case 4: outdir_mod << "_outletInterpolatedVelocity";  break;
+    case 5: outdir_mod << "_outletZeroGradient";          break;
+    case 6: outdir_mod << "_outletLocalConvection";       break;
+    case 7: outdir_mod << "_outletInterpolatedConvection";break;
+  }
 
   singleton::directories().setOutputDir( outdir_mod.str()+"/" );  // set output directory
   std::ofstream fileStream( outdir_mod.str() + "/output.txt" );
   DoubleBuffer doubleBuffer( std::cout.rdbuf(), fileStream.rdbuf() );
   std::streambuf* originalCoutBuffer = std::cout.rdbuf( &doubleBuffer );
   OstreamManager clout( std::cout, "main" );
+  clout << "outdir specified to " << outdir_mod.str() << std::endl;
 
   OutletType outlettype;
   switch ( outlet ) {
-    case 1:   outlettype = localpressure;     clout << "Outlet boundary condition type specified to local pressure."      << std::endl; break;
-    case 2:   outlettype = localvelocity;     clout << "Outlet boundary condition type specified to local velocity."      << std::endl; break;
-    case 3:   outlettype = interpressure;     clout << "Outlet boundary condition type specified to interpolated pressure."      << std::endl; break;
-    case 4:   outlettype = intervelocity;     clout << "Outlet boundary condition type specified to interpolated velocity."      << std::endl; break;
-    case 5:   outlettype = zerogradient;      clout << "Outlet boundary condition type specified to zero gradient." << std::endl; break;
-    case 6:   outlettype = localconvection;   clout << "Outlet boundary condition type specified to local convection."    << std::endl; break;
-    case 7:   outlettype = interconvection;   clout << "Outlet boundary condition type specified to interpolated convection."    << std::endl; break;
+    case 1:   outlettype = localpressure;     clout << "Outlet boundary condition type specified to local pressure."            << std::endl; break;
+    case 2:   outlettype = localvelocity;     clout << "Outlet boundary condition type specified to local velocity."            << std::endl; break;
+    case 3:   outlettype = interpressure;     clout << "Outlet boundary condition type specified to interpolated pressure."     << std::endl; break;
+    case 4:   outlettype = intervelocity;     clout << "Outlet boundary condition type specified to interpolated velocity."     << std::endl; break;
+    case 5:   outlettype = zerogradient;      clout << "Outlet boundary condition type specified to zero gradient."             << std::endl; break;
+    case 6:   outlettype = localconvection;   clout << "Outlet boundary condition type specified to local convection."          << std::endl; break;
+    case 7:   outlettype = interconvection;   clout << "Outlet boundary condition type specified to interpolated convection."   << std::endl; break;
   }
 
   if ( porousTE ) clout << "Calculating with porous trailing edge" << std::endl;
@@ -594,7 +609,7 @@ int main( int argc, char* argv[] )
   if ( iout != 0 ) { nout_from_iout = size_t( iTmax / iout ); nout = std::max( nout, nout_from_iout ); }
   if ( tout != 0 ) { nout_from_tout = size_t( iTmax / tout ); nout = std::max( nout, nout_from_tout ); }
   size_t iTvtk = size_t( iTmax / nout );
-  clout << "Set nout to " << nout << ", so iTvtk=" << iTvtk;
+  clout << "Set nout to " << nout << ", so iTvtk=" << iTvtk << std::endl;
 
   // === 4th Step: Main Loop with Timer ===
   clout << "starting simulation..." << std::endl;
