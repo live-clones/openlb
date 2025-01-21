@@ -108,15 +108,15 @@ void prepareLattice( UnitConverter<T,DESCRIPTOR> const& converter,
   // Material=4 -->bulk dynamics (outflow)
   sLattice.defineDynamics<BulkDynamics>(bulkIndicator);
   // Material=2 -->bounce back
-  setBounceBackBoundary(sLattice, superGeometry, 2);
+  boundary::set<boundary::BounceBack>(sLattice, superGeometry, 2);
 
   //if boundary conditions are chosen to be local
-  setLocalVelocityBoundary<T,DESCRIPTOR>(sLattice, omega, superGeometry, 3);
-  setLocalPressureBoundary<T,DESCRIPTOR>(sLattice, omega, superGeometry, 4);
+  boundary::set<boundary::LocalVelocity>(sLattice, superGeometry, 3);
+  boundary::set<boundary::LocalPressure>(sLattice, superGeometry, 4);
 
   //if boundary conditions are chosen to be interpolated
-  //setInterpolatedVelocityBoundary<T,DESCRIPTOR>(sLattice, omega, superGeometry, 3);
-  //setInterpolatedPressureBoundary<T,DESCRIPTOR>(sLattice, omega, superGeometry, 4);
+  // boundary::set<boundary::InterpolatedVelocity>(sLattice, superGeometry, 3);
+  // boundary::set<boundary::InterpolatedPressure>(sLattice, superGeometry, 4);
 
   // Initial conditions
   AnalyticalConst2D<T,T> ux( 0. );
@@ -157,7 +157,7 @@ void setBoundaryValues( UnitConverter<T,DESCRIPTOR> const& converter,
     T frac[1] = {};
     StartScale( frac,iTvec );
     T maxVelocity = converter.getCharLatticeVelocity()*3./2.*frac[0];
-    T distance2Wall = converter.getConversionFactorLength()/2.;
+    T distance2Wall = converter.getPhysDeltaX()/2.;
     Poiseuille2D<T> poiseuilleU( superGeometry, 3, maxVelocity, distance2Wall );
     // define lattice speed on inflow
     sLattice.defineU( superGeometry, 3, poiseuilleU );
@@ -179,10 +179,8 @@ void getResults( SuperLattice<T,DESCRIPTOR>& sLattice,
 
   if ( iT==0 ) {
     // Writes geometry, cuboid no. and rank no. to file system
-    SuperLatticeGeometry2D<T,DESCRIPTOR> geometry( sLattice, superGeometry );
     SuperLatticeCuboid2D<T,DESCRIPTOR> cuboid( sLattice );
     SuperLatticeRank2D<T,DESCRIPTOR> rank( sLattice );
-    vtmWriter.write( geometry );
     vtmWriter.write( cuboid );
     vtmWriter.write( rank );
     vtmWriter.createMasterFile();
@@ -270,7 +268,7 @@ int main( int argc, char* argv[] )
   Vector<T,2> originStep( 0, 0);
   std::shared_ptr<IndicatorF2D<T>> step = std::make_shared<IndicatorCuboid2D<T>>( extendStep, originStep );
 
-  CuboidGeometry2D<T> cuboidGeometry( *(channel-step), converter.getConversionFactorLength(), noOfCuboids );
+  CuboidGeometry2D<T> cuboidGeometry( *(channel-step), converter.getPhysDeltaX(), noOfCuboids );
 
   // Instantiation of a loadBalancer
   HeuristicLoadBalancer<T> loadBalancer( cuboidGeometry );

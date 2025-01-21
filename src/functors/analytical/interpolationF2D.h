@@ -28,7 +28,7 @@
 #include "analyticalF.h"
 #include "functors/lattice/blockBaseF2D.h"
 #include "functors/lattice/superBaseF2D.h"
-#include "geometry/cuboidGeometry2D.h"
+#include "geometry/cuboidGeometry.h"
 #include "geometry/blockGeometry.h"
 #include "geometry/superGeometry.h"
 
@@ -54,7 +54,7 @@ protected:
   const bool _communicateOverlap;
 
   SuperF2D<T>&         _f;
-  CuboidGeometry2D<T>& _cuboidGeometry;
+  CuboidDecomposition<T,2>& _cuboidGeometry;
 
   std::vector<std::unique_ptr<AnalyticalFfromBlockF2D<T,W>>> _blockF;
 public:

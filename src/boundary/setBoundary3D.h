@@ -273,6 +273,36 @@ struct NormalSpecialMixinDynamicsForPlainMomenta {
   }
 };
 
+//Instantiates TYPE derived from RESULT with direction and orientation
+template <
+  typename RESULT, typename T, typename DESCRIPTOR,
+  template <typename,typename,int,int> typename TYPE
+>
+RESULT promiseForDirectionOrientation(Vector<int,3> n)
+{
+  if (n == Vector<int,3> {-1, 0, 0}) {
+    return meta::id<TYPE<T,DESCRIPTOR,0,-1>>();
+  }
+  else if (n == Vector<int,3> {1, 0, 0}) {
+    return meta::id<TYPE<T,DESCRIPTOR,0,1>>();
+  }
+  else if (n == Vector<int,3> {0, -1, 0}) {
+    return meta::id<TYPE<T,DESCRIPTOR,1,-1>>();
+  }
+  else if (n == Vector<int,3> {0, 1, 0}) {
+    return meta::id<TYPE<T,DESCRIPTOR,1,1>>();
+  }
+  else if (n == Vector<int,3> {0, 0, -1}) {
+    return meta::id<TYPE<T,DESCRIPTOR,2,-1>>();
+  }
+  else if (n == Vector<int,3> {0, 0, 1}) {
+    return meta::id<TYPE<T,DESCRIPTOR,2,1>>();
+  }
+  else {
+    throw std::runtime_error("Could not set Boundary.");
+  }
+}
+
 //Instantiates TYPE derived from RESULT with values from descreteNormal Vector n
 //RESULT can be either Dynamics or PostProcessorGenerator3D
 template <
@@ -309,6 +339,104 @@ RESULT* constructForNormal(Vector<int,3> n, ARGS&&... args)
   else {
     return nullptr;
   }
+}
+
+template <
+  typename RESULT,
+  template <int...> typename TYPE
+>
+RESULT promiseForNormal(Vector<int,3> n)
+{
+  if (n == Vector<int,3> {1, 1, 1}) {
+    return meta::id<TYPE<1,1,1>>();
+  }
+  else if (n == Vector<int,3> {1, -1, 1}) {
+    return meta::id<TYPE<1,-1,1>>();
+  }
+  else if (n == Vector<int,3> {1, 1, -1}) {
+    return meta::id<TYPE<1,1,-1>>();
+  }
+  else if (n == Vector<int,3> {1, -1, -1}) {
+    return meta::id<TYPE<1,-1,-1>>();
+  }
+  else if (n == Vector<int,3> {-1, 1, 1}) {
+    return meta::id<TYPE<-1,1,1>>();
+  }
+  else if (n == Vector<int,3> {-1, -1, 1}) {
+    return meta::id<TYPE<-1,-1,1>>();
+  }
+  else if (n == Vector<int,3> {-1, 1, -1}) {
+    return meta::id<TYPE<-1,1,-1>>();
+  }
+  else if (n == Vector<int,3> {-1, -1, -1}) {
+    return meta::id<TYPE<-1,-1,-1>>();
+  }
+  else if (n == Vector<int,3> {-1, -1, 0}) {
+    return meta::id<TYPE<-1,-1,0>>();
+  }
+  else if (n == Vector<int,3> {-1, 0, 0}) {
+    return meta::id<TYPE<-1,0,0>>();
+  }
+  else if (n == Vector<int,3> {1, 0, 0}) {
+    return meta::id<TYPE<1,0,0>>();
+  }
+  else if (n == Vector<int,3> {0, -1, 0}) {
+    return meta::id<TYPE<0,-1,0>>();
+  }
+  else if (n == Vector<int,3> {-1, 0, -1}) {
+    return meta::id<TYPE<-1,0,-1>>();
+  }
+  else if (n == Vector<int,3> {0, 1, 0}) {
+    return meta::id<TYPE<0,1,0>>();
+  }
+  else if (n == Vector<int,3> {0, 0, -1}) {
+    return meta::id<TYPE<0,0,-1>>();
+  }
+  else if (n == Vector<int,3> {-1, 1, 0}) {
+    return meta::id<TYPE<-1,1,0>>();
+  }
+  else if (n == Vector<int,3> {0, -1, -1}) {
+    return meta::id<TYPE<0,-1,-1>>();
+  }
+  else if (n == Vector<int,3> {0, -1, 1}) {
+    return meta::id<TYPE<0,-1,1>>();
+  }
+  else if (n == Vector<int,3> {-1, 0, 1}) {
+    return meta::id<TYPE<-1,0,1>>();
+  }
+  else if (n == Vector<int,3> {1, 0, -1}) {
+    return meta::id<TYPE<1,0,-1>>();
+  }
+  else if (n == Vector<int,3> {0, 0, 1}) {
+    return meta::id<TYPE<0,0,1>>();
+  }
+  else if (n == Vector<int,3> {0, 1, -1}) {
+    return meta::id<TYPE<0,1,-1>>();
+  }
+  else if (n == Vector<int,3> {0, 1, 1}) {
+    return meta::id<TYPE<0,1,1>>();
+  }
+  else if (n == Vector<int,3> {1, 0, 1}) {
+    return meta::id<TYPE<1,0,1>>();
+  }
+  else if (n == Vector<int,3> {1, -1, 0}) {
+    return meta::id<TYPE<1,-1,0>>();
+  }
+  else if (n == Vector<int,3> {1, 1, 0}) {
+    return meta::id<TYPE<1,1,0>>();
+  }
+  else {
+    throw std::domain_error("Invalid normal");
+  }
+}
+
+template <
+  typename RESULT,
+  typename T, typename DESCRIPTOR,
+  template <int,int,int> typename TYPE
+>
+RESULT promiseForNormal(Vector<int,3> n) {
+  return promiseForNormal<RESULT,TYPE>(n);
 }
 
 template <
@@ -498,6 +626,15 @@ PROMISE promiseForNormalSpecial(Vector<int,3> n)
   }
 }
 
+template <
+  typename T, typename DESCRIPTOR,
+  template<typename,typename,int,int> typename TYPE
+>
+PostProcessorPromise<T,DESCRIPTOR> promisePostProcessorForDirectionOrientation(Vector<int,3> n)
+{
+  return promiseForDirectionOrientation<PostProcessorPromise<T,DESCRIPTOR>,T,DESCRIPTOR,TYPE>(n);
+}
+
 //constructs TYPE derived from PostProcessorGenerator3D with three normals as template args
 template <
   typename T, typename DESCRIPTOR,
@@ -507,6 +644,15 @@ template <
 PostProcessorGenerator3D<T,DESCRIPTOR>* constructPostProcessorForNormal(Vector<int,3> n, ARGS&&... args)
 {
   return constructForNormal<PostProcessorGenerator3D<T,DESCRIPTOR>,T,DESCRIPTOR,TYPE>(n, std::forward<decltype(args)>(args)...);
+}
+
+template <
+  typename T, typename DESCRIPTOR,
+  template <int...> typename TYPE
+>
+PostProcessorPromise<T,DESCRIPTOR> promisePostProcessorForNormal(Vector<int,3> n)
+{
+  return promiseForNormal<PostProcessorPromise<T,DESCRIPTOR>,T,DESCRIPTOR,TYPE>(n);
 }
 
 template <
@@ -540,8 +686,48 @@ PostProcessorPromise<T,DESCRIPTOR> promisePostProcessorForNormalSpecial(Vector<i
 
 }//namespace boundaryhelper
 
-}//namespace olb
+template <typename T, typename DESCRIPTOR, template<typename,typename,int...> typename OPERATOR>
+void setOperatorForNormal(SuperLattice<T, DESCRIPTOR>& sLattice,
+                          FunctorPtr<SuperIndicatorF3D<T>>&& boundaryI,
+                          FunctorPtr<SuperIndicatorF3D<T>>&& fluidI,
+                          FunctorPtr<SuperIndicatorF3D<T>>&& outsideI)
+{
+  for (int iCloc = 0; iCloc < sLattice.getLoadBalancer().size(); ++iCloc) {
+    setOperatorForNormal<T,DESCRIPTOR,OPERATOR>(sLattice.getBlock(iCloc),
+                                                boundaryI->getBlockIndicatorF(iCloc),
+                                                fluidI->getBlockIndicatorF(iCloc),
+                                                outsideI->getBlockIndicatorF(iCloc));
+  }
+  addPoints2CommBC(sLattice, std::forward<decltype(boundaryI)>(boundaryI), 1);
+}
 
-#include "normalDynamicsContructors.h"
+template <typename T, typename DESCRIPTOR, template<typename,typename,int...> typename OPERATOR>
+void setOperatorForNormal(BlockLattice<T,DESCRIPTOR>& block,
+                          BlockIndicatorF3D<T>& boundaryI,
+                          BlockIndicatorF3D<T>& fluidI,
+                          BlockIndicatorF3D<T>& outsideI)
+{
+  OstreamManager clout(std::cout, "setOperatorForNormal");
+  auto& blockGeometryStructure = boundaryI.getBlockGeometry();
+  blockGeometryStructure.forSpatialLocations([&](auto iX, auto iY, auto iZ) {
+    if (   blockGeometryStructure.getNeighborhoodRadius({iX, iY, iZ}) >= 1
+        && boundaryI(iX, iY, iZ)) {
+      auto [normalType, normal] = computeBoundaryTypeAndNormal(fluidI, outsideI, {iX,iY,iZ});
+      if (normal[0]!=0 || normal[1]!=0 || normal[2]!=0) {
+        block.addPostProcessor(
+          typeid(stage::PostCollide), {iX,iY,iZ},
+          boundaryhelper::promisePostProcessorForNormal<T,DESCRIPTOR,OPERATOR>(normal.data())
+        );
+      }
+      else {
+        clout << "Warning: Could not setOperatorForNormal("
+              << iX << ", " << iY << ", " << iZ
+              << "), discreteNormal=" << normal << "" << std::endl;
+      }
+    }
+  });
+}
+
+}
 
 #endif

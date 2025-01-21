@@ -35,11 +35,10 @@ namespace olb {
 template<typename T>
 bool SuperPlaneIntegralF2D<T>::isToBeIntegrated(const Vector<T,2>& physR, int iC)
 {
-  Vector<int,3> latticeR;
   //get nearest lattice point
-  if ( _geometry.getCuboidGeometry().getFloorLatticeR(physR, latticeR) ) {
-    const int& iX = latticeR[1];
-    const int& iY = latticeR[2];
+  if (auto latticeR = _geometry.getCuboidGeometry().getFloorLatticeR(physR) ) {
+    const int& iX = (*latticeR)[1];
+    const int& iY = (*latticeR)[2];
 
     // interpolation is possible iff all neighbours are within the indicated subset
     return _integrationIndicatorF->operator()(   iC, iX,   iY  )
@@ -175,15 +174,19 @@ bool SuperPlaneIntegralF2D<T>::operator()(T output[], const int input[])
 
   const int flowDim = _reductionF.getTargetDim();
 
-  std::vector<T> flow(flowDim,0.);
+  std::vector<util::KahanSummator<T>> summators(flowDim, util::KahanSummator<T>());
 
   for ( int pos : _rankLocalSubplane ) {
     T outputTmp[flowDim];
     _reductionF(outputTmp, pos);
 
     for ( int j = 0; j < flowDim; j++ ) {
-      flow[j] += outputTmp[j];
+      summators[j].add(outputTmp[j]);
     }
+  }
+  std::vector<T> flow(flowDim,0.);
+  for ( int j = 0; j < flowDim; j++ ) {
+      flow[j] = summators[j].getSum();
   }
 
   int vox = _rankLocalSubplane.size();

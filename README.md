@@ -1,20 +1,20 @@
 # OpenLB - Open Source Lattice Boltzmann Code
 
 The OpenLB project is a C++ package for the implementation of lattice Boltzmann
-methods adressing a vast range of tansport problems.
+methods adressing a vast range of transport problems.
 
 ## Dependencies
 
 The only mandatory external dependency of OpenLB is GNU Make and a C++ compiler
-with C++17 support. This includes all reasonably recent versions of GCC, Clang
-and ICC.
+with C++20 support. This includes all reasonably recent versions of GCC, Clang
+and Intel ICX.
 
-GPU support depends on Nvidia CUDA 11.4 or later.
+GPU support depends on Nvidia CUDA 12 or later.
 
 ## Installation
 
 1. Adjust the `config.mk` file to fit your local compiler environment
-   (examples for some common configurations are available in `config/`
+   (examples for some common configurations are available in `config/`)
 2. Build the embedded dependencies using `make`
 3. Switch to any of the examples and compile it using `make`
 
@@ -53,9 +53,9 @@ Standardized citation metadata is available in the `CITATION.cff` file.
 To cite OpenLB in general instead of a specific release we suggest:
 
 ```
-@article{OpenLB2020,
+@article{OpenLB2021,
   title = {OpenLB - Open Source Lattice Boltzmann Code},
-  year = {2020},
+  year = {2021},
   issn = {08981221},
   doi = {10.1016/j.camwa.2020.04.033},
   journal = {Computers \& Mathematics with Applications},

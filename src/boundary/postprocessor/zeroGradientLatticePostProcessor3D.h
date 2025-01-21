@@ -27,7 +27,7 @@
 #include "core/blockStructure.h"
 #include "core/postProcessing.h"
 #include "core/util.h"
-#include "dynamics/latticeDescriptors.h"
+#include "descriptor/descriptor.h"
 #include "utilities/omath.h"
 
 
@@ -37,7 +37,7 @@ namespace olb {
 // ======== Zero Gradient Boundary for AD 3D ======//
 //======================================================================
 template<typename T, typename DESCRIPTOR>
-struct zeroGradientLatticePostProcessor3D
+struct ZeroGradientLatticePostProcessor3D
 {
   static constexpr OperatorScope scope = OperatorScope::PerCell;
 

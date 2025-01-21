@@ -56,18 +56,23 @@ public:
    : _dimControl(initialValues.size()), _control(initialValues)
   { }
 
-  S const& getControl(int i) const
+  S getControl(int i) const
   {
     return _control[i];
   };
-  S& getControl(int i)
-  {
-    return _control[i];
-  };
-  const std::vector<S>& getControl()
+  const std::vector<S>& getControl() const
   {
     return _control;
   };
+
+  const S* getControlPointer(int i) const
+  {
+    return &_control[i];
+  }
+  S* getControlPointer(int i)
+  {
+    return &_control[i];
+  }
 
   int getDimControl() const
   {

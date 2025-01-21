@@ -244,6 +244,9 @@ public:
   template <typename T,unsigned DIM>
   void reduceAndBcast(util::ADf<T,DIM>& reductVal, MPI_Op op, int root = 0, MPI_Comm comm = MPI_COMM_WORLD);
 
+  template <typename T>
+  void allreduce(const T* in, T* out, int count, MPI_Op op, MPI_Comm comm = MPI_COMM_WORLD);
+
   /// Complete a non-blocking MPI operation
   void wait(MPI_Request* request, MPI_Status* status);
 

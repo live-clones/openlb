@@ -17,12 +17,16 @@
       <PhysMaxTime> 6.0 </PhysMaxTime> <!-- 8.0 -->
       <StartUpTime> 4.0 </StartUpTime> <!-- 5.0 -->
       <BoundaryValueUpdateTime> 0.001 </BoundaryValueUpdateTime>
-      <TimeStabilityCheck> 0.06 </TimeStabilityCheck>
     </PhysParameters>
     <Mesh>
       <noCuboidsPerProcess> 1  </noCuboidsPerProcess>
       <Overlap> 3 </Overlap>
     </Mesh>
+    <StabilityCheck>
+      <Frequency> 0.06 </Frequency>
+      <ExitMaxU> false </ExitMaxU>
+      <BoundMaxU> 10. </BoundMaxU>
+    </StabilityCheck>
     <BoundaryCondition> interpolated </BoundaryCondition>
     <Domain> sphere </Domain>
     <PressureFilter> true </PressureFilter>
@@ -43,8 +47,9 @@
     <ObjectiveMaterial> 1 </ObjectiveMaterial>
     <Projection> ForceFactor </Projection>
     <ReferenceSolution> true </ReferenceSolution>
+    <RegAlpha> 0 </RegAlpha>
     <OptiReferenceMode> analytical </OptiReferenceMode>
-    <StartValue> 0.1 </StartValue>
+    <StartValue> 0. </StartValue>
     <StartValueType> Control </StartValueType>
     <StepCondition> Wolfe </StepCondition>
     <TestFlowOptiMode> velocity </TestFlowOptiMode>
@@ -64,7 +69,7 @@
     </Log>
 
     <VisualizationVTK>
-      <Output> true </Output>
+      <Output> final </Output>
       <SaveTime> 0.5  </SaveTime>
       <Filename> testflow </Filename>
     </VisualizationVTK>

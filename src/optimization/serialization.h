@@ -29,12 +29,12 @@
  #ifndef SERIALIZATION_H
  #define SERIALIZATION_H
 
-#include <cstdlib>
-
 #include "controller.h"
 #include "geometry/superGeometry.h"
+#include "geometry/cuboidDecomposition.h"
 #include "utilities/aliases.h"
 #include "utilities/vectorHelpers.h"
+#include "optiCaseDual.h"
 
 namespace olb {
 
@@ -42,6 +42,11 @@ namespace opti {
 
 template<typename S>
 class Controller;
+
+
+
+/////////////////////////// SERIALIZATION CLASSES /////////////////////////////
+
 
 /** This class serializes the cells inside the geometry.
  * Intended for creating one long vector out of field data on super level.
@@ -109,7 +114,7 @@ template<typename S, unsigned dim>
 class SimpleGeometrySerializer : public GeometrySerializer<S,dim>
 {
 protected:
-  CuboidGeometry<S,dim>&          _cGeometry;
+  CuboidDecomposition<S,dim>&     _cGeometry;
   const unsigned                  _noCuboids;
 
 private:
@@ -118,9 +123,9 @@ private:
   unsigned                        _noCells;
 
 public:
-  SimpleGeometrySerializer(CuboidGeometry<S,dim>& cGeometry)
+  SimpleGeometrySerializer(CuboidDecomposition<S,dim>& cGeometry)
    : _cGeometry(cGeometry),
-     _noCuboids(_cGeometry.getNc())
+     _noCuboids(_cGeometry.size())
   {
     _cuboidSizes.reserve(_noCuboids);
     _offsets.reserve(_noCuboids);
@@ -218,7 +223,7 @@ public:
   {
     const auto cGeometry = superGeometry.getCuboidGeometry();
     L latticeR;
-    for (unsigned iC = 0; iC < cGeometry.getNc(); ++iC) {
+    for (unsigned iC = 0; iC < cGeometry.size(); ++iC) {
       latticeR[0] = iC;
       const int nX = cGeometry.get(iC).getNx();
       const int nY = cGeometry.get(iC).getNy();
@@ -293,20 +298,11 @@ public:
   }
 };
 
-/// Helper that gives global access to material numbers
-template<typename S, unsigned dim>
-int getMaterialGlobally (SuperGeometry<S,dim>& sGeometry, LatticeR<dim+1> latticeR)
-{
-  int material = 0;
-  if ( sGeometry.getLoadBalancer().rank(latticeR[0]) == singleton::mpi().getRank() ) {
-    material = sGeometry.get(latticeR);
-  }
-#ifdef PARALLEL_MODE_MPI
-  singleton::mpi().bCast(&material, 1, sGeometry.getLoadBalancer().rank(latticeR[0]));
-#endif
-  return material;
-}
 
+
+
+
+/////////////////////// FUNCTORS BASED ON SERIAL DATA /////////////////////////
 
 template <typename T, typename DESCRIPTOR>
 class BlockLatticeSerialDataF : public BlockLatticeF<T,DESCRIPTOR> {
@@ -335,7 +331,7 @@ public:
         latticeR[3] = input[2];
       }
       const auto index = _serializer.getSerializedComponentIndex(latticeR, 0, this->getTargetDim());
-      for (int i = 0; i < this->getTargetDim(); ++i) {  // todo: benutze std::copy_n?
+      for (int i = 0; i < this->getTargetDim(); ++i) {
         output[i] = _projection(_controller.getControl(index + i));
       }
       return true;
@@ -392,6 +388,190 @@ public:
   { }
 };
 
+
+
+
+
+/////////////////////////// GLOBAL FUNCTOR ACCESS /////////////////////////////
+
+
+/// Helper that gives global access to material numbers
+// warning: this function breaks the parallelization concept. It is expensive
+// and should be used with care
+template<typename S, unsigned dim>
+int getMaterialGlobally (SuperGeometry<S,dim>& sGeometry, LatticeR<dim+1> latticeR)
+{
+  int material = 0;
+  if ( sGeometry.getLoadBalancer().rank(latticeR[0]) == singleton::mpi().getRank() ) {
+    material = sGeometry.get(latticeR);
+  }
+#ifdef PARALLEL_MODE_MPI
+  singleton::mpi().bCast(&material, 1, sGeometry.getLoadBalancer().rank(latticeR[0]));
+#endif
+  return material;
+}
+
+/// Helper that gives global access to the values of an indicator
+// warning: this function breaks the parallelization concept. It is expensive
+// and should be used with care
+template <unsigned D, typename T>
+bool evaluateSuperIndicatorFglobally (SuperIndicatorF<T,D>& f, const int input[])
+{
+  bool result = false;
+  const auto loadBalancer = f.getSuperGeometry().getLoadBalancer();
+  if ( loadBalancer.rank(input[0]) == singleton::mpi().getRank() ) {
+    result = f(input);
+  }
+#ifdef PARALLEL_MODE_MPI
+  singleton::mpi().bCast(&result, 1, loadBalancer.rank(input[0]));
+#endif
+  return result;
+}
+
+/// Helper that gives global access to the values of a functor
+// warning: this function breaks the parallelization concept. It is expensive
+// and should be used with care
+template <unsigned D, typename T, typename U=T>
+bool evaluateSuperFglobally (SuperF<D,T,U>& f, U* output, const int input[])
+{
+  const auto loadBalancer = f.getSuperStructure().getLoadBalancer();
+  if ( loadBalancer.rank(input[0]) == singleton::mpi().getRank() ) {
+    f(output, input);
+  }
+#ifdef PARALLEL_MODE_MPI
+  singleton::mpi().bCast(output, f.getTargetDim(), loadBalancer.rank(input[0]));
+#endif
+  return true;
+}
+
+
+
+
+
+/////////////////////////// SERIALIZE FROM FIELDS /////////////////////////////
+
+/// @brief Take values of a field and put them into a long vector
+/// Idea: FIELD[cartesianCoordinates] = result[serialIndex]
+/// -> we want to get the vector ''result''.
+/// @tparam T floating point type
+/// @tparam DESCRIPTOR lattice descriptor, must provide the field FIELD
+/// @tparam C container type, where result is written
+/// @tparam FIELD name of the field
+/// @param sLattice super lattice
+/// @param serializer implements the transformation from cartesian to serial data
+/// @param indicator describes, at which positions FIELD is evaluated (at other positions, the default value of C remains)
+/// @param controlDim length of result vector
+/// @return vector with the field data
+template <typename FIELD, typename T, typename DESCRIPTOR, typename C=std::vector<T>>
+C serialDataFromField(SuperLattice<T,DESCRIPTOR>& sLattice,
+  const GeometrySerializer<T,DESCRIPTOR::d>& serializer,
+  SuperIndicatorF<T,DESCRIPTOR::d>& indicator,
+  unsigned controlDim
+  )
+{
+  constexpr unsigned dim = DESCRIPTOR::d;
+  constexpr unsigned fieldDim = DESCRIPTOR::template size<FIELD>();
+  auto result = util::ContainerCreator<C>::create(controlDim);
+  const auto& cGeometry = sLattice.getCuboidGeometry();
+  const auto& loadBalancer = sLattice.getLoadBalancer();
+
+  LatticeR<dim+1> latticeR;
+  for (int iC=0; iC<cGeometry.size(); iC++) {
+    latticeR[0] = iC;
+    const int nX = cGeometry.get(iC).getNx();
+    const int nY = cGeometry.get(iC).getNy();
+    const int nZ = cGeometry.get(iC).getNz();
+    for (int iX=0; iX<nX; iX++) {
+      latticeR[1] = iX;
+      for (int iY=0; iY<nY; iY++) {
+        latticeR[2] = iY;
+        for (int iZ=0; iZ<nZ; iZ++) {
+          latticeR[3] = iZ;
+
+          if (evaluateSuperIndicatorFglobally<dim,T>(indicator, latticeR.data())) {
+            Vector<T,fieldDim> dataHelp;
+            if (loadBalancer.rank(iC) == singleton::mpi().getRank()) {
+              for (unsigned iDim=0; iDim<fieldDim; iDim++) {
+                const auto cell = sLattice.get(latticeR);
+                dataHelp[iDim]
+                  = cell.template getFieldComponent<FIELD>(iDim);
+              }
+            }
+#ifdef PARALLEL_MODE_MPI
+            singleton::mpi().bCast(&dataHelp[0], fieldDim, loadBalancer.rank(iC));
+#endif
+            for (unsigned iDim=0; iDim<fieldDim; iDim++) {
+              const auto index = serializer.getSerializedComponentIndex(latticeR, iDim, fieldDim);
+              result[index] = dataHelp[iDim];
+            }
+          }
+        }
+      }
+    }
+  }
+  return result;
+}
+
+// forward declaration
+template<
+  typename S,
+  template<typename,SolverMode> typename SOLVER,
+  typename C>
+class OptiCaseDual;
+
+
+/// @brief Take values of FIELD and put them into a long vector
+/// Idea: FIELD[cartesianCoordinates] = result[serialIndex]
+/// -> we want to get the vector ''result''.
+/// @tparam T floating point type
+/// @tparam C container type, where result is written
+/// @tparam FIELD name of the field
+/// @param optiCase dual opti case, provides the information on serialization etc.
+/// @param solver the solver, whose FIELD data is taken
+/// @return vector with the field data
+template<
+  typename FIELD,
+  typename T,
+  template<typename,SolverMode> typename SOLVER,
+  typename C=std::vector<T>>
+C serialDataFromField(OptiCaseDual<T,SOLVER,C>& optiCase,
+  std::shared_ptr<SOLVER<T,SolverMode::Reference>> solver)
+{
+  using descriptor = typename SOLVER<T,SolverMode::Reference>::AdjointLbSolver::DESCRIPTOR;
+  return serialDataFromField<
+    FIELD, T, descriptor, C>(
+    solver->lattice(),
+    *(optiCase._serializer),
+    *(optiCase._controlIndicator),
+    optiCase._dimCtrl
+  );
+}
+
+
+/// @brief Get control values of some simulation in the context of adjoint optimization
+/// Take values of FIELD, apply inverse projection and put them into a long vector
+/// Idea: FIELD[cartesianCoordinates] = projection(result[serialIndex])
+/// -> we want to get the vector ''result''.
+/// @tparam T floating point type
+/// @tparam C container type, where result is written
+/// @tparam FIELD name of the field
+/// @param optiCase dual opti case, provides the information on serialization etc.
+/// @param solver the solver, whose FIELD data is taken
+/// @return vector with the field data
+template<
+  typename FIELD,
+  typename T,
+  template<typename,SolverMode> typename SOLVER,
+  typename C=std::vector<T>>
+C getControl(OptiCaseDual<T,SOLVER,C>& optiCase,
+  std::shared_ptr<SOLVER<T,SolverMode::Reference>> solver)
+{
+  C result = serialDataFromField<FIELD,T,SOLVER,C>(optiCase, solver);
+  std::transform(result.begin(), result.end(), result.begin(), [&](auto r){
+    return optiCase._projection->inverse(r);
+  });
+  return result;
+}
 
 
 }

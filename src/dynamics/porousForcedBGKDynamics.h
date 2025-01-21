@@ -130,13 +130,14 @@ struct PorousParticleKupershtokh {
     template <typename CELL, typename PARAMETERS, typename V=typename CELL::value_t>
     CellStatistic<V> apply(CELL& cell, PARAMETERS& parameters) any_platform {
       V u[DESCRIPTOR::d];
-      MomentaF().computeU(cell, u);
+      V rho;
+      MomentaF().computeRhoU(cell, rho, u);
       const auto velDenominator = cell.template getField<descriptors::VELOCITY_DENOMINATOR>();
       const auto statistic = CollisionO().apply(cell, parameters);
       const auto force = cell.template getField<descriptors::FORCE>();
       V uPlusDeltaU[DESCRIPTOR::d];
       for (int iVel=0; iVel < DESCRIPTOR::d; ++iVel) {
-        uPlusDeltaU[iVel] = u[iVel] + force[iVel];
+        uPlusDeltaU[iVel] = u[iVel] + force[iVel] / rho;
       }
       if (velDenominator > std::numeric_limits<V>::epsilon()) {
         calculate(cell, uPlusDeltaU);
@@ -147,9 +148,12 @@ struct PorousParticleKupershtokh {
           cell.template setField<descriptors::VELOCITY_NUMERATOR>({0.,0.,0.});
         }
       }
+      V fEq[DESCRIPTOR::q] { };
+      V fEq2[DESCRIPTOR::q] { };
+      EquilibriumF().compute(cell, statistic.rho, u, fEq);
+      EquilibriumF().compute(cell, statistic.rho, uPlusDeltaU, fEq2);
       for (int iPop=0; iPop < DESCRIPTOR::q; ++iPop) {
-        cell[iPop] += EquilibriumF().compute(iPop, statistic.rho, uPlusDeltaU)
-                    - EquilibriumF().compute(iPop, statistic.rho, u);
+        cell[iPop] += fEq2[iPop] - fEq[iPop];
       }
 
       // Reset contact helper if utilized

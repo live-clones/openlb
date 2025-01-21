@@ -34,12 +34,11 @@ namespace olb {
 template<typename T>
 bool SuperPlaneIntegralF3D<T>::isToBeIntegrated(const Vector<T,3>& physR, int iC)
 {
-  Vector<int,4> latticeR;
   //get nearest lattice point
-  if ( _geometry.getCuboidGeometry().getFloorLatticeR(physR, latticeR) ) {
-    const int& iX = latticeR[1];
-    const int& iY = latticeR[2];
-    const int& iZ = latticeR[3];
+  if (auto latticeR = _geometry.getCuboidGeometry().getFloorLatticeR(physR)) {
+    const int& iX = (*latticeR)[1];
+    const int& iY = (*latticeR)[2];
+    const int& iZ = (*latticeR)[3];
 
     // interpolation is possible iff all neighbours are within the indicated subset
     return _integrationIndicatorF->operator()(   iC, iX,   iY,   iZ  )
@@ -273,7 +272,7 @@ bool SuperPlaneIntegralF3D<T>::operator()(T output[], const int input[])
 
   const int flowDim = _reductionF.getTargetDim();
 
-  std::vector<T> flow(flowDim,0.);
+  std::vector<util::KahanSummator<T>> summators(flowDim, util::KahanSummator<T>());
 
   for ( std::tuple<int,int>& pos : _rankLocalSubplane ) {
     T outputTmp[flowDim];
@@ -282,8 +281,12 @@ bool SuperPlaneIntegralF3D<T>::operator()(T output[], const int input[])
     _reductionF(outputTmp, inputTmp);
 
     for ( int j = 0; j < flowDim; j++ ) {
-      flow[j] += outputTmp[j];
+      summators[j].add(outputTmp[j]);
     }
+  }
+  std::vector<T> flow(flowDim,0.);
+  for ( int j = 0; j < flowDim; j++ ) {
+      flow[j] = summators[j].getSum();
   }
 
   int vox = _rankLocalSubplane.size();

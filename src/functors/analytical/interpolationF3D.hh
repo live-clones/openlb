@@ -186,20 +186,18 @@ template <typename T, typename W>
 bool AnalyticalFfromBlockF3D<T,W>::operator()(W output[], const T physC[])
 {
   int latticeC[3];
-  int latticeR[3];
-  _cuboid.getFloorLatticeR(latticeR, physC);
+  auto latticeR = _cuboid.getFloorLatticeR(physC);
 
   auto& block = _f.getBlockStructure();
   auto padding = std::min(1, block.getPadding());
 
-  if (LatticeR<3>(latticeR) >= -padding && LatticeR<3>(latticeR) < block.getExtent()+padding-1) {
+  if (latticeR >= -padding && latticeR < block.getExtent()+padding-1) {
     const int& locX = latticeR[0];
     const int& locY = latticeR[1];
     const int& locZ = latticeR[2];
 
-    Vector<T,3> physRiC;
     Vector<T,3> physCv(physC);
-    _cuboid.getPhysR(physRiC.data(), {locX, locY, locZ});
+    Vector<T,3> physRiC = _cuboid.getPhysR({locX, locY, locZ});
 
     // compute weights
     Vector<W,3> d = (physCv - physRiC) * (1. / _cuboid.getDeltaR());
@@ -317,8 +315,10 @@ bool AnalyticalFfromSuperF3D<T,W>::operator()(W output[], const T physC[])
     output[iD] = W();
   }
 
-  int latticeR[4];
-  if (!_cuboidGeometry.getLatticeR(latticeR, physC)) {
+  LatticeR<4> latticeR;
+  if (auto tmp = _cuboidGeometry.getLatticeR(physC)) {
+    latticeR = *tmp;
+  } else {
     return false;
   }
 

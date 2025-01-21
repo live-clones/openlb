@@ -72,6 +72,41 @@ void MultiPhaseUnitConverter<T, DESCRIPTOR>::print() const
 
 }
 
+template <typename T, typename DESCRIPTOR>
+void MultiPhaseUnitConverterFromRelaxationTime<T, DESCRIPTOR>::print() const
+{
+  clout << "----------------- MultiPhaseUnitConverter information ------------------" << std::endl;
+  clout << "--------------------- Parameters in lattice units: ---------------------" << std::endl;
+  clout << "Resolution:                                 N=                              " << this->getResolution() << std::endl;
+  clout << "Lattice velocity:                           latticeU=                       " << this->getCharLatticeVelocity() << std::endl;
+  clout << "Lattice relaxation frequency:               omega=                          " << this->getLatticeRelaxationFrequency() << std::endl;
+  clout << "Lattice relaxation time:                    tau=                            " << this->getLatticeRelaxationTime() << std::endl;
+  clout << "Lattice Surface Tension(J/m^2):             latSurfaceTension=              " << getLatticeSurfaceTension() << std::endl;
+  clout << "--------------------- Parameters in physical units: --------------------" << std::endl;
+  clout << "Characteristical length(m):                 charL=                          " << this->getCharPhysLength() << std::endl;
+  clout << "Characteristical speed(m/s):                charU=                          " << this->getCharPhysVelocity() << std::endl;
+  clout << "Phys. kinematic viscosity(m^2/s):           charNu=                         " << this->getPhysViscosity() << std::endl;
+  clout << "Characteristical pressure(N/m^2):           charPressure=                   " << this->getCharPhysPressure() << std::endl;
+  clout << "Reynolds number:                            reynoldsNumber=                 " << this->getReynoldsNumber() << std::endl;
+  clout << "Phys. Delta X(m):                           physDeltaX=                     " << this->getPhysDeltaX() << std::endl;
+  clout << "Phys. Delta T(s):                           physDeltaT=                     " << this->getPhysDeltaT() << std::endl;
+  clout << "Phys. Surface Tension(J/m^2):               physSurfaceTension=             " << getPhysSurfaceTension() << std::endl;
+
+  clout << "----------------- Conversion factors:-----------------------------------" << std::endl;
+  clout << "Voxel length(m):                            physDeltaX=                     " << this->getConversionFactorLength() << std::endl;
+  clout << "Time step(s):                               physDeltaT=                     " << this->getConversionFactorTime() << std::endl;
+  clout << "Velocity factor(m/s):                       physVelocity=                   " << this->getConversionFactorVelocity() << std::endl;
+  clout << "Density factor(kg/m^3):                     physDensity=                    " << this->getConversionFactorDensity() <<  std::endl;
+  clout << "Mass factor(kg):                            physMass=                       " << this->getConversionFactorMass() << std::endl;
+  clout << "Viscosity factor(m^2/s):                    physViscosity=                  " << this->getConversionFactorViscosity() << std::endl;
+  clout << "Force factor(N):                            physForce=                      " << this->getConversionFactorForce() << std::endl;
+  clout << "Pressure factor(N/m^2):                     physPressure=                   " << this->getConversionFactorPressure() << std::endl;
+  clout << "Surface tension factor(J/m^2):              physSurfaceTension=             " << getConversionFactorSurfaceTension() << std::endl;
+
+  clout << "------------------------------------------------------------------------" << std::endl;
+
+}
+
 }  // namespace olb
 
 #endif

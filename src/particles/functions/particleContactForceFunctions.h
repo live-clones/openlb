@@ -1257,7 +1257,7 @@ struct particle_wall<
     const std::function<bool(const PhysR<T, D>&)> isInside =
         [&](const PhysR<T, D>& pos) {
           bool const isInsideIndicator =
-              solidBoundary.getIndicator()->signedDistance(pos.data()) <=
+              solidBoundary.getIndicator()->signedDistanceExact(pos.data()) <=
               solidBoundary.getEnlargementForContact();
           bool const isInsideParticle =
               particles::resolved::signedDistanceToParticle(particle, pos) <=
@@ -1283,7 +1283,7 @@ struct particle_wall<
           for (unsigned iD = 0; iD < D; ++iD) {
             neighbor[iD] = -normalB[iD] * contactPhysDeltaX[iD];
           }
-          onSurfaceB = solidBoundary.getIndicator()->signedDistance(
+          onSurfaceB = solidBoundary.getIndicator()->signedDistanceExact(
                            (pos + neighbor).data()) <=
                        solidBoundary.getEnlargementForContact();
           return onSurfaceA || onSurfaceB;
@@ -1299,7 +1299,7 @@ struct particle_wall<
     // Calculate normal to indicator surface
     const std::function<Vector<T, D>(const PhysR<T, D>&, const T)> calcNormalB =
         [&](const PhysR<T, D>& pos, const T meshSize) {
-          return solidBoundary.getIndicator()->surfaceNormal(pos, meshSize);
+          return solidBoundary.getIndicator()->surfaceNormalExact(pos, meshSize);
         };
     // Wrapper for update of min and max
     const std::function<void(const PhysR<T, D>&)> updateMinMax =
@@ -1379,7 +1379,7 @@ struct particle_wall<
             }
 #ifdef OLB_DEBUG
             else if (!util::nearZero(
-                         solidBoundary.getIndicator()->signedDistance(
+                         solidBoundary.getIndicator()->signedDistanceExact(
                              center))) {
               OstreamManager clout(std::cout, "forceApplication");
               clout << "WARNING: No distance to wall determined." << std::endl;
@@ -1441,7 +1441,7 @@ struct particle_wall<
               sdf::rounding(
                   particles::resolved::signedDistanceToParticle(particle, pos),
                   particles::access::getEnlargementForContact(particle)),
-              sdf::rounding(solidBoundary.getIndicator()->signedDistance(pos),
+              sdf::rounding(solidBoundary.getIndicator()->signedDistanceExact(pos),
                             solidBoundary.getEnlargementForContact()));
         },
         [&contact]() {

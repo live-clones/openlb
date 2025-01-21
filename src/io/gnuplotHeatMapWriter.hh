@@ -37,19 +37,6 @@ namespace olb {
 
 namespace heatmap {
 
-template <typename T>
-void write(BlockReduction3D2D<T>& blockReduction, int iT, const plotParam<T> param, const std::vector<T>& valueArea)
-{
-  detail::genericHeatMapInterface(blockReduction, blockReduction, iT, valueArea, param);
-}
-
-template <typename T>
-void write(BlockReduction2D2D<T>& blockReduction, int iT, const plotParam<T> param, const std::vector<T>& valueArea)
-{
-  detail::genericHeatMapInterface(blockReduction.getPlaneDiscretizationIn3D(), blockReduction, iT,
-                                  valueArea, param);
-}
-
 namespace detail {
 
 template <typename T>

@@ -50,23 +50,15 @@ struct OptiResultsBase : public ParameterBase { };
 // ---------------------- Output parameters -----------------------------------
 
 
-template <typename T, opti::SolverMode MODE=opti::SolverMode::Reference>
+template <typename T>
 struct OptiOutput : public ParameterBase {
-};
-
-template <typename T>
-struct OptiOutput<T,opti::SolverMode::Primal> : public ParameterBase{
   std::size_t                       counterOptiStep {0};
 };
 
-template <typename T>
-struct OptiOutput<T,opti::SolverMode::Dual> : public ParameterBase {
-  std::size_t                       counterOptiStep {0};
-};
 
-template<typename T, opti::SolverMode MODE, typename TAG>
-struct Reader<OptiOutput<T,MODE>, TAG> : public ReaderBase<OptiOutput<T,MODE>> {
-  using ReaderBase<OptiOutput<T,MODE>>::ReaderBase;
+template<typename T, typename TAG>
+struct Reader<OptiOutput<T>, TAG> : public ReaderBase<OptiOutput<T>> {
+  using ReaderBase<OptiOutput<T>>::ReaderBase;
 
   void read(XMLreader const& xml)
   { }
@@ -86,6 +78,7 @@ template<typename T>
 struct DirectOptiResults : public OptiResultsBase {
 
   using BT = BaseType<T>;
+  // Value of goal functional. Optimization seeks to minimize it
   T objective {std::numeric_limits<BT>::infinity()};
 };
 
@@ -101,8 +94,12 @@ struct DistributedOptiSimulationBase : public OptiSimulationBase {
   using descriptor = typename LATTICES::values_t::template get<0>;
 
   int                                   fieldDim {descriptor::d};
-  int                                   controlMaterial {0};
-  std::shared_ptr<SuperLatticeF<T,descriptor>> controlledField;  // this is set by OptiCaseDual
+  // This is set automatically by OptiCaseDual
+  std::shared_ptr<SuperLatticeF<T,descriptor>> controlledField;
+  // Fluid cells without Dirichlet boundaries. This is set by user in solver::prepareGeometry
+  std::shared_ptr<SuperIndicatorF3D<T>> bulkIndicator;
+  // Where the control variables are active. This is set by user in solver::prepareGeometry
+  std::shared_ptr<SuperIndicatorF3D<T>> designDomain;
 };
 
 
@@ -111,25 +108,14 @@ struct DistributedOptiSimulation
   : public DistributedOptiSimulationBase<T,LATTICES> { };
 
 template<typename T, typename LATTICES>
-struct DistributedOptiSimulation<T,LATTICES,opti::SolverMode::Primal>
-  : public DistributedOptiSimulationBase<T,LATTICES> {
-
-  //using descriptor = typename LATTICES::values_t::template get<0>;
-
-  std::shared_ptr<SuperF3D<T,T>> referenceSolution;
-  std::shared_ptr<SuperF3D<T,T>> referencePorosity;
-};
-
-template<typename T, typename LATTICES>
 struct DistributedOptiSimulation<T,LATTICES,opti::SolverMode::Dual>
   : public DistributedOptiSimulationBase<T,LATTICES> {
 
   using descriptor = typename LATTICES::values_t::template get<0>;
   static constexpr unsigned                    dim = descriptor::d;
 
-  std::shared_ptr<SuperLatticeF<T,descriptor>> fpop;
-  std::shared_ptr<SuperF3D<T,T>>               dObjectiveDf;
-  std::shared_ptr<SuperF3D<T,T>>               dObjectiveDcontrol;
+  std::shared_ptr<SuperLatticeF<T,descriptor>> fpop;          // this is set by OptiCaseDual
+  std::shared_ptr<SuperF3D<T,T>>               dObjectiveDf;  // this is set by OptiCaseDual
 };
 
 
@@ -141,8 +127,6 @@ struct Reader<DistributedOptiSimulation<T,LATTICES,MODE>, TAG>
 
   void read(XMLreader const& xml)
   {
-    xml.readOrWarn<int>("Optimization", "ControlMaterial", "",
-                        this->params->controlMaterial, true, true, true);
     xml.readOrWarn<int>("Optimization", "FieldDimension", "",
                         this->params->fieldDim, true, false, true);
   }
@@ -151,46 +135,14 @@ struct Reader<DistributedOptiSimulation<T,LATTICES,MODE>, TAG>
 
 // ------------------- Results of adjoint optimization ------------------------
 
-template<typename T, typename LATTICES, opti::SolverMode MODE>
-struct DistributedOptiSimulationResults : public OptiResultsBase { };
-
 template<typename T, typename LATTICES>
-struct DistributedOptiSimulationResults<T,LATTICES,opti::SolverMode::Reference>
-  : public OptiResultsBase {
-
+struct DistributedOptiSimulationResults : public OptiResultsBase
+{
   using descriptor = typename LATTICES::values_t::template get<0>;
-  std::shared_ptr<SuperGeometry<T,descriptor::d>>   geometry;
-  std::shared_ptr<SuperLattice<T,descriptor>>       lattice;
-
-  std::shared_ptr<SuperLatticeF<T,descriptor>>      referenceSolution;
+  std::shared_ptr<SuperGeometry<T,descriptor::d>>   geometry;  // this is set by user in solver::prepareGeometry
+  std::shared_ptr<SuperLattice<T,descriptor>>       lattice;   // this is set in AdjointLbSolver::computeResults
 };
 
-template<typename T, typename LATTICES>
-struct DistributedOptiSimulationResults<T,LATTICES,opti::SolverMode::Primal>
-  : public OptiResultsBase {
-
-  using descriptor = typename LATTICES::values_t::template get<0>;
-  std::shared_ptr<SuperGeometry<T,descriptor::d>>   geometry;
-  std::shared_ptr<SuperLattice<T,descriptor>>       lattice;
-
-  std::shared_ptr<SuperLatticeF<T,descriptor>>      fpop;
-  std::shared_ptr<SuperF3D<T,T>>                    djdf;
-  std::shared_ptr<SuperLatticeF<T,descriptor>>      djdalpha;
-
-  using BT = BaseType<T>;
-  T objective {std::numeric_limits<BT>::infinity()};
-  bool objectiveComputed {false};
-};
-
-template<typename T, typename LATTICES>
-struct DistributedOptiSimulationResults<T,LATTICES,opti::SolverMode::Dual>
-  : public OptiResultsBase {
-
-  using descriptor = typename LATTICES::values_t::template get<0>;
-  std::shared_ptr<SuperLattice<T,descriptor>>       lattice;
-
-  // std::shared_ptr<SuperLatticeF3D<T,descriptor>>    phi;
-};
 
 }  // namespace parameters
 

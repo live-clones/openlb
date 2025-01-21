@@ -1,6 +1,6 @@
 /*  This file is part of the OpenLB library
  *
- *  Copyright (C) 2019 Jakob Mangold, Mathias J. Krause
+ *  Copyright (C) 2019 Jakob Mangold, Mathias J. Krause, 2024 Julius Jeßberger
  *  E-mail contact: info@openlb.net
  *  The most recent release of OpenLB can be downloaded at
  *  <http://www.openlb.net/>
@@ -32,13 +32,11 @@ namespace olb {
 template <typename T, typename W>
 BlockVarianceF3D<T,W>::BlockVarianceF3D(BlockF3D<W>&          f,
                                         BlockIndicatorF3D<T>& indicatorF,
-                                        Cuboid3D<T>&      cuboid,
                                         T expectedValue)
-  : BlockSum3D<T,W>(f, indicatorF),
+  : BlockF3D<W>(f.getBlockStructure(), f.getTargetDim()),
     _f(f),
     _indicatorF(indicatorF),
-    _cuboid(cuboid),
-    _expectedValue(expectedValue)
+    _expectedValue(BlockConst3D<T>(this->getBlockStructure(), expectedValue))
 {
   this->getName() = "BlockVariance("+_f.getName()+")";
 }
@@ -49,81 +47,28 @@ bool BlockVarianceF3D<T,W>::operator() (W output[], const int input[])
   OLB_ASSERT(_f.getSourceDim() == _indicatorF.getSourceDim(),
              "functor source dimension equals indicator source dimension");
 
-  std::size_t voxels(0);
-
-  W outputTmp[_f.getTargetDim()];
-  for(unsigned i=0; i<_f.getTargetDim(); ++i) {
-    outputTmp[i] = W(0);
-  }
-  int inputTmp[_f.getSourceDim()];
-
-  for (inputTmp[0] = 0; inputTmp[0] < _cuboid.getNx(); ++inputTmp[0]) {
-    for (inputTmp[1] = 0; inputTmp[1] < _cuboid.getNy(); ++inputTmp[1]) {
-      for (inputTmp[2] = 0; inputTmp[2] < _cuboid.getNz(); ++inputTmp[2]) {
-        if (_indicatorF(inputTmp)) {
-          _f(outputTmp,inputTmp);
-          for (int i = 0; i < _f.getTargetDim(); ++i) {
-            output[i] += util::pow(outputTmp[i] - _expectedValue, 2);
-          }
-          voxels += 1;
-        }
-      }
-    }
-  }
-
-
-  output[_f.getTargetDim()] += voxels;
-
-  return true;
+  return BlockAverage3D<T,W>((_f-_expectedValue)*(_f-_expectedValue),_indicatorF)(output, input);
 }
 
 
 template <typename T, typename W>
 BlockStdDeviationF3D<T,W>::BlockStdDeviationF3D(BlockF3D<W>&          f,
     BlockIndicatorF3D<T>& indicatorF,
-    Cuboid3D<T>&      cuboid,
     T expectedValue)
-  : BlockSum3D<T,W>(f, indicatorF),
-    _f(f),
-    _indicatorF(indicatorF),
-    _cuboid(cuboid),
-    _expectedValue(expectedValue)
+  : BlockF3D<W>(f.getBlockStructure(), f.getTargetDim()),
+    _variance(BlockVarianceF3D<T,W>(f,indicatorF,expectedValue))
 {
-  this->getName() = "BlockStdDeviation("+_f.getName()+")";
+  this->getName() = "BlockStdDeviation("+f.getName()+")";
 }
 
 template <typename T, typename W>
 bool BlockStdDeviationF3D<T,W>::operator() (W output[], const int input[])
 {
-  OLB_ASSERT(_f.getSourceDim() == _indicatorF.getSourceDim(),
-             "functor source dimension equals indicator source dimension");
-
-  std::size_t voxels(0);
-
-  W outputTmp[_f.getTargetDim()];
-  for(int i=0; i<_f.getTargetDim(); ++i) {
-    outputTmp[i] = W(0);
+  const bool res = _variance(output, input);
+  for (int i=0; i<_variance.getTargetDim(); ++i) {
+    output[i] = util::sqrt(output[i]);
   }
-  int inputTmp[_f.getSourceDim()];
-
-  for (inputTmp[0] = 0; inputTmp[0] < _cuboid.getNx(); ++inputTmp[0]) {
-    for (inputTmp[1] = 0; inputTmp[1] < _cuboid.getNy(); ++inputTmp[1]) {
-      for (inputTmp[2] = 0; inputTmp[2] < _cuboid.getNz(); ++inputTmp[2]) {
-        if (_indicatorF(inputTmp)) {
-          _f(outputTmp,inputTmp);
-          for (int i = 0; i < _f.getTargetDim(); ++i) {
-            output[i] += util::pow(outputTmp[i] - _expectedValue, 2);
-          }
-          voxels += 1;
-        }
-      }
-    }
-  }
-
-
-  output[_f.getTargetDim()] += voxels;
-
-  return true;
+  return res;
 }
 
 }

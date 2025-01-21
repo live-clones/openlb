@@ -133,10 +133,8 @@ void getResults( SuperLattice<T, DESCRIPTOR>& sLattice, int iT,
 
   if ( iT==0 ) {
     // Writes the geometry, cuboid no. and rank no. as vti file for visualization
-    SuperLatticeGeometry2D<T, DESCRIPTOR> geometry( sLattice, superGeometry );
     SuperLatticeCuboid2D<T, DESCRIPTOR> cuboid( sLattice );
     SuperLatticeRank2D<T, DESCRIPTOR> rank( sLattice );
-    vtmWriter.write( geometry );
     vtmWriter.write( cuboid );
     vtmWriter.write( rank );
 
@@ -183,10 +181,10 @@ int main( int argc, char *argv[] )
 #else
   const int noOfCuboids = 1;
 #endif
-  CuboidGeometry2D<T> cuboidGeometry( 0, 0, 1, nx, ny, noOfCuboids );
+  CuboidGeometry2D<T> cuboidGeometry(0, 1, {nx, ny}, noOfCuboids);
 
   // Periodic boundaries in x- and y-direction
-  cuboidGeometry.setPeriodicity( true, true );
+  cuboidGeometry.setPeriodicity({ true, true });
 
   // Instantiation of a loadBalancer
   HeuristicLoadBalancer<T> loadBalancer( cuboidGeometry );

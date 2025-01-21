@@ -24,20 +24,8 @@
 #ifndef LATTICE_FIELD_2D_HH
 #define LATTICE_FIELD_2D_HH
 
-#include <vector>
-#include "utilities/omath.h"
-#include <limits>
-
 #include "latticeField2D.h"
-#include "dynamics/lbm.h"  // for computation of lattice rho and velocity
-#include "geometry/superGeometry.h"
-#include "indicator/superIndicatorF2D.h"
-#include "blockBaseF2D.h"
-#include "functors/genericF.h"
-#include "functors/analytical/analyticalF.h"
-#include "functors/analytical/indicator/indicatorF2D.h"
-#include "communication/mpiManager.h"
-
+#include "core/fields.h"
 
 namespace olb {
 
@@ -46,7 +34,7 @@ SuperLatticeField2D<T,DESCRIPTOR,FIELD>::SuperLatticeField2D(
   SuperLattice<T,DESCRIPTOR>& sLattice)
   : SuperLatticeF2D<T,DESCRIPTOR>(sLattice, DESCRIPTOR::template size<FIELD>())
 {
-  this->getName() = "ExtField";
+  this->getName() = fields::name<FIELD>();
   for (int iC = 0; iC < this->_sLattice.getLoadBalancer().size(); iC++ ) {
     this->_blockF.emplace_back(
       new BlockLatticeField2D<T,DESCRIPTOR,FIELD>(this->_sLattice.getBlock(iC)));
@@ -58,7 +46,7 @@ BlockLatticeField2D<T,DESCRIPTOR,FIELD>::BlockLatticeField2D(
   BlockLattice<T,DESCRIPTOR>& blockLattice)
   : BlockLatticeF2D<T, DESCRIPTOR>(blockLattice, DESCRIPTOR::template size<FIELD>())
 {
-  this->getName() = "extField";
+  this->getName() = fields::name<FIELD>();
 }
 
 template<typename T, typename DESCRIPTOR, typename FIELD>

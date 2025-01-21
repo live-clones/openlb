@@ -24,118 +24,13 @@
 #ifndef NAVIER_STOKES_ADVECTION_DIFFUSION_COUPLING_POST_PROCESSOR_2D_HH
 #define NAVIER_STOKES_ADVECTION_DIFFUSION_COUPLING_POST_PROCESSOR_2D_HH
 
-#include "latticeDescriptors.h"
+#include "descriptor/descriptor.h"
 #include "navierStokesAdvectionDiffusionCouplingPostProcessor2D.h"
 #include "core/util.h"
 #include "utilities/finiteDifference2D.h"
 
 
 namespace olb {
-
-//=====================================================================================
-//==============  TotalEnthalpyPhaseChangeCouplingPostProcessor2D ===============
-//=====================================================================================
-
-template<typename T, typename DESCRIPTOR, typename DYNAMICS>
-TotalEnthalpyPhaseChangeCouplingPostProcessor2D<T,DESCRIPTOR,DYNAMICS>::
-TotalEnthalpyPhaseChangeCouplingPostProcessor2D(int x0_, int x1_, int y0_, int y1_,
-    T gravity_, T T0_, T deltaTemp_, std::vector<T> dir_,
-    std::vector<BlockStructureD<2>* > partners_)
-  :  x0(x0_), x1(x1_), y0(y0_), y1(y1_),
-     gravity(gravity_), T0(T0_), deltaTemp(deltaTemp_),
-     dir(dir_), partners(partners_)
-{
-  this->getName() = "TotalEnthalpyPhaseChangeCouplingPostProcessor2D";
-  // we normalize the direction of force vector
-  T normDir = T();
-  for (unsigned iD = 0; iD < dir.size(); ++iD) {
-    normDir += dir[iD]*dir[iD];
-  }
-  normDir = util::sqrt(normDir);
-  for (unsigned iD = 0; iD < dir.size(); ++iD) {
-    dir[iD] /= normDir;
-  }
-
-  for (unsigned iD = 0; iD < dir.size(); ++iD) {
-    forcePrefactor[iD] = gravity * dir[iD];
-  }
-
-  tPartner = static_cast<BlockLattice<T,descriptors::D2Q5<descriptors::VELOCITY,descriptors::TEMPERATURE>> *>(partners[0]);
-}
-
-template<typename T, typename DESCRIPTOR, typename DYNAMICS>
-void TotalEnthalpyPhaseChangeCouplingPostProcessor2D<T,DESCRIPTOR,DYNAMICS>::
-processSubDomain(BlockLattice<T,DESCRIPTOR>& blockLattice,
-                 int x0_, int x1_, int y0_, int y1_)
-{
-
-  int newX0, newX1, newY0, newY1;
-  if ( util::intersect (
-         x0, x1, y0, y1,
-         x0_, x1_, y0_, y1_,
-         newX0, newX1, newY0, newY1 ) ) {
-    auto* dynamics = static_cast<DYNAMICS*>(tPartner->template getDynamics<DYNAMICS>());
-    auto& parameters = static_cast<ParametersOfDynamicsD<DYNAMICS>&>(
-      tPartner->template getData<OperatorParameters<DYNAMICS>>());
-
-    for (int iX=newX0; iX<=newX1; ++iX) {
-      for (int iY=newY0; iY<=newY1; ++iY) {
-        auto cell = blockLattice.get(iX,iY);
-        auto partnerCell = tPartner->get(iX,iY);
-
-        T enthalpy = partnerCell.computeRho();
-
-        cell.template setField<descriptors::POROSITY>(
-          dynamics->template computeLiquidFraction<T>(parameters, enthalpy));
-        auto temperature = partnerCell.template getFieldPointer<descriptors::TEMPERATURE>();
-        temperature[0] = dynamics->template computeTemperature<T>(parameters, enthalpy);
-
-        // computation of the bousinessq force
-        auto force = cell.template getFieldPointer<descriptors::FORCE>();
-        T temperatureDifference = temperature[0] - T0;
-        for (unsigned iD = 0; iD < L::d; ++iD) {
-          force[iD] = forcePrefactor[iD] * temperatureDifference;
-        }
-        // Velocity coupling
-        T u[DESCRIPTOR::d] { };
-        cell.computeU(u);
-        partnerCell.template setField<descriptors::VELOCITY>(u);
-      }
-    }
-  }
-}
-
-template<typename T, typename DESCRIPTOR, typename DYNAMICS>
-void TotalEnthalpyPhaseChangeCouplingPostProcessor2D<T,DESCRIPTOR,DYNAMICS>::
-process(BlockLattice<T,DESCRIPTOR>& blockLattice)
-{
-  processSubDomain(blockLattice, x0, x1, y0, y1);
-}
-
-/// LatticeCouplingGenerator for advectionDiffusion coupling
-
-template<typename T, typename DESCRIPTOR, typename DYNAMICS>
-TotalEnthalpyPhaseChangeCouplingGenerator2D<T,DESCRIPTOR,DYNAMICS>::
-TotalEnthalpyPhaseChangeCouplingGenerator2D(int x0_, int x1_, int y0_, int y1_,
-    T gravity_, T T0_, T deltaTemp_, std::vector<T> dir_)
-  : LatticeCouplingGenerator2D<T,DESCRIPTOR>(x0_, x1_, y0_, y1_),
-    gravity(gravity_), T0(T0_), deltaTemp(deltaTemp_), dir(dir_)
-{ }
-
-template<typename T, typename DESCRIPTOR, typename DYNAMICS>
-PostProcessor2D<T,DESCRIPTOR>* TotalEnthalpyPhaseChangeCouplingGenerator2D<T,DESCRIPTOR,DYNAMICS>::generate (
-  std::vector<BlockStructureD<2>* > partners) const
-{
-  return new TotalEnthalpyPhaseChangeCouplingPostProcessor2D<T,DESCRIPTOR,DYNAMICS>(
-           this->x0,this->x1,this->y0,this->y1, gravity, T0, deltaTemp, dir,partners);
-}
-
-template<typename T, typename DESCRIPTOR, typename DYNAMICS>
-LatticeCouplingGenerator2D<T,DESCRIPTOR>* TotalEnthalpyPhaseChangeCouplingGenerator2D<T,DESCRIPTOR,DYNAMICS>::clone() const
-{
-  return new TotalEnthalpyPhaseChangeCouplingGenerator2D<T,DESCRIPTOR,DYNAMICS>(*this);
-}
-
 
 //=====================================================================================
 //==============  PhaseFieldCouplingPostProcessor2D ===============
@@ -232,9 +127,10 @@ processSubDomain(BlockLattice<T,DESCRIPTOR>& blockLattice,
         cell.computeRhoU( rho_tmp, u_tmp );
         T p_tmp = rho_tmp / descriptors::invCs2<T,DESCRIPTOR>();
         T uSqr_tmp = util::normSqr<T,DESCRIPTOR::d>(u_tmp);
+        T fEq[DESCRIPTOR::q] { };
+        cell.getDynamics()->computeEquilibrium(cell, p_tmp, u_tmp, fEq);
         for (int iPop = 0; iPop < L::q; ++iPop) {
-          T fEq = cell.getDynamics()->computeEquilibrium( iPop, p_tmp, u_tmp);
-          T fNeq = cell[iPop] - fEq;
+          T fNeq = cell[iPop] - fEq[iPop];
           for (int iD = 0; iD < L::d; ++iD) {
             for (int jD = 0; jD < L::d; ++jD) {
               viscous_force[iD] += descriptors::c<L>(iPop,iD) * descriptors::c<L>(iPop,jD) * fNeq * grad_rho[jD];

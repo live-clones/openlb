@@ -29,7 +29,7 @@
 #include "core/util.h"
 #include "core/postProcessing.h"
 #include "core/latticeStatistics.h"
-#include "latticeDescriptors.h"
+#include "descriptor/descriptor.h"
 
 #include "momenta/interface.h"
 #include "momenta/aliases.h"

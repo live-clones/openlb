@@ -132,6 +132,15 @@ T box(Vector<T, 3> p, Vector<T, 3> b) any_platform
          util::min(util::max({q[0], q[1], q[2]}), T());
 }
 
+template <typename T, unsigned D>
+T line(Vector<T,D> p, Vector<T,D> a, Vector<T,D> b, T r) any_platform
+{
+  const auto pa = p - a;
+  const auto ba = b - a;
+  const auto h = clamp((pa*ba)/(ba*ba), T{0}, T{1});
+  return norm(pa - ba*h) - r;
+}
+
 /** Exact signed distance to the surface of two-dimensional triangle.
  *
  * \param p         point for which the distance to the surface is calculated
@@ -159,6 +168,37 @@ T triangle(Vector<T, 2> p, Vector<T, 2> a, Vector<T, 2> b,
                              s * (v1[0] * e1[1] - v1[1] * e1[0])),
                    s * (v2[0] * e2[1] - v2[1] * e2[0]));
   return -util::sqrt(dx) * util::sign(dy);
+}
+
+/** Exact signed distance to the surface of three-dimensional triangle.
+ *
+ * \param p         point for which the distance to the surface is calculated
+ * \param a         vector containing first vertex
+ * \param b         vector containing second vertex
+ * \param c         vector containing third vertex
+*/
+template <typename T>
+T triangle(Vector<T,3> p, Vector<T,3> a, Vector<T,3> b, Vector<T,3> c) any_platform
+{
+  auto ba = b - a; auto pa = p - a;
+  auto cb = c - b; auto pb = p - b;
+  auto ac = a - c; auto pc = p - c;
+  auto nor = crossProduct(ba, ac);
+
+  auto x1 = ba*clamp((ba*pa)/(ba*ba), T{0}, T{1}) - pa;
+  auto x2 = cb*clamp((cb*pb)/(cb*cb), T{0}, T{1}) - pb;
+  auto x3 = ac*clamp((ac*pc)/(ac*ac), T{0}, T{1}) - pc;
+
+  return util::sqrt(
+    (util::sign(crossProduct(ba,nor) * pa) +
+     util::sign(crossProduct(cb,nor) * pb) +
+     util::sign(crossProduct(ac,nor) * pc) < T{2})
+     ?
+     util::min(util::min((x1*x1),
+                         (x2*x2)),
+               (x3*x3))
+     :
+     (nor*pa)*(nor*pa)/(nor*nor));
 }
 
 /** Exact signed distance to the surface of three-dimensional cylinder.

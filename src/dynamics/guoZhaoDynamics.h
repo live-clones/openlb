@@ -33,18 +33,7 @@
 
 #include "momenta/interface.h"
 #include "interface.h"
-
 #include "core/util.h"
-#include "core/postProcessing.h"
-#include "core/latticeStatistics.h"
-#include "latticeDescriptors.h"
-
-#include "momenta/interface.h"
-#include "momenta/aliases.h"
-
-#include "collision.h"
-#include "equilibrium.h"
-#include "forcing.h"
 
 namespace olb {
 
@@ -123,22 +112,21 @@ struct GuoZhaoSecondOrder {
   struct type {
     using MomentaF = typename MOMENTA::template type<DESCRIPTOR>;
 
-    template <typename RHO, typename U>
-    auto compute(int iPop, const RHO& rho, const U& u) any_platform {
-      assert("GuoZhaoSecondOrder::compute(int, RHO&, U&) should never be called." && false);
-      return RHO();
-    }
-
-    template <typename CELL, typename PARAMETERS, typename FEQ, typename V=typename CELL::value_t>
-    CellStatistic<V> compute(CELL& cell, PARAMETERS& parameters, FEQ& fEq) any_platform {
+    template <typename CELL, typename RHO, typename U, typename FEQ, typename V=typename CELL::value_t>
+    CellStatistic<V> compute(CELL& cell, RHO& rho, U& u, FEQ& fEq) any_platform {
       const V epsilon  = cell.template getField<descriptors::EPSILON>();
-      V rho, u[DESCRIPTOR::d];
-      MomentaF().computeRhoU(cell, rho, u);
       const V uSqr = util::normSqr<V,DESCRIPTOR::d>(u);
       for (int iPop=0; iPop < DESCRIPTOR::q; ++iPop) {
         fEq[iPop] = guoZhao_equilibrium<DESCRIPTOR>::secondOrder(iPop, rho, u, uSqr, epsilon);
       }
       return {rho, util::normSqr<V,DESCRIPTOR::d>(u)};
+    };
+
+    template <typename CELL, typename PARAMETERS, typename FEQ, typename V=typename CELL::value_t>
+    CellStatistic<V> compute(CELL& cell, PARAMETERS& parameters, FEQ& fEq) any_platform {
+      V rho, u[DESCRIPTOR::d];
+      MomentaF().computeRhoU(cell, rho, u);
+      return compute(cell, rho, u, fEq);
     };
   };
 };
@@ -208,5 +196,3 @@ using SmagorinskyGuoZhaoBGKdynamics = dynamics::Tuple<
 }
 
 #endif
-
-#include "guoZhaoDynamics.cse.h"

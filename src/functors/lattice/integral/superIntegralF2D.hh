@@ -70,7 +70,7 @@ template <typename T, typename W>
 bool SuperSum2D<T,W>::operator() (W output[], const int input[])
 {
   _f->getSuperStructure().communicate();
-  CuboidGeometry2D<T>& geometry = _f->getSuperStructure().getCuboidGeometry();
+  auto& geometry = _f->getSuperStructure().getCuboidGeometry();
   LoadBalancer<T>&     load     = _f->getSuperStructure().getLoadBalancer();
 
   for (int i = 0; i < this->getTargetDim(); ++i) {
@@ -81,6 +81,7 @@ bool SuperSum2D<T,W>::operator() (W output[], const int input[])
     W outputTmp[_f->getTargetDim()];
     int inputTmp[_f->getSourceDim()];
     std::size_t voxels(0);
+    std::vector<util::KahanSummator<W>> summators(_f->getTargetDim(), util::KahanSummator<W>());
 
     for (int iC = 0; iC < load.size(); ++iC) {
       const Cuboid2D<T> cuboid = geometry.get(load.glob(iC));
@@ -90,12 +91,15 @@ bool SuperSum2D<T,W>::operator() (W output[], const int input[])
             if (_indicatorF(inputTmp)) {
               _f(outputTmp,inputTmp);
               for (int i = 0; i < _f->getTargetDim(); ++i) {
-                output[i] += outputTmp[i];
+                summators[i].add(outputTmp[i]);
               }
               voxels += 1;
             }
         }
       }
+    }
+    for (int i = 0; i < _f->getTargetDim(); ++i) {
+      output[i] = summators[i].getSum();
     }
     output[_f->getTargetDim()] = voxels;
   }
@@ -149,31 +153,34 @@ template <typename T, typename W>
 bool SuperIntegral2D<T,W>::operator() (W output[], const int input[])
 {
   _f->getSuperStructure().communicate();
-  CuboidGeometry2D<T>& geometry = _f->getSuperStructure().getCuboidGeometry();
+  auto& geometry = _f->getSuperStructure().getCuboidGeometry();
   LoadBalancer<T>&     load     = _f->getSuperStructure().getLoadBalancer();
 
   for (int i = 0; i < this->getTargetDim(); ++i) {
     output[i] = W(0);
   }
-
   if (this->_blockF.empty()) {
     W outputTmp[_f->getTargetDim()];
     int inputTmp[_f->getSourceDim()];
+    std::vector<util::KahanSummator<W>> summators(_f->getTargetDim(), util::KahanSummator<W>());
 
     for (int iC = 0; iC < load.size(); ++iC) {
       const Cuboid2D<T> cuboid = geometry.get(load.glob(iC));
-      const W weight = pow(cuboid.getDeltaR(), 2);
+      const W weight = util::pow(cuboid.getDeltaR(), 2);
       inputTmp[0] = load.glob(iC);
       for (inputTmp[1] = 0; inputTmp[1] < cuboid.getNx(); ++inputTmp[1]) {
         for (inputTmp[2] = 0; inputTmp[2] < cuboid.getNy(); ++inputTmp[2]) {
             if (_indicatorF(inputTmp)) {
               _f(outputTmp,inputTmp);
               for (int i = 0; i < this->getTargetDim(); ++i) {
-                output[i] += outputTmp[i] * weight;
+                summators[i].add(outputTmp[i]*weight);
               }
             }
         }
       }
+    }
+    for (int i = 0; i < _f->getTargetDim(); ++i) {
+      output[i] = summators[i].getSum();
     }
   }
   else {

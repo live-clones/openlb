@@ -25,13 +25,16 @@
 #define FIELD_PARAMETERS_D_H
 
 #include "fieldArrayD.h"
+#include "utilities/typeMap.h"
+
+#include "core/concepts.h"
 
 #include <stdexcept>
 
 namespace olb {
 
 /// Storage of a single FIELD-valued parameter
-template <typename T, typename DESCRIPTOR, typename FIELD>
+template <concepts::BaseType T, concepts::Descriptor DESCRIPTOR, concepts::Field FIELD>
 class ParameterD {
 private:
   std::conditional_t<
@@ -75,11 +78,11 @@ public:
 };
 
 /// Dynamic access interface for FIELD-valued parameters
-template <typename T, typename DESCRIPTOR>
+template <concepts::BaseType T, concepts::Descriptor DESCRIPTOR>
 struct AbstractParameters {
   virtual ~AbstractParameters() = default;
 
-  template <typename FIELD>
+  template <concepts::Field FIELD>
   bool provides() const {
     if (auto concrete = dynamic_cast<const ParameterD<T,DESCRIPTOR,FIELD>*>(this)) {
       return true;
@@ -88,7 +91,7 @@ struct AbstractParameters {
     }
   };
 
-  template <typename FIELD>
+  template <concepts::Field FIELD>
   auto get() const {
     if (auto concrete = dynamic_cast<const ParameterD<T,DESCRIPTOR,FIELD>*>(this)) {
       return concrete->read();
@@ -97,7 +100,7 @@ struct AbstractParameters {
     }
   };
 
-  template <typename FIELD>
+  template <concepts::Field FIELD>
   auto getOrFallback(typename ParameterD<T,DESCRIPTOR,FIELD>::data_t&& fallback) const {
     if (auto concrete = dynamic_cast<const ParameterD<T,DESCRIPTOR,FIELD>*>(this)) {
       return concrete->read();
@@ -106,7 +109,7 @@ struct AbstractParameters {
     }
   }
 
-  template <typename FIELD>
+  template <concepts::Field FIELD>
   void set(FieldD<T,DESCRIPTOR,FIELD>&& value) {
     if (auto concrete = dynamic_cast<ParameterD<T,DESCRIPTOR,FIELD>*>(this)) {
       return concrete->write(std::forward<decltype(value)>(value));
@@ -115,7 +118,7 @@ struct AbstractParameters {
     }
   };
 
-  template <typename FIELD>
+  template <concepts::Field FIELD>
   void set(const FieldD<T,DESCRIPTOR,FIELD>& value) {
     if (auto concrete = dynamic_cast<ParameterD<T,DESCRIPTOR,FIELD>*>(this)) {
       return concrete->write(value);
@@ -127,13 +130,16 @@ struct AbstractParameters {
 };
 
 /// Set of FIELD-valued parameters
-template <typename T, typename DESCRIPTOR, typename... FIELDS>
+template <concepts::BaseType T, concepts::Descriptor DESCRIPTOR, concepts::Field... FIELDS>
 struct ParametersD final : public AbstractParameters<T,DESCRIPTOR>
                          , public ParameterD<T,DESCRIPTOR,FIELDS>...
 {
+  using value_t = T;
+  using descriptor_t = DESCRIPTOR;
+
   using fields_t = meta::list<FIELDS...>;
 
-  template <typename... Fs>
+  template <concepts::Field... Fs>
   using include_fields = ParametersD<T,DESCRIPTOR,FIELDS...,Fs...>;
   /// Return ParametersD containing FIELDS in addition to all entries of FIELD_LIST
   template <typename FIELD_LIST>
@@ -146,13 +152,15 @@ struct ParametersD final : public AbstractParameters<T,DESCRIPTOR>
     ParameterD<T,DESCRIPTOR,FIELDS>(static_cast<const ParameterD<T,DESCRIPTOR,FIELDS>&>(rhs))...
   { }
 
-  template <typename FIELD>
+  template <concepts::Field FIELD>
   bool provides() const any_platform {
     return fields_t::template contains<FIELD>();
   }
 
-  template <typename FIELD>
+  template <concepts::Field FIELD>
   const auto& get() const any_platform {
+    static_assert(fields_t::template contains<FIELD>(),
+                  "FIELD must be available");
     return static_cast<const ParameterD<T,DESCRIPTOR,FIELD>*>(this)->read();
   }
 
@@ -161,26 +169,42 @@ struct ParametersD final : public AbstractParameters<T,DESCRIPTOR>
     return ParametersD<V,DESCRIPTOR,FIELDS...>(*this);
   }
 
-  template <typename FIELD>
+  template <concepts::Field FIELD>
   auto& get() any_platform {
+    static_assert(fields_t::template contains<FIELD>(),
+                  "FIELD must be available");
     return static_cast<ParameterD<T,DESCRIPTOR,FIELD>*>(this)->read();
   }
 
-  template <typename FIELD>
+  template <concepts::Field FIELD>
   void set(FieldD<T,DESCRIPTOR,FIELD>&& value) any_platform {
     return static_cast<ParameterD<T,DESCRIPTOR,FIELD>*>(this)->write(
       std::forward<decltype(value)>(value));
   };
 
-  template <typename FIELD>
+  template <concepts::Field FIELD>
   void set(const FieldD<T,DESCRIPTOR,FIELD>& value) any_platform {
     return static_cast<ParameterD<T,DESCRIPTOR,FIELD>*>(this)->write(value);
   };
 
 };
 
+template <concepts::BaseType T, concepts::Descriptor DESCRIPTOR, typename... MAP>
+auto makeParametersD(MAP&&... args) {
+  auto tuple = std::make_tuple(args...);
+  using result_t = typename ParametersD<T,DESCRIPTOR>::template include<typename meta::map<MAP...>::keys_t>;
+  result_t params;
+  result_t::fields_t::for_each([&](auto id) {
+    using field_t = typename decltype(id)::type;
+    constexpr unsigned idx = result_t::fields_t::template index<field_t>();
+    params.template set<field_t>(std::get<2*idx+1>(tuple));
+  });
+  return params;
+}
+
+
 /// Deduce ParametersD of OPERATOR w.r.t. T and DESCRIPTOR
-template <typename T, typename DESCRIPTOR, typename OPERATOR>
+template <concepts::BaseType T, concepts::Descriptor DESCRIPTOR, typename OPERATOR>
 using ParametersOfOperatorD = typename ParametersD<T,DESCRIPTOR>::template include<
   typename OPERATOR::parameters
 >;
@@ -198,7 +222,7 @@ using ParametersOfDynamicsD = typename ParametersD<
 /**
  * Used for platform-agnostic access to concrete parameter storage.
  **/
-template <typename T, typename DESCRIPTOR>
+template <concepts::BaseType T, concepts::Descriptor DESCRIPTOR>
 struct AbstractedConcreteParameters {
   virtual AbstractParameters<T,DESCRIPTOR>& asAbstract() = 0;
 
@@ -211,7 +235,7 @@ struct AbstractedConcreteParameters {
  * in order to preserve a minimal cross-device implementation
  * of this critical data structure.
  **/
-template <typename T, typename DESCRIPTOR, Platform PLATFORM, typename PARAMETERS>
+template <concepts::BaseType T, concepts::Descriptor DESCRIPTOR, Platform PLATFORM, typename PARAMETERS>
 struct ConcreteParametersD final : public AbstractedConcreteParameters<T,DESCRIPTOR>
                                  , public Serializable {
   typename ParametersD<T,DESCRIPTOR>::template include<PARAMETERS> parameters;

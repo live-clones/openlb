@@ -29,6 +29,11 @@
       <Interval>1</Interval>
       <Residuum>1e-3</Residuum>
     </ConvergenceCheck>
+    <StabilityCheck>
+      <Frequency> 1. </Frequency>
+      <ExitMaxU> false </ExitMaxU>
+      <BoundMaxU> 0.3 </BoundMaxU>
+    </StabilityCheck>
   </Application>
   <Output>
     <OutputDir>./tmp/</OutputDir>

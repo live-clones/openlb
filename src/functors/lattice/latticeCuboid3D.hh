@@ -48,7 +48,7 @@ SuperLatticeCuboid3D<T, DESCRIPTOR>::SuperLatticeCuboid3D(
 
 template<typename T, typename DESCRIPTOR>
 BlockLatticeCuboid3D<T,DESCRIPTOR>::BlockLatticeCuboid3D(
-  BlockLattice<T,DESCRIPTOR>& blockLattice, int iC, Cuboid3D<T>& cuboid)
+  BlockLattice<T,DESCRIPTOR>& blockLattice, int iC, const Cuboid3D<T>& cuboid)
   : BlockLatticeF3D<T,DESCRIPTOR>(blockLattice, 2), _iC(iC), _cuboid(cuboid)
 {
   this->getName() = "cuboid";
@@ -58,7 +58,7 @@ template<typename T, typename DESCRIPTOR>
 bool BlockLatticeCuboid3D<T, DESCRIPTOR>::operator()(T output[], const int input[])
 {
   output[0] = _iC + 1;
-  output[1] = T(_cuboid.getWeightValue()) / _cuboid.getLatticeVolume();
+  output[1] = T(_cuboid.getWeight()) / _cuboid.getLatticeVolume();
   return true;
 }
 

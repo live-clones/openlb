@@ -42,10 +42,10 @@ template <typename T, typename DESCRIPTOR>
 class BlockLatticeCuboid3D final : public BlockLatticeF3D<T,DESCRIPTOR> {
 private:
   int _iC;
-  Cuboid3D<T>& _cuboid;
+  const Cuboid3D<T>& _cuboid;
 
 public:
-  BlockLatticeCuboid3D(BlockLattice<T,DESCRIPTOR>& blockLattice, int iC, Cuboid3D<T>& cuboid);
+  BlockLatticeCuboid3D(BlockLattice<T,DESCRIPTOR>& blockLattice, int iC, const Cuboid3D<T>& cuboid);
 
   bool operator() (T output[], const int input[]) override;
 

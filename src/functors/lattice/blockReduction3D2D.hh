@@ -65,7 +65,7 @@ void BlockReduction3D2D<T>::updateBlockAnalytical(BlockData<2,T,T>& block)
 template <typename T>
 void BlockReduction3D2D<T>::updateBlockDiscrete(BlockData<2,T,T>& block)
 {
-  CuboidGeometry3D<T>& geometry = _f->getSuperStructure().getCuboidGeometry();
+  auto& geometry = _f->getSuperStructure().getCuboidGeometry();
 
   for ( std::tuple<int,int,int>& pos : _rankLocalSubplane ) {
     const int& iX = std::get<0>(pos);
@@ -78,10 +78,9 @@ void BlockReduction3D2D<T>::updateBlockDiscrete(BlockData<2,T,T>& block)
     }
 
     T output[_f->getTargetDim()];
-    int input[4] { iC, 0, 0, 0 };
-    geometry.get(iC).getLatticeR(&input[1], physR);
+    auto input = geometry.get(iC).getLatticeR(physR).withPrefix(iC);
 
-    if (_f(output, input)) {
+    if (_f(output, input.data())) {
       for ( int iSize = 0; iSize < _f->getTargetDim(); ++iSize ) {
         block.get({iX, iY}, iSize) += output[iSize];
       }
@@ -104,14 +103,14 @@ BlockReduction3D2D<T>::BlockReduction3D2D(
   this->getName() = "planeReduction(" + _f->getName() + ")";
 
   if ( _reductionMode == BlockDataReductionMode::Discrete ) {
-    const CuboidGeometry3D<T>& geometry = _f->getSuperStructure().getCuboidGeometry();
+    const auto& geometry = _f->getSuperStructure().getCuboidGeometry();
     const Hyperplane3D<T>& hyperplane   = this->getHyperplane();
     const bool spansAxisPlane = hyperplane.isXYPlane() ||
                                 hyperplane.isXZPlane() ||
                                 hyperplane.isYZPlane();
     // verify axes alignment and spacing of hyperplane parametrization
     if ( !spansAxisPlane ||
-         lattice.getPhysSpacing() != geometry.getMinDeltaR() ) {
+         lattice.getPhysSpacing() != geometry.getDeltaR() ) {
       // hyperplane lattice doesn't describe a trivially discretizable plane
       OstreamManager clerr(std::cerr, "BlockReduction3D2D");
       clerr << "Given hyperplane is not trivially discretizable. "
@@ -192,7 +191,7 @@ BlockReduction3D2D<T>::BlockReduction3D2D(
 template <typename T>
 void BlockReduction3D2D<T>::initialize()
 {
-  const CuboidGeometry3D<T>& geometry = _f->getSuperStructure().getCuboidGeometry();
+  const auto& geometry = _f->getSuperStructure().getCuboidGeometry();
   LoadBalancer<T>&           load     = _f->getSuperStructure().getLoadBalancer();
 
   _rankLocalSubplane.clear();
@@ -204,10 +203,9 @@ void BlockReduction3D2D<T>::initialize()
       // Schedule plane point for storage if its physical position intersects the
       // mother cuboid and the cuboid of the nearest lattice position is local to
       // the current rank:
-      int iC;
-      if ( geometry.getC(physR, iC) ) {
-        if ( load.isLocal(iC) ) {
-          _rankLocalSubplane.emplace_back(iX, iY, iC);
+      if (auto iC = geometry.getC(physR)) {
+        if ( load.isLocal(*iC) ) {
+          _rankLocalSubplane.emplace_back(iX, iY, *iC);
         }
       }
     }

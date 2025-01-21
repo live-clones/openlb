@@ -36,7 +36,7 @@
 #include "utilities/aliases.h"
 #include "communication/superStructure.h"
 #include "communication/superCommunicator.h"
-#include "dynamics/descriptorTag.h"
+#include "descriptor/tag.h"
 
 
 namespace olb {
@@ -56,7 +56,7 @@ public:
 
   using block_t = ConcretizableBlockData<D,T,U>;
 
-  SuperData(CuboidGeometry<T,D>& cuboidGeometry,
+  SuperData(CuboidDecomposition<T,D>& cuboidGeometry,
             LoadBalancer<T>& loadBalancer,
             int overlap = 2,
             int size = 1);

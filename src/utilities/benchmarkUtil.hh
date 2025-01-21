@@ -121,8 +121,8 @@ bool ValueTracer<T>::hasConverged() const
       return util::fabs(stdDev/average) < _epsilon;
     }
     else {
-      clout << "simulation diverged." << std::endl;
-      return true;
+      // Throw execption for diverging
+      throw std::runtime_error("Simulation diverged.");
     }
   }
 }
@@ -139,8 +139,8 @@ bool ValueTracer<T>::convergenceCheck() const
       return util::fabs(stdDev/average) < _epsilon;
     }
     else {
-      clout << "simulation diverged." << std::endl;
-      return false;
+      // Throw execption for diverging
+      throw std::runtime_error("Simulation diverged.");
     }
   }
 }

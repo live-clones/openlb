@@ -36,12 +36,13 @@ namespace olb {
 /// Constructor with name of outputFiles
 /// boolean true for real-time plotting //WARNING: experimental!
 template< typename T >
-CSV<T>::CSV(std::string name, char separator, std::vector<std::string> columnTags)
+CSV<T>::CSV(std::string name, char separator, std::vector<std::string> columnTags, std::string format)
   : _name(name),
-    _dataFile(singleton::directories().getGnuplotOutDir()+"data/"+_name+".dat"),
+    _dataFile(singleton::directories().getGnuplotOutDir()+"data/"+_name+format),
     _dir(singleton::directories().getGnuplotOutDir()),
     _separator(separator),
-    _columnTags(columnTags)
+    _columnTags(columnTags),
+    _format(format)
 {
   if (singleton::mpi().getRank() == _rank) {
     std::ofstream fout;
@@ -72,7 +73,7 @@ void CSV<T>::writeDataFile(T xValue, const std::vector<T>& yValues,const std::st
   if (singleton::mpi().getRank() == _rank) {
     std::ofstream fout;
     std::string DATAF;
-    DATAF = singleton::directories().getGnuplotOutDir()+"data/"+plotNameFile+".dat";
+    DATAF = singleton::directories().getGnuplotOutDir()+"data/"+plotNameFile+_format;
     fout.precision(precision);
     fout.open(DATAF.c_str(), std::ios::out | std::ios::app);
     fout << BaseType<T>(xValue);
@@ -120,7 +121,7 @@ void CSV<T>::setColumnTags(const std::vector<std::string> columnTags, std::strin
 {
   OstreamManager clout(std::cout,"setColumnTags");
 
-  std::ofstream fout(singleton::directories().getGnuplotOutDir() + "data/" + plotFileName + ".dat",std::ios::out);
+  std::ofstream fout(singleton::directories().getGnuplotOutDir() + "data/" + plotFileName + _format,std::ios::out);
 
   if(fout.is_open())
   {
@@ -145,7 +146,7 @@ template< typename T >
 void CSV<T>::clearFile(std::string filename)
 {
   /// empty the file by opening an ofstream
-  std::ofstream fout(singleton::directories().getGnuplotOutDir() + "data/" + filename + ".dat",std::ios::out);
+  std::ofstream fout(singleton::directories().getGnuplotOutDir() + "data/" + filename + _format,std::ios::out);
   fout.close();
 }
 

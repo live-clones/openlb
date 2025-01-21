@@ -24,7 +24,9 @@
 #ifndef CELL_D_H
 #define CELL_D_H
 
-#include "fieldArrayD.h"
+#include <type_traits>
+
+#include "fieldArrayD.hh"
 
 namespace olb {
 

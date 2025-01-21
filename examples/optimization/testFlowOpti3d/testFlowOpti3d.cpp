@@ -31,12 +31,15 @@
 #include "testFlowOpti3d.h"
 
 using namespace olb;
+using namespace olb::opti;
 using namespace olb::parameters;
 
 using S = FLOATING_POINT_TYPE;
 constexpr unsigned numberOfDerivatives (3);
 using T = util::ADf<S,numberOfDerivatives>;
 
+template <typename T, typename DESCRIPTOR>
+using ForcedBGKdynamicsGuo = ForcedBGKdynamics<T,DESCRIPTOR,momenta::BulkTuple>;
 
 
 /** Compute sensitivities with forward difference quotients
@@ -145,10 +148,10 @@ void optiAd() {
     referenceSolver->parameters(Opti()).applyControl(referenceControl);
     referenceSolver->solve();
 
-    testFlow->parameters(Opti()).referenceSolution
+    testFlow->parameters(Opti()).referenceState
      = referenceSolver->parameters(Results()).solution;
 
-    testFlowAD->parameters(Opti()).referenceSolution
+    testFlowAD->parameters(Opti()).referenceState
      = referenceSolver->parameters(Results()).solution;
   }
 
@@ -177,14 +180,25 @@ void optiAdjoint() {
   XMLreader config("parameterAdjoint.xml");
 
   OptiCaseDual<S,TestFlowSolverOptiAdjoint> optiCase (config);
+  // classical approach: define objective via functors
+  //auto objective = std::make_shared<TestFlowObjective<S>>(config);
+  // use generic objective handling
+  auto objectiveHelp = std::make_shared<RelativeDifferenceVelocityObjectiveGeneric<S>>(config);
+  auto objective = std::make_shared<GenericObjective<S,TestFlowSolverOptiAdjoint,
+    RelativeDifferenceVelocityObjectiveGeneric<S>,
+    ForcedBGKdynamicsGuo, 3>>(objectiveHelp);
+  optiCase.setObjective(objective);
   auto optimizer = createOptimizerLBFGS<S>(config, optiCase._dimCtrl);
 
   S startValue;
   config.readOrWarn<S>("Optimization", "StartValue", "", startValue);
   startValue = projection::getInitialControl(startValue, optiCase);
-  optimizer->setStartValue(startValue);
+  const auto referenceControl = getControl<descriptors::FORCE,S,TestFlowSolverOptiAdjoint>(
+    optiCase, objectiveHelp->_referenceSolver);
 
-  optimizer->setReferenceControl(optiCase.getReferenceControl());
+  optimizer->setReferenceControl(referenceControl);
+  //optimizer->setStartValue(startValue);
+  optimizer->setStartValue(referenceControl, startValue);  // interpret startValue as a scaling factor of referenceControl
 
   optimizer->optimize(optiCase);
 }

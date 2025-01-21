@@ -21,19 +21,12 @@
  *  Boston, MA  02110-1301, USA.
 */
 
-
 #ifndef BLOCK_LOAD_BALANCER_H
 #define BLOCK_LOAD_BALANCER_H
 
-
 #include "communication/loadBalancer.h"
 
-
-
 namespace olb {
-
-template<typename T> class CuboidGeometry3D;
-template<typename T> class CuboidGeometry2D;
 
 
 template<typename T>
@@ -52,6 +45,7 @@ public:
   int firstGlobNum() const;
   int lastGlobNum() const;
 };
+
 }  // namespace olb
 
 #endif

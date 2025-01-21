@@ -56,7 +56,9 @@ public:
       nCells   += 1;
       avRho    += rho;
       avEnergy += uSqr;
-      maxU = std::max(uSqr, maxU);
+      if constexpr (!std::is_same_v<Expr,T>) {
+        maxU = std::max(uSqr, maxU);
+      }
     }
 
     Aggregatable& operator+=(const Aggregatable& rhs) {
@@ -72,7 +74,7 @@ public:
   LatticeStatistics();
   ~LatticeStatistics() = default;
   void reset();
-  void reset(T average_rho_, T average_energy_, T maxU_, size_t numCells_);
+  void reset(T average_rho_, T average_energy_, T maxU_, std::size_t numCells_);
 
   int subscribeAverage();
   int subscribeSum();
@@ -89,7 +91,7 @@ public:
   T getAverageRho() const;
   T getAverageEnergy() const;
   T getMaxU() const;
-  size_t const& getNumCells() const;
+  std::size_t getNumCells() const;
 
   T getAverage(int whichAverage) const;
   T getSum(int whichSum) const;
@@ -103,19 +105,21 @@ public:
 
   void incrementTime();
   void resetTime(size_t value=0);
-  size_t getTime() const;
+  std::size_t getTime() const;
   void print(int iterationStep, T physicalTime=-1) const;
   void initialize();
+
 private:
   mutable OstreamManager clout;
   // variables for internal computations
   std::vector<T> tmpAv, tmpSum, tmpMin, tmpMax;
-  size_t tmpNumCells;
+  std::size_t tmpNumCells;
   // variables containing the public result
   std::vector<T> averageVect, sumVect, minVect, maxVect;
-  size_t numCells;
-  size_t latticeTime;
+  std::size_t numCells;
+  std::size_t latticeTime;
   bool firstCall;
+
 };
 
 }  // namespace olb

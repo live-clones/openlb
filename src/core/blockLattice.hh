@@ -28,18 +28,23 @@
 
 #include "blockLattice.h"
 
+#include "introspection.h"
+
+#include <iterator>
+
 namespace olb {
 
 
-template<typename T, typename DESCRIPTOR>
+template<concepts::BaseType T, concepts::LatticeDescriptor DESCRIPTOR>
 BlockLattice<T,DESCRIPTOR>::BlockLattice(Vector<int,DESCRIPTOR::d> size, int padding, Platform platform)
   : BlockStructure<DESCRIPTOR>(size, padding),
     _platform(platform),
     _statisticsEnabled{true},
-    _statistics{nullptr}
+    _statistics{nullptr},
+    _introspectable{true}
 { }
 
-template<typename T, typename DESCRIPTOR>
+template<concepts::BaseType T, concepts::LatticeDescriptor DESCRIPTOR>
 BlockLattice<T,DESCRIPTOR>::~BlockLattice()
 {
   if (_statistics) {
@@ -47,12 +52,13 @@ BlockLattice<T,DESCRIPTOR>::~BlockLattice()
   }
 }
 
-template<typename T, typename DESCRIPTOR>
+template<concepts::BaseType T, concepts::LatticeDescriptor DESCRIPTOR>
 void BlockLattice<T,DESCRIPTOR>::initialize()
 {
-  addPostProcessor(typeid(stage::PostStream), meta::id<StatisticsPostProcessor>());
+  addPostProcessor(typeid(stage::PostStream),
+                   meta::id<StatisticsPostProcessor>());
 
-  // Todo: Move to StatisticsPostProcessor::setup
+  // TODO: Move to StatisticsPostProcessor::setup
   _statistics = new LatticeStatistics<T>;
   _statistics->initialize();
 
@@ -60,78 +66,78 @@ void BlockLattice<T,DESCRIPTOR>::initialize()
   postProcess();
 }
 
-template<typename T, typename DESCRIPTOR>
+template<concepts::BaseType T, concepts::LatticeDescriptor DESCRIPTOR>
 void BlockLattice<T,DESCRIPTOR>::defineRho(
   BlockIndicatorF<T,DESCRIPTOR::d>& indicator, AnalyticalF<DESCRIPTOR::d,T,T>& rho)
 {
   if (!indicator.isEmpty()) {
-    T physR[DESCRIPTOR::d] = { };
+    Vector<T, DESCRIPTOR::d> physR;
     T rhoTmp = T();
     this->forSpatialLocations([&](LatticeR<DESCRIPTOR::d> loc) {
       if (indicator(loc)) {
         indicator.getBlockGeometry().getPhysR(physR, loc);
-        rho(&rhoTmp,physR);
+        rho(&rhoTmp,physR.data());
         get(loc).defineRho(rhoTmp);
       }
     });
   }
 }
 
-template<typename T, typename DESCRIPTOR>
+template<concepts::BaseType T, concepts::LatticeDescriptor DESCRIPTOR>
 void BlockLattice<T,DESCRIPTOR>::defineU(
   BlockIndicatorF<T,DESCRIPTOR::d>& indicator, AnalyticalF<DESCRIPTOR::d,T,T>& u)
 {
   if (!indicator.isEmpty()) {
-    T physR[DESCRIPTOR::d] = { };
+    Vector<T, DESCRIPTOR::d> physR;
     T uTmp[DESCRIPTOR::d] = { };
     this->forSpatialLocations([&](LatticeR<DESCRIPTOR::d> loc) {
       if (indicator(loc)) {
         indicator.getBlockGeometry().getPhysR(physR, loc);
-        u(uTmp,physR);
+        u(uTmp,physR.data());
         get(loc).defineU(uTmp);
       }
     });
   }
 }
 
-template<typename T, typename DESCRIPTOR>
+template<concepts::BaseType T, concepts::LatticeDescriptor DESCRIPTOR>
 void BlockLattice<T,DESCRIPTOR>::defineRhoU(
   BlockIndicatorF<T,DESCRIPTOR::d>& indicator,
   AnalyticalF<DESCRIPTOR::d,T,T>& rho, AnalyticalF<DESCRIPTOR::d,T,T>& u)
 {
   if (!indicator.isEmpty()) {
-    T physR[DESCRIPTOR::d] = { };
+    Vector<T, DESCRIPTOR::d> physR;
     T uTmp[DESCRIPTOR::d] = { };
     T rhoTmp = T();
     this->forSpatialLocations([&](LatticeR<DESCRIPTOR::d> loc) {
       if (indicator(loc)) {
         indicator.getBlockGeometry().getPhysR(physR, loc);
-        rho(&rhoTmp,physR);
-        u(uTmp,physR);
+
+        rho(&rhoTmp,physR.data());
+        u(uTmp,physR.data());
         get(loc).defineRhoU(rhoTmp,uTmp);
       }
     });
   }
 }
 
-template<typename T, typename DESCRIPTOR>
+template<concepts::BaseType T, concepts::LatticeDescriptor DESCRIPTOR>
 void BlockLattice<T,DESCRIPTOR>::definePopulations(
   BlockIndicatorF<T,DESCRIPTOR::d>& indicator, AnalyticalF<DESCRIPTOR::d,T,T>& popF)
 {
   if (!indicator.isEmpty()) {
-    T physR[DESCRIPTOR::d] = { };
     T pop[DESCRIPTOR::q];
     this->forSpatialLocations([&](LatticeR<DESCRIPTOR::d> loc) {
       if (indicator(loc)) {
-        indicator.getBlockGeometry().getPhysR(physR, loc);
-        popF(pop,physR);
+        auto physR = indicator.getBlockGeometry().getPhysR(loc);
+        popF(pop,physR.data());
         get(loc).definePopulations(pop);
       }
     });
   }
 }
 
-template<typename T, typename DESCRIPTOR>
+template<concepts::BaseType T, concepts::LatticeDescriptor DESCRIPTOR>
 void BlockLattice<T,DESCRIPTOR>::definePopulations(BlockIndicatorF<T,DESCRIPTOR::d>& indicator,
                                                    BlockF<T,DESCRIPTOR::d>& popF)
 {
@@ -146,7 +152,7 @@ void BlockLattice<T,DESCRIPTOR>::definePopulations(BlockIndicatorF<T,DESCRIPTOR:
   }
 }
 
-template<typename T, typename DESCRIPTOR>
+template<concepts::BaseType T, concepts::LatticeDescriptor DESCRIPTOR>
 template<typename FIELD>
 void BlockLattice<T,DESCRIPTOR>::defineField(
   BlockIndicatorF<T,DESCRIPTOR::d>& indicator, AnalyticalF<DESCRIPTOR::d,T,T>& field)
@@ -154,18 +160,20 @@ void BlockLattice<T,DESCRIPTOR>::defineField(
   if (!indicator.isEmpty()) {
     // Don't use FieldD here as long as AnalyticalF is fixed to T
     std::array<T,DESCRIPTOR::template size<FIELD>()> fieldTmp;
-    T physR[DESCRIPTOR::d] = { };
+    Vector<T, DESCRIPTOR::d> physR;
+    getField<FIELD> ();
     this->forSpatialLocationsParallel([&](LatticeR<DESCRIPTOR::d> loc) {
       if (indicator(loc)) {
         indicator.getBlockGeometry().getPhysR(physR, loc);
-        field(fieldTmp.data(), physR);
+
+        field(fieldTmp.data(), physR.data());
         get(loc).template setField<FIELD>(fieldTmp.data());
       }
     });
   }
 }
 
-template<typename T, typename DESCRIPTOR>
+template<concepts::BaseType T, concepts::LatticeDescriptor DESCRIPTOR>
 template<typename FIELD>
 void BlockLattice<T,DESCRIPTOR>::defineField(BlockIndicatorF<T,DESCRIPTOR::d>& indicator,
                                              BlockF<T,DESCRIPTOR::d>& field)
@@ -181,7 +189,7 @@ void BlockLattice<T,DESCRIPTOR>::defineField(BlockIndicatorF<T,DESCRIPTOR::d>& i
   }
 }
 
-template<typename T, typename DESCRIPTOR>
+template<concepts::BaseType T, concepts::LatticeDescriptor DESCRIPTOR>
 template<typename FIELD>
 void BlockLattice<T,DESCRIPTOR>::defineField(BlockGeometry<T,DESCRIPTOR::d>& blockGeometry,
                                              IndicatorF<T,DESCRIPTOR::d>& indicatorF,
@@ -191,27 +199,27 @@ void BlockLattice<T,DESCRIPTOR>::defineField(BlockGeometry<T,DESCRIPTOR::d>& blo
   defineField<FIELD>(indicator, field);
 }
 
-template<typename T, typename DESCRIPTOR>
+template<concepts::BaseType T, concepts::LatticeDescriptor DESCRIPTOR>
 void BlockLattice<T,DESCRIPTOR>::iniEquilibrium(BlockIndicatorF<T,DESCRIPTOR::d>& indicator,
                                                 AnalyticalF<DESCRIPTOR::d,T,T>& rho,
                                                 AnalyticalF<DESCRIPTOR::d,T,T>& u)
 {
   if (!indicator.isEmpty()) {
-    T physR[DESCRIPTOR::d] = { };
     T uTmp[DESCRIPTOR::d] = { };
     T rhoTmp = T();
+    Vector<T,DESCRIPTOR::d> physR;
     this->forSpatialLocations([&](LatticeR<DESCRIPTOR::d> loc) {
       if (indicator(loc)) {
         indicator.getBlockGeometry().getPhysR(physR, loc);
-        u(uTmp, physR);
-        rho(&rhoTmp, physR);
+        u(uTmp, physR.data());
+        rho(&rhoTmp, physR.data());
         get(loc).iniEquilibrium(rhoTmp, uTmp);
       }
     });
   }
 }
 
-template<typename T, typename DESCRIPTOR>
+template<concepts::BaseType T, concepts::LatticeDescriptor DESCRIPTOR>
 void BlockLattice<T,DESCRIPTOR>::iniEquilibrium(BlockIndicatorF<T,DESCRIPTOR::d>& indicator,
                                                 AnalyticalF<DESCRIPTOR::d,T,T>& rho,
                                                 BlockF<T,DESCRIPTOR::d>& u)
@@ -231,7 +239,7 @@ void BlockLattice<T,DESCRIPTOR>::iniEquilibrium(BlockIndicatorF<T,DESCRIPTOR::d>
   }
 }
 
-template<typename T, typename DESCRIPTOR>
+template<concepts::BaseType T, concepts::LatticeDescriptor DESCRIPTOR>
 void BlockLattice<T,DESCRIPTOR>::iniRegularized(BlockIndicatorF<T,DESCRIPTOR::d>& indicator,
                                                 AnalyticalF<DESCRIPTOR::d,T,T>& rho,
                                                 AnalyticalF<DESCRIPTOR::d,T,T>& u,
@@ -254,20 +262,17 @@ void BlockLattice<T,DESCRIPTOR>::iniRegularized(BlockIndicatorF<T,DESCRIPTOR::d>
   }
 }
 
-template<typename T, typename DESCRIPTOR>
-void BlockLattice<T,DESCRIPTOR>::defineDynamics(
-  BlockIndicatorF<T,DESCRIPTOR::d>& indicator, Dynamics<T,DESCRIPTOR>* dynamics)
+template<concepts::BaseType T, concepts::LatticeDescriptor DESCRIPTOR>
+template<typename DYNAMICS>
+void BlockLattice<T,DESCRIPTOR>::defineDynamics()
 {
-  if (!indicator.isEmpty()) {
-    this->forSpatialLocations([&](LatticeR<DESCRIPTOR::d> loc) {
-      if (indicator(loc)) {
-        defineDynamics(loc, dynamics);
-      }
-    });
-  }
+  this->forSpatialLocations([&](LatticeR<DESCRIPTOR::d> loc) {
+    setDynamics(this->getCellId(loc),
+                DynamicsPromise(meta::id<DYNAMICS>{}));
+  });
 }
 
-template<typename T, typename DESCRIPTOR>
+template<concepts::BaseType T, concepts::LatticeDescriptor DESCRIPTOR>
 template<typename DYNAMICS>
 void BlockLattice<T,DESCRIPTOR>::defineDynamics(BlockIndicatorF<T,DESCRIPTOR::d>& indicator)
 {
@@ -281,12 +286,18 @@ void BlockLattice<T,DESCRIPTOR>::defineDynamics(BlockIndicatorF<T,DESCRIPTOR::d>
   }
 }
 
-template<typename T, typename DESCRIPTOR>
-void BlockLattice<T,DESCRIPTOR>::defineDynamics(Dynamics<T,DESCRIPTOR>* dynamics)
+template<concepts::BaseType T, concepts::LatticeDescriptor DESCRIPTOR>
+void BlockLattice<T,DESCRIPTOR>::defineDynamics(BlockIndicatorF<T,DESCRIPTOR::d>& indicator,
+                                                DynamicsPromise<T,DESCRIPTOR>&& promise)
 {
-  this->forCellIndices([&](CellID iCell) {
-    setDynamics(iCell, dynamics);
-  });
+  if (!indicator.isEmpty()) {
+    this->forSpatialLocations([&](LatticeR<DESCRIPTOR::d> loc) {
+      if (indicator(loc)) {
+        defineDynamics(loc,
+                       std::forward<DynamicsPromise<T,DESCRIPTOR>&&>(promise));
+      }
+    });
+  }
 }
 
 template<typename T, typename DESCRIPTOR, Platform PLATFORM>
@@ -352,7 +363,7 @@ struct StripeOffDensityOffsetO {
   }
 };
 
-template<typename T, typename DESCRIPTOR>
+template<concepts::BaseType T, concepts::LatticeDescriptor DESCRIPTOR>
 void BlockLattice<T,DESCRIPTOR>::stripeOffDensityOffset(T offset)
 {
   if (!hasPostProcessor(typeid(StripeOffDensityOffsetO),
@@ -366,46 +377,13 @@ void BlockLattice<T,DESCRIPTOR>::stripeOffDensityOffset(T offset)
   postProcess(typeid(StripeOffDensityOffsetO));
 }
 
-template<typename T, typename DESCRIPTOR>
-void BlockLattice<T,DESCRIPTOR>::addLatticeCoupling(LatticeCouplingGenerator<T,DESCRIPTOR> const& lcGen,
-                                                    std::vector<BlockStructureD<DESCRIPTOR::d>*> partners)
-{
-  addPostProcessor<stage::Coupling>(lcGen.generate(partners));
-}
-
-template<typename T, typename DESCRIPTOR>
-void BlockLattice<T,DESCRIPTOR>::addLatticeCoupling(BlockIndicatorF<T,DESCRIPTOR::d>& indicator,
-                                                    LatticeCouplingGenerator<T,DESCRIPTOR> const& lcGen,
-                                                    std::vector<BlockStructureD<DESCRIPTOR::d>*> partners)
-{
-  if (!indicator.isEmpty()) {
-    this->forSpatialLocations([&](LatticeR<DESCRIPTOR::d> loc) {
-      if (this->getNeighborhoodRadius(loc) >= 1) {
-        if (indicator(loc)) {
-          std::unique_ptr<LatticeCouplingGenerator<T,DESCRIPTOR>> extractedLcGen{ lcGen.clone() };
-          if (extractedLcGen->extract(0, 0)) {
-            extractedLcGen->shift(loc);
-            addLatticeCoupling(*extractedLcGen, partners);
-          }
-        }
-      }
-    });
-  }
-}
-
-template<typename T, typename DESCRIPTOR>
-void BlockLattice<T,DESCRIPTOR>::executeCoupling()
-{
-  postProcess<stage::Coupling>();
-}
-
-template<typename T, typename DESCRIPTOR>
+template<concepts::BaseType T, concepts::LatticeDescriptor DESCRIPTOR>
 LatticeStatistics<T>& BlockLattice<T,DESCRIPTOR>::getStatistics()
 {
   return *_statistics;
 }
 
-template<typename T, typename DESCRIPTOR>
+template<concepts::BaseType T, concepts::LatticeDescriptor DESCRIPTOR>
 const LatticeStatistics<T>& BlockLattice<T,DESCRIPTOR>::getStatistics() const
 {
   return *_statistics;
@@ -413,7 +391,8 @@ const LatticeStatistics<T>& BlockLattice<T,DESCRIPTOR>::getStatistics() const
 
 
 template<typename T, typename DESCRIPTOR, Platform PLATFORM>
-ConcreteBlockLattice<T,DESCRIPTOR,PLATFORM>::ConcreteBlockLattice(Vector<int,DESCRIPTOR::d> size, int padding)
+ConcreteBlockLattice<T,DESCRIPTOR,PLATFORM>::ConcreteBlockLattice(Vector<int,DESCRIPTOR::d> size,
+                                                                  int padding)
   : BlockLattice<T,DESCRIPTOR>(size, padding, PLATFORM),
     _data(),
     _descriptorFields(),
@@ -431,9 +410,8 @@ ConcreteBlockLattice<T,DESCRIPTOR,PLATFORM>::ConcreteBlockLattice(Vector<int,DES
     _data.template setSerialization<field_type>(true);
   });
 
-  Dynamics<T,DESCRIPTOR>* noDynamics = _dynamicsMap.get(DynamicsPromise(meta::id<NoDynamics<T,DESCRIPTOR>>{}));
   for (CellID iCell=0; iCell < this->getNcells(); ++iCell) {
-    _dynamicsMap.set(iCell, noDynamics);
+    _dynamicsMap.set(iCell, meta::id<NoDynamics<T,DESCRIPTOR>>{});
   }
 }
 
@@ -504,42 +482,85 @@ const auto& ConcreteBlockLattice<T,DESCRIPTOR,PLATFORM>::getField(FIELD) const
 }
 
 template<typename T, typename DESCRIPTOR, Platform PLATFORM>
-void ConcreteBlockLattice<T,DESCRIPTOR,PLATFORM>::addPostProcessor(
-  std::type_index stage, PostProcessor<T,DESCRIPTOR>* postProcessor)
-{
-  auto [postProcessorsOfPriority, _] = _postProcessors[stage].try_emplace(postProcessor->getPriority(), this);
-  std::get<1>(*postProcessorsOfPriority).addLegacy(postProcessor);
-}
-
-template<typename T, typename DESCRIPTOR, Platform PLATFORM>
-void ConcreteBlockLattice<T,DESCRIPTOR,PLATFORM>::addPostProcessor(
-  std::type_index stage, const PostProcessorGenerator<T,DESCRIPTOR>& ppGen)
-{
-  addPostProcessor(stage, ppGen.generate());
-}
-
-template<typename T, typename DESCRIPTOR, Platform PLATFORM>
-void ConcreteBlockLattice<T,DESCRIPTOR,PLATFORM>::addPostProcessor(
-  std::type_index stage, BlockIndicatorF<T,DESCRIPTOR::d>& indicator, const PostProcessorGenerator<T,DESCRIPTOR>& ppGen)
-{
-  if (!indicator.isEmpty()) {
-    this->forCoreSpatialLocations([&](LatticeR<DESCRIPTOR::d> loc) {
-      if (indicator(loc)) {
-        std::unique_ptr<PostProcessorGenerator<T,DESCRIPTOR>> extractedPpGen{ ppGen.clone() };
-        if (extractedPpGen->extract(0, 0)) {
-          extractedPpGen->shift(loc);
-          addPostProcessor(stage, *extractedPpGen);
-        }
-      }
-    });
-  }
-}
-
-template<typename T, typename DESCRIPTOR, Platform PLATFORM>
 void ConcreteBlockLattice<T,DESCRIPTOR,PLATFORM>::postProcess(std::type_index stage)
 {
   for (auto& [_, postProcessorsOfPriority] : _postProcessors[stage]) {
     postProcessorsOfPriority.apply();
+  }
+}
+
+template<typename T, typename DESCRIPTOR, Platform PLATFORM>
+void ConcreteBlockLattice<T,DESCRIPTOR,PLATFORM>::writeDescription(std::ostream& clout) const
+{
+  const auto dynamics = _dynamicsMap.getAll();
+  for (const auto& promise : dynamics) {
+    auto simplifiedName = introspection::getSimplifiedDynamicsName(promise.name());
+    std::istringstream stream(simplifiedName);
+    std::string fragment;
+    std::vector<std::string> fragments;
+    while (std::getline(stream, fragment, '\n')) {
+      if (!fragment.empty()) {
+        fragments.push_back(fragment);
+      }
+    }
+
+    clout << "---Dynamics Details---" << std::endl;
+    clout << " Name:          " << fragments[0] << std::endl;
+    for (unsigned i=1; i < fragments.size(); ++i) {
+    clout << "                " << fragments[i] << std::endl;
+    }
+    clout << " Weight:        " << _dynamicsMap.getWeight(promise) << std::endl;
+    if (auto optimizable = promise.isOptimizable()) {
+    clout << " isOptimizable: " << *optimizable << std::endl;
+    }
+    clout << " isOptimized:   " << promise.hasOptimizedVersion() << std::endl;
+    if (auto count = promise.getArithmeticOperationCount()) {
+    clout << " complexity:    " << *count << std::endl;
+    }
+    clout << "----------------------" << std::endl;
+  }
+
+  for (const auto& [stage, map] : _postProcessors) {
+    clout << "---Stage Details---" << std::endl;
+    clout << " Name: " << stage.name() << std::endl;
+
+    for (const auto& [priority, postProcessorsOfPriority] : map) {
+      clout << std::endl;
+      const auto operators = postProcessorsOfPriority.getAll();
+      for (const auto& promise : operators) {
+        clout << "---Post Processor Details---" << std::endl;
+        clout << " Name:     " << promise.name() << std::endl;
+        clout << " Priority: " << promise.priority() << std::endl;
+        clout << " Scope:    " << getName(promise.scope()) << std::endl;
+        clout << " Weight:   " << postProcessorsOfPriority.getWeight(promise) << std::endl;
+        clout << "---------------------------" << std::endl;
+      }
+    }
+
+    clout << "-------------------" << std::endl;
+  }
+}
+
+template<typename T, typename DESCRIPTOR, Platform PLATFORM>
+void ConcreteBlockLattice<T,DESCRIPTOR,PLATFORM>::writeDynamicsAsCSV(std::ostream& clout) const
+{
+  const auto dynamics = _dynamicsMap.getAll();
+  clout << "name; weight; isOptimizable; isOptimized; complexity" << std::endl;
+  for (const auto& promise : dynamics) {
+    clout << promise.name()
+          << "; " << _dynamicsMap.getWeight(promise);
+    if (auto optimizable = promise.isOptimizable()) {
+    clout << "; " << *optimizable;
+    } else {
+    clout << "; -1";
+    }
+    clout << "; " << promise.hasOptimizedVersion();
+    if (auto count = promise.getArithmeticOperationCount()) {
+    clout << "; " <<* count;
+    } else {
+    clout << "; -1";
+    }
+    clout << std::endl;
   }
 }
 

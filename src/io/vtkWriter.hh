@@ -91,7 +91,6 @@ template<typename T, typename FUNCTOR, vtkType VTKTYPE>
 template<bool vtmAsMaster, typename F>
 void VTKwriter<T,FUNCTOR,VTKTYPE>::write(int iT, std::string nameCollection, F applyFunctors)
 {
-
   std::string fileExtension;
 
   int rank = 0;

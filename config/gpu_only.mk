@@ -14,7 +14,7 @@ CXX             := nvcc
 CC              := nvcc
 
 CXXFLAGS        := -O3
-CXXFLAGS        += -std=c++17 --forward-unknown-to-host-compiler
+CXXFLAGS        += -std=c++20 --forward-unknown-to-host-compiler
 
 PARALLEL_MODE   := NONE
 

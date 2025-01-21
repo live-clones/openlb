@@ -1,6 +1,6 @@
 /*  This file is part of the OpenLB library
  *
- *  Copyright (C) 2010-2015 Thomas Henn, Mathias J. Krause, Jonathan Jeppener-Haltenhoff
+ *  Copyright (C) 2010-2024 Thomas Henn, Mathias J. Krause, Jonathan Jeppener-Haltenhoff, Christoph Gaul
  *  E-mail contact: info@openlb.net
  *  The most recent release of OpenLB can be downloaded at
  *  <http://www.openlb.net/>
@@ -38,6 +38,16 @@
 #include "octree.hh"
 #include "stlReader.h"
 
+#ifdef FEATURE_VTK
+#include <vtkSmartPointer.h>
+#include <vtkUnstructuredGrid.h>
+#include <vtkPoints.h>
+#include <vtkCellArray.h>
+#include <vtkFloatArray.h>
+#include <vtkPointData.h>
+#include <vtkTriangle.h>
+#include <vtkXMLUnstructuredGridWriter.h>
+#endif
 
 // All OpenLB code is contained in this namespace.
 namespace olb {
@@ -706,12 +716,13 @@ bool STLmesh<T>::testRayIntersect(const std::set<unsigned int>& tris, const Vect
   return false;
 }
 
+
 /*
  * STLReader functions
  */
 template<typename T>
 STLreader<T>::STLreader(const std::string fName, T voxelSize, T stlSize,
-                        int method, bool verbose, T overlap, T max)
+                        RayMode method, bool verbose, T overlap, T max)
   : _voxelSize(voxelSize),
     _stlSize(stlSize),
     _overlap(overlap),
@@ -762,16 +773,16 @@ STLreader<T>::STLreader(const std::string fName, T voxelSize, T stlSize,
 
   /// Indicate nodes of the tree. (Inside/Outside)
   switch (method) {
-  case 1:
+  case RayMode::Robust:
     indicate1();
     break;
-  case 3:
+  case RayMode::DoubleRay:
     indicate3();
     break;
-  case 4:
+  case RayMode::FastRayX:
     indicate2_Xray();
     break;
-  case 5:
+  case RayMode::FastRayY:
     indicate2_Yray();
     break;
   default:
@@ -792,7 +803,7 @@ STLreader<T>::STLreader(const std::string fName, T voxelSize, T stlSize,
  */
 template<typename T>
 STLreader<T>::STLreader(const std::vector<std::vector<T>> meshPoints, T voxelSize, T stlSize,
-                        int method, bool verbose, T overlap, T max)
+                        RayMode method, bool verbose, T overlap, T max)
   : _voxelSize(voxelSize),
     _stlSize(stlSize),
     _overlap(overlap),
@@ -856,17 +867,17 @@ STLreader<T>::STLreader(const std::vector<std::vector<T>> meshPoints, T voxelSiz
 
 
   // Indicate nodes of the tree. (Inside/Outside)
-  switch (method) {
-  case 1:
+ switch (method) {
+  case RayMode::Robust:
     indicate1();
     break;
-  case 3:
+  case RayMode::DoubleRay:
     indicate3();
     break;
-  case 4:
+  case RayMode::FastRayX:
     indicate2_Xray();
     break;
-  case 5:
+  case RayMode::FastRayY:
     indicate2_Yray();
     break;
   default:
@@ -1002,7 +1013,6 @@ void STLreader<T>::indicate2()
     pt[0] += _voxelSize;
   }
 }
-
 
 
 /*
@@ -1227,15 +1237,36 @@ template<typename T>
 bool STLreader<T>::operator() (bool output[], const T input[])
 {
   output[0] = false;
-  T coords = _tree->getRadius();
-  Vector<T,3> c(_tree->getCenter());
-  if (c[0] - coords < input[0] && input[0] < c[0] + coords && c[1] - coords < input[1]
-      && input[1] < c[1] + coords && c[2] - coords < input[2] && input[2] < c[2] + coords) {
+  if (isInsideRootTree(input)) {
     std::vector<T> tmp(input, input + 3);
     output[0] = _tree->find(tmp)->getInside();
   }
   return true;
 }
+
+
+template<typename T>
+bool STLreader<T>::isInsideRootTree(const T input[])
+{
+  T coords = _tree->getRadius();
+  Vector<T,3> c(_tree->getCenter());
+  return c[0] - coords < input[0] && input[0] < c[0] + coords && c[1] - coords < input[1]
+      && input[1] < c[1] + coords && c[2] - coords < input[2] && input[2] < c[2] + coords;
+}
+
+
+template<typename T>
+Vector<T,3> STLreader<T>::closestPointInBoundingBox(const Vector<T,3>& input)
+{
+  T coords = _tree->getRadius();
+  Vector<T,3> c(_tree->getCenter());
+  Vector<T,3> closestPoint;
+  for(int i = 0; i < 3; ++i) {
+    closestPoint[i] = util::max(c[i] - coords, util::min(c[i] + coords, input[i]));
+  }
+  return closestPoint;
+}
+
 
 template<typename T>
 bool STLreader<T>::distance(T& distance, const Vector<T,3>& origin,
@@ -1358,20 +1389,41 @@ bool STLreader<T>::distance(T& distance, const Vector<T,3>& origin,
 }
 
 template<typename T>
+template<typename F>
+void STLreader<T>::iterateOverCloseTriangles(const PhysR<T,3>& pt, F func, Octree<T>* leafNode) {
+  // Find the leaf node in the Octree that contains the input point
+  leafNode = _tree->find(pt);
+
+  if (leafNode && !leafNode->getTriangles().empty()) {
+    const std::vector<unsigned int>& triangleIndices = leafNode->getTriangles();
+    for (unsigned int idx : triangleIndices) {
+      const STLtriangle<T>& triangle = _mesh.getTri(idx);
+      func(triangle);
+    }
+  }
+  else {
+    for (const STLtriangle<T>& triangle : _mesh.getTriangles()) {
+      func(triangle);
+    }
+  }
+};
+
+template<typename T>
 Vector<T,3> STLreader<T>::evalNormalOnSurface(const PhysR<T,3>& pt, const Vector<T,3>& fallbackNormal)
 {
   // Check if the position is on the corner of a triangle
   unsigned countTriangles = 0;
   Vector<T,3> normal(T(0));
 
-  // TODO: Calculate angle-weighted psuedonormal (see 10.1109/TVCG.2005.49) in case the point lies on corners
-  // Edges correspond to an unweighted average (as calculated below) anyway
-  for (const STLtriangle<T>& triangle : _mesh.getTriangles()) {
-    if (triangle.isPointInside(pt)) {
-      ++countTriangles;
-      normal+=triangle.getNormal();
-    }
-  }
+  iterateOverCloseTriangles(pt, [&](const STLtriangle<T>& triangle){
+      // TODO: Calculate angle-weighted psuedonormal (see 10.1109/TVCG.2005.49) in case the point lies on corners
+      // Edges correspond to an unweighted average (as calculated below) anyway
+      if (triangle.isPointInside(pt)) {
+        ++countTriangles;
+        normal+=triangle.getNormal();
+      }
+    });
+
   if (countTriangles > 0) {
     return normal / countTriangles;
   }
@@ -1381,30 +1433,31 @@ Vector<T,3> STLreader<T>::evalNormalOnSurface(const PhysR<T,3>& pt, const Vector
 }
 
 template<typename T>
+template<SignMode SIGNMODE>
 Vector<T,3> STLreader<T>::evalSurfaceNormal(const Vector<T,3>& origin)
 {
   Vector<T,3> normal(0.);
   Vector<T,3> closestPointOnSurface(0.);
   const STLtriangle<T>* closestTriangle = nullptr;
   T distance = std::numeric_limits<T>::max();
+  const PhysR<T,3> pt(closestPointInBoundingBox(origin));
 
-  for (const STLtriangle<T>& triangle : _mesh.getTriangles()) {
-    PhysR<T,3> const pointOnTriangle = triangle.closestPtPointTriangle(origin);
-    PhysR<T,3> const currDistance = origin - pointOnTriangle;
-    T currDistanceNorm = norm_squared(currDistance);
-    if (distance > currDistanceNorm) {
-      normal = currDistance;
-      distance = currDistanceNorm;
-      closestPointOnSurface = pointOnTriangle;
-      closestTriangle = &triangle;
-    }
-  }
+  iterateOverCloseTriangles(pt, [&](const STLtriangle<T>& triangle) {
+      PhysR<T,3> const pointOnTriangle = triangle.closestPtPointTriangle(pt);
+      PhysR<T,3> const currDistance = pt - pointOnTriangle;
+      T currDistanceNorm = norm_squared(currDistance);
+      if (distance > currDistanceNorm) {
+        normal = currDistance;
+        distance = currDistanceNorm;
+        closestPointOnSurface = pointOnTriangle;
+        closestTriangle = &triangle;
+      }
+    });
 
   distance = util::sqrt(distance);
   if (!util::nearZero(distance)) {
-    const short signAtInput = evalSignForSignedDistance(origin);
     normal = normal/distance;
-    normal *= signAtInput;
+    normal *= evalSignForSignedDistance<SIGNMODE>(origin, distance);
   }
   else {
     normal = evalNormalOnSurface(closestPointOnSurface, closestTriangle->getNormal());
@@ -1422,8 +1475,29 @@ Vector<T,3> STLreader<T>::evalSurfaceNormal(const Vector<T,3>& origin)
   return normal;
 }
 
+
+template <typename T>
+template <SignMode SIGNMODE>
+short STLreader<T>::evalSignForSignedDistance(
+    const Vector<T,3>& pt, [[maybe_unused]] const T distance)
+{
+  short sign;
+  if constexpr(SIGNMODE == SignMode::EXACT) {
+    if(distance < _voxelSize) {
+      sign = evalSignForSignedDistanceFromWindingNumber(pt);
+    }
+    else {
+      sign = evalSignForSignedDistanceFromCache(pt);
+    }
+  }
+  else {
+    sign = evalSignForSignedDistanceFromCache(pt);
+  }
+  return sign;
+}
+
 template<typename T>
-short STLreader<T>::evalSignForSignedDistance(const Vector<T,3>& pseudonormal, const Vector<T,3>& distance)
+short STLreader<T>::evalSignForSignedDistanceFromPseudonormal(const Vector<T,3>& pseudonormal, const Vector<T,3>& distance)
 {
   const T projection = pseudonormal * distance;
 
@@ -1437,7 +1511,7 @@ short STLreader<T>::evalSignForSignedDistance(const Vector<T,3>& pseudonormal, c
 }
 
 template<typename T>
-short STLreader<T>::evalSignForSignedDistance(const Vector<T,3>& pt)
+short STLreader<T>::evalSignForSignedDistanceFromWindingNumber(const Vector<T,3>& pt)
 {
   T windingNumber{0};
 
@@ -1463,31 +1537,73 @@ short STLreader<T>::evalSignForSignedDistance(const Vector<T,3>& pt)
   return -1;
 }
 
+
 template<typename T>
-T STLreader<T>::signedDistance(const Vector<T,3>& input)
+short STLreader<T>::evalSignForSignedDistanceFromCache(const Vector<T,3>& pt)
 {
-  Vector<T,3> distance;
-  Vector<T,3> closestPointOnSurface;
+  bool isInside;
+  this->operator()(&isInside, pt.data());
+  return (isInside ? -1 : 1);
+}
+
+template <typename T>
+T STLreader<T>::signedDistance(const Vector<T, 3>& input)
+{
+  return signedDistance<SignMode::CACHED>(input);
+}
+
+template <typename T>
+T STLreader<T>::signedDistanceExact(const Vector<T, 3>& input)
+{
+  return signedDistance<SignMode::EXACT>(input);
+}
+
+template <typename T>
+template <SignMode SIGNMODE>
+T STLreader<T>::signedDistance(const Vector<T, 3>& input)
+{
   T distanceNorm = std::numeric_limits<T>::max();
+  T extraDistance{};
 
-  for (const STLtriangle<T>& triangle : _mesh.getTriangles()) {
-    const PhysR<T,3> currPointOnTriangle = triangle.closestPtPointTriangle(input);
-    const Vector<T,3> currDistance = input - currPointOnTriangle;
-    T currDistanceNorm = norm_squared(currDistance);
-    if (distanceNorm > currDistanceNorm) {
-      distanceNorm = currDistanceNorm;
-      distance = currDistance;
-      closestPointOnSurface = currPointOnTriangle;
-    }
+  const auto evalDistance = [&](const Vector<T,3>& pt) {
+    iterateOverCloseTriangles(pt, [&](const STLtriangle<T>& triangle) {
+        const PhysR<T, 3> currPointOnTriangle =
+            triangle.closestPtPointTriangle(pt);
+        const Vector<T, 3> currDistance     = pt - currPointOnTriangle;
+        T                  currDistanceNorm = norm_squared(currDistance);
+        distanceNorm = util::min(distanceNorm, currDistanceNorm);
+      });
+    return util::sqrt(distanceNorm);
+  };
+
+  if(!isInsideRootTree(input.data())) {
+    const PhysR<T,3> ptInsideTree = closestPointInBoundingBox(input);
+    const T distance = evalDistance(ptInsideTree);
+    extraDistance = norm(ptInsideTree - input);
+    return distance + extraDistance;
   }
+  const T distance = evalDistance(input);
 
-  return util::sqrt(distanceNorm) * evalSignForSignedDistance(input);
+  return evalSignForSignedDistance<SIGNMODE>(input, distance) * distance;
 }
 
 template <typename T>
 Vector<T,3> STLreader<T>::surfaceNormal(const Vector<T,3>& pos, const T meshSize)
 {
-  return evalSurfaceNormal(pos);
+  return surfaceNormal<SignMode::CACHED>(pos, meshSize);
+}
+
+template <typename T>
+Vector<T,3> STLreader<T>::surfaceNormalExact(const Vector<T,3>& pos, const T meshSize)
+{
+  return surfaceNormal<SignMode::EXACT>(pos, meshSize);
+}
+
+template <typename T>
+template <SignMode SIGNMODE>
+Vector<T,3> STLreader<T>::surfaceNormal(const Vector<T,3>& pos, const T meshSize)
+{
+  return evalSurfaceNormal<SIGNMODE>(pos);
 }
 
 template<typename T>

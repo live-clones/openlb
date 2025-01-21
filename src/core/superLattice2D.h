@@ -40,13 +40,13 @@
 #include "communication/superStructure.h"
 #include "utilities/functorPtr.h"
 #include "functors/analytical/analyticalF.h"
+#include "geometry/cuboidGeometry.h"
 
 #include "core/olbDebug.h"
 
 // All OpenLB code is contained in this namespace.
 namespace olb {
 
-template<typename T> class CuboidGeometry2D;
 template<typename T, typename DESCRIPTOR> class SuperLattice;
 template<typename T> class LoadBalancer;
 template<typename T, unsigned D> class SuperGeometry;

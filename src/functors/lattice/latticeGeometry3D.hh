@@ -1,7 +1,7 @@
 /*  This file is part of the OpenLB library
  *
  *  Copyright (C) 2012 Lukas Baron, Tim Dornieden, Mathias J. Krause,
- *  Albert Mink
+ *  Albert Mink, Stephan Simonis
  *  E-mail contact: info@openlb.net
  *  The most recent release of OpenLB can be downloaded at
  *  <http://www.openlb.net/>
@@ -41,15 +41,8 @@
 
 namespace olb {
 
-template<typename T,typename DESCRIPTOR>
-SuperLatticeGeometry3D<T,DESCRIPTOR>::SuperLatticeGeometry3D(
-  SuperLattice<T,DESCRIPTOR>& sLattice, SuperGeometry<T,3>& superGeometry,
-  const int material)
-  : SuperLatticeGeometry3D<T,DESCRIPTOR>(superGeometry, material)
-{ }
-
-template<typename T, typename DESCRIPTOR>
-SuperLatticeGeometry3D<T, DESCRIPTOR>::SuperLatticeGeometry3D(
+template<typename T>
+SuperGeometryF3D<T>::SuperGeometryF3D(
   SuperGeometry<T,3>& superGeometry, const int material)
   : SuperF3D<T>(superGeometry, 1), _superGeometry(superGeometry),
     _material(material)
@@ -58,20 +51,14 @@ SuperLatticeGeometry3D<T, DESCRIPTOR>::SuperLatticeGeometry3D(
   const int maxC = superGeometry.getLoadBalancer().size();
   this->_blockF.reserve(maxC);
   for (int iC = 0; iC < maxC; iC++) {
-    this->_blockF.emplace_back(new  BlockLatticeGeometry3D<T,DESCRIPTOR>(
+    this->_blockF.emplace_back(new  BlockLatticeGeometry3D<T>(
                                  this->_superGeometry.getBlockGeometry(iC),
                                  _material) );
   }
 }
 
-template <typename T, typename DESCRIPTOR>
-BlockLatticeGeometry3D<T,DESCRIPTOR>::BlockLatticeGeometry3D
-(BlockLattice<T,DESCRIPTOR>& blockLattice, BlockGeometry<T,3>& blockGeometry, int material)
-  : BlockLatticeGeometry3D<T,DESCRIPTOR>(blockGeometry, material)
-{ }
-
-template<typename T, typename DESCRIPTOR>
-BlockLatticeGeometry3D<T, DESCRIPTOR>::BlockLatticeGeometry3D(
+template<typename T>
+BlockLatticeGeometry3D<T>::BlockLatticeGeometry3D(
     BlockGeometry<T,3>& blockGeometry, int material)
   : BlockF3D<T>(blockGeometry, 1),
     _blockGeometry(blockGeometry),
@@ -80,8 +67,8 @@ BlockLatticeGeometry3D<T, DESCRIPTOR>::BlockLatticeGeometry3D(
   this->getName() = "geometry";
 }
 
-template<typename T, typename DESCRIPTOR>
-bool BlockLatticeGeometry3D<T, DESCRIPTOR>::operator()(T output[], const int input[])
+template<typename T>
+bool BlockLatticeGeometry3D<T>::operator()(T output[], const int input[])
 {
   output[0] = _blockGeometry.getMaterial({input[0], input[1], input[2]});
 

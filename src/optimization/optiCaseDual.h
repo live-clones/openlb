@@ -33,6 +33,7 @@
 
 #include "adjointLbSolver.h"
 #include "controller.h"
+#include "objective.h"
 #include "optiCase.h"
 #include "projection.h"
 #include "serialization.h"
@@ -43,13 +44,22 @@ namespace opti {
 
 enum ControlType {ForceControl, PorosityControl};
 
+template<typename S, unsigned dim>
+class GeometrySerializer;
+
+template <
+  typename T,
+  template<typename,SolverMode> typename SOLVER
+>
+class DistributedObjective;
+
 /** This class implements the evaluation of the goal functional
  * and its derivatives by using adjoint LBM.
  * The adjoint equations are problem-specific and have been computed for force
  * and porosity optimization so far.
  *
  * Requirements: S is the arithmetic data type
- * SOLVER implements the (primal/ dual) simulation, inherits from AdjointLbSolverBase
+ * SOLVER implements the (primal/ dual) simulation, inherits from AdjointLbSolver
  * An xml file is expected to provide additional information on e.g. simulation
  * and optimization parameters
  */
@@ -61,8 +71,8 @@ class OptiCaseDual : public OptiCase<S,C> {
 
 private:
   mutable OstreamManager                           clout {std::cout, "OptiCaseDual"};
-  using descriptor = typename SOLVER<S,SolverMode::Reference>::AdjointLbSolverBase::DESCRIPTOR;
-  static constexpr int dim = descriptor::d;
+  using descriptor = typename SOLVER<S,SolverMode::Reference>::AdjointLbSolver::DESCRIPTOR;
+  static constexpr unsigned dim = descriptor::d;
 
 public:
   bool                                             _verbose {true};
@@ -76,21 +86,21 @@ public:
 
   /// Spatial dimension of controlled field
   int                                              _fieldDim;
-  /// Material number of design domain
-  int                                              _controlMaterial;
-  /// Regulatory term in objective functional (so far unused)
-  S                                                _regAlpha {0};
+  /// Marks, where there are active control variables
+  std::shared_ptr<SuperIndicatorF<S,dim>>          _controlIndicator;
 
   /// Manages the array of control variables
   Controller<S>*                                   _controller {nullptr};
   UnitConverter<S,descriptor>*                     _converter {nullptr};
   std::shared_ptr<SOLVER<S,SolverMode::Primal>>    _primalSolver;
   std::shared_ptr<SOLVER<S,SolverMode::Dual>>      _dualSolver;
-  std::shared_ptr<SOLVER<S,SolverMode::Reference>> _referenceSolver;
+
+  std::shared_ptr<DistributedObjective<S,SOLVER>>  _objective;
 
   bool                                             _computeReference {false};
-  std::shared_ptr<SuperGeometry<S,dim>>            _referenceGeometry;
-  std::shared_ptr<SuperLattice<S,descriptor>>      _referenceLattice;
+  std::shared_ptr<SuperGeometry<S,dim>>            _primalGeometry;
+  // this lattice is not used for simulations, but rather for functor syntax
+  std::shared_ptr<SuperLattice<S,descriptor>>      _refLattice;
 
   std::shared_ptr<GeometrySerializer<S,dim>>       _serializer;
   std::shared_ptr<projection::Base<S>>             _projection;
@@ -123,9 +133,11 @@ public:
   void computeDerivatives(
     const C& control, C& derivatives, unsigned optiStep=0) override;
 
-  // get the control values as they were computed in the reference solution
-  // only ForceControl & without projection is implemented so far
-  C getReferenceControl() const;
+
+  void setObjective(std::shared_ptr<DistributedObjective<S,SOLVER>> objective) {
+    _objective = objective;
+    _objective->initialize(_controller, _serializer);
+  }
 
 private:
   void readFromXML(XMLreader const& xml);

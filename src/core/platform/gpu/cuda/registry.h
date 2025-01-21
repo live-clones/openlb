@@ -62,7 +62,7 @@ template<typename T, typename DESCRIPTOR>
 class FieldTypeRegistry<T,DESCRIPTOR,Platform::GPU_CUDA> {
 private:
   /// Host-side field type index
-  utilities::TypeIndexedMap<AnyFieldType<T,DESCRIPTOR,Platform::GPU_CUDA>*,FieldTypeRegistry> _index;
+  utilities::TypeIndexedMap<AnyFieldTypeD<T,DESCRIPTOR,Platform::GPU_CUDA>*,FieldTypeRegistry> _index;
 
   struct Data;
   std::unique_ptr<Data> _data;
@@ -79,12 +79,16 @@ public:
   }
 
   template <typename FIELD_TYPE>
-  AnyFieldType<T,DESCRIPTOR,Platform::GPU_CUDA>* get() {
+  const AnyFieldTypeD<T,DESCRIPTOR,Platform::GPU_CUDA>* get() const {
+    return _index.template get<FIELD_TYPE>();
+  }
+  template <typename FIELD_TYPE>
+  AnyFieldTypeD<T,DESCRIPTOR,Platform::GPU_CUDA>* get() {
     return _index.template get<FIELD_TYPE>();
   }
 
   template <typename FIELD_TYPE>
-  void track(AnyFieldType<T,DESCRIPTOR,Platform::GPU_CUDA>* fieldType);
+  void track(AnyFieldTypeD<T,DESCRIPTOR,Platform::GPU_CUDA>* fieldType);
 
   void*** deviceData();
 

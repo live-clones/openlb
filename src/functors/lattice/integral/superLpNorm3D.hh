@@ -87,10 +87,10 @@ template <typename T, typename W, int P>
 bool SuperLpNorm3D<T,W,P>::operator() (W output[], const int input[])
 {
   _f->getSuperStructure().communicate();
-  CuboidGeometry3D<T>& cGeometry = _f->getSuperStructure().getCuboidGeometry();
+  auto& cGeometry = _f->getSuperStructure().getCuboidGeometry();
   LoadBalancer<T>&     load      = _f->getSuperStructure().getLoadBalancer();
 
-  output[0] = W(0);
+  W sum[2] = {0,0};
   W outputTmp[_f->getTargetDim()];
   int inputTmp[_f->getSourceDim()];
 
@@ -110,13 +110,14 @@ bool SuperLpNorm3D<T,W,P>::operator() (W output[], const int input[])
           if (_indicatorF(inputTmp)) {
             _f(outputTmp, inputTmp);
             for (int iDim = 0; iDim < _f->getTargetDim(); ++iDim) {
-              output[0] = LpNormImpl<T,W,P>()(output[0], outputTmp[iDim], weight);
+              LpNormImpl<T,W,P>()(sum, outputTmp[iDim], weight);
             }
           }
         }
       }
     }
   }
+  output[0] = sum[0];
 
 #ifdef PARALLEL_MODE_MPI
   if (P == 0) {

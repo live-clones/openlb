@@ -92,10 +92,30 @@ struct ShanChen94 {
 };
 
 struct CarnahanStarling {
-  struct G : public descriptors::FIELD_BASE<1> { };
-  struct A : public descriptors::FIELD_BASE<1> { };
-  struct B : public descriptors::FIELD_BASE<1> { };
-  struct T : public descriptors::FIELD_BASE<1> { };
+  struct G : public descriptors::FIELD_BASE<1> {
+    template <typename T, typename DESCRIPTOR,typename FIELD>
+    static constexpr auto isValid(FieldD<T,DESCRIPTOR,FIELD> value) {
+      return value != 0;
+    }
+  };
+  struct A : public descriptors::FIELD_BASE<1> {
+    template <typename T, typename DESCRIPTOR,typename FIELD>
+    static constexpr auto isValid(FieldD<T,DESCRIPTOR,FIELD> value) {
+      return value > 0;
+    }
+  };
+  struct B : public descriptors::FIELD_BASE<1> {
+    template <typename T, typename DESCRIPTOR,typename FIELD>
+    static constexpr auto isValid(FieldD<T,DESCRIPTOR,FIELD> value) {
+      return value > 0;
+    }
+   };
+  struct T : public descriptors::FIELD_BASE<1> {
+    template <typename T, typename DESCRIPTOR,typename FIELD>
+    static constexpr auto isValid(FieldD<T,DESCRIPTOR,FIELD> value) {
+      return value > 0;
+    }
+   };
 
   using parameters = meta::list<G,A,B,T>;
 
@@ -210,6 +230,7 @@ struct MCPRpseudoPotential {
 
 }
 
+#ifndef USING_LEGACY_CODEGEN
 
 // established -- original for both single- and multicomponent flow
 
@@ -312,6 +333,8 @@ public:
   Normal(T sigma=1., T mu=1.);
   bool operator() (T psi[], const S rho[]);
 };
+
+#endif // not USING_LEGACY_CODEGEN
 
 } // end namespace olb
 

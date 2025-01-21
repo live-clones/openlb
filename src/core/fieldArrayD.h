@@ -28,7 +28,7 @@
 #include "vector.h"
 #include "columnVector.h"
 #include "serializer.h"
-#include "dynamics/descriptorBase.h"
+#include "descriptor/base.h"
 
 #include "platform/platform.h"
 
@@ -38,12 +38,9 @@
 namespace olb {
 
 
-/// Vector storing a single field instance
-template<typename T, typename DESCRIPTOR, typename FIELD>
-using FieldD = Vector<
-  typename FIELD::template value_type<T>,
-  DESCRIPTOR::template size<FIELD>()
->;
+template<typename T, typename DESCRIPTOR, Platform PLATFORM, typename FIELD>
+class FieldArrayD;
+
 
 /// Platform-agnostic interface to concrete host-side field arrays
 template<typename T, typename DESCRIPTOR, typename FIELD>
@@ -55,6 +52,24 @@ private:
 public:
   class const_ptr;
   class ptr;
+
+  /// Returns Platform of concrete FieldArrayD
+  virtual Platform getPlatform() const = 0;
+  /// Cast to concrete FieldArrayD<PLATFORM>
+  template <Platform PLATFORM>
+  FieldArrayD<T,DESCRIPTOR,PLATFORM,FIELD>& asConcrete() {
+    if (auto* ptr = dynamic_cast<FieldArrayD<T,DESCRIPTOR,PLATFORM,FIELD>*>(this);
+        ptr != nullptr) {
+      return *ptr;
+    } else {
+      throw std::invalid_argument("FieldArrayD is not of PLATFORM");
+    }
+  }
+
+  /// Sets processing context (Platform dependent)
+  virtual void setProcessingContext(ProcessingContext context) = 0;
+  /// Resize to size newCount
+  virtual void resize(std::size_t newCount) = 0;
 
   const auto& operator[](unsigned iDim) const
   {
@@ -94,10 +109,6 @@ public:
   {
     return ptr(*this, i);
   }
-
-  virtual void resize(std::size_t newCount) = 0;
-
-  virtual void setProcessingContext(ProcessingContext context) = 0;
 
 };
 
@@ -242,6 +253,11 @@ public:
     return static_cast<AbstractFieldArrayD<T,DESCRIPTOR,FIELD>&>(*this);
   }
 
+  Platform getPlatform() const override
+  {
+    return PLATFORM;
+  }
+
   void setProcessingContext(ProcessingContext context) override
   {
     for (unsigned iDim=0; iDim < DESCRIPTOR::template size<FIELD>(); ++iDim) {
@@ -251,10 +267,10 @@ public:
 
   void resize(std::size_t newCount) override {
     const std::size_t oldCount = this->_count;
-    static_cast<ColumnVector<
-      column_type,
-      DESCRIPTOR::template size<FIELD>()
-    >*>(this)->resize(newCount);
+    for (unsigned iDim=0; iDim < DESCRIPTOR::template size<FIELD>(); ++iDim) {
+      operator[](iDim).resize(newCount);
+    }
+    this->_count = newCount;
     if (oldCount < newCount) {
       const auto initial = FIELD::template getInitialValue<T,DESCRIPTOR>();
       for (std::size_t i=oldCount; i < newCount; ++i) {
@@ -289,14 +305,38 @@ public:
 /// Curried FieldArrayD template for use in callUsingConcretePlatform
 template <typename T, typename DESCRIPTOR, typename FIELD>
 struct ConcretizableFieldArrayD {
+  using value_t = T;
 
-using base_t = ColumnVectorBase;
+  using base_t = ColumnVectorBase;
 
-template <Platform PLATFORM>
-using type = FieldArrayD<T,DESCRIPTOR,PLATFORM,FIELD>;
+  template <Platform PLATFORM>
+  using type = FieldArrayD<T,DESCRIPTOR,PLATFORM,FIELD>;
 
 };
 
+template<typename T> class LoadBalancer;
+
+/// Constructs FieldArrayD accessible on all locally used platforms
+/**
+ * For data that is shared between blocks, e.g. reference porosity fields
+ **/
+template <typename T, typename DESCRIPTOR, typename FIELD>
+std::unique_ptr<AbstractFieldArrayD<T,DESCRIPTOR,FIELD>> makeSharedAbstractFieldArrayD(
+  LoadBalancer<T>& loadBalancer, std::size_t count=1)
+{
+  #if defined(PLATFORM_GPU_CUDA)
+  if (loadBalancer.isLocal(Platform::GPU_CUDA)) {
+    return std::unique_ptr<AbstractFieldArrayD<T,DESCRIPTOR,FIELD>>(
+      new FieldArrayD<T,DESCRIPTOR,Platform::GPU_CUDA,FIELD>(count));
+  } else {
+    return std::unique_ptr<AbstractFieldArrayD<T,DESCRIPTOR,FIELD>>(
+      new FieldArrayD<T,DESCRIPTOR,Platform::CPU_SISD,FIELD>(count));
+  }
+  #else
+  return std::unique_ptr<AbstractFieldArrayD<T,DESCRIPTOR,FIELD>>(
+    new FieldArrayD<T,DESCRIPTOR,Platform::CPU_SISD,FIELD>(count));
+  #endif
+}
 
 template <typename T, typename DESCRIPTOR, Platform PLATFORM, typename FIELD>
 class ConcreteCommunicatable<FieldArrayD<T,DESCRIPTOR,PLATFORM,FIELD>> final : public Communicatable {
@@ -341,7 +381,7 @@ public:
   }
 };
 
-/// Storage for a fixed set of static FIELDS and arbitrary custom fields
+/// Storage for a fixed set of FIELDS
 /**
  * Actual field data is stored by individual FieldArrayD instances
  *

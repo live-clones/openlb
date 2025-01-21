@@ -21,7 +21,7 @@ CC              := gcc
 # architecture / SIMD flags. Alternatively, compilation at the start of
 # the HPC jobs is a common option.
 CXXFLAGS        := -O3 -Wall -march=native -mtune=native
-CXXFLAGS        += -std=c++17
+CXXFLAGS        += -std=c++20
 
 # HYBRID mode is also possible but more complex to run correctly
 PARALLEL_MODE   := MPI

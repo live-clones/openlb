@@ -24,7 +24,7 @@ CXX             := mpic++
 CC              := gcc
 
 CXXFLAGS        := -O3 -Wall -march=native -mtune=native
-CXXFLAGS        += -std=c++17
+CXXFLAGS        += -std=c++20
 CXXFLAGS        += -fopenmp
 
 PARALLEL_MODE   := HYBRID
@@ -33,7 +33,7 @@ PLATFORMS       := CPU_SISD CPU_SIMD GPU_CUDA
 
 # Compiler to use for CUDA-enabled files
 CUDA_CXX        := nvcc
-CUDA_CXXFLAGS   := -O3 -std=c++17
+CUDA_CXXFLAGS   := -O3 -std=c++20
 # Adjust to enable resolution of libcuda, libcudart, libcudadevrt
 CUDA_LDFLAGS    := -L/run/opengl-driver/lib
 CUDA_LDFLAGS    += -fopenmp

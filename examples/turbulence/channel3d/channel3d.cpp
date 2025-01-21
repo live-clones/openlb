@@ -1,7 +1,8 @@
-/*  Lattice Boltzmann sample, written in C++, using the OpenLB
- *  library
+/*  Lattice Boltzmann sample, written in C++, using the OpenLB library
  *
- *  Copyright (C) 2020 Jonathan Jeppener-Haltenhoff, Marc Haußmann, Mathias J. Krause
+ *  Copyright (C) 2024 Fedor Bukreev, Adrian Kummerlaender,
+ *                     Jonathan Jeppener-Haltenhoff, Marc Haußmann,
+ *                     Mathias J. Krause
  *  E-mail contact: info@openlb.net
  *  The most recent release of OpenLB can be downloaded at
  *  <http://www.openlb.net/>
@@ -24,15 +25,12 @@
 
 /* channel3d.cpp:
  * This example examines a wall-bounded flow at high Reynolds numbers.
- * The dynamics follow the BGK collision operator and Smagorinsky-Lilly turbulence model.
+ * The dynamics follow the RLB collision operator of 3rd order and Smagorinsky-Lilly turbulence model.
  * The near wall region is modelled by a wall function.
  *
- * The example shows the usage of turbulent wall models.
- *
- * The results are published in
- * Haußmann, M. et al. 2019: Large-eddy simulation coupled with wall models for turbulent
- * channel flows at high Reynolds numbers with a lattice Boltzmann method — Application
- * to Coriolis mass flowmeter. In: Computers & Mathematics with Applications. 78 (10). 3285-3302
+ * The example shows the usage of turbulent wall model with different parameters.
+ * All WM paramertes are integrated into HLBM interface.
+ * As showcase for stability improvement HRR collision is possible.
  */
 
 #include "olb3D.h"
@@ -43,37 +41,49 @@ using namespace olb::descriptors;
 using namespace olb::util;
 
 using T = FLOATING_POINT_TYPE;
-typedef WallFunctionForcedD3Q19Descriptor DESCRIPTOR;
+using DESCRIPTOR = D3Q19<FORCE,STRAINRATE>;
 
-// Mathmatical constants
-const T pi = util::acos(-1);
+#define HRR
 
 // Parameters for the simulation setup
-const int N = 50;
+const int N = 40;
 const T physRefL = 1.0;     // half channel height in meters
-const T lx = 2. * pi * physRefL;  // streamwise length in meters
+const T lx = 2. * std::numbers::pi_v<T> * physRefL;  // streamwise length in meters
+const T ly = 2. * std::numbers::pi_v<T> * physRefL/10.;  // spanwise length in meters
 const T lz = 2. * physRefL;       // wall-normal length in meters
+#ifdef HRR
+const T hybridConst = 0.99;   // very strong influence of numerical diffusion. 0.99 meand 1% FDM strain rate tensor, which is already enough!
+#endif
 
 // Choose friction reynolds number ReTau
 #define Case_ReTau_1000
 //#define Case_ReTau_2000
 
-// Wallfunction parameters
-const T latticeWallDistance = 0.5;  // lattice distance to boundary
-const int rhoMethod = 2;    // method for density reconstruction
-// 0: Zou-He
-// 1: extrapolation
-// 2: constant
-const int fneqMethod = 3;   // method for fneq reconstruction
-// 0: regularized NEBB (Latt)
-// 1: extrapolation NEQ (Guo Zhaoli)
-// 2: regularized second order finite Differnce
-// 3: equilibrium scheme
-const int wallProfile = 0;    // wallfunction profile
-// 0: Musker profile
-// 1: power law profile
-
-// The current wall function parameters are appropriate for y+ > 15. For y+ < 15 other more precise but more unstable options can be chosen.
+/// Wallfunction parameters
+//  Used method for density reconstruction
+//  0: use local density
+//  1: extrapolation (Guo)
+//  2: constant (rho = 1.)
+const int rhoMethod = 0;
+//  Used method for non-equilibrium population reconstruction
+//  0: extrapolation NEQ (Guo Zhaoli)
+//  1: first or second order finite differnce (Malaspinas)
+//  2: equilibrium scheme (no fNeq)
+const int fNeqMethod = 1;
+//  Used wall profile
+//  0: power law profile
+//  1: Spalding profile
+const int wallFunctionProfile = 1;
+// check if descriptor with body force is used
+const bool bodyForce = true;
+// interpolate sampling velocity along given normal between lattice voxels
+const bool interpolateSampleVelocity = true;
+// use van Driest damping function for turbulent viscosity in boundary cell
+const bool useVanDriest = true;
+//  distance from cell to real wall in lattice units if no geometry indicator is given as input
+const T latticeWallDistance = 0.5;
+//  distance from cell to velocity sampling point in lattice units
+const T samplingCellDistance = 3.5;
 
 // Reynolds number based on the friction velocity
 #if defined (Case_ReTau_1000)
@@ -91,20 +101,20 @@ T charPhysNu = 2.3/100000.;
 
 // number of forcing updates over simulation time
 #if defined (Case_ReTau_1000)
-T fluxUpdates = 2000;
+T fluxUpdates = 4000;
 #elif defined (Case_ReTau_2000)
 T fluxUpdates = 4000;
 #endif
 
 // physical simulated length adapted for lattice distance to boundary in meters
-const T adaptedPhysSimulatedLength = 2 * physRefL - 2 * ((2. / T(N + 2 * latticeWallDistance)) * latticeWallDistance);
+const T adaptedPhysSimulatedLength = 2 * physRefL / ( 1. - 2./N*(1.-latticeWallDistance) );
 // Characteristic physical mean bulk velocity from Dean correlations in meters - Malaspinas and Sagaut (2014)
 const T charPhysU = ( util::pow((8.0/0.073), (4.0/7.0)) * util::pow((T)ReTau, (8.0/7.0)) ) * charPhysNu / (2. * physRefL);
 // Time of the simulation in seconds
 const T charPhysT = physRefL / (ReTau * charPhysNu / physRefL);
 
-const T physConvergeTime = 120. * charPhysT;  // time until until statistics sampling in seconds
-const T physStatisticsTime = 40. * charPhysT ;  // statistics sampling time in seconds
+const T physConvergeTime = 40. * charPhysT;  // time until until statistics sampling in seconds
+const T physStatisticsTime = 150. * charPhysT ;  // statistics sampling time in seconds
 const T maxPhysT = physConvergeTime + physStatisticsTime; // max. simulation time in seconds
 const T statisticsSave = 1./25.;    // time between statistics samples in seconds
 
@@ -116,22 +126,6 @@ std::default_random_engine generator(seed);
 #else
 std::default_random_engine generator(0x1337533DAAAAAAAA);
 #endif
-
-// Compute mean lattice velocity from musker wallfunction
-T computeLatticeVelocity()
-{
-  T Ma_max = 0.1;
-  T c_s = 1/util::sqrt(3.0);
-  T latticeUMax = Ma_max * c_s;
-  Musker<T,T> musker_tmp(charPhysNu, physRefL, 1.);
-  T charPhysU_tau = ReTau * charPhysNu / physRefL;
-  T tau_w[1];
-  tau_w[0] = util::pow(charPhysU_tau,2.);
-  T charPhysUMax[1];
-  musker_tmp(charPhysUMax,tau_w);
-  T latticeU = charPhysU * latticeUMax / charPhysUMax[0];
-  return latticeU;
-}
 
 template <typename T, typename S>
 class Channel3D : public AnalyticalF3D<T,S> {
@@ -149,9 +143,7 @@ public:
   Channel3D(UnitConverter<T,DESCRIPTOR> const& converter, T frac) : AnalyticalF3D<T,S>(3)
   {
     turbulenceIntensity = 0.05;
-    distanceToWall = -converter.getPhysDeltaX()/2.;
     maxVelocity = converter.getLatticeVelocity(converter.getCharPhysVelocity()*(8./7.)); // Centerline Velocity
-    obst_z = physRefL + distanceToWall;
     obst_r = physRefL;
     a = -1.;
     b = 1.;
@@ -164,42 +156,43 @@ public:
     T nRandom2 = distribution(generator);
     T nRandom3 = distribution(generator);
 
-    T u_calc = maxVelocity*util::pow(((obst_r-util::abs(input[2] - obst_z))/obst_r), 1./7.);
+    if( (util::abs(input[2] - obst_r)) < obst_r ){
+
+    T u_calc = maxVelocity*util::pow(((obst_r-util::abs(input[2] - obst_r))/obst_r), 1./7.);
 
     output[0] = turbulenceIntensity*nRandom1*maxVelocity + u_calc;
     output[1] = turbulenceIntensity*nRandom2*maxVelocity;
     output[2] = turbulenceIntensity*nRandom3*maxVelocity;
-
+    }
     return true;
   };
 };
 
 template <typename T, typename S>
 class TrackedForcing3D : public AnalyticalF3D<T,S> {
-
 protected:
-  T um;
-  T utau;
-  T h2;
-  T aveVelocity;
+  const T _um;
+  const T _utau;
+  const T _h2;
+  T _aveVelocity;
 
 public:
-  TrackedForcing3D(UnitConverter<T,DESCRIPTOR> const& converter, int ReTau) : AnalyticalF3D<T, S>(3)
-  {
-    um = converter.getCharPhysVelocity();
-    utau = ReTau * converter.getPhysViscosity()/(converter.getCharPhysLength()/2.);
-    h2 = converter.getCharPhysLength()/2.;
-    aveVelocity = um;
-  };
+  TrackedForcing3D(UnitConverter<T,DESCRIPTOR> const& converter, int ReTau)
+    : AnalyticalF3D<T, S>(3)
+    , _um{converter.getCharPhysVelocity()}
+    , _utau{ReTau * converter.getPhysViscosity()/physRefL}
+    , _h2{physRefL}
+    , _aveVelocity{_um}
+  { };
 
   void updateAveVelocity(T newVel)
   {
-    aveVelocity = newVel;
+    _aveVelocity = newVel;
   }
 
   bool operator()(T output[], const S input[])
   {
-    output[0] = util::pow(utau, 2)/h2 + (um - aveVelocity)*um/h2;
+    output[0] = util::pow(_utau, 2)/_h2 + (_um - _aveVelocity)*_um/_h2;
     output[1] = 0;
     output[2] = 0;
 
@@ -207,8 +200,9 @@ public:
   };
 };
 
-void prepareGeometry(SuperGeometry<T,3>& superGeometry, IndicatorF3D<T>& indicator,
-                     UnitConverter<T,DESCRIPTOR> const& converter)
+void prepareGeometry(SuperGeometry<T,3>& superGeometry,
+                     IndicatorF3D<T>& indicator,
+                     const UnitConverter<T,DESCRIPTOR>& converter)
 {
   OstreamManager clout(std::cout,"prepareGeometry");
   clout << "Prepare Geometry ..." << std::endl;
@@ -232,16 +226,16 @@ void prepareGeometry(SuperGeometry<T,3>& superGeometry, IndicatorF3D<T>& indicat
 
 // set up initial conditions
 void setInitialConditions(SuperLattice<T, DESCRIPTOR>& sLattice,
-                          UnitConverter<T,DESCRIPTOR> const& converter,
+                          const UnitConverter<T,DESCRIPTOR>& converter,
                           SuperGeometry<T,3>& superGeometry,
                           AnalyticalScaled3D<T, T>& forceSolScaled,
                           TrackedForcing3D<T, T>& forceSol)
 {
-
   OstreamManager clout(std::cout, "setInitialConditions");
   clout << "Set initial conditions ..." << std::endl;
 
   AnalyticalConst3D<T, T> rho(1.);
+  AnalyticalConst3D<T, T> rho0(0.);
   Channel3D<T, T> uSol(converter, 1.);
 
   sLattice.defineRhoU(superGeometry, 1, rho, uSol);
@@ -250,52 +244,45 @@ void setInitialConditions(SuperLattice<T, DESCRIPTOR>& sLattice,
   sLattice.defineRhoU(superGeometry, 2, rho, uSol);
   sLattice.iniEquilibrium(superGeometry, 2, rho, uSol);
 
-  AnalyticalConst3D<T,T> TauEff(1./converter.getLatticeRelaxationFrequency());
-
-  sLattice.defineField<TAU_EFF>(superGeometry, 1, TauEff);
-  sLattice.defineField<TAU_EFF>(superGeometry, 2, TauEff);
-
   // Force Initialization
   forceSol.updateAveVelocity(converter.getCharPhysVelocity()); // New average velocity
 
   // Initialize force
-  sLattice.defineField<FORCE>(superGeometry, 1, forceSolScaled);
-  sLattice.defineField<FORCE>(superGeometry, 2, forceSolScaled);
-  // Tau_w Initialization
-  T tau_w_guess = 0.0; // Wall shear stress in phys units
-  AnalyticalConst3D<T, T> tau_w_ini(tau_w_guess);
-  AnalyticalScaled3D<T, T> tau_w_ini_scaled(tau_w_ini, 1. / ( converter.getConversionFactorForce() * util::pow(converter.getConversionFactorLength(),2.) ) );
-
-  sLattice.defineField<TAU_W>(superGeometry, 1, tau_w_ini_scaled);
-  sLattice.defineField<TAU_W>(superGeometry, 2, tau_w_ini_scaled);
+  sLattice.defineField<descriptors::FORCE>(superGeometry, 1, forceSolScaled);
 
   clout << "Set initial conditions ... OK" << std::endl;
 }
 
 // Set up the geometry of the simulation
 void prepareLattice(SuperLattice<T,DESCRIPTOR>& sLattice,
-                    UnitConverter<T,DESCRIPTOR> const& converter,
+                    const UnitConverter<T,DESCRIPTOR>& converter,
                     SuperGeometry<T,3>& superGeometry,
                     AnalyticalScaled3D<T, T>& forceSolScaled,
                     TrackedForcing3D<T, T>& forceSol,
-                    wallFunctionParam<T> const& wallFunctionParam
+                    WallModelParameters<T>& wallModelParameters
                    )
 {
-
   OstreamManager clout(std::cout,"prepareLattice");
   clout << "Prepare Lattice ..." << std::endl;
 
   /// Material=1 -->bulk dynamics
-  sLattice.defineDynamics<SmagorinskyForcedBGKdynamics>(superGeometry, 1);
+  setTurbulentWallModelDynamics(sLattice, superGeometry, 1, wallModelParameters);
+  sLattice.defineDynamics<BounceBack>(superGeometry, 2);
+#ifdef HRR
+  sLattice.addPostProcessor<stage::PostStream>(superGeometry.getMaterialIndicator({1}),
+                                               meta::id<FDMstrainRateTensorPostProcessor>{});
+  AnalyticalConst3D<T, T> hybrid(hybridConst);
+  sLattice.defineField<collision::HYBRID>(superGeometry, 1, hybrid);
+#endif
+
   /// Material = 2 --> boundary node + wallfunction
-  sLattice.defineDynamics<ExternalTauEffLESForcedBGKdynamics>(superGeometry, 2);
-  setWallFunctionBoundary<T,DESCRIPTOR>(sLattice, superGeometry, 2, converter, wallFunctionParam);
 
   /// === Set Initial Conditions == ///
+  setTurbulentWallModel(sLattice, superGeometry, 2, wallModelParameters);
   setInitialConditions(sLattice, converter, superGeometry, forceSolScaled, forceSol);
 
   sLattice.setParameter<descriptors::OMEGA>( converter.getLatticeRelaxationFrequency() );
-  sLattice.setParameter<collision::LES::Smagorinsky>(T(0.12));
+  sLattice.setParameter<collision::LES::SMAGORINSKY>(T(0.12));
 
   // Make the lattice ready for simulation
   sLattice.initialize();
@@ -315,10 +302,8 @@ void getResults(SuperLattice<T, DESCRIPTOR>& sLattice,
   const T checkstatistics = (T)maxPhysT/200.;
 
   SuperVTMwriter3D<T> vtmWriter("channel3d");
-  SuperLatticeGeometry3D<T, DESCRIPTOR> geometry(sLattice, superGeometry);
-  SuperLatticePhysVelocity3D<T, DESCRIPTOR> velocity(sLattice, converter);
-  SuperLatticePhysPressure3D<T, DESCRIPTOR> pressure(sLattice, converter);
-  vtmWriter.addFunctor(geometry);
+  SuperLatticePhysVelocity3D velocity(sLattice, converter);
+  SuperLatticePhysPressure3D pressure(sLattice, converter);
   vtmWriter.addFunctor(velocity);
   vtmWriter.addFunctor(pressure);
   vtmWriter.addFunctor(sAveragedVel);
@@ -326,11 +311,9 @@ void getResults(SuperLattice<T, DESCRIPTOR>& sLattice,
 
   if (iT == 0) {
     // Writes the geometry, cuboid no. and rank no. as vti file for visualization
-    SuperLatticeGeometry3D<T, DESCRIPTOR> geometry(sLattice, superGeometry);
-    SuperLatticeCuboid3D<T, DESCRIPTOR> cuboid(sLattice);
-    SuperLatticeRank3D<T, DESCRIPTOR> rank(sLattice);
+    SuperLatticeCuboid3D cuboid(sLattice);
+    SuperLatticeRank3D rank(sLattice);
 
-    vtmWriter.write(geometry);
     vtmWriter.write(cuboid);
     vtmWriter.write(rank);
 
@@ -356,7 +339,7 @@ void getResults(SuperLattice<T, DESCRIPTOR>& sLattice,
     sAveragedPress.addEnsemble();
   }
 
-  if (iT%converter.getLatticeTime(maxPhysT/20)==0 || iT==converter.getLatticeTime(maxPhysT)-1) {
+  if (iT%converter.getLatticeTime(checkstatistics)/*converter.getLatticeTime(maxPhysT/20)*/==0 || iT==converter.getLatticeTime(maxPhysT)-1) {
     // Writes the vtk files
     vtmWriter.write(iT);
   }
@@ -372,9 +355,9 @@ int main(int argc, char* argv[])
   // display messages from every single mpi process
   //clout.setMultiOutput(true);
 
-  UnitConverterFromResolutionAndLatticeVelocity<T,DESCRIPTOR> const converter(
+  UnitConverterFromResolutionAndRelaxationTime<T,DESCRIPTOR> const converter(
     int {N},                  // resolution: number of voxels per charPhysL
-    (T)   computeLatticeVelocity(),     // latticeU : mean lattice velocity
+    (T)   0.50025,            // relaxation time
     (T)   adaptedPhysSimulatedLength, // charPhysLength: reference length of simulation geometry
     (T)   1.0,                // charPhysVelocity: mean bulk velocity in __m / s__
     (T)   charPhysNu,           // physViscosity: physical kinematic viscosity in __m^2 / s__
@@ -402,19 +385,18 @@ int main(int argc, char* argv[])
   const int noOfCuboids = 1;
 #endif
 
-  Vector<T,3> extend(lx, 6.*converter.getPhysDeltaX(), adaptedPhysSimulatedLength);
-  extend[2] += (1./8.)*converter.getPhysDeltaX();
-
-  Vector<T,3> origin(0., 0., 0.);
+  T dx = converter.getPhysDeltaX();
+  Vector<T,3> extend(lx, ly, adaptedPhysSimulatedLength);
+  Vector<T,3> origin(0., 0., -(1.-latticeWallDistance)*dx);
   IndicatorCuboid3D<T> cuboid(extend, origin );
 
   CuboidGeometry3D<T> cuboidGeometry( cuboid, converter.getPhysDeltaX(), noOfCuboids );
 
-  cuboidGeometry.setPeriodicity(true, true, false);
+  cuboidGeometry.setPeriodicity({true, true, false});
 
   HeuristicLoadBalancer<T> loadBalancer( cuboidGeometry );
 
-  SuperGeometry<T,3> superGeometry(cuboidGeometry, loadBalancer);
+  SuperGeometry<T,3> superGeometry(cuboidGeometry, loadBalancer, 4);
 
   prepareGeometry(superGeometry, cuboid, converter);
 
@@ -437,23 +419,22 @@ int main(int argc, char* argv[])
   SuperLatticePhysVelocity3D<T, DESCRIPTOR> velocity(sLattice, converter);
   std::vector<int> materials;
   materials.push_back( 1 );
-  materials.push_back( 2 );
 
   std::list<int> materialslist;
   materialslist.push_back( 1 );
-  materialslist.push_back( 2 );
 
-  wallFunctionParam<T> wallFunctionParam;
-  wallFunctionParam.bodyForce = true;
-  wallFunctionParam.wallProfile = wallProfile;
-  wallFunctionParam.rhoMethod = rhoMethod;
-  wallFunctionParam.fneqMethod = fneqMethod;
-  wallFunctionParam.latticeWalldistance = latticeWallDistance;
-  wallFunctionParam.vonKarman = 0.375;
-  wallFunctionParam.curved = false;
+  WallModelParameters<T> wallModelParameters;
+  wallModelParameters.bodyForce = bodyForce;
+  wallModelParameters.rhoMethod = rhoMethod;
+  wallModelParameters.fNeqMethod = fNeqMethod;
+  wallModelParameters.samplingCellDistance = samplingCellDistance;
+  wallModelParameters.interpolateSampleVelocity = interpolateSampleVelocity;
+  wallModelParameters.useVanDriest = useVanDriest;
+  wallModelParameters.wallFunctionProfile = wallFunctionProfile;
+  wallModelParameters.latticeWallDistance = latticeWallDistance;
 
   prepareLattice(sLattice, converter, superGeometry,
-                 forceSolScaled, forceSol, wallFunctionParam);
+                 forceSolScaled, forceSol, wallModelParameters);
 
   SuperPlaneIntegralFluxVelocity3D<T> velFlux(sLattice, converter, superGeometry, center, normal, materials,
       BlockDataReductionMode::Discrete);
@@ -481,7 +462,6 @@ int main(int argc, char* argv[])
       T area = output[1];
       forceSol.updateAveVelocity(flux/area);
       sLattice.defineField<FORCE>(superGeometry, 1, forceSolScaled);
-      sLattice.defineField<FORCE>(superGeometry, 2, forceSolScaled);
     }
 
     /// === 7th Step: Collide and Stream Execution ===
@@ -493,4 +473,3 @@ int main(int argc, char* argv[])
 
   return 0;
 }
-

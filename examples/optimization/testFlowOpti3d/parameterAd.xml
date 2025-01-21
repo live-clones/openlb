@@ -17,12 +17,16 @@
       <PhysMaxTime> 6.0 </PhysMaxTime> <!-- 8.0 -->
       <StartUpTime> 4.0 </StartUpTime> <!-- 5.0 -->
       <BoundaryValueUpdateTime> 0.001 </BoundaryValueUpdateTime>
-      <TimeStabilityCheck> 0.06 </TimeStabilityCheck>
     </PhysParameters>
     <Mesh>
       <noCuboidsPerProcess> 1  </noCuboidsPerProcess>
       <Overlap> 3 </Overlap>
     </Mesh>
+    <StabilityCheck>
+      <Frequency> 0.06 </Frequency>
+      <ExitMaxU> false </ExitMaxU>
+      <BoundMaxU> 0.3 </BoundMaxU>
+    </StabilityCheck>
     <BoundaryCondition> interpolated </BoundaryCondition>
     <Domain> sphere </Domain>
     <PressureFilter> true </PressureFilter>

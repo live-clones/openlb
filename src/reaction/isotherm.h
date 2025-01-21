@@ -33,75 +33,114 @@
 namespace olb {
 
 /**
- * @brief Base class for isotherms.
- *
- * Create derived class with the actual equation for the equilibrium.
- * @tparam T
- */
-template<typename T>
-class Isotherm {
-public:
-/**
- * @brief Base class for Isotherm objects
+ * @brief This is a new version of Isotherm made to be
+ * suitable with the template format
  *
  * Returns loading in mg/g corresponding to concentration in mg/mL
  *
- * @param isoKonstA first constant
- * @param isoKonstB second constant or exponent
+ * @param ISO_KONST_A first constant
+ * @param ISO_KONST_B second constant or exponent
  */
-Isotherm(T isoKonstA, T isoKonstB) : isoKonstA(isoKonstA), isoKonstB(isoKonstB){}
-T isoKonstA{};
-T isoKonstB{};
+namespace Isotherm {
 
-/// Equation for isotherm
-/// @param c Concentration in mg/mL
-/// @return q loading in mg/g
-virtual T getLoading(T c) const = 0;
+// Linear Isotherm
+struct LinearIsotherm {
 
-virtual T getConversionFactorKonstA() {
-  return 1;
+  struct ISO_KONST_A : public descriptors::FIELD_BASE<1> { };
+  struct ISO_KONST_B : public descriptors::FIELD_BASE<1> { };
+
+  using parameters = meta::list<ISO_KONST_A,ISO_KONST_B>;
+
+  template <typename V, typename COUPLING>
+  static void setParameters(V isoKonstA, V isoKonstB, COUPLING& coupling) any_platform {
+    coupling.template setParameter<Isotherm::LinearIsotherm::ISO_KONST_A>(isoKonstA);
+    coupling.template setParameter<Isotherm::LinearIsotherm::ISO_KONST_B>(isoKonstB);
+    return;
+  }
+
+  template <typename V, typename COUPLING>
+  static V getLoadingFromCoupling(V c, COUPLING& coupling) any_platform {
+    auto isoKonstA = coupling.template getParameter<Isotherm::LinearIsotherm::ISO_KONST_A>();
+    return isoKonstA[0] * c;
+  }
+
+  template <typename V, typename PARAMETERS>
+  V getLoading(V c, PARAMETERS& params) any_platform {
+    V isoKonstA = params.template get<ISO_KONST_A>();
+    return isoKonstA * c;
+  }
+
+  template <typename V, typename COUPLING>
+  static void print(std::ostream& clout, COUPLING& coupling) {
+    auto isoKonstA = coupling.template getParameter<Isotherm::LinearIsotherm::ISO_KONST_A>();
+    auto isoKonstB = coupling.template getParameter<Isotherm::LinearIsotherm::ISO_KONST_B>();
+    clout << "----------------- Isotherm information -----------------" << std::endl;
+    clout << "Isotherm exponent    n = " << isoKonstB << std::endl;
+    clout << "Isotherm factor      K = " << isoKonstA << std::endl;
+    clout << "-------------------------------------------------------------" << std::endl;
+  }
+
 };
 
-virtual T getConversionFactorKonstB() {
-  return 1;
+// LangmuirIsotherm
+struct LangmuirIsotherm {
+
+  struct ISO_KONST_A : public descriptors::FIELD_BASE<1> { };
+  struct ISO_KONST_B : public descriptors::FIELD_BASE<1> { };
+
+  using parameters = meta::list<ISO_KONST_A,ISO_KONST_B>;
+
+  template <typename V, typename COUPLING>
+  static void setParameters(V isoKonstA, V isoKonstB, COUPLING& coupling) any_platform {
+    coupling.template setParameter<Isotherm::LangmuirIsotherm::ISO_KONST_A>(isoKonstA);
+    coupling.template setParameter<Isotherm::LangmuirIsotherm::ISO_KONST_B>(isoKonstB);
+    return;
+  }
+
+  template <typename V, typename COUPLING>
+  static V getLoadingFromCoupling(V c, COUPLING& coupling) any_platform {
+    auto isoKonstA = coupling.template getParameter<Isotherm::LangmuirIsotherm::ISO_KONST_A>();
+    auto isoKonstB = coupling.template getParameter<Isotherm::LangmuirIsotherm::ISO_KONST_B>();
+    return V(isoKonstA[0]) * V(isoKonstB[0]) * c / ( 1 + V(isoKonstB[0]) * c );
+  }
+
+  template <typename V, typename PARAMETERS>
+  V getLoading(V c, PARAMETERS& params) any_platform {
+    V isoKonstA = params.template get<ISO_KONST_A>();
+    V isoKonstB = params.template get<ISO_KONST_B>();
+    return isoKonstA * isoKonstB * c / ( 1 + isoKonstB * c );
+  }
+
+  template <typename V, typename COUPLING>
+  static void print(std::ostream& clout, COUPLING& coupling) {
+    auto isoKonstA = coupling.template getParameter<Isotherm::LangmuirIsotherm::ISO_KONST_A>();
+    auto isoKonstB = coupling.template getParameter<Isotherm::LangmuirIsotherm::ISO_KONST_B>();
+    clout << "----------------- Isotherm information -----------------" << std::endl;
+    clout << "Isotherm exponent    n = " << isoKonstB << std::endl;
+    clout << "Isotherm factor      K = " << isoKonstA << std::endl;
+    clout << "-------------------------------------------------------------" << std::endl;
+  }
+
 };
 
-void print(std::ostream& clout) const {
-  clout << "Isotherm exponent    n=    " << this->isoKonstB << std::endl;
-  clout << "Isotherm factor      K=    " << this->isoKonstA << std::endl;
-  clout << "-------------------------------------------------------------" << std::endl;
+// FreundlichIsotherm
+struct FreundlichIsotherm {
+
+  struct ISO_KONST_A : public descriptors::FIELD_BASE<1> { };
+  struct ISO_KONST_B : public descriptors::FIELD_BASE<1> { };
+
+  using parameters = meta::list<ISO_KONST_A,ISO_KONST_B>;
+
+  template <typename V, typename PARAMETERS>
+  V getLoading(V c, PARAMETERS& params) any_platform {
+    V isoKonstA = params.template get<ISO_KONST_A>();
+    V isoKonstB = params.template get<ISO_KONST_B>();
+    return isoKonstA * std::pow(c, isoKonstB);
+  }
+
+};
+
 }
-};
-
-template<typename T>
-class LinearIsotherm: public Isotherm<T> {
- public:
-  LinearIsotherm(T isoKonstA, T isoKonstB): Isotherm<T>(isoKonstA, isoKonstB){}
-
-  T getLoading(T c) const override {
-    return this->isoKonstA * c;
-  }
-};
-
-template<typename T>
-class LangmuirIsotherm: public Isotherm<T> {
- public:
-  LangmuirIsotherm(T isoKonstA, T isoKonstB): Isotherm<T>(isoKonstA, isoKonstB){}
-
-  T getLoading(T c) const override {
-    return this->isoKonstA*this->isoKonstB*c/(1+this->isoKonstB*c);
-  }
-};
-
-template<typename T>
-class FreundlichIsotherm: public Isotherm<T> {
- public:
-  FreundlichIsotherm(T isoKonstA, T isoKonstB): Isotherm<T>(isoKonstA, isoKonstB){}
-
-  T getLoading(T c) const override {
-    return this->isoKonstA * std::pow(c, this->isoKonstB);
-  }
-};
 
 }
 #endif

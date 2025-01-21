@@ -25,8 +25,8 @@
 #define DYNAMICS_COLLISION_MRT_H
 
 #include "mrt.h"
-#include "descriptorField.h"
-#include "mrtLatticeDescriptors.h"
+#include "descriptor/fields.h"
+#include "descriptor/definition/mrt.h"
 
 #include "core/latticeStatistics.h"
 
@@ -143,4 +143,3 @@ struct LaddVerberg {
 
 #endif
 
-#include "collisionMRT.cse.h"

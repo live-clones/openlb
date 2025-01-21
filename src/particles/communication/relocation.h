@@ -283,7 +283,11 @@ void checkRelocation(
     //Find particle system by position
     int globiCcentre = -1;
     // getC doesn't treat periodicity! We can only use it because we updated it before
-    const bool particleCentreInDomain = cuboidGeometry.getC(position, globiCcentre);
+    auto iC = cuboidGeometry.getC(position);
+    const bool particleCentreInDomain = *iC;
+    if (particleCentreInDomain) {
+      globiCcentre = *iC;
+    }
     /*
     // Retrieve particle position
     PhysR<T,D> position = particle.template getField<GENERAL,POSITION>();

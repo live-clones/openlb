@@ -1,6 +1,6 @@
 /*  This file is part of the OpenLB library
  *
- *  Copyright (C) 2019 Jakob Mangold, Mathias J. Krause
+ *  Copyright (C) 2019 Jakob Mangold, Mathias J. Krause, 2024 Julius Jeßberger
  *  E-mail contact: info@openlb.net
  *  The most recent release of OpenLB can be downloaded at
  *  <http://www.openlb.net/>
@@ -32,13 +32,14 @@
 namespace olb {
 
 
-/// SuperVarianceF3D returns the Variance in each component of f on a indicated subset calcutalted with Steiner translation theorem
+/// SuperVarianceF3D returns the variance in each component of f on a indicated subset
 template <typename T, typename W = T>
-class SuperVarianceF3D final : public SuperF3D<T,W> {
-private:
+class SuperVarianceF3D : public SuperF3D<T,W> {
+protected:
   FunctorPtr<SuperF3D<T,W>>        _f;
   FunctorPtr<SuperIndicatorF3D<T>> _indicatorF;
   T _expectedValue;
+  SuperConst3D<T> _expectedValueF;
 public:
   /// Constructor for determining the standard deviation of f on a indicated subset
   /**
@@ -90,13 +91,10 @@ public:
 
 
 
-/// SuperStdDeviaitonF3D returns the standard deviation in each component of f on a indicated subset calcutalted with Steiner translation theorem
+/// SuperStdDeviaitonF3D returns the standard deviation in each component of f on a indicated subset
 template <typename T, typename W = T>
-class SuperStdDeviationF3D final : public SuperF3D<T,W> {
-private:
-  FunctorPtr<SuperF3D<T,W>>        _f;
-  FunctorPtr<SuperIndicatorF3D<T>> _indicatorF;
-  T _expectedValue;
+class SuperStdDeviationF3D final : public SuperVarianceF3D<T,W> {
+
 public:
   /// Constructor for determining the standard deviation of f on a indicated subset
   /**

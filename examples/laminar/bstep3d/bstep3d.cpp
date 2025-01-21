@@ -70,13 +70,13 @@ void prepareGeometry( UnitConverter<T,DESCRIPTOR> const& converter,
   superGeometry.rename( 1,2,cuboid2 );
 
   // Set material number for inflow
-  extend = {2*converter.getConversionFactorLength(), ly0, lz0};
-  origin[0] -= converter.getConversionFactorLength()/2.;
+  extend = {2*converter.getPhysDeltaX(), ly0, lz0};
+  origin[0] -= converter.getPhysDeltaX()/2.;
   IndicatorCuboid3D<T> inflow( extend, origin );
   superGeometry.rename( 2,3,1,inflow );
 
   // Set material number for outflow
-  origin[0] = lx0 - converter.getConversionFactorLength()*1.5;
+  origin[0] = lx0 - converter.getPhysDeltaX()*1.5;
   IndicatorCuboid3D<T> outflow( extend, origin );
   superGeometry.rename( 2,4,1,outflow );
 
@@ -109,17 +109,17 @@ void prepareLattice( UnitConverter<T,DESCRIPTOR> const& converter,
   sLattice.defineDynamics<BulkDynamics>(bulkIndicator);
 
   // Material=2 -->bounce back
-  setBounceBackBoundary(sLattice, superGeometry, 2);
+  boundary::set<boundary::BounceBack>(sLattice, superGeometry, 2);
 
   // Setting of the boundary conditions
 
   //if local boundary conditions are chosen
-  setLocalVelocityBoundary<T,DESCRIPTOR>(sLattice, omega, superGeometry, 3);
-  setLocalPressureBoundary<T,DESCRIPTOR>(sLattice, omega, superGeometry, 4);
+  //boundary::set<boundary::LocalVelocity>(sLattice, superGeometry, 3);
+  //boundary::set<boundary::LocalPressure>(sLattice, superGeometry, 4);
 
   //if interpolated boundary conditions are chosen
-  //setInterpolatedVelocityBoundary<T,DESCRIPTOR>(sLattice, omega, superGeometry, 3);
-  //setInterpolatedPressureBoundary<T,DESCRIPTOR>(sLattice, omega, superGeometry, 4);
+  boundary::set<boundary::InterpolatedVelocity>(sLattice, superGeometry, 3);
+  boundary::set<boundary::InterpolatedPressure>(sLattice, superGeometry, 4);
 
   // Initial conditions
   AnalyticalConst3D<T,T> ux( 0. );
@@ -168,7 +168,7 @@ void setBoundaryValues( UnitConverter<T,DESCRIPTOR> const& converter,
     std::vector<T> maxVelocity( 3,0 );
     maxVelocity[0] = 2.25*frac[0]*converter.getCharLatticeVelocity();
 
-    T distance2Wall = converter.getConversionFactorLength()/2.;
+    T distance2Wall = converter.getPhysDeltaX()/2.;
     RectanglePoiseuille3D<T> poiseuilleU( superGeometry, 3, maxVelocity, distance2Wall, distance2Wall, distance2Wall );
     sLattice.defineU( superGeometry, 3, poiseuilleU );
 
@@ -201,10 +201,8 @@ void getResults( SuperLattice<T,DESCRIPTOR>& sLattice,
 
   if ( iT==0 ) {
     // Writes the geometry, cuboid no. and rank no. as vti file for visualization
-    SuperLatticeGeometry3D<T, DESCRIPTOR> geometry( sLattice, superGeometry );
     SuperLatticeCuboid3D<T, DESCRIPTOR> cuboid( sLattice );
     SuperLatticeRank3D<T, DESCRIPTOR> rank( sLattice );
-    vtmWriter.write( geometry );
     vtmWriter.write( cuboid );
     vtmWriter.write( rank );
     vtmWriter.createMasterFile();
@@ -278,7 +276,7 @@ int main( int argc, char* argv[] )
 #else
   const int noOfCuboids = 7;
 #endif
-  CuboidGeometry3D<T> cuboidGeometry( cuboid, converter.getConversionFactorLength(), noOfCuboids );
+  CuboidGeometry3D<T> cuboidGeometry( cuboid, converter.getPhysDeltaX(), noOfCuboids );
 
   // Instantiation of a loadBalancer
   HeuristicLoadBalancer<T> loadBalancer( cuboidGeometry );

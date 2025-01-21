@@ -52,6 +52,7 @@ void UnitConverter<T, DESCRIPTOR>::print(std::ostream& clout) const
   clout << "Mach number:                      machNumber=     " << getMachNumber() << std::endl;
   clout << "Reynolds number:                  reynoldsNumber= " << getReynoldsNumber() << std::endl;
   clout << "Knudsen number:                   knudsenNumber=  " << getKnudsenNumber() << std::endl;
+  clout << "Characteristical CFL number:      charCFLnumber=  " << getCharCFLnumber() << std::endl;
 
   clout << std::endl;
   clout << "-- Conversion factors:" << std::endl;
@@ -65,6 +66,16 @@ void UnitConverter<T, DESCRIPTOR>::print(std::ostream& clout) const
   clout << "Pressure factor(N/m^2):           physPressure=   " << getConversionFactorPressure() << std::endl;
 
   clout << "-------------------------------------------------------------" << std::endl;
+
+  if ( getLatticeRelaxationTime() < T(0.55) && getCharLatticeVelocity() > T(8)*(getLatticeRelaxationTime() - T(0.5)) ) {
+    clout << "WARNING:" << std::endl;
+    clout << "Potentially UNSTABLE combination of relaxation time (tau=" << getLatticeRelaxationTime() << ")" << std::endl;
+    clout << "and characteristical CFL number (lattice velocity) charCFLnumber=" << getCharCFLnumber() << "!" << std::endl;
+    clout << "Potentially maximum characteristical CFL number (maxCharCFLnumber=" << T(8)*(getLatticeRelaxationTime() - T(0.5)) << ")" << std::endl;
+    clout << "Actual characteristical CFL number (charCFLnumber=" << getCharCFLnumber() << ") > " << T(8)*(getLatticeRelaxationTime() - T(0.5)) << std::endl;
+    clout << "Please reduce the time step size (physDeltaT=" << getConversionFactorTime() <<")!" << std::endl;
+    clout << "-------------------------------------------------------------" << std::endl;
+  }
 
 }
 
@@ -122,7 +133,7 @@ UnitConverter<T, DESCRIPTOR>* createUnitConverter(XMLreader const& params)
   std::vector<std::string> discretizationParam = {"PhysDeltaX", "Resolution",
     "CharLatticeVelocity", "PhysDeltaT", "LatticeRelaxationTime"};
 
-  for(int i = 0; i<discretizationParam.size(); i++){
+  for(unsigned i = 0; i<discretizationParam.size(); i++){
     std::string test;
     if(params["Application"]["Discretization"][discretizationParam[i]].read(test,false)){
       counter++;

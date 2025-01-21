@@ -80,8 +80,6 @@ void writeGeometry3D(SuperVTMwriter3D<T> vtmWriter,
                      SuperGeometry<T,3>& superGeometry,
                      SuperLattice<T,RADDESCRIPTOR>& adLattice)
 {
-  SuperLatticeGeometry3D<T,RADDESCRIPTOR> geometry(adLattice, superGeometry);
-  vtmWriter.write(geometry);
 
   vtmWriter.createMasterFile();
 }
@@ -155,10 +153,10 @@ void prepareLattice(AdeUnitConverter<T,RADDESCRIPTOR> const& converter,
   adLattice.template defineDynamics<NoDynamics>(superGeometry, 0);
   adLattice.template defineDynamics<AdvectionDiffusionBGKdynamics>(bulkIndicator);
 
-  setAdvectionDiffusionTemperatureBoundary<T, RADDESCRIPTOR>(adLattice, superGeometry.getMaterialIndicator({2}));
+  boundary::set<boundary::AdvectionDiffusionDirichlet>(adLattice, superGeometry.getMaterialIndicator({2}));
   setZeroGradientBoundary<T, RADDESCRIPTOR>(adLattice, superGeometry.getMaterialIndicator({3}));
   setZeroGradientBoundary<T, RADDESCRIPTOR>(adLattice, superGeometry.getMaterialIndicator({4}));
-  setAdvectionDiffusionTemperatureBoundary<T, RADDESCRIPTOR>(adLattice, superGeometry.getMaterialIndicator({5}));
+  boundary::set<boundary::AdvectionDiffusionDirichlet>(adLattice, superGeometry.getMaterialIndicator({5}));
 
   // Initial conditions
   AnalyticalConst3D<T,T> rho0(1.e-8);
@@ -298,7 +296,7 @@ int simulateFlow(T D)
   CuboidGeometry3D<T> cuboidGeometry(cuboid, dx, noOfCuboids);
 
   // periodic in the z dir
-  cuboidGeometry.setPeriodicity(false, false, true);
+  cuboidGeometry.setPeriodicity({false, false, true});
 
   // load balancer
   HeuristicLoadBalancer<T> loadBalancer(cuboidGeometry);

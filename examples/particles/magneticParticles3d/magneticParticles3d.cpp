@@ -91,12 +91,12 @@ void prepareGeometry(UnitConverter<T, DESCRIPTOR> const& converter, IndicatorF3D
   superGeometry.rename(1, 5, wire);
 
   T minR = superGeometry.getStatistics().getMinPhysR(2)[0];
-  minR -= 0.5 * converter.getConversionFactorLength();
+  minR -= 0.5 * converter.getPhysDeltaX();
   olb::Vector <T, 3 > center = superGeometry.getStatistics().getCenterPhysR(2);
   olb::Vector<T, 3> physExtend = superGeometry.getStatistics().getPhysExtend(1);
 
   Vector<T, 3> origin = { minR, center[1], center[2] };
-  Vector<T, 3> extend = { converter.getConversionFactorLength(), physExtend[1], physExtend[2] };
+  Vector<T, 3> extend = { converter.getPhysDeltaX(), physExtend[1], physExtend[2] };
 
   IndicatorCuboid3D<T> inlet(extend[0], extend[1], extend[2], origin);
   origin[0] += superGeometry.getStatistics().getPhysExtend(2)[0];
@@ -133,14 +133,13 @@ void prepareLattice(SuperLattice<T, DESCRIPTOR>& sLattice,
   sLattice.defineDynamics<BGKdynamics>(superGeometry, 4);
 
   /// Material=5 -->do nothing
-  legacy::setBouzidiZeroVelocityBoundary<T,DESCRIPTOR>(sLattice, superGeometry, 5, wire);
+  setBouzidiBoundary(sLattice, superGeometry, 5, wire);
 
   // boundary conditions for fluid
-
   // inlet
-  setInterpolatedVelocityBoundary<T,DESCRIPTOR>(sLattice, omega, superGeometry, 3);
+  boundary::set<boundary::InterpolatedVelocity>(sLattice, superGeometry, 3);
   // outlet
-  setInterpolatedPressureBoundary<T,DESCRIPTOR>(sLattice, omega, superGeometry, 4);
+  boundary::set<boundary::InterpolatedPressure>(sLattice, superGeometry, 4);
 
   // initialisation
   AnalyticalConst3D<T, T> roh(1.);
@@ -167,7 +166,7 @@ void setBoundaryValues(SuperLattice<T, DESCRIPTOR>& sLattice,
 
   OstreamManager clout(std::cout, "setBoundaryValues");
   std::vector < T > maxVelocity(3, T());
-  T distanceToBoundary = converter.getConversionFactorLength() / 2.;
+  T distanceToBoundary = converter.getPhysDeltaX() / 2.;
 
   if (outNS && iT <= itStartScaleT) {
 
@@ -227,11 +226,9 @@ void getResults(SuperGeometry<T,3>& superGeometry,
   vtmWriterFluidStart.addFunctor(superMagPForceOne);
 
   if (outNS && iT == 0) {
-    SuperLatticeGeometry3D<T, DESCRIPTOR> geometry(sLattice, superGeometry);
     SuperLatticeCuboid3D<T, DESCRIPTOR> cuboid(sLattice);
     SuperLatticeRank3D<T, DESCRIPTOR> rank(sLattice);
 
-    vtmWriterFluidStart.write(geometry);
     vtmWriterFluidStart.write(cuboid);
     vtmWriterFluidStart.write(rank);
 
@@ -298,7 +295,7 @@ int main(int argc, char* argv[])
   T physDeltaTParticles = t_Rayleigh * 0.4; // [s]
   // particles relaxation time
   T tau_particles = (physDeltaTParticles * 3 * converter->getPhysViscosity() /
-                     util::pow(converter->getConversionFactorLength(), 2.) + 0.5);
+                     util::pow(converter->getPhysDeltaX(), 2.) + 0.5);
 
   // converter contains parameters of particle simulation
   UnitConverterFromResolutionAndRelaxationTime<T, DESCRIPTOR> const converterParticles(
@@ -370,7 +367,7 @@ int main(int argc, char* argv[])
   length[2] = geometryLengthZ;
 
   IndicatorCuboid3D<T> cuboid(length, center);
-  IndicatorLayer3D<T> extendedDomainCuboid(cuboid, converter->getConversionFactorLength());
+  IndicatorLayer3D<T> extendedDomainCuboid(cuboid, converter->getPhysDeltaX());
 
   std::vector<T> centerW(3, T());
   centerW[0] = geometryLengthX - 0.675e-3;
@@ -381,11 +378,11 @@ int main(int argc, char* argv[])
   normalW[0] = T(0);
   normalW[1] = T(0);
   normalW[2] = T(1);
-  wLength += 2 * converter->getConversionFactorLength();
+  wLength += 2 * converter->getPhysDeltaX();
   IndicatorCylinder3D<T> wire(centerW, normalW, wRadius, wLength);
 
   CuboidGeometry3D<T> cuboidGeometry(extendedDomainCuboid,
-                                     converter->getConversionFactorLength(), noOfCuboids);
+                                     converter->getPhysDeltaX(), noOfCuboids);
 
   /// Instantiation of a loadBalancer
   HeuristicLoadBalancer<T> loadBalancer(cuboidGeometry);
@@ -489,7 +486,7 @@ int main(int argc, char* argv[])
   spSys.addBoundary(materialreflectBoundary);
 
   // cuboid overlap
-  spSys.setOverlap(2.*converter->getConversionFactorLength());
+  spSys.setOverlap(2.*converter->getPhysDeltaX());
 
   // particles vtu output
   std::string particleOutputName = "vtuOutMagP";

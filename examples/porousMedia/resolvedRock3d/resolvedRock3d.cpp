@@ -95,33 +95,38 @@ generateIndicatorFromVTI(const std::string vtiFile, const std::string arrayName)
 }
 
 void prepareGeometry(UnitConverter<T, DESCRIPTOR> const& converter,
-                     IndicatorF3D<T>&                    indicator,
+                     IndicatorF3D<T>&                    layer,
                      SuperGeometry<T, 3>&                superGeometry)
 {
 
   OstreamManager clout(std::cout, "prepareGeometry");
   clout << "Prepare Geometry ..." << std::endl;
 
-  superGeometry.rename(0, 2);
+  // Set the cells inside of the layer indicator to MN 2
+  superGeometry.rename(0, 2, layer);
+
+  // Set material number 1 for cells in the rock cavity with 1 cell offset in each direction
+  superGeometry.rename(2, 1, {1,1,1});
 
   Vector<T, 3> origin = superGeometry.getStatistics().getMinPhysR(2);
   Vector<T, 3> extend = superGeometry.getStatistics().getMaxPhysR(2);
 
   // Set material number for inflow
   origin[0] = superGeometry.getStatistics().getMinPhysR(2)[0] -
-              converter.getConversionFactorLength();
-  extend[0] = T {1.5} * converter.getConversionFactorLength();
+              T {0.5} * converter.getPhysDeltaX();
+  extend[0] = T {1} * converter.getPhysDeltaX();
   IndicatorCuboid3D<T> inflow(extend, origin);
-  superGeometry.rename(2, 3, inflow);
+  // MN 3 is set only if the neighbor cell has MN 1
+  superGeometry.rename(2, 3, 1, inflow);
 
   // Set material number for outflow
   origin[0] = superGeometry.getStatistics().getMaxPhysR(2)[0] -
-              T {0.5} * converter.getConversionFactorLength();
-  extend[0] = T {1.5} * converter.getConversionFactorLength();
+              T {0.5} * converter.getPhysDeltaX();
+  extend[0] = T {1} * converter.getPhysDeltaX();
   IndicatorCuboid3D<T> outflow(extend, origin);
-  superGeometry.rename(2, 4, outflow);
+  // MN 4 is set only if the neighbor cell has MN 1
+  superGeometry.rename(2, 4, 1, outflow);
 
-  superGeometry.rename(2, 1, indicator);
   superGeometry.clean();
 
   // Removes all not needed boundary voxels outside the surface
@@ -147,17 +152,16 @@ void prepareLattice(SuperLattice<T, DESCRIPTOR>&        sLattice,
   sLattice.defineDynamics<BGKdynamics>(bulkIndicator);
 
   // Material=2 -->bounce back
-  setBounceBackBoundary(sLattice, superGeometry, 2);
+  boundary::set<boundary::BounceBack>(sLattice, superGeometry, 2);
 
   // Setting of the boundary conditions
-
   // local boundary conditions
-  setLocalPressureBoundary(sLattice, omega, superGeometry, 3);
-  setLocalPressureBoundary(sLattice, omega, superGeometry, 4);
+  boundary::set<boundary::LocalPressure>(sLattice, superGeometry, 3);
+  boundary::set<boundary::LocalPressure>(sLattice, superGeometry, 4);
 
   // interpolated boundary conditions
-  /* setInterpolatedPressureBoundary(sLattice, omega, superGeometry, 3); */
-  /* setInterpolatedPressureBoundary(sLattice, omega, superGeometry, 4); */
+  boundary::set<boundary::InterpolatedPressure>(sLattice, superGeometry, 3);
+  boundary::set<boundary::InterpolatedPressure>(sLattice, superGeometry, 4);
 
   // Initial conditions
   AnalyticalConst3D<T, T> rhoF(T {1});
@@ -231,10 +235,8 @@ void getResults(SuperLattice<T, DESCRIPTOR>&        sLattice,
 
   if (iT == 0) {
     // Writes the geometry, cuboid no. and rank no. as vti file for visualization
-    SuperLatticeGeometry3D<T, DESCRIPTOR> geometry(sLattice, superGeometry);
     SuperLatticeCuboid3D<T, DESCRIPTOR>   cuboid(sLattice);
     SuperLatticeRank3D<T, DESCRIPTOR>     rank(sLattice);
-    vtmWriter.write(geometry);
     vtmWriter.write(cuboid);
     vtmWriter.write(rank);
 
@@ -362,9 +364,13 @@ int main(int argc, char* argv[])
 #else
   const int noOfCuboids = 7;
 #endif
+
+  //layer of 1 cell around the rock geometry for correct definition of bondary matreial numbers
+  IndicatorLayer3D<T> layer(*rock, converter.getPhysDeltaX());
+
   CuboidGeometry3D<T> cuboidGeometry(
-      *rock, converter.getConversionFactorLength(), noOfCuboids);
-  cuboidGeometry.setPeriodicity(false, true, true);
+      layer, converter.getPhysDeltaX(), noOfCuboids);
+  cuboidGeometry.setPeriodicity({false, true, true});
 
   // Instantiation of a loadBalancer
   HeuristicLoadBalancer<T> loadBalancer(cuboidGeometry);
@@ -372,7 +378,7 @@ int main(int argc, char* argv[])
   // Instantiation of a superGeometry
   SuperGeometry<T, 3> superGeometry(cuboidGeometry, loadBalancer);
 
-  prepareGeometry(converter, *rock, superGeometry);
+  prepareGeometry(converter, layer, superGeometry);
 
   // === 3rd Step: Prepare Lattice ===
   SuperLattice<T, DESCRIPTOR> sLattice(superGeometry);

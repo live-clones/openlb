@@ -21,7 +21,7 @@ CXX             := nvcc
 CC              := nvcc
 
 CXXFLAGS        := -O3
-CXXFLAGS        += -std=c++17
+CXXFLAGS        += -std=c++20
 
 PARALLEL_MODE   := MPI
 

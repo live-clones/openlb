@@ -25,7 +25,9 @@
 
 #ifndef MOMENTUM_EXCHANGE_FORCE_H
 #define MOMENTUM_EXCHANGE_FORCE_H
-
+#ifndef M_PI
+#define M_PI 3.14159265358979323846
+#endif
 
 namespace olb {
 
@@ -85,13 +87,17 @@ bool momentumExchangeAtSurfaceLocation(
 
   using namespace descriptors;
   constexpr unsigned D = DESCRIPTOR::d;
-  auto position = particle.template getField<GENERAL,POSITION>();
+  auto position = particles::access::getPosition(particle);
 
   //Retrieve grid spacing
   const T deltaR = blockGeometry.getDeltaR();
   //Get inner phys position
   T physRinner[D] = { };
-  blockGeometry.getPhysR(physRinner, latticeRinner);
+  Vector<T,D> physRV;
+  blockGeometry.getPhysR(physRV, latticeRinner);
+  for (unsigned iD = 0; iD < D; ++iD) {
+    physRinner[iD] = physRV[iD];
+  }
   //Retrieve inner porosity
   T porosityInner[1] = { };
   particles::resolved::evalSolidVolumeFraction(porosityInner, physRinner, particle);
@@ -104,7 +110,11 @@ bool momentumExchangeAtSurfaceLocation(
       const LatticeR<D> latticeRouter = latticeRinner + c;
       //Retrieve outer phys position
       T physRouter[D] = {0.};
-      blockGeometry.getPhysR(physRouter, latticeRouter);
+      Vector<T,D> physRouterV;
+      blockGeometry.getPhysR(physRouterV, latticeRouter);
+      for (unsigned iD = 0; iD < D; ++iD) {
+        physRouter[iD] = physRouterV[iD];
+      }
       //Retrieve outer porosity
       T porosityOuter[1] = {0.};
       particles::resolved::evalSolidVolumeFraction(porosityOuter, physRouter, particle);
@@ -119,7 +129,58 @@ bool momentumExchangeAtSurfaceLocation(
           momentumExchange[iDim] -= converter.getPhysForce(
                                       population_momentum_exchange<T,D>::calculate( f1, f2, c[iDim], pVel[iDim], deltaR ) );
         }
+
+        // Optional correction of the lubrication force
+        if constexpr (particles::access::providesIsInContact<PARTICLETYPE>()) {
+          auto contact = particle.template getField<NUMERICPROPERTIES,IS_IN_CONTACT>();
+
+          if (contact == 1) {
+            T vn = 0.0;
+            for (unsigned iDim=0; iDim<D; ++iDim) {
+                //std::cout << momentumExchange[iDim];
+                vn = vn + util::pow(momentumExchange[iDim],2);
+            }
+
+            vn = util::sqrt(vn);
+
+            auto cell = blockLattice.get(latticeRinner);
+            Vector<T,DESCRIPTOR::d> localLatticeFluidVelocity;
+            Vector<T,DESCRIPTOR::d> localPhysicalFluidVelocity;
+            cell.computeU(localLatticeFluidVelocity.data());
+
+            for(unsigned iD=0; iD<D; ++iD) {
+                localPhysicalFluidVelocity[iD] = converter.getPhysVelocity(localLatticeFluidVelocity[iD]);
+            }
+
+            T U = 0.0;
+            for (unsigned iDim=0; iDim<D; ++iDim) {
+                U = U + util::pow(pVel[iDim]-localLatticeFluidVelocity[iDim],2.0);
+            }
+            U = util::sqrt(U);
+
+
+            T deltaT = converter.getPhysDeltaT();
+            T deltaTLattice = converter.getLatticeTime(deltaT);
+            T rho_fluid = converter.getPhysDensity();
+
+            T factor = 1.0;
+
+            T maxForce = converter.getPhysForce(U * converter.getLatticeDensity(rho_fluid)/deltaTLattice)*factor;
+
+            if (util::fabs(vn) == 0){
+                vn = 0.5 * maxForce;
+            }
+            if (util::fabs(vn) > util::fabs(maxForce)) {
+                T mp = maxForce/vn;
+                for (unsigned iDim=0; iDim<D; ++iDim) {
+                    //Set the force to the maximal force
+                    momentumExchange[iDim] *= mp;
+                }
+            }
+          }
+        }
       }
+
     }
     //Calculate lever (necessary for torque calculation)
     lever = PhysR<T,D>(physRinner)-position;

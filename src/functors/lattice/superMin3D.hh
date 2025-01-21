@@ -40,7 +40,7 @@ SuperMin3D<T,W>::SuperMin3D(FunctorPtr<SuperF3D<T,W>>&&        f,
   this->getName() = "Min("+_f->getName()+")";
 
   LoadBalancer<T>&     load   = _f->getSuperStructure().getLoadBalancer();
-  CuboidGeometry3D<T>& cuboid = _f->getSuperStructure().getCuboidGeometry();
+  auto& cuboid = _f->getSuperStructure().getCuboidGeometry();
 
   if ( _f->getBlockFSize()          == load.size() &&
        _indicatorF->getBlockFSize() == load.size() ) {
@@ -67,7 +67,7 @@ template <typename T, typename W>
 bool SuperMin3D<T,W>::operator() (W output[], const int input[])
 {
   _f->getSuperStructure().communicate();
-  CuboidGeometry3D<T>& geometry = _f->getSuperStructure().getCuboidGeometry();
+  auto& geometry = _f->getSuperStructure().getCuboidGeometry();
   LoadBalancer<T>&     load     = _f->getSuperStructure().getLoadBalancer();
 
   for (int i = 0; i < this->getTargetDim(); ++i) {

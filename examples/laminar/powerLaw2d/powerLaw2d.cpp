@@ -32,7 +32,7 @@
  *
  */
 
-#define SMAGORINSKY // Smagorinsky power-law instead of power-law
+#define _SMAGORINSKY // Smagorinsky power-law instead of power-law
 
 #include "olb2D.h"
 #include "olb2D.hh"
@@ -73,8 +73,8 @@ void prepareGeometry( PowerLawUnitConverter<T,DESCRIPTOR> const& converter,
   superGeometry.rename( 2,1,{1,1} );
 
   // Set material number for inflow
-  extend[0] = 1.2*converter.getConversionFactorLength();
-  origin[0] = -converter.getConversionFactorLength();
+  extend[0] = 1.2*converter.getPhysDeltaX();
+  origin[0] = -converter.getPhysDeltaX();
   IndicatorCuboid2D<T> inflow( extend, origin );
   if (bcTypePeriodic) {
     superGeometry.rename( 1,3,inflow );
@@ -83,7 +83,7 @@ void prepareGeometry( PowerLawUnitConverter<T,DESCRIPTOR> const& converter,
     superGeometry.rename( 2,3,1,inflow );
   }
   // Set material number for outflow
-  origin[0] = lx-.5*converter.getConversionFactorLength();
+  origin[0] = lx-.5*converter.getPhysDeltaX();
   IndicatorCuboid2D<T> outflow( extend, origin );
   if (bcTypePeriodic) {
     superGeometry.rename( 1,4,outflow );
@@ -110,19 +110,17 @@ void prepareLattice( SuperLattice<T,DESCRIPTOR>& sLattice,
   OstreamManager clout( std::cout,"prepareLattice" );
   clout << "Prepare Lattice ..." << std::endl;
 
-  const T omega = converter.getLatticeRelaxationFrequency();
-
   // Material=1 -->bulk dynamics
-#ifdef SMAGORINSKY
+#ifdef _SMAGORINSKY
   sLattice.defineDynamics<SmagorinskyPowerLawBGKdynamics>(superGeometry.getMaterialIndicator(1));
 #else
   sLattice.defineDynamics<PowerLawBGKdynamics>(superGeometry.getMaterialIndicator(1));
 #endif
 
   // Material=2 -->bounce back
-  setBounceBackBoundary(sLattice, superGeometry.getMaterialIndicator(2));
+  boundary::set<boundary::BounceBack>(sLattice, superGeometry.getMaterialIndicator(2));
 
-  T distance2Wall = converter.getConversionFactorLength()/2.;
+  T distance2Wall = converter.getPhysDeltaX()/2.;
   T p0 = converter.getPhysConsistencyCoeff()*util::pow( converter.getCharPhysVelocity(),n )*util::pow( ( n + 1. )/n,n )*util::pow( 2./( ly-distance2Wall*2 ), n + 1.);
 
   // Material=3 -->bulk dynamics (inflow)
@@ -137,7 +135,7 @@ void prepareLattice( SuperLattice<T,DESCRIPTOR>& sLattice,
   else {
     sLattice.defineDynamics<PowerLawBGKdynamics>(superGeometry.getMaterialIndicator(3));
     // Setting of the boundary conditions
-    setInterpolatedVelocityBoundary<T,DESCRIPTOR>(sLattice, omega, superGeometry, 3);
+    boundary::set<boundary::InterpolatedVelocity>(sLattice, superGeometry, 3);
   }
 
   // Material=4 -->bulk dynamics (outflow)
@@ -152,7 +150,7 @@ void prepareLattice( SuperLattice<T,DESCRIPTOR>& sLattice,
   else {
     sLattice.defineDynamics<PowerLawBGKdynamics>(superGeometry.getMaterialIndicator(4));
     // Setting of the boundary conditions
-    setInterpolatedPressureBoundary<T,DESCRIPTOR>(sLattice, omega, superGeometry, 4);
+    boundary::set<boundary::InterpolatedPressure>(sLattice, superGeometry, 4);
   }
 
   sLattice.setParameter<descriptors::OMEGA>(converter.getLatticeRelaxationFrequency());
@@ -163,8 +161,8 @@ void prepareLattice( SuperLattice<T,DESCRIPTOR>& sLattice,
   const T nuMax = 3.1667;
   sLattice.setParameter<powerlaw::OMEGA_MIN>(1./(nuMax*descriptors::invCs2<T,DESCRIPTOR>() + 0.5));
   sLattice.setParameter<powerlaw::OMEGA_MAX>(1./(nuMin*descriptors::invCs2<T,DESCRIPTOR>() + 0.5));
-#ifdef SMAGORINSKY
-  sLattice.setParameter<collision::LES::Smagorinsky>(T(0.15));
+#ifdef _SMAGORINSKY
+  sLattice.setParameter<collision::LES::SMAGORINSKY>(T(0.15));
 #endif
 
   // Define the analytical solutions for pressure and velocity
@@ -210,7 +208,7 @@ void error( SuperGeometry<T,2>& superGeometry,
   int input[1] = { };
   T result[1]  = { };
 
-  T distance2Wall = converter.getConversionFactorLength()/2.;
+  T distance2Wall = converter.getPhysDeltaX()/2.;
 
   PowerLaw2D<T> uSol( superGeometry,3,converter.getCharPhysVelocity(),distance2Wall,( n + 1. )/n );
   SuperLatticePhysVelocity2D<T,DESCRIPTOR> u( sLattice,converter );
@@ -284,9 +282,7 @@ void getResults( SuperLattice<T, DESCRIPTOR>& sLattice,
 
   if ( iT==0 ) {
     SuperLatticeCuboid2D<T, DESCRIPTOR> cuboid( sLattice );
-    SuperLatticeGeometry2D<T, DESCRIPTOR> geometry( sLattice,superGeometry );
     SuperLatticeRank2D<T, DESCRIPTOR> rank( sLattice );
-    vtmWriter.write( geometry );
     vtmWriter.write( cuboid );
     vtmWriter.write( rank );
     vtmWriter.createMasterFile();
@@ -351,14 +347,14 @@ int main( int argc, char* argv[] )
   IndicatorCuboid2D<T> cuboid( extend, origin );
 
 #ifdef PARALLEL_MODE_MPI
-  CuboidGeometry2D<T> cuboidGeometry( cuboid, converter.getConversionFactorLength(), singleton::mpi().getSize() );
+  CuboidGeometry2D<T> cuboidGeometry( cuboid, converter.getPhysDeltaX(), singleton::mpi().getSize() );
 #else
-  CuboidGeometry2D<T> cuboidGeometry( cuboid, converter.getConversionFactorLength(), 1 );
+  CuboidGeometry2D<T> cuboidGeometry( cuboid, converter.getPhysDeltaX(), 1 );
 #endif
 
   // Periodic boundaries in x-direction
   if (bcTypePeriodic) {
-    cuboidGeometry.setPeriodicity( true, false );
+    cuboidGeometry.setPeriodicity({ true, false });
   }
 
   HeuristicLoadBalancer<T> loadBalancer( cuboidGeometry );
@@ -410,7 +406,7 @@ int main( int argc, char* argv[] )
     std::vector<T> axisDirection( 2,T() );
     axisDirection[0] = 1;
     axisDirection[1] = 0;
-    T distance2Wall = converter.getConversionFactorLength()/2.;
+    T distance2Wall = converter.getPhysDeltaX()/2.;
     PowerLaw2D<T> uSol( superGeometry,3,converter.getCharPhysVelocity(),distance2Wall,( n + 1. )/n );
     T analytical[2] = {T(),T()};
     uSol( analytical,point );

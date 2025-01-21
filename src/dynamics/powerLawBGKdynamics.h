@@ -43,10 +43,31 @@ namespace olb {
 
 namespace powerlaw {
 
-struct OMEGA_MIN : public descriptors::FIELD_BASE<1> { };
-struct OMEGA_MAX : public descriptors::FIELD_BASE<1> { };
-struct M : public descriptors::FIELD_BASE<1> { };
-struct N : public descriptors::FIELD_BASE<1> { };
+struct OMEGA_MIN : public descriptors::FIELD_BASE<1> {
+  template <typename T, typename DESCRIPTOR,typename FIELD>
+  static constexpr auto isValid(FieldD<T,DESCRIPTOR,FIELD> value) {
+    return value > 0;
+  }
+};
+struct OMEGA_MAX : public descriptors::FIELD_BASE<1> {
+  template <typename T, typename DESCRIPTOR,typename FIELD>
+  static constexpr auto isValid(FieldD<T,DESCRIPTOR,FIELD> value) {
+    return value > 0;
+  }
+ };
+struct M : public descriptors::FIELD_BASE<1> {
+  template <typename T, typename DESCRIPTOR,typename FIELD>
+  static constexpr auto isValid(FieldD<T,DESCRIPTOR,FIELD> value) {
+    return value > 0;
+  }
+ };
+struct N : public descriptors::FIELD_BASE<1> {
+  template <typename T, typename DESCRIPTOR,typename FIELD>
+  static constexpr auto isValid(FieldD<T,DESCRIPTOR,FIELD> value) {
+    return value > 0;
+  }
+ };
+
 // The following is used for Herschel-Bulkley only
 struct YIELD_STRESS : public descriptors::FIELD_BASE<1> { };
 struct SHEAR_RATE_MIN : public descriptors::FIELD_BASE<1> { };
@@ -119,7 +140,6 @@ struct OmegaFromCell {
     }
   };
 };
-
 
 template <int... NORMAL>
 struct PRESSURE_OFFSET : public descriptors::FIELD_BASE<1> { };

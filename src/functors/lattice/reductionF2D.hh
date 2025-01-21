@@ -42,7 +42,7 @@ SuperLatticeFfromAnalyticalF2D<T,DESCRIPTOR>::SuperLatticeFfromAnalyticalF2D(
   this->getName() = "fromAnalyticalF(" + _f->getName() + ")";
 
   LoadBalancer<T>&     load   = sLattice.getLoadBalancer();
-  CuboidGeometry2D<T>& cuboid = sLattice.getCuboidGeometry();
+  auto& cuboid = sLattice.getCuboidGeometry();
 
   for (int iC = 0; iC < load.size(); ++iC) {
     this->_blockF.emplace_back(
@@ -57,9 +57,8 @@ SuperLatticeFfromAnalyticalF2D<T,DESCRIPTOR>::SuperLatticeFfromAnalyticalF2D(
 template <typename T, typename DESCRIPTOR>
 bool SuperLatticeFfromAnalyticalF2D<T,DESCRIPTOR>::operator()(T output[], const int input[])
 {
-  T physR[2] = {};
-  this->_sLattice.getCuboidGeometry().getPhysR(physR,input);
-  return _f(output,physR);
+  auto physR = this->_sLattice.getCuboidGeometry().getPhysR(input);
+  return _f(output,physR.data());
 }
 
 
@@ -79,9 +78,8 @@ template<typename T, typename DESCRIPTOR>
 bool BlockLatticeFfromAnalyticalF2D<T, DESCRIPTOR>::operator()(
   T output[], const int input[])
 {
-  T physR[2] = {};
-  _cuboid.getPhysR(physR,input);
-  return _f(output,physR);
+  auto physR = _cuboid.getPhysR(input);
+  return _f(output,physR.data());
 }
 
 

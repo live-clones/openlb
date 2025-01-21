@@ -1,0 +1,126 @@
+<!-- <Methods>
+<Map>
+<Indicator></Indicator>
+<Dynamic>
+....
+</Dynamic>
+</Map>
+<Methods> -->
+
+<Param>
+  <Methods>
+    <Map>
+      <Indicator>0</Indicator>
+      <Dynamic>
+        <Momenta>
+        <OneDensity/>
+        <ZeroMomentum/>
+        <ZeroStress/>
+        <DefineSeparately/>
+        </Momenta>
+        <Equilibria>
+        <None/>
+        </Equilibria>
+        <Collision>
+        <None/>
+        </Collision>
+      </Dynamic>
+    </Map>
+    <Map>
+      <Indicator>1</Indicator>
+      <Dynamic>
+        <Momenta>
+        <BulkDensity/>
+        <PorousMomentum><BulkMomentum/></PorousMomentum>
+        <BulkStress/>
+        <DefineToNEq/>
+        </Momenta>
+        <Equilibria>
+        <SecondOrder/>
+        </Equilibria>
+        <Collision>
+        <SmagorinskyEffectiveOmega><BGK/></SmagorinskyEffectiveOmega>
+        </Collision>
+        <Parameter>
+          <collision::LES::SMAGORINSKY>0.3</collision::LES::SMAGORINSKY>
+        </Parameter>
+      </Dynamic>
+    </Map>
+    <Map>
+      <Indicator>2</Indicator>
+      <Dynamic>
+        <Momenta>
+        <BulkDensity/>
+        <PorousMomentum><BulkMomentum/></PorousMomentum>
+        <BulkStress/>
+        <DefineToNEq/>
+        </Momenta>
+        <Equilibria>
+        <SecondOrder/>
+        </Equilibria>
+        <Collision>
+        <SmagorinskyEffectiveOmega><BGK/></SmagorinskyEffectiveOmega>
+        </Collision>
+        <Parameter>
+          <collision::LES::SMAGORINSKY>0.3</collision::LES::SMAGORINSKY>
+        </Parameter>
+      </Dynamic>
+    </Map>
+  </Methods>
+  <Application>
+    <Name>city3d</Name>
+    <dim>3</dim>
+    <OlbDir>../../</OlbDir> <!-- read manually in main-->
+    <PressureFilter></PressureFilter>
+    <Discretization> <!--two discretization parameters are required for unit converter-->
+      <Resolution>1</Resolution>
+      <LatticeRelaxationTime></LatticeRelaxationTime>
+      <PhysDeltaX></PhysDeltaX>
+      <CharLatticeVelocity>0.03</CharLatticeVelocity>
+      <PhysDeltaT></PhysDeltaT>
+    </Discretization>
+    <PhysParameters>
+      <PhysMaxTime>200</PhysMaxTime> <!-- read manually in main-->
+      <CharPhysLength>1.</CharPhysLength>
+      <CharPhysPressure>0.</CharPhysPressure>
+      <CharPhysVelocity>4.</CharPhysVelocity>
+      <PhysViscosity>10e-5</PhysViscosity>
+      <PhysDensity>1</PhysDensity>
+      <StartUpTime></StartUpTime>
+      <BoundaryValueUpdateTime></BoundaryValueUpdateTime>
+      <!--atmLayer parameters-->
+      <atmReferenceHeight>10</atmReferenceHeight>
+      <atmRoughnessLength>0.1</atmRoughnessLength>
+      <atmGroundNormalDisplacement>0.0</atmGroundNormalDisplacement>
+      <karmanConstant>0.41</karmanConstant>
+    </PhysParameters>
+    <Mesh>
+      <noCuboidsPerProcess></noCuboidsPerProcess>
+    </Mesh>
+    <ConvergenceCheck>
+      <Type></Type>
+      <Interval>1</Interval>
+      <Residuum>1e-3</Residuum>
+    </ConvergenceCheck>
+  </Application>
+  <Output>
+    <OutputDir>./tmp/</OutputDir> <!-- read manually in main-->
+    <MultiOutput>false</MultiOutput>
+    <PrintLogConverter></PrintLogConverter>
+    <VisualizationVTK>
+      <Output></Output>
+      <Filename>city3dvtk</Filename> <!-- read manually in main-->
+      <SaveTime>10</SaveTime> <!-- read manually in main-->
+    </VisualizationVTK>
+    <Log>
+      <Filename>city3d.log</Filename>
+      <SaveTime>0.1</SaveTime> <!-- read manually in main-->
+      <VerboseLog></VerboseLog>
+    </Log>
+    <Timer>
+      <PrintMode>0</PrintMode>
+      <PrintSummary>true</PrintSummary> <!-- app specific, unused -->
+      <PrintModeSummary>0</PrintModeSummary>
+    </Timer>
+  </Output>
+</Param>

@@ -45,32 +45,6 @@ namespace olb {
 
 template<typename T> class BlockIndicatorF2D;
 
-template <typename T, typename DESCRIPTOR>
-class BlockL1Norm2D final : public BlockLatticeF2D<T,DESCRIPTOR> {
-protected:
-  BlockLatticeF2D<T,DESCRIPTOR>& _f;
-  BlockGeometry<T,2>& _blockGeometry;
-  int _material;
-public:
-  BlockL1Norm2D(BlockLatticeF2D<T,DESCRIPTOR>& f, BlockGeometry<T,2>& blockGeometry, int material);
-  bool operator() (T output[], const int input[]) override;
-};
-
-
-/// BlockL223D returns componentwise the squared l2-norm
-template <typename T, typename DESCRIPTOR>
-class BlockL222D final : public BlockLatticeF2D<T,DESCRIPTOR> {
-protected:
-  BlockLatticeF2D<T,DESCRIPTOR>& _f;
-  BlockGeometry<T,2>& _blockGeometry;
-  int _material;
-public:
-  BlockL222D(BlockLatticeF2D<T,DESCRIPTOR>& f,
-             BlockGeometry<T,2>& blockGeometry,
-             int material);
-  bool operator() (T output[], const int input[]) override;
-};
-
 
 /// functor to get pointwise phys force acting on a indicated boundary on local lattice
 template <typename T, typename DESCRIPTOR>

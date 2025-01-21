@@ -23,7 +23,7 @@
 
 #pragma once
 
-#include "dynamics/descriptorField.h"
+#include "descriptor/fields.h"
 #include "dynamics/freeSurfaceHelpers.h"
 #include "core/postProcessing.h"
 #include "core/blockLattice.h"

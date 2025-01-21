@@ -1224,8 +1224,8 @@ void MpiManager::reduceAndBcast<int>(int& reductVal, MPI_Op op, int root, MPI_Co
   MPI_Reduce(&reductVal, &recvVal, 1, MPI_INT, op, root, comm);
   reductVal = recvVal;
   MPI_Bcast(&reductVal, 1, MPI_INT, root, comm);
-
 }
+
 
 template <>
 void MpiManager::reduceAndBcast<float>(float& reductVal, MPI_Op op, int root, MPI_Comm comm)
@@ -1237,7 +1237,6 @@ void MpiManager::reduceAndBcast<float>(float& reductVal, MPI_Op op, int root, MP
   MPI_Reduce(&reductVal, &recvVal, 1, MPI_FLOAT, op, root, comm);
   reductVal = recvVal;
   MPI_Bcast(&reductVal, 1, MPI_FLOAT, root, comm);
-
 }
 
 template <>
@@ -1290,6 +1289,42 @@ void MpiManager::reduceAndBcast<unsigned long>(unsigned long& reductVal, MPI_Op 
   reductVal = recvVal;
   MPI_Bcast(&reductVal, 1, MPI_UNSIGNED_LONG, root, comm);
 
+}
+
+template <>
+void MpiManager::allreduce<float>(const float* in, float* out, int count, MPI_Op op, MPI_Comm comm)
+{
+  if (!ok) {
+    return;
+  }
+  MPI_Allreduce(in, out, count, MPI_FLOAT, op, comm);
+}
+
+template <>
+void MpiManager::allreduce<double>(const double* in, double* out, int count, MPI_Op op, MPI_Comm comm)
+{
+  if (!ok) {
+    return;
+  }
+  MPI_Allreduce(in, out, count, MPI_DOUBLE, op, comm);
+}
+
+template <>
+void MpiManager::allreduce<unsigned>(const unsigned* in, unsigned* out, int count, MPI_Op op, MPI_Comm comm)
+{
+  if (!ok) {
+    return;
+  }
+  MPI_Allreduce(in, out, count, MPI_UNSIGNED, op, comm);
+}
+
+template <>
+void MpiManager::allreduce<int>(const int* in, int* out, int count, MPI_Op op, MPI_Comm comm)
+{
+  if (!ok) {
+    return;
+  }
+  MPI_Allreduce(in, out, count, MPI_INT, op, comm);
 }
 
 void MpiManager::wait(MPI_Request* request, MPI_Status* status)

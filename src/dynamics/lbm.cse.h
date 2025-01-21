@@ -28,7 +28,7 @@
 #ifndef DISABLE_CSE
 
 #include "lbm.h"
-#include "latticeDescriptors.h"
+#include "descriptor/descriptor.h"
 
 namespace olb {
 
@@ -109,20 +109,20 @@ auto x3 = V{1} / ((x2)*(x2));
 auto x4 = V{1.5}*x3;
 auto x5 = cell[2] - cell[4];
 auto x6 = -x5;
-auto x12 = x6*x6;
-auto x13 = cell[1] - cell[3];
-auto x14 = -x13;
-auto x15 = x4*(x14*x14) + V{-1};
+auto x7 = x6*x6;
+auto x8 = cell[1] - cell[3];
+auto x9 = -x8;
+auto x15 = x4*(x9*x9) + V{-1};
 auto x16 = V{1} / (x2);
 auto x17 = x16*(V{3}*cell[1] - V{3}*cell[3]);
 auto x18 = V{3}*x3;
-auto x19 = x13*x13;
+auto x19 = x8*x8;
 auto x20 = x5*x5;
 auto x21 = x20*x4;
 auto x22 = V{3}*cell[2] - V{3}*cell[4];
-fEq[0] = -V{0.333333333333333}*x1*(x12*x4 + x15) + V{-0.333333333333333};
+fEq[0] = -V{0.333333333333333}*x1*(x15 + x4*x7) + V{-0.333333333333333};
 fEq[1] = V{0.166666666666667}*x1*(x17 + x18*x19 - x21 + V{1}) + V{-0.166666666666667};
-fEq[2] = -V{0.166666666666667}*x1*(-x12*x18 + x15 - x16*x22) + V{-0.166666666666667};
+fEq[2] = -V{0.166666666666667}*x1*(x15 - x16*x22 - x18*x7) + V{-0.166666666666667};
 fEq[3] = V{0.166666666666667}*x1*(-x17 + V{3}*x19*x3 - x21 + V{1}) + V{-0.166666666666667};
 fEq[4] = -V{0.166666666666667}*x1*(x16*x22 - x18*x20 + x19*x4 + V{-1}) + V{-0.166666666666667};
 
@@ -138,13 +138,13 @@ auto x3 = V{1.5}*x2;
 auto x4 = x3 + V{-1};
 auto x5 = V{0.166666666666667}*rho;
 auto x6 = V{3}*u[0];
-auto x12 = V{3}*u[1];
-auto x13 = V{3}*x2;
+auto x7 = V{3}*u[1];
+auto x8 = V{3}*x2;
 fNeq[0] = V{0.333333333333333}*rho*(x1 + x4) + cell[0] + V{0.333333333333333};
 fNeq[1] = -x5*(V{3}*x0 - x4 - x6) + cell[1] + V{0.166666666666667};
-fNeq[2] = x5*(x1 + x12 - x13 + V{-1}) + cell[2] + V{0.166666666666667};
+fNeq[2] = x5*(x1 + x7 - x8 + V{-1}) + cell[2] + V{0.166666666666667};
 fNeq[3] = -x5*(V{3}*x0 - x3 + x6 + V{1}) + cell[3] + V{0.166666666666667};
-fNeq[4] = -x5*(-x1 + x12 + x13 + V{1}) + cell[4] + V{0.166666666666667};
+fNeq[4] = -x5*(-x1 + x7 + x8 + V{1}) + cell[4] + V{0.166666666666667};
 
 }
 
@@ -158,19 +158,19 @@ auto x3 = cell[1] - cell[3];
 auto x4 = x3*x3;
 auto x5 = x2*x4;
 auto x6 = cell[2] - cell[4];
-auto x12 = x6*x6;
-auto x13 = x12*x2;
-auto x14 = x13 + V{-1};
+auto x7 = x6*x6;
+auto x8 = x2*x7;
+auto x9 = x8 + V{-1};
 auto x15 = V{0.166666666666667}*cell[0] + V{0.166666666666667}*cell[1] + V{0.166666666666667}*cell[2] + V{0.166666666666667}*cell[3] + V{0.166666666666667}*cell[4] + V{0.166666666666667};
 auto x16 = V{1} / (x0);
 auto x17 = x16*(V{3}*cell[1] - V{3}*cell[3]);
 auto x18 = V{3}*x1;
 auto x19 = x16*(V{3}*cell[2] - V{3}*cell[4]);
-auto x20 = x12*x18;
-fNeq[0] = (x14 + x5)*(V{0.333333333333333}*cell[0] + V{0.333333333333333}*cell[1] + V{0.333333333333333}*cell[2] + V{0.333333333333333}*cell[3] + V{0.333333333333333}*cell[4] + V{0.333333333333333}) + cell[0] + V{0.333333333333333};
-fNeq[1] = -x15*(-x13 + x17 + x18*x4 + V{1}) + cell[1] + V{0.166666666666667};
+auto x20 = x18*x7;
+fNeq[0] = (x5 + x9)*(V{0.333333333333333}*cell[0] + V{0.333333333333333}*cell[1] + V{0.333333333333333}*cell[2] + V{0.333333333333333}*cell[3] + V{0.333333333333333}*cell[4] + V{0.333333333333333}) + cell[0] + V{0.333333333333333};
+fNeq[1] = -x15*(x17 + x18*x4 - x8 + V{1}) + cell[1] + V{0.166666666666667};
 fNeq[2] = x15*(V{1.5}*x1*x4 - x19 - x20 + V{-1}) + cell[2] + V{0.166666666666667};
-fNeq[3] = -x15*(V{3}*x1*x4 - x14 - x17) + cell[3] + V{0.166666666666667};
+fNeq[3] = -x15*(V{3}*x1*x4 - x17 - x9) + cell[3] + V{0.166666666666667};
 fNeq[4] = x15*(x19 - x20 + x5 + V{-1}) + cell[4] + V{0.166666666666667};
 
 }
@@ -427,6 +427,48 @@ cell[4] = -x7*(x12*(x11 + V{3}) + x13) + cell[4];
 
 }
 
+template <typename CELL, typename RHO, typename NABLARHO, typename U, typename OMEGA, typename FORCE, typename V=typename CELL::value_t>
+static void addLiangForce(CELL& cell, RHO& rho, NABLARHO& nablarho, U& u, OMEGA& omega, FORCE& force) any_platform
+{
+auto x5 = rho*force[0];
+auto x6 = nablarho[0]*u[0];
+auto x7 = V{0.25}*omega + V{-0.5};
+auto x8 = rho*force[1];
+auto x9 = nablarho[1]*u[1];
+cell[0] = cell[0];
+cell[1] = x7*(x5 - x6) + cell[1];
+cell[2] = x7*(x8 - x9) + cell[2];
+cell[3] = -x7*(x5 + x6) + cell[3];
+cell[4] = -x7*(x8 + x9) + cell[4];
+
+}
+
+template <typename CELL, typename OMEGA, typename FORCE, typename V=typename CELL::value_t>
+static void addAllenCahnForce(CELL& cell, OMEGA& omega, FORCE& force) any_platform
+{
+auto x5 = V{0.25}*omega + V{-0.5};
+auto x6 = x5*force[0];
+auto x7 = x5*force[1];
+cell[0] = cell[0];
+cell[1] = x6 + cell[1];
+cell[2] = x7 + cell[2];
+cell[3] = -x6 + cell[3];
+cell[4] = -x7 + cell[4];
+
+}
+
+template <typename CELL, typename OMEGA, typename SOURCE, typename V=typename CELL::value_t>
+static void addAllenCahnSource(CELL& cell, OMEGA& omega, SOURCE& source) any_platform
+{
+auto x5 = V{0.166666666666667}*source;
+cell[0] = V{0.333333333333333}*source + cell[0];
+cell[1] = x5 + cell[1];
+cell[2] = x5 + cell[2];
+cell[3] = x5 + cell[3];
+cell[4] = x5 + cell[4];
+
+}
+
 };
 
 template <typename... FIELDS>
@@ -521,10 +563,10 @@ auto x7 = x5 + x6 - cell[3] + cell[7];
 auto x8 = x7*x7;
 auto x9 = x4*x8;
 auto x10 = cell[2] - cell[6];
-auto x20 = x10 + x5 + cell[3] - cell[7];
-auto x21 = -x20;
-auto x22 = x4*(x21*x21) + V{-1};
-auto x23 = x22 + x9;
+auto x11 = x10 + x5 + cell[3] - cell[7];
+auto x12 = -x11;
+auto x13 = x4*(x12*x12) + V{-1};
+auto x23 = x13 + x9;
 auto x24 = V{4.5}*x3;
 auto x25 = x10 + x6 + V{2}*cell[1] - V{2}*cell[5];
 auto x26 = x24*(x25*x25);
@@ -537,7 +579,7 @@ auto x32 = x27*x31;
 auto x33 = x32 - x9 + V{1};
 auto x34 = -x28 + x29 + x30 - V{3}*cell[4] + V{3}*cell[8];
 auto x35 = x27*x34;
-auto x36 = x20*x20;
+auto x36 = x11*x11;
 auto x37 = x36*x4;
 auto x38 = x35 - x37;
 auto x39 = V{3}*x3;
@@ -550,7 +592,7 @@ fEq[0] = -V{0.444444444444444}*x1*x23 + V{-0.444444444444444};
 fEq[1] = V{0.0277777777777778}*x1*(x26 + x33 + x38) + V{-0.0277777777777778};
 fEq[2] = V{0.111111111111111}*x1*(x33 + x36*x39) + V{-0.111111111111111};
 fEq[3] = -V{0.0277777777777778}*(x1*(x23 - x24*x41*x41 - x27*x31 + x35) + V{1});
-fEq[4] = -V{0.111111111111111}*x1*(x22 + x35 - x42) + V{-0.111111111111111};
+fEq[4] = -V{0.111111111111111}*x1*(x13 + x35 - x42) + V{-0.111111111111111};
 fEq[5] = -V{0.0277777777777778}*x1*(-x26 + x35 + x44) + V{-0.0277777777777778};
 fEq[6] = V{0.111111111111111}*x1*(V{3}*x3*x36 - x43) + V{-0.111111111111111};
 fEq[7] = V{0.0277777777777778}*(-x1*(-x27*x34 - V{4.5}*x3*x40*x40 + x44) + V{-1});
@@ -572,24 +614,24 @@ auto x7 = V{3}*u[1];
 auto x8 = -x7;
 auto x9 = u[0] - u[1];
 auto x10 = x9*x9;
-auto x20 = V{3}*u[0];
-auto x21 = x20 + x5;
-auto x22 = V{0.111111111111111}*rho;
+auto x11 = V{3}*u[0];
+auto x12 = x11 + x5;
+auto x13 = V{0.111111111111111}*rho;
 auto x23 = u[0] + u[1];
 auto x24 = V{4.5}*(x23*x23);
 auto x25 = V{3}*x2;
 auto x26 = -x1;
-auto x27 = x20 - x3 + V{1};
+auto x27 = x11 - x3 + V{1};
 auto x28 = x26 + x7;
 fNeq[0] = V{0.444444444444444}*rho*x5 + cell[0] + V{0.444444444444444};
-fNeq[1] = -x6*(V{4.5}*x10 - x21 - x8) + cell[1] + V{0.0277777777777778};
-fNeq[2] = -x22*(V{3}*x0 - x20 - x4) + cell[2] + V{0.111111111111111};
-fNeq[3] = x6*(x21 - x24 + x7) + cell[3] + V{0.0277777777777778};
-fNeq[4] = x22*(x1 - x25 + x7 + V{-1}) + cell[4] + V{0.111111111111111};
+fNeq[1] = -x6*(V{4.5}*x10 - x12 - x8) + cell[1] + V{0.0277777777777778};
+fNeq[2] = -x13*(V{3}*x0 - x11 - x4) + cell[2] + V{0.111111111111111};
+fNeq[3] = x6*(x12 - x24 + x7) + cell[3] + V{0.0277777777777778};
+fNeq[4] = x13*(x1 - x25 + x7 + V{-1}) + cell[4] + V{0.111111111111111};
 fNeq[5] = -x6*(V{4.5}*x10 + x26 + x27 + x8) + cell[5] + V{0.0277777777777778};
-fNeq[6] = -x22*(V{3}*x0 + x27) + cell[6] + V{0.111111111111111};
+fNeq[6] = -x13*(V{3}*x0 + x27) + cell[6] + V{0.111111111111111};
 fNeq[7] = -x6*(x24 + x27 + x28) + cell[7] + V{0.0277777777777778};
-fNeq[8] = -x22*(x25 + x28 + V{1}) + cell[8] + V{0.111111111111111};
+fNeq[8] = -x13*(x25 + x28 + V{1}) + cell[8] + V{0.111111111111111};
 
 }
 
@@ -607,9 +649,9 @@ auto x7 = x2*x6;
 auto x8 = cell[2] - cell[6];
 auto x9 = x3 + x8 + cell[3] - cell[7];
 auto x10 = x9*x9;
-auto x20 = x10*x2;
-auto x21 = x20 + V{-1};
-auto x22 = x21 + x7;
+auto x11 = x10*x2;
+auto x12 = x11 + V{-1};
+auto x13 = x12 + x7;
 auto x23 = V{0.0277777777777778}*cell[0] + V{0.0277777777777778}*cell[1] + V{0.0277777777777778}*cell[2] + V{0.0277777777777778}*cell[3] + V{0.0277777777777778}*cell[4] + V{0.0277777777777778}*cell[5] + V{0.0277777777777778}*cell[6] + V{0.0277777777777778}*cell[7] + V{0.0277777777777778}*cell[8] + V{0.0277777777777778};
 auto x24 = V{4.5}*x1;
 auto x25 = x4 + x8 + V{2}*cell[1] - V{2}*cell[5];
@@ -622,7 +664,7 @@ auto x31 = x27*(x28 - x29 + x30 + V{3}*cell[2] - V{3}*cell[6]);
 auto x32 = x31 - x7 + V{1};
 auto x33 = -x28 + x29 + x30 - V{3}*cell[4] + V{3}*cell[8];
 auto x34 = x27*x33;
-auto x35 = -x20;
+auto x35 = -x11;
 auto x36 = x34 + x35;
 auto x37 = V{0.111111111111111}*cell[0] + V{0.111111111111111}*cell[1] + V{0.111111111111111}*cell[2] + V{0.111111111111111}*cell[3] + V{0.111111111111111}*cell[4] + V{0.111111111111111}*cell[5] + V{0.111111111111111}*cell[6] + V{0.111111111111111}*cell[7] + V{0.111111111111111}*cell[8] + V{0.111111111111111};
 auto x38 = V{3}*x1;
@@ -630,12 +672,12 @@ auto x39 = -x27*x33;
 auto x40 = x8 + V{2}*cell[3] + cell[4] - V{2}*cell[7] - cell[8];
 auto x41 = -x40;
 auto x42 = x38*x6;
-auto x43 = x22 + x31;
-fNeq[0] = x22*(V{0.444444444444444}*cell[0] + V{0.444444444444444}*cell[1] + V{0.444444444444444}*cell[2] + V{0.444444444444444}*cell[3] + V{0.444444444444444}*cell[4] + V{0.444444444444444}*cell[5] + V{0.444444444444444}*cell[6] + V{0.444444444444444}*cell[7] + V{0.444444444444444}*cell[8] + V{0.444444444444444}) + cell[0] + V{0.444444444444444};
+auto x43 = x13 + x31;
+fNeq[0] = x13*(V{0.444444444444444}*cell[0] + V{0.444444444444444}*cell[1] + V{0.444444444444444}*cell[2] + V{0.444444444444444}*cell[3] + V{0.444444444444444}*cell[4] + V{0.444444444444444}*cell[5] + V{0.444444444444444}*cell[6] + V{0.444444444444444}*cell[7] + V{0.444444444444444}*cell[8] + V{0.444444444444444}) + cell[0] + V{0.444444444444444};
 fNeq[1] = -x23*(x26 + x32 + x36) + cell[1] + V{0.0277777777777778};
 fNeq[2] = -x37*(x10*x38 + x32) + cell[2] + V{0.111111111111111};
 fNeq[3] = -x23*(x24*(x41*x41) + x32 + x35 + x39) + cell[3] + V{0.0277777777777778};
-fNeq[4] = x37*(x21 + x34 - x42) + cell[4] + V{0.111111111111111};
+fNeq[4] = x37*(x12 + x34 - x42) + cell[4] + V{0.111111111111111};
 fNeq[5] = x23*(-x26 + x34 + x43) + cell[5] + V{0.0277777777777778};
 fNeq[6] = -x37*(V{3}*x1*x10 - x31 - x7 + V{1}) + cell[6] + V{0.111111111111111};
 fNeq[7] = x23*(-V{4.5}*x1*x40*x40 + x39 + x43) + cell[7] + V{0.0277777777777778};
@@ -1052,6 +1094,74 @@ cell[8] = -x11*(x14*x22 + x23) + cell[8];
 
 }
 
+template <typename CELL, typename RHO, typename NABLARHO, typename U, typename OMEGA, typename FORCE, typename V=typename CELL::value_t>
+static void addLiangForce(CELL& cell, RHO& rho, NABLARHO& nablarho, U& u, OMEGA& omega, FORCE& force) any_platform
+{
+auto x9 = u[0] - u[1];
+auto x10 = x9*nablarho[1];
+auto x11 = rho*force[0];
+auto x12 = rho*force[1];
+auto x13 = x11 - x12;
+auto x14 = V{0.5}*omega + V{-1};
+auto x15 = V{0.0833333333333333}*x14;
+auto x16 = nablarho[0]*u[0];
+auto x17 = V{0.333333333333333}*x14;
+auto x18 = u[0] + u[1];
+auto x19 = x18*nablarho[0];
+auto x20 = x18*nablarho[1];
+auto x21 = x11 + x12;
+auto x22 = nablarho[1]*u[1];
+cell[0] = cell[0];
+cell[1] = -x15*(-x10 - x13 + x9*nablarho[0]) + cell[1];
+cell[2] = x17*(x11 - x16) + cell[2];
+cell[3] = x15*(-x19 - x20 + x21) + cell[3];
+cell[4] = x17*(x12 - x22) + cell[4];
+cell[5] = -x15*(-x10 + x13 + x9*nablarho[0]) + cell[5];
+cell[6] = -x17*(x11 + x16) + cell[6];
+cell[7] = -x15*(x19 + x20 + x21) + cell[7];
+cell[8] = -x17*(x12 + x22) + cell[8];
+
+}
+
+template <typename CELL, typename OMEGA, typename FORCE, typename V=typename CELL::value_t>
+static void addAllenCahnForce(CELL& cell, OMEGA& omega, FORCE& force) any_platform
+{
+auto x9 = V{0.5}*omega + V{-1};
+auto x10 = V{0.0833333333333333}*x9;
+auto x11 = x10*(force[0] - force[1]);
+auto x12 = V{0.333333333333333}*x9;
+auto x13 = x12*force[0];
+auto x14 = x10*(force[0] + force[1]);
+auto x15 = x12*force[1];
+cell[0] = cell[0];
+cell[1] = x11 + cell[1];
+cell[2] = x13 + cell[2];
+cell[3] = x14 + cell[3];
+cell[4] = x15 + cell[4];
+cell[5] = -x11 + cell[5];
+cell[6] = -x13 + cell[6];
+cell[7] = -x14 + cell[7];
+cell[8] = -x15 + cell[8];
+
+}
+
+template <typename CELL, typename OMEGA, typename SOURCE, typename V=typename CELL::value_t>
+static void addAllenCahnSource(CELL& cell, OMEGA& omega, SOURCE& source) any_platform
+{
+auto x9 = V{0.0277777777777778}*source;
+auto x10 = V{0.111111111111111}*source;
+cell[0] = V{0.444444444444444}*source + cell[0];
+cell[1] = x9 + cell[1];
+cell[2] = x10 + cell[2];
+cell[3] = x9 + cell[3];
+cell[4] = x10 + cell[4];
+cell[5] = x9 + cell[5];
+cell[6] = x10 + cell[6];
+cell[7] = x9 + cell[7];
+cell[8] = x10 + cell[8];
+
+}
+
 };
 
 template <typename... FIELDS>
@@ -1122,7 +1232,7 @@ auto x6 = cell[3] - cell[6];
 auto x7 = V{0.25}*cell[0];
 auto x8 = x7 + V{0.25}*cell[3] + V{0.25}*cell[6];
 auto x9 = V{0.25}*cell[2] + V{0.25}*cell[5];
-auto x20 = V{0.25}*cell[1] + V{0.25}*cell[4];
+auto x10 = V{0.25}*cell[1] + V{0.25}*cell[4];
 rho = x0;
 u[0] = -x3;
 u[1] = -x5;
@@ -1130,9 +1240,9 @@ u[2] = -x2*x6;
 pi[0] = -x2*x1*x1 - x8 - x9 + V{0.75}*cell[1] + V{0.75}*cell[4];
 pi[1] = -x3*x4;
 pi[2] = -x3*x6;
-pi[3] = -x2*x4*x4 - x20 - x8 + V{0.75}*cell[2] + V{0.75}*cell[5];
+pi[3] = -x10 - x2*x4*x4 - x8 + V{0.75}*cell[2] + V{0.75}*cell[5];
 pi[4] = -x5*x6;
-pi[5] = -x2*x6*x6 - x20 - x7 - x9 + V{0.75}*cell[3] + V{0.75}*cell[6];
+pi[5] = -x10 - x2*x6*x6 - x7 - x9 + V{0.75}*cell[3] + V{0.75}*cell[6];
 
 }
 
@@ -1149,14 +1259,14 @@ auto x6 = -x5;
 auto x7 = x6*x6;
 auto x8 = x4*x7;
 auto x9 = cell[2] - cell[5];
-auto x17 = -x9;
-auto x18 = x17*x17;
-auto x19 = x18*x4;
-auto x20 = cell[3] - cell[6];
-auto x21 = -x20;
+auto x10 = -x9;
+auto x11 = x10*x10;
+auto x12 = x11*x4;
+auto x13 = cell[3] - cell[6];
+auto x21 = -x13;
 auto x22 = x21*x21;
 auto x23 = x22*x4;
-auto x24 = x19 + x23 + V{-1};
+auto x24 = x12 + x23 + V{-1};
 auto x25 = V{1} / (x2);
 auto x26 = V{4}*cell[1] - V{4}*cell[4];
 auto x27 = V{6}*x3;
@@ -1166,13 +1276,13 @@ auto x30 = V{4}*cell[3] - V{4}*cell[6];
 auto x31 = x9*x9;
 auto x32 = x31*x4;
 auto x33 = x5*x5;
-auto x34 = x20*x20;
+auto x34 = x13*x13;
 auto x35 = x34*x4 + V{-1};
 auto x36 = x33*x4;
 fEq[0] = -V{0.25}*x1*(x24 + x8) + V{-0.25};
 fEq[1] = -V{0.125}*x1*(x24 - x25*x26 - x27*x7) + V{-0.125};
-fEq[2] = -V{0.125}*x1*(-x18*x27 + x23 - x25*x28 + x29) + V{-0.125};
-fEq[3] = -V{0.125}*x1*(x19 - x22*x27 - x25*x30 + x29) + V{-0.125};
+fEq[2] = -V{0.125}*x1*(-x11*x27 + x23 - x25*x28 + x29) + V{-0.125};
+fEq[3] = -V{0.125}*x1*(x12 - x22*x27 - x25*x30 + x29) + V{-0.125};
 fEq[4] = -V{0.125}*x1*(x25*x26 - x27*x33 + x32 + x35) + V{-0.125};
 fEq[5] = -V{0.125}*x1*(x25*x28 - x27*x31 + x35 + x36) + V{-0.125};
 fEq[6] = -V{0.125}*x1*(x25*x30 - x27*x34 + x32 + x36 + V{-1}) + V{-0.125};
@@ -1192,21 +1302,21 @@ auto x6 = x3 + x5 + V{-1};
 auto x7 = V{0.125}*rho;
 auto x8 = V{4}*u[0];
 auto x9 = V{6}*x0;
-auto x17 = V{4}*u[1];
-auto x18 = V{6}*x2;
-auto x19 = x1 + V{-1};
-auto x20 = V{4}*u[2];
+auto x10 = V{4}*u[1];
+auto x11 = V{6}*x2;
+auto x12 = x1 + V{-1};
+auto x13 = V{4}*u[2];
 auto x21 = V{6}*x4;
 auto x22 = -x3;
 auto x23 = V{1} - x5;
 auto x24 = -x1;
 fNeq[0] = V{0.25}*rho*(x1 + x6) + cell[0] + V{0.25};
 fNeq[1] = x7*(x6 + x8 - x9) + cell[1] + V{0.125};
-fNeq[2] = x7*(x17 - x18 + x19 + x5) + cell[2] + V{0.125};
-fNeq[3] = x7*(x19 + x20 - x21 + x3) + cell[3] + V{0.125};
+fNeq[2] = x7*(x10 - x11 + x12 + x5) + cell[2] + V{0.125};
+fNeq[3] = x7*(x12 + x13 - x21 + x3) + cell[3] + V{0.125};
 fNeq[4] = -x7*(x22 + x23 + x8 + x9) + cell[4] + V{0.125};
-fNeq[5] = -x7*(x17 + x18 + x23 + x24) + cell[5] + V{0.125};
-fNeq[6] = -x7*(x20 + x21 + x22 + x24 + V{1}) + cell[6] + V{0.125};
+fNeq[5] = -x7*(x10 + x11 + x23 + x24) + cell[5] + V{0.125};
+fNeq[6] = -x7*(x13 + x21 + x22 + x24 + V{1}) + cell[6] + V{0.125};
 
 }
 
@@ -1223,29 +1333,29 @@ auto x6 = cell[2] - cell[5];
 auto x7 = x6*x6;
 auto x8 = x2*x7;
 auto x9 = cell[3] - cell[6];
-auto x17 = x9*x9;
-auto x18 = x17*x2;
-auto x19 = x18 + x8 + V{-1};
-auto x20 = V{0.125}*cell[0] + V{0.125}*cell[1] + V{0.125}*cell[2] + V{0.125}*cell[3] + V{0.125}*cell[4] + V{0.125}*cell[5] + V{0.125}*cell[6] + V{0.125};
+auto x10 = x9*x9;
+auto x11 = x10*x2;
+auto x12 = x11 + x8 + V{-1};
+auto x13 = V{0.125}*cell[0] + V{0.125}*cell[1] + V{0.125}*cell[2] + V{0.125}*cell[3] + V{0.125}*cell[4] + V{0.125}*cell[5] + V{0.125}*cell[6] + V{0.125};
 auto x21 = V{1} / (x0);
 auto x22 = x21*(V{4}*cell[1] - V{4}*cell[4]);
 auto x23 = V{6}*x1;
 auto x24 = x23*x4;
 auto x25 = -V{2}*x1*x7;
-auto x26 = -V{2}*x1*x17 + V{1};
+auto x26 = -V{2}*x1*x10 + V{1};
 auto x27 = x21*(V{4}*cell[2] - V{4}*cell[5]);
 auto x28 = x23*x7;
 auto x29 = -V{2}*x1*x4;
 auto x30 = x21*(V{4}*cell[3] - V{4}*cell[6]);
-auto x31 = x17*x23;
+auto x31 = x10*x23;
 auto x32 = x5 + V{-1};
-fNeq[0] = (x19 + x5)*(V{0.25}*cell[0] + V{0.25}*cell[1] + V{0.25}*cell[2] + V{0.25}*cell[3] + V{0.25}*cell[4] + V{0.25}*cell[5] + V{0.25}*cell[6] + V{0.25}) + cell[0] + V{0.25};
-fNeq[1] = x20*(-x22 - x24 - x25 - x26) + cell[1] + V{0.125};
-fNeq[2] = x20*(-x26 - x27 - x28 - x29) + cell[2] + V{0.125};
-fNeq[3] = x20*(-x25 - x29 - x30 - x31 + V{-1}) + cell[3] + V{0.125};
-fNeq[4] = x20*(x19 + x22 - x24) + cell[4] + V{0.125};
-fNeq[5] = x20*(x18 + x27 - x28 + x32) + cell[5] + V{0.125};
-fNeq[6] = x20*(x30 - x31 + x32 + x8) + cell[6] + V{0.125};
+fNeq[0] = (x12 + x5)*(V{0.25}*cell[0] + V{0.25}*cell[1] + V{0.25}*cell[2] + V{0.25}*cell[3] + V{0.25}*cell[4] + V{0.25}*cell[5] + V{0.25}*cell[6] + V{0.25}) + cell[0] + V{0.25};
+fNeq[1] = x13*(-x22 - x24 - x25 - x26) + cell[1] + V{0.125};
+fNeq[2] = x13*(-x26 - x27 - x28 - x29) + cell[2] + V{0.125};
+fNeq[3] = x13*(-x25 - x29 - x30 - x31 + V{-1}) + cell[3] + V{0.125};
+fNeq[4] = x13*(x12 + x22 - x24) + cell[4] + V{0.125};
+fNeq[5] = x13*(x11 + x27 - x28 + x32) + cell[5] + V{0.125};
+fNeq[6] = x13*(x30 - x31 + x32 + x8) + cell[6] + V{0.125};
 
 }
 
@@ -1623,6 +1733,57 @@ cell[6] = x10*(-x21*(x20 + V{4}) + x22) + cell[6];
 
 }
 
+template <typename CELL, typename RHO, typename NABLARHO, typename U, typename OMEGA, typename FORCE, typename V=typename CELL::value_t>
+static void addLiangForce(CELL& cell, RHO& rho, NABLARHO& nablarho, U& u, OMEGA& omega, FORCE& force) any_platform
+{
+auto x7 = rho*force[0];
+auto x8 = nablarho[0]*u[0];
+auto x9 = V{0.25}*omega + V{-0.5};
+auto x10 = rho*force[1];
+auto x11 = nablarho[1]*u[1];
+auto x12 = rho*force[2];
+auto x13 = nablarho[2]*u[2];
+cell[0] = cell[0];
+cell[1] = x9*(x7 - x8) + cell[1];
+cell[2] = x9*(x10 - x11) + cell[2];
+cell[3] = x9*(x12 - x13) + cell[3];
+cell[4] = -x9*(x7 + x8) + cell[4];
+cell[5] = -x9*(x10 + x11) + cell[5];
+cell[6] = -x9*(x12 + x13) + cell[6];
+
+}
+
+template <typename CELL, typename OMEGA, typename FORCE, typename V=typename CELL::value_t>
+static void addAllenCahnForce(CELL& cell, OMEGA& omega, FORCE& force) any_platform
+{
+auto x7 = V{0.25}*omega + V{-0.5};
+auto x8 = x7*force[0];
+auto x9 = x7*force[1];
+auto x10 = x7*force[2];
+cell[0] = cell[0];
+cell[1] = x8 + cell[1];
+cell[2] = x9 + cell[2];
+cell[3] = x10 + cell[3];
+cell[4] = -x8 + cell[4];
+cell[5] = -x9 + cell[5];
+cell[6] = -x10 + cell[6];
+
+}
+
+template <typename CELL, typename OMEGA, typename SOURCE, typename V=typename CELL::value_t>
+static void addAllenCahnSource(CELL& cell, OMEGA& omega, SOURCE& source) any_platform
+{
+auto x7 = V{0.125}*source;
+cell[0] = V{0.25}*source + cell[0];
+cell[1] = x7 + cell[1];
+cell[2] = x7 + cell[2];
+cell[3] = x7 + cell[3];
+cell[4] = x7 + cell[4];
+cell[5] = x7 + cell[5];
+cell[6] = x7 + cell[6];
+
+}
+
 };
 
 template <typename... FIELDS>
@@ -1762,18 +1923,18 @@ auto x18 = x17 + x7;
 auto x19 = cell[18] - cell[9];
 auto x20 = -cell[2];
 auto x21 = x20 + cell[11] - cell[14] + cell[5];
-auto x41 = x18 + x19 + x21;
-auto x42 = x41*x41;
-auto x43 = x42*x6;
-auto x44 = x17 + x8;
+auto x22 = x18 + x19 + x21;
+auto x23 = x22*x22;
+auto x24 = x23*x6;
+auto x25 = x17 + x8;
 auto x45 = -cell[3];
 auto x46 = -cell[18] + cell[9];
 auto x47 = x45 + x46;
 auto x48 = x1 - cell[16];
-auto x49 = x44 + x47 + x48;
+auto x49 = x25 + x47 + x48;
 auto x50 = x49*x49;
 auto x51 = x50*x6;
-auto x52 = x43 + x51 + V{-1};
+auto x52 = x24 + x51 + V{-1};
 auto x53 = x16 + x52;
 auto x54 = V{1} / (x4);
 auto x55 = V{3}*cell[14];
@@ -1789,13 +1950,13 @@ auto x64 = V{3}*cell[18];
 auto x65 = V{3}*cell[9];
 auto x66 = V{3}*cell[17] - V{3}*cell[8];
 auto x67 = x54*(-x55 + x57 + x59 + x64 - x65 + x66 + V{3}*cell[11] - V{3}*cell[2]);
-auto x68 = x42*x62;
+auto x68 = x23*x62;
 auto x69 = x16 + V{-1};
 auto x70 = x54*(-x56 + x58 + x60 - x64 + x65 + x66 + V{3}*cell[12] - V{3}*cell[3]);
 auto x71 = x50*x62;
 auto x72 = V{4.5}*x5;
 auto x73 = x12 + cell[10];
-auto x74 = x19 + x20 + x44 + x73 + cell[11] + V{2}*cell[13] - V{2}*cell[4];
+auto x74 = x19 + x20 + x25 + x73 + cell[11] + V{2}*cell[13] - V{2}*cell[4];
 auto x75 = x72*(x74*x74);
 auto x76 = x53 + x61;
 auto x77 = -x67;
@@ -1814,7 +1975,7 @@ auto x89 = x72*(x88*x88);
 auto x90 = x53 + x67;
 auto x91 = x11 + x21 + x85 - cell[15] + V{2}*cell[18] + cell[6] - V{2}*cell[9];
 auto x92 = -x91;
-auto x93 = -x43;
+auto x93 = -x24;
 auto x94 = V{1} - x51;
 auto x95 = x93 + x94;
 auto x96 = x61 + x95;
@@ -1826,7 +1987,7 @@ auto x101 = x53 + x70;
 fEq[0] = -V{0.333333333333333}*x3*x53 + V{-0.333333333333333};
 fEq[1] = -V{0.0555555555555556}*x3*(x52 + x61 - x63) + V{-0.0555555555555556};
 fEq[2] = -V{0.0555555555555556}*x3*(x51 + x67 - x68 + x69) + V{-0.0555555555555556};
-fEq[3] = -V{0.0555555555555556}*x3*(x43 + x69 + x70 - x71) + V{-0.0555555555555556};
+fEq[3] = -V{0.0555555555555556}*x3*(x24 + x69 + x70 - x71) + V{-0.0555555555555556};
 fEq[4] = -V{0.0277777777777778}*x3*(x67 - x75 + x76) + V{-0.0277777777777778};
 fEq[5] = -V{0.0277777777777778}*(x3*(-x72*x80*x80 + x76 + x77) + V{1});
 fEq[6] = -V{0.0277777777777778}*x3*(x70 + x76 - x83) + V{-0.0277777777777778};
@@ -1870,10 +2031,10 @@ auto x18 = V{4.5}*(x17*x17);
 auto x19 = x7 + x9;
 auto x20 = -x11;
 auto x21 = u[0] - u[1];
-auto x41 = -V{4.5}*x21*x21;
-auto x42 = u[0] + u[2];
-auto x43 = V{4.5}*(x42*x42);
-auto x44 = -x14;
+auto x22 = -V{4.5}*x21*x21;
+auto x23 = u[0] + u[2];
+auto x24 = V{4.5}*(x23*x23);
+auto x25 = -x14;
 auto x45 = -u[2];
 auto x46 = x45 + u[0];
 auto x47 = -V{4.5}*x46*x46;
@@ -1896,17 +2057,17 @@ fNeq[1] = x8*(-x10 + x6 + x9) + cell[1] + V{0.0555555555555556};
 fNeq[2] = x8*(x11 - x12 + x13 + x5) + cell[2] + V{0.0555555555555556};
 fNeq[3] = x8*(x13 + x14 - x15 + x3) + cell[3] + V{0.0555555555555556};
 fNeq[4] = x16*(x11 - x18 + x19) + cell[4] + V{0.0277777777777778};
-fNeq[5] = x16*(x19 + x20 + x41) + cell[5] + V{0.0277777777777778};
-fNeq[6] = x16*(x14 + x19 - x43) + cell[6] + V{0.0277777777777778};
-fNeq[7] = x16*(x19 + x44 + x47) + cell[7] + V{0.0277777777777778};
+fNeq[5] = x16*(x19 + x20 + x22) + cell[5] + V{0.0277777777777778};
+fNeq[6] = x16*(x14 + x19 - x24) + cell[6] + V{0.0277777777777778};
+fNeq[7] = x16*(x19 + x25 + x47) + cell[7] + V{0.0277777777777778};
 fNeq[8] = x16*(x14 - x49 + x50) + cell[8] + V{0.0277777777777778};
-fNeq[9] = x16*(x44 + x50 + x52) + cell[9] + V{0.0277777777777778};
+fNeq[9] = x16*(x25 + x50 + x52) + cell[9] + V{0.0277777777777778};
 fNeq[10] = -x8*(x10 + x56) + cell[10] + V{0.0555555555555556};
 fNeq[11] = -x8*(x12 + x54 + x58) + cell[11] + V{0.0555555555555556};
 fNeq[12] = -x8*(x15 + x53 + x59 + V{1}) + cell[12] + V{0.0555555555555556};
 fNeq[13] = -x16*(x18 + x56 + x58) + cell[13] + V{0.0277777777777778};
-fNeq[14] = x16*(x41 + x50 + x60) + cell[14] + V{0.0277777777777778};
-fNeq[15] = -x16*(x43 + x56 + x59) + cell[15] + V{0.0277777777777778};
+fNeq[14] = x16*(x22 + x50 + x60) + cell[14] + V{0.0277777777777778};
+fNeq[15] = -x16*(x24 + x56 + x59) + cell[15] + V{0.0277777777777778};
 fNeq[16] = x16*(x47 + x60 + x61) + cell[16] + V{0.0277777777777778};
 fNeq[17] = -x16*(x14 + x49 + x55 + x58) + cell[17] + V{0.0277777777777778};
 fNeq[18] = x16*(x20 + x52 + x61) + cell[18] + V{0.0277777777777778};
@@ -1938,16 +2099,16 @@ auto x18 = -cell[2];
 auto x19 = x18 + cell[11] - cell[14] + cell[5];
 auto x20 = x16 + x17 + x19;
 auto x21 = x20*x20;
-auto x41 = x21*x4;
-auto x42 = x15 + x6;
-auto x43 = -cell[3];
-auto x44 = -cell[18] + cell[9];
-auto x45 = x43 + x44;
+auto x22 = x21*x4;
+auto x23 = x15 + x6;
+auto x24 = -cell[3];
+auto x25 = -cell[18] + cell[9];
+auto x45 = x24 + x25;
 auto x46 = x1 - cell[16];
-auto x47 = x42 + x45 + x46;
+auto x47 = x23 + x45 + x46;
 auto x48 = x47*x47;
 auto x49 = x4*x48;
-auto x50 = x41 + x49 + V{-1};
+auto x50 = x22 + x49 + V{-1};
 auto x51 = x14 + x50;
 auto x52 = V{0.0555555555555556}*cell[0] + V{0.0555555555555556}*cell[10] + V{0.0555555555555556}*cell[11] + V{0.0555555555555556}*cell[12] + V{0.0555555555555556}*cell[13] + V{0.0555555555555556}*cell[14] + V{0.0555555555555556}*cell[15] + V{0.0555555555555556}*cell[16] + V{0.0555555555555556}*cell[17] + V{0.0555555555555556}*cell[18] + V{0.0555555555555556}*cell[1] + V{0.0555555555555556}*cell[2] + V{0.0555555555555556}*cell[3] + V{0.0555555555555556}*cell[4] + V{0.0555555555555556}*cell[5] + V{0.0555555555555556}*cell[6] + V{0.0555555555555556}*cell[7] + V{0.0555555555555556}*cell[8] + V{0.0555555555555556}*cell[9] + V{0.0555555555555556};
 auto x53 = V{1} / (x2);
@@ -1971,12 +2132,12 @@ auto x70 = x48*x61;
 auto x71 = V{0.0277777777777778}*cell[0] + V{0.0277777777777778}*cell[10] + V{0.0277777777777778}*cell[11] + V{0.0277777777777778}*cell[12] + V{0.0277777777777778}*cell[13] + V{0.0277777777777778}*cell[14] + V{0.0277777777777778}*cell[15] + V{0.0277777777777778}*cell[16] + V{0.0277777777777778}*cell[17] + V{0.0277777777777778}*cell[18] + V{0.0277777777777778}*cell[1] + V{0.0277777777777778}*cell[2] + V{0.0277777777777778}*cell[3] + V{0.0277777777777778}*cell[4] + V{0.0277777777777778}*cell[5] + V{0.0277777777777778}*cell[6] + V{0.0277777777777778}*cell[7] + V{0.0277777777777778}*cell[8] + V{0.0277777777777778}*cell[9] + V{0.0277777777777778};
 auto x72 = V{4.5}*x3;
 auto x73 = x10 + cell[10];
-auto x74 = x17 + x18 + x42 + x73 + cell[11] + V{2}*cell[13] - V{2}*cell[4];
+auto x74 = x17 + x18 + x23 + x73 + cell[11] + V{2}*cell[13] - V{2}*cell[4];
 auto x75 = x72*(x74*x74);
 auto x76 = x51 + x60;
 auto x77 = -x66;
 auto x78 = -cell[17] + cell[8];
-auto x79 = x44 + x6 + x73 + x78 - cell[11] + V{2}*cell[14] + cell[2] - V{2}*cell[5];
+auto x79 = x25 + x6 + x73 + x78 - cell[11] + V{2}*cell[14] + cell[2] - V{2}*cell[5];
 auto x80 = -x72*x79*x79;
 auto x81 = x11 + x8;
 auto x82 = x16 + x45 + x81 + cell[12] + V{2}*cell[15] - V{2}*cell[6];
@@ -1985,12 +2146,12 @@ auto x84 = -x69;
 auto x85 = x5 - cell[12] + cell[3];
 auto x86 = x17 + x78 + x81 + x85 + V{2}*cell[16] - V{2}*cell[7];
 auto x87 = -x72*x86*x86;
-auto x88 = x19 + x43 + x46 + x7 + V{2}*cell[17] - V{2}*cell[8];
+auto x88 = x19 + x24 + x46 + x7 + V{2}*cell[17] - V{2}*cell[8];
 auto x89 = x72*(x88*x88);
 auto x90 = x51 + x66;
 auto x91 = x19 + x85 + x9 - cell[15] + V{2}*cell[18] + cell[6] - V{2}*cell[9];
 auto x92 = -x72*x91*x91;
-auto x93 = -x41;
+auto x93 = -x22;
 auto x94 = V{1} - x49;
 auto x95 = x93 + x94;
 auto x96 = x60 + x95;
@@ -2002,7 +2163,7 @@ auto x101 = x51 + x69;
 fNeq[0] = x51*(V{0.333333333333333}*cell[0] + V{0.333333333333333}*cell[10] + V{0.333333333333333}*cell[11] + V{0.333333333333333}*cell[12] + V{0.333333333333333}*cell[13] + V{0.333333333333333}*cell[14] + V{0.333333333333333}*cell[15] + V{0.333333333333333}*cell[16] + V{0.333333333333333}*cell[17] + V{0.333333333333333}*cell[18] + V{0.333333333333333}*cell[1] + V{0.333333333333333}*cell[2] + V{0.333333333333333}*cell[3] + V{0.333333333333333}*cell[4] + V{0.333333333333333}*cell[5] + V{0.333333333333333}*cell[6] + V{0.333333333333333}*cell[7] + V{0.333333333333333}*cell[8] + V{0.333333333333333}*cell[9] + V{0.333333333333333}) + cell[0] + V{0.333333333333333};
 fNeq[1] = x52*(x50 + x60 - x62) + cell[1] + V{0.0555555555555556};
 fNeq[2] = x52*(x49 + x66 - x67 + x68) + cell[2] + V{0.0555555555555556};
-fNeq[3] = x52*(x41 + x68 + x69 - x70) + cell[3] + V{0.0555555555555556};
+fNeq[3] = x52*(x22 + x68 + x69 - x70) + cell[3] + V{0.0555555555555556};
 fNeq[4] = x71*(x66 - x75 + x76) + cell[4] + V{0.0277777777777778};
 fNeq[5] = x71*(x76 + x77 + x80) + cell[5] + V{0.0277777777777778};
 fNeq[6] = x71*(x69 + x76 - x83) + cell[6] + V{0.0277777777777778};
@@ -2898,6 +3059,128 @@ cell[18] = -x22*(-x48*(x38 + x57) - x52 + V{0.0277777777777778}*(x46 + x58)*forc
 
 }
 
+template <typename CELL, typename RHO, typename NABLARHO, typename U, typename OMEGA, typename FORCE, typename V=typename CELL::value_t>
+static void addLiangForce(CELL& cell, RHO& rho, NABLARHO& nablarho, U& u, OMEGA& omega, FORCE& force) any_platform
+{
+auto x19 = rho*force[0];
+auto x20 = nablarho[0]*u[0];
+auto x21 = V{0.5}*omega + V{-1};
+auto x22 = V{0.166666666666667}*x21;
+auto x23 = rho*force[1];
+auto x24 = nablarho[1]*u[1];
+auto x25 = rho*force[2];
+auto x26 = nablarho[2]*u[2];
+auto x27 = u[0] + u[1];
+auto x28 = x27*nablarho[0];
+auto x29 = x27*nablarho[1];
+auto x30 = x19 + x23;
+auto x31 = V{0.0833333333333333}*x21;
+auto x32 = u[0] - u[1];
+auto x33 = x32*nablarho[1];
+auto x34 = x19 - x23;
+auto x35 = u[0] + u[2];
+auto x36 = x35*nablarho[0];
+auto x37 = x35*nablarho[2];
+auto x38 = x19 + x25;
+auto x39 = -u[2];
+auto x40 = x39 + u[0];
+auto x41 = x40*nablarho[2];
+auto x42 = -x25;
+auto x43 = x19 + x42;
+auto x44 = u[1] + u[2];
+auto x45 = x44*nablarho[1];
+auto x46 = x44*nablarho[2];
+auto x47 = x23 + x25;
+auto x48 = x39 + u[1];
+auto x49 = x48*nablarho[2];
+auto x50 = x23 + x42;
+cell[0] = cell[0];
+cell[1] = x22*(x19 - x20) + cell[1];
+cell[2] = x22*(x23 - x24) + cell[2];
+cell[3] = x22*(x25 - x26) + cell[3];
+cell[4] = x31*(-x28 - x29 + x30) + cell[4];
+cell[5] = -x31*(x32*nablarho[0] - x33 - x34) + cell[5];
+cell[6] = x31*(-x36 - x37 + x38) + cell[6];
+cell[7] = -x31*(x40*nablarho[0] - x41 - x43) + cell[7];
+cell[8] = x31*(-x45 - x46 + x47) + cell[8];
+cell[9] = -x31*(x48*nablarho[1] - x49 - x50) + cell[9];
+cell[10] = -x22*(x19 + x20) + cell[10];
+cell[11] = -x22*(x23 + x24) + cell[11];
+cell[12] = -x22*(x25 + x26) + cell[12];
+cell[13] = -x31*(x28 + x29 + x30) + cell[13];
+cell[14] = -x31*(x32*nablarho[0] - x33 + x34) + cell[14];
+cell[15] = -x31*(x36 + x37 + x38) + cell[15];
+cell[16] = -x31*(x40*nablarho[0] - x41 + x43) + cell[16];
+cell[17] = -x31*(x45 + x46 + x47) + cell[17];
+cell[18] = -x31*(x48*nablarho[1] - x49 + x50) + cell[18];
+
+}
+
+template <typename CELL, typename OMEGA, typename FORCE, typename V=typename CELL::value_t>
+static void addAllenCahnForce(CELL& cell, OMEGA& omega, FORCE& force) any_platform
+{
+auto x19 = V{0.5}*omega + V{-1};
+auto x20 = V{0.166666666666667}*x19;
+auto x21 = x20*force[0];
+auto x22 = x20*force[1];
+auto x23 = x20*force[2];
+auto x24 = V{0.0833333333333333}*x19;
+auto x25 = x24*(force[0] + force[1]);
+auto x26 = x24*(force[0] - force[1]);
+auto x27 = x24*(force[0] + force[2]);
+auto x28 = -force[2];
+auto x29 = x24*(x28 + force[0]);
+auto x30 = x24*(force[1] + force[2]);
+auto x31 = x24*(x28 + force[1]);
+cell[0] = cell[0];
+cell[1] = x21 + cell[1];
+cell[2] = x22 + cell[2];
+cell[3] = x23 + cell[3];
+cell[4] = x25 + cell[4];
+cell[5] = x26 + cell[5];
+cell[6] = x27 + cell[6];
+cell[7] = x29 + cell[7];
+cell[8] = x30 + cell[8];
+cell[9] = x31 + cell[9];
+cell[10] = -x21 + cell[10];
+cell[11] = -x22 + cell[11];
+cell[12] = -x23 + cell[12];
+cell[13] = -x25 + cell[13];
+cell[14] = -x26 + cell[14];
+cell[15] = -x27 + cell[15];
+cell[16] = -x29 + cell[16];
+cell[17] = -x30 + cell[17];
+cell[18] = -x31 + cell[18];
+
+}
+
+template <typename CELL, typename OMEGA, typename SOURCE, typename V=typename CELL::value_t>
+static void addAllenCahnSource(CELL& cell, OMEGA& omega, SOURCE& source) any_platform
+{
+auto x19 = V{0.0555555555555556}*source;
+auto x20 = V{0.0277777777777778}*source;
+cell[0] = V{0.333333333333333}*source + cell[0];
+cell[1] = x19 + cell[1];
+cell[2] = x19 + cell[2];
+cell[3] = x19 + cell[3];
+cell[4] = x20 + cell[4];
+cell[5] = x20 + cell[5];
+cell[6] = x20 + cell[6];
+cell[7] = x20 + cell[7];
+cell[8] = x20 + cell[8];
+cell[9] = x20 + cell[9];
+cell[10] = x19 + cell[10];
+cell[11] = x19 + cell[11];
+cell[12] = x19 + cell[12];
+cell[13] = x20 + cell[13];
+cell[14] = x20 + cell[14];
+cell[15] = x20 + cell[15];
+cell[16] = x20 + cell[16];
+cell[17] = x20 + cell[17];
+cell[18] = x20 + cell[18];
+
+}
+
 };
 
 template <typename... FIELDS>
@@ -3027,14 +3310,14 @@ auto x26 = -cell[11];
 auto x27 = x12 + x13 + x18 + x24 + x26 + x7 - cell[16] + cell[20] + cell[22] + cell[24] + cell[26] - cell[7] + cell[8] - cell[9];
 auto x28 = V{0.666666666666667}*cell[10];
 auto x29 = V{0.666666666666667}*cell[11];
-auto x40 = V{0.666666666666667}*cell[12];
-auto x41 = V{0.666666666666667}*cell[13];
-auto x42 = V{0.666666666666667}*cell[23];
-auto x43 = V{0.666666666666667}*cell[24];
+auto x30 = V{0.666666666666667}*cell[12];
+auto x31 = V{0.666666666666667}*cell[13];
+auto x32 = V{0.666666666666667}*cell[23];
+auto x33 = V{0.666666666666667}*cell[24];
 auto x44 = V{0.666666666666667}*cell[25];
 auto x45 = V{0.666666666666667}*cell[26];
 auto x46 = -V{0.333333333333333}*cell[0];
-auto x47 = x28 + x29 + x40 + x41 + x42 + x43 + x44 + x45 + x46 - V{0.333333333333333}*cell[16] + V{0.666666666666667}*cell[17] + V{0.666666666666667}*cell[18] - V{0.333333333333333}*cell[3] + V{0.666666666666667}*cell[4] + V{0.666666666666667}*cell[5];
+auto x47 = x28 + x29 + x30 + x31 + x32 + x33 + x44 + x45 + x46 - V{0.333333333333333}*cell[16] + V{0.666666666666667}*cell[17] + V{0.666666666666667}*cell[18] - V{0.333333333333333}*cell[3] + V{0.666666666666667}*cell[4] + V{0.666666666666667}*cell[5];
 auto x48 = -V{0.333333333333333}*cell[15] + V{0.666666666666667}*cell[19] + V{0.666666666666667}*cell[20] - V{0.333333333333333}*cell[2] + V{0.666666666666667}*cell[6] + V{0.666666666666667}*cell[7];
 auto x49 = x19*x20;
 auto x50 = -cell[10];
@@ -3049,7 +3332,7 @@ pi[1] = -V{1}*x1 - V{1}*x11 - V{1}*x25*x49 - V{1}*x26 - V{1}*x51 + V{1}*cell[4];
 pi[2] = -V{1}*x14 - V{1}*x22 - V{1}*x27*x49 - V{1}*x3 - V{1}*x51 + V{1}*cell[6];
 pi[3] = -x21*x25*x25 + x47 + x52 + V{0.666666666666667}*cell[15] - V{0.333333333333333}*cell[19] - V{0.333333333333333}*cell[20] + V{0.666666666666667}*cell[2] - V{0.333333333333333}*cell[6] - V{0.333333333333333}*cell[7];
 pi[4] = -V{1}*x0 - V{1}*x16 - V{1}*x2 - V{1}*x20*x25*x27 - V{1}*x23 - V{1}*x4 - V{1}*x50 + V{1}*cell[8];
-pi[5] = -x21*x27*x27 + x28 + x29 + x40 + x41 + x42 + x43 + x44 + x45 + x46 + x48 + x52 + V{0.666666666666667}*cell[16] - V{0.333333333333333}*cell[17] - V{0.333333333333333}*cell[18] + V{0.666666666666667}*cell[3] - V{0.333333333333333}*cell[4] - V{0.333333333333333}*cell[5];
+pi[5] = -x21*x27*x27 + x28 + x29 + x30 + x31 + x32 + x33 + x44 + x45 + x46 + x48 + x52 + V{0.666666666666667}*cell[16] - V{0.333333333333333}*cell[17] - V{0.333333333333333}*cell[18] + V{0.666666666666667}*cell[3] - V{0.333333333333333}*cell[4] - V{0.333333333333333}*cell[5];
 
 }
 
@@ -3086,11 +3369,11 @@ auto x26 = x24 + x25 + cell[26] + cell[8];
 auto x27 = -cell[22];
 auto x28 = x8 + cell[4];
 auto x29 = x27 + x28 + cell[9];
-auto x57 = -cell[15];
-auto x58 = x57 + cell[18] + cell[2] - cell[5];
-auto x59 = -cell[12] + cell[25];
-auto x60 = x13 + x26 + x29 + x58 + x59;
-auto x61 = -x60;
+auto x30 = -cell[15];
+auto x31 = x30 + cell[18] + cell[2] - cell[5];
+auto x32 = -cell[12] + cell[25];
+auto x33 = x13 + x26 + x29 + x31 + x32;
+auto x61 = -x33;
 auto x62 = x61*x61;
 auto x63 = x62*x7;
 auto x64 = -cell[16];
@@ -3136,7 +3419,7 @@ auto x103 = V{4.5}*x6;
 auto x104 = V{2}*cell[11] - V{2}*cell[24];
 auto x105 = V{2}*cell[10] - V{2}*cell[23];
 auto x106 = x105 + x25;
-auto x107 = x57 + cell[2];
+auto x107 = x30 + cell[2];
 auto x108 = x107 - V{2}*cell[17] + V{2}*cell[4];
 auto x109 = x0 + x104 + x106 + x108 + x17 + x27 + x67;
 auto x110 = -x109;
@@ -3170,24 +3453,24 @@ auto x137 = -x135 + x136;
 auto x138 = x118 + x126 + x134 + x137 + x29 + cell[21];
 auto x139 = -V{2}*cell[21] + V{2}*cell[8];
 auto x140 = x127 + x139;
-auto x141 = x10 + x105 + x116 - x117 + x140 + x58 + x69;
+auto x141 = x10 + x105 + x116 - x117 + x140 + x31 + x69;
 auto x142 = -x141;
 auto x143 = x76 + x99;
 auto x144 = x102 + x143;
 auto x145 = V{2}*cell[22];
 auto x146 = V{2}*cell[9];
 auto x147 = -x145 + x146;
-auto x148 = x113 - x114 + x134 + x147 + x16 + x28 + x58 + cell[19] - cell[6];
+auto x148 = x113 - x114 + x134 + x147 + x16 + x28 + x31 + cell[19] - cell[6];
 auto x149 = x108 + x125;
 auto x150 = x11 + x128 + x139 + x149 + x2 + x24 + x65 + V{3}*cell[10] - V{3}*cell[23];
 auto x151 = -x150;
-auto x152 = x12 + x133 + x137 + x147 + x149 + x19 + x59 + V{3}*cell[11] + cell[16] - V{3}*cell[24];
+auto x152 = x12 + x133 + x137 + x147 + x149 + x19 + x32 + V{3}*cell[11] + cell[16] - V{3}*cell[24];
 auto x153 = x121 + x125 + x129 + x145 - x146 + x19 + x70 + V{3}*cell[12] + cell[15] - V{3}*cell[25];
 auto x154 = x77*x92;
-auto x155 = x107 + x119 - x120 + x135 - x136 + x140 + x59 + x70 - V{3}*cell[13] + cell[14] - cell[1] + V{3}*cell[26];
+auto x155 = x107 + x119 - x120 + x135 - x136 + x140 + x32 + x70 - V{3}*cell[13] + cell[14] - cell[1] + V{3}*cell[26];
 auto x156 = -x155;
 auto x157 = x101*x77;
-auto x158 = x60*x60;
+auto x158 = x33*x33;
 auto x159 = x158*x7;
 auto x160 = x71*x71;
 auto x161 = x160*x7 + V{-1};
@@ -3271,11 +3554,11 @@ auto x26 = V{4.5}*(x25*x25);
 auto x27 = -x14;
 auto x28 = -u[2];
 auto x29 = x28 + u[0];
-auto x57 = -V{4.5}*x29*x29;
-auto x58 = u[1] + u[2];
-auto x59 = V{4.5}*(x58*x58);
-auto x60 = x11 + x7;
-auto x61 = x14 + x60;
+auto x30 = -V{4.5}*x29*x29;
+auto x31 = u[1] + u[2];
+auto x32 = V{4.5}*(x31*x31);
+auto x33 = x11 + x7;
+auto x61 = x14 + x33;
 auto x62 = x28 + u[1];
 auto x63 = -V{4.5}*x62*x62;
 auto x64 = V{0.00462962962962963}*rho;
@@ -3285,7 +3568,7 @@ auto x67 = x17 + x28;
 auto x68 = V{4.5}*(x67*x67);
 auto x69 = x21 + u[2];
 auto x70 = V{4.5}*(x69*x69);
-auto x71 = x58 - u[0];
+auto x71 = x31 - u[0];
 auto x72 = -V{4.5}*x71*x71;
 auto x73 = -x3;
 auto x74 = V{1} - x5;
@@ -3305,9 +3588,9 @@ fNeq[3] = x8*(x13 + x14 - x15 + x3) + cell[3] + V{0.0740740740740741};
 fNeq[4] = x16*(-x18 + x20) + cell[4] + V{0.0185185185185185};
 fNeq[5] = x16*(x22 + x24) + cell[5] + V{0.0185185185185185};
 fNeq[6] = x16*(x14 + x19 - x26) + cell[6] + V{0.0185185185185185};
-fNeq[7] = x16*(x19 + x27 + x57) + cell[7] + V{0.0185185185185185};
-fNeq[8] = x16*(-x59 + x61) + cell[8] + V{0.0185185185185185};
-fNeq[9] = x16*(x27 + x60 + x63) + cell[9] + V{0.0185185185185185};
+fNeq[7] = x16*(x19 + x27 + x30) + cell[7] + V{0.0185185185185185};
+fNeq[8] = x16*(-x32 + x61) + cell[8] + V{0.0185185185185185};
+fNeq[9] = x16*(x27 + x33 + x63) + cell[9] + V{0.0185185185185185};
 fNeq[10] = x64*(x14 + x20 - x66) + cell[10] + V{0.00462962962962963};
 fNeq[11] = x64*(x20 + x27 - x68) + cell[11] + V{0.00462962962962963};
 fNeq[12] = x64*(x14 + x24 - x70) + cell[12] + V{0.00462962962962963};
@@ -3316,10 +3599,10 @@ fNeq[14] = -x8*(x10 + x76) + cell[14] + V{0.0740740740740741};
 fNeq[15] = -x8*(x12 + x74 + x78) + cell[15] + V{0.0740740740740741};
 fNeq[16] = -x8*(x15 + x73 + x79 + V{1}) + cell[16] + V{0.0740740740740741};
 fNeq[17] = -x16*(x18 + x80) + cell[17] + V{0.0185185185185185};
-fNeq[18] = x16*(x22 + x60 + x81) + cell[18] + V{0.0185185185185185};
+fNeq[18] = x16*(x22 + x33 + x81) + cell[18] + V{0.0185185185185185};
 fNeq[19] = -x16*(x26 + x82) + cell[19] + V{0.0185185185185185};
-fNeq[20] = x16*(x57 + x81 + x83) + cell[20] + V{0.0185185185185185};
-fNeq[21] = -x16*(x14 + x59 + x75 + x78) + cell[21] + V{0.0185185185185185};
+fNeq[20] = x16*(x30 + x81 + x83) + cell[20] + V{0.0185185185185185};
+fNeq[21] = -x16*(x14 + x32 + x75 + x78) + cell[21] + V{0.0185185185185185};
 fNeq[22] = x16*(x23 + x63 + x83) + cell[22] + V{0.0185185185185185};
 fNeq[23] = -x64*(x14 + x66 + x80) + cell[23] + V{0.00462962962962963};
 fNeq[24] = -x64*(x27 + x68 + x80) + cell[24] + V{0.00462962962962963};
@@ -3361,19 +3644,19 @@ auto x26 = -cell[22] + cell[9];
 auto x27 = x25 + x26 + cell[2];
 auto x28 = cell[18] - cell[5];
 auto x29 = -cell[12] + cell[25];
-auto x57 = x22 + x24 + x27 + x28 + x29 + x9;
-auto x58 = x57*x57;
-auto x59 = x4*x58;
-auto x60 = x21 + cell[8];
+auto x30 = x22 + x24 + x27 + x28 + x29 + x9;
+auto x31 = x30*x30;
+auto x32 = x31*x4;
+auto x33 = x21 + cell[8];
 auto x61 = -cell[16];
 auto x62 = cell[22] - cell[9];
 auto x63 = x61 + x62 + cell[3];
 auto x64 = -cell[11] + cell[24];
 auto x65 = cell[20] - cell[7];
-auto x66 = x24 + x60 + x63 + x64 + x65 + x7;
+auto x66 = x24 + x33 + x63 + x64 + x65 + x7;
 auto x67 = x66*x66;
 auto x68 = x4*x67;
-auto x69 = x59 + x68 + V{-1};
+auto x69 = x32 + x68 + V{-1};
 auto x70 = x20 + x69;
 auto x71 = V{0.0740740740740741}*cell[0] + V{0.0740740740740741}*cell[10] + V{0.0740740740740741}*cell[11] + V{0.0740740740740741}*cell[12] + V{0.0740740740740741}*cell[13] + V{0.0740740740740741}*cell[14] + V{0.0740740740740741}*cell[15] + V{0.0740740740740741}*cell[16] + V{0.0740740740740741}*cell[17] + V{0.0740740740740741}*cell[18] + V{0.0740740740740741}*cell[19] + V{0.0740740740740741}*cell[1] + V{0.0740740740740741}*cell[20] + V{0.0740740740740741}*cell[21] + V{0.0740740740740741}*cell[22] + V{0.0740740740740741}*cell[23] + V{0.0740740740740741}*cell[24] + V{0.0740740740740741}*cell[25] + V{0.0740740740740741}*cell[26] + V{0.0740740740740741}*cell[2] + V{0.0740740740740741}*cell[3] + V{0.0740740740740741}*cell[4] + V{0.0740740740740741}*cell[5] + V{0.0740740740740741}*cell[6] + V{0.0740740740740741}*cell[7] + V{0.0740740740740741}*cell[8] + V{0.0740740740740741}*cell[9] + V{0.0740740740740741};
 auto x72 = V{3}*x3;
@@ -3394,11 +3677,11 @@ auto x86 = V{3}*cell[12];
 auto x87 = V{3}*cell[25];
 auto x88 = x86 - x87 - V{3}*cell[19] + V{3}*cell[6];
 auto x89 = x74*(x75 + x76 + x77 - x78 - x79 - x80 + x85 + x88 - V{3}*cell[14] + V{3}*cell[1]);
-auto x90 = -V{1.5}*x3*x58;
+auto x90 = -V{1.5}*x3*x31;
 auto x91 = -V{1.5}*x3*x67 + V{1};
 auto x92 = x90 + x91;
 auto x93 = x89 + x92;
-auto x94 = x58*x72;
+auto x94 = x31*x72;
 auto x95 = V{3}*cell[9];
 auto x96 = V{3}*cell[22];
 auto x97 = -x77 + x80 - V{3}*cell[21] + V{3}*cell[8];
@@ -3418,7 +3701,7 @@ auto x110 = x8 + cell[1];
 auto x111 = x108 + x109 + x110;
 auto x112 = x5 + cell[6];
 auto x113 = x112 + x14;
-auto x114 = x106 + x107 + x111 + x113 + x27 + x60;
+auto x114 = x106 + x107 + x111 + x113 + x27 + x33;
 auto x115 = -x114;
 auto x116 = x100 + x93;
 auto x117 = V{2}*cell[25];
@@ -3494,7 +3777,7 @@ fNeq[12] = x158*(-x134 - x155 - x166) + cell[12] + V{0.00462962962962963};
 fNeq[13] = x158*(x102 + x130 - x168) + cell[13] + V{0.00462962962962963};
 fNeq[14] = x71*(x69 - x73 + x89) + cell[14] + V{0.0740740740740741};
 fNeq[15] = x71*(x169 + x68 - x94 + x98) + cell[15] + V{0.0740740740740741};
-fNeq[16] = x71*(-x101 + x102 + x169 + x59) + cell[16] + V{0.0740740740740741};
+fNeq[16] = x71*(-x101 + x102 + x169 + x32) + cell[16] + V{0.0740740740740741};
 fNeq[17] = x104*(-x105*x114*x114 + x171) + cell[17] + V{0.0185185185185185};
 fNeq[18] = x104*(x127 + x156 + x89) + cell[18] + V{0.0185185185185185};
 fNeq[19] = x104*(x102 - x105*x132*x132 + x170) + cell[19] + V{0.0185185185185185};
@@ -4869,6 +5152,175 @@ cell[23] = -x74*((x46 + x83)*force[2] + (x59 + x79)*force[0] + (x59 + x80)*force
 cell[24] = -x74*(-(x46 + x85)*force[2] + (x75 + x79)*force[0] + (x75 + x80)*force[1]) + cell[24];
 cell[25] = -x74*(-(x49 + x71)*force[1] + (x49 + x73)*force[2] + (x59 + x82)*force[0]) + cell[25];
 cell[26] = -x74*(-(x72 + x85)*force[2] - (x75 + x81)*force[1] + (x75 + x82)*force[0]) + cell[26];
+
+}
+
+template <typename CELL, typename RHO, typename NABLARHO, typename U, typename OMEGA, typename FORCE, typename V=typename CELL::value_t>
+static void addLiangForce(CELL& cell, RHO& rho, NABLARHO& nablarho, U& u, OMEGA& omega, FORCE& force) any_platform
+{
+auto x27 = rho*force[0];
+auto x28 = nablarho[0]*u[0];
+auto x29 = V{0.5}*omega + V{-1};
+auto x30 = V{0.222222222222222}*x29;
+auto x31 = rho*force[1];
+auto x32 = nablarho[1]*u[1];
+auto x33 = rho*force[2];
+auto x34 = nablarho[2]*u[2];
+auto x35 = u[0] + u[1];
+auto x36 = x35*nablarho[0];
+auto x37 = x35*nablarho[1];
+auto x38 = x27 + x31;
+auto x39 = V{0.0555555555555556}*x29;
+auto x40 = u[0] - u[1];
+auto x41 = x40*nablarho[1];
+auto x42 = x27 - x31;
+auto x43 = u[0] + u[2];
+auto x44 = x43*nablarho[0];
+auto x45 = x43*nablarho[2];
+auto x46 = x27 + x33;
+auto x47 = -u[2];
+auto x48 = x47 + u[0];
+auto x49 = x48*nablarho[2];
+auto x50 = -x33;
+auto x51 = x27 + x50;
+auto x52 = u[1] + u[2];
+auto x53 = x52*nablarho[1];
+auto x54 = x52*nablarho[2];
+auto x55 = x31 + x33;
+auto x56 = x47 + u[1];
+auto x57 = x56*nablarho[2];
+auto x58 = x31 + x50;
+auto x59 = x35 + u[2];
+auto x60 = x59*nablarho[0];
+auto x61 = x59*nablarho[1];
+auto x62 = x59*nablarho[2];
+auto x63 = x33 + x38;
+auto x64 = V{0.0138888888888889}*x29;
+auto x65 = x35 + x47;
+auto x66 = x65*nablarho[2];
+auto x67 = x38 + x50;
+auto x68 = x40 + u[2];
+auto x69 = x68*nablarho[1];
+auto x70 = x33 + x42;
+auto x71 = x52 - u[0];
+auto x72 = -x71*nablarho[0] + x71*nablarho[1] + x71*nablarho[2];
+cell[0] = cell[0];
+cell[1] = x30*(x27 - x28) + cell[1];
+cell[2] = x30*(x31 - x32) + cell[2];
+cell[3] = x30*(x33 - x34) + cell[3];
+cell[4] = x39*(-x36 - x37 + x38) + cell[4];
+cell[5] = -x39*(x40*nablarho[0] - x41 - x42) + cell[5];
+cell[6] = x39*(-x44 - x45 + x46) + cell[6];
+cell[7] = -x39*(x48*nablarho[0] - x49 - x51) + cell[7];
+cell[8] = x39*(-x53 - x54 + x55) + cell[8];
+cell[9] = -x39*(x56*nablarho[1] - x57 - x58) + cell[9];
+cell[10] = x64*(-x60 - x61 - x62 + x63) + cell[10];
+cell[11] = -x64*(x65*nablarho[0] + x65*nablarho[1] - x66 - x67) + cell[11];
+cell[12] = -x64*(x68*nablarho[0] + x68*nablarho[2] - x69 - x70) + cell[12];
+cell[13] = -x64*(-x27 + x55 + x72) + cell[13];
+cell[14] = -x30*(x27 + x28) + cell[14];
+cell[15] = -x30*(x31 + x32) + cell[15];
+cell[16] = -x30*(x33 + x34) + cell[16];
+cell[17] = -x39*(x36 + x37 + x38) + cell[17];
+cell[18] = -x39*(x40*nablarho[0] - x41 + x42) + cell[18];
+cell[19] = -x39*(x44 + x45 + x46) + cell[19];
+cell[20] = -x39*(x48*nablarho[0] - x49 + x51) + cell[20];
+cell[21] = -x39*(x53 + x54 + x55) + cell[21];
+cell[22] = -x39*(x56*nablarho[1] - x57 + x58) + cell[22];
+cell[23] = -x64*(x60 + x61 + x62 + x63) + cell[23];
+cell[24] = -x64*(x65*nablarho[0] + x65*nablarho[1] - x66 + x67) + cell[24];
+cell[25] = -x64*(x68*nablarho[0] + x68*nablarho[2] - x69 + x70) + cell[25];
+cell[26] = -x64*(x42 + x50 + x72) + cell[26];
+
+}
+
+template <typename CELL, typename OMEGA, typename FORCE, typename V=typename CELL::value_t>
+static void addAllenCahnForce(CELL& cell, OMEGA& omega, FORCE& force) any_platform
+{
+auto x27 = V{0.5}*omega + V{-1};
+auto x28 = V{0.222222222222222}*x27;
+auto x29 = x28*force[0];
+auto x30 = x28*force[1];
+auto x31 = x28*force[2];
+auto x32 = force[0] + force[1];
+auto x33 = V{0.0555555555555556}*x27;
+auto x34 = x32*x33;
+auto x35 = force[0] - force[1];
+auto x36 = x33*x35;
+auto x37 = x33*(force[0] + force[2]);
+auto x38 = -force[2];
+auto x39 = x33*(x38 + force[0]);
+auto x40 = force[1] + force[2];
+auto x41 = x33*x40;
+auto x42 = x33*(x38 + force[1]);
+auto x43 = V{0.0138888888888889}*x27;
+auto x44 = x43*(x32 + force[2]);
+auto x45 = x43*(x32 + x38);
+auto x46 = x43*(x35 + force[2]);
+auto x47 = x43*(x40 - force[0]);
+cell[0] = cell[0];
+cell[1] = x29 + cell[1];
+cell[2] = x30 + cell[2];
+cell[3] = x31 + cell[3];
+cell[4] = x34 + cell[4];
+cell[5] = x36 + cell[5];
+cell[6] = x37 + cell[6];
+cell[7] = x39 + cell[7];
+cell[8] = x41 + cell[8];
+cell[9] = x42 + cell[9];
+cell[10] = x44 + cell[10];
+cell[11] = x45 + cell[11];
+cell[12] = x46 + cell[12];
+cell[13] = -x47 + cell[13];
+cell[14] = -x29 + cell[14];
+cell[15] = -x30 + cell[15];
+cell[16] = -x31 + cell[16];
+cell[17] = -x34 + cell[17];
+cell[18] = -x36 + cell[18];
+cell[19] = -x37 + cell[19];
+cell[20] = -x39 + cell[20];
+cell[21] = -x41 + cell[21];
+cell[22] = -x42 + cell[22];
+cell[23] = -x44 + cell[23];
+cell[24] = -x45 + cell[24];
+cell[25] = -x46 + cell[25];
+cell[26] = x47 + cell[26];
+
+}
+
+template <typename CELL, typename OMEGA, typename SOURCE, typename V=typename CELL::value_t>
+static void addAllenCahnSource(CELL& cell, OMEGA& omega, SOURCE& source) any_platform
+{
+auto x27 = V{0.0740740740740741}*source;
+auto x28 = V{0.0185185185185185}*source;
+auto x29 = V{0.00462962962962963}*source;
+cell[0] = V{0.296296296296296}*source + cell[0];
+cell[1] = x27 + cell[1];
+cell[2] = x27 + cell[2];
+cell[3] = x27 + cell[3];
+cell[4] = x28 + cell[4];
+cell[5] = x28 + cell[5];
+cell[6] = x28 + cell[6];
+cell[7] = x28 + cell[7];
+cell[8] = x28 + cell[8];
+cell[9] = x28 + cell[9];
+cell[10] = x29 + cell[10];
+cell[11] = x29 + cell[11];
+cell[12] = x29 + cell[12];
+cell[13] = x29 + cell[13];
+cell[14] = x27 + cell[14];
+cell[15] = x27 + cell[15];
+cell[16] = x27 + cell[16];
+cell[17] = x28 + cell[17];
+cell[18] = x28 + cell[18];
+cell[19] = x28 + cell[19];
+cell[20] = x28 + cell[20];
+cell[21] = x28 + cell[21];
+cell[22] = x28 + cell[22];
+cell[23] = x29 + cell[23];
+cell[24] = x29 + cell[24];
+cell[25] = x29 + cell[25];
+cell[26] = x29 + cell[26];
 
 }
 

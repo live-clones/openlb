@@ -43,12 +43,17 @@ void setZeroGradientBoundary(SuperLattice<T, DESCRIPTOR>& sLattice, FunctorPtr<S
 {
   OstreamManager clout(std::cout, "setZeroGradientBoundary");
 
-  int _overlap = 1;
   for (int iCloc = 0; iCloc < sLattice.getLoadBalancer().size(); iCloc++) {
     setZeroGradientBoundary<T,DESCRIPTOR,MixinDynamics>(sLattice.getBlock(iCloc), indicator->getBlockIndicatorF(iCloc));
   }
   /// Adds needed Cells to the Communicator _commBC in SuperLattice
-  addPoints2CommBC(sLattice,std::forward<decltype(indicator)>(indicator), _overlap);
+  int _overlap = 2;
+  auto& communicator = sLattice.getCommunicator(stage::PostStream());
+  communicator.template requestField<descriptors::POPULATION>();
+
+  SuperIndicatorBoundaryNeighbor<T,DESCRIPTOR::d> neighborIndicator(std::forward<decltype(indicator)>(indicator), _overlap);
+  communicator.requestOverlap(_overlap, neighborIndicator);
+  communicator.exchangeRequests();
 }
 
 
@@ -58,7 +63,7 @@ void setZeroGradientBoundary(BlockLattice<T,DESCRIPTOR>& _block, BlockIndicatorF
 {
   using namespace boundaryhelper;
   const auto& blockGeometryStructure = indicator.getBlockGeometry();
-  const int margin = 1;
+  const int margin = 2;
   std::vector<int> discreteNormal(4,0);
   blockGeometryStructure.forSpatialLocations([&](auto iX, auto iY, auto iZ) {
     if (blockGeometryStructure.getNeighborhoodRadius({iX, iY, iZ}) >= margin
@@ -77,7 +82,7 @@ void setZeroGradientBoundary(BlockLattice<T,DESCRIPTOR>& _block, BlockIndicatorF
         }
         _block.addPostProcessor(
             typeid(stage::PostCollide), {iX,iY,iZ},
-            meta::id<zeroGradientLatticePostProcessor3D<T, DESCRIPTOR>>{}
+            meta::id<ZeroGradientLatticePostProcessor3D<T, DESCRIPTOR>>{}
             );
         _block.template defineDynamics<NoCollideDynamics>({iX, iY, iZ});
       } else {

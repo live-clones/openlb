@@ -24,8 +24,6 @@
 #ifndef SET_BOUNDARY_2D_H
 #define SET_BOUNDARY_2D_H
 
-#include "core/blockDynamicsMap.h"
-
 namespace olb {
 
 //sets boundary on indicated cells. This is a function, which can be used on many boundaries.
@@ -169,53 +167,6 @@ struct PlainDynamicsForDirectionOrientationMomenta {
   }
 };
 
-//constructs DYNAMICS with MixinDynamics and a Momenta that expects a direction and orientation as template args
-template <
-  typename T, typename DESCRIPTOR,
-  template <typename,typename,typename,typename> typename DYNAMICS,
-  typename MIXIN,
-  template <int,int> typename MOMENTA
->
-struct PlainMixinDynamicsForDirectionOrientationMomenta {
-  template <int x, int y>
-  using ConcreteDynamics = DYNAMICS<T,DESCRIPTOR,MIXIN,MOMENTA<x,y>>;
-
-  static auto construct(Vector<int,2> n) {
-    return constructConcreteDynamicsForDirectionOrientation<T,DESCRIPTOR,ConcreteDynamics>(n);
-  }
-};
-
-//constructs DYNAMICS with MixinDynamics, direction, orientation and a Momenta that itself expects a direction and orientation
-template <
-  typename T, typename DESCRIPTOR,
-  template <typename,typename,typename,typename,int,int> typename DYNAMICS,
-  typename MIXIN,
-  template <int,int> typename MOMENTA
->
-struct DirectionOrientationMixinDynamicsForDirectionOrientationMomenta {
-  template <int x, int y>
-  using ConcreteDynamics = DYNAMICS<T,DESCRIPTOR,MIXIN,MOMENTA<x,y>,x,y>;
-
-  static auto construct(Vector<int,2> n) {
-    return constructConcreteDynamicsForDirectionOrientation<T,DESCRIPTOR,ConcreteDynamics>(n);
-  }
-};
-
-//constructs MixinDynamics with a Momenta that expects direction and orientation as template args
-template <
-  typename T, typename DESCRIPTOR,
-  typename MIXIN,
-  template <int,int> typename MOMENTA
->
-struct MixinDynamicsExchangeDirectionOrientationMomenta {
-  template <int x, int y>
-  using ConcreteDynamics = typename MIXIN::template exchange_momenta<MOMENTA<x,y>>;
-
-  static auto construct(Vector<int,2> n) {
-    return constructConcreteDynamicsForDirectionOrientation<T,DESCRIPTOR,ConcreteDynamics>(n);
-  }
-};
-
 //constructs DYNAMICS with a Momenta that expects two normal values a template args
 template <
   typename T, typename DESCRIPTOR,
@@ -290,6 +241,41 @@ RESULT* constructForNormal(Vector<int,2> n, ARGS&&... args)
 
 template <
   typename RESULT, typename T, typename DESCRIPTOR,
+  template <int,int> typename TYPE
+>
+RESULT promiseForNormal(Vector<int,2> n)
+{
+  if (n == Vector<int,2> {1, 1}) {
+    return meta::id<TYPE<1,1>>();
+  }
+  else if (n == Vector<int,2> {1, -1}) {
+    return meta::id<TYPE<1,-1>>();
+  }
+  else if (n == Vector<int,2> {-1, 1}) {
+    return meta::id<TYPE<-1,1>>();
+  }
+  else if (n == Vector<int,2> {-1, -1}) {
+    return meta::id<TYPE<-1,-1>>();
+  }
+  else if (n == Vector<int,2> {-1, 0}) {
+    return meta::id<TYPE<-1,0>>();
+  }
+   else if (n == Vector<int,2> {1, 0}) {
+    return meta::id<TYPE<1,0>>();
+  }
+  else if (n == Vector<int,2> {0, -1}) {
+    return meta::id<TYPE<0,-1>>();
+  }
+  else if (n == Vector<int,2> {0, 1}) {
+    return meta::id<TYPE<0,1>>();
+  }
+  else {
+    throw std::runtime_error("Invalid normal");
+  }
+}
+
+template <
+  typename RESULT, typename T, typename DESCRIPTOR,
   template <typename,typename,int,int> typename TYPE
 >
 RESULT promiseForNormal(Vector<int,2> n)
@@ -332,6 +318,15 @@ template <
 PostProcessorGenerator2D<T,DESCRIPTOR>* constructPostProcessorForNormal(Vector<int,2> n, ARGS&&... args)
 {
   return constructForNormal<PostProcessorGenerator2D<T,DESCRIPTOR>,T,DESCRIPTOR,TYPE>(n, std::forward<decltype(args)>(args)...);
+}
+
+template <
+  typename T, typename DESCRIPTOR,
+  template<int...> typename TYPE
+>
+PostProcessorPromise<T,DESCRIPTOR> promisePostProcessorForNormal(Vector<int,2> n)
+{
+  return promiseForNormal<PostProcessorPromise<T,DESCRIPTOR>,T,DESCRIPTOR,TYPE>(n);
 }
 
 template <
@@ -413,10 +408,8 @@ PostProcessorPromise<T,DESCRIPTOR> promisePostProcessorForDirectionOrientation(V
   return promiseForDirectionOrientation<PostProcessorPromise<T,DESCRIPTOR>,T,DESCRIPTOR,TYPE>(n);
 }
 
-}//namespace boundaryhelper
+}
 
-}//namespace olb
-
-#include "normalDynamicsContructors.h"
+}
 
 #endif

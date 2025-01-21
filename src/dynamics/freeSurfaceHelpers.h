@@ -23,7 +23,7 @@
 
 #pragma once
 
-#include "dynamics/descriptorField.h"
+#include "descriptor/fields.h"
 
 
 #include <cstdint>

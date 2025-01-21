@@ -1,6 +1,6 @@
 /*  This file is part of the OpenLB library
  *
- *  Copyright (C) 2006-2021 Mathias J. Krause, Fabian Klemens,
+ *  Copyright (C) 2006-2024 Mathias J. Krause, Fabian Klemens,
  *  Julius Jessberger
  *  E-mail contact: info@openlb.net
  *  The most recent release of OpenLB can be downloaded at
@@ -42,102 +42,6 @@ enum TestFlowOptiMode {VELOCITY, DISSIPATION};
 enum OptiReferenceSolution {ANALYTICAL, DISCRETE};
 
 
-/// Adds objective computation to TestFlowBase solver implementation
-template<
-  typename T,
-  typename PARAMETERS,
-  typename LATTICES,
-  SolverMode MODE=SolverMode::Reference>
-class TestFlowOptiBase : public TestFlowBase<T,PARAMETERS,LATTICES,MODE>
-{
-private:
-  mutable OstreamManager            clout {std::cout, "TestFlowOptiBase"};
-
-public:
-  TestFlowOptiBase(utilities::TypeIndexedSharedPtrTuple<PARAMETERS> params)
-   : TestFlowOptiBase::TestFlowBase(params)
-  { }
-
-  using typename TestFlowOptiBase::TestFlowBase::descriptor;
-
-protected:
-  /** compute velocity or dissipation L2-error
-   * objective = 0.5 * error^2
-   */
-  T computeObjective() const
-  {
-    int tmp[1];
-    T output[1];
-
-    using BT = BaseType<T>;
-    std::shared_ptr<AnalyticalF<3,BT,BT>> help;
-    std::shared_ptr<AnalyticalF<3,T,T>> analytical;
-    std::shared_ptr<SuperF3D<T,T>>      simulated;
-
-    switch (this->parameters(Opti()).optiMode)
-    {
-      case DISSIPATION:
-      {
-        // assign analytical and simulated dissipation for error computation
-        switch (this->parameters(Opti()).optiReferenceMode)
-        {
-          case ANALYTICAL:
-          {
-            analytical = std::make_shared<DissipationTestFlow3D<T,T,descriptor>>(
-              this->converter());
-          } break;
-
-          case DISCRETE:
-          {
-            // user has to guarantee that reference solution is computed
-            // cf. node Optimization -> ReferenceSolution in xml file
-            help = std::make_shared<AnalyticalFfromSuperF3D<BT>>(
-              *(this->parameters(Opti()).referenceSolution));
-            analytical = std::make_shared<AnalyticalTypecast<3,BT,T,BT,T>>(*help);
-          } break;
-        }
-
-        simulated = std::make_shared<SuperLatticePhysDissipation3D<T,descriptor>>(
-          this->lattice(), this->converter());
-      } break;
-
-      case VELOCITY:
-      {
-        // assign analytical and simulated velocity field for error computation
-        switch (this->parameters(Opti()).optiReferenceMode)
-        {
-          case ANALYTICAL:
-          {
-            analytical = this->_velocity;
-          } break;
-
-          case DISCRETE:
-          {
-            // user has to guarantee that reference solution is computed
-            // cf. node Optimization -> ReferenceSolution in xml file
-            help = std::make_shared<AnalyticalFfromSuperF3D<BT>>(
-              *(this->parameters(Opti()).referenceSolution));
-            analytical = std::make_shared<AnalyticalTypecast<3,BT,T,BT,T>>(*help);
-          } break;
-        }
-
-        simulated = std::make_shared<SuperLatticePhysVelocity3D<T,descriptor>>(
-          this->lattice(), this->converter());
-      } break;
-    }
-
-    RelativeDifferenceObjective3D<T,descriptor>(
-      this->lattice(),
-      simulated,
-      analytical,
-      this->geometry().getMaterialIndicator(this->parameters(Opti()).objectiveMaterial)
-    ).operator()(output, tmp);
-
-    return output[0];
-  }
-};
-
-
 
 // =================== Variant B: optimizable solver ==========================
 
@@ -164,7 +68,7 @@ struct TfDirectOpti : public parameters::DirectOptiSimulation<T> {
 
   /// here, we can store a discrete reference solution for objective computation
   using BT = BaseType<T>;
-  std::shared_ptr<SuperF3D<BT>> referenceSolution;
+  std::shared_ptr<SuperF3D<BT>> referenceState;
 
   /// define how the control variable enters the simulation
   void applyControl(const std::vector<T>& control) override {
@@ -224,7 +128,7 @@ template<typename T>
 using Params_TfDirectOpti = meta::map<
   Opti,             TfDirectOpti<T>,
   Output,           parameters::OutputGeneral<T>,
-  OutputOpti,       parameters::OptiOutput<T,SolverMode::Primal>,
+  OutputOpti,       parameters::OptiOutput<T>,
   Results,          TfDirectOptiResults<T>,
   Simulation,       TfSimulationParams<T,Lattices>,
   VisualizationVTK, parameters::OutputPlot<T>
@@ -232,22 +136,23 @@ using Params_TfDirectOpti = meta::map<
 
 
 template<typename T>
-class TestFlowSolverDirectOpti : public TestFlowOptiBase<T,Params_TfDirectOpti<T>,Lattices> {
+class TestFlowSolverDirectOpti : public TestFlowBase<T,Params_TfDirectOpti<T>,Lattices> {
 private:
   mutable OstreamManager            clout {std::cout, "TestFlowSolverDirectOpti"};
-  using typename TestFlowSolverDirectOpti::TestFlowOptiBase::descriptor;
+  using descriptor = typename Lattices::values_t::template get<0>;
 
 public:
   TestFlowSolverDirectOpti(
     utilities::TypeIndexedSharedPtrTuple<Params_TfDirectOpti<T>> params)
-   : TestFlowSolverDirectOpti::TestFlowOptiBase(params)
+   : TestFlowSolverDirectOpti::LbSolver(params),
+    TestFlowSolverDirectOpti::TestFlowBase(params)
   { }
 
 protected:
   void prepareLattices() override
   {
-    // call prepareLattices from base class
-    TestFlowSolverDirectOpti::TestFlowBase::prepareLattices();
+    // set dynamics as in standard simulation
+    this->setDynamics();
 
     // scale force field according to control
     std::shared_ptr<AnalyticalF<3,T,T>> controlF;
@@ -262,18 +167,26 @@ protected:
     }
     OLB_ASSERT((controlF->getTargetDim()==3),
       "Dimension of force scaling functor must be 3");
-    this->_force = this->_force * controlF;
+
+    ForceTestFlow3D<T,T,descriptor> forceSol(this->converter());
+    const T latticeScaling(this->converter().getConversionFactorMass()
+      / this->converter().getConversionFactorForce());
+    std::shared_ptr<AnalyticalF<3,T,T>> force
+     = std::make_shared<AnalyticalScaled3D<T,T>>(forceSol, latticeScaling);
+    force = force * controlF;
 
     this->lattice().template defineField<descriptors::FORCE>
-    (this->geometry().getMaterialIndicator({1, 2}), *(this->_force));
+    (this->geometry().getMaterialIndicator({1, 2}), *force);
   }
 
   void computeResults() override
   {
+    // objective computation
     if (this->parameters(Opti()).computeObjective) {
-      this->parameters(Results()).objective = this->computeObjective();
+      this->parameters(Results()).objective = computeObjective();
     }
 
+    // save simulated solution as a functor
     switch (this->parameters(Opti()).optiMode)
     {
       case DISSIPATION:
@@ -291,6 +204,85 @@ protected:
       } break;
     }
   }
+
+  /** compute velocity or dissipation L2-error
+   * objective = 0.5 * error^2
+   */
+  T computeObjective() const
+  {
+    int tmp[1];
+    T output[1];
+
+    using BT = BaseType<T>;
+    std::shared_ptr<AnalyticalF<3,BT,BT>> help;
+    std::shared_ptr<AnalyticalF<3,T,T>> analytical;
+    std::shared_ptr<SuperF3D<T,T>>      simulated;
+
+    switch (this->parameters(Opti()).optiMode)
+    {
+      case DISSIPATION:
+      {
+        // assign analytical and simulated dissipation for error computation
+        switch (this->parameters(Opti()).optiReferenceMode)
+        {
+          case ANALYTICAL:
+          {
+            analytical = std::make_shared<DissipationTestFlow3D<T,T,descriptor>>(
+              this->converter());
+          } break;
+
+          case DISCRETE:
+          {
+            // user has to guarantee that reference solution is computed
+            // cf. node Optimization -> ReferenceSolution in xml file
+            help = std::make_shared<AnalyticalFfromSuperF3D<BT>>(
+              *(this->parameters(Opti()).referenceState));
+            // cast reference solution to T-valued functor
+            // for opti with difference quotients, this does nothing
+            // for opti with automatic differentiation, we cast double to ADf
+            analytical = std::make_shared<AnalyticalTypecast<3,BT,T,BT,T>>(*help);
+          } break;
+        }
+
+        simulated = std::make_shared<SuperLatticePhysDissipation3D<T,descriptor>>(
+          this->lattice(), this->converter());
+      } break;
+
+      case VELOCITY:
+      {
+        // assign analytical and simulated velocity field for error computation
+        switch (this->parameters(Opti()).optiReferenceMode)
+        {
+          case ANALYTICAL:
+          {
+            analytical = std::make_shared<VelocityTestFlow3D<T,T,descriptor>>(
+              this->converter());
+          } break;
+
+          case DISCRETE:
+          {
+            // user has to guarantee that reference solution is computed
+            // cf. node Optimization -> ReferenceSolution in xml file
+            help = std::make_shared<AnalyticalFfromSuperF3D<BT>>(
+              *(this->parameters(Opti()).referenceState));
+            analytical = std::make_shared<AnalyticalTypecast<3,BT,T,BT,T>>(*help);
+          } break;
+        }
+
+        simulated = std::make_shared<SuperLatticePhysVelocity3D<T,descriptor>>(
+          this->lattice(), this->converter());
+      } break;
+    }
+
+    RelativeDifferenceObjective3D<T,descriptor>(
+      this->lattice(),
+      simulated,
+      analytical,
+      this->geometry().getMaterialIndicator(this->parameters(Opti()).objectiveMaterial)
+    ).operator()(output, tmp);
+
+    return output[0];
+  }
 };
 
 
@@ -304,7 +296,6 @@ struct TestFlowAdjointOpti
   int                       objectiveMaterial {1};
   TestFlowOptiMode          optiMode          {VELOCITY};
   OptiReferenceSolution     optiReferenceMode {DISCRETE};
-  std::shared_ptr<SuperIndicatorF3D<T>> designDomain {};
 };
 
 /// XML interface for TestFlowOptiSimulation parameters
@@ -320,7 +311,18 @@ struct parameters::Reader<TestFlowAdjointOpti<T,MODE>, TAG>
     xml.readOrWarn<int>("Optimization", "ObjectiveMaterial", "",
       this->params->objectiveMaterial, true, false, false);
 
-    std::string helper ("analytical");
+    std::string helper("velocity");
+    xml.readOrWarn<std::string>("Optimization", "TestFlowOptiMode", "",
+      helper, true, false, true);
+    if (helper=="velocity") {
+      this->params->optiMode = VELOCITY;
+    } else if (helper=="dissipation") {
+      this->params->optiMode = DISSIPATION;
+    } else {
+      throw std::invalid_argument("invalid argument in xml [Optimization][TestFlowOptiMode]");
+    }
+
+    helper = "analytical";
     xml.readOrWarn<std::string>("Optimization", "OptiReferenceMode", "",
       helper, true, false, true);
     if (helper=="discrete") {
@@ -337,191 +339,424 @@ struct parameters::Reader<TestFlowAdjointOpti<T,MODE>, TAG>
 template<typename T, SolverMode MODE>
 using Params_TfOptiAdjoint = meta::map<
   Opti,             TestFlowAdjointOpti<T,MODE>,
-  OutputOpti,       parameters::OptiOutput<T,MODE>,
+  OutputOpti,       parameters::OptiOutput<T>,
   Output,           parameters::OutputGeneral<T>,
-  Results,          parameters::DistributedOptiSimulationResults<T,DualLattices,MODE>,
+  Results,          parameters::DistributedOptiSimulationResults<T,DualLattices>,
   Simulation,       TfSimulationParams<T,DualLattices>,
   VisualizationVTK, parameters::OutputPlot<T>
 >;
 
 template<typename T, SolverMode MODE>
-class TestFlowSolverOptiAdjoint : public TestFlowOptiBase<
-  T,Params_TfOptiAdjoint<T,MODE>,DualLattices,MODE>
+class TestFlowSolverOptiAdjoint
+ : virtual public TestFlowBase<T,Params_TfOptiAdjoint<T,MODE>,DualLattices>,
+   virtual public AdjointLbSolver<T,Params_TfOptiAdjoint<T,MODE>,DualLattices,MODE>
 {
 private:
   mutable OstreamManager            clout {std::cout, "TestFlowSolverOptiAdjoint"};
 
 public:
-  using lattices = DualLattices;
-  using typename TestFlowSolverOptiAdjoint::TestFlowOptiBase::descriptor;
+  using descriptor = typename TestFlowSolverOptiAdjoint::AdjointLbSolver::DESCRIPTOR;
 
   TestFlowSolverOptiAdjoint(
     utilities::TypeIndexedSharedPtrTuple<Params_TfOptiAdjoint<T,MODE>> params)
-   : TestFlowSolverOptiAdjoint::TestFlowOptiBase(params)
-  { }
+   : TestFlowSolverOptiAdjoint::LbSolver(params),
+     TestFlowSolverOptiAdjoint::TestFlowBase(params),
+     TestFlowSolverOptiAdjoint::AdjointLbSolver(params)
+  {
+    const std::string name = (MODE == SolverMode::Reference) ? "Reference_Solution"
+      : ((MODE == SolverMode::Primal) ? "Flow_Simulations"
+      : "Dual_Simulations");
+    this->parameters(VisualizationVTK()).filename = name;
+  }
 
   void prepareGeometry() override
   {
     TestFlowSolverOptiAdjoint::TestFlowBase::prepareGeometry();
 
-    this->parameters(Opti()).designDomain =
-      std::move(this->geometry().getMaterialIndicator(this->parameters(Opti()).controlMaterial));
+    // store some data for optimization
+    // this needs to be done in every adjoint optimization
+    this->parameters(Opti()).bulkIndicator = std::move(this->geometry().getMaterialIndicator(1));
+    this->parameters(Opti()).designDomain = this->parameters(Opti()).bulkIndicator;
+    this->parameters(Results()).geometry = this->_sGeometry;
+  }
+
+  void prepareLattices() override
+  {
+    auto& lattice = this->lattice();
+
+    if constexpr (MODE != SolverMode::Dual) {
+      // dynamics from standard simulation
+      this->setDynamics();
+    }
+    else {
+      const T omega = this->converter().getLatticeRelaxationFrequency();
+
+      // material=1 -->bulk dynamics
+      auto bulk = this->geometry().getMaterialIndicator({1});
+      lattice.template defineDynamics<DualForcedBGKDynamics<T,descriptor>>(bulk);
+
+      // material=2 -->Dirichlet zero (bounce back)
+      auto boundary = this->geometry().getMaterialIndicator({2});
+      boundary::set<boundary::BounceBack>(lattice, boundary);
+
+      lattice.template setParameter<descriptors::OMEGA>(omega);
+    }
+
+    if constexpr (MODE == SolverMode::Reference) {
+      // standard execution: use analytical force function
+      this->setForceField();
+    }
+    else {
+      // optimization: get force from control variables
+      lattice.template defineField<descriptors::FORCE>(
+        this->geometry().getMaterialIndicator({1}),
+        *(this->parameters(Opti()).controlledField));
+    }
   }
 
   void setInitialValues() override
   {
     TestFlowSolverOptiAdjoint::TestFlowBase::setInitialValues();
 
+    // load primal data
+    // this needs to be done in every adjoint optimization
     if constexpr ( MODE == SolverMode::Dual ) {
       this->loadPrimalPopulations();
     }
   }
 
-  void prepareVTK() const override { }
+  void setBoundaryValues(std::size_t iT) override
+  {
+    if constexpr (MODE != SolverMode::Dual) {
+      TestFlowSolverOptiAdjoint::TestFlowBase::setBoundaryValues(iT);
+    }
+    // dual simulation has homogeneous Dirichlet BC, so nothing to do in that case
+  }
+
+  void prepareVTK() const override {
+    const bool prepare
+     = ((MODE == SolverMode::Reference) || (this->parameters(OutputOpti()).counterOptiStep == 0));
+    if (prepare) {
+      TestFlowSolverOptiAdjoint::LbSolver::prepareVTK();
+    }
+  }
 
   void writeVTK(std::size_t iT) const override
   {
-    if constexpr (MODE == SolverMode::Reference) {
-      // ARTIFICIAL DATA: write solution (unsteady, until convergence in time is obtained)
-      SuperVTMwriter3D<T> writer("Reference_Solution");
+    // reference simulation: write solution (unsteady)
+    // optimization: write stationary flow field
+    SuperVTMwriter3D<T> writer(this->parameters(VisualizationVTK()).filename);
+    const int index = (MODE == SolverMode::Reference) ?
+      iT : this->parameters(OutputOpti()).counterOptiStep;
 
-      if (iT == 0) {
-        // Writes the geometry, cuboid no. and rank no. as vti file for visualization
-        SuperLatticeGeometry3D<T,descriptor> geometry(this->lattice(), this->geometry());
-        SuperLatticeCuboid3D<T,descriptor> cuboid(this->lattice());
-        SuperLatticeRank3D<T,descriptor> rank(this->lattice());
-
-        writer.write(cuboid);
-        writer.write(geometry);
-        writer.write(rank);
-        writer.createMasterFile();
-      }
-
-      this->writeFunctorsToVTK(writer, iT);
-    }
-
-    else if constexpr (MODE == SolverMode::Primal) {
-      // OPTIMISATION: Write stationary flow field
-      if (this->_finishedTimeLoop) {
-        SuperVTMwriter3D<T> writer("Flow_Simulations");
-
-        if (this->parameters(OutputOpti()).counterOptiStep == 0) {
-          writer.createMasterFile();
-        }
-
-        this->writeFunctorsToVTK(writer, this->parameters(OutputOpti()).counterOptiStep);
-      }
-    }
-
-    else {    // Dual (adjoint) mode
-      if (this->_finishedTimeLoop) {
-        SuperVTMwriter3D<T> writer("Dual_Simulations");
-
-        if (this->parameters(OutputOpti()).counterOptiStep==0) {
-          writer.createMasterFile();
-        }
-
-        this->writeFunctorsToVTK(writer, this->parameters(OutputOpti()).counterOptiStep);
-      }
-    }
+    this->writeFunctorsToVTK(writer, index);
   }
 
-  /// Store some pointers and fields s.t. they can be passed to the adjoint Solver
   void computeResults() override
   {
-    // yield pointer to lattice
-    this->parameters(Results()).lattice = std::get<0>(this->_sLattices);
-
-    if constexpr ((MODE == SolverMode::Reference) || (MODE == SolverMode::Primal))
-    {
-      this->parameters(Results()).geometry = this->_sGeometry;
+    if constexpr (MODE == SolverMode::Reference) {
+      // error computation
+      TestFlowSolverOptiAdjoint::TestFlowBase::computeResults();
     }
-
-    if constexpr (MODE == SolverMode::Primal)
-    {
-      // compute objective
-      this->parameters(Results()).objective = this->computeObjective();
-      this->parameters(Results()).objectiveComputed = true;
-
-      // set population
-      this->parameters(Results()).fpop = std::make_shared<SuperLatticeFpop3D<T,descriptor>>(
-        this->lattice());
-
-      // set objective derivative
-      this->parameters(Results()).djdf = getObjectiveDerivative();
-
-      // set control derivative
-      std::shared_ptr<AnalyticalF<3,T,T>> zero = std::make_shared<AnalyticalConst<3,T,T>> (Vector<T,3>(0));
-      this->parameters(Results()).djdalpha = std::make_shared<SuperLatticeFfromAnalyticalF3D<T,descriptor>> (
-        zero, this->lattice());
-    }
+    // store some data for optimization
+    TestFlowSolverOptiAdjoint::AdjointLbSolver::computeResults();
   }
+};
 
-  std::shared_ptr<SuperF3D<T,T>> getObjectiveDerivative() const
-  {
-    std::shared_ptr<SuperF3D<T,T>>      simulated;
-    std::shared_ptr<SuperF3D<T,T>>      simulatedDerivative;
-    std::shared_ptr<AnalyticalF<3,T,T>> analytical;
 
-    switch (this->parameters(Opti()).optiMode)
+/// @brief Objective and derivative computation for adjoint optimization
+/// Objective = 0.5 * norm(u-uReference)^2
+/// @tparam T floating point type
+template <typename T>
+class TestFlowObjective : public DistributedObjective<T,TestFlowSolverOptiAdjoint>
+{
+public:
+  using descriptor = typename TestFlowSolverOptiAdjoint<T,SolverMode::Reference>::AdjointLbSolver::DESCRIPTOR;
+  std::shared_ptr<TestFlowSolverOptiAdjoint<T,SolverMode::Reference>>  _referenceSolver;
+  std::shared_ptr<SuperF3D<T,T>>                    _referenceState;
+
+  TestFlowObjective(XMLreader const& xml) {
+    // define reference solution
+    _referenceSolver = createLbSolver <TestFlowSolverOptiAdjoint<T,SolverMode::Reference>> (xml);
+
+    switch (_referenceSolver->parameters(Opti()).optiMode)
     {
       case DISSIPATION:
       {
-        simulated = std::make_shared<SuperLatticePhysDissipation3D<T,descriptor>>(
-          this->lattice(), this->converter());
-        simulatedDerivative = std::make_shared<SuperLatticeDphysDissipationDf3D<T,descriptor>> (
-          this->lattice(), this->converter());
-
-        switch (this->parameters(Opti()).optiReferenceMode)
+        switch (_referenceSolver->parameters(Opti()).optiReferenceMode)
         {
           case ANALYTICAL:
           {
-            analytical = std::make_shared<DissipationTestFlow3D<T,T,descriptor>>(
-              this->converter());
+            _referenceSolver->buildAndReturn();  // need to construct the SuperLattice
+            std::shared_ptr<AnalyticalF3D<T,T>> analytical
+             = std::make_shared<DissipationTestFlow3D<T,T,descriptor>>(
+              _referenceSolver->converter());
+            _referenceState = std::make_shared<SuperLatticeFfromAnalyticalF3D<T,descriptor>>(
+              analytical,
+              _referenceSolver->lattice());
           } break;
 
           case DISCRETE:
           {
-            // user has to guarantee that reference solution is computed
-            // cf. node Optimization -> ReferenceSolution in xml file
-            analytical = std::make_shared<AnalyticalFfromSuperF3D<T>>(
-              *(this->parameters(Opti()).referenceSolution));
+            _referenceSolver->solve();
+            _referenceState
+             = std::make_shared<SuperLatticePhysDissipation3D<T,descriptor>>(
+              _referenceSolver->lattice(), _referenceSolver->converter());
           } break;
         }
       } break;
 
       case VELOCITY:
       {
-        simulated = std::make_shared<SuperLatticePhysVelocity3D<T,descriptor>>(
-          this->lattice(), this->converter());
-        simulatedDerivative = std::make_shared<SuperLatticeDphysVelocityDf3D<T,descriptor>> (
-          this->lattice(), this->converter());
-
-        switch (this->parameters(Opti()).optiReferenceMode)
+        switch (_referenceSolver->parameters(Opti()).optiReferenceMode)
         {
           case ANALYTICAL:
           {
-            analytical = std::make_shared<VelocityTestFlow3D<T,T,descriptor>>(
-              this->converter());
+            _referenceSolver->buildAndReturn();
+            std::shared_ptr<AnalyticalF3D<T,T>> analytical
+             = std::make_shared<VelocityTestFlow3D<T,T,descriptor>>(
+              _referenceSolver->converter());
+            _referenceState = std::make_shared<SuperLatticeFfromAnalyticalF3D<T,descriptor>>(
+              analytical,
+              _referenceSolver->lattice());
           } break;
 
           case DISCRETE:
           {
-            // user has to guarantee that reference solution is computed
-            // cf. node Optimization -> ReferenceSolution in xml file
-            analytical = std::make_shared<AnalyticalFfromSuperF3D<T>>(
-              *(this->parameters(Opti()).referenceSolution));
+            _referenceSolver->solve();
+            _referenceState
+             = std::make_shared<SuperLatticePhysVelocity3D<T,descriptor>>(
+              _referenceSolver->lattice(), _referenceSolver->converter());
           } break;
         }
       } break;
     }
 
+    // define objective domain
+    this->_objectiveDomain = _referenceSolver->parameters(Opti()).designDomain;
+    this->_designDomain = _referenceSolver->parameters(Opti()).designDomain;
+  }
+
+  T evaluate() override {
+    // define functor for simulated solution
+    std::shared_ptr<SuperF3D<T,T>>      simulatedState;
+    switch (_referenceSolver->parameters(Opti()).optiMode)
+    {
+      case DISSIPATION:
+      {
+        simulatedState = std::make_shared<SuperLatticePhysDissipation3D<T,descriptor>>(
+          this->_primalSolver->lattice(), _referenceSolver->converter());
+      } break;
+
+      case VELOCITY:
+      {
+        simulatedState = std::make_shared<SuperLatticePhysVelocity3D<T,descriptor>>(
+          this->_primalSolver->lattice(), _referenceSolver->converter());
+      } break;
+    }
+
+    // compare simulated with reference solution
+    T output[1]; int tmp[4];
+    RelativeDifferenceObjective3D<T,descriptor>(
+      this->_primalSolver->lattice(),
+      simulatedState,
+      _referenceState,
+      this->_objectiveDomain
+    ).operator()(output, tmp);
+
+    return output[0];
+  }
+
+  std::shared_ptr<SuperF3D<T,T>> derivativeByPopulations() override {
+    // define functor for simulated state and its derivative by populations
+    std::shared_ptr<SuperF3D<T,T>>      simulatedState;
+    std::shared_ptr<SuperF3D<T,T>>      simulatedDerivative;
+
+    switch (_referenceSolver->parameters(Opti()).optiMode)
+    {
+      case DISSIPATION:
+      {
+        simulatedState = std::make_shared<SuperLatticePhysDissipation3D<T,descriptor>>(
+          this->_primalSolver->lattice(),
+          this->_primalSolver->converter());
+        simulatedDerivative = std::make_shared<SuperLatticeDphysDissipationDf3D<T,descriptor>> (
+          this->_primalSolver->lattice(),
+          this->_primalSolver->converter());
+      } break;
+
+      case VELOCITY:
+      {
+        simulatedState = std::make_shared<SuperLatticePhysVelocity3D<T,descriptor>>(
+          this->_primalSolver->lattice(),
+          this->_primalSolver->converter());
+        simulatedDerivative = std::make_shared<SuperLatticeDphysVelocityDf3D<T,descriptor>> (
+          this->_primalSolver->lattice(),
+          this->_primalSolver->converter());
+      } break;
+    }
+
+    // define derivative of objective by populations
     return std::make_shared<DrelativeDifferenceObjectiveDf3D<T,descriptor>>(
-      this->lattice(),
-      simulated,
+      this->_primalSolver->lattice(),
+      simulatedState,
       simulatedDerivative,
-      analytical,
-      this->geometry().getMaterialIndicator(this->parameters(Opti()).objectiveMaterial));
+      _referenceState,
+      this->_objectiveDomain);
+  }
+
+  std::shared_ptr<SuperF3D<T,T>> derivativeByControl() override {
+    // objective does not depend (directly) on control
+    const Vector<T,3> v(0);
+    return std::make_shared<SuperConst3D<T,T>>(this->_primalSolver->lattice(), v);
+  }
+};
+
+template <typename T>
+class RelativeDifferenceVelocityObjectiveGeneric
+{
+public:
+  using Descriptor = descriptors::DualForcedD3Q19Descriptor;
+  std::shared_ptr<TestFlowSolverOptiAdjoint<T,SolverMode::Reference>> _referenceSolver;
+  std::shared_ptr<SuperF3D<T,T>>                           _referenceState;
+protected:
+  T _uRefNorm;
+  T _conversionVelocity;
+  T _regAlpha {0};
+
+public:
+  // these indicators are used by the GenericObjective class
+  std::shared_ptr<SuperIndicatorF<T,3>>           _objectiveDomain;
+  std::shared_ptr<SuperIndicatorF<T,3>>           _designDomain;
+
+  RelativeDifferenceVelocityObjectiveGeneric(XMLreader const& xml) {
+    // create reference solver, compute reference solution
+    _referenceSolver = createLbSolver <TestFlowSolverOptiAdjoint<T,SolverMode::Reference>> (xml);
+
+    switch (_referenceSolver->parameters(Opti()).optiMode)
+    {
+      case DISSIPATION:
+      {
+        switch (_referenceSolver->parameters(Opti()).optiReferenceMode)
+        {
+          case ANALYTICAL:
+          {
+            _referenceSolver->buildAndReturn();  // need to construct the SuperLattice
+            std::shared_ptr<AnalyticalF3D<T,T>> analytical
+             = std::make_shared<DissipationTestFlow3D<T,T,Descriptor>>(
+              _referenceSolver->converter());
+            _referenceState = std::make_shared<SuperLatticeFfromAnalyticalF3D<T,Descriptor>>(
+              analytical,
+              _referenceSolver->lattice());
+          } break;
+
+          case DISCRETE:
+          {
+            _referenceSolver->solve();
+            _referenceState
+             = std::make_shared<SuperLatticePhysDissipation3D<T,Descriptor>>(
+              _referenceSolver->lattice(), _referenceSolver->converter());
+          } break;
+        }
+      } break;
+
+      case VELOCITY:
+      {
+        switch (_referenceSolver->parameters(Opti()).optiReferenceMode)
+        {
+          case ANALYTICAL:
+          {
+            _referenceSolver->buildAndReturn();
+            std::shared_ptr<AnalyticalF3D<T,T>> analytical
+             = std::make_shared<VelocityTestFlow3D<T,T,Descriptor>>(
+              _referenceSolver->converter());
+            _referenceState = std::make_shared<SuperLatticeFfromAnalyticalF3D<T,Descriptor>>(
+              analytical,
+              _referenceSolver->lattice());
+          } break;
+
+          case DISCRETE:
+          {
+            _referenceSolver->solve();
+            _referenceState
+             = std::make_shared<SuperLatticePhysVelocity3D<T,Descriptor>>(
+              _referenceSolver->lattice(), _referenceSolver->converter());
+          } break;
+        }
+      } break;
+    }
+
+    // define objective domain
+    _objectiveDomain = _referenceSolver->parameters(Opti()).designDomain;
+    _designDomain = _referenceSolver->parameters(Opti()).designDomain;
+
+    // define constants
+    const int dummy[1]{0};
+    SuperL2Norm3D<T>(_referenceState, _objectiveDomain)(&_uRefNorm, dummy);
+    _conversionVelocity = _referenceSolver->converter().getConversionFactorVelocity();
+    // todo dissipation
+    xml.readOrWarn<T>("Optimization", "RegAlpha", "", _regAlpha);
+  }
+
+  /// Implements the population-dependent term of objective functional
+  // This interface is expected by the GenericObjective class. It uses different
+  // cell/data types CELL/ V. Hence, beware of typecasts from V to T!
+  template <typename CELL, typename V>
+  void j(V* output, CELL& cell, int iC, const int* coords) {
+    // application-specific implementation
+    V diff(0);
+    const int iCglob = _referenceSolver->lattice().getLoadBalancer().glob(iC);
+    switch (_referenceSolver->parameters(Opti()).optiMode)
+    {
+      case DISSIPATION:
+      {
+        const V diss = dissipation(cell);
+        T dissRef;
+        (*_referenceState)(&dissRef, iCglob, coords[0], coords[1], coords[2]);
+        diff = (diss-dissRef) * (diss-dissRef);
+      } break;
+
+      case VELOCITY:
+      {
+        Vector<V,3> u;
+        cell.computeU(u.data());
+        T uRef[3];
+        (*_referenceState)(uRef, iCglob, coords[0], coords[1], coords[2]);
+        diff = norm_squared(_conversionVelocity * u - Vector<V,3>(uRef));
+      } break;
+    }
+    // scale and return
+    output[0] = diff / (T(2)*_uRefNorm*_uRefNorm);
+  }
+
+  /// Implements the control-dependent term of objective functional
+  // This interface is expected by GenericObjective, with different data types V.
+  // Hence, do not typecasts from V to T!
+  template <typename V>
+  void r(V* output, int iC, const int* coords, const V* control) {
+    // application-specific implementation: compute regularization
+    output[0] = V(0);  // T(0.5) * _regAlpha * util::norm2(control, 3);
+  }
+
+private:
+  template <typename CELL, typename V = typename CELL::value_t>
+  V dissipation(CELL& cell) {
+    V rho, uTemp[Descriptor::d], pi[util::TensorVal<Descriptor >::n];
+    cell.computeAllMomenta(rho, uTemp, pi);
+
+    V PiNeqNormSqr = pi[0] * pi[0] + 2. * pi[1] * pi[1] + pi[2] * pi[2];
+    if (util::TensorVal<Descriptor >::n == 6) {
+      PiNeqNormSqr += pi[2] * pi[2] + pi[3] * pi[3] + 2. * pi[4] * pi[4]
+                      + pi[5] * pi[5];
+    }
+
+    const auto& converter = _referenceSolver->converter();
+    const V dt = converter.getConversionFactorTime();
+    const V omega = 1. / converter.getLatticeRelaxationTime();
+    const V nuLattice = converter.getLatticeViscosity();
+
+    return PiNeqNormSqr * nuLattice
+            * util::pow(omega * descriptors::invCs2<T,Descriptor>() / rho, 2) / 2.
+            * converter.getPhysViscosity() / nuLattice / dt / dt;
   }
 };
 

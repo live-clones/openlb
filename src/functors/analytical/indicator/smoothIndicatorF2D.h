@@ -70,7 +70,7 @@ private:
   IndicatorCircle2D<S> _ind;
 public:
   SmoothIndicatorCircle2D(IndicatorCircle2D<S>& indPtr, S epsilon);
-  SmoothIndicatorCircle2D(Vector<S,2>center, S radius, S epsilon);
+  SmoothIndicatorCircle2D(Vector<S,2> center, S radius, S epsilon);
   IndicatorCircle2D<S>& getIndicator();
   Vector<S,2> surfaceNormal(const Vector<S,2>& pos, const S meshSize) override;
   const S signedDistance( const Vector<S,2> input ) override;
@@ -197,4 +197,3 @@ public:
 }
 
 #endif
-

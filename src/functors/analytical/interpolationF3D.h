@@ -28,7 +28,7 @@
 #include "analyticalF.h"
 #include "functors/lattice/blockBaseF3D.h"
 #include "functors/lattice/superBaseF3D.h"
-#include "geometry/cuboidGeometry3D.h"
+#include "geometry/cuboidGeometry.h"
 #include "geometry/blockGeometry.h"
 #include "geometry/superGeometry.h"
 
@@ -67,7 +67,7 @@ protected:
   const bool _communicateOverlap;
 
   SuperF3D<T,W>&       _f;
-  CuboidGeometry3D<T>& _cuboidGeometry;
+  CuboidDecomposition<T,3>& _cuboidGeometry;
 
   std::vector<std::unique_ptr<AnalyticalFfromBlockF3D<T,W>>> _blockF;
 public:

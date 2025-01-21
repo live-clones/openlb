@@ -132,7 +132,7 @@ void prepareLattice(
 
   /// Material=0 -->do nothing
   sLattice.defineDynamics<PorousParticleBGKdynamics>(superGeometry, 1);
-  setBounceBackBoundary(sLattice, superGeometry, 2);
+  boundary::set<boundary::BounceBack>(sLattice, superGeometry, 2);
 
   sLattice.setParameter<descriptors::OMEGA>(converter.getLatticeRelaxationFrequency());
 
@@ -194,10 +194,8 @@ void getResults(SuperLattice<T, DESCRIPTOR>& sLattice,
 
   if (iT == 0) {
     /// Writes the converter log file
-    SuperLatticeGeometry3D<T, DESCRIPTOR> geometry(sLattice, superGeometry);
     SuperLatticeCuboid3D<T, DESCRIPTOR> cuboid(sLattice);
     SuperLatticeRank3D<T, DESCRIPTOR> rank(sLattice);
-    vtkWriter.write(geometry);
     vtkWriter.write(cuboid);
     vtkWriter.write(rank);
     vtkWriter.createMasterFile();
@@ -254,9 +252,9 @@ int main(int argc, char* argv[])
   IndicatorCuboid3D<T> cuboid(extend, origin);
 
 #ifdef PARALLEL_MODE_MPI
-  CuboidGeometry3D<T> cuboidGeometry(cuboid, converter.getConversionFactorLength(), singleton::mpi().getSize());
+  CuboidGeometry3D<T> cuboidGeometry(cuboid, converter.getPhysDeltaX(), singleton::mpi().getSize());
 #else
-  CuboidGeometry3D<T> cuboidGeometry(cuboid, converter.getConversionFactorLength(), 7);
+  CuboidGeometry3D<T> cuboidGeometry(cuboid, converter.getPhysDeltaX(), 7);
 #endif
   cuboidGeometry.print();
 
@@ -286,7 +284,7 @@ int main(int argc, char* argv[])
     VerletParticleDynamics<T,PARTICLETYPE>>();
 
   // Calculate particle quantities
-  T epsilon = 0.5*converter.getConversionFactorLength();
+  T epsilon = 0.5*converter.getPhysDeltaX();
   Vector<T,3> cubeExtend( cubeEdgeLength );
 
   // Create Particle 1

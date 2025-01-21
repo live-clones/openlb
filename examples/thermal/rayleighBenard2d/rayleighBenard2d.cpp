@@ -108,8 +108,8 @@ void prepareLattice( ThermalUnitConverter<T, NSDESCRIPTOR, TDESCRIPTOR> &convert
   T NSomega = converter.getLatticeRelaxationFrequency();
 
   NSlattice.defineDynamics<ForcedBGKdynamics>(superGeometry, 1);
-  setBounceBackBoundary(NSlattice, superGeometry, 2);
-  setBounceBackBoundary(NSlattice, superGeometry, 3);
+  boundary::set<boundary::BounceBack>(NSlattice, superGeometry, 2);
+  boundary::set<boundary::BounceBack>(NSlattice, superGeometry, 3);
   NSlattice.defineDynamics<ForcedBGKdynamics>(superGeometry, 4);
 
   ADlattice.defineDynamics<AdvectionDiffusionBGKdynamics>(superGeometry, 1);
@@ -117,8 +117,8 @@ void prepareLattice( ThermalUnitConverter<T, NSDESCRIPTOR, TDESCRIPTOR> &convert
   ADlattice.defineDynamics<AdvectionDiffusionBGKdynamics>(superGeometry, 3);
   ADlattice.defineDynamics<AdvectionDiffusionBGKdynamics>(superGeometry, 4);
 
-  setAdvectionDiffusionTemperatureBoundary(ADlattice, superGeometry, 2);
-  setAdvectionDiffusionTemperatureBoundary(ADlattice, superGeometry, 3);
+  boundary::set<boundary::AdvectionDiffusionDirichlet>(ADlattice, superGeometry, 2);
+  boundary::set<boundary::AdvectionDiffusionDirichlet>(ADlattice, superGeometry, 3);
 
   /// define initial conditions
   AnalyticalConst2D<T,T> rho(1.);
@@ -168,10 +168,8 @@ void getResults(ThermalUnitConverter<T, NSDESCRIPTOR, TDESCRIPTOR> &converter,
     // writeLogFile(converter,"rayleighBenard2d");
 
     /// Writes the geometry, cuboid no. and rank no. as vti file for visualization
-    SuperLatticeGeometry2D<T, NSDESCRIPTOR> geometry(NSlattice, superGeometry);
     SuperLatticeCuboid2D<T, NSDESCRIPTOR> cuboid(NSlattice);
     SuperLatticeRank2D<T, NSDESCRIPTOR> rank(NSlattice);
-    vtkWriter.write(geometry);
     vtkWriter.write(cuboid);
     vtkWriter.write(rank);
 
@@ -245,7 +243,7 @@ int main(int argc, char *argv[])
 #endif
   CuboidGeometry2D<T> cuboidGeometry(cuboid, converter.getPhysDeltaX(), noOfCuboids);
 
-  cuboidGeometry.setPeriodicity(true, false);
+  cuboidGeometry.setPeriodicity({true, false});
 
   HeuristicLoadBalancer<T> loadBalancer(cuboidGeometry);
 

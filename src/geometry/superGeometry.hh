@@ -34,32 +34,38 @@
 #include <string>
 #include <vector>
 
-#include "geometry/cuboid2D.h"
-#include "geometry/cuboidGeometry2D.h"
-#include "geometry/cuboidGeometry3D.h"
+#include "geometry/cuboid.h"
+#include "geometry/cuboidGeometry.h"
 #include "geometry/superGeometry.h"
+
 #include "communication/superStructure.h"
 #include "communication/loadBalancer.h"
+
 #include "functors/analytical/indicator/indicatorF2D.h"
 #include "functors/analytical/indicator/indicatorF3D.h"
 #include "functors/lattice/indicator/superIndicatorF2D.h"
 #include "functors/lattice/indicator/superIndicatorF3D.h"
+
 #include "io/ostreamManager.h"
+#include "io/superVtmWriter2D.h"
+#include "io/superVtmWriter3D.h"
 
 namespace olb {
 
 
 template<typename T, unsigned D>
-SuperGeometry<T,D>::SuperGeometry(CuboidGeometry<T,D>& cuboidGeometry,
+SuperGeometry<T,D>::SuperGeometry(CuboidDecomposition<T,D>& cuboidGeometry,
                                   LoadBalancer<T>& loadBalancer,
                                   int overlap):
   SuperStructure<T,D>(cuboidGeometry, loadBalancer, overlap),
   _communicator(new SuperCommunicator<T,SuperGeometry<T,D>>(*this)),
   _communicationNeeded(false),
   _statistics(this),
-  clout(std::cout, ("SuperGeometry" + std::to_string(D) + "D"))
+  clout(std::cout, ("SuperGeometry" + std::to_string(D) + "D")),
+  _iConstructionT{0},
+  _writeIncrementalVtkEnabled{true}
 {
-  for (int iCloc=0; iCloc<this->getLoadBalancer().size(); iCloc++) {
+  for (int iCloc=0; iCloc < this->getLoadBalancer().size(); iCloc++) {
     int iCglob = this->getLoadBalancer().glob(iCloc);
     _block.emplace_back(
       new BlockGeometry<T,D>(cuboidGeometry.get(iCglob), overlap, iCglob));
@@ -72,6 +78,22 @@ SuperGeometry<T,D>::SuperGeometry(CuboidGeometry<T,D>& cuboidGeometry,
   _statistics.getStatisticsStatus() = true;
   _communicationNeeded = true;
   updateStatistics(false);
+
+  writeIncrementalVTK();
+}
+
+template<typename T, unsigned D>
+void SuperGeometry<T,D>::writeIncrementalVTK()
+{
+  if (_writeIncrementalVtkEnabled) {
+    SuperVTMwriter<T,D> writer("geometry");
+    if (_iConstructionT == 0) {
+      writer.createMasterFile();
+    }
+    SuperGeometryF<T,D> geometryF(*this);
+    writer.addFunctor(geometryF);
+    writer.write(_iConstructionT++);
+  }
 }
 
 template<typename T, unsigned D>
@@ -129,20 +151,20 @@ int SuperGeometry<T,D>::getAndCommunicate(LatticeR<D+1> latticeR) const
 }
 
 template<typename T, unsigned D>
-std::vector<T> SuperGeometry<T,D>::getPhysR(int iCglob,  LatticeR<D> latticeR) const
+Vector<T,D> SuperGeometry<T,D>::getPhysR(int iCglob,  LatticeR<D> latticeR) const
 {
   T physRv[D];
   getPhysR(physRv, iCglob, latticeR);
-  std::vector<T> physR(physRv,physRv + D);
+  Vector<T,D> physR(physRv);
   return physR;
 }
 
 template<typename T, unsigned D>
-std::vector<T> SuperGeometry<T,D>::getPhysR(LatticeR<D+1> latticeR) const
+Vector<T,D> SuperGeometry<T,D>::getPhysR(LatticeR<D+1> latticeR) const
 {
   T physRv[D];
   this->_cuboidGeometry.getPhysR(physRv, latticeR);
-  std::vector<T> physR(physRv,physRv + D);
+  Vector<T,D> physR(physRv);
   return physR;
 }
 
@@ -245,6 +267,7 @@ int SuperGeometry<T,D>::clean(bool verbose, std::vector<int> bulkMaterials)
   }
   _statistics.getStatisticsStatus() = true;
   this->_communicationNeeded = true;
+  writeIncrementalVTK();
   return counter;
 }
 
@@ -265,6 +288,7 @@ int SuperGeometry<T,D>::outerClean(bool verbose, std::vector<int> bulkMaterials)
   }
   _statistics.getStatisticsStatus() = true;
   this->_communicationNeeded = true;
+  writeIncrementalVTK();
   return counter;
 }
 
@@ -286,6 +310,7 @@ int SuperGeometry<T,D>::innerClean(bool verbose)
   }
   _statistics.getStatisticsStatus() = true;
   this->_communicationNeeded = true;
+  writeIncrementalVTK();
   return counter;
 }
 
@@ -306,6 +331,7 @@ int SuperGeometry<T,D>::innerClean(int bcType, bool verbose)
   }
   _statistics.getStatisticsStatus() = true;
   this->_communicationNeeded = true;
+  writeIncrementalVTK();
   return counter;
 }
 
@@ -339,6 +365,7 @@ void SuperGeometry<T,D>::reset(IndicatorF<T,D>& domain)
   }
   _statistics.getStatisticsStatus() = true;
   this->_communicationNeeded = true;
+  writeIncrementalVTK();
 }
 
 template<typename T, unsigned D>
@@ -350,6 +377,7 @@ void SuperGeometry<T,D>::rename(int fromM, int toM)
   }
   _statistics.getStatisticsStatus() = true;
   this->_communicationNeeded = true;
+  writeIncrementalVTK();
 }
 
 template<typename T, unsigned D>
@@ -360,6 +388,7 @@ void SuperGeometry<T,D>::rename(int fromM, int toM, FunctorPtr<IndicatorF<T,D>>&
     _block[iC]->rename(fromM,toM,*condition);
   }
   _statistics.getStatisticsStatus() = true;
+  writeIncrementalVTK();
 }
 
 template<typename T, unsigned D>
@@ -373,13 +402,14 @@ void SuperGeometry<T,D>::rename(int fromM, int toM, LatticeR<D> offset)
     }
     _statistics.getStatisticsStatus() = true;
     this->_communicationNeeded = true;
+    writeIncrementalVTK();
   }else{
     clout << "error rename only implemented for offset<=overlap" << std::endl;
   }
 }
 
 template<typename T, unsigned D>
-void SuperGeometry<T,D>::rename(int fromM, int toM, int testM, std::vector<int> testDirection)
+void SuperGeometry<T,D>::rename(int fromM, int toM, int testM, Vector<int,D> testDirection)
 {
   if ( testDirection[0]*testDirection[0]<=(this->_overlap)*(this->_overlap)
         && testDirection[1]*testDirection[1]<=(this->_overlap)*(this->_overlap)  ){
@@ -400,7 +430,8 @@ void SuperGeometry<T,D>::rename(int fromM, int toM, int testM, std::vector<int> 
       _statistics.getStatisticsStatus() = true;
       this->_communicationNeeded = true;
     }
-  }else{
+    writeIncrementalVTK();
+  } else {
     clout << "error rename only implemented for |testDirection[i]|<=overlap" << std::endl;
   }
 }
@@ -419,6 +450,7 @@ void SuperGeometry<T,D>::rename(int fromBcMat, int toBcMat, int fluidMat,
     }
     _statistics.getStatisticsStatus() = true;
     this->_communicationNeeded = true;
+    writeIncrementalVTK();
   }
   else {
     clout << "error rename only implemented for overlap>=2" << std::endl;
@@ -439,6 +471,7 @@ void SuperGeometry<T,D>::rename(int fromBcMat, int toBcMat, int fluidMat,
     }
     _statistics.getStatisticsStatus() = true;
     this->_communicationNeeded = true;
+    writeIncrementalVTK();
   }
   else {
     clout << "error rename only implemented for overlap>=2" << std::endl;
@@ -451,6 +484,40 @@ void SuperGeometry<T,D>::print()
 {
   this->_cuboidGeometry.print();
   getStatistics().print();
+}
+
+
+template<typename T, unsigned D>
+void SuperGeometry<T,D>::print(const T physR[D], int offset)
+{
+    if (offset >= this->_overlap) {
+      clout << "Warning! the offset is larger than overlap, set offset to _overlap = " << this->_overlap << std::endl;
+      offset=this->_overlap;
+    }
+    int latticeR[D+1];
+
+    if ( this->_cuboidGeometry.getLatticeR(latticeR, physR) ) {
+      int iCglob = latticeR[0];
+
+      std::vector<int> loc(D, 0);
+      if constexpr (D==3) {
+        loc[0] = latticeR[1];
+        loc[1] = latticeR[2];
+        loc[2] = latticeR[3];
+        clout << "physR(center)" << "=" << "{" << latticeR[1] << "," << latticeR[2] << "," << latticeR[3] << "}" << std::endl;
+      }
+      else {
+        loc[0] = latticeR[1];
+        loc[1] = latticeR[2];
+        clout << "physR(center)" << "=" << "{" << latticeR[1] << "," << latticeR[2] << "}" << std::endl;
+      }
+
+      _block[this->getLoadBalancer().loc(iCglob)]->printNode(loc,offset);
+
+    }
+    else {
+      clout << "this point isn't inside the geometry" << std::endl;
+    }
 }
 
 template<typename T, unsigned D>

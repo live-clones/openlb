@@ -68,9 +68,7 @@ bool SuperLatticeYplus3D<T,DESCRIPTOR>::operator() (T output[], const int input[
       }
       if ( counter > 0 ) {
         // get physical Coordinates at intersection
-
-        std::vector<T> physR(3, T());
-        _superGeometry.getCuboidGeometry().getPhysR(&(physR[0]), &(input[0]));
+        auto physR = _superGeometry.getCuboidGeometry().getPhysR(&(input[0]));
 
         T voxelSize = _superGeometry.getCuboidGeometry().get(globIC).getDeltaR();
 
@@ -82,7 +80,7 @@ bool SuperLatticeYplus3D<T,DESCRIPTOR>::operator() (T output[], const int input[
         direction[2] = voxelSize*normal[2]*2.;
 
         // calculate distance to STL file
-        if ( _indicator.distance(distance, physR, direction) ) {
+        if (_indicator.distance(distance, physR.data(), direction)) {
           // call stress at this point
           T rho;
           T u[3];

@@ -41,7 +41,7 @@ Vector<T,D> getNormalOnClosestSurface( SolidBoundary<T,D>& solidBoundary,
   Vector<T,D>& position, T referenceLength )
 {
   T delXofCentralDifference = 1.e-8*referenceLength;
-  return solidBoundary.getIndicator()->surfaceNormal(position, delXofCentralDifference);
+  return solidBoundary.getIndicator()->surfaceNormalExact(position, delXofCentralDifference);
 }
 
 template<typename T, typename PARTICLETYPE>
@@ -73,7 +73,7 @@ void doAtParticleWallContact(
   T radius = access::getRadius( particle );
   //VERSION A: Use signed distance functions of indicator
   if constexpr (!useCubicBounds){
-    T distToWall = solidBoundary.getIndicator()->signedDistance(position)-radius;
+    T distToWall = solidBoundary.getIndicator()->signedDistanceExact(position)-radius;
     if (distToWall<=0){
 
       if constexpr (std::is_invocable_v<F,Particle<T,PARTICLETYPE>&,Vector<T,PARTICLETYPE::d>&,T>){

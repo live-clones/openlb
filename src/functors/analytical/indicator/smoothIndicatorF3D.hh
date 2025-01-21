@@ -32,7 +32,6 @@
 #include "smoothIndicatorBaseF3D.h"
 #include "smoothIndicatorCalcF3D.h"
 #include "utilities/vectorHelpers.h"
-#include "dynamics/descriptorAlias.h"
 #include "functors/analytical/interpolationF3D.h"
 #include "functors/lattice/reductionF3D.h"
 
@@ -765,7 +764,7 @@ void SmoothIndicatorCustom3D<T,S,PARTICLE>::initBlockData(IndicatorF3D<T>& ind)
         for (unsigned iD=0; iD<3; ++iD) {
           input[iD] = (iX[iD]-blockDataPadding[iD]/2)*_latticeSpacing+ind.getMin()[iD];
         }
-        this->_blockData->get(iX) = ind.signedDistance(input);
+        this->_blockData->get(iX) = ind.signedDistanceExact(input);
       }
     }
   }
@@ -883,14 +882,14 @@ Vector<T,3> SmoothIndicatorCustom3D<T,S,PARTICLE>::getLocalCenter()
 template <typename T, typename S, bool PARTICLE>
 Vector<S,3> SmoothIndicatorCustom3D<T,S,PARTICLE>::surfaceNormal( const Vector<S,3>& pos, const S meshSize )
 {
-  return _indPtr->surfaceNormal(pos, meshSize);
+  return _indPtr->surfaceNormalExact(pos, meshSize);
 }
 
 template <typename T, typename S, bool PARTICLE>
 Vector<S,3> SmoothIndicatorCustom3D<T,S,PARTICLE>::surfaceNormal( const Vector<S,3>& pos, const S meshSize,
     std::function<Vector<S,3>(const Vector<S,3>&)> transformPos )
 {
-  return _indPtr->surfaceNormal( pos, meshSize, transformPos );
+  return _indPtr->surfaceNormalExact( pos, meshSize, transformPos );
 }
 
 template <typename T, typename S, bool PARTICLE>

@@ -42,6 +42,7 @@ using PorousBGKdynamics = dynamics::Tuple<
 
 
 namespace particles {
+
 template <typename DESCRIPTOR, typename CELL,
           typename V = typename CELL::value_t>
 inline void resetParticleRelatedFields(CELL& cell) noexcept
@@ -140,6 +141,8 @@ struct PorousParticle {
       // use Kuperstokh forcing by default
       V uPlus[DESCRIPTOR::d]{ };
       V diff[DESCRIPTOR::q]{ };
+      V fEqPlus[DESCRIPTOR::q]{ };
+      V fEq[DESCRIPTOR::q]{ };
 
       if (velDenominator > std::numeric_limits<V>::epsilon()) {
         for (int iDim=0; iDim<DESCRIPTOR::d; ++iDim) {
@@ -150,14 +153,55 @@ struct PorousParticle {
           particles::resetParticleRelatedFields<DESCRIPTOR,CELL,V>(cell);
         }
 
+        EquilibriumF().compute(cell, rho, uPlus, fEqPlus);
+        EquilibriumF().compute(cell, rho, u, fEq);
         for (int tmp_iPop=0; tmp_iPop < DESCRIPTOR::q; tmp_iPop++) {
-          diff[tmp_iPop] +=   EquilibriumF().compute(tmp_iPop, rho, uPlus)
-                            - EquilibriumF().compute(tmp_iPop, rho, u);
+          diff[tmp_iPop] += fEqPlus[tmp_iPop] - fEq[tmp_iPop];
           cell[tmp_iPop] += diff[tmp_iPop];
         }
       }
 
       particles::resetParticleContactRelatedFields<DESCRIPTOR,CELL,V>(cell);
+
+      return statistic;
+    }
+  };
+};
+
+template <typename COLLISION>
+struct MovingPorosity {
+  using parameters = typename meta::list<descriptors::OMEGA>;
+
+  static std::string getName() {
+    return "MovingPorosity<" + COLLISION::getName() + ">" ;
+  }
+
+  template <typename DESCRIPTOR, typename MOMENTA, typename EQUILIBRIUM>
+  struct type {
+    using MomentaF     = typename MOMENTA::template type<DESCRIPTOR>;
+    using EquilibriumF = typename EQUILIBRIUM::template type<DESCRIPTOR,MOMENTA>;
+    using CollisionO   = typename COLLISION::template type<DESCRIPTOR,MOMENTA,EQUILIBRIUM>;
+
+    template <typename CELL, typename PARAMETERS, typename V=typename CELL::value_t>
+    CellStatistic<V> apply(CELL& cell, PARAMETERS& parameters) any_platform {
+      Vector<V,DESCRIPTOR::d> u{};
+      MomentaF().computeU(cell, u);
+
+      auto statistic = CollisionO().apply(cell, parameters);
+
+      // use Kuperstokh forcing
+      Vector<V,DESCRIPTOR::d> uPlus = u;
+      uPlus += (V{1} - cell.template getField<descriptors::POROSITY>())
+             * (cell.template getField<descriptors::VELOCITY>() - uPlus);
+
+      // TODO replace by single EquilibriumF()::compute
+      V fEq[DESCRIPTOR::q] { };
+      V fEq2[DESCRIPTOR::q] { };
+      EquilibriumF().compute(cell, statistic.rho, u, fEq);
+      EquilibriumF().compute(cell, statistic.rho, uPlus, fEq2);
+      for (int iPop=0; iPop < DESCRIPTOR::q; ++iPop) {
+        cell[iPop] += fEq2[iPop] - fEq[iPop];
+      }
 
       return statistic;
     }
@@ -201,15 +245,19 @@ struct PSM {
         V paramC = (1. - paramB);
         V omega_s[DESCRIPTOR::q];
         V cell_tmp[DESCRIPTOR::q];
+
+        V fEq[DESCRIPTOR::q] { };
+        V fEq_s[DESCRIPTOR::q] { };
+        EquilibriumF().compute(cell, rho, u, fEq);
+        EquilibriumF().compute(cell, rho, u_s, fEq_s);
         for (int iPop=0; iPop < DESCRIPTOR::q; ++iPop) {
           cell_tmp[iPop] = cell[iPop];
           //// To be reimplemented sensibly in case one needs it
           //if constexpr (MODE == 2) {
-            omega_s[iPop] = (EquilibriumF().compute(iPop, rho, u_s) - cell[iPop])
-                            + (V{1} - omega) * (cell[iPop] - EquilibriumF().compute(iPop, rho, u));
+            omega_s[iPop] = (fEq_s[iPop] - cell[iPop]) + (V{1} - omega) * (cell[iPop] - fEq[iPop]);
           //} else if constexpr (MODE == 3) {
-          //  omega_s[iPop] = (cell[descriptors::opposite<DESCRIPTOR>(iPop)] - EquilibriumF().compute(descriptors::opposite<DESCRIPTOR>(iPop), rho, u_s))
-          //                  - (cell[iPop] - EquilibriumF().compute(iPop, rho, u_s));
+          //  omega_s[iPop] = (cell[descriptors::opposite<DESCRIPTOR>(iPop)] - fEq_s[descriptors::opposite<DESCRIPTOR>(iPop)])
+          //                  - (cell[iPop] - fEq_s[iPop]);
           //}
         }
         CollisionO().apply(cell, parameters);
@@ -313,9 +361,12 @@ struct DBBParticleBGK {
       V uPlusSqr = lbm<DESCRIPTOR>::bgkCollision(cell, rho, uPlus, omega);
 
       V diff[DESCRIPTOR::q] = {};
+      V fEqPlus[DESCRIPTOR::q] = {};
+      V fEq[DESCRIPTOR::q] = {};
+      EquilibriumF().compute(cell, rho, uPlus, fEqPlus);
+      EquilibriumF().compute(cell, rho, u, fEq);
       for (int tmp_iPop=0; tmp_iPop<DESCRIPTOR::q; tmp_iPop++) {
-        diff[tmp_iPop] += EquilibriumF().compute(tmp_iPop, rho, uPlus)
-                          - EquilibriumF().compute(tmp_iPop, rho, u);
+        diff[tmp_iPop] += fEqPlus[tmp_iPop] - fEq[tmp_iPop];
 
         for (int iDim=0; iDim<DESCRIPTOR::d; iDim++) {
           tmpMomentumLoss[iDim] -= descriptors::c<DESCRIPTOR>(tmp_iPop,iDim) * diff[tmp_iPop];
@@ -336,7 +387,7 @@ struct DBBParticleBGK {
 // including the Krause turbulence modell
 template <typename COLLISION>
 struct KrauseH {
-  using parameters = meta::list<descriptors::OMEGA, LES::Smagorinsky>;
+  using parameters = meta::list<descriptors::OMEGA, LES::SMAGORINSKY>;
 
   static std::string getName(){
     return "KrauseH<" + COLLISION::getName() + ">";
@@ -358,7 +409,7 @@ struct KrauseH {
       _fieldTmp[2] = V{};
       _fieldTmp[3] = V{};
 
-      const V smagoConst = parameters.template get<collision::LES::Smagorinsky>();
+      const V smagoConst = parameters.template get<collision::LES::SMAGORINSKY>();
       V preFactor = smagoConst*smagoConst
                     * descriptors::invCs2<V,DESCRIPTOR>()*descriptors::invCs2<V,DESCRIPTOR>()
                     * 2*util::sqrt(2);
@@ -373,8 +424,10 @@ struct KrauseH {
       }
       /// Molecular realaxation time
       V tau_mol = 1./omega;
+      V fEq[DESCRIPTOR::q] { };
+      EquilibriumF().compute(cell, rho, u, fEq);
       for (int iPop=0; iPop<DESCRIPTOR::q; iPop++) {
-        V fNeq = util::fabs(cell[iPop] - EquilibriumF().compute(iPop, rho, u));
+        V fNeq = util::fabs(cell[iPop] - fEq[iPop]);
         /// Turbulent realaxation time
         V tau_turb = 0.5*(util::sqrt(tau_mol*tau_mol+(preFactor*fNeq))-tau_mol);
         /// Effective realaxation time
@@ -408,7 +461,7 @@ struct KrauseH {
 /// two way coupling
 template <typename COLLISION>
 struct SmallParticle {
-  using parameters = meta::list<descriptors::OMEGA, LES::Smagorinsky>;
+  using parameters = meta::list<descriptors::OMEGA, LES::SMAGORINSKY>;
 
   static std::string getName(){
     return "SmallParticle<" + COLLISION::getName() + ">";
@@ -541,23 +594,15 @@ using PSMBGKdynamics = dynamics::Tuple<
 
 /// Implementation of the Partially Saturated Method (PSM),
 /// see Krüger, Timm, et al. The Lattice Boltzmann Method. Springer, 2017. (p.447-451)
-template<typename T, typename DESCRIPTOR, typename MOMENTA=momenta::BulkTuple>
-class ForcedPSMBGKdynamics final : public dynamics::CustomCollision<T,DESCRIPTOR,MOMENTA> {
-private:
-  olb::ParametersD<T,DESCRIPTOR,descriptors::OMEGA>* _parameters;
+template<typename T, typename DESCRIPTOR>
+struct ForcedPSMBGKdynamics final : public dynamics::CustomCollision<T,DESCRIPTOR,momenta::ForcedPSMBulkTuple> {
 
-public:
-  using MomentaF = typename MOMENTA::template type<DESCRIPTOR>;
-  using EquilibriumF = typename equilibria::SecondOrder::template type<DESCRIPTOR,MOMENTA>;
+  using MomentaF = typename momenta::ForcedPSMBulkTuple::template type<DESCRIPTOR>;
+  using EquilibriumF = typename equilibria::SecondOrder::template type<DESCRIPTOR,momenta::ForcedPSMBulkTuple>;
 
   using parameters = meta::list<descriptors::OMEGA>;
 
   constexpr static bool is_vectorizable = false;
-  constexpr static bool has_parametrized_momenta = true;
-
-  void setMomentaParameters(decltype(_parameters) parameters) {
-    _parameters = parameters;
-  }
 
   std::type_index id() override {
     return typeid(ForcedPSMBGKdynamics);
@@ -567,40 +612,12 @@ public:
     return block.template getData<OperatorParameters<ForcedPSMBGKdynamics>>();
   }
 
-  void computeU(ConstCell<T,DESCRIPTOR>& cell, T u[DESCRIPTOR::d]) const override
-  {
-    MomentaF().computeU(cell, u);
-    T epsilon = 1. - cell.template getField<descriptors::POROSITY>();
-    T omega = _parameters->template get<descriptors::OMEGA>();
-    T paramA = 1 / omega - 0.5;
-    T paramB = (epsilon * paramA) / ((1. - epsilon) + paramA);
-    T paramC = (1. - paramB);
-    for (int iVel=0; iVel < DESCRIPTOR::d; ++iVel) {
-      u[iVel] = paramC * (u[iVel] + cell.template getFieldComponent<descriptors::FORCE>(iVel) * 0.5)
-              + paramB * cell.template getFieldComponent<descriptors::VELOCITY_SOLID>(iVel);
-    }
-  }
-
-  void computeRhoU(ConstCell<T,DESCRIPTOR>& cell, T& rho, T u[DESCRIPTOR::d]) const override
-  {
-    MomentaF().computeRhoU(cell, rho, u);
-    T epsilon = 1. - cell.template getField<descriptors::POROSITY>();
-    T omega = _parameters->template get<descriptors::OMEGA>();
-    T paramA = 1 / omega - 0.5;
-    T paramB = (epsilon * paramA) / ((1. - epsilon) + paramA);
-    T paramC = (1. - paramB);
-    for (int iVel=0; iVel < DESCRIPTOR::d; ++iVel) {
-      u[iVel] = paramC * (u[iVel] + cell.template getFieldComponent<descriptors::FORCE>(iVel) * 0.5)
-              + paramB * cell.template getFieldComponent<descriptors::VELOCITY_SOLID>(iVel);
-    }
-  }
-
   template <typename CELL, typename PARAMETERS, typename V=typename CELL::value_t>
-  CellStatistic<V> apply(CELL& cell, PARAMETERS& parameters)
+  CellStatistic<V> apply(CELL& cell, PARAMETERS& parameters) any_platform
   {
     V omega = parameters.template get<descriptors::OMEGA>();
     V rho, u[DESCRIPTOR::d], uSqr;
-    MomentaF().computeRhoU(cell, rho, u);
+    lbm<DESCRIPTOR>::computeRhoU(cell, rho, u);
     auto force = cell.template getField<descriptors::FORCE>();
     for (int iVel=0; iVel < DESCRIPTOR::d; ++iVel) {
       u[iVel] += force[iVel] * V{0.5};
@@ -641,8 +658,8 @@ public:
     return {rho, uSqr};
   }
 
-  T computeEquilibrium(int iPop, T rho, const T u[DESCRIPTOR::d]) const override {
-    return EquilibriumF().compute(iPop, rho, u);
+  void computeEquilibrium(ConstCell<T,DESCRIPTOR>& cell, T rho, const T u[DESCRIPTOR::d], T fEq[DESCRIPTOR::q]) const override {
+    EquilibriumF().compute(cell, rho, u, fEq);
   };
 
   std::string getName() const override {

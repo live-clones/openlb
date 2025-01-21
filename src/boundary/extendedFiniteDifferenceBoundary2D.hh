@@ -34,7 +34,6 @@ namespace olb {
 
 
 ///////////  ExtendedStraightFdBoundaryPostProcessor2D ///////////////////////////////////
-
 template<typename T, typename DESCRIPTOR, int direction, int orientation>
 ExtendedStraightFdBoundaryPostProcessor2D<T,DESCRIPTOR,direction,orientation>::
 ExtendedStraightFdBoundaryPostProcessor2D(int x0_, int x1_, int y0_, int y1_)

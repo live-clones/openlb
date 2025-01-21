@@ -451,8 +451,12 @@ ParallelParticleLocator addSubgridSphere3D(
   //Get global particle id
   std::size_t globID = sParticleSystem.getGlobID();
   //Find globiC the particle belongs to
+  auto iC = cuboidGeometry.getC(position);
   int globiCcentre;
-  bool inDomain = cuboidGeometry.getC( position, globiCcentre );
+  bool inDomain = iC;
+  if (inDomain) {
+    globiCcentre = *iC;
+  }
   if (!inDomain){ std::cerr << "ERROR: Particle added outside domain!" << std::endl; }
 
   //Iterate over particle systems
@@ -491,8 +495,12 @@ ParallelParticleLocator addSubgridSphereWithSpecies3D(
   //Get global particle id
   std::size_t globID = sParticleSystem.getGlobID();
   //Find globiC the particle belongs to
+  auto iC = cuboidGeometry.getC(position);
+  bool inDomain = iC;
   int globiCcentre;
-  bool inDomain = cuboidGeometry.getC( position, globiCcentre );
+  if (inDomain) {
+    globiCcentre = *iC;
+  }
   if (!inDomain){ std::cerr << "ERROR: Particle added outside domain!" << std::endl; }
 
   //Iterate over particle systems

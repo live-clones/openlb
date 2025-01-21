@@ -26,7 +26,7 @@
 
 #include "blockLpNorm2D.h"
 #include "functors/lattice/indicator/blockIndicatorBaseF2D.h"
-#include "geometry/cuboid2D.h"
+#include "geometry/cuboid.h"
 #include "latticeIntegralCommon.h"
 
 namespace olb {
@@ -34,7 +34,7 @@ namespace olb {
 template <typename T, typename W, int P>
 BlockLpNorm2D<T,W,P>::BlockLpNorm2D(BlockF2D<W>&          f,
                                     BlockIndicatorF2D<T>& indicatorF)
-  : BlockF2D<W>(f.getBlockStructure(), f.getTargetDim()),
+  : BlockF2D<W>(f.getBlockStructure(), 1),
     _f(f),
     _indicatorF(indicatorF)
 {
@@ -52,7 +52,7 @@ bool BlockLpNorm2D<T,W,P>::operator()(W output[], const int input[])
   const int nY = blockGeometry.getNy();
   const T weight = util::pow(blockGeometry.getDeltaR(), 2);
 
-  output[0] = W(0);
+  W sum[2] = {0,0};
   W outputTmp[_f.getTargetDim()];
   int inputTmp[_f.getSourceDim()];
 
@@ -61,13 +61,13 @@ bool BlockLpNorm2D<T,W,P>::operator()(W output[], const int input[])
       if (_indicatorF(inputTmp)) {
         _f(outputTmp, inputTmp);
         for (int iDim = 0; iDim < _f.getTargetDim(); ++iDim) {
-          output[0] = LpNormImpl<T,W,P>()(output[0], outputTmp[iDim], weight);
+          LpNormImpl<T,W,P>()(sum, outputTmp[iDim], weight);
         }
       }
     }
   }
 
-  output[0] = LpNormImpl<T,W,P>().enclose(output[0]);
+  output[0] = LpNormImpl<T,W,P>().enclose(sum[0]);
 
   return true;
 }

@@ -159,6 +159,12 @@ S IndicPlus2D<S>::signedDistance( const Vector<S,2>& input )
   return sdf::unify(this->_f->signedDistance(input), this->_g->signedDistance(input));
 }
 
+template <typename S>
+S IndicPlus2D<S>::signedDistanceExact( const Vector<S,2>& input )
+{
+  return sdf::unify(this->_f->signedDistanceExact(input), this->_g->signedDistanceExact(input));
+}
+
 
 template <typename S>
 IndicMinus2D<S>::IndicMinus2D(std::shared_ptr<IndicatorF2D<S>> f, std::shared_ptr<IndicatorF2D<S>> g)
@@ -175,6 +181,12 @@ template <typename S>
 S IndicMinus2D<S>::signedDistance( const Vector<S,2>& input )
 {
   return sdf::subtraction(this->_f->signedDistance(input), this->_g->signedDistance(input));
+}
+
+template <typename S>
+S IndicMinus2D<S>::signedDistanceExact( const Vector<S,2>& input )
+{
+  return sdf::subtraction(this->_f->signedDistanceExact(input), this->_g->signedDistanceExact(input));
 }
 
 
@@ -194,6 +206,11 @@ S IndicMultiplication2D<S>::signedDistance( const Vector<S,2>& input )
   return sdf::intersection(this->_f->signedDistance(input), this->_g->signedDistance(input));
 }
 
+template <typename S>
+S IndicMultiplication2D<S>::signedDistanceExact( const Vector<S,2>& input )
+{
+  return sdf::intersection(this->_f->signedDistanceExact(input), this->_g->signedDistanceExact(input));
+}
 
 
 
