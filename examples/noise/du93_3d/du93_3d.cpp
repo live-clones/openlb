@@ -285,26 +285,26 @@ void setBoundaryValues( SuperLattice<T, DESCRIPTOR>& sLattice,
           << "; ux_PU=" << converter.getPhysVelocity( ux_i[0] ) << "; ux_max_PU=" << maxPhysU << std::endl;
   }
 
-  AnalyticalConst3D<T,T> rho_out( 1. );
-  AnalyticalConst3D<T,T> ux_out( maxLatticeU );
-  AnalyticalConst3D<T,T> uy_out( 0. );
-  AnalyticalConst3D<T,T> uz_out( 0. );
-  AnalyticalComposed3D<T,T> u_out( ux_out, uy_out, uz_out );
-  switch ( outlet )
-  {
-  case localpressure:
-  case interpressure:
-    sLattice.defineRho( superGeometry, 4, rho_out );
-    break;
-  case localvelocity:
-  case intervelocity:
-    sLattice.defineU( superGeometry, 4, u_out );
-    break;
-  case zerogradient:
-  case localconvection:
-  case interconvection:
-    break;
-  }
+  // AnalyticalConst3D<T,T> rho_out( 1. );
+  // AnalyticalConst3D<T,T> ux_out( maxLatticeU );
+  // AnalyticalConst3D<T,T> uy_out( 0. );
+  // AnalyticalConst3D<T,T> uz_out( 0. );
+  // AnalyticalComposed3D<T,T> u_out( ux_out, uy_out, uz_out );
+  // switch ( outlet )
+  // {
+  // case localpressure:
+  // case interpressure:
+  //   sLattice.defineRho( superGeometry, 4, rho_out );
+  //   break;
+  // case localvelocity:
+  // case intervelocity:
+  //   sLattice.defineU( superGeometry, 4, u_out );
+  //   break;
+  // case zerogradient:
+  // case localconvection:
+  // case interconvection:
+  //   break;
+  // }
 
   sLattice.setProcessingContext<Array<momenta::FixedVelocityMomentumGeneric::VELOCITY>>(ProcessingContext::Simulation);
 }
