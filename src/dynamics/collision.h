@@ -25,14 +25,18 @@
 #define DYNAMICS_COLLISION_H
 
 #include "lbm.h"
-#include "descriptorField.h"
-#include "rtlbmDescriptors.h"
-
+#include "momenta/aliases.h"
 #include "core/latticeStatistics.h"
+#include "collisionHRR.h"
 
 namespace olb {
 
+template<typename T> struct CellStatistic;
+
 namespace collision {
+
+struct DualPorousBGK;
+struct DualForcedBGK;
 
 struct None {
   using parameters = typename meta::list<>;
@@ -43,7 +47,7 @@ struct None {
 
   template <typename DESCRIPTOR, typename MOMENTA, typename EQUILIBRIUM>
   struct type {
-    template <CONCEPT(MinimalCell) CELL, typename PARAMETERS, typename V=typename CELL::value_t>
+    template <concepts::MinimalCell CELL, typename PARAMETERS, typename V=typename CELL::value_t>
     CellStatistic<V> apply(CELL& cell, PARAMETERS& parameters) any_platform {
       return {-1, -1};
     };
@@ -61,7 +65,7 @@ struct BGK {
   struct type {
     using EquilibriumF = typename EQUILIBRIUM::template type<DESCRIPTOR,MOMENTA>;
 
-    template <CONCEPT(MinimalCell) CELL, typename PARAMETERS, typename V=typename CELL::value_t>
+    template <concepts::MinimalCell CELL, typename PARAMETERS, typename V=typename CELL::value_t>
     CellStatistic<V> apply(CELL& cell, PARAMETERS& parameters) any_platform {
       V fEq[DESCRIPTOR::q] { };
       const auto statistic = EquilibriumF().compute(cell, parameters, fEq);
@@ -87,7 +91,7 @@ struct RLB {
     using MomentaF = typename MOMENTA::template type<DESCRIPTOR>;
     using EquilibriumF = typename EQUILIBRIUM::template type<DESCRIPTOR,MOMENTA>;
 
-    template <CONCEPT(MinimalCell) CELL, typename PARAMETERS, typename V=typename CELL::value_t>
+    template <concepts::MinimalCell CELL, typename PARAMETERS, typename V=typename CELL::value_t>
     CellStatistic<V> apply(CELL& cell, PARAMETERS& parameters) any_platform {
       V pi[util::TensorVal<DESCRIPTOR>::n] { };
       MomentaF().computeStress(cell, pi);
@@ -119,7 +123,7 @@ struct AdvectionDiffusionRLB {
     using MomentaF = typename MOMENTA::template type<DESCRIPTOR>;
     using EquilibriumF = typename EQUILIBRIUM::template type<DESCRIPTOR,MOMENTA>;
 
-    template <CONCEPT(MinimalCell) CELL, typename PARAMETERS, typename V=typename CELL::value_t>
+    template <concepts::MinimalCell CELL, typename PARAMETERS, typename V=typename CELL::value_t>
     CellStatistic<V> apply(CELL& cell, PARAMETERS& parameters) any_platform {
       V fEq[DESCRIPTOR::q] { };
       const auto statistic = EquilibriumF().compute(cell, parameters, fEq);
@@ -155,7 +159,7 @@ struct ConstRhoBGK {
     using MomentaF     = typename MOMENTA::template type<DESCRIPTOR>;
     using EquilibriumF = typename EQUILIBRIUM::template type<DESCRIPTOR,MOMENTA>;
 
-    template <CONCEPT(MinimalCell) CELL, typename PARAMETERS, typename V=typename CELL::value_t>
+    template <concepts::MinimalCell CELL, typename PARAMETERS, typename V=typename CELL::value_t>
     CellStatistic<V> apply(CELL& cell, PARAMETERS& parameters) any_platform {
       V fEq[DESCRIPTOR::q];
       const auto statistic = EquilibriumF().compute(cell, parameters, fEq);
@@ -188,7 +192,7 @@ struct PerPopulationBGK {
   struct type {
     using EquilibriumF = typename EQUILIBRIUM::template type<DESCRIPTOR,MOMENTA>;
 
-    template <CONCEPT(MinimalCell) CELL, typename PARAMETERS, typename V=typename CELL::value_t>
+    template <concepts::MinimalCell CELL, typename PARAMETERS, typename V=typename CELL::value_t>
     CellStatistic<V> apply(CELL& cell, PARAMETERS& parameters) any_platform {
       V fEq[DESCRIPTOR::q] { };
       const auto statistic = EquilibriumF().compute(cell, parameters, fEq);
@@ -216,7 +220,7 @@ struct TRT {
     using MomentaF     = typename MOMENTA::template type<DESCRIPTOR>;
     using EquilibriumF = typename EQUILIBRIUM::template type<DESCRIPTOR,MOMENTA>;
 
-    template <CONCEPT(MinimalCell) CELL, typename PARAMETERS, typename V=typename CELL::value_t>
+    template <concepts::MinimalCell CELL, typename PARAMETERS, typename V=typename CELL::value_t>
     CellStatistic<V> apply(CELL& cell, PARAMETERS& parameters) any_platform {
       V fPlus[DESCRIPTOR::q], fMinus[DESCRIPTOR::q];
       V fEq[DESCRIPTOR::q], fEqPlus[DESCRIPTOR::q], fEqMinus[DESCRIPTOR::q];
@@ -251,7 +255,7 @@ struct Revert {
 
   template <typename DESCRIPTOR, typename MOMENTA, typename EQUILIBRIUM>
   struct type {
-    template <CONCEPT(MinimalCell) CELL, typename PARAMETERS, typename V=typename CELL::value_t>
+    template <concepts::MinimalCell CELL, typename PARAMETERS, typename V=typename CELL::value_t>
     CellStatistic<V> apply(CELL& cell, PARAMETERS& parameters) any_platform {
       for (int iPop=1; iPop <= DESCRIPTOR::q/2; ++iPop) {
         V cell_iPop = cell[iPop];
@@ -284,7 +288,7 @@ struct NguyenLaddCorrection {
     using MomentaF   = typename MOMENTA::template type<DESCRIPTOR>;
     using CollisionO = typename COLLISION::template type<DESCRIPTOR,MOMENTA,EQUILIBRIUM>;
 
-    template <CONCEPT(MinimalCell) CELL, typename PARAMETERS, typename V=typename CELL::value_t>
+    template <concepts::MinimalCell CELL, typename PARAMETERS, typename V=typename CELL::value_t>
     CellStatistic<V> apply(CELL& cell, PARAMETERS& parameters) any_platform {
       CollisionO().apply(cell, parameters);
       V rho, u[DESCRIPTOR::d];
@@ -309,7 +313,7 @@ struct PartialBounceBack {
 
   template <typename DESCRIPTOR, typename MOMENTA, typename EQUILIBRIUM>
   struct type {
-    template <CONCEPT(MinimalCell) CELL, typename PARAMETERS, typename V=typename CELL::value_t>
+    template <concepts::MinimalCell CELL, typename PARAMETERS, typename V=typename CELL::value_t>
     CellStatistic<V> apply(CELL& cell, PARAMETERS& parameters) any_platform {
       for (int iPop=1; iPop <= DESCRIPTOR::q/2; ++iPop) {
         std::swap(cell[iPop], cell[iPop+DESCRIPTOR::q/2]);
@@ -336,7 +340,7 @@ struct Poisson {
   struct type {
     using EquilibriumF = typename EQUILIBRIUM::template type<DESCRIPTOR,MOMENTA>;
 
-    template <CONCEPT(MinimalCell) CELL, typename PARAMETERS, typename V=typename CELL::value_t>
+    template <concepts::MinimalCell CELL, typename PARAMETERS, typename V=typename CELL::value_t>
     CellStatistic<V> apply(CELL& cell, PARAMETERS& parameters) any_platform {
       V fEq[DESCRIPTOR::q] { };
       const auto statistic = EquilibriumF().compute(cell, parameters, fEq);
@@ -366,7 +370,7 @@ struct P1 {
   struct type {
     using EquilibriumF = typename EQUILIBRIUM::template type<DESCRIPTOR,MOMENTA>;
 
-    template <CONCEPT(MinimalCell) CELL, typename PARAMETERS, typename V=typename CELL::value_t>
+    template <concepts::MinimalCell CELL, typename PARAMETERS, typename V=typename CELL::value_t>
     CellStatistic<V> apply(CELL& cell, PARAMETERS& parameters) any_platform {
       V fEq[DESCRIPTOR::q] { };
       const auto statistic = EquilibriumF().compute(cell, parameters, fEq);
@@ -392,7 +396,7 @@ struct FixedEquilibrium {
   struct type {
     using EquilibriumF = typename EQUILIBRIUM::template type<DESCRIPTOR,MOMENTA>;
 
-    template <CONCEPT(MinimalCell) CELL, typename PARAMETERS, typename V=typename CELL::value_t>
+    template <concepts::MinimalCell CELL, typename PARAMETERS, typename V=typename CELL::value_t>
     CellStatistic<V> apply(CELL& cell, PARAMETERS& parameters) any_platform {
       V fEq[DESCRIPTOR::q] { };
       const auto statistic = EquilibriumF().compute(cell, parameters, fEq);
@@ -404,10 +408,81 @@ struct FixedEquilibrium {
   };
 };
 
+struct ThirdOrderRLB {
+  using parameters = typename meta::list<descriptors::OMEGA>;
+
+  static std::string getName() {
+    return "ThirdOrderRLB";
+  }
+
+  template <typename DESCRIPTOR, typename MOMENTA, typename EQUILIBRIUM>
+  struct type {
+    using MomentaF     = typename MOMENTA::template type<DESCRIPTOR>;
+    using EquilibriumF = typename EQUILIBRIUM::template type<DESCRIPTOR,MOMENTA>;
+
+    template <typename CELL, typename PARAMETERS, typename V=typename CELL::value_t>
+    CellStatistic<V> apply(CELL& cell, PARAMETERS& parameters) any_platform {
+      const V omega = parameters.template get<descriptors::OMEGA>();
+
+      V rho, u[DESCRIPTOR::d];
+      MomentaF().computeRhoU(cell, rho, u);
+      V pi[util::TensorVal<DESCRIPTOR>::n] { };
+      MomentaF().computeStress(cell, pi);
+
+      V uSqr = u[0]*u[0] + u[1]*u[1] + u[2]*u[2];
+
+      V aHybrid[6] {};
+      for(int i = 0; i < 6; i++) {
+        aHybrid[i] = pi[i];
+      }
+
+      V aNeq3XXY = V(2) * u[0] * aHybrid[1] + u[1] * aHybrid[0];
+      V aNeq3XYY = V(2) * u[1] * aHybrid[1] + u[0] * aHybrid[3];
+      V aNeq3XXZ = V(2) * u[0] * aHybrid[2] + u[2] * aHybrid[0];
+      V aNeq3XZZ = V(2) * u[2] * aHybrid[2] + u[0] * aHybrid[5];
+      V aNeq3YYZ = V(2) * u[1] * aHybrid[4] + u[2] * aHybrid[3];
+      V aNeq3YZZ = V(2) * u[2] * aHybrid[4] + u[1] * aHybrid[5];
+
+      for(int iPop = 0; iPop<DESCRIPTOR::q; iPop++) {
+        //Hermite polynomes  https://doi.org/10.1017/S0022112005008153
+        V hermite2XX = descriptors::c<DESCRIPTOR>(iPop,0)*descriptors::c<DESCRIPTOR>(iPop,0) - V{1}/descriptors::invCs2<V,DESCRIPTOR>();
+        V hermite2XY = descriptors::c<DESCRIPTOR>(iPop,0)*descriptors::c<DESCRIPTOR>(iPop,1);
+        V hermite2XZ = descriptors::c<DESCRIPTOR>(iPop,0)*descriptors::c<DESCRIPTOR>(iPop,2);
+        V hermite2YY = descriptors::c<DESCRIPTOR>(iPop,1)*descriptors::c<DESCRIPTOR>(iPop,1) - V{1}/descriptors::invCs2<V,DESCRIPTOR>();
+        V hermite2YZ = descriptors::c<DESCRIPTOR>(iPop,1)*descriptors::c<DESCRIPTOR>(iPop,2);
+        V hermite2ZZ = descriptors::c<DESCRIPTOR>(iPop,2)*descriptors::c<DESCRIPTOR>(iPop,2) - V{1}/descriptors::invCs2<V,DESCRIPTOR>();
+
+        V hermite3XXY = hermite2XX * descriptors::c<DESCRIPTOR>(iPop,1);
+        V hermite3XYY = hermite2XY * descriptors::c<DESCRIPTOR>(iPop,1) - descriptors::c<DESCRIPTOR>(iPop,0)/descriptors::invCs2<V,DESCRIPTOR>();
+        V hermite3XXZ = hermite2XX * descriptors::c<DESCRIPTOR>(iPop,2);
+        V hermite3XZZ = hermite2XZ * descriptors::c<DESCRIPTOR>(iPop,2) - descriptors::c<DESCRIPTOR>(iPop,0)/descriptors::invCs2<V,DESCRIPTOR>();
+        V hermite3YYZ = hermite2YY * descriptors::c<DESCRIPTOR>(iPop,2);
+        V hermite3YZZ = hermite2YZ * descriptors::c<DESCRIPTOR>(iPop,2) - descriptors::c<DESCRIPTOR>(iPop,1)/descriptors::invCs2<V,DESCRIPTOR>();
+
+        V reciSpeedOfSoundQc = descriptors::invCs2<V,DESCRIPTOR>() * descriptors::invCs2<V,DESCRIPTOR>();
+        V reciSpeedOfSoundHc = descriptors::invCs2<V,DESCRIPTOR>() * descriptors::invCs2<V,DESCRIPTOR>() * descriptors::invCs2<V,DESCRIPTOR>();
+
+        V fEq = equilibrium<DESCRIPTOR>::thirdOrder(iPop, rho, u, uSqr);
+
+        V fNeq = descriptors::t<V,DESCRIPTOR>(iPop) * ( V(0.5) * reciSpeedOfSoundQc * (hermite2XX * aHybrid[0] + hermite2YY * aHybrid[3] + hermite2ZZ * aHybrid[5])
+                                                        + V(1.0) * reciSpeedOfSoundQc * (hermite2XY * aHybrid[1] + hermite2XZ * aHybrid[2] + hermite2YZ * aHybrid[4])
+                                                        + V(1./2.) * reciSpeedOfSoundHc * (hermite3XXY + hermite3YZZ) * (aNeq3XXY + aNeq3YZZ)
+                                                        + V(1./2.) * reciSpeedOfSoundHc * (hermite3XZZ + hermite3XYY) * (aNeq3XZZ + aNeq3XYY)
+                                                        + V(1./2.) * reciSpeedOfSoundHc * (hermite3YYZ + hermite3XXZ) * (aNeq3YYZ + aNeq3XXZ)
+                                                        + V(1./6.) * reciSpeedOfSoundHc * (hermite3XXY - hermite3YZZ) * (aNeq3XXY - aNeq3YZZ)
+                                                        + V(1./6.) * reciSpeedOfSoundHc * (hermite3XZZ - hermite3XYY) * (aNeq3XZZ - aNeq3XYY)
+                                                        + V(1./6.) * reciSpeedOfSoundHc * (hermite3YYZ - hermite3XXZ) * (aNeq3YYZ - aNeq3XXZ));
+
+        cell[iPop] = fEq + (V(1) - omega)*fNeq;
+      }
+
+      return {rho, uSqr};
+    };
+  };
+};
+
 }
 
 }
 
 #endif
-
-#include "collision.cse.h"

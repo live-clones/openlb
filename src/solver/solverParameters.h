@@ -55,10 +55,13 @@ struct SimulationBase : public ParameterBase
 {
   using BT = BaseType<T>;
 
-  BT                                    startUpTime {0};
-  BT                                    maxTime {1};
+  BT                                    startUpTime                 {0};
+  BT                                    maxTime                     {1};
   BT                                    physBoundaryValueUpdateTime {0.1};
+
   BT                                    physTimeStabilityCheck      {0.1};
+  bool                                  exitMaxU                    {false};
+  BT                                    boundMaxU                   {1.0};
 
   bool                                  pressureFilter {false};
 
@@ -313,7 +316,10 @@ struct Reader<SimulationBase<T>, TAG> : public ReaderBase<SimulationBase<T>>
     this->params->physBoundaryValueUpdateTime = this->params->maxTime / BT(100); // 1% of max. time as default value
     xml.readOrWarn<BT>("Application", "PhysParameters", "BoundaryValueUpdateTime", this->params->physBoundaryValueUpdateTime, true, false, true);
     this->params->physTimeStabilityCheck = this->params->maxTime / BT(100);
-    xml.readOrWarn<BT>("Application", "PhysParameters", "TimeStabilityCheck", this->params->physTimeStabilityCheck, true, false, true);
+
+    xml.readOrWarn<BT>("Application", "StabilityCheck", "Frequency", this->params->physTimeStabilityCheck, true, false, false);
+    xml.readOrWarn<bool>("Application", "StabilityCheck", "ExitMaxU", this->params->exitMaxU, true, false, false);
+    xml.readOrWarn<BT>("Application", "StabilityCheck", "BoundMaxU", this->params->boundMaxU, true, false, false);
   }
 };
 

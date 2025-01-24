@@ -64,6 +64,10 @@ public:
               _serialized.get());
   }
 
+  AbstractColumn<bool>& asAbstract() {
+    return _mask;
+  }
+
   bool operator[](std::size_t i) const {
     return _mask[i];
   }

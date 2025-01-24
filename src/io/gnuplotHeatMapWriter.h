@@ -30,6 +30,7 @@
 
 #include "functors/lattice/blockReduction3D2D.h"
 #include "functors/lattice/blockReduction2D2D.h"
+#include "functors/lattice/efficientBlockReduction3D2D.h"
 
 namespace olb {
 
@@ -55,28 +56,6 @@ struct plotParam {
   }
 
 };
-
-/** This function is used to plot heat maps as jpeg files.
- * minValue and maxValue set a defined scalar range.
- * contourlevel sets the number of contours in the plot.
- * zoomOrigin and zoomExtend set a zoom scale in the plot:
- * (zoomOrigin(0 to 1) and zoomExtend(0 to 1-zoomOrigin)
- * Available colour schemes are "grey", "pm3d", "blackbody" and "rainbow"
- */
-template <typename T>
-void write(BlockReduction3D2D<T>& blockReduction, int iT, const plotParam<T> param = {},
-           const std::vector<T>& valueArea = std::vector<T>());
-
-/** This function is used to plot heat maps as jpeg files.
- * minValue and maxValue set a defined scalar range.
- * contourlevel sets the number of contours in the plot.
- * zoomOrigin and zoomExtend set a zoom scale in the plot:
- * (zoomOrigin(0 to 1) and zoomExtend(0 to 1-zoomOrigin)
- * Available colour schemes are "grey", "pm3d", "blackbody" and "rainbow"
- */
-template <typename T>
-void write(BlockReduction2D2D<T>& blockReduction, int iT, const plotParam<T> param = {},
-           const std::vector<T>& valueArea = std::vector<T>());
 
 namespace detail {
 
@@ -124,6 +103,29 @@ void executeGnuplot(detailParam<T>& param);
 bool gnuplotInstalled();
 
 } // namespace detail
+
+/** This function is used to plot heat maps as jpeg files.
+ * minValue and maxValue set a defined scalar range.
+ * contourlevel sets the number of contours in the plot.
+ * zoomOrigin and zoomExtend set a zoom scale in the plot:
+ * (zoomOrigin(0 to 1) and zoomExtend(0 to 1-zoomOrigin)
+ * Available colour schemes are "grey", "pm3d", "blackbody" and "rainbow"
+ */
+template <typename T>
+void write(BlockReduction3D2D<T>& blockReduction, int iT, const plotParam<T> param = {}, const std::vector<T>& valueArea = std::vector<T>{}) {
+  detail::genericHeatMapInterface<T>(blockReduction, blockReduction, iT, valueArea, param);
+}
+
+template <typename T>
+void write(BlockReduction2D2D<T>& blockReduction, int iT, const plotParam<T> param = {}, const std::vector<T>& valueArea = std::vector<T>{}) {
+  detail::genericHeatMapInterface<T>(blockReduction.getPlaneDiscretizationIn3D(), blockReduction, iT,
+                                     valueArea, param);
+}
+
+template <typename T, typename DESCRIPTOR, typename FUNCTOR>
+void write(EfficientBlockReduction3D2D<T,DESCRIPTOR,FUNCTOR>& blockReduction, int iT, const plotParam<T> param = {}, const std::vector<T>& valueArea = std::vector<T>{}) {
+  detail::genericHeatMapInterface<T>(blockReduction, blockReduction, iT, valueArea, param);
+}
 
 } // namespace heatmap
 

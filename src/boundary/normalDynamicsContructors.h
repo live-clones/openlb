@@ -44,6 +44,37 @@ struct NormalDynamicsForPlainMomenta {
   }
 };
 
+//constructs Dynamics with template args Momenta, direction, and orientation
+template <
+  typename T, typename DESCRIPTOR,
+  template<typename,typename,typename,int,int> typename DYNAMICS,
+  typename MOMENTA
+>
+struct DirectionOrientationDynamicsForPlainMomenta {
+  template <int direction, int orientation>
+  using ConcreteDynamics = DYNAMICS<T,DESCRIPTOR,MOMENTA,direction,orientation>;
+
+  template <unsigned D>
+  static auto construct(Vector<int,D> n) {
+    return constructConcreteDynamicsForDirectionOrientation<T,DESCRIPTOR,ConcreteDynamics>(n);
+  }
+};
+
+//constructs Dynamics with template direction and orientation
+template <
+  typename T, typename DESCRIPTOR,
+  template<typename,typename,int,int> typename DYNAMICS
+>
+struct DirectionOrientationDynamics {
+  template <int direction, int orientation>
+  using ConcreteDynamics = DYNAMICS<T,DESCRIPTOR,direction,orientation>;
+
+  template <unsigned D>
+  static auto construct(Vector<int,D> n) {
+    return constructConcreteDynamicsForDirectionOrientation<T,DESCRIPTOR,ConcreteDynamics>(n);
+  }
+};
+
 //constructs DYNAMICS with template args MixinDynamics, Momenta and normal values
 template <
   typename T, typename DESCRIPTOR,
@@ -95,9 +126,58 @@ struct DirectionOrientationMixinDynamicsForPlainMomenta {
   }
 };
 
-}//namespace boundaryhelper
+//constructs Dynamics with template args MixinDynamics, Momenta which takes direction, and orientation
+template <
+  typename T, typename DESCRIPTOR,
+  template<typename,typename,typename,typename> typename DYNAMICS,
+  typename MIXIN,
+  template <int,int> typename MOMENTA
+>
+struct PlainMixinDynamicsForDirectionOrientationMomenta {
+  template <int direction, int orientation>
+  using ConcreteDynamics = DYNAMICS<T,DESCRIPTOR,MIXIN,MOMENTA<direction,orientation>>;
 
-}//namespace olb
+  template <unsigned D>
+  static auto construct(Vector<int,D> n) {
+    return constructConcreteDynamicsForDirectionOrientation<T,DESCRIPTOR,ConcreteDynamics>(n);
+  }
+};
+
+//constructs DYNAMICS with MixinDynamics, direction, orientation and a Momenta that itself expects a direction and orientation
+template <
+  typename T, typename DESCRIPTOR,
+  template<typename,typename,typename,typename,int,int> typename DYNAMICS,
+  typename MIXIN,
+  template <int,int> typename MOMENTA
+>
+struct DirectionOrientationMixinDynamicsForDirectionOrientationMomenta {
+  template <int direction, int orientation>
+  using ConcreteDynamics = DYNAMICS<T,DESCRIPTOR,MIXIN,MOMENTA<direction,orientation>,direction,orientation>;
+
+  template <unsigned D>
+  static auto construct(Vector<int,D> n) {
+    return constructConcreteDynamicsForDirectionOrientation<T,DESCRIPTOR,ConcreteDynamics>(n);
+  }
+};
+
+//constructs MixinDynamics with a Momenta that expects direction and orientation as template args
+template <
+  typename T, typename DESCRIPTOR,
+  typename MIXIN,
+  template <int,int> typename MOMENTA
+>
+struct MixinDynamicsExchangeDirectionOrientationMomenta {
+  template <int x, int y>
+  using ConcreteDynamics = typename MIXIN::template exchange_momenta<MOMENTA<x,y>>;
+
+  template <unsigned D>
+  static auto construct(Vector<int,D> n) {
+    return constructConcreteDynamicsForDirectionOrientation<T,DESCRIPTOR,ConcreteDynamics>(n);
+  }
+};
+
+}
+
+}
 
 #endif
-

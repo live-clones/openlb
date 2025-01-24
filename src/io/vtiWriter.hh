@@ -37,8 +37,8 @@
 #include <vector>
 
 #include "core/singleton.h"
-#include "geometry/cuboid3D.h"
-#include "geometry/cuboidGeometry3D.h"
+#include "geometry/cuboid.h"
+#include "geometry/cuboidGeometry.h"
 #include "core/blockData.h"
 #include "core/superData.h"
 #include "communication/loadBalancer.h"

@@ -56,15 +56,15 @@ bool BlockLocalAverage3D<T,W>::operator() (W output[], const int input[])
     return true;
   }
 
-  T centerOfSphere[3];
-  geometry.getPhysR(centerOfSphere, input);
-  IndicatorSphere3D<T> analyticalSphere(centerOfSphere, _radius);
+  auto centerOfSphere = geometry.getPhysR(input);
+  IndicatorSphere3D<T> analyticalSphere(centerOfSphere.data(), _radius);
   BlockIndicatorFfromIndicatorF3D<T> latticeSphere(
     analyticalSphere,
     _indicatorF.getBlockGeometry());
 
   std::size_t voxels(0);
   int inputTmp[3];
+  std::vector<util::KahanSummator<W>> summators(_f.getTargetDim(), util::KahanSummator<W>());
 
   for (inputTmp[0] = 0; inputTmp[0] < geometry.getNx(); ++inputTmp[0]) {
     for (inputTmp[1] = 0; inputTmp[1] < geometry.getNy(); ++inputTmp[1]) {
@@ -73,7 +73,7 @@ bool BlockLocalAverage3D<T,W>::operator() (W output[], const int input[])
           T outputTmp[_f.getTargetDim()];
           _f(outputTmp, inputTmp);
           for (int i = 0; i < this->getTargetDim(); ++i) {
-            output[i] += outputTmp[i];
+            summators[i].add(outputTmp[i]);
           }
           voxels += 1;
         }
@@ -83,7 +83,7 @@ bool BlockLocalAverage3D<T,W>::operator() (W output[], const int input[])
 
   if (voxels > 0) {
     for (int i = 0; i < this->getTargetDim(); ++i) {
-      output[i] /= voxels;
+      output[i] = summators[i].getSum() / voxels;
     }
   }
 

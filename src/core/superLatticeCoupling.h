@@ -255,6 +255,7 @@ private:
   }
 
 public:
+
   template <typename... MAP>
   SuperLatticeCoupling(COUPLER,
                        MAP&&... args) {
@@ -300,6 +301,13 @@ public:
     for (int iC = 0; iC < load.size(); ++iC) {
       _block[iC]->getParameters().template set<FIELD>(std::forward<decltype(field)>(field));
     }
+  }
+
+  /// Get coupling parameter FIELD for block 0
+  template <typename FIELD>
+  auto getParameter() const -> typename AbstractCouplingO<COUPLEES>::template FieldD<FIELD>
+  {
+    return _block[0]->getParameters().template get<FIELD>();
   }
 
   /// Return block-level abstract coupling operator

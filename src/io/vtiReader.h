@@ -58,8 +58,8 @@
 #include <vector>
 
 #include "io/xmlReader.h"
-#include "geometry/cuboid3D.h"
-#include "geometry/cuboidGeometry3D.h"
+#include "geometry/cuboid.h"
+#include "geometry/cuboidGeometry.h"
 #include "core/superData.h"
 #include "core/blockData.h"
 #include "io/ostreamManager.h"
@@ -68,26 +68,28 @@
 //typedef double T;
 namespace olb {
 
-template<typename T> class CuboidGeometry3D;
-//template<typename T> class Cuboid2D;
-template<typename T> class Cuboid3D;
 template<typename T> class LoadBalancer;
 template<typename T, typename BaseType> class SuperData3D;
 template<typename T, typename BaseType> class BlockData3D;
+
+enum DataType {
+  PointData,
+  CellData
+};
 
 template<typename T>
 class BaseVTIreader {
 public:
   BaseVTIreader(const std::string& fName, int dim, std::string dName,
-                const std::string class_name="BaseVTIreader");
+                const std::string class_name="BaseVTIreader", const DataType type = PointData);
   virtual ~BaseVTIreader() {};
   void printInfo();
 protected:
   mutable OstreamManager clout;
   /* Dimension (2D or 3D) */
   int _dim;
-  /// Size of Data Field
-  int _size;
+  /* #Data array components */
+  int _comps;
   /* Origin */
   std::vector<T> _origin;
   /* #Nodes */
@@ -96,27 +98,38 @@ protected:
   XMLreader _xmlReader;
   // Number of Cuboids
   int _nCuboids;
+  DataType _type;
+
   /// Reads Extent from extAttrName from XML Tag and returns as vector
   std::vector<int> readExtent(const XMLreader* reader, std::string extAttrName);
   /// Converts 4D (or 6D) extents vector into 2D (3D) nb_nodes vector
   std::vector<int> getNbNodes(std::vector<int>& extents);
   /// Reads size from XML tag (attribute "NumberOfComponents")
-  int getSize(const XMLreader& tag);
+  /// Reads the number of components from the XML DataArray Tag
+  int getNbComps(const XMLreader& tagReader);
+  ///Computes the total amount of data values
+  ///Number of components * number of cells/point
+  size_t computeTotalDataValues();
 };
 
 
 template<typename T, typename BaseType>
 class BaseVTIreader3D : public BaseVTIreader<T> {
 public:
-  BaseVTIreader3D(const std::string& fName, std::string dName,
-                  const std::string class_name="BaseVTIreader3D");
+  BaseVTIreader3D(const std::string& fileName, std::string dataName,
+                  const std::string class_name="BaseVTIreader3D", const DataType type = PointData);
   ~BaseVTIreader3D() override {};
 protected:
   /// Reads cuboid from piece node
-  void readCuboid(Cuboid3D<T>& cuboid, XMLreader* piece);
-  /// Reads from pointDataTag and fills blockData
-  bool readBlockData(BlockData<3,T,BaseType>& blockData, const XMLreader& pointDataTag,
-                     const std::string dName);
+  void readCuboid(Cuboid3D<T>& cuboid, XMLreader* pieceReader);
+  /// Reads from DataArray and fills blockData
+  bool readBlockData(BlockData<3,T,BaseType>& blockData, const XMLreader& pieceTagReader,
+                     const std::string dataName);
+private:
+  ///Reads the ASCII encoded DataArray of a vti-file
+  void readAsciiData(std::stringstream& stream_val, BlockData<3,T,BaseType>& blockData);
+  ///Reads the binary encoded DataArray of a vti-file
+  void readBinaryData(std::stringstream& stream_val, BlockData<3,T,BaseType>& blockData, size_t str_length);
 };
 
 
@@ -124,7 +137,7 @@ protected:
 template<typename T, typename BaseType>
 class BlockVTIreader3D : public BaseVTIreader3D<T,BaseType> {
 public:
-  BlockVTIreader3D(const std::string& fName, const std::string& dName);
+  BlockVTIreader3D(const std::string& fileName, const std::string& dataName, const DataType type = PointData);
   ~BlockVTIreader3D() override {};
   BlockData<3,T,BaseType>& getBlockData();
   Cuboid3D<T>& getCuboid();

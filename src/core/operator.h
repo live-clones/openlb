@@ -24,10 +24,13 @@
 #ifndef CORE_OPERATOR_H
 #define CORE_OPERATOR_H
 
+#include "operatorScope.h"
+
 namespace olb {
 
 template <typename T, typename DESCRIPTOR, Platform PLATFORM> class ConcreteBlockLattice;
 template <typename T, Platform PLATFORM> class ConcreteBlockMask;
+template <typename T, typename DESCRIPTOR> struct Dynamics;
 
 /// Base of any block operator
 struct AbstractBlockO {
@@ -45,19 +48,9 @@ struct BlockO : public AbstractBlockO {
   virtual void setup(ConcreteBlockLattice<T,DESCRIPTOR,PLATFORM>& block) = 0;
   /// Apply operator on block
   virtual void apply(ConcreteBlockLattice<T,DESCRIPTOR,PLATFORM>& block) = 0;
-};
 
-/// Block-wide operator application scopes
-/**
- * Declares how the actual OPERATOR::apply template wants to be called.
- **/
-enum struct OperatorScope {
-  /// Per-cell application, i.e. OPERATOR::apply is passed a CELL concept implementation
-  PerCell,
-  /// Per-block application, i.e. OPERATOR::apply is passed a ConcreteBlockLattice
-  PerBlock,
-  /// Per-cell application with parameters, i.e. OPERATOR::apply is passed a CELL concept implementation and parameters
-  PerCellWithParameters,
+  /// Get number of cells covered by operator (optional)
+  virtual std::size_t weight() const = 0;
 };
 
 /// Block application of concrete OPERATOR called using SCOPE on PLATFORM
@@ -141,6 +134,9 @@ struct AbstractCouplingO : public AbstractBlockO {
 template<typename COUPLEES, Platform PLATFORM, typename OPERATOR, OperatorScope SCOPE>
 class ConcreteBlockCouplingO;
 
+/// Particle coupling of COUPLEES using concrete OPERATOR with SCOPE on PLATFORM lattices
+template<typename COUPLEES, Platform PLATFORM, typename OPERATOR, OperatorScope SCOPE>
+class ConcreteBlockPointCouplingO;
 
 }
 

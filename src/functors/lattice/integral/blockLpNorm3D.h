@@ -27,7 +27,6 @@
 namespace olb {
 
 template<typename T> class BlockF3D;
-template<typename T> class Cuboid3D;
 template<typename T> class BlockIndicatorF3D;
 
 /// Block level functor that returns the Lp norm over omega of the euklid norm of the input block functor.

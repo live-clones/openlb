@@ -139,7 +139,7 @@ void prepareGeometry(const UnitConverter<T,DESCRIPTOR>& converter,
                        5.5*converter.getCharPhysLength()+converter.getPhysDeltaX());
 
     IndicatorCylinder3D<T> cylinderOUT(extend, origin, 5.5*converter.getCharPhysLength());
-    superGeometry.rename(1,4, cylinderOUT);
+    superGeometry.rename(1,4,1, cylinderOUT);
   }
 
   superGeometry.clean();
@@ -173,18 +173,18 @@ void prepareLattice(SuperLattice<T,DESCRIPTOR>& sLattice,
       break;
     case BulkModel::ShearSmagorinsky:
       sLattice.defineDynamics<ShearSmagorinskyBGKdynamics>(bulkIndicator);
-      sLattice.setParameter<collision::LES::Smagorinsky>(0.15);
+      sLattice.setParameter<collision::LES::SMAGORINSKY>(0.15);
       break;
     case BulkModel::Krause:
       sLattice.defineDynamics<KrauseBGKdynamics>(bulkIndicator);
-      sLattice.setParameter<collision::LES::Smagorinsky>(0.15);
+      sLattice.setParameter<collision::LES::SMAGORINSKY>(0.15);
     case BulkModel::ConsistentStrainSmagorinsky:
       sLattice.defineDynamics<ConStrainSmagorinskyBGKdynamics>(bulkIndicator);
-      sLattice.setParameter<collision::LES::Smagorinsky>(0.15);
+      sLattice.setParameter<collision::LES::SMAGORINSKY>(0.15);
       break;
     default:
       sLattice.defineDynamics<SmagorinskyBGKdynamics>(bulkIndicator);
-      sLattice.setParameter<collision::LES::Smagorinsky>(T(0.15));
+      sLattice.setParameter<collision::LES::SMAGORINSKY>(T(0.15));
       break;
   }
 
@@ -192,8 +192,8 @@ void prepareLattice(SuperLattice<T,DESCRIPTOR>& sLattice,
   sLattice.defineDynamics<BounceBack>(superGeometry, 2);
 
   const T omega = converter.getLatticeRelaxationFrequency();
-  setInterpolatedVelocityBoundary(sLattice, omega, superGeometry, 3);
-  setInterpolatedPressureBoundary(sLattice, omega, superGeometry, 4);
+  boundary::set<boundary::InterpolatedVelocity>(sLattice, superGeometry, 3);
+  boundary::set<boundary::InterpolatedPressure>(sLattice, superGeometry, 4);
 
   sLattice.setParameter<descriptors::OMEGA>(omega);
 
@@ -229,6 +229,9 @@ void setBoundaryValues(const UnitConverter<T,DESCRIPTOR>& converter,
     sLattice.initialize();
 
     superGeometry.updateStatistics();
+
+    auto intensity = std::shared_ptr<AnalyticalF3D<T,T>>(new AnalyticalConst3D<T,T>(0.05));
+    vortex.setIntensityProfile(intensity);
   }
 
   const auto maxStartT = converter.getLatticeTime(0.5);
@@ -240,7 +243,7 @@ void setBoundaryValues(const UnitConverter<T,DESCRIPTOR>& converter,
     T frac{};
     scale(&frac, &iT);
 
-    vortex.setProfile(converter.getConversionFactorVelocity() * frac * uSol);
+    vortex.setVelocityProfile(converter.getConversionFactorVelocity() * frac * uSol);
     sLattice.template setProcessingContext<Array<U_PROFILE>>(ProcessingContext::Simulation);
     vortex.apply(iT);
   } else {
@@ -257,11 +260,9 @@ void getResults(SuperLattice<T, DESCRIPTOR>& sLattice,
 
   if (iT==0) {
     SuperVTMwriter3D<T> vtmWriter("nozzle3d");
-    SuperLatticeGeometry3D geometry(sLattice, superGeometry);
     SuperLatticeCuboid3D cuboid(sLattice);
     SuperLatticeRank3D rank(sLattice);
     SuperLatticePlatform platform(sLattice);
-    vtmWriter.write(geometry);
     vtmWriter.write(cuboid);
     vtmWriter.write(rank);
     vtmWriter.write(platform);
@@ -324,13 +325,13 @@ int main(int argc, char* argv[])
   if (args.contains("--load-decomposition-from")) {
     const std::string xmlPath = args.getValueOrFallback<std::string>("--load-decomposition-from", "");
     clout << "Load decomposition from " << xmlPath << std::endl;
-    cuboidGeometry.reset(createCuboidGeometry<T>(xmlPath));
+    cuboidGeometry.reset(createCuboidGeometry<T,3>(xmlPath));
     if (!cuboidGeometry->tryRefineTo(converter.getPhysDeltaX())) {
       throw std::invalid_argument("Cuboid geometry is not refineable to reach goal deltaR");
     }
     continueMinimizeByVolume(*cuboidGeometry, *boundingI, singleton::mpi().getSize());
   } else {
-    cuboidGeometry.reset(new CuboidGeometry3D<T>(boundingI, converter.getPhysDeltaX(), singleton::mpi().getSize()));
+    cuboidGeometry.reset(new CuboidGeometry3D<T>(*boundingI, converter.getPhysDeltaX(), singleton::mpi().getSize()));
   }
   clout << "Done." << std::endl;
 
@@ -366,13 +367,14 @@ int main(int argc, char* argv[])
     converter,
     sLattice,
     50,                                // nSeeds
-    converter.getLatticeTime(0.1),     // nTime
+    0.1,                               // nTime (s)
     converter.getCharPhysLength()*0.1, // sigma
-    0.05,                              // intensity
     inflowAxis);
 
   // === 4th Step: Main Loop with Timer ===
   setBoundaryValues(converter, sLattice, superGeometry, vortex, bulkModel, 0);
+
+  sLattice.writeSummary();
 
   util::Timer<T> timer(converter.getLatticeTime(maxPhysT), superGeometry.getStatistics().getNvoxel());
 

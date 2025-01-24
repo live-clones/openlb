@@ -40,7 +40,6 @@
 
 #include "geometry/blockGeometry.h"
 
-#include "data.h"
 #include "fieldArrayD.h"
 
 #include "platform/cpu/sisd.h"
@@ -74,6 +73,8 @@ template<typename T, typename DESCRIPTOR, Platform PLATFORM> class ConcreteBlock
 template<typename T, typename DESCRIPTOR>
 struct ConcretizableBlockLattice {
 
+using value_t = T;
+
 using base_t = BlockLattice<T,DESCRIPTOR>;
 
 template <Platform PLATFORM>
@@ -81,15 +82,30 @@ using type = ConcreteBlockLattice<T,DESCRIPTOR,PLATFORM>;
 
 };
 
+template<typename T, typename DESCRIPTOR> class BlockLattice { };
+
+/// Stub to filter construction on non-lattice descriptors
+template<concepts::BaseType T, typename DESCRIPTOR>
+requires (!concepts::LatticeDescriptor<DESCRIPTOR>)
+class BlockLattice<T,DESCRIPTOR> { };
+
 /// Platform-abstracted block lattice for external access and inter-block interaction
-template<typename T, typename DESCRIPTOR>
-class BlockLattice : public BlockStructure<DESCRIPTOR>
-                   , public Serializable {
+template<concepts::BaseType T, concepts::LatticeDescriptor DESCRIPTOR>
+class BlockLattice<T,DESCRIPTOR> : public BlockStructure<DESCRIPTOR>
+                                 , public Serializable {
 protected:
+  /// Platform used by the derived concrete lattice
   const Platform _platform;
 
+  /// True if statistics are gathered during collide
   bool _statisticsEnabled;
   LatticeStatistics<T>* _statistics;
+
+  /// True for lattice that can be introspected
+  /**
+   * i.e. lattices that are NOT constructed during introspection (preventing infinite recursion)
+   **/
+  bool _introspectable;
 
 public:
   BlockLattice(Vector<int,DESCRIPTOR::d> size, int padding, Platform platform);
@@ -116,6 +132,15 @@ public:
   /// Return platform used to process lattice
   Platform getPlatform() const {
     return _platform;
+  }
+
+  template <Platform PLATFORM>
+  ConcreteBlockLattice<T,DESCRIPTOR,PLATFORM>& asConcrete() {
+    if (auto* ptr = dynamic_cast<ConcreteBlockLattice<T,DESCRIPTOR,PLATFORM>*>(this)) [[likely]] {
+      return *ptr;
+    } else {
+      throw std::runtime_error("Invalid PLATFORM");
+    }
   }
 
   /// Return whether FIELD_TYPE is available / has been allocated
@@ -214,18 +239,15 @@ public:
     _statisticsEnabled = state;
   }
 
+  bool isIntrospectable() const {
+    return _introspectable && !std::is_same_v<T,Expr>;
+  }
+  void setIntrospectability(bool state) {
+    _introspectable = state;
+  }
+
   /// Set dynamics at iCell to promised dynamics
   virtual void setDynamics(CellID iCell, DynamicsPromise<T,DESCRIPTOR>&&) = 0;
-  // Legacy dynamics setter, to be deprecated
-  virtual void setDynamics(CellID iCell, Dynamics<T,DESCRIPTOR>*) = 0;
-
-  /// Return pointer to dynamics yielded by promise
-  virtual Dynamics<T,DESCRIPTOR>* getDynamics(DynamicsPromise<T,DESCRIPTOR>&&) = 0;
-  /// Return pointer to DYNAMICS (legacy)
-  template<typename DYNAMICS>
-  Dynamics<T,DESCRIPTOR>* getDynamics() {
-    return getDynamics(DynamicsPromise(meta::id<DYNAMICS>{}));
-  }
 
   /// Return pointer to dynamics at iCell
   virtual Dynamics<T,DESCRIPTOR>* getDynamics(CellID iCell) = 0;
@@ -251,21 +273,16 @@ public:
     setDynamics(this->getCellId(latticeR),
                 DynamicsPromise(meta::id<DYNAMICS<T,DESCRIPTOR>>{}));
   }
-  /// Assign dynamics to latticeR via pointer (legacy)
-  void defineDynamics(LatticeR<DESCRIPTOR::d> latticeR,
-                      Dynamics<T,DESCRIPTOR>* dynamics)
-  {
-    setDynamics(this->getCellId(latticeR), dynamics);
-  }
 
-  /// Define the dynamics on a domain described by an indicator
-  void defineDynamics(BlockIndicatorF<T,DESCRIPTOR::d>& indicator,
-                      Dynamics<T,DESCRIPTOR>* dynamics);
+  /// Define DYNAMICS everywhere
+  template <typename DYNAMICS>
+  void defineDynamics();
   /// Define DYNAMICS on a domain described by an indicator
   template <typename DYNAMICS>
   void defineDynamics(BlockIndicatorF<T,DESCRIPTOR::d>& indicator);
-  /// Define the same dynamics on all cells
-  void defineDynamics(Dynamics<T,DESCRIPTOR>* dynamics);
+  /// Define promised dynamics on a domain described by an indicator
+  void defineDynamics(BlockIndicatorF<T,DESCRIPTOR::d>& indicator,
+                      DynamicsPromise<T,DESCRIPTOR>&& promise);
 
   /// Set value of parameter FIELD for any dynamics that provide it
   /**
@@ -285,8 +302,8 @@ public:
       });
   }
 
-  template <typename PARAMETER, typename FIELD>
-  void setParameter(AbstractFieldArrayD<T,DESCRIPTOR,FIELD>& fieldArray) {
+  template <typename PARAMETER, typename _DESCRIPTOR, typename FIELD>
+  void setParameter(AbstractFieldArrayD<T,_DESCRIPTOR,FIELD>& fieldArray) {
     callUsingConcretePlatform<ConcretizableBlockLattice<T,DESCRIPTOR>>(
       _platform,
       this,
@@ -294,8 +311,8 @@ public:
         lattice->template setParameter<PARAMETER>(fieldArray);
       });
   }
-  template <typename PARAMETER, Platform PLATFORM, typename FIELD>
-  void setParameter(FieldArrayD<T,DESCRIPTOR,PLATFORM,FIELD>& fieldArray) {
+  template <typename PARAMETER, typename _DESCRIPTOR, Platform PLATFORM, typename FIELD>
+  void setParameter(FieldArrayD<T,_DESCRIPTOR,PLATFORM,FIELD>& fieldArray) {
     callUsingConcretePlatform<ConcretizableBlockLattice<T,DESCRIPTOR>>(
       _platform,
       this,
@@ -319,31 +336,13 @@ public:
                                 BlockIndicatorF<T,DESCRIPTOR::d>& indicator,
                                 PostProcessorPromise<T,DESCRIPTOR>&& promise) = 0;
 
-  /// Schedule legacy post processor for application in stage
-  virtual void addPostProcessor(std::type_index stage, PostProcessor<T,DESCRIPTOR>* postProcessor) = 0;
-  /// Schedule legacy post processor in stage
-  virtual void addPostProcessor(std::type_index stage, const PostProcessorGenerator<T,DESCRIPTOR>& ppGen) = 0;
-  /// Schedule legacy post processor for application to indicated cells in stage
-  virtual void addPostProcessor(std::type_index stage,
-                                BlockIndicatorF<T,DESCRIPTOR::d>& indicator,
-                                const PostProcessorGenerator<T,DESCRIPTOR>& ppGen) = 0;
-
-  /// Schedule legacy post processor for application in STAGE
-  template <typename STAGE=stage::PostStream>
-  void addPostProcessor(PostProcessor<T,DESCRIPTOR>* postProcessor) {
-    addPostProcessor(typeid(STAGE), postProcessor);
-  }
-  /// Schedule legacy post processor for application in STAGE
-  template <typename STAGE=stage::PostStream>
-  void addPostProcessor(const PostProcessorGenerator<T,DESCRIPTOR>& ppGen) {
-    addPostProcessor(typeid(STAGE), ppGen);
-  }
-  /// Schedule legacy post processor for application to indicated cells in STAGE
-  template <typename STAGE=stage::PostStream>
-  void addPostProcessor(BlockIndicatorF<T,DESCRIPTOR::d>& indicator,
-                        const PostProcessorGenerator<T,DESCRIPTOR>& ppGen) {
-    addPostProcessor(typeid(STAGE), indicator, ppGen);
-  }
+  /// Prints human-readable summary of all used dynamics and post processors
+  virtual void writeDescription(std::ostream&) const = 0;
+  /// Prints CSV-structured list of all used dynamics
+  /**
+   * Used as input for automatic code generation
+   **/
+  virtual void writeDynamicsAsCSV(std::ostream&) const = 0;
 
   /// Execute post processors of stage
   virtual void postProcess(std::type_index stage = typeid(stage::PostStream)) = 0;
@@ -443,15 +442,6 @@ public:
   /// Subtract the given offset from all densities
   void stripeOffDensityOffset(T offset);
 
-  /// Add a non-local post-processing step (legacy)
-  void addLatticeCoupling(LatticeCouplingGenerator<T,DESCRIPTOR> const& lcGen,
-                          std::vector<BlockStructureD<DESCRIPTOR::d>*> partners);
-  void addLatticeCoupling(BlockIndicatorF<T,DESCRIPTOR::d>& indicator,
-                          LatticeCouplingGenerator<T,DESCRIPTOR> const& lcGen,
-                          std::vector<BlockStructureD<DESCRIPTOR::d>*> partners);
-  /// Execute couplings steps (legacy)
-  void executeCoupling();
-
   /// Return a handle to the LatticeStatistics object
   LatticeStatistics<T>& getStatistics();
   /// Return a constant handle to the LatticeStatistics object
@@ -464,11 +454,12 @@ template<typename T, typename DESCRIPTOR, Platform PLATFORM=Platform::CPU_SISD>
 class ConcreteBlockLattice final : public BlockLattice<T,DESCRIPTOR> {
 private:
   /// Field data
-  Data<T,DESCRIPTOR,PLATFORM> _data;
+  ConcreteData<T,DESCRIPTOR,PLATFORM> _data;
   /// Index of DESCRIPTOR-declared field arrays
   utilities::FixedTypeIndexedMap<typename DESCRIPTOR::fields_t, ColumnVectorBase*> _descriptorFields;
   /// Pointers to Communicatable-casted FieldArrayD instances for overlap communication
   std::map<std::type_index, std::unique_ptr<Communicatable>> _communicatables;
+
   /// Assignments of dynamics instances to cell indices
   BlockDynamicsMap<T,DESCRIPTOR,PLATFORM> _dynamicsMap;
   /// Optional custom callable replacing default collision application
@@ -498,6 +489,10 @@ public:
 
   void setProcessingContext(ProcessingContext context) override {
     _data.setProcessingContext(context);
+  }
+
+  ConcreteData<T,DESCRIPTOR,PLATFORM>& getData() {
+    return _data;
   }
 
   template<typename FIELD_TYPE>
@@ -546,10 +541,6 @@ public:
     return _dynamicsMap;
   }
 
-  Dynamics<T,DESCRIPTOR>* getDynamics(DynamicsPromise<T,DESCRIPTOR>&& promise) override {
-    return _dynamicsMap.get(std::forward<decltype(promise)>(promise));
-  }
-
   /// Get reference to dynamics of cell by index
   Dynamics<T,DESCRIPTOR>* getDynamics(CellID iCell) override
   {
@@ -561,10 +552,6 @@ public:
     _dynamicsMap.set(iCell, std::forward<decltype(promise)>(promise));
     auto cell = this->get(iCell);
     getDynamics(iCell)->initialize(cell);
-  }
-  void setDynamics(CellID iCell, Dynamics<T,DESCRIPTOR>* dynamics) override
-  {
-    _dynamicsMap.set(iCell, dynamics);
   }
 
   template <typename FIELD>
@@ -579,9 +566,11 @@ public:
     });
   }
 
-  template <typename PARAMETER, Platform _PLATFORM, typename FIELD>
-  void setParameter(FieldArrayD<T,DESCRIPTOR,_PLATFORM,FIELD>& fieldArray)
+  template <typename PARAMETER, typename _DESCRIPTOR, Platform _PLATFORM, typename FIELD>
+  void setParameter(FieldArrayD<T,_DESCRIPTOR,_PLATFORM,FIELD>& fieldArray)
   {
+    static_assert(DESCRIPTOR::template size<PARAMETER>() == DESCRIPTOR::template size<FIELD>(),
+                  "PARAMETER field size must match FIELD size");
     if constexpr (PLATFORM == Platform::GPU_CUDA) {
       static_assert(PLATFORM == _PLATFORM, "FieldArrayD must be available on PLATFORM");
     }
@@ -596,11 +585,28 @@ public:
     setParameter<PARAMETER>(std::move(fieldArrayPointers));
   }
 
-  template <typename PARAMETER, typename FIELD>
-  void setParameter(AbstractFieldArrayD<T,DESCRIPTOR,FIELD>& abstractFieldArray)
+  template <typename PARAMETER, typename _DESCRIPTOR, typename FIELD>
+  void setParameter(AbstractFieldArrayD<T,_DESCRIPTOR,FIELD>& abstractFieldArray)
   {
-    auto& fieldArray = dynamic_cast<FieldArrayD<T,DESCRIPTOR,PLATFORM,FIELD>&>(abstractFieldArray);
-    setParameter<PARAMETER>(fieldArray);
+    if constexpr (PLATFORM == Platform::CPU_SIMD) {
+      switch (abstractFieldArray.getPlatform()) {
+        case Platform::CPU_SISD: {
+          auto& fieldArray = dynamic_cast<FieldArrayD<T,_DESCRIPTOR,Platform::CPU_SISD,FIELD>&>(abstractFieldArray);
+          setParameter<PARAMETER>(fieldArray);
+          break;
+        }
+        case Platform::CPU_SIMD: {
+          auto& fieldArray = dynamic_cast<FieldArrayD<T,_DESCRIPTOR,Platform::CPU_SIMD,FIELD>&>(abstractFieldArray);
+          setParameter<PARAMETER>(fieldArray);
+          break;
+        }
+        default:
+          throw std::bad_cast();
+      }
+    } else {
+      auto& fieldArray = dynamic_cast<FieldArrayD<T,_DESCRIPTOR,PLATFORM,FIELD>&>(abstractFieldArray);
+      setParameter<PARAMETER>(fieldArray);
+    }
   }
 
   bool hasPostProcessor(std::type_index stage,
@@ -615,22 +621,27 @@ public:
                         LatticeR<DESCRIPTOR::d> latticeR,
                         PostProcessorPromise<T,DESCRIPTOR>&& promise) override
   {
-    if (!this->isPadding(latticeR)) {
-      auto [postProcessorsOfPriority, _] = _postProcessors[stage].try_emplace(promise.priority(), this);
-      std::get<1>(*postProcessorsOfPriority).add(this->getCellId(latticeR),
-                                                 std::forward<decltype(promise)>(promise));
-    }
+    auto [postProcessorsOfPriority, _] = _postProcessors[stage].try_emplace(promise.priority(), this);
+    std::get<1>(*postProcessorsOfPriority).add(this->getCellId(latticeR),
+                                               std::forward<decltype(promise)>(promise));
   }
 
   void addPostProcessor(std::type_index stage,
                         BlockIndicatorF<T,DESCRIPTOR::d>& indicator,
                         PostProcessorPromise<T,DESCRIPTOR>&& promise) override
   {
-    this->forCoreSpatialLocations([&](LatticeR<DESCRIPTOR::d> loc) {
-      if (indicator(loc)) {
-        addPostProcessor(stage, loc, std::forward<decltype(promise)>(promise));
+    if (promise.scope() == OperatorScope::PerBlock) {
+      if (!indicator.isEmpty()) {
+        auto [postProcessorsOfPriority, _] = _postProcessors[stage].try_emplace(promise.priority(), this);
+        std::get<1>(*postProcessorsOfPriority).add(std::forward<decltype(promise)>(promise));
       }
-    });
+    } else {
+      this->forCoreSpatialLocations([&](LatticeR<DESCRIPTOR::d> loc) {
+        if (indicator(loc)) {
+          addPostProcessor(stage, loc, std::forward<decltype(promise)>(promise));
+        }
+      });
+    }
   }
 
   void addPostProcessor(std::type_index stage,
@@ -645,12 +656,6 @@ public:
       });
     }
   }
-
-  void addPostProcessor(std::type_index stage, PostProcessor<T,DESCRIPTOR>* postProcessor) override;
-  void addPostProcessor(std::type_index stage, const PostProcessorGenerator<T,DESCRIPTOR>& ppGen) override;
-  void addPostProcessor(std::type_index stage,
-                        BlockIndicatorF<T,DESCRIPTOR::d>& indicator,
-                        const PostProcessorGenerator<T,DESCRIPTOR>& ppGen) override;
 
   /// Execute post processors of stage
   void postProcess(std::type_index stage) override;
@@ -674,6 +679,9 @@ public:
     return _data.getRegistry();
   }
 
+  void writeDescription(std::ostream& clout) const override;
+  void writeDynamicsAsCSV(std::ostream& clout) const override;
+
   /// Number of data blocks for the serializable interface
   std::size_t getNblock() const override;
   /// Binary size for the serializer
@@ -686,6 +694,12 @@ public:
 
 };
 
+/// Prevent attempts to introspect CPU_SIMD lattice
+template <typename DESCRIPTOR>
+class ConcreteBlockLattice<Expr,DESCRIPTOR,Platform::CPU_SIMD>;
+/// Prevent attempts to introspect GPU_CUDA lattice
+template <typename DESCRIPTOR>
+class ConcreteBlockLattice<Expr,DESCRIPTOR,Platform::GPU_CUDA>;
 
 /// Wrapper for a local heterogeneous block communication request
 /**

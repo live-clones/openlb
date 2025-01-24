@@ -33,6 +33,7 @@
 #include "util.h"
 #include "meta.h"
 #include "utilities/aliases.h"
+#include "core/concepts.h"
 
 #include "fieldArrayD.h"
 
@@ -49,7 +50,7 @@ template<typename T, typename DESCRIPTOR> class Cell;
  * Only use where access to the specific ConcreteBlockLattice
  * resp. Dynamics information is not (yet) possible.
  **/
-template<typename T, typename DESCRIPTOR>
+template<concepts::BaseType T, concepts::LatticeDescriptor DESCRIPTOR>
 class ConstCell {
 private:
   ConstCell<T,DESCRIPTOR>& self() const;
@@ -93,6 +94,8 @@ public:
     _populations = _block.getPopulationPointers(iCell);
   }
 
+  const Dynamics<T,DESCRIPTOR>* getDynamics() const;
+
   bool operator==(ConstCell<T,DESCRIPTOR>& rhs) const;
   bool operator!=(ConstCell<T,DESCRIPTOR>& rhs) const;
   bool operator< (ConstCell<T,DESCRIPTOR>& rhs) const;
@@ -115,9 +118,6 @@ public:
   /// Return copy of descriptor-declared FIELD as a vector
   template <typename FIELD>
   auto getField(FIELD field = FIELD()) const;
-
-  /// Get a pointer to the dynamics
-  const Dynamics<T,DESCRIPTOR>* getDynamics() const;
 
   /// Copy FIELD content to given memory location
   template <typename FIELD>
@@ -143,14 +143,23 @@ public:
 
 };
 
+template<typename T, typename DESCRIPTOR> class Cell { };
+
+/// Stub to filter construction on non-lattice descriptors
+template<concepts::BaseType T, typename DESCRIPTOR>
+requires (!concepts::LatticeDescriptor<DESCRIPTOR>)
+class Cell<T,DESCRIPTOR> { };
+
 /// Highest-level interface to Cell data
-template<typename T, typename DESCRIPTOR>
-class Cell : public ConstCell<T,DESCRIPTOR> {
+template<concepts::BaseType T, concepts::LatticeDescriptor DESCRIPTOR>
+class Cell<T,DESCRIPTOR> : public ConstCell<T,DESCRIPTOR> {
 public:
   Cell(BlockLattice<T,DESCRIPTOR>& block,
        std::size_t iCell):
     ConstCell<T,DESCRIPTOR>(block, iCell)
   { }
+
+  Dynamics<T,DESCRIPTOR>* getDynamics();
 
   Cell<T,DESCRIPTOR> neighbor(Vector<int,DESCRIPTOR::d> c);
 
@@ -174,15 +183,6 @@ public:
 
   template <typename FIELD>
   void setFieldComponent(unsigned iD, typename FIELD::template value_type<T> value);
-
-  /// Get a pointer to the dynamics
-  Dynamics<T,DESCRIPTOR>* getDynamics();
-
-  /// Revert ("bounce-back") the distribution functions
-  void revert();
-
-  /// Apply LB collision to the cell according to local dynamics
-  CellStatistic<T> collide();
 
   /// Set density on the cell
   void defineRho(T rho);

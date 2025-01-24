@@ -45,4 +45,5 @@
 #include "matrix.h"
 #include "geometricOperations.h"
 #include "permeability.h"
-//#include "commandLineParser.h"
+#include "line3D.h"
+#include "lineLattice3D.h"

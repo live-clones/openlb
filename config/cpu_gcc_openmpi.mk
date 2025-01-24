@@ -21,7 +21,7 @@ CC              := gcc
 # architecture / SIMD flags. Alternatively, compilation at the start of
 # the HPC jobs is a common option.
 CXXFLAGS        := -O3 -Wall -march=native -mtune=native
-CXXFLAGS        += -std=c++17
+CXXFLAGS        += -std=c++20
 
 # TODO: allow debugging, for now (?)
 CXXFLAGS        += -g

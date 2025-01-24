@@ -80,6 +80,7 @@ bool SuperLocalAverage3D<T,W>::operator() (W output[], const int input[])
 
   std::size_t voxels(0);
   int inputTmp[4];
+  std::vector<util::KahanSummator<W>> summators(_f->getTargetDim(), util::KahanSummator<W>());
 
   for (int iC = 0; iC < load.size(); ++iC) {
     inputTmp[0] = load.glob(iC);
@@ -92,13 +93,17 @@ bool SuperLocalAverage3D<T,W>::operator() (W output[], const int input[])
             T outputTmp[_f->getTargetDim()];
             _f(outputTmp, inputTmp);
             for (int i = 0; i < this->getTargetDim(); ++i) {
-              output[i] += outputTmp[i];
+              summators[i].add(outputTmp[i]);
             }
             voxels += 1;
           }
         }
       }
     }
+  }
+
+  for (int i = 0; i < _f->getTargetDim(); ++i) {
+    output[i] = summators[i].getSum();
   }
 
 #ifdef PARALLEL_MODE_MPI

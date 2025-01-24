@@ -81,7 +81,7 @@ namespace olb {
     rank = singleton::mpi().getRank();
     size = singleton::mpi().getSize();
 #endif
-    for (int i = 0; i < this->_cuboidGeometry.getNc(); ++i) {
+    for (int i = 0; i < this->_cuboidGeometry.size(); ++i) {
       if (this->_loadBalancer.rank(i) == rank) {
         auto dummy = new ParticleSystem3D<T, PARTICLETYPE>(i, _superGeometry);
         std::vector<T> physPos = toStdVector(this->_cuboidGeometry.get(i).getOrigin());
@@ -98,7 +98,7 @@ namespace olb {
     }
 
 #ifdef PARALLEL_MODE_MPI
-    for (int i = 0; i < this->_cuboidGeometry.getNc(); ++i) {
+    for (int i = 0; i < this->_cuboidGeometry.size(); ++i) {
       if (this->_loadBalancer.rank(i) == rank) {
         std::vector<int> dummy;
         this->getCuboidGeometry().getNeighbourhood(i, dummy, 3);
@@ -817,7 +817,7 @@ namespace olb {
   {
     int C = this->_cuboidGeometry.get_iC(p.getPos()[0], p.getPos()[1],
                                          p.getPos()[2], overlap);
-    if (C != this->_cuboidGeometry.getNc()) {
+    if (C != this->_cuboidGeometry.size()) {
       p.setCuboid(C);
       return 1;
     }
@@ -874,7 +874,7 @@ namespace olb {
             std::set<int> sendTo;
             // Run through all cuboids to search the one that
             // shares its boundary with the cuboid containing the particle
-            for (int iC = 0; iC < this->_cuboidGeometry.getNc(); iC++) {
+            for (int iC = 0; iC < this->_cuboidGeometry.size(); iC++) {
               // Check if iC is neighbor cuboid in which overlap the particle is
               // located
               if (par->getCuboid() != iC && checkCuboid(*par, _overlap, iC)) {
@@ -905,7 +905,7 @@ namespace olb {
           if (!(checkCuboid(*par, -_overlap))) {
             // yes, particle is in boundary layer
             std::set<int> sendTo;
-            for (int iC = 0; iC < this->_cuboidGeometry.getNc(); iC++) {
+            for (int iC = 0; iC < this->_cuboidGeometry.size(); iC++) {
               // checks if iC is neighbor cuboid in whose overlap the particle
               // is located
               if (par->getCuboid() != iC && checkCuboid(*par, _overlap, iC)) {

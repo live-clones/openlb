@@ -24,7 +24,7 @@
 #ifndef BLOCK_INTEGRAL_F_3D_H
 #define BLOCK_INTEGRAL_F_3D_H
 
-#include "geometry/cuboid3D.h"
+#include "geometry/cuboid.h"
 #include "functors/lattice/blockBaseF3D.h"
 
 namespace olb {

@@ -44,7 +44,6 @@ struct ROT_MATRIX {};
 
 //Common
 struct POSITION          : public FIELD_BASE<0,  1, 0> { };
-// struct DENSITY           : public FIELD_BASE<1,  0, 0> { };
 struct INVALID           : public FIELD_BASE<1,  0, 0> {  //Storage invalidation, filtered in particleManager
   template <typename T, typename DESCRIPTOR>
   static constexpr auto getInitialValue() {
@@ -81,7 +80,8 @@ struct SPECIES           : public FIELD_BASE<1,  0, 0> { };
 struct FLUIDVEL          : public FIELD_BASE<0,  1, 0> { }; //Prinz 230214
 
 // Contact model
-struct ENLARGEMENT_FOR_CONTACT : public FIELD_BASE<1,  0, 0> { };
+struct ENLARGEMENT_FOR_CONTACT  : public FIELD_BASE<1,  0, 0> { };
+struct IS_IN_CONTACT            : public FIELD_BASE<1,  0, 0> { };
 
 //Dimension sensitive fields
 template<unsigned D>
@@ -169,6 +169,10 @@ struct SURFACE_RESOLVED_PARALLEL  : public PARTICLE_DESCRIPTOR<D,ANGLE_XD<D>,ROT
 template<unsigned D>
 struct NUMERICPROPERTIES_RESOLVED_CONTACT
                                   : public PARTICLE_DESCRIPTOR<D,ENLARGEMENT_FOR_CONTACT>, public NUMERICPROPERTIES {};
+
+template<unsigned D>
+struct NUMERICPROPERTIES_RESOLVED_LUBRICATION_FORCE_CORRECTION
+                                  : public PARTICLE_DESCRIPTOR<D,IS_IN_CONTACT>, public NUMERICPROPERTIES {};
 
 template<unsigned D>
 struct FORCING_RESOLVED           : public PARTICLE_DESCRIPTOR<D,FORCE,TORQUE_XD<D>>, public FORCING {};

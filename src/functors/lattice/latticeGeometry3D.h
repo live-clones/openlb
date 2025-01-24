@@ -1,7 +1,7 @@
 /*  This file is part of the OpenLB library
  *
  *  Copyright (C) 2012 Lukas Baron, Tim Dornieden, Mathias J. Krause,
- *  Albert Mink
+ *  Albert Mink, Stephan Simonis
  *  E-mail contact: info@openlb.net
  *  The most recent release of OpenLB can be downloaded at
  *  <http://www.openlb.net/>
@@ -47,25 +47,21 @@
 namespace olb {
 
 /// functor to get pointwise the material no. presenting the geometry on local lattice
-template <typename T, typename DESCRIPTOR=void>
-class SuperLatticeGeometry3D final : public SuperF3D<T> {
+template <typename T>
+class SuperGeometryF3D final : public SuperF3D<T> {
 private:
   SuperGeometry<T,3>& _superGeometry;
   const int _material;
 public:
-  SuperLatticeGeometry3D(SuperLattice<T,DESCRIPTOR>& sLattice,
-                         SuperGeometry<T,3>& superGeometry, const int material = -1);
-  SuperLatticeGeometry3D(SuperGeometry<T,3>& superGeometry, const int material = -1);
+  SuperGeometryF3D(SuperGeometry<T,3>& superGeometry, const int material = -1);
 };
 
 /// functor returns pointwise the material no. presenting the geometry on local lattice
-template <typename T, typename DESCRIPTOR=void>
+template <typename T>
 class BlockLatticeGeometry3D final : public BlockF3D<T> {
   BlockGeometry<T,3>& _blockGeometry;
   const int _material;
 public:
-  BlockLatticeGeometry3D(BlockLattice<T,DESCRIPTOR>& blockLattice,
-                         BlockGeometry<T,3>& blockGeometry, int material = -1);
   BlockLatticeGeometry3D(BlockGeometry<T,3>& blockGeometry, int material = -1);
   bool operator() (T output[], const int input[]) override;
 };

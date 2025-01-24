@@ -1,7 +1,8 @@
 /*  This file is part of the OpenLB library
  *
- *  Copyright (C) 2007 Mathias J. Krause
- *                2021 Adrian Kummerlaender
+ *  Copyright (C) 2007-2024 Mathias J. Krause,
+ *                Adrian Kummerlaender,
+ *                Dennis Teutscher
  *  E-mail contact: info@openlb.net
  *  The most recent release of OpenLB can be downloaded at
  *  <http://www.openlb.net/>
@@ -40,15 +41,22 @@
 
 #include "io/serializerIO.h"
 
-#include "geometry/cuboidGeometry2D.h"
-#include "geometry/cuboidGeometry3D.h"
-
+#include "geometry/cuboidGeometry.h"
 #include "geometry/superGeometry.hh"
 
 #include "communication/loadBalancer.h"
 
+#include "io/tupleParser.h"
+
 namespace olb {
 
+#ifdef FEATURE_EXPORT_CODE_GENERATION_TARGETS
+namespace introspection {
+
+static unsigned iLattice = 0;
+
+}
+#endif
 
 template<typename T, typename DESCRIPTOR>
 void SuperLattice<T,DESCRIPTOR>::collectStatistics()
@@ -98,15 +106,12 @@ void SuperLattice<T,DESCRIPTOR>::collectStatistics()
 }
 
 template<typename T, typename DESCRIPTOR>
-SuperLattice<T,DESCRIPTOR>::SuperLattice(SuperGeometry<T,DESCRIPTOR::d>& superGeometry, bool debug)
-  : SuperLattice<T,DESCRIPTOR>( superGeometry )
-  { this->_debug = debug; }
-
-template<typename T, typename DESCRIPTOR>
-SuperLattice<T,DESCRIPTOR>::SuperLattice(SuperGeometry<T,DESCRIPTOR::d>& superGeometry)
-  : SuperStructure<T,DESCRIPTOR::d>(superGeometry.getCuboidGeometry(),
-                                    superGeometry.getLoadBalancer(),
-                                    superGeometry.getOverlap()),
+SuperLattice<T,DESCRIPTOR>::SuperLattice(CuboidDecomposition<T,DESCRIPTOR::d>& decomposition,
+                                         LoadBalancer<T>& loadBalancer,
+                                         unsigned overlap)
+  : SuperStructure<T,DESCRIPTOR::d>(decomposition,
+                                    loadBalancer,
+                                    overlap),
     _statistics()
 {
   using namespace stage;
@@ -189,6 +194,60 @@ void SuperLattice<T,DESCRIPTOR>::initialize()
     _block[iC]->initialize();
   }
   _communicationNeeded = true;
+
+#ifdef FEATURE_EXPORT_CODE_GENERATION_TARGETS
+  writeSummary("lattice" + std::to_string(introspection::iLattice++));
+#endif
+}
+
+template<typename T, typename DESCRIPTOR>
+void SuperLattice<T,DESCRIPTOR>::printSummary() const
+{
+  _block[0]->writeDescription(this->clout);
+}
+
+template<typename T, typename DESCRIPTOR>
+void SuperLattice<T,DESCRIPTOR>::writeSummary(std::string fileName) const
+{
+  const auto& cGeometry = this->getCuboidGeometry();
+  for (int iC = 0; iC < this->_loadBalancer.size(); ++iC) {
+    const int globC = this->_loadBalancer.glob(iC);
+    {
+      std::string dataFile = singleton::directories().getIntrospectionOutDir()
+                           + fileName + "_globC_" + std::to_string(globC)
+                           + ".log";
+      std::ofstream fout(dataFile.c_str(), std::ios::trunc);
+      if (!fout) {
+        this->clout << "writeSummary error: can not open std::ofstream" << std::endl;
+      } else {
+        cGeometry.get(globC).write(fout);
+        fout << std::endl;
+        _block[0]->writeDescription(fout);
+        fout.close();
+      }
+    }
+    {
+      std::string dataFile = singleton::directories().getIntrospectionOutDir()
+                           + fileName + "_globC_" + std::to_string(globC)
+                           + ".dynamics";
+      std::ofstream fout(dataFile.c_str(), std::ios::trunc);
+      if (!fout) {
+        this->clout << "writeSummary error: can not open std::ofstream" << std::endl;
+      } else {
+        _block[0]->writeDynamicsAsCSV(fout);
+        fout.close();
+      }
+    }
+  }
+}
+
+template<typename T, typename DESCRIPTOR>
+template<typename DYNAMICS>
+void SuperLattice<T,DESCRIPTOR>::defineDynamics()
+{
+  for (int iC = 0; iC < this->_loadBalancer.size(); ++iC) {
+    _block[iC]->template defineDynamics<DYNAMICS>();
+  }
 }
 
 template<typename T, typename DESCRIPTOR>
@@ -225,19 +284,13 @@ void SuperLattice<T,DESCRIPTOR>::defineDynamics(SuperGeometry<T,DESCRIPTOR::d>& 
 
 template<typename T, typename DESCRIPTOR>
 void SuperLattice<T,DESCRIPTOR>::defineDynamics(FunctorPtr<SuperIndicatorF<T,DESCRIPTOR::d>>&& indicator,
-                                                Dynamics<T,DESCRIPTOR>* dynamics)
+                                                DynamicsPromise<T,DESCRIPTOR>&& promise)
 {
   for (int iC = 0; iC < this->_loadBalancer.size(); ++iC) {
-    _block[iC]->defineDynamics(indicator->getBlockIndicatorF(iC), dynamics);
+    _block[iC]->defineDynamics(indicator->getBlockIndicatorF(iC), std::forward<DynamicsPromise<T,DESCRIPTOR>&&>(promise));
   }
 }
 
-template<typename T, typename DESCRIPTOR>
-void SuperLattice<T,DESCRIPTOR>::defineDynamics(SuperGeometry<T,DESCRIPTOR::d>& sGeometry, int material,
-                                                Dynamics<T,DESCRIPTOR>* dynamics)
-{
-  defineDynamics(sGeometry.getMaterialIndicator(material), dynamics);
-}
 
 template<typename T, typename DESCRIPTOR>
 void SuperLattice<T,DESCRIPTOR>::defineRho(FunctorPtr<SuperIndicatorF<T,DESCRIPTOR::d>>&& indicator,
@@ -397,26 +450,32 @@ void SuperLattice<T,DESCRIPTOR>::defineField(SuperGeometry<T,DESCRIPTOR::d>& sGe
 
 template<typename T, typename DESCRIPTOR>
 template <typename FIELD>
-void SuperLattice<T,DESCRIPTOR>::defineField(SuperGeometry<T,DESCRIPTOR::d>& sGeometry, IndicatorF2D<T>& indicator,
+void SuperLattice<T,DESCRIPTOR>::defineField(SuperGeometry<T,DESCRIPTOR::d>& sGeometry,
+                                             IndicatorF<T,DESCRIPTOR::d>& indicator,
                                              AnalyticalF<DESCRIPTOR::d,T,T>& field)
 {
-  SuperIndicatorFfromIndicatorF2D<T> indicatorF(indicator, sGeometry);
+  SuperIndicatorFfromIndicatorF<T,DESCRIPTOR::d> indicatorF(indicator, sGeometry);
   defineField<FIELD>(indicatorF, field);
 }
 
 template<typename T, typename DESCRIPTOR>
 template <typename FIELD>
-void SuperLattice<T,DESCRIPTOR>::defineField(SuperGeometry<T,DESCRIPTOR::d>& sGeometry, IndicatorF3D<T>& indicator,
-                                             AnalyticalF<DESCRIPTOR::d,T,T>& field)
+void SuperLattice<T,DESCRIPTOR>::defineField(SuperGeometry<T,DESCRIPTOR::d>& sGeometry,
+                                             IndicatorF<T,DESCRIPTOR::d>& indicator,
+                                             FunctorPtr<SuperF<DESCRIPTOR::d,T,T>>&& field)
 {
-  SuperIndicatorFfromIndicatorF3D<T> indicatorF(indicator, sGeometry);
-  defineField<FIELD>(indicatorF, field);
+  SuperIndicatorFfromIndicatorF<T,DESCRIPTOR::d> indicatorF(indicator, sGeometry);
+  defineField<FIELD>(indicatorF, std::forward<decltype(field)>(field));
 }
 
 template<typename T, typename DESCRIPTOR>
 template <typename PARAMETER>
 void SuperLattice<T,DESCRIPTOR>::setParameter(FieldD<T,DESCRIPTOR,PARAMETER> field)
 {
+  if (!PARAMETER::template isValid<T,DESCRIPTOR,PARAMETER>(field)) {
+    const std::string error = "Value of parameter " + fields::name<PARAMETER>() + " is invalid";
+    throw std::invalid_argument(error);
+  }
   for (int iC=0; iC < this->getLoadBalancer().size(); ++iC) {
     _block[iC]->template setParameter<PARAMETER>(field);
   }
@@ -440,16 +499,18 @@ void SuperLattice<T,DESCRIPTOR>::setParameterOfDynamics(FieldD<T,DESCRIPTOR,PARA
 }
 
 template<typename T, typename DESCRIPTOR>
-template <typename PARAMETER, Platform PLATFORM, typename FIELD>
-void SuperLattice<T,DESCRIPTOR>::setParameter(FieldArrayD<T,DESCRIPTOR,PLATFORM,FIELD>& fieldArray)
+template <typename PARAMETER, typename _DESCRIPTOR, typename FIELD>
+void SuperLattice<T,DESCRIPTOR>::setParameter(AbstractFieldArrayD<T,_DESCRIPTOR,FIELD>& abstractFieldArray)
 {
   static_assert(DESCRIPTOR::template size<PARAMETER>() == DESCRIPTOR::template size<FIELD>(),
                 "PARAMETER size must equal FIELD size");
   static_assert(std::is_same_v<typename PARAMETER::template value_type<T>,
                                typename FIELD::template value_type<T>*>,
                 "PARAMETER must store pointers to FIELD components");
+  // auto test = PARAMETER::template getMaxValue<T,DESCRIPTOR>();
+  // std::cout << test<< std::endl;
   for (int iC=0; iC < this->getLoadBalancer().size(); ++iC) {
-    _block[iC]->template setParameter<PARAMETER>(fieldArray);
+    _block[iC]->template setParameter<PARAMETER>(abstractFieldArray);
   }
 }
 
@@ -557,6 +618,16 @@ void SuperLattice<T,DESCRIPTOR>::collideAndStream()
     collectStatistics();
   }
   _communicationNeeded = true;
+
+#ifdef FEATURE_EXPORT_CODE_GENERATION_TARGETS
+  if (introspection::iLattice > 1) {
+    introspection::iLattice -= 1;
+  } else {
+    this->clout << "Terminating after export of code generation targets." << std::endl
+                << "If you are confused by this message EXPORT_CODE_GENERATION_TARGETS was wrongly enabled." << std::endl;
+    std::exit(0);
+  }
+#endif
 }
 
 template<typename T, typename DESCRIPTOR>
@@ -623,32 +694,6 @@ LatticeStatistics<T> const& SuperLattice<T,DESCRIPTOR>::getStatistics() const
 
 template<typename T, typename DESCRIPTOR>
 template<typename STAGE>
-void SuperLattice<T,DESCRIPTOR>::addPostProcessor(
-  PostProcessorGenerator<T,DESCRIPTOR> const& ppGen)
-{
-  for (int iC = 0; iC < this->_loadBalancer.size(); ++iC) {
-    int overlap = getBlock(iC).getPadding();
-    PostProcessorGenerator<T,DESCRIPTOR> *extractedPpGen = ppGen.clone();
-    extractedPpGen->reset(-overlap+1, getBlock(iC).getExtent()+overlap-2);
-    getBlock(iC).template addPostProcessor<STAGE>(*extractedPpGen);
-    delete extractedPpGen;
-  }
-}
-
-template<typename T, typename DESCRIPTOR>
-template<typename STAGE>
-void SuperLattice<T,DESCRIPTOR>::addPostProcessor(FunctorPtr<SuperIndicatorF<T,DESCRIPTOR::d>>&& indicator,
-                                                  PostProcessorGenerator<T,DESCRIPTOR> const& ppGen)
-{
-  for (int iC = 0; iC < this->_loadBalancer.size(); ++iC) {
-    getBlock(iC).template addPostProcessor<STAGE>(indicator->getBlockIndicatorF(iC),
-                                                  ppGen);
-  }
-  _communicationNeeded = true;
-}
-
-template<typename T, typename DESCRIPTOR>
-template<typename STAGE>
 void SuperLattice<T,DESCRIPTOR>::addPostProcessor(FunctorPtr<SuperIndicatorF<T,DESCRIPTOR::d>>&& indicator,
                                                   PostProcessorPromise<T,DESCRIPTOR>&& promise)
 {
@@ -667,115 +712,6 @@ void SuperLattice<T,DESCRIPTOR>::addPostProcessor(PostProcessorPromise<T,DESCRIP
     getBlock(iC).addPostProcessor(typeid(STAGE),
                                   std::forward<decltype(promise)>(promise));
   }
-}
-
-template<typename T, typename DESCRIPTOR>
-template<typename STAGE>
-void SuperLattice<T,DESCRIPTOR>::addPostProcessor(
-  SuperGeometry<T,DESCRIPTOR::d>& sGeometry, int material,
-  PostProcessorGenerator<T,DESCRIPTOR> const& ppGen)
-{
-  addPostProcessor<STAGE>(sGeometry.getMaterialIndicator(material), ppGen);
-}
-
-template<typename T, typename DESCRIPTOR>
-template<typename PARTNER_DESCRIPTOR>
-void SuperLattice<T,DESCRIPTOR>::addLatticeCoupling(
-  LatticeCouplingGenerator<T,DESCRIPTOR> const& lcGen,
-  std::vector<SuperLattice<T,PARTNER_DESCRIPTOR>*> partnerLattices)
-{
-  for (int iC = 0; iC < this->_loadBalancer.size(); ++iC) {
-    std::vector<BlockStructureD<DESCRIPTOR::d>*> partners;
-    for (auto partnerLattice: partnerLattices) {
-      partners.push_back(&partnerLattice->getBlock(iC));
-    }
-    int overlap = getBlock(iC).getPadding();
-    LatticeCouplingGenerator<T,DESCRIPTOR> *extractedLcGen = lcGen.clone();
-    extractedLcGen->reset(-overlap+1, getBlock(iC).getExtent()+overlap-2);
-    getBlock(iC).addLatticeCoupling(*extractedLcGen, partners);
-    delete extractedLcGen;
-  }
-  return;
-}
-
-template<typename T, typename DESCRIPTOR>
-template<typename PARTNER_DESCRIPTOR>
-void SuperLattice<T,DESCRIPTOR>::addLatticeCoupling(FunctorPtr<SuperIndicatorF<T,DESCRIPTOR::d>>&& indicator,
-                                                    LatticeCouplingGenerator<T,DESCRIPTOR> const& lcGen,
-                                                    std::vector<SuperLattice<T,PARTNER_DESCRIPTOR>*> partnerLattices)
-{
-  for (int iC = 0; iC < this->_loadBalancer.size(); ++iC) {
-    std::vector<BlockStructureD<DESCRIPTOR::d>*> partners;
-    for (auto partnerLattice: partnerLattices) {
-      partners.push_back(&partnerLattice->getBlock(iC));
-    }
-    getBlock(iC).addLatticeCoupling(indicator->getBlockIndicatorF(iC),
-                                           lcGen,
-                                           partners);
-  }
-}
-
-template<typename T, typename DESCRIPTOR>
-template<typename PARTNER_DESCRIPTOR>
-void SuperLattice<T,DESCRIPTOR>::addLatticeCoupling(SuperGeometry<T,DESCRIPTOR::d>& sGeometry, int material,
-                                                    LatticeCouplingGenerator<T,DESCRIPTOR> const& lcGen,
-                                                    std::vector<SuperLattice<T,PARTNER_DESCRIPTOR>*> partnerLattices)
-{
-  addLatticeCoupling(sGeometry.getMaterialIndicator(material),
-                     lcGen, partnerLattices);
-}
-
-template<typename T, typename DESCRIPTOR>
-template<typename... PARTNER_DESCRIPTORS>
-void SuperLattice<T,DESCRIPTOR>::addLatticeCoupling(
-  LatticeCouplingGenerator<T,DESCRIPTOR> const& lcGen,
-  PARTNER_DESCRIPTORS&... partnerLattices)
-{
-  for (int iC = 0; iC < this->_loadBalancer.size(); ++iC) {
-    std::vector<BlockStructureD<DESCRIPTOR::d>*> partners{&partnerLattices.getBlock(iC)...};
-    int overlap = getBlock(iC).getPadding();
-    LatticeCouplingGenerator<T,DESCRIPTOR> *extractedLcGen = lcGen.clone();
-    extractedLcGen->reset(-overlap+1, getBlock(iC).getExtent()+overlap-2);
-    getBlock(iC).addLatticeCoupling(*extractedLcGen, partners);
-    delete extractedLcGen;
-  }
-  return;
-}
-
-template<typename T, typename DESCRIPTOR>
-template<typename... PARTNER_DESCRIPTORS>
-void SuperLattice<T,DESCRIPTOR>::addLatticeCoupling(FunctorPtr<SuperIndicatorF<T,DESCRIPTOR::d>>&& indicator,
-                                                    LatticeCouplingGenerator<T,DESCRIPTOR> const& lcGen,
-                                                    PARTNER_DESCRIPTORS&... partnerLattices)
-{
-  for (int iC = 0; iC < this->_loadBalancer.size(); ++iC) {
-    std::vector<BlockStructureD<DESCRIPTOR::d>*> partners{&partnerLattices.getBlock(iC)...};
-    getBlock(iC).addLatticeCoupling(indicator->getBlockIndicatorF(iC),
-                                    lcGen,
-                                    partners);
-  }
-}
-
-template<typename T, typename DESCRIPTOR>
-template<typename... PARTNER_DESCRIPTORS>
-void SuperLattice<T,DESCRIPTOR>::addLatticeCoupling(SuperGeometry<T,DESCRIPTOR::d>& sGeometry, int material,
-                                                    LatticeCouplingGenerator<T,DESCRIPTOR> const& lcGen,
-                                                    PARTNER_DESCRIPTORS&... partnerLattices)
-{
-  addLatticeCoupling(sGeometry.getMaterialIndicator(material),
-                     lcGen, partnerLattices...);
-}
-
-template<typename T, typename DESCRIPTOR>
-void SuperLattice<T,DESCRIPTOR>::executeCoupling()
-{
-  getCommunicator(stage::PreCoupling()).communicate();
-  for (int iC = 0; iC < this->_loadBalancer.size(); ++iC) {
-    _block[iC]->executeCoupling();
-  }
-  executeCustomTasks(stage::Coupling());
-  getCommunicator(stage::PostCoupling()).communicate();
-  _communicationNeeded = true;
 }
 
 template<typename T, typename DESCRIPTOR>
@@ -872,7 +808,6 @@ void SuperLattice<T,DESCRIPTOR>::postLoad()
     _block[iC]->postLoad();
   }
 }
-
 
 }
 

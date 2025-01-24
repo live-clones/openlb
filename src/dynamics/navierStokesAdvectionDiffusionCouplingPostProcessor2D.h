@@ -31,51 +31,6 @@
 namespace olb {
 
 //======================================================================
-// ======== Total enthalpy coupling with Boussinesq bouancy 2D and phase change====================//
-//======================================================================
-template<typename T, typename DESCRIPTOR, typename DYNAMICS>
-class TotalEnthalpyPhaseChangeCouplingPostProcessor2D : public LocalPostProcessor2D<T,DESCRIPTOR> {
-public:
-  TotalEnthalpyPhaseChangeCouplingPostProcessor2D(int x0_, int x1_, int y0_, int y1_,
-      T gravity_, T T0_, T deltaTemp_, std::vector<T> dir_,
-      std::vector<BlockStructureD<2>* > partners_);
-  int extent() const override
-  {
-    return 0;
-  }
-  int extent(int whichDirection) const override
-  {
-    return 0;
-  }
-  void process(BlockLattice<T,DESCRIPTOR>& blockLattice) override;
-  void processSubDomain(BlockLattice<T,DESCRIPTOR>& blockLattice,
-                        int x0_, int x1_, int y0_, int y1_) override;
-private:
-  typedef DESCRIPTOR L;
-  int x0, x1, y0, y1;
-  T gravity, T0, deltaTemp;
-  std::vector<T> dir;
-  BlockLattice<T,descriptors::D2Q5<descriptors::VELOCITY,descriptors::TEMPERATURE>> *tPartner;
-  T forcePrefactor[L::d];
-
-  std::vector<BlockStructureD<2>*> partners;
-};
-
-template <typename T, typename DESCRIPTOR, typename DYNAMICS>
-class TotalEnthalpyPhaseChangeCouplingGenerator2D : public LatticeCouplingGenerator2D<T,DESCRIPTOR> {
-public:
-  TotalEnthalpyPhaseChangeCouplingGenerator2D(int x0_, int x1_, int y0_, int y1_,
-      T gravity_, T T0_, T deltaTemp_, std::vector<T> dir_);
-  PostProcessor2D<T,DESCRIPTOR>* generate(std::vector<BlockStructureD<2>* > partners) const override;
-  LatticeCouplingGenerator2D<T,DESCRIPTOR>* clone() const override;
-
-private:
-  T gravity, T0, deltaTemp;
-  std::vector<T> dir;
-};
-
-
-//======================================================================
 // ======== Phase field coupling without bouancy 2D ====================//
 //======================================================================
 template<typename T, typename DESCRIPTOR>

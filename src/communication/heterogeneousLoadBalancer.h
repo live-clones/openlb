@@ -52,9 +52,9 @@ public:
   {
     OstreamManager clout(std::cout, "HeterogeneousLoadBalancer");
 
-    std::vector<int> rankBuffer(cGeometry.getNc(), 0);
-    std::vector<int> locBuffer(cGeometry.getNc(), 0);
-    std::vector<std::uint8_t> platformBuffer(cGeometry.getNc(), static_cast<std::uint8_t>(Platform::CPU_SISD));
+    std::vector<int> rankBuffer(cGeometry.size(), 0);
+    std::vector<int> locBuffer(cGeometry.size(), 0);
+    std::vector<std::uint8_t> platformBuffer(cGeometry.size(), static_cast<std::uint8_t>(Platform::CPU_SISD));
 
     const auto nRank = singleton::mpi().getSize();
     const auto iRank = singleton::mpi().getRank();
@@ -97,8 +97,8 @@ public:
       } while (globalAssignedVolume < largeBlockFraction*totalVolume);
 
       // Compute GPU rank affinity of remaining cuboids
-      std::vector<int> preferredRank(cGeometry.getNc(), -1);
-      for (int jCuboid=iCuboid; jCuboid < cGeometry.getNc(); ++jCuboid) {
+      std::vector<int> preferredRank(cGeometry.size(), -1);
+      for (int jCuboid=iCuboid; jCuboid < cGeometry.size(); ++jCuboid) {
         std::vector<int> neighbours;
         cGeometry.getNeighbourhood(jCuboid, neighbours, 1);
         std::vector<int> neighboursInRank(nRank, 0);
@@ -117,7 +117,7 @@ public:
       }
 
       // Distribute remaining GPU-neighboring blocks over ranks using CPU_SIMD platform
-      for (int jCuboid=iCuboid; jCuboid < cGeometry.getNc(); ++jCuboid) {
+      for (int jCuboid=iCuboid; jCuboid < cGeometry.size(); ++jCuboid) {
         if (preferredRank[jCuboid] != -1) {
           auto iRank = preferredRank[jCuboid];
 
@@ -128,8 +128,8 @@ public:
       }
 
       // Compute fallback CPU rank affinity of remaining cuboids
-      std::vector<int> preferredRankFallback(cGeometry.getNc(), -1);
-      for (int jCuboid=iCuboid; jCuboid < cGeometry.getNc(); ++jCuboid) {
+      std::vector<int> preferredRankFallback(cGeometry.size(), -1);
+      for (int jCuboid=iCuboid; jCuboid < cGeometry.size(); ++jCuboid) {
         if (preferredRank[jCuboid] == -1) {
           std::vector<int> neighbours;
           cGeometry.getNeighbourhood(jCuboid, neighbours, 1);
@@ -150,7 +150,7 @@ public:
       }
 
       // Distribute remaining blocks over ranks using CPU_SIMD platform
-      for (int jCuboid=iCuboid; jCuboid < cGeometry.getNc(); ++jCuboid) {
+      for (int jCuboid=iCuboid; jCuboid < cGeometry.size(); ++jCuboid) {
         if (preferredRank[jCuboid] == -1) {
           auto iRank = preferredRankFallback[jCuboid];
 
@@ -170,7 +170,7 @@ public:
     #endif
 
     // Update internal LoadBalancer structure to match given assignment
-    for (int iCuboid=0; iCuboid < cGeometry.getNc(); ++iCuboid) {
+    for (int iCuboid=0; iCuboid < cGeometry.size(); ++iCuboid) {
       this->_rank[iCuboid] = rankBuffer[iCuboid];
       this->_loc[iCuboid] = locBuffer[iCuboid];
 
@@ -216,9 +216,9 @@ public:
   {
     OstreamManager clout(std::cout, "OrthogonalHeterogeneousLoadBalancer");
 
-    std::vector<int> rankBuffer(cGeometry.getNc(), 0);
-    std::vector<int> locBuffer(cGeometry.getNc(), 0);
-    std::vector<std::uint8_t> platformBuffer(cGeometry.getNc(), static_cast<std::uint8_t>(Platform::CPU_SISD));
+    std::vector<int> rankBuffer(cGeometry.size(), 0);
+    std::vector<int> locBuffer(cGeometry.size(), 0);
+    std::vector<std::uint8_t> platformBuffer(cGeometry.size(), static_cast<std::uint8_t>(Platform::CPU_SISD));
 
     const auto nRank = singleton::mpi().getSize();
     const auto iRank = singleton::mpi().getRank();
@@ -230,7 +230,9 @@ public:
                 return lhs.getLatticeVolume() > rhs.getLatticeVolume();
               });
 
+    #if defined(PARALLEL_MODE_MPI) || defined(PLATFORM_GPU_CUDA)
     int localPreferredPlatform = static_cast<int>(Platform::CPU_SIMD);
+    #endif
     #ifdef PLATFORM_GPU_CUDA
     if (gpu::cuda::device::getCount() > 0) {
       localPreferredPlatform = static_cast<int>(Platform::GPU_CUDA);
@@ -303,7 +305,7 @@ public:
         localAssignedVolume[jRank] = std::numeric_limits<std::size_t>::max();
       }
 
-      for (int jCuboid=iCuboid; jCuboid < cGeometry.getNc(); ++jCuboid) {
+      for (int jCuboid=iCuboid; jCuboid < cGeometry.size(); ++jCuboid) {
         jRank = std::distance(localAssignedVolume.begin(),
                               std::min_element(localAssignedVolume.begin(),
                                                localAssignedVolume.end()));
@@ -327,7 +329,7 @@ public:
     #endif
 
     // Update internal LoadBalancer structure to match given assignment
-    for (int iCuboid=0; iCuboid < cGeometry.getNc(); ++iCuboid) {
+    for (int iCuboid=0; iCuboid < cGeometry.size(); ++iCuboid) {
       this->_rank[iCuboid] = rankBuffer[iCuboid];
       this->_loc[iCuboid] = locBuffer[iCuboid];
 

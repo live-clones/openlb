@@ -85,7 +85,7 @@ struct RandomLoadBalancer final : public LoadBalancer<T> {
   }
 
   RandomLoadBalancer(CuboidGeometry<T,3>& cGeometry):
-    RandomLoadBalancer(cGeometry.getNc(),
+    RandomLoadBalancer(cGeometry.size(),
                        singleton::mpi().getSize(),
                        singleton::mpi().getRank())
   { }

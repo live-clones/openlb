@@ -27,8 +27,7 @@
 
 #include "superData.h"
 
-#include "geometry/cuboidGeometry2D.h"
-#include "geometry/cuboidGeometry3D.h"
+#include "geometry/cuboidGeometry.h"
 
 #include "functors/lattice/superBaseF2D.h"
 #include "functors/lattice/superBaseF3D.h"
@@ -37,7 +36,7 @@ namespace olb {
 
 
 template<unsigned D, typename T, typename U>
-SuperData<D,T,U>::SuperData(CuboidGeometry<T,D>& cuboidGeometry,
+SuperData<D,T,U>::SuperData(CuboidDecomposition<T,D>& cuboidGeometry,
                             LoadBalancer<T>& loadBalancer,
                             int overlap, int size)
   : SuperStructure<T,D>(cuboidGeometry, loadBalancer, overlap),

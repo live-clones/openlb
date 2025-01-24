@@ -100,7 +100,7 @@ bool BlockLatticeIndicatorSmoothIndicatorIntersection3D<T, DESCRIPTOR, HLBM>::op
   T posYmax = _smoothInd.getPos()[1] + _smoothInd.getCircumRadius();
   T posZmin = _smoothInd.getPos()[2] - _smoothInd.getCircumRadius();
   T posZmax = _smoothInd.getPos()[2] + _smoothInd.getCircumRadius();
-  if (tmpCuboid.checkInters(posXmin, posXmax, posYmin, posYmax, posZmin, posZmax, start[0],
+  if (tmpCuboid.intersects(posXmin, posXmax, posYmin, posYmax, posZmin, posZmax, start[0],
                             end[0], start[1], end[1], start[2], end[2])) {
 
     for (int k=0; k<3; k++) {

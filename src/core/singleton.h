@@ -54,6 +54,7 @@ public:
     setImageOutDir(outputDir + "imageData/");
     setVtkOutDir(outputDir + "vtkData/");
     setGnuplotOutDir(outputDir + "gnuplotData/");
+    setIntrospectionOutDir(outputDir + "introspectionData/");
   }
   void setLogOutDir(std::string logOutDir_)
   {
@@ -77,6 +78,11 @@ public:
     createDirectory(gnuplotOutDir_);
     createDirectory(gnuplotOutDir_+"data/");
     gnuplotOutDir = gnuplotOutDir_;
+  }
+  void setIntrospectionOutDir(std::string introspectionOutDir_)
+  {
+    createDirectory(introspectionOutDir_);
+    introspectionOutDir = introspectionOutDir_;
   }
   void makeCustomDir(std::string customDir)
   {
@@ -102,6 +108,10 @@ public:
   {
     return gnuplotOutDir;
   }
+  std::string getIntrospectionOutDir() const
+  {
+    return introspectionOutDir;
+  }
 private:
   Directories() : clout(std::cout,"Directories")
   {
@@ -110,6 +120,7 @@ private:
     setImageOutDir("./tmp/imageData/");
     setVtkOutDir("./tmp/vtkData/");
     setGnuplotOutDir("./tmp/gnuplotData/");
+    setIntrospectionOutDir("./tmp/introspectionData/");
   }
   ~Directories() { }
 
@@ -143,6 +154,7 @@ private:
   std::string imageOutDir;
   std::string vtkOutDir;
   std::string gnuplotOutDir;
+  std::string introspectionOutDir;
 
   friend Directories& directories();
 };

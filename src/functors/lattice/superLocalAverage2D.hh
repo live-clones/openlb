@@ -70,16 +70,17 @@ bool SuperLocalAverage2D<T,W>::operator() (W output[], const int input[])
   if (!_indicatorF(input)) {
     return true;
   }
-
-  T centerOfCircle[2];
-  geometry.getPhysR(centerOfCircle, input);
-  IndicatorCircle2D<T> analyticalCircle(centerOfCircle, _radius);
+  Vector<T,2> centerOfCircle;
+  LatticeR<3> latticeR(input);
+  geometry.getPhysR(centerOfCircle, latticeR);
+  IndicatorCircle2D<T> analyticalCircle(centerOfCircle.data(), _radius);
   SuperIndicatorFfromIndicatorF2D<T> latticeCircle(
     analyticalCircle,
     _indicatorF->getSuperGeometry());
 
   std::size_t voxels(0);
   int inputTmp[3];
+  std::vector<util::KahanSummator<W>> summators(_f->getTargetDim(), util::KahanSummator<W>());
 
   for (int iC = 0; iC < load.size(); ++iC) {
     inputTmp[0] = load.glob(iC);
@@ -91,12 +92,16 @@ bool SuperLocalAverage2D<T,W>::operator() (W output[], const int input[])
           T outputTmp[_f->getTargetDim()];
           _f(outputTmp, inputTmp);
           for (int i = 0; i < this->getTargetDim(); ++i) {
-            output[i] += outputTmp[i];
+            summators[i].add(outputTmp[i]);
           }
           voxels += 1;
         }
       }
     }
+  }
+
+  for (int i = 0; i < _f->getTargetDim(); ++i) {
+    output[i] = summators[i].getSum();
   }
 
 #ifdef PARALLEL_MODE_MPI

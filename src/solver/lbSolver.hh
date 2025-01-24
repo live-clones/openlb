@@ -63,7 +63,7 @@ void LbSolver<T,PARAMETERS,LATTICES>::buildAndReturn()
     this->initialize();
   }
   build();
-  computeResults();
+  setInitialValues();
 }
 
 template<typename T,  typename PARAMETERS, typename LATTICES>
@@ -170,7 +170,6 @@ void LbSolver<T,PARAMETERS,LATTICES>::timeStep(std::size_t iT)
 
   meta::tuple_for_each(_sLattices, [](auto& lattice){
     lattice->collideAndStream();
-    lattice->executeCoupling();
   });
 
   if (this->parameters(names::Simulation()).pressureFilter) {
@@ -279,10 +278,10 @@ bool LbSolver<T,PARAMETERS,LATTICES>::checkStability(std::size_t iT)
 {
   bool result = true;
   meta::tuple_for_each(_sLattices, [&](auto& lattice){
-    if (lattice->getStatistics().getMaxU() > _boundMaxU) {
+    if (lattice->getStatistics().getMaxU() > this->parameters(names::Simulation()).boundMaxU) {
       clout << "PROBLEM uMax=" << lattice->getStatistics().getMaxU() << std::endl;
       lattice->getStatistics().print(iT, converter().getPhysTime(iT));
-      if (_exitMaxU) {
+      if (this->parameters(names::Simulation()).exitMaxU) {
         exit(1);
       }
       result = false;
@@ -331,13 +330,10 @@ void LbSolver<T,PARAMETERS,LATTICES>::prepareVTK() const
 
   SuperVTMwriter<T,dim> vtmWriter(this->parameters(names::VisualizationVTK()).filename);
 
-
   /// Writes the geometry, cuboid no. and rank no. as vti file for visualization
-  SuperLatticeGeometry<T,DESCRIPTOR> geometry(lattice, this->geometry());
   SuperLatticeCuboid<T,DESCRIPTOR> cuboid(lattice);
   SuperLatticeRank<T,DESCRIPTOR> rank(lattice);
   vtmWriter.write( cuboid );
-  vtmWriter.write( geometry );
   vtmWriter.write( rank );
   vtmWriter.createMasterFile();
 }

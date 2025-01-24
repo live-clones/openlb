@@ -31,7 +31,7 @@
 #define MRT_H
 
 #include "lbm.h"
-#include "mrtLatticeDescriptors.h"
+#include "descriptor/definition/mrt.h"
 
 namespace olb {
 

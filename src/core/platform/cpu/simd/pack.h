@@ -36,55 +36,65 @@ namespace cpu {
 
 namespace simd {
 
-template <typename T, typename S>
+namespace concepts {
+
+template <typename T>
+concept convertible_to_pack = requires(T x) {
+  Pack<float>{x};
+  Pack<double>{x};
+};
+
+}
+
+template <std::floating_point T, concepts::convertible_to_pack S>
 Pack<T> operator+(S lhs, Pack<T> rhs)
 {
   return Pack<T>(lhs) + rhs;
 }
 
-template <typename T, typename S>
+template <std::floating_point T, concepts::convertible_to_pack S>
 Pack<T> operator+(Pack<T> lhs, S rhs)
 {
   return lhs + Pack<T>(rhs);
 }
 
-template <typename T, typename S>
+template <std::floating_point T, concepts::convertible_to_pack S>
 Pack<T> operator-(S lhs, Pack<T> rhs)
 {
   return Pack<T>(lhs) - rhs;
 }
 
-template <typename T, typename S>
+template <std::floating_point T, concepts::convertible_to_pack S>
 Pack<T> operator-(Pack<T> lhs, S rhs)
 {
   return lhs - Pack<T>(rhs);
 }
 
-template <typename T, typename S>
+template <std::floating_point T, concepts::convertible_to_pack S>
 Pack<T> operator*(Pack<T> lhs, S rhs)
 {
   return lhs * Pack<T>(rhs);
 }
 
-template <typename T, typename S>
+template <std::floating_point T, concepts::convertible_to_pack S>
 Pack<T> operator*(S lhs, Pack<T> rhs)
 {
   return Pack<T>(lhs) * rhs;
 }
 
-template <typename T, typename S>
+template <std::floating_point T, concepts::convertible_to_pack S>
 Pack<T> operator/(Pack<T> lhs, S rhs)
 {
   return lhs / Pack<T>(rhs);
 }
 
-template <typename T, typename S>
+template <std::floating_point T, concepts::convertible_to_pack S>
 Pack<T> operator/(S lhs, Pack<T> rhs)
 {
   return Pack<T>(lhs) / rhs;
 }
 
-template <typename T>
+template <std::floating_point T>
 Pack<T> sqrt(Pack<T> x)
 {
   return x.sqrt();
@@ -96,37 +106,37 @@ Pack<T> sqrt(Pack<T> x)
 
 namespace util {
 
-template <typename T>
+template <std::floating_point T>
 cpu::simd::Pack<T> sqrt(cpu::simd::Pack<T> value)
 {
   return value.sqrt();
 }
 
-template <typename T>
+template <std::floating_point T>
 cpu::simd::Pack<T> fabs(cpu::simd::Pack<T> value)
 {
   return cpu::simd::fabs(value);
 }
 
-template <typename T>
+template <std::floating_point T>
 cpu::simd::Pack<T> pow(cpu::simd::Pack<T> base, cpu::simd::Pack<T> exp)
 {
   return cpu::simd::pow(base, exp);
 }
 
-template <typename T, typename S>
+template <std::floating_point T, cpu::simd::concepts::convertible_to_pack S>
 cpu::simd::Pack<T> pow(cpu::simd::Pack<T> base, S exp)
 {
   return cpu::simd::pow(base, cpu::simd::Pack<T>(exp));
 }
 
-template <typename T>
+template <std::floating_point T>
 cpu::simd::Pack<T> min(cpu::simd::Pack<T> rhs, cpu::simd::Pack<T> lhs)
 {
   return cpu::simd::min(rhs, lhs);
 }
 
-template <typename T>
+template <std::floating_point T>
 cpu::simd::Pack<T> max(cpu::simd::Pack<T> rhs, cpu::simd::Pack<T> lhs)
 {
   return cpu::simd::max(rhs, lhs);

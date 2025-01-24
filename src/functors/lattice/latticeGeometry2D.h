@@ -41,26 +41,22 @@ namespace olb {
 template<typename T, unsigned D> class SuperGeometry;
 
 /// functor to get pointwise the material no. presenting the geometry on local lattice
-template <typename T, typename DESCRIPTOR=void>
-class SuperLatticeGeometry2D final : public SuperF2D<T> {
+template <typename T>
+class SuperGeometryF2D final : public SuperF2D<T> {
 private:
   SuperGeometry<T,2>& _superGeometry;
   const int _material;
 public:
-  SuperLatticeGeometry2D(SuperLattice<T,DESCRIPTOR>& sLattice,
-                         SuperGeometry<T,2>& superGeometry, const int material = -1);
-  SuperLatticeGeometry2D(SuperGeometry<T,2>& superGeometry, const int material = -1);
+  SuperGeometryF2D(SuperGeometry<T,2>& superGeometry, const int material = -1);
 };
 
 /// BlockLatticeGeometry2D returns pointwise the material no. presenting the geometry on local lattice.
-template <typename T, typename DESCRIPTOR=void>
+template <typename T>
 class BlockLatticeGeometry2D final : public BlockF2D<T> {
 private:
   BlockGeometry<T,2>& _blockGeometry;
   const int _material;
 public:
-  BlockLatticeGeometry2D(BlockLattice<T,DESCRIPTOR>& blockLattice,
-                         BlockGeometry<T,2>& blockGeometry, int material = -1);
   BlockLatticeGeometry2D(BlockGeometry<T,2>& blockGeometry, int material = -1);
   bool operator() (T output[], const int input[]) override;
 };

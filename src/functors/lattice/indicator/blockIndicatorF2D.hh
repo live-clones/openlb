@@ -41,9 +41,8 @@ BlockIndicatorFfromIndicatorF2D<T>::BlockIndicatorFfromIndicatorF2D(
 template <typename T>
 bool BlockIndicatorFfromIndicatorF2D<T>::operator() (bool output[], const int input[])
 {
-  T physR[2];
-  this->_blockGeometryStructure.getPhysR(physR,input);
-  return _indicatorF(output,physR);
+  auto physR = this->_blockGeometryStructure.getPhysR(input);
+  return _indicatorF(output,physR.data());
 }
 
 template <typename T>
@@ -77,10 +76,9 @@ BlockIndicatorFfromSmoothIndicatorF2D<T,HLBM>::BlockIndicatorFfromSmoothIndicato
 template <typename T, bool HLBM>
 bool BlockIndicatorFfromSmoothIndicatorF2D<T,HLBM>::operator() (bool output[], const int input[])
 {
-  T physR[2];
   T inside[1];
-  this->_blockGeometryStructure.getPhysR(physR,input);
-  _indicatorF(inside, physR);
+  auto physR = this->_blockGeometryStructure.getPhysR(input);
+  _indicatorF(inside, physR.data());
   return !util::nearZero(inside[0]);
 }
 
@@ -229,16 +227,15 @@ bool BlockIndicatorBoundaryNeighbor2D<T>::operator() (bool output[], const int i
     for ( int iXo = -_overlap; iXo <= _overlap; ++iXo ) {
       for ( int iYo = -_overlap; iYo <= _overlap; ++iYo ) {
         const int neighborPos[2] = {iXo + input[0], iYo + input[1]};
-        bool partOfBoundary[1] = {false};
-        // material-indicator to check if part of boundary
-        _indicatorF( partOfBoundary, neighborPos );
-        if ( partOfBoundary[0] ) {
+        if ( _indicatorF ( neighborPos ) &&
+             this->getBlockGeometry().isInside( neighborPos ) ) {
+          output[0] = true;
           return true;
         }
       }
     }
   }
-  return false;
+  return true;
 }
 
 template <typename T>

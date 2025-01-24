@@ -71,7 +71,7 @@ protected:
 
     this->_cGeometry = std::make_shared<CuboidGeometry2D<T>> (
       cuboid,
-      this->converter().getConversionFactorLength(),
+      this->converter().getPhysDeltaX(),
       this->parameters(Simulation()).noC * singleton::mpi().getSize() );
 
     this->_cGeometry->print();
@@ -86,7 +86,7 @@ protected:
     this->geometry().rename( 0,2 );
     this->geometry().rename( 2,1,{1,1} );
 
-    T eps = this->converter().getConversionFactorLength();
+    T eps = this->converter().getPhysDeltaX();
     Vector<T,2> extendShifted( T( 1 ) + 2*eps, 2*eps );
     Vector<T,2> originShifted( T() - eps, T( 1 ) - eps );
     IndicatorCuboid2D<T> lid( extendShifted, originShifted );
@@ -106,10 +106,8 @@ protected:
       this->geometry().getMaterialIndicator({1,2,3}));
 
     const T omega = this->converter().getLatticeRelaxationFrequency();
-    setInterpolatedVelocityBoundary<T,Descriptor,BulkDynamics>(
-      this->lattice(), omega, this->geometry(), 2);
-    setInterpolatedVelocityBoundary<T,Descriptor,BulkDynamics>(
-      this->lattice(), omega, this->geometry(), 3);
+    boundary::set<boundary::InterpolatedVelocity>(this->lattice(), this->geometry(), 2);
+    boundary::set<boundary::InterpolatedVelocity>(this->lattice(), this->geometry(), 3);
 
     this->lattice().template setParameter<descriptors::OMEGA>(omega);
   }
@@ -137,7 +135,6 @@ protected:
     SuperVTMwriter2D<T> vtmWriter(this->parameters(VisualizationVTK()).filename);
     auto sLattice = &this->lattice();
 
-    SuperLatticeGeometry<T,Descriptor> geometry(*sLattice, this->geometry());
     SuperLatticeCuboid<T,Descriptor> cuboid(*sLattice);
     SuperLatticeRank<T,Descriptor> rank(*sLattice);
     SuperLatticeDiscreteNormal2D discreteNormal(
@@ -146,7 +143,6 @@ protected:
       *sLattice, this->geometry(), this->geometry().getMaterialIndicator({2, 3}) );
 
     vtmWriter.write( cuboid );
-    vtmWriter.write( geometry );
     vtmWriter.write( rank );
     vtmWriter.write( discreteNormal );
     vtmWriter.write( discreteNormalType );

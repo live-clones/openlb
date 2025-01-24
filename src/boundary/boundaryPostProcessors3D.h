@@ -47,7 +47,7 @@ public:
     return 0;
   }
 
-  template <CONCEPT(Cell) CELL>
+  template <concepts::DynamicCell CELL>
   void apply(CELL& cell) any_platform;
 
 private:
@@ -57,7 +57,7 @@ private:
 };
 
 
-template <typename DESCRIPTOR, int direction, int orientation>
+template <typename T, typename DESCRIPTOR, int direction, int orientation>
 class StraightConvectionBoundaryProcessor3D {
 public:
   static constexpr OperatorScope scope = OperatorScope::PerCell;
@@ -70,10 +70,10 @@ public:
     return 0;
   }
 
-  template <CONCEPT(Cell) CELL>
+  template <concepts::DynamicCell CELL>
   void initialize(CELL& cell) any_platform;
 
-  template <CONCEPT(Cell) CELL>
+  template <concepts::DynamicCell CELL>
   void apply(CELL& cell) any_platform;
 
 };
@@ -93,7 +93,7 @@ public:
     return 0;
   }
 
-  template <CONCEPT(Cell) CELL>
+  template <concepts::DynamicCell CELL>
   void apply(CELL& cell) any_platform;
 
 private:
@@ -115,7 +115,7 @@ struct OuterVelocityCornerProcessor3D {
     return 1;
   }
 
-  template <CONCEPT(Cell) CELL>
+  template <concepts::DynamicCell CELL>
   void apply(CELL& cell) any_platform;
 };
 
@@ -205,6 +205,181 @@ private:
 /// between the chemical potential and force lattice couplings. However there is no
 /// access to the discrete normals in lattice couplings.
 template<typename T, typename DESCRIPTOR, int NORMAL_X, int NORMAL_Y, int NORMAL_Z>
+struct FreeEnergyInletMomentum3D {
+public:
+  static constexpr OperatorScope scope = OperatorScope::PerCell;
+
+  int getPriority() const {
+    return 0;
+  }
+
+  template <concepts::DynamicCell CELL>
+  void apply(CELL& cell) any_platform {
+
+    cell.template setField<descriptors::CHEM_POTENTIAL>(
+    cell.neighbor({-NORMAL_X,-NORMAL_Y,-NORMAL_Z}).template getField<descriptors::CHEM_POTENTIAL>());
+
+    T rhoBoundary = cell.computeRho();
+    T rhoBulk = cell.neighbor({-NORMAL_X,-NORMAL_Y,-NORMAL_Z}).computeRho();
+
+    cell.template setField<descriptors::CHEM_POTENTIAL>(
+      cell.template getField<descriptors::CHEM_POTENTIAL>() + (rhoBulk / rhoBoundary - 1) / descriptors::invCs2<T,DESCRIPTOR>());
+
+  }
+
+};
+
+template<typename T, typename DESCRIPTOR, int NORMAL_X, int NORMAL_Y, int NORMAL_Z>
+struct FreeEnergyInletOrderParameter3D {
+public:
+  static constexpr OperatorScope scope = OperatorScope::PerCell;
+
+  int getPriority() const {
+    return 0;
+  }
+
+  template <concepts::DynamicCell CELL>
+  void apply(CELL& cell) any_platform {
+
+    cell.template setField<descriptors::CHEM_POTENTIAL>(
+    cell.neighbor({-NORMAL_X,-NORMAL_Y,-NORMAL_Z}).template getField<descriptors::CHEM_POTENTIAL>());
+
+  }
+
+};
+
+template<typename T, typename DESCRIPTOR, int NORMAL_X, int NORMAL_Y, int NORMAL_Z>
+struct FreeEnergyOutletMomentum3D {
+public:
+  static constexpr OperatorScope scope = OperatorScope::PerCell;
+
+  int getPriority() const {
+    return 0;
+  }
+
+  template <concepts::DynamicCell CELL>
+  void apply(CELL& cell) any_platform {
+
+    T rhoBoundaryNew, rhoBoundaryOld, rhoBulk, u[3];
+
+    rhoBoundaryOld = cell.computeRho();
+
+    cell.neighbor({-NORMAL_X,-NORMAL_Y,-NORMAL_Z}).computeRhoU(rhoBulk, u);
+
+    T uPerp = 0;
+
+    Vector<T, 3> normalVec({NORMAL_X,NORMAL_Y,NORMAL_Z});
+
+    if (normalVec[2] == 0) {
+      if (normalVec[1] == 0) {
+        if (normalVec[0] < 0) {
+          uPerp = -u[0];
+        } else {
+          uPerp = u[0];
+        }
+      } else if (normalVec[0] == 0) {
+        if (normalVec[1] < 0) {
+          uPerp = -u[1];
+        } else {
+          uPerp = u[1];
+        }
+      } else {
+        uPerp = util::sqrt(u[0] * u[0] + u[1] * u[1]);
+      }
+    } else if (normalVec[1] == 0) {
+      if (normalVec[0] == 0) {
+        if (normalVec[2] < 0) {
+          uPerp = -u[2];
+        } else {
+          uPerp = u[2];
+        }
+      } else {
+        uPerp = util::sqrt(u[0] * u[0] + u[2] * u[2]);
+      }
+    } else if (normalVec[0] == 0) {
+      uPerp = util::sqrt(u[1] * u[1] + u[2] * u[2]);
+    } else {
+      uPerp = util::sqrt(u[0] * u[0] + u[1] * u[1] + u[2] * u[2]);
+    }
+
+    rhoBoundaryNew = (rhoBoundaryOld + uPerp * rhoBulk) / (1. + uPerp);
+    cell.defineRho(rhoBoundaryNew);
+
+    cell.template setField<descriptors::CHEM_POTENTIAL>(
+    cell.neighbor({-NORMAL_X,-NORMAL_Y,-NORMAL_Z}).template getField<descriptors::CHEM_POTENTIAL>());
+
+    cell.template setField<descriptors::CHEM_POTENTIAL>(
+      cell.template getField<descriptors::CHEM_POTENTIAL>() + (rhoBulk / rhoBoundaryNew - 1) / descriptors::invCs2<T,DESCRIPTOR>());
+
+  }
+
+};
+
+template<typename T, typename DESCRIPTOR, int NORMAL_X, int NORMAL_Y, int NORMAL_Z>
+struct FreeEnergyOutletOrderParameter3D {
+public:
+  static constexpr OperatorScope scope = OperatorScope::PerCell;
+
+  int getPriority() const {
+    return 0;
+  }
+
+  template <concepts::DynamicCell CELL>
+  void apply(CELL& cell) any_platform {
+
+    T rhoBoundaryNew, rhoBoundaryOld, rhoBulk, u[3];
+
+    rhoBoundaryOld = cell.computeRho();
+
+    cell.neighbor({-NORMAL_X,-NORMAL_Y,-NORMAL_Z}).computeRhoU(rhoBulk, u);
+
+    T uPerp = 0;
+
+    Vector<T, 3> normalVec({NORMAL_X,NORMAL_Y,NORMAL_Z});
+
+    if (normalVec[2] == 0) {
+      if (normalVec[1] == 0) {
+        if (normalVec[0] < 0) {
+          uPerp = -u[0];
+        } else {
+          uPerp = u[0];
+        }
+      } else if (normalVec[0] == 0) {
+        if (normalVec[1] < 0) {
+          uPerp = -u[1];
+        } else {
+          uPerp = u[1];
+        }
+      } else {
+        uPerp = util::sqrt(u[0] * u[0] + u[1] * u[1]);
+      }
+    } else if (normalVec[1] == 0) {
+      if (normalVec[0] == 0) {
+        if (normalVec[2] < 0) {
+          uPerp = -u[2];
+        } else {
+          uPerp = u[2];
+        }
+      } else {
+        uPerp = util::sqrt(u[0] * u[0] + u[2] * u[2]);
+      }
+    } else if (normalVec[0] == 0) {
+      uPerp = util::sqrt(u[1] * u[1] + u[2] * u[2]);
+    } else {
+      uPerp = util::sqrt(u[0] * u[0] + u[1] * u[1] + u[2] * u[2]);
+    }
+
+    rhoBoundaryNew = (rhoBoundaryOld + uPerp * rhoBulk) / (1. + uPerp);
+    cell.defineRho(rhoBoundaryNew);
+
+    cell.template setField<descriptors::CHEM_POTENTIAL>(
+    cell.neighbor({-NORMAL_X,-NORMAL_Y,-NORMAL_Z}).template getField<descriptors::CHEM_POTENTIAL>());
+
+  }
+
+};
+
+template<typename T, typename DESCRIPTOR, int NORMAL_X, int NORMAL_Y, int NORMAL_Z>
 class FreeEnergyChemPotBoundaryProcessor3DA {
 public:
   static constexpr OperatorScope scope = OperatorScope::PerCell;
@@ -213,7 +388,7 @@ public:
     return 0;
   }
 
-  template <CONCEPT(Cell) CELL>
+  template <concepts::DynamicCell CELL>
   void apply(CELL& cell) any_platform;
 
 };
@@ -227,7 +402,7 @@ public:
     return 0;
   }
 
-  template <CONCEPT(Cell) CELL>
+  template <concepts::DynamicCell CELL>
   void apply(CELL& cell) any_platform;
 
 };
@@ -248,11 +423,81 @@ public:
     return 0;
   }
 
-  template <CONCEPT(Cell) CELL, typename PARAMETERS>
+  template <concepts::DynamicCell CELL, typename PARAMETERS>
   void apply(CELL& cell, PARAMETERS& parameters) any_platform;
 
 };
 
+template<typename T, typename DESCRIPTOR, int NORMAL_X, int NORMAL_Y, int NORMAL_Z>
+class FreeEnergyWallMomentumProcessor3D {
+public:
+  static constexpr OperatorScope scope = OperatorScope::PerCellWithParameters;
+  using parameters = meta::list<olb::descriptors::ADDEND>;
+
+  int getPriority() const {
+    return 0;
+  }
+
+  template <concepts::DynamicCell CELL, typename PARAMETERS>
+  void apply(CELL& cell, PARAMETERS& parameters) any_platform {
+
+    auto addend = parameters.template get<descriptors::ADDEND>();
+
+    T rhoBulk = cell.neighbor({-NORMAL_X, -NORMAL_Y, -NORMAL_Z}).computeRho();
+    T rhoTmp = 0.;
+
+    for (int iPop = 1; iPop < DESCRIPTOR::q ; ++iPop) {
+      rhoTmp += cell[iPop];
+    }
+
+    T rhoBoundary = rhoBulk + addend;
+    rhoBoundary -= rhoTmp;
+
+    cell[0] = rhoBoundary - 1.;
+
+    cell.template setField<descriptors::CHEM_POTENTIAL>(
+    cell.neighbor({-NORMAL_X,-NORMAL_Y,-NORMAL_Z}).template getField<descriptors::CHEM_POTENTIAL>());
+
+    cell.template setField<descriptors::CHEM_POTENTIAL>(
+      cell.template getField<descriptors::CHEM_POTENTIAL>() + (rhoBulk / rhoBoundary - 1) / descriptors::invCs2<T,DESCRIPTOR>());
+
+  }
+
+};
+
+template<typename T, typename DESCRIPTOR, int NORMAL_X, int NORMAL_Y, int NORMAL_Z>
+class FreeEnergyWallOrderParameterProcessor3D {
+public:
+  static constexpr OperatorScope scope = OperatorScope::PerCellWithParameters;
+  using parameters = meta::list<olb::descriptors::ADDEND>;
+
+  int getPriority() const {
+    return 0;
+  }
+
+  template <concepts::DynamicCell CELL, typename PARAMETERS>
+  void apply(CELL& cell, PARAMETERS& parameters) any_platform {
+
+    auto addend = parameters.template get<descriptors::ADDEND>();
+
+    T rhoBulk = cell.neighbor({-NORMAL_X, -NORMAL_Y, -NORMAL_Z}).computeRho();
+    T rhoTmp = 0.;
+
+    for (int iPop = 1; iPop < DESCRIPTOR::q ; ++iPop) {
+      rhoTmp += cell[iPop];
+    }
+
+    T rhoBoundary = rhoBulk + addend;
+    rhoBoundary -= rhoTmp;
+
+    cell[0] = rhoBoundary - 1.;
+
+    cell.template setField<descriptors::CHEM_POTENTIAL>(
+    cell.neighbor({-NORMAL_X,-NORMAL_Y,-NORMAL_Z}).template getField<descriptors::CHEM_POTENTIAL>());
+
+  }
+
+};
 
 /// PostProcessor for the density / velocity outflow boundaries in the free energy model.
 /// The density / order parameters are prescribed to the outflow nodes such that they obey
@@ -266,7 +511,7 @@ public:
     return 0;
   }
 
-  template <CONCEPT(Cell) CELL>
+  template <concepts::DynamicCell CELL>
   void apply(CELL& cell) any_platform;
 };
 

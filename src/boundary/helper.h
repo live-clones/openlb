@@ -24,9 +24,6 @@
 #ifndef BOUNDARY_HELPER_H
 #define BOUNDARY_HELPER_H
 
-#include "core/cell.h"
-#include "core/util.h"
-
 namespace olb {
 
 /// All boundary helper functions are inside this structure

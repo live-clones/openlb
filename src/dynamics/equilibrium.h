@@ -25,10 +25,11 @@
 #define DYNAMICS_EQUILIBRIUM_H
 
 #include "lbm.h"
-#include "descriptorField.h"
-#include "core/latticeStatistics.h"
+#include "descriptor/fields.h"
 
 namespace olb {
+
+template<typename T> struct CellStatistic;
 
 namespace equilibria {
 
@@ -41,17 +42,21 @@ struct None {
 
   template <typename DESCRIPTOR, typename MOMENTA>
   struct type {
-    template <typename RHO, typename U>
-    auto compute(int iPop, const RHO& rho, const U& u) any_platform {
-      return 0;
-    }
+    using MomentaF = typename MOMENTA::template type<DESCRIPTOR>;
 
-    template <typename CELL, typename PARAMETERS, typename FEQ, typename V=typename CELL::value_t>
-    CellStatistic<V> compute(CELL& cell, PARAMETERS& parameters, FEQ& fEq) any_platform {
+    template <typename CELL, typename RHO, typename U, typename FEQ, typename V=typename CELL::value_t>
+    CellStatistic<V> compute(CELL& cell, RHO& rho, U& u, FEQ& fEq) any_platform {
       for (int iPop=0; iPop < DESCRIPTOR::q; ++iPop) {
         fEq[iPop] = V{0};
       }
       return {0, 0};
+    };
+
+    template <typename CELL, typename PARAMETERS, typename FEQ, typename V=typename CELL::value_t>
+    CellStatistic<V> compute(CELL& cell, PARAMETERS& parameters, FEQ& fEq) any_platform {
+      V rho, u[DESCRIPTOR::d];
+      MomentaF().computeRhoU(cell, rho, u);
+      return compute(cell, rho, u, fEq);
     };
   };
 };
@@ -67,18 +72,19 @@ struct ZerothOrder {
   struct type {
     using MomentaF = typename MOMENTA::template type<DESCRIPTOR>;
 
-    template <typename RHO, typename U>
-    auto compute(int iPop, const RHO& rho, const U& u) any_platform {
-      return descriptors::t<RHO,DESCRIPTOR>(iPop) * rho - descriptors::t<RHO,DESCRIPTOR>(iPop);
-    }
-
-    template <typename CELL, typename PARAMETERS, typename FEQ, typename V=typename CELL::value_t>
-    CellStatistic<V> compute(CELL& cell, PARAMETERS& parameters, FEQ& fEq) any_platform {
-      const V rho = MomentaF().computeRho(cell);
+    template <typename CELL, typename RHO, typename U, typename FEQ, typename V=typename CELL::value_t>
+    CellStatistic<V> compute(CELL& cell, RHO& rho, U& u, FEQ& fEq) any_platform {
       for (int iPop=0; iPop < DESCRIPTOR::q; ++iPop) {
         fEq[iPop] = descriptors::t<V,DESCRIPTOR>(iPop) * rho - descriptors::t<V,DESCRIPTOR>(iPop);
       }
       return {rho, 0};
+    };
+
+    template <typename CELL, typename PARAMETERS, typename FEQ, typename V=typename CELL::value_t>
+    CellStatistic<V> compute(CELL& cell, PARAMETERS& parameters, FEQ& fEq) any_platform {
+      V rho, u[DESCRIPTOR::d];
+      MomentaF().computeRhoU(cell, rho, u);
+      return compute(cell, rho, u, fEq);
     };
   };
 };
@@ -94,19 +100,19 @@ struct FirstOrder {
   struct type {
     using MomentaF = typename MOMENTA::template type<DESCRIPTOR>;
 
-    template <typename RHO, typename U>
-    auto compute(int iPop, const RHO& rho, const U& u) any_platform {
-      return equilibrium<DESCRIPTOR>::firstOrder(iPop, rho, u);
-    }
+    template <typename CELL, typename RHO, typename U, typename FEQ, typename V=typename CELL::value_t>
+    CellStatistic<V> compute(CELL& cell, RHO& rho, U& u, FEQ& fEq) any_platform {
+      for (int iPop=0; iPop < DESCRIPTOR::q; ++iPop) {
+        fEq[iPop] = equilibrium<DESCRIPTOR>::firstOrder(iPop, rho, u);
+      }
+      return {rho, util::normSqr<V,DESCRIPTOR::d>(u)};
+    };
 
     template <typename CELL, typename PARAMETERS, typename FEQ, typename V=typename CELL::value_t>
     CellStatistic<V> compute(CELL& cell, PARAMETERS& parameters, FEQ& fEq) any_platform {
       V rho, u[DESCRIPTOR::d];
       MomentaF().computeRhoU(cell, rho, u);
-      for (int iPop=0; iPop < DESCRIPTOR::q; ++iPop) {
-        fEq[iPop] = equilibrium<DESCRIPTOR>::firstOrder(iPop, rho, u);
-      }
-      return {rho, util::normSqr<V,DESCRIPTOR::d>(u)};
+      return compute(cell, rho, u, fEq);
     };
   };
 };
@@ -122,20 +128,49 @@ struct SecondOrder {
   struct type {
     using MomentaF = typename MOMENTA::template type<DESCRIPTOR>;
 
-    template <typename RHO, typename U>
-    auto compute(int iPop, const RHO& rho, const U& u) any_platform {
-      return equilibrium<DESCRIPTOR>::secondOrder(iPop, rho, u);
-    }
-
-    template <typename CELL, typename PARAMETERS, typename FEQ, typename V=typename CELL::value_t>
-    CellStatistic<V> compute(CELL& cell, PARAMETERS& parameters, FEQ& fEq) any_platform {
-      V rho, u[DESCRIPTOR::d];
-      MomentaF().computeRhoU(cell, rho, u);
+    template <typename CELL, typename RHO, typename U, typename FEQ, typename V=typename CELL::value_t>
+    CellStatistic<V> compute(CELL& cell, RHO& rho, U& u, FEQ& fEq) any_platform {
       const V uSqr = util::normSqr<V,DESCRIPTOR::d>(u);
       for (int iPop=0; iPop < DESCRIPTOR::q; ++iPop) {
         fEq[iPop] = equilibrium<DESCRIPTOR>::secondOrder(iPop, rho, u, uSqr);
       }
       return {rho, util::normSqr<V,DESCRIPTOR::d>(u)};
+    };
+
+    template <typename CELL, typename PARAMETERS, typename FEQ, typename V=typename CELL::value_t>
+    CellStatistic<V> compute(CELL& cell, PARAMETERS& parameters, FEQ& fEq) any_platform {
+      V rho, u[DESCRIPTOR::d];
+      MomentaF().computeRhoU(cell, rho, u);
+      return compute(cell, rho, u, fEq);
+    };
+  };
+};
+
+struct ThirdOrder {
+  using parameters = meta::list<>;
+
+  static std::string getName() {
+    return "ThirdOrder";
+  }
+
+  template <typename DESCRIPTOR, typename MOMENTA>
+  struct type {
+    using MomentaF = typename MOMENTA::template type<DESCRIPTOR>;
+
+    template <typename CELL, typename RHO, typename U, typename FEQ, typename V=typename CELL::value_t>
+    CellStatistic<V> compute(CELL& cell, RHO& rho, U& u, FEQ& fEq) any_platform {
+      const V uSqr = util::normSqr<V,DESCRIPTOR::d>(u);
+      for (int iPop=0; iPop < DESCRIPTOR::q; ++iPop) {
+        fEq[iPop] = equilibrium<DESCRIPTOR>::thirdOrder(iPop, rho, u, uSqr);
+      }
+      return {rho, util::normSqr<V,DESCRIPTOR::d>(u)};
+    };
+
+    template <typename CELL, typename PARAMETERS, typename FEQ, typename V=typename CELL::value_t>
+    CellStatistic<V> compute(CELL& cell, PARAMETERS& parameters, FEQ& fEq) any_platform {
+      V rho, u[DESCRIPTOR::d];
+      MomentaF().computeRhoU(cell, rho, u);
+      return compute(cell, rho, u, fEq);
     };
   };
 };
@@ -151,26 +186,51 @@ struct Incompressible {
   struct type {
     using MomentaF = typename MOMENTA::template type<DESCRIPTOR>;
 
-    template <typename RHO, typename U, typename V=RHO>
-    auto compute(int iPop, const RHO& rho, const U& u) any_platform {
-      const V pressure = rho / descriptors::invCs2<V,DESCRIPTOR>();
-      V j[DESCRIPTOR::d] { };
-      for (unsigned iD=0; iD < DESCRIPTOR::d; ++iD) {
-        j[iD] = u[iD] * rho;
-      }
-      return equilibrium<DESCRIPTOR>::incompressible(iPop, j, pressure);
-    }
-
-    template <typename CELL, typename PARAMETERS, typename FEQ, typename V=typename CELL::value_t>
-    CellStatistic<V> compute(CELL& cell, PARAMETERS& parameters, FEQ& fEq) any_platform {
-      V rho, j[DESCRIPTOR::d];
-      MomentaF().computeRhoJ(cell, rho, j);
+    template <typename CELL, typename RHO, typename J, typename FEQ, typename V=typename CELL::value_t>
+    CellStatistic<V> compute(CELL& cell, RHO& rho, J& j, FEQ& fEq) any_platform {
       const V pressure = rho / descriptors::invCs2<V,DESCRIPTOR>();
       const V jSqr = util::normSqr<V,DESCRIPTOR::d>(j);
       for (int iPop=0; iPop < DESCRIPTOR::q; ++iPop) {
         fEq[iPop] = equilibrium<DESCRIPTOR>::incompressible(iPop, j, jSqr, pressure);
       }
       return {rho, jSqr / (rho*rho)};
+    };
+
+    template <typename CELL, typename PARAMETERS, typename FEQ, typename V=typename CELL::value_t>
+    CellStatistic<V> compute(CELL& cell, PARAMETERS& parameters, FEQ& fEq) any_platform {
+      V rho, j[DESCRIPTOR::d];
+      MomentaF().computeRhoJ(cell, rho, j);
+      return compute(cell, rho, j, fEq);
+    };
+  };
+};
+
+struct MPIncompressible {
+  using parameters = meta::list<>;
+
+  static std::string getName() {
+    return "Multi-Phase-Incompressible";
+  }
+
+  template <typename DESCRIPTOR, typename MOMENTA>
+  struct type {
+    using MomentaF = typename MOMENTA::template type<DESCRIPTOR>;
+
+    template <typename CELL, typename P, typename U, typename FEQ, typename V=typename CELL::value_t>
+    CellStatistic<V> compute(CELL& cell, P& p, U& u, FEQ& fEq) any_platform {
+      const auto rho = cell.template getField<descriptors::RHO>();
+      const V uSqr = util::normSqr<V,DESCRIPTOR::d>(u);
+      for (int iPop=0; iPop < DESCRIPTOR::q; ++iPop) {
+        fEq[iPop] = equilibrium<DESCRIPTOR>::mpincompressible(iPop, rho, u, uSqr, p);
+      }
+      return {rho, uSqr};
+    };
+
+    template <typename CELL, typename PARAMETERS, typename FEQ, typename V=typename CELL::value_t>
+    CellStatistic<V> compute(CELL& cell, PARAMETERS& parameters, FEQ& fEq) any_platform {
+      V p, u[DESCRIPTOR::d];
+      MomentaF().computeRhoU(cell, p, u);
+      return compute(cell, p, u, fEq);
     };
   };
 };
@@ -186,19 +246,19 @@ struct P1 {
   struct type {
     using MomentaF = typename MOMENTA::template type<DESCRIPTOR>;
 
-    template <typename RHO, typename U>
-    auto compute(int iPop, const RHO& rho, const U& u) any_platform {
-      return equilibrium<DESCRIPTOR>::P1(iPop, rho, u);
-    }
-
-    template <typename CELL, typename PARAMETERS, typename FEQ, typename V=typename CELL::value_t>
-    CellStatistic<V> compute(CELL& cell, PARAMETERS& parameters, FEQ& fEq) any_platform {
-      V rho, j[DESCRIPTOR::d] { };
-      MomentaF().computeRhoJ(cell, rho, j);
+    template <typename CELL, typename RHO, typename J, typename FEQ, typename V=typename CELL::value_t>
+    CellStatistic<V> compute(CELL& cell, RHO& rho, J& j, FEQ& fEq) any_platform {
       for (int iPop=0; iPop < DESCRIPTOR::q; ++iPop) {
         fEq[iPop] = equilibrium<DESCRIPTOR>::P1(iPop, rho, j);
       }
       return {rho, 0};
+    };
+
+    template <typename CELL, typename PARAMETERS, typename FEQ, typename V=typename CELL::value_t>
+    CellStatistic<V> compute(CELL& cell, PARAMETERS& parameters, FEQ& fEq) any_platform {
+      V rho, j[DESCRIPTOR::d];
+      MomentaF().computeRhoJ(cell, rho, j);
+      return compute(cell, rho, j, fEq);
     };
   };
 };
@@ -216,37 +276,55 @@ struct Chopard {
   struct type {
     using MomentaF = typename MOMENTA::template type<DESCRIPTOR>;
 
-    // TODO: Use SPEED_OF_SOUND parameter
-    template <typename RHO, typename U, typename VS2, typename V=RHO>
-    auto compute(int iPop, const RHO& rho, const U& u, VS2 vs2 = V{1} / descriptors::invCs2<V,DESCRIPTOR>()) any_platform {
+    template <typename CELL, typename RHO, typename U, typename FEQ, typename VS2, typename V=typename CELL::value_t>
+    CellStatistic<V> compute(CELL& cell, RHO& rho, U& u, FEQ& fEq, VS2 vs2 = V{1} / descriptors::invCs2<V,DESCRIPTOR>()) any_platform {
       const V uSqr = util::normSqr<V,DESCRIPTOR::d>(u);
-      if (iPop==0) {
-        return rho * (V{1} - vs2 * descriptors::invCs2<V,DESCRIPTOR>()*(V{1}-descriptors::t<V,DESCRIPTOR>(0))
-                           - descriptors::t<V,DESCRIPTOR>(0)/V{2}*descriptors::invCs2<V,DESCRIPTOR>()*uSqr)
-               - descriptors::t<V,DESCRIPTOR>(0);
-      }
-      else {
-        V c_u{};
-        for (int iD=0; iD < DESCRIPTOR::d; ++iD) {
-          c_u += descriptors::c<DESCRIPTOR>(iPop,iD)*u[iD];
+      for (int iPop=0; iPop < DESCRIPTOR::q; ++iPop) {
+        if (iPop==0) {
+          return rho * (V{1} - vs2 * descriptors::invCs2<V,DESCRIPTOR>()*(V{1}-descriptors::t<V,DESCRIPTOR>(0))
+                              - descriptors::t<V,DESCRIPTOR>(0)/V{2}*descriptors::invCs2<V,DESCRIPTOR>()*uSqr)
+                  - descriptors::t<V,DESCRIPTOR>(0);
         }
-        return rho * descriptors::t<V,DESCRIPTOR>(iPop) * descriptors::invCs2<V,DESCRIPTOR>()
-                   * (vs2 + c_u
-                      + descriptors::invCs2<V,DESCRIPTOR>() / V{2} * c_u*c_u
-                      - uSqr / V{2})
-          - descriptors::t<V,DESCRIPTOR>(iPop);
+        else {
+          V c_u{};
+          for (int iD=0; iD < DESCRIPTOR::d; ++iD) {
+            c_u += descriptors::c<DESCRIPTOR>(iPop,iD)*u[iD];
+          }
+          return rho * descriptors::t<V,DESCRIPTOR>(iPop) * descriptors::invCs2<V,DESCRIPTOR>()
+                      * (vs2 + c_u
+                        + descriptors::invCs2<V,DESCRIPTOR>() / V{2} * c_u*c_u
+                        - uSqr / V{2})
+            - descriptors::t<V,DESCRIPTOR>(iPop);
+        }
       }
-    }
+      return {rho, uSqr};
+    };
 
     template <typename CELL, typename PARAMETERS, typename FEQ, typename V=typename CELL::value_t>
     CellStatistic<V> compute(CELL& cell, PARAMETERS& parameters, FEQ& fEq) any_platform {
-      V rho, u[DESCRIPTOR::d] { };
+      V rho, u[DESCRIPTOR::d];
       MomentaF().computeRhoU(cell, rho, u);
       const V vs2 = parameters.template get<SPEED_OF_SOUND>();
+      const V uSqr = util::normSqr<V,DESCRIPTOR::d>(u);
       for (int iPop=0; iPop < DESCRIPTOR::q; ++iPop) {
-        fEq[iPop] = compute(iPop, rho, u, vs2);
+        if (iPop==0) {
+          return rho * (V{1} - vs2 * descriptors::invCs2<V,DESCRIPTOR>()*(V{1}-descriptors::t<V,DESCRIPTOR>(0))
+                              - descriptors::t<V,DESCRIPTOR>(0)/V{2}*descriptors::invCs2<V,DESCRIPTOR>()*uSqr)
+                  - descriptors::t<V,DESCRIPTOR>(0);
+        }
+        else {
+          V c_u{};
+          for (int iD=0; iD < DESCRIPTOR::d; ++iD) {
+            c_u += descriptors::c<DESCRIPTOR>(iPop,iD)*u[iD];
+          }
+          return rho * descriptors::t<V,DESCRIPTOR>(iPop) * descriptors::invCs2<V,DESCRIPTOR>()
+                      * (vs2 + c_u
+                        + descriptors::invCs2<V,DESCRIPTOR>() / V{2} * c_u*c_u
+                        - uSqr / V{2})
+            - descriptors::t<V,DESCRIPTOR>(iPop);
+        }
       }
-      return {rho, util::normSqr<V,DESCRIPTOR::d>(u)};
+      return {rho, uSqr};
     };
   };
 };

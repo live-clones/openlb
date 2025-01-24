@@ -27,7 +27,7 @@
 #include "core/blockStructure.h"
 #include "core/postProcessing.h"
 #include "core/util.h"
-#include "latticeDescriptors.h"
+#include "descriptor/descriptor.h"
 #include "utilities/omath.h"
 
 

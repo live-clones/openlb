@@ -25,7 +25,7 @@
 #define HYPERPLANE_2D_H
 
 #include "core/vector.h"
-#include "geometry/cuboid2D.h"
+#include "geometry/cuboid.h"
 
 namespace olb {
 

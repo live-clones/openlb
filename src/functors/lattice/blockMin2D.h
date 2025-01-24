@@ -25,7 +25,7 @@
 #define BLOCK_MIN_2D_H
 
 #include "blockBaseF2D.h"
-#include "geometry/cuboid2D.h"
+#include "geometry/cuboid.h"
 #include "indicator/blockIndicatorBaseF2D.h"
 
 namespace olb {

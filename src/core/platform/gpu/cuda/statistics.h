@@ -28,7 +28,6 @@
 
 namespace olb {
 
-
 template <typename T, typename DESCRIPTOR>
 struct StatisticsPostProcessor::type<ConcreteBlockLattice<T,DESCRIPTOR,Platform::GPU_CUDA>> {
 
@@ -42,7 +41,6 @@ void setup(ConcreteBlockLattice<T,DESCRIPTOR,Platform::GPU_CUDA>& blockLattice)
 void apply(ConcreteBlockLattice<T,DESCRIPTOR,Platform::GPU_CUDA>& blockLattice);
 
 };
-
 
 }
 

@@ -35,5 +35,3 @@
 #include "shanChenDynOmegaForcedPostProcessor3D.hh"
 #include "shanChenForcedSingleComponentPostProcessor3D.hh"
 #include "stochasticSGSdynamics.hh"
-
-#include "porousAdvectionDiffusionDynamics.hh"

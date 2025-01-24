@@ -88,7 +88,7 @@ T Fringe3D<T,S>::s(const T& x) const
 template <typename T, typename S>
 T Fringe3D<T,S>::lambda(const T& x) const
 {
-  return _lambdaMax*(s((x - _start)/_rise*(_end - _start) ) - s((x - _end)/_fall*(_end - _start) + T(1.)) );
+  return _lambdaMax*(s((x - _start)/_rise ) - s((x - _end)/_fall + T(1.)) );
 }
 
 } // end namespace olb

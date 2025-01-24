@@ -42,7 +42,7 @@ class ParticleSystem3D;
 template<typename T, template<typename U> class PARTICLETYPE>
 class PeriodicBoundary3D : public Boundary3D<T, PARTICLETYPE> {
 public:
-  PeriodicBoundary3D(SuperGeometry<T,3> sg, bool x,
+  PeriodicBoundary3D(SuperGeometry<T,3>& sg, bool x,
                      bool y, bool z);
   PeriodicBoundary3D(PeriodicBoundary3D<T, PARTICLETYPE>& f);
   virtual ~PeriodicBoundary3D() { };
@@ -52,7 +52,7 @@ public:
   unsigned int* getJumper();
 private:
   //cube extents with origin (0,0,0)
-  std::vector<T> _minPhys, _maxPhys, _extend;
+  olb::Vector<T, 3> _minPhys, _maxPhys, _extend;
   bool _x, _y, _z;
   unsigned int _jumper[6];
   CuboidGeometry3D<T>& _cuboidGeometry;
@@ -61,8 +61,10 @@ private:
 
 template<typename T, template<typename U> class PARTICLETYPE>
 PeriodicBoundary3D<T, PARTICLETYPE>::PeriodicBoundary3D(
-  SuperGeometry<T,3> sg, bool x, bool y, bool z) : Boundary3D<T, PARTICLETYPE>(),
-  _minPhys(3, T()), _maxPhys(3, T()), _extend(3, T()),
+  SuperGeometry<T,3>& sg, bool x, bool y, bool z) : Boundary3D<T, PARTICLETYPE>(),
+  _minPhys(sg.getStatistics().getMinPhysR(1)),
+  _maxPhys(sg.getStatistics().getMaxPhysR(1)),
+  _extend(_maxPhys - _minPhys),
   _x(x),
   _y(y),
   _z(z), _cuboidGeometry(sg.getCuboidGeometry())

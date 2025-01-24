@@ -186,6 +186,71 @@ protected:
   const ThermalUnitConverter<T,DESCRIPTOR,TDESCRIPTOR>& _converter;
 };
 
+template <typename T, typename W = T>
+class BlockConst3D final : public BlockF3D<W> {
+protected:
+  const std::vector<W> _c;
+public:
+  /// Constructor accepting std::vector
+  /**
+   * \param blockStructure Only required to instantiate underlying BlockF3D
+   * \param v              std::vector to be copied to output by operator.
+   *                       Size determines target dimension.
+   **/
+  BlockConst3D(BlockStructureD<3>& blockStructure, std::vector<W> v);
+
+  /// Constructor accepting single scalar
+  BlockConst3D(BlockStructureD<3>& blockStructure, W scalar);
+  /// Constructor template accepting vectors
+  template <unsigned Size>
+  BlockConst3D(BlockStructureD<3>& blockStructure, Vector<W,Size> v)
+    : BlockConst3D(blockStructure, v.toStdVector()) { };
+
+  bool operator() (W output[], const int input[]) override;
+};
+
+
+/// @brief Generate a BlockLatticeF from an arbitrary function
+/// @tparam T floating point type
+template <typename T, typename DESCRIPTOR>
+class BlockLatticeFfromCallableF final : public BlockLatticeF<T,DESCRIPTOR> {
+private:
+  // local block number
+  const unsigned _iC;
+  // internal function with interface defined by BlockF:
+  // takes local coordinates, writes result into array, returns bool
+  std::function<bool(T*,const int*)> _f;
+
+public:
+  /// @brief Generate a BlockLatticeF from an arbitrary function
+  /// @tparam F function type
+  /// @param iC local cuboid number
+  /// @param f some function, e.g. lambda expression
+  /// The following types of f are accepted:
+  /// void(T* output, auto cell)
+  /// void(T* output, auto cell, int iC, const int* localCoordinates)
+  /// void(T* output, int iC, const int* localCoordinates)
+  template <typename F>
+  BlockLatticeFfromCallableF(BlockLattice<T,DESCRIPTOR>& blockLattice, unsigned iC, F&& f)
+   : BlockLatticeF<T,DESCRIPTOR>(blockLattice, 1), _iC(iC),
+    _f([&,f](T* output, const int* input) -> bool {
+      auto cell = blockLattice.get(input);
+      if constexpr (std::is_invocable_v<F, T*, decltype(cell)>) {
+        f(output, cell);
+      } else if constexpr (std::is_invocable_v<F, T*, decltype(cell), int, const int*>) {
+        f(output, cell, _iC, input);
+      } else {
+        f(output, _iC, input);
+      }
+      return true;
+    })
+  { }
+
+  bool operator() (T output[], const int input[]) override {
+    return _f(output, input);
+  }
+};
+
 
 } // end namespace olb
 

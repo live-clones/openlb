@@ -63,6 +63,35 @@ const bool calcAngle = true;
 
 T angle_prev = 90.;
 
+T helperFunction( T alpha, T kappa1, T kappa2, T h1, T h2, int latticeNumber )
+{
+  T addend = 0;
+  if (latticeNumber==1) {
+    addend = 1./(alpha*alpha) * ( (h1/kappa1) + (h2/kappa2) );
+  }
+  else if (latticeNumber==2) {
+    addend = 1./(alpha*alpha) * ( (h1/kappa1) + (-h2/kappa2) );
+  }
+  else if (latticeNumber==3) {
+    addend = 1./(alpha*alpha) * ( (h1/kappa1) + (h2/kappa2) );
+  }
+  return addend;
+}
+
+T helperFunction( T alpha, T kappa1, T kappa2, T kappa3, T h1, T h2, T h3, int latticeNumber )
+{
+  T addend = 0;
+  if (latticeNumber==1) {
+    addend = 1./(alpha*alpha) * ( (h1/kappa1) + (h2/kappa2) + (h3/kappa3) );
+  }
+  else if (latticeNumber==2) {
+    addend = 1./(alpha*alpha) * ( (h1/kappa1) + (-h2/kappa2) );
+  }
+  else if (latticeNumber==3) {
+    addend = 1./(alpha*alpha) * ( (h3/kappa3) );
+  }
+  return addend;
+}
 
 void prepareGeometry( SuperGeometry<T,3>& superGeometry,
                       UnitConverter<T, DESCRIPTOR>& converter)
@@ -85,7 +114,6 @@ void prepareGeometry( SuperGeometry<T,3>& superGeometry,
   clout << "Prepare Geometry ... OK" << std::endl;
 }
 
-
 void prepareLattice( SuperLattice<T, DESCRIPTOR>& sLattice1,
                      SuperLattice<T, DESCRIPTOR>& sLattice2,
                      UnitConverter<T, DESCRIPTOR>& converter,
@@ -99,10 +127,18 @@ void prepareLattice( SuperLattice<T, DESCRIPTOR>& sLattice1,
   sLattice1.defineDynamics<ForcedBGKdynamics>(superGeometry, 1);
   sLattice2.defineDynamics<FreeEnergyBGKdynamics>( superGeometry, 1);
 
-  // Add wall boundary
-  setFreeEnergyWallBoundary<T,DESCRIPTOR>(sLattice1, superGeometry, 2, alpha, kappa1, kappa2, h1, h2, 1);
-  setFreeEnergyWallBoundary<T,DESCRIPTOR>(sLattice2, superGeometry, 2, alpha, kappa1, kappa2, h1, h2, 2);
+  // Defining walls
+  auto walls = superGeometry.getMaterialIndicator({2});
 
+  // Compute Addends
+  T addend1 = helperFunction( alpha, kappa1, kappa2, h1, h2, 1 );
+  T addend2 = helperFunction( alpha, kappa1, kappa2, h1, h2, 2 );
+
+  // Add wall boundary
+  boundary::set<boundary::FreeEnergyWallMomentum>(sLattice1, walls);
+  sLattice1.setParameter<descriptors::ADDEND>( addend1 );
+  boundary::set<boundary::FreeEnergyWallOrderParameter>(sLattice2, walls);
+  sLattice2.setParameter<descriptors::ADDEND>( addend2 );
 
   // Bulk initial conditions
   // Define spherical domain for fluid 2
@@ -158,10 +194,8 @@ void getResults( SuperLattice<T, DESCRIPTOR>& sLattice1,
 
   if ( iT==0 ) {
     // Writes the geometry, cuboid no. and rank no. as vti file for visualization
-    SuperLatticeGeometry3D<T, DESCRIPTOR> geometry( sLattice1, superGeometry );
     SuperLatticeCuboid3D<T, DESCRIPTOR> cuboid( sLattice1 );
     SuperLatticeRank3D<T, DESCRIPTOR> rank( sLattice1 );
-    vtmWriter.write( geometry );
     vtmWriter.write( cuboid );
     vtmWriter.write( rank );
     vtmWriter.createMasterFile();
@@ -313,7 +347,7 @@ int main( int argc, char *argv[] )
 #endif
 
   // Set periodic boundaries to the domain
-  cGeometry.setPeriodicity( true, true, false );
+  cGeometry.setPeriodicity({ true, true, false });
 
   // Instantiation of loadbalancer
   HeuristicLoadBalancer<T> loadBalancer( cGeometry );

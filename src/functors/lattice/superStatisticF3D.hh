@@ -1,6 +1,6 @@
 /*  This file is part of the OpenLB library
  *
- *  Copyright (C) 2019 Jakob Mangold, Mathias J. Krause
+ *  Copyright (C) 2019 Jakob Mangold, Mathias J. Krause, 2024 Julius Jeßberger
  *  E-mail contact: info@openlb.net
  *  The most recent release of OpenLB can be downloaded at
  *  <http://www.openlb.net/>
@@ -37,12 +37,12 @@ SuperVarianceF3D<T,W>::SuperVarianceF3D(FunctorPtr<SuperF3D<T,W>>&&        f,
   : SuperF3D<T,W>(f->getSuperStructure(), f->getTargetDim()+1),
     _f(std::move(f)),
     _indicatorF(std::move(indicatorF)),
-    _expectedValue(expectedValue)
+    _expectedValue(expectedValue),
+    _expectedValueF(this->getSuperStructure(), _expectedValue)
 {
   this->getName() = "Variance("+_f->getName()+")";
 
   LoadBalancer<T>& load = _f->getSuperStructure().getLoadBalancer();
-  CuboidGeometry3D<T>& cuboid = _f->getSuperStructure().getCuboidGeometry();
 
   if ( _f->getBlockFSize()          == load.size() &&
        _indicatorF->getBlockFSize() == load.size() ) {
@@ -50,7 +50,6 @@ SuperVarianceF3D<T,W>::SuperVarianceF3D(FunctorPtr<SuperF3D<T,W>>&&        f,
       this->_blockF.emplace_back(
         new BlockVarianceF3D<T,W>(_f->getBlockF(iC),
                                   _indicatorF->getBlockIndicatorF(iC),
-                                  cuboid.get(load.glob(iC)),
                                   _expectedValue)
       );
     }
@@ -71,59 +70,7 @@ SuperVarianceF3D<T,W>::SuperVarianceF3D(FunctorPtr<SuperF3D<T,W>>&& f,
 template <typename T, typename W>
 bool SuperVarianceF3D<T,W>::operator() (W output[], const int input[])
 {
-  _f->getSuperStructure().communicate();
-  CuboidGeometry3D<T>& geometry = _f->getSuperStructure().getCuboidGeometry();
-  LoadBalancer<T>&     load     = _f->getSuperStructure().getLoadBalancer();
-
-  std::size_t voxels(0);
-
-  for (int i = 0; i <= _f->getTargetDim(); ++i) {
-    output[i] = W(0);
-  }
-
-  if (this->_blockF.empty()) {
-    W outputTmp[_f->getTargetDim()];
-    for(unsigned i=0; i<_f->getTargetDim(); ++i) {
-      outputTmp[i] = W(0);
-    }
-    int inputTmp[_f->getSourceDim()];
-
-    for (int iC = 0; iC < load.size(); ++iC) {
-      const Cuboid3D<T> cuboid = geometry.get(load.glob(iC));
-      inputTmp[0] = load.glob(iC);
-      for (inputTmp[1] = 0; inputTmp[1] < cuboid.getNx(); ++inputTmp[1]) {
-        for (inputTmp[2] = 0; inputTmp[2] < cuboid.getNy(); ++inputTmp[2]) {
-          for (inputTmp[3] = 0; inputTmp[3] < cuboid.getNz(); ++inputTmp[3]) {
-            if (_indicatorF(inputTmp)) {
-              _f(outputTmp,inputTmp);
-              for (int i = 0; i < _f->getTargetDim(); ++i) {
-                output[i] += util::pow(outputTmp[i] - _expectedValue, 2);
-              }
-              voxels += 1;
-            }
-          }
-        }
-      }
-      output[_f->getTargetDim()] += voxels;
-    }
-  }
-  else {
-    for (int iC = 0; iC < load.size(); ++iC) {
-      this->getBlockF(iC)(output, input);
-    }
-  }
-
-#ifdef PARALLEL_MODE_MPI
-  for (int i = 0; i <= this->getTargetDim(); ++i) {
-    singleton::mpi().reduceAndBcast(output[i], MPI_SUM);
-  }
-#endif
-
-  for (int i = 0; i < _f->getTargetDim(); ++i) {
-    output[i] = output[i] / output[_f->getTargetDim()];
-  }
-
-  return true;
+  return SuperAverage3D<T,W>((*_f-_expectedValueF)*(*_f-_expectedValueF),*_indicatorF)(output, input);
 }
 
 
@@ -132,27 +79,22 @@ bool SuperVarianceF3D<T,W>::operator() (W output[], const int input[])
 
 
 template <typename T, typename W>
-SuperStdDeviationF3D<T,W>::SuperStdDeviationF3D(FunctorPtr<SuperF3D<T,W>>&&        f,
+SuperStdDeviationF3D<T,W>::SuperStdDeviationF3D(FunctorPtr<SuperF3D<T,W>>&& f,
     FunctorPtr<SuperIndicatorF3D<T>>&& indicatorF,
     T expectedValue)
-  : SuperF3D<T,W>(f->getSuperStructure(), f->getTargetDim()+1),
-    _f(std::move(f)),
-    _indicatorF(std::move(indicatorF)),
-    _expectedValue(expectedValue)
+  : SuperVarianceF3D<T,W>(std::forward<decltype(f)>(f), std::forward<decltype(indicatorF)>(indicatorF), expectedValue)
 {
-  this->getName() = "Variance("+_f->getName()+")";
+  this->getName() = "StdDeviation("+this->_f->getName()+")";
 
-  LoadBalancer<T>& load = _f->getSuperStructure().getLoadBalancer();
-  CuboidGeometry3D<T>& cuboid = _f->getSuperStructure().getCuboidGeometry();
+  LoadBalancer<T>& load = this->_f->getSuperStructure().getLoadBalancer();
 
-  if ( _f->getBlockFSize()          == load.size() &&
-       _indicatorF->getBlockFSize() == load.size() ) {
+  if ( this->_f->getBlockFSize()          == load.size() &&
+       this->_indicatorF->getBlockFSize() == load.size() ) {
     for (int iC = 0; iC < load.size(); ++iC) {
       this->_blockF.emplace_back(
-        new BlockStdDeviationF3D<T,W>(_f->getBlockF(iC),
-                                      _indicatorF->getBlockIndicatorF(iC),
-                                      cuboid.get(load.glob(iC)),
-                                      _expectedValue)
+        new BlockStdDeviationF3D<T,W>(this->_f->getBlockF(iC),
+                                      this->_indicatorF->getBlockIndicatorF(iC),
+                                      this->_expectedValue)
       );
     }
   }
@@ -172,60 +114,11 @@ SuperStdDeviationF3D<T,W>::SuperStdDeviationF3D(FunctorPtr<SuperF3D<T,W>>&& f,
 template <typename T, typename W>
 bool SuperStdDeviationF3D<T,W>::operator() (W output[], const int input[])
 {
-  _f->getSuperStructure().communicate();
-  CuboidGeometry3D<T>& geometry = _f->getSuperStructure().getCuboidGeometry();
-  LoadBalancer<T>&     load     = _f->getSuperStructure().getLoadBalancer();
-
-  std::size_t voxels(0);
-
-  for (int i = 0; i <= _f->getTargetDim(); ++i) {
-    output[i] = W(0);
+  const bool res = SuperVarianceF3D<T,W>::operator()(output, input);
+  for (int i=0; i<this->getTargetDim(); ++i) {
+    output[i] = util::sqrt(output[i]);
   }
-
-  if (this->_blockF.empty()) {
-    W outputTmp[_f->getTargetDim()];
-    for(int i=0; i<_f->getTargetDim(); ++i) {
-      outputTmp[i] = W(0);
-    }
-    int inputTmp[_f->getSourceDim()];
-
-    for (int iC = 0; iC < load.size(); ++iC) {
-      const Cuboid3D<T> cuboid = geometry.get(load.glob(iC));
-      inputTmp[0] = load.glob(iC);
-      for (inputTmp[1] = 0; inputTmp[1] < cuboid.getNx(); ++inputTmp[1]) {
-        for (inputTmp[2] = 0; inputTmp[2] < cuboid.getNy(); ++inputTmp[2]) {
-          for (inputTmp[3] = 0; inputTmp[3] < cuboid.getNz(); ++inputTmp[3]) {
-            if (_indicatorF(inputTmp)) {
-              _f(outputTmp,inputTmp);
-              for (int i = 0; i < _f->getTargetDim(); ++i) {
-                output[i] += util::pow(outputTmp[i] - _expectedValue, 2);
-              }
-              voxels += 1;
-            }
-          }
-        }
-      }
-      output[_f->getTargetDim()] += voxels;
-    }
-  }
-  else {
-    for (int iC = 0; iC < load.size(); ++iC) {
-      this->getBlockF(iC)(output, input);
-    }
-  }
-
-#ifdef PARALLEL_MODE_MPI
-  for (int i = 0; i <= this->getTargetDim(); ++i) {
-    singleton::mpi().reduceAndBcast(output[i], MPI_SUM);
-  }
-#endif
-
-  for (int i = 0; i < _f->getTargetDim(); ++i) {
-    output[i] = util::sqrt(output[i] / output[_f->getTargetDim()]);
-  }
-
-
-  return true;
+  return res;
 }
 
 

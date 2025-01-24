@@ -80,7 +80,7 @@ bool SuperLatticeRefinementMetricKnudsen3D<T, DESCRIPTOR>::operator()(T output[]
 template<typename T, typename DESCRIPTOR>
 void SuperLatticeRefinementMetricKnudsen3D<T, DESCRIPTOR>::print()
 {
-  const int nC = this->_sLattice.getCuboidGeometry().getNc();
+  const int nC = this->_sLattice.getCuboidGeometry().size();
 
   std::vector<T> factors(nC, T{});
   T output[1] = { };

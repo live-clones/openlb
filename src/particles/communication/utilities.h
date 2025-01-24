@@ -29,6 +29,68 @@
 
 namespace olb {
 
+///Evaluate complete neighbourhood and store in std::map
+template<typename T, unsigned D>
+void evaluateCuboidGeometryNeighbourhood(
+  CuboidDecomposition<T,D>& cuboidGeometry,
+  std::map<int,std::vector<int>>& neighbourhood,
+  int offset=0 )
+{
+  for (int iC=0; iC<cuboidGeometry.size(); ++iC){
+    neighbourhood[iC].clear();
+    auto neighbours = cuboidGeometry.getNeighborhood(iC, offset);
+    for (int jC : neighbours) {
+      neighbourhood[iC].emplace_back(jC);
+    }
+  }
+}
+
+/// Consistency check for neighbour retrieval
+/// - workaround for issue #319
+bool checkCuboidNeighbourhoodConsistency(
+  std::map<int,std::vector<int>>& neighbourhood,
+  bool correct = false,
+  bool verbose = false)
+{
+  bool consistent = true;
+  for ( auto cuboidNeighbourPair : neighbourhood){
+    //Retrieve iC and neighbours
+    int iC = cuboidNeighbourPair.first;
+    std::vector<int>& neighbours = cuboidNeighbourPair.second;
+    //Loop over neighbours
+    for (int iCN : neighbours){
+      //Retreive neighbour's neighbours
+      std::vector<int>& neighboursNeighbours = neighbourhood[iCN];
+      bool iCfound = false;
+      //Loop over neighbour's neighbours
+      for (int iCNN : neighboursNeighbours ){
+        if (iCNN == iC){
+          iCfound=true;
+          break;
+        }
+      }
+      if (!iCfound){
+        //Set consistency boolean to false
+        consistent = false;
+        //Output, if desired
+        if (verbose){
+          std::cout << "iC " << iC << " not found in list of neighbour iC "
+                             << iCN << std::endl;
+        }
+        //Correct, if desired
+        if (correct){
+          neighbourhood[iCN].push_back(iC);
+        }
+      }
+    }
+  }
+  //Return whether consistent
+  return consistent;
+}
+
+
+
+
 namespace particles {
 
 namespace communication {
@@ -39,15 +101,18 @@ template<typename T, unsigned D, bool verbose=false>
 std::vector<int> getNeighborCuboids(
   CuboidGeometry<T,D>& cuboidGeometry, unsigned offset, int globiC )
 {
-  std::vector<int> neighbors;
-  cuboidGeometry.getNeighbourhood(globiC, neighbors, offset);
+  auto neighbors = cuboidGeometry.getNeighborhood(globiC, offset);
 
   //Print, if desired
   if constexpr(verbose){
     std::cout << globiC << ": " << neighbors << std::endl;
   }
 
-  return neighbors;
+  std::vector<int> ns;
+  for (int iC : neighbors) {
+    ns.emplace_back(iC);
+  }
+  return ns;
 }
 
 /// Get neighbour ranks
@@ -231,7 +296,7 @@ void checkCuboidSizes( SuperParticleSystem<T, PARTICLETYPE>& sParticleSystem )
 #endif
 
   int minCuboidExtent{std::numeric_limits<int>::max()};
-  for (int iC=0; iC<cuboidGeometry.getNc(); ++iC){
+  for (int iC=0; iC<cuboidGeometry.size(); ++iC){
     for(unsigned iD=0; iD<D; ++iD){
       minCuboidExtent = util::min(minCuboidExtent,
           cuboidGeometry.get(iC).getExtent()[iD]);
@@ -281,7 +346,7 @@ T applyPeriodicityToPosition(const bool isPeriodic, T position, const T max, con
 
 /// Returns minimal coordinate of domain for periodic particle boundaries
 template<typename T, unsigned D>
-Vector<T,D> getCuboidMin(const CuboidGeometry<T,D>& cuboidGeometry)
+Vector<T,D> getCuboidMin(const CuboidDecomposition<T,D>& cuboidGeometry)
 {
   const T physDeltaX = cuboidGeometry.getMotherCuboid().getDeltaR();
   return (cuboidGeometry.getMotherCuboid().getOrigin() - 0.5 * physDeltaX);
@@ -290,7 +355,7 @@ Vector<T,D> getCuboidMin(const CuboidGeometry<T,D>& cuboidGeometry)
 
 /// Returns maximal coordinate of domain for periodic particle boundaries
 template<typename T, unsigned D>
-Vector<T,D> getCuboidMax(const CuboidGeometry<T,D>& cuboidGeometry,
+Vector<T,D> getCuboidMax(const CuboidDecomposition<T,D>& cuboidGeometry,
     const PhysR<T,D>& min)
 {
   const T physDeltaX = cuboidGeometry.getMotherCuboid().getDeltaR();
@@ -300,7 +365,7 @@ Vector<T,D> getCuboidMax(const CuboidGeometry<T,D>& cuboidGeometry,
 /// Updates a position if out of bounds and periodic setup is used
 template<typename T, unsigned D>
 Vector<T,D> applyPeriodicityToPosition(
-    const CuboidGeometry<T,D>& cuboidGeometry,
+    const CuboidDecomposition<T,D>& cuboidGeometry,
     const Vector<bool,D>& periodicity,
     PhysR<T,D> position)
 {
@@ -317,13 +382,14 @@ Vector<T,D> applyPeriodicityToPosition(
 
 /// Function returns true if cuboid was found and gives iC
 template<typename T, unsigned D>
-bool getCuboid(const CuboidGeometry<T,D>& cuboidGeometry,
+bool getCuboid(const CuboidDecomposition<T,D>& cuboidGeometry,
     const Vector<bool,D>& periodicity,
     const PhysR<T,D>& position, int& iC)
 {
   PhysR<T,D> newPosition(
       applyPeriodicityToPosition(cuboidGeometry, periodicity, position));
-  return cuboidGeometry.getC(newPosition, iC);
+  auto iC_ = cuboidGeometry.getC(newPosition);
+  return iC_.operator bool();
 }
 
 

@@ -28,6 +28,9 @@
 
 namespace olb {
 
+template <typename T, typename DESCRIPTOR, Platform PLATFORM>
+class ConcreteBlockD;
+
 /// Implementations of CPU specifics
 namespace cpu {
 
@@ -53,13 +56,15 @@ struct Dynamics {
   virtual void computeStress    (Cell<T,DESCRIPTOR,PLATFORM>& cell, T& rho, T* u, T* pi) = 0;
   virtual void computeAllMomenta(Cell<T,DESCRIPTOR,PLATFORM>& cell, T& rho, T* u, T* pi) = 0;
 
-  virtual T computeEquilibrium(int iPop, T rho, T* u) = 0;
+  virtual void computeEquilibrium(Cell<T,DESCRIPTOR,PLATFORM>& cell, T rho, T* u, T* fEq) = 0;
 
   virtual T getOmegaOrFallback(T fallback) = 0;
 
   void iniEquilibrium(Cell<T,DESCRIPTOR,PLATFORM>& cell, T rho, T* u) {
+    T fEq[DESCRIPTOR::q] { };
+    computeEquilibrium(cell, rho, u, fEq);
     for (unsigned iPop=0; iPop < DESCRIPTOR::q; ++iPop) {
-      cell[iPop] = computeEquilibrium(iPop, rho, u);
+      cell[iPop] = fEq[iPop];
     }
   };
 
@@ -72,6 +77,55 @@ struct Dynamics {
   }
 
   virtual void inverseShiftRhoU(Cell<T,DESCRIPTOR,PLATFORM>& cell, T& rho, T* u) = 0;
+
+};
+
+/// Row concept for concrete non-LBM lattices on CPU platforms
+template <typename T, typename DESCRIPTOR, Platform PLATFORM>
+class Row {
+private:
+  ConcreteBlockD<T,DESCRIPTOR,PLATFORM>* _lattice;
+  std::size_t _iCell;
+
+public:
+  using value_t = T;
+  using descriptor_t = DESCRIPTOR;
+
+  Row():
+    _lattice(nullptr),
+    _iCell(0) { }
+
+  Row(ConcreteBlockD<T,DESCRIPTOR,PLATFORM>& lattice, std::size_t iCell=0):
+    _lattice(&lattice),
+    _iCell(iCell) { }
+
+  CellID getCellId() const {
+    return _iCell;
+  }
+
+  void setCellId(std::size_t iCell) {
+    _iCell = iCell;
+  }
+
+  template <typename FIELD>
+  auto getField() const {
+    return _lattice->template getField<FIELD>().getRow(_iCell);
+  }
+
+  template <typename FIELD>
+  void setField(const FieldD<T,DESCRIPTOR,FIELD>& v) {
+    return _lattice->template getField<FIELD>().setRow(_iCell, v);
+  }
+
+  template <typename FIELD>
+  auto getFieldPointer() {
+    return _lattice->template getField<FIELD>().getRowPointer(_iCell);
+  }
+
+  template <typename FIELD>
+  auto& getFieldComponent(unsigned iD) {
+    return _lattice->template getField<FIELD>()[iD][_iCell];
+  }
 
 };
 
@@ -107,6 +161,10 @@ public:
 
   void setCellId(std::size_t iCell) {
     _iCell = iCell;
+  }
+
+  void setLatticeR(LatticeR<DESCRIPTOR::d> latticeR) {
+    _iCell = _lattice->getCellId(latticeR);
   }
 
   T& operator[](unsigned iPop) {
@@ -188,6 +246,62 @@ public:
   }
   void inverseShiftRhoU(T& rho, T* u) {
     getDynamics().inverseShiftRhoU(*this, rho, u);
+  }
+
+};
+
+template <typename T, typename DESCRIPTOR, Platform PLATFORM>
+class PlainCell {
+private:
+  ConcreteBlockD<T,DESCRIPTOR,PLATFORM>* _lattice;
+  std::size_t _iCell;
+
+public:
+  using value_t = T;
+  using descriptor_t = DESCRIPTOR;
+
+  PlainCell():
+    _lattice(nullptr),
+    _iCell(0) { }
+
+  PlainCell(ConcreteBlockD<T,DESCRIPTOR,PLATFORM>& lattice, std::size_t iCell=0):
+    _lattice(&lattice),
+    _iCell(iCell) { }
+
+  CellID getCellId() const {
+    return _iCell;
+  }
+
+  void setCellId(std::size_t iCell) {
+    _iCell = iCell;
+  }
+
+  T& operator[](unsigned iPop) {
+    return _lattice->template getField<descriptors::POPULATION>()[iPop][_iCell];
+  }
+
+  template <typename FIELD>
+  auto getField() const {
+    return _lattice->template getField<FIELD>().getRow(_iCell);
+  }
+
+  template <typename FIELD>
+  void setField(const FieldD<T,DESCRIPTOR,FIELD>& v) {
+    return _lattice->template getField<FIELD>().setRow(_iCell, v);
+  }
+
+  template <typename FIELD>
+  auto getFieldPointer() {
+    return _lattice->template getField<FIELD>().getRowPointer(_iCell);
+  }
+
+  template <typename FIELD>
+  auto& getFieldComponent(unsigned iD) {
+    return _lattice->template getField<FIELD>()[iD][_iCell];
+  }
+
+  Cell<T,DESCRIPTOR,PLATFORM> neighbor(LatticeR<DESCRIPTOR::d> offset) {
+    return {*_lattice, _iCell + _lattice->getNeighborDistance(offset)};
   }
 
 };

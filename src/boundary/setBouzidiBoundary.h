@@ -1,6 +1,6 @@
 /*  This file is part of the OpenLB library
  *
- *  Copyright (C) 2022 Michael Crocoll, Adrian Kummerlaender, Shota Ito
+ *  Copyright (C) 2022 Michael Crocoll, Adrian Kummerlaender, Shota Ito, Anas Selmi
  *  E-mail contact: info@openlb.net
  *  The most recent release of OpenLB can be downloaded at
  *  <http://www.openlb.net/>
@@ -24,6 +24,11 @@
 #ifndef SET_BOUZIDI_BOUNDARY_H
 #define SET_BOUZIDI_BOUNDARY_H
 
+#include "bouzidiFields.h"
+#include "postprocessor/turbulentWallModelPostProcessor3D.h"
+#include "postprocessor/bouzidiSlipVelocityPostProcessor3D.h"
+#include "postprocessor/bouzidiTemperatureJumpPostProcessor3D.h"
+
 // M. Bouzidi, M. Firdaouss, and P. Lallemand.
 // Momentum transfer of a Boltzmann-lattice fluid with boundaries.
 // Physics of Fluids 13, 3452 (2001).
@@ -34,34 +39,9 @@
 // Session: FD-27: CFD Methodology III (2012)
 // DOI: 10.2514/6.2003-953
 
+#include "../dynamics/collisionLES.h"
+
 namespace olb {
-
-namespace descriptors {
-
-/// Interpolated Bounce Back (Bouzidi) distance field
-struct BOUZIDI_DISTANCE : public descriptors::FIELD_BASE<0,0,1> {
-  template <typename T, typename DESCRIPTOR>
-  static constexpr auto getInitialValue() {
-    return Vector<value_type<T>,DESCRIPTOR::template size<BOUZIDI_DISTANCE>()>(-1);
-  }
-};
-
-/// Interpolated Bounce Back (Bouzidi) velocity coefficient field
-struct BOUZIDI_VELOCITY : public descriptors::FIELD_BASE<0,0,1> {
-  template <typename T, typename DESCRIPTOR>
-  static constexpr auto getInitialValue() {
-    return Vector<value_type<T>,DESCRIPTOR::template size<BOUZIDI_VELOCITY>()>(0);
-  }
-};
-
-/// Interpolated Bounce Back (Bouzidi) for ADE Dirichlet field
-struct BOUZIDI_ADE_DIRICHLET : public descriptors::FIELD_BASE<0,0,1> {
-  template <typename T, typename DESCRIPTOR>
-  static constexpr auto getInitialValue() {
-    return Vector<value_type<T>,DESCRIPTOR::template size<BOUZIDI_ADE_DIRICHLET>()>(0);
-  }
-};
-}
 
 /// Post processor for the zero-velocity Bouzidi boundary
 class BouzidiPostProcessor {
@@ -268,8 +248,8 @@ void setBouzidiBoundary(BlockLattice<T,DESCRIPTOR>& block,
         const auto iPop_opposite = descriptors::opposite<DESCRIPTOR>(iPop);
 
         if (blockGeometry.isInside(boundaryLatticeR)) {
-          T boundaryPhysR[DESCRIPTOR::d] { };
-          blockGeometry.getPhysR(boundaryPhysR,boundaryLatticeR);
+          auto boundaryPhysR = blockGeometry.getPhysR(boundaryLatticeR);
+
           // check if neighbor is fluid cell
           if (bulkIndicator(boundaryLatticeR)) {
             T dist = -1;    // distance to boundary
@@ -278,7 +258,7 @@ void setBouzidiBoundary(BlockLattice<T,DESCRIPTOR>& block,
             auto direction = -deltaR * c; // vector pointing from the boundary cell to the solid cell
 
             // Check if distance calculation was performed correctly
-            if (indicatorAnalyticalBoundary.distance(dist, boundaryPhysR, direction, blockGeometry.getIcGlob())) {
+            if (indicatorAnalyticalBoundary.distance(dist, boundaryPhysR.data(), direction, blockGeometry.getIcGlob())) {
               qIpop = dist / norm;
 
               // if distance function returned a dist. not suitable for Bouzidi -> fall-back
@@ -418,8 +398,7 @@ void setBouzidiVelocity(BlockLattice<T,DESCRIPTOR>& block,
           if (opp_bouzidi_dist >= 0) {
             T wallVelocity[DESCRIPTOR::d] = { };
             T physicalIntersection[DESCRIPTOR::d] = { };
-            T boundaryPhysR[DESCRIPTOR::d] { };
-            cuboid.getPhysR(boundaryPhysR, boundaryLatticeR);
+            auto boundaryPhysR = cuboid.getPhysR(boundaryLatticeR);
 
             // calculating the intersection of the boundary with the missing link in physical coordinates
             for ( int i = 0; i< DESCRIPTOR::d; ++i) {
@@ -561,11 +540,10 @@ void setBouzidiAdeDirichlet(BlockLattice<T,DESCRIPTOR>& block,
 
           // check if distance from the fluid cell to the solid cell is a valid bouzidi distance
           if (opp_bouzidi_dist >= 0) {
-            T boundaryPhysR[DESCRIPTOR::d] { };
             T phi_at_cell[1] { };
-            cuboid.getPhysR(boundaryPhysR, boundaryLatticeR);
+            auto boundaryPhysR = cuboid.getPhysR(boundaryLatticeR);
 
-            phi_d(phi_at_cell, boundaryPhysR);
+            phi_d(phi_at_cell, boundaryPhysR.data());
 
             // set computed velocity into the bouzidi velocity field
             block.get(boundaryLatticeR).template setFieldComponent<descriptors::BOUZIDI_ADE_DIRICHLET>(iPop_opposite, phi_at_cell[0]);
@@ -575,6 +553,234 @@ void setBouzidiAdeDirichlet(BlockLattice<T,DESCRIPTOR>& block,
     }
   });
 }
+
+/**
+ * Bouzidi General/Knudsen Slip Velocity 3D
+ * Sets slip velocity on general walls
+ */
+
+// Set Bouzidi slip velocity boundary on material cells of sLattice
+template<typename T, typename DESCRIPTOR>
+void setBouzidiSlipVelocity(SuperLattice<T,DESCRIPTOR>& sLattice,
+                            SuperGeometry<T,DESCRIPTOR::d>& superGeometry, int material,
+                            IndicatorF<T,DESCRIPTOR::d>& indicatorAnalyticalBoundary,
+                            int gradientOrder = 1,
+                            std::vector<int> bulkMaterials = std::vector<int>(1,1),
+    bool isOuterWall = true, bool useDiscreteNormal = false)
+{
+  setBouzidiSlipVelocity<T, DESCRIPTOR>(
+      sLattice, superGeometry.getMaterialIndicator(material),
+      indicatorAnalyticalBoundary, gradientOrder, bulkMaterials, isOuterWall,
+      useDiscreteNormal);
 }
+
+/// Set Bouzidi velocity boundary on indicated cells of sLattice
+template<typename T, typename DESCRIPTOR>
+void setBouzidiSlipVelocity(SuperLattice<T,DESCRIPTOR>& sLattice,
+                            FunctorPtr<SuperIndicatorF<T,DESCRIPTOR::d>>&& boundaryIndicator,
+                            IndicatorF<T,DESCRIPTOR::d>& indicatorAnalyticalBoundary,
+                            int gradientOrder = 1,
+                            std::vector<int> bulkMaterials = std::vector<int>(1,1),
+    bool isOuterWall = true, bool useDiscreteNormal = false)
+{
+  setBouzidiSlipVelocity<T, DESCRIPTOR>(
+      sLattice, std::forward<decltype(boundaryIndicator)>(boundaryIndicator),
+      indicatorAnalyticalBoundary,
+      boundaryIndicator->getSuperGeometry().getMaterialIndicator(
+          std::move(bulkMaterials)),
+      gradientOrder, isOuterWall, useDiscreteNormal);
+}
+
+/// Set Bouzidi velocity boundary on indicated cells of sLattice
+template<typename T, typename DESCRIPTOR>
+void setBouzidiSlipVelocity(SuperLattice<T,DESCRIPTOR>& sLattice,
+                        FunctorPtr<SuperIndicatorF<T,DESCRIPTOR::d>>&& boundaryIndicator,
+                        IndicatorF<T,DESCRIPTOR::d>& indicatorAnalyticalBoundary,
+                        FunctorPtr<SuperIndicatorF<T,DESCRIPTOR::d>>&& bulkIndicator,
+                        int gradientOrder = 1,
+                        bool isOuterWall = true,
+    bool useDiscreteNormal = false)
+{
+  auto& load = sLattice.getLoadBalancer();
+  auto& cuboidGeometry =
+      boundaryIndicator->getSuperGeometry().getCuboidGeometry();
+  for (int iCloc = 0; iCloc < load.size(); ++iCloc) {
+    auto& cuboid = cuboidGeometry.get(load.glob(iCloc));
+    setBouzidiSlipVelocity<T,DESCRIPTOR>(sLattice.getBlock(iCloc),
+                                     boundaryIndicator->getBlockIndicatorF(iCloc),
+                                     indicatorAnalyticalBoundary,
+                                     bulkIndicator->getBlockIndicatorF(iCloc),
+        cuboid, gradientOrder, isOuterWall, useDiscreteNormal);
+  }
+  int _overlap = 3;
+  addPoints2CommBC<T, DESCRIPTOR>(
+      sLattice, std::forward<decltype(boundaryIndicator)>(boundaryIndicator),
+      _overlap);
+}
+
+/// Set Bouzidi velocity boundary on indicated cells of block lattice
+template<typename T, typename DESCRIPTOR>
+void setBouzidiSlipVelocity(BlockLattice<T,DESCRIPTOR>& block,
+                        BlockIndicatorF<T,DESCRIPTOR::d>& boundaryIndicator,
+                        IndicatorF<T,DESCRIPTOR::d>& indicatorAnalyticalBoundary,
+                        BlockIndicatorF<T,DESCRIPTOR::d>& bulkIndicator,
+                        Cuboid<T,DESCRIPTOR::d>& cuboid,
+                        int gradientOrder = 1,
+                        bool isOuterWall = true,
+                        bool useDiscreteNormal = false)
+{
+  assert((gradientOrder==0) || (gradientOrder==1) || (gradientOrder==2));
+  const T deltaR = cuboid.getDeltaR();
+  block.template setParameter<descriptors::FD_DEG>(gradientOrder);
+  auto& blockGeometryStructure = bulkIndicator.getBlockGeometry();
+  // For each solid cell: all of its fluid neighbors need population updates
+  block.forSpatialLocations([&](LatticeR<DESCRIPTOR::d> solidLatticeR) {
+    // Check if cell is solid cell
+    if (boundaryIndicator(solidLatticeR)) {
+      Vector<int, 3> discreteNormal =
+          blockGeometryStructure.getStatistics().computeNormal(
+              solidLatticeR[0], solidLatticeR[1], solidLatticeR[2]);
+      for (int iPop = 1; iPop < DESCRIPTOR::q; ++iPop) {
+        Vector<T, DESCRIPTOR::d> boundaryLatticeR(
+            solidLatticeR + descriptors::c<DESCRIPTOR>(iPop));
+        if (block.isInside(boundaryLatticeR)) {
+          const int iPop_opposite = descriptors::opposite<DESCRIPTOR>(iPop);
+          auto      x_b           = block.get(boundaryLatticeR);
+          //int material = blockGeometryStructure.getMaterial(boundaryLatticeR);
+          const auto opp_bouzidi_dist = x_b.template getFieldComponent<descriptors::BOUZIDI_DISTANCE>(iPop_opposite);
+
+          // check if distance from the fluid cell to the solid cell is a valid bouzidi distance
+          if (opp_bouzidi_dist >= 0 && (bulkIndicator(boundaryLatticeR))){ // || boundaryIndicator(boundaryLatticeR))) { // )){ // Try if( bulkIndicator(boundaryLatticeR))opp_bouzidi_dist >= 0
+            auto boundaryPhysR = cuboid.getPhysR(boundaryLatticeR);
+            IndicatorLayer3D<T> indicatorAnalyticalBoundaryLayer(
+                indicatorAnalyticalBoundary, 0.5 * deltaR);
+            if (!useDiscreteNormal) {
+              Vector<T, 3> normal =
+                  indicatorAnalyticalBoundaryLayer.surfaceNormal(boundaryPhysR.data(),
+                                                                 deltaR);
+              if (isOuterWall) {
+                normal = -1 * normal;
+              }
+              Vector<T, 3> ceilNormal(ceil(normal[0]), ceil(normal[1]),
+                                      ceil(normal[2]));
+              Vector<T, 3> floorNormal(floor(normal[0]), floor(normal[1]),
+                                       floor(normal[2]));
+              if (bulkIndicator(ceilNormal + boundaryLatticeR) ||
+                  bulkIndicator(floorNormal + boundaryLatticeR)) {
+                block.get(boundaryLatticeR)
+                    .template setField<descriptors::NORMAL>(
+                        {normal[0], normal[1], normal[2]});
+              }
+            }
+            else {
+              block.get(boundaryLatticeR)
+                  .template setField<descriptors::NORMAL>({(T) discreteNormal[0],
+                                                           (T) discreteNormal[1],
+                                                           (T) discreteNormal[2]});
+            }
+
+            block.get(boundaryLatticeR)
+                .template setFieldComponent<descriptors::BOUZIDI_VELOCITY>(
+                    iPop_opposite, T(0));
+          }
+        }
+      }
+    }
+  });
+}
+
+
+template<typename T, typename DESCRIPTOR>
+void setBouzidiTemperatureJump(SuperLattice<T,DESCRIPTOR>& sLattice,
+                            SuperGeometry<T,DESCRIPTOR::d>& superGeometry, int material,
+                            AnalyticalF<DESCRIPTOR::d,T,T>& phi_d,
+                            std::vector<int> bulkMaterials = std::vector<int>(1,1))
+{
+  setBouzidiTemperatureJump<T, DESCRIPTOR>(
+      sLattice, superGeometry.getMaterialIndicator(material), phi_d,
+      bulkMaterials);
+}
+
+template<typename T, typename DESCRIPTOR>
+void setBouzidiTemperatureJump(SuperLattice<T,DESCRIPTOR>& sLattice,
+                            FunctorPtr<SuperIndicatorF<T,DESCRIPTOR::d>>&& boundaryIndicator,
+                            FunctorPtr<SuperIndicatorF<T,DESCRIPTOR::d>>&& bulkIndicator,
+                            AnalyticalF<DESCRIPTOR::d,T,T>& phi_d)
+{
+  auto& load = sLattice.getLoadBalancer();
+  auto& cuboidGeometry =
+      boundaryIndicator->getSuperGeometry().getCuboidGeometry();
+  for (int iCloc = 0; iCloc < load.size(); ++iCloc) {
+    auto& cuboid = cuboidGeometry.get(load.glob(iCloc));
+    setBouzidiTemperatureJump<T,DESCRIPTOR>(sLattice.getBlock(iCloc),
+                                     boundaryIndicator->getBlockIndicatorF(iCloc),
+                                     bulkIndicator->getBlockIndicatorF(iCloc),
+                                     phi_d,
+                                     cuboid);
+  }
+}
+
+
+template<typename T, typename DESCRIPTOR>
+void setBouzidiTemperatureJump(SuperLattice<T,DESCRIPTOR>& sLattice,
+                            FunctorPtr<SuperIndicatorF<T,DESCRIPTOR::d>>&& boundaryIndicator,
+                            AnalyticalF<DESCRIPTOR::d,T,T>& phi_d,
+                            std::vector<int> bulkMaterials = std::vector<int>(1,1))
+{
+  setBouzidiTemperatureJump<T, DESCRIPTOR>(
+      sLattice, std::forward<decltype(boundaryIndicator)>(boundaryIndicator),
+      boundaryIndicator->getSuperGeometry().getMaterialIndicator(
+          std::move(bulkMaterials)),
+      phi_d);
+}
+
+
+template<typename T, typename DESCRIPTOR>
+void setBouzidiTemperatureJump(BlockLattice<T,DESCRIPTOR>& block,
+                            BlockIndicatorF<T,DESCRIPTOR::d>& boundaryIndicator,
+                            BlockIndicatorF<T,DESCRIPTOR::d>& bulkIndicator,
+                            AnalyticalF<DESCRIPTOR::d,T,T>& phi_d,
+                            Cuboid<T,DESCRIPTOR::d>& cuboid)
+{
+  auto&            blockGeometryStructure = bulkIndicator.getBlockGeometry();
+  std::vector<int> discreteNormalOutwards(4, 0);
+  block.forSpatialLocations([&](LatticeR<DESCRIPTOR::d> solidLatticeR) {
+    if (boundaryIndicator(solidLatticeR)) {
+
+      for (int iPop = 1; iPop < DESCRIPTOR::q; ++iPop) {
+        Vector<T, DESCRIPTOR::d> boundaryLatticeR(
+            solidLatticeR + descriptors::c<DESCRIPTOR>(iPop));
+        if (block.isInside(boundaryLatticeR)) {
+          const int  iPop_opposite = descriptors::opposite<DESCRIPTOR>(iPop);
+          auto       x_b           = block.get(boundaryLatticeR);
+          const auto opp_bouzidi_dist =
+              x_b.template getFieldComponent<descriptors::BOUZIDI_DISTANCE>(
+                  iPop_opposite);
+
+          // check if distance from the fluid cell to the solid cell is a valid bouzidi distance
+          if ((opp_bouzidi_dist >= 0) && (bulkIndicator(boundaryLatticeR))) {
+            T phi_at_cell[1] {};
+            auto boundaryPhysR = cuboid.getPhysR(boundaryLatticeR);
+
+            phi_d(phi_at_cell, boundaryPhysR.data());
+            discreteNormalOutwards =
+                blockGeometryStructure.getStatistics().getType(
+                    solidLatticeR[0], solidLatticeR[1], solidLatticeR[2]);
+            // set computed velocity into the bouzidi velocity field
+            block.get(boundaryLatticeR)
+                .template setFieldComponent<descriptors::BOUZIDI_WALL_TEMP>(
+                    iPop_opposite, phi_at_cell[0]);
+            block.get(boundaryLatticeR)
+                .template setField<descriptors::NORMAL>(
+                    {-discreteNormalOutwards[1], -discreteNormalOutwards[2],
+                     -discreteNormalOutwards[3]});
+          }
+        }
+      }
+    }
+  });
+}
+
+} // namespace olb
 
 #endif

@@ -1,6 +1,7 @@
 /*  This file is part of the OpenLB library
  *
  *  Copyright (C) 2014-2016 Cyril Masquelier, Mathias J. Krause, Albert Mink, Berkay Oralalp
+ *                2024 Dennis Teutscher
  *  E-mail contact: info@openlb.net
  *  The most recent release of OpenLB can be downloaded at
  *  <http://www.openlb.net/>
@@ -261,6 +262,30 @@ public:
   Vector<S,3> getSample(const std::function<S()>& randomness) const override;
 };
 
+
+/** indicator function for a 3d-polygon
+ * \param points represent the outline of the geometry. A point inside the pointslist has x,y,z and an offset in z direction.
+ * Currently this only works, when z is used as height.
+ */
+template <typename S>
+class IndicatorPolygon3D : public IndicatorF3D<S> {
+private:
+  std::vector<Vector<S,4>> _points;
+  S _height;
+  Vector<S,3> _normal;
+  std::vector<Vector<S, 2>> _projectedPolygon2D;
+  Vector<S, 3> _origin;
+  Vector<S, 2> projectTo2D(const Vector<S, 3>& point);
+  bool isPointInPolygon2D(const Vector<S, 2>& point, const std::vector<Vector<S, 2>>& polygon);
+  S interpolateHeight(S x, S y);
+
+
+public:
+  /// constructs a polygon with a list of points
+  IndicatorPolygon3D(std::vector<Vector<S,4>> points);
+  /// returns true if input is inside, otherwise false
+  bool operator() (bool output[], const S input[]) override;
+};
 
 /** \brief indicator function for a 3d-cuboid, turned by an angle theta around an axis of rotation
  *

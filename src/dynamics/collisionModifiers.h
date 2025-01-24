@@ -25,7 +25,7 @@
 #define DYNAMICS_COLLISION_MODIFIERS_H
 
 #include "lbm.h"
-#include "descriptorField.h"
+#include "descriptor/fields.h"
 
 namespace olb {
 
@@ -44,7 +44,9 @@ struct ParameterFromCell {
   struct type {
     using CollisionO = typename COLLISION::template type<DESCRIPTOR, MOMENTA, EQUILIBRIUM>;
 
-    template <CONCEPT(MinimalCell) CELL, typename PARAMETERS, typename V=typename CELL::value_t>
+    static constexpr bool is_vectorizable = dynamics::is_vectorizable_v<CollisionO>;
+
+    template <concepts::Cell CELL, typename PARAMETERS, typename V=typename CELL::value_t>
     CellStatistic<V> apply(CELL& cell, PARAMETERS& parameters) any_platform {
       parameters.template set<PARAMETER>(
         cell.template getField<PARAMETER>());
@@ -72,7 +74,7 @@ struct OmegaFromCellTauEff {
   struct type {
     using CollisionO = typename COLLISION::template type<DESCRIPTOR, MOMENTA, EQUILIBRIUM>;
 
-    template <CONCEPT(MinimalCell) CELL, typename PARAMETERS, typename V=typename CELL::value_t>
+    template <concepts::Cell CELL, typename PARAMETERS, typename V=typename CELL::value_t>
     CellStatistic<V> apply(CELL& cell, PARAMETERS& parameters) any_platform {
       parameters.template set<descriptors::OMEGA>(
         V{1} / cell.template getField<descriptors::TAU_EFF>());
@@ -95,14 +97,14 @@ struct TrackAverageVelocity {
     using MomentaF = typename MOMENTA::template type<DESCRIPTOR>;
     using CollisionO = typename COLLISION::template type<DESCRIPTOR, MOMENTA, EQUILIBRIUM>;
 
-    template <CONCEPT(MinimalCell) CELL, typename PARAMETERS, typename V=typename CELL::value_t>
+    template <concepts::Cell CELL, typename PARAMETERS, typename V=typename CELL::value_t>
     CellStatistic<V> apply(CELL& cell, PARAMETERS& parameters) any_platform {
       auto statistics = CollisionO().apply(cell, parameters);
 
       Vector<V,DESCRIPTOR::d> u;
       MomentaF().computeU(cell, u);
 
-      std::size_t iT = parameters.template get<descriptors::LATTICE_TIME>();
+      auto iT = parameters.template get<descriptors::LATTICE_TIME>();
       auto uAvg = cell.template getField<descriptors::AVERAGE_VELOCITY>();
       cell.template setField<descriptors::AVERAGE_VELOCITY>((uAvg * (iT-1) + u) / iT);
 
@@ -110,9 +112,69 @@ struct TrackAverageVelocity {
     }
   };
 };
+  /// Track time-averaged density of COLLISION into cell field AVERAGE_DENSITY
+template <typename COLLISION>
+struct TrackAverageDensity {
+  using parameters = typename COLLISION::parameters::template include<descriptors::LATTICE_TIME>;
 
+  static std::string getName() {
+    return "TrackAverageDensity<" + COLLISION::getName() + ">";
+  }
+
+  template <typename DESCRIPTOR, typename MOMENTA, typename EQUILIBRIUM>
+  struct type {
+    using MomentaF = typename MOMENTA::template type<DESCRIPTOR>;
+    using CollisionO = typename COLLISION::template type<DESCRIPTOR, MOMENTA, EQUILIBRIUM>;
+
+    template <concepts::Cell CELL, typename PARAMETERS, typename V=typename CELL::value_t>
+    CellStatistic<V> apply(CELL& cell, PARAMETERS& parameters) any_platform {
+      auto statistics = CollisionO().apply(cell, parameters);
+
+      auto d = MomentaF().computeRho(cell);
+      auto iT = parameters.template get<descriptors::LATTICE_TIME>();
+      auto dAvg = cell.template getField<descriptors::AVERAGE_DENSITY>();
+      cell.template setField<descriptors::AVERAGE_DENSITY>((dAvg * (iT-1) + d) / iT);
+
+      return statistics;
+    }
+  };
+};
+
+  /// Track time-averaged TKE and velocity
+template <typename COLLISION>
+struct TrackAverageTKE {
+  using parameters = typename COLLISION::parameters::template include<descriptors::LATTICE_TIME>;
+
+  static std::string getName() {
+    return "TrackAverageTKE<" + COLLISION::getName() + ">";
+  }
+
+  template <typename DESCRIPTOR, typename MOMENTA, typename EQUILIBRIUM>
+  struct type {
+    using MomentaF = typename MOMENTA::template type<DESCRIPTOR>;
+    using CollisionO = typename COLLISION::template type<DESCRIPTOR, MOMENTA, EQUILIBRIUM>;
+
+    template <concepts::Cell CELL, typename PARAMETERS, typename V=typename CELL::value_t>
+    CellStatistic<V> apply(CELL& cell, PARAMETERS& parameters) any_platform {
+      auto statistics = CollisionO().apply(cell, parameters);
+
+      Vector<V,DESCRIPTOR::d> u;
+      MomentaF().computeU(cell, u);
+
+      auto iT = parameters.template get<descriptors::LATTICE_TIME>();
+      auto uAvg = cell.template getField<descriptors::AVERAGE_VELOCITY>();
+      cell.template setField<descriptors::AVERAGE_VELOCITY>((uAvg * (iT-1) + u) / iT);
+      auto uDiff = u - uAvg;
+      auto TKE = cell.template getField<descriptors::AVERAGE_TKE>();
+      auto TKE_new = 0.5*(uDiff[0]*uDiff[0]+uDiff[1]*uDiff[1]+uDiff[2]*uDiff[2]);
+      cell.template setField<descriptors::AVERAGE_TKE>((TKE * (iT-1) + TKE_new) / iT);
+      return statistics;
+    }
+  };
+};
+}
 }
 
-}
+
 
 #endif

@@ -31,4 +31,6 @@
 #include "functorDsl3D.hh"
 #include "hyperplane3D.hh"
 #include "hyperplaneLattice3D.hh"
+#include "line3D.hh"
+#include "lineLattice3D.hh"
 #include "random.hh"

@@ -33,60 +33,16 @@
  * - simulation only or eoc convergence analysis
  */
 
+// the main code of the simulation is in poiseuille3d.h as it is also used by the
+// example ../../pdeSolverEoc/poiseuille3dEoc
+
+// set flag in order to use mrt collision operators instead of bgk
 //#define ENABLE_MRT
 
 #include "poiseuille3d.h"
 
-/// User dialogue: read optional arguments
-// Resolution, flow and boundary type are modified in place
-int readParameters(int argc, char** argv,
-  int& N, FlowType& flowType, BoundaryType& boundaryType, bool& eoc)
-{
-  if (argc > 1) {
-    if (argv[1][0]=='-'&&argv[1][1]=='h') {
-      OstreamManager clout( std::cout,"help" );
-      clout<<"Usage: program [Resolution] [FlowType] [BoundaryType] [Eoc]"<<std::endl;
-      clout<<"FlowType: 0=forced, 1=nonForced"<<std::endl;
-      clout<<"BoundaryType: 0=bounceBack, 1=local, 2=interpolated, 3=bouzidi, 4=freeSlip, 5=partialSlip"<<std::endl;
-      clout<<"Eoc: 0=false, 1=true"<<std::endl;
-      clout<<"Default: Resolution=21, FlowType=nonForced, BoundaryType=interpolated, Eoc=false"<<std::endl;
-      return 0;
-    }
-  }
-
-  if (argc > 1) {
-    N = atoi(argv[1]);
-    if (N < 1) {
-      std::cerr << "Fluid domain is too small" << std::endl;
-      return 1;
-    }
-  }
-
-  if (argc > 2) {
-    int flowTypeNumber = atoi(argv[2]);
-    if (flowTypeNumber < 0 || flowTypeNumber > (int)nonForced) {
-      std::cerr << "Unknown fluid flow type" << std::endl;
-      return 2;
-    }
-    flowType = (FlowType) flowTypeNumber;
-  }
-
-  if (argc > 3) {
-    int boundaryTypeNumber = atoi(argv[3]);
-    if (boundaryTypeNumber < 0 || boundaryTypeNumber > (int) partialSlip) {
-      std::cerr << "Unknown boundary type" << std::endl;
-      return 3;
-    }
-    boundaryType = (BoundaryType) boundaryTypeNumber;
-  }
-
-  if (argc > 4) {
-    int eocNumber = atoi(argv[4]);
-    eoc = (bool) eocNumber;
-  }
-  return 0;
-}
-
+//Initialize Gnuplot
+static Gnuplot<T> gplot("centerVelocity");
 
 int main( int argc, char* argv[] )
 {
@@ -95,38 +51,13 @@ int main( int argc, char* argv[] )
   singleton::directories().setOutputDir( "./tmp/" );
   OstreamManager clout( std::cout,"main" );
 
-  int status = readParameters(argc, argv, N, flowType, boundaryType, eoc);
+  int N = 21;
+  bool eoc = false;
+
+  int status = readParameters(argc, argv, N, flowType, boundaryType);
   if (status != 0) {
     return status;
   }
+  simulatePoiseuille(N, gplot, eoc);
 
-  if (! eoc) {
-    static Gnuplot<T> gplot("centerVelocity");
-    simulatePoiseuille(N, gplot, eoc);
-  }
-  else {
-    if ((boundaryType == freeSlip) || (boundaryType == partialSlip)) {
-      throw std::invalid_argument(
-        "eoc computation is currently not supported for slip boundary conditions");
-    }
-    static Gnuplot<T> gplot(
-      "Velocity_and_StrainRate_eoc",
-      false,
-      "set terminal png size 720, 720 font 'Arial,10'",
-      Gnuplot<T>::LOGLOG,
-      Gnuplot<T>::LINREG);
-    gplot.setLabel("Resolution", "Error");
-
-    int maxN = N + 41;
-
-    // loop over the different simulations
-    for(int simuN = N; simuN < maxN; simuN += 10){
-
-      /// Run the simulations
-      clout << "Starting next simulation with N = " << simuN << std::endl;
-      simulatePoiseuille(simuN, gplot, eoc);
-    }
-
-    gplot.writePNG();
-  }
 }

@@ -51,6 +51,113 @@ const int M = 20;             // time discretization refinement
 const bool bouzidiOn = true;  // choice of boundary condition
 const T maxPhysT = 2.;        // max. simulation time in s, SI unit
 
+template <typename T, typename DESCRIPTOR>
+class SuperLatticeStress3D final : public SuperLatticeF3D<T,DESCRIPTOR> {
+public:
+  SuperLatticeStress3D(SuperLattice<T,DESCRIPTOR>& sLattice);
+};
+
+template <typename T, typename DESCRIPTOR>
+class BlockLatticeStress3D final : public BlockLatticeF3D<T,DESCRIPTOR> {
+public:
+  BlockLatticeStress3D(BlockLattice<T,DESCRIPTOR>& blockLattice);
+  bool operator() (T output[], const int input[]) override;
+};
+
+template<typename T, typename DESCRIPTOR>
+SuperLatticeStress3D<T, DESCRIPTOR>::SuperLatticeStress3D(
+  SuperLattice<T, DESCRIPTOR>& sLattice) : SuperLatticeF3D<T, DESCRIPTOR>(sLattice, 6)
+{
+  this->getName() = "stress";
+  int maxC = this->_sLattice.getLoadBalancer().size();
+  for (int iC = 0; iC < maxC; iC++) {
+    this->_blockF.emplace_back(new BlockLatticeStress3D<T, DESCRIPTOR>(this->_sLattice.getBlock(iC)));
+  }
+}
+
+template<typename T, typename DESCRIPTOR>
+BlockLatticeStress3D<T, DESCRIPTOR>::BlockLatticeStress3D(
+  BlockLattice<T, DESCRIPTOR>& blockLattice)
+  : BlockLatticeF3D<T, DESCRIPTOR>(blockLattice, 6)
+{
+  this->getName() = "stress";
+}
+
+template<typename T, typename DESCRIPTOR>
+bool BlockLatticeStress3D<T, DESCRIPTOR>::operator()(T output[], const int input[])
+{
+  this->_blockLattice.get(input[0], input[1], input[2]).computeStress(output);
+  return true;
+}
+
+template <typename T, typename DESCRIPTOR>
+class InterpolatedWssF final: public AnalyticalF<3,T,T> {
+private:
+  UnitConverter<T,DESCRIPTOR>& _converter;
+  AnalyticalF3D<T,T>& _densityF;
+  AnalyticalF3D<T,T>& _stressF;
+  STLreader<T>& _stlReader;
+  T _physFactor;
+
+public:
+  InterpolatedWssF(UnitConverter<T,DESCRIPTOR>& converter,
+                   AnalyticalF3D<T,T>& densityF,
+                   AnalyticalF3D<T,T>& stressF,
+                   STLreader<T>& stlReader):
+    AnalyticalF<3,T,T>(3),
+    _converter(converter),
+    _densityF(densityF),
+    _stressF(stressF),
+    _stlReader(stlReader) {
+    const T omega = 1. / _converter.getLatticeRelaxationTime();
+    const T dt = _converter.getConversionFactorTime();
+    _physFactor = -omega
+                * descriptors::invCs2<T,DESCRIPTOR>() / dt
+                * _converter.getPhysDensity() * _converter.getPhysViscosity();
+  }
+
+  bool operator() (T output[], const T physR[]) override {
+    Vector<T,3> origin(physR);
+    auto normal = _stlReader.surfaceNormal(physR);
+    normal = normalize(normal);
+
+    T traction[3] { };
+    T stress[6] { };
+    T rho{};
+
+    Vector<T,3> neighbor = origin - 0.5*_converter.getPhysDeltaX() * normal;
+    _densityF(&rho, neighbor.data());
+    _stressF(stress, neighbor.data());
+
+    traction[0] = stress[0]/_physFactor*rho*normal[0] +
+                  stress[1]/_physFactor*rho*normal[1] +
+                  stress[2]/_physFactor*rho*normal[2];
+    traction[1] = stress[1]/_physFactor*rho*normal[0] +
+                  stress[3]/_physFactor*rho*normal[1] +
+                  stress[4]/_physFactor*rho*normal[2];
+    traction[2] = stress[2]/_physFactor*rho*normal[0] +
+                  stress[4]/_physFactor*rho*normal[1] +
+                  stress[5]/_physFactor*rho*normal[2];
+
+    T traction_normal_SP;
+    T tractionNormalComponent[3];
+    // scalar product of traction and normal vector
+    traction_normal_SP = traction[0] * normal[0] +
+                         traction[1] * normal[1] +
+                         traction[2] * normal[2];
+    tractionNormalComponent[0] = traction_normal_SP * normal[0];
+    tractionNormalComponent[1] = traction_normal_SP * normal[1];
+    tractionNormalComponent[2] = traction_normal_SP * normal[2];
+
+    output[0] = traction[0] - tractionNormalComponent[0];
+    output[1] = traction[1] - tractionNormalComponent[1];
+    output[2] = traction[2] - tractionNormalComponent[2];
+
+    return true;
+  }
+
+};
+
 
 // Stores data from stl file in geometry in form of material numbers
 void prepareGeometry( UnitConverter<T,DESCRIPTOR> const& converter, IndicatorF3D<T>& indicator,
@@ -67,19 +174,19 @@ void prepareGeometry( UnitConverter<T,DESCRIPTOR> const& converter, IndicatorF3D
 
   // Set material number for inflow
   IndicatorCircle3D<T> inflow(  0.218125,0.249987,0.0234818, 0., 1.,0., 0.0112342 );
-  IndicatorCylinder3D<T> layerInflow( inflow, 2.*converter.getConversionFactorLength() );
+  IndicatorCylinder3D<T> layerInflow( inflow, 2.*converter.getPhysDeltaX() );
   superGeometry.rename( 2,3,1,layerInflow );
 
   // Set material number for outflow0
   //IndicatorCircle3D<T> outflow0(0.2053696,0.0900099,0.0346537,  2.5522,5.0294,-1.5237, 0.0054686 );
   IndicatorCircle3D<T> outflow0( 0.2053696,0.0900099,0.0346537, 0.,-1.,0., 0.0054686 );
-  IndicatorCylinder3D<T> layerOutflow0( outflow0, 2.*converter.getConversionFactorLength() );
+  IndicatorCylinder3D<T> layerOutflow0( outflow0, 2.*converter.getPhysDeltaX() );
   superGeometry.rename( 2,4,1,layerOutflow0 );
 
   // Set material number for outflow1
   //IndicatorCircle3D<T> outflow1(0.2388403,0.0900099,0.0343228, -1.5129,5.1039,-2.8431, 0.0058006 );
   IndicatorCircle3D<T> outflow1( 0.2388403,0.0900099,0.0343228, 0.,-1.,0., 0.0058006 );
-  IndicatorCylinder3D<T> layerOutflow1( outflow1, 2.*converter.getConversionFactorLength() );
+  IndicatorCylinder3D<T> layerOutflow1( outflow1, 2.*converter.getPhysDeltaX() );
   superGeometry.rename( 2,5,1,layerOutflow1 );
 
   // Removes all not needed boundary voxels outside the surface
@@ -114,15 +221,16 @@ void prepareLattice( SuperLattice<T, DESCRIPTOR>& lattice,
   }
   else {
     // material=2 --> bounceBack dynamics
-    setBounceBackBoundary(lattice, superGeometry, 2);
+    boundary::set<boundary::BounceBack>(lattice, superGeometry, 2);
     // material=3 --> bulk dynamics + velocity (inflow)
     lattice.defineDynamics<BulkDynamics>(superGeometry, 3);
-    setInterpolatedVelocityBoundary<T,DESCRIPTOR>(lattice, omega, superGeometry, 3);
+    boundary::set<boundary::InterpolatedVelocity>(lattice, superGeometry, 3);
   }
 
   // material=4,5 --> bulk dynamics + pressure (outflow)
   lattice.defineDynamics<BulkDynamics>(superGeometry.getMaterialIndicator({4, 5}));
-  setInterpolatedPressureBoundary<T,DESCRIPTOR>(lattice, omega, superGeometry.getMaterialIndicator({4, 5}));
+  boundary::set<boundary::InterpolatedPressure>(lattice, superGeometry, 4);
+  boundary::set<boundary::InterpolatedPressure>(lattice, superGeometry, 5);
 
   // Initial conditions
   AnalyticalConst3D<T,T> rhoF( 1 );
@@ -134,7 +242,7 @@ void prepareLattice( SuperLattice<T, DESCRIPTOR>& lattice,
   lattice.iniEquilibrium( superGeometry.getMaterialIndicator({1, 3, 4, 5}),rhoF,uF );
 
   lattice.setParameter<descriptors::OMEGA>(omega);
-  lattice.setParameter<collision::LES::Smagorinsky>(T(0.1));
+  lattice.setParameter<collision::LES::SMAGORINSKY>(T(0.1));
   // Lattice initialize
   lattice.initialize();
 
@@ -177,9 +285,12 @@ void setBoundaryValues( SuperLattice<T, DESCRIPTOR>& sLattice,
 // Computes flux at inflow and outflow
 void getResults( SuperLattice<T, DESCRIPTOR>& sLattice,
                  UnitConverter<T,DESCRIPTOR>& converter, int iT,
-                 SuperGeometry<T,3>& superGeometry, util::Timer<T>& timer, STLreader<T>& stlReader )
+                 SuperGeometry<T,3>& superGeometry, util::Timer<T>& timer, STLreader<T>& stlReader
+#ifdef FEATURE_VTK
+                 , vtkSurfaceWriter<T>& vtkSurfaceWriter
+#endif
+                 )
 {
-
   OstreamManager clout( std::cout,"getResults" );
 
   const int vtkIter  = converter.getLatticeTime( .1 );
@@ -187,12 +298,9 @@ void getResults( SuperLattice<T, DESCRIPTOR>& sLattice,
 
   if ( iT==0 ) {
     SuperVTMwriter3D<T> vtmWriter("aorta3d");
-
     // Writes the geometry, cuboid no. and rank no. as vti file for visualization
-    SuperLatticeGeometry3D<T, DESCRIPTOR> geometry( sLattice, superGeometry );
     SuperLatticeCuboid3D<T, DESCRIPTOR> cuboid( sLattice );
     SuperLatticeRank3D<T, DESCRIPTOR> rank( sLattice );
-    vtmWriter.write( geometry );
     vtmWriter.write( cuboid );
     vtmWriter.write( rank );
 
@@ -210,6 +318,32 @@ void getResults( SuperLattice<T, DESCRIPTOR>& sLattice,
       vtmWriter.addFunctor(pressure);
       task(vtmWriter, iT);
     });
+
+#ifdef FEATURE_VTK
+    {
+      SuperLatticePhysVelocity3D velocityF(sLattice, converter);
+      AnalyticalFfromSuperF3D smoothVelocityF(velocityF);
+      smoothVelocityF.getName() = "u";
+      vtkSurfaceWriter.addFunctor(smoothVelocityF);
+
+      SuperLatticePhysPressure3D pressureF(sLattice, converter);
+      AnalyticalFfromSuperF3D smoothPressureF(pressureF);
+      smoothPressureF.getName() = "p";
+      vtkSurfaceWriter.addFunctor(smoothPressureF);
+
+      SuperLatticeDensity3D densityF(sLattice);
+      AnalyticalFfromSuperF3D smoothDensityF(densityF);
+
+      SuperLatticeStress3D stressF(sLattice);
+      AnalyticalFfromSuperF3D smoothStressF(stressF);
+
+      InterpolatedWssF<T,DESCRIPTOR> interpolatedWssF(converter, smoothDensityF, smoothStressF, stlReader);
+      interpolatedWssF.getName() = "interpolatedWss";
+      vtkSurfaceWriter.addFunctor(interpolatedWssF);
+
+      vtkSurfaceWriter.write(iT);
+    }
+#endif
   }
 
   // Writes output on the console
@@ -224,19 +358,19 @@ void getResults( SuperLattice<T, DESCRIPTOR>& sLattice,
     // Flux at the inflow and outflow region
     std::vector<int> materials = { 1, 3, 4, 5 };
 
-    IndicatorCircle3D<T> inflow(  0.218125,0.249987-2.*converter.getConversionFactorLength(),0.0234818, 0., -1.,0., 0.0112342+2*converter.getConversionFactorLength() );
+    IndicatorCircle3D<T> inflow(  0.218125,0.249987-2.*converter.getPhysDeltaX(),0.0234818, 0., -1.,0., 0.0112342+2*converter.getPhysDeltaX() );
     SuperPlaneIntegralFluxVelocity3D<T> vFluxInflow( sLattice, converter, superGeometry, inflow, materials, BlockDataReductionMode::Discrete );
     vFluxInflow.print( "inflow","ml/s" );
     SuperPlaneIntegralFluxPressure3D<T> pFluxInflow( sLattice, converter, superGeometry, inflow, materials, BlockDataReductionMode::Discrete );
     pFluxInflow.print( "inflow","N","mmHg" );
 
-    IndicatorCircle3D<T> outflow0( 0.2053696,0.0900099+2.*converter.getConversionFactorLength(),0.0346537, 0.,1.,0., 0.0054686+2*converter.getConversionFactorLength() );
+    IndicatorCircle3D<T> outflow0( 0.2053696,0.0900099+2.*converter.getPhysDeltaX(),0.0346537, 0.,1.,0., 0.0054686+2*converter.getPhysDeltaX() );
     SuperPlaneIntegralFluxVelocity3D<T> vFluxOutflow0( sLattice, converter, superGeometry, outflow0, materials, BlockDataReductionMode::Discrete );
     vFluxOutflow0.print( "outflow0","ml/s" );
     SuperPlaneIntegralFluxPressure3D<T> pFluxOutflow0( sLattice, converter, superGeometry, outflow0, materials, BlockDataReductionMode::Discrete );
     pFluxOutflow0.print( "outflow0","N","mmHg" );
 
-    IndicatorCircle3D<T> outflow1( 0.2388403,0.0900099+2.*converter.getConversionFactorLength(),0.0343228, 0.,1.,0., 0.0058006+2*converter.getConversionFactorLength() );
+    IndicatorCircle3D<T> outflow1( 0.2388403,0.0900099+2.*converter.getPhysDeltaX(),0.0343228, 0.,1.,0., 0.0058006+2*converter.getPhysDeltaX() );
     SuperPlaneIntegralFluxVelocity3D<T> vFluxOutflow1( sLattice, converter, superGeometry, outflow1, materials, BlockDataReductionMode::Discrete );
     vFluxOutflow1.print( "outflow1","ml/s" );
     SuperPlaneIntegralFluxPressure3D<T> pFluxOutflow1( sLattice, converter, superGeometry, outflow1, materials, BlockDataReductionMode::Discrete );
@@ -284,8 +418,8 @@ int main( int argc, char* argv[] )
 
   // Instantiation of the STLreader class
   // file name, voxel size in meter, stl unit in meter, outer voxel no., inner voxel no.
-  STLreader<T> stlReader( "aorta3d.stl", converter.getConversionFactorLength(), 0.001, 0, true );
-  IndicatorLayer3D<T> extendedDomain( stlReader, converter.getConversionFactorLength() );
+  STLreader<T> stlReader( "aorta3d.stl", converter.getPhysDeltaX(), 0.001,  olb::RayMode::FastRayZ, true );
+  IndicatorLayer3D<T> extendedDomain( stlReader, converter.getPhysDeltaX() );
 
   // Instantiation of a cuboidGeometry with weights
 #ifdef PARALLEL_MODE_MPI
@@ -293,7 +427,7 @@ int main( int argc, char* argv[] )
 #else
   const int noOfCuboids = 2;
 #endif
-  CuboidGeometry3D<T> cuboidGeometry( extendedDomain, converter.getConversionFactorLength(), noOfCuboids, "volume" );
+  CuboidGeometry3D<T> cuboidGeometry( extendedDomain, converter.getPhysDeltaX(), noOfCuboids, "volume" );
   // Instantiation of a loadBalancer
   HeuristicLoadBalancer<T> loadBalancer( cuboidGeometry );
 
@@ -309,6 +443,13 @@ int main( int argc, char* argv[] )
   timer1.start();
 
   prepareLattice( sLattice, converter, stlReader, superGeometry );
+
+#ifdef FEATURE_VTK
+  vtkSurfaceWriter<T> vtkSurfaceWriter(stlReader,
+                                       sLattice.getCuboidGeometry(),
+                                       sLattice.getLoadBalancer(),
+                                       "aortaSurface");
+#endif
 
   timer1.stop();
   timer1.printSummary();
@@ -326,7 +467,11 @@ int main( int argc, char* argv[] )
     sLattice.collideAndStream();
 
     // === 7th Step: Computation and Output of the Results ===
+#ifdef FEATURE_VTK
+    getResults( sLattice, converter, iT, superGeometry, timer, stlReader, vtkSurfaceWriter );
+#else
     getResults( sLattice, converter, iT, superGeometry, timer, stlReader );
+#endif
   }
 
   timer.stop();

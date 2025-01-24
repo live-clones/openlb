@@ -26,7 +26,7 @@
 
 #include <vector>
 
-
+#include <functors/lattice/euklidNorm3D.h>
 
 namespace olb {
 
@@ -36,12 +36,15 @@ namespace olb {
 // TA  = SUM(functorvalue(iT)/SUM(iT))
 // RMS = SQRT( SUM( (functorvalue(iT) - TA)^2 / SUM(iT) ) )
 template <typename T>
-class SuperLatticeTimeAveragedF3D final:  public SuperF3D<T,T> {
-private:
+class SuperLatticeTimeAveragedF3D : public SuperF3D<T,T> {
+protected:
   int _ensembles;
   SuperF3D<T,T>& _sFunctor;
   SuperData<3,T, T> _sData;
   SuperData<3,T, T> _sDataP2;
+
+  SuperData<3,T,T> _sDataHelp;     // for Kahan summation
+  SuperData<3,T,T> _sDataP2help;   // for Kahan summation
 
 public:
   SuperLatticeTimeAveragedF3D(SuperF3D<T,T>& sFunctor);
@@ -56,12 +59,15 @@ public:
 };
 
 template <typename T>
-class SuperLatticeTimeAveragedMagnitudesF3D final:  public SuperF3D<T,T> {
-private:
+class SuperLatticeTimeAveragedMagnitudesF3D : public SuperF3D<T,T> {
+protected:
   int _ensembles;
   SuperF3D<T,T>& _sFunctor;
   SuperData<3,T, T> _sData;
   SuperData<3,T, T> _sDataP2;
+
+  SuperData<3,T,T> _sDataHelp;     // for Kahan summation
+  SuperData<3,T,T> _sDataP2help;   // for Kahan summation
 
 public:
   SuperLatticeTimeAveragedMagnitudesF3D(SuperF3D<T,T>& sFunctor);
@@ -89,6 +95,11 @@ private:
   SuperData<3,T, T> _sDataN;
   SuperData<3,T, T> _sDataMN;
 
+  // for Kahan summation
+  SuperData<3,T,T> _sDataMhelp;
+  SuperData<3,T,T> _sDataNhelp;
+  SuperData<3,T,T> _sDataMNhelp;
+
 public:
   SuperLatticeTimeAveragedCrossCorrelationF3D(SuperF3D<T,T>& sFunctorM, SuperF3D<T,T>& sFunctorN);
 
@@ -97,20 +108,7 @@ public:
   void addEnsemble();
 
 };
-template <typename T>
-class SuperLatticeTimeAveraged3DL2Norm final: public SuperF3D<T,T> {
-private:
-  SuperF3D<T,T>&_sFunctorM;
-  SuperF3D<T,T>&_sFunctorN;
-  SuperGeometry<T,3>& _sGeometry;
-  int _material;
 
-public:
-  SuperLatticeTimeAveraged3DL2Norm(SuperF3D<T,T>& sFunctorM,SuperF3D<T,T>& sFunctorN,SuperGeometry<T,3>& sGeometry,int material);
-
-  bool operator() (T output[], const int input[]);
-
-};
 }
 
 #endif

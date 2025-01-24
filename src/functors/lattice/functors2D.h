@@ -78,7 +78,6 @@
 #include "euklidNorm2D.h"
 #include "latticeIndicatorSmoothIndicatorIntersection2D.h"
 #include "latticeField2D.h"
-#include "latticeAverage2D.h"
 #include "latticePhysExternalParticleVelocity2D.h"
 #include "latticePhysExternalScalar2D.h"
 #include "latticePhysExternalPorosity2D.h"

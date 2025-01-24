@@ -38,7 +38,7 @@
 #include "forces/force3D.h"
 #include "functors/analytical/indicator/indicatorBaseF3D.h"
 #include "functors/analytical/analyticalF.h"
-#include "geometry/cuboidGeometry3D.h"
+#include "geometry/cuboidGeometry.h"
 #include "geometry/superGeometry.h"
 #include "particleSystem3D.h"
 #include "superParticleSysVTUout.h"

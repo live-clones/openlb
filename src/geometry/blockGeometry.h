@@ -34,9 +34,9 @@
 #include "core/blockStructure.h"
 #include "core/fieldArrayD.hh"
 #include "geometry/blockGeometryStatistics2D.h"
-#include "geometry/cuboid2D.h"
+#include "geometry/cuboid.h"
 #include "communication/communicatable.h"
-#include "dynamics/latticeDescriptors.h"
+#include "descriptor/descriptor.h"
 
 // All OpenLB code is contained in this namespace.
 namespace olb {
@@ -126,14 +126,14 @@ public:
   void set(const int latticeR[D], int material);
   void set(std::size_t iCell, int material);
 
-  Vector<T,D> getPhysR(LatticeR<D> latticeR) {
-    T physR[D];
+  Vector<T,D> getPhysR(LatticeR<D> latticeR) const {
+    Vector<T,D> physR;
     getPhysR(physR, latticeR);
-    return Vector<T,D>(physR);
+    return physR;
   }
   /// Transforms lattice to physical coordinates (wrapped from cuboid geometry)
-  void getPhysR(T physR[D], const int latticeR[D]) const;
-  void getPhysR(T physR[D], LatticeR<D> latticeR) const;
+  void getPhysR(Vector<T,D>& physR, LatticeR<D> latticeR) const;
+
   Cuboid<T,D>& getCuboid(){
     return _cuboid;
   }
@@ -192,7 +192,7 @@ public:
   /// Prints a chosen part of the block geometry
   void printLayer(int direction, int layer, bool linenumber = false);
   /// Prints a chosen node and its neighbourhood
-  void printNode(std::vector<int> loc);
+  void printNode(std::vector<int> loc, int offset=1);
 
   /// Number of data blocks for the serializable interface
   std::size_t getNblock() const override;
@@ -215,6 +215,8 @@ using BlockGeometry3D = BlockGeometry<T,3>;
 /// Curried BlockGeometry template for use in callUsingConcretePlatform
 template<typename T, unsigned D>
 struct ConcretizableBlockGeometry {
+
+using value_t = T;
 
 using base_t = BlockGeometry<T,D>;
 

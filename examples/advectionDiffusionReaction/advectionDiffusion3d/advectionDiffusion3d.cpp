@@ -61,7 +61,7 @@ using TDESCRIPTOR = D3Q7<VELOCITY>;
 
 const int nonsmooth = 1;           //switch for initial condition
 const int runs = 4;                // # simulations with increasing resolution
-const int N0 = 20;                 // initial # discrete points per dimension
+const int N0 = 21;                 // initial # discrete points per dimension
 const int statIter0 = 20;          // initial # lattice output timesteps
 
 // Note: the peclet number can also be passed as an argument
@@ -293,10 +293,8 @@ T getResults(SuperLattice<T, TDESCRIPTOR> &ADlattice,
 
     if (iT == 0) {
       /// Writes the geometry, cuboid no. and rank no. as vti file for visualization
-      SuperLatticeGeometry3D <T, TDESCRIPTOR> geometry(ADlattice, superGeometry);
       SuperLatticeCuboid3D <T, TDESCRIPTOR> cuboid(ADlattice);
       SuperLatticeRank3D <T, TDESCRIPTOR> rank(ADlattice);
-      vtkWriter.write(geometry);
       vtkWriter.write(cuboid);
       vtkWriter.write(rank);
 
@@ -379,7 +377,7 @@ void simulate(int N, int statIter, T physVel, T peclet, T physLength) {
     const int noOfCuboids = 1;
 #endif
     CuboidGeometry3D <T> cuboidGeometry(cuboid, converter.getPhysDeltaX(), noOfCuboids);
-    cuboidGeometry.setPeriodicity(true, true, true);
+    cuboidGeometry.setPeriodicity({true, true, true});
 
     /// Instantiation of a loadBalancer
     HeuristicLoadBalancer <T> loadBalancer(cuboidGeometry);

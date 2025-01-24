@@ -26,7 +26,7 @@
 #define NAMES_H
 
 
-#include "dynamics/descriptorTag.h"
+#include "descriptor/tag.h"
 
 
 namespace olb {
@@ -44,9 +44,11 @@ struct Component2 { };
 struct Component3 { };
 struct Component4 { };
 
+struct Lattice : public descriptors::DESCRIPTOR_TAG { };
 struct NavierStokes : public descriptors::DESCRIPTOR_TAG { };
 struct AdvectionDiffusion : public descriptors::DESCRIPTOR_TAG { };
 struct Temperature  : public descriptors::DESCRIPTOR_TAG { };
+struct Points : public descriptors::DESCRIPTOR_TAG { };
 
 template <unsigned DIM>
 struct Concentration   : public descriptors::DESCRIPTOR_TAG { };

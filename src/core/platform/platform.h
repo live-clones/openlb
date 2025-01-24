@@ -25,9 +25,8 @@
 #ifndef PLATFORM_H
 #define PLATFORM_H
 
+#include <cstdint>
 #include <stdexcept>
-
-#include "core/meta.h"
 
 /// Top level namespace for all of OpenLB
 namespace olb {
@@ -79,76 +78,6 @@ struct PreContextSwitchTo { };
   #define platform_constant constexpr
   #define platform_constant_definition constexpr
 #endif
-
-/// Dispatcher for concrete platform access
-/**
- * See e.g. ConcretizableBlockLattice usage in BlockLattice::getField
- **/
-template <typename CONCRETIZABLE, typename F>
-inline auto callUsingConcretePlatform(Platform platform, typename CONCRETIZABLE::base_t* ptr, F f)
-{
-  switch (platform) {
-#ifdef PLATFORM_CPU_SISD
-  case Platform::CPU_SISD:
-    return f(static_cast<typename CONCRETIZABLE::template type<Platform::CPU_SISD>*>(ptr));
-#endif
-#ifdef PLATFORM_CPU_SIMD
-  case Platform::CPU_SIMD:
-    return f(static_cast<typename CONCRETIZABLE::template type<Platform::CPU_SIMD>*>(ptr));
-#endif
-#ifdef PLATFORM_GPU_CUDA
-  case Platform::GPU_CUDA:
-    return f(static_cast<typename CONCRETIZABLE::template type<Platform::GPU_CUDA>*>(ptr));
-#endif
-  default:
-    throw std::invalid_argument("Invalid PLATFORM");
-  }
-}
-
-template <typename F>
-inline void callUsingConcretePlatform(Platform platform, F f)
-{
-  switch (platform) {
-#ifdef PLATFORM_CPU_SISD
-  case Platform::CPU_SISD:
-    f(meta::value<Platform::CPU_SISD>{});
-    break;
-#endif
-#ifdef PLATFORM_CPU_SIMD
-  case Platform::CPU_SIMD:
-    f(meta::value<Platform::CPU_SIMD>{});
-    break;
-#endif
-#ifdef PLATFORM_GPU_CUDA
-  case Platform::GPU_CUDA:
-    f(meta::value<Platform::GPU_CUDA>{});
-    break;
-#endif
-  default:
-    throw std::invalid_argument("Invalid PLATFORM");
-  }
-}
-
-template <typename CONCRETIZABLE, typename... ARGS>
-typename CONCRETIZABLE::base_t* constructUsingConcretePlatform(Platform platform, ARGS&&... args)
-{
-  switch (platform) {
-#ifdef PLATFORM_CPU_SISD
-  case Platform::CPU_SISD:
-    return new typename CONCRETIZABLE::template type<Platform::CPU_SISD>(std::forward<decltype(args)>(args)...);
-#endif
-#ifdef PLATFORM_CPU_SIMD
-  case Platform::CPU_SIMD:
-    return new typename CONCRETIZABLE::template type<Platform::CPU_SIMD>(std::forward<decltype(args)>(args)...);
-#endif
-#ifdef PLATFORM_GPU_CUDA
-  case Platform::GPU_CUDA:
-    return new typename CONCRETIZABLE::template type<Platform::GPU_CUDA>(std::forward<decltype(args)>(args)...);
-#endif
-  default:
-    throw std::invalid_argument("Invalid PLATFORM");
-  }
-}
 
 /// Returns true if platform is equal to Platform::CPU_*
 constexpr bool isPlatformCPU(Platform platform) {

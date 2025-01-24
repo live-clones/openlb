@@ -53,7 +53,7 @@ const std::vector<unsigned int> WallContact<D>::indicesSingle({0});
 // Contact type to be used, if wall contact should be ignored (e.g., if only particle-particle contact is of interest)
 // TODO: struct IgnoreWallContact : WallContact {};
 
-template <typename T, unsigned D, bool CONVEX>
+template <typename T, unsigned D, bool CONVEX = true>
 struct WallContactArbitraryFromOverlapVolume : WallContact<D> {
 private:
   /// position of the particle (necessary for periodic setups)

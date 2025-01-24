@@ -29,7 +29,7 @@
 #include "core/blockStructure.h"
 #include "core/postProcessing.h"
 #include "core/util.h"
-#include "dynamics/latticeDescriptors.h"
+#include "descriptor/descriptor.h"
 #include "utilities/omath.h"
 #include <assert.h>
 

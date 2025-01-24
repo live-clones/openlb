@@ -149,6 +149,16 @@ struct GenericVector {
     return false;
   }
 
+  constexpr bool operator != (T rhs) const any_platform
+  {
+    for (unsigned iDim=0; iDim < D; ++iDim) {
+      if (operator[](iDim) != rhs) {
+        return true;
+      }
+    }
+    return false;
+  }
+
 };
 
 

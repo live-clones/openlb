@@ -53,9 +53,8 @@ SuperIndicatorFfromIndicatorF3D<T>::SuperIndicatorFfromIndicatorF3D(
 template <typename T>
 bool SuperIndicatorFfromIndicatorF3D<T>::operator() (bool output[], const int input[])
 {
-  T physR[3];
-  this->_superStructure.getCuboidGeometry().getPhysR(physR, input);
-  return _indicatorF(output, physR);
+  auto physR = this->_superStructure.getCuboidGeometry().getPhysR(input);
+  return _indicatorF(output, physR.data());
 }
 
 
@@ -81,10 +80,9 @@ SuperIndicatorFfromSmoothIndicatorF3D<T, HLBM>::SuperIndicatorFfromSmoothIndicat
 template <typename T, bool HLBM>
 bool SuperIndicatorFfromSmoothIndicatorF3D<T, HLBM>::operator() (bool output[], const int input[])
 {
-  T physR[3];
   T inside[1];
-  this->_superStructure.getCuboidGeometry().getPhysR(physR, input);
-  _indicatorF(inside, physR);
+  auto physR = this->_superStructure.getCuboidGeometry().getPhysR(input);
+  _indicatorF(inside, physR.data());
   return !util::nearZero(inside[0]);
 }
 
@@ -120,6 +118,38 @@ SuperIndicatorMaterial3D<T>::SuperIndicatorMaterial3D(
 
 template <typename T>
 bool SuperIndicatorMaterial3D<T>::operator() (bool output[], const int input[])
+{
+  output[0] = false;
+
+  LoadBalancer<T>& load = this->_superGeometry.getLoadBalancer();
+
+  if (!this->_blockF.empty() && load.isLocal(input[0])) {
+    // query material number of appropriate block indicator
+    return this->getBlockF(load.loc(input[0]))(output,&input[1]);
+  }
+  else {
+    return false;
+  }
+}
+
+template <typename T, typename DESCRIPTOR, typename FIELD>
+SuperIndicatorFieldThreshold3D<T,DESCRIPTOR,FIELD>::SuperIndicatorFieldThreshold3D(
+  SuperGeometry<T,3>& geometry, SuperLattice<T, DESCRIPTOR>& superLattice, std::vector<int> materials, T thresholdValue, std::string condition)
+  : SuperIndicatorF3D<T>(geometry),
+    _superLattice(superLattice),
+    _thresholdValue(thresholdValue),
+    _condition(condition)
+{
+  geometry.updateStatistics(false);
+  for (int iC=0; iC < this->_superGeometry.getLoadBalancer().size(); ++iC) {
+    this->_blockF.emplace_back(
+      new BlockIndicatorFieldThreshold3D<T,DESCRIPTOR,FIELD>(this->_superGeometry.getBlockGeometry(iC), this->_superLattice.getBlock(iC), materials, _thresholdValue, _condition)
+    );
+  }
+}
+
+template <typename T, typename DESCRIPTOR, typename FIELD>
+bool SuperIndicatorFieldThreshold3D<T,DESCRIPTOR,FIELD>::operator() (bool output[], const int input[])
 {
   output[0] = false;
 
@@ -205,6 +235,36 @@ bool SuperIndicatorMultiplication3D<T>::operator()(
   _f(output, input);
   if (output[0]) {
     _g(output, input);
+  }
+  return output[0];
+}
+
+template <typename T>
+SuperIndicatorSubstraction3D<T>::SuperIndicatorSubstraction3D(
+  FunctorPtr<SuperIndicatorF3D<T>>&& f,
+  FunctorPtr<SuperIndicatorF3D<T>>&& g)
+  : SuperIndicatorF3D<T>(f->getSuperGeometry()),
+    _f(std::move(f)), _g(std::move(g))
+{
+  this->getName() = _f->getName() + " - " + _g->getName();
+
+  for (int iC = 0; iC < _f->getBlockFSize(); ++iC) {
+    this->_blockF.emplace_back(
+      new BlockIndicatorSubstraction3D<T>(
+        _f->getBlockIndicatorF(iC),
+        _g->getBlockIndicatorF(iC)));
+  }
+}
+
+template <typename T>
+bool SuperIndicatorSubstraction3D<T>::operator()(
+  bool output[], const int input[])
+{
+  _f(output, input);
+  if (output[0]) {
+    bool tmp { };
+    _g(&tmp, input);
+    output[0] &= !tmp;
   }
   return output[0];
 }

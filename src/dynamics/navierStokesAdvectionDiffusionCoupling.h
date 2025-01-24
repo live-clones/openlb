@@ -31,55 +31,73 @@ namespace olb {
 /// TotalEnthalpyPhaseChange between a Navier-Stokes and an Advection-Diffusion lattice
 struct TotalEnthalpyPhaseChangeCoupling {
   static constexpr OperatorScope scope = OperatorScope::PerCellWithParameters;
-
+  struct T_S             : public descriptors::FIELD_BASE<1> { };
+  struct T_L             : public descriptors::FIELD_BASE<1> { };
+  struct CP_S            : public descriptors::FIELD_BASE<1> { };
+  struct CP_L            : public descriptors::FIELD_BASE<1> { };
+  struct L               : public descriptors::FIELD_BASE<1> { };
   struct FORCE_PREFACTOR : public descriptors::FIELD_BASE<0,1> { };
-  struct T0 : public descriptors::FIELD_BASE<1> { };
+  struct T_COLD          : public descriptors::FIELD_BASE<1> { };
+  struct DELTA_T         : public descriptors::FIELD_BASE<1> { };
 
-  struct CP_S : public descriptors::FIELD_BASE<1> { };
-  struct CP_L : public descriptors::FIELD_BASE<1> { };
-  struct T_S  : public descriptors::FIELD_BASE<1> { };
-  struct T_L  : public descriptors::FIELD_BASE<1> { };
-  struct L    : public descriptors::FIELD_BASE<1> { };
-  // V H_s  = cp_s * T_s;
-  // V H_l  = cp_l * T_l + l;
+  using parameters = meta::list<T_S,T_L,CP_S,CP_L,L,FORCE_PREFACTOR,T_COLD,DELTA_T>;
 
+  int getPriority() const {
+    return 0;
+  }
 
-  using parameters = meta::list<FORCE_PREFACTOR,T0, CP_S, CP_L, T_S, T_L, L>;
-
-  template <typename CELLS, typename PARAMETERS>
-  void apply(CELLS& cells, PARAMETERS& parameters) any_platform
+  template <typename CELL, typename PARAMETERS>
+  void apply(CELL& cells, PARAMETERS& parameters) any_platform
   {
-    using V = typename CELLS::template value_t<names::NavierStokes>::value_t;
-    using DESCRIPTOR = typename CELLS::template value_t<names::NavierStokes>::descriptor_t;
+    using V = typename CELL::template value_t<names::NavierStokes>::value_t;
+    using DESCRIPTOR = typename CELL::template value_t<names::NavierStokes>::descriptor_t;
 
-    auto& cellNSE = cells.template get<names::NavierStokes>();
-    auto& cellADE = cells.template get<names::Temperature>();
+    auto& cellNS = cells.template get<names::NavierStokes>();
+    auto& cellAD = cells.template get<names::Temperature>();
 
-    V enthalpy = cellADE.computeRho();
-    auto& dynamics = cellADE.getDynamics();
-    /*auto& dynParams = static_cast<ParametersOfDynamicsD<DYNAMICS>&>(
-      tPartner->template getData<OperatorParameters<DYNAMICS>>());*/
+    auto cp_s = parameters.template get<CP_S>();
+    auto cp_l = parameters.template get<CP_L>();
+    auto T_s = parameters.template get<T_S>();
+    auto T_l = parameters.template get<T_L>();
+    auto l = parameters.template get<L>();
+    auto forcePrefactor = parameters.template get<FORCE_PREFACTOR>();
+    auto T0 = parameters.template get<T_COLD>();
+    //auto deltaT = parameters.template get<DELTA_T>();
 
-    //cellNSE.template setField<descriptors::POROSITY>(
-      //dynamics->template computeLiquidFraction<T>(parameters, enthalpy)
-    //);
+    const V H_s  = cp_s * T_s;
+    const V H_l  = cp_l * T_l + l;
+    V enthalpy = cellAD.computeRho();
+    V temperature, liquid_fraction;
 
-    auto temperature = cellADE.template getFieldPointer<descriptors::TEMPERATURE>();
-    //temperature[0] = dynamics->computeTemperature<V, parameters, enthalpy>();
+    if (enthalpy <= H_s) {
+      temperature = T_s - (H_s - enthalpy) / cp_s;
+      liquid_fraction = 0.;
+    }
+    else if (enthalpy >= H_l) {
+      temperature = T_l + (enthalpy - H_l) / cp_l;
+      liquid_fraction = 1.;
+    }
+    else {
+      temperature = (H_l - enthalpy) / (H_l - H_s) * T_s + (enthalpy - H_s) / (H_l - H_s) * T_l;
+      liquid_fraction = (enthalpy - H_s) / l;
+    }
+    //std::cout << "temperature: " << temperature << std::endl;
+    //std::cout << "liquid fraction: " << liquid_fraction << std::endl;
+    cellNS.template setField<descriptors::POROSITY>(liquid_fraction);
+    cellAD.template setField<descriptors::TEMPERATURE>(temperature);
 
     // computation of the bousinessq force
-    auto force = cellNSE.template getFieldPointer<descriptors::FORCE>();
-    auto forcePrefactor = parameters.template get<FORCE_PREFACTOR>();
-    V temperatureDifference = cellADE.computeRho() - parameters.template get<T0>();
+    auto force = cellNS.template getFieldPointer<descriptors::FORCE>();
+    V temperatureDifference = temperature - T0;
     for (unsigned iD = 0; iD < DESCRIPTOR::d; ++iD) {
       force[iD] = forcePrefactor[iD] * temperatureDifference;
     }
+
     // Velocity coupling
     V u[DESCRIPTOR::d] { };
-    cellNSE.computeU(u);
-    cellADE.template setField<descriptors::VELOCITY>(u);
+    cellNS.computeU(u);
+    cellAD.template setField<descriptors::VELOCITY>(u);
   }
-
 };
 
 
@@ -306,6 +324,56 @@ struct LESReactionCoupling {
 
 };
 
+/// Porous ADE correction term
+template<typename T>
+struct PorousADECorrection {
+  static constexpr OperatorScope scope = OperatorScope::PerCellWithParameters;
+
+  struct DIFFUSION : public descriptors::FIELD_BASE<1> { };
+  //struct VELOCITY : public descriptors::FIELD_BASE<3> { };
+
+  using parameters = meta::list<DIFFUSION>;
+
+  template <typename CELLS, typename PARAMETERS>
+  void apply(CELLS& cells, PARAMETERS& parameters) any_platform
+   {
+    T diffusion = parameters.template get<DIFFUSION>();
+
+    auto& cell = cells.template get<names::Concentration0>();
+
+    auto vel = cell.template getField<descriptors::VELOCITY>();
+
+    T porOld = cell.template getField<descriptors::SCALAR>();
+    T porosity = cell.template getField<descriptors::POROSITY>();
+    T porosityXP = cell.neighbor({1,0,0}).template getField<descriptors::POROSITY>();
+    T porosityXM = cell.neighbor({-1,0,0}).template getField<descriptors::POROSITY>();
+    T porosityYP = cell.neighbor({0,1,0}).template getField<descriptors::POROSITY>();
+    T porosityYM = cell.neighbor({0,-1,0}).template getField<descriptors::POROSITY>();
+    T porosityZP = cell.neighbor({0,0,1}).template getField<descriptors::POROSITY>();
+    T porosityZM = cell.neighbor({0,0,-1}).template getField<descriptors::POROSITY>();
+    T dxPor = 0.5 * (porosityXP - porosityXM);
+    T dyPor = 0.5 * (porosityYP - porosityYM);
+    T dzPor = 0.5 * (porosityZP - porosityZM);
+    T conc = cell.computeRho();
+    T concPlusX = cell.neighbor({1,0,0}).computeRho();
+    T concMinusX = cell.neighbor({-1,0,0}).computeRho();
+    T concPlusY = cell.neighbor({0,1,0}).computeRho();
+    T concMinusY = cell.neighbor({0,-1,0}).computeRho();
+    T concPlusZ = cell.neighbor({0,0,1}).computeRho();
+    T concMinusZ = cell.neighbor({0,0,-1}).computeRho();
+    T dxConc = 0.5 * (concPlusX - concMinusX);
+    T dyConc = 0.5 * (concPlusY - concMinusY);
+    T dzConc = 0.5 * (concPlusZ - concMinusZ);
+    //T source = cell.template getField<descriptors::SOURCE>();
+    T source = (-conc*(porosity - porOld)/porosity -conc*(vel[0]*dxPor + vel[1]*dyPor + vel[2]*dzPor)/porosity + diffusion*(dxConc*dxPor + dyConc*dyPor + dzConc*dzPor)/porosity);
+    cell.template setField<descriptors::SOURCE>(source);
+    cell.template setField<descriptors::SCALAR>(porosity);
+  }
+
+};
+
+
+
 /// LES-ADE coupling with Schmidt number stabilization
 template<typename T>
 struct LESADECoupling {
@@ -504,6 +572,149 @@ struct GranularCoupling {
 
 };
 
+/// Poisson-Nernst-Planck coupling
+template<typename T>
+struct PNPCoupling {
+  static constexpr OperatorScope scope = OperatorScope::PerCellWithParameters;
+
+  struct DX : public descriptors::FIELD_BASE<1> { };
+  struct NPVELCOEFF : public descriptors::FIELD_BASE<1> { };
+  struct POISSONCOEFF : public descriptors::FIELD_BASE<1> { };
+  struct OMEGA : public descriptors::FIELD_BASE<1> { };
+
+  using parameters = meta::list<DX,NPVELCOEFF,POISSONCOEFF,OMEGA>;
+
+  template <typename CELLS, typename PARAMETERS>
+  void apply(CELLS& cells, PARAMETERS& parameters) any_platform
+   {
+    T dX = parameters.template get<DX>();
+    T velCoeff = parameters.template get<NPVELCOEFF>();
+    T poissonCoeff = parameters.template get<POISSONCOEFF>();
+    T omega = parameters.template get<OMEGA>();
+    using DESCRIPTOR = typename CELLS::template value_t<names::Concentration0>::descriptor_t;
+
+    auto& cellNP = cells.template get<names::Concentration0>();
+    auto& cellP = cells.template get<names::Concentration1>();
+    auto& cellNP2 = cells.template get<names::Concentration2>();
+
+    T dxPsi = 0.;
+    T dyPsi = 0.;
+    T dzPsi = 0.;
+
+    for(int iPop = 0; iPop < DESCRIPTOR::q; iPop++){
+      dxPsi += descriptors::c<DESCRIPTOR>(iPop, 0) * cellP[iPop];
+      dyPsi += descriptors::c<DESCRIPTOR>(iPop, 1) * cellP[iPop];
+      dzPsi += descriptors::c<DESCRIPTOR>(iPop, 2) * cellP[iPop];
+    }
+
+    dxPsi *= (-1.*omega*descriptors::invCs2<T,DESCRIPTOR>()/dX);
+    dyPsi *= (-1.*omega*descriptors::invCs2<T,DESCRIPTOR>()/dX);
+    dzPsi *= (-1.*omega*descriptors::invCs2<T,DESCRIPTOR>()/dX);
+
+    T vel[3] ={0.};
+    vel[0] -= velCoeff * dxPsi;
+    vel[1] -= velCoeff * dyPsi;
+    vel[2] -= velCoeff * dzPsi;
+    cellNP.template setField<descriptors::VELOCITY>(vel);
+
+    T vel2[3] ={0.};
+    vel2[0] += velCoeff * dxPsi;
+    vel2[1] += velCoeff * dyPsi;
+    vel2[2] += velCoeff * dzPsi;
+    cellNP2.template setField<descriptors::VELOCITY>(vel2);
+
+    T concentration = cellNP.computeRho();
+    if(util::abs(concentration) > 1.){ concentration = 0.; }
+    T concentration2 = cellNP2.computeRho();
+    if(util::abs(concentration2) > 1.){ concentration2 = 0.; }
+    T poissonSource = poissonCoeff * (concentration - concentration2);
+    cellP.template setField<descriptors::SOURCE>(poissonSource);
+  }
+};
+
+/// Naver-Stokes-Poisson-Nernst-Planck coupling
+template<typename T>
+struct NSPNPCoupling {
+  static constexpr OperatorScope scope = OperatorScope::PerCellWithParameters;
+
+  struct DX : public descriptors::FIELD_BASE<1> { };
+  struct NPVELCOEFF : public descriptors::FIELD_BASE<1> { };
+  struct POISSONCOEFF : public descriptors::FIELD_BASE<1> { };
+  struct FORCECOEFF : public descriptors::FIELD_BASE<1> { };
+  struct DTADE : public descriptors::FIELD_BASE<1> { };
+  struct DTNSE : public descriptors::FIELD_BASE<1> { };
+  struct OMEGA : public descriptors::FIELD_BASE<1> { };
+
+  using parameters = meta::list<DX,NPVELCOEFF,POISSONCOEFF,FORCECOEFF,DTADE,DTNSE,OMEGA>;
+
+  template <typename CELLS, typename PARAMETERS>
+  void apply(CELLS& cells, PARAMETERS& parameters) any_platform
+   {
+    T dX = parameters.template get<DX>();
+    T velCoeff = parameters.template get<NPVELCOEFF>();
+    T poissonCoeff = parameters.template get<POISSONCOEFF>();
+    T forceCoeff = parameters.template get<FORCECOEFF>();
+    T dtADE = parameters.template get<DTADE>();
+    T dtNSE = parameters.template get<DTNSE>();
+    T omega = parameters.template get<OMEGA>();
+
+    using DESCRIPTOR = typename CELLS::template value_t<names::Concentration0>::descriptor_t;
+    auto& cellNP = cells.template get<names::Concentration0>();
+    auto& cellNP2 = cells.template get<names::Concentration1>();
+    auto& cellP = cells.template get<names::Temperature>();
+    auto& cellNSE = cells.template get<names::NavierStokes>();
+
+    T dxPsi = 0.;
+    T dyPsi = 0.;
+    T dzPsi = 0.;
+
+    for(int iPop = 0; iPop < DESCRIPTOR::q; iPop++){
+      dxPsi += descriptors::c<DESCRIPTOR>(iPop, 0) * cellP[iPop];
+      dyPsi += descriptors::c<DESCRIPTOR>(iPop, 1) * cellP[iPop];
+      dzPsi += descriptors::c<DESCRIPTOR>(iPop, 2) * cellP[iPop];
+    }
+
+    dxPsi *= (-1.*omega*descriptors::invCs2<T,DESCRIPTOR>()/dX);
+    dyPsi *= (-1.*omega*descriptors::invCs2<T,DESCRIPTOR>()/dX);
+    dzPsi *= (-1.*omega*descriptors::invCs2<T,DESCRIPTOR>()/dX);
+
+    auto vel = cellNP.template getField<descriptors::VELOCITY>();
+    cellNSE.computeU(vel.data());
+    vel[0] *= dtADE / dtNSE;
+    vel[1] *= dtADE / dtNSE;
+    vel[2] *= dtADE / dtNSE;
+
+    vel[0] -= velCoeff * dxPsi;
+    vel[1] -= velCoeff * dyPsi;
+    vel[2] -= velCoeff * dzPsi;
+    cellNP.template setField<descriptors::VELOCITY>(vel);
+
+    auto vel2 = cellNP2.template getField<descriptors::VELOCITY>();
+    cellNSE.computeU(vel2.data());
+    vel2[0] *= dtADE / dtNSE;
+    vel2[1] *= dtADE / dtNSE;
+    vel2[2] *= dtADE / dtNSE;
+
+    vel2[0] += velCoeff * dxPsi;
+    vel2[1] += velCoeff * dyPsi;
+    vel2[2] += velCoeff * dzPsi;
+    cellNP2.template setField<descriptors::VELOCITY>(vel2);
+
+    T concentration = cellNP.computeRho();
+    if(util::abs(concentration) > 1.e5){ concentration = 0.; }
+    T concentration2 = cellNP2.computeRho();
+    if(util::abs(concentration2) > 1.e5){ concentration2 = 0.; }
+    T poissonSource = poissonCoeff * (concentration - concentration2);
+    cellP.template setField<descriptors::SOURCE>(poissonSource);
+
+    auto force = cellNSE.template getField<descriptors::FORCE>();
+    force = {0.,0.,0.};
+    force[0] = forceCoeff * (concentration - concentration2);
+    //force[1] = -forceCoeff * (concentration - concentration2) * dyPsi;
+    //force[2] = -forceCoeff * (concentration - concentration2) * dzPsi;
+    cellNSE.template setField<descriptors::FORCE>(force);
+  }
+};
 
 }
 

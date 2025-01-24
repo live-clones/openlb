@@ -79,7 +79,7 @@ bool BlockLatticeRefinementMetricKnudsen3D<T, DESCRIPTOR>::operator()(T output[]
 {
   const std::size_t cellCount = this->_blockLattice.getNx() * this->_blockLattice.getNy() * this->_blockLattice.getNz();
 
-  T blockSum = 0.;
+  util::KahanSummator<T> blockSum{};
 
   T   localOutput[1] = { };
   int localInput[3]  = { };
@@ -89,12 +89,12 @@ bool BlockLatticeRefinementMetricKnudsen3D<T, DESCRIPTOR>::operator()(T output[]
       for (localInput[2]=0; localInput[2] < this->_blockLattice.getNz(); ++localInput[2]) {
         BlockLatticeKnudsen3D<T, DESCRIPTOR>::operator()(localOutput, localInput);
 
-        blockSum += localOutput[0];
+        blockSum.add(localOutput[0]);
       }
     }
   }
 
-  const T blockC = blockSum / cellCount;
+  const T blockC = blockSum.getSum() / cellCount;
 
   output[0] = std::log2(blockC / _knudsen);
 

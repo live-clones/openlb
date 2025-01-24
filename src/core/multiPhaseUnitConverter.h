@@ -194,6 +194,101 @@ private:
   mutable OstreamManager clout;
 };
 
+/** Conversion between physical and lattice units, as well as discretization for multiple component lattices.
+* Be aware of the nomenclature:
+* We distingish between physical (dimensioned) and lattice (dimensionless) values.
+* A specific conversion factor maps the two different scopes,
+* e.g. __physLength = conversionLength * latticeLength__
+*
+* For the basic units of length L, time T, mass M, particle number N and temperature theta,
+* 5 elemental conversion factors are deduced from EoS parameters a,b and R, molar mass M and surface tension sigma.
+* For multiple components, the conversion factors are computed for the lightest condensable component.
+*
+* TODO: Extend documentation for MultiPhaseUnitConverter
+*/
+template <typename T, typename DESCRIPTOR>
+class MultiPhaseUnitConverterFromRelaxationTime : public UnitConverter<T, DESCRIPTOR> {
+public:
+  /** Documentation of constructor:
+    * TODO: Extend constructur documentation
+    */
+  constexpr MultiPhaseUnitConverterFromRelaxationTime(
+    size_t resolution,
+    T latticeRelaxationTime,
+    T latticeDensity,
+    T charPhysLength,
+    T charPhysVelocity,
+    T physViscosity,
+    T physDensity,
+    T physSurfaceTension,
+    T charPhysPressure = 0 ) : UnitConverter<T, DESCRIPTOR>(
+        (charPhysLength/resolution),
+        (latticeRelaxationTime - 0.5) / descriptors::invCs2<T,DESCRIPTOR>() * util::pow((charPhysLength/resolution),2) / physViscosity,
+        charPhysLength,
+        charPhysVelocity,
+        physViscosity,
+        (physDensity/latticeDensity),
+        charPhysPressure),
+      _conversionSurfaceTension(
+        this->_conversionDensity *
+        this->_conversionViscosity * this->_conversionViscosity /
+        this->_conversionLength ),
+      _conversionChemicalPotential( this->_conversionVelocity * this->_conversionVelocity ),
+      _physSurfaceTension(physSurfaceTension),
+      _latticeSurfaceTension( physSurfaceTension / _conversionSurfaceTension ),
+      clout(std::cout,"MultiPhaseUnitConv")
+  {
+  };
+
+  /// return surface tension in physical units
+  constexpr T getPhysSurfaceTension(  ) const
+  {
+    return _physSurfaceTension;
+  };
+
+  /// access (read-only) to private member variable
+  constexpr T getConversionFactorSurfaceTension() const
+  {
+    return _conversionSurfaceTension;
+  };
+
+  /// return lattice surface tension for parameter fitting
+  constexpr T getLatticeSurfaceTension(  ) const
+  {
+    return _latticeSurfaceTension;
+  };
+
+  /// access (read-only) to private member variable
+  constexpr T getConversionFactorChemicalPotential() const
+  {
+    return _conversionChemicalPotential;
+  };
+
+  /// compute relaxation time from physical viscosity
+  constexpr T computeRelaxationTimefromPhysViscosity( T userViscosity ) const
+  {
+    return 0.5 + descriptors::invCs2<T,DESCRIPTOR>() *
+                 userViscosity / this->_conversionViscosity;
+  };
+
+/// nice terminal output for conversion factors, characteristical and physical data
+  void print() const override;
+
+protected:
+  // conversion factors
+  const T _conversionSurfaceTension;            // J / m^2 = kg / s^2
+  const T _conversionChemicalPotential;            // J / kg = m^2 / s^2
+
+  // physical units, e.g characteristic or reference values
+  const T _physSurfaceTension;                  // J / m^2 = kg / s^2
+
+  // lattice units, discretization parameters
+  const T _latticeSurfaceTension;               // -
+
+private:
+  mutable OstreamManager clout;
+};
+
 }  // namespace olb
 
 #endif

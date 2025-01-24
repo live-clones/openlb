@@ -230,10 +230,10 @@ void prepareLattice(SuperLattice<T, DESCRIPTOR>& sLattice,
   center0[0] -= 0.5*converter.getPhysDeltaX();
   center1[0] += 0.5*converter.getPhysDeltaX();
   IndicatorCylinder3D<T> pipe(center0, center1, radius);
-  legacy::setBouzidiZeroVelocityBoundary<T,DESCRIPTOR>(sLattice, superGeometry, 2, pipe);
+  setBouzidiBoundary(sLattice, superGeometry, 2, pipe);
   // Interp
   //sLattice.defineDynamics<DYNAMICS>(superGeometry, 2);
-  //setInterpolatedVelocityBoundary<T,DESCRIPTOR>(sLattice, omega, superGeometry, 2);
+  boundary::set<boundary::InterpolatedVelocity>(sLattice, superGeometry, 2);
 
   // Material=3 --> bulk dynamics
   #ifdef GUO_ZHAO
@@ -241,7 +241,7 @@ void prepareLattice(SuperLattice<T, DESCRIPTOR>& sLattice,
   #else
   sLattice.defineDynamics<DYNAMICS>(superGeometry, 3);
   #endif
-  setInterpolatedVelocityBoundary<T,DESCRIPTOR>(sLattice, omega, superGeometry, 3);
+  boundary::set<boundary::InterpolatedVelocity>(sLattice, superGeometry, 3);
 
   // Material=4 --> bulk dynamics
   #ifdef GUO_ZHAO
@@ -249,7 +249,7 @@ void prepareLattice(SuperLattice<T, DESCRIPTOR>& sLattice,
   #else
   sLattice.defineDynamics<DYNAMICS>(superGeometry, 4);
   #endif
-  setInterpolatedPressureBoundary<T,DESCRIPTOR>(sLattice, omega, superGeometry, 4);
+  boundary::set<boundary::InterpolatedPressure>(sLattice, superGeometry, 4);
 
   // Initial conditions
   // Pressure for Poiseuille flow with maximum velocity of charU at K->infty
@@ -369,11 +369,8 @@ void getResults( SuperLattice<T,DESCRIPTOR>& sLattice,
 
   if ( iT==0 ) {
     // Writes the geometry, cuboid no. and rank no. as vti file for visualization
-    SuperLatticeGeometry3D<T, DESCRIPTOR> geometry( sLattice, superGeometry );
     SuperLatticeCuboid3D<T, DESCRIPTOR> cuboid( sLattice );
     SuperLatticeRank3D<T, DESCRIPTOR> rank( sLattice );
-
-    vtmWriter.write( geometry );
     vtmWriter.write( cuboid );
     vtmWriter.write( rank );
 

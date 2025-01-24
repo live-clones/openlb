@@ -138,9 +138,9 @@ void BlockLatticeMomentumExchangeForce<T, DESCRIPTOR, PARTICLETYPE>::evaluate(T 
         //Calculate torque
         const Vector<T,Drot> torque = particles::dynamics::torque_from_force<D,T>::calculate( tmpForce, lever );
 
-        T physR[D] = {0.};
-        this->_blockGeometry.getPhysR(physR, latticeRinner);
-        _f(particle, physR, tmpForce, torque);
+        Vector<T,D> physRv;
+        this->_blockGeometry.getPhysR(physRv, latticeRinner);
+        _f(particle, physRv.data(), tmpForce, torque);
 
         //Add force and torque to output
         for (unsigned iDim=0; iDim<D; ++iDim) {

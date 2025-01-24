@@ -35,7 +35,7 @@ class CSV {
 public:
 
   /// Constructor with name for output file
-  CSV(std::string name, char separator, std::vector<std::string> columnTags);
+  CSV(std::string name, char separator, std::vector<std::string> columnTags, std::string format=".dat");
   explicit CSV(std::string name = "unnamed");
   CSV(std::string name, char separator);
   CSV(std::string name, std::vector<std::string> columnTags);
@@ -66,6 +66,7 @@ private:
   std::string _dir;
   char _separator;
   std::vector<std::string> _columnTags;
+  std::string _format;
 
   static constexpr int _rank {0};  // only process _rank will write output
 };

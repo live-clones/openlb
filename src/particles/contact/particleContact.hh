@@ -214,20 +214,33 @@ ParticleContactArbitraryFromOverlapVolume<T, D, CONVEX>::combineWith(
   if (particleContactConsistsOfIDs<
           ParticleContactArbitraryFromOverlapVolume<T, D, CONVEX>, true>(pc,
                                                                          ids)) {
-    newContact[0] = newContact[0] && pc.isNew();
+    if(newContact[0] == pc.isNew()) {
+      newContact[0] = newContact[0] && pc.isNew();
 
-    // Determine bounding box of combined overlap area
-    for (unsigned iD = 0; iD < D; ++iD) {
-      min[iD] = util::min(min[iD], pc.getMin()[iD]);
-      max[iD] = util::max(max[iD], pc.getMax()[iD]);
+      // Determine bounding box of combined overlap area
+      for (unsigned iD = 0; iD < D; ++iD) {
+        min[iD] = util::min(min[iD], pc.getMin()[iD]);
+        max[iD] = util::max(max[iD], pc.getMax()[iD]);
+      }
+      // The damping factors should be either the same or one is -1 and the other has the correct value which is > 0
+      dampingFactor[0]   = util::max(dampingFactor[0], pc.getDampingFactor());
+      responsibleRank[0] = util::min(responsibleRank[0], pc.getResponsibleRank());
+      particlePositionUpdated[0] =
+          particlePositionUpdated[0] || pc.isParticlePositionUpdated();
+      if (!particlePositionUpdated[0] && pc.isParticlePositionUpdated()) {
+        particlePositions = pc.getParticlePositions();
+      }
     }
-    // The damping factors should be either the same or one is -1 and the other has the correct value which is > 0
-    dampingFactor[0]   = util::max(dampingFactor[0], pc.getDampingFactor());
-    responsibleRank[0] = util::min(responsibleRank[0], pc.getResponsibleRank());
-    particlePositionUpdated[0] =
-        particlePositionUpdated[0] || pc.isParticlePositionUpdated();
-    if (!particlePositionUpdated[0] && pc.isParticlePositionUpdated()) {
-      particlePositions = pc.getParticlePositions();
+    else {
+      if(!pc.isNew()) {
+        min = pc.getMin();
+        max = pc.getMax();
+        dampingFactor[0] = pc.getDampingFactor();
+        particlePositionUpdated[0] = pc.isParticlePositionUpdated();
+        particlePositions = pc.getParticlePositions();
+      }
+      responsibleRank[0] = util::min(responsibleRank[0], pc.getResponsibleRank());
+      newContact[0] = newContact[0] && pc.isNew();
     }
 
     // Ignore second contact by resetting it

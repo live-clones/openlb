@@ -30,26 +30,6 @@ namespace olb {
 
 // *INDENT-OFF*
 
-template <typename T> class Cuboid2D;
-template <typename T> class Cuboid3D;
-
-template <typename T, unsigned D>
-using Cuboid = std::conditional_t<
-  D == 2,
-  Cuboid2D<T>,
-  Cuboid3D<T>
->;
-
-template <typename T> class CuboidGeometry2D;
-template <typename T> class CuboidGeometry3D;
-
-template <typename T, unsigned D>
-using CuboidGeometry = std::conditional_t<
-  D == 2,
-  CuboidGeometry2D<T>,
-  CuboidGeometry3D<T>
->;
-
 template <typename T> class Communicator2D;
 template <typename T> class Communicator3D;
 
@@ -91,16 +71,6 @@ using SuperGeometryStatistics = std::conditional_t<
                      SuperGeometryStatistics3D<T>
                      >;
 
-template <typename T> class CuboidGeometry2D;
-template <typename T> class CuboidGeometry3D;
-
-template <typename T, unsigned DIM>
-using CuboidGeometry = std::conditional_t<
-                     DIM == 2,
-                     CuboidGeometry2D<T>,
-                     CuboidGeometry3D<T>
-                     >;
-
 template<typename T, typename OUT_T, typename W> class SuperVTMwriter2D;
 template<typename T, typename OUT_T, typename W> class SuperVTMwriter3D;
 
@@ -111,14 +81,14 @@ using SuperVTMwriter = std::conditional_t<
                      SuperVTMwriter3D<T,OUT_T,W>
                      >;
 
-template <typename T, typename DESCRIPTOR> class SuperLatticeGeometry2D;
-template <typename T, typename DESCRIPTOR> class SuperLatticeGeometry3D;
+template <typename T> class SuperGeometryF2D;
+template <typename T> class SuperGeometryF3D;
 
-template <typename T, typename DESCRIPTOR>
-using SuperLatticeGeometry = std::conditional_t<
-                     DESCRIPTOR::d == 2,
-                     SuperLatticeGeometry2D<T,DESCRIPTOR>,
-                     SuperLatticeGeometry3D<T,DESCRIPTOR>
+template <typename T, unsigned D>
+using SuperGeometryF = std::conditional_t<
+                     D == 2,
+                     SuperGeometryF2D<T>,
+                     SuperGeometryF3D<T>
                      >;
 
 template <typename T, typename DESCRIPTOR> class SuperLatticeCuboid2D;
@@ -149,6 +119,15 @@ using SuperLatticeF = std::conditional_t<
                      DESCRIPTOR::d == 2,
                      SuperLatticeF2D<T,DESCRIPTOR>,
                      SuperLatticeF3D<T,DESCRIPTOR>
+                     >;
+
+template <typename T, typename W> class SuperIntegral2D;
+template <typename T, typename W> class SuperIntegral3D;
+template <unsigned DIM, typename T, typename W = T>
+using SuperIntegral = std::conditional_t<
+                     DIM == 2,
+                     SuperIntegral2D<T,W>,
+                     SuperIntegral3D<T,W>
                      >;
 
 template <typename T, typename DESCRIPTOR> class BlockLatticeF2D;
@@ -363,6 +342,15 @@ using BlockLatticeInterpPhysVelocity = std::conditional_t<
   BlockLatticeInterpPhysVelocity3D<T,DESCRIPTOR>
 >;
 
+template <typename T> class BlockIndicatorFfromCallableF2D;
+template <typename T> class BlockIndicatorFfromCallableF3D;
+
+template <typename T, unsigned D>
+using BlockIndicatorFfromCallableF = std::conditional_t<
+  D == 2,
+  BlockIndicatorFfromCallableF2D<T>,
+  BlockIndicatorFfromCallableF3D<T>
+>;
 
 // *INDENT-ON*
 

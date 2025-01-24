@@ -26,12 +26,11 @@
 #ifndef GEOMETRY_3D_HH
 #define GEOMETRY_3D_HH
 
+#include "discreteNormals.hh"
 #include "blockGeometry.hh"
 #include "blockGeometryStatistics3D.hh"
-#include "cuboid2D.hh"
-#include "cuboid3D.hh"
-#include "cuboidGeometry2D.hh"
-#include "cuboidGeometry3D.hh"
+#include "cuboid.hh"
+#include "cuboidGeometry.hh"
 #include "superGeometry.hh"
 #include "superGeometryStatistics3D.hh"
 

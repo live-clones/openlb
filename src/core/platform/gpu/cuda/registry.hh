@@ -75,7 +75,7 @@ FieldTypeRegistry<T,DESCRIPTOR,Platform::GPU_CUDA>::~FieldTypeRegistry()
 template <typename T, typename DESCRIPTOR>
 template <typename FIELD_TYPE>
 void FieldTypeRegistry<T,DESCRIPTOR,Platform::GPU_CUDA>::track(
-  AnyFieldType<T,DESCRIPTOR,Platform::GPU_CUDA>* fieldType)
+  AnyFieldTypeD<T,DESCRIPTOR,Platform::GPU_CUDA>* fieldType)
 {
   _index.template set<FIELD_TYPE>(fieldType);
 

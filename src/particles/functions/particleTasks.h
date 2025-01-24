@@ -71,8 +71,8 @@ struct apply_external_acceleration_single_cuboid{
   {
     using namespace descriptors;
     //Apply acceleration
-    Vector<T,PARTICLETYPE::d> force = particle.template getField<FORCING,FORCE>();
-    T mass = particle.template getField<PHYSPROPERTIES,MASS>();
+    Vector<T,PARTICLETYPE::d> force = access::getForce(particle);
+    const T mass = access::getMass(particle);
     force += externalAcceleration * mass;
     particle.template setField<FORCING,FORCE>( force );
   }
@@ -310,8 +310,8 @@ struct apply_external_acceleration_parallel{
   {
     using namespace descriptors;
     //Apply acceleration
-    Vector<T,PARTICLETYPE::d> force = particle.template getField<FORCING,FORCE>();
-    T mass = particle.template getField<PHYSPROPERTIES,MASS>();
+    Vector<T,PARTICLETYPE::d> force = access::getForce(particle);
+    const T mass = access::getMass(particle);
     force += externalAcceleration * mass;
     particle.template setField<FORCING,FORCE>( force );
   }

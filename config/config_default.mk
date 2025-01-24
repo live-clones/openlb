@@ -21,12 +21,12 @@ CXXFLAGS        := -O3 -Wall -march=native -mtune=native
 # Uncomment to add debug symbols and enable runtime asserts
 #CXXFLAGS        += -g -DOLB_DEBUG
 
-# OpenLB requires support for C++17
+# OpenLB requires support for C++20
 # works in:
 #  * gcc 9 or later      (https://gcc.gnu.org/projects/cxx-status.html#cxx17)
 #  * icc 19.0 or later   (https://software.intel.com/en-us/articles/c17-features-supported-by-intel-c-compiler)
 #  * clang 7 or later  (https://clang.llvm.org/cxx_status.html#cxx17)
-CXXFLAGS        += -std=c++17
+CXXFLAGS        += -std=c++20
 
 # optional linker flags
 LDFLAGS         :=
@@ -54,5 +54,5 @@ FLOATING_POINT_TYPE := double
 # Used to enable some alternative code paths and dependencies
 FEATURES        :=
 
-# Set to OFF if libz and tinyxml are provided by the system (optional)
+# Set to OFF if libz and tinyxml2 are provided by the system (optional)
 USE_EMBEDDED_DEPENDENCIES := ON

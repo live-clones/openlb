@@ -177,6 +177,8 @@ public:
 
   void setStartValue(S startValue);
 
+  void setStartValue(C startValues, S factor=S(1));
+
   OptiCase<S,C>* getOptiCase() { return _optiCase; }
 
   void setOptiCase(OptiCase<S,C>* optiCase) { _optiCase = optiCase; }

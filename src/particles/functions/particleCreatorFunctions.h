@@ -554,7 +554,7 @@ updateParticlePositions(std::vector<SpawnData<T, PARTICLETYPE::d>> spawnData,
   auto& cuboidGeometry = particleSystem.getSuperStructure().getCuboidGeometry();
   auto& loadBalancer   = particleSystem.getSuperStructure().getLoadBalancer();
   std::unordered_set<int> destRanksSet;
-  for (int iC = 0; iC < cuboidGeometry.getNc(); ++iC) {
+  for (int iC = 0; iC < cuboidGeometry.size(); ++iC) {
     int rank = loadBalancer.rank(iC);
     if (rank != singleton::mpi().getRank()) {
       destRanksSet.insert(rank);

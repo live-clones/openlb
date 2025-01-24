@@ -46,6 +46,8 @@ namespace olb {
  **/
 struct ColumnVectorBase : public Serializable {
   virtual ~ColumnVectorBase() { };
+
+  virtual void resize(std::size_t newCount) = 0;
 };
 
 /// Vector of columns
@@ -119,15 +121,6 @@ public:
   const_ptr getRowPointer(std::size_t i) const
   {
     return const_ptr(*this, i);
-  }
-
-  /// Resize columns, potentially invalidates any inbound pointers
-  void resize(std::size_t newCount)
-  {
-    for (unsigned iDim=0; iDim < D; ++iDim) {
-      _column[iDim].resize(newCount);
-    }
-    _count = newCount;
   }
 
   /// Swap contents of row i and row j

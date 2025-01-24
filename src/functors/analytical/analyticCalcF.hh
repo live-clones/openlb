@@ -40,8 +40,9 @@ AnalyticCalcF<D,T,S,F>::AnalyticCalcF(FunctorPtr<AnalyticalF<D,T,S>>&& f,
     _f(std::move(f)),
     _g(std::move(g))
 {
-  OLB_ASSERT(g->getTargetDim() == f->getTargetDim(),
-             "the dimensions of both functors need to be equal");
+  if (g->getTargetDim() != f->getTargetDim()) {
+    throw std::invalid_argument("Functor target dimensions must be equal");
+  }
   std::swap(f->_ptrCalcC, this->_ptrCalcC);
   this->getName() = "(" + _f->getName() + F<T>::symbol + _g->getName() + ")";
 }

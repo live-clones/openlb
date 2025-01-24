@@ -13,7 +13,7 @@ CXX             := mpicxx
 CC              := icc
 
 CXXFLAGS        := -O3 -Wall -xHost -ipo -axMIC-AVX512,CORE-AVX2
-CXXFLAGS        += -std=c++17
+CXXFLAGS        += -std=c++20
 
 # HYBRID mode is also possible but more complex to run correctly
 PARALLEL_MODE   := MPI

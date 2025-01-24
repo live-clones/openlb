@@ -24,7 +24,7 @@
 #ifndef BLOCK_INTEGRAL_F_2D_H
 #define BLOCK_INTEGRAL_F_2D_H
 
-#include "geometry/cuboid2D.h"
+#include "geometry/cuboid.h"
 #include "functors/lattice/blockBaseF2D.h"
 
 namespace olb {

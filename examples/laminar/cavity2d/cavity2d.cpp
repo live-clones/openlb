@@ -52,7 +52,7 @@ void prepareGeometry( UnitConverter<T,DESCRIPTOR> const& converter,
   superGeometry.rename( 2,1,{1,1} );
   superGeometry.clean();
 
-  T eps = converter.getConversionFactorLength();
+  T eps = converter.getPhysDeltaX();
   Vector<T,2> extend( T( 1 ) + 2*eps, 2*eps );
   Vector<T,2> origin( T() - eps, T( 1 ) - eps );
   IndicatorCuboid2D<T> lid( extend, origin );
@@ -82,8 +82,8 @@ void prepareLattice( UnitConverter<T,DESCRIPTOR> const& converter,
   sLattice.defineDynamics<BulkDynamics>(superGeometry, 1);
 
   // Material=2,3 -->bulk dynamics, velocity boundary
-  setInterpolatedVelocityBoundary<T,DESCRIPTOR,BulkDynamics>(sLattice, omega, superGeometry, 2);
-  setInterpolatedVelocityBoundary<T,DESCRIPTOR,BulkDynamics>(sLattice, omega, superGeometry, 3);
+  boundary::set<boundary::InterpolatedVelocity<T,DESCRIPTOR,BulkDynamics>>(sLattice, superGeometry, 2);
+  boundary::set<boundary::InterpolatedVelocity<T,DESCRIPTOR,BulkDynamics>>(sLattice, superGeometry, 3);
 
   sLattice.setParameter<descriptors::OMEGA>(omega);
 
@@ -129,13 +129,11 @@ void getResults( SuperLattice<T, DESCRIPTOR>& sLattice,
 
   if ( iT==0 ) {
     // Writes the geometry, cuboid no. and rank no. as vti file for visualization
-    SuperLatticeGeometry2D<T, DESCRIPTOR> geometry( sLattice, superGeometry );
     SuperLatticeCuboid2D<T, DESCRIPTOR> cuboid( sLattice );
     SuperLatticeRank2D<T, DESCRIPTOR> rank( sLattice );
     SuperLatticeDiscreteNormal2D<T, DESCRIPTOR> discreteNormal( sLattice, superGeometry, superGeometry.getMaterialIndicator({2, 3}) );
     SuperLatticeDiscreteNormalType2D<T, DESCRIPTOR> discreteNormalType( sLattice, superGeometry, superGeometry.getMaterialIndicator({2, 3}) );
 
-    vtmWriter.write( geometry );
     vtmWriter.write( cuboid );
     vtmWriter.write( rank );
     vtmWriter.write( discreteNormal );
@@ -264,9 +262,9 @@ int main( int argc, char* argv[] )
   IndicatorCuboid2D<T> cuboid( extend, origin );
 
 #ifdef PARALLEL_MODE_MPI
-  CuboidGeometry2D<T> cuboidGeometry( cuboid, converter->getConversionFactorLength(), singleton::mpi().getSize() );
+  CuboidGeometry2D<T> cuboidGeometry( cuboid, converter->getPhysDeltaX(), singleton::mpi().getSize() );
 #else
-  CuboidGeometry2D<T> cuboidGeometry( cuboid, converter->getConversionFactorLength(), 1 );
+  CuboidGeometry2D<T> cuboidGeometry( cuboid, converter->getPhysDeltaX(), 1 );
 #endif
 
   cuboidGeometry.print();

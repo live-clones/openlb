@@ -233,6 +233,27 @@ BlockLatticeThermalPhysF3D<T,DESCRIPTOR,TDESCRIPTOR>::BlockLatticeThermalPhysF3D
 { }
 
 
+template <typename T, typename W>
+BlockConst3D<T,W>::BlockConst3D(BlockStructureD<3>& blockStructure, std::vector<W> v)
+  : BlockF3D<W>(blockStructure, v.size()),
+    _c{std::move(v)}
+{
+  this->getName() = "const(" + std::to_string(_c.size()) + ")";
+}
+
+template <typename T, typename W>
+BlockConst3D<T,W>::BlockConst3D(BlockStructureD<3>& blockStructure, W scalar)
+  : BlockConst3D(blockStructure, std::vector<W>(1, scalar))
+{ }
+
+template <typename T, typename W>
+bool BlockConst3D<T,W>::operator() (W output[], const int input[])
+{
+  for (int i = 0; i < this->getTargetDim(); ++i) {
+    output[i] = _c[i];
+  }
+  return true;
+}
 
 
 } // end namespace olb

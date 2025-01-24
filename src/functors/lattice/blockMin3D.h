@@ -25,7 +25,7 @@
 #define BLOCK_MIN_3D_H
 
 #include "blockBaseF3D.h"
-#include "geometry/cuboid3D.h"
+#include "geometry/cuboid.h"
 #include "indicator/blockIndicatorBaseF3D.h"
 
 namespace olb {

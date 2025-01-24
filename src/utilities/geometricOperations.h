@@ -67,7 +67,7 @@ decltype(util::sqrt(T())) radianToDegree(T angle)
 
 template <typename T, unsigned D>
 Vector<T, utilities::dimensions::convert<D>::matrix> calculateRotationMatrix(
-    const Vector<T, utilities::dimensions::convert<D>::rotation>& angle)
+    const Vector<T, utilities::dimensions::convert<D>::rotation>& angle) any_platform
 {
   Vector<T, utilities::dimensions::convert<D>::matrix> rotationMatrix;
 
@@ -107,6 +107,38 @@ Vector<T, utilities::dimensions::convert<D>::matrix> calculateRotationMatrix(
   }
 
   return rotationMatrix;
+}
+
+/// Compute v=M b
+template <typename T, unsigned D>
+Vector<T,D> matrixVectorProduct(
+  const Vector<T,utilities::dimensions::convert<D>::matrix>& M,
+  const Vector<T,D>& b) any_platform
+{
+  return Vector<T,D>([&](unsigned iD) -> T {
+    T element{};
+    for (unsigned jD=0; jD < D; ++jD) {
+      element += M[iD*D + jD] * b[jD];
+    }
+    return element;
+  });
+}
+
+/// Compute C=AB for square matrices
+template <typename T, unsigned D>
+Vector<T,utilities::dimensions::convert<D>::matrix> matrixMatrixProduct(
+  const Vector<T,utilities::dimensions::convert<D>::matrix>& A,
+  const Vector<T,utilities::dimensions::convert<D>::matrix>& B) any_platform
+{
+  Vector<T,utilities::dimensions::convert<D>::matrix> C{};
+  for (unsigned i=0; i < D; ++i) {
+    for (unsigned j=0; j < D; ++j) {
+      for (unsigned k=0; k < D; ++k) {
+        C[i*D + j] += A[i*D + k] * B[k*D + j];
+      }
+    }
+  }
+  return C;
 }
 
 template <typename T, unsigned D>

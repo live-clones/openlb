@@ -21,3 +21,6 @@ examples/noise/cylinder3dnoise/cylinder3dnoise
 examples/noise/cylinder3dnoise/periodic/
 examples/noise/cylinder3dnoise/local/
 examples/noise/cylinder3dnoise/damping/
+build/
+
+examples/*/*/tmp*

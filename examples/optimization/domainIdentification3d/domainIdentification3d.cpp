@@ -1,6 +1,6 @@
 /*  This file is part of the OpenLB library
  *
- *  Copyright (C) 2020-22 Fabian Klemens, Mathias J. Krause, Benjamin
+ *  Copyright (C) 2020-24 Fabian Klemens, Mathias J. Krause, Benjamin
  *  Förster, Julius Jeßberger
  *  E-mail contact: info@openlb.net
  *  The most recent release of OpenLB can be downloaded at
@@ -40,6 +40,8 @@ using Lattices = meta::map<
                  NavierStokes, Descriptor
                  >;
 
+template <typename T>
+class RelativeDifferenceVelocityObjective;
 
 /// Collect parameters which are relevant for optimization.
 // Inherit/ extend DistributedOptiSimulation which has the adjoint-optimization-
@@ -48,7 +50,7 @@ template <typename T, SolverMode MODE>
 struct TestDomainOptiParameters
  : public parameters::DistributedOptiSimulation<T,Lattices,MODE>
 {
-  std::shared_ptr<IndicatorF3D<T>>      designDomain;
+  std::shared_ptr<IndicatorF3D<T>>      designDomainAnalytical;
   std::shared_ptr<IndicatorF3D<T>>      objectiveDomain;
 };
 
@@ -64,7 +66,7 @@ struct parameters::Reader<TestDomainOptiParameters<T,MODE>, TAG>
     using namespace parameters;
     Reader<DistributedOptiSimulation<T,Lattices,MODE>, TAG>(this->params).read(xml);
     this->params->objectiveDomain = createIndicatorF3D<T> (xml["ObjectiveDomain"], false);
-    this->params->designDomain = createIndicatorF3D<T> (xml["DesignDomain"]);
+    this->params->designDomainAnalytical = createIndicatorF3D<T> (xml["DesignDomain"]);
   }
 };
 
@@ -98,17 +100,17 @@ using Parameters = meta::map<
   Opti,             TestDomainOptiParameters<T,MODE>,
   Simulation,       TestDomainSimulationParameters<T>,
   Stationarity,     parameters::Stationarity<T>,
-  OutputOpti,       parameters::OptiOutput<T,MODE>,
-  Results,          parameters::DistributedOptiSimulationResults<T,Lattices,MODE>,
+  OutputOpti,       parameters::OptiOutput<T>,
+  Results,          parameters::DistributedOptiSimulationResults<T,Lattices>,
   Output,           parameters::OutputGeneral<T>,
   VisualizationVTK, parameters::OutputPlot<T>
 >;
 
 /// Solver class implements the simulation
-// Inherit from AdjointLbSolverBase since most of the adjoint-specific details
+// Inherit from AdjointLbSolver since most of the adjoint-specific details
 // are implemented there
 template<typename T, SolverMode MODE>
-class DomainIdSolver : public AdjointLbSolverBase<T,Parameters<T,MODE>,Lattices,MODE>
+class DomainIdSolver : public AdjointLbSolver<T,Parameters<T,MODE>,Lattices,MODE>
 {
 private:
   mutable OstreamManager                clout {std::cout, "DomainIdSolver"};
@@ -118,7 +120,8 @@ public:
   using descriptor = typename Lattices::values_t::template get<0>;
 
   DomainIdSolver(utilities::TypeIndexedSharedPtrTuple<Parameters<T,MODE>> params)
-   : DomainIdSolver::AdjointLbSolverBase(params)
+   : DomainIdSolver::LbSolver(params),  // has to be called "by hand" because AdjointLbSolver inherits virtually
+    DomainIdSolver::AdjointLbSolver(params)
   {
     const std::string name = (MODE == SolverMode::Reference) ? "Reference_Solution"
       : ((MODE == SolverMode::Primal) ? "Flow_Simulations"
@@ -180,7 +183,15 @@ protected:
     this->geometry().rename( 2,4,outflow );
 
     // Indicators for material 6 (designDomain)
-    this->geometry().rename(1, 6, this->parameters(Opti()).designDomain);
+    this->geometry().rename(1, 6, this->parameters(Opti()).designDomainAnalytical);
+
+    // store some data for optimization
+    // this needs to be done in every adjoint optimization
+    this->parameters(Opti()).designDomain
+     = std::make_shared<SuperIndicatorFfromIndicatorF3D<T>>(
+      this->parameters(Opti()).designDomainAnalytical, this->geometry());
+    this->parameters(Opti()).bulkIndicator = std::move(this->geometry().getMaterialIndicator({1,6}));
+    this->parameters(Results()).geometry = this->_sGeometry;
 
     if constexpr (MODE == SolverMode::Reference) {
       const unsigned nSimulation = this->geometry().getStatistics().getNvoxel();
@@ -193,42 +204,37 @@ protected:
   void prepareLattices() override
   {
     auto& lattice = this->lattice(NavierStokes());
-    const T omega = this->converter().getLatticeRelaxationFrequency();
-
-    lattice.template defineDynamics<NoDynamics<T,descriptor>>(this->geometry(), 0);
 
     // PRIMAL
     if constexpr ( (MODE == SolverMode::Reference) || (MODE == SolverMode::Primal) ) {
       auto bulkIndicator = this->geometry().getMaterialIndicator({1, 3, 4, 6});
       lattice.template defineDynamics<PorousBGKdynamics>(bulkIndicator);
 
-      setBounceBackBoundary(lattice, this->geometry(), 2);
+      boundary::set<boundary::BounceBack>(lattice, this->geometry(), 2);
 
-      setLocalVelocityBoundary<T,descriptor>(
+      boundary::set<boundary::LocalVelocity>(
         lattice,
-        omega,
         this->geometry().getMaterialIndicator({3, 4}));
-
-      lattice.template setParameter<descriptors::OMEGA>(omega);
     }
     else {   // DUAL
       auto bulkIndicator = this->geometry().getMaterialIndicator({1, 6});
-      lattice.defineDynamics(bulkIndicator,
-                             new DualPorousBGKdynamics<T,descriptor> (omega));
+      lattice.template defineDynamics<DualPorousBGKDynamics>(bulkIndicator);
 
       auto bounceBackIndicator = this->geometry().getMaterialIndicator({2, 3, 4});
-      setBounceBackBoundary(lattice, bounceBackIndicator);
+      boundary::set<boundary::BounceBack>(lattice, bounceBackIndicator);
     }
+    const T omega = this->converter().getLatticeRelaxationFrequency();
+    lattice.template setParameter<descriptors::OMEGA>(omega);
   }
 
   void setInitialValues() override
   {
     std::unique_ptr<SuperIndicatorF3D<T>> bulkIndicator;
     if constexpr ( (MODE == SolverMode::Reference) || (MODE == SolverMode::Primal) ) {
-      bulkIndicator = this->geometry().getMaterialIndicator({1, 3, 4});
+      bulkIndicator = this->geometry().getMaterialIndicator({1, 3, 4, 6});
     }
     else {
-      bulkIndicator = this->geometry().getMaterialIndicator({1, 2, 3, 4});
+      bulkIndicator = this->geometry().getMaterialIndicator({1, 2, 3, 4, 6});
     }
 
     AnalyticalConst3D<T,T> rhoF(1);
@@ -240,12 +246,7 @@ protected:
 
 
     AnalyticalConst3D<T,T> one(1.);
-
-    for ( int i: {
-            0,1,2,3,4
-          } ) {
-      this->lattice(NavierStokes()).template defineField<POROSITY>(this->geometry(), i, one);
-    }
+    this->lattice(NavierStokes()).template defineField<POROSITY>(bulkIndicator, one);
 
     if constexpr ( MODE == SolverMode::Reference ) {
       // solid cube is the middle
@@ -256,10 +257,12 @@ protected:
         zero);
     } else {
       this->lattice(NavierStokes()).template defineField<POROSITY>(
-        this->geometry().getMaterialIndicator({6}),
+        this->parameters(Opti()).designDomain,
         *(this->parameters(Opti()).controlledField));
     }
 
+    // load primal data
+    // this needs to be done in every adjoint optimization
     if constexpr ( MODE == SolverMode::Dual ) {
       this->loadPrimalPopulations();
     }
@@ -277,13 +280,13 @@ protected:
 
       if constexpr ( (MODE == SolverMode::Reference) || (MODE == SolverMode::Primal) ) {
         AnalyticalConst3D<T,T> uF(0., frac[0] * this->converter().getCharLatticeVelocity(), 0.);
-        //this->lattice(NavierStokes()).defineU(this->geometry(), 2, uF);
         this->lattice(NavierStokes()).defineU(this->geometry(), 3, uF);
         this->lattice(NavierStokes()).defineU(this->geometry(), 4, uF);
       }
     }
   }
 
+  // prepare unsteady vtk output for reference simulation
   void prepareVTK() const override
   {
     if constexpr (MODE == SolverMode::Reference) {
@@ -291,77 +294,20 @@ protected:
     }
   }
 
+  // (unsteady) vtk output for reference simulation
   void writeVTK(std::size_t iT) const override
   {
-    SuperVTMwriter3D<T> writer(this->parameters(VisualizationVTK()).filename);
     if constexpr (MODE == SolverMode::Reference) {
       // ARTIFICIAL DATA: write solution (unsteady, until convergence in time is obtained)
+      SuperVTMwriter3D<T> writer(this->parameters(VisualizationVTK()).filename);
 
-      SuperLatticeGeometry3D<T,descriptor> geometry(this->lattice(NavierStokes()), this->geometry());
       SuperLatticePhysVelocity3D<T,descriptor> velocity(this->lattice(NavierStokes()), this->converter());
       SuperLatticePhysPressure3D<T,descriptor> pressure(this->lattice(NavierStokes()), this->converter());
       SuperLatticePorosity3D<T,descriptor> porosity(this->lattice(NavierStokes()));
       writer.addFunctor(porosity);
-      writer.addFunctor(geometry);
       writer.addFunctor(velocity);
       writer.addFunctor(pressure);
       writer.write(iT);
-    }
-  }
-
-  /// Compute and store data at the end of the simulation
-  void computeResults() override
-  {
-    auto& lattice = this->lattice(NavierStokes());
-
-    // Store the full lattice for later functor evaluation
-    this->parameters(Results()).lattice = std::get<0>(this->_sLattices);
-
-    // Store the full geometry for later functor evaluation
-    if constexpr ((MODE == SolverMode::Reference) || (MODE == SolverMode::Primal))
-    {
-      this->parameters(Results()).geometry = this->_sGeometry;
-    }
-
-    if constexpr (MODE == SolverMode::Primal) {
-      // compute objective
-      int tmp[1];
-      T output[1];
-      const std::shared_ptr<SuperIndicatorF3D<T>> objectiveDomain
-       = std::make_shared<SuperIndicatorFfromIndicatorF3D<T>> (
-        this->parameters(Opti()).objectiveDomain,
-        this->geometry());
-
-      std::shared_ptr<SuperF3D<T,T>> physLatticeVelocity
-                                  = std::make_shared<SuperLatticePhysVelocity3D<T,descriptor>>(
-                                      lattice, this->converter());
-      RelativeDifferenceObjective3D<T,descriptor> objective(
-        lattice,
-        physLatticeVelocity,
-        this->parameters(Opti()).referenceSolution,
-        objectiveDomain);
-
-      objective(output,tmp);
-      this->parameters(Results()).objective = output[0];
-      this->parameters(Results()).objectiveComputed = true;
-
-      // set population
-      this->parameters(Results()).fpop = std::make_shared<SuperLatticeFpop3D<T,descriptor>>(
-        lattice);
-
-      // set population derivative
-      std::shared_ptr<SuperF3D<T,T>> dPhysVelocityf = std::make_shared<SuperLatticeDphysVelocityDf3D<T,descriptor>> (
-        lattice, this->converter());
-      this->parameters(Results()).djdf = std::make_shared<DrelativeDifferenceObjectiveDf3D_Lattice<T,descriptor>>(
-        lattice,
-        physLatticeVelocity,
-        dPhysVelocityf,
-        this->parameters(Opti()).referenceSolution,
-        objectiveDomain);
-
-      // set control derivative
-      std::shared_ptr<AnalyticalF<3,T,T>> zero = std::make_shared<AnalyticalConst<3,T,T>> (Vector<T,3>(0));
-      this->parameters(Results()).djdalpha = std::make_shared<SuperLatticeFfromAnalyticalF3D<T,descriptor>> (zero, lattice);
     }
   }
 
@@ -378,12 +324,10 @@ public:
         }
 
         SuperVTMwriter3D<T> writer(this->parameters(VisualizationVTK()).filename);
-        SuperLatticeGeometry3D<T,descriptor> geometry(this->lattice(NavierStokes()), this->geometry());
         SuperLatticePhysVelocity3D<T,descriptor> velocity(this->lattice(NavierStokes()), this->converter());
         SuperLatticePhysPressure3D<T,descriptor> pressure(this->lattice(NavierStokes()), this->converter());
         SuperLatticePorosity3D<T,descriptor> porosity(this->lattice(NavierStokes()));
         writer.addFunctor(porosity);
-        writer.addFunctor(geometry);
         writer.addFunctor(velocity);
         writer.addFunctor(pressure);
 
@@ -392,6 +336,173 @@ public:
     }
   }
 };
+
+
+/// @brief Objective and derivative computation
+/// Objective = 0.5 * norm(u-uReference)^2 / norm(u)^2
+/// @tparam T floating point type
+template <typename T>
+class RelativeDifferenceVelocityObjective : public DistributedObjective<T,DomainIdSolver>
+{
+protected:
+  std::shared_ptr<DomainIdSolver<T,SolverMode::Reference>> _referenceSolver;
+  std::shared_ptr<SuperF3D<T,T>>                           _referenceState;
+  T _uRefNorm;
+  T _cellVolume;
+  T _regAlpha {0};
+
+public:
+  RelativeDifferenceVelocityObjective(XMLreader const& xml) {
+    // create reference solver, compute reference solution
+    _referenceSolver = createLbSolver <DomainIdSolver<T,SolverMode::Reference>> (xml);
+    _referenceSolver->solve();
+    _referenceState = std::make_shared<SuperLatticePhysVelocity3D<T,Descriptor>>(
+      _referenceSolver->lattice(),
+      _referenceSolver->converter());
+
+    // define indicators
+    this->_objectiveDomain = std::make_shared<SuperIndicatorFfromIndicatorF3D<T>>(
+      _referenceSolver->parameters(Opti()).objectiveDomain,
+      _referenceSolver->geometry());
+    this->_designDomain = _referenceSolver->parameters(Opti()).designDomain;
+
+    // define constants
+    const int dummy[1]{0};
+    SuperL2Norm3D<T>(_referenceState, this->_objectiveDomain)(&_uRefNorm, dummy);
+    _cellVolume = util::pow(
+      this->_objectiveDomain->getSuperGeometry().getCuboidGeometry().getDeltaR(), 3);
+    xml.readOrWarn<T>("Optimization", "RegAlpha", "", _regAlpha);
+  }
+
+  T evaluate() override {
+    // compare primal velocity with reference solution
+    SuperLatticePhysVelocity3D<T,Descriptor> primalVelocity(
+      this->_primalSolver->lattice(),
+      this->_primalSolver->converter());
+    RelativeDifferenceObjective3D<T,Descriptor> J(
+      this->_primalSolver->lattice(),
+      &primalVelocity,
+      _referenceState,
+      this->_objectiveDomain);
+    int dummy[4]{0}; T res{0};
+    J(&res, dummy);
+
+    // regularization
+    SuperLatticeSerialDataF<T,Descriptor> r(
+      this->_primalSolver->lattice(),
+      *(this->_controller),
+      1,
+      this->_serializer,
+      [](T x) { return x*x; });
+    SuperIntegral3D<T> R(&r, this->_designDomain);  // contains weighting by cell volume
+    T reg{0};
+    R(&reg, dummy);
+
+    return res + 0.5*_regAlpha*reg;
+  }
+
+  std::shared_ptr<SuperF3D<T,T>> derivativeByPopulations() override {
+    std::shared_ptr<SuperF3D<T,T>> primalVelocity
+     = std::make_shared<SuperLatticePhysVelocity3D<T,Descriptor>>(
+      this->_primalSolver->lattice(),
+      this->_primalSolver->converter());
+    std::shared_ptr<SuperF3D<T,T>> dPhysVelocityDf
+     = std::make_shared<SuperLatticeDphysVelocityDf3D<T,Descriptor>> (
+      this->_primalSolver->lattice(),
+      this->_primalSolver->converter());
+    std::shared_ptr<SuperF3D<T,T>> dObjectiveDf
+     = std::make_shared<DrelativeDifferenceObjectiveDf3D<T,Descriptor>>(
+      this->_primalSolver->lattice(),
+      primalVelocity,
+      dPhysVelocityDf,
+      _referenceState,
+      this->_objectiveDomain);
+    return dObjectiveDf;
+  }
+
+  std::shared_ptr<SuperF3D<T,T>> derivativeByControl() override {
+    return std::make_shared<SuperLatticeSerialDataF<T,Descriptor>>(
+      this->_primalSolver->lattice(),
+      *(this->_controller),
+      1,
+      this->_serializer,
+      [this](T x) { return _regAlpha*_cellVolume*x; });
+  }
+};
+
+/// @brief Objective and derivative computation
+/// Objective = integral over 0.5 * norm(u-uReference)^2 / norm(u)^2 + 0.5*alpha*ctrl^2
+///           = integral_{objectiveDomain} j(f,x) dx + integral_{designDomain} r(ctrl,x) dx
+/// @tparam T floating point type
+// This represents an alternative approach to the above class
+// RelativeDifferenceVelocityObjective. Here, it is sufficient to define the
+// objective via (pointwise) functions j and r. The spatial integration and the
+// partial derivatives are then computed by the class GenericObjective
+template <typename T>
+class RelativeDifferenceVelocityObjectiveGeneric
+{
+protected:
+  std::shared_ptr<DomainIdSolver<T,SolverMode::Reference>> _referenceSolver;
+  std::shared_ptr<SuperF3D<T,T>>                           _referenceState;
+  T _uRefNorm;
+  T _conversion;
+  T _regAlpha {0};
+
+public:
+  // these indicators are used by the GenericObjective class
+  std::shared_ptr<SuperIndicatorF<T,3>>           _objectiveDomain;
+  std::shared_ptr<SuperIndicatorF<T,3>>           _designDomain;
+
+  RelativeDifferenceVelocityObjectiveGeneric(XMLreader const& xml) {
+    // create reference solver, compute reference solution
+    _referenceSolver = createLbSolver <DomainIdSolver<T,SolverMode::Reference>> (xml);
+    _referenceSolver->solve();
+    _referenceState = std::make_shared<SuperLatticePhysVelocity3D<T,Descriptor>>(
+      _referenceSolver->lattice(),
+      _referenceSolver->converter());
+
+    // define indicators
+    _objectiveDomain = std::make_shared<SuperIndicatorFfromIndicatorF3D<T>>(
+      _referenceSolver->parameters(Opti()).objectiveDomain,
+      _referenceSolver->geometry());
+    _designDomain = _referenceSolver->parameters(Opti()).designDomain;
+
+    // define constants
+    const int dummy[1]{0};
+    SuperL2Norm3D<T>(_referenceState, _objectiveDomain)(&_uRefNorm, dummy);
+    _conversion = _referenceSolver->converter().getConversionFactorVelocity();
+    xml.readOrWarn<T>("Optimization", "RegAlpha", "", _regAlpha);
+  }
+
+  /// Implements the population-dependent term of objective functional
+  // This interface is expected by the GenericObjective class. It uses different
+  // cell/data types CELL/ V. Hence, beware of typecasts from V to T!
+  template <typename CELL, typename V>
+  void j(V* output, CELL& cell, int iC, const int* coords) {
+    // application-specific implementation
+    // compute primal velocity
+    Vector<V,3> u;
+    cell.computeU(u.data());
+    // compute reference velocity
+    T uRef[3];
+    auto refCell = _referenceSolver->lattice().getBlock(iC).get(coords);  // expects local iC
+    refCell.computeU(uRef);
+    // compare
+    const V diff = norm_squared(u - Vector<V,3>(uRef));
+    // scale and return
+    output[0] = diff * _conversion * _conversion / (T(2)*_uRefNorm*_uRefNorm);
+  }
+
+  /// Implements the control-dependent term of objective functional
+  // This interface is expected by GenericObjective, with different data types V.
+  // Hence, do not typecasts from V to T!
+  template <typename V>
+  void r(V* output, int iC, const int* coords, const V* control) {
+    // application-specific implementation: compute regularization
+    output[0] = T(0.5) * _regAlpha * control[0] * control[0];
+  }
+};
+
 
 
 int main(int argc, char **argv)
@@ -403,6 +514,15 @@ int main(int argc, char **argv)
   using T = FLOATING_POINT_TYPE;
 
   OptiCaseDual<T,DomainIdSolver> optiCase(config);
+
+  // classical objective from functors
+  auto objective = std::make_shared<RelativeDifferenceVelocityObjective<T>>(config);
+  // alternative: generic objective computation
+  // auto objectiveHelp = std::make_shared<RelativeDifferenceVelocityObjectiveGeneric<T>>(config);
+  // auto objective = std::make_shared<GenericObjective<T,DomainIdSolver,
+  //   RelativeDifferenceVelocityObjectiveGeneric<T>,
+  //   PorousBGKdynamics, 1>>(objectiveHelp);
+  optiCase.setObjective(objective);
 
   auto optimizer = createOptimizerLBFGS<T>(config, optiCase._dimCtrl);
 

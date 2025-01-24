@@ -155,7 +155,7 @@ void prepareLattice( UnitConverter<T,DESCRIPTOR> const& converter,
   //setSlipBoundary<T,DESCRIPTOR>(sLattice, superGeometry, 2);
 
   sLattice.setParameter<descriptors::OMEGA>(converter.getLatticeRelaxationFrequency());
-  sLattice.setParameter<collision::LES::Smagorinsky>(T(0.2));
+  sLattice.setParameter<collision::LES::SMAGORINSKY>(T(0.2));
 
   prepareBreakingDam(converter, sLattice, superGeometry, lattice_size, helper);
 
@@ -189,10 +189,8 @@ void getResults( SuperLattice<T,DESCRIPTOR>& sLattice,
   if ( iT==0 ) {
     // Writes the geometry, cuboid no. and rank no. as vti file for visualization
     SuperVTMwriter3D<T> vtmWriter( "breakingDam3d" );
-    SuperLatticeGeometry3D<T, DESCRIPTOR> geometry( sLattice, superGeometry );
     SuperLatticeCuboid3D<T, DESCRIPTOR> cuboid( sLattice );
     SuperLatticeRank3D<T, DESCRIPTOR> rank( sLattice );
-    vtmWriter.write( geometry );
     vtmWriter.write( cuboid );
     vtmWriter.write( rank );
 
@@ -209,7 +207,6 @@ void getResults( SuperLattice<T,DESCRIPTOR>& sLattice,
     SuperLatticeExternalScalarField3D<T, DESCRIPTOR, FreeSurface::EPSILON> epsilon( sLattice );
     SuperLatticeExternalScalarField3D<T, DESCRIPTOR, FreeSurface::CELL_TYPE> cells( sLattice );
     SuperLatticeExternalScalarField3D<T, DESCRIPTOR, FreeSurface::MASS> mass( sLattice );
-    SuperLatticeGeometry3D<T, DESCRIPTOR> geometry(sLattice, superGeometry);
     epsilon.getName() = "epsilon";
     cells.getName() = "cell_type";
     mass.getName() = "mass";
@@ -218,7 +215,6 @@ void getResults( SuperLattice<T,DESCRIPTOR>& sLattice,
     vtmWriter.addFunctor( epsilon );
     vtmWriter.addFunctor( cells );
     vtmWriter.addFunctor( mass );
-    vtmWriter.addFunctor( geometry );
 
     vtmWriter.write(iT);
   }
@@ -294,7 +290,7 @@ int main(int argc, char **argv)
 
   // Convert kg / s^2
   // Basically it is multiplied with s^2 / kg = s^2 * m^3 / (kg * m^2 * m) = 1. / (velocity_factor^2 * density * length_factor)
-  T surface_tension_coefficient_factor = std::pow(converter.getConversionFactorTime(),2)/ (c.density * std::pow(converter.getConversionFactorLength(),3));
+  T surface_tension_coefficient_factor = std::pow(converter.getConversionFactorTime(),2)/ (c.density * std::pow(converter.getPhysDeltaX(),3));
 
   clout<<"Surface: "<<surface_tension_coefficient_factor * helper.surface_tension_coefficient<<std::endl;
   clout<<"Lattice Size: "<<converter.getPhysDeltaX()<<std::endl;
@@ -310,7 +306,7 @@ int main(int argc, char **argv)
 #else
   const int noOfCuboids = 4;
 #endif
-  CuboidGeometry3D<T> cuboidGeometry( cuboid, converter.getConversionFactorLength(), noOfCuboids );
+  CuboidGeometry3D<T> cuboidGeometry( cuboid, converter.getPhysDeltaX(), noOfCuboids );
 
   HeuristicLoadBalancer<T> loadBalancer( cuboidGeometry );
   SuperGeometry<T,3> superGeometry( cuboidGeometry, loadBalancer, 2 );

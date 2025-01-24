@@ -84,9 +84,9 @@ public:
     __builtin_unreachable();
   }
 
-  T computeEquilibrium(int iPop, T rho, T* u) override {
-    return DYNAMICS().computeEquilibrium(iPop, rho, u);
-  }
+  void computeEquilibrium(cpu::Cell<T,DESCRIPTOR,Platform::CPU_SISD>& cell, T rho, T* u, T* fEq) override {
+    typename DYNAMICS::EquilibriumF().compute(cell, rho, u, fEq);
+  };
 
   void defineRho(cpu::Cell<T,DESCRIPTOR,Platform::CPU_SISD>& cell, T& rho) override {
     typename DYNAMICS::MomentaF().defineRho(cell, rho);
@@ -151,13 +151,50 @@ private:
     #endif
 
     if constexpr (DESCRIPTOR::d == 3) {
-      #ifdef PARALLEL_MODE_OMP
-      #pragma omp parallel for schedule(dynamic,1) reduction(+ : statistics)
-      #endif
-      for (int iX=0; iX < block.getNx(); ++iX) {
-        for (int iY=0; iY < block.getNy(); ++iY) {
-          std::size_t iCell = block.getCellId(iX,iY,0);
-          for (int iZ=0; iZ < block.getNz(); ++iZ) {
+      if (block.statisticsEnabled()) {
+        #ifdef PARALLEL_MODE_OMP
+        #pragma omp parallel for schedule(dynamic,1) reduction(+ : statistics)
+        #endif
+        for (int iX=0; iX < block.getNx(); ++iX) {
+          for (int iY=0; iY < block.getNy(); ++iY) {
+            std::size_t iCell = block.getCellId(iX,iY,0);
+            for (int iZ=0; iZ < block.getNz(); ++iZ) {
+              cpu::Cell<T,DESCRIPTOR,Platform::CPU_SISD> cell(block, iCell);
+              if (auto cellStatistic = mask[iCell] ? DYNAMICS().apply(cell, parameters)
+                                                   : _dynamicsOfCells[iCell]->collide(cell)) {
+                statistics.increment(cellStatistic.rho, cellStatistic.uSqr);
+              }
+              iCell += 1;
+            }
+          }
+        }
+      } else {
+        #ifdef PARALLEL_MODE_OMP
+        #pragma omp parallel for schedule(dynamic,1)
+        #endif
+        for (int iX=0; iX < block.getNx(); ++iX) {
+          for (int iY=0; iY < block.getNy(); ++iY) {
+            std::size_t iCell = block.getCellId(iX,iY,0);
+            for (int iZ=0; iZ < block.getNz(); ++iZ) {
+              cpu::Cell<T,DESCRIPTOR,Platform::CPU_SISD> cell(block, iCell);
+              if (mask[iCell]) [[likely]] {
+                DYNAMICS().apply(cell, parameters);
+              } else {
+                _dynamicsOfCells[iCell]->collide(cell);
+              }
+              iCell += 1;
+            }
+          }
+        }
+      }
+    } else {
+      if (block.statisticsEnabled()) {
+        #ifdef PARALLEL_MODE_OMP
+        #pragma omp parallel for schedule(dynamic,1) reduction(+ : statistics)
+        #endif
+        for (int iX=0; iX < block.getNx(); ++iX) {
+          std::size_t iCell = block.getCellId(iX,0);
+          for (int iY=0; iY < block.getNy(); ++iY) {
             cpu::Cell<T,DESCRIPTOR,Platform::CPU_SISD> cell(block, iCell);
             if (auto cellStatistic = mask[iCell] ? DYNAMICS().apply(cell, parameters)
                                                  : _dynamicsOfCells[iCell]->collide(cell)) {
@@ -166,25 +203,28 @@ private:
             iCell += 1;
           }
         }
-      }
-    } else {
-      #ifdef PARALLEL_MODE_OMP
-      #pragma omp parallel for schedule(dynamic,1) reduction(+ : statistics)
-      #endif
-      for (int iX=0; iX < block.getNx(); ++iX) {
-        std::size_t iCell = block.getCellId(iX,0);
-        for (int iY=0; iY < block.getNy(); ++iY) {
-          cpu::Cell<T,DESCRIPTOR,Platform::CPU_SISD> cell(block, iCell);
-          if (auto cellStatistic = mask[iCell] ? DYNAMICS().apply(cell, parameters)
-                                               : _dynamicsOfCells[iCell]->collide(cell)) {
-            statistics.increment(cellStatistic.rho, cellStatistic.uSqr);
+      } else {
+        #ifdef PARALLEL_MODE_OMP
+        #pragma omp parallel for schedule(dynamic,1)
+        #endif
+        for (int iX=0; iX < block.getNx(); ++iX) {
+          std::size_t iCell = block.getCellId(iX,0);
+          for (int iY=0; iY < block.getNy(); ++iY) {
+            cpu::Cell<T,DESCRIPTOR,Platform::CPU_SISD> cell(block, iCell);
+            if (mask[iCell]) [[likely]] {
+              DYNAMICS().apply(cell, parameters);
+            } else {
+              _dynamicsOfCells[iCell]->collide(cell);
+            }
+            iCell += 1;
           }
-          iCell += 1;
         }
       }
     }
 
-    block.getStatistics().incrementStats(statistics);
+    if (block.statisticsEnabled()) {
+      block.getStatistics().incrementStats(statistics);
+    }
   }
 
   /// Apply only DYNAMICS, do not apply others
@@ -245,11 +285,11 @@ public:
   void set(CellID iCell, bool state, bool overlap) override
   {
     /// Only unmask cells that actually do something
-    if constexpr (!std::is_same_v<DYNAMICS,NoDynamics<T,DESCRIPTOR>>) {
+    //if constexpr (!std::is_same_v<DYNAMICS,NoDynamics<T,DESCRIPTOR>>) {
       if (!overlap) {
         _mask->set(iCell, state);
       }
-    }
+    //}
     if (state) {
       _dynamicsOfCells[iCell] = _concreteDynamics.get();
     }
@@ -296,7 +336,7 @@ public:
 
 
 /// Application of a cell-wise OPERATOR on a concrete scalar CPU block
-template <typename T, typename DESCRIPTOR, CONCEPT(CellOperator) OPERATOR>
+template <typename T, typename DESCRIPTOR, concepts::CellOperator OPERATOR>
 class ConcreteBlockO<T,DESCRIPTOR,Platform::CPU_SISD,OPERATOR,OperatorScope::PerCell> final
   : public BlockO<T,DESCRIPTOR,Platform::CPU_SISD> {
 private:
@@ -307,6 +347,11 @@ public:
   std::type_index id() const override
   {
     return typeid(OPERATOR);
+  }
+
+  std::size_t weight() const override
+  {
+    return _cells.size();
   }
 
   void set(CellID iCell, bool state) override
@@ -342,7 +387,7 @@ public:
 };
 
 
-template <typename T, typename DESCRIPTOR, CONCEPT(CellOperator) OPERATOR>
+template <typename T, typename DESCRIPTOR, concepts::CellOperator OPERATOR>
 class ConcreteBlockO<T,DESCRIPTOR,Platform::CPU_SISD,OPERATOR,OperatorScope::PerCellWithParameters> final
   : public BlockO<T,DESCRIPTOR,Platform::CPU_SISD> {
 private:
@@ -355,6 +400,11 @@ public:
   std::type_index id() const override
   {
     return typeid(OPERATOR);
+  }
+
+  std::size_t weight() const override
+  {
+    return _cells.size();
   }
 
   void set(CellID iCell, bool state) override
@@ -396,13 +446,18 @@ public:
 /**
  * e.g. StatisticsPostProcessor
  **/
-template <typename T, typename DESCRIPTOR, CONCEPT(BlockOperator) OPERATOR>
+template <typename T, typename DESCRIPTOR, concepts::BlockOperator OPERATOR>
 class ConcreteBlockO<T,DESCRIPTOR,Platform::CPU_SISD,OPERATOR,OperatorScope::PerBlock> final
   : public BlockO<T,DESCRIPTOR,Platform::CPU_SISD> {
 public:
   std::type_index id() const override
   {
     return typeid(OPERATOR);
+  }
+
+  std::size_t weight() const override
+  {
+    return 0;
   }
 
   void set(CellID iCell, bool state) override

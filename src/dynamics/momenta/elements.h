@@ -33,23 +33,18 @@
 #include <type_traits>
 #include <functional>
 
-#include "dynamics/latticeDescriptors.h"
+#include "descriptor/descriptor.h"
 #include "dynamics/lbm.h"
-#include "core/vector.h"
+#include "boundary/helper.h"
 
 #include "core/util.h"
-#include "core/cell.hh"
+#include "core/cellD.h"
 
 
 namespace olb {
 
-
-// forward declarations
 template<typename T, typename DESCRIPTOR> class CellD;
 template<typename DESCRIPTOR> struct lbHelpers;
-template<typename T, typename DESCRIPTOR, int direction, int orientation>
-struct BoundaryHelpers;
-
 
 namespace momenta {
 
@@ -147,6 +142,43 @@ struct BulkDensity {
 
   static std::string getName(){
     return "BulkDensity";
+  }
+};
+
+/// Computation of hydrodynamic pressure as zeroth moment of the population.
+template<typename MOMENTUM>
+struct BulkPressure {
+  template <typename TYPE, typename CELL, typename PRESSURE, typename DESCRIPTOR=typename CELL::descriptor_t, typename V=typename CELL::value_t>
+  void compute(CELL& cell, PRESSURE& p) any_platform
+  {
+    V sum = 0;
+    for (int iPop=1; iPop < DESCRIPTOR::q; ++iPop) {
+      sum += cell[iPop];
+    }
+    auto rho = cell.template getField<descriptors::RHO>();
+    auto gradRho = cell.template getField<descriptors::NABLARHO>();
+    Vector<V,DESCRIPTOR::d> u{};
+    V uGradRho = 0;
+    MOMENTUM().template computeU<TYPE>(cell, u);
+    for (unsigned iD=0; iD < DESCRIPTOR::d; ++iD) {
+      uGradRho += u[iD] * gradRho[iD];
+    }
+    V uSqr = util::normSqr<V,DESCRIPTOR::d>(u);
+    const V s0 = -descriptors::t<V,DESCRIPTOR>(0) * descriptors::invCs2<V,DESCRIPTOR>()/V{2} * uSqr;
+    p = 1/ descriptors::invCs2<V,DESCRIPTOR>() / (1-descriptors::t<V,DESCRIPTOR>(0)) * (sum + 0.5*uGradRho + rho*s0);
+  }
+
+  template <typename TYPE, typename CELL, typename RHO>
+  void define(CELL& cell, const RHO& rho) any_platform {};
+
+  template <typename TYPE, typename CELL>
+  void initialize(CELL& cell) any_platform {};
+
+  template <typename TYPE, typename CELL, typename RHO>
+  void inverseShift(CELL& cell, RHO& rho) any_platform {};
+
+  static std::string getName(){
+    return "BulkPressure";
   }
 };
 
@@ -406,6 +438,40 @@ struct BulkMomentum {
 
   static std::string getName() {
     return "BulkMomentum";
+  }
+};
+
+struct IncompressibleBulkMomentum {
+  // compute the momentum
+  template <typename TYPE, typename CELL, typename J, typename DESCRIPTOR=typename CELL::descriptor_t>
+  void compute(CELL& cell, J& j) any_platform
+  {
+    lbm<DESCRIPTOR>::computeJ(cell, j);
+  }
+
+  // compute the velocity
+  template <typename TYPE, typename CELL, typename U, typename V=typename CELL::value_t, typename DESCRIPTOR=typename CELL::descriptor_t>
+  void computeU(CELL& cell, U& u) any_platform
+  {
+    lbm<DESCRIPTOR>::computeJ(cell, u);
+    auto rho = cell.template getField<descriptors::RHO>();
+    for (int iD=0; iD < DESCRIPTOR::d; ++iD) {
+      u[iD] /= rho;
+    }
+  }
+
+  // define the velocity
+  template <typename TYPE, typename CELL, typename U>
+  void define(CELL& cell, const U& u) any_platform {};
+
+  template <typename TYPE, typename CELL>
+  void initialize(CELL& cell) any_platform {};
+
+  template <typename TYPE, typename CELL, typename U>
+  void inverseShift(CELL& cell, U& u) any_platform {};
+
+  static std::string getName() {
+    return "IncompressibleBulkMomentum";
   }
 };
 
@@ -754,6 +820,46 @@ struct FreeEnergyMomentum {
   }
 };
 
+struct ForcedPSMMomentum {
+  template <typename TYPE, typename CELL, typename J, typename V=typename CELL::value_t, typename DESCRIPTOR=typename CELL::descriptor_t>
+  void compute(CELL& cell, J& j) any_platform
+  {
+    const V rho = TYPE().computeRho(cell);
+    computeU<TYPE>(cell, j);
+    for (int iVel=0; iVel<DESCRIPTOR::d; ++iVel) {
+      j[iVel] *= rho;
+    }
+  }
+
+  template <typename TYPE, typename CELL, typename U, typename V=typename CELL::value_t, typename DESCRIPTOR=typename CELL::descriptor_t>
+  void computeU(CELL& cell, U& u) any_platform
+  {
+    V rho{};
+    lbm<DESCRIPTOR>::computeRhoU(cell, rho, u);
+    V epsilon = 1. - cell.template getField<descriptors::POROSITY>();
+    V omega = cell.template getField<descriptors::OMEGA>();
+    V paramA = 1 / omega - 0.5;
+    V paramB = (epsilon * paramA) / ((1. - epsilon) + paramA);
+    V paramC = (1. - paramB);
+    for (int iVel=0; iVel < DESCRIPTOR::d; ++iVel) {
+      u[iVel] = paramC * (u[iVel] + cell.template getFieldComponent<descriptors::FORCE>(iVel) * 0.5)
+              + paramB * cell.template getFieldComponent<descriptors::VELOCITY_SOLID>(iVel);
+    }
+  }
+
+  template <typename TYPE, typename CELL, typename U>
+  void define(CELL& cell, const U& u) any_platform {}
+
+  template <typename TYPE, typename CELL>
+  void initialize(CELL& cell) any_platform {}
+
+  template <typename TYPE, typename CELL, typename U>
+  void inverseShift(CELL& cell, U& u) any_platform {};
+
+  static std::string getName() {
+    return "ForcedPSMMomentum";
+  }
+};
 
 struct GuoZhaoMomentum {
   // compute the momentum
@@ -1044,6 +1150,120 @@ struct PorousParticleMomentum {
   }
 };
 
+/// Momentum of a moving porous medium
+template <typename MOMENTUM>
+struct MovingPorousMomentum {
+  template <typename TYPE, typename CELL, typename J, typename V=typename CELL::value_t, typename DESCRIPTOR=typename CELL::descriptor_t>
+  void compute(CELL& cell, J& j) any_platform
+  {
+    MOMENTUM().template compute<TYPE>(cell, j);
+  }
+
+  template <typename TYPE, typename CELL, typename U, typename V=typename CELL::value_t, typename DESCRIPTOR=typename CELL::descriptor_t>
+  void computeU(CELL& cell, U& u) any_platform
+  {
+    const V rho = TYPE().computeRho(cell);
+    MOMENTUM().template computeU<TYPE>(cell, u);
+    const V porosity = cell.template getField<descriptors::POROSITY>();
+    for (int iD=0; iD < DESCRIPTOR::d; ++iD) {
+      u[iD] += V{0.5} * rho
+             * (V{1} - porosity)
+             * (cell.template getFieldComponent<descriptors::VELOCITY>(iD) - u[iD]);
+    }
+  }
+
+  template <typename TYPE, typename CELL, typename U, typename DESCRIPTOR=typename CELL::descriptor_t>
+  void define(CELL& cell, const U& u) any_platform
+  {
+    MOMENTUM().template define<TYPE>(cell, u);
+  }
+
+  template <typename TYPE, typename CELL>
+  void initialize(CELL& cell) any_platform
+  {
+    MOMENTUM().template initialize<TYPE>(cell);
+  }
+
+  template <typename TYPE, typename CELL, typename U>
+  void inverseShift(CELL& cell, U& u) any_platform {}
+
+  static std::string getName(){
+    return "MovingPorousMomentum<" + MOMENTUM().getName() + ">";
+  }
+};
+
+template<typename STRESS>
+struct MovingPorousStress {
+  template <typename TYPE, typename CELL, typename RHO, typename U, typename PI, typename V=typename CELL::value_t, typename DESCRIPTOR=typename CELL::descriptor_t>
+  void compute(CELL& cell, const RHO& rho, const U& u, PI& pi) any_platform
+  {
+    V uNew[DESCRIPTOR::d] { };
+    const V porosity = cell.template getField<descriptors::POROSITY>();
+    for (int iD=0; iD < DESCRIPTOR::d; ++iD) {
+      uNew[iD] = u[iD] + V{0.5} * rho
+                       * (V{1} - porosity)
+                       * (cell.template getFieldComponent<descriptors::VELOCITY>(iD) - u[iD]);
+    }
+
+    STRESS().template compute<TYPE>(cell, rho, uNew, pi);
+    V forceTensor[util::TensorVal<DESCRIPTOR>::n];
+    // Creation of body force tensor (rho/2.)*(G_alpha*U_beta + U_alpha*G_Beta)
+    int iPi = 0;
+    for (int iAlpha=0; iAlpha < DESCRIPTOR::d; ++iAlpha) {
+      for (int iBeta=iAlpha; iBeta < DESCRIPTOR::d; ++iBeta) {
+        forceTensor[iPi] = V{0.5} * rho * (uNew[iBeta] + uNew[iAlpha]);
+        ++iPi;
+      }
+    }
+    // Creation of second-order moment off-equilibrium tensor
+    for (int iPi=0; iPi < util::TensorVal<DESCRIPTOR>::n; ++iPi) {
+      pi[iPi] += forceTensor[iPi];
+    }
+  }
+
+  static std::string getName() {
+    return "MovingPorousStress<" + STRESS().getName() + ">";
+  }
+};
+
+template <typename MOMENTUM>
+struct MovingPorousMomentumCombination {
+  template <typename TYPE, typename CELL, typename J, typename V=typename CELL::value_t, typename DESCRIPTOR=typename CELL::descriptor_t>
+  void compute(CELL& cell, J& j) any_platform
+  {
+    MOMENTUM().template compute<TYPE>(cell, j);
+  }
+
+  template <typename TYPE, typename CELL, typename U, typename V=typename CELL::value_t, typename DESCRIPTOR=typename CELL::descriptor_t>
+  void computeU(CELL& cell, U& u) any_platform
+  {
+    MOMENTUM().template computeU<TYPE>(cell, u);
+    const V porosity = cell.template getField<descriptors::POROSITY>();
+    for (int iD=0; iD < DESCRIPTOR::d; ++iD) {
+      u[iD] *= porosity;
+      u[iD] += (V{1} - porosity) * cell.template getFieldComponent<descriptors::VELOCITY>(iD);
+    }
+  }
+
+  template <typename TYPE, typename CELL, typename U, typename DESCRIPTOR=typename CELL::descriptor_t>
+  void define(CELL& cell, const U& u) any_platform
+  {
+    MOMENTUM().template define<TYPE>(cell, u);
+  }
+
+  template <typename TYPE, typename CELL>
+  void initialize(CELL& cell) any_platform
+  {
+    MOMENTUM().template initialize<TYPE>(cell);
+  }
+
+  template <typename TYPE, typename CELL, typename U>
+  void inverseShift(CELL& cell, U& u) any_platform {}
+
+  static std::string getName(){
+    return "MovingPorousMomentumCombination<" + MOMENTUM().getName() + ">";
+  }
+};
 
 /// Momentum is zero at solid material.
 struct ZeroMomentum {
@@ -1261,7 +1481,7 @@ struct InnerCornerStress2D {
   template <typename TYPE, typename CELL, typename RHO, typename U, typename PI, typename V=typename CELL::value_t, typename DESCRIPTOR=typename CELL::descriptor_t>
   void compute(CELL& cell, RHO& rho, const U& u, PI& pi) any_platform
   {
-    FieldD<V,DESCRIPTOR,descriptors::POPULATION> newCell(
+    PopulationCellD<V,DESCRIPTOR> newCell(
       cell.template getField<descriptors::POPULATION>());
     int v[DESCRIPTOR::d] = { -normalX, -normalY };
     int unknownF  = util::findVelocity<DESCRIPTOR >(v);

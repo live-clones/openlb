@@ -38,7 +38,10 @@ public:
   IndicInverse(FunctorPtr<IndicatorF<S, D>> f, PhysR<S, D> min,
                PhysR<S, D> max);
   IndicInverse(FunctorPtr<IndicatorF<S, D>> f);
-  S signedDistance(const Vector<S, D>& input);
+  S signedDistance(const Vector<S, D>& input) override;
+  S signedDistanceExact(const Vector<S, D>& input) override;
+  Vector<S,D> surfaceNormal(const Vector<S,D>& pos, const S meshSize) override;
+  Vector<S,D> surfaceNormalExact(const Vector<S,D>& pos, const S meshSize) override;
 };
 
 template <typename S, unsigned D>
@@ -52,7 +55,8 @@ public:
   void setScalingFactor(const S scalingFactor);
   S getScalingFactor();
   Vector<S,D> getEstimatedCenter();
-  S    signedDistance(const Vector<S, D>& input);
+  S    signedDistance(const Vector<S, D>& input) override;
+  S    signedDistanceExact(const Vector<S, D>& input) override;
 };
 
 template <typename S, unsigned D>
@@ -66,7 +70,8 @@ public:
   void setElongation(const Vector<S,D>& elongation);
   Vector<S,D> getElongation();
   Vector<S,D> getEstimatedCenter();
-  S    signedDistance(const Vector<S, D>& input);
+  S    signedDistance(const Vector<S, D>& input) override;
+  S    signedDistanceExact(const Vector<S, D>& input) override;
 };
 
 } // namespace olb
