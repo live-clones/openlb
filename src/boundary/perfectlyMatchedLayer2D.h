@@ -24,8 +24,8 @@
 //This file contains the Perfectly Matched Layer Damping Boundary
 //This is an onLattice boundary
 
-#ifndef OLB_PERFECTLY_MATCHED_LAYER_H
-#define OLB_PERFECTLY_MATCHED_LAYER_H
+#ifndef OLB_PERFECTLY_MATCHED_LAYER_2D_H
+#define OLB_PERFECTLY_MATCHED_LAYER_2D_H
 
 #include "boundary/dynamics/dampingBoundaryDynamics.h"
 
@@ -34,6 +34,7 @@ namespace olb {
 namespace boundary {
 
 template <concepts::BaseType T, concepts::LatticeDescriptor DESCRIPTOR>
+requires (DESCRIPTOR::d == 2)
 struct PerfectlyMatchedLayer {
 
 using value_t = T;
@@ -43,15 +44,15 @@ CellDistance getNeighborhoodRadius() {
   return 0;
 }
 
-std::optional<DynamicsPromise<T,DESCRIPTOR>> getDynamics(DiscreteNormalType type,
-                                                         DiscreteNormal<DESCRIPTOR> n) {
-  return DynamicsPromise(meta::id<boundaryhelper::DampingBoundaryDynamics<T,DESCRIPTOR,momenta::BulkTuple,equilibria::SecondOrder>{});
-}
+// std::optional<DynamicsPromise<T,DESCRIPTOR>> getDynamics(DiscreteNormalType type,
+//                                                          DiscreteNormal<DESCRIPTOR> n) {
+//   return DynamicsPromise(meta::id<boundaryhelper::DampingBoundaryDynamics<T,DESCRIPTOR,momenta::BulkTuple,equilibria::SecondOrder>{});
+// }
 
-std::optional<PostProcessorPromise<T,DESCRIPTOR>> getPostProcessor(DiscreteNormalType type,
-                                                                   DiscreteNormal<DESCRIPTOR> n) {
-  return std::nullopt;
-}
+// std::optional<PostProcessorPromise<T,DESCRIPTOR>> getPostProcessor(DiscreteNormalType type,
+//                                                                    DiscreteNormal<DESCRIPTOR> n) {
+//   return std::nullopt;
+// }
 
 };
 
