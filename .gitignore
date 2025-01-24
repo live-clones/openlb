@@ -24,3 +24,5 @@ examples/noise/cylinder3dnoise/damping/
 build/
 
 examples/*/*/tmp*
+examples/gridRefinement/cylinder2d/cylinder2d
+examples/gridRefinement/sphere3d/sphere3d
