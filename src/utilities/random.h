@@ -32,7 +32,7 @@ namespace util {
 /* The present class is supposed to represent a random scalar generator that can
  * be fed from stored values also. This is supposed to enable a semi-random approach,
  * which will enable reproducible results with random-like values. This is primarily
- * intendet to be used in the random particle seeding.
+ * intended to be used in the random particle seeding.
  * When passing useStored=true, 'generateScalar' will use stored values provided in
  * the constructor or by a specified file.
  */
@@ -49,7 +49,7 @@ public:
   /// Constructor with passed sequence
   Randomizer(std::vector<T> sequence);
 
-  /// Constroctor with filePath to stored sequence
+  /// Constructor with filePath to stored sequence
   /// - throws error, if file does not exist and enforceStored=true
   Randomizer(std::string filePathSequence, bool enforceStored=false );
 

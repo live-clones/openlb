@@ -23,7 +23,6 @@
       <Re>    </Re>
       <charU> </charU>
       <BoundaryValueUpdateTime> 0.02 </BoundaryValueUpdateTime>
-      <TimeStabilityCheck> 0.06 </TimeStabilityCheck>
     </PhysParameters>
 
     <ConvergenceCheck>
@@ -31,6 +30,12 @@
       <Interval>.1</Interval>
       <Residuum>1e-5</Residuum>
     </ConvergenceCheck>
+
+    <StabilityCheck>
+      <Frequency> 0.06 </Frequency>
+      <ExitMaxU> false </ExitMaxU>
+      <BoundMaxU> 10. </BoundMaxU>
+    </StabilityCheck>
 
     <Mesh>
       <IndicatorCuboid3D extend="1.001 1.001 1.001" origin="0 0 0"/>

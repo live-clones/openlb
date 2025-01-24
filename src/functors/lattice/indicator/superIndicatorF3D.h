@@ -97,6 +97,21 @@ public:
   bool operator() (bool output[], const int input[]) override;
 };
 
+/// threshold for external field
+template <typename T, typename DESCRIPTOR, typename FIELD>
+class SuperIndicatorFieldThreshold3D : public SuperIndicatorF3D<T> {
+private:
+SuperLattice<T, DESCRIPTOR>& _superLattice;
+T _thresholdValue;
+std::string _condition;
+
+public:
+  SuperIndicatorFieldThreshold3D(SuperGeometry<T,3>& geometry, SuperLattice<T, DESCRIPTOR>& superLattice, std::vector<int> materials, T thresholdValue, std::string condition);
+
+  using SuperIndicatorF3D<T>::operator();
+  bool operator() (bool output[], const int input[]) override;
+};
+
 /// Indicator extended by a layer
 template <typename T>
 class SuperIndicatorLayer3D : public SuperIndicatorF3D<T> {
@@ -135,9 +150,24 @@ protected:
   FunctorPtr<SuperIndicatorF3D<T>> _g;
 public:
   SuperIndicatorMultiplication3D(FunctorPtr<SuperIndicatorF3D<T>>&& f,
-    FunctorPtr<SuperIndicatorF3D<T>>&& g);
+                                 FunctorPtr<SuperIndicatorF3D<T>>&& g);
 
   using SuperIndicatorF3D<T>::operator();
+  bool operator() (bool output[], const int input[]) override;
+};
+
+/// Indicator substraction functor
+template <typename T>
+class SuperIndicatorSubstraction3D : public SuperIndicatorF3D<T> {
+protected:
+  FunctorPtr<SuperIndicatorF3D<T>> _f;
+  FunctorPtr<SuperIndicatorF3D<T>> _g;
+public:
+  SuperIndicatorSubstraction3D(FunctorPtr<SuperIndicatorF3D<T>>&& f,
+                               FunctorPtr<SuperIndicatorF3D<T>>&& g);
+
+  using SuperIndicatorF3D<T>::operator();
+
   bool operator() (bool output[], const int input[]) override;
 };
 

@@ -122,34 +122,27 @@ struct SimulationErrors : public parameters::ResultsBase
  *   component-wise (3 parameters) or cuboid-wise for arbitrary number of cuboids
  * - parameter optimization: identify the force field point-wise via adjoint
  *   optimization
- * In any case, we inherit from AdjointLbSolverBase which makes no difference
+ * In any case, we inherit from AdjointLbSolver which makes no difference
  * per default but allows adjoint optimization as well.
  */
 template<
   typename T,
   typename PARAMETERS,
-  typename LATTICES,
-  SolverMode MODE=SolverMode::Reference>
-class TestFlowBase : public AdjointLbSolverBase<T,PARAMETERS,LATTICES,MODE>
+  typename LATTICES>
+class TestFlowBase : virtual public LbSolver<T,PARAMETERS,LATTICES>
 {
 private:
   mutable OstreamManager            clout {std::cout, "TestFlowSolver"};
 
-protected:
-  /// the flow-driving force
-  std::shared_ptr<AnalyticalF<3,T,T>>     _force;
-  /// the analytical solution is used as boundary condition
-  std::shared_ptr<AnalyticalF<3,T,T>>     _velocity;
-
 public:
   TestFlowBase(utilities::TypeIndexedSharedPtrTuple<PARAMETERS> params)
-   : TestFlowBase::AdjointLbSolverBase(params)
+   : TestFlowBase::LbSolver(params)
   { }
 
   using descriptor = typename LATTICES::values_t::template get<0>;
 
 protected:
-  void prepareGeometry() override
+  virtual void prepareGeometry() override
   {
     // construct sphere (only used for spherical domain)
     std::vector<T> origin(3,T());
@@ -195,73 +188,54 @@ protected:
 
   virtual void prepareLattices() override
   {
+    setDynamics();
+    setForceField();
+  }
+
+  void setDynamics()
+  {
     auto& lattice = this->lattice();
-    auto outside = this->geometry().getMaterialIndicator({0});
     auto bulk = this->geometry().getMaterialIndicator({1});
     auto boundary = this->geometry().getMaterialIndicator({2});
 
-    // define dynamics
-    const T omega = this->converter().getLatticeRelaxationFrequency();
-
     // material=0 -->do nothing
-    lattice.template defineDynamics<NoDynamics<T,descriptor>>(outside);
 
-    if constexpr (MODE != SolverMode::Dual) {
-      // material=1,2 -->bulk dynamics
-      using BulkDynamics = ForcedBGKdynamics<T,descriptor>;
-      lattice.template defineDynamics<BulkDynamics>(bulk);
+    // material=1 -->bulk dynamics
+    using BulkDynamics = ForcedBGKdynamics<T,descriptor>;
+    lattice.template defineDynamics<BulkDynamics>(bulk);
 
-      // material=2 -->Dirichlet non-zero
-      switch (this->parameters(Simulation()).bcType) {
-        case LOCAL:
-          setLocalVelocityBoundary<T,descriptor>(
-            lattice, omega, boundary);
-          break;
-        case INTERPOLATED:
-          setInterpolatedVelocityBoundary<T,descriptor>(
-            lattice, omega, boundary);
-          break;
-        case BOUZIDI:
-          std::vector<T> center(3,0.5);
-          IndicatorSphere3D<T> sphere(center,
-            this->converter().getCharPhysVelocity()/2.);
-          setBouzidiBoundary<T,descriptor,BouzidiVelocityPostProcessor>(
-            lattice, this->geometry(), 2, sphere);
-          break;
-      }
-    }
-    else {
-      // material=1 -->bulk dynamics
-      lattice.defineDynamics(bulk,
-        new DualForcedBGKdynamics<T,descriptor>(omega));
-
-      // material=2 -->Dirichlet zero (bounce back)
-      setBounceBackBoundary(lattice, boundary);
+    // material=2 -->Dirichlet non-zero
+    switch (this->parameters(Simulation()).bcType) {
+      case LOCAL:
+        boundary::set<boundary::LocalVelocity>(
+          lattice, boundary);
+        break;
+      case INTERPOLATED:
+        boundary::set<boundary::InterpolatedVelocity>(lattice, boundary);
+        break;
+      case BOUZIDI:
+        std::vector<T> center(3,0.5);
+        IndicatorSphere3D<T> sphere(center,
+          this->converter().getCharPhysVelocity()/2.);
+        setBouzidiBoundary<T,descriptor,BouzidiVelocityPostProcessor>(
+          lattice, this->geometry(), 2, sphere);
+        break;
     }
 
+    const T omega = this->converter().getLatticeRelaxationFrequency();
     lattice.template setParameter<descriptors::OMEGA>(omega);
+  }
 
+  void setForceField()
+  {
     // set force field (on whole domain)
-    if constexpr (MODE == SolverMode::Reference) {
-      // standard execution: use analytical force function
-      std::shared_ptr<AnalyticalF<3,T,T>> forceSol(
-        new ForceTestFlow3D<T,T,descriptor> (this->converter()));
-      const T scaling(this->converter().getConversionFactorMass()
-        / this->converter().getConversionFactorForce());
-      _force = scaling * forceSol;  // conversion to lattice units
-      lattice.template defineField<descriptors::FORCE>(
-        bulk,
-        *_force);
-    } else {
-      // optimization: get force from control variables
-      lattice.template defineField<descriptors::FORCE>(
-        bulk,
-        *(this->parameters(Opti()).controlledField));
-    }
-
-    // set velocity field (for the boundary condition)
-    _velocity = std::make_shared<VelocityTestFlow3D<T,T,descriptor>>(
-      this->converter());
+    ForceTestFlow3D<T,T,descriptor> forceSol(this->converter());
+    const T latticeScaling(this->converter().getConversionFactorMass()
+      / this->converter().getConversionFactorForce());
+    AnalyticalScaled3D<T,T> force(forceSol, latticeScaling);  // conversion to lattice units
+    this->lattice().template defineField<descriptors::FORCE>(
+      this->geometry().getMaterialIndicator({1}),
+      force);
   }
 
   virtual void setInitialValues() override
@@ -276,27 +250,28 @@ protected:
       this->geometry().getMaterialIndicator({1,2}), rhoF, uF);
   }
 
-  void setBoundaryValues(std::size_t iT) override
+  virtual void setBoundaryValues(std::size_t iT) override
   {
-    if constexpr (MODE != SolverMode::Dual) {  // else we have Dirichlet zero
-      // smoothly scale inflow velocity (in order to reduce pressure waves)
-      const std::size_t itMaxStart = this->converter().getLatticeTime(
-        this->parameters(Simulation()).startUpTime);
-      if (iT <= itMaxStart) {
-        PolynomialStartScale<T,T> StartScale(itMaxStart, T(1));
-        T iTvec[1] = {T(iT)};
-        T frac[1] = {};
-        StartScale(frac, iTvec);
+    // smoothly scale inflow velocity (in order to reduce pressure waves)
+    const std::size_t itMaxStart = this->converter().getLatticeTime(
+      this->parameters(Simulation()).startUpTime);
+    if (iT <= itMaxStart) {
+      // compute scaling factor
+      PolynomialStartScale<T,T> startScale(itMaxStart, T(1));
+      T iTvec[1] = {T(iT)};
+      T frac[1] = {};
+      startScale(frac, iTvec);
 
-        AnalyticalScaled3D<T,T> uBoundaryStart(*_velocity,
-          frac[0] / this->converter().getConversionFactorVelocity());
-        switch (this->parameters(Simulation()).bcType) {
-          case BOUZIDI:
-            setBouzidiVelocity(this->lattice(), this->geometry(), 2, uBoundaryStart);
-            break;
-          default:
-            this->lattice().defineU(this->geometry(), 2, uBoundaryStart);
-        }
+      // analytical solution
+      VelocityTestFlow3D<T,T,descriptor> velocity(this->converter());
+      AnalyticalScaled3D<T,T> uBoundaryStart(velocity,
+        frac[0] / this->converter().getConversionFactorVelocity());
+      switch (this->parameters(Simulation()).bcType) {
+        case BOUZIDI:
+          setBouzidiVelocity(this->lattice(), this->geometry(), 2, uBoundaryStart);
+          break;
+        default:
+          this->lattice().defineU(this->geometry(), 2, uBoundaryStart);
       }
     }
   }
@@ -310,7 +285,6 @@ protected:
 
   void writeFunctorsToVTK(SuperVTMwriter3D<T>& writer, int index) const
   {
-    SuperLatticeGeometry3D<T,descriptor> geometry(this->lattice(), this->geometry());
     SuperLatticePhysVelocity3D<T,descriptor> velocity(this->lattice(), this->converter());
     SuperLatticePhysPressure3D<T,descriptor> pressure(this->lattice(), this->converter());
     SuperLatticeField3D<T,descriptor,descriptors::FORCE> force(
@@ -331,7 +305,6 @@ protected:
     writer.addFunctor(solution_density_lattice);
 
     writer.addFunctor(force);
-    writer.addFunctor(geometry);
     writer.addFunctor(velocity);
     writer.addFunctor(pressure);
     writer.write(index);
@@ -339,13 +312,7 @@ protected:
 
   virtual void computeResults() override
   {
-    if constexpr (MODE != SolverMode::Dual) {
-      computeErrors();
-    }
-  }
-
-  void computeErrors() const
-  {
+    // error computation
     if constexpr (PARAMETERS::keys_t::template contains<Errors>())
     {
       auto& converter = this->converter();
@@ -457,15 +424,8 @@ using Params_TfBasic = meta::map<
   Errors,           SimulationErrors<T>
 >;
 
-
 template<typename T>
-class TestFlowSolver : public TestFlowBase<T,Params_TfBasic<T>,Lattices> {
-public:
-  TestFlowSolver(
-    utilities::TypeIndexedSharedPtrTuple<Params_TfBasic<T>> params)
-   : TestFlowSolver::TestFlowBase(params)
-  { }
-};
+using TestFlowSolver = TestFlowBase<T,Params_TfBasic<T>,Lattices>;
 
 // Further variants suitable for optimization can be found in
 // examples/optimization/testFlowOpti3d.h

@@ -52,7 +52,7 @@ using namespace olb::graphics;
 
 using T = FLOATING_POINT_TYPE;
 
-using NSDESCRIPTOR = D2Q9<POROSITY,VELOCITY_SOLID,FORCE>;
+using NSDESCRIPTOR = D2Q9<POROSITY,VELOCITY_SOLID,FORCE,OMEGA>;
 using TDESCRIPTOR  = D2Q5<VELOCITY,TEMPERATURE>;
 
 using TotalEnthalpyAdvectionDiffusionDynamics = TotalEnthalpyAdvectionDiffusionTRTdynamics<T,TDESCRIPTOR>;
@@ -140,9 +140,11 @@ void prepareGeometry(SuperGeometry<T,2>& superGeometry,
 
 }
 
+template <typename SuperLatticeCoupling>
 void prepareLattice( ThermalUnitConverter<T, NSDESCRIPTOR, TDESCRIPTOR> const& converter,
                      SuperLattice<T, NSDESCRIPTOR>& NSlattice,
                      SuperLattice<T, TDESCRIPTOR>& ADlattice,
+                     SuperLatticeCoupling& coupling,
                      SuperGeometry<T,2>& superGeometry )
 {
 
@@ -154,16 +156,37 @@ void prepareLattice( ThermalUnitConverter<T, NSDESCRIPTOR, TDESCRIPTOR> const& c
 
   NSlattice.defineDynamics<ForcedPSMBGKdynamics>(superGeometry.getMaterialIndicator({1, 2, 3, 4}));
   ADlattice.defineDynamics<TotalEnthalpyAdvectionDiffusionDynamics>(superGeometry.getMaterialIndicator({1, 2, 3}));
-  setBounceBackBoundary(ADlattice, superGeometry, 4);
+  boundary::set<boundary::BounceBack>(ADlattice, superGeometry, 4);
 
   /// sets boundary
-  setRegularizedTemperatureBoundary<T,TDESCRIPTOR>(ADlattice, Tomega, superGeometry.getMaterialIndicator({2, 3}));
-  setInterpolatedVelocityBoundary<T,NSDESCRIPTOR>(NSlattice, omega, superGeometry.getMaterialIndicator({2, 3, 4}));
+  boundary::set<boundary::RegularizedTemperature>(ADlattice, superGeometry.getMaterialIndicator({2,3}));
+  boundary::set<boundary::InterpolatedVelocity>(NSlattice, superGeometry.getMaterialIndicator({2,3,4}));
+
+  /// Compute pre factor
+  std::vector<T> dir{0.0, 1.0};
+  std::vector<T> forcePrefactor{0, 0};
+  T boussinesqForcePrefactor = Ra / util::pow(T(N),3) * Pr * util::pow(cp_ref / descriptors::invCs2<T,TDESCRIPTOR>() * (converter.getLatticeThermalRelaxationTime() - 0.5), 2);
+  clout << "boussinesq " << Ra / util::pow(T(N), 3) * Pr * lambda_l * lambda_l << std::endl;
+
+  // we normalize the direction of force vector
+  T normDir = T();
+  for (unsigned iD = 0; iD < dir.size(); ++iD) {
+    normDir += dir[iD]*dir[iD];
+  }
+  normDir = util::sqrt(normDir);
+  for (unsigned iD = 0; iD < dir.size(); ++iD) {
+    dir[iD] /= normDir;
+  }
+
+  for (unsigned iD = 0; iD < dir.size(); ++iD) {
+    forcePrefactor[iD] = boussinesqForcePrefactor * dir[iD];
+  }
 
   NSlattice.setParameter<descriptors::OMEGA>(omega);
-
   ADlattice.setParameter<descriptors::OMEGA>(Tomega);
+
   ADlattice.setParameter<collision::TRT::MAGIC>(T(0.25));
+
   ADlattice.setParameter<TotalEnthalpy::T_S>(Tmelt);
   ADlattice.setParameter<TotalEnthalpy::T_L>(Tmelt);
   ADlattice.setParameter<TotalEnthalpy::CP_S>(cp_s);
@@ -172,11 +195,22 @@ void prepareLattice( ThermalUnitConverter<T, NSDESCRIPTOR, TDESCRIPTOR> const& c
   ADlattice.setParameter<TotalEnthalpy::LAMBDA_L>(cp_ref / descriptors::invCs2<T,TDESCRIPTOR>() * (converter.getLatticeThermalRelaxationTime() - 0.5));
   ADlattice.setParameter<TotalEnthalpy::L>(L);
 
+  coupling.template setParameter<TotalEnthalpyPhaseChangeCoupling::T_S>(Tmelt);
+  coupling.template setParameter<TotalEnthalpyPhaseChangeCoupling::T_L>(Tmelt);
+  coupling.template setParameter<TotalEnthalpyPhaseChangeCoupling::CP_S>(cp_s);
+  coupling.template setParameter<TotalEnthalpyPhaseChangeCoupling::CP_L>(cp_l);
+  coupling.template setParameter<TotalEnthalpyPhaseChangeCoupling::L>(L);
+  coupling.template setParameter<TotalEnthalpyPhaseChangeCoupling::FORCE_PREFACTOR>(forcePrefactor);
+  coupling.template setParameter<TotalEnthalpyPhaseChangeCoupling::T_COLD>(Tcold);
+  coupling.template setParameter<TotalEnthalpyPhaseChangeCoupling::DELTA_T>(T(1.));
+
   /// define initial conditions
   AnalyticalConst2D<T,T> rho(1.);
   AnalyticalConst2D<T,T> u0(0.0, 0.0);
   AnalyticalConst2D<T,T> T_cold(lattice_Hcold);
   AnalyticalConst2D<T,T> T_hot(lattice_Hhot);
+  AnalyticalConst2D<T,T> omegaField(omega);
+  NSlattice.defineField<descriptors::OMEGA>(superGeometry.getMaterialIndicator({1, 2, 3, 4}), omegaField);
 
   /// for each material set Rho, U and the Equilibrium
   NSlattice.defineRhoU(superGeometry.getMaterialIndicator({1, 2, 3, 4}), rho, u0);
@@ -216,7 +250,6 @@ void getResults( ThermalUnitConverter<T, NSDESCRIPTOR, TDESCRIPTOR> const& conve
   OstreamManager clout(std::cout,"getResults");
 
   SuperVTMwriter2D<T> vtkWriter("galliumMelting2d");
-  SuperLatticeGeometry2D<T, NSDESCRIPTOR> geometry(NSlattice, superGeometry);
   SuperLatticeField2D<T, TDESCRIPTOR, VELOCITY> velocity(ADlattice);
   SuperLatticePhysPressure2D<T, NSDESCRIPTOR> pressure(NSlattice, converter);
 
@@ -228,7 +261,6 @@ void getResults( ThermalUnitConverter<T, NSDESCRIPTOR, TDESCRIPTOR> const& conve
   temperature.getName() = "temperature";
   SuperLatticeField2D<T, NSDESCRIPTOR, FORCE> force(NSlattice);
   force.getName() = "force";
-  vtkWriter.addFunctor( geometry );
   vtkWriter.addFunctor( pressure );
   vtkWriter.addFunctor( velocity );
   vtkWriter.addFunctor( enthalpy );
@@ -240,10 +272,8 @@ void getResults( ThermalUnitConverter<T, NSDESCRIPTOR, TDESCRIPTOR> const& conve
 
   if (iT == 0) {
     /// Writes the geometry, cuboid no. and rank no. as vti file for visualization
-    SuperLatticeGeometry2D<T, NSDESCRIPTOR> geometry(NSlattice, superGeometry);
     SuperLatticeCuboid2D<T, NSDESCRIPTOR> cuboid(NSlattice);
     SuperLatticeRank2D<T, NSDESCRIPTOR> rank(NSlattice);
-    vtkWriter.write(geometry);
     vtkWriter.write(cuboid);
     vtkWriter.write(rank);
 
@@ -342,19 +372,14 @@ int main(int argc, char *argv[])
   SuperLattice<T, TDESCRIPTOR> ADlattice(superGeometry);
   SuperLattice<T, NSDESCRIPTOR> NSlattice(superGeometry);
 
-
-  std::vector<T> dir{0.0, 1.0};
-  T boussinesqForcePrefactor = Ra / util::pow(T(N),3) * Pr * util::pow(cp_ref / descriptors::invCs2<T,TDESCRIPTOR>() * (converter.getLatticeThermalRelaxationTime() - 0.5), 2);
-  clout << "boussinesq " << Ra / util::pow(T(N), 3) * Pr * lambda_l * lambda_l << std::endl;
-
-  TotalEnthalpyPhaseChangeCouplingGenerator2D<T,NSDESCRIPTOR,TotalEnthalpyAdvectionDiffusionDynamics>
-  coupling(0, converter.getLatticeLength(lx), 0, converter.getLatticeLength(ly),
-           boussinesqForcePrefactor, Tcold, 1., dir);
-
-  NSlattice.addLatticeCoupling(superGeometry, 1, coupling, ADlattice);
+  SuperLatticeCoupling coupling(
+      TotalEnthalpyPhaseChangeCoupling{},
+      names::NavierStokes{}, NSlattice,
+      names::Temperature{}, ADlattice);
+  coupling.restrictTo(superGeometry.getMaterialIndicator({1}));
 
   // prepareLattice and setBoundaryConditions
-  prepareLattice(converter, NSlattice, ADlattice, superGeometry);
+  prepareLattice(converter, NSlattice, ADlattice, coupling, superGeometry);
 
   /// === 4th Step: Main Loop with Timer ===
   util::Timer<T> timer(converter.getLatticeTime(maxPhysT), superGeometry.getStatistics().getNvoxel() );
@@ -366,7 +391,7 @@ int main(int argc, char *argv[])
     setBoundaryValues(converter, NSlattice, ADlattice, iT, superGeometry);
 
     /// === 6th Step: Collide and Stream Execution ===
-    NSlattice.executeCoupling();
+    coupling.execute();
     NSlattice.collideAndStream();
     ADlattice.collideAndStream();
 

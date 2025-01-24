@@ -28,8 +28,6 @@
 #define BLOCK_LATTICE_INTERACTION_HH
 
 #include "blockLatticeInteraction.h"
-// TODO: Use with c++20
-//#include <numbers>
 
 namespace olb {
 
@@ -236,7 +234,11 @@ void setBlockParticleField(const BlockGeometry<T, DESCRIPTOR::d>& blockGeometry,
       [&](const LatticeR<D>& latticeR) {
         //Get phys position
         T physR[D] = {};
-        blockGeometry.getPhysR(physR, latticeR);
+        Vector<T, D> physRV;
+        blockGeometry.getPhysR(physRV, latticeR);
+        for (unsigned iD = 0; iD != D; ++iD) {
+          physR[iD] = physRV[iD];
+        }
         //Retrieve porosity
         FieldD<T, DESCRIPTOR, descriptors::POROSITY> porosity {};
         particles::resolved::evalSolidVolumeFraction(porosity.data(), physR, particle);
@@ -308,7 +310,11 @@ void setBlockParticleField(
       [&](const LatticeR<D>& latticeR) {
         //Get phys position
         T physR[D] = {};
-        blockGeometry.getPhysR(physR, latticeR);
+        Vector<T, D> physRV;
+        blockGeometry.getPhysR(physRV, latticeR);
+        for (unsigned iD = 0; iD != D; ++iD) {
+          physR[iD] = physRV[iD];
+        }
         T const signedDist = particles::resolved::signedDistanceToParticle(
             particle, PhysR<T, D>(physR));
         //Retrieve porosity
@@ -410,11 +416,7 @@ void setBlockParticleField(
             }
 
             if (detectWallContacts) {
-              // TODO: Use the following line with c++20
-              //for (unsigned short solidBoundaryID = 0; SolidBoundary<T, DESCRIPTOR::d>& solidBoundary : solidBoundaries)
-              unsigned solidBoundaryID = 0;
-              for (SolidBoundary<T, DESCRIPTOR::d>& solidBoundary :
-                   solidBoundaries) {
+              for (unsigned short solidBoundaryID = 0; SolidBoundary<T, DESCRIPTOR::d>& solidBoundary : solidBoundaries){
                 const T solidBoundaryDetectionDistance =
                     0.5 * util::sqrt(D) * deltaX +
                     solidBoundary.getEnlargementForContact();

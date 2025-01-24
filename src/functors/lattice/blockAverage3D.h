@@ -25,7 +25,7 @@
 #define BLOCK_AVERAGE_3D_H
 
 #include "integral/blockIntegralF3D.h"
-#include "geometry/cuboid3D.h"
+#include "geometry/cuboid.h"
 #include "indicator/blockIndicatorBaseF3D.h"
 
 namespace olb {

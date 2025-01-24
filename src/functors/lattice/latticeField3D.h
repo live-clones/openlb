@@ -51,14 +51,14 @@ namespace olb {
 template <typename T, typename DESCRIPTOR, typename FIELD>
 class SuperLatticeField3D final : public SuperLatticeF3D<T,DESCRIPTOR> {
 public:
-  SuperLatticeField3D(SuperLattice<T,DESCRIPTOR>& sLattice, std::string name = "externalField");
+  SuperLatticeField3D(SuperLattice<T,DESCRIPTOR>& sLattice);
 };
 
 /// functor to get pointwise, lattice-dependent external field
 template <typename T, typename DESCRIPTOR, typename FIELD>
 class BlockLatticeField3D final : public BlockLatticeF3D<T,DESCRIPTOR> {
 public:
-  BlockLatticeField3D(BlockLattice<T,DESCRIPTOR>& blockLattice, std::string name = "externalField");
+  BlockLatticeField3D(BlockLattice<T,DESCRIPTOR>& blockLattice);
   bool operator() (T output[], const int input[]) override;
 };
 

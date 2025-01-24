@@ -28,13 +28,13 @@
 
 namespace olb {
 
-template <typename T, typename DESCRIPTOR, Platform PLATFORM, typename PARAMETERS>
+template <concepts::BaseType T, concepts::Descriptor DESCRIPTOR, Platform PLATFORM, typename PARAMETERS>
 std::size_t ConcreteParametersD<T,DESCRIPTOR,PLATFORM,PARAMETERS>::getNblock() const
 {
   return PARAMETERS::size;
 }
 
-template <typename T, typename DESCRIPTOR, Platform PLATFORM, typename PARAMETERS>
+template <concepts::BaseType T, concepts::Descriptor DESCRIPTOR, Platform PLATFORM, typename PARAMETERS>
 std::size_t ConcreteParametersD<T,DESCRIPTOR,PLATFORM,PARAMETERS>::getSerializableSize() const
 {
   std::size_t size = 0;
@@ -45,7 +45,7 @@ std::size_t ConcreteParametersD<T,DESCRIPTOR,PLATFORM,PARAMETERS>::getSerializab
   return size;
 }
 
-template <typename T, typename DESCRIPTOR, Platform PLATFORM, typename PARAMETERS>
+template <concepts::BaseType T, concepts::Descriptor DESCRIPTOR, Platform PLATFORM, typename PARAMETERS>
 bool* ConcreteParametersD<T,DESCRIPTOR,PLATFORM,PARAMETERS>::getBlock(
   std::size_t iBlock, std::size_t& sizeBlock, bool loadingMode)
 {

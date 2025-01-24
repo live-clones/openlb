@@ -25,8 +25,8 @@
 #ifndef DYNAMICS_LBM_H
 #define DYNAMICS_LBM_H
 
+#include "core/concepts.h"
 #include "core/util.h"
-#include "descriptorFunction.h"
 
 namespace olb {
 
@@ -70,6 +70,65 @@ struct equilibrium {
     return secondOrder(iPop, rho, u, uSqr);
   }
 
+  /// Computation of equilibrium distribution, third order in u
+  template <typename RHO, typename U, typename USQR, typename V=RHO>
+  static V thirdOrder(int iPop, const RHO& rho, const U& u, const USQR& uSqr) any_platform
+  {
+    V c_u{};
+    for (int iD=0; iD < DESCRIPTOR::d; ++iD) {
+      c_u += descriptors::c<DESCRIPTOR>(iPop,iD)*u[iD];
+    }
+    V reciSpeedOfSoundHc = descriptors::invCs2<V,DESCRIPTOR>() * descriptors::invCs2<V,DESCRIPTOR>() * descriptors::invCs2<V,DESCRIPTOR>();
+
+    V aEqThrdXXY = u[0] * u[0] * u[1];
+    V aEqThrdXYY = u[0] * u[1] * u[1];
+
+    //Hermite polynomes  https://doi.org/10.1017/S0022112005008153
+    V hermite2XX = descriptors::c<DESCRIPTOR>(iPop,0)*descriptors::c<DESCRIPTOR>(iPop,0) - V{1}/descriptors::invCs2<V,DESCRIPTOR>();
+    V hermite2XY = descriptors::c<DESCRIPTOR>(iPop,0)*descriptors::c<DESCRIPTOR>(iPop,1);
+    V hermite2YY = descriptors::c<DESCRIPTOR>(iPop,1)*descriptors::c<DESCRIPTOR>(iPop,1) - V{1}/descriptors::invCs2<V,DESCRIPTOR>();
+
+    V hermite3XXY = hermite2XX * descriptors::c<DESCRIPTOR>(iPop,1);
+    V hermite3XYY = hermite2XY * descriptors::c<DESCRIPTOR>(iPop,1) - descriptors::c<DESCRIPTOR>(iPop,0)/descriptors::invCs2<V,DESCRIPTOR>();
+
+    V thirdOrderTerms = V{1. / 2.} * reciSpeedOfSoundHc * (hermite3XXY + hermite3XYY) * (aEqThrdXXY + aEqThrdXYY)
+                      + V{1. / 6.} * reciSpeedOfSoundHc * (hermite3XXY - hermite3XYY) * (aEqThrdXXY - aEqThrdXYY);
+    if constexpr (DESCRIPTOR::d == 3) {
+      V aEqThrdXXZ = u[0] * u[0] * u[2];
+      V aEqThrdXZZ = u[0] * u[2] * u[2];
+      V aEqThrdYYZ = u[1] * u[1] * u[2];
+      V aEqThrdYZZ = u[1] * u[2] * u[2];
+
+      V hermite2YZ = descriptors::c<DESCRIPTOR>(iPop,1)*descriptors::c<DESCRIPTOR>(iPop,2);
+      V hermite2XZ = descriptors::c<DESCRIPTOR>(iPop,0)*descriptors::c<DESCRIPTOR>(iPop,2);
+
+      V hermite3XXZ = hermite2XX * descriptors::c<DESCRIPTOR>(iPop,2);
+      V hermite3XZZ = hermite2XZ * descriptors::c<DESCRIPTOR>(iPop,2) - descriptors::c<DESCRIPTOR>(iPop,0)/descriptors::invCs2<V,DESCRIPTOR>();
+      V hermite3YYZ = hermite2YY * descriptors::c<DESCRIPTOR>(iPop,2);
+      V hermite3YZZ = hermite2YZ * descriptors::c<DESCRIPTOR>(iPop,2) - descriptors::c<DESCRIPTOR>(iPop,1)/descriptors::invCs2<V,DESCRIPTOR>();
+
+      thirdOrderTerms += V{1. / 2.} * reciSpeedOfSoundHc * (hermite3XZZ + hermite3YZZ) * (aEqThrdXZZ + aEqThrdYZZ)
+                      + V{1. / 2.} * reciSpeedOfSoundHc * (hermite3YYZ + hermite3XXZ) * (aEqThrdYYZ + aEqThrdXXZ)
+                      + V{1. / 6.} * reciSpeedOfSoundHc * (hermite3XZZ - hermite3YZZ) * (aEqThrdXZZ - aEqThrdYZZ)
+                      + V{1. / 6.} * reciSpeedOfSoundHc * (hermite3YYZ - hermite3XXZ) * (aEqThrdYYZ - aEqThrdXXZ);
+    }
+    return rho
+           * descriptors::t<V,DESCRIPTOR>(iPop)
+           * ( V{1}
+               + descriptors::invCs2<V,DESCRIPTOR>() * c_u
+               + descriptors::invCs2<V,DESCRIPTOR>() * descriptors::invCs2<V,DESCRIPTOR>() * V{0.5} * c_u * c_u
+               - descriptors::invCs2<V,DESCRIPTOR>() * V{0.5} * uSqr
+               + thirdOrderTerms)
+           - descriptors::t<V,DESCRIPTOR>(iPop);
+  }
+  /// Computation of equilibrium distribution, third order in u
+  template <typename RHO, typename U, typename V=RHO>
+  static V thirdOrder(int iPop, const RHO& rho, const U& u) any_platform
+  {
+    const V uSqr = util::normSqr<U,DESCRIPTOR::d>(u);
+    return thirdOrder(iPop, rho, u, uSqr);
+  }
+
   // compute equilibrium f^eq_i eq. (5.32) from DOI:10.1002/9780470177013
   template <typename RHO, typename U, typename V=RHO>
   static V P1(int iPop, const RHO& rho, const U& u) any_platform
@@ -102,6 +161,29 @@ struct equilibrium {
   {
     const V jSqr = util::normSqr<J,DESCRIPTOR::d>(j);
     return incompressible(iPop, j, jSqr, pressure);
+  }
+
+  template <typename RHO, typename U, typename USQR, typename PRESSURE, typename V=PRESSURE>
+  static V mpincompressible(int iPop, const RHO& rho, const U& u, const USQR& uSqr, const PRESSURE& pressure) any_platform
+  {
+    V c_u{};
+    if (iPop == 0) {
+      return descriptors::invCs2<V,DESCRIPTOR>() * pressure * (descriptors::t<V,DESCRIPTOR>(iPop)-V{1})
+             - rho*descriptors::t<V,DESCRIPTOR>(iPop)*uSqr*descriptors::invCs2<V,DESCRIPTOR>()*V{0.5};
+    }
+    else {
+      for (int iD=0; iD < DESCRIPTOR::d; ++iD) {
+        c_u += descriptors::c<DESCRIPTOR>(iPop,iD)*u[iD];
+      }
+      return descriptors::t<V,DESCRIPTOR>(iPop)*descriptors::invCs2<V,DESCRIPTOR>()
+             * ( pressure + rho*(c_u + descriptors::invCs2<V,DESCRIPTOR>()*V{0.5}*c_u*c_u - uSqr*V{0.5}) );
+    }
+  }
+  template <typename RHO, typename U, typename PRESSURE, typename V=PRESSURE>
+  static V mpincompressible(int iPop, const RHO& rho, const U& u, const PRESSURE& pressure) any_platform
+  {
+    const V uSqr = util::normSqr<U,DESCRIPTOR::d>(u);
+    return mpincompressible(iPop, rho, u, uSqr, pressure);
   }
 
   /// compute off-equilibrium part of the populations from gradient of the flux
@@ -181,7 +263,7 @@ struct equilibrium {
 template <typename DESCRIPTOR>
 struct lbm {
   /// Computation of density
-  template <typename CELL, typename V=typename CELL::value_t>
+  template <concepts::MinimalCell CELL, typename V=typename CELL::value_t>
   static V computeRho(CELL& cell) any_platform
   {
     V rho = V();
@@ -193,7 +275,7 @@ struct lbm {
   }
 
   /// Computation of momentum
-  template <typename CELL, typename J, typename V=typename CELL::value_t>
+  template <concepts::MinimalCell CELL, typename J, typename V=typename CELL::value_t>
   static void computeJ(CELL& cell, J& j) any_platform
   {
     for (int iD=0; iD < DESCRIPTOR::d; ++iD) {
@@ -207,7 +289,7 @@ struct lbm {
   }
 
   /// Computation of hydrodynamic variables
-  template <typename CELL, typename RHO, typename J, typename V=typename CELL::value_t>
+  template <concepts::MinimalCell CELL, typename RHO, typename J, typename V=typename CELL::value_t>
   static void computeRhoJ(CELL& cell, RHO& rho, J& j) any_platform
   {
     rho = computeRho(cell);
@@ -215,7 +297,7 @@ struct lbm {
   }
 
   /// Computation of hydrodynamic variables
-  template <typename CELL, typename RHO, typename U, typename V=typename CELL::value_t>
+  template <concepts::MinimalCell CELL, typename RHO, typename U, typename V=typename CELL::value_t>
   static void computeRhoU(CELL& cell, RHO& rho, U& u) any_platform
   {
     computeRhoJ(cell, rho, u);
@@ -225,7 +307,7 @@ struct lbm {
   }
 
   /// Computation of stress tensor
-  template <typename CELL, typename RHO, typename U, typename PI, typename V=typename CELL::value_t>
+  template <concepts::MinimalCell CELL, typename RHO, typename U, typename PI, typename V=typename CELL::value_t>
   static void computeStress(CELL& cell, const RHO& rho, const U& u, PI& pi) any_platform
   {
     int iPi = 0;
@@ -247,14 +329,14 @@ struct lbm {
   }
 
   /// Computation of all hydrodynamic variables
-  template <typename CELL, typename RHO, typename U, typename PI, typename V=typename CELL::value_t>
+  template <concepts::MinimalCell CELL, typename RHO, typename U, typename PI, typename V=typename CELL::value_t>
   static void computeAllMomenta(CELL& cell, RHO& rho, U& u, PI& pi) any_platform
   {
     computeRhoU(cell, rho, u);
     computeStress(cell, rho, u, pi);
   }
 
-  template <typename CELL, typename FEQ, typename V=typename CELL::value_t>
+  template <concepts::MinimalCell CELL, typename FEQ, typename V=typename CELL::value_t>
   static void computeFeq(CELL& cell, FEQ& fEq) any_platform
   {
     V rho {};
@@ -267,7 +349,7 @@ struct lbm {
   }
 
   /// Computation of non-equilibrium distribution
-  template <typename CELL, typename FNEQ, typename RHO, typename U, typename V=typename CELL::value_t>
+  template <concepts::MinimalCell CELL, typename FNEQ, typename RHO, typename U, typename V=typename CELL::value_t>
   static void computeFneq(CELL& cell, FNEQ& fNeq, const RHO& rho, const U& u) any_platform
   {
     const V uSqr = util::normSqr<U,DESCRIPTOR::d>(u);
@@ -276,7 +358,7 @@ struct lbm {
     }
   }
 
-  template <typename CELL, typename FNEQ, typename V=typename CELL::value_t>
+  template <concepts::MinimalCell CELL, typename FNEQ, typename V=typename CELL::value_t>
   static void computeFneq(CELL& cell, FNEQ& fNeq) any_platform
   {
     V rho{};
@@ -286,7 +368,7 @@ struct lbm {
   }
 
   /// BGK collision step
-  template <typename CELL, typename RHO, typename VELOCITY, typename OMEGA, typename V=typename CELL::value_t>
+  template <concepts::MinimalCell CELL, typename RHO, typename VELOCITY, typename OMEGA, typename V=typename CELL::value_t>
   static V bgkCollision(CELL& cell, const RHO& rho, const VELOCITY& u, const OMEGA& omega) any_platform
   {
     const V uSqr = util::normSqr<VELOCITY,DESCRIPTOR::d>(u);
@@ -298,7 +380,7 @@ struct lbm {
   }
 
   /// Advection diffusion BGK collision step
-  template <typename CELL, typename RHO, typename VELOCITY, typename OMEGA, typename V=typename CELL::value_t>
+  template <concepts::MinimalCell CELL, typename RHO, typename VELOCITY, typename OMEGA, typename V=typename CELL::value_t>
   static V adeBgkCollision(CELL& cell, const RHO& rho, const VELOCITY& u, const OMEGA& omega) any_platform
   {
     const V uSqr = util::normSqr<VELOCITY,DESCRIPTOR::d>(u);
@@ -310,7 +392,7 @@ struct lbm {
   }
 
   /// Incompressible BGK collision step
-  template <typename CELL, typename PRESSURE, typename J, typename OMEGA, typename V=typename CELL::value_t>
+  template <concepts::MinimalCell CELL, typename PRESSURE, typename J, typename OMEGA, typename V=typename CELL::value_t>
   static V incBgkCollision(CELL& cell, const PRESSURE& pressure, const J& j, const OMEGA& omega) any_platform
   {
     const V jSqr = util::normSqr<J,DESCRIPTOR::d>(j);
@@ -322,7 +404,7 @@ struct lbm {
   }
 
   /// BGK collision step with density correction
-  template <typename CELL, typename RHO, typename U, typename RATIORHO, typename OMEGA, typename V=typename CELL::value_t>
+  template <concepts::MinimalCell CELL, typename RHO, typename U, typename RATIORHO, typename OMEGA, typename V=typename CELL::value_t>
   static V constRhoBgkCollision(CELL& cell, const RHO& rho, const U& u,
                                 const RATIORHO& ratioRho, const OMEGA& omega) any_platform
   {
@@ -337,7 +419,7 @@ struct lbm {
   }
 
   /// RLB advection diffusion collision step
-  template <typename CELL, typename RHO, typename U, typename OMEGA, typename V=typename CELL::value_t>
+  template <concepts::MinimalCell CELL, typename RHO, typename U, typename OMEGA, typename V=typename CELL::value_t>
   static V rlbCollision(CELL& cell, const RHO& rho, const U& u, const OMEGA& omega) any_platform
   {
     const V uSqr = util::normSqr<U,DESCRIPTOR::d>(u);
@@ -368,7 +450,7 @@ struct lbm {
   }
 
   /// Renormalized DESCRIPTOR Boltzmann collision operator, fIn --> fOut
-  template <typename CELL, typename RHO, typename U, typename PI, typename OMEGA, typename V=typename CELL::value_t>
+  template <concepts::MinimalCell CELL, typename RHO, typename U, typename PI, typename OMEGA, typename V=typename CELL::value_t>
   static V rlbCollision(CELL& cell, const RHO& rho, const U& u, const PI& pi, const OMEGA& omega) any_platform
   {
     const V uSqr = util::normSqr<U,DESCRIPTOR::d>(u);
@@ -385,7 +467,7 @@ struct lbm {
     return uSqr;
   }
 
-  template <typename CELL, typename NEWRHO, typename NEWU, typename V=typename CELL::value_t>
+  template <concepts::MinimalCell CELL, typename NEWRHO, typename NEWU, typename V=typename CELL::value_t>
   static void defineEqFirstOrder(CELL& cell, const NEWRHO& newRho, const NEWU& newU) any_platform
   {
     for (int iPop=0; iPop < DESCRIPTOR::q; ++iPop) {
@@ -393,7 +475,7 @@ struct lbm {
     }
   }
 
-  template <typename CELL, typename OLDRHO, typename OLDU, typename NEWRHO, typename NEWU, typename V=typename CELL::value_t>
+  template <concepts::MinimalCell CELL, typename OLDRHO, typename OLDU, typename NEWRHO, typename NEWU, typename V=typename CELL::value_t>
   static void defineNEq(CELL& cell,
                         const OLDRHO& oldRho, const OLDU& oldU,
                         const NEWRHO& newRho, const NEWU& newU) any_platform
@@ -406,7 +488,7 @@ struct lbm {
     }
   }
 
-  template <typename CELL, typename RHO, typename U, typename PI, typename V=typename CELL::value_t>
+  template <concepts::MinimalCell CELL, typename RHO, typename U, typename PI, typename V=typename CELL::value_t>
   static void defineNEqFromPi(CELL& cell,
                               const RHO& rho,
                               const U& u,
@@ -420,7 +502,7 @@ struct lbm {
   }
 
   /// Computes squared norm of non-equilibrium part of 2nd momentum for forced dynamics
-  template <typename CELL, typename FORCE, typename V=typename CELL::value_t>
+  template <concepts::MinimalCell CELL, typename FORCE, typename V=typename CELL::value_t>
   static V computePiNeqNormSqr(CELL& cell, const FORCE& force) any_platform
   {
     V rho, u[DESCRIPTOR::d], pi[util::TensorVal<DESCRIPTOR>::n];
@@ -446,7 +528,7 @@ struct lbm {
   }
 
   /// Computes squared norm of non-equilibrium part of 2nd momentum for standard (non-forced) dynamics
-  template <typename CELL, typename V=typename CELL::value_t>
+  template <concepts::MinimalCell CELL, typename V=typename CELL::value_t>
   static V computePiNeqNormSqr(CELL& cell) any_platform
   {
     V rho, u[DESCRIPTOR::d], pi[util::TensorVal<DESCRIPTOR>::n];
@@ -459,7 +541,7 @@ struct lbm {
   }
 
   /// Add a force term after BGK collision
-  template <typename CELL, typename RHO, typename U, typename OMEGA, typename FORCE, typename V=typename CELL::value_t>
+  template <concepts::MinimalCell CELL, typename RHO, typename U, typename OMEGA, typename FORCE, typename V=typename CELL::value_t>
   static void addExternalForce(CELL& cell, const RHO& rho, const U& u, const OMEGA& omega, const FORCE& force) any_platform
   {
     for (int iPop=0; iPop < DESCRIPTOR::q; ++iPop) {
@@ -482,7 +564,52 @@ struct lbm {
       cell[iPop] += forceTerm;
     }
   }
+
+  /// Add a force term after BGK collision for incompressible binary fluid model (Allen-Cahn phase-field) from Liang et al. 2019
+  template <typename CELL, typename RHO, typename NABLARHO, typename U, typename OMEGA, typename FORCE, typename V=typename CELL::value_t>
+  static void addLiangForce(CELL& cell, const RHO& rho, const NABLARHO& nablarho, const U& u, const OMEGA& omega, const FORCE& force) any_platform
+  {
+    for (int iPop=0; iPop < DESCRIPTOR::q; ++iPop) {
+      V c_u{};
+      for (int iD=0; iD < DESCRIPTOR::d; ++iD) {
+        c_u += descriptors::c<DESCRIPTOR>(iPop,iD)*u[iD];
+      }
+      V forceTerm{};
+      for (int iD=0; iD < DESCRIPTOR::d; ++iD) {
+        forceTerm += descriptors::c<DESCRIPTOR>(iPop,iD) * force[iD] * rho +c_u * descriptors::c<DESCRIPTOR>(iPop,iD) * nablarho[iD];
+      }
+      forceTerm *= descriptors::t<V,DESCRIPTOR>(iPop)*descriptors::invCs2<V,DESCRIPTOR>();
+      forceTerm *= V{1} - omega * V{0.5};
+      cell[iPop] += forceTerm;
+    }
+  }
+
+  /// Add a force term after BGK collision for constructing local Allen-Cahn-equation from Liang et al. 2019
+  template <typename CELL, typename OMEGA, typename FORCE, typename V=typename CELL::value_t>
+  static void addAllenCahnForce(CELL& cell, const OMEGA& omega, const FORCE& force) any_platform
+  {
+    for (int iPop=0; iPop < DESCRIPTOR::q; ++iPop) {
+      V forceTerm{};
+      for (int iD=0; iD < DESCRIPTOR::d; ++iD) {
+        forceTerm += descriptors::c<DESCRIPTOR>(iPop,iD) * force[iD];
+      }
+      forceTerm *= descriptors::t<V,DESCRIPTOR>(iPop)*descriptors::invCs2<V,DESCRIPTOR>();
+      forceTerm *= V{1} - omega * V{0.5};
+      cell[iPop] += forceTerm;
+    }
+  }
+
+  /// Add a source term after BGK collision for constructing non-local Allen-Cahn-equation from Liu et al. 2023
+  template <typename CELL, typename OMEGA, typename SOURCE, typename V=typename CELL::value_t>
+  static void addAllenCahnSource(CELL& cell, const OMEGA& omega, const SOURCE& source) any_platform
+  {
+    for (int iPop=0; iPop < DESCRIPTOR::q; ++iPop) {
+      cell[iPop] += descriptors::t<V,DESCRIPTOR>(iPop)*source;
+    }
+  }
 };
+
+
 
 }
 

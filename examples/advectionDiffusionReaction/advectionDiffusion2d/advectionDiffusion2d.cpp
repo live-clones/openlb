@@ -218,10 +218,8 @@ T getResults( SuperLattice<T, TDESCRIPTOR>& ADlattice,
 
   if (iT == 0) {
     /// Writes the geometry, cuboid no. and rank no. as vti file for visualization
-    SuperLatticeGeometry2D<T, TDESCRIPTOR> geometry(ADlattice, superGeometry);
     SuperLatticeCuboid2D<T, TDESCRIPTOR> cuboid(ADlattice);
     SuperLatticeRank2D<T, TDESCRIPTOR> rank(ADlattice);
-    vtkWriter.write(geometry);
     vtkWriter.write(cuboid);
     vtkWriter.write(rank);
 
@@ -241,7 +239,7 @@ T getResults( SuperLattice<T, TDESCRIPTOR>& ADlattice,
       plotParam_temp0.maxValue = 2;
       plotParam_temp0.contourlevel = 10;
       BlockReduction2D2D<T> planeReduction0( temperature, converter.getResolution(), BlockDataSyncMode::ReduceOnly );
-      heatmap::write( planeReduction0, iT, plotParam_temp0 );
+      heatmap::write(planeReduction0, iT, plotParam_temp0);
     }
 
     timer.update(iT);
@@ -266,7 +264,7 @@ T getResults( SuperLattice<T, TDESCRIPTOR>& ADlattice,
       plotParam_temp.maxValue = 2;
       plotParam_temp.contourlevel = 10;
       BlockReduction2D2D<T> planeReduction( temperature, converter.getResolution(), BlockDataSyncMode::ReduceOnly );
-      heatmap::write( planeReduction, iT, plotParam_temp );
+      heatmap::write(planeReduction, iT, plotParam_temp);
     }
 
     /// ADLattice statistics console output
@@ -323,7 +321,7 @@ void simulate(int N, int statIter, T mue, T peclet, T physLength)
   const int noOfCuboids = 1;
 #endif
   CuboidGeometry2D<T> cuboidGeometry(cuboid, converter.getPhysDeltaX(), noOfCuboids);
-  cuboidGeometry.setPeriodicity(true, true);
+  cuboidGeometry.setPeriodicity({true, true});
 
   /// Instantiation of a loadBalancer
   HeuristicLoadBalancer<T> loadBalancer(cuboidGeometry);

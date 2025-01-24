@@ -21,7 +21,7 @@
  *  Boston, MA  02110-1301, USA.
 */
 
-#include "dynamics/latticeDescriptors.h"
+#include "descriptor/descriptor.h"
 
 #include "functors/lattice/latticeInterpPhysVelocity3D.h"
 #include "functors/lattice/latticeInterpPhysVelocity3D.hh"

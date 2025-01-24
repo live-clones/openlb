@@ -69,18 +69,17 @@ int HyperplaneLattice2D<T>::computeMaxLatticeDistance() const
 template <typename T>
 void HyperplaneLattice2D<T>::constructCuboid(int maxLatticeDistance)
 {
-  int iC;
   int min = -maxLatticeDistance;
   int max = maxLatticeDistance;
 
   for ( int i = -maxLatticeDistance; i < maxLatticeDistance; ++i ) {
-    if ( _geometry.getC(getPhysR(i), iC) ) {
+    if (auto iC = _geometry.getC(getPhysR(i)) ) {
       min = i;
       break;
     }
   }
   for ( int i = maxLatticeDistance; i > -maxLatticeDistance; --i ) {
-    if ( _geometry.getC(getPhysR(i), iC) ) {
+    if (auto iC = _geometry.getC(getPhysR(i))) {
       max = i;
       break;
     }
@@ -101,12 +100,12 @@ void HyperplaneLattice2D<T>::setToResolution(int resolution)
 
 template<typename T>
 HyperplaneLattice2D<T>::HyperplaneLattice2D(
-  CuboidGeometry2D<T>& geometry, Hyperplane2D<T> hyperplane)
+  CuboidDecomposition<T,2>& geometry, Hyperplane2D<T> hyperplane)
   : _geometry(geometry),
     _hyperplane(hyperplane),
     _origin(hyperplane.origin),
     _u(hyperplane.u),
-    _h(geometry.getMinDeltaR())
+    _h(geometry.getDeltaR())
 {
   _u = normalize(_u, _h);
 
@@ -117,12 +116,12 @@ HyperplaneLattice2D<T>::HyperplaneLattice2D(
 
 template<typename T>
 HyperplaneLattice2D<T>::HyperplaneLattice2D(
-  CuboidGeometry2D<T>& geometry, Hyperplane2D<T> hyperplane, int resolution)
+  CuboidDecomposition<T,2>& geometry, Hyperplane2D<T> hyperplane, int resolution)
   : _geometry(geometry),
     _hyperplane(hyperplane),
     _origin(hyperplane.origin),
     _u(hyperplane.u),
-    _h(geometry.getMinDeltaR())
+    _h(geometry.getDeltaR())
 {
   _u = normalize(_u, _h);
 
@@ -137,7 +136,7 @@ HyperplaneLattice2D<T>::HyperplaneLattice2D(
 
 template<typename T>
 HyperplaneLattice2D<T>::HyperplaneLattice2D(
-  CuboidGeometry2D<T>& geometry, Hyperplane2D<T> hyperplane, T h)
+  CuboidDecomposition<T,2>& geometry, Hyperplane2D<T> hyperplane, T h)
   : _geometry(geometry),
     _hyperplane(hyperplane),
     _origin(hyperplane.origin),
@@ -145,7 +144,7 @@ HyperplaneLattice2D<T>::HyperplaneLattice2D(
     _h(h)
 {
   if ( util::nearZero(_h) ) {
-    _h = _geometry.getMinDeltaR();
+    _h = _geometry.getDeltaR();
   }
 
   _u = normalize(_u, _h);

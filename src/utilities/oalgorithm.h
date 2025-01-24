@@ -27,79 +27,46 @@
 #include <algorithm>
 
 #include "core/meta.h"
+#include "core/expr.h"
+#include "core/platform/platform.h"
 
 namespace olb {
 
 namespace util {
 
 // Max
-template< typename T >
-inline constexpr T max( T a, meta::id_t<T> b )
-{
+template <typename T>
+any_platform constexpr T max(T a, meta::id_t<T> b) {
+#ifdef  __CUDA_ARCH__
+  return ::max(a, b);
+#else
   return std::max(a, b);
+#endif
 }
-template< typename T, class Compare >
-inline constexpr T max( T a, meta::id_t<T> b, Compare comp )
-{
-  return std::max(a, b, comp);
-}
-template< typename T >
-constexpr T inline max( std::initializer_list<T> ilist )
-{
+
+template <typename T>
+constexpr T max(std::initializer_list<T> ilist) {
   return std::max(ilist);
 }
-template< typename T, class Compare >
-inline constexpr T max( std::initializer_list<T> ilist, Compare comp )
-{
-  return std::max(ilist, comp);
-}
 
-template <>
-inline float max<float>(float x, float y) any_platform
-{
-  return std::fmax(x, y);
-}
-
-template <>
-inline double max<double> (double x, double y) any_platform
-{
-  return std::fmax(x, y);
-}
+Expr max(Expr a, Expr b);
 
 // Min
-template< typename T >
-inline constexpr T min( T a, meta::id_t<T> b )
-{
+template <typename T>
+any_platform constexpr T min(T a, meta::id_t<T> b) {
+#ifdef  __CUDA_ARCH__
+  return ::min(a, b);
+#else
   return std::min(a, b);
+#endif
 }
-template< typename T, class Compare >
-inline constexpr T min( T a, meta::id_t<T> b, Compare comp )
-{
-  return std::min(a, b, comp);
-}
-template< typename T >
-inline constexpr T min( std::initializer_list<T> ilist )
-{
+
+template <typename T>
+inline constexpr T min( std::initializer_list<T> ilist ) {
   return std::min(ilist);
 }
-template< typename T, class Compare >
-inline constexpr T min( std::initializer_list<T> ilist, Compare comp )
-{
-  return std::min(ilist, comp);
-}
 
-template <>
-inline float min<float>(float x, float y) any_platform
-{
-  return std::fmin(x, y);
-}
-
-template <>
-inline double min<double>(double x, double y) any_platform
-{
-  return std::fmin(x, y);
-}
-
+Expr min(Expr a, Expr b);
 
 } // namespace util
 

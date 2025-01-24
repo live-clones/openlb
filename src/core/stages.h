@@ -36,6 +36,8 @@ struct PostCollide     { };
 struct PostStream      { };
 /// Communication after applying the post processors
 struct PostPostProcess { };
+/// Communication after solving for another field
+struct IterativePostProcess { };
 /// Communication prior to coupling
 struct PreCoupling     { };
 /// Communication after coupling
@@ -48,6 +50,12 @@ struct Coupling { };
 
 /// Collision stage
 struct Collide { };
+
+/// Result evaluation (for custom tasks only needed for results export)
+struct Evaluation { };
+
+struct WriteCheckpoint { };
+struct ReadCheckpoint { };
 
 }
 

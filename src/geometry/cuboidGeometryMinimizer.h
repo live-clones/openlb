@@ -25,23 +25,24 @@
 #ifndef CUBOID_GEOMETRY_MINIMIZER_H
 #define CUBOID_GEOMETRY_MINIMIZER_H
 
+#include "cuboid.h"
+
 namespace olb {
 
-template <typename T> class CuboidGeometry3D;
+template <typename T, unsigned D> class CuboidGeometry;
 template <typename T> class IndicatorF3D;
-template <typename T> class Cuboid3D;
 
 /// Splits largest cuboid by-volume until there are nC cuboids
 template <typename T>
-void continueMinimizeByVolume(CuboidGeometry3D<T>& cGeometry, IndicatorF3D<T>& indicatorF, int nC)
+void continueMinimizeByVolume(CuboidGeometry<T,3>& cGeometry, IndicatorF3D<T>& indicatorF, int nC)
 {
   cGeometry.shrink(indicatorF);
 
-  while (cGeometry.getNc() < nC) {
+  while (cGeometry.size() < nC) {
     // Search for the largest child cuboid
-    T iCVolume[cGeometry.getNc()];
+    T iCVolume[cGeometry.size()];
     int maxiC = 0;
-    for (int iC = 0; iC < cGeometry.getNc(); iC++) {
+    for (int iC = 0; iC < cGeometry.size(); iC++) {
       iCVolume[iC] = cGeometry.get(iC).getLatticeVolume();
       if ( iCVolume[iC] > iCVolume[maxiC] ) {
         maxiC = iC;
@@ -52,15 +53,15 @@ void continueMinimizeByVolume(CuboidGeometry3D<T>& cGeometry, IndicatorF3D<T>& i
     auto& largest = cGeometry.get(maxiC);
     if (largest.getNx() >= largest.getNy() && largest.getNx() >= largest.getNz()) {
       // clout << "Cut in x direction!" << std::endl;
-      largest.divide(2,1,1, cGeometry.cuboids());
+      largest.divide({2,1,1}, cGeometry.cuboids());
     }
     else if (largest.getNy() >= largest.getNx() && largest.getNy() >= largest.getNz()) {
       // clout << "Cut in y direction!" << std::endl;
-      largest.divide(1,2,1, cGeometry.cuboids());
+      largest.divide({1,2,1}, cGeometry.cuboids());
     }
     else {
       // clout << "Cut in z direction!" << std::endl;
-      largest.divide(1,1,2, cGeometry.cuboids());
+      largest.divide({1,1,2}, cGeometry.cuboids());
     }
     cGeometry.remove(maxiC);
     // shrink the two new cuboids
@@ -71,7 +72,7 @@ void continueMinimizeByVolume(CuboidGeometry3D<T>& cGeometry, IndicatorF3D<T>& i
 
 /// Splits into nC cuboids by-volume
 template <typename T>
-void minimizeByVolume(CuboidGeometry3D<T>& cGeometry, IndicatorF3D<T>& indicatorF, int nC)
+void minimizeByVolume(CuboidGeometry<T,3>& cGeometry, IndicatorF3D<T>& indicatorF, int nC)
 {
   // Search for the largest multiplier not dividable by two
   int initalNc = nC;
@@ -87,7 +88,7 @@ void minimizeByVolume(CuboidGeometry3D<T>& cGeometry, IndicatorF3D<T>& indicator
 }
 
 template <typename T>
-void minimizeByWeight(CuboidGeometry3D<T>& cGeometry, IndicatorF3D<T>& indicatorF, int nC)
+void minimizeByWeight(CuboidGeometry<T,3>& cGeometry, IndicatorF3D<T>& indicatorF, int nC)
 {
   cGeometry.setWeights(indicatorF);
 

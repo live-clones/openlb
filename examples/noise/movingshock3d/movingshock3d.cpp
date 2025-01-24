@@ -260,10 +260,6 @@ void prepareGeometry(UnitConverter<T,DESCRIPTOR> const& converter,
   superGeometry.updateStatistics();
   superGeometry.getStatistics().print();
 
-  SuperVTMwriter3D<T> vtmWriter( "movingshock3d_local" );
-  SuperLatticeGeometry3D<T,DESCRIPTOR> geometry( superGeometry );
-  vtmWriter.write( geometry );
-
   clout << "Prepare Geometry ... OK" << std::endl;
 }
 
@@ -357,16 +353,16 @@ void prepareLattice(UnitConverter<T,DESCRIPTOR> const& converter,
     case local:
       sLattice.defineDynamics<BulkDynamics>(superGeometry, dampMat);
       bulkIndicator = superGeometry.getMaterialIndicator({dampMat, inflMat, outfMat});
-      setInterpolatedVelocityBoundary(sLattice, omega, superGeometry, inflMat);
+      boundary::set<boundary::InterpolatedVelocity>(sLattice, superGeometry, inflMat);
       // setLocalVelocityBoundary(sLattice, omega, superGeometry, inflMat);
       
       // setInterpolatedConvectionBoundary(sLattice, omega, superGeometry, outfMat, uAverage);
-      setLocalPressureBoundary(sLattice, omega, superGeometry, outfMat);
+      boundary::set<boundary::LocalPressure>(sLattice, superGeometry, outfMat);
       // setLocalVelocityBoundary(sLattice, omega, superGeometry, outfMat);
       // setZeroGradientBoundary(sLattice, superGeometry, outfMat);
 
-      setLocalVelocityBoundary(sLattice, omega, superGeometry, topfMat);
-      setLocalVelocityBoundary(sLattice, omega, superGeometry, bottMat);
+      boundary::set<boundary::InterpolatedVelocity>(sLattice, superGeometry, topfMat);
+      boundary::set<boundary::InterpolatedVelocity>(sLattice, superGeometry, bottMat);
       // setLocalVelocityBoundary(sLattice, omega, superGeometry, backMat);
       // setLocalVelocityBoundary(sLattice, omega, superGeometry, fronMat);
       setZeroGradientBoundary(sLattice, superGeometry, backMat);
@@ -376,16 +372,17 @@ void prepareLattice(UnitConverter<T,DESCRIPTOR> const& converter,
     case damping:
       sLattice.defineDynamics<BulkDynamics>( superGeometry, fluiMat );
       bulkIndicator = superGeometry.getMaterialIndicator( {fluiMat, dampMat} );
-      setDampingBoundary<T,DESCRIPTOR>( sLattice, superGeometry, dampMat );
+      boundary::set<boundary::PerfectlyMatchedLayer>( sLattice, superGeometry, dampMat );
       break;
       
     case dampingAndLocal:
       sLattice.defineDynamics<BulkDynamics>(superGeometry, fluiMat);
       domain_lengths -= 2*converter.getConversionFactorLength();
       bulkIndicator = superGeometry.getMaterialIndicator({fluiMat, dampMat, inflMat, outfMat});
-      setDampingBoundary<T,DESCRIPTOR>(sLattice, superGeometry, dampMat);
-      setLocalVelocityBoundary(sLattice, omega, superGeometry, inflMat);
-      setInterpolatedConvectionBoundary(sLattice, omega, superGeometry, outfMat, uAverage);
+      boundary::set<boundary::PerfectlyMatchedLayer>(sLattice, superGeometry, dampMat);
+      boundary::set<boundary::LocalVelocity>(sLattice, superGeometry, inflMat);
+      boundary::set<boundary::LocalPressure>(sLattice, superGeometry, inflMat);
+      // boundary::set<boundary::InterpolatedConvection>(sLattice, superGeometry, outfMat, uAverage);
       break;
   }
 
@@ -533,10 +530,8 @@ void getResults(SuperLattice<T,DESCRIPTOR>& sLattice,
 
   if ( iT==0 ) {
     // Writes geometry, cuboid no. and rank no. to file system
-    SuperLatticeGeometry3D<T,DESCRIPTOR> geometry( sLattice, superGeometry );
     SuperLatticeCuboid3D<T,DESCRIPTOR> cuboid( sLattice );
     SuperLatticeRank3D<T,DESCRIPTOR> rank( sLattice );
-    vtmWriter.write( geometry );
     vtmWriter.write( cuboid );
     vtmWriter.write( rank );
     vtmWriter.createMasterFile();
@@ -814,11 +809,11 @@ int main( int argc, char* argv[] )
                                           );
 
   switch ( boundarytype ) {
-    case eternal:         cuboidGeometry.setPeriodicity(true, true, true);    break;
-    case periodic:        cuboidGeometry.setPeriodicity(true, true, true);    break;
-    case local:           cuboidGeometry.setPeriodicity(false, false, false); break;
-    case damping:         cuboidGeometry.setPeriodicity(true, true, true);    break;
-    case dampingAndLocal: cuboidGeometry.setPeriodicity(false, true, true);   break;
+    case eternal:         cuboidGeometry.setPeriodicity({true, true, true});    break;
+    case periodic:        cuboidGeometry.setPeriodicity({true, true, true});    break;
+    case local:           cuboidGeometry.setPeriodicity({false, false, false}); break;
+    case damping:         cuboidGeometry.setPeriodicity({true, true, true});    break;
+    case dampingAndLocal: cuboidGeometry.setPeriodicity({false, true, true});   break;
   }
   
   int fluidMaterial = fluiMat;
@@ -838,7 +833,7 @@ int main( int argc, char* argv[] )
   clout << "Number of fluid voxels: " << superGeometry.getStatistics().getNvoxel( fluidMaterial ) << std::endl;
   
   // === 3rd Step: Prepare Lattice ===
-  SuperLattice<T,DESCRIPTOR> sLattice( superGeometry, debug );
+  SuperLattice<T,DESCRIPTOR> sLattice( superGeometry );
 
   //prepare Lattice and set boundaryConditions
   prepareLattice( converter, sLattice, superGeometry, rho0, Ma, amplitude, alpha_shock, boundarytype, source, boundaryDepth, domain_lengths, dampingStrength );

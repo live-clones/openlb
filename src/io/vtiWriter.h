@@ -40,8 +40,6 @@ namespace olb {
 template< typename T, typename BaseType> class BlockData3D;
 template< typename T, typename BaseType> class SuperData3D;
 template< typename T> class LoadBalancer;
-template< typename T> class Cuboid3D;
-template< typename T> class CuboidGeometry3D;
 
 template<typename T, typename BaseType>
 class VTIwriter3D {

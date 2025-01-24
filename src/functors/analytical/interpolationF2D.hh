@@ -45,8 +45,8 @@ template <typename T, typename W>
 bool AnalyticalFfromBlockF2D<T,W>::operator()(W output[], const T physC[])
 {
   int latticeC[2];
-  int latticeR[2];
-  _cuboid.getFloorLatticeR(latticeR, physC);
+  Vector<T,2> physCv(physC);
+  LatticeR<2> latticeR = _cuboid.getFloorLatticeR(physCv);
 
   auto& block = _f.getBlockStructure();
   auto padding = std::min(1, block.getPadding());
@@ -55,9 +55,7 @@ bool AnalyticalFfromBlockF2D<T,W>::operator()(W output[], const T physC[])
     const int& locX = latticeR[0];
     const int& locY = latticeR[1];
 
-    Vector<T,2> physRiC;
-    Vector<T,2> physCv(physC);
-    _cuboid.getPhysR(physRiC.data(), {locX, locY});
+    Vector<T,2> physRiC = _cuboid.getPhysR({locX, locY});
 
     // compute weights
     Vector<W,2> d = (physCv - physRiC) * (1. / _cuboid.getDeltaR());
@@ -133,9 +131,8 @@ bool AnalyticalFfromSuperF2D<T,W>::operator() (T output[], const T physC[])
   for (int iD = 0; iD < _f.getTargetDim(); ++iD) {
     output[iD] = W();
   }
-
-  int latticeR[3];
-  if (!_cuboidGeometry.getLatticeR(latticeR, physC)) {
+  Vector<T,2> physCV(physC);
+  if (auto latticeR = _cuboidGeometry.getLatticeR(physCV)) {
     return false;
   }
 

@@ -26,10 +26,12 @@
 #ifndef GEOMETRY_2D_H
 #define GEOMETRY_2D_H
 
+#include "discreteNormals.h"
 #include "blockGeometry.h"
 #include "blockGeometryStatistics2D.h"
-#include "cuboid2D.h"
-#include "cuboidGeometry2D.h"
+#include "cuboid.h"
+#include "cuboid.h"
+#include "cuboidGeometry.h"
 #include "superGeometry.h"
 #include "superGeometryStatistics2D.h"
 

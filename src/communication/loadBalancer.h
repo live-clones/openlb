@@ -28,6 +28,8 @@
 #include <vector>
 #include <map>
 
+#include "geometry/cuboidGeometry.h"
+
 #include "core/singleton.h"
 #include "core/serializer.h"
 #include "io/xmlReader.h"
@@ -37,8 +39,6 @@ namespace olb {
 
 
 //template<typename T, typename BaseType> class Vector;
-template<typename T> class CuboidGeometry3D;
-template<typename T> class CuboidGeometry2D;
 template<typename T> class HeuristicLoadBalancer;
 
 /** Base class for all LoadBalancer.
@@ -68,6 +68,8 @@ protected:
   std::map<int,int> _rank;
   /// maps global cuboid number to local platform
   std::map<int,Platform> _platform;
+  /// defines if global cuboid number has state doOutput
+  std::map<int,bool> _doOutput;
 
 public:
   /// Default empty constructor
@@ -81,15 +83,15 @@ public:
   /// Swap method
   void swap(LoadBalancer<T>& loadBalancer);
   /// returns whether `glob` is on this process
-  bool isLocal(const int& glob);
+  bool isLocal(const int& glob) const;
+  /// returns whether there is a block on `platform` in this process
+  bool isLocal(Platform platform) const;
   /// \return local cuboid number of relevant thread
   int loc(const int& glob);
   /// \return local cuboid number of relevant thread
   int loc(int glob) const;
   /// \return global cuboid number of given local cuboid
   int glob(int loc) const;
-  /// \param glob is the global cuboid number \return rank that owns the given global cuboid number
-  int rank(const int& glob);
   /// \param glob is the global cuboid number \return rank that owns the given global cuboid number
   int rank(int glob) const;
   /// \return read only acess to _size
@@ -119,6 +121,17 @@ public:
     _platform[glob(loc)] = platform;
   }
 
+  virtual bool doOutput(int glob) const {
+    try {
+      return _doOutput.at(glob);
+    } catch (std::out_of_range& ex) {
+      return true;
+    }
+  }
+  virtual void setDoOutput(int glob, bool doOutput) {
+    _doOutput[glob] = doOutput;
+  }
+
   /// equal operator
   bool operator==(const LoadBalancer<T>& rhs) const;
 
@@ -130,6 +143,44 @@ public:
   bool* getBlock(std::size_t iBlock, std::size_t& sizeBlock, bool loadingMode) override;
 
   void print(bool multiOutput = false) const;
+
+};
+
+template<typename T>
+struct CustomLoadBalancer final : public LoadBalancer<T> {
+  CustomLoadBalancer(int nCuboid, int nRank, int iRank,
+                     const std::map<int,int>& rankOfCuboid):
+    LoadBalancer<T>(0)
+  {
+    std::vector<int> rankBuffer(nCuboid, 0);
+    std::vector<int> locBuffer(nCuboid, 0);
+
+    // Distribute cuboids to ranks on rank 0
+    std::map<int,int> nLoc;
+    for (int iCuboid=0; iCuboid < nCuboid; ++iCuboid) {
+      rankBuffer[iCuboid] = rankOfCuboid.at(iCuboid);
+      locBuffer[iCuboid]  = nLoc[rankOfCuboid.at(iCuboid)]++;
+    }
+
+    // Update internal LoadBalancer structure to match given assignment
+    for (int iCuboid=0; iCuboid < nCuboid; ++iCuboid) {
+      this->_rank[iCuboid] = rankBuffer[iCuboid];
+      this->_loc[iCuboid] = locBuffer[iCuboid];
+      if (rankBuffer[iCuboid] == singleton::mpi().getRank()) {
+        this->_glob.resize(std::max(int{this->_glob.size()}, this->_loc[iCuboid]+1));
+        this->_glob[this->_loc[iCuboid]] = iCuboid;
+        this->_size = this->_glob.size();
+      }
+    }
+  }
+
+  CustomLoadBalancer(CuboidGeometry<T,3>& cGeometry,
+                     const std::map<int,int>& rankOfCuboid):
+    CustomLoadBalancer(cGeometry.size(),
+                       singleton::mpi().getSize(),
+                       singleton::mpi().getRank(),
+                       rankOfCuboid)
+  { }
 
 };
 

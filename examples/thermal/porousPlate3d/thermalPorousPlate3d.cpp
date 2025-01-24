@@ -215,8 +215,8 @@ void prepareLattice( ThermalUnitConverter<T, NSDESCRIPTOR, TDESCRIPTOR> const& c
   NSlattice.defineDynamics<ForcedBGKdynamics>(superGeometry.getMaterialIndicator({1, 2, 3}));
 
   /// sets boundary
-  setLocalVelocityBoundary<T,NSDESCRIPTOR>(NSlattice, NSomega, superGeometry.getMaterialIndicator({2, 3}));
-  setAdvectionDiffusionTemperatureBoundary<T,TDESCRIPTOR>(ADlattice, superGeometry.getMaterialIndicator({2, 3}));
+  boundary::set<boundary::LocalVelocity>(NSlattice, superGeometry.getMaterialIndicator({2, 3}));
+  boundary::set<boundary::AdvectionDiffusionDirichlet>(ADlattice, superGeometry.getMaterialIndicator({2, 3}));
 
   ADlattice.setParameter<descriptors::OMEGA>(Tomega);
   NSlattice.setParameter<descriptors::OMEGA>(NSomega);
@@ -299,10 +299,8 @@ void getResults(ThermalUnitConverter<T, NSDESCRIPTOR, TDESCRIPTOR> const& conver
     //writeLogFile(converter,"thermalPorousPlate3d");
 
     /// Writes the geometry, cuboid no. and rank no. as vti file for visualization
-    SuperLatticeGeometry3D<T, NSDESCRIPTOR> geometry(NSlattice, superGeometry);
     SuperLatticeCuboid3D<T, NSDESCRIPTOR> cuboid(NSlattice);
     SuperLatticeRank3D<T, NSDESCRIPTOR> rank(NSlattice);
-    vtkWriter.write(geometry);
     vtkWriter.write(cuboid);
     vtkWriter.write(rank);
 
@@ -375,7 +373,7 @@ int main(int argc, char *argv[])
   const int noOfCuboids = 7;
 #endif
   CuboidGeometry3D<T> cuboidGeometry(cuboid, converter.getPhysDeltaX(), noOfCuboids);
-  cuboidGeometry.setPeriodicity(true,false, true);
+  cuboidGeometry.setPeriodicity({true,false, true});
 
   /// Instantiation of a loadBalancer
   HeuristicLoadBalancer<T> loadBalancer(cuboidGeometry);

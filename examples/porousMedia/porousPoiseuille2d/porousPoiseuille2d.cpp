@@ -185,14 +185,14 @@ void prepareLattice( UnitConverter<T,DESCRIPTOR> const& converter,
   sLattice.defineDynamics<DYNAMICS>(superGeometry, 1);
 
   if (boundaryType == bounceBack) {
-    setBounceBackBoundary(sLattice, superGeometry, 2);
+    boundary::set<boundary::BounceBack>(sLattice, superGeometry, 2);
   }
   else {
     if (boundaryType == local) {
-      setLocalVelocityBoundary<T,DESCRIPTOR>(sLattice, omega, superGeometry, 2);
+      boundary::set<boundary::LocalVelocity>(sLattice, superGeometry, 2);
     }
     else {
-      setInterpolatedVelocityBoundary<T,DESCRIPTOR>(sLattice, omega, superGeometry, 2);
+      boundary::set<boundary::InterpolatedVelocity>(sLattice, superGeometry, 2);
     }
   }
 
@@ -201,12 +201,12 @@ void prepareLattice( UnitConverter<T,DESCRIPTOR> const& converter,
   sLattice.defineDynamics<DYNAMICS>(superGeometry.getMaterialIndicator({3,4}));
 
   if (boundaryType == local) {
-    setLocalVelocityBoundary<T,DESCRIPTOR>(sLattice, omega, superGeometry, 3);
-    setLocalPressureBoundary<T,DESCRIPTOR>(sLattice, omega, superGeometry, 4);
+    boundary::set<boundary::LocalVelocity>(sLattice, superGeometry, 3);
+    boundary::set<boundary::LocalPressure>(sLattice, superGeometry, 4);
   }
   else {
-    setInterpolatedVelocityBoundary<T,DESCRIPTOR>(sLattice, omega, superGeometry, 3);
-    setInterpolatedPressureBoundary<T,DESCRIPTOR>(sLattice, omega, superGeometry, 4);
+    boundary::set<boundary::InterpolatedVelocity>(sLattice, superGeometry, 3);
+    boundary::set<boundary::InterpolatedPressure>(sLattice, superGeometry, 4);
   }
 
 #ifdef SPAID_PHELAN
@@ -265,7 +265,7 @@ void prepareLattice( UnitConverter<T,DESCRIPTOR> const& converter,
 
   sLattice.setParameter<descriptors::OMEGA>(omega);
   #ifdef GUO_ZHAO_SMAGO
-  sLattice.setParameter<collision::LES::Smagorinsky>(T(0.14));
+  sLattice.setParameter<collision::LES::SMAGORINSKY>(T(0.14));
   #endif
 
   // Make the lattice ready for simulation
@@ -362,11 +362,9 @@ void getResults( SuperLattice<T,DESCRIPTOR>& sLattice,
 
   if ( iT==0 ) {
     // Writes the geometry, cuboid no. and rank no. as vti file for visualization
-    SuperLatticeGeometry2D<T, DESCRIPTOR> geometry( sLattice, superGeometry );
     SuperLatticeCuboid2D<T, DESCRIPTOR> cuboid( sLattice );
     SuperLatticeRank2D<T, DESCRIPTOR> rank( sLattice );
     superGeometry.rename( 0,2 );
-    vtmWriter.write( geometry );
     vtmWriter.write( cuboid );
     vtmWriter.write( rank );
 
@@ -488,7 +486,7 @@ int main( int argc, char* argv[] )
 #else
   const int noOfCuboids = 1;
 #endif
-  CuboidGeometry2D<T> cuboidGeometry( cuboid, converter.getConversionFactorLength(), noOfCuboids );
+  CuboidGeometry2D<T> cuboidGeometry( cuboid, converter.getPhysDeltaX(), noOfCuboids );
 
   // Instantiation of a loadBalancer
   HeuristicLoadBalancer<T> loadBalancer( cuboidGeometry );

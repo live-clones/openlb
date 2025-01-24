@@ -195,6 +195,14 @@ void Optimizer<S,C>::setStartValue(S startValue)
 }
 
 template<typename S, typename C>
+void Optimizer<S,C>::setStartValue(C startValues, S factor)
+{
+  std::transform(startValues.begin(), startValues.end(), _control.begin(), [factor](auto s){
+    return factor*s;
+  });
+}
+
+template<typename S, typename C>
 void Optimizer<S,C>::setGnuplotData()
 {
   std::vector<S> yValues;

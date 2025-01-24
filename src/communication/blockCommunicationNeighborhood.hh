@@ -37,7 +37,7 @@ namespace olb {
 
 template <typename T, unsigned D>
 BlockCommunicationNeighborhood<T,D>::BlockCommunicationNeighborhood(
-    CuboidGeometry<T,D>& cuboidGeometry
+    CuboidDecomposition<T,D>& cuboidDecomposition
   , LoadBalancer<T>& loadBalancer
   , int iC
   , int padding
@@ -45,7 +45,7 @@ BlockCommunicationNeighborhood<T,D>::BlockCommunicationNeighborhood(
   , MPI_Comm comm
 #endif
 ):
-    _cuboidGeometry(cuboidGeometry)
+    _cuboidDecomposition(cuboidDecomposition)
   , _loadBalancer(loadBalancer)
   , _iC(iC)
   , _padding(padding)
@@ -66,22 +66,20 @@ BlockCommunicationNeighborhood<T,D>::BlockCommunicationNeighborhood(
 template <typename T, unsigned D>
 void BlockCommunicationNeighborhood<T,D>::requestCell(LatticeR<D> latticeR)
 {
-  auto& cuboid = _cuboidGeometry.get(_iC);
+  const auto& cuboid = _cuboidDecomposition.get(_iC);
   BlockStructureD<D> paddedBlock(cuboid.getExtent(), _padding);
   if (paddedBlock.isPadding(latticeR)) {
-    T physR[D];
     // Read physR using global cuboid geometry instead of local cuboid
     // to resolve periodic boundaries
-    _cuboidGeometry.getPhysR(physR, latticeR.withPrefix(_iC));
-    int remoteLatticeR[D+1];
-    if (_cuboidGeometry.getLatticeR(remoteLatticeR, physR)) {
-      _cellsInboundFrom[remoteLatticeR[0]].emplace_back(paddedBlock.getCellId(latticeR));
+    auto physR = _cuboidDecomposition.getPhysR(latticeR.withPrefix(_iC));
+    if (auto remoteLatticeR = _cuboidDecomposition.getLatticeR(physR)) {
+      _cellsInboundFrom[(*remoteLatticeR)[0]].emplace_back(paddedBlock.getCellId(latticeR));
 
-      Cuboid<T,D>& remoteCuboid = _cuboidGeometry.get(remoteLatticeR[0]);
+      const auto& remoteCuboid = _cuboidDecomposition.get((*remoteLatticeR)[0]);
       BlockStructureD<D> remotePaddedBlock(remoteCuboid.getExtent(), _padding);
 
-      _cellsRequestedFrom[remoteLatticeR[0]].emplace_back(
-        remotePaddedBlock.getCellId(remoteLatticeR+1));
+      _cellsRequestedFrom[(*remoteLatticeR)[0]].emplace_back(
+        remotePaddedBlock.getCellId(&(*remoteLatticeR)[1]));
     }
   } else {
     throw std::logic_error("Requested cell is outside of available padding");
@@ -98,7 +96,7 @@ void BlockCommunicationNeighborhood<T,D>::requestOverlap(int width)
     throw std::logic_error("Requested overlap exceeds available padding");
   }
 
-  auto& cuboid = _cuboidGeometry.get(_iC);
+  const auto& cuboid = _cuboidDecomposition.get(_iC);
   BlockStructureD<D> overlapBlock(cuboid.getExtent(), width);
 
   overlapBlock.forSpatialLocations([&](LatticeR<D> latticeR) {
@@ -118,7 +116,7 @@ void BlockCommunicationNeighborhood<T,D>::requestOverlap(int width, BlockIndicat
     throw std::logic_error("Requested overlap exceeds available padding");
   }
 
-  auto& cuboid = _cuboidGeometry.get(_iC);
+  const auto& cuboid = _cuboidDecomposition.get(_iC);
   BlockStructureD<D> overlapBlock(cuboid.getExtent(), width);
 
   overlapBlock.forSpatialLocations([&](LatticeR<D> latticeR) {

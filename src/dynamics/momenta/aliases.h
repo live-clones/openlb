@@ -45,10 +45,28 @@ using BulkTuple = Tuple<
   DefineToNEq
 >;
 
+/// Incompressible Allen-Cahn computation of momenta from the populations in the bulk
+template<typename MOMENTUM>
+using IncBulkTuple = Tuple<
+  BulkPressure<MOMENTUM>,
+  IncompressibleBulkMomentum,
+  BulkStress,
+  DefineToNEq
+>;
+
 /// The Velocity is stored in descriptors::VELOCITY (and computed e.g. in a
 /// postprocessor)
 using ExternalVelocityTuple = Tuple<
   BulkDensity,
+  FixedVelocityMomentum,
+  BulkStress,
+  DefineUSeparately
+>;
+
+/// The Velocity is stored in descriptors::VELOCITY (and computed e.g. in a
+/// postprocessor, density is fixed for using at boundary conditions with fixed pressure)
+using ExternalVelocityFixedDensityTuple = Tuple<
+  FixedDensity,
   FixedVelocityMomentum,
   BulkStress,
   DefineUSeparately
@@ -224,6 +242,13 @@ using None = Tuple<
 using FreeEnergyBulkTuple = Tuple<
   BulkDensity,
   FreeEnergyMomentum,
+  BulkStress,
+  DefineToNEq
+>;
+
+using ForcedPSMBulkTuple = Tuple<
+  BulkDensity,
+  ForcedPSMMomentum,
   BulkStress,
   DefineToNEq
 >;

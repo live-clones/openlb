@@ -32,8 +32,6 @@
 
 namespace olb {
 
-////////  ExtendedFdPlaneBoundaryPostProcessor3D ///////////////////////////////////
-
 template<typename T, typename DESCRIPTOR, int direction, int orientation>
 ExtendedFdPlaneBoundaryPostProcessor3D <T,DESCRIPTOR,direction,orientation>::
 ExtendedFdPlaneBoundaryPostProcessor3D(int x0_, int x1_, int y0_, int y1_, int z0_, int z1_)

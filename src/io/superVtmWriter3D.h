@@ -53,7 +53,7 @@ public:
   /// Construct writer for functor output
   SuperVTMwriter3D( const std::string& name, int overlap = 1, bool binary=true, bool compress=true );
   /// Construct writer for CuboidGeometry3D debugging
-  SuperVTMwriter3D( CuboidGeometry3D<T>& cGeometry,
+  SuperVTMwriter3D( CuboidDecomposition<T,3>& cGeometry,
                     const std::string& name, int overlap = 1, bool binary=true, bool compress=true );
   ///  writes functors stored in pointerVec
   ///  every process writes a vti file with data for each of its cuboids
@@ -88,7 +88,7 @@ public:
   std::string getName() const;
 
 private:
-  CuboidGeometry3D<T>* _cGeometry = nullptr;
+  CuboidDecomposition<T,3>* _cGeometry = nullptr;
 
   ///  performes <VTKFile ...>, <ImageData ...>, <PieceExtent ...> and <PointData ...>
   void preambleVTI(const std::string& fullName, const Vector<int,3> extent0, const Vector<int,3> extent1,
@@ -131,6 +131,12 @@ private:
 
 };
 
+/// Write out functor F to VTK file (helper)
+template <typename T, typename W>
+void writeVTK(SuperF3D<T,W>& f, int iT=0) {
+  SuperVTMwriter3D<T> writer("");
+  writer.write(f, iT);
+}
 
 }  // namespace olb
 

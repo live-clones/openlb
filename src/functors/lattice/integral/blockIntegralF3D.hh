@@ -39,17 +39,21 @@ BlockSum3D<T,W>::BlockSum3D(BlockF3D<W>&          f,
     _indicatorF(indicatorF)
 {
   this->getName() = "BlockSum("+_f.getName()+")";
+
+  OLB_ASSERT(_f.getSourceDim() == _indicatorF.getSourceDim(),
+            "functor source dimension equals indicator source dimension");
 }
 
 template <typename T, typename W>
 bool BlockSum3D<T,W>::operator() (W output[], const int input[])
 {
-  OLB_ASSERT(_f.getSourceDim() == _indicatorF.getSourceDim(),
-             "functor source dimension equals indicator source dimension");
+  // BlockSum3D must not reset output to 0 because SuperSum3D
+  // assumes this
 
   W outputTmp[_f.getTargetDim()];
   int inputTmp[_f.getSourceDim()];
   std::size_t voxels(0);
+  std::vector<util::KahanSummator<W>> summators(_f.getTargetDim(), util::KahanSummator<W>());
 
   const auto& blockStructure = this->getBlockStructure();
 
@@ -59,12 +63,15 @@ bool BlockSum3D<T,W>::operator() (W output[], const int input[])
         if (_indicatorF(inputTmp)) {
           _f(outputTmp,inputTmp);
           for (int i = 0; i < _f.getTargetDim(); ++i) {
-            output[i] += outputTmp[i];
+            summators[i].add(outputTmp[i]);
           }
           voxels += 1;
         }
       }
     }
+  }
+  for (int i = 0; i < _f.getTargetDim(); ++i) {
+    output[i] += summators[i].getSum();
   }
   output[_f.getTargetDim()] += voxels;
 
@@ -80,18 +87,22 @@ BlockIntegral3D<T,W>::BlockIntegral3D(BlockF3D<W>&          f,
     _indicatorF(indicatorF)
 {
   this->getName() = "BlockIntegral("+_f.getName()+")";
+
+  OLB_ASSERT(_f.getSourceDim() == _indicatorF.getSourceDim(),
+             "functor source dimension equals indicator source dimension");
 }
 
 template <typename T, typename W>
 bool BlockIntegral3D<T,W>::operator() (W output[], const int input[])
 {
-  OLB_ASSERT(_f.getSourceDim() == _indicatorF.getSourceDim(),
-             "functor source dimension equals indicator source dimension");
+  // BlockIntegral3D must not reset output to 0 because SuperIntegral3D
+  // assumes this
 
   const W weight = util::pow(_indicatorF.getBlockGeometry().getDeltaR(), 3);
 
   W outputTmp[_f.getTargetDim()];
   int inputTmp[_f.getSourceDim()];
+  std::vector<util::KahanSummator<W>> summators(_f.getTargetDim(), util::KahanSummator<W>());
 
   const auto& blockStructure = this->getBlockStructure();
 
@@ -101,11 +112,14 @@ bool BlockIntegral3D<T,W>::operator() (W output[], const int input[])
         if (_indicatorF(inputTmp)) {
           _f(outputTmp,inputTmp);
           for (int i = 0; i < this->getTargetDim(); ++i) {
-            output[i] += outputTmp[i] * weight;
+            summators[i].add(outputTmp[i]);
           }
         }
       }
     }
+  }
+  for (int i = 0; i < _f.getTargetDim(); ++i) {
+    output[i] += summators[i].getSum()*weight;
   }
 
   return true;

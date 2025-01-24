@@ -29,6 +29,7 @@
 #include "dualDynamics.h"
 #include "dualFunctors3D.h"
 #include "dualMrtDynamics.h"
+#include "objective.h"
 #include "optiCase.h"
 #include "optiCaseAD.h"
 #include "optiCaseDual.h"
@@ -39,5 +40,4 @@
 #include "optimizerSteepestDecent.h"
 #include "optiSolverParameters.h"
 #include "projection.h"
-#include "dualLatticeDescriptors.h"
 #include "serialization.h"

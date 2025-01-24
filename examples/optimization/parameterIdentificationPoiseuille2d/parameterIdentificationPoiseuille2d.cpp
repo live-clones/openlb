@@ -88,10 +88,10 @@ void prepareLattice( UnitConverter<T,DESCRIPTOR> const& converter,
   const T omega = converter.getLatticeRelaxationFrequency();
 
   sLattice.template defineDynamics<BGKdynamics<T,DESCRIPTOR>>(superGeometry, 1);
-  setBounceBackBoundary(sLattice, superGeometry, 2);
+  boundary::set<boundary::BounceBack>(sLattice, superGeometry, 2);
 
-  setInterpolatedVelocityBoundary(sLattice, omega, superGeometry, 3);
-  setInterpolatedPressureBoundary(sLattice, omega, superGeometry, 4);
+  boundary::set<boundary::InterpolatedVelocity>(sLattice, superGeometry, 3);
+  boundary::set<boundary::InterpolatedPressure>(sLattice, superGeometry, 4);
 
   // Initial conditions
   AnalyticalLinear2D<T,T> rho(
@@ -162,18 +162,14 @@ void writeVTK( SuperLattice<T,DESCRIPTOR>& sLattice,
   const int vtmIter  = converter.getLatticeTime( maxPhysT/20. );
 
   SuperLatticePhysVelocity2D<T,DESCRIPTOR> velocity( sLattice, converter );
-  SuperLatticeGeometry2D<T,DESCRIPTOR> materials( sLattice, superGeometry );
   SuperLatticePhysPressure2D<T,DESCRIPTOR> pressure( sLattice, converter );
   vtmWriter.addFunctor( velocity );
-  vtmWriter.addFunctor( materials );
   vtmWriter.addFunctor( pressure );
 
   if (iT == 0) {
       sLattice.communicate();
-      SuperLatticeGeometry2D<T, DESCRIPTOR> geometry( sLattice, superGeometry );
       SuperLatticeCuboid2D<T, DESCRIPTOR> cuboid( sLattice );
       SuperLatticeRank2D<T, DESCRIPTOR> rank( sLattice );
-      vtmWriter.write( geometry );
       vtmWriter.write( cuboid );
       vtmWriter.write( rank );
       vtmWriter.createMasterFile();
@@ -217,7 +213,7 @@ T simulatePoiseuille( T inletPressure )
   const int noOfCuboids = 1;
 #endif
   CuboidGeometry2D<T> cuboidGeometry(
-    cuboid, converter.getConversionFactorLength(), noOfCuboids );
+    cuboid, converter.getPhysDeltaX(), noOfCuboids );
 
   HeuristicLoadBalancer<T> loadBalancer( cuboidGeometry );
 

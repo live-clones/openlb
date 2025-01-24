@@ -86,7 +86,7 @@ void BlockLatticeStokesDragForce<T, DESCRIPTOR, PARTICLETYPE, serialize>::evalua
   //Check whether inside cuboid (when not parallelized)
   bool inside = true;
   if constexpr ( !particles::access::providesParallelization<PARTICLETYPE>() ){
-    inside = cuboid.checkPoint(position);
+    inside = cuboid.isInside(position);
   }
   if (inside){
 

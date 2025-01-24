@@ -86,10 +86,10 @@ template <typename T, typename W, int P>
 bool SuperLpNorm2D<T,W,P>::operator() (W output[], const int input[])
 {
   _f->getSuperStructure().communicate();
-  CuboidGeometry2D<T>& geometry = _f->getSuperStructure().getCuboidGeometry();
+  auto& geometry = _f->getSuperStructure().getCuboidGeometry();
   LoadBalancer<T>&     load     = _f->getSuperStructure().getLoadBalancer();
 
-  output[0] = W(0);
+  W sum[2] = {0,0};
   W   outputTmp[_f->getTargetDim()];
   int inputTmp[3];
 
@@ -107,15 +107,16 @@ bool SuperLpNorm2D<T,W,P>::operator() (W output[], const int input[])
         if (_indicatorF(inputTmp)) {
           _f(outputTmp, inputTmp);
           for (int iDim = 0; iDim < _f->getTargetDim(); ++iDim) {
-            output[0] = LpNormImpl<T,W,P>()(output[0], outputTmp[iDim], weight);
+            LpNormImpl<T,W,P>()(sum, outputTmp[iDim], weight);
           }
         }
       }
     }
   }
+  output[0] = sum[0];
 
 #ifdef PARALLEL_MODE_MPI
-  if (P == 0) {
+  if constexpr (P == 0) {
     singleton::mpi().reduceAndBcast(output[0], MPI_MAX);
   }
   else {

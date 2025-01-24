@@ -27,6 +27,7 @@
 
 #include "utilities/aDiff.h"
 #include "dualDynamics.h"
+#include "objective.h"
 #include "optiCase.h"
 #include "optiCaseAD.h"
 #include "optimizer.h"

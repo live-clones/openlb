@@ -41,9 +41,8 @@ BlockIndicatorFfromIndicatorF3D<T>::BlockIndicatorFfromIndicatorF3D(
 template <typename T>
 bool BlockIndicatorFfromIndicatorF3D<T>::operator() (bool output[], const int input[])
 {
-  T physR[3];
-  this->_block.getPhysR(physR,input);
-  return _indicatorF(output,physR);
+  auto physR = this->_block.getPhysR(input);
+  return _indicatorF(output, physR.data());
 }
 
 template <typename T>
@@ -79,10 +78,9 @@ BlockIndicatorFfromSmoothIndicatorF3D<T, HLBM>::BlockIndicatorFfromSmoothIndicat
 template <typename T, bool HLBM>
 bool BlockIndicatorFfromSmoothIndicatorF3D<T,HLBM>::operator() (bool output[], const int input[])
 {
-  T physR[3];
   T inside[1];
-  this->_block.getPhysR(physR,input);
-  _indicatorF(inside, physR);
+  auto physR = this->_block.getPhysR(input);
+  _indicatorF(inside, physR.data());
   return !util::nearZero(inside[0]);
 }
 
@@ -200,6 +198,98 @@ Vector<int,3> BlockIndicatorMaterial3D<T>::getMax()
   return globalMax;
 }
 
+template <typename T, typename DESCRIPTOR, typename FIELD>
+BlockIndicatorFieldThreshold3D<T,DESCRIPTOR,FIELD>::BlockIndicatorFieldThreshold3D(
+  BlockGeometry<T,3>& blockGeometry, BlockLattice<T,DESCRIPTOR>& blockLattice, std::vector<int> materials, T thresholdValue, std::string condition)
+  : BlockIndicatorF3D<T>(blockGeometry),
+    _blockLattice(blockLattice),
+    _materials(materials),
+    _thresholdValue(thresholdValue),
+    _condition(condition)
+{ }
+
+template <typename T, typename DESCRIPTOR, typename FIELD>
+bool BlockIndicatorFieldThreshold3D<T, DESCRIPTOR, FIELD>::operator() (bool output[], const int input[])
+{
+  const auto& blockGeometry = this->getBlockGeometry();
+  const int current = blockGeometry.getMaterial({input[0], input[1], input[2]});
+  bool var = std::any_of(_materials.cbegin(),
+                          _materials.cend(),
+  [current](int material) {
+    return current == material;
+  });
+  if (var) {
+    T fieldValue = _blockLattice.get({input[0], input[1], input[2]}).template getField<FIELD>();
+    output[0] = false;
+    if ( fieldValue > _thresholdValue && _condition == "higher" ) {
+      output[0] = true;
+    }
+    else if ( fieldValue == _thresholdValue && _condition == "equal" ) {
+      output[0] = true;
+    }
+    else if ( fieldValue < _thresholdValue && _condition == "lower" ) {
+      output[0] = true;
+    }
+  } else {
+    output[0] = false;
+  }
+  return true;
+}
+
+template <typename T, typename DESCRIPTOR, typename FIELD>
+bool BlockIndicatorFieldThreshold3D<T, DESCRIPTOR, FIELD>::isEmpty()
+{
+  auto& statistics = this->getBlockGeometry().getStatistics();
+
+  return std::none_of(_materials.cbegin(), _materials.cend(),
+  [&statistics](int material) -> bool {
+    return statistics.getNvoxel(material) > 0;
+  });
+}
+
+template <typename T, typename DESCRIPTOR, typename FIELD>
+Vector<int,3> BlockIndicatorFieldThreshold3D<T, DESCRIPTOR, FIELD>::getMin()
+{
+  auto& blockGeometry = this->getBlockGeometry();
+  auto& statistics    = blockGeometry.getStatistics();
+
+  Vector<int,3> globalMin{
+    blockGeometry.getNx()+blockGeometry.getPadding()-1,
+    blockGeometry.getNy()+blockGeometry.getPadding()-1,
+    blockGeometry.getNz()+blockGeometry.getPadding()-1,
+  };
+
+  for ( int material : _materials ) {
+    if ( statistics.getNvoxel(material) > 0 ) {
+      const Vector<int,3> localMin = statistics.getMinLatticeR(material);
+      for ( int d = 0; d < 3; ++d ) {
+        globalMin[d] = localMin[d] < globalMin[d] ? localMin[d] : globalMin[d];
+      }
+    }
+  }
+
+  return globalMin;
+}
+
+template <typename T, typename DESCRIPTOR, typename FIELD>
+Vector<int,3> BlockIndicatorFieldThreshold3D<T, DESCRIPTOR, FIELD>::getMax()
+{
+  auto& statistics = this->getBlockGeometry().getStatistics();
+
+  Vector<int,3> globalMax = -this->getBlockGeometry().getPadding();
+
+  for ( int material : _materials ) {
+    if ( statistics.getNvoxel(material) > 0 ) {
+      const Vector<int,3> localMax = statistics.getMaxLatticeR(material);
+      for ( int d = 0; d < 3; ++d ) {
+        globalMax[d] = localMax[d] > globalMax[d] ? localMax[d] : globalMax[d];
+      }
+    }
+  }
+
+  return globalMax;
+}
+
 template <typename T>
 BlockIndicatorLayer3D<T>::BlockIndicatorLayer3D(BlockIndicatorF3D<T>& indicatorF)
   : BlockIndicatorF3D<T>(indicatorF.getBlockGeometry()),
@@ -296,6 +386,38 @@ Vector<int,3> BlockIndicatorMultiplication3D<T>::getMax()
 
 
 template <typename T>
+BlockIndicatorSubstraction3D<T>::BlockIndicatorSubstraction3D(
+  BlockIndicatorF3D<T>& f, BlockIndicatorF3D<T>& g)
+  : BlockIndicatorF3D<T>(f.getBlockGeometry()),
+    _f(f), _g(g)
+{ }
+
+template <typename T>
+bool BlockIndicatorSubstraction3D<T>::operator() (bool output[], const int input[])
+{
+  _f(output, input);
+  if (output[0]) {
+    bool tmp { };
+    _g(&tmp, input);
+    output[0] &= !tmp;
+  }
+  return output[0];
+}
+
+template <typename T>
+Vector<int,3> BlockIndicatorSubstraction3D<T>::getMin()
+{
+  return _f.getMin();
+}
+
+template <typename T>
+Vector<int,3> BlockIndicatorSubstraction3D<T>::getMax()
+{
+  return _f.getMax();
+}
+
+
+template <typename T>
 BlockIndicatorBoundaryNeighbor3D<T>::BlockIndicatorBoundaryNeighbor3D(BlockIndicatorF3D<T>& indicatorF, int overlap)
   : BlockIndicatorF3D<T>(indicatorF.getBlockGeometry()),
     _indicatorF(indicatorF),
@@ -305,24 +427,25 @@ BlockIndicatorBoundaryNeighbor3D<T>::BlockIndicatorBoundaryNeighbor3D(BlockIndic
 template <typename T>
 bool BlockIndicatorBoundaryNeighbor3D<T>::operator() (bool output[], const int input[])
 {
+  output[0] = false;
+
   // check if current position is not solid
-  if ( this->getBlockGeometry().getMaterial(input[0],input[1],input[2]) != 0 ) {
-    // check all neighbors if they are part of boundary via indicator
+  if ( this->getBlockGeometry().isPadding(input) &&
+       this->getBlockGeometry().getMaterial(input) != 0 ) {
     for ( int iXo = -_overlap; iXo <= _overlap; ++iXo ) {
       for ( int iYo = -_overlap; iYo <= _overlap; ++iYo ) {
         for ( int iZo = -_overlap; iZo <= _overlap; ++iZo ) {
           const int neighborPos[3] = {iXo + input[0], iYo + input[1], iZo + input[2]};
-          bool partOfBoundary[1] = {false};
-          // material-indicator to check if part of boundary
-          _indicatorF( partOfBoundary, neighborPos );
-          if ( partOfBoundary[0] ) {
+          if ( _indicatorF ( neighborPos ) &&
+               this->getBlockGeometry().isInside( neighborPos ) ) {
+            output[0] = true;
             return true;
           }
         }
       }
     }
   }
-  return false;
+  return true;
 }
 
 template <typename T>

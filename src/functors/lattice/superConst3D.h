@@ -61,7 +61,7 @@ public:
   /// Constructor template accepting vectors
   template <unsigned Size>
   SuperConst3D(SuperStructure<T,3>& superStructure, Vector<W,Size> v)
-    : SuperConst3D(superStructure, v.toStdVector()) { };
+    : SuperConst3D(superStructure, toStdVector(v)) { };
 
   bool operator() (W output[], const int input[]) override;
 };

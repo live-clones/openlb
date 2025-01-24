@@ -114,21 +114,21 @@ void prepareGeometry( UnitConverter<T,DESCRIPTOR> const& converter,
   IndicatorCircle3D<T> inletCircle( inletCenter, inletNormal,
                                     inletRadius );
   IndicatorCylinder3D<T> inlet( inletCircle,
-                                2 * converter.getConversionFactorLength() );
+                                2 * converter.getPhysDeltaX() );
   superGeometry.rename( 2, 3, 1, inlet );
 
   // rename the material at the outlet0
   IndicatorCircle3D<T> outletCircle0( outletCenter0, outletNormal0,
                                       0.95 * outletRadius0 );
   IndicatorCylinder3D<T> outlet0( outletCircle0,
-                                  4 * converter.getConversionFactorLength() );
+                                  4 * converter.getPhysDeltaX() );
   superGeometry.rename( 2, 4, outlet0 );
 
   // rename the material at the outlet1
   IndicatorCircle3D<T> outletCircle1( outletCenter1, outletNormal1,
                                       0.95 * outletRadius1 );
   IndicatorCylinder3D<T> outlet1( outletCircle1,
-                                  4 * converter.getConversionFactorLength() );
+                                  4 * converter.getPhysDeltaX() );
   superGeometry.rename( 2, 5, outlet1 );
 
   superGeometry.clean();
@@ -157,9 +157,9 @@ void prepareLattice( SuperLattice<T, DESCRIPTOR>& superLattice,
   superLattice.defineDynamics<BGKdynamics>(superGeometry, 1);
 
   #ifdef BOUZIDI
-  legacy::setBouzidiZeroVelocityBoundary<T,DESCRIPTOR>(superLattice, superGeometry, 2, stlReader);
+  setBouzidiBoundary(superLattice, superGeometry, 2, stlReader);
   #else
-  setBounceBackBoundary(superLattice, superGeometry, 2);
+  boundary::set<boundary::BounceBack>(superLattice, superGeometry, 2);
   #endif
 
   // Material=3 -->bulk dynamics (inflow)
@@ -170,9 +170,9 @@ void prepareLattice( SuperLattice<T, DESCRIPTOR>& superLattice,
   superLattice.defineDynamics<BGKdynamics>(superGeometry, 5);
 
   // Setting of the boundary conditions
-  setInterpolatedPressureBoundary<T,DESCRIPTOR>(superLattice, omega, superGeometry, 3);
-  setInterpolatedVelocityBoundary<T,DESCRIPTOR>(superLattice, omega, superGeometry, 4);
-  setInterpolatedVelocityBoundary<T,DESCRIPTOR>(superLattice, omega,superGeometry, 5);
+  boundary::set<boundary::InterpolatedPressure>(superLattice, superGeometry, 3);
+  boundary::set<boundary::InterpolatedVelocity>(superLattice, superGeometry, 4);
+  boundary::set<boundary::InterpolatedVelocity>(superLattice, superGeometry, 5);
 
   superLattice.setParameter<descriptors::OMEGA>(omega);
 
@@ -273,9 +273,9 @@ void prepareParticles( UnitConverter<T,DESCRIPTOR> const& converter,
   Vector<T, 3> c( inletCenter );
   c[2] = 0.074;
   IndicatorCircle3D<T> inflowCircle( c, inletNormal, inletRadius -
-                                     converter.getConversionFactorLength() * 2.5 );
+                                     converter.getPhysDeltaX() * 2.5 );
   IndicatorCylinder3D<T> inletCylinder( inflowCircle, 0.01 *
-                                        converter.getConversionFactorLength() );
+                                        converter.getPhysDeltaX() );
 
   //Add particles
   addParticles( superParticleSystem, inletCylinder, partRho, radius, noOfParticles, randomizer );
@@ -336,10 +336,8 @@ bool getResults( SuperLattice<T, DESCRIPTOR>& superLattice,
   std::size_t fluidMaxT = converter.getLatticeTime( fluidMaxPhysT );
 
   if ( iT == 0 ) {
-    SuperLatticeGeometry3D<T, DESCRIPTOR> geometry( superLattice, superGeometry );
     SuperLatticeCuboid3D<T, DESCRIPTOR> cuboid( superLattice );
     SuperLatticeRank3D<T, DESCRIPTOR> rank( superLattice );
-    vtmWriter.write( geometry );
     vtmWriter.write( cuboid );
     vtmWriter.write( rank );
     vtmWriter.createMasterFile();
@@ -350,7 +348,7 @@ bool getResults( SuperLattice<T, DESCRIPTOR>& superLattice,
     // Print some output of the chosen simulation setup
     clout << "N=" << N <<"; maxTimeSteps(fluid)="
           << converter.getLatticeTime( fluidMaxPhysT ) << "; noOfCuboid="
-          << superGeometry.getCuboidGeometry().getNc() << "; Re=" << Re
+          << superGeometry.getCuboidGeometry().size() << "; Re=" << Re
           <<  "; noOfParticles=" << noOfParticles << "; maxTimeSteps(particle)="
           << converter.getLatticeTime( particleMaxPhysT )
           << "; St=" << ( 2.*partRho*radius*radius*converter.getCharPhysVelocity() ) / ( 9.*converter.getPhysViscosity()*converter.getPhysDensity()*converter.getCharPhysLength() ) << std::endl;
@@ -385,24 +383,24 @@ bool getResults( SuperLattice<T, DESCRIPTOR>& superLattice,
     const std::vector<int> materials = { 1, 3, 4, 5 };
 
     IndicatorCircle3D<T> inlet(
-      inletCenter + 2. * converter.getConversionFactorLength() * inletNormal,
-      inletNormal, inletRadius + 2. * converter.getConversionFactorLength() );
+      inletCenter + 2. * converter.getPhysDeltaX() * inletNormal,
+      inletNormal, inletRadius + 2. * converter.getPhysDeltaX() );
     SuperPlaneIntegralFluxVelocity3D<T> vFluxInflow( superLattice, converter, superGeometry, inlet, materials );
     vFluxInflow.print( "inflow", "ml/s" );
     SuperPlaneIntegralFluxPressure3D<T> pFluxInflow( superLattice, converter, superGeometry, inlet, materials );
     pFluxInflow.print( "inflow", "N", "Pa" );
 
     IndicatorCircle3D<T> outlet0(
-      outletCenter0 + 2. * converter.getConversionFactorLength() * outletNormal0,
-      outletNormal0, outletRadius0 + 2. * converter.getConversionFactorLength() );
+      outletCenter0 + 2. * converter.getPhysDeltaX() * outletNormal0,
+      outletNormal0, outletRadius0 + 2. * converter.getPhysDeltaX() );
     SuperPlaneIntegralFluxVelocity3D<T> vFluxOutflow0( superLattice, converter, superGeometry, outlet0, materials );
     vFluxOutflow0.print( "outflow0", "ml/s" );
     SuperPlaneIntegralFluxPressure3D<T> pFluxOutflow0( superLattice, converter, superGeometry, outlet0, materials );
     pFluxOutflow0.print( "outflow0", "N", "Pa" );
 
     IndicatorCircle3D<T> outlet1(
-      outletCenter1 + 2. * converter.getConversionFactorLength() * outletNormal1,
-      outletNormal1, outletRadius1 + 2. * converter.getConversionFactorLength() );
+      outletCenter1 + 2. * converter.getPhysDeltaX() * outletNormal1,
+      outletNormal1, outletRadius1 + 2. * converter.getPhysDeltaX() );
     SuperPlaneIntegralFluxVelocity3D<T> vFluxOutflow1( superLattice, converter, superGeometry, outlet1, materials );
     vFluxOutflow1.print( "outflow1", "ml/s" );
     SuperPlaneIntegralFluxPressure3D<T> pFluxOutflow1( superLattice, converter, superGeometry, outlet1, materials );
@@ -499,9 +497,9 @@ int main( int argc, char* argv[] )
   converter.write("converter");
 
   // === 2nd Step: Prepare Geometry ===
-  STLreader<T> stlReader( "../bifurcation3d.stl", converter.getConversionFactorLength() );
+  STLreader<T> stlReader( "../bifurcation3d.stl", converter.getPhysDeltaX() );
   IndicatorLayer3D<T> extendedDomain( stlReader,
-                                      converter.getConversionFactorLength() );
+                                      converter.getPhysDeltaX() );
 
   // Create solid wall
   const unsigned latticeMaterial = 2; //Material number of wall
@@ -512,7 +510,7 @@ int main( int argc, char* argv[] )
   // Instantiation of an empty cuboidGeometry
   int noOfCuboids = util::max( 16, 4 * singleton::mpi().getSize() );
 
-  CuboidGeometry3D<T> cuboidGeometry( extendedDomain, converter.getConversionFactorLength(),
+  CuboidGeometry3D<T> cuboidGeometry( extendedDomain, converter.getPhysDeltaX(),
                                       noOfCuboids );
 
   // Instantiation of an empty loadBalancer

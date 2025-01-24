@@ -101,7 +101,7 @@ public:
     return _data[i];
   }
 
-  std::size_t size() const
+  std::size_t size() const override
   {
     return _count;
   }
@@ -222,7 +222,7 @@ public:
     return _f[i];
   }
 
-  std::size_t size() const
+  std::size_t size() const override
   {
     return _count;
   }

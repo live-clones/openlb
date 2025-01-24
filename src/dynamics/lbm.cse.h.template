@@ -31,7 +31,7 @@
 #ifndef DISABLE_CSE
 
 #include "lbm.h"
-#include "latticeDescriptors.h"
+#include "descriptor/descriptor.h"
 
 namespace olb {
 
@@ -85,6 +85,12 @@ ${cell_operator_cse(DESCRIPTOR, olb.lbm[DESCRIPTOR], "computePiNeqNormSqr", cell
 ${cell_operator_cse(DESCRIPTOR, olb.lbm[DESCRIPTOR], "computePiNeqNormSqr", cell=Cell(DESCRIPTOR))}
 
 ${cell_operator_cse(DESCRIPTOR, olb.lbm[DESCRIPTOR], "addExternalForce", cell=Cell(DESCRIPTOR), rho=Scalar(), u=Vector(d), omega=Scalar(), force=Vector(d))}
+
+${cell_operator_cse(DESCRIPTOR, olb.lbm[DESCRIPTOR], "addLiangForce", cell=Cell(DESCRIPTOR), rho=Scalar(), nablarho=Vector(d), u=Vector(d), omega=Scalar(), force=Vector(d))}
+
+${cell_operator_cse(DESCRIPTOR, olb.lbm[DESCRIPTOR], "addAllenCahnForce", cell=Cell(DESCRIPTOR), omega=Scalar(), force=Vector(d))}
+
+${cell_operator_cse(DESCRIPTOR, olb.lbm[DESCRIPTOR], "addAllenCahnSource", cell=Cell(DESCRIPTOR), omega=Scalar(), source=Scalar())}
 
 };
 % endfor

@@ -112,6 +112,4 @@ int main(int argc, char **argv)
   clout << "\nExecute standard simulation and compute error norms" << std::endl;
   simulate();
 
-  clout << "\nPerform eoc-study" << std::endl;
-  eoc();
 }

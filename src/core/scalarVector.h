@@ -52,7 +52,7 @@ struct ScalarVector : public GenericVector<T,D,IMPL> {
 
 /// Squared euclidean vector norm
 template<typename T, unsigned D, typename IMPL>
-inline constexpr T norm_squared(const ScalarVector<T,D,IMPL>& a)
+inline constexpr T norm_squared(const ScalarVector<T,D,IMPL>& a) any_platform
 {
   T sqNorm{};
   for (unsigned iDim=0; iDim < D; ++iDim) {
@@ -63,7 +63,7 @@ inline constexpr T norm_squared(const ScalarVector<T,D,IMPL>& a)
 
 /// Euclidean vector norm
 template<typename T, unsigned D, typename IMPL>
-inline constexpr T norm(const ScalarVector<T,D,IMPL>& a)
+inline constexpr T norm(const ScalarVector<T,D,IMPL>& a) any_platform
 {
   using namespace util;
   T sqNorm = norm_squared(a);

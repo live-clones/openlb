@@ -33,7 +33,7 @@
 #include "io/ostreamManager.h"
 #include "utilities/omath.h"
 #include "core/vector.h"
-#include "aDiff.h"
+#include "utilities/aDiff.h"
 
 namespace olb {
 
@@ -47,55 +47,6 @@ template <class T, unsigned DIM> inline ADf<T,DIM> sqrt (const ADf<T,DIM>& a);
 
 template<typename S>
 using StdVector = std::vector<S,std::allocator<S>>;
-
-/// return true if a is close to zero
-template <typename T>
-inline bool nearZero(T a)
-{
-  if (a==T()) {
-    return true;
-  }
-  T EPSILON = std::numeric_limits<T>::epsilon();
-  if (a > -EPSILON && a < EPSILON) {
-    return true;
-  }
-  else {
-    return false;
-  }
-}
-
-template <typename T>
-inline bool nearZero(T a, T epsilon)
-{
-  if (a > -epsilon && a < epsilon) {
-    return true;
-  }
-  else {
-    return false;
-  }
-}
-
-template<typename T, typename U=T, typename W=T>
-inline bool approxEqual(T a, U b, W epsilon)
-{
-  if (a==b) {
-    return true;
-  }
-  return nearZero<T>(a - b, epsilon);
-}
-
-template<typename T, typename U=T>
-inline bool approxEqual(T a, U b)
-{
-  if (a==b) {
-    return true;
-  }
-  if (nearZero(a) && nearZero(b)) {
-    return true;
-  }
-  T EPSILON = std::numeric_limits<T>::epsilon()*4.*util::fabs(a);
-  return approxEqual(a,b,EPSILON);
-}
 
 template <class T>
 inline void copyN(T c[], const T a[], const unsigned dim) any_platform
@@ -140,16 +91,14 @@ std::vector<T> fromVector2(const Vector<T,2>& vec)
   return v;
 }
 
-
-/// l2 norm of a vector of arbitrary length
+/// l2 norm to the power of 2 of a vector of arbitrary length
 template <typename T>
-T norm(const std::vector<T>& a)
+T norm2(const T* a, unsigned size)
 {
-  T v(0);
-  for (unsigned iD=0; iD<a.size(); iD++) {
+  T v{};
+  for (unsigned iD=0; iD<size; ++iD) {
     v += a[iD]*a[iD];
   }
-  v = util::sqrt(v);
   return v;
 }
 
@@ -157,11 +106,21 @@ T norm(const std::vector<T>& a)
 template <typename T>
 T norm2(const std::vector<T>& a)
 {
-  T v = T();
-  for (unsigned iD=0; iD<a.size(); iD++) {
-    v += a[iD]*a[iD];
-  }
-  return v;
+  return norm2(a.data(), a.size());
+}
+
+/// l2 norm of a vector of arbitrary length
+template <typename T>
+T norm(const T* a, unsigned size)
+{
+  return util::sqrt(norm2(a, size));
+}
+
+/// l2 norm of a vector of arbitrary length
+template <typename T>
+T norm(const std::vector<T>& a)
+{
+  return norm(a.data(), a.size());
 }
 
 /// dot product, only valid in 3d
@@ -210,7 +169,7 @@ std::vector<T> normalize(const std::vector<T>& a)
 
 /// applies floor to each component of a vector
 template <typename T, unsigned Size>
-Vector<T,Size> floor(const Vector<T,Size>& a)
+Vector<T,Size> floor(const Vector<T,Size>& a) any_platform
 {
   Vector<T,Size> out;
   for (unsigned int iDim=0; iDim < Size; ++iDim) {
@@ -221,7 +180,7 @@ Vector<T,Size> floor(const Vector<T,Size>& a)
 
 /// applies ceil to each component of a vector
 template <typename T, unsigned Size>
-Vector<T,Size> ceil(const Vector<T,Size>& a)
+Vector<T,Size> ceil(const Vector<T,Size>& a) any_platform
 {
   Vector<T,Size> out;
   for (unsigned int iDim=0; iDim < Size; ++iDim) {
@@ -469,6 +428,33 @@ struct ContainerCreator<Vector<T,SIZE>> {
     return C{};
   }
 };
+
+/// @brief Compute serial index of symmetric tensor
+/// @tparam DIM Spatial dimension
+/// @param i First spatial index
+/// @param j Second spatial index
+/// @return Serialized index, as it is used in computeStress
+template<unsigned DIM>
+unsigned serialSymmetricTensorIndex(unsigned i, unsigned j) any_platform
+{
+  OLB_PRECONDITION(DIM > 1);
+  OLB_PRECONDITION(DIM < 4);
+  if constexpr (DIM==2) {
+    return i+j;
+  }
+  else if constexpr (DIM==3) {
+    const unsigned res = i+j;
+    if ((i>0) && (j>0)) {
+      return res+1;
+    } else {
+      return res;
+    }
+  }
+  else {
+    // other dimensions are not implemented
+    exit(1);
+  }
+}
 
 } // namespace util
 

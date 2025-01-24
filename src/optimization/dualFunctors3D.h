@@ -26,6 +26,7 @@
 
 
 #include "functors/analytical/analyticalBaseF.h"
+#include "functors/lattice/reductionF3D.h"
 #include "functors/lattice/superBaseF3D.h"
 
 namespace olb {
@@ -53,12 +54,12 @@ class SuperLatticeDphysDissipationDf3D : public SuperLatticePhysF3D<T,DESCRIPTOR
 public:
   SuperLatticeDphysDissipationDf3D(SuperLattice<T,DESCRIPTOR>& sLattice,
                                    const UnitConverter<T,DESCRIPTOR>& converter);
-  bool operator()(T output[], const int input[]);
 };
 
 
 /// functor to get pointwise dual velocity density on local lattices, if globIC is not on
 /// the local processor, the returned vector is empty
+// this is made a BGK-type momenta computation.
 template <typename T, typename DESCRIPTOR>
 class BlockLatticeDphysVelocityDf3D : public BlockLatticeF3D<T,DESCRIPTOR> {
 protected:
@@ -85,7 +86,6 @@ public:
   SuperLatticeDphysVelocityDf3D(SuperLattice<T,DESCRIPTOR>& sLattice,
                                 const UnitConverter<T,DESCRIPTOR>& converter,
                                 SuperExtractComponentF3D<T,T>& sExtract);
-  bool operator()(T output[], const int input[]);
 };
 
 
@@ -219,9 +219,14 @@ class DrelativeDifferenceObjectiveDf3D : public SuperF3D<T,T> {
 private:
   FunctorPtr<SuperF3D<T,T>>                 _f;
   FunctorPtr<SuperF3D<T,T>>                 _dFdF;
-  SuperLatticeFfromAnalyticalF3D<T,DESCRIPTOR> _wantedF;
+  FunctorPtr<SuperF3D<T,T>>                 _wantedF;
   FunctorPtr<SuperIndicatorF3D<T>>          _indicatorF;
 public:
+  DrelativeDifferenceObjectiveDf3D(SuperLattice<T, DESCRIPTOR>& sLattice,
+                                   FunctorPtr<SuperF3D<T,T>>&&        f,
+                                   FunctorPtr<SuperF3D<T,T>>&&        dFdF,
+                                   FunctorPtr<SuperF3D<T,T>>&&   wantedF,
+                                   FunctorPtr<SuperIndicatorF3D<T>>&& indicatorF);
   DrelativeDifferenceObjectiveDf3D(SuperLattice<T, DESCRIPTOR>& sLattice,
                                    FunctorPtr<SuperF3D<T,T>>&&        f,
                                    FunctorPtr<SuperF3D<T,T>>&&        dFdF,
@@ -239,25 +244,6 @@ public:
                                    FunctorPtr<AnalyticalF3D<T,T>>&& wantedF,
                                    SuperGeometry<T,3>& geometry,
                                    int                 material);
-
-  bool operator()(T output[], const int input[]);
-};
-
-/// functor to compute 0.5(f-f_wanted)^2/f_wanted^2 on a lattice
-// with two lattice functors
-template <typename T, typename DESCRIPTOR>
-class DrelativeDifferenceObjectiveDf3D_Lattice : public SuperF3D<T,T> {
-private:
-  FunctorPtr<SuperF3D<T,T>>                 _f;
-  FunctorPtr<SuperF3D<T,T>>                 _dFdF;
-  FunctorPtr<SuperF3D<T,T>>                 _wantedF;
-  FunctorPtr<SuperIndicatorF3D<T>>          _indicatorF;
-public:
-  DrelativeDifferenceObjectiveDf3D_Lattice(SuperLattice<T, DESCRIPTOR>& sLattice,
-                                   FunctorPtr<SuperF3D<T,T>>&&        f,
-                                   FunctorPtr<SuperF3D<T,T>>&&        dFdF,
-                                   FunctorPtr<SuperF3D<T,T>>&&   wantedF,
-                                   FunctorPtr<SuperIndicatorF3D<T>>&& indicatorF);
 
   bool operator()(T output[], const int input[]);
 };

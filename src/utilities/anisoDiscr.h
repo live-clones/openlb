@@ -43,7 +43,7 @@
 #include <openblas/lapacke.h>
 #endif
 
-#include "dynamics/descriptorFunction.h"
+#include "descriptor/functions.h"
 #include "core/util.h"
 
 namespace olb {

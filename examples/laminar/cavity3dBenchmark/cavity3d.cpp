@@ -46,7 +46,7 @@ void prepareGeometry(UnitConverter<T,DESCRIPTOR> const& converter,
   superGeometry.rename(0,2,indicator);
   superGeometry.rename(2,1,{1,1,1});
 
-  T eps = converter.getConversionFactorLength();
+  T eps = converter.getPhysDeltaX();
   Vector<T,3> origin(-eps, converter.getCharPhysLength() - eps, -eps);
   Vector<T,3> extend(converter.getCharPhysLength() + 2*eps, 2*eps, converter.getCharPhysLength() + 2*eps);
   IndicatorCuboid3D<T> lid(extend,origin);
@@ -70,15 +70,15 @@ void prepareLattice(SuperLattice<T,DESCRIPTOR>& superLattice,
 
 #ifdef LID_DRIVEN
   #ifdef LID_DRIVEN_BOUNCE_BACK
-  setBounceBackBoundary(superLattice, superGeometry, 2);
+  boundary::set<boundary::BounceBack>(superLattice, superGeometry, 2);
   superLattice.defineDynamics<BounceBackVelocity>(superGeometry, 3);
   #else // Local velocity boundaries
-  setLocalVelocityBoundary<T,DESCRIPTOR,BulkDynamics>(superLattice, omega, superGeometry, 2);
-  setLocalVelocityBoundary<T,DESCRIPTOR,BulkDynamics>(superLattice, omega, superGeometry, 3);
+  boundary::set<boundary::LocalVelocity<T,DESCRIPTOR,BulkDynamics>>(superLattice, superGeometry, 2);
+  boundary::set<boundary::LocalVelocity<T,DESCRIPTOR,BulkDynamics>>(superLattice, superGeometry, 3);
   #endif
 #else
-  setBounceBackBoundary(superLattice, superGeometry, 2);
-  setBounceBackBoundary(superLattice, superGeometry, 3);
+  boundary::set<boundary::BounceBack>(superLattice, superGeometry, 2);
+  boundary::set<boundary::BounceBack>(superLattice, superGeometry, 3);
 #endif
 
   superLattice.setParameter<descriptors::OMEGA>(omega);
@@ -141,13 +141,11 @@ void getResults(SuperLattice<T,DESCRIPTOR>& superLattice,
 {
   SuperVTMwriter3D<T> vtmWriter("cavity3d");
 
-  SuperLatticeGeometry3D<T,DESCRIPTOR> geometryF(superLattice, superGeometry);
   SuperLatticeCuboid3D<T,DESCRIPTOR> cuboidF(superLattice);
   SuperLatticeRank3D<T,DESCRIPTOR> rankF(superLattice);
   SuperLatticePhysVelocity3D<T,DESCRIPTOR> velocityF(superLattice, converter);
   SuperLatticePhysPressure3D<T,DESCRIPTOR> pressureF(superLattice, converter);
 
-  vtmWriter.write(geometryF);
   vtmWriter.write(cuboidF);
   vtmWriter.write(rankF);
   vtmWriter.write(velocityF);
@@ -178,22 +176,25 @@ int main(int argc, char **argv)
   );
 
   Vector<T,3> origin{};
-  Vector<T,3> extend(converter.getCharPhysLength() + 0.25 * converter.getConversionFactorLength());
+  Vector<T,3> extend(converter.getCharPhysLength() + 0.25 * converter.getPhysDeltaX());
   IndicatorCuboid3D<T> cube(extend, origin);
 
 #ifdef PARALLEL_MODE_MPI
-  CuboidGeometry3D<T> cuboidGeometry(cube, converter.getConversionFactorLength(), cuboidsPerProcess*singleton::mpi().getSize());
+  CuboidGeometry3D<T> cuboidGeometry(cube, converter.getPhysDeltaX(), cuboidsPerProcess*singleton::mpi().getSize());
 #else
-  CuboidGeometry3D<T> cuboidGeometry(cube, converter.getConversionFactorLength(), cuboidsPerProcess);
+  CuboidGeometry3D<T> cuboidGeometry(cube, converter.getPhysDeltaX(), cuboidsPerProcess);
 #endif
 
-  BlockLoadBalancer<T> loadBalancer(singleton::mpi().getRank(), singleton::mpi().getSize(), cuboidGeometry.getNc(), 0);
+  BlockLoadBalancer<T> loadBalancer(singleton::mpi().getRank(), singleton::mpi().getSize(), cuboidGeometry.size(), 0);
 
   SuperGeometry<T,3> superGeometry(cuboidGeometry, loadBalancer);
 
   prepareGeometry(converter, cube, superGeometry);
 
-  SuperLattice<T,DESCRIPTOR> superLattice(superGeometry);
+  SuperLattice<T,DESCRIPTOR> superLattice(cuboidGeometry,
+                                          loadBalancer,
+                                          3,
+                                          converter);
   superLattice.statisticsOff();
 
   prepareLattice(superLattice, superGeometry, converter);
@@ -201,6 +202,7 @@ int main(int argc, char **argv)
   setBoundaryValues(superLattice, superGeometry, converter);
 
   if (exportResults) {
+    superLattice.writeSummary();
     getResults(superLattice, superGeometry, converter);
   }
 

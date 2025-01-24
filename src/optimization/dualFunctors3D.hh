@@ -25,7 +25,8 @@
 #define DUAL_FUNCTORS_3D_HH
 
 
-#include "optimization/dualFunctors3D.h"
+#include "dualFunctors3D.h"
+#include "dualLbHelpers.h"
 
 
 namespace olb {
@@ -47,61 +48,28 @@ BlockLatticeDphysDissipationDf3D<T,DESCRIPTOR>::BlockLatticeDphysDissipationDf3D
 template <typename T, typename DESCRIPTOR>
 bool BlockLatticeDphysDissipationDf3D<T,DESCRIPTOR>::operator()(T dDdf[], const int latticeR[])
 {
-  T omega = _converter.getLatticeRelaxationFrequency();
-  T dt = _converter.getConversionFactorTime();
+  const T omega = _converter.getLatticeRelaxationFrequency();
+  const T dt = _converter.getConversionFactorTime();
 
-  T rho;
-  T u[3];
-  T pi[6];
-
-  /*const int localLatticeR[3] = {
-    latticeR[0] + _overlap,
-    latticeR[1] + _overlap,
-    latticeR[2] + _overlap
-  };
-  this->_blockLattice.get(localLatticeR).computeAllMomenta(rho, u, pi);*/
-  this->_blockLattice.get(latticeR).computeAllMomenta(rho, u, pi);
-
-  for (int i=0; i<DESCRIPTOR::q; i++) { //output default 0
-    dDdf[i] = T();
-  }
-
-  T pi2[DESCRIPTOR::d][DESCRIPTOR::d];
-
-  pi2[0][0]=pi[0];
-  pi2[0][1]=pi[1];
-  if (util::TensorVal<DESCRIPTOR >::n == 6) {
-    pi2[0][2]=pi[2];
-  }
-  else {
-    pi2[1][1]=pi[2];
-  }
-  pi2[1][0]=pi[1];
-  if (util::TensorVal<DESCRIPTOR >::n == 6) {
-    pi2[1][1]=pi[3];
-    pi2[1][2]=pi[4];
-    pi2[2][0]=pi[2];
-    pi2[2][1]=pi[4];
-    pi2[2][2]=pi[5];
-  }
+  T rho, u[DESCRIPTOR::d], pi[util::TensorVal<DESCRIPTOR >::n];
+  auto cell = this->_blockLattice.get(latticeR);
+  cell.computeAllMomenta(rho, u, pi);
 
   for (int jPop=0; jPop < DESCRIPTOR::q; ++jPop) {
-    for (int iDim=0; iDim < DESCRIPTOR::d; ++iDim) {
-      for (int jDim=0; jDim < DESCRIPTOR::d; ++jDim) {
-        T dPidf2ndTerm = T();
-        for (int iPop=0; iPop < DESCRIPTOR::q; ++iPop) {
-          dPidf2ndTerm += descriptors::c<DESCRIPTOR>(iPop)[iDim] * descriptors::c<DESCRIPTOR>(iPop)[jDim]
-                          * dualLbHelpers<T,DESCRIPTOR>::equilibrium(iPop, jPop, rho, u);
-        }
-        T dpidf = descriptors::c<DESCRIPTOR>(jPop,iDim)*descriptors::c<DESCRIPTOR>(jPop,jDim) - dPidf2ndTerm;
-        // rho2 instead of rho vs simon!
-        dDdf[jPop] += 2.*(pi2[iDim][jDim]*(dpidf - pi2[iDim][jDim]/2./rho*2.));
+    dDdf[jPop] = T();
+    T dpidf[util::TensorVal<DESCRIPTOR >::n];
+    dualLbMomentaHelpers<DESCRIPTOR>::dPiDf(cell, dpidf, jPop);
+    for (int iAlpha=0; iAlpha < DESCRIPTOR::d; ++iAlpha) {
+      for (int iBeta=0; iBeta < DESCRIPTOR::d; ++iBeta) {
+        const int iPi = util::serialSymmetricTensorIndex<DESCRIPTOR::d>(iAlpha, iBeta);
+        dDdf[jPop] += pi[iPi] * dpidf[iPi] - pi[iPi] * pi[iPi] / rho;
       }
     }
-    dDdf[jPop] *= util::pow(omega*descriptors::invCs2<T,DESCRIPTOR>()/rho,2)/2.*_converter.getPhysViscosity()/_converter.getLatticeViscosity()/dt/dt;
+    dDdf[jPop] *= T(2)*util::pow(omega*descriptors::invCs2<T,DESCRIPTOR>()/rho,2)/2.*_converter.getPhysViscosity()/dt/dt;
   }
   return true;
 }
+
 
 template <typename T, typename DESCRIPTOR>
 SuperLatticeDphysDissipationDf3D<T,DESCRIPTOR>::SuperLatticeDphysDissipationDf3D(
@@ -116,18 +84,6 @@ SuperLatticeDphysDissipationDf3D<T,DESCRIPTOR>::SuperLatticeDphysDissipationDf3D
         sLattice.getOverlap(),
         converter)
     );
-  }
-}
-
-template <typename T, typename DESCRIPTOR>
-bool SuperLatticeDphysDissipationDf3D<T,DESCRIPTOR>::operator()(T output[], const int input[])
-{
-  auto& load = this->_sLattice.getLoadBalancer();
-  if (load.isLocal(input[0])) {
-    return this->getBlockF(load.loc(input[0]))(output, &input[1]);
-  }
-  else {
-    return false;
   }
 }
 
@@ -149,19 +105,7 @@ BlockLatticeDphysVelocityDf3D<T,DESCRIPTOR>::BlockLatticeDphysVelocityDf3D(
 template <typename T, typename DESCRIPTOR>
 bool BlockLatticeDphysVelocityDf3D<T,DESCRIPTOR>::operator()(T dVelocityDf[], const int latticeR[])
 {
-  for (int i=0; i<DESCRIPTOR::d*DESCRIPTOR::q; i++) {
-    dVelocityDf[i] = T();
-  }
-
-  T rho;
-  T u[3];
-  /*const int localLatticeR[3] = {
-    latticeR[0] + _overlap,
-    latticeR[1] + _overlap,
-    latticeR[2] + _overlap
-  };
-
-  this->_blockLattice.get(localLatticeR).computeRhoU(rho, u);*/
+  T rho, u[3];
   this->_blockLattice.get(latticeR).computeRhoU(rho, u);
 
   for (int jPop=0; jPop < DESCRIPTOR::q; ++jPop) {
@@ -170,7 +114,7 @@ bool BlockLatticeDphysVelocityDf3D<T,DESCRIPTOR>::operator()(T dVelocityDf[], co
         dVelocityDf[jPop*DESCRIPTOR::d + iDim] = T(0);
       }
       else {
-        dVelocityDf[jPop*DESCRIPTOR::d + iDim] = (descriptors::c<DESCRIPTOR>(jPop,iDim)-u[iDim])/rho;
+        dVelocityDf[jPop*DESCRIPTOR::d + iDim] = (descriptors::c<DESCRIPTOR>(jPop,iDim)-u[iDim])/rho * this->_converter.getConversionFactorVelocity();
       }
     }
   }
@@ -210,18 +154,6 @@ SuperLatticeDphysVelocityDf3D<T,DESCRIPTOR>::SuperLatticeDphysVelocityDf3D(
         converter,
         1, sExtract.getExtractDim())
     );
-  }
-}
-
-template <typename T, typename DESCRIPTOR>
-bool SuperLatticeDphysVelocityDf3D<T,DESCRIPTOR>::operator()(T output[], const int input[])
-{
-  auto& load = this->_sLattice.getLoadBalancer();
-  if (load.isLocal(input[0])) {
-    return this->getBlockF(load.loc(input[0]))(output, &input[1]);
-  }
-  else {
-    return false;
   }
 }
 
@@ -312,7 +244,7 @@ bool BlockDdifferenceObjectiveDf3D<T,DESCRIPTOR>::operator()(T dJdF[], const int
     _dFdF(dFdF,latticeR);
 
     for (int iDim=0; iDim<nDim; iDim++) {
-      dJdD[iDim] = (f[iDim] - wantedF[iDim]) * _weight*_weight;
+      dJdD[iDim] = (f[iDim] - wantedF[iDim]) * _weight;
 
       for (int jPop=0; jPop < DESCRIPTOR::q; ++jPop) {
         dJdF[jPop] += dJdD[iDim] * dFdF[jPop*nDim + iDim];
@@ -337,7 +269,7 @@ DdifferenceObjectiveDf3D<T,DESCRIPTOR>::DdifferenceObjectiveDf3D(
 {
   this->getName() = "dDifferenceObjectiveDf";
 
-  const T weight = util::pow(_f->getSuperStructure().getCuboidGeometry().getMinDeltaR(), 3);
+  const T weight = util::pow(_f->getSuperStructure().getCuboidGeometry().getDeltaR(), 3);
 
   for (int iC = 0; iC < this->getSuperLattice().getLoadBalancer().size(); ++iC) {
     this->_blockF.emplace_back(
@@ -489,7 +421,7 @@ bool BlockDrelativeDifferenceObjectiveDf3D<T,DESCRIPTOR>::operator()(T dJdF[], c
     _dFdF(dFdF, latticeR);
 
     for (int iDim=0; iDim < nDim; ++iDim) {
-      dJdD[iDim] = (f[iDim] - wantedF[iDim]) / _globalValue * _weight*_weight;
+      dJdD[iDim] = (f[iDim] - wantedF[iDim]) / _globalValue * _weight;
 
       for (int jPop=0; jPop < DESCRIPTOR::q; ++jPop) {
         dJdF[jPop] += dJdD[iDim] * dFdF[jPop*nDim + iDim];
@@ -505,22 +437,23 @@ DrelativeDifferenceObjectiveDf3D<T,DESCRIPTOR>::DrelativeDifferenceObjectiveDf3D
   SuperLattice<T, DESCRIPTOR>& sLattice,
   FunctorPtr<SuperF3D<T,T>>&&        f,
   FunctorPtr<SuperF3D<T,T>>&&        dFdF,
-  FunctorPtr<AnalyticalF3D<T,T>>&&   wantedF,
+  FunctorPtr<SuperF3D<T,T>>&&        wantedF,
   FunctorPtr<SuperIndicatorF3D<T>>&& indicatorF)
   :  SuperF3D<T,T>(sLattice, DESCRIPTOR::q),
      _f(std::move(f)),
      _dFdF(std::move(dFdF)),
-     _wantedF(std::forward<decltype(wantedF)>(wantedF), sLattice),
+     _wantedF(std::move(wantedF)),
      _indicatorF(std::move(indicatorF))
 {
-  this->getName() = "dRelativeDifferenceObjectiveDf";
+  this->getName() = "dRelativeDifferenceObjectiveDf_Lattice";
 
-  SuperL2Norm3D<T> wantedFlp(_wantedF, *_indicatorF);
+  SuperL2Norm3D<T> wantedFlp(*_wantedF, *_indicatorF);
   T output[1] {};
   wantedFlp(output, nullptr);
 
   const T globalValue = util::pow(output[0], 2);
-  const T weight = util::pow(_f->getSuperStructure().getCuboidGeometry().getMinDeltaR(), 3);
+  const T weight = util::pow(sLattice.getCuboidGeometry().getDeltaR(), 3);
+  // util::pow(_f->getSuperStructure().getCuboidGeometry().getDeltaR(), 3);
 
   for (int iC = 0; iC < sLattice.getLoadBalancer().size(); ++iC) {
     this->_blockF.emplace_back(
@@ -528,13 +461,29 @@ DrelativeDifferenceObjectiveDf3D<T,DESCRIPTOR>::DrelativeDifferenceObjectiveDf3D
         sLattice.getBlock(iC),
         _f->getBlockF(iC),
         _dFdF->getBlockF(iC),
-        _wantedF.getBlockF(iC),
+        _wantedF->getBlockF(iC),
         _indicatorF->getBlockIndicatorF(iC),
         globalValue,
         weight)
     );
   }
 }
+
+template <typename T, typename DESCRIPTOR>
+DrelativeDifferenceObjectiveDf3D<T,DESCRIPTOR>::DrelativeDifferenceObjectiveDf3D(
+  SuperLattice<T, DESCRIPTOR>& sLattice,
+  FunctorPtr<SuperF3D<T,T>>&&        f,
+  FunctorPtr<SuperF3D<T,T>>&&        dFdF,
+  FunctorPtr<AnalyticalF3D<T,T>>&&   wantedF,
+  FunctorPtr<SuperIndicatorF3D<T>>&& indicatorF)
+  : DrelativeDifferenceObjectiveDf3D(sLattice,
+                                     std::forward<decltype(f)>(f),
+                                     std::forward<decltype(dFdF)>(dFdF),
+                                     std::unique_ptr<SuperF3D<T,T>>(
+                                       std::make_unique<SuperLatticeFfromAnalyticalF3D<T,DESCRIPTOR>>(
+                                         std::forward<decltype(wantedF)>(wantedF), sLattice)),
+                                     std::forward<decltype(indicatorF)>(indicatorF))
+{ }
 
 template <typename T, typename DESCRIPTOR>
 DrelativeDifferenceObjectiveDf3D<T,DESCRIPTOR>::DrelativeDifferenceObjectiveDf3D(
@@ -568,60 +517,6 @@ DrelativeDifferenceObjectiveDf3D<T,DESCRIPTOR>::DrelativeDifferenceObjectiveDf3D
 
 template <typename T, typename DESCRIPTOR>
 bool DrelativeDifferenceObjectiveDf3D<T,DESCRIPTOR>::operator()(T dJdF[], const int latticeR[])
-{
-  for (int i=0; i < DESCRIPTOR::q; ++i) {
-    dJdF[i] = T{};
-  }
-
-  auto& load = _f->getSuperStructure().getLoadBalancer();
-
-  if (load.isLocal(latticeR[0])) {
-    return this->getBlockF(load.loc(latticeR[0]))(dJdF, &latticeR[1]);
-  }
-  else {
-    return true;
-  }
-}
-
-template <typename T, typename DESCRIPTOR>
-DrelativeDifferenceObjectiveDf3D_Lattice<T,DESCRIPTOR>::DrelativeDifferenceObjectiveDf3D_Lattice(
-  SuperLattice<T, DESCRIPTOR>& sLattice,
-  FunctorPtr<SuperF3D<T,T>>&&        f,
-  FunctorPtr<SuperF3D<T,T>>&&        dFdF,
-  FunctorPtr<SuperF3D<T,T>>&&        wantedF,
-  FunctorPtr<SuperIndicatorF3D<T>>&& indicatorF)
-  :  SuperF3D<T,T>(sLattice, DESCRIPTOR::q),
-     _f(std::move(f)),
-     _dFdF(std::move(dFdF)),
-     _wantedF(std::move(wantedF)),
-     _indicatorF(std::move(indicatorF))
-{
-  this->getName() = "dRelativeDifferenceObjectiveDf_Lattice";
-
-  SuperL2Norm3D<T> wantedFlp(*_wantedF, *_indicatorF);
-  T output[1] {};
-  wantedFlp(output, nullptr);
-
-  const T globalValue = util::pow(output[0], 2);
-  const T weight = util::pow(sLattice.getCuboidGeometry().getMinDeltaR(), 3);
-  // util::pow(_f->getSuperStructure().getCuboidGeometry().getMinDeltaR(), 3);
-
-  for (int iC = 0; iC < sLattice.getLoadBalancer().size(); ++iC) {
-    this->_blockF.emplace_back(
-      new BlockDrelativeDifferenceObjectiveDf3D<T,DESCRIPTOR>(
-        sLattice.getBlock(iC),
-        _f->getBlockF(iC),
-        _dFdF->getBlockF(iC),
-        _wantedF->getBlockF(iC),
-        _indicatorF->getBlockIndicatorF(iC),
-        globalValue,
-        weight)
-    );
-  }
-}
-
-template <typename T, typename DESCRIPTOR>
-bool DrelativeDifferenceObjectiveDf3D_Lattice<T,DESCRIPTOR>::operator()(T dJdF[], const int latticeR[])
 {
   for (int i=0; i < DESCRIPTOR::q; ++i) {
     dJdF[i] = T{};
@@ -679,7 +574,7 @@ bool BlockDrelativeDifferenceObjectiveComponentDf3D<T,DESCRIPTOR>::operator()(T 
       if (iDim == _extractDim) {
         // Note that by convention wantedF is always one-dimensional.
         // This is why f[0] - wantedF[0] is correct (as compared to f[0] - wantedF[iDim])
-        dJdD[iDim] = (f[0] - wantedF[0]) / _globalValue * _weight*_weight;
+        dJdD[iDim] = (f[0] - wantedF[0]) / _globalValue * _weight;
       }
 
       for (int jPop=0; jPop < DESCRIPTOR::q; ++jPop) {
@@ -711,7 +606,7 @@ DrelativeDifferenceObjectiveComponentDf3D<T,DESCRIPTOR>::DrelativeDifferenceObje
   wantedFlp(output, nullptr);
 
   const T globalValue = util::pow(output[0], 2);
-  const T weight = util::pow(_f.getSuperStructure().getCuboidGeometry().getMinDeltaR(), 3);
+  const T weight = util::pow(_f.getSuperStructure().getCuboidGeometry().getDeltaR(), 3);
 
   for (int iC = 0; iC < sLattice.getLoadBalancer().size(); ++iC) {
     this->_blockF.emplace_back(

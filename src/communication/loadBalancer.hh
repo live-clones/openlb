@@ -66,9 +66,20 @@ void LoadBalancer<T>::swap(LoadBalancer<T>& loadBalancer)
 }
 
 template<typename T>
-bool LoadBalancer<T>::isLocal(const int& glob)
+bool LoadBalancer<T>::isLocal(const int& glob) const
 {
   return rank(glob) == singleton::mpi().getRank();
+}
+
+template<typename T>
+bool LoadBalancer<T>::isLocal(Platform platform) const
+{
+  for (auto [loc, _] : _loc) {
+    if (this->platform(loc) == platform) {
+      return true;
+    }
+  }
+  return false;
 }
 
 template<typename T>
@@ -88,12 +99,6 @@ template<typename T>
 int LoadBalancer<T>::glob(int loc) const
 {
   return _glob[loc];
-}
-
-template<typename T>
-int LoadBalancer<T>::rank(const int& glob)
-{
-  return _rank[glob];
 }
 
 template<typename T>

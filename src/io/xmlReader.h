@@ -1,6 +1,7 @@
 /*  This file is part of the OpenLB library
  *
  *  Copyright (C) 2010 Jonas Latt, Jonas Fietz, Mathias Krause
+ *                2024 Dennis Teutscher
  *  E-mail contact: info@openlb.net
  *  The most recent release of OpenLB can be downloaded at
  *  <http://www.openlb.net/>
@@ -24,8 +25,9 @@
 /** \file
  * Input/Output in XML format -- header file.
  */
-#ifndef XML_IO_H
-#define XML_IO_H
+
+#ifndef OLB_IO_XML_READER_H
+#define OLB_IO_XML_READER_H
 
 #include <string>
 #include <vector>
@@ -34,32 +36,33 @@
 #include <map>
 #include <typeinfo>
 
-#include <tinyxml.h>
+#include <tinyxml2.h>
 
 #include "io/ostreamManager.h"
-#include "communication/mpiManager.h"
 #include "xmlReaderOutput.h"
+
 
 namespace olb {
 
 namespace util {
-  template <class T, unsigned DIM> class ADf;
+
+template <class T, unsigned DIM> class ADf;
+
 }
 
 class XMLreader {
-  friend class olb::XMLreaderOutput;
+private:
+  friend class XMLreaderOutput;
+
 public:
   /**
    * Constructs a new XMLreader from another XMLreader
    * \param pParent The new root node for the XMLreader
    */
-  XMLreader( TiXmlNode* pParent, OutputChannel outputChannel = OutputChannel::ERRCHANNEL);
+  XMLreader(tinyxml2::XMLNode* pParent, OutputChannel outputChannel = OutputChannel::ERRCHANNEL);
   /// Constructs a new XMLreader from a XML file fName
   XMLreader( const std::string& fName, OutputChannel outputChannel = OutputChannel::ERRCHANNEL);
-  /// destructor
   ~XMLreader();
-  /// Prints out the XML structure read in, mostly for debugging purposes
-  //void print(int indent) const;
   /**
    * Read a value from the xml file
    * \param reference to return the value
@@ -104,19 +107,22 @@ public:
 
   /// handling all the output for the XMLreader
   XMLreaderOutput _output;
+
 private:
-  void mainProcessorIni(TiXmlNode* pParent);
-  void slaveProcessorIni();
+  void mainProcessorIni(tinyxml2::XMLNode* pParent);
   XMLreader();
+
 private:
+  OutputChannel _outputChannel;
   mutable bool _warningsOn;
   std::string _text;
   std::string _name;
   static XMLreader _notFound;
-  OutputChannel _outputChannel;
+
 protected:
   std::map<std::string, std::string> _attributes;
   std::vector<XMLreader*> _children;
+
 };
 
 // methods with template
@@ -127,9 +133,9 @@ bool XMLreader::read(util::ADf<T,DIM>& value, bool verboseOn, bool exitIfMissing
   std::stringstream valueStr(_text);
   T tmp = T();
   if (!(valueStr >> tmp)) {
-//    if ( _verboseOn ) {
-//      clout << std::string("Error: cannot read value from XML element ") << _name << std::endl;
-//    }
+    //if ( _verboseOn ) {
+      //clout << std::string("Error: cannot read value from XML element ") << _name << std::endl;
+    //}
     _output.printWarning(_name, "ADf vector", "", verboseOn, exitIfMissing);
     return false;
   }
@@ -172,7 +178,6 @@ T XMLreader::get(bool verboseOn, bool exitIfMissing) const
   }
   return tmp;
 }
-
 
 template<typename ParameterType>
 bool XMLreader::readOrWarn(std::string name_parameter_1,
@@ -241,45 +246,21 @@ XMLreader::XMLreader()
   _output = XMLreaderOutput(OutputChannel::ERRCHANNEL);
 }
 
-XMLreader::XMLreader( TiXmlNode* pParent, OutputChannel outputChannel) : _output(outputChannel)
+XMLreader::XMLreader( tinyxml2::XMLNode* pParent, OutputChannel outputChannel) : _output(outputChannel)
 {
   _outputChannel = outputChannel;
   _warningsOn = true;
 
-  if (singleton::mpi().isMainProcessor()) {
-    mainProcessorIni(pParent);
-  }
-  else {
-    slaveProcessorIni();
-  }
+  mainProcessorIni(pParent);
 }
 
-XMLreader::XMLreader(const std::string& fName, OutputChannel outputChannel) : _output(outputChannel)
+XMLreader::XMLreader(const std::string& fName, OutputChannel outputChannel)
+    : _output(outputChannel), _outputChannel(outputChannel), _warningsOn(true)
 {
-  _outputChannel = outputChannel;
-  _warningsOn = true;
-
-  TiXmlDocument* doc = nullptr;
-  int loadOK = false;
-#ifdef PARALLEL_MODE_MPI  // parallel program execution
-  if (singleton::mpi().isMainProcessor()) {
-#endif
-    std::string docName = std::string(fName);  // call copy constructor
-    doc = new TiXmlDocument(docName.c_str());
-    loadOK = doc->LoadFile();
-    _output.loadFile(loadOK, fName);
-#ifdef PARALLEL_MODE_MPI  // parallel program execution
-  }
-  if (singleton::mpi().isMainProcessor()) {
-#endif
-    mainProcessorIni(doc);
-    delete doc;
-#ifdef PARALLEL_MODE_MPI  // parallel program execution
-  }
-  else {
-    slaveProcessorIni();
-  }
-#endif
+  tinyxml2::XMLDocument doc(true, tinyxml2::COLLAPSE_WHITESPACE);  // Create an instance of TinyXML2's XMLDocument
+  bool loadOK = (doc.LoadFile(fName.c_str()) == tinyxml2::XML_SUCCESS);  // Load the XML file and check for success
+  _output.loadFile(loadOK, fName);  // Call the output's loadFile method
+  mainProcessorIni(&doc);
 }
 
 XMLreader::~XMLreader()
@@ -289,93 +270,42 @@ XMLreader::~XMLreader()
   }
 }
 
-void XMLreader::mainProcessorIni( TiXmlNode* pParent )
+void XMLreader::mainProcessorIni(tinyxml2::XMLNode* pParent)
 {
-  assert (pParent->Type()==TiXmlNode::TINYXML_DOCUMENT || pParent->Type()==TiXmlNode::TINYXML_ELEMENT );
-  if (pParent->Type() == TiXmlNode::TINYXML_DOCUMENT) {
-    // ignore the surrounding PARAM-block
-    pParent = pParent->FirstChildElement();
+  OstreamManager clout("mainProcessorIni");
+  assert(pParent != nullptr);  // Ensure pParent is not null
+  // Check if the parent is a document or element
+  tinyxml2::XMLElement* element = pParent->ToElement();
+  if (element == nullptr && pParent->ToDocument() == nullptr) {
+    // If neither, return or handle the error
+    return; // Handle accordingly
   }
 
-  _name = pParent->ValueStr();
-#ifdef PARALLEL_MODE_MPI  // parallel program execution
-  singleton::mpi().bCast(&_name,1);
-#endif
+  if (pParent->ToDocument() != nullptr) {
+    // Ignore the surrounding PARAM-block by getting the first child element
+    element = pParent->FirstChildElement();
+    if (element == nullptr) return; // Safety check
+  }
 
-  TiXmlAttribute* attr = pParent->ToElement()->FirstAttribute();
+  _name = element->Name();  // Get the name of the element
+
+  // Process attributes
+  const tinyxml2::XMLAttribute* attr = element->FirstAttribute();
   while (attr != nullptr) {
-#ifdef PARALLEL_MODE_MPI  // parallel program execution
-    int size = 0;
-    std::string* key = const_cast<std::string*>(&attr->NameTStr());
-    singleton::mpi().bCast(key, size);
-    std::string* value = const_cast<std::string*>(&attr->ValueStr());
-    singleton::mpi().bCast(value, size);
-#endif
-    _attributes[attr->NameTStr()] = attr->ValueStr();
+    _attributes[attr->Name()] = attr->Value();  // Store attribute name and value
     attr = attr->Next();
   }
-#ifdef PARALLEL_MODE_MPI  // parallel program execution
-  std::string tmpstr = "";
-  int size = 0;
-  singleton::mpi().bCast(&tmpstr, size);
-  singleton::mpi().bCast(&tmpstr, size);
-#endif
 
 
-  TiXmlNode * pChild;
-  int type = 0;
-  for ( pChild = pParent->FirstChild(); pChild != nullptr; pChild = pChild->NextSibling()) {
-    type = pChild->Type();
-#ifdef PARALLEL_MODE_MPI  // parallel program execution
-    singleton::mpi().bCast(&type, 1);
-#endif
-    if ( type==TiXmlNode::TINYXML_ELEMENT ) {
-      _children.push_back( new XMLreader( pChild , _outputChannel) );
+  // Process child nodes
+  for (tinyxml2::XMLNode* pChild = element->FirstChild(); pChild != nullptr; pChild = pChild->NextSibling()) {
+    if (pChild->ToElement()) {  // Check if the child is an element
+      _children.push_back(new XMLreader(pChild->ToElement(), _outputChannel));
+      }
+      else if (pChild->ToText()) {  // Check if the child is text
+        _text = pChild->ToText()->Value();
+      }
     }
-    else if ( type==TiXmlNode::TINYXML_TEXT ) {
-      _text = pChild->ToText()->ValueStr();
-#ifdef PARALLEL_MODE_MPI  // parallel program execution
-      singleton::mpi().bCast(&_text,1);
-#endif
-    }
-  }
-  type = TiXmlNode::TINYXML_UNKNOWN;
-#ifdef PARALLEL_MODE_MPI  // parallel program execution
-  singleton::mpi().bCast(&type, 1);
-#endif
-}
-
-void XMLreader::slaveProcessorIni()
-{
-#ifdef PARALLEL_MODE_MPI  // parallel program execution
-
-  singleton::mpi().bCast(&_name,1);
-  std::string key = "";
-  std::string value = "";
-  int size = int();
-  do {
-    singleton::mpi().bCast(&key, size);
-    singleton::mpi().bCast(&value, size);
-    _attributes[key] = value;
-  }
-  while (key != "");
-#endif
-
-  int type=0;
-  do {
-#ifdef PARALLEL_MODE_MPI  // parallel program execution
-    singleton::mpi().bCast(&type, 1);
-#endif
-    if ( type==TiXmlNode::TINYXML_ELEMENT ) {
-      _children.push_back( new XMLreader( nullptr, _outputChannel ) );
-    }
-    else if ( type==TiXmlNode::TINYXML_TEXT ) {
-#ifdef PARALLEL_MODE_MPI  // parallel program execution
-      singleton::mpi().bCast(&_text,1);
-#endif
-    }
-  }
-  while (type != TiXmlNode::TINYXML_UNKNOWN);
 }
 
 XMLreader const& XMLreader::operator[] (std::string fName) const
@@ -417,7 +347,7 @@ void XMLreader::setWarningsOn(bool warnings) const
   }
 }
 
-// template specialization for T=bool
+// templatde specialization for T=bool
 template <>
 bool XMLreader::read<bool>(bool& value, bool verboseOn, bool exitIfMissing) const
 {
@@ -545,10 +475,8 @@ std::string XMLreader::getAttribute(const std::string& aName) const
     return "Attribute not found.";
   }
   return it->second;
-  //return attributes[aName];
 }
 
+}
 
-}  // namespace olb
-
-#endif  // XML_IO_H
+#endif  // OLB_IO_XML_READER_H

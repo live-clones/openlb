@@ -64,6 +64,10 @@ public:
     return _mask.deviceData();
   }
 
+  AbstractColumn<bool>& asAbstract() {
+    return _mask;
+  }
+
   void setProcessingContext(ProcessingContext context) {
     if (_modified && context == ProcessingContext::Simulation) {
       _mask.setProcessingContext(context);

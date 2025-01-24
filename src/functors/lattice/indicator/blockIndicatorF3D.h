@@ -24,6 +24,8 @@
 #ifndef BLOCK_INDICATOR_F_3D_H
 #define BLOCK_INDICATOR_F_3D_H
 
+#include <list>
+
 #include "blockIndicatorBaseF3D.h"
 #include "functors/analytical/indicator/smoothIndicatorBaseF3D.h"
 
@@ -52,6 +54,33 @@ public:
   Vector<int,3> getMax() override;
 };
 
+/// Block indicator helper for people that don't like writing boilerplate
+template <typename T>
+class BlockIndicatorFfromCallableF3D : public BlockIndicatorF3D<T> {
+protected:
+  std::function<bool(LatticeR<3>)> _callableF;
+
+public:
+  template <typename F>
+  BlockIndicatorFfromCallableF3D(BlockGeometry<T,3>& blockGeometry, F&& f)
+  : BlockIndicatorF3D<T>(blockGeometry)
+  , _callableF(f)
+  { }
+
+  using BlockIndicatorF3D<T>::operator();
+
+  bool operator() (bool output[], const int input[]) override {
+    output[0] = _callableF(input);
+    return true;
+  }
+
+  Vector<int,3> getMin() override {
+    return std::numeric_limits<int>::min();
+  }
+  Vector<int,3> getMax() override {
+    return std::numeric_limits<int>::max();
+  }
+};
 
 /// BlockIndicatorF3D from SmoothIndicatorF3D
 template <typename T, bool HLBM>
@@ -113,6 +142,27 @@ public:
   Vector<int,3> getMax() override;
 };
 
+/// Block indicator threshold for external field
+template <typename T, typename DESCRIPTOR, typename FIELD>
+class BlockIndicatorFieldThreshold3D : public BlockIndicatorF3D<T> {
+protected:
+  BlockLattice<T,DESCRIPTOR>& _blockLattice;
+  const std::vector<int> _materials;
+  T _thresholdValue;
+  std::string _condition;
+public:
+  BlockIndicatorFieldThreshold3D(BlockGeometry<T,3>& blockGeometry, BlockLattice<T,DESCRIPTOR>& blockLattice, std::vector<int> materials, T thresholdValue, std::string condition);
+
+  using BlockIndicatorF3D<T>::operator();
+  bool operator() (bool output[], const int input[]) override;
+  /// Returns true iff indicated domain subset is empty
+  bool isEmpty() override;
+  /// Returns min lattice position of the indicated domain's bounding box
+  Vector<int,3> getMin() override;
+  /// Returns max lattice position of the indicated domain's bounding box
+  Vector<int,3> getMax() override;
+};
+
 /// Block indicator extended by a layer
 template <typename T>
 class BlockIndicatorLayer3D : public BlockIndicatorF3D<T> {
@@ -166,6 +216,24 @@ public:
    * \param g Block indicator to be multiplied
    **/
   BlockIndicatorMultiplication3D(BlockIndicatorF3D<T>& f, BlockIndicatorF3D<T>& g);
+
+  using BlockIndicatorF3D<T>::operator();
+  bool operator() (bool output[], const int input[]) override;
+
+  /// Returns min lattice position of the indicated domain's bounding box
+  Vector<int,3> getMin() override;
+  /// Returns max lattice position of the indicated domain's bounding box
+  Vector<int,3> getMax() override;
+};
+
+/// Block indicator substraction
+template <typename T>
+class BlockIndicatorSubstraction3D : public BlockIndicatorF3D<T> {
+protected:
+  BlockIndicatorF3D<T>& _f;
+  BlockIndicatorF3D<T>& _g;
+public:
+  BlockIndicatorSubstraction3D(BlockIndicatorF3D<T>& f, BlockIndicatorF3D<T>& g);
 
   using BlockIndicatorF3D<T>::operator();
   bool operator() (bool output[], const int input[]) override;

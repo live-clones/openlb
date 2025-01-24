@@ -1,4 +1,5 @@
 #include <core/core2D.h>
+#include <descriptor/descriptor.h>
 #include <boundary/boundary2D.h>
 #include <communication/communication.h>
 #include <datatype.h>
@@ -11,3 +12,5 @@
 #include <optimization/opti2D.h>
 #include <utilities/utilities2D.h>
 #include <particles/particles.h>
+#include <fsi/fsi.h>
+#include <refinement/refinement.h>

@@ -54,13 +54,15 @@ struct Dynamics {
   virtual void defineRhoU      (DataOnlyCell<T,DESCRIPTOR>& cell, T& rho, T* u       ) __device__ = 0;
   virtual void defineAllMomenta(DataOnlyCell<T,DESCRIPTOR>& cell, T& rho, T* u, T* pi) __device__ = 0;
 
-  virtual T computeEquilibrium(int iPop, T rho, T* u) __device__ = 0;
+  virtual void computeEquilibrium(DataOnlyCell<T,DESCRIPTOR>& cell, T& rho, T* u, T* fEq) __device__ = 0;
 
   virtual T getOmegaOrFallback(T fallback) __device__ = 0;
 
   void iniEquilibrium(DataOnlyCell<T,DESCRIPTOR>& cell, T rho, T* u) __device__ {
+    T fEq[DESCRIPTOR::q] { };
+    computeEquilibrium(cell, rho, u, fEq);
     for (unsigned iPop=0; iPop < DESCRIPTOR::q; ++iPop) {
-      cell[iPop] = computeEquilibrium(iPop, rho, u);
+      cell[iPop] = fEq[iPop];
     }
   }
 
@@ -119,8 +121,8 @@ public:
     }
   }
 
-  T computeEquilibrium(int iPop, T rho, T* u) override __device__ {
-    return DYNAMICS().computeEquilibrium(iPop, rho, u);
+  void computeEquilibrium(DataOnlyCell<T,DESCRIPTOR>& cell, T& rho, T* u, T* fEq) override __device__ {
+    DYNAMICS::EquilibriumF().compute(cell, rho, u, fEq);
   }
 
   void defineRho(DataOnlyCell<T,DESCRIPTOR>& cell, T& rho) override __device__ {

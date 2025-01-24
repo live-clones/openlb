@@ -23,7 +23,7 @@
 
 #include "blockLatticeIntegralF2D.h"
 #include "blockLatticeIntegralF2D.hh"
-#include "dynamics/latticeDescriptors.h"
+#include "descriptor/descriptor.h"
 #include "latticeInterpPhysVelocity2D.h"
 
 namespace olb {

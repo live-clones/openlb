@@ -125,7 +125,7 @@ BlockLatticeSTLreader<T>::BlockLatticeSTLreader(CuboidGeometry3D<T>& cbg3d, Load
 
   clout <<"creating of the lists for signed distance function"<< std::endl;
   _trianglesInCuboidList.resize(_loadBalancer.size());
-  //_cuboidGeometry.getNc();
+  //_cuboidGeometry.size();
   for( int iC=0; iC < _loadBalancer.size();iC++)
   {
     //_trainglesInCuboidList.emplace_back();
@@ -134,7 +134,7 @@ BlockLatticeSTLreader<T>::BlockLatticeSTLreader(CuboidGeometry3D<T>& cbg3d, Load
   for (STLtriangle<T>& triangle : _mesh.getTriangles())
   {
     Vector<T,3> center = triangle.getCenter() ;
-    if (cuboid.checkInters(center[0], center[1], center[2], 3))
+    if (cuboid.intersects(center[0], center[1], center[2], 3))
     {
       _trianglesInCuboidList[iC].push_back(triangle);
 

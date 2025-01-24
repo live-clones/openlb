@@ -31,13 +31,6 @@
 
 namespace olb {
 
-/**
-* This class computes the finite difference approximation to LB boundary conditions
-* on a flat wall in 2D with all the terms of the CE expansion. The details
-* on the computations can be found in the thesis of
-* Jonas Latt, "Hydrodynamic limit of lattice Boltzmann equations",
-* University of Geneva, (2007).
-*/
 template<typename T, typename DESCRIPTOR, int direction, int orientation>
 class ExtendedStraightFdBoundaryPostProcessor2D : public LocalPostProcessor2D<T,DESCRIPTOR> {
 public:

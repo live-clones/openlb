@@ -108,7 +108,7 @@ void LatticeStatistics<T>::reset()
 
 template<typename T>
 void LatticeStatistics<T>::reset (
-  T average_rho_, T average_energy_, T maxU_, size_t numCells_ )
+  T average_rho_, T average_energy_, T maxU_, std::size_t numCells_ )
 {
   averageVect[avRho]    = average_rho_;
   averageVect[avEnergy] = average_energy_;
@@ -256,7 +256,7 @@ T LatticeStatistics<T>::getMaxU() const
 }
 
 template<typename T>
-size_t const& LatticeStatistics<T>::getNumCells() const
+std::size_t LatticeStatistics<T>::getNumCells() const
 {
   return numCells;
 }
@@ -334,13 +334,12 @@ size_t LatticeStatistics<T>::getTime() const
 template<typename T>
 void LatticeStatistics<T>::print(int iterationStep, T physicalTime) const
 {
-  clout
-      << "step=" << iterationStep << "; "
-      << "t=" << physicalTime << "; "
-      << "uMax=" << getMaxU() << "; "
-      << "avEnergy=" << getAverageEnergy() << "; "
-      << "avRho=" << getAverageRho()
-      << std::endl;
+  clout << "step="      << iterationStep      << "; "
+        << "physT="     << physicalTime       << "; "
+        << "maxCFL="    << getMaxU()          << "; "
+        << "avgEnergy=" << getAverageEnergy() << "; "
+        << "avgRho="    << getAverageRho()
+        << std::endl;
 }
 
 }  // namespace olb

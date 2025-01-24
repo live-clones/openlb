@@ -41,16 +41,10 @@
 
 namespace olb {
 
-template<typename T,typename DESCRIPTOR>
-SuperLatticeGeometry2D<T,DESCRIPTOR>::SuperLatticeGeometry2D(
-  SuperLattice<T,DESCRIPTOR>& sLattice, SuperGeometry<T,2>& superGeometry,
+template<typename T>
+SuperGeometryF2D<T>::SuperGeometryF2D(
+  SuperGeometry<T,2>& superGeometry,
   const int material)
-  : SuperLatticeGeometry2D<T,DESCRIPTOR>(superGeometry, material)
-{ }
-
-template<typename T,typename DESCRIPTOR>
-SuperLatticeGeometry2D<T,DESCRIPTOR>::SuperLatticeGeometry2D(
-  SuperGeometry<T,2>& superGeometry, const int material)
   : SuperF2D<T>(superGeometry, 1), _superGeometry(superGeometry),
     _material(material)
 {
@@ -58,28 +52,22 @@ SuperLatticeGeometry2D<T,DESCRIPTOR>::SuperLatticeGeometry2D(
   const int maxC = superGeometry.getLoadBalancer().size();
   this->_blockF.reserve(maxC);
   for (int iC = 0; iC < maxC; iC++) {
-    this->_blockF.emplace_back( new  BlockLatticeGeometry2D<T,DESCRIPTOR>(
+    this->_blockF.emplace_back( new  BlockLatticeGeometry2D<T>(
                                   this->_superGeometry.getBlockGeometry(iC),
                                   _material) );
   }
 }
 
-template <typename T, typename DESCRIPTOR>
-BlockLatticeGeometry2D<T,DESCRIPTOR>::BlockLatticeGeometry2D
-(BlockLattice<T,DESCRIPTOR>& blockLattice, BlockGeometry<T,2>& blockGeometry, int material)
-  : BlockLatticeGeometry2D<T,DESCRIPTOR>(blockGeometry, material)
-{ }
-
-template <typename T, typename DESCRIPTOR>
-BlockLatticeGeometry2D<T,DESCRIPTOR>::BlockLatticeGeometry2D
+template <typename T>
+BlockLatticeGeometry2D<T>::BlockLatticeGeometry2D
 (BlockGeometry<T,2>& blockGeometry, int material)
   : BlockF2D<T>(blockGeometry,1), _blockGeometry(blockGeometry), _material(material)
 {
   this->getName() = "geometry";
 }
 
-template <typename T, typename DESCRIPTOR>
-bool BlockLatticeGeometry2D<T,DESCRIPTOR>::operator() (T output[], const int input[])
+template <typename T>
+bool BlockLatticeGeometry2D<T>::operator() (T output[], const int input[])
 {
   const int materialTmp = _blockGeometry.getMaterial( {input[0], input[1]} );
 

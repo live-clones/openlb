@@ -27,11 +27,9 @@
 
 
 #include "communication/mpiManager.h"
-#include "geometry/cuboidGeometry2D.h"
-#include "geometry/cuboid3D.h"
-#include "geometry/cuboid3D.hh"
-#include "geometry/cuboidGeometry3D.h"
-#include "geometry/cuboidGeometry3D.hh"
+#include "geometry/cuboid.h"
+#include "geometry/cuboidGeometry.h"
+#include "geometry/cuboidGeometry.hh"
 #include "communication/loadBalancer.h"
 
 

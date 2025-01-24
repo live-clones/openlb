@@ -1,5 +1,5 @@
-all: lib zlib tinyxml
-.PHONY: zlib tinyxml
+all: lib zlib tinyxml2
+.PHONY: zlib tinyxml2
 
 lib:
 	mkdir lib
@@ -11,19 +11,12 @@ zlib:
 clean_zlib:
 	make -C zlib clean
 
-#getopt:
-#	make -C getopt
-#	cp getopt/build/ lib/
-#
-#clean_getopt:
-#	make -C getopt clean
+tinyxml2:
+	make -C tinyxml2
+	cp tinyxml2/build/libtinyxml2.a lib/
 
-tinyxml:
-	make -C tinyxml
-	cp tinyxml/build/libtinyxml.a lib/
+clean_tinyxml2:
+	make -C tinyxml2 clean
 
-clean_tinyxml:
-	make -C tinyxml clean
-
-clean: clean_zlib clean_tinyxml
-	rm -f lib/libz.a lib/libtinyxml.a
+clean: clean_zlib clean_tinyxml2
+	rm -f lib/libz.a lib/libtinyxml2.a

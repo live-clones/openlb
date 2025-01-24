@@ -26,8 +26,6 @@
 
 #include "nanoflann.hpp"
 
-using namespace nanoflann;
-
 namespace olb {
 
 template<typename T, template<typename U> class PARTICLETYPE>
@@ -90,7 +88,7 @@ class NanoflannContact : public ContactDetection<T, PARTICLETYPE> {
 
   NanoflannContact(ParticleSystem3D<T, PARTICLETYPE>& pSys, T sRad) : ContactDetection<T, PARTICLETYPE> (pSys, "Nanoflann"),
   _pc2kd(pSys),
-  _index(3,_pc2kd, KDTreeSingleIndexAdaptorParams(10) ),
+  _index(3,_pc2kd, nanoflann::KDTreeSingleIndexAdaptorParams(10) ),
   _sRad2(sRad*sRad),
   _sRad(sRad)
  {
@@ -114,7 +112,7 @@ class NanoflannContact : public ContactDetection<T, PARTICLETYPE> {
  private:
     typedef NanoflannParticleAdaptor<T, ParticleSystem3D<T, PARTICLETYPE> > PC2KD;
     const PC2KD _pc2kd;
-    typedef KDTreeSingleIndexAdaptor<L2_Simple_Adaptor<T, PC2KD > ,PC2KD, 3> kd_tree;
+    typedef nanoflann::KDTreeSingleIndexAdaptor<nanoflann::L2_Simple_Adaptor<T, PC2KD > ,PC2KD, 3> kd_tree;
     kd_tree _index;
     nanoflann::SearchParams _params;
     T _sRad2;

@@ -43,25 +43,33 @@ namespace olb {
 
 template<typename T, typename DESCRIPTOR>
 SuperLatticePhysEffectiveDissipation3D<T, DESCRIPTOR>::SuperLatticePhysEffectiveDissipation3D(
-  SuperLattice<T, DESCRIPTOR>& sLattice, const UnitConverter<T,DESCRIPTOR>& converter, T smagoConst,
-                                         std::function<T(Cell<T,DESCRIPTOR>&)> effectiveOmegaF)
+  SuperLattice<T, DESCRIPTOR>& sLattice, const UnitConverter<T,DESCRIPTOR>& converter,
+  T smagoConst, std::function<T(Cell<T,DESCRIPTOR>&)> effectiveOmegaF)
   : SuperLatticePhysF3D<T, DESCRIPTOR>(sLattice, converter, 1)
 {
   this->getName() = "physEffectiveDissipation";
-  int maxC = this->_sLattice.getLoadBalancer().size();
+  const int maxC = this->_sLattice.getLoadBalancer().size();
   this->_blockF.reserve(maxC);
   for (int iC = 0; iC < maxC; iC++) {
-    this->_blockF.emplace_back(new BlockLatticePhysEffectiveDissipation3D<T, DESCRIPTOR>(this->_sLattice.getBlock(iC),
-                               this->_converter, smagoConst, effectiveOmegaF));
+    this->_blockF.emplace_back(
+      new BlockLatticePhysEffectiveDissipation3D<T, DESCRIPTOR>(
+        this->_sLattice.getBlock(iC),
+        this->_converter,
+        smagoConst,
+        effectiveOmegaF));
   }
 }
 
 template<typename T, typename DESCRIPTOR>
 BlockLatticePhysEffectiveDissipation3D<T, DESCRIPTOR>::BlockLatticePhysEffectiveDissipation3D(
-  BlockLattice<T, DESCRIPTOR>& blockLattice, const UnitConverter<T,DESCRIPTOR>& converter, T smagoConst,
+  BlockLattice<T, DESCRIPTOR>& blockLattice,
+  const UnitConverter<T,DESCRIPTOR>& converter,
+  T smagoConst,
   std::function<T(Cell<T,DESCRIPTOR>&)> effectiveOmegaF)
   : BlockLatticeF3D<T, DESCRIPTOR>(blockLattice, 1),
-    _converter(converter), _smagoConst(smagoConst), _effectiveOmegaF(effectiveOmegaF)
+    _converter(converter),
+    _smagoConst(smagoConst),
+    _effectiveOmegaF(effectiveOmegaF)
 {
   this->getName() = "physEffectiveDissipation";
 }
@@ -70,24 +78,21 @@ template<typename T, typename DESCRIPTOR>
 bool BlockLatticePhysEffectiveDissipation3D<T, DESCRIPTOR>::operator()(T output[], const int input[])
 {
   T rho, uTemp[DESCRIPTOR::d], pi[util::TensorVal<DESCRIPTOR >::n];
-  this->_blockLattice.get(input[0], input[1], input[2]).computeAllMomenta(rho,
-      uTemp,
-      pi);
+  this->_blockLattice.get(input[0], input[1], input[2]).computeAllMomenta(rho, uTemp, pi);
 
   T PiNeqNormSqr = pi[0] * pi[0] + 2. * pi[1] * pi[1] + pi[2] * pi[2];
   if (util::TensorVal<DESCRIPTOR >::n == 6) {
-    PiNeqNormSqr += pi[2] * pi[2] + pi[3] * pi[3] + 2. * pi[4] * pi[4]
-                    + pi[5] * pi[5];
+    PiNeqNormSqr += pi[2] * pi[2] + pi[3] * pi[3] + 2. * pi[4] * pi[4] + pi[5] * pi[5];
   }
 
-  T dt = 1./ _converter.getConversionFactorTime();
   auto cell = this->_blockLattice.get(input[0], input[1], input[2]);
-  T omegaEff = _effectiveOmegaF(cell);
+  T dt = this->_converter.getConversionFactorTime();
+  T omegaEff = this->_effectiveOmegaF(cell);
   T nuEff = ((1./omegaEff)-0.5)/descriptors::invCs2<T,DESCRIPTOR>();  // BGK shear viscosity definition
 
   output[0] = PiNeqNormSqr * nuEff
               * util::pow(omegaEff * descriptors::invCs2<T,DESCRIPTOR>() / rho, 2) / 2.
-              * _converter.getPhysViscosity() / _converter.getLatticeViscosity() / dt / dt;
+              * this->_converter.getPhysViscosity() / this->_converter.getLatticeViscosity() / dt / dt;
 
   return true;
 }

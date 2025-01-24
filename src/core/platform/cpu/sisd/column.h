@@ -93,7 +93,7 @@ public:
     return _data[i];
   }
 
-  std::size_t size() const
+  std::size_t size() const override
   {
     return _count;
   }
@@ -169,7 +169,7 @@ public:
     return (i > _remainder ? _start[1] : _start[0])[i];
   }
 
-  std::size_t size() const
+  std::size_t size() const override
   {
     return _count;
   }

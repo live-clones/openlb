@@ -27,8 +27,7 @@
 
 #include "utilities/aliases.h"
 
-#include "geometry/cuboidGeometry2D.h"
-#include "geometry/cuboidGeometry3D.h"
+#include "geometry/cuboidDecomposition.h"
 
 #include "communication/loadBalancer.h"
 
@@ -38,8 +37,8 @@ namespace olb {
 template<typename T, unsigned D>
 class SuperStructure {
 protected:
-  /// The grid structure is stored here
-  CuboidGeometry<T,D>& _cuboidGeometry;
+  /// The grid structure is referenced here
+  CuboidDecomposition<T,D>& _cuboidGeometry;
   /// Distribution of the cuboids of the cuboid structure
   LoadBalancer<T>& _loadBalancer;
   /// Size of ghost cell layer (must be greater than 1 and
@@ -53,16 +52,15 @@ public:
 
   /// Virtual Destructor for inheritance
   virtual ~SuperStructure() {};
+
   /// Construction of a super structure
-  SuperStructure(CuboidGeometry<T,D>& cuboidGeometry,
+  SuperStructure(CuboidDecomposition<T,D>& cuboidGeometry,
                  LoadBalancer<T>& loadBalancer, int overlap = 2);
-  /// Default Constructor for empty SuperStructure
-  SuperStructure(int overlap = 1);
 
   /// Read and write access to cuboid geometry
-  CuboidGeometry<T,D>& getCuboidGeometry();
+  CuboidDecomposition<T,D>& getCuboidGeometry();
   /// Read only access to cuboid geometry
-  CuboidGeometry<T,D> const& getCuboidGeometry() const;
+  const CuboidDecomposition<T,D>& getCuboidGeometry() const;
 
   /// Read and write access to the overlap
   int getOverlap();
@@ -76,23 +74,6 @@ public:
 
   virtual void communicate() { };
 
-  /// Iterate over discrete physical locations
-  template <typename F>
-  void forCorePhysLocations(F f) const;
-
-  /// Iterate over discrete physical locations between min and max
-  template <typename F>
-  void forCorePhysLocations(PhysR<T,D> min, PhysR<T,D> max, F f) const;
-
-  /// Iterate over spatial locations
-  /// NOTE: Based on physical locations (as opposed to its blockStructure version)
-  template <typename F>
-  void forCoreSpatialLocations(F f) const;
-
-  /// Iterate over spatial locations between min and max
-  /// NOTE: Based on physical locations (as opposed to its blockStructure version)
-  template <typename F>
-  void forCoreSpatialLocations(PhysR<T,D> min, PhysR<T,D> max, F f) const;
 };
 
 

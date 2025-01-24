@@ -6,17 +6,20 @@ all: dependencies core $(EXAMPLE)
 
 INCLUDE_DIRS := $(OLB_ROOT)/src
 
-ifeq ($(USE_EMBEDDED_DEPENDENCIES), ON)
+ifneq ($(USE_EMBEDDED_DEPENDENCIES), OFF)
 INCLUDE_DIRS += \
 	$(OLB_ROOT)/external/zlib \
-	$(OLB_ROOT)/external/tinyxml
+	$(OLB_ROOT)/external/tinyxml2
 
 LDFLAGS := -L$(OLB_ROOT)/external/lib $(LDFLAGS)
 
 dependencies:
 	$(MAKE) -C $(OLB_ROOT)/external
+
+clean-dependencies:
+	$(MAKE) -C $(OLB_ROOT)/external clean
 else
-.PHONY: dependencies
+.PHONY: dependencies clean-dependencies
 endif
 
 LDFLAGS += -L$(OLB_ROOT)/build/lib
@@ -43,7 +46,10 @@ build/missing.txt: $(OBJ_FILES)
 EXPLICIT_METHOD_INSTANTIATION := \
 	FieldTypeRegistry \
 	StatisticsPostProcessor \
-	checkPlatform
+	IntegratePorousBoundaryForceO \
+	IntegratePorousBoundaryStressO \
+	checkPlatform \
+	getFusedCollision
 
 EXPLICIT_CLASS_INSTANTIATION := \
 	Column \
@@ -51,17 +57,20 @@ EXPLICIT_CLASS_INSTANTIATION := \
 	ConcreteBlockO \
 	ConcreteBlockCollisionO \
 	ConcreteBlockCouplingO \
+	ConcreteBlockPointCouplingO \
+	ConcreteBlockRefinementO \
 	ConcreteCommunicatable \
 	ConcreteBlockCommunicator \
 	HeterogeneousCopyTask \
 	ConcreteParametersD \
-	FieldTypeRegistry \
 	unique_ptr \
-	StatisticsPostProcessor
+	StatisticsPostProcessor \
+	IntegratePorousBoundaryForceO \
+	IntegratePorousBoundaryStressO
 
 OLB_MIXED_MODE_INCLUDE := \#include <olb.h>\n
 ifdef OLB_MIXED_MODE_INCLUDE_CPP
-	OLB_MIXED_MODE_INCLUDE := $(CPP_FILES:%=\n#include "../%")
+	OLB_MIXED_MODE_INCLUDE := $(CPP_FILES:%=\n#include "../%"\n)
 endif
 
 build/olbcuda.cu: build/missing.txt
@@ -73,15 +82,20 @@ build/olbcuda.cu: build/missing.txt
 # - adding the explicit instantiation prefix (all supported methods are void, luckily)
 	cat build/missing.txt \
 	| grep '$(subst $() $(),\|,$(EXPLICIT_METHOD_INSTANTIATION))' \
-	| grep -wv '.*\~.*\|FieldTypeRegistry()' \
-	| xargs -0 -n1 | grep . \
-	| sed -e 's/.*/template void &;/' -e 's/void void/void/' >> $@
+	| grep -wv '.*~.*\|FieldTypeRegistry()' \
+	| sed -e 's/.*/template void &;/' -e 's/void void/void/' -e 's/void std::function/std::function/' >> $@
+# | xargs -0 -n1 | grep . \
 # - filtering for a set of known and automatically instantiable classes
 # - dropping method cruft and wrapping into explicit class instantiation
 # - removing duplicates
 	cat build/missing.txt \
 	| grep '.*\($(subst $() $(),\|,$(EXPLICIT_CLASS_INSTANTIATION))\)<' \
-	| sed -e 's/\.*>::.*/>/' -e 's/.*/template class &;/' -e 's/class void/class/' \
+	| sed -e 's/>::~\?[[:alnum:]]\+\[\?\]\?(.*)/>/' -e 's/.*/template class &;/' -e 's/class void/class/' \
+	| sort | uniq >> $@
+# Handle FieldTypeRegistry
+	cat build/missing.txt \
+  | sed -n 's/\(olb::FieldTypeRegistry<.*(olb::Platform)[0-9]>\)::.*/\1/p' \
+	| sed -e 's/.*/template class &;/' -e 's/class void/class/' \
 	| sort | uniq >> $@
 
 CUDA_CPP_FILES := build/olbcuda.cu
@@ -98,7 +112,7 @@ build/olbcuda.version: $(CUDA_OBJ_FILES)
 # - dropping the shared library location information
 # - postfixing by semicolons
 	nm $(CUDA_OBJ_FILES) \
-	| grep '$(subst $() $(),\|,$(EXPLICIT_CLASS_INSTANTIATION))\|cuda.*device\|checkPlatform' \
+	| grep '$(subst $() $(),\|,$(EXPLICIT_CLASS_INSTANTIATION))\|cuda.*device\|checkPlatform\|getFusedCollision\|FieldTypeRegistry' \
 	| grep -wv '.*sisd.*' \
 	| cut -c 20- \
 	| sed 's/$$/;/' >> $@
@@ -123,7 +137,7 @@ no-cuda-recompile: $(EXAMPLE)-no-cuda-recompile
 clean-tmp:
 	rm -f tmp/*.* tmp/vtkData/*.* tmp/vtkData/data/*.* tmp/imageData/*.* tmp/imageData/data/*.* tmp/gnuplotData/*.* tmp/gnuplotData/data/*.*
 
-.PHONE: clean-core
+.PHONY: clean-core
 clean-core:
 	make -C $(OLB_ROOT) clean-core
 

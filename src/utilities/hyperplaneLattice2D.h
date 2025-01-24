@@ -25,7 +25,7 @@
 #define HYPERPLANE_LATTICE_2D_H
 
 #include "core/vector.h"
-#include "geometry/cuboidGeometry2D.h"
+#include "geometry/cuboidGeometry.h"
 #include "hyperplane2D.h"
 
 namespace olb {
@@ -33,12 +33,12 @@ namespace olb {
 /// Parametrization of a hyperplane lattice (i.e. a line lattice).
 /**
  * This class provides a common interface for describing how to discretize the intersection
- * of a hyperplane given by Hyperplane2D<T> and the mother cuboid of CuboidGeometry2D<T>.
+ * of a hyperplane given by Hyperplane2D<T> and the mother cuboid of CuboidDecomposition<T,2>.
  **/
 template <typename T>
 class HyperplaneLattice2D {
 private:
-  CuboidGeometry2D<T>&  _geometry;
+  CuboidDecomposition<T,2>&  _geometry;
 
   /// \return max possible distance
   int computeMaxLatticeDistance() const;
@@ -68,16 +68,16 @@ protected:
 public:
   /// Constructor for automatic discretization.
   /**
-   * i.e. the grid width is set to CuboidGeometry2D<T>::getMinDeltaR.
+   * i.e. the grid width is set to CuboidDecomposition<T,2>::getDeltaR.
    **/
-  HyperplaneLattice2D(CuboidGeometry2D<T>& geometry,
+  HyperplaneLattice2D(CuboidDecomposition<T,2>& geometry,
                       Hyperplane2D<T>      hyperplane);
   /// Constructor for discretization of a given resolution.
-  HyperplaneLattice2D(CuboidGeometry2D<T>& geometry,
+  HyperplaneLattice2D(CuboidDecomposition<T,2>& geometry,
                       Hyperplane2D<T>      hyperplane,
                       int                  resolution);
   /// Constructor for discretization of a given grid width.
-  HyperplaneLattice2D(CuboidGeometry2D<T>& geometry,
+  HyperplaneLattice2D(CuboidDecomposition<T,2>& geometry,
                       Hyperplane2D<T>      hyperplane,
                       T                    h);
 

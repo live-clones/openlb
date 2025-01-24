@@ -57,7 +57,7 @@ const std::vector<unsigned int> ParticleContact<D>::indicesSingle({0});
 // TODO: struct IgnoreParticleContact : ParticleContact {};
 
 /// An object holding data for a contact which is described analog to Nassauer and Kuna (2013)
-template <typename T, unsigned D, bool CONVEX>
+template <typename T, unsigned D, bool CONVEX = true>
 struct ParticleContactArbitraryFromOverlapVolume : ParticleContact<D> {
 private:
   /// position of the particle (necessary for periodic setups)

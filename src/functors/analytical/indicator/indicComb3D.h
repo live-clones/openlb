@@ -47,6 +47,7 @@ protected:
   std::shared_ptr<IndicatorF3D<S>> _g;
 public:
   virtual S signedDistance( const Vector<S,3>& input )=0;
+  virtual S signedDistanceExact( const Vector<S,3>& input )=0;
   bool operator() (bool output[], const S input[3]);
 };
 
@@ -56,6 +57,7 @@ class IndicPlus3D : public IndicComb3D<S,util::plus> {
 public:
   IndicPlus3D( std::shared_ptr<IndicatorF3D<S>> f, std::shared_ptr<IndicatorF3D<S>> g );
   S signedDistance( const Vector<S,3>& input ) override;
+  S signedDistanceExact( const Vector<S,3>& input ) override;
 };
 
 /// Subtraction
@@ -64,6 +66,7 @@ class IndicMinus3D : public IndicComb3D<S,util::minus> {
 public:
   IndicMinus3D( std::shared_ptr<IndicatorF3D<S>> f, std::shared_ptr<IndicatorF3D<S>> g );
   S signedDistance( const Vector<S,3>& input ) override;
+  S signedDistanceExact( const Vector<S,3>& input ) override;
 };
 
 /// Intersection
@@ -72,6 +75,7 @@ class IndicMultiplication3D : public IndicComb3D<S,util::multiplies> {
 public:
   IndicMultiplication3D( std::shared_ptr<IndicatorF3D<S>> f, std::shared_ptr<IndicatorF3D<S>> g );
   S signedDistance( const Vector<S,3>& input ) override;
+  S signedDistanceExact( const Vector<S,3>& input ) override;
 };
 
 /** Free function implements lhs+rhs, only for IndicaotrsF3D types through enable_if and is_base_of

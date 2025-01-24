@@ -35,7 +35,7 @@
 #include <string>
 #include "core/singleton.h"
 #include "communication/loadBalancer.h"
-#include "geometry/cuboidGeometry2D.h"
+#include "geometry/cuboidGeometry.h"
 #include "communication/mpiManager.h"
 #include "io/base64.h"
 #include "io/fileName.h"
@@ -52,6 +52,132 @@ SuperVTMwriter2D<T,OUT_T,W>::SuperVTMwriter2D( std::string name, int overlap, bo
   static_assert(std::is_same_v<OUT_T, float> || std::is_same_v<OUT_T, double>,
               "OUT_T must be either float or double");
 }
+
+template<typename T, typename OUT_T, typename W>
+void SuperVTMwriter2D<T,OUT_T,W>::extremes( int nMinOut[], int nMaxOut[],
+        CuboidGeometry2D<T> const& cGeometry, LoadBalancer<T>& load, std::vector<T> rMin, std::vector<T> rMax, int iCloc)
+{
+  std::vector<int> nMinCuboid { load.glob(iCloc), 0, 0 };
+  std::vector<int> nMaxCuboid { load.glob(iCloc), cGeometry.get(load.glob(iCloc)).getNx() ,cGeometry.get(load.glob(iCloc)).getNy() };
+
+  std::vector<T> rMinCuboid = cGeometry.getPhysR(nMinCuboid);
+  std::vector<T> rMaxCuboid = cGeometry.getPhysR(nMaxCuboid);
+
+  std::vector<int> nMin {0,0,0};
+  std::vector<int> nMax {0,0,0};
+
+  cGeometry.getLatticeR(rMin, nMin);
+  cGeometry.getLatticeR(rMax, nMax);
+
+
+  for (int i=0; i<2; i++) {
+    if (rMinCuboid[i] > rMin[i]) {
+      nMinOut[i] = nMinCuboid[i+1];
+    }
+    else {
+      std::vector<T> rMinC {0, 0.};
+      for (int j=0; j<2; j++) {
+        rMinC[j] = (rMinCuboid[j] + rMaxCuboid[j])/2;
+      }
+      rMinC[i] = rMin[i];
+      std::vector<int> nMinC {0,0,0};
+      cGeometry.getLatticeR(rMinC, nMinC);
+      nMinOut[i] = nMinC[i+1];
+    }
+
+    if (rMaxCuboid[i] < rMax[i]) {
+      nMaxOut[i] = nMaxCuboid[i+1];
+    }
+    else {
+      std::vector<T> rMaxC {0, 0.};
+      for (int j=0; j<2; j++) {
+        rMaxC[j] = (rMinCuboid[j] + rMaxCuboid[j])/2;
+      }
+      rMaxC[i] = rMax[i];
+      std::vector<int> nMaxC {0,0,0};
+      cGeometry.getLatticeR(rMaxC, nMaxC);
+      nMaxOut[i] = nMaxC[i+1];
+    }
+  }
+}
+
+template<typename T, typename OUT_T, typename W>
+void SuperVTMwriter2D<T,OUT_T,W>::write(std::vector<T> rMin, std::vector<T> rMax, int iT)
+{
+  int rank = 0;
+#ifdef PARALLEL_MODE_MPI
+  rank = singleton::mpi().getRank();
+#endif
+
+  //  !!!!!!!!!!! check whether _pointerVec is empty
+  if ( _pointerVec.empty() ) {
+    clout << "Error: Did you add a Functor ?";
+  }
+  else {
+    // no gaps between vti files (cuboids)
+    for (SuperF2D<T,W>* f : _pointerVec) {
+      f->getSuperStructure().communicate();
+    }
+
+    // to get first element _pointerVec
+    // problem if functors with different SuperStructure are stored
+    // since till now, there is only one origin
+    auto it_begin = _pointerVec.cbegin();
+    if (it_begin == _pointerVec.end()) {
+      throw std::runtime_error("No functor to write");
+    }
+    const auto& cGeometry = (**it_begin).getSuperStructure().getCuboidGeometry();
+    // no gaps between vti files (cuboids)
+    LoadBalancer<T>& load = (**it_begin).getSuperStructure().getLoadBalancer();
+
+    // PVD, owns all
+    if ( rank == 0 ) {
+      std::string pathPVD = singleton::directories().getVtkOutDir()
+                            + createFileName( _name ) + ".pvd";
+      dataPVDmaster( iT, pathPVD,  "data/" + createFileName( _name, iT ) + ".vtm" );
+
+      std::string pathVTM = singleton::directories().getVtkOutDir()
+                            + "data/" + createFileName( _name, iT ) + ".vtm";
+      preambleVTM(pathVTM);
+      for (int iC = 0; iC < cGeometry.size(); iC++) {
+        dataVTM( iC, pathVTM, createFileName( _name, iT, iC) + ".vti" );
+      }
+      closeVTM(pathVTM);
+    }
+    // VTI, each process writes his cuboids
+    int originLatticeR[3] = {int()};
+    for (int iCloc = 0; iCloc < load.size(); iCloc++) {
+      int nMin[] {0,0};
+      int nMax[] {0,0};
+      extremes(nMin, nMax, cGeometry, load, rMin, rMax, iCloc);
+
+      // to be changed into the following line once local refinement has been implemented
+      // double deltaX = cGeometry.get(load.glob(iCloc)).getDeltaR();
+      T delta = cGeometry.getMotherCuboid().getDeltaR();
+
+      std::string fullNameVTI = singleton::directories().getVtkOutDir() + "data/"
+                                + createFileName( _name, iT, load.glob(iCloc) ) + ".vti";
+
+      // get dimension/extent for each cuboid
+      originLatticeR[0] = load.glob(iCloc);
+      T originPhysR[2] = {T()};
+      cGeometry.getPhysR(originPhysR,originLatticeR);
+
+      preambleVTI(fullNameVTI, nMin[0]-_overlap,nMin[1]-_overlap, nMax[0]+_overlap-1, nMax[1]+_overlap-1, originPhysR[0],originPhysR[1], delta);
+      for (auto it : _pointerVec) {
+        if (_binary) {
+          dataArrayBinary(fullNameVTI, (*it), load.glob(iCloc), nMin[0],nMax[0],nMin[1],nMax[1]);
+        }
+        else {
+          dataArray(fullNameVTI, (*it), load.glob(iCloc), nMin[0],nMax[0],nMin[1],nMax[1]);
+        }
+      }
+      closePiece(fullNameVTI);
+      closeVTI(fullNameVTI);
+    }
+  }
+}
+
 
 template<typename T, typename OUT_T, typename W>
 void SuperVTMwriter2D<T,OUT_T,W>::write(int iT)
@@ -78,7 +204,7 @@ void SuperVTMwriter2D<T,OUT_T,W>::write(int iT)
     if (it_begin == _pointerVec.end()) {
       throw std::runtime_error("No functor to write");
     }
-    CuboidGeometry2D<T> const& cGeometry = (**it_begin).getSuperStructure().getCuboidGeometry();
+    const auto& cGeometry = (**it_begin).getSuperStructure().getCuboidGeometry();
     // no gaps between vti files (cuboids)
     LoadBalancer<T>& load = (**it_begin).getSuperStructure().getLoadBalancer();
 
@@ -91,13 +217,13 @@ void SuperVTMwriter2D<T,OUT_T,W>::write(int iT)
       std::string pathVTM = singleton::directories().getVtkOutDir()
                             + "data/" + createFileName( _name, iT ) + ".vtm";
       preambleVTM(pathVTM);
-      for (int iC = 0; iC < cGeometry.getNc(); iC++) {
+      for (int iC = 0; iC < cGeometry.size(); iC++) {
         dataVTM( iC, pathVTM, createFileName( _name, iT, iC) + ".vti" );
       }
       closeVTM(pathVTM);
     }
     // VTI, each process writes his cuboids
-    int originLatticeR[3] = {int()};
+    LatticeR<3> originLatticeR;
     for (int iCloc = 0; iCloc < load.size(); iCloc++) {
       int nx = cGeometry.get(load.glob(iCloc)).getNx();
       int ny = cGeometry.get(load.glob(iCloc)).getNy();
@@ -110,16 +236,15 @@ void SuperVTMwriter2D<T,OUT_T,W>::write(int iT)
 
       // get dimension/extent for each cuboid
       originLatticeR[0] = load.glob(iCloc);
-      T originPhysR[2] = {T()};
-      cGeometry.getPhysR(originPhysR,originLatticeR);
+      auto originPhysR = cGeometry.getPhysR(originLatticeR);
 
       preambleVTI(fullNameVTI, -_overlap,-_overlap, nx+_overlap-1, ny+_overlap-1, originPhysR[0],originPhysR[1], delta);
       for (auto it : _pointerVec) {
         if (_binary) {
-          dataArrayBinary(fullNameVTI, (*it), load.glob(iCloc), nx,ny);
+          dataArrayBinary(fullNameVTI, (*it), load.glob(iCloc), 0,nx,0,ny);
         }
         else {
-          dataArray(fullNameVTI, (*it), load.glob(iCloc), nx,ny);
+          dataArray(fullNameVTI, (*it), load.glob(iCloc), 0,nx,0,ny);
         }
       }
       closePiece(fullNameVTI);
@@ -129,9 +254,9 @@ void SuperVTMwriter2D<T,OUT_T,W>::write(int iT)
 }
 
 template<typename T, typename OUT_T, typename W>
-void SuperVTMwriter2D<T,OUT_T, W>::write(SuperF2D<T,W>& f, int iT)
+void SuperVTMwriter2D<T,OUT_T, W>::write(SuperF2D<T,W>& f, std::vector<T> rMin, std::vector<T> rMax, int iT)
 {
-  CuboidGeometry2D<T> const& cGeometry = f.getSuperStructure().getCuboidGeometry();
+  const auto& cGeometry = f.getSuperStructure().getCuboidGeometry();
   LoadBalancer<T>& load = f.getSuperStructure().getLoadBalancer();
   // no gaps between vti files (cuboids)
   f.getSuperStructure().communicate();
@@ -150,7 +275,7 @@ void SuperVTMwriter2D<T,OUT_T, W>::write(SuperF2D<T,W>& f, int iT)
                           + createFileName( f.getName(), iT )  + ".vtm";
 
     preambleVTM(pathVTM);
-    for (int iC = 0; iC < cGeometry.getNc(); iC++) {
+    for (int iC = 0; iC < cGeometry.size(); iC++) {
       std::string nameVTI = "data/" + createFileName( f.getName(), iT, iC) + ".vti";
       // puts name of .vti piece to a .pvd file [fullNamePVD]
       dataVTM( iC, pathVTM, nameVTI );
@@ -159,11 +284,9 @@ void SuperVTMwriter2D<T,OUT_T, W>::write(SuperF2D<T,W>& f, int iT)
   } // master only
 
   for (int iCloc = 0; iCloc < load.size(); iCloc++) {
-    // cuboid
-    int nx = cGeometry.get(load.glob(iCloc)).getNx();
-    int ny = cGeometry.get(load.glob(iCloc)).getNy();
-    // to be changed into the following line once local refinement has been implemented
-    // double deltaX = cGeometry.get(load.glob(iCloc)).getDeltaR();
+    int nMin[] {0,0};
+    int nMax[] {0,0};
+    extremes(nMin, nMax, cGeometry, load, rMin, rMax, iCloc);
 
     std::string fullNameVTI = singleton::directories().getVtkOutDir() + "data/"
                               + createFileName( f.getName(), iT, load.glob(iCloc) ) + ".vti";
@@ -173,16 +296,75 @@ void SuperVTMwriter2D<T,OUT_T, W>::write(SuperF2D<T,W>& f, int iT)
     T originPhysR[2] = {T()};
     cGeometry.getPhysR(originPhysR,originLatticeR);
 
-    preambleVTI(fullNameVTI, -_overlap,-_overlap, nx+_overlap-1, ny+_overlap-1, originPhysR[0],originPhysR[1], delta);
+    preambleVTI(fullNameVTI, nMin[0]-_overlap,nMin[1]-_overlap, nMax[0]+_overlap-1, nMax[1]+_overlap-1, originPhysR[0],originPhysR[1], delta);
     if (_binary) {
-      dataArrayBinary(fullNameVTI, f, load.glob(iCloc), nx,ny);
+      dataArrayBinary(fullNameVTI, f, load.glob(iCloc), nMin[0],nMax[0],nMin[1],nMax[1]);
     }
     else {
-      dataArray(fullNameVTI, f, load.glob(iCloc), nx,ny);
+      dataArray(fullNameVTI, f, load.glob(iCloc), nMin[0],nMax[0],nMin[1],nMax[1]);
     }
     closePiece(fullNameVTI);
     closeVTI(fullNameVTI);
   } // cuboid
+}
+
+template<typename T, typename OUT_T, typename W>
+void SuperVTMwriter2D<T,OUT_T, W>::write(SuperF2D<T,W>& f, int iT)
+{
+  const auto& cGeometry = f.getSuperStructure().getCuboidGeometry();
+  LoadBalancer<T>& load = f.getSuperStructure().getLoadBalancer();
+  // no gaps between vti files (cuboids)
+  f.getSuperStructure().communicate();
+  T delta = cGeometry.getMotherCuboid().getDeltaR();
+
+  int rank = 0;
+#ifdef PARALLEL_MODE_MPI
+  rank = singleton::mpi().getRank();
+#endif
+
+  // write a pvd file, which links all vti files
+  // each vti file is written by one thread, which may own severals cuboids
+  if ( rank == 0 ) {
+    // master only
+    std::string pathVTM = singleton::directories().getVtkOutDir()
+                          + createFileName( f.getName(), iT )  + ".vtm";
+
+    preambleVTM(pathVTM);
+    for (int iC = 0; iC < cGeometry.size(); iC++) {
+      std::string nameVTI = "data/" + createFileName( f.getName(), iT, iC) + ".vti";
+      // puts name of .vti piece to a .pvd file [fullNamePVD]
+      dataVTM( iC, pathVTM, nameVTI );
+    }
+    closeVTM(pathVTM);
+  } // master only
+
+  for (int iCloc = 0; iCloc < load.size(); iCloc++) {
+    int nx = cGeometry.get(load.glob(iCloc)).getNx();
+    int ny = cGeometry.get(load.glob(iCloc)).getNy();
+
+    std::string fullNameVTI = singleton::directories().getVtkOutDir() + "data/"
+                              + createFileName( f.getName(), iT, load.glob(iCloc) ) + ".vti";
+
+    // get dimension/extent for each cuboid
+    LatticeR<3> originLatticeR = {load.glob(iCloc),0,0};
+    auto originPhysR = cGeometry.getPhysR(originLatticeR);
+
+    preambleVTI(fullNameVTI, -_overlap,-_overlap, nx+_overlap-1, ny+_overlap-1, originPhysR[0],originPhysR[1], delta);
+    if (_binary) {
+      dataArrayBinary(fullNameVTI, f, load.glob(iCloc), 0,nx,0,ny);
+    }
+    else {
+      dataArray(fullNameVTI, f, load.glob(iCloc), 0,nx,0,ny);
+    }
+    closePiece(fullNameVTI);
+    closeVTI(fullNameVTI);
+  } // cuboid
+}
+
+template<typename T, typename OUT_T, typename W>
+void SuperVTMwriter2D<T,OUT_T,W>::write(std::shared_ptr<SuperF2D<T,W>> ptr_f, std::vector<T> rMin, std::vector<T> rMax, int iT)
+{
+  write(*ptr_f, rMin, rMax, iT);
 }
 
 template<typename T, typename OUT_T, typename W>
@@ -364,7 +546,7 @@ void SuperVTMwriter2D<T,OUT_T,W>::dataPVDmaster(int iT,
 
 template<typename T, typename OUT_T, typename W>
 void SuperVTMwriter2D<T,OUT_T,W>::dataArray(const std::string& fullName,
-                                      SuperF2D<T,W>& f, int iC, int nx, int ny)
+                                      SuperF2D<T,W>& f, int iC, int nxMin, int nxMax, int nyMin, int nyMax)
 {
   std::cout << "DIOCANE" <<std::endl <<std::endl <<std::endl <<std::endl <<std::endl;
   std::ofstream fout( fullName, std::ios::out | std::ios::app );
@@ -390,8 +572,8 @@ void SuperVTMwriter2D<T,OUT_T,W>::dataArray(const std::string& fullName,
   // since cuboid has been blowed up by _overlap [every dimension]
   // looping from -_overlap to ny (= ny+_overlap, as passed)
   std::vector<int> tmpVec( 3,int(0) );
-  for (i[2]=-_overlap; i[2] < ny+_overlap; ++i[2]) {
-    for (i[1]=-_overlap; i[1] < nx+_overlap; ++i[1]) {
+  for (i[2]=nyMin-_overlap; i[2] < nyMax+_overlap; ++i[2]) {
+    for (i[1]=nxMin-_overlap; i[1] < nxMax+_overlap; ++i[1]) {
       f(evaluated,i);
       for (int iDim = 0; iDim < f.getTargetDim(); ++iDim) {
         //  tmpVec = {iC,iX,iY,iZ};  // std=c++11
@@ -405,7 +587,7 @@ void SuperVTMwriter2D<T,OUT_T,W>::dataArray(const std::string& fullName,
 
 template<typename T, typename OUT_T, typename W>
 void SuperVTMwriter2D<T,OUT_T,W>::dataArrayBinary(const std::string& fullName,
-    SuperF2D<T,W>& f, int iC, int nx, int ny)
+    SuperF2D<T,W>& f, int iC, int nxMin, int nxMax, int nyMin, int nyMax)
 {
   std::ofstream fout( fullName, std::ios::out | std::ios::app );
   if (!fout) {
@@ -430,7 +612,7 @@ void SuperVTMwriter2D<T,OUT_T,W>::dataArrayBinary(const std::string& fullName,
     clout << "Error: could not open " << fullName << std::endl;
   }
 
-  size_t fullSize = f.getTargetDim() * (nx+2*_overlap) * (ny+2*_overlap);    //  how many numbers to write
+  size_t fullSize = f.getTargetDim() * (nxMax-nxMin+2*_overlap) * (nyMax-nyMin+2*_overlap);    //  how many numbers to write
   size_t binarySize = size_t( fullSize*sizeof(OUT_T) );
   // writes first number, which have to be the size(byte) of the following data
   Base64Encoder<unsigned int> sizeEncoder(ofstr, 1);
@@ -446,8 +628,8 @@ void SuperVTMwriter2D<T,OUT_T,W>::dataArrayBinary(const std::string& fullName,
   }
   int itter = 0;
   std::unique_ptr<OUT_T[]> bufferFloat(new OUT_T[fullSize]);
-  for (i[2] = -_overlap; i[2] < ny+_overlap; ++i[2]) {
-    for (i[1] = -_overlap; i[1] < nx+_overlap; ++i[1]) {
+  for (i[2] = nyMin-_overlap; i[2] < nyMax+_overlap; ++i[2]) {
+    for (i[1] = nxMin-_overlap; i[1] < nxMax+_overlap; ++i[1]) {
       f(evaluated,i);
       for (int iDim = 0; iDim < f.getTargetDim(); ++iDim) {
         bufferFloat[ itter ] = OUT_T( evaluated[iDim] );

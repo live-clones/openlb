@@ -33,6 +33,7 @@
 #include <string>
 
 #include "io/ostreamManager.h"
+#include "discreteNormals.h"
 
 // All OpenLB code is contained in this namespace.
 namespace olb {
@@ -122,6 +123,9 @@ public:
   std::vector<T> getCenterPhysR(int material) const;
   /// Returns the boundary type which is characterized by a discrete normal (c.f. Zimny)
   std::vector<int> getType(const int* input) const;
+  std::vector<int> getType(int iX, int iY,
+                           BlockIndicatorF2D<T>& fluidI,
+                           BlockIndicatorF2D<T>& outsideI) const;
   std::vector<int> getType(int iX, int iY) const;
 
   /// Returns normal that points into the fluid for paraxial surfaces

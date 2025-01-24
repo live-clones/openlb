@@ -144,6 +144,7 @@ public:
   ThermalUnitConverter<T,DESCRIPTOR,TDESCRIPTOR> const& getConverter() const;
 };
 
+
 } // end namespace olb
 
 #endif

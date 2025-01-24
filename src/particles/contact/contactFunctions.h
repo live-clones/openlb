@@ -28,6 +28,8 @@
 #ifndef CONTACT_FUNCTIONS_H
 #define CONTACT_FUNCTIONS_H
 
+#include <numbers>
+
 namespace olb {
 
 namespace particles {
@@ -64,9 +66,7 @@ T evalContactDetectionDistance(Particle<T, PARTICLETYPE>& particle,
   if constexpr (particles::access::providesContactMaterial<PARTICLETYPE>()) {
     constexpr T factor = []() {
       static_assert(D == 2 || D == 3, "Only D=2 and D=3 are supported");
-      // TODO: Use with c++20
-      //return T{0.5} * (D == 3 ? std::numbers::sqrt3_v<T> : std::numbers::sqrt2_v<T>);
-      return T {0.5} * (D == 3 ? 1.7320508075688772935 : 1.4142135623730950488);
+      return T{0.5} * (D == 3 ? std::numbers::sqrt3_v<T> : std::numbers::sqrt2_v<T>);
     }();
     return factor * physDeltaX +
            particles::access::getEnlargementForContact(particle);

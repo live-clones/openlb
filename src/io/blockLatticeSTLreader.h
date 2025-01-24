@@ -36,7 +36,7 @@
 #include <limits>
 
 #include "communication/loadBalancer.h"
-#include "geometry/cuboidGeometry3D.h"
+#include "geometry/cuboidGeometry.h"
 #include "functors/analytical/indicator/indicatorF3D.h"
 #include "functors/analytical/indicator/indicatorBaseF3D.h"
 #include "utilities/vectorHelpers.h"

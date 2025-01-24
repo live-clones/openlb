@@ -45,6 +45,24 @@ inline auto fmod_pos(T a, S b) {
   }
 }
 
+/// Accurate summation of floating point numbers with the Kahan algorithm
+// cf. documentation of class below
+template<typename T>
+void kahanSum(T output[2], T summand)
+{
+  const T y {summand - output[1]};
+  const T t {output[0] + y};
+  output[1] = (t - output[0]) - y;
+  output[0] = t;
+}
+template<typename T>
+void kahanSum(T& output0, T& output1, T summand)
+{
+  const T y {summand - output1};
+  const T t {output0 + y};
+  output1 = (t - output0) - y;
+  output0 = t;
+}
 
 /** Accurate summation of floating point numbers with the Kahan algorithm
  * Reduces round-off effects which arise if the total sum is significantly
@@ -57,24 +75,22 @@ template<typename T>
 class KahanSummator
 {
 private:
-  T sum {0};
-  T c {0};   // tracks the cancellation errors
+  // 0th component = sum
+  // 1st component tracks the cancellation errors
+  T result[2] = {0,0};
 
 public:
   void add(T summand) {
-    const T y {summand - c};
-    const T t {sum + y};
-    c = (t - sum) - y;
-    sum = t;
+    kahanSum<T>(result, summand);
   }
 
   T getSum() const {
-    return sum;
+    return result[0];
   }
 
   void initialize(T value = 0.) {
-    sum = value;
-    c = T(0);
+    result[0] = value;
+    result[1] = T();
   }
 };
 

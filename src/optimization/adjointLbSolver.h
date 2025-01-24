@@ -49,41 +49,42 @@ template<
   typename LATTICES,
   SolverMode MODE
 >
-class AdjointLbSolverBase : public LbSolver<T,PARAMETERS,LATTICES>
+class AdjointLbSolver : virtual public LbSolver<T,PARAMETERS,LATTICES>
 {
 private:
-  mutable OstreamManager            clout {std::cout, "AdjointLbSolverBase"};
+  mutable OstreamManager            clout {std::cout, "AdjointLbSolver"};
 
 public:
   using DESCRIPTOR = typename LATTICES::values_t::template get<0>;
 
-  AdjointLbSolverBase(utilities::TypeIndexedSharedPtrTuple<PARAMETERS> params)
-   : AdjointLbSolverBase::LbSolver(params)
+  AdjointLbSolver() : AdjointLbSolver::LbSolver()
+  { }
+
+  AdjointLbSolver(utilities::TypeIndexedSharedPtrTuple<PARAMETERS> params)
+   : AdjointLbSolver::LbSolver(params)
   { }
 
 protected:
   /// Helper for dual solver: init external fields from primal solution
+  // User needs to call this method for dual solver at the end of setInitialValues
   void loadPrimalPopulations()
   {
     const auto& params = this->parameters(names::Opti());
-    auto lattice = std::get<0>(this->_sLattices);
 
-    lattice->template defineField<descriptors::F>(
-      this->geometry(), 1, *params.fpop);
-    lattice->template defineField<descriptors::F>(
-      this->geometry(), params.controlMaterial, *params.fpop);
-
-    lattice->template defineField<descriptors::DJDF>(
-      this->geometry(), 1, *(params.dObjectiveDf));
-    lattice->template defineField<descriptors::DJDF>(
-      this->geometry(), params.controlMaterial, *(params.dObjectiveDf));
-    lattice->template defineField<descriptors::DJDALPHA>(
-      this->geometry(), params.controlMaterial, *(params.dObjectiveDcontrol));
+    this->lattice().template defineField<descriptors::F>(params.bulkIndicator, *params.fpop);
+    this->lattice().template defineField<descriptors::DJDF>(params.bulkIndicator, *(params.dObjectiveDf));
 
     // update fields if gpu used
-    lattice->template setProcessingContext<Array<descriptors::F>>(ProcessingContext::Simulation);
-    lattice->template setProcessingContext<Array<descriptors::DJDF>>(ProcessingContext::Simulation);
-    lattice->template setProcessingContext<Array<descriptors::DJDALPHA>>(ProcessingContext::Simulation);
+    this->lattice().template setProcessingContext<Array<descriptors::F>>(ProcessingContext::Simulation);
+    this->lattice().template setProcessingContext<Array<descriptors::DJDF>>(ProcessingContext::Simulation);
+  }
+
+  /// Store SuperLattice pointer for interaction with optimization routine
+  // This method is called by default after simulation
+  // If it gets overridden, the user needs to ensure that this method gets called
+  virtual void computeResults() override
+  {
+    this->parameters(names::Results()).lattice = std::get<0>(this->_sLattices);
   }
 };
 

@@ -290,7 +290,6 @@ void getResults( SuperLattice<T, DESCRIPTOR_NS>& sLatticeNS,
   SuperLatticePhysVelocity3D<T, DESCRIPTOR_NS>       velocity( sLatticeNS, converter );
   SuperLatticeEul2LagrDensity3D<T, DESCRIPTOR_NS>    particleDensity( sLatticeNS );
   SuperLatticeExternal3D<T, DESCRIPTOR_NS, AD_FIELD> fdField( sLatticeNS, iT );
-  SuperLatticeGeometry3D<T, DESCRIPTOR_NS>           geometry( sLatticeNS, superGeometry );
   SuperLatticeDensity3D<T, DESCRIPTOR_AD>            lbField( sLatticeAD );
 
 #ifndef NOVTM
@@ -303,7 +302,6 @@ void getResults( SuperLattice<T, DESCRIPTOR_NS>& sLatticeNS,
     // Writes the geometry, cuboid no. and rank no. as vti file for visualization
     SuperLatticeCuboid3D<T, DESCRIPTOR_NS> cuboid( sLatticeNS );
     SuperLatticeRank3D<T, DESCRIPTOR_NS> rank( sLatticeNS );
-    vtmWriterNS.write( geometry );
     vtmWriterNS.write( cuboid );
     vtmWriterNS.write( rank );
     vtmWriterNS.createMasterFile();
@@ -478,7 +476,7 @@ int main(int argc, char* argv[])
 #endif
 #endif
   CuboidGeometry3D<T> cuboidGeometry(cuboid, deltaX, noOfCuboids);
-  cuboidGeometry.setPeriodicity(false, false, false);
+  cuboidGeometry.setPeriodicity({false, false, false});
   cuboidGeometry.print();
 
   /// Instantiation of a loadBalancer

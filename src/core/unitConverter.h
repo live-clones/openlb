@@ -34,6 +34,8 @@
 #include "core/util.h"
 #include "io/xmlReader.h"
 
+#include "descriptor/fields.h"
+
 // known design issues
 //    1. How can we prevent abuse of constructur by mixing up parameters?
 //    2. physical problems may have different names for viscosity, e.g. diffusity,  temperature conductivity
@@ -42,8 +44,48 @@
 //    6. Is it worth to introduce invConversionDensity to avoid division
 
 
-// All OpenLB code is contained in this namespace.
 namespace olb {
+
+namespace fields {
+
+namespace converter {
+
+struct PHYS_VELOCITY : public descriptors::FIELD_BASE<1> {
+  template <typename T, typename DESCRIPTOR,typename FIELD>
+  static constexpr auto isValid(FieldD<T,DESCRIPTOR,FIELD> value) {
+    return value >= 0;
+  }
+};
+struct PHYS_LENGTH : public descriptors::FIELD_BASE<1> {
+  template <typename T, typename DESCRIPTOR,typename FIELD>
+  static constexpr auto isValid(FieldD<T,DESCRIPTOR,FIELD> value) {
+    return value > 0;
+  }
+ };
+struct PHYS_DELTA_X : public descriptors::FIELD_BASE<1> {
+  template <typename T, typename DESCRIPTOR,typename FIELD>
+  static constexpr auto isValid(FieldD<T,DESCRIPTOR,FIELD> value) {
+    return value > 0;
+  }
+};
+struct PHYS_DELTA_T : public descriptors::FIELD_BASE<1> {
+  template <typename T, typename DESCRIPTOR,typename FIELD>
+  static constexpr auto isValid(FieldD<T,DESCRIPTOR,FIELD> value) {
+    return value > 0;
+  }
+};
+
+struct LATTICE_TIME : public descriptors::FIELD_BASE<1> {
+  template <typename T, typename DESCRIPTOR,typename FIELD>
+  static constexpr auto isValid(FieldD<T,DESCRIPTOR,FIELD> value) {
+    return value >= 0;
+  }
+ };
+
+}
+
+}
+
 
 struct UnitConverterBase {
   virtual ~UnitConverterBase() = default;
@@ -154,6 +196,11 @@ public:
   {
     return _charLatticeVelocity;
   }
+  /// return characteristic CFL number
+  constexpr T getCharCFLnumber(  ) const
+  {
+    return _charLatticeVelocity;
+  }
   /// return viscosity in physical units
   constexpr T getPhysViscosity(  ) const
   {
@@ -238,6 +285,14 @@ public:
   {
     return physVelocity / _conversionVelocity;
   }
+  /// conversion from physical to lattice velocity
+  template <unsigned D>
+  constexpr Vector<T,D> getLatticeVelocity(Vector<T,D> physU) const
+  {
+    return Vector<T,D>([&](std::size_t iD) -> T {
+      return this->getLatticeVelocity(physU[iD]);
+    });
+  }
   /// access (read-only) to private member variable
   constexpr T getConversionFactorVelocity() const
   {
@@ -301,6 +356,14 @@ public:
   {
     return _conversionForce * latticeForce;
   }
+  /// conversion from lattice to  physical force vector
+  template <unsigned D>
+  constexpr Vector<T,D> getPhysForce(Vector<T,D> latticeForce) const
+  {
+    return Vector<T,D>([&](std::size_t iD) -> T {
+      return this->getPhysForce(latticeForce[iD]);
+    });
+  }
   /// conversion from physical to lattice force
   constexpr T getLatticeForce( T physForce ) const
   {
@@ -316,6 +379,14 @@ public:
   constexpr T getPhysTorque ( T latticeTorque ) const
   {
     return _conversionTorque * latticeTorque;
+  }
+  /// conversion from lattice to  physical force vector
+  template <unsigned D>
+  constexpr Vector<T,D> getPhysTorque(Vector<T,D> latticeTorque) const
+  {
+    return Vector<T,D>([&](std::size_t iD) -> T {
+      return this->getPhysTorque(latticeTorque[iD]);
+    });
   }
   /// conversion from physical to lattice torque
   constexpr T getLatticeTorque( T physTorque ) const
@@ -377,27 +448,26 @@ private:
   mutable OstreamManager clout;
 };
 
+template <typename T, typename DESCRIPTOR>
+UnitConverter<T,DESCRIPTOR> convectivelyRefineUnitConverter(
+  const UnitConverter<T,DESCRIPTOR>& converter,
+  unsigned scale = 2)
+{
+  const T refinementFactor = T{1} / scale;
+  return UnitConverter<T,DESCRIPTOR>(
+    converter.getPhysDeltaX() * refinementFactor,
+    converter.getPhysDeltaT() * refinementFactor,
+    converter.getCharPhysLength(),
+    converter.getCharPhysVelocity(),
+    converter.getPhysViscosity(),
+    converter.getPhysDensity(),
+    converter.getCharPhysPressure()
+  );
+}
+
 /// creator function with data given by a XML file
 template <typename T, typename DESCRIPTOR>
 UnitConverter<T, DESCRIPTOR>* createUnitConverter(XMLreader const& params);
-
-/*
-TODO: check scaling
-template <typename T, typename DESCRIPTOR>
-UnitConverter<T, DESCRIPTOR>* createRefinedUnitConverter(
-  const UnitConverter<T, DESCRIPTOR>* converter, T refinementFactor = 0.5)
-{
-  return new UnitConverter<T, DESCRIPTOR>(
-    converter->getPhysDeltaX() * refinementFactor,
-    converter->getPhysDeltaT() * refinementFactor * refinementFactor,
-    converter->getCharPhysLength(),
-    converter->getCharPhysVelocity(),
-    converter->getPhysViscosity(),
-    converter->getPhysDensity(),
-    converter->getCharPhysPressure()
-  );
-}
-*/
 
 template <typename T, typename DESCRIPTOR>
 class UnitConverterFromResolutionAndRelaxationTime : public UnitConverter<T, DESCRIPTOR> {

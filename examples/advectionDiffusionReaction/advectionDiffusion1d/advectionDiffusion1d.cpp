@@ -189,10 +189,8 @@ T getResults( SuperLattice<T, TDESCRIPTOR>& ADlattice,
 
   if (iT == 0) {
     /// Writes the geometry, cuboid no. and rank no. as vti file for visualization
-    SuperLatticeGeometry2D<T, TDESCRIPTOR> geometry(ADlattice, superGeometry);
     SuperLatticeCuboid2D<T, TDESCRIPTOR> cuboid(ADlattice);
     SuperLatticeRank2D<T, TDESCRIPTOR> rank(ADlattice);
-    vtkWriter.write(geometry);
     vtkWriter.write(cuboid);
     vtkWriter.write(rank);
 
@@ -287,7 +285,7 @@ void simulate(int N, int statIter, T mue, T peclet, T physLength)
   const int noOfCuboids = 1;
 #endif
   CuboidGeometry2D<T> cuboidGeometry(cuboid, converter.getPhysDeltaX(), noOfCuboids);
-  cuboidGeometry.setPeriodicity(true, true);
+  cuboidGeometry.setPeriodicity({true, true});
 
   /// Instantiation of a loadBalancer
   HeuristicLoadBalancer<T> loadBalancer(cuboidGeometry);

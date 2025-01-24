@@ -220,6 +220,12 @@ S IndicatorF2D<S>::signedDistance(const Vector<S,2>& input)
 }
 
 template <typename S>
+S IndicatorF2D<S>::signedDistanceExact(const Vector<S,2>& input)
+{
+  return this->signedDistance(input);
+}
+
+template <typename S>
 Vector<S,2> IndicatorF2D<S>::surfaceNormal(const Vector<S,2>& pos, const S meshSize)
 {
   return util::surfaceNormal(pos, meshSize,
@@ -229,10 +235,23 @@ Vector<S,2> IndicatorF2D<S>::surfaceNormal(const Vector<S,2>& pos, const S meshS
 }
 
 template <typename S>
+Vector<S,2> IndicatorF2D<S>::surfaceNormalExact(const Vector<S,2>& pos, const S meshSize)
+{
+  return this->surfaceNormal(pos, meshSize);
+}
+
+template <typename S>
 Vector<S,2> IndicatorF2D<S>::surfaceNormal(const Vector<S,2>& pos, const S meshSize,
     std::function<Vector<S,2>(const Vector<S,2>&)> transformPos)
 {
   return this->surfaceNormal(transformPos(pos), meshSize);
+}
+
+template <typename S>
+Vector<S,2> IndicatorF2D<S>::surfaceNormalExact(const Vector<S,2>& pos, const S meshSize,
+    std::function<Vector<S,2>(const Vector<S,2>&)> transformPos)
+{
+  return this->surfaceNormalExact(transformPos(pos), meshSize);
 }
 
 template <typename S>

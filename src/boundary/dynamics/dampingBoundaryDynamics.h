@@ -30,10 +30,12 @@
 #ifndef DAMPING_BOUNDARY_DYNAMICS_H
 #define DAMPING_BOUNDARY_DYNAMICS_H
 
-#include "dynamics/latticeDescriptors.h"
+// #include "dynamics/latticeDescriptors.h"
 #include "dynamics/dynamics.h"
 
 namespace olb {
+
+namespace boundaryhelper {
 
 //===================================================================================
 //================= DampingDynamics =========
@@ -81,5 +83,6 @@ struct DampingBoundaryDynamics final : public dynamics::CustomCollision<T,DESCRI
     return "DampingBoundaryDynamics";
   };
 };
+}
 }
 #endif

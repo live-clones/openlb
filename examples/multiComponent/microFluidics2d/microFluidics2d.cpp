@@ -80,6 +80,35 @@ const int maxIter  = 1000000;
 const int vtkIter  = 1000;
 const int statIter = 2000;
 
+T helperFunction( T alpha, T kappa1, T kappa2, T h1, T h2, int latticeNumber )
+{
+  T addend = 0;
+  if (latticeNumber==1) {
+    addend = 1./(alpha*alpha) * ( (h1/kappa1) + (h2/kappa2) );
+  }
+  else if (latticeNumber==2) {
+    addend = 1./(alpha*alpha) * ( (h1/kappa1) + (-h2/kappa2) );
+  }
+  else if (latticeNumber==3) {
+    addend = 1./(alpha*alpha) * ( (h1/kappa1) + (h2/kappa2) );
+  }
+  return addend;
+}
+
+T helperFunction( T alpha, T kappa1, T kappa2, T kappa3, T h1, T h2, T h3, int latticeNumber )
+{
+  T addend = 0;
+  if (latticeNumber==1) {
+    addend = 1./(alpha*alpha) * ( (h1/kappa1) + (h2/kappa2) + (h3/kappa3) );
+  }
+  else if (latticeNumber==2) {
+    addend = 1./(alpha*alpha) * ( (h1/kappa1) + (-h2/kappa2) );
+  }
+  else if (latticeNumber==3) {
+    addend = 1./(alpha*alpha) * ( (h3/kappa3) );
+  }
+  return addend;
+}
 
 void prepareGeometry( SuperGeometry<T,2>& superGeometry )
 {
@@ -134,36 +163,47 @@ void prepareLattice( SuperLattice<T, DESCRIPTOR>& sLattice1,
   sLattice2.defineDynamics<FreeEnergyBGKdynamics>(superGeometry, 1);
   sLattice3.defineDynamics<FreeEnergyBGKdynamics>(superGeometry, 1);
 
-  // add wall boundary
+  // Defining walls
+  auto walls = superGeometry.getMaterialIndicator({2});
+
+  // Compute Addends
+  T addend1 = helperFunction( alpha, kappa1, kappa2, kappa3, h1, h2, h3, 1 );
+  T addend2 = helperFunction( alpha, kappa1, kappa2, kappa3, h1, h2, h3, 2 );
+  T addend3 = helperFunction( alpha, kappa1, kappa2, kappa3, h1, h2, h3, 3 );
+
+  // Add wall boundary
   clout << "Prepare Lattice: Add wall boundary ..." << std::endl;
-  setFreeEnergyWallBoundary<T,DESCRIPTOR>(sLattice1, superGeometry, 2, alpha, kappa1, kappa2, kappa3, h1, h2, h3, 1);
-  setFreeEnergyWallBoundary<T,DESCRIPTOR>(sLattice2, superGeometry, 2, alpha, kappa1, kappa2, kappa3, h1, h2, h3, 2);
-  setFreeEnergyWallBoundary<T,DESCRIPTOR>(sLattice3, superGeometry, 2, alpha, kappa1, kappa2, kappa3, h1, h2, h3, 3);
+  boundary::set<boundary::FreeEnergyWallMomentum>(sLattice1, walls);
+  sLattice1.setParameter<descriptors::ADDEND>( addend1 );
+  boundary::set<boundary::FreeEnergyWallOrderParameter>(sLattice2, walls);
+  sLattice2.setParameter<descriptors::ADDEND>( addend2 );
+  boundary::set<boundary::FreeEnergyWallOrderParameter>(sLattice3, walls);
+  sLattice3.setParameter<descriptors::ADDEND>( addend3 );
 
   // add inlet boundaries
   clout << "Prepare Lattice: Add inlet boundaries ..." << std::endl;
   T omega = converter.getLatticeRelaxationFrequency();
   auto inlet1Indicator = superGeometry.getMaterialIndicator(3);
-  setFreeEnergyInletBoundary<T,DESCRIPTOR>(sLattice1, omega, inlet1Indicator, "velocity", 1);
-  setFreeEnergyInletBoundary<T,DESCRIPTOR>(sLattice2, omega, inlet1Indicator, "velocity", 2);
-  setFreeEnergyInletBoundary<T,DESCRIPTOR>(sLattice3, omega, inlet1Indicator, "velocity", 3);
+  boundary::set<boundary::FreeEnergyVelocity>(sLattice1, inlet1Indicator);
+  boundary::set<boundary::FreeEnergyOrderParameter>(sLattice2, inlet1Indicator);
+  boundary::set<boundary::FreeEnergyOrderParameter>(sLattice3, inlet1Indicator);
 
   auto inlet2Indicator = superGeometry.getMaterialIndicator({4, 5});
-  setFreeEnergyInletBoundary<T,DESCRIPTOR>(sLattice1, omega, inlet2Indicator, "velocity", 1);
-  setFreeEnergyInletBoundary<T,DESCRIPTOR>(sLattice2, omega, inlet2Indicator, "velocity", 2);
-  setFreeEnergyInletBoundary<T,DESCRIPTOR>(sLattice3, omega, inlet2Indicator, "velocity", 3);
+  boundary::set<boundary::FreeEnergyVelocity>(sLattice1, inlet2Indicator);
+  boundary::set<boundary::FreeEnergyOrderParameter>(sLattice2, inlet2Indicator);
+  boundary::set<boundary::FreeEnergyOrderParameter>(sLattice3, inlet2Indicator);
 
   auto inlet3Indicator = superGeometry.getMaterialIndicator({6, 7});
-  setFreeEnergyInletBoundary<T,DESCRIPTOR>(sLattice1, omega, inlet3Indicator, "velocity", 1);
-  setFreeEnergyInletBoundary<T,DESCRIPTOR>(sLattice2, omega, inlet3Indicator, "velocity", 2);
-  setFreeEnergyInletBoundary<T,DESCRIPTOR>(sLattice3, omega, inlet3Indicator, "velocity", 3);
+  boundary::set<boundary::FreeEnergyVelocity>(sLattice1, inlet3Indicator);
+  boundary::set<boundary::FreeEnergyOrderParameter>(sLattice2, inlet3Indicator);
+  boundary::set<boundary::FreeEnergyOrderParameter>(sLattice3, inlet3Indicator);
 
   // add outlet boundary
   clout << "Prepare Lattice: Add outlet boundary ..." << std::endl;
   auto outletIndicator = superGeometry.getMaterialIndicator(8);
-  setFreeEnergyOutletBoundary<T,DESCRIPTOR>(sLattice1, omega, outletIndicator, "density",1);
-  setFreeEnergyOutletBoundary<T,DESCRIPTOR>(sLattice2, omega, outletIndicator, "density",2);
-  setFreeEnergyOutletBoundary<T,DESCRIPTOR>(sLattice3, omega, outletIndicator, "density",3);
+  boundary::set<boundary::FreeEnergyPressureConvective>(sLattice1, outletIndicator);
+  boundary::set<boundary::FreeEnergyOrderParameterConvective>(sLattice2, outletIndicator);
+  boundary::set<boundary::FreeEnergyOrderParameterConvective>(sLattice3, outletIndicator);
 
   // bulk initial conditions
   clout << "Prepare Lattice: Bulk initial conditions ..." << std::endl;
@@ -257,60 +297,6 @@ void prepareLattice( SuperLattice<T, DESCRIPTOR>& sLattice1,
   clout << "Prepare Lattice ... OK" << std::endl;
 }
 
-/**
-void prepareCoupling(SuperLattice<T, DESCRIPTOR>& sLattice1,
-                     SuperLattice<T, DESCRIPTOR>& sLattice2,
-                     SuperLattice<T, DESCRIPTOR>& sLattice3,
-                     SuperGeometry<T,2>& superGeometry)
-{
-  OstreamManager clout( std::cout,"prepareCoupling" );
-  clout << "Add lattice coupling" << std::endl;
-
-  // Bulk couplings
-  FreeEnergyChemicalPotentialGenerator2D<T,DESCRIPTOR> coupling2( alpha, kappa1, kappa2, kappa3 );
-  FreeEnergyForceGenerator2D<T,DESCRIPTOR> coupling3;
-
-  // Inlet / outlet couplings
-  FreeEnergyDensityOutletGenerator2D<T,DESCRIPTOR> coupling1( outletDensity );
-  FreeEnergyInletOutletGenerator2D<T,DESCRIPTOR> coupling4;
-
-  // The DensityOutlet coupling must be added to the first lattice and come before the ChemicalPotential coupling
-  // The InletOutlet couplings must be added to the second lattice and come after the Force coupling.
-  sLattice1.addLatticeCoupling<DESCRIPTOR>( superGeometry, 8, coupling1, {&sLattice2, &sLattice3} );
-
-  sLattice1.addLatticeCoupling<DESCRIPTOR>( superGeometry, 1, coupling2, {&sLattice2, &sLattice3} );
-  sLattice2.addLatticeCoupling<DESCRIPTOR>( superGeometry, 1, coupling3, {&sLattice1, &sLattice3} );
-
-  sLattice2.addLatticeCoupling<DESCRIPTOR>( superGeometry, 3, coupling4, {&sLattice1, &sLattice3} );
-  sLattice2.addLatticeCoupling<DESCRIPTOR>( superGeometry, 4, coupling4, {&sLattice1, &sLattice3} );
-  sLattice2.addLatticeCoupling<DESCRIPTOR>( superGeometry, 5, coupling4, {&sLattice1, &sLattice3} );
-  sLattice2.addLatticeCoupling<DESCRIPTOR>( superGeometry, 6, coupling4, {&sLattice1, &sLattice3} );
-  sLattice2.addLatticeCoupling<DESCRIPTOR>( superGeometry, 7, coupling4, {&sLattice1, &sLattice3} );
-  sLattice2.addLatticeCoupling<DESCRIPTOR>( superGeometry, 8, coupling4, {&sLattice1, &sLattice3} );
-
-  {
-    auto& communicator = sLattice1.getCommunicator(stage::PostCoupling());
-    communicator.requestField<CHEM_POTENTIAL>();
-    communicator.requestOverlap(sLattice1.getOverlap());
-    communicator.exchangeRequests();
-  }
-  {
-    auto& communicator = sLattice2.getCommunicator(stage::PreCoupling());
-    communicator.requestField<CHEM_POTENTIAL>();
-    communicator.requestOverlap(sLattice2.getOverlap());
-    communicator.exchangeRequests();
-  }
-  {
-    auto& communicator = sLattice3.getCommunicator(stage::PreCoupling());
-    communicator.requestField<CHEM_POTENTIAL>();
-    communicator.requestOverlap(sLattice3.getOverlap());
-    communicator.exchangeRequests();
-  }
-
-  clout << "Add lattice coupling ... OK!" << std::endl;
-}
-**/
-
 void getResults( SuperLattice<T, DESCRIPTOR>& sLattice1,
                  SuperLattice<T, DESCRIPTOR>& sLattice2,
                  SuperLattice<T, DESCRIPTOR>& sLattice3, int iT,
@@ -323,10 +309,8 @@ void getResults( SuperLattice<T, DESCRIPTOR>& sLattice1,
 
   if ( iT==0 ) {
     // Writes the geometry, cuboid no. and rank no. as vti file for visualization
-    SuperLatticeGeometry2D<T, DESCRIPTOR> geometry( sLattice1, superGeometry );
     SuperLatticeCuboid2D<T, DESCRIPTOR> cuboid( sLattice1 );
     SuperLatticeRank2D<T, DESCRIPTOR> rank( sLattice1 );
-    vtmWriter.write( geometry );
     vtmWriter.write( cuboid );
     vtmWriter.write( rank );
     vtmWriter.createMasterFile();
@@ -423,7 +407,6 @@ int main( int argc, char *argv[] )
   // Prepare Coupling
   clout << "Add lattice coupling" << std::endl;
 
-  //FreeEnergyDensityOutletGenerator2D<T,DESCRIPTOR> coupling1( outletDensity );
   SuperLatticeCoupling coupling1(
   DensityOutletCoupling2D{},
   names::A{}, sLattice1,
@@ -436,7 +419,6 @@ int main( int argc, char *argv[] )
   coupling1.restrictTo(superGeometry.getMaterialIndicator({8}));
 
 
-  //FreeEnergyChemicalPotentialGenerator2D<T,DESCRIPTOR> coupling2( alpha, kappa1, kappa2, kappa3 );
   SuperLatticeCoupling coupling2(
   ChemicalPotentialCoupling2D{},
   names::A{}, sLattice1,
@@ -450,7 +432,6 @@ int main( int argc, char *argv[] )
   coupling2.template setParameter<ChemicalPotentialCoupling2D::KAPPA2>(kappa3);
   coupling2.restrictTo(superGeometry.getMaterialIndicator({1}));
 
-  //FreeEnergyForceGenerator2D<T,DESCRIPTOR> coupling3;
   SuperLatticeCoupling coupling3(
   ForceCoupling2D{},
   names::A{}, sLattice2,
@@ -460,7 +441,6 @@ int main( int argc, char *argv[] )
   coupling3.restrictTo(superGeometry.getMaterialIndicator({1}));
 
 
-  //FreeEnergyInletOutletGenerator2D<T,DESCRIPTOR> coupling4;
   SuperLatticeCoupling coupling4(
   InletOutletCoupling2D{},
   names::A{}, sLattice2,

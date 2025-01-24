@@ -80,40 +80,6 @@ private:
 * external field from the neighbour in normal direction.
 * Therefore it is assumed this neighbour is a fluid cell.
 */
-template<typename T, typename DESCRIPTOR, typename FIELD_A, typename FIELD_B>
-class ExtFieldBoundaryProcessor3D : public LocalPostProcessor3D<T,DESCRIPTOR> {
-public:
-  ExtFieldBoundaryProcessor3D(int x0_, int x1_, int y0_, int y1_, int z0_, int z1_,
-                              int discreteNormalX_, int discreteNormalY_, int discreteNormalZ_);
-  int extent() const override
-  {
-    return 0;
-  }
-  int extent(int whichDirection) const override
-  {
-    return 0;
-  }
-  void process(BlockLattice<T,DESCRIPTOR>& blockLattice) override;
-  void processSubDomain ( BlockLattice<T,DESCRIPTOR>& blockLattice,
-                          int x0_, int x1_, int y0_, int y1_, int z0_, int z1_) override;
-private:
-  int x0, x1, y0, y1, z0, z1;
-  int discreteNormalX, discreteNormalY, discreteNormalZ;
-  bool tick;
-};
-
-template<typename T, typename DESCRIPTOR, typename FIELD_A, typename FIELD_B>
-class ExtFieldBoundaryProcessorGenerator3D : public PostProcessorGenerator3D<T,DESCRIPTOR> {
-public:
-  ExtFieldBoundaryProcessorGenerator3D(int x0_, int x1_, int y0_, int y1_, int z0_,
-                                       int z1_, int discreteNormalX_, int discreteNormalY_,
-                                       int discreteNormalZ_);
-  PostProcessor3D<T,DESCRIPTOR>* generate() const override;
-  PostProcessorGenerator3D<T,DESCRIPTOR>*  clone() const override;
-private:
-  int discreteNormalX, discreteNormalY, discreteNormalZ;
-};
-
 /**
 * This class resets some values of the distribution
 * on the boundary that can have arbitrary values
@@ -159,4 +125,3 @@ private:
 
 
 #endif
-

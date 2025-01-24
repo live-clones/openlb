@@ -40,17 +40,16 @@
 #include <fstream>
 #include <set>
 
-#include "../isotherms.h"
+//#include "../isotherms.h"
 
 using namespace olb;
 using namespace olb::descriptors;
 using namespace olb::graphics;
-using namespace olb::util;
 
 using T = FLOATING_POINT_TYPE;
 
-typedef D3Q19<VELOCITY> NSDESCRIPTOR;
-typedef D3Q7<VELOCITY, SOURCE> ADEDESCRIPTOR;
+typedef D3Q19<> NSDESCRIPTOR;
+typedef D3Q7<VELOCITY> ADEDESCRIPTOR;
 
 using bulkDynamicsNS = BGKdynamics<T, NSDESCRIPTOR>;
 using bulkDynamicsAD = SourcedAdvectionDiffusionBGKdynamics<T, ADEDESCRIPTOR>;
@@ -94,7 +93,7 @@ void prepareGeometry(UnitConverter<T, NSDESCRIPTOR> const& converterNS,
   Vector<T, 3> maxR = superGeometry.getStatistics().getMaxPhysR(2);
   Vector<T, 3> centerR = superGeometry.getStatistics().getCenterPhysR(2);
   Vector<T, 3> extend = superGeometry.getStatistics().getPhysExtend(2);
-  extend[2] = converterNS.getConversionFactorLength();
+  extend[2] = converterNS.getPhysDeltaX();
 
   // sets circle of both inflows and the outflow, with direction and radius
   IndicatorCircle3D<T> inflow1(minR[0], minR[1], centerR[2], 0., -1., 0.,
@@ -105,9 +104,9 @@ void prepareGeometry(UnitConverter<T, NSDESCRIPTOR> const& converterNS,
                                0., 1., 0., (maxR[0] - minR[0]) / T(3));
 
   // sets cylinder on that in-/out-flow circles with length
-  IndicatorCylinder3D<T> layerInflow1(inflow1, converterNS.getConversionFactorLength());
-  IndicatorCylinder3D<T> layerInflow2(inflow2, converterNS.getConversionFactorLength());
-  IndicatorCylinder3D<T> layerOutflow(outflow, converterNS.getConversionFactorLength());
+  IndicatorCylinder3D<T> layerInflow1(inflow1, converterNS.getPhysDeltaX());
+  IndicatorCylinder3D<T> layerInflow2(inflow2, converterNS.getPhysDeltaX());
+  IndicatorCylinder3D<T> layerOutflow(outflow, converterNS.getPhysDeltaX());
   // renames all boundary voxels of material fromBcMat to toBcMat if two neighbour voxel
   // in the direction of the discrete normal are fluid voxel with material fluidM in the region
   // where the indicator function is fulfilled
@@ -135,15 +134,15 @@ void prepareLatticeNS(
 
   // dynamics for fluid
   sLattice.defineDynamics<bulkDynamicsNS>(superGeometry.getMaterialIndicator({1, 3, 4, 5}));
-  setBounceBackBoundary(sLattice, superGeometry, 2);
+  boundary::set<boundary::BounceBack>(sLattice, superGeometry, 2);
 
   // boundary conditions for fluid
 
   // inlet
-  setInterpolatedPressureBoundary<T,NSDESCRIPTOR>(sLattice, omega, superGeometry, 3);
-  setInterpolatedPressureBoundary<T,NSDESCRIPTOR>(sLattice, omega, superGeometry, 4);
+  boundary::set<boundary::InterpolatedPressure>(sLattice, superGeometry, 3);
+  boundary::set<boundary::InterpolatedPressure>(sLattice, superGeometry, 4);
   // outlet
-  setInterpolatedVelocityBoundary<T,NSDESCRIPTOR>(sLattice, omega, superGeometry, 5);
+  boundary::set<boundary::InterpolatedVelocity>(sLattice, superGeometry, 5);
 
 
   // initialisation for fluid
@@ -158,8 +157,7 @@ void prepareLatticeNS(
   sLattice.initialize();
 
   {
-    auto &communicator = sLattice.getCommunicator(stage::Full());
-    communicator.requestField<descriptors::VELOCITY>();
+    auto &communicator = sLattice.getCommunicator(stage::PreCoupling());
     communicator.requestOverlap(sLattice.getOverlap());
     communicator.exchangeRequests();
   }
@@ -179,12 +177,12 @@ void prepareLatticeAD(
 
   // dynamics for ADE
   sLatticeAD->defineDynamics<bulkDynamicsAD>(superGeometry.getMaterialIndicator({1, 5}));
-  setBounceBackBoundary(*sLatticeAD, superGeometry, 2);
+  boundary::set<boundary::BounceBack>(*sLatticeAD, superGeometry, 2);
   sLatticeAD->defineDynamics<bulkDynamicsAD>(superGeometry, inlet);
-  setBounceBackBoundary(*sLatticeAD, superGeometry, noInlet);
+  boundary::set<boundary::BounceBack>(*sLatticeAD, superGeometry, noInlet);
 
   // boundary for ADE
-  setAdvectionDiffusionTemperatureBoundary<T,ADEDESCRIPTOR>(*sLatticeAD, superGeometry, inlet);
+  boundary::set<boundary::AdvectionDiffusionDirichlet>(*sLatticeAD, superGeometry, inlet);
   setZeroGradientBoundary<T,ADEDESCRIPTOR>(*sLatticeAD, superGeometry, 5);
 
   // initialisation for fluid
@@ -216,7 +214,7 @@ void setBoundaryValues(
   OstreamManager clout(std::cout, "setBoundaryValues");
 
   std::vector < T > maxVelocity(3, T());
-  const T distanceToBoundary = converterNS.getConversionFactorLength() / T(2);
+  const T distanceToBoundary = converterNS.getPhysDeltaX() / T(2);
   const T latticeVelNS = converterNS.getLatticeVelocity(converterNS.getCharPhysVelocity());
   const size_t itStartTime = converterNS.getLatticeTime(physStartTime);
 
@@ -233,11 +231,9 @@ void setBoundaryValues(
     RectanglePoiseuille3D<T> u5(superGeometry, 5, maxVelocity,
                                 distanceToBoundary, distanceToBoundary, distanceToBoundary);
     sLattice.defineU(superGeometry, 5, u5);
+    sLattice.setProcessingContext<olb::Array<momenta::FixedVelocityMomentumGeneric::VELOCITY>>(
+      ProcessingContext::Simulation);
   }
-  SuperLatticeVelocity3D<T, NSDESCRIPTOR> velocity(sLattice);
-  AnalyticalFfromSuperF3D<T,T> vel(velocity);
-  sLattice.communicate();
-  sLattice.defineField<descriptors::VELOCITY>(superGeometry.getMaterialIndicator({1, 2, 3, 4, 5}), vel);
 }
 
 void getResults(
@@ -245,7 +241,7 @@ void getResults(
   UnitConverter<T, NSDESCRIPTOR>& converterNS,
   std::vector<SuperLattice<T, ADEDESCRIPTOR>*> partners,
   size_t iT, SuperGeometry<T,3>& superGeometry,
-  Timer<double>& timer)
+  util::Timer<double>& timer)
 {
   OstreamManager clout(std::cout, "getResults");
 
@@ -255,28 +251,13 @@ void getResults(
   const int iTperiodConsole = itTotalTime / 100;   // Console output
   const int iTperiodVTK = itTotalTime / 100;   // Writes the vtk files
 
-  SuperLatticeGeometry3D<T, NSDESCRIPTOR> materials(sLattice, superGeometry);
-  SuperLatticePhysVelocity3D<T, NSDESCRIPTOR> velocityNS(sLattice, converterNS);
-  SuperLatticePhysPressure3D<T, NSDESCRIPTOR> pressure(sLattice, converterNS);
-  SuperLatticeDensity3D<T, ADEDESCRIPTOR> adsorptive(*partners[0]);
-  SuperLatticeDensity3D<T, ADEDESCRIPTOR> loading(*partners[2]);
-  SuperLatticeDensity3D<T, ADEDESCRIPTOR> soluteConcentration(*partners[1]);
-
-  SuperVTMwriter3D<T> vtmWriter("microMixer3d");
-
-  vtmWriter.addFunctor(velocityNS);
-  vtmWriter.addFunctor(pressure);
-  vtmWriter.addFunctor(adsorptive, "particle concentration");
-  vtmWriter.addFunctor(loading, "loading");
-  vtmWriter.addFunctor(soluteConcentration, "solute concentration");
-  vtmWriter.addFunctor(materials);
+  SuperVTMwriter3D<T> vtmWriter( "microMixer3d" );
 
   if (iT == 0) {
-    SuperLatticeGeometry3D<T, NSDESCRIPTOR> geometry(sLattice, superGeometry);
+    sLattice.setProcessingContext(ProcessingContext::Evaluation);
     SuperLatticeCuboid3D<T, NSDESCRIPTOR> cuboid(sLattice);
     SuperLatticeRank3D<T, NSDESCRIPTOR> rank(sLattice);
 
-    vtmWriter.write(geometry);
     vtmWriter.write(cuboid);
     vtmWriter.write(rank);
 
@@ -298,6 +279,22 @@ void getResults(
 
   // vtk and gif output
   if (iT % iTperiodVTK == 0) {
+    sLattice.setProcessingContext(ProcessingContext::Evaluation);
+    partners[0]->setProcessingContext(ProcessingContext::Evaluation);
+    partners[1]->setProcessingContext(ProcessingContext::Evaluation);
+    partners[2]->setProcessingContext(ProcessingContext::Evaluation);
+    SuperGeometryF<T,3> materials(superGeometry);
+    SuperLatticePhysVelocity3D<T, NSDESCRIPTOR> velocityNS(sLattice, converterNS);
+    SuperLatticePhysPressure3D<T, NSDESCRIPTOR> pressure(sLattice, converterNS);
+    SuperLatticeDensity3D<T, ADEDESCRIPTOR> adsorptive(*partners[0]);
+    SuperLatticeDensity3D<T, ADEDESCRIPTOR> loading(*partners[2]);
+    SuperLatticeDensity3D<T, ADEDESCRIPTOR> soluteConcentration(*partners[1]);
+    vtmWriter.addFunctor(velocityNS);
+    vtmWriter.addFunctor(pressure);
+    vtmWriter.addFunctor(adsorptive, "particle concentration");
+    vtmWriter.addFunctor(loading, "loading");
+    vtmWriter.addFunctor(soluteConcentration, "solute concentration");
+    vtmWriter.addFunctor(materials);
     vtmWriter.write(iT);
   }
 }
@@ -350,13 +347,13 @@ int main(int argc, char* argv[])
   const int noOfCuboids = util::max(16, 4 * singleton::mpi().getSize());
 
   STLreader<T> stlReader("microMixer3d_small.stl",
-                         converterNS.getConversionFactorLength(), stlSize);
+                         converterNS.getPhysDeltaX(), stlSize);
 
   IndicatorLayer3D<T> extendedDomain( stlReader,
-                                      converterNS.getConversionFactorLength() );
+                                      converterNS.getPhysDeltaX() );
 
   CuboidGeometry3D<T> cuboidGeometry( extendedDomain,
-                                      converterNS.getConversionFactorLength(), noOfCuboids );
+                                      converterNS.getPhysDeltaX(), noOfCuboids );
 
   // Instantiation of an empty loadBalancer
   HeuristicLoadBalancer<T> loadBalancer(cuboidGeometry);
@@ -366,9 +363,7 @@ int main(int argc, char* argv[])
 
   prepareGeometry(converterNS, stlReader, superGeometry);
 
-
   /// === 3rd Step: Prepare Lattice ===
-
   SuperLattice<T, NSDESCRIPTOR> sLattice(superGeometry);
   SuperLattice<T, ADEDESCRIPTOR> sLatticeAD(superGeometry);
   SuperLattice<T, ADEDESCRIPTOR> CADLattice(superGeometry);
@@ -389,37 +384,49 @@ int main(int argc, char* argv[])
     prepareLatticeAD(superGeometry, partners[i], omegaAD, inlet[i], noInlet[i], rhoInlet[i]);
     }
 
-  // add post-processing: coupling of the lattices, post-processing is run after collide step
-  LangmuirIsotherm<T> const isotherm(isoConstA, isoConstB);
-  AdsorptionReaction<T, ADEDESCRIPTOR> surfaceLoading(converterADE, &isotherm, k_f, D_s, c_0, particleRadius);
-  surfaceLoading.print(clout);
-  AdsorptionFullCouplingPostProcessorGenerator3D<T, NSDESCRIPTOR, ADEDESCRIPTOR> adsorptionCoupling(&surfaceLoading);
-  AdvDiffDragForce3D<T, NSDESCRIPTOR, ADEDESCRIPTOR> dragForce(converterNS, particleRadius, particleDensity);
-  adsorptionCoupling.addForce(dragForce);
-  sLattice.addLatticeCoupling(adsorptionCoupling, partners);
+  SuperLatticeCoupling coupling(
+    AdsorptionFullCoupling3D<AdsorptionReaction<Isotherm::LangmuirIsotherm>,
+                             ade_forces::AdvDiffDragForce3D>{},
+    names::NavierStokes{}, sLattice,
+    names::Concentration0{}, sLatticeAD,
+    names::Concentration1{}, CADLattice,
+    names::Concentration2{}, QADLattice );
+
+  // Setting Isotherm Parameters
+  Isotherm::LangmuirIsotherm::setParameters<T>(isoConstA, isoConstB, coupling);
+
+  // Setting Adsorption Reaction Parameters
+  coupling.template setParameter<AdsorptionReaction<Isotherm::LangmuirIsotherm>::K_F>(k_f);
+  coupling.template setParameter<AdsorptionReaction<Isotherm::LangmuirIsotherm>::D_S>(D_s);
+  coupling.template setParameter<AdsorptionReaction<Isotherm::LangmuirIsotherm>::C_0>(c_0);
+  coupling.template setParameter<AdsorptionReaction<Isotherm::LangmuirIsotherm>::R_P>(particleRadius);
+
+  // Compute the interaction parameters
+  AdsorptionReaction<Isotherm::LangmuirIsotherm>::computeParameters<T>(coupling, converterADE);
+
+  AdsorptionReaction<Isotherm::LangmuirIsotherm>::print<T>(clout, coupling, converterADE);
+
+  // Compute the drag force parameters
+  ade_forces::AdvDiffDragForce3D::computeParametersFromRhoAndRadius<T>(particleDensity, particleRadius, coupling, converterNS);
 
   /// === 4th Step: Fluid Main Loop with Timer ===
-  Timer<double> timer(converterNS.getLatticeTime(physTotalTime),
+  util::Timer<double> timer(converterNS.getLatticeTime(physTotalTime),
                       superGeometry.getStatistics().getNvoxel());
 
   timer.start();
 
   for (size_t iT = 0; iT < converterNS.getLatticeTime(physTotalTime); ++iT) {
-
     setBoundaryValues(superGeometry, sLattice, converterNS, iT);
 
-    sLattice.executeCoupling();
-    for(int i = 0; i<3; i++) {
-      partners[i]->executeCoupling();
-      }
+    coupling.execute();
 
     getResults(sLattice, converterNS, partners, iT, superGeometry, timer);
 
-    for(int i = 0; i<3; i++) {
+    for (int i = 0; i<3; i++) {
       partners[i]->collideAndStream();
-      }
-    sLattice.collideAndStream();
+    }
 
+    sLattice.collideAndStream();
   }
 
   timer.stop();

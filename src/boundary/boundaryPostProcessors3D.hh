@@ -37,7 +37,7 @@ namespace olb {
 ////////  PlaneFdBoundaryProcessor3D ///////////////////////////////////
 
 template <typename T, typename DESCRIPTOR, int direction, int orientation>
-template <CONCEPT(Cell) CELL>
+template <concepts::DynamicCell CELL>
 void PlaneFdBoundaryProcessor3D<T,DESCRIPTOR,direction,orientation>::apply(CELL& cell)
 {
   using namespace olb::util::tensorIndices3D;
@@ -74,9 +74,10 @@ void PlaneFdBoundaryProcessor3D<T,DESCRIPTOR,direction,orientation>::apply(CELL&
 
   // Computation of the particle distribution functions
   // according to the regularized formula
+  T fEq[DESCRIPTOR::q] { };
+  dynamics.computeEquilibrium(cell, rho, u, fEq);
   for (int iPop = 0; iPop < DESCRIPTOR::q; ++iPop) {
-    cell[iPop] = dynamics.computeEquilibrium(iPop,rho,u)
-               + equilibrium<DESCRIPTOR>::template fromPiToFneq<T>(iPop, pi);
+    cell[iPop] = fEq[iPop] + equilibrium<DESCRIPTOR>::template fromPiToFneq<T>(iPop, pi);
   }
 }
 
@@ -89,9 +90,9 @@ void PlaneFdBoundaryProcessor3D<T,DESCRIPTOR,direction,orientation>::interpolate
     ::interpolateVector(velDeriv, cell);
 }
 
-template <typename DESCRIPTOR, int direction, int orientation>
-template <CONCEPT(Cell) CELL>
-void StraightConvectionBoundaryProcessor3D<DESCRIPTOR,direction,orientation>::initialize(CELL& cell)
+template <typename T, typename DESCRIPTOR, int direction, int orientation>
+template <concepts::DynamicCell CELL>
+void StraightConvectionBoundaryProcessor3D<T,DESCRIPTOR,direction,orientation>::initialize(CELL& cell)
 {
   constexpr auto missing = util::populationsContributingToVelocity<DESCRIPTOR,direction,-orientation>();
   auto prevCell = cell.template getFieldPointer<PREV_CELL>();
@@ -100,9 +101,9 @@ void StraightConvectionBoundaryProcessor3D<DESCRIPTOR,direction,orientation>::in
   }
 }
 
-template <typename DESCRIPTOR, int direction, int orientation>
-template <CONCEPT(Cell) CELL>
-void StraightConvectionBoundaryProcessor3D<DESCRIPTOR,direction,orientation>::apply(CELL& cell)
+template <typename T, typename DESCRIPTOR, int direction, int orientation>
+template <concepts::DynamicCell CELL>
+void StraightConvectionBoundaryProcessor3D<T,DESCRIPTOR,direction,orientation>::apply(CELL& cell)
 {
   using V = typename CELL::value_t;
   constexpr auto missing = util::populationsContributingToVelocity<DESCRIPTOR,direction,-orientation>();
@@ -162,7 +163,7 @@ void StraightConvectionBoundaryProcessor3D<DESCRIPTOR,direction,orientation>::ap
 ////////  OuterVelocityEdgeProcessor3D ///////////////////////////////////
 
 template <typename T, typename DESCRIPTOR, int plane, int normal1, int normal2>
-template <CONCEPT(Cell) CELL>
+template <concepts::DynamicCell CELL>
 void OuterVelocityEdgeProcessor3D<T,DESCRIPTOR,plane,normal1,normal2>::apply(CELL& cell)
 {
   using namespace olb::util::tensorIndices3D;
@@ -205,9 +206,10 @@ void OuterVelocityEdgeProcessor3D<T,DESCRIPTOR,plane,normal1,normal2>::apply(CEL
   T u[DESCRIPTOR::d];
   cell.computeU(u);
 
+  T fEq[DESCRIPTOR::q] { };
+  dynamics.computeEquilibrium(cell, rho, u, fEq);
   for (int iPop = 0; iPop < DESCRIPTOR::q; ++iPop) {
-    cell[iPop] = dynamics.computeEquilibrium(iPop,rho,u)
-               + equilibrium<DESCRIPTOR>::template fromPiToFneq<T>(iPop, pi);
+    cell[iPop] = fEq[iPop] + equilibrium<DESCRIPTOR>::template fromPiToFneq<T>(iPop, pi);
   }
 }
 
@@ -236,7 +238,7 @@ void OuterVelocityEdgeProcessor3D<T,DESCRIPTOR,plane,normal1,normal2>
 /////////// OuterVelocityCornerProcessor3D /////////////////////////////////////
 
 template <typename T, typename DESCRIPTOR, int xNormal, int yNormal, int zNormal>
-template <CONCEPT(Cell) CELL>
+template <concepts::DynamicCell CELL>
 void OuterVelocityCornerProcessor3D<T,DESCRIPTOR,xNormal,yNormal,zNormal>::apply(CELL& cell)
 {
   using namespace olb::util::tensorIndices3D;
@@ -281,9 +283,10 @@ void OuterVelocityCornerProcessor3D<T,DESCRIPTOR,xNormal,yNormal,zNormal>::apply
   T u[DESCRIPTOR::d];
   cell.computeU(u);
 
+  T fEq[DESCRIPTOR::q] { };
+  dynamics.computeEquilibrium(cell, rho, u, fEq);
   for (int iPop = 0; iPop < DESCRIPTOR::q; ++iPop) {
-    cell[iPop] = dynamics.computeEquilibrium(iPop,rho,u)
-               + equilibrium<DESCRIPTOR>::template fromPiToFneq<T>(iPop, pi);
+    cell[iPop] = fEq[iPop] + equilibrium<DESCRIPTOR>::template fromPiToFneq<T>(iPop, pi);
   }
 }
 
@@ -503,7 +506,7 @@ PartialSlipBoundaryProcessorGenerator3D<T,DESCRIPTOR>::clone() const
 
 ////////  FreeEnergyWallProcessor3D ////////////////////////////////
 template<typename T, typename DESCRIPTOR, int NORMAL_X, int NORMAL_Y, int NORMAL_Z>
-template <CONCEPT(Cell) CELL, typename PARAMETERS>
+template <concepts::DynamicCell CELL, typename PARAMETERS>
 void FreeEnergyWallProcessor3D<T,DESCRIPTOR,NORMAL_X,NORMAL_Y,NORMAL_Z>::apply(CELL& cell, PARAMETERS& vars) {
 
   T addend = cell.template getField<descriptors::ADDEND>();
@@ -525,7 +528,7 @@ void FreeEnergyWallProcessor3D<T,DESCRIPTOR,NORMAL_X,NORMAL_Y,NORMAL_Z>::apply(C
 
 ////////  FreeEnergyChemPotBoundaryProcessor3D ////////////////////////////////
 template<typename T, typename DESCRIPTOR, int NORMAL_X, int NORMAL_Y, int NORMAL_Z>
-template <CONCEPT(Cell) CELL>
+template <concepts::DynamicCell CELL>
 void FreeEnergyChemPotBoundaryProcessor3DA<T,DESCRIPTOR,NORMAL_X,NORMAL_Y,NORMAL_Z>::apply(CELL& cell) {
 
   cell.template setField<descriptors::CHEM_POTENTIAL>(
@@ -539,7 +542,7 @@ void FreeEnergyChemPotBoundaryProcessor3DA<T,DESCRIPTOR,NORMAL_X,NORMAL_Y,NORMAL
 }
 
 template<typename T, typename DESCRIPTOR, int NORMAL_X, int NORMAL_Y, int NORMAL_Z>
-template <CONCEPT(Cell) CELL>
+template <concepts::DynamicCell CELL>
 void FreeEnergyChemPotBoundaryProcessor3DB<T,DESCRIPTOR,NORMAL_X,NORMAL_Y,NORMAL_Z>::apply(CELL& cell) {
 
   cell.template setField<descriptors::CHEM_POTENTIAL>(
@@ -549,7 +552,7 @@ void FreeEnergyChemPotBoundaryProcessor3DB<T,DESCRIPTOR,NORMAL_X,NORMAL_Y,NORMAL
 
 ////////  FreeEnergyConvectiveProcessor3D ////////////////////////////////
 template<typename T, typename DESCRIPTOR, int NORMAL_X, int NORMAL_Y, int NORMAL_Z>
-template <CONCEPT(Cell) CELL>
+template <concepts::DynamicCell CELL>
 void FreeEnergyConvectiveProcessor3D<T,DESCRIPTOR,NORMAL_X,NORMAL_Y,NORMAL_Z>::apply(CELL& cell) {
 
   T rho, rho0, rho1, u[3];

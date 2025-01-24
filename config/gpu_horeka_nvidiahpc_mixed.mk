@@ -15,7 +15,7 @@ CXX             := mpic++
 CC              := gcc
 
 CXXFLAGS        := -O3
-CXXFLAGS        += -std=c++17
+CXXFLAGS        += -std=c++20
 CXXFLAGS        += -Xcompiler -I/hkfs/home/software/all/toolkit/nvidia_hpc_sdk/22.3/Linux_x86_64/22.3/cuda/include
 
 PARALLEL_MODE   := MPI
@@ -24,7 +24,7 @@ PLATFORMS       := CPU_SISD GPU_CUDA
 
 # Compiler to use for CUDA-enabled files
 CUDA_CXX        := nvcc
-CUDA_CXXFLAGS   := -O3 -std=c++17
+CUDA_CXXFLAGS   := -O3 -std=c++20
 CUDA_LDFLAGS    := -L/hkfs/home/software/all/toolkit/nvidia_hpc_sdk/22.3/Linux_x86_64/22.3/cuda/11.6/lib64 -L/hkfs/home/software/all/toolkit/nvidia_hpc_sdk/22.3/Linux_x86_64/22.3/REDIST/cuda/11.6/targets/x86_64-linux/lib/stubs
 CUDA_ARCH       := 80
 
@@ -32,7 +32,7 @@ USE_EMBEDDED_DEPENDENCIES := ON
 
 # Example SLURM config:
 #
-# #!/bin/bash
+# #!/usr/bin/env bash
 # #SBATCH --account="hk-project-cpe"
 # #SBATCH --partition="accelerated"
 # #SBATCH --nodes=1

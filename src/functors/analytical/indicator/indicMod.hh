@@ -58,6 +58,24 @@ S IndicInverse<S, D>::signedDistance(const Vector<S, D>& input)
 }
 
 template <typename S, unsigned D>
+S IndicInverse<S, D>::signedDistanceExact(const Vector<S, D>& input)
+{
+  return -this->_f->signedDistanceExact(input);
+}
+
+template <typename S, unsigned D>
+Vector<S,D> IndicInverse<S, D>::surfaceNormal(const Vector<S,D>& pos, const S meshSize)
+{
+  return this->_f->surfaceNormal(pos, meshSize) * -1;
+}
+
+template <typename S, unsigned D>
+Vector<S,D> IndicInverse<S, D>::surfaceNormalExact(const Vector<S,D>& pos, const S meshSize)
+{
+  return this->_f->surfaceNormalExact(pos, meshSize) * -1;
+}
+
+template <typename S, unsigned D>
 IndicScale<S, D>::IndicScale(FunctorPtr<IndicatorF<S, D>> f, S scalingFactor)
     : _f(std::move(f))
 {
@@ -97,6 +115,17 @@ S IndicScale<S, D>::signedDistance(const Vector<S, D>& input)
 }
 
 template <typename S, unsigned D>
+S IndicScale<S, D>::signedDistanceExact(const Vector<S, D>& input)
+{
+  std::function<S(const Vector<S, D>&)> sdf =
+      [this](const Vector<S, D>& input) {
+        return this->_f->signedDistanceExact(input);
+      };
+
+  return sdf::scale(sdf, input, _scalingFactor);
+}
+
+template <typename S, unsigned D>
 IndicElongation<S, D>::IndicElongation(FunctorPtr<IndicatorF<S, D>> f, const Vector<S,D>& elongation)
     : _f(std::move(f))
 {
@@ -129,6 +158,17 @@ S IndicElongation<S, D>::signedDistance(const Vector<S, D>& input)
   std::function<S(const Vector<S, D>&)> sdf =
       [this](const Vector<S, D>& input) {
         return this->_f->signedDistance(input);
+      };
+
+  return sdf::elongation(sdf, input, _elongation, getEstimatedCenter());
+}
+
+template <typename S, unsigned D>
+S IndicElongation<S, D>::signedDistanceExact(const Vector<S, D>& input)
+{
+  std::function<S(const Vector<S, D>&)> sdf =
+      [this](const Vector<S, D>& input) {
+        return this->_f->signedDistanceExact(input);
       };
 
   return sdf::elongation(sdf, input, _elongation, getEstimatedCenter());

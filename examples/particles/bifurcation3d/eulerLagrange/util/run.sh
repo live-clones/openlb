@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 #2023 Nicolas Hafen
 
 #Load .shellSupport for e.g. print command

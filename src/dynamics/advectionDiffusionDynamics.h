@@ -29,7 +29,7 @@
 #ifndef ADVECTION_DIFFUSION_DYNAMICS_H
 #define ADVECTION_DIFFUSION_DYNAMICS_H
 
-#include "latticeDescriptors.h"
+#include "descriptor/descriptor.h"
 #include "dynamics/dynamics.h"
 #include "core/unitConverter.h"
 #include "collisionMRT.h"
@@ -37,13 +37,13 @@
 namespace olb {
 
 namespace TotalEnthalpy {
-  struct T_S      : public descriptors::FIELD_BASE<1> { };
-  struct T_L      : public descriptors::FIELD_BASE<1> { };
-  struct CP_S     : public descriptors::FIELD_BASE<1> { };
-  struct CP_L     : public descriptors::FIELD_BASE<1> { };
-  struct LAMBDA_S : public descriptors::FIELD_BASE<1> { };
-  struct LAMBDA_L : public descriptors::FIELD_BASE<1> { };
-  struct L        : public descriptors::FIELD_BASE<1> { };
+  struct T_S               : public descriptors::FIELD_BASE<1> { };
+  struct T_L               : public descriptors::FIELD_BASE<1> { };
+  struct CP_S              : public descriptors::FIELD_BASE<1> { };
+  struct CP_L              : public descriptors::FIELD_BASE<1> { };
+  struct LAMBDA_S          : public descriptors::FIELD_BASE<1> { };
+  struct LAMBDA_L          : public descriptors::FIELD_BASE<1> { };
+  struct L                 : public descriptors::FIELD_BASE<1> { };
 }
 
 struct AdvectionDiffusionExternalVelocityCollision {
@@ -86,8 +86,15 @@ template <typename T, typename DESCRIPTOR, typename DYNAMICS, typename MOMENTA=m
 class CombinedAdvectionDiffusionRLBdynamics final : public dynamics::CustomCollision<T,DESCRIPTOR,MOMENTA> {
 public:
   using MomentaF = typename MOMENTA::template type<DESCRIPTOR>;
+  using EquilibriumF = typename DYNAMICS::EquilibriumF;
 
   using parameters = typename DYNAMICS::parameters;
+
+  template <typename NEW_T>
+  using exchange_value_type = CombinedAdvectionDiffusionRLBdynamics<
+    NEW_T, DESCRIPTOR,
+    DYNAMICS, MOMENTA
+  >;
 
   template <typename M>
   using exchange_momenta = CombinedAdvectionDiffusionRLBdynamics<T,DESCRIPTOR,DYNAMICS,M>;
@@ -112,16 +119,19 @@ public:
       jNeq[iD] -= u[iD] * rho;
     }
 
+    V fEq[DESCRIPTOR::q] { };
+    EquilibriumF().compute(cell, rho, u, fEq);
     for (int iPop = 0; iPop < DESCRIPTOR::q; ++iPop) {
-      cell[iPop] = typename DYNAMICS::EquilibriumF().compute(iPop, rho, u)
-                 + equilibrium<DESCRIPTOR>::template fromJneqToFneq<V>(iPop, jNeq);
+      cell[iPop] = fEq[iPop] + equilibrium<DESCRIPTOR>::template fromJneqToFneq<V>(iPop, jNeq);
     }
 
     return typename DYNAMICS::CollisionO().apply(cell, parameters);
   };
 
-  T computeEquilibrium(int iPop, T rho, const T u[DESCRIPTOR::d]) const override any_platform {
-    return equilibrium<DESCRIPTOR>::template firstOrder(iPop, rho, u);
+  void computeEquilibrium(ConstCell<T,DESCRIPTOR>& cell, T rho, const T u[DESCRIPTOR::d], T fEq[DESCRIPTOR::q]) const override {
+    for ( int iPop = 0; iPop < DESCRIPTOR::q; iPop++ ) {
+      fEq[iPop] = equilibrium<DESCRIPTOR>::template firstOrder(iPop, rho, u);
+    }
   };
 
   std::string getName() const override {
@@ -174,8 +184,15 @@ struct SourcedAdvectionDiffusionBGKdynamics final : public dynamics::CustomColli
     typename MOMENTA::stress,
     typename MOMENTA::definition
   >::template type<DESCRIPTOR>;
+  using EquilibriumF = typename equilibria::FirstOrder::template type<DESCRIPTOR,MOMENTA>;
 
   using parameters = meta::list<descriptors::OMEGA>;
+
+  template <typename NEW_T>
+  using exchange_value_type = SourcedAdvectionDiffusionBGKdynamics<
+    NEW_T, DESCRIPTOR,
+    MOMENTA
+  >;
 
   template<typename M>
   using exchange_momenta = SourcedAdvectionDiffusionBGKdynamics<T,DESCRIPTOR,M>;
@@ -204,8 +221,10 @@ struct SourcedAdvectionDiffusionBGKdynamics final : public dynamics::CustomColli
     return {temperature, uSqr};
   };
 
-  T computeEquilibrium(int iPop, T rho, const T u[DESCRIPTOR::d]) const override any_platform {
-    return equilibrium<DESCRIPTOR>::template firstOrder(iPop, rho, u);
+  void computeEquilibrium(ConstCell<T,DESCRIPTOR>& cell, T rho, const T u[DESCRIPTOR::d], T fEq[DESCRIPTOR::q]) const override {
+    for ( int iPop = 0; iPop < DESCRIPTOR::q; iPop++ ) {
+      fEq[iPop] = equilibrium<DESCRIPTOR>::template firstOrder(iPop, rho, u);
+    }
   };
 
   std::string getName() const override {
@@ -265,8 +284,10 @@ struct SourcedLimitedAdvectionDiffusionBGKdynamics final : public dynamics::Cust
     return {temperature, uSqr};
   };
 
-  T computeEquilibrium(int iPop, T rho, const T u[DESCRIPTOR::d]) const any_platform override {
-    return equilibrium<DESCRIPTOR>::template firstOrder(iPop, rho, u);
+  void computeEquilibrium(ConstCell<T,DESCRIPTOR>& cell, T rho, const T u[DESCRIPTOR::d], T fEq[DESCRIPTOR::q]) const override {
+    for ( int iPop = 0; iPop < DESCRIPTOR::q; iPop++ ) {
+      fEq[iPop] = equilibrium<DESCRIPTOR>::template firstOrder(iPop, rho, u);
+    }
   };
 
   std::string getName() const override {
@@ -283,6 +304,7 @@ struct TotalEnthalpyAdvectionDiffusionBGKdynamics final : public dynamics::Custo
   static constexpr bool is_vectorizable = false;
 
   using MomentaF = typename MOMENTA::template type<DESCRIPTOR>;
+  using EquilibriumF = typename equilibria::FirstOrder::template type<DESCRIPTOR,MOMENTA>;
 
   using parameters = meta::list<
     descriptors::OMEGA,
@@ -358,10 +380,11 @@ struct TotalEnthalpyAdvectionDiffusionBGKdynamics final : public dynamics::Custo
     return liquid_fraction;
   }
 
-  T computeEquilibrium(int iPop, T rho, const T u[DESCRIPTOR::d]) const override any_platform
-  {
-    return equilibrium<DESCRIPTOR>::template firstOrder(iPop, rho, u);
-  }
+  void computeEquilibrium(ConstCell<T,DESCRIPTOR>& cell, T rho, const T u[DESCRIPTOR::d], T fEq[DESCRIPTOR::q]) const override {
+    for ( int iPop = 0; iPop < DESCRIPTOR::q; iPop++ ) {
+      fEq[iPop] = equilibrium<DESCRIPTOR>::template firstOrder(iPop, rho, u);
+    }
+  };
 
   template <typename CELL, typename PARAMETERS, typename V=typename CELL::value_t>
   CellStatistic<V> apply(CELL& cell, PARAMETERS& parameters) any_platform {
@@ -419,6 +442,7 @@ struct TotalEnthalpyAdvectionDiffusionTRTdynamics final : public dynamics::Custo
   static constexpr bool is_vectorizable = false;
 
   using MomentaF = typename MOMENTA::template type<DESCRIPTOR>;
+  using EquilibriumF = typename equilibria::FirstOrder::template type<DESCRIPTOR,MOMENTA>;
 
   using parameters = meta::list<
     descriptors::OMEGA,
@@ -444,7 +468,7 @@ struct TotalEnthalpyAdvectionDiffusionTRTdynamics final : public dynamics::Custo
   }
 
   template<typename V, typename PARAMETERS, typename ENTHALPY>
-  V computeTemperature(const PARAMETERS& parameters, const ENTHALPY& enthalpy) const
+  V computeTemperature(const PARAMETERS& parameters, const ENTHALPY& enthalpy) const any_platform
   {
     using namespace TotalEnthalpy;
 
@@ -470,7 +494,7 @@ struct TotalEnthalpyAdvectionDiffusionTRTdynamics final : public dynamics::Custo
   }
 
   template<typename V, typename PARAMETERS, typename ENTHALPY>
-  V computeLiquidFraction(const PARAMETERS& parameters, const ENTHALPY& enthalpy) const
+  V computeLiquidFraction(const PARAMETERS& parameters, const ENTHALPY& enthalpy) const any_platform
   {
     using namespace TotalEnthalpy;
 
@@ -496,7 +520,7 @@ struct TotalEnthalpyAdvectionDiffusionTRTdynamics final : public dynamics::Custo
   }
 
   template<typename V, typename PARAMETERS, typename RHO, typename U>
-  V computeEquilibrium(int iPop, const PARAMETERS& parameters, RHO& rho, U& u) const
+  V computeEquilibrium(int iPop, const PARAMETERS& parameters, RHO& rho, U& u) const any_platform
   {
     using namespace TotalEnthalpy;
 
@@ -532,7 +556,7 @@ struct TotalEnthalpyAdvectionDiffusionTRTdynamics final : public dynamics::Custo
   }
 
   template <typename CELL, typename PARAMETERS, typename V=typename CELL::value_t>
-  CellStatistic<V> apply(CELL& cell, PARAMETERS& parameters) {
+  CellStatistic<V> apply(CELL& cell, PARAMETERS& parameters) any_platform {
     using namespace TotalEnthalpy;
 
     const V lambda_s = parameters.template get<LAMBDA_S>();
@@ -573,10 +597,11 @@ struct TotalEnthalpyAdvectionDiffusionTRTdynamics final : public dynamics::Custo
     return {enthalpy, uSqr};
   };
 
-  T computeEquilibrium(int iPop, T rho, const T u[DESCRIPTOR::d]) const override
-  {
-    return equilibrium<DESCRIPTOR>::template firstOrder(iPop, rho, u);
-  }
+  void computeEquilibrium(ConstCell<T,DESCRIPTOR>& cell, T rho, const T u[DESCRIPTOR::d], T fEq[DESCRIPTOR::q]) const override {
+    for ( int iPop = 0; iPop < DESCRIPTOR::q; iPop++ ) {
+      fEq[iPop] = equilibrium<DESCRIPTOR>::template firstOrder(iPop, rho, u);
+    }
+  };
 
   std::string getName() const override {
     return "TotalEnthalpyAdvectionDiffusionTRTdynamics<" + MomentaF().getName() + ">";
@@ -596,6 +621,7 @@ struct INTERFACE_THICKNESS : public descriptors::FIELD_BASE<1> { };
 template<typename T, typename DESCRIPTOR, typename MOMENTA=momenta::AdvectionDiffusionBulkTuple>
 struct PhaseFieldAdvectionDiffusionBGKdynamics : public dynamics::CustomCollision<T,DESCRIPTOR,MOMENTA> {
   using MomentaF = typename MOMENTA::template type<DESCRIPTOR>;
+  using EquilibriumF = typename equilibria::FirstOrder::template type<DESCRIPTOR,momenta::BulkTuple>;
 
   using parameters = meta::list<descriptors::OMEGA,descriptors::INTERFACE_THICKNESS>;
 
@@ -639,10 +665,11 @@ struct PhaseFieldAdvectionDiffusionBGKdynamics : public dynamics::CustomCollisio
     return {phi, uSqr};
   };
 
-  T computeEquilibrium(int iPop, T rho, const T u[DESCRIPTOR::d]) const override
-  {
-    return equilibrium<DESCRIPTOR>::template firstOrder(iPop, rho, u);
-  }
+  void computeEquilibrium(ConstCell<T,DESCRIPTOR>& cell, T rho, const T u[DESCRIPTOR::d], T fEq[DESCRIPTOR::q]) const override {
+    for ( int iPop = 0; iPop < DESCRIPTOR::q; iPop++ ) {
+      fEq[iPop] = equilibrium<DESCRIPTOR>::template firstOrder(iPop, rho, u);
+    }
+  };
 
   std::string getName() const override {
     return "PhaseFieldAdvectionDiffusionBGKdynamics<" + MomentaF().getName() + ">";
@@ -660,6 +687,7 @@ public:
     typename MOMENTA::stress,
     typename MOMENTA::definition
   >::template type<DESCRIPTOR>;
+  using EquilibriumF = typename equilibria::FirstOrder::template type<DESCRIPTOR,MOMENTA>;
 
   using parameters = meta::list<descriptors::OMEGA,descriptors::LATTICE_TIME>;
 
@@ -675,7 +703,7 @@ public:
   }
 
   template <typename CELL, typename PARAMETERS, typename V=typename CELL::value_t>
-  CellStatistic<V> apply(CELL& cell, PARAMETERS& parameters) {
+  CellStatistic<V> apply(CELL& cell, PARAMETERS& parameters) any_platform {
     const V           omega  = parameters.template get<descriptors::OMEGA>();
     const std::size_t time   = parameters.template get<descriptors::LATTICE_TIME>();
     const auto u = (time % 2 == 0) ? cell.template getField<descriptors::VELOCITY>()
@@ -685,8 +713,10 @@ public:
     return {rho, uSqr};
   };
 
-  T computeEquilibrium(int iPop, T rho, const T u[DESCRIPTOR::d]) const override {
-    return equilibrium<DESCRIPTOR>::template firstOrder(iPop, rho, u);
+  void computeEquilibrium(ConstCell<T,DESCRIPTOR>& cell, T rho, const T u[DESCRIPTOR::d], T fEq[DESCRIPTOR::q]) const override {
+    for ( int iPop = 0; iPop < DESCRIPTOR::q; iPop++ ) {
+      fEq[iPop] = equilibrium<DESCRIPTOR>::template firstOrder(iPop, rho, u);
+    }
   };
 
   std::string getName() const override {
