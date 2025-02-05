@@ -14,7 +14,7 @@ CXX             := nvcc
 CC              := nvcc
 
 CXXFLAGS        := -O3
-CXXFLAGS        += -std=c++20 --forward-unknown-to-host-compiler
+CXXFLAGS        += -std=c++20 --forward-unknown-to-host-compiler -diag-suppress 20012
 
 PARALLEL_MODE   := NONE
 MPIFLAGS		    := -lmpi_cxx -lmpi
