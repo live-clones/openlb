@@ -49,6 +49,6 @@
 #include "bounceBack.h"
 #include "bounceBackVelocity.h"
 #include "zouHePressure2D.h"
-#include "perfectlyMatchedLayer2D.h"
+#include "perfectlyMatchedLayer.h"
 
 #include "boundary2D.hh"

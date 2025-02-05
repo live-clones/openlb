@@ -34,16 +34,20 @@
 #include "dynamics/dynamics.h"
 
 namespace olb {
-
 namespace boundaryhelper {
 
 //===================================================================================
 //================= DampingDynamics =========
 //===================================================================================
-template<typename T, typename DESCRIPTOR, typename MOMENTA, typename EQUILIBRIUM>
-struct DampingBoundaryDynamics final : public dynamics::CustomCollision<T,DESCRIPTOR,MOMENTA> {
+template<concepts::BaseType T, concepts::LatticeDescriptor DESCRIPTOR, typename MOMENTA, typename EQUILIBRIUM>
+struct DampingBoundaryDynamics : public dynamics::CustomCollision<T,DESCRIPTOR,MOMENTA>
+{
+private:
+
+public:
   using parameters = typename meta::list<descriptors::OMEGA>;
   using MomentaF = typename MOMENTA::template type<DESCRIPTOR>;
+  using EquilibriumF = typename EQUILIBRIUM::template type<DESCRIPTOR,MOMENTA>;
 
   std::type_index id() override {
     return typeid(DampingBoundaryDynamics);
@@ -52,8 +56,6 @@ struct DampingBoundaryDynamics final : public dynamics::CustomCollision<T,DESCRI
   AbstractParameters<T,DESCRIPTOR>& getParameters(BlockLattice<T,DESCRIPTOR>& block) override {
     return block.template getData<OperatorParameters<DampingBoundaryDynamics>>();
   }
-
-  using EquilibriumF = typename EQUILIBRIUM::template type<DESCRIPTOR,MOMENTA>;
 
   template <typename CELL, typename PARAMETERS, typename V=typename CELL::value_t>
   CellStatistic<V> apply(CELL& cell, PARAMETERS& parameters) any_platform {
@@ -67,16 +69,18 @@ struct DampingBoundaryDynamics final : public dynamics::CustomCollision<T,DESCRI
     
     const V omega = parameters.template get<descriptors::OMEGA>();
     const V sigma = cell.template getField<descriptors::DAMPING>();
+
+    V fEqRef[DESCRIPTOR::q] { };
+    EquilibriumF().compute(cell, rhoRef, uRef, fEqRef);
     
     for (int iPop=0; iPop < DESCRIPTOR::q; ++iPop) {
-      const V fEqRef = computeEquilibrium(iPop, rhoRef, uRef);
-      cell[iPop] = cell[iPop] + omega * ( fEq[iPop] - cell[iPop]) + sigma * ( fEqRef - fEq[iPop] );
+      cell[iPop] = cell[iPop] + omega * ( fEq[iPop] - cell[iPop]) + sigma * ( fEqRef[iPop] - fEq[iPop] );
     }
     return statistic;
   };
 
-  T computeEquilibrium(int iPop, T rho, const T u[DESCRIPTOR::d]) const override any_platform {
-    return equilibrium<DESCRIPTOR>::template secondOrder(iPop, rho, u);
+  void computeEquilibrium(ConstCell<T,DESCRIPTOR>& cell, T rho, const T u[DESCRIPTOR::d], T fEq[DESCRIPTOR::q]) const override {
+    EquilibriumF().compute(cell, rho, u, fEq);
   };
 
   std::string getName() const override {

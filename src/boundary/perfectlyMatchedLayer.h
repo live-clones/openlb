@@ -45,7 +45,7 @@ CellDistance getNeighborhoodRadius() {
 
 std::optional<DynamicsPromise<T,DESCRIPTOR>> getDynamics(DiscreteNormalType type,
                                                          DiscreteNormal<DESCRIPTOR> n) {
-  return DynamicsPromise(meta::id<boundaryhelper::DampingBoundaryDynamics<T,DESCRIPTOR,momenta::BulkTuple,equilibria::SecondOrder>{});
+  return meta::id<boundaryhelper::DampingBoundaryDynamics<T,DESCRIPTOR,momenta::BulkTuple,equilibria::SecondOrder>>();
 }
 
 std::optional<PostProcessorPromise<T,DESCRIPTOR>> getPostProcessor(DiscreteNormalType type,
