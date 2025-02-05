@@ -500,7 +500,8 @@ int main( int argc, char* argv[] )
   outdir_mod << outdir;
   if ( !porousTE ) outdir_mod << "_noPorous";
   else outdir_mod << "_" << Kin << "porous";
-  outdir_mod << "_" << angle << "deg_u" << maxPhysU << "_Re" << Re << "_" << lengthDomain << "x" << heightDomain << "x" << depthDomain << "_res" << res << "_bd" << boundaryDepth << "x" << dampingStrength;
+  outdir_mod << "_" << angle << "deg_u" << maxPhysU << "_Re" << Re << "_" << lengthDomain << "x" << heightDomain << "x" << depthDomain << "_res" << res;
+  if ( withDampingLayer ) outdir_mod << "_bd" << boundaryDepth << "x" << dampingStrength;
   switch ( outlet ) {
     case 1: outdir_mod << "_outletLocalPressure";         break;
     case 2: outdir_mod << "_outletLocalVelocity";         break;
