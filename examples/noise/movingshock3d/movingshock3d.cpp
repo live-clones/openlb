@@ -361,12 +361,12 @@ void prepareLattice(UnitConverter<T,DESCRIPTOR> const& converter,
       // setLocalVelocityBoundary(sLattice, omega, superGeometry, outfMat);
       // setZeroGradientBoundary(sLattice, superGeometry, outfMat);
 
-      boundary::set<boundary::InterpolatedVelocity>(sLattice, superGeometry, topfMat);
-      boundary::set<boundary::InterpolatedVelocity>(sLattice, superGeometry, bottMat);
+      boundary::set<boundary::InterpolatedVelocity>( sLattice, superGeometry, topfMat );
+      boundary::set<boundary::InterpolatedVelocity>( sLattice, superGeometry, bottMat );
       // setLocalVelocityBoundary(sLattice, omega, superGeometry, backMat);
       // setLocalVelocityBoundary(sLattice, omega, superGeometry, fronMat);
-      setZeroGradientBoundary(sLattice, superGeometry, backMat);
-      setZeroGradientBoundary(sLattice, superGeometry, fronMat);
+      setZeroGradientBoundary( sLattice, superGeometry, backMat );
+      setZeroGradientBoundary( sLattice, superGeometry, fronMat );
       break;
 
     case damping:
@@ -378,10 +378,10 @@ void prepareLattice(UnitConverter<T,DESCRIPTOR> const& converter,
     case dampingAndLocal:
       sLattice.defineDynamics<BulkDynamics>(superGeometry, fluiMat);
       domain_lengths -= 2*converter.getConversionFactorLength();
-      bulkIndicator = superGeometry.getMaterialIndicator({fluiMat, dampMat, inflMat, outfMat});
-      boundary::set<boundary::PerfectlyMatchedLayer>(sLattice, superGeometry, dampMat);
-      boundary::set<boundary::LocalVelocity>(sLattice, superGeometry, inflMat);
-      boundary::set<boundary::LocalPressure>(sLattice, superGeometry, inflMat);
+      bulkIndicator = superGeometry.getMaterialIndicator( {fluiMat, dampMat, inflMat, outfMat} );
+      boundary::set<boundary::PerfectlyMatchedLayer>( sLattice, superGeometry, dampMat );
+      boundary::set<boundary::LocalVelocity>( sLattice, superGeometry, inflMat );
+      boundary::set<boundary::LocalPressure>( sLattice, superGeometry, inflMat );
       // boundary::set<boundary::InterpolatedConvection>(sLattice, superGeometry, outfMat, uAverage);
       break;
   }
