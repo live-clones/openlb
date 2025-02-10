@@ -218,9 +218,9 @@ int main(int argc, char* argv[])
                                Vector<T,3>{0.0,0.0,0.0});
   IndicatorLayer3D<T> domainLayerI(domainI, converterLevel0.getPhysDeltaX());
   CuboidGeometry3D<T> cGeometryLevel0(domainLayerI, converterLevel0.getPhysDeltaX());
-  cGeometryLevel0.splitFractional(0, 0, {0.15,0.5,0.35});
-  cGeometryLevel0.splitFractional(1, 1, {0.1,0.8,0.1});
-  cGeometryLevel0.splitFractional(3, 2, {0.1,0.8,0.1});
+  cGeometryLevel0.splitFractional(0, 0, {0.15,0.5,0.35});  // 0,1,2
+  cGeometryLevel0.splitFractional(1, 1, {0.1,0.8,0.1});  // 2 back to 1; split 1 into 2,3,4
+  cGeometryLevel0.splitFractional(3, 2, {0.1,0.8,0.1});  // 4 back to 3; split 3 into 3,4,5
   cGeometryLevel0.splitFractional(5, 0, {0.5,0.5});
   cGeometryLevel0.splitFractional(7, 1, {0.5,0.5});
   cGeometryLevel0.print();
