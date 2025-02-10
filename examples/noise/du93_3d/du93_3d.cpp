@@ -1,7 +1,7 @@
 /*  Lattice Boltzmann sample, written in C++, using the OpenLB
  *  library
  *
- *  Copyright (C) 2011-2013 Mathias J. Krause, Thomas Henn, Tim Dornieden
+ *  Copyright (C) 2025 Philipp Spelten
  *  E-mail contact: info@openlb.net
  *  The most recent release of OpenLB can be downloaded at
  *  <http://www.openlb.net/>
@@ -34,7 +34,7 @@ using namespace olb;
 using namespace olb::descriptors;
 using namespace olb::graphics;
 
-using T = FLOATING_POINT_TYPE;
+using T = float;
 using DESCRIPTOR = D3Q19<>;
 
 T* uAverage = NULL;
@@ -47,9 +47,12 @@ typedef enum {localpressure, localvelocity, interpressure, intervelocity, zerogr
 void prepareGeometry( UnitConverter<T,DESCRIPTOR> const& converter, //std::shared_ptr<IndicatorF3D<T>> domain,
                       STLreader<T>& foilBody,
                       STLreader<T>& foilTail,
-                      SuperGeometry<T,3>& superGeometry,
+                      SuperGeometry<T,3>& sGeometry,
+                      Vector<T,3> extendDomain,
+                      Vector<T,3> originDomain,
                       bool withDampingLayer,
-                      T boundaryDepth )
+                      T boundaryDepth,
+                      bool outerLayer )
 {
   OstreamManager clout( std::cout,"prepareGeometry" );
   clout << "Prepare Geometry ..." << std::endl
@@ -61,54 +64,71 @@ void prepareGeometry( UnitConverter<T,DESCRIPTOR> const& converter, //std::share
         << "5 = Airfoil Bounce Back or Bouzidi" << std::endl
         << "6 = Airfoil porous trailing edge" << std::endl
         << "7 = Fluid if 1 is damping layer" << std::endl;
+  
+  IndicatorCuboid3D<T> cuboidDomain(extendDomain, originDomain);
+  IndicatorLayer3D<T> domainLayer(cuboidDomain, converter.getPhysDeltaX());
+  Vector<T,3> origin = domainLayer.getMin();
+  Vector<T,3> extend = domainLayer.getMax() - domainLayer.getMin();
 
-  superGeometry.rename( 0, 2 );
+  // clout << "0 to 2 everywhere" << std::endl;
+  sGeometry.rename( 0, 2 );
+  // sGeometry.getStatistics().print();
+  if ( outerLayer ) {
+    // clout << "2 to 1 in domainLayer" << std::endl;
+    sGeometry.rename( 2, 1, {1, 0, 0} );
+    // sGeometry.getStatistics().print();
 
-  Vector<T,3> origin = superGeometry.getStatistics().getMinPhysR( 2 );
-  Vector<T,3> extend = superGeometry.getStatistics().getMaxPhysR( 2 ) - superGeometry.getStatistics().getMinPhysR( 2 );
-  origin[0] += converter.getConversionFactorLength();
-  extend[0] -= 2*converter.getConversionFactorLength();
-  IndicatorCuboid3D<T> domain( extend, origin );
-
-  // all nodes except x-boundaries to fluid
-  superGeometry.rename( 2, 1, domain );
-
-  // du93 profile
-  superGeometry.rename( 1, 5, foilBody );
-  superGeometry.rename( 1, 6, foilTail );
+    // Set material number for inflow
+    origin[0] = domainLayer.getMin()[0]-converter.getPhysDeltaX()/2;
+    extend[0] = converter.getPhysDeltaX();
+    IndicatorCuboid3D<T> inflow( extend, origin );
+    // clout << "2 to 3 pointing to 1 in inflow" << std::endl;
+    sGeometry.rename( 2, 3, 1, inflow );
+    // sGeometry.getStatistics().print();
+  
+    // Set material number for outflow
+    origin[0] = domainLayer.getMax()[0]-converter.getPhysDeltaX()/2;
+    extend[0] = converter.getPhysDeltaX();
+    IndicatorCuboid3D<T> outflow( extend,origin );
+    // clout << "2 to 4 pointing to 1 in inflow" << std::endl;
+    sGeometry.rename( 2, 4, outflow );
+    // sGeometry.getStatistics().print();
+  } else {
+    sGeometry.rename( 2, 1 );
+    // du93 profile
+    // clout << "1 to 5 in foilBody" << std::endl;
+    sGeometry.rename( 1, 5, foilBody );
+    // sGeometry.getStatistics().print();
+    // clout << "1 to 6 in foilTail" << std::endl;
+    sGeometry.rename( 1, 6, foilTail );
+    // sGeometry.getStatistics().print();
+  }
+  // clout << "cleaning geometry" << std::endl;
+  // sGeometry.clean();
+  // sGeometry.getStatistics().print();
 
   if ( withDampingLayer ) {
     // fluid domain part to fluid
     T bd_pu = converter.getPhysLength( boundaryDepth );
-    origin = superGeometry.getStatistics().getMinPhysR( 2 );
-    extend = superGeometry.getStatistics().getMaxPhysR( 2 ) - superGeometry.getStatistics().getMinPhysR( 2 );
+    origin = domainLayer.getMin();
+    extend = domainLayer.getMax() - domainLayer.getMin();
     origin[0] += bd_pu;
     extend[0] -= 2*bd_pu;
     IndicatorCuboid3D<T> fluid_domain( extend, origin );
-    superGeometry.rename( 1, 7, fluid_domain );  // all nodes except boundary length
+    // clout << "1 to 7 in fluid_domain" << std::endl;
+    sGeometry.rename( 1, 7, fluid_domain );  // all nodes except boundary length
+    // sGeometry.getStatistics().print();
   }
 
-  // Set material number for inflow
-  origin[0] = superGeometry.getStatistics().getMinPhysR( 2 )[0]-converter.getConversionFactorLength();
-  extend[0] = 2*converter.getConversionFactorLength();
-  IndicatorCuboid3D<T> inflow( extend,origin );
-  superGeometry.rename( 2, 3, 1, inflow );
-
-  // Set material number for outflow
-  origin[0] = superGeometry.getStatistics().getMaxPhysR( 2 )[0]-converter.getConversionFactorLength();
-  extend[0] = 2*converter.getConversionFactorLength();
-  IndicatorCuboid3D<T> outflow( extend,origin );
-  superGeometry.rename( 2, 4, 1, outflow );
-
   // Removes all not needed boundary voxels outside the surface
-  // superGeometry.clean();
-  superGeometry.checkForErrors();
-  superGeometry.print();
+  // sGeometry.clean();
+  sGeometry.checkForErrors();
+  sGeometry.print();
   clout << "Prepare Geometry ... OK" << std::endl;
 }
 
 void setUAverage( SuperLattice<T,DESCRIPTOR>& sLattice,
-                  SuperGeometry<T,3>& superGeometry,
+                  SuperGeometry<T,3>& sGeometry,
                   int fluidNumber
                   )
 {
@@ -116,12 +136,12 @@ void setUAverage( SuperLattice<T,DESCRIPTOR>& sLattice,
 
   // update outflow boundary value (adaptive convection boundary for smaller domains)
   SuperLatticeVelocity3D<T, DESCRIPTOR> velocity( sLattice );
-  std::unique_ptr<SuperIndicatorF<T,3>> fluidIndicator = superGeometry.getMaterialIndicator({fluidNumber});
+  std::unique_ptr<SuperIndicatorF<T,3>> fluidIndicator = sGeometry.getMaterialIndicator({fluidNumber});
   SuperSum3D<T> sum( velocity, fluidIndicator );
   int input[1];
   T output[3];
   sum(output, input);
-  *uAverage = output[0] / superGeometry.getStatistics().getNvoxel( 1 );
+  *uAverage = output[0] / sGeometry.getStatistics().getNvoxel( 1 );
 
   sLattice.setProcessingContext<Array<momenta::FixedVelocityMomentumGeneric::VELOCITY>>(ProcessingContext::Simulation);
 }
@@ -131,64 +151,77 @@ void prepareLattice( SuperLattice<T,DESCRIPTOR>& sLattice,
                      UnitConverter<T,DESCRIPTOR> const& converter,
                      STLreader<T>& foilBody,
                      STLreader<T>& foilTail,
-                     SuperGeometry<T,3>& superGeometry,
+                     SuperGeometry<T,3>& sGeometry,
                      bool porousTE,
                      T Kin,
                      T initialUx,
                      bool withDampingLayer,
                      T boundaryDepth,
                      T dampingStrength,
-                     OutletType outlet )
+                     OutletType outlet,
+                     Vector<T,3> extendDomain,
+                     Vector<T,3> originDomain,
+                     std::string name )
 {
-  OstreamManager clout( std::cout,"prepareLattice" );
+  OstreamManager clout( std::cout,"prepareLattice_"+name );
   clout << "Prepare Lattice ..." << std::endl;
+
+  IndicatorCuboid3D<T> cuboidDomain(extendDomain, originDomain);
+  IndicatorLayer3D<T> domainLayer(cuboidDomain, converter.getPhysDeltaX());
 
   T tmp = T();
   uAverage = &tmp;  //*uAverage = 0.0;
   int fluidNumber = 1;
   if ( withDampingLayer ) fluidNumber = 7;
-  setUAverage( sLattice, superGeometry, fluidNumber );
+  setUAverage( sLattice, sGeometry, fluidNumber );
   const T omega = converter.getLatticeRelaxationFrequency();
 
   // Material=1 -->bulk dynamics
-  auto bulkIndicator = superGeometry.getMaterialIndicator({1});
+  clout << "Setting bulk dynamics in fluid and PML in damping layer" << std::endl;
+  auto bulkIndicator = sGeometry.getMaterialIndicator({1});
   if ( withDampingLayer ) {
-    boundary::set<boundary::PerfectlyMatchedLayer>( sLattice, superGeometry, 1 );
-    Vector<T,3> extend = superGeometry.getStatistics().getMaxPhysR( 2 ) - superGeometry.getStatistics().getMinPhysR( 2 );
+    boundary::set<boundary::PerfectlyMatchedLayer>( sLattice, sGeometry, 1 );
+    Vector<T,3> extend = domainLayer.getMax() - domainLayer.getMin();
     DampingTerm<3,T,DESCRIPTOR> sigma( converter, boundaryDepth, extend, dampingStrength );
     sLattice.defineField<descriptors::DAMPING>( bulkIndicator, sigma );
 
-    bulkIndicator = superGeometry.getMaterialIndicator({7});
+    bulkIndicator = sGeometry.getMaterialIndicator({7});
     sLattice.defineDynamics<BGKdynamics>(bulkIndicator);
 
-    bulkIndicator = superGeometry.getMaterialIndicator({1,7});
+    bulkIndicator = sGeometry.getMaterialIndicator({1,7});
   } else {
     sLattice.defineDynamics<BGKdynamics>(bulkIndicator);
   }
 
   // Material=3 -->inlet
-  boundary::set<boundary::LocalVelocity>(sLattice, superGeometry, 3);
+  clout << "Setting LocalVelocity inlet on 3" << std::endl;
+  if ( sGeometry.getStatistics().getNvoxel(3) > 0 ) boundary::set<boundary::LocalVelocity>(sLattice, sGeometry, 3);
 
   // Material=4 -->outlet
-  switch ( outlet ) {
-    case localpressure:   boundary::set<boundary::LocalPressure>(sLattice, superGeometry, 4); break;
-    case localvelocity:   boundary::set<boundary::LocalVelocity>(sLattice, superGeometry, 4); break;
-    case interpressure:   boundary::set<boundary::InterpolatedPressure>(sLattice, superGeometry, 4); break;
-    case intervelocity:   boundary::set<boundary::InterpolatedVelocity>(sLattice, superGeometry, 4); break;
-    case zerogradient:    setZeroGradientBoundary(sLattice, superGeometry, 4); break;
-    case interconvection: boundary::set<boundary::InterpolatedConvection>(sLattice, superGeometry, 4); break;
+  if ( sGeometry.getStatistics().getNvoxel(4) > 0 ) {
+    clout << "Setting outlet on 4" << std::endl;
+    switch ( outlet ) {
+      case localpressure:   boundary::set<boundary::LocalPressure>(sLattice, sGeometry, 4); break;
+      case localvelocity:   boundary::set<boundary::LocalVelocity>(sLattice, sGeometry, 4); break;
+      case interpressure:   boundary::set<boundary::InterpolatedPressure>(sLattice, sGeometry, 4); break;
+      case intervelocity:   boundary::set<boundary::InterpolatedVelocity>(sLattice, sGeometry, 4); break;
+      case zerogradient:    setZeroGradientBoundary(sLattice, sGeometry, 4); break;
+      case interconvection: boundary::set<boundary::InterpolatedConvection>(sLattice, sGeometry, 4); break;
+    }
   }
 
   // Material=5 -->bouzidi / bounce back
+  clout << "Setting solid boundary on 5" << std::endl;
   #ifdef BOUZIDI
-  setBouzidiBoundary<T,DESCRIPTOR>(sLattice, superGeometry, 5, foilBody);
+  if ( sGeometry.getStatistics().getNvoxel(5) > 0 ) setBouzidiBoundary<T,DESCRIPTOR>(sLattice, sGeometry, 5, foilBody);
   #else
-  setBounceBackBoundary(sLattice, superGeometry, 5);
+  if ( sGeometry.getStatistics().getNvoxel(5) > 0 ) setBounceBackBoundary(sLattice, sGeometry, 5);
   #endif
 
   if ( porousTE ) {
+    clout << "Setting porous dynamics on 6" << std::endl;
     // Material=6 --> porous media
-    sLattice.defineDynamics<PorousBGKdynamics>(superGeometry, 6);  // velocity will always be multiplied by d
+    sLattice.defineDynamics<PorousBGKdynamics>(sGeometry, 6);  // velocity will always be multiplied by d
     T tau = converter.getLatticeRelaxationTime();
     T nu = (tau-0.5)/3.;
     T h = converter.getPhysDeltaX();
@@ -200,12 +233,13 @@ void prepareLattice( SuperLattice<T,DESCRIPTOR>& sLattice,
       exit(1);
     }
     AnalyticalConst3D<T,T> porosity(d);
-    sLattice.defineField<POROSITY>(superGeometry.getMaterialIndicator({6}), porosity);
+    sLattice.defineField<POROSITY>(sGeometry.getMaterialIndicator({6}), porosity);
   } else {
+    clout << "Setting solid boundary on 6" << std::endl;
     #ifdef BOUZIDI
-    setBouzidiBoundary<T,DESCRIPTOR>(sLattice, superGeometry, 6, foilTail);
+    setBouzidiBoundary<T,DESCRIPTOR>(sLattice, sGeometry, 6, foilTail);
     #else
-    setBounceBackBoundary(sLattice, superGeometry, 5);
+    setBounceBackBoundary(sLattice, sGeometry, 5);
     #endif
   }
 
@@ -239,17 +273,18 @@ void prepareLattice( SuperLattice<T,DESCRIPTOR>& sLattice,
 
 // Generates a slowly increasing inflow for the first iTMaxStart timesteps
 void setBoundaryValues( SuperLattice<T, DESCRIPTOR>& sLattice,
-                        UnitConverter<T,DESCRIPTOR> const& converter,
+                        const UnitConverter<T,DESCRIPTOR>& converter,
                         size_t iT,
-                        SuperGeometry<T,3>& superGeometry,
+                        SuperGeometry<T,3>& sGeometry,
                         size_t iTmaxStart,
                         T maxLatticeU,
                         T maxPhysU,
                         T iniPhysU,
                         bool withDampingLayer,
-                        OutletType outlet )
+                        OutletType outlet,
+                        std::string name )
 {
-  OstreamManager clout( std::cout,"setBoundaryValues" );
+  OstreamManager clout( std::cout,"setBoundaryValues_"+name );
 
   // No of time steps for smooth start-up#
   int iTupdate = int(iTmaxStart/50/10)*10;  // --> about 50 updates, rounded to 10 iterations
@@ -269,10 +304,10 @@ void setBoundaryValues( SuperLattice<T, DESCRIPTOR>& sLattice,
     AnalyticalConst3D<T,T> uy( 0. );
     AnalyticalConst3D<T,T> uz( 0. );
     AnalyticalComposed3D<T,T> u( ux, uy, uz );
-    sLattice.defineU( superGeometry, 3, u );
+    sLattice.defineU( sGeometry, 3, u );
 
     if ( withDampingLayer ) {
-      auto bulkIndicator = superGeometry.getMaterialIndicator({1,7});
+      auto bulkIndicator = sGeometry.getMaterialIndicator({1,7});
       sLattice.defineField<descriptors::UX>( bulkIndicator, ux );
     }
 
@@ -290,11 +325,11 @@ void setBoundaryValues( SuperLattice<T, DESCRIPTOR>& sLattice,
   // {
   // case localpressure:
   // case interpressure:
-  //   sLattice.defineRho( superGeometry, 4, rho_out );
+  //   sLattice.defineRho( sGeometry, 4, rho_out );
   //   break;
   // case localvelocity:
   // case intervelocity:
-  //   sLattice.defineU( superGeometry, 4, u_out );
+  //   sLattice.defineU( sGeometry, 4, u_out );
   //   break;
   // case zerogradient:
   // case interconvection:
@@ -304,65 +339,32 @@ void setBoundaryValues( SuperLattice<T, DESCRIPTOR>& sLattice,
   sLattice.setProcessingContext<Array<momenta::FixedVelocityMomentumGeneric::VELOCITY>>(ProcessingContext::Simulation);
 }
 
-void vtkOutput( SuperVTMwriter3D<T> vtmWriter, int iT,
-                SuperLatticePhysVelocity3D<T, DESCRIPTOR>& velocity,
-                SuperLatticePhysPressure3D<T, DESCRIPTOR>& pressure,
-                SuperDiscretizationF3D<T>& discretization ) {
-  vtmWriter.write( iT );
-
-  {
-    SuperEuklidNorm3D<T> normVel( velocity );
-    BlockReduction3D2D<T> planeReduction( normVel, Vector<T,3>({0, 0, 1}) );
-    // write output as JPEG
-    heatmap::plotParam<T> uScale;
-    uScale.minValue = 0;
-    heatmap::write(planeReduction, iT, uScale);
-  }
-
-  {
-    BlockReduction3D2D<T> planeReduction( discretization, Vector<T,3>({0, 0, 1}) );
-    heatmap::plotParam<T> jpeg_scale;
-    jpeg_scale.colour = "blackbody";
-    jpeg_scale.name = "quality";
-    heatmap::write( planeReduction, iT, jpeg_scale );
-  }
-}
-
 // Computes the pressure drop between the voxels before and after the airfoil
 void getResults( SuperLattice<T, DESCRIPTOR>& sLattice,
                  UnitConverter<T,DESCRIPTOR> const& converter, int iT,
-                 SuperGeometry<T,3>& superGeometry, util::Timer<T>& timer,
+                 SuperGeometry<T,3>& sGeometry, util::Timer<T>& timer,
                  STLreader<T>& foilBody,
                  size_t iTmax, size_t iTmaxStart, size_t iTvtk,
-                 bool withDampingLayer )
+                 bool withDampingLayer,
+                 std::string name )
 {
-  OstreamManager clout( std::cout, "getResults, iT=" + std::to_string(iT) );
+  OstreamManager clout( std::cout, "getResults_"+name+", iT=" + std::to_string(iT) );
 
-  SuperVTMwriter3D<T> vtmWriter( "du93_3d" );
-  SuperLatticePhysVelocity3D<T, DESCRIPTOR> velocity( sLattice, converter );
-  SuperLatticePhysPressure3D<T, DESCRIPTOR> pressure( sLattice, converter );
-  SuperLatticeYplus3D<T, DESCRIPTOR> yPlus( sLattice, converter, superGeometry, foilBody, 5 );
-  SuperLatticeRefinementMetricKnudsen3D<T, DESCRIPTOR> quality( sLattice, converter );
-  SuperRoundingF3D<T, T> roundedQuality ( quality, RoundingMode::NearestInteger );
-  SuperDiscretizationF3D<T> discretization ( roundedQuality, 0., 2. );
-
-  vtmWriter.addFunctor( quality );
-  vtmWriter.addFunctor( velocity );
-  vtmWriter.addFunctor( pressure );
-  vtmWriter.addFunctor( yPlus );
+  if (iT == 0) {
+    SuperVTMwriter3D<T> vtmWriter(name, 0);
+    if (name == "level0") {
+      SuperLatticeRank3D rank( sLattice );
+      vtmWriter.write(rank);
+    }
+    SuperGeometryF<T,DESCRIPTOR::d> geometryF(sGeometry);
+    geometryF.getName() = name + "_geometry";
+    vtmWriter.write(geometryF);
+    vtmWriter.createMasterFile();
+  }
 
   const size_t statIter = int( iTvtk/10 );
   const size_t iTcheck  = 500;
   bool lastIteration = false;
-
-  if ( iT==0 ) {
-    // Writes the geometry, cuboid no. and rank no. as vti file for visualization
-    SuperLatticeCuboid3D<T, DESCRIPTOR> cuboid( sLattice );
-    SuperLatticeRank3D<T, DESCRIPTOR> rank( sLattice );
-    vtmWriter.write( cuboid );
-    vtmWriter.write( rank );
-    vtmWriter.createMasterFile();
-  }
 
   if ( iT%iTcheck == 0 ) {
     if ( sLattice.getStatistics().getAverageRho() > 2. ) {
@@ -372,35 +374,37 @@ void getResults( SuperLattice<T, DESCRIPTOR>& sLattice,
 
   // Writes output on the console
   if ( iT%statIter == 0 ) {
-    sLattice.setProcessingContext(ProcessingContext::Evaluation);
-
+    SuperLatticeYplus3D<T, DESCRIPTOR> yPlus( sLattice, converter, sGeometry, foilBody, 5 );
+    SuperLatticePhysVelocity3D<T, DESCRIPTOR> velocity( sLattice, converter );
+    SuperLatticePhysPressure3D<T, DESCRIPTOR> pressure( sLattice, converter );
+    
     // Timer console output
     timer.update( iT );
     timer.printStep();
 
     // Lattice statistics console output
-    sLattice.getStatistics().print( iT,converter.getPhysTime( iT ) );
+    sLattice.getStatistics().print( iT, converter.getPhysTime( iT ) );
 
     // Drag, lift, pressure drop
     AnalyticalFfromSuperF3D<T> intpolatePressure( pressure, true );
-    SuperLatticePhysDrag3D<T,DESCRIPTOR> drag( sLattice, superGeometry.getMaterialIndicator({5,6}), converter );
+    SuperLatticePhysDrag3D<T,DESCRIPTOR> drag( sLattice, sGeometry.getMaterialIndicator({5,6}), converter );
 
-    olb::Vector<T, 3> point1V = superGeometry.getStatistics().getCenterPhysR( 5 );
-    olb::Vector<T, 3> point2V = superGeometry.getStatistics().getCenterPhysR( 5 );
+    olb::Vector<T, 3> point1V = sGeometry.getStatistics().getCenterPhysR( 5 );
+    olb::Vector<T, 3> point2V = sGeometry.getStatistics().getCenterPhysR( 5 );
     T point1[3] = {};
     T point2[3] = {};
     for ( int i = 0; i<3; i++ ) {
       point1[i] = point1V[i];
       point2[i] = point2V[i];
     }
-    point1[0] = std::min(superGeometry.getStatistics().getMinPhysR( 5 )[0], superGeometry.getStatistics().getMinPhysR( 6 )[0]) - converter.getConversionFactorLength();
-    point2[0] = std::max(superGeometry.getStatistics().getMaxPhysR( 5 )[0], superGeometry.getStatistics().getMaxPhysR( 6 )[0]) + converter.getConversionFactorLength();
+    point1[0] = std::min(sGeometry.getStatistics().getMinPhysR( 5 )[0], sGeometry.getStatistics().getMinPhysR( 6 )[0]) - converter.getPhysDeltaX();
+    point2[0] = std::max(sGeometry.getStatistics().getMaxPhysR( 5 )[0], sGeometry.getStatistics().getMaxPhysR( 6 )[0]) + converter.getPhysDeltaX();
 
     T p1, p2;
     intpolatePressure( &p1,point1 );
     intpolatePressure( &p2,point2 );
 
-    clout << "pressure1=" << p1;
+    clout << name << ": pressure1=" << p1;
     clout << "; pressure2=" << p2;
 
     T pressureDrop = p1-p2;
@@ -412,28 +416,64 @@ void getResults( SuperLattice<T, DESCRIPTOR>& sLattice,
     clout << "; drag=" << dragA[0] << "; lift=" << dragA[1] << std::endl;
 
     int input[4] = {};
-    SuperMax3D<T> yPlusMaxF( yPlus, superGeometry, 1 );
+    SuperMax3D<T> yPlusMaxF( yPlus, sGeometry, 1 );
     T yPlusMax[1];
     yPlusMaxF( yPlusMax,input );
     clout << "yPlusMax=" << yPlusMax[0] << std::endl;
 
     if ( p1 != p1 ) lastIteration = true;
 
-    sLattice.setProcessingContext<Array<momenta::FixedVelocityMomentumGeneric::VELOCITY>>(ProcessingContext::Simulation);
   }
 
   // Writes the vtk files
   if ( iT%iTvtk == 0 || lastIteration ) {
-    sLattice.setProcessingContext(ProcessingContext::Evaluation);
-    vtkOutput( vtmWriter, iT, velocity, pressure, discretization );
-    sLattice.setProcessingContext<Array<momenta::FixedVelocityMomentumGeneric::VELOCITY>>(ProcessingContext::Simulation);
+    sLattice.scheduleBackgroundOutputVTK([&,name,iT](auto task) {
+      SuperVTMwriter3D<T> vtmWriter(name);
+      SuperLatticePhysVelocity3D velocityF(sLattice, converter);
+      SuperLatticePhysPressure3D pressureF(sLattice, converter);
+      SuperLatticeYplus3D<T, DESCRIPTOR> yPlusF( sLattice, converter, sGeometry, foilBody, 5 );
+      SuperLatticeRefinementMetricKnudsen3D qualityF(sLattice, converter);
+      SuperRoundingF3D<T, T> roundedQuality ( qualityF, RoundingMode::NearestInteger );
+      SuperDiscretizationF3D<T> discretizationF ( roundedQuality, 0., 2. );
+      vtmWriter.addFunctor(qualityF);
+      vtmWriter.addFunctor(yPlusF);
+      vtmWriter.addFunctor(velocityF);
+      vtmWriter.addFunctor(pressureF);
+      vtmWriter.addFunctor(discretizationF);
+      task(vtmWriter, iT);
+    });
+    
+    // SuperLatticePhysVelocity3D velocityF(sLattice, converter);
+    // SuperEuklidNorm3D<T> normVel( velocityF );
+    // BlockReduction3D2D<T> planeReductionU( normVel, Vector<T,3>({0, 0, 1}) );
+    // // write output as JPEG
+    // heatmap::plotParam<T> uScale;
+    // uScale.minValue = 0;
+    // uScale.name = "velocity_"+name;
+    // heatmap::write( planeReductionU, iT, uScale) ;
+    
+    // SuperLatticePhysPressure3D pressureF(sLattice, converter);
+    // BlockReduction3D2D<T> planeReductionP( pressureF, Vector<T,3>({0, 0, 1}) );
+    // heatmap::plotParam<T> pScale;
+    // pScale.name = "pressure_"+name;
+    // heatmap::write( planeReductionP, iT, pScale );
+    
+    // SuperLatticeYplus3D<T, DESCRIPTOR> yPlusF( sLattice, converter, sGeometry, foilBody, 5 );
+    // SuperLatticeRefinementMetricKnudsen3D qualityF(sLattice, converter);
+    // SuperRoundingF3D<T, T> roundedQuality ( qualityF, RoundingMode::NearestInteger );
+    // SuperDiscretizationF3D<T> discretizationF ( roundedQuality, 0., 2. );
+    // BlockReduction3D2D<T> planeReductionQ( discretizationF, Vector<T,3>({0, 0, 1}) );
+    // heatmap::plotParam<T> jpeg_scale;
+    // jpeg_scale.colour = "blackbody";
+    // jpeg_scale.name = "quality_"+name;
+    // heatmap::write( planeReductionQ, iT, jpeg_scale );
   }
 
   if ( iT%50 == 0 ) {
     int fluidNumber = 1;
     if ( withDampingLayer ) fluidNumber = 7;
-    setUAverage( sLattice, superGeometry, fluidNumber );
-    clout << "uAverage(" << iT << ")= " << *uAverage << std::endl;
+    setUAverage( sLattice, sGeometry, fluidNumber );
+    clout << "uAverage(" << iT << ")_" << name << "= " << *uAverage << std::endl;
   }
 
   if ( lastIteration ) {
@@ -442,6 +482,8 @@ void getResults( SuperLattice<T, DESCRIPTOR>& sLattice,
     timer.printSummary();
     exit(1);
   }
+
+  sLattice.setProcessingContext<Array<momenta::FixedVelocityMomentumGeneric::VELOCITY>>(ProcessingContext::Simulation);
 }
 
 int main( int argc, char* argv[] )
@@ -455,8 +497,8 @@ int main( int argc, char* argv[] )
   std::string foilName      = args.getValueOrFallback<std::string>( "--foilname", "DU93W210TET05");
   const int angle           = args.getValueOrFallback( "--angle",         2);   // in deg
   T lengthDomain            = args.getValueOrFallback( "--lx",            6);   // in m
-  const T heightDomain      = args.getValueOrFallback( "--ly",            3);   // in m
-  const T depthDomain       = args.getValueOrFallback( "--lz",            1.2); // in m
+  const T heightDomain      = args.getValueOrFallback( "--ly",            2);   // in m
+  const T depthDomain       = args.getValueOrFallback( "--lz",            0.2); // in m
   const size_t res          = args.getValueOrFallback( "--res",           50);  // voxel/m (dx_LU/m)
   size_t boundaryDepth      = args.getValueOrFallback( "--bd",            20);  // depth of damping layer in LU
   T maxPhysT                = args.getValueOrFallback( "--tmax",          10);  // in s
@@ -464,7 +506,7 @@ int main( int argc, char* argv[] )
   size_t nout               = args.getValueOrFallback( "--nout",          5);   // minimum number of vtk outputs
   size_t iout               = args.getValueOrFallback( "--iout",          0);   // iterations for vtk outputs
   T tout                    = args.getValueOrFallback( "--tout",          0);   // timestep for vtk outputs
-  T maxPhysU                = args.getValueOrFallback( "--umax",          1);   // in m/s
+  T maxPhysU                = args.getValueOrFallback( "--umax",          .01);   // in m/s
   T Re                      = args.getValueOrFallback( "--Re",            0);
   T tau                     = args.getValueOrFallback( "--tau",           0);   // previously tau=0.53 fixed
   const T Kin               = args.getValueOrFallback( "--permeability",  1e-8);
@@ -472,9 +514,8 @@ int main( int argc, char* argv[] )
   const T tMaxInit          = args.getValueOrFallback( "--tmaxinit",      2);
   T charL                   = args.getValueOrFallback( "--charL",         1);
   T iniPhysU                = args.getValueOrFallback( "--iniPhysU",      0);
-  const int outlet          = args.getValueOrFallback( "--outlet",        1);
+  const int outlet          = args.getValueOrFallback( "--outlet",        3);  // default: interpolated pressure outlet
   const bool debug          = args.contains("--debug");
-  const bool debug_geometry = args.contains("--debug-geometry");
   const bool porousTE       = !args.contains("--no-porous");                    // --no-porous = no porous material in trailing edge
   const bool withDampingLayer   = !args.contains("--no-damping");                   // --no-damping = no damping layer around domain
 
@@ -518,7 +559,7 @@ int main( int argc, char* argv[] )
   OstreamManager clout( std::cout, "main" );
   clout << "outdir specified to " << outdir_mod.str() << std::endl;
 
-  OutletType outlettype = localpressure;
+  OutletType outlettype = intervelocity;
   switch ( outlet ) {
     case 1:   outlettype = localpressure;     clout << "Outlet boundary condition type specified to local pressure."            << std::endl; break;
     case 2:   outlettype = localvelocity;     clout << "Outlet boundary condition type specified to local velocity."            << std::endl; break;
@@ -531,7 +572,7 @@ int main( int argc, char* argv[] )
   if ( porousTE ) clout << "Calculating with porous trailing edge" << std::endl;
   else clout << "Calculating without trailing edge" << std::endl;
 
-  UnitConverterFromResolutionAndRelaxationTime<T, DESCRIPTOR> const converter(
+  UnitConverterFromResolutionAndRelaxationTime<T, DESCRIPTOR> const converterL0(
     (size_t)  res,            // resolution: number of voxels per charPhysL
     (T)       tau,            // latticeRelaxationTime: relaxation time, have to be greater than 0.5!
     (T)       charL,          // charPhysLength: reference length of simulation geometry
@@ -539,11 +580,11 @@ int main( int argc, char* argv[] )
     (T)       viscosity,      // physViscosity: physical kinematic viscosity in __m^2 / s__
     (T)       1.204           // physDensity: physical density in __kg / m^3__; air at 101.325 kPa and 20 °C
   );
-  T maxLatticeU                 = converter.getLatticeVelocity( maxPhysU );
+  T maxLatticeU                 = converterL0.getLatticeVelocity( maxPhysU );
   // Prints the converter log as console output
-  converter.print();
+  converterL0.print();
   // Writes the converter log in a file
-  converter.write("du93_3d");
+  converterL0.write("du93_3d");
 
   // === 2nd Step: Prepare Geometry ===
 
@@ -552,48 +593,81 @@ int main( int argc, char* argv[] )
   std::string foilBodyFilename = foilName + "_" + std::to_string(angle) + "deg_body.stl";
   std::string foilTailFilename = foilName + "_" + std::to_string(angle) + "deg_tail.stl";
   clout << "Loading airfoil body from " << foilBodyFilename << " and airfoil tail from " << foilTailFilename << std::endl;
-  STLreader<T> foilBody( foilBodyFilename, converter.getConversionFactorLength() );
-  STLreader<T> foilTail( foilTailFilename, converter.getConversionFactorLength() );
+  STLreader<T> foilBody( foilBodyFilename, converterL0.getPhysDeltaX() );
+  STLreader<T> foilTail( foilTailFilename, converterL0.getPhysDeltaX() );
 
   // Instantiation of a cuboidGeometry with weights
-#ifdef PARALLEL_MODE_MPI
-  const int noOfCuboids = singleton::mpi().getSize();
-#else
-  const int noOfCuboids = 7;
-#endif
+// #ifdef PARALLEL_MODE_MPI
+//   const int noOfCuboids = singleton::mpi().getSize();
+// #else
+//   const int noOfCuboids = 7;
+// #endif
   // setup domain
-  if ( withDampingLayer ) lengthDomain += converter.getPhysLength( boundaryDepth );
-  Vector<T,3> originDomain( -lengthDomain/3, -heightDomain/2, 0.1 );  //
-  Vector<T,3> extendDomain( lengthDomain, heightDomain, depthDomain );  // size of the domain
-  std::shared_ptr<IndicatorF3D<T>> domain = std::make_shared<IndicatorCuboid3D<T>>( extendDomain, originDomain );
+  if ( withDampingLayer ) lengthDomain += converterL0.getPhysLength( boundaryDepth );
 
-  CuboidGeometry3D<T> cuboidGeometry(*(domain),
-                                     converter.getConversionFactorLength(),
-                                     noOfCuboids
-                                     );
-  cuboidGeometry.setPeriodicity( {false, true, true} );
+  // cuboidGeometry.setPeriodicity( {false, true, true} );
+  Vector<T,3> extendDomain = {lengthDomain, heightDomain, depthDomain};
+  Vector<T,3> originDomain = {-lengthDomain/3, -heightDomain/2, -depthDomain/2};
+  IndicatorCuboid3D<T> cuboidDomainL0(extendDomain, originDomain);
+  IndicatorLayer3D<T> domainL0(cuboidDomainL0, converterL0.getPhysDeltaX());
+  CuboidGeometry3D<T> cGeometryL0(domainL0, converterL0.getPhysDeltaX());
+  // split 0th cuboid along dimension 0, creating cuboids 0,1,2 with ratios .15, .5, .35
+  std::vector<T> xSplit = {0.15,0.5,0.35};
+  cGeometryL0.splitFractional(0, 0, xSplit);
+  // split middle cuboid (1) along dimension 1, inserting 2 back at 1, splitting 1 into 2,3,4
+  std::vector<T> ySplit = {0.2,0.6,0.2};
+  cGeometryL0.splitFractional(1, 1, ySplit);
+  // split centre cuboid (3) along dimension 0, inserting 4 back at 3, splitting 3 into 4,5
+  cGeometryL0.splitFractional(3, 0, {0.5,0.5});
+  // split centre cuboids (3,5) along dimension 1
+  cGeometryL0.splitFractional(4, 1, {0.5,0.5});  // 5 back at 4, 4 into 5,6
+  cGeometryL0.splitFractional(4, 1, {0.5,0.5});  // 5,6 back at 4,5, 4 into 6,7
+  cGeometryL0.print();
 
-  // Instantiation of a loadBalancer
-  HeuristicLoadBalancer<T> loadBalancer( cuboidGeometry );
+  auto cGeometryL1 = cGeometryL0;
+  Vector<T,3> originRefinement = {xSplit[0]*lengthDomain, ySplit[0]*heightDomain, 0};
+  originRefinement += originDomain;
+  IndicatorCuboid3D<T> toBeRefinedI( {xSplit[1]*lengthDomain*T(.99), ySplit[1]*heightDomain*T(.99), depthDomain},
+                                     originRefinement );
+  cGeometryL1.remove(toBeRefinedI);
+  cGeometryL1.refine(2);
+  cGeometryL1.print();
 
-  // Instantiation of a superGeometry
-  SuperGeometry<T,3> superGeometry( cuboidGeometry, loadBalancer );
+  // Adjust weights for balancing
+  for (int iC=0; iC < cGeometryL0.size(); ++iC) {
+    auto& cuboid = cGeometryL0.get(iC);
+    cuboid.setWeight(cuboid.getLatticeVolume());
+    auto origin = cGeometryL0.get(iC).getOrigin();
+    for (int jC=0; jC < cGeometryL1.size(); ++jC) {
+      if (cGeometryL1.get(jC).getOrigin() == origin) {
+        cuboid.setWeight(cuboid.getWeight() + 2*cGeometryL1.get(jC).getLatticeVolume());
+      }
+    }
+  }
 
-  prepareGeometry( converter, foilBody, foilTail, superGeometry, withDampingLayer, boundaryDepth );
+  // // === 3rd Step: Prepare Lattice ===
+  HeuristicLoadBalancer<T> loadBalancerL0(cGeometryL0);
+  SuperGeometry<T,3> sGeometryL0(cGeometryL0, loadBalancerL0);
+  prepareGeometry( converterL0, foilBody, foilTail, sGeometryL0, extendDomain, originDomain, withDampingLayer, boundaryDepth, true );
+  SuperLattice<T,DESCRIPTOR> sLatticeL0( cGeometryL0, loadBalancerL0, 3, converterL0);
+  prepareLattice( sLatticeL0, converterL0, foilBody, foilTail, sGeometryL0, porousTE, Kin, iniPhysU, withDampingLayer, boundaryDepth, dampingStrength, outlettype, extendDomain, originDomain, "level0" );
 
-  if ( debug_geometry ) exit(1);
+  RefinedLoadBalancer<T,3> loadBalancerL1( cGeometryL0, loadBalancerL0, cGeometryL1 );
+  auto converterL1 = convectivelyRefineUnitConverter( converterL0, 2 );
+  converterL1.print();
+  SuperGeometry<T,3> sGeometryL1( cGeometryL1, loadBalancerL1 );
+  prepareGeometry( converterL1, foilBody, foilTail, sGeometryL1, extendDomain, originDomain, withDampingLayer, boundaryDepth, false );
+  SuperLattice<T,DESCRIPTOR> sLatticeL1(cGeometryL1, loadBalancerL1, 3, converterL1);
+  prepareLattice( sLatticeL1, converterL1, foilBody, foilTail, sGeometryL1, porousTE, Kin, iniPhysU, withDampingLayer, boundaryDepth, dampingStrength, outlettype, extendDomain, originDomain, "level1" );
 
-  // === 3rd Step: Prepare Lattice ===
-  SuperLattice<T, DESCRIPTOR> sLattice( superGeometry );
-
-  //prepareLattice and set boundaryCondition
-  prepareLattice( sLattice, converter, foilBody, foilTail, superGeometry, porousTE, Kin, iniPhysU, withDampingLayer, boundaryDepth, dampingStrength, outlettype);
+  auto coarseToFine = refinement::lagrava::makeCoarseToFineCoupler(sLatticeL0, sGeometryL0, sLatticeL1, sGeometryL1);
+  auto fineToCoarse = refinement::lagrava::makeFineToCoarseCoupler(sLatticeL0, sGeometryL0, sLatticeL1, sGeometryL1);
 
   // === 3a-rd Step: calculate iterations from input ===
   // iTmax depends on maximum physical time. If iTmax is provided in command line, it is an upper bound
-  if ( iTmax == 0 ) iTmax = converter.getLatticeTime( maxPhysT );
-  else iTmax = std::min( iTmax, converter.getLatticeTime( maxPhysT ) );
-  size_t iTmaxStart = converter.getLatticeTime( tMaxInit );
+  if ( iTmax == 0 ) iTmax = converterL0.getLatticeTime( maxPhysT );
+  else iTmax = std::min( iTmax, converterL0.getLatticeTime( maxPhysT ) );
+  size_t iTmaxStart = converterL0.getLatticeTime( tMaxInit );
   // nout is the minimum number of vtk outputs --> take max between nout and nout derived from iout or tout
   size_t nout_from_iout = 0, nout_from_tout = 0;
   if ( iout != 0 ) { nout_from_iout = size_t( iTmax / iout ); nout = std::max( nout, nout_from_iout ); }
@@ -603,21 +677,39 @@ int main( int argc, char* argv[] )
 
   // === 4th Step: Main Loop with Timer ===
   clout << "starting simulation..." << std::endl;
-  util::Timer<T> timer( iTmax, superGeometry.getStatistics().getNvoxel() );
-  timer.start();
+  util::Timer<T> timerL0( iTmax, sGeometryL0.getStatistics().getNvoxel() );
+  util::Timer<T> timerL1( iTmax, sGeometryL1.getStatistics().getNvoxel() );
+  timerL0.start();
+  timerL1.start();
 
   for (size_t iT = 0; iT < iTmax; ++iT) {
-    // === 5th Step: Definition of Initial and Boundary Conditions ===
-    setBoundaryValues( sLattice, converter, iT, superGeometry, iTmaxStart, maxLatticeU, maxPhysU, iniPhysU, withDampingLayer, outlettype );
+    // === Computation and Output of the Results ===
+    getResults(sLatticeL0, converterL0, iT, sGeometryL0, timerL0, foilBody, iTmax, iTmaxStart, iTvtk, withDampingLayer, "level0");
+    getResults(sLatticeL1, converterL1, iT, sGeometryL1, timerL1, foilBody, iTmax, iTmaxStart, iTvtk, withDampingLayer, "level1");
 
-    // === 6th Step: Collide and Stream Execution ===
-    sLattice.collideAndStream();
+    // === Definition of Initial and Boundary Conditions ===
+    setBoundaryValues( sLatticeL0, converterL0, iT, sGeometryL0, iTmaxStart, maxLatticeU, maxPhysU, iniPhysU, withDampingLayer, outlettype, "level0" );
+    sLatticeL0.collideAndStream();
 
-    // === 7th Step: Computation and Output of the Results ===
-    getResults( sLattice, converter, iT, superGeometry, timer, foilBody, iTmax, iTmaxStart, iTvtk, withDampingLayer );
+    sLatticeL1.collideAndStream();
+    coarseToFine->apply(meta::id<refinement::lagrava::HalfTimeCoarseToFineO>{});
+
+    sLatticeL1.collideAndStream();
+    coarseToFine->apply(meta::id<refinement::lagrava::FullTimeCoarseToFineO>{});
+
+    fineToCoarse->apply(meta::id<refinement::lagrava::FineToCoarseO>{});
+
+    if (iT % converterL0.getLatticeTime(0.1) == 0) {
+      timerL0.update(iT);
+      timerL0.printStep();
+      sLatticeL0.getStatistics().print(iT, converterL0.getPhysTime(iT));
+    }
+
   }
 
-  timer.stop();
-  timer.printSummary();
+  timerL0.stop();
+  timerL0.printSummary();
+  timerL1.stop();
+  timerL1.printSummary();
   std::cout.rdbuf(originalCoutBuffer);
 }
