@@ -660,8 +660,10 @@ int main( int argc, char* argv[] )
   SuperLattice<T,DESCRIPTOR> sLatticeL1(cGeometryL1, loadBalancerL1, 3, converterL1);
   prepareLattice( sLatticeL1, converterL1, foilBody, foilTail, sGeometryL1, porousTE, Kin, iniPhysU, withDampingLayer, boundaryDepth, dampingStrength, outlettype, extendDomain, originDomain, "level1" );
 
+  clout << "Coupling coarse to fine grid(s) ..." << std::endl;
   auto coarseToFine = refinement::lagrava::makeCoarseToFineCoupler(sLatticeL0, sGeometryL0, sLatticeL1, sGeometryL1);
   auto fineToCoarse = refinement::lagrava::makeFineToCoarseCoupler(sLatticeL0, sGeometryL0, sLatticeL1, sGeometryL1);
+  clout << "Coupling coarse to fine grid(s) ... OK" << std::endl;
 
   // === 3a-rd Step: calculate iterations from input ===
   // iTmax depends on maximum physical time. If iTmax is provided in command line, it is an upper bound
