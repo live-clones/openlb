@@ -31,42 +31,35 @@ using namespace olb::descriptors;
 using T = float;
 using DESCRIPTOR = D3Q19<>;
 
-void prepareGeometry(const UnitConverter<T,DESCRIPTOR>& converter,
-                     SuperGeometry<T,3>& sGeometry,
-                     Vector<T,3> extendDomain,
-                     Vector<T,3> originDomain)
-{
-  OstreamManager clout( std::cout,"prepareGeometry" );
+void prepareGeometry( const UnitConverter<T,DESCRIPTOR>& converter,
+                      SuperGeometry<T,3>& sGeometry,
+                      Vector<T,3> extendDomain,
+                      Vector<T,3> originDomain,
+                      std::string name
+                    ) {
+  OstreamManager clout( std::cout,"prepareGeometry_"+name );
   clout << "Prepare Geometry ..." << std::endl;
+  sGeometry.rename( 0, 2 );
+
+  T dx_half = converter.getPhysDeltaX()/2.;  
+  Vector<T,3> origin = originDomain - dx_half;
+  Vector<T,3> extend = extendDomain + 2*dx_half;
+
+  origin[0] = originDomain[0] + dx_half;
+  extend[0] = extendDomain[0] - 2*dx_half;
+  IndicatorCuboid3D<T> domainLayer(extend, origin);
+  sGeometry.rename( 2, 1, domainLayer );
   
-  IndicatorCuboid3D<T> cuboidDomain(extendDomain, originDomain);
-  IndicatorLayer3D<T> domainLayer(cuboidDomain, converter.getPhysDeltaX());
-  Vector<T,3> origin = domainLayer.getMin();
-  Vector<T,3> extend = domainLayer.getMax() - domainLayer.getMin();
-
-  sGeometry.rename( 0, 2, domainLayer );
-  sGeometry.rename( 2, 1, cuboidDomain );
-  sGeometry.clean();
-
-  // Vector<T,3> origin = sGeometry.getStatistics().getMinPhysR(2);
-  origin[1] += converter.getPhysDeltaX()/2.;
-  origin[2] += converter.getPhysDeltaX()/2.;
-
-  // Vector<T,3> extend = sGeometry.getStatistics().getMaxPhysR(2);
-  extend[1] = extend[1]-origin[1]-converter.getPhysDeltaX()/2.;
-  extend[2] = extend[2]-origin[2]-converter.getPhysDeltaX()/2.;
-
   // Set material number for inflow
-  origin[0] = sGeometry.getStatistics().getMinPhysR(2)[0]-converter.getPhysDeltaX();
-  extend[0] = 2*converter.getPhysDeltaX();
+  origin[0] = originDomain[0] - dx_half;
+  extend[0] = 2*dx_half;
   IndicatorCuboid3D<T> inflow(extend, origin);
-  sGeometry.rename(2,3, inflow);
+  sGeometry.rename( 2, 3, inflow);
 
   // Set material number for outflow
-  origin[0] = sGeometry.getStatistics().getMaxPhysR(2)[0]-converter.getPhysDeltaX();
-  extend[0] = 2*converter.getPhysDeltaX();
+  origin[0] = originDomain[0]+extendDomain[0]-dx_half;
   IndicatorCuboid3D<T> outflow(extend, origin);
-  sGeometry.rename(2,4,outflow);
+  sGeometry.rename( 2, 4, outflow);
 
   sGeometry.clean();
   sGeometry.checkForErrors();
@@ -79,16 +72,17 @@ void prepareGeometry(const UnitConverter<T,DESCRIPTOR>& converter,
 void prepareGeometryFine(const UnitConverter<T,DESCRIPTOR>& converter,
                          SuperGeometry<T,3>& sGeometry,
                          STLreader<T>& foilBody,
-                         STLreader<T>& foilTail)
-{
-  OstreamManager clout( std::cout,"prepareGeometryFine");
+                         STLreader<T>& foilTail,
+                         std::string name
+                        ) {
+  OstreamManager clout( std::cout,"prepareGeometryFine_"+name);
   clout << "Prepare Geometry ..." << std::endl;
 
-  sGeometry.rename(0,1);
+  sGeometry.rename( 0, 1 );
 
   // IndicatorSphere3D<T> sphereI({0.55, 0.25, 0.25}, 0.1);
-  sGeometry.rename(1,2, foilBody);
-  sGeometry.rename(1,2, foilTail);
+  sGeometry.rename( 1, 5, foilBody );
+  sGeometry.rename( 1, 5, foilTail );
 
   sGeometry.clean();
   sGeometry.checkForErrors();
@@ -112,16 +106,16 @@ void prepareLattice(SuperLattice<T,DESCRIPTOR>& sLattice,
   sLattice.defineDynamics<BGKdynamics>(bulkIndicator);
 
   // Material=2 -->bounce back
-  boundary::set<boundary::BounceBack>(sLattice, sGeometry, 2);
+  boundary::set<boundary::BounceBack>( sLattice, sGeometry, 5 );
 
   //if interpolated boundary conditions are chosen
-  boundary::set<boundary::InterpolatedVelocity>(sLattice, sGeometry, 3);
-  boundary::set<boundary::InterpolatedPressure>(sLattice, sGeometry, 4);
+  boundary::set<boundary::InterpolatedVelocity>( sLattice, sGeometry, 3 );
+  boundary::set<boundary::InterpolatedPressure>( sLattice, sGeometry, 4 );
 
   // Initial conditions
   AnalyticalConst3D<T,T> rhoF( 1 );
   Vector<T,3> velocityV;
-  AnalyticalConst3D<T,T> uF(velocityV);
+  AnalyticalConst3D<T,T> uF( velocityV );
 
   // Initialize all values of distribution functions to their local equilibrium
   sLattice.defineRhoU( bulkIndicator, rhoF, uF );
@@ -144,12 +138,12 @@ void setBoundaryValues(SuperLattice<T, DESCRIPTOR>& sLattice,
                        T maxPhysU,
                        T iniPhysU)
 {
-  OstreamManager clout( std::cout,"setBoundaryValues" );
+  OstreamManager clout( std::cout, "setBoundaryValues" );
 
   // No of time steps for smooth start-up
   std::size_t iTupdate = 30;
 
-  if (iT % iTupdate == 0 && iT <= iTmaxStart) {
+  if ( iT % iTupdate == 0 && iT <= iTmaxStart ) {
     PolynomialStartScale<T,std::size_t> StartScale( iTmaxStart, T( maxLatticeU - iniPhysU ) );
 
     // Creates and sets the Poiseuille inflow profile using functors
@@ -179,9 +173,9 @@ void writeResults(SuperLattice<T, DESCRIPTOR>& sLattice,
 {
   OstreamManager clout(std::cout, name);
 
-  if (iT == 0) {
+  if ( iT == 0 ) {
     SuperVTMwriter3D<T> vtmWriter(name, 0);
-    if (name == "level0") {
+    if ( name == "level0" ) {
       SuperLatticeRank3D rank( sLattice );
       vtmWriter.write(rank);
     }
@@ -276,9 +270,9 @@ int main(int argc, char* argv[])
 
   Vector<T,3> extendDomain = {lx, ly, lz};
   Vector<T,3> originDomain = {x0, y0, z0};
-  IndicatorCuboid3D<T> domainI(extendDomain,originDomain);
-  IndicatorLayer3D<T> domainLayerI(domainI, converterL0.getPhysDeltaX());
-  CuboidGeometry3D<T> cGeometryL0(domainLayerI, converterL0.getPhysDeltaX());
+  IndicatorCuboid3D<T> domainI( extendDomain,originDomain );
+  IndicatorLayer3D<T> domainLayerI( domainI, converterL0.getPhysDeltaX() );
+  CuboidGeometry3D<T> cGeometryL0( domainLayerI, converterL0.getPhysDeltaX() );
   cGeometryL0.setPeriodicity( {false, true, true} );
   // split 0th cuboid along dimension 0, creating cuboids 0,1,2 with ratios .15, .5, .35
   std::vector<T> xSplit = {0.3/2.5,1.2/2.5,1/2.5};
@@ -296,30 +290,30 @@ int main(int argc, char* argv[])
   auto cGeometryL1 = cGeometryL0;
   Vector<T,3> originRefinement1 = {xSplit[0]*lx, ySplit[0]*ly, 0};
   originRefinement1 += originDomain;
-  Vector<T,3> extendRefinement1 = {xSplit[1]*lx*T(.999), ySplit[1]*ly*T(.999), lz*T(.999)};
+  Vector<T,3> extendRefinement1 = {xSplit[1]*lx*T(.99), ySplit[1]*ly*T(.99), lz};
   clout << "originRefinement1=" << originRefinement1 << "; extendRefinement1=" << extendRefinement1 << std::endl;
   IndicatorCuboid3D<T> toBeRefinedI( extendRefinement1, originRefinement1 );
   cGeometryL1.remove( toBeRefinedI );
   cGeometryL1.refine(2);
   cGeometryL1.print();
 
-  // split 0th cuboid along dimension 0, creating cuboids 0,1,2 with ratios .15, .5, .35
-  xSplit = {0.15,0.5,0.35};
-  cGeometryL1.splitFractional(0, 0, xSplit);
-  // split middle cuboid (1) along dimension 1, inserting 2 back at 1, splitting 1 into 2,3,4
-  ySplit = {0.2,0.6,0.2};
-  cGeometryL1.splitFractional(1, 1, ySplit);
-  cGeometryL1.print();
+  // // split 0th cuboid along dimension 0, creating cuboids 0,1,2 with ratios .15, .5, .35
+  // xSplit = {0.15,0.5,0.35};
+  // cGeometryL1.splitFractional(0, 0, xSplit);
+  // // split middle cuboid (1) along dimension 1, inserting 2 back at 1, splitting 1 into 2,3,4
+  // ySplit = {0.2,0.6,0.2};
+  // cGeometryL1.splitFractional(1, 1, ySplit);
+  // cGeometryL1.print();
 
-  auto cGeometryL2 = cGeometryL1;
-  Vector<T,3> originRefinement2 = {xSplit[0]*extendRefinement1[0], ySplit[0]*extendRefinement1[1], 0};
-  originRefinement2 += originRefinement1;
-  Vector<T,3> extendRefinement2 = {xSplit[1]*extendRefinement1[0]*T(.999), ySplit[1]*extendRefinement1[1]*T(.999), extendRefinement1[2]*T(.999)};
-  clout << "originRefinement2=" << originRefinement2 << "; extendRefinement2=" << extendRefinement2 << std::endl;
-  IndicatorCuboid3D<T> toBeRefinedII( extendRefinement2, originRefinement2 );
-  cGeometryL2.remove( toBeRefinedII );
-  cGeometryL2.refine(2);
-  cGeometryL2.print();
+  // auto cGeometryL2 = cGeometryL1;
+  // Vector<T,3> originRefinement2 = {xSplit[0]*extendRefinement1[0], ySplit[0]*extendRefinement1[1], 0};
+  // originRefinement2 += originRefinement1;
+  // Vector<T,3> extendRefinement2 = {xSplit[1]*extendRefinement1[0]*T(.999), ySplit[1]*extendRefinement1[1]*T(.999), extendRefinement1[2]};
+  // clout << "originRefinement2=" << originRefinement2 << "; extendRefinement2=" << extendRefinement2 << std::endl;
+  // IndicatorCuboid3D<T> toBeRefinedII( extendRefinement2, originRefinement2 );
+  // cGeometryL2.remove( toBeRefinedII );
+  // cGeometryL2.refine(2);
+  // cGeometryL2.print();
 
   // Adjust weights for balancing
   for (int iC=0; iC < cGeometryL0.size(); ++iC) {
@@ -327,14 +321,14 @@ int main(int argc, char* argv[])
     cuboid1.setWeight(cuboid1.getLatticeVolume());
     auto origin1 = cGeometryL0.get(iC).getOrigin();
     for (int jC=0; jC < cGeometryL1.size(); ++jC) {
-      auto& cuboid2 = cGeometryL1.get(jC);
-      cuboid2.setWeight(cuboid2.getLatticeVolume());
-      auto origin2 = cGeometryL1.get(jC).getOrigin();
-      for (int kC=0; kC < cGeometryL2.size(); ++kC) {
-        if (cGeometryL2.get(kC).getOrigin() == origin2) {
-          cuboid2.setWeight(cuboid2.getWeight() + 2*cGeometryL2.get(kC).getLatticeVolume());
-        }
-      }
+      // auto& cuboid2 = cGeometryL1.get(jC);
+      // cuboid2.setWeight(cuboid2.getLatticeVolume());
+      // auto origin2 = cGeometryL1.get(jC).getOrigin();
+      // for (int kC=0; kC < cGeometryL2.size(); ++kC) {
+      //   if (cGeometryL2.get(kC).getOrigin() == origin2) {
+      //     cuboid2.setWeight(cuboid2.getWeight() + 2*cGeometryL2.get(kC).getLatticeVolume());
+      //   }
+      // }
       if (cGeometryL1.get(jC).getOrigin() == origin1) {
         cuboid1.setWeight(cuboid1.getWeight() + 2*cGeometryL1.get(jC).getLatticeVolume());
       }
@@ -344,9 +338,9 @@ int main(int argc, char* argv[])
   STLreader<T> foilBody( "DU93W210TET05_2deg_body_small.stl", converterL0.getPhysDeltaX() );
   STLreader<T> foilTail( "DU93W210TET05_2deg_tail_small.stl", converterL0.getPhysDeltaX() );
 
-  HeuristicLoadBalancer<T> loadBalancerL0(cGeometryL0);
-  SuperGeometry<T,3> sGeometryL0(cGeometryL0, loadBalancerL0);
-  prepareGeometry(converterL0, sGeometryL0, extendDomain, originDomain);
+  HeuristicLoadBalancer<T> loadBalancerL0( cGeometryL0 );
+  SuperGeometry<T,3> sGeometryL0( cGeometryL0, loadBalancerL0 );
+  prepareGeometry( converterL0, sGeometryL0, extendDomain, originDomain, "level0" );
   SuperLattice<T,DESCRIPTOR> sLatticeL0(cGeometryL0, loadBalancerL0, 3, converterL0);
   prepareLattice(sLatticeL0, converterL0, sGeometryL0);
 
@@ -354,17 +348,17 @@ int main(int argc, char* argv[])
   auto converterL1 = convectivelyRefineUnitConverter(converterL0, 2);
   converterL1.print();
   SuperGeometry<T,3> sGeometryL1(cGeometryL1, loadBalancerL1);
-  prepareGeometryFine(converterL1, sGeometryL1, foilBody, foilTail);
+  prepareGeometryFine(converterL1, sGeometryL1, foilBody, foilTail, "level1");
   SuperLattice<T,DESCRIPTOR> sLatticeL1(cGeometryL1, loadBalancerL1, 3, converterL1);
   prepareLattice(sLatticeL1, converterL1, sGeometryL1);
 
-  RefinedLoadBalancer<T,3> loadBalancerL2(cGeometryL1, loadBalancerL1, cGeometryL2);
-  auto converterL2 = convectivelyRefineUnitConverter(converterL1, 2);
-  converterL2.print();
-  SuperGeometry<T,3> sGeometryL2(cGeometryL2, loadBalancerL2);
-  prepareGeometryFine(converterL2, sGeometryL2, foilBody, foilTail);
-  SuperLattice<T,DESCRIPTOR> sLatticeL2(cGeometryL2, loadBalancerL2, 3, converterL2);
-  prepareLattice(sLatticeL2, converterL2, sGeometryL2);
+  // RefinedLoadBalancer<T,3> loadBalancerL2(cGeometryL1, loadBalancerL1, cGeometryL2);
+  // auto converterL2 = convectivelyRefineUnitConverter(converterL1, 2);
+  // converterL2.print();
+  // SuperGeometry<T,3> sGeometryL2(cGeometryL2, loadBalancerL2);
+  // prepareGeometryFine(converterL2, sGeometryL2, foilBody, foilTail);
+  // SuperLattice<T,DESCRIPTOR> sLatticeL2(cGeometryL2, loadBalancerL2, 3, converterL2);
+  // prepareLattice(sLatticeL2, converterL2, sGeometryL2);
 
   clout << "Coupling coarse to fine grid(s) ..." << std::endl;
   auto coarseToFine1 = refinement::lagrava::makeCoarseToFineCoupler(
@@ -373,12 +367,12 @@ int main(int argc, char* argv[])
   auto fineToCoarse1 = refinement::lagrava::makeFineToCoarseCoupler(
     sLatticeL0, sGeometryL0,
     sLatticeL1, sGeometryL1);
-  auto coarseToFine2 = refinement::lagrava::makeCoarseToFineCoupler(
-    sLatticeL1, sGeometryL1,
-    sLatticeL2, sGeometryL2);
-  auto fineToCoarse2 = refinement::lagrava::makeFineToCoarseCoupler(
-    sLatticeL1, sGeometryL1,
-    sLatticeL2, sGeometryL2);
+  // auto coarseToFine2 = refinement::lagrava::makeCoarseToFineCoupler(
+  //   sLatticeL1, sGeometryL1,
+  //   sLatticeL2, sGeometryL2);
+  // auto fineToCoarse2 = refinement::lagrava::makeFineToCoarseCoupler(
+  //   sLatticeL1, sGeometryL1,
+  //   sLatticeL2, sGeometryL2);
   clout << "Coupling coarse to fine grid(s) ... OK" << std::endl;
 
   // iTmax depends on maximum physical time. If iTmax is provided in command line, it is an upper bound
@@ -397,14 +391,15 @@ int main(int argc, char* argv[])
   util::Timer<T> timer( converterL0.getLatticeTime(maxPhysT),
                         sGeometryL0.getStatistics().getNvoxel()
                         + 2*sGeometryL1.getStatistics().getNvoxel()
-                        + 2*2*sGeometryL2.getStatistics().getNvoxel());
+                        // + 2*2*sGeometryL2.getStatistics().getNvoxel()
+                      );
   timer.start();
 
   for (std::size_t iT = 0; iT < converterL0.getLatticeTime(maxPhysT); ++iT) {
     if (iT % iTvtk == 0) {
       writeResults(sLatticeL0, converterL0, iT, sGeometryL0, "level0");
       writeResults(sLatticeL1, converterL1, iT, sGeometryL1, "level1");
-      writeResults(sLatticeL2, converterL2, iT, sGeometryL2, "level2");
+      // writeResults(sLatticeL2, converterL2, iT, sGeometryL2, "level2");
     }
 
     setBoundaryValues( sLatticeL0, converterL0, iT, sGeometryL0, iTmaxStart, maxLatticeU, maxPhysU, iniPhysU );
@@ -413,24 +408,24 @@ int main(int argc, char* argv[])
       sLatticeL1.collideAndStream();
       coarseToFine1->apply(meta::id<refinement::lagrava::HalfTimeCoarseToFineO>{});
 
-        sLatticeL2.collideAndStream();
-        coarseToFine2->apply(meta::id<refinement::lagrava::HalfTimeCoarseToFineO>{});
+        // sLatticeL2.collideAndStream();
+        // coarseToFine2->apply(meta::id<refinement::lagrava::HalfTimeCoarseToFineO>{});
 
-        sLatticeL2.collideAndStream();
-        coarseToFine2->apply(meta::id<refinement::lagrava::FullTimeCoarseToFineO>{});
+        // sLatticeL2.collideAndStream();
+        // coarseToFine2->apply(meta::id<refinement::lagrava::FullTimeCoarseToFineO>{});
 
-        fineToCoarse2->apply(meta::id<refinement::lagrava::FineToCoarseO>{});
+        // fineToCoarse2->apply(meta::id<refinement::lagrava::FineToCoarseO>{});
 
       sLatticeL1.collideAndStream();
       coarseToFine1->apply(meta::id<refinement::lagrava::FullTimeCoarseToFineO>{});
 
-        sLatticeL2.collideAndStream();
-        coarseToFine2->apply(meta::id<refinement::lagrava::HalfTimeCoarseToFineO>{});
+        // sLatticeL2.collideAndStream();
+        // coarseToFine2->apply(meta::id<refinement::lagrava::HalfTimeCoarseToFineO>{});
 
-        sLatticeL2.collideAndStream();
-        coarseToFine2->apply(meta::id<refinement::lagrava::FullTimeCoarseToFineO>{});
+        // sLatticeL2.collideAndStream();
+        // coarseToFine2->apply(meta::id<refinement::lagrava::FullTimeCoarseToFineO>{});
 
-        fineToCoarse2->apply(meta::id<refinement::lagrava::FineToCoarseO>{});
+        // fineToCoarse2->apply(meta::id<refinement::lagrava::FineToCoarseO>{});
 
       fineToCoarse1->apply(meta::id<refinement::lagrava::FineToCoarseO>{});
 
