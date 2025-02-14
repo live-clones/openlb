@@ -232,19 +232,35 @@ void writeResults(SuperLattice<T, DESCRIPTOR>& sLattice,
 int main(int argc, char* argv[])
 {
   olbInit(&argc, &argv);
-  OstreamManager clout(std::cout, "main");
 
   CLIreader args(argc, argv);
+  std::string outdir        = args.getValueOrFallback<std::string>( "--outdir", "./tmp" );
   const int N               = args.getValueOrFallback<int>( "--res",        31);
   const int Re              = args.getValueOrFallback<int>( "--Re",         100);
   const int maxPhysT        = args.getValueOrFallback<int>( "--maxPhysT",   4);
   const T tMaxInit          = args.getValueOrFallback<T>  ( "--iniPhysT",   2);
   size_t iTmax              = args.getValueOrFallback<int>( "--iTmax",      0);
+  size_t nout               = args.getValueOrFallback( "--nout",            5);     // minimum number of vtk outputs
+  size_t iTout              = args.getValueOrFallback( "--iTout",           0);     // iterations for vtk outputs
+  T physTout                = args.getValueOrFallback( "--physTout",        0);     // timestep for vtk outputs
   T maxPhysU                = args.getValueOrFallback<T>  ( "--maxPhysU",   .2);    // in m/s
   T iniPhysU                = args.getValueOrFallback<T>  ( "--iniPhysU",   .00);
-  T lengthDomain            = args.getValueOrFallback<T>  ( "--lx",         2.5);     // in m
-  const T heightDomain      = args.getValueOrFallback<T>  ( "--ly",         0.5);     // in m
-  const T depthDomain       = args.getValueOrFallback<T>  ( "--lz",         0.2);   // in m
+  const T lx                = args.getValueOrFallback<T>  ( "--lx",         2.5);   // in m
+  const T ly                = args.getValueOrFallback<T>  ( "--ly",         0.5);   // in m
+  const T lz                = args.getValueOrFallback<T>  ( "--lz",         0.2);   // in m
+  const T x0                = args.getValueOrFallback<T>  ( "--x0",         -.5);   // in m
+  const T y0                = args.getValueOrFallback<T>  ( "--y0",         -.25);   // in m
+  const T z0                = args.getValueOrFallback<T>  ( "--z0",         -.1);   // in m
+
+  std::stringstream outdir_mod;
+  outdir_mod << outdir;
+  outdir_mod << "_u" << maxPhysU << "_Re" << Re << "_" << lx << "x" << ly << "x" << lz << "_res" << N;
+  singleton::directories().setOutputDir( outdir_mod.str()+"/" );  // set output directory
+  std::ofstream fileStream( outdir_mod.str() + "/output.txt" );
+  DoubleBuffer doubleBuffer( std::cout.rdbuf(), fileStream.rdbuf() );
+  std::streambuf* originalCoutBuffer = std::cout.rdbuf( &doubleBuffer );
+  OstreamManager clout( std::cout, "main" );
+  clout << "outdir specified to " << outdir_mod.str() << std::endl;
 
   const UnitConverterFromResolutionAndRelaxationTime<T, DESCRIPTOR> converterL0(
     int {N},             // resolution: number of voxels per charPhysL
@@ -258,11 +274,12 @@ int main(int argc, char* argv[])
   converterL0.print();
   converterL0.write("du93");
 
-  Vector<T,3> extendDomain = {lengthDomain, heightDomain, depthDomain};
-  Vector<T,3> originDomain = {-lengthDomain/3, -heightDomain/2, -depthDomain/2};
+  Vector<T,3> extendDomain = {lx, ly, lz};
+  Vector<T,3> originDomain = {x0, y0, z0};
   IndicatorCuboid3D<T> domainI(extendDomain,originDomain);
   IndicatorLayer3D<T> domainLayerI(domainI, converterL0.getPhysDeltaX());
   CuboidGeometry3D<T> cGeometryL0(domainLayerI, converterL0.getPhysDeltaX());
+  cGeometryL0.setPeriodicity( {false, true, true} );
   // split 0th cuboid along dimension 0, creating cuboids 0,1,2 with ratios .15, .5, .35
   std::vector<T> xSplit = {0.3/2.5,1.2/2.5,1/2.5};
   cGeometryL0.splitFractional(0, 0, xSplit);
@@ -277,13 +294,12 @@ int main(int argc, char* argv[])
   cGeometryL0.print();
 
   auto cGeometryL1 = cGeometryL0;
-  Vector<T,3> originRefinement = {xSplit[0]*lengthDomain, ySplit[0]*heightDomain, 0};
-  originRefinement += originDomain;
-  Vector<T,3> extendRefinement = {xSplit[1]*lengthDomain*T(.99), ySplit[1]*heightDomain*T(.99), depthDomain};
-  clout << "originRefinement=" << originRefinement << "; extendRefinement=" << extendRefinement << std::endl;
-  IndicatorCuboid3D<T> toBeRefinedI( extendRefinement,
-                                     originRefinement );
-  cGeometryL1.remove(toBeRefinedI);
+  Vector<T,3> originRefinement1 = {xSplit[0]*lx, ySplit[0]*ly, 0};
+  originRefinement1 += originDomain;
+  Vector<T,3> extendRefinement1 = {xSplit[1]*lx*T(.999), ySplit[1]*ly*T(.999), lz*T(.999)};
+  clout << "originRefinement1=" << originRefinement1 << "; extendRefinement1=" << extendRefinement1 << std::endl;
+  IndicatorCuboid3D<T> toBeRefinedI( extendRefinement1, originRefinement1 );
+  cGeometryL1.remove( toBeRefinedI );
   cGeometryL1.refine(2);
   cGeometryL1.print();
 
@@ -291,102 +307,137 @@ int main(int argc, char* argv[])
   xSplit = {0.15,0.5,0.35};
   cGeometryL1.splitFractional(0, 0, xSplit);
   // split middle cuboid (1) along dimension 1, inserting 2 back at 1, splitting 1 into 2,3,4
-  std::vector<T> ySplit = {0.2,0.6,0.2};
+  ySplit = {0.2,0.6,0.2};
   cGeometryL1.splitFractional(1, 1, ySplit);
   cGeometryL1.print();
 
   auto cGeometryL2 = cGeometryL1;
-  Vector<T,3> originRefinement2 = {xSplit[0]*extendRefinement[0], ySplit[0]*extendRefinement[1], extendRefinement[2]};
-  originRefinement += originDomain;
-  Vector<T,3> extendRefinement2 = {xSplit[1]*extendRefinement[0]*T(.99), ySplit[1]*extendRefinement[1]*T(.99), extendRefinement[2]};
-  clout << "originRefinement=" << originRefinement << "; extendRefinement=" << extendRefinement << std::endl;
-  IndicatorCuboid3D<T> toBeRefinedI( extendRefinement,
-                                     originRefinement );
-  cGeometryL1.remove(toBeRefinedI);
-  cGeometryL1.refine(2);
-  cGeometryL1.print();
+  Vector<T,3> originRefinement2 = {xSplit[0]*extendRefinement1[0], ySplit[0]*extendRefinement1[1], 0};
+  originRefinement2 += originRefinement1;
+  Vector<T,3> extendRefinement2 = {xSplit[1]*extendRefinement1[0]*T(.999), ySplit[1]*extendRefinement1[1]*T(.999), extendRefinement1[2]*T(.999)};
+  clout << "originRefinement2=" << originRefinement2 << "; extendRefinement2=" << extendRefinement2 << std::endl;
+  IndicatorCuboid3D<T> toBeRefinedII( extendRefinement2, originRefinement2 );
+  cGeometryL2.remove( toBeRefinedII );
+  cGeometryL2.refine(2);
+  cGeometryL2.print();
 
   // Adjust weights for balancing
   for (int iC=0; iC < cGeometryL0.size(); ++iC) {
-    auto& cuboid = cGeometryL0.get(iC);
-    cuboid.setWeight(cuboid.getLatticeVolume());
-    auto origin = cGeometryL0.get(iC).getOrigin();
+    auto& cuboid1 = cGeometryL0.get(iC);
+    cuboid1.setWeight(cuboid1.getLatticeVolume());
+    auto origin1 = cGeometryL0.get(iC).getOrigin();
     for (int jC=0; jC < cGeometryL1.size(); ++jC) {
+      auto& cuboid2 = cGeometryL1.get(jC);
+      cuboid2.setWeight(cuboid2.getLatticeVolume());
+      auto origin2 = cGeometryL1.get(jC).getOrigin();
       for (int kC=0; kC < cGeometryL2.size(); ++kC) {
-
+        if (cGeometryL2.get(kC).getOrigin() == origin2) {
+          cuboid2.setWeight(cuboid2.getWeight() + 2*cGeometryL2.get(kC).getLatticeVolume());
+        }
       }
-      if (cGeometryL1.get(jC).getOrigin() == origin) {
-        cuboid.setWeight(cuboid.getWeight() + 2*cGeometryL1.get(jC).getLatticeVolume());
+      if (cGeometryL1.get(jC).getOrigin() == origin1) {
+        cuboid1.setWeight(cuboid1.getWeight() + 2*cGeometryL1.get(jC).getLatticeVolume());
       }
     }
   }
 
-  HeuristicLoadBalancer<T> loadBalancerLevel0(cGeometryL0);
-  SuperGeometry<T,3> sGeometryLevel0(cGeometryL0, loadBalancerLevel0);
-  prepareGeometry(converterL0, sGeometryLevel0, extendDomain, originDomain);
-  SuperLattice<T,DESCRIPTOR> sLatticeLevel0(cGeometryL0,
-                                            loadBalancerLevel0,
-                                            3,
-                                            converterL0);
-  prepareLattice(sLatticeLevel0, converterL0, sGeometryLevel0);
-
-  RefinedLoadBalancer<T,3> loadBalancerLevel1(cGeometryL0,
-                                              loadBalancerLevel0,
-                                              cGeometryL1);
-  auto converterL1 = convectivelyRefineUnitConverter(converterL0, 2);
-  converterL1.print();
-  SuperGeometry<T,3> sGeometryLevel1(cGeometryL1, loadBalancerLevel1);
   STLreader<T> foilBody( "DU93W210TET05_2deg_body_small.stl", converterL0.getPhysDeltaX() );
   STLreader<T> foilTail( "DU93W210TET05_2deg_tail_small.stl", converterL0.getPhysDeltaX() );
-  prepareGeometryFine(converterL1, sGeometryLevel1, foilBody, foilTail);
-  SuperLattice<T,DESCRIPTOR> sLatticeLevel1(cGeometryL1,
-                                            loadBalancerLevel1,
-                                            3,
-                                            converterL1);
-  prepareLattice(sLatticeLevel1, converterL1, sGeometryLevel1);
+
+  HeuristicLoadBalancer<T> loadBalancerL0(cGeometryL0);
+  SuperGeometry<T,3> sGeometryL0(cGeometryL0, loadBalancerL0);
+  prepareGeometry(converterL0, sGeometryL0, extendDomain, originDomain);
+  SuperLattice<T,DESCRIPTOR> sLatticeL0(cGeometryL0, loadBalancerL0, 3, converterL0);
+  prepareLattice(sLatticeL0, converterL0, sGeometryL0);
+
+  RefinedLoadBalancer<T,3> loadBalancerL1(cGeometryL0, loadBalancerL0, cGeometryL1);
+  auto converterL1 = convectivelyRefineUnitConverter(converterL0, 2);
+  converterL1.print();
+  SuperGeometry<T,3> sGeometryL1(cGeometryL1, loadBalancerL1);
+  prepareGeometryFine(converterL1, sGeometryL1, foilBody, foilTail);
+  SuperLattice<T,DESCRIPTOR> sLatticeL1(cGeometryL1, loadBalancerL1, 3, converterL1);
+  prepareLattice(sLatticeL1, converterL1, sGeometryL1);
+
+  RefinedLoadBalancer<T,3> loadBalancerL2(cGeometryL1, loadBalancerL1, cGeometryL2);
+  auto converterL2 = convectivelyRefineUnitConverter(converterL1, 2);
+  converterL2.print();
+  SuperGeometry<T,3> sGeometryL2(cGeometryL2, loadBalancerL2);
+  prepareGeometryFine(converterL2, sGeometryL2, foilBody, foilTail);
+  SuperLattice<T,DESCRIPTOR> sLatticeL2(cGeometryL2, loadBalancerL2, 3, converterL2);
+  prepareLattice(sLatticeL2, converterL2, sGeometryL2);
 
   clout << "Coupling coarse to fine grid(s) ..." << std::endl;
-  auto coarseToFine = refinement::lagrava::makeCoarseToFineCoupler(
-    sLatticeLevel0, sGeometryLevel0,
-    sLatticeLevel1, sGeometryLevel1);
-  auto fineToCoarse = refinement::lagrava::makeFineToCoarseCoupler(
-    sLatticeLevel0, sGeometryLevel0,
-    sLatticeLevel1, sGeometryLevel1);
+  auto coarseToFine1 = refinement::lagrava::makeCoarseToFineCoupler(
+    sLatticeL0, sGeometryL0,
+    sLatticeL1, sGeometryL1);
+  auto fineToCoarse1 = refinement::lagrava::makeFineToCoarseCoupler(
+    sLatticeL0, sGeometryL0,
+    sLatticeL1, sGeometryL1);
+  auto coarseToFine2 = refinement::lagrava::makeCoarseToFineCoupler(
+    sLatticeL1, sGeometryL1,
+    sLatticeL2, sGeometryL2);
+  auto fineToCoarse2 = refinement::lagrava::makeFineToCoarseCoupler(
+    sLatticeL1, sGeometryL1,
+    sLatticeL2, sGeometryL2);
   clout << "Coupling coarse to fine grid(s) ... OK" << std::endl;
 
   // iTmax depends on maximum physical time. If iTmax is provided in command line, it is an upper bound
   if ( iTmax == 0 ) iTmax = converterL0.getLatticeTime( maxPhysT );
   else iTmax = std::min( iTmax, converterL0.getLatticeTime( maxPhysT ) );
   size_t iTmaxStart = converterL0.getLatticeTime( tMaxInit );
+  // nout is the minimum number of vtk outputs --> take max between nout and nout derived from iTout or physTout
+  size_t nout_from_iTout = 0, nout_from_physTout = 0;
+  if ( iTout != 0 ) { nout_from_iTout = size_t( iTmax / iTout ); nout = std::max( nout, nout_from_iTout ); }
+  if ( physTout != 0 ) { nout_from_physTout = size_t( iTmax / physTout ); nout = std::max( nout, nout_from_physTout ); }
+  size_t iTvtk = size_t( iTmax / nout );
+  clout << "Set nout to " << nout << ", so iTvtk=" << iTvtk << std::endl;
 
   // === 4th Step: Main Loop with Timer ===
   clout << "starting simulation..." << std::endl;
-  util::Timer<T> timer(converterL0.getLatticeTime(maxPhysT),
-                           sGeometryLevel0.getStatistics().getNvoxel()
-                       + 2*sGeometryLevel1.getStatistics().getNvoxel());
+  util::Timer<T> timer( converterL0.getLatticeTime(maxPhysT),
+                        sGeometryL0.getStatistics().getNvoxel()
+                        + 2*sGeometryL1.getStatistics().getNvoxel()
+                        + 2*2*sGeometryL2.getStatistics().getNvoxel());
   timer.start();
 
   for (std::size_t iT = 0; iT < converterL0.getLatticeTime(maxPhysT); ++iT) {
-    if (iT % converterL0.getLatticeTime(1.0) == 0) {
-      writeResults(sLatticeLevel0, converterL0, iT, sGeometryLevel0, "level0");
-      writeResults(sLatticeLevel1, converterL1, iT, sGeometryLevel1, "level1");
+    if (iT % iTvtk == 0) {
+      writeResults(sLatticeL0, converterL0, iT, sGeometryL0, "level0");
+      writeResults(sLatticeL1, converterL1, iT, sGeometryL1, "level1");
+      writeResults(sLatticeL2, converterL2, iT, sGeometryL2, "level2");
     }
 
-    setBoundaryValues( sLatticeLevel0, converterL0, iT, sGeometryLevel0, iTmaxStart, maxLatticeU, maxPhysU, iniPhysU );
-    sLatticeLevel0.collideAndStream();
+    setBoundaryValues( sLatticeL0, converterL0, iT, sGeometryL0, iTmaxStart, maxLatticeU, maxPhysU, iniPhysU );
+    sLatticeL0.collideAndStream();
 
-    sLatticeLevel1.collideAndStream();
-    coarseToFine->apply(meta::id<refinement::lagrava::HalfTimeCoarseToFineO>{});
+      sLatticeL1.collideAndStream();
+      coarseToFine1->apply(meta::id<refinement::lagrava::HalfTimeCoarseToFineO>{});
 
-    sLatticeLevel1.collideAndStream();
-    coarseToFine->apply(meta::id<refinement::lagrava::FullTimeCoarseToFineO>{});
+        sLatticeL2.collideAndStream();
+        coarseToFine2->apply(meta::id<refinement::lagrava::HalfTimeCoarseToFineO>{});
 
-    fineToCoarse->apply(meta::id<refinement::lagrava::FineToCoarseO>{});
+        sLatticeL2.collideAndStream();
+        coarseToFine2->apply(meta::id<refinement::lagrava::FullTimeCoarseToFineO>{});
+
+        fineToCoarse2->apply(meta::id<refinement::lagrava::FineToCoarseO>{});
+
+      sLatticeL1.collideAndStream();
+      coarseToFine1->apply(meta::id<refinement::lagrava::FullTimeCoarseToFineO>{});
+
+        sLatticeL2.collideAndStream();
+        coarseToFine2->apply(meta::id<refinement::lagrava::HalfTimeCoarseToFineO>{});
+
+        sLatticeL2.collideAndStream();
+        coarseToFine2->apply(meta::id<refinement::lagrava::FullTimeCoarseToFineO>{});
+
+        fineToCoarse2->apply(meta::id<refinement::lagrava::FineToCoarseO>{});
+
+      fineToCoarse1->apply(meta::id<refinement::lagrava::FineToCoarseO>{});
 
     if (iT % converterL0.getLatticeTime(0.1) == 0) {
       timer.update(iT);
       timer.printStep();
-      sLatticeLevel0.getStatistics().print(iT, converterL0.getPhysTime(iT));
+      sLatticeL0.getStatistics().print(iT, converterL0.getPhysTime(iT));
     }
   }
 
@@ -394,4 +445,5 @@ int main(int argc, char* argv[])
 
   timer.stop();
   timer.printSummary();
+  std::cout.rdbuf(originalCoutBuffer);
 }
