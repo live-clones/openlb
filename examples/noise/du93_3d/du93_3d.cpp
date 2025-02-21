@@ -605,12 +605,12 @@ int main( int argc, char* argv[] )
   // setup domain
   if ( withDampingLayer ) lengthDomain += converterL0.getPhysLength( boundaryDepth );
 
-  // cuboidGeometry.setPeriodicity( {false, true, true} );
   Vector<T,3> extendDomain = {lengthDomain, heightDomain, depthDomain};
   Vector<T,3> originDomain = {-lengthDomain/3, -heightDomain/2, -depthDomain/2};
   IndicatorCuboid3D<T> cuboidDomainL0(extendDomain, originDomain);
   IndicatorLayer3D<T> domainL0(cuboidDomainL0, converterL0.getPhysDeltaX());
   CuboidGeometry3D<T> cGeometryL0(domainL0, converterL0.getPhysDeltaX());
+  cGeometryL0.setPeriodicity( {false, true, true} );
   // split 0th cuboid along dimension 0, creating cuboids 0,1,2 with ratios .15, .5, .35
   std::vector<T> xSplit = {0.15,0.5,0.35};
   cGeometryL0.splitFractional(0, 0, xSplit);
