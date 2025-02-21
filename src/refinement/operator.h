@@ -67,6 +67,7 @@ struct BlockRefinementContextD {
    * Scope of operator must match scope of context
    **/
   virtual void apply(BlockRefinementOperatorPromise<T,DESCRIPTOR>&& promise) = 0;
+  virtual void initialize_prev(BlockRefinementOperatorPromise<T,DESCRIPTOR>&& promise) = 0;
 
   template <Platform PLATFORM>
   auto& asConcrete() {

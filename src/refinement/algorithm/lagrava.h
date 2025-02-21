@@ -191,6 +191,26 @@ struct FullTimeCoarseToFineO {
       }
     }
   }
+
+
+  template <typename COARSE_CELL, typename FINE_CELL, typename DATA, typename PARAMETERS>
+  void initialize_prev(COARSE_CELL& cCellPtr, FINE_CELL& fCell, DATA& data, PARAMETERS& params) any_platform {
+    using V = typename COARSE_CELL::value_t;
+    using DESCRIPTOR = typename COARSE_CELL::descriptor_t;
+    if (cCellPtr) {
+      auto cCell = *cCellPtr;
+
+      V rho{};
+      Vector<V,DESCRIPTOR::d> u{};
+      Vector<V,DESCRIPTOR::q> fNeq{};
+      lbm<DESCRIPTOR>::computeRhoU(cCell, rho, u);
+      lbm<DESCRIPTOR>::computeFneq(cCell, fNeq, rho, u);
+
+      data->template setField<fields::refinement::PREV_RHO>(rho);
+      data->template setField<fields::refinement::PREV_U>(u);
+      data->template setField<fields::refinement::PREV_FNEQ>(fNeq);
+    }
+  }
 };
 
 struct FineToCoarseO {
