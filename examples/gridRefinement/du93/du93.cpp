@@ -342,7 +342,7 @@ int main(int argc, char* argv[])
   // IndicatorLayer3D<T> toBeRefinedLayerI( toBeRefinedI, dx1 );
   cGeometryL1.remove( toBeRefinedI );
   cGeometryL1.refine(2);
-  cGeometryL1.setPeriodicity( {false, false, false} );
+  cGeometryL1.setPeriodicity( {true, true, true} );
   cGeometryL1.print();
 
   auto cGeometryL2 = cGeometryL1;
@@ -350,7 +350,7 @@ int main(int argc, char* argv[])
   // IndicatorLayer3D<T> toBeRefinedLayerII( toBeRefinedII, dx2 );
   cGeometryL2.remove( toBeRefinedII );
   cGeometryL2.refine(2);
-  cGeometryL2.setPeriodicity( {false, false, false} );
+  cGeometryL2.setPeriodicity( {true, true, true} );
   cGeometryL2.print();
 
   //// ADJUST WEIGHTS FOR BALANCING ////
