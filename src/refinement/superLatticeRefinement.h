@@ -139,16 +139,6 @@ public:
     promise.apply(*this);
   }
 
-  void initialize_prev(BlockRefinementOperatorPromise<T,DESCRIPTOR>&& promise) override {
-    if (_dataIndexChanged && promise.requiresContextNeighborAccess()) {
-      updateContextNeighborIndices();
-      _data.template getField<fields::refinement::CONTEXT_NEIGHBORS>()
-           .setProcessingContext(ProcessingContext::Simulation);
-      _dataIndexChanged = false;
-    }
-    promise.initialize_prev(*this);
-  }
-
 };
 
 template <typename T, typename DESCRIPTOR>
@@ -200,16 +190,6 @@ public:
     #endif
     for (int iC = 0; iC < _balancer.size(); ++iC) {
       _context[iC]->apply(std::forward<BlockRefinementOperatorPromise<T,DESCRIPTOR>&&>(promise));
-    }
-  }
-
-  /// Apply coupling operation on all blocks
-  void initialize_prev(BlockRefinementOperatorPromise<T,DESCRIPTOR>&& promise) {
-    #ifdef PARALLEL_MODE_OMP
-    #pragma omp taskloop
-    #endif
-    for (int iC = 0; iC < _balancer.size(); ++iC) {
-      _context[iC]->initialize_prev(std::forward<BlockRefinementOperatorPromise<T,DESCRIPTOR>&&>(promise));
     }
   }
 

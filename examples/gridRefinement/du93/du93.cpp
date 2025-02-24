@@ -412,10 +412,10 @@ int main(int argc, char* argv[])
     sLatticeL2, sGeometryL2);
   clout << "Coupling coarse to fine grid(s) ... OK" << std::endl;
 
-  clout << "Initializing PREV_RHO ..." << std::endl;
-  coarseToFine1->initialize_prev(meta::id<refinement::lagrava::FullTimeCoarseToFineO>{});
-  coarseToFine2->initialize_prev(meta::id<refinement::lagrava::FullTimeCoarseToFineO>{});
-  clout << "Initializing PREV_RHO ... OK" << std::endl;
+  // clout << "Initializing PREV_RHO ..." << std::endl;
+  // refinement::lagrava::initialize_prev(meta::id<refinement::lagrava::FullTimeCoarseToFineO>{});
+  // refinement::lagrava::initialize_prev(meta::id<refinement::lagrava::FullTimeCoarseToFineO>{});
+  // clout << "Initializing PREV_RHO ... OK" << std::endl;
 
   // iTmax depends on maximum physical time. If iTmax is provided in command line, it is an upper bound
   if ( iTmax == 0 ) iTmax = converterL0.getLatticeTime( maxPhysT );
@@ -425,7 +425,7 @@ int main(int argc, char* argv[])
   size_t nout_from_iTout = 0, nout_from_physTout = 0;
   if ( iTout != 0 ) { nout_from_iTout = size_t( iTmax / iTout ); nout = std::max( nout, nout_from_iTout ); }
   if ( physTout != 0 ) { nout_from_physTout = size_t( iTmax / physTout ); nout = std::max( nout, nout_from_physTout ); }
-  size_t iTvtk = size_t( iTmax / nout );
+  size_t iTvtk = std::size_t( std::max( T(iTmax / nout), T(1) ) );
   clout << "Set nout to " << nout << ", so iTvtk=" << iTvtk << std::endl;
 
   // === 4th Step: Main Loop with Timer ===

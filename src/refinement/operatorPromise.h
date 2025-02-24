@@ -90,13 +90,6 @@ public:
     _executor(context);
   }
 
-  void initialize_prev(BlockRefinementContextD<T,DESCRIPTOR>& context) {
-    for (auto promise : requiredData()) {
-      promise.ensureAvailabilityIn(context.getData());
-    }
-    _executor(context);
-  }
-
 };
 
 }
