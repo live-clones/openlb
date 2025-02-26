@@ -52,7 +52,7 @@ struct HalfTimeCoarseToFineO {
       auto rhoPrev  = data->template getField<fields::refinement::PREV_RHO>();
       auto uPrev    = data->template getField<fields::refinement::PREV_U>();
       auto fNeqPrev = data->template getField<fields::refinement::PREV_FNEQ>();
-      // if ( rhoPrev < .999999 ) std::cout << "rhoPrev=" << rhoPrev << std::endl;
+      if ( rhoPrev < .999999 ) std::cout << "rhoPrev=" << rhoPrev << std::endl;
 
       V rhoCurr{};
       Vector<V,DESCRIPTOR::d> uCurr{};
@@ -192,6 +192,25 @@ struct FullTimeCoarseToFineO {
       }
     }
   }
+
+  template <typename COARSE_CELL, typename FINE_CELL, typename DATA, typename PARAMETERS>
+  void initialize_prev(COARSE_CELL& cCellPtr, FINE_CELL& fCell, DATA& data, PARAMETERS& params) any_platform {
+    using V = typename COARSE_CELL::value_t;
+    using DESCRIPTOR = typename COARSE_CELL::descriptor_t;
+    if (cCellPtr) {
+      auto cCell = *cCellPtr;
+
+      V rho{};
+      Vector<V,DESCRIPTOR::d> u{};
+      Vector<V,DESCRIPTOR::q> fNeq{};
+      lbm<DESCRIPTOR>::computeRhoU(cCell, rho, u);
+      lbm<DESCRIPTOR>::computeFneq(cCell, fNeq, rho, u);
+
+      data->template setField<fields::refinement::PREV_RHO>(rho);
+      data->template setField<fields::refinement::PREV_U>(u);
+      data->template setField<fields::refinement::PREV_FNEQ>(fNeq);
+    }
+  }
 };
 
 struct FineToCoarseO {
@@ -320,23 +339,23 @@ std::unique_ptr<SuperLatticeRefinement<T,DESCRIPTOR>> makeFineToCoarseCoupler(
                  .template set<descriptors::TAU>(converterCoarse.getLatticeRelaxationTime());
   }
 
-  for (int iC = 0; iC < sLatticeCoarse.getLoadBalancer().size(); ++iC) {
-    auto& cBlock = sLatticeCoarse.getBlock(iC);
-    cBlock.forSpatialLocations([&](LatticeR<DESCRIPTOR::d> coarseLatticeR) {
-      // if (f2cFrontierI.getBlockIndicatorF(iC)(2*coarseLatticeR)) {
-        std::cout << "coarseLatticeR=" << coarseLatticeR << std::endl;
-        auto cCell = cBlock.get(coarseLatticeR);
-        T rho{};
-        Vector<T,DESCRIPTOR::d> u{};
-        Vector<T,DESCRIPTOR::q> fNeq{};
-        lbm<DESCRIPTOR>::computeRhoU(cCell, rho, u);
-        lbm<DESCRIPTOR>::computeFneq(cCell, fNeq, rho, u);
-        cCell.template setField<fields::refinement::PREV_RHO>(rho);
-        cCell.template setField<fields::refinement::PREV_U>(u);
-        cCell.template setField<fields::refinement::PREV_FNEQ>(fNeq);
-      // }
-    });
-  }
+  // for (int iC = 0; iC < sLatticeCoarse.getLoadBalancer().size(); ++iC) {
+  //   auto& cBlock = sLatticeCoarse.getBlock(iC);
+  //   cBlock.forSpatialLocations([&](LatticeR<DESCRIPTOR::d> coarseLatticeR) {
+  //     // if (f2cFrontierI.getBlockIndicatorF(iC)(2*coarseLatticeR)) {
+  //       std::cout << "coarseLatticeR=" << coarseLatticeR << std::endl;
+  //       auto cCell = cBlock.get(coarseLatticeR);
+  //       T rho{};
+  //       Vector<T,DESCRIPTOR::d> u{};
+  //       Vector<T,DESCRIPTOR::q> fNeq{};
+  //       lbm<DESCRIPTOR>::computeRhoU(cCell, rho, u);
+  //       lbm<DESCRIPTOR>::computeFneq(cCell, fNeq, rho, u);
+  //       cCell.template setField<fields::refinement::PREV_RHO>(rho);
+  //       cCell.template setField<fields::refinement::PREV_U>(u);
+  //       cCell.template setField<fields::refinement::PREV_FNEQ>(fNeq);
+  //     // }
+  //   });
+  // }
 
   fineToCoarse->setProcessingContext(ProcessingContext::Simulation);
 
