@@ -52,7 +52,7 @@ struct HalfTimeCoarseToFineO {
       auto rhoPrev  = data->template getField<fields::refinement::PREV_RHO>();
       auto uPrev    = data->template getField<fields::refinement::PREV_U>();
       auto fNeqPrev = data->template getField<fields::refinement::PREV_FNEQ>();
-      if ( rhoPrev < .999999 ) std::cout << "rhoPrev=" << rhoPrev << std::endl;
+      // if ( rhoPrev < .999999 ) std::cout << "rhoPrev=" << rhoPrev << std::endl;
 
       V rhoCurr{};
       Vector<V,DESCRIPTOR::d> uCurr{};
@@ -320,16 +320,12 @@ std::unique_ptr<SuperLatticeRefinement<T,DESCRIPTOR>> makeFineToCoarseCoupler(
                  .template set<descriptors::TAU>(converterCoarse.getLatticeRelaxationTime());
   }
 
-  for (int iC = 0; iC < loadBalancerFine.size(); ++iC) {
-    // std::cout << "1" << std::endl;
-    auto& cBlock = sLatticeCoarse.getBlock(loadBalancerFine.cloc(iC));
-    // std::cout << "2" << std::endl;
+  for (int iC = 0; iC < sLatticeCoarse.getLoadBalancer().size(); ++iC) {
+    auto& cBlock = sLatticeCoarse.getBlock(iC);
     cBlock.forSpatialLocations([&](LatticeR<DESCRIPTOR::d> coarseLatticeR) {
-      // std::cout << "3" << std::endl;
-      if (f2cFrontierI.getBlockIndicatorF(iC)(2*coarseLatticeR)) {
-        // std::cout << "4" << std::endl;
+      // if (f2cFrontierI.getBlockIndicatorF(iC)(2*coarseLatticeR)) {
+        std::cout << "coarseLatticeR=" << coarseLatticeR << std::endl;
         auto cCell = cBlock.get(coarseLatticeR);
-        // std::cout << "5" << std::endl;
         T rho{};
         Vector<T,DESCRIPTOR::d> u{};
         Vector<T,DESCRIPTOR::q> fNeq{};
@@ -338,7 +334,7 @@ std::unique_ptr<SuperLatticeRefinement<T,DESCRIPTOR>> makeFineToCoarseCoupler(
         cCell.template setField<fields::refinement::PREV_RHO>(rho);
         cCell.template setField<fields::refinement::PREV_U>(u);
         cCell.template setField<fields::refinement::PREV_FNEQ>(fNeq);
-      }
+      // }
     });
   }
 
