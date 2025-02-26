@@ -81,8 +81,8 @@ void prepareGeometryFine(const UnitConverter<T,DESCRIPTOR>& converter,
 
   sGeometry.rename(0,1);
 
-  IndicatorSphere3D<T> sphereI({0.55, 0.25, 0.25}, 0.1);
-  sGeometry.rename(1,2, sphereI);
+  // IndicatorSphere3D<T> sphereI({0.55, 0.25, 0.25}, 0.1);
+  // sGeometry.rename(1,2, sphereI);
 
   sGeometry.clean();
   sGeometry.checkForErrors();
@@ -165,12 +165,14 @@ void writeResults(SuperLattice<T, DESCRIPTOR>& sLattice,
                   const UnitConverter<T,DESCRIPTOR>& converter,
                   std::size_t iT,
                   SuperGeometry<T,3>& sGeometry,
-                  std::string name)
+                  std::string name,
+                  std::string vtmName="",
+                  bool vtk=false)
 {
   OstreamManager clout(std::cout, name);
 
-  if (iT == 0) {
-    SuperVTMwriter3D<T> vtmWriter(name, 0);
+  if (iT == 0 && vtk) {
+    SuperVTMwriter3D<T> vtmWriter(vtmName, 0);
     if (name == "level0") {
       SuperLatticeRank3D rank( sLattice );
       vtmWriter.write(rank);
@@ -182,16 +184,34 @@ void writeResults(SuperLattice<T, DESCRIPTOR>& sLattice,
   }
 
   sLattice.setProcessingContext(ProcessingContext::Evaluation);
-  sLattice.scheduleBackgroundOutputVTK([&,name,iT](auto task) {
-    SuperVTMwriter3D<T> vtmWriter(name);
+  if ( vtk ) sLattice.scheduleBackgroundOutputVTK([&,vtmName,iT](auto task) {
+    SuperVTMwriter3D<T> vtmWriter(vtmName);
     SuperLatticePhysVelocity3D velocityF(sLattice, converter);
     SuperLatticePhysPressure3D pressureF(sLattice, converter);
     SuperLatticeRefinementMetricKnudsen3D qualityF(sLattice, converter);
+    SuperLatticePhysField3D<T,DESCRIPTOR,fields::refinement::PREV_RHO> prev_rho( sLattice, 1., "PREV_RHO" );
+    vtmWriter.addFunctor(prev_rho);
     vtmWriter.addFunctor(qualityF);
     vtmWriter.addFunctor(velocityF);
     vtmWriter.addFunctor(pressureF);
     task(vtmWriter, iT);
   });
+
+  SuperLatticePhysVelocity3D velocityF(sLattice, converter);
+  SuperEuklidNorm3D<T> normVel( velocityF );
+  BlockReduction3D2D<T> planeReductionU( normVel, Vector<T,3>({0, 0, 1}) );
+  // write output as JPEG
+  heatmap::plotParam<T> uScale;
+  uScale.minValue = 0;
+  uScale.name = "velocity_"+name;
+  heatmap::write( planeReductionU, iT, uScale) ;
+  
+  SuperLatticePhysPressure3D pressureF(sLattice, converter);
+  BlockReduction3D2D<T> planeReductionP( pressureF, Vector<T,3>({0, 0, 1}) );
+  heatmap::plotParam<T> pScale;
+  pScale.name = "pressure_"+name;
+  heatmap::write( planeReductionP, iT, pScale );
+
 }
 
 int main(int argc, char* argv[])
@@ -203,6 +223,10 @@ int main(int argc, char* argv[])
   const int N = args.getValueOrFallback<int>("--resolution", 11);
   const int Re = args.getValueOrFallback<int>("--reynolds", 100);
   const int maxPhysT = args.getValueOrFallback<int>("--maxPhysT", 16);
+  size_t iTmax              = args.getValueOrFallback<int>( "--iTmax",      0);
+  size_t nout               = args.getValueOrFallback( "--nout",            5);     // minimum number of vtk outputs
+  size_t iTout              = args.getValueOrFallback( "--iTout",           0);     // iterations for vtk outputs
+  T physTout                = args.getValueOrFallback( "--physTout",        0);     // timestep for vtk outputs
 
   const UnitConverterFromResolutionAndRelaxationTime<T, DESCRIPTOR> converterLevel0(
     int {N},             // resolution: number of voxels per charPhysL
@@ -221,8 +245,8 @@ int main(int argc, char* argv[])
   cGeometryLevel0.splitFractional(0, 0, {0.15,0.5,0.35});  // 0,1,2
   cGeometryLevel0.splitFractional(1, 1, {0.1,0.8,0.1});  // 2 back to 1; split 1 into 2,3,4
   cGeometryLevel0.splitFractional(3, 2, {0.1,0.8,0.1});  // 4 back to 3; split 3 into 3,4,5
-  cGeometryLevel0.splitFractional(5, 0, {0.5,0.5});
-  cGeometryLevel0.splitFractional(7, 1, {0.5,0.5});
+  // cGeometryLevel0.splitFractional(5, 0, {0.5,0.5});
+  // cGeometryLevel0.splitFractional(7, 1, {0.5,0.5});
   cGeometryLevel0.print();
 
   auto cGeometryLevel1 = cGeometryLevel0;
@@ -271,6 +295,19 @@ int main(int argc, char* argv[])
   auto fineToCoarse = refinement::lagrava::makeFineToCoarseCoupler(
     sLatticeLevel0, sGeometryLevel0,
     sLatticeLevel1, sGeometryLevel1);
+  coarseToFine->initialize_prev(meta::id<refinement::lagrava::FullTimeCoarseToFineO>{});
+
+
+  // iTmax depends on maximum physical time. If iTmax is provided in command line, it is an upper bound
+  if ( iTmax == 0 ) iTmax = converterLevel0.getLatticeTime( maxPhysT );
+  else iTmax = std::min( iTmax, converterLevel0.getLatticeTime( maxPhysT ) );
+  // size_t iTmaxStart = converterLevel0.getLatticeTime( tMaxInit );
+  // nout is the minimum number of vtk outputs --> take max between nout and nout derived from iTout or physTout
+  size_t nout_from_iTout = 0, nout_from_physTout = 0;
+  if ( iTout != 0 ) { nout_from_iTout = size_t( iTmax / iTout ); nout = std::max( nout, nout_from_iTout ); }
+  if ( physTout != 0 ) { nout_from_physTout = size_t( iTmax / physTout ); nout = std::max( nout, nout_from_physTout ); }
+  size_t iTvtk = size_t( std::max( T(iTmax) / T(nout), T(1) ) );
+  clout << "Set nout to " << nout << ", so iTvtk=" << iTvtk << std::endl;
 
   // === 4th Step: Main Loop with Timer ===
   clout << "starting simulation..." << std::endl;
@@ -279,20 +316,38 @@ int main(int argc, char* argv[])
                        + 2*sGeometryLevel1.getStatistics().getNvoxel());
   timer.start();
 
-  for (std::size_t iT = 0; iT < converterLevel0.getLatticeTime(maxPhysT); ++iT) {
-    if (iT % converterLevel0.getLatticeTime(1.0) == 0) {
-      writeResults(sLatticeLevel0, converterLevel0, iT, sGeometryLevel0, "level0");
-      writeResults(sLatticeLevel1, converterLevel1, iT, sGeometryLevel1, "level1");
+  for (std::size_t iT = 0; iT < iTmax; ++iT) {
+    if (iT % iTvtk == 0) {
+      writeResults(sLatticeLevel0, converterLevel0, iT, sGeometryLevel0, std::to_string(iT)+".00_level0_preBC", "00_level0_preBC", true);
+      writeResults(sLatticeLevel1, converterLevel1, iT, sGeometryLevel1, std::to_string(iT)+".00_level1_preBC", "00_level1_preBC", true);
+
+      setBoundaryValues(sLatticeLevel0, converterLevel0, iT, sGeometryLevel0);
+      writeResults(sLatticeLevel0, converterLevel0, iT, sGeometryLevel0, std::to_string(iT)+".01_level0_postBC");
+      sLatticeLevel0.collideAndStream();
+      writeResults(sLatticeLevel0, converterLevel0, iT, sGeometryLevel0, std::to_string(iT)+".02_level0_postCS");
+
+        sLatticeLevel1.collideAndStream();
+        writeResults(sLatticeLevel1, converterLevel1, iT, sGeometryLevel1, std::to_string(iT)+".03_level1_postCS1");
+        coarseToFine->apply(meta::id<refinement::lagrava::HalfTimeCoarseToFineO>{});
+        writeResults(sLatticeLevel1, converterLevel1, iT, sGeometryLevel1, std::to_string(iT)+".04_level1_postC2F1");
+
+        sLatticeLevel1.collideAndStream();
+        writeResults(sLatticeLevel1, converterLevel1, iT, sGeometryLevel1, std::to_string(iT)+".05_level1_postCS2");
+        coarseToFine->apply(meta::id<refinement::lagrava::FullTimeCoarseToFineO>{});
+        writeResults(sLatticeLevel1, converterLevel1, iT, sGeometryLevel1, std::to_string(iT)+".06_level1_postC2F2");
+
+      fineToCoarse->apply(meta::id<refinement::lagrava::FineToCoarseO>{});
+      writeResults(sLatticeLevel0, converterLevel0, iT, sGeometryLevel0, std::to_string(iT)+".07_level0_postF2C");
     }
 
     setBoundaryValues(sLatticeLevel0, converterLevel0, iT, sGeometryLevel0);
     sLatticeLevel0.collideAndStream();
 
-    sLatticeLevel1.collideAndStream();
-    coarseToFine->apply(meta::id<refinement::lagrava::HalfTimeCoarseToFineO>{});
+      sLatticeLevel1.collideAndStream();
+      coarseToFine->apply(meta::id<refinement::lagrava::HalfTimeCoarseToFineO>{});
 
-    sLatticeLevel1.collideAndStream();
-    coarseToFine->apply(meta::id<refinement::lagrava::FullTimeCoarseToFineO>{});
+      sLatticeLevel1.collideAndStream();
+      coarseToFine->apply(meta::id<refinement::lagrava::FullTimeCoarseToFineO>{});
 
     fineToCoarse->apply(meta::id<refinement::lagrava::FineToCoarseO>{});
 

@@ -52,7 +52,6 @@ struct HalfTimeCoarseToFineO {
       auto rhoPrev  = data->template getField<fields::refinement::PREV_RHO>();
       auto uPrev    = data->template getField<fields::refinement::PREV_U>();
       auto fNeqPrev = data->template getField<fields::refinement::PREV_FNEQ>();
-      if ( rhoPrev < .999999 ) std::cout << "rhoPrev=" << rhoPrev << std::endl;
 
       V rhoCurr{};
       Vector<V,DESCRIPTOR::d> uCurr{};
@@ -80,12 +79,12 @@ struct HalfTimeCoarseToFineO {
 
       unsigned nNeighbors=0;
       for (unsigned iN=0; iN < fields::refinement::CONTEXT_NEIGHBORS::count<DESCRIPTOR>(); ++iN) {
-        auto n = fields::refinement::CONTEXT_NEIGHBORS::c<DESCRIPTOR>(iN);
-        if (n*normal == 0) {
-          if (auto ncCellPtr = cCellPtr.neighbor(n)) {
+        auto n = fields::refinement::CONTEXT_NEIGHBORS::c<DESCRIPTOR>(iN);  // direction (vector, length d)
+        if (n*normal == 0) {  // normal to edge --> there should be neighbor
+          if (auto ncCellPtr = cCellPtr.neighbor(n)) {  // has coarse neighbor (not only fine)
             nNeighbors += 1;
             auto ncCell = *ncCellPtr;
-            auto nData = data.neighbor(iN);
+            auto nData = data.neighbor(iN);  // new data object with data in neighbor direction
 
             auto rhoPrev  = nData->template getField<fields::refinement::PREV_RHO>();
             auto uPrev    = nData->template getField<fields::refinement::PREV_U>();
@@ -97,6 +96,7 @@ struct HalfTimeCoarseToFineO {
             lbm<DESCRIPTOR>::computeRhoU(ncCell, rhoCurr, uCurr);
             lbm<DESCRIPTOR>::computeFneq(ncCell, fNeqCurr, rhoCurr, uCurr);
 
+            // time-interpoltation
             rho += V{0.5}*(rhoPrev + rhoCurr);
             u += V{0.5}*(uPrev + uCurr);
             fNeq += V{0.5}*(fNeqPrev + fNeqCurr);

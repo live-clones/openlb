@@ -184,13 +184,15 @@ void writeResults(SuperLattice<T, DESCRIPTOR>& sLattice,
                   const UnitConverter<T,DESCRIPTOR>& converter,
                   std::size_t iT,
                   SuperGeometry<T,3>& sGeometry,
-                  std::string name)
+                  std::string name,
+                  std::string vtmName="",
+                  bool vtk=false)
 {
   OstreamManager clout(std::cout, name);
 
-  if ( iT == 0 ) {
+  if ( iT == 0 && vtk ) {
     clout << "Writing rank of " << name << std::endl;
-    SuperVTMwriter3D<T> vtmWriter(name, 0);
+    SuperVTMwriter3D<T> vtmWriter(vtmName, 0);
     if ( name == "level0" ) {
       SuperLatticeRank3D rank( sLattice );
       vtmWriter.write(rank);
@@ -202,16 +204,18 @@ void writeResults(SuperLattice<T, DESCRIPTOR>& sLattice,
   }
 
   sLattice.setProcessingContext(ProcessingContext::Evaluation);
-  // sLattice.scheduleBackgroundOutputVTK([&,name,iT](auto task) {
-  //   SuperVTMwriter3D<T> vtmWriter(name);
-  //   SuperLatticePhysVelocity3D velocityF(sLattice, converter);
-  //   SuperLatticePhysPressure3D pressureF(sLattice, converter);
-  //   SuperLatticeRefinementMetricKnudsen3D qualityF(sLattice, converter);
-  //   vtmWriter.addFunctor(velocityF);
-  //   vtmWriter.addFunctor(pressureF);
-  //   vtmWriter.addFunctor(qualityF);
-  //   task(vtmWriter, iT);
-  // });
+  if ( vtk ) sLattice.scheduleBackgroundOutputVTK([&,vtmName,iT](auto task) {
+    SuperVTMwriter3D<T> vtmWriter(vtmName);
+    SuperLatticePhysVelocity3D velocityF(sLattice, converter);
+    SuperLatticePhysPressure3D pressureF(sLattice, converter);
+    SuperLatticeRefinementMetricKnudsen3D qualityF(sLattice, converter);
+    SuperLatticePhysField3D<T,DESCRIPTOR,fields::refinement::PREV_RHO> prev_rho( sLattice, 1., "PREV_RHO" );
+    vtmWriter.addFunctor(velocityF);
+    vtmWriter.addFunctor(prev_rho);
+    vtmWriter.addFunctor(pressureF);
+    vtmWriter.addFunctor(qualityF);
+    task(vtmWriter, iT);
+  });
 
   SuperLatticePhysVelocity3D velocityF(sLattice, converter);
   SuperEuklidNorm3D<T> normVel( velocityF );
@@ -412,10 +416,12 @@ int main(int argc, char* argv[])
     sLatticeL2, sGeometryL2);
   clout << "Coupling coarse to fine grid(s) ... OK" << std::endl;
 
-  // clout << "Initializing PREV_RHO ..." << std::endl;
+  clout << "Initializing PREV_RHO ..." << std::endl;
   // refinement::lagrava::initialize_prev(meta::id<refinement::lagrava::FullTimeCoarseToFineO>{});
   // refinement::lagrava::initialize_prev(meta::id<refinement::lagrava::FullTimeCoarseToFineO>{});
-  // clout << "Initializing PREV_RHO ... OK" << std::endl;
+  coarseToFine1->initialize_prev(meta::id<refinement::lagrava::FullTimeCoarseToFineO>{});
+  coarseToFine2->initialize_prev(meta::id<refinement::lagrava::FullTimeCoarseToFineO>{});
+  clout << "Initializing PREV_RHO ... OK" << std::endl;
 
   // iTmax depends on maximum physical time. If iTmax is provided in command line, it is an upper bound
   if ( iTmax == 0 ) iTmax = converterL0.getLatticeTime( maxPhysT );
@@ -440,52 +446,52 @@ int main(int argc, char* argv[])
   for (std::size_t iT = 0; iT < iTmax; ++iT) {
     if (iT % iTvtk == 0) {
 
-    writeResults(sLatticeL0, converterL0, iT, sGeometryL0, std::to_string(iT)+".00_level0_preBC");
-    writeResults(sLatticeL1, converterL1, iT, sGeometryL1, std::to_string(iT)+".00_level1_preBC");
-    writeResults(sLatticeL2, converterL2, iT, sGeometryL2, std::to_string(iT)+".00_level2_preBC");
+    writeResults(sLatticeL0, converterL0, iT, sGeometryL0, std::to_string(iT)+"_00_level0_preBC", "00_level0_preBC", true);
+    writeResults(sLatticeL1, converterL1, iT, sGeometryL1, std::to_string(iT)+"_00_level1_preBC", "00_level1_preBC", true);
+    writeResults(sLatticeL2, converterL2, iT, sGeometryL2, std::to_string(iT)+"_00_level2_preBC", "00_level2_preBC", true);
 
     setBoundaryValues( sLatticeL0, converterL0, iT, sGeometryL0, iTmaxStart, maxLatticeU, maxPhysU, iniPhysU );
-    writeResults(sLatticeL0, converterL0, iT, sGeometryL0, std::to_string(iT)+".01_level0_postBC");
+    writeResults(sLatticeL0, converterL0, iT, sGeometryL0, std::to_string(iT)+"_01_level0_postBC");
     sLatticeL0.collideAndStream();
-    writeResults(sLatticeL0, converterL0, iT, sGeometryL0, std::to_string(iT)+".02_level0_postCS");
+    writeResults(sLatticeL0, converterL0, iT, sGeometryL0, std::to_string(iT)+"_02_level0_postCS");
 
       sLatticeL1.collideAndStream();
-      writeResults(sLatticeL1, converterL1, iT, sGeometryL1, std::to_string(iT)+".03_level1_postCS1");
+      writeResults(sLatticeL1, converterL1, iT, sGeometryL1, std::to_string(iT)+"_03_level1_postCS1");
       coarseToFine1->apply(meta::id<refinement::lagrava::HalfTimeCoarseToFineO>{});
-      writeResults(sLatticeL1, converterL1, iT, sGeometryL1, std::to_string(iT)+".04_level1_postC2F1");
+      writeResults(sLatticeL1, converterL1, iT, sGeometryL1, std::to_string(iT)+"_04_level1_postC2F1");
 
         sLatticeL2.collideAndStream();
-        writeResults(sLatticeL2, converterL2, iT, sGeometryL2, std::to_string(iT)+".05_level2_postCS1");
+        writeResults(sLatticeL2, converterL2, iT, sGeometryL2, std::to_string(iT)+"_05_level2_postCS1");
         coarseToFine2->apply(meta::id<refinement::lagrava::HalfTimeCoarseToFineO>{});
-        writeResults(sLatticeL2, converterL2, iT, sGeometryL2, std::to_string(iT)+".06_level2_postC2F1");
+        writeResults(sLatticeL2, converterL2, iT, sGeometryL2, std::to_string(iT)+"_06_level2_postC2F1");
 
         sLatticeL2.collideAndStream();
-        writeResults(sLatticeL2, converterL2, iT, sGeometryL2, std::to_string(iT)+".07_level2_postCS2");
+        writeResults(sLatticeL2, converterL2, iT, sGeometryL2, std::to_string(iT)+"_07_level2_postCS2");
         coarseToFine2->apply(meta::id<refinement::lagrava::FullTimeCoarseToFineO>{});
-        writeResults(sLatticeL2, converterL2, iT, sGeometryL2, std::to_string(iT)+".08_level2_postC2F2");
+        writeResults(sLatticeL2, converterL2, iT, sGeometryL2, std::to_string(iT)+"_08_level2_postC2F2");
 
       fineToCoarse2->apply(meta::id<refinement::lagrava::FineToCoarseO>{});
-      writeResults(sLatticeL1, converterL1, iT, sGeometryL1, std::to_string(iT)+".09_level1_postF2C1");
+      writeResults(sLatticeL1, converterL1, iT, sGeometryL1, std::to_string(iT)+"_09_level1_postF2C1");
       sLatticeL1.collideAndStream();
-      writeResults(sLatticeL1, converterL1, iT, sGeometryL1, std::to_string(iT)+".10_level1_postCS2");
+      writeResults(sLatticeL1, converterL1, iT, sGeometryL1, std::to_string(iT)+"_10_level1_postCS2");
       coarseToFine1->apply(meta::id<refinement::lagrava::FullTimeCoarseToFineO>{});
-      writeResults(sLatticeL1, converterL1, iT, sGeometryL1, std::to_string(iT)+".11_level1_postC2F2");
+      writeResults(sLatticeL1, converterL1, iT, sGeometryL1, std::to_string(iT)+"_11_level1_postC2F2");
 
         sLatticeL2.collideAndStream();
-        writeResults(sLatticeL2, converterL2, iT, sGeometryL2, std::to_string(iT)+".12_level2_postCS3");
+        writeResults(sLatticeL2, converterL2, iT, sGeometryL2, std::to_string(iT)+"_12_level2_postCS3");
         coarseToFine2->apply(meta::id<refinement::lagrava::HalfTimeCoarseToFineO>{});
-        writeResults(sLatticeL2, converterL2, iT, sGeometryL2, std::to_string(iT)+".13_level2_postC2F3");
+        writeResults(sLatticeL2, converterL2, iT, sGeometryL2, std::to_string(iT)+"_13_level2_postC2F3");
 
         sLatticeL2.collideAndStream();
-        writeResults(sLatticeL2, converterL2, iT, sGeometryL2, std::to_string(iT)+".14_level2_postCS4");
+        writeResults(sLatticeL2, converterL2, iT, sGeometryL2, std::to_string(iT)+"_14_level2_postCS4");
         coarseToFine2->apply(meta::id<refinement::lagrava::FullTimeCoarseToFineO>{});
-        writeResults(sLatticeL2, converterL2, iT, sGeometryL2, std::to_string(iT)+".15_level2_postC2F4");
+        writeResults(sLatticeL2, converterL2, iT, sGeometryL2, std::to_string(iT)+"_15_level2_postC2F4");
 
       fineToCoarse2->apply(meta::id<refinement::lagrava::FineToCoarseO>{});
-      writeResults(sLatticeL1, converterL1, iT, sGeometryL1, std::to_string(iT)+".16_level1_postF2C2");
+      writeResults(sLatticeL1, converterL1, iT, sGeometryL1, std::to_string(iT)+"_16_level1_postF2C2");
 
     fineToCoarse1->apply(meta::id<refinement::lagrava::FineToCoarseO>{});
-    writeResults(sLatticeL0, converterL0, iT, sGeometryL0, std::to_string(iT)+".17_level0_postF2C");
+    writeResults(sLatticeL0, converterL0, iT, sGeometryL0, std::to_string(iT)+"_17_level0_postF2C");
 
     } else {
 
