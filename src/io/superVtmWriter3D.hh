@@ -84,7 +84,7 @@ void SuperVTMwriter3D<T,OUT_T,W>::write(int iT)
   const CuboidDecomposition<T,3>& cGeometry = _cGeometry ? *_cGeometry : (**it_begin).getSuperStructure().getCuboidGeometry();
 
   // PVD, owns all
-  writePVD(iT);
+  // writePVD(iT);
   if (_cGeometry) {
     // Write globally if cuboid geometry is provided
     for (int iC = 0; iC < cGeometry.size(); ++iC) {

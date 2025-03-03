@@ -46,7 +46,6 @@ struct HalfTimeCoarseToFineO {
   void apply(COARSE_CELL& cCellPtr, FINE_CELL& fCell, DATA& data, PARAMETERS& params) any_platform {
     using V = typename COARSE_CELL::value_t;
     using DESCRIPTOR = typename COARSE_CELL::descriptor_t;
-    std::cout << "1";
     if (cCellPtr) {
       auto cCell = *cCellPtr;
 
@@ -78,100 +77,102 @@ struct HalfTimeCoarseToFineO {
       Vector<V,DESCRIPTOR::d> u{};
       Vector<V,DESCRIPTOR::q> fNeq{};
 
-      for (unsigned iN=0; iN < fields::refinement::CONTEXT_NEIGHBORS::count<DESCRIPTOR>(); ++iN) {
-        auto n = fields::refinement::CONTEXT_NEIGHBORS::c<DESCRIPTOR>(iN);  // direction (vector, length d)
-        if (n*normal == 0) {  // normal to edge --> there should be neighbor
-          if (auto ncCellPtr = cCellPtr.neighbor(n)) {  // has coarse neighbor (not only fine)
-            // nNeighbors += 1;
-            auto ncCell = *ncCellPtr;
-            auto nData = data.neighbor(iN);  // new data object with data in neighbor direction
+      // for (unsigned iN=0; iN < fields::refinement::CONTEXT_NEIGHBORS::count<DESCRIPTOR>(); ++iN) {
+      //   auto n = fields::refinement::CONTEXT_NEIGHBORS::c<DESCRIPTOR>(iN);  // direction (vector, length d)
+      //   if (n*normal == 0) {  // normal to edge --> there should be neighbor
+      //     if ( auto ncCellPtr = cCellPtr.neighbor(n) ) {  // has coarse neighbor (not only fine)
+      //       // nNeighbors += 1;
+      //       auto ncCell = *ncCellPtr;
+      //       auto nData = data.neighbor(iN);  // new data object with data in neighbor direction
 
-            auto rhoPrev  = nData->template getField<fields::refinement::PREV_RHO>();
-            auto uPrev    = nData->template getField<fields::refinement::PREV_U>();
-            auto fNeqPrev = nData->template getField<fields::refinement::PREV_FNEQ>();
+      //       auto rhoPrev  = nData->template getField<fields::refinement::PREV_RHO>();
+      //       auto uPrev    = nData->template getField<fields::refinement::PREV_U>();
+      //       auto fNeqPrev = nData->template getField<fields::refinement::PREV_FNEQ>();
 
-            V rhoCurr{};
-            Vector<V,DESCRIPTOR::d> uCurr{};
-            Vector<V,DESCRIPTOR::q> fNeqCurr{};
-            lbm<DESCRIPTOR>::computeRhoU(ncCell, rhoCurr, uCurr);
-            lbm<DESCRIPTOR>::computeFneq(ncCell, fNeqCurr, rhoCurr, uCurr);
+      //       V rhoCurr{};
+      //       Vector<V,DESCRIPTOR::d> uCurr{};
+      //       Vector<V,DESCRIPTOR::q> fNeqCurr{};
+      //       lbm<DESCRIPTOR>::computeRhoU(ncCell, rhoCurr, uCurr);
+      //       lbm<DESCRIPTOR>::computeFneq(ncCell, fNeqCurr, rhoCurr, uCurr);
 
-            // time-interpoltation
-            bool cartesian = false;
-            if ( DESCRIPTOR::d == 3 ) if ( abs(n[0])+abs(n[1])+abs(n[2]) == 1 ) cartesian = true;
-            if ( DESCRIPTOR::d == 2 ) cartesian = true;
-            if ( cartesian ) {  // neighbor in cartesian direction
-              rho += V(9./16.)*V{0.5}*(rhoPrev + rhoCurr);
-              u += V(9./16.)*V{0.5}*(uPrev + uCurr);
-              fNeq += V(9./16.)*V{0.5}*(fNeqPrev + fNeqCurr);
+      //       // time-interpoltation
+      //       bool cartesian = false;
+      //       if ( DESCRIPTOR::d == 2 ) cartesian = true;
+      //       // if ( DESCRIPTOR::d == 2 ) if ( abs(n[0])+abs(n[1]) == 1 ) cartesian = true;
+      //       if ( DESCRIPTOR::d == 3 ) if ( abs(n[0])+abs(n[1])+abs(n[2]) == 1 ) cartesian = true;
+      //       if ( cartesian ) {  // neighbor lies in cartesian direction -> simpler interpolation
+      //         rho += V(9./16.)*V{0.5}*(rhoPrev + rhoCurr);
+      //         u += V(9./16.)*V{0.5}*(uPrev + uCurr);
+      //         fNeq += V(9./16.)*V{0.5}*(fNeqPrev + fNeqCurr);
 
-              ncCellPtr = cCellPtr.neighbor(3*n);
-              ncCell = *ncCellPtr;
-              nData = data.neighbor(iN);  // new data object with data in neighbor direction
+      //         ncCellPtr = cCellPtr.neighbor(3*n);
+      //         ncCell = *ncCellPtr;
+      //         nData = data.neighbor(iN).neighbor(iN).neighbor(iN);
 
-              rhoPrev  = nData->template getField<fields::refinement::PREV_RHO>();
-              uPrev    = nData->template getField<fields::refinement::PREV_U>();
-              fNeqPrev = nData->template getField<fields::refinement::PREV_FNEQ>();
+      //         rhoPrev  = nData->template getField<fields::refinement::PREV_RHO>();
+      //         uPrev    = nData->template getField<fields::refinement::PREV_U>();
+      //         fNeqPrev = nData->template getField<fields::refinement::PREV_FNEQ>();
 
-              lbm<DESCRIPTOR>::computeRhoU(ncCell, rhoCurr, uCurr);
-              lbm<DESCRIPTOR>::computeFneq(ncCell, fNeqCurr, rhoCurr, uCurr);
+      //         lbm<DESCRIPTOR>::computeRhoU(ncCell, rhoCurr, uCurr);
+      //         lbm<DESCRIPTOR>::computeFneq(ncCell, fNeqCurr, rhoCurr, uCurr);
 
-              rho -= V(1./16.)*V{0.5}*(rhoPrev + rhoCurr);
-              u -= V(1./16.)*V{0.5}*(uPrev + uCurr);
-              fNeq -= V(1./16.)*V{0.5}*(fNeqPrev + fNeqCurr);
-            } else {  // neighbor in diagonal direction
-              // Lagrava weights: 81/256, -9/256, -9/256, +1/256 (using 16 points)
-              // alternative: 5/16 direct neighbors, -1/32 further neighbors - applied directly to populations?? (using 12 points)
-              rho += V(81./256.)*V{0.5}*(rhoPrev + rhoCurr);
-              u += V(81./256.)*V{0.5}*(uPrev + uCurr);
-              fNeq += V(81./256.)*V{0.5}*(fNeqPrev + fNeqCurr);
+      //         rho -= V(1./16.)*V{0.5}*(rhoPrev + rhoCurr);
+      //         u -= V(1./16.)*V{0.5}*(uPrev + uCurr);
+      //         fNeq -= V(1./16.)*V{0.5}*(fNeqPrev + fNeqCurr);
+      //       } else {  // neighbor in diagonal direction
+      //         // Lagrava weights: 81/256, -9/256, -9/256, +1/256 (using 16 points)
+      //         // alternative: 5/16 direct neighbors, -1/32 further neighbors - applied directly to populations?? (using 12 points)
+      //         rho += V(81./256.)*V{0.5}*(rhoPrev + rhoCurr);
+      //         u += V(81./256.)*V{0.5}*(uPrev + uCurr);
+      //         fNeq += V(81./256.)*V{0.5}*(fNeqPrev + fNeqCurr);
 
-              auto n2 = n;
-              for ( size_t dim; dim < 3; dim++ ) { if ( n[dim] != 0 ) {
-                n2[dim] *= 2;
-                unsigned iN2=0;
-                while (iN2 < fields::refinement::CONTEXT_NEIGHBORS::count<DESCRIPTOR>()) {
-                  auto n3 = fields::refinement::CONTEXT_NEIGHBORS::c<DESCRIPTOR>(iN2);  // direction (vector, length d)
-                  if ( n+n3 == n2 ) break;
-                  ++iN2;
-                }
-                n2[dim] /= 2;
-                n2[dim] *= 3;
+      //         for ( size_t dim; dim < 3; dim++ ) {
+      //           auto n2 = n;
+      //           if ( n[dim] != 0 ) {
+      //             n2[dim] *= 2;
+      //             unsigned iN2=0;
+      //             while ( iN2 < fields::refinement::CONTEXT_NEIGHBORS::count<DESCRIPTOR>() ) {
+      //               auto n3 = fields::refinement::CONTEXT_NEIGHBORS::c<DESCRIPTOR>(iN2);  // direction (vector, length d)
+      //               if ( n+n3 == n2 ) break;
+      //               ++iN2;
+      //             }
+      //             n2[dim] = n[dim]*3;
 
-                ncCellPtr = cCellPtr.neighbor(n2);
-                ncCell = *ncCellPtr;
-                nData = data.neighbor(iN).neighbor(iN2).neighbor(iN2);  // TODO: How to find neighbor in {0, h, 3h} ?
+      //             ncCellPtr = cCellPtr.neighbor(n2);
+      //             ncCell = *ncCellPtr;
+      //             nData = data.neighbor(iN).neighbor(iN2).neighbor(iN2);  // TODO: How to find neighbor in {0, h, 3h} ?
 
-                rhoPrev  = nData->template getField<fields::refinement::PREV_RHO>();
-                uPrev    = nData->template getField<fields::refinement::PREV_U>();
-                fNeqPrev = nData->template getField<fields::refinement::PREV_FNEQ>();
+      //             rhoPrev  = nData->template getField<fields::refinement::PREV_RHO>();
+      //             uPrev    = nData->template getField<fields::refinement::PREV_U>();
+      //             fNeqPrev = nData->template getField<fields::refinement::PREV_FNEQ>();
 
-                lbm<DESCRIPTOR>::computeRhoU(ncCell, rhoCurr, uCurr);
-                lbm<DESCRIPTOR>::computeFneq(ncCell, fNeqCurr, rhoCurr, uCurr);
-                
-                rho -= V(9./256.)*V{0.5}*(rhoPrev + rhoCurr);
-                u -= V(9./256.)*V{0.5}*(uPrev + uCurr);
-                fNeq -= V(9./256.)*V{0.5}*(fNeqPrev + fNeqCurr);
-              } }
+      //             lbm<DESCRIPTOR>::computeRhoU(ncCell, rhoCurr, uCurr);
+      //             lbm<DESCRIPTOR>::computeFneq(ncCell, fNeqCurr, rhoCurr, uCurr);
+                  
+      //             rho -= V(9./256.)*V{0.5}*(rhoPrev + rhoCurr);
+      //             u -= V(9./256.)*V{0.5}*(uPrev + uCurr);
+      //             fNeq -= V(9./256.)*V{0.5}*(fNeqPrev + fNeqCurr);
+      //           }
+      //         }
 
-              ncCellPtr = cCellPtr.neighbor(3*n);
-              ncCell = *ncCellPtr;
-              nData = data.neighbor(iN).neighbor(iN).neighbor(iN);  // new data object with data in 3* neighbor direction
+      //         ncCellPtr = cCellPtr.neighbor(3*n);
+      //         ncCell = *ncCellPtr;
+      //         nData = data.neighbor(iN).neighbor(iN).neighbor(iN);  // new data object with data in 3* neighbor direction
 
-              rhoPrev  = nData->template getField<fields::refinement::PREV_RHO>();
-              uPrev    = nData->template getField<fields::refinement::PREV_U>();
-              fNeqPrev = nData->template getField<fields::refinement::PREV_FNEQ>();
+      //         rhoPrev  = nData->template getField<fields::refinement::PREV_RHO>();
+      //         uPrev    = nData->template getField<fields::refinement::PREV_U>();
+      //         fNeqPrev = nData->template getField<fields::refinement::PREV_FNEQ>();
 
-              lbm<DESCRIPTOR>::computeRhoU(ncCell, rhoCurr, uCurr);
-              lbm<DESCRIPTOR>::computeFneq(ncCell, fNeqCurr, rhoCurr, uCurr);
+      //         lbm<DESCRIPTOR>::computeRhoU(ncCell, rhoCurr, uCurr);
+      //         lbm<DESCRIPTOR>::computeFneq(ncCell, fNeqCurr, rhoCurr, uCurr);
               
-              rho += V(1./256.)*V{0.5}*(rhoPrev + rhoCurr);
-              u += V(1./256.)*V{0.5}*(uPrev + uCurr);
-              fNeq += V(1./256.)*V{0.5}*(fNeqPrev + fNeqCurr);
-            }
-          }
-        }
-      }
+      //         rho += V(1./256.)*V{0.5}*(rhoPrev + rhoCurr);
+      //         u += V(1./256.)*V{0.5}*(uPrev + uCurr);
+      //         fNeq += V(1./256.)*V{0.5}*(fNeqPrev + fNeqCurr);
+      //       }
+      //     }
+      //   }
+      // }
 
       V uSqr = util::normSqr<V,DESCRIPTOR::d>(u);
 
