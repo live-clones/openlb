@@ -22,24 +22,29 @@
       "preLaunchTask": "make movingshock3d"
     },
     {
-      "name": "Debug du93_3d laptop",
+      "name": "Debug sphere3d laptop",
       "type": "cppdbg",
       "request": "launch",
-      "args": [], // "--debug", 
+      "args": [], // "--debug",
       "stopAtEntry": false,
       "externalConsole": false,
-      "cwd": "/home/hbrs/OpenLB/examples/noise/du93_3d",
-      "program": "/home/hbrs/OpenLB/examples/noise/du93_3d/du93_3d",
+      "cwd": "/home/hbrs/OpenLB/examples/gridRefinement/sphere3d",
+      "program": "/home/hbrs/OpenLB/examples/gridRefinement/sphere3d/sphere3d",
       "MIMode": "gdb",
       "miDebuggerPath": "gdb",
       "setupCommands": [
         {
-          "description": "Enable pretty-printing for gdb",
-          "text": "-enable-pretty-printing",
-          "ignoreFailures": true
+            "description": "Enable pretty-printing for gdb",
+            "text": "-enable-pretty-printing",
+            "ignoreFailures": true
+        },
+        {
+            "description": "Set Disassembly Flavor to Intel",
+            "text": "-gdb-set disassembly-flavor intel",
+            "ignoreFailures": true
         }
       ],
-      "preLaunchTask": "make du93_3d"
+      "preLaunchTask": "make sphere3d"
     },
     {
       "name": "Debug movingshock3d workstation",

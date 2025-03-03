@@ -131,5 +131,6 @@
     "ranges": "cpp",
     "source_location": "cpp"
   },
-  "makefile.makefilePath": "${HOME}/OpenLB/examples/noise/movingshock3d/Makefile"
+  "makefile.makefilePath": "/home/hbrs/OpenLB/examples/gridRefinement/sphere3d/Makefile",
+  "makefile.buildLog": ""
 }

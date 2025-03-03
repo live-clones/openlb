@@ -46,6 +46,7 @@ struct HalfTimeCoarseToFineO {
   void apply(COARSE_CELL& cCellPtr, FINE_CELL& fCell, DATA& data, PARAMETERS& params) any_platform {
     using V = typename COARSE_CELL::value_t;
     using DESCRIPTOR = typename COARSE_CELL::descriptor_t;
+    std::cout << "1";
     if (cCellPtr) {
       auto cCell = *cCellPtr;
 
@@ -96,7 +97,10 @@ struct HalfTimeCoarseToFineO {
             lbm<DESCRIPTOR>::computeFneq(ncCell, fNeqCurr, rhoCurr, uCurr);
 
             // time-interpoltation
-            if ( ( DESCRIPTOR::d == 2 ) || ( abs(n[0])+abs(n[1])+abs(n[2]) == 1 ) ) {  // neighbor in cartesian direction
+            bool cartesian = false;
+            if ( DESCRIPTOR::d == 3 ) if ( abs(n[0])+abs(n[1])+abs(n[2]) == 1 ) cartesian = true;
+            if ( DESCRIPTOR::d == 2 ) cartesian = true;
+            if ( cartesian ) {  // neighbor in cartesian direction
               rho += V(9./16.)*V{0.5}*(rhoPrev + rhoCurr);
               u += V(9./16.)*V{0.5}*(uPrev + uCurr);
               fNeq += V(9./16.)*V{0.5}*(fNeqPrev + fNeqCurr);
@@ -174,10 +178,12 @@ struct HalfTimeCoarseToFineO {
       V coarseTau = params.template get<descriptors::TAU>();
       V scalingFactor = (coarseTau - V{0.25}) / coarseTau;
 
+      std::cout << "rho=" << rho << " ";
       for (int iPop=0; iPop < DESCRIPTOR::q; ++iPop) {
         fCell[iPop] = equilibrium<DESCRIPTOR>::secondOrder(iPop, rho, u, uSqr) + scalingFactor*fNeq[iPop];
       }
     }
+    std::cout << "9" << std::endl;
   }
 };
 
