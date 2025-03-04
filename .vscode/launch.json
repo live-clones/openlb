@@ -2,14 +2,14 @@
   "version": "0.2.0",
   "configurations": [
     {
-      "name": "Debug movingshock3d ws",
+      "name": "Debug workstation",
       "type": "cppdbg",
       "request": "launch",
-      "args": ["--boundary_condition", "2", "--boundary_depth", "0", "--res", "2"], // "--debug", "--boundary_condition", "3"
+      "args": [],  // "--boundary_condition", "2", "--boundary_depth", "0", "--res", "2"], // "--debug", "--boundary_condition", "3"
       "stopAtEntry": false,
       "externalConsole": false,
-      "cwd": "/home/philipp/OpenLB/examples/noise/movingshock3d",
-      "program": "/home/philipp/OpenLB/examples/noise/movingshock3d/movingshock3d",
+      "cwd": "/home/philipp/OpenLB/examples/gridRefinement/sphere3d",
+      "program": "/home/philipp/OpenLB/examples/gridRefinement/sphere3d/sphere3d",
       "MIMode": "gdb",
       "miDebuggerPath": "gdb",
       "setupCommands": [
@@ -19,7 +19,7 @@
           "ignoreFailures": true
         }
       ],
-      "preLaunchTask": "make movingshock3d"
+      "preLaunchTask": "make sphere3d"
     },
     {
       "name": "Debug sphere3d laptop",

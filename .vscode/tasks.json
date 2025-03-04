@@ -15,12 +15,24 @@
             "type": "shell",
             "label": "make sphere3d",
             "command": "cd $HOME/OpenLB/examples/gridRefinement/sphere3d && /usr/bin/make",
-            // "dependsOn": "clean sphere3d"
+            "dependsOn": "clean sphere3d"
         },
         {
             "type": "shell",
             "label": "clean sphere3d",
-            "command": "cd $HOME/OpenLB/examples/gridRefinement/sphere3d && /usr/bin/make clean"
+            "command": "cd $HOME/OpenLB/examples/gridRefinement/sphere3d && /usr/bin/make clean",
+            "dependsOn": "make"
+        },
+        {
+            "type": "shell",
+            "label": "make",
+            "command": "cd $HOME/OpenLB/ && /usr/bin/make",
+            "dependsOn": "clean"
+        },
+        {
+            "type": "shell",
+            "label": "clean",
+            "command": "cd $HOME/OpenLB/ && /usr/bin/make clean"
         }
     ],
     "version": "2.0.0"
