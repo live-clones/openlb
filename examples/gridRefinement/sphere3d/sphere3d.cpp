@@ -81,8 +81,8 @@ void prepareGeometryFine(const UnitConverter<T,DESCRIPTOR>& converter,
 
   sGeometry.rename(0,1);
 
-  // IndicatorSphere3D<T> sphereI({0.55, 0.25, 0.25}, 0.1);
-  // sGeometry.rename(1,2, sphereI);
+  IndicatorSphere3D<T> sphereI({0.55, 0.25, 0.25}, 0.1);
+  sGeometry.rename(1,2, sphereI);
 
   sGeometry.clean();
   sGeometry.checkForErrors();
@@ -151,8 +151,8 @@ void setBoundaryValues(SuperLattice<T, DESCRIPTOR>& sLattice,
     maxVelocity[0] = 2.25*frac[0]*converter.getCharLatticeVelocity();
 
     T distance2Wall = converter.getPhysDeltaX()/2.;
-    // RectanglePoiseuille3D<T> poiseuilleU( sGeometry, 3, maxVelocity, distance2Wall, distance2Wall, distance2Wall );
-    // sLattice.defineU( sGeometry, 3, poiseuilleU );
+    RectanglePoiseuille3D<T> poiseuilleU( sGeometry, 3, maxVelocity, distance2Wall, distance2Wall, distance2Wall );
+    sLattice.defineU( sGeometry, 3, poiseuilleU );
 
     clout << "step=" << iT << "; maxVel=" << maxVelocity[0] << std::endl;
 
@@ -171,31 +171,31 @@ void writeResults(SuperLattice<T, DESCRIPTOR>& sLattice,
 {
   OstreamManager clout(std::cout, name);
 
-  // if (iT == 0 && vtk) {
-  //   SuperVTMwriter3D<T> vtmWriter(vtmName, 0);
-  //   if (name == "level0") {
-  //     SuperLatticeRank3D rank( sLattice );
-  //     vtmWriter.write(rank);
-  //   }
-  //   SuperGeometryF<T,DESCRIPTOR::d> geometryF(sGeometry);
-  //   geometryF.getName() = name + "_geometry";
-  //   vtmWriter.write(geometryF);
-  //   vtmWriter.createMasterFile();
-  // }
+  if (iT == 0 && vtk) {
+    SuperVTMwriter3D<T> vtmWriter(vtmName, 0);
+    if (name == "level0") {
+      SuperLatticeRank3D rank( sLattice );
+      vtmWriter.write(rank);
+    }
+    SuperGeometryF<T,DESCRIPTOR::d> geometryF(sGeometry);
+    geometryF.getName() = name + "_geometry";
+    vtmWriter.write(geometryF);
+    vtmWriter.createMasterFile();
+  }
 
-  // sLattice.setProcessingContext(ProcessingContext::Evaluation);
-  // if ( vtk ) sLattice.scheduleBackgroundOutputVTK([&,vtmName,iT](auto task) {
-  //   SuperVTMwriter3D<T> vtmWriter(vtmName);
-  //   SuperLatticePhysVelocity3D velocityF(sLattice, converter);
-  //   SuperLatticePhysPressure3D pressureF(sLattice, converter);
-  //   SuperLatticeRefinementMetricKnudsen3D qualityF(sLattice, converter);
-  //   SuperLatticePhysField3D<T,DESCRIPTOR,fields::refinement::PREV_RHO> prev_rho( sLattice, 1., "PREV_RHO" );
-  //   vtmWriter.addFunctor(prev_rho);
-  //   vtmWriter.addFunctor(qualityF);
-  //   vtmWriter.addFunctor(velocityF);
-  //   vtmWriter.addFunctor(pressureF);
-  //   task(vtmWriter, iT);
-  // });
+  sLattice.setProcessingContext(ProcessingContext::Evaluation);
+  if ( vtk ) sLattice.scheduleBackgroundOutputVTK([&,vtmName,iT](auto task) {
+    SuperVTMwriter3D<T> vtmWriter(vtmName);
+    SuperLatticePhysVelocity3D velocityF(sLattice, converter);
+    SuperLatticePhysPressure3D pressureF(sLattice, converter);
+    SuperLatticeRefinementMetricKnudsen3D qualityF(sLattice, converter);
+    SuperLatticePhysField3D<T,DESCRIPTOR,fields::refinement::PREV_RHO> prev_rho( sLattice, 1., "PREV_RHO" );
+    vtmWriter.addFunctor(prev_rho);
+    vtmWriter.addFunctor(qualityF);
+    vtmWriter.addFunctor(velocityF);
+    vtmWriter.addFunctor(pressureF);
+    task(vtmWriter, iT);
+  });
 
   SuperLatticePhysVelocity3D velocityF(sLattice, converter);
   SuperEuklidNorm3D<T> normVel( velocityF );
@@ -220,13 +220,14 @@ int main(int argc, char* argv[])
   OstreamManager clout(std::cout, "main");
 
   CLIreader args(argc, argv);
-  const int N = args.getValueOrFallback<int>("--res", 11);
-  const int Re = args.getValueOrFallback<int>("--reynolds", 100);
+  const int N = args.getValueOrFallback<int>("--res", 31);
+  const int Re = args.getValueOrFallback<int>("--reynolds", 600);
   const int maxPhysT = args.getValueOrFallback<int>("--maxPhysT", 16);
   size_t iTmax              = args.getValueOrFallback<int>( "--iTmax",      0);
   size_t nout               = args.getValueOrFallback( "--nout",            5);     // minimum number of vtk outputs
   size_t iTout              = args.getValueOrFallback( "--iTout",           0);     // iterations for vtk outputs
   T physTout                = args.getValueOrFallback( "--physTout",        0);     // timestep for vtk outputs
+  bool allVtk               = args.contains( "--allVtk" );  // vtk for all substeps
 
   const UnitConverterFromResolutionAndRelaxationTime<T, DESCRIPTOR> converterLevel0(
     int {N},             // resolution: number of voxels per charPhysL
@@ -322,22 +323,22 @@ int main(int argc, char* argv[])
       writeResults(sLatticeLevel1, converterLevel1, iT, sGeometryLevel1, std::to_string(iT)+".00_level1_preBC", "00_level1_preBC", true);
 
       setBoundaryValues(sLatticeLevel0, converterLevel0, iT, sGeometryLevel0);
-      writeResults(sLatticeLevel0, converterLevel0, iT, sGeometryLevel0, std::to_string(iT)+".01_level0_postBC");
+      writeResults(sLatticeLevel0, converterLevel0, iT, sGeometryLevel0, std::to_string(iT)+".01_level0_postBC", "01_level0_postBC", allVtk);
       sLatticeLevel0.collideAndStream();
-      writeResults(sLatticeLevel0, converterLevel0, iT, sGeometryLevel0, std::to_string(iT)+".02_level0_postCS");
+      writeResults(sLatticeLevel0, converterLevel0, iT, sGeometryLevel0, std::to_string(iT)+".02_level0_postCS", "02_level0_postCS", allVtk);
 
         sLatticeLevel1.collideAndStream();
-        writeResults(sLatticeLevel1, converterLevel1, iT, sGeometryLevel1, std::to_string(iT)+".03_level1_postCS1");
+        writeResults(sLatticeLevel1, converterLevel1, iT, sGeometryLevel1, std::to_string(iT)+".03_level1_postCS1", "03_level1_postCS1", allVtk);
         coarseToFine->apply(meta::id<refinement::lagrava::HalfTimeCoarseToFineO>{});
-        writeResults(sLatticeLevel1, converterLevel1, iT, sGeometryLevel1, std::to_string(iT)+".04_level1_postC2F1");
+        writeResults(sLatticeLevel1, converterLevel1, iT, sGeometryLevel1, std::to_string(iT)+".04_level1_postC2F1", "04_level1_postC2F1", allVtk);
 
         sLatticeLevel1.collideAndStream();
-        writeResults(sLatticeLevel1, converterLevel1, iT, sGeometryLevel1, std::to_string(iT)+".05_level1_postCS2");
+        writeResults(sLatticeLevel1, converterLevel1, iT, sGeometryLevel1, std::to_string(iT)+".05_level1_postCS2", "05_level1_postCS2", allVtk);
         coarseToFine->apply(meta::id<refinement::lagrava::FullTimeCoarseToFineO>{});
-        writeResults(sLatticeLevel1, converterLevel1, iT, sGeometryLevel1, std::to_string(iT)+".06_level1_postC2F2");
+        writeResults(sLatticeLevel1, converterLevel1, iT, sGeometryLevel1, std::to_string(iT)+".06_level1_postC2F2", "06_level1_postC2F2", allVtk);
 
       fineToCoarse->apply(meta::id<refinement::lagrava::FineToCoarseO>{});
-      writeResults(sLatticeLevel0, converterLevel0, iT, sGeometryLevel0, std::to_string(iT)+".07_level0_postF2C");
+      writeResults(sLatticeLevel0, converterLevel0, iT, sGeometryLevel0, std::to_string(iT)+".07_level0_postF2C", "07_level0_postF2C", allVtk);
     } else {
       setBoundaryValues(sLatticeLevel0, converterLevel0, iT, sGeometryLevel0);
       sLatticeLevel0.collideAndStream();
