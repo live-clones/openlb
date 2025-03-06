@@ -374,12 +374,12 @@ bool BlockGeometry<T,D>::checkForErrors(bool verbose) const
   this->forSpatialLocations([&](LatticeR<D> latticeR)
   {
     if (get(latticeR) == 0) {
-          errorFound = false;
-          for(int iPop = 1; iPop < DESCRIPTOR::q; iPop++){
-            if(getMaterial(latticeR + (descriptors::c<DESCRIPTOR>(iPop))) == 1){
-              errorFound = true;
-            }
-          }
+      errorFound = false;
+      for(int iPop = 1; iPop < DESCRIPTOR::q; iPop++){
+        if(getMaterial(latticeR + (descriptors::c<DESCRIPTOR>(iPop))) == 1){
+          errorFound = true;
+        }
+      }
       if(errorFound){
         error = true;
       }
