@@ -47,7 +47,7 @@ private:
     const auto& cellIdFine = _data.template getField<CELL_ID_FINE>();
     for (std::size_t i=0; i < cellIdFine.getSize(); ++i) {
       auto latticeR = _fLattice.getLatticeR(cellIdFine[0][i]);
-      FieldD<T,DESCRIPTOR,CONTEXT_NEIGHBORS> neighbors{-1};
+      FieldD<T,DESCRIPTOR,CONTEXT_NEIGHBORS> neighbors(-1);
       for (int iN=0; iN < CONTEXT_NEIGHBORS::count<DESCRIPTOR>(); ++iN) {
         if (auto index = getDataIndex(latticeR + CONTEXT_NEIGHBORS::c<DESCRIPTOR>(iN))) {
           neighbors[iN] = *index;
