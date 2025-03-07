@@ -368,7 +368,7 @@ int main(int argc, char* argv[])
   auto converterLevel1 = convectivelyRefineUnitConverter(converterLevel0, 2);
   converterLevel1.print();
   SuperGeometry<T,2> sGeometryLevel1(cGeometryLevel1, loadBalancerLevel1);
-  prepareGeometryMiddle(converterLevel1, sGeometryLevel1, circle, geomParams);
+  prepareGeometryMiddle(converterLevel1, sGeometryLevel1);
   SuperLattice<T,DESCRIPTOR> sLatticeLevel1(cGeometryLevel1,
                                             loadBalancerLevel1,
                                             3,
