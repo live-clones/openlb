@@ -134,76 +134,56 @@ void prepareGeometry(UnitConverter<T,DESCRIPTOR> const& converter,
       superGeometry.getStatistics().print();
       
       // Set material number for inflow
-      origin_d = superGeometry.getStatistics().getMinPhysR( checMat );
-      origin_d[0] -= dx2;
-      origin_d[1] -= dx2;
-      origin_d[2] -= dx2;
-      extend_d = superGeometry.getStatistics().getMaxPhysR( checMat ) - superGeometry.getStatistics().getMinPhysR( checMat );
-      extend_d[0] += dx;
-      extend_d[1] += dx;
-      extend_d[2] += dx;
-
-      origin = origin_d;
-      extend = extend_d;
-      extend[0] = dx;
-      clout << "inflow: origin=" << origin << "; origin+extend=" << origin+extend << std::endl;
+      origin = superGeometry.getStatistics().getMinPhysR( checMat ) - converter.getConversionFactorLength();
+      extend = superGeometry.getStatistics().getMaxPhysR( checMat ) - superGeometry.getStatistics().getMinPhysR( checMat ) + 2*converter.getConversionFactorLength();
+      extend[0] = 2*converter.getConversionFactorLength();
       inflow = std::make_shared<IndicatorCuboid<T,ndim>>( extend, origin );
+      clout << "inflow: origin=" << origin << "; origin+extend=" << origin+extend << std::endl;
       clout << "Renaming " << checMat << " to " << inflMat << " pointing to " << dampMat << " in inflow" << std::endl;
-      // superGeometry.rename( checMat, inflMat, dampMat, inflow );  // inflow to bc, pointing to porous
-      // superGeometry.getStatistics().print();
-      superGeometry.rename( checMat, inflMat, inflow );  // inflow to bc, pointing to porous
+      superGeometry.rename( checMat, inflMat, dampMat, inflow );
       superGeometry.getStatistics().print();
       
       // // Set material number for outflow
-      origin[0] = origin_d[0] + extend_d[0] - dx;
-      clout << "outflow: origin=" << origin << "; origin+extend=" << origin+extend << std::endl;
+      origin[0] = superGeometry.getStatistics().getMaxPhysR( checMat )[0] - converter.getConversionFactorLength();
       outflow = std::make_shared<IndicatorCuboid<T,ndim>>( extend, origin );
+      clout << "outflow: origin=" << origin << "; origin+extend=" << origin+extend << std::endl;
       clout << "Renaming " << checMat << " to " << outfMat << " pointing to " << dampMat << " in outflow" << std::endl;
-      // superGeometry.rename( checMat, outfMat, dampMat, outflow );  // outflow to bc, pointing to porous
-      // superGeometry.getStatistics().print();
-      superGeometry.rename( checMat, outfMat, outflow );  // outflow to bc, pointing to porous
+      superGeometry.rename( checMat, outfMat, dampMat, outflow );  // outflow to bc, pointing to porous
       superGeometry.getStatistics().print();
       
       // Set material number for bottomflow
-      origin = origin_d;
-      extend = extend_d;
-      extend[1] = dx;
-      clout << "bottomflow: origin=" << origin << "; origin+extend=" << origin+extend << std::endl;
+      origin = superGeometry.getStatistics().getMinPhysR( checMat ) - converter.getConversionFactorLength();
+      extend = superGeometry.getStatistics().getMaxPhysR( checMat ) - superGeometry.getStatistics().getMinPhysR( checMat ) + 2*converter.getConversionFactorLength();
+      extend[1] = 2*converter.getConversionFactorLength();
       bottomflow = std::make_shared<IndicatorCuboid<T,ndim>>( extend, origin );
+      clout << "bottomflow: origin=" << origin << "; origin+extend=" << origin+extend << std::endl;
       clout << "Renaming " << checMat << " to " << bottMat << " pointing to " << dampMat << " in bottomflow" << std::endl;
-      // superGeometry.rename( checMat, bottMat, dampMat, bottomflow );
-      // superGeometry.getStatistics().print();
-      superGeometry.rename( checMat, bottMat, bottomflow );
+      superGeometry.rename( checMat, bottMat, dampMat, bottomflow );
       superGeometry.getStatistics().print();
 
       // Set material number for topflow
-      origin[1] = origin_d[1] + extend_d[1] - dx;
-      clout << "topflow: origin=" << origin << "; origin+extend=" << origin+extend << std::endl;
+      origin[1] = superGeometry.getStatistics().getMaxPhysR( checMat )[1] - converter.getConversionFactorLength();
       topflow = std::make_shared<IndicatorCuboid<T,ndim>>( extend, origin );
+      clout << "topflow: origin=" << origin << "; origin+extend=" << origin+extend << std::endl;
       clout << "Renaming " << checMat << " to " << topfMat << " pointing to " << dampMat << " in topflow" << std::endl;
-      // superGeometry.rename( checMat, topfMat, dampMat, topflow );
-      // superGeometry.getStatistics().print();
-      superGeometry.rename( checMat, topfMat, topflow );
+      superGeometry.rename( checMat, topfMat, dampMat, topflow );
       superGeometry.getStatistics().print();
 
       // Set material number for frontflow
-      origin = origin_d;
-      extend = extend_d;
-      extend[2] = dx;
+      origin = superGeometry.getStatistics().getMinPhysR( checMat ) - converter.getConversionFactorLength();
+      extend = superGeometry.getStatistics().getMaxPhysR( checMat ) - superGeometry.getStatistics().getMinPhysR( checMat ) + 2*converter.getConversionFactorLength();
+      extend[2] = 2*converter.getConversionFactorLength();
       frontflow = std::make_shared<IndicatorCuboid<T,ndim>>( extend, origin );
+      clout << "frontflow: origin=" << origin << "; origin+extend=" << origin+extend << std::endl;
       clout << "Renaming " << checMat << " to " << fronMat << " pointing to " << dampMat << " in frontflow" << std::endl;
-      // superGeometry.rename( checMat, fronMat, dampMat, frontflow );
-      // superGeometry.getStatistics().print();
-      superGeometry.rename( checMat, fronMat, frontflow );
+      superGeometry.rename( checMat, fronMat, dampMat, frontflow );
       superGeometry.getStatistics().print();
 
       // Set material number for backflow
-      origin[2] = origin_d[2] + extend_d[2] - dx;
+      origin[2] = superGeometry.getStatistics().getMaxPhysR( checMat )[2] - converter.getConversionFactorLength();
       backflow = std::make_shared<IndicatorCuboid<T,ndim>>( extend, origin );
       clout << "Renaming " << checMat << " to " << backMat << " pointing to " << dampMat << " in backflow" << std::endl;
-      // superGeometry.rename( checMat, backMat, dampMat, backflow );
-      // superGeometry.getStatistics().print();
-      superGeometry.rename( checMat, backMat, backflow );
+      superGeometry.rename( checMat, backMat, dampMat, backflow );
       superGeometry.getStatistics().print();
       break;
 
@@ -235,9 +215,8 @@ void prepareGeometry(UnitConverter<T,DESCRIPTOR> const& converter,
       superGeometry.getStatistics().print();
   
       // Set material number for inflow
-      origin = superGeometry.getStatistics().getMinPhysR( checMat );
-      extend = superGeometry.getStatistics().getMaxPhysR( checMat ) - superGeometry.getStatistics().getMinPhysR( checMat );
-      origin[0] -= converter.getConversionFactorLength();
+      origin = superGeometry.getStatistics().getMinPhysR( checMat ) - converter.getConversionFactorLength();
+      extend = superGeometry.getStatistics().getMaxPhysR( checMat ) - superGeometry.getStatistics().getMinPhysR( checMat ) + 2*converter.getConversionFactorLength();
       extend[0] = 2*converter.getConversionFactorLength();
       inflow = std::make_shared<IndicatorCuboid<T,ndim>>( extend, origin );
       clout << "Renaming " << checMat << " to " << inflMat << " pointing to " << dampMat << " in inflow" << std::endl;
@@ -245,7 +224,7 @@ void prepareGeometry(UnitConverter<T,DESCRIPTOR> const& converter,
       superGeometry.getStatistics().print();
       
       // Set material number for outflow
-      origin[0] = superGeometry.getStatistics().getMaxPhysR( checMat )[0]-converter.getConversionFactorLength();
+      origin[0] = superGeometry.getStatistics().getMaxPhysR( checMat )[0] - converter.getConversionFactorLength();
       outflow = std::make_shared<IndicatorCuboid<T,ndim>>( extend, origin );
       clout << "Renaming " << checMat << " to " << outfMat << " pointing to " << dampMat << " in outflow" << std::endl;
       superGeometry.rename( checMat, outfMat, dampMat, outflow );  // outflow to bc, pointing to porous
@@ -352,21 +331,16 @@ void prepareLattice(UnitConverter<T,DESCRIPTOR> const& converter,
 
     case local:
       sLattice.defineDynamics<BulkDynamics>(superGeometry, dampMat);
-      bulkIndicator = superGeometry.getMaterialIndicator({dampMat, inflMat, outfMat});
-      boundary::set<boundary::InterpolatedVelocity>(sLattice, superGeometry, inflMat);
-      // setLocalVelocityBoundary(sLattice, omega, superGeometry, inflMat);
-      
+      bulkIndicator = superGeometry.getMaterialIndicator({dampMat, inflMat, outfMat, backMat, fronMat, topfMat, bottMat, checMat});
+      // boundary::set<boundary::InterpolatedVelocity>(sLattice, superGeometry, inflMat);
+      boundary::set<boundary::LocalVelocity>(sLattice, superGeometry.getMaterialIndicator({inflMat, outfMat, backMat, fronMat, topfMat, bottMat, checMat}));
+      // setZeroGradientBoundary( sLattice, superGeometry, fronMat );
+
       // setInterpolatedConvectionBoundary(sLattice, omega, superGeometry, outfMat, uAverage);
       boundary::set<boundary::LocalPressure>(sLattice, superGeometry, outfMat);
       // setLocalVelocityBoundary(sLattice, omega, superGeometry, outfMat);
       // setZeroGradientBoundary(sLattice, superGeometry, outfMat);
 
-      boundary::set<boundary::InterpolatedVelocity>( sLattice, superGeometry, topfMat );
-      boundary::set<boundary::InterpolatedVelocity>( sLattice, superGeometry, bottMat );
-      // setLocalVelocityBoundary(sLattice, omega, superGeometry, backMat);
-      // setLocalVelocityBoundary(sLattice, omega, superGeometry, fronMat);
-      setZeroGradientBoundary( sLattice, superGeometry, backMat );
-      setZeroGradientBoundary( sLattice, superGeometry, fronMat );
       break;
 
     case damping:
@@ -381,7 +355,7 @@ void prepareLattice(UnitConverter<T,DESCRIPTOR> const& converter,
       bulkIndicator = superGeometry.getMaterialIndicator( {fluiMat, dampMat, inflMat, outfMat} );
       boundary::set<boundary::PerfectlyMatchedLayer>( sLattice, superGeometry, dampMat );
       boundary::set<boundary::LocalVelocity>( sLattice, superGeometry, inflMat );
-      boundary::set<boundary::LocalPressure>( sLattice, superGeometry, inflMat );
+      boundary::set<boundary::LocalPressure>( sLattice, superGeometry, outfMat );
       // boundary::set<boundary::InterpolatedConvection>(sLattice, superGeometry, outfMat, uAverage);
       break;
   }
@@ -416,20 +390,21 @@ void prepareLattice(UnitConverter<T,DESCRIPTOR> const& converter,
   }
 
   sLattice.setParameter<descriptors::OMEGA>( omega );
-  // Define fields; could also use setParameter as for omega, but then I could not use a flow profile
-  sLattice.defineField<descriptors::UX>( bulkIndicator, *ux );
-  sLattice.defineField<descriptors::UY>( bulkIndicator, uy );
-  sLattice.defineField<descriptors::UZ>( bulkIndicator, uz );
-  AnalyticalConst<ndim,T,T> rhoField( rho0 );
-  sLattice.defineField<descriptors::DENSITY>( bulkIndicator, rhoField );
 
-  // output damping layer parameter
-  DampingTerm<3,T,DESCRIPTOR> sigma_plot( converter, boundaryDepth, domain_lengths );
-  plotSamplings( sigma_plot, ndatapoints, dist, "sigma_hline", "sigma", horizontal );
-  plotSamplings( sigma_plot, ndatapoints, dist, "sigma_diag", "sigma", diagonal2d );
-
-  DampingTerm<3,T,DESCRIPTOR> sigma( converter, boundaryDepth, domain_lengths, dampingStrength );
-  sLattice.defineField<descriptors::DAMPING>( bulkIndicator, sigma );
+  if ( boundarytype == damping || boundarytype == dampingAndLocal ) {
+    // Define fields; could also use setParameter as for omega, but then I could not use a flow profile
+    sLattice.defineField<descriptors::UX>( bulkIndicator, *ux );
+    sLattice.defineField<descriptors::UY>( bulkIndicator, uy );
+    sLattice.defineField<descriptors::UZ>( bulkIndicator, uz );
+    AnalyticalConst<ndim,T,T> rhoField( rho0 );
+    sLattice.defineField<descriptors::DENSITY>( bulkIndicator, rhoField );
+    // output damping layer parameter
+    DampingTerm<3,T,DESCRIPTOR> sigma_plot( converter, boundaryDepth, domain_lengths );
+    plotSamplings( sigma_plot, ndatapoints, dist, "sigma_hline", "sigma", horizontal );
+    plotSamplings( sigma_plot, ndatapoints, dist, "sigma_diag", "sigma", diagonal2d );
+    DampingTerm<3,T,DESCRIPTOR> sigma( converter, boundaryDepth, domain_lengths, dampingStrength );
+    sLattice.defineField<descriptors::DAMPING>( bulkIndicator, sigma );
+  }
   
   // Make the lattice ready for simulation
   sLattice.initialize();
@@ -453,7 +428,7 @@ void setFarFieldValues( UnitConverter<T,DESCRIPTOR> const& converter,
 
   auto farFieldIndicator = superGeometry.getMaterialIndicator( {inflMat, outfMat, topfMat, bottMat, fronMat, backMat} );
   sLattice.defineRhoU( farFieldIndicator, rho, u );
-  // sLattice.iniEquilibrium( farFieldIndicator, rho, u );
+  sLattice.iniEquilibrium( farFieldIndicator, rho, u );
 }
 
 // Generates a sinusoidal pressure
@@ -532,6 +507,8 @@ void getResults(SuperLattice<T,DESCRIPTOR>& sLattice,
     // Writes geometry, cuboid no. and rank no. to file system
     SuperLatticeCuboid3D<T,DESCRIPTOR> cuboid( sLattice );
     SuperLatticeRank3D<T,DESCRIPTOR> rank( sLattice );
+    SuperGeometryF<T,DESCRIPTOR::d> geometryF(superGeometry);
+    vtmWriter.write(geometryF);
     vtmWriter.write( cuboid );
     vtmWriter.write( rank );
     vtmWriter.createMasterFile();
@@ -646,7 +623,7 @@ int main( int argc, char* argv[] )
   const T lz                    = args.getValueOrFallback( "--lz",                1.  );
   T tau                         = args.getValueOrFallback( "--tau",               0.  );
   T maxPhysT                    = args.getValueOrFallback( "--tmax",              0.3 );
-  size_t maxLatticeT            = args.getValueOrFallback( "--imax",              0   );
+  size_t maxLatticeT            = args.getValueOrFallback( "--iTmax",             0   );
   size_t nout                   = args.getValueOrFallback( "--nout",              5   );  // minimum number of vtk outputs
   size_t iTout                  = args.getValueOrFallback( "--iTout",             0   );  // iterations for vtk outputs
   T tout                        = args.getValueOrFallback( "--tout",              0.  );  // timestep for vtk outputs
