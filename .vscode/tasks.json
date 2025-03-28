@@ -13,14 +13,14 @@
         },
         {
             "type": "shell",
-            "label": "make sphere3d",
-            "command": "cd $HOME/OpenLB/examples/gridRefinement/sphere3d && /usr/bin/make",
-            "dependsOn": "clean sphere3d"
+            "label": "make du93",
+            "command": "cd $HOME/OpenLB/examples/gridRefinement/du93 && /usr/bin/make",
+            "dependsOn": "clean du93"
         },
         {
             "type": "shell",
-            "label": "clean sphere3d",
-            "command": "cd $HOME/OpenLB/examples/gridRefinement/sphere3d && /usr/bin/make clean",
+            "label": "clean du93",
+            "command": "cd $HOME/OpenLB/examples/gridRefinement/du93 && /usr/bin/make clean",
             "dependsOn": "make"
         },
         {

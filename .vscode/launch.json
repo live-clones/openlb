@@ -8,8 +8,8 @@
       "args": [],  // "--boundary_condition", "2", "--boundary_depth", "0", "--res", "2"], // "--debug", "--boundary_condition", "3"
       "stopAtEntry": false,
       "externalConsole": false,
-      "cwd": "/home/philipp/OpenLB/examples/gridRefinement/sphere3d",
-      "program": "/home/philipp/OpenLB/examples/gridRefinement/sphere3d/sphere3d",
+      "cwd": "/home/philipp/OpenLB/examples/gridRefinement/du93",
+      "program": "/home/philipp/OpenLB/examples/gridRefinement/du93/du93",
       "MIMode": "gdb",
       "miDebuggerPath": "gdb",
       "setupCommands": [
@@ -19,7 +19,7 @@
           "ignoreFailures": true
         }
       ],
-      "preLaunchTask": "make sphere3d"
+      "preLaunchTask": "make du93"
     },
     {
       "name": "Debug sphere3d laptop",

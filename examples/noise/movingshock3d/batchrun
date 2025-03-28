@@ -1,0 +1,5 @@
+make
+for bc in 1 2 3 4 5
+do
+    mpirun -np 12 ./movingshock3d --boundaryCondition $bc --iTmax 600
+done

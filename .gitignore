@@ -16,6 +16,7 @@ examples/laminar/cavity3d/cavity3d
 examples/laminar/cavity3dBenchmark/cavity3d
 examples/laminar/cylinder3d/cylinder3d
 examples/noise/movingshock3d/movingshock3d
+examples/noise/movingshock3d/makelog.txt
 examples/noise/movingshock3drefinement/movingshock3drefinement
 examples/noise/cylinder3dnoise/cylinder3dnoise
 examples/noise/cylinder3dnoise/periodic/
