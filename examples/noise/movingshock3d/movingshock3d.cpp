@@ -49,8 +49,8 @@
 using namespace olb;
 using namespace olb::descriptors;
 using T = FLOATING_POINT_TYPE;
-// using DESCRIPTOR = D3Q19<>;
-using DESCRIPTOR = D3Q27<>;
+using DESCRIPTOR = D3Q19<>;
+// using DESCRIPTOR = D3Q27<>;
 using BulkDynamics = BGKdynamics<T,DESCRIPTOR>;
 // using BulkDynamics = KBCdynamics<T,DESCRIPTOR>;
 // using BulkDynamics = olb::dynamics::Tuple<T,DESCRIPTOR,momenta::BulkTuple,equilibria::Incompressible,collision::TRT>;
@@ -63,7 +63,6 @@ const int inflMat = 4;
 const int outfMat = 5;
 const int rounMat = 6;
 const int ndim = 3;  // a few things (e.g. SuperSum3D cannot be adapted to 2D, but this should help speed it up)
-const int eternalscale = 2;
 
 typedef enum {eternal, periodic, local, damping, dampingAndLocal, dampingAndZeroGrad, localAndZeroGrad, localAndConvection, interpolated, interpolatedAndZeroGrad} BoundaryType;
 typedef enum {horizontal, vertical, diagonal2d, diagonal3d} SamplingDirection;
@@ -372,15 +371,11 @@ void getResults(SuperLattice<T,DESCRIPTOR>& sLattice,
   gpu::cuda::device::synchronize();
 #endif
   OstreamManager clout( std::cout,"getResults" );
-  SuperVTMwriter3D<T> vtmWriter( "movingshock3d" );
 
-  SuperLatticePhysVelocity3D<T, DESCRIPTOR> velocity( sLattice, converter );
-  SuperLatticePhysPressure3D<T, DESCRIPTOR> pressure( sLattice, converter );
-
-  vtmWriter.addFunctor( velocity );
-  vtmWriter.addFunctor( pressure );
+  std::string name = "movingshock3d";
 
   if ( iT==0 ) {
+    SuperVTMwriter3D<T> vtmWriter( name );
     // Writes geometry, cuboid no. and rank no. to file system
     SuperLatticeCuboid3D<T,DESCRIPTOR> cuboid( sLattice );
     SuperLatticeRank3D<T,DESCRIPTOR> rank( sLattice );
@@ -390,6 +385,7 @@ void getResults(SuperLattice<T,DESCRIPTOR>& sLattice,
     vtmWriter.write( rank );
     vtmWriter.createMasterFile();
   }
+  SuperLatticePhysPressure3D<T, DESCRIPTOR> pressure( sLattice, converter );
 
   // Writes to plot 100 times
   if ( iT%iTplot==0 ) {
@@ -412,8 +408,8 @@ void getResults(SuperLattice<T,DESCRIPTOR>& sLattice,
       T dist = converter.getPhysDeltaX();
       T ndatapoints = converter.getResolution(); // number of data points on line
       AnalyticalFfromSuperF3D<T> pressure_interpolation( pressure, true, true );
-      T pmin(converter.getPhysPressure(-amplitude/200));
-      T pmax(converter.getPhysPressure(+amplitude/200));
+      T pmin(converter.getPhysPressure(-amplitude/50));
+      T pmax(converter.getPhysPressure(+amplitude/50));
       plotSamplings( pressure_interpolation, ndatapoints, dist, "pressure_hline_" + ss.str(), "pressure [PU]", horizontal, false, true, pmin, pmax );
       plotSamplings( pressure_interpolation, ndatapoints, dist, "pressure_vline_" + ss.str(), "pressure [PU]", vertical, false, true, pmin, pmax );
       plotSamplings( pressure_interpolation, ndatapoints, dist, "pressure_diagonal_" + ss.str(), "pressure [PU]", diagonal2d, false, true, pmin, pmax );
@@ -431,7 +427,14 @@ void getResults(SuperLattice<T,DESCRIPTOR>& sLattice,
   if ( iT%iTvtk==0 || sLattice.getStatistics().getAverageRho() > 2. ) {
     sLattice.setProcessingContext(ProcessingContext::Evaluation);  // important for synchronization on GPU (or is sync above enough?)
     clout << "vtmWriter startet" << std::endl;
-    vtmWriter.write( iT );
+    sLattice.scheduleBackgroundOutputVTK([&,name,iT](auto task) {
+      SuperVTMwriter3D<T> vtmWriter(name);
+      SuperLatticePhysVelocity3D velocityF(sLattice, converter);
+      SuperLatticePhysPressure3D pressureF(sLattice, converter);
+      vtmWriter.addFunctor(velocityF);
+      vtmWriter.addFunctor(pressureF);
+      task(vtmWriter, iT);
+    });
 
     // pressure image
     BlockReduction3D2D<T> pressureReduction( pressure, Vector<T,3>({0, 0, 1}) );
@@ -477,6 +480,7 @@ int main( int argc, char* argv[] )
   size_t overlap                = args.getValueOrFallback( "--overlap",           3   );
   const T bShock                = args.getValueOrFallback( "--bShock",            1./20.);
   const T aShock                = args.getValueOrFallback( "--aShock",            log(2.)/(bShock*bShock) );
+  const int eternalscale        = args.getValueOrFallback( "--eternalscale",      2   );
 
   // managing outputs
   std::stringstream outdir_mod;
@@ -498,6 +502,7 @@ int main( int argc, char* argv[] )
     if ( Re != 0 ) outdir_mod << "_Re" << Re;
     if ( amplitude != 1e-3 ) outdir_mod << "_a" << amplitude;
     outdir_mod  << "_" << lx << "x" << ly << "x" << lz << "_res" << res;
+    if ( boundaryCondition == 0 ) outdir_mod << "x" << eternalscale;
     if ( boundaryCondition == 3 || boundaryCondition == 4 ) outdir_mod << "_bd" << boundaryDepth << "_bs" << dampingStrength;
   } else {
     outdir_mod << outdir;
@@ -679,7 +684,7 @@ int main( int argc, char* argv[] )
 
   // === 3a-rd Step: calculate iterations from input ===
   // maxLatticeT depends on maximum physical time. If maxLatticeT is provided in command line, it is an upper bound
-  if ( maxPhysT == 0. ) maxPhysT = .015;  // expecting cs = 343 m/s, so this should be enough for 5 revolutions through the domain
+  if ( maxPhysT == 0. ) maxPhysT = .015/Ma;  // expecting cs = 343 m/s, so this should be enough for 5 revolutions through the domain
   if ( maxLatticeT == 0 ) maxLatticeT = converter.getLatticeTime( maxPhysT );
   else maxLatticeT = std::min( maxLatticeT, converter.getLatticeTime( maxPhysT ) );
   // nout is the minimum number of vtk outputs --> take max between nout and nout derived from iTout or tout
