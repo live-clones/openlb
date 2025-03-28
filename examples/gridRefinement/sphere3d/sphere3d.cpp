@@ -323,22 +323,22 @@ int main(int argc, char* argv[])
       writeResults(sLatticeLevel1, converterLevel1, iT, sGeometryLevel1, std::to_string(iT)+".00_level1_preBC", "00_level1_preBC", true);
 
       setBoundaryValues(sLatticeLevel0, converterLevel0, iT, sGeometryLevel0);
-      writeResults(sLatticeLevel0, converterLevel0, iT, sGeometryLevel0, std::to_string(iT)+".01_level0_postBC", "01_level0_postBC", allVtk);
+      // writeResults(sLatticeLevel0, converterLevel0, iT, sGeometryLevel0, std::to_string(iT)+".01_level0_postBC", "01_level0_postBC", allVtk);
       sLatticeLevel0.collideAndStream();
-      writeResults(sLatticeLevel0, converterLevel0, iT, sGeometryLevel0, std::to_string(iT)+".02_level0_postCS", "02_level0_postCS", allVtk);
+      // writeResults(sLatticeLevel0, converterLevel0, iT, sGeometryLevel0, std::to_string(iT)+".02_level0_postCS", "02_level0_postCS", allVtk);
 
         sLatticeLevel1.collideAndStream();
-        writeResults(sLatticeLevel1, converterLevel1, iT, sGeometryLevel1, std::to_string(iT)+".03_level1_postCS1", "03_level1_postCS1", allVtk);
+        // writeResults(sLatticeLevel1, converterLevel1, iT, sGeometryLevel1, std::to_string(iT)+".03_level1_postCS1", "03_level1_postCS1", allVtk);
         coarseToFine->apply(meta::id<refinement::lagrava::HalfTimeCoarseToFineO>{});
-        writeResults(sLatticeLevel1, converterLevel1, iT, sGeometryLevel1, std::to_string(iT)+".04_level1_postC2F1", "04_level1_postC2F1", allVtk);
+        // writeResults(sLatticeLevel1, converterLevel1, iT, sGeometryLevel1, std::to_string(iT)+".04_level1_postC2F1", "04_level1_postC2F1", allVtk);
 
         sLatticeLevel1.collideAndStream();
-        writeResults(sLatticeLevel1, converterLevel1, iT, sGeometryLevel1, std::to_string(iT)+".05_level1_postCS2", "05_level1_postCS2", allVtk);
+        // writeResults(sLatticeLevel1, converterLevel1, iT, sGeometryLevel1, std::to_string(iT)+".05_level1_postCS2", "05_level1_postCS2", allVtk);
         coarseToFine->apply(meta::id<refinement::lagrava::FullTimeCoarseToFineO>{});
-        writeResults(sLatticeLevel1, converterLevel1, iT, sGeometryLevel1, std::to_string(iT)+".06_level1_postC2F2", "06_level1_postC2F2", allVtk);
+        // writeResults(sLatticeLevel1, converterLevel1, iT, sGeometryLevel1, std::to_string(iT)+".06_level1_postC2F2", "06_level1_postC2F2", allVtk);
 
       fineToCoarse->apply(meta::id<refinement::lagrava::FineToCoarseO>{});
-      writeResults(sLatticeLevel0, converterLevel0, iT, sGeometryLevel0, std::to_string(iT)+".07_level0_postF2C", "07_level0_postF2C", allVtk);
+      // writeResults(sLatticeLevel0, converterLevel0, iT, sGeometryLevel0, std::to_string(iT)+".07_level0_postF2C", "07_level0_postF2C", allVtk);
     } else {
       setBoundaryValues(sLatticeLevel0, converterLevel0, iT, sGeometryLevel0);
       sLatticeLevel0.collideAndStream();
