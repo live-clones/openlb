@@ -652,7 +652,7 @@ int main( int argc, char* argv[] )
       fluidMaterial = dampMat; break;
     default: break;
   }
-  clout << "Number of fluid voxels: " << superGeometry.getStatistics().getNvoxel( fluidMaterial ) << std::endl;
+  clout << "Actual fluid material number is " << fluidMaterial << "; number of fluid voxels: " << superGeometry.getStatistics().getNvoxel( fluidMaterial ) << std::endl;
   
   SuperLattice<T,DESCRIPTOR> sLattice( superGeometry );
 
