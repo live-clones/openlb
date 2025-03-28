@@ -217,9 +217,10 @@ void writeResults(SuperLattice<T, DESCRIPTOR>& sLattice,
 int main(int argc, char* argv[])
 {
   olbInit(&argc, &argv);
-  OstreamManager clout(std::cout, "main");
-
   CLIreader args(argc, argv);
+
+  // === get Command Line Arguments
+  std::string outdir = args.getValueOrFallback<std::string>( "--outdir", "" );
   const int N = args.getValueOrFallback<int>("--res", 31);
   const int Re = args.getValueOrFallback<int>("--reynolds", 600);
   const int maxPhysT = args.getValueOrFallback<int>("--maxPhysT", 16);
@@ -228,6 +229,16 @@ int main(int argc, char* argv[])
   size_t iTout              = args.getValueOrFallback( "--iTout",           0);     // iterations for vtk outputs
   T physTout                = args.getValueOrFallback( "--physTout",        0);     // timestep for vtk outputs
   bool allVtk               = args.contains( "--allVtk" );  // vtk for all substeps
+
+  // managing outputs
+  std::stringstream outdir_mod;
+  OstreamManager clout(std::cout, "main");
+  if ( outdir == "" ) {
+    outdir_mod << "./tmp";
+  } else {
+    outdir_mod << outdir;
+  }
+  singleton::directories().setOutputDir( outdir_mod.str()+"/" );  // set output directory
 
   const UnitConverterFromResolutionAndRelaxationTime<T, DESCRIPTOR> converterLevel0(
     int {N},             // resolution: number of voxels per charPhysL
