@@ -150,6 +150,7 @@ public:
   /// Get 1D cell ID
   CellID getCellId(LatticeR<D> latticeR) const
   {
+    // if ( !isInside(latticeR) ) std::cout << "latticeR=[" << latticeR[0] << " " << latticeR[1] << " " << latticeR[2] << "];" << std::endl;
     OLB_PRECONDITION(isInside(latticeR));
     return (latticeR+_padding) * _projection;
   }

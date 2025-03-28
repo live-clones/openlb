@@ -142,6 +142,7 @@ public:
   ContextDataWithNeighbors neighbor(unsigned iN) any_platform {
     auto data = _data;
     const int index = data.template getFieldComponent<fields::refinement::CONTEXT_NEIGHBORS>(iN);
+    // OLB_ASSERT( index == -1, "No neighbor in directon " + std::to_string(iN) );
     data.setCellId(index);
     return ContextDataWithNeighbors{data};
   }
