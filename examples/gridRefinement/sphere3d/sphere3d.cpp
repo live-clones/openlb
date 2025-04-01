@@ -235,6 +235,7 @@ int main(int argc, char* argv[])
   OstreamManager clout(std::cout, "main");
   if ( outdir == "" ) {
     outdir_mod << "./tmp";
+    outdir_mod << "_Re" << Re << "_res" << N;
   } else {
     outdir_mod << outdir;
   }

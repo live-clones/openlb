@@ -426,7 +426,6 @@ void getResults(SuperLattice<T,DESCRIPTOR>& sLattice,
   // get VTK and images
   if ( iT%iTvtk==0 || sLattice.getStatistics().getAverageRho() > 2. ) {
     sLattice.setProcessingContext(ProcessingContext::Evaluation);  // important for synchronization on GPU (or is sync above enough?)
-    clout << "vtmWriter startet" << std::endl;
     sLattice.scheduleBackgroundOutputVTK([&,name,iT](auto task) {
       SuperVTMwriter3D<T> vtmWriter(name);
       SuperLatticePhysVelocity3D velocityF(sLattice, converter);

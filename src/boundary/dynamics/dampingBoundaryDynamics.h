@@ -23,8 +23,14 @@
 */
 
 /*
- * Implements the absorbing layer described in H. Xu and P. Sagaut, “Analysis of the absorbing layers for the weakly-compressible lattice Boltzmann methods,” Journal of Computational Physics, vol. 245, pp. 14–42, Jul. 2013, doi: 10.1016/j.jcp.2013.02.051.
-
+ * Implements the absorbing layer described in equation (24) of 
+ * H. Xu and P. Sagaut, “Analysis of the absorbing layers for the 
+ * weakly-compressible lattice Boltzmann methods”, Journal of 
+ * Computational Physics, vol. 245, pp. 14–42, Jul. 2013, 
+ * doi: 10.1016/j.jcp.2013.02.051.
+ * 
+ * The newtonian cooling term suggested by Israeli and Orszag is 
+ * implemented in src/functors/noise_auxiliary/dampingTerm.h
 */
 
 #ifndef DAMPING_BOUNDARY_DYNAMICS_H

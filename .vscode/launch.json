@@ -5,11 +5,11 @@
       "name": "Debug workstation",
       "type": "cppdbg",
       "request": "launch",
-      "args": [],  // "--boundary_condition", "2", "--boundary_depth", "0", "--res", "2"], // "--debug", "--boundary_condition", "3"
+      "args": ["--boundaryCondition", "11", "--res", "51"],
       "stopAtEntry": false,
       "externalConsole": false,
-      "cwd": "/home/philipp/OpenLB/examples/gridRefinement/du93",
-      "program": "/home/philipp/OpenLB/examples/gridRefinement/du93/du93",
+      "cwd": "/home/philipp/OpenLB/examples/gridRefinement/movingshock3drefined",
+      "program": "/home/philipp/OpenLB/examples/gridRefinement/movingshock3drefined/movingshock3drefined",
       "MIMode": "gdb",
       "miDebuggerPath": "gdb",
       "setupCommands": [
@@ -19,13 +19,13 @@
           "ignoreFailures": true
         }
       ],
-      "preLaunchTask": "make du93"
+      "preLaunchTask": "make movingshock3drefined"
     },
     {
       "name": "Debug sphere3d laptop",
       "type": "cppdbg",
       "request": "launch",
-      "args": [], // "--debug",
+      "args": [],
       "stopAtEntry": false,
       "externalConsole": false,
       "cwd": "/home/hbrs/OpenLB/examples/gridRefinement/sphere3d",
@@ -34,14 +34,14 @@
       "miDebuggerPath": "gdb",
       "setupCommands": [
         {
-            "description": "Enable pretty-printing for gdb",
-            "text": "-enable-pretty-printing",
-            "ignoreFailures": true
+          "description": "Enable pretty-printing for gdb",
+          "text": "-enable-pretty-printing",
+          "ignoreFailures": true
         },
         {
-            "description": "Set Disassembly Flavor to Intel",
-            "text": "-gdb-set disassembly-flavor intel",
-            "ignoreFailures": true
+          "description": "Set Disassembly Flavor to Intel",
+          "text": "-gdb-set disassembly-flavor intel",
+          "ignoreFailures": true
         }
       ],
       "preLaunchTask": "make sphere3d"
@@ -50,7 +50,14 @@
       "name": "Debug movingshock3d workstation",
       "type": "cppdbg",
       "request": "launch",
-      "args": ["--boundarycondition", "4", "--imax", "50", "--iout", "10"],  // , "--debug"], // , "--tmax", "1"
+      "args": [
+        "--boundarycondition",
+        "4",
+        "--imax",
+        "50",
+        "--iout",
+        "10"
+      ],
       "stopAtEntry": false,
       "externalConsole": false,
       "cwd": "/home/philipp/OpenLB/examples/noise/movingshock3d",
@@ -65,6 +72,32 @@
         }
       ],
       "preLaunchTask": "make movingshock3d"
+    },
+    {
+      "name": "C/C++: gcc build and debug active file",
+      "type": "cppdbg",
+      "request": "launch",
+      "program": "${fileDirname}/${fileBasenameNoExtension}",
+      "args": [],
+      "stopAtEntry": false,
+      "cwd": "${fileDirname}",
+      "environment": [],
+      "externalConsole": false,
+      "MIMode": "gdb",
+      "setupCommands": [
+        {
+          "description": "Enable pretty-printing for gdb",
+          "text": "-enable-pretty-printing",
+          "ignoreFailures": true
+        },
+        {
+          "description": "Set Disassembly Flavor to Intel",
+          "text": "-gdb-set disassembly-flavor intel",
+          "ignoreFailures": true
+        }
+      ],
+      "preLaunchTask": "C/C++: gcc build active file",
+      "miDebuggerPath": "/usr/bin/gdb"
     }
   ]
 }
