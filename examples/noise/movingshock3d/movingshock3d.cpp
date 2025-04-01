@@ -168,32 +168,6 @@ void prepareGeometry(UnitConverter<T,DESCRIPTOR> const& converter,
   clout << "Prepare Geometry ... OK" << std::endl;
 }
 
-void plotSamplings( AnalyticalF3D<T,T>& data, size_t ndatapoints, T dist,
-                    std::string title, std::string ylabel,
-                    SamplingDirection direction, bool halfDomain = true,
-                    bool setRange = false, T ymin=0, T ymax=0 )
-{
-  Gnuplot<T> gplot( title );
-  gplot.setLabel( "distance [m]", ylabel );
-  int nmin = 0;
-  if ( !halfDomain ) nmin = -int( ndatapoints/2 );
-  for ( int n = nmin; n <= int(ndatapoints/2); n++ ) {
-    T input[ndim] = {0,0,0};
-    T distance = 0;
-    switch ( direction ) {
-      case horizontal:  input[0] = n*dist;                                        distance = n*dist;              break;
-      case vertical:    input[1] = n*dist;                                        distance = n*dist;              break;
-      case diagonal2d:  input[0] = n*dist; input[1] = n*dist;                     distance = n*dist*std::sqrt(2); break;
-      case diagonal3d:  input[0] = n*dist; input[1] = n*dist; input[2] = n*dist;  distance = n*dist*std::sqrt(3); break;
-    }
-    T output[1];
-    data( output, input );
-    gplot.setData( distance, output[0] );
-  }
-  if ( setRange ) gplot.setYrange( ymin, ymax );
-  gplot.writePNG( -1, -1, title );
-}
-
 void setUAverage( SuperLattice<T,DESCRIPTOR>& sLattice,
                   SuperGeometry<T,ndim>& superGeometry,
                   int fluidMaterial
@@ -291,8 +265,8 @@ void prepareLattice(UnitConverter<T,DESCRIPTOR> const& converter,
   T dist = converter.getPhysDeltaX();
   bulkIndicator = superGeometry.getMaterialIndicator({1,2,3,4,5,6,7,8,9,10});  // got all indicators to define RhoU and fields globally
   AcousticPulse<3,T> densityProfile( rho0, amplitude, alpha );
-  plotSamplings( densityProfile, ndatapoints, dist, "shock_diag", "density [LU]", diagonal2d );
-  plotSamplings( densityProfile, ndatapoints, dist, "shock_hline", "density [LU]", horizontal );
+  linePlot<ndim,T>( densityProfile, ndatapoints, dist, "shock_diag", "density [LU]", diagonal2d );
+  linePlot<ndim,T>( densityProfile, ndatapoints, dist, "shock_hline", "density [LU]", horizontal );
 
   //Initialize all values of distribution functions to their local equilibrium
   sLattice.defineRhoU( bulkIndicator, densityProfile, u );
@@ -309,8 +283,8 @@ void prepareLattice(UnitConverter<T,DESCRIPTOR> const& converter,
     sLattice.defineField<descriptors::DENSITY>( bulkIndicator, rhoField );
     // output damping layer parameter
     DampingTerm<3,T,DESCRIPTOR> sigma_plot( converter, boundaryDepth, domainLengths );
-    plotSamplings( sigma_plot, ndatapoints, dist, "sigma_hline", "sigma", horizontal );
-    plotSamplings( sigma_plot, ndatapoints, dist, "sigma_diag", "sigma", diagonal2d );
+    linePlot<ndim,T>( sigma_plot, ndatapoints, dist, "sigma_hline", "sigma", horizontal );
+    linePlot<ndim,T>( sigma_plot, ndatapoints, dist, "sigma_diag", "sigma", diagonal2d );
     DampingTerm<3,T,DESCRIPTOR> sigma( converter, boundaryDepth, domainLengths, dampingStrength );
     sLattice.defineField<descriptors::DAMPING>( bulkIndicator, sigma );
   }
@@ -410,9 +384,9 @@ void getResults(SuperLattice<T,DESCRIPTOR>& sLattice,
       AnalyticalFfromSuperF3D<T> pressure_interpolation( pressure, true, true );
       T pmin(converter.getPhysPressure(-amplitude/50));
       T pmax(converter.getPhysPressure(+amplitude/50));
-      plotSamplings( pressure_interpolation, ndatapoints, dist, "pressure_hline_" + ss.str(), "pressure [PU]", horizontal, false, true, pmin, pmax );
-      plotSamplings( pressure_interpolation, ndatapoints, dist, "pressure_vline_" + ss.str(), "pressure [PU]", vertical, false, true, pmin, pmax );
-      plotSamplings( pressure_interpolation, ndatapoints, dist, "pressure_diagonal_" + ss.str(), "pressure [PU]", diagonal2d, false, true, pmin, pmax );
+      linePlot<ndim,T>( pressure_interpolation, ndatapoints, dist, "pressure_hline_" + ss.str(), "pressure [PU]", horizontal, false, true, pmin, pmax );
+      linePlot<ndim,T>( pressure_interpolation, ndatapoints, dist, "pressure_vline_" + ss.str(), "pressure [PU]", vertical, false, true, pmin, pmax );
+      linePlot<ndim,T>( pressure_interpolation, ndatapoints, dist, "pressure_diagonal_" + ss.str(), "pressure [PU]", diagonal2d, false, true, pmin, pmax );
     }
 
     sLattice.setProcessingContext<Array<momenta::FixedVelocityMomentumGeneric::VELOCITY>>(ProcessingContext::Simulation);

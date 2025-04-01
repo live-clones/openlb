@@ -32,3 +32,4 @@
 #include "particles/particleFunctors.h"
 #include "noise_auxiliary/dampingTerm.h"
 #include "noise_auxiliary/acousticPulse.h"
+#include "noise_auxiliary/linePlot.h"
