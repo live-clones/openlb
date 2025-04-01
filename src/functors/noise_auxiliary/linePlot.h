@@ -1,5 +1,7 @@
-
+#include "../../io/gnuplotWriter.h"
 namespace olb {
+
+typedef enum {horizontal, vertical, diagonal2d, diagonal3d} SamplingDirection;
 
 template<unsigned int ndim, typename T>
 void linePlot( AnalyticalF3D<T,T>& data, size_t ndatapoints, T dist,

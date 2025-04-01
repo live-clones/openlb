@@ -65,7 +65,6 @@ const int rounMat = 6;
 const int ndim = 3;  // a few things (e.g. SuperSum3D cannot be adapted to 2D, but this should help speed it up)
 
 typedef enum {eternal, periodic, local, damping, dampingAndLocal, dampingAndZeroGrad, localAndZeroGrad, localAndConvection, interpolated, interpolatedAndZeroGrad} BoundaryType;
-typedef enum {horizontal, vertical, diagonal2d, diagonal3d} SamplingDirection;
 
 T* uAverage = NULL;
 
@@ -314,21 +313,6 @@ void setFarFieldValues( SuperLattice<T,DESCRIPTOR>& sLattice,
   sLattice.iniEquilibrium( farFieldIndicator, rho, u );
 }
 
-T L2Norm(SuperLattice<T,DESCRIPTOR>& sLattice,
-         SuperGeometry<T,ndim>& superGeometry,
-         UnitConverter<T,DESCRIPTOR> const& converter,
-         int fluidMaterial
-         ) {
-  OstreamManager clout(std::cout, "L2Norm");
-  SuperLatticePhysPressure3D<T,DESCRIPTOR> pressurenD( sLattice, converter );
-  AnalyticalConst<ndim,T,T> rho0nD( 0. );
-  SuperAbsoluteErrorL2Norm3D<T> absPressureErrorL2Norm( pressurenD, rho0nD, superGeometry.getMaterialIndicator( fluidMaterial ) );
-  T result[ndim];
-  int tmp[] = {int()};
-  absPressureErrorL2Norm( result, tmp );
-  return result[0];
-}
-
 // write data to termimal and file system
 void getResults(SuperLattice<T,DESCRIPTOR>& sLattice,
                 UnitConverter<T,DESCRIPTOR> const& converter, int iT,
@@ -374,7 +358,7 @@ void getResults(SuperLattice<T,DESCRIPTOR>& sLattice,
       sLattice.getStatistics().print( iT,converter.getPhysTime( iT ) );
     }
 
-    gplot_l2_abs.setData(T(iT), L2Norm( sLattice, superGeometry, converter, fluidMaterial ) / Lp0 );
+    gplot_l2_abs.setData(T(iT), L2Norm<ndim,T,DESCRIPTOR>( sLattice, superGeometry, converter, fluidMaterial ) / Lp0 );
 
     if ( iT%( iTplot*10 ) == 0 ) {
       std::stringstream ss;
@@ -579,11 +563,11 @@ int main( int argc, char* argv[] )
   clout << "Fluid Domain = " << lx << "x" << ly << "x" << lz << std::endl;
   clout << "Simulation Domain = " << lengthDomain << "x" << heightDomain << "x" << depthDomain << std::endl;
   Vector<T,ndim> domainLengths = { lengthDomain, heightDomain, depthDomain };
-  Vector<T,ndim> originDomain( -lengthDomain/2, -heightDomain/2, -depthDomain/2 );  //
+  Vector<T,ndim> originDomain( -lengthDomain/2., -heightDomain/2., -depthDomain/2. );  //
   Vector<T,ndim> extendDomain( lengthDomain, heightDomain, depthDomain );  // size of the domain
   IndicatorCuboid3D<T> domain( extendDomain, originDomain );
   Vector<T,3> fluidExtend = { lx, ly, lz };
-  Vector<T,3> fluidOrigin = { -lx/2, -ly/2, -lz/2 };
+  Vector<T,3> fluidOrigin = { -lx/2., -ly/2., -lz/2. };
   IndicatorCuboid3D<T> fluidDomain( fluidExtend, fluidOrigin );
   // Instantiation of a cuboidGeometry with weights
   #ifdef PARALLEL_MODE_MPI
@@ -640,7 +624,7 @@ int main( int argc, char* argv[] )
   // Initialize pressure L2 norm plot
   Gnuplot<T> gplot_l2_abs("l2_absolute");
   gplot_l2_abs.setLabel("time []", "absolute L2 norm []");
-  T Lp0 = L2Norm( sLattice, superGeometry, converter, fluidMaterial );
+  T Lp0 = L2Norm<ndim,T,DESCRIPTOR>( sLattice, superGeometry, converter, fluidMaterial );
 
   SuperVTMwriter<T,ndim> vtmWriter_init( "movingshock3d_init" );
   vtmWriter_init.createMasterFile();
