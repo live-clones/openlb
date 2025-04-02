@@ -297,12 +297,12 @@ int main( int argc, char* argv[] )
   }
   clout << "Fluid Domain = " << lx << "^" << ndim << std::endl;
   clout << "Simulation Domain = " << lengthDomain << "^" << ndim << std::endl;
-  Vector<T,ndim> domainLengths = { lengthDomain, lengthDomain, lengthDomain };
-  Vector<T,ndim> originDomain( -lengthDomain/2., -lengthDomain/2., -lengthDomain/2. );  //
-  Vector<T,ndim> extendDomain( lengthDomain, lengthDomain, lengthDomain );  // size of the domain
+  Vector<T,ndim> domainLengths = { lengthDomain };
+  Vector<T,ndim> originDomain( 0. );  // -lengthDomain/2.
+  Vector<T,ndim> extendDomain( lengthDomain );  // size of the domain
   IndicatorCuboid3D<T> domain( extendDomain, originDomain );
-  Vector<T,3> fluidExtend = { lx, lx, lx };
-  Vector<T,3> fluidOrigin = { -lx/2., -lx/2., -lx/2. };
+  Vector<T,3> fluidExtend( lx );
+  Vector<T,3> fluidOrigin( (lengthDomain-lx)*.5 ); // -lx/2.
   IndicatorCuboid3D<T> fluidDomain( fluidExtend, fluidOrigin );
   // Instantiation of a cGeometryL0 with weights
   CuboidGeometry<T,ndim> cGeometryL0( domain, converterL0.getConversionFactorLength() );
@@ -317,8 +317,8 @@ int main( int argc, char* argv[] )
     // cGeometryL0.splitFractional(5, 0, {0.1,0.8,0.1});
     // cGeometryL0.splitFractional(7, 1, {0.1,0.8,0.1});
     // cGeometryL0.splitFractional(9, 2, {0.1,0.8,0.1});
-    extendRefinement = {scaling, scaling, scaling};
-    originRefinement = {-scaling/2., -scaling/2., -scaling/2.};
+    extendRefinement = {lx*scaling, lx*scaling, lx*scaling};
+    originRefinement = {(1.-scaling)*.5,(1.-scaling)*.5,(1.-scaling)*.5};  // {-scaling/2., -scaling/2., -scaling/2.};
     IndicatorCuboid3D<T> toBeRefinedI(extendRefinement, originRefinement);
     cGeometryL1 = cGeometryL0;
     cGeometryL1.remove(toBeRefinedI);
@@ -352,7 +352,7 @@ int main( int argc, char* argv[] )
     // cGeometryL0.splitFractional(1, 1, {0.1,0.8,0.1});  // 2 back to 1; split 1 into 2,3,4
     // cGeometryL0.splitFractional(3, 2, {0.1,0.8,0.1});  // 4 back to 3; split 3 into 3,4,5
     extendRefinement = {lengthDomain/scaling, lengthDomain/scaling, lengthDomain/scaling};
-    originRefinement = {lengthDomain*((scaling-1.)/2.), lengthDomain*((scaling-1.)/2.), lengthDomain*((scaling-1.)/2.)};
+    originRefinement = {(1.-scaling)*lx,(1.-scaling)*lx,(1.-scaling)*lx};  // {lengthDomain*((scaling-1.)/2.), lengthDomain*((scaling-1.)/2.), lengthDomain*((scaling-1.)/2.)};
     IndicatorCuboid3D<T> toBeRefinedI(extendRefinement, originRefinement);
     cGeometryL1 = cGeometryL0;
     cGeometryL1.remove(toBeRefinedI);
@@ -421,7 +421,8 @@ int main( int argc, char* argv[] )
   vtmWriterGeometry.write( geometryFL2 );
 
   // Initial conditions
-  AcousticPulse<ndim,T> densityProfile( rho0, amplitude, aShock );
+  Vector<T,ndim> x0 = sGeometry.getStatistics().getCenterPhysR(fluiMat);
+  AcousticPulse<ndim,T> densityProfile( rho0, amplitude, aShock, x0 );
   AnalyticalConst<ndim,T,T> ux = AnalyticalConst<ndim,T,T>( Ma );
   AnalyticalConst<ndim,T,T> uy = AnalyticalConst<ndim,T,T>( 0. );
   AnalyticalConst<ndim,T,T> uz = AnalyticalConst<ndim,T,T>( 0. );
