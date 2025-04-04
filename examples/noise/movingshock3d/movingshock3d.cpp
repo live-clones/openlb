@@ -250,7 +250,7 @@ void prepareLattice(UnitConverter<T,DESCRIPTOR> const& converter,
       if ( boundarytype == dampingAndLocal ) boundary::set<boundary::LocalVelocity>( sLattice, aroundIndicator );
       if ( boundarytype == dampingAndZeroGrad ) setZeroGradientBoundary<T,DESCRIPTOR>( sLattice, aroundIndicator );
     case damping:
-      boundary::set<boundary::PerfectlyMatchedLayer>( sLattice, superGeometry, dampMat );
+      boundary::set<boundary::SpongeLayer>( sLattice, superGeometry, dampMat );
       break;
   }
 

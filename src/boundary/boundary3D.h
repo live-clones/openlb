@@ -48,7 +48,6 @@
 #include "robin3D.h"
 #include "helper.h"
 #include "vortexMethod.h"
-// #include "setDampingBoundary3D.h"
 #include "interpolatedConvection3D.h"
 #include "externalField.h"
 #include "advectionDiffusionDirichlet3D.h"
@@ -60,6 +59,6 @@
 #include "zouHePressure.h"
 #include "zouHePressure3D.h"
 #include "setTurbulentWallModel3D.h"
-#include "perfectlyMatchedLayer.h"
+#include "spongeLayer.h"
 
 #include "boundary3D.hh"

@@ -32,7 +32,6 @@
 #include "setZeroGradientBoundary3D.hh"
 #include "legacy/defineU3D.hh"
 #include "legacy/setSlipBoundaryWithDynamics3D.hh"
-// #include "setDampingBoundary3D.hh"
 #include "slip3D.hh"
 #include "partialSlip3D.hh"
 #include "legacy/setWallFunctionBoundary3D.hh"

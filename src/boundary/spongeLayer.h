@@ -34,7 +34,7 @@ namespace olb {
 namespace boundary {
 
 template <concepts::BaseType T, concepts::LatticeDescriptor DESCRIPTOR>
-struct PerfectlyMatchedLayer {
+struct SpongeLayer {
 
 using value_t = T;
 using descriptor_t = DESCRIPTOR;

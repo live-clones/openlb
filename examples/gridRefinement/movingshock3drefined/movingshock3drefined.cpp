@@ -443,7 +443,7 @@ int main( int argc, char* argv[] )
   SuperLattice<T,DESCRIPTOR> sLatticeL1(cGeometryL1, loadBalancerL1, 3, converterL1);
   std::unique_ptr<SuperIndicatorF<T,ndim>> bulkIndicatorL1 = sGeometryL1.getMaterialIndicator( {farfMat, fluiMat, checMat} );
   sLatticeL1.defineDynamics<BulkDynamics>( bulkIndicatorL1 );
-  if ( boundarytype == dampingAndStretched ) boundary::set<boundary::PerfectlyMatchedLayer>( sLatticeL1, sGeometryL2, farfMat );
+  if ( boundarytype == dampingAndStretched ) boundary::set<boundary::SpongeLayer>( sLatticeL1, sGeometryL2, farfMat );
   sLatticeL1.defineRhoU( bulkIndicatorL1, densityProfile, u );
   sLatticeL1.iniEquilibrium( bulkIndicatorL1, densityProfile, u );
   sLatticeL1.setParameter<descriptors::OMEGA>( converterL1.getLatticeRelaxationFrequency() );
