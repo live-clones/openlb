@@ -317,8 +317,9 @@ int main( int argc, char* argv[] )
     // cGeometryL0.splitFractional(5, 0, {0.1,0.8,0.1});
     // cGeometryL0.splitFractional(7, 1, {0.1,0.8,0.1});
     // cGeometryL0.splitFractional(9, 2, {0.1,0.8,0.1});
+    clout << "fluidExtend=" << fluidExtend << ",fluidOrigin" << fluidOrigin << ",lengthDomain" << lengthDomain << ",lx" << lx << std::endl;
     extendRefinement = {lx*scaling, lx*scaling, lx*scaling};
-    originRefinement = {(1.-scaling)*.5,(1.-scaling)*.5,(1.-scaling)*.5};  // {-scaling/2., -scaling/2., -scaling/2.};
+    originRefinement = {(lengthDomain-lx*scaling)/2.,(lengthDomain-lx*scaling)/2.,(lengthDomain-lx*scaling)/2.};  // {-scaling/2., -scaling/2., -scaling/2.};
     IndicatorCuboid3D<T> toBeRefinedI(extendRefinement, originRefinement);
     cGeometryL1 = cGeometryL0;
     cGeometryL1.remove(toBeRefinedI);
@@ -380,10 +381,10 @@ int main( int argc, char* argv[] )
     clout << "overlap=" << overlap << "; boundaryDepth_LU=" << boundaryDepth << "; setting overlap to >=boundaryDepth." << std::endl;
     overlap = std::max( overlap, boundaryDepth );
   }
-  SuperGeometry<T,ndim> sGeometry( cGeometryL0, loadBalancer, overlap );
+  SuperGeometry<T,ndim> sGeometryL0( cGeometryL0, loadBalancer, overlap );
 
-  clout << std:: endl << "Domain setup: boundaryDepthLU=" << boundaryDepth << "; boundaryDepthPU=" << bdPU << "; overlapLU=" << sGeometry.getOverlap() << std::endl;
-  prepareGeometry( converterL0, sGeometry, domain, fluidDomain, boundarytype, res, boundaryDepth );
+  clout << std:: endl << "Domain setup: boundaryDepthLU=" << boundaryDepth << "; boundaryDepthPU=" << bdPU << "; overlapLU=" << sGeometryL0.getOverlap() << std::endl;
+  prepareGeometry( converterL0, sGeometryL0, domain, fluidDomain, boundarytype, res, boundaryDepth );
   
   RefinedLoadBalancer<T,ndim> loadBalancerL1(cGeometryL0, loadBalancer, cGeometryL1);
 
@@ -391,9 +392,10 @@ int main( int argc, char* argv[] )
   if ( boundarytype == stretchedLayer ) refDeg = 2.;
   viscosity /= 2;
   res *= 2;
-  UnitConverter<T, DESCRIPTOR> converterL1 ( (charL/res),  // dx
-                                             (tau - 0.5) / descriptors::invCs2<T,DESCRIPTOR>() * util::pow(charL/res,2) / viscosity,  // dt
-                                             charL, charV, viscosity, rho0, 0.);
+  // UnitConverter<T, DESCRIPTOR> converterL1 ( (charL/res),  // dx
+  //                                            (tau - 0.5) / descriptors::invCs2<T,DESCRIPTOR>() * util::pow(charL/res,2) / viscosity,  // dt
+  //                                            charL, charV, viscosity, rho0, 0.);
+  UnitConverter<T, DESCRIPTOR> converterL1 = convectivelyRefineUnitConverter(converterL0, 2);
   converterL1.print();
   SuperGeometry<T,ndim> sGeometryL1(cGeometryL1, loadBalancerL1);
   prepareGeometry(converterL1, sGeometryL1, domain, fluidDomain, boundarytype, res, boundaryDepth);
@@ -402,15 +404,16 @@ int main( int argc, char* argv[] )
   refDeg = 1.;  // refinement degree
   viscosity /= 2;
   res *= 2;
-  UnitConverter<T, DESCRIPTOR> converterL2( (charL/res),  // dx
-                                            (tau - 0.5) / descriptors::invCs2<T,DESCRIPTOR>() * util::pow(charL/res,2) / viscosity,  // dt
-                                            charL, charV, viscosity, rho0, 0.);
+  // UnitConverter<T, DESCRIPTOR> converterL2( (charL/res),  // dx
+  //                                           (tau - 0.5) / descriptors::invCs2<T,DESCRIPTOR>() * util::pow(charL/res,2) / viscosity,  // dt
+  //                                           charL, charV, viscosity, rho0, 0.);
+  UnitConverter<T, DESCRIPTOR> converterL2 = convectivelyRefineUnitConverter(converterL1, 2);
   converterL2.print();
   SuperGeometry<T,ndim> sGeometryL2(cGeometryL2, loadBalancerL2);
   prepareGeometry(converterL2, sGeometryL2, domain, fluidDomain, boundarytype, res, boundaryDepth);
 
   SuperVTMwriter<T,ndim> vtmWriterGeometry( "geometry_init", 0 );
-  SuperGeometryF<T,DESCRIPTOR::d> geometryFL0(sGeometry);
+  SuperGeometryF<T,DESCRIPTOR::d> geometryFL0(sGeometryL0);
   geometryFL0.getName() += "L0";
   vtmWriterGeometry.write( geometryFL0 );
   SuperGeometryF<T,DESCRIPTOR::d> geometryFL1(sGeometryL1);
@@ -421,7 +424,7 @@ int main( int argc, char* argv[] )
   vtmWriterGeometry.write( geometryFL2 );
 
   // Initial conditions
-  Vector<T,ndim> x0 = sGeometry.getStatistics().getCenterPhysR(fluiMat);
+  Vector<T,ndim> x0 = sGeometryL0.getStatistics().getCenterPhysR(fluiMat);
   AcousticPulse<ndim,T> densityProfile( rho0, amplitude, aShock, x0 );
   AnalyticalConst<ndim,T,T> ux = AnalyticalConst<ndim,T,T>( Ma );
   AnalyticalConst<ndim,T,T> uy = AnalyticalConst<ndim,T,T>( 0. );
@@ -429,13 +432,13 @@ int main( int argc, char* argv[] )
   AnalyticalComposed<ndim,T,T> u( ux, uy, uz );
 
   // === prepare Lattice and set boundaryConditions
-  SuperLattice<T,DESCRIPTOR> sLattice( cGeometryL0, loadBalancer, 3, converterL0 );
-  std::unique_ptr<SuperIndicatorF<T,ndim>> bulkIndicator = sGeometry.getMaterialIndicator( {farfMat, fluiMat, checMat} );
-  sLattice.defineDynamics<BulkDynamics>( bulkIndicator );
-  sLattice.defineRhoU( bulkIndicator, densityProfile, u );
-  sLattice.iniEquilibrium( bulkIndicator, densityProfile, u );
-  sLattice.setParameter<descriptors::OMEGA>( converterL0.getLatticeRelaxationFrequency() );
-  sLattice.initialize();
+  SuperLattice<T,DESCRIPTOR> sLatticeL0( cGeometryL0, loadBalancer, 3, converterL0 );
+  std::unique_ptr<SuperIndicatorF<T,ndim>> bulkIndicator = sGeometryL0.getMaterialIndicator( {farfMat, fluiMat, checMat} );
+  sLatticeL0.defineDynamics<BulkDynamics>( bulkIndicator );
+  sLatticeL0.defineRhoU( bulkIndicator, densityProfile, u );
+  sLatticeL0.iniEquilibrium( bulkIndicator, densityProfile, u );
+  sLatticeL0.setParameter<descriptors::OMEGA>( converterL0.getLatticeRelaxationFrequency() );
+  sLatticeL0.initialize();
 
   SuperLattice<T,DESCRIPTOR> sLatticeL1(cGeometryL1, loadBalancerL1, 3, converterL1);
   std::unique_ptr<SuperIndicatorF<T,ndim>> bulkIndicatorL1 = sGeometryL1.getMaterialIndicator( {farfMat, fluiMat, checMat} );
@@ -471,8 +474,8 @@ int main( int argc, char* argv[] )
     sLatticeL1.defineField<descriptors::DAMPING>( bulkIndicatorL1, sigma );
   }
 
-  auto coarseToFineL1 = refinement::lagrava::makeCoarseToFineCoupler( sLattice, sGeometry, sLatticeL1, sGeometryL1 );
-  auto fineToCoarseL1 = refinement::lagrava::makeFineToCoarseCoupler( sLattice, sGeometry, sLatticeL1, sGeometryL1 );
+  auto coarseToFineL1 = refinement::lagrava::makeCoarseToFineCoupler( sLatticeL0, sGeometryL0, sLatticeL1, sGeometryL1 );
+  auto fineToCoarseL1 = refinement::lagrava::makeFineToCoarseCoupler( sLatticeL0, sGeometryL0, sLatticeL1, sGeometryL1 );
   auto coarseToFineL2 = refinement::lagrava::makeCoarseToFineCoupler( sLatticeL1, sGeometryL1, sLatticeL2, sGeometryL2 );
   auto fineToCoarseL2 = refinement::lagrava::makeFineToCoarseCoupler( sLatticeL1, sGeometryL1, sLatticeL2, sGeometryL2 );
   if ( boundarytype == dampingAndStretched ) {
@@ -482,14 +485,14 @@ int main( int argc, char* argv[] )
     coarseToFineL2->initialize_prev(meta::id<refinement::lagrava::FullTimeCoarseToFineO>{});
   }
 
-  clout << "Number of fluid voxels: " << sGeometry.getStatistics().getNvoxel( fluiMat ) << std::endl;
+  clout << "Number of fluid voxels: " << sGeometryL0.getStatistics().getNvoxel( fluiMat ) << std::endl;
   // Initialize pressure L2 norm plot
   Gnuplot<T> gplot_l2_abs("l2_absolute");
   gplot_l2_abs.setLabel("time []", "absolute L2 norm []");
   T Lp0;
   if ( boundarytype == stretchedLayer ) Lp0 = L2Norm<ndim,T,DESCRIPTOR>( sLatticeL2, sGeometryL2, converterL2, fluiMat );
   else if ( boundarytype == dampingAndStretched ) Lp0 = L2Norm<ndim,T,DESCRIPTOR>( sLatticeL1, sGeometryL1, converterL1, fluiMat );
-  else Lp0 = L2Norm<ndim,T,DESCRIPTOR>( sLattice, sGeometry, converterL0, fluiMat );
+  else Lp0 = L2Norm<ndim,T,DESCRIPTOR>( sLatticeL0, sGeometryL0, converterL0, fluiMat );
 
   // === 3a-rd Step: calculate iterations from input ===
   // maxLatticeT depends on maximum physical time. If maxLatticeT is provided in command line, it is an upper bound
@@ -514,20 +517,20 @@ int main( int argc, char* argv[] )
 
   // === 4th Step: Main Loop with Timer ===
   clout << std::endl << "starting simulation..." << std::endl;
-  size_t Nvoxel = sGeometry.getStatistics().getNvoxel();
+  size_t Nvoxel = sGeometryL0.getStatistics().getNvoxel();
   switch ( boundarytype ) {
-    case dampingAndStretched: Nvoxel = sGeometry.getStatistics().getNvoxel() + 2*sGeometryL1.getStatistics().getNvoxel();
-    case stretchedLayer:      Nvoxel = sGeometry.getStatistics().getNvoxel() + 2*sGeometryL1.getStatistics().getNvoxel() + 4*sGeometryL2.getStatistics().getNvoxel();
-    default: Nvoxel = sGeometry.getStatistics().getNvoxel();
+    case dampingAndStretched: Nvoxel = sGeometryL0.getStatistics().getNvoxel() + 2*sGeometryL1.getStatistics().getNvoxel();
+    case stretchedLayer:      Nvoxel = sGeometryL0.getStatistics().getNvoxel() + 2*sGeometryL1.getStatistics().getNvoxel() + 4*sGeometryL2.getStatistics().getNvoxel();
+    default: Nvoxel = sGeometryL0.getStatistics().getNvoxel();
   }
   util::Timer<T> timer( maxLatticeT, Nvoxel );
   timer.start();
 
   size_t iT = 0;
   while ( iT < maxLatticeT ) {
-    sLattice.setProcessingContext<Array<momenta::FixedVelocityMomentumGeneric::VELOCITY>>(ProcessingContext::Simulation);
+    sLatticeL0.setProcessingContext<Array<momenta::FixedVelocityMomentumGeneric::VELOCITY>>(ProcessingContext::Simulation);
     // === 6th Step: Collide and Stream Execution ===
-    sLattice.collideAndStream();
+    sLatticeL0.collideAndStream();
     if ( boundarytype == stretchedLayer || boundarytype == dampingAndStretched ) {
       sLatticeL1.collideAndStream();
       coarseToFineL1->apply(meta::id<refinement::lagrava::HalfTimeCoarseToFineO>{});
@@ -553,12 +556,12 @@ int main( int argc, char* argv[] )
     if ( boundarytype == stretchedLayer ) {
       getResults( sLatticeL2, converterL2, iT, sGeometryL2, timer, amplitude, gplot_l2_abs, Lp0, iTvtk, iTplot, "L2", true );
       getResults( sLatticeL1, converterL1, iT, sGeometryL1, timer, amplitude, gplot_l2_abs, Lp0, iTvtk, iTplot, "L1" );
-      getResults( sLattice, converterL0, iT, sGeometry, timer, amplitude, gplot_l2_abs, Lp0, iTvtk, iTplot, "L0" );
+      getResults( sLatticeL0, converterL0, iT, sGeometryL0, timer, amplitude, gplot_l2_abs, Lp0, iTvtk, iTplot, "L0" );
     } else if ( boundarytype == dampingAndStretched ) {
       getResults( sLatticeL1, converterL1, iT, sGeometryL1, timer, amplitude, gplot_l2_abs, Lp0, iTvtk, iTplot, "L1", true );
-      getResults( sLattice, converterL0, iT, sGeometry, timer, amplitude, gplot_l2_abs, Lp0, iTvtk, iTplot, "L0" );
+      getResults( sLatticeL0, converterL0, iT, sGeometryL0, timer, amplitude, gplot_l2_abs, Lp0, iTvtk, iTplot, "L0" );
     } else {
-      getResults( sLattice, converterL0, iT, sGeometry, timer, amplitude, gplot_l2_abs, Lp0, iTvtk, iTplot, "L0", true );
+      getResults( sLatticeL0, converterL0, iT, sGeometryL0, timer, amplitude, gplot_l2_abs, Lp0, iTvtk, iTplot, "L0", true );
     }    
     iT++;
   }
