@@ -17,6 +17,7 @@ examples/laminar/cavity3dBenchmark/cavity3d
 examples/laminar/cylinder3d/cylinder3d
 examples/noise/movingshock3d/movingshock3d
 examples/noise/cylinder3dnoise/cylinder3dnoise
+examples/noise/du93_noRefine/du93_noRefine
 examples/gridRefinement/cylinder2d/cylinder2d
 examples/gridRefinement/sphere3d/sphere3d
 examples/gridRefinement/du93/du93
