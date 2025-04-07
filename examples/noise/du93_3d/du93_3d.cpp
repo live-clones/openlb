@@ -52,7 +52,8 @@ void prepareGeometry( UnitConverter<T,DESCRIPTOR> const& converter, //std::share
                       Vector<T,3> originDomain,
                       bool withDampingLayer,
                       T boundaryDepth,
-                      bool outerLayer )
+                      bool outerLayer,
+                      bool singleLayer=false )
 {
   OstreamManager clout( std::cout,"prepareGeometry" );
   clout << "Prepare Geometry ..." << std::endl
@@ -70,11 +71,22 @@ void prepareGeometry( UnitConverter<T,DESCRIPTOR> const& converter, //std::share
   Vector<T,3> origin = domainLayer.getMin();
   Vector<T,3> extend = domainLayer.getMax() - domainLayer.getMin();
 
-  // clout << "0 to 2 everywhere" << std::endl;
   sGeometry.rename( 0, 2 );
-  // sGeometry.getStatistics().print();
-  if ( outerLayer ) {
-    // clout << "2 to 1 in domainLayer" << std::endl;
+  if ( singleLayer ) {
+    sGeometry.rename( 2, 1, {1, 0, 0} );
+    // Set material number for inflow
+    origin[0] = domainLayer.getMin()[0]-converter.getPhysDeltaX()/2;
+    extend[0] = converter.getPhysDeltaX();
+    IndicatorCuboid3D<T> inflow( extend, origin );
+    sGeometry.rename( 2, 3, 1, inflow );
+    // Set material number for outflow
+    origin[0] = domainLayer.getMax()[0]-converter.getPhysDeltaX()/2;
+    extend[0] = converter.getPhysDeltaX();
+    IndicatorCuboid3D<T> outflow( extend,origin );
+    sGeometry.rename( 2, 4, outflow );
+    sGeometry.rename( 1, 5, foilBody );
+    sGeometry.rename( 1, 6, foilTail );
+  } else if ( outerLayer ) {
     sGeometry.rename( 2, 1, {1, 0, 0} );
     // sGeometry.getStatistics().print();
 
@@ -180,7 +192,7 @@ void prepareLattice( SuperLattice<T,DESCRIPTOR>& sLattice,
   clout << "Setting bulk dynamics in fluid and PML in damping layer" << std::endl;
   auto bulkIndicator = sGeometry.getMaterialIndicator({1});
   if ( withDampingLayer ) {
-    boundary::set<boundary::PerfectlyMatchedLayer>( sLattice, sGeometry, 1 );
+    boundary::set<boundary::SpongeLayer>( sLattice, sGeometry, 1 );
     Vector<T,3> extend = domainLayer.getMax() - domainLayer.getMin();
     DampingTerm<3,T,DESCRIPTOR> sigma( converter, boundaryDepth, extend, dampingStrength );
     sLattice.defineField<descriptors::DAMPING>( bulkIndicator, sigma );
@@ -230,7 +242,7 @@ void prepareLattice( SuperLattice<T,DESCRIPTOR>& sLattice,
     clout << "Kmin: " << h*h*nu*tau << std::endl;
     if (Kin < h*h*nu*tau) {
       clout << "WARNING: Chosen K is too small!" << std::endl;
-      exit(1);
+      Kin = h*h*nu*tau;  // exit(1);
     }
     AnalyticalConst3D<T,T> porosity(d);
     sLattice.defineField<POROSITY>(sGeometry.getMaterialIndicator({6}), porosity);
@@ -516,8 +528,9 @@ int main( int argc, char* argv[] )
   T iniPhysU                = args.getValueOrFallback( "--iniPhysU",      0);
   const int outlet          = args.getValueOrFallback( "--outlet",        3);  // default: interpolated pressure outlet
   const bool debug          = args.contains("--debug");
-  const bool porousTE       = !args.contains("--no-porous");                    // --no-porous = no porous material in trailing edge
-  const bool withDampingLayer   = !args.contains("--no-damping");                   // --no-damping = no damping layer around domain
+  const bool porousTE       = !args.contains("--no-porous");                   // --no-porous = no porous material in trailing edge
+  const bool withDampingLayer   = !args.contains("--no-damping");              // --no-damping = no damping layer around domain
+  const bool withSubgrid    = !args.contains("--no-subgrid");                  // --no-subgrid = no refined grid around airfoil
 
   const T cs_LU             = 1 / std::sqrt(3.0);
   T charV                   = 4 * maxPhysU;
@@ -611,36 +624,42 @@ int main( int argc, char* argv[] )
   IndicatorLayer3D<T> domainL0(cuboidDomainL0, converterL0.getPhysDeltaX());
   CuboidGeometry3D<T> cGeometryL0(domainL0, converterL0.getPhysDeltaX());
   cGeometryL0.setPeriodicity( {false, true, true} );
-  // split 0th cuboid along dimension 0, creating cuboids 0,1,2 with ratios .15, .5, .35
   std::vector<T> xSplit = {0.15,0.5,0.35};
-  cGeometryL0.splitFractional(0, 0, xSplit);
-  // split middle cuboid (1) along dimension 1, inserting 2 back at 1, splitting 1 into 2,3,4
   std::vector<T> ySplit = {0.2,0.6,0.2};
-  cGeometryL0.splitFractional(1, 1, ySplit);
-  // split centre cuboid (3) along dimension 0, inserting 4 back at 3, splitting 3 into 4,5
-  cGeometryL0.splitFractional(3, 0, {0.5,0.5});
-  // split centre cuboids (3,5) along dimension 1
-  cGeometryL0.splitFractional(4, 1, {0.5,0.5});  // 5 back at 4, 4 into 5,6
-  cGeometryL0.splitFractional(4, 1, {0.5,0.5});  // 5,6 back at 4,5, 4 into 6,7
+  if ( withSubgrid ) {
+    // split 0th cuboid along dimension 0, creating cuboids 0,1,2 with ratios .15, .5, .35
+    cGeometryL0.splitFractional(0, 0, xSplit);
+    // split middle cuboid (1) along dimension 1, inserting 2 back at 1, splitting 1 into 2,3,4
+    cGeometryL0.splitFractional(1, 1, ySplit);
+    // split centre cuboid (3) along dimension 0, inserting 4 back at 3, splitting 3 into 4,5
+    cGeometryL0.splitFractional(3, 0, {0.5,0.5});
+    // split centre cuboids (3,5) along dimension 1
+    cGeometryL0.splitFractional(4, 1, {0.5,0.5});  // 5 back at 4, 4 into 5,6
+    cGeometryL0.splitFractional(4, 1, {0.5,0.5});  // 5,6 back at 4,5, 4 into 6,7
+  }
   cGeometryL0.print();
 
   auto cGeometryL1 = cGeometryL0;
-  Vector<T,3> originRefinement = {xSplit[0]*lengthDomain, ySplit[0]*heightDomain, 0};
-  originRefinement += originDomain;
-  IndicatorCuboid3D<T> toBeRefinedI( {xSplit[1]*lengthDomain*T(.99), ySplit[1]*heightDomain*T(.99), depthDomain},
-                                     originRefinement );
-  cGeometryL1.remove(toBeRefinedI);
-  cGeometryL1.refine(2);
+  if ( withSubgrid ) {
+    Vector<T,3> originRefinement = {xSplit[0]*lengthDomain, ySplit[0]*heightDomain, 0};
+    originRefinement += originDomain;
+    IndicatorCuboid3D<T> toBeRefinedI( {xSplit[1]*lengthDomain*T(.99), ySplit[1]*heightDomain*T(.99), depthDomain},
+                                       originRefinement );
+    cGeometryL1.remove(toBeRefinedI);
+    cGeometryL1.refine(2);
+  }
   cGeometryL1.print();
 
-  // Adjust weights for balancing
-  for (int iC=0; iC < cGeometryL0.size(); ++iC) {
-    auto& cuboid = cGeometryL0.get(iC);
-    cuboid.setWeight(cuboid.getLatticeVolume());
-    auto origin = cGeometryL0.get(iC).getOrigin();
-    for (int jC=0; jC < cGeometryL1.size(); ++jC) {
-      if (cGeometryL1.get(jC).getOrigin() == origin) {
-        cuboid.setWeight(cuboid.getWeight() + 2*cGeometryL1.get(jC).getLatticeVolume());
+  if ( withSubgrid ) {
+    // Adjust weights for balancing
+    for (int iC=0; iC < cGeometryL0.size(); ++iC) {
+      auto& cuboid = cGeometryL0.get(iC);
+      cuboid.setWeight(cuboid.getLatticeVolume());
+      auto origin = cGeometryL0.get(iC).getOrigin();
+      for (int jC=0; jC < cGeometryL1.size(); ++jC) {
+        if (cGeometryL1.get(jC).getOrigin() == origin) {
+          cuboid.setWeight(cuboid.getWeight() + 2*cGeometryL1.get(jC).getLatticeVolume());
+        }
       }
     }
   }
@@ -648,7 +667,8 @@ int main( int argc, char* argv[] )
   // // === 3rd Step: Prepare Lattice ===
   HeuristicLoadBalancer<T> loadBalancerL0(cGeometryL0);
   SuperGeometry<T,3> sGeometryL0(cGeometryL0, loadBalancerL0);
-  prepareGeometry( converterL0, foilBody, foilTail, sGeometryL0, extendDomain, originDomain, withDampingLayer, boundaryDepth, true );
+  if ( !withSubgrid ) prepareGeometry( converterL0, foilBody, foilTail, sGeometryL0, extendDomain, originDomain, withDampingLayer, boundaryDepth, false, true );
+  else prepareGeometry( converterL0, foilBody, foilTail, sGeometryL0, extendDomain, originDomain, withDampingLayer, boundaryDepth, true );
   SuperLattice<T,DESCRIPTOR> sLatticeL0( cGeometryL0, loadBalancerL0, 3, converterL0);
   prepareLattice( sLatticeL0, converterL0, foilBody, foilTail, sGeometryL0, porousTE, Kin, iniPhysU, withDampingLayer, boundaryDepth, dampingStrength, outlettype, extendDomain, originDomain, "level0" );
 
@@ -656,9 +676,9 @@ int main( int argc, char* argv[] )
   auto converterL1 = convectivelyRefineUnitConverter( converterL0, 2 );
   converterL1.print();
   SuperGeometry<T,3> sGeometryL1( cGeometryL1, loadBalancerL1 );
-  prepareGeometry( converterL1, foilBody, foilTail, sGeometryL1, extendDomain, originDomain, withDampingLayer, boundaryDepth, false );
+  if ( withSubgrid ) prepareGeometry( converterL1, foilBody, foilTail, sGeometryL1, extendDomain, originDomain, withDampingLayer, boundaryDepth, false );
   SuperLattice<T,DESCRIPTOR> sLatticeL1(cGeometryL1, loadBalancerL1, 3, converterL1);
-  prepareLattice( sLatticeL1, converterL1, foilBody, foilTail, sGeometryL1, porousTE, Kin, iniPhysU, withDampingLayer, boundaryDepth, dampingStrength, outlettype, extendDomain, originDomain, "level1" );
+  if ( withSubgrid ) prepareLattice( sLatticeL1, converterL1, foilBody, foilTail, sGeometryL1, porousTE, Kin, iniPhysU, withDampingLayer, boundaryDepth, dampingStrength, outlettype, extendDomain, originDomain, "level1" );
 
   clout << "Coupling coarse to fine grid(s) ..." << std::endl;
   auto coarseToFine = refinement::lagrava::makeCoarseToFineCoupler(sLatticeL0, sGeometryL0, sLatticeL1, sGeometryL1);
@@ -687,19 +707,20 @@ int main( int argc, char* argv[] )
   for (size_t iT = 0; iT < iTmax; ++iT) {
     // === Computation and Output of the Results ===
     getResults(sLatticeL0, converterL0, iT, sGeometryL0, timerL0, foilBody, iTmax, iTmaxStart, iTvtk, withDampingLayer, "level0");
-    getResults(sLatticeL1, converterL1, iT, sGeometryL1, timerL1, foilBody, iTmax, iTmaxStart, iTvtk, withDampingLayer, "level1");
+    if ( withSubgrid ) getResults(sLatticeL1, converterL1, iT, sGeometryL1, timerL1, foilBody, iTmax, iTmaxStart, iTvtk, withDampingLayer, "level1");
 
     // === Definition of Initial and Boundary Conditions ===
     setBoundaryValues( sLatticeL0, converterL0, iT, sGeometryL0, iTmaxStart, maxLatticeU, maxPhysU, iniPhysU, withDampingLayer, outlettype, "level0" );
     sLatticeL0.collideAndStream();
-
-    sLatticeL1.collideAndStream();
-    coarseToFine->apply(meta::id<refinement::lagrava::HalfTimeCoarseToFineO>{});
-
-    sLatticeL1.collideAndStream();
-    coarseToFine->apply(meta::id<refinement::lagrava::FullTimeCoarseToFineO>{});
-
-    fineToCoarse->apply(meta::id<refinement::lagrava::FineToCoarseO>{});
+    if ( withSubgrid ) {
+      sLatticeL1.collideAndStream();
+      coarseToFine->apply(meta::id<refinement::lagrava::HalfTimeCoarseToFineO>{});
+  
+      sLatticeL1.collideAndStream();
+      coarseToFine->apply(meta::id<refinement::lagrava::FullTimeCoarseToFineO>{});
+  
+      fineToCoarse->apply(meta::id<refinement::lagrava::FineToCoarseO>{});
+    }
 
     if (iT % converterL0.getLatticeTime(0.1) == 0) {
       timerL0.update(iT);
