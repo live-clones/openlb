@@ -5,11 +5,11 @@
       "name": "Debug workstation",
       "type": "cppdbg",
       "request": "launch",
-      "args": ["--boundaryCondition", "11", "--res", "51"],
+      "args": ["--no-damping","--no-subgrid","--outlet","1","--Re","200","--res","100"],
       "stopAtEntry": false,
       "externalConsole": false,
-      "cwd": "/home/philipp/OpenLB/examples/gridRefinement/movingshock3drefined",
-      "program": "/home/philipp/OpenLB/examples/gridRefinement/movingshock3drefined/movingshock3drefined",
+      "cwd": "/home/philipp/OpenLB/examples/noise/du93_3d",
+      "program": "/home/philipp/OpenLB/examples/noise/du93_3d/du93_3d",
       "MIMode": "gdb",
       "miDebuggerPath": "gdb",
       "setupCommands": [
@@ -19,7 +19,7 @@
           "ignoreFailures": true
         }
       ],
-      "preLaunchTask": "make movingshock3drefined"
+      "preLaunchTask": "make du93"
     },
     {
       "name": "Debug sphere3d laptop",

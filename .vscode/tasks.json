@@ -13,19 +13,19 @@
     {
       "type": "shell",
       "label": "make du93",
-      "command": "cd $HOME/OpenLB/examples/gridRefinement/du93 && /usr/bin/make",
+      "command": "export MPI_ROOT=$HOME/.openmpi && cd $HOME/OpenLB/examples/noise/du93_3d && /usr/bin/make",
       "dependsOn": "clean du93"
     },
     {
       "type": "shell",
       "label": "clean du93",
-      "command": "cd $HOME/OpenLB/examples/gridRefinement/du93 && /usr/bin/make clean",
-      "dependsOn": "make"
+      "command": "cd $HOME/OpenLB/examples/noise/du93_3d && /usr/bin/make clean",
+      // "dependsOn": "make"
     },
     {
       "type": "shell",
       "label": "make",
-      "command": "cd $HOME/OpenLB/ && /usr/bin/make",
+      "command": "export MPI_ROOT=$HOME/.openmpi && cd $HOME/OpenLB/ && /usr/bin/make",
       "dependsOn": "clean"
     },
     {

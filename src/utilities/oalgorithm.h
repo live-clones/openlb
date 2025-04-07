@@ -55,7 +55,7 @@ Expr max(Expr a, Expr b);
 template <typename T>
 any_platform constexpr T min(T a, meta::id_t<T> b) {
 #ifdef  __CUDA_ARCH__
-  return ::min(a, b);
+  return (a > b) ? a : b;
 #else
   return std::min(a, b);
 #endif
