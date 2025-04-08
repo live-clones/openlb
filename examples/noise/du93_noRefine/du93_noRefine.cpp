@@ -50,7 +50,7 @@ void prepareGeometry( UnitConverter<T,DESCRIPTOR> const& converter, //std::share
                       SuperGeometry<T,3>& sGeometry,
                       Vector<T,3> extendDomain,
                       Vector<T,3> originDomain,
-                      bool withDampingLayer,
+                      bool withSponge,
                       T boundaryDepth )
 {
   OstreamManager clout( std::cout,"prepareGeometry" );
@@ -89,7 +89,7 @@ void prepareGeometry( UnitConverter<T,DESCRIPTOR> const& converter, //std::share
   // sGeometry.clean();
   // sGeometry.getStatistics().print();
 
-  if ( withDampingLayer ) {
+  if ( withSponge ) {
     // fluid domain part to fluid
     T bd_pu = converter.getPhysLength( boundaryDepth );
     origin = domainLayer.getMin();
@@ -137,13 +137,15 @@ void prepareLattice( SuperLattice<T,DESCRIPTOR>& sLattice,
                      bool porousTE,
                      T Kin,
                      T initialUx,
-                     bool withDampingLayer,
+                     bool withSponge,
                      T boundaryDepth,
                      T dampingStrength,
                      OutletType outlet,
                      Vector<T,3> extendDomain,
                      Vector<T,3> originDomain,
-                     std::string name )
+                     std::string name,
+                     T d  // porosity
+                    )
 {
   OstreamManager clout( std::cout,"prepareLattice_"+name );
   clout << "Prepare Lattice ..." << std::endl;
@@ -154,14 +156,14 @@ void prepareLattice( SuperLattice<T,DESCRIPTOR>& sLattice,
   T tmp = T();
   uAverage = &tmp;  //*uAverage = 0.0;
   int fluidNumber = 1;
-  if ( withDampingLayer ) fluidNumber = 7;
+  if ( withSponge ) fluidNumber = 7;
   setUAverage( sLattice, sGeometry, fluidNumber );
   const T omega = converter.getLatticeRelaxationFrequency();
 
   // Material=1 -->bulk dynamics
   clout << "Setting bulk dynamics in fluid and PML in damping layer" << std::endl;
   auto bulkIndicator = sGeometry.getMaterialIndicator({1});
-  if ( withDampingLayer ) {
+  if ( withSponge ) {
     boundary::set<boundary::SpongeLayer>( sLattice, sGeometry, 1 );
     Vector<T,3> extend = domainLayer.getMax() - domainLayer.getMin();
     DampingTerm<3,T,DESCRIPTOR> sigma( converter, boundaryDepth, extend, dampingStrength );
@@ -207,7 +209,11 @@ void prepareLattice( SuperLattice<T,DESCRIPTOR>& sLattice,
     T tau = converter.getLatticeRelaxationTime();
     T nu = (tau-0.5)/3.;
     T h = converter.getPhysDeltaX();
-    T d = 1. - (h*h*nu*tau/Kin);
+    if ( Kin != 0. ) {
+      d = 1. - (h*h*nu*tau/Kin);
+    } else {
+      Kin = h*h*nu*tau/(1.-d);
+    }
     clout << "Lattice Porosity: " << d << "(1 = permeable , 0 = not permeable)" << std::endl;
     clout << "Kmin: " << h*h*nu*tau << std::endl;
     if (Kin < h*h*nu*tau) {
@@ -234,7 +240,7 @@ void prepareLattice( SuperLattice<T,DESCRIPTOR>& sLattice,
   AnalyticalConst3D<T,T> uy(velocityV[1]);
   AnalyticalConst3D<T,T> uz(velocityV[2]);
 
-  if ( withDampingLayer ) {
+  if ( withSponge ) {
     sLattice.defineField<descriptors::UX>( bulkIndicator, ux );
     sLattice.defineField<descriptors::UY>( bulkIndicator, uy );
     sLattice.defineField<descriptors::UZ>( bulkIndicator, uz );
@@ -262,7 +268,7 @@ void setBoundaryValues( SuperLattice<T, DESCRIPTOR>& sLattice,
                         T maxLatticeU,
                         T maxPhysU,
                         T iniPhysU,
-                        bool withDampingLayer,
+                        bool withSponge,
                         OutletType outlet,
                         std::string name )
 {
@@ -288,7 +294,7 @@ void setBoundaryValues( SuperLattice<T, DESCRIPTOR>& sLattice,
     AnalyticalComposed3D<T,T> u( ux, uy, uz );
     sLattice.defineU( sGeometry, 3, u );
 
-    if ( withDampingLayer ) {
+    if ( withSponge ) {
       auto bulkIndicator = sGeometry.getMaterialIndicator({1,7});
       sLattice.defineField<descriptors::UX>( bulkIndicator, ux );
     }
@@ -327,8 +333,10 @@ void getResults( SuperLattice<T, DESCRIPTOR>& sLattice,
                  SuperGeometry<T,3>& sGeometry, util::Timer<T>& timer,
                  STLreader<T>& foilBody,
                  size_t iTmax, size_t iTmaxStart, size_t iTvtk,
-                 bool withDampingLayer,
-                 std::string name )
+                 bool withSponge,
+                 std::string name,
+                 OutletType outlet
+                )
 {
   OstreamManager clout( std::cout, "getResults_"+name+", iT=" + std::to_string(iT) );
 
@@ -444,9 +452,9 @@ void getResults( SuperLattice<T, DESCRIPTOR>& sLattice,
     // heatmap::write( planeReductionQ, iT, jpeg_scale );
   }
 
-  if ( iT%50 == 0 ) {
+  if ( iT%50 == 0 && outlet == interconvection ) {
     int fluidNumber = 1;
-    if ( withDampingLayer ) fluidNumber = 7;
+    if ( withSponge ) fluidNumber = 7;
     setUAverage( sLattice, sGeometry, fluidNumber );
     clout << "uAverage(" << iT << ")_" << name << "= " << *uAverage << std::endl;
   }
@@ -481,18 +489,20 @@ int main( int argc, char* argv[] )
   size_t nout               = args.getValueOrFallback( "--nout",          5);   // minimum number of vtk outputs
   size_t iout               = args.getValueOrFallback( "--iout",          0);   // iterations for vtk outputs
   T tout                    = args.getValueOrFallback( "--tout",          0);   // timestep for vtk outputs
-  T maxPhysU                = args.getValueOrFallback( "--umax",          .01);   // in m/s
+  T maxPhysU                = args.getValueOrFallback( "--umax",          .01); // in m/s
   T Re                      = args.getValueOrFallback( "--Re",            0);
+  T Ma                      = args.getValueOrFallback( "--Ma",            0.2);
   T tau                     = args.getValueOrFallback( "--tau",           0);   // previously tau=0.53 fixed
-  const T Kin               = args.getValueOrFallback( "--permeability",  1e-8);
+  const T Kin               = args.getValueOrFallback( "--Kin",           0.);  // set only to ignore permeability
   const T dampingStrength   = args.getValueOrFallback( "--dampingStrength", .5);
-  const T tMaxInit          = args.getValueOrFallback( "--tmaxinit",      2);
-  T charL                   = args.getValueOrFallback( "--charL",         1);
-  T iniPhysU                = args.getValueOrFallback( "--iniPhysU",      0);
-  const int outlet          = args.getValueOrFallback( "--outlet",        3);  // default: interpolated pressure outlet
+  const T tMaxInit          = args.getValueOrFallback( "--tmaxinit",      2.);
+  T charL                   = args.getValueOrFallback( "--charL",         1.);
+  T iniPhysU                = args.getValueOrFallback( "--iniPhysU",      0.);
+  const int outlet          = args.getValueOrFallback( "--outlet",        3);   // default: interpolated pressure outlet
+  const T permeability      = args.getValueOrFallback( "--permeability",  .3);  // 0 = solid, 1 = fluid
   const bool debug          = args.contains("--debug");
-  const bool porousTE       = !args.contains("--no-porous");                   // --no-porous = no porous material in trailing edge
-  const bool withDampingLayer   = !args.contains("--no-damping");              // --no-damping = no damping layer around domain
+  const bool porousTE       = !args.contains("--no-porous");   // --no-porous = no porous material in trailing edge
+  const bool withSponge     = !args.contains("--no-damping");  // --no-damping = no damping layer around domain
 
   const T cs_LU             = 1 / std::sqrt(3.0);
   T charV                   = 4 * maxPhysU;
@@ -515,9 +525,9 @@ int main( int argc, char* argv[] )
   std::stringstream outdir_mod;
   outdir_mod << outdir;
   if ( !porousTE ) outdir_mod << "_noPorous";
-  else outdir_mod << "_" << Kin << "porous";
-  outdir_mod << "_" << angle << "deg_u" << maxPhysU << "_Re" << Re << "_" << lengthDomain << "x" << heightDomain << "x" << depthDomain << "_res" << res;
-  if ( withDampingLayer ) outdir_mod << "_bd" << boundaryDepth << "x" << dampingStrength;
+  else outdir_mod << "_" << permeability << "porous";
+  outdir_mod << "_" << angle << "deg_u" << maxPhysU << "_Re" << Re << "_Ma" << Ma << "_" << lengthDomain << "x" << heightDomain << "x" << depthDomain << "_res" << res;
+  if ( withSponge ) outdir_mod << "_bd" << boundaryDepth << "x" << dampingStrength;
   switch ( outlet ) {
     case 1: outdir_mod << "_outletLocalPressure";         break;
     case 2: outdir_mod << "_outletLocalVelocity";         break;
@@ -547,14 +557,22 @@ int main( int argc, char* argv[] )
   if ( porousTE ) clout << "Calculating with porous trailing edge" << std::endl;
   else clout << "Calculating without trailing edge" << std::endl;
 
-  UnitConverterFromResolutionAndRelaxationTime<T, DESCRIPTOR> const converterL0(
-    (size_t)  res,            // resolution: number of voxels per charPhysL
-    (T)       tau,            // latticeRelaxationTime: relaxation time, have to be greater than 0.5!
-    (T)       charL,          // charPhysLength: reference length of simulation geometry
-    (T)       charV,          // charPhysVelocity: maximal/highest expected velocity during simulation in __m / s__
-    (T)       viscosity,      // physViscosity: physical kinematic viscosity in __m^2 / s__
-    (T)       1.204           // physDensity: physical density in __kg / m^3__; air at 101.325 kPa and 20 °C
+  UnitConverterFromResolutionAndLatticeVelocity<T,DESCRIPTOR> const converterL0(
+    (size_t)  res,
+    (T)       Ma,
+    (T)       charL,
+    (T)       charV,
+    (T)       viscosity,
+    (T)       1.204
   );
+  // UnitConverterFromResolutionAndRelaxationTime<T, DESCRIPTOR> const converterL0(
+  //   (size_t)  res,            // resolution: number of voxels per charPhysL
+  //   (T)       tau,            // latticeRelaxationTime: relaxation time, have to be greater than 0.5!
+  //   (T)       charL,          // charPhysLength: reference length of simulation geometry
+  //   (T)       charV,          // charPhysVelocity: maximal/highest expected velocity during simulation in __m / s__
+  //   (T)       viscosity,      // physViscosity: physical kinematic viscosity in __m^2 / s__
+  //   (T)       1.204           // physDensity: physical density in __kg / m^3__; air at 101.325 kPa and 20 °C
+  // );
   T maxLatticeU                 = converterL0.getLatticeVelocity( maxPhysU );
   // Prints the converter log as console output
   converterL0.print();
@@ -578,7 +596,7 @@ int main( int argc, char* argv[] )
 //   const int noOfCuboids = 7;
 // #endif
   // setup domain
-  if ( withDampingLayer ) lengthDomain += converterL0.getPhysLength( boundaryDepth );
+  if ( withSponge ) lengthDomain += converterL0.getPhysLength( boundaryDepth );
 
   Vector<T,3> extendDomain = {lengthDomain, heightDomain, depthDomain};
   Vector<T,3> originDomain = {-lengthDomain/3, -heightDomain/2, -depthDomain/2};
@@ -591,9 +609,9 @@ int main( int argc, char* argv[] )
   // // === 3rd Step: Prepare Lattice ===
   HeuristicLoadBalancer<T> loadBalancerL0(cGeometryL0);
   SuperGeometry<T,3> sGeometryL0(cGeometryL0, loadBalancerL0);
-  prepareGeometry( converterL0, foilBody, foilTail, sGeometryL0, extendDomain, originDomain, withDampingLayer, boundaryDepth );
+  prepareGeometry( converterL0, foilBody, foilTail, sGeometryL0, extendDomain, originDomain, withSponge, boundaryDepth );
   SuperLattice<T,DESCRIPTOR> sLatticeL0( cGeometryL0, loadBalancerL0, 3, converterL0);
-  prepareLattice( sLatticeL0, converterL0, foilBody, foilTail, sGeometryL0, porousTE, Kin, iniPhysU, withDampingLayer, boundaryDepth, dampingStrength, outlettype, extendDomain, originDomain, "level0" );
+  prepareLattice( sLatticeL0, converterL0, foilBody, foilTail, sGeometryL0, porousTE, Kin, iniPhysU, withSponge, boundaryDepth, dampingStrength, outlettype, extendDomain, originDomain, "level0", permeability );
 
   // === 3a-rd Step: calculate iterations from input ===
   // iTmax depends on maximum physical time. If iTmax is provided in command line, it is an upper bound
@@ -614,10 +632,10 @@ int main( int argc, char* argv[] )
 
   for (size_t iT = 0; iT < iTmax; ++iT) {
     // === Computation and Output of the Results ===
-    getResults(sLatticeL0, converterL0, iT, sGeometryL0, timerL0, foilBody, iTmax, iTmaxStart, iTvtk, withDampingLayer, "level0");
+    getResults( sLatticeL0, converterL0, iT, sGeometryL0, timerL0, foilBody, iTmax, iTmaxStart, iTvtk, withSponge, "level0", outlettype );
     
     // === Definition of Initial and Boundary Conditions ===
-    setBoundaryValues( sLatticeL0, converterL0, iT, sGeometryL0, iTmaxStart, maxLatticeU, maxPhysU, iniPhysU, withDampingLayer, outlettype, "level0" );
+    setBoundaryValues( sLatticeL0, converterL0, iT, sGeometryL0, iTmaxStart, maxLatticeU, maxPhysU, iniPhysU, withSponge, outlettype, "level0" );
     sLatticeL0.collideAndStream();
     
     if (iT % converterL0.getLatticeTime(0.1) == 0) {
