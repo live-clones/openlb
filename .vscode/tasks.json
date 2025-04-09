@@ -12,14 +12,14 @@
     },
     {
       "type": "shell",
-      "label": "make du93",
-      "command": "export MPI_ROOT=$HOME/.openmpi && cd $HOME/OpenLB/examples/noise/du93_3d && /usr/bin/make",
-      "dependsOn": "clean du93"
+      "label": "make cylinder2d",
+      "command": "export MPI_ROOT=$HOME/.openmpi && cd $HOME/OpenLB/examples/gridRefinement/cylinder2d && /usr/bin/make",
+      "dependsOn": "clean cylinder2d"
     },
     {
       "type": "shell",
-      "label": "clean du93",
-      "command": "cd $HOME/OpenLB/examples/noise/du93_3d && /usr/bin/make clean",
+      "label": "clean cylinder2d",
+      "command": "cd $HOME/OpenLB/examples/gridRefinement/cylinder2d && /usr/bin/make clean",
       // "dependsOn": "make"
     },
     {

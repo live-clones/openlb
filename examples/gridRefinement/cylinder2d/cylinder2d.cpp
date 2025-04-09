@@ -49,12 +49,12 @@ struct GeometryParameters {
 };
 
 
-void prepareGeometry(const UnitConverter<T,DESCRIPTOR>& converter,
+void prepareGeometryCoarse(const UnitConverter<T,DESCRIPTOR>& converter,
                      SuperGeometry<T,2>& sGeometry,
                      std::shared_ptr<IndicatorF2D<T>> circle,
                      GeometryParameters geomParams)
 {
-  OstreamManager clout( std::cout,"prepareGeometry" );
+  OstreamManager clout( std::cout,"prepareGeometryCoarse" );
   clout << "Prepare Geometry ..." << std::endl;
 
   Vector<T,2> extend(geomParams.lengthX, geomParams.lengthY);
@@ -88,7 +88,7 @@ void prepareGeometry(const UnitConverter<T,DESCRIPTOR>& converter,
 void prepareGeometryMiddle(const UnitConverter<T,DESCRIPTOR>& converter,
                          SuperGeometry<T,2>& sGeometry)
 {
-  OstreamManager clout( std::cout,"prepareGeometry" );
+  OstreamManager clout( std::cout,"prepareGeometryMiddle" );
   clout << "Prepare Geometry ..." << std::endl;
 
   sGeometry.rename(0,1);
@@ -106,7 +106,7 @@ void prepareGeometryFine(const UnitConverter<T,DESCRIPTOR>& converter,
                          std::shared_ptr<IndicatorF2D<T>> circle,
                          GeometryParameters geomParams)
 {
-  OstreamManager clout( std::cout,"prepareGeometry" );
+  OstreamManager clout( std::cout,"prepareGeometryFine" );
   clout << "Prepare Geometry ..." << std::endl;
 
   Vector<T,2> extend(geomParams.lengthX, geomParams.lengthY);
@@ -288,7 +288,7 @@ int main(int argc, char* argv[])
   T maxPhysU                = args.getValueOrFallback<T>  ( "--maxPhysU",   1.);    // in m/s
   T iniPhysU                = args.getValueOrFallback<T>  ( "--iniPhysU",   .0);
   bool allVtk               = args.contains( "--allVtk" );  // vtk for all substeps
-  bool subImages          = args.contains( "--subImages" );  // vtk for all substeps
+  bool subImages            = args.contains( "--subImages" );  // vtk for all substeps
 
   std::stringstream outdir_mod;
   outdir_mod << outdir;
@@ -358,7 +358,7 @@ int main(int argc, char* argv[])
 
   HeuristicLoadBalancer<T> loadBalancerLevel0(cGeometryLevel0);
   SuperGeometry<T,2> sGeometryLevel0(cGeometryLevel0, loadBalancerLevel0);
-  prepareGeometry(converterLevel0, sGeometryLevel0, circle, geomParams);
+  prepareGeometryCoarse(converterLevel0, sGeometryLevel0, circle, geomParams);
   SuperLattice<T,DESCRIPTOR> sLatticeLevel0(cGeometryLevel0,
                                             loadBalancerLevel0,
                                             3,
@@ -405,10 +405,10 @@ int main(int argc, char* argv[])
     sLatticeLevel1, sGeometryLevel1,
     sLatticeLevel2, sGeometryLevel2);
 
-  clout << "Initializing PREV_RHO ..." << std::endl;
+  clout << "Initializing PREV_xx ..." << std::endl;
   coarseToFineLevel1->initialize_prev(meta::id<refinement::lagrava::FullTimeCoarseToFineO>{});
   coarseToFineLevel2->initialize_prev(meta::id<refinement::lagrava::FullTimeCoarseToFineO>{});
-  clout << "Initializing PREV_RHO ... OK" << std::endl;
+  clout << "Initializing PREV_xx ... OK" << std::endl;
 
   // iTmax depends on maximum physical time. If iTmax is provided in command line, it is an upper bound
   if ( iTmax == 0 ) iTmax = converterLevel0.getLatticeTime( maxPhysT );

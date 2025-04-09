@@ -129,7 +129,8 @@
     "valarray": "cpp",
     "variant": "cpp",
     "ranges": "cpp",
-    "source_location": "cpp"
+    "source_location": "cpp",
+    "complex": "cpp"
   },
   "makefile.makefilePath": "/home/hbrs/OpenLB/examples/gridRefinement/sphere3d/Makefile",
   "makefile.buildLog": ""

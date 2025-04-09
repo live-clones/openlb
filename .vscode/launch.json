@@ -22,14 +22,14 @@
       "preLaunchTask": "make du93"
     },
     {
-      "name": "Debug sphere3d laptop",
+      "name": "Debug cylinder2d laptop",
       "type": "cppdbg",
       "request": "launch",
       "args": [],
       "stopAtEntry": false,
       "externalConsole": false,
-      "cwd": "/home/hbrs/OpenLB/examples/gridRefinement/sphere3d",
-      "program": "/home/hbrs/OpenLB/examples/gridRefinement/sphere3d/sphere3d",
+      "cwd": "/home/hbrs/OpenLB/examples/gridRefinement/cylinder2d",
+      "program": "/home/hbrs/OpenLB/examples/gridRefinement/cylinder2d/cylinder2d",
       "MIMode": "gdb",
       "miDebuggerPath": "gdb",
       "setupCommands": [
@@ -44,7 +44,7 @@
           "ignoreFailures": true
         }
       ],
-      "preLaunchTask": "make sphere3d"
+      "preLaunchTask": "make cylinder2d"
     },
     {
       "name": "Debug movingshock3d workstation",
