@@ -2,7 +2,6 @@
 namespace olb {
 
 template<unsigned int ndim, typename T, typename DESCRIPTOR>
-
 T L2Norm(SuperLattice<T,DESCRIPTOR>& sLattice,
          SuperGeometry<T,ndim>& sGeometry,
          UnitConverter<T,DESCRIPTOR> const& converter,

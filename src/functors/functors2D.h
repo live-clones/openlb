@@ -33,4 +33,3 @@
 #include "noise_auxiliary/dampingTerm.h"
 #include "noise_auxiliary/acousticPulse.h"
 #include "noise_auxiliary/linePlot.h"
-#include "noise_auxiliary/l2norm.h"

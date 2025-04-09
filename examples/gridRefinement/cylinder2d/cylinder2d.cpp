@@ -223,7 +223,7 @@ void writeResults(SuperLattice<T, DESCRIPTOR>& sLattice,
                   std::string name,
                   std::string vtmName="",
                   bool vtk=false,
-                  bool noImages=false)
+                  bool images=false)
 {
   OstreamManager clout(std::cout, name);
 
@@ -248,12 +248,15 @@ void writeResults(SuperLattice<T, DESCRIPTOR>& sLattice,
   SuperLatticePhysVelocity2D velocityF(sLattice, converter);
   SuperLatticePhysPressure2D pressureF(sLattice, converter);
   SuperLatticeRefinementMetricKnudsen2D qualityF(sLattice, converter);
+  SuperLatticePhysField2D<T,DESCRIPTOR,fields::refinement::PREV_RHO> prev_rho( sLattice, 1. );
+  prev_rho.getName() = "PREV_RHO";
+  vtmWriter.addFunctor(prev_rho);
   vtmWriter.addFunctor(qualityF);
   vtmWriter.addFunctor(velocityF);
   vtmWriter.addFunctor(pressureF);
   vtmWriter.write(iT);
 
-  if ( !noImages) {
+  if ( images ) {
     SuperEuklidNorm2D<T,DESCRIPTOR> normVel( velocityF );
     BlockReduction2D2D<T> planeReductionU( normVel );
     // write output as JPEG
@@ -283,9 +286,9 @@ int main(int argc, char* argv[])
   size_t iTout              = args.getValueOrFallback( "--iTout",           0);     // iterations for vtk outputs
   T physTout                = args.getValueOrFallback( "--physTout",        0);     // timestep for vtk outputs
   T maxPhysU                = args.getValueOrFallback<T>  ( "--maxPhysU",   1.);    // in m/s
-  T iniPhysU                = args.getValueOrFallback<T>  ( "--iniPhysU",   .00);
+  T iniPhysU                = args.getValueOrFallback<T>  ( "--iniPhysU",   .0);
   bool allVtk               = args.contains( "--allVtk" );  // vtk for all substeps
-  bool noSubImages               = args.contains( "--noSubImages" );  // vtk for all substeps
+  bool subImages          = args.contains( "--subImages" );  // vtk for all substeps
 
   std::stringstream outdir_mod;
   outdir_mod << outdir;
@@ -303,7 +306,7 @@ int main(int argc, char* argv[])
     int {N},                                   // resolution: number of voxels per charPhysL
     (T)   0.51,                                // latticeRelaxationTime: relaxation time, have to be greater than 0.5!
     (T)   2.0*geomParams.radiusCylinder,       // charPhysLength: reference length of simulation geometry
-    (T)   0.2,                                 // charPhysVelocity: maximal/highest expected velocity during simulation in __m / s__
+    (T)   maxPhysU,                            // charPhysVelocity: maximal/highest expected velocity during simulation in __m / s__
     (T)   0.2*2.*geomParams.radiusCylinder/Re, // physViscosity: physical kinematic viscosity in __m^2 / s__
     (T)   1.0                                  // physDensity: physical density in __kg / m^3__
   );
@@ -432,47 +435,47 @@ int main(int argc, char* argv[])
       writeResults(sLatticeLevel2, converterLevel2, iT, sGeometryLevel2, std::to_string(iT)+"_00_level2_preBC", "00_level2_preBC", true);
 
       setBoundaryValues( sLatticeLevel0, converterLevel0, iT, sGeometryLevel0, iTmaxStart, maxLatticeU, maxPhysU, iniPhysU );
-      writeResults(sLatticeLevel0, converterLevel0, iT, sGeometryLevel0, std::to_string(iT)+"_01_level0_postBC", "01_level0_postBC", allVtk, noSubImages);
+      // writeResults(sLatticeLevel0, converterLevel0, iT, sGeometryLevel0, std::to_string(iT)+"_01_level0_postBC", "01_level0_postBC", allVtk, subImages);
       sLatticeLevel0.collideAndStream();
-      writeResults(sLatticeLevel0, converterLevel0, iT, sGeometryLevel0, std::to_string(iT)+"_02_level0_postCS", "02_level0_postCS", allVtk, noSubImages);
+      // writeResults(sLatticeLevel0, converterLevel0, iT, sGeometryLevel0, std::to_string(iT)+"_02_level0_postCS", "02_level0_postCS", allVtk, subImages);
   
         sLatticeLevel1.collideAndStream();
-        writeResults(sLatticeLevel1, converterLevel1, iT, sGeometryLevel1, std::to_string(iT)+"_03_level1_postCS1", "03_level1_postCS1", allVtk, noSubImages);
+        // writeResults(sLatticeLevel1, converterLevel1, iT, sGeometryLevel1, std::to_string(iT)+"_03_level1_postCS1", "03_level1_postCS1", allVtk, subImages);
         coarseToFineLevel1->apply(meta::id<refinement::lagrava::HalfTimeCoarseToFineO>{});
-        writeResults(sLatticeLevel1, converterLevel1, iT, sGeometryLevel1, std::to_string(iT)+"_04_level1_postC2F1", "04_level1_postC2F1", allVtk, noSubImages);
+        writeResults(sLatticeLevel1, converterLevel1, iT, sGeometryLevel1, std::to_string(iT)+"_04_level1_postC2F1", "04_level1_postC2F1", allVtk, subImages);
   
           sLatticeLevel2.collideAndStream();
-          writeResults(sLatticeLevel2, converterLevel2, iT, sGeometryLevel2, std::to_string(iT)+"_05_level2_postCS1", "05_level2_postCS1", allVtk, noSubImages);
+          // writeResults(sLatticeLevel2, converterLevel2, iT, sGeometryLevel2, std::to_string(iT)+"_05_level2_postCS1", "05_level2_postCS1", allVtk, subImages);
           coarseToFineLevel2->apply(meta::id<refinement::lagrava::HalfTimeCoarseToFineO>{});
-          writeResults(sLatticeLevel2, converterLevel2, iT, sGeometryLevel2, std::to_string(iT)+"_06_level2_postC2F1", "06_level2_postC2F1", allVtk, noSubImages);
+          // writeResults(sLatticeLevel2, converterLevel2, iT, sGeometryLevel2, std::to_string(iT)+"_06_level2_postC2F1", "06_level2_postC2F1", allVtk, subImages);
   
           sLatticeLevel2.collideAndStream();
-          writeResults(sLatticeLevel2, converterLevel2, iT, sGeometryLevel2, std::to_string(iT)+"_07_level2_postCS2", "07_level2_postCS2", allVtk, noSubImages);
+          // writeResults(sLatticeLevel2, converterLevel2, iT, sGeometryLevel2, std::to_string(iT)+"_07_level2_postCS2", "07_level2_postCS2", allVtk, subImages);
           coarseToFineLevel2->apply(meta::id<refinement::lagrava::FullTimeCoarseToFineO>{});
-          writeResults(sLatticeLevel2, converterLevel2, iT, sGeometryLevel2, std::to_string(iT)+"_08_level2_postC2F2", "08_level2_postC2F2", allVtk, noSubImages);
+          // writeResults(sLatticeLevel2, converterLevel2, iT, sGeometryLevel2, std::to_string(iT)+"_08_level2_postC2F2", "08_level2_postC2F2", allVtk, subImages);
   
         fineToCoarseLevel2->apply(meta::id<refinement::lagrava::FineToCoarseO>{});
-        writeResults(sLatticeLevel1, converterLevel1, iT, sGeometryLevel1, std::to_string(iT)+"_09_level1_postF2C1", "09_level1_postF2C1", allVtk, noSubImages);
+        writeResults(sLatticeLevel1, converterLevel1, iT, sGeometryLevel1, std::to_string(iT)+"_09_level1_postF2C1", "09_level1_postF2C1", allVtk, subImages);
         sLatticeLevel1.collideAndStream();
-        writeResults(sLatticeLevel1, converterLevel1, iT, sGeometryLevel1, std::to_string(iT)+"_10_level1_postCS2", "10_level1_postCS2", allVtk, noSubImages);
+        // writeResults(sLatticeLevel1, converterLevel1, iT, sGeometryLevel1, std::to_string(iT)+"_10_level1_postCS2", "10_level1_postCS2", allVtk, subImages);
         coarseToFineLevel1->apply(meta::id<refinement::lagrava::FullTimeCoarseToFineO>{});
-        writeResults(sLatticeLevel1, converterLevel1, iT, sGeometryLevel1, std::to_string(iT)+"_11_level1_postC2F2", "11_level1_postC2F2", allVtk, noSubImages);
+        writeResults(sLatticeLevel1, converterLevel1, iT, sGeometryLevel1, std::to_string(iT)+"_11_level1_postC2F2", "11_level1_postC2F2", allVtk, subImages);
   
           sLatticeLevel2.collideAndStream();
-          writeResults(sLatticeLevel2, converterLevel2, iT, sGeometryLevel2, std::to_string(iT)+"_12_level2_postCS3", "12_level2_postCS3", allVtk, noSubImages);
+          // writeResults(sLatticeLevel2, converterLevel2, iT, sGeometryLevel2, std::to_string(iT)+"_12_level2_postCS3", "12_level2_postCS3", allVtk, subImages);
           coarseToFineLevel2->apply(meta::id<refinement::lagrava::HalfTimeCoarseToFineO>{});
-          writeResults(sLatticeLevel2, converterLevel2, iT, sGeometryLevel2, std::to_string(iT)+"_13_level2_postC2F3", "13_level2_postC2F3", allVtk, noSubImages);
+          // writeResults(sLatticeLevel2, converterLevel2, iT, sGeometryLevel2, std::to_string(iT)+"_13_level2_postC2F3", "13_level2_postC2F3", allVtk, subImages);
   
           sLatticeLevel2.collideAndStream();
-          writeResults(sLatticeLevel2, converterLevel2, iT, sGeometryLevel2, std::to_string(iT)+"_14_level2_postCS4", "14_level2_postCS4", allVtk, noSubImages);
+          // writeResults(sLatticeLevel2, converterLevel2, iT, sGeometryLevel2, std::to_string(iT)+"_14_level2_postCS4", "14_level2_postCS4", allVtk, subImages);
           coarseToFineLevel2->apply(meta::id<refinement::lagrava::FullTimeCoarseToFineO>{});
-          writeResults(sLatticeLevel2, converterLevel2, iT, sGeometryLevel2, std::to_string(iT)+"_15_level2_postC2F4", "15_level2_postC2F4", allVtk, noSubImages);
+          // writeResults(sLatticeLevel2, converterLevel2, iT, sGeometryLevel2, std::to_string(iT)+"_15_level2_postC2F4", "15_level2_postC2F4", allVtk, subImages);
   
         fineToCoarseLevel2->apply(meta::id<refinement::lagrava::FineToCoarseO>{});
-        writeResults(sLatticeLevel1, converterLevel1, iT, sGeometryLevel1, std::to_string(iT)+"_16_level1_postF2C2", "16_level1_postF2C2", allVtk, noSubImages);
+        // writeResults(sLatticeLevel1, converterLevel1, iT, sGeometryLevel1, std::to_string(iT)+"_16_level1_postF2C2", "16_level1_postF2C2", allVtk, subImages);
   
       fineToCoarseLevel1->apply(meta::id<refinement::lagrava::FineToCoarseO>{});
-      writeResults(sLatticeLevel0, converterLevel0, iT, sGeometryLevel0, std::to_string(iT)+"_17_level0_postF2C", "17_level0_postF2C", allVtk, noSubImages);
+      // writeResults(sLatticeLevel0, converterLevel0, iT, sGeometryLevel0, std::to_string(iT)+"_17_level0_postF2C", "17_level0_postF2C", allVtk, subImages);
   
     } else {
       setBoundaryValues( sLatticeLevel0, converterLevel0, iT, sGeometryLevel0, iTmaxStart, maxLatticeU, maxPhysU, iniPhysU );

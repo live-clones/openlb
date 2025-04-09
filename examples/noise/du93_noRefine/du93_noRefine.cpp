@@ -489,13 +489,13 @@ int main( int argc, char* argv[] )
   size_t nout               = args.getValueOrFallback( "--nout",          5);   // minimum number of vtk outputs
   size_t iout               = args.getValueOrFallback( "--iout",          0);   // iterations for vtk outputs
   T tout                    = args.getValueOrFallback( "--tout",          0);   // timestep for vtk outputs
-  T maxPhysU                = args.getValueOrFallback( "--umax",          .01); // in m/s
+  T maxPhysU                = args.getValueOrFallback( "--umax",          1.); // in m/s
   T Re                      = args.getValueOrFallback( "--Re",            0);
   T Ma                      = args.getValueOrFallback( "--Ma",            0.2);
   T tau                     = args.getValueOrFallback( "--tau",           0);   // previously tau=0.53 fixed
   const T Kin               = args.getValueOrFallback( "--Kin",           0.);  // set only to ignore permeability
   const T dampingStrength   = args.getValueOrFallback( "--dampingStrength", .5);
-  const T tMaxInit          = args.getValueOrFallback( "--tmaxinit",      2.);
+  const T tMaxInit          = args.getValueOrFallback( "--tmaxinit",      1.);
   T charL                   = args.getValueOrFallback( "--charL",         1.);
   T iniPhysU                = args.getValueOrFallback( "--iniPhysU",      0.);
   const int outlet          = args.getValueOrFallback( "--outlet",        3);   // default: interpolated pressure outlet
@@ -622,7 +622,7 @@ int main( int argc, char* argv[] )
   size_t nout_from_iout = 0, nout_from_tout = 0;
   if ( iout != 0 ) { nout_from_iout = size_t( iTmax / iout ); nout = std::max( nout, nout_from_iout ); }
   if ( tout != 0 ) { nout_from_tout = size_t( iTmax / tout ); nout = std::max( nout, nout_from_tout ); }
-  size_t iTvtk = size_t( iTmax / nout );
+  size_t iTvtk = std::max( size_t( iTmax / nout ), size_t(1) );
   clout << "Set nout to " << nout << ", so iTvtk=" << iTvtk << std::endl;
 
   // === 4th Step: Main Loop with Timer ===
