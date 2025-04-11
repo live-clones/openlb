@@ -77,14 +77,10 @@ struct HalfTimeCoarseToFineO {
       Vector<V,DESCRIPTOR::d> u{};
       Vector<V,DESCRIPTOR::q> fNeq{};
 
-      int normalneighbors=0;
-      int coarseneighbors=0;
       for (unsigned iN=0; iN < fields::refinement::CONTEXT_NEIGHBORS::count<DESCRIPTOR>(); ++iN) {
         auto n = fields::refinement::CONTEXT_NEIGHBORS::c<DESCRIPTOR>(iN);  // direction (vector, length d)
         if (n*normal == 0) {  // normal to edge --> there should be neighbor
-          normalneighbors +=1;
           if ( auto ncCellPtr = cCellPtr.neighbor(n) ) {  // this is a coarse neighbor (not only fine)
-            coarseneighbors +=1;
             auto ncCell = *ncCellPtr;
             auto nData = data.neighbor(iN);  // new data object with data in neighbor direction
 
@@ -108,20 +104,51 @@ struct HalfTimeCoarseToFineO {
               fNeq += V(9./16.)*V{0.5}*(fNeqPrev + fNeqCurr);
 
               ncCellPtr = cCellPtr.neighbor(3*n);
-              ncCell = *ncCellPtr;
-              nData = data.neighbor(iN).neighbor(iN).neighbor(iN);
+              if (ncCellPtr) {
+                ncCell = *ncCellPtr;
+                nData = data.neighbor(iN).neighbor(iN).neighbor(iN);
 
-              rhoPrev  = nData->template getField<fields::refinement::PREV_RHO>();
-              if (rhoPrev==0) std::cout << "rhoPrev==0! iN=" << iN << "; n=" << n << std::endl;
-              uPrev    = nData->template getField<fields::refinement::PREV_U>();
-              fNeqPrev = nData->template getField<fields::refinement::PREV_FNEQ>();
+                rhoPrev  = nData->template getField<fields::refinement::PREV_RHO>();
+                if (rhoPrev==0) std::cout << "rhoPrev==0! iN=" << iN << "; n=" << n << std::endl;
+                uPrev    = nData->template getField<fields::refinement::PREV_U>();
+                fNeqPrev = nData->template getField<fields::refinement::PREV_FNEQ>();
 
-              lbm<DESCRIPTOR>::computeRhoU(ncCell, rhoCurr, uCurr);
-              lbm<DESCRIPTOR>::computeFneq(ncCell, fNeqCurr, rhoCurr, uCurr);
+                lbm<DESCRIPTOR>::computeRhoU(ncCell, rhoCurr, uCurr);
+                lbm<DESCRIPTOR>::computeFneq(ncCell, fNeqCurr, rhoCurr, uCurr);
 
-              rho -= V(1./16.)*V{0.5}*(rhoPrev + rhoCurr);
-              u -= V(1./16.)*V{0.5}*(uPrev + uCurr);
-              fNeq -= V(1./16.)*V{0.5}*(fNeqPrev + fNeqCurr);
+                rho -= V(1./16.)*rhoCurr;
+                u -= V(1./16.)*uCurr;
+                fNeq -= V(1./16.)*fNeqCurr;
+              } else {
+                std::cout << "No proper neighbor! Instead doing 1D";
+                rho = 0.;
+                u = 0.;
+                fNeq = 0.;
+                for (unsigned iN=0; iN < fields::refinement::CONTEXT_NEIGHBORS::count<DESCRIPTOR>(); ++iN) {
+                  auto n = fields::refinement::CONTEXT_NEIGHBORS::c<DESCRIPTOR>(iN);  // direction (vector, length d)
+                  if (n*normal == 0) {  // normal to edge --> there should be neighbor
+                    if ( auto ncCellPtr = cCellPtr.neighbor(n) ) {  // this is a coarse neighbor (not only fine)
+                      auto ncCell = *ncCellPtr;
+                      auto nData = data.neighbor(iN);  // new data object with data in neighbor direction
+          
+                      auto rhoPrev  = nData->template getField<fields::refinement::PREV_RHO>();
+                      auto uPrev    = nData->template getField<fields::refinement::PREV_U>();
+                      auto fNeqPrev = nData->template getField<fields::refinement::PREV_FNEQ>();
+          
+                      V rhoCurr{};
+                      Vector<V,DESCRIPTOR::d> uCurr{};
+                      Vector<V,DESCRIPTOR::q> fNeqCurr{};
+                      lbm<DESCRIPTOR>::computeRhoU(ncCell, rhoCurr, uCurr);
+                      lbm<DESCRIPTOR>::computeFneq(ncCell, fNeqCurr, rhoCurr, uCurr);
+
+                      rho += V{0.25}*(rhoPrev + rhoCurr);
+                      u += V{0.25}*(uPrev + uCurr);
+                      fNeq += V{0.25}*(fNeqPrev + fNeqCurr);
+                    }
+                  }
+                }
+                break;
+              }
             } else {  // neighbor in diagonal direction -> 2nd order interpolation in 2D
               // Lagrava weights: 81/256, -9/256, -9/256, +1/256 (using 16 points)
               // alternative: 5/16 direct neighbors, -1/32 further neighbors - applied directly to populations?? (using 12 points)
@@ -183,9 +210,7 @@ struct HalfTimeCoarseToFineO {
       V scalingFactor = (coarseTau - V{0.25}) / coarseTau;
 
       if ( rho > 1. ) {
-        std::cout << "rho=" << rho << "; neighbors=" << fields::refinement::CONTEXT_NEIGHBORS::count<DESCRIPTOR>() 
-        << "; normalneighbors=" << normalneighbors << "; DESCRIPTOR::d=" << DESCRIPTOR::d << ""
-        << std::endl;
+        std::cout << "rho=" << rho << std::endl;
       }
       for (int iPop=0; iPop < DESCRIPTOR::q; ++iPop) {
         fCell[iPop] = equilibrium<DESCRIPTOR>::secondOrder(iPop, rho, u, uSqr) + scalingFactor*fNeq[iPop];
@@ -263,7 +288,7 @@ struct FullTimeCoarseToFineO {
 
               lbm<DESCRIPTOR>::computeRhoU(ncCell, rhoCurr, uCurr);
               lbm<DESCRIPTOR>::computeFneq(ncCell, fNeqCurr, rhoCurr, uCurr);
-
+              
               rho -= V(1./16.)*rhoCurr;
               u -= V(1./16.)*uCurr;
               fNeq -= V(1./16.)*fNeqCurr;
@@ -317,7 +342,6 @@ struct FullTimeCoarseToFineO {
       V coarseTau = params.template get<descriptors::TAU>();
       V scalingFactor = (coarseTau - V{0.25}) / coarseTau;
 
-      if (rho>1.) std::cout << "rho="<<rho<<",1"<<std::endl;
       for (int iPop=0; iPop < DESCRIPTOR::q; ++iPop) {
         fCell[iPop] = equilibrium<DESCRIPTOR>::secondOrder(iPop, rho, u, uSqr) + scalingFactor*fNeq[iPop];
       }
