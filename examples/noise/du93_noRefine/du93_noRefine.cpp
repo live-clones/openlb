@@ -599,7 +599,7 @@ int main( int argc, char* argv[] )
   if ( withSponge ) lengthDomain += converterL0.getPhysLength( boundaryDepth );
 
   Vector<T,3> extendDomain = {lengthDomain, heightDomain, depthDomain};
-  Vector<T,3> originDomain = {-lengthDomain/3, -heightDomain/2, -depthDomain/2};
+  Vector<T,3> originDomain = {-lengthDomain/3, -heightDomain/2, 0.01};
   IndicatorCuboid3D<T> cuboidDomainL0(extendDomain, originDomain);
   IndicatorLayer3D<T> domainL0(cuboidDomainL0, converterL0.getPhysDeltaX());
   CuboidGeometry3D<T> cGeometryL0(domainL0, converterL0.getPhysDeltaX());
