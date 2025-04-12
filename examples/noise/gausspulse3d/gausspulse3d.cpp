@@ -160,7 +160,7 @@ void prepareLattice(UnitConverter<T,DESCRIPTOR> const& converter,
   clout << std::endl << "Prepare Lattice ..." << std::endl;
 
   const T omega = converter.getLatticeRelaxationFrequency();
-
+  
   // Material=fluiMat --> bulk dynamics
   std::unique_ptr<SuperIndicatorF<T,ndim>> bulkIndicator = superGeometry.getMaterialIndicator( {dampMat, fluiMat, checMat} );
   sLattice.defineDynamics<BulkDynamics>( bulkIndicator );
@@ -235,11 +235,11 @@ void prepareLattice(UnitConverter<T,DESCRIPTOR> const& converter,
 void setFarFieldValues( SuperLattice<T,DESCRIPTOR>& sLattice,
                         SuperGeometry<T,3>& superGeometry,
                         T rho0,
-                        T charV,
+                        T Ma,
                         BoundaryType boundarytype )
 {
   OstreamManager clout( std::cout,"setFarFieldValues" );
-  AnalyticalConst<ndim,T,T> ux( charV );
+  AnalyticalConst<ndim,T,T> ux( Ma );
   AnalyticalConst<ndim,T,T> uy( 0. );
   AnalyticalConst<ndim,T,T> uz( 0. );
   AnalyticalComposed<ndim,T,T> u( ux, uy, uz );
@@ -371,7 +371,7 @@ int main( int argc, char* argv[] )
       case 3:
       default:  outdir_mod << "_damping"; break;
     }
-    outdir_mod << "_Ma" << Ma << "_Re" << Re << "_a" << amplitude << "_" << charL << "m" << "_res" << res;
+    outdir_mod << "_Ma" << Ma << "_Re" << Re << "_a" << amplitude << "_l" << charL << "x" << res;
     if ( boundaryCondition == 0 ) outdir_mod << "x" << eternalscale;
     if ( boundaryCondition == 3 ) outdir_mod << "_damping" << dampingDepth << "x" << dampingStrength;
   } else {
@@ -512,7 +512,7 @@ int main( int argc, char* argv[] )
   while ( iT < maxLatticeT ) {
     // === Definition of Initial and Boundary Conditions ===
     if ( boundarytype == local ) {
-      setFarFieldValues( sLattice, superGeometry, rho0, charV, boundarytype );
+      setFarFieldValues( sLattice, superGeometry, rho0, Ma, boundarytype );
     }
     sLattice.setProcessingContext<Array<momenta::FixedVelocityMomentumGeneric::VELOCITY>>(ProcessingContext::Simulation);
     // === Collide and Stream Execution ===
