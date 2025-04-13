@@ -441,7 +441,7 @@ int main( int argc, char* argv[] )
 
   // === prepare Lattice and set boundaryConditions
   SuperLattice<T,DESCRIPTOR> sLattice( superGeometry );
-  prepareLattice( converter, sLattice, superGeometry, rho0, charV, amplitude, alpha, boundarytype, dampingDepthPU, lengthDomain, dampingStrength );
+  prepareLattice( converter, sLattice, superGeometry, rho0, charVLU, amplitude, alpha, boundarytype, dampingDepthPU, lengthDomain, dampingStrength );
 
   // === Initialize pressure L2 norm plot
   Gnuplot<T> gplot_l2_abs("l2_absolute");
@@ -469,7 +469,7 @@ int main( int argc, char* argv[] )
   while ( iT < maxLatticeT ) {
     // === Definition of Initial and Boundary Conditions ===
     if ( boundarytype == local ) {
-      setFarFieldValues( sLattice, superGeometry, rho0, charV, boundarytype );
+      setFarFieldValues( sLattice, superGeometry, rho0, charVLU, boundarytype );
     }
     sLattice.setProcessingContext<Array<momenta::FixedVelocityMomentumGeneric::VELOCITY>>(ProcessingContext::Simulation);
     // === Collide and Stream Execution ===
