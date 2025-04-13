@@ -15,4 +15,4 @@ done
 python ./l2plot.py
 ```
 
-NOTE: You need matplotlib for the python plots.
+NOTE: You need matplotlib and numpy for the python plots.
