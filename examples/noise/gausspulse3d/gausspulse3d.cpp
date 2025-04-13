@@ -39,6 +39,7 @@
 #include <sstream>
 #include <iomanip>
 #include <getopt.h>
+#include "../noiseauxiliary.h"
 
 using namespace olb;
 using namespace olb::descriptors;
@@ -437,10 +438,10 @@ int main( int argc, char* argv[] )
     default: break;
   }
   clout << "Actual fluid material number is " << fluidMaterial << "; number of fluid voxels: " << superGeometry.getStatistics().getNvoxel( fluidMaterial ) << std::endl;
-  
+
   // === prepare Lattice and set boundaryConditions
   SuperLattice<T,DESCRIPTOR> sLattice( superGeometry );
-  prepareLattice( converter, sLattice, superGeometry, rho0, charVLU, amplitude, alpha, boundarytype, dampingDepthPU, lengthDomain, dampingStrength );
+  prepareLattice( converter, sLattice, superGeometry, rho0, charV, amplitude, alpha, boundarytype, dampingDepthPU, lengthDomain, dampingStrength );
 
   // === Initialize pressure L2 norm plot
   Gnuplot<T> gplot_l2_abs("l2_absolute");
@@ -448,7 +449,7 @@ int main( int argc, char* argv[] )
   T Lp0 = L2Norm<ndim,T,DESCRIPTOR>( sLattice, superGeometry, converter, fluidMaterial );
 
   // === calculate output intervals
-  // nout is the minimum number of vtk outputs --> take max between nout and nout derived from iTout or tout
+    // nout is the minimum number of vtk outputs --> take max between nout and nout derived from iTout or tout
   size_t nout_from_iTout = 0, nout_from_tout = 0;
   if ( iTout != 0 ) { nout_from_iTout = size_t( maxLatticeT / iTout ); nout = std::max( nout, nout_from_iTout ); }
   if ( tout != 0 ) { nout_from_tout = size_t( maxLatticeT / tout ); nout = std::max( nout, nout_from_tout ); }
@@ -468,7 +469,7 @@ int main( int argc, char* argv[] )
   while ( iT < maxLatticeT ) {
     // === Definition of Initial and Boundary Conditions ===
     if ( boundarytype == local ) {
-      setFarFieldValues( sLattice, superGeometry, rho0, charVLU, boundarytype );
+      setFarFieldValues( sLattice, superGeometry, rho0, charV, boundarytype );
     }
     sLattice.setProcessingContext<Array<momenta::FixedVelocityMomentumGeneric::VELOCITY>>(ProcessingContext::Simulation);
     // === Collide and Stream Execution ===
