@@ -1,4 +1,4 @@
-#include "../../io/gnuplotWriter.h"
+#include "olb3D.h"
 namespace olb {
 
 typedef enum {horizontal, vertical, diagonal2d, diagonal3d} SamplingDirection;

@@ -124,7 +124,7 @@ void prepareGeometry(UnitConverter<T,DESCRIPTOR> const& converter,
         << "3 = far field (except damping and eternal, then it's the fluid domain)" << std::endl
         << "4 = inflow" << std::endl
         << "5 = outflow" << std::endl
-        << " = around domain" << std::endl;
+        << "6 = around domain" << std::endl;
 
   SuperVTMwriter3D<T> vtmWriter( "gausspulse3d" );
   SuperGeometryF<T,DESCRIPTOR::d> geometryF(superGeometry);
@@ -192,8 +192,6 @@ void prepareLattice(UnitConverter<T,DESCRIPTOR> const& converter,
     // define and output damping layer parameter
     Vector<T,ndim> domainLengths( lengthDomain );
     DampingTerm<3,T,DESCRIPTOR> sigma( dampingDepthPU, domainLengths, dampingStrength );
-    linePlot<ndim,T>( sigma, converter.getResolution(), converter.getPhysDeltaX(), "sigma_hline", "sigma", horizontal );
-    linePlot<ndim,T>( sigma, converter.getResolution(), converter.getPhysDeltaX(), "sigma_diag", "sigma", diagonal2d );
     sLattice.defineField<descriptors::DAMPING>( bulkIndicator, sigma );
 
     // write the initialization to see whether the damping parameters were set correctly
@@ -320,11 +318,10 @@ int main( int argc, char* argv[] )
   const T charL                 = args.getValueOrFallback( "--charL",             1.  );  // domain size [m]
   const int res                 = args.getValueOrFallback( "--res",               101 );  // number of points across charL
   const T rho0                  = args.getValueOrFallback( "--rho0",              1.  );  // background density
-  const T Ma                    = args.getValueOrFallback( "--Ma",                0.3 );  // characteristic lattice velocity
+  const T Ma                    = args.getValueOrFallback( "--Ma",                0.1 );  // characteristic lattice velocity
   const T charV                 = args.getValueOrFallback( "--charV",             1.  );  // characteristic physical velocity
   // timing and outputs
-  T maxPhysT                    = args.getValueOrFallback( "--maxPhysT",          .4  );  // maximum simulation time [s]
-  size_t maxLatticeT            = args.getValueOrFallback( "--iTmax",             0   );  // maximum number of iterations
+  size_t maxLatticeT            = args.getValueOrFallback( "--iTmax",             300 );  // maximum number of iterations
   size_t nplot                  = args.getValueOrFallback( "--nplot",             100 );  // minimum number of plot points
   bool doImages                 = args.contains("--doImages");                             // otherwise won't do images
   size_t nout                   = args.getValueOrFallback( "--nout",              5   );  // minimum number of vtk outputs
@@ -430,6 +427,7 @@ int main( int argc, char* argv[] )
   }
   SuperGeometry<T,ndim> superGeometry( cuboidGeometry, loadBalancer, overlap );
 
+  // === set fluidMaterial to evaluate the core domain correctly
   clout << std:: endl << "Domain setup: dampingDepthLU=" << dampingDepthLU << "; dampingDepthPU=" << dampingDepthPU << "; overlapLU=" << superGeometry.getOverlap() << std::endl;
   prepareGeometry( converter, superGeometry, domain, fluidDomain, boundarytype, res );
   size_t fluidMaterial = 3;
@@ -440,26 +438,22 @@ int main( int argc, char* argv[] )
   }
   clout << "Actual fluid material number is " << fluidMaterial << "; number of fluid voxels: " << superGeometry.getStatistics().getNvoxel( fluidMaterial ) << std::endl;
   
+  // === prepare Lattice and set boundaryConditions
   SuperLattice<T,DESCRIPTOR> sLattice( superGeometry );
+  prepareLattice( converter, sLattice, superGeometry, rho0, charVLU, amplitude, alpha, boundarytype, dampingDepthPU, lengthDomain, dampingStrength );
 
-  //prepare Lattice and set boundaryConditions
-  prepareLattice( converter, sLattice, superGeometry, rho0, Ma, amplitude, alpha, boundarytype, dampingDepthPU, lengthDomain, dampingStrength );
-
-  // Initialize pressure L2 norm plot
+  // === Initialize pressure L2 norm plot
   Gnuplot<T> gplot_l2_abs("l2_absolute");
   gplot_l2_abs.setLabel("time []", "absolute L2 norm []");
   T Lp0 = L2Norm<ndim,T,DESCRIPTOR>( sLattice, superGeometry, converter, fluidMaterial );
 
-  // === calculate iterations from input ===
-  // maxLatticeT depends on maximum physical time. If maxLatticeT is provided in command line, it is an upper bound
-  if ( maxLatticeT == 0 ) maxLatticeT = converter.getLatticeTime( maxPhysT );
-  else maxLatticeT = std::min( maxLatticeT, converter.getLatticeTime( maxPhysT ) );
+  // === calculate output intervals
   // nout is the minimum number of vtk outputs --> take max between nout and nout derived from iTout or tout
   size_t nout_from_iTout = 0, nout_from_tout = 0;
   if ( iTout != 0 ) { nout_from_iTout = size_t( maxLatticeT / iTout ); nout = std::max( nout, nout_from_iTout ); }
   if ( tout != 0 ) { nout_from_tout = size_t( maxLatticeT / tout ); nout = std::max( nout, nout_from_tout ); }
   size_t iTvtk    = std::max(int( maxLatticeT / nout ), 1);
-  size_t iTplot   = std::max(int( maxLatticeT / nplot ), 1);
+  size_t iTplot   = std::min(std::max(int( maxLatticeT / nplot ), 1), 25);
 
   clout << "Timing setup:" << std::endl
         << "maxLatticeT=" << maxLatticeT << "; maxPhysT=" << converter.getPhysTime( maxLatticeT ) << "; dt=" << converter.getPhysDeltaT() << std::endl
@@ -474,7 +468,7 @@ int main( int argc, char* argv[] )
   while ( iT < maxLatticeT ) {
     // === Definition of Initial and Boundary Conditions ===
     if ( boundarytype == local ) {
-      setFarFieldValues( sLattice, superGeometry, rho0, Ma, boundarytype );
+      setFarFieldValues( sLattice, superGeometry, rho0, charVLU, boundarytype );
     }
     sLattice.setProcessingContext<Array<momenta::FixedVelocityMomentumGeneric::VELOCITY>>(ProcessingContext::Simulation);
     // === Collide and Stream Execution ===

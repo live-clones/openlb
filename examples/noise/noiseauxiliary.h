@@ -25,8 +25,7 @@
  * Groups all include files for the directory genericFunctions.
  */
 
-#include "genericF.h"
-#include "primitive/sdf.h"
-#include "analytical/functors2D.h"
-#include "lattice/functors2D.h"
-#include "particles/particleFunctors.h"
+#include "noiseauxiliary/acousticPulse.h"
+#include "noiseauxiliary/dampingTerm.h"
+#include "noiseauxiliary/l2norm.h"
+#include "noiseauxiliary/linePlot.h"

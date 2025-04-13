@@ -7,10 +7,10 @@ protected:
   int A=4;
   int n=4;
   T _bdPU;
-  T _damping_strength;
+  T _ds;
 public:
-  DampingTerm(T boundaryDepthPU, Vector<T,ndim> domain_lengths, T damping_strength = 1. )
-      : AnalyticalF<ndim,T,T>(1), _damping_strength(damping_strength), _bdPU(boundaryDepthPU)
+  DampingTerm(T boundaryDepthPU, Vector<T,ndim> domain_lengths, T dampingStrength = 1. )
+      : AnalyticalF<ndim,T,T>(1), _bdPU(boundaryDepthPU), _ds(dampingStrength)
       {
         for (size_t d=0; d<ndim; d++) {
           Lx[d] = domain_lengths[d]/2;  // Lx is usually half the domain
@@ -45,7 +45,7 @@ public:
     sigma /= 9.8304 / std::pow(_bdPU, 6);  // calculated as max of function (at X=0.8) for A=n=4
     sigma = std::max(sigma, T(0));
     sigma = std::min(sigma, T(1));  // hard set 0<sigma<1
-    sigma *= _damping_strength;
+    sigma *= _ds;
     output[0] = sigma;
     return true;
   };
