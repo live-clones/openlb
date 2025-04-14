@@ -14,8 +14,8 @@ ax.plot(data[:,0], data[:,1], label="Periodische Randbedingungen")
 filename = glob("tmp_local_*/gnuplotData/data/l2_absolute.dat")[0]
 data = np.loadtxt(filename)
 ax.plot(data[:,0], data[:,1], label="Lokale Randbedingungen")
-for bd in [20]:
-    filename = glob("tmp_damping_*_damping" + str(bd) + "*/gnuplotData/data/l2_absolute.dat")[0]
+for bd in [5, 10, 20, 50]:
+    filename = glob("tmp_damping_*_bd" + str(bd) + "*/gnuplotData/data/l2_absolute.dat")[0]
     data = np.loadtxt(filename)
     ax.plot(data[:,0], data[:,1], label=f"Dämpfungsschicht {bd} Punkte")
 ax.set_yscale('log')
