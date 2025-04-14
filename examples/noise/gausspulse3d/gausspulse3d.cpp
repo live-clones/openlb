@@ -193,14 +193,14 @@ void prepareLattice(UnitConverter<T,DESCRIPTOR> const& converter,
     SuperVTMwriter<T,ndim> vtmWriter_init( "gausspulse3d_init" );
     vtmWriter_init.createMasterFile();
     SuperLatticePhysField3D<T,DESCRIPTOR,DAMPING> damping( sLattice, 1. );
-    damping.getName() = "dampingField";
     SuperLatticePhysField3D<T,DESCRIPTOR,UX> uxField( sLattice, 1. );
-    uxField.getName() = "uxField";
     SuperLatticePhysField3D<T,DESCRIPTOR,UX> uyField( sLattice, 1. );
-    uyField.getName() = "uyField";
     SuperLatticePhysField3D<T,DESCRIPTOR,UX> uzField( sLattice, 1. );
-    uzField.getName() = "uzField";
     SuperLatticePhysField3D<T,DESCRIPTOR,DENSITY> density( sLattice, 1. );
+    damping.getName() = "dampingField";
+    uxField.getName() = "uxField";
+    uyField.getName() = "uyField";
+    uzField.getName() = "uzField";
     density.getName() = "densityField";
     vtmWriter_init.addFunctor( damping );
     vtmWriter_init.addFunctor( uxField );
