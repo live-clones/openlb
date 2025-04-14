@@ -35,10 +35,6 @@
 
 #include "olb3D.h"
 #include "olb3D.hh"
-#include <iostream>
-#include <sstream>
-#include <iomanip>
-#include <getopt.h>
 #include "../noiseauxiliary.h"
 
 using namespace olb;
@@ -189,6 +185,8 @@ void prepareLattice(UnitConverter<T,DESCRIPTOR> const& converter,
     // define and output damping layer parameter
     Vector<T,ndim> domainLengths( lengthDomain );
     DampingTerm<3,T,DESCRIPTOR> sigma( dampingDepthPU, domainLengths, dampingStrength );
+    // === alternatively, define sigma as a global constant
+    // AnalyticalConst<3,T,T> sigma( dampingStrength );
     sLattice.defineField<descriptors::DAMPING>( bulkIndicator, sigma );
 
     // write the initialization to see whether the damping parameters were set correctly

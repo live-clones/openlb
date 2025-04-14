@@ -29,6 +29,7 @@
 
 #include "olb3D.h"
 #include "olb3D.hh"
+#include "../noiseauxiliary.h"
 
 using namespace olb;
 using namespace olb::descriptors;
@@ -165,8 +166,8 @@ void prepareLattice( SuperLattice<T,DESCRIPTOR>& sLattice,
   auto bulkIndicator = sGeometry.getMaterialIndicator({1});
   if ( withSponge ) {
     boundary::set<boundary::SpongeLayer>( sLattice, sGeometry, 1 );
-    Vector<T,3> extend = domainLayer.getMax() - domainLayer.getMin();
-    DampingTerm<3,T,DESCRIPTOR> sigma( converter, boundaryDepth, extend, dampingStrength );
+    Vector<T,3> domainLengths = domainLayer.getMax() - domainLayer.getMin();
+    DampingTerm<3,T,DESCRIPTOR> sigma( boundaryDepth, domainLengths, dampingStrength );
     sLattice.defineField<descriptors::DAMPING>( bulkIndicator, sigma );
 
     bulkIndicator = sGeometry.getMaterialIndicator({7});
@@ -179,7 +180,7 @@ void prepareLattice( SuperLattice<T,DESCRIPTOR>& sLattice,
 
   // Material=3 -->inlet
   clout << "Setting LocalVelocity inlet on 3" << std::endl;
-  if ( sGeometry.getStatistics().getNvoxel(3) > 0 ) boundary::set<boundary::LocalVelocity>(sLattice, sGeometry, 3);
+  if ( sGeometry.getStatistics().getNvoxel(3) > 0 ) boundary::set<boundary::InterpolatedVelocity>(sLattice, sGeometry, 3);
 
   // Material=4 -->outlet
   if ( sGeometry.getStatistics().getNvoxel(4) > 0 ) {
