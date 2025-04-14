@@ -59,6 +59,6 @@
 #include "zouHePressure.h"
 #include "zouHePressure3D.h"
 #include "setTurbulentWallModel3D.h"
-#include "spongeLayer.h"
+#include "spongeLayerBoundary.h"
 
 #include "boundary3D.hh"

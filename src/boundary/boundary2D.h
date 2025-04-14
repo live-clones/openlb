@@ -49,6 +49,6 @@
 #include "bounceBack.h"
 #include "bounceBackVelocity.h"
 #include "zouHePressure2D.h"
-#include "spongeLayer.h"
+#include "spongeLayerBoundary.h"
 
 #include "boundary2D.hh"

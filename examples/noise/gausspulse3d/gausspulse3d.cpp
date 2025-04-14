@@ -46,6 +46,7 @@ using namespace olb::descriptors;
 using T = FLOATING_POINT_TYPE;
 using DESCRIPTOR = D3Q19<>;
 using BulkDynamics = BGKdynamics<T,DESCRIPTOR>;
+using SpongeDynamics = SpongeLayerDynamics<T,DESCRIPTOR,momenta::BulkTuple,equilibria::SecondOrder>;
 const int ndim = 3;  // a few things (e.g. SuperSum3D) cannot be adapted to 2D, but this should help speed it up
 typedef enum {eternal, periodic, local, damping} BoundaryType;
 
@@ -155,7 +156,9 @@ void prepareLattice(UnitConverter<T,DESCRIPTOR> const& converter,
       boundary::set<boundary::LocalVelocity>( sLattice, superGeometry, 6 );
       break;
     case damping:
-      boundary::set<boundary::SpongeLayer>( sLattice, superGeometry, 1 );
+      sLattice.defineDynamics<SpongeDynamics>( superGeometry.getMaterialIndicator( 1 ) );
+      // === alternatively, set the boundary, which overwrites the dynamics
+      // boundary::set<boundary::SpongeLayer>( sLattice, superGeometry, 1 );
       break;
   }
 

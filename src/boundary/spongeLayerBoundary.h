@@ -21,11 +21,11 @@
  *  Boston, MA  02110-1301, USA.
 */
 
-//This file contains the Perfectly Matched Layer Damping Boundary
+//This file contains the Sponge Layer Damping Boundary
 //This is an onLattice boundary
 
-#ifndef OLB_PERFECTLY_MATCHED_LAYER_H
-#define OLB_PERFECTLY_MATCHED_LAYER_H
+#ifndef OLB_SPONGE_LAYER_BC_H
+#define OLB_SPONGE_LAYER_BC_H
 
 #include "boundary/dynamics/dampingBoundaryDynamics.h"
 
@@ -45,7 +45,7 @@ CellDistance getNeighborhoodRadius() {
 
 std::optional<DynamicsPromise<T,DESCRIPTOR>> getDynamics(DiscreteNormalType type,
                                                          DiscreteNormal<DESCRIPTOR> n) {
-  return meta::id<boundaryhelper::DampingBoundaryDynamics<T,DESCRIPTOR,momenta::BulkTuple,equilibria::SecondOrder>>();
+  return meta::id<SpongeLayerDynamics<T,DESCRIPTOR,momenta::BulkTuple,equilibria::SecondOrder>>();
 }
 
 std::optional<PostProcessorPromise<T,DESCRIPTOR>> getPostProcessor(DiscreteNormalType type,

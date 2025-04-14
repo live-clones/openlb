@@ -40,6 +40,7 @@
 #include "forcing.h"
 
 #include "collisionModifiers.h"
+#include "spongeLayerDynamics.h"
 
 namespace olb {
 
