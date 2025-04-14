@@ -448,6 +448,17 @@ constexpr bool providesEnlargementForContactTreatment(Particle<T,PARTICLETYPE>& 
 }
 
 template<typename PARTICLETYPE>
+constexpr bool providesIsInContact()
+{
+  using namespace descriptors;
+  return PARTICLETYPE::template providesNested<NUMERICPROPERTIES,IS_IN_CONTACT>();
+}
+template<typename T, typename PARTICLETYPE>
+constexpr bool providesIsInContact(Particle<T,PARTICLETYPE>& particle){
+  return providesIsInContact<PARTICLETYPE>();
+}
+
+template<typename PARTICLETYPE>
 constexpr bool providesContactMaterial()
 {
   using namespace descriptors;

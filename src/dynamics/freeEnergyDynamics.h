@@ -49,26 +49,20 @@ struct FreeEnergy {
   struct type {
     using MomentaF = typename MOMENTA::template type<DESCRIPTOR>;
 
-    template <typename RHO, typename U, typename V=RHO>
-    auto compute(int iPop, const RHO& rho, const U& u) any_platform {
-      V eq = equilibrium<DESCRIPTOR>::secondOrder(iPop, rho, u);
-      if (iPop == 0) {
-        eq += (V{1} - descriptors::t<V,DESCRIPTOR>(0)) * rho;
-      } else {
-        eq -= descriptors::t<V,DESCRIPTOR>(iPop) * rho;
-      }
-      return eq;
-    }
-
-    template <typename CELL, typename PARAMETERS, typename FEQ, typename V=typename CELL::value_t>
-    CellStatistic<V> compute(CELL& cell, PARAMETERS& parameters, FEQ& fEq) any_platform {
-      auto u = cell.template getField<descriptors::FORCE>();
-      V rho = MomentaF().computeRho(cell);
+    template <typename CELL, typename RHO, typename U, typename FEQ, typename V=typename CELL::value_t>
+    CellStatistic<V> compute(CELL& cell, RHO& rho, U& u, FEQ& fEq) any_platform {
       const V uSqr = util::normSqr<V,DESCRIPTOR::d>(u);
       for (int iPop=0; iPop < DESCRIPTOR::q; ++iPop) {
         fEq[iPop] = equilibrium<DESCRIPTOR>::secondOrder(iPop, rho, u, uSqr);
       }
       return {rho, uSqr};
+    };
+
+    template <typename CELL, typename PARAMETERS, typename FEQ, typename V=typename CELL::value_t>
+    CellStatistic<V> compute(CELL& cell, PARAMETERS& parameters, FEQ& fEq) any_platform {
+      auto u = cell.template getField<descriptors::FORCE>();
+      V rho = MomentaF().computeRho(cell);
+      return compute(cell, rho, u, fEq);
     };
   };
 };
@@ -212,4 +206,3 @@ using FreeEnergyInletOutletDynamics = dynamics::Tuple<
 
 #endif
 
-#include "freeEnergyDynamics.cse.h"

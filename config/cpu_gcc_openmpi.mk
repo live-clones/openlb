@@ -10,7 +10,7 @@
 # Usage of the Intel C++ compiler is recommended for Intel CPU clusters.
 # See `config/cpu_simd_intel_mpi.mk` for guidance.
 
-CXX             := mpic++
+CXX             := ${MPI_ROOT}/bin/mpic++
 CC              := gcc
 
 # The `march=native` flag enables AVX2 / AVX-512 instructions if available.
@@ -21,7 +21,10 @@ CC              := gcc
 # architecture / SIMD flags. Alternatively, compilation at the start of
 # the HPC jobs is a common option.
 CXXFLAGS        := -O3 -Wall -march=native -mtune=native
-CXXFLAGS        += -std=c++17
+CXXFLAGS        += -std=c++20
+
+# TODO: allow debugging, for now (?)
+CXXFLAGS        += -g
 
 # HYBRID mode is also possible but more complex to run correctly
 PARALLEL_MODE   := MPI

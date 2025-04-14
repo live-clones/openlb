@@ -30,7 +30,7 @@
 namespace olb {
 
 template <typename T>
-int HyperplaneLattice3D<T>::computeMaxLatticeDistance(Cuboid3D<T>&& cuboid) const
+int HyperplaneLattice3D<T>::computeMaxLatticeDistance(const Cuboid3D<T>& cuboid) const
 {
   const Vector<T,3>   origin = cuboid.getOrigin();
   const Vector<int,3> extend = cuboid.getExtent();
@@ -83,9 +83,8 @@ int HyperplaneLattice3D<T>::computeMaxLatticeDistance(Cuboid3D<T>&& cuboid) cons
 
 template <typename T>
 void HyperplaneLattice3D<T>::constructCuboid(
-  CuboidGeometry3D<T>& geometry, int maxLatticeDistance)
+  CuboidDecomposition<T,3>& geometry, int maxLatticeDistance)
 {
-  int iC;
   int minX = -maxLatticeDistance;
   int maxX = maxLatticeDistance;
   int minY = -maxLatticeDistance;
@@ -94,7 +93,7 @@ void HyperplaneLattice3D<T>::constructCuboid(
 
   for ( int iX = -maxLatticeDistance; iX < maxLatticeDistance; ++iX ) {
     for ( int iY = -maxLatticeDistance; iY < maxLatticeDistance; ++iY ) {
-      if ( geometry.getC(getPhysR(iX, iY), iC) ) {
+      if (auto iC = geometry.getC(getPhysR(iX, iY))) {
         minX = iX;
         found = true;
         break;
@@ -107,7 +106,7 @@ void HyperplaneLattice3D<T>::constructCuboid(
   found = false;
   for ( int iX = maxLatticeDistance; iX > -maxLatticeDistance; --iX ) {
     for ( int iY = -maxLatticeDistance; iY < maxLatticeDistance; ++iY ) {
-      if ( geometry.getC(getPhysR(iX, iY), iC) ) {
+      if (auto iC = geometry.getC(getPhysR(iX, iY))) {
         maxX = iX;
         found = true;
         break;
@@ -120,7 +119,7 @@ void HyperplaneLattice3D<T>::constructCuboid(
   found = false;
   for ( int iY = -maxLatticeDistance; iY < maxLatticeDistance; ++iY ) {
     for ( int iX = -maxLatticeDistance; iX < maxLatticeDistance; ++iX ) {
-      if ( geometry.getC(getPhysR(iX, iY), iC) ) {
+      if (auto iC = geometry.getC(getPhysR(iX, iY))) {
         minY = iY;
         found = true;
         break;
@@ -133,7 +132,7 @@ void HyperplaneLattice3D<T>::constructCuboid(
   found = false;
   for ( int iY = maxLatticeDistance; iY > -maxLatticeDistance; --iY ) {
     for ( int iX = -maxLatticeDistance; iX < maxLatticeDistance; ++iX ) {
-      if ( geometry.getC(getPhysR(iX, iY), iC) ) {
+      if (auto iC = geometry.getC(getPhysR(iX, iY))) {
         maxY = iY;
         found = true;
         break;
@@ -171,12 +170,12 @@ void HyperplaneLattice3D<T>::setToResolution(int resolution)
 
 template<typename T>
 HyperplaneLattice3D<T>::HyperplaneLattice3D(
-  CuboidGeometry3D<T>& geometry, Hyperplane3D<T> hyperplane)
+  CuboidDecomposition<T,3>& geometry, Hyperplane3D<T> hyperplane)
   : _hyperplane(hyperplane),
     _origin(hyperplane.origin),
     _u(hyperplane.u),
     _v(hyperplane.v),
-    _h(geometry.getMinDeltaR())
+    _h(geometry.getDeltaR())
 {
   _u = normalize(_u, _h);
   _v = normalize(_v, _h);
@@ -188,12 +187,12 @@ HyperplaneLattice3D<T>::HyperplaneLattice3D(
 
 template<typename T>
 HyperplaneLattice3D<T>::HyperplaneLattice3D(
-  CuboidGeometry3D<T>& geometry, Hyperplane3D<T> hyperplane, int resolution)
+  CuboidDecomposition<T,3>& geometry, Hyperplane3D<T> hyperplane, int resolution)
   : _hyperplane(hyperplane),
     _origin(hyperplane.origin),
     _u(hyperplane.u),
     _v(hyperplane.v),
-    _h(geometry.getMinDeltaR())
+    _h(geometry.getDeltaR())
 {
   _u = normalize(_u, _h);
   _v = normalize(_v, _h);
@@ -209,7 +208,7 @@ HyperplaneLattice3D<T>::HyperplaneLattice3D(
 
 template<typename T>
 HyperplaneLattice3D<T>::HyperplaneLattice3D(
-  CuboidGeometry3D<T>& geometry, Hyperplane3D<T> hyperplane, T h)
+  CuboidDecomposition<T,3>& geometry, Hyperplane3D<T> hyperplane, T h)
   : _hyperplane(hyperplane),
     _origin(hyperplane.origin),
     _u(hyperplane.u),
@@ -217,7 +216,7 @@ HyperplaneLattice3D<T>::HyperplaneLattice3D(
     _h(h)
 {
   if ( util::nearZero(_h) ) {
-    _h = geometry.getMinDeltaR();
+    _h = geometry.getDeltaR();
   }
 
   _u = normalize(_u, _h);

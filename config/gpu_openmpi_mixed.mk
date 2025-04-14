@@ -26,7 +26,7 @@ CXX             := mpic++
 CC              := gcc
 
 CXXFLAGS        := -O3 -Wall -march=native -mtune=native
-CXXFLAGS        += -std=c++17
+CXXFLAGS        += -std=c++20
 
 PARALLEL_MODE   := MPI
 
@@ -34,7 +34,7 @@ PLATFORMS       := CPU_SISD GPU_CUDA
 
 # Compiler to use for CUDA-enabled files
 CUDA_CXX        := nvcc
-CUDA_CXXFLAGS   := -O3 -std=c++17
+CUDA_CXXFLAGS   := -O3 -std=c++20
 # Adjust to enable resolution of libcuda, libcudart, libcudadevrt
 CUDA_LDFLAGS    := -L/run/opengl-driver/lib
 # for e.g. RTX 30* (Ampere), see table in `rules.mk` for other options

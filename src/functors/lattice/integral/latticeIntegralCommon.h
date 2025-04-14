@@ -33,14 +33,14 @@ namespace olb {
  **/
 template <typename T, typename W, int P>
 struct LpNormImpl {
-  inline W operator()(W output, W tmp, T weight);
+  inline void operator()(W output[2], W tmp, T weight);
   inline W enclose(W output);
 };
 
 template <typename T, typename W, int P>
-inline W LpNormImpl<T,W,P>::operator()(W output, W tmp, T weight)
+inline void LpNormImpl<T,W,P>::operator()(W output[2], W tmp, T weight)
 {
-  return output + util::pow(util::fabs(tmp), P)*weight;
+  util::kahanSum<T>(output, util::pow(util::fabs(tmp), P)*weight);
 }
 
 template <typename T, typename W, int P>
@@ -52,9 +52,9 @@ inline W LpNormImpl<T,W,P>::enclose(W output)
 /// Linf norm functor implementation details
 template <typename T, typename W>
 struct LpNormImpl<T,W,0> {
-  inline W operator()(W output, W tmp, T weight)
+  inline void operator()(W output[2], W tmp, T weight)
   {
-    return util::max(output, util::fabs(tmp));
+    output[0] = util::max(output[0], util::fabs(tmp));
   }
   inline W enclose(W output)
   {
@@ -65,9 +65,9 @@ struct LpNormImpl<T,W,0> {
 /// L1 norm functor implementation details
 template <typename T, typename W>
 struct LpNormImpl<T,W,1> {
-  inline W operator()(W output, W tmp, T weight)
+  inline void operator()(W output[2], W tmp, T weight)
   {
-    return output + util::fabs(tmp)*weight;
+    util::kahanSum<T>(output, util::fabs(tmp)*weight);
   }
   inline W enclose(W output)
   {
@@ -78,9 +78,9 @@ struct LpNormImpl<T,W,1> {
 /// L2 norm functor implementation details
 template <typename T, typename W>
 struct LpNormImpl<T,W,2> {
-  inline W operator()(W output, W tmp, T weight)
+  inline void operator()(W output[2], W tmp, T weight)
   {
-    return output + tmp*tmp*weight;
+    util::kahanSum<T>(output, tmp*tmp*weight);
   }
   inline W enclose(W output)
   {

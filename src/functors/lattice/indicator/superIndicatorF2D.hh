@@ -53,9 +53,10 @@ SuperIndicatorFfromIndicatorF2D<T>::SuperIndicatorFfromIndicatorF2D(
 template <typename T>
 bool SuperIndicatorFfromIndicatorF2D<T>::operator() (bool output[], const int input[])
 {
-  T physR[2];
+  Vector<T,2> physR;
+  LatticeR<3> latticeR(input);
   this->_superStructure.getCuboidGeometry().getPhysR(physR, input);
-  return _indicatorF(output, physR);
+  return _indicatorF(output, physR.data());
 }
 
 

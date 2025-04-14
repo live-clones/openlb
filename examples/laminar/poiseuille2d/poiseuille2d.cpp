@@ -25,7 +25,13 @@
 
 /* poiseuille2d.cpp:
  * This example examines a 2D Poseuille flow
- * It illustrates the computation of error norms.
+ * It illustrates the usage of different flow setups, boundary conditions
+ * and computation of error norms.
+ * The following simulation options can be combined freely:
+ * - if the compiler flag ENABLE_MRT is set, mrt collision operators are used
+ * - forced/ nonForced flow
+ * - different boundary conditions
+ * - simulation only or eoc convergence analysis
  */
 
 // the main code of the simulation is in poiseuille2d.h as it is also used by the
@@ -47,11 +53,12 @@ int main( int argc, char* argv[] )
 
   // Simulation parameter
   int N = 50;
+  bool eoc = false;
+
   int status = readParameters(argc, argv, N, flowType, boundaryType);
   if (status != 0) {
     return status;
   }
-  bool eoc = false;
 
   simulatePoiseuille(N, gplot, eoc);
 }

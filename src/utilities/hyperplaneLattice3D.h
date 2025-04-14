@@ -25,7 +25,7 @@
 #define HYPERPLANE_LATTICE_3D_H
 
 #include "core/vector.h"
-#include "geometry/cuboidGeometry3D.h"
+#include "geometry/cuboidGeometry.h"
 #include "hyperplane3D.h"
 
 namespace olb {
@@ -41,9 +41,9 @@ template <typename T>
 class HyperplaneLattice3D {
 private:
   /// \return max possible distance
-  int computeMaxLatticeDistance(Cuboid3D<T>&& cuboid) const;
+  int computeMaxLatticeDistance(const Cuboid3D<T>& cuboid) const;
   /// Compute _hyperplane.origin, _nx, _ny so that the cuboid is right inside the geometry
-  void constructCuboid(CuboidGeometry3D<T>& geometry, int maxLatticeDistance);
+  void constructCuboid(CuboidDecomposition<T,3>& geometry, int maxLatticeDistance);
   /// Update _h, _nx, _ny, _hyperplane.(u,v) so that the longest side length matches the given resolution
   void setToResolution(int resolution);
 
@@ -72,18 +72,18 @@ protected:
 public:
   /// Constructor for automatic discretization.
   /**
-   * i.e. the grid width is set to CuboidGeometry3D<T>::getMinDeltaR.
+   * i.e. the grid width is set to CuboidGeometry3D<T>::getDeltaR.
    **/
-  HyperplaneLattice3D(CuboidGeometry3D<T>& geometry,
-                      Hyperplane3D<T>      hyperplane);
+  HyperplaneLattice3D(CuboidDecomposition<T,3>& geometry,
+                      Hyperplane3D<T>           hyperplane);
   /// Constructor for discretization of a given resolution.
-  HyperplaneLattice3D(CuboidGeometry3D<T>& geometry,
-                      Hyperplane3D<T>      hyperplane,
-                      int                  resolution);
+  HyperplaneLattice3D(CuboidDecomposition<T,3>& geometry,
+                      Hyperplane3D<T>           hyperplane,
+                      int                       resolution);
   /// Constructor for discretization of a given grid width.
-  HyperplaneLattice3D(CuboidGeometry3D<T>& geometry,
-                      Hyperplane3D<T>      hyperplane,
-                      T                    h);
+  HyperplaneLattice3D(CuboidDecomposition<T,3>& geometry,
+                      Hyperplane3D<T>           hyperplane,
+                      T                         h);
 
   /// Constructor for manual discretization
   /**

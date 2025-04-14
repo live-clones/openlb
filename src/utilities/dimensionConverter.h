@@ -24,7 +24,7 @@
 #ifndef DIMENSION_CONVERTER_H
 #define DIMENSION_CONVERTER_H
 
-/* #include <numbers> */
+#include <numbers>
 
 #include "functors/analytical/indicator/smoothIndicatorBaseF2D.h"
 #include "functors/analytical/indicator/smoothIndicatorBaseF3D.h"
@@ -45,8 +45,7 @@ template <>
 struct convert<2> {
 private:
   template <typename T>
-  constexpr static const T invSqrt2 = T{0.7071067811865475244008443621048490392848359376884740365883};
-  /* constexpr static const T invSqrt2 = T{1} / std::numbers::sqrt2; */
+  constexpr static const T invSqrt2 = T{1} / std::numbers::sqrt2;
 
 public:
   // Rotational dimensions (rotational degrees of freedom)
@@ -91,11 +90,9 @@ template <>
 struct convert<3> {
 private:
   template <typename T>
-  constexpr static const T invSqrt2 = T{0.7071067811865475244008443621048490392848359376884740365883};
-  /* constexpr static const T invSqrt2 = T{1} / std::numbers::sqrt2; */
+  constexpr static const T invSqrt2 = T{1} / std::numbers::sqrt2;
   template <typename T>
-  constexpr static const T invSqrt3 = T{0.5773502691896257645091487805019574556476017512701268760186};
-  /* constexpr static const T invSqrt3 = std::numbers::inv_sqrt3; */
+  constexpr static const T invSqrt3 = std::numbers::inv_sqrt3;
 
 public:
   // Rotational dimensions (rotational degrees of freedom)

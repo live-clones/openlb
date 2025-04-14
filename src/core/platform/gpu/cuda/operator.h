@@ -35,6 +35,13 @@
 
 namespace olb {
 
+namespace gpu::cuda {
+
+template <typename T, typename DESCRIPTOR, typename... DYNAMICS>
+std::function<void(ConcreteBlockLattice<T,DESCRIPTOR,Platform::GPU_CUDA>&)> getFusedCollisionO();
+
+}
+
 
 /// Application of the collision step on a concrete CUDA block
 template <typename T, typename DESCRIPTOR, typename DYNAMICS>
@@ -118,7 +125,7 @@ public:
 
 
 /// Application of a cell-wise OPERATOR on a concrete CUDA block
-template <typename T, typename DESCRIPTOR, CONCEPT(CellOperator) OPERATOR>
+template <typename T, typename DESCRIPTOR, concepts::CellOperator OPERATOR>
 class ConcreteBlockO<T,DESCRIPTOR,Platform::GPU_CUDA,OPERATOR,OperatorScope::PerCell> final
   : public BlockO<T,DESCRIPTOR,Platform::GPU_CUDA> {
 private:
@@ -133,6 +140,11 @@ public:
   std::type_index id() const override
   {
     return typeid(OPERATOR);
+  }
+
+  std::size_t weight() const override
+  {
+    return _cells.size();
   }
 
   void set(CellID iCell, bool state) override
@@ -154,7 +166,7 @@ public:
 
 
 /// Application of a parametrized cell-wise OPERATOR on a concrete CUDA block
-template <typename T, typename DESCRIPTOR, CONCEPT(CellOperator) OPERATOR>
+template <typename T, typename DESCRIPTOR, concepts::CellOperator OPERATOR>
 class ConcreteBlockO<T,DESCRIPTOR,Platform::GPU_CUDA,OPERATOR,OperatorScope::PerCellWithParameters> final
   : public BlockO<T,DESCRIPTOR,Platform::GPU_CUDA> {
 private:
@@ -171,6 +183,11 @@ public:
   std::type_index id() const override
   {
     return typeid(OPERATOR);
+  }
+
+  std::size_t weight() const override
+  {
+    return _cells.size();
   }
 
   void set(CellID iCell, bool state) override
@@ -196,13 +213,18 @@ public:
 /**
  * e.g. StatisticsPostProcessor
  **/
-template <typename T, typename DESCRIPTOR, CONCEPT(BlockOperator) OPERATOR>
+template <typename T, typename DESCRIPTOR, concepts::BlockOperator OPERATOR>
 class ConcreteBlockO<T,DESCRIPTOR,Platform::GPU_CUDA,OPERATOR,OperatorScope::PerBlock> final
   : public BlockO<T,DESCRIPTOR,Platform::GPU_CUDA> {
 public:
   std::type_index id() const override
   {
     return typeid(OPERATOR);
+  }
+
+  std::size_t weight() const override
+  {
+    return 0;
   }
 
   void set(CellID iCell, bool state) override
@@ -287,6 +309,64 @@ public:
   template <typename LATTICES>
   ConcreteBlockCouplingO(LATTICES&& lattices):
     _lattices{lattices}
+  { }
+
+  std::type_index id() const override {
+    return typeid(COUPLER);
+  }
+
+  typename AbstractCouplingO<COUPLEES>::AbstractParameters& getParameters() override {
+    return _parameters;
+  }
+
+  void set(CellID iCell, bool state) override;
+
+  void execute() override;
+
+};
+
+/// Application of a block-wise particle COUPLER on concrete CUDA COUPLEES with parameters
+template <typename COUPLER, typename COUPLEES>
+class ConcreteBlockPointCouplingO<COUPLEES,Platform::GPU_CUDA,COUPLER,OperatorScope::PerCellWithParameters>
+  final : public AbstractCouplingO<COUPLEES> {
+private:
+  template <typename VALUED_DESCRIPTOR>
+  using ptr_to_lattice = std::conditional_t<
+    VALUED_DESCRIPTOR::descriptor_t::template provides<descriptors::POPULATION>(),
+    ConcreteBlockLattice<typename VALUED_DESCRIPTOR::value_t,
+                         typename VALUED_DESCRIPTOR::descriptor_t,
+                         Platform::GPU_CUDA>,
+    ConcreteBlockD<typename VALUED_DESCRIPTOR::value_t,
+                          typename VALUED_DESCRIPTOR::descriptor_t,
+                          Platform::GPU_CUDA>
+  >*;
+
+  utilities::TypeIndexedTuple<typename COUPLEES::template map_values<
+    ptr_to_lattice
+  >> _lattices;
+
+  Cuboid<
+    typename AbstractCouplingO<COUPLEES>::value_t,
+    AbstractCouplingO<COUPLEES>::descriptor_t::d
+  >& _cuboid;
+
+  typename AbstractCouplingO<COUPLEES>::ParametersD::template include<
+    typename meta::merge<
+      typename COUPLER::parameters,
+      meta::list<
+        fields::converter::PHYS_DELTA_X,
+        fields::BLOCK_LOWER
+      >
+    >
+  > _parameters;
+
+public:
+  template <typename LATTICES>
+  ConcreteBlockPointCouplingO(LATTICES&& lattices,
+                              Cuboid<typename AbstractCouplingO<COUPLEES>::value_t,
+                              AbstractCouplingO<COUPLEES>::descriptor_t::d>& cuboid):
+    _lattices{lattices},
+    _cuboid{cuboid}
   { }
 
   std::type_index id() const override {

@@ -139,7 +139,7 @@ void prepareLattice(
 
   /// Material=0 -->do nothing
   sLattice.defineDynamics<PorousParticleBGKdynamics>(superGeometry, 1);
-  setBounceBackBoundary(sLattice, superGeometry, 2);
+  boundary::set<boundary::BounceBack>(sLattice, superGeometry, 2);
 
   sLattice.setParameter<descriptors::OMEGA>(converter.getLatticeRelaxationFrequency());
 
@@ -191,10 +191,8 @@ void getResults(SuperLattice<T, DESCRIPTOR>& sLattice,
 
   if (iT == 0) {
     converter.write("dkt");
-    SuperLatticeGeometry2D<T, DESCRIPTOR> geometry(sLattice, superGeometry);
     SuperLatticeCuboid2D<T, DESCRIPTOR> cuboid(sLattice);
     SuperLatticeRank2D<T, DESCRIPTOR> rank(sLattice);
-    vtkWriter.write(geometry);
     vtkWriter.write(cuboid);
     vtkWriter.write(rank);
     vtkWriter.createMasterFile();
@@ -270,9 +268,9 @@ int main(int argc, char* argv[])
   IndicatorCuboid2D<T> cuboid(extend, origin);
 
 #ifdef PARALLEL_MODE_MPI
-  CuboidGeometry2D<T> cuboidGeometry(cuboid, converter.getConversionFactorLength(), singleton::mpi().getSize());
+  CuboidGeometry2D<T> cuboidGeometry(cuboid, converter.getPhysDeltaX(), singleton::mpi().getSize());
 #else
-  CuboidGeometry2D<T> cuboidGeometry(cuboid, converter.getConversionFactorLength(), 1);
+  CuboidGeometry2D<T> cuboidGeometry(cuboid, converter.getPhysDeltaX(), 1);
 #endif
 
   HeuristicLoadBalancer<T> loadBalancer(cuboidGeometry);
@@ -316,7 +314,7 @@ int main(int argc, char* argv[])
                         coefficientOfRestitution, coefficientKineticFriction, coefficientStaticFriction);
 
 
-  T epsilon = eps * converter.getConversionFactorLength();
+  T epsilon = eps * converter.getPhysDeltaX();
   T radius = radiusP;
 
   // Create Particle 1

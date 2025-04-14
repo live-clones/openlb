@@ -28,8 +28,7 @@
 #include <map>
 #include "communication/mpiManager.h"
 #include "communication/blockLoadBalancer.h"
-#include "geometry/cuboidGeometry2D.h"
-#include "geometry/cuboidGeometry3D.h"
+#include "geometry/cuboidGeometry.h"
 #include "core/olbDebug.h"
 
 namespace olb {
@@ -43,13 +42,13 @@ BlockLoadBalancer<T>::BlockLoadBalancer(int rank, int size, int globChunkSize, i
 template<typename T>
 BlockLoadBalancer<T>::BlockLoadBalancer(CuboidGeometry3D<T>& cGeometry)
 {
-  init_chunkD(singleton::mpi().getRank(), singleton::mpi().getSize(), cGeometry.getNc(), 0);
+  init_chunkD(singleton::mpi().getRank(), singleton::mpi().getSize(), cGeometry.size(), 0);
 }
 
 template<typename T>
 BlockLoadBalancer<T>::BlockLoadBalancer(CuboidGeometry2D<T>& cGeometry)
 {
-  init_chunkD(singleton::mpi().getRank(), singleton::mpi().getSize(), cGeometry.getNc(), 0);
+  init_chunkD(singleton::mpi().getRank(), singleton::mpi().getSize(), cGeometry.size(), 0);
 }
 
 template<typename T>

@@ -50,20 +50,19 @@ typedef enum {forced, nonForced} FlowType;
 typedef enum {bounceBack, local, interpolated, bouzidi, freeSlip, partialSlip} BoundaryType;
 
 // Parameters for the simulation setup
-FlowType flowType = forced;
+FlowType flowType = nonForced;
 BoundaryType boundaryType = interpolated;
-bool eoc = false;
 
 const T length  = 2.;         // length of the pie
 const T diameter  = 1.;       // diameter of the pipe
-int N = 21;                   // resolution of the model
+// int N = 21;                   // resolution of the model
 const T physU = 1.;           // physical velocity
 const T Re = 10.;             // Reynolds number
 const T physRho = 1.;         // physical density
 const T tau = 0.8;            // lattice relaxation time
 const T maxPhysT = 20.;       // max. simulation time in s, SI unit
 const T residuum = 1e-5;      // residuum for the convergence check
-const T tuner = 0.97;         // for partialSlip only: 0->bounceBack, 1->freeSlip
+const T tuner = 0.;         // for partialSlip only: 0->bounceBack, 1->freeSlip
 
 // Scaled Parameters
 const T radius  = diameter/2.;            // radius of the pipe
@@ -82,37 +81,6 @@ T wssLinfAbsError = 0;
 T pressureL1AbsError = 0;
 T pressureL2AbsError = 0;
 T pressureLinfAbsError = 0;
-
-
-//Windprofile. Equation from OpenFoam
-template <typename T>
-class WindProfile3D : public AnalyticalF3D<T,T> {
-
-protected:
-  T _z0;
-  T _u0;
-  T _d =0;
-  int _windDirection;
-  int _normalToEarth;
-  T _kappa;
-  T _u_fric;
-  T _z_ref;
-
-public:
-  WindProfile3D(T u0, T z0, T z_ref,T kappa, T d, int windDirection = 0, int normalToEarth =2) : AnalyticalF3D<T,T>( 3 )
-  ,_u0(u0), _z0(z0), _z_ref(z_ref), _kappa(kappa), _d(d),_windDirection(windDirection), _normalToEarth(normalToEarth) {
-    _u_fric = (_u0*_kappa)/std::log10((_z_ref+_z0)/_z0);
-    this->getName() = "WindProfile3D";
-  };
-
-  bool operator()( T output[3], const T input[3] ) override {
-    output[_windDirection] = _u_fric / _kappa *std::log10(((input[_normalToEarth]-_d)+_z0)/_z0);
-    return true;
-  };
-
-};
-
-
 
 // Stores geometry information in form of material numbers
 void prepareGeometry( UnitConverter<T,DESCRIPTOR> const& converter,
@@ -191,13 +159,14 @@ void prepareLattice(SuperLattice<T, DESCRIPTOR>& sLattice,
   CirclePoiseuille3D<T> poiseuilleU(origin, axis, converter.getCharLatticeVelocity(), radius);
 
   if (boundaryType == bounceBack) {
-    setBounceBackBoundary(sLattice, superGeometry, 2);
+    boundary::set<boundary::BounceBack>(sLattice, superGeometry, 2);
   }
   else if (boundaryType == freeSlip) {
-    setSlipBoundary(sLattice, superGeometry, 2);
+    boundary::set<boundary::FullSlip>(sLattice, superGeometry, 2);
   }
   else if (boundaryType == partialSlip) {
-    setPartialSlipBoundary(sLattice, tuner, superGeometry, 2);
+    boundary::set<boundary::PartialSlip>(sLattice, superGeometry, 2);
+    sLattice.template setParameter<descriptors::TUNER>(tuner);
   }
   else if (boundaryType == bouzidi) {
     center0[0] -= 0.5*converter.getPhysDeltaX();
@@ -211,10 +180,11 @@ void prepareLattice(SuperLattice<T, DESCRIPTOR>& sLattice,
   }
   else {
     if (boundaryType == local) {
-      setLocalVelocityBoundary(sLattice, omega, superGeometry, 2);
+      boundary::set<boundary::LocalVelocity>(sLattice, superGeometry, 2);
     }
     else {
-      setInterpolatedVelocityBoundary(sLattice, omega, superGeometry, 2);
+      // boundary::set<boundary::InterpolatedVelocity>(sLattice, superGeometry, 2);
+      boundary::set<boundary::InterpolatedVelocity>(sLattice, superGeometry, 2);
     }
   }
 
@@ -226,18 +196,18 @@ void prepareLattice(SuperLattice<T, DESCRIPTOR>& sLattice,
     else {
       // Material=3 -->bulk dynamics
       if (boundaryType == local) {
-        setLocalVelocityBoundary(sLattice, omega, superGeometry, 3);
+        boundary::set<boundary::LocalVelocity>(sLattice, superGeometry, 3);
       }
       else {
-        setInterpolatedVelocityBoundary(sLattice, omega, superGeometry, 3);
+        boundary::set<boundary::InterpolatedVelocity>(sLattice, superGeometry, 3);
       }
     }
     // Material=4 -->bulk dynamics
     if (boundaryType == local) {
-      setLocalPressureBoundary(sLattice, omega, superGeometry, 4);
+      boundary::set<boundary::LocalPressure>(sLattice, superGeometry, 4);
     }
     else {
-      setInterpolatedPressureBoundary(sLattice, omega, superGeometry, 4);
+      boundary::set<boundary::LocalPressure>(sLattice, superGeometry, 4);
     }
   }
 
@@ -302,6 +272,7 @@ void error( SuperGeometry<T,3>& superGeometry,
             SuperLatticePhysWallShearStress3D<T,DESCRIPTOR>& wss)
 {
   OstreamManager clout( std::cout,"error" );
+  sLattice.setProcessingContext(ProcessingContext::Evaluation);
 
   int tmp[]= { };
   T result[2]= { };
@@ -443,14 +414,12 @@ void getResults( SuperLattice<T,DESCRIPTOR>& sLattice,
 
   // VTK and image output only if no EOC analysis
   if (! eoc) {
-
     SuperVTMwriter3D<T> vtmWriter( "poiseuille3d" );
     SuperLatticePhysVelocity3D<T, DESCRIPTOR> velocity( sLattice, converter );
     SuperLatticePhysPressure3D<T, DESCRIPTOR> pressure( sLattice, converter );
     vtmWriter.addFunctor( velocity );
     vtmWriter.addFunctor( pressure );
     vtmWriter.addFunctor( wss );
-
     const T maxVelocity = converter.getCharPhysVelocity();
     std::vector<T> axisPoint = {length, radius, radius};
     std::vector<T> axisDirection = { 1, 0, 0 };
@@ -463,13 +432,10 @@ void getResults( SuperLattice<T,DESCRIPTOR>& sLattice,
 
     if ( iT==0 ) {
       // Writes the geometry, cuboid no. and rank no. as vti file for visualization
-      SuperLatticeGeometry3D<T, DESCRIPTOR> geometry( sLattice, superGeometry );
       SuperLatticeCuboid3D<T, DESCRIPTOR> cuboid( sLattice );
       SuperLatticeRank3D<T, DESCRIPTOR> rank( sLattice );
       SuperLatticeDiscreteNormal3D<T, DESCRIPTOR> discreteNormal( sLattice, superGeometry, superGeometry.getMaterialIndicator({2, 3}) );
       SuperLatticeDiscreteNormalType3D<T, DESCRIPTOR> discreteNormalType( sLattice, superGeometry, superGeometry.getMaterialIndicator({2, 3, 4, 5}) );
-
-      vtmWriter.write( geometry );
       vtmWriter.write( cuboid );
       vtmWriter.write( rank );
       vtmWriter.write( discreteNormal );
@@ -607,7 +573,7 @@ void simulatePoiseuille(int N, Gnuplot<T>& gplot, bool eoc)
   CuboidGeometry3D<T> cuboidGeometry( extendedDomain, converter.getPhysDeltaX(), noOfCuboids);
   if (flowType == forced) {
     // Periodic boundaries in x-direction
-    cuboidGeometry.setPeriodicity( true, false, false );
+    cuboidGeometry.setPeriodicity({ true, false, false });
   }
 
   // Instantiation of a loadBalancer
@@ -633,7 +599,7 @@ void simulatePoiseuille(int N, Gnuplot<T>& gplot, bool eoc)
     center1Extended[0] += 4.*converter.getPhysDeltaX();
   }
   IndicatorCylinder3D<T> pipeExtended(center0Extended, center1Extended, radius);
-  IndicatorLayer3D<T> indicatorExtended (pipeExtended, 0.9*converter.getConversionFactorLength()*N/11.);
+  IndicatorLayer3D<T> indicatorExtended (pipeExtended, 0.9*converter.getPhysDeltaX()*N/11.);
   SuperLatticePhysWallShearStress3D<T,DESCRIPTOR> wss(sLattice, superGeometry, 2, converter, indicatorExtended);
 
   // === 4th Step: Main Loop with Timer ===
@@ -647,7 +613,6 @@ void simulatePoiseuille(int N, Gnuplot<T>& gplot, bool eoc)
       clout << "Simulation converged." << std::endl;
       getResults( sLattice, converter, iT, superGeometry, timer,
         converge.hasConverged(), wss, gplot, eoc );
-
       break;
     }
 
@@ -665,6 +630,56 @@ void simulatePoiseuille(int N, Gnuplot<T>& gplot, bool eoc)
 
   timer.stop();
   timer.printSummary();
+}
+
+/// User dialogue: read optional arguments
+// Resolution, flow and boundary type are modified in place
+int readParameters(int argc, char** argv,
+  int& N, FlowType& flowType, BoundaryType& boundaryType)
+{
+  if (argc > 1) {
+    if (argv[1][0]=='-'&&argv[1][1]=='h') {
+      OstreamManager clout( std::cout,"help" );
+      clout<<"Usage: program [Resolution] [FlowType] [BoundaryType] [Eoc]"<<std::endl;
+      clout<<"FlowType: 0=forced, 1=nonForced"<<std::endl;
+      clout<<"BoundaryType: 0=bounceBack, 1=local, 2=interpolated, 3=bouzidi, 4=freeSlip, 5=partialSlip"<<std::endl;
+      // clout<<"Eoc: 0=false, 1=true"<<std::endl;
+      clout<<"Default: Resolution=21, FlowType=nonForced, BoundaryType=interpolated, Eoc=false"<<std::endl;
+      return 0;
+    }
+  }
+
+  if (argc > 1) {
+    N = atoi(argv[1]);
+    if (N < 1) {
+      std::cerr << "Fluid domain is too small" << std::endl;
+      return 1;
+    }
+  }
+
+  if (argc > 2) {
+    int flowTypeNumber = atoi(argv[2]);
+    if (flowTypeNumber < 0 || flowTypeNumber > (int)nonForced) {
+      std::cerr << "Unknown fluid flow type" << std::endl;
+      return 2;
+    }
+    flowType = (FlowType) flowTypeNumber;
+  }
+
+  if (argc > 3) {
+    int boundaryTypeNumber = atoi(argv[3]);
+    if (boundaryTypeNumber < 0 || boundaryTypeNumber > (int) partialSlip) {
+      std::cerr << "Unknown boundary type" << std::endl;
+      return 3;
+    }
+    boundaryType = (BoundaryType) boundaryTypeNumber;
+  }
+
+  // if (argc > 4) {
+  //   int eocNumber = atoi(argv[4]);
+  //   eoc = (bool) eocNumber;
+  // }
+  return 0;
 }
 
 #endif

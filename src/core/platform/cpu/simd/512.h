@@ -180,6 +180,11 @@ public:
     return reinterpret_cast<const double*>(&_reg)[i];
   }
 
+  double& operator[](unsigned i)
+  {
+    return reinterpret_cast<double*>(&_reg)[i];
+  }
+
   Pack operator+(Pack rhs) const
   {
     return Pack(_mm512_add_pd(_reg, rhs));
@@ -288,6 +293,11 @@ public:
     return reinterpret_cast<const float*>(&_reg)[i];
   }
 
+  float& operator[](unsigned i)
+  {
+    return reinterpret_cast<float*>(&_reg)[i];
+  }
+
   Pack operator+(Pack rhs) const
   {
     return Pack(_mm512_add_ps(_reg, rhs));
@@ -347,11 +357,17 @@ public:
 template <typename T>
 Pack<T> pow(Pack<T> base, Pack<T> exp)
 {
-  if constexpr (std::is_same_v<T,double>) {
-    return _mm512_pow_pd(base, exp);
-  } else {
-    return _mm512_pow_ps(base, exp);
+  //if constexpr (std::is_same_v<T,double>) {
+  //  return _mm512_pow_pd(base, exp);
+  //} else {
+  //  return _mm512_pow_ps(base, exp);
+  //}
+  // Workaround until I figure out why the intrinsics are not available (anymore?)
+  Pack<T> result;
+  for (unsigned i=0; i < Pack<T>::size; ++i) {
+    result[i] = util::pow(base[i], exp[i]);
   }
+  return result;
 }
 
 template <typename T>

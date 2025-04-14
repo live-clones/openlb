@@ -29,13 +29,25 @@
 
 #include "operator.h"
 #include "postProcessing.h"
+#include "introspection.h"
 
 namespace olb {
 
+template <typename T, typename DESCRIPTOR, typename OPERATOR>
+struct ConcretizableBlockO {
 
-/// Factory for instances of a specific POST_PROCESSOR type
+using value_t = T;
+
+using base_t = AbstractBlockO;
+
+template <Platform PLATFORM>
+using type = ConcreteBlockO<T,DESCRIPTOR,PLATFORM,OPERATOR,OPERATOR::scope>;
+
+};
+
+/// Factory for instances of a specific OPERATOR type
 /**
- * Factory callable for ConcreteBlockO<POST_PROCESSOR> is constructed at
+ * Factory callable for ConcreteBlockO<OPERATOR> is constructed at
  * PostProcessorPromise construction time. Recipients accepting such
  * _promised post processors_ are not obligated to actually _realize_
  * this promise.
@@ -47,40 +59,41 @@ namespace olb {
 template <typename T, typename DESCRIPTOR>
 class PostProcessorPromise {
 protected:
-  std::type_index _id;
-  int _priority;
-  OperatorScope _scope;
+  const std::type_index _id;
+  const int _priority;
+  const OperatorScope _scope;
+  const std::string _name;
+
   std::function<AbstractBlockO*(Platform)> _constructor;
+  /// Returns the set of all accessed fields
+  std::function<std::set<FieldTypePromise<T,DESCRIPTOR>>()> _accessedFields;
 
 public:
-  template <typename POST_PROCESSOR>
-  PostProcessorPromise(meta::id<POST_PROCESSOR> id = meta::id<POST_PROCESSOR>{}):
-    _id(typeid(POST_PROCESSOR)),
-    _priority(POST_PROCESSOR().getPriority()),
-    _scope(POST_PROCESSOR::scope),
+  template <typename OPERATOR>
+  PostProcessorPromise(meta::id<OPERATOR> id = meta::id<OPERATOR>{}):
+    _id(typeid(OPERATOR)),
+    _priority(OPERATOR().getPriority()),
+    _scope(OPERATOR::scope),
+    _name{fields::name<OPERATOR>()},
     _constructor([](Platform platform) -> AbstractBlockO* {
-      switch (platform) {
-      #ifdef PLATFORM_CPU_SISD
-      case Platform::CPU_SISD:
-        return new ConcreteBlockO<T,DESCRIPTOR,Platform::CPU_SISD,POST_PROCESSOR,POST_PROCESSOR::scope>();
-      #endif
-      #ifdef PLATFORM_CPU_SIMD
-      case Platform::CPU_SIMD:
-        return new ConcreteBlockO<T,DESCRIPTOR,Platform::CPU_SIMD,POST_PROCESSOR,POST_PROCESSOR::scope>();
-      #endif
-      #ifdef PLATFORM_GPU_CUDA
-      case Platform::GPU_CUDA:
-        return new ConcreteBlockO<T,DESCRIPTOR,Platform::GPU_CUDA,POST_PROCESSOR,POST_PROCESSOR::scope>();
-      #endif
-      default:
-        throw std::invalid_argument("Invalid PLATFORM");
+      return constructUsingConcretePlatform<ConcretizableBlockO<T,DESCRIPTOR,OPERATOR>>(platform);
+    }),
+    _accessedFields([]() -> std::set<FieldTypePromise<T,DESCRIPTOR>> {
+      if constexpr (!std::is_same_v<T,Expr>) {
+        return introspection::getFieldsAccessedByOperator<T,DESCRIPTOR,OPERATOR>();
+      } else {
+        throw std::domain_error("Can not introspect the introspection");
       }
     })
   { }
 
-  /// Returns type index of the promised POST_PROCESSOR
+  /// Returns type index of the promised OPERATOR
   std::type_index id() const {
     return _id;
+  }
+
+  std::string name() const {
+    return _name;
   }
 
   int priority() const {
@@ -89,6 +102,14 @@ public:
 
   OperatorScope scope() const {
     return _scope;
+  }
+
+  std::set<FieldTypePromise<T,DESCRIPTOR>> accessedFields() const {
+    return _accessedFields();
+  }
+
+  bool operator<(const PostProcessorPromise<T,DESCRIPTOR>& rhs) const {
+    return id() < rhs.id();
   }
 
   template <Platform PLATFORM>
@@ -102,55 +123,6 @@ public:
 template <typename PP>
 PostProcessorPromise(meta::id<PP>) -> PostProcessorPromise<typename PP::value_t,
                                                            typename PP::descriptor_t>;
-
-/// Block operator for supporting legacy post processor in the new operator-centric framework
-template <typename T, typename DESCRIPTOR, Platform PLATFORM>
-class LegacyBlockPostProcessorO final : public BlockO<T,DESCRIPTOR,PLATFORM> {
-private:
-  /// List of legacy post processors
-  std::vector<std::unique_ptr<PostProcessor<T,DESCRIPTOR>>> _postProcessors;
-
-public:
-  std::type_index id() const override
-  {
-    return typeid(LegacyBlockPostProcessorO);
-  }
-
-  void set(CellID iCell, bool state) override
-  {
-    throw std::logic_error("Invalid legacy post processor setter");
-  }
-
-  void setup(ConcreteBlockLattice<T,DESCRIPTOR,PLATFORM>& block) override { }
-
-  void apply(ConcreteBlockLattice<T,DESCRIPTOR,PLATFORM>& block) override
-  {
-    #ifdef PLATFORM_GPU_CUDA
-    if constexpr (PLATFORM == Platform::GPU_CUDA) {
-      if (!_postProcessors.empty()) {
-        throw std::runtime_error("Legacy post processors not supported on GPU_CUDA");
-      }
-    }
-    #else // CPU_* platform
-    #ifdef PARALLEL_MODE_OMP
-    #pragma omp parallel for schedule(dynamic)
-    #endif
-    for (std::size_t i=0; i < _postProcessors.size(); ++i) {
-      if constexpr (DESCRIPTOR::d == 3) {
-        _postProcessors[i]->processSubDomain(block, 0, block.getNx()-1, 0, block.getNy()-1, 0, block.getNz()-1);
-      } else {
-        _postProcessors[i]->processSubDomain(block, 0, block.getNx()-1, 0, block.getNy()-1);
-      }
-    }
-    #endif
-  }
-
-  void add(PostProcessor<T,DESCRIPTOR>* postProcessor)
-  {
-    _postProcessors.emplace_back(postProcessor);
-  }
-
-};
 
 /// Map of post processors of a single priority and stage
 /**
@@ -167,13 +139,8 @@ private:
    * Only add new BlockO instances to this map via resolve
    **/
   std::map<std::type_index,
-           std::unique_ptr<BlockO<T,DESCRIPTOR,PLATFORM>>> _map;
-
-  /// BlockO for managing legacy post processors
-  /**
-   * Will be removed once all post processors are refactored into operators
-   **/
-  LegacyBlockPostProcessorO<T,DESCRIPTOR,PLATFORM> _legacyPostProcessors;
+           std::tuple<PostProcessorPromise<T,DESCRIPTOR>,
+                      std::unique_ptr<BlockO<T,DESCRIPTOR,PLATFORM>>>> _map;
 
   /// Resolve promised post processor into concrete BlockO instance
   BlockO<T,DESCRIPTOR,PLATFORM>& resolve(PostProcessorPromise<T,DESCRIPTOR>&& promise)
@@ -182,21 +149,26 @@ private:
     if (iter == _map.end()) {
       iter = _map.emplace(std::piecewise_construct,
                           std::forward_as_tuple(promise.id()),
-                          std::forward_as_tuple(promise.template realize<PLATFORM>())).first;
-      iter->second->setup(_lattice);
+                          std::forward_as_tuple(promise, promise.template realize<PLATFORM>())).first;
+      auto& [_, op] = iter->second;
+      op->setup(_lattice);
+      if (_lattice.isIntrospectable()) {
+        auto accessedFields = promise.accessedFields();
+        for (FieldTypePromise<T,DESCRIPTOR> field : accessedFields) {
+          field.ensureAvailabilityIn(_lattice);
+        }
+      }
+      return *op;
+    } else {
+      auto& [_, op] = iter->second;
+      return *op;
     }
-    return *(iter->second);
   }
 
 public:
   BlockPostProcessorMap(ConcreteBlockLattice<T,DESCRIPTOR,PLATFORM>* lattice):
     _lattice{*lattice}
   { }
-
-  void addLegacy(PostProcessor<T,DESCRIPTOR>* postProcessor)
-  {
-    _legacyPostProcessors.add(postProcessor);
-  }
 
   /// Schedule post processor for application at iCell
   void add(std::size_t iCell, PostProcessorPromise<T,DESCRIPTOR>&& promise)
@@ -216,23 +188,47 @@ public:
     return _map.find(promise.id()) != _map.end();
   }
 
+  /// Returns number of cells assigned to promised post processor
+  /**
+   * Doesn't allocate, intended for introspection
+   **/
+  std::size_t getWeight(const PostProcessorPromise<T,DESCRIPTOR>& promise) const {
+    auto iter = _map.find(promise.id());
+    if (iter != _map.end()) {
+      const auto& [_, op] = std::get<1>(*iter);
+      return op->weight();
+    } else {
+      return 0;
+    }
+  }
+
+  /// Returns set of all post processors maintained this map
+  std::set<PostProcessorPromise<T,DESCRIPTOR>> getAll() const
+  {
+    std::set<PostProcessorPromise<T,DESCRIPTOR>> operators;
+    for (auto& [id, value] : _map) {
+      const auto& [promise, _] = value;
+      operators.emplace(promise);
+    }
+    return operators;
+  }
+
   /// Apply all managed post processors to lattice
   /**
    * All post processors within a single BlockPostProcessorMap should be expected
-   * to be executed in parallel as far as feasible. E.g. (non-)legacy post processors
-   * on CPU blocks are parallelized using OpenMP if enabled while per-cell operators
+   * to be executed in parallel as far as feasible. E.g. post processors on CPU
+   * blocks are parallelized using OpenMP if enabled while per-cell operators
    * on GPU blocks are parallelized both on the level of kernels and by running
    * multiple kernels asynchronously in separate streams.
    *
    * In general, interdependent post processors should be separated into different
-   * priorities (not doing so also works in many cases but leads to non-deterministic
+   * priorities (not doing so also "works" in many cases but leads to non-deterministic
    * data relationships).
    **/
   void apply()
   {
-    _legacyPostProcessors.apply(_lattice);
-
-    for (auto& [_, postProcessor] : _map) {
+    for (auto& [_, value] : _map) {
+      auto& [promise, postProcessor] = value;
       postProcessor->apply(_lattice);
     }
 

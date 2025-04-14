@@ -27,7 +27,7 @@
 
 #include "blockBaseF3D.h"
 #include "superBaseF3D.h"
-#include "geometry/cuboidGeometry3D.h"
+#include "geometry/cuboidGeometry.h"
 #include "geometry/blockGeometry.h"
 #include "geometry/superGeometry.h"
 #include "functors/analytical/analyticalF.h"

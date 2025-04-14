@@ -309,9 +309,6 @@ template<> inline float abs<float>(float x) {
 template<> inline double abs<double>(double x) {
   return olb::util::fabs(x);
 }
-template<> inline long double abs<long double>(long double x) {
-  return olb::util::fabsl(x);
-}
 
 /** Manhattan distance functor (generic version, optimized for high-dimensionality data sets).
  *  Corresponding distance traits: nanoflann::metric_L1
@@ -538,7 +535,6 @@ class PooledAllocator {
   size_t remaining; /* Number of bytes left in current block of storage. */
   void* base; /* Pointer to base of current block of storage. */
   void* loc; /* Current location in block to next allocate memory. */
-  size_t blocksize;
 
   void internal_init() {
     remaining = 0;
@@ -554,8 +550,7 @@ class PooledAllocator {
   /**
    Default constructor. Initializes a new pool.
    */
-  PooledAllocator(const size_t blocksize_ = BLOCKSIZE)
-      : blocksize(blocksize_) {
+  PooledAllocator(const size_t blocksize_ = BLOCKSIZE) {
     internal_init();
   }
 

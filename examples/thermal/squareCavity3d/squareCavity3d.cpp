@@ -22,6 +22,12 @@
  *  Boston, MA  02110-1301, USA.
  */
 
+/* squareCavity3d.cpp
+ * The results are published in "Gaedtke, M., Wachter, S., Raedle, M., Nirschl, H., & Krause, M. J. (2018).
+ * Application of a lattice Boltzmann method combined with a Smagorinsky turbulence model to spatially resolved heat flux inside a refrigerated vehicle.
+ * Computers & Mathematics with Applications, 76(10), 2315-2329."
+ */
+
 // natural convection of air in a square cavity in 3D
 
 #include "olb3D.h"
@@ -172,14 +178,14 @@ void prepareLattice( ThermalUnitConverter<T, NSDESCRIPTOR, TDESCRIPTOR> &convert
   T Tomega  = converter.getLatticeThermalRelaxationFrequency();
 
   ADlattice.defineDynamics<AdvectionDiffusionBGKdynamics>(superGeometry.getMaterialIndicator({1, 2, 3}));
-  setBounceBackBoundary(ADlattice, superGeometry, 4);
+  boundary::set<boundary::BounceBack>(ADlattice, superGeometry, 4);
 
   NSlattice.defineDynamics<ForcedBGKdynamics>(superGeometry.getMaterialIndicator({1, 2, 3}));
-  setBounceBackBoundary(NSlattice, superGeometry, 4);
+  boundary::set<boundary::BounceBack>(NSlattice, superGeometry, 4);
 
   /// sets boundary
-  setAdvectionDiffusionTemperatureBoundary<T,TDESCRIPTOR>(ADlattice, superGeometry.getMaterialIndicator({2, 3}));
-  setLocalVelocityBoundary<T,NSDESCRIPTOR>(NSlattice, omega, superGeometry.getMaterialIndicator({2, 3}));
+  boundary::set<boundary::AdvectionDiffusionDirichlet>(ADlattice, superGeometry.getMaterialIndicator({2, 3}));
+  boundary::set<boundary::LocalVelocity>(NSlattice, superGeometry.getMaterialIndicator({2, 3}));
 
   /// define initial conditions
   AnalyticalConst3D<T,T> rho(1.);
@@ -233,11 +239,9 @@ void getResults(ThermalUnitConverter<T, NSDESCRIPTOR, TDESCRIPTOR> &converter,
   OstreamManager clout(std::cout,"getResults");
 
   SuperVTMwriter3D<T> vtkWriter("squareCavity3d");
-  SuperLatticeGeometry3D<T, NSDESCRIPTOR> geometry(NSlattice, superGeometry);
   SuperLatticePhysVelocity3D<T, NSDESCRIPTOR> velocity(NSlattice, converter);
   SuperLatticePhysPressure3D<T, NSDESCRIPTOR> pressure(NSlattice, converter);
   SuperLatticePhysTemperature3D<T, NSDESCRIPTOR,TDESCRIPTOR> temperature(ADlattice, converter);
-  vtkWriter.addFunctor( geometry );
   vtkWriter.addFunctor( pressure );
   vtkWriter.addFunctor( velocity );
   vtkWriter.addFunctor( temperature );
@@ -426,7 +430,7 @@ int main(int argc, char *argv[])
 
   /// Instantiation of an empty cuboidGeometry
   CuboidGeometry3D<T> cuboidGeometry(cuboid, converter.getPhysDeltaX(), singleton::mpi().getSize());
-  cuboidGeometry.setPeriodicity(false, false, true);  // x, y, z
+  cuboidGeometry.setPeriodicity({false, false, true});  // x, y, z
 
   /// Instantiation of a loadBalancer
   HeuristicLoadBalancer<T> loadBalancer(cuboidGeometry);

@@ -33,8 +33,10 @@ namespace legacy {
 
 template <typename T, typename DESCRIPTOR, typename MOMENTA>
 struct BasicDynamics : public dynamics::CustomCollision<T,DESCRIPTOR,MOMENTA> {
-  T computeEquilibrium(int iPop, T rho, const T u[DESCRIPTOR::d]) const override {
-    return equilibrium<DESCRIPTOR>::secondOrder(iPop, rho, u);
+  void computeEquilibrium(ConstCell<T,DESCRIPTOR>& cell, T rho, const T u[DESCRIPTOR::d], T fEq[DESCRIPTOR::q]) const override {
+    for ( int iPop = 0; iPop < DESCRIPTOR::q; iPop++ ) {
+      fEq[iPop] = equilibrium<DESCRIPTOR>::template secondOrder(iPop, rho, u);
+    }
   };
 
   std::type_index id() override {
@@ -85,7 +87,7 @@ public:
   /// You may fix a fictitious density value on no dynamics node via this constructor.
   NoLatticeDynamics(T rho = T(1) );
   /// Yields 0;
-  T computeEquilibrium(int iPop, T rho, const T u[DESCRIPTOR::d]) const override any_platform;
+  void computeEquilibrium(ConstCell<T,DESCRIPTOR>& cell, T rho, const T u[DESCRIPTOR::d], T fEq[DESCRIPTOR::q]) const override any_platform;
   /// Collision step
   CellStatistic<T> collide(Cell<T,DESCRIPTOR>& cell) override;
   /// Yields 1;
@@ -192,7 +194,7 @@ NoLatticeDynamics<T,DESCRIPTOR>::NoLatticeDynamics(T rho) :_rho(rho)
 }
 
 template<typename T, typename DESCRIPTOR>
-T NoLatticeDynamics<T,DESCRIPTOR>::computeEquilibrium(int iPop, T rho, const T u[DESCRIPTOR::d]) const
+void NoLatticeDynamics<T,DESCRIPTOR>::computeEquilibrium(ConstCell<T,DESCRIPTOR>& cell, T rho, const T u[DESCRIPTOR::d], T fEq[DESCRIPTOR::q]) const
 {
   return T();
 }

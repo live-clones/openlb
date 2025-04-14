@@ -124,7 +124,7 @@ void setBouzidiZeroVelocityBoundary1(BlockLattice<T, DESCRIPTOR>& block, BlockGe
     if (blockGeometryStructure.isInside(iXn,iYn,iZn)) {
       if (bulkIndicator(iXn,iYn,iZn)) {
         T dist = -1;
-        T physR[3];
+        Vector<T,3> physR{};
         blockGeometryStructure.getPhysR(physR,{iXn,iYn,iZn});
         T voxelSize=blockGeometryStructure.getDeltaR();
 

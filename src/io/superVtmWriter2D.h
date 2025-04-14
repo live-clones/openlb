@@ -55,9 +55,12 @@ public:
   ///  every thread writes a vti file with data from his cuboids
   ///  the vti files are linked in a pvd file
   void write(int iT=0);
+  void write(std::vector<T> rMin, std::vector<T> rMax, int iT=0);
   ///  writes functor instantaneously, same vti-pvd file structure as above
   void write(SuperF2D<T,W>& f, int iT=0);
+  void write(SuperF2D<T,W>& f, std::vector<T> rMin, std::vector<T> rMax, int iT=0);
   void write(std::shared_ptr<SuperF2D<T,W>> ptr_f, int iT=0);
+  void write(std::shared_ptr<SuperF2D<T,W>> ptr_f, std::vector<T> rMin, std::vector<T> rMax, int iT=0);
   ///  have to be called before calling write(int iT=0), since it creates
   //   the master pvd file, where all vti are linked!
   void createMasterFile();
@@ -72,6 +75,8 @@ public:
   /// getter for _name
   std::string getName() const;
 private:
+  /// computes the extremes of the plotted area for a given block
+  void extremes(int nMinOut[], int nMaxOut[], CuboidGeometry2D<T> const& cGeometry, LoadBalancer<T>& load, std::vector<T> rMin, std::vector<T> rMax, int iCloc);
   ///  performes <VTKFile ...>, <ImageData ...>, <PieceExtent ...> and <PointData ...>
   void preambleVTI(const std::string& fullName, int x0, int y0, int x1, int y1,
                    T originX, T originY, T delta);
@@ -94,10 +99,10 @@ private:
                      const std::string& namePiece);
   ///  writes given functor f, ascii
   void dataArray(const std::string& fullName, SuperF2D<T,W>& f,
-                 int iC, int nx, int ny);
+                 int iC, int nxMin, int nxMax, int nyMin, int nyMax);
   ///  writes given functor f, base 64
   void dataArrayBinary(const std::string& fullName, SuperF2D<T,W>& f,
-                       int iC, int nx, int ny);
+                       int iC, int nxMin, int nxMax, int nyMin, int nyMax);
   ///  performes </PointData> and </Piece>
   void closePiece(const std::string& fullNamePiece);
 private:
@@ -112,6 +117,12 @@ private:
   bool _binary =true;
 };
 
+/// Write out functor F to VTK file (helper)
+template <typename T, typename W>
+void writeVTK(SuperF2D<T,W>& f, int iT=0) {
+  SuperVTMwriter2D<T> writer("");
+  writer.write(f, iT);
+}
 
 }  // namespace olb
 

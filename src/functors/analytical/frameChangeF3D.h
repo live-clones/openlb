@@ -210,6 +210,45 @@ public:
   bool operator()(T output[], const T x[]) override;
 };
 
+/**
+  * This functor returns a Casson profile for use with a pipe with
+  * util::round cross-section. It uses cylinder coordinates and is valid for the
+  * entire length of the pipe.
+  */
+
+template <typename T>
+class CircleCasson3D : public AnalyticalF3D<T,T> {
+protected:
+  olb::Vector<T, 3> _center;
+  std::vector<T> _normal;
+  T _radius;
+  T _cassonViscosity; // dynamic viscosity
+  T _pressureDrop;
+  T _yieldStress;
+  T _scale;
+
+public:
+  CircleCasson3D(olb::Vector<T, 3> axisPoint, std::vector<T> axisDirection, T radius, T cassonViscosity, T pressureDrop, T yieldStress, T scale = 1.0);
+
+  /// Returns centerpoint vector
+  olb::Vector<T, 3> getCenter()
+  {
+    return _center;
+  };
+  /// Returns normal vector
+  std::vector<T> getNormal()
+  {
+    return _normal;
+  };
+  /// Returns radi
+  T getRadius()
+  {
+    return _radius;
+  };
+
+  bool operator()(T output[], const T x[]) override;
+};
+
 /// Velocity profile for util::round pipes and a laminar flow of a Newtonian fluid: u(r)=u_max*(1-(r/R)^2)
 template <typename T>
 class CirclePoiseuille3D final : public CirclePowerLaw3D<T> {

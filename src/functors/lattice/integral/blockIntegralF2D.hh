@@ -39,17 +39,21 @@ BlockSum2D<T,W>::BlockSum2D(BlockF2D<W>&          f,
     _indicatorF(indicatorF)
 {
   this->getName() = "BlockSum("+_f.getName()+")";
+
+  OLB_ASSERT(_f.getSourceDim() == _indicatorF.getSourceDim(),
+             "functor source dimension equals indicator source dimension");
 }
 
 template <typename T, typename W>
 bool BlockSum2D<T,W>::operator() (W output[], const int input[])
 {
-  OLB_ASSERT(_f.getSourceDim() == _indicatorF.getSourceDim(),
-             "functor source dimension equals indicator source dimension");
+  // BlockSum2D must not reset output to 0 because SuperSum2D
+  // assumes this
 
   W outputTmp[_f.getTargetDim()];
   int inputTmp[_f.getSourceDim()];
   std::size_t voxels(0);
+  std::vector<util::KahanSummator<W>> summators(_f.getTargetDim(), util::KahanSummator<W>());
 
   const auto& blockStructure = this->getBlockStructure();
 
@@ -58,11 +62,14 @@ bool BlockSum2D<T,W>::operator() (W output[], const int input[])
         if (_indicatorF(inputTmp)) {
           _f(outputTmp,inputTmp);
           for (int i = 0; i < _f.getTargetDim(); ++i) {
-            output[i] += outputTmp[i];
+            summators[i].add(outputTmp[i]);
           }
           voxels += 1;
         }
     }
+  }
+  for (int i = 0; i < _f.getTargetDim(); ++i) {
+    output[i] += summators[i].getSum();
   }
   output[_f.getTargetDim()] += voxels;
 
@@ -78,18 +85,21 @@ BlockIntegral2D<T,W>::BlockIntegral2D(BlockF2D<W>&          f,
     _indicatorF(indicatorF)
 {
   this->getName() = "BlockIntegral("+_f.getName()+")";
+
+  OLB_ASSERT(_f.getSourceDim() == _indicatorF.getSourceDim(),
+             "functor source dimension equals indicator source dimension");
 }
 
 template <typename T, typename W>
 bool BlockIntegral2D<T,W>::operator() (W output[], const int input[])
 {
-  OLB_ASSERT(_f.getSourceDim() == _indicatorF.getSourceDim(),
-             "functor source dimension equals indicator source dimension");
-
-  const W weight = pow(_indicatorF.getBlockGeometry().getDeltaR(), 2);// was 3
+  // BlockIntegral2D must not reset output to 0 because SuperIntegral2D
+  // assumes this
+  const W weight = util::pow(_indicatorF.getBlockGeometry().getDeltaR(), 2);// was 3
 
   W outputTmp[_f.getTargetDim()];
   int inputTmp[_f.getSourceDim()];
+  std::vector<util::KahanSummator<W>> summators(_f.getTargetDim(), util::KahanSummator<W>());
 
   const auto& blockStructure = this->getBlockStructure();
 
@@ -98,10 +108,13 @@ bool BlockIntegral2D<T,W>::operator() (W output[], const int input[])
         if (_indicatorF(inputTmp)) {
           _f(outputTmp,inputTmp);
           for (int i = 0; i < this->getTargetDim(); ++i) {
-            output[i] += outputTmp[i] * weight;
+            summators[i].add(outputTmp[i]);
           }
         }
     }
+  }
+  for (int i = 0; i < _f.getTargetDim(); ++i) {
+    output[i] += summators[i].getSum()*weight;
   }
 
   return true;

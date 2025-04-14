@@ -44,6 +44,9 @@ Tim Dornieden
   functors: smooth start scaling
   io: vti writer
 
+Simon Englert
+  documentation: user guide
+
 Jonas Fietz
   io: configure file parsing based on XML, octree STL reader interface to CVMLCPP
   communication: heuristic load balancer
@@ -74,7 +77,7 @@ Marc Haussmann
   examples: tgv3d
   io: gnuplot heatmap
 
-Marc Heinzelmann:
+Marc Heinzelmann
   postProcessor: surface reaction models using source term and robin-type boundary conditions
   examples: longitudinalMixing3d
 
@@ -106,6 +109,11 @@ Julius Jeßberger
   examples: poiseuille2d, cavity2dSolver, porousPlate3dSolver, testFlow3dSolver, optimization examples
   postprocessing: error analysis
   utilities: algorithmic differentiation
+
+Florian Kaiser
+  examples: solidPlate2d, holeyPlate2d
+  dynamics: LBM for solids
+  documentation: user guide
 
 Fabian Klemens
   functors: flux, indicator-based functors
@@ -190,6 +198,9 @@ Patrick Nathen
   dynamics: turbulence modeling (advanced subgrid-scale models)
   examples: nozzle3d
 
+Johannes Nguyen
+  examples: four roll mill, binary shear flow
+
 Aleksandra Pachalieva
    dynamics: thermal (MRT model)
    examples: thermal (MRT model)
@@ -236,6 +247,10 @@ Gilles Zahnd
 
 Asher Zarth
   core: vector implementation
+
+Mingliang Zhong 
+  dynamics: uncertainty quantification, stochastic Galerkin LBM, stochastic collocation LBM, Monte Carlo methods 
+  external: features
 
 Simon Zimny
   io: pre-processing: automated setting of boundary conditions

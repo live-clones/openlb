@@ -50,7 +50,7 @@ namespace momenta {
  **/
 template <typename BASE, typename DENSITY, typename MOMENTUM>
 struct ComputeRhoU {
-  template <typename CELL, typename RHO, typename U>
+  template <concepts::Cell CELL, typename RHO, typename U>
   void operator()(CELL& cell, RHO& rho, U& u) const any_platform
   {
     DENSITY().template compute<BASE>(cell, rho);
@@ -60,7 +60,7 @@ struct ComputeRhoU {
 
 template <typename BASE>
 struct ComputeRhoU<BASE,BulkDensity,BulkMomentum> {
-  template <typename CELL, typename RHO, typename U, typename DESCRIPTOR=typename CELL::descriptor_t>
+  template <concepts::Cell CELL, typename RHO, typename U, typename DESCRIPTOR=typename CELL::descriptor_t>
   void operator()(CELL& cell, RHO& rho, U& u) const any_platform
   {
     lbm<DESCRIPTOR>::computeRhoU(cell, rho, u);
@@ -102,7 +102,7 @@ struct ConcreteTuple {
 
   using abstract = Tuple<DENSITY,MOMENTUM,STRESS,DefinitionRule>;
 
-  template <typename CELL, typename V=typename CELL::value_t>
+  template <concepts::Cell CELL, typename V=typename CELL::value_t>
   V computeRho(CELL& cell) const any_platform
   {
     V rho{};
@@ -110,13 +110,13 @@ struct ConcreteTuple {
     return rho;
   }
 
-  template <typename CELL, typename U>
+  template <concepts::Cell CELL, typename U>
   void computeU(CELL& cell, U& u) const any_platform
   {
     MOMENTUM().template computeU<type>(cell, u);
   }
 
-  template <typename CELL, typename J>
+  template <concepts::Cell CELL, typename J>
   void computeJ(CELL& cell, J& j) const any_platform
   {
     MOMENTUM().template compute<type>(cell, j);
@@ -124,7 +124,7 @@ struct ConcreteTuple {
 
   // TODO: Drop the rho and u args here, this is just another opportunity for
   // injecting false values. Replaces calls with computeAllMomenta
-  template <typename CELL, typename RHO, typename U, typename PI>
+  template <concepts::Cell CELL, typename RHO, typename U, typename PI>
   void computeStress(CELL& cell,
                      const RHO& rho, const U& u, PI& pi) const any_platform
   {
@@ -132,7 +132,7 @@ struct ConcreteTuple {
   }
 
   //computeStress without rho and u args
-  template <typename CELL, typename PI, typename V=typename CELL::value_t>
+  template <concepts::Cell CELL, typename PI, typename V=typename CELL::value_t>
   void computeStress(CELL& cell, PI& pi) const any_platform
   {
     V rho, u[DESCRIPTOR::d];
@@ -140,27 +140,27 @@ struct ConcreteTuple {
     STRESS().template compute<type>(cell, rho, u, pi);
   }
 
-  template <typename CELL, typename RHO, typename J>
+  template <concepts::Cell CELL, typename RHO, typename J>
   void computeRhoJ(CELL& cell, RHO& rho, J& j) const any_platform
   {
     DENSITY().template compute<type>(cell, rho);
     MOMENTUM().template compute<type>(cell, j);
   }
 
-  template <typename CELL, typename RHO, typename U>
+  template <concepts::Cell CELL, typename RHO, typename U>
   void computeRhoU(CELL& cell, RHO& rho, U& u) const any_platform
   {
     ComputeRhoU<type,DENSITY,MOMENTUM>()(cell, rho, u);
   }
 
-  template <typename CELL, typename RHO, typename U, typename PI>
+  template <concepts::Cell CELL, typename RHO, typename U, typename PI>
   void computeAllMomenta(CELL& cell, RHO& rho, U& u, PI& pi) const any_platform
   {
     computeRhoU(cell, rho, u);
     STRESS().template compute<type>(cell, rho, u, pi);
   }
 
-  template <typename CELL, typename PINEQNORMSQR, typename V=typename CELL::value_t>
+  template <concepts::Cell CELL, typename PINEQNORMSQR, typename V=typename CELL::value_t>
   void computePiNeqNormSqr(CELL& cell, PINEQNORMSQR& piNeqNormSqr) const any_platform
   {
     V rho, u[DESCRIPTOR::d], pi[util::TensorVal<DESCRIPTOR>::n] { };
@@ -172,7 +172,7 @@ struct ConcreteTuple {
     }
   }
 
-  template <typename CELL, typename RHO>
+  template <concepts::Cell CELL, typename RHO>
   void defineRho(CELL& cell, const RHO& rho) any_platform
   {
     DENSITY().template define<type>(cell, rho);
@@ -182,7 +182,7 @@ struct ConcreteTuple {
     DefinitionRule().template defineRho<type>(cell, rho);
   }
 
-  template <typename CELL, typename U>
+  template <concepts::Cell CELL, typename U>
   void defineU(CELL& cell, const U& u) any_platform
   {
     MOMENTUM().template define<type>(cell, u);
@@ -194,7 +194,7 @@ struct ConcreteTuple {
     DefinitionRule().template defineU<type>(cell, u);
   }
 
-  template <typename CELL, typename RHO, typename U>
+  template <concepts::Cell CELL, typename RHO, typename U>
   void defineRhoU(CELL& cell, const RHO& rho, const U& u) any_platform
   {
     DENSITY().template define<type>(cell, rho);
@@ -208,7 +208,7 @@ struct ConcreteTuple {
     DefinitionRule().template defineRhoU<type>(cell, rhoShift, uShift);
   }
 
-  template <typename CELL, typename RHO, typename U, typename PI>
+  template <concepts::Cell CELL, typename RHO, typename U, typename PI>
   void defineAllMomenta(CELL& cell, const RHO& rho, const U& u, const PI& pi) any_platform
   {
     DENSITY().template define<type>(cell, rho);
@@ -229,19 +229,19 @@ struct ConcreteTuple {
     MOMENTUM().template initialize<type>(cell);
   }
 
-  template <typename CELL, typename RHO>
+  template <concepts::Cell CELL, typename RHO>
   void inverseShiftRho(CELL& cell, RHO& rho) any_platform
   {
     DENSITY().template inverseShift<type>(cell, rho);
   }
 
-  template <typename CELL, typename U>
+  template <concepts::Cell CELL, typename U>
   void inverseShiftU(CELL& cell, U& u) any_platform
   {
     MOMENTUM().template inverseShift<type>(cell, u);
   }
 
-  template <typename CELL, typename RHO, typename U>
+  template <concepts::Cell CELL, typename RHO, typename U>
   void inverseShiftRhoU(CELL& cell, RHO& rho, U& u) any_platform
   {
     inverseShiftRho(cell, rho);
@@ -273,6 +273,15 @@ struct Tuple {
 
   template <typename DESCRIPTOR>
   using type = ConcreteTuple<DESCRIPTOR,DENSITY,MOMENTUM,STRESS,DefinitionRule>;
+
+  /// Helper for modifying the momentum element of the Tuple
+  template <template<typename> typename F>
+  using wrap_momentum = Tuple<DENSITY,F<MOMENTUM>,STRESS,DefinitionRule>;
+
+  /// Helper for modifying the stress element of the Tuple
+  template <template<typename> typename F>
+  using wrap_stress = Tuple<DENSITY,MOMENTUM,F<STRESS>,DefinitionRule>;
+
 };
 
 template <typename MOMENTA>

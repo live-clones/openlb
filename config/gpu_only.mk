@@ -14,13 +14,16 @@ CXX             := nvcc
 CC              := nvcc
 
 CXXFLAGS        := -O3
-CXXFLAGS        += -std=c++17 --forward-unknown-to-host-compiler
+CXXFLAGS        += -std=c++20 --forward-unknown-to-host-compiler -diag-suppress 20012
 
 PARALLEL_MODE   := NONE
+MPIFLAGS		    := -lmpi_cxx -lmpi
 
 PLATFORMS       := CPU_SISD GPU_CUDA
 
-# for e.g. RTX 30* (Ampere), see table in `rules.mk` for other options
+# for e.g. RTX 20* (Turing), see table in `rules.mk` for other options
+# Laptop: Geforce RTX 3060    		8.6		Ampere
+# Workstation: Geforce RTX 20...    7.5 (?)	Turing
 CUDA_ARCH       := 86
 
 FLOATING_POINT_TYPE := float

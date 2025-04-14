@@ -337,7 +337,7 @@ void SmoothIndicatorCustom2D<T,S,PARTICLE>::initBlockData(IndicatorF2D<T>& ind)
       for (unsigned iD=0; iD<2; ++iD) {
         input[iD] = (iX[iD]-blockDataPadding[iD]/2)*_latticeSpacing+ind.getMin()[iD];
       }
-      this->_blockData->get(iX) = ind.signedDistance(input);
+      this->_blockData->get(iX) = ind.signedDistanceExact(input);
     }
   }
 
@@ -443,7 +443,7 @@ Vector<T,2> SmoothIndicatorCustom2D<T,S,PARTICLE>::getLocalCenter()
 template <typename T, typename S, bool PARTICLE>
 Vector<S,2> SmoothIndicatorCustom2D<T,S,PARTICLE>::surfaceNormal( const Vector<S,2>& pos, const S meshSize )
 {
-  return _indPtr->surfaceNormal(pos, meshSize);
+  return _indPtr->surfaceNormalExact(pos, meshSize);
 }
 
 template <typename T, typename S, bool PARTICLE>

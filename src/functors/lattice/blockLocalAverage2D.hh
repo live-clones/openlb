@@ -57,15 +57,15 @@ bool BlockLocalAverage2D<T,W>::operator() (W output[], const int input[])
     return true;
   }
 
-  T centerOfCircle[2];
-  geometry.getPhysR(centerOfCircle, input);
-  IndicatorCircle2D<T> analyticalCircle(centerOfCircle, _radius);
+  auto centerOfCircle = geometry.getPhysR(input);
+  IndicatorCircle2D<T> analyticalCircle(centerOfCircle.data(), _radius);
   BlockIndicatorFfromIndicatorF2D<T> latticeCircle(
     analyticalCircle,
     _indicatorF.getBlockGeometry());
 
   std::size_t voxels(0);
   int inputTmp[2];
+  std::vector<util::KahanSummator<W>> summators(_f.getTargetDim(), util::KahanSummator<W>());
 
   for (inputTmp[0] = 0; inputTmp[0] < geometry.getNx(); ++inputTmp[0]) {
     for (inputTmp[1] = 0; inputTmp[1] < geometry.getNy(); ++inputTmp[1]) {
@@ -73,7 +73,7 @@ bool BlockLocalAverage2D<T,W>::operator() (W output[], const int input[])
         T outputTmp[_f.getTargetDim()];
         _f(outputTmp, inputTmp);
         for (int i = 0; i < this->getTargetDim(); ++i) {
-          output[i] += outputTmp[i];
+          summators[i].add(outputTmp[i]);
         }
         voxels += 1;
       }
@@ -82,7 +82,7 @@ bool BlockLocalAverage2D<T,W>::operator() (W output[], const int input[])
 
   if (voxels > 0) {
     for (int i = 0; i < this->getTargetDim(); ++i) {
-      output[i] /= voxels;
+      output[i] = summators[i].getSum() / voxels;
     }
   }
 

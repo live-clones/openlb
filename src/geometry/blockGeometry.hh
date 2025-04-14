@@ -138,17 +138,9 @@ void BlockGeometry<T,D>::set(std::size_t iCell, int material)
 }
 
 template<typename T, unsigned D>
-void BlockGeometry<T,D>::getPhysR(T physR[D], const int latticeR[D]) const
+void BlockGeometry<T,D>::getPhysR(Vector<T,D>& physR, LatticeR<D> latticeR) const
 {
-  LatticeR<D> loc{latticeR};
-  getPhysR(physR, loc);
-  return;
-}
-
-template<typename T, unsigned D>
-void BlockGeometry<T,D>::getPhysR(T physR[D], LatticeR<D> loc) const
-{
-  _cuboid.getPhysR(physR, loc);
+  physR = _cuboid.getPhysR(latticeR);
   return;
 }
 
@@ -382,12 +374,12 @@ bool BlockGeometry<T,D>::checkForErrors(bool verbose) const
   this->forSpatialLocations([&](LatticeR<D> latticeR)
   {
     if (get(latticeR) == 0) {
-          errorFound = false;
-          for(int iPop = 1; iPop < DESCRIPTOR::q; iPop++){
-            if(getMaterial(latticeR + (descriptors::c<DESCRIPTOR>(iPop))) == 1){
-              errorFound = true;
-            }
-          }
+      errorFound = false;
+      for(int iPop = 1; iPop < DESCRIPTOR::q; iPop++){
+        if(getMaterial(latticeR + (descriptors::c<DESCRIPTOR>(iPop))) == 1){
+          errorFound = true;
+        }
+      }
       if(errorFound){
         error = true;
       }
@@ -418,12 +410,13 @@ void BlockGeometry<T,D>::rename(int fromM, int toM)
 template<typename T, unsigned D>
 void BlockGeometry<T,D>::rename(int fromM, int toM, IndicatorF<T,D>& condition)
 {
-  T physR[D];
+  Vector<T,D> physR;
   this->forSpatialLocations([&](LatticeR<D> latticeR) {
     if (get(latticeR) == fromM) {
       getPhysR(physR, latticeR);
       bool inside[1];
-      condition(inside, physR);
+
+      condition(inside, physR.data());
       if (inside[0]) {
         set(latticeR, toM);
       }
@@ -505,12 +498,14 @@ void BlockGeometry<T,D>::rename(int fromM, int toM, int fluidM,
 {
   rename(fromM, toM, condition);
   Vector<int,D> testDirection(discreteNormal);
-  T physR[D];
+  Vector<T,D> physR;
+
   this->forCoreSpatialLocations([&](LatticeR<D> latticeR) {
     if (get(latticeR) == toM) {
       getPhysR(physR, latticeR);
       bool inside[1];
-      condition(inside, physR);
+
+      condition(inside, physR.data());
       if (inside[0]) {
         if constexpr (D==3){
           if (getMaterial({latticeR[0]+testDirection[0],latticeR[1]+testDirection[1],latticeR[2]+testDirection[2]})!=fluidM ||
@@ -701,13 +696,15 @@ void BlockGeometry<T,D>::printLayer(int direction, int layer, bool linenumber)
 }
 
 template<typename T, unsigned D>
-void BlockGeometry<T,D>::printNode(std::vector<int> loc)
+void BlockGeometry<T,D>::printNode(std::vector<int> loc, int offset)
 {
-  for (int x = loc[0] - 1; x <= loc[0] + 1; x++) {
-    clout << "x=" << x << std::endl;
-    for (int y = loc[1] - 1; y <= loc[1] + 1; y++) {
+  for (int x = loc[0] - offset; x <= loc[0] + offset; x++) {
+    if constexpr (D==3) {
+      clout << "yz-plane_x=" << x - loc[0] << std::endl;
+    }
+    for (int y = loc[1] - offset; y <= loc[1] + offset; y++) {
       if constexpr (D==3){
-        for (int z = loc[2] - 1; z <= loc[2] + 1; z++) {
+        for (int z = loc[2] - offset; z <= loc[2] + offset; z++) {
           clout << getMaterial({x, y, z}) << " ";
         }
         clout << std::endl;
@@ -715,9 +712,10 @@ void BlockGeometry<T,D>::printNode(std::vector<int> loc)
         clout << getMaterial({x, y}) << " ";
       }
     }
-    clout << std::endl;
+    if constexpr (D==2){
+      clout << std::endl;
+    }
   }
-  clout << std::endl;
 }
 
 template<typename T, unsigned D>

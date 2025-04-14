@@ -21,7 +21,9 @@ CXX             := nvcc
 CC              := nvcc
 
 CXXFLAGS        := -O3
-CXXFLAGS        += -std=c++17
+CXXFLAGS        += -std=c++20
+CXXFLAGS		    += -I${MPI_ROOT}/include
+LDFLAGS   		  += -L${MPI_ROOT}/lib # $$ mpicxx --showme:link $$ -L${MPI_ROOT}/lib -Wl,-rpath -Wl, ${MPI_ROOT}/lib -Wl,--enable-new-dtags -lmpi
 
 PARALLEL_MODE   := MPI
 
@@ -30,6 +32,8 @@ MPIFLAGS        := -lmpi_cxx -lmpi
 PLATFORMS       := CPU_SISD GPU_CUDA
 
 # for e.g. RTX 30* (Ampere), see table in `rules.mk` for other options
+# Laptop: Geforce RTX 3060    		8.6
+# Workstation: Geforce RTX 20...    7.5 (?)
 CUDA_ARCH       := 86
 
 FLOATING_POINT_TYPE := float

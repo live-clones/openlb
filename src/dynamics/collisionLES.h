@@ -34,7 +34,18 @@ namespace collision {
 
 namespace LES {
 
-struct Smagorinsky : public descriptors::FIELD_BASE<1> { };
+struct SMAGORINSKY : public descriptors::FIELD_BASE<1,0,0> {
+  template <typename T, typename DESCRIPTOR>
+  static constexpr auto getInitialValue() {
+    return FieldD<T,DESCRIPTOR,SMAGORINSKY>(0.15);
+  }
+
+  template <typename T, typename DESCRIPTOR,typename FIELD>
+  static constexpr auto isValid(FieldD<T,DESCRIPTOR,FIELD> value) {
+    return value >= 0;
+  }
+};
+
 
 }
 
@@ -49,13 +60,13 @@ struct SmagorinskyEffectiveOmega {
   using MomentaF = typename MOMENTA::template type<DESCRIPTOR>;
   using CollisionO = typename COLLISION::template type<DESCRIPTOR, MOMENTA, EQUILIBRIUM>;
 
-  template <typename CELL, typename PARAMETERS, typename V=typename CELL::value_t>
+  template <concepts::Cell CELL, concepts::Parameters PARAMETERS, typename V=typename CELL::value_t>
   V computeEffectiveOmega(CELL& cell, PARAMETERS& parameters) any_platform {
     V piNeqNormSqr { };
     MomentaF().computePiNeqNormSqr(cell, piNeqNormSqr);
     const V rho = MomentaF().computeRho(cell);
     const V omega = parameters.template get<descriptors::OMEGA>();
-    const V smagorinsky = parameters.template get<collision::LES::Smagorinsky>();
+    const V smagorinsky = parameters.template get<collision::LES::SMAGORINSKY>();
     V piNeqNorm = util::sqrt(piNeqNormSqr);
     V preFactor = smagorinsky*smagorinsky
                 * descriptors::invCs2<V,DESCRIPTOR>()*descriptors::invCs2<V,DESCRIPTOR>()
@@ -69,7 +80,83 @@ struct SmagorinskyEffectiveOmega {
     return  V{1} / tauEff;
   }
 
-  template <typename CELL, typename PARAMETERS, typename V=typename CELL::value_t>
+  template <concepts::Cell CELL, concepts::Parameters PARAMETERS, typename V=typename CELL::value_t>
+  CellStatistic<V> apply(CELL& cell, PARAMETERS& parameters) any_platform {
+    parameters.template set<descriptors::OMEGA>(
+      computeEffectiveOmega(cell, parameters));
+    return CollisionO().apply(cell, parameters);
+  }
+};
+
+template <typename COLLISION, typename DESCRIPTOR, typename MOMENTA, typename EQUILIBRIUM>
+struct LocalSmagorinskyEffectiveOmega {
+  using MomentaF = typename MOMENTA::template type<DESCRIPTOR>;
+  using CollisionO = typename COLLISION::template type<DESCRIPTOR, MOMENTA, EQUILIBRIUM>;
+
+  template <concepts::Cell CELL, concepts::Parameters PARAMETERS, typename V=typename CELL::value_t>
+  V computeEffectiveOmega(CELL& cell, PARAMETERS& parameters) any_platform {
+    V piNeqNormSqr { };
+    MomentaF().computePiNeqNormSqr(cell, piNeqNormSqr);
+    const V rho = MomentaF().computeRho(cell);
+    const V omega = parameters.template get<descriptors::OMEGA>();
+    const V smagorinsky = parameters.template get<collision::LES::SMAGORINSKY>();
+    V piNeqNorm = util::sqrt(piNeqNormSqr);
+    V preFactor = smagorinsky*smagorinsky
+                * descriptors::invCs2<V,DESCRIPTOR>()*descriptors::invCs2<V,DESCRIPTOR>()
+                * 2 * util::sqrt(2);
+    /// Molecular realaxation time
+    V tauMol = V{1} / omega;
+    /// Turbulent realaxation time
+    V tauTurb = V{0.5} * (util::sqrt(tauMol*tauMol + preFactor / rho * piNeqNorm) - tauMol);
+    /// Effective realaxation time
+    V tauEff = tauMol + tauTurb;
+    cell.template setField<descriptors::OMEGA>(V{1} / tauEff);
+    return  V{1} / tauEff;
+  }
+
+  template <concepts::Cell CELL, concepts::Parameters PARAMETERS, typename V=typename CELL::value_t>
+  CellStatistic<V> apply(CELL& cell, PARAMETERS& parameters) any_platform {
+    parameters.template set<descriptors::OMEGA>(
+      computeEffectiveOmega(cell, parameters));
+    return CollisionO().apply(cell, parameters);
+  }
+};
+
+template <typename COLLISION, typename DESCRIPTOR, typename MOMENTA, typename EQUILIBRIUM>
+struct LocalVanDriestSmagorinskyEffectiveOmega {
+  using MomentaF = typename MOMENTA::template type<DESCRIPTOR>;
+  using CollisionO = typename COLLISION::template type<DESCRIPTOR, MOMENTA, EQUILIBRIUM>;
+
+  static constexpr bool is_vectorizable = false;
+
+  template <concepts::Cell CELL, concepts::Parameters PARAMETERS, typename V=typename CELL::value_t>
+  V computeEffectiveOmega(CELL& cell, PARAMETERS& parameters) any_platform {
+    V piNeqNormSqr { };
+    MomentaF().computePiNeqNormSqr(cell, piNeqNormSqr);
+    const V rho = MomentaF().computeRho(cell);
+    const V omega = parameters.template get<descriptors::OMEGA>();
+    V tauEff {};
+    V nuT = cell.template getField<descriptors::VISCOSITY>();
+    if ( nuT != V(0) ) {
+      tauEff = nuT*descriptors::invCs2<V,DESCRIPTOR>() + V(0.5);
+    } else {
+      const V smagorinsky = parameters.template get<collision::LES::SMAGORINSKY>();
+      V piNeqNorm = util::sqrt(piNeqNormSqr);
+      V preFactor = smagorinsky*smagorinsky
+                  * descriptors::invCs2<V,DESCRIPTOR>()*descriptors::invCs2<V,DESCRIPTOR>()
+                  * 2 * util::sqrt(2);
+      /// Molecular realaxation time
+      V tauMol = V{1} / omega;
+      /// Turbulent realaxation time
+      V tauTurb = V{0.5} * (util::sqrt(tauMol*tauMol + preFactor / rho * piNeqNorm) - tauMol);
+      /// Effective realaxation time
+      tauEff = tauMol + tauTurb;
+    }
+    cell.template setField<descriptors::OMEGA>(V{1} / tauEff);
+    return  V{1} / tauEff;
+  }
+
+  template <concepts::Cell CELL, concepts::Parameters PARAMETERS, typename V=typename CELL::value_t>
   CellStatistic<V> apply(CELL& cell, PARAMETERS& parameters) any_platform {
     parameters.template set<descriptors::OMEGA>(
       computeEffectiveOmega(cell, parameters));
@@ -82,14 +169,14 @@ struct ShearSmagorinskyEffectiveOmega {
   using MomentaF = typename MOMENTA::template type<DESCRIPTOR>;
   using CollisionO = typename COLLISION::template type<DESCRIPTOR, MOMENTA, EQUILIBRIUM>;
 
-  template <typename CELL, typename PARAMETERS, typename V=typename CELL::value_t>
+  template <concepts::Cell CELL, concepts::Parameters PARAMETERS, typename V=typename CELL::value_t>
   V computeEffectiveOmega(CELL& cell, PARAMETERS& parameters) any_platform {
     V piNeqNormSqr { };
     MomentaF().computePiNeqNormSqr(cell, piNeqNormSqr);
     const V rho = MomentaF().computeRho(cell);
     const auto iT = parameters.template get<descriptors::LATTICE_TIME>();
     const V omega = parameters.template get<descriptors::OMEGA>();
-    const V smagorinsky = parameters.template get<collision::LES::Smagorinsky>();
+    const V smagorinsky = parameters.template get<collision::LES::SMAGORINSKY>();
     V avShear = cell.template getField<descriptors::AV_SHEAR>();
     V piNeqNorm = util::sqrt(piNeqNormSqr);
     V preFactor = smagorinsky*smagorinsky
@@ -103,7 +190,7 @@ struct ShearSmagorinskyEffectiveOmega {
     return  V{1} / tauEff;
   }
 
-  template <typename CELL, typename PARAMETERS, typename V=typename CELL::value_t>
+  template <concepts::Cell CELL, concepts::Parameters PARAMETERS, typename V=typename CELL::value_t>
   CellStatistic<V> apply(CELL& cell, PARAMETERS& parameters) any_platform {
     parameters.template set<descriptors::OMEGA>(
       computeEffectiveOmega(cell, parameters));
@@ -122,7 +209,7 @@ struct ConStrainSmagorinskyEffectiveOmega {
   using MomentaF = typename MOMENTA::template type<DESCRIPTOR>;
   using CollisionO = typename COLLISION::template type<DESCRIPTOR, MOMENTA, EQUILIBRIUM>;
 
-  template <typename CELL, typename PARAMETERS, typename V=typename CELL::value_t>
+  template <concepts::Cell CELL, concepts::Parameters PARAMETERS, typename V=typename CELL::value_t>
   V computeEffectiveOmega(CELL& cell, PARAMETERS& parameters) any_platform {
     V pi[util::TensorVal<DESCRIPTOR>::n] { };
     MomentaF().computeStress(cell, pi);
@@ -130,7 +217,7 @@ struct ConStrainSmagorinskyEffectiveOmega {
     MomentaF().computePiNeqNormSqr(cell, piNeqNormSqr);
     const V rho = MomentaF().computeRho(cell);
     const V omega = parameters.template get<descriptors::OMEGA>();
-    const V smagorinsky = parameters.template get<collision::LES::Smagorinsky>();
+    const V smagorinsky = parameters.template get<collision::LES::SMAGORINSKY>();
     V piNeqNorm = util::sqrt(2*piNeqNormSqr);
     V S[util::TensorVal<DESCRIPTOR>::n];
     V cs2 = V{1} / descriptors::invCs2<V,DESCRIPTOR>();
@@ -153,7 +240,7 @@ struct ConStrainSmagorinskyEffectiveOmega {
     return V{1} / tauEff;
   }
 
-  template <typename CELL, typename PARAMETERS, typename V=typename CELL::value_t>
+  template <concepts::Cell CELL, concepts::Parameters PARAMETERS, typename V=typename CELL::value_t>
   CellStatistic<V> apply(CELL& cell, PARAMETERS& parameters) any_platform{
     parameters.template set<descriptors::OMEGA>(
       computeEffectiveOmega(cell, parameters));
@@ -167,7 +254,7 @@ struct ConSmagorinskyEffectiveOmega {
   using MomentaF = typename MOMENTA::template type<DESCRIPTOR>;
   using CollisionO = typename COLLISION::template type<DESCRIPTOR, MOMENTA, EQUILIBRIUM>;
 
-  template <typename CELL, typename PARAMETERS, typename V=typename CELL::value_t>
+  template <concepts::Cell CELL, concepts::Parameters PARAMETERS, typename V=typename CELL::value_t>
   V computeEffectiveOmega(CELL& cell, PARAMETERS& parameters) any_platform {
     V pi[util::TensorVal<DESCRIPTOR>::n] { };
     MomentaF().computeStress(cell, pi);
@@ -175,7 +262,7 @@ struct ConSmagorinskyEffectiveOmega {
     MomentaF().computePiNeqNormSqr(cell, piNeqNormSqr);
     const V rho = MomentaF().computeRho(cell);
     const V omega = parameters.template get<descriptors::OMEGA>();
-    const V smagorinsky = parameters.template get<collision::LES::Smagorinsky>();
+    const V smagorinsky = parameters.template get<collision::LES::SMAGORINSKY>();
     V H[util::TensorVal<DESCRIPTOR >::n];
     V conSmagoR[DESCRIPTOR::q];
     V S[util::TensorVal<DESCRIPTOR >::n];
@@ -221,7 +308,7 @@ struct ConSmagorinskyEffectiveOmega {
     return conSmagoR[0];
   }
 
-  template <typename CELL, typename PARAMETERS, typename V=typename CELL::value_t>
+  template <concepts::Cell CELL, concepts::Parameters PARAMETERS, typename V=typename CELL::value_t>
   CellStatistic<V> apply(CELL& cell, PARAMETERS& parameters) any_platform {
     parameters.template set<descriptors::OMEGA>(
       computeEffectiveOmega(cell, parameters));
@@ -234,12 +321,12 @@ struct WaleEffectiveOmega {
   using MomentaF = typename MOMENTA::template type<DESCRIPTOR>;
   using CollisionO = typename COLLISION::template type<DESCRIPTOR, MOMENTA, EQUILIBRIUM>;
 
-  template <typename CELL, typename PARAMETERS, typename V=typename CELL::value_t>
+  template <concepts::Cell CELL, concepts::Parameters PARAMETERS, typename V=typename CELL::value_t>
   V computeEffectiveOmega(CELL& cell, PARAMETERS& parameters) any_platform {
     V piNeqNormSqr { };
     MomentaF().computePiNeqNormSqr(cell, piNeqNormSqr);
     const V omega = parameters.template get<descriptors::OMEGA>();
-    const V smagorinsky = parameters.template get<collision::LES::Smagorinsky>();
+    const V smagorinsky = parameters.template get<collision::LES::SMAGORINSKY>();
     const auto velocityGradient = cell.template getField<descriptors::VELO_GRAD>();
     V preFactor = smagorinsky*smagorinsky;
     // velocity gradient tensor
@@ -307,7 +394,7 @@ struct WaleEffectiveOmega {
     return V{1} / tauEff;
   }
 
-  template <typename CELL, typename PARAMETERS, typename V=typename CELL::value_t>
+  template <concepts::Cell CELL, concepts::Parameters PARAMETERS, typename V=typename CELL::value_t>
   CellStatistic<V> apply(CELL& cell, PARAMETERS& parameters) any_platform {
     parameters.template set<descriptors::OMEGA>(
       computeEffectiveOmega(cell, parameters));
@@ -320,13 +407,13 @@ struct KrauseEffectiveOmega {
   using MomentaF = typename MOMENTA::template type<DESCRIPTOR>;
   using CollisionO = typename COLLISION::template type<DESCRIPTOR, MOMENTA, EQUILIBRIUM>;
 
-  template <typename CELL, typename PARAMETERS, typename V=typename CELL::value_t>
+  template <concepts::Cell CELL, concepts::Parameters PARAMETERS, typename V=typename CELL::value_t>
   V computeEffectiveOmega(CELL& cell, PARAMETERS& parameters) any_platform {
     V rho, u[DESCRIPTOR::d], fNeq[DESCRIPTOR::q] { };
     MomentaF().computeRhoU(cell, rho, u);
     lbm<DESCRIPTOR>::computeFneq(cell, fNeq, rho, u);
     const V omega = parameters.template get<descriptors::OMEGA>();
-    const V smagorinsky = parameters.template get<collision::LES::Smagorinsky>();
+    const V smagorinsky = parameters.template get<collision::LES::SMAGORINSKY>();
     const V preFactor = smagorinsky*smagorinsky
                       * 3*descriptors::invCs2<V,DESCRIPTOR>()*descriptors::invCs2<V,DESCRIPTOR>()
                       * 2*util::sqrt(2);
@@ -344,13 +431,13 @@ struct KrauseEffectiveOmega {
     return avgOmegaEff;
   }
 
-  template <typename CELL, typename PARAMETERS, typename V=typename CELL::value_t>
+  template <concepts::Cell CELL, concepts::Parameters PARAMETERS, typename V=typename CELL::value_t>
   CellStatistic<V> apply(CELL& cell, PARAMETERS& parameters) any_platform {
     V rho, u[DESCRIPTOR::d], fNeq[DESCRIPTOR::q] { };
     MomentaF().computeRhoU(cell, rho, u);
     lbm<DESCRIPTOR>::computeFneq(cell, fNeq, rho, u); // TODO: Use EQUILIBRIUM instead of 2nd order
     const V omega = parameters.template get<descriptors::OMEGA>();
-    const V smagorinsky = parameters.template get<collision::LES::Smagorinsky>();
+    const V smagorinsky = parameters.template get<collision::LES::SMAGORINSKY>();
     const V preFactor = smagorinsky*smagorinsky
                       * 3*descriptors::invCs2<V,DESCRIPTOR>()*descriptors::invCs2<V,DESCRIPTOR>()
                       * 2*util::sqrt(2);
@@ -372,7 +459,7 @@ struct KrauseEffectiveOmega {
 template <typename COLLISION>
 struct SmagorinskyEffectiveOmega {
   using parameters = typename COLLISION::parameters::template include<
-    descriptors::OMEGA, LES::Smagorinsky
+    descriptors::OMEGA, LES::SMAGORINSKY
   >;
 
   static_assert(COLLISION::parameters::template contains<descriptors::OMEGA>(),
@@ -386,11 +473,45 @@ struct SmagorinskyEffectiveOmega {
   using type = detail::SmagorinskyEffectiveOmega<COLLISION,DESCRIPTOR,MOMENTA,EQUILIBRIUM>;
 };
 
+template <typename COLLISION>
+struct LocalSmagorinskyEffectiveOmega {
+  using parameters = typename COLLISION::parameters::template include<
+    descriptors::OMEGA, LES::SMAGORINSKY
+  >;
+
+  static_assert(COLLISION::parameters::template contains<descriptors::OMEGA>(),
+                "COLLISION must be parametrized using relaxation frequency OMEGA");
+
+  static std::string getName() {
+    return "LocalSmagorinskyEffectiveOmega<" + COLLISION::getName() + ">";
+  }
+
+  template <typename DESCRIPTOR, typename MOMENTA, typename EQUILIBRIUM>
+  using type = detail::LocalSmagorinskyEffectiveOmega<COLLISION,DESCRIPTOR,MOMENTA,EQUILIBRIUM>;
+};
+
+template <typename COLLISION>
+struct LocalVanDriestSmagorinskyEffectiveOmega {
+  using parameters = typename COLLISION::parameters::template include<
+    descriptors::OMEGA, LES::SMAGORINSKY
+  >;
+
+  static_assert(COLLISION::parameters::template contains<descriptors::OMEGA>(),
+                "COLLISION must be parametrized using relaxation frequency OMEGA");
+
+  static std::string getName() {
+    return "LocalVanDriestSmagorinskyEffectiveOmega<" + COLLISION::getName() + ">";
+  }
+
+  template <typename DESCRIPTOR, typename MOMENTA, typename EQUILIBRIUM>
+  using type = detail::LocalVanDriestSmagorinskyEffectiveOmega<COLLISION,DESCRIPTOR,MOMENTA,EQUILIBRIUM>;
+};
+
 /// Compute dynamics parameter OMEGA locally using Shear Smagorinsky LES model
 template <typename COLLISION>
 struct ShearSmagorinskyEffectiveOmega {
   using parameters = typename COLLISION::parameters::template include<
-    descriptors::LATTICE_TIME, descriptors::OMEGA, LES::Smagorinsky
+    descriptors::LATTICE_TIME, descriptors::OMEGA, LES::SMAGORINSKY
   >;
 
   static_assert(COLLISION::parameters::template contains<descriptors::OMEGA>(),
@@ -408,7 +529,7 @@ struct ShearSmagorinskyEffectiveOmega {
 template <typename COLLISION>
 struct ConStrainSmagorinskyEffectiveOmega {
   using parameters = typename COLLISION::parameters::template include<
-    descriptors::OMEGA, LES::Smagorinsky
+    descriptors::OMEGA, LES::SMAGORINSKY
   >;
 
   static_assert(COLLISION::parameters::template contains<descriptors::OMEGA>(),
@@ -426,7 +547,7 @@ struct ConStrainSmagorinskyEffectiveOmega {
 template <typename COLLISION>
 struct ConSmagorinskyEffectiveOmega {
   using parameters = typename COLLISION::parameters::template include<
-    descriptors::OMEGA, LES::Smagorinsky
+    descriptors::OMEGA, LES::SMAGORINSKY
   >;
 
   static_assert(COLLISION::parameters::template contains<descriptors::OMEGA>(),
@@ -444,7 +565,7 @@ struct ConSmagorinskyEffectiveOmega {
 template <typename COLLISION>
 struct WaleEffectiveOmega {
   using parameters = typename COLLISION::parameters::template include<
-    descriptors::OMEGA, LES::Smagorinsky
+    descriptors::OMEGA, LES::SMAGORINSKY
   >;
 
   static_assert(COLLISION::parameters::template contains<descriptors::OMEGA>(),
@@ -462,7 +583,7 @@ struct WaleEffectiveOmega {
 template <typename COLLISION>
 struct KrauseEffectiveOmega {
   using parameters = typename COLLISION::parameters::template include<
-    descriptors::OMEGA, LES::Smagorinsky
+    descriptors::OMEGA, LES::SMAGORINSKY
   >;
 
   static std::string getName() {
@@ -478,5 +599,3 @@ struct KrauseEffectiveOmega {
 }
 
 #endif
-
-#include "collisionLES.cse.h"

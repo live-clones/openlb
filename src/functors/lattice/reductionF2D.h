@@ -28,7 +28,7 @@
 #include "functors/analytical/analyticalF.h"
 #include "superBaseF2D.h"
 #include "geometry/superGeometry.h"
-#include "geometry/cuboidGeometry2D.h"
+#include "geometry/cuboidGeometry.h"
 
 namespace olb {
 

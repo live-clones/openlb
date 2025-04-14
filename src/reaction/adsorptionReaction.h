@@ -35,44 +35,62 @@ namespace olb {
 
 struct SCALAR2 : public descriptors::FIELD_BASE<1,  0, 0> { };
 
-/**
- * @brief Describes adsorption reactions in conjunction with a Isotherm class.
- *
- * @tparam T
- * @tparam DESCRIPTOR
- *
- * @see Isotherm
- */
-template<typename T, typename DESCRIPTOR>
-class AdsorptionReaction {
- protected:
-//  virtual void boundary(int n, T x[], T fvec[], int &iflag, T args[]) = 0;
-  bool externalMassTransferEnabled = false;
-  const AdsorptionConverter<T, DESCRIPTOR> _unitConverter;
-  const Isotherm<T>* isotherm; // needs to be pointer because Isotherm is an abstract class
+template <typename ISOTHERM>
+struct AdsorptionReaction {
+  using isotherm_t = ISOTHERM;
+  // K_F: film diffusion mass transfer coefficient (m/s)
+  struct K_F : public descriptors::FIELD_BASE<1> { };
+  // D_S: surface diffusion constant (m^2/s)
+  struct D_S : public descriptors::FIELD_BASE<1> { };
+  // C_0: initial concentration (mg/L)
+  struct C_0 : public descriptors::FIELD_BASE<1> { };
+  // R_P: particle radius (m)
+  struct R_P : public descriptors::FIELD_BASE<1> { };
+  // K_S: surface diffusion mass transfer coefficient (1/s)
+  struct K_S : public descriptors::FIELD_BASE<1> { };
+  // Q_0: equilibrium surface loading (mg/g)
+  struct Q_0 : public descriptors::FIELD_BASE<1> { };
+  // Conversion Factor Density
+  struct CONV_DENS : public descriptors::FIELD_BASE<1> { };
+  // Conversion Factor Particle Density
+  struct CONV_PARC_DENS : public descriptors::FIELD_BASE<1> { };
+  // External Mass Transfer Enabled
+  struct EXT_MASS : public descriptors::FIELD_BASE<1> { };
 
- public:
-  T k_f{}; // film diffusion mass transfer coefficient (m/s)
-  T D_s{}; // surface diffusion constant (m^2/s)
-  T c_0{}; // initial concentration (mg/L)
-  T r_p{}; // particle radius (m)
-  T q_0{}; // equilibrium surface loading (mg/g)
-  T k_s{}; // surface diffusion mass transfer coefficient (1/s)
+  using parameters = typename ISOTHERM::parameters::template include<
+    K_F,D_S,C_0,R_P,K_S,Q_0,CONV_DENS,CONV_PARC_DENS,EXT_MASS
+  >;
 
-//  explicit AdsorptionReaction(void(*fcn)(int, T[], T[], int&, T[])): fcn(fcn){}
-  AdsorptionReaction(AdsorptionConverter<T, DESCRIPTOR> const& converter, Isotherm<T> const* isotherm, T k_f, T D_s, T c_0, T r_p):
-  _unitConverter(converter),
-  isotherm(isotherm)
-  {
-    // calculate lattice values
-    T conversionFactorLength = _unitConverter.getConversionFactorLength();
-    this->k_f = k_f * _unitConverter.getConversionFactorTime() * 3 / r_p;
-    this->D_s = D_s / (conversionFactorLength*conversionFactorLength) * _unitConverter.getConversionFactorTime();
-    this->c_0 = c_0 / _unitConverter.getConversionFactorDensity();
-    this->r_p = r_p / conversionFactorLength;
-    this->k_s = 15 * this->D_s / (this->r_p * this->r_p);
-    this->q_0 = this->isotherm->getLoading(c_0) / _unitConverter.getConversionFactorParticleDensity();
-    externalMassTransferEnabled = this->k_f > 0.;
+  template <typename V, typename COUPLING, typename CONVERTER>
+  static void computeParameters(COUPLING& coupling, CONVERTER& converter) {
+    std::cout << "Starting computeParameters" << std::endl;
+    // Compute K_F
+    auto k_f = coupling.template getParameter<AdsorptionReaction::K_F>();
+    auto r_p = coupling.template getParameter<AdsorptionReaction::R_P>();
+    k_f[0] = k_f[0] * converter.getConversionFactorTime() * V(3.) / r_p[0];
+    coupling.template setParameter<AdsorptionReaction::K_F>(k_f[0]);
+    // Compute D_S
+    auto D_s = coupling.template getParameter<AdsorptionReaction::D_S>();
+    D_s[0] = D_s[0] * converter.getConversionFactorTime()
+                    / ( converter.getConversionFactorLength() * converter.getConversionFactorLength() );
+    coupling.template setParameter<AdsorptionReaction::D_S>(D_s[0]);
+    // Compute C_0
+    auto c_0 = coupling.template getParameter<AdsorptionReaction::C_0>();
+    c_0[0] = c_0[0] / converter.getConversionFactorDensity();
+    coupling.template setParameter<AdsorptionReaction::C_0>(c_0[0]);
+    // Compute R_P
+    r_p[0] = r_p[0] / converter.getConversionFactorLength();
+    coupling.template setParameter<AdsorptionReaction::R_P>(r_p[0]);
+    // Compute K_S
+    auto k_s = V(15.) * D_s[0] / ( r_p[0] * r_p[0] );
+    coupling.template setParameter<AdsorptionReaction::K_S>(k_s);
+    // Compute Q_0
+    auto q_0 = ISOTHERM().getLoadingFromCoupling(c_0,coupling) / converter.getConversionFactorParticleDensity();
+    coupling.template setParameter<AdsorptionReaction::Q_0>(q_0[0]);
+    // Enable external mass transfer
+    coupling.template setParameter<AdsorptionReaction::CONV_DENS>(converter.getConversionFactorDensity());
+    coupling.template setParameter<AdsorptionReaction::CONV_PARC_DENS>(converter.getConversionFactorParticleDensity());
+    coupling.template setParameter<AdsorptionReaction::EXT_MASS>(k_f[0] > 0.);
   }
 
   /**
@@ -81,9 +99,10 @@ class AdsorptionReaction {
    * @param soluteConcentration
    * @return loading in g/m^3
    */
-  T getSurfaceLoading(T soluteConcentration) {
+  template <typename V, typename PARAMETERS>
+  V getSurfaceLoading(V soluteConcentration, PARAMETERS& parameters) any_platform {
     if (soluteConcentration < 0) return 0; // prevent nan
-    T load = this->isotherm->getLoading(soluteConcentration);
+    V load = ISOTHERM().getLoading(soluteConcentration,parameters);
     if (load < 0) load = 0;
     return load;
   }
@@ -98,22 +117,26 @@ class AdsorptionReaction {
    * @param particleConcentration
    * @return T
    */
-  T getSurfaceLoading(T soluteConcentration, T particleLoading, T particleConcentration) {
+  template <typename V, typename PARAMETERS>
+  V getSurfaceLoading(V soluteConcentration, V particleLoading,
+                      V particleConcentration, PARAMETERS& parameters) any_platform {
     if (soluteConcentration < 0) return 0; // prevent nan
     // using D = double;  // because fsolve is hardcoded in double type
 
     // previous surface concentration as initial guess
-    T surfaceConcentration = soluteConcentration;
-    T args[] = {particleLoading, soluteConcentration, particleConcentration};
+    V surfaceConcentration = soluteConcentration;
+    V args[] = {particleLoading, soluteConcentration, particleConcentration};
     for(int i = 0; i<100; i++){
       //ADf<T,1> y0_ad = iniAD(surfaceConcentration);
       //ADf<T,1> y1_ad = filmDiffBoundary(y0_ad, args);
       //surfaceConcentration -= filmDiffBoundary(surfaceConcentration, args) / y1_ad.d(0);
 
-      T dCs = surfaceConcentration/1E8;
-      surfaceConcentration -= 2.*dCs*filmDiffBoundary(surfaceConcentration, args)/(filmDiffBoundary(surfaceConcentration + dCs, args) - filmDiffBoundary(surfaceConcentration - dCs, args));
+      V dCs = surfaceConcentration/1E8;
+      surfaceConcentration -= 2.*dCs*filmDiffBoundary(surfaceConcentration, args,parameters)
+                                    /(filmDiffBoundary(surfaceConcentration + dCs, args, parameters)
+                                    - filmDiffBoundary(surfaceConcentration - dCs, args, parameters));
     }
-    T load = isotherm->getLoading(surfaceConcentration);
+    V load = ISOTHERM().getLoading(surfaceConcentration,parameters);
     if (load < 0) load = 0;
     return load;
   }
@@ -123,73 +146,89 @@ class AdsorptionReaction {
   /// \param particleLoading
   /// \param particleConcentration
   /// \return change in solute concentration
-  Vector<T, 2> getReactionRate(T soluteConcentration, T particleLoading, T particleConcentration) {
-    T surfaceLoad;
-    particleConcentration *= _unitConverter.getConversionFactorParticleDensity(); // convert to kg/m^3
-    soluteConcentration *= _unitConverter.getConversionFactorDensity();           // convert to g/m^3
-    particleLoading *= _unitConverter.getConversionFactorParticleDensity();       // convert to g/m^3
+  template <typename V, typename PARAMETERS>
+  Vector<V, 2> getReactionRate(V soluteConcentration, V particleLoading,
+                               V particleConcentration, PARAMETERS& params) any_platform{
+    V surfaceLoad;
+    V conversionFactorDensity = params.template get<CONV_DENS>();
+    V conversionFactorParticleDensity = params.template get<CONV_PARC_DENS>();
+    particleConcentration *= conversionFactorParticleDensity; // convert to kg/m^3
+    soluteConcentration *= conversionFactorDensity;           // convert to g/m^3
+    particleLoading *= conversionFactorParticleDensity;       // convert to g/m^3
+    auto externalMassTransferEnabled = params.template get<EXT_MASS>();
     if (externalMassTransferEnabled) {
-      surfaceLoad = this->getSurfaceLoading(soluteConcentration, particleLoading, particleConcentration);
+      surfaceLoad = getSurfaceLoading(soluteConcentration, particleLoading, particleConcentration, params);
     } else {
-      surfaceLoad = this->getSurfaceLoading(soluteConcentration);
+      surfaceLoad = getSurfaceLoading(soluteConcentration,params);
     }
+    V D_s = params.template get<D_S>();
+    V r_p = params.template get<R_P>();
+    V k_s = params.template get<K_S>();
 
-    T reactionRate = this->k_s * (surfaceLoad * particleConcentration - particleLoading);
-    Vector<T, 2> reactionRates(reactionRate / _unitConverter.getConversionFactorDensity(),          // solute
-                               reactionRate / _unitConverter.getConversionFactorParticleDensity()); // loading
+    V reactionRate = k_s * (surfaceLoad * particleConcentration - particleLoading);
+    Vector<V, 2> reactionRates(reactionRate / conversionFactorDensity, // solute
+                               reactionRate / conversionFactorParticleDensity ); // loading
+
     return reactionRates;
   }
 
-  T getPhysFilmTransferConstant() {
-    return this->k_f / _unitConverter.getConversionFactorTime();
-  }
-  T getPhysSurfaceTransferConstant() {
-    return this->k_s / _unitConverter.getConversionFactorTime();
-  }
-
-  T getPhysSurfaceDiffusionConstant() {
-    return this->D_s * _unitConverter.getConversionFactorLength() * _unitConverter.getConversionFactorLength() / _unitConverter.getConversionFactorTime();
-  }
-
-  void print(std::ostream& clout) {
-    clout << "----------------- Reaction information -----------------" << std::endl;
-    clout << "-- Parameters:" << std::endl;
-    clout << "Particle diameter(m):                   d_p=    " << this->r_p*2 * _unitConverter.getConversionFactorLength() << std::endl;
-    clout << "Film diffusion constant(m/s):           k_f*=   " << getPhysFilmTransferConstant() << std::endl;
-    clout << "Surface diffusion constant(m^2/s):      D_s=    " << getPhysSurfaceDiffusionConstant() << std::endl;
-    clout << "Initial solute concentration(mg/mL):    c_0=    " << this->c_0 * _unitConverter.getConversionFactorDensity() << std::endl;
-    clout << "Equilibrium surface loading(mg/g):      q_0=    " << this->q_0 * _unitConverter.getConversionFactorParticleDensity() << std::endl;
-    clout << "lattice Equilibrium surface loading:    q_0=    " << this->q_0 << std::endl;
-    clout << "Surface Mass transfer coefficient(m/s): k_s*=   " << getPhysSurfaceTransferConstant() << std::endl;
-    clout << "-------------------------------------------------------------" << std::endl;
-    this->isotherm->print(clout);
-  }
-
-  void write(std::string const& fileName) {
-    std::string dataFile = singleton::directories().getLogOutDir() + fileName + ".dat";
-
-    if (singleton::mpi().isMainProcessor()) {
-      std::ofstream fout(dataFile.c_str(), std::ios::app);
-      if (!fout) {
-        std::cout << "error write() function: can not open std::ofstream" << std::endl;
-      }
-      else {
-        this->print( fout );
-        fout.close();
-      }
-    }
-  }
-
   /// equations for surface concentration
-  T filmDiffBoundary(T c_s_, T args[]) {
-    T q = args[0];
-    T c = args[1];
-    T particleConcentration = args[2];
+  template <typename V, typename PARAMETERS>
+  V filmDiffBoundary(V c_s_, V args[], PARAMETERS& params) any_platform{
+    V q = args[0];
+    V c = args[1];
+    V particleConcentration = args[2];
     auto c_s = c_s_;
-    T q_s = this->isotherm->getLoading(c_s);
-    T equation = this->k_f * (c - c_s) - this->k_s * (particleConcentration * q_s - q);
+    V q_s = ISOTHERM().getLoading(c_s, params);
+    // getting parameters
+    V k_f = params.template get<K_F>();
+    V D_s = params.template get<D_S>();
+    V r_p = params.template get<R_P>();
+    V k_s = params.template get<K_S>();
+    V equation = k_f * (c - c_s) - k_s * (particleConcentration * q_s - q);
     return equation;
   }
+
+  template <typename V, typename COUPLING, typename CONVERTER>
+  static V getPhysFilmTransferConstant(COUPLING& coupling, CONVERTER& converter) {
+    auto k_f = coupling.template getParameter<AdsorptionReaction::K_F>();
+    return k_f[0] / converter.getConversionFactorTime();
+  }
+
+  template <typename V, typename COUPLING, typename CONVERTER>
+  static V getPhysSurfaceTransferConstant(COUPLING& coupling, CONVERTER& converter) {
+    auto k_s = coupling.template getParameter<AdsorptionReaction::K_S>();
+    return k_s[0] / converter.getConversionFactorTime();
+  }
+
+  template <typename V, typename COUPLING, typename CONVERTER>
+  static V getPhysSurfaceDiffusionConstant(COUPLING& coupling, CONVERTER& converter) {
+    auto D_s = coupling.template getParameter<AdsorptionReaction::D_S>();
+    return D_s[0] * converter.getConversionFactorLength() * converter.getConversionFactorLength()
+                  / converter.getConversionFactorTime();
+  }
+
+  template <typename V, typename COUPLING, typename CONVERTER>
+  static void print(std::ostream& clout, COUPLING& coupling, CONVERTER& converter) {
+    // Get values
+    auto r_p = coupling.template getParameter<AdsorptionReaction::R_P>();
+    auto c_0 = coupling.template getParameter<AdsorptionReaction::C_0>();
+    auto q_0 = coupling.template getParameter<AdsorptionReaction::Q_0>();
+    clout << "----------------- Reaction information -----------------" << std::endl;
+    clout << "-- Parameters:" << std::endl;
+    clout << "Particle diameter(m):                   d_p=    " << r_p[0] * 2 * converter.getConversionFactorLength() << std::endl;
+    clout << "Film diffusion constant(m/s):           k_f*=   " << getPhysFilmTransferConstant<V>(coupling,converter) << std::endl;
+    clout << "Surface diffusion constant(m^2/s):      D_s=    " << getPhysSurfaceDiffusionConstant<V>(coupling,converter) << std::endl;
+    clout << "Initial solute concentration(mg/mL):    c_0=    " << c_0[0] * converter.getConversionFactorDensity() << std::endl;
+    clout << "Equilibrium surface loading(mg/g):      q_0=    " << q_0[0] * converter.getConversionFactorParticleDensity() << std::endl;
+    clout << "lattice Equilibrium surface loading:    q_0=    " << q_0[0] << std::endl;
+    clout << "Surface Mass transfer coefficient(m/s): k_s*=   " << getPhysSurfaceTransferConstant<V>(coupling,converter) << std::endl;
+    clout << "-------------------------------------------------------------" << std::endl;
+    ISOTHERM::template print<V>(clout, coupling);
+  }
+
 };
+
 }
+
 #endif //OLB_APPS_FLORIAN_ADSORPTION3D_ADSORPTIONREACTION_H_

@@ -25,6 +25,7 @@
 #define BOUNDARIES_VORTEX_METHOD_H
 
 #include "utilities/functorPtr.h"
+#include "functors/lattice/indicator/superIndicatorF3D.h"
 
 namespace olb {
 
@@ -55,16 +56,16 @@ class VortexMethodTurbulentVelocityBoundary final {
 private:
   FunctorPtr<SuperIndicatorF3D<T>> _inletLatticeI;
   FunctorPtr<IndicatorF3D<T>> _inletPhysI;
-  std::shared_ptr<AnalyticalF3D<T,T>> _profileF;
+  std::shared_ptr<AnalyticalF3D<T,T>> _velocityProfileF;
+  std::shared_ptr<AnalyticalF3D<T,T>> _intensityProfileF;
 
   UnitConverter<T,DESCRIPTOR>& _converter;
   SuperLattice<T, DESCRIPTOR>& _sLattice;
 
   const int _nSeeds;
-  int _nTime;
+  T _nTime;
   T _inletArea;
   T _sigma;
-  T _intensity;
 
   Vector<T,3> _axisDirection;
 
@@ -84,12 +85,12 @@ public:
     UnitConverter<T,DESCRIPTOR>& converter,
     SuperLattice<T, DESCRIPTOR>& sLattice,
     int nSeeds,
-    int nTime,
+    T nTime,
     T sigma,
-    T intensity,
     Vector<T,3> axisDirection);
 
-  void setProfile(std::shared_ptr<AnalyticalF3D<T,T>> profileF);
+  void setVelocityProfile(std::shared_ptr<AnalyticalF3D<T,T>> velocityProfileF);
+  void setIntensityProfile(std::shared_ptr<AnalyticalF3D<T,T>> intensityProfileF);
 
   void apply(std::size_t iT);
 
@@ -102,9 +103,8 @@ VortexMethodTurbulentVelocityBoundary<T,DESCRIPTOR>::VortexMethodTurbulentVeloci
   UnitConverter<T,DESCRIPTOR>& converter,
   SuperLattice<T, DESCRIPTOR>& sLattice,
   int nSeeds,
-  int nTime,
+  T nTime,
   T sigma,
-  T intensity,
   Vector<T,3> axisDirection)
   : _inletLatticeI(std::move(inletLatticeI)),
     _inletPhysI(std::move(inletPhysI)),
@@ -113,7 +113,6 @@ VortexMethodTurbulentVelocityBoundary<T,DESCRIPTOR>::VortexMethodTurbulentVeloci
     _nSeeds(nSeeds),
     _nTime(nTime),
     _sigma(sigma),
-    _intensity(intensity),
     _axisDirection(axisDirection),
     _AiC(_sLattice.getLoadBalancer().size()),
     _NiC(_sLattice.getLoadBalancer().size()),
@@ -143,17 +142,16 @@ VortexMethodTurbulentVelocityBoundary<T,DESCRIPTOR>::VortexMethodTurbulentVeloci
   for (int iC=0; iC < load.size(); ++iC) {
     _AiC[iC] = 0.;
     auto& cuboid = cGeometry.get(load.glob(iC));
-    if (cuboid.checkInters(indicatorCuboid)) {
+    if (cuboid.intersects(indicatorCuboid)) {
       auto& block = _sLattice.getBlock(iC);
       for (int iX=0; iX < block.getNx(); ++iX) {
         for (int iY=0; iY < block.getNy(); ++iY) {
           for (int iZ=0; iZ < block.getNz(); ++iZ) {
             int latticeR[3] {iX, iY, iZ};
-            T physR[3] { };
-            cuboid.getPhysR(physR, latticeR);
+            auto physR = cuboid.getPhysR(latticeR);
             block.get(iX,iY,iZ).template setField<descriptors::LOCATION>(physR);
             bool inInlet{};
-            _inletPhysI(&inInlet, physR);
+            _inletPhysI(&inInlet, physR.data());
             if (inInlet) {
               _AiC[iC] += util::pow(_converter.getPhysDeltaX(), 2.);
             }
@@ -230,7 +228,7 @@ void VortexMethodTurbulentVelocityBoundary<T,DESCRIPTOR>::updateSeedsVorticity(s
 {
   std::random_device rd;
   std::mt19937 gen(rd());
-  std::uniform_int_distribution<> distrib(-1, 1);
+  std::uniform_int_distribution<> distrib(0, 1);
   auto& load = _sLattice.getLoadBalancer();
   for (int iC=0; iC < load.size(); ++iC) {
     if (_NiC[iC] > 0) {
@@ -242,16 +240,19 @@ void VortexMethodTurbulentVelocityBoundary<T,DESCRIPTOR>::updateSeedsVorticity(s
       for(int i = 0; i<_NiC[iC]; i++) {
         Vector<T,3> inlet = seeds.get(i);
         Vector<T,3> velocity;
-        _profileF->operator()(velocity.data(), inlet.data());
+        _velocityProfileF->operator()(velocity.data(), inlet.data());
+        Vector<T,1> intensity;
+        _intensityProfileF->operator()(intensity.data(), inlet.data());
         T normVel = olb::norm(velocity);
-        T kinE = 3./2. * util::pow(normVel * _intensity, 2. );
+        T kinE = 3./2. * util::pow(normVel * intensity[0], 2. );
         T vorticity = 4. * util::sqrt( M_PI * _AiC[iC] * kinE / 3. / _NiC[iC] / (2.*util::log(3.) - 3.*util::log(2.)) );
 
         // random vorticity sign change
         T sign = 1.;
-        T tau = _nTime * _sigma / normVel;
-        if(iT == _converter.getLatticeTime(tau)) {
-          sign *= distrib(gen);
+        if(iT % _converter.getLatticeTime(_nTime) == 0) {
+          if(distrib(gen) == 0) {
+            sign *= -1;
+          }
         }
         vorticity *= sign;
 
@@ -263,11 +264,16 @@ void VortexMethodTurbulentVelocityBoundary<T,DESCRIPTOR>::updateSeedsVorticity(s
 }
 
 template <typename T, typename DESCRIPTOR>
-void VortexMethodTurbulentVelocityBoundary<T,DESCRIPTOR>::setProfile(std::shared_ptr<AnalyticalF3D<T,T>> profileF)
+void VortexMethodTurbulentVelocityBoundary<T,DESCRIPTOR>::setVelocityProfile(std::shared_ptr<AnalyticalF3D<T,T>> velocityProfileF)
 {
-  _profileF = profileF;
-  _sLattice.template defineField<U_PROFILE>(*_inletLatticeI, *_profileF);
-  //_sLattice.template setProcessingContext<Array<U_PROFILE>>(ProcessingContext::Simulation);
+  _velocityProfileF = velocityProfileF;
+  _sLattice.template defineField<U_PROFILE>(*_inletLatticeI, *_velocityProfileF);
+}
+
+template <typename T, typename DESCRIPTOR>
+void VortexMethodTurbulentVelocityBoundary<T,DESCRIPTOR>::setIntensityProfile(std::shared_ptr<AnalyticalF3D<T,T>> intensityProfileF)
+{
+  _intensityProfileF = intensityProfileF;
 }
 
 template <typename T, typename DESCRIPTOR>

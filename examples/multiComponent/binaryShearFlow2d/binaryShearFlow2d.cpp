@@ -284,12 +284,12 @@ void prepareLattice( SuperLattice<T, DESCRIPTOR>& sLattice1,
   T omega = converter.getLatticeRelaxationFrequency();
 
   auto topIndicator = superGeometry.getMaterialIndicator(3);
-  setFreeEnergyInletBoundary<T, DESCRIPTOR>(sLattice1, omega, topIndicator, "velocity", 1);
-  setFreeEnergyInletBoundary<T, DESCRIPTOR>(sLattice2, omega, topIndicator, "velocity", 2);
+  boundary::set<boundary::FreeEnergyVelocity>(sLattice1, topIndicator);
+  boundary::set<boundary::FreeEnergyOrderParameter>(sLattice2, topIndicator);
 
   auto bottomIndicator = superGeometry.getMaterialIndicator(4);
-  setFreeEnergyInletBoundary<T, DESCRIPTOR>(sLattice1, omega, bottomIndicator, "velocity", 1);
-  setFreeEnergyInletBoundary<T, DESCRIPTOR>(sLattice2, omega, bottomIndicator, "velocity", 2);
+  boundary::set<boundary::FreeEnergyVelocity>(sLattice1, bottomIndicator);
+  boundary::set<boundary::FreeEnergyOrderParameter>(sLattice2, bottomIndicator);
 
   sLattice1.setParameter<OMEGA>(omega);
   sLattice2.setParameter<OMEGA>(omega);
@@ -346,10 +346,8 @@ void getResults( SuperLattice<T, DESCRIPTOR>& sLattice2,
 
   if ( iT==0 ) {
     // Writes the geometry, cuboid no. and rank no. as vti file for visualization
-    SuperLatticeGeometry2D<T, DESCRIPTOR> geometry( sLattice1, superGeometry );
     SuperLatticeCuboid2D<T, DESCRIPTOR> cuboid( sLattice1 );
     SuperLatticeRank2D<T, DESCRIPTOR> rank( sLattice1 );
-    vtmWriter.write( geometry );
     vtmWriter.write( cuboid );
     vtmWriter.write( rank );
     vtmWriter.createMasterFile();
@@ -422,7 +420,7 @@ int main( int argc, char *argv[] )
 
   // 1. compute surface tension from Ca
   surfTen = radius * shearRate * physDensity * contVisc / capillaryNr;
-  surfTenLatt = surfTen / (converter.getConversionFactorPressure() * converter.getConversionFactorLength());
+  surfTenLatt = surfTen / (converter.getConversionFactorPressure() * converter.getPhysDeltaX());
 
   // 2. compute interface thickness from Ch
   xiThickness = cahnNr * converter.getLatticeLength(radius);
@@ -499,7 +497,7 @@ int main( int argc, char *argv[] )
   CuboidGeometry2D<T> cGeometry( cuboid, converter.getPhysDeltaX(), noOfCuboids);
 
   // set periodic boundaries to the domain
-  cGeometry.setPeriodicity( true, false );
+  cGeometry.setPeriodicity({ true, false });
 
   // Instantiation of loadbalancer
   HeuristicLoadBalancer<T> loadBalancer( cGeometry );

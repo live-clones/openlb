@@ -96,9 +96,9 @@ BlockLatticePhysWallShearStress2D<T,DESCRIPTOR>::BlockLatticePhysWallShearStress
         _discreteNormal[iX-1][iY-1][0] = -discreteNormalOutwards[1];
         _discreteNormal[iX-1][iY-1][1] = -discreteNormalOutwards[2];
 
-        T physR[2];
+        Vector<T,2> physR{};
         _blockGeometry.getPhysR(physR, {iX, iY});
-        Vector<T,2> origin(physR[0],physR[1]);
+        Vector<T,2> origin(physR);
         Vector<T,2> direction(-_discreteNormal[iX-1][iY-1][0] * scaling,
                               -_discreteNormal[iX-1][iY-1][1] * scaling);
         Vector<T,2> normal(0.,0.);

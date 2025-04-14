@@ -86,6 +86,7 @@ protected:
   std::shared_ptr<IndicatorF2D<S>> _g;
 public:
   virtual S signedDistance( const Vector<S,2>& input )=0;
+  virtual S signedDistanceExact( const Vector<S,2>& input )=0;
   bool operator() (bool output[], const S input[3]);
 };
 
@@ -95,6 +96,7 @@ class IndicPlus2D : public IndicCalc2D<S,util::plus> {
 public:
   IndicPlus2D( std::shared_ptr<IndicatorF2D<S>> f, std::shared_ptr<IndicatorF2D<S>> g );
   S signedDistance( const Vector<S,2>& input ) override;
+  S signedDistanceExact( const Vector<S,2>& input ) override;
 };
 
 /// Subtraction
@@ -103,6 +105,7 @@ class IndicMinus2D : public IndicCalc2D<S,util::minus> {
 public:
   IndicMinus2D( std::shared_ptr<IndicatorF2D<S>> f, std::shared_ptr<IndicatorF2D<S>> g );
   S signedDistance( const Vector<S,2>& input ) override;
+  S signedDistanceExact( const Vector<S,2>& input ) override;
 };
 
 /// Intersection
@@ -111,6 +114,7 @@ class IndicMultiplication2D : public IndicCalc2D<S,util::multiplies> {
 public:
   IndicMultiplication2D( std::shared_ptr<IndicatorF2D<S>> f, std::shared_ptr<IndicatorF2D<S>> g );
   S signedDistance( const Vector<S,2>& input ) override;
+  S signedDistanceExact( const Vector<S,2>& input ) override;
 };
 
 template<typename S, template <typename U> class F1, template <typename V> class F2,

@@ -64,7 +64,7 @@ public:
   const T& operator[](std::size_t i) const override;
   T& operator[](std::size_t i) override;
 
-  std::size_t size() const;
+  std::size_t size() const override;
 
   const T* data() const;
   T* data();
@@ -131,7 +131,7 @@ public:
     return _devicePopulation;
   }
 
-  std::size_t size() const
+  std::size_t size() const override
   {
     return _count;
   }

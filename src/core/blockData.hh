@@ -27,8 +27,8 @@
 
 #include "blockData.h"
 
-#include "geometry/cuboid2D.h"
-#include "geometry/cuboid3D.h"
+#include "geometry/cuboid.h"
+#include "geometry/cuboid.h"
 
 #include "functors/lattice/blockBaseF2D.h"
 #include "functors/lattice/blockBaseF3D.h"

@@ -339,6 +339,10 @@ struct list : public list_base {
 
 };
 
+/// Merge elements of LIST_A and LIST_B into new list
+template <typename LIST_A, typename LIST_B>
+using merge = typename LIST_A::template decompose_into<LIST_B::template include>;
+
 /// Apply F to each element of meta::list listed in INDICES
 template <typename TYPES, typename F, std::size_t... INDICES>
 void list_for_each_index(F&& f, std::index_sequence<INDICES...>)

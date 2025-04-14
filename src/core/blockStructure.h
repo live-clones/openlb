@@ -60,17 +60,22 @@ protected:
   int _padding;
 
 public:
-  static_assert(D == 2 || D == 3, "Only D=2 and D=3 are supported");
+  static_assert(D >= 1 && D <= 3, "Only D={1,2,3} are supported");
 
   BlockStructureD(Vector<int,D> size, int padding=0):
     _core(size),
     _size(size + 2*padding),
     _padding(padding)
   {
-    if constexpr (D == 3) {
+           if constexpr (D == 3) {
       _projection = {_size[1]*_size[2], _size[2], 1};
-    } else {
+    } else if constexpr (D == 2) {
       _projection = {_size[1], 1};
+    } else if constexpr (D == 1) {
+      _projection = {1};
+    } else {
+      static_assert(D >= 1 && D <= 3,
+                    "Invalid D");
     }
 
     if (getNcells()-1 > std::numeric_limits<CellID>::max()) {
@@ -82,6 +87,24 @@ public:
     BlockStructureD(1, 0)
   { };
 
+  void resize(Vector<int,D> size)
+  {
+    _core = size;
+    _size = size + 2*_padding;
+           if constexpr (D == 3) {
+      _projection = {_size[1]*_size[2], _size[2], 1};
+    } else if constexpr (D == 2) {
+      _projection = {_size[1], 1};
+    } else if constexpr (D == 1) {
+      _projection = {1};
+    }
+  }
+
+  auto getCore() const
+  {
+    return _core;
+  }
+
   /// Read only access to block width
   int getNx() const
   {
@@ -90,12 +113,13 @@ public:
   /// Read only access to block height
   int getNy() const
   {
+    static_assert(D >= 2, "y-component only available in 2D or higher");
     return _core[1];
   };
   /// Read only access to block height
   int getNz() const
   {
-    static_assert(D == 3, "z-component only available in 3D");
+    static_assert(D >= 3, "z-component only available in 3D or higher");
     return _core[2];
   };
 
@@ -113,10 +137,12 @@ public:
   /// Get number of cells
   std::size_t getNcells() const
   {
-    if constexpr (D == 3) {
+           if constexpr (D == 3) {
       return _size[0] * _size[1] * _size[2];
-    } else {
+    } else if constexpr (D == 2) {
       return _size[0] * _size[1];
+    } else if constexpr (D == 1) {
+      return _size[0];
     }
     __builtin_unreachable();
   }
@@ -124,6 +150,7 @@ public:
   /// Get 1D cell ID
   CellID getCellId(LatticeR<D> latticeR) const
   {
+    // if ( !isInside(latticeR) ) std::cout << "latticeR=[" << latticeR[0] << " " << latticeR[1] << " " << latticeR[2] << "];" << std::endl;
     OLB_PRECONDITION(isInside(latticeR));
     return (latticeR+_padding) * _projection;
   }
@@ -134,6 +161,21 @@ public:
   {
     return LatticeR<D>{latticeR+_padding...} * _projection;
   }
+
+  LatticeR<D> getLatticeR(CellID iCell) const
+  {
+    if constexpr (D == 3) {
+      const std::int32_t iX = iCell / _projection[0];
+      const std::int32_t remainder = iCell % _projection[0];
+      const std::int32_t iY = remainder / _projection[1];
+      const std::int32_t iZ = remainder % _projection[1];
+      return LatticeR<D>{iX - _padding, iY - _padding, iZ - _padding};
+    } else {
+      const std::int32_t iX = iCell / _projection[0];
+      const std::int32_t iY = iCell % _projection[0];
+      return LatticeR<D>{iX - _padding, iY - _padding};
+    }
+  };
 
   /// Get 1D neighbor distance
   CellDistance getNeighborDistance(LatticeR<D> dir) const
@@ -157,6 +199,14 @@ public:
   bool isPadding(LatticeR<D> latticeR) const
   {
     return isInside(latticeR) && !(latticeR >= 0 && latticeR < _core);
+  };
+
+  bool isPadding(LatticeR<D> latticeR, int overlap) const
+  {
+    return  isInside(latticeR)
+        && !isInsideCore(latticeR)
+        &&  latticeR >=      -overlap
+        &&  latticeR <  _core+overlap;
   };
 
   template <typename... L>
@@ -184,21 +234,29 @@ public:
   {
     using loc = typename LatticeR<D>::value_t;
     for (loc iX=-_padding; iX < _core[0] + _padding; ++iX) {
-      for (loc iY=-_padding; iY < _core[1] + _padding; ++iY) {
-        if constexpr (D == 3) {
-          for (loc iZ=-_padding; iZ < _core[2] + _padding; ++iZ) {
+      if constexpr (D > 1) {
+        for (loc iY=-_padding; iY < _core[1] + _padding; ++iY) {
+          if constexpr (D == 3) {
+            for (loc iZ=-_padding; iZ < _core[2] + _padding; ++iZ) {
+              if constexpr (std::is_invocable_v<F, LatticeR<D>>) {
+                f({iX,iY,iZ});
+              } else {
+                f(iX,iY,iZ);
+              }
+            }
+          } else {
             if constexpr (std::is_invocable_v<F, LatticeR<D>>) {
-              f({iX,iY,iZ});
+              f({iX,iY});
             } else {
-              f(iX,iY,iZ);
+              f(iX,iY);
             }
           }
+        }
+      } else {
+        if constexpr (std::is_invocable_v<F, LatticeR<D>>) {
+          f({iX});
         } else {
-          if constexpr (std::is_invocable_v<F, LatticeR<D>>) {
-            f({iX,iY});
-          } else {
-            f(iX,iY);
-          }
+          f(iX);
         }
       }
     }
@@ -208,26 +266,39 @@ public:
   void forSpatialLocationsParallel(F f) const
   {
     using loc = typename LatticeR<D>::value_t;
-    #ifdef PARALLEL_MODE_OMP
-    #pragma omp parallel for schedule(dynamic,1)
-    #endif
-    for (loc iX=-_padding; iX < _core[0] + _padding; ++iX) {
-      for (loc iY=-_padding; iY < _core[1] + _padding; ++iY) {
-        if constexpr (D == 3) {
-          for (loc iZ=-_padding; iZ < _core[2] + _padding; ++iZ) {
+    if constexpr (D > 1) {
+      #ifdef PARALLEL_MODE_OMP
+      #pragma omp parallel for schedule(dynamic,1)
+      #endif
+      for (loc iX=-_padding; iX < _core[0] + _padding; ++iX) {
+        for (loc iY=-_padding; iY < _core[1] + _padding; ++iY) {
+          if constexpr (D == 3) {
+            for (loc iZ=-_padding; iZ < _core[2] + _padding; ++iZ) {
+              if constexpr (std::is_invocable_v<F, LatticeR<D>>) {
+                f({iX,iY,iZ});
+              } else {
+                f(iX,iY,iZ);
+              }
+            }
+          } else {
             if constexpr (std::is_invocable_v<F, LatticeR<D>>) {
-              f({iX,iY,iZ});
+              f({iX,iY});
             } else {
-              f(iX,iY,iZ);
+              f(iX,iY);
             }
           }
-        } else {
-          if constexpr (std::is_invocable_v<F, LatticeR<D>>) {
-            f({iX,iY});
-          } else {
-            f(iX,iY);
-          }
         }
+      }
+    } else {
+      #ifdef PARALLEL_MODE_OMP
+      #pragma omp parallel for schedule(static)
+      #endif
+      for (loc iX=-_padding; iX < _core[0] + _padding; ++iX) {
+         if constexpr (std::is_invocable_v<F, LatticeR<D>>) {
+           f({iX});
+         } else {
+           f(iX);
+         }
       }
     }
   }
@@ -237,21 +308,29 @@ public:
   {
     using loc = typename LatticeR<D>::value_t;
     for (loc iX=std::max(-_padding, min[0]); iX < std::min(_core[0] + _padding, max[0]+1); ++iX) {
-      for (loc iY=std::max(-_padding, min[1]); iY < std::min(_core[1] + _padding, max[1]+1); ++iY) {
-        if constexpr (D == 3) {
-          for (loc iZ=std::max(-_padding, min[2]); iZ < std::min(_core[2] + _padding, max[2]+1); ++iZ) {
+      if constexpr (D > 1) {
+        for (loc iY=std::max(-_padding, min[1]); iY < std::min(_core[1] + _padding, max[1]+1); ++iY) {
+          if constexpr (D == 3) {
+            for (loc iZ=std::max(-_padding, min[2]); iZ < std::min(_core[2] + _padding, max[2]+1); ++iZ) {
+              if constexpr (std::is_invocable_v<F, LatticeR<D>>) {
+                f({iX,iY,iZ});
+              } else {
+                f(iX,iY,iZ);
+              }
+            }
+          } else {
             if constexpr (std::is_invocable_v<F, LatticeR<D>>) {
-              f({iX,iY,iZ});
+              f({iX,iY});
             } else {
-              f(iX,iY,iZ);
+              f(iX,iY);
             }
           }
+        }
+      } else {
+        if constexpr (std::is_invocable_v<F, LatticeR<D>>) {
+          f({iX});
         } else {
-          if constexpr (std::is_invocable_v<F, LatticeR<D>>) {
-            f({iX,iY});
-          } else {
-            f(iX,iY);
-          }
+          f(iX);
         }
       }
     }
@@ -262,21 +341,29 @@ public:
   {
     using loc = typename LatticeR<D>::value_t;
     for (loc iX=0; iX < _core[0]; ++iX) {
-      for (loc iY=0; iY < _core[1]; ++iY) {
-        if constexpr (D == 3) {
-          for (loc iZ=0; iZ < _core[2]; ++iZ) {
+      if constexpr (D > 1) {
+        for (loc iY=0; iY < _core[1]; ++iY) {
+          if constexpr (D == 3) {
+            for (loc iZ=0; iZ < _core[2]; ++iZ) {
+              if constexpr (std::is_invocable_v<F, LatticeR<D>>) {
+                f({iX,iY,iZ});
+              } else {
+                f(iX,iY,iZ);
+              }
+            }
+          } else {
             if constexpr (std::is_invocable_v<F, LatticeR<D>>) {
-              f({iX,iY,iZ});
+              f({iX,iY});
             } else {
-              f(iX,iY,iZ);
+              f(iX,iY);
             }
           }
+        }
+      } else {
+        if constexpr (std::is_invocable_v<F, LatticeR<D>>) {
+          f({iX});
         } else {
-          if constexpr (std::is_invocable_v<F, LatticeR<D>>) {
-            f({iX,iY});
-          } else {
-            f(iX,iY);
-          }
+          f(iX);
         }
       }
     }

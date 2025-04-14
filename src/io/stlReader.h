@@ -1,6 +1,6 @@
 /*  This file is part of the OpenLB library
  *
- *  Copyright (C) 2010-2015 Thomas Henn, Mathias J. Krause
+ *  Copyright (C) 2010-2024 Thomas Henn, Mathias J. Krause, Christoph Gaul
  *  E-mail contact: info@openlb.net
  *  The most recent release of OpenLB can be downloaded at
  *  <http://www.openlb.net/>
@@ -36,7 +36,7 @@
 #include <limits>
 
 #include "communication/loadBalancer.h"
-#include "geometry/cuboidGeometry3D.h"
+#include "geometry/cuboidGeometry.h"
 #include "functors/analytical/indicator/indicatorF3D.h"
 #include "functors/analytical/indicator/indicatorBaseF3D.h"
 #include "utilities/vectorHelpers.h"
@@ -209,6 +209,23 @@ public:
   bool testRayIntersect(const std::set<unsigned int>& tris, const Vector<T,3>& pt,const Vector<T,3>& dir, Vector<T,3>& q, T& alpha);
 };
 
+/**
+ * @brief Enum class that specifies the mode to use for computing the sign of the signed distance.
+ *
+ * This enum class specifies the mode to use for computing the sign of the signed distance.
+ * It can take one of the following values:
+ * - SignMode::EXACT: The sign is computed exactly using the winding number close to the surface (slow).
+ * - SignMode::CACHED: The sign is computed from cache (fast, but less accurate in vicinity of the surface).
+ */
+enum class SignMode { EXACT, CACHED };
+
+enum class RayMode : int {
+  FastRayZ  = 1,  /// Indicate function with ray in Z-direction(faster, less stable). Default option
+  Robust    = 2,  /// Old indicate function (slower, more stable)
+  FastRayX  = 3,  /// Indicate function with ray in X-direction(faster, less stable).
+  FastRayY  = 4,  /// Indicate function with ray in Y-direction(faster, less stable).
+  DoubleRay = 5   /// Indicate function with double ray
+};
 
 template<typename T>
 class STLreader : public IndicatorF3D<T> {
@@ -241,24 +258,48 @@ private:
 
   void indicate3();
 
+  /// Iterates over triangles close to passed point using the octree.
+  /// If the point is outside of the mesh, it iterates over all triangles as fallback.
+  template <typename F>
+  void iterateOverCloseTriangles(const PhysR<T,3>& pt, F func, Octree<T>* leafNode = nullptr);
+
   /// Evaluates the normal for points on the surface (do not use for points that aren't on the surface!)
   /// Due to rounding errors it's possible that points that were found via STLtriangle.closestPtPointTriangle return false on STLtriangle.isPointInside.
   /// Therefore, we provide a fallback normal that should be set to the normal of the triangle the cloest point was located on.
   Vector<T,3> evalNormalOnSurface(const PhysR<T,3>& pt, const Vector<T,3>& fallbackNormal);
 
   /// Finds surface normal
+  template <SignMode SIGNMODE>
   Vector<T,3> evalSurfaceNormal(const Vector<T,3>& origin);
 
+  /**
+   * @brief Computes the sign for the signed distance of a point to the surface of the geometry.
+   *
+   * @tparam SIGNMODE The mode to use for computing the sign.
+   * @param pt The point for which the sign should be computed.
+   * @param distance The distance of the point to the surface of the geometry. This parameter is marked as maybe_unused as it's only used in EXACT mode.
+   * @return short The sign of the signed distance. Returns -1 if the point is inside the geometry, 1 otherwise.
+   *
+   * This function computes the sign for the signed distance of a point to the surface of the geometry.
+   * The mode used for computing the sign is determined by the template parameter SIGNMODE.
+   * If SIGNMODE is SignMode::EXACT, the sign is computed exactly using the distance parameter.
+   * If SIGNMODE is SignMode::CACHE, the sign is computed from cache (less accurate).
+   */
+  template <SignMode SIGNMODE>
+  short evalSignForSignedDistance(const Vector<T,3>& pt, [[maybe_unused]] const T distance);
   /// Evaluate sign for signed distance
   /// Computes the sign following 10.1109/TVCG.2005.49 (distance corresponds to p - c)
   /// p: the position that is evaluated
   /// c: the closest point on the surface
   /// Note: This method is less robust.
-  short evalSignForSignedDistance(const Vector<T,3>& normal, const Vector<T,3>& distance);
+  short evalSignForSignedDistanceFromPseudonormal(const Vector<T,3>& pseudonormal, const Vector<T,3>& distance);
   /// Evaluate sign for signed distance
   /// Computest the sign following 10.1145/2461912.2461916
   /// Note: This method is more robust.
-  short evalSignForSignedDistance(const Vector<T,3>& pt);
+  short evalSignForSignedDistanceFromWindingNumber(const Vector<T,3>& pt);
+  /// Evaluate sign for signed distance using cached information
+  /// Less accurate
+  short evalSignForSignedDistanceFromCache(const Vector<T,3>& pt);
 
   /// Size of the smallest voxel
   T _voxelSize;
@@ -289,7 +330,7 @@ public:
    * \param verbose Get additional information.
    */
 
-  STLreader(const std::string fName, T voxelSize, T stlSize=1, int method=2,
+  STLreader(const std::string fName, T voxelSize, T stlSize=1, RayMode method = RayMode::FastRayZ,
             bool verbose = false, T overlap=0., T max=0.);
   /**
    * Constructs a new STLreader from a file
@@ -301,21 +342,42 @@ public:
    *               1: slow, more stable (for untight STLs)
    * \param verbose Get additional information.
    */
-  STLreader(const std::vector<std::vector<T>> meshPoints, T voxelSize, T stlSize=1, int method=2,
+  STLreader(const std::vector<std::vector<T>> meshPoints, T voxelSize, T stlSize=1, RayMode method= RayMode::FastRayZ,
             bool verbose = false, T overlap=0., T max=0.);
 
   ~STLreader() override;
   /// Returns whether node is inside or not.
   bool operator() (bool output[], const T input[]) override;
 
+  /// Returns whether node is inside the top-level octree or not.
+  bool isInsideRootTree(const T input[]);
+
+  /// Returns the closest point in the bounding box
+  /// If `input` is already inside, then it returns `input`.
+  Vector<T,3> closestPointInBoundingBox(const Vector<T,3>& input);
+
   /// Computes distance to closest triangle intersection
   bool distance(T& distance,const Vector<T,3>& origin, const Vector<T,3>& direction, int iC=-1) override;
 
   /// Computes signed distance to closest triangle in direction of the surface normal
+  /// Using the cached information (faster, but less accurate)
   T signedDistance(const Vector<T,3>& input) override;
+  /// Computes exact signed distance to closest triangle in direction of the surface normal
+  /// Much slower, but more accurate
+  T signedDistanceExact(const Vector<T,3>& input) override;
+  /// Computes signed distance to closest triangle in direction of the surface normal
+  template <SignMode SIGNMODE>
+  T signedDistance(const Vector<T,3>& input);
 
   /// Finds and returns normal of the closest surface (triangle)
+  /// Using the cached information (faster, but less accurate)
   Vector<T,3> surfaceNormal(const Vector<T,3>& pos, const T meshSize=0) override;
+  /// Finds and returns normal of the closest surface (triangle)
+  /// Much slower, but more accurate
+  Vector<T,3> surfaceNormalExact(const Vector<T,3>& pos, const T meshSize=0) override;
+  /// Finds and returns normal of the closest surface (triangle)
+  template <SignMode SIGNMODE>
+  Vector<T,3> surfaceNormal(const Vector<T,3>& pos, const T meshSize=0);
 
   /// Prints console output
   void print();
@@ -345,6 +407,7 @@ public:
   {
     return _mesh;
   };
+
 };
 
 }  // namespace olb

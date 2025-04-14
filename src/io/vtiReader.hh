@@ -33,21 +33,19 @@
 #include <math.h>
 #include <cassert>
 
-#include "geometry/cuboid2D.h"
+#include "geometry/cuboid.h"
 #include "vtiReader.h"
 #include "communication/heuristicLoadBalancer.h"
 
 namespace olb {
 
-//template< typename T, typename BaseType> class SuperData3D;
-
 /* ------------------ BaseVTIreader -----------------*/
 
 template<typename T>
-BaseVTIreader<T>::BaseVTIreader( const std::string& fName, int dim,
-                                 std::string dName, const std::string class_name )
-  : clout(class_name), _dim(dim), _size(0), _origin(_dim, 0), _extent(_dim, 0),
-    _delta(0), _xmlReader(fName), _nCuboids(0)
+BaseVTIreader<T>::BaseVTIreader( const std::string& fileName, int dim,
+                                 std::string dataName, const std::string class_name, DataType type)
+  : clout(class_name), _dim(dim), _comps(0), _origin(_dim, 0), _extent(_dim, 0),
+    _delta(0), _xmlReader(fileName), _nCuboids(0), _type(type)
 {
   // Read WholeExtent (2 * _dim ints) from XML File and calculate _extent
   std::vector<int> wholeExtend = readExtent(&_xmlReader["ImageData"], "WholeExtent");
@@ -55,7 +53,18 @@ BaseVTIreader<T>::BaseVTIreader( const std::string& fName, int dim,
 
   // Read _delta
   std::stringstream stream_val_1(_xmlReader["ImageData"].getAttribute("Spacing"));
-  stream_val_1 >> _delta;
+  T delta1;
+  T delta2;
+  T delta3;
+  stream_val_1 >> delta1;
+  stream_val_1 >> delta2;
+  stream_val_1 >> delta3;
+  T eps = std::numeric_limits<T>::epsilon();
+  if( std::fabs(delta1 - delta2) > eps || std::fabs(delta1 - delta3) > eps ) {
+    clout << " Error: The lattice has to be homogenous" << std::endl;
+    exit(1);
+  }
+  _delta = delta1;
 
   // Read _origin
   std::stringstream stream_val_2(_xmlReader["ImageData"].getAttribute("Origin"));
@@ -63,18 +72,24 @@ BaseVTIreader<T>::BaseVTIreader( const std::string& fName, int dim,
     stream_val_2 >> origin_i;
   }
 
-  // Read _size and count cuboids (_nCuboids)
-  for ( auto& piece : _xmlReader["ImageData"] ) {
-    if (piece->getName() == "Piece") {
-      // Read _size from first dName PointData Tag
+  /// Read _comps but only from the FIRST dataName Data Tag and count cuboids (_nCuboids)
+  for ( auto& pieceReader : _xmlReader["ImageData"] ) {
+    if (pieceReader->getName() == "Piece") {
       if ( _nCuboids == 0 ) {
-        for (auto &dataArray : (*piece)["PointData"]) {
-          if (dataArray->getAttribute("Name") == dName && dataArray->getName() == "DataArray") {
-            _size = this->getSize(*dataArray);
+        if (_type == PointData) {
+          for (auto& dataArrayReader : (*pieceReader)["PointData"]) {
+            if (dataArrayReader->getAttribute("Name") == dataName && dataArrayReader->getName() == "DataArray") {
+              _comps = this->getNbComps(*dataArrayReader);
+            }
+          }
+        } else {
+          for (auto& dataArrayReader : (*pieceReader)["CellData"]) {
+            if (dataArrayReader->getAttribute("Name") == dataName && dataArrayReader->getName() == "DataArray") {
+              _comps = this->getNbComps(*dataArrayReader);
+            }
           }
         }
       }
-
       _nCuboids++;
     }
   }
@@ -103,7 +118,7 @@ template<typename T>
 std::vector<int> BaseVTIreader<T>::readExtent(const XMLreader* reader, std::string extAttrName)
 {
   // An extent is in the form of four (or six) integers "x0 x1 y0 y1 z0 z1"
-  //  each representing a node number
+  // each representing a node number
   std::stringstream extstr(reader->getAttribute(extAttrName));
   std::vector<int> extents;
   int tmp;
@@ -120,45 +135,57 @@ std::vector<int> BaseVTIreader<T>::getNbNodes(std::vector<int>& extents)
   // Convert 4D (or 6D) extents vector into 2D (3D) extent vector
   std::vector<int> nNodes;
   for ( int i = 0; i < _dim; i++ ) {
-    nNodes.push_back(extents[ 2*i + 1 ] - extents[ 2* i ] + 1);
+    if (_type == PointData) nNodes.push_back(extents[2 * i + 1 ] - extents[2 * i ] + 1);
+    else nNodes.push_back(extents[2 * i + 1] - extents[2 * i]);
   }
   return nNodes;
 }
 
 template<typename T>
-int BaseVTIreader<T>::getSize(const XMLreader& tag)
+int BaseVTIreader<T>::getNbComps(const XMLreader& tagReader)
 {
   // read the NumberOfComponents-Attribute (VTI standard) and return as integer
-  int size = std::atoi((tag.getAttribute("NumberOfComponents")).c_str());
-  if (size == 0) {
-    clout << "VTI READER: NumberOfComponents zero or not given!" << std::endl;
-    clout << "EXAMPLE: <DataArray Name='physVelocity' NumberOfComponents='3'" << std::endl;
-    exit(1);
+  int comps = std::atoi((tagReader.getAttribute("NumberOfComponents")).c_str());
+  if (comps == 0) {
+    clout << "Warning: NumberOfComponents zero or not given!" << std::endl;
+    clout << "Example: <DataArray Name='physVelocity' NumberOfComponents='3'" << std::endl;
+    clout << "Setting to default of NumberOfComponents='1'" << std::endl;
+    comps = 1;
   }
-  return size;
+  return comps;
+}
+
+template<typename T>
+size_t BaseVTIreader<T>::computeTotalDataValues() {
+  size_t result = 1;
+  for(int i = 0; i < _dim; i++) {
+    result *= _extent[i];
+  }
+  return result * _comps;
 }
 
 
 /* -------------------- BaseVTIreader3D --------------------- */
 
 template<typename T, typename BaseType>
-BaseVTIreader3D<T,BaseType>::BaseVTIreader3D( const std::string& fName, std::string dName,
-    const std::string class_name)
-  : BaseVTIreader<T>(fName, 3, dName, class_name)
+BaseVTIreader3D<T,BaseType>::BaseVTIreader3D( const std::string& fileName, std::string dataName,
+    const std::string class_name, const DataType type)
+  : BaseVTIreader<T>(fileName, 3, dataName, class_name, type)
 {
 }
 
 template<typename T, typename BaseType>
-void BaseVTIreader3D<T,BaseType>::readCuboid(Cuboid3D<T>& cuboid, XMLreader* piece)
+void BaseVTIreader3D<T,BaseType>::readCuboid(Cuboid3D<T>& cuboid, XMLreader* pieceReader)
 {
-  if (piece->getName() == "Piece") {
-    std::vector<int> extents = this->readExtent(piece, "Extent");
+  if (pieceReader->getName() == "Piece") {
+    std::vector<int> extents = this->readExtent(pieceReader, "Extent");
     std::vector<int> extent = this->getNbNodes(extents);
     // int extents[i] is node number => multiply with _delta to get coordinate
     cuboid.init(extents[0] * this->_delta,
                 extents[2] * this->_delta,
                 extents[4] * this->_delta,
                 this->_delta,
+                //Why is this 0, 1, 2 and not 1, 3, 5?
                 extent[0],
                 extent[1],
                 extent[2]);
@@ -166,57 +193,140 @@ void BaseVTIreader3D<T,BaseType>::readCuboid(Cuboid3D<T>& cuboid, XMLreader* pie
 }
 
 template<typename T, typename BaseType>
-bool BaseVTIreader3D<T,BaseType>::readBlockData(BlockData<3,T,BaseType>& blockData,
-    const XMLreader& pieceTag, const std::string dName)
+void BaseVTIreader3D<T, BaseType>::readAsciiData(std::stringstream& stream_val, BlockData<3, T, BaseType>& blockData)
 {
-  /*** This is the main data reader method. All other methods use this one for accessing data ***/
+  // Careful: respect ordering in VTI File
+  for (int iz = 0; iz < blockData.getNz(); iz++) {
+    for (int iy = 0; iy < blockData.getNy(); iy++) {
+      for (int ix = 0; ix < blockData.getNx(); ix++) {
+        for (unsigned iSize=0; iSize < blockData.getSize(); iSize++) {
 
-  // Calculate number of cells in each direction
-  std::vector<int> extents = this->readExtent(&pieceTag, "Extent");
-  std::vector<int> extent = this->getNbNodes(extents);
-
-  // Iterate through all <DataArray> tags and take the one with the given Name attribute
-  for (auto & dataArray : pieceTag["PointData"]) {
-    if (dataArray->getAttribute("Name") == dName && dataArray->getName() == "DataArray") {
-      std::string data_str;
-      if (dataArray->read(data_str)) {
-        std::stringstream stream_val(data_str);
-
-        // Careful: respect ordering in VTI File
-        for (int iz = 0; iz < blockData.getNz(); iz++) {
-          for (int iy = 0; iy < blockData.getNy(); iy++) {
-            for (int ix = 0; ix < blockData.getNx(); ix++) {
-              for (unsigned iSize=0; iSize < blockData.getSize(); iSize++) {
-                BaseType tmp;
-                stream_val >> tmp;
-                // write tmp into blockData
-                blockData.get({ix, iy, iz}, iSize) = tmp;
-              }
-            }
+          //Throws an exception, when the input stream has reached it's end, but the blockData is not completely initialized
+          if(stream_val.eof()) {
+            this->clout << " Error: End of input has been reached, but there is still data to be written" << std::endl;
+            exit(1);
+          }
+          //Test if the vertex is inside of the physical extent
+          if (blockData.isInside({ix, iy, iz})) {
+            BaseType tmp;
+            stream_val >> tmp;
+            // write tmp into blockData
+            blockData.get({ix, iy, iz}, iSize) = tmp;
+          } else {
+            this->clout << "Found point outside of the block structure" << std::endl;
+            blockData.get({ix, iy, iz}, iSize) = 0;
           }
         }
+        //Test if string stream is empty
+        if (!stream_val.eof()) {
+          std::cerr << "There are still values left in the value stream but the Block Data is already filled" << std::endl;
+          exit(1);
+        }
       }
+    }
+  }
+  //Test if string stream is empty
+  if (!stream_val.eof()) {
+    this->clout << " Error: There are still values left in the value stream but the Block Data is already filled" << std::endl;
+    exit(1);
+  }
+}
 
-      // set correct blockData Name (GenericF)
-      //      blockData.getName() = dName;
+template<typename T, typename BaseType>
+void BaseVTIreader3D<T, BaseType>::readBinaryData(std::stringstream& stream_val, BlockData<3, T, BaseType>& blockData,
+                                                  size_t str_length)
+{
+  Base64Decoder<BaseType> decoder(stream_val, str_length);
+  size_t totalDataValues = this->computeTotalDataValues();
+  std::vector<BaseType> values(totalDataValues);
+  decoder.decode(values.data(), totalDataValues);
 
+  size_t value_idx = 0;
+  for (int iz = 0; iz < blockData.getNz(); iz++) {
+    for (int iy = 0; iy < blockData.getNy(); iy++) {
+      for (int ix = 0; ix < blockData.getNx(); ix++) {
+        for (unsigned iSize=0; iSize < blockData.getSize(); iSize++) {
+          //Throws an exception, when the input stream has reached it's end, but the blockData is not completely initialized
+          if(value_idx >= totalDataValues) {
+            this->clout << " Error: End of input has been reached, but there is still data to be written" << std::endl;
+            exit(1);
+          }
+          //Test if the vertex is inside of the physical extent
+          if (blockData.isInside({ix, iy, iz})) {
+            blockData.get({ix, iy, iz}, iSize) = values[value_idx];
+          } else {
+            this->clout << "Found point outside of the block structure" << std::endl;
+            blockData.get({ix, iy, iz}, iSize) = 0;
+          }
+          value_idx++;
+        }
+      }
+    }
+  }
+  //Test if string stream is empty
+  if (value_idx < totalDataValues) {
+    this->clout << " Error: There are still values left in the value stream but the Block Data is already filled" << std::endl;
+    exit(1);
+  }
+}
+
+template<typename T, typename BaseType>
+bool BaseVTIreader3D<T,BaseType>::readBlockData(BlockData<3,T,BaseType>& blockData,
+    const XMLreader& pieceTagReader, const std::string dataName)
+{
+
+  std::string arrayType = (this->_type == PointData) ? "PointData" : "CellData";
+
+  // Iterate through all <DataArray> tags and take the one with the given Name attribute
+  bool attributeFound = false;
+  for (auto & dataArrayReader : pieceTagReader[arrayType]) {
+    if (dataArrayReader->getAttribute("Name") == dataName && dataArrayReader->getName() == "DataArray") {
+      attributeFound = true;
+      std::string data_str;
+      if (dataArrayReader->read(data_str)) {
+        std::stringstream stream_val(data_str);
+        if (dataArrayReader->getAttribute("format") == "binary") {
+          this->clout << "Reading binary data" << std::endl;
+          readBinaryData(stream_val, blockData, data_str.length());
+        } else if (dataArrayReader->getAttribute("format") == "ascii") {
+          this->clout << "Reading ASCII data" << std::endl;
+          readAsciiData(stream_val, blockData);
+        } else {
+          this->clout << "Warning: The file format has to be either 'ascii' or 'binary', but it is '" << dataArrayReader->getAttribute("format") << "'."<< std::endl;
+        }
+      }
       return true;
     }
+  }
+  if(!attributeFound) {
+    this->clout << "Could not find attribute with the given Name: '" << dataName << "'" << std::endl;
   }
   return false;
 }
 
-
 /* ---------------- BlockVTIreader3D -------------------*/
 
 template<typename T,typename BaseType>
-BlockVTIreader3D<T,BaseType>::BlockVTIreader3D(const std::string& fName, const std::string& dName )
-  : BaseVTIreader3D<T,BaseType>(fName, dName, "BlockVTIreader3D"),
+BlockVTIreader3D<T,BaseType>::BlockVTIreader3D(const std::string& fileName, const std::string& dataName, const DataType type)
+  : BaseVTIreader3D<T,BaseType>(fileName, dataName, "BlockVTIreader3D", type),
     _cuboid(this->_origin, this->_delta, this->_extent),
-    _blockData(_cuboid, 0, this->_size)
+    _blockData(_cuboid, 0, this->_comps)
 {
+  size_t pieceTagCounter = 0;
+  for (XMLreader* child : this->_xmlReader["ImageData"]) {
+    if(child->getName() == "Piece") {
+      pieceTagCounter++;
+    }
+  }
+  if(pieceTagCounter == 0) {
+    this->clout << " Error: No piece tag could be found in " << fileName << std::endl;
+    exit(1);
+  }
+  if(pieceTagCounter > 1) {
+    this->clout << "Found several piece tags, only reads the first one" << std::endl;
+  }
   // Only read the first <Piece> tag in the XML file
-  this->readBlockData(_blockData, this->_xmlReader["ImageData"]["Piece"], dName);
+  this->readBlockData(_blockData, this->_xmlReader["ImageData"]["Piece"], dataName);
 }
 
 
@@ -325,210 +435,6 @@ LoadBalancer<T>& SuperVTIreader3D<T,BaseType>::getLoadBalancer()
 {
   return *_loadBalancer;
 }
-
-
-
-
-
-
-// ************************************ old 2D ********************************************** //
-
-/*
-template<typename T>
-void VTIreader2D<T>::printInfo()
-{
-  clout << "Origin: " << _x0 << " "  << _y0 << std::endl;
-  clout << "Extend: " << _x  << " "  << _y  << std::endl;
-  clout << "Spacing: " << _delta << std::endl;
-}
-
-template<typename T>
-VTIreader2D<T>::VTIreader2D(const std::string& fName ) : XMLreader(fName)
-{
-  // get _x, _y, _z
-  int x, y, z;
-  std::stringstream stream_val_0((*this)["ImageData"].getAttribute("WholeExtent"));
-  stream_val_0 >> x >> _x >> y >> _y >> z >> _z;
-  _x = _x-x+1;
-  _y = _y-y+1;
-  _z = _z-z+1;
-
-  // get _delta
-  std::stringstream stream_val_1((*this)["ImageData"].getAttribute("Spacing"));
-  stream_val_1 >> _delta;
-
-  std::stringstream stream_val_2((*this)["ImageData"].getAttribute("Origin"));
-  stream_val_2 >> _x0 >> _y0 >> _z0;
-}
-
-template<typename T>
-VTIreader2D<T>::~VTIreader2D() {}
-
-template<typename T>
-void VTIreader2D<T>::getCuboid(Cuboid2D<T>& cuboid)
-{
-  cuboid.init(_x0, _y0, _delta, _x, _y);
-}
-
-template<typename T>
-void VTIreader2D<T>::getCuboids(std::vector<Cuboid2D<T>* >& cuboids)
-{
-  std::vector<XMLreader*>::const_iterator it;
-  int i = 0;
-  for (it = (*this)["ImageData"].begin(); it != (*this)["ImageData"].end(); it++) {
-    if ((*it)->getName() == "Piece") {
-      ++i;
-      std::stringstream extstr((*it)->getAttribute("Extent"));
-      int extents[6];
-      for (int i = 0; i < 6; ++i) {
-        extstr >> extents[i];
-      }
-      Cuboid2D<T>* cuboid = new Cuboid2D<T>(extents[0], extents[2], _delta,
-                                            extents[1]-extents[0]+1,
-                                            extents[3]-extents[2]+1);
-      cuboids.push_back(cuboid);
-    }
-  }
-}
-*/
-/*
-template<typename T>
-void VTIreader2D<T>::getScalarMultiPieceData(std::vector<const ScalarFieldBase2D<T>* >& bases, const std::string dName)
-{
-  std::vector<XMLreader*>::const_iterator it;
-  for (it = (*this)["ImageData"].begin(); it != (*this)["ImageData"].end(); it++) {
-    if ((*it)->getName() == "Piece") {
-      std::stringstream extstr((*it)->getAttribute("Extent"));
-      int extents[6];
-      for (int i = 0; i < 6; i++) {
-        extstr >> extents[i];
-      }
-      std::vector<XMLreader*>::const_iterator it2;
-      for (it2 = (*it)->operator[]("PointData").begin(); it2 != (*it)->operator[]("PointData").end(); it2++) {
-        if ((*it2)->getAttribute("Name") == dName && (*it2)->getName() == "DataArray") {
-          ScalarField2D<T>* tmp = new ScalarField2D<T>(extents[1]-extents[0]+1, extents[3]-extents[2]+1);
-          tmp->construct();
-          std::string data_str;
-          if ((*it2)->read(data_str)) {
-            std::stringstream stream_val(data_str);
-            for (int iz = 0; iz < extents[5]-extents[4]+1; iz++) {
-              for (int iy = 0; iy < extents[3]-extents[2]+1; iy++) {
-                for (int ix = 0; ix < extents[1]-extents[0]+1; ix++) {
-                  T tmp2;
-                  stream_val >> tmp2;
-                  tmp->get(ix, iy) = tmp2;
-                }
-              }
-            }
-          }
-          bases.push_back(tmp);
-        }
-      }
-    }
-  }
-}
-
-template<typename T>
-void VTIreader2D<T>::getVectorMultiPieceData(std::vector<const TensorFieldBase2D<T, 2>* >& bases, const std::string dName)
-{
-  std::vector<XMLreader*>::const_iterator it;
-  for (it = (*this)["ImageData"].begin(); it != (*this)["ImageData"].end(); it++) {
-    if ((*it)->getName() == "Piece") {
-      std::stringstream extstr((*it)->getAttribute("Extent"));
-      int extents[6];
-      for (int i=0; i<6; i++) {
-        extstr >> extents[i];
-      }
-      std::vector<XMLreader*>::const_iterator it2;
-      for (it2 = (*it)->operator[]("PointData").begin(); it2 != (*it)->operator[]("PointData").end(); it2++) {
-        if ((*it2)->getAttribute("Name") == dName && (*it2)->getName() == "DataArray") {
-          TensorField2D<T, 2>* tmp = new TensorField2D<T, 2>(extents[1]-extents[0]+1, extents[3]-extents[2]+1);
-          tmp->construct();
-          std::string data_str;
-          if ((*it2)->read(data_str)) {
-            std::stringstream stream_val(data_str);
-            for (int iz = 0; iz < extents[5]-extents[4]+1; iz++) {
-              for (int iy = 0; iy < extents[3]-extents[2]+1; iy++) {
-                for (int ix = 0; ix < extents[1]-extents[0]+1; ix++) {
-                  T tmpval;
-                  for (int i=0; i < 2; i++) {
-                    stream_val >> tmpval;
-                    tmp->get(ix, iy)[i] = tmpval;
-                  }
-                  stream_val >> tmpval;
-                }
-              }
-            }
-          }
-          bases.push_back(tmp);
-        }
-      }
-    }
-  }
-}
-
-template<typename T>
-bool VTIreader2D<T>::getScalarData(ScalarField2D<T>* base, const std::string dName)
-{
-  std::vector<XMLreader*>::const_iterator it;
-  for (it = (*this)["ImageData"]["Piece"]["PointData"].begin(); it != (*this)["ImageData"]["Piece"]["PointData"].end(); it++) {
-    if ((*it)->getAttribute("Name") == dName && (*it)->getName() == "DataArray") {
-      ScalarField2D<T>* tmp = new ScalarField2D<T>(_x, _y);
-      tmp->construct();
-      std::string data_str;
-      if ((*it)->read(data_str)) {
-        std::stringstream stream_val(data_str);
-        for (int iz = 0; iz < _z; iz++) {
-          for (int iy = 0; iy < _y; iy++) {
-            for (int ix = 0; ix < _x; ix++) {
-              T tmp2;
-              stream_val >> tmp2;
-              tmp->get(ix, iy) = tmp2;
-            }
-          }
-        }
-      }
-      base->swap(*tmp);
-      delete tmp;
-      return true;
-    }
-  }
-  return false;
-}
-
-template<typename T>
-bool VTIreader2D<T>::getVectorData(TensorField2D<T, 2>* base, const std::string dName)
-{
-  std::vector<XMLreader*>::const_iterator it;
-  for (it = (*this)["ImageData"]["Piece"]["PointData"].begin(); it != (*this)["ImageData"]["Piece"]["PointData"].end(); it++) {
-    if ((*it)->getAttribute("Name") == dName && (*it)->getName() == "DataArray") {
-      TensorField2D<T, 2>* tmp = new TensorField2D<T, 2>(_x, _y);
-      tmp->construct();
-      std::string data_str;
-      if ((*it)->read(data_str)) {
-        std::stringstream stream_val(data_str);
-        for (int iz = 0; iz < _z; iz++) {
-          for (int iy = 0; iy < _y; iy++) {
-            for (int ix = 0; ix < _x; ix++) {
-              T tmpval;
-              for (int i = 0; i < 2; i++) {
-                stream_val >> tmpval;
-                tmp->get(ix, iy)[i] = tmpval;
-              }
-              stream_val >> tmpval;
-            }
-          }
-        }
-      }
-      base->swap(*tmp);
-      delete tmp;
-      return true;
-    }
-  }
-  return false;
-}
-*/
-
 
 }
 #endif

@@ -49,7 +49,7 @@ using T = FLOATING_POINT_TYPE;
 
 // Choose turbulence model or collision scheme
 //#define RLB
-#define SMAGORINSKY
+#define _SMAGORINSKY
 //#define WALE
 //#define ConsistentStrainSmagorinsky
 //#define ShearSmagorinsky
@@ -161,7 +161,7 @@ void prepareLattice(SuperLattice<T,DESCRIPTOR>& sLattice,
   sLattice.defineDynamics<BulkDynamics>(superGeometry, 1);
   sLattice.setParameter<descriptors::OMEGA>(omega);
   #if !defined(RLB) && !defined(DNS) && !defined(KBC)
-  sLattice.setParameter<collision::LES::Smagorinsky>(smagoConst);
+  sLattice.setParameter<collision::LES::SMAGORINSKY>(smagoConst);
   #endif
 
   sLattice.initialize();
@@ -256,11 +256,9 @@ void getResults(SuperLattice<T, DESCRIPTOR>& sLattice,
 
   if (iT == 0) {
     // Writes the geometry, cuboid no. and rank no. as vti file for visualization
-    SuperLatticeGeometry3D<T, DESCRIPTOR> geometry(sLattice, superGeometry);
     SuperLatticeCuboid3D<T, DESCRIPTOR> cuboid(sLattice);
     SuperLatticeRank3D<T, DESCRIPTOR> rank(sLattice);
     superGeometry.rename(0,2);
-    vtmWriter.write(geometry);
     vtmWriter.write(cuboid);
     vtmWriter.write(rank);
     vtmWriter.createMasterFile();
@@ -303,7 +301,7 @@ void getResults(SuperLattice<T, DESCRIPTOR>& sLattice,
     matNumber.push_back(1);
     SuperLatticePhysDissipationFD3D<T, DESCRIPTOR> diss(superGeometry, sLattice, matNumber, converter);
 #if !defined (DNS) && !defined(KBC) && !defined(RLB)
-    bulkDynamicsParams.set<collision::LES::Smagorinsky>(smagoConst);
+    bulkDynamicsParams.set<collision::LES::SMAGORINSKY>(smagoConst);
     SuperLatticePhysEffectiveDissipationFD3D<T, DESCRIPTOR> effectiveDiss(
       superGeometry, sLattice, matNumber, converter,
       [&](Cell<T,DESCRIPTOR>& cell) -> double {
@@ -313,7 +311,7 @@ void getResults(SuperLattice<T, DESCRIPTOR>& sLattice,
 #else
     SuperLatticePhysDissipation3D<T, DESCRIPTOR> diss(sLattice, converter);
 #if !defined (DNS) && !defined(KBC) && !defined(RLB)
-    bulkDynamicsParams.set<collision::LES::Smagorinsky>(smagoConst);
+    bulkDynamicsParams.set<collision::LES::SMAGORINSKY>(smagoConst);
     SuperLatticePhysEffectiveDissipation3D<T, DESCRIPTOR> effectiveDiss(
       sLattice, converter, smagoConst,
       [&](Cell<T,DESCRIPTOR>& cell) -> double {
@@ -378,9 +376,9 @@ int main(int argc, char* argv[])
   const int noOfCuboids = 1;
 #endif
 
-  CuboidGeometry3D<T> cuboidGeometry(0, 0, 0, converter.getConversionFactorLength(), N, N, N, noOfCuboids);
+  CuboidGeometry3D<T> cuboidGeometry(0, converter.getPhysDeltaX(), N, noOfCuboids);
 
-  cuboidGeometry.setPeriodicity(true, true, true);
+  cuboidGeometry.setPeriodicity({true, true, true});
 
   HeuristicLoadBalancer<T> loadBalancer(cuboidGeometry);
 

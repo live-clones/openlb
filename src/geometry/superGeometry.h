@@ -47,8 +47,7 @@
 #include <iostream>
 #include <string>
 
-#include "geometry/cuboidGeometry2D.h"
-#include "geometry/cuboidGeometry3D.h"
+#include "geometry/cuboidGeometry.h"
 #include "geometry/superGeometryStatistics2D.h"
 #include "geometry/superGeometryStatistics3D.h"
 #include "geometry/blockGeometry.h"
@@ -59,7 +58,7 @@
 #include "functors/analytical/indicator/indicatorF3D.h"
 #include "io/ostreamManager.h"
 #include "utilities/functorPtr.h"
-#include "dynamics/latticeDescriptors.h"
+#include "descriptor/descriptor.h"
 
 
 // All OpenLB code is contained in this namespace.
@@ -80,12 +79,19 @@ private:
   /// class specific output stream
   mutable OstreamManager clout;
 
+  /// Timestep for incremental construction VTK output
+  std::size_t _iConstructionT;
+  /// True iff geometry should be written out as VTK after every modification
+  bool _writeIncrementalVtkEnabled;
+  /// Writes out current geometry to VTK if _writeIncrementalVtkEnabled is true
+  void writeIncrementalVTK();
+
 public:
   constexpr static unsigned d = D;
 
   using block_t = ConcretizableBlockGeometry<T,D>;
 
-  SuperGeometry(CuboidGeometry<T,D>& cuboidGeometry,
+  SuperGeometry(CuboidDecomposition<T,D>& cuboidGeometry,
                 LoadBalancer<T>& loadBalancer,
                 int overlap = 3);
 
@@ -105,9 +111,9 @@ public:
   int getAndCommunicate(LatticeR<D+1> latticeR) const;
 
   /// Transforms a lattice to physical position (SI unites)
-  std::vector<T> getPhysR(int iCglob, LatticeR<D> latticeR) const;
+  Vector<T,D> getPhysR(int iCglob, LatticeR<D> latticeR) const;
   /// Transforms a lattice to physical position (SI unites)
-  std::vector<T> getPhysR(LatticeR<D+1> latticeR) const;
+  Vector<T,D> getPhysR(LatticeR<D+1> latticeR) const;
   /// Transforms a lattice to physical position (SI unites)
   void getPhysR(T output[D], const int latticeR[D+1]) const;
   void getPhysR(T output[D], const int iCglob, LatticeR<D> latticeR) const;
@@ -158,7 +164,7 @@ public:
   /// replace one material with another respecting an offset (overlap)
   void rename(int fromM, int toM, LatticeR<D> offset);
   /// renames all voxels of material fromM to toM if the number of voxels given by testDirection is of material testM
-  void rename(int fromM, int toM, int testM, std::vector<int> testDirection);
+  void rename(int fromM, int toM, int testM, Vector<int,D> testDirection);
   /// renames all boundary voxels of material fromBcMat to toBcMat if two neighbour voxel in the direction of the discrete normal are fluid voxel with material fluidM in the region where the indicator function is fulfilled
   void rename(int fromBcMat, int toBcMat, int fluidMat, IndicatorF<T,D>& condition);
   /// renames all boundary voxels of material fromBcMat to toBcMat if two neighbour voxel in the direction of the discrete normal are fluid voxel with material fluidM in the region where the indicator function is fulfilled
@@ -167,6 +173,13 @@ public:
 
   /// Prints some information about the super geometry
   void print();
+  /// Toggles whether geometry should be written out as VTK after every modification
+  void setWriteIncrementalVTK(bool state) {
+    _writeIncrementalVtkEnabled = state;
+  }
+
+  // print the materials of all the neighbours of a given voxel
+  void print(const T physR[D], int offset);
 
   /**
    * Returns a material indicator using the given vector of materials

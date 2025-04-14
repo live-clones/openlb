@@ -34,7 +34,7 @@
 
 #include "communication/mpiManager.h"
 #include "cell.h"
-#include "geometry/cuboidGeometry2D.h"
+#include "geometry/cuboidGeometry.h"
 #include "geometry/superGeometry.h"
 #include "communication/loadBalancer.h"
 #include "superLattice2D.h"

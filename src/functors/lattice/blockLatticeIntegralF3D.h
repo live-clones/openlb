@@ -45,33 +45,6 @@ namespace olb {
 
 template<typename T> class BlockIndicatorF3D;
 
-/// BlockL1Norm3D returns componentwise the l1 norm
-template <typename T, typename DESCRIPTOR>
-class BlockL1Norm3D final : public BlockLatticeF3D<T,DESCRIPTOR> {
-protected:
-  BlockLatticeF3D<T,DESCRIPTOR>& _f;
-  BlockGeometry<T,3>& _blockGeometry;
-  int _material;
-public:
-  BlockL1Norm3D(BlockLatticeF3D<T,DESCRIPTOR>& f, BlockGeometry<T,3>& blockGeometry, int material);
-  bool operator() (T output[], const int input[]) override;
-};
-
-
-/// BlockL223D returns componentwise the squared l2-norm
-template <typename T, typename DESCRIPTOR>
-class BlockL223D final : public BlockLatticeF3D<T,DESCRIPTOR> {
-protected:
-  BlockLatticeF3D<T,DESCRIPTOR>& _f;
-  BlockGeometry<T,3>& _blockGeometry;
-  int _material;
-public:
-  BlockL223D(BlockLatticeF3D<T,DESCRIPTOR>& f,
-             BlockGeometry<T,3>& blockGeometry,
-             int material);
-  bool operator() (T output[], const int input[]) override;
-};
-
 
 /// functor to get pointwise phys force acting on a indicated boundary on local lattice
 template <typename T, typename DESCRIPTOR>

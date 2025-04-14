@@ -54,6 +54,33 @@ public:
   Vector<int,2> getMax() override;
 };
 
+/// Block indicator helper for people that don't like writing boilerplate
+template <typename T>
+class BlockIndicatorFfromCallableF2D : public BlockIndicatorF2D<T> {
+protected:
+  std::function<bool(LatticeR<2>)> _callableF;
+
+public:
+  template <typename F>
+  BlockIndicatorFfromCallableF2D(BlockGeometry<T,2>& blockGeometry, F&& f)
+  : BlockIndicatorF2D<T>(blockGeometry)
+  , _callableF(f)
+  { }
+
+  using BlockIndicatorF2D<T>::operator();
+
+  bool operator() (bool output[], const int input[]) override {
+    output[0] = _callableF(input);
+    return true;
+  }
+
+  Vector<int,2> getMin() override {
+    return std::numeric_limits<int>::min();
+  }
+  Vector<int,2> getMax() override {
+    return std::numeric_limits<int>::max();
+  }
+};
 
 /// BlockIndicatorF2D from SmoothIndicatorF2D
 /**

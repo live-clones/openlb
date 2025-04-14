@@ -26,11 +26,11 @@
 #define DYNAMICS_DYNAMICS_H
 
 #include "interface.h"
+#include "modifiers.h"
 
 #include "core/util.h"
-#include "core/postProcessing.h"
 #include "core/latticeStatistics.h"
-#include "latticeDescriptors.h"
+#include "descriptor/descriptor.h"
 
 #include "momenta/interface.h"
 #include "momenta/aliases.h"
@@ -40,6 +40,7 @@
 #include "forcing.h"
 
 #include "collisionModifiers.h"
+#include "spongeLayerDynamics.h"
 
 namespace olb {
 
@@ -67,6 +68,21 @@ using NoDynamicsWithZero = dynamics::Tuple<
   collision::None
 >;
 
+/// Dynamics for "dead cells" with fixed density
+template <typename T, typename DESCRIPTOR>
+using NoDynamicsWithFixedDensity = dynamics::Tuple<
+  T, DESCRIPTOR,
+  // Return 1 for the 0th moment, 0 for all others
+  momenta::Tuple<
+    momenta::FixedDensity,
+    momenta::ZeroMomentum,
+    momenta::ZeroStress,
+    momenta::DefineSeparately
+  >,
+  equilibria::None,
+  collision::None
+>;
+
 /// Common BGK collision step
 template <typename T, typename DESCRIPTOR, typename MOMENTA=momenta::BulkTuple>
 using BGKdynamics = dynamics::Tuple<
@@ -77,6 +93,104 @@ using BGKdynamics = dynamics::Tuple<
                         equilibria::FirstOrder,
                         equilibria::SecondOrder>,
   collision::BGK
+>;
+
+//BGK collision with third order equilibrium function
+template <typename T, typename DESCRIPTOR, typename MOMENTA=momenta::BulkTuple>
+using ThirdOrderBGKdynamics = dynamics::Tuple<
+  T, DESCRIPTOR,
+  MOMENTA,
+  equilibria::ThirdOrder,
+  collision::BGK
+>;
+
+// HRR collision https://hal.science/hal-02114308
+template <typename T, typename DESCRIPTOR, typename MOMENTA=momenta::BulkTuple>
+using ThirdOrderHRRdynamics = dynamics::Tuple<
+  T, DESCRIPTOR,
+  MOMENTA,
+  equilibria::ThirdOrder,
+  collision::HRR
+>;
+
+template <typename T, typename DESCRIPTOR, typename MOMENTA=momenta::BulkTuple>
+using ThirdOrderRLBdynamics = dynamics::Tuple<
+  T, DESCRIPTOR,
+  MOMENTA,
+  equilibria::ThirdOrder,
+  collision::RLBThirdOrder
+>;
+
+template <typename T, typename DESCRIPTOR, typename MOMENTA=momenta::BulkTuple>
+using ForcedThirdOrderRLBdynamics = dynamics::Tuple<
+  T, DESCRIPTOR,
+  MOMENTA,
+  equilibria::ThirdOrder,
+  collision::RLBThirdOrder,
+  forcing::GuoThirdOrder<momenta::Forced>
+>;
+
+template <typename T, typename DESCRIPTOR, typename MOMENTA=momenta::BulkTuple>
+using ForcedThirdOrderHRRdynamics = dynamics::Tuple<
+  T, DESCRIPTOR,
+  MOMENTA,
+  equilibria::ThirdOrder,
+  collision::HRR,
+  forcing::GuoThirdOrder<momenta::Forced>
+>;
+
+template <typename T, typename DESCRIPTOR>
+using ThirdOrderHRLBdynamics = dynamics::Tuple<
+  T, DESCRIPTOR,
+  momenta::Tuple<
+    momenta::BulkDensity,
+  momenta::MovingPorousMomentumCombination<momenta::BulkMomentum>,
+  momenta::BulkStress,
+  momenta::DefineToNEq
+  >,
+  equilibria::ThirdOrder,
+  collision::RLBThirdOrder
+>;
+
+template <typename T, typename DESCRIPTOR>
+using ForcedThirdOrderHRLBdynamics = dynamics::Tuple<
+  T, DESCRIPTOR,
+  momenta::Tuple<
+    momenta::BulkDensity,
+  momenta::MovingPorousMomentumCombination<momenta::BulkMomentum>,
+  momenta::BulkStress,
+  momenta::DefineToNEq
+  >,
+  equilibria::ThirdOrder,
+  collision::RLBThirdOrder,
+  forcing::GuoThirdOrder<momenta::Forced>
+>;
+
+template <typename T, typename DESCRIPTOR>
+using ThirdOrderHHRRdynamics = dynamics::Tuple<
+  T, DESCRIPTOR,
+  momenta::Tuple<
+    momenta::BulkDensity,
+  momenta::MovingPorousMomentumCombination<momenta::BulkMomentum>,
+  momenta::BulkStress,
+  momenta::DefineToNEq
+  >,
+  equilibria::ThirdOrder,
+  collision::HRR
+>;
+
+template <typename T, typename DESCRIPTOR>
+using ForcedThirdOrderHHRRdynamics = dynamics::Tuple<
+  T, DESCRIPTOR,
+  momenta::Tuple<
+    momenta::BulkDensity,
+  momenta::MovingPorousMomentumCombination<momenta::BulkMomentum>,
+  momenta::BulkStress,
+  momenta::DefineToNEq
+  >,
+  equilibria::ThirdOrder,
+  collision::HRR,
+  forcing::GuoThirdOrder<momenta::Forced>
 >;
 
 /// Pressure-corrected BGK collision step
@@ -111,6 +225,21 @@ using MultiComponentForcedBGKdynamics = dynamics::Tuple<
   equilibria::SecondOrder,
   collision::BGK,
   forcing::MCGuo<momenta::Identity>
+>;
+
+/// BGK collision step with external force (Wagner)
+/**
+ * Wagner, A (2006) Thermodynamic consistency of liquid-gas
+ * lattice Boltzmann simulations. Phys Rev E 74, 056703
+ * DOI: 10.1103/PhysRevE.74.056703
+ **/
+template <typename T, typename DESCRIPTOR, typename MOMENTA=momenta::BulkTuple>
+using ForcedWagnerBGKdynamics = dynamics::Tuple<
+  T, DESCRIPTOR,
+  MOMENTA,
+  equilibria::SecondOrder,
+  collision::ParameterFromCell<descriptors::OMEGA, collision::BGK>,
+  forcing::Wagner
 >;
 
 /// BGK collision step with external force (Kupershtokh)
@@ -170,6 +299,31 @@ using ExternalTauForcedIncBGKdynamics = dynamics::Tuple<
   forcing::Guo<momenta::Forced>
 >;
 
+/// Multi-phase incompressible BGK collision step with relaxation frequency 1 / TAU_EFF and external force
+/**
+ * Liang, H., Xu, J., Chen, J., Wang, H., Chai, Z., & Shi, B. (2018).
+ * Phase-field-based lattice Boltzmann modeling of large-density-ratio two-phase flows.
+ * Physical Review E, 97(3), 033309.
+ * DOI: 10.1103/PhysRevE.97.033309
+ **/
+template <typename T, typename DESCRIPTOR>
+using MPIncBGKdynamics = dynamics::Tuple<
+  T, DESCRIPTOR,
+  momenta::IncBulkTuple<momenta::ForcedMomentum<momenta::IncompressibleBulkMomentum>>,
+  equilibria::MPIncompressible,
+  collision::OmegaFromCellTauEff<collision::BGK>,
+  forcing::Liang<momenta::Forced>
+>;
+
+template <typename T, typename DESCRIPTOR, typename MOMENTA=momenta::ExternalVelocityTuple>
+using AllenCahnBGKdynamics = dynamics::Tuple<
+  T, DESCRIPTOR,
+  MOMENTA,
+  equilibria::FirstOrder,
+  collision::BGK,
+  forcing::AllenCahn
+>;
+
 /// Regularized BGK collision step
 /**
  * This model is substantially more stable than plain BGK, and has roughly
@@ -197,8 +351,12 @@ private:
 
 public:
   using MomentaF = typename MOMENTA::template type<DESCRIPTOR>;
+  using EquilibriumF = typename CORRECTED_DYNAMICS::EquilibriumF;
 
   using parameters = typename CORRECTED_DYNAMICS::parameters;
+
+  template <typename NEW_T>
+  using exchange_value_type = CombinedRLBdynamics<NEW_T,DESCRIPTOR,DYNAMICS,MOMENTA>;
 
   template <typename M>
   using exchange_momenta = CombinedRLBdynamics<T,DESCRIPTOR,DYNAMICS,M>;
@@ -211,21 +369,22 @@ public:
     return block.template getData<OperatorParameters<CombinedRLBdynamics>>();
   }
 
-  template <CONCEPT(MinimalCell) CELL, typename PARAMETERS, typename V=typename CELL::value_t>
+  template <concepts::Cell CELL, typename PARAMETERS, typename V=typename CELL::value_t>
   CellStatistic<V> apply(CELL& cell, PARAMETERS& parameters) any_platform {
     V rho, u[DESCRIPTOR::d], pi[util::TensorVal<DESCRIPTOR>::n];
     MomentaF().computeAllMomenta(cell,rho,u,pi);
+    V fEq[DESCRIPTOR::q] { };
+    EquilibriumF().compute(cell, rho, u, fEq);
 
     for (int iPop = 0; iPop < DESCRIPTOR::q; ++iPop) {
-      cell[iPop] = typename CORRECTED_DYNAMICS::EquilibriumF().compute(iPop, rho, u)
-                 + equilibrium<DESCRIPTOR>::template fromPiToFneq<V>(iPop, pi);
+      cell[iPop] = fEq[iPop] + equilibrium<DESCRIPTOR>::template fromPiToFneq<V>(iPop, pi);
     }
 
     return typename CORRECTED_DYNAMICS::CollisionO().apply(cell, parameters);
   };
 
-  T computeEquilibrium(int iPop, T rho, const T u[DESCRIPTOR::d]) const override any_platform {
-    return typename CORRECTED_DYNAMICS::EquilibriumF().compute(iPop, rho, u);
+  void computeEquilibrium(ConstCell<T,DESCRIPTOR>& cell, T rho, const T u[DESCRIPTOR::d], T fEq[DESCRIPTOR::q]) const override {
+    EquilibriumF().compute(cell, rho, u, fEq);
   };
 
   std::string getName() const override {
@@ -294,6 +453,32 @@ using BounceBackBulkDensity = dynamics::Tuple<
   collision::Revert
 >;
 
+template <typename T, typename DESCRIPTOR>
+using BounceBackIncompressible = dynamics::Tuple<
+  T, DESCRIPTOR,
+  momenta::Tuple<
+    momenta::FixedDensity,
+    momenta::ZeroMomentum,
+    momenta::ZeroStress,
+    momenta::DefineSeparately
+  >,
+  equilibria::MPIncompressible,
+  collision::Revert
+>;
+
+template <typename T, typename DESCRIPTOR>
+using BounceBackBulkDensityADE = dynamics::Tuple<
+  T, DESCRIPTOR,
+  momenta::Tuple<
+    momenta::BulkDensity,
+    momenta::ZeroMomentum,
+    momenta::ZeroStress,
+    momenta::DefineSeparately
+  >,
+  equilibria::FirstOrder,
+  collision::Revert
+>;
+
 /// Bounce Back boundary dynamics with Nguyen-Ladd velocity correction
 /**
  * This is a very popular way to implement no-slip boundary conditions,
@@ -303,7 +488,7 @@ using BounceBackBulkDensity = dynamics::Tuple<
 template <typename T, typename DESCRIPTOR>
 using BounceBackVelocity = dynamics::Tuple<
   T, DESCRIPTOR,
-  momenta::ExternalVelocityTuple,
+  momenta::ExternalVelocityFixedDensityTuple,
   equilibria::SecondOrder,
   collision::NguyenLaddCorrection<collision::Revert>
 >;
@@ -349,6 +534,12 @@ struct ZeroDistributionDynamics final : public dynamics::CustomCollision<
     momenta::DefineSeparately
   >
 > {
+  using EquilibriumF = typename equilibria::None::template type<DESCRIPTOR,momenta::Tuple<
+    momenta::BulkDensity,
+    momenta::ZeroMomentum,
+    momenta::ZeroStress,
+    momenta::DefineSeparately
+  >>;
   using parameters = meta::list<>;
 
   std::type_index id() override {
@@ -367,8 +558,10 @@ struct ZeroDistributionDynamics final : public dynamics::CustomCollision<
     return {-1, -1};
   };
 
-  T computeEquilibrium(int iPop, T rho, const T u[DESCRIPTOR::d]) const any_platform override {
-    return 0;
+  void computeEquilibrium(ConstCell<T,DESCRIPTOR>& cell, T rho, const T u[DESCRIPTOR::d], T fEq[DESCRIPTOR::q]) const override {
+    for ( int iPop = 0; iPop < DESCRIPTOR::q; iPop++ ) {
+      fEq[iPop] = 0;
+    }
   };
 
   std::string getName() const override {

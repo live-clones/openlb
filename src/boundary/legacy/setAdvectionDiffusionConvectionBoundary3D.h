@@ -33,7 +33,7 @@
 #include "functors/lattice/indicator/superIndicatorBaseF3D.h"
 #include "functors/lattice/indicator/blockIndicatorF3D.h"
 #include "dynamics/dynamics.h"
-#include "dynamics/rtlbmDescriptors.h"
+#include "descriptor/definition/rtlbm.h"
 #include "io/ostreamManager.h"
 #include "advectionDiffusionBoundaryPostProcessor3D.h"
 #include "boundary/dynamics/advectionDiffusionBoundaries.h"

@@ -29,7 +29,7 @@
 #define RTLBM_DYNAMICS_HH
 
 #include "rtlbmDynamics.h"
-#include "rtlbmDescriptors.h"
+#include "descriptor/definition/rtlbm.h"
 #include "lbm.h"
 
 namespace olb {

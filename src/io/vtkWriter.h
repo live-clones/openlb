@@ -115,7 +115,6 @@ protected:
   ///  performes </PointData> and </Piece>
   void closePiece(const std::string& fullNamePiece);
 
-
   ///  writes points necessary for VTU
   template<unsigned sourceDim>
   void dataArrayPoints(const std::string& fullName,

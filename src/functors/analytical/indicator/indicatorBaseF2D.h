@@ -95,11 +95,26 @@ public:
 /// Returns true if input is inside the indicator
   virtual bool operator() (bool output[1], const S input[2]);
   /// Returns signed distance to the nearest point on the indicator surface
+  /// Uses the fastest, but potentially less accurate method
+  /// This is usually sufficient for fluid-wall interactions
   virtual S signedDistance(const Vector<S,2>& input);
+  /// Returns exact signed distance to the nearest point on the indicator surface
+  /// Uses the most accurate, but slower method
+  /// This is likely necessary for particle-wall interactions
+  virtual S signedDistanceExact(const Vector<S,2>& input);
   /// Return surface normal
+  /// Uses the fastest, but potentially less accurate method
   virtual Vector<S,2> surfaceNormal(const Vector<S,2>& pos, const S meshSize);
+  /// Return surface normal
+  /// Uses the most accurate, but slower method
+  virtual Vector<S,2> surfaceNormalExact(const Vector<S,2>& pos, const S meshSize);
   /// Return surface normal after possible translation and rotation
+  /// Uses the fastest, but potentially less accurate method
   Vector<S,2> surfaceNormal(const Vector<S,2>& pos, const S meshSize,
+                            std::function<Vector<S,2>(const Vector<S,2>&)> transformPos);
+  /// Return surface normal after possible translation and rotation
+  /// Uses the most accurate, but slower method
+  Vector<S,2> surfaceNormalExact(const Vector<S,2>& pos, const S meshSize,
                             std::function<Vector<S,2>(const Vector<S,2>&)> transformPos);
   /// Returns true if `point` is inside a cube with corners `_myMin` and `_myMax`
   bool isInsideBox(Vector<S,2> point);

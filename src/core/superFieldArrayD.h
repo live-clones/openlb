@@ -26,13 +26,18 @@
 
 namespace olb {
 
+/// Maintains per-block arrays of FIELD
+/**
+ * Useful for storing additional data in the correct per-block platforms
+ * for usage in operators (by passing pointer as parameter).
+ **/
 template <typename T, typename DESCRIPTOR, typename FIELD>
 class SuperFieldArrayD final : public SuperStructure<T,DESCRIPTOR::d> {
 private:
   std::vector<std::unique_ptr<ColumnVectorBase>> _block;
 
 public:
-  SuperFieldArrayD(CuboidGeometry<T,DESCRIPTOR::d>& cGeometry,
+  SuperFieldArrayD(CuboidDecomposition<T,DESCRIPTOR::d>& cGeometry,
                    LoadBalancer<T>& loadBalancer):
     SuperStructure<T,DESCRIPTOR::d>(cGeometry, loadBalancer, 0)
   {
@@ -52,6 +57,16 @@ public:
       [&](auto* field) -> auto* {
         return &(field->asAbstract());
       });
+  }
+
+  template <Platform PLATFORM>
+  FieldArrayD<T,DESCRIPTOR,PLATFORM,FIELD>& getBlock(int iC) {
+    if (auto* ptr = dynamic_cast<FieldArrayD<T,DESCRIPTOR,PLATFORM,FIELD>*>(_block[iC].get());
+        ptr != nullptr) {
+      return *ptr;
+    } else {
+      throw std::invalid_argument("FieldArrayD is not of PLATFORM");
+    }
   }
 
 };

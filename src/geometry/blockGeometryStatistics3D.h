@@ -33,8 +33,8 @@
 #include <string>
 
 #include "io/ostreamManager.h"
+#include "discreteNormals.h"
 
-// All OpenLB code is contained in this namespace.
 namespace olb {
 
 /// Representation of a statistic for a 3D geometry
@@ -121,15 +121,18 @@ public:
   /// Returns the center position
   std::vector<T> getCenterPhysR(int material);
   std::vector<T> getCenterPhysR(int material) const;
+
   /* Returns the boundary type which is characterized by a discrete normal (c.f. Zimny)
    * 0 element:   flat, corner or edge
    * 1 element:   orientation -1, 0 or 1
    * 2 element:   orientation -1, 0 or 1
    * 3 element:   orientation -1, 0 or 1
    */
-  std::vector<int> getType(int iX, int iY, int iZ, bool anyNormal = false);
-  std::vector<int> getType(const int* input, bool anyNormal = false) const;
-  std::vector<int> getType(int iX, int iY, int iZ, bool anyNormal = false) const;
+  std::vector<int> getType(int iX, int iY, int iZ);
+  std::vector<int> getType(const int* input) const;
+  std::vector<int> getType(int iX, int iY, int iZ, BlockIndicatorF3D<T>& fluidI, BlockIndicatorF3D<T>& outsideI) const;
+  std::vector<int> getType(int iX, int iY, int iZ) const;
+
 
   /// Returns normal that points into the fluid for paraxial surfaces
   std::vector<int> computeNormal(int iX, int iY, int iZ);
@@ -154,14 +157,9 @@ public:
   void print() const;
 
 private:
-
   /// Helper function to simplify the implementation
   void takeStatistics(int iX, int iY, int iZ);
-  /// Helper function for get type (c.f. Zimny)
-  std::vector<int> checkExtraBoundary(std::vector<int> discreteNormal,
-                                      std::vector<int> discreteNormal2);
-  std::vector<int> checkExtraBoundary(std::vector<int> discreteNormal,
-                                      std::vector<int> discreteNormal2) const;
+
 };
 
 } // namespace olb

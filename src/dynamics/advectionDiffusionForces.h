@@ -28,6 +28,57 @@
 
 namespace olb {
 
+/**
+ * Refactored AdvectionDiffusion forces to fit
+ * with new template style
+ */
+namespace ade_forces {
+
+struct AdvDiffDragForce3D {
+
+  struct INIT_ARG : public descriptors::FIELD_BASE<1> { };
+  struct DRAG_COEFF : public descriptors::FIELD_BASE<1> { };
+
+  using parameters = meta::list<INIT_ARG,DRAG_COEFF>;
+
+  template <typename V,typename PARAMETERS>
+  V computeDragFromSt(V ST, V U, V dT, V dL, PARAMETERS& params) any_platform {
+    V dragCoeff = (U*dT) / (ST*dL);
+    params.template set<INIT_ARG>(8.);
+    params.template set<DRAG_COEFF>(dragCoeff);
+  }
+
+  template <typename V, typename COUPLING, typename CONVERTER>
+  static void computeParametersFromRhoAndRadius(V pRho, V pRadius, COUPLING& coupling, CONVERTER& converter) any_platform {
+    V dragCoeff = (9.*converter.getPhysViscosity()*converter.getPhysDensity()*converter.getConversionFactorTime())
+              / (2.*pRho*pRadius*pRadius);
+    coupling.template setParameter<ade_forces::AdvDiffDragForce3D::INIT_ARG>(V(8.));
+    coupling.template setParameter<ade_forces::AdvDiffDragForce3D::DRAG_COEFF>(dragCoeff);
+  }
+
+  template <typename V,typename PARAMETERS>
+  V computeDragFromRhoAndRadius(V pRho, V pRadius, V dGamma, V dRho, V dT, PARAMETERS& params) any_platform {
+    V dragCoeff = (9.*dGamma*dRho*dT) / (2.*pRho*pRadius*pRadius);
+    params.template set<INIT_ARG>(8.);
+    params.template set<DRAG_COEFF>(dragCoeff);
+  }
+
+  template <typename V, typename CELLS, typename PARAMETERS>
+  static void applyForce(V force[], CELLS& cells, V velocity[], PARAMETERS& params) any_platform {
+    using DESCRIPTOR = typename CELLS::template value_t<names::NavierStokes>::descriptor_t;
+    auto& cellNS = cells.template get<names::NavierStokes>();
+    V dragCoeff = params.template get<DRAG_COEFF>();
+    V velF[3] = {0.,0.,0.};
+    cellNS.computeU(velF);
+    for (int i=0; i < DESCRIPTOR::d; i++) {
+      force[i] += dragCoeff*(velF[i]-velocity[i]);
+    }
+  }
+
+};
+
+}
+
 template<typename T, typename DESCRIPTOR,
          typename ADLattice=descriptors::D3Q7<descriptors::VELOCITY,descriptors::VELOCITY2>>
 class AdvectionDiffusionForce3D {

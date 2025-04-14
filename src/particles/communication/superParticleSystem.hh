@@ -44,7 +44,7 @@ SuperParticleSystem<T, PARTICLETYPE>::SuperParticleSystem(
     _blockParticleSystems.push_back(new ParticleSystem<T, PARTICLETYPE>);
   }
 
-  _cuboidNeighborhood.resize(_superStructure.getCuboidGeometry().getNc());
+  _cuboidNeighborhood.resize(_superStructure.getCuboidGeometry().size());
   updateCuboidNeighborhood();
 }
 

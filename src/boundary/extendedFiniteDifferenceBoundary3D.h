@@ -30,11 +30,6 @@
 
 namespace olb {
 
-/**
-* This class computes the finite difference approximation to LB boundary conditions
-* on a plane wall in 3D with all the terms of the CE expansion.
-*/
-
 template<typename T, typename DESCRIPTOR, int direction, int orientation>
 class ExtendedFdPlaneBoundaryPostProcessor3D : public LocalPostProcessor3D<T,DESCRIPTOR> {
 public:

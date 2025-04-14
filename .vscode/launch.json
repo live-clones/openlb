@@ -1,0 +1,103 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "Debug workstation",
+      "type": "cppdbg",
+      "request": "launch",
+      "args": ["--no-damping","--no-subgrid","--outlet","1","--Re","200","--res","100"],
+      "stopAtEntry": false,
+      "externalConsole": false,
+      "cwd": "/home/philipp/OpenLB/examples/noise/du93_3d",
+      "program": "/home/philipp/OpenLB/examples/noise/du93_3d/du93_3d",
+      "MIMode": "gdb",
+      "miDebuggerPath": "gdb",
+      "setupCommands": [
+        {
+          "description": "Enable pretty-printing for gdb",
+          "text": "-enable-pretty-printing",
+          "ignoreFailures": true
+        }
+      ],
+      "preLaunchTask": "make du93"
+    },
+    {
+      "name": "Debug cylinder2d laptop",
+      "type": "cppdbg",
+      "request": "launch",
+      "args": [],
+      "stopAtEntry": false,
+      "externalConsole": false,
+      "cwd": "/home/hbrs/OpenLB/examples/gridRefinement/cylinder2d",
+      "program": "/home/hbrs/OpenLB/examples/gridRefinement/cylinder2d/cylinder2d",
+      "MIMode": "gdb",
+      "miDebuggerPath": "gdb",
+      "setupCommands": [
+        {
+          "description": "Enable pretty-printing for gdb",
+          "text": "-enable-pretty-printing",
+          "ignoreFailures": true
+        },
+        {
+          "description": "Set Disassembly Flavor to Intel",
+          "text": "-gdb-set disassembly-flavor intel",
+          "ignoreFailures": true
+        }
+      ],
+      "preLaunchTask": "make cylinder2d"
+    },
+    {
+      "name": "Debug movingshock3d workstation",
+      "type": "cppdbg",
+      "request": "launch",
+      "args": [
+        "--boundarycondition",
+        "4",
+        "--imax",
+        "50",
+        "--iout",
+        "10"
+      ],
+      "stopAtEntry": false,
+      "externalConsole": false,
+      "cwd": "/home/philipp/OpenLB/examples/noise/movingshock3d",
+      "program": "/home/philipp/OpenLB/examples/noise/movingshock3d/movingshock3d",
+      "MIMode": "gdb",
+      "miDebuggerPath": "gdb",
+      "setupCommands": [
+        {
+          "description": "Enable pretty-printing for gdb",
+          "text": "-enable-pretty-printing",
+          "ignoreFailures": true
+        }
+      ],
+      "preLaunchTask": "make movingshock3d"
+    },
+    {
+      "name": "C/C++: gcc build and debug active file",
+      "type": "cppdbg",
+      "request": "launch",
+      "program": "${fileDirname}/${fileBasenameNoExtension}",
+      "args": [],
+      "stopAtEntry": false,
+      "cwd": "${fileDirname}",
+      "environment": [],
+      "externalConsole": false,
+      "MIMode": "gdb",
+      "setupCommands": [
+        {
+          "description": "Enable pretty-printing for gdb",
+          "text": "-enable-pretty-printing",
+          "ignoreFailures": true
+        },
+        {
+          "description": "Set Disassembly Flavor to Intel",
+          "text": "-gdb-set disassembly-flavor intel",
+          "ignoreFailures": true
+        }
+      ],
+      "preLaunchTask": "C/C++: gcc build active file",
+      "miDebuggerPath": "/usr/bin/gdb"
+    }
+  ]
+}

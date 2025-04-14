@@ -4,17 +4,20 @@ all: dependencies core $(EXAMPLE)
 
 INCLUDE_DIRS := $(OLB_ROOT)/src
 
-ifeq ($(USE_EMBEDDED_DEPENDENCIES), ON)
+ifneq ($(USE_EMBEDDED_DEPENDENCIES), OFF)
 INCLUDE_DIRS += \
 	$(OLB_ROOT)/external/zlib \
-	$(OLB_ROOT)/external/tinyxml
+	$(OLB_ROOT)/external/tinyxml2
 
 LDFLAGS := -L$(OLB_ROOT)/external/lib $(LDFLAGS)
 
 dependencies:
 	$(MAKE) -C $(OLB_ROOT)/external
+
+clean-dependencies:
+	$(MAKE) -C $(OLB_ROOT)/external clean
 else
-.PHONY: dependencies
+.PHONY: dependencies clean-dependencies
 endif
 
 LDFLAGS += -L$(OLB_ROOT)/build/lib
@@ -34,17 +37,26 @@ INCLUDE_FLAGS := -I$(subst $(EMPTY) $(EMPTY), -I,$(INCLUDE_DIRS))
 %.o: %.cpp
 	$(CXX) $(CXXFLAGS) $(INCLUDE_FLAGS) -c -o $@ $<
 
+ifeq ($(CUDA_ARCH), 75)
+$(EXAMPLE): $(OBJ_FILES)
+	$(CXX) $(OBJ_FILES) -o $@ -lolbcore $(LDFLAGS) -arch=sm_75
+else
 $(EXAMPLE): $(OBJ_FILES)
 	$(CXX) $(OBJ_FILES) -o $@ -lolbcore $(LDFLAGS)
+endif
 
 .PHONY: onlysample
 onlysample: $(EXAMPLE)
+
+.PHONY: run
+run: $(EXAMPLE)
+	./$(EXAMPLE)
 
 .PHONY: clean-tmp
 clean-tmp:
 	rm -f tmp/*.* tmp/vtkData/*.* tmp/vtkData/data/*.* tmp/imageData/*.* tmp/imageData/data/*.* tmp/gnuplotData/*.* tmp/gnuplotData/data/*.*
 
-.PHONE: clean-core
+.PHONY: clean-core
 clean-core:
 	make -C $(OLB_ROOT) clean-core
 

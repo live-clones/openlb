@@ -36,11 +36,12 @@ using namespace olb::graphics;
 
 using T = double;
 
-using DESCRIPTOR = D3Q19<VELOCITY,FORCE,EXTERNAL_FORCE,STATISTIC,SCALAR>;
+using DESCRIPTOR = D3Q19<VELOCITY,FORCE,EXTERNAL_FORCE,STATISTIC,SCALAR,PSI>;
 using BulkDynamics = MultiComponentForcedBGKdynamics<T, DESCRIPTOR>;
 
 constexpr unsigned N_COMPONENTS = 3;
-using COUPLING = MCMPForcedPostProcessor<interaction::MCPRpseudoPotential<N_COMPONENTS>,N_COMPONENTS>;
+using COUPLING = MCMPForcedPostProcessor<N_COMPONENTS>;
+using STATISTICS = RhoPsiStatistics<interaction::MCPRpseudoPotential<N_COMPONENTS>,N_COMPONENTS>;
 
 // Parameters for the simulation setup
 const int N  = 70;                                              // domain resolution
@@ -77,8 +78,8 @@ const std::vector<T> alpha = {0., 0.199222317, 0.193233601, 0.199222317, 0., 0.,
 const std::vector<T> g_I = {0., -4.29088111e3, -1.95640777e2, 3.02126911e4, 0., 5.65244934e2, 6.13396078e4, -5.01392189e2, 0.};
 const std::vector<T> g_II = {0., 3.47847412e1, 2.10776021e1, -3.70834075e1, 0., 0., -1.22744109e2, 0., 0.};
 std::vector<T> rho0L(3), rho0V(3);
-const int maxIter  = 30000;
-const int vtkIter  = 50;
+const int maxIter  = 10000;
+const int vtkIter  = 100;
 const int statIter = 20;
 
 void prepareGeometry( SuperGeometry<T,3>& superGeometry )
@@ -93,12 +94,13 @@ void prepareGeometry( SuperGeometry<T,3>& superGeometry )
   clout << "Prepare Geometry ... OK" << std::endl;
 }
 
-template <typename SuperLatticeCoupling>
+template <typename SuperLatticeCoupling, typename StatisticsCoupling>
 void prepareLattice( SuperLattice<T, DESCRIPTOR>& sLattice1,
                      SuperLattice<T, DESCRIPTOR>& sLattice2,
                      SuperLattice<T, DESCRIPTOR>& sLattice3,
-                               SuperLatticeCoupling& coupling,
-                               MultiPhaseUnitConverter<T, DESCRIPTOR> const& converter,
+                     SuperLatticeCoupling& coupling,
+                     StatisticsCoupling& statistics,
+                     MultiPhaseUnitConverter<T, DESCRIPTOR> const& converter,
                      SuperGeometry<T,3>& superGeometry )
 {
   OstreamManager clout( std::cout,"prepareLattice" );
@@ -184,31 +186,30 @@ void prepareLattice( SuperLattice<T, DESCRIPTOR>& sLattice1,
   sLattice2.setParameter<descriptors::OMEGA>( 1./tau_nuAir );
   sLattice3.setParameter<descriptors::OMEGA>( 1./tau_nuAir );
 
-  T sigma = converter.getLatticeSurfaceTension()*(0.1);
+  T sigma = converter.getLatticeSurfaceTension()*(-2.6);
   clout << "Sigma for correct unit conversion: " << sigma << std::endl;
   coupling.template setParameter<COUPLING::CHI>(chi);
-  coupling.template setParameter<COUPLING::TEMPERATURE>(T_L);
   coupling.template setParameter<COUPLING::G>(-1.);
   coupling.template setParameter<COUPLING::SIGMA>(sigma);
   coupling.template setParameter<COUPLING::EPSILON>(initEpsilon);
-  coupling.template setParameter<COUPLING::K>(1.);
-  coupling.template setParameter<COUPLING::A>(a_L);
-  coupling.template setParameter<COUPLING::B>(b_L);
-  coupling.template setParameter<COUPLING::MM>(M_L);
-  coupling.template setParameter<COUPLING::TCRIT>(Tc_L);
-  coupling.template setParameter<COUPLING::DEVI>(devi);
-  coupling.template setParameter<COUPLING::ALPHA>(alpha);
-  coupling.template setParameter<COUPLING::GI>(gI_L);
-  coupling.template setParameter<COUPLING::GII>(gII_L);
 
-  sLattice1.addPostProcessor<stage::PreCoupling>(meta::id<RhoStatistics>());
-  sLattice2.addPostProcessor<stage::PreCoupling>(meta::id<RhoStatistics>());
-  sLattice3.addPostProcessor<stage::PreCoupling>(meta::id<RhoStatistics>());
+  statistics.template setParameter<STATISTICS::TEMPERATURE>(T_L);
+  statistics.template setParameter<STATISTICS::G>(-1.);
+  statistics.template setParameter<STATISTICS::K>(1.);
+  statistics.template setParameter<STATISTICS::A>(a_L);
+  statistics.template setParameter<STATISTICS::B>(b_L);
+  statistics.template setParameter<STATISTICS::MM>(M_L);
+  statistics.template setParameter<STATISTICS::TCRIT>(Tc_L);
+  statistics.template setParameter<STATISTICS::DEVI>(devi);
+  statistics.template setParameter<STATISTICS::ALPHA>(alpha);
+  statistics.template setParameter<STATISTICS::GI>(gI_L);
+  statistics.template setParameter<STATISTICS::GII>(gII_L);
 
   {
     auto& communicator = sLattice1.getCommunicator(stage::PreCoupling());
     communicator.requestOverlap(1);
     communicator.requestField<STATISTIC>();
+    communicator.requestField<PSI>();
     communicator.exchangeRequests();
   }
 
@@ -229,28 +230,23 @@ void prepareLattice( SuperLattice<T, DESCRIPTOR>& sLattice1,
   sLattice1.initialize();
   sLattice2.initialize();
   sLattice3.initialize();
-
-  sLattice1.executePostProcessors(stage::PreCoupling());
-  sLattice2.executePostProcessors(stage::PreCoupling());
-  sLattice3.executePostProcessors(stage::PreCoupling());
+  statistics.execute();
 
   clout << "Prepare Lattice ... OK" << std::endl;
 }
 
-std::vector<T> getResults( SuperLattice<T, DESCRIPTOR>& sLattice1,
-                           SuperLattice<T, DESCRIPTOR>& sLattice2,
-                                 SuperLattice<T, DESCRIPTOR>& sLattice3,
-                                 int iT, SuperGeometry<T,3>& superGeometry, util::Timer<T>& timer,
-                           MultiPhaseUnitConverter<T, DESCRIPTOR> const& converter )
+void getResults( SuperLattice<T, DESCRIPTOR>& sLattice1,
+                 SuperLattice<T, DESCRIPTOR>& sLattice2,
+                 SuperLattice<T, DESCRIPTOR>& sLattice3,
+                 int iT, SuperGeometry<T,3>& superGeometry, util::Timer<T>& timer,
+                 MultiPhaseUnitConverter<T, DESCRIPTOR> const& converter )
 {
   OstreamManager clout( std::cout,"getResults" );
   SuperVTMwriter3D<T> vtmWriter( "airBubbleCoalescence3d" );
   if ( iT==0 ) {
     // Writes the geometry, cuboid no. and rank no. as vti file for visualization
-    SuperLatticeGeometry3D<T, DESCRIPTOR> geometry( sLattice1, superGeometry );
     SuperLatticeCuboid3D<T, DESCRIPTOR> cuboid( sLattice1 );
     SuperLatticeRank3D<T, DESCRIPTOR> rank( sLattice1 );
-    vtmWriter.write( geometry );
     vtmWriter.write( cuboid );
     vtmWriter.write( rank );
     vtmWriter.createMasterFile();
@@ -265,8 +261,6 @@ std::vector<T> getResults( SuperLattice<T, DESCRIPTOR>& sLattice1,
     sLattice3.getStatistics().print( iT, converter.getPhysTime(iT) );
   }
 
-  T delta_p = 0.;
-  T final_radius = 1.;
   // Writes the VTK files
   if ( iT%vtkIter==0 ) {
     sLattice1.setProcessingContext(ProcessingContext::Evaluation);
@@ -321,27 +315,7 @@ std::vector<T> getResults( SuperLattice<T, DESCRIPTOR>& sLattice1,
     interpolPressure(&pressureOut, position);
     clout << "Pressure Difference: " << pressureIn-pressureOut << "  ;  ";
     clout << "Approximate Surface Tension: " << radius*converter.getPhysDeltaX()*(pressureIn-pressureOut) << std::endl;
-    delta_p = pressureIn-pressureOut;
-    AnalyticalFfromSuperF3D<T, T> interpolDensity( density, true, 1);
-    T pos[3] = { 0.5*N, 0.5*N, 0.5*N };
-    T densityIn = 0.;
-    T densityOut = 0.;
-    interpolDensity(&densityIn, pos);
-    interpolDensity(&densityOut, position);
-    T densityMid = 0.5*(densityIn+densityOut);
-    T diff = 5.0e3;
-    for ( int i=0; i<1000; ++i ) {
-      pos[0] += 0.5*N/1000;
-      T dens = 0.;
-      interpolDensity(&dens, pos);
-      T newdiff = abs(dens - densityMid);
-      if (newdiff < diff) {
-        diff = newdiff;
-        final_radius = pos[0] - 0.5*N;
-      }
-    }
   }
-  return {1/(final_radius*converter.getPhysDeltaX()), delta_p};
 }
 
 void simulate()
@@ -354,7 +328,7 @@ void simulate()
     (T)   Re/L_char*viscosityH2O,   // charPhysVelocity: maximal/highest expected velocity during simulation in __m / s__
     (T)   viscosityH2O,             // physViscosity: physical kinematic viscosity in __m^2 / s__
     (T)   a[0],                     // physEoSa: H2O energy parameter in __kg m^5 / mol^2 s^2__
-      (T)   a_0L,                     // latticeEoSa: first component's energy parameter in lattice units
+    (T)   a_0L,                     // latticeEoSa: first component's energy parameter in lattice units
     (T)   b[0],                     // physEoSb: H2O co-volume parameter in __m^3 / mol__
     (T)   M[0],                     // physMolarMass: H2O molar mass for EoS in __kg / mol__
     (T)   surfaceTension,           // physSurfaceTension: physical surface tension of mixture in __kg / s^2__
@@ -371,9 +345,9 @@ void simulate()
 #else
   const int noOfCuboids = 1;
 #endif
-  CuboidGeometry3D<T> cGeometry( 0, 0, 0, 1, N, N, N, noOfCuboids );
+  CuboidGeometry3D<T> cGeometry(0, 1, N, noOfCuboids );
   // set periodic boundaries to the domain
-  cGeometry.setPeriodicity( true, true, true );
+  cGeometry.setPeriodicity({ true, true, true });
   // Instantiation of loadbalancer
   HeuristicLoadBalancer<T> loadBalancer( cGeometry );
   loadBalancer.print();
@@ -392,27 +366,33 @@ void simulate()
     names::Component2{}, sLattice2,
     names::Component3{}, sLattice3);
 
-  prepareLattice( sLattice1, sLattice2, sLattice3, coupling, converter, superGeometry );
+  SuperLatticeCoupling statistics(
+    STATISTICS{},
+    names::Component1{}, sLattice1,
+    names::Component2{}, sLattice2,
+    names::Component3{}, sLattice3);
+
+  prepareLattice( sLattice1, sLattice2, sLattice3, coupling, statistics, converter, superGeometry );
 
   // === 4th Step: Main Loop with Timer ===
   int iT = 0;
   clout << "starting simulation..." << std::endl;
   util::Timer<T> timer( maxIter, superGeometry.getStatistics().getNvoxel() );
   timer.start();
-  std::vector<T> output = {1./radius,0};
   for ( iT=0; iT<=maxIter; ++iT ) {
     // Collide and stream (and coupling) execution
     sLattice1.collideAndStream();
     sLattice2.collideAndStream();
     sLattice3.collideAndStream();
 
-    sLattice1.executePostProcessors(stage::PreCoupling());
-    sLattice2.executePostProcessors(stage::PreCoupling());
-    sLattice3.executePostProcessors(stage::PreCoupling());
+    statistics.execute();
+    sLattice1.getCommunicator(stage::PreCoupling()).communicate();
+    sLattice2.getCommunicator(stage::PreCoupling()).communicate();
+    sLattice3.getCommunicator(stage::PreCoupling()).communicate();
     coupling.execute();
 
     // Computation and output of the results
-    output = getResults( sLattice1, sLattice2, sLattice3, iT, superGeometry, timer, converter );
+    getResults( sLattice1, sLattice2, sLattice3, iT, superGeometry, timer, converter );
     if ( std::isnan( sLattice1.getStatistics().getAverageEnergy() ) ) {
       clout << "unstable!" << std::endl;
       break;

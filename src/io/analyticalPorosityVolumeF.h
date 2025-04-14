@@ -50,6 +50,7 @@ private:
 #endif
   std::string _fileName;
   Vector<int,3> _shape;
+  Vector<T, 3> _origin;
   T _spacing;
 
 public:
@@ -71,6 +72,9 @@ public:
       _shape[0] = bounds.max().x() - bounds.min().x();
       _shape[1] = bounds.max().y() - bounds.min().y();
       _shape[2] = bounds.max().z() - bounds.min().z();
+      _origin[0] = bounds.min().x();
+      _origin[1] = bounds.min().y();
+      _origin[2] = bounds.min().z();
     }
     #endif
     #if not defined(FEATURE_VTK)
@@ -101,6 +105,9 @@ public:
   Vector<T,3> getPhysShape() const {
     return _shape * _spacing;
   }
+  Vector<T,3> getOrigin() const{
+    return _origin * _spacing;
+  }
 
   bool operator()(T output[], const T physR[]) override{
     #ifdef FEATURE_VDB
@@ -111,14 +118,22 @@ public:
       iX = util::floor(physR[0] / _spacing);
       iY = util::floor(physR[1] / _spacing);
       iZ = util::floor(physR[2] / _spacing);
-      if (iX >= 0 && iY >= 0 && iZ >= 0 && iX < _shape[0] && iY < _shape[1] && iZ < _shape[2]) {
+      //if (iX >= 0 && iY >= 0 && iZ >= 0 && iX < _shape[0] && iY < _shape[1] && iZ < _shape[2]) {
         auto grid = openvdb::gridPtrCast<openvdb::FloatGrid>(*grids->begin());
         openvdb::Coord location(iX, iY, iZ);
         openvdb::FloatGrid::Accessor accessor = grid->getAccessor();
-        output[0] =accessor.getValue(location);
-      } else {
-        output[0]=0;
-      }
+        //std::cout << "Values: " << grid->tree().getValue(location)<< std::endl;
+        if(accessor.isValueOn(location)){
+          //output[0] =accessor.getValue(location);
+          output[0] = grid->tree().getValue(location);
+        }
+        else
+          output[0]=1;
+      //}
+      // else
+      // {
+      //   output[0]=1;
+      // }
       return true;
     }
     #endif

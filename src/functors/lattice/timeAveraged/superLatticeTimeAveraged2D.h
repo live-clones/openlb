@@ -43,6 +43,9 @@ private:
   SuperData<2,T, T> _sData;
   SuperData<2,T, T> _sDataP2;
 
+  SuperData<2,T,T> _sDataHelp;     // for Kahan summation
+  SuperData<2,T,T> _sDataP2help;   // for Kahan summation
+
 public:
   SuperLatticeTimeAveragedF2D(SuperF2D<T,T>& sFunctor);
 
@@ -69,6 +72,11 @@ private:
   SuperData<2,T, T> _sDataN;
   SuperData<2,T, T> _sDataMN;
 
+  // for Kahan summation
+  SuperData<2,T,T> _sDataMhelp;
+  SuperData<2,T,T> _sDataNhelp;
+  SuperData<2,T,T> _sDataMNhelp;
+
 public:
   SuperLatticeTimeAveragedCrossCorrelationF2D(SuperF2D<T,T>& sFunctorM, SuperF2D<T,T>& sFunctorN);
 
@@ -77,20 +85,7 @@ public:
   void addEnsemble();
 
 };
-template <typename T>
-class SuperLatticeTimeAveraged2DL2Norm final: public SuperF2D<T,T> {
-private:
-  SuperF2D<T,T>&_sFunctorM;
-  SuperF2D<T,T>&_sFunctorN;
-  SuperGeometry<T,2>& _sGeometry;
-  int _material;
 
-public:
-  SuperLatticeTimeAveraged2DL2Norm(SuperF2D<T,T>& sFunctorM,SuperF2D<T,T>& sFunctorN,SuperGeometry<T,2>& sGeometry,int material);
-
-  bool operator() (T output[], const int input[]);
-
-};
 }
 
 #endif

@@ -29,8 +29,9 @@
 
 #include "blockStructure.h"
 #include "serializer.h"
+#include "geometry/cuboid.h"
 #include "utilities/aliases.h"
-#include "dynamics/descriptorTag.h"
+#include "descriptor/tag.h"
 #include "communication/communicatable.h"
 #include "core/platform/column.h"
 
@@ -89,6 +90,8 @@ public:
 /// Curried BlockData template for use in callUsingConcretePlatform
 template<unsigned D, typename T, typename U>
 struct ConcretizableBlockData {
+
+using value_t = T;
 
 using base_t = BlockData<D,T,U>;
 

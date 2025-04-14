@@ -47,7 +47,7 @@ template<typename T> class SuperCommunicationTagCoordinator;
 template<typename T, unsigned D>
 class BlockCommunicationNeighborhood {
 private:
-  CuboidGeometry<T,D>& _cuboidGeometry;
+  CuboidDecomposition<T,D>& _cuboidDecomposition;
   LoadBalancer<T>& _loadBalancer;
 
   const int _iC;
@@ -69,7 +69,7 @@ private:
 #endif
 
 public:
-  BlockCommunicationNeighborhood(  CuboidGeometry<T,D>& cuboidGeometry
+  BlockCommunicationNeighborhood(  CuboidDecomposition<T,D>& cuboidDecomposition
                                  , LoadBalancer<T>& loadBalancer
                                  , int iC
                                  , int padding

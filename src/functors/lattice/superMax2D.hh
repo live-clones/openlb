@@ -40,7 +40,7 @@ SuperMax2D<T,W>::SuperMax2D(FunctorPtr<SuperF2D<T,W>>&&        f,
   this->getName() = "Max("+_f->getName()+")";
 
   LoadBalancer<T>&     load   = _f->getSuperStructure().getLoadBalancer();
-  CuboidGeometry2D<T>& cuboid = _f->getSuperStructure().getCuboidGeometry();
+  auto& cuboid = _f->getSuperStructure().getCuboidGeometry();
 
   if ( _f->getBlockFSize()          == load.size() &&
        _indicatorF->getBlockFSize() == load.size() ) {
@@ -67,7 +67,7 @@ template <typename T, typename W>
 bool SuperMax2D<T,W>::operator() (W output[], const int input[])
 {
   _f->getSuperStructure().communicate();
-  CuboidGeometry2D<T>& geometry = _f->getSuperStructure().getCuboidGeometry();
+  auto& geometry = _f->getSuperStructure().getCuboidGeometry();
   LoadBalancer<T>&     load     = _f->getSuperStructure().getLoadBalancer();
 
   for (int i = 0; i < this->getTargetDim(); ++i) {

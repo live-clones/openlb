@@ -20,14 +20,19 @@
  *  Software Foundation, Inc., 51 Franklin Street, Fifth Floor,
  *  Boston, MA  02110-1301, USA.
 */
+
+#ifndef IO_XML_READER_OUTPUT_H_
+#define IO_XML_READER_OUTPUT_H_
+
 #include <string>
 #include <vector>
 #include <iostream>
 
-enum class OutputChannel {TERMINAL, ERRCHANNEL};
+#include "io/ostreamManager.h"
 
 namespace olb {
 
+enum class OutputChannel {TERMINAL, ERRCHANNEL};
 
 class XMLreaderOutput{
 public:
@@ -140,7 +145,6 @@ void XMLreaderOutput::print(int indent, XMLreaderType& xmlReader) const{
   }
 }
 
-
-
-
 } // namespace olb
+
+#endif

@@ -104,7 +104,7 @@ bool BlockGeometryFacesIndicator2D<T,HLBM>::operator() (T output[], const int in
 {
   int counter[4] = {0,0,0,0};
   T inside[1];
-  T physR[2];
+  Vector<T,2> physR;
   if (_blockGeometry.getStatistics().getNvoxel(_material)!=0) {
     const int x0 = _blockGeometry.getStatistics().getMinLatticeR(_material)[0];
     const int y0 = _blockGeometry.getStatistics().getMinLatticeR(_material)[1];
@@ -115,25 +115,30 @@ bool BlockGeometryFacesIndicator2D<T,HLBM>::operator() (T output[], const int in
     for (int iX = x0; iX <= x1; ++iX) {
       for (int iY = y0; iY <= y1; ++iY) {
           // Look at solid nodes only
-        _blockGeometry.getPhysR(physR, {iX, iY});
-          _indicator(inside, physR);
+        LatticeR<2> latticeR = {iX, iY};
+        physR = _blockGeometry.getPhysR(latticeR);
+          _indicator(inside, physR.data());
           if ( !util::nearZero(inside[0]) ) {
-            _blockGeometry.getPhysR(physR, {iX-1, iY});
-            _indicator(inside, physR);
-            if ( util::nearZero(inside[0]) )
+            physR = _blockGeometry.getPhysR({iX-1, iY});
+            _indicator(inside, physR.data());
+            if ( util::nearZero(inside[0]) ) {
               counter[0]++;
-            _blockGeometry.getPhysR(physR, {iX, iY-1});
-            _indicator(inside, physR);
-            if ( util::nearZero(inside[0]) )
+            }
+            physR = _blockGeometry.getPhysR({iX, iY-1});
+            _indicator(inside, physR.data());
+            if ( util::nearZero(inside[0]) ) {
               counter[1]++;
-            _blockGeometry.getPhysR(physR, {iX+1, iY});
-            _indicator(inside, physR);
-            if ( util::nearZero(inside[0]) )
+            }
+            physR = _blockGeometry.getPhysR({iX+1, iY});
+            _indicator(inside, physR.data());
+            if ( util::nearZero(inside[0]) ) {
               counter[2]++;
-            _blockGeometry.getPhysR(physR, {iX, iY+1});
-            _indicator(inside, physR);
-            if ( util::nearZero(inside[0]) )
+            }
+            physR = _blockGeometry.getPhysR({iX, iY+1});
+            _indicator(inside, physR.data());
+            if ( util::nearZero(inside[0]) ) {
               counter[3]++;
+            }
           }
       }
     }

@@ -89,24 +89,22 @@ BlockLatticePhysWallShearStress3D<T,DESCRIPTOR>::BlockLatticePhysWallShearStress
     if (blockGeometryStructure.getNeighborhoodRadius({iX,iY,iZ}) >= 1) {
       if (_blockGeometry.get({iX, iY, iZ}) == _material) {
         discreteNormalOutwards = blockGeometryStructure.getStatistics().getType(iX, iY, iZ);
-        auto discreteNormal = -1 * Vector<int,3>(&discreteNormalOutwards[1]);
-        _discreteNormal.getRowPointer(blockGeometryStructure.getCellId(iX,iY,iZ)) = discreteNormal;
+        if (!(   discreteNormalOutwards[0] == 0
+             && discreteNormalOutwards[1]  == 0
+             && discreteNormalOutwards[2]  == 0)) {
+          auto discreteNormal = -1 * Vector<int,3>(discreteNormalOutwards.data()+1);
+          _discreteNormal.getRowPointer(blockGeometryStructure.getCellId(iX,iY,iZ)) = discreteNormal;
 
-        T physR[3];
-        _blockGeometry.getPhysR(physR,{iX, iY, iZ});
-        Vector<T,3> origin(physR[0],physR[1],physR[2]);
-        Vector<T,3> direction(-discreteNormal[0] * scaling,
-                              -discreteNormal[1] * scaling,
-                              -discreteNormal[2] * scaling);
-        Vector<T,3> normal(0.,0.,0.);
-        origin[0] = physR[0];
-        origin[1] = physR[1];
-        origin[2] = physR[2];
+          Vector<T,3> physR;
+          _blockGeometry.getPhysR(physR, {iX, iY, iZ});
+          Vector<T,3> direction = discreteNormal * -scaling;
+          Vector<T,3> normal{};
 
-        indicator.normal(normal, origin, direction);
-        normal = normalize(normal);
-
-        _normal.getRowPointer(blockGeometryStructure.getCellId(iX,iY,iZ)) = Vector<T,3>(normal);
+          if (indicator.normal(normal, physR, direction)) {
+            normal = normalize(normal);
+            _normal.getRowPointer(blockGeometryStructure.getCellId(iX,iY,iZ)) = Vector<T,3>(normal);
+          }
+        }
       }
     }
   });

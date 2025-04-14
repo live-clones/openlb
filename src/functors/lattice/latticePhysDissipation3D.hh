@@ -80,9 +80,10 @@ bool BlockLatticePhysDissipation3D<T, DESCRIPTOR>::operator()(T output[], const 
                     + pi[5] * pi[5];
   }
 
-  T nuLattice = this->_converter.getLatticeViscosity();
-  T omega = 1. / this->_converter.getLatticeRelaxationTime();
   T dt = this->_converter.getConversionFactorTime();
+  T omega = 1. / this->_converter.getLatticeRelaxationTime();
+  T nuLattice = this->_converter.getLatticeViscosity();
+
   output[0] = PiNeqNormSqr * nuLattice
               * util::pow(omega * descriptors::invCs2<T,DESCRIPTOR>() / rho, 2) / 2.
               * this->_converter.getPhysViscosity() / nuLattice / dt / dt;

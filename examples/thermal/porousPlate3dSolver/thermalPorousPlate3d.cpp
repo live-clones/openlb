@@ -196,7 +196,7 @@ protected:
       cuboid,
       this->converter().getPhysDeltaX(),
       noOfCuboids);
-    this->_cGeometry->setPeriodicity(true,false, true);
+    this->_cGeometry->setPeriodicity({true,false, true});
 
     /// Instantiation of a loadBalancer
     this->_loadBalancer = std::make_shared<HeuristicLoadBalancer<T>> (*this->_cGeometry);
@@ -248,11 +248,10 @@ protected:
       this->geometry().getMaterialIndicator({1, 2, 3}));
 
     /// sets boundary
-    setLocalVelocityBoundary<T,NSDESCRIPTOR>(
+    boundary::set<boundary::LocalVelocity>(
       this->lattice(NavierStokes()),
-      NSomega,
       this->geometry().getMaterialIndicator({2, 3}));
-    setAdvectionDiffusionTemperatureBoundary<T,TDESCRIPTOR>(
+    boundary::set<boundary::AdvectionDiffusionDirichlet>(
       this->lattice(Temperature()),
       this->geometry().getMaterialIndicator({2, 3}));
 

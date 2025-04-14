@@ -25,7 +25,7 @@
 #define BLOCK_AVERAGE_2D_H
 
 #include "integral/blockIntegralF2D.h"
-#include "geometry/cuboid2D.h"
+#include "geometry/cuboid.h"
 #include "indicator/blockIndicatorBaseF2D.h"
 
 namespace olb {

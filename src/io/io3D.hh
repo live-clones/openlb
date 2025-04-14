@@ -38,6 +38,6 @@
 #include "vtiWriter.hh"
 #include "octree.hh"
 #include "vtkWriter.hh"
+#include "vtkSurfaceWriter.hh"
 #include "blockLatticeSTLreader.hh"
 #include "plainWriter.hh"
-

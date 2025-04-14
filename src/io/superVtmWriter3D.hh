@@ -35,7 +35,7 @@
 #include <string>
 #include "core/singleton.h"
 #include "communication/loadBalancer.h"
-#include "geometry/cuboidGeometry3D.h"
+#include "geometry/cuboidGeometry.h"
 #include "communication/mpiManager.h"
 #include "io/fileName.h"
 #include "io/superVtmWriter3D.h"
@@ -59,7 +59,7 @@ SuperVTMwriter3D<T,OUT_T,W>::SuperVTMwriter3D( const std::string& name, int over
 }
 
 template<typename T, typename OUT_T, typename W>
-SuperVTMwriter3D<T,OUT_T,W>::SuperVTMwriter3D( CuboidGeometry3D<T>& cGeometry,
+SuperVTMwriter3D<T,OUT_T,W>::SuperVTMwriter3D( CuboidDecomposition<T,3>& cGeometry,
                                          const std::string& name, int overlap, bool binary, bool compress)
   : SuperVTMwriter3D(name, overlap, binary, compress)
 {
@@ -81,13 +81,13 @@ void SuperVTMwriter3D<T,OUT_T,W>::write(int iT)
   if (!_cGeometry && it_begin == _pointerVec.end()) {
     throw std::runtime_error("No functor to write");
   }
-  CuboidGeometry3D<T> const& cGeometry = _cGeometry ? *_cGeometry : (**it_begin).getSuperStructure().getCuboidGeometry();
+  const CuboidDecomposition<T,3>& cGeometry = _cGeometry ? *_cGeometry : (**it_begin).getSuperStructure().getCuboidGeometry();
 
   // PVD, owns all
-  writePVD(iT);
+  // writePVD(iT);
   if (_cGeometry) {
     // Write globally if cuboid geometry is provided
-    for (int iC = 0; iC < cGeometry.getNc(); ++iC) {
+    for (int iC = 0; iC < cGeometry.size(); ++iC) {
       writeGlobalVTI(iT, iC);
     }
   } else {
@@ -106,7 +106,8 @@ void SuperVTMwriter3D<T,OUT_T,W>::writePVD(int iT)
   // problem if functors with different SuperStructure are stored
   // since till now, there is only one origin
   const auto it_begin = _pointerVec.cbegin();
-  CuboidGeometry3D<T> const& cGeometry = _cGeometry ? *_cGeometry : (**it_begin).getSuperStructure().getCuboidGeometry();
+  const auto& cGeometry = _cGeometry ? *_cGeometry : (**it_begin).getSuperStructure().getCuboidGeometry();
+  LoadBalancer<T>& load = (**it_begin).getSuperStructure().getLoadBalancer();
 
   // PVD, owns all
   if (singleton::mpi().isMainProcessor()) {
@@ -117,8 +118,10 @@ void SuperVTMwriter3D<T,OUT_T,W>::writePVD(int iT)
     const std::string pathVTM = singleton::directories().getVtkOutDir()
                               + "data/" + createFileName(_name, iT) + ".vtm";
     preambleVTM(pathVTM);
-    for (int iC = 0; iC < cGeometry.getNc(); iC++) {
-      dataVTM(iC, pathVTM, createFileName(_name, iT, iC) + ".vti" );
+    for (int iC = 0; iC < cGeometry.size(); iC++) {
+      if (load.doOutput(iC)) {
+        dataVTM(iC, pathVTM, createFileName(_name, iT, iC) + ".vti" );
+      }
     }
     closeVTM(pathVTM);
   }
@@ -128,7 +131,7 @@ template<typename T, typename OUT_T, typename W>
 void SuperVTMwriter3D<T,OUT_T,W>::writeGlobalVTI(int iT, int iC)
 {
   const auto it_begin = _pointerVec.cbegin();
-  CuboidGeometry3D<T> const& cGeometry = _cGeometry ? *_cGeometry : (**it_begin).getSuperStructure().getCuboidGeometry();
+  const auto& cGeometry = _cGeometry ? *_cGeometry : (**it_begin).getSuperStructure().getCuboidGeometry();
   const T delta = cGeometry.getMotherCuboid().getDeltaR();
 
   // get piece/whole extent
@@ -140,10 +143,9 @@ void SuperVTMwriter3D<T,OUT_T,W>::writeGlobalVTI(int iT, int iC)
 
   // get dimension/extent for each cuboid
   const int originLatticeR[4] = {iC,0,0,0};
-  T originPhysR[3] = {T()};
-  cGeometry.getPhysR(originPhysR,originLatticeR);
+  auto originPhysR = cGeometry.getPhysR(originLatticeR);
 
-  preambleVTI(fullNameVTI, extent0, (extent1+_overlap-1), originPhysR, delta);
+  preambleVTI(fullNameVTI, extent0, (extent1+_overlap-1), originPhysR.data(), delta);
   for (auto it : _pointerVec) {
     dataArray(fullNameVTI, *it, iC, extent1);
   }
@@ -155,7 +157,7 @@ template<typename T, typename OUT_T, typename W>
 void SuperVTMwriter3D<T,OUT_T,W>::writeVTI(int iT, int iCloc)
 {
   const auto it_begin = _pointerVec.cbegin();
-  CuboidGeometry3D<T> const& cGeometry = (**it_begin).getSuperStructure().getCuboidGeometry();
+  const auto& cGeometry = (**it_begin).getSuperStructure().getCuboidGeometry();
   LoadBalancer<T>& load = (**it_begin).getSuperStructure().getLoadBalancer();
   const T delta = cGeometry.getMotherCuboid().getDeltaR();
 
@@ -168,10 +170,9 @@ void SuperVTMwriter3D<T,OUT_T,W>::writeVTI(int iT, int iCloc)
 
   // get dimension/extent for each cuboid
   const int originLatticeR[4] = {load.glob(iCloc),0,0,0};
-  T originPhysR[3] = {T()};
-  cGeometry.getPhysR(originPhysR,originLatticeR);
+  auto originPhysR = cGeometry.getPhysR(originLatticeR);
 
-  preambleVTI(fullNameVTI, extent0, (extent1+_overlap-1), originPhysR, delta);
+  preambleVTI(fullNameVTI, extent0, (extent1+_overlap-1), originPhysR.data(), delta);
   for (auto it : _pointerVec) {
     dataArray(fullNameVTI, *it, load.glob(iCloc), extent1);
   }
@@ -182,7 +183,7 @@ void SuperVTMwriter3D<T,OUT_T,W>::writeVTI(int iT, int iCloc)
 template<typename T, typename OUT_T, typename W>
 void SuperVTMwriter3D<T,OUT_T,W>::write(SuperF3D<T,W>& f, int iT)
 {
-  CuboidGeometry3D<T> const& cGeometry = f.getSuperStructure().getCuboidGeometry();
+  const auto& cGeometry = f.getSuperStructure().getCuboidGeometry();
   LoadBalancer<T>& load = f.getSuperStructure().getLoadBalancer();
   // no gaps between vti files (cuboids)
   f.getSuperStructure().communicate();
@@ -201,7 +202,7 @@ void SuperVTMwriter3D<T,OUT_T,W>::write(SuperF3D<T,W>& f, int iT)
                                 + createFileName( f.getName(), iT )  + ".vtm";
 
     preambleVTM(pathVTM);
-    for (int iC = 0; iC < cGeometry.getNc(); iC++) {
+    for (int iC = 0; iC < cGeometry.size(); iC++) {
       const std::string nameVTI = "data/" + createFileName( f.getName(), iT, iC) + ".vti";
       // puts name of .vti piece to a .pvd file [fullNamePVD]
       dataVTM( iC, pathVTM, nameVTI );
@@ -219,10 +220,9 @@ void SuperVTMwriter3D<T,OUT_T,W>::write(SuperF3D<T,W>& f, int iT)
 
     // get dimension/extent for each cuboid
     const int originLatticeR[4] = {load.glob(iCloc),0,0,0};
-    T originPhysR[3] = {T()};
-    cGeometry.getPhysR(originPhysR,originLatticeR);
+    auto originPhysR = cGeometry.getPhysR(originLatticeR);
 
-    preambleVTI(fullNameVTI, extent0, (extent1+_overlap-1.), originPhysR, delta);
+    preambleVTI(fullNameVTI, extent0, (extent1+_overlap-1.), originPhysR.data(), delta);
 
     dataArray(fullNameVTI, f, load.glob(iCloc), extent1);
     closePiece(fullNameVTI);

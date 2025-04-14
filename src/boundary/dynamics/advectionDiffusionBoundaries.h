@@ -25,7 +25,7 @@
 #ifndef ADVECTION_DIFFUSION_BOUNDARIES_H
 #define ADVECTION_DIFFUSION_BOUNDARIES_H
 
-#include "dynamics/latticeDescriptors.h"
+#include "descriptor/descriptor.h"
 #include "dynamics/advectionDiffusionDynamics.h"
 #include "dynamics/dynamics.h"
 
@@ -39,8 +39,16 @@ namespace olb {
 template<typename T, typename DESCRIPTOR, typename DYNAMICS, typename MOMENTA, int direction, int orientation>
 struct AdvectionDiffusionBoundariesDynamics final : public dynamics::CustomCollision<T,DESCRIPTOR,MOMENTA> {
   using MomentaF = typename MOMENTA::template type<DESCRIPTOR>;
+  using EquilibriumF = typename DYNAMICS::template exchange_momenta<MOMENTA>::EquilibriumF;
 
   using parameters = typename DYNAMICS::parameters;
+
+  template <typename NEW_T>
+  using exchange_value_type = AdvectionDiffusionBoundariesDynamics<
+    NEW_T, DESCRIPTOR,
+    DYNAMICS, MOMENTA, direction,
+    orientation
+  >;
 
   template <typename M>
   using exchange_momenta = AdvectionDiffusionBoundariesDynamics<T,DESCRIPTOR,DYNAMICS,M,direction,orientation>;
@@ -91,8 +99,10 @@ struct AdvectionDiffusionBoundariesDynamics final : public dynamics::CustomColli
     }
   };
 
-  T computeEquilibrium(int iPop, T rho, const T u[DESCRIPTOR::d]) const override any_platform {
-    return equilibrium<DESCRIPTOR>::template firstOrder(iPop, rho, u);
+  void computeEquilibrium(ConstCell<T,DESCRIPTOR>& cell, T rho, const T u[DESCRIPTOR::d], T fEq[DESCRIPTOR::q]) const override {
+    for ( int iPop = 0; iPop < DESCRIPTOR::q; iPop++ ) {
+      fEq[iPop] = equilibrium<DESCRIPTOR>::template firstOrder(iPop, rho, u);
+    }
   };
 
   std::string getName() const override {
@@ -114,8 +124,16 @@ template<typename T, typename DESCRIPTOR, typename DYNAMICS, typename MOMENTA, i
 class AdvectionDiffusionEdgesDynamics final : public dynamics::CustomCollision<T,DESCRIPTOR,MOMENTA> {
 public:
   using MomentaF = typename MOMENTA::template type<DESCRIPTOR>;
+  using EquilibriumF = typename DYNAMICS::template exchange_momenta<MOMENTA>::EquilibriumF;
 
   using parameters = typename DYNAMICS::parameters;
+
+  template <typename NEW_T>
+  using exchange_value_type = AdvectionDiffusionEdgesDynamics<
+    NEW_T, DESCRIPTOR,
+    DYNAMICS, MOMENTA, plane,
+    normal1, normal2
+  >;
 
   template <typename M>
   using exchange_momenta = AdvectionDiffusionEdgesDynamics<T,DESCRIPTOR,DYNAMICS,M,plane,normal1,normal2>;
@@ -152,8 +170,10 @@ public:
     return typename DYNAMICS::template exchange_momenta<MOMENTA>::CollisionO().apply(cell, parameters);
   };
 
-  T computeEquilibrium(int iPop, T rho, const T u[DESCRIPTOR::d]) const override any_platform {
-    return equilibrium<DESCRIPTOR>::template firstOrder(iPop, rho, u);
+  void computeEquilibrium(ConstCell<T,DESCRIPTOR>& cell, T rho, const T u[DESCRIPTOR::d], T fEq[DESCRIPTOR::q]) const override {
+    for ( int iPop = 0; iPop < DESCRIPTOR::q; iPop++ ) {
+      fEq[iPop] = equilibrium<DESCRIPTOR>::template firstOrder(iPop, rho, u);
+    }
   };
 
   std::string getName() const override {
@@ -173,8 +193,16 @@ AdvectionDiffusionEdgesDynamics< T, DESCRIPTOR, DYNAMICS, MOMENTA, ARGS...>
 template<typename T, typename DESCRIPTOR, typename DYNAMICS, typename MOMENTA, int xNormal, int yNormal>
 struct AdvectionDiffusionCornerDynamics2D final : public dynamics::CustomCollision<T,DESCRIPTOR,MOMENTA> {
   using MomentaF = typename MOMENTA::template type<DESCRIPTOR>;
+  using EquilibriumF = typename DYNAMICS::template exchange_momenta<MOMENTA>::EquilibriumF;
 
   using parameters = typename DYNAMICS::parameters;
+
+  template <typename NEW_T>
+  using exchange_value_type = AdvectionDiffusionCornerDynamics2D<
+    NEW_T, DESCRIPTOR,
+    DYNAMICS, MOMENTA,
+    xNormal, yNormal
+  >;
 
   template <typename M>
   using exchange_momenta = AdvectionDiffusionCornerDynamics2D<T,DESCRIPTOR,DYNAMICS,M,xNormal,yNormal>;
@@ -211,8 +239,10 @@ struct AdvectionDiffusionCornerDynamics2D final : public dynamics::CustomCollisi
     return typename DYNAMICS::CollisionO().apply(cell, parameters);
   };
 
-  T computeEquilibrium(int iPop, T rho, const T u[DESCRIPTOR::d]) const override any_platform {
-    return equilibrium<DESCRIPTOR>::template firstOrder(iPop, rho, u);
+  void computeEquilibrium(ConstCell<T,DESCRIPTOR>& cell, T rho, const T u[DESCRIPTOR::d], T fEq[DESCRIPTOR::q]) const override {
+    for ( int iPop = 0; iPop < DESCRIPTOR::q; iPop++ ) {
+      fEq[iPop] = equilibrium<DESCRIPTOR>::template firstOrder(iPop, rho, u);
+    }
   };
 
   std::string getName() const override {
@@ -233,8 +263,16 @@ using AdvectionLocalDiffusionCornerDynamics2D = dynamics::ParameterFromCell<desc
 template<typename T, typename DESCRIPTOR, typename DYNAMICS, typename MOMENTA, int xNormal, int yNormal, int zNormal>
 struct AdvectionDiffusionCornerDynamics3D final : public dynamics::CustomCollision<T,DESCRIPTOR,MOMENTA> {
   using MomentaF = typename MOMENTA::template type<DESCRIPTOR>;
+  using EquilibriumF = typename DYNAMICS::template exchange_momenta<MOMENTA>::EquilibriumF;
 
   using parameters = typename DYNAMICS::parameters;
+
+  template <typename NEW_T>
+  using exchange_value_type = AdvectionDiffusionCornerDynamics3D<
+    NEW_T, DESCRIPTOR,
+    DYNAMICS, MOMENTA, xNormal,
+    yNormal, zNormal
+  >;
 
   template <typename M>
   using exchange_momenta = AdvectionDiffusionCornerDynamics3D<T,DESCRIPTOR,DYNAMICS,M,xNormal,yNormal,zNormal>;
@@ -271,8 +309,10 @@ struct AdvectionDiffusionCornerDynamics3D final : public dynamics::CustomCollisi
     return typename DYNAMICS::template exchange_momenta<MOMENTA>::CollisionO().apply(cell, parameters);
   };
 
-  T computeEquilibrium(int iPop, T rho, const T u[DESCRIPTOR::d]) const override any_platform {
-    return equilibrium<DESCRIPTOR>::template firstOrder(iPop, rho, u);
+  void computeEquilibrium(ConstCell<T,DESCRIPTOR>& cell, T rho, const T u[DESCRIPTOR::d], T fEq[DESCRIPTOR::q]) const override {
+    for ( int iPop = 0; iPop < DESCRIPTOR::q; iPop++ ) {
+      fEq[iPop] = equilibrium<DESCRIPTOR>::template firstOrder(iPop, rho, u);
+    }
   };
 
   std::string getName() const override {

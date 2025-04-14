@@ -27,9 +27,15 @@
 #include <functional>
 #include <typeindex>
 #include <algorithm>
+#include <optional>
+#include <unordered_set>
 
 #include "dynamics/dynamics.h"
+#include "dynamics/cse.h"
+
 #include "platform/cpu/cell.h"
+
+#include "introspection.h"
 
 namespace olb {
 
@@ -39,227 +45,16 @@ template<typename T, typename DESCRIPTOR, Platform PLATFORM> class ConcreteBlock
 template<typename T,                      Platform PLATFORM> class ConcreteBlockMask;
 template<typename T, typename DESCRIPTOR, Platform PLATFORM, typename DYNAMICS> class ConcreteBlockCollisionO;
 
-/// Concrete CPU dynamics for legacy dynamics
-/**
- * Required to enable interaction between generic operators / non-legacy
- * post processors and legacy dynamics. Note that this is only supported
- * on CPU targets.
- **/
-template <typename T, typename DESCRIPTOR, Platform PLATFORM>
-class LegacyConcreteDynamics final : public cpu::Dynamics<T,DESCRIPTOR,PLATFORM> {
-private:
-  BlockLattice<T,DESCRIPTOR>& _lattice;
-  Dynamics<T,DESCRIPTOR>* _dynamics;
+template <typename T, typename DESCRIPTOR, typename DYNAMICS>
+struct ConcretizableBlockCollisionO {
 
-public:
-  LegacyConcreteDynamics(ConcreteBlockLattice<T,DESCRIPTOR,PLATFORM>& lattice,
-                         Dynamics<T,DESCRIPTOR>* dynamics):
-    _lattice(lattice),
-    _dynamics{dynamics} {
-  }
+using value_t = T;
 
-  CellStatistic<T> collide(cpu::Cell<T,DESCRIPTOR,PLATFORM>& cell) override {
-    auto abstractCell = _lattice.get(cell.getCellId());
-    return _dynamics->collide(abstractCell);
-  }
+using base_t = AbstractCollisionO<T,DESCRIPTOR>;
 
-  T computeRho(cpu::Cell<T,DESCRIPTOR,PLATFORM>& cell) override {
-    auto abstractCell = _lattice.get(cell.getCellId());
-    return _dynamics->computeRho(abstractCell);
-  }
-  void computeU(cpu::Cell<T,DESCRIPTOR,PLATFORM>& cell, T* u) override {
-    auto abstractCell = _lattice.get(cell.getCellId());
-    _dynamics->computeU(abstractCell, u);
-  }
-  void computeJ(cpu::Cell<T,DESCRIPTOR,PLATFORM>& cell, T* j) override {
-    auto abstractCell = _lattice.get(cell.getCellId());
-    _dynamics->computeJ(abstractCell, j);
-  }
-  void computeRhoU(cpu::Cell<T,DESCRIPTOR,PLATFORM>& cell, T& rho, T* u) override {
-    auto abstractCell = _lattice.get(cell.getCellId());
-    _dynamics->computeRhoU(abstractCell, rho, u);
-  }
-  void defineRho(cpu::Cell<T,DESCRIPTOR,PLATFORM>& cell, T& rho) override {
-    auto abstractCell = _lattice.get(cell.getCellId());
-    _dynamics->defineRho(abstractCell, rho);
-  }
+template <Platform PLATFORM>
+using type = ConcreteBlockCollisionO<T,DESCRIPTOR,PLATFORM,DYNAMICS>;
 
-  void defineU(cpu::Cell<T,DESCRIPTOR,PLATFORM>& cell, T* u) override {
-    auto abstractCell = _lattice.get(cell.getCellId());
-    _dynamics->defineU(abstractCell, u);
-  }
-
-  void defineRhoU(cpu::Cell<T,DESCRIPTOR,PLATFORM>& cell, T& rho, T* u) override {
-    auto abstractCell = _lattice.get(cell.getCellId());
-    _dynamics->defineRhoU(abstractCell, rho, u);
-  }
-
-  void defineAllMomenta(cpu::Cell<T,DESCRIPTOR,PLATFORM>& cell, T& rho, T* u, T* pi) override {
-    auto abstractCell = _lattice.get(cell.getCellId());
-    _dynamics->defineAllMomenta(abstractCell, rho, u, pi);
-  }
-
-  void computeStress(cpu::Cell<T,DESCRIPTOR,PLATFORM>& cell, T& rho, T* u, T* pi) override {
-    auto abstractCell = _lattice.get(cell.getCellId());
-    _dynamics->computeStress(abstractCell, rho, u, pi);
-  }
-  void computeAllMomenta(cpu::Cell<T,DESCRIPTOR,PLATFORM>& cell, T& rho, T* u, T* pi) override {
-    auto abstractCell = _lattice.get(cell.getCellId());
-    _dynamics->computeAllMomenta(abstractCell, rho, u, pi);
-  }
-
-  T getOmegaOrFallback(T fallback) override {
-    throw std::runtime_error("getOmegaOrFallback not supported for legacy dynamics");
-  }
-
-  T computeEquilibrium(int iPop, T rho, T* u) override {
-    return _dynamics->computeEquilibrium(iPop, rho, u);
-  }
-
-  void inverseShiftRhoU(cpu::Cell<T,DESCRIPTOR,PLATFORM>& cell, T& rho, T* u) override {
-    auto abstractCell = _lattice.get(cell.getCellId());
-    _dynamics->inverseShiftRhoU(abstractCell, rho, u);
-  }
-};
-
-/// Concrete collision operator for legacy dynamics
-/**
- * To be removed once both all OpenLB-included dynamics are adapted
- * and legacy support was included in at least one release.
- *
- * Legacy dynamics are only supported on CPU targets.
- **/
-template <typename T, typename DESCRIPTOR, Platform PLATFORM>
-class LegacyBlockCollisionO final : public BlockCollisionO<T,DESCRIPTOR,PLATFORM> {
-private:
-  ConcreteBlockMask<T,PLATFORM> _mask;
-  Dynamics<T,DESCRIPTOR>** const _legacyDynamics;
-  ConcreteBlockLattice<T,DESCRIPTOR,PLATFORM>* _block;
-
-  /// Map of concrete dynamics to support legacy dynamics in the context of
-  /// generic operators / non-legacy post processors
-  std::map<Dynamics<T,DESCRIPTOR>*,
-           std::unique_ptr<cpu::Dynamics<T,DESCRIPTOR,PLATFORM>>> _concreteDynamics;
-  cpu::Dynamics<T,DESCRIPTOR,PLATFORM>** _dynamicsOfCells;
-
-  /// Resolve legacy dynamics at iCell into matching LegacyConcreteDynamics
-  cpu::Dynamics<T,DESCRIPTOR,PLATFORM>* resolve(CellID iCell)
-  {
-    auto iter = _concreteDynamics.find(_legacyDynamics[iCell]);
-    if (iter == _concreteDynamics.end()) {
-      iter = std::get<0>(_concreteDynamics.emplace(
-        _legacyDynamics[iCell],
-        new LegacyConcreteDynamics<T,DESCRIPTOR,PLATFORM>(*_block,
-                                                          _legacyDynamics[iCell])));
-    }
-    return std::get<1>(*iter).get();
-  }
-
-public:
-  LegacyBlockCollisionO(std::size_t count, Dynamics<T,DESCRIPTOR>** dynamics):
-    _mask{count},
-    _legacyDynamics{dynamics}
-  { }
-
-  std::type_index id() const override
-  {
-    return typeid(LegacyBlockCollisionO);
-  }
-
-  std::size_t weight() const override
-  {
-    return _mask.weight();
-  }
-
-  void set(CellID iCell, bool state, bool overlap) override
-  {
-    if (!overlap) {
-      _mask.set(iCell, state);
-    }
-    if (state) {
-      _dynamicsOfCells[iCell] = resolve(iCell);
-    }
-  }
-
-  Dynamics<T,DESCRIPTOR>* getDynamics() override
-  {
-    return nullptr;
-  }
-
-  void setup(ConcreteBlockLattice<T,DESCRIPTOR,PLATFORM>& block) override
-  {
-    // Remember block in order to construct LegacyConcreteDynamics
-    _block = &block;
-    // Fetch pointer to concretized dynamic-dispatch field
-    _dynamicsOfCells = block.template getField<cpu::DYNAMICS<T,DESCRIPTOR,PLATFORM>>()[0].data();
-  }
-
-  /// Apply collision on subdomain of block
-  /**
-   * Loop excludes overlap areas of block as collisions are never applied there.
-   * This assumes that `subdomain` is the core mask of BlockDynamicsMap.
-   **/
-  void apply(ConcreteBlockLattice<T,DESCRIPTOR,PLATFORM>& block,
-             ConcreteBlockMask<T,PLATFORM>&               subdomain,
-             CollisionDispatchStrategy                    strategy) override
-  {
-    if (strategy != CollisionDispatchStrategy::Dominant) {
-      throw std::runtime_error("LegacyBlockCollisionO only supports CollisionDispatchStrategy::Dominant");
-    }
-
-    typename LatticeStatistics<T>::Aggregatable statistics{};
-    #ifdef PARALLEL_MODE_OMP
-    #pragma omp declare reduction(+ : typename LatticeStatistics<T>::Aggregatable : omp_out += omp_in) initializer (omp_priv={})
-    #endif
-
-    if constexpr (DESCRIPTOR::d == 3) {
-      #ifdef PARALLEL_MODE_OMP
-      #pragma omp parallel for schedule(dynamic,1) reduction(+ : statistics)
-      #endif
-      for (int iX=0; iX < block.getNx(); ++iX) {
-        auto cell = block.get(iX,0,0);
-        for (int iY=0; iY < block.getNy(); ++iY) {
-          for (int iZ=0; iZ < block.getNz(); ++iZ) {
-            CellID iCell = block.getCellId(iX,iY,iZ);
-            if (_mask[iCell]) {
-              cell.setCellId(iCell);
-              if (auto cellStatistic = _legacyDynamics[iCell]->collide(cell)) {
-                statistics.increment(cellStatistic.rho, cellStatistic.uSqr);
-              }
-            } else {
-              cpu::Cell<T,DESCRIPTOR,PLATFORM> cell(block, iCell);
-              if (auto cellStatistic = _dynamicsOfCells[iCell]->collide(cell)) {
-                statistics.increment(cellStatistic.rho, cellStatistic.uSqr);
-              }
-            }
-          }
-        }
-      }
-    } else {
-      #ifdef PARALLEL_MODE_OMP
-      #pragma omp parallel for schedule(dynamic,1) reduction(+ : statistics)
-      #endif
-      for (int iX=0; iX < block.getNx(); ++iX) {
-        auto cell = block.get(iX,0);
-        for (int iY=0; iY < block.getNy(); ++iY) {
-          CellID iCell = block.getCellId(iX,iY);
-          if (_mask[iCell]) {
-            cell.setCellId(iCell);
-            if (auto cellStatistic = _legacyDynamics[iCell]->collide(cell)) {
-              statistics.increment(cellStatistic.rho, cellStatistic.uSqr);
-            }
-          } else {
-            cpu::Cell<T,DESCRIPTOR,PLATFORM> cell(block, iCell);
-            if (auto cellStatistic = _dynamicsOfCells[iCell]->collide(cell)) {
-              statistics.increment(cellStatistic.rho, cellStatistic.uSqr);
-            }
-          }
-        }
-      }
-    }
-
-    block.getStatistics().incrementStats(statistics);
-  }
 };
 
 /// Factory for instances of a specific Dynamics type
@@ -277,36 +72,62 @@ public:
 template <typename T, typename DESCRIPTOR>
 class DynamicsPromise {
 protected:
-  std::type_index _id;
-  std::function<Dynamics<T,DESCRIPTOR>*()>                   _dynamicsConstructor;
-  std::function<AbstractCollisionO<T,DESCRIPTOR>*(Platform)> _operatorConstructor;
+  const std::type_index _id;
+
+  std::function<Dynamics<T,DESCRIPTOR>*()>                   _makeDynamics;
+  std::function<AbstractCollisionO<T,DESCRIPTOR>*(Platform)> _makeOperator;
+
+  const std::string _name;
+  const bool _isOptimizationAvailable;
+
+  std::function<std::optional<std::size_t>()> _inspectArithmeticOperationCount;
+  std::function<std::optional<bool>()> _inspectOptimizability;
 
 public:
   template <typename DYNAMICS>
   DynamicsPromise(meta::id<DYNAMICS> id = meta::id<DYNAMICS>{}):
     _id(typeid(DYNAMICS)),
-    _dynamicsConstructor([]() -> Dynamics<T,DESCRIPTOR>* {
+    _makeDynamics([]() -> Dynamics<T,DESCRIPTOR>* {
       return new DYNAMICS();
     }),
-    _operatorConstructor([](Platform platform) -> AbstractCollisionO<T,DESCRIPTOR>* {
-      static_assert(dynamics::is_generic_v<T,DESCRIPTOR,DYNAMICS>,
-                    "Promised DYNAMICS must be generic");
-      switch (platform) {
-      #ifdef PLATFORM_CPU_SISD
-      case Platform::CPU_SISD:
-        return new ConcreteBlockCollisionO<T,DESCRIPTOR,Platform::CPU_SISD,DYNAMICS>();
-      #endif
-      #ifdef PLATFORM_CPU_SIMD
-      case Platform::CPU_SIMD:
-        return new ConcreteBlockCollisionO<T,DESCRIPTOR,Platform::CPU_SIMD,DYNAMICS>();
-      #endif
-      #ifdef PLATFORM_GPU_CUDA
-      case Platform::GPU_CUDA:
-        return new ConcreteBlockCollisionO<T,DESCRIPTOR,Platform::GPU_CUDA,DYNAMICS>();
-      #endif
-      default:
-        throw std::invalid_argument("Invalid PLATFORM");
+    _makeOperator([](Platform platform) -> AbstractCollisionO<T,DESCRIPTOR>* {
+      if constexpr (concepts::IntrospectableDynamics<DYNAMICS>) {
+        if constexpr (dynamics::is_cse_optimized<DYNAMICS>::value) {
+          return constructUsingConcretePlatform<ConcretizableBlockCollisionO<T,DESCRIPTOR,CSE<DYNAMICS>>>(platform);
+        } else {
+          return constructUsingConcretePlatform<ConcretizableBlockCollisionO<T,DESCRIPTOR,DYNAMICS>>(platform);
+        }
+      } else {
+          return constructUsingConcretePlatform<ConcretizableBlockCollisionO<T,DESCRIPTOR,DYNAMICS>>(platform);
       }
+    }),
+    _name{fields::name<DYNAMICS>()},
+    _isOptimizationAvailable{dynamics::is_cse_optimized<DYNAMICS>::value},
+    _inspectArithmeticOperationCount([]() -> std::optional<std::size_t> {
+#ifdef FEATURE_INSPECT_DYNAMICS
+      if constexpr (!std::is_same_v<T,Expr>) {
+        // TODO Unravel, both counts currently the same due to Expr structure
+        if constexpr (dynamics::is_cse_optimized<DYNAMICS>::value) {
+          return introspection::getArithmeticOperationCount<CSE<DYNAMICS>>();
+        } else {
+          return introspection::getArithmeticOperationCount<DYNAMICS>();
+        }
+      } else {
+        throw std::domain_error("Can not introspect the introspection - we, sadly, are not in LISP land.");
+      }
+#endif // FEATURE_INSPECT_DYNAMICS
+      return std::nullopt;
+    }),
+    _inspectOptimizability([]() -> std::optional<bool> {
+#ifdef FEATURE_INSPECT_DYNAMICS
+      if constexpr (!std::is_same_v<T,Expr>) {
+        return introspection::isOptimizable<DYNAMICS>();
+      } else {
+        return false;
+      }
+#else
+      return std::nullopt;
+#endif // FEATURE_INSPECT_DYNAMICS
     })
   { }
 
@@ -315,16 +136,36 @@ public:
     return _id;
   }
 
+  std::string name() const {
+    return _name;
+  }
+
+  bool hasOptimizedVersion() const {
+    return _isOptimizationAvailable;
+  }
+
+  std::optional<std::size_t> getArithmeticOperationCount() const {
+    return _inspectArithmeticOperationCount();
+  }
+
+  std::optional<bool> isOptimizable() const {
+    return _inspectOptimizability();
+  }
+
+  bool operator<(const DynamicsPromise<T,DESCRIPTOR>& rhs) const {
+    return id() < rhs.id();
+  }
+
   /// Returns new instance of the promised DYNAMICS
   Dynamics<T,DESCRIPTOR>* realize() {
-    return _dynamicsConstructor();
+    return _makeDynamics();
   };
 
   /// Returns new instance of the collision operator for promised DYNAMICS
   template <Platform PLATFORM>
   BlockCollisionO<T,DESCRIPTOR,PLATFORM>* realize() {
-    return static_cast<BlockCollisionO<T,DESCRIPTOR,PLATFORM>*>(
-      _operatorConstructor(PLATFORM));
+    AbstractCollisionO<T,DESCRIPTOR>* op = _makeOperator(PLATFORM);
+    return static_cast<BlockCollisionO<T,DESCRIPTOR,PLATFORM>*>(op);
   };
 
 };
@@ -360,7 +201,8 @@ private:
   ConcreteBlockLattice<T,DESCRIPTOR,PLATFORM>& _lattice;
 
   std::map<std::type_index,
-           std::unique_ptr<BlockCollisionO<T,DESCRIPTOR,PLATFORM>>> _map;
+           std::tuple<DynamicsPromise<T,DESCRIPTOR>,
+                      std::unique_ptr<BlockCollisionO<T,DESCRIPTOR,PLATFORM>>>> _map;
 
   std::unique_ptr<Dynamics<T,DESCRIPTOR>*[]>                 _dynamicsOfCells;
   std::unique_ptr<BlockCollisionO<T,DESCRIPTOR,PLATFORM>*[]> _operatorOfCells;
@@ -377,22 +219,13 @@ private:
     if (iter == _map.end()) {
       iter = _map.emplace(std::piecewise_construct,
                           std::forward_as_tuple(promise.id()),
-                          std::forward_as_tuple(promise.template realize<PLATFORM>())).first;
-      iter->second->setup(_lattice);
-    }
-    return *(iter->second);
-  }
-
-  /// Assigns dynamics to cell index and updates block masks
-  void set(std::size_t iCell, BlockCollisionO<T,DESCRIPTOR,PLATFORM>& collisionO)
-  {
-    if (_operatorOfCells[iCell] != nullptr) {
-      _map.at(_operatorOfCells[iCell]->id())->set(iCell, false, !_coreMask[iCell]);
-    }
-    collisionO.set(iCell, true, !_coreMask[iCell]);
-    _operatorOfCells[iCell] = &collisionO;
-    if (Dynamics<T,DESCRIPTOR>* dynamics = collisionO.getDynamics()) {
-      _dynamicsOfCells[iCell] = dynamics;
+                          std::forward_as_tuple(promise, promise.template realize<PLATFORM>())).first;
+      auto& [_, op] = iter->second;
+      op->setup(_lattice);
+      return *op;
+    } else {
+      auto& [_, op] = iter->second;
+      return *op;
     }
   }
 
@@ -408,14 +241,6 @@ public:
     _lattice.forCoreSpatialLocations([&](LatticeR<DESCRIPTOR::d> lattice) {
       _coreMask.set(_lattice.getCellId(lattice), true);
     });
-
-    if constexpr (isPlatformCPU(PLATFORM)) {
-      /// Setup support for legacy dynamics
-      using LegacyO = LegacyBlockCollisionO<T,DESCRIPTOR,PLATFORM>;
-      _map[typeid(LegacyO)] = std::make_unique<LegacyO>(_lattice.getNcells(),
-                                                        _dynamicsOfCells.get());
-      _map[typeid(LegacyO)]->setup(_lattice);
-    }
   }
 
   /// Returns a pointer to dynamics matching the promise
@@ -437,33 +262,17 @@ public:
     return _dynamicsOfCells[iCell];
   }
 
-  /// Assigns promised dynamics to cell index iCell
+  /// Assigns promised dynamics to cell index and updates block masks
   void set(std::size_t iCell, DynamicsPromise<T,DESCRIPTOR>&& promise)
   {
-    set(iCell, resolve(std::forward<decltype(promise)>(promise)));
-    _dominantCollisionO = nullptr;
-  }
-
-  /// Assigns dynamics pointer to cell index iCell
-  /**
-   * Dynamics at the pointed address must either be legacy or previously
-   * constructed from a promise.
-   **/
-  void set(std::size_t iCell, Dynamics<T,DESCRIPTOR>* dynamics)
-  {
-    auto iter = _map.find(dynamics->id());
-    if (iter != _map.end()) { // Non-legacy dynamics
-      set(iCell, *iter->second);
-    } else { // Legacy dynamics
-      iter = _map.find(typeid(LegacyBlockCollisionO<T,DESCRIPTOR,PLATFORM>));
-      if (iter != _map.end()) {
-        // Order is important here as LegacyBlockCollisionO uses the dynamics
-        // pointer to construct matching LegacyConcreteDynamics internally.
-        _dynamicsOfCells[iCell] = dynamics;
-        set(iCell, *iter->second);
-      } else {
-        throw std::runtime_error("Legacy dynamics not supported on this platform");
-      }
+    auto& collisionO = resolve(std::forward<decltype(promise)>(promise));
+    if (_operatorOfCells[iCell] != nullptr) {
+      _operatorOfCells[iCell]->set(iCell, false, !_coreMask[iCell]);
+    }
+    collisionO.set(iCell, true, !_coreMask[iCell]);
+    _operatorOfCells[iCell] = &collisionO;
+    if (Dynamics<T,DESCRIPTOR>* dynamics = collisionO.getDynamics()) {
+      _dynamicsOfCells[iCell] = dynamics;
     }
     _dominantCollisionO = nullptr;
   }
@@ -482,17 +291,20 @@ public:
     switch (strategy) {
     case CollisionDispatchStrategy::Dominant:
       if (!_dominantCollisionO) {
-        _dominantCollisionO = std::max_element(_map.begin(),
-                                               _map.end(),
-                                               [](const auto& lhs, const auto& rhs) -> bool {
-                                                 return lhs.second->weight() < rhs.second->weight();
-                                               })->second.get();
+        _dominantCollisionO = std::get<1>(std::max_element(
+          _map.begin(),
+          _map.end(),
+          [](const auto& lhs, const auto& rhs) -> bool {
+            return std::get<1>(lhs.second)->weight()
+                 < std::get<1>(rhs.second)->weight();
+          })->second).get();
       }
       _dominantCollisionO->apply(_lattice, _coreMask, strategy);
       break;
 
     case CollisionDispatchStrategy::Individual:
-      for (auto& [id, collisionO] : _map) {
+      for (auto& [id, value] : _map) {
+        auto& [promise, collisionO] = value;
         if (collisionO->weight() > 0) {
           collisionO->apply(_lattice, _coreMask, strategy);
         }
@@ -505,16 +317,28 @@ public:
     }
   }
 
-  /// Returns a human-readable string listing all managed dynamics and their assigned fraction of cells
-  std::string describe()
-  {
-    std::stringstream out;
-    for (auto& [_, collisionO] : _map) {
-      out << collisionO->getDynamics()->getName() << ", "
-          << static_cast<double>(collisionO.weight()) / (_coreMask.weight())
-          << std::endl;
+  /// Returns number of cells assigned to promised dynamics
+  /**
+   * Doesn't allocate, intended for introspection
+   **/
+  std::size_t getWeight(const DynamicsPromise<T,DESCRIPTOR>& promise) const {
+    auto iter = _map.find(promise.id());
+    if (iter != _map.end()) {
+      const auto& [_, collisionO] = std::get<1>(*iter);
+      return collisionO->weight();
+    } else {
+      return 0;
     }
-    return out.str();
+  }
+
+  /// Returns set of all dynamics maintained this map
+  std::set<DynamicsPromise<T,DESCRIPTOR>> getAll() const {
+    std::set<DynamicsPromise<T,DESCRIPTOR>> dynamics;
+    for (auto& [id, value] : _map) {
+      const auto& [promise, collisionO] = value;
+      dynamics.emplace(promise);
+    }
+    return dynamics;
   }
 
 };
