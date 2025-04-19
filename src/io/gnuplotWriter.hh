@@ -266,6 +266,20 @@ void Gnuplot<T>::writePlotFile(std::string type, std::string plotName)
     /// Scaling the axes if necessary
     scaleAxes(fout);
 
+    /// Setting x- and y- ranges
+    fout << "set xrange [" << _xmin << ":" << _xmax << "]" << "\n";
+    fout << "set yrange [" << _ymin << ":" << _ymax << "]" << "\n";
+
+    /// Setting log scales for individual axes
+    if ( xlog ) { 
+        fout << "set logscale x " << xlogn << "\n";
+        //fout << "set format x '" << xlogn << "^{%.0f}'\n";
+    }
+    if ( ylog ) {
+        fout << "set logscale y " << ylogn << "\n";
+        //fout << "set format y '" << ylogn << "^{%.0f}'\n";
+    }
+
     /// Labelling the axes
 
     fout << "set xlabel '" << _xLabel << "'" << "\n";
@@ -354,6 +368,24 @@ void Gnuplot<T>::setLabel(std::string xLabel, std::string yLabel)
   _xLabel = xLabel;
   _yLabel = yLabel;
 }
+
+
+/// set Label of the gnuplotPlot; xLabel and yLabel
+template< typename T > void Gnuplot<T>::setXmin(T xmin) { _xmin = xmin; }
+template< typename T > void Gnuplot<T>::setXmax(T xmax) { _xmax = xmax; }
+template< typename T > void Gnuplot<T>::setYmin(T ymin) { _ymin = ymin; }
+template< typename T > void Gnuplot<T>::setYmax(T ymax) { _ymax = ymax; }
+template< typename T > void Gnuplot<T>::setXrange(T xmin, T xmax) { _xmin = std::to_string(xmin);
+                                                                    _xmax = std::to_string(xmax); }
+template< typename T > void Gnuplot<T>::setYrange(T ymin, T ymax) { _ymin = std::to_string(ymin);
+                                                                    _ymax = std::to_string(ymax); }
+template< typename T > void Gnuplot<T>::setLogScale(size_t dim, size_t n) {
+    if      ( dim == 1 ) { xlog=true; xlogn=n; }
+    else if ( dim == 2 ) { ylog=true; ylogn=n; }
+    else                 std::cout << "Error at setLogScale" << std::endl;
+}
+
+  void setLogScale(size_t dim);
 
 
 /// system command to start gnuplot (LINUX ONLY!)

@@ -1,6 +1,6 @@
 /*  This file is part of the OpenLB library
  *
- *  Copyright (C) 2007 Jonas Latt
+ *  Copyright (C) 2012 Lukas Baron, Mathias J. Krause
  *  E-mail contact: info@openlb.net
  *  The most recent release of OpenLB can be downloaded at
  *  <http://www.openlb.net/>
@@ -22,31 +22,10 @@
 */
 
 /** \file
- * Groups all the 3D include files for the directory io.
+ * Groups all include files for the directory genericFunctions.
  */
-#include "printUtils.h"
-#include "base64.h"
-#include "blockGifWriter.h"
-#include "blockVtkWriter3D.h"
-#include "colormaps.h"
-#include "fileName.h"
-#include "gnuplotHeatMapWriter.h"
-#include "gnuplotWriter.h"
-#include "ostreamManager.h"
-#include "parallelIO.h"
-#include "serializerIO.h"
-#include "stlReader.h"
-#include "superVtmWriter3D.h"
-#include "vtiReader.h"
-#include "vtiWriter.h"
-#include "xmlReader.h"
-#include "cliReader.h"
-#include "octree.h"
-#include "vtkWriter.h"
-#include "vtkSurfaceWriter.h"
-#include "consoleWriter.h"
-#include "blockLatticeSTLreader.h"
-#include "plainWriter.h"
-#include "analyticalPorosityVolumeF.h"
-#include "analyticalVelocityVolumeF.h"
-#include "consoleToFileWriter.h"
+
+#include "noiseauxiliary/acousticPulse.h"
+#include "noiseauxiliary/dampingTerm.h"
+#include "noiseauxiliary/l2norm.h"
+#include "noiseauxiliary/linePlot.h"

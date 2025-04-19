@@ -56,6 +56,7 @@
 #include "stochasticSGSdynamics.h"
 #include "guoZhaoDynamics.h"
 #include "multiphaseBGKdynamics.h"
+#include "spongeLayerDynamics.h"
 
 #include "dynamics2D.hh"
 
