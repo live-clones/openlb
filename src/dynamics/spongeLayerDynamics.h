@@ -40,8 +40,6 @@ namespace olb {
 template<typename T, typename DESCRIPTOR, typename MOMENTA, typename EQUILIBRIUM>
 struct SpongeLayerDynamics : public dynamics::CustomCollision<T,DESCRIPTOR,MOMENTA>
 {
-private:
-
 public:
   using parameters = typename meta::list<descriptors::OMEGA>;
   using MomentaF = typename MOMENTA::template type<DESCRIPTOR>;
