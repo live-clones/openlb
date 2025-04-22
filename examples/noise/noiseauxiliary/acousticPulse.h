@@ -1,3 +1,35 @@
+/*  Lattice Boltzmann sample, written in C++, using the OpenLB
+ *  library
+ *
+ *  Copyright (C) 2025 Philipp Spelten
+ *  E-mail contact: info@openlb.net
+ *  The most recent release of OpenLB can be downloaded at
+ *  <http://www.openlb.net/>
+ *
+ *  This program is free software; you can redistribute it and/or
+ *  modify it under the terms of the GNU General Public License
+ *  as published by the Free Software Foundation; either version 2
+ *  of the License, or (at your option) any later version.
+ *
+ *  This program is distributed in the hope that it will be useful,
+ *  but WITHOUT ANY WARRANTY; without even the implied warranty of
+ *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ *  GNU General Public License for more details.
+ *
+ *  You should have received a copy of the GNU General Public
+ *  License along with this program; if not, write to the Free
+ *  Software Foundation, Inc., 51 Franklin Street, Fifth Floor,
+ *  Boston, MA  02110-1301, USA.
+*/
+
+/* acousticPulse.h:
+ * Function returning a gaussian pressure field described by
+ * rho(x) = rho0 + amplitude*e^(-alpha*||x-x0||)
+*/
+
+#ifndef ACOUSTIC_PULSE_H
+#define ACOUSTIC_PULSE_H
+
 namespace olb {
 
 template <unsigned ndim, typename T>
@@ -19,9 +51,10 @@ public:
       distance += distance_i*distance_i;  // actually, distance would be square root, but would be squared in exponent
     }
     output[0] = rho0+amplitude*util::exp(-alpha*distance);
-    // if ( output[0] > rho0 ) std::cout << "input=[" << input[0] << "," << input[1] << "," << input[2] << "], distance=" << distance << ", output=" << output[0] << std::endl;
     return true;
   };
 };
 
 }
+
+#endif
