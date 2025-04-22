@@ -1,7 +1,6 @@
 /*  This file is part of the OpenLB library
  *
- *  Copyright (C) 2008 Orestis Malaspinas, Andrea Parmigiani
- *                2022 Nando Suntoyo, Adrian Kummerlaender, Shota Ito
+ *  Copyright (C) 2025 Philipp Spelten
  *  E-mail contact: info@openlb.net
  *  The most recent release of OpenLB can be downloaded at
  *  <http://www.openlb.net/>
@@ -22,15 +21,12 @@
  *  Boston, MA  02110-1301, USA.
 */
 
-/*
+/* spongeLayerDynamics.h:
  * Implements the absorbing layer described in equation (24) of 
  * H. Xu and P. Sagaut, “Analysis of the absorbing layers for the 
  * weakly-compressible lattice Boltzmann methods”, Journal of 
  * Computational Physics, vol. 245, pp. 14–42, Jul. 2013, 
  * doi: 10.1016/j.jcp.2013.02.051.
- * 
- * The newtonian cooling term suggested by Israeli and Orszag is 
- * implemented in examples/noise/noiseauxiliary/dampingTerm.h
 */
 
 #ifndef SPONGE_LAYER_DYNAMICS_H
