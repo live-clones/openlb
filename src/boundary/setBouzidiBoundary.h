@@ -39,6 +39,7 @@
 // DOI: 10.2514/6.2003-953
 
 #include "../dynamics/collisionLES.h"
+#include "postprocessor/knudsenVelocityPostProcessor.h"
 
 namespace olb {
 
@@ -242,6 +243,7 @@ void setBouzidiBoundary(BlockLattice<T,DESCRIPTOR>& block,
     // Check if cell is solid cell
     if (boundaryIndicator(solidLatticeR)) {
       for (int iPop=1; iPop < DESCRIPTOR::q; ++iPop) {
+
         Vector<T,DESCRIPTOR::d> boundaryLatticeR(solidLatticeR + descriptors::c<DESCRIPTOR>(iPop));
         const auto c = descriptors::c<DESCRIPTOR>(iPop);
         const auto iPop_opposite = descriptors::opposite<DESCRIPTOR>(iPop);
@@ -411,6 +413,121 @@ void setBouzidiVelocity(BlockLattice<T,DESCRIPTOR>& block,
 
             // set computed velocity into the bouzidi velocity field
             block.get(boundaryLatticeR).template setFieldComponent<descriptors::BOUZIDI_VELOCITY>(iPop_opposite, vel_coeff);
+          }
+        }
+      }
+    }
+  });
+}
+
+/// Set Bouzidi velocity boundary on material cells of sLattice
+template<typename T, typename DESCRIPTOR, bool thermalCreep = false>
+void setBouzidiKnudsenSlipVelocity(SuperLattice<T,DESCRIPTOR>& sLattice,
+                                   SuperGeometry<T,DESCRIPTOR::d>& superGeometry, int material,
+                                   IndicatorF<T,DESCRIPTOR::d>& indicatorAnalyticalBoundary,
+                                   std::vector<int> bulkMaterials = std::vector<int>(1,1))
+{
+  setBouzidiKnudsenSlipVelocity<T,DESCRIPTOR,thermalCreep>(sLattice, superGeometry.getMaterialIndicator(material), indicatorAnalyticalBoundary, bulkMaterials);
+}
+
+/// Set Bouzidi velocity boundary on indicated cells of sLattice
+template<typename T, typename DESCRIPTOR, bool thermalCreep = false>
+void setBouzidiKnudsenSlipVelocity(SuperLattice<T,DESCRIPTOR>& sLattice,
+                                   FunctorPtr<SuperIndicatorF<T,DESCRIPTOR::d>>&& boundaryIndicator,
+                                   IndicatorF<T,DESCRIPTOR::d>& indicatorAnalyticalBoundary,
+                                   std::vector<int> bulkMaterials = std::vector<int>(1,1))
+{
+  setBouzidiKnudsenSlipVelocity<T,DESCRIPTOR,thermalCreep>(sLattice, std::forward<decltype(boundaryIndicator)>(boundaryIndicator),
+                               boundaryIndicator->getSuperGeometry().getMaterialIndicator(std::move(bulkMaterials)),
+                               indicatorAnalyticalBoundary);
+}
+
+/// Set Bouzidi velocity boundary on indicated cells of sLattice
+template<typename T, typename DESCRIPTOR, bool thermalCreep = false>
+void setBouzidiKnudsenSlipVelocity(SuperLattice<T,DESCRIPTOR>& sLattice,
+                                   FunctorPtr<SuperIndicatorF<T,DESCRIPTOR::d>>&& boundaryIndicator,
+                                   FunctorPtr<SuperIndicatorF<T,DESCRIPTOR::d>>&& bulkIndicator,
+                                   IndicatorF<T,DESCRIPTOR::d>& indicatorAnalyticalBoundary)
+{
+  auto& load = sLattice.getLoadBalancer();
+  auto& cuboidDecomposition = boundaryIndicator->getSuperGeometry().getCuboidDecomposition();
+  for (int iCloc = 0; iCloc < load.size(); ++iCloc) {
+    auto& cuboid = cuboidDecomposition.get(load.glob(iCloc));
+    setBouzidiKnudsenSlipVelocity<T,DESCRIPTOR,thermalCreep>(sLattice.getBlock(iCloc),
+                                                boundaryIndicator->getBlockIndicatorF(iCloc),
+                                                bulkIndicator->getBlockIndicatorF(iCloc),
+                                                cuboid,
+                                                indicatorAnalyticalBoundary);
+  }
+  addPoints2CommBC<T,DESCRIPTOR>(sLattice, std::forward<decltype(boundaryIndicator)>(boundaryIndicator), 5);
+}
+
+/// Set Bouzidi velocity boundary on indicated cells of block lattice
+template<typename T, typename DESCRIPTOR, bool thermalCreep = false>
+void setBouzidiKnudsenSlipVelocity(BlockLattice<T,DESCRIPTOR>& block,
+                                   BlockIndicatorF<T,DESCRIPTOR::d>& boundaryIndicator,
+                                   BlockIndicatorF<T,DESCRIPTOR::d>& bulkIndicator,
+                                   Cuboid<T,DESCRIPTOR::d>& cuboid,
+                                   IndicatorF<T,DESCRIPTOR::d>& indicatorAnalyticalBoundary)
+{
+  const T deltaR = cuboid.getDeltaR();
+  block.forSpatialLocations([&](LatticeR<DESCRIPTOR::d> solidLatticeR) {
+    if (boundaryIndicator(solidLatticeR)) {
+      for (int iPop = 1; iPop < DESCRIPTOR::q; ++iPop) {
+        Vector<T,DESCRIPTOR::d> boundaryLatticeR(solidLatticeR + descriptors::c<DESCRIPTOR>(iPop));
+        if (block.isInside(boundaryLatticeR)) {
+          if ( bulkIndicator(boundaryLatticeR)) {
+            auto boundaryPhysR = cuboid.getPhysR(boundaryLatticeR);
+            Vector<T,DESCRIPTOR::d> normal = indicatorAnalyticalBoundary.surfaceNormal(boundaryPhysR, deltaR);
+            for ( int i = 0; i< DESCRIPTOR::d; ++i) {
+              block.get(boundaryLatticeR).template setFieldComponent<descriptors::NORMAL>(i,-normal[i]);
+            }
+            if(thermalCreep) {
+              Vector<T,DESCRIPTOR::d> normalRound {};
+              for(int iD = 0; iD < DESCRIPTOR::d; iD++){
+                normalRound[iD] = util::round(normal[iD]);
+              }
+              auto wallLatticeR = boundaryLatticeR + normalRound;
+              if(boundaryIndicator(wallLatticeR)) {
+                Vector<T,DESCRIPTOR::d> tempDerivative {};
+                T temp = block.get(wallLatticeR).template getField<descriptors::TEMPERATURE>();
+                if constexpr(DESCRIPTOR::d==2) {
+                  using DESCR = descriptors::D2Q5<>;
+                  for( int iPop=1; iPop < DESCR::q; iPop++) {
+                    Vector<T,DESCRIPTOR::d> solidNeighborR(wallLatticeR + descriptors::c<DESCR>(iPop));
+                    if (boundaryIndicator(solidNeighborR)) {
+                      T tempNeighbor = block.get(solidNeighborR).template getField<descriptors::TEMPERATURE>();
+                      for( int iD = 0; iD<DESCRIPTOR::d; iD++) {
+                        if( descriptors::c<DESCR>(iPop,iD) > 0) {
+                          tempDerivative[iD] = tempNeighbor - temp;
+                        }
+                        if( descriptors::c<DESCR>(iPop,iD) < 0) {
+                          tempDerivative[iD] = temp - tempNeighbor;
+                        }
+                      }
+                    }
+                  }
+                } else {
+                  using DESCR = descriptors::D3Q7<>;
+                  for( int iPop=1; iPop < DESCR::q; iPop++) {
+                    Vector<T,DESCRIPTOR::d> solidNeighborR(wallLatticeR + descriptors::c<DESCR>(iPop));
+                    if (boundaryIndicator(solidNeighborR)) {
+                      T tempNeighbor = block.get(solidNeighborR).template getField<descriptors::TEMPERATURE>();
+                      for( int iD = 0; iD<DESCRIPTOR::d; iD++) {
+                        if( descriptors::c<DESCR>(iPop,iD) > 0) {
+                          tempDerivative[iD] = tempNeighbor - temp;
+                        }
+                        if( descriptors::c<DESCR>(iPop,iD) < 0) {
+                          tempDerivative[iD] = temp - tempNeighbor;
+                        }
+                      }
+                    }
+                  }
+                }
+                tempDerivative -= (tempDerivative*normal)*normal;
+                block.get(boundaryLatticeR).template setField<descriptors::TEMPGRADIENT>(tempDerivative);
+              }
+            }
           }
         }
       }

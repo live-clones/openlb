@@ -14,5 +14,8 @@
 #include <solver/solver.h>
 #include <utilities/utilities3D.h>
 #include <particles/particles.h>
+#include <fsi/ibm/membrane/mem3D.h>
+#include <fsi/ibm/ibm3D.h>
 #include <fsi/fsi.h>
 #include <refinement/refinement.h>
+#include <uq/uq.h>

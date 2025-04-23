@@ -373,6 +373,50 @@ using BlockIndicatorFfromCallableF = std::conditional_t<
   BlockIndicatorFfromCallableF3D<T>
 >;
 
+
+template <typename T, typename BaseType> class BlockVTIreader2D;
+template <typename T, typename BaseType> class BlockVTIreader3D;
+
+template <typename T, typename BaseType, unsigned D >
+using BlockVTIreader = std::conditional_t<
+    D == 2,
+    BlockVTIreader2D<T, BaseType>,
+    BlockVTIreader3D<T, BaseType>
+>;
+
+
+template <typename T, typename BaseType> class BlockDataF2D;
+template <typename T, typename BaseType> class BlockDataF3D;
+
+template <typename T, typename BaseType, unsigned D >
+using BlockDataF = std::conditional_t<
+  D == 2,
+  BlockDataF2D<T, BaseType>,
+  BlockDataF3D<T, BaseType>
+>;
+
+
+template <typename T, typename W> class SpecialAnalyticalFfromBlockF2D;
+template <typename T, typename W> class SpecialAnalyticalFfromBlockF3D;
+
+template <typename T, typename W, unsigned D >
+using SpecialAnalyticalFfromBlockF = std::conditional_t<
+  D == 2,
+  SpecialAnalyticalFfromBlockF2D<T, W>,
+  SpecialAnalyticalFfromBlockF3D<T, W>
+>;
+
+
+template <typename T, typename DESCRIPTOR, typename FIELD> class SuperLatticePhysField2D;
+template <typename T, typename DESCRIPTOR, typename FIELD> class SuperLatticePhysField3D;
+
+template <typename T, typename DESCRIPTOR, typename FIELD>
+using SuperLatticePhysField = std::conditional_t<
+  DESCRIPTOR::d == 2,
+  SuperLatticePhysField2D<T, DESCRIPTOR, FIELD>,
+  SuperLatticePhysField3D< T, DESCRIPTOR, FIELD>
+>;
+
 // *INDENT-ON*
 
 }

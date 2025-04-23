@@ -39,6 +39,7 @@
 #include "octree.hh"
 #include "vtkWriter.hh"
 #include "vtuPointWriter.hh"
+#include "vtuSurfaceWriter.hh"
 #include "vtkSurfaceWriter.hh"
 #include "blockLatticeSTLreader.hh"
 #include "plainWriter.hh"

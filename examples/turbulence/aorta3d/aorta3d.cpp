@@ -29,12 +29,14 @@
  * adequately mapped and initialized fully automatically. As
  * dynamics a Smagorinsky turbulent BGK model is used to stabilize
  * the simulation for low resolutions. As output the flux at the
- * inflow and outflow region is computed. The results has been
- * validated by comparison with other results obtained with FEM
- * and FVM.
+ * inflow and outflow region is computed. The wall stress can be
+ * visualized on the stl Mesh with the Mesh.pvd file in paraview.
+ * The results has been validated by comparison with other results
+ * obtained with FEM and FVM.
  */
 
 #include <olb.h>
+
 
 using namespace olb;
 using namespace olb::descriptors;
@@ -92,14 +94,14 @@ bool BlockLatticeStress3D<T, DESCRIPTOR>::operator()(T output[], const int input
 template <typename T, typename DESCRIPTOR>
 class InterpolatedWssF final: public AnalyticalF<3,T,T> {
 private:
-  UnitConverter<T,DESCRIPTOR>& _converter;
+  const UnitConverter<T,DESCRIPTOR>& _converter;
   AnalyticalF3D<T,T>& _densityF;
   AnalyticalF3D<T,T>& _stressF;
   STLreader<T>& _stlReader;
   T _physFactor;
 
 public:
-  InterpolatedWssF(UnitConverter<T,DESCRIPTOR>& converter,
+  InterpolatedWssF(const UnitConverter<T,DESCRIPTOR>& converter,
                    AnalyticalF3D<T,T>& densityF,
                    AnalyticalF3D<T,T>& stressF,
                    STLreader<T>& stlReader):
@@ -250,20 +252,20 @@ void prepareLattice( SuperLattice<T, DESCRIPTOR>& lattice,
 
 // Generates a slowly increasing sinuidal inflow
 void setBoundaryValues( SuperLattice<T, DESCRIPTOR>& sLattice,
-                        UnitConverter<T,DESCRIPTOR> const& converter, int iT,
+                        UnitConverter<T,DESCRIPTOR> const& converter, std::size_t iT,
                         SuperGeometry<T,3>& superGeometry )
 {
 
   // No of time steps for smooth start-up
-  int iTperiod = converter.getLatticeTime( 0.5 );
-  int iTupdate = 50;
+  std::size_t iTperiod = converter.getLatticeTime( 0.5 );
+  std::size_t iTupdate = 50;
 
   if ( iT%iTupdate == 0 ) {
     // Smooth start curve, sinus
-    SinusStartScale<T,int> nSinusStartScale( iTperiod,converter.getCharLatticeVelocity() );
+    SinusStartScale<T,std::size_t> nSinusStartScale( iTperiod,converter.getCharLatticeVelocity() );
 
     // Creates and sets the Poiseuille inflow profile using functors
-    int iTvec[1]= {iT};
+    std::size_t iTvec[1]= {iT};
     T maxVelocity[1]= {T()};
     nSinusStartScale( maxVelocity,iTvec );
     CirclePoiseuille3D<T> velocity( superGeometry,3,maxVelocity[0], T() );
@@ -282,28 +284,30 @@ void setBoundaryValues( SuperLattice<T, DESCRIPTOR>& sLattice,
 }
 
 // Computes flux at inflow and outflow
-void getResults( SuperLattice<T, DESCRIPTOR>& sLattice,
-                 UnitConverter<T,DESCRIPTOR>& converter, int iT,
-                 SuperGeometry<T,3>& superGeometry, util::Timer<T>& timer, STLreader<T>& stlReader
-#ifdef FEATURE_VTK
-                 , vtkSurfaceWriter<T>& vtkSurfaceWriter
-#endif
-                 )
+void getResults(SuperLattice<T, DESCRIPTOR>& sLattice,
+                const UnitConverter<T,DESCRIPTOR>& converter,
+                std::size_t iT,
+                SuperGeometry<T,3>& superGeometry,
+                util::Timer<T>& timer,
+                STLreader<T>& stlReader,
+                VTUsurfaceWriter<T>& vtuWriter)
 {
   OstreamManager clout( std::cout,"getResults" );
 
-  const int vtkIter  = converter.getLatticeTime( .1 );
-  const int statIter = converter.getLatticeTime( .1 );
+  const std::size_t vtkIter  = converter.getLatticeTime( .1 );
+  const std::size_t statIter = converter.getLatticeTime( .1 );
 
   if ( iT==0 ) {
     SuperVTMwriter3D<T> vtmWriter("aorta3d");
     // Writes the geometry, cuboid no. and rank no. as vti file for visualization
+
     SuperLatticeCuboid3D<T, DESCRIPTOR> cuboid( sLattice );
     SuperLatticeRank3D<T, DESCRIPTOR> rank( sLattice );
     vtmWriter.write( cuboid );
     vtmWriter.write( rank );
 
     vtmWriter.createMasterFile();
+    vtuWriter.createMasterFile();
   }
 
   // Writes the vtk files
@@ -318,31 +322,25 @@ void getResults( SuperLattice<T, DESCRIPTOR>& sLattice,
       task(vtmWriter, iT);
     });
 
-#ifdef FEATURE_VTK
+    // Write velocity, pressure and interpolated wall shear stress on the STL surface
     {
-      SuperLatticePhysVelocity3D velocityF(sLattice, converter);
-      AnalyticalFfromSuperF3D smoothVelocityF(velocityF);
-      smoothVelocityF.getName() = "u";
-      vtkSurfaceWriter.addFunctor(smoothVelocityF);
-
-      SuperLatticePhysPressure3D pressureF(sLattice, converter);
-      AnalyticalFfromSuperF3D smoothPressureF(pressureF);
-      smoothPressureF.getName() = "p";
-      vtkSurfaceWriter.addFunctor(smoothPressureF);
-
       SuperLatticeDensity3D densityF(sLattice);
       AnalyticalFfromSuperF3D smoothDensityF(densityF);
 
       SuperLatticeStress3D stressF(sLattice);
       AnalyticalFfromSuperF3D smoothStressF(stressF);
 
+      SuperLatticePhysVelocity3D<T, DESCRIPTOR> velocity( sLattice, converter );
+      SuperLatticePhysPressure3D<T, DESCRIPTOR> pressure( sLattice, converter );
       InterpolatedWssF<T,DESCRIPTOR> interpolatedWssF(converter, smoothDensityF, smoothStressF, stlReader);
       interpolatedWssF.getName() = "interpolatedWss";
-      vtkSurfaceWriter.addFunctor(interpolatedWssF);
 
-      vtkSurfaceWriter.write(iT);
+      vtuWriter.addFunctor(velocity);
+      vtuWriter.addFunctor(pressure);
+      vtuWriter.addFunctor(interpolatedWssF);
+
+      vtuWriter.write(iT);
     }
-#endif
   }
 
   // Writes output on the console
@@ -400,7 +398,7 @@ int main( int argc, char* argv[] )
   // display messages from every single mpi process
   //clout.setMultiOutput(true);
 
-  UnitConverter<T,DESCRIPTOR> converter(
+  const UnitConverter<T,DESCRIPTOR> converter(
     (T)   0.02246/N,     // physDeltaX: spacing between two lattice cells in __m__
     (T)   0.02246/(M*N), // physDeltaT: time step in __s__
     (T)   0.02246,       // charPhysLength: reference length of simulation geometry
@@ -443,12 +441,8 @@ int main( int argc, char* argv[] )
 
   prepareLattice( sLattice, converter, stlReader, superGeometry );
 
-#ifdef FEATURE_VTK
-  vtkSurfaceWriter<T> vtkSurfaceWriter(stlReader,
-                                       sLattice.getCuboidDecomposition(),
-                                       sLattice.getLoadBalancer(),
-                                       "aortaSurface");
-#endif
+  VTUsurfaceWriter<T> vtuWriter("surface", cuboidDecomposition, loadBalancer);
+  vtuWriter.addSTL( stlReader );
 
   timer1.stop();
   timer1.printSummary();
@@ -466,11 +460,7 @@ int main( int argc, char* argv[] )
     sLattice.collideAndStream();
 
     // === 7th Step: Computation and Output of the Results ===
-#ifdef FEATURE_VTK
-    getResults( sLattice, converter, iT, superGeometry, timer, stlReader, vtkSurfaceWriter );
-#else
-    getResults( sLattice, converter, iT, superGeometry, timer, stlReader );
-#endif
+    getResults( sLattice, converter, iT, superGeometry, timer, stlReader, vtuWriter );
   }
 
   timer.stop();

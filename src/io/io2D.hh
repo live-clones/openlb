@@ -35,6 +35,7 @@
 #include "superVtmWriter2D.hh"
 #include "vtiReader.hh"
 #include "vtuPointWriter.hh"
+#include "vtuSurfaceWriter.hh"
 #include "blockLatticeSTLreader.hh"
 #include "plainWriter.hh"
 

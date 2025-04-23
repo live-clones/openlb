@@ -77,7 +77,7 @@
         '';
       };
 
-      env-gcc = mkShell {
+      env-gcc = pkgs.mkShell {
         name = "openlb-env-gcc";
         buildInputs = common-env ++ (with pkgs; [
           gcc13
@@ -172,6 +172,26 @@
           export VTK_VERSION=
           export CXXFLAGS="$CXXFLAGS -I${pkgs.vtk_9}/include/vtk -I${pkgs.nlopt}/include/nlopt"
           export LDFLAGS="$LDFLAGS -L${pkgs.vtk_9}/lib -L${pkgs.nlopt}/lib -lnlopt"
+        '';
+      };
+
+      env-ibm-evaluation = pkgs.mkShell {
+        name = "openlb-env-ibm-evaluation";
+        buildInputs = common-env ++ (with pkgs; [
+          gcc11
+          gsl
+          blas
+        ]);
+        shellHook = ''
+          export CXX=g++
+          export CC=gcc
+
+          export CXXFLAGS="-O3 -Wall -march=native -mtune=native -std=c++20"
+          export LDFLAGS="-lgsl -lblas"
+
+          export PARALLEL_MODE=NONE
+
+          export PLATFORMS="CPU_SISD"
         '';
       };
 

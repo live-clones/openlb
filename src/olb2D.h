@@ -14,3 +14,4 @@
 #include <particles/particles.h>
 #include <fsi/fsi.h>
 #include <refinement/refinement.h>
+#include <uq/uq.h>

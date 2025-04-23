@@ -1,6 +1,6 @@
 # This file is part of the OpenLB library
 #
-# Copyright (C) 2024 Shota Ito
+# Copyright (C) 2024 Shota Ito, Adrian Kummerlaender
 # E-mail contact: info@openlb.net
 # The most recent release of OpenLB can be downloaded at
 # <http://www.openlb.net/>

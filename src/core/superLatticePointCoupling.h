@@ -93,7 +93,7 @@ public:
     #ifdef PARALLEL_MODE_OMP
     #pragma omp parallel for schedule(static)
     #endif
-    for (std::size_t iP=0; iP < points->getNcells(); ++iP) {
+    for (CellID iP=0; iP < points->getNcells(); ++iP) {
       const auto physR = points->template getField<fields::PHYS_R>().get(iP);
       const LatticeR<DESCRIPTOR::d> latticeR = util::floor((physR - originR) / deltaX + V{0.5});
       const CellID iCell = _lattices.template get<0>()->getCellId(latticeR);

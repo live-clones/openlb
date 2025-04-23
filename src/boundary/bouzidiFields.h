@@ -44,6 +44,30 @@ struct BOUZIDI_ADE_DIRICHLET : public descriptors::FIELD_BASE<0,0,1> { };
 
 struct NORMAL : public descriptors::FIELD_BASE<0,1,0> { };
 
+struct BOUZIDI_NORMAL : public FIELD_BASE_CUSTOM_SIZE {
+  template <unsigned D, unsigned Q >
+  static constexpr unsigned size() {
+    return Q * D;
+  }
+
+  template <typename T, typename DESCRIPTOR>
+  static constexpr auto getInitialValue() {
+    return Vector<value_type<T>, DESCRIPTOR::template size<BOUZIDI_NORMAL>()>{};
+  }
+};
+
+struct BOUZIDI_SAMPLING_DISTANCE : public FIELD_BASE_CUSTOM_SIZE {
+  template <unsigned D, unsigned Q >
+  static constexpr unsigned size() {
+    return Q * D;
+  }
+
+  template <typename T, typename DESCRIPTOR>
+  static constexpr auto getInitialValue() {
+    return Vector<value_type<T>, DESCRIPTOR::template size<BOUZIDI_SAMPLING_DISTANCE>()>{};
+  }
+};
+
 }
 
 }

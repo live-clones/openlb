@@ -328,6 +328,7 @@ struct DAMPING              : public FIELD_BASE<1,  0, 0> { };
 struct UX                   : public FIELD_BASE<1,  0, 0> { };
 struct UY                   : public FIELD_BASE<1,  0, 0> { };
 struct UZ                   : public FIELD_BASE<1,  0, 0> { };
+struct TEMPGRADIENT         : public FIELD_BASE<0,  1, 0> { };
 struct AVERAGE_VELOCITY     : public FIELD_BASE<0,  1, 0> { };
 struct AVERAGE_DENSITY      : public FIELD_BASE<1,  0, 0> { };
 struct AVERAGE_TKE          : public FIELD_BASE<0,  1, 0> { };
@@ -506,6 +507,16 @@ namespace fields {
 struct PHYS_R : public descriptors::FIELD_BASE<0,1> { };
 struct BLOCK_LOWER : public descriptors::FIELD_BASE<0,1> { };
 struct BLOCK_UPPER : public descriptors::FIELD_BASE<0,1> { };
+
+namespace membrane {
+
+struct VELOCITY : public descriptors::FIELD_BASE<0,1> { };
+struct OLD_VELOCITY : public descriptors::FIELD_BASE<0,1> { };
+struct FORCE : public descriptors::FIELD_BASE<0,1> { };
+
+struct STENCIL_WIDTH : public descriptors::FIELD_BASE<1> { };
+
+}
 
 namespace moments {
 

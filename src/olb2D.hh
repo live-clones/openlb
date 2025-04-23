@@ -10,3 +10,4 @@
 #include <optimization/opti2D.hh>
 #include <utilities/utilities2D.hh>
 #include <particles/particles.hh>
+#include <uq/uq.hh>

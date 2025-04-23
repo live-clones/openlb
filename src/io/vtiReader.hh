@@ -248,7 +248,7 @@ void BaseVTIreader3D<T, BaseType>::readBinaryData(std::stringstream& stream_val,
           }
           //Test if the vertex is inside of the physical extent
           if (blockData.isInside({ix, iy, iz})) {
-            this->clout << "got value: " << values[value_idx] << std::endl;
+            // this->clout << "got value: " << values[value_idx] << std::endl;
             blockData.get({ix, iy, iz}, iSize) = values[value_idx];
           } else {
             this->clout << "Found point outside of the block structure" << std::endl;

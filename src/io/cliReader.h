@@ -63,13 +63,33 @@ public:
     if (contains(name)) {
       const std::string str = operator[](name);
       TYPE value{};
-      std::from_chars(str.data(), str.data() + str.size(), value);
-      return value;
+      // Handling required due to inconsistent support for std::from_chars
+             if constexpr (std::is_integral_v<TYPE>) {
+        auto result = std::from_chars(str.data(),
+                                      str.data() + str.size(),
+                                      value);
+        if (result.ec != std::errc()) {
+          return fallback;
+        }
+        return value;
+      } else if constexpr (std::is_floating_point_v<TYPE>) {
+        try {
+          std::size_t nProcessed{};
+          value = static_cast<TYPE>(std::stod(str, &nProcessed));
+          if (nProcessed != str.size()) {
+            return fallback;
+          }
+          return value;
+        } catch (...) {
+          return fallback;
+        }
+      } else {
+        static_assert([](){ return false; }, "Unsupported type");
+      }
     } else {
       return fallback;
     }
   }
-
 
 };
 

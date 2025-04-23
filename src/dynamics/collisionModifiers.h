@@ -146,6 +146,35 @@ struct TrackAverageDensity {
   };
 };
 
+/// Save velocity of COLLISION into cell field VELOCITY
+template <typename COLLISION>
+struct SaveVelocity {
+  using parameters = typename COLLISION::parameters;
+
+  static std::string getName() {
+    return "SaveVelocity<" + COLLISION::getName() + ">";
+  }
+
+  template <typename DESCRIPTOR, typename MOMENTA, typename EQUILIBRIUM>
+  struct type {
+    using MomentaF = typename MOMENTA::template type<DESCRIPTOR>;
+    using CollisionO = typename COLLISION::template type<DESCRIPTOR, MOMENTA, EQUILIBRIUM>;
+
+    constexpr static bool is_vectorizable = dynamics::is_vectorizable_v<CollisionO>;
+
+    template <concepts::Cell CELL, typename PARAMETERS, typename V=typename CELL::value_t>
+    CellStatistic<V> apply(CELL& cell, PARAMETERS& parameters) any_platform {
+      auto statistics = CollisionO().apply(cell, parameters);
+
+      Vector<V,DESCRIPTOR::d> u;
+      MomentaF().computeU(cell, u);
+      cell.template setField<descriptors::VELOCITY>(u);
+
+      return statistics;
+    }
+  };
+};
+
   /// Track time-averaged TKE and velocity
 template <typename COLLISION>
 struct TrackAverageTKE {

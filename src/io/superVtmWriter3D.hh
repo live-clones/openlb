@@ -439,7 +439,7 @@ void SuperVTMwriter3D<T,OUT_T,W>::dataArray(const std::string& fullName,
     fout << "format=\"binary\" encoding=\"base64\">\n";
   }
   else {
-    fout << ">\n";
+    fout << "format=\"ascii\" >\n";
   }
 
   int i[4] = {iC, 0, 0, 0};

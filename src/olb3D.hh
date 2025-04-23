@@ -7,6 +7,8 @@
 #include <io/io3D.hh>
 #include <optimization/opti3D.hh>
 #include <solver/solver.hh>
+#include <fsi/ibm/membrane/mem3D.hh>
 #include <utilities/utilities3D.hh>
 #include <particles/particles.hh>
 #include <communication/communication.hh>
+#include <uq/uq.hh>

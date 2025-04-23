@@ -86,6 +86,9 @@ using ForcedADMD2Q9Descriptor                       = D2Q9<FORCE,FIL_RHO,LOCAL_F
 using MRTD2Q9Descriptor                             = D2Q9<tag::MRT>;
 using ForcedMRTD2Q9Descriptor                       = D2Q9<tag::MRT,FORCE>;
 
+template <typename... FIELDS>
+using D3Q0 = LATTICE_DESCRIPTOR<3,0,FIELDS...>;
+
 
 /// D3Q7 descriptor
 using D3Q7Descriptor                                = D3Q7<>;

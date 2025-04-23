@@ -1,172 +1,313 @@
+/*  Lattice Boltzmann sample, written in C++, using the OpenLB
+ *  library
+ *
+ *  Copyright (C) 2025 Mingliang Zhong, Stephan Simonis
+ *  E-mail contact: info@openlb.net
+ *  The most recent release of OpenLB can be downloaded at
+ *  <http://www.openlb.net/>
+ *
+ *  This program is free software; you can redistribute it and/or
+ *  modify it under the terms of the GNU General Public License
+ *  as published by the Free Software Foundation; either version 2
+ *  of the License, or (at your option) any later version.
+ *
+ *  This program is distributed in the hope that it will be useful,
+ *  but WITHOUT ANY WARRANTY; without even the implied warranty of
+ *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ *  GNU General Public License for more details.
+ *
+ *  You should have received a copy of the GNU General Public
+ *  License along with this program; if not, write to the Free
+ *  Software Foundation, Inc., 51 Franklin Street, Fifth Floor,
+ *  Boston, MA  02110-1301, USA.
+ */
+
+/* tgv2d.cpp:
+ * This example simulates the 2D Taylor-Green vortex problem, where certain flow
+ * parameters (such as the Reynolds number) are uncertain. Monte Carlo sampling
+ * and the stochastic collocation method are used to analyze how these uncertainties
+ * influence the vortex evolution.
+ */
 #include <olb.h>
 
-using namespace olb;
-using namespace olb::descriptors;
-using namespace olb::graphics;
+ using namespace olb;
+ using namespace olb::uq;
+ using namespace olb::descriptors;
+ using namespace olb::graphics;
 
-using T = FLOATING_POINT_TYPE;
-using DESCRIPTOR = D2Q9<>;
+ using T = FLOATING_POINT_TYPE;
+ using DESCRIPTOR = D2Q9<>;
 
-#define DNS
-// #define SMAGORINSKY
+ // Choose DNS or SMAGORINSKY LES model (uncomment as needed)
+ #define DNS
+ //#define _SMAGORINSKY
 
-#ifdef DNS
-  using BulkDynamics = ConstRhoBGKdynamics<T,DESCRIPTOR>;
-#elif defined(SMAGORINSKY)
-  using BulkDynamics = SmagorinskyBGKdynamics<T,DESCRIPTOR>;
-#endif
-
-// Parameters for the simulation setup
-//const int N = 33;       // resolution of the model
-const T num_vortice = 2;
-const T maxPhysT = 100;  // util::max. simulation time in s, SI unit
-const T startPhysT = 0;  // util::max. simulation time in s, SI unit
-const T smagoConst = 0.1;
-
-const T vtkSave = 10; //saves vtk files every vtkSave seconds
-
-template <typename T, typename _DESCRIPTOR>
-class Tgv2D : public AnalyticalF2D<T,T> {
-
-protected:
-  T u0;
-
-// initial solution of the TGV
-public:
-  Tgv2D(UnitConverter<T,_DESCRIPTOR> const& converter) : AnalyticalF2D<T,T>(2)
-  {
-    u0 = converter.getCharLatticeVelocity();
-  };
-
-  bool operator()(T output[], const T input[]) override
-  {
-    const T x = input[0];
-    const T y = input[1];
-
-    output[0] = -u0 * util::cos(x) * util::sin(y);
-    output[1] =  u0 * util::sin(x) * util::cos(y);
-
-    return true;
-  };
-};
+ #ifdef DNS
+   using BulkDynamics = ConstRhoBGKdynamics<T,DESCRIPTOR>;
+ #elif defined(_SMAGORINSKY)
+   using BulkDynamics = SmagorinskyBGKdynamics<T,DESCRIPTOR>;
+ #endif
 
 
-  void save_velocity_field(std::string dir, int nx, int ny, std::vector<std::vector<T>> u, std::vector<std::vector<T>> v, int idx) {
-    std::string filename_u = dir + "/u_" + std::to_string(idx) + ".dat";
-    // std::cout << "filename_u: " << filename_u << std::endl;
-    std::ofstream outputFile_u(filename_u);
-    if (!outputFile_u) {
-      std::cerr << "Error opening the file: " << filename_u << std::endl;
-      return;
-    }
-    outputFile_u << std::setprecision(20);
-    for (int i = 0; i < nx; ++i) {
-      for (int j = 0; j < ny; ++j) {
-        outputFile_u << u[i][j] << "\t";
-      }
-      outputFile_u << "\n";
-    }
-    outputFile_u.close();
+ // -------------------------------------------------------------------------
+ // Global parameters for the TGV simulation
+ // -------------------------------------------------------------------------
+ extern const T smagoConst;  ///< Smagorinsky constant for LES
+ extern const T vtkSave;  ///< Interval for writing VTK output (in physical seconds)
+ extern const T maxPhysT; ///< Maximum physical time for simulation (seconds)
 
-    std::string filename_v = dir + "/v_" + std::to_string(idx) + ".dat";
-    std::ofstream outputFile_v(filename_v);
-    if (!outputFile_v) {
-      std::cerr << "Error opening the file: " << filename_v << std::endl;
-      return;
-    }
-    outputFile_v << std::setprecision(20);
-    for (int i = 0; i < nx; ++i) {
-      for (int j = 0; j < ny; ++j) {
-        outputFile_v << v[i][j] << "\t";
-      }
-      outputFile_v << "\n";
-    }
 
-    outputFile_v.close();
+ /**
+  * @brief Base TGV solution in 2D:
+  *        u_x = -u0 cos(x) sin(y)
+  *        u_y =  u0 sin(x) cos(y)
+  *
+  * Currently not used in the code, but kept for reference.
+  *
+  * @tparam T           Floating-point type
+  * @tparam _DESCRIPTOR Lattice descriptor
+  */
+ template <typename T, typename _DESCRIPTOR>
+ class Tgv2D : public AnalyticalF2D<T,T> {
+ protected:
+   T u0; ///< Characteristic velocity
 
+ public:
+   Tgv2D(UnitConverter<T,_DESCRIPTOR> const& converter, T /*unusedFrac*/)
+     : AnalyticalF2D<T,T>(2),
+       u0(converter.getCharLatticeVelocity())
+   {}
+
+   bool operator()(T output[], const T input[]) override {
+     const T x = input[0];
+     const T y = input[1];
+
+     output[0] = -u0 * util::cos(x) * util::sin(y);
+     output[1] =  u0 * util::sin(x) * util::cos(y);
+     return true;
+   }
+ };
+
+ /**
+  * @brief TGV solution in 2D with user-defined perturbations:
+  *        Perturbation = \sum_i deltas[i] * [sin/cos(2x) * sin/cos(2y)]
+  *
+  * @tparam T           Floating-point type
+  * @tparam _DESCRIPTOR Lattice descriptor
+  */
+ template <typename T, typename _DESCRIPTOR>
+ class Tgv2D4U : public AnalyticalF2D<T,T> {
+ protected:
+   T u0;                         ///< Characteristic velocity
+   std::vector<T> deltas_;  ///< Perturbation parameters
+
+ public:
+   Tgv2D4U(UnitConverter<T,_DESCRIPTOR> const& converter,
+           const std::vector<T>& deltas)
+     : AnalyticalF2D<T,T>(2),
+       u0(converter.getCharLatticeVelocity()),
+       deltas_(deltas)
+   {}
+
+   bool operator()(T output[], const T input[]) override {
+     const T x = input[0];
+     const T y = input[1];
+
+     T u_perturbation = 0.0;
+     u_perturbation += deltas_[0] * util::sin(2*x) * util::sin(2*y);
+     u_perturbation += deltas_[1] * util::sin(2*x) * util::cos(2*y);
+     u_perturbation += deltas_[2] * util::cos(2*x) * util::sin(2*y);
+     u_perturbation += deltas_[3] * util::cos(2*x) * util::cos(2*y);
+
+    const T factor = 1.0 + 0.25 * u_perturbation;
+    // const T factor = 0.25 * u_perturbation;
+     output[0] =  u0 * factor * util::sin(x) * util::cos(y);
+     output[1] = -u0 * factor * util::cos(x) * util::sin(y);
+     return true;
+   }
+ };
+
+
+ /**
+  * @brief Prepare the geometry by assigning material indicators and cleaning up boundaries.
+  */
+  void prepareGeometry(const UnitConverter<T,DESCRIPTOR>& converter,
+    SuperGeometry<T,2>& superGeometry) {
+    OstreamManager clout(std::cout,"prepareGeometry");
+    clout << "Prepare Geometry ..." << std::endl;
+
+    // Assign material 1 to all cells
+    superGeometry.rename(0, 1);
+    superGeometry.communicate();
+
+    // Remove unnecessary boundary voxels
+    superGeometry.clean();
+    superGeometry.innerClean();
+
+    // Check for geometry errors
+    superGeometry.checkForErrors();
+    //  superGeometry.getStatistics().print();
+
+    clout << "Prepare Geometry ... OK" << std::endl;
   }
 
-void prepareGeometry( UnitConverter<T,DESCRIPTOR> const& converter,
-                      SuperGeometry<T,2>& superGeometry )
-{
-  OstreamManager clout( std::cout,"prepareGeometry" );
-  clout << "Prepare Geometry ..." << std::endl;
-
-  superGeometry.rename( 0,1 );
-  superGeometry.communicate();
-
-  // Removes all not needed boundary voxels outside the surface
-  superGeometry.clean();
-  // Removes all not needed boundary voxels inside the surface
-  superGeometry.innerClean();
-  superGeometry.checkForErrors();
-  superGeometry.getStatistics().print();
-  clout << "Prepare Geometry ... OK" << std::endl;
-}
-
-void prepareLattice( UnitConverter<T,DESCRIPTOR> const& converter,
+ /**
+  * @brief Define the bulk and boundary dynamics on the lattice.
+  */
+ void prepareLattice(const UnitConverter<T,DESCRIPTOR>& converter,
                      SuperLattice<T, DESCRIPTOR>& sLattice,
-                     SuperGeometry<T,2>& superGeometry )
-{
+                     SuperGeometry<T,2>& superGeometry) {
+   OstreamManager clout(std::cout,"prepareLattice");
+   clout << "Prepare Lattice ..." << std::endl;
 
-  OstreamManager clout( std::cout,"prepareLattice" );
-  clout << "Prepare Lattice ..." << std::endl;
+   // Relaxation frequency in lattice units
+   const T omega = converter.getLatticeRelaxationFrequency();
 
-  const T omega = converter.getLatticeRelaxationFrequency();
+   // Material=0 -> No Dynamics
+   sLattice.defineDynamics<NoDynamics<T,DESCRIPTOR>>(superGeometry, 0);
 
-  // Material=0 -->do nothing
-  sLattice.defineDynamics<NoDynamics<T,DESCRIPTOR>>(superGeometry, 0);
+   // Material=1 -> Bulk Dynamics (DNS or Smagorinsky)
+   sLattice.defineDynamics<BulkDynamics>(superGeometry, 1);
 
-  // Material=1 -->bulk dynamics
-  sLattice.defineDynamics<BulkDynamics>(superGeometry, 1);
+   // Set BGK relaxation parameter
+   sLattice.setParameter<descriptors::OMEGA>(omega);
 
-  sLattice.setParameter<descriptors::OMEGA>(omega);
+   #ifdef _SMAGORINSKY
+   // Set Smagorinsky constant (used in SmagorinskyBGKdynamics)
+   sLattice.setParameter<collision::LES::SMAGORINSKY>(smagoConst);
+   #endif
 
-  #ifdef SMAGORINSKY
-    sLattice.setParameter<collision::LES::Smagorinsky>(smagoConst);// Smagorisky Constant, for ConsistentStrainSmagorinsky smagoConst = 0.033
-  #endif
+   clout << "Prepare Lattice ... OK" << std::endl;
+ }
 
-  clout << "Prepare Lattice ... OK" << std::endl;
+ /**
+  * @brief Sets the initial density and velocity fields within the domain.
+  *        Uses Tgv2D4U for velocity with random perturbations.
+  */
+ void setBoundaryValues( const UnitConverter<T,DESCRIPTOR>& converter,
+                         SuperLattice<T, DESCRIPTOR>& sLattice,
+                         SuperGeometry<T,2>& superGeometry,
+                         const std::vector<double>& random) {
+   OstreamManager clout(std::cout,"setBoundaryValues");
+
+   // Constant density initialization
+   AnalyticalConst2D<T,T> rhoF(1.0);
+
+   // TGV velocity solution with perturbations
+   Tgv2D4U<T,DESCRIPTOR> uSol(converter, random);
+
+   // Set initial equilibrium in the bulk (material=1)
+   auto bulkIndicator = superGeometry.getMaterialIndicator({1});
+   sLattice.iniEquilibrium(bulkIndicator, rhoF, uSol);
+   sLattice.defineRhoU(bulkIndicator, rhoF, uSol);
+
+   // Prepare the lattice for simulation
+   sLattice.initialize();
+ }
+
+ /**
+  * @brief Periodically writes simulation results (velocity, pressure) to VTK.
+  *        Collects iteration indices in a vector.
+  */
+ void getResults( SuperLattice<T, DESCRIPTOR>& sLattice,
+                  const UnitConverter<T,DESCRIPTOR>& converter,
+                  std::size_t iT,
+                  util::Timer<double>& timer,
+                  std::vector<int>& iTList) {
+   OstreamManager clout(std::cout,"getResults");
+
+   // Set up a VTM writer for 2D data
+   SuperVTMwriter2D<T> vtmWriter("tgv2d", 1, false);
+
+   // Write geometry and rank data on the first iteration
+   if (iT == 0) {
+     SuperLatticeCuboid2D<T, DESCRIPTOR> cuboid(sLattice);
+     SuperLatticeRank2D<T, DESCRIPTOR>   rank(sLattice);
+     vtmWriter.write(cuboid);
+     vtmWriter.write(rank);
+     vtmWriter.createMasterFile();
+   }
+
+   // Write data every 'vtkSave' physical seconds
+   if (iT % converter.getLatticeTime(vtkSave) == 0) {
+     sLattice.setProcessingContext(ProcessingContext::Evaluation);
+
+     // Add velocity, pressure functors
+     SuperLatticePhysVelocity2D<T, DESCRIPTOR> velocity(sLattice, converter);
+     SuperLatticePhysPressure2D<T, DESCRIPTOR> pressure(sLattice, converter);
+     vtmWriter.addFunctor(velocity);
+     vtmWriter.addFunctor(pressure);
+     vtmWriter.write(iT);
+
+     // Update timer and log to console
+     timer.update(iT);
+     timer.printStep(2);
+     sLattice.getStatistics().print(iT, converter.getPhysTime(iT));
+
+     // Only the main MPI rank logs iteration steps
+     int rank = 0;
+     #ifdef PARALLEL_MODE_MPI
+       rank = singleton::mpi().getRank();
+     #endif
+     if (rank == 0) {
+       iTList.push_back(static_cast<int>(iT));
+     }
+   }
+ }
+
+
+ void save_velocity_field(int nx, int ny, std::vector<std::vector<T>> u, std::vector<std::vector<T>> v, int iter) {
+  std::string filename_u = singleton::directories().getLogOutDir() + "/u_" + std::to_string(iter) + ".dat";
+  std::ofstream outputFile_u(filename_u);
+  if (!outputFile_u) {
+    std::cerr << "Error opening the file: " << filename_u << std::endl;
+    return;
+  }
+  outputFile_u << std::fixed << std::setprecision(15);
+  for (int i = 0; i < nx; ++i) {
+    for (int j = 0; j < ny; ++j) {
+      outputFile_u << u[i][j] << "\t";
+    }
+    outputFile_u << "\n";
+  }
+  outputFile_u.close();
+
+  std::string filename_v = singleton::directories().getLogOutDir() + "/v_" + std::to_string(iter) + ".dat";
+  std::ofstream outputFile_v(filename_v);
+  if (!outputFile_v) {
+    std::cerr << "Error opening the file: " << filename_v << std::endl;
+    return;
+  }
+  outputFile_v << std::fixed << std::setprecision(15);
+  for (int i = 0; i < nx; ++i) {
+    for (int j = 0; j < ny; ++j) {
+      outputFile_v << v[i][j] << "\t";
+    }
+    outputFile_v << "\n";
+  }
+
+  outputFile_v.close();
+
 }
-
-void setBoundaryValues( UnitConverter<T,DESCRIPTOR> const& converter,
-                        SuperLattice<T, DESCRIPTOR>& sLattice, SuperGeometry<T,2>& superGeometry )
-{
-
-  OstreamManager clout(std::cout,"setBoundaryValues");
-  AnalyticalConst2D<T,T> rhoF( 1 );
-  Tgv2D<T,DESCRIPTOR> uSol(converter);
-
-  auto bulkIndicator = superGeometry.getMaterialIndicator({1});
-  sLattice.iniEquilibrium( bulkIndicator, rhoF, uSol );
-  sLattice.defineRhoU( bulkIndicator, rhoF, uSol );
-
-  // Make the lattice ready for simulation
-  sLattice.initialize();
-}
-
 
 void saveResults(SuperLattice<T, DESCRIPTOR>& sLattice,
                   UnitConverter<T,DESCRIPTOR> const& converter,
                   SuperGeometry<T,2>& superGeometry,
-                  std::string dir,
                   int resolution,
                   int idx,
-                  int iT, T td ) {
+                  int iT ) {
 
   OstreamManager clout( std::cout,"output" );
-  const int UQIter = td * 0.1;
+  const int UQIter = converter.getLatticeTime( maxPhysT * 0.2 );
 
   if (iT % UQIter == 0) {
-    std::vector<std::vector<double>> u(resolution, std::vector<double>(resolution));
-    std::vector<std::vector<double>> v(resolution, std::vector<double>(resolution));
+    std::vector<std::vector<T>> u(resolution, std::vector<T>(resolution));
+    std::vector<std::vector<T>> v(resolution, std::vector<T>(resolution));
 
     SuperLatticePhysVelocity2D<T, DESCRIPTOR> velocityField( sLattice, converter );
     AnalyticalFfromSuperF2D<T> intpolateVelocity( velocityField, true, 1 );
-    // SuperLatticeGeometry2D<T, DESCRIPTOR> geometry( sLattice, superGeometry );
 
     T dx = converter.getPhysDeltaX();
-    // clout << "resolution: " << resolution << std::endl;
 
     for (int i = 0; i < resolution; ++i) {
       for (int j = 0; j < resolution; ++j) {
@@ -177,151 +318,112 @@ void saveResults(SuperLattice<T, DESCRIPTOR>& sLattice,
         v[i][j] = velocity[1];
       }
     }
-    std::string outputDir = dir + "dataFiles/" + std::to_string(iT / UQIter);
 
-    save_velocity_field( outputDir, resolution, resolution, u, v, idx);
-    clout << "saved " << iT / UQIter << "\ttime step: " << iT << std::endl;
+    save_velocity_field( resolution, resolution, u, v, iT / UQIter);
+    clout << "saved " << iT / UQIter << "\tphysT: " << converter.getPhysTime(iT) << std::endl;
   }
 
 }
 
-// Computes the pressure drop between the voxels before and after the cylinder
-void getResults( SuperLattice<T, DESCRIPTOR>& sLattice,
-                 UnitConverter<T, DESCRIPTOR> const& converter, std::size_t iT,
-                 SuperGeometry<T,2>& superGeometry, util::Timer<T>& timer, T td )
-{
-  OstreamManager clout( std::cout,"getResults" );
 
-  SuperVTMwriter2D<T> vtmWriter("tgv2d", 1, false );
+ /**
+ * @brief Main function for running the Taylor–Green Vortex (TGV) simulation
+ *        with optional perturbations in the velocity field.
+ *
+ * @param physViscosity  Physical viscosity in m^2/s
+ * @param dx             Lattice spacing
+ * @param dt             Lattice time step
+ * @param random         Vector of perturbation parameters
+ * @param idx            Sample index for labeling/logging
+ */
+ void simulateTGV( T physViscosity,
+                   T dx,
+                   T dt,
+                   const std::vector<T>& random,
+                   bool exportResults,
+                   int idx) {
+   OstreamManager clout(std::cout,"simulateTGV");
+   clout << "Start sample " << idx << std::endl;
 
-  if (iT == 0) {
-    // Writes the geometry, cuboid no. and rank no. as vti file for visualization
-    SuperLatticeCuboid2D<T, DESCRIPTOR> cuboid(sLattice);
-    SuperLatticeRank2D<T, DESCRIPTOR> rank(sLattice);
+   // Create a UnitConverter based on given parameters
+   UnitConverter<T,DESCRIPTOR> converter(
+           dx,
+           dt,
+     (T)   1.0,                // charPhysLength
+     (T)   1.0,                // charPhysVelocity
+     (T)   physViscosity,
+     (T)   1.0                 // physDensity
+   );
 
-    vtmWriter.write(cuboid);
-    vtmWriter.write(rank);
-    vtmWriter.createMasterFile();
-  }
-  // if (iT % converter.getLatticeTime(vtkSave) == 0) {
-  int step = 0.1 * td;
-  if (iT % step == 0) {
-    sLattice.setProcessingContext(ProcessingContext::Evaluation);
+   // Print converter info on screen and save to file
+   converter.print();
+   converter.write("tgv2d");
 
-    SuperLatticePhysVelocity2D<T, DESCRIPTOR> velocity(sLattice, converter);
-    SuperLatticePhysPressure2D<T, DESCRIPTOR> pressure(sLattice, converter);
-    vtmWriter.addFunctor( velocity );
-    vtmWriter.addFunctor( pressure );
-    vtmWriter.write(iT);
+ #ifdef PARALLEL_MODE_MPI
+   const int noOfCuboids = singleton::mpi().getSize();
+ #else
+   const int noOfCuboids = 4;
+ #endif
 
-    timer.update(iT);
-    timer.printStep(2);
-    sLattice.getStatistics().print(iT,converter.getPhysTime( iT ));
+   // Define the 2D domain from (0,0) to (2π,2π)
+   Vector<T,2> extend(2 * M_PI, 2 * M_PI);
+   Vector<T,2> origin;
+   IndicatorCuboid2D<T> cuboid(extend, origin);
 
-    // int rank = 0;
-    // #ifdef PARALLEL_MODE_MPI
-    //   rank = singleton::mpi().getRank();
-    // #endif
-    // Only rank 0 writes to the file
-    // if (rank == 0) {
-    //   iTList.push_back(iT);
-    // }
-  }
-}
+   // Decompose the domain and set periodic boundaries in x, y
+   CuboidDecomposition2D<T> cuboidDecomposition(cuboid, dx, noOfCuboids);
+   cuboidDecomposition.setPeriodicity({true, true});
 
-// void simulateTGV(double Re, std::vector<double> random, double L, double Ma, int N, std::string foldPath, int idx, std::vector<std::vector<double>>&u, std::vector<std::vector<double>>&v)
-void simulateTGV(double Re, double charL, double tau, int N, std::string foldPath, int idx)
-{
+   // Build a super geometry with load balancing
+   HeuristicLoadBalancer<T> loadBalancer(cuboidDecomposition);
+   SuperGeometry<T,2> superGeometry(cuboidDecomposition, loadBalancer);
 
-  // === 1st Step: Initialization ===
-  //initialize( &argc, &argv );
-  OstreamManager clout( std::cout,"main" );
-  clout << "start sample " << idx << std::endl;
+   // Prepare geometry and lattice data structures
+   prepareGeometry(converter, superGeometry);
+   SuperLattice<T, DESCRIPTOR> sLattice(superGeometry);
+   prepareLattice(converter, sLattice, superGeometry);
 
-  // UnitConverter<T,DESCRIPTOR> converter(
-  //   (T)   charL / N,
-  //   (T)   charL / N * Ma / std::sqrt(3.0),
-  //   (T)   charL,                            // charPhysLength:
-  //   (T)   0.01,  // charPhysVelocity: in __m / s__
-  //   (T)   0.01 * charL / Re,                    // physViscosity: in __m^2 / s__
-  //   (T)   1.0                           // physDensity:  in __kg / m^3__
-  // );
-  double mu = 0.01 * charL / Re;
-    UnitConverterFromResolutionAndRelaxationTime<T, DESCRIPTOR> const converter(
-      int {N},                        // resolution: number of voxels per charPhysL
-      (T)   tau,                     // latticeRelaxationTime: relaxation time, have to be greater than 0.5!
-      (T)   charL,       // charPhysLength: reference length of simulation geometry
-      (T)   0.01,                      // charPhysVelocity: maximal/highest expected velocity during simulation in __m / s__
-      (T)   mu, // physViscosity: physical kinematic viscosity in __m^2 / s__
-      (T)   1.0                       // physDensity: physical density in __kg / m^3__
-    );
+   // Create timer for performance measurements
+   util::Timer<T> timer(
+     converter.getLatticeTime(maxPhysT),
+     superGeometry.getStatistics().getNvoxel()
+   );
 
-  //clout << u1 << "\t" << miu << std::endl;
+   // Optional convergence check
+   int interval = converter.getLatticeTime(1);
+   T epsilon = static_cast<T>(1e-3);
+   util::ValueTracer<T> converge(interval, epsilon);
 
-  // Prints the converter log as console output
-  // converter.print();
-  // Writes the converter log in a file
-  converter.write("tgv2d");
+   // Set initial fields (rho, velocity)
+   setBoundaryValues(converter, sLattice, superGeometry, random);
 
-  // === 2nd Step: Prepare Geometry ===
-  #ifdef PARALLEL_MODE_MPI
-  const int noOfCuboids = singleton::mpi().getSize();
-#else
-  const int noOfCuboids = 1;
-#endif
-  Vector<T,2> extend( charL,charL );
-  Vector<T,2> origin( 0,0 );
-  IndicatorCuboid2D<T> cuboid( extend, origin );
+   timer.start();
+   std::size_t iT = 0;
+   std::vector<int> iTList;
 
-  CuboidDecomposition2D<T> cuboidDecomposition( cuboid, converter.getPhysDeltaX(), noOfCuboids );
-  cuboidDecomposition.setPeriodicity({true, true});
+   // Main time loop
+   while (iT <= converter.getLatticeTime(maxPhysT)) {
+     sLattice.collideAndStream();                  // Collide & stream
+     if (exportResults) {
+      getResults(sLattice, converter, iT, timer, iTList); // Output results
+     }
+     saveResults( sLattice, converter, superGeometry, (converter.getReynoldsNumber() / 40)+1, idx, iT );
+     ++iT;
+   }
 
-  cuboidDecomposition.print();
+   // Write iteration indices to a file (only on the main processor)
+   if (singleton::mpi().isMainProcessor()) {
+     std::ofstream outFile(singleton::directories().getLogOutDir() + "iteration_log.txt");
+     if (outFile.is_open()) {
+       for (auto step : iTList) {
+         outFile << step << "\n";
+       }
+       outFile.close();
+     } else {
+       clout << "Error: Unable to open iteration_log.txt for writing!" << std::endl;
+     }
+   }
 
-  HeuristicLoadBalancer<T> loadBalancer( cuboidDecomposition );
-  SuperGeometry<T,2> superGeometry( cuboidDecomposition, loadBalancer );
-  prepareGeometry( converter, superGeometry );
-
-  // === 3rd Step: Prepare Lattice ===
-
-  SuperLattice<T, DESCRIPTOR> sLattice( superGeometry );
-
-  prepareLattice( converter, sLattice, superGeometry );
-
-  // === 4th Step: Main Loop with Timer ===
-
-  util::Timer<T> timer( converter.getLatticeTime( maxPhysT ), superGeometry.getStatistics().getNvoxel() );
-
-  int interval = converter.getLatticeTime( 1 /*config["Application"]["ConvergenceCheck"]["interval"].get<T>()*/ );
-  T epsilon = 1e-3;
-  util::ValueTracer<T> converge( interval, epsilon );
-  setBoundaryValues( converter, sLattice, superGeometry );
-  timer.start();
-  std::size_t iT=0;
-
-  T td = 1.0 / (( 0.01 * charL / Re ) * (2 * converter.getPhysDeltaX() * converter.getPhysDeltaX()));
-  clout << "td: " << td << std::endl;
-  //T td = 6388;
-  // while(iT <= converter.getLatticeTime( maxPhysT ))
-  for ( iT = 0; iT <= 0.5 * td; ++iT )
-  {
-    if ( idx == 0 ) {
-      getResults( sLattice, converter, iT, superGeometry, timer, td);
-      // clout << "saved " << iT << std::endl;
-    }
-    // === 6th Step: Collide and Stream Execution ===
-    sLattice.collideAndStream();
-    // === 7th Step: Computation and Output of the Results ===
-    //getResults( sLattice, *converter, iT, timer, logT, maxPhysT, imSave, vtkSave, filenameGif, filenameVtk,
-    //            timerPrintMode, timerTimeSteps, superGeometry, converge.hasConverged() );
-    //converge.takeValue( sLattice.getStatistics().getAverageEnergy(), true );
-    // saveResults( sLattice, converter, superGeometry, N, idx, iT );
-    saveResults( sLattice, converter, superGeometry, foldPath, N, idx, iT, td );
-
-    // iT++;
-  }
-  timer.stop();
-  timer.printSummary();
-  // delete &converter;
-  // delete &timer;
-}
+   timer.stop();
+   timer.printSummary();
+ }

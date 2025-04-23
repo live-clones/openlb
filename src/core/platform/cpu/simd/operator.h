@@ -197,6 +197,19 @@ public:
     }
   }
 
+  /// Set compoents of FIELD from pack-valued vector
+  template <typename FIELD>
+  void setField(const FieldD<V,DESCRIPTOR,FIELD>& value) {
+    if constexpr (rw_fields::template contains<FIELD>()) {
+      std::get<(rw_fields::template index<FIELD>())>(_fields) = value;
+    } else {
+      auto& array = _lattice.template getField<FIELD>();
+      for (unsigned iD=0; iD < DESCRIPTOR::template size<FIELD>(); ++iD) {
+        cpu::simd::maskstore(&array[iD][_iCell], _mask, value[iD]);
+      }
+    }
+  }
+
   /// Return reference to pack-valued interim storage vector of r/w field
   template <typename FIELD>
   std::enable_if_t<rw_fields::template contains<FIELD>(), FieldD<V,DESCRIPTOR,FIELD>&>

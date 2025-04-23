@@ -60,6 +60,7 @@ struct Guo {
     CellStatistic<V> apply(CELL& cell, PARAMETERS& parameters) any_platform {
       V rho, u[DESCRIPTOR::d];
       MomentaF().computeRhoU(cell, rho, u);
+      //cell.template setField<descriptors::VELOCITY>(u);
       CollisionO().apply(cell, parameters);
       const V omega = parameters.template get<descriptors::OMEGA>();
       const auto force = cell.template getField<descriptors::FORCE>();

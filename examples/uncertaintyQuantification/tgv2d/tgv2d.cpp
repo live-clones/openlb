@@ -1,374 +1,194 @@
+/*  Lattice Boltzmann sample, written in C++, using the OpenLB
+ *  library
+ *
+ *  Copyright (C) 2025 Mingliang Zhong, Stephan Simonis
+ *  E-mail contact: info@openlb.net
+ *  The most recent release of OpenLB can be downloaded at
+ *  <http://www.openlb.net/>
+ *
+ *  This program is free software; you can redistribute it and/or
+ *  modify it under the terms of the GNU General Public License
+ *  as published by the Free Software Foundation; either version 2
+ *  of the License, or (at your option) any later version.
+ *
+ *  This program is distributed in the hope that it will be useful,
+ *  but WITHOUT ANY WARRANTY; without even the implied warranty of
+ *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ *  GNU General Public License for more details.
+ *
+ *  You should have received a copy of the GNU General Public
+ *  License along with this program; if not, write to the Free
+ *  Software Foundation, Inc., 51 Franklin Street, Fifth Floor,
+ *  Boston, MA  02110-1301, USA.
+ */
+
+/* tgv2d.cpp:
+ * This example simulates the 2D Taylor-Green vortex problem, where flow
+ * parameters (such as the Reynolds number) are uncertain. Monte Carlo sampling
+ * and the stochastic collocation method are used to analyze how these uncertainties
+ * influence the vortex evolution.
+ *
+ * Some note about the usage method, order, nq
+ */
+
 #include "tgv2d.h"
 #include <time.h>
-#include "../uq/uq.h"
-#include "../uq/postprocessing2D.h"
 
-#define SC
-// #define MC
+// Define one method of sampling (uncomment if needed):
+#define MonteCarloSampling
+// #define stochasticCollocationMethod
 
-using namespace std;
+/**
+ * @brief UQ (Uncertainty Quantification) parameter setup:
+ *
+ * 1) Monte Carlo Sampling (Uncomment #define MonteCarloSampling):
+ *    - Uses random draws (nq samples) from the specified distributions.
+ *    - The number of samples nq can be set as an integer. Increasing nq yields
+ *      more statistically robust results at higher computational cost.
+ *    - Convergence Rate:
+ *      - The Monte Carlo error typically decreases on the order of 1/sqrt(nq).
+ *      - Consequently, to gain one extra digit of accuracy, the sample size nq must
+ *        increase by about a factor of 100.
+ *    - Example code block:
+ *         int nq = resolution / 3.0;
+ *         unsigned int seed = 123456; // fixed seed for reproducibility
+ *         uq.initializeMonteCarlo(nq, jointPerturb, seed);
+ *
+ * 2) Stochastic Collocation (Default, #define stochasticCollocationMethod):
+ *    - Implements generalized polynomial chaos (GPC).
+ *    - Configure the polynomial expansion order (orderGPC) and the number
+ *      of quadrature points per dimension (nqPerDim).
+ *    - The total number of samples is (nqPerDim)^(number_of_dimensions).
+ *    - Convergence Rate:
+ *      - For smooth problems, polynomial-based methods like GPC can achieve
+ *        exponential (spectral) convergence as the polynomial order is increased.
+ *      - However, increasing orderGPC or nqPerDim grows the number of simulations
+ *        rapidly, especially in high-dimensional parameter spaces.
+ *    - Example code block:
+ *         int orderGPC = 2;  // polynomial chaos order
+ *         int nqPerDim = 3;  // quadrature points per dimension
+ *         uq.initializeGPC(orderGPC, nqPerDim, jointPerturb);
+ *
+ * Adjust these parameters according to the desired accuracy and computational
+ * resources. Higher order or more samples generally capture broader variations
+ * but increase runtime.
+ */
 
-std::vector<std::vector<double>> loadMatrix(const std::string &filename)
-{
-    std::ifstream inFile(filename);
-    if (!inFile) {
-        throw std::runtime_error("Error: could not open file " + filename);
-    }
-
-    std::vector<std::vector<double>> data;
-    std::string line;
-
-    while (std::getline(inFile, line)) {
-        // Optionally skip empty lines
-        if (line.empty()) {
-            continue;
-        }
-
-        std::istringstream iss(line);
-        double val;
-        std::vector<double> row;
-
-        // Read the values in this line
-        while (iss >> val) {
-            row.push_back(val);
-        }
-
-        if (!row.empty()) {
-            data.push_back(row);
-        }
-    }
-
-    return data;
-}
-
-
-void totalKineticEnergy(std::vector<double>&tke, int t, double u0, double dx, vector<vector<vector<T>>> u, vector<vector<vector<T>>> v, std::unique_ptr<GeneralizedPolynomialChaos>& op)
-{
-  OstreamManager clout( std::cout,"output" );
-  size_t No = op->getPolynomialsOrder();
-  std::vector<T> u2(No, 0.0);
-  std::vector<T> v2(No, 0.0);
-  int nx = u.size();
-  int ny = u.size();
-
-  for (int i = 0; i < nx; ++i){
-    for (int j = 0; j < ny; ++j){
-      op->chaosProduct(u[i][j], u[i][j], u2);
-      op->chaosProduct(v[i][j], v[i][j], v2);
-
-      for (int alpha = 0; alpha < No; ++alpha) {
-        tke[alpha] += ((u2[alpha] + v2[alpha]) *  2 / (nx*ny*u0*u0));
-      }
-    }
+/**
+  * @brief Helper function to create a directory (with '-p' for recursive creation).
+  *        Logs a warning if directory creation fails.
+  *
+  * @param directory Path of the directory to create.
+  * @param clout     Output stream for logging.
+  */
+void createDirectory(const std::string& directory, OstreamManager& clout) {
+  std::string command = "mkdir -p " + directory;
+  int result = std::system(command.c_str());
+  if (result != 0) {
+    clout << "Warning: Failed to create directory " << directory
+          << " (return code = " << result << ")" << std::endl;
+  } else {
+    clout << "Directory created (or already exists): " << directory << std::endl;
   }
 }
 
-std::vector<T> MonteCarloPostprocessing(string foldPath, int nq, int resolution, double physVelocity, double dx, UncertaintyQuantification& uq) {
-    OstreamManager clout( std::cout,"main" );
-    clout << "Starting Monte Carlo postprocessing" << endl;
-    std::vector<T> tke(nq, 0.0);
-    std::vector<std::vector<T>> u_mean(resolution, std::vector<T>(resolution, 0.0));
-    std::vector<std::vector<T>> v_mean(resolution, std::vector<T>(resolution, 0.0));
-    std::vector<std::vector<T>> u_var(resolution, std::vector<T>(resolution, 0.0));
-    std::vector<std::vector<T>> v_var(resolution, std::vector<T>(resolution, 0.0));
-    std::vector<std::vector<T>> u_mean_old(resolution, std::vector<T>(resolution, 0.0));
-    std::vector<std::vector<T>> v_mean_old(resolution, std::vector<T>(resolution, 0.0));
-    std::vector<std::vector<T>> u_var_old(resolution, std::vector<T>(resolution, 0.0));
-    std::vector<std::vector<T>> v_var_old(resolution, std::vector<T>(resolution, 0.0));
-
-    for (int i = 0; i < nq; ++i) {
-      string file_u = foldPath + "dataFiles/5/u_" + std::to_string(i) + ".dat";
-      string file_v = foldPath + "dataFiles/5/v_" + std::to_string(i) + ".dat";
-
-      std::vector<std::vector<T>> u = loadMatrix(file_u);
-      std::vector<std::vector<T>> v = loadMatrix(file_v);
-
-
-      for (int ii = 0; ii < resolution; ++ii) {
-        for (int jj = 0; jj < resolution; ++jj) {
-          tke[i] += ((u[ii][jj] * u[ii][jj] + v[ii][jj] * v[ii][jj]) * 0.5 / ( resolution * resolution * physVelocity * physVelocity ));
-
-          u_mean_old[ii][jj] = u_mean[ii][jj];
-          u_mean[ii][jj] = u_mean_old[ii][jj] + (u[ii][jj] - u_mean_old[ii][jj])/(i+1);
-          u_var_old[ii][jj] = u_var[ii][jj];
-          u_var[ii][jj] = u_var_old[ii][jj] + (u[ii][jj] - u_mean_old[ii][jj])*(u[ii][jj] - u_mean[ii][jj]);
-
-          v_mean_old[ii][jj] = v_mean[ii][jj];
-          v_mean[ii][jj] = v_mean_old[ii][jj] + (v[ii][jj] - v_mean_old[ii][jj])/(i+1);
-          v_var_old[ii][jj] = v_var[ii][jj];
-          v_var[ii][jj] = v_var_old[ii][jj] + (v[ii][jj] - v_mean_old[ii][jj]) * (v[ii][jj] - v_mean[ii][jj]);
-        }
-      }
-    }
-
-    clout << std::fixed << std::setprecision(20);
-    clout << "Total kinetic energy: mean = " << uq.mean(tke) << ", std = " << uq.std(tke) << endl;
-
-    std::string filenameUAll = "uq/dataFiles/5/final/tgv2dMc.dat";
-    std::ofstream outputFileUAll(filenameUAll);
-
-    if (!outputFileUAll) {
-      std::cerr << "Error opening the file: " << filenameUAll << std::endl;
-    }
-
-    outputFileUAll << "TITLE = \"TGV2D\"\n";
-    outputFileUAll << "VARIABLES = \"X\", \"Y\", \"umean\", \"ustd\", \"vmean\", \"vstd\" \n";
-    outputFileUAll << "ZONE T=\"Zone 1\", I=" << resolution << ", J=" << resolution << ", DATAPACKING=POINT\n";
-
-    for (int i = 0; i < resolution; ++i) {
-      for (int j = 0; j < resolution; ++j) {
-          outputFileUAll.precision(20);
-          outputFileUAll << i * dx << "\t" << j * dx << "\t" << u_mean[i][j] << "\t" << sqrt(u_var[i][j]) << "\t" << v_mean[i][j] << "\t" << sqrt(v_var[i][j]) << "\n";
-      }
-    }
-    outputFileUAll.close();
-
-    return tke;
-
-}
-
-std::vector<T> stochasticCollocationPostprocessing(string foldPath, int order, int nq, int resolution, double physVelocity, double dx, UncertaintyQuantification& uq) {
-    OstreamManager clout( std::cout,"main" );
-
-    std::vector<std::vector<std::vector<T>>> u(nq, std::vector<std::vector<T>>(resolution, std::vector<T>(resolution, 0.0)));
-    std::vector<std::vector<std::vector<T>>> v(nq, std::vector<std::vector<T>>(resolution, std::vector<T>(resolution, 0.0)));
-    std::vector<T> tke(order+1, 0.0);
-
-    for (int i = 0; i < nq; ++i) {
-      string file_u = foldPath + "dataFiles/5/u_" + std::to_string(i) + ".dat";
-      string file_v = foldPath + "dataFiles/5/v_" + std::to_string(i) + ".dat";
-      u[i] = loadMatrix(file_u);
-      v[i] = loadMatrix(file_v);
-    }
-    // clout << "Loaded velocity fields" << endl;
-
-    std::unique_ptr<GeneralizedPolynomialChaos> op = uq.getOps();
-
-    // clout << "No: " << op->getPolynomialsOrder() << ", nq: " << op->getQuadraturePointsNumber() << endl;
-
-    std::vector<std::vector<std::vector<T>>> uChaos(resolution, std::vector<std::vector<T>>(resolution, std::vector<T>(order+1, 0.0)));
-    std::vector<std::vector<std::vector<T>>> vChaos(resolution, std::vector<std::vector<T>>(resolution, std::vector<T>(order+1, 0.0)));
-
-    for (int i = 0; i < resolution; ++i) {
-      for (int j = 0; j < resolution; ++j) {
-        std::vector<T> utmp(nq, 0.0);
-        std::vector<T> vtmp(nq, 0.0);
-        for (int k = 0; k < nq; ++k) {
-          utmp[k] = u[k][i][j];
-          vtmp[k] = v[k][i][j];
-        }
-        op->randomToChaos(utmp, uChaos[i][j]);
-        op->randomToChaos(vtmp, vChaos[i][j]);
-      }
-    }
-    // clout << "Converted velocity fields to chaos" << endl;
-
-    std::vector<T> u2(order+1, 0.0);
-    std::vector<T> v2(order+1, 0.0);
-    for (int i = 0; i < resolution; ++i){
-      for (int j = 0; j < resolution; ++j){
-        op->chaosProduct(uChaos[i][j], uChaos[i][j], u2);
-        op->chaosProduct(vChaos[i][j], vChaos[i][j], v2);
-
-        for (int alpha = 0; alpha < order+1; ++alpha) {
-          tke[alpha] += ((u2[alpha] + v2[alpha]) * 0.5 / ( resolution * resolution * physVelocity * physVelocity ));
-        }
-      }
-    }
-
-    clout << std::fixed << std::setprecision(20);
-    clout << "Total kinetic energy: mean = " << op->mean(tke) << ", std = " << op->std(tke) << endl;
-
-    std::string filenameUAll = "uq/dataFiles/5/final/tgv2dSc.dat";
-    std::ofstream outputFileUAll(filenameUAll);
-
-    if (!outputFileUAll) {
-      std::cerr << "Error opening the file: " << filenameUAll << std::endl;
-    }
-
-    outputFileUAll << "TITLE = \"TGV2D\"\n";
-    outputFileUAll << "VARIABLES = \"X\", \"Y\", \"umean\", \"ustd\", \"vmean\", \"vstd\" \n";
-    outputFileUAll << "ZONE T=\"Zone 1\", I=" << resolution << ", J=" << resolution << ", DATAPACKING=POINT\n";
-
-    for (int i = 0; i < resolution; ++i) {
-      for (int j = 0; j < resolution; ++j) {
-        // std::vector<T> utmp(nq, 0.0);
-        // std::vector<T> vtmp(nq, 0.0);
-        // for (int n = 0; n < nq; ++n) {
-        //   utmp[n] = u[n][i][j];
-        //   vtmp[n] = v[n][i][j];
-        // }
-        // clout << endl;
-          outputFileUAll.precision(20);
-          // outputFileUAll << i * dx << "\t" << j * dx << "\t" << uq.mean(utmp) << "\t" << uq.std(utmp) << "\t" << uq.mean(vtmp) << "\t" << uq.std(vtmp) << "\n";
-          outputFileUAll << i * dx << "\t" << j * dx << "\t" << op->mean(uChaos[i][j]) << "\t" << op->std(uChaos[i][j]) << "\t" << op->mean(vChaos[i][j]) << "\t" << op->std(vChaos[i][j]) << "\n";
-      }
-    }
-    outputFileUAll.close();
-
-  return tke;
-}
-
-bool createDirectories(const std::string& foldPath) {
-    OstreamManager clout( std::cout,"main" );
-    std::string command;
-    int mkdirResult;
-
-    // Create the first directory
-    command = "mkdir -p " + foldPath;
-    mkdirResult = std::system(command.c_str());
-    if (mkdirResult != 0) {
-        clout << "Failed to create directory: " << foldPath << std::endl;
-        return false; // Early return on failure
-    }
-
-    for ( int i = 0; i <= 5; ++i ) {
-      std::string subFoldPath = foldPath + "/" + std::to_string(i);
-      command = "mkdir -p " + subFoldPath;
-      mkdirResult = std::system(command.c_str());
-      if (mkdirResult != 0) {
-          clout << "Failed to create directory: " << subFoldPath << std::endl;
-          return false; // Early return on failure
-      }
-
-      // Create the second directory
-      std::string foldPathFinal = subFoldPath + "/final";
-      clout << "foldPath: " << foldPath << std::endl;
-      command = "mkdir -p " + foldPathFinal;
-      mkdirResult = std::system(command.c_str());
-      if (mkdirResult != 0) {
-          clout << "Failed to create directory: " << foldPathFinal << std::endl;
-          return false; // Early return on failure
-      }
-    }
-
-    // If both directories are created successfully
-    clout << "Directories created successfully:" << std::endl;
-    clout << foldPath << std::endl;
-
-    return true;
-}
-
-void save_viscosity_list(std::string dir, std::vector<double> list) {
-  std::string filename = dir + "/viscosity_list.dat";
-  std::ofstream outputFile(filename);
-  if (!outputFile) {
-    std::cerr << "Error opening the file: " << filename << std::endl;
-    return;
-  }
-  for (int i = 0; i < list.size(); ++i) {
-    outputFile << list[i] << "\n";
-  }
-  outputFile.close();
-}
+const T maxPhysT   = 100.0; //Maximum physical time for simulation (seconds)
+const T vtkSave    = 1.0;   // Interval for writing VTK output (in physical seconds)
+const T smagoConst = 0.1;   // Smagorinsky constant for LES
 
 int main( int argc, char* argv[] )
 {
   // === 1st Step: Initialization ===
   initialize( &argc, &argv );
-  OstreamManager clout( std::cout,"main" );
+  OstreamManager clout(std::cout, "main");
 
-  string foldPath = "./uq/";
-  string command;
-  command = "mkdir -p " + foldPath;
-  int result = std::system(command.c_str());
-  if (result != 0) {
-      clout << "Command failed with return code: " << result << std::endl;
+  // === 2nd Lattice / Physics Parameters ===
+  int    resolution    = 64;
+  if (argc > 1) {
+    resolution = std::stoi(argv[1]);
   }
-  else {
-      clout << "finish mkdir" << std::endl;
+  T numVortices   = 2.0;
+  T L             = 1.0;
+  T Ma            = 1.6 / resolution;
+  T Re            = 40.0 * resolution;
+
+  bool   exportResults  = true;            // Whether to write VTI/VTM output
+
+  // Characteristic length in TGV (Taylor–Green Vortex) setup
+  T charL               = numVortices * M_PI * L;
+  T dx                  = charL / resolution;
+  T dt                  = dx * Ma / std::sqrt(3.0);
+  T physViscosity       = 1.0 / Re;
+
+  // === 3rd Uncertainty Quantification Setup ===
+  // Define uniform distributions over given parameter ranges.
+  auto perturb1 = uniform(-0.025, 0.025);
+  auto perturb2 = uniform(-0.025, 0.025);
+  auto perturb3 = uniform(-0.025, 0.025);
+  auto perturb4 = uniform(-0.025, 0.025);
+
+  // Combine these four separate uniform distributions into a single
+  // joint distribution representing a 4-dimensional parameter space.
+  auto jointPerturb = joint<T>({perturb1, perturb2, perturb3, perturb4});
+
+
+  // Create main folder to store results
+  std::string foldPath = "uq/res_" + std::to_string(resolution) + "/";
+  createDirectory(foldPath, clout);
+
+#ifdef MonteCarloSampling
+  int nq = resolution/3.0; // number of samples
+  UncertaintyQuantification<T> uq(UQMethod::MonteCarlo);
+  unsigned int seed = 123456; // fixed seed for reproducibility
+  uq.initializeMonteCarlo(nq, jointPerturb, seed);
+#elif defined(stochasticCollocationMethod)
+  UncertaintyQuantification<T> uq(UQMethod::GPC);
+  int orderGPC = 2;
+  int nqPerDim = 3; // jointPerturb is 4D, so nq overall will be nqPerDim^4
+  uq.initializeGPC(orderGPC, nqPerDim, jointPerturb);
+#endif
+
+  // Retrieve the actual sample points from the UQ object
+  auto samples = uq.getSamplingPoints();
+
+  // === 4th Geometry Setup ===
+  Vector<T,2> extend(charL, charL);
+  Vector<T,2> origin;
+  IndicatorCuboid2D<T> cuboid(extend, origin);
+
+#ifdef PARALLEL_MODE_MPI
+  const int noOfCuboids = singleton::mpi().getSize();
+#else
+  const int noOfCuboids = 4;
+#endif
+
+  CuboidDecomposition2D<T> cuboidDecomposition(cuboid, dx, noOfCuboids);
+  HeuristicLoadBalancer<T> loadBalancer(cuboidDecomposition);
+  SuperGeometry<T,2> superGeometry(cuboidDecomposition, loadBalancer);
+
+  clout << "Starting simulation over " << samples.size() << " samples." << std::endl;
+
+  // === 5th Loop over all samples and run simulations ===
+  for (std::size_t n = 0; n < samples.size(); ++n) {
+    if (exportResults) {
+    // Create subfolder for this sample
+      std::string subFoldPath = foldPath + std::to_string(n) + "/tmp/";
+      createDirectory(subFoldPath, clout);
+      // Redirect output to this sample's folder
+      singleton::directories().setOutputDir(subFoldPath);
+    }
+
+    // Run the TGV simulation for this particular sample
+    simulateTGV(physViscosity, dx, dt, samples[n], exportResults, n);
   }
 
+  // === 6. Post-processing: compute mean, std, and write VTI data ===
+  // The string "physVelocity" is a tag used inside the function, not the variable name.
 
-    // Parameters params;
-    // readParameters("./parameters.dat", params);
-    double num_vortice = 2;
-    double L = 1.0;
-    double resolution = 33;
-    double physVelocity = 0.01;
-    double charL = num_vortice * M_PI * L;
-    double Ma = 0.0125;
-    double Re = 15;
-
-    int order = 3;
-    int nq = 7;
-
-    // Parse command-line arguments
-    if (argc > 1) {
-      order = std::stoi(argv[1]);
-    }
-    if (argc > 2) {
-      nq = std::stoi(argv[2]);
-    }
-    if (argc > 2) {
-      resolution = std::stoi(argv[3]);
-    }
-
-    double dx = charL / resolution;
-    double dt = dx / (physVelocity / (Ma / std::sqrt(3)));
-    double conversionViscosity = dx * dx / dt;
-    double physViscosity = physVelocity * charL / Re;
-    double tau = physViscosity * 3 + 0.5;
-
-  #ifdef SC
-    std::vector<Distribution> distributions = { Distribution(DistributionType::Uniform, 0.8 * Re, 1.2 * Re) };
-    // // std::vector<Distribution> distributions = { Distribution(DistributionType::Normal, Re, 0.1 * Re) };
-    UncertaintyQuantification uq(UQMethod::GPC);
-    uq.initializeGPC(order, nq, distributions, Quadrature::QuadratureMethod::WilkinsonShiftQR );
-    foldPath += "sc/res" + std::to_string(static_cast<int>(resolution)) + "/";
-  #elif defined(MC)
-    UncertaintyQuantification uq(UQMethod::MonteCarlo);
-    unsigned int seed = 123456;
-    nq = 5000;
-    uq.initializeMonteCarlo(nq, 1, Distribution(DistributionType::Uniform, 0.8 * Re, 1.2 * Re), seed);
-    foldPath += "mc/res" + std::to_string(static_cast<int>(resolution)) + "/";
-  #endif
-
-  std::vector<std::vector<double>> samples;
-  uq.getSamplingPoints(samples);
-
-  if (createDirectories(foldPath + "dataFiles/")) {
-    clout << "Both directories were created successfully." << std::endl;
-  } else {
-    clout << "Error creating directories." << std::endl;
+  if (exportResults) {
+    computeMeanAndStdAndWriteVTI<T, DESCRIPTOR>(
+      uq, foldPath, "tgv2d", "physVelocity", cuboidDecomposition, superGeometry
+    );
   }
-
-    singleton::directories().setOutputDir( foldPath + "/tmp/" );
-
-
-    clout << "tau: " << tau << "; conversionViscosity: " << conversionViscosity <<std::endl;
-    // double tau = params.tau;
-
-
-    clock_t start,end;
-    start = clock();
-    clout << "Start simulation" << endl;
-
-  for(size_t n = 0; n < samples.size(); ++n) {
-    simulateTGV( samples[n][0], charL, tau, resolution, foldPath, n);
-  }
-
-    end = clock();
-    clout << "total CPI time used: " << (double)(end-start)/CLOCKS_PER_SEC << "s" << endl;
-
-    clout << "Finished simulation" << endl;
-
-  // for (int order = 1; order <= 8; ++order) {
-  //   #if defined(SC)
-  //     uq.initializeGPC(order, nq, distributions, Quadrature::QuadratureMethod::GSL );
-  //     std::vector<T> tke = stochasticCollocationPostprocessing(foldPath, order, nq, resolution, physVelocity, dx, uq);
-  //   #elif defined(MC)
-  //     std::vector<T> tke = MonteCarloPostprocessing(foldPath, nq, resolution, physVelocity, dx, uq);
-  //   #endif
-  // }
-  #ifdef SC
-    std::vector<T> tke = stochasticCollocationPostprocessing(foldPath, order, nq, resolution, physVelocity, dx, uq);
-  #elif defined(MC)
-    std::vector<int> nqList = {10, 100, 1000, 5000};
-    for (int nq : nqList) {
-        std::vector<T> tke = MonteCarloPostprocessing(foldPath, nq, resolution, physVelocity, dx, uq);
-    }
-  #endif
-
   return 0;
 }
