@@ -44,3 +44,4 @@
 #include "consoleWriter.h"
 #include "blockLatticeSTLreader.h"
 #include "plainWriter.h"
+#include "consoleToFileWriter.h"

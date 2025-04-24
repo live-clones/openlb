@@ -59,6 +59,7 @@
 #include "thermalCreepBouzidiCoupling.h"
 #include "multiphaseBGKdynamics.h"
 #include "kEpsilonRANSDynamics.h"
+#include "spongeLayerDynamics.h"
 
 #include "dynamics3D.hh"
 
