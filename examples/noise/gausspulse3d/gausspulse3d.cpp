@@ -38,19 +38,21 @@
 
 using namespace olb;
 using namespace olb::descriptors;
+
 using T = FLOATING_POINT_TYPE;
 using DESCRIPTOR = D3Q19<>;
 using BulkDynamics = BGKdynamics<T,DESCRIPTOR>;
 using SpongeDynamics = SpongeLayerDynamics<T,DESCRIPTOR,momenta::BulkTuple,equilibria::SecondOrder>;
+
 const int ndim = 3;  // a few things (e.g. SuperSum3D) cannot be adapted to 2D, but this should help speed it up
+
 typedef enum {eternal, periodic, local, damping} BoundaryType;
 
 // Stores geometry information in form of material numbers
 void prepareGeometry(UnitConverter<T,DESCRIPTOR> const& converter,
                      SuperGeometry<T,ndim>& superGeometry,
                      IndicatorF3D<T>& domainFluid,
-                     BoundaryType boundarytype
-                     )
+                     BoundaryType boundarytype)
 {
   OstreamManager clout( std::cout,"prepareGeometry" );
   clout << std::endl << "Prepare Geometry ..." << std::endl;
@@ -59,7 +61,7 @@ void prepareGeometry(UnitConverter<T,DESCRIPTOR> const& converter,
   superGeometry.rename( 0, 2 );
 
   T dx = converter.getConversionFactorLength();
-  
+
   switch ( boundarytype ) {
     // eternal and damping: 3 is the actual fluid; periodic: 1 is the fluid
     case eternal:
@@ -70,14 +72,14 @@ void prepareGeometry(UnitConverter<T,DESCRIPTOR> const& converter,
       break;
     case local: {
       superGeometry.rename( 2, 1, {1,1,1} );
-  
+
       // Set material number for inflow
       Vector<T,ndim> origin = superGeometry.getStatistics().getMinPhysR( 2 ) - dx;
       Vector<T,ndim> extend = superGeometry.getStatistics().getMaxPhysR( 2 ) - superGeometry.getStatistics().getMinPhysR( 2 ) + 2*dx;
       extend[0] = 2*dx;
       IndicatorCuboid3D<T> inflow( extend, origin );
       superGeometry.rename( 2, 4, 1, inflow );
-      
+
       // Set material number for outflow
       origin[0] = superGeometry.getStatistics().getMaxPhysR( 2 )[0] - dx;
       IndicatorCuboid3D<T> outflow( extend, origin );
@@ -116,7 +118,7 @@ void prepareGeometry(UnitConverter<T,DESCRIPTOR> const& converter,
         << "5 = outflow" << std::endl
         << "6 = around domain" << std::endl;
 
-  SuperVTMwriter3D<T> vtmWriter( "gausspulse3d" );
+  SuperVTMwriter3D<T> vtmWriter("gausspulse3d");
   SuperGeometryF<T,DESCRIPTOR::d> geometryF(superGeometry);
   vtmWriter.write(geometryF);
 
@@ -137,9 +139,9 @@ void prepareLattice(UnitConverter<T,DESCRIPTOR> const& converter,
   clout << std::endl << "Prepare Lattice ..." << std::endl;
 
   const T omega = converter.getLatticeRelaxationFrequency();
-  
+
   // Material=3 --> bulk dynamics
-  auto bulkIndicator = superGeometry.getMaterialIndicator( {0,1,2,3} );  // for local bcs all around, corners remain at 2, so they are included here
+  auto bulkIndicator = superGeometry.getMaterialIndicator({0,1,2,3});  // for local bcs all around, corners remain at 2, so they are included here
   sLattice.defineDynamics<BulkDynamics>( bulkIndicator );
 
   switch ( boundarytype ) {
@@ -193,8 +195,8 @@ void prepareLattice(UnitConverter<T,DESCRIPTOR> const& converter,
     vtmWriter_init.createMasterFile();
     SuperLatticePhysField3D<T,DESCRIPTOR,DAMPING> damping( sLattice, 1. );
     SuperLatticePhysField3D<T,DESCRIPTOR,UX> uxField( sLattice, 1. );
-    SuperLatticePhysField3D<T,DESCRIPTOR,UX> uyField( sLattice, 1. );
-    SuperLatticePhysField3D<T,DESCRIPTOR,UX> uzField( sLattice, 1. );
+    SuperLatticePhysField3D<T,DESCRIPTOR,UY> uyField( sLattice, 1. );
+    SuperLatticePhysField3D<T,DESCRIPTOR,UZ> uzField( sLattice, 1. );
     SuperLatticePhysField3D<T,DESCRIPTOR,DENSITY> density( sLattice, 1. );
     damping.getName() = "dampingField";
     uxField.getName() = "uxField";
@@ -208,7 +210,7 @@ void prepareLattice(UnitConverter<T,DESCRIPTOR> const& converter,
     vtmWriter_init.addFunctor( density );
     vtmWriter_init.write( 0 );
   }
-  
+
   // Make the lattice ready for simulation
   sLattice.initialize();
 
@@ -364,7 +366,7 @@ int main( int argc, char* argv[] )
   // === set boundarytype depending on input values
   BoundaryType boundarytype;
   switch ( boundaryCondition ) {
-    case 0:   boundarytype = eternal;   clout << "Boundary condition is solved by just extending the domain to " 
+    case 0:   boundarytype = eternal;   clout << "Boundary condition is solved by just extending the domain to "
                                               << eternalscale << " times" << std::endl; break;
     case 1:   boundarytype = periodic;  clout << "Boundary condition type specified to periodic." << std::endl; break;
     case 2:   boundarytype = local;     clout << "Boundary condition type specified to local."    << std::endl; break;
@@ -384,7 +386,7 @@ int main( int argc, char* argv[] )
     (T)       rho0          // physDensity
   );
   converter.print();
-  
+
   // === change domain size depending the boundary condition
   T dampingDepthPU = converter.getPhysLength( dampingDepthLU );
   T lengthDomain;
@@ -392,7 +394,7 @@ int main( int argc, char* argv[] )
     case eternal:   lengthDomain  = eternalscale*charL;                               break;  // extend the domain
     case periodic:  lengthDomain  = charL;                                            break;  // reference domain size
     case local:     lengthDomain  = charL + 2*converter.getConversionFactorLength();  break;  // add one layer in each direction
-    case damping:   lengthDomain  = charL + 2*dampingDepthPU;                         break;  // add boundary layer      
+    case damping:   lengthDomain  = charL + 2*dampingDepthPU;                         break;  // add boundary layer
   }
   clout << "Fluid Domain = " << charL << "^3; Simulation Domain = " << lengthDomain << "^3" << std::endl;
   Vector<T,ndim> originDomain( -lengthDomain/2. );
@@ -413,7 +415,7 @@ int main( int argc, char* argv[] )
     case local:
       CuboidDecomposition.setPeriodicity({false, false, false}); break;
   }
-  
+
   // === create loadBalancer and superGeometry
   HeuristicLoadBalancer<T> loadBalancer( CuboidDecomposition );
   // Instantiation of a superGeometry
