@@ -101,7 +101,7 @@ public:
   { }
 
   SuperLattice(const SuperLattice&) = delete;
-  ~SuperLattice() = default;
+  ~SuperLattice();
 
   const UnitConverter<T,DESCRIPTOR>& getConverter() const {
     if (_converter) {

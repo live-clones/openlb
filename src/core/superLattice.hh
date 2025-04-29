@@ -157,6 +157,13 @@ SuperLattice<T,DESCRIPTOR>::SuperLattice(CuboidDecomposition<T,DESCRIPTOR::d>& d
 }
 
 template<typename T, typename DESCRIPTOR>
+SuperLattice<T,DESCRIPTOR>::~SuperLattice()
+{
+  waitForBackgroundTasks(stage::PreCollide{});
+  waitForBackgroundTasks(stage::PreContextSwitchTo<ProcessingContext::Evaluation>{});
+}
+
+template<typename T, typename DESCRIPTOR>
 Cell<T,DESCRIPTOR> SuperLattice<T,DESCRIPTOR>::get(LatticeR<DESCRIPTOR::d+1> latticeR)
 {
 #ifdef PARALLEL_MODE_MPI
