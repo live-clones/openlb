@@ -73,6 +73,7 @@ EXPLICIT_CLASS_INSTANTIATION_LINKER := \
 	ConcreteBlockCollisionO \
 	ConcreteBlockCouplingO \
 	ConcreteBlockPointCouplingO \
+	ConcreteBlockRefinementO \
 	ConcreteCommunicatable \
 	ConcreteBlockCommunicator \
 	HeterogeneousCopyTask \
