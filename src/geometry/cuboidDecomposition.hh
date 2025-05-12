@@ -61,10 +61,11 @@ CuboidDecomposition<T,D>::CuboidDecomposition(IndicatorF<T,D>& indicatorF, T vox
   , _cuboids{_motherCuboid}
   , _periodicityOn{}
 {
+  _cuboids.reserve(nC+2);
   if (nC > 1) {
     split(0, nC);
+    shrink(indicatorF);
   }
-  shrink(indicatorF);
 }
 
 template <typename T, unsigned D>
@@ -695,7 +696,7 @@ void CuboidDecomposition<T,D>::shrink(int iC, IndicatorF<T,D>& indicatorF)
 template <typename T, unsigned D>
 void CuboidDecomposition<T,D>::shrink(IndicatorF<T,D>& indicatorF)
 {
-  for (int iC=0; iC < size(); ++iC) {
+  for (int iC = size() - 1; iC >= 0; iC--) {
     shrink(iC, indicatorF);
   }
   // shrink mother cuboid
