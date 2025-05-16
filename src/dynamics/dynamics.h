@@ -309,7 +309,7 @@ using ExternalTauForcedIncBGKdynamics = dynamics::Tuple<
  * DOI: 10.1103/PhysRevE.97.033309
  **/
 template <typename T, typename DESCRIPTOR>
-using MPIncBGKdynamics = dynamics::Tuple<
+using MultiPhaseIncompressbileBGKdynamics = dynamics::Tuple<
   T, DESCRIPTOR,
   momenta::IncBulkTuple<momenta::ForcedMomentum<momenta::IncompressibleBulkMomentum>>,
   equilibria::MPIncompressible,
@@ -318,7 +318,7 @@ using MPIncBGKdynamics = dynamics::Tuple<
 >;
 
 template <typename T, typename DESCRIPTOR>
-using MPIncTRTdynamics = dynamics::Tuple<
+using MultiPhaseIncompressbileTRTdynamics = dynamics::Tuple<
   T, DESCRIPTOR,
   momenta::IncBulkTuple<momenta::ForcedMomentum<momenta::IncompressibleBulkMomentum>>,
   equilibria::MPIncompressible,
@@ -327,7 +327,7 @@ using MPIncTRTdynamics = dynamics::Tuple<
 >;
 
 template <typename T, typename DESCRIPTOR>
-using MultiPhaseIncTRTdynamics = dynamics::Tuple<
+using MultiPhaseIncompressbileInterfaceTRTdynamics = dynamics::Tuple<
   T, DESCRIPTOR,
   momenta::IncBulkTuple<momenta::ForcedMomentum<momenta::IncompressibleBulkMomentum>>,
   equilibria::MPIncompressible,
@@ -336,7 +336,7 @@ using MultiPhaseIncTRTdynamics = dynamics::Tuple<
 >;
 
 template <typename T, typename DESCRIPTOR>
-using MultiPhaseSmagorinskyIncBGKdynamics = dynamics::Tuple<
+using MultiPhaseIncompressbileSmagorinskyBGKdynamics = dynamics::Tuple<
   T, DESCRIPTOR,
   momenta::IncBulkTuple<momenta::ForcedMomentum<momenta::IncompressibleBulkMomentum>>,
   equilibria::MPIncompressible,
@@ -345,11 +345,11 @@ using MultiPhaseSmagorinskyIncBGKdynamics = dynamics::Tuple<
 >;
 
 template <typename T, typename DESCRIPTOR>
-using MultiPhaseSmagorinskyIncTRTdynamics = dynamics::Tuple<
+using MultiPhaseIncompressbileSmagorinskyTRTdynamics = dynamics::Tuple<
   T, DESCRIPTOR,
   momenta::IncBulkTuple<momenta::ForcedMomentum<momenta::IncompressibleBulkMomentum>>,
   equilibria::MPIncompressible,
-  collision::OmegaFromCellTauEff<collision::IncompressibleSmagorinskyEffectiveOmega<collision::ITRT>>,
+  collision::OmegaFromCellTauEff<collision::IncompressibleSmagorinskyEffectiveOmega<collision::TRT>>,
   forcing::LiangTRT<momenta::ForcedWithIncompressibleStress>
 >;
 
@@ -404,7 +404,11 @@ public:
   using parameters = typename CORRECTED_DYNAMICS::parameters;
 
   template <typename NEW_T>
-  using exchange_value_type = CombinedRLBdynamics<NEW_T,DESCRIPTOR,DYNAMICS,MOMENTA>;
+  using exchange_value_type = CombinedRLBdynamics<
+    NEW_T, DESCRIPTOR,
+    typename DYNAMICS::template exchange_value_type<NEW_T>,
+    MOMENTA
+  >;
 
   template <typename M>
   using exchange_momenta = CombinedRLBdynamics<T,DESCRIPTOR,DYNAMICS,M>;
@@ -428,7 +432,7 @@ public:
       cell[iPop] = fEq[iPop] + equilibrium<DESCRIPTOR>::template fromPiToFneq<V>(iPop, pi);
     }
 
-    return typename CORRECTED_DYNAMICS::CollisionO().apply(cell, parameters);
+    return CORRECTED_DYNAMICS().collide(cell, parameters);
   };
 
   void computeEquilibrium(ConstCell<T,DESCRIPTOR>& cell, T rho, const T u[DESCRIPTOR::d], T fEq[DESCRIPTOR::q]) const override {
@@ -601,7 +605,14 @@ struct ZeroDistributionDynamics final : public dynamics::CustomCollision<
     momenta::ZeroStress,
     momenta::DefineSeparately
   >>;
+
   using parameters = meta::list<>;
+
+  template <typename NEW_T>
+  using exchange_value_type = ZeroDistributionDynamics<NEW_T,DESCRIPTOR>;
+
+  template <typename M>
+  using exchange_momenta = ZeroDistributionDynamics<T,DESCRIPTOR>;
 
   std::type_index id() override {
     return typeid(ZeroDistributionDynamics);
@@ -674,6 +685,9 @@ struct ForcedVANSBGKdynamics final : public dynamics::CustomCollision<T,DESCRIPT
   using MomentaF = typename MOMENTA::template type<DESCRIPTOR>;
 
   using parameters = meta::list<descriptors::OMEGA>;
+
+  template <typename NEW_T>
+  using exchange_value_type = ForcedVANSBGKdynamics<NEW_T,DESCRIPTOR,MOMENTA>;
 
   std::type_index id() override {
     return typeid(ForcedVANSBGKdynamics);

@@ -257,10 +257,6 @@ int main(int argc, char *argv[])
 
   prepareLattice(converter, NSlattice, ADlattice, superGeometry);
 
-  // !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!//
-  // This coupling must be necessarily be put on the Navier-Stokes lattice!!
-  // !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!//
-
   T boussinesqForcePrefactor = 9.81 / converter.getConversionFactorVelocity() * converter.getConversionFactorTime() *
                                converter.getCharPhysTemperatureDifference() * converter.getPhysThermalExpansionCoefficient();
   SuperLatticeCoupling coupling(

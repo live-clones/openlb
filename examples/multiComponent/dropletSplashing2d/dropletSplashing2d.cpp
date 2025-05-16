@@ -40,16 +40,16 @@ using DESCRIPTOR = D2Q9<FORCE,          // Interaction force
 using COUPLING = PseudopotentialForcedPostProcessor<interaction::Polinomial>;
 
 // Parameters in physical units
-const T radius = 0.5e-4; // radius of liquid phase [m]
+const T radius = 5e-6; // radius of liquid phase [m]
 const T Lx = 8*radius; // length of the domain [m]
 const T Ly = 4*radius; // height of the domain [m]
-const T U_droplet = 3.0; // droplet velocity [m.s-1]
+const T U_droplet = 6.0; // droplet velocity [m.s-1]
 
 // Properties of R134 vapor and liquid
 // at saturation condition 30 degree Celsius
 
-const T nu_vapor   = 3.3e-6; // vapor kinematic viscosity [m2.s-1]
-const T nu_liquid = 1.55e-6;   // liquid kinematic viscosity [m2.s-1]
+const T nu_vapor   = 3.39e-7; // vapor kinematic viscosity [m2.s-1]
+const T nu_liquid = 1.58e-7;   // liquid kinematic viscosity [m2.s-1]
 
 const T SurfTension = 7.58e-3; // surface tension for water-air [N.m-1]
 
@@ -64,7 +64,7 @@ const int Ny = 200;
 const T thickness = 1.0; // interface thickness in grid nodes; physThickness = delta_x * thickness
 
 // Time and plot parameters
-const int maxIter  = 1500; // amount of time steps to complete simulation
+const int maxIter  = 1000; // amount of time steps to complete simulation
 const int vtkIter  = 10;   // amount of time steps to save vtk files
 const int statIter = 10;   // amount of time steps to display simulation parameters
 
@@ -172,8 +172,9 @@ void prepareLattice( SuperLattice<T, DESCRIPTOR>& sLattice,
   sLattice.iniEquilibrium( allGeometry, fluidDensity, fluidVelocity );
 
   std::cout << "External force field = 0" << std::endl;
-  AnalyticalConst2D<T,T> f( 0 );
-  sLattice.defineField<descriptors::EXTERNAL_FORCE>( superGeometry, 1, f );
+  std::vector<T> fnull( 2,T() );
+  AnalyticalConst2D<T,T> fnull_( fnull );
+  sLattice.defineField<descriptors::EXTERNAL_FORCE>( superGeometry, 1, fnull_ );
 
   // global relaxation frequency (it can be initialized as one)
   AnalyticalConst2D<T,T> one( 1. );
@@ -302,7 +303,7 @@ int main( int argc, char *argv[] )
   // === 1st Step: Unit Converter ===
   MultiPhaseUnitConverterFromRelaxationTime<T,DESCRIPTOR> converter(
     (T)   Nx,                        // resolution
-    (T)   0.7,                       // lattice relaxation time
+    (T)   0.6,                       // lattice relaxation time
     (T)   rho_liquid/1000,           // lattice density
     (T)   Lx,                        // charPhysLength: reference length of simulation geometry
     (T)   nu_liquid,                 // physViscosity: physical kinematic viscosity in __m^2 / s__

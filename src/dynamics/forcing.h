@@ -164,6 +164,10 @@ struct Liang {
     using MomentaF   = typename Forced<MOMENTA>::template type<DESCRIPTOR>;
     using CollisionO = typename COLLISION::template type<DESCRIPTOR,Forced<MOMENTA>,EQUILIBRIUM>;
 
+    constexpr static bool is_vectorizable = dynamics::is_vectorizable_v<CollisionO>
+      // hacky workaround until vectorizability is deduced by introspection
+      && !std::is_same_v<MOMENTA, momenta::IncBulkTuple<momenta::ForcedMomentum<momenta::IncompressibleBulkMomentum>>>;
+
     static_assert(COLLISION::parameters::template contains<descriptors::OMEGA>(),
                   "COLLISION must be parametrized using relaxation frequency OMEGA");
 
@@ -204,6 +208,10 @@ struct LiangTRT {
 
     static_assert(COLLISION::parameters::template contains<descriptors::OMEGA>(),
                   "COLLISION must be parametrized using relaxation frequency OMEGA");
+
+    constexpr static bool is_vectorizable = dynamics::is_vectorizable_v<CollisionO>
+      // hacky workaround until vectorizability is deduced by introspection
+      && !std::is_same_v<MOMENTA, momenta::IncBulkTuple<momenta::ForcedMomentum<momenta::IncompressibleBulkMomentum>>>;
 
     template <typename CELL, typename PARAMETERS, typename V=typename CELL::value_t>
     CellStatistic<V> apply(CELL& cell, PARAMETERS& parameters) any_platform {
@@ -478,7 +486,6 @@ private:
       CellStatistic<V> compute(CELL& cell, PARAMETERS& parameters, FEQ& fEq) any_platform {
         V rho, u[DESCRIPTOR::d];
         MomentaF().computeRhoU(cell, rho, u);
-        const auto U = cell. template getField<descriptors::VELOCITY>();
         const auto force = cell.template getFieldPointer<descriptors::FORCE>();
         for (int iVel=0; iVel<DESCRIPTOR::d; ++iVel) {
           u[iVel] += force[iVel] / parameters.template get<descriptors::OMEGA>();

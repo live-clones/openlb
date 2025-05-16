@@ -357,10 +357,40 @@ public:
 
 /**
 * This class computes the convective boundary condition for
+* the populations of a phase field solving LBE.
+*/
+template<typename T, typename DESCRIPTOR, int xNormal,int yNormal>
+struct FlatConvectivePhaseFieldPostProcessorA2D {
+  static constexpr OperatorScope scope = OperatorScope::PerCellWithParameters;
+  using parameters = meta::list<descriptors::MAX_VELOCITY>;
+
+  int getPriority() const {
+    return 0;
+  }
+
+  template <typename CELL, typename PARAMETERS>
+  void apply(CELL& cell, PARAMETERS& parameters) any_platform{
+
+    auto u_conv = parameters.template get<descriptors::MAX_VELOCITY>();
+    Vector<int,DESCRIPTOR::d> normal{-xNormal, -yNormal};
+    auto cell1 = cell.neighbor(normal);
+    auto outlet_cell = cell.template getField<descriptors::CONV_POPS>();
+
+    for (int iPop=0; iPop < DESCRIPTOR::q; ++iPop) {
+      outlet_cell[iPop] = (outlet_cell[iPop] + u_conv * cell1[iPop]) / ((T)1 + u_conv);
+      cell[iPop] = outlet_cell[iPop];
+    }
+    cell.template setField<descriptors::CONV_POPS>(outlet_cell);
+  }
+
+};
+
+/**
+* This class computes the convective boundary condition for
 * phi at ghost nodes for a phase field solving LBE.
 */
 template<typename T, typename DESCRIPTOR, int xNormal,int yNormal>
-struct FlatConvectivePhaseFieldPostProcessor2D {
+struct FlatConvectivePhaseFieldPostProcessorB2D {
   static constexpr OperatorScope scope = OperatorScope::PerCellWithParameters;
   using parameters = meta::list<descriptors::MAX_VELOCITY>;
 
@@ -378,7 +408,6 @@ struct FlatConvectivePhaseFieldPostProcessor2D {
     for (int iPop=0; iPop < DESCRIPTOR::q; ++iPop) {
       cell[iPop] = outlet_cell[iPop];
     }
-    cell.template setField<descriptors::CONV_POPS>(outlet_cell);
 
     auto phi = cell.template getField<descriptors::STATISTIC>();
     phi[0] = cell.computeRho();

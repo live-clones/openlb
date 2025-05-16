@@ -208,32 +208,32 @@ void setTurbulentWallModelDynamics(SuperLattice<T, DESCRIPTOR>& sLattice,
     if( wallModelParameters.bodyForce ) {
       if( wallModelParameters.useVanDriest ) {
         if( wallModelParameters.rhoMethod != 0 ) {
-          sLattice.template defineDynamics<typename ForcedVanDriestExternalRhoWMHRRdynamics<T,DESCRIPTOR>::template wrap_collision<collision::TrackAverageVelocity>>(std::move(bulkIndicator));
+          sLattice.template defineDynamics<typename ForcedVanDriestExternalRhoWMHRRdynamics<T,DESCRIPTOR>::template wrap_collision<collision::StoreAndTrackAverageVelocity>>(std::move(bulkIndicator));
         } else {
-          sLattice.template defineDynamics<typename ForcedVanDriestWMHRRdynamics<T,DESCRIPTOR>::template wrap_collision<collision::TrackAverageVelocity>>(std::move(bulkIndicator));
+          sLattice.template defineDynamics<typename ForcedVanDriestWMHRRdynamics<T,DESCRIPTOR>::template wrap_collision<collision::StoreAndTrackAverageVelocity>>(std::move(bulkIndicator));
         }
       }
       else {
         if( wallModelParameters.rhoMethod != 0 ) {
-          sLattice.template defineDynamics<typename ForcedExternalRhoWMHRRdynamics<T,DESCRIPTOR>::template wrap_collision<collision::TrackAverageVelocity>>(std::move(bulkIndicator));
+          sLattice.template defineDynamics<typename ForcedExternalRhoWMHRRdynamics<T,DESCRIPTOR>::template wrap_collision<collision::StoreAndTrackAverageVelocity>>(std::move(bulkIndicator));
         } else {
-          sLattice.template defineDynamics<typename ForcedWMHRRdynamics<T,DESCRIPTOR>::template wrap_collision<collision::TrackAverageVelocity>>(std::move(bulkIndicator));
+          sLattice.template defineDynamics<typename ForcedWMHRRdynamics<T,DESCRIPTOR>::template wrap_collision<collision::StoreAndTrackAverageVelocity>>(std::move(bulkIndicator));
         }
       }
     }
     else {
       if( wallModelParameters.useVanDriest ) {
         if( wallModelParameters.rhoMethod != 0 ) {
-          sLattice.template defineDynamics<typename VanDriestExternalRhoWMHRRdynamics<T,DESCRIPTOR>::template wrap_collision<collision::TrackAverageVelocity>>(std::move(bulkIndicator));
+          sLattice.template defineDynamics<typename VanDriestExternalRhoWMHRRdynamics<T,DESCRIPTOR>::template wrap_collision<collision::StoreAndTrackAverageVelocity>>(std::move(bulkIndicator));
         } else {
-          sLattice.template defineDynamics<typename VanDriestWMHRRdynamics<T,DESCRIPTOR>::template wrap_collision<collision::TrackAverageVelocity>>(std::move(bulkIndicator));
+          sLattice.template defineDynamics<typename VanDriestWMHRRdynamics<T,DESCRIPTOR>::template wrap_collision<collision::StoreAndTrackAverageVelocity>>(std::move(bulkIndicator));
         }
       }
       else {
         if( wallModelParameters.rhoMethod != 0 ) {
-          sLattice.template defineDynamics<typename ExternalRhoWMHRRdynamics<T,DESCRIPTOR>::template wrap_collision<collision::TrackAverageVelocity>>(std::move(bulkIndicator));
+          sLattice.template defineDynamics<typename ExternalRhoWMHRRdynamics<T,DESCRIPTOR>::template wrap_collision<collision::StoreAndTrackAverageVelocity>>(std::move(bulkIndicator));
         } else {
-          sLattice.template defineDynamics<typename WMHRRdynamics<T,DESCRIPTOR>::template wrap_collision<collision::TrackAverageVelocity>>(std::move(bulkIndicator));
+          sLattice.template defineDynamics<typename WMHRRdynamics<T,DESCRIPTOR>::template wrap_collision<collision::StoreAndTrackAverageVelocity>>(std::move(bulkIndicator));
         }
       }
     }

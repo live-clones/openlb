@@ -120,7 +120,8 @@ public:
   template <typename NEW_T>
   using exchange_value_type = CombinedAdvectionDiffusionRLBdynamics<
     NEW_T, DESCRIPTOR,
-    DYNAMICS, MOMENTA
+    typename DYNAMICS::template exchange_value_type<NEW_T>,
+    MOMENTA
   >;
 
   template <typename M>
@@ -286,6 +287,9 @@ struct SourcedLimitedAdvectionDiffusionBGKdynamics final : public dynamics::Cust
 
   constexpr static bool is_vectorizable = false;
 
+  template <typename NEW_T>
+  using exchange_value_type = SourcedLimitedAdvectionDiffusionBGKdynamics<NEW_T,DESCRIPTOR,MOMENTA>;
+
   template<typename M>
   using exchange_momenta = SourcedLimitedAdvectionDiffusionBGKdynamics<T,DESCRIPTOR,M>;
 
@@ -346,6 +350,9 @@ struct TotalEnthalpyAdvectionDiffusionBGKdynamics final : public dynamics::Custo
     TotalEnthalpy::LAMBDA_L,
     TotalEnthalpy::L
   >;
+
+  template <typename NEW_T>
+  using exchange_value_type = TotalEnthalpyAdvectionDiffusionBGKdynamics<NEW_T,DESCRIPTOR,MOMENTA>;
 
   template<typename M>
   using exchange_momenta = TotalEnthalpyAdvectionDiffusionBGKdynamics<T,DESCRIPTOR,M>;
@@ -485,6 +492,9 @@ struct TotalEnthalpyAdvectionDiffusionTRTdynamics final : public dynamics::Custo
     TotalEnthalpy::LAMBDA_L,
     TotalEnthalpy::L
   >;
+
+  template <typename NEW_T>
+  using exchange_value_type = TotalEnthalpyAdvectionDiffusionTRTdynamics<NEW_T,DESCRIPTOR,MOMENTA>;
 
   template<typename M>
   using exchange_momenta = TotalEnthalpyAdvectionDiffusionTRTdynamics<T,DESCRIPTOR,M>;
@@ -655,6 +665,9 @@ struct PhaseFieldAdvectionDiffusionBGKdynamics : public dynamics::CustomCollisio
 
   using parameters = meta::list<descriptors::OMEGA,descriptors::INTERFACE_THICKNESS>;
 
+  template <typename NEW_T>
+  using exchange_value_type = PhaseFieldAdvectionDiffusionBGKdynamics<NEW_T,DESCRIPTOR,MOMENTA>;
+
   template<typename M>
   using exchange_momenta = PhaseFieldAdvectionDiffusionBGKdynamics<T,DESCRIPTOR,M>;
 
@@ -721,6 +734,9 @@ public:
 
   using parameters = meta::list<descriptors::OMEGA,descriptors::LATTICE_TIME>;
 
+  template <typename NEW_T>
+  using exchange_value_type = ParticleAdvectionDiffusionBGKdynamics<NEW_T,DESCRIPTOR,MOMENTA>;
+
   template <typename M>
   using exchange_momenta = ParticleAdvectionDiffusionBGKdynamics<T,DESCRIPTOR,M>;
 
@@ -734,8 +750,8 @@ public:
 
   template <typename CELL, typename PARAMETERS, typename V=typename CELL::value_t>
   CellStatistic<V> collide(CELL& cell, PARAMETERS& parameters) any_platform {
-    const V           omega  = parameters.template get<descriptors::OMEGA>();
-    const std::size_t time   = parameters.template get<descriptors::LATTICE_TIME>();
+    const V    omega  = parameters.template get<descriptors::OMEGA>();
+    const auto time = parameters.template get<descriptors::LATTICE_TIME>();
     const auto u = (time % 2 == 0) ? cell.template getField<descriptors::VELOCITY>()
                                    : cell.template getField<descriptors::VELOCITY2>();
     V rho = MomentaF().computeRho(cell);
@@ -764,6 +780,9 @@ struct RTLBMdynamicsMcHardy final : public dynamics::CustomCollision<T,DESCRIPTO
   using MomentaF = typename MOMENTA::template type<DESCRIPTOR>;
   using EquilibriumF = typename equilibria::ZerothOrder::template type<DESCRIPTOR,MOMENTA>;
   using parameters = meta::list<Light::ABSORPTION,Light::SCATTERING,Light::ANISOMATRIX>;
+
+  template <typename NEW_T>
+  using exchange_value_type = RTLBMdynamicsMcHardy<NEW_T,DESCRIPTOR,MOMENTA>;
 
   template<typename M>
   using exchange_momenta = RTLBMdynamicsMcHardy<T,DESCRIPTOR,M>;
@@ -823,6 +842,9 @@ struct RTLBMdynamicsMcHardyRK final : public dynamics::CustomCollision<T,DESCRIP
   using MomentaF = typename MOMENTA::template type<DESCRIPTOR>;
   using EquilibriumF = typename equilibria::ZerothOrder::template type<DESCRIPTOR,MOMENTA>;
   using parameters = meta::list<Light::ABSORPTION,Light::SCATTERING,Light::ANISOMATRIX>;
+
+  template <typename NEW_T>
+  using exchange_value_type = RTLBMdynamicsMcHardyRK<NEW_T,DESCRIPTOR,MOMENTA>;
 
   template<typename M>
   using exchange_momenta = RTLBMdynamicsMcHardyRK<T,DESCRIPTOR,M>;

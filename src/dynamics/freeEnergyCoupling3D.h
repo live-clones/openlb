@@ -65,10 +65,6 @@ struct ChemicalPotentialCoupling3D {
     V term2 = 0.125 * kappa2 * (densityDifference)
                   * (densityDifference-1.) * (densityDifference-2.);
 
-
-    V term3 = 0.;
-
-
     V laplaceRho1 = -24.0 * rhoA;
     V laplaceRho2 = -24.0 * rhoB;
     V laplaceRho3 = 0;

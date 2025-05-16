@@ -34,7 +34,7 @@ namespace olb {
 namespace cse {
 
 /// Extract expression tree of the collision operator for DYNAMICS
-template<typename DYNAMICS>
+template <typename DYNAMICS>
 std::stringstream extractExpressionTree() {
   std::stringstream tree;
   using T = Expr;
@@ -58,19 +58,21 @@ std::stringstream extractExpressionTree() {
     cell[iPop] = T(symbol("cell[" + std::to_string(iPop) + "]"));
   }
 
+  std::vector<T> params;
+
   // Initialize expressions for the accessed fields
   for (auto field : introspection::getFieldsAccessedByDynamics<T,DESCRIPTOR,DYNAMICS>()) {
     if (auto dim = field.dimension()) {
       std::vector<T> initExpr;
       for (unsigned iD=0; iD < dim; ++iD) {
         initExpr.emplace_back(T(symbol("cell.template getFieldComponent<" + remove_array_from_name(field.name()) + ">(" + std::to_string(iD) + ")")));
+        params.emplace_back(T(symbol("cell.template getFieldComponent<" + remove_array_from_name(field.name()) + ">(" + std::to_string(iD) + ")")));
       }
       field.setPlaceholderExpression(cell, initExpr);
     }
   }
 
   // Retrieve parameters from Dynamics and initialize unique expressions
-  std::vector<T> params;
   PARAMETERS::for_each([&](auto field) {
     using FIELD = typename decltype(field)::type;
     FieldD<T,DESCRIPTOR,FIELD> f;

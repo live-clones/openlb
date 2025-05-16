@@ -40,15 +40,15 @@ using namespace olb::descriptors;
 using namespace olb::util;
 
 using T = FLOATING_POINT_TYPE;
-using DESCRIPTOR = D3Q19<FORCE,TENSOR,VELOCITY,POROSITY,VELOCITY2>;
+using DESCRIPTOR = D3Q19<FORCE,TENSOR,VELOCITY,POROSITY,VELOCITY2,AVERAGE_VELOCITY>;
 
-#define HRR_COLLISION
+//#define HRR_COLLISION
 
 // Parameters for the simulation setup
 const int N = 40;
 const T physRefL = 1.0;     // half channel height in meters
-const T lx = 2. * std::numbers::pi_v<T> * physRefL;  // streamwise length in meters
-const T ly = 2. * std::numbers::pi_v<T> * physRefL/10.;  // spanwise length in meters
+const T lx = 3. * std::numbers::pi_v<T> * physRefL;  // streamwise length in meters
+const T ly = 3. * std::numbers::pi_v<T> * physRefL/10.;  // spanwise length in meters
 const T lz = 2. * physRefL;       // wall-normal length in meters
 #ifdef HRR_COLLISION
 const T hybridConst = 0.99;   // very strong influence of numerical diffusion. 0.99 meand 1% FDM strain rate tensor, which is already enough!
@@ -68,7 +68,7 @@ const int rhoMethod = 0;
 //  0: extrapolation NEQ (Guo Zhaoli)
 //  1: first or second order finite differnce (Malaspinas)
 //  2: equilibrium scheme (no fNeq)
-const int fNeqMethod = 1;
+const int fNeqMethod = 0;
 //  Used wall profile
 //  0: power law profile
 //  1: Spalding profile
@@ -83,6 +83,10 @@ const bool useVanDriest = true;
 const T latticeWallDistance = 0.5;
 //  distance from cell to velocity sampling point in lattice units
 const T samplingCellDistance = 3.5;
+
+const bool movingWall = false;
+
+const bool averageVelocity = true;
 
 // Reynolds number based on the friction velocity
 #if defined (Case_ReTau_1000)
@@ -108,7 +112,6 @@ const T charPhysT = physRefL / (ReTau * charPhysNu / physRefL);
 const T physConvergeTime = 40. * charPhysT;  // time until until statistics sampling in seconds
 const T physStatisticsTime = 150. * charPhysT ;  // statistics sampling time in seconds
 const T maxPhysT = physConvergeTime + physStatisticsTime; // max. simulation time in seconds
-const T statisticsSave = 1./25.;    // time between statistics samples in seconds
 
 // seed the rng with time if SEED_WITH_TIME is set, otherwise just use a fixed seed.
 #if defined SEED_WITH_TIME
@@ -118,22 +121,6 @@ std::default_random_engine generator(seed);
 #else
 std::default_random_engine generator(0x1337533DAAAAAAAA);
 #endif
-
-struct CellSpatialCalculationVelocityField {
-  static constexpr OperatorScope scope = OperatorScope::PerCell;
-  int getPriority() const { return 2; }
-
-  template <typename CELL>
-  void apply(CELL& cell) any_platform
-  {
-    //every value is the lattice(non-dimensional) unit
-    using DESCRIPTOR = typename CELL::descriptor_t;
-    using V          = typename CELL::value_t;
-    Vector<V, DESCRIPTOR::d> lattice_u {};
-    cell.computeU(lattice_u.data());
-    cell.template setField<descriptors::VELOCITY2>(lattice_u);
-  }
-};
 
 template <typename T, typename S>
 class Channel3D : public AnalyticalF3D<T,S> {
@@ -225,11 +212,10 @@ void setInitialConditions(SuperLattice<T, DESCRIPTOR>& sLattice,
   sLattice.defineField<reduction::TAGS_U>(superGeometry.getMaterialIndicator({0,2}), tag0);
   sLattice.defineField<descriptors::VELOCITY2>(superGeometry.getMaterialIndicator({0,1,2}), uSol);
   sLattice.defineField<descriptors::VELOCITY>(superGeometry.getMaterialIndicator({0,1,2}), u0);
+  sLattice.defineField<descriptors::AVERAGE_VELOCITY>(superGeometry.getMaterialIndicator({0,1,2}), u0);
   sLattice.defineField<FORCE>(superGeometry.getMaterialIndicator({0,1,2}), u0);
   sLattice.defineField<descriptors::POROSITY>(superGeometry.getMaterialIndicator({0,2}), rho0);
   sLattice.defineField<descriptors::POROSITY>(superGeometry, 1, rho);
-  sLattice.addPostProcessor<stage::PostStream>(superGeometry.getMaterialIndicator({1,2}),
-                                               meta::id<CellSpatialCalculationVelocityField>{});
 
   clout << "Set initial conditions ... OK" << std::endl;
 }
@@ -271,31 +257,15 @@ void prepareLattice(SuperLattice<T,DESCRIPTOR>& sLattice,
 /// Computes the pressure drop between the voxels before and after the cylinder
 void getResults(SuperLattice<T, DESCRIPTOR>& sLattice,
                 UnitConverter<T,DESCRIPTOR> const& converter, size_t iT,
-                SuperGeometry<T,3>& superGeometry, Timer<double>& timer,
-                SuperLatticeTimeAveragedF3D<T>& sAveragedVel,
-                SuperLatticeTimeAveragedF3D<T>& sAveragedPress)
+                SuperGeometry<T,3>& superGeometry, Timer<double>& timer)
 {
   OstreamManager clout(std::cout, "getResults");
 
-  const T checkstatistics = converter.getPhysTime(100);//(T)maxPhysT/200.;
-
-  SuperVTMwriter3D<T> vtmWriter("channel3d");
-  SuperLatticePhysVelocity3D velocity(sLattice, converter);
-  SuperLatticePhysPressure3D pressure(sLattice, converter);
-  vtmWriter.addFunctor(velocity);
-  vtmWriter.addFunctor(pressure);
-  vtmWriter.addFunctor(sAveragedVel);
-  vtmWriter.addFunctor(sAveragedPress);
-
+  const T checkstatistics = (T)maxPhysT/200.;
 
   if (iT == 0) {
-    // Writes the geometry, cuboid no. and rank no. as vti file for visualization
-    SuperLatticeCuboid3D cuboid(sLattice);
-    SuperLatticeRank3D rank(sLattice);
-
-    vtmWriter.write(cuboid);
-    vtmWriter.write(rank);
-
+    // Writes the geometry for visualization
+    SuperVTMwriter3D<T> vtmWriter("channel3d");
     vtmWriter.createMasterFile();
   }
 
@@ -311,17 +281,39 @@ void getResults(SuperLattice<T, DESCRIPTOR>& sLattice,
           / (ReTau * charPhysNu / (converter.getCharPhysLength()/2.)) << std::endl;
   }
 
-  if (iT%converter.getLatticeTime(statisticsSave) == 0 && iT > converter.getLatticeTime(physConvergeTime)) {
-    // Add ensemble to temporal averaged velocity
-    sLattice.communicate();
-    sAveragedVel.addEnsemble();
-    sAveragedPress.addEnsemble();
+  int iTstartAvg = converter.getLatticeTime(physConvergeTime);
+  if (iT == iTstartAvg) {
+    SuperLatticeVelocity3D<T,DESCRIPTOR> latticeVelocity(sLattice);
+    sLattice.defineField<descriptors::AVERAGE_VELOCITY>(superGeometry.getMaterialIndicator({1,2}), latticeVelocity);
+  }
+  if (iT < iTstartAvg) {
+    sLattice.setParameter<descriptors::LATTICE_TIME>(2);
+  }
+  else {
+    sLattice.setParameter<descriptors::LATTICE_TIME>(iT - iTstartAvg + 1);
   }
 
-  if (iT%converter.getLatticeTime(checkstatistics)/*converter.getLatticeTime(maxPhysT/20)*/==0 || iT==converter.getLatticeTime(maxPhysT)-1) {
-    sLattice.setProcessingContext(ProcessingContext::Evaluation);
+  if (iT%converter.getLatticeTime(checkstatistics) == 0 || iT==converter.getLatticeTime(maxPhysT)-1) {
     // Writes the vtk files
-    vtmWriter.write(iT);
+    sLattice.executePostProcessors(stage::Evaluation{});
+    sLattice.setProcessingContext(ProcessingContext::Evaluation);
+    sLattice.scheduleBackgroundOutputVTK([&,iT](auto task)
+    {
+      SuperVTMwriter3D<T> vtmWriter("channel3d");
+      SuperLatticePhysVelocity3D velocity(sLattice, converter);
+      SuperLatticePhysPressure3D pressure(sLattice, converter);
+      SuperLatticePhysField3D<T,DESCRIPTOR,AVERAGE_VELOCITY> sAveragedVel(sLattice, converter.getConversionFactorVelocity());
+      SuperLatticePhysField3D<T,DESCRIPTOR,descriptors::WMVELOCITY> wmvelocity(sLattice, converter.getConversionFactorVelocity());
+      wmvelocity.getName() = "wmvelocity";
+      SuperGeometryF<T,3> geom(superGeometry);
+      vtmWriter.addFunctor(velocity);
+      vtmWriter.addFunctor(pressure);
+      vtmWriter.addFunctor(sAveragedVel);
+      vtmWriter.addFunctor(geom);
+      vtmWriter.addFunctor(wmvelocity);
+      task(vtmWriter, iT);
+    });
+
   }
 }
 
@@ -350,9 +342,6 @@ int main(int argc, char* argv[])
   clout << "Lattice converge time: " << converter.getLatticeTime(physConvergeTime) << std::endl;
   clout << "Max. Phys. simulation time(s): " << maxPhysT << std::endl;
   clout << "Max. Lattice simulation time: " << converter.getLatticeTime(maxPhysT) << std::endl;
-  clout << "Frequency Statistics Save(Hz): " << 1./statisticsSave << std::endl;
-  clout << "Statistics save period(s): " << statisticsSave << std::endl;
-  clout << "Lattice statistics save period: " << converter.getLatticeTime(statisticsSave) << std::endl;
   clout << "----------------------------------------------------------------------" << std::endl;
   clout << "Channel height(m): " << adaptedPhysSimulatedLength << std::endl;
   clout << "y+ value: " << (ReTau * converter.getPhysViscosity() / (physRefL)) * ((2. / T(N + 2 * latticeWallDistance)) * latticeWallDistance)/ converter.getPhysViscosity() << std::endl;
@@ -393,6 +382,8 @@ int main(int argc, char* argv[])
   wallModelParameters.useVanDriest = useVanDriest;
   wallModelParameters.wallFunctionProfile = wallFunctionProfile;
   wallModelParameters.latticeWallDistance = latticeWallDistance;
+  wallModelParameters.movingWall = movingWall;
+  wallModelParameters.averageVelocity = averageVelocity;
 
   prepareLattice(sLattice, converter, superGeometry, wallModelParameters);
 
@@ -410,21 +401,14 @@ int main(int argc, char* argv[])
   coupling.restrictTo(superGeometry.getMaterialIndicator(1));
   coupling.execute();
 
-  /// === 5th Step: Definition of turbulent Statistics Objects ===
-
-  SuperLatticePhysVelocity3D<T, DESCRIPTOR> sVel(sLattice, converter);
-  SuperLatticeTimeAveragedF3D<T> sAveragedVel(sVel);
-
-  SuperLatticePhysPressure3D<T, DESCRIPTOR> sPress(sLattice, converter);
-  SuperLatticeTimeAveragedF3D<T> sAveragedPress(sPress);
-
   /// === 4th Step: Main Loop with Timer ===
   Timer<double> timer(converter.getLatticeTime(maxPhysT), superGeometry.getStatistics().getNvoxel() );
   timer.start();
 
   for (size_t iT=0; iT<converter.getLatticeTime(maxPhysT); ++iT) {
     /// === 6th Step: Computation and Output of the Results ===
-    getResults(sLattice, converter, iT, superGeometry, timer, sAveragedVel, sAveragedPress);
+    sLattice.setParameter<descriptors::LATTICE_TIME>(iT);
+    getResults(sLattice, converter, iT, superGeometry,timer);
     coupling.setParameter<TurbulentChannelForce<T>::LATTICE_U_SUM>(sumProcessor.compute());
     coupling.execute();
     /// === 7th Step: Collide and Stream Execution ===

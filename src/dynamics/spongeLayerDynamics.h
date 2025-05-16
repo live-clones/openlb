@@ -38,12 +38,16 @@ namespace olb {
 //================= DampingDynamics =========
 //===================================================================================
 template<typename T, typename DESCRIPTOR, typename MOMENTA, typename EQUILIBRIUM>
-struct SpongeLayerDynamics : public dynamics::CustomCollision<T,DESCRIPTOR,MOMENTA>
-{
-public:
+struct SpongeLayerDynamics : public dynamics::CustomCollision<T,DESCRIPTOR,MOMENTA> {
   using parameters = typename meta::list<descriptors::OMEGA>;
   using MomentaF = typename MOMENTA::template type<DESCRIPTOR>;
   using EquilibriumF = typename EQUILIBRIUM::template type<DESCRIPTOR,MOMENTA>;
+
+  template <typename NEW_T>
+  using exchange_value_type = SpongeLayerDynamics<NEW_T,DESCRIPTOR,MOMENTA,EQUILIBRIUM>;
+
+  template <typename M>
+  using exchange_momenta = SpongeLayerDynamics<T,DESCRIPTOR,M,EQUILIBRIUM>;
 
   std::type_index id() override {
     return typeid(SpongeLayerDynamics);
@@ -82,6 +86,9 @@ public:
   std::string getName() const override {
     return "SpongeLayerDynamics";
   };
+
 };
+
 }
+
 #endif

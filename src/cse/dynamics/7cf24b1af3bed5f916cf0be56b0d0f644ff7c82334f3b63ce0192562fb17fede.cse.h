@@ -38,34 +38,38 @@ template <typename T, typename... FIELDS>
 struct CSE<AdvectionDiffusionBoundariesDynamics<T, descriptors::D3Q7<FIELDS...>, dynamics::Tuple<T, descriptors::D3Q7<FIELDS...>, momenta::Tuple<momenta::BulkDensity, momenta::BulkMomentum, momenta::NoStress, momenta::DefineToEq>, equilibria::FirstOrder, collision::AdvectionDiffusionRLB, AdvectionDiffusionExternalVelocityCollision>, momenta::Tuple<momenta::FixedDensity, momenta::FixedVelocityMomentumGeneric, momenta::ZeroStress, momenta::DefineSeparately>, 1, 1>> {
 template <concepts::Cell CELL, concepts::Parameters PARAMETERS, concepts::BaseType V=typename CELL::value_t>
 CellStatistic<V> collide(CELL& cell, PARAMETERS& parameters) any_platform {
-auto x7 = parameters.template get<descriptors::OMEGA>();
-auto x8 = x7 + V{-1};
-auto x9 = V{0.5}*cell[4];
-auto x10 = V{0.5}*cell[1];
-auto x11 = V{4}*cell.template getFieldComponent<descriptors::VELOCITY>(0);
-auto x12 = x11 + V{-1};
-auto x13 = V{0.0625}*cell.template getFieldComponent<momenta::FixedDensity::RHO>(0);
-auto x14 = x11 + V{1};
-auto x15 = x13*x14;
-auto x16 = V{0.125}*cell.template getFieldComponent<momenta::FixedDensity::RHO>(0);
-auto x17 = V{4}*cell.template getFieldComponent<descriptors::VELOCITY>(1);
-auto x18 = x17 + V{-1};
-auto x19 = V{0.5}*cell[6];
-auto x20 = V{0.5}*cell[3];
-auto x21 = x17 + V{1};
-auto x22 = -V{0.5}*cell.template getFieldComponent<momenta::FixedDensity::RHO>(0) + V{0.5}*cell[0] + V{1}*cell[5] + x10 - x13*x21 + x19 + x20 + x9 + V{0.5};
-auto x23 = V{4}*cell.template getFieldComponent<descriptors::VELOCITY>(2);
-auto x24 = x23 + V{-1};
-auto x25 = x23 + V{1};
-auto x26 = x13*x25;
-cell[0] = V{0.25}*cell.template getFieldComponent<momenta::FixedDensity::RHO>(0) + V{-0.25};
-cell[1] = -x12*x16 + x8*(-x10 - x12*x13 - x15 + x9) + V{-0.125};
-cell[2] = -x16*x18 + x8*(-x13*x18 + x22) + V{-0.125};
-cell[3] = -x16*x24 + x8*(-x13*x24 + x19 - x20 - x26) + V{-0.125};
-cell[4] = V{0.125}*cell.template getFieldComponent<momenta::FixedDensity::RHO>(0)*x14 - x8*(V{0.5}*cell[4] - x10 - x12*x13 - x15) + V{-0.125};
-cell[5] = V{0.125}*cell.template getFieldComponent<momenta::FixedDensity::RHO>(0)*x21 - x8*(-x13*x18 + x22) + V{-0.125};
-cell[6] = V{0.125}*cell.template getFieldComponent<momenta::FixedDensity::RHO>(0)*x25 - x8*(V{0.5}*cell[6] - x13*x24 - x20 - x26) + V{-0.125};
-return { cell.template getFieldComponent<momenta::FixedDensity::RHO>(0), cell.template getFieldComponent<descriptors::VELOCITY>(0)*cell.template getFieldComponent<descriptors::VELOCITY>(0) + cell.template getFieldComponent<descriptors::VELOCITY>(1)*cell.template getFieldComponent<descriptors::VELOCITY>(1) + cell.template getFieldComponent<descriptors::VELOCITY>(2)*cell.template getFieldComponent<descriptors::VELOCITY>(2) };
+auto x8 = cell.template getFieldComponent<descriptors::VELOCITY>(1);
+auto x9 = cell.template getFieldComponent<descriptors::VELOCITY>(2);
+auto x7 = cell.template getFieldComponent<descriptors::VELOCITY>(0);
+auto x10 = cell.template getFieldComponent<momenta::FixedDensity::RHO>(0);
+auto x14 = parameters.template get<descriptors::OMEGA>();
+auto x11 = x14 + V{-1};
+auto x12 = V{0.5}*cell[1];
+auto x13 = V{0.5}*cell[4];
+auto x15 = V{4}*x7;
+auto x16 = x15 + V{1};
+auto x17 = V{0.0625}*x10;
+auto x18 = x15 + V{-1};
+auto x19 = x11*(x12 - x13 + x16*x17 + x17*x18);
+auto x20 = V{0.125}*x10;
+auto x21 = V{4}*x8;
+auto x22 = x21 + V{-1};
+auto x23 = V{0.5}*cell[3];
+auto x24 = V{0.5}*cell[6];
+auto x25 = x21 + V{1};
+auto x26 = V{0.5}*cell[0] + V{1}*cell[5] - V{0.5}*x10 + x12 + x13 - x17*x25 + x23 + x24 + V{0.5};
+auto x27 = V{4}*x9;
+auto x28 = x27 + V{1};
+auto x29 = x27 + V{-1};
+auto x30 = x11*(x17*x28 + x17*x29 + x23 - x24);
+cell[0] = V{0.25}*x10 + V{-0.25};
+cell[1] = -x18*x20 - x19 + V{-0.125};
+cell[2] = x11*(-x17*x22 + x26) - x20*x22 + V{-0.125};
+cell[3] = -x20*x29 - x30 + V{-0.125};
+cell[4] = x16*x20 + x19 + V{-0.125};
+cell[5] = V{0.125}*x10*x25 - x11*(-x17*x22 + x26) + V{-0.125};
+cell[6] = x20*x28 + x30 + V{-0.125};
+return { x10, x7*x7 + x8*x8 + x9*x9 };
 }
 };
 

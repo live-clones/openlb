@@ -157,8 +157,16 @@ public:
 
   using parameters = typename CORRECTED_DYNAMICS::parameters;
 
+  template <typename NEW_T>
+  using exchange_value_type = IncZouHeDynamics<NEW_T,DESCRIPTOR,
+    typename DYNAMICS::template exchange_value_type<NEW_T>,
+    MOMENTA,direction,orientation
+  >;
+
   template<typename M>
   using exchange_momenta = IncZouHeDynamics<T,DESCRIPTOR,DYNAMICS,M,direction,orientation>;
+
+  constexpr static bool is_vectorizable = false;
 
   std::type_index id() override {
     return typeid(IncZouHeDynamics);

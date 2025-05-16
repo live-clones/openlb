@@ -38,21 +38,24 @@ template <typename T, typename... FIELDS>
 struct CSE<dynamics::Tuple<T, descriptors::D3Q7<FIELDS...>, momenta::Tuple<momenta::BulkDensity, momenta::BulkMomentum, momenta::NoStress, momenta::DefineToEq>, equilibria::FirstOrder, collision::BGK, AdvectionDiffusionExternalVelocityCollision>> {
 template <concepts::Cell CELL, concepts::Parameters PARAMETERS, concepts::BaseType V=typename CELL::value_t>
 CellStatistic<V> collide(CELL& cell, PARAMETERS& parameters) any_platform {
-auto x7 = parameters.template get<descriptors::OMEGA>();
-auto x8 = x7 + V{-1};
-auto x9 = cell[0] + cell[1] + cell[2] + cell[3] + cell[4] + cell[5] + cell[6];
-auto x10 = V{4}*cell.template getFieldComponent<descriptors::VELOCITY>(0);
-auto x11 = x9 + V{1};
-auto x12 = V{0.125}*x7;
-auto x13 = V{4}*cell.template getFieldComponent<descriptors::VELOCITY>(1);
-auto x14 = V{4}*cell.template getFieldComponent<descriptors::VELOCITY>(2);
-auto x0 = -cell[0]*x8 + V{0.25}*x7*x9;
-auto x1 = -cell[1]*x8 - x12*(x11*(x10 + V{-1}) + V{1});
-auto x2 = -cell[2]*x8 - x12*(x11*(x13 + V{-1}) + V{1});
-auto x3 = -cell[3]*x8 - x12*(x11*(x14 + V{-1}) + V{1});
-auto x4 = -cell[4]*x8 + V{0.125}*x7*(x11*(x10 + V{1}) + V{-1});
-auto x5 = -cell[5]*x8 + V{0.125}*x7*(x11*(x13 + V{1}) + V{-1});
-auto x6 = -cell[6]*x8 + V{0.125}*x7*(x11*(x14 + V{1}) + V{-1});
+auto x7 = cell.template getFieldComponent<descriptors::VELOCITY>(0);
+auto x8 = cell.template getFieldComponent<descriptors::VELOCITY>(1);
+auto x9 = cell.template getFieldComponent<descriptors::VELOCITY>(2);
+auto x10 = parameters.template get<descriptors::OMEGA>();
+auto x11 = x10 + V{-1};
+auto x12 = cell[0] + cell[1] + cell[2] + cell[3] + cell[4] + cell[5] + cell[6];
+auto x13 = V{4}*x7;
+auto x14 = x12 + V{1};
+auto x15 = V{0.125}*x10;
+auto x16 = V{4}*x8;
+auto x17 = V{4}*x9;
+auto x0 = -cell[0]*x11 + V{0.25}*x10*x12;
+auto x1 = -cell[1]*x11 - x15*(x14*(x13 + V{-1}) + V{1});
+auto x2 = -cell[2]*x11 - x15*(x14*(x16 + V{-1}) + V{1});
+auto x3 = -cell[3]*x11 - x15*(x14*(x17 + V{-1}) + V{1});
+auto x4 = -cell[4]*x11 + V{0.125}*x10*(x14*(x13 + V{1}) + V{-1});
+auto x5 = -cell[5]*x11 + V{0.125}*x10*(x14*(x16 + V{1}) + V{-1});
+auto x6 = -cell[6]*x11 + V{0.125}*x10*(x14*(x17 + V{1}) + V{-1});
 cell[0] = x0;
 cell[1] = x1;
 cell[2] = x2;
@@ -60,7 +63,7 @@ cell[3] = x3;
 cell[4] = x4;
 cell[5] = x5;
 cell[6] = x6;
-return { x9 + V{1}, cell.template getFieldComponent<descriptors::VELOCITY>(0)*cell.template getFieldComponent<descriptors::VELOCITY>(0) + cell.template getFieldComponent<descriptors::VELOCITY>(1)*cell.template getFieldComponent<descriptors::VELOCITY>(1) + cell.template getFieldComponent<descriptors::VELOCITY>(2)*cell.template getFieldComponent<descriptors::VELOCITY>(2) };
+return { x12 + V{1}, x7*x7 + x8*x8 + x9*x9 };
 }
 };
 

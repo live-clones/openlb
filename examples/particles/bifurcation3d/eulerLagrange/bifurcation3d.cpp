@@ -510,7 +510,7 @@ int main( int argc, char* argv[] )
   int noOfCuboids = util::max( 16, 4 * singleton::mpi().getSize() );
 
   CuboidDecomposition3D<T> cuboidDecomposition( extendedDomain, converter.getPhysDeltaX(),
-                                      noOfCuboids );
+                                                noOfCuboids );
 
   // Instantiation of an empty loadBalancer
   HeuristicLoadBalancer<T> loadBalancer( cuboidDecomposition );

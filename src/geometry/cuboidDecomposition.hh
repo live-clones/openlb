@@ -64,8 +64,8 @@ CuboidDecomposition<T,D>::CuboidDecomposition(IndicatorF<T,D>& indicatorF, T vox
   _cuboids.reserve(nC+2);
   if (nC > 1) {
     split(0, nC);
-    shrink(indicatorF);
   }
+  shrink(indicatorF);
 }
 
 template <typename T, unsigned D>

@@ -116,6 +116,39 @@ struct TrackAverageVelocity {
     }
   };
 };
+
+template <typename COLLISION>
+struct StoreAndTrackAverageVelocity {
+  using parameters = typename COLLISION::parameters::template include<descriptors::LATTICE_TIME>;
+
+  static std::string getName() {
+    return "StoreAndTrackAverageVelocity<" + COLLISION::getName() + ">";
+  }
+
+  template <typename DESCRIPTOR, typename MOMENTA, typename EQUILIBRIUM>
+  struct type {
+    using MomentaF = typename MOMENTA::template type<DESCRIPTOR>;
+    using CollisionO = typename COLLISION::template type<DESCRIPTOR, MOMENTA, EQUILIBRIUM>;
+
+    static constexpr bool is_vectorizable = dynamics::is_vectorizable_v<CollisionO>;
+
+    template <concepts::Cell CELL, typename PARAMETERS, typename V=typename CELL::value_t>
+    CellStatistic<V> apply(CELL& cell, PARAMETERS& parameters) any_platform {
+      auto statistics = CollisionO().apply(cell, parameters);
+
+      Vector<V,DESCRIPTOR::d> u;
+      MomentaF().computeU(cell, u);
+
+      auto iT = parameters.template get<descriptors::LATTICE_TIME>();
+      auto uAvg = cell.template getField<descriptors::AVERAGE_VELOCITY>();
+      cell.template setField<descriptors::AVERAGE_VELOCITY>((uAvg * (iT-1) + u) / iT);
+      cell.template setField<descriptors::VELOCITY2>(u);
+
+      return statistics;
+    }
+  };
+};
+
   /// Track time-averaged density of COLLISION into cell field AVERAGE_DENSITY
 template <typename COLLISION>
 struct TrackAverageDensity {

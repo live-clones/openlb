@@ -78,10 +78,15 @@ protected:
   std::function<AbstractCollisionO<T,DESCRIPTOR>*(Platform)> _makeOperator;
 
   const std::string _name;
-  const bool _isOptimizationAvailable;
 
+  /// Returns the set of all accessed fields
+  std::function<std::set<FieldTypePromise<T,DESCRIPTOR>>()> _accessedFields;
+
+  const bool _isOptimizationAvailable;
   std::function<std::optional<std::size_t>()> _inspectArithmeticOperationCount;
+  std::function<std::optional<std::size_t>()> _inspectMemoryBandwidth;
   std::function<std::optional<bool>()> _inspectOptimizability;
+  std::function<std::optional<std::size_t>()> _inspectComplexity;
 
 public:
   template <typename DYNAMICS>
@@ -93,20 +98,30 @@ public:
     _makeOperator([](Platform platform) -> AbstractCollisionO<T,DESCRIPTOR>* {
       if constexpr (concepts::IntrospectableDynamics<DYNAMICS>) {
         if constexpr (dynamics::is_cse_optimized<DYNAMICS>::value) {
-          return constructUsingConcretePlatform<ConcretizableBlockCollisionO<T,DESCRIPTOR,CSE<DYNAMICS>>>(platform);
+         return constructUsingConcretePlatform<ConcretizableBlockCollisionO<T,DESCRIPTOR,CSE<DYNAMICS>>>(platform);
         } else {
           return constructUsingConcretePlatform<ConcretizableBlockCollisionO<T,DESCRIPTOR,DYNAMICS>>(platform);
         }
       } else {
-          return constructUsingConcretePlatform<ConcretizableBlockCollisionO<T,DESCRIPTOR,DYNAMICS>>(platform);
+        return constructUsingConcretePlatform<ConcretizableBlockCollisionO<T,DESCRIPTOR,DYNAMICS>>(platform);
       }
     }),
     _name{fields::name<DYNAMICS>()},
+    _accessedFields([]() -> std::set<FieldTypePromise<T,DESCRIPTOR>> {
+      if constexpr (!std::is_same_v<T,Expr>) {
+        if constexpr (std::is_same_v<NoDynamics<T,DESCRIPTOR>, DYNAMICS>) {
+          return {};
+        } else {
+          return introspection::getFieldsAccessedByDynamics<T,DESCRIPTOR,DYNAMICS>();
+        }
+      } else {
+        throw std::domain_error("Can not introspect the introspection");
+      }
+    }),
     _isOptimizationAvailable{dynamics::is_cse_optimized<DYNAMICS>::value},
     _inspectArithmeticOperationCount([]() -> std::optional<std::size_t> {
 #ifdef FEATURE_INSPECT_DYNAMICS
       if constexpr (!std::is_same_v<T,Expr>) {
-        // TODO Unravel, both counts currently the same due to Expr structure
         if constexpr (dynamics::is_cse_optimized<DYNAMICS>::value) {
           return introspection::getArithmeticOperationCount<CSE<DYNAMICS>>();
         } else {
@@ -114,6 +129,20 @@ public:
         }
       } else {
         throw std::domain_error("Can not introspect the introspection - we, sadly, are not in LISP land.");
+      }
+#endif // FEATURE_INSPECT_DYNAMICS
+      return std::nullopt;
+    }),
+    _inspectMemoryBandwidth([]() -> std::optional<std::size_t> {
+#ifdef FEATURE_INSPECT_DYNAMICS
+      if constexpr (!std::is_same_v<T,Expr>) {
+        if constexpr (dynamics::is_cse_optimized<DYNAMICS>::value) {
+          return introspection::getMemoryBandwidthOfCollision<CSE<DYNAMICS>>();
+        } else {
+          return introspection::getMemoryBandwidthOfCollision<DYNAMICS>();
+        }
+      } else {
+        throw std::domain_error("Can not introspect the introspection");
       }
 #endif // FEATURE_INSPECT_DYNAMICS
       return std::nullopt;
@@ -128,6 +157,20 @@ public:
 #else
       return std::nullopt;
 #endif // FEATURE_INSPECT_DYNAMICS
+    }),
+    _inspectComplexity([]() -> std::optional<std::size_t> {
+#ifdef FEATURE_INSPECT_DYNAMICS
+      if constexpr (!std::is_same_v<T,Expr>) {
+        if constexpr (dynamics::is_cse_optimized<DYNAMICS>::value) {
+          return introspection::getComplexity<CSE<DYNAMICS>>();
+        } else {
+          return introspection::getComplexity<DYNAMICS>();
+        }
+      } else {
+        throw std::domain_error("Can not introspect the introspection - we, sadly, are not in LISP land.");
+      }
+#endif // FEATURE_INSPECT_DYNAMICS
+      return std::nullopt;
     })
   { }
 
@@ -136,20 +179,43 @@ public:
     return _id;
   }
 
+  /// Returns name of promised DYNAMICS
   std::string name() const {
     return _name;
   }
 
+  /// Returns set of accessed fields
+  std::set<FieldTypePromise<T,DESCRIPTOR>> accessedFields() const {
+    return _accessedFields();
+  }
+
+  /// Returns true if a CSE version is available
   bool hasOptimizedVersion() const {
     return _isOptimizationAvailable;
   }
 
+  /// Returns whether a CSE version can be generated (if this can be determined)
+  std::optional<bool> isOptimizable() const {
+    return _inspectOptimizability();
+  }
+
+  /// Returns FLOPs per collision (if this can be determined)
   std::optional<std::size_t> getArithmeticOperationCount() const {
     return _inspectArithmeticOperationCount();
   }
 
-  std::optional<bool> isOptimizable() const {
-    return _inspectOptimizability();
+  /// Returns memory bandwidth per collision (if this can be determined)
+  std::optional<std::size_t> getMemoryBandwidth() const {
+    if (auto bandwidth = _inspectMemoryBandwidth()) {
+      return *bandwidth * sizeof(T);
+    } else {
+      return std::nullopt;
+    }
+  }
+
+  /// Returns size of expanded expression tree (only for internal CSE generation use)
+  std::optional<std::size_t> getComplexity() const {
+    return _inspectComplexity();
   }
 
   bool operator<(const DynamicsPromise<T,DESCRIPTOR>& rhs) const {
@@ -222,6 +288,12 @@ private:
                           std::forward_as_tuple(promise, promise.template realize<PLATFORM>())).first;
       auto& [_, op] = iter->second;
       op->setup(_lattice);
+      if (_lattice.isIntrospectable()) {
+        auto accessedFields = promise.accessedFields();
+        for (FieldTypePromise<T,DESCRIPTOR> field : accessedFields) {
+          field.ensureAvailabilityIn(_lattice);
+        }
+      }
       return *op;
     } else {
       auto& [_, op] = iter->second;

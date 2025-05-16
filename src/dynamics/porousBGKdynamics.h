@@ -604,6 +604,9 @@ struct ForcedPSMBGKdynamics final : public dynamics::CustomCollision<T,DESCRIPTO
 
   constexpr static bool is_vectorizable = false;
 
+  template <typename NEW_T>
+  using exchange_value_type = ForcedPSMBGKdynamics<NEW_T,DESCRIPTOR>;
+
   std::type_index id() override {
     return typeid(ForcedPSMBGKdynamics);
   }

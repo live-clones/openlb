@@ -92,7 +92,7 @@ clean-extraction:
 
 .PHONY: clean-targets
 clean-targets:
-	rm $(EXT_TARGET_LIST)
+	rm -f $(EXT_TARGET_LIST)
 
 .PHONY: clean
 clean: clean-extraction

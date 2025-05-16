@@ -38,24 +38,26 @@ template <typename T, typename... FIELDS>
 struct CSE<dynamics::Tuple<T, descriptors::D2Q5<FIELDS...>, momenta::Tuple<momenta::BulkDensity, momenta::BulkMomentum, momenta::NoStress, momenta::DefineToEq>, equilibria::FirstOrder, collision::BGK, AdvectionDiffusionExternalVelocityCollision>> {
 template <concepts::Cell CELL, concepts::Parameters PARAMETERS, concepts::BaseType V=typename CELL::value_t>
 CellStatistic<V> collide(CELL& cell, PARAMETERS& parameters) any_platform {
-auto x5 = parameters.template get<descriptors::OMEGA>();
-auto x6 = x5 + V{-1};
-auto x7 = cell[0] + cell[1] + cell[2] + cell[3] + cell[4];
-auto x8 = V{3}*cell.template getFieldComponent<descriptors::VELOCITY>(0);
-auto x9 = x7 + V{1};
-auto x10 = V{0.166666666666667}*x5;
-auto x11 = V{3}*cell.template getFieldComponent<descriptors::VELOCITY>(1);
-auto x0 = -cell[0]*x6 + V{0.333333333333333}*x5*x7;
-auto x1 = -cell[1]*x6 - x10*(x9*(x8 + V{-1}) + V{1});
-auto x2 = -cell[2]*x6 - x10*(x9*(x11 + V{-1}) + V{1});
-auto x3 = -cell[3]*x6 + V{0.166666666666667}*x5*(x9*(x8 + V{1}) + V{-1});
-auto x4 = -cell[4]*x6 + V{0.166666666666667}*x5*(x9*(x11 + V{1}) + V{-1});
+auto x5 = cell.template getFieldComponent<descriptors::VELOCITY>(0);
+auto x7 = parameters.template get<descriptors::OMEGA>();
+auto x6 = cell.template getFieldComponent<descriptors::VELOCITY>(1);
+auto x8 = x7 + V{-1};
+auto x9 = cell[0] + cell[1] + cell[2] + cell[3] + cell[4];
+auto x10 = V{3}*x5;
+auto x11 = x9 + V{1};
+auto x12 = V{0.166666666666667}*x7;
+auto x13 = V{3}*x6;
+auto x0 = -cell[0]*x8 + V{0.333333333333333}*x7*x9;
+auto x1 = -cell[1]*x8 - x12*(x11*(x10 + V{-1}) + V{1});
+auto x2 = -cell[2]*x8 - x12*(x11*(x13 + V{-1}) + V{1});
+auto x3 = -cell[3]*x8 + V{0.166666666666667}*x7*(x11*(x10 + V{1}) + V{-1});
+auto x4 = -cell[4]*x8 + V{0.166666666666667}*x7*(x11*(x13 + V{1}) + V{-1});
 cell[0] = x0;
 cell[1] = x1;
 cell[2] = x2;
 cell[3] = x3;
 cell[4] = x4;
-return { x7 + V{1}, cell.template getFieldComponent<descriptors::VELOCITY>(0)*cell.template getFieldComponent<descriptors::VELOCITY>(0) + cell.template getFieldComponent<descriptors::VELOCITY>(1)*cell.template getFieldComponent<descriptors::VELOCITY>(1) };
+return { x9 + V{1}, x5*x5 + x6*x6 };
 }
 };
 

@@ -294,9 +294,9 @@ public:
           auto ub = u_1*tangent;
           if (movingWall) {
             ub = ub + uWall;
+            auto ub_prev = cell.template getField<descriptors::WMVELOCITY>();
+            ub = V{0.9}*ub_prev + V{0.1}*ub;
           }
-          auto ub_prev = cell.template getField<descriptors::WMVELOCITY>();
-          ub = V{0.9}*ub_prev + V{0.1}*ub;
           if (bodyForce) {
             auto force = cell.template getField<descriptors::FORCE>();
             V u_b[DESCRIPTOR::d] { };

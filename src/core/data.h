@@ -122,7 +122,7 @@ public:
     }),
     _setPlaceholderExpr([](Cell<Expr,DESCRIPTOR>& cell, std::vector<Expr>& expr) {
       if constexpr (concepts::LatticeDescriptor<DESCRIPTOR>) {
-        if constexpr (std::is_same_v<Expr, T> && fields::isArray<FIELD_TYPE>()) {
+        if constexpr (fields::isArray<FIELD_TYPE>()) {
           if constexpr (std::is_same_v<Expr, typename FieldD<Expr,DESCRIPTOR,typename FIELD_TYPE::field_t>::value_t>) {
             FieldD<Expr,DESCRIPTOR,typename FIELD_TYPE::field_t> placeholder{};
             for (unsigned iD=0; iD < placeholder.d; ++iD) {
@@ -130,7 +130,7 @@ public:
             }
             cell.template setField<typename FIELD_TYPE::field_t>(placeholder);
           } else {
-            throw std::runtime_error("Can not set placeholder for non-FieldArray types");
+            throw std::runtime_error("Can not set placeholder for non-T types");
           }
         } else {
           throw std::runtime_error("Can not set placeholder for non-FieldArray types");
@@ -140,7 +140,7 @@ public:
     _getPlaceholderExpr([](Cell<Expr,DESCRIPTOR>& cell) {
       std::vector<Expr> expressions;
       if constexpr (concepts::LatticeDescriptor<DESCRIPTOR>) {
-        if constexpr (std::is_same_v<Expr, T> && fields::isArray<FIELD_TYPE>()) {
+        if constexpr (fields::isArray<FIELD_TYPE>()) {
           if constexpr (std::is_same_v<Expr, typename FieldD<Expr,DESCRIPTOR,typename FIELD_TYPE::field_t>::value_t>) {
             FieldD<Expr,DESCRIPTOR,typename FIELD_TYPE::field_t> placeholder{};
             placeholder = cell.template getFieldPointer<typename FIELD_TYPE::field_t>();
@@ -148,7 +148,7 @@ public:
               expressions.push_back(placeholder[iD]);
             }
           } else {
-            throw std::runtime_error("Can not get placeholder for non-FieldArray types");
+            throw std::runtime_error("Can not get placeholder for non-T types");
           }
         } else {
           throw std::runtime_error("Can not get placeholder for non-FieldArray types");
@@ -167,7 +167,7 @@ public:
   }
 
   std::optional<unsigned> dimension() const {
-      return _dim;
+    return _dim;
   }
 
   void ensureAvailabilityIn(BlockLattice<T,DESCRIPTOR>& block) {

@@ -9,8 +9,8 @@ TARGET_OUT=$2
 # define type of target
 TYPE=dynamics
 
-# Only look at optimizable dynamics with complexity in [0,100e6]
-awk -F\; '$3 == 1 && $5 > 0 && $5 < 100e6 { print $1 }' $TARGET_IN > tmp.$TYPE
+# Only look at optimizable dynamics with manageable complexity
+awk -F\; '$3 == 1 && $6 > 0 && $6 < 100e6 { print $1 }' $TARGET_IN > tmp.$TYPE
 
 # Perform some string manipulation of the following steps
 awk 'NF > 0 { line=$0; gsub(/double/, "Expr", line);

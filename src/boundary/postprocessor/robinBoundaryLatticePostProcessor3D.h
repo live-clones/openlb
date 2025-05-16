@@ -84,7 +84,7 @@ struct robinBoundaryLatticePostProcessor3D
 
     Vector<T,1> unknownIndices;
     for(int iPop = 0; iPop<DESCRIPTOR::q; iPop++){
-      if(descriptors::c<DESCRIPTOR>(iPop)[direction] == orientation){
+      if(descriptors::c<DESCRIPTOR>(iPop, direction) == orientation){
         unknownIndices[0] = iPop;
       }
     }
@@ -137,7 +137,7 @@ struct robinBoundaryLatticePostProcessor3Dother
 
     Vector<T,1> unknownIndices;
     for(int iPop = 0; iPop<DESCRIPTOR::q; iPop++){
-      if(descriptors::c<DESCRIPTOR>(iPop)[direction] == orientation){
+      if(descriptors::c<DESCRIPTOR>(iPop, direction) == orientation){
         unknownIndices[0] = iPop;
       }
     }

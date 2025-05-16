@@ -41,14 +41,14 @@ using namespace olb::graphics;
 using T = FLOATING_POINT_TYPE;
 using NSDESCRIPTOR = D2Q9<RHO,NABLARHO,FORCE,EXTERNAL_FORCE,TAU_EFF,STATISTIC,SCALAR>;
 using ACDESCRIPTOR = D2Q9<CONV_POPS,FORCE,SOURCE,VELOCITY,OLD_PHIU,STATISTIC,THETA,PSI,NORMGRADPSI,SCALAR,PSI0>;
-using NSBulkDynamics = MPIncTRTdynamics<T,NSDESCRIPTOR>;
+using NSBulkDynamics = MultiPhaseIncompressbileTRTdynamics<T,NSDESCRIPTOR>;
 using ACBulkDynamics = AllenCahnBGKdynamics<T,ACDESCRIPTOR>;
 using Coupling = LiangPostProcessor;
 
 // Parameters for the simulation setup
 const int Ny = 160;                         // domain resolution y [lattice units]
-const int Nx = 6*Ny;                        // domain resolution x [lattice units]
-const int diameter = Ny/4;                    // lattice bubble diameter [lattice units]
+const int Nx = 4*Ny;                        // domain resolution x [lattice units]
+const int diameter = Ny/4;                  // lattice bubble diameter [lattice units]
 const T L_char = 40e-6;                     // physLength bubble diameter [physical units]
 const T C_rho = 100.;                       // conversion factor density [physical units]
 const T tau_l = 0.53;                       // lattice relaxation time H2O liquid [lattice units]
@@ -191,7 +191,7 @@ void prepareLattice( SuperLattice<T,NSDESCRIPTOR>& sLatticeNS,
   boundary::set<boundary::IncompressibleZouHeVelocity>(sLatticeNS, inlet);
   boundary::set<boundary::RegularizedTemperature>(sLatticeAC, inlet);
   boundary::set<boundary::IncompressibleZouHePressure>(sLatticeNS, outlet);
-  boundary::set<boundary::PhaseFieldConvective>(sLatticeAC, outlet);
+  setConvectivePhaseFieldBoundary<T,ACDESCRIPTOR>(sLatticeAC, outlet);
 
   const T maxVelocity = Re/Ny*((tau_l-0.5)/3.);
   const T radius = T(0.5)*dx*(Ny - 2);

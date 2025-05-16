@@ -41,7 +41,7 @@ private:
   Vector<S,D> _rotationPoint;
   Vector<S,D> _rotationAxis;
   S _rotationAngle;
-  GenericF<bool, S>& _indicator;
+  IndicatorF<S,D>& _indicator;
   Vector<S,D> _min;
   Vector<S,D> _max;
 public:
@@ -52,8 +52,8 @@ public:
   bool rotate(S output[], const S input[], Vector<S,2> rotationPoint, S rotationAngle );
   bool rotate(S output[], const S input[], Vector<S,3> rotationPoint, Vector<S,3> rotationAxis, S rotationAngle );
   bool operator() (bool output[], const S input[]) override;
-  Vector<S,D>& getMin();
-  Vector<S,D>& getMax();
+  Vector<S,D>& getMin() override;
+  Vector<S,D>& getMax() override;
 };
 
 }

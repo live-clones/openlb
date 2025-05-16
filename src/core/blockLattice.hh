@@ -505,34 +505,37 @@ void ConcreteBlockLattice<T,DESCRIPTOR,PLATFORM>::writeDescription(std::ostream&
     }
 
     clout << "---Dynamics Details---" << std::endl;
-    clout << " Name:          " << fragments[0] << std::endl;
+    clout << " name: " << fragments[0] << std::endl;
     for (unsigned i=1; i < fragments.size(); ++i) {
-    clout << "                " << fragments[i] << std::endl;
+    clout << "       " << fragments[i] << std::endl;
     }
-    clout << " Weight:        " << _dynamicsMap.getWeight(promise) << std::endl;
+    clout << " weight:           " << _dynamicsMap.getWeight(promise) << std::endl;
     if (auto optimizable = promise.isOptimizable()) {
-    clout << " isOptimizable: " << *optimizable << std::endl;
+    clout << " isOptimizable:    " << *optimizable << std::endl;
     }
-    clout << " isOptimized:   " << promise.hasOptimizedVersion() << std::endl;
+    clout << " isOptimized:      " << promise.hasOptimizedVersion() << std::endl;
     if (auto count = promise.getArithmeticOperationCount()) {
-    clout << " complexity:    " << *count << std::endl;
+    clout << " operations[FLOP]: " << *count << std::endl;
+    }
+    if (auto count = promise.getMemoryBandwidth()) {
+    clout << " bandwidth[byte]:  " << *count << std::endl;
     }
     clout << "----------------------" << std::endl;
   }
 
   for (const auto& [stage, map] : _postProcessors) {
     clout << "---Stage Details---" << std::endl;
-    clout << " Name: " << stage.name() << std::endl;
+    clout << " name: " << stage.name() << std::endl;
 
     for (const auto& [priority, postProcessorsOfPriority] : map) {
       clout << std::endl;
       const auto operators = postProcessorsOfPriority.getAll();
       for (const auto& promise : operators) {
         clout << "---Post Processor Details---" << std::endl;
-        clout << " Name:        " << promise.name() << std::endl;
-        clout << " Priority:    " << promise.priority() << std::endl;
-        clout << " Scope:       " << getName(promise.scope()) << std::endl;
-        clout << " Weight:      " << postProcessorsOfPriority.getWeight(promise) << std::endl;
+        clout << " name:        " << promise.name() << std::endl;
+        clout << " priority:    " << promise.priority() << std::endl;
+        clout << " scope:       " << getName(promise.scope()) << std::endl;
+        clout << " weight:      " << postProcessorsOfPriority.getWeight(promise) << std::endl;
         clout << " isOptimized: " << promise.hasOptimizedVersion() << std::endl;
         clout << "---------------------------" << std::endl;
       }
@@ -546,7 +549,7 @@ template<typename T, typename DESCRIPTOR, Platform PLATFORM>
 void ConcreteBlockLattice<T,DESCRIPTOR,PLATFORM>::writeDynamicsAsCSV(std::ostream& clout) const
 {
   const auto dynamics = _dynamicsMap.getAll();
-  clout << "name; weight; isOptimizable; isOptimized; complexity" << std::endl;
+  clout << "name; weight; isOptimizable; isOptimized; FLOP; complexity; bandwidth" << std::endl;
   for (const auto& promise : dynamics) {
     clout << promise.name()
           << "; " << _dynamicsMap.getWeight(promise);
@@ -557,7 +560,17 @@ void ConcreteBlockLattice<T,DESCRIPTOR,PLATFORM>::writeDynamicsAsCSV(std::ostrea
     }
     clout << "; " << promise.hasOptimizedVersion();
     if (auto count = promise.getArithmeticOperationCount()) {
-    clout << "; " <<* count;
+    clout << "; " << *count;
+    } else {
+    clout << "; -1";
+    }
+    if (auto count = promise.getComplexity()) {
+    clout << "; " << *count;
+    } else {
+    clout << "; -1";
+    }
+    if (auto count = promise.getMemoryBandwidth()) {
+    clout << "; " << *count;
     } else {
     clout << "; -1";
     }

@@ -156,6 +156,8 @@ private:
   const std::ptrdiff_t _count;
   const std::size_t    _size;
 
+  int _shm_file;
+
   std::uint8_t* _buffer;
 
   T* _base;
@@ -174,7 +176,7 @@ public:
   #ifdef __NR_memfd_create
     // Open anonymous file for physical lattice memory
     // Manual call of "memfd_create("openlb", MFD_CLOEXEC)" in case GLIB is old
-    const int shm_file = syscall(__NR_memfd_create, "openlb", MFD_CLOEXEC);
+    _shm_file = syscall(__NR_memfd_create, "openlb", MFD_CLOEXEC);
   #else
     std::string shm_path = "/openlb_block_XXXXXX";
     const int shm_name = mkstemp(const_cast<char*>(shm_path.data()));
@@ -182,15 +184,15 @@ public:
       throw std::runtime_error("Could not generate unique shared memory object name");
     }
     // Open shared memory object as physical lattice memory
-    const int shm_file = shm_open(shm_path.c_str(), O_CREAT | O_RDWR | O_EXCL | O_CLOEXEC, S_IRUSR | S_IWUSR);
+    _shm_file = shm_open(shm_path.c_str(), O_CREAT | O_RDWR | O_EXCL | O_CLOEXEC, S_IRUSR | S_IWUSR);
     shm_unlink(shm_path.c_str());
   #endif
-    if (shm_file == -1) {
+    if (_shm_file == -1) {
       throw std::runtime_error("Failed to create shared memory object");
     }
 
     // Resize to fit lattice populations
-    if (ftruncate(shm_file, _size) == -1) {
+    if (ftruncate(_shm_file, _size) == -1) {
       throw std::runtime_error("Failed to resize shared memory object");
     }
 
@@ -199,8 +201,8 @@ public:
       mmap(NULL, 2 * _size, PROT_NONE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0));
 
     // Map single physical lattice into virtual address space
-    mmap(_buffer,         _size, PROT_RW, MAP_SHARED | MAP_FIXED, shm_file, 0);
-    mmap(_buffer + _size, _size, PROT_RW, MAP_SHARED | MAP_FIXED, shm_file, 0);
+    mmap(_buffer,         _size, PROT_RW, MAP_SHARED | MAP_FIXED, _shm_file, 0);
+    mmap(_buffer + _size, _size, PROT_RW, MAP_SHARED | MAP_FIXED, _shm_file, 0);
 
     // Store base pointer for reference
     _base = reinterpret_cast<T*>(_buffer);
@@ -210,6 +212,7 @@ public:
 
   ~CyclicColumn() {
     munmap(_buffer, 2 * _size);
+    close(_shm_file);
   }
 
   const T& operator[](std::size_t i) const override

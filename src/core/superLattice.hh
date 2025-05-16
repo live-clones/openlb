@@ -225,7 +225,7 @@ void SuperLattice<T,DESCRIPTOR>::writeSummary(std::string fileName) const
       } else {
         cGeometry.get(globC).write(fout);
         fout << std::endl;
-        _block[0]->writeDescription(fout);
+        _block[iC]->writeDescription(fout);
         fout.close();
       }
     }
@@ -237,7 +237,7 @@ void SuperLattice<T,DESCRIPTOR>::writeSummary(std::string fileName) const
       if (!fout) {
         this->clout << "writeSummary error: can not open std::ofstream" << std::endl;
       } else {
-        _block[0]->writeDynamicsAsCSV(fout);
+        _block[iC]->writeDynamicsAsCSV(fout);
         fout.close();
       }
     }
@@ -249,7 +249,7 @@ void SuperLattice<T,DESCRIPTOR>::writeSummary(std::string fileName) const
       if (!fout) {
         this->clout << "writeSummary error: can not open std::ofstream" << std::endl;
       } else {
-        _block[0]->writeOperatorAsCSV(fout);
+        _block[iC]->writeOperatorAsCSV(fout);
         fout.close();
       }
     }

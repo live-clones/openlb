@@ -31,21 +31,21 @@ namespace boundary {
 template <
   concepts::BaseType T,
   concepts::LatticeDescriptor DESCRIPTOR,
-  typename MixinDynamics = MPIncTRTdynamics<T,DESCRIPTOR>
+  typename MixinDynamics = MultiPhaseIncompressbileTRTdynamics<T,DESCRIPTOR>
 >
 struct IncompressibleZouHeVelocity;
 
 template <
   concepts::BaseType T,
   concepts::LatticeDescriptor DESCRIPTOR,
-  typename MixinDynamics = MPIncTRTdynamics<T,DESCRIPTOR>
+  typename MixinDynamics = MultiPhaseIncompressbileTRTdynamics<T,DESCRIPTOR>
 >
 struct IncompressibleZouHePressure;
 
 template <
   concepts::BaseType T,
   concepts::LatticeDescriptor DESCRIPTOR,
-  typename MixinDynamics = MPIncTRTdynamics<T,DESCRIPTOR>
+  typename MixinDynamics = MultiPhaseIncompressbileTRTdynamics<T,DESCRIPTOR>
 >
 struct IncompressibleConvective;
 

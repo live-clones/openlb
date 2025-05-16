@@ -46,8 +46,9 @@ struct AdvectionDiffusionBoundariesDynamics final : public dynamics::CustomColli
   template <typename NEW_T>
   using exchange_value_type = AdvectionDiffusionBoundariesDynamics<
     NEW_T, DESCRIPTOR,
-    DYNAMICS, MOMENTA, direction,
-    orientation
+    typename DYNAMICS::template exchange_value_type<NEW_T>,
+    MOMENTA,
+    direction, orientation
   >;
 
   template <typename M>
@@ -131,8 +132,9 @@ public:
   template <typename NEW_T>
   using exchange_value_type = AdvectionDiffusionEdgesDynamics<
     NEW_T, DESCRIPTOR,
-    DYNAMICS, MOMENTA, plane,
-    normal1, normal2
+    typename DYNAMICS::template exchange_value_type<NEW_T>,
+    MOMENTA,
+    plane, normal1, normal2
   >;
 
   template <typename M>
@@ -200,7 +202,8 @@ struct AdvectionDiffusionCornerDynamics2D final : public dynamics::CustomCollisi
   template <typename NEW_T>
   using exchange_value_type = AdvectionDiffusionCornerDynamics2D<
     NEW_T, DESCRIPTOR,
-    DYNAMICS, MOMENTA,
+    typename DYNAMICS::template exchange_value_type<NEW_T>,
+    MOMENTA,
     xNormal, yNormal
   >;
 
@@ -270,8 +273,9 @@ struct AdvectionDiffusionCornerDynamics3D final : public dynamics::CustomCollisi
   template <typename NEW_T>
   using exchange_value_type = AdvectionDiffusionCornerDynamics3D<
     NEW_T, DESCRIPTOR,
-    DYNAMICS, MOMENTA, xNormal,
-    yNormal, zNormal
+    typename DYNAMICS::template exchange_value_type<NEW_T>,
+    MOMENTA,
+    xNormal, yNormal, zNormal
   >;
 
   template <typename M>

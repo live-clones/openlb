@@ -38,12 +38,14 @@ namespace olb{
 // Constructor for 2D Indicator
 template <typename S, unsigned D>
 IndicatorRotate<S,D>::IndicatorRotate(Vector<S,2> rotationPoint, S rotationAngle, IndicatorF<S,D>& indicator)
-:  _rotationPoint(rotationPoint), _rotationAngle(rotationAngle), _indicator(indicator), _min(indicator.getMin()), _max(indicator.getMax()){}
+:  _rotationPoint(rotationPoint), _rotationAngle(rotationAngle), _indicator(indicator), _min(indicator.getMin()), _max(indicator.getMax())
+{}
 
 // Constructor for 3D Indicator
 template <typename S, unsigned D>
 IndicatorRotate<S,D>::IndicatorRotate(Vector<S,3> rotationPoint, Vector<S,3> rotationAxis, S rotationAngle, IndicatorF<S,D>& indicator)
-: _rotationPoint(rotationPoint), _rotationAxis(rotationAxis), _rotationAngle(rotationAngle), _indicator(indicator), _min(indicator.getMin()), _max(indicator.getMax()){}
+: _rotationPoint(rotationPoint), _rotationAxis(rotationAxis), _rotationAngle(rotationAngle), _indicator(indicator), _min(indicator.getMin()), _max(indicator.getMax())
+{}
 
 // Rotate method for 2D
 template <typename S, unsigned D>
@@ -63,24 +65,6 @@ bool IndicatorRotate<S,D>::rotate(S output[], const S input[], Vector<S,2> rotat
   output[0] = p_rot[0] + x_r;
   output[1] = p_rot[1] + y_r;
   return true;
-}
-
-// 2D operator function
-template <typename S, unsigned D>
-bool IndicatorRotate<S,D>::operator() (bool output[], const S input[] )
-{
-  if constexpr (D == 2){
-    S inputTranslated[2] {};
-    IndicatorRotate<S,D>::rotate(inputTranslated, input, _rotationPoint, _rotationAngle);
-    _indicator.operator()(output, inputTranslated);
-    return output[0];
-  }
-  else if constexpr (D == 3){
-    S inputTranslated[3] {};
-    IndicatorRotate<S,D>::rotate(inputTranslated, input, _rotationPoint, _rotationAxis, _rotationAngle);
-    _indicator.operator()(output, inputTranslated);
-    return output[0];
-  }
 }
 
 // 3D rotate function
@@ -129,19 +113,25 @@ Vector<S,D>& IndicatorRotate<S,D>::getMin()
 {
   if constexpr (D == 2){
     S minRot[2] {};
-    const S inMin[2] = {_min[0], _min[1]};
+    const S inMin[2] = {_indicator.getMin()[0], _indicator.getMin()[1]};
     IndicatorRotate<S,D>::rotate(minRot, inMin, _rotationPoint, _rotationAngle);
-    _min[0] = minRot[0];
-    _min[1] = minRot[1];
+    S maxRot[2] {};
+    const S inMax[2] = {_indicator.getMax()[0], _indicator.getMax()[1]};
+    IndicatorRotate<S,D>::rotate(maxRot, inMax, _rotationPoint, _rotationAngle);
+    _min[0] = util::min(minRot[0],maxRot[0]);
+    _min[1] = util::min(minRot[1],maxRot[1]);
     return _min;
   }
   else if constexpr (D == 3){
     S minRot[3] {};
-    const S inMin[3] = {_min[0], _min[1], _min[2]};
+    const S inMin[3] = {_indicator.getMin()[0], _indicator.getMin()[1], _indicator.getMin()[2]};
     IndicatorRotate<S,D>::rotate(minRot, inMin, _rotationPoint, _rotationAxis, _rotationAngle);
-    _min[0] = minRot[0];
-    _min[1] = minRot[1];
-    _min[2] = minRot[2];
+    S maxRot[3] {};
+    const S inMax[3] = {_indicator.getMax()[0], _indicator.getMax()[1], _indicator.getMax()[2]};
+    IndicatorRotate<S,D>::rotate(maxRot, inMax, _rotationPoint, _rotationAxis, _rotationAngle);
+    _min[0] = util::min(minRot[0],maxRot[0]);
+    _min[1] = util::min(minRot[1],maxRot[1]);
+    _min[2] = util::min(minRot[2],maxRot[2]);
     return _min;
   }
 }
@@ -150,21 +140,45 @@ template <typename S, unsigned D>
 Vector<S,D>& IndicatorRotate<S,D>::getMax()
 {
   if constexpr (D == 2){
+    S minRot[2] {};
+    const S inMin[2] = {_indicator.getMin()[0], _indicator.getMin()[1]};
+    IndicatorRotate<S,D>::rotate(minRot, inMin, _rotationPoint, _rotationAngle);
     S maxRot[2] {};
-    const S inMax[2] = {_max[0], _max[1]};
+    const S inMax[2] = {_indicator.getMax()[0], _indicator.getMax()[1]};
     IndicatorRotate<S,D>::rotate(maxRot, inMax, _rotationPoint, _rotationAngle);
-    _max[0] = maxRot[0];
-    _max[1] = maxRot[1];
+    _max[0] = util::max(minRot[0],maxRot[0]);
+    _max[1] = util::max(minRot[1],maxRot[1]);
     return _max;
   }
   else if constexpr (D == 3){
+    S minRot[3] {};
+    const S inMin[3] = {_indicator.getMin()[0], _indicator.getMin()[1], _indicator.getMin()[2]};
+    IndicatorRotate<S,D>::rotate(minRot, inMin, _rotationPoint, _rotationAxis, _rotationAngle);
     S maxRot[3] {};
-    const S inMax[3] = {_max[0], _max[1], _max[2]};
+    const S inMax[3] = {_indicator.getMax()[0], _indicator.getMax()[1], _indicator.getMax()[2]};
     IndicatorRotate<S,D>::rotate(maxRot, inMax, _rotationPoint, _rotationAxis, _rotationAngle);
-    _max[0] = maxRot[0];
-    _max[1] = maxRot[1];
-    _max[2] = maxRot[2];
+    _max[0] = util::max(minRot[0],maxRot[0]);
+    _max[1] = util::max(minRot[1],maxRot[1]);
+    _max[2] = util::max(minRot[2],maxRot[2]);
     return _max;
+  }
+}
+
+// operator function
+template <typename S, unsigned D>
+bool IndicatorRotate<S,D>::operator() (bool output[], const S input[] )
+{
+  if constexpr (D == 2){
+    S inputTranslated[2] {};
+    IndicatorRotate<S,D>::rotate(inputTranslated, input, _rotationPoint, _rotationAngle);
+    _indicator.operator()(output, inputTranslated);
+    return output[0];
+  }
+  else if constexpr (D == 3){
+    S inputTranslated[3] {};
+    IndicatorRotate<S,D>::rotate(inputTranslated, input, _rotationPoint, _rotationAxis, _rotationAngle);
+    _indicator.operator()(output, inputTranslated);
+    return output[0];
   }
 }
 

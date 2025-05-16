@@ -443,7 +443,6 @@ struct PseudopotentialForcedPostProcessor {
 
     // Computation of the interaction potential
     Vector<V,DESCRIPTOR::d> totalForce{};
-    Vector<V,DESCRIPTOR::d> A_ij{};
     V p = POTENTIAL().computeP(rho, parameters);
     V psi = util::sqrt(util::abs(6.*(p - rho/3.)));
     const int symmNumer = DESCRIPTOR::d * ( DESCRIPTOR::d + 1 ) / 2;
@@ -475,6 +474,7 @@ struct PseudopotentialForcedPostProcessor {
                             ) * psi_i;
 
         }
+
       }
 
     }
@@ -495,6 +495,7 @@ struct PseudopotentialForcedPostProcessor {
                           - ( sig - 1. ) * cs2 * M1[iD_1] / cs2 * M2[iD_Symm] / cs4 / 6.;
 
       }
+
     }
 
     // Saving total force and pressure from EOS

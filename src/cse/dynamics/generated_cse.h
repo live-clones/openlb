@@ -36,6 +36,9 @@
 //AdvectionDiffusionBoundariesDynamics<Expr, descriptors::D3Q7<>, dynamics::Tuple<Expr, descriptors::D3Q7<>, momenta::Tuple<momenta::BulkDensity, momenta::BulkMomentum, momenta::NoStress, momenta::DefineToEq>, equilibria::FirstOrder, collision::AdvectionDiffusionRLB, AdvectionDiffusionExternalVelocityCollision>, momenta::Tuple<momenta::FixedDensity, momenta::FixedVelocityMomentumGeneric, momenta::ZeroStress, momenta::DefineSeparately>, 1, 1>
 #include "7cf24b1af3bed5f916cf0be56b0d0f644ff7c82334f3b63ce0192562fb17fede.cse.h"
 
+//AdvectionDiffusionBoundariesDynamics<Expr, descriptors::D3Q7<>, dynamics::Tuple<Expr, descriptors::D3Q7<>, momenta::Tuple<momenta::BulkDensity, momenta::BulkMomentum, momenta::NoStress, momenta::DefineToEq>, equilibria::FirstOrder, collision::AdvectionDiffusionRLB, AdvectionDiffusionExternalVelocityCollision>, momenta::Tuple<momenta::FixedDensity, momenta::FixedVelocityMomentumGeneric, momenta::ZeroStress, momenta::DefineSeparately>, 2, 1>
+#include "25fac19e76d9c87c70721bc18b6033a6af0527cbb7580484bd498bed62501ca1.cse.h"
+
 //AdvectionDiffusionCornerDynamics2D<Expr, descriptors::D2Q5<>, dynamics::Tuple<Expr, descriptors::D2Q5<>, momenta::Tuple<momenta::BulkDensity, momenta::BulkMomentum, momenta::NoStress, momenta::DefineToEq>, equilibria::FirstOrder, collision::AdvectionDiffusionRLB, AdvectionDiffusionExternalVelocityCollision>, momenta::Tuple<momenta::FixedDensity, momenta::FixedVelocityMomentumGeneric, momenta::ZeroStress, momenta::DefineSeparately>, 1, -1>
 #include "acbf79f8085fae17387d31069689c667a2519ad7ffa026bd5d36ca3321e0a657.cse.h"
 
@@ -63,11 +66,8 @@
 //CombinedAdvectionDiffusionRLBdynamics<Expr, descriptors::D2Q5<>, dynamics::Tuple<Expr, descriptors::D2Q5<>, momenta::Tuple<momenta::BulkDensity, momenta::BulkMomentum, momenta::NoStress, momenta::DefineToEq>, equilibria::FirstOrder, collision::AdvectionDiffusionRLB, AdvectionDiffusionExternalVelocityCollision>, momenta::Tuple<momenta::HeatFluxBoundaryDensity<1, 1>, momenta::FixedVelocityMomentumAD, momenta::NoStress, momenta::DefineToEq> >
 #include "7cc09b5832fd629c49c04104e1c4a8c9e8c90735422af8d75355a981e9396278.cse.h"
 
-//CombinedRLBdynamics<Expr, descriptors::D2Q9<>, dynamics::Tuple<Expr, descriptors::D2Q9<>, momenta::Tuple<momenta::BulkDensity, momenta::BulkMomentum, momenta::BulkStress, momenta::DefineToNEq>, equilibria::SecondOrder, collision::ParameterFromCell<descriptors::OMEGA, collision::BGK>, forcing::Wagner>, momenta::Tuple<momenta::FixedDensity, momenta::FixedPressureMomentum<0, -1>, momenta::RegularizedBoundaryStress<0, -1>, momenta::DefineSeparately> >
-#include "101232e66af2ba5112cc90273f06e5b010d6c44dd9cdf432d36103083f41b7c9.cse.h"
-
-//CombinedRLBdynamics<Expr, descriptors::D2Q9<>, dynamics::Tuple<Expr, descriptors::D2Q9<>, momenta::Tuple<momenta::BulkDensity, momenta::BulkMomentum, momenta::BulkStress, momenta::DefineToNEq>, equilibria::SecondOrder, collision::ParameterFromCell<descriptors::OMEGA, collision::BGK>, forcing::Wagner>, momenta::Tuple<momenta::FixedDensity, momenta::FixedPressureMomentum<0, 1>, momenta::RegularizedBoundaryStress<0, 1>, momenta::DefineSeparately> >
-#include "ba1c47014126d64caec6386f4052d75b2de1e30d9c7ce72b3f2fe9b415f043e4.cse.h"
+//CombinedAdvectionDiffusionRLBdynamics<Expr, descriptors::D2Q9<>, dynamics::Tuple<Expr, descriptors::D2Q9<>, momenta::Tuple<momenta::BulkDensity, momenta::BulkMomentum, momenta::NoStress, momenta::DefineToEq>, equilibria::FirstOrder, collision::AdvectionDiffusionRLB, AdvectionDiffusionExternalVelocityCollision>, momenta::Tuple<momenta::FixedDensity, momenta::FixedTemperatureMomentum<0, -1>, momenta::NoStress, momenta::DefineSeparately> >
+#include "174a64c2c88933efd6154c0efebf843fe7f069bc675a46c89dc1ff7c8ff87988.cse.h"
 
 //CombinedRLBdynamics<Expr, descriptors::D2Q9<>, dynamics::Tuple<Expr, descriptors::D2Q9<>, momenta::Tuple<momenta::BulkDensity, momenta::BulkMomentum, momenta::BulkStress, momenta::DefineToNEq>, equilibria::SecondOrder, collision::RLB, dynamics::DefaultCombination>, momenta::Tuple<momenta::FixedDensity, momenta::FixedPressureMomentum<0, 1>, momenta::RegularizedBoundaryStress<0, 1>, momenta::DefineSeparately> >
 #include "cc198b8c1238615b9fc84f7580c29b2805e757af37e00024d7a3ad3d47a101bb.cse.h"
@@ -83,6 +83,12 @@
 
 //CombinedRLBdynamics<Expr, descriptors::D2Q9<>, dynamics::Tuple<Expr, descriptors::D2Q9<>, momenta::Tuple<momenta::BulkDensity, momenta::BulkMomentum, momenta::BulkStress, momenta::DefineToNEq>, equilibria::SecondOrder, collision::RLB, dynamics::DefaultCombination>, momenta::Tuple<momenta::VelocityBoundaryDensity<1, 1>, momenta::FixedVelocityMomentumGeneric, momenta::RegularizedBoundaryStress<1, 1>, momenta::DefineSeparately> >
 #include "0b54c813f514f9b061db90c1777df1b27cf72c65fbb69409c3f07470dbbd359b.cse.h"
+
+//CombinedRLBdynamics<Expr, descriptors::D2Q9<>, dynamics::Tuple<Expr, descriptors::D2Q9<>, momenta::Tuple<momenta::BulkDensity, momenta::BulkMomentum, momenta::BulkStress, momenta::DefineToNEq>, equilibria::SecondOrder, collision::SaveVelocity<collision::BGK>, dynamics::DefaultCombination>, momenta::Tuple<momenta::FixedDensity, momenta::FixedPressureMomentum<0, -1>, momenta::RegularizedBoundaryStress<0, -1>, momenta::DefineSeparately> >
+#include "4a6a87e4bc3e90463db2df427813e42f3442ac63d629b10c1a9c7fb5e0d0b295.cse.h"
+
+//CombinedRLBdynamics<Expr, descriptors::D2Q9<>, dynamics::Tuple<Expr, descriptors::D2Q9<>, momenta::Tuple<momenta::BulkDensity, momenta::BulkMomentum, momenta::BulkStress, momenta::DefineToNEq>, equilibria::SecondOrder, collision::SaveVelocity<collision::BGK>, dynamics::DefaultCombination>, momenta::Tuple<momenta::FixedDensity, momenta::FixedPressureMomentum<0, 1>, momenta::RegularizedBoundaryStress<0, 1>, momenta::DefineSeparately> >
+#include "cfdc729ce198c902194c909a37c3ff72d279c4c93d959fa8d338e451c7530616.cse.h"
 
 //CombinedRLBdynamics<Expr, descriptors::D3Q19<>, dynamics::Tuple<Expr, descriptors::D3Q19<>, momenta::Tuple<momenta::BulkDensity, momenta::BulkMomentum, momenta::BulkStress, momenta::DefineToNEq>, equilibria::SecondOrder, collision::BGK, dynamics::DefaultCombination>, momenta::Tuple<momenta::InnerCornerDensity3D<-1, -1, -1>, momenta::FixedVelocityMomentumGeneric, momenta::InnerCornerStress3D<-1, -1, -1>, momenta::DefineSeparately> >
 #include "80f4c1273aaec3ee8e5538854cffc9fc50c19ae990f908fb497ae4be6813de20.cse.h"
@@ -162,8 +168,20 @@
 //CombinedRLBdynamics<Expr, descriptors::D3Q19<>, dynamics::Tuple<Expr, descriptors::D3Q19<>, momenta::Tuple<momenta::BulkDensity, momenta::BulkMomentum, momenta::BulkStress, momenta::DefineToNEq>, equilibria::SecondOrder, collision::BGK, dynamics::DefaultCombination>, momenta::Tuple<momenta::VelocityBoundaryDensity<2, 1>, momenta::FixedVelocityMomentumGeneric, momenta::RegularizedBoundaryStress<2, 1>, momenta::DefineSeparately> >
 #include "6fe887699614cbe4ea0006e0b11cb1c1016e8c62bd0a1199d3a2f178384694c0.cse.h"
 
+//CombinedRLBdynamics<Expr, descriptors::D3Q19<>, dynamics::Tuple<Expr, descriptors::D3Q19<>, momenta::Tuple<momenta::BulkDensity, momenta::BulkMomentum, momenta::BulkStress, momenta::DefineToNEq>, equilibria::SecondOrder, collision::SaveVelocity<collision::BGK>, dynamics::DefaultCombination>, momenta::Tuple<momenta::FixedDensity, momenta::FixedPressureMomentum<0, 1>, momenta::RegularizedBoundaryStress<0, 1>, momenta::DefineSeparately> >
+#include "67676b09f3c2ddd8f10764fd9f4e8324b2c05ca9313982fd3ab40da568014122.cse.h"
+
+//CombinedRLBdynamics<Expr, descriptors::D3Q19<>, dynamics::Tuple<Expr, descriptors::D3Q19<>, momenta::Tuple<momenta::BulkDensity, momenta::BulkMomentum, momenta::BulkStress, momenta::DefineToNEq>, equilibria::SecondOrder, collision::SaveVelocity<collision::BGK>, dynamics::DefaultCombination>, momenta::Tuple<momenta::VelocityBoundaryDensity<0, -1>, momenta::FixedVelocityMomentumGeneric, momenta::RegularizedBoundaryStress<0, -1>, momenta::DefineSeparately> >
+#include "3cf555dfcfcfd3a60eb71b26ec7ccd105312cf993176a20245b88ca8f6f932ee.cse.h"
+
 //dynamics::Tuple<Expr, descriptors::D2Q5<>, momenta::Tuple<momenta::BulkDensity, momenta::BulkMomentum, momenta::NoStress, momenta::DefineToEq>, equilibria::FirstOrder, collision::BGK, AdvectionDiffusionExternalVelocityCollision>
 #include "462a238371e486b6552d99628d3ac0964c4efd099dcc0129e460ce9de7078105.cse.h"
+
+//dynamics::Tuple<Expr, descriptors::D2Q5<>, momenta::Tuple<momenta::FixedDensity, momenta::ZeroMomentum, momenta::ZeroStress, momenta::DefineSeparately>, equilibria::SecondOrder, collision::Revert, dynamics::DefaultCombination>
+#include "0d734f6856d1d0c3d10347278f4ed84cbd9e38110769f18203a55619e2cf3241.cse.h"
+
+//dynamics::Tuple<Expr, descriptors::D2Q5<>, momenta::Tuple<momenta::OneDensity, momenta::ZeroMomentum, momenta::ZeroStress, momenta::DefineSeparately>, equilibria::None, collision::None, dynamics::DefaultCombination>
+#include "cfdeeca50c7baa3d1aea6d4c457fde7082fbcc3451a57ec9666990a9cb803505.cse.h"
 
 //dynamics::Tuple<Expr, descriptors::D2Q9<>, momenta::Porous<momenta::Tuple<momenta::BulkDensity, momenta::BulkMomentum, momenta::BulkStress, momenta::DefineToNEq> >, equilibria::SecondOrder, collision::BGK, dynamics::DefaultCombination>
 #include "2bb77ad4326049922b42caa24f9ddf59ff7d73ec0cc69e6ef52c2e9c45901aee.cse.h"
@@ -180,8 +198,8 @@
 //dynamics::Tuple<Expr, descriptors::D2Q9<>, momenta::Tuple<momenta::BulkDensity, momenta::BulkMomentum, momenta::BulkStress, momenta::DefineToNEq>, equilibria::SecondOrder, collision::ConstRhoBGK, dynamics::DefaultCombination>
 #include "624cb65402c15187e66409fd86ad9d5849ee280b2bfb2a16f451c6ce8ec0d9ae.cse.h"
 
-//dynamics::Tuple<Expr, descriptors::D2Q9<>, momenta::Tuple<momenta::BulkDensity, momenta::BulkMomentum, momenta::BulkStress, momenta::DefineToNEq>, equilibria::SecondOrder, collision::ParameterFromCell<descriptors::OMEGA, collision::BGK>, forcing::Wagner>
-#include "996f6708939f8d1daeed1f99b8140f8bc0b2bd19baf66b4fb9a8f07b2e3a1670.cse.h"
+//dynamics::Tuple<Expr, descriptors::D2Q9<>, momenta::Tuple<momenta::BulkDensity, momenta::BulkMomentum, momenta::BulkStress, momenta::DefineToNEq>, equilibria::SecondOrder, collision::SaveVelocity<collision::BGK>, dynamics::DefaultCombination>
+#include "90e11e30211170171bb07bd966659eef755d609a83b61e4f62beb7b2c031b2e9.cse.h"
 
 //dynamics::Tuple<Expr, descriptors::D2Q9<>, momenta::Tuple<momenta::BulkDensity, momenta::BulkMomentum, momenta::BulkStress, momenta::DefineToNEq>, equilibria::SecondOrder, collision::SmagorinskyEffectiveOmega<collision::BGK>, forcing::Guo<momenta::ForcedWithStress> >
 #include "c3c9a47e0b09367e0f1fabbe0f7e28ca4c77e9235b1d6b687f83e765a1d4ba8a.cse.h"
@@ -198,8 +216,14 @@
 //dynamics::Tuple<Expr, descriptors::D2Q9<>, momenta::Tuple<momenta::BulkDensity, momenta::FixedVelocityMomentumGeneric, momenta::BulkStress, momenta::DefineUSeparatelyTrace>, equilibria::SecondOrder, collision::ConstRhoBGK, dynamics::DefaultCombination>
 #include "7db96ae43933a8e676a84cd9caa319e696c854cc3bef49f2b1e87c3c1bd1cfff.cse.h"
 
+//dynamics::Tuple<Expr, descriptors::D2Q9<>, momenta::Tuple<momenta::BulkDensity, momenta::FixedVelocityMomentum, momenta::BulkStress, momenta::DefineUSeparately>, equilibria::CahnHilliardZerothOrder, collision::BGK, forcing::WellBalancedCahnHilliard>
+#include "391dd0286b8ff36d100cd7045324028600b16f575e5c33500d9b566e7c4bdc2e.cse.h"
+
 //dynamics::Tuple<Expr, descriptors::D2Q9<>, momenta::Tuple<momenta::BulkDensity, momenta::FixedVelocityMomentum, momenta::BulkStress, momenta::DefineUSeparately>, equilibria::FirstOrder, collision::BGK, forcing::AllenCahn>
 #include "a69e497df9752b474fb63811774b9eddd97ffbb4e497c3359c655d0fce87fcc2.cse.h"
+
+//dynamics::Tuple<Expr, descriptors::D2Q9<>, momenta::Tuple<momenta::BulkDensity, momenta::FixedVelocityMomentum, momenta::BulkStress, momenta::DefineUSeparately>, equilibria::FirstOrder, collision::None, dynamics::DefaultCombination>
+#include "39d33ceb0cf872f6e877e54fc8dd6904c13eeaab803d0bbd74d1ef46220c73e0.cse.h"
 
 //dynamics::Tuple<Expr, descriptors::D2Q9<>, momenta::Tuple<momenta::BulkDensity, momenta::FixedVelocityMomentum, momenta::BulkStress, momenta::DefineUSeparately>, equilibria::SecondOrder, collision::BGK, forcing::MCGuo<momenta::Identity> >
 #include "7439aa5750a38d9cd8f53b4ad5394f9880f8bdadb0a60121b150c709c95e480f.cse.h"
@@ -210,14 +234,23 @@
 //dynamics::Tuple<Expr, descriptors::D2Q9<>, momenta::Tuple<momenta::BulkDensity, momenta::FreeEnergyMomentum, momenta::BulkStress, momenta::DefineToNEq>, equilibria::FreeEnergy, collision::FreeEnergy, dynamics::DefaultCombination>
 #include "dd45531b28e9142de5c6b699b294dfe1b99c91c4b992d98af12c0f4777fa6924.cse.h"
 
-//dynamics::Tuple<Expr, descriptors::D2Q9<>, momenta::Tuple<momenta::BulkPressure<momenta::ForcedMomentum<momenta::IncompressibleBulkMomentum> >, momenta::IncompressibleBulkMomentum, momenta::BulkStress, momenta::DefineToNEq>, equilibria::MPIncompressible, collision::OmegaFromCellTauEff<collision::BGK>, forcing::Liang<momenta::Forced> >
-#include "23f38b2248dcd77c0c766eefbdf764981960a602c43870b14bdd822bfc3fff7d.cse.h"
+//dynamics::Tuple<Expr, descriptors::D2Q9<>, momenta::Tuple<momenta::BulkDensity, momenta::MovingPorousMomentumCombination<momenta::BulkMomentum>, momenta::BulkStress, momenta::DefineToNEq>, equilibria::ThirdOrder, collision::ParameterFromCell<collision::HYBRID, collision::LocalSmagorinskyEffectiveOmega<collision::HRR> >, dynamics::DefaultCombination>
+#include "cc8d1bafc60a9d4f6a2ad430ed72822907810397c0bf1a54d4ef893f2cdc2a9d.cse.h"
+
+//dynamics::Tuple<Expr, descriptors::D2Q9<>, momenta::Tuple<momenta::BulkDensity, momenta::ZeroMomentum, momenta::ZeroStress, momenta::DefineSeparately>, equilibria::FreeEnergy, collision::Revert, dynamics::DefaultCombination>
+#include "368d288a70daacc0ee2ff0eb6ebffff2546193802d979565d82ad58aa84f3380.cse.h"
+
+//dynamics::Tuple<Expr, descriptors::D2Q9<>, momenta::Tuple<momenta::BulkDensity, momenta::ZeroMomentum, momenta::ZeroStress, momenta::DefineSeparately>, equilibria::SecondOrder, collision::Revert, dynamics::DefaultCombination>
+#include "249d899f46680717c5a9d4f6587e82a40bb9b75b980d645eb97cee66a2f60297.cse.h"
 
 //dynamics::Tuple<Expr, descriptors::D2Q9<>, momenta::Tuple<momenta::FixedDensity, momenta::FixedPressureMomentum<0, 1>, momenta::BulkStress, momenta::DefineSeparately>, equilibria::SecondOrder, collision::BGK, dynamics::DefaultCombination>
 #include "bbb7aff621faf6c6dbcab9aec00bfff173cf0711921d733925c9885a1fe8bb92.cse.h"
 
 //dynamics::Tuple<Expr, descriptors::D2Q9<>, momenta::Tuple<momenta::FixedDensity, momenta::FixedPressureMomentum<1, -1>, momenta::BulkStress, momenta::DefineSeparately>, equilibria::SecondOrder, collision::BGK, dynamics::DefaultCombination>
 #include "fd5d7d685120bf2cdc2ce0237cc0bf032451ecb6207d687907a12f586197b92b.cse.h"
+
+//dynamics::Tuple<Expr, descriptors::D2Q9<>, momenta::Tuple<momenta::FixedDensity, momenta::ZeroMomentum, momenta::ZeroStress, momenta::DefineSeparately>, equilibria::SecondOrder, collision::Revert, dynamics::DefaultCombination>
+#include "265ba35fcf3f9aea0c4e5a6da3050f1ceb141c044adb3b2e21cb33eee2e19d49.cse.h"
 
 //dynamics::Tuple<Expr, descriptors::D2Q9<>, momenta::Tuple<momenta::FreeEnergyInletOutletDensity, momenta::FreeEnergyInletOutletMomentum<0, -1>, momenta::RegularizedBoundaryStress<0, -1>, momenta::DefineSeparately>, equilibria::FreeEnergy, collision::FreeEnergyInletOutlet<0, -1>, dynamics::DefaultCombination>
 #include "6a9d362e4120bb517a18aa59786fb97cdbfb4a02b9ffaf0924529de932b25ecb.cse.h"
@@ -230,6 +263,9 @@
 
 //dynamics::Tuple<Expr, descriptors::D2Q9<>, momenta::Tuple<momenta::FreeEnergyInletOutletDensity, momenta::FreeEnergyInletOutletMomentum<1, 1>, momenta::RegularizedBoundaryStress<1, 1>, momenta::DefineSeparately>, equilibria::FreeEnergy, collision::FreeEnergyInletOutlet<1, 1>, dynamics::DefaultCombination>
 #include "518be5cfd4544f11148fdc01c186238e9012ffecd34e78b49684f033a439d1eb.cse.h"
+
+//dynamics::Tuple<Expr, descriptors::D2Q9<>, momenta::Tuple<momenta::OneDensity, momenta::ZeroMomentum, momenta::ZeroStress, momenta::DefineSeparately>, equilibria::None, collision::None, dynamics::DefaultCombination>
+#include "4bd53dbf63b5ffc8d4b9294fa43107ba11b68e278b1b6b9378afc44a606a352c.cse.h"
 
 //dynamics::Tuple<Expr, descriptors::D2Q9<>, momenta::Tuple<momenta::VelocityBoundaryDensity<0, -1>, momenta::FixedVelocityMomentumGeneric, momenta::BulkStress, momenta::DefineSeparately>, equilibria::SecondOrder, collision::BGK, dynamics::DefaultCombination>
 #include "a42436953263028ba9159b227b0ff8137445c7f6aaa1f6b4e1657f05af50496b.cse.h"
@@ -258,8 +294,17 @@
 //dynamics::Tuple<Expr, descriptors::D3Q15<>, momenta::Tuple<momenta::BulkDensity, momenta::BulkMomentum, momenta::BulkStress, momenta::DefineToNEq>, equilibria::SecondOrder, multiphase::OmegaFromCell<collision::BGK>, forcing::Guo<momenta::Forced> >
 #include "2851f5b82b0dbc53aeaf67ca5c95523cd07fedfa41c619ce1487d008eea4eb5f.cse.h"
 
+//dynamics::Tuple<Expr, descriptors::D3Q15<>, momenta::Tuple<momenta::FixedDensity, momenta::ZeroMomentum, momenta::ZeroStress, momenta::DefineSeparately>, equilibria::SecondOrder, collision::Revert, dynamics::DefaultCombination>
+#include "720d0cdc0eaca9c926c8c5135414c24805c2b705d646b39a0d21537971b31129.cse.h"
+
+//dynamics::Tuple<Expr, descriptors::D3Q15<>, momenta::Tuple<momenta::OneDensity, momenta::ZeroMomentum, momenta::ZeroStress, momenta::DefineSeparately>, equilibria::None, collision::None, dynamics::DefaultCombination>
+#include "02a09b7d4bab418eba53b411dac902bf8157334150793f4ce157ee7daeacdebc.cse.h"
+
 //dynamics::Tuple<Expr, descriptors::D3Q19<>, momenta::Porous<momenta::Tuple<momenta::BulkDensity, momenta::BulkMomentum, momenta::BulkStress, momenta::DefineToNEq> >, equilibria::SecondOrder, collision::BGK, dynamics::DefaultCombination>
 #include "473767b0324c9ede6a752ab3a59d8b5672fb717e12c8b527e8ede47c807d5f1c.cse.h"
+
+//dynamics::Tuple<Expr, descriptors::D3Q19<>, momenta::Tuple<momenta::BulkDensity, momenta::BulkMomentum, momenta::BulkStress, momenta::DefineToNEq>, equilibria::None, collision::None, dynamics::DefaultCombination>
+#include "62a0e5ed554775a9936dc29259a28843897f51c4d276514c4781b61f2a9ac6b9.cse.h"
 
 //dynamics::Tuple<Expr, descriptors::D3Q19<>, momenta::Tuple<momenta::BulkDensity, momenta::BulkMomentum, momenta::BulkStress, momenta::DefineToNEq>, equilibria::SecondOrder, collision::BGK, dynamics::DefaultCombination>
 #include "b550090bd934e5c75c1604512d552f3147f9c291d524942812207d2ebbab8aaa.cse.h"
@@ -273,6 +318,9 @@
 //dynamics::Tuple<Expr, descriptors::D3Q19<>, momenta::Tuple<momenta::BulkDensity, momenta::BulkMomentum, momenta::BulkStress, momenta::DefineToNEq>, equilibria::SecondOrder, collision::RLB, dynamics::DefaultCombination>
 #include "c887e3b719519cab56d0cb19b2822e02b025d8839107c4938bbb687ae0c33263.cse.h"
 
+//dynamics::Tuple<Expr, descriptors::D3Q19<>, momenta::Tuple<momenta::BulkDensity, momenta::BulkMomentum, momenta::BulkStress, momenta::DefineToNEq>, equilibria::SecondOrder, collision::SaveVelocity<collision::BGK>, dynamics::DefaultCombination>
+#include "f0a667007b146f33e280912542fc3226d87809c49bff5c28790fd0ae8076816f.cse.h"
+
 //dynamics::Tuple<Expr, descriptors::D3Q19<>, momenta::Tuple<momenta::BulkDensity, momenta::BulkMomentum, momenta::BulkStress, momenta::DefineToNEq>, equilibria::SecondOrder, collision::SmagorinskyEffectiveOmega<collision::BGK>, dynamics::DefaultCombination>
 #include "d7a4bdcd549cc337d3cd1c6d321821f05e2e9ffad3a5e6da62a3c3ac5a18ca60.cse.h"
 
@@ -284,6 +332,9 @@
 
 //dynamics::Tuple<Expr, descriptors::D3Q19<>, momenta::Tuple<momenta::BulkDensity, momenta::FixedVelocityMomentumGeneric, momenta::BulkStress, momenta::DefineUSeparatelyTrace>, equilibria::SecondOrder, collision::RLB, dynamics::DefaultCombination>
 #include "2e3ccd063d9ac9b188387089ccceaec875a477d2d5e0e06c3aed3bd65365a8ed.cse.h"
+
+//dynamics::Tuple<Expr, descriptors::D3Q19<>, momenta::Tuple<momenta::BulkDensity, momenta::FixedVelocityMomentum, momenta::BulkStress, momenta::DefineUSeparately>, equilibria::CahnHilliardZerothOrder, collision::BGK, forcing::WellBalancedCahnHilliard>
+#include "f48166e195fe23f1b9867442d39c1932514ca787a4b850d2faf6cf8274b21c07.cse.h"
 
 //dynamics::Tuple<Expr, descriptors::D3Q19<>, momenta::Tuple<momenta::BulkDensity, momenta::FixedVelocityMomentum, momenta::BulkStress, momenta::DefineUSeparately>, equilibria::SecondOrder, collision::BGK, forcing::MCGuo<momenta::Identity> >
 #include "8981ae33b5f6da4bc4bf48729cf9f80a3ab3e11ec719c4144ddf09f12d1a543d.cse.h"
@@ -312,6 +363,12 @@
 //dynamics::Tuple<Expr, descriptors::D3Q19<>, momenta::Tuple<momenta::FixedDensity, momenta::FixedPressureMomentum<2, 1>, momenta::BulkStress, momenta::DefineSeparately>, equilibria::SecondOrder, collision::BGK, dynamics::DefaultCombination>
 #include "3527b2ad793d4247ffa10d96c60c6548b8f6b60401d2a4b74e03ea6d6ec1ade4.cse.h"
 
+//dynamics::Tuple<Expr, descriptors::D3Q19<>, momenta::Tuple<momenta::FixedDensity, momenta::ZeroMomentum, momenta::ZeroStress, momenta::DefineSeparately>, equilibria::SecondOrder, collision::Revert, dynamics::DefaultCombination>
+#include "5f9378d81f55ea965cb8c27b4adcea27d9319d3fcffc430ce297622ea20a7be9.cse.h"
+
+//dynamics::Tuple<Expr, descriptors::D3Q19<>, momenta::Tuple<momenta::OneDensity, momenta::ZeroMomentum, momenta::ZeroStress, momenta::DefineSeparately>, equilibria::None, collision::None, dynamics::DefaultCombination>
+#include "0fba1a95ee41b24986f557c84b2cf8b9e63166becf52698da7c12a655b370328.cse.h"
+
 //dynamics::Tuple<Expr, descriptors::D3Q19<>, momenta::Tuple<momenta::VelocityBoundaryDensity<0, -1>, momenta::FixedVelocityMomentumGeneric, momenta::BulkStress, momenta::DefineSeparately>, equilibria::SecondOrder, collision::BGK, dynamics::DefaultCombination>
 #include "50c23cb114a51dc52c6782d17b4ffe0326995e5b736e19ac9e6429bad6dff96e.cse.h"
 
@@ -336,11 +393,20 @@
 //dynamics::Tuple<Expr, descriptors::D3Q27<>, momenta::Tuple<momenta::BulkDensity, momenta::BulkMomentum, momenta::BulkStress, momenta::DefineToNEq>, equilibria::SecondOrder, collision::SmagorinskyEffectiveOmega<collision::BGK>, forcing::Guo<momenta::ForcedWithStress> >
 #include "073eefdb19b5eb70922033b5fc889525be9bf342c6d9ec088d71e406fad52959.cse.h"
 
+//dynamics::Tuple<Expr, descriptors::D3Q27<>, momenta::Tuple<momenta::FixedDensity, momenta::ZeroMomentum, momenta::ZeroStress, momenta::DefineSeparately>, equilibria::SecondOrder, collision::Revert, dynamics::DefaultCombination>
+#include "689239523cac186c8e66f3c1a7b97db2da72241b073a7cf141749307880b3fc0.cse.h"
+
+//dynamics::Tuple<Expr, descriptors::D3Q27<>, momenta::Tuple<momenta::OneDensity, momenta::ZeroMomentum, momenta::ZeroStress, momenta::DefineSeparately>, equilibria::None, collision::None, dynamics::DefaultCombination>
+#include "5f5011461f6b47e5085de9678dad4b33a6231a57d6b34f19df75a65a8aa36380.cse.h"
+
 //dynamics::Tuple<Expr, descriptors::D3Q27<>, momenta::Tuple<momenta::VelocityBoundaryDensity<2, -1>, momenta::FixedVelocityMomentumGeneric, momenta::BulkStress, momenta::DefineSeparately>, equilibria::SecondOrder, collision::BGK, dynamics::DefaultCombination>
 #include "a49663b5fb42cff3385aa16bb0bc3c569c1b1291218dfc44014129e450ca8e81.cse.h"
 
 //dynamics::Tuple<Expr, descriptors::D3Q27<>, momenta::Tuple<momenta::VelocityBoundaryDensity<2, 1>, momenta::FixedVelocityMomentumGeneric, momenta::BulkStress, momenta::DefineSeparately>, equilibria::SecondOrder, collision::BGK, dynamics::DefaultCombination>
 #include "bddb5d177753e594d3b61fce9319e5efe67a8fcb21aa171269df73d4bc5e0b45.cse.h"
+
+//dynamics::Tuple<Expr, descriptors::D3Q7<>, momenta::Tuple<momenta::BulkDensity, momenta::BulkMomentum, momenta::BulkStress, momenta::DefineToNEq>, equilibria::None, collision::None, dynamics::DefaultCombination>
+#include "10f76eada8910e8125181dc9ad7c4ce6a57361a5869cd1d6376e0de2303a9dfd.cse.h"
 
 //dynamics::Tuple<Expr, descriptors::D3Q7<>, momenta::Tuple<momenta::BulkDensity, momenta::BulkMomentum, momenta::NoStress, momenta::DefineToEq>, equilibria::FirstOrder, collision::BGK, AdvectionDiffusionExternalVelocityCollision>
 #include "c669bfeb3f0a859cef9b11826a90e245986bde23bcf929d3d6a39f42f30bd786.cse.h"
@@ -348,10 +414,22 @@
 //dynamics::Tuple<Expr, descriptors::D3Q7<>, momenta::Tuple<momenta::FixedDensity, momenta::FixedVelocityMomentumGeneric, momenta::ZeroStress, momenta::DefineSeparately>, equilibria::FirstOrder, collision::FixedEquilibrium, dynamics::DefaultCombination>
 #include "1d431eff28077987ffcd3e8783c159c1d2f8ab21ec8bde06c9c1a0721c7a673b.cse.h"
 
+//dynamics::Tuple<Expr, descriptors::D3Q7<>, momenta::Tuple<momenta::FixedDensity, momenta::ZeroMomentum, momenta::ZeroStress, momenta::DefineSeparately>, equilibria::SecondOrder, collision::Revert, dynamics::DefaultCombination>
+#include "04cfafdf9624d7606f328f72496944aef5c90cbebb4ed04479b86c86e323a06a.cse.h"
+
+//dynamics::Tuple<Expr, descriptors::D3Q7<>, momenta::Tuple<momenta::OneDensity, momenta::ZeroMomentum, momenta::ZeroStress, momenta::DefineSeparately>, equilibria::None, collision::None, dynamics::DefaultCombination>
+#include "c3a98586039237daf3496f4ad794f0ab61efed2a8ffd85efa7246ee6f3403cfe.cse.h"
+
 //SourcedAdvectionDiffusionBGKdynamics<Expr, descriptors::D3Q19<> >
 #include "b0802dcbfdfe2d3df2c6341680838b0109a464937e441bf537f836d339cc3dc0.cse.h"
 
 //SourcedAdvectionDiffusionBGKdynamics<Expr, descriptors::D3Q7<> >
 #include "470e1c8a901b03cfb11df33b2a3e79a1db6d02b5c1c14c161b981b0f85132c49.cse.h"
+
+//SpongeLayerDynamics<Expr, descriptors::D3Q19<>, momenta::Tuple<momenta::BulkDensity, momenta::BulkMomentum, momenta::BulkStress, momenta::DefineToNEq>, equilibria::SecondOrder>
+#include "86789783378d00a3814b44791228f66b5679d9c3d3f55b0edb29a3a5c4b4e3c5.cse.h"
+
+//ZeroDistributionDynamics<Expr, descriptors::D3Q7<> >
+#include "f440704100fea417d8101d68090bc6ef4e31fab26072b404a12171b82d357aee.cse.h"
 
 #endif

@@ -255,7 +255,6 @@ private:
   }
 
 public:
-
   template <typename... MAP>
   SuperLatticeCoupling(COUPLER,
                        MAP&&... args) {

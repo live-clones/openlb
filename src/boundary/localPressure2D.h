@@ -43,30 +43,29 @@ using descriptor_t = DESCRIPTOR;
 CellDistance getNeighborhoodRadius() {
   return 0;
 }
+
 std::optional<DynamicsPromise<T,DESCRIPTOR>> getDynamics(DiscreteNormalType type,
                                                          DiscreteNormal<DESCRIPTOR> n) {
-
-switch (type){
-        case DiscreteNormalType::Flat:
-          return boundaryhelper::PlainMixinDynamicsForDirectionOrientationMomenta<T,DESCRIPTOR,
-          CombinedRLBdynamics,MixinDynamics,momenta::RegularizedPressureBoundaryTuple
-          >::construct(n);
-        default:
-          throw std::runtime_error("No valid discrete normal found. This BC is not suited for curved walls.");
-          return std::nullopt;
-        }
-
-
+  switch (type){
+  case DiscreteNormalType::Flat:
+    return boundaryhelper::PlainMixinDynamicsForDirectionOrientationMomenta<T,DESCRIPTOR,
+      CombinedRLBdynamics,MixinDynamics,momenta::RegularizedPressureBoundaryTuple
+     >::construct(n);
+  default:
+    throw std::runtime_error("No valid discrete normal found. This BC is not suited for curved walls.");
+    return std::nullopt;
+  }
 }
+
 std::optional<PostProcessorPromise<T,DESCRIPTOR>> getPostProcessor(DiscreteNormalType type,
                                                                    DiscreteNormal<DESCRIPTOR> n) {
   return std::nullopt;
 }
 
-
-
 };
+
 }
+
 }
 
 

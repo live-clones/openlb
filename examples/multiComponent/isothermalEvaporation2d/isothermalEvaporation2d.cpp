@@ -24,7 +24,9 @@
 
 /* isothermalEvaporation2d.cpp
  * Flat interface evaporates due to a lower pressure assigned
- * to the boundary
+ * to the boundary. This example is runned in lattice units, but
+ * can be easily changed to physical units by prescribing the values
+ * of the parameters in physical units.
  */
 
 #include <olb.h>
@@ -85,8 +87,7 @@ void prepareGeometry( SuperGeometry<T,2>& superGeometry )
 {
   OstreamManager clout( std::cout,"prepareGeometry" );
   clout << "Prepare Geometry ..." << std::endl;
-  superGeometry.rename( 0,3 );
-  superGeometry.rename( 3,2,{1,0} );
+  superGeometry.rename( 0,2 );
   superGeometry.rename( 2,1,{1,0} );
   superGeometry.innerClean();
   superGeometry.checkForErrors();
@@ -104,7 +105,8 @@ void prepareLattice( SuperLattice<T, DESCRIPTOR>& sLattice,
   sLattice.defineDynamics<NoDynamics>(superGeometry, 0);
   sLattice.defineDynamics<BulkDynamics>(superGeometry, 1);
   sLattice.defineDynamics<BulkDynamics>(superGeometry, 2);
-  sLattice.defineDynamics<NoDynamicsWithFixedDensity>(superGeometry, 3);
+
+  clout << "Check Point" << std::endl;
 
   // Set boundary pressure condition
   boundary::set<boundary::LocalPressure<T, DESCRIPTOR, BulkDynamics>>(sLattice, superGeometry, 2);
@@ -136,13 +138,10 @@ void prepareLattice( SuperLattice<T, DESCRIPTOR>& sLattice,
   sLattice.iniEquilibrium( superGeometry, 1, rho, solVelocity );
   sLattice.defineRhoU( superGeometry, 2, rho, solVelocity );
   sLattice.iniEquilibrium( superGeometry, 2, rho, solVelocity );
-  sLattice.defineRhoU( superGeometry, 3, rho, solVelocity );
-  sLattice.iniEquilibrium( superGeometry, 3, rho, solVelocity );
 
   // Set Chemical Potential
   AnalyticalConst2D<T,T> chemical( mu_b/converter.getConversionFactorChemicalPotential() );
   sLattice.defineField<descriptors::CHEM_POTENTIAL>( superGeometry, 2, chemical );
-  sLattice.defineField<descriptors::CHEM_POTENTIAL>( superGeometry, 3, chemical );
 
   // Set OMEGA
   AnalyticalConst2D<T,T> omega( T( 1./converter.computeRelaxationTimefromPhysViscosity(nu) ) );
@@ -241,7 +240,7 @@ void boundaryCondition( SuperLattice<T, DESCRIPTOR>& sLattice,
     AnalyticalConst2D<T,T> chemicalMN2 ( mu_b );
 
     sLattice.defineRho( superGeometry, 2, densityMN2 );
-    sLattice.defineField<descriptors::CHEM_POTENTIAL>( superGeometry, 3, chemicalMN2 );
+    sLattice.defineField<descriptors::CHEM_POTENTIAL>( superGeometry, 2, chemicalMN2 );
 
 }
 
@@ -279,19 +278,18 @@ void computeRelaxationFrequency( SuperLattice<T, DESCRIPTOR>& sLattice,
 
     // Computing indicator
     AnalyticalConst2D<T,T> bulk ( 1./tau );
-    SmoothIndicatorFactoredCuboid2D<T,T> left ( {0., Ly/2.}, 2.*h1-10.*thickness*dx,
+    SmoothIndicatorFactoredCuboid2D<T,T> left ( {0., Ly/2.}, 2.*h1-15.*thickness*dx,
                       Lx, 1., 0, {0,0}, 0,
                       1. - 1./tau );
-    SmoothIndicatorFactoredCuboid2D<T,T> center ( {Nx/2., Ly/2.}, h2-h1-10.*thickness*dx,
+    SmoothIndicatorFactoredCuboid2D<T,T> center ( {Nx/2., Ly/2.}, h2-h1-15.*thickness*dx,
                       Lx, 1., 0, {0,0}, 0,
                       1. - 1./tau );
-    SmoothIndicatorFactoredCuboid2D<T,T> right ( {Nx, Ly/2.}, 2.*h1-10.*thickness*dx,
+    SmoothIndicatorFactoredCuboid2D<T,T> right ( {Nx, Ly/2.}, 2.*h1-15.*thickness*dx,
                       Lx, 1., 0, {0,0}, 0,
                       1. - 1./tau );
     AnalyticalIdentity2D<T,T> _omega ( bulk + left + center + right );
 
     // Setting Omega field
-    //SuperLatticeFfromAnalyticalF2D<T, DESCRIPTOR> __omega( _omega, sLattice );
     sLattice.defineField<descriptors::OMEGA>( superGeometry, 1, _omega );
     sLattice.defineField<descriptors::OMEGA>( superGeometry, 2, _omega );
 
@@ -435,7 +433,7 @@ int main( int argc, char *argv[] )
   HeuristicLoadBalancer<T> loadBalancer( cuboidDecomposition );
   loadBalancer.print();
   // Instantiation of superGeometry
-  SuperGeometry<T,2> superGeometry( cuboidDecomposition,loadBalancer, 3 ); // checar esse 2
+  SuperGeometry<T,2> superGeometry( cuboidDecomposition,loadBalancer, 3 );
   prepareGeometry( superGeometry );
 
   // === 3rd Step: Prepare Lattice ===
@@ -449,7 +447,8 @@ int main( int argc, char *argv[] )
     COUPLING1{},
     names::Component1{}, sLattice
   );
-  chemicalCoupling.restrictTo(superGeometry.getMaterialIndicator({1,2}));
+
+  chemicalCoupling.restrictTo(superGeometry.getMaterialIndicator({1}));
 
   chemicalCoupling.template setParameter<EOS::Landau::RHOV>(
                   rho_vapor/converter.getConversionFactorDensity());
@@ -467,7 +466,8 @@ int main( int argc, char *argv[] )
     COUPLING2{},
     names::Component1{}, sLattice
   );
-  forceCoupling.restrictTo(superGeometry.getMaterialIndicator({1,2}));
+
+  forceCoupling.restrictTo(superGeometry.getMaterialIndicator({1}));
 
   // Initial Condition
   initialCondition( sLattice, superGeometry, chemicalCoupling, forceCoupling );

@@ -21,7 +21,10 @@
  *  Software Foundation, Inc., 51 Franklin Street, Fifth Floor,
  *  Boston, MA  02110-1301, USA.
  */
-
+// centrifugal pump showcase with casing and rotor geometries,
+// please download the two files casing.stl and rotor.stl
+// https://openlb.net/data/pump/casing.stl
+// https://openlb.net/data/pump/rotor.stl
 #include <olb.h>
 
 using namespace olb;
@@ -42,7 +45,7 @@ using BulkDynamics = dynamics::Tuple<
   T, DESCRIPTOR,
   typename momenta::Tuple<
     momenta::BulkDensity,
-    momenta::MovingPorousMomentumCombination<momenta::BulkMomentum>,
+    momenta::MovingPorousMomentumCombinationNoWM<momenta::BulkMomentum>,
     momenta::BulkStress,
     momenta::DefineToNEq
   >,
@@ -54,7 +57,6 @@ using BulkDynamics = dynamics::Tuple<
 const T charLatticeVelocity = 0.01;
 const T rotationFreq = 24.1667; // 1/s ACHTUNG 1450rpm => 24.166Hz
 const T bladeRadius = 0.15; //Durchmesser Lara 400mm
-const T volume = 0.00337; // pump volume
 
 // Time Settings
 const T startT = 0.01;

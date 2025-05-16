@@ -105,13 +105,11 @@ public:
 * Implementation of convective boundary condition for the order parameter.
 */
 template<typename T, typename DESCRIPTOR, typename DYNAMICS, typename MOMENTA, int direction, int orientation>
-class PhaseFieldConvectiveOutletDynamics : public dynamics::CustomCollision<T,DESCRIPTOR,MOMENTA> {
-private:
-
-public:
+struct PhaseFieldConvectiveOutletDynamics : public dynamics::CustomCollision<T,DESCRIPTOR,MOMENTA> {
   using MomentaF = typename MOMENTA::template type<DESCRIPTOR>;
   using EquilibriumF = typename DYNAMICS::EquilibriumF;
 
+  //using parameters = typename DYNAMICS::parameters;
   using parameters = meta::list<descriptors::MAX_VELOCITY>;
 
   std::type_index id() override {
@@ -122,21 +120,11 @@ public:
     return block.template getData<OperatorParameters<PhaseFieldConvectiveOutletDynamics>>();
   }
 
+  constexpr static bool is_vectorizable = false;
+
   template <typename CELL, typename PARAMETERS, typename V=typename CELL::value_t>
   CellStatistic<V> collide(CELL& cell, PARAMETERS& parameters) any_platform {
-
-    auto u_conv = parameters.template get<descriptors::MAX_VELOCITY>();
-    Vector<int,DESCRIPTOR::d> normal;
-    normal[direction] = -orientation;
-    auto cell1 = cell.neighbor(normal);
-    auto outlet_cell = cell.template getField<descriptors::CONV_POPS>();
-    for (int iPop=0; iPop < DESCRIPTOR::q; ++iPop) {
-      outlet_cell[iPop] = (outlet_cell[iPop] + u_conv * cell1[iPop]) / ((T)1 + u_conv);
-      cell[iPop] = outlet_cell[iPop];
-    }
-
     V phi = MomentaF().computeRho(cell);
-    cell.template setField<descriptors::CONV_POPS>(outlet_cell);
     V u[DESCRIPTOR::d];
     MomentaF().computeU(cell, u);
     V uSqr = util::normSqr<V,DESCRIPTOR::d>(u);
@@ -153,57 +141,69 @@ public:
 
 };
 
-/**
-* Implementation of convective boundary condition.
-*/
-template<typename T, typename DESCRIPTOR, typename DYNAMICS, typename MOMENTA, int direction, int orientation>
-class ConvectiveOutletDynamics : public dynamics::CustomCollision<T,DESCRIPTOR,MOMENTA> {
-private:
+template <typename T, typename DESCRIPTOR>
+using NoCollideDynamicsExternalVelocity = dynamics::Tuple<
+  T, DESCRIPTOR,
+  momenta::ExternalVelocityTuple,
+  equilibria::FirstOrder,
+  collision::None
+>;
+///Initialising the setConvectivePhaseFieldBoundary function on the superLattice domain
+template<typename T, typename DESCRIPTOR>
+void setConvectivePhaseFieldBoundary(SuperLattice<T, DESCRIPTOR>& sLattice, SuperGeometry<T,2>& superGeometry, int material)
+{
+  setConvectivePhaseFieldBoundary<T,DESCRIPTOR>(sLattice, superGeometry.getMaterialIndicator(material));
+}
 
-public:
-  using MomentaF = typename MOMENTA::template type<DESCRIPTOR>;
-  using EquilibriumF = typename DYNAMICS::EquilibriumF;
+///Initialising the setConvectivePhaseFieldBoundary function on the superLattice domain
+template<typename T, typename DESCRIPTOR>
+void setConvectivePhaseFieldBoundary(SuperLattice<T, DESCRIPTOR>& sLattice, FunctorPtr<SuperIndicatorF2D<T>>&& indicator)
+{
+  OstreamManager clout(std::cout, "setConvectivePhaseFieldBoundary");
 
-  using parameters = meta::list<descriptors::MAX_VELOCITY>;
-
-  std::type_index id() override {
-    return typeid(ConvectiveOutletDynamics);
+  for (int iCloc = 0; iCloc < sLattice.getLoadBalancer().size(); iCloc++) {
+    setConvectivePhaseFieldBoundary<T,DESCRIPTOR>(sLattice.getBlock(iCloc), indicator->getBlockIndicatorF(iCloc));
   }
+  /// Adds needed Cells to the Communicator _commBC in SuperLattice
+  int _overlap = 1;
+  {
+    auto& communicator = sLattice.getCommunicator(stage::PostCollide());
+    communicator.template requestField<descriptors::POPULATION>();
 
-  AbstractParameters<T,DESCRIPTOR>& getParameters(BlockLattice<T,DESCRIPTOR>& block) override {
-    return block.template getData<OperatorParameters<ConvectiveOutletDynamics>>();
+    SuperIndicatorBoundaryNeighbor<T,DESCRIPTOR::d> neighborIndicator(std::forward<decltype(indicator)>(indicator), _overlap);
+    communicator.requestOverlap(_overlap, neighborIndicator);
+    communicator.exchangeRequests();
   }
+}
 
-  template <typename CELL, typename PARAMETERS, typename V=typename CELL::value_t>
-  CellStatistic<V> collide(CELL& cell, PARAMETERS& parameters) any_platform {
 
-    auto u_conv = parameters.template get<descriptors::MAX_VELOCITY>();
-    Vector<int,DESCRIPTOR::d> normal;
-    normal[direction] = -orientation;
-    auto cell1 = cell.neighbor(normal);
-    auto outlet_cell = cell.template getField<descriptors::CONV_POPS>();
-    auto rho = cell.template getField<descriptors::RHO>();
-    for (int iPop=0; iPop < DESCRIPTOR::q; ++iPop) {
-      outlet_cell[iPop] = (outlet_cell[iPop] + u_conv * cell1[iPop]) / ((T)1 + u_conv);
-      cell[iPop] = outlet_cell[iPop];
+/// Set ConvectivePhaseFieldBoundary for any indicated cells inside the block domain
+template<typename T, typename DESCRIPTOR>
+void setConvectivePhaseFieldBoundary(BlockLattice<T,DESCRIPTOR>& block, BlockIndicatorF2D<T>& indicator)
+{
+  using namespace boundaryhelper;
+  const auto& blockGeometryStructure = indicator.getBlockGeometry();
+  const int margin = 1;
+  std::vector<int> discreteNormal(3,0);
+  blockGeometryStructure.forSpatialLocations([&](auto iX, auto iY) {
+    if (blockGeometryStructure.getNeighborhoodRadius({iX, iY}) >= margin && indicator(iX, iY)) {
+      discreteNormal = blockGeometryStructure.getStatistics().getType(iX, iY);
+      if ((abs(discreteNormal[1]) + abs(discreteNormal[2])) == 1) {
+        block.addPostProcessor(
+          typeid(stage::PostCollide), {iX,iY},
+          promisePostProcessorForNormal<T,DESCRIPTOR,FlatConvectivePhaseFieldPostProcessorA2D>(
+            Vector<int,2>(discreteNormal.data() + 1)));
+        block.addPostProcessor(
+          typeid(stage::PostStream), {iX,iY},
+          promisePostProcessorForNormal<T,DESCRIPTOR,FlatConvectivePhaseFieldPostProcessorB2D>(
+            Vector<int,2>(discreteNormal.data() + 1)));
+        block.template defineDynamics<NoCollideDynamicsExternalVelocity>({iX, iY});
+      } else {
+        throw std::runtime_error("No valid discrete normal found. This BC is not suited for curved walls.");
+      }
     }
-
-    cell.template setField<descriptors::CONV_POPS>(outlet_cell);
-    V u[DESCRIPTOR::d];
-    MomentaF().computeU(cell, u);
-    V uSqr = util::normSqr<V,DESCRIPTOR::d>(u);
-    return {rho, uSqr};
-  }
-
-  void computeEquilibrium(ConstCell<T,DESCRIPTOR>& cell, T rho, const T u[DESCRIPTOR::d], T fEq[DESCRIPTOR::q]) const override {
-    EquilibriumF().compute(cell, rho, u, fEq);
-  };
-
-  std::string getName() const override {
-    return "ConvectiveOutletDynamics<" + DYNAMICS().getName() + ">";
-  };
-
-};
+  });
+}
 
 }
 

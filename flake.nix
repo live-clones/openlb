@@ -453,6 +453,7 @@
         buildInputs = with pkgs; [
           gnumake
           gcc13
+          gdb
           (python3.withPackages (python-pkgs: with python-pkgs; [
             mako
             sympy
@@ -473,7 +474,7 @@
           export CXX=g++
           export CC=gcc
 
-          export CXXFLAGS="-O0 -g -Wall -std=c++20"
+          export CXXFLAGS="-O1 -g -Wall -std=c++20"
 
           export PARALLEL_MODE=NONE
 

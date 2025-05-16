@@ -505,7 +505,10 @@ struct IncompressibleBulkMomentum {
     auto rho = cell.template getField<descriptors::RHO>();
     for (int iD=0; iD < DESCRIPTOR::d; ++iD) {
       u[iD] /= rho;
-      if (fabs(u[iD]) < 1e-15) u[iD] = 0;
+      // TODO do this check relatively / in a more controlled manner
+      if (util::fabs(u[iD]) < 1e-15) {
+        u[iD] = 0;
+      }
     }
   }
 
@@ -695,8 +698,7 @@ struct PressureBoundaryMomentum {
       otherU += cs2*0.5*u[(direction+iDim)%DESCRIPTOR::d]*gradRho[(direction+iDim)%DESCRIPTOR::d]
                 -0.5*w0*rho*u[(direction+iDim)%DESCRIPTOR::d]*u[(direction+iDim)%DESCRIPTOR::d];
     }
-    u[direction] = orientation*(-term + sqrt(term*term + V{2}/rho/w0*(cs2*(pops+0.5*force[direction])-(V{1}-w0)*p+otherU)));
-    //u[direction] = orientation*(-cs2/w0 + sqrt(cs2*cs2/w0/w0 + V{2}/rho/w0*(cs2*pops-(V{1}-w0)*p)));
+    u[direction] = orientation*(-term + util::sqrt(term*term + V{2}/rho/w0*(cs2*(pops+0.5*force[direction])-(V{1}-w0)*p+otherU)));
   }
 
   // define the velocity

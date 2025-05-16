@@ -38,17 +38,21 @@ template <typename T, typename... FIELDS>
 struct CSE<dynamics::Tuple<T, descriptors::D3Q7<FIELDS...>, momenta::Tuple<momenta::FixedDensity, momenta::FixedVelocityMomentumGeneric, momenta::ZeroStress, momenta::DefineSeparately>, equilibria::FirstOrder, collision::FixedEquilibrium, dynamics::DefaultCombination>> {
 template <concepts::Cell CELL, concepts::Parameters PARAMETERS, concepts::BaseType V=typename CELL::value_t>
 CellStatistic<V> collide(CELL& cell, PARAMETERS& parameters) any_platform {
-auto x7 = V{4}*cell.template getFieldComponent<momenta::FixedVelocityMomentumGeneric::VELOCITY>(0);
-auto x8 = V{4}*cell.template getFieldComponent<momenta::FixedVelocityMomentumGeneric::VELOCITY>(1);
-auto x9 = V{4}*cell.template getFieldComponent<momenta::FixedVelocityMomentumGeneric::VELOCITY>(2);
-cell[0] = V{0.25}*cell.template getFieldComponent<momenta::FixedDensity::RHO>(0) + V{-0.25};
-cell[1] = -V{0.125}*cell.template getFieldComponent<momenta::FixedDensity::RHO>(0)*(x7 + V{-1}) + V{-0.125};
-cell[2] = -V{0.125}*cell.template getFieldComponent<momenta::FixedDensity::RHO>(0)*(x8 + V{-1}) + V{-0.125};
-cell[3] = -V{0.125}*cell.template getFieldComponent<momenta::FixedDensity::RHO>(0)*(x9 + V{-1}) + V{-0.125};
-cell[4] = V{0.125}*cell.template getFieldComponent<momenta::FixedDensity::RHO>(0)*(x7 + V{1}) + V{-0.125};
-cell[5] = V{0.125}*cell.template getFieldComponent<momenta::FixedDensity::RHO>(0)*(x8 + V{1}) + V{-0.125};
-cell[6] = V{0.125}*cell.template getFieldComponent<momenta::FixedDensity::RHO>(0)*(x9 + V{1}) + V{-0.125};
-return { cell.template getFieldComponent<momenta::FixedDensity::RHO>(0), cell.template getFieldComponent<momenta::FixedVelocityMomentumGeneric::VELOCITY>(0)*cell.template getFieldComponent<momenta::FixedVelocityMomentumGeneric::VELOCITY>(0) + cell.template getFieldComponent<momenta::FixedVelocityMomentumGeneric::VELOCITY>(1)*cell.template getFieldComponent<momenta::FixedVelocityMomentumGeneric::VELOCITY>(1) + cell.template getFieldComponent<momenta::FixedVelocityMomentumGeneric::VELOCITY>(2)*cell.template getFieldComponent<momenta::FixedVelocityMomentumGeneric::VELOCITY>(2) };
+auto x8 = cell.template getFieldComponent<momenta::FixedVelocityMomentumGeneric::VELOCITY>(0);
+auto x9 = cell.template getFieldComponent<momenta::FixedVelocityMomentumGeneric::VELOCITY>(1);
+auto x10 = cell.template getFieldComponent<momenta::FixedVelocityMomentumGeneric::VELOCITY>(2);
+auto x7 = cell.template getFieldComponent<momenta::FixedDensity::RHO>(0);
+auto x11 = V{4}*x8;
+auto x12 = V{4}*x9;
+auto x13 = V{4}*x10;
+cell[0] = V{0.25}*x7 + V{-0.25};
+cell[1] = -V{0.125}*x7*(x11 + V{-1}) + V{-0.125};
+cell[2] = -V{0.125}*x7*(x12 + V{-1}) + V{-0.125};
+cell[3] = -V{0.125}*x7*(x13 + V{-1}) + V{-0.125};
+cell[4] = V{0.125}*x7*(x11 + V{1}) + V{-0.125};
+cell[5] = V{0.125}*x7*(x12 + V{1}) + V{-0.125};
+cell[6] = V{0.125}*x7*(x13 + V{1}) + V{-0.125};
+return { x7, x10*x10 + x8*x8 + x9*x9 };
 }
 };
 

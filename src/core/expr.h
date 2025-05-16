@@ -29,6 +29,7 @@
 #include <memory>
 #include <variant>
 #include <functional>
+#include <numeric>
 
 #include "core/meta.h"
 
@@ -37,15 +38,18 @@ namespace olb {
 /// Basic value-substitute enabling extraction of expression trees for code generation
 class Expr : public ExprBase {
 public:
-  enum struct Op {
-    Add, Mul, Sub, Div, Sqrt, Abs, Pow, Exp
+  enum struct Op : std::size_t {
+    Add, Mul, Sub, Div, Sqrt, Abs, Pow, Exp,
+    End // keep last
   };
 
 private:
+  static std::array<std::size_t, static_cast<std::size_t>(Op::End)> _stats;
+
   struct Symbol {
     std::string name;
 
-    std::string describe() const;
+    void describe(std::stringstream& out) const;
     std::size_t size() const;
   };
 
@@ -57,7 +61,7 @@ private:
     Constant();
     Constant(double x);
 
-    std::string describe() const;
+    void describe(std::stringstream& out) const;
     std::size_t size() const;
   };
 
@@ -70,8 +74,7 @@ private:
   public:
     Binary(Expr lhs, Op op, Expr rhs);
 
-    std::string describe() const;
-
+    void describe(std::stringstream& out) const;
     std::size_t size() const;
   };
 
@@ -83,8 +86,7 @@ private:
   public:
     Unary(Op op, Expr arg);
 
-    std::string describe() const;
-
+    void describe(std::stringstream& out) const;
     std::size_t size() const;
   };
 
@@ -99,16 +101,43 @@ public:
   Expr(Expr lhs, Op op, Expr rhs);
   Expr(Op op, Expr rhs);
 
-  std::string describe() const;
-
-  std::size_t size() const;
-
   Expr& operator=(const Expr& rhs);
 
   Expr& operator+=(Expr rhs);
   Expr& operator-=(Expr rhs);
   Expr& operator*=(Expr rhs);
   Expr& operator/=(Expr rhs);
+
+  /// Writes the serialized expression tree to out
+  void describe(std::stringstream& out) const;
+  /// Returns the serialized expression tree
+  std::string describe() const;
+
+  /// Helper function to quickly check if Expr is a specific symbol
+  bool isSymbol(std::string name) const;
+
+  /// Returns expanded size of tree
+  std::size_t size() const;
+
+  /// Resets FLOP counter
+  static void reset() {
+    _stats.fill(0);
+  }
+
+  /// Increment FLOP counter
+  static void increment(Op op) {
+    ++_stats[static_cast<std::size_t>(op)];
+  }
+
+  /// Return accumulated FLOPs
+  static std::size_t count() {
+    return std::accumulate(_stats.cbegin(), _stats.cend(), 0);
+  }
+
+  /// Return accumulated FLOPs of type
+  static std::size_t count(Op op) {
+    return _stats[static_cast<std::size_t>(op)];
+  }
 
 };
 
@@ -117,6 +146,8 @@ Expr operator-(Expr lhs, Expr rhs);
 Expr operator*(Expr lhs, Expr rhs);
 Expr operator/(Expr lhs, Expr rhs);
 Expr operator-(Expr rhs);
+
+Expr operator%(Expr lhs, int rhs);
 
 bool operator==(const Expr& rhs, const Expr& lhs);
 bool operator!=(const Expr& rhs, const Expr& lhs);
