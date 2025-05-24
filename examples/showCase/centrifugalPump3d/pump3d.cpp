@@ -279,7 +279,7 @@ int main(int argc, char* argv[])
   cuboidDecomposition.print();
 
   HeuristicLoadBalancer<T> loadBalancer( cuboidDecomposition );
-  SuperGeometry<T,3> superGeometry( cuboidDecomposition, loadBalancer, 2 );
+  SuperGeometry<T,3> superGeometry( cuboidDecomposition, loadBalancer, 3 );
   prepareGeometry(converter, extendedDomain, stlReader, superGeometry);
 
   /// === 3rd Step: Prepare Lattice ===
