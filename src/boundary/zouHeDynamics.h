@@ -62,6 +62,13 @@ public:
   template<typename M>
   using exchange_momenta = ZouHeDynamics<T,DESCRIPTOR,DYNAMICS,M,direction,orientation>;
 
+  template <typename NEW_T>
+  using exchange_value_type = ZouHeDynamics<
+    NEW_T, DESCRIPTOR,
+    DYNAMICS, MOMENTA,
+    direction, orientation
+  >;
+
   std::type_index id() override {
     return typeid(ZouHeDynamics);
   }

@@ -39,7 +39,7 @@ struct VelocityF {
   using fields_t = meta::list<descriptors::VELOCITY>;
 
   template <typename CELL, typename PARAMETERS>
-  auto compute(CELL& cell, PARAMETERS& parameters) {
+  auto compute(CELL& cell, PARAMETERS& parameters) any_platform {
     using V = typename CELL::value_t;
     using DESCRIPTOR = typename CELL::descriptor_t;
     V conversion = parameters.template get<descriptors::CONVERSION>();

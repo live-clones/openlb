@@ -138,10 +138,10 @@ template <typename T, typename DESCRIPTOR, typename TDESCRIPTOR>
 class SuperLatticeThermalPhysF2D : public SuperLatticeF2D<T,TDESCRIPTOR> {
 protected:
   SuperLatticeThermalPhysF2D(SuperLattice<T,TDESCRIPTOR>& sLattice,
-                             const ThermalUnitConverter<T,DESCRIPTOR,TDESCRIPTOR>& converter, int targetDim);
-  const ThermalUnitConverter<T,DESCRIPTOR,TDESCRIPTOR>& _converter;
+                             const UnitConverter<T,DESCRIPTOR>& converter, int targetDim);
+  const UnitConverter<T,DESCRIPTOR>& _converter;
 public:
-  ThermalUnitConverter<T,DESCRIPTOR,TDESCRIPTOR> const& getConverter() const;
+  UnitConverter<T,DESCRIPTOR> const& getConverter() const;
 };
 
 

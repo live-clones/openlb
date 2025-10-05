@@ -41,18 +41,17 @@ const T physDeltaX        = 0.0078125;   // grid spacing [m]
 const T physDeltaT        = 0.00078125;  // temporal spacing [s]
 const T physLength        = 1.0;         // length of the squared cuboid [m]
 const T physLidVelocity   = 1.0;         // velocity imposed on lid [m/s]
-const T physViscosity     = 0.001;        // kinetic viscosity of fluid [m*m/s]
+const T physViscosity     = 0.001;       // kinetic viscosity of fluid [m*m/s]
 const T physDensity       = 1.0;         // fluid density [kg/(m*m*m)]
 const T physMaxT          = 30.0;        // maximal simulation time [s]
 
-void prepareGeometry(const UnitConverter<T,DESCRIPTOR>& converter,
-                     SuperGeometry<T,2>& superGeometry)
+void prepareGeometry(SuperGeometry<T,2>& superGeometry)
 {
   // Set material numbers to assign physics to lattice nodes
   superGeometry.rename(0, 2);
   superGeometry.rename(2, 1, {1,1});
 
-  T dx = converter.getPhysDeltaX();
+  T dx = physDeltaX;
   Vector extend{physLength + 2*dx, 2*dx};
   Vector origin{-dx, physLength - dx};
   IndicatorCuboid2D lid(extend, origin);
@@ -61,8 +60,7 @@ void prepareGeometry(const UnitConverter<T,DESCRIPTOR>& converter,
   superGeometry.getStatistics().print();
 }
 
-void prepareLattice(const UnitConverter<T,DESCRIPTOR>& converter,
-                    SuperLattice<T, DESCRIPTOR>& sLattice,
+void prepareLattice(SuperLattice<T, DESCRIPTOR>& sLattice,
                     SuperGeometry<T,2>& superGeometry)
 {
   // Material=1 -->bulk dynamics
@@ -72,18 +70,17 @@ void prepareLattice(const UnitConverter<T,DESCRIPTOR>& converter,
   boundary::set<boundary::InterpolatedVelocity<T,DESCRIPTOR,BulkDynamics>>(sLattice, superGeometry, 2);
   boundary::set<boundary::InterpolatedVelocity<T,DESCRIPTOR,BulkDynamics>>(sLattice, superGeometry, 3);
 
-  sLattice.setParameter<descriptors::OMEGA>(converter.getLatticeRelaxationFrequency());
+  sLattice.setParameter<descriptors::OMEGA>(sLattice.getUnitConverter().getLatticeRelaxationFrequency());
 }
 
-void setBoundaryValues(const UnitConverter<T,DESCRIPTOR>& converter,
-                       SuperLattice<T, DESCRIPTOR>& sLattice,
+void setBoundaryValues(SuperLattice<T, DESCRIPTOR>& sLattice,
                        std::size_t iT, SuperGeometry<T,2>& superGeometry)
 {
   if (iT == 0) {
     auto domain = superGeometry.getMaterialIndicator({1,2,3});
     AnalyticalConst2D<T,T> rhoF(1);
     AnalyticalConst2D<T,T> uWall(0, 0);
-    AnalyticalConst2D<T,T> uLid(converter.getCharLatticeVelocity(), 0);
+    AnalyticalConst2D<T,T> uLid(sLattice.getUnitConverter().getCharLatticeVelocity(), 0);
 
     // Initialize populations to equilibrium state
     sLattice.iniEquilibrium(domain, rhoF, uWall);
@@ -95,10 +92,10 @@ void setBoundaryValues(const UnitConverter<T,DESCRIPTOR>& converter,
   }
 }
 
-void getResults(const UnitConverter<T,DESCRIPTOR>& converter,
-                SuperLattice<T, DESCRIPTOR>& sLattice,
+void getResults(SuperLattice<T, DESCRIPTOR>& sLattice,
                 std::size_t iT, util::Timer<T> timer)
 {
+  const UnitConverter<T,DESCRIPTOR>& converter = sLattice.getUnitConverter();
   const std::size_t iTvtk = converter.getLatticeTime(physMaxT/100.);
   const std::size_t iTlog = converter.getLatticeTime(physMaxT/20.);
 
@@ -151,11 +148,11 @@ int main(int argc, char* argv[])
   HeuristicLoadBalancer<T> loadBalancer(cuboidDecomposition);
 
   SuperGeometry<T,2> superGeometry(cuboidDecomposition, loadBalancer);
-  prepareGeometry(converter, superGeometry);
+  prepareGeometry(superGeometry);
 
   // === 3rd Step: Prepare Lattice ===
-  SuperLattice<T,DESCRIPTOR> sLattice(superGeometry);
-  prepareLattice(converter, sLattice, superGeometry);
+  SuperLattice<T,DESCRIPTOR> sLattice(converter, superGeometry);
+  prepareLattice(sLattice, superGeometry);
 
   // === 4th Step: Main Loop with Timer ===
   const std::size_t iTmax = converter.getLatticeTime(physMaxT);
@@ -164,11 +161,11 @@ int main(int argc, char* argv[])
 
   for (std::size_t iT=0; iT < iTmax; ++iT) {
     // === 5th Step: Definition of Initial and Boundary Conditions ===
-    setBoundaryValues(converter, sLattice, iT, superGeometry);
+    setBoundaryValues(sLattice, iT, superGeometry);
     // === 6th Step: Collide and Stream Execution ===
     sLattice.collideAndStream();
     // === 7th Step: Computation and Output of the Results ===
-    getResults(converter, sLattice, iT, timer);
+    getResults(sLattice, iT, timer);
   }
 
   timer.stop();

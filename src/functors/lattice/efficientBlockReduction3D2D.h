@@ -69,7 +69,7 @@ struct BlockReduction3D2DO {
   void apply(CELLS& cells, PARAMETERS& parameters) any_platform
   {
     auto point = cells.template get<names::Points>();
-    auto cell = cells.template get<names::Lattice>();
+    auto cell = cells.template get<names::Lattice1>();
     auto result = FUNCTOR().compute(cell, parameters);
     point.template setField<typename FUNCTOR::result_field>(result);
   }
@@ -94,7 +94,7 @@ private:
   SuperD<T,descriptors::D3<fields::PHYS_R,typename FUNCTOR::result_field>> _sliceD;
   SuperLatticePointCoupling<
     BlockReduction3D2DO<FUNCTOR>,
-    meta::map<names::Lattice, descriptors::VALUED_DESCRIPTOR<T,DESCRIPTOR>,
+    meta::map<names::Lattice1, descriptors::VALUED_DESCRIPTOR<T,DESCRIPTOR>,
               names::Points, descriptors::VALUED_DESCRIPTOR<T,descriptors::D3<fields::PHYS_R,typename FUNCTOR::result_field>>>
   > _couplingO;
 

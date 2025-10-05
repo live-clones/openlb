@@ -15,7 +15,8 @@ awk -v file="$INCLUDE_HEADER" -v dir="$EXT_DIR" 'BEGIN { print "/*  ============
              print " *  ========================================================" > file;
              print " */" > file;
              print "" > file;
-             print "#ifndef DISABLE_CSE" > file}'
+             print "#ifndef DISABLE_CSE" > file;
+             print "#include \"optimization/dual.h\"" > file}'
 
 awk -v file="$INCLUDE_HEADER" -v dir="$EXT_DIR" '{ cmd = "echo -n \"" $0 "\" | sha256sum";
             cmd | getline hash;

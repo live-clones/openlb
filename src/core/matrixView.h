@@ -48,40 +48,40 @@ public:
     Vector<T,ROWS*COLS>& _data;
     unsigned _row;
   public:
-    RowView(Vector<T,ROWS*COLS>& data, unsigned row) : _data(data), _row(row) { }
+    RowView(Vector<T,ROWS*COLS>& data, unsigned row) any_platform : _data(data), _row(row) { }
 
-    T& operator[](unsigned col) {
+    T& operator[](unsigned col) any_platform {
       return _data[_row * COLS + col];
     }
 
-    const T& operator[](unsigned col) const {
+    const T& operator[](unsigned col) const any_platform {
       return _data[_row * COLS + col];
     }
   };
 
   /// Create matrix from olb::Vector
   template <unsigned V_SIZE>
-  explicit MatrixView(Vector<T, V_SIZE>& vector) : _data(vector)
+  explicit MatrixView(Vector<T, V_SIZE>& vector) any_platform : _data(vector)
   {
     static_assert(V_SIZE == ROWS * COLS,
                   "ERROR: Vector size must correspond to matrix size.");
   }
 
-  explicit MatrixView(const MatrixView<T, ROWS, COLS>& matrix)
+  explicit MatrixView(const MatrixView<T, ROWS, COLS>& matrix) any_platform
   {
     _data = matrix._data;
   }
-  MatrixView& operator=(const MatrixView& matrix)
+  MatrixView& operator=(const MatrixView& matrix) any_platform
   {
     _data = matrix._data;
     return *this;
   }
 
-  Vector<T,ROWS*COLS>& asVector() { return _data; }
-  const Vector<T,ROWS*COLS>& asVector() const { return _data; }
+  Vector<T,ROWS*COLS>& asVector() any_platform { return _data; }
+  const Vector<T,ROWS*COLS>& asVector() const any_platform { return _data; }
 
   /// Returns row vector
-  RowView operator[](unsigned row) {
+  RowView operator[](unsigned row) any_platform {
     return RowView(_data, row);
   }
 };
@@ -108,40 +108,40 @@ public:
     Vector<T,MATRIX_VIEW::rows*MATRIX_VIEW::cols>& _data;
     unsigned _col;
   public:
-    ColView(Vector<T,MATRIX_VIEW::rows*MATRIX_VIEW::cols>& data, unsigned col) : _data(data), _col(col) { }
+    ColView(Vector<T,MATRIX_VIEW::rows*MATRIX_VIEW::cols>& data, unsigned col) any_platform : _data(data), _col(col) { }
 
-    T& operator[](unsigned row) {
+    T& operator[](unsigned row) any_platform {
       return _data[row * MATRIX_VIEW::cols + _col];
     }
 
-    const T& operator[](unsigned row) const {
+    const T& operator[](unsigned row) const any_platform {
       return _data[row * MATRIX_VIEW::cols + _col];
     }
   };
 
   /// Create matrix from olb::Vector
   template <unsigned V_SIZE>
-  explicit TransposedMatrixView(Vector<T, V_SIZE>& vector) : _data(vector)
+  explicit TransposedMatrixView(Vector<T, V_SIZE>& vector) any_platform : _data(vector)
   {
     static_assert(V_SIZE == rows * cols,
                   "ERROR: Vector size must correspond to matrix size.");
   }
 
-  explicit TransposedMatrixView(const TransposedMatrixView<MATRIX_VIEW>& matrix)
+  explicit TransposedMatrixView(const TransposedMatrixView<MATRIX_VIEW>& matrix) any_platform
   {
     _data = matrix._data;
   }
-  TransposedMatrixView& operator=(const TransposedMatrixView& matrix)
+  TransposedMatrixView& operator=(const TransposedMatrixView& matrix) any_platform
   {
     _data = matrix._data;
     return *this;
   }
 
-  Vector<T,rows*cols>& asVector() { return _data; }
-  const Vector<T,rows*cols>& asVector() const { return _data; }
+  Vector<T,rows*cols>& asVector() any_platform { return _data; }
+  const Vector<T,rows*cols>& asVector() const any_platform { return _data; }
 
   /// Returns column vector
-  ColView operator[](unsigned col) {
+  ColView operator[](unsigned col) any_platform {
     return ColView(_data, col);
   }
 };

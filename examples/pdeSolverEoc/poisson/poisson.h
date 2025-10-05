@@ -310,7 +310,7 @@ void simulatePoisson3D(int N, Gnuplot<T>& gplot)
 
   // === 3rd Step: Prepare Lattice ===
 
-  SuperLattice<T, DESCRIPTOR> sLattice( superGeometry );
+  SuperLattice<T, DESCRIPTOR> sLattice( converter, superGeometry );
 
   prepareLattice( converter, sLattice, superGeometry );
 

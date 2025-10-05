@@ -125,6 +125,9 @@ public:
    : DomainIdSolver::LbSolver(params),  // has to be called "by hand" because AdjointLbSolver inherits virtually
     DomainIdSolver::AdjointLbSolver(params)
   {
+    if constexpr (MODE == SolverMode::Dual) {
+      this->parameters(Simulation()).pressureFilter = true;
+    }
     const std::string name = (MODE == SolverMode::Reference) ? "Reference_Solution"
       : ((MODE == SolverMode::Primal) ? "Flow_Simulations"
       : "Dual_Simulations");
@@ -226,7 +229,8 @@ protected:
     }
     else {   // DUAL
       auto bulkIndicator = this->geometry().getMaterialIndicator({1, 6});
-      lattice.template defineDynamics<DualPorousBGKDynamics>(bulkIndicator);
+      //lattice.template defineDynamics<Dual<PorousBGKdynamics<T,descriptor>>>(bulkIndicator);
+      lattice.template defineDynamics<DualPorousBGKDynamics<T,descriptor>>(bulkIndicator);
 
       auto bounceBackIndicator = this->geometry().getMaterialIndicator({2, 3, 4});
       boundary::set<boundary::BounceBack>(lattice, bounceBackIndicator);
@@ -279,6 +283,11 @@ protected:
     if constexpr ( MODE == SolverMode::Dual ) {
       this->loadPrimalPopulations();
     }
+    if constexpr ( MODE == SolverMode::Primal ) {
+      this->lattice(NavierStokes()).writeSummary("Primal_lattice" + std::to_string(0));
+    } else if ( MODE == SolverMode::Dual ) {
+      this->lattice(NavierStokes()).writeSummary("Dual_lattice" + std::to_string(0));
+    }
   }
 
   void setBoundaryValues(std::size_t iT) override
@@ -311,15 +320,17 @@ protected:
   {
     if constexpr (MODE == SolverMode::Reference) {
       // ARTIFICIAL DATA: write solution (unsteady, until convergence in time is obtained)
-      SuperVTMwriter3D<T> writer(this->parameters(VisualizationVTK()).filename);
-
-      SuperLatticePhysVelocity3D<T,descriptor> velocity(this->lattice(NavierStokes()), this->converter());
-      SuperLatticePhysPressure3D<T,descriptor> pressure(this->lattice(NavierStokes()), this->converter());
-      SuperLatticePorosity3D<T,descriptor> porosity(this->lattice(NavierStokes()));
-      writer.addFunctor(porosity);
-      writer.addFunctor(velocity);
-      writer.addFunctor(pressure);
-      writer.write(iT);
+      this->lattice(NavierStokes()).setProcessingContext(ProcessingContext::Evaluation);
+      this->lattice(NavierStokes()).scheduleBackgroundOutputVTK([&,iT](auto task) {
+        SuperVTMwriter3D<T> writer(this->parameters(VisualizationVTK()).filename);
+        SuperLatticePhysVelocity3D<T,descriptor> velocity(this->lattice(NavierStokes()), this->converter());
+        SuperLatticePhysPressure3D<T,descriptor> pressure(this->lattice(NavierStokes()), this->converter());
+        SuperLatticePorosity3D<T,descriptor> porosity(this->lattice(NavierStokes()));
+        writer.addFunctor(porosity);
+        writer.addFunctor(velocity);
+        writer.addFunctor(pressure);
+        task(writer, iT);
+      });
     }
   }
 
@@ -335,15 +346,18 @@ public:
           DomainIdSolver::LbSolver::prepareVTK();
         }
 
-        SuperVTMwriter3D<T> writer(this->parameters(VisualizationVTK()).filename);
-        SuperLatticePhysVelocity3D<T,descriptor> velocity(this->lattice(NavierStokes()), this->converter());
-        SuperLatticePhysPressure3D<T,descriptor> pressure(this->lattice(NavierStokes()), this->converter());
-        SuperLatticePorosity3D<T,descriptor> porosity(this->lattice(NavierStokes()));
-        writer.addFunctor(porosity);
-        writer.addFunctor(velocity);
-        writer.addFunctor(pressure);
-
-        writer.write(this->parameters(OutputOpti()).counterOptiStep);
+        auto iT = this->parameters(OutputOpti()).counterOptiStep;
+        this->lattice(NavierStokes()).setProcessingContext(ProcessingContext::Evaluation);
+        this->lattice(NavierStokes()).scheduleBackgroundOutputVTK([&,iT](auto task) {
+          SuperVTMwriter3D<T> writer(this->parameters(VisualizationVTK()).filename);
+          SuperLatticePhysVelocity3D<T,descriptor> velocity(this->lattice(NavierStokes()), this->converter());
+          SuperLatticePhysPressure3D<T,descriptor> pressure(this->lattice(NavierStokes()), this->converter());
+          SuperLatticePorosity3D<T,descriptor> porosity(this->lattice(NavierStokes()));
+          writer.addFunctor(porosity);
+          writer.addFunctor(velocity);
+          writer.addFunctor(pressure);
+          task(writer, iT);
+        });
       }
     }
   }
@@ -519,7 +533,7 @@ int main(int argc, char **argv)
   XMLreader config("parameter.xml");
   OstreamManager clout("main");
 
-  using T = FLOATING_POINT_TYPE;
+  using T = double;
 
   OptiCaseDual<T,DomainIdSolver,descriptors::POROSITY,PorousBGKdynamics> optiCase(config);
 

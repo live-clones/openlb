@@ -34,10 +34,12 @@ template <typename DYNAMICS>
 struct CollisionF {
   using parameters = typename DYNAMICS::parameters;
   using result_t = typename descriptors::POPULATION;
-  using fields_t = meta::list<>; // Is this correct?
+  // Currently, no static knowlegde of accessed field by dynamics is supported which requires to write fields manually in the descriptor
+  // if DerivaitveF is used with CollisionF as in optimization examples
+  using fields_t = meta::list<>;
 
   template <typename CELL, typename PARAMETERS>
-  auto compute(CELL& cell, PARAMETERS& parameters) {
+  auto compute(CELL& cell, PARAMETERS& parameters) any_platform {
     using V = typename CELL::value_t;
     using DESCRIPTOR = typename CELL::descriptor_t;
 

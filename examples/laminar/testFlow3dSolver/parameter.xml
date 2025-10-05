@@ -14,8 +14,8 @@
       <PhysDensity> 1. </PhysDensity> <!-- 1200.0 -->
       <CharPhysPressure> 0. </CharPhysPressure> <!-- 0.0 -->
       <PhysViscosity> 0.1 </PhysViscosity> <!-- 0.01 -->
-      <PhysMaxTime> 6.0 </PhysMaxTime> <!-- 8.0 -->
-      <StartUpTime> 4.0 </StartUpTime> <!-- 5.0 -->
+      <PhysMaxTime> 3.0 </PhysMaxTime> <!-- 8.0 -->
+      <StartUpTime> 1.0 </StartUpTime> <!-- 5.0 -->
       <BoundaryValueUpdateTime> 0.001 </BoundaryValueUpdateTime>
     </PhysParameters>
     <Mesh>

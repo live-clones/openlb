@@ -50,7 +50,7 @@ struct L2DistanceF {
                                                                 L2DistanceF<FUNCTOR>::Reference>;
 
   template <typename CELL, typename PARAMETERS>
-  auto compute(CELL& cell, PARAMETERS& parameters) {
+  auto compute(CELL& cell, PARAMETERS& parameters) any_platform {
     using V = typename CELL::value_t;
     using DESCRIPTOR = typename CELL::descriptor_t;
     V normalize = parameters.template get<descriptors::NORMALIZE>();
@@ -77,7 +77,7 @@ struct DualF {
   using result_t = opti::DJDF;
 
   template <typename CELL, typename PARAMETERS>
-  auto compute(CELL& cell, PARAMETERS& parameters) {
+  auto compute(CELL& cell, PARAMETERS& parameters) any_platform {
     using V = typename CELL::value_t;
     using COMBINED_FIELDS = meta::merge<typename CELL::descriptor_t::fields_t, typename FUNCTOR::fields_t>;
     using DESCRIPTOR = typename COMBINED_FIELDS::template decompose_into<CELL::descriptor_t::template extend_by_fields>;
@@ -116,7 +116,7 @@ struct DerivativeF {
   using result_t = descriptors::FIELD_MATRIX<typename FUNCTOR::result_t, RESPECT_TO>;
 
   template <typename CELL, typename PARAMETERS>
-  auto compute(CELL& cell, PARAMETERS& parameters) {
+  auto compute(CELL& cell, PARAMETERS& parameters) any_platform {
     using V = typename CELL::value_t;
 
     /// Collecting all accessed fields in order to include them all for correct derivative computation
@@ -146,10 +146,11 @@ struct DerivativeF {
     auto view = DerivativeF::result_t::template getMatrixView<V,DESCRIPTOR>(jacobian);
     for (unsigned row=0; row<view.rows; ++row) {
       for (unsigned col=0; col<view.cols; ++col) {
-        view[row][col] = y[row].d(col);
+        view[row][col] = (y[row]).d(col);
         view[row][col] *= util::pow(dx, DESCRIPTOR::d); // scaling due to cell-wise contribution
       }
     }
+
     return jacobian;
   }
 };

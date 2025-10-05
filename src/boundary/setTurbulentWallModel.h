@@ -406,13 +406,13 @@ void setTurbulentWallModel(BlockLattice<T,DESCRIPTOR>& block,
   if( wallModelParameters.fNeqMethod == 1 ) {
     kMax = 3;
   }
-  for(int k=1; k < kMax; k++){
+  for (int k=1; k < kMax; k++) {
     block.forSpatialLocations([&](LatticeR<DESCRIPTOR::d> solidLatticeR) {
       // Check if cell is solid cell
       if (boundaryIndicator(solidLatticeR)) {
         for (int iPop=1; iPop < DESCRIPTOR::q; ++iPop) {
           Vector<T,DESCRIPTOR::d> boundaryLatticeR(solidLatticeR + k*descriptors::c<DESCRIPTOR>(iPop));
-          if (blockGeometry.getNeighborhoodRadius(boundaryLatticeR) >= 1) {
+          if (blockGeometry.getNeighborhoodRadius(boundaryLatticeR) >= 3) {
             if (blockGeometry.isInside(boundaryLatticeR)) {
               Vector<T,DESCRIPTOR::d> boundaryPhysR{ };
               blockGeometry.getPhysR(boundaryPhysR,boundaryLatticeR);

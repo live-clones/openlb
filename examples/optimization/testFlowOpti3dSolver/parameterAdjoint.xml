@@ -28,7 +28,7 @@
       <BoundMaxU> 10. </BoundMaxU>
     </StabilityCheck>
     <BoundaryCondition> interpolated </BoundaryCondition>
-    <Domain> sphere </Domain>
+    <Domain> cube </Domain>
     <PressureFilter> true </PressureFilter>
 
   </Application>

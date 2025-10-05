@@ -131,8 +131,7 @@
  /**
   * @brief Prepare the geometry by assigning material indicators and cleaning up boundaries.
   */
-  void prepareGeometry(const UnitConverter<T,DESCRIPTOR>& converter,
-    SuperGeometry<T,2>& superGeometry) {
+  void prepareGeometry(SuperGeometry<T,2>& superGeometry) {
     OstreamManager clout(std::cout,"prepareGeometry");
     clout << "Prepare Geometry ..." << std::endl;
 
@@ -146,10 +145,11 @@
 
     // Check for geometry errors
     superGeometry.checkForErrors();
-    //  superGeometry.getStatistics().print();
+    superGeometry.getStatistics().print();
 
     clout << "Prepare Geometry ... OK" << std::endl;
   }
+
 
  /**
   * @brief Define the bulk and boundary dynamics on the lattice.
@@ -379,8 +379,8 @@ void saveResults(SuperLattice<T, DESCRIPTOR>& sLattice,
    SuperGeometry<T,2> superGeometry(cuboidDecomposition, loadBalancer);
 
    // Prepare geometry and lattice data structures
-   prepareGeometry(converter, superGeometry);
-   SuperLattice<T, DESCRIPTOR> sLattice(superGeometry);
+   prepareGeometry(superGeometry);
+   SuperLattice<T, DESCRIPTOR> sLattice(converter, superGeometry);
    prepareLattice(converter, sLattice, superGeometry);
 
    // Create timer for performance measurements

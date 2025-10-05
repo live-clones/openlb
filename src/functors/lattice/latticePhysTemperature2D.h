@@ -42,7 +42,7 @@ template <typename T, typename DESCRIPTOR, typename TDESCRIPTOR>
 class SuperLatticePhysTemperature2D final : public SuperLatticeThermalPhysF2D<T,DESCRIPTOR,TDESCRIPTOR> {
 public:
   SuperLatticePhysTemperature2D(SuperLattice<T,TDESCRIPTOR>& sLattice,
-                                ThermalUnitConverter<T,DESCRIPTOR,TDESCRIPTOR> const& converter);
+                                UnitConverter<T,DESCRIPTOR> const& converter);
 };
 
 /// BlockLatticePhysTemperature2D returns pointwise phys temperature from rho on local lattices.
@@ -50,7 +50,7 @@ template <typename T, typename DESCRIPTOR, typename TDESCRIPTOR>
 class BlockLatticePhysTemperature2D final : public BlockLatticeThermalPhysF2D<T,DESCRIPTOR,TDESCRIPTOR> {
 public:
   BlockLatticePhysTemperature2D(BlockLattice<T,TDESCRIPTOR>& blockLattice,
-                                ThermalUnitConverter<T,DESCRIPTOR,TDESCRIPTOR> const& converter);
+                                UnitConverter<T,DESCRIPTOR> const& converter);
   bool operator() (T output[], const int input[]) override;
 };
 

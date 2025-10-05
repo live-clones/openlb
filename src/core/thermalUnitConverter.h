@@ -90,137 +90,137 @@ public:
   };
 
   /// return thermal relaxation time in lattice units
-  constexpr T getLatticeThermalRelaxationTime(  ) const
+  constexpr T getLatticeThermalRelaxationTime(  ) const override
   {
     return _latticeThermalRelaxationTime;
   };
   /// return thermal relaxation frequency in lattice units
-  constexpr T getLatticeThermalRelaxationFrequency(  ) const
+  constexpr T getLatticeThermalRelaxationFrequency(  ) const override
   {
     return 1.0 / _latticeThermalRelaxationTime;
   };
 
   /// return characteristic low temperature in physical units
-  constexpr T getCharPhysLowTemperature(  ) const
+  constexpr T getCharPhysLowTemperature(  ) const override
   {
     return _charPhysLowTemperature;
   };
   /// return characteristic high temperature in physical units
-  constexpr T getCharPhysHighTemperature(  ) const
+  constexpr T getCharPhysHighTemperature(  ) const override
   {
     return _charPhysHighTemperature;
   };
   /// return characteristic temperature difference in physical units
-  constexpr T getCharPhysTemperatureDifference(  ) const
+  constexpr T getCharPhysTemperatureDifference(  ) const override
   {
     return _charPhysTemperatureDifference;
   };
   /// return thermal expansion coefficient in physical units
-  constexpr T getPhysThermalExpansionCoefficient(  ) const
+  constexpr T getPhysThermalExpansionCoefficient(  ) const override
   {
     return _physThermalExpansionCoefficient;
   };
   /// return thermal diffusivity in physical units
-  constexpr T getPhysThermalDiffusivity(  ) const
+  constexpr T getPhysThermalDiffusivity(  ) const override
   {
     return _physThermalDiffusivity;
   };
   /// return specific heat capacity in physical units
-  constexpr T getPhysSpecificHeatCapacity(  ) const
+  constexpr T getPhysSpecificHeatCapacity(  ) const override
   {
     return _physSpecificHeatCapacity;
   };
   /// return thermal conductivity in physical units
-  constexpr T getThermalConductivity(  ) const
+  constexpr T getThermalConductivity(  ) const override
   {
     return _physThermalConductivity;
   };
 
   /// conversion from lattice to physical temperature
-  constexpr T getPhysTemperature( T latticeTemperature ) const
+  constexpr T getPhysTemperature( T latticeTemperature ) const override
   {
     return _conversionTemperature * (latticeTemperature - 0.5) + _charPhysLowTemperature;
   };
   /// conversion from physical to lattice temperature
-  constexpr T getLatticeTemperature( T physTemperature ) const
+  constexpr T getLatticeTemperature( T physTemperature ) const override
   {
     return (physTemperature - _charPhysLowTemperature) / _conversionTemperature + 0.5;
   };
   /// access (read-only) to private member variable
-  constexpr T getConversionFactorTemperature() const
+  constexpr T getConversionFactorTemperature() const override
   {
     return _conversionTemperature;
   };
 
   /// conversion from lattice to physical thermal diffusivity
-  constexpr T getPhysThermalDiffusivity( T latticeThermalDiffusivity ) const
+  constexpr T getPhysThermalDiffusivity( T latticeThermalDiffusivity ) const override
   {
     return _conversionThermalDiffusivity * latticeThermalDiffusivity;
   };
   /// conversion from physical to lattice thermal diffusivity
-  constexpr T getLatticeThermalDiffusivity( T physThermalDiffusivity ) const
+  constexpr T getLatticeThermalDiffusivity( T physThermalDiffusivity ) const override
   {
     return physThermalDiffusivity / _conversionThermalDiffusivity;
   };
   /// access (read-only) to private member variable
-  constexpr T getConversionFactorThermalDiffusivity() const
+  constexpr T getConversionFactorThermalDiffusivity() const override
   {
     return _conversionThermalDiffusivity;
   };
 
 
   /// conversion from lattice to physical specific heat capacity
-  constexpr T getPhysSpecificHeatCapacity( T latticeSpecificHeatCapacity ) const
+  constexpr T getPhysSpecificHeatCapacity( T latticeSpecificHeatCapacity ) const override
   {
     return _conversionSpecificHeatCapacity * latticeSpecificHeatCapacity;
   };
   /// conversion from physical to lattice specific heat capacity
-  constexpr T getLatticeSpecificHeatCapacity( T physSpecificHeatCapacity ) const
+  constexpr T getLatticeSpecificHeatCapacity( T physSpecificHeatCapacity ) const override
   {
     return physSpecificHeatCapacity / _conversionSpecificHeatCapacity;
   };
   /// access (read-only) to private member variable
-  constexpr T getConversionFactorSpecificHeatCapacity() const
+  constexpr T getConversionFactorSpecificHeatCapacity() const override
   {
     return _conversionSpecificHeatCapacity;
   };
 
   /// conversion from lattice to physical thermal  conductivity
-  constexpr T getPhysThermalConductivity( T latticeThermalConductivity ) const
+  constexpr T getPhysThermalConductivity( T latticeThermalConductivity ) const override
   {
     return _conversionThermalConductivity * latticeThermalConductivity;
   };
   /// conversion from physical to lattice thermal  conductivity
-  constexpr T getLatticeThermalConductivity( T physThermalConductivity ) const
+  constexpr T getLatticeThermalConductivity( T physThermalConductivity ) const override
   {
     return physThermalConductivity / _conversionThermalConductivity;
   };
   /// access (read-only) to private member variable
-  constexpr T getConversionFactorThermalConductivity() const
+  constexpr T getConversionFactorThermalConductivity() const override
   {
     return _conversionThermalConductivity;
   };
 
   /// conversion from lattice to physical heat flux
-  constexpr T getPhysHeatFlux( T latticeHeatFlux ) const
+  constexpr T getPhysHeatFlux( T latticeHeatFlux ) const override
   {
     return _conversionHeatFlux * latticeHeatFlux;
   };
   /// conversion from physical to lattice heat flux
-  constexpr T getLatticeHeatFlux( T physHeatFlux ) const
+  constexpr T getLatticeHeatFlux( T physHeatFlux ) const override
   {
     return physHeatFlux / _conversionHeatFlux;
   };
   /// access (read-only) to private member variable
-  constexpr T getConversionFactorHeatFlux() const
+  constexpr T getConversionFactorHeatFlux() const override
   {
     return _conversionHeatFlux;
   };
-  constexpr T getPrandtlNumber() const
+  constexpr T getPrandtlNumber() const override
   {
     return this->_physViscosity/_physThermalDiffusivity;
   };
-  constexpr T getRayleighNumber() const
+  constexpr T getRayleighNumber() const override
   {
     return 9.81 * _physThermalExpansionCoefficient/this->_physViscosity/_physThermalDiffusivity * (_charPhysHighTemperature - _charPhysLowTemperature) * util::pow(this->_charPhysLength,3);
   };

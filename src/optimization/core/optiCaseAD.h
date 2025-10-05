@@ -117,13 +117,23 @@ public:
    : OptiCaseAD<S,n,C>(getCallable<S>(solver), getCallable<T>(adSolver),
        std::bind(&SOLVER<S>::postProcess, solver)),
      _solver(solver), _adSolver(adSolver)
-  { }
+{ }
 
   OptiCaseAdForSolver(XMLreader const& xml)
    : OptiCaseAdForSolver(
       createLbSolver<SOLVER<S>> (xml),
       createLbSolver<SOLVER<T>> (xml))
   { }
+
+  S evaluateObjective(const C<S>& control, unsigned optiStep=0) override {
+    _solver->parameters(names::OutputOpti()).counterOptiStep = optiStep;
+    return OptiCaseAD<S,n,C>::evaluateObjective(control, optiStep);
+  }
+
+  void computeDerivatives(const C<S>& control, C<S>& derivatives, unsigned optiStep=0) override {
+    _adSolver->parameters(names::OutputOpti()).counterOptiStep = optiStep;
+    OptiCaseAD<S,n,C>::computeDerivatives(control, derivatives, optiStep);
+  }
 };
 
 template<typename S, typename T, template<typename> typename SOLVER>

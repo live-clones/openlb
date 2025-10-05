@@ -67,7 +67,7 @@ bool checkMaterialVicinity(
   //Retrieve super geometry
   auto& sGeometry = materialIndicator.getSuperGeometry();
   //Get lattice position
-  auto latticeR = sGeometry.getCuboidDecomposition().getFloorLatticeR(position);
+  std::optional<LatticeR<D+1>> latticeR = sGeometry.getCuboidDecomposition().getFloorLatticeR(position);
   bool foundPos = latticeR.operator bool();
   if (!foundPos) {
     std::cerr << "Position (" << position << ") not found!" << std::endl;

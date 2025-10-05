@@ -182,6 +182,10 @@ public:
     _iCell = iCell;
   }
 
+  CellID getCellId() const __device__ {
+    return _iCell;
+  }
+
   template <typename FIELD>
   typename FIELD::template value_type<T> getFieldComponent(unsigned iD) __device__ {
     return _data.template getField<FIELD>()[iD][_iCell];

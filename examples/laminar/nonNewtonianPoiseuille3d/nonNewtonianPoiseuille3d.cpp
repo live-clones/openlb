@@ -176,16 +176,15 @@ template<typename MODEL>
 using DYNAMICS = MODEL::dynamics;
 
 // Stores geometry information in form of material numbers
-void prepareGeometry( UnitConverter<T,DESCRIPTOR> const& converter,
-                      SuperGeometry<T,3>& superGeometry )
+void prepareGeometry( SuperGeometry<T,3>& superGeometry, T dx )
 {
   OstreamManager clout(std::cout, "prepareGeometry");
   clout << "Prepare Geometry ..." << std::endl;
 
-  Vector<T, 3> center0(-converter.getPhysDeltaX() * 0.2, radius, radius);
+  Vector<T, 3> center0(-dx * 0.2, radius, radius);
   Vector<T, 3> center1(length, radius, radius);
-  center0[0] -= 3.*converter.getPhysDeltaX();
-  center1[0] += 3.*converter.getPhysDeltaX();
+  center0[0] -= 3.*dx;
+  center1[0] += 3.*dx;
   IndicatorCylinder3D<T> pipe(center0, center1, radius);
   superGeometry.rename(0, 2);
   superGeometry.rename(2, 1, pipe);
@@ -200,10 +199,10 @@ void prepareGeometry( UnitConverter<T,DESCRIPTOR> const& converter,
 // Set up the geometry of the simulation
 template<typename MODEL>
 void prepareLattice(SuperLattice<T, DESCRIPTOR>& sLattice,
-                    UnitConverter<T, DESCRIPTOR>const& converter,
                     SuperGeometry<T,3>& superGeometry)
 {
   OstreamManager clout( std::cout,"prepareLattice" );
+  const UnitConverter<T,DESCRIPTOR>& converter = sLattice.getUnitConverter();
   clout << "Prepare Lattice ..." << std::endl;
 
   const T omega = converter.getLatticeRelaxationFrequency();
@@ -244,10 +243,10 @@ void prepareLattice(SuperLattice<T, DESCRIPTOR>& sLattice,
 // Compute error norms
 template<typename MODEL>
 std::vector<T> error( SuperGeometry<T,3>& superGeometry,
-            SuperLattice<T, DESCRIPTOR>& sLattice,
-            UnitConverter<T,DESCRIPTOR> const& converter )
+            SuperLattice<T, DESCRIPTOR>& sLattice)
 {
   OstreamManager clout( std::cout,"error" );
+  const UnitConverter<T,DESCRIPTOR>& converter = sLattice.getUnitConverter();
   std::vector<T> errors;
   int tmp[]= { };
   T result[2]= { };
@@ -287,10 +286,11 @@ std::vector<T> error( SuperGeometry<T,3>& superGeometry,
 // Output to console and files
 template<typename MODEL>
 void getResults( SuperLattice<T,DESCRIPTOR>& sLattice,
-                 UnitConverter<T,DESCRIPTOR> const& converter, std::size_t iT,
+                 std::size_t iT,
                  SuperGeometry<T,3>& superGeometry, util::Timer<T>& timer )
 {
   OstreamManager clout( std::cout,"getResults" );
+  const UnitConverter<T,DESCRIPTOR>& converter = sLattice.getUnitConverter();
   const bool lastTimeStep = (iT + 1 == converter.getLatticeTime( maxPhysT ));
   const int statIter = converter.getLatticeTime( maxPhysT / 10. );
 
@@ -332,7 +332,7 @@ void getResults( SuperLattice<T,DESCRIPTOR>& sLattice,
     timer.update( iT );
     timer.printStep();
     sLattice.getStatistics().print( iT,converter.getPhysTime( iT ) );
-    error<MODEL>( superGeometry, sLattice, converter );
+    error<MODEL>( superGeometry, sLattice);
   }
 }
 
@@ -375,13 +375,13 @@ std::vector<T> simulatePoiseuilleWith()
   const int overlap = 3;
   SuperGeometry<T,3> superGeometry(cuboidDecomposition, loadBalancer, overlap);
 
-  prepareGeometry(converter, superGeometry);
+  prepareGeometry(superGeometry, converter.getPhysDeltaX());
 
   // === 3rd Step: Prepare Lattice ===
-  SuperLattice<T,DESCRIPTOR> sLattice( superGeometry );
+  SuperLattice<T,DESCRIPTOR> sLattice(converter, superGeometry);
 
   //prepareLattice and setBoundaryConditions
-  prepareLattice<MODEL>(sLattice, converter, superGeometry);
+  prepareLattice<MODEL>(sLattice, superGeometry);
 
   // === 4th Step: Main Loop with Timer ===
   clout << "starting simulation..." << std::endl;
@@ -391,12 +391,12 @@ std::vector<T> simulatePoiseuilleWith()
   std::vector<T> errors;
   for ( std::size_t iT = 0; iT < converter.getLatticeTime( maxPhysT ); ++iT ) {
     sLattice.collideAndStream();
-    getResults<MODEL>( sLattice, converter, iT, superGeometry, timer );
+    getResults<MODEL>( sLattice, iT, superGeometry, timer );
   }
   timer.stop();
   timer.printSummary();
 
-  return error<MODEL>(superGeometry, sLattice, converter);
+  return error<MODEL>(superGeometry, sLattice);
 }
 
 template<typename MODEL>

@@ -341,7 +341,7 @@ void simulate(int N) {
   prepareGeometry(superGeometry, cuboid, converter);
 
   /// === 3rd Step: Prepare Lattice ===
-  SuperLattice<T, TDESCRIPTOR> ADlattice(superGeometry);
+  SuperLattice<T, TDESCRIPTOR> ADlattice(converter, superGeometry);
   prepareLattice(ADlattice, superGeometry, converter);
 
   // Prepare reaction at left wall for IN_BULK_APPROACH
@@ -361,7 +361,7 @@ void simulate(int N) {
 
     /// === 6th Step: Collide and Stream Execution ===
 #ifdef IN_BULK_APPROACH
-    Reaction.execute();
+    Reaction.apply();
 #endif
     ADlattice.collideAndStream();
     // === 7th Step: Computation and Output of the Results ===

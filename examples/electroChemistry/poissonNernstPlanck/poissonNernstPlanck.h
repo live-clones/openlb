@@ -121,7 +121,7 @@ template <typename T, typename S, typename DESCRIPTOR>
         };
     };
 
-void prepareGeometry( UnitConverter<T,DESCRIPTOR> const& converter,
+void prepareGeometry( T eps,
                       SuperGeometry<T,3>& superGeometry )
 {
   OstreamManager clout( std::cout,"prepareGeometry" );
@@ -131,7 +131,6 @@ void prepareGeometry( UnitConverter<T,DESCRIPTOR> const& converter,
   superGeometry.rename( 2,1,{0,1,0} );
   superGeometry.clean();
 
-  T eps = converter.getPhysDeltaX();
   Vector<T,3> extend(length, 2*eps, 5*eps);
   Vector<T,3> origin;
   IndicatorCuboid3D<T> inlet( extend, origin );
@@ -150,15 +149,14 @@ void prepareGeometry( UnitConverter<T,DESCRIPTOR> const& converter,
   clout << "Prepare Geometry ... OK" << std::endl;
 }
 
-void prepareLatticePoisson( UnitConverter<T,DESCRIPTOR> const& converter,
-                            SuperLattice<T, DESCRIPTOR>& sLattice,
+void prepareLatticePoisson( SuperLattice<T, DESCRIPTOR>& sLattice,
                             SuperGeometry<T,3>& superGeometry )
 {
 
   OstreamManager clout( std::cout,"prepareLatticePoisson" );
   //clout << "Prepare Lattice Poisson..." << std::endl;
 
-  const T omega = converter.getLatticeRelaxationFrequency();
+  const T omega = sLattice.getUnitConverter().getLatticeRelaxationFrequency();
 
   // Material=1,3,4 -->bulk dynamics
   sLattice.defineDynamics<BulkDynamicsPsi>(superGeometry.getMaterialIndicator({1, 3, 4}));
@@ -186,8 +184,7 @@ void prepareLatticePoisson( UnitConverter<T,DESCRIPTOR> const& converter,
   sLattice.initialize();
 }
 
-void prepareLatticeNernstPlanck( UnitConverter<T,DESCRIPTOR> const& converter,
-                                 SuperLattice<T, DESCRIPTOR>& sLattice,
+void prepareLatticeNernstPlanck( SuperLattice<T, DESCRIPTOR>& sLattice,
                                  SuperGeometry<T,3>& superGeometry,
                                  T CB, T sign )
 {
@@ -195,7 +192,7 @@ void prepareLatticeNernstPlanck( UnitConverter<T,DESCRIPTOR> const& converter,
   OstreamManager clout( std::cout,"prepareLatticeNernstPlanck" );
   clout << "Prepare Lattice Nernst-Planck..." << std::endl;
 
-  const T omega = converter.getLatticeRelaxationFrequency();
+  const T omega = sLattice.getUnitConverter().getLatticeRelaxationFrequency();
 
   // Material=1, 4 -->bulk dynamics
   sLattice.defineDynamics<BulkDynamicsConc>(superGeometry.getMaterialIndicator({1, 4}));
@@ -232,7 +229,6 @@ void prepareLatticeNernstPlanck( UnitConverter<T,DESCRIPTOR> const& converter,
 void error( SuperLattice<T, DESCRIPTOR>& sLatticePoisson,
             SuperLattice<T, DESCRIPTOR>& sLatticeCation,
             SuperLattice<T, DESCRIPTOR>& sLatticeAnion,
-            UnitConverter<T, DESCRIPTOR> const& converter,
             SuperGeometry<T,3>& superGeometry, bool var)
 {
   OstreamManager clout( std::cout,"Errors" );
@@ -243,8 +239,8 @@ void error( SuperLattice<T, DESCRIPTOR>& sLatticePoisson,
     int tmp[]= { };
     T result[2] = { };
 
-    T eps = converter.getPhysDeltaX();
-    PotentialProfile1D<T,T,DESCRIPTOR> psiSol(0.*eps, width - 0.*eps, converter);
+    T eps = sLatticeCation.getUnitConverter().getPhysDeltaX();
+    PotentialProfile1D<T,T,DESCRIPTOR> psiSol(0.*eps, width - 0.*eps, sLatticeCation.getUnitConverter());
     ConcentrationProfile1D<T,T,DESCRIPTOR> concSolCation(valence, psiSol);
     ConcentrationProfile1D<T,T,DESCRIPTOR> concSolAnion(-valence, psiSol);
     SuperLatticeDensity3D<T, DESCRIPTOR> psi( sLatticePoisson );
@@ -302,17 +298,17 @@ void error( SuperLattice<T, DESCRIPTOR>& sLatticePoisson,
   }
 }
 
-void getResultsNernstPlanck( SuperLattice<T, DESCRIPTOR>& sLatticeCation, SuperLattice<T, DESCRIPTOR>& sLatticeAnion,
+void getResultsNernstPlanck( SuperLattice<T, DESCRIPTOR>& sLatticeCation,
+                             SuperLattice<T, DESCRIPTOR>& sLatticeAnion,
                              SuperLattice<T, DESCRIPTOR>& sLatticePoisson,
-                             UnitConverter<T, DESCRIPTOR> const& converter, std::size_t iT,
-                             SuperGeometry<T,3>& superGeometry, util::Timer<T>& timer,
-                             bool hasConverged, Gnuplot<T>& gplot)
+                             std::size_t iT, SuperGeometry<T,3>& superGeometry,
+                             util::Timer<T>& timer, bool hasConverged, Gnuplot<T>& gplot)
 {
 
   OstreamManager clout( std::cout,"getResultsNernstPlanck" );
 
-  const int vtkIter  = converter.getLatticeTime( .5 );
-  const int statIter = converter.getLatticeTime( .5 );
+  const int vtkIter  = sLatticeCation.getUnitConverter().getLatticeTime( .5 );
+  const int statIter = sLatticeCation.getUnitConverter().getLatticeTime( .5 );
 
   if ( iT==0 ) {
     // Writes the geometry, cuboid no. and rank no. as vti file for visualization
@@ -339,7 +335,7 @@ void getResultsNernstPlanck( SuperLattice<T, DESCRIPTOR>& sLatticeCation, SuperL
     timer.printStep();
 
     // Lattice statistics console output
-    sLatticeCation.getStatistics().print( iT,converter.getPhysTime( iT ) );
+    sLatticeCation.getStatistics().print( iT,sLatticeCation.getUnitConverter().getPhysTime( iT ) );
   }
 
   // Writes the VTK files
@@ -352,8 +348,8 @@ void getResultsNernstPlanck( SuperLattice<T, DESCRIPTOR>& sLatticeCation, SuperL
       SuperVTMwriter3D<T> vtmWriterPoisson( "poisson" );
       SuperLatticeDensity3D psi( sLatticePoisson);
       psi.getName() = "psi";
-      T eps = converter.getPhysDeltaX();
-      PotentialProfile1D<T,T,DESCRIPTOR> psiSol(0.*eps, width - 0.*eps, converter);
+      T eps = sLatticeCation.getUnitConverter().getPhysDeltaX();
+      PotentialProfile1D<T,T,DESCRIPTOR> psiSol(0.*eps, width - 0.*eps, sLatticeCation.getUnitConverter());
       SuperLatticeFfromAnalyticalF3D<T,DESCRIPTOR> analyticalPsi(psiSol, sLatticePoisson);
       analyticalPsi.getName() = "analytical potential";
       vtmWriterPoisson.addFunctor(psi);
@@ -365,10 +361,10 @@ void getResultsNernstPlanck( SuperLattice<T, DESCRIPTOR>& sLatticeCation, SuperL
       SuperVTMwriter3D<T> vtmWriterCation( "cation" );
       SuperLatticeDensity3D<T,DESCRIPTOR> cation( sLatticeCation );
       cation.getName() = "cation";
-      SuperLatticePhysField3D<T,DESCRIPTOR,VELOCITY> velCation( sLatticeCation, converter.getConversionFactorVelocity() );
+      SuperLatticePhysField3D<T,DESCRIPTOR,VELOCITY> velCation( sLatticeCation, sLatticeCation.getUnitConverter().getConversionFactorVelocity() );
       velCation.getName() = "velCation";
-      T eps = converter.getPhysDeltaX();
-      PotentialProfile1D<T,T,DESCRIPTOR> psiSol(0.*eps, width - 0.*eps, converter);
+      T eps = sLatticeCation.getUnitConverter().getPhysDeltaX();
+      PotentialProfile1D<T,T,DESCRIPTOR> psiSol(0.*eps, width - 0.*eps, sLatticeCation.getUnitConverter());
       ConcentrationProfile1D<T,T,DESCRIPTOR> concSol(valence, psiSol);
       SuperLatticeFfromAnalyticalF3D<T,DESCRIPTOR> analyticalConcCation(concSol, sLatticeCation);
       analyticalConcCation.getName() = "analytical concentration cation";
@@ -382,10 +378,10 @@ void getResultsNernstPlanck( SuperLattice<T, DESCRIPTOR>& sLatticeCation, SuperL
       SuperVTMwriter3D<T> vtmWriterAnion( "anion" );
       SuperLatticeDensity3D<T,DESCRIPTOR> anion( sLatticeAnion );
       anion.getName() = "anion";
-      SuperLatticePhysField3D<T,DESCRIPTOR,VELOCITY> velAnion( sLatticeAnion, converter.getConversionFactorVelocity() );
+      SuperLatticePhysField3D<T,DESCRIPTOR,VELOCITY> velAnion( sLatticeAnion, sLatticeCation.getUnitConverter().getConversionFactorVelocity() );
       velAnion.getName() = "velAnion";
-      T eps = converter.getPhysDeltaX();
-      PotentialProfile1D<T,T,DESCRIPTOR> psiSol(0.*eps, width - 0.*eps, converter);
+      T eps = sLatticeCation.getUnitConverter().getPhysDeltaX();
+      PotentialProfile1D<T,T,DESCRIPTOR> psiSol(0.*eps, width - 0.*eps, sLatticeCation.getUnitConverter());
       ConcentrationProfile1D<T,T,DESCRIPTOR> concSol2(-valence, psiSol);
       SuperLatticeFfromAnalyticalF3D<T,DESCRIPTOR> analyticalConcAnion(concSol2, sLatticeAnion);
       analyticalConcAnion.getName() = "analytical concentration anion";
@@ -398,7 +394,7 @@ void getResultsNernstPlanck( SuperLattice<T, DESCRIPTOR>& sLatticeCation, SuperL
 
   if(hasConverged){
     gplot.setData (
-          T(converter.getResolution()),
+          T(sLatticeCation.getUnitConverter().getResolution()),
           { psiL1RelError, psiL2RelError, psiLinfRelError,
             concL1RelError, concL2RelError, concLinfRelError,
             conc2L1RelError, conc2L2RelError, conc2LinfRelError},
@@ -421,16 +417,15 @@ void getResultsNernstPlanck( SuperLattice<T, DESCRIPTOR>& sLatticeCation, SuperL
 }
 
 void simulatePoisson(SuperLattice<T, DESCRIPTOR>& sLattice,
-                     UnitConverter<T, DESCRIPTOR> const& converter,
                      SuperGeometry<T,3>& superGeometry,
                      bool poissonLoop)
 {
 
-  util::Timer<T> timer( converter.getLatticeTime( maxPhysT ), superGeometry.getStatistics().getNvoxel() );
+  util::Timer<T> timer( sLattice.getUnitConverter().getLatticeTime( maxPhysT ), superGeometry.getStatistics().getNvoxel() );
   util::ValueTracer<T> converge( 10, 1.e-9 );
   timer.start();
 
-  for ( std::size_t iT = 0; iT < (!poissonLoop)*1 + (poissonLoop)*converter.getLatticeTime( maxPhysT ); ++iT ) {
+  for ( std::size_t iT = 0; iT < (!poissonLoop)*1 + (poissonLoop)*sLattice.getUnitConverter().getLatticeTime( maxPhysT ); ++iT ) {
 
     sLattice.collideAndStream();
 
@@ -491,20 +486,20 @@ void simulatePoissonNernstPlanck3D(int N, bool poissonLoop, Gnuplot<T>& gplot)
 
   HeuristicLoadBalancer<T> loadBalancer( cuboidDecomposition );
   SuperGeometry<T,3> superGeometry( cuboidDecomposition, loadBalancer );
-  prepareGeometry( converterNernstPlanck, superGeometry );
+  prepareGeometry( converterNernstPlanck.getPhysDeltaX(), superGeometry );
 
   // === 3rd Step: Prepare Lattice ===
 
-  SuperLattice<T, DESCRIPTOR> sLatticeCation( superGeometry );
-  SuperLattice<T, DESCRIPTOR> sLatticePoisson( superGeometry );
-  SuperLattice<T, DESCRIPTOR> sLatticeAnion( superGeometry );
+  SuperLattice<T, DESCRIPTOR> sLatticeCation( converterNernstPlanck, superGeometry );
+  SuperLattice<T, DESCRIPTOR> sLatticePoisson( converterPoisson, superGeometry );
+  SuperLattice<T, DESCRIPTOR> sLatticeAnion( converterNernstPlanck, superGeometry );
 
   T CationWall = C0 * util::exp(-charge*valence*psi0/Boltzmann/temperature);
   T AnionWall = C0 * util::exp(charge*valence*psi0/Boltzmann/temperature);
 
-  prepareLatticeNernstPlanck( converterNernstPlanck, sLatticeCation, superGeometry, CationWall, 1. );
-  prepareLatticeNernstPlanck( converterNernstPlanck, sLatticeAnion, superGeometry, AnionWall, -1. );
-  prepareLatticePoisson( converterPoisson, sLatticePoisson, superGeometry );
+  prepareLatticeNernstPlanck( sLatticeCation, superGeometry, CationWall, 1. );
+  prepareLatticeNernstPlanck( sLatticeAnion, superGeometry, AnionWall, -1. );
+  prepareLatticePoisson( sLatticePoisson, superGeometry );
 
   T npVelCoeff = charge * valence * diffusion / Boltzmann / temperature / converterNernstPlanck.getConversionFactorVelocity();
   T sourceCoeff = 1./dielectricC * Faraday * valence * converterPoisson.getConversionFactorTime();
@@ -533,16 +528,16 @@ void simulatePoissonNernstPlanck3D(int N, bool poissonLoop, Gnuplot<T>& gplot)
     // internal Poisson loop. In terms of efficiency choose an appropriate frequency of Poisson equation updates
     int poissonLoopPerTotalSteps = 5;
     if( iT == 0 || iT%((!poissonLoop)*1 + (poissonLoop)*poissonLoopPerTotalSteps) == 0){
-      simulatePoisson(sLatticePoisson, converterPoisson, superGeometry, poissonLoop);
+      simulatePoisson(sLatticePoisson, superGeometry, poissonLoop);
     }
 
-    coupling.execute();
+    coupling.apply();
 
     sLatticeCation.collideAndStream();
     sLatticeAnion.collideAndStream();
 
-    error( sLatticePoisson, sLatticeCation, sLatticeAnion, converterNernstPlanck, superGeometry, converge.hasConverged());
-    getResultsNernstPlanck( sLatticeCation, sLatticeAnion, sLatticePoisson, converterNernstPlanck, iT, superGeometry, timer, converge.hasConverged(), gplot);
+    error( sLatticePoisson, sLatticeCation, sLatticeAnion,superGeometry, converge.hasConverged());
+    getResultsNernstPlanck( sLatticeCation, sLatticeAnion, sLatticePoisson, iT, superGeometry, timer, converge.hasConverged(), gplot);
 
     if(converge.hasConverged()) { break; }
     converge.takeValue( sLatticePoisson.getStatistics().getAverageRho(), false );

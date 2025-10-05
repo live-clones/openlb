@@ -94,6 +94,10 @@ public:
     }
     writer.write(arg);
   }
+
+  void resetResults() {
+    _creators.clear();
+  }
 };
 
 }

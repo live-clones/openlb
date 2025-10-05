@@ -50,7 +50,7 @@ SuperLatticePointExtraction<T,DESCRIPTOR,FUNCTOR>::SuperLatticePointExtraction(
   : _sLattice(sLattice),
     _sampleD(sLattice.getLoadBalancer()),
     _couplingO(PointExtractionO<FUNCTOR>{},
-               names::Lattice{}, sLattice,
+               names::Lattice1{}, sLattice,
                names::Points{}, _sampleD),
     _extractionPointD(points.size()),
     _extractionResultD(points.size())
@@ -95,7 +95,7 @@ SuperLatticePointExtraction<T,DESCRIPTOR,FUNCTOR>::SuperLatticePointExtraction(
 template <typename T, typename DESCRIPTOR, typename FUNCTOR>
 void SuperLatticePointExtraction<T,DESCRIPTOR,FUNCTOR>::update()
 {
-  _couplingO.execute();
+  _couplingO.apply();
   _sampleD.setProcessingContext(ProcessingContext::Evaluation);
 
 #ifdef PARALLEL_MODE_MPI

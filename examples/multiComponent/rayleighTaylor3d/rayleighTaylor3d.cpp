@@ -257,6 +257,15 @@ int main( int argc, char *argv[] )
   singleton::directories().setOutputDir( "./tmp/" );
   OstreamManager clout( std::cout,"main" );
 
+  UnitConverterFromResolutionAndRelaxationTime<T,DESCRIPTOR> converter(
+    (T)   nx, // resolution
+    (T)   1., // lattice relaxation time (tau)
+    (T)   1e-5, // charPhysLength: reference length of simulation geometry
+    (T)   1.e-6, // charPhysVelocity: maximal/highest expected velocity during simulation in __m / s__
+    (T)   0.1, // physViscosity: physical kinematic viscosity in __m^2 / s__
+    (T)   1. // physDensity: physical density in __kg / m^3__
+  );
+
   T force = 7./( T )ny/( T )ny;
 
   // === 2nd Step: Prepare Geometry ===
@@ -278,8 +287,8 @@ int main( int argc, char *argv[] )
 
   // === 3rd Step: Prepare Lattice ===
 
-  SuperLattice<T, DESCRIPTOR> sLatticeOne( superGeometry );
-  SuperLattice<T, DESCRIPTOR> sLatticeTwo( superGeometry );
+  SuperLattice<T, DESCRIPTOR> sLatticeOne( converter, superGeometry );
+  SuperLattice<T, DESCRIPTOR> sLatticeTwo( converter, superGeometry );
 
   SuperLatticeCoupling coupling(
     COUPLING{},
@@ -304,7 +313,7 @@ int main( int argc, char *argv[] )
 
     sLatticeOne.executePostProcessors(stage::PreCoupling());
     sLatticeTwo.executePostProcessors(stage::PreCoupling());
-    coupling.execute();
+    coupling.apply();
 
     // === 7th Step: Computation and Output of the Results ===
     getResults( sLatticeTwo, sLatticeOne, iT, superGeometry, timer );

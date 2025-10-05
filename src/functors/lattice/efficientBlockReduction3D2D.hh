@@ -65,7 +65,7 @@ EfficientBlockReduction3D2D<T,DESCRIPTOR,FUNCTOR>::EfficientBlockReduction3D2D(
     _syncMode(syncMode),
     _sliceD(sLattice.getLoadBalancer()),
     _couplingO(BlockReduction3D2DO<FUNCTOR>{},
-               names::Lattice{}, sLattice,
+               names::Lattice1{}, sLattice,
                names::Points{}, _sliceD)
 {
   this->getName() = "planeReduction()";
@@ -126,7 +126,7 @@ void EfficientBlockReduction3D2D<T,DESCRIPTOR,FUNCTOR>::initialize()
 template <typename T, typename DESCRIPTOR, typename FUNCTOR>
 void EfficientBlockReduction3D2D<T,DESCRIPTOR,FUNCTOR>::update()
 {
-  _couplingO.execute();
+  _couplingO.apply();
   //_sliceD.template setProcessingContext<Array<typename FUNCTOR::result_field>>(ProcessingContext::Evaluation);
   _sliceD.setProcessingContext(ProcessingContext::Evaluation);
 

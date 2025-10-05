@@ -163,6 +163,24 @@ S IndicatorSphere3D<S>::signedDistance( const Vector<S,3>& input )
 }
 
 template <typename S>
+bool IndicatorSphere3D<S>::operator()(bool output[], const S input[])
+{
+  // computes squared distance to center
+  S d2 = (input[0] - _center[0])*(input[0] - _center[0]) +
+         (input[1] - _center[1])*(input[1] - _center[1]) +
+         (input[2] - _center[2])*(input[2] - _center[2]);
+  S eps_rad= util::epsRelative(_radius);
+
+  if (d2 < _radius2+eps_rad) {
+    output[0] = true;
+    return true;
+  } else {
+    output[0] = false;
+  }
+  return true;
+}
+
+template <typename S>
 bool IndicatorSphere3D<S>::distance(S& distance, const Vector<S,3>& origin,
                                     const Vector<S,3>& direction, int iC)
 {
@@ -338,15 +356,26 @@ IndicatorCylinder3D<S>::IndicatorCylinder3D(IndicatorCircle3D<S> const& circleF,
 template <typename S>
 bool IndicatorCylinder3D<S>::operator()(bool output[], const S input[])
 {
+  // transform input to the new base
   Vector<S,3> pa(Vector<S,3>(input) - _center1);
+  Vector<S,3> d = _center2 - _center1;
+  // normalize pa to the cylinder axis
+  S h = (pa[0]*d[0]+pa[1]*d[1]+pa[2]*d[2]) / ( d[0]*d[0] + d[1]*d[1] + d[2]*d[2] );
 
-  S X = _I[0]*pa[0] + _I[1]*pa[1] + _I[2]*pa[2];
-  S Y = _J[0]*pa[0] + _J[1]*pa[1] + _J[2]*pa[2];
-  S Z = _K[0]*pa[0] + _K[1]*pa[1] + _K[2]*pa[2];
+  Vector<S,3> eps_rad = S( util::epsRelative(std::sqrt(_radius2)) );
 
-  // X^2 + Y^2 <= _radius2
-  output[0] = ( Z <= _length && Z >= 0 && X*X + Y*Y <= _radius2 );
-  return output[0];
+  S epsMax = std::max(S(util::epsRelative(this->_myMax[0])),
+             std::max( S(util::epsRelative(this->_myMax[1])), S(util::epsRelative(this->_myMax[2]))));
+
+  if( h < 0.- epsMax || h > 1.+ epsMax ) {
+    // point is outside the cylinder
+    output [0] = false;
+    return true;
+  }
+  Vector<S,3> closest = _center1 + h * d;
+  S dist2 = (Vector<S,3>(input) - closest)*(Vector<S,3>(input) - closest);
+  output[0] = dist2 < _radius2 + eps_rad;
+  return true;
 }
 
 template <typename S>
@@ -490,8 +519,11 @@ bool IndicatorCone3D<S>::operator()(bool output[], const S input[])
   S Y = _J[0]*pa[0] + _J[1]*pa[1] + _J[2]*pa[2];
   S Z = _K[0]*pa[0] + _K[1]*pa[1] + _K[2]*pa[2];
   S radius = _radius1 + (_radius2 - _radius1)*Z / _length;
+  S eps_rad = util::epsRelative(_radius1);
+  S eps_length = util::epsRelative(_length);
 
-  output[0] = ( Z <= _length && Z >= 0 && X*X + Y*Y <= radius*radius );
+
+  output[0] = ( Z < _length + eps_length && Z > 0- eps_length && X*X + Y*Y < radius*radius + eps_rad );
   return true;
 }
 
@@ -560,6 +592,24 @@ S IndicatorEllipsoid3D<S>::signedDistance( const Vector<S,3>& input )
 }
 
 template <typename S>
+bool IndicatorEllipsoid3D<S>::operator()(bool output[], const S input[])
+{
+  // computes squared distance to center
+  S d2 = (input[0] - _center[0])*(input[0] - _center[0]) / (_radius[0]*_radius[0]) +
+         (input[1] - _center[1])*(input[1] - _center[1]) / (_radius[1]*_radius[1]) +
+         (input[2] - _center[2])*(input[2] - _center[2]) / (_radius[2]*_radius[2]);
+  S eps_rad = util::epsRelative(util::sqrt(_radius[0]*_radius[0] + _radius[1]*_radius[1] + _radius[2]*_radius[2]));
+
+  if (d2 < 1. + eps_rad) {
+    output[0] = true;
+    return true;
+  } else {
+    output[0] = false;
+  }
+  return true;
+}
+
+template <typename S>
 IndicatorSuperEllipsoid3D<S>::IndicatorSuperEllipsoid3D(Vector<S,3> center, S xHalfAxis, S yHalfAxis, S zHalfAxis, S exponent1, S exponent2)
   : _center(center), _xHalfAxis(xHalfAxis), _yHalfAxis(yHalfAxis), _zHalfAxis(zHalfAxis), _exp1(exponent1), _exp2(exponent2)
 {
@@ -622,7 +672,9 @@ bool IndicatorSuperEllipsoid3D<S>::operator()(bool output[], const S input[])
   S c = util::pow ( util::abs( (input[2] - _center[2]) / _zHalfAxis ), _exp2 );
   S ab = util::pow( a+b, _exp2/_exp1 );
 
-  if ( (ab+c) <= 1. ) {
+  S eps_rad = util::epsRelative(util::sqrt(_xHalfAxis*_xHalfAxis + _yHalfAxis*_yHalfAxis + _zHalfAxis*_zHalfAxis));
+
+  if ( (ab+c) < 1. + eps_rad ) {
     output[0] = 1.;
     return true;
   }
@@ -681,11 +733,24 @@ S const IndicatorCuboid3D<S>::getzLength() const
 template <typename S>
 bool IndicatorCuboid3D<S>::operator()(bool output[], const S input[])
 {
-  // returns true if x is inside the cuboid
-  Vector<S,3> q = distanceXYZ(input);
-  Vector<S,3> eps = std::numeric_limits<BaseType<S>>::epsilon();
-  output[0] = ( q < eps );
-  return output[0];
+  // returns true if input is inside the cuboid
+  Vector<S,3> eps_min = {S(util::epsRelative( this->_myMin[0])),
+                         S(util::epsRelative( this->_myMin[1])),
+                         S(util::epsRelative( this->_myMin[2]))};
+  Vector<S,3> eps_max = {S(util::epsRelative( this->_myMax[0])),
+                         S(util::epsRelative(this->_myMax[1])),
+                         S(util::epsRelative(this->_myMax[2]))};
+
+  if( this->_myMin[0]- eps_min[0] < input[0] && input[0] < this->_myMax[0] + eps_max[0] &&
+      this->_myMin[1]- eps_min[1] < input[1] && input[1] < this->_myMax[1] + eps_max[1] &&
+      this->_myMin[2]- eps_min[2] < input[2] && input[2] < this->_myMax[2] + eps_max[2] ) {
+    output[0] = true;
+    return true;
+  }
+  else {
+    output[0] = false;
+    return false;
+  }
 }
 
 template <typename S>

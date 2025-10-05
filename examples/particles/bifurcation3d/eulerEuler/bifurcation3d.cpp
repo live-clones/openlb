@@ -356,6 +356,16 @@ int main( int argc, char* argv[] )
     (T)   1.5e-5,                      // physViscosity: physical kinematic viscosity in __m^2 / s__
     (T)   1.225                        // physDensity: physical density in __kg / m^3__
   );
+
+  UnitConverter<T,ADDESCRIPTOR> const converterAD(
+    (T) converter.getPhysDeltaX(),
+    (T) converter.getPhysDeltaT(),
+    (T) converter.getCharPhysLength(),
+    (T) converter.getCharPhysVelocity(),
+    (T) converter.getPhysViscosity(),
+    (T) converter.getPhysDensity()
+  );
+
   // Prints the converter log as console output
   converter.print();
   // Writes the converter log in a file
@@ -383,8 +393,8 @@ int main( int argc, char* argv[] )
   prepareGeometry( converter, extendedDomain, stlReader, superGeometry );
 
   // === 3rd Step: Prepare Lattice ===
-  SuperLattice<T, NSDESCRIPTOR> sLatticeNS( superGeometry );
-  SuperLattice<T, ADDESCRIPTOR> sLatticeAD( superGeometry );
+  SuperLattice<T, NSDESCRIPTOR> sLatticeNS( converter, superGeometry );
+  SuperLattice<T, ADDESCRIPTOR> sLatticeAD( converterAD, superGeometry );
 
   prepareLattice( sLatticeNS, sLatticeAD, converter, superGeometry, omegaAD );
 
@@ -407,7 +417,7 @@ int main( int argc, char* argv[] )
     coupling.template setParameter<AdvectionDiffusionParticleCoupling3D<ade_forces::AdvDiffDragForce3D>::LATTICE_TIME>(iT);
     getResults( sLatticeNS, sLatticeAD, converter, iT, superGeometry, timer );
     setBoundaryValues( sLatticeNS, converter, iT, superGeometry );
-    coupling.execute();
+    coupling.apply();
     sLatticeAD.getCommunicator(stage::PostCoupling()).communicate();
     sLatticeNS.collideAndStream();
     sLatticeAD.collideAndStream();

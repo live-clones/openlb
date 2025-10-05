@@ -82,19 +82,18 @@ T pressureL2AbsError = 0;
 T pressureLinfAbsError = 0;
 
 // Stores geometry information in form of material numbers
-void prepareGeometry( UnitConverter<T,DESCRIPTOR> const& converter,
-                      SuperGeometry<T,3>& superGeometry )
+void prepareGeometry( SuperGeometry<T,3>& superGeometry, T dx )
 {
 
   OstreamManager clout(std::cout, "prepareGeometry");
 
   clout << "Prepare Geometry ..." << std::endl;
 
-  Vector<T, 3> center0(-converter.getPhysDeltaX() * 0.2, radius, radius);
+  Vector<T, 3> center0(-dx * 0.2, radius, radius);
   Vector<T, 3> center1(length, radius, radius);
   if (flowType == forced) {
-    center0[0] -= 3.*converter.getPhysDeltaX();
-    center1[0] += 3.*converter.getPhysDeltaX();
+    center0[0] -= 3.*dx;
+    center1[0] += 3.*dx;
   }
   IndicatorCylinder3D<T> pipe(center0, center1, radius);
 
@@ -108,14 +107,14 @@ void prepareGeometry( UnitConverter<T,DESCRIPTOR> const& converter,
     Vector<T, 3> extend = origin;
 
     // Set material number for inflow
-    origin[0] = -converter.getPhysDeltaX() * 2;
-    extend[0] = converter.getPhysDeltaX() * 2;
+    origin[0] = -dx * 2;
+    extend[0] = dx * 2;
     IndicatorCylinder3D<T> inflow(origin, extend, radius);
     superGeometry.rename(2, 3, 1, inflow);
 
     // Set material number for outflow
-    origin[0] = length - 2 * converter.getPhysDeltaX();
-    extend[0] = length + 2 * converter.getPhysDeltaX();
+    origin[0] = length - 2 * dx;
+    extend[0] = length + 2 * dx;
     IndicatorCylinder3D<T> outflow(extend, origin, radius);
     superGeometry.rename(2, 4, 1, outflow);
   }
@@ -133,12 +132,10 @@ void prepareGeometry( UnitConverter<T,DESCRIPTOR> const& converter,
 
 // Set up the geometry of the simulation
 void prepareLattice(SuperLattice<T, DESCRIPTOR>& sLattice,
-                    UnitConverter<T, DESCRIPTOR>const& converter,
                     SuperGeometry<T,3>& superGeometry)
 {
-
-
   OstreamManager clout( std::cout,"prepareLattice" );
+  const UnitConverter<T,DESCRIPTOR>& converter = sLattice.getUnitConverter();
   clout << "Prepare Lattice ..." << std::endl;
 
   const T omega = converter.getLatticeRelaxationFrequency();
@@ -266,10 +263,10 @@ void prepareLattice(SuperLattice<T, DESCRIPTOR>& sLattice,
 // Compute error norms
 void error( SuperGeometry<T,3>& superGeometry,
             SuperLattice<T, DESCRIPTOR>& sLattice,
-            UnitConverter<T,DESCRIPTOR> const& converter,
             SuperLatticePhysWallShearStress3D<T,DESCRIPTOR>& wss)
 {
   OstreamManager clout( std::cout,"error" );
+  const UnitConverter<T,DESCRIPTOR>& converter = sLattice.getUnitConverter();
   sLattice.setProcessingContext(ProcessingContext::Evaluation);
 
   int tmp[]= { };
@@ -399,13 +396,14 @@ void error( SuperGeometry<T,3>& superGeometry,
 
 // Output to console and files
 void getResults( SuperLattice<T,DESCRIPTOR>& sLattice,
-                 UnitConverter<T,DESCRIPTOR> const& converter, std::size_t iT,
+                 std::size_t iT,
                  SuperGeometry<T,3>& superGeometry, util::Timer<T>& timer, bool hasConverged,
                  SuperLatticePhysWallShearStress3D<T,DESCRIPTOR>& wss,
                  Gnuplot<T>& gplot, bool eoc)
 {
 
   OstreamManager clout( std::cout,"getResults" );
+  const UnitConverter<T,DESCRIPTOR>& converter = sLattice.getUnitConverter();
   const bool lastTimeStep = ( hasConverged || (iT + 1 == converter.getLatticeTime( maxPhysT )) );
   const bool noslipBoundary = ((boundaryType != freeSlip) && (boundaryType != partialSlip));
   const int statIter = converter.getLatticeTime( maxPhysT/20. );
@@ -468,7 +466,7 @@ void getResults( SuperLattice<T,DESCRIPTOR>& sLattice,
     // Error norms
     if (noslipBoundary) {
       if ( (!eoc) || lastTimeStep ) {
-        error( superGeometry, sLattice, converter, wss );
+        error( superGeometry, sLattice, wss );
       }
     }
   }
@@ -581,13 +579,13 @@ void simulatePoiseuille(int N, Gnuplot<T>& gplot, bool eoc)
   const int overlap = (flowType == forced) ? 2 : 3;
   SuperGeometry<T,3> superGeometry(cuboidDecomposition, loadBalancer, overlap);
 
-  prepareGeometry(converter, superGeometry);
+  prepareGeometry(superGeometry, converter.getPhysDeltaX());
 
   // === 3rd Step: Prepare Lattice ===
-  SuperLattice<T, DESCRIPTOR> sLattice( superGeometry );
+  SuperLattice<T,DESCRIPTOR> sLattice(converter, superGeometry);
 
   //prepareLattice and setBoundaryConditions
-  prepareLattice(sLattice, converter, superGeometry);
+  prepareLattice(sLattice, superGeometry);
 
   // set up size-increased indicator and instantiate wall shear stress functor (wss)
   Vector<T, 3> center0Extended(-converter.getPhysDeltaX() * 0.2, radius, radius);
@@ -609,7 +607,7 @@ void simulatePoiseuille(int N, Gnuplot<T>& gplot, bool eoc)
   for ( std::size_t iT = 0; iT < converter.getLatticeTime( maxPhysT ); ++iT ) {
     if ( converge.hasConverged() ) {
       clout << "Simulation converged." << std::endl;
-      getResults( sLattice, converter, iT, superGeometry, timer,
+      getResults( sLattice, iT, superGeometry, timer,
         converge.hasConverged(), wss, gplot, eoc );
       break;
     }
@@ -621,7 +619,7 @@ void simulatePoiseuille(int N, Gnuplot<T>& gplot, bool eoc)
     sLattice.collideAndStream();
 
     // === 7th Step: Computation and Output of the Results ===
-    getResults( sLattice, converter, iT, superGeometry, timer,
+    getResults( sLattice, iT, superGeometry, timer,
       converge.hasConverged(), wss, gplot, eoc  );
     converge.takeValue( sLattice.getStatistics().getAverageEnergy(), (! eoc) );
   }

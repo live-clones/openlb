@@ -45,7 +45,7 @@ int main(int argc, char **argv) {
   HeuristicLoadBalancer balancer(cDecomposition);
 
   // Set up lattice structure
-  SuperLattice<T,DESCRIPTOR> sLattice(cDecomposition, balancer);
+  SuperLattice<T,DESCRIPTOR> sLattice(converter, cDecomposition, balancer);
 
   // Use BGK collision step everywhere (default second order equilibrium)
   sLattice.defineDynamics<BGKdynamics>();

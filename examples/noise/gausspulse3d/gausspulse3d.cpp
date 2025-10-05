@@ -49,16 +49,14 @@ const int ndim = 3; // a few things (e.g. SuperSum3D) cannot be adapted to 2D, b
 typedef enum { eternal, periodic, local, damping } BoundaryType;
 
 // Stores geometry information in form of material numbers
-void prepareGeometry(UnitConverter<T, DESCRIPTOR> const& converter, SuperGeometry<T, ndim>& superGeometry,
-                     IndicatorF3D<T>& domainFluid, BoundaryType boundarytype)
+void prepareGeometry(SuperGeometry<T, ndim>& superGeometry, T dx, IndicatorF3D<T>& domainFluid,
+                     BoundaryType boundarytype)
 {
   OstreamManager clout(std::cout, "prepareGeometry");
   clout << std::endl << "Prepare Geometry ..." << std::endl;
 
   // all nodes to temporary type
   superGeometry.rename(0, 2);
-
-  T dx = converter.getConversionFactorLength();
 
   switch (boundarytype) {
   // eternal and damping: 3 is the actual fluid; periodic: 1 is the fluid
@@ -127,14 +125,14 @@ void prepareGeometry(UnitConverter<T, DESCRIPTOR> const& converter, SuperGeometr
 }
 
 // Set up the geometry of the simulation
-void prepareLattice(UnitConverter<T, DESCRIPTOR> const& converter, SuperLattice<T, DESCRIPTOR>& sLattice,
-                    SuperGeometry<T, ndim>& superGeometry, T rho0, T u0, T amplitude, T alpha,
-                    BoundaryType boundarytype, T dampingDepthPU, T lengthDomain, T dampingStrength)
+void prepareLattice(SuperLattice<T, DESCRIPTOR>& sLattice, SuperGeometry<T, ndim>& superGeometry,
+                    T rho0, T u0, T amplitude, T alpha, BoundaryType boundarytype, T dampingDepthPU,
+                    T lengthDomain, T dampingStrength)
 {
   OstreamManager clout(std::cout, "prepareLattice");
   clout << std::endl << "Prepare Lattice ..." << std::endl;
 
-  const T omega = converter.getLatticeRelaxationFrequency();
+  const T omega = sLattice.getUnitConverter().getLatticeRelaxationFrequency();
 
   // Material=3 --> bulk dynamics
   auto bulkIndicator = superGeometry.getMaterialIndicator(
@@ -164,10 +162,10 @@ void prepareLattice(UnitConverter<T, DESCRIPTOR> const& converter, SuperLattice<
   AnalyticalComposed<ndim, T, T> u(ux, uy, uz);
   bulkIndicator = superGeometry.getMaterialIndicator({0, 1, 2, 3, 4, 5, 6}); // define RhoU and fields everywhere
   AcousticPulse<3, T> densityProfile(rho0, amplitude, alpha);
-  linePlot<ndim, T>(densityProfile, converter.getResolution(), converter.getPhysDeltaX(), "pulse_diag", "density [LU]",
-                    diagonal2d);
-  linePlot<ndim, T>(densityProfile, converter.getResolution(), converter.getPhysDeltaX(), "pulse_hline", "density [LU]",
-                    horizontal);
+  linePlot<ndim, T>(densityProfile, sLattice.getUnitConverter().getResolution(), sLattice.getUnitConverter().getPhysDeltaX(),
+                    "pulse_diag", "density [LU]", diagonal2d);
+  linePlot<ndim, T>(densityProfile, sLattice.getUnitConverter().getResolution(), sLattice.getUnitConverter().getPhysDeltaX(),
+                    "pulse_hline", "density [LU]", horizontal);
 
   //Initialize all values of distribution functions to their local equilibrium
   sLattice.defineRhoU(bulkIndicator, densityProfile, u);
@@ -218,8 +216,8 @@ void prepareLattice(UnitConverter<T, DESCRIPTOR> const& converter, SuperLattice<
 }
 
 // Sets fixed far field average values
-void setFarFieldValues(SuperLattice<T, DESCRIPTOR>& sLattice, SuperGeometry<T, ndim>& superGeometry, T rho0, T u0,
-                       BoundaryType boundarytype)
+void setFarFieldValues(SuperLattice<T, DESCRIPTOR>& sLattice, SuperGeometry<T, ndim>& superGeometry,
+                       T rho0, T u0, BoundaryType boundarytype)
 {
   OstreamManager                 clout(std::cout, "setFarFieldValues");
   AnalyticalConst<ndim, T, T>    ux(u0);
@@ -235,17 +233,16 @@ void setFarFieldValues(SuperLattice<T, DESCRIPTOR>& sLattice, SuperGeometry<T, n
 
 // write data to termimal and file system
 void setPlotData(SuperLattice<T, DESCRIPTOR>& sLattice, SuperGeometry<T, ndim>& superGeometry,
-                 UnitConverter<T, DESCRIPTOR> const& converter, size_t iT, Gnuplot<T>& gplot_l2_abs, T Lp0,
-                 size_t fluidMaterial)
+                 size_t iT, Gnuplot<T>& gplot_l2_abs, T Lp0, size_t fluidMaterial)
 {
   // write plot data
   sLattice.setProcessingContext(ProcessingContext::Evaluation);
-  T Lpi = L2Norm<ndim, T, DESCRIPTOR>(sLattice, superGeometry, converter, fluidMaterial);
+  T Lpi = L2Norm<ndim, T, DESCRIPTOR>(sLattice, superGeometry, sLattice.getUnitConverter(), fluidMaterial);
   gplot_l2_abs.setData(T(iT), Lpi / Lp0);
 }
 
-void getGraphicalResults(SuperLattice<T, DESCRIPTOR>& sLattice, UnitConverter<T, DESCRIPTOR> const& converter,
-                         size_t iT, SuperGeometry<T, ndim>& superGeometry, T amplitude)
+void getGraphicalResults(SuperLattice<T, DESCRIPTOR>& sLattice, size_t iT,
+                         SuperGeometry<T, ndim>& superGeometry, T amplitude)
 {
   const std::string name("gausspulse3d");
   if (iT == 0) {
@@ -263,30 +260,30 @@ void getGraphicalResults(SuperLattice<T, DESCRIPTOR>& sLattice, UnitConverter<T,
   // vtk output
   sLattice.scheduleBackgroundOutputVTK([&, name, iT](auto task) {
     SuperVTMwriter3D<T>        vtmWriter(name);
-    SuperLatticePhysVelocity3D velocityF(sLattice, converter);
-    SuperLatticePhysPressure3D pressureF(sLattice, converter);
+    SuperLatticePhysVelocity3D velocityF(sLattice, sLattice.getUnitConverter());
+    SuperLatticePhysPressure3D pressureF(sLattice, sLattice.getUnitConverter());
     vtmWriter.addFunctor(velocityF);
     vtmWriter.addFunctor(pressureF);
     task(vtmWriter, iT);
   });
 
   // output pressure image
-  SuperLatticePhysPressure3D<T, DESCRIPTOR> pressure(sLattice, converter);
+  SuperLatticePhysPressure3D<T, DESCRIPTOR> pressure(sLattice, sLattice.getUnitConverter());
   BlockReduction3D2D<T>                     pressureReduction(pressure, Vector<T, ndim>({0, 0, 1}));
   heatmap::plotParam<T>                     jpeg_ParamP;
-  jpeg_ParamP.maxValue       = converter.getPhysPressure(+amplitude / 200);
-  jpeg_ParamP.minValue       = converter.getPhysPressure(-amplitude / 200);
+  jpeg_ParamP.maxValue       = sLattice.getUnitConverter().getPhysPressure(+amplitude / 200);
+  jpeg_ParamP.minValue       = sLattice.getUnitConverter().getPhysPressure(-amplitude / 200);
   jpeg_ParamP.colour         = "rainbow";
   jpeg_ParamP.fullScreenPlot = true;
   heatmap::write(pressureReduction, iT, jpeg_ParamP);
 
   std::stringstream ss;
   ss << std::setw(4) << std::setfill('0') << iT;
-  T                          dist        = converter.getPhysDeltaX();
-  T                          ndatapoints = converter.getResolution(); // number of data points on line
+  T                          dist        = sLattice.getUnitConverter().getPhysDeltaX();
+  T                          ndatapoints = sLattice.getUnitConverter().getResolution(); // number of data points on line
   AnalyticalFfromSuperF3D<T> pressure_interpolation(pressure, true, true);
-  T                          pmin(converter.getPhysPressure(-amplitude / 50));
-  T                          pmax(converter.getPhysPressure(+amplitude / 50));
+  T                          pmin(sLattice.getUnitConverter().getPhysPressure(-amplitude / 50));
+  T                          pmax(sLattice.getUnitConverter().getPhysPressure(+amplitude / 50));
   linePlot<ndim, T>(pressure_interpolation, ndatapoints, dist, "pressure_hline_" + ss.str(), "pressure [PU]",
                     horizontal, false, true, pmin, pmax);
   linePlot<ndim, T>(pressure_interpolation, ndatapoints, dist, "pressure_vline_" + ss.str(), "pressure [PU]", vertical,
@@ -463,7 +460,7 @@ int main(int argc, char* argv[])
   SuperGeometry<T, ndim> superGeometry(CuboidDecomposition, loadBalancer, overlap);
 
   // === set fluidMaterial to evaluate the core domain correctly
-  prepareGeometry(converter, superGeometry, domainFluid, boundarytype);
+  prepareGeometry(superGeometry, converter.getConversionFactorLength(), domainFluid, boundarytype);
   size_t fluidMaterial = 3;
   switch (boundarytype) { // for correct normals, fluid material number must be 1
   case periodic:
@@ -477,8 +474,8 @@ int main(int argc, char* argv[])
         << "; number of fluid voxels: " << superGeometry.getStatistics().getNvoxel(fluidMaterial) << std::endl;
 
   // === prepare Lattice and set boundaryConditions
-  SuperLattice<T, DESCRIPTOR> sLattice(superGeometry);
-  prepareLattice(converter, sLattice, superGeometry, rho0, charVLU, amplitude, alpha, boundarytype, dampingDepthPU,
+  SuperLattice<T, DESCRIPTOR> sLattice(converter, superGeometry);
+  prepareLattice(sLattice, superGeometry, rho0, charVLU, amplitude, alpha, boundarytype, dampingDepthPU,
                  lengthDomain, dampingStrength);
 
   // === Initialize pressure L2 norm plot
@@ -522,9 +519,9 @@ int main(int argc, char* argv[])
     sLattice.collideAndStream();
     // === Computation and Output of the Results ===
     if (iT % iTplot == 0)
-      setPlotData(sLattice, superGeometry, converter, iT, gplot_l2_abs, Lp0, fluidMaterial);
+      setPlotData(sLattice, superGeometry, iT, gplot_l2_abs, Lp0, fluidMaterial);
     if (doImages && iT % iTvtk == 0)
-      getGraphicalResults(sLattice, converter, iT, superGeometry, amplitude);
+      getGraphicalResults(sLattice, iT, superGeometry, amplitude);
     if (iT % iTvtk == 0) {
       // lattice and timer statistics console output
       timer.update(iT);

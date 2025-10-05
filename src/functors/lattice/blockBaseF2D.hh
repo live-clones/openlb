@@ -229,7 +229,7 @@ BlockLatticePhysF2D<T,DESCRIPTOR>::BlockLatticePhysF2D
 
 template <typename T, typename DESCRIPTOR, typename TDESCRIPTOR>
 BlockLatticeThermalPhysF2D<T,DESCRIPTOR,TDESCRIPTOR>::BlockLatticeThermalPhysF2D
-(BlockLattice<T,TDESCRIPTOR>& blockLattice, const ThermalUnitConverter<T,DESCRIPTOR,TDESCRIPTOR>& converter, int targetDim)
+(BlockLattice<T,TDESCRIPTOR>& blockLattice, const UnitConverter<T,DESCRIPTOR>& converter, int targetDim)
   : BlockLatticeF2D<T,TDESCRIPTOR>(blockLattice, targetDim), _converter(converter)
 { }
 

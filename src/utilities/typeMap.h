@@ -90,6 +90,13 @@ using map = plain_map<
   typename unzip_flattened_values<KVs...>::type
 >;
 
+/// Helper to exchange value types of mapped values
+template <typename VALUE_TYPE>
+struct exchange_value_type {
+  template <typename TYPE>
+  using type = typename TYPE::exchange_value_t<VALUE_TYPE>;
+};
+
 }
 
 }

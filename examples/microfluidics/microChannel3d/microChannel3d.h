@@ -100,14 +100,14 @@ public:
 };
 
 // Stores geometry information in form of material numbers
-void prepareGeometry( UnitConverter<T,DESCRIPTOR> const& converter,
+void prepareGeometry( T dx,
                       SuperGeometry<T,3>& superGeometry)
 {
 
   OstreamManager clout( std::cout,"prepareGeometry" );
   clout << "Prepare Geometry ..." << std::endl;
 
-  Vector<T, 3> center0(-converter.getPhysDeltaX() * 0.2, height/2., height/2.);
+  Vector<T, 3> center0(-dx * 0.2, height/2., height/2.);
   Vector<T, 3> center1(length, height/2., height/2.);
   IndicatorCylinder3D<T> pipe(center0, center1, height/2.);
 
@@ -120,14 +120,14 @@ void prepareGeometry( UnitConverter<T,DESCRIPTOR> const& converter,
   Vector<T, 3> extend = origin;
 
   // Set material number for inflow
-  origin[0] = -converter.getPhysDeltaX() * 2;
-  extend[0] = converter.getPhysDeltaX() * 2;
+  origin[0] = -dx * 2;
+  extend[0] = dx * 2;
   IndicatorCylinder3D<T> inflow(origin, extend, height/2.);
   superGeometry.rename(2, 3, 1, inflow);
 
   // Set material number for outflow
-  origin[0] = length - 2 * converter.getPhysDeltaX();
-  extend[0] = length + 2 * converter.getPhysDeltaX();
+  origin[0] = length - 2 * dx;
+  extend[0] = length + 2 * dx;
   IndicatorCylinder3D<T> outflow(extend, origin, height/2.);
   superGeometry.rename(2, 4, 1, outflow);
 
@@ -144,8 +144,7 @@ void prepareGeometry( UnitConverter<T,DESCRIPTOR> const& converter,
 }
 
 // Set up the geometry of the simulation
-void prepareLattice( UnitConverter<T,DESCRIPTOR> const& converter,
-                     SuperLattice<T, DESCRIPTOR>& sLattice,
+void prepareLattice( SuperLattice<T, DESCRIPTOR>& sLattice,
                      SuperGeometry<T,3>& superGeometry,
                      IndicatorF3D<T>& channel)
 {
@@ -165,7 +164,7 @@ void prepareLattice( UnitConverter<T,DESCRIPTOR> const& converter,
   setBouzidiKnudsenSlipVelocity<T,DESCRIPTOR,true>(sLattice, superGeometry.getMaterialIndicator({2}), superGeometry.getMaterialIndicator({1,3,4}), channel);
 
   // Initial conditions
-  T pL0 = converter.getLatticePressure(pOut);
+  T pL0 = sLattice.getUnitConverter().getLatticePressure(pOut);
   AnalyticalConst3D<T,T> rho(pL0*descriptors::invCs2<T,DESCRIPTOR>()+T(1));
   AnalyticalConst3D<T,T> u0(T(0), T(0), T(0));
   sLattice.defineField<VELOCITY>(superGeometry.getMaterialIndicator({1,2,3,4}),u0);
@@ -174,9 +173,9 @@ void prepareLattice( UnitConverter<T,DESCRIPTOR> const& converter,
   sLattice.defineRhoU(superGeometry.getMaterialIndicator({0,1,2,3,4}), rho, u0);
   sLattice.iniEquilibrium(superGeometry.getMaterialIndicator({0,1,2,3,4}), rho, u0);
 
-  sLattice.template setParameter<descriptors::OMEGA>(converter.getLatticeRelaxationFrequency());
-  sLattice.template setParameter<KnudsenVelocityPostProcessor<true>::SLIPCOEFF>(slipCoeff/converter.getPhysDeltaX());
-  sLattice.template setParameter<KnudsenVelocityPostProcessor<true>::CREEPCOEFF>(creepCoeff/converter.getPhysDeltaX()/converter.getConversionFactorVelocity());
+  sLattice.template setParameter<descriptors::OMEGA>(sLattice.getUnitConverter().getLatticeRelaxationFrequency());
+  sLattice.template setParameter<KnudsenVelocityPostProcessor<true>::SLIPCOEFF>(slipCoeff/sLattice.getUnitConverter().getPhysDeltaX());
+  sLattice.template setParameter<KnudsenVelocityPostProcessor<true>::CREEPCOEFF>(creepCoeff/sLattice.getUnitConverter().getPhysDeltaX()/sLattice.getUnitConverter().getConversionFactorVelocity());
 
   // Make the lattice ready for simulation
   sLattice.initialize();
@@ -193,14 +192,14 @@ void prepareLattice( UnitConverter<T,DESCRIPTOR> const& converter,
 
 // Generates a slowly increasing inflow for the first iTMaxStart timesteps
 void setBoundaryValues( SuperLattice<T, DESCRIPTOR>& sLattice,
-                        UnitConverter<T, DESCRIPTOR> const& converter, int iT,
+                        int iT,
                         SuperGeometry<T,3>& superGeometry)
 {
 
   OstreamManager clout( std::cout,"setBoundaryValues" );
 
   // No of time steps for smooth start-up
-  int iTmaxStart = converter.getLatticeTime( maxPhysT*0.05 );
+  int iTmaxStart = sLattice.getUnitConverter().getLatticeTime( maxPhysT*0.05 );
   int iTupdate = iTmaxStart/30;
 
   if ( iT%iTupdate==0 && iT<= iTmaxStart ) {
@@ -210,10 +209,10 @@ void setBoundaryValues( SuperLattice<T, DESCRIPTOR>& sLattice,
     T iTvec[1] = {T( iT )};
     T frac[1] = {};
     StartScale( frac,iTvec );
-    T pLin = converter.getLatticePressure((pIn-pOut)*frac[0] + pOut);
+    T pLin = sLattice.getUnitConverter().getLatticePressure((pIn-pOut)*frac[0] + pOut);
     AnalyticalConst3D<T,T> rho(pLin*descriptors::invCs2<T,DESCRIPTOR>()+T(1));
     VelocityKnudsenProfile3D<T,T> uSol(height, length, density*visc, pIn, pOut, accomodC, Kn);
-    AnalyticalConst3D<T,T> conv(frac[0]/converter.getConversionFactorVelocity(), 0., 0.);
+    AnalyticalConst3D<T,T> conv(frac[0]/sLattice.getUnitConverter().getConversionFactorVelocity(), 0., 0.);
 
     sLattice.defineRho( superGeometry, 3, rho );
     sLattice.defineU( superGeometry, 3, uSol*conv );
@@ -227,8 +226,7 @@ void setBoundaryValues( SuperLattice<T, DESCRIPTOR>& sLattice,
 
 // Compute error norms
 void error( SuperGeometry<T,3>& superGeometry,
-            SuperLattice<T, DESCRIPTOR>& sLattice,
-            UnitConverter<T,DESCRIPTOR> const& converter )
+            SuperLattice<T, DESCRIPTOR>& sLattice)
 {
   OstreamManager clout( std::cout,"error" );
   sLattice.setProcessingContext(ProcessingContext::Evaluation);
@@ -238,7 +236,7 @@ void error( SuperGeometry<T,3>& superGeometry,
 
   // velocity error
   VelocityKnudsenProfile3D<T,T> uSol(height, length, density*visc, pIn, pOut, accomodC, Kn);
-  SuperLatticePhysVelocity3D<T,DESCRIPTOR> u( sLattice,converter );
+  SuperLatticePhysVelocity3D<T,DESCRIPTOR> u( sLattice,sLattice.getUnitConverter() );
   auto indicatorF = superGeometry.getMaterialIndicator(1);
 
   SuperAbsoluteErrorL1Norm3D<T> absVelocityErrorNormL1(u, uSol, indicatorF);
@@ -271,17 +269,17 @@ void error( SuperGeometry<T,3>& superGeometry,
 
 // Output to console and files
 void getResults( SuperLattice<T,DESCRIPTOR>& sLattice,
-                 UnitConverter<T,DESCRIPTOR> const& converter, std::size_t iT,
+                 std::size_t iT,
                  SuperGeometry<T,3>& superGeometry, util::Timer<T>& timer, bool hasConverged,
                  Gnuplot<T>& gplot)
 {
   OstreamManager clout( std::cout,"getResults" );
-  const bool lastTimeStep = ( hasConverged || (iT + 1 == converter.getLatticeTime( maxPhysT )) );
-  const int statIter = converter.getLatticeTime( maxPhysT/50. );
+  const bool lastTimeStep = ( hasConverged || (iT + 1 == sLattice.getUnitConverter().getLatticeTime( maxPhysT )) );
+  const int statIter = sLattice.getUnitConverter().getLatticeTime( maxPhysT/50. );
 
   // VTK and image output only if no EOC analysis
   SuperVTMwriter3D<T> vtmWriter( "microChannel3d" );
-  const int vtmIter  = converter.getLatticeTime( maxPhysT/10. );
+  const int vtmIter  = sLattice.getUnitConverter().getLatticeTime( maxPhysT/10. );
 
   if ( iT==0 ) {
     // Writes the geometry, pipe no. and rank no. as vti file for visualization
@@ -294,8 +292,8 @@ void getResults( SuperLattice<T,DESCRIPTOR>& sLattice,
     sLattice.setProcessingContext(ProcessingContext::Evaluation);
     sLattice.scheduleBackgroundOutputVTK([&,iT](auto task) {
       SuperVTMwriter3D<T> vtmWriter("microChannel3d");
-      SuperLatticePhysVelocity3D velocity(sLattice, converter);
-      SuperLatticePhysPressure3D pressure(sLattice, converter);
+      SuperLatticePhysVelocity3D velocity(sLattice, sLattice.getUnitConverter());
+      SuperLatticePhysPressure3D pressure(sLattice, sLattice.getUnitConverter());
       SuperGeometryF<T,3> geometry( superGeometry );
       vtmWriter.addFunctor(velocity);
       vtmWriter.addFunctor(pressure);
@@ -318,11 +316,11 @@ void getResults( SuperLattice<T,DESCRIPTOR>& sLattice,
     timer.printStep();
 
     // Lattice statistics console output
-    sLattice.getStatistics().print( iT,converter.getPhysTime( iT ) );
+    sLattice.getStatistics().print( iT,sLattice.getUnitConverter().getPhysTime( iT ) );
 
     // Error norms
     if ( lastTimeStep ) {
-      error( superGeometry, sLattice, converter );
+      error( superGeometry, sLattice);
     }
   }
 
@@ -330,7 +328,7 @@ void getResults( SuperLattice<T,DESCRIPTOR>& sLattice,
   if ((lastTimeStep)) {
     sLattice.setProcessingContext(ProcessingContext::Evaluation);
     gplot.setData (
-      T(converter.getResolution()),
+      T(sLattice.getUnitConverter().getResolution()),
       { velocityL1RelError, velocityL2RelError, velocityLinfRelError},
       { "velocity L1 rel Error","velocity L2 rel Error",
         "velocity Linf rel error"},
@@ -373,16 +371,16 @@ void simulateMicroChannel3D( int N, Gnuplot<T>& gplot, T relTime)
   // Instantiation of a superGeometry
   SuperGeometry<T,3> superGeometry( pipeGeometry, loadBalancer, 5 );
 
-  prepareGeometry( converter, superGeometry);
+  prepareGeometry( converter.getPhysDeltaX(), superGeometry);
 
   // === 3rd Step: Prepare Lattice ===
-  SuperLattice<T, DESCRIPTOR> sLattice( superGeometry );
+  SuperLattice<T, DESCRIPTOR> sLattice( converter, superGeometry );
 
   // Prepare lattice and set boundary conditions
   Vector<T, 3> center02(-10.*converter.getPhysDeltaX(), height/2., height/2.);
   Vector<T, 3> center12(length + 20 * converter.getPhysDeltaX(), height/2., height/2.);
   IndicatorCylinder3D<T> pipe2(center02, center12, height/2.);
-  prepareLattice(converter, sLattice, superGeometry, pipe2);
+  prepareLattice(sLattice, superGeometry, pipe2);
 
   // === 4th Step: Main Loop with Timer ===
   clout << "starting simulation..." << std::endl;
@@ -396,19 +394,19 @@ void simulateMicroChannel3D( int N, Gnuplot<T>& gplot, T relTime)
   for ( std::size_t iT = 0; iT < converter.getLatticeTime( maxPhysT ); ++iT ) {
     if ( converge.hasConverged() ) {
       clout << "Simulation converged." << std::endl;
-      getResults( sLattice, converter, iT, superGeometry, timer, converge.hasConverged(), gplot);
+      getResults( sLattice, iT, superGeometry, timer, converge.hasConverged(), gplot);
 
       break;
     }
 
     // === 5th Step: Definition of Initial and Boundary Conditions ===
-    setBoundaryValues( sLattice, converter, iT, superGeometry);
+    setBoundaryValues( sLattice, iT, superGeometry);
 
     // === 6th Step: Collide and Stream Execution ===
     sLattice.collideAndStream();
 
     // === 7th Step: Computation and Output of the Results ===
-    getResults( sLattice, converter, iT,superGeometry, timer, converge.hasConverged(), gplot);
+    getResults( sLattice, iT,superGeometry, timer, converge.hasConverged(), gplot);
     converge.takeValue( sLattice.getStatistics().getMaxU(), false );
   }
 

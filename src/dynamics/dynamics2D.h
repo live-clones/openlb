@@ -61,3 +61,4 @@
 #include "dynamics2D.hh"
 
 #include "fsi/dynamics.h"
+#include "linearElasticDynamics.h"

@@ -47,8 +47,8 @@ IndicatorAirfoil2D<S>::IndicatorAirfoil2D(Vector<S,2> center, S chordLength, S c
 {
   // Set bounding box
   S maxThickness = _chordLength * _thicknessPercentage;
-  this->_myMin = {_center[0] - _chordLength/S(2), _center[1] - maxThickness/S(2)};
-  this->_myMax = {_center[0] + _chordLength/S(2), _center[1] + maxThickness/S(2)};
+  this->_myMin = {_center[0] - _chordLength/S(2), _center[1] - maxThickness/S(2) - computeCamber(_camber)};
+  this->_myMax = {_center[0] + _chordLength/S(2), _center[1] + maxThickness/S(2) + computeCamber(_camber)};
 }
 
 template <typename S>
@@ -208,8 +208,8 @@ bool IndicatorCuboid2D<S>::operator()(bool output[], const S input[])
     y = input[1];
   }
 
-  output[0] = (  (util::fabs(_center[0] - x) < _xLength/S(2) || util::approxEqual(util::fabs(_center[0] - x),_xLength/S(2)) )
-                 && (util::fabs(_center[1] - y) < _yLength/S(2) || util::approxEqual(util::fabs(_center[1] - y), _yLength/S(2)) ) );
+  output[0] = (  (util::fabs(_center[0] - x) < _xLength/S(2) || util::equal(util::fabs(_center[0] - x),_xLength/S(2)) )
+                 && (util::fabs(_center[1] - y) < _yLength/S(2) || util::equal(util::fabs(_center[1] - y), _yLength/S(2)) ) );
   return true;
 }
 
@@ -379,6 +379,123 @@ IndicatorCircle2D<S>* createIndicatorCircle2D(XMLreader const& params, bool verb
   xmlRadius >> radius;
 
   return new IndicatorCircle2D<S>(center, radius);
+}
+
+// Create an Ellipse
+template <typename S>
+IndicatorEllipse2D<S>::IndicatorEllipse2D(Vector<S,2> center, S a, S b, S theta)
+  :  _center(center),
+     _a(a),
+     _b(b),
+     _theta(theta),
+     _thetaRadian(theta * M_PI / 180.)
+{
+  this->_myMin = {_center[0] - 1.1*_a * util::cos(_thetaRadian), _center[1] - 1.1*_b * util::cos(_thetaRadian)};
+  this->_myMax = {_center[0] + 1.1*_a * util::cos(_thetaRadian), _center[1] + 1.1*_b * util::cos(_thetaRadian)};
+}
+
+template <typename S>
+Vector<S,2> const& IndicatorEllipse2D<S>::getCenter() const
+{
+  return _center;
+}
+
+template <typename S>
+S const IndicatorEllipse2D<S>::getA() const
+{
+  return _a;
+}
+
+template <typename S>
+S const IndicatorEllipse2D<S>::getB() const
+{
+  return _b;
+}
+
+template <typename S>
+S const IndicatorEllipse2D<S>::getTheta() const
+{
+  return _theta;
+}
+
+template <typename S>
+S const IndicatorEllipse2D<S>::getThetaRadian() const
+{
+  return _thetaRadian;
+}
+
+// returns true if x is inside the ellipse
+template <typename S>
+bool IndicatorEllipse2D<S>::operator()(bool output[], const S input[])
+{
+  // (x - x_s)²/a² + (y - y_s)²/b² <= 1
+  S x1 = input[0] - _center[0];
+  S y1 = input[1] - _center[1];
+
+  S x2 = x1 * util::cos(_thetaRadian) + y1 * util::sin(_thetaRadian);
+  S y2 = -x1 * util::sin(_thetaRadian) + y1 * util::cos(_thetaRadian);
+  output[0] = (util::pow( x2 / _a, 2) + util::pow( y2 / _b, 2) <= 1);
+
+  return output[0];
+}
+
+template <typename S>
+bool const IndicatorEllipse2D<S>::distance(S& distance, const Vector<S,2>& point, Vector<S,2>& direction, int iC) const
+{
+    S a                 = _a;
+    S b                 = _b;
+    Vector<S, 2> center = _center;
+    S theta             = _thetaRadian;
+    S i = direction[0];
+    S j = direction[1];
+    S A, B, C;
+    S t[2] = { };
+    S dist[2] = { };
+
+    S dx = point[0] - center[0];
+    S dy = point[1] - center[1];
+
+    A = (i * cos(theta) + j * sin(theta)) * (i * cos(theta) + j * sin(theta)) * b * b + (-i * sin(theta) + j * cos(theta)) * (-i * sin(theta) + j * cos(theta)) * a * a;
+    B = 2 * (dx * cos(theta) + dy * sin(theta)) * (i * cos(theta) + j * sin(theta)) * b * b
+      + 2 * (-dx * sin(theta) + dy * cos(theta)) * (-i * sin(theta) + j * cos(theta)) * a * a;
+    C = (dx * cos(theta) + dy * sin(theta)) * (dx * cos(theta) + dy * sin(theta)) * b * b
+      + (-dx * sin(theta) + dy * cos(theta)) * (-dx * sin(theta) + dy * cos(theta)) * a * a - a * a * b * b;
+
+    t[0] = (-B + sqrt(B * B - 4 * A * C)) / (2 * A);
+    t[1] = (-B - sqrt(B * B - 4 * A * C)) / (2 * A);
+
+    dist[0] = t[0] * sqrt(i * i + j * j);
+    dist[1] = t[1] * sqrt(i * i + j * j);
+
+    if (std::isnan(dist[0]) || std::isnan(dist[1])) {
+      distance = -1;
+      return false;
+    }
+    else {
+      distance = std::min(std::abs(dist[0]), std::abs(dist[1]));
+      return true;
+    }
+}
+
+template <typename S>
+bool IndicatorEllipse2D<S>::normal(Vector<S,2>& nxny, Vector<S,2> point) const
+{
+  S x = point[0] - _center[0];
+  S y = point[1] - _center[1];
+
+  S nx = (2 * (x * cos(_thetaRadian) + y * sin(_thetaRadian)) * cos(_thetaRadian)) / (_a * _a) + (2 * (x * sin(_thetaRadian) - y * cos(_thetaRadian)) * sin(_thetaRadian)) / (_b * _b);
+  S ny = (2 * (x * cos(_thetaRadian) + y * sin(_thetaRadian)) * sin(_thetaRadian)) / (_a * _a) - (2 * (x * sin(_thetaRadian) - y * cos(_thetaRadian)) * cos(_thetaRadian)) / (_b * _b);
+
+  S length = std::sqrt(nx * nx + ny * ny);
+
+  if (! std::isnan(nx) && ! std::isnan(ny)) {
+    nxny = {nx / length, ny / length};
+    return true;
+  }
+  else {
+    nxny = {0., 0.};
+    return false;
+  }
 }
 
 template <typename S>

@@ -87,7 +87,7 @@ enum material {
   boundary = 2
 };
 
-void prepareGeometry(UnitConverter<T, NSDESCRIPTOR> const &converter, SuperGeometry<T, dim> &superGeometry) {
+void prepareGeometry(SuperGeometry<T, dim> &superGeometry) {
   OstreamManager clout(std::cout, "prepareGeometry");
   clout << "Prepare Geometry ..." << std::endl;
 
@@ -105,7 +105,6 @@ void prepareGeometry(UnitConverter<T, NSDESCRIPTOR> const &converter, SuperGeome
 }
 
 void prepareLatticeNS(SuperLattice<T, NSDESCRIPTOR> &NSLattice,
-                      UnitConverter<T, NSDESCRIPTOR> const &converter,
                       SuperGeometry<T, dim> &superGeometry,
                       T omega) {
   OstreamManager clout(std::cout, "prepareLatticeNS");
@@ -139,7 +138,6 @@ void prepareLatticeNS(SuperLattice<T, NSDESCRIPTOR> &NSLattice,
 }
 
 void prepareLatticeAD(SuperLattice<T, ADEDESCRIPTOR>*& ADLattice,
-                      UnitConverter<T, NSDESCRIPTOR> const &converter,
                       SuperGeometry<T, dim> &superGeometry,
                       T rho_,
                       T omegaAD) {
@@ -180,8 +178,6 @@ void getResults(SuperLattice<T, NSDESCRIPTOR> &NSLattice,
                 SuperLattice<T, ADEDESCRIPTOR> &QADLattice,
                 SuperLattice<T, ADEDESCRIPTOR> &CADLattice,
                 COUPLING& coupling,
-                UnitConverter<T, NSDESCRIPTOR> const &converter,
-                UnitConverter<T, ADEDESCRIPTOR> const &adsConverter,
                 int iT,
                 SuperGeometry<T, dim> &superGeometry,
                 util::Timer<T> &timer,
@@ -190,7 +186,7 @@ void getResults(SuperLattice<T, NSDESCRIPTOR> &NSLattice,
 
   SuperVTMwriter3D<T> vtmWriter("adsorption3D");
 
-  const int vtkIter = adsConverter.getLatticeTime(maxPhysT/T(100))+1;
+  const int vtkIter = CADLattice.getUnitConverter().getLatticeTime(maxPhysT/T(100))+1;
 
   if (iT == 0) {
     NSLattice.setProcessingContext(ProcessingContext::Evaluation);
@@ -201,11 +197,11 @@ void getResults(SuperLattice<T, NSDESCRIPTOR> &NSLattice,
     vtmWriter.createMasterFile();
 
     // Print some output of the chosen simulation setup
-    clout << "N=" << N << "; maxTimeSteps=" << converter.getLatticeTime(maxPhysT)
+    clout << "N=" << N << "; maxTimeSteps=" << NSLattice.getUnitConverter().getLatticeTime(maxPhysT)
           << "; noOfCuboid=" << superGeometry.getCuboidDecomposition().size() << "; Re=" << Re
           << "; St="
-          << (T(2) * partRho * particleRadius * particleRadius * converter.getCharPhysVelocity())
-              / (T(9) * converter.getPhysViscosity() * converter.getPhysDensity() * converter.getCharPhysLength())
+          << (T(2) * partRho * particleRadius * particleRadius * NSLattice.getUnitConverter().getCharPhysVelocity())
+              / (T(9) * NSLattice.getUnitConverter().getPhysViscosity() * NSLattice.getUnitConverter().getPhysDensity() * NSLattice.getUnitConverter().getCharPhysLength())
           << std::endl;
   }
 
@@ -220,13 +216,13 @@ void getResults(SuperLattice<T, NSDESCRIPTOR> &NSLattice,
     SuperLatticeDensity3D<T, ADEDESCRIPTOR> particles(PADLattice);
     SuperLatticeDensity3D<T, ADEDESCRIPTOR> loading(QADLattice);
     SuperLatticeDensity3D<T, ADEDESCRIPTOR> phosphateConcentration(CADLattice);
-    SuperLatticePhysField3D<T, ADEDESCRIPTOR, descriptors::VELOCITY> extFieldParticles(PADLattice, converter.getConversionFactorVelocity());
-    SuperLatticePhysField3D<T, ADEDESCRIPTOR, descriptors::VELOCITY> extFieldPhosphate(CADLattice, converter.getConversionFactorVelocity());
+    SuperLatticePhysField3D<T, ADEDESCRIPTOR, descriptors::VELOCITY> extFieldParticles(PADLattice, NSLattice.getUnitConverter().getConversionFactorVelocity());
+    SuperLatticePhysField3D<T, ADEDESCRIPTOR, descriptors::VELOCITY> extFieldPhosphate(CADLattice, NSLattice.getUnitConverter().getConversionFactorVelocity());
     SuperLatticePhysField3D<T, ADEDESCRIPTOR, descriptors::SOURCE> sourcePhosphate(CADLattice, 1);
     AnalyticalFfromSuperF3D<T> concentrationInterpolation(phosphateConcentration, true, true);
     AnalyticalFfromSuperF3D<T> loadingInterpolation(loading, true, true);
     T k_s= T(15.) * D_s / ( particleRadius * particleRadius );
-    BatchSolution<T> concentrationSol(adsConverter.getPhysTime(iT), D_b, k_s);
+    BatchSolution<T> concentrationSol(CADLattice.getUnitConverter().getPhysTime(iT), D_b, k_s);
     SuperLatticeFfromAnalyticalF3D<T, ADEDESCRIPTOR> solution(concentrationSol, QADLattice);
 
     vtmWriter.addFunctor(materials);
@@ -248,7 +244,7 @@ void getResults(SuperLattice<T, NSDESCRIPTOR> &NSLattice,
     relConcentrationError(result, &tmp);
     clout << "concentration-L2-error(rel)=" << result[0] << std::endl;
 
-    NSLattice.getStatistics().print(iT, converter.getPhysTime(iT));
+    NSLattice.getStatistics().print(iT, NSLattice.getUnitConverter().getPhysTime(iT));
   }
 }
 
@@ -316,13 +312,13 @@ int main(int argc, char *argv[]) {
   // Instantiation of a superGeometry
   SuperGeometry<T, dim> superGeometry(cuboidDecomposition, loadBalancer, 2);
 
-  prepareGeometry(converter, superGeometry);
+  prepareGeometry(superGeometry);
 
   // === 3rd Step: Prepare Lattice ===
-  SuperLattice<T, NSDESCRIPTOR> NSLattice(superGeometry);
-  SuperLattice<T, ADEDESCRIPTOR> PADLattice(superGeometry);
-  SuperLattice<T, ADEDESCRIPTOR> QADLattice(superGeometry);
-  SuperLattice<T, ADEDESCRIPTOR> CADLattice(superGeometry);
+  SuperLattice<T, NSDESCRIPTOR> NSLattice(converter, superGeometry);
+  SuperLattice<T, ADEDESCRIPTOR> PADLattice(adsConverter, superGeometry);
+  SuperLattice<T, ADEDESCRIPTOR> QADLattice(adsConverter, superGeometry);
+  SuperLattice<T, ADEDESCRIPTOR> CADLattice(adsConverter, superGeometry);
 
   //prepareLattice and setBoundaryConditions
   T rho[3] = {0.};
@@ -336,13 +332,11 @@ int main(int argc, char *argv[]) {
   partners.emplace_back(&QADLattice);
 
   prepareLatticeNS(NSLattice,
-                   converter,
                    superGeometry,
                    omega);
 
   for(int i = 0; i<3; i++){
     prepareLatticeAD(partners[i],
-                     converter,
                      superGeometry,
                      rho[i],
                      omegaAD);
@@ -381,10 +375,10 @@ int main(int argc, char *argv[]) {
   timer.start();
   for (std::size_t iT = 0; iT < adsConverter.getLatticeTime(maxPhysT); ++iT) {
     // === 6th Step: Computation and Output of the Results ===
-    getResults(NSLattice, PADLattice, QADLattice, CADLattice, coupling, converter, adsConverter, iT, superGeometry, timer, D_b);
+    getResults(NSLattice, PADLattice, QADLattice, CADLattice, coupling, iT, superGeometry, timer, D_b);
 
     // === 7th Step: Collide and Stream Execution ===
-    coupling.execute();
+    coupling.apply();
 
     for(int i = 0; i<3; i++) {
       partners[i]->collideAndStream();

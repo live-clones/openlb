@@ -526,7 +526,7 @@ void writeData(int iT, MembraneParticleSystem3D<T,DESCRIPTOR>& sMembrane) {
     std::string fullNamePVDmaster = singleton::directories().getVtkOutDir()
                                   + createFileName(name) + "_master.pvd";
 
-    std::string namePiece =  "VTKparticles/" + name+ "_t"+ std::to_string(iT) + ".vtp";
+    std::string namePiece =  "VTKParticles/" + name+ "_t"+ std::to_string(iT) + ".vtp";
     if(iT==0){
       createMasterFile(clout, name, iT, sMembrane);
       dataPVDmaster(clout, iT, fullNamePVDmaster, namePiece, sMembrane );

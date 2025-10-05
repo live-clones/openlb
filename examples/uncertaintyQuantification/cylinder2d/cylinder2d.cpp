@@ -130,8 +130,9 @@ int main(int argc, char* argv[]) {
   OstreamManager clout(std::cout, "main");
 
   // Create main folder to store results
-  std::string foldPath = "./uq/";
-  createDirectory(foldPath, clout);
+  std::string foldPath = "./";
+  std::string uqFoldPath = foldPath + "uq/";
+  createDirectory(uqFoldPath, clout);
 
   // === 2nd Lattice / Physics Parameters ===
   int    resolution   = 10;    // Grid resolution
@@ -191,7 +192,7 @@ int main(int argc, char* argv[]) {
   for (std::size_t n = 0; n < samples.size(); ++n) {
     if (exportResults) {
     // Create subfolder for this sample
-      std::string subFoldPath = foldPath + std::to_string(n) + "/tmp/";
+      std::string subFoldPath = uqFoldPath + std::to_string(n) + "/tmp/";
       createDirectory(subFoldPath, clout);
       // Redirect output to this sample's folder
       singleton::directories().setOutputDir(subFoldPath);
@@ -244,11 +245,42 @@ int main(int argc, char* argv[]) {
    // Optionally compute mean and std fields and write VTI output
    // (only if 'exportResults' is set to true)
   if (exportResults) {
-    computeMeanAndStdAndWriteVTI<T, DESCRIPTOR>(
-      uq, foldPath, "cylinder2d", "physVelocity",
-      cuboidDecomposition, superGeometry
+      GeometryParameters geomParams(resolution);
+      Vector<T,2> extend(geomParams.lengthX, geomParams.lengthY);
+      Vector<T,2> origin(0.0, 0.0);
+      IndicatorCuboid2D<T> cuboid(extend, origin);
+
+    #ifdef PARALLEL_MODE_MPI
+      const int noOfCuboids = singleton::mpi().getSize();
+    #else
+      const int noOfCuboids = 1;
+    #endif
+    UnitConverterFromResolutionAndRelaxationTime<T, DESCRIPTOR> const converter(
+      int   {resolution},                        // resolution: number of voxels per charPhysL
+      (T)   0.56,                     // latticeRelaxationTime: relaxation time, have to be greater than 0.5!
+      (T)   2.0*geomParams.radiusCylinder,       // charPhysLength: reference length of simulation geometry
+      (T)   u0,                      // charPhysVelocity: maximal/highest expected velocity during simulation in __m / s__
+      (T)   0.001, // physViscosity: physical kinematic viscosity in __m^2 / s__
+      (T)   1.0                       // physDensity: physical density in __kg / m^3__
     );
-  }
+
+      CuboidDecomposition2D<T> cuboidDecomposition(cuboid, dx, noOfCuboids);
+      HeuristicLoadBalancer<T> loadBalancer(cuboidDecomposition);
+      SuperGeometry<T,2> superGeometry(cuboidDecomposition, loadBalancer);
+
+      Vector<T,2> center( geomParams.centerCylinderX, geomParams.centerCylinderY );
+      std::shared_ptr<IndicatorF2D<T>> circle = std::make_shared<IndicatorCircle2D<T>>( center, geomParams.radiusCylinder );
+
+      singleton::directories().setOutputDir(foldPath + "tmp/");
+      prepareGeometry(superGeometry, circle, geomParams);
+
+      std::vector<int> materials = {1};
+      computeMeanAndStdAndWriteVTI<T, DESCRIPTOR>(
+        uq, foldPath, "cylinder2d", "physVelocity",
+        converter, superGeometry, materials
+      );
+    }
+
 
    return 0;
  }

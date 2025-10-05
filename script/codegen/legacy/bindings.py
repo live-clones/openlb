@@ -78,3 +78,8 @@ freeEnergyDescriptors = {
     'D2Q9': olb.descriptors.D2Q9[olb.descriptors.CHEM_POTENTIAL,olb.descriptors.FORCE],
     'D3Q19': olb.descriptors.D3Q19[olb.descriptors.CHEM_POTENTIAL,olb.descriptors.FORCE],
 }
+
+porousDescriptors = {
+    'D2Q9': olb.descriptors.D2Q9[olb.descriptors.POROSITY],
+    'D3Q19': olb.descriptors.D3Q19[olb.descriptors.POROSITY],
+}

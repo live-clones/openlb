@@ -96,57 +96,57 @@ public:
       _latticeDiffusion(_physDiffusion/this->getConversionFactorLength())
   { };
 
-  constexpr T getPhysAbsorption() const
+  constexpr T getPhysAbsorption() const override
   {
     return _physAbsorption;
   };
 
-  constexpr T getPhysScattering() const
+  constexpr T getPhysScattering() const override
   {
     return _physScattering;
   };
 
-  constexpr T getAnisotropyFactor() const
+  constexpr T getAnisotropyFactor() const override
   {
     return _anisotropyFactor;
   };
 
-  constexpr T getExtinction() const
+  constexpr T getExtinction() const override
   {
     return _extinction;
   };
 
-  constexpr T getScatteringAlbedo() const
+  constexpr T getScatteringAlbedo() const override
   {
     return _scatteringAlbedo;
   };
 
-  constexpr T getPhysDiffusion() const
+  constexpr T getPhysDiffusion() const override
   {
     return _physDiffusion;
   };
 
-  constexpr T getEffectiveAttenuation() const
+  constexpr T getEffectiveAttenuation() const override
   {
     return _effectiveAttenuation;
   };
 
-  constexpr T getLatticeAbsorption() const
+  constexpr T getLatticeAbsorption() const override
   {
     return _latticeAbsorption;
   };
 
-  constexpr T getLatticeScattering() const
+  constexpr T getLatticeScattering() const override
   {
     return _latticeScattering;
   };
 
-  constexpr T getLatticeDiffusion() const
+  constexpr T getLatticeDiffusion() const override
   {
     return _latticeDiffusion;
   };
 
-  constexpr T getRefractiveRelative() const
+  constexpr T getRefractiveRelative() const override
   {
     return _refractiveRelative;
   };

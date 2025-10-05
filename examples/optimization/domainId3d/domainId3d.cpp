@@ -45,10 +45,10 @@ void preparePrimal(auto& primal, const std::vector<T>& controls) {
   auto& converter = primal->getUnitConverter();
   auto& superGeometry = primal->getSuperGeometry();
   auto& sLattice = primal->getSuperLattice();
-  auto bulkIndicator = superGeometry.getMaterialIndicator({1,3,4,6});
+  auto bulkIndicator = superGeometry.getMaterialIndicator({1,2,3,4,6});
 
   // Define primal physics
-  sLattice.template defineDynamics<DYNAMICS>(bulkIndicator);
+  sLattice.template defineDynamics<DYNAMICS>(superGeometry.getMaterialIndicator({1,6}));
   boundary::set<boundary::BounceBack>(sLattice, superGeometry, 2);
   boundary::set<boundary::LocalVelocity>(sLattice, superGeometry.getMaterialIndicator({3}));
   boundary::set<boundary::LocalPressure>(sLattice, superGeometry.getMaterialIndicator({4}));
@@ -78,7 +78,7 @@ T computeObjective(auto& reference, auto& primal) {
   auto& superGeometry = reference->getSuperGeometry();
   auto& refLattice = reference->getSuperLattice();
   auto& primalLattice = primal->getSuperLattice();
-  auto objectiveDomain = superGeometry.getMaterialIndicator({1,2,3,4,6});
+  auto objectiveDomain = superGeometry.getMaterialIndicator({1,6});
 
   // Evaluate functor for objective computation
   auto objectiveO = makeWriteFunctorO<OBJECTIVE,opti::J>(primalLattice);
@@ -90,7 +90,7 @@ T computeObjective(auto& reference, auto& primal) {
   copyFields<OBJECTIVE::Reference,OBJECTIVE::Reference>(refLattice, primalLattice);
   objectiveO->template setParameter<descriptors::CONVERSION>(converter.getConversionFactorVelocity());
   objectiveO->template setParameter<descriptors::NORMALIZE>(norm(refLattice, converter, objectiveDomain));
-  objectiveO->execute();
+  objectiveO->apply();
 
   // Compute source term for the dual simulation
   auto objectiveDerivativeO = makeWriteFunctorO<functors::DerivativeF<OBJECTIVE,descriptors::POPULATION,DYNAMICS>,
@@ -99,8 +99,9 @@ T computeObjective(auto& reference, auto& primal) {
   objectiveDerivativeO->template setParameter<descriptors::CONVERSION>(converter.getConversionFactorVelocity());
   objectiveDerivativeO->template setParameter<descriptors::NORMALIZE>(norm(refLattice, converter, objectiveDomain));
   objectiveDerivativeO->template setParameter<descriptors::DX>(converter.getPhysDeltaX());
+  objectiveDerivativeO->apply();
 
-  objectiveDerivativeO->execute();
+  primalLattice.setProcessingContext(ProcessingContext::Evaluation);
   return integrate<opti::J>(primalLattice, objectiveDomain)[0];
 }
 
@@ -109,10 +110,10 @@ void prepareDual(auto& dual, auto& primal, auto& reference) {
   auto& superGeometry = dual->getSuperGeometry();
   auto& sLattice = dual->getSuperLattice();
   auto& primalLattice = primal->getSuperLattice();
-  auto bulkIndicator = superGeometry.getMaterialIndicator({1,6});
+  auto bulkIndicator = superGeometry.getMaterialIndicator({1,2,3,4,6});
 
   // Define dual physics
-  sLattice.template defineDynamics<DUAL_DYNAMICS>(bulkIndicator);
+  sLattice.template defineDynamics<DUAL_DYNAMICS>(superGeometry.getMaterialIndicator({1,6}));
   boundary::set<boundary::BounceBack>(sLattice, superGeometry.getMaterialIndicator({2,3,4}));
   sLattice.template setParameter<descriptors::OMEGA>(converter.getLatticeRelaxationFrequency());
 
@@ -123,12 +124,14 @@ void prepareDual(auto& dual, auto& primal, auto& reference) {
   sLattice.defineRhoU(bulkIndicator, rhoF, uF);
   sLattice.iniEquilibrium(bulkIndicator, rhoF, uF);
 
+  // This needs to be before copying the fields as otherwise the the copied fields will be overwritten
+  sLattice.initialize();
+
   // Provide fields required by the dual collision operator
   copyFields<CONTROLS,CONTROLS>(primalLattice, sLattice);
   writeFunctorTo<functors::PopulationF,opti::F>(primalLattice, bulkIndicator);
   copyFields<opti::F,opti::F>(primalLattice, sLattice);
   copyFields<opti::DJDF,opti::DJDF>(primalLattice, sLattice);
-  sLattice.initialize();
 
   dual->getLatticeResults().template add<SuperLatticePhysPressure3D<T,DESCRIPTOR>,
                                          SuperLatticePhysVelocity3D<T,DESCRIPTOR>,
@@ -148,18 +151,20 @@ std::vector<T> computeSensitivity(auto& dual, auto& primal, const std::vector<T>
   // Derivative of applied projection
   std::vector<T> projectionD = opti::applyProjection<opti::projection::SigmoidD<T>>(controls);
   setFieldFromSerialized<opti::DPROJECTIONDALPHA<CONTROLS>>(projectionD, dualLattice, superGeometry.getMaterialIndicator({6}));
+  dualLattice.template setProcessingContext<Array<opti::DPROJECTIONDALPHA<CONTROLS>>>(ProcessingContext::Simulation);
   // Compute jacobian of collision operator regarding control variable
   auto dCDalphaO = makeWriteFunctorO<functors::DerivativeF<functors::CollisionF<DYNAMICS>,CONTROLS,DYNAMICS>,
                                      opti::DCDALPHA<CONTROLS>>(primalLattice);
   dCDalphaO->template setParameter<descriptors::OMEGA>(converter.getLatticeRelaxationFrequency());
   dCDalphaO->template setParameter<descriptors::DX>(1.0);
-  dCDalphaO->execute();
+  dCDalphaO->apply();
   // Jacobian is computed on primal lattice as jacobian is evaluated for primal populations
   copyFields<opti::DCDALPHA<CONTROLS>,opti::DCDALPHA<CONTROLS>>(primalLattice, dualLattice);
   optimalityO->template setParameter<descriptors::OMEGA>(converter.getLatticeRelaxationFrequency());
-  optimalityO->execute();
+  optimalityO->apply();
 
   // Return serial vector containing total derivatives of objective regarding controls
+  dualLattice.setProcessingContext(ProcessingContext::Evaluation);
   return getSerializedFromField<opti::SENSITIVITY<CONTROLS>>(dualLattice, superGeometry.getMaterialIndicator({6}));
 }
 

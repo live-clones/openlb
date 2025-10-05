@@ -22,18 +22,21 @@
  *  Boston, MA  02110-1301, USA.
  */
 
-/* gasStorage2d.cpp
+/**
  * This example shows a liquid (water) entering inside a porous media
  * filled with gas (compressed hydrogen at 100bar) and replacing the
  * gas, only to a certain extent as some of the gas remains trapped in
  * the porous domain which gives the effective porosity for such removal
  * of stored gas processes.
  *
- * To run this example, download the appropriate vti file with the
- * the same name as the example from the OpenLB website:
- * https://openlb.net/data/gas_storage/gasStorage2d.vti
- * and execute something like 'porousCode gasStorage2d.vti "Tiff Scalars"'.
- */
+ * To run this example, download the appropriate vti file
+ *
+ * curl "https://openlb.net/data/gas_storage/gasStorage2d.vti" -o storage.vti
+ *
+ * and execute
+ *
+ * ./gasStorage2d storage.vti "Tiff Scalars"
+ **/
 
 #include <olb.h>
 
@@ -389,6 +392,16 @@ int main(int argc, char* argv[])
     (T)   viscosityLiquid,           // physViscosity: physical kinematic viscosity in __m^2 / s__
     (T)   densityLiquid              // physDensity: physical density in __kg / m^3__
   );
+
+  UnitConverter<T,ACDESCRIPTOR> const converterAC(
+    (T) converter.getPhysDeltaX(),
+    (T) converter.getPhysDeltaT(),
+    (T) converter.getCharPhysLength(),
+    (T) converter.getCharPhysVelocity(),
+    (T) converter.getPhysViscosity(),
+    (T) converter.getPhysDensity()
+  );
+
   // Prints the converter log as console output
   converter.print();
 
@@ -419,8 +432,8 @@ int main(int argc, char* argv[])
   prepareGeometry(converter, ind, superGeometry);
 
   // === 3rd Step: Prepare Lattice ===
-  SuperLattice<T, NSDESCRIPTOR> sLatticeNS(superGeometry);
-  SuperLattice<T, ACDESCRIPTOR> sLatticeAC(superGeometry);
+  SuperLattice<T, NSDESCRIPTOR> sLatticeNS(converter, superGeometry);
+  SuperLattice<T, ACDESCRIPTOR> sLatticeAC(converterAC, superGeometry);
   SuperLatticeCoupling coupling(LiangPostProcessor {},
                                 names::NavierStokes {}, sLatticeNS,
                                 names::Component1 {}, sLatticeAC);
@@ -455,9 +468,9 @@ int main(int argc, char* argv[])
     }
     sLatticeAC.getCommunicator(stage::PreCoupling()).communicate();
 
-    coupling.execute();
+    coupling.apply();
 
-    velocityCoupling.execute();
+    velocityCoupling.apply();
 
     T uMax = helperConvectiveU(sLatticeNS, superGeometry, converter);
     sLatticeAC.setParameter<descriptors::MAX_VELOCITY>(uMax);

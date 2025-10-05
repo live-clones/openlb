@@ -34,10 +34,27 @@
 #ifndef DUAL_DYNAMICS_H
 #define DUAL_DYNAMICS_H
 
+#include "utilities/aDiffTape.h"
+
 #include "utilities/vectorHelpers.h"
 
 // All OpenLB code is contained in this namespace.
 namespace olb {
+
+namespace opti {
+
+template<typename T> class Controller;
+template<typename T, typename DESCRIPTOR> class DualController;
+
+}
+
+
+
+
+
+
+
+////////////////////// Forced/ Porous ALBM /////////////////////////
 
 namespace collision {
 
@@ -56,9 +73,8 @@ struct DualPorousBGK {
     template <concepts::Cell CELL, typename PARAMETERS, typename V=typename CELL::value_t>
     CellStatistic<V> apply(CELL& cell, PARAMETERS& parameters) any_platform {
       // Revert for backwards-in-time propagation
-      //cell.revert();
       for (int iPop=1; iPop <= DESCRIPTOR::q/2; ++iPop) {
-        V cell_iPop = cell[iPop];
+        const V cell_iPop = cell[iPop];
         cell[iPop] = cell[descriptors::opposite<DESCRIPTOR>(iPop)];
         cell[descriptors::opposite<DESCRIPTOR>(iPop)] = cell_iPop;
       }
@@ -111,19 +127,19 @@ struct DualPorousBGK {
       }
 
       // Statistics
-      V rho_phi, u_phi[DESCRIPTOR::d];
-      MomentaF().computeRhoU( cell, rho_phi, u_phi );
-      V uSqr_phi = util::normSqr<V,DESCRIPTOR::d>( u_phi );
+      V phi2 = V();
+      for (int iPop=0; iPop < DESCRIPTOR::q; ++iPop) {
+        phi2 += cell[iPop]*cell[iPop];
+      }
 
       // Undo revert
-      //cell.revert();
       for (int iPop=1; iPop <= DESCRIPTOR::q/2; ++iPop) {
-        V cell_iPop = cell[iPop];
+        const V cell_iPop = cell[iPop];
         cell[iPop] = cell[descriptors::opposite<DESCRIPTOR>(iPop)];
         cell[descriptors::opposite<DESCRIPTOR>(iPop)] = cell_iPop;
       }
-      return {V(1) + cell[0], uSqr_phi};
-    };
+      return {V(1) + cell[0], phi2};
+    }
   };
 };
 
@@ -154,7 +170,6 @@ struct DualForcedBGK {
       auto force = cell.template getFieldPointer<descriptors::FORCE>();
       const V omega = parameters.template get<descriptors::OMEGA>();
 
-      //dualLbDynamicsHelpers<T,DESCRIPTOR>::computeRhoU(f.data(), rho_f, u_f);
       V rho { };
       V u[DESCRIPTOR::d] { };
       //this->computeRhoU( pop_f.data(), rho_f, u_f);
@@ -250,6 +265,9 @@ using DualForcedBGKDynamics = dynamics::Tuple<
   collision::DualForcedBGK
 >;
 
+
 } // namespace olb
 
 #endif
+
+// #include "dualDynamics.cse.h"

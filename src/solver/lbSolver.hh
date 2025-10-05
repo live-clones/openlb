@@ -44,6 +44,7 @@ void LbSolver<T,PARAMETERS,LATTICES>::initialize()
   //this->geometry().clean(this->parameters(names::Output()).verbose);
   // Removes all not needed boundary voxels inside the surface
   this->geometry().innerClean(this->parameters(names::Output()).verbose);
+  geometry().communicate();
   geometry().checkForErrors(this->parameters(names::Output()).verbose);
   if (this->parameters(names::Output()).verbose) {
     geometry().getStatistics().print();
@@ -72,12 +73,12 @@ void LbSolver<T,PARAMETERS,LATTICES>::build()
   if (this->parameters(names::Output()).printLogConverter) {
     writeLogConverter();
   }
-
+  //std::cout << "maxTime lBSolver: " << this->parameters(names::Simulation()).maxTime << std::endl;
   _timer = std::make_unique<util::Timer<BaseType<T>>>(
     converter().getLatticeTime(this->parameters(names::Simulation()).maxTime),
     _sGeometry->getStatistics().getNvoxel(),
     1); // 1 for printing a short timer summary
-
+  //std::cout << "maxTime lBSolver: " << this->parameters(names::Simulation()).maxTime << std::endl;
   if constexpr (isStationary){
     for (unsigned i = 0; i < getNumberStationaryLattices(); ++i) {
       _convergenceCheck[i] = std::make_unique<util::ValueTracer<T>>(
@@ -103,9 +104,9 @@ void LbSolver<T,PARAMETERS,LATTICES>::prepareSimulation()
     clout << "Start prepareSimulation" << std::endl;
   }
 
-  this->_iT = 0;
+  //this->_iT = 0;
 
-  build();
+  //build();
 
   setInitialValues();
 
@@ -114,7 +115,7 @@ void LbSolver<T,PARAMETERS,LATTICES>::prepareSimulation()
     lattice->getStatistics().reset();
     lattice->getStatistics().initialize();
   });
-
+  //std::cout << "maxTime lBSolver-prepSimu-between: " << this->parameters(names::Simulation()).maxTime << std::endl;
 
   if constexpr (outputVTK) {
     if (this->parameters(names::VisualizationVTK()).output != "off") {
@@ -295,7 +296,7 @@ void LbSolver<T,PARAMETERS,LATTICES>::renewLattices()
 {
   meta::tuple_for_each(_sLattices, [&](auto& lattice){
     using lattice_type = typename std::remove_reference_t<decltype(lattice)>::element_type;
-    lattice = std::make_shared<lattice_type>(geometry());
+    lattice = std::make_shared<lattice_type>(converter(), geometry());
   });
 
   prepareLattices();

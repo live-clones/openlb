@@ -43,7 +43,7 @@ namespace olb {
 
 template<typename T,typename DESCRIPTOR, typename TDESCRIPTOR>
 SuperLatticePhysHeatFlux2D<T,DESCRIPTOR,TDESCRIPTOR>::SuperLatticePhysHeatFlux2D(
-  SuperLattice<T,TDESCRIPTOR>& sLattice, const ThermalUnitConverter<T,DESCRIPTOR,TDESCRIPTOR>& converter)
+  SuperLattice<T,TDESCRIPTOR>& sLattice, const UnitConverter<T,DESCRIPTOR>& converter)
   : SuperLatticeThermalPhysF2D<T,DESCRIPTOR,TDESCRIPTOR>(sLattice, converter, 2)
 {
   this->getName() = "physHeatFlux";
@@ -57,7 +57,7 @@ SuperLatticePhysHeatFlux2D<T,DESCRIPTOR,TDESCRIPTOR>::SuperLatticePhysHeatFlux2D
 
 template <typename T, typename DESCRIPTOR, typename TDESCRIPTOR>
 BlockLatticePhysHeatFlux2D<T,DESCRIPTOR,TDESCRIPTOR>::BlockLatticePhysHeatFlux2D
-(BlockLattice<T,TDESCRIPTOR>& blockLattice, ThermalUnitConverter<T,DESCRIPTOR,TDESCRIPTOR> const& converter)
+(BlockLattice<T,TDESCRIPTOR>& blockLattice, UnitConverter<T,DESCRIPTOR> const& converter)
   : BlockLatticeThermalPhysF2D<T,DESCRIPTOR,TDESCRIPTOR>(blockLattice,converter,2),
     _temp(converter.getLatticeSpecificHeatCapacity(converter.getPhysSpecificHeatCapacity())*(converter.getLatticeThermalRelaxationTime() - 0.5) / converter.getLatticeThermalRelaxationTime())
 {

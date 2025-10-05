@@ -620,8 +620,8 @@ public:
               uyDx = u[1] - uXm[1];
             }
             if (util::abs(y1[0]) < V(1.e-8) &&
-                cell.neighbor({-1,0}).template getField<descriptors::POROSITY>() == V(0) &&
-                cell.neighbor({1,0}).template getField<descriptors::POROSITY>() == V(0)) {
+                cell.neighbor({-1,0}).template getField<descriptors::POROSITY>() != V(0) &&
+                cell.neighbor({1,0}).template getField<descriptors::POROSITY>() != V(0)) {
               V uXp[DESCRIPTOR::d], uXm[DESCRIPTOR::d] {};
               cell.neighbor({1,0}).computeU(uXp);
               cell.neighbor({-1,0}).computeU(uXm);
@@ -642,8 +642,8 @@ public:
               uyDy = u[1] - uYm[1];
             }
             if (util::abs(y1[1]) < V(1.e-8) &&
-                cell.neighbor({0,-1}).template getField<descriptors::POROSITY>() == V(0) &&
-                cell.neighbor({0,1}).template getField<descriptors::POROSITY>() == V(0)) {
+                cell.neighbor({0,-1}).template getField<descriptors::POROSITY>() != V(0) &&
+                cell.neighbor({0,1}).template getField<descriptors::POROSITY>() != V(0)) {
               V uYp[DESCRIPTOR::d], uYm[DESCRIPTOR::d] {};
               cell.neighbor({0,1}).computeU(uYp);
               cell.neighbor({0,-1}).computeU(uYm);
@@ -676,8 +676,8 @@ public:
               uzDx = u[2] - uXm[2];
             }
             if (util::abs(y1[0]) < V(1.e-8) &&
-                cell.neighbor({-1,0,0}).template getField<descriptors::POROSITY>() == V(0) &&
-                cell.neighbor({1,0,0}).template getField<descriptors::POROSITY>() == V(0)) {
+                cell.neighbor({-1,0,0}).template getField<descriptors::POROSITY>() != V(0) &&
+                cell.neighbor({1,0,0}).template getField<descriptors::POROSITY>() != V(0)) {
               V uXp[DESCRIPTOR::d], uXm[DESCRIPTOR::d] {};
               cell.neighbor({1,0,0}).computeU(uXp);
               cell.neighbor({-1,0,0}).computeU(uXm);
@@ -701,8 +701,8 @@ public:
               uzDy = u[2] - uYm[2];
             }
             if (util::abs(y1[1]) < V(1.e-8) &&
-                cell.neighbor({0,-1,0}).template getField<descriptors::POROSITY>() == V(0) &&
-                cell.neighbor({0,1,0}).template getField<descriptors::POROSITY>() == V(0)) {
+                cell.neighbor({0,-1,0}).template getField<descriptors::POROSITY>() != V(0) &&
+                cell.neighbor({0,1,0}).template getField<descriptors::POROSITY>() != V(0)) {
               V uYp[DESCRIPTOR::d], uYm[DESCRIPTOR::d] {};
               cell.neighbor({0,1,0}).computeU(uYp);
               cell.neighbor({0,-1,0}).computeU(uYm);
@@ -726,8 +726,8 @@ public:
               uzDz = u[2] - uZm[2];
             }
             if (util::abs(y1[2]) < V(1.e-8) &&
-                cell.neighbor({0,0,-1}).template getField<descriptors::POROSITY>() == V(0) &&
-                cell.neighbor({0,0,1}).template getField<descriptors::POROSITY>() == V(0)) {
+                cell.neighbor({0,0,-1}).template getField<descriptors::POROSITY>() != V(0) &&
+                cell.neighbor({0,0,1}).template getField<descriptors::POROSITY>() != V(0)) {
               V uZp[DESCRIPTOR::d], uZm[DESCRIPTOR::d] {};
               cell.neighbor({0,0,1}).computeU(uZp);
               cell.neighbor({0,0,-1}).computeU(uZm);

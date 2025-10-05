@@ -386,7 +386,7 @@ void simulate(int N, int statIter, T physVel, T peclet, T physLength) {
     prepareGeometry(superGeometry, cuboid);
 
     /// === 3rd Step: Prepare Lattice ===
-    SuperLattice<T, TDESCRIPTOR> ADlattice(superGeometry);
+    SuperLattice<T, TDESCRIPTOR> ADlattice(converter, superGeometry);
 
     prepareLattice(ADlattice, superGeometry, converter);
 

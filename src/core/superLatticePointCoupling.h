@@ -83,7 +83,7 @@ public:
     return _parameters;
   }
 
-  void execute() override
+  void apply() override
   {
     using V = typename AbstractCouplingO<COUPLEES>::value_t;
     using DESCRIPTOR = typename AbstractCouplingO<COUPLEES>::descriptor_t;
@@ -193,14 +193,14 @@ public:
   }
 
   /// Execute coupling operation on all blocks
-  void execute()
+  void apply()
   {
     auto& load = _lattices.template get<0>()->getLoadBalancer();
     #ifdef PARALLEL_MODE_OMP
     #pragma omp taskloop
     #endif
     for (int iC = 0; iC < load.size(); ++iC) {
-      _block[iC]->execute();
+      _block[iC]->apply();
     }
   }
 

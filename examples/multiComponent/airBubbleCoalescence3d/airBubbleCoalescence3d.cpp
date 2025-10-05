@@ -229,7 +229,7 @@ void prepareLattice( SuperLattice<T, DESCRIPTOR>& sLattice1,
   sLattice1.initialize();
   sLattice2.initialize();
   sLattice3.initialize();
-  statistics.execute();
+  statistics.apply();
 
   clout << "Prepare Lattice ... OK" << std::endl;
 }
@@ -355,9 +355,9 @@ void simulate()
   prepareGeometry( superGeometry );
 
   // === 3rd Step: Prepare Lattice ===
-  SuperLattice<T, DESCRIPTOR> sLattice1( superGeometry );
-  SuperLattice<T, DESCRIPTOR> sLattice2( superGeometry );
-  SuperLattice<T, DESCRIPTOR> sLattice3( superGeometry );
+  SuperLattice<T, DESCRIPTOR> sLattice1( converter, superGeometry );
+  SuperLattice<T, DESCRIPTOR> sLattice2( converter, superGeometry );
+  SuperLattice<T, DESCRIPTOR> sLattice3( converter, superGeometry );
 
   SuperLatticeCoupling coupling(
     COUPLING{},
@@ -384,11 +384,11 @@ void simulate()
     sLattice2.collideAndStream();
     sLattice3.collideAndStream();
 
-    statistics.execute();
+    statistics.apply();
     sLattice1.getCommunicator(stage::PreCoupling()).communicate();
     sLattice2.getCommunicator(stage::PreCoupling()).communicate();
     sLattice3.getCommunicator(stage::PreCoupling()).communicate();
-    coupling.execute();
+    coupling.apply();
 
     // Computation and output of the results
     getResults( sLattice1, sLattice2, sLattice3, iT, superGeometry, timer, converter );

@@ -1,4 +1,31 @@
 #ifndef OLB_APPS_FLORIAN_ADSORPTIONCONVERTER_H_
+/*  This file is part of the OpenLB library
+ *
+ *  Copyright (C) 2021 Florian Raichle
+ *  E-mail contact: info@openlb.net
+ *  The most recent release of OpenLB can be downloaded at
+ *  <http://www.openlb.net/>
+ *
+ *  This program is free software; you can redistribute it and/or
+ *  modify it under the terms of the GNU General Public License
+ *  as published by the Free Software Foundation; either version 2
+ *  of the License, or (at your option) any later version.
+ *
+ *  This program is distributed in the hope that it will be useful,
+ *  but WITHOUT ANY WARRANTY; without even the implied warranty of
+ *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ *  GNU General Public License for more details.
+ *
+ *  You should have received a copy of the GNU General Public
+ *  License along with this program; if not, write to the Free
+ *  Software Foundation, Inc., 51 Franklin Street, Fifth Floor,
+ *  Boston, MA  02110-1301, USA.
+*/
+
+/** \file
+ * Unit conversion handling -- header file.
+ */
+
 #define OLB_APPS_FLORIAN_ADSORPTIONCONVERTER_H_
 
 #include <fstream>
@@ -54,59 +81,50 @@ class AdsorptionConverter : public UnitConverter<T, DESCRIPTOR> {
                               clout(std::cout, "AdsConverter") {};
 
   // rename properties because in ADE viscosity has the function of diffusivity
-  constexpr T
-  getPhysDiffusivity() const {
+  constexpr T getPhysDiffusivity() const override {
     return UnitConverter<T, DESCRIPTOR>::getPhysViscosity();
   }
-  constexpr T
-  getLatticeDiffusivity() const {
+  constexpr T getLatticeDiffusivity() const override {
     return UnitConverter<T, DESCRIPTOR>::getLatticeViscosity();
   }
-  constexpr T
-  getConversionFactorDiffusivity() const {
+  constexpr T getConversionFactorDiffusivity() const override {
     return UnitConverter<T, DESCRIPTOR>::getConversionFactorViscosity();
   }
 
-  constexpr T
-  getPhysViscosity() const {
+  constexpr T getPhysViscosity() const {
     return _physViscosity;
   }
-  constexpr T
-  getConversionFactorViscosity() const {
+  constexpr T getConversionFactorViscosity() const {
     return _conversionViscosity;
   }
   /// conversion factor to convert particle density from lattice units to kg/m^3
-  constexpr T
-  getConversionFactorParticleDensity() const {
+  constexpr T getConversionFactorParticleDensity() const override {
     return _particleConcentration;
   }
-  T getPhysParticleConcentration(T c) {
+  constexpr T getPhysParticleConcentration(T c) const override {
     return c * _particleConcentration;
   }
 
-  T getPhysConcentration(T c) {
+  constexpr T getPhysConcentration(T c) const override {
     return c * this->getConversionFactorDensity();
   }
-  T getPhysLoading(T Cq) {
+  constexpr T getPhysLoading(T Cq) const override {
     return Cq * _particleConcentration;
   }
 
 
-  constexpr T
-  getReynoldsNumber() const {
+  constexpr T getReynoldsNumber() const {
     return this->_charPhysVelocity * this->_charPhysLength / this->_physViscosity;
   }
-  constexpr T
-  getSchmidtNumber() const {
+  constexpr T getSchmidtNumber() const override {
     return  this->getPhysViscosity() / this->getPhysDiffusivity();
   }
-  constexpr T
-  getFourierNumber() const {
+  constexpr T getFourierNumber() const override {
     return this->getPhysDiffusivity()*this->getPhysDeltaT() / this->getPhysDeltaX()/ this->getPhysDeltaX();
   }
 
 
-  void print(std::ostream &clout) const {
+  void print(std::ostream &clout) const override {
     {
       clout << "----------------- UnitConverter information -----------------" << std::endl;
       clout << "-- Parameters:" << std::endl;
@@ -141,7 +159,7 @@ class AdsorptionConverter : public UnitConverter<T, DESCRIPTOR> {
     }
   }
 
-  void print() const {
+  void print() const override {
     {
       this->print(clout);
     }

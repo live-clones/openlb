@@ -55,8 +55,7 @@ const T centerCylinderY = 0.2+L/2.;
 const T radiusCylinder = 0.05;
 
 // Stores geometry information in form of material numbers
-void prepareGeometry(const UnitConverter<T,DESCRIPTOR>& converter,
-                     SuperGeometry<T,2>& superGeometry,
+void prepareGeometry(SuperGeometry<T,2>& superGeometry,
                      IndicatorF2D<T>& circle)
 {
   Vector<T,2> extend(lengthX, lengthY);
@@ -86,7 +85,6 @@ void prepareGeometry(const UnitConverter<T,DESCRIPTOR>& converter,
 
 // Set up the geometry of the simulation
 void prepareLattice(SuperLattice<T,DESCRIPTOR>& sLattice,
-                    const UnitConverter<T, DESCRIPTOR>& converter,
                     SuperGeometry<T,2>& superGeometry,
                     IndicatorF2D<T>& circle)
 {
@@ -112,16 +110,17 @@ void prepareLattice(SuperLattice<T,DESCRIPTOR>& sLattice,
   // Initialize all values of distribution functions to their local equilibrium
   sLattice.defineRhoU(superGeometry, 1, rhoF, uF);
   sLattice.iniEquilibrium(superGeometry, 1, rhoF, uF);
-  sLattice.setParameter<descriptors::OMEGA>(converter.getLatticeRelaxationFrequency());
+  sLattice.setParameter<descriptors::OMEGA>(sLattice.getUnitConverter().getLatticeRelaxationFrequency());
   sLattice.initialize();
 }
 
 // Generates a slowly increasing inflow for the first iTMaxStart timesteps
 void setBoundaryValues(SuperLattice<T, DESCRIPTOR>& sLattice,
-                       const UnitConverter<T, DESCRIPTOR>& converter, std::size_t iT,
+                       std::size_t iT,
                        SuperGeometry<T,2>& superGeometry)
 {
   // Number of time steps for smooth start-up
+  const UnitConverter<T,DESCRIPTOR>& converter = sLattice.getUnitConverter();
   const std::size_t iTmaxStart = converter.getLatticeTime( maxPhysT*0.4 );
   const std::size_t iTupdate = iTmaxStart/1000;
 
@@ -146,10 +145,11 @@ void setBoundaryValues(SuperLattice<T, DESCRIPTOR>& sLattice,
 
 // Computes the pressure drop between the voxels before and after the cylinder
 void getResults(SuperLattice<T, DESCRIPTOR>& sLattice,
-                const UnitConverter<T, DESCRIPTOR>& converter, std::size_t iT,
+                std::size_t iT,
                 SuperGeometry<T,2>& superGeometry, util::Timer<T>& timer)
 {
   OstreamManager clout( std::cout,"getResults" );
+  const UnitConverter<T,DESCRIPTOR>& converter = sLattice.getUnitConverter();
   const std::size_t vtkIter  = converter.getLatticeTime(0.3);
   const std::size_t statIter = converter.getLatticeTime(0.8);
 
@@ -233,11 +233,11 @@ int main(int argc, char* argv[])
   SuperGeometry<T,2> superGeometry(cuboidDecomposition, loadBalancer);
   Vector center{centerCylinderX, centerCylinderY};
   IndicatorCircle2D<T> circle(center, radiusCylinder);
-  prepareGeometry(converter, superGeometry, circle);
+  prepareGeometry(superGeometry, circle);
 
   // === 3rd Step: Prepare Lattice ===
-  SuperLattice<T,DESCRIPTOR> sLattice(superGeometry);
-  prepareLattice(sLattice, converter, superGeometry, circle);
+  SuperLattice<T,DESCRIPTOR> sLattice(converter, superGeometry);
+  prepareLattice(sLattice, superGeometry, circle);
 
   // === 4th Step: Main Loop with Timer ===
   std::size_t iTmax = converter.getLatticeTime(maxPhysT);
@@ -246,11 +246,11 @@ int main(int argc, char* argv[])
 
   for (std::size_t iT = 0; iT < iTmax; ++iT) {
     // === 5th Step: Definition of Initial and Boundary Conditions ===
-    setBoundaryValues(sLattice, converter, iT, superGeometry);
+    setBoundaryValues(sLattice, iT, superGeometry);
     // === 6th Step: Collide and Stream Execution ===
     sLattice.collideAndStream();
     // === 7th Step: Computation and Output of the Results ===
-    getResults(sLattice, converter, iT, superGeometry, timer);
+    getResults(sLattice, iT, superGeometry, timer);
   }
 
   timer.stop();

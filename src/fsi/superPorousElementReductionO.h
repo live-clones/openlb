@@ -53,7 +53,7 @@ private:
   std::unique_ptr<SuperD<T,descriptors::fsi::REDUCED_ELEMENTS<DESCRIPTOR::d>>> _superReducedElementsD;
 
   /// Reduced per-element fields
-  std::map<unsigned, ParametersD<T,DESCRIPTOR,FIELDS...>> _fields;
+  std::map<unsigned, StaticParametersD<T,DESCRIPTOR,FIELDS...>> _fields;
 
   std::size_t _nElements;
 

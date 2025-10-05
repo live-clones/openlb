@@ -158,7 +158,7 @@ class Parameters:
 
     def realize(self, name, generator):
         self.name = name
-        self.expr = self.fields.decompose_into[olb.ParametersD[olb.Expr,self.descriptor].include_fields]()
+        self.expr = self.fields.decompose_into[olb.StaticParametersD[olb.Expr,self.descriptor].include_fields]()
         self.symbols = { }
         self.optional_assignments = [ ]
         self.substitutions = [ ]

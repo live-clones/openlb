@@ -165,6 +165,25 @@ void set(SuperLattice<T,DESCRIPTOR>& sLattice,
                                      sGeometry.getMaterialIndicator(material));
 }
 
+template <template<typename...> typename BC,
+          template<typename...> typename DYNAMICS,
+          concepts::BaseType T, concepts::LatticeDescriptor DESCRIPTOR>
+void set(SuperLattice<T,DESCRIPTOR>& sLattice,
+         FunctorPtr<SuperIndicatorF<T,DESCRIPTOR::d>>&& indicator)
+{
+  set<T,DESCRIPTOR,BC<T,DESCRIPTOR,DYNAMICS<T,DESCRIPTOR>>>(sLattice, std::move(indicator));
+}
+
+template <template<typename...> typename BC,
+          template<typename...> typename DYNAMICS,
+          concepts::BaseType T, concepts::LatticeDescriptor DESCRIPTOR>
+void set(SuperLattice<T,DESCRIPTOR>& sLattice,
+         SuperGeometry<T,DESCRIPTOR::d>& sGeometry,
+         int material)
+{
+  set<BC,DYNAMICS,T,DESCRIPTOR>(sLattice, sGeometry.getMaterialIndicator(material));
+}
+
 template <concepts::BoundaryCondition BC>
 void set(SuperLattice<typename BC::value_t,typename BC::descriptor_t>& sLattice,
          SuperGeometry<typename BC::value_t,BC::descriptor_t::d>& sGeometry,

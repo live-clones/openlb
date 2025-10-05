@@ -40,6 +40,40 @@ namespace olb {
 */
 namespace descriptors {
 
+/// D2Q8 lattice
+template <typename... FIELDS>
+struct D2Q8 : public LATTICE_DESCRIPTOR<2,8,POPULATION,FIELDS...> {
+  D2Q8() = delete;
+};
+
+namespace data {
+
+template <>
+platform_constant_definition int vicinity<2,8> = 1;
+
+template <>
+platform_constant_definition int c<2,8>[8][2] = {
+  // { 0, 0},
+  {1, 0}, {0, 1}, {-1, 0}, {0,-1},
+  {1, 1}, {-1, 1}, {-1, -1}, {1, -1}
+};
+
+template <>
+platform_constant_definition int opposite<2,8>[8] = {
+  // 3, 4, 1, 2, 7, 8, 5, 6
+  2, 3, 0, 1, 6, 7, 4, 5
+};
+
+template <>
+platform_constant_definition Fraction t<2,8>[8] = {
+  {1, 2}, {1, 2}, {1, 2}, {1, 2},
+  {1, 4}, {1, 4}, {-1, 4}, {1, 4}
+};
+
+template <>
+platform_constant_definition Fraction cs2<2,8> = {1, 3};
+
+}
 
 /// D2Q9 lattice
 template <typename... FIELDS>

@@ -71,6 +71,19 @@ public:
   bool operator()(T output[],const S input[]) override;
 };
 
+/// implements a smooth particle ellipsoid in 3D using a sigmoid transition for porosity.
+template <typename T, typename S, bool PARTICLE=false>
+class SmoothIndicatorSigmoidEllipsoid3D final: public SmoothIndicatorF3D<T, S, PARTICLE> {
+private:
+  IndicatorEllipsoid3D<S> _ind;
+
+public:
+  SmoothIndicatorSigmoidEllipsoid3D(IndicatorEllipsoid3D<S>& ind, S epsilon, Vector<S,3> theta = Vector<S,3> (0.,0.,0.));
+  SmoothIndicatorSigmoidEllipsoid3D(Vector<S,3> center, Vector<S,3> radius, S epsilon, Vector<S,3> theta = Vector<S,3> (0.,0.,0.));
+  IndicatorEllipsoid3D<S>& getIndicator();
+  bool operator()(T output[],const S input[]) override;
+};
+
 /// implements a smooth particle super-ellipsoid in 3D. The epsilon sector is currently missing.
 template <typename T, typename S, bool PARTICLE=false>
 class SmoothIndicatorSuperEllipsoid3D final: public SmoothIndicatorF3D<T, S, PARTICLE> {

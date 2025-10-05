@@ -44,7 +44,7 @@ struct Component2 { };
 struct Component3 { };
 struct Component4 { };
 
-struct Lattice : public descriptors::DESCRIPTOR_TAG { };
+struct Lattice1 : public descriptors::DESCRIPTOR_TAG { };
 struct Lattice2 : public descriptors::DESCRIPTOR_TAG { };
 struct Primal : public descriptors::DESCRIPTOR_TAG { };
 struct Dual : public descriptors::DESCRIPTOR_TAG { };

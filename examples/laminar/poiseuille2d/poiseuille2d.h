@@ -74,8 +74,7 @@ T pressureLinfAbsError = 0;
 T strainRateLinfAbsError = 0;
 
 // Stores geometry information in form of material numbers
-void prepareGeometry( UnitConverter<T,DESCRIPTOR> const& converter,
-                      SuperGeometry<T,2>& superGeometry )
+void prepareGeometry( SuperGeometry<T,2>& superGeometry, T dx )
 {
 
   OstreamManager clout( std::cout,"prepareGeometry" );
@@ -87,7 +86,7 @@ void prepareGeometry( UnitConverter<T,DESCRIPTOR> const& converter,
   if (flowType == nonForced) {
     Vector<T,2> extend;
     Vector<T,2> origin;
-    T physSpacing = converter.getPhysDeltaX();
+    T physSpacing = dx;
 
     // Set material number for inflow
     extend[1] = ly;
@@ -114,12 +113,12 @@ void prepareGeometry( UnitConverter<T,DESCRIPTOR> const& converter,
 }
 
 // Set up the geometry of the simulation
-void prepareLattice( UnitConverter<T,DESCRIPTOR> const& converter,
-                     SuperLattice<T, DESCRIPTOR>& sLattice,
+void prepareLattice( SuperLattice<T, DESCRIPTOR>& sLattice,
                      SuperGeometry<T,2>& superGeometry )
 {
 
   OstreamManager clout( std::cout,"prepareLattice" );
+  const UnitConverter<T,DESCRIPTOR>& converter = sLattice.getUnitConverter();
   clout << "Prepare Lattice ..." << std::endl;
 
   const T omega = converter.getLatticeRelaxationFrequency();
@@ -223,10 +222,10 @@ void prepareLattice( UnitConverter<T,DESCRIPTOR> const& converter,
 
 // Compute error norms
 void error( SuperGeometry<T,2>& superGeometry,
-            SuperLattice<T, DESCRIPTOR>& sLattice,
-            UnitConverter<T,DESCRIPTOR> const& converter )
+            SuperLattice<T, DESCRIPTOR>& sLattice)
 {
   OstreamManager clout( std::cout,"error" );
+  const UnitConverter<T,DESCRIPTOR>& converter = sLattice.getUnitConverter();
   sLattice.setProcessingContext(ProcessingContext::Evaluation);
 
   int tmp[]= { };
@@ -334,12 +333,13 @@ void error( SuperGeometry<T,2>& superGeometry,
 
 // Output to console and files
 void getResults( SuperLattice<T,DESCRIPTOR>& sLattice,
-                 UnitConverter<T,DESCRIPTOR> const& converter, std::size_t iT,
+                 std::size_t iT,
                  SuperGeometry<T,2>& superGeometry, util::Timer<T>& timer, bool hasConverged,
                  Gnuplot<T>& gplot,
                  bool eoc)
 {
   OstreamManager clout( std::cout,"getResults" );
+  const UnitConverter<T,DESCRIPTOR>& converter = sLattice.getUnitConverter();
   const bool lastTimeStep = ( hasConverged || (iT + 1 == converter.getLatticeTime( maxPhysT )) );
   const bool noslipBoundary = ((boundaryType != freeSlip) && (boundaryType != partialSlip));
   const int statIter = converter.getLatticeTime( maxPhysT/20. );
@@ -416,7 +416,7 @@ void getResults( SuperLattice<T,DESCRIPTOR>& sLattice,
     // Error norms
     if (noslipBoundary) {
       if ( (!eoc) || lastTimeStep ) {
-        error( superGeometry, sLattice, converter );
+        error( superGeometry, sLattice);
       }
     }
   }
@@ -525,14 +525,14 @@ void simulatePoiseuille( int N, Gnuplot<T>& gplot, bool eoc )
   const int overlap = (flowType == forced) ? 2 : 3;
   SuperGeometry<T,2> superGeometry( cuboidDecomposition, loadBalancer, overlap );
 
-  prepareGeometry( converter, superGeometry );
+  prepareGeometry( superGeometry, converter.getPhysDeltaX() );
 
 
   // === 3rd Step: Prepare Lattice ===
-  SuperLattice<T, DESCRIPTOR> sLattice( superGeometry );
+  SuperLattice<T,DESCRIPTOR> sLattice(converter, superGeometry);
 
   // Prepare lattice and set boundary conditions
-  prepareLattice(converter, sLattice, superGeometry);
+  prepareLattice(sLattice, superGeometry);
 
   // === 4th Step: Main Loop with Timer ===
   clout << "starting simulation..." << std::endl;
@@ -544,7 +544,7 @@ void simulatePoiseuille( int N, Gnuplot<T>& gplot, bool eoc )
   for ( std::size_t iT = 0; iT < converter.getLatticeTime( maxPhysT ); ++iT ) {
     if ( converge.hasConverged() ) {
       clout << "Simulation converged." << std::endl;
-      getResults( sLattice, converter, iT, superGeometry, timer, converge.hasConverged() ,gplot, eoc );
+      getResults( sLattice, iT, superGeometry, timer, converge.hasConverged() ,gplot, eoc );
 
       break;
     }
@@ -556,7 +556,7 @@ void simulatePoiseuille( int N, Gnuplot<T>& gplot, bool eoc )
     sLattice.collideAndStream();
 
     // === 7th Step: Computation and Output of the Results ===
-    getResults( sLattice, converter, iT,
+    getResults( sLattice, iT,
       superGeometry, timer, converge.hasConverged(), gplot, eoc );
     converge.takeValue( sLattice.getStatistics().getMaxU(), false );
   }

@@ -75,7 +75,6 @@ void prepareGeometry( SuperGeometry<T,2>& superGeometry )
 
 void prepareLattice( SuperLattice<T, DESCRIPTOR>& sLattice1,
                      SuperLattice<T, DESCRIPTOR>& sLattice2,
-                     UnitConverter<T, DESCRIPTOR>& converter,
                      SuperGeometry<T,2>& superGeometry )
 {
 
@@ -100,8 +99,8 @@ void prepareLattice( SuperLattice<T, DESCRIPTOR>& sLattice1,
   sLattice1.iniEquilibrium( superGeometry, 1, rho, zeroVelocity );
   sLattice2.iniEquilibrium( superGeometry, 1, phi, zeroVelocity );
 
-  sLattice1.setParameter<descriptors::OMEGA>( converter.getLatticeRelaxationFrequency() );
-  sLattice2.setParameter<descriptors::OMEGA>( converter.getLatticeRelaxationFrequency() );
+  sLattice1.setParameter<descriptors::OMEGA>( sLattice1.getUnitConverter().getLatticeRelaxationFrequency() );
+  sLattice2.setParameter<descriptors::OMEGA>( sLattice2.getUnitConverter().getLatticeRelaxationFrequency() );
   sLattice2.setParameter<collision::FreeEnergy::GAMMA>(gama);
 
   sLattice1.initialize();
@@ -125,8 +124,7 @@ void prepareLattice( SuperLattice<T, DESCRIPTOR>& sLattice1,
 
 void getResults( SuperLattice<T, DESCRIPTOR>& sLattice2,
                  SuperLattice<T, DESCRIPTOR>& sLattice1, int iT,
-                 SuperGeometry<T,2>& superGeometry, util::Timer<T>& timer,
-                 UnitConverter<T, DESCRIPTOR> converter)
+                 SuperGeometry<T,2>& superGeometry, util::Timer<T>& timer )
 {
 
   OstreamManager clout( std::cout,"getResults" );
@@ -146,8 +144,8 @@ void getResults( SuperLattice<T, DESCRIPTOR>& sLattice2,
     // Timer console output
     timer.update( iT );
     timer.printStep();
-    sLattice1.getStatistics().print( iT, converter.getPhysTime(iT) );
-    sLattice2.getStatistics().print( iT, converter.getPhysTime(iT) );
+    sLattice1.getStatistics().print( iT, sLattice1.getUnitConverter().getPhysTime(iT) );
+    sLattice2.getStatistics().print( iT, sLattice2.getUnitConverter().getPhysTime(iT) );
   }
 
   // Writes the VTK files
@@ -198,8 +196,8 @@ void getResults( SuperLattice<T, DESCRIPTOR>& sLattice2,
       T pressureIn = 0.;
       T pressureOut = 0.;
       interpolPressure(&pressureIn, position);
-      position[0] = ((double)N/100.)*converter.getPhysDeltaX();
-      position[1] = ((double)N/100.)*converter.getPhysDeltaX();
+      position[0] = ((double)N/100.)*sLattice1.getUnitConverter().getPhysDeltaX();
+      position[1] = ((double)N/100.)*sLattice1.getUnitConverter().getPhysDeltaX();
       interpolPressure(&pressureOut, position);
 
       clout << "Pressure Difference: " << pressureIn-pressureOut << "  ;  ";
@@ -255,10 +253,10 @@ int main( int argc, char *argv[] )
   prepareGeometry( superGeometry );
 
   // === 3rd Step: Prepare Lattice ===
-  SuperLattice<T, DESCRIPTOR> sLattice1( superGeometry );
-  SuperLattice<T, DESCRIPTOR> sLattice2( superGeometry );
+  SuperLattice<T, DESCRIPTOR> sLattice1( converter, superGeometry );
+  SuperLattice<T, DESCRIPTOR> sLattice2( converter, superGeometry );
 
-  prepareLattice( sLattice1, sLattice2, converter, superGeometry );
+  prepareLattice( sLattice1, sLattice2, superGeometry );
 
   // === 4th Step: Prepare Coupling ===
   SuperLatticeCoupling coupling1(
@@ -305,7 +303,7 @@ int main( int argc, char *argv[] )
 
   for ( iT=0; iT<=maxIter; ++iT ) {
     // Computation and output of the results
-    getResults( sLattice2, sLattice1, iT, superGeometry, timer, converter );
+    getResults( sLattice2, sLattice1, iT, superGeometry, timer );
 
 
     // Collide and stream execution
@@ -316,13 +314,13 @@ int main( int argc, char *argv[] )
     sLattice1.executePostProcessors(stage::PreCoupling());
 
     sLattice1.getCommunicator(stage::PreCoupling()).communicate();
-    coupling1.execute();
+    coupling1.apply();
     sLattice1.getCommunicator(stage::PostCoupling()).communicate();
 
     sLattice2.executePostProcessors(stage::PreCoupling());
 
     sLattice2.getCommunicator(stage::PreCoupling()).communicate();
-    coupling2.execute();
+    coupling2.apply();
     sLattice2.getCommunicator(stage::PostCoupling()).communicate();
 
 

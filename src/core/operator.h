@@ -32,6 +32,13 @@ template <typename T, typename DESCRIPTOR, Platform PLATFORM> class ConcreteBloc
 template <typename T, Platform PLATFORM> class ConcreteBlockMask;
 template <typename T, typename DESCRIPTOR> struct Dynamics;
 
+/// Base for operator closures that are applicable without additional knowledge
+struct ApplicableO {
+  virtual ~ApplicableO() = default;
+
+  virtual void apply() = 0;
+};
+
 /// Base of any block operator
 struct AbstractBlockO {
   virtual ~AbstractBlockO() = default;
@@ -112,14 +119,14 @@ struct AbstractCouplingO : public AbstractBlockO {
   using descriptor_t = typename COUPLEES::values_t::template get<0>::descriptor_t;
 
   using AbstractParameters = olb::AbstractParameters<value_t,descriptor_t>;
-  using ParametersD = olb::ParametersD<value_t,descriptor_t>;
+  using ParametersD = olb::StaticParametersD<value_t,descriptor_t>;
 
   using LatticeR = olb::LatticeR<descriptor_t::d>;
   template <typename FIELD>
   using FieldD = olb::FieldD<value_t,descriptor_t,FIELD>;
 
   /// Execute coupling operation
-  virtual void execute() = 0;
+  virtual void apply() = 0;
   /// Return reference to parameters of coupling operator
   virtual AbstractParameters& getParameters() = 0;
   /// Set whether iCell is covered by the present coupling

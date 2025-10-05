@@ -299,7 +299,7 @@ int main(int argc, char **argv)
 
   prepareGeometry( converter, superGeometry );
 
-  SuperLattice<T, DESCRIPTOR> sLattice( superGeometry );
+  SuperLattice<T, DESCRIPTOR> sLattice( converter, superGeometry );
 
   clout<<"Overlap: "<<sLattice.getOverlap()<<std::endl;
 

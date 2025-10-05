@@ -70,6 +70,7 @@ void readData(int samples_number, const std::string& uqFolder, const std::string
   if constexpr (DESCRIPTOR::d == 3) {
     info.dims[2] = blockDataSample0.getNz();
   }
+
   info.nodeCount = std::accumulate(info.dims.begin(), info.dims.end(), 1, std::multiplies<> {});
 
   info.size = blockDataSample0.getSize();
@@ -90,15 +91,17 @@ void readData(int samples_number, const std::string& uqFolder, const std::string
     BlockData<DESCRIPTOR::d, T, T>&     blockDataSample = reader.getBlockData();
 
     // Extract data for each lattice point
+    int nodeIndex = 0;
     if constexpr (DESCRIPTOR::d == 2) {
       for (int iy = 0; iy < info.dims[1]; ++iy) {
         for (int ix = 0; ix < info.dims[0]; ++ix) {
-          int nodeIndex = ix + info.dims[0] * iy;
+          // int nodeIndex = ix + info.dims[0] * iy;
           // std::array<int, 2> coords = {ix, iy};
 
           for (unsigned iSize = 0; iSize < info.size; ++iSize) {
             data[nodeIndex][iSize][iSample] = blockDataSample.get({ix, iy}, iSize);
           }
+          ++nodeIndex;
         }
       }
     }
@@ -106,12 +109,13 @@ void readData(int samples_number, const std::string& uqFolder, const std::string
       for (int iz = 0; iz < info.dims[2]; ++iz) {
         for (int iy = 0; iy < info.dims[1]; ++iy) {
           for (int ix = 0; ix < info.dims[0]; ++ix) {
-            int nodeIndex = ix + info.dims[0] * (iy + info.dims[1] * iz);
+            // int nodeIndex = ix + info.dims[0] * (iy + info.dims[1] * iz);
             // std::array<int, 3> coords = {ix, iy, iz};
 
             for (unsigned iSize = 0; iSize < info.size; ++iSize) {
               data[nodeIndex][iSize][iSample] = blockDataSample.get({ix, iy, iz}, iSize);
             }
+            ++nodeIndex;
           }
         }
       }
@@ -128,17 +132,18 @@ void computeMeanAndStd(UncertaintyQuantification<T>&                   uq,
                        const FieldGeometryInfo<D, T>& info, BlockData<D, T, T>& blockDataMean,
                        BlockData<D, T, T>& blockDataStd)
 {
+  int nodeIndex = 0;
   if constexpr (D == 2) {
     for (int iy = 0; iy < info.dims[1]; ++iy) {
       for (int ix = 0; ix < info.dims[0]; ++ix) {
-        int nodeIndex = ix + info.dims[0] * iy;
-        // std::array<int, 2> coords = {ix, iy};
+        // int nodeIndex = ix + info.dims[0] * iy;
 
         for (unsigned iSize = 0; iSize < info.size; ++iSize) {
           const auto& samples                = data[nodeIndex][iSize];
           blockDataMean.get({ix, iy}, iSize) = uq.mean(samples);
           blockDataStd.get({ix, iy}, iSize)  = uq.std(samples);
         }
+        ++nodeIndex;
       }
     }
   }
@@ -147,13 +152,13 @@ void computeMeanAndStd(UncertaintyQuantification<T>&                   uq,
       for (int iy = 0; iy < info.dims[1]; ++iy) {
         for (int ix = 0; ix < info.dims[0]; ++ix) {
           int nodeIndex = ix + info.dims[0] * (iy + info.dims[1] * iz);
-          // std::array<int, 3> coords = {ix, iy, iz};
 
           for (unsigned iSize = 0; iSize < info.size; ++iSize) {
             const auto& samples                    = data[nodeIndex][iSize];
             blockDataMean.get({ix, iy, iz}, iSize) = uq.mean(samples);
             blockDataStd.get({ix, iy, iz}, iSize)  = uq.std(samples);
           }
+          ++nodeIndex;
         }
       }
     }
@@ -164,19 +169,19 @@ void computeMeanAndStd(UncertaintyQuantification<T>&                   uq,
   * \brief Compute mean, std dev, and write them out to VTI for postprocessing
   */
 template <typename T, typename DESCRIPTOR>
-void computeMeanAndStdAndWriteVTI(UncertaintyQuantification<T>& uq, const std::string& uqFolder,
+void computeMeanAndStdAndWriteVTI(UncertaintyQuantification<T>& uq, const std::string& foldPath,
                                   const std::string& name, const std::string& dataName,
-                                  CuboidDecomposition<T, DESCRIPTOR::d>& cuboidDecomposition,
-                                  SuperGeometry<T, DESCRIPTOR::d>&       sGeometry)
+                                  UnitConverter<T,DESCRIPTOR> const& converter,
+                                  SuperGeometry<T, DESCRIPTOR::d>& sGeometry,
+                                  std::vector<int> materials )
 {
   constexpr unsigned D = DESCRIPTOR::d;
 
-  OstreamManager clout(std::cout, "computeMeanAndStdAndWriteVTI");
+  std::string uqFolder = foldPath + "uq/";
+  std::string outputFolder = foldPath + "tmp/";
+  singleton::directories().setOutputDir(outputFolder);
 
-  // Build a super lattice for reading/writing the final data
-  SuperLattice<T, DESCRIPTOR> sLattice(sGeometry);
-  sLattice.template defineDynamics<NoDynamics>(sGeometry, /*material=*/0);
-  sLattice.initialize();
+  OstreamManager clout(std::cout, "computeMeanAndStdAndWriteVTI");
 
   // Load iteration logs for each sample
   std::vector<std::vector<size_t>> iTList(uq.getSamplesNumber());
@@ -200,41 +205,25 @@ void computeMeanAndStdAndWriteVTI(UncertaintyQuantification<T>& uq, const std::s
 
   SuperVTMwriter<T, D> vtmWriter(name);
 
-#ifdef PARALLEL_MODE_MPI
-  const int noOfCuboids = singleton::mpi().getSize();
-#else
-  const int noOfCuboids = 1;
-#endif
+  auto materialIndicator = sGeometry.getMaterialIndicator(std::move(materials));
+  auto cuboidDecomposition = sGeometry.getCuboidDecomposition();
+  // Build a super lattice for reading/writing the final data
+  SuperLattice<T, DESCRIPTOR> sLattice(converter, sGeometry);
+  sLattice.initialize();
 
-  // Rename materials for visualization
-  for (int rank = 0; rank < noOfCuboids; ++rank) {
-    Cuboid<T, D>& cuboid = cuboidDecomposition.get(rank);
-    Vector<T, D>  origin = cuboid.getOrigin();
-    origin[0] -= cuboid.getDeltaR();
-    origin[1] -= cuboid.getDeltaR();
-    if constexpr (DESCRIPTOR::d == 3) {
-      origin[2] -= cuboid.getDeltaR();
-    }
-
-    Vector<T, D> extent = cuboid.getExtent() * cuboid.getDeltaR();
-    extent[0] += cuboid.getDeltaR();
-    extent[1] += cuboid.getDeltaR();
-    if constexpr (DESCRIPTOR::d == 3) {
-      extent[2] += cuboid.getDeltaR();
-    }
-
-    IndicatorCuboid<T, D> readCuboid(extent, origin);
-    sGeometry.rename(/*fromMaterial=*/0, /*toMaterial=*/10 + rank, readCuboid);
-  }
-
-  // Process each iteration
-  singleton::directories().setOutputDir("./tmp/");
-  SuperLatticeCuboid<T, DESCRIPTOR> cuboid(sLattice);
+  SuperLatticeCuboid<T, DESCRIPTOR> superLatticeCuboid(sLattice);
   SuperLatticeRank<T, DESCRIPTOR>   rankFunctor(sLattice);
 
-  vtmWriter.write(cuboid);
+  vtmWriter.write(superLatticeCuboid);
   vtmWriter.write(rankFunctor);
   vtmWriter.createMasterFile();
+
+  SuperLatticePhysField<T, DESCRIPTOR, descriptors::VELOCITY> meanPhysField(sLattice,
+                                                                                  /*scale=*/1.0, dataName + "Mean");
+  SuperLatticePhysField<T, DESCRIPTOR, descriptors::VELOCITY2> stdPhysField(sLattice,
+                                                                                  /*scale=*/1.0, dataName + "Std");
+  vtmWriter.addFunctor(meanPhysField);
+  vtmWriter.addFunctor(stdPhysField);
 
   for (size_t iter = 0; iter < numIterations; ++iter) {
     // Collect the iteration index from each sample
@@ -244,15 +233,15 @@ void computeMeanAndStdAndWriteVTI(UncertaintyQuantification<T>& uq, const std::s
       iT.push_back(list[iter]);
     }
 
-    clout << "Processing iteration " << iT[0] << std::endl;
+    for (int iBalancer = 0; iBalancer < sGeometry.getLoadBalancer().size(); ++iBalancer) {
+      int iC = sGeometry.getLoadBalancer().glob(iBalancer); // Use the first cuboid for simplicity
+      clout << "Processing iteration " << iT[0] << std::endl;
 
     // Process data for each cuboid/rank
-    for (int rank = 0; rank < noOfCuboids; ++rank) {
-      std::string basePath = uqFolder + "0/tmp/";
-      singleton::directories().setOutputDir(basePath);
-
+    std::string basePath = uqFolder + "0/tmp/";
+    singleton::directories().setOutputDir(basePath);
       std::string fileName =
-          singleton::directories().getVtkOutDir() + "data/" + createFileName(name, iT[0], rank) + ".vti";
+          singleton::directories().getVtkOutDir() + "data/" + createFileName(name, iT[0], iC) + ".vti";
 
       // We'll read the block data from the 0th sample's file,
       // then overwrite it with the mean/std from all samples.
@@ -266,7 +255,7 @@ void computeMeanAndStdAndWriteVTI(UncertaintyQuantification<T>& uq, const std::s
       std::vector<std::vector<std::vector<T>>> data;
       FieldGeometryInfo<D, T>                  info;
 
-      readData<T, DESCRIPTOR>(uq.getSamplesNumber(), uqFolder, name, dataName, iT, rank, data, info);
+      readData<T, DESCRIPTOR>(uq.getSamplesNumber(), uqFolder, name, dataName, iT, iC, data, info);
 
       // Overwrite blockDataMean, blockDataStd with computed mean, std
       computeMeanAndStd<T, D>(uq, data, info, blockDataMean, blockDataStd);
@@ -275,34 +264,31 @@ void computeMeanAndStdAndWriteVTI(UncertaintyQuantification<T>& uq, const std::s
       BlockDataF<T, T, D> blockDataFMean(blockDataMean);
       BlockDataF<T, T, D> blockDataFStd(blockDataStd);
 
-      SpecialAnalyticalFfromBlockF<T, T, D> meanField(blockDataFMean, cuboidDecomposition.get(rank), info.spacing,
+      Cuboid<T, D>& cuboidDecomp = cuboidDecomposition.get(iC);
+      Vector<T, D>  origin = cuboidDecomp.getOrigin();
+      origin -= cuboidDecomp.getDeltaR();
+
+      Vector<T, D> extent = cuboidDecomp.getExtent() * cuboidDecomp.getDeltaR();
+      extent += cuboidDecomp.getDeltaR();
+
+      Cuboid<T, D> cuboid(origin, cuboidDecomp.getDeltaR(), extent);
+
+      SpecialAnalyticalFfromBlockF<T, T, D> meanField(blockDataFMean, cuboid, info.spacing,
                                                       /*scale=*/1.0);
-      SpecialAnalyticalFfromBlockF<T, T, D> stdField(blockDataFStd, cuboidDecomposition.get(rank), info.spacing,
-                                                     /*scale=*/1.0);
+      SpecialAnalyticalFfromBlockF<T, T, D>  stdField(blockDataFStd , cuboid, info.spacing,
+                                                      /*scale=*/1.0);
 
-      // Define the newly computed fields on the lattice
-      auto materialIndicator = sGeometry.getMaterialIndicator({10 + rank});
-      for (int iBalancer = 0; iBalancer < sGeometry.getLoadBalancer().size(); ++iBalancer) {
-        sLattice.getBlock(iBalancer).template defineField<descriptors::VELOCITY>(
-            materialIndicator->getBlockIndicatorF(iBalancer), meanField);
-        sLattice.getBlock(iBalancer).template defineField<descriptors::VELOCITY2>(
-            materialIndicator->getBlockIndicatorF(iBalancer), stdField);
-      }
-    }
-
-    // Write data to VTM file
-    SuperLatticePhysField<T, DESCRIPTOR, descriptors::VELOCITY> meanPhysField(sLattice,
-                                                                              /*scale=*/1.0, dataName + "Mean");
-    vtmWriter.addFunctor(meanPhysField);
-
-    SuperLatticePhysField<T, DESCRIPTOR, descriptors::VELOCITY2> stdPhysField(sLattice,
-                                                                              /*scale=*/1.0, dataName + "Std");
-    vtmWriter.addFunctor(stdPhysField);
+      sLattice.template defineField<descriptors::VELOCITY >(materialIndicator, meanField);
+      sLattice.template defineField<descriptors::VELOCITY2>(materialIndicator,  stdField);
+    } // end for (iBalancer)
 
     // Finally, write the iteration data
-    singleton::directories().setOutputDir("./tmp/");
+    // singleton::directories().setOutputDir("./tmp/");
+    singleton::directories().setOutputDir(outputFolder);
     vtmWriter.write(iT[0]);
+
   } // end for (iter)
+  clout << "Finished saving mean and std dev to VTI files, path is " << outputFolder << std::endl;
 }
 
 } // namespace uq

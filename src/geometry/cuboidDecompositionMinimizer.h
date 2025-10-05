@@ -112,7 +112,7 @@ void minimizeByWeight(CuboidDecomposition<T,3>& cGeometry, IndicatorF3D<T>& indi
       cGeometry.shrink(indicatorF);
     }
     for (int iC = 0; iC < currentNc; iC++) {
-      // clout << "delet cuboid number #" << iC << std::endl;
+      // clout << "delete cuboid number #" << iC << std::endl;
       cGeometry.remove(0);
     }
   }

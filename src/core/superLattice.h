@@ -47,7 +47,7 @@ class SuperLattice final : public SuperStructure<T,DESCRIPTOR::d>
                          , public BufferSerializable {
 private:
   /// Converter between SI and lattice units
-  std::optional<const UnitConverter<T,DESCRIPTOR>*> _converter;
+  std::unique_ptr<UnitConverter<T,DESCRIPTOR>> _converter;
   /// Lattices with ghost cell layer of size overlap
   std::vector<std::unique_ptr<BlockLattice<T,DESCRIPTOR>>> _block;
   /// Communicators for stages of collideAndStream
@@ -85,35 +85,30 @@ public:
                LoadBalancer<T>& loadBalancer,
                unsigned overlap = 3);
 
-  SuperLattice(CuboidDecomposition<T,DESCRIPTOR::d>& cuboidDecomposition,
+  SuperLattice(UnitConverter<T,DESCRIPTOR> converter,
+               CuboidDecomposition<T,DESCRIPTOR::d>& cuboidDecomposition,
                LoadBalancer<T>& loadBalancer,
-               unsigned overlap,
-               const UnitConverter<T,DESCRIPTOR>& converter)
-    : SuperLattice(cuboidDecomposition, loadBalancer, overlap)
-  {
-    _converter = &converter;
-  }
+               unsigned overlap = 3);
 
-  SuperLattice(SuperGeometry<T,DESCRIPTOR::d>& sGeometry)
-    : SuperLattice(sGeometry.getCuboidDecomposition(),
+  SuperLattice(UnitConverter<T,DESCRIPTOR> converter,
+               SuperGeometry<T,DESCRIPTOR::d>& sGeometry)
+    : SuperLattice(converter,
+                   sGeometry.getCuboidDecomposition(),
                    sGeometry.getLoadBalancer(),
                    sGeometry.getOverlap())
+  { }
+
+  SuperLattice(SuperGeometry<T,DESCRIPTOR::d>& sGeometry)
+  : SuperLattice(sGeometry.getCuboidDecomposition(),
+                 sGeometry.getLoadBalancer(),
+                 sGeometry.getOverlap())
   { }
 
   SuperLattice(const SuperLattice&) = delete;
   ~SuperLattice() = default;
 
-  const UnitConverter<T,DESCRIPTOR>& getConverter() const {
-    if (_converter) {
-      return **_converter;
-    } else {
-      throw std::runtime_error("Unit converter not provided");
-    }
-  }
-
   /// Return BlockLattice with local index locC
-  BlockLattice<T,DESCRIPTOR>& getBlock(int locC)
-  {
+  BlockLattice<T,DESCRIPTOR>& getBlock(int locC) {
     return *_block[locC];
   };
   /// Return locC-th block lattice casted to BLOCK
@@ -121,61 +116,34 @@ public:
    * Only safe to use under external knownledge that the locC-th block is of type BLOCK
    **/
   template <typename BLOCK>
-  BLOCK& getBlock(int locC)
-  {
+  BLOCK& getBlock(int locC) {
     return *dynamic_cast<BLOCK*>(_block[locC].get());
   };
   /// Return read-only BlockLattice with local index locC
-  const BlockLattice<T,DESCRIPTOR>& getBlock(int locC) const
-  {
+  const BlockLattice<T,DESCRIPTOR>& getBlock(int locC) const {
     return *_block[locC];
   };
   /// Return locC-th block lattice casted to BLOCK (read-only)
   template <typename BLOCK>
-  const BLOCK& getBlock(int locIC) const
-  {
+  const BLOCK& getBlock(int locIC) const {
     return *dynamic_cast<const BLOCK*>(_block[locIC].get());
   };
 
   /// Apply f to every ConcreteBlockLattice of PLATFORM
   template <Platform PLATFORM, typename F>
-  void forBlocksOnPlatform(F f) {
-    for (int iC = 0; iC < this->_loadBalancer.size(); ++iC) {
-      if (_block[iC]->getPlatform() == PLATFORM) {
-        f(static_cast<ConcreteBlockLattice<T,DESCRIPTOR,PLATFORM>&>(*_block[iC]));
-      }
-    }
-  };
+  void forBlocksOnPlatform(F f);
 
   /// Set processing context of block lattices
   /**
    * Used to sync data between device and host
    **/
-  void setProcessingContext(ProcessingContext context)
-  {
-    // Communicate overlap prior to evaluation
-    if (context == ProcessingContext::Evaluation) {
-      communicate();
-      waitForBackgroundTasks<stage::PreContextSwitchTo<ProcessingContext::Evaluation>>();
-    }
-    for (int iC = 0; iC < this->_loadBalancer.size(); ++iC) {
-      _block[iC]->setProcessingContext(context);
-    }
-  };
-
+  void setProcessingContext(ProcessingContext context);
   /// Set processing context of FIELD_TYPE in block lattices
   /**
    * Used to sync data between device and host
    **/
   template <typename FIELD_TYPE>
-  void setProcessingContext(ProcessingContext context)
-  {
-    for (int iC = 0; iC < this->_loadBalancer.size(); ++iC) {
-      if (_block[iC]->template hasData<FIELD_TYPE>()) {
-        _block[iC]->template getData<FIELD_TYPE>().setProcessingContext(context);
-      }
-    }
-  };
+  void setProcessingContext(ProcessingContext context);
 
   /// Return communicator for given communication stage
   template <typename STAGE>
@@ -183,10 +151,53 @@ public:
   /// Perform full overlap communication if needed
   void communicate() override;
 
-  /// Return a handle to the LatticeStatistics object
   LatticeStatistics<T>& getStatistics();
-  /// Return a constant handle to the LatticeStatistics object
-  LatticeStatistics<T> const& getStatistics() const;
+  const LatticeStatistics<T>& getStatistics() const;
+  /// Switch Statistics on (default on)
+  void setStatisticsOn();
+  /// Switch Statistics off (default on)
+  /**
+   * This speeds up the execution time
+   **/
+  void setStatisticsOff();
+
+  const UnitConverter<T,DESCRIPTOR>& getUnitConverter() const {
+    if (!_converter) {
+      throw std::runtime_error("Unit converter not defined");
+    }
+    return *_converter;
+  }
+  /// Replaces internal unit converter by copying the given converter
+  template <typename _DESCRIPTOR>
+  void setUnitConverter(const UnitConverter<T,_DESCRIPTOR>& converter) {
+    _converter.reset(new UnitConverter<T,DESCRIPTOR>(
+      (T)   converter.getPhysDeltaX(),
+      (T)   converter.getPhysDeltaT(),
+      (T)   converter.getCharPhysLength(),
+      (T)   converter.getCharPhysVelocity(),
+      (T)   converter.getPhysViscosity(),
+      (T)   converter.getPhysDensity()
+    ));
+  }
+  /// Replaces internal unit converter by taking ownership of the given converter
+  void setUnitConverter(UnitConverter<T,DESCRIPTOR>* converter) {
+    _converter.reset(converter);
+  }
+  /// Constructs the internal unit converter in place for given arguments
+  template <typename CONVERTER, typename ARG1, typename ARG2, typename... ARGS>
+  void setUnitConverter(ARG1&& arg1, ARG2&& arg2, ARGS&&... args) {
+    _converter.reset(new CONVERTER(
+      std::forward<ARG1&&>(arg1),
+      std::forward<ARG2&&>(arg2),
+      std::forward<ARGS&&>(args)...));
+  }
+  /// Constructs the internal unit converter in place for given arguments
+  template <typename HEAD, typename... TAIL>
+  void setUnitConverter(HEAD&& head, TAIL&&... tail) {
+    setUnitConverter<UnitConverter<T,DESCRIPTOR>>(
+      std::forward<HEAD&&>(head),
+      std::forward<TAIL&&>(tail)...);
+  }
 
   /// Get local cell interface
   Cell<T,DESCRIPTOR> get(LatticeR<DESCRIPTOR::d+1> latticeR);
@@ -230,7 +241,8 @@ public:
   void defineDynamics(SuperGeometry<T,DESCRIPTOR::d>& sGeometry, int material);
 
   //Define the dynamics on a domain with indicator and promise
-  void defineDynamics(FunctorPtr<SuperIndicatorF<T,DESCRIPTOR::d>>&& indicator,DynamicsPromise<T,DESCRIPTOR>&& promise);
+  void defineDynamics(FunctorPtr<SuperIndicatorF<T,DESCRIPTOR::d>>&& indicator,
+                      DynamicsPromise<T,DESCRIPTOR>&& promise);
 
   /// Define rho on a domain described by an indicator
   /**
@@ -381,26 +393,6 @@ public:
 
   /// Subtract constant offset from the density
   void stripeOffDensityOffset(T offset);
-
-  /// Switch Statistics on (default on)
-  void statisticsOn()
-  {
-    _statisticsEnabled = true;
-    for (int iC = 0; iC < this->_loadBalancer.size(); ++iC) {
-      _block[iC]->setStatisticsEnabled(true);
-    }
-  };
-  /// Switch Statistics off (default on)
-  /**
-   * This speeds up the execution time
-   **/
-  void statisticsOff()
-  {
-    _statisticsEnabled = false;
-    for (int iC = 0; iC < this->_loadBalancer.size(); ++iC) {
-      _block[iC]->setStatisticsEnabled(false);
-    }
-  };
 
   /// Add a non-local post-processing step
   template <typename STAGE=stage::PostStream>

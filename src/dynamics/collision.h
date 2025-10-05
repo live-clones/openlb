@@ -49,7 +49,7 @@ struct None {
   struct type {
     template <concepts::MinimalCell CELL, typename PARAMETERS, typename V=typename CELL::value_t>
     CellStatistic<V> apply(CELL& cell, PARAMETERS& parameters) any_platform {
-      return {-1, -1};
+      return {V(-1), V(-1)};
     };
   };
 };

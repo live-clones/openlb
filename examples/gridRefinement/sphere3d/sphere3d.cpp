@@ -245,10 +245,10 @@ int main(int argc, char* argv[])
   HeuristicLoadBalancer<T> loadBalancerLevel0(cuboidDecompositionLevel0);
   SuperGeometry<T,3> sGeometryLevel0(cuboidDecompositionLevel0, loadBalancerLevel0);
   prepareGeometry(converterLevel0, sGeometryLevel0);
-  SuperLattice<T,DESCRIPTOR> sLatticeLevel0(cuboidDecompositionLevel0,
+  SuperLattice<T,DESCRIPTOR> sLatticeLevel0(converterLevel0,
+                                            cuboidDecompositionLevel0,
                                             loadBalancerLevel0,
-                                            3,
-                                            converterLevel0);
+                                            3);
   prepareLattice(sLatticeLevel0, converterLevel0, sGeometryLevel0);
 
   RefinedLoadBalancer<T,3> loadBalancerLevel1(cuboidDecompositionLevel0,
@@ -258,18 +258,20 @@ int main(int argc, char* argv[])
   converterLevel1.print();
   SuperGeometry<T,3> sGeometryLevel1(cuboidDecompositionLevel1, loadBalancerLevel1);
   prepareGeometryFine(converterLevel1, sGeometryLevel1);
-  SuperLattice<T,DESCRIPTOR> sLatticeLevel1(cuboidDecompositionLevel1,
+  SuperLattice<T,DESCRIPTOR> sLatticeLevel1(converterLevel1,
+                                            cuboidDecompositionLevel1,
                                             loadBalancerLevel1,
-                                            3,
-                                            converterLevel1);
+                                            3);
   prepareLattice(sLatticeLevel1, converterLevel1, sGeometryLevel1);
 
   auto coarseToFine = refinement::lagrava::makeCoarseToFineCoupler(
     sLatticeLevel0, sGeometryLevel0,
-    sLatticeLevel1, sGeometryLevel1);
+    sLatticeLevel1, sGeometryLevel1,
+    sGeometryLevel1.getMaterialIndicator(1));
   auto fineToCoarse = refinement::lagrava::makeFineToCoarseCoupler(
     sLatticeLevel0, sGeometryLevel0,
-    sLatticeLevel1, sGeometryLevel1);
+    sLatticeLevel1, sGeometryLevel1,
+    sGeometryLevel1.getMaterialIndicator(1));
 
   coarseToFine->apply(meta::id<refinement::lagrava::InitializeO>{});
 

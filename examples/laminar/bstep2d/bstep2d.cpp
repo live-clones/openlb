@@ -56,10 +56,10 @@ const T relaxationTime    = 0.518;
 
 
 // Stores geometry information in form of material numbers
-void prepareGeometry( UnitConverter<T,DESCRIPTOR> const& converter,
-                      SuperGeometry<T,2>& superGeometry,
+void prepareGeometry( SuperGeometry<T,2>& superGeometry,
                       std::shared_ptr<IndicatorF2D<T>> channel,
-                      std::shared_ptr<IndicatorF2D<T>> step )
+                      std::shared_ptr<IndicatorF2D<T>> step,
+                      T dx)
 {
   OstreamManager clout( std::cout,"prepareGeometry" );
   clout << "Prepare Geometry ..." << std::endl;
@@ -68,9 +68,9 @@ void prepareGeometry( UnitConverter<T,DESCRIPTOR> const& converter,
   superGeometry.rename(0,2, channel-step);
   superGeometry.rename(2,1,{1,1} );
 
-  Vector<T,2> extendBC_out( 0 + 1.*converter.getPhysDeltaX(),heightChannel );
+  Vector<T,2> extendBC_out( 0 + 1.*dx,heightChannel );
   Vector<T,2> extendBC_in( 0, heightInlet );
-  Vector<T,2> originBC_out( lengthChannel - 1.*converter.getPhysDeltaX(),0 );
+  Vector<T,2> originBC_out( lengthChannel - 1.*dx,0 );
   Vector<T,2> originBC_in( 0, heightStep);
 
   IndicatorCuboid2D<T> inflow( extendBC_in, originBC_in );
@@ -91,14 +91,13 @@ void prepareGeometry( UnitConverter<T,DESCRIPTOR> const& converter,
 }
 
 // Set up the geometry of the simulation
-void prepareLattice( UnitConverter<T,DESCRIPTOR> const& converter,
-                     SuperLattice<T,DESCRIPTOR>& sLattice,
+void prepareLattice( SuperLattice<T,DESCRIPTOR>& sLattice,
                      SuperGeometry<T,2>& superGeometry )
 {
   OstreamManager clout( std::cout,"prepareLattice" );
   clout << "Prepare Lattice ..." << std::endl;
 
-  const T omega = converter.getLatticeRelaxationFrequency();
+  const T omega = sLattice.getUnitConverter().getLatticeRelaxationFrequency();
 
   auto bulkIndicator = superGeometry.getMaterialIndicator({1, 3, 4});
 
@@ -136,11 +135,11 @@ void prepareLattice( UnitConverter<T,DESCRIPTOR> const& converter,
 }
 
 // Generates a slowly increasing inflow for the first iTMaxStart timesteps
-void setBoundaryValues( UnitConverter<T,DESCRIPTOR> const& converter,
-                        SuperLattice<T,DESCRIPTOR>& sLattice, int iT,
+void setBoundaryValues( SuperLattice<T,DESCRIPTOR>& sLattice, int iT,
                         SuperGeometry<T,2>& superGeometry )
 {
   OstreamManager clout( std::cout,"setBoundaryValues" );
+  const UnitConverter<T,DESCRIPTOR>& converter = sLattice.getUnitConverter();
 
   // time for smooth start-up
   int iTmaxStart = converter.getLatticeTime( maxPhysT*0.2 );
@@ -167,13 +166,13 @@ void setBoundaryValues( UnitConverter<T,DESCRIPTOR> const& converter,
 }
 
 // write data to termimal and file system
-void getResults( SuperLattice<T,DESCRIPTOR>& sLattice,
-                 UnitConverter<T,DESCRIPTOR> const& converter, int iT,
+void getResults( SuperLattice<T,DESCRIPTOR>& sLattice, std::size_t iT,
                  SuperGeometry<T,2>& superGeometry, util::Timer<T>& timer,
                  SuperPlaneIntegralFluxVelocity2D<T>& velocityFlux,
                  SuperPlaneIntegralFluxPressure2D<T>& pressureFlux )
 {
   OstreamManager clout( std::cout,"getResults" );
+  const UnitConverter<T,DESCRIPTOR>& converter = sLattice.getUnitConverter();
   SuperVTMwriter2D<T> vtmWriter( "bstep2d" );
 
   if ( iT==0 ) {
@@ -275,13 +274,13 @@ int main( int argc, char* argv[] )
   // Instantiation of a superGeometry
   SuperGeometry<T,2> superGeometry( cuboidDecomposition, loadBalancer );
 
-  prepareGeometry( converter, superGeometry, channel, step );
+  prepareGeometry( superGeometry, channel, step, converter.getPhysDeltaX());
 
   // === 3rd Step: Prepare Lattice ===
-  SuperLattice<T,DESCRIPTOR> sLattice( superGeometry );
+  SuperLattice<T,DESCRIPTOR> sLattice(converter, superGeometry);
 
   //prepare Lattice and set boundaryConditions
-  prepareLattice( converter, sLattice, superGeometry );
+  prepareLattice( sLattice, superGeometry );
 
   // instantiate reusable functors
   SuperPlaneIntegralFluxVelocity2D<T> velocityFlux( sLattice,
@@ -303,11 +302,11 @@ int main( int argc, char* argv[] )
 
   for ( std::size_t iT = 0; iT < converter.getLatticeTime( maxPhysT ); ++iT ) {
     // === 5th Step: Definition of Initial and Boundary Conditions ===
-    setBoundaryValues( converter, sLattice, iT, superGeometry );
+    setBoundaryValues( sLattice, iT, superGeometry );
     // === 6th Step: Collide and Stream Execution ===
     sLattice.collideAndStream();
     // === 7th Step: Computation and Output of the Results ===
-    getResults( sLattice, converter, iT, superGeometry, timer, velocityFlux, pressureFlux );
+    getResults( sLattice, iT, superGeometry, timer, velocityFlux, pressureFlux );
   }
 
   timer.stop();

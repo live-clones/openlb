@@ -33,6 +33,44 @@ namespace olb {
 /// Dynamics combination rules for various forcing schemes
 namespace forcing {
 
+struct PlainGuo {
+  static std::string getName() {
+    return "PlainGuoForcing";
+  }
+
+  template <typename M>
+  using Forced = typename momenta::Forced<M>;
+
+  template <typename DESCRIPTOR, typename MOMENTA>
+  using combined_momenta = typename Forced<MOMENTA>::template type<DESCRIPTOR>;
+
+  template <typename DESCRIPTOR, typename MOMENTA, typename EQUILIBRIUM>
+  using combined_equilibrium = typename EQUILIBRIUM::template type<DESCRIPTOR,Forced<MOMENTA>>;
+
+  template <typename DESCRIPTOR, typename MOMENTA, typename EQUILIBRIUM, typename COLLISION>
+  struct combined_collision {
+    using MomentaF   = typename Forced<MOMENTA>::template type<DESCRIPTOR>;
+    using CollisionO = typename COLLISION::template type<DESCRIPTOR,Forced<MOMENTA>,EQUILIBRIUM>;
+
+    static_assert(COLLISION::parameters::template contains<descriptors::OMEGA>(),
+                  "COLLISION must be parametrized using relaxation frequency OMEGA");
+
+    template <typename CELL, typename PARAMETERS, typename V=typename CELL::value_t>
+    CellStatistic<V> apply(CELL& cell, PARAMETERS& parameters) any_platform {
+      V rho, u[DESCRIPTOR::d];
+      MomentaF().computeRhoU(cell, rho, u);
+      CollisionO().apply(cell, parameters);
+      const V omega = parameters.template get<descriptors::OMEGA>();
+      const auto force = cell.template getField<descriptors::FORCE>();
+      lbm<DESCRIPTOR>::addExternalForce(cell, rho, u, omega, force);
+      return {rho, util::normSqr<V,DESCRIPTOR::d>(u)};
+    };
+  };
+
+  template <typename DESCRIPTOR, typename MOMENTA, typename EQUILIBRIUM, typename COLLISION>
+  using combined_parameters = typename COLLISION::parameters;
+};
+
 /// Dynamics combination rule implementing the forcing scheme by Guo et al.
 template <template <typename> typename Forced = momenta::Forced>
 struct Guo {

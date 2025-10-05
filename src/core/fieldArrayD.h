@@ -257,7 +257,7 @@ public:
   {
     const auto initial = FIELD::template getInitialValue<T,DESCRIPTOR>();
     for (std::size_t i=0; i < count; ++i) {
-      this->getRowPointer(i) = initial;
+      this->setRow(i, initial);
     }
   }
 
@@ -292,7 +292,7 @@ public:
     if (oldCount < newCount) {
       const auto initial = FIELD::template getInitialValue<T,DESCRIPTOR>();
       for (std::size_t i=oldCount; i < newCount; ++i) {
-        this->getRowPointer(i) = initial;
+        this->setRow(i, initial);
       }
     }
   }

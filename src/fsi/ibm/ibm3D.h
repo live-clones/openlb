@@ -172,7 +172,7 @@ public:
     _spreadForceO->template setParameter<fields::converter::PHYS_DELTA_X>(dx);
   }
 
-  void execute()
+  void apply()
   {
     // purge force field
     auto sLattice = _lattices.get(meta::id<names::NavierStokes>{});
@@ -186,10 +186,10 @@ public:
     }
 
     // spread force from membrane to fluid
-    _spreadForceO->execute();
+    _spreadForceO->apply();
 
     // interpolate fluid velocity on membrane surface
-    _interpolateO->execute();
+    _interpolateO->apply();
   }
 };
 

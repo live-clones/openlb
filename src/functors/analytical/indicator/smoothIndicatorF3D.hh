@@ -254,6 +254,78 @@ bool SmoothIndicatorEllipsoid3D<T,S,PARTICLE>::operator()(T output[], const S in
   return false;
 }
 
+// Constructor: SmoothIndicatorSigmoidEllipsoid3D
+template <typename T, typename S, bool PARTICLE>
+SmoothIndicatorSigmoidEllipsoid3D<T,S,PARTICLE>::SmoothIndicatorSigmoidEllipsoid3D(IndicatorEllipsoid3D<S>& ind,
+    S epsilon, Vector<S,3> theta)
+  :SmoothIndicatorSigmoidEllipsoid3D(ind.getCenter(), ind.getRadius(), epsilon, theta)
+{ }
+
+template <typename T, typename S, bool PARTICLE>
+SmoothIndicatorSigmoidEllipsoid3D<T,S,PARTICLE>::SmoothIndicatorSigmoidEllipsoid3D(Vector<S,3> center, Vector<S,3> radius,
+    S epsilon, Vector<S,3> theta)
+  :_ind(center, radius)
+{
+  this->_epsilon = epsilon;
+  if constexpr (!PARTICLE) {
+    this->_pos = center;
+    this->_theta = util::degreeToRadian(theta);
+  }
+
+  T const max_axis = util::max( radius[0], util::max(radius[1], radius[2]) );
+  this->_circumRadius = max_axis+0.5*epsilon;
+  if constexpr (!PARTICLE) {
+    this->_myMin = {
+      this->_pos[0] - this->getCircumRadius(),
+      this->_pos[1] - this->getCircumRadius(),
+      this->_pos[2] - this->getCircumRadius()
+    };
+    this->_myMax = {
+      this->_pos[0] + this->getCircumRadius(),
+      this->_pos[1] + this->getCircumRadius(),
+      this->_pos[2] + this->getCircumRadius()
+    };
+    this->init();
+  }
+}
+
+template <typename T, typename S, bool PARTICLE>
+IndicatorEllipsoid3D<S>& SmoothIndicatorSigmoidEllipsoid3D<T,S,PARTICLE>::getIndicator(){
+  return _ind;
+}
+
+template <typename T, typename S, bool PARTICLE>
+bool SmoothIndicatorSigmoidEllipsoid3D<T,S,PARTICLE>::operator()(T output[], const S input[])
+{
+  Vector<T,3> pos(0.);
+  Vector<T,9> rotMatrix = {1, 0, 0, 0, 1, 0, 0, 0, 1};
+  if constexpr (!PARTICLE) {
+    pos = this->getPos();
+    rotMatrix = this->getRotationMatrix();
+  }
+
+  //1.Calculate distance between point and center of unrotated indicator
+  T xDist = input[0] - pos[0];
+  T yDist = input[1] - pos[1];
+  T zDist = input[2] - pos[2];
+
+  //2.Calculate point projected to rotated indicator
+  // counter-clockwise rotation by _theta=-theta around center
+  T x = pos[0] + rotMatrix[0]*xDist + rotMatrix[3]*yDist + rotMatrix[6]*zDist;
+  T y = pos[1] + rotMatrix[1]*xDist + rotMatrix[4]*yDist + rotMatrix[7]*zDist;
+  T z = pos[2] + rotMatrix[2]*xDist + rotMatrix[5]*yDist + rotMatrix[8]*zDist;
+
+  T a = (x - pos[0]) / (_ind.getRadius()[0] );
+  T b = (y - pos[1]) / (_ind.getRadius()[1] );
+  T c = (z - pos[2]) / (_ind.getRadius()[2] );
+  T sum = a*a+b*b+c*c;
+  // Apply sigmoid for smooth epsilon section
+  T val = 2.*(1. - sum)/this->getEpsilon();
+  output[0] = util::exp(val) / (util::exp(val) + 1.);
+
+  return true;
+}
+
 
 //Constructor: SmoothIndicatorSuperEllipsoid3D
 template <typename T, typename S, bool PARTICLE>

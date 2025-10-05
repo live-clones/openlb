@@ -237,12 +237,12 @@ struct TypeIndexedTuple {
   /// Set value assigned to KEY of MAP
   template <typename KEY>
   constexpr void set(typename MAP::template value<KEY> value) any_platform {
-    get<KEY>() = value;
+    get<KEY>() = std::move(value);
   }
 
   template <typename KEY>
   constexpr void set(meta::id<KEY>, typename MAP::template value<KEY> value) any_platform {
-    get<KEY>() = value;
+    get<KEY>() = std::move(value);
   }
 
   /// Calls f(name, value) for all pairs

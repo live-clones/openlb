@@ -38,7 +38,7 @@
 using namespace olb;
 using namespace olb::opti;
 
-using S = FLOATING_POINT_TYPE;
+using S = double;
 using U = util::ADf<S,1>;
 using DESCRIPTOR = descriptors::D2Q9<>;
 
@@ -221,7 +221,7 @@ T simulatePoiseuille( T inletPressure )
   prepareGeometry( converter, superGeometry );
 
   // === 3rd Step: Prepare Lattice ===
-  SuperLattice<T, DESCRIPTOR> sLattice( superGeometry );
+  SuperLattice<T, DESCRIPTOR> sLattice( converter, superGeometry );
 
   // Prepare lattice and set boundary conditions
   prepareLattice<T>(converter, sLattice, superGeometry, inletPressure);

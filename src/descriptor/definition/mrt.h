@@ -60,6 +60,14 @@ platform_constant Fraction M[Q][Q] = {};
 template <unsigned D, unsigned Q>
 platform_constant Fraction invM[Q][Q] = {};
 
+// Matrix of base change between f and moments (for solids) : moments=M.f
+template <unsigned D, unsigned Q>
+platform_constant Fraction MSolid[Q][Q] = {};
+
+// inverse of base change matrix (for solids) : f=invM.moments
+template <unsigned D, unsigned Q>
+platform_constant Fraction invMSolid[Q][Q] = {};
+
 // relaxation times
 template <unsigned D, unsigned Q>
 platform_constant Fraction s[Q] = {};
@@ -92,6 +100,21 @@ platform_constant_definition Fraction M<2,5>[5][5] = {
   { 0, 0,-1, 0, 1},
   {-4, 1, 1, 1, 1},
   { 0, 1,-1, 1,-1}
+};
+
+/// MRT D2Q9 lattice. The numbering follows the one in Boolakee, O. (2023).
+// A new lattice Boltzmann scheme for linear elastic solids: periodic problems.
+// Computer Methods in Applied Mechanics and Engineering, 404.
+template <>
+platform_constant_definition Fraction MSolid<2,8>[8][8] = {
+  { 1,  0, -1,  0,  1, -1, -1,  1 },
+  { 0,  1,  0, -1,  1,  1, -1, -1 },
+  { 0,  0,  0,  0,  1, -1,  1, -1 },
+  { 1,  1,  1,  1,  2,  2,  2,  2 },
+  { 1, -1,  1, -1,  0,  0,  0,  0 },
+  { 0,  0,  0,  0,  1, -1, -1,  1 },
+  { 0,  0,  0,  0,  1,  1, -1, -1 },
+  { 0,  0,  0,  0,  1,  1,  1,  1 }
 };
 
 /// MRT D2Q9 lattice. The numbering follows the one in "Viscous flow computations
@@ -165,6 +188,18 @@ platform_constant_definition Fraction invM<2,5>[5][5] = {
   {{1, 5},       0, {-1, 2}, { 1, 20}, {-1, 4}},
   {{1, 5}, { 1, 2},       0, { 1, 20}, { 1, 4}},
   {{1, 5},       0, { 1, 2}, { 1, 20}, {-1, 4}}
+};
+
+template <>
+platform_constant_definition Fraction invMSolid<2,8>[8][8] = {
+  { { 1, 2 },        0,        0, { 1, 4 }, { 1, 4 }, {-1, 2 },        0, {-1, 2 } },
+  {        0, { 1, 2 },        0, { 1, 4 }, {-1, 4 },        0, {-1, 2 }, {-1, 2 } },
+  { {-1, 2 },        0,        0, { 1, 4 }, { 1, 4 }, { 1, 2 },        0, {-1, 2 } },
+  {        0, {-1, 2 },        0, { 1, 4 }, {-1, 4 },        0, { 1, 2 }, {-1, 2 } },
+  {        0,        0, { 1, 4 },        0,        0, { 1, 4 }, { 1, 4 }, { 1, 4 } },
+  {        0,        0, {-1, 4 },        0,        0, {-1, 4 }, { 1, 4 }, { 1, 4 } },
+  {        0,        0, { 1, 4 },        0,        0, {-1, 4 }, {-1, 4 }, { 1, 4 } },
+  {        0,        0, {-1, 4 },        0,        0, { 1, 4 }, {-1, 4 }, { 1, 4 } },
 };
 
 template <>
@@ -464,6 +499,31 @@ template <typename DESCRIPTOR>
 constexpr int bulkViscIndex() any_platform
 {
   return bulkViscIndex<DESCRIPTOR::d, DESCRIPTOR::q>(typename DESCRIPTOR::category_tag());
+}
+
+// FSI
+template <typename T, unsigned D, unsigned Q>
+constexpr T mSolid(unsigned iPop, unsigned jPop, tag::MRT)
+{
+  return mrt_data::MSolid<D,Q>[iPop][jPop].template as<T>();
+}
+
+template <typename T, typename DESCRIPTOR>
+constexpr T mSolid(unsigned iPop, unsigned jPop)
+{
+  return mSolid<T, DESCRIPTOR::d, DESCRIPTOR::q>(iPop, jPop, typename DESCRIPTOR::category_tag());
+}
+
+template <typename T, unsigned D, unsigned Q>
+constexpr T invMSolid(unsigned iPop, unsigned jPop, tag::MRT)
+{
+  return mrt_data::invMSolid<D,Q>[iPop][jPop].template as<T>();
+}
+
+template <typename T, typename DESCRIPTOR>
+constexpr T invMSolid(unsigned iPop, unsigned jPop)
+{
+  return invMSolid<T, DESCRIPTOR::d, DESCRIPTOR::q>(iPop, jPop, typename DESCRIPTOR::category_tag());
 }
 
 }  // namespace descriptors

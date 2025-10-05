@@ -92,13 +92,10 @@ template <typename T, unsigned D>
 void Cuboid<T,D>::refine(int factor) {
   if (factor < 1) {
     throw std::invalid_argument("refinement factor must be >= 1");
-  } else if (factor == 2) {
+  } else {
     _delta /= factor;
     _extent *= factor;
-    _extent -= 1;
     _weight *= util::pow(factor,D);
-  } else if (factor != 1) {
-    throw std::invalid_argument("TBD refinement factor must be == 2");
   }
 }
 

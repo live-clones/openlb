@@ -96,7 +96,7 @@ private:
   const S _thicknessPercentage;             // Max Camber Position
 
   // NACA coefficients for thickness distribution formula
-  static constexpr S _coeffs[5] = {0.2969, -0.1260, -0.3516, 0.2843, -0.1036};
+  static constexpr S _coeffs[5] = {0.2969, -0.1260, -0.3516, 0.2843, -0.1015};
   static constexpr S _exponents[5] = {0.5, 1.0, 2.0, 3.0, 4.0};
 
   // Function to compute the local thickness at a given point along the camber line
@@ -132,6 +132,27 @@ public:
   bool normal(Vector<S,2>& normal, const Vector<S,2>& origin, const Vector<S,2>& direction, int iC=-1) override;
   S signedDistance(const Vector<S,2>& input) override;
   using IndicatorF2D<S>::distance;
+};
+
+/// indicator function for a 2D ellipse
+template <typename S>
+class IndicatorEllipse2D : public IndicatorF2D<S> {
+private:
+  const Vector<S,2> _center;
+  const S _a;
+  const S _b;
+  const S _theta;
+  const S _thetaRadian;
+public:
+  IndicatorEllipse2D(Vector<S,2> center, S a, S b, S theta = 0);
+  Vector<S,2> const& getCenter() const;
+  S const getA() const;
+  S const getB() const;
+  S const getTheta() const;
+  S const getThetaRadian() const;
+  bool const distance(S& distance, const Vector<S,2>& point, Vector<S,2>& direction, int iC=-1) const;
+  bool normal(Vector<S,2>& nxny, Vector<S,2> point) const;
+  bool operator() (bool output[], const S input[]) override;
 };
 
 

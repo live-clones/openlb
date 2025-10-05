@@ -108,11 +108,12 @@ struct HalfTimeCoarseToFineO {
         auto n = fields::refinement::CONTEXT_NEIGHBORS::c<DESCRIPTOR>(iN);
         if (n*normal == 0) {
           if (auto ncCellPtr = cCellPtr.neighbor(n)) {
-            nNeighbors += 1;
             auto ncCell = *ncCellPtr;
-            {
-              auto nData = data.neighbor(iN);
+            if (auto nData = data.neighbor(iN)) {
+              nNeighbors += 1;
+              //auto nData = data.neighbor(iN);
               OLB_ASSERT(nData, "Context data must be available by design, check makeCoarseToFineCoupler");
+
               auto rhoPrev  = nData->template getField<fields::refinement::PREV_RHO>();
               auto uPrev    = nData->template getField<fields::refinement::PREV_U>();
               auto fNeqPrev = nData->template getField<fields::refinement::PREV_FNEQ>();
@@ -160,8 +161,17 @@ struct FullTimeCoarseToFineO {
   void apply(COARSE_CELL& cCellPtr, FINE_CELL& fCell, DATA& data, PARAMETERS& params) any_platform {
     using V = typename COARSE_CELL::value_t;
     using DESCRIPTOR = typename COARSE_CELL::descriptor_t;
+
+    #ifdef FEATURE_DEBUG_REFINEMENT
+    fCell.template setField<descriptors::MATERIAL>(1);
+    #endif
+
     if (cCellPtr) {
       auto cCell = *cCellPtr;
+
+      #ifdef FEATURE_DEBUG_REFINEMENT
+      cCell.template setField<descriptors::MATERIAL>(1);
+      #endif
 
       V rho{};
       Vector<V,DESCRIPTOR::d> u{};
@@ -233,6 +243,11 @@ struct FineToCoarseO {
     using V = typename COARSE_CELL::value_t;
     using DESCRIPTOR = typename COARSE_CELL::descriptor_t;
 
+    #ifdef FEATURE_DEBUG_REFINEMENT
+    fCell.template setField<descriptors::MATERIAL>(2);
+    cCell.template setField<descriptors::MATERIAL>(2);
+    #endif
+
     V rho{};
     Vector<V,DESCRIPTOR::d> u{};
     Vector<V,DESCRIPTOR::q> fNeq{};
@@ -262,13 +277,14 @@ std::unique_ptr<SuperLatticeRefinement<T,DESCRIPTOR>> makeCoarseToFineCoupler(
   SuperLattice<T,DESCRIPTOR>& sLatticeCoarse,
   SuperGeometry<T,DESCRIPTOR::d>& sGeometryCoarse,
   SuperLattice<T,DESCRIPTOR>& sLatticeFine,
-  SuperGeometry<T,DESCRIPTOR::d>& sGeometryFine)
+  SuperGeometry<T,DESCRIPTOR::d>& sGeometryFine,
+  FunctorPtr<SuperIndicatorF<T,DESCRIPTOR::d>>&& fineBulkI)
 {
   auto& loadBalancerFine = dynamic_cast<RefinedLoadBalancer<T,DESCRIPTOR::d>&>(
     sLatticeFine.getLoadBalancer());
   auto& loadBalancerCoarse = sLatticeCoarse.getLoadBalancer();
   auto& cDecompositionFine = sLatticeFine.getCuboidDecomposition();
-  const auto& converterCoarse = sLatticeCoarse.getConverter();
+  const auto& converterCoarse = sLatticeCoarse.getUnitConverter();
 
   SuperIndicatorDomainFrontierDistanceF<T,DESCRIPTOR> c2fFrontierI(cDecompositionFine,
                                                                    sGeometryFine,
@@ -290,17 +306,17 @@ std::unique_ptr<SuperLatticeRefinement<T,DESCRIPTOR>> makeCoarseToFineCoupler(
     auto& fBlock = sLatticeFine.getBlock(iC);
 
     fBlock.forSpatialLocations([&](LatticeR<DESCRIPTOR::d> fineLatticeR) {
-      if (c2fFrontierI.getBlockIndicatorF(iC)(fineLatticeR)) {
+      if (   c2fFrontierI.getBlockIndicatorF(iC)(fineLatticeR)
+          && fineBulkI->getBlockIndicatorF(iC)(fineLatticeR)) {
         if (fBlock.isInsideCore(fineLatticeR)) {
           coarseToFine->getBlock(iC).add(fineLatticeR);
         } else {
           // Couple co-incident nodes in overlap s.t. context data for interpolation is available
           if (fineLatticeR % 2 == Vector<int,DESCRIPTOR::d>(0)) {
             coarseToFine->getBlock(iC).add(fineLatticeR);
-
             // Coarse populations need to be up to date for FullTimeCoarseToFineO
             auto coarseLatticeR = (fineLatticeR / 2).withPrefix(
-              loadBalancerCoarse.glob(loadBalancerFine.cloc(iC)));
+              loadBalancerFine.cloc(iC));
             coarseToFineCommunicatorCoarse.requestCell(coarseLatticeR);
           }
         }
@@ -330,7 +346,6 @@ std::unique_ptr<SuperLatticeRefinement<T,DESCRIPTOR>> makeCoarseToFineCoupler(
 
   coarseToFineCommunicatorCoarse.exchangeRequests();
   coarseToFine->setProcessingContext(ProcessingContext::Simulation);
-
   return coarseToFine;
 }
 
@@ -339,12 +354,13 @@ std::unique_ptr<SuperLatticeRefinement<T,DESCRIPTOR>> makeFineToCoarseCoupler(
   SuperLattice<T,DESCRIPTOR>& sLatticeCoarse,
   SuperGeometry<T,DESCRIPTOR::d>& sGeometryCoarse,
   SuperLattice<T,DESCRIPTOR>& sLatticeFine,
-  SuperGeometry<T,DESCRIPTOR::d>& sGeometryFine)
+  SuperGeometry<T,DESCRIPTOR::d>& sGeometryFine,
+  FunctorPtr<SuperIndicatorF<T,DESCRIPTOR::d>>&& fineBulkI)
 {
   auto& loadBalancerFine = dynamic_cast<RefinedLoadBalancer<T,DESCRIPTOR::d>&>(
     sLatticeFine.getLoadBalancer());
   auto& cDecompositionFine = sLatticeFine.getCuboidDecomposition();
-  const auto& converterCoarse = sLatticeCoarse.getConverter();
+  const auto& converterCoarse = sLatticeCoarse.getUnitConverter();
 
   SuperIndicatorDomainFrontierDistanceF<T,DESCRIPTOR> f2cFrontierI(cDecompositionFine,
                                                                    sGeometryFine,
@@ -354,9 +370,9 @@ std::unique_ptr<SuperLatticeRefinement<T,DESCRIPTOR>> makeFineToCoarseCoupler(
     sLatticeCoarse, sLatticeFine, loadBalancerFine);
   for (int iC = 0; iC < loadBalancerFine.size(); ++iC) {
     auto& cBlock = sLatticeCoarse.getBlock(loadBalancerFine.cloc(iC));
-
     cBlock.forCoreSpatialLocations([&](LatticeR<DESCRIPTOR::d> coarseLatticeR) {
-      if (f2cFrontierI.getBlockIndicatorF(iC)(2*coarseLatticeR)) {
+      if (   f2cFrontierI.getBlockIndicatorF(iC)(2*coarseLatticeR)
+          && fineBulkI->getBlockIndicatorF(iC)(2*coarseLatticeR)) {
         fineToCoarse->getBlock(iC).add(2*coarseLatticeR);
       }
     });

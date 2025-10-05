@@ -297,10 +297,10 @@ int main(int argc, char* argv[])
   HeuristicLoadBalancer<T> loadBalancerLevel0(cuboidDecompositionLevel0);
   SuperGeometry<T,2> sGeometryLevel0(cuboidDecompositionLevel0, loadBalancerLevel0);
   prepareGeometry(converterLevel0, sGeometryLevel0, circle, geomParams);
-  SuperLattice<T,DESCRIPTOR> sLatticeLevel0(cuboidDecompositionLevel0,
+  SuperLattice<T,DESCRIPTOR> sLatticeLevel0(converterLevel0,
+                                            cuboidDecompositionLevel0,
                                             loadBalancerLevel0,
-                                            3,
-                                            converterLevel0);
+                                            3);
   prepareLattice(sLatticeLevel0, converterLevel0, sGeometryLevel0, circle);
 
   RefinedLoadBalancer<T,2> loadBalancerLevel1(cuboidDecompositionLevel0,
@@ -310,18 +310,20 @@ int main(int argc, char* argv[])
   converterLevel1.print();
   SuperGeometry<T,2> sGeometryLevel1(cuboidDecompositionLevel1, loadBalancerLevel1);
   prepareGeometryFine(converterLevel1, sGeometryLevel1, circle, geomParams);
-  SuperLattice<T,DESCRIPTOR> sLatticeLevel1(cuboidDecompositionLevel1,
+  SuperLattice<T,DESCRIPTOR> sLatticeLevel1(converterLevel1,
+                                            cuboidDecompositionLevel1,
                                             loadBalancerLevel1,
-                                            3,
-                                            converterLevel1);
+                                            3);
   prepareLattice(sLatticeLevel1, converterLevel1, sGeometryLevel1, circle);
 
   auto coarseToFineLevel1 = refinement::lagrava::makeCoarseToFineCoupler(
     sLatticeLevel0, sGeometryLevel0,
-    sLatticeLevel1, sGeometryLevel1);
+    sLatticeLevel1, sGeometryLevel1,
+    sGeometryLevel1.getMaterialIndicator(1));
   auto fineToCoarseLevel1 = refinement::lagrava::makeFineToCoarseCoupler(
     sLatticeLevel0, sGeometryLevel0,
-    sLatticeLevel1, sGeometryLevel1);
+    sLatticeLevel1, sGeometryLevel1,
+    sGeometryLevel1.getMaterialIndicator(1));
 
   RefinedLoadBalancer<T,2> loadBalancerLevel2(cuboidDecompositionLevel1,
                                               loadBalancerLevel1,
@@ -330,18 +332,20 @@ int main(int argc, char* argv[])
   converterLevel2.print();
   SuperGeometry<T,2> sGeometryLevel2(cuboidDecompositionLevel2, loadBalancerLevel2);
   prepareGeometryFine(converterLevel2, sGeometryLevel2, circle, geomParams);
-  SuperLattice<T,DESCRIPTOR> sLatticeLevel2(cuboidDecompositionLevel2,
+  SuperLattice<T,DESCRIPTOR> sLatticeLevel2(converterLevel2,
+                                            cuboidDecompositionLevel2,
                                             loadBalancerLevel2,
-                                            3,
-                                            converterLevel2);
+                                            3);
   prepareLattice(sLatticeLevel2, converterLevel2, sGeometryLevel2, circle);
 
   auto coarseToFineLevel2 = refinement::lagrava::makeCoarseToFineCoupler(
     sLatticeLevel1, sGeometryLevel1,
-    sLatticeLevel2, sGeometryLevel2);
+    sLatticeLevel2, sGeometryLevel2,
+    sGeometryLevel2.getMaterialIndicator(1));
   auto fineToCoarseLevel2 = refinement::lagrava::makeFineToCoarseCoupler(
     sLatticeLevel1, sGeometryLevel1,
-    sLatticeLevel2, sGeometryLevel2);
+    sLatticeLevel2, sGeometryLevel2,
+    sGeometryLevel2.getMaterialIndicator(1));
 
   coarseToFineLevel1->apply(meta::id<refinement::lagrava::InitializeO>{});
   coarseToFineLevel2->apply(meta::id<refinement::lagrava::InitializeO>{});

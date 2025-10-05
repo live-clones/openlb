@@ -39,7 +39,7 @@ struct OptimalityF {
   using result_t = opti::DJDALPHA<CONTROLS>;
 
   template <typename CELL, typename PARAMETERS>
-  auto compute(CELL& cell, PARAMETERS& parameters) {
+  auto compute(CELL& cell, PARAMETERS& parameters) any_platform {
     using V = typename CELL::value_t;
     using DESCRIPTOR = typename CELL::descriptor_t;
 

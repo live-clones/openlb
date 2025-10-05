@@ -36,7 +36,7 @@ using BulkDynamics = ConstRhoBGKdynamics<T,DESCRIPTOR>;
 extern const T vtkSave;  ///< Interval for writing VTK output (in physical seconds)
 extern const T maxPhysT; ///< Maximum physical time for simulation (seconds)
 
-void prepareGeometry( UnitConverter<T, DESCRIPTOR> const& converter, IndicatorF3D<T>& indicator, SuperGeometry<T,3>& superGeometry )
+void prepareGeometry( T eps, IndicatorF3D<T>& indicator, SuperGeometry<T,3>& superGeometry )
 {
   OstreamManager clout( std::cout,"prepareGeometry" );
   clout << "Prepare Geometry ..." << std::endl;
@@ -45,9 +45,8 @@ void prepareGeometry( UnitConverter<T, DESCRIPTOR> const& converter, IndicatorF3
   superGeometry.rename( 0,2,indicator );
   superGeometry.rename( 2,1,{1,1,1} );
 
-  T eps = converter.getPhysDeltaX();
-  Vector<T,3> origin( -eps, converter.getCharPhysLength() - eps, -eps );
-  Vector<T,3> extend( converter.getCharPhysLength() + 2*eps, 2*eps, converter.getCharPhysLength() + 2*eps );
+  Vector<T,3> origin( -eps, 1.0 - eps, -eps );
+  Vector<T,3> extend( 1.0 + 2*eps, 2*eps, 1.0 + 2*eps );
   IndicatorCuboid3D<T> lid( extend,origin );
 
   superGeometry.rename( 2,3,1,lid );
@@ -196,10 +195,10 @@ void simulateCavity3d( T physVelocity, int N, int sample )
   // Instantiation of a super geometry
   SuperGeometry<T,3> superGeometry( cuboidDecomposition, loadBalancer );
 
-  prepareGeometry( converter, cube, superGeometry );
+  prepareGeometry( converter.getPhysDeltaX(), cube, superGeometry );
 
   // === 3rd Step: Prepare Lattice ===
-  SuperLattice<T, DESCRIPTOR> sLattice( superGeometry );
+  SuperLattice<T, DESCRIPTOR> sLattice( converter, superGeometry );
 
   //prepareLattice and setBoundaryConditions
   prepareLattice( converter, sLattice, superGeometry );

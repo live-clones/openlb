@@ -120,7 +120,8 @@ public:
 
   /// Used to reset simulations
   void resetLattice() {
-    _lattice.reset(new SuperLattice<T,DESCRIPTOR>(*_geometry));
+    _lattice.reset(new SuperLattice<T,DESCRIPTOR>(*_converter, *_geometry));
+    _results->resetResults();
   }
 
   /// Used for differentiating different latticeData instances

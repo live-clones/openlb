@@ -49,7 +49,7 @@ struct None {
       for (int iPop=0; iPop < DESCRIPTOR::q; ++iPop) {
         fEq[iPop] = V{0};
       }
-      return {0, 0};
+      return {V(0), V(0)};
     };
 
     template <typename CELL, typename PARAMETERS, typename FEQ, typename V=typename CELL::value_t>

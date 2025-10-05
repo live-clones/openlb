@@ -56,7 +56,6 @@ EXPLICIT_CLASS_INSTANTIATION := \
 	CyclicColumn \
 	ConcreteBlockO \
 	ConcreteBlockCollisionO \
-	ConcreteBlockCouplingO \
 	ConcreteBlockPointCouplingO \
 	ConcreteBlockRefinementO \
 	ConcreteCommunicatable \
@@ -106,6 +105,16 @@ build/olbcuda.cu: build/missing.txt
 	cat build/missing.txt \
 	| grep '.*\($(subst $() $(),\|,$(EXPLICIT_CLASS_INSTANTIATION))\)<' \
 	| sed -e 's/>::~\?[[:alnum:]]\+\[\?\]\?(.*)/>/' -e 's/.*/template class &;/' -e 's/class void/class/' \
+	| sort | uniq >> $@
+# Handle ConcreteBlockCouplingO
+	cat build/missing.txt \
+	| grep '.*\($(subst $() $(),\|,ConcreteBlockCouplingO)\)<' \
+	| grep -v 'ConcreteBlockCouplingO.*ConcreteBlockCouplingO' \
+	| sed -e 's/>::~\?[[:alnum:]]\+\[\?\]\?(.*)/>/' -e 's/.*/template class &;/' -e 's/class void/class/' \
+	| sort | uniq >> $@
+	cat build/missing.txt \
+  | sed -n 's/\(olb::ConcreteBlockCouplingO.*ConcreteBlockCouplingO.*\)/\1/p' \
+	| sed 's/.*/template &;/' \
 	| sort | uniq >> $@
 # Handle FieldTypeRegistry
 	cat build/missing.txt \

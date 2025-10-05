@@ -3,4 +3,5 @@
 #include "olb3D.h"
 #include "olb3D.hh"
 
+#include "case/case.h"
 #include "cse/cse.h"

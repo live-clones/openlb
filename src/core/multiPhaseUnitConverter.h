@@ -94,74 +94,74 @@ public:
   };
 
   /// return characteristic temperature in physical units
-  constexpr T getCharPhysTemperature(  ) const
+  constexpr T getCharPhysTemperature(  ) const override
   {
     return _charPhysTemperature;
   };
   /// return equation of state parameter a in physical units
-  constexpr T getPhysEoSa(  ) const
+  constexpr T getPhysEoSa(  ) const override
   {
     return _physEoSa;
   };
   /// return equation of state parameter b in physical units
-  constexpr T getPhysEoSb(  ) const
+  constexpr T getPhysEoSb(  ) const override
   {
     return _physEoSb;
   };
   /// return molar mass in physical units
-  constexpr T getPhysMolarMass(  ) const
+  constexpr T getPhysMolarMass(  ) const override
   {
     return _physMolarMass;
   };
   /// return surface tension in physical units
-  constexpr T getPhysSurfaceTension(  ) const
+  constexpr T getPhysSurfaceTension(  ) const override
   {
     return _physSurfaceTension;
   };
   /// return characteristic temperature in physical units
-  constexpr T getPhysTemperature(  ) const
+  constexpr T getPhysTemperature(  ) const override
   {
     return _charPhysTemperature;
   };
 
   /// access (read-only) to private member variable
-  constexpr T getConversionFactorEoSa() const
+  constexpr T getConversionFactorEoSa() const override
   {
     return _conversionEoSa;
   };
 
   /// access (read-only) to private member variable
-  constexpr T getConversionFactorEoSb() const
+  constexpr T getConversionFactorEoSb() const override
   {
     return _conversionEoSb;
   };
 
   /// access (read-only) to private member variable
-  constexpr T getConversionFactorMolarMass() const
+  constexpr T getConversionFactorMolarMass() const override
   {
     return _conversionMolarMass;
   };
 
   /// access (read-only) to private member variable
-  constexpr T getConversionFactorGasConstant() const
+  constexpr T getConversionFactorGasConstant() const override
   {
     return _conversionGasConstant;
   };
 
   /// access (read-only) to private member variable
-  constexpr T getConversionFactorSurfaceTension() const
+  constexpr T getConversionFactorSurfaceTension() const override
   {
     return _conversionSurfaceTension;
   };
 
   /// access (read-only) to private member variable
-  constexpr T getConversionFactorTemperature(  ) const
+  constexpr T getConversionFactorTemperature(  ) const override
   {
     return _conversionTemperature;
   };
 
   /// return lattice surface tension for parameter fitting
-  constexpr T getLatticeSurfaceTension(  ) const
+  constexpr T getLatticeSurfaceTension(  ) const override
   {
     return _latticeSurfaceTension;
   };
@@ -237,38 +237,38 @@ public:
   };
 
   /// access (read-only) to private member variable
-  constexpr T getConversionFactorSurfaceTension() const
+  constexpr T getConversionFactorSurfaceTension() const override
   {
     return _conversionSurfaceTension;
   };
 
   /// access (read-only) to private member variable
-  constexpr T getConversionFactorChemicalPotential() const
+  constexpr T getConversionFactorChemicalPotential() const override
   {
     return _conversionChemicalPotential;
   };
 
   /// compute relaxation time from physical viscosity
-  constexpr T computeRelaxationTimefromPhysViscosity( T userViscosity ) const
+  constexpr T computeRelaxationTimefromPhysViscosity( T userViscosity ) const override
   {
     return 0.5 + descriptors::invCs2<T,DESCRIPTOR>() *
                  userViscosity / this->_conversionViscosity;
   };
 
   /// compute lattice surface tension from physical one
-  constexpr T computeLatticeSurfaceTension( T userSurfaceTension ) const
+  constexpr T computeLatticeSurfaceTension( T userSurfaceTension ) const override
   {
     return userSurfaceTension / this->_conversionSurfaceTension;
   };
 
   /// compute Reynolds from kinematic viscosity
-  constexpr T computeReynolds( T userVelocity, T userLength, T userViscosity ) const
+  constexpr T computeReynolds( T userVelocity, T userLength, T userViscosity ) const override
   {
     return userVelocity * userLength / userViscosity;
   };
 
   /// compute Weber
-  constexpr T computeWeber( T userVelocity, T userLength, T userSurfaceTension ) const
+  constexpr T computeWeber( T userVelocity, T userLength, T userSurfaceTension ) const override
   {
     return userLength * userVelocity * userVelocity / userSurfaceTension;
   };

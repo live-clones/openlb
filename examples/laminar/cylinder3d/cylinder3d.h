@@ -41,10 +41,10 @@ const T Re = 20.;       // Reynolds number
 const T maxPhysT = 16.; // max. simulation time in s, SI unit
 
 // Stores data from stl file in geometry in form of material numbers
-void prepareGeometry( UnitConverter<T,DESCRIPTOR> const& converter, IndicatorF3D<T>& indicator,
-                      STLreader<T>& stlReader, SuperGeometry<T,3>& superGeometry )
+void prepareGeometry( IndicatorF3D<T>& indicator,
+                      STLreader<T>& stlReader, SuperGeometry<T,3>& superGeometry,
+                      T dx)
 {
-
   OstreamManager clout( std::cout,"prepareGeometry" );
   clout << "Prepare Geometry ..." << std::endl;
 
@@ -53,27 +53,27 @@ void prepareGeometry( UnitConverter<T,DESCRIPTOR> const& converter, IndicatorF3D
   superGeometry.clean();
 
   Vector<T,3> origin = superGeometry.getStatistics().getMinPhysR( 2 );
-  origin[1] += converter.getPhysDeltaX()/2.;
-  origin[2] += converter.getPhysDeltaX()/2.;
+  origin[1] += dx/2.;
+  origin[2] += dx/2.;
 
   Vector<T,3> extend = superGeometry.getStatistics().getMaxPhysR( 2 );
-  extend[1] = extend[1]-origin[1]-converter.getPhysDeltaX()/2.;
-  extend[2] = extend[2]-origin[2]-converter.getPhysDeltaX()/2.;
+  extend[1] = extend[1]-origin[1]-dx/2.;
+  extend[2] = extend[2]-origin[2]-dx/2.;
 
   // Set material number for inflow
-  origin[0] = superGeometry.getStatistics().getMinPhysR( 2 )[0]-converter.getPhysDeltaX();
-  extend[0] = 2*converter.getPhysDeltaX();
+  origin[0] = superGeometry.getStatistics().getMinPhysR( 2 )[0]-dx;
+  extend[0] = 2*dx;
   IndicatorCuboid3D<T> inflow( extend,origin );
   superGeometry.rename( 2,3,inflow );
 
   // Set material number for outflow
-  origin[0] = superGeometry.getStatistics().getMaxPhysR( 2 )[0]-converter.getPhysDeltaX();
-  extend[0] = 2*converter.getPhysDeltaX();
+  origin[0] = superGeometry.getStatistics().getMaxPhysR( 2 )[0]-dx;
+  extend[0] = 2*dx;
   IndicatorCuboid3D<T> outflow( extend,origin );
   superGeometry.rename( 2,4,outflow );
 
   // Set material number for cylinder
-  origin[0] = superGeometry.getStatistics().getMinPhysR( 2 )[0]+converter.getPhysDeltaX();
+  origin[0] = superGeometry.getStatistics().getMinPhysR( 2 )[0]+dx;
   extend[0] = ( superGeometry.getStatistics().getMaxPhysR( 2 )[0]-superGeometry.getStatistics().getMinPhysR( 2 )[0] )/2.;
   std::shared_ptr<IndicatorF3D<T>> cylinder = std::make_shared<IndicatorCuboid3D<T>>( extend, origin );
   superGeometry.rename( 2,5, cylinder );
@@ -89,14 +89,13 @@ void prepareGeometry( UnitConverter<T,DESCRIPTOR> const& converter, IndicatorF3D
 
 // Set up the geometry of the simulation
 void prepareLattice( SuperLattice<T,DESCRIPTOR>& sLattice,
-                     UnitConverter<T,DESCRIPTOR> const& converter,
                      STLreader<T>& stlReader,
                      SuperGeometry<T,3>& superGeometry )
 {
   OstreamManager clout( std::cout,"prepareLattice" );
   clout << "Prepare Lattice ..." << std::endl;
 
-  const T omega = converter.getLatticeRelaxationFrequency();
+  const T omega = sLattice.getUnitConverter().getLatticeRelaxationFrequency();
 
   // Material=1 -->bulk dynamics
   auto bulkIndicator = superGeometry.getMaterialIndicator({1});
@@ -141,14 +140,15 @@ void prepareLattice( SuperLattice<T,DESCRIPTOR>& sLattice,
 
 // Generates a slowly increasing inflow for the first iTMaxStart timesteps
 void setBoundaryValues( SuperLattice<T, DESCRIPTOR>& sLattice,
-                        UnitConverter<T,DESCRIPTOR> const& converter, int iT,
+                        std::size_t iT,
                         SuperGeometry<T,3>& superGeometry )
 {
+  const UnitConverter<T,DESCRIPTOR>& converter = sLattice.getUnitConverter();
   OstreamManager clout( std::cout,"setBoundaryValues" );
 
   // No of time steps for smooth start-up
-  int iTmaxStart = converter.getLatticeTime( maxPhysT*0.4 );
-  int iTupdate = 30;
+  std::size_t iTmaxStart = converter.getLatticeTime( maxPhysT*0.4 );
+  std::size_t iTupdate = 30;
 
   if ( iT%iTupdate == 0 && iT <= iTmaxStart ) {
     // Smooth start curve, sinus
@@ -158,7 +158,7 @@ void setBoundaryValues( SuperLattice<T, DESCRIPTOR>& sLattice,
     PolynomialStartScale<T,int> StartScale( iTmaxStart, T( 1 ) );
 
     // Creates and sets the Poiseuille inflow profile using functors
-    int iTvec[1] = {iT};
+    int iTvec[1] = {(int) iT};
     T frac[1] = {};
     StartScale( frac,iTvec );
     std::vector<T> maxVelocity( 3,0 );
@@ -176,14 +176,14 @@ void setBoundaryValues( SuperLattice<T, DESCRIPTOR>& sLattice,
 }
 
 // Computes the pressure drop between the voxels before and after the cylinder
-double getResults( SuperLattice<T, DESCRIPTOR>& sLattice,
-                 UnitConverter<T,DESCRIPTOR> const& converter, int iT,
-                 SuperGeometry<T,3>& superGeometry, util::Timer<T>& timer,
-                 STLreader<T>& stlReader,
-                 Gnuplot<T>& gplot,
-                 bool eoc )
+T getResults( SuperLattice<T, DESCRIPTOR>& sLattice,
+              std::size_t iT,
+              SuperGeometry<T,3>& superGeometry, util::Timer<T>& timer,
+              STLreader<T>& stlReader,
+              Gnuplot<T>& gplot,
+              bool eoc )
 {
-
+  const UnitConverter<T,DESCRIPTOR>& converter = sLattice.getUnitConverter();
   OstreamManager clout( std::cout,"getResults" );
 
   SuperLatticePhysVelocity3D<T, DESCRIPTOR> velocity( sLattice, converter );
@@ -193,8 +193,8 @@ double getResults( SuperLattice<T, DESCRIPTOR>& sLattice,
   SuperRoundingF3D<T, T> roundedQuality ( quality, RoundingMode::NearestInteger );
   SuperDiscretizationF3D<T> discretization ( roundedQuality, 0., 2. );
 
-  const int vtkIter  = converter.getLatticeTime( .3 );
-  const int statIter = converter.getLatticeTime( .1 );
+  const std::size_t vtkIter  = converter.getLatticeTime( .3 );
+  const std::size_t statIter = converter.getLatticeTime( .1 );
 
   T dragCoefficient = 0.;
 
@@ -301,7 +301,7 @@ double getResults( SuperLattice<T, DESCRIPTOR>& sLattice,
 
 }
 
-double simulateCylinder( int N, Gnuplot<T>& gplot, bool eoc )
+T simulateCylinder( int N, Gnuplot<T>& gplot, bool eoc )
 {
 
   // === 1st Step: Initialization ===
@@ -345,13 +345,13 @@ double simulateCylinder( int N, Gnuplot<T>& gplot, bool eoc )
   // Instantiation of a superGeometry
   SuperGeometry<T,3> superGeometry( cuboidDecomposition, loadBalancer );
 
-  prepareGeometry( converter, extendedDomain, stlReader, superGeometry );
+  prepareGeometry( extendedDomain, stlReader, superGeometry, converter.getPhysDeltaX() );
 
   // === 3rd Step: Prepare Lattice ===
-  SuperLattice<T, DESCRIPTOR> sLattice( superGeometry );
+  SuperLattice<T, DESCRIPTOR> sLattice(converter, superGeometry);
 
   //prepareLattice and set boundaryCondition
-  prepareLattice( sLattice, converter, stlReader, superGeometry );
+  prepareLattice( sLattice, stlReader, superGeometry );
 
   // === 4th Step: Main Loop with Timer ===
   clout << "starting simulation..." << std::endl;
@@ -362,7 +362,7 @@ double simulateCylinder( int N, Gnuplot<T>& gplot, bool eoc )
 
   for (std::size_t iT = 0; iT < converter.getLatticeTime( maxPhysT ); ++iT) {
     // === 5th Step: Definition of Initial and Boundary Conditions ===
-    setBoundaryValues( sLattice, converter, iT, superGeometry );
+    setBoundaryValues( sLattice, iT, superGeometry );
 
     // === 6th Step: Collide and Stream Execution ===
     sLattice.collideAndStream();
@@ -370,7 +370,7 @@ double simulateCylinder( int N, Gnuplot<T>& gplot, bool eoc )
     // === 7th Step: Computation and Output of the Results ===
     if (iT % converter.getLatticeTime( .1 ) == 0)
     {
-      drag = getResults( sLattice, converter, iT, superGeometry, timer, stlReader, gplot, eoc );
+      drag = getResults( sLattice, iT, superGeometry, timer, stlReader, gplot, eoc );
     }
   }
 

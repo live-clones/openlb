@@ -24,7 +24,7 @@
 
 using namespace olb;
 
-using T = FLOATING_POINT_TYPE;
+using T = double;
 using DESCRIPTOR = descriptors::DualForcedD3Q19Descriptor;
 using DYNAMICS = ForcedBGKdynamics<T,DESCRIPTOR>;
 
@@ -84,6 +84,7 @@ void setBoundaryValues(UnitConverter<T,DESCRIPTOR>& converter,
     VelocityTestFlow3D<T,T,DESCRIPTOR> velocity(converter);
     AnalyticalScaled3D<T,T> uBoundaryStart(velocity, frac[0] / converter.getConversionFactorVelocity());
     sLattice.defineU(superGeometry, 2, uBoundaryStart);
+    sLattice.template setProcessingContext<Array<momenta::FixedVelocityMomentumGeneric::VELOCITY>>(ProcessingContext::Simulation);
   }
 }
 
@@ -94,7 +95,7 @@ void getResults(UnitConverter<T,DESCRIPTOR>& converter,
   const std::size_t iTvtk = converter.getLatticeTime(physMaxT/5);
   const std::size_t iTlog = converter.getLatticeTime(physMaxT/5);
 
-  // writes the vtk files
+  // Writes the VTK files
   if (iT%iTvtk == 0) {
     results.write(converter, sLattice, iT);
   }
@@ -134,7 +135,7 @@ auto build(std::string name) {
   auto& superGeometry = lData->create<SuperGeometry<T,3>>(cuboidDecomposition, loadBalancer);
   prepareGeometry(superGeometry);
 
-  lData->create<SuperLattice<T,DESCRIPTOR>>(superGeometry);
+  lData->create<SuperLattice<T,DESCRIPTOR>>(converter, superGeometry);
   clout << "Done." << std::endl;
   return lData;
 }

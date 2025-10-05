@@ -1,7 +1,7 @@
 #ifndef PRIMITIVES_H
 #define PRIMITIVES_H
 
-#include "superLatticeO.h"
+#include "singleLatticeO.h"
 
 #include "functors/latticeF.h"
 #include "functors/physF.h"

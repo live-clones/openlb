@@ -68,17 +68,26 @@ public:
   void solve()
   {
     if (! _isInitialized) {
+      //std::cout << "null" << std::endl;
       initialize();
     }
+    //std::cout << "eins" << std::endl;
+    //std::cout << "maxTime lBSolver-Solve-before: " << this->parameters(names::Simulation()).maxTime << std::endl;
+
+    // new
+    _iT = 0;
+    build();
 
     prepareSimulation();
-
+    //std::cout << "zwei" << std::endl;
+    //std::cout << "maxTime lBSolver-Solve-after: " << this->parameters(names::Simulation()).maxTime << std::endl;
     do
     {
       timeStep(_iT);
+      //std::cout << "iterator" << std::endl;
       ++_iT;
     } while (! exitCondition(_iT));
-
+    //std::cout << "drei" << std::endl;
     _finishedTimeLoop = true;
     postSimulation();
   }
@@ -87,6 +96,8 @@ public:
   virtual void postProcess() { }
 
 protected:
+  virtual void build() = 0;
+
   /// Actions that shall be executed before the time-stepping
   virtual void prepareSimulation() = 0;
 
@@ -183,6 +194,8 @@ public:
   void buildAndReturn();
 
 protected:
+  void build() override;
+
   /// Set up lattice and initialize fields
   void prepareSimulation() override;
 
@@ -228,7 +241,7 @@ protected:
 
 private:
   /// Set up geometry and lattices
-  void build();
+  //void build();
   /// Construct and set up a new lattice
   void renewLattices();
 

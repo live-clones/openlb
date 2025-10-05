@@ -101,6 +101,9 @@ public:
   }
 
   /// Request single cell in the padding area for communication
+  /**
+   * latticeR[0] must be the local cuboid ID
+   **/
   void requestCell(LatticeR<SUPER::d+1> latticeR);
   /// Request all cells in overlap of width for communication
   void requestOverlap(int width);

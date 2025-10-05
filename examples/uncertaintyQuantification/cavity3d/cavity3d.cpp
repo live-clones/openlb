@@ -105,7 +105,8 @@ int main( int argc, char* argv[] ) {
 
   // Create main folder to store results
   std::string foldPath = "uq/res_" + std::to_string(resolution) + "/";
-  createDirectory(foldPath, clout);
+  std::string uqFoldPath = foldPath + "uq/";
+  createDirectory(uqFoldPath, clout);
 
   #ifdef MonteCarloSampling
     int nq = 10; // number of samples
@@ -121,9 +122,33 @@ int main( int argc, char* argv[] ) {
 
   auto samples = uq.getSamplingPoints();
 
+
+  clout << "Starting simulation over " << samples.size() << " samples." << std::endl;
+
+  for(int n = 0; n < samples.size(); ++n) {
+    // Create subfolder for this sample
+    std::string subFoldPath = uqFoldPath + std::to_string(n) + "/tmp/";
+    createDirectory(subFoldPath, clout);
+    // Redirect output to this sample's folder
+    singleton::directories().setOutputDir(subFoldPath);
+
+    // Run the cavity3d simulation for this particular sample
+    simulateCavity3d(samples[n][0], resolution, n);
+  }
+
+  // === 6. Post-processing: compute mean, std, and write VTI data ===
+  // The string "physVelocity" is a tag used inside the function, not the variable name.
   Vector<T,3> origin( T( 0 ) );
   Vector<T,3> extend( 1.0 + 0.5 / resolution );
   IndicatorCuboid3D<T> cube( extend,origin );
+  UnitConverterFromResolutionAndRelaxationTime<T, DESCRIPTOR> const converter(
+    int {resolution},     // resolution: number of voxels per charPhysL
+    (T)   0.509, // latticeRelaxationTime: relaxation time, have to be greater than 0.5!
+    (T)   1.0,   // charPhysLength: reference length of simulation geometry
+    (T)   physVelocity,   // charPhysVelocity: maximal/highest expected velocity during simulation in __m / s__
+    (T)   0.001, // physViscosity: physical kinematic viscosity in __m^2 / s__
+    (T)   1.0    // physDensity: physical density in __kg / m^3__
+  );
 
   // Instantiation of a cuboid geometry with weights
   int noCuboids = singleton::mpi().getSize();
@@ -135,21 +160,11 @@ int main( int argc, char* argv[] ) {
   // Instantiation of a super geometry
   SuperGeometry<T,3> superGeometry( cuboidDecomposition, loadBalancer );
 
-  clout << "Starting simulation over " << samples.size() << " samples." << std::endl;
+  singleton::directories().setOutputDir(foldPath + "tmp/");
+  prepareGeometry(1.0 / resolution, cube, superGeometry);
 
-  for(int n = 0; n < samples.size(); ++n) {
-    // Create subfolder for this sample
-    std::string subFoldPath = foldPath + std::to_string(n) + "/tmp/";
-    createDirectory(subFoldPath, clout);
-    // Redirect output to this sample's folder
-    singleton::directories().setOutputDir(subFoldPath);
+  std::vector<int> materials = {1};
 
-    // Run the cavity3d simulation for this particular sample
-    simulateCavity3d(samples[n][0], resolution, n);
-  }
-
-  // === 6. Post-processing: compute mean, std, and write VTI data ===
-  // The string "physVelocity" is a tag used inside the function, not the variable name.
   computeMeanAndStdAndWriteVTI<T, DESCRIPTOR>(uq, foldPath, "cavity3d", "physVelocity",
-        cuboidDecomposition, superGeometry);
+        converter, superGeometry, materials);
 }

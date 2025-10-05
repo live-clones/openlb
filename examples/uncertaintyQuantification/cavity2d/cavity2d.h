@@ -39,7 +39,7 @@ using BulkDynamics = ConstRhoBGKdynamics<T,DESCRIPTOR>;
 extern const T vtkSave;  ///< Interval for writing VTK output (in physical seconds)
 extern const T maxPhysT; ///< Maximum physical time for simulation (seconds)
 
-void prepareGeometry( UnitConverter<T,DESCRIPTOR> const& converter,
+void prepareGeometry( T eps,
                       SuperGeometry<T,2>& superGeometry )
 {
   OstreamManager clout( std::cout,"prepareGeometry" );
@@ -49,7 +49,6 @@ void prepareGeometry( UnitConverter<T,DESCRIPTOR> const& converter,
   superGeometry.rename( 2,1,{1,1} );
   superGeometry.clean();
 
-  T eps = converter.getConversionFactorLength();
   Vector<T,2> extend( T( 1 ) + 2*eps, 2*eps );
   Vector<T,2> origin( T() - eps, T( 1 ) - eps );
   IndicatorCuboid2D<T> lid( extend, origin );
@@ -198,11 +197,11 @@ void simulateCavity2d(T physVelocity, int N, int idx)
 
   HeuristicLoadBalancer<T> loadBalancer( cuboidDecomposition );
   SuperGeometry<T,2> superGeometry( cuboidDecomposition, loadBalancer );
-  prepareGeometry( converter, superGeometry );
+  prepareGeometry( converter.getConversionFactorLength(), superGeometry );
 
   // === 3rd Step: Prepare Lattice ===
 
-  SuperLattice<T, DESCRIPTOR> sLattice( superGeometry );
+  SuperLattice<T, DESCRIPTOR> sLattice( converter, superGeometry );
 
   prepareLattice( converter, sLattice, superGeometry );
 

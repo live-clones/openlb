@@ -43,7 +43,7 @@ namespace olb {
 
 template <typename T, typename DESCRIPTOR, typename TDESCRIPTOR>
 SuperLatticePhysTemperature2D<T,DESCRIPTOR,TDESCRIPTOR>::SuperLatticePhysTemperature2D(
-  SuperLattice<T,TDESCRIPTOR>& sLattice, ThermalUnitConverter<T,DESCRIPTOR,TDESCRIPTOR> const& converter)
+  SuperLattice<T,TDESCRIPTOR>& sLattice, UnitConverter<T,DESCRIPTOR> const& converter)
   : SuperLatticeThermalPhysF2D<T,DESCRIPTOR,TDESCRIPTOR>(sLattice, converter, 1)
 {
   this->getName() = "physTemperature";
@@ -56,7 +56,7 @@ SuperLatticePhysTemperature2D<T,DESCRIPTOR,TDESCRIPTOR>::SuperLatticePhysTempera
 
 template <typename T, typename DESCRIPTOR, typename TDESCRIPTOR>
 BlockLatticePhysTemperature2D<T,DESCRIPTOR,TDESCRIPTOR>::BlockLatticePhysTemperature2D
-(BlockLattice<T,TDESCRIPTOR>& blockLattice, ThermalUnitConverter<T,DESCRIPTOR,TDESCRIPTOR> const& converter)
+(BlockLattice<T,TDESCRIPTOR>& blockLattice, UnitConverter<T,DESCRIPTOR> const& converter)
   : BlockLatticeThermalPhysF2D<T,DESCRIPTOR,TDESCRIPTOR>(blockLattice,converter,1)
 {
   this->getName() = "physTemperature";

@@ -358,7 +358,7 @@ size_t setupCylinder2d()
   prepareGeometry(*converter, *superGeometry, circle, geometryParameters);
 
   // === 3rd Step: Prepare Lattice ===
-  sLattice.reset(new SuperLattice<T, DESCRIPTOR>(*superGeometry));
+  sLattice.reset(new SuperLattice<T, DESCRIPTOR>(*converter, *superGeometry));
 
   //prepareLattice and set boundaryConditions
   prepareLattice(*sLattice, *converter, *superGeometry, circle);

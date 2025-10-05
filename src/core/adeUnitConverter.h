@@ -66,46 +66,46 @@ public:
   };
 
   /// return thermal relaxation time in lattice units
-  constexpr T getLatticeAdeRelaxationTime(  ) const
+  constexpr T getLatticeAdeRelaxationTime(  ) const override
   {
     return _latticeAdeRelaxationTime;
   };
 
   /// return thermal relaxation frequency in lattice units
-  constexpr T getLatticeAdeRelaxationFrequency(  ) const
+  constexpr T getLatticeAdeRelaxationFrequency(  ) const override
   {
     return 1.0 / _latticeAdeRelaxationTime;
   };
 
-  constexpr T getPhysDiffusivity() const
+  constexpr T getPhysDiffusivity() const override
   {
     return _physDiffusivity;
   }
 
-  constexpr T getLatticeDiffusivity() const
+  constexpr T getLatticeDiffusivity() const override
   {
     return _physDiffusivity / _conversionDiffusivity ;
   }
 
-  constexpr T getConversionFactorDiffusivity() const
+  constexpr T getConversionFactorDiffusivity() const override
   {
     return _conversionDiffusivity;
   }
 
 
-  constexpr T getPecletNumber() const
+  constexpr T getPecletNumber() const override
   {
     return this->getCharPhysVelocity()  * this->getCharPhysLength() / this->getPhysDiffusivity();
   }
 
-  constexpr T getKnudsenNumber() const
+  constexpr T getKnudsenNumber() const override
   {
     return this->getMachNumber()/getPecletNumber();
   }
 
   void print() const override;
 
-  void write(std::string const& fileName = "AdeUnitConverter") const override;
+  void write(std::string const& fileName) const override;
 
 protected:
   // lattice units, discretization parameters

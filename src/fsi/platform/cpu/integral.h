@@ -42,7 +42,7 @@ void apply(ConcreteBlockLattice<T,DESCRIPTOR,PLATFORM>& blockLattice) {
 
   const auto& tag = blockLattice.template getField<fields::fsi::REDUCED_ELEMENT_TAG>();
 
-  std::map<int, ParametersD<T,DESCRIPTOR,FIELDS...>> data;
+  std::map<int, StaticParametersD<T,DESCRIPTOR,FIELDS...>> data;
   // Sum up per-element fields
   blockLattice.forCoreSpatialLocations([&](LatticeR<DESCRIPTOR::d> latticeR) {
     const std::size_t iCell = blockLattice.getCellId(latticeR);

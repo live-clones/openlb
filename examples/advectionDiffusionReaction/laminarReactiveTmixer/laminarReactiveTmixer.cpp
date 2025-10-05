@@ -402,7 +402,7 @@ void getResultsCRAD( std::vector<SuperLattice<T, RADDESCRIPTOR>*>& adlattices,
       // Average concentration: use average functor
       SuperAverage3D<T> (densities[2], plane).operator()(result, dummy);
       const T avConc = result[0];
-      if (iX == nX - 4) {  // at outlet
+      if (iX == nX - 8) {  // at outlet
         clout << "av. conc. at outlet = " << avConc << std::endl;
       }
       csvWriter.setData(x, avConc);
@@ -471,11 +471,11 @@ int main( int argc, char* argv[] )
 
   prepareGeometry( converter, superGeometry );
 
-  SuperLattice<T, NSDESCRIPTOR> sLatticeNS( superGeometry );
+  SuperLattice<T, NSDESCRIPTOR> sLatticeNS( converter, superGeometry );
 
   prepareLatticeNS( converter, sLatticeNS, superGeometry );
 
-  SuperLattice<T, RADDESCRIPTOR> CRADlattice( superGeometry );
+  SuperLattice<T, RADDESCRIPTOR> CRADlattice( converterAD, superGeometry );
 
   // initiate reference lattice for coupling, this lattice will be the first component
   std::vector<SuperLattice<T, RADDESCRIPTOR>*> adlattices;
@@ -483,7 +483,7 @@ int main( int argc, char* argv[] )
 
   // initiate further lattices for the remaining components
   for (int i =1; i<3;i++){
-    adlattices.emplace_back( new SuperLattice<T, RADDESCRIPTOR> (superGeometry));
+    adlattices.emplace_back( new SuperLattice<T, RADDESCRIPTOR> ( converterAD, superGeometry));
   }
   // partners are used for coupling; coupled with adlattice[0]
   std::vector<SuperLattice<T, RADDESCRIPTOR>*> partners;
@@ -501,10 +501,10 @@ int main( int argc, char* argv[] )
     if ( i == 2 ) {rhoA = 1.e-8; rhoB = 1.e-8; D = D_P;}
     prepareLatticeCRAD(sLatticeNS, adlattices[i], superGeometry, converter, rhoA, rhoB, D);
   }
-  sLatticeNS.statisticsOff();
-  adlattices[0] -> statisticsOff();
-  adlattices[1] -> statisticsOff();
-  adlattices[2] -> statisticsOff();
+  sLatticeNS.setStatisticsOff();
+  adlattices[0] -> setStatisticsOff();
+  adlattices[1] -> setStatisticsOff();
+  adlattices[2] -> setStatisticsOff();
   T omegaA = converter.getLatticeRelaxationFrequencyFromDiffusivity<RADDESCRIPTOR>( D_A );
   T omegaB = converter.getLatticeRelaxationFrequencyFromDiffusivity<RADDESCRIPTOR>( D_B );
   T omegaP = converter.getLatticeRelaxationFrequencyFromDiffusivity<RADDESCRIPTOR>( D_P );
@@ -537,10 +537,10 @@ int main( int argc, char* argv[] )
 
   for ( std::size_t iT = 0; iT < converter.getLatticeTime( maxPhysT ); ++iT ) {
     if(iT%statIterNS == 0){
-      sLatticeNS.statisticsOn();
+      sLatticeNS.setStatisticsOn();
     }
     if(iT == 0){
-      adlattices[1] -> statisticsOn();
+      adlattices[1] -> setStatisticsOn();
     }
     setBoundaryValues( converter, sLatticeNS, iT, superGeometry );
     sLatticeNS.collideAndStream();
@@ -548,10 +548,10 @@ int main( int argc, char* argv[] )
     if(iT == 0){getResultsCRAD( adlattices, converter, converterAD, iT, superGeometry, timer );}
     if(iT >= converter.getLatticeTime( maxPhysT - maxPhysTAD )){
       if(iT%statIterAD == 0){
-      adlattices[1] -> statisticsOn();
+      adlattices[1] -> setStatisticsOn();
       }
       if(iT%100 == 0){
-        coupling.execute();
+        coupling.apply();
       }
       for (int i = 0; i<3; i++){
         adlattices[i]->collideAndStream();
@@ -559,10 +559,10 @@ int main( int argc, char* argv[] )
       getResultsCRAD( adlattices, converter, converterAD, iT, superGeometry, timer );
     }
     if(iT%statIterNS == 0){
-      sLatticeNS.statisticsOff();
+      sLatticeNS.setStatisticsOff();
     }
     if(iT%statIterAD == 0){
-      adlattices[1] -> statisticsOff();
+      adlattices[1] -> setStatisticsOff();
     }
   }
 

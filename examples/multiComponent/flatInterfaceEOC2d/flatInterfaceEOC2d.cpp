@@ -462,6 +462,15 @@ void simulate( int Ny, int phaseLength, T w, T sigma )
     (T)   DeltaRho                  // physDensity: physical density in __kg / m^3__
   );
 
+  UnitConverter<T,PFDESCRIPTOR> dummy_converter(
+    (T)   converter.getPhysDeltaX(),      // deltaX
+    (T)   converter.getPhysDeltaT(),      // deltaT
+    (T)   converter.getCharPhysLength(),  // from converter
+    (T)   converter.getCharPhysVelocity(),// from converter
+    (T)   converter.getPhysViscosity(),   // from converter
+    (T)   converter.getPhysDensity()      // from converter
+  );
+
   // Prints the converter log as console output
   converter.print();
   clout << "Physical Surface Tension: " << converter.getConversionFactorMass()/converter.getPhysDeltaT()/converter.getPhysDeltaT()*sigma << std::endl;
@@ -486,8 +495,8 @@ void simulate( int Ny, int phaseLength, T w, T sigma )
   prepareGeometry( superGeometry );
 
   // === 3rd Step: Prepare Lattice and Coupling ===
-  SuperLattice<T,NSDESCRIPTOR> sLatticeNS( superGeometry );
-  SuperLattice<T,PFDESCRIPTOR> sLatticePF( superGeometry );
+  SuperLattice<T,NSDESCRIPTOR> sLatticeNS( converter, superGeometry );
+  SuperLattice<T,PFDESCRIPTOR> sLatticePF( dummy_converter, superGeometry );
   SuperLatticeCoupling coupling(
     Coupling{},
     names::NavierStokes{}, sLatticeNS,
@@ -507,7 +516,7 @@ void simulate( int Ny, int phaseLength, T w, T sigma )
   T tobo = helper(sLatticePF,superGeometry);
   coupling.template setParameter<Coupling::NONLOCALITY>(tobo);
 #endif
-  coupling.execute();
+  coupling.apply();
   for ( iT=0; iT<=maxIter; ++iT ) {
     // Collide and stream (and coupling) execution
     sLatticeNS.collideAndStream();
@@ -524,7 +533,7 @@ void simulate( int Ny, int phaseLength, T w, T sigma )
     sLatticePF.executePostProcessors(stage::ChemPotCalc());
     sLatticePF.getCommunicator(stage::PreCoupling()).communicate();
 #endif
-    coupling.execute();
+    coupling.apply();
 
     // Computation and output of the results
     getResults( sLatticeNS, sLatticePF, iT, superGeometry, timer, converter, Ny, phaseLength, w );

@@ -106,6 +106,7 @@ public:
   Vector<S,3> const& getCenter() const;
   S const getRadius() const;
   S signedDistance(const Vector<S,3>& input) override;
+  bool operator() (bool output[], const S input[]) override;
   bool distance(S& distance, const Vector<S,3>& origin,
                 const Vector<S,3>& direction, int iC=-1) override;
   using IndicatorF3D<S>::distance;
@@ -203,6 +204,7 @@ public:
   Vector<S,3> const& getCenter() const;
   Vector<S,3> const& getRadius() const;
   S signedDistance(const Vector<S,3>& input) override;
+  bool operator() (bool output[], const S input[]) override;
 };
 
 

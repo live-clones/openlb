@@ -111,8 +111,8 @@ SuperLattice<T,DESCRIPTOR>::SuperLattice(CuboidDecomposition<T,DESCRIPTOR::d>& d
                                          unsigned overlap)
   : SuperStructure<T,DESCRIPTOR::d>(decomposition,
                                     loadBalancer,
-                                    overlap),
-    _statistics()
+                                    overlap)
+  , _statistics()
 {
   using namespace stage;
 
@@ -157,6 +157,42 @@ SuperLattice<T,DESCRIPTOR>::SuperLattice(CuboidDecomposition<T,DESCRIPTOR::d>& d
 }
 
 template<typename T, typename DESCRIPTOR>
+SuperLattice<T,DESCRIPTOR>::SuperLattice(UnitConverter<T,DESCRIPTOR> converter,
+                                         CuboidDecomposition<T,DESCRIPTOR::d>& decomposition,
+                                         LoadBalancer<T>& loadBalancer,
+                                         unsigned overlap)
+  : SuperLattice(decomposition,
+                 loadBalancer,
+                 overlap)
+{
+  setUnitConverter<DESCRIPTOR>(converter);
+}
+
+
+template<typename T, typename DESCRIPTOR>
+void SuperLattice<T,DESCRIPTOR>::setProcessingContext(ProcessingContext context)
+{
+  // Communicate overlap prior to evaluation
+  if (context == ProcessingContext::Evaluation) {
+    communicate();
+    waitForBackgroundTasks<stage::PreContextSwitchTo<ProcessingContext::Evaluation>>();
+  }
+  for (int iC = 0; iC < this->_loadBalancer.size(); ++iC) {
+    _block[iC]->setProcessingContext(context);
+  }
+}
+
+template<typename T, typename DESCRIPTOR>
+template<typename FIELD_TYPE>
+void SuperLattice<T,DESCRIPTOR>::setProcessingContext(ProcessingContext context) {
+  for (int iC = 0; iC < this->_loadBalancer.size(); ++iC) {
+    if (_block[iC]->template hasData<FIELD_TYPE>()) {
+      _block[iC]->template getData<FIELD_TYPE>().setProcessingContext(context);
+    }
+  }
+}
+
+template<typename T, typename DESCRIPTOR>
 Cell<T,DESCRIPTOR> SuperLattice<T,DESCRIPTOR>::get(LatticeR<DESCRIPTOR::d+1> latticeR)
 {
 #ifdef PARALLEL_MODE_MPI
@@ -188,9 +224,23 @@ SuperLattice<T,DESCRIPTOR>::get(R... latticeR)
 }
 
 template<typename T, typename DESCRIPTOR>
+template <Platform PLATFORM, typename F>
+void SuperLattice<T,DESCRIPTOR>::forBlocksOnPlatform(F f) {
+  for (int iC = 0; iC < this->_loadBalancer.size(); ++iC) {
+    if (_block[iC]->getPlatform() == PLATFORM) {
+      f(static_cast<ConcreteBlockLattice<T,DESCRIPTOR,PLATFORM>&>(*_block[iC]));
+    }
+  }
+}
+
+template<typename T, typename DESCRIPTOR>
 void SuperLattice<T,DESCRIPTOR>::initialize()
 {
   if (!_initialized) {
+    if (!_converter) {
+      throw std::runtime_error("Each SuperLattice must be assigned a UnitConverter");
+    }
+
     for (int iC = 0; iC < this->_loadBalancer.size(); ++iC) {
       _block[iC]->initialize();
     }
@@ -716,6 +766,24 @@ template<typename T, typename DESCRIPTOR>
 LatticeStatistics<T>& SuperLattice<T,DESCRIPTOR>::getStatistics()
 {
   return _statistics;
+}
+
+template<typename T, typename DESCRIPTOR>
+void SuperLattice<T,DESCRIPTOR>::setStatisticsOn()
+{
+  _statisticsEnabled = true;
+  for (int iC = 0; iC < this->_loadBalancer.size(); ++iC) {
+    _block[iC]->setStatisticsEnabled(true);
+  }
+}
+
+template<typename T, typename DESCRIPTOR>
+void SuperLattice<T,DESCRIPTOR>::setStatisticsOff()
+{
+  _statisticsEnabled = false;
+  for (int iC = 0; iC < this->_loadBalancer.size(); ++iC) {
+    _block[iC]->setStatisticsEnabled(false);
+  }
 }
 
 template<typename T, typename DESCRIPTOR>

@@ -24,7 +24,7 @@
 
 using namespace olb;
 
-using T = FLOATING_POINT_TYPE;
+using T = double;
 using DESCRIPTOR = descriptors::DualPorousD3Q19Descriptor;
 using DYNAMICS = PorousBGKdynamics<T,DESCRIPTOR>;
 
@@ -50,7 +50,7 @@ void prepareGeometry(const UnitConverter<T,DESCRIPTOR>& converter,
   Vector<T,3> origin{0.,0.,0.};
   origin[0] += converter.getPhysDeltaX()/2.;
   origin[1] -= converter.getPhysDeltaX()/2.;
-  origin[0] += converter.getPhysDeltaX()/2.;
+  origin[2] += converter.getPhysDeltaX()/2.;
 
   Vector<T,3> extend{physLength, 0., physLength};
   extend[0] -= 2.*converter.getPhysDeltaX()/2.;
@@ -124,6 +124,7 @@ void setBoundaryValues(const UnitConverter<T,DESCRIPTOR>& converter,
 
     AnalyticalConst3D<T,T> uF(0., frac[0] * converter.getCharLatticeVelocity(), 0.);
     sLattice.defineU(superGeometry, 3, uF);
+    sLattice.template setProcessingContext<Array<momenta::FixedVelocityMomentumGeneric::VELOCITY>>(ProcessingContext::Simulation);
   }
 }
 
@@ -136,7 +137,7 @@ void getResults(const UnitConverter<T,DESCRIPTOR>& converter,
   const std::size_t iTlog = converter.getLatticeTime(physMaxT/5);
 
   // Writes the VTK files
-  if (iT%iTvtk == 0 && iT > 0) {
+  if (iT%iTvtk == 0) {
     results.write(converter, sLattice, iT);
   }
 
@@ -162,12 +163,12 @@ auto build(std::string name) {
     physViscosity,     // physViscosity: physical kinematic viscosity in [m^2/s]
     physDensity        // physDensity: physical density [kg/m^3]
   );
+  converter.print();
 
   // === 2nd Step: Prepare Geometry ===
   Vector extend{physLength, physLength, physLength};
   Vector origin{0, 0, 0};
   IndicatorCuboid3D<T> cuboid(extend, origin);
-  // This seems to be expensive, so maybe use the same cD for all simulations? (maybe shared_ptr here)
   auto& cuboidDecomposition = lData->create<CuboidDecomposition3D<T>>(cuboid, converter.getPhysDeltaX(),singleton::mpi().getSize());
 
   auto& loadBalancer = lData->create<HeuristicLoadBalancer<T>>(cuboidDecomposition);
@@ -175,7 +176,7 @@ auto build(std::string name) {
   auto& superGeometry = lData->create<SuperGeometry<T,3>>(cuboidDecomposition, loadBalancer);
   prepareGeometry(converter, superGeometry);
 
-  lData->create<SuperLattice<T,DESCRIPTOR>>(superGeometry);
+  lData->create<SuperLattice<T,DESCRIPTOR>>(converter, superGeometry);
   clout << "Done." << std::endl;
   return lData;
 }

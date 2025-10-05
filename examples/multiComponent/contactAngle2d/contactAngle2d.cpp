@@ -340,6 +340,15 @@ void simulate( int diameter )
     (T)   DeltaRho                  // physDensity: physical density in __kg / m^3__
   );
 
+  UnitConverter<T,CHDESCRIPTOR> dummy_converter(
+    (T)   converter.getPhysDeltaX(),      // deltaX
+    (T)   converter.getPhysDeltaT(),      // deltaT
+    (T)   converter.getCharPhysLength(),  // from converter
+    (T)   converter.getCharPhysVelocity(),// from converter
+    (T)   converter.getPhysViscosity(),   // from converter
+    (T)   converter.getPhysDensity()      // from converter
+  );
+
   // Prints the converter log as console output
   converter.print();
   // === 2nd Step: Prepare Geometry ===
@@ -363,8 +372,8 @@ void simulate( int diameter )
   prepareGeometry( superGeometry );
 
   // === 3rd Step: Prepare Lattice ===
-  SuperLattice<T,NSDESCRIPTOR> sLatticeNS( superGeometry );
-  SuperLattice<T,CHDESCRIPTOR> sLatticeCH( superGeometry );
+  SuperLattice<T,NSDESCRIPTOR> sLatticeNS( converter, superGeometry );
+  SuperLattice<T,CHDESCRIPTOR> sLatticeCH( dummy_converter, superGeometry );
   SuperLatticeCoupling coupling(
       WellBalancedCahnHilliardPostProcessor{},
       names::NavierStokes{}, sLatticeNS,
@@ -392,7 +401,7 @@ void simulate( int diameter )
     sLatticeCH.executePostProcessors(stage::ChemPotCalc());
     sLatticeCH.getCommunicator(stage::PreCoupling()).communicate();
 
-    coupling.execute();
+    coupling.apply();
 
     // Computation and output of the results
     T angle = getResults( sLatticeNS, sLatticeCH, iT, superGeometry, timer, converter );

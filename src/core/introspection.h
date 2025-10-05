@@ -1,6 +1,6 @@
 /*  This file is part of the OpenLB library
  *
- *  Copyright (C) 2024 Adrian Kummerlaender
+ *  Copyright (C) 2024-2025 Adrian Kummerlaender, Shota Ito
  *  E-mail contact: info@openlb.net
  *  The most recent release of OpenLB can be downloaded at
  *  <http://www.openlb.net/>
@@ -33,6 +33,8 @@
 #include "olbInit.h"
 
 #include "cse/symbolGenerator.h"
+
+#include "solver/names.h"
 
 namespace olb {
 
@@ -251,6 +253,108 @@ std::set<FieldTypePromise<T,DESCRIPTOR>> getFieldsAccessedByOperator() {
                       std::inserter(accessed, accessed.end()));
   return accessed;
 }
+
+namespace coupling_helpers {
+
+template <typename VALUED_DESCRIPTOR>
+using ptr_to_lattice = ConcreteBlockLattice<typename VALUED_DESCRIPTOR::value_t,
+                                            typename VALUED_DESCRIPTOR::descriptor_t,
+                                            Platform::CPU_SISD>*;
+template <typename VALUED_DESCRIPTOR>
+using unique_ptr_to_lattice = std::unique_ptr<ConcreteBlockLattice<typename VALUED_DESCRIPTOR::value_t,
+                                                                   typename VALUED_DESCRIPTOR::descriptor_t,
+                                                                   Platform::CPU_SISD>>;
+template <typename VALUED_DESCRIPTOR>
+using set_of_fields = std::set<FieldTypePromise<typename VALUED_DESCRIPTOR::value_t,
+                                                typename VALUED_DESCRIPTOR::descriptor_t>>;
+
+}
+
+template <typename COUPLER, typename COUPLEES>
+[[gnu::noinline]]
+auto getFieldsAccessedByCoupling() {
+  using namespace coupling_helpers;
+
+  using tuple_of_field_sets = typename utilities::TypeIndexedTuple<
+    typename COUPLEES::template map_values<
+      set_of_fields
+    >
+  >;
+
+  // Access raw lattice pointers via names (KEYs), used to construct ConcreteBlockCouplingO
+  utilities::TypeIndexedTuple<typename COUPLEES::template map_values<
+    ptr_to_lattice>
+  > ptr_to_lattices;
+  // Store the dummy lattices as unique ptrs
+  utilities::TypeIndexedTuple<typename COUPLEES::template map_values<
+    unique_ptr_to_lattice>
+  > unique_ptr_to_lattices;
+
+  // Fill tuples from template meta::map
+  COUPLEES::keys_t::for_each([&](auto id) {
+    using NAME = typename decltype(id)::type;
+    using T = typename COUPLEES::template value<NAME>::value_t;
+    using DESCRIPTOR = typename COUPLEES::template value<NAME>::descriptor_t;
+    unique_ptr_to_lattices.template set<NAME>(std::make_unique<ConcreteBlockLattice<T,
+                                                                                    DESCRIPTOR,
+                                                                                    Platform::CPU_SISD
+                                                                                   >>(1, 3));
+    auto& lattice = *(unique_ptr_to_lattices.template get<NAME>());
+    lattice.setStatisticsEnabled(false);
+    lattice.setIntrospectability(false);
+    ptr_to_lattices.template set<NAME>(&lattice);
+  });
+  // Construct concrete block coupling
+  ConcreteBlockCouplingO<COUPLEES,Platform::CPU_SISD,COUPLER,COUPLER::scope> coupling(ptr_to_lattices);
+
+  // Retrieve fields for each lattice before coupling
+  tuple_of_field_sets fieldsPreCoupling;
+  COUPLEES::keys_t::for_each([&](auto id) {
+    using NAME = typename decltype(id)::type;
+    using T = typename COUPLEES::template value<NAME>::value_t;
+    using DESCRIPTOR = typename COUPLEES::template value<NAME>::descriptor_t;
+    auto& lattice = *(unique_ptr_to_lattices.template get<NAME>());
+
+    std::set<FieldTypePromise<T,DESCRIPTOR>> preCoupling;
+    lattice.getData().forEach([&](auto& anyFieldType) {
+      preCoupling.emplace(anyFieldType.getPromise());
+    });
+    fieldsPreCoupling.template set<NAME>(preCoupling);
+  });
+
+  coupling.apply();
+
+  // Get fields for each lattice after coupling
+  tuple_of_field_sets fieldsPostCoupling;
+  COUPLEES::keys_t::for_each([&](auto id) {
+    using NAME = typename decltype(id)::type;
+    using T = typename COUPLEES::template value<NAME>::value_t;
+    using DESCRIPTOR = typename COUPLEES::template value<NAME>::descriptor_t;
+    auto& lattice = *(unique_ptr_to_lattices.template get<NAME>());
+
+    std::set<FieldTypePromise<T,DESCRIPTOR>> postCoupling;
+    lattice.getData().forEach([&](auto& anyFieldType) {
+      postCoupling.emplace(anyFieldType.getPromise());
+    });
+    fieldsPostCoupling.template set<NAME>(postCoupling);
+  });
+
+  // Compare sets to obtain the accessed fields
+  tuple_of_field_sets accessedFields;
+  COUPLEES::keys_t::for_each([&](auto id) {
+    using NAME = typename decltype(id)::type;
+    auto& accessed = accessedFields.template get<NAME>();
+    auto& preCoupling = fieldsPreCoupling.template get<NAME>();
+    auto& postCoupling = fieldsPostCoupling.template get<NAME>();
+    std::set_difference(postCoupling.begin(), postCoupling.end(),
+                        preCoupling.begin(), preCoupling.end(),
+                        std::inserter(accessed, accessed.end()));
+    accessedFields.template set<NAME>(accessed);
+  });
+
+  return accessedFields;
+}
+
 
 /// Returns estimate of number of scalar reads and writes for DYNAMICS::collide
 template <typename DYNAMICS>

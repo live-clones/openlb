@@ -1,6 +1,6 @@
 /*  This file is part of the OpenLB library
  *
- *  Copyright (C) 2024 Christoph Gaul
+ *  Copyright (C) 2025 Christoph Gaul
  *  E-mail contact: info@openlb.net
  *  The most recent release of OpenLB can be downloaded at
  *  <http://www.openlb.net/>
@@ -24,7 +24,7 @@
 #ifndef VTU_SURFACE_WRITER_HH
 #define VTU_SURFACE_WRITER_HH
 
-#include "vtuSurfaceWriter.h"
+#include "vtuSurfaceWriterSerialized.h"
 
 #include <cmath>
 #include <unordered_set>

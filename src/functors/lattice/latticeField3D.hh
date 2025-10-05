@@ -55,7 +55,14 @@ BlockLatticeField3D<T,DESCRIPTOR,FIELD>::BlockLatticeField3D(
 template<typename T, typename DESCRIPTOR, typename FIELD>
 bool BlockLatticeField3D<T,DESCRIPTOR,FIELD>::operator()(T output[], const int input[])
 {
-  this->_blockLattice.get(input[0], input[1], input[2]).template computeField<FIELD>(output);
+  auto fieldD = this->_blockLattice.get(input).template getField<FIELD>();
+  if constexpr (DESCRIPTOR::template size<FIELD>() == 1) {
+    output[0] = static_cast<T>(fieldD);
+  } else {
+    for (unsigned iD=0; iD < DESCRIPTOR::template size<FIELD>(); ++iD) {
+      output[iD] = static_cast<T>(fieldD[iD]);
+    }
+  }
   return true;
 }
 

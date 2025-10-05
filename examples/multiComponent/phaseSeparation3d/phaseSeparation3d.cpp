@@ -174,6 +174,16 @@ int main( int argc, char *argv[] )
   initialize( &argc, &argv );
   singleton::directories().setOutputDir( "./tmp/" );
   OstreamManager clout( std::cout,"main" );
+
+  UnitConverterFromResolutionAndRelaxationTime<T,DESCRIPTOR> converter(
+    (T)   nx, // resolution
+    (T)   1., // lattice relaxation time (tau)
+    (T)   1e-5, // charPhysLength: reference length of simulation geometry
+    (T)   1.e-6, // charPhysVelocity: maximal/highest expected velocity during simulation in __m / s__
+    (T)   0.1, // physViscosity: physical kinematic viscosity in __m^2 / s__
+    (T)   1. // physDensity: physical density in __kg / m^3__
+  );
+
   // display messages from every single mpi process
   //clout.setMultiOutput(true);
 
@@ -199,7 +209,7 @@ int main( int argc, char *argv[] )
   prepareGeometry( superGeometry );
 
   // === 3rd Step: Prepare Lattice ===
-  SuperLattice<T, DESCRIPTOR> sLattice( superGeometry );
+  SuperLattice<T, DESCRIPTOR> sLattice( converter, superGeometry );
 
   prepareLattice( sLattice, superGeometry );
 

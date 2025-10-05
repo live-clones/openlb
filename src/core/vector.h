@@ -33,6 +33,7 @@
 #include <cstring>
 #include <type_traits>
 #include <array>
+#include <optional>
 
 #include "scalarVector.h"
 #include "utilities/omath.h"
@@ -246,6 +247,8 @@ public:
     currentBlock++;
     return dataPtr;
   }
+
+  static std::optional<Vector<T,D>> fromString(const std::string& input);
 
 };
 
@@ -474,6 +477,31 @@ constexpr T max(const ScalarVector<T,D,IMPL>& v)
   return max;
 }
 
+template <typename T, unsigned D>
+std::optional<Vector<T,D>> Vector<T,D>::fromString(const std::string& input) {
+  Vector<T,D> o;
+  std::stringstream is(input);
+  char c = 0;
+  // Consume leading whitespace and check for '['
+  if (!(is >> std::ws >> c) || c != '[') {
+    return std::nullopt;
+  }
+  for (unsigned i=0; i < D; ++i) {
+    if (!(is >> o[i])) {
+      return std::nullopt;
+    }
+  }
+  // Consume internal whitespace and check for ']'
+  if (!(is >> std::ws >> c) || c != ']') {
+    return std::nullopt;
+  }
+  // Check that there is nothing left in the stream but whitespace
+  is >> std::ws;
+  if (!is.eof()) {
+    return std::nullopt;
+  }
+  return o;
+}
 
 /// Vector storing a single field instance
 template<typename T, typename DESCRIPTOR, typename FIELD>

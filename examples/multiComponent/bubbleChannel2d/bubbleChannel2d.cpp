@@ -330,6 +330,15 @@ void simulate( T Re )
     (T)   rhos[1]               // physDensity: physical density in __kg / m^3__
   );
 
+  UnitConverter<T,ACDESCRIPTOR> dummy_converter(
+    (T)   converter.getPhysDeltaX(),      // deltaX
+    (T)   converter.getPhysDeltaT(),      // deltaT
+    (T)   converter.getCharPhysLength(),  // from converter
+    (T)   converter.getCharPhysVelocity(),// from converter
+    (T)   converter.getPhysViscosity(),   // from converter
+    (T)   converter.getPhysDensity()      // from converter
+  );
+
   // Prints the converter log as console output
   converter.print();
   T u_phys = Re*viscosityH2O/(L_char/diameter*(Ny-1.));
@@ -355,8 +364,8 @@ void simulate( T Re )
   prepareGeometry( superGeometry, dx );
 
   // === 3rd Step: Prepare Lattice ===
-  SuperLattice<T,NSDESCRIPTOR> sLatticeNS( superGeometry );
-  SuperLattice<T,ACDESCRIPTOR> sLatticeAC( superGeometry );
+  SuperLattice<T,NSDESCRIPTOR> sLatticeNS( converter, superGeometry );
+  SuperLattice<T,ACDESCRIPTOR> sLatticeAC( dummy_converter, superGeometry );
   SuperLatticeCoupling coupling(
       LiangPostProcessor{},
       names::NavierStokes{}, sLatticeNS,
@@ -390,8 +399,8 @@ void simulate( T Re )
     }
     sLatticeAC.getCommunicator(stage::PreCoupling()).communicate();
 
-    coupling.execute();
-    velocityCoupling.execute();
+    coupling.apply();
+    velocityCoupling.apply();
 
     T uMax = helperConvectiveU(sLatticeNS,superGeometry,dx);
     sLatticeAC.setParameter<descriptors::MAX_VELOCITY>( uMax );

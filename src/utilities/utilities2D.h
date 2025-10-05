@@ -26,6 +26,7 @@
  */
 
 #include "aDiff.h"
+#include "floatingPointRelationalOperators.h"
 #include "adHelpers.h"
 #include "benchmarkUtil.h"
 #include "calc.h"

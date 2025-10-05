@@ -266,9 +266,7 @@ private:
 
 public:
   template <typename LATTICES>
-  ConcreteBlockCouplingO(LATTICES&& lattices):
-    _lattices{lattices}
-  { }
+  ConcreteBlockCouplingO(LATTICES&& lattices);
 
   std::type_index id() const override {
     return typeid(COUPLER);
@@ -280,7 +278,7 @@ public:
 
   void set(CellID iCell, bool state) override;
 
-  void execute() override;
+  void apply() override;
 
 };
 
@@ -307,9 +305,7 @@ private:
 
 public:
   template <typename LATTICES>
-  ConcreteBlockCouplingO(LATTICES&& lattices):
-    _lattices{lattices}
-  { }
+  ConcreteBlockCouplingO(LATTICES&& lattices);
 
   std::type_index id() const override {
     return typeid(COUPLER);
@@ -321,7 +317,7 @@ public:
 
   void set(CellID iCell, bool state) override;
 
-  void execute() override;
+  void apply() override;
 
 };
 
@@ -379,7 +375,7 @@ public:
 
   void set(CellID iCell, bool state) override;
 
-  void execute() override;
+  void apply() override;
 
 };
 

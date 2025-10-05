@@ -72,7 +72,7 @@ void OptiCaseDual<S,SOLVER,CONTROLLED_FIELD,PRIMAL_DYNAMICS,C>::initialize(XMLre
   _primalSolver->initialize();
   _controlIndicator = _primalSolver->parameters(names::Opti()).designDomain;
   _primalGeometry = _primalSolver->parameters(names::Results()).geometry;
-  _refLattice = std::make_shared<SuperLattice<S,descriptor>>(*_primalGeometry);
+  _refLattice = std::make_shared<SuperLattice<S,descriptor>>(*_converter, *_primalGeometry);
 
   _serializer = std::make_shared<SimpleGeometrySerializer<S,dim>>(*_primalGeometry);
   _dimCtrl = _serializer->getNoCells() * fieldDim;

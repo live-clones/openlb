@@ -5,6 +5,7 @@
  */
 
 #ifndef DISABLE_CSE
+#include "optimization/dynamics/dual.h"
 
 //AdvectionDiffusionBoundariesDynamics<Expr, descriptors::D2Q5<>, dynamics::Tuple<Expr, descriptors::D2Q5<>, momenta::Tuple<momenta::BulkDensity, momenta::BulkMomentum, momenta::NoStress, momenta::DefineToEq>, equilibria::FirstOrder, collision::AdvectionDiffusionRLB, AdvectionDiffusionExternalVelocityCollision>, momenta::Tuple<momenta::FixedDensity, momenta::FixedVelocityMomentumGeneric, momenta::ZeroStress, momenta::DefineSeparately>, 0, -1>
 #include "520ddfe15706bf9584b216a07a88cc605558a661a613e6c938153530205a188c.cse.h"
@@ -425,6 +426,33 @@
 
 //SourcedAdvectionDiffusionBGKdynamics<Expr, descriptors::D3Q7<> >
 #include "470e1c8a901b03cfb11df33b2a3e79a1db6d02b5c1c14c161b981b0f85132c49.cse.h"
+
+//dynamics::Tuple<Expr, descriptors::D2Q9<>, momenta::Tuple<momenta::BulkDensity, momenta::BulkMomentum, momenta::BulkStress, momenta::DefineToNEq>, equilibria::SecondOrder, collision::BGK, forcing::fsi::HLBM>
+#include "6c18c57dbf6124f241e5d4d5bbda6ab781f5ce214108cb33f511ece9f8e92657.cse.h"
+
+//dynamics::Tuple<Expr, descriptors::D3Q19<>, momenta::Tuple<momenta::BulkDensity, momenta::BulkMomentum, momenta::BulkStress, momenta::DefineToNEq>, equilibria::SecondOrder, collision::DualForcedBGK, dynamics::DefaultCombination>
+#include "786656673556767ec83220e0986aca7ad1f3c8266dfcb77341fa138b0aef5e98.cse.h"
+
+//Dual<dynamics::Tuple<Expr, descriptors::D3Q19<>, momenta::Tuple<momenta::BulkDensity, momenta::BulkMomentum, momenta::BulkStress, momenta::DefineToNEq>, equilibria::SecondOrder, collision::BGK, forcing::PlainGuo>, Expr, descriptors::D3Q19<>  >
+#include "fd61932081562ef460bebf611b6a9efa5b9ddccef44a7c28f1aaaa935bc71ad2.cse.h"
+
+//Dual<dynamics::Tuple<Expr, descriptors::D3Q19<>, momenta::Porous<momenta::Tuple<momenta::BulkDensity, momenta::BulkMomentum, momenta::BulkStress, momenta::DefineToNEq> >, equilibria::SecondOrder, collision::BGK, dynamics::DefaultCombination>, Expr, descriptors::D3Q19<> >
+#include "dfa2c0aef7f277a748e95f9dba29c3994370e1c113edf681dffb27d9b06913cb.cse.h"
+
+//dynamics::Tuple<Expr, descriptors::D3Q19<>, momenta::Tuple<momenta::BulkDensity, momenta::BulkMomentum, momenta::BulkStress, momenta::DefineToNEq>, equilibria::SecondOrder, collision::DualPorousBGK, dynamics::DefaultCombination>
+#include "d74bab8b6592f03b33b57c6338e0effe804696fd3c431ed5c569ce2418ee4be0.cse.h"
+
+//ZouHeDynamics<Expr, descriptors::D3Q19<>, dynamics::Tuple<Expr, descriptors::D3Q19<>, momenta::Tuple<momenta::BulkDensity, momenta::BulkMomentum, momenta::BulkStress, momenta::DefineToNEq>, equilibria::SecondOrder, collision::BGK, dynamics::DefaultCombination>, momenta::Tuple<momenta::FixedDensity, momenta::FixedPressureMomentum<1, 1>, momenta::BulkStress, momenta::DefineSeparately>, 1, 1>
+#include "b2873eb56072f9bda6a613ad5b2f6ee5cc17f904f325258747a24cd9a29ab5ff.cse.h"
+
+//ZouHeDynamics<Expr, descriptors::D3Q19<>, dynamics::Tuple<Expr, descriptors::D3Q19<>, momenta::Tuple<momenta::BulkDensity, momenta::BulkMomentum, momenta::BulkStress, momenta::DefineToNEq>, equilibria::SecondOrder, collision::BGK, dynamics::DefaultCombination>, momenta::Tuple<momenta::VelocityBoundaryDensity<1, -1>, momenta::FixedVelocityMomentumGeneric, momenta::BulkStress, momenta::DefineSeparately>, 1, -1>
+#include "07df5fdabed80ae29f75f5081d1dd7cfeda7b39342ae293b0fce815e21d8cbcd.cse.h"
+
+//Dual<ZouHeDynamics<Expr, descriptors::D3Q19<>, dynamics::Tuple<Expr, descriptors::D3Q19<>, momenta::Tuple<momenta::BulkDensity, momenta::BulkMomentum, momenta::BulkStress, momenta::DefineToNEq>, equilibria::SecondOrder, collision::BGK, dynamics::DefaultCombination>, momenta::Tuple<momenta::VelocityBoundaryDensity<1, -1>, momenta::FixedVelocityMomentumGeneric, momenta::BulkStress, momenta::DefineSeparately>, 1, -1>, Expr, descriptors::D3Q19<> >
+#include "124218f5b14885acadbfbd669c790acf3217b1e4d9f30cf63d1a4fa9d088294a.cse.h"
+
+//Dual<ZouHeDynamics<Expr, descriptors::D3Q19<>, dynamics::Tuple<Expr, descriptors::D3Q19<>, momenta::Tuple<momenta::BulkDensity, momenta::BulkMomentum, momenta::BulkStress, momenta::DefineToNEq>, equilibria::SecondOrder, collision::BGK, dynamics::DefaultCombination>, momenta::Tuple<momenta::VelocityBoundaryDensity<1, 1>, momenta::FixedVelocityMomentumGeneric, momenta::BulkStress, momenta::DefineSeparately>, 1, 1>, Expr, descriptors::D3Q19<> >
+#include "27baeec720136c8e5e2615390b7c738c10efd69fcda3871f9ae89d9b0226514e.cse.h"
 
 //SpongeLayerDynamics<Expr, descriptors::D3Q19<>, momenta::Tuple<momenta::BulkDensity, momenta::BulkMomentum, momenta::BulkStress, momenta::DefineToNEq>, equilibria::SecondOrder>
 #include "86789783378d00a3814b44791228f66b5679d9c3d3f55b0edb29a3a5c4b4e3c5.cse.h"

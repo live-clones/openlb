@@ -133,6 +133,10 @@ class TestFlowBase : virtual public LbSolver<T,PARAMETERS,LATTICES>
 private:
   mutable OstreamManager            clout {std::cout, "TestFlowSolver"};
 
+protected:
+  /// use reverse AD generated dynamics for dual problem
+  static constexpr bool                   _useNewDynamics {true};
+
 public:
   TestFlowBase(utilities::TypeIndexedSharedPtrTuple<PARAMETERS> params)
    : TestFlowBase::LbSolver(params)
@@ -318,6 +322,7 @@ protected:
       auto& lattice = this->lattice();
       auto& superGeometry = this->geometry();
       auto& results = this->parameters(Errors());
+      const bool verbose = this->parameters(Output()).verbose;
 
       OstreamManager clout(std::cout,"error");
 
@@ -340,74 +345,105 @@ protected:
       SuperL1Norm3D<T> uSolL1Norm(uSolLattice,superGeometry,1);
       uL1Norm(result,tmp); uSolL1Norm(result1,tmp);
       results.velocityAbsL1Error = result[0];
-      clout << "velocity-L1-error(abs)=" << result[0] << "; velocity-L1-error(rel)=" << result[0]/result1[0] << std::endl;
+      if (verbose)
+        clout << "velocity-L1-error(abs)=" << result[0] << "; velocity-L1-error(rel)=" << result[0]/result1[0] << std::endl;
 
       SuperL2Norm3D<T> uL2Norm(uSolLattice-u,superGeometry,1);
       SuperL2Norm3D<T> uSolL2Norm(uSolLattice,superGeometry,1);
       uL2Norm(result,tmp); uSolL2Norm(result1,tmp);
       results.velocityAbsL2Error = result[0];
-      clout << "velocity-L2-error(abs)=" << result[0] << "; velocity-L2-error(rel)=" << result[0]/result1[0] << std::endl;
+      if (verbose)
+        clout << "velocity-L2-error(abs)=" << result[0] << "; velocity-L2-error(rel)=" << result[0]/result1[0] << std::endl;
 
       SuperLinfNorm3D<T> uLinfNorm(uSolLattice-u,superGeometry,1);
       SuperLinfNorm3D<T> uSolLinfNorm(uSolLattice,superGeometry,1);
       uLinfNorm(result,tmp); uSolLinfNorm(result1,tmp);
       results.velocityAbsLinfError = result[0];
-      clout << "velocity-Linf-error(abs)=" << result[0] << "; velocity-Linf-error(rel)=" << result[0]/result1[0] << std::endl;
+      if (verbose)
+        clout << "velocity-Linf-error(abs)=" << result[0] << "; velocity-Linf-error(rel)=" << result[0]/result1[0] << std::endl;
 
       // pressure error
       SuperL1Norm3D<T> pL1Norm(pSolLattice-p,superGeometry,1);
       SuperL1Norm3D<T> pSolL1Norm(pSolLattice,superGeometry,1);
       pL1Norm(result,tmp); pSolL1Norm(result1,tmp);
       results.pressureAbsL1Error = result[0];
-      clout << "pressure-L1-error(abs)=" << result[0] << "; pressure-L1-error(rel)=" << result[0]/result1[0] << std::endl;
+      if (verbose)
+        clout << "pressure-L1-error(abs)=" << result[0] << "; pressure-L1-error(rel)=" << result[0]/result1[0] << std::endl;
 
       SuperL2Norm3D<T> pL2Norm(pSolLattice-p,superGeometry,1);
       SuperL2Norm3D<T> pSolL2Norm(pSolLattice,superGeometry,1);
       pL2Norm(result,tmp); pSolL2Norm(result1,tmp);
       results.pressureAbsL2Error = result[0];
-      clout << "pressure-L2-error(abs)=" << result[0] << "; pressure-L2-error(rel)=" << result[0]/result1[0] << std::endl;
+      if (verbose)
+        clout << "pressure-L2-error(abs)=" << result[0] << "; pressure-L2-error(rel)=" << result[0]/result1[0] << std::endl;
 
       SuperLinfNorm3D<T> pLinfNorm(pSolLattice-p,superGeometry,1);
       SuperLinfNorm3D<T> pSolLinfNorm(pSolLattice,superGeometry,1);
       pLinfNorm(result,tmp); pSolLinfNorm(result1,tmp);
       results.pressureAbsLinfError = result[0];
-      clout << "pressure-Linf-error(abs)=" << result[0] << "; pressure-Linf-error(rel)=" << result[0]/result1[0] << std::endl;
+      if (verbose)
+        clout << "pressure-Linf-error(abs)=" << result[0] << "; pressure-Linf-error(rel)=" << result[0]/result1[0] << std::endl;
 
       // strain rate error
       SuperL1Norm3D<T> sL1Norm(sSolLattice-s,superGeometry,1);
       SuperL1Norm3D<T> sSolL1Norm(sSolLattice,superGeometry,1);
       sL1Norm(result,tmp); sSolL1Norm(result1,tmp);
       results.strainRateAbsL1Error = result[0];
-      clout << "strainRate-L1-error(abs)=" << result[0] << "; strainRate-L1-error(rel)=" << result[0]/result1[0] << std::endl;
+      if (verbose)
+        clout << "strainRate-L1-error(abs)=" << result[0] << "; strainRate-L1-error(rel)=" << result[0]/result1[0] << std::endl;
 
       SuperL2Norm3D<T> sL2Norm(sSolLattice-s,superGeometry,1);
       SuperL2Norm3D<T> sSolL2Norm(sSolLattice,superGeometry,1);
       sL2Norm(result,tmp); sSolL2Norm(result1,tmp);
       results.strainRateAbsL2Error = result[0];
-      clout << "strainRate-L2-error(abs)=" << result[0] << "; strainRate-L2-error(rel)=" << result[0]/result1[0] << std::endl;
+      if (verbose)
+        clout << "strainRate-L2-error(abs)=" << result[0] << "; strainRate-L2-error(rel)=" << result[0]/result1[0] << std::endl;
 
       SuperLinfNorm3D<T> sLinfNorm(sSolLattice-s,superGeometry,1);
       sLinfNorm(result,tmp);
       results.strainRateAbsLinfError = result[0];
-      clout << "strainRate-Linf-error(abs)=" << result[0] << std::endl;
+      if (verbose)
+        clout << "strainRate-Linf-error(abs)=" << result[0] << std::endl;
 
       // dissipation error
       SuperL1Norm3D<T> dL1Norm(dSolLattice-d,superGeometry,1);
       SuperL1Norm3D<T> dSolL1Norm(dSolLattice,superGeometry,1);
       dL1Norm(result,tmp); dSolL1Norm(result1,tmp);
       results.dissipationAbsL1Error = result[0];
-      clout << "dissipation-L1-error(abs)=" << result[0] << "; dissipation-L1-error(rel)=" << result[0]/result1[0] << std::endl;
+      if (verbose)
+        clout << "dissipation-L1-error(abs)=" << result[0] << "; dissipation-L1-error(rel)=" << result[0]/result1[0] << std::endl;
 
       SuperL2Norm3D<T> dL2Norm(dSolLattice-d,superGeometry,1);
       SuperL2Norm3D<T> dSolL2Norm(dSolLattice,superGeometry,1);
       dL2Norm(result,tmp); dSolL2Norm(result1,tmp);
       results.dissipationAbsL2Error = result[0];
-      clout << "dissipation-L2-error(abs)=" << result[0] << "; dissipation-L2-error(rel)=" << result[0]/result1[0] << std::endl;
+      if (verbose)
+        clout << "dissipation-L2-error(abs)=" << result[0] << "; dissipation-L2-error(rel)=" << result[0]/result1[0] << std::endl;
 
       SuperLinfNorm3D<T> dLinfNorm(dSolLattice-d,superGeometry,1);
       dLinfNorm(result,tmp);
       results.dissipationAbsLinfError = result[0];
-      clout << "dissipation-Linf-error(abs)=" << result[0] << std::endl;
+      if (verbose)
+        clout << "dissipation-Linf-error(abs)=" << result[0] << std::endl;
+    }
+  }
+
+  virtual void writeGnuplot(std::size_t iT) const override
+  {
+    if constexpr (PARAMETERS::keys_t::template contains<Errors>()) {
+      static Gnuplot<T> gplot( "errors_over_time" );
+      const auto& errors = this->parameters(Errors());
+      gplot.setData( this->converter().getPhysTime( iT ),
+        {errors.velocityAbsL1Error, errors.velocityAbsL2Error, errors.velocityAbsLinfError,
+        errors.pressureAbsL1Error, errors.pressureAbsL2Error, errors.pressureAbsLinfError},
+        {"velocity L1 error", "velocity L2 error", "velocity L-inf error",
+        "pressure L1 error", "pressure L2 error", "pressure L-inf error"},
+        "bottom right",
+        {'p','p','p','p','p','p'} );
+
+      if ( this->_finishedTimeLoop ) {
+        gplot.writePNG();
+      }
     }
   }
 };
@@ -417,10 +453,10 @@ protected:
 
 template<typename T>
 using Params_TfBasic = meta::map<
-  Simulation,       TfSimulationParams<T,Lattices>,
-  Output,           parameters::OutputGeneral<T>,
-  VisualizationVTK, parameters::OutputPlot<T>,
-  Errors,           SimulationErrors<T>
+  Simulation,           TfSimulationParams<T,Lattices>,
+  Output,               parameters::OutputGeneral<T>,
+  VisualizationVTK,     parameters::OutputPlot<T>,
+  Errors,               SimulationErrors<T>
 >;
 
 template<typename T>

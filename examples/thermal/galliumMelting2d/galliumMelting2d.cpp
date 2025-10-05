@@ -89,8 +89,7 @@ T lattice_Hcold, lattice_Hhot;
 T physDeltaX, physDeltaT;
 
 /// Stores geometry information in form of material numbers
-void prepareGeometry(SuperGeometry<T,2>& superGeometry,
-                     ThermalUnitConverter<T, NSDESCRIPTOR, TDESCRIPTOR> const& converter)
+void prepareGeometry(SuperGeometry<T,2>& superGeometry, T dx)
 {
 
   OstreamManager clout(std::cout,"prepareGeometry");
@@ -102,14 +101,14 @@ void prepareGeometry(SuperGeometry<T,2>& superGeometry,
   extend[0] = lx;
   extend[1] = ly;
   std::vector<T> origin(2,T());
-  origin[0] = converter.getPhysLength(1);
-  origin[1] = 0.5*converter.getPhysLength(1);
+  origin[0] = dx;
+  origin[1] = 0.5*dx;
   IndicatorCuboid2D<T> cuboid2(extend, origin);
 
   superGeometry.rename(4,1,cuboid2);
 
   std::vector<T> extendwallleft(2,T(0));
-  extendwallleft[0] = converter.getPhysLength(1);
+  extendwallleft[0] = dx;
   extendwallleft[1] = ly;
   std::vector<T> originwallleft(2,T(0));
   originwallleft[0] = 0.0;
@@ -117,10 +116,10 @@ void prepareGeometry(SuperGeometry<T,2>& superGeometry,
   IndicatorCuboid2D<T> wallleft(extendwallleft, originwallleft);
 
   std::vector<T> extendwallright(2,T(0));
-  extendwallright[0] = converter.getPhysLength(1);
+  extendwallright[0] = dx;
   extendwallright[1] = ly;
   std::vector<T> originwallright(2,T(0));
-  originwallright[0] = lx+converter.getPhysLength(1);
+  originwallright[0] = lx+dx;
   originwallright[1] = 0.0;
   IndicatorCuboid2D<T> wallright(extendwallright, originwallright);
 
@@ -140,8 +139,7 @@ void prepareGeometry(SuperGeometry<T,2>& superGeometry,
 }
 
 template <typename SuperLatticeCoupling>
-void prepareLattice( ThermalUnitConverter<T, NSDESCRIPTOR, TDESCRIPTOR> const& converter,
-                     SuperLattice<T, NSDESCRIPTOR>& NSlattice,
+void prepareLattice( SuperLattice<T, NSDESCRIPTOR>& NSlattice,
                      SuperLattice<T, TDESCRIPTOR>& ADlattice,
                      SuperLatticeCoupling& coupling,
                      SuperGeometry<T,2>& superGeometry )
@@ -149,6 +147,7 @@ void prepareLattice( ThermalUnitConverter<T, NSDESCRIPTOR, TDESCRIPTOR> const& c
 
   OstreamManager clout(std::cout,"prepareLattice");
   clout << "Prepare Lattice ..." << std::endl;
+  const auto& converter = NSlattice.getUnitConverter();
 
   T omega  = converter.getLatticeRelaxationFrequency();
   T Tomega = converter.getLatticeThermalRelaxationFrequency();
@@ -228,8 +227,7 @@ void prepareLattice( ThermalUnitConverter<T, NSDESCRIPTOR, TDESCRIPTOR> const& c
   clout << "Prepare Lattice ... OK" << std::endl;
 }
 
-void setBoundaryValues( ThermalUnitConverter<T, NSDESCRIPTOR, TDESCRIPTOR> const& converter,
-                        SuperLattice<T, NSDESCRIPTOR>& NSlattice,
+void setBoundaryValues( SuperLattice<T, NSDESCRIPTOR>& NSlattice,
                         SuperLattice<T, TDESCRIPTOR>& ADlattice,
                         int iT, SuperGeometry<T,2>& superGeometry)
 {
@@ -238,8 +236,7 @@ void setBoundaryValues( ThermalUnitConverter<T, NSDESCRIPTOR, TDESCRIPTOR> const
 
 }
 
-void getResults( ThermalUnitConverter<T, NSDESCRIPTOR, TDESCRIPTOR> const& converter,
-                 SuperLattice<T, NSDESCRIPTOR>& NSlattice,
+void getResults( SuperLattice<T, NSDESCRIPTOR>& NSlattice,
                  SuperLattice<T, TDESCRIPTOR>& ADlattice, int iT,
                  SuperGeometry<T,2>& superGeometry,
                  util::Timer<T>& timer,
@@ -247,6 +244,7 @@ void getResults( ThermalUnitConverter<T, NSDESCRIPTOR, TDESCRIPTOR> const& conve
 {
 
   OstreamManager clout(std::cout,"getResults");
+  const auto& converter = NSlattice.getUnitConverter();
 
   SuperVTMwriter2D<T> vtkWriter("galliumMelting2d");
   SuperLatticeField2D<T, TDESCRIPTOR, VELOCITY> velocity(ADlattice);
@@ -332,7 +330,29 @@ int main(int argc, char *argv[])
 
   clout << "H_cold " << lattice_Hcold << " H_hot " << lattice_Hhot << std::endl;
 
-  ThermalUnitConverter<T, NSDESCRIPTOR, TDESCRIPTOR> const converter(
+  /// === 2nd Step: Prepare Geometry ===
+  std::vector<T> extend(2,T());
+  extend[0] = lx + 2*physDeltaX;
+  extend[1] = ly + physDeltaX;
+  std::vector<T> origin(2,T());
+  IndicatorCuboid2D<T> cuboid(extend, origin);
+
+  /// Instantiation of an empty cuboidDecomposition
+  CuboidDecomposition2D<T> cuboidDecomposition(cuboid, physDeltaX, singleton::mpi().getSize());
+
+  /// Instantiation of a loadBalancer
+  HeuristicLoadBalancer<T> loadBalancer(cuboidDecomposition);
+
+  /// Instantiation of a superGeometry
+  SuperGeometry<T,2> superGeometry(cuboidDecomposition, loadBalancer);
+
+  prepareGeometry(superGeometry, physDeltaX);
+
+  /// === 3rd Step: Prepare Lattice ===
+
+  SuperLattice<T, NSDESCRIPTOR> NSlattice(superGeometry);
+
+  NSlattice.setUnitConverter<ThermalUnitConverter<T,NSDESCRIPTOR,TDESCRIPTOR>>(
     (T) physDeltaX, // physDeltaX
     (T) physDeltaT, // physDeltaT
     (T) lx, // charPhysLength
@@ -345,31 +365,13 @@ int main(int argc, char *argv[])
     (T) Tcold, // charPhysLowTemperature
     (T) Thot // charPhysHighTemperature
   );
+
+  const auto& converter = NSlattice.getUnitConverter();
   converter.print();
   clout << "lattice cp " << converter.getLatticeSpecificHeatCapacity(cp_l) << std::endl;
 
-  /// === 2nd Step: Prepare Geometry ===
-  std::vector<T> extend(2,T());
-  extend[0] = lx + 2*converter.getPhysLength(1);
-  extend[1] = ly + converter.getPhysLength(1);
-  std::vector<T> origin(2,T());
-  IndicatorCuboid2D<T> cuboid(extend, origin);
-
-  /// Instantiation of an empty cuboidDecomposition
-  CuboidDecomposition2D<T> cuboidDecomposition(cuboid, converter.getPhysDeltaX(), singleton::mpi().getSize());
-
-  /// Instantiation of a loadBalancer
-  HeuristicLoadBalancer<T> loadBalancer(cuboidDecomposition);
-
-  /// Instantiation of a superGeometry
-  SuperGeometry<T,2> superGeometry(cuboidDecomposition, loadBalancer);
-
-  prepareGeometry(superGeometry, converter);
-
-  /// === 3rd Step: Prepare Lattice ===
-
   SuperLattice<T, TDESCRIPTOR> ADlattice(superGeometry);
-  SuperLattice<T, NSDESCRIPTOR> NSlattice(superGeometry);
+  ADlattice.setUnitConverter(converter);
 
   SuperLatticeCoupling coupling(
       TotalEnthalpyPhaseChangeCoupling{},
@@ -378,7 +380,7 @@ int main(int argc, char *argv[])
   coupling.restrictTo(superGeometry.getMaterialIndicator({1}));
 
   // prepareLattice and setBoundaryConditions
-  prepareLattice(converter, NSlattice, ADlattice, coupling, superGeometry);
+  prepareLattice(NSlattice, ADlattice, coupling, superGeometry);
 
   /// === 4th Step: Main Loop with Timer ===
   util::Timer<T> timer(converter.getLatticeTime(maxPhysT), superGeometry.getStatistics().getNvoxel() );
@@ -387,15 +389,15 @@ int main(int argc, char *argv[])
   for (std::size_t iT = 0; iT < converter.getLatticeTime(maxPhysT)+1; ++iT) {
 
     /// === 5th Step: Definition of Initial and Boundary Conditions ===
-    setBoundaryValues(converter, NSlattice, ADlattice, iT, superGeometry);
+    setBoundaryValues(NSlattice, ADlattice, iT, superGeometry);
 
     /// === 6th Step: Collide and Stream Execution ===
-    coupling.execute();
+    coupling.apply();
     NSlattice.collideAndStream();
     ADlattice.collideAndStream();
 
     /// === 7th Step: Computation and Output of the Results ===
-    getResults(converter, NSlattice, ADlattice, iT, superGeometry, timer, false);
+    getResults(NSlattice, ADlattice, iT, superGeometry, timer, false);
   }
 
   timer.stop();

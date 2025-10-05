@@ -573,6 +573,15 @@ int main(int argc, char *argv[])
   );
   converter.print();
 
+  UnitConverter<T,TDESCRIPTOR> dummy_converter(
+    (T)   converter.getPhysDeltaX(),      // deltaX
+    (T)   converter.getPhysDeltaT(),      // deltaT
+    (T)   converter.getCharPhysLength(),  // from converter
+    (T)   converter.getCharPhysVelocity(),// from converter
+    (T)   converter.getPhysViscosity(),   // from converter
+    (T)   converter.getPhysDensity()      // from converter
+  );
+
   /// === 2nd Step: Prepare Geometry ===
   std::vector<T> extend(2,T());
   extend[0] = lx + 2*converter.getPhysLength(1);
@@ -593,8 +602,8 @@ int main(int argc, char *argv[])
 
   /// === 3rd Step: Prepare Lattice ===
 
-  SuperLattice<T, TDESCRIPTOR> ADlattice(superGeometry);
-  SuperLattice<T, NSDESCRIPTOR> NSlattice(superGeometry);
+  SuperLattice<T, TDESCRIPTOR> ADlattice(dummy_converter, superGeometry);
+  SuperLattice<T, NSDESCRIPTOR> NSlattice(converter, superGeometry);
 
   //prepareLattice and setBoundaryCondition
   prepareLattice(converter, NSlattice, ADlattice, superGeometry);
@@ -664,7 +673,7 @@ int main(int argc, char *argv[])
     setBoundaryValues(converter, NSlattice, ADlattice, iT, superGeometry);
 
     /// === 6th Step: Collide and Stream Execution ===
-    coupling.execute();
+    coupling.apply();
 
     NSlattice.collideAndStream();
     ADlattice.collideAndStream();

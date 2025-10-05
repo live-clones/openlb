@@ -54,8 +54,7 @@ const T Tcold = 273.15;    // temperature of the fluid in Kelvin
 const T Tperturb = 1./5. * Tcold + 4./5. * Thot; // temperature of the perturbation
 
 /// Stores geometry information in form of material numbers
-void prepareGeometry(SuperGeometry<T,2>& superGeometry,
-                     ThermalUnitConverter<T, NSDESCRIPTOR, TDESCRIPTOR> &converter)
+void prepareGeometry(SuperGeometry<T,2>& superGeometry, T dx)
 {
 
   OstreamManager clout(std::cout,"prepareGeometry");
@@ -66,17 +65,17 @@ void prepareGeometry(SuperGeometry<T,2>& superGeometry,
 
   std::vector<T> extend( 2, T(0) );
   extend[0] = lx;
-  extend[1] = converter.getPhysLength(1);
+  extend[1] = dx;
   std::vector<T> origin( 2, T(0) );
   IndicatorCuboid2D<T> bottom(extend, origin);
 
-  origin[1] = ly-converter.getPhysLength(1);
+  origin[1] = ly-dx;
   IndicatorCuboid2D<T> top(extend, origin);
 
   origin[0] = lx/2.;
-  origin[1] = converter.getPhysLength(1);
-  extend[0] = converter.getPhysLength(1);
-  extend[1] = converter.getPhysLength(1);
+  origin[1] = dx;
+  extend[0] = dx;
+  extend[1] = dx;
   IndicatorCuboid2D<T> perturbation(extend, origin);
 
   /// Set material numbers for bottom, top and pertubation
@@ -95,13 +94,13 @@ void prepareGeometry(SuperGeometry<T,2>& superGeometry,
   clout << "Prepare Geometry ... OK" << std::endl;
 }
 
-void prepareLattice( ThermalUnitConverter<T, NSDESCRIPTOR, TDESCRIPTOR> &converter,
-                     SuperLattice<T, NSDESCRIPTOR>& NSlattice,
+void prepareLattice( SuperLattice<T, NSDESCRIPTOR>& NSlattice,
                      SuperLattice<T, TDESCRIPTOR>& ADlattice,
                      SuperGeometry<T,2>& superGeometry )
 {
 
   OstreamManager clout(std::cout,"prepareLattice");
+  const auto& converter = NSlattice.getUnitConverter();
 
   T Tomega  = converter.getLatticeThermalRelaxationFrequency();
   T NSomega = converter.getLatticeRelaxationFrequency();
@@ -150,14 +149,14 @@ void prepareLattice( ThermalUnitConverter<T, NSDESCRIPTOR, TDESCRIPTOR> &convert
   clout << "Prepare Lattice ... OK" << std::endl;
 }
 
-void getResults(ThermalUnitConverter<T, NSDESCRIPTOR, TDESCRIPTOR> &converter,
-                SuperLattice<T, NSDESCRIPTOR>& NSlattice,
+void getResults(SuperLattice<T, NSDESCRIPTOR>& NSlattice,
                 SuperLattice<T, TDESCRIPTOR>& ADlattice, int iT,
                 SuperGeometry<T,2>& superGeometry,
                 util::Timer<T>& timer,
                 bool converged)
 {
   SuperVTMwriter2D<T> vtkWriter("rayleighBenard2d");
+  const auto& converter = NSlattice.getUnitConverter();
 
   const int statIter = converter.getLatticeTime(10.0);
   const int saveIter = converter.getLatticeTime(10.0);
@@ -190,9 +189,9 @@ void getResults(ThermalUnitConverter<T, NSDESCRIPTOR, TDESCRIPTOR> &converter,
     ADlattice.setProcessingContext(ProcessingContext::Evaluation);
 
     SuperLatticePhysVelocity2D<T, NSDESCRIPTOR> velocity(NSlattice, converter);
-    SuperLatticePhysPressure2D<T, NSDESCRIPTOR> presure(NSlattice, converter);
+    SuperLatticePhysPressure2D<T, NSDESCRIPTOR> pressure(NSlattice, converter);
     SuperLatticePhysTemperature2D<T, NSDESCRIPTOR, TDESCRIPTOR> temperature(ADlattice, converter);
-    vtkWriter.addFunctor( presure );
+    vtkWriter.addFunctor( pressure );
     vtkWriter.addFunctor( velocity );
     vtkWriter.addFunctor( temperature );
 
@@ -212,21 +211,6 @@ int main(int argc, char *argv[])
   initialize(&argc, &argv);
   singleton::directories().setOutputDir("./tmp/");
 
-  ThermalUnitConverter<T, NSDESCRIPTOR, TDESCRIPTOR> converter(
-    (T) 0.1/N, // physDeltaX
-    (T) 0.1 / (1e-5 / 0.1 * util::sqrt( Ra / Pr)) * 0.1 / N, // physDeltaT = charLatticeVelocity / charPhysVelocity * physDeltaX
-    (T) 0.1,  // charPhysLength
-    (T) 1e-5 / 0.1 * util::sqrt( Ra / Pr ), // charPhysVelocity
-    (T) 1e-5,  // physViscosity
-    (T) 1.0, // physDensity
-    (T) 0.03, // physThermalConductivity
-    (T) Pr * 0.03 / 1e-5 / 1.0,    // physSpecificHeatCapacity
-    (T) Ra * 1e-5 * 1e-5 / Pr / 9.81 / (Thot - Tcold) / util::pow(0.1, 3), // physThermalExpansionCoefficient
-    (T) Tcold, // charPhysLowTemperature
-    (T) Thot // charPhysHighTemperature
-  );
-  converter.print();
-
   /// === 2nd Step: Prepare Geometry ===
   std::vector<T> extend(2,T());
   extend[0] = lx;
@@ -240,7 +224,9 @@ int main(int argc, char *argv[])
 #else
   const int noOfCuboids = 1;
 #endif
-  CuboidDecomposition2D<T> cuboidDecomposition(cuboid, converter.getPhysDeltaX(), noOfCuboids);
+  T dx = 0.1/N;
+
+  CuboidDecomposition2D<T> cuboidDecomposition(cuboid, dx, noOfCuboids);
 
   cuboidDecomposition.setPeriodicity({true, false});
 
@@ -248,14 +234,33 @@ int main(int argc, char *argv[])
 
   SuperGeometry<T,2> superGeometry(cuboidDecomposition, loadBalancer);
 
-  prepareGeometry(superGeometry, converter);
+  prepareGeometry(superGeometry, dx);
 
   /// === 3rd Step: Prepare Lattice ===
 
   SuperLattice<T, NSDESCRIPTOR> NSlattice(superGeometry);
-  SuperLattice<T, TDESCRIPTOR> ADlattice(superGeometry);
 
-  prepareLattice(converter, NSlattice, ADlattice, superGeometry);
+  NSlattice.setUnitConverter<ThermalUnitConverter<T,NSDESCRIPTOR,TDESCRIPTOR>>(
+    (T) dx, // physDeltaX
+    (T) 0.1 / (1e-5 / 0.1 * util::sqrt( Ra / Pr)) * 0.1 / N, // physDeltaT = charLatticeVelocity / charPhysVelocity * physDeltaX
+    (T) 0.1,  // charPhysLength
+    (T) 1e-5 / 0.1 * util::sqrt( Ra / Pr ), // charPhysVelocity
+    (T) 1e-5,  // physViscosity
+    (T) 1.0, // physDensity
+    (T) 0.03, // physThermalConductivity
+    (T) Pr * 0.03 / 1e-5 / 1.0,    // physSpecificHeatCapacity
+    (T) Ra * 1e-5 * 1e-5 / Pr / 9.81 / (Thot - Tcold) / util::pow(0.1, 3), // physThermalExpansionCoefficient
+    (T) Tcold, // charPhysLowTemperature
+    (T) Thot // charPhysHighTemperature
+  );
+
+  const auto& converter = NSlattice.getUnitConverter();
+  converter.print();
+
+  SuperLattice<T, TDESCRIPTOR> ADlattice(superGeometry);
+  ADlattice.setUnitConverter(converter);
+
+  prepareLattice(NSlattice, ADlattice, superGeometry);
 
   T boussinesqForcePrefactor = 9.81 / converter.getConversionFactorVelocity() * converter.getConversionFactorTime() *
                                converter.getCharPhysTemperatureDifference() * converter.getPhysThermalExpansionCoefficient();
@@ -276,7 +281,7 @@ int main(int argc, char *argv[])
   for (std::size_t iT = 0; iT < converter.getLatticeTime(maxPhysT); ++iT) {
     if (converge.hasConverged()) {
       clout << "Simulation converged." << std::endl;
-      getResults(converter, NSlattice, ADlattice, iT, superGeometry, timer, converge.hasConverged());
+      getResults(NSlattice, ADlattice, iT, superGeometry, timer, converge.hasConverged());
 
       clout << "Time " << iT << "." << std::endl;
 
@@ -287,10 +292,10 @@ int main(int argc, char *argv[])
     NSlattice.collideAndStream();
     ADlattice.collideAndStream();
 
-    coupling.execute();
+    coupling.apply();
 
     /// === 7th Step: Computation and Output of the Results ===
-    getResults(converter, NSlattice, ADlattice, iT, superGeometry, timer, converge.hasConverged());
+    getResults(NSlattice, ADlattice, iT, superGeometry, timer, converge.hasConverged());
     converge.takeValue(ADlattice.getStatistics().getAverageEnergy(),true);
   }
 

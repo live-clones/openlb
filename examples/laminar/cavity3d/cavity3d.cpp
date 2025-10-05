@@ -45,7 +45,9 @@ const T maxT = 100.;     // max. simulation time in s, SI unit
 const T interval = 1.0; // Time intervall in seconds for convergence check
 const T epsilon = 1e-3; // Residuum for convergence check
 
-void prepareGeometry( UnitConverter<T, DESCRIPTOR> const& converter, IndicatorF3D<T>& indicator, SuperGeometry<T,3>& superGeometry )
+void prepareGeometry(IndicatorF3D<T>& indicator,
+                     SuperGeometry<T,3>& superGeometry,
+                     T dx, T length)
 {
   OstreamManager clout( std::cout,"prepareGeometry" );
   clout << "Prepare Geometry ..." << std::endl;
@@ -54,9 +56,9 @@ void prepareGeometry( UnitConverter<T, DESCRIPTOR> const& converter, IndicatorF3
   superGeometry.rename( 0,2,indicator );
   superGeometry.rename( 2,1,{1,1,1} );
 
-  T eps = converter.getPhysDeltaX();
-  Vector<T,3> origin( -eps, converter.getCharPhysLength() - eps, -eps );
-  Vector<T,3> extend( converter.getCharPhysLength() + 2*eps, 2*eps, converter.getCharPhysLength() + 2*eps );
+  T eps = dx;
+  Vector<T,3> origin( -eps, length - eps, -eps );
+  Vector<T,3> extend( length + 2*eps, 2*eps, length + 2*eps );
   IndicatorCuboid3D<T> lid( extend,origin );
 
   superGeometry.rename( 2,3,1,lid );
@@ -73,14 +75,13 @@ void prepareGeometry( UnitConverter<T, DESCRIPTOR> const& converter, IndicatorF3
 }
 
 
-void prepareLattice( UnitConverter<T, DESCRIPTOR> const& converter,
-                     SuperLattice<T,DESCRIPTOR>& lattice,
-                     SuperGeometry<T,3>& superGeometry )
+void prepareLattice(SuperLattice<T,DESCRIPTOR>& lattice,
+                    SuperGeometry<T,3>& superGeometry )
 {
   OstreamManager clout( std::cout,"prepareLattice" );
   clout << "Prepare Lattice ..." << std::endl;
 
-  const T omega = converter.getLatticeRelaxationFrequency();
+  const T omega = lattice.getUnitConverter().getLatticeRelaxationFrequency();
 
   // Material=1 -->bulk dynamics
   lattice.defineDynamics<BulkDynamics>(superGeometry, 1);
@@ -94,8 +95,7 @@ void prepareLattice( UnitConverter<T, DESCRIPTOR> const& converter,
   clout << "Prepare Lattice ... OK" << std::endl;
 }
 
-void setBoundaryValues( UnitConverter<T, DESCRIPTOR> const& converter,
-                        SuperLattice<T,DESCRIPTOR>& lattice, SuperGeometry<T,3>& superGeometry, int iT )
+void setBoundaryValues(SuperLattice<T,DESCRIPTOR>& lattice, SuperGeometry<T,3>& superGeometry, std::size_t iT)
 {
 
   OstreamManager clout( std::cout,"setBoundaryValues" );
@@ -108,22 +108,23 @@ void setBoundaryValues( UnitConverter<T, DESCRIPTOR> const& converter,
     lattice.iniEquilibrium( bulkIndicator, rhoF, uF );
     lattice.defineRhoU( bulkIndicator, rhoF, uF );
 
-    clout << converter.getCharLatticeVelocity() << std::endl;
-    AnalyticalConst3D<T,T> uTop( converter.getCharLatticeVelocity(), T( 0 ), T( 0 ) );
-    lattice.defineU( superGeometry,3,uTop );
+    clout << lattice.getUnitConverter().getCharLatticeVelocity() << std::endl;
+    AnalyticalConst3D<T,T> uTop(lattice.getUnitConverter().getCharLatticeVelocity(), T( 0 ), T( 0 ));
+    lattice.defineU(superGeometry,3, uTop);
 
     // Make the lattice ready for simulation
     lattice.initialize();
   }
 }
 
-void getResults( SuperLattice<T,DESCRIPTOR>& sLattice,
-                 UnitConverter<T, DESCRIPTOR> const& converter, SuperGeometry<T,3>& superGeometry,
-                 int iT, util::Timer<T>& timer, bool converged )
+void getResults(SuperLattice<T,DESCRIPTOR>& sLattice,
+                SuperGeometry<T,3>& superGeometry,
+                std::size_t iT, util::Timer<T>& timer, bool converged)
 {
 
   OstreamManager clout( std::cout,"getResults" );
   SuperVTMwriter3D<T> vtmWriter( "cavity3d" );
+  const auto& converter = sLattice.getUnitConverter();
 
   const T logT   = ( T )1.;
   const T saveT  = ( T )1.;
@@ -141,14 +142,14 @@ void getResults( SuperLattice<T,DESCRIPTOR>& sLattice,
   }
 
   // Get statistics
-  if ( (iT%converter.getLatticeTime(logT) == 0 && iT > 0) || converged ) {
+  if ((iT % converter.getLatticeTime(logT) == 0 && iT > 0) || converged) {
     timer.update( iT );
     timer.printStep( 2 );
-    sLattice.getStatistics().print( iT,converter.getPhysTime( iT ) );
+    sLattice.getStatistics().print(iT, converter.getPhysTime(iT));
   }
 
   // Writes the VTK
-  if ( (iT%converter.getLatticeTime(saveT) == 0 && iT > 0) || converged ) {
+  if ((iT % converter.getLatticeTime(saveT) == 0 && iT > 0) || converged) {
     sLattice.setProcessingContext(ProcessingContext::Evaluation);
 
     SuperLatticePhysVelocity3D<T, DESCRIPTOR> velocity( sLattice, converter );
@@ -176,17 +177,13 @@ void getResults( SuperLattice<T,DESCRIPTOR>& sLattice,
   }
 }
 
-
-int main( int argc, char **argv )
-{
-
+int main(int argc, char **argv) {
   // === 1st Step: Initialization ===
+  initialize(&argc, &argv);
+  singleton::directories().setOutputDir("./tmp/");
+  OstreamManager clout(std::cout, "main");
 
-  initialize( &argc, &argv );
-  singleton::directories().setOutputDir( "./tmp/" );
-  OstreamManager clout( std::cout,"main" );
-
-  UnitConverterFromResolutionAndRelaxationTime<T, DESCRIPTOR> const converter(
+  const UnitConverterFromResolutionAndRelaxationTime<T, DESCRIPTOR> converter(
     int {N},     // resolution: number of voxels per charPhysL
     (T)   0.509, // latticeRelaxationTime: relaxation time, have to be greater than 0.5!
     (T)   1.0,   // charPhysLength: reference length of simulation geometry
@@ -199,9 +196,7 @@ int main( int argc, char **argv )
   // Writes the converter log in a file
   converter.write("cavity3d");
 
-
   // === 2nd Step: Prepare Geometry ===
-
   // Instantiation of a unit cube by an indicator
   Vector<T,3> origin( T( 0 ) );
   Vector<T,3> extend( converter.getCharPhysLength() + 0.5 * converter.getPhysDeltaX() );
@@ -217,13 +212,13 @@ int main( int argc, char **argv )
   // Instantiation of a super geometry
   SuperGeometry<T,3> superGeometry( cuboidDecomposition, loadBalancer );
 
-  prepareGeometry( converter, cube, superGeometry );
+  prepareGeometry(cube, superGeometry, converter.getPhysDeltaX(), converter.getCharPhysLength());
 
   // === 3rd Step: Prepare Lattice ===
-  SuperLattice<T, DESCRIPTOR> sLattice( superGeometry );
+  SuperLattice<T,DESCRIPTOR> sLattice(converter, superGeometry);
 
   //prepareLattice and setBoundaryConditions
-  prepareLattice( converter, sLattice, superGeometry );
+  prepareLattice(sLattice, superGeometry);
 
   // === 4th Step: Main Loop with Timer ===
   util::ValueTracer<T> converge( converter.getLatticeTime(interval), epsilon );
@@ -231,22 +226,22 @@ int main( int argc, char **argv )
   util::Timer<T> timer( converter.getLatticeTime( maxT ), util::pow<int>(converter.getResolution(),3) );
   timer.start();
 
-  for ( std::size_t iT = 0; iT <= converter.getLatticeTime( maxT ); ++iT ) {
-    if ( converge.hasConverged() ) {
+  for (std::size_t iT = 0; iT <= converter.getLatticeTime( maxT ); ++iT) {
+    if (converge.hasConverged()) {
       clout << "Simulation converged." << std::endl;
-      getResults( sLattice, converter, superGeometry, iT, timer, converge.hasConverged() );
+      getResults( sLattice, superGeometry, iT, timer, converge.hasConverged() );
       break;
     }
 
     // === 5th Step: Definition of Initial and Boundary Conditions ===
-    setBoundaryValues( converter, sLattice, superGeometry, iT );
+    setBoundaryValues(sLattice, superGeometry, iT);
 
     // === 6th Step: Collide and Stream Execution ===
     sLattice.collideAndStream();
 
     // === 7th Step: Computation and Output of the Results ===
-    getResults( sLattice, converter, superGeometry, iT, timer, converge.hasConverged() );
-    converge.takeValue( sLattice.getStatistics().getAverageEnergy(), true );
+    getResults(sLattice, superGeometry, iT, timer, converge.hasConverged());
+    converge.takeValue(sLattice.getStatistics().getAverageEnergy(), true);
   }
 
   timer.stop();

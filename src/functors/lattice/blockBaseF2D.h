@@ -174,8 +174,8 @@ template <typename T, typename DESCRIPTOR, typename TDESCRIPTOR>
 class BlockLatticeThermalPhysF2D : public BlockLatticeF2D<T,TDESCRIPTOR> {
 protected:
   BlockLatticeThermalPhysF2D(BlockLattice<T,TDESCRIPTOR>& blockLattice,
-                             const ThermalUnitConverter<T,DESCRIPTOR,TDESCRIPTOR>& converter, int targetDim);
-  const ThermalUnitConverter<T,DESCRIPTOR,TDESCRIPTOR>& _converter;
+                             const UnitConverter<T,DESCRIPTOR>& converter, int targetDim);
+  const UnitConverter<T,DESCRIPTOR>& _converter;
 };
 
 

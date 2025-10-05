@@ -396,9 +396,9 @@ int main( int argc, char *argv[] )
   prepareGeometry( superGeometry );
 
   // === 3rd Step: Prepare Lattice ===
-  SuperLattice<T, DESCRIPTOR> sLattice1( superGeometry );
-  SuperLattice<T, DESCRIPTOR> sLattice2( superGeometry );
-  SuperLattice<T, DESCRIPTOR> sLattice3( superGeometry );
+  SuperLattice<T, DESCRIPTOR> sLattice1( converter, superGeometry );
+  SuperLattice<T, DESCRIPTOR> sLattice2( converter, superGeometry );
+  SuperLattice<T, DESCRIPTOR> sLattice3( converter, superGeometry );
 
   //prepareLattice and set boundaryConditions
   prepareLattice( sLattice1, sLattice2, sLattice3, converter, superGeometry );
@@ -503,15 +503,15 @@ int main( int argc, char *argv[] )
     sLattice3.getCommunicator(stage::PreCoupling()).communicate();
 
     // Execute coupling between the two lattices
-    coupling1.execute();
-    coupling2.execute();
+    coupling1.apply();
+    coupling2.apply();
 
     sLattice1.getCommunicator(stage::PostCoupling()).communicate();
     sLattice1.executePostProcessors(stage::PostCoupling());
 
 
-    coupling3.execute();
-    coupling4.execute();
+    coupling3.apply();
+    coupling4.apply();
 
 
 

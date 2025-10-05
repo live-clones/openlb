@@ -22,8 +22,8 @@
  *  Boston, MA  02110-1301, USA.
  */
 
-#ifndef SUPER_LATTICE_O_H
-#define SUPER_LATTICE_O_H
+#ifndef SINGLE_LATTICE_O_H
+#define SINGLE_LATTICE_O_H
 
 #include "core/superLatticeCoupling.h"
 
@@ -37,21 +37,21 @@ struct SingleLatticeO {
   using parameters = typename OPERATOR::parameters;
 
   template <typename CELLS> requires (OPERATOR::scope == OperatorScope::PerCell)
-  void apply(CELLS& cells) {
-    OPERATOR().apply(cells.template get<names::Lattice>());
+  void apply(CELLS& cells) any_platform {
+    OPERATOR().apply(cells.template get<names::Lattice1>());
   }
   template <typename CELLS, typename PARAMETERS> requires (OPERATOR::scope == OperatorScope::PerCellWithParameters)
-  void apply(CELLS& cells, PARAMETERS& parameters) {
-    OPERATOR().apply(cells.template get<names::Lattice>(), parameters);
+  void apply(CELLS& cells, PARAMETERS& parameters) any_platform {
+    OPERATOR().apply(cells.template get<names::Lattice1>(), parameters);
   }
 };
 
 template <typename OPERATOR, typename T, typename DESCRIPTOR>
-auto makeSuperLatticeO(SuperLattice<T,DESCRIPTOR>& lattice) {
+auto makeSingleLatticeO(SuperLattice<T,DESCRIPTOR>& lattice) {
   return std::make_unique<SuperLatticeCoupling<SingleLatticeO<OPERATOR>,
-                                               meta::map<names::Lattice,
+                                               meta::map<names::Lattice1,
                                                descriptors::VALUED_DESCRIPTOR<T,DESCRIPTOR>>>>
-    (SingleLatticeO<OPERATOR>(), names::Lattice(), lattice);
+    (SingleLatticeO<OPERATOR>(), names::Lattice1(), lattice);
 }
 
 }

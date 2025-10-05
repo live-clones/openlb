@@ -108,28 +108,28 @@ public:
   }
 
   /// return consistency coefficient in physical units
-  constexpr T getPhysConsistencyCoeff( ) const
+  constexpr T getPhysConsistencyCoeff( ) const override
   {
     return _physConsistencyCoeff;
   }
   /// conversion from lattice to  physical consistency coefficient
-  constexpr T getPhysConsistencyCoeff( T latticeConsistencyCoeff ) const
+  constexpr T getPhysConsistencyCoeff( T latticeConsistencyCoeff ) const override
   {
     return _conversionConsistencyCoeff * latticeConsistencyCoeff;
   }
   /// conversion from physical to lattice consistency coefficient
-  constexpr T getLatticeConsistencyCoeff(  ) const
+  constexpr T getLatticeConsistencyCoeff(  ) const override
   {
     return _physConsistencyCoeff / _conversionConsistencyCoeff;
   }
   /// access (read-only) to private member variable
-  constexpr T getConversionFactorConsistencyCoeff() const
+  constexpr T getConversionFactorConsistencyCoeff() const override
   {
     return _conversionConsistencyCoeff;
   }
 
   /// access (read-only) to private member variable
-  constexpr T getPowerLawIndex() const
+  constexpr T getPowerLawIndex() const override
   {
     return _powerLawIndex;
   }

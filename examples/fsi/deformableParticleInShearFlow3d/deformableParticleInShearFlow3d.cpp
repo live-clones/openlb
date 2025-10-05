@@ -181,8 +181,8 @@ int main( int argc, char **argv )
   SuperGeometry<T,3> superGeometry( cuboidDecomposition, loadBalancer );
   prepareGeometry( converter, superGeometry );
 
-  SuperLattice<T, DESCRIPTOR> sLattice( superGeometry );
-  prepareLattice( converter, sLattice, superGeometry );
+  SuperLattice sLattice(converter, superGeometry);
+  prepareLattice(converter, sLattice, superGeometry);
 
   util::Timer<T> timer( converter.getLatticeTime( maxT ), util::pow<int>(converter.getResolution(),3) );
 
@@ -204,7 +204,7 @@ int main( int argc, char **argv )
     sMembrane.updateForcesFromDisplacements();
 
     // Communicate displacement and force
-    ibmO.execute();
+    ibmO.apply();
 
     // Update flow field.
     sLattice.collideAndStream();

@@ -70,7 +70,7 @@ struct ComputeSourceTerm {
 
 // Compute the analytical solution and error
 void error(SuperGeometry<T, 3>& superGeometry, SuperLattice<T, DESCRIPTOR>& lattice,
-           UnitConverter<T, DESCRIPTOR> const& converter, T absorption, T scattering)
+           T absorption, T scattering)
 {
   OstreamManager clout(std::cout, "error");
 
@@ -95,7 +95,7 @@ void error(SuperGeometry<T, 3>& superGeometry, SuperLattice<T, DESCRIPTOR>& latt
 }
 
 // Stores geometry information in form of material numbers
-void prepareGeometry(UnitConverter<T, DESCRIPTOR> const& converter, SuperGeometry<T, 3>& superGeometry,
+void prepareGeometry(SuperGeometry<T, 3>& superGeometry,
                      IndicatorSphere3D<T>& sphereAll, IndicatorSphere3D<T>& sphereEm)
 {
   OstreamManager clout(std::cout, "prepareGeometry");
@@ -120,14 +120,14 @@ void prepareGeometry(UnitConverter<T, DESCRIPTOR> const& converter, SuperGeometr
 }
 
 // Set up the geometry of the simulation
-void prepareLattice(UnitConverter<T, DESCRIPTOR> const& converter, SuperLattice<T, DESCRIPTOR>& sLattice,
+void prepareLattice(SuperLattice<T, DESCRIPTOR>& sLattice,
                     SuperGeometry<T, 3>& superGeometry)
 {
   OstreamManager clout(std::cout, "prepareLattice");
   clout << "Prepare Lattice ..." << std::endl;
 
   // the simulation parameters
-  const T omega = converter.getLatticeRelaxationFrequency();
+  const T omega = sLattice.getUnitConverter().getLatticeRelaxationFrequency();
   // T latticeSink = 3.*converter.getLatticeAbsorption()*(converter.getLatticeAbsorption()+converter.getLatticeScattering()) / 8.;
 
   // define dynamics
@@ -157,7 +157,7 @@ void prepareLattice(UnitConverter<T, DESCRIPTOR> const& converter, SuperLattice<
 }
 
 // Write data to termimal and file system
-void getResults(SuperLattice<T, DESCRIPTOR>& sLattice, int iT, UnitConverter<T, DESCRIPTOR> const& converter,
+void getResults(SuperLattice<T, DESCRIPTOR>& sLattice, int iT,
                 SuperGeometry<T, 3>& superGeometry, util::Timer<T>& timer, int saveIter, T absorption, T scattering)
 {
   OstreamManager                       clout(std::cout, "getResults");
@@ -185,7 +185,7 @@ void getResults(SuperLattice<T, DESCRIPTOR>& sLattice, int iT, UnitConverter<T, 
   if (iT % saveIter == 0) {
     timer.update(iT);
     timer.printStep();
-    sLattice.getStatistics().print(iT, converter.getPhysTime(iT));
+    sLattice.getStatistics().print(iT, sLattice.getUnitConverter().getPhysTime(iT));
   }
 
   if (iT % 500 == 0) {
@@ -271,11 +271,11 @@ int main(int argc, char* argv[])
   // Instatiation of a superGeometry
   SuperGeometry<T, 3> superGeometry(*cuboid, *loadBalancer, 2);
 
-  prepareGeometry(converter, superGeometry, sphereAll, sphereEm);
+  prepareGeometry(superGeometry, sphereAll, sphereEm);
 
   // ===== 3rd Step: Prepare Lattice =====
-  SuperLattice<T, DESCRIPTOR> sLattice(superGeometry);
-  prepareLattice(converter, sLattice, superGeometry);
+  SuperLattice<T, DESCRIPTOR> sLattice(converter, superGeometry);
+  prepareLattice(sLattice, superGeometry);
 
   // Add PostProcessor and set parameters
   sLattice.addPostProcessor<stage::PreCollide>(meta::id<ComputeSourceTerm> {});
@@ -300,13 +300,13 @@ int main(int argc, char* argv[])
     if (iT % saveIter == 0) {
       sLattice.getStatistics().print(iT, converter.getPhysTime(iT));
       timer.print(iT);
-      error(superGeometry, sLattice, converter, ABSORPTION, SCATTERING);
+      error(superGeometry, sLattice, ABSORPTION, SCATTERING);
     }
 
     // === 6th Step: Collide and Stream Execution ===
     sLattice.collideAndStream();
     // === 7th Step: Computation and Output of the Results ===
-    getResults(sLattice, iT, converter, superGeometry, timer, saveIter, ABSORPTION, SCATTERING);
+    getResults(sLattice, iT, superGeometry, timer, saveIter, ABSORPTION, SCATTERING);
   }
   // Write and save the results in a text file
   std::string   name = std::string("line") + std::to_string(iT) + std::string(".txt");

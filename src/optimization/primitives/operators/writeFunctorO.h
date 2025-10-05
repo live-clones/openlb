@@ -27,7 +27,7 @@
 
 #include <core/operator.h>
 #include "../concept.h"
-#include "../superLatticeO.h"
+#include "../singleLatticeO.h"
 
 namespace olb {
 
@@ -52,34 +52,34 @@ struct WriteFunctorO {
 
 }
 
-// Returns a unique pointer to the SuperLatticeO with the writing operator
+// Returns a unique pointer to the SingleLatticeO with the writing operator
 template <typename FUNCTOR, typename TO, typename T, typename DESCRIPTOR>
 auto makeWriteFunctorO(SuperLattice<T,DESCRIPTOR>& lattice) {
-  return makeSuperLatticeO<operators::WriteFunctorO<FUNCTOR,TO>>(lattice);
+  return makeSingleLatticeO<operators::WriteFunctorO<FUNCTOR,TO>>(lattice);
 }
 
 template <typename FUNCTOR, typename TO, typename T, typename DESCRIPTOR>
 void writeFunctorTo(SuperLattice<T,DESCRIPTOR>& lattice) {
-  auto superLatticeO = makeSuperLatticeO<operators::WriteFunctorO<FUNCTOR,TO>>(lattice);
-  superLatticeO->execute();
+  auto superLatticeO = makeSingleLatticeO<operators::WriteFunctorO<FUNCTOR,TO>>(lattice);
+  superLatticeO->apply();
 }
 
 template <typename FUNCTOR, typename TO, typename T, typename DESCRIPTOR>
 void writeFunctorTo(SuperLattice<T,DESCRIPTOR>& lattice,
                            FunctorPtr<SuperIndicatorF<T,DESCRIPTOR::d>>&& indicator) {
-  auto superLatticeO = makeSuperLatticeO<operators::WriteFunctorO<FUNCTOR,TO>>(lattice);
+  auto superLatticeO = makeSingleLatticeO<operators::WriteFunctorO<FUNCTOR,TO>>(lattice);
   superLatticeO->restrictTo(std::forward<FunctorPtr<SuperIndicatorF<T,DESCRIPTOR::d>>>(indicator));
-  superLatticeO->execute();
+  superLatticeO->apply();
 }
 
 template <typename FUNCTOR, typename TO, typename T, typename DESCRIPTOR>
 void writePhysFunctorTo(SuperLattice<T,DESCRIPTOR>& lattice,
                                FunctorPtr<SuperIndicatorF<T,DESCRIPTOR::d>>&& indicator,
                                T conversionFactor = 1.0) {
-  auto superLatticeO = makeSuperLatticeO<operators::WriteFunctorO<FUNCTOR,TO>>(lattice);
+  auto superLatticeO = makeSingleLatticeO<operators::WriteFunctorO<FUNCTOR,TO>>(lattice);
   superLatticeO->template setParameter<descriptors::CONVERSION>(conversionFactor);
   superLatticeO->restrictTo(std::forward<FunctorPtr<SuperIndicatorF<T,DESCRIPTOR::d>>>(indicator));
-  superLatticeO->execute();
+  superLatticeO->apply();
 }
 
 }

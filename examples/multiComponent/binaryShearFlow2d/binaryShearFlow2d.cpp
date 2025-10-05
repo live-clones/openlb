@@ -508,8 +508,8 @@ int main( int argc, char *argv[] )
   prepareGeometry( superGeometry, converter );
 
   // === 3rd Step: Prepare Lattice ===
-  SuperLattice<T, DESCRIPTOR> sLattice1( superGeometry );
-  SuperLattice<T, DESCRIPTOR> sLattice2( superGeometry );
+  SuperLattice<T, DESCRIPTOR> sLattice1( converter, superGeometry );
+  SuperLattice<T, DESCRIPTOR> sLattice2( converter, superGeometry );
 
   prepareLattice( sLattice1, sLattice2, converter, superGeometry );
 
@@ -602,9 +602,9 @@ int main( int argc, char *argv[] )
     sLattice2.executePostProcessors(stage::PreCoupling());
 
     // Execute coupling between the two lattices
-    coupling1.execute();
-    coupling2.execute();
-    coupling3.execute();
+    coupling1.apply();
+    coupling2.apply();
+    coupling3.apply();
 
   converge.takeValue( sLattice2.getStatistics().getAverageRho(), true );
   }

@@ -51,8 +51,7 @@ const T maxPhysT = 40.;  // max. simulation time in s, SI unit
 
 
 // Stores geometry information in form of material numbers
-void prepareGeometry( UnitConverter<T,DESCRIPTOR> const& converter,
-                      SuperGeometry<T,3>& superGeometry )
+void prepareGeometry( SuperGeometry<T,3>& superGeometry, T dx )
 {
 
   OstreamManager clout( std::cout,"prepareGeometry" );
@@ -69,13 +68,13 @@ void prepareGeometry( UnitConverter<T,DESCRIPTOR> const& converter,
   superGeometry.rename( 1,2,cuboid2 );
 
   // Set material number for inflow
-  extend = {2*converter.getPhysDeltaX(), ly0, lz0};
-  origin[0] -= converter.getPhysDeltaX()/2.;
+  extend = {2*dx, ly0, lz0};
+  origin[0] -= dx/2.;
   IndicatorCuboid3D<T> inflow( extend, origin );
   superGeometry.rename( 2,3,1,inflow );
 
   // Set material number for outflow
-  origin[0] = lx0 - converter.getPhysDeltaX()*1.5;
+  origin[0] = lx0 - dx*1.5;
   IndicatorCuboid3D<T> outflow( extend, origin );
   superGeometry.rename( 2,4,1,outflow );
 
@@ -91,15 +90,14 @@ void prepareGeometry( UnitConverter<T,DESCRIPTOR> const& converter,
 }
 
 // Set up the geometry of the simulation
-void prepareLattice( UnitConverter<T,DESCRIPTOR> const& converter,
-                     SuperLattice<T,DESCRIPTOR>& sLattice,
+void prepareLattice( SuperLattice<T,DESCRIPTOR>& sLattice,
                      SuperGeometry<T,3>& superGeometry )
 {
 
   OstreamManager clout( std::cout,"prepareLattice" );
   clout << "Prepare Lattice ..." << std::endl;
 
-  const T omega = converter.getLatticeRelaxationFrequency();
+  const T omega = sLattice.getUnitConverter().getLatticeRelaxationFrequency();
 
   // Material=1 -->bulk dynamics
   // Material=3 -->bulk dynamics (inflow)
@@ -140,12 +138,11 @@ void prepareLattice( UnitConverter<T,DESCRIPTOR> const& converter,
 }
 
 // Generates a slowly increasing inflow for the first iTMaxStart timesteps
-void setBoundaryValues( UnitConverter<T,DESCRIPTOR> const& converter,
-                        SuperLattice<T,DESCRIPTOR>& sLattice, int iT,
+void setBoundaryValues( SuperLattice<T,DESCRIPTOR>& sLattice, int iT,
                         SuperGeometry<T,3>& superGeometry )
 {
-
   OstreamManager clout( std::cout,"setBoundaryValues" );
+  const UnitConverter<T,DESCRIPTOR>& converter = sLattice.getUnitConverter();
 
   // No of time steps for smooth start-up
   const int iTmaxStart = converter.getLatticeTime( maxPhysT*0.2 );
@@ -181,12 +178,12 @@ void setBoundaryValues( UnitConverter<T,DESCRIPTOR> const& converter,
 
 // Output to console and files
 void getResults( SuperLattice<T,DESCRIPTOR>& sLattice,
-                 UnitConverter<T,DESCRIPTOR> const& converter,
                  BlockReduction3D2D<T>& planeReduction,
                  int iT,
                  SuperGeometry<T,3>& superGeometry, util::Timer<T>& timer)
 {
   OstreamManager clout( std::cout,"getResults" );
+  const UnitConverter<T,DESCRIPTOR>& converter = sLattice.getUnitConverter();
 
   SuperVTMwriter3D<T> vtmWriter( "bstep3d" );
   SuperLatticePhysVelocity3D<T, DESCRIPTOR> velocity( sLattice, converter );
@@ -283,13 +280,13 @@ int main( int argc, char* argv[] )
   // Instantiation of a superGeometry
   SuperGeometry<T,3> superGeometry( cuboidDecomposition, loadBalancer );
 
-  prepareGeometry( converter, superGeometry );
+  prepareGeometry( superGeometry, converter.getPhysDeltaX() );
 
   // === 3rd Step: Prepare Lattice ===
-  SuperLattice<T, DESCRIPTOR> sLattice( superGeometry );
+  SuperLattice<T, DESCRIPTOR> sLattice(converter, superGeometry);
 
   //prepareLattice and set boundaryConditions
-  prepareLattice( converter, sLattice, superGeometry );
+  prepareLattice( sLattice, superGeometry );
 
   // === 4th Step: Main Loop with Timer ===
   clout << "starting simulation..." << std::endl;
@@ -309,13 +306,13 @@ int main( int argc, char* argv[] )
   for ( std::size_t iT = 0; iT < converter.getLatticeTime( maxPhysT ); ++iT ) {
 
     // === 5th Step: Definition of Initial and Boundary Conditions ===
-    setBoundaryValues( converter, sLattice, iT, superGeometry );
+    setBoundaryValues( sLattice, iT, superGeometry );
 
     // === 6th Step: Collide and Stream Execution ===
     sLattice.collideAndStream();
 
     // === 7th Step: Computation and Output of the Results ===
-    getResults( sLattice, converter, planeReduction, iT, superGeometry, timer );
+    getResults( sLattice, planeReduction, iT, superGeometry, timer );
   }
 
   timer.stop();

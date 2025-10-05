@@ -283,7 +283,7 @@ void checkRelocation(
     //Find particle system by position
     int globiCcentre = -1;
     // getC doesn't treat periodicity! We can only use it because we updated it before
-    auto iC = cuboidDecomposition.getC(position);
+    std::optional<int> iC = cuboidDecomposition.getC(position);
     const bool particleCentreInDomain = iC.operator bool();
     if (particleCentreInDomain) {
       globiCcentre = *iC;

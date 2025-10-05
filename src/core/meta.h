@@ -244,6 +244,26 @@ struct filter<COND,TYPE> {
 template <template <typename> class COND, typename... TYPES>
 using filter_t = typename filter<COND,TYPES...>::type;
 
+/// Return type list of FIELDS without duplicates
+template <typename HEAD=void, typename... TAIL>
+struct unify {
+  using type = std::conditional_t<
+    list<TAIL...>::template contains<HEAD>(),
+    typename unify<TAIL...>::type,
+    typename unify<TAIL...>::type::template push<HEAD>
+  >;
+};
+
+/// Return list with single TYPE
+template <typename TYPE>
+struct unify<TYPE> {
+  using type = list<TYPE>;
+};
+
+/// meta::list of TYPES without duplicates
+template <typename... TYPES>
+using unify_t = typename unify<TYPES...>::type;
+
 
 /// Return type list of all FIELDS in reversed order
 template <typename HEAD=void, typename... TAIL>

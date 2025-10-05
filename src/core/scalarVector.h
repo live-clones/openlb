@@ -176,7 +176,7 @@ inline constexpr bool lex_greater_eq (const ScalarVector<T,D,IMPL>& lhs, const S
 
 /// Print vector entries to ostream in a human-readable fashion
 template<typename T, unsigned D, typename IMPL>
-inline std::ostream& operator << (std::ostream& os, const ScalarVector<T,D,IMPL>& o)
+std::ostream& operator << (std::ostream& os, const ScalarVector<T,D,IMPL>& o)
 {
   if (D > 0) {
     os << "[";
@@ -190,7 +190,6 @@ inline std::ostream& operator << (std::ostream& os, const ScalarVector<T,D,IMPL>
   }
   return os;
 }
-
 
 }
 

@@ -109,6 +109,7 @@ struct OmegaFromCell {
     }
     V m = parameters.template get<M>();
     V n = parameters.template get<N>();
+
     V nuNew = m * util::pow(gamma, n-V{1}); // Ostwald-de Waele relation
     if constexpr(HERSCHELBULKLEY) {
       // Second term necessary for Herschel-Bulkley relation

@@ -1,6 +1,6 @@
 /*  This file is part of the OpenLB library
  *
- *  Copyright (C) 2019 Adrian Kummerlaender
+ *  Copyright (C) 2019-2025 Adrian Kummerlaender, Shota Ito
  *  E-mail contact: info@openlb.net
  *  The most recent release of OpenLB can be downloaded at
  *  <http://www.openlb.net/>
@@ -57,50 +57,66 @@ public:
 template<typename T, typename DESCRIPTOR>
 class CellD {
 private:
-  MultiFieldArrayForDescriptorD<T,DESCRIPTOR,Platform::CPU_SISD> _fieldsD;
+  CellFieldsForDescriptorD<T,DESCRIPTOR> _cellFieldsD;
 
 public:
   using value_t = T;
   using descriptor_t = DESCRIPTOR;
 
-  CellD(): _fieldsD(1) { }
+  CellD() any_platform : _cellFieldsD() { }
 
-  const T& operator[](unsigned iPop) const {
-    return _fieldsD.template getFieldComponent<descriptors::POPULATION>(0, iPop);
+  const T& operator[](unsigned iPop) const any_platform {
+    return _cellFieldsD.template get<descriptors::POPULATION>()[iPop];
   }
 
-  T& operator[](unsigned iPop) {
-    return _fieldsD.template getFieldComponent<descriptors::POPULATION>(0, iPop);
-  }
-
-  template <typename FIELD>
-  auto getField() const {
-    return _fieldsD.template getField<FIELD>(0);
+  T& operator[](unsigned iPop) any_platform {
+    return _cellFieldsD.template get<descriptors::POPULATION>()[iPop];
   }
 
   template <typename FIELD>
-  void setField(const FieldD<T,DESCRIPTOR,FIELD>& v) {
-    _fieldsD.template setField<FIELD>(0, v);
+  auto getField() const any_platform {
+    return _cellFieldsD.template get<FIELD>();
   }
 
   template <typename FIELD>
-  auto getFieldPointer() {
-    return _fieldsD.template getFieldPointer<FIELD>(0);
+  void setField(const FieldD<T,DESCRIPTOR,FIELD>& v) any_platform {
+    _cellFieldsD.template set<FIELD>(v);
   }
 
   template <typename FIELD>
-  auto getFieldPointer() const {
-    return _fieldsD.template getFieldPointer<FIELD>(0);
+  auto getFieldPointer() any_platform {
+    if constexpr (DESCRIPTOR::template size<FIELD>() == 1) {
+      return &_cellFieldsD.template get<FIELD>();
+    } else {
+      return _cellFieldsD.template get<FIELD>().data();
+    }
   }
 
   template <typename FIELD>
-  const auto& getFieldComponent(unsigned iD) const {
-    return _fieldsD.template getFieldComponent<FIELD>(0, iD);
+  auto getFieldPointer() const any_platform {
+    if constexpr (DESCRIPTOR::template size<FIELD>() == 1) {
+      return &_cellFieldsD.template get<FIELD>();
+    } else {
+      return _cellFieldsD.template get<FIELD>().data();
+    }
   }
 
   template <typename FIELD>
-  auto& getFieldComponent(unsigned iD) {
-    return _fieldsD.template getFieldComponent<FIELD>(0, iD);
+  const auto& getFieldComponent(unsigned iD) const any_platform {
+    if constexpr (DESCRIPTOR::template size<FIELD>() == 1) {
+      return _cellFieldsD.template get<FIELD>();
+    } else {
+      return _cellFieldsD.template get<FIELD>()[iD];
+    }
+  }
+
+  template <typename FIELD>
+  auto& getFieldComponent(unsigned iD) any_platform {
+    if constexpr (DESCRIPTOR::template size<FIELD>() == 1) {
+      return _cellFieldsD.template get<FIELD>();
+    } else {
+      return _cellFieldsD.template get<FIELD>()[iD];
+    }
   }
 
 };
@@ -109,50 +125,50 @@ public:
 template<typename T, typename DESCRIPTOR, typename DYNAMICS>
 class FullCellD : public CellD<T,DESCRIPTOR> {
 public:
-  FullCellD() : CellD<T,DESCRIPTOR>()
+  FullCellD() any_platform : CellD<T,DESCRIPTOR>()
   { }
 
-  T computeRho() const {
+  T computeRho() const any_platform {
     return typename DYNAMICS::MomentaF().computeRho(*this);
   }
-  void computeU(T* u) {
+  void computeU(T* u) any_platform {
     typename DYNAMICS::MomentaF().computeU(*this, u);
   }
-  void computeJ(T* j) {
+  void computeJ(T* j) any_platform {
     typename DYNAMICS::MomentaF().computeJ(*this, j);
   }
-  void computeRhoU(T& rho, T* u) {
+  void computeRhoU(T& rho, T* u) any_platform {
     typename DYNAMICS::MomentaF().computeRhoU(*this, rho, u);
   }
-  void computeStress(T* pi) {
+  void computeStress(T* pi) any_platform {
     T rho, u[DESCRIPTOR::d] { };
     typename DYNAMICS::MomentaF().computeRhoU(*this, rho, u);
     typename DYNAMICS::MomentaF().computeStress(*this, rho, u, pi);
   }
-  void computeAllMomenta(T& rho, T* u, T* pi) {
+  void computeAllMomenta(T& rho, T* u, T* pi) any_platform {
     typename DYNAMICS::MomentaF().computeAllMomenta(*this, rho, u, pi);
   }
 
-  void defineRho(T& rho) {
+  void defineRho(T& rho) any_platform {
     typename DYNAMICS::MomentaF().defineRho(*this, rho);
   }
-  void defineU(T* u) {
+  void defineU(T* u) any_platform {
     typename DYNAMICS::MomentaF().defineU(*this, u);
   }
-  void defineRhoU(T rho, T* u) {
+  void defineRhoU(T rho, T* u) any_platform {
     typename DYNAMICS::MomentaF().defineRhoU(*this, rho, u);
   }
-  void defineAllMomenta(T rho, T* u, T* pi) {
+  void defineAllMomenta(T rho, T* u, T* pi) any_platform {
     typename DYNAMICS::MomentaF().defineAllMomenta(*this, rho, u, pi);
   }
 
-  void iniEquilibrium(T rho, T* u) {
+  void iniEquilibrium(T rho, T* u) any_platform {
     typename DYNAMICS::MomentaF().iniEquilibrium(*this, rho, u);
   }
-  void iniRegularized(T rho, T* u, T* pi) {
+  void iniRegularized(T rho, T* u, T* pi) any_platform {
     typename DYNAMICS::MomentaF().iniRegularized(*this, rho, u, pi);
   }
-  void inverseShiftRhoU(T& rho, T* u) {
+  void inverseShiftRhoU(T& rho, T* u) any_platform {
     typename DYNAMICS::MomentaF().inverseShiftRhoU(*this, rho, u);
   }
 

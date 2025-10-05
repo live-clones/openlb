@@ -164,8 +164,7 @@ public:
 };
 
 void prepareGeometry(SuperGeometry<T,3>& superGeometry,
-                     IndicatorF3D<T>& indicator,
-                     const UnitConverter<T,DESCRIPTOR>& converter)
+                     IndicatorF3D<T>& indicator)
 {
   OstreamManager clout(std::cout,"prepareGeometry");
   clout << "Prepare Geometry ..." << std::endl;
@@ -189,7 +188,6 @@ void prepareGeometry(SuperGeometry<T,3>& superGeometry,
 
 // set up initial conditions
 void setInitialConditions(SuperLattice<T, DESCRIPTOR>& sLattice,
-                          const UnitConverter<T,DESCRIPTOR>& converter,
                           SuperGeometry<T,3>& superGeometry)
 {
   OstreamManager clout(std::cout, "setInitialConditions");
@@ -200,7 +198,7 @@ void setInitialConditions(SuperLattice<T, DESCRIPTOR>& sLattice,
   AnalyticalConst3D<T, T> u0(0.,0.,0.);
   AnalyticalConst3D<T,T> tag1(1);
   AnalyticalConst3D<T,T> tag0(0);
-  Channel3D<T, T> uSol(converter, 1.);
+  Channel3D<T, T> uSol(sLattice.getUnitConverter(), 1.);
 
   sLattice.defineRhoU(superGeometry, 1, rho, uSol);
   sLattice.iniEquilibrium(superGeometry, 1, rho, uSol);
@@ -222,7 +220,6 @@ void setInitialConditions(SuperLattice<T, DESCRIPTOR>& sLattice,
 
 // Set up the geometry of the simulation
 void prepareLattice(SuperLattice<T,DESCRIPTOR>& sLattice,
-                    const UnitConverter<T,DESCRIPTOR>& converter,
                     SuperGeometry<T,3>& superGeometry,
                     WallModelParameters<T>& wallModelParameters)
 {
@@ -243,9 +240,9 @@ void prepareLattice(SuperLattice<T,DESCRIPTOR>& sLattice,
 
   /// === Set Initial Conditions == ///
   setTurbulentWallModel(sLattice, superGeometry, 2, wallModelParameters);
-  setInitialConditions(sLattice, converter, superGeometry);
+  setInitialConditions(sLattice, superGeometry);
 
-  sLattice.setParameter<descriptors::OMEGA>( converter.getLatticeRelaxationFrequency() );
+  sLattice.setParameter<descriptors::OMEGA>( sLattice.getUnitConverter().getLatticeRelaxationFrequency() );
   sLattice.setParameter<collision::LES::SMAGORINSKY>(T(0.12));
 
   // Make the lattice ready for simulation
@@ -255,8 +252,7 @@ void prepareLattice(SuperLattice<T,DESCRIPTOR>& sLattice,
 }
 
 /// Computes the pressure drop between the voxels before and after the cylinder
-void getResults(SuperLattice<T, DESCRIPTOR>& sLattice,
-                UnitConverter<T,DESCRIPTOR> const& converter, size_t iT,
+void getResults(SuperLattice<T, DESCRIPTOR>& sLattice, size_t iT,
                 SuperGeometry<T,3>& superGeometry, Timer<double>& timer)
 {
   OstreamManager clout(std::cout, "getResults");
@@ -270,18 +266,18 @@ void getResults(SuperLattice<T, DESCRIPTOR>& sLattice,
   }
 
   // Writes output on the console
-  if (iT % converter.getLatticeTime(checkstatistics) == 0) {
+  if (iT % sLattice.getUnitConverter().getLatticeTime(checkstatistics) == 0) {
     // Timer console output
     timer.update(iT);
     timer.printStep(2);
     // Lattice statistics console output
-    sLattice.getStatistics().print(iT, iT * converter.getPhysDeltaT());
-    clout << "Max. physical velocity(m/s): " << converter.getPhysVelocity(sLattice.getStatistics().getMaxU()) << std::endl;
-    clout << "Max u+:" << converter.getPhysVelocity(sLattice.getStatistics().getMaxU())
-          / (ReTau * charPhysNu / (converter.getCharPhysLength()/2.)) << std::endl;
+    sLattice.getStatistics().print(iT, iT * sLattice.getUnitConverter().getPhysDeltaT());
+    clout << "Max. physical velocity(m/s): " << sLattice.getUnitConverter().getPhysVelocity(sLattice.getStatistics().getMaxU()) << std::endl;
+    clout << "Max u+:" << sLattice.getUnitConverter().getPhysVelocity(sLattice.getStatistics().getMaxU())
+          / (ReTau * charPhysNu / (sLattice.getUnitConverter().getCharPhysLength()/2.)) << std::endl;
   }
 
-  int iTstartAvg = converter.getLatticeTime(physConvergeTime);
+  int iTstartAvg = sLattice.getUnitConverter().getLatticeTime(physConvergeTime);
   if (iT == iTstartAvg) {
     SuperLatticeVelocity3D<T,DESCRIPTOR> latticeVelocity(sLattice);
     sLattice.defineField<descriptors::AVERAGE_VELOCITY>(superGeometry.getMaterialIndicator({1,2}), latticeVelocity);
@@ -293,17 +289,17 @@ void getResults(SuperLattice<T, DESCRIPTOR>& sLattice,
     sLattice.setParameter<descriptors::LATTICE_TIME>(iT - iTstartAvg + 1);
   }
 
-  if (iT%converter.getLatticeTime(checkstatistics) == 0 || iT==converter.getLatticeTime(maxPhysT)-1) {
+  if (iT%sLattice.getUnitConverter().getLatticeTime(checkstatistics) == 0 || iT==sLattice.getUnitConverter().getLatticeTime(maxPhysT)-1) {
     // Writes the vtk files
     sLattice.executePostProcessors(stage::Evaluation{});
     sLattice.setProcessingContext(ProcessingContext::Evaluation);
     sLattice.scheduleBackgroundOutputVTK([&,iT](auto task)
     {
       SuperVTMwriter3D<T> vtmWriter("channel3d");
-      SuperLatticePhysVelocity3D velocity(sLattice, converter);
-      SuperLatticePhysPressure3D pressure(sLattice, converter);
-      SuperLatticePhysField3D<T,DESCRIPTOR,AVERAGE_VELOCITY> sAveragedVel(sLattice, converter.getConversionFactorVelocity());
-      SuperLatticePhysField3D<T,DESCRIPTOR,descriptors::WMVELOCITY> wmvelocity(sLattice, converter.getConversionFactorVelocity());
+      SuperLatticePhysVelocity3D velocity(sLattice, sLattice.getUnitConverter());
+      SuperLatticePhysPressure3D pressure(sLattice, sLattice.getUnitConverter());
+      SuperLatticePhysField3D<T,DESCRIPTOR,AVERAGE_VELOCITY> sAveragedVel(sLattice, sLattice.getUnitConverter().getConversionFactorVelocity());
+      SuperLatticePhysField3D<T,DESCRIPTOR,descriptors::WMVELOCITY> wmvelocity(sLattice, sLattice.getUnitConverter().getConversionFactorVelocity());
       wmvelocity.getName() = "wmvelocity";
       SuperGeometryF<T,3> geom(superGeometry);
       vtmWriter.addFunctor(velocity);
@@ -367,10 +363,10 @@ int main(int argc, char* argv[])
 
   SuperGeometry<T,3> superGeometry(cuboidDecomposition, loadBalancer, 4);
 
-  prepareGeometry(superGeometry, cuboid, converter);
+  prepareGeometry(superGeometry, cuboid);
 
   /// === 3rd Step: Prepare Lattice ===
-  SuperLattice<T, DESCRIPTOR> sLattice(superGeometry);
+  SuperLattice<T, DESCRIPTOR> sLattice(converter, superGeometry);
 
 
   WallModelParameters<T> wallModelParameters;
@@ -385,7 +381,7 @@ int main(int argc, char* argv[])
   wallModelParameters.movingWall = movingWall;
   wallModelParameters.averageVelocity = averageVelocity;
 
-  prepareLattice(sLattice, converter, superGeometry, wallModelParameters);
+  prepareLattice(sLattice, superGeometry, wallModelParameters);
 
   //forcing of the channel
   SuperLatticeFieldReductionO<T, DESCRIPTOR, descriptors::VELOCITY2, reduction::SumO,
@@ -399,7 +395,7 @@ int main(int argc, char* argv[])
   coupling.setParameter<TurbulentChannelForce<T>::LATTICE_CHANNEL_VOLUME>(converter.getLatticeLength(lz) *converter.getLatticeLength(ly) *converter.getLatticeLength(lx));
   coupling.setParameter<TurbulentChannelForce<T>::LATTICE_U_SUM>({converter.getCharLatticeVelocity(),0.,0.});
   coupling.restrictTo(superGeometry.getMaterialIndicator(1));
-  coupling.execute();
+  coupling.apply();
 
   /// === 4th Step: Main Loop with Timer ===
   Timer<double> timer(converter.getLatticeTime(maxPhysT), superGeometry.getStatistics().getNvoxel() );
@@ -408,9 +404,9 @@ int main(int argc, char* argv[])
   for (size_t iT=0; iT<converter.getLatticeTime(maxPhysT); ++iT) {
     /// === 6th Step: Computation and Output of the Results ===
     sLattice.setParameter<descriptors::LATTICE_TIME>(iT);
-    getResults(sLattice, converter, iT, superGeometry,timer);
+    getResults(sLattice, iT, superGeometry,timer);
     coupling.setParameter<TurbulentChannelForce<T>::LATTICE_U_SUM>(sumProcessor.compute());
-    coupling.execute();
+    coupling.apply();
     /// === 7th Step: Collide and Stream Execution ===
     sLattice.collideAndStream();
   }

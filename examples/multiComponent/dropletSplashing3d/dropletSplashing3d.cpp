@@ -109,7 +109,7 @@ void initialCondition( SuperLattice<T, DESCRIPTOR>& sLattice,
   // Compute initial force
   sLattice.executePostProcessors(stage::PreCoupling());
   sLattice.getCommunicator(stage::PreCoupling()).communicate();
-  couplingInteractionForce.execute();
+  couplingInteractionForce.apply();
 
   // Correct velocity
   sLattice.addPostProcessor<stage::PostCoupling>(meta::id<InitialPopulationCorrectionO>());
@@ -133,8 +133,7 @@ void prepareGeometry( SuperGeometry<T,3>& superGeometry )
 }
 
 void prepareLattice( SuperLattice<T, DESCRIPTOR>& sLattice,
-                     SuperGeometry<T,3>& superGeometry,
-                     MultiPhaseUnitConverterFromRelaxationTime<T, DESCRIPTOR> const& converter )
+                     SuperGeometry<T,3>& superGeometry )
 {
   OstreamManager clout( std::cout,"prepareLattice" );
   clout << "Prepare Lattice ..." << std::endl;
@@ -152,25 +151,25 @@ void prepareLattice( SuperLattice<T, DESCRIPTOR>& sLattice,
   AnalyticalConst3D<T,T> _dropletVelocity_y( dropletVelocity_y );
 
   SmoothIndicatorFactoredCircle3D<T,T> dropletVelocity_z( {Lx/2., Ly/2., Lz/2.}, radius,
-                                                           sqrt(2.)*thickness*converter.getConversionFactorLength(),
+                                                           sqrt(2.)*thickness*sLattice.getUnitConverter().getConversionFactorLength(),
                                                            0, {0,0, 0}, 0,
-                                                           -U_droplet/converter.getConversionFactorVelocity() );
+                                                           -U_droplet/sLattice.getUnitConverter().getConversionFactorVelocity() );
   AnalyticalIdentity3D<T,T> _dropletVelocity_z( dropletVelocity_z );
 
   AnalyticalComposed3D<T,T> fluidVelocity(_dropletVelocity_x,_dropletVelocity_y,_dropletVelocity_z);
 
 
-  AnalyticalConst3D<T,T> vapor ( rho_vapor/converter.getConversionFactorDensity() );
+  AnalyticalConst3D<T,T> vapor ( rho_vapor/sLattice.getUnitConverter().getConversionFactorDensity() );
   SmoothIndicatorFactoredCircle3D<T,T> liquid ( {Lx/2., Ly/2., Lz/2.}, radius,
-                                                 sqrt(2.)*thickness*converter.getConversionFactorLength(),
+                                                 sqrt(2.)*thickness*sLattice.getUnitConverter().getConversionFactorLength(),
                                                  0, {0,0,0}, 0,
-                                                 ( rho_liquid - rho_vapor )/converter.getConversionFactorDensity() );
+                                                 ( rho_liquid - rho_vapor )/sLattice.getUnitConverter().getConversionFactorDensity() );
 
   SmoothIndicatorCuboid3D<T,T> film( 2.*Lx, 2.*Ly, radius, {Lx/2., Ly/2., 0.},
-                                     sqrt(2.)*thickness*converter.getConversionFactorLength(),
+                                     sqrt(2.)*thickness*sLattice.getUnitConverter().getConversionFactorLength(),
                                      {0,0,0} );
   AnalyticalConst3D<T,T> difference ( (rho_liquid - rho_vapor)
-                                      /converter.getConversionFactorDensity() );
+                                      /sLattice.getUnitConverter().getConversionFactorDensity() );
 
   AnalyticalIdentity3D<T,T> fluidDensity( vapor + liquid + film * difference );
 
@@ -184,13 +183,11 @@ void prepareLattice( SuperLattice<T, DESCRIPTOR>& sLattice,
   sLattice.defineField<descriptors::EXTERNAL_FORCE>( superGeometry, 1, fnull_ );
 
   // global relaxation frequency (it can be initialized as one)
-  AnalyticalConst3D<T,T> one( 1. );
-  sLattice.defineField<descriptors::OMEGA>( superGeometry, 1, one );
   sLattice.setParameter<OMEGA>( 1. );
-  sLattice.setParameter<multiphase::RHO_VAPOR>( rho_vapor/converter.getConversionFactorDensity() );
-  sLattice.setParameter<multiphase::RHO_LIQUID>( rho_liquid/converter.getConversionFactorDensity() );
-  sLattice.setParameter<multiphase::OMEGA_VAPOR>( 1./converter.computeRelaxationTimefromPhysViscosity( nu_vapor ) );
-  sLattice.setParameter<multiphase::OMEGA_LIQUID>( 1./converter.computeRelaxationTimefromPhysViscosity( nu_liquid ) );
+  sLattice.setParameter<multiphase::RHO_VAPOR>( rho_vapor/sLattice.getUnitConverter().getConversionFactorDensity() );
+  sLattice.setParameter<multiphase::RHO_LIQUID>( rho_liquid/sLattice.getUnitConverter().getConversionFactorDensity() );
+  sLattice.setParameter<multiphase::OMEGA_VAPOR>( 1./sLattice.getUnitConverter().computeRelaxationTimefromPhysViscosity( nu_vapor ) );
+  sLattice.setParameter<multiphase::OMEGA_LIQUID>( 1./sLattice.getUnitConverter().computeRelaxationTimefromPhysViscosity( nu_liquid ) );
 
   sLattice.addPostProcessor<stage::PreCoupling>(meta::id<RhoStatistics>());
 
@@ -209,16 +206,15 @@ void prepareLattice( SuperLattice<T, DESCRIPTOR>& sLattice,
 }
 
 //std::vector<T>
-void getResults( SuperLattice<T, DESCRIPTOR>& sLattice1,
-                 int iT, SuperGeometry<T,3>& superGeometry, util::Timer<T>& timer,
-                 MultiPhaseUnitConverterFromRelaxationTime<T, DESCRIPTOR> const& converter )
+void getResults( SuperLattice<T, DESCRIPTOR>& sLattice,
+                 int iT, SuperGeometry<T,3>& superGeometry, util::Timer<T>& timer )
 {
   OstreamManager clout( std::cout,"getResults" );
   SuperVTMwriter3D<T> vtmWriter( "dropletSplashing3d" );
   if ( iT==0 ) {
     // Writes the geometry, cuboid no. and rank no. as vti file for visualization
-    SuperLatticeCuboid3D<T, DESCRIPTOR> cuboid( sLattice1 );
-    SuperLatticeRank3D<T, DESCRIPTOR> rank( sLattice1 );
+    SuperLatticeCuboid3D<T, DESCRIPTOR> cuboid( sLattice );
+    SuperLatticeRank3D<T, DESCRIPTOR> rank( sLattice );
     vtmWriter.write( cuboid );
     vtmWriter.write( rank );
     vtmWriter.createMasterFile();
@@ -228,59 +224,59 @@ void getResults( SuperLattice<T, DESCRIPTOR>& sLattice1,
     // Timer console output
     timer.update( iT );
     timer.printStep();
-    sLattice1.getStatistics().print( iT, iT );
+    sLattice.getStatistics().print( iT, iT );
   }
 
   // Save vtk files
   if (iT % vtkIter == 0) {
-    sLattice1.setProcessingContext(ProcessingContext::Evaluation);
+    sLattice.setProcessingContext(ProcessingContext::Evaluation);
 
     // rho_lat -> density in lattice units
-    SuperLatticeDensity3D<T, DESCRIPTOR> rhoL_lat( sLattice1 );
+    SuperLatticeDensity3D<T, DESCRIPTOR> rhoL_lat( sLattice );
     SuperIdentity3D<T,T> rho_lat( rhoL_lat );
     rho_lat.getName() = "rho_lat";
 
     // rho_phs -> density in physical units
-    AnalyticalConst3D<T,T> _C_rho( converter.getConversionFactorDensity() );
-    SuperLatticeFfromAnalyticalF3D<T, DESCRIPTOR> __C_rho( _C_rho, sLattice1 );
+    AnalyticalConst3D<T,T> _C_rho( sLattice.getUnitConverter().getConversionFactorDensity() );
+    SuperLatticeFfromAnalyticalF3D<T, DESCRIPTOR> __C_rho( _C_rho, sLattice );
     SuperIdentity3D<T,T> rho_phs( rho_lat * __C_rho );
     rho_phs.getName() = "rho_phs";
 
     // velocity_lat -> velocity in lattice units
-    SuperLatticeVelocity3D<T, DESCRIPTOR> velocityL_lat( sLattice1 );
+    SuperLatticeVelocity3D<T, DESCRIPTOR> velocityL_lat( sLattice );
     SuperIdentity3D<T,T> velocity_lat( velocityL_lat );
     velocity_lat.getName() = "velocity_lat";
 
     // velocity_phs -> velocity in physical units
-    AnalyticalConst3D<T,T> _C_U( converter.getConversionFactorVelocity() );
-    SuperLatticeFfromAnalyticalF3D<T, DESCRIPTOR> __C_U( _C_U, sLattice1 );
+    AnalyticalConst3D<T,T> _C_U( sLattice.getUnitConverter().getConversionFactorVelocity() );
+    SuperLatticeFfromAnalyticalF3D<T, DESCRIPTOR> __C_U( _C_U, sLattice );
     SuperIdentity3D<T,T> velocity_phs( velocity_lat * __C_U );
     velocity_phs.getName() = "velocity_phs";
 
     // force_lat -> force in lattice units
-    SuperLatticeField3D<T, DESCRIPTOR, FORCE> forceL_lat( sLattice1 );
+    SuperLatticeField3D<T, DESCRIPTOR, FORCE> forceL_lat( sLattice );
     SuperIdentity3D<T,T> force_lat( forceL_lat );
     force_lat.getName() = "force_lat";
 
     // force_phs -> force in physical units
-    AnalyticalConst3D<T,T> _C_F( converter.getConversionFactorForce() );
-    SuperLatticeFfromAnalyticalF3D<T, DESCRIPTOR> __C_F( _C_F, sLattice1 );
+    AnalyticalConst3D<T,T> _C_F( sLattice.getUnitConverter().getConversionFactorForce() );
+    SuperLatticeFfromAnalyticalF3D<T, DESCRIPTOR> __C_F( _C_F, sLattice );
     SuperIdentity3D<T,T> force_phs( force_lat * __C_F );
     force_phs.getName() = "force_phs";
 
     // p_lat -> pressure in lattice units
-    SuperLatticeField3D<T, DESCRIPTOR, SCALAR> pL_lat( sLattice1 );
+    SuperLatticeField3D<T, DESCRIPTOR, SCALAR> pL_lat( sLattice );
     SuperIdentity3D<T,T> p_lat( pL_lat );
     p_lat.getName() = "p_lat";
 
     // p_phs -> physical in physical units
-    AnalyticalConst3D<T,T> _C_P( converter.getConversionFactorPressure() );
-    SuperLatticeFfromAnalyticalF3D<T, DESCRIPTOR> __C_P( _C_P, sLattice1 );
+    AnalyticalConst3D<T,T> _C_P( sLattice.getUnitConverter().getConversionFactorPressure() );
+    SuperLatticeFfromAnalyticalF3D<T, DESCRIPTOR> __C_P( _C_P, sLattice );
     SuperIdentity3D<T,T> p_phs( p_lat * __C_P );
     p_phs.getName() = "p_phs";
 
     // omega
-    SuperLatticeField3D<T, DESCRIPTOR, OMEGA> omega( sLattice1 );
+    SuperLatticeField3D<T, DESCRIPTOR, OMEGA> omega( sLattice );
     SuperIdentity3D<T,T> _omega( omega );
     _omega.getName() = "Omega";
 
@@ -304,27 +300,14 @@ int main( int argc, char *argv[] )
   initialize( &argc, &argv );
   OstreamManager clout(std::cout, "main");
 
-  // === 1st Step: Unit Converter ===
-  MultiPhaseUnitConverterFromRelaxationTime<T,DESCRIPTOR> converter(
-    (T)   Nx,                        // resolution
-    (T)   0.60,                       // lattice relaxation time
-    (T)   rho_liquid/1000,          // lattice density
-    (T)   Lx,                        // charPhysLength: reference length of simulation geometry
-    (T)   nu_liquid,                 // physViscosity: physical kinematic viscosity in __m^2 / s__
-    (T)   rho_liquid                 // physDensity: physical density in __kg / m^3__
-  );
-
-  // Prints the converter log as console output
-  converter.print();
-
-  // === 2nd Step: Prepare Geometry ===
+  // === 1st Step: Prepare Geometry ===
   // Instantiation of a cuboidDecomposition with weights
 #ifdef PARALLEL_MODE_MPI
   const int noOfCuboids = singleton::mpi().getSize();
 #else
   const int noOfCuboids = 1;
 #endif
-  CuboidDecomposition3D<T> cuboidDecomposition(0, converter.getPhysDeltaX(), {Nx, Ny, Nz}, noOfCuboids);
+  CuboidDecomposition3D<T> cuboidDecomposition(0, Lx/Nx, {Nx, Ny, Nz}, noOfCuboids);
   // set periodic boundaries to the domain
   cuboidDecomposition.setPeriodicity({true, true, false});
   // Instantiation of loadbalancer
@@ -334,10 +317,22 @@ int main( int argc, char *argv[] )
   SuperGeometry<T,3> superGeometry( cuboidDecomposition,loadBalancer, 3 );
   prepareGeometry( superGeometry );
 
-  // === 3rd Step: Prepare Lattice ===
+  // === 2nd Step: Prepare Lattice ===
   SuperLattice<T, DESCRIPTOR> sLattice( superGeometry );
 
-  prepareLattice( sLattice, superGeometry, converter );
+  // Unit Converter
+  sLattice.setUnitConverter<MultiPhaseUnitConverterFromRelaxationTime<T,DESCRIPTOR>>(
+    (T)   Nx,                        // resolution
+    (T)   0.6,                       // lattice relaxation time
+    (T)   rho_liquid/1000.,           // lattice density
+    (T)   Lx,                        // charPhysLength: reference length of simulation geometry
+    (T)   nu_liquid,                 // physViscosity: physical kinematic viscosity in __m^2 / s__
+    (T)   rho_liquid                 // physDensity: physical density in __kg / m^3__
+  );
+  // Prints the converter log as console output
+  sLattice.getUnitConverter().print();
+
+  prepareLattice( sLattice, superGeometry );
 
   SuperLatticeCoupling couplingInteractionForce(
     COUPLING{},
@@ -345,12 +340,12 @@ int main( int argc, char *argv[] )
   );
 
   couplingInteractionForce.template setParameter<interaction::Polinomial::RHOV>(
-                                                  rho_vapor/converter.getConversionFactorDensity());
+                                                  rho_vapor/sLattice.getUnitConverter().getConversionFactorDensity());
   couplingInteractionForce.template setParameter<interaction::Polinomial::RHOL>(
-                                                  rho_liquid/converter.getConversionFactorDensity());
+                                                  rho_liquid/sLattice.getUnitConverter().getConversionFactorDensity());
   couplingInteractionForce.template setParameter<interaction::Polinomial::THICKNESS>(thickness);
   couplingInteractionForce.template setParameter<interaction::Polinomial::SURFTENSION>(
-                                                  SurfTension/converter.getConversionFactorSurfaceTension());
+                                                  SurfTension/sLattice.getUnitConverter().getConversionFactorSurfaceTension());
 
   // Compute the interaction parameters
   interaction::Polinomial::computeParameters<T>(couplingInteractionForce);
@@ -362,21 +357,21 @@ int main( int argc, char *argv[] )
 
   initialCondition(sLattice, couplingInteractionForce);
 
-  // === 4th Step: Main Loop with Timer ===
+  // === 3rd Step: Main Loop with Timer ===
   int iT = 0;
   std::cout << "starting simulation..." << std::endl;
   util::Timer<T> timer(maxIter, superGeometry.getStatistics().getNvoxel());
   timer.start();
   std::vector<T> output = {1./radius,0};
   for ( iT=0; iT<=maxIter; ++iT ) {
-    getResults(sLattice, iT, superGeometry, timer, converter);
+    getResults(sLattice, iT, superGeometry, timer);
 
     // Collide and stream (and coupling) execution
     sLattice.collideAndStream();
 
     sLattice.executePostProcessors(stage::PreCoupling());
     sLattice.getCommunicator(stage::PreCoupling()).communicate();
-    couplingInteractionForce.execute();
+    couplingInteractionForce.apply();
 
   }
   timer.stop();

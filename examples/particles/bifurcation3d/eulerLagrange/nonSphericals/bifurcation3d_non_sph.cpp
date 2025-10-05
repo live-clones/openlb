@@ -511,7 +511,7 @@ int main(int argc, char* argv[])
 
   // === 3rd Step: Prepare Lattice ===
 
-  SuperLattice<T, DESCRIPTOR> superLattice(superGeometry);
+  SuperLattice<T, DESCRIPTOR> superLattice(converter, superGeometry);
 
   //prepareLattice and setBoundaryConditions
   prepareLattice(superLattice, converter, stlReader, superGeometry);

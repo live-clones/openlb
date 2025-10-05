@@ -111,7 +111,7 @@ void resetMovement( Particle<T,PARTICLETYPE>& particle,
   }
 }
 
-//TODO: remove in favour of ParametersD
+//TODO: remove in favour of StaticParametersD
 template<typename T, typename PARTICLETYPE>
 struct ParticleDynamicStateNoAngle{
   Vector<T,PARTICLETYPE::d> position;

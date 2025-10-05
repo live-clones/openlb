@@ -6,7 +6,7 @@
     <OlbDir> ../../../ </OlbDir>
 
     <Discretization>
-      <Resolution> 20 </Resolution>                           // 104
+      <Resolution> 30 </Resolution>                           // 104
       <LatticeRelaxationTime> 0.8 </LatticeRelaxationTime>
     </Discretization>
 

@@ -54,8 +54,8 @@ const T maxPhysT = 2.;        // max. simulation time in s, SI unit
 
 
 // Stores data from stl file in geometry in form of material numbers
-void prepareGeometry( UnitConverter<T,DESCRIPTOR> const& converter, IndicatorF3D<T>& indicator,
-                      STLreader<T>& stlReader, SuperGeometry<T,3>& superGeometry )
+void prepareGeometry( IndicatorF3D<T>& indicator, STLreader<T>& stlReader,
+                      SuperGeometry<T,3>& superGeometry, T dx )
 {
 
   OstreamManager clout( std::cout,"prepareGeometry" );
@@ -68,19 +68,19 @@ void prepareGeometry( UnitConverter<T,DESCRIPTOR> const& converter, IndicatorF3D
 
   // Set material number for inflow
   IndicatorCircle3D<T> inflow(  0.218125,0.249987,0.0234818, 0., 1.,0., 0.0112342 );
-  IndicatorCylinder3D<T> layerInflow( inflow, 2.*converter.getPhysDeltaX() );
+  IndicatorCylinder3D<T> layerInflow( inflow, 2.*dx );
   superGeometry.rename( 2,3,1,layerInflow );
 
   // Set material number for outflow0
   //IndicatorCircle3D<T> outflow0(0.2053696,0.0900099,0.0346537,  2.5522,5.0294,-1.5237, 0.0054686 );
   IndicatorCircle3D<T> outflow0( 0.2053696,0.0900099,0.0346537, 0.,-1.,0., 0.0054686 );
-  IndicatorCylinder3D<T> layerOutflow0( outflow0, 2.*converter.getPhysDeltaX() );
+  IndicatorCylinder3D<T> layerOutflow0( outflow0, 2.*dx );
   superGeometry.rename( 2,4,1,layerOutflow0 );
 
   // Set material number for outflow1
   //IndicatorCircle3D<T> outflow1(0.2388403,0.0900099,0.0343228, -1.5129,5.1039,-2.8431, 0.0058006 );
   IndicatorCircle3D<T> outflow1( 0.2388403,0.0900099,0.0343228, 0.,-1.,0., 0.0058006 );
-  IndicatorCylinder3D<T> layerOutflow1( outflow1, 2.*converter.getPhysDeltaX() );
+  IndicatorCylinder3D<T> layerOutflow1( outflow1, 2.*dx );
   superGeometry.rename( 2,5,1,layerOutflow1 );
 
   // Removes all not needed boundary voxels outside the surface
@@ -94,37 +94,36 @@ void prepareGeometry( UnitConverter<T,DESCRIPTOR> const& converter, IndicatorF3D
 }
 
 // Set up the geometry of the simulation
-void prepareLattice( SuperLattice<T, DESCRIPTOR>& lattice,
-                     UnitConverter<T,DESCRIPTOR> const& converter,
+void prepareLattice( SuperLattice<T, DESCRIPTOR>& sLattice,
                      STLreader<T>& stlReader, SuperGeometry<T,3>& superGeometry )
 {
 
   OstreamManager clout( std::cout,"prepareLattice" );
   clout << "Prepare Lattice ..." << std::endl;
 
-  const T omega = converter.getLatticeRelaxationFrequency();
+  const T omega = sLattice.getUnitConverter().getLatticeRelaxationFrequency();
 
   // material=1 --> bulk dynamics
-  lattice.defineDynamics<BulkDynamics>(superGeometry, 1);
+  sLattice.defineDynamics<BulkDynamics>(superGeometry, 1);
 
   if ( bouzidiOn ) {
     // material=2 --> no dynamics + bouzidi zero velocity
-    setBouzidiBoundary<T,DESCRIPTOR>(lattice, superGeometry, 2, stlReader);
+    setBouzidiBoundary<T,DESCRIPTOR>(sLattice, superGeometry, 2, stlReader);
     // material=3 --> no dynamics + bouzidi velocity (inflow)
-    setBouzidiBoundary<T,DESCRIPTOR,BouzidiVelocityPostProcessor>(lattice, superGeometry, 3, stlReader);
+    setBouzidiBoundary<T,DESCRIPTOR,BouzidiVelocityPostProcessor>(sLattice, superGeometry, 3, stlReader);
   }
   else {
     // material=2 --> bounceBack dynamics
-    boundary::set<boundary::BounceBack>(lattice, superGeometry, 2);
+    boundary::set<boundary::BounceBack>(sLattice, superGeometry, 2);
     // material=3 --> bulk dynamics + velocity (inflow)
-    lattice.defineDynamics<BulkDynamics>(superGeometry, 3);
-    boundary::set<boundary::InterpolatedVelocity>(lattice, superGeometry, 3);
+    sLattice.defineDynamics<BulkDynamics>(superGeometry, 3);
+    boundary::set<boundary::InterpolatedVelocity>(sLattice, superGeometry, 3);
   }
 
   // material=4,5 --> bulk dynamics + pressure (outflow)
-  lattice.defineDynamics<BulkDynamics>(superGeometry.getMaterialIndicator({4, 5}));
-  boundary::set<boundary::InterpolatedPressure>(lattice, superGeometry, 4);
-  boundary::set<boundary::InterpolatedPressure>(lattice, superGeometry, 5);
+  sLattice.defineDynamics<BulkDynamics>(superGeometry.getMaterialIndicator({4, 5}));
+  boundary::set<boundary::InterpolatedPressure>(sLattice, superGeometry, 4);
+  boundary::set<boundary::InterpolatedPressure>(sLattice, superGeometry, 5);
 
   // Initial conditions
   AnalyticalConst3D<T,T> rhoF( 1 );
@@ -132,30 +131,29 @@ void prepareLattice( SuperLattice<T, DESCRIPTOR>& lattice,
   AnalyticalConst3D<T,T> uF( velocity );
 
   // Initialize all values of distribution functions to their local equilibrium
-  lattice.defineRhoU( superGeometry.getMaterialIndicator({1, 3, 4, 5}),rhoF,uF );
-  lattice.iniEquilibrium( superGeometry.getMaterialIndicator({1, 3, 4, 5}),rhoF,uF );
+  sLattice.defineRhoU( superGeometry.getMaterialIndicator({1, 3, 4, 5}),rhoF,uF );
+  sLattice.iniEquilibrium( superGeometry.getMaterialIndicator({1, 3, 4, 5}),rhoF,uF );
 
-  lattice.setParameter<descriptors::OMEGA>(omega);
-  lattice.setParameter<collision::LES::SMAGORINSKY>(T(0.1));
+  sLattice.setParameter<descriptors::OMEGA>(omega);
+  sLattice.setParameter<collision::LES::SMAGORINSKY>(T(0.1));
   // Lattice initialize
-  lattice.initialize();
+  sLattice.initialize();
 
   clout << "Prepare Lattice ... OK" << std::endl;
 }
 
 // Generates a slowly increasing sinuidal inflow
-void setBoundaryValues( SuperLattice<T, DESCRIPTOR>& sLattice,
-                        UnitConverter<T,DESCRIPTOR> const& converter, std::size_t iT,
+void setBoundaryValues( SuperLattice<T, DESCRIPTOR>& sLattice, std::size_t iT,
                         SuperGeometry<T,3>& superGeometry )
 {
 
   // No of time steps for smooth start-up
-  std::size_t iTperiod = converter.getLatticeTime( 0.5 );
+  std::size_t iTperiod = sLattice.getUnitConverter().getLatticeTime( 0.5 );
   std::size_t iTupdate = 50;
 
   if ( iT%iTupdate == 0 ) {
     // Smooth start curve, sinus
-    SinusStartScale<T,std::size_t> nSinusStartScale( iTperiod,converter.getCharLatticeVelocity() );
+    SinusStartScale<T,std::size_t> nSinusStartScale( iTperiod, sLattice.getUnitConverter().getCharLatticeVelocity() );
 
     // Creates and sets the Poiseuille inflow profile using functors
     std::size_t iTvec[1]= {iT};
@@ -178,17 +176,16 @@ void setBoundaryValues( SuperLattice<T, DESCRIPTOR>& sLattice,
 
 // Computes flux at inflow and outflow
 void getResults(SuperLattice<T, DESCRIPTOR>& sLattice,
-                const UnitConverter<T,DESCRIPTOR>& converter,
                 std::size_t iT,
                 SuperGeometry<T,3>& superGeometry,
                 util::Timer<T>& timer,
                 STLreader<T>& stlReader,
-                VTUsurfaceWriter<T>& vtuWriter)
+                VTUsurfaceWriterRankwise<T>& vtuWriter)
 {
   OstreamManager clout( std::cout,"getResults" );
 
-  const std::size_t vtkIter  = converter.getLatticeTime( .1 );
-  const std::size_t statIter = converter.getLatticeTime( .1 );
+  const std::size_t vtkIter  = sLattice.getUnitConverter().getLatticeTime( .1 );
+  const std::size_t statIter = sLattice.getUnitConverter().getLatticeTime( .1 );
 
   if ( iT==0 ) {
     SuperVTMwriter3D<T> vtmWriter("aorta3d");
@@ -208,8 +205,8 @@ void getResults(SuperLattice<T, DESCRIPTOR>& sLattice,
     sLattice.setProcessingContext(ProcessingContext::Evaluation);
     sLattice.scheduleBackgroundOutputVTK([&,iT](auto task) {
       SuperVTMwriter3D<T> vtmWriter("aorta3d");
-      SuperLatticePhysVelocity3D velocity(sLattice, converter);
-      SuperLatticePhysPressure3D pressure(sLattice, converter);
+      SuperLatticePhysVelocity3D velocity(sLattice, sLattice.getUnitConverter());
+      SuperLatticePhysPressure3D pressure(sLattice, sLattice.getUnitConverter());
       vtmWriter.addFunctor(velocity);
       vtmWriter.addFunctor(pressure);
       task(vtmWriter, iT);
@@ -223,7 +220,7 @@ void getResults(SuperLattice<T, DESCRIPTOR>& sLattice,
       SuperLatticeStress3D stressF(sLattice);
       AnalyticalFfromSuperF3D smoothStressF(stressF);
 
-      PhysWallShearStressOnSurface3D<T,DESCRIPTOR> interpolatedWssF(converter, smoothDensityF, smoothStressF, stlReader);
+      PhysWallShearStressOnSurface3D<T,DESCRIPTOR> interpolatedWssF(sLattice.getUnitConverter(), smoothDensityF, smoothStressF, stlReader);
       interpolatedWssF.getName() = "interpolatedWss";
 
       vtuWriter.addFunctor(interpolatedWssF);
@@ -239,31 +236,31 @@ void getResults(SuperLattice<T, DESCRIPTOR>& sLattice,
     timer.printStep();
 
     // Lattice statistics console output
-    sLattice.getStatistics().print( iT,converter.getPhysTime( iT ) );
+    sLattice.getStatistics().print( iT, sLattice.getUnitConverter().getPhysTime( iT ) );
 
     // Flux at the inflow and outflow region
     std::vector<int> materials = { 1, 3, 4, 5 };
 
-    IndicatorCircle3D<T> inflow(  0.218125,0.249987-2.*converter.getPhysDeltaX(),0.0234818, 0., -1.,0., 0.0112342+2*converter.getPhysDeltaX() );
-    SuperPlaneIntegralFluxVelocity3D<T> vFluxInflow( sLattice, converter, superGeometry, inflow, materials, BlockDataReductionMode::Discrete );
+    IndicatorCircle3D<T> inflow(  0.218125,0.249987-2.*sLattice.getUnitConverter().getPhysDeltaX(),0.0234818, 0., -1.,0., 0.0112342+2*sLattice.getUnitConverter().getPhysDeltaX() );
+    SuperPlaneIntegralFluxVelocity3D<T> vFluxInflow( sLattice, sLattice.getUnitConverter(), superGeometry, inflow, materials, BlockDataReductionMode::Discrete );
     vFluxInflow.print( "inflow","ml/s" );
-    SuperPlaneIntegralFluxPressure3D<T> pFluxInflow( sLattice, converter, superGeometry, inflow, materials, BlockDataReductionMode::Discrete );
+    SuperPlaneIntegralFluxPressure3D<T> pFluxInflow( sLattice, sLattice.getUnitConverter(), superGeometry, inflow, materials, BlockDataReductionMode::Discrete );
     pFluxInflow.print( "inflow","N","mmHg" );
 
-    IndicatorCircle3D<T> outflow0( 0.2053696,0.0900099+2.*converter.getPhysDeltaX(),0.0346537, 0.,1.,0., 0.0054686+2*converter.getPhysDeltaX() );
-    SuperPlaneIntegralFluxVelocity3D<T> vFluxOutflow0( sLattice, converter, superGeometry, outflow0, materials, BlockDataReductionMode::Discrete );
+    IndicatorCircle3D<T> outflow0( 0.2053696,0.0900099+2.*sLattice.getUnitConverter().getPhysDeltaX(),0.0346537, 0.,1.,0., 0.0054686+2*sLattice.getUnitConverter().getPhysDeltaX() );
+    SuperPlaneIntegralFluxVelocity3D<T> vFluxOutflow0( sLattice, sLattice.getUnitConverter(), superGeometry, outflow0, materials, BlockDataReductionMode::Discrete );
     vFluxOutflow0.print( "outflow0","ml/s" );
-    SuperPlaneIntegralFluxPressure3D<T> pFluxOutflow0( sLattice, converter, superGeometry, outflow0, materials, BlockDataReductionMode::Discrete );
+    SuperPlaneIntegralFluxPressure3D<T> pFluxOutflow0( sLattice, sLattice.getUnitConverter(), superGeometry, outflow0, materials, BlockDataReductionMode::Discrete );
     pFluxOutflow0.print( "outflow0","N","mmHg" );
 
-    IndicatorCircle3D<T> outflow1( 0.2388403,0.0900099+2.*converter.getPhysDeltaX(),0.0343228, 0.,1.,0., 0.0058006+2*converter.getPhysDeltaX() );
-    SuperPlaneIntegralFluxVelocity3D<T> vFluxOutflow1( sLattice, converter, superGeometry, outflow1, materials, BlockDataReductionMode::Discrete );
+    IndicatorCircle3D<T> outflow1( 0.2388403,0.0900099+2.*sLattice.getUnitConverter().getPhysDeltaX(),0.0343228, 0.,1.,0., 0.0058006+2*sLattice.getUnitConverter().getPhysDeltaX() );
+    SuperPlaneIntegralFluxVelocity3D<T> vFluxOutflow1( sLattice, sLattice.getUnitConverter(), superGeometry, outflow1, materials, BlockDataReductionMode::Discrete );
     vFluxOutflow1.print( "outflow1","ml/s" );
-    SuperPlaneIntegralFluxPressure3D<T> pFluxOutflow1( sLattice, converter, superGeometry, outflow1, materials, BlockDataReductionMode::Discrete );
+    SuperPlaneIntegralFluxPressure3D<T> pFluxOutflow1( sLattice, sLattice.getUnitConverter(), superGeometry, outflow1, materials, BlockDataReductionMode::Discrete );
     pFluxOutflow1.print( "outflow1","N","mmHg" );
 
     if ( bouzidiOn ) {
-      SuperLatticeYplus3D<T, DESCRIPTOR> yPlus( sLattice, converter, superGeometry, stlReader, 3 );
+      SuperLatticeYplus3D<T, DESCRIPTOR> yPlus( sLattice, sLattice.getUnitConverter(), superGeometry, stlReader, 3 );
       SuperMax3D<T> yPlusMaxF( yPlus, superGeometry, 1 );
       int input[4]= {};
       T yPlusMax[1];
@@ -320,17 +317,17 @@ int main( int argc, char* argv[] )
   // Instantiation of a superGeometry
   SuperGeometry<T,3> superGeometry( cuboidDecomposition, loadBalancer );
 
-  prepareGeometry( converter, extendedDomain, stlReader, superGeometry );
+  prepareGeometry( extendedDomain, stlReader, superGeometry, converter.getPhysDeltaX() );
 
   // === 3rd Step: Prepare Lattice ===
-  SuperLattice<T, DESCRIPTOR> sLattice( superGeometry );
+  SuperLattice<T, DESCRIPTOR> sLattice( converter, superGeometry );
 
   util::Timer<T> timer1( converter.getLatticeTime( maxPhysT ), superGeometry.getStatistics().getNvoxel() );
   timer1.start();
 
-  prepareLattice( sLattice, converter, stlReader, superGeometry );
+  prepareLattice( sLattice, stlReader, superGeometry );
 
-  VTUsurfaceWriter<T> vtuWriter("surface", cuboidDecomposition, loadBalancer);
+  VTUsurfaceWriterRankwise<T> vtuWriter("surface", cuboidDecomposition, loadBalancer);
   vtuWriter.addSTL( stlReader );
 
   timer1.stop();
@@ -343,13 +340,13 @@ int main( int argc, char* argv[] )
 
   for ( std::size_t iT = 0; iT <= converter.getLatticeTime( maxPhysT ); iT++ ) {
     // === 5th Step: Definition of Initial and Boundary Conditions ===
-    setBoundaryValues( sLattice, converter, iT, superGeometry );
+    setBoundaryValues( sLattice, iT, superGeometry );
 
     // === 6th Step: Collide and Stream Execution ===
     sLattice.collideAndStream();
 
     // === 7th Step: Computation and Output of the Results ===
-    getResults( sLattice, converter, iT, superGeometry, timer, stlReader, vtuWriter );
+    getResults( sLattice, iT, superGeometry, timer, stlReader, vtuWriter );
   }
 
   timer.stop();

@@ -216,7 +216,7 @@ using ForcedBGKdynamics = dynamics::Tuple<
   MOMENTA,
   equilibria::SecondOrder,
   collision::BGK,
-  forcing::Guo<momenta::Forced>
+  forcing::PlainGuo
 >;
 
 // BGK collision step with external force (Guo) for multiple component lattices

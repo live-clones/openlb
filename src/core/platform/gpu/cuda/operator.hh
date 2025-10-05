@@ -29,6 +29,8 @@
 #include "context.hh"
 #include "dynamics.hh"
 
+#include "core/introspection.h"
+
 #include "solver/names.h"
 
 namespace olb {
@@ -304,7 +306,7 @@ getFusedCollisionO() {
 }
 
 
-/// CUDA kernels to execute collisions and post processors
+/// CUDA kernels to apply collisions and post processors
 namespace kernel {
 
 /// CUDA kernel for applying purely local collision steps
@@ -693,6 +695,34 @@ void ConcreteBlockO<T,DESCRIPTOR,Platform::GPU_CUDA,OPERATOR,OperatorScope::PerC
 
 
 template <typename COUPLER, typename COUPLEES>
+template <typename LATTICES>
+ConcreteBlockCouplingO<COUPLEES,Platform::GPU_CUDA,COUPLER,OperatorScope::PerCell>
+::ConcreteBlockCouplingO(LATTICES&& lattices)
+  : _lattices{lattices}
+{
+  // If the lattices are introspectable, allocate fields accessed by the COUPLER
+  bool allCoupledLatticesAreIntrospectable = true;
+  COUPLEES::keys_t::for_each([&](auto id) {
+    using name_t = typename decltype(id)::type;
+    auto& lattice = *(_lattices.template get<name_t>());
+    if (!lattice.isIntrospectable()) {
+      allCoupledLatticesAreIntrospectable = false;
+    }
+  });
+
+  if (allCoupledLatticesAreIntrospectable) {
+    auto accessedFields = introspection::getFieldsAccessedByCoupling<COUPLER,COUPLEES>();
+    COUPLEES::keys_t::for_each([&](auto id) {
+      using name_t = typename decltype(id)::type;
+      auto& lattice = *(_lattices.template get<name_t>());
+      for (auto field : accessedFields.template get<name_t>()) {
+        field.ensureAvailabilityIn(lattice);
+      }
+    });
+  }
+}
+
+template <typename COUPLER, typename COUPLEES>
 void ConcreteBlockCouplingO<COUPLEES,Platform::GPU_CUDA,COUPLER,OperatorScope::PerCell>::set(
   CellID iCell, bool state)
 {
@@ -706,7 +736,7 @@ void ConcreteBlockCouplingO<COUPLEES,Platform::GPU_CUDA,COUPLER,OperatorScope::P
 }
 
 template <typename COUPLER, typename COUPLEES>
-void ConcreteBlockCouplingO<COUPLEES,Platform::GPU_CUDA,COUPLER,OperatorScope::PerCell>::execute()
+void ConcreteBlockCouplingO<COUPLEES,Platform::GPU_CUDA,COUPLER,OperatorScope::PerCell>::apply()
 {
   auto deviceLattice = _lattices.exchange_values([&](auto name) -> auto {
     return gpu::cuda::DeviceBlockLattice{*_lattices.get(name)};
@@ -725,6 +755,34 @@ void ConcreteBlockCouplingO<COUPLEES,Platform::GPU_CUDA,COUPLER,OperatorScope::P
 }
 
 template <typename COUPLER, typename COUPLEES>
+template <typename LATTICES>
+ConcreteBlockCouplingO<COUPLEES,Platform::GPU_CUDA,COUPLER,OperatorScope::PerCellWithParameters>
+::ConcreteBlockCouplingO(LATTICES&& lattices)
+  : _lattices{lattices}
+{
+  // If the lattices are introspectable, allocate fields accessed by the COUPLER
+  bool allCoupledLatticesAreIntrospectable = true;
+  COUPLEES::keys_t::for_each([&](auto id) {
+    using name_t = typename decltype(id)::type;
+    auto& lattice = *(_lattices.template get<name_t>());
+    if (!lattice.isIntrospectable()) {
+      allCoupledLatticesAreIntrospectable = false;
+    }
+  });
+
+  if (allCoupledLatticesAreIntrospectable) {
+    auto accessedFields = introspection::getFieldsAccessedByCoupling<COUPLER,COUPLEES>();
+    COUPLEES::keys_t::for_each([&](auto id) {
+      using name_t = typename decltype(id)::type;
+      auto& lattice = *(_lattices.template get<name_t>());
+      for (auto field : accessedFields.template get<name_t>()) {
+        field.ensureAvailabilityIn(lattice);
+      }
+    });
+  }
+}
+
+template <typename COUPLER, typename COUPLEES>
 void ConcreteBlockCouplingO<COUPLEES,Platform::GPU_CUDA,COUPLER,OperatorScope::PerCellWithParameters>::set(
   CellID iCell, bool state)
 {
@@ -738,7 +796,7 @@ void ConcreteBlockCouplingO<COUPLEES,Platform::GPU_CUDA,COUPLER,OperatorScope::P
 }
 
 template <typename COUPLER, typename COUPLEES>
-void ConcreteBlockCouplingO<COUPLEES,Platform::GPU_CUDA,COUPLER,OperatorScope::PerCellWithParameters>::execute()
+void ConcreteBlockCouplingO<COUPLEES,Platform::GPU_CUDA,COUPLER,OperatorScope::PerCellWithParameters>::apply()
 {
   auto deviceLattice = _lattices.exchange_values([&](auto name) -> auto {
     return gpu::cuda::DeviceBlockLattice{*_lattices.get(name)};
@@ -764,7 +822,7 @@ void ConcreteBlockPointCouplingO<COUPLEES,Platform::GPU_CUDA,COUPLER,OperatorSco
 }
 
 template <typename COUPLER, typename COUPLEES>
-void ConcreteBlockPointCouplingO<COUPLEES,Platform::GPU_CUDA,COUPLER,OperatorScope::PerCellWithParameters>::execute()
+void ConcreteBlockPointCouplingO<COUPLEES,Platform::GPU_CUDA,COUPLER,OperatorScope::PerCellWithParameters>::apply()
 {
   if (_lattices.get(meta::id<names::Points>{})->getNcells() == 0) {
     return;

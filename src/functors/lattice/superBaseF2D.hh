@@ -163,12 +163,12 @@ UnitConverter<T,DESCRIPTOR> const& SuperLatticePhysF2D<T,DESCRIPTOR>::getConvert
 
 template <typename T, typename DESCRIPTOR, typename TDESCRIPTOR>
 SuperLatticeThermalPhysF2D<T,DESCRIPTOR,TDESCRIPTOR>::SuperLatticeThermalPhysF2D
-(SuperLattice<T,TDESCRIPTOR>& sLattice, const ThermalUnitConverter<T,DESCRIPTOR,TDESCRIPTOR>& converter,
+(SuperLattice<T,TDESCRIPTOR>& sLattice, const UnitConverter<T,DESCRIPTOR>& converter,
  int targetDim)
   : SuperLatticeF2D<T,TDESCRIPTOR>(sLattice, targetDim), _converter(converter) { }
 
 template <typename T, typename DESCRIPTOR, typename TDESCRIPTOR>
-ThermalUnitConverter<T,DESCRIPTOR,TDESCRIPTOR> const& SuperLatticeThermalPhysF2D<T,DESCRIPTOR,TDESCRIPTOR>::getConverter() const
+UnitConverter<T,DESCRIPTOR> const& SuperLatticeThermalPhysF2D<T,DESCRIPTOR,TDESCRIPTOR>::getConverter() const
 {
   return this->_converter;
 }

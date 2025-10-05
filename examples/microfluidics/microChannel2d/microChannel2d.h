@@ -98,7 +98,7 @@ public:
 };
 
 // Stores geometry information in form of material numbers
-void prepareGeometry( UnitConverter<T,DESCRIPTOR> const& converter,
+void prepareGeometry( T dx,
                       SuperGeometry<T,2>& superGeometry,
                       IndicatorF2D<T>& cuboidLayer)
 {
@@ -107,26 +107,26 @@ void prepareGeometry( UnitConverter<T,DESCRIPTOR> const& converter,
   clout << "Prepare Geometry ..." << std::endl;
 
   superGeometry.rename( 0,2,cuboidLayer );
-  Vector<T,2> extend( length-2.*converter.getPhysDeltaX(), height );
-  Vector<T,2> origin(converter.getPhysDeltaX(),0.);
+  Vector<T,2> extend( length-2.*dx, height );
+  Vector<T,2> origin(dx,0.);
   IndicatorCuboid2D<T> channel( extend, origin );
   superGeometry.rename( 2,1,channel );
   superGeometry.clean();
 
   Vector<T,2> originBC = superGeometry.getStatistics().getMinPhysR( 2 );
-  originBC[1] += converter.getPhysDeltaX()/2.;
+  originBC[1] += dx/2.;
   Vector<T,2> extendBC = superGeometry.getStatistics().getMaxPhysR( 2 );
-  extendBC[1] = extendBC[1]-originBC[1]-converter.getPhysDeltaX()/2.;
+  extendBC[1] = extendBC[1]-originBC[1]-dx/2.;
 
   // Set material number for inflow
-  originBC[0] = superGeometry.getStatistics().getMinPhysR( 2 )[0]-converter.getPhysDeltaX();
-  extendBC[0] = 2*converter.getPhysDeltaX();
+  originBC[0] = superGeometry.getStatistics().getMinPhysR( 2 )[0]-dx;
+  extendBC[0] = 2*dx;
   IndicatorCuboid2D<T> inflow( extendBC,originBC );
   superGeometry.rename( 2,3,1,inflow );
 
   // Set material number for outflow
-  originBC[0] = superGeometry.getStatistics().getMaxPhysR( 2 )[0]-converter.getPhysDeltaX();
-  extendBC[0] = 2*converter.getPhysDeltaX();
+  originBC[0] = superGeometry.getStatistics().getMaxPhysR( 2 )[0]-dx;
+  extendBC[0] = 2*dx;
   IndicatorCuboid2D<T> outflow( extendBC,originBC );
   superGeometry.rename( 2,4,1,outflow );
 
@@ -140,8 +140,7 @@ void prepareGeometry( UnitConverter<T,DESCRIPTOR> const& converter,
 }
 
 // Set up the geometry of the simulation
-void prepareLattice( UnitConverter<T,DESCRIPTOR> const& converter,
-                     SuperLattice<T, DESCRIPTOR>& sLattice,
+void prepareLattice( SuperLattice<T, DESCRIPTOR>& sLattice,
                      SuperGeometry<T,2>& superGeometry,
                      IndicatorF2D<T>& channel)
 {
@@ -159,7 +158,7 @@ void prepareLattice( UnitConverter<T,DESCRIPTOR> const& converter,
   setBouzidiKnudsenSlipVelocity<T,DESCRIPTOR,true>(sLattice, superGeometry.getMaterialIndicator({2}), superGeometry.getMaterialIndicator({1,3,4}), channel);
 
   // Initial conditions
-  T pL0 = converter.getLatticePressure(pOut);
+  T pL0 = sLattice.getUnitConverter().getLatticePressure(pOut);
   AnalyticalConst2D<T,T> rho(pL0*descriptors::invCs2<T,DESCRIPTOR>()+T(1));
   AnalyticalConst2D<T,T> u0(T(0), T(0));
   sLattice.defineField<VELOCITY>(superGeometry.getMaterialIndicator({0,1,2,3,4}), u0);
@@ -169,9 +168,9 @@ void prepareLattice( UnitConverter<T,DESCRIPTOR> const& converter,
   sLattice.defineRhoU(superGeometry.getMaterialIndicator({0,1,2,3,4}), rho, u0);
   sLattice.iniEquilibrium(superGeometry.getMaterialIndicator({0,1,2,3,4}), rho, u0);
 
-  sLattice.template setParameter<descriptors::OMEGA>(converter.getLatticeRelaxationFrequency());
-  sLattice.template setParameter<KnudsenVelocityPostProcessor<true>::SLIPCOEFF>(slipCoeff/converter.getPhysDeltaX());
-  sLattice.template setParameter<KnudsenVelocityPostProcessor<true>::CREEPCOEFF>(creepCoeff/converter.getPhysDeltaX()/converter.getConversionFactorVelocity());
+  sLattice.template setParameter<descriptors::OMEGA>(sLattice.getUnitConverter().getLatticeRelaxationFrequency());
+  sLattice.template setParameter<KnudsenVelocityPostProcessor<true>::SLIPCOEFF>(slipCoeff/sLattice.getUnitConverter().getPhysDeltaX());
+  sLattice.template setParameter<KnudsenVelocityPostProcessor<true>::CREEPCOEFF>(creepCoeff/sLattice.getUnitConverter().getPhysDeltaX()/sLattice.getUnitConverter().getConversionFactorVelocity());
 
   // Make the lattice ready for simulation
   sLattice.initialize();
@@ -188,14 +187,14 @@ void prepareLattice( UnitConverter<T,DESCRIPTOR> const& converter,
 
 // Generates a slowly increasing inflow for the first iTMaxStart timesteps
 void setBoundaryValues( SuperLattice<T, DESCRIPTOR>& sLattice,
-                        UnitConverter<T, DESCRIPTOR> const& converter, int iT,
+                        int iT,
                         SuperGeometry<T,2>& superGeometry)
 {
 
   OstreamManager clout( std::cout,"setBoundaryValues" );
 
   // No of time steps for smooth start-up
-  int iTmaxStart = converter.getLatticeTime( maxPhysT*0.05 );
+  int iTmaxStart = sLattice.getUnitConverter().getLatticeTime( maxPhysT*0.05 );
 
   if ( iT<= iTmaxStart ) {
     PolynomialStartScale<T,T> StartScale( iTmaxStart, T( 1 ) );
@@ -204,7 +203,7 @@ void setBoundaryValues( SuperLattice<T, DESCRIPTOR>& sLattice,
     T iTvec[1] = {T( iT )};
     T frac[1] = {};
     StartScale( frac,iTvec );
-    T pLin = converter.getLatticePressure((pIn-pOut)*frac[0] + pOut);
+    T pLin = sLattice.getUnitConverter().getLatticePressure((pIn-pOut)*frac[0] + pOut);
     AnalyticalConst2D<T,T> rho(pLin*descriptors::invCs2<T,DESCRIPTOR>()+T(1));
 
     sLattice.defineRho( superGeometry, 3, rho );
@@ -216,8 +215,7 @@ void setBoundaryValues( SuperLattice<T, DESCRIPTOR>& sLattice,
 
 // Compute error norms
 void error( SuperGeometry<T,2>& superGeometry,
-            SuperLattice<T, DESCRIPTOR>& sLattice,
-            UnitConverter<T,DESCRIPTOR> const& converter )
+            SuperLattice<T, DESCRIPTOR>& sLattice)
 {
   OstreamManager clout( std::cout,"error" );
   sLattice.setProcessingContext(ProcessingContext::Evaluation);
@@ -227,7 +225,7 @@ void error( SuperGeometry<T,2>& superGeometry,
 
   // velocity error
   VelocityKnudsenProfile2D<T,T> uSol(height, length, density*visc, pIn, pOut, accomodC, Kn);
-  SuperLatticePhysVelocity2D<T,DESCRIPTOR> u( sLattice,converter );
+  SuperLatticePhysVelocity2D<T,DESCRIPTOR> u( sLattice,sLattice.getUnitConverter() );
   auto indicatorF = superGeometry.getMaterialIndicator(1);
 
   SuperAbsoluteErrorL1Norm2D<T> absVelocityErrorNormL1(u, uSol, indicatorF);
@@ -260,17 +258,17 @@ void error( SuperGeometry<T,2>& superGeometry,
 
 // Output to console and files
 void getResults( SuperLattice<T,DESCRIPTOR>& sLattice,
-                 UnitConverter<T,DESCRIPTOR> const& converter, std::size_t iT,
+                 std::size_t iT,
                  SuperGeometry<T,2>& superGeometry, util::Timer<T>& timer, bool hasConverged,
                  Gnuplot<T>& gplot)
 {
   OstreamManager clout( std::cout,"getResults" );
-  const bool lastTimeStep = ( hasConverged || (iT + 1 == converter.getLatticeTime( maxPhysT )) );
-  const int statIter = converter.getLatticeTime( maxPhysT/100. );
+  const bool lastTimeStep = ( hasConverged || (iT + 1 == sLattice.getUnitConverter().getLatticeTime( maxPhysT )) );
+  const int statIter = sLattice.getUnitConverter().getLatticeTime( maxPhysT/100. );
 
   // VTK and image output only if no EOC analysis
   SuperVTMwriter2D<T> vtmWriter( "microChannel2d" );
-  const int vtmIter  = converter.getLatticeTime( maxPhysT/10. );
+  const int vtmIter  = sLattice.getUnitConverter().getLatticeTime( maxPhysT/10. );
 
   if ( iT==0 ) {
     // Writes the geometry, cuboid no. and rank no. as vti file for visualization
@@ -283,10 +281,10 @@ void getResults( SuperLattice<T,DESCRIPTOR>& sLattice,
     SuperGeometryF<T,2> geom(superGeometry);
     vtmWriter.addFunctor( geom );
 
-    SuperLatticePhysVelocity2D<T,DESCRIPTOR> velocity( sLattice, converter );
+    SuperLatticePhysVelocity2D<T,DESCRIPTOR> velocity( sLattice, sLattice.getUnitConverter() );
     vtmWriter.addFunctor( velocity );
 
-    SuperLatticePhysPressure2D<T,DESCRIPTOR> pressure( sLattice, converter );
+    SuperLatticePhysPressure2D<T,DESCRIPTOR> pressure( sLattice, sLattice.getUnitConverter() );
     vtmWriter.addFunctor( pressure );
 
     VelocityKnudsenProfile2D<T,T> uSol(height, length, density*visc, pIn, pOut, accomodC, Kn);
@@ -308,11 +306,11 @@ void getResults( SuperLattice<T,DESCRIPTOR>& sLattice,
     timer.printStep();
 
     // Lattice statistics console output
-    sLattice.getStatistics().print( iT,converter.getPhysTime( iT ) );
+    sLattice.getStatistics().print( iT,sLattice.getUnitConverter().getPhysTime( iT ) );
 
     // Error norms
     if ( lastTimeStep ) {
-      error( superGeometry, sLattice, converter );
+      error( superGeometry, sLattice);
     }
   }
 
@@ -320,7 +318,7 @@ void getResults( SuperLattice<T,DESCRIPTOR>& sLattice,
   if ((lastTimeStep)) {
     sLattice.setProcessingContext(ProcessingContext::Evaluation);
     gplot.setData (
-      T(converter.getResolution()),
+      T(sLattice.getUnitConverter().getResolution()),
       { velocityL1RelError, velocityL2RelError, velocityLinfRelError},
       { "velocity L1 rel Error","velocity L2 rel Error",
         "velocity Linf rel error"},
@@ -364,17 +362,17 @@ void simulateMicroChannel2D( int N, Gnuplot<T>& gplot)
   // Instantiation of a superGeometry
   SuperGeometry<T,2> superGeometry( cuboidGeometry, loadBalancer, 5 );
 
-  prepareGeometry( converter, superGeometry, cuboidLayer );
+  prepareGeometry( converter.getPhysDeltaX(), superGeometry, cuboidLayer );
 
   // === 3rd Step: Prepare Lattice ===
-  SuperLattice<T, DESCRIPTOR> sLattice( superGeometry );
+  SuperLattice<T, DESCRIPTOR> sLattice( converter, superGeometry );
 
   // Prepare lattice and set boundary conditions
   origin[0] -= 10.*converter.getPhysDeltaX();
   origin[1] += 0.5*converter.getPhysDeltaX();
   extend[0] += 20.*converter.getPhysDeltaX();
   IndicatorCuboid2D<T> channel( extend, origin );
-  prepareLattice(converter, sLattice, superGeometry, channel);
+  prepareLattice(sLattice, superGeometry, channel);
 
   // === 4th Step: Main Loop with Timer ===
   clout << "starting simulation..." << std::endl;
@@ -386,19 +384,19 @@ void simulateMicroChannel2D( int N, Gnuplot<T>& gplot)
   for ( std::size_t iT = 0; iT < converter.getLatticeTime( maxPhysT ); ++iT ) {
     if ( converge.hasConverged() ) {
       clout << "Simulation converged." << std::endl;
-      getResults( sLattice, converter, iT, superGeometry, timer, converge.hasConverged(), gplot);
+      getResults( sLattice, iT, superGeometry, timer, converge.hasConverged(), gplot);
 
       break;
     }
 
     // === 5th Step: Definition of Initial and Boundary Conditions ===
-    setBoundaryValues( sLattice, converter, iT, superGeometry);
+    setBoundaryValues( sLattice, iT, superGeometry);
 
     // === 6th Step: Collide and Stream Execution ===
     sLattice.collideAndStream();
 
     // === 7th Step: Computation and Output of the Results ===
-    getResults( sLattice, converter, iT,superGeometry, timer, converge.hasConverged(), gplot);
+    getResults( sLattice, iT,superGeometry, timer, converge.hasConverged(), gplot);
     converge.takeValue( sLattice.getStatistics().getMaxU(), false );
   }
 

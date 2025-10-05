@@ -65,6 +65,7 @@
 #include "fractionalUnitConverter.h"
 #include "adeUnitConverter.h"
 #include "adsorptionConverter.h"
+#include "linElaUnitConverter.h"
 
 #include "genericVector.h"
 #include "scalarVector.h"

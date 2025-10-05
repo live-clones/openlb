@@ -61,8 +61,7 @@ const T radiusCylinder = 0.05;
 
 
 // Stores geometry information in form of material numbers
-void prepareGeometry( UnitConverter<T, DESCRIPTOR> const& converter,
-                      SuperGeometry<T,2>& superGeometry,
+void prepareGeometry( SuperGeometry<T,2>& superGeometry,
                       std::shared_ptr<IndicatorF2D<T>> circle)
 {
   OstreamManager clout( std::cout,"prepareGeometry" );
@@ -98,14 +97,13 @@ void prepareGeometry( UnitConverter<T, DESCRIPTOR> const& converter,
 
 // Set up the geometry of the simulation
 void prepareLattice( SuperLattice<T,DESCRIPTOR>& sLattice,
-                     UnitConverter<T, DESCRIPTOR> const& converter,
                      SuperGeometry<T,2>& superGeometry,
                      std::shared_ptr<IndicatorF2D<T>> circle)
 {
   OstreamManager clout( std::cout,"prepareLattice" );
   clout << "Prepare Lattice ..." << std::endl;
 
-  const T omega = converter.getLatticeRelaxationFrequency();
+  const T omega = sLattice.getUnitConverter().getLatticeRelaxationFrequency();
 
   // Material=1 -->bulk dynamics
   auto bulkIndicator = superGeometry.getMaterialIndicator({1});
@@ -144,15 +142,15 @@ void prepareLattice( SuperLattice<T,DESCRIPTOR>& sLattice,
 
 // Generates a slowly increasing inflow for the first iTMaxStart timesteps
 void setBoundaryValues( SuperLattice<T, DESCRIPTOR>& sLattice,
-                        UnitConverter<T, DESCRIPTOR> const& converter, int iT,
+                        std::size_t iT,
                         SuperGeometry<T,2>& superGeometry)
 {
-
   OstreamManager clout( std::cout,"setBoundaryValues" );
+  const UnitConverter<T,DESCRIPTOR>& converter = sLattice.getUnitConverter();
 
   // No of time steps for smooth start-up
-  int iTmaxStart = converter.getLatticeTime( maxPhysT*0.4 );
-  int iTupdate = 5;
+  std::size_t iTmaxStart = converter.getLatticeTime( maxPhysT*0.4 );
+  std::size_t iTupdate = 5;
 
   if ( iT%iTupdate==0 && iT<= iTmaxStart ) {
     // Smooth start curve, sinus
@@ -178,10 +176,11 @@ void setBoundaryValues( SuperLattice<T, DESCRIPTOR>& sLattice,
 
 // Computes the pressure drop between the voxels before and after the cylinder
 void getResults( SuperLattice<T, DESCRIPTOR>& sLattice,
-                 UnitConverter<T, DESCRIPTOR> const& converter, std::size_t iT,
+                 std::size_t iT,
                  SuperGeometry<T,2>& superGeometry, util::Timer<T>& timer )
 {
   OstreamManager clout( std::cout,"getResults" );
+  const UnitConverter<T,DESCRIPTOR>& converter = sLattice.getUnitConverter();
 
   // Gnuplot constructor (must be static!)
   // for real-time plotting: gplot("name", true) // experimental!
@@ -194,8 +193,8 @@ void getResults( SuperLattice<T, DESCRIPTOR>& sLattice,
   vtmWriter.addFunctor( velocity );
   vtmWriter.addFunctor( pressure );
 
-  const int vtkIter  = converter.getLatticeTime( .3 );
-  const int statIter = converter.getLatticeTime( .1 );
+  const std::size_t vtkIter  = converter.getLatticeTime( .3 );
+  const std::size_t statIter = converter.getLatticeTime( .1 );
 
   T point[2] = {};
   point[0] = centerCylinderX + 3*radiusCylinder;
@@ -323,12 +322,12 @@ int main( int argc, char* argv[] )
   Vector<T,2> center( centerCylinderX, centerCylinderY );
   std::shared_ptr<IndicatorF2D<T>> circle = std::make_shared<IndicatorCircle2D<T>>( center, radiusCylinder );
 
-  prepareGeometry( converter, superGeometry, circle);
+  prepareGeometry(superGeometry, circle);
 
   // === 3rd Step: Prepare Lattice ===
-  SuperLattice<T, DESCRIPTOR> sLattice( superGeometry );
+  SuperLattice<T, DESCRIPTOR> sLattice(converter, superGeometry);
 
-  prepareLattice( sLattice, converter, superGeometry, circle );
+  prepareLattice( sLattice, superGeometry, circle );
 
   // === 4th Step: Main Loop with Timer ===
   clout << "starting simulation..." << std::endl;
@@ -337,13 +336,13 @@ int main( int argc, char* argv[] )
 
   for ( std::size_t iT = 0; iT < converter.getLatticeTime( maxPhysT ); ++iT ) {
     // === 5th Step: Definition of Initial and Boundary Conditions ===
-    setBoundaryValues( sLattice, converter, iT, superGeometry);
+    setBoundaryValues( sLattice, iT, superGeometry);
 
     // === 6th Step: Collide and Stream Execution ===
     sLattice.collideAndStream();
 
     // === 7th Step: Computation and Output of the Results ===
-    getResults( sLattice, converter, iT, superGeometry, timer );
+    getResults( sLattice, iT, superGeometry, timer );
 
   }
 

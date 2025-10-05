@@ -713,21 +713,6 @@ void CuboidDecomposition<T,D>::refine(int factor)
   for (auto& cuboid : _cuboids) {
     cuboid.refine(factor);
   }
-  // Fix neighbor relationships
-  for (int iC=0; iC < size(); ++iC) {
-    auto& iCuboid = get(iC);
-    auto inconsistentNeighbors = getNeighborhood(iC, 2);
-    for (int jC : inconsistentNeighbors) {
-      auto& jCuboid = get(jC);
-      for (unsigned iD=0; iD < D; ++iD) {
-        auto extent = iCuboid.getExtent();
-        if (iCuboid.getOrigin()[iD] + extent[iD]*iCuboid.getDeltaR() < jCuboid.getOrigin()[iD]) {
-          extent[iD] += (jCuboid.getOrigin()[iD] - (iCuboid.getOrigin()[iD] + extent[iD]*iCuboid.getDeltaR())) / iCuboid.getDeltaR() > std::numeric_limits<T>::epsilon();
-          iCuboid.resize(0, extent);
-        }
-      }
-    }
-  }
 }
 
 template <typename T, unsigned D>
@@ -977,7 +962,7 @@ template <typename T, unsigned D>
 void CuboidDecomposition<T,D>::print() const
 {
   OstreamManager clout(std::cout, "CuboidDecomposition");
-  clout << "---Cuboid Structure Statistics---" << std::endl;
+  clout << "-- Cuboid Structure Statistics --" << std::endl;
   clout << " Number of Cuboids: " << "\t" << size() << std::endl;
   clout << " Delta       : " << "\t" << "\t" << getDeltaR() << std::endl;
   clout << " Ratio  (min): " << "\t" << "\t" << getMinRatio() << std::endl;
@@ -986,7 +971,7 @@ void CuboidDecomposition<T,D>::print() const
   clout << "        (max): " << "\t" << "\t" << getMaxLatticeVolume() << std::endl;
   clout << " Weight (min): " << "\t" << "\t" << getMinLatticeWeight() << std::endl;
   clout << "        (max): " << "\t" << "\t" << getMaxLatticeWeight() << std::endl;
-  clout << "--------------------------------" << std::endl;
+  clout << "---------------------------------" << std::endl;
 }
 
 template <typename T, unsigned D>

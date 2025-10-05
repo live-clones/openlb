@@ -157,7 +157,6 @@ void prepareGeometry(const UnitConverter<T,DESCRIPTOR>& converter,
 }
 
 void prepareLattice(SuperLattice<T,DESCRIPTOR>& sLattice,
-                    const UnitConverter<T,DESCRIPTOR>& converter,
                     SuperGeometry<T,3>& superGeometry,
                     BulkModel bulkModel)
 {
@@ -194,7 +193,7 @@ void prepareLattice(SuperLattice<T,DESCRIPTOR>& sLattice,
     case BulkModel::LocalSmagorinsky:
     default:
       sLattice.defineDynamics<LocalSmagorinskyBGKdynamics>(bulkIndicator);
-      FringeZoneSmagorinskyConstant smagorinskyFringe(converter, T{0.15});
+      FringeZoneSmagorinskyConstant smagorinskyFringe(sLattice.getUnitConverter(), T{0.15});
       sLattice.defineField<collision::LES::SMAGORINSKY>(bulkIndicator, smagorinskyFringe);
       break;
   }
@@ -202,7 +201,7 @@ void prepareLattice(SuperLattice<T,DESCRIPTOR>& sLattice,
   // Material=2 -->bounce back
   sLattice.defineDynamics<BounceBack>(superGeometry, 2);
 
-  const T omega = converter.getLatticeRelaxationFrequency();
+  const T omega = sLattice.getUnitConverter().getLatticeRelaxationFrequency();
   boundary::set<boundary::LocalVelocity>(sLattice, superGeometry, 3);
   boundary::set<boundary::InterpolatedConvection>(sLattice, superGeometry, 4);
 
@@ -218,8 +217,7 @@ void prepareLattice(SuperLattice<T,DESCRIPTOR>& sLattice,
   clout << "Prepare Lattice ... OK" << std::endl;
 }
 
-void setBoundaryValues(const UnitConverter<T,DESCRIPTOR>& converter,
-                       SuperLattice<T,DESCRIPTOR>& sLattice,
+void setBoundaryValues(SuperLattice<T,DESCRIPTOR>& sLattice,
                        SuperGeometry<T,3>& superGeometry,
                        VortexMethodTurbulentVelocityBoundary<T,DESCRIPTOR>& vortex,
                        BulkModel bulkModel,
@@ -245,18 +243,18 @@ void setBoundaryValues(const UnitConverter<T,DESCRIPTOR>& converter,
     vortex.setIntensityProfile(intensity);
   }
 
-  const T startUpFactor = 0.001 * 1.0 / converter.getCharLatticeVelocity();
-  const T maxStartTPhys = (60*converter.getCharPhysLength()/converter.getCharPhysVelocity()) * startUpFactor;
-  const auto maxStartT = converter.getLatticeTime(maxStartTPhys);
+  const T startUpFactor = 0.001 * 1.0 / sLattice.getUnitConverter().getCharLatticeVelocity();
+  const T maxStartTPhys = (60*sLattice.getUnitConverter().getCharPhysLength()/sLattice.getUnitConverter().getCharPhysVelocity()) * startUpFactor;
+  const auto maxStartT = sLattice.getUnitConverter().getLatticeTime(maxStartTPhys);
 
-  auto uSol = std::shared_ptr<AnalyticalF3D<T,T>>(new CirclePowerLaw3D<T>(superGeometry, 3, converter.getCharLatticeVelocity(), 8, T()));
+  auto uSol = std::shared_ptr<AnalyticalF3D<T,T>>(new CirclePowerLaw3D<T>(superGeometry, 3, sLattice.getUnitConverter().getCharLatticeVelocity(), 8, T()));
 
   if (iT <= maxStartT) {
     PolynomialStartScale<T,std::size_t> scale(maxStartT, 1);
     T frac{};
     scale(&frac, &iT);
 
-    vortex.setVelocityProfile(converter.getConversionFactorVelocity() * frac * uSol);
+    vortex.setVelocityProfile(sLattice.getUnitConverter().getConversionFactorVelocity() * frac * uSol);
     sLattice.template setProcessingContext<Array<U_PROFILE>>(ProcessingContext::Simulation);
     vortex.apply(iT);
   } else {
@@ -264,8 +262,7 @@ void setBoundaryValues(const UnitConverter<T,DESCRIPTOR>& converter,
   }
 }
 
-void getResults(SuperLattice<T, DESCRIPTOR>& sLattice,
-                UnitConverter<T,DESCRIPTOR> const& converter, std::size_t iT,
+void getResults(SuperLattice<T, DESCRIPTOR>& sLattice, std::size_t iT,
                 SuperGeometry<T,3>& superGeometry, util::Timer<T>& timer,
                 bool vtkOut)
 {
@@ -282,22 +279,22 @@ void getResults(SuperLattice<T, DESCRIPTOR>& sLattice,
     vtmWriter.createMasterFile();
   }
 
-  if (iT % converter.getLatticeTime(0.1) == 0) {
+  if (iT % sLattice.getUnitConverter().getLatticeTime(0.1) == 0) {
     timer.update(iT);
     timer.printStep();
-    sLattice.getStatistics().print(iT, converter.getPhysTime(iT));
+    sLattice.getStatistics().print(iT, sLattice.getUnitConverter().getPhysTime(iT));
     if (std::isnan(sLattice.getStatistics().getAverageRho())) {
       std::exit(-1);
     }
   }
 
   // Writes the vtk files
-  if (vtkOut && iT % converter.getLatticeTime(1) == 0) {
+  if (vtkOut && iT % sLattice.getUnitConverter().getLatticeTime(1) == 0) {
     sLattice.setProcessingContext(ProcessingContext::Evaluation);
     sLattice.scheduleBackgroundOutputVTK([&,iT](auto task) {
       SuperVTMwriter3D<T> vtkWriter("nozzle3d");
-      SuperLatticePhysVelocity3D velocity(sLattice, converter);
-      SuperLatticePhysPressure3D pressure(sLattice, converter);
+      SuperLatticePhysVelocity3D velocity(sLattice, sLattice.getUnitConverter());
+      SuperLatticePhysPressure3D pressure(sLattice, sLattice.getUnitConverter());
       vtkWriter.addFunctor(velocity);
       vtkWriter.addFunctor(pressure);
       task(vtkWriter, iT);
@@ -366,8 +363,8 @@ int main(int argc, char* argv[])
   prepareGeometry(converter, superGeometry);
 
   // === 3rd Step: Prepare Lattice ===
-  SuperLattice<T,DESCRIPTOR> sLattice(superGeometry);
-  prepareLattice(sLattice, converter, superGeometry, bulkModel);
+  SuperLattice<T,DESCRIPTOR> sLattice(converter, superGeometry);
+  prepareLattice(sLattice, superGeometry, bulkModel);
 
   // === Setup turbulent inlet condition ===
   Vector<T,3> originI(1./resolution, 5.5+1./resolution, 5.5+1./resolution);
@@ -385,22 +382,22 @@ int main(int argc, char* argv[])
     inflowAxis);
 
   // === 4th Step: Main Loop with Timer ===
-  setBoundaryValues(converter, sLattice, superGeometry, vortex, bulkModel, 0);
+  setBoundaryValues(sLattice, superGeometry, vortex, bulkModel, 0);
 
   sLattice.writeSummary();
 
   util::Timer<T> timer(converter.getLatticeTime(maxPhysT), superGeometry.getStatistics().getNvoxel());
 
-  setBoundaryValues(converter, sLattice, superGeometry, vortex, bulkModel, 0);
+  setBoundaryValues(sLattice, superGeometry, vortex, bulkModel, 0);
   sLattice.collideAndStream();
-  getResults(sLattice, converter, 0, superGeometry, timer, !noResults);
+  getResults(sLattice, 0, superGeometry, timer, !noResults);
 
   timer.start();
 
   for (std::size_t iT = 1; iT <= converter.getLatticeTime(maxPhysT); ++iT) {
-    setBoundaryValues(converter, sLattice, superGeometry, vortex, bulkModel, iT);
+    setBoundaryValues(sLattice, superGeometry, vortex, bulkModel, iT);
     sLattice.collideAndStream();
-    getResults(sLattice, converter, iT, superGeometry, timer, !noResults);
+    getResults(sLattice, iT, superGeometry, timer, !noResults);
   }
 
   timer.stop();

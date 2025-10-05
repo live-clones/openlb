@@ -452,6 +452,15 @@ int main(int argc, char *argv[])
   );
   converter.print();
 
+  UnitConverter<T,TDESCRIPTOR> dummy_converter(
+    (T)   converter.getPhysDeltaX(),      // deltaX
+    (T)   converter.getPhysDeltaT(),      // deltaT
+    (T)   converter.getCharPhysLength(),  // from converter
+    (T)   converter.getCharPhysVelocity(),// from converter
+    (T)   converter.getPhysViscosity(),   // from converter
+    (T)   converter.getPhysDensity()      // from converter
+  );
+
   clout << "H_cold: " << lattice_Hcold << std::endl;
   clout << "H_hot: " << lattice_Hhot << std::endl;
   clout << "k: " << std::setprecision(17) << k << std::endl;
@@ -485,8 +494,8 @@ int main(int argc, char *argv[])
 
   /// === 3rd Step: Prepare Lattice ===
 
-  SuperLattice<T, TDESCRIPTOR> ADlattice(superGeometry);
-  SuperLattice<T, NSDESCRIPTOR> NSlattice(superGeometry);
+  SuperLattice<T, TDESCRIPTOR> ADlattice(dummy_converter, superGeometry);
+  SuperLattice<T, NSDESCRIPTOR> NSlattice(converter, superGeometry);
 
   SuperLatticeCoupling coupling(
     TotalEnthalpyPhaseChangeCoupling{},
@@ -507,7 +516,7 @@ int main(int argc, char *argv[])
     setBoundaryValues(converter, NSlattice, ADlattice, iT, superGeometry);
 
     /// === 6th Step: Collide and Stream Execution ===
-    coupling.execute();
+    coupling.apply();
     std::vector<T> zero(2,T());
     AnalyticalConst2D<T,T> u(zero);
     ADlattice.defineField<descriptors::VELOCITY>(superGeometry, 1, u);

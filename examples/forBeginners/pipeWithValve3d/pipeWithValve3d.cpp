@@ -41,35 +41,35 @@ const T Re = 20.;                               // Reynolds number
 const T maxPhysT = 16.;                         // max. simulation time in s, SI unit
 const T L = 0.05/N;                             // latticeL
 const T CFL = 0.05;                             // CFL number
-Vector<T,3> rotationPoint = {0.15, 0., 0.}; // coordinates of the rotation point for valve
-Vector<T,3> rotationAxis = {0., 0., 1.};    // axis of rotation
+Vector<T,3> rotationPoint = {0.15, 0., 0.};     // coordinates of the rotation point for valve
+Vector<T,3> rotationAxis = {0., 0., 1.};        // axis of rotation
 T angle = 75;                                   // rotation angle in degrees
 
 // Stores data from stl file in geometry in form of material numbers
-void prepareGeometry( UnitConverter<T,DESCRIPTOR> const& converter, IndicatorF3D<T>& indicator,
-                      STLreader<T>& pipe, STLreader<T>& valve, SuperGeometry<T,3>& superGeometry )
+void prepareGeometry( IndicatorF3D<T>& indicator, STLreader<T>& pipe, T dx,
+                      STLreader<T>& valve, SuperGeometry<T,3>& superGeometry )
 {
   superGeometry.rename( 0,2,indicator );
   superGeometry.rename( 2,1,pipe );
   superGeometry.clean();
 
   Vector<T,3> origin = superGeometry.getStatistics().getMinPhysR( 2 );
-  origin[1] += converter.getPhysDeltaX()/2.;
-  origin[2] += converter.getPhysDeltaX()/2.;
+  origin[1] += dx/2.;
+  origin[2] += dx/2.;
 
   Vector<T,3> extend = superGeometry.getStatistics().getMaxPhysR( 2 );
-  extend[1] = extend[1]-origin[1]-converter.getPhysDeltaX()/2.;
-  extend[2] = extend[2]-origin[2]-converter.getPhysDeltaX()/2.;
+  extend[1] = extend[1]-origin[1]-dx/2.;
+  extend[2] = extend[2]-origin[2]-dx/2.;
 
   // Set material number for inflow
-  origin[0] = superGeometry.getStatistics().getMinPhysR( 2 )[0]-converter.getPhysDeltaX();
-  extend[0] = 2*converter.getPhysDeltaX();
+  origin[0] = superGeometry.getStatistics().getMinPhysR( 2 )[0]-dx;
+  extend[0] = 2*dx;
   IndicatorCuboid3D<T> inflow( extend,origin );
   superGeometry.rename( 2,3,inflow );
 
   // Set material number for outflow
-  origin[0] = superGeometry.getStatistics().getMaxPhysR( 2 )[0]-converter.getPhysDeltaX();
-  extend[0] = 2*converter.getPhysDeltaX();
+  origin[0] = superGeometry.getStatistics().getMaxPhysR( 2 )[0]-dx;
+  extend[0] = 2*dx;
   IndicatorCuboid3D<T> outflow( extend,origin );
   superGeometry.rename( 2,4,outflow );
 
@@ -86,7 +86,6 @@ void prepareGeometry( UnitConverter<T,DESCRIPTOR> const& converter, IndicatorF3D
 
 // Set up the geometry of the simulation
 void prepareLattice( SuperLattice<T,DESCRIPTOR>& sLattice,
-                     UnitConverter<T,DESCRIPTOR> const& converter,
                      SuperGeometry<T,3>& superGeometry )
 {
   OstreamManager clout( std::cout,"prepareLattice" );
@@ -115,7 +114,7 @@ void prepareLattice( SuperLattice<T,DESCRIPTOR>& sLattice,
   sLattice.defineRhoU( superGeometry, 1, rhoF, uF );
   sLattice.iniEquilibrium( superGeometry, 1, rhoF, uF );
 
-  sLattice.setParameter<descriptors::OMEGA>(converter.getLatticeRelaxationFrequency());
+  sLattice.setParameter<descriptors::OMEGA>(sLattice.getUnitConverter().getLatticeRelaxationFrequency());
 
   // Make the lattice ready for simulation
   sLattice.initialize();
@@ -125,10 +124,11 @@ void prepareLattice( SuperLattice<T,DESCRIPTOR>& sLattice,
 
 // Generates a slowly increasing inflow for the first iTMaxStart timesteps
 void setBoundaryValues( SuperLattice<T, DESCRIPTOR>& sLattice,
-                        UnitConverter<T,DESCRIPTOR> const& converter, int iT,
+                        int iT,
                         SuperGeometry<T,3>& superGeometry )
 {
   OstreamManager clout( std::cout,"setBoundaryValues" );
+  const UnitConverter<T,DESCRIPTOR>& converter = sLattice.getUnitConverter();
 
   // No of time steps for smooth start-up
   int iTmaxStart = converter.getLatticeTime( maxPhysT*0.4 );
@@ -155,11 +155,11 @@ void setBoundaryValues( SuperLattice<T, DESCRIPTOR>& sLattice,
 
 // Computes the pressure drop between the voxels before and after the cylinder
 void getResults( SuperLattice<T, DESCRIPTOR>& sLattice,
-                 UnitConverter<T,DESCRIPTOR> const& converter, int iT,
+                 std::size_t iT,
                  SuperGeometry<T,3>& superGeometry, util::Timer<T>& timer)
 {
-
   OstreamManager clout( std::cout,"getResults" );
+  const UnitConverter<T,DESCRIPTOR>& converter = sLattice.getUnitConverter();
 
   const std::size_t vtkIter  = converter.getLatticeTime( .3 );
   const std::size_t statIter = converter.getLatticeTime( .1 );
@@ -208,7 +208,6 @@ int main( int argc, char* argv[] )
   );
   converter.print();
 
-
   // === 2nd Step: Prepare Geometry ===
   // Instantiation of the STLreader class
   // file name, voxel size in meter, stl unit in meter, outer voxel no., inner voxel no.
@@ -228,13 +227,13 @@ int main( int argc, char* argv[] )
   // Instantiation of a superGeometry
   SuperGeometry<T,3> superGeometry( cuboidDecomposition, loadBalancer );
 
-  prepareGeometry( converter, extendedDomain, pipe, valve, superGeometry );
+  prepareGeometry( extendedDomain, pipe, converter.getPhysDeltaX(), valve, superGeometry );
 
   // === 3rd Step: Prepare Lattice ===
-  SuperLattice<T, DESCRIPTOR> sLattice( superGeometry );
+  SuperLattice<T, DESCRIPTOR> sLattice( converter, superGeometry );
 
   //prepareLattice and set boundaryCondition
-  prepareLattice( sLattice, converter, superGeometry );
+  prepareLattice( sLattice, superGeometry );
 
   // === 4th Step: Main Loop with Timer ===
   clout << "starting simulation..." << std::endl;
@@ -243,13 +242,13 @@ int main( int argc, char* argv[] )
 
   for (std::size_t iT = 0; iT < converter.getLatticeTime( maxPhysT ); ++iT) {
     // === 5th Step: Definition of Initial and Boundary Conditions ===
-    setBoundaryValues( sLattice, converter, iT, superGeometry );
+    setBoundaryValues( sLattice, iT, superGeometry );
 
     // === 6th Step: Collide and Stream Execution ===
     sLattice.collideAndStream();
 
     // === 7th Step: Computation and Output of the Results ===
-    getResults( sLattice, converter, iT, superGeometry, timer );
+    getResults( sLattice, iT, superGeometry, timer );
   }
 
   timer.stop();

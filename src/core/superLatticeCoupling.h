@@ -1,6 +1,6 @@
 /*  This file is part of the OpenLB library
  *
- *  Copyright (C) 2022 Adrian Kummerlaender
+ *  Copyright (C) 2022-2025 Adrian Kummerlaender, Shota Ito
  *
  *  E-mail contact: info@openlb.net
  *  The most recent release of OpenLB can be downloaded at
@@ -52,7 +52,7 @@ private:
   std::unique_ptr<ConcreteBlockMask<typename COUPLEES::values_t::template get<0>::value_t,
                                     PLATFORM>> _mask;
 
-  void execute(typename AbstractCouplingO<COUPLEES>::LatticeR latticeR)
+  void apply(typename AbstractCouplingO<COUPLEES>::LatticeR latticeR)
   {
     CellID iCell = _lattices.template get<0>()->getCellId(latticeR);
     auto cells = _lattices.exchange_values([&](auto name) -> auto {
@@ -86,7 +86,7 @@ public:
     _mask->set(iCell, state);
   }
 
-  void execute() override
+  void apply() override
   {
     using loc = typename AbstractCouplingO<COUPLEES>::LatticeR::value_t;
     auto* lattice = _lattices.template get<0>();
@@ -99,12 +99,12 @@ public:
           if constexpr (AbstractCouplingO<COUPLEES>::descriptor_t::d == 3) {
             for (loc iZ=0; iZ < lattice->getNz(); ++iZ) {
               if (_mask->operator[](lattice->getCellId(iX,iY,iZ))) {
-                execute({iX,iY,iZ});
+                apply({iX,iY,iZ});
               }
             }
           } else {
             if (_mask->operator[](lattice->getCellId(iX,iY))) {
-              execute({iX,iY});
+              apply({iX,iY});
             }
           }
         }
@@ -117,10 +117,10 @@ public:
         for (loc iY=0; iY < lattice->getNy(); ++iY) {
           if constexpr (AbstractCouplingO<COUPLEES>::descriptor_t::d == 3) {
             for (loc iZ=0; iZ < lattice->getNz(); ++iZ) {
-              execute({iX,iY,iZ});
+              apply({iX,iY,iZ});
             }
           } else {
-            execute({iX,iY});
+            apply({iX,iY});
           }
         }
       }
@@ -149,7 +149,7 @@ private:
   std::unique_ptr<ConcreteBlockMask<typename COUPLEES::values_t::template get<0>::value_t,
                                     PLATFORM>> _mask;
 
-  void execute(typename AbstractCouplingO<COUPLEES>::LatticeR latticeR)
+  void apply(typename AbstractCouplingO<COUPLEES>::LatticeR latticeR)
   {
     CellID iCell = _lattices.template get<0>()->getCellId(latticeR);
     auto cells = _lattices.exchange_values([&](auto name) -> auto {
@@ -183,7 +183,7 @@ public:
     _mask->set(iCell, state);
   }
 
-  void execute() override
+  void apply() override
   {
     using loc = typename AbstractCouplingO<COUPLEES>::LatticeR::value_t;
     auto* lattice = _lattices.template get<0>();
@@ -196,12 +196,12 @@ public:
           if constexpr (AbstractCouplingO<COUPLEES>::descriptor_t::d == 3) {
             for (loc iZ=0; iZ < lattice->getNz(); ++iZ) {
               if (_mask->operator[](lattice->getCellId(iX,iY,iZ))) {
-                execute({iX,iY,iZ});
+                apply({iX,iY,iZ});
               }
             }
           } else {
             if (_mask->operator[](lattice->getCellId(iX,iY))) {
-              execute({iX,iY});
+              apply({iX,iY});
             }
           }
         }
@@ -214,10 +214,10 @@ public:
         for (loc iY=0; iY < lattice->getNy(); ++iY) {
           if constexpr (AbstractCouplingO<COUPLEES>::descriptor_t::d == 3) {
             for (loc iZ=0; iZ < lattice->getNz(); ++iZ) {
-              execute({iX,iY,iZ});
+              apply({iX,iY,iZ});
             }
           } else {
-            execute({iX,iY});
+            apply({iX,iY});
           }
         }
       }
@@ -226,10 +226,9 @@ public:
 
 };
 
-
 /// Coupling operator COUPLER on named COUPLEES
 template <typename COUPLER, typename COUPLEES>
-class SuperLatticeCoupling {
+class SuperLatticeCoupling : public ApplicableO {
 private:
   template <typename VALUED_DESCRIPTOR>
   using ptr_to_lattice = SuperLattice<typename VALUED_DESCRIPTOR::value_t,
@@ -280,15 +279,17 @@ public:
     }
   }
 
+  ~SuperLatticeCoupling() = default;
+
   /// Execute coupling operation on all blocks
-  void execute()
+  void apply() override
   {
     auto& load = _lattices.template get<0>()->getLoadBalancer();
     #ifdef PARALLEL_MODE_OMP
     #pragma omp taskloop
     #endif
     for (int iC = 0; iC < load.size(); ++iC) {
-      _block[iC]->execute();
+      _block[iC]->apply();
     }
   }
 
@@ -345,6 +346,14 @@ SuperLatticeCoupling(COUPLER, MAP&&...) -> SuperLatticeCoupling<
   COUPLER,
   typename meta::map<MAP...>::template map_values<descriptors::extract_valued_descriptor_t>
 >;
+
+template <typename COUPLER, typename... MAP>
+auto constructUniqueCoupling(COUPLER, MAP&&... map) {
+  return std::make_unique<SuperLatticeCoupling<
+    COUPLER,
+    typename meta::map<MAP...>::template map_values<descriptors::extract_valued_descriptor_t>
+  >>(COUPLER{}, std::forward<decltype(map)>(map)...);
+}
 
 template <typename COUPLER, typename... MAP>
 auto constructSharedCoupling(COUPLER, MAP&&... map) {

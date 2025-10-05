@@ -96,8 +96,7 @@ void prepareGeometry( SuperGeometry<T,2>& superGeometry )
 }
 
 void prepareLattice( SuperLattice<T, DESCRIPTOR>& sLattice,
-                     SuperGeometry<T,2>& superGeometry,
-                     MultiPhaseUnitConverterFromRelaxationTime<T, DESCRIPTOR> const& converter )
+                     SuperGeometry<T,2>& superGeometry )
 {
   OstreamManager clout( std::cout,"prepareLattice" );
   clout << "Prepare Lattice ..." << std::endl;
@@ -115,23 +114,23 @@ void prepareLattice( SuperLattice<T, DESCRIPTOR>& sLattice,
   AnalyticalConst2D<T,T> zeroVelocity( zeroV );
 
   // Computing the density
-  AnalyticalConst2D<T,T> vapor ( rho_V/converter.getConversionFactorDensity() );
+  AnalyticalConst2D<T,T> vapor ( rho_V/sLattice.getUnitConverter().getConversionFactorDensity() );
   SmoothIndicatorFactoredCuboid2D<T,T> liquid ( {Lx/2., Ly/2.}, length, Lx,
-                                                 sqrt(2.)*thickness*converter.getConversionFactorLength(),
+                                                 sqrt(2.)*thickness*sLattice.getUnitConverter().getConversionFactorLength(),
                                                  0, {0,0}, 0,
-                                                 ( rho_L - rho_V )/converter.getConversionFactorDensity() );
+                                                 ( rho_L - rho_V )/sLattice.getUnitConverter().getConversionFactorDensity() );
   AnalyticalIdentity2D<T,T> rho ( vapor + liquid );
 
   // sign function
   AnalyticalConst2D<T,T> left ( -1. );
   SmoothIndicatorFactoredCuboid2D<T,T> right ( {Lx, Ly/2.}, Lx, Lx,
-                                                sqrt(2.)*thickness*converter.getConversionFactorLength(),
+                                                sqrt(2.)*thickness*sLattice.getUnitConverter().getConversionFactorLength(),
                                                 0, {0,0}, 0, 2. );
   AnalyticalIdentity2D<T,T> sign ( left + right );
 
   // Computing the velocity
-  AnalyticalConst2D<T,T> _rho_L ( rho_L/converter.getConversionFactorDensity() );
-  AnalyticalConst2D<T,T> _Ui ( Ui_sol/converter.getConversionFactorVelocity() );
+  AnalyticalConst2D<T,T> _rho_L ( rho_L/sLattice.getUnitConverter().getConversionFactorDensity() );
+  AnalyticalConst2D<T,T> _Ui ( Ui_sol/sLattice.getUnitConverter().getConversionFactorVelocity() );
   AnalyticalIdentity2D<T,T> solVelocity ( sign * _Ui * _rho_L / rho - sign * _Ui );
 
   sLattice.defineRhoU( superGeometry, 1, rho, solVelocity );
@@ -140,11 +139,11 @@ void prepareLattice( SuperLattice<T, DESCRIPTOR>& sLattice,
   sLattice.iniEquilibrium( superGeometry, 2, rho, solVelocity );
 
   // Set Chemical Potential
-  AnalyticalConst2D<T,T> chemical( mu_b/converter.getConversionFactorChemicalPotential() );
+  AnalyticalConst2D<T,T> chemical( mu_b/sLattice.getUnitConverter().getConversionFactorChemicalPotential() );
   sLattice.defineField<descriptors::CHEM_POTENTIAL>( superGeometry, 2, chemical );
 
   // Set OMEGA
-  AnalyticalConst2D<T,T> omega( T( 1./converter.computeRelaxationTimefromPhysViscosity(nu) ) );
+  AnalyticalConst2D<T,T> omega( T( 1./sLattice.getUnitConverter().computeRelaxationTimefromPhysViscosity(nu) ) );
   sLattice.defineField<descriptors::OMEGA>( superGeometry, 1, omega );
 
   sLattice.addPostProcessor<stage::PreCoupling>(meta::id<RhoStatistics>());
@@ -207,10 +206,10 @@ void initialCondition( SuperLattice<T, DESCRIPTOR>& sLattice,
   // Compute force
   sLattice.executePostProcessors(stage::PreCoupling());
   sLattice.getCommunicator(stage::PreCoupling()).communicate();
-  chemicalCoupling.execute();
+  chemicalCoupling.apply();
   sLattice.executePostProcessors(stage::PreCoupling());
   sLattice.getCommunicator(stage::PreCoupling()).communicate();
-  forceCoupling.execute();
+  forceCoupling.apply();
 
   // Correct velocity
   sLattice.addPostProcessor<stage::PostCoupling>(meta::id<initialVelocityCorrection>());
@@ -221,13 +220,12 @@ void initialCondition( SuperLattice<T, DESCRIPTOR>& sLattice,
 }
 
 void boundaryCondition( SuperLattice<T, DESCRIPTOR>& sLattice,
-                        SuperGeometry<T,2>& superGeometry,
-                        MultiPhaseUnitConverterFromRelaxationTime<T, DESCRIPTOR> const& converter )
+                        SuperGeometry<T,2>& superGeometry )
 {
   // Compute density at MN1
     SuperLatticeDensity2D<T, DESCRIPTOR> _density( sLattice );
     AnalyticalFfromSuperF2D<T,T> interpolRHO( _density, true, 1 );
-    T dx = converter.getConversionFactorLength();
+    T dx = sLattice.getUnitConverter().getConversionFactorLength();
     T pos_MN1[2] = {dx, 0.};
     T rho_MN1;
     interpolRHO( &rho_MN1, pos_MN1 );
@@ -251,15 +249,14 @@ void boundaryCondition( SuperLattice<T, DESCRIPTOR>& sLattice,
  * Interface: omega = 1/tau
 */
 void computeRelaxationFrequency( SuperLattice<T, DESCRIPTOR>& sLattice,
-                                 SuperGeometry<T,2>& superGeometry,
-                                 MultiPhaseUnitConverterFromRelaxationTime<T, DESCRIPTOR> const& converter )
+                                 SuperGeometry<T,2>& superGeometry )
 {
     // Get density
     SuperLatticeDensity2D<T, DESCRIPTOR> _density( sLattice );
 
     // Find interface position
-    T rhom = 0.5*(rho_V+rho_L)/converter.getConversionFactorDensity();
-    T dx = converter.getConversionFactorLength();
+    T rhom = 0.5*(rho_V+rho_L)/sLattice.getUnitConverter().getConversionFactorDensity();
+    T dx = sLattice.getUnitConverter().getConversionFactorLength();
     AnalyticalFfromSuperF2D<T,T> interpolRHO( _density, true, 1 );
     T pos1[2] = {0., 0.};
     T pos2[2] = {0., 0.};
@@ -281,10 +278,10 @@ void computeRelaxationFrequency( SuperLattice<T, DESCRIPTOR>& sLattice,
     SmoothIndicatorFactoredCuboid2D<T,T> left ( {0., Ly/2.}, 2.*h1-15.*thickness*dx,
                       Lx, 1., 0, {0,0}, 0,
                       1. - 1./tau );
-    SmoothIndicatorFactoredCuboid2D<T,T> center ( {Nx/2., Ly/2.}, h2-h1-15.*thickness*dx,
+    SmoothIndicatorFactoredCuboid2D<T,T> center ( {Lx/2., Ly/2.}, h2-h1-15.*thickness*dx,
                       Lx, 1., 0, {0,0}, 0,
                       1. - 1./tau );
-    SmoothIndicatorFactoredCuboid2D<T,T> right ( {Nx, Ly/2.}, 2.*h1-15.*thickness*dx,
+    SmoothIndicatorFactoredCuboid2D<T,T> right ( {Lx, Ly/2.}, 2.*h1-15.*thickness*dx,
                       Lx, 1., 0, {0,0}, 0,
                       1. - 1./tau );
     AnalyticalIdentity2D<T,T> _omega ( bulk + left + center + right );
@@ -298,7 +295,6 @@ void computeRelaxationFrequency( SuperLattice<T, DESCRIPTOR>& sLattice,
 //std::vector<T>
 void getResults( SuperLattice<T, DESCRIPTOR>& sLattice,
                  int iT, SuperGeometry<T,2>& superGeometry,
-                 MultiPhaseUnitConverterFromRelaxationTime<T, DESCRIPTOR> const& converter,
                  util::Timer<T>& timer )
 {
   OstreamManager clout( std::cout,"getResults" );
@@ -329,7 +325,7 @@ void getResults( SuperLattice<T, DESCRIPTOR>& sLattice,
     SuperIdentity2D<T,T> _density_lat( density_lat );
     _density_lat.getName() = "lattice density";
 
-    AnalyticalConst2D<T,T> C_rho( converter.getConversionFactorDensity() );
+    AnalyticalConst2D<T,T> C_rho( sLattice.getUnitConverter().getConversionFactorDensity() );
     SuperLatticeFfromAnalyticalF2D<T, DESCRIPTOR> _C_rho( C_rho, sLattice );
     SuperIdentity2D<T,T> _density_phs( density_lat * _C_rho );
     _density_phs.getName() = "physical density";
@@ -342,7 +338,7 @@ void getResults( SuperLattice<T, DESCRIPTOR>& sLattice,
     SuperIdentity2D<T,T> _force_lat( force_lat );
     _force_lat.getName() = "lattice force";
 
-    AnalyticalConst2D<T,T> C_F( converter.getConversionFactorForce() );
+    AnalyticalConst2D<T,T> C_F( sLattice.getUnitConverter().getConversionFactorForce() );
     SuperLatticeFfromAnalyticalF2D<T, DESCRIPTOR> _C_F( C_F, sLattice );
     SuperIdentity2D<T,T> _force_phs( force_lat * _C_F );
     _force_phs.getName() = "physical force";
@@ -351,7 +347,7 @@ void getResults( SuperLattice<T, DESCRIPTOR>& sLattice,
     SuperIdentity2D<T,T> _chemical_lat( chemical_lat );
     _chemical_lat.getName() = "lattice chemical potential";
 
-    AnalyticalConst2D<T,T> C_MU( converter.getConversionFactorChemicalPotential() );
+    AnalyticalConst2D<T,T> C_MU( sLattice.getUnitConverter().getConversionFactorChemicalPotential() );
     SuperLatticeFfromAnalyticalF2D<T, DESCRIPTOR> _C_MU( C_MU, sLattice );
     SuperIdentity2D<T,T> _chemical_phs( chemical_lat * _C_MU );
     _chemical_phs.getName() = "physical chemical potential";
@@ -365,7 +361,7 @@ void getResults( SuperLattice<T, DESCRIPTOR>& sLattice,
     SuperIdentity2D<T,T> _velocity_lat( velocityEq_lat + _half * force_lat );
     _velocity_lat.getName() = "lattice velocity";
 
-    AnalyticalConst2D<T,T> C_U( converter.getConversionFactorVelocity() );
+    AnalyticalConst2D<T,T> C_U( sLattice.getUnitConverter().getConversionFactorVelocity() );
     SuperLatticeFfromAnalyticalF2D<T, DESCRIPTOR> _C_U( C_U, sLattice );
     SuperIdentity2D<T,T> _velocity_phs( _velocity_lat * _C_U );
     _velocity_phs.getName() = "physical velocity";
@@ -384,7 +380,7 @@ void getResults( SuperLattice<T, DESCRIPTOR>& sLattice,
     // Compute error in Interface velocity
     // first: compute vapor phase velocity
     AnalyticalFfromSuperF2D<T,T> interpolVelocity( _velocity_phs, true, 1 );
-    T dx = converter.getConversionFactorLength();
+    T dx = sLattice.getUnitConverter().getConversionFactorLength();
     T pos[2] = {dx, 0.};
     T Ui_num[2] = {0., 0.};
     interpolVelocity( &Ui_num[0], pos );
@@ -406,19 +402,6 @@ int main( int argc, char *argv[] )
   initialize( &argc, &argv );
   OstreamManager clout(std::cout, "main");
 
-  // === 1st Step: Unit Converter ===
-  MultiPhaseUnitConverterFromRelaxationTime<T,DESCRIPTOR> converter(
-    (T)   Nx,                        // resolution
-    (T)   tau,                       // lattice relaxation time
-    (T)   rho_liquid,                // lattice density
-    (T)   Lx,                        // charPhysLength: reference length of simulation geometry
-    (T)   nu,                        // physViscosity: physical kinematic viscosity in __m^2 / s__
-    (T)   rho_liquid                 // physDensity: physical density in __kg / m^3__
-  );
-
-  // Prints the converter log as console output
-  converter.print();
-
   // === 2nd Step: Prepare Geometry ===
   // Instantiation of a cuboidDecomposition with weights
 #ifdef PARALLEL_MODE_MPI
@@ -426,7 +409,7 @@ int main( int argc, char *argv[] )
 #else
   const int noOfCuboids = 1;
 #endif
-  CuboidDecomposition2D<T> cuboidDecomposition({0, 0}, converter.getPhysDeltaX(), {Nx, Ny}, noOfCuboids );
+  CuboidDecomposition2D<T> cuboidDecomposition({0, 0}, Lx/Nx, {Nx, Ny}, noOfCuboids );
   // set periodic boundaries to the vertical direction
   cuboidDecomposition.setPeriodicity({ false, true });
   // Instantiation of loadbalancer
@@ -439,7 +422,19 @@ int main( int argc, char *argv[] )
   // === 3rd Step: Prepare Lattice ===
   SuperLattice<T, DESCRIPTOR> sLattice( superGeometry );
 
-  prepareLattice( sLattice, superGeometry, converter );
+  // Unit Converter
+  sLattice.setUnitConverter<MultiPhaseUnitConverterFromRelaxationTime<T,DESCRIPTOR>>(
+    (T)   Nx,                        // resolution
+    (T)   tau,                       // lattice relaxation time
+    (T)   rho_liquid,                // lattice density
+    (T)   Lx,                        // charPhysLength: reference length of simulation geometry
+    (T)   nu,                        // physViscosity: physical kinematic viscosity in __m^2 / s__
+    (T)   rho_liquid                 // physDensity: physical density in __kg / m^3__
+  );
+  // Prints the converter log as console output
+  sLattice.getUnitConverter().print();
+
+  prepareLattice( sLattice, superGeometry );
 
   // === 4th Step: Prepare Couplings ===
   // Chemical potential coupling
@@ -451,12 +446,12 @@ int main( int argc, char *argv[] )
   chemicalCoupling.restrictTo(superGeometry.getMaterialIndicator({1}));
 
   chemicalCoupling.template setParameter<EOS::Landau::RHOV>(
-                  rho_vapor/converter.getConversionFactorDensity());
+                  rho_vapor/sLattice.getUnitConverter().getConversionFactorDensity());
   chemicalCoupling.template setParameter<EOS::Landau::RHOL>(
-                  rho_liquid/converter.getConversionFactorDensity());
+                  rho_liquid/sLattice.getUnitConverter().getConversionFactorDensity());
   chemicalCoupling.template setParameter<EOS::Landau::THICKNESS>(thickness);
   chemicalCoupling.template setParameter<EOS::Landau::SURFTENSION>(
-                  surfTension/converter.getConversionFactorSurfaceTension());
+                  surfTension/sLattice.getUnitConverter().getConversionFactorSurfaceTension());
 
   // Compute the EOS parameters
   EOS::Landau::computeParameters<T>(chemicalCoupling);
@@ -481,13 +476,13 @@ int main( int argc, char *argv[] )
   for ( iT=0; iT<=maxIter; ++iT ) {
 
     // Apply boundary conditions
-    boundaryCondition( sLattice, superGeometry, converter );
+    boundaryCondition( sLattice, superGeometry );
 
     // Compute relaxation frequency
-    computeRelaxationFrequency( sLattice, superGeometry, converter );
+    computeRelaxationFrequency( sLattice, superGeometry );
 
     // Computation and output of the results
-    getResults( sLattice, iT, superGeometry, converter, timer );
+    getResults( sLattice, iT, superGeometry, timer );
     if ( std::isnan( sLattice.getStatistics().getAverageEnergy() ) ) {
       clout << "unstable!" << std::endl;
       break;
@@ -499,12 +494,12 @@ int main( int argc, char *argv[] )
     // Compute chemical potential
     sLattice.executePostProcessors(stage::PreCoupling());
     sLattice.getCommunicator(stage::PreCoupling()).communicate();
-    chemicalCoupling.execute();
+    chemicalCoupling.apply();
 
     // Compute thermodynamic force
     sLattice.executePostProcessors(stage::PreCoupling());
     sLattice.getCommunicator(stage::PreCoupling()).communicate();
-    forceCoupling.execute();
+    forceCoupling.apply();
 
   }
   timer.stop();

@@ -307,7 +307,7 @@ int simulateFlow(T D)
   prepareGeometry<T>(converter, superGeometry);
 
   // === 3. Prepare lattice ====
-  SuperLattice<T,RADDESCRIPTOR> adLattice(superGeometry);
+  SuperLattice<T,RADDESCRIPTOR> adLattice(converter, superGeometry);
 
   prepareLattice<T>(converter, adLattice, superGeometry);
 

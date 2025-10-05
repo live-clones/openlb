@@ -77,7 +77,7 @@ const int latticeOverlap = 2;
 
 const T stlSize = 10.0;
 
-void prepareGeometry(UnitConverter<T, NSDESCRIPTOR> const& converterNS,
+void prepareGeometry(T dx,
                      IndicatorF3D<T>& indicator, SuperGeometry<T,3>& superGeometry)
 {
 
@@ -92,7 +92,7 @@ void prepareGeometry(UnitConverter<T, NSDESCRIPTOR> const& converterNS,
   Vector<T, 3> maxR = superGeometry.getStatistics().getMaxPhysR(2);
   Vector<T, 3> centerR = superGeometry.getStatistics().getCenterPhysR(2);
   Vector<T, 3> extend = superGeometry.getStatistics().getPhysExtend(2);
-  extend[2] = converterNS.getPhysDeltaX();
+  extend[2] = dx;
 
   // sets circle of both inflows and the outflow, with direction and radius
   IndicatorCircle3D<T> inflow1(minR[0], minR[1], centerR[2], 0., -1., 0.,
@@ -103,9 +103,9 @@ void prepareGeometry(UnitConverter<T, NSDESCRIPTOR> const& converterNS,
                                0., 1., 0., (maxR[0] - minR[0]) / T(3));
 
   // sets cylinder on that in-/out-flow circles with length
-  IndicatorCylinder3D<T> layerInflow1(inflow1, converterNS.getPhysDeltaX());
-  IndicatorCylinder3D<T> layerInflow2(inflow2, converterNS.getPhysDeltaX());
-  IndicatorCylinder3D<T> layerOutflow(outflow, converterNS.getPhysDeltaX());
+  IndicatorCylinder3D<T> layerInflow1(inflow1, dx);
+  IndicatorCylinder3D<T> layerInflow2(inflow2, dx);
+  IndicatorCylinder3D<T> layerOutflow(outflow, dx);
   // renames all boundary voxels of material fromBcMat to toBcMat if two neighbour voxel
   // in the direction of the discrete normal are fluid voxel with material fluidM in the region
   // where the indicator function is fulfilled
@@ -207,15 +207,14 @@ void prepareLatticeAD(
 void setBoundaryValues(
   SuperGeometry<T,3>& superGeometry,
   SuperLattice<T, NSDESCRIPTOR>& sLattice,
-  UnitConverter<T, NSDESCRIPTOR> const& converterNS,
   std::size_t iT)
 {
   OstreamManager clout(std::cout, "setBoundaryValues");
 
   std::vector < T > maxVelocity(3, T());
-  const T distanceToBoundary = converterNS.getPhysDeltaX() / T(2);
-  const T latticeVelNS = converterNS.getLatticeVelocity(converterNS.getCharPhysVelocity());
-  const size_t itStartTime = converterNS.getLatticeTime(physStartTime);
+  const T distanceToBoundary = sLattice.getUnitConverter().getPhysDeltaX() / T(2);
+  const T latticeVelNS = sLattice.getUnitConverter().getLatticeVelocity(sLattice.getUnitConverter().getCharPhysVelocity());
+  const size_t itStartTime = sLattice.getUnitConverter().getLatticeTime(physStartTime);
 
   if (iT <= itStartTime && iT % 50 == 0) {
 
@@ -237,14 +236,13 @@ void setBoundaryValues(
 
 void getResults(
   SuperLattice<T, NSDESCRIPTOR>& sLattice,
-  UnitConverter<T, NSDESCRIPTOR>& converterNS,
   std::vector<SuperLattice<T, ADEDESCRIPTOR>*> partners,
   size_t iT, SuperGeometry<T,3>& superGeometry,
   util::Timer<double>& timer)
 {
   OstreamManager clout(std::cout, "getResults");
 
-  const int itTotalTime = converterNS.getLatticeTime(physTotalTime);
+  const int itTotalTime = sLattice.getUnitConverter().getLatticeTime(physTotalTime);
 
   // output in beginning
   const int iTperiodConsole = itTotalTime / 100;   // Console output
@@ -272,8 +270,8 @@ void getResults(
     timer.printStep();
 
     // output for latticeStatistics
-    sLattice.getStatistics().print(iT, converterNS.getPhysTime(iT));
-    partners[0]->getStatistics().print(iT, converterNS.getPhysTime(iT));
+    sLattice.getStatistics().print(iT, sLattice.getUnitConverter().getPhysTime(iT));
+    partners[0]->getStatistics().print(iT, sLattice.getUnitConverter().getPhysTime(iT));
   }
 
   // vtk and gif output
@@ -283,8 +281,8 @@ void getResults(
     partners[1]->setProcessingContext(ProcessingContext::Evaluation);
     partners[2]->setProcessingContext(ProcessingContext::Evaluation);
     SuperGeometryF<T,3> materials(superGeometry);
-    SuperLatticePhysVelocity3D<T, NSDESCRIPTOR> velocityNS(sLattice, converterNS);
-    SuperLatticePhysPressure3D<T, NSDESCRIPTOR> pressure(sLattice, converterNS);
+    SuperLatticePhysVelocity3D<T, NSDESCRIPTOR> velocityNS(sLattice, sLattice.getUnitConverter());
+    SuperLatticePhysPressure3D<T, NSDESCRIPTOR> pressure(sLattice, sLattice.getUnitConverter());
     SuperLatticeDensity3D<T, ADEDESCRIPTOR> adsorptive(*partners[0]);
     SuperLatticeDensity3D<T, ADEDESCRIPTOR> loading(*partners[2]);
     SuperLatticeDensity3D<T, ADEDESCRIPTOR> soluteConcentration(*partners[1]);
@@ -360,13 +358,13 @@ int main(int argc, char* argv[])
   // Default instantiation of superGeometry
   SuperGeometry<T,3> superGeometry(cuboidDecomposition, loadBalancer, latticeOverlap);
 
-  prepareGeometry(converterNS, stlReader, superGeometry);
+  prepareGeometry(converterNS.getPhysDeltaX(), stlReader, superGeometry);
 
   /// === 3rd Step: Prepare Lattice ===
-  SuperLattice<T, NSDESCRIPTOR> sLattice(superGeometry);
-  SuperLattice<T, ADEDESCRIPTOR> sLatticeAD(superGeometry);
-  SuperLattice<T, ADEDESCRIPTOR> CADLattice(superGeometry);
-  SuperLattice<T, ADEDESCRIPTOR> QADLattice(superGeometry);
+  SuperLattice<T, NSDESCRIPTOR> sLattice(converterNS, superGeometry);
+  SuperLattice<T, ADEDESCRIPTOR> sLatticeAD(converterADE, superGeometry);
+  SuperLattice<T, ADEDESCRIPTOR> CADLattice(converterADE, superGeometry);
+  SuperLattice<T, ADEDESCRIPTOR> QADLattice(converterADE, superGeometry);
 
   std::vector<SuperLattice<T, ADEDESCRIPTOR>*> partners;
   partners.emplace_back(&sLatticeAD);
@@ -415,11 +413,11 @@ int main(int argc, char* argv[])
   timer.start();
 
   for (size_t iT = 0; iT < converterNS.getLatticeTime(physTotalTime); ++iT) {
-    setBoundaryValues(superGeometry, sLattice, converterNS, iT);
+    setBoundaryValues(superGeometry, sLattice, iT);
 
-    coupling.execute();
+    coupling.apply();
 
-    getResults(sLattice, converterNS, partners, iT, superGeometry, timer);
+    getResults(sLattice, partners, iT, superGeometry, timer);
 
     for (int i = 0; i<3; i++) {
       partners[i]->collideAndStream();

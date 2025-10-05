@@ -241,7 +241,7 @@ public:
     return getCharLatticeVelocity() * util::sqrt(descriptors::invCs2<T,DESCRIPTOR>());
   }
   /// return Knudsen number
-  constexpr T getKnudsenNumber(  ) const
+  virtual constexpr T getKnudsenNumber(  ) const
   {
     // This calculates the lattice Knudsen number.
     // See e.g. (7.22) in "The Lattice Boltzmann Method: Principles and Practice" [kruger2017lattice].
@@ -432,7 +432,276 @@ public:
   virtual void print() const;
   void print(std::ostream& fout) const;
 
-  void write(std::string const& fileName = "unitConverter") const;
+  virtual void write(std::string const& fileName = "unitConverter") const;
+
+
+  // from thermalUnitConverter
+  /// return thermal relaxation time in lattice units
+  virtual constexpr T getLatticeThermalRelaxationTime(  ) const {
+    throw std::logic_error("Undefined");
+  };
+  /// return thermal relaxation frequency in lattice units
+  virtual constexpr T getLatticeThermalRelaxationFrequency() const {
+    throw std::logic_error("Undefined");
+  };
+  /// return characteristic low temperature in physical units
+  virtual constexpr T getCharPhysLowTemperature(  ) const {
+    throw std::logic_error("Undefined");
+  };
+  /// return characteristic high temperature in physical units
+  virtual constexpr T getCharPhysHighTemperature(  ) const {
+    throw std::logic_error("Undefined");
+  };
+  /// return characteristic temperature difference in physical units
+  virtual constexpr T getCharPhysTemperatureDifference() const {
+    throw std::logic_error("Undefined");
+  };
+  /// return thermal expansion coefficient in physical units
+  virtual constexpr T getPhysThermalExpansionCoefficient() const {
+    throw std::logic_error("Undefined");
+  };
+  /// return thermal diffusivity in physical units
+  virtual constexpr T getPhysThermalDiffusivity(  ) const {
+    throw std::logic_error("Undefined");
+  };
+  /// return specific heat capacity in physical units
+  virtual constexpr T getPhysSpecificHeatCapacity(  ) const {
+    throw std::logic_error("Undefined");
+  };
+  /// return thermal conductivity in physical units
+  virtual constexpr T getThermalConductivity(  ) const {
+    throw std::logic_error("Undefined");
+  };
+  /// conversion from lattice to physical temperature
+  virtual constexpr T getPhysTemperature( T latticeTemperature ) const {
+    throw std::logic_error("Undefined");
+  };
+  /// conversion from physical to lattice temperature
+  virtual constexpr T getLatticeTemperature( T physTemperature ) const {
+    throw std::logic_error("Undefined");
+  };
+  /// conversion from lattice to physical thermal diffusivity
+  virtual constexpr T getPhysThermalDiffusivity( T latticeThermalDiffusivity ) const {
+    throw std::logic_error("Undefined");
+  };
+  /// conversion from physical to lattice thermal diffusivity
+  virtual constexpr T getLatticeThermalDiffusivity( T physThermalDiffusivity ) const {
+    throw std::logic_error("Undefined");
+  };
+  /// access (read-only) to private member variable
+  virtual constexpr T getConversionFactorThermalDiffusivity() const {
+    throw std::logic_error("Undefined");
+  };
+  /// conversion from lattice to physical specific heat capacity
+  virtual constexpr T getPhysSpecificHeatCapacity( T latticeSpecificHeatCapacity ) const {
+    throw std::logic_error("Undefined");
+  };
+  /// conversion from physical to lattice specific heat capacity
+  virtual constexpr T getLatticeSpecificHeatCapacity( T physSpecificHeatCapacity ) const {
+    throw std::logic_error("Undefined");
+  };
+  /// access (read-only) to private member variable
+  virtual constexpr T getConversionFactorSpecificHeatCapacity() const {
+    throw std::logic_error("Undefined");
+  };
+  /// conversion from lattice to physical thermal  conductivity
+  virtual constexpr T getPhysThermalConductivity( T latticeThermalConductivity ) const {
+    throw std::logic_error("Undefined");
+  };
+  /// conversion from physical to lattice thermal  conductivity
+  virtual constexpr T getLatticeThermalConductivity( T physThermalConductivity ) const {
+    throw std::logic_error("Undefined");
+  };
+  /// access (read-only) to private member variable
+  virtual constexpr T getConversionFactorThermalConductivity() const {
+    throw std::logic_error("Undefined");
+  };
+  /// conversion from lattice to physical heat flux
+  virtual constexpr T getPhysHeatFlux( T latticeHeatFlux ) const {
+    throw std::logic_error("Undefined");
+  };
+  /// conversion from physical to lattice heat flux
+  virtual constexpr T getLatticeHeatFlux( T physHeatFlux ) const {
+    throw std::logic_error("Undefined");
+  };
+  /// access (read-only) to private member variable
+  virtual constexpr T getConversionFactorHeatFlux() const {
+    throw std::logic_error("Undefined");
+  };
+  virtual constexpr T getPrandtlNumber() const {
+    throw std::logic_error("Undefined");
+  };
+  virtual constexpr T getRayleighNumber() const {
+    throw std::logic_error("Undefined");
+  };
+
+  // from multiPhaseUnitConverter
+  /// return characteristic temperature in physical units
+  virtual constexpr T getCharPhysTemperature() const {
+    throw std::logic_error("Undefined");
+  };
+  /// return equation of state parameter a in physical units
+  virtual constexpr T getPhysEoSa() const {
+    throw std::logic_error("Undefined");
+  };
+  /// return characteristic temperature in physical units
+  virtual constexpr T getPhysTemperature(  ) const  {
+    throw std::logic_error("Undefined");
+  };
+  /// return equation of state parameter b in physical units
+  virtual constexpr T getPhysEoSb() const {
+    throw std::logic_error("Undefined");
+  };
+  /// return molar mass in physical units
+  virtual constexpr T getPhysMolarMass() const {
+    throw std::logic_error("Undefined");
+  };
+  /// return surface tension in physical units
+  virtual constexpr T getPhysSurfaceTension() const {
+    throw std::logic_error("Undefined");
+  };
+  /// access (read-only) to private member variable
+  virtual constexpr T getConversionFactorEoSa() const {
+    throw std::logic_error("Undefined");
+  };
+  /// access (read-only) to private member variable
+  virtual constexpr T getConversionFactorEoSb() const {
+    throw std::logic_error("Undefined");
+  };
+  /// access (read-only) to private member variable
+  virtual constexpr T getConversionFactorMolarMass() const  {
+    throw std::logic_error("Undefined");
+  };
+  /// access (read-only) to private member variable
+  virtual constexpr T getConversionFactorGasConstant() const  {
+    throw std::logic_error("Undefined");
+  };
+  /// access (read-only) to private member variable
+  virtual constexpr T getConversionFactorTemperature() const  {
+    throw std::logic_error("Undefined");
+  };
+  /// access (read-only) to private member variable
+  virtual constexpr T getLatticeSurfaceTension() const  {
+    throw std::logic_error("Undefined");
+  };
+
+  virtual constexpr T getConversionFactorSurfaceTension() const {
+    throw std::logic_error("Undefined");
+  };
+  virtual constexpr T getConversionFactorChemicalPotential() const {
+    throw std::logic_error("Undefined");
+  };
+  virtual constexpr T computeRelaxationTimefromPhysViscosity( T userViscosity ) const {
+    throw std::logic_error("Undefined");
+  };
+  virtual constexpr T computeLatticeSurfaceTension( T userSurfaceTension ) const {
+    throw std::logic_error("Undefined");
+  };
+  virtual constexpr T computeReynolds(  T userVelocity, T userLength, T userViscosity  ) const {
+    throw std::logic_error("Undefined");
+  };
+  virtual constexpr T computeWeber( T userVelocity, T userLength, T userSurfaceTension ) const {
+    throw std::logic_error("Undefined");
+  };
+
+  //from powerLawUnitConverter
+  /// return consistency coefficient in physical units
+  virtual constexpr T getPhysConsistencyCoeff(  ) const {
+    throw std::logic_error("Undefined");
+  };
+  /// conversion from lattice to  physical consistency coefficient
+  virtual constexpr T getPhysConsistencyCoeff( T latticeConsistencyCoeff ) const {
+    throw std::logic_error("Undefined");
+  };
+  /// conversion from physical to lattice consistency coefficient
+  virtual constexpr T getLatticeConsistencyCoeff(  ) const {
+    throw std::logic_error("Undefined");
+  };
+  /// access (read-only) to private member variable
+  virtual constexpr T getConversionFactorConsistencyCoeff(  ) const {
+    throw std::logic_error("Undefined");
+  };
+  /// access (read-only) to private member variable
+  virtual constexpr T getPowerLawIndex(  ) const {
+    throw std::logic_error("Undefined");
+  };
+
+
+
+  // from adeUnitConverter
+  virtual constexpr T getLatticeAdeRelaxationTime() const {
+    throw std::logic_error("Undefined");
+  };
+  virtual constexpr T getLatticeAdeRelaxationFrequency() const {
+    throw std::logic_error("Undefined");
+  };
+  virtual constexpr T getPhysDiffusivity() const {
+    throw std::logic_error("Undefined");
+  };
+  virtual constexpr T getLatticeDiffusivity() const {
+    throw std::logic_error("Undefined");
+  };
+  virtual constexpr T getConversionFactorDiffusivity() const {
+    throw std::logic_error("Undefined");
+  };
+  virtual constexpr T getPecletNumber() const {
+    throw std::logic_error("Undefined");
+  };
+
+  // from adsorptionUnitConverter
+  virtual constexpr T getConversionFactorParticleDensity() const {
+    throw std::logic_error("Undefined");
+  };
+  virtual constexpr T getPhysParticleConcentration(T c) const {
+    throw std::logic_error("Undefined");
+  };
+  virtual constexpr T getPhysConcentration(T c) const {
+    throw std::logic_error("Undefined");
+  };
+  virtual constexpr T getPhysLoading(T Cq) const {
+    throw std::logic_error("Undefined");
+  };
+  virtual constexpr T getSchmidtNumber() const {
+    throw std::logic_error("Undefined");
+  };
+  virtual constexpr T getFourierNumber() const {
+    throw std::logic_error("Undefined");
+  };
+
+  // from radiativeUnitConverter
+  virtual constexpr T getPhysAbsorption() const {
+    throw std::logic_error("Undefined");
+  };
+  virtual constexpr T getPhysScattering() const {
+    throw std::logic_error("Undefined");
+  };
+  virtual constexpr T getAnisotropyFactor() const {
+    throw std::logic_error("Undefined");
+  };
+  virtual constexpr T getExtinction() const {
+    throw std::logic_error("Undefined");
+  };
+  virtual constexpr T getScatteringAlbedo() const {
+    throw std::logic_error("Undefined");
+  };
+  virtual constexpr T getPhysDiffusion() const {
+    throw std::logic_error("Undefined");
+  };
+  virtual constexpr T getEffectiveAttenuation() const {
+    throw std::logic_error("Undefined");
+  };
+  virtual constexpr T getLatticeAbsorption() const {
+    throw std::logic_error("Undefined");
+  };
+  virtual constexpr T getLatticeScattering() const {
+    throw std::logic_error("Undefined");
+  };
+  virtual constexpr T getLatticeDiffusion() const {
+    throw std::logic_error("Undefined");
+  };
+  virtual constexpr T getRefractiveRelative() const {
+    throw std::logic_error("Undefined");
+  };
 
 protected:
   // conversion factors

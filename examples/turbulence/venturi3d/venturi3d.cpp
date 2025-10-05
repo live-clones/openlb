@@ -103,14 +103,13 @@ SuperGeometry<T,3> prepareGeometry( )
 
 
 void prepareLattice( SuperLattice<T,DESCRIPTOR>& sLattice,
-                     UnitConverter<T, DESCRIPTOR> const& converter,
                      SuperGeometry<T,3>& superGeometry )
 {
 
   OstreamManager clout( std::cout,"prepareLattice" );
   clout << "Prepare Lattice ..." << std::endl;
 
-  const T omega = converter.getLatticeRelaxationFrequency();
+  const T omega = sLattice.getUnitConverter().getLatticeRelaxationFrequency();
 
   // Material=1 -->bulk dynamics
   sLattice.defineDynamics<RLBdynamics>(superGeometry, 1);
@@ -131,14 +130,13 @@ void prepareLattice( SuperLattice<T,DESCRIPTOR>& sLattice,
 }
 
 // Generates a slowly increasing sinuidal inflow for the first iTMax timesteps
-void setBoundaryValues( SuperLattice<T, DESCRIPTOR>& sLattice,
-                        UnitConverter<T, DESCRIPTOR> const& converter, int iT,
+void setBoundaryValues( SuperLattice<T, DESCRIPTOR>& sLattice, int iT,
                         SuperGeometry<T,3>& superGeometry )
 {
   OstreamManager clout( std::cout,"setBoundaryValues" );
 
   // No of time steps for smooth start-up
-  int iTmaxStart = converter.getLatticeTime( maxPhysT*0.8 );
+  int iTmaxStart = sLattice.getUnitConverter().getLatticeTime( maxPhysT*0.8 );
   int iTperiod = 50;
 
   if ( iT%iTperiod==0 && iT<= iTmaxStart ) {
@@ -151,7 +149,7 @@ void setBoundaryValues( SuperLattice<T, DESCRIPTOR>& sLattice,
     startScale( &frac,iTvec );
 
     // Creates and sets the Poiseuille inflow profile using functors
-    CirclePoiseuille3D<T> poiseuilleU( superGeometry, 3, frac*converter.getCharLatticeVelocity(), T(), converter.getPhysDeltaX() );
+    CirclePoiseuille3D<T> poiseuilleU( superGeometry, 3, frac*sLattice.getUnitConverter().getCharLatticeVelocity(), T(), sLattice.getUnitConverter().getPhysDeltaX() );
     sLattice.defineU( superGeometry, 3, poiseuilleU );
 
     clout << "step=" << iT << "; scalingFactor=" << frac << std::endl;
@@ -162,8 +160,7 @@ void setBoundaryValues( SuperLattice<T, DESCRIPTOR>& sLattice,
   //clout << "Set Boundary Values ... ok" << std::endl;
 }
 
-void getResults( SuperLattice<T, DESCRIPTOR>& sLattice,
-                 UnitConverter<T, DESCRIPTOR>& converter, int iT,
+void getResults( SuperLattice<T, DESCRIPTOR>& sLattice, int iT,
                  SuperGeometry<T,3>& superGeometry, util::Timer<T>& timer )
 {
 
@@ -180,12 +177,12 @@ void getResults( SuperLattice<T, DESCRIPTOR>& sLattice,
   }
 
   // Writes the vtm files
-  if ( iT%converter.getLatticeTime( 1. )==0 ) {
+  if ( iT%sLattice.getUnitConverter().getLatticeTime( 1. )==0 ) {
     sLattice.setProcessingContext(ProcessingContext::Evaluation);
 
     // Create the data-reading functors...
-    SuperLatticePhysVelocity3D<T, DESCRIPTOR> velocity( sLattice, converter );
-    SuperLatticePhysPressure3D<T, DESCRIPTOR> pressure( sLattice, converter );
+    SuperLatticePhysVelocity3D<T, DESCRIPTOR> velocity( sLattice, sLattice.getUnitConverter() );
+    SuperLatticePhysPressure3D<T, DESCRIPTOR> pressure( sLattice, sLattice.getUnitConverter() );
     vtmWriter.addFunctor( velocity );
     vtmWriter.addFunctor( pressure );
     vtmWriter.write( iT );
@@ -207,10 +204,10 @@ void getResults( SuperLattice<T, DESCRIPTOR>& sLattice,
   }
 
   // Writes output on the console
-  if ( iT%converter.getLatticeTime( 1. )==0 ) {
+  if ( iT%sLattice.getUnitConverter().getLatticeTime( 1. )==0 ) {
     timer.update( iT );
     timer.printStep();
-    sLattice.getStatistics().print( iT, converter.getPhysTime( iT ) );
+    sLattice.getStatistics().print( iT, sLattice.getUnitConverter().getPhysTime( iT ) );
   }
 }
 
@@ -241,25 +238,25 @@ int main( int argc, char* argv[] )
 
   // === 3rd Step: Prepare Lattice ===
 
-  SuperLattice<T, DESCRIPTOR> sLattice( superGeometry );
+  SuperLattice<T, DESCRIPTOR> sLattice( *converter, superGeometry );
 
-  prepareLattice( sLattice, *converter, superGeometry );
+  prepareLattice( sLattice, superGeometry );
 
   util::Timer<T> timer( converter->getLatticeTime( maxPhysT ), superGeometry.getStatistics().getNvoxel() );
   timer.start();
-  getResults( sLattice, *converter, 0, superGeometry, timer );
+  getResults( sLattice, 0, superGeometry, timer );
 
   // === 4th Step: Main Loop with Timer ===
   for ( std::size_t iT = 0; iT <= converter->getLatticeTime( maxPhysT ); ++iT ) {
 
     // === 5th Step: Definition of Initial and Boundary Conditions ===
-    setBoundaryValues( sLattice, *converter, iT, superGeometry );
+    setBoundaryValues( sLattice, iT, superGeometry );
 
     // === 6th Step: Collide and Stream Execution ===
     sLattice.collideAndStream();
 
     // === 7th Step: Computation and Output of the Results ===
-    getResults( sLattice, *converter, iT, superGeometry, timer );
+    getResults( sLattice, iT, superGeometry, timer );
   }
 
   timer.stop();

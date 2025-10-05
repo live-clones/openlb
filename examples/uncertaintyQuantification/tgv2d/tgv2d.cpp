@@ -134,7 +134,8 @@ int main( int argc, char* argv[] )
 
   // Create main folder to store results
   std::string foldPath = "uq/res_" + std::to_string(resolution) + "/";
-  createDirectory(foldPath, clout);
+  std::string uqFoldPath = foldPath + "uq/";
+  createDirectory(uqFoldPath, clout);
 
 #ifdef MonteCarloSampling
   int nq = resolution/3.0; // number of samples
@@ -172,7 +173,7 @@ int main( int argc, char* argv[] )
   for (std::size_t n = 0; n < samples.size(); ++n) {
     if (exportResults) {
     // Create subfolder for this sample
-      std::string subFoldPath = foldPath + std::to_string(n) + "/tmp/";
+      std::string subFoldPath = uqFoldPath + std::to_string(n) + "/tmp/";
       createDirectory(subFoldPath, clout);
       // Redirect output to this sample's folder
       singleton::directories().setOutputDir(subFoldPath);
@@ -186,9 +187,38 @@ int main( int argc, char* argv[] )
   // The string "physVelocity" is a tag used inside the function, not the variable name.
 
   if (exportResults) {
+    Vector<T,2> extend(charL, charL);
+    Vector<T,2> origin;
+    IndicatorCuboid2D<T> cuboid(extend, origin);
+
+    #ifdef PARALLEL_MODE_MPI
+      const int noOfCuboids = singleton::mpi().getSize();
+    #else
+      const int noOfCuboids = 1;
+    #endif
+
+    UnitConverter<T,DESCRIPTOR> converter(
+           dx,
+           dt,
+     (T)   1.0,                // charPhysLength
+     (T)   1.0,                // charPhysVelocity
+     (T)   physViscosity,
+     (T)   1.0                 // physDensity
+   );
+
+    CuboidDecomposition2D<T> cuboidDecomposition(cuboid, dx, noOfCuboids);
+    cuboidDecomposition.setPeriodicity({true, true});
+    HeuristicLoadBalancer<T> loadBalancer(cuboidDecomposition);
+    SuperGeometry<T,2> superGeometry(cuboidDecomposition, loadBalancer);
+    singleton::directories().setOutputDir(foldPath + "tmp/");
+    prepareGeometry(superGeometry);
+
+    std::vector<int> materials = {1};
+
     computeMeanAndStdAndWriteVTI<T, DESCRIPTOR>(
-      uq, foldPath, "tgv2d", "physVelocity", cuboidDecomposition, superGeometry
+      uq, foldPath, "tgv2d", "physVelocity", converter, superGeometry, materials
     );
   }
+
   return 0;
 }

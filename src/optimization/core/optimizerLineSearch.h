@@ -30,6 +30,7 @@
 #define OPTIMIZER_LINE_SEARCH_H
 
 #include "optimizer.h"
+#include "utilities/norm.h"
 
 // All OpenLB code is contained in this namespace.
 namespace olb {
@@ -61,6 +62,12 @@ protected:
   // Upper/Lower bound
   bool _lowerBoundFlag;
   bool _upperBoundFlag;
+
+  /// Accept control if line search fails to find a step instead of terminating the program
+  // Can be set to true only if accessed by optimizerConstrainedBFGS
+  bool _acceptBoundedControl;
+  bool _controlStuck;
+
   /// Maximal number of step attempts for conditioned line search
   int _maxStepAttempts;
 
@@ -92,6 +99,10 @@ public:
     _lowerBoundFlag = false;
     _upperBoundFlag = false;
     _nextDerivFlag = false;
+
+    // Used only by optimizerConstrainedBFGS
+    _acceptBoundedControl = false;
+    _controlStuck = false;
 
     /// Define step conditions and step length calculation
     // No Condition
@@ -131,7 +142,14 @@ public:
       if (atUpper) {
         if (_upperBoundFlag) {
           clout << "Control stuck at upper bound: " <<  std::string(this->_upperBound.begin(), this->_upperBound.end()) << std::endl;
-          exit(1);
+          // If this is accessed by optimizerConstrainedBFGS, control is accepted as solution to quadratic subproblem
+          if(_acceptBoundedControl){
+            // Flag to break from optimization
+            _controlStuck = true;
+          }
+          else{
+            exit(1);
+          }
         }
         _upperBoundFlag = true;
       }
@@ -148,7 +166,14 @@ public:
       if (atLower) {
         if (_lowerBoundFlag) {
           clout << "Control stuck at lower bound: " << std::string(this->_lowerBound.begin(), this->_lowerBound.end()) << std::endl;
-          exit(1);
+          // If this is accessed by optimizerConstrainedBFGS, control is accepted as solution to quadratic subproblem
+          if(_acceptBoundedControl){
+            // Flag to break from optimization
+            _controlStuck = true;
+          }
+          else{
+            exit(1);
+          }
         }
         _lowerBoundFlag = true;
       }
@@ -284,14 +309,30 @@ public:
     while ( !(this->*condition)(tempValue) ) {
       if ( util::abs(lambda/this->_value) < std::numeric_limits<double>::epsilon() ) {
         clout << "Excessive refinement steps (too small step size).\nProgram terminated." <<std::endl;
-        exit(1);
+        // If this is accessed by optimizerConstrainedBFGS, control is accepted as solution to quadratic subproblem
+        if(_acceptBoundedControl){
+          // Flag to break from optimization
+          _controlStuck = true;
+          break;
+        }
+        else{
+          exit(1);
+        }
       }
       refinementStep++;
 
       // Leave program if maximum number of step attempts is exceeded.
       if ( refinementStep >= _maxStepAttempts ) {
         clout << "Excessive refinement steps (maxStepAttempts exeeded).\nProgram terminated." <<std::endl;
-        exit(1);
+        // If this is accessed by optimizerConstrainedBFGS, control is accepted as solution to quadratic subproblem
+        if(_acceptBoundedControl){
+          // Flag to break from optimization
+          _controlStuck = true;
+          break;
+        }
+        else{
+          exit(1);
+        }
       }
 
       S newLambda = this->_lambda;
@@ -309,7 +350,15 @@ public:
       // stop excessive refinement steps when values become no longer sensible
       if (notSensible) {
         clout << "Excessive refinement steps (not sensible).\nProgram terminated." <<std::endl;
-        exit(1);
+        // If this is accessed by optimizerConstrainedBFGS, control is accepted as solution to quadratic subproblem
+        if(_acceptBoundedControl){
+          // Flag to break from optimization
+          _controlStuck = true;
+          break;
+        }
+        else{
+          exit(1);
+        }
       }
 
       if (this->_withUpperBound||this->_withLowerBound) {
@@ -401,10 +450,20 @@ public:
         }
       }  // else control diff is zero anyway
     }
+
+    // OptimizerConstrainedBFGS accepts controls if they are stuck at upper/lower bounds
+    if((_acceptBoundedControl)&&(_controlStuck)){
+      this->_controlsConverged = true;
+    }
     if (this->_verboseOn) {
       clout << "Controls converged within " << this->_controlEps << ": " << ((this->_controlsConverged) ? "true" : "false") << std::endl;
     }
   };
+
+  // Used by OptimizerConstrainedBFGS to switch _acceptBoundedControls to true
+  void acceptBoundedControl(bool accept){
+    _acceptBoundedControl = accept;
+  }
 };
 
 } // namespace opti

@@ -134,8 +134,7 @@ public:
 };
 
 // Stores geometry information in form of material numbers
-void prepareGeometry( UnitConverter<T,DESCRIPTOR> const& converter,
-                      SuperGeometry<T,3>& superGeometry,
+void prepareGeometry( SuperGeometry<T,3>& superGeometry,
                       IndicatorF3D<T>& knudsenPumpLayer,
                       IndicatorF3D<T>& knudsenPump)
 {
@@ -160,8 +159,7 @@ void prepareGeometry( UnitConverter<T,DESCRIPTOR> const& converter,
 }
 
 // Set up the geometry of the simulation
-void prepareLattice( UnitConverter<T,DESCRIPTOR> const& converter,
-                     SuperLattice<T, DESCRIPTOR>& sLattice,
+void prepareLattice( SuperLattice<T, DESCRIPTOR>& sLattice,
                      SuperGeometry<T,3>& superGeometry,
                      IndicatorF3D<T>& channel)
 {
@@ -176,7 +174,7 @@ void prepareLattice( UnitConverter<T,DESCRIPTOR> const& converter,
   setBouzidiKnudsenSlipVelocity<T,DESCRIPTOR,true>(sLattice, superGeometry.getMaterialIndicator({2}), superGeometry.getMaterialIndicator({1}), channel);
 
   // Initial conditions
-  T pL0 = converter.getLatticePressure(pM);
+  T pL0 = sLattice.getUnitConverter().getLatticePressure(pM);
   AnalyticalConst3D<T,T> rho(pL0*descriptors::invCs2<T,DESCRIPTOR>()+T(1));
   AnalyticalConst3D<T,T> u0(T(0), T(0), T(0));
   sLattice.defineField<VELOCITY>(superGeometry.getMaterialIndicator({1,2}),u0);
@@ -185,9 +183,9 @@ void prepareLattice( UnitConverter<T,DESCRIPTOR> const& converter,
   sLattice.defineRhoU(superGeometry.getMaterialIndicator({0,1,2}), rho, u0);
   sLattice.iniEquilibrium(superGeometry.getMaterialIndicator({0,1,2}), rho, u0);
 
-  sLattice.template setParameter<descriptors::OMEGA>(converter.getLatticeRelaxationFrequency());
-  sLattice.template setParameter<KnudsenVelocityPostProcessor<true>::SLIPCOEFF>(slipCoeff/converter.getPhysDeltaX());
-  sLattice.template setParameter<KnudsenVelocityPostProcessor<true>::CREEPCOEFF>(creepCoeff/converter.getPhysDeltaX()/converter.getConversionFactorVelocity());
+  sLattice.template setParameter<descriptors::OMEGA>(sLattice.getUnitConverter().getLatticeRelaxationFrequency());
+  sLattice.template setParameter<KnudsenVelocityPostProcessor<true>::SLIPCOEFF>(slipCoeff/sLattice.getUnitConverter().getPhysDeltaX());
+  sLattice.template setParameter<KnudsenVelocityPostProcessor<true>::CREEPCOEFF>(creepCoeff/sLattice.getUnitConverter().getPhysDeltaX()/sLattice.getUnitConverter().getConversionFactorVelocity());
 
   // Make the lattice ready for simulation
   sLattice.initialize();
@@ -204,8 +202,7 @@ void prepareLattice( UnitConverter<T,DESCRIPTOR> const& converter,
 
 // Compute error norms
 void error( SuperGeometry<T,3>& superGeometry,
-            SuperLattice<T, DESCRIPTOR>& sLattice,
-            UnitConverter<T,DESCRIPTOR> const& converter )
+            SuperLattice<T, DESCRIPTOR>& sLattice )
 {
   OstreamManager clout( std::cout,"error" );
   sLattice.setProcessingContext(ProcessingContext::Evaluation);
@@ -215,7 +212,7 @@ void error( SuperGeometry<T,3>& superGeometry,
 
   // velocity error
   PressureProfile3D<T,T> presSol(height/2., length, density*visc, pM, accomodC, Kn, 0., length);
-  SuperLatticePhysPressure3D<T,DESCRIPTOR> pres( sLattice,converter );
+  SuperLatticePhysPressure3D<T,DESCRIPTOR> pres( sLattice,sLattice.getUnitConverter() );
   auto indicatorF = superGeometry.getMaterialIndicator(1);
 
   SuperRelativeErrorL1Norm3D<T> relPressureErrorNormL1(pres, presSol, indicatorF);
@@ -236,16 +233,16 @@ void error( SuperGeometry<T,3>& superGeometry,
 
 // Output to console and files
 void getResults( SuperLattice<T,DESCRIPTOR>& sLattice,
-                 UnitConverter<T,DESCRIPTOR> const& converter, std::size_t iT,
+                 std::size_t iT,
                  SuperGeometry<T,3>& superGeometry, util::Timer<T>& timer, T maxPhysT, bool hasConverged)
 {
   OstreamManager clout( std::cout,"getResults" );
-  const bool lastTimeStep = ( hasConverged || (iT + 1 == converter.getLatticeTime( maxPhysT )) );
-  const int statIter = converter.getLatticeTime( maxPhysT/50. );
+  const bool lastTimeStep = ( hasConverged || (iT + 1 == sLattice.getUnitConverter().getLatticeTime( maxPhysT )) );
+  const int statIter = sLattice.getUnitConverter().getLatticeTime( maxPhysT/50. );
 
   // VTK and image output only if no EOC analysis
   SuperVTMwriter3D<T> vtmWriter( "knudsenPump3d" );
-  const int vtmIter  = converter.getLatticeTime( maxPhysT/50. );
+  const int vtmIter  = sLattice.getUnitConverter().getLatticeTime( maxPhysT/50. );
 
   if ( iT==0 ) {
     // Writes the geometry, pipe no. and rank no. as vti file for visualization
@@ -258,8 +255,8 @@ void getResults( SuperLattice<T,DESCRIPTOR>& sLattice,
     sLattice.setProcessingContext(ProcessingContext::Evaluation);
     sLattice.scheduleBackgroundOutputVTK([&,iT](auto task) {
       SuperVTMwriter3D<T> vtmWriter("knudsenPump3d");
-      SuperLatticePhysVelocity3D velocity(sLattice, converter);
-      SuperLatticePhysPressure3D pressure(sLattice, converter);
+      SuperLatticePhysVelocity3D velocity(sLattice, sLattice.getUnitConverter());
+      SuperLatticePhysPressure3D pressure(sLattice, sLattice.getUnitConverter());
       SuperGeometryF<T,3> geometry( superGeometry );
       vtmWriter.addFunctor(velocity);
       vtmWriter.addFunctor(pressure);
@@ -282,11 +279,11 @@ void getResults( SuperLattice<T,DESCRIPTOR>& sLattice,
     timer.printStep();
 
     // Lattice statistics console output
-    sLattice.getStatistics().print( iT,converter.getPhysTime( iT ) );
+    sLattice.getStatistics().print( iT,sLattice.getUnitConverter().getPhysTime( iT ) );
 
     // Error norms
     if ( lastTimeStep ) {
-      error( superGeometry, sLattice, converter);
+      error( superGeometry, sLattice);
     }
   }
 }
@@ -334,13 +331,13 @@ int main(int argc, char* argv[])
   // Instantiation of a superGeometry
   SuperGeometry<T,3> superGeometry( knudsenPumpGeometry, loadBalancer, 5 );
 
-  prepareGeometry( converter, superGeometry, knudsenPumpLayer, *knudsenPump);
+  prepareGeometry( superGeometry, knudsenPumpLayer, *knudsenPump);
 
   // === 3rd Step: Prepare Lattice ===
-  SuperLattice<T, DESCRIPTOR> sLattice( superGeometry );
+  SuperLattice<T, DESCRIPTOR> sLattice( converter, superGeometry );
 
   // Prepare lattice and set boundary conditions
-  prepareLattice(converter, sLattice, superGeometry, *knudsenPump);
+  prepareLattice(sLattice, superGeometry, *knudsenPump);
 
   // === 4th Step: Main Loop with Timer ===
   clout << "starting simulation..." << std::endl;
@@ -354,7 +351,7 @@ int main(int argc, char* argv[])
   for ( std::size_t iT = 0; iT < converter.getLatticeTime( maxPhysT ); ++iT ) {
     if ( converge.hasConverged() ) {
       clout << "Simulation converged." << std::endl;
-      getResults( sLattice, converter, iT, superGeometry, timer, maxPhysT, converge.hasConverged());
+      getResults( sLattice, iT, superGeometry, timer, maxPhysT, converge.hasConverged());
 
       break;
     }
@@ -364,7 +361,7 @@ int main(int argc, char* argv[])
     sLattice.stripeOffDensityOffset(sLattice.getStatistics().getAverageRho()-(T)1);
 
     // === 7th Step: Computation and Output of the Results ===
-    getResults( sLattice, converter, iT,superGeometry, timer, maxPhysT, converge.hasConverged());
+    getResults( sLattice, iT,superGeometry, timer, maxPhysT, converge.hasConverged());
     converge.takeValue( sLattice.getStatistics().getAverageEnergy(), false );
   }
 

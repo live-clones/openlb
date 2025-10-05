@@ -39,15 +39,32 @@ struct PopulationF {
   using fields_t = meta::list<descriptors::POPULATION>;
 
   template <typename CELL, typename PARAMETERS>
-  auto compute(CELL& cell, PARAMETERS& parameters) {
+  auto compute(CELL& cell, PARAMETERS& parameters) any_platform {
     using V = typename CELL::value_t;
     using DESCRIPTOR = typename CELL::descriptor_t;
 
-    auto pop = cell.template getField<descriptors::POPULATION>();
+    FieldD<V,DESCRIPTOR,typename PopulationF::result_t> pop = cell.template getField<descriptors::POPULATION>();
     for (auto iPop=0; iPop<DESCRIPTOR::q; ++iPop) {
       pop[iPop] += descriptors::t<V,DESCRIPTOR>(iPop);
     }
     return pop;
+  }
+};
+
+/// Computes the porosity
+struct PorosityF {
+  using parameters = meta::list<>;
+
+  using result_t = descriptors::POROSITY;
+  using fields_t = meta::list<descriptors::POROSITY>;
+
+  template <typename CELL, typename PARAMETERS>
+  auto compute(CELL& cell, PARAMETERS& parameters) any_platform {
+    using V = typename CELL::value_t;
+    using DESCRIPTOR = typename CELL::descriptor_t;
+
+    FieldD<V,DESCRIPTOR,typename PorosityF::result_t> d = cell.template getField<descriptors::POROSITY>();
+    return d;
   }
 };
 

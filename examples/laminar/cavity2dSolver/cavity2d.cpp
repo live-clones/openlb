@@ -174,44 +174,44 @@ protected:
     // Interpolation functor with velocityField information
     AnalyticalFfromSuperF2D<T> interpolation( velocityField, true, 1 );
 
-    Vector<T,17> y_coord( {128, 125, 124, 123, 122, 109, 94, 79, 64, 58, 36, 22, 13, 9, 8, 7, 0} );
-    // Ghia, Ghia and Shin, 1982: "High-Re Solutions for Incompressible Flow
-    // Using the Navier-Stokes Equations and a Multigrid Method";  Table 1
-    Vector<T,17> vel_ghia_RE1000( { 1.0,     0.65928, 0.57492, 0.51117, 0.46604,
-                                    0.33304, 0.18719, 0.05702,-0.06080,-0.10648,
-                                    -0.27805,-0.38289,-0.29730,-0.22220,-0.20196,
-                                    -0.18109, 0.0
+      Vector<T,17> y_coord( {128, 125, 124, 123, 122, 109, 94, 79, 64, 58, 36, 22, 13, 9, 8, 7, 0} );
+      // Ghia, Ghia and Shin, 1982: "High-Re Solutions for Incompressible Flow
+      // Using the Navier-Stokes Equations and a Multigrid Method";  Table 1
+      Vector<T,17> vel_ghia_RE1000( { 1.0,     0.65928, 0.57492, 0.51117, 0.46604,
+                                      0.33304, 0.18719, 0.05702,-0.06080,-0.10648,
+                                      -0.27805,-0.38289,-0.29730,-0.22220,-0.20196,
+                                      -0.18109, 0.0
+                                    } );
+      Vector<T,17> vel_ghia_RE100( {1.0,     0.84123, 0.78871, 0.73722, 0.68717,
+                                    0.23151, 0.00332,-0.13641,-0.20581,-0.21090,
+                                    -0.15662,-0.10150,-0.06434,-0.04775,-0.04192,
+                                    -0.03717, 0.0
                                   } );
-    Vector<T,17> vel_ghia_RE100( {1.0,     0.84123, 0.78871, 0.73722, 0.68717,
-                                  0.23151, 0.00332,-0.13641,-0.20581,-0.21090,
-                                  -0.15662,-0.10150,-0.06434,-0.04775,-0.04192,
-                                  -0.03717, 0.0
-                                } );
-    Vector<T,17> vel_simulation;
+      Vector<T,17> vel_simulation;
 
     // Gnuplot interface to create plots
     Gnuplot<T> gplot( this->parameters(VisualizationGnuplot()).filename + "_iT" + std::to_string(iT) );
     // Define comparison values
     Vector<T,17> comparison = vel_ghia_RE1000;
 
-    for ( int nY = 0; nY < 17; ++nY ) {
-      // 17 data points evenly distributed between 0 and 1 (height)
-      T position[2] = {0.5, y_coord[nY]/ T(128)};
-      T velocity[2] = {T(), T()};
-      // Interpolate velocityField at "position" and save it in "velocity"
-      interpolation( velocity, position );
-      // Save value of velocity (in x-direction) in "vel_simulation" for every position "nY"
-      vel_simulation[nY] = velocity[0];
-      // Set data for plot output
-      gplot.setData( position[1], {vel_simulation[nY],comparison[nY]}, {"simulated","Ghia"} );
-    }
-    // Create PNG file
-    gplot.writePNG();
-    // Console output with results
-    clout
-      << "absoluteErrorL2(line)=" << norm(vel_simulation - comparison) / 17.
-      << "; relativeErrorL2(line)=" << norm(vel_simulation - comparison) / norm(comparison)
-      << std::endl;
+      for ( int nY = 0; nY < 17; ++nY ) {
+        // 17 data points evenly distributed between 0 and 1 (height)
+        T position[2] = {0.5, y_coord[nY]/ T(128)};
+        T velocity[2] = {T(), T()};
+        // Interpolate velocityField at "position" and save it in "velocity"
+        interpolation( velocity, position );
+        // Save value of velocity (in x-direction) in "vel_simulation" for every position "nY"
+        vel_simulation[nY] = velocity[0];
+        // Set data for plot output
+        gplot.setData( position[1], {vel_simulation[nY],comparison[nY]}, {"simulated","Ghia"} );
+      }
+      // Create PNG file
+      gplot.writePNG();
+      // Console output with results
+      clout
+        << "absoluteErrorL2(line)=" << norm(vel_simulation - comparison) / 17.
+        << "; relativeErrorL2(line)=" << norm(vel_simulation - comparison) / norm(comparison)
+        << std::endl;
   }
 };
 

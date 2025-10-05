@@ -30,7 +30,7 @@
   is represented by "map.osm".
 
   To run the small case, define `small`; to run the full case, define `original`.
-  This example requires the PROJ library.
+  This example requires the PROJ library (https://proj.org/en/stable/).
   Ensure it is installed on your system, then enable it by adding 'PROJ' to the FEATURES variable in config.mk:
   FEATURES := PROJ
 */
@@ -1025,8 +1025,8 @@ int main( int argc, char* argv[] )
   prepareGeometry( *converter, superGeometry,osmParser,bounding);
 
   // === 3rd Step: Prepare Lattice ===
-  SuperLattice<T, DESCRIPTOR> sLattice( superGeometry );
-  SuperLattice<T, ADDESCRIPTOR> sLatticeAD( superGeometry );
+  SuperLattice<T, DESCRIPTOR> sLattice(*converter, superGeometry );
+  SuperLattice<T, ADDESCRIPTOR> sLatticeAD(*converter, superGeometry);
 
   //prepareLattice and set boundaryCondition
   prepareLattice( sLattice, *converter, superGeometry );
@@ -1057,9 +1057,9 @@ int main( int argc, char* argv[] )
 
     // //// === 6th Step: Collide and Stream Execution ===
     sLattice.collideAndStream();
-    coupling.execute();
+    coupling.apply();
     sLatticeAD.collideAndStream();
-    coupling2.execute();
+    coupling2.apply();
 
     updateCounter=updateCounter+1;
     // //=== 7th Step: Computation and Output of the Results ===

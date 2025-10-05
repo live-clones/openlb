@@ -142,7 +142,8 @@ int main( int argc, char* argv[] )
 
   // Create main folder to store results
   std::string foldPath = "uq/res_" + std::to_string(resolution) + "/";
-  createDirectory(foldPath, clout);
+  std::string uqFoldPath = foldPath + "uq/";
+  createDirectory(uqFoldPath, clout);
 
   // === 3rd Step: Uncertainty Quantification Setup ===
   // We define the uncertain inlet velocity in [0.8*u0, 1.2*u0] as an example
@@ -197,7 +198,7 @@ int main( int argc, char* argv[] )
   for (size_t n = 0; n < samples.size(); ++n) {
     if (exportResults) {
     // Create subfolder for this sample
-      std::string subFoldPath = foldPath + std::to_string(n) + "/tmp/";
+      std::string subFoldPath = uqFoldPath + std::to_string(n) + "/tmp/";
       createDirectory(subFoldPath, clout);
       // Redirect output to this sample's folder
       singleton::directories().setOutputDir(subFoldPath);
@@ -250,12 +251,46 @@ int main( int argc, char* argv[] )
    // Optionally compute mean and std fields and write VTI output
    // (only if 'exportResults' is set to true)
   if (exportResults) {
+
+    STLreader<T> stlReader( "../../laminar/cylinder3d/cylinder3d.stl", dx, 0.001);
+    IndicatorLayer3D<T> extendedDomain( stlReader, dx );
+
+    // Instantiation of a cuboidDecomposition with weights
+  #ifdef PARALLEL_MODE_MPI
+    const int noOfCuboids = singleton::mpi().getSize();
+  #else
+    const int noOfCuboids = 7;
+  #endif
+
+  UnitConverterFromResolutionAndRelaxationTime<T, DESCRIPTOR> const converter(
+    int {resolution},              // resolution: number of voxels per charPhysL
+    (T)   0.53,           // latticeRelaxationTime: relaxation time, have to be greater than 0.5!
+    (T)   0.1,            // charPhysLength: reference length of simulation geometry
+    (T)   physVelocity,            // charPhysVelocity: maximal/highest expected velocity during simulation in __m / s__
+    (T)   0.2*2.*0.05/Re, // physViscosity: physical kinematic viscosity in __m^2 / s__
+    (T)   1.0             // physDensity: physical density in __kg / m^3__
+  );
+    CuboidDecomposition3D<T> cuboidDecomposition( extendedDomain, dx, noOfCuboids );
+
+    // Instantiation of a loadBalancer
+    HeuristicLoadBalancer<T> loadBalancer( cuboidDecomposition );
+
+    // Instantiation of a superGeometry
+    SuperGeometry<T,3> superGeometry( cuboidDecomposition, loadBalancer );
+
+    singleton::directories().setOutputDir(foldPath + "tmp/");
+    prepareGeometry(converter, extendedDomain, stlReader, superGeometry);
+
+    std::vector<int> materials = {1};
+
     clout << "Computing mean and std fields..." << std::endl;
     computeMeanAndStdAndWriteVTI<T, DESCRIPTOR>(
       uq, foldPath, "cylinder3d", "physVelocity",
-      cuboidDecomposition, superGeometry
+      converter, superGeometry, materials
     );
   }
+
+
 
   return 0;
 }

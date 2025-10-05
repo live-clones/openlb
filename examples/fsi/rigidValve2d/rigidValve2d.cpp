@@ -285,7 +285,7 @@ int main(int argc, char* argv[]) {
   SuperGeometry<T,2> superGeometry(cuboidDecomposition, loadBalancer);
   prepareGeometry(converter, superGeometry);
 
-  SuperLattice<T,DESCRIPTOR> superLattice(superGeometry);
+  SuperLattice superLattice(converter, superGeometry);
   prepareLattice(superLattice, converter, superGeometry);
 
   SuperPorousElementEmbeddingO fsiEmbeddingO(superLattice);

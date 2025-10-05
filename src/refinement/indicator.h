@@ -57,8 +57,14 @@ struct SuperIndicatorDomainFrontierDistanceF : public SuperIndicatorF<T,DESCRIPT
           bool insideTestAlways = true;
           for (int iDir=0; iDir < fields::refinement::CONTEXT_NEIGHBORS::count<DESCRIPTOR>(); ++iDir) {
             const auto c_i = fields::refinement::CONTEXT_NEIGHBORS::c<DESCRIPTOR>(iDir);
-            outsideTestOnce  |= !cDecomposition.isInside(physR + c_i * outsideTestDistance * deltaX);
-            insideTestAlways &=  cDecomposition.isInside(physR + c_i *  insideTestDistance * deltaX);
+
+            if (c_i >= 0) {
+              outsideTestOnce  |= !(cDecomposition.isInside(physR + c_i * (outsideTestDistance+1) * deltaX) );
+              insideTestAlways &=  (cDecomposition.isInside(physR + c_i * (insideTestDistance +1) * deltaX) );
+            } else {
+              outsideTestOnce  |= !(cDecomposition.isInside(physR + c_i * outsideTestDistance * deltaX) );
+              insideTestAlways &=  (cDecomposition.isInside(physR + c_i *  insideTestDistance * deltaX) );
+            }
           }
           return outsideTestOnce && insideTestAlways;
         })

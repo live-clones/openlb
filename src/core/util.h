@@ -112,21 +112,6 @@ inline bool intersect (
   return newX1>=newX0 && newY1>=newY0 && newZ1>=newZ0;
 }
 
-inline bool contained(int x, int y,
-                      int x0, int x1, int y0, int y1)
-{
-  return x>=x0 && x<=x1 &&
-         y>=y0 && y<=y1;
-}
-
-inline bool contained(int x, int y, int z,
-                      int x0, int x1, int y0, int y1, int z0, int z1)
-{
-  return x>=x0 && x<=x1 &&
-         y>=y0 && y<=y1 &&
-         z>=z0 && z<=z1;
-}
-
 
 template<typename T>
 any_platform T sqr(T arg) any_platform
@@ -397,54 +382,6 @@ any_platform T pressureFromDensity( T latticeDensity )
   return (latticeDensity - 1.0) / descriptors::invCs2<T,DESCRIPTOR>();
 }
 
-/// return true if a is close to zero
-template <typename T>
-inline bool nearZero(T a) any_platform
-{
-  if (a==T()) {
-    return true;
-  }
-  T EPSILON = std::numeric_limits<T>::epsilon();
-  if (a > -EPSILON && a < EPSILON) {
-    return true;
-  }
-  else {
-    return false;
-  }
-}
-
-template <typename T>
-inline bool nearZero(T a, T epsilon) any_platform
-{
-  if (a > -epsilon && a < epsilon) {
-    return true;
-  }
-  else {
-    return false;
-  }
-}
-
-template<typename T, typename U=T, typename W=T>
-inline bool approxEqual(T a, U b, W epsilon) any_platform
-{
-  if (a==b) {
-    return true;
-  }
-  return nearZero<T>(a - b, epsilon);
-}
-
-template<typename T, typename U=T>
-inline bool approxEqual(T a, U b) any_platform
-{
-  if (a==b) {
-    return true;
-  }
-  if (nearZero(a) && nearZero(b)) {
-    return true;
-  }
-  T EPSILON = std::numeric_limits<T>::epsilon()*4.*util::fabs(a);
-  return approxEqual(a,b,EPSILON);
-}
 
 template <unsigned D, typename F>
 void forEachOffset(F fn) any_platform {

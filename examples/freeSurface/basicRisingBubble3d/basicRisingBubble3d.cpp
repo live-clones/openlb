@@ -513,7 +513,7 @@ int main(int argc, char* argv[])
   prepareGeometry(configuration, superGeometry, NavierStokesConverter);
 
   //-- 3rd Step: Prepare Navier-Stokes lattice with the free-surface model
-  SuperLattice<T, NavierStokesDescriptor> NavierStokesLattice(superGeometry);
+  SuperLattice<T, NavierStokesDescriptor> NavierStokesLattice(NavierStokesConverter, superGeometry);
   prepareNavierStokesLattice(configuration, superGeometry, NavierStokesConverter, NavierStokesLattice);
   FreeSurface3DSetup<T, NavierStokesDescriptor> freeSurfaceHandler(NavierStokesLattice);
   freeSurfaceHandler.addPostProcessor();

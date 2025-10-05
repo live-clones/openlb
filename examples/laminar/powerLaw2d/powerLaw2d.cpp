@@ -362,7 +362,7 @@ int main( int argc, char* argv[] )
   prepareGeometry( converter, superGeometry );
 
   // === 3rd Step: Prepare Lattice ===
-  SuperLattice<T, DESCRIPTOR> sLattice( superGeometry );
+  SuperLattice<T,DESCRIPTOR> sLattice(converter, superGeometry);
 
   //prepareLattice and set boundaryConditions
   prepareLattice( sLattice, converter, superGeometry );

@@ -246,26 +246,26 @@ struct MATRIX : public FIELD_BASE_CUSTOM_SIZE {
 template <typename FIELD, typename FIELD2>
 struct FIELD_MATRIX : public FIELD_BASE_CUSTOM_SIZE  {
   template <typename DESCRIPTOR>
-  static constexpr unsigned size() {
+  static constexpr unsigned size() any_platform {
     return DESCRIPTOR::template size<FIELD>() * DESCRIPTOR::template size<FIELD2>();
   }
 
   template <typename DESCRIPTOR>
-  static constexpr unsigned rows() {
+  static constexpr unsigned rows() any_platform {
     return DESCRIPTOR::template size<FIELD>();
   }
 
   template <typename DESCRIPTOR>
-  static constexpr unsigned cols() {
+  static constexpr unsigned cols() any_platform {
     return DESCRIPTOR::template size<FIELD2>();
   }
 
   template <typename T, typename DESCRIPTOR>
-  static auto getMatrixView(FieldD<T,DESCRIPTOR,FIELD_MATRIX<FIELD,FIELD2>>& field) {
+  static auto getMatrixView(FieldD<T,DESCRIPTOR,FIELD_MATRIX<FIELD,FIELD2>>& field) any_platform {
     return MatrixD<T,DESCRIPTOR,FIELD_MATRIX<FIELD,FIELD2>>(field);
   }
   template <typename T, typename DESCRIPTOR>
-  static auto getTransposedMatrixView(FieldD<T,DESCRIPTOR,FIELD_MATRIX<FIELD,FIELD2>>& field) {
+  static auto getTransposedMatrixView(FieldD<T,DESCRIPTOR,FIELD_MATRIX<FIELD,FIELD2>>& field) any_platform {
     return TransposedMatrixD<T,DESCRIPTOR,FIELD_MATRIX<FIELD,FIELD2>>(field);
   }
 
@@ -437,7 +437,7 @@ struct CONTACT_DETECTION    : public TYPED_FIELD_BASE<size_t, 1,  0, 0> { };
 struct POROSITY             : public FIELD_BASE<1,  0, 0> {
   template <typename T, typename DESCRIPTOR>
   static constexpr auto getInitialValue() {
-    return Vector<value_type<T>,DESCRIPTOR::template size<POROSITY>()>{1};
+    return Vector<value_type<T>,DESCRIPTOR::template size<POROSITY>()>{T(1)};
   }
 
   template <typename T, typename DESCRIPTOR, typename FIELD>
@@ -499,11 +499,38 @@ constexpr unsigned getIndexInFieldList()
   return 1 + getIndexInFieldList<WANTED_FIELD,FIELDS...>();
 }
 
-//@}
+// Solid
+struct PRECOLLIDE_MOMENT_VECTOR : public FIELD_BASE<0,  0, 1> { };
+struct MOMENT_VECTOR            : public FIELD_BASE<0,  0, 1> { };
+struct BARED_MOMENT_VECTOR      : public FIELD_BASE<0,  0, 1> { };
+struct DISP_SOLID               : public FIELD_BASE<0,  1, 0> { };
+struct SIGMA_SOLID              : public FIELD_BASE<0,  2, 0> { };
+struct MAGIC_SOLID              : public FIELD_BASE<8,  0, 0> { };
+struct OMEGA_SOLID              : public FIELD_BASE<6,  0, 0> { };
+struct DIRICHLET_SOLID_U        : public FIELD_BASE<0,  1, 0> { };
+struct SOLID_DISTANCE_FIELD     : public FIELD_BASE<0,  0, 1> { };
+struct MIN_DIST_SOLID           : public FIELD_BASE<0,  0, 1> { };
+struct SOLID_LINK_NEEDED        : public FIELD_BASE<0,  0, 1> { };
+struct NEUMANN_SOLID_STRESS     : public FIELD_BASE<0,  2, 0> { };
+struct NEUMANN_SOLID_C          : public FIELD_BASE<3,  0, 0> { };
+struct NEUMANN_SOLID_NORMAL_X   : public FIELD_BASE<0,  0, 1> { };
+struct NEUMANN_SOLID_NORMAL_Y   : public FIELD_BASE<0,  0, 1> { };
+struct NEUMANN_SOLID_NORMAL     : public FIELD_BASE<0,  1, 0> { };
+struct UCHAR_SOLID              : public FIELD_BASE<1,  0, 0> { };
+struct OMEGA_MATRIX_SOLID       : public FIELD_BASE<0,  0, 8> { };
+struct PREVIOUS_CELL            : public FIELD_BASE<0,  0, 1> { };
+struct CURRENT_CELL             : public FIELD_BASE<0,  0, 1> { };
+struct CELL_COORDS              : public FIELD_BASE<0,  1, 0> { };
+struct BOUNDARY_COORDS_X        : public FIELD_BASE<0,  0, 1> { };
+struct BOUNDARY_COORDS_Y        : public FIELD_BASE<0,  0, 1> { };
+struct SOLID_WEIGHTS            : public FIELD_BASE<0,  0, 1> { };
+// End of Solid
 
 //@}
 
-}
+//@}
+
+} // descriptors
 
 namespace fields {
 
@@ -607,7 +634,7 @@ struct DCDALPHA : public descriptors::FIELD_MATRIX<descriptors::POPULATION,CONTR
 
 }
 
-}
+} // olb
 
 // *INDENT-ON*
 

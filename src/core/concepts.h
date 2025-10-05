@@ -37,6 +37,7 @@
 #include "descriptor/descriptor.h"
 
 #include "utilities/aDiff.h"
+#include "utilities/aDiffTape.h"
 
 namespace olb {
 

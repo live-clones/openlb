@@ -131,8 +131,8 @@ struct AbstractParameters {
 
 /// Set of FIELD-valued parameters
 template <concepts::BaseType T, concepts::Descriptor DESCRIPTOR, concepts::Field... FIELDS>
-struct ParametersD final : public AbstractParameters<T,DESCRIPTOR>
-                         , public ParameterD<T,DESCRIPTOR,FIELDS>...
+struct StaticParametersD final : public AbstractParameters<T,DESCRIPTOR>
+                               , public ParameterD<T,DESCRIPTOR,FIELDS>...
 {
   using value_t = T;
   using descriptor_t = DESCRIPTOR;
@@ -140,15 +140,15 @@ struct ParametersD final : public AbstractParameters<T,DESCRIPTOR>
   using fields_t = meta::list<FIELDS...>;
 
   template <concepts::Field... Fs>
-  using include_fields = ParametersD<T,DESCRIPTOR,FIELDS...,Fs...>;
-  /// Return ParametersD containing FIELDS in addition to all entries of FIELD_LIST
+  using include_fields = StaticParametersD<T,DESCRIPTOR,FIELDS...,Fs...>;
+  /// Return StaticParametersD containing FIELDS in addition to all entries of FIELD_LIST
   template <typename FIELD_LIST>
   using include = typename FIELD_LIST::template decompose_into<include_fields>;
 
-  ParametersD() = default;
+  StaticParametersD() = default;
 
   template <typename V>
-  ParametersD(const ParametersD<V,DESCRIPTOR,FIELDS...>& rhs) any_platform :
+  StaticParametersD(const StaticParametersD<V,DESCRIPTOR,FIELDS...>& rhs) any_platform :
     ParameterD<T,DESCRIPTOR,FIELDS>(static_cast<const ParameterD<T,DESCRIPTOR,FIELDS>&>(rhs))...
   { }
 
@@ -165,8 +165,8 @@ struct ParametersD final : public AbstractParameters<T,DESCRIPTOR>
   }
 
   template <typename V>
-  ParametersD<V,DESCRIPTOR,FIELDS...> copyAs() const any_platform {
-    return ParametersD<V,DESCRIPTOR,FIELDS...>(*this);
+  StaticParametersD<V,DESCRIPTOR,FIELDS...> copyAs() const any_platform {
+    return StaticParametersD<V,DESCRIPTOR,FIELDS...>(*this);
   }
 
   template <concepts::Field FIELD>
@@ -187,13 +187,20 @@ struct ParametersD final : public AbstractParameters<T,DESCRIPTOR>
     return static_cast<ParameterD<T,DESCRIPTOR,FIELD>*>(this)->write(value);
   };
 
+  template <typename F>
+  void forEach(F f) any_platform {
+    fields_t::for_each([f](auto id) {
+      f(get<typeof(id).type>());
+    });
+  }
+
 };
 
-/// Builds a ParametersD from field-value pairs
+/// Builds a StaticParametersD from field-value pairs
 template <concepts::BaseType T, concepts::Descriptor DESCRIPTOR, typename... MAP>
 auto makeParametersD(MAP&&... args) {
   auto tuple = std::tie(args...);
-  using result_t = typename ParametersD<T,DESCRIPTOR>::template include<typename meta::map<MAP...>::keys_t>;
+  using result_t = typename StaticParametersD<T,DESCRIPTOR>::template include<typename meta::map<MAP...>::keys_t>;
   result_t params;
   result_t::fields_t::for_each([&](auto id) {
     using field_t = typename decltype(id)::type;
@@ -241,18 +248,34 @@ auto makeParametersD(MAP&&... args) {
 
 /// Deduce ParametersD of OPERATOR w.r.t. T and DESCRIPTOR
 template <concepts::BaseType T, concepts::Descriptor DESCRIPTOR, typename OPERATOR>
-using ParametersOfOperatorD = typename ParametersD<T,DESCRIPTOR>::template include<
+using ParametersOfOperatorD = typename StaticParametersD<T,DESCRIPTOR>::template include<
   typename OPERATOR::parameters
 >;
 
 /// Deduce ParametersD of DYNAMICS w.r.t. its value type and descriptor
 template <typename DYNAMICS>
-using ParametersOfDynamicsD = typename ParametersD<
+using ParametersOfDynamicsD = typename StaticParametersD<
   typename DYNAMICS::value_t,
   typename DYNAMICS::descriptor_t
 >::template include<
   typename DYNAMICS::parameters
 >;
+
+/// Declare ParametersD with all fields_t from descriptor
+template <concepts::BaseType T, concepts::Descriptor DESCRIPTOR>
+struct CellFieldForDescriptorHelper {
+  template <typename... FIELDS>
+  using CurriedParametersD = StaticParametersD<T,DESCRIPTOR,FIELDS...>;
+
+  using list = typename DESCRIPTOR::fields_t::template decompose_into<meta::unify_t>;
+
+  using type = typename list::template decompose_into<CurriedParametersD>;
+};
+
+/// ParametersD containing all fields from the descriptor as compact FieldD in the single cell interface
+template <concepts::BaseType T, concepts::Descriptor DESCRIPTOR>
+using CellFieldsForDescriptorD = typename CellFieldForDescriptorHelper<T,DESCRIPTOR>::type;
+
 
 /// Abstract base of ConcreteParametersD
 /**
@@ -274,7 +297,7 @@ struct AbstractedConcreteParameters {
 template <concepts::BaseType T, concepts::Descriptor DESCRIPTOR, Platform PLATFORM, typename PARAMETERS>
 struct ConcreteParametersD final : public AbstractedConcreteParameters<T,DESCRIPTOR>
                                  , public Serializable {
-  typename ParametersD<T,DESCRIPTOR>::template include<PARAMETERS> parameters;
+  typename StaticParametersD<T,DESCRIPTOR>::template include<PARAMETERS> parameters;
 
   ConcreteParametersD(std::size_t): // TODO: Implement more generic non-cellwise field allocation in Data
     parameters{}
@@ -295,7 +318,6 @@ struct ConcreteParametersD final : public AbstractedConcreteParameters<T,DESCRIP
   bool* getBlock(std::size_t iBlock, std::size_t& sizeBlock, bool loadingMode) override;
 
 };
-
 
 }
 

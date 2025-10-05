@@ -37,17 +37,17 @@ using BulkDynamics = BGKdynamics<T,DESCRIPTOR>;
 //// Use single fused collision kernel instead of individual dispatch on GPUs
 //#define GPU_USE_FUSED_COLLISION
 
-void prepareGeometry(UnitConverter<T,DESCRIPTOR> const& converter,
-                     IndicatorF3D<T>& indicator,
-                     SuperGeometry<T,3>& superGeometry)
+void prepareGeometry(IndicatorF3D<T>& indicator,
+                     SuperGeometry<T,3>& superGeometry,
+                     T dx, T length)
 {
   // Sets material number for fluid and boundary
   superGeometry.rename(0,2,indicator);
   superGeometry.rename(2,1,{1,1,1});
 
-  T eps = converter.getPhysDeltaX();
-  Vector<T,3> origin(-eps, converter.getCharPhysLength() - eps, -eps);
-  Vector<T,3> extend(converter.getCharPhysLength() + 2*eps, 2*eps, converter.getCharPhysLength() + 2*eps);
+  T eps = dx;
+  Vector<T,3> origin(-eps, length - eps, -eps);
+  Vector<T,3> extend(length + 2*eps, 2*eps, length + 2*eps);
   IndicatorCuboid3D<T> lid(extend,origin);
 
   superGeometry.rename(2,3,1,lid);
@@ -59,10 +59,9 @@ void prepareGeometry(UnitConverter<T,DESCRIPTOR> const& converter,
 }
 
 void prepareLattice(SuperLattice<T,DESCRIPTOR>& superLattice,
-                    SuperGeometry<T,3>& superGeometry,
-                    UnitConverter<T,DESCRIPTOR> const& converter)
+                    SuperGeometry<T,3>& superGeometry)
 {
-  const T omega = converter.getLatticeRelaxationFrequency();
+  const T omega = superLattice.getUnitConverter().getLatticeRelaxationFrequency();
 
   /// Material=1 -->bulk dynamics
   superLattice.defineDynamics<BulkDynamics>(superGeometry, 1);
@@ -110,9 +109,9 @@ void prepareLattice(SuperLattice<T,DESCRIPTOR>& superLattice,
 }
 
 void setBoundaryValues(SuperLattice<T,DESCRIPTOR>& superLattice,
-                       SuperGeometry<T,3>& superGeometry,
-                       UnitConverter<T,DESCRIPTOR> const& converter)
+                       SuperGeometry<T,3>& superGeometry)
 {
+  const UnitConverter<T,DESCRIPTOR>& converter = superLattice.getUnitConverter();
   AnalyticalConst3D<T,T> rhoF(1);
   Vector<T,3> velocity{};
   AnalyticalConst3D<T,T> uF(velocity);
@@ -135,10 +134,10 @@ void setBoundaryValues(SuperLattice<T,DESCRIPTOR>& superLattice,
 }
 
 void getResults(SuperLattice<T,DESCRIPTOR>& superLattice,
-                SuperGeometry<T,3>& superGeometry,
-                UnitConverter<T,DESCRIPTOR> const& converter)
+                SuperGeometry<T,3>& superGeometry)
 {
   SuperVTMwriter3D<T> vtmWriter("cavity3d");
+  const UnitConverter<T,DESCRIPTOR>& converter = superLattice.getUnitConverter();
 
   SuperLatticeCuboid3D<T,DESCRIPTOR> cuboidF(superLattice);
   SuperLatticeRank3D<T,DESCRIPTOR> rankF(superLattice);
@@ -188,21 +187,21 @@ int main(int argc, char **argv)
 
   SuperGeometry<T,3> superGeometry(cuboidDecomposition, loadBalancer);
 
-  prepareGeometry(converter, cube, superGeometry);
+  prepareGeometry(cube, superGeometry, converter.getPhysDeltaX(), converter.getCharPhysLength());
 
-  SuperLattice<T,DESCRIPTOR> superLattice(cuboidDecomposition,
+  SuperLattice<T,DESCRIPTOR> superLattice(converter,
+                                          cuboidDecomposition,
                                           loadBalancer,
-                                          3,
-                                          converter);
-  superLattice.statisticsOff();
+                                          3);
+  superLattice.setStatisticsOff();
 
-  prepareLattice(superLattice, superGeometry, converter);
+  prepareLattice(superLattice, superGeometry);
 
-  setBoundaryValues(superLattice, superGeometry, converter);
+  setBoundaryValues(superLattice, superGeometry);
 
   if (exportResults) {
     superLattice.writeSummary();
-    getResults(superLattice, superGeometry, converter);
+    getResults(superLattice, superGeometry);
   }
 
   for (std::size_t iT=0; iT < 10; ++iT) {
@@ -243,7 +242,7 @@ int main(int argc, char **argv)
   }
 
   if (exportResults) {
-    getResults(superLattice, superGeometry, converter);
+    getResults(superLattice, superGeometry);
   }
 
   return 0;

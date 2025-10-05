@@ -63,8 +63,7 @@ struct GeometryParameters {
 };
 
 // Stores geometry information in form of material numbers
-void prepareGeometry( UnitConverter<T, DESCRIPTOR> const& converter,
-                      SuperGeometry<T,2>& superGeometry,
+void prepareGeometry(  SuperGeometry<T,2>& superGeometry,
                       std::shared_ptr<IndicatorF2D<T>> circle,
                       GeometryParameters geomParams)
 {
@@ -92,6 +91,7 @@ void prepareGeometry( UnitConverter<T, DESCRIPTOR> const& converter,
   superGeometry.innerClean(verbose);
   superGeometry.checkForErrors(verbose);
 }
+
 
 // Set up the geometry of the simulation
 void prepareLattice( SuperLattice<T,DESCRIPTOR>& sLattice,
@@ -282,10 +282,10 @@ T simulateCylinder( int N, T u0, bool exportResults )
   Vector<T,2> center( geomParams.centerCylinderX, geomParams.centerCylinderY );
   std::shared_ptr<IndicatorF2D<T>> circle = std::make_shared<IndicatorCircle2D<T>>( center, geomParams.radiusCylinder );
 
-  prepareGeometry( converter, superGeometry, circle, geomParams );
+  prepareGeometry( superGeometry, circle, geomParams );
 
   // === 3rd Step: Prepare Lattice ===
-  SuperLattice<T, DESCRIPTOR> sLattice( superGeometry );
+  SuperLattice<T, DESCRIPTOR> sLattice( converter, superGeometry );
 
   //prepareLattice and set boundaryConditions
   prepareLattice( sLattice, converter, superGeometry, circle );

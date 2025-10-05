@@ -34,7 +34,7 @@ class ConcreteParametersD<T,DESCRIPTOR,Platform::GPU_CUDA,PARAMETERS> final
   : public AbstractedConcreteParameters<T,DESCRIPTOR>
   , public Serializable {
 private:
-  using ParametersD = typename olb::ParametersD<T,DESCRIPTOR>::template include<PARAMETERS>;
+  using ParametersD = typename olb::StaticParametersD<T,DESCRIPTOR>::template include<PARAMETERS>;
   gpu::cuda::device::unique_ptr<ParametersD> _deviceParameters;
 
 public:

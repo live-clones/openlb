@@ -44,7 +44,7 @@ struct CopyFieldsO {
     using V = typename CELLS::template value_t<names::Lattice2>::value_t;
     using DESCRIPTOR = typename CELLS::template value_t<names::Lattice2>::descriptor_t;
 
-    auto& cell_from = cells.template get<names::Lattice>();
+    auto& cell_from = cells.template get<names::Lattice1>();
     auto& cell_to = cells.template get<names::Lattice2>();
 
     FieldD<V,DESCRIPTOR,TO> content = cell_from.template getField<FROM>();
@@ -62,9 +62,9 @@ template <typename FROM, typename TO,
 void copyFields(SuperLattice<T_FROM,DESCRIPTOR_FROM>& lattice_from,
                 SuperLattice<T_TO,DESCRIPTOR_TO>& lattice_to) {
   SuperLatticeCoupling coupling(couplers::CopyFieldsO<FROM,TO>{},
-                       names::Lattice{}, lattice_from,
+                       names::Lattice1{}, lattice_from,
                        names::Lattice2{}, lattice_to);
-  coupling.execute();
+  coupling.apply();
 }
 
 }

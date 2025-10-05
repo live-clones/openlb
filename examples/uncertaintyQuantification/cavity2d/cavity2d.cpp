@@ -30,11 +30,10 @@
  */
 
 #include "cavity2d.h"
-#include <time.h>
 
 // Define one method of sampling (uncomment if needed):
-// #define MonteCarloSampling
-#define stochasticCollocationMethod
+#define MonteCarloSampling
+// #define stochasticCollocationMethod
 
 /**
  * @brief UQ (Uncertainty Quantification) parameter setup:
@@ -105,7 +104,8 @@ int main( int argc, char* argv[] )
 
   // Create main folder to store results
   std::string foldPath = "uq/res_" + std::to_string(resolution) + "/";
-  createDirectory(foldPath, clout);
+  std::string uqFoldPath = foldPath + "uq/";
+  createDirectory(uqFoldPath, clout);
 
   #ifdef MonteCarloSampling
     int nq = resolution/4.0; // number of samples
@@ -121,6 +121,22 @@ int main( int argc, char* argv[] )
 
   auto samples = uq.getSamplingPoints();
 
+  clout << "Starting simulation over " << samples.size() << " samples." << std::endl;
+
+  for(int n = 0; n < samples.size(); ++n) {
+    // Create subfolder for this sample
+    std::string subFoldPath = uqFoldPath + std::to_string(n) + "/tmp/";
+    createDirectory(subFoldPath, clout);
+    // Redirect output to this sample's folder
+    singleton::directories().setOutputDir(subFoldPath);
+
+    // Run the cavity2d simulation for this particular sample
+    simulateCavity2d(samples[n][0], resolution, n);
+  }
+
+  // === 6. Post-processing: compute mean, std, and write VTI data ===
+  // The string "physVelocity" is a tag used inside the function, not the variable name.
+
   Vector<T,2> extend( 1,1 );
   Vector<T,2> origin( 0,0 );
   IndicatorCuboid2D<T> cuboid( extend, origin );
@@ -133,24 +149,20 @@ int main( int argc, char* argv[] )
 
   HeuristicLoadBalancer<T> loadBalancer( cuboidDecomposition );
   SuperGeometry<T,2> superGeometry( cuboidDecomposition, loadBalancer );
+  UnitConverterFromResolutionAndRelaxationTime<T,DESCRIPTOR> converter(
+    resolution,                 // resolution
+    0.5384, // latticeRelaxationTime: relaxation time, have to be greater than 0.5!
+    1.0,             // charPhysLength: reference length of simulation geometry
+    physVelocity,               // charPhysVelocity: maximal/highest expected velocity during simulation in __m / s__
+    0.001,                 // physViscosity: physical kinematic viscosity in __m^2 / s__
+    1.0                 // physDensity: physical density in __kg / m^3__
+  );
 
-  clout << "Starting simulation over " << samples.size() << " samples." << std::endl;
-
-  for(int n = 0; n < samples.size(); ++n) {
-    // Create subfolder for this sample
-    std::string subFoldPath = foldPath + std::to_string(n) + "/tmp/";
-    createDirectory(subFoldPath, clout);
-    // Redirect output to this sample's folder
-    singleton::directories().setOutputDir(subFoldPath);
-
-    // Run the cavity2d simulation for this particular sample
-    simulateCavity2d(samples[n][0], resolution, n);
-  }
-
-  // === 6. Post-processing: compute mean, std, and write VTI data ===
-  // The string "physVelocity" is a tag used inside the function, not the variable name.
+  singleton::directories().setOutputDir(foldPath + "tmp/");
+  prepareGeometry(1.0/resolution, superGeometry);
+  std::vector<int> materials = {1};
   computeMeanAndStdAndWriteVTI<T, DESCRIPTOR>(
-    uq, foldPath, "cavity2d", "physVelocity", cuboidDecomposition, superGeometry
+    uq, foldPath, "cavity2d", "physVelocity", converter, superGeometry, materials
   );
 
 }
