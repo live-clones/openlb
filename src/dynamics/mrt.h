@@ -43,7 +43,7 @@ struct mrt {
 
   /// Computation of equilibrium distribution (in momenta space)
   template <typename RHO, typename U, typename V=RHO>
-  static V equilibrium(int iPop, const RHO& rho, const U& u) any_platform
+  static V equilibrium(int iPop, const RHO& rho, const U& u)
   {
     V equ{};
     const V uSqr = util::normSqr<U,DESCRIPTOR::d>(u);
@@ -58,7 +58,7 @@ struct mrt {
   /// Computation of all equilibrium distribution (in momenta space)
   template <typename MOMENTAEQ, typename RHO, typename U, typename V=RHO>
   static void computeEquilibrium(MOMENTAEQ& momentaEq,
-                                 const RHO& rho, const U& u) any_platform
+                                 const RHO& rho, const U& u)
   {
     const V uSqr = util::normSqr<U,DESCRIPTOR::d>(u);
     for (int iPop = 0; iPop < DESCRIPTOR::q; ++iPop) {
@@ -72,7 +72,7 @@ struct mrt {
   }
 
   template <typename MOMENTA, typename CELL, typename V=typename CELL::value_t>
-  static void computeMomenta(MOMENTA& momenta, CELL& cell) any_platform
+  static void computeMomenta(MOMENTA& momenta, CELL& cell)
   {
     for (int iPop = 0; iPop < DESCRIPTOR::q; ++iPop) {
       momenta[iPop] = V{};
@@ -87,7 +87,7 @@ struct mrt {
   template <typename CELL, typename RHO, typename U, typename INVM_S, typename V=typename CELL::value_t>
   static V mrtCollision(CELL& cell,
                         const RHO& rho, const U& u,
-                        const INVM_S& invM_S) any_platform
+                        const INVM_S& invM_S)
   {
     V uSqr = util::normSqr<V,DESCRIPTOR::d>(u);
     V momenta[DESCRIPTOR::q] { };
@@ -111,7 +111,7 @@ struct mrt {
   static V mrtSGSCollision(CELL& cell,
                            const RHO& rho, const U& u,
                            const OMEGA& omega,
-                           const INVM_S_SGS& invM_S_SGS) any_platform
+                           const INVM_S_SGS& invM_S_SGS)
   {
     V uSqr = util::normSqr<V,DESCRIPTOR::d>(u);
     V momenta[DESCRIPTOR::q];
@@ -138,7 +138,7 @@ struct mrt {
   static void addExternalForce(CELL& cell,
                                const RHO& rho, const U& u,
                                const INVM_S& invM_S,
-                               const FORCE& force) any_platform
+                               const FORCE& force)
   {
     V f_u{};
     for (int iD=0; iD < DESCRIPTOR::d; ++iD) {

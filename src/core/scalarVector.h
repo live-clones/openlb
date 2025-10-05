@@ -178,15 +178,16 @@ inline constexpr bool lex_greater_eq (const ScalarVector<T,D,IMPL>& lhs, const S
 template<typename T, unsigned D, typename IMPL>
 std::ostream& operator << (std::ostream& os, const ScalarVector<T,D,IMPL>& o)
 {
-  if (D > 0) {
+  if (D > 1) {
     os << "[";
-    for (unsigned iDim=0; iDim < D-1; ++iDim) {
-      os << o[iDim] << " ";
-    }
-    os << o[D-1]<<"]";
   }
-  else {
-    os << "[empty]";
+  for (unsigned iDim=0; iDim < D-1; ++iDim) {
+    os << o[iDim] << " ";
+  }
+  if (D > 1) {
+    os << o[D-1] << "]";
+  } else {
+    os << o[D-1];
   }
   return os;
 }

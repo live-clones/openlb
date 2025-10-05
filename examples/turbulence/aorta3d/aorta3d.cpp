@@ -180,7 +180,7 @@ void getResults(SuperLattice<T, DESCRIPTOR>& sLattice,
                 SuperGeometry<T,3>& superGeometry,
                 util::Timer<T>& timer,
                 STLreader<T>& stlReader,
-                VTUsurfaceWriterRankwise<T>& vtuWriter)
+                SuperVtuSurfaceWriter<T>& vtuWriter)
 {
   OstreamManager clout( std::cout,"getResults" );
 
@@ -327,8 +327,7 @@ int main( int argc, char* argv[] )
 
   prepareLattice( sLattice, stlReader, superGeometry );
 
-  VTUsurfaceWriterRankwise<T> vtuWriter("surface", cuboidDecomposition, loadBalancer);
-  vtuWriter.addSTL( stlReader );
+  SuperVtuSurfaceWriter<T> vtuWriter("surface", cuboidDecomposition, loadBalancer, stlReader);
 
   timer1.stop();
   timer1.printSummary();

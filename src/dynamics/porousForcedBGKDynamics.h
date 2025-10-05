@@ -137,7 +137,7 @@ struct PorousParticleKupershtokh {
       const auto force = cell.template getField<descriptors::FORCE>();
       V uPlusDeltaU[DESCRIPTOR::d];
       for (int iVel=0; iVel < DESCRIPTOR::d; ++iVel) {
-        uPlusDeltaU[iVel] = u[iVel] + force[iVel] / rho;
+        uPlusDeltaU[iVel] = u[iVel] + force[iVel];
       }
       if (velDenominator > std::numeric_limits<V>::epsilon()) {
         calculate(cell, uPlusDeltaU);

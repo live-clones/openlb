@@ -33,8 +33,6 @@ using namespace olb::opti;
 
 using S = FLOATING_POINT_TYPE;
 using U = util::ADf<S,2>;
-template <typename T>
-using VectorHelp = Vector<T,2>;
 using DESCRIPTOR = D3Q19<>;
 
 const int N = 20;                    // resolution of the model
@@ -242,7 +240,7 @@ void getResults( SuperLattice<T, DESCRIPTOR>& sLattice,
 
 // Main simulation
 template<typename T> // If getAllResults = false, only the objective is evaluated, no lattice fields will be computed and visualized
-T simulateEllipsoid3D( Vector<T,2> controls )
+T simulateEllipsoid3D( std::vector<T> controls )
 {
   OstreamManager clout( std::cout,"simulateEllipsoid" );
 

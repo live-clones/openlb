@@ -31,6 +31,7 @@ class Mesh {
 private:
   std::unique_ptr<CuboidDecomposition<T,D>> _decomposition;
   std::unique_ptr<LoadBalancer<T>> _balancer;
+  std::optional<unsigned> _overlap;
 
 public:
   Mesh(std::unique_ptr<CuboidDecomposition<T, D>> decomposition,
@@ -54,6 +55,18 @@ public:
 
   LoadBalancer<T>& getLoadBalancer() {
     return *_balancer;
+  }
+
+  void setOverlap(unsigned overlap) {
+    _overlap = overlap;
+  }
+
+  unsigned getOverlap() const {
+    if (_overlap) {
+      return *_overlap;
+    } else {
+      throw std::logic_error("Mesh overlap not specified");
+    }
   }
 
   T getDeltaX() const {

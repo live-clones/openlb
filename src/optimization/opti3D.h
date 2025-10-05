@@ -1,6 +1,7 @@
 /*  This file is part of the OpenLB library
  *
  *  Copyright (C) 2012-2016 Mathias J. Krause, Benjamin Förster
+ *                2025 Shota Ito
  *  E-mail contact: info@openlb.net
  *  The most recent release of OpenLB can be downloaded at
  *  <http://www.openlb.net/>
@@ -25,12 +26,9 @@
  * Groups all the 3D include files for the directory optimization.
  */
 
-#include "optimization/core/latticeData.h"
-#include "optimization/core/latticeResults.h"
+#include "optimization/core/controller.h"
 #include "optimization/core/serialize.h"
 #include "optimization/core/optiCase.h"
-#include "optimization/core/optiCaseAD.h"
-#include "optimization/core/optiCaseDual.h"
 #include "optimization/core/optimizer.h"
 #include "optimization/core/optimizerBarzilaiBorwein.h"
 #include "optimization/core/optimizerConstrainedBFGS.h"
@@ -42,7 +40,10 @@
 #include "optimization/dynamics/dualDynamics.h"
 #include "optimization/dynamics/dualMrtDynamics.h"
 #include "optimization/functors/dualFunctors3D.h"
+#include "optimization/primitives/primitives.h"
 #include "optimization/solver/adjointLbSolver.h"
+#include "optimization/solver/optiCaseAD.h"
+#include "optimization/solver/optiCaseDual.h"
 #include "optimization/solver/objective.h"
 #include "optimization/solver/optiSolverParameters.h"
 #include "optimization/solver/serialization.h"

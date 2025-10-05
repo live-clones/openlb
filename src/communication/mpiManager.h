@@ -90,7 +90,7 @@ public:
 class MpiManager {
 public:
   /// Initializes the mpi manager
-  void init(int *argc, char ***argv, bool verbose=true);
+  bool init(int *argc, char ***argv);
   /// Returns the number of processes
   int getSize() const;
   /// Returns the process ID
@@ -276,10 +276,10 @@ public:
 private:
   MpiManager();
   ~MpiManager();
+
 private:
   int numTasks, taskId;
   bool ok;
-  mutable OstreamManager clout;
 
   friend MpiManager& mpi();
 };
@@ -289,7 +289,7 @@ private:
 class MpiManager {
 public:
   /// Initializes the mpi manager
-  void init(int *argc, char ***argv, bool verbose=false) { }
+  bool init(int *argc, char ***argv) { return false; }
   /// Returns the number of processes
   int getSize() const
   {

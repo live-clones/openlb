@@ -30,13 +30,12 @@ namespace olb {
 /// Returns serialized vector of field data inside indicated region
 template <typename FIELD, typename T, typename DESCRIPTOR>
 std::vector<T> getSerializedFromField(SuperLattice<T,DESCRIPTOR>& lattice,
-                                      FunctorPtr<SuperIndicatorF<T,DESCRIPTOR::d>>&& indicator)
+                                      const FunctorPtr<SuperIndicatorF<T,DESCRIPTOR::d>>& indicator)
 {
   auto& loadBalancer = lattice.getLoadBalancer();
   auto& cDecomposition = indicator->getSuperStructure().getCuboidDecomposition();
   auto& superGeometry = indicator->getSuperGeometry();
-  const std::size_t serializedSize = getSerializedFieldSize<FIELD>(lattice,
-    std::forward<FunctorPtr<SuperIndicatorF<T,DESCRIPTOR::d>>>(indicator));
+  const std::size_t serializedSize = getSerializedFieldSize<FIELD>(lattice, indicator);
 
   std::vector<T> serial;
   serial.resize(serializedSize, 0);
@@ -75,7 +74,7 @@ std::vector<T> getSerializedFromField(SuperLattice<T,DESCRIPTOR>& lattice,
 /// Set field content from a serialized data vector inside indicated region
 template <typename FIELD, typename T, typename DESCRIPTOR>
 void setFieldFromSerialized(const std::vector<T>& serial, SuperLattice<T,DESCRIPTOR>& lattice,
-                            FunctorPtr<SuperIndicatorF<T,DESCRIPTOR::d>>&& indicator)
+                            const FunctorPtr<SuperIndicatorF<T,DESCRIPTOR::d>>& indicator)
 {
   auto& loadBalancer = lattice.getLoadBalancer();
   auto& cDecomposition = indicator->getSuperStructure().getCuboidDecomposition();
@@ -119,7 +118,7 @@ std::size_t getSerializedFieldSize(SuperLattice<T,DESCRIPTOR>& lattice) {
 /// Returns size of serialized data vector of a field
 template <typename FIELD, typename T, typename DESCRIPTOR>
 std::size_t getSerializedFieldSize(SuperLattice<T,DESCRIPTOR>& lattice,
-                                   FunctorPtr<SuperIndicatorF<T,DESCRIPTOR::d>>&& indicator) {
+                                   const FunctorPtr<SuperIndicatorF<T,DESCRIPTOR::d>>& indicator) {
   auto& loadBalancer = lattice.getLoadBalancer();
   auto& cDecomposition = indicator->getSuperStructure().getCuboidDecomposition();
   auto& superGeometry = indicator->getSuperGeometry();

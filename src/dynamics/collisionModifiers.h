@@ -243,9 +243,54 @@ struct TrackAverageTKE {
   };
 };
 
-}
-}
+/// Track covariance of velocity into cell field COVARIANCE_VELOCITY
+/// Based on forum user jmctighe's code and idea
+template <typename COLLISION>
+struct TrackCovarianceVelocity {
+  static constexpr OperatorScope scope = OperatorScope::PerCellWithParameters;
+  using parameters = typename COLLISION::parameters::template include<descriptors::LATTICE_TIME>;
+
+  static std::string getName() {
+    return "TrackCovarianceVelocity<" + COLLISION::getName() + ">";
+  }
+
+  template <typename DESCRIPTOR, typename MOMENTA, typename EQUILIBRIUM>
+  struct type {
+    using MomentaF = typename MOMENTA::template type<DESCRIPTOR>;
+    using CollisionO = typename COLLISION::template type<DESCRIPTOR, MOMENTA, EQUILIBRIUM>;
+    constexpr static bool is_vectorizable = dynamics::is_vectorizable_v<CollisionO>;
+
+    template <concepts::Cell CELL, typename PARAMETERS,
+              typename V = typename CELL::value_t>
+    CellStatistic<V> apply(CELL &cell, PARAMETERS &parameters) any_platform {
+      auto statistics = CollisionO().apply(cell, parameters);
+      auto iT = parameters.template get<descriptors::LATTICE_TIME>();
+      auto uCovar = cell.template getField<descriptors::COVARIANCE_VELOCITY>();
+
+      if (iT > 1) {
+        auto uAvg = cell.template getField<descriptors::AVERAGE_VELOCITY>();
+
+        Vector<V, DESCRIPTOR::d> u{};
+        MomentaF().computeU(cell, u);
+        Vector<V, DESCRIPTOR::d> uDiff = u - uAvg;
+
+        for (int i = 0; i < DESCRIPTOR::d; i++) {
+          for (int j = 0; j < DESCRIPTOR::d; j++) {
+            uCovar[j + i * DESCRIPTOR::d] =
+                (iT - V(1.0)) / iT * uCovar[j + i * DESCRIPTOR::d] +
+                V(1.0) / (iT - V(1.0)) * uDiff[i] * uDiff[j];
+          }
+        }
+      }
+      cell.template setField<descriptors::COVARIANCE_VELOCITY>(uCovar);
+      return statistics;
+    }
+  };
+};
 
 
+
+}
+}
 
 #endif

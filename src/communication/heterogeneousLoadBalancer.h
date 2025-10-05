@@ -47,6 +47,8 @@ private:
   std::vector<Platform> _platform;
 
 public:
+  HeterogeneousLoadBalancer() {};
+
   HeterogeneousLoadBalancer(CuboidDecomposition<T,3>& cGeometry, T largeBlockFraction=0.9):
     LoadBalancer<T>(0)
   {
@@ -211,6 +213,8 @@ private:
   std::vector<Platform> _platform;
 
 public:
+  OrthogonalHeterogeneousLoadBalancer() {};
+
   OrthogonalHeterogeneousLoadBalancer(CuboidDecomposition<T,3>& cGeometry, T largeBlockFraction=0.9):
     LoadBalancer<T>(0)
   {

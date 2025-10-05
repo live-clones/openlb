@@ -39,9 +39,9 @@ namespace olb {
 /// All optimization code is contained in this namespace.
 namespace opti {
 
-enum StartValueType {Control, ProjectedControl, Porosity, Permeability};
-
 namespace projection {
+
+enum StartValueType {Control, ProjectedControl, Porosity, Permeability};
 
 template <typename T>
 struct Base {

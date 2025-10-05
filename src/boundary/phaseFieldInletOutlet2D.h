@@ -35,6 +35,62 @@
 
 namespace olb {
 
+///Initialising the setConvectivePhaseFieldBoundary function on the superLattice domain in 2d
+template<typename T, typename DESCRIPTOR>
+void setConvectivePhaseFieldBoundary(SuperLattice<T, DESCRIPTOR>& sLattice, SuperGeometry<T,2>& superGeometry, int material)
+{
+  setConvectivePhaseFieldBoundary<T,DESCRIPTOR>(sLattice, superGeometry.getMaterialIndicator(material));
+}
+
+///Initialising the setConvectivePhaseFieldBoundary function on the superLattice domain
+template<typename T, typename DESCRIPTOR>
+void setConvectivePhaseFieldBoundary(SuperLattice<T, DESCRIPTOR>& sLattice, FunctorPtr<SuperIndicatorF2D<T>>&& indicator)
+{
+  OstreamManager clout(std::cout, "setConvectivePhaseFieldBoundary");
+
+  for (int iCloc = 0; iCloc < sLattice.getLoadBalancer().size(); iCloc++) {
+    setConvectivePhaseFieldBoundary<T,DESCRIPTOR>(sLattice.getBlock(iCloc), indicator->getBlockIndicatorF(iCloc));
+  }
+  /// Adds needed Cells to the Communicator _commBC in SuperLattice
+  int _overlap = 1;
+  {
+    auto& communicator = sLattice.getCommunicator(stage::PostCollide());
+    communicator.template requestField<descriptors::POPULATION>();
+
+    SuperIndicatorBoundaryNeighbor<T,DESCRIPTOR::d> neighborIndicator(std::forward<decltype(indicator)>(indicator), _overlap);
+    communicator.requestOverlap(_overlap, neighborIndicator);
+    communicator.exchangeRequests();
+  }
+}
+
+/// Set ConvectivePhaseFieldBoundary for any indicated cells inside the block domain
+template<typename T, typename DESCRIPTOR>
+void setConvectivePhaseFieldBoundary(BlockLattice<T,DESCRIPTOR>& block, BlockIndicatorF2D<T>& indicator)
+{
+  using namespace boundaryhelper;
+  const auto& blockGeometryStructure = indicator.getBlockGeometry();
+  const int margin = 1;
+  std::vector<int> discreteNormal(3,0);
+  blockGeometryStructure.forSpatialLocations([&](auto iX, auto iY) {
+    if (blockGeometryStructure.getNeighborhoodRadius({iX, iY}) >= margin && indicator(iX, iY)) {
+      discreteNormal = blockGeometryStructure.getStatistics().getType(iX, iY);
+      if ((abs(discreteNormal[1]) + abs(discreteNormal[2])) == 1) {
+        block.addPostProcessor(
+          typeid(stage::PostCollide), {iX,iY},
+          promisePostProcessorForNormal<T,DESCRIPTOR,FlatConvectivePhaseFieldPostProcessorA2D>(
+            Vector<int,2>(discreteNormal.data() + 1)));
+        block.addPostProcessor(
+          typeid(stage::PostStream), {iX,iY},
+          promisePostProcessorForNormal<T,DESCRIPTOR,FlatConvectivePhaseFieldPostProcessorB2D>(
+            Vector<int,2>(discreteNormal.data() + 1)));
+        block.template defineDynamics<NoCollideDynamicsExternalVelocity>({iX, iY});
+      } else {
+        throw std::runtime_error("No valid discrete normal found. This BC is not suited for curved walls.");
+      }
+    }
+  });
+}
+
 namespace boundary {
 
 template <concepts::BaseType T, concepts::LatticeDescriptor DESCRIPTOR, typename MixinDynamics>
@@ -102,12 +158,10 @@ std::optional<DynamicsPromise<T,DESCRIPTOR>> getDynamics(DiscreteNormalType type
     >::construct(n);
 
   case DiscreteNormalType::ExternalCorner:
-    return meta::id<typename MixinDynamics::template exchange_momenta<momenta::FixedVelocityBoundaryTuple>>{};
+    return std::nullopt;
 
   case DiscreteNormalType::InternalCorner:
-    return boundaryhelper::PlainMixinDynamicsForNormalMomenta<T,DESCRIPTOR,
-      CombinedRLBdynamics,MixinDynamics,momenta::InnerCornerVelocityTuple2D
-    >::construct(n);
+    return std::nullopt;
 
   default:
     return std::nullopt;
@@ -119,7 +173,7 @@ std::optional<PostProcessorPromise<T,DESCRIPTOR>> getPostProcessor(DiscreteNorma
   switch (type) {
 
   case DiscreteNormalType::ExternalCorner:
-    return boundaryhelper::promisePostProcessorForNormal<T,DESCRIPTOR,OuterVelocityCornerProcessor2D>(n);
+    return std::nullopt;
 
   default:
     return std::nullopt;

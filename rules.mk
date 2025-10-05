@@ -1,6 +1,15 @@
 ###########################################################################
 ## conditional settings
 
+OLB_RELEASE := 1.8r1
+
+GIT_VERSION := $(shell if command -v git >/dev/null 2>&1 && git rev-parse --is-inside-work-tree >/dev/null 2>&1; then git describe --always --tags --dirty; fi)
+ifneq ($(strip $(GIT_VERSION)),)
+	CXXFLAGS += -DOLB_VERSION=\"$(GIT_VERSION)\"
+else
+	CXXFLAGS += -DOLB_VERSION=\"$(OLB_RELEASE)\"
+endif
+
 # Select std::thread foundation for use in thread pool / async job system
 ifdef THREAD_POOL
 ifeq ($(THREAD_POOL), PTHREAD)

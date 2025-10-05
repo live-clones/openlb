@@ -34,7 +34,7 @@ MpiManager& mpi()
 
 #ifdef PARALLEL_MODE_MPI
 
-MpiManager::MpiManager() : ok(false), clout(std::cout,"MpiManager")
+MpiManager::MpiManager() : ok(false)
 { }
 
 MpiManager::~MpiManager()
@@ -45,21 +45,18 @@ MpiManager::~MpiManager()
   }
 }
 
-void MpiManager::init(int *argc, char ***argv, bool verbose)
+bool MpiManager::init(int *argc, char ***argv)
 {
   int ok0{};
   MPI_Initialized(&ok0);
-  if (ok0) {
-    return;
+  if (ok0 == MPI_SUCCESS) {
+    int ok1 = MPI_Init(argc, argv);
+    int ok2 = MPI_Comm_rank(MPI_COMM_WORLD, &taskId);
+    int ok3 = MPI_Comm_size(MPI_COMM_WORLD, &numTasks);
+    int ok4 = MPI_Comm_set_errhandler(MPI_COMM_WORLD, MPI_ERRORS_ARE_FATAL);
+    ok = (ok1 == MPI_SUCCESS && ok2 == MPI_SUCCESS && ok3 == MPI_SUCCESS && ok4 == MPI_SUCCESS);
   }
-  int ok1 = MPI_Init(argc, argv);
-  int ok2 = MPI_Comm_rank(MPI_COMM_WORLD, &taskId);
-  int ok3 = MPI_Comm_size(MPI_COMM_WORLD, &numTasks);
-  int ok4 = MPI_Comm_set_errhandler(MPI_COMM_WORLD, MPI_ERRORS_ARE_FATAL);
-  ok = (ok1 == MPI_SUCCESS && ok2 == MPI_SUCCESS && ok3 == MPI_SUCCESS && ok4 == MPI_SUCCESS);
-  if (verbose) {
-    clout << "Sucessfully initialized, numThreads=" << getSize() << std::endl;
-  }
+  return ok;
 }
 
 int MpiManager::getSize() const

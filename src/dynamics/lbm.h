@@ -186,6 +186,29 @@ struct equilibrium {
     return mpincompressible(iPop, rho, u, uSqr, pressure);
   }
 
+  template <typename RHO, typename LAPLACERHO, typename U, typename USQR, typename PRESSURE, typename V=PRESSURE>
+  static V cmpincompressible(int iPop, const RHO& rho, const LAPLACERHO& laplaceRho, const U& u, const USQR& uSqr, const PRESSURE& pressure) any_platform
+  {
+    V c_u{};
+    if (iPop == 0) {
+      return descriptors::invCs2<V,DESCRIPTOR>() * pressure * (descriptors::t<V,DESCRIPTOR>(iPop)-V{1})
+             - rho*descriptors::t<V,DESCRIPTOR>(iPop)*uSqr*descriptors::invCs2<V,DESCRIPTOR>()*V{0.5};
+    }
+    else {
+      for (int iD=0; iD < DESCRIPTOR::d; ++iD) {
+        c_u += descriptors::c<DESCRIPTOR>(iPop,iD)*u[iD];
+      }
+      return descriptors::t<V,DESCRIPTOR>(iPop)*descriptors::invCs2<V,DESCRIPTOR>()
+             * ( pressure + laplaceRho/V{4}*c_u + rho*(c_u + descriptors::invCs2<V,DESCRIPTOR>()*V{0.5}*c_u*c_u - uSqr*V{0.5}) );
+    }
+  }
+  template <typename RHO, typename LAPLACERHO, typename U, typename PRESSURE, typename V=PRESSURE>
+  static V cmpincompressible(int iPop, const RHO& rho, const LAPLACERHO& laplaceRho, const U& u, const PRESSURE& pressure) any_platform
+  {
+    const V uSqr = util::normSqr<U,DESCRIPTOR::d>(u);
+    return cmpincompressible(iPop, rho, laplaceRho, u, uSqr, pressure);
+  }
+
   /// compute off-equilibrium part of the populations from gradient of the flux
   /// for asymmetric regularization init to circumvent pi computation
   template <typename V>

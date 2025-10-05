@@ -23,17 +23,6 @@
 
 #include "olbInit.h"
 
-#include "io/ostreamManager.h"
-
-#include "communication/mpiManager.h"
-#include "communication/ompManager.h"
-
-#include "core/platform/platform.h"
-
-#ifdef FEATURE_VDB
-#include <openvdb/openvdb.h>
-#endif
-
 namespace olb {
 
 namespace singleton {
@@ -44,38 +33,6 @@ ThreadPool& pool()
   return instance;
 }
 
-}
-
-void initialize(int *argc, char ***argv, bool multiOutput, bool verbose)
-{
-  // create an OstreamManager object in order to enable multi output
-  olb::OstreamManager clout(std::cout, "olbInit");
-  clout.setMultiOutput(multiOutput);
-  singleton::mpi().init(argc, argv, verbose);
-
-#ifdef PARALLEL_MODE_OMP
-  singleton::omp().init(verbose);
-#endif
-
-  int nThreads = 1;
-  if (const char* envOlbNumThreads = std::getenv("OLB_NUM_THREADS")) {
-    nThreads = std::stoi(envOlbNumThreads);
-  }
-  singleton::pool().init(nThreads, verbose);
-
-  /// Verify requirements for using all enabled platforms
-  #ifdef PLATFORM_GPU_CUDA
-  checkPlatform<Platform::GPU_CUDA>();
-  #endif
-
-  #ifdef FEATURE_VDB
-  openvdb::initialize();
-  #endif
-}
-
-void initialize(int argc, char **argv, bool multiOutput, bool verbose)
-{
-  initialize(&argc, &argv, multiOutput, verbose);
 }
 
 }

@@ -389,6 +389,52 @@ ParallelParticleLocator addResolvedArbitraryShape3D(
   return ParallelParticleLocator(globiCcentre, globID, localIDcentre);
 }
 
+
+
+template<typename T, typename PARTICLETYPE>
+ParallelParticleLocator addResolvedArbitraryShape3D(
+  SuperParticleSystem<T,PARTICLETYPE>& sParticleSystem,
+  const Vector<bool, PARTICLETYPE::d>& periodicity,
+  const Vector<T,3>& position, T latticeSpacing,
+  std::unique_ptr<SmoothIndicatorCustom3D<T, T, true>> indPtr,
+  T epsilon, T density=0.,
+  const Vector<T,3>& angleInDegree = Vector<T,3> (0.),
+  const Vector<T,3>& velocity = Vector<T,3> (0.))
+{
+  //Get circumRadius and set angleInDegree
+  T circumRadius = indPtr->getCircumRadius();
+
+  //Get new global particle id
+  std::size_t globID = sParticleSystem.getGlobID();
+
+  //Prepare particle and get list of touching iCs
+  int globiCcentre;
+  std::unordered_set<int> setOfICs = prepareParallelResolvedParticle(sParticleSystem,
+    position, circumRadius, epsilon, globiCcentre,
+    sParticleSystem.getSuperStructure().getCuboidGeometry().getMotherCuboid().getDeltaR(),
+    periodicity);
+
+  std::size_t idxSurface = addSurface(sParticleSystem,
+      [&](){ return std::move(indPtr); });
+
+  //Iterate over particle systems
+  std::size_t localIDcentre=0; //Return localID of particle inside particleSystem holding centre
+  communication::forSystemsInSuperParticleSystem( sParticleSystem,
+  [&](ParticleSystem<T,PARTICLETYPE>& particleSystem, int iC, int globiC){
+    //Do for all iCs
+
+    //Assigne resolved particle to iCs specified in setOfICs
+    std::size_t localID=0;
+    assignParallelResolvedParticle( particleSystem, setOfICs, globiC,
+      idxSurface, globID, localID, globiCcentre,
+      position, density, angleInDegree, velocity );
+    //Set localID if centre
+    if (globiC==globiCcentre){ localIDcentre=localID; }
+  });
+
+  return ParallelParticleLocator(globiCcentre, globID, localIDcentre);
+}
+
 //Add particle on residing iC with surface on all iCs
 template<typename T, typename PARTICLETYPE>
 ParallelParticleLocator addResolvedCircle2D(

@@ -29,16 +29,17 @@
  #ifndef SERIALIZATION_H
  #define SERIALIZATION_H
 
-#include "optimization/solver/controller.h"
 #include "geometry/superGeometry.h"
 #include "geometry/cuboidDecomposition.h"
 #include "utilities/aliases.h"
 #include "utilities/vectorHelpers.h"
-#include "optimization/core/optiCaseDual.h"
+#include "optimization/solver/optiCaseDual.h"
 
 namespace olb {
 
 namespace opti {
+
+namespace solver {
 
 template<typename S>
 class Controller;
@@ -577,6 +578,7 @@ C getControl(OptiCaseDual<T,SOLVER,CONTROLLED_FIELD,PRIMAL_DYNAMICS,C>& optiCase
   return result;
 }
 
+}
 
 }
 }

@@ -33,6 +33,18 @@
 
 #include "threadPool.h"
 
+#include "io/ostreamManager.h"
+
+#include "communication/mpiManager.h"
+#include "communication/ompManager.h"
+
+#include "core/platform/platform.h"
+
+#ifdef FEATURE_VDB
+#include <openvdb/openvdb.h>
+#endif
+
+
 namespace olb {
 
 namespace singleton {
@@ -40,14 +52,6 @@ namespace singleton {
 ThreadPool& pool();
 
 }
-
-/// Initialize OpenLB
-/**
- * Sets up MPI, thread pool and verifies platform requirements.
- **/
-void initialize(int *argc, char ***argv, bool multiOutput=false, bool verbose=true);
-/// Initialize OpenLB
-void initialize(int argc, char **argv, bool multiOutput=false, bool verbose=true);
 
 }
 

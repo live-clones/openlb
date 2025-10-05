@@ -111,6 +111,178 @@ struct RLB {
   };
 };
 
+struct IRLB {
+  using parameters = typename meta::list<descriptors::OMEGA>;
+
+  static std::string getName() {
+    return "IRLB";
+  }
+
+  template <typename DESCRIPTOR, typename MOMENTA, typename EQUILIBRIUM>
+  struct type {
+    using MomentaF = typename MOMENTA::template type<DESCRIPTOR>;
+    using EquilibriumF = typename EQUILIBRIUM::template type<DESCRIPTOR,MOMENTA>;
+
+    template <concepts::MinimalCell CELL, typename PARAMETERS, typename V=typename CELL::value_t>
+    CellStatistic<V> apply(CELL& cell, PARAMETERS& parameters) any_platform {
+      V pi[util::TensorVal<DESCRIPTOR>::n] { };
+      V u[DESCRIPTOR::d] {};
+      V fEq[DESCRIPTOR::q] { };
+      const auto statistic = EquilibriumF().compute(cell, parameters, fEq);
+      const V omega = parameters.template get<descriptors::OMEGA>();
+      const auto force = cell.template getField<descriptors::FORCE>();
+      const auto rho = cell.template getField<descriptors::RHO>();
+      const auto gradRho = cell.template getField<descriptors::NABLARHO>();
+      MomentaF().computeU(cell, u);
+      MomentaF().computeStress(cell, pi);
+      V u_gradRho = 0;
+      for (int iD=0; iD < DESCRIPTOR::d; iD++) {
+        u_gradRho += u[iD]*gradRho[iD];
+      }
+      for (int iAlpha=0; iAlpha < DESCRIPTOR::d; ++iAlpha) {
+        for (int iBeta=iAlpha; iBeta < DESCRIPTOR::d; ++iBeta) {
+          if (iAlpha == iBeta) {
+            pi[ static_cast<int>( iAlpha * (DESCRIPTOR::d - ( iAlpha - 1 ) * 0.5) ) ] += V{0.5}/descriptors::invCs2<V,DESCRIPTOR>()*u_gradRho;
+          }
+        }
+      }
+      for (int iPop=0; iPop < DESCRIPTOR::q; ++iPop) {
+        cell[iPop] = fEq[iPop];
+        V c_F = 0;
+        for (int iD=0; iD < DESCRIPTOR::d; iD++) {
+          c_F += descriptors::c<DESCRIPTOR>(iPop,iD)*force[iD]*rho;
+        }
+        V fNeq = (V{1} - omega) * (equilibrium<DESCRIPTOR>::template fromPiToFneq<V>(iPop, pi) -
+                  descriptors::t<V,DESCRIPTOR>(iPop) * V{0.5} * (u_gradRho +
+                  descriptors::invCs2<V,DESCRIPTOR>()*c_F));
+        cell[iPop] += fNeq;
+      }
+      return statistic;
+    };
+  };
+};
+
+struct CIRLB {
+  using parameters = typename meta::list<descriptors::OMEGA>;
+
+  static std::string getName() {
+    return "CIRLB";
+  }
+
+  template <typename DESCRIPTOR, typename MOMENTA, typename EQUILIBRIUM>
+  struct type {
+    using MomentaF = typename MOMENTA::template type<DESCRIPTOR>;
+    using EquilibriumF = typename EQUILIBRIUM::template type<DESCRIPTOR,MOMENTA>;
+
+    template <concepts::MinimalCell CELL, typename PARAMETERS, typename V=typename CELL::value_t>
+    CellStatistic<V> apply(CELL& cell, PARAMETERS& parameters) any_platform {
+      V pi[util::TensorVal<DESCRIPTOR>::n] { };
+      V u[DESCRIPTOR::d] {};
+      V fEq[DESCRIPTOR::q] { };
+      const auto statistic = EquilibriumF().compute(cell, parameters, fEq);
+      const V omega = parameters.template get<descriptors::OMEGA>();
+      const auto force = cell.template getField<descriptors::FORCE>();
+      const auto rho = cell.template getField<descriptors::RHO>();
+      const auto gradRho = cell.template getField<descriptors::NABLARHO>();
+      const auto laplaceRho = cell.template getField<descriptors::LAPLACERHO>();
+      MomentaF().computeU(cell, u);
+      MomentaF().computeStress(cell, pi);
+      V u_gradRho = 0;
+      for (int iD=0; iD < DESCRIPTOR::d; iD++) {
+        u_gradRho += u[iD]*gradRho[iD];
+      }
+      for (int iAlpha=0; iAlpha < DESCRIPTOR::d; ++iAlpha) {
+        for (int iBeta=iAlpha; iBeta < DESCRIPTOR::d; ++iBeta) {
+          if (iAlpha == iBeta) {
+            pi[ static_cast<int>( iAlpha * (DESCRIPTOR::d - ( iAlpha - 1 ) * 0.5) ) ] += V{0.5}/descriptors::invCs2<V,DESCRIPTOR>()*u_gradRho;
+          }
+        }
+      }
+      for (int iPop=0; iPop < DESCRIPTOR::q; ++iPop) {
+        cell[iPop] = fEq[iPop];
+        V c_F = 0;
+        for (int iD=0; iD < DESCRIPTOR::d; iD++) {
+          c_F += descriptors::c<DESCRIPTOR>(iPop,iD)*force[iD]*(rho + laplaceRho/4.);
+        }
+        V fNeq = (V{1} - omega) * (equilibrium<DESCRIPTOR>::template fromPiToFneq<V>(iPop, pi) -
+                  descriptors::t<V,DESCRIPTOR>(iPop) * V{0.5} * (u_gradRho +
+                  descriptors::invCs2<V,DESCRIPTOR>()*c_F));
+        cell[iPop] += fNeq;
+      }
+      return statistic;
+    };
+  };
+};
+
+struct WMIRLB {
+  using parameters = typename meta::list<descriptors::OMEGA, collision::HYBRID, collision::HYBRID_RHO>;
+
+  static std::string getName() {
+    return "WMIRLB";
+  }
+
+  template <typename DESCRIPTOR, typename MOMENTA, typename EQUILIBRIUM>
+  struct type {
+    using MomentaF = typename MOMENTA::template type<DESCRIPTOR>;
+    using EquilibriumF = typename EQUILIBRIUM::template type<DESCRIPTOR,MOMENTA>;
+
+    template <concepts::MinimalCell CELL, typename PARAMETERS, typename V=typename CELL::value_t>
+    CellStatistic<V> apply(CELL& cell, PARAMETERS& parameters) any_platform {
+      V pi[util::TensorVal<DESCRIPTOR>::n] { };
+      V p, u[DESCRIPTOR::d] {};
+      V fEq[DESCRIPTOR::q] { };
+      const V omega = parameters.template get<descriptors::OMEGA>();
+      const V hybridPar = parameters.template get<collision::HYBRID>();
+      const V complementHybridPar = V(1) - hybridPar;
+      const V hybridParRho = parameters.template get<collision::HYBRID_RHO>();
+      const V complementHybridParRho = V(1) - hybridParRho;
+      V invPreFactor = -V(1)/(omega * descriptors::invCs2<V,DESCRIPTOR>());
+      auto strainRateTensorFD = cell.template getField<descriptors::TENSOR>();
+
+      const auto force = cell.template getField<descriptors::FORCE>();
+      const auto rho = cell.template getField<descriptors::RHO>();
+      const auto gradRho = cell.template getField<descriptors::NABLARHO>();
+
+      MomentaF().computeRhoU(cell, p, u);
+      MomentaF().computeStress(cell, pi);
+      p *= hybridParRho;
+      p += complementHybridParRho * cell.template getField<descriptors::DENSITY>();
+
+      //const auto statistic = EquilibriumF().compute(cell, parameters, fEq);
+      const auto statistic = EquilibriumF().compute(cell, p, u, fEq);
+
+      V aHybrid[util::TensorVal<DESCRIPTOR>::n] {V(0)};
+      for(int i = 0; i < util::TensorVal<DESCRIPTOR>::n; i++) {
+        aHybrid[i] = hybridPar * pi[i] + complementHybridPar * invPreFactor * V(2) * rho * strainRateTensorFD[i];
+      }
+
+      V u_gradRho = 0;
+      for (int iD=0; iD < DESCRIPTOR::d; iD++) {
+        u_gradRho += u[iD]*gradRho[iD];
+      }
+      for (int iAlpha=0; iAlpha < DESCRIPTOR::d; ++iAlpha) {
+        for (int iBeta=iAlpha; iBeta < DESCRIPTOR::d; ++iBeta) {
+          if (iAlpha == iBeta) {
+            aHybrid[ static_cast<int>( iAlpha * (DESCRIPTOR::d - ( iAlpha - 1 ) * 0.5) ) ] += V{0.5}/descriptors::invCs2<V,DESCRIPTOR>()*u_gradRho;
+          }
+        }
+      }
+      for (int iPop=0; iPop < DESCRIPTOR::q; ++iPop) {
+        cell[iPop] = fEq[iPop];
+        V c_F = 0;
+        for (int iD=0; iD < DESCRIPTOR::d; iD++) {
+          c_F += descriptors::c<DESCRIPTOR>(iPop,iD)*force[iD]*rho;
+        }
+        V fNeq = (V{1} - omega) * (equilibrium<DESCRIPTOR>::template fromPiToFneq<V>(iPop, aHybrid) -
+                  descriptors::t<V,DESCRIPTOR>(iPop) * V{0.5} * (u_gradRho +
+                  descriptors::invCs2<V,DESCRIPTOR>()*c_F));
+        cell[iPop] += fNeq;
+      }
+      return statistic;
+    };
+  };
+};
+
 struct AdvectionDiffusionRLB {
   using parameters = typename meta::list<descriptors::OMEGA>;
 

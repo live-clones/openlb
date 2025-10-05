@@ -32,7 +32,7 @@
 namespace olb {
 
 struct ompManager {
-  void init(bool verbose=true);
+  bool init(int *argc, char ***argv);
 
   int getSize() const;
   int getRank() const;

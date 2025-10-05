@@ -1,8 +1,7 @@
 /*  Lattice Boltzmann sample, written in C++, using the OpenLB
  *  library
  *
- *  Copyright (C) 2006 - 2025 Mathias J. Krause, Jonas Fietz,
- *                            Jonas Latt, Jonas Kratzke, Shota Ito
+ *  Copyright (C) 2025 Shota Ito, Julius Jessberger, Adrian Kummerländer, Mathias J. Krause
  *  E-mail contact: info@openlb.net
  *  The most recent release of OpenLB can be downloaded at
  *  <http://www.openlb.net/>
@@ -23,85 +22,142 @@
  *  Boston, MA  02110-1301, USA.
  */
 
-/* cavity2d.cpp:
- * This example illustrates a minimal working example for a
- * fluid simulation with OpenLB; a flow in a cuboid, the lid-
- * driven cavity.
- */
-
 #include <olb.h>
 
 using namespace olb;
+using namespace olb::names;
 
-using T = FLOATING_POINT_TYPE;
-using DESCRIPTOR = descriptors::D2Q9<>;
-using BulkDynamics = ConstRhoBGKdynamics<T,DESCRIPTOR>;
+// === Step 1: Declarations ===
+using MyCase = Case<
+  NavierStokes, Lattice<double, descriptors::D2Q9<>>
+>;
 
-const T physDeltaX        = 0.0078125;   // grid spacing [m]
-const T physDeltaT        = 0.00078125;  // temporal spacing [s]
-const T physLength        = 1.0;         // length of the squared cuboid [m]
-const T physLidVelocity   = 1.0;         // velocity imposed on lid [m/s]
-const T physViscosity     = 0.001;       // kinetic viscosity of fluid [m*m/s]
-const T physDensity       = 1.0;         // fluid density [kg/(m*m*m)]
-const T physMaxT          = 30.0;        // maximal simulation time [s]
+/// @brief Create a simulation mesh, based on user-specific geometry
+/// @return An instance of Mesh, which keeps the relevant information
+Mesh<MyCase::value_t,MyCase::d> createMesh(MyCase::ParametersD& params) {
+  using T = MyCase::value_t;
+  const Vector extent = params.get<parameters::DOMAIN_EXTENT>();
+  const Vector origin{0, 0};
+  IndicatorCuboid2D<T> cuboid(extent, origin);
 
-void prepareGeometry(SuperGeometry<T,2>& superGeometry)
-{
-  // Set material numbers to assign physics to lattice nodes
-  superGeometry.rename(0, 2);
-  superGeometry.rename(2, 1, {1,1});
+  const T physDeltaX = params.get<parameters::PHYS_DELTA_X>();
 
-  T dx = physDeltaX;
-  Vector extend{physLength + 2*dx, 2*dx};
-  Vector origin{-dx, physLength - dx};
-  IndicatorCuboid2D lid(extend, origin);
-  superGeometry.rename(2,3,1,lid);
-
-  superGeometry.getStatistics().print();
+  Mesh<T,MyCase::d> mesh(cuboid, physDeltaX, singleton::mpi().getSize());
+  mesh.setOverlap(params.get<parameters::OVERLAP>());
+  return mesh;
 }
 
-void prepareLattice(SuperLattice<T, DESCRIPTOR>& sLattice,
-                    SuperGeometry<T,2>& superGeometry)
-{
-  // Material=1 -->bulk dynamics
-  sLattice.defineDynamics<BulkDynamics>(superGeometry, 1);
+/// @brief Set material numbers for different parts of the domain
+/// @param myCase The Case instance which keeps the simulation data
+/// @note The material numbers will be used to assign physics to lattice nodes
+void prepareGeometry(MyCase& myCase) {
+  using T = MyCase::value_t;
+  auto& params = myCase.getParameters();
+  auto& geometry = myCase.getGeometry();
 
-  // Material=2,3 -->bulk dynamics, velocity boundary
-  boundary::set<boundary::InterpolatedVelocity<T,DESCRIPTOR,BulkDynamics>>(sLattice, superGeometry, 2);
-  boundary::set<boundary::InterpolatedVelocity<T,DESCRIPTOR,BulkDynamics>>(sLattice, superGeometry, 3);
+  const T physLength = params.get<parameters::DOMAIN_EXTENT>()[0];
+  const T physDeltaX = params.get<parameters::PHYS_DELTA_X>();
 
-  sLattice.setParameter<descriptors::OMEGA>(sLattice.getUnitConverter().getLatticeRelaxationFrequency());
+  /// Set material numbers
+  geometry.rename(0, 2);
+  geometry.rename(2, 1, {1,1});
+
+  const Vector lidExtend {physLength + 2*physDeltaX, 2*physDeltaX};
+  const Vector lidOrigin {-physDeltaX, physLength - physDeltaX};
+  IndicatorCuboid2D lid (lidExtend, lidOrigin);
+  geometry.rename(2,3,1,lid);
+
+  geometry.getStatistics().print();
 }
 
-void setBoundaryValues(SuperLattice<T, DESCRIPTOR>& sLattice,
-                       std::size_t iT, SuperGeometry<T,2>& superGeometry)
-{
-  if (iT == 0) {
-    auto domain = superGeometry.getMaterialIndicator({1,2,3});
-    AnalyticalConst2D<T,T> rhoF(1);
-    AnalyticalConst2D<T,T> uWall(0, 0);
-    AnalyticalConst2D<T,T> uLid(sLattice.getUnitConverter().getCharLatticeVelocity(), 0);
+/// @brief Set lattice dynamics
+/// @param myCase The Case instance which keeps the simulation data
+void prepareLattice(MyCase& myCase) {
+  using T = MyCase::value_t;
+  auto& params = myCase.getParameters();
+  auto& lattice = myCase.getLattice(NavierStokes{});
 
-    // Initialize populations to equilibrium state
-    sLattice.iniEquilibrium(domain, rhoF, uWall);
-    sLattice.defineRhoU(domain, rhoF, uWall);
+  const T physDeltaX = params.get<parameters::PHYS_DELTA_X>();
+  const T physDeltaT = params.get<parameters::PHYS_DELTA_T>();
+  const T physLength = params.get<parameters::DOMAIN_EXTENT>()[0];
+  const T physCharVelocity = params.get<parameters::PHYS_CHAR_VELOCITY>();
+  const T physCharViscosity = params.get<parameters::PHYS_CHAR_VISCOSITY>();
+  const T physCharDensity = params.get<parameters::PHYS_CHAR_DENSITY>();
 
-    // Assign the non-zero velocity to the lid
-    sLattice.defineU(superGeometry, 3, uLid);
-    sLattice.initialize();
-  }
+  // Set up a unit converter with the characteristic physical units
+  myCase.getLattice(NavierStokes{}).setUnitConverter(
+    physDeltaX,        // physDeltaX: spacing between two lattice cells in [m]
+    physDeltaT,        // physDeltaT: time step in [s]
+    physLength,        // charPhysLength: reference length of simulation geometry in [m]
+    physCharVelocity,  // charPhysVelocity: highest expected velocity during simulation in [m/s]
+    physCharViscosity, // physViscosity: physical kinematic viscosity in [m^2/s]
+    physCharDensity    // physDensity: physical density [kg/m^3]
+  );
+  lattice.getUnitConverter().print();
+
+  /// Material=1 -->bulk dynamics
+  lattice.defineDynamics<ConstRhoBGKdynamics>(myCase.getGeometry(), 1);
+
+  /// Material=2,3 -->bulk dynamics, velocity boundary
+  boundary::set<boundary::InterpolatedVelocity, ConstRhoBGKdynamics>(lattice, myCase.getGeometry(), 2);
+  boundary::set<boundary::InterpolatedVelocity, ConstRhoBGKdynamics>(lattice, myCase.getGeometry(), 3);
+
+  lattice.setParameter<descriptors::OMEGA>(lattice.getUnitConverter().getLatticeRelaxationFrequency());
 }
 
-void getResults(SuperLattice<T, DESCRIPTOR>& sLattice,
-                std::size_t iT, util::Timer<T> timer)
+/// Set initial condition for primal variables (velocity and density)
+/// @param myCase The Case instance which keeps the simulation data
+/// @note Be careful: initial values have to be set using lattice units
+void setInitialValues(MyCase& myCase) {
+  using T = MyCase::value_t;
+  auto& lattice = myCase.getLattice(NavierStokes{});
+
+  /// Initialize density to one everywhere
+  /// Initialize velocity to be tangential at the lid and zero in the bulk and at the walls
+  AnalyticalConst2D<T,T> rho(1);
+  AnalyticalConst2D<T,T> uLid(lattice.getUnitConverter().getCharLatticeVelocity(), 0);
+  AnalyticalConst2D<T,T> uRest(0, 0);
+
+  /// Initialize populations to equilibrium state
+  auto domain = myCase.getGeometry().getMaterialIndicator({1,2,3});
+  lattice.iniEquilibrium(domain, rho, uRest);
+  lattice.defineRhoU(domain, rho, uRest);
+
+  /// Assign the non-zero velocity to the lid
+  lattice.defineU(myCase.getGeometry(), 3, uLid);
+  lattice.initialize();
+}
+
+/// Update boundary values at times (and external fields, if they exist)
+/// @param myCase The Case instance which keeps the simulation data
+/// @param iT The time step
+/// @note Be careful: boundary values have to be set using lattice units
+void setTemporalValues(MyCase& myCase,
+                       std::size_t iT)
 {
-  const UnitConverter<T,DESCRIPTOR>& converter = sLattice.getUnitConverter();
-  const std::size_t iTvtk = converter.getLatticeTime(physMaxT/100.);
+  // Nothing to do here, because simulation does not depend on time
+}
+
+/// Compute simulation results at times
+/// @param myCase The Case instance which keeps the simulation data
+/// @param iT The time step
+void getResults(MyCase& myCase,
+                util::Timer<MyCase::value_t>& timer,
+                std::size_t iT)
+{
+  /// Write vtk plots every 0.3 seconds (of phys. simulation time)
+  using T = MyCase::value_t;
+  auto& params = myCase.getParameters();
+  auto& lattice = myCase.getLattice(NavierStokes{});
+  auto& converter = lattice.getUnitConverter();
+
+  const T physMaxT = params.get<parameters::MAX_PHYS_T>();
   const std::size_t iTlog = converter.getLatticeTime(physMaxT/20.);
+  const std::size_t iTvtk = converter.getLatticeTime(physMaxT/100.);
 
   SuperVTMwriter2D<T> vtmWriter("cavity2d");
-  SuperLatticePhysVelocity2D velocity(sLattice, converter);
-  SuperLatticePhysPressure2D pressure(sLattice, converter);
+  SuperLatticePhysVelocity2D velocity(lattice, converter);
+  SuperLatticePhysPressure2D pressure(lattice, converter);
   vtmWriter.addFunctor(velocity);
   vtmWriter.addFunctor(pressure);
 
@@ -111,63 +167,77 @@ void getResults(SuperLattice<T, DESCRIPTOR>& sLattice,
 
   // Writes the VTK files
   if (iT%iTvtk == 0 && iT > 0) {
-    sLattice.setProcessingContext(ProcessingContext::Evaluation);
+    lattice.setProcessingContext(ProcessingContext::Evaluation);
     vtmWriter.write(iT);
   }
 
-  // Get statistics
+  /// Print some (numerical and computational) statistics
   if (iT%iTlog == 0) {
-    sLattice.getStatistics().print(iT, converter.getPhysTime(iT));
+    lattice.getStatistics().print(iT, converter.getPhysTime(iT));
     timer.print(iT);
   }
 }
 
-int main(int argc, char* argv[])
-{
-  // === 1st Step: Initialization ===
-  initialize(&argc, &argv);
-  OstreamManager clout( std::cout,"main" );
 
-  // Provide the unit converter the characteristic entities
-  const UnitConverter<T,DESCRIPTOR> converter (
-    physDeltaX,        // physDeltaX: spacing between two lattice cells in [m]
-    physDeltaT,        // physDeltaT: time step in [s]
-    physLength,        // charPhysLength: reference length of simulation geometry in [m]
-    physLidVelocity,   // charPhysVelocity: highest expected velocity during simulation in [m/s]
-    physViscosity,     // physViscosity: physical kinematic viscosity in [m^2/s]
-    physDensity        // physDensity: physical density [kg/m^3]
-  );
-  converter.print();
+/// @brief Execute simulation: set initial values and run time loop
+/// @param myCase The Case instance which keeps the simulation data
+void simulate(MyCase& myCase) {
+  using T = MyCase::value_t;
+  auto& params = myCase.getParameters();
+  const T physMaxT = params.get<parameters::MAX_PHYS_T>();
 
-  // === 2nd Step: Prepare Geometry ===
-  Vector extend{physLength, physLength};
-  Vector origin{0, 0};
-  IndicatorCuboid2D<T> cuboid(extend, origin);
-  CuboidDecomposition2D<T> cuboidDecomposition(cuboid, converter.getPhysDeltaX(), singleton::mpi().getSize());
-
-  HeuristicLoadBalancer<T> loadBalancer(cuboidDecomposition);
-
-  SuperGeometry<T,2> superGeometry(cuboidDecomposition, loadBalancer);
-  prepareGeometry(superGeometry);
-
-  // === 3rd Step: Prepare Lattice ===
-  SuperLattice<T,DESCRIPTOR> sLattice(converter, superGeometry);
-  prepareLattice(sLattice, superGeometry);
-
-  // === 4th Step: Main Loop with Timer ===
-  const std::size_t iTmax = converter.getLatticeTime(physMaxT);
-  util::Timer<T> timer(iTmax, superGeometry.getStatistics().getNvoxel());
+  const std::size_t iTmax = myCase.getLattice(NavierStokes{}).getUnitConverter().getLatticeTime(physMaxT);
+  util::Timer<T> timer(iTmax, myCase.getGeometry().getStatistics().getNvoxel());
   timer.start();
 
   for (std::size_t iT=0; iT < iTmax; ++iT) {
-    // === 5th Step: Definition of Initial and Boundary Conditions ===
-    setBoundaryValues(sLattice, iT, superGeometry);
-    // === 6th Step: Collide and Stream Execution ===
-    sLattice.collideAndStream();
-    // === 7th Step: Computation and Output of the Results ===
-    getResults(sLattice, iT, timer);
+    /// === Step 8.1: Update the Boundary Values and Fields at Times ===
+    setTemporalValues(myCase, iT);
+
+    /// === Step 8.2: Collide and Stream Execution ===
+    myCase.getLattice(NavierStokes{}).collideAndStream();
+
+    /// === Step 8.3: Computation and Output of the Results ===
+    getResults(myCase, timer, iT);
   }
 
   timer.stop();
   timer.printSummary();
+}
+
+/// Setup and run a simulation
+int main(int argc, char* argv[]) {
+  initialize(&argc, &argv);
+
+  /// === Step 2: Set Parameters ===
+  MyCase::ParametersD myCaseParameters;
+  {
+    using namespace olb::parameters;
+    myCaseParameters.set<PHYS_DELTA_X       >( 0.0078125);
+    myCaseParameters.set<PHYS_DELTA_T       >(0.00078125);
+    myCaseParameters.set<PHYS_CHAR_VELOCITY >(       1.0);
+    myCaseParameters.set<PHYS_CHAR_VISCOSITY>(     0.001);
+    myCaseParameters.set<PHYS_CHAR_DENSITY  >(       1.0);
+    myCaseParameters.set<DOMAIN_EXTENT      >({1.0, 1.0});
+    myCaseParameters.set<MAX_PHYS_T         >(       30.);
+  }
+  myCaseParameters.fromCLI(argc, argv);
+
+  /// === Step 3: Create Mesh ===
+  Mesh mesh = createMesh(myCaseParameters);
+
+  /// === Step 4: Create Case ===
+  MyCase myCase(myCaseParameters, mesh);
+
+  /// === Step 5: Prepare Geometry ===
+  prepareGeometry(myCase);
+
+  /// === Step 6: Prepare Lattice ===
+  prepareLattice(myCase);
+
+  /// === Step 7: Definition of Initial, Boundary Values, and Fields ===
+  setInitialValues(myCase);
+
+  /// === Step 8: Simulate ===
+  simulate(myCase);
 }

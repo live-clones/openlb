@@ -91,7 +91,7 @@ std::optional<PostProcessorPromise<T,DESCRIPTOR>> getPostProcessor(DiscreteNorma
   switch (type) {
   case DiscreteNormalType::Flat:
     if (n[0] == 0 && n[1] == 0) {
-      return meta::id<GeometricPhaseFieldCurvedWallProcessor2D<T,DESCRIPTOR>>();
+      return meta::id<GeometricPhaseFieldCurvedWallProcessor<T,DESCRIPTOR>>();
     }
     return boundaryhelper::promisePostProcessorForNormal<T,DESCRIPTOR,IsoPhaseFieldCurvedWallProcessor2D>(n);
 
@@ -102,7 +102,7 @@ std::optional<PostProcessorPromise<T,DESCRIPTOR>> getPostProcessor(DiscreteNorma
     return boundaryhelper::promisePostProcessorForNormal<T,DESCRIPTOR,IsoPhaseFieldCurvedWallProcessor2D>(n);
 
   default:
-    return meta::id<GeometricPhaseFieldCurvedWallProcessor2D<T,DESCRIPTOR>>();
+    return meta::id<GeometricPhaseFieldCurvedWallProcessor<T,DESCRIPTOR>>();
   }
 }
 

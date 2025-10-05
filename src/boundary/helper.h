@@ -80,6 +80,59 @@ struct BoundaryHelpers {
     }
   }
 
+  template <typename CELL>
+  static void computeIncompressibleStress(
+    CELL& cell, T p, const T u[DESCRIPTOR::d],
+    T pi[util::TensorVal<DESCRIPTOR>::n] ) any_platform
+  {
+    const T uSqr = util::normSqr<T,DESCRIPTOR::d>(u);
+    const auto rho = cell.template getField<descriptors::RHO>();
+    const auto laplaceRho = cell.template getField<descriptors::LAPLACERHO>();
+
+    constexpr auto onWallIndices = util::populationsContributingToVelocity<DESCRIPTOR,direction,0>();
+    constexpr auto normalIndices = util::populationsContributingToVelocity<DESCRIPTOR,direction,orientation>();
+
+    T fNeq[DESCRIPTOR::q];
+    for (unsigned fIndex=0; fIndex<onWallIndices.size(); ++fIndex) {
+      int iPop = onWallIndices[fIndex];
+      if (iPop == 0) {
+        fNeq[0] = T();  // fNeq[0] will not be used anyway
+      }
+      else {
+        fNeq[iPop] =
+          cell[iPop] -
+          equilibrium<DESCRIPTOR>::cmpincompressible(iPop, rho, laplaceRho, u, uSqr, p);
+      }
+    }
+    for (unsigned fIndex=0; fIndex<normalIndices.size(); ++fIndex) {
+      int iPop = normalIndices[fIndex];
+      fNeq[iPop] =
+        cell[iPop] -
+        equilibrium<DESCRIPTOR>::cmpincompressible(iPop, rho, laplaceRho, u, uSqr, p);
+    }
+
+    int iPi = 0;
+    for (int iAlpha=0; iAlpha < DESCRIPTOR::d; ++iAlpha) {
+      for (int iBeta=iAlpha; iBeta < DESCRIPTOR::d; ++iBeta) {
+        pi[iPi] = T();
+        for (unsigned fIndex=0; fIndex < onWallIndices.size(); ++fIndex) {
+          const int iPop = onWallIndices[fIndex];
+          pi[iPi] += descriptors::c<DESCRIPTOR>(iPop,iAlpha)
+                   * descriptors::c<DESCRIPTOR>(iPop,iBeta)
+                   * fNeq[iPop];
+        }
+        for (unsigned fIndex=0; fIndex < normalIndices.size(); ++fIndex) {
+          const int iPop = normalIndices[fIndex];
+          pi[iPi] += T{2}
+                   * descriptors::c<DESCRIPTOR>(iPop,iAlpha)
+                   * descriptors::c<DESCRIPTOR>(iPop,iBeta)
+                   * fNeq[iPop];
+        }
+        ++iPi;
+      }
+    }
+  }
+
 };
 
 }

@@ -141,6 +141,65 @@ struct PhaseFieldConvectiveOutletDynamics : public dynamics::CustomCollision<T,D
 
 };
 
+/// Regularized incompressible (multiphase) pops followed by any other Dynamics
+/**
+ * Commonly used to model boundaries consisting of a specific boundary
+ * momenta and standard dynamics::Tuple-declared dynamics.
+ **/
+template <typename T, typename DESCRIPTOR, typename DYNAMICS, typename MOMENTA>
+class CombinedIRLBdynamics final : public dynamics::CustomCollision<T,DESCRIPTOR,MOMENTA> {
+private:
+  // Use same MOMENTA in combined and nested (boundary) dynamics
+  using CORRECTED_DYNAMICS = typename DYNAMICS::template exchange_momenta<MOMENTA>;
+
+public:
+  using MomentaF = typename MOMENTA::template type<DESCRIPTOR>;
+  using EquilibriumF = typename CORRECTED_DYNAMICS::EquilibriumF;
+
+  using parameters = typename CORRECTED_DYNAMICS::parameters;
+
+  template <typename NEW_T>
+  using exchange_value_type = CombinedIRLBdynamics<
+    NEW_T, DESCRIPTOR,
+    typename DYNAMICS::template exchange_value_type<NEW_T>,
+    MOMENTA
+  >;
+
+  template <typename M>
+  using exchange_momenta = CombinedIRLBdynamics<T,DESCRIPTOR,DYNAMICS,M>;
+
+  std::type_index id() override {
+    return typeid(CombinedIRLBdynamics);
+  }
+
+  AbstractParameters<T,DESCRIPTOR>& getParameters(BlockLattice<T,DESCRIPTOR>& block) override {
+    return block.template getData<OperatorParameters<CombinedIRLBdynamics>>();
+  }
+
+  template <concepts::Cell CELL, typename PARAMETERS, typename V=typename CELL::value_t>
+  CellStatistic<V> collide(CELL& cell, PARAMETERS& parameters) any_platform {
+    V p, u[DESCRIPTOR::d], pi[util::TensorVal<DESCRIPTOR>::n];
+    MomentaF().computeAllMomenta(cell,p,u,pi);
+    V fEq[DESCRIPTOR::q] { };
+    EquilibriumF().compute(cell, p, u, fEq);
+
+    for (int iPop=0; iPop < DESCRIPTOR::q; ++iPop) {
+      cell[iPop] = fEq[iPop];
+    }
+
+    return CORRECTED_DYNAMICS().collide(cell, parameters);
+  };
+
+  void computeEquilibrium(ConstCell<T,DESCRIPTOR>& cell, T rho, const T u[DESCRIPTOR::d], T fEq[DESCRIPTOR::q]) const override {
+    EquilibriumF().compute(cell, rho, u, fEq);
+  };
+
+  std::string getName() const override {
+    return "CombinedIRLBdynamics<" + CORRECTED_DYNAMICS().getName() + ">";
+  };
+
+};
+
 template <typename T, typename DESCRIPTOR>
 using NoCollideDynamicsExternalVelocity = dynamics::Tuple<
   T, DESCRIPTOR,
@@ -148,62 +207,6 @@ using NoCollideDynamicsExternalVelocity = dynamics::Tuple<
   equilibria::FirstOrder,
   collision::None
 >;
-///Initialising the setConvectivePhaseFieldBoundary function on the superLattice domain
-template<typename T, typename DESCRIPTOR>
-void setConvectivePhaseFieldBoundary(SuperLattice<T, DESCRIPTOR>& sLattice, SuperGeometry<T,2>& superGeometry, int material)
-{
-  setConvectivePhaseFieldBoundary<T,DESCRIPTOR>(sLattice, superGeometry.getMaterialIndicator(material));
-}
-
-///Initialising the setConvectivePhaseFieldBoundary function on the superLattice domain
-template<typename T, typename DESCRIPTOR>
-void setConvectivePhaseFieldBoundary(SuperLattice<T, DESCRIPTOR>& sLattice, FunctorPtr<SuperIndicatorF2D<T>>&& indicator)
-{
-  OstreamManager clout(std::cout, "setConvectivePhaseFieldBoundary");
-
-  for (int iCloc = 0; iCloc < sLattice.getLoadBalancer().size(); iCloc++) {
-    setConvectivePhaseFieldBoundary<T,DESCRIPTOR>(sLattice.getBlock(iCloc), indicator->getBlockIndicatorF(iCloc));
-  }
-  /// Adds needed Cells to the Communicator _commBC in SuperLattice
-  int _overlap = 1;
-  {
-    auto& communicator = sLattice.getCommunicator(stage::PostCollide());
-    communicator.template requestField<descriptors::POPULATION>();
-
-    SuperIndicatorBoundaryNeighbor<T,DESCRIPTOR::d> neighborIndicator(std::forward<decltype(indicator)>(indicator), _overlap);
-    communicator.requestOverlap(_overlap, neighborIndicator);
-    communicator.exchangeRequests();
-  }
-}
-
-
-/// Set ConvectivePhaseFieldBoundary for any indicated cells inside the block domain
-template<typename T, typename DESCRIPTOR>
-void setConvectivePhaseFieldBoundary(BlockLattice<T,DESCRIPTOR>& block, BlockIndicatorF2D<T>& indicator)
-{
-  using namespace boundaryhelper;
-  const auto& blockGeometryStructure = indicator.getBlockGeometry();
-  const int margin = 1;
-  std::vector<int> discreteNormal(3,0);
-  blockGeometryStructure.forSpatialLocations([&](auto iX, auto iY) {
-    if (blockGeometryStructure.getNeighborhoodRadius({iX, iY}) >= margin && indicator(iX, iY)) {
-      discreteNormal = blockGeometryStructure.getStatistics().getType(iX, iY);
-      if ((abs(discreteNormal[1]) + abs(discreteNormal[2])) == 1) {
-        block.addPostProcessor(
-          typeid(stage::PostCollide), {iX,iY},
-          promisePostProcessorForNormal<T,DESCRIPTOR,FlatConvectivePhaseFieldPostProcessorA2D>(
-            Vector<int,2>(discreteNormal.data() + 1)));
-        block.addPostProcessor(
-          typeid(stage::PostStream), {iX,iY},
-          promisePostProcessorForNormal<T,DESCRIPTOR,FlatConvectivePhaseFieldPostProcessorB2D>(
-            Vector<int,2>(discreteNormal.data() + 1)));
-        block.template defineDynamics<NoCollideDynamicsExternalVelocity>({iX, iY});
-      } else {
-        throw std::runtime_error("No valid discrete normal found. This BC is not suited for curved walls.");
-      }
-    }
-  });
-}
 
 }
 

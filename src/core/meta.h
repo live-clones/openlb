@@ -32,6 +32,7 @@
 #include <utility>
 #include <string>
 #include <cstdint>
+#include <source_location>
 
 // Forward-declaration of ADf type marker
 struct AD;
@@ -99,6 +100,19 @@ using value = typename std::integral_constant<TYPE, VALUE>::type;
 template <typename T>
 std::string name() {
   return typeid(T).name();
+}
+
+/// Returns nicer to read name using modern C++ (but of course might also return garbage, this is still C++)
+template <typename FIELD>
+constexpr std::string_view nice_name() {
+#ifndef USING_LEGACY_CODEGEN
+  const std::string_view raw = std::source_location::current().function_name();
+  return std::string_view(raw.cbegin() + raw.find_first_of('=')+2,
+                          raw.cbegin() + std::min(raw.find_first_of(']'),
+                                                  raw.find_first_of(';')));
+#else
+  return std::string_view();
+#endif
 }
 
 /// Checks whether T can be used as a scalar arithmetic type

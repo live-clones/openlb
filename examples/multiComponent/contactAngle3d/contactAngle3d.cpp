@@ -39,7 +39,7 @@ using namespace olb::graphics;
 using T = FLOATING_POINT_TYPE;
 using NSDESCRIPTOR = D3Q19<RHO,NABLARHO,FORCE,EXTERNAL_FORCE,TAU_EFF,STATISTIC>;
 using CHDESCRIPTOR = D3Q19<FORCE,SOURCE,SOURCE_OLD,PHIWETTING,VELOCITY,OLD_PHIU,STATISTIC,CHEM_POTENTIAL,BOUNDARY>;
-using NSBulkDynamics = MultiPhaseIncompressbileBGKdynamics<T,NSDESCRIPTOR>;
+using NSBulkDynamics = MultiPhaseIncompressibleBGKdynamics<T,NSDESCRIPTOR>;
 using CHBulkDynamics = WellBalancedCahnHilliardBGKdynamics<T,CHDESCRIPTOR>;
 using Coupling = WellBalancedCahnHilliardPostProcessor;
 

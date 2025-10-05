@@ -38,6 +38,7 @@ namespace olb {
 /// All optimization code is contained in this namespace.
 namespace opti {
 
+namespace solver {
 
 template<typename S>
 class Controller {
@@ -142,6 +143,7 @@ public:
   }
 };
 
+} // namespace solver
 
 } // namespace opti
 

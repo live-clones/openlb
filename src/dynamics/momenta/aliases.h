@@ -54,6 +54,24 @@ using IncBulkTuple = Tuple<
   DefineToNEq
 >;
 
+/// Incompressible computation of momenta from the populations in the bulk
+template<typename MOMENTUM>
+using WMIncBulkTuple = Tuple<
+  BulkPressure<MOMENTUM>,
+  MOMENTUM,
+  IncompressibleBulkStress,
+  DefineToNEq
+>;
+
+/// Corrected Incompressible computation of momenta from the populations in the bulk
+template<typename MOMENTUM>
+using CorrectedIncBulkTuple = Tuple<
+  BulkPressure<MOMENTUM>,
+  CorrectedIncompressibleBulkMomentum,
+  IncompressibleBulkStress,
+  DefineToNEq
+>;
+
 /// The Velocity is stored in descriptors::VELOCITY (and computed e.g. in a
 /// postprocessor)
 using ExternalVelocityTuple = Tuple<
@@ -137,6 +155,15 @@ using RegularizedPressureBoundaryTuple = Tuple<
   FixedDensity,
   FixedPressureMomentum<direction,orientation>,
   RegularizedBoundaryStress<direction,orientation>,
+  DefineSeparately
+>;
+
+/// Regularized incompressible pressure boundary node
+template <int direction, int orientation>
+using IncRegularizedPressureBoundaryTuple = Tuple<
+  FixedDensity,
+  PressureBoundaryMomentum<direction,orientation>,
+  IncRegularizedBoundaryStress<direction,orientation>,
   DefineSeparately
 >;
 

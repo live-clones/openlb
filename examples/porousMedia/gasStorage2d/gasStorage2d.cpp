@@ -49,7 +49,7 @@ using T = FLOATING_POINT_TYPE;
 using NSDESCRIPTOR = D2Q9<RHO, NABLARHO, FORCE, EXTERNAL_FORCE, TAU_EFF, STATISTIC, SCALAR>;
 using ACDESCRIPTOR = D2Q9<CONV_POPS, FORCE, SOURCE, SOURCE_OLD, VELOCITY, OLD_PHIU, STATISTIC,
                           PSI, NORMGRADPSI, SCALAR, PSI0, THETA, BOUNDARY>;
-using NSBulkDynamics = MultiPhaseIncompressbileInterfaceTRTdynamics<T,NSDESCRIPTOR>;
+using NSBulkDynamics = MultiPhaseIncompressibleInterfaceTRTdynamics<T,NSDESCRIPTOR>;
 using ACBulkDynamics = AllenCahnBGKdynamics<T, ACDESCRIPTOR>;
 using Coupling = LiangPostProcessor;
 
@@ -211,7 +211,7 @@ void prepareLattice(SuperLattice<T, NSDESCRIPTOR>& sLatticeNS,
   sLatticeNS.defineRhoU(all, p0, u0);
   sLatticeNS.iniEquilibrium(all, p0, u0);
 
-  sLatticeAC.addPostProcessor<stage::InitOutlet>(outlet, meta::id<SetOutletCells<1, 0>>());
+  sLatticeAC.addPostProcessor<stage::InitOutlet>(outlet, meta::id<SetOutletCells2D<1, 0>>());
   sLatticeAC.addPostProcessor<stage::PreCoupling>(fluid,meta::id<RhoStatistics>());
 
   sLatticeAC.addPostProcessor<stage::PreCoupling>(meta::id<initialPsi>{});

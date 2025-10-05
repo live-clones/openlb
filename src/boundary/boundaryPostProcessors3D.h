@@ -515,6 +515,131 @@ public:
   void apply(CELL& cell) any_platform;
 };
 
+/**
+* This class computes the convective boundary condition for
+* the populations of a phase field solving LBE.
+*/
+template<typename T, typename DESCRIPTOR, int xNormal,int yNormal, int zNormal>
+struct FlatConvectivePhaseFieldPostProcessorA3D {
+  static constexpr OperatorScope scope = OperatorScope::PerCellWithParameters;
+  using parameters = meta::list<descriptors::MAX_VELOCITY>;
+
+  int getPriority() const {
+    return 0;
+  }
+
+  template <typename CELL, typename PARAMETERS>
+  void apply(CELL& cell, PARAMETERS& parameters) any_platform{
+
+    auto u_conv = parameters.template get<descriptors::MAX_VELOCITY>();
+    // std::cout << "A PP" << std::endl;
+    Vector<int,DESCRIPTOR::d> normal{-xNormal, -yNormal, -zNormal};
+    auto cell1 = cell.neighbor(normal);
+    auto outlet_cell = cell.template getField<descriptors::CONV_POPS>();
+
+    for (int iPop=0; iPop < DESCRIPTOR::q; ++iPop) {
+      outlet_cell[iPop] = (outlet_cell[iPop] + u_conv * cell1[iPop]) / ((T)1 + u_conv);
+      cell[iPop] = outlet_cell[iPop];
+    }
+    cell.template setField<descriptors::CONV_POPS>(outlet_cell);
+  }
+
+};
+
+/**
+* This class computes the convective boundary condition for
+* phi at ghost nodes for a phase field solving LBE.
+*/
+template<typename T, typename DESCRIPTOR, int xNormal,int yNormal, int zNormal>
+struct FlatConvectivePhaseFieldPostProcessorB3D {
+  static constexpr OperatorScope scope = OperatorScope::PerCellWithParameters;
+  using parameters = meta::list<descriptors::MAX_VELOCITY>;
+
+  int getPriority() const {
+    return 0;
+  }
+
+  template <typename CELL, typename PARAMETERS>
+  void apply(CELL& cell, PARAMETERS& parameters) any_platform{
+
+    auto u_conv = parameters.template get<descriptors::MAX_VELOCITY>();
+    // std::cout << "B PP" << std::endl;
+    Vector<int,DESCRIPTOR::d> normal{xNormal, yNormal, zNormal};
+    auto outlet_cell = cell.template getField<descriptors::CONV_POPS>();
+
+    for (int iPop=0; iPop < DESCRIPTOR::q; ++iPop) {
+      cell[iPop] = outlet_cell[iPop];
+    }
+
+    auto phi = cell.template getField<descriptors::STATISTIC>();
+    phi[0] = cell.computeRho();
+    cell.template setField<descriptors::STATISTIC>(phi);
+    auto phiGhost = cell.neighbor(normal).template getField<descriptors::STATISTIC>();
+    phiGhost[0] = (phiGhost[0] + u_conv * phi[0]) / ((T)1 + u_conv);
+    if (phiGhost[0] > 1.0001) phiGhost[0] = 1;
+    if (phiGhost[0] < -0.0001) phiGhost[0] = 0;
+    cell.neighbor(normal).template setField<descriptors::STATISTIC>(phiGhost);
+  }
+
+};
+
+/**
+* This class computes the Neumann boundary condition for
+* the populations of a phase field solving LBE.
+*/
+template<typename T, typename DESCRIPTOR, int xNormal,int yNormal, int zNormal>
+struct FlatNeumannPhaseFieldPostProcessorA3D {
+  static constexpr OperatorScope scope = OperatorScope::PerCell;
+
+  int getPriority() const {
+    return 0;
+  }
+
+  template <typename CELL>
+  void apply(CELL& cell) any_platform{
+
+    // std::cout << "A PP" << std::endl;
+    Vector<int,DESCRIPTOR::d> normal{-xNormal, -yNormal, -zNormal};
+    auto cell1 = cell.neighbor(normal);
+
+    for (int iPop=0; iPop < DESCRIPTOR::q; ++iPop) {
+      cell[iPop] = cell1[iPop];
+    }
+    auto phi = cell.template getField<descriptors::STATISTIC>();
+    phi[0] = cell.computeRho();
+    cell.template setField<descriptors::STATISTIC>(phi);
+  }
+
+};
+
+/**
+* This class computes the Neumann boundary condition for
+* phi at ghost nodes for a phase field solving LBE.
+*/
+template<typename T, typename DESCRIPTOR, int xNormal,int yNormal, int zNormal>
+struct FlatNeumannPhaseFieldPostProcessorB3D {
+  static constexpr OperatorScope scope = OperatorScope::PerCell;
+
+  int getPriority() const {
+    return 0;
+  }
+
+  template <typename CELL>
+  void apply(CELL& cell) any_platform{
+
+    // std::cout << "B PP" << std::endl;
+    Vector<int,DESCRIPTOR::d> normal{xNormal, yNormal, zNormal};
+
+    auto phi = cell.template getField<descriptors::STATISTIC>();
+    auto phiGhost = cell.neighbor(normal).template getField<descriptors::STATISTIC>();
+    phiGhost[0] = phi[0];
+    if (phiGhost[0] > 1.0001) phiGhost[0] = 1;
+    if (phiGhost[0] < -0.0001) phiGhost[0] = 0;
+    cell.neighbor(normal).template setField<descriptors::STATISTIC>(phiGhost);
+  }
+
+};
+
 
 }
 

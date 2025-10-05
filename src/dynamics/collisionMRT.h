@@ -47,7 +47,7 @@ struct MRT {
     using EquilibriumF = typename EQUILIBRIUM::template type<DESCRIPTOR,MOMENTA>;
 
     template <typename CELL, typename PARAMETERS, typename V=typename CELL::value_t>
-    CellStatistic<V> apply(CELL& cell, PARAMETERS& parameters) any_platform {
+    CellStatistic<V> apply(CELL& cell, PARAMETERS& parameters) {
       const V omega = parameters.template get<descriptors::OMEGA>();
 
       V rt[DESCRIPTOR::q] { }; // relaxation times vector.

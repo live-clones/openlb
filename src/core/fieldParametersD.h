@@ -189,7 +189,7 @@ struct StaticParametersD final : public AbstractParameters<T,DESCRIPTOR>
 
   template <typename F>
   void forEach(F f) any_platform {
-    fields_t::for_each([f](auto id) {
+    fields_t::for_each([f,this](auto id) {
       f(get<typeof(id).type>());
     });
   }

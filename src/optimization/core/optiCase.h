@@ -1,6 +1,7 @@
 /*  This file is part of the OpenLB library
  *
  *  Copyright (C) 2012, 2021 Mathias J. Krause, Julius Jeßberger
+ *                2025       Shota Ito
  *  E-mail contact: info@openlb.net
  *  The most recent release of OpenLB can be downloaded at
  *  <http://www.openlb.net/>
@@ -25,272 +26,341 @@
 #ifndef OPTI_CASE_H
 #define OPTI_CASE_H
 
-#include <functional>
-
-#include "io/xmlReader.h"
+#include "derivatives.h"
 
 namespace olb {
 
 namespace opti {
 
+template <typename T> class Controller;
 
 /// Abstract base class for optimization tasks
 // provides function evaluation and gradient computation
-template <typename S, typename C>
-class OptiCase{
+template <typename T>
+struct AbstractOptiCase {
+  AbstractOptiCase() = default;
 
-protected:
-  std::function<void (void)>         _postEvaluation { [](){} };
-
-public:
-  OptiCase() = default;
-
-  explicit OptiCase(std::function<void (void)> postEvaluation)
-   : _postEvaluation(postEvaluation)
-  { }
-
-  virtual S evaluateObjective(const C& control, unsigned optiStep=0) = 0;
-  virtual void computeDerivatives (
-    const C& control, C& derivatives, unsigned optiStep=0) = 0;
-
-  void postEvaluation() {
-    _postEvaluation();
-  }
+  virtual T computeObjective(const std::vector<T>& control, unsigned optiStep=0) = 0;
+  virtual void computeDerivatives(
+    const std::vector<T>& control, std::vector<T>& derivatives, unsigned optiStep=0) = 0;
+  virtual std::vector<T>& getControlVector() = 0;
 };
 
-
-/// Gradient is just passed as a function (and not computed by an own routine)
-template <typename S, typename C>
-class OptiCaseAnalytical : public OptiCase<S,C> {
-
-protected:
-  std::function<S (const C&)>         _function;
-  std::function<void (const C&, C&)>  _derivative;
-
-public:
-  OptiCaseAnalytical(std::function<S (const C&)> function,
-    std::function<void (const C&, C&)> derivative,
-    std::function<void (void)> postEvaluation = [](){})
-   : OptiCase<S,C>(postEvaluation), _function(function), _derivative(derivative)
-  { }
-
-  // Empty constructor where objective and derivative computation is set afterwards
-  OptiCaseAnalytical() {}
-
-  void setObjective(std::function<S (const C&)> f) {
-    _function = f;
-  }
-
-  void setDerivative(std::function<void (const C&, C&)> d) {
-    _derivative = d;
-  }
-
-  S evaluateObjective(
-    const C& control, unsigned optiStep=0) override {
-    return _function(control);
-  }
-
-  void computeDerivatives(
-    const C& control, C& derivatives, unsigned optiStep=0) override {
-    _derivative(control, derivatives);
-  }
+// Help struct to assess data type and descriptor from the case-map
+template <typename MAP>
+struct LatticeTypeFromCase {
+  template <typename NAME>
+  using lattice_t = MAP::template value<NAME>::reference_component_t;
 };
 
-template <typename S, typename C>
-OptiCaseAnalytical(std::function<S (const C&)>,
-                   std::function<void (const C&, C&)>)
-  -> OptiCaseAnalytical<S,C>;
+template <typename MAP>
+using ValueTypeFromControlledCase = LatticeTypeFromCase<MAP>::template lattice_t<names::Controlled>::value_t;
+template <typename MAP>
+using ValueTypeFromDerivativesCase = LatticeTypeFromCase<MAP>::template lattice_t<names::Derivatives>::value_t;
 
-template <typename S, typename C>
-OptiCaseAnalytical(std::function<S (const C&)>,
-                   std::function<void (const C&, C&)>,
-                   std::function<void (void)>)
-  -> OptiCaseAnalytical<S,C>;
-
-
-// Abstract base class for gradient computation with difference quotients
-template <typename S, typename C>
-class OptiCaseDQ : public OptiCase<S,C> {
-
-protected:
-  std::function<S (const C&)>           _functionHelp   { [](const C&){ return S{}; } };
-  std::function<S (const C&, unsigned)> _function;
-  S                                     _stepWidth {1.e-8};
-
-  bool                                  _objectiveComputed {false};
-  S                                     _objective;
-
+/// @brief   OptiCase class specialized for optimizing simulation cases
+/// @tparam  DERIVATIVE Logic how to compute the objective derivative regarding control parameters
+/// @tparam  MAP        Assigns names to cases to distinguish different simualtion types
+template <typename DERIVATIVE, typename MAP>
+class OptiCase : public AbstractOptiCase<ValueTypeFromControlledCase<MAP>> {
 public:
-  explicit OptiCaseDQ(std::function<S (const C&, unsigned)> function,
-    std::function<void (void)> postEvaluation)
-   : OptiCase<S,C>(postEvaluation), _function(function)
-  { }
+  // Get value type and descriptor type from the controlled case
+  using value_t = ValueTypeFromControlledCase<MAP>;
+  using objective_t = std::function<value_t(const std::vector<value_t>&)>;
+  using derivative_t = std::function<void(const std::vector<value_t>&, std::vector<value_t>&)>;
 
-  // If function with (only) one argument is passed, use plain wrapper
-  explicit OptiCaseDQ(std::function<S (const C&)> function,
-    std::function<void (void)> postEvaluation)
-   : OptiCase<S,C>(postEvaluation),
-     _functionHelp(function),
-     _function([&](const C& arg, unsigned){ return _functionHelp(arg); })
-  { }
+  template <typename CASE>
+  using ptr_to_case = CASE*;
 
-  template <typename F>
-  OptiCaseDQ(F function, S stepWidth,
-    std::function<void (void)> postEvaluation)
-   : OptiCaseDQ(function, postEvaluation) {
-    _stepWidth = stepWidth;
-  }
+  template <typename NAME>
+  using case_t = MAP::template value<NAME>;
 
-  S evaluateObjective(
-    const C& control, unsigned optiStep=0) override {
-    _objective = _function(control, optiStep);
-    _objectiveComputed = true;
-    return _objective;
-  }
-};
-
-
-/// Gradient computation with forward difference quotients
-template <typename S, typename C>
-class OptiCaseFDQ : public OptiCaseDQ<S,C> {
 private:
-  OstreamManager                                  clout {std::cout, "OptiCaseFDQ"};
+  // Cases stored via non-owning pointers accessed by NAME types
+  utilities::TypeIndexedTuple<typename MAP::template map_values<
+    ptr_to_case
+  >> _cases;
+
+  // Instace for managing control parameters
+  Controller<value_t> _controller;
+  // Encapsulate logic how to compute objective starting from setting controls
+  objective_t _objective;
+  // Encapsulate logic how to compute derivatives starting from setting controls
+  derivative_t _derivative;
+
+  std::size_t _optimizationStep = 0;
 
 public:
-  template <typename F>
-  explicit OptiCaseFDQ(F function,
-    std::function<void (void)> postEvaluation = [](){})
-   : OptiCaseFDQ::OptiCaseDQ(function, postEvaluation)
-  { }
+  OptiCase() : _derivative(DERIVATIVE::getDerivativeF(*this)) { };
 
-  template <typename F>
-  OptiCaseFDQ(F function, S stepWidth,
-    std::function<void (void)> postEvaluation = [](){})
-   : OptiCaseFDQ::OptiCaseDQ(function, stepWidth, postEvaluation)
-  { }
+  template <typename NAME>
+  void setCase(typename MAP::template value<NAME>& caseRef) {
+    _cases.template set<NAME>(&caseRef);
+    caseRef.setName(NAME{}.name);
+  }
 
-  void computeDerivatives(const C& control,
-    C& derivatives, unsigned optiStep=0) override
-  {
-    assert((control.size() == derivatives.size()));
-
-    if (!(this->_objectiveComputed)) {
-      this->evaluateObjective(control, optiStep);
+  template <typename NAME>
+  auto& getCase(NAME) {
+    if (_cases.template get<NAME>() == nullptr) {
+      throw std::runtime_error("Accessed case was not set.");
     }
-    const S objective(this->_objective);
+    return *_cases.template get<NAME>();
+  }
 
-    for (std::size_t it = 0; it < control.size(); ++it)
-    {
-      C shiftedControl(control);
-      shiftedControl[it] += this->_stepWidth;
-      S shiftedObjective = this->evaluateObjective(shiftedControl, optiStep);
-      derivatives[it] = (shiftedObjective - objective) / this->_stepWidth;
+  auto& getController() {
+    return _controller;
+  }
+
+  std::vector<value_t>& getControlVector() override {
+    return _controller.get();
+  }
+
+  // Set objective evalution routine via a lambda function
+  void setObjective(objective_t f) {
+    _objective = std::move(f);
+  }
+
+  // This overload is required when a free functions is passed
+  void setObjective(std::function<value_t(OptiCase<DERIVATIVE, MAP>&)> f) {
+    _objective = [this, f](const std::vector<value_t>& control) -> value_t {
+      _controller.set(control);
+      return f(*this);
+    };
+  }
+
+  // Set derivative evalution routine
+  void setDerivative(derivative_t derivative) {
+    _derivative = std::move(derivative);
+  }
+  // This overload is required when a free functions is passed
+  void setDerivative(std::function<std::vector<value_t>(OptiCase<DERIVATIVE, MAP>&)> f) {
+    _derivative = [this, f](const std::vector<value_t>& control, std::vector<value_t>& derivatives) {
+      _controller.set(control);
+      derivatives = f(*this);
+    };
+  }
+
+  // Compute objective value, called by the optimizer
+  value_t computeObjective(const std::vector<value_t>& control, unsigned optiStep=0) override {
+    if (!_objective) {
+      throw std::runtime_error("Objective computation is not yet defined.");
     }
-    this->_objectiveComputed = false;
+    _optimizationStep = optiStep;
+    return _objective(control);
+  }
+
+  // Compute derivatives, called by the optimizer
+  void computeDerivatives(const std::vector<value_t>& control,
+                                          std::vector<value_t>& derivative, unsigned optiStep=0) override {
+    if (!_derivative) {
+      throw std::runtime_error("Derivative computation is not yet defined. (Define derivative manually, e.g. for OptiCaseAdjoint)");
+    }
+    _optimizationStep = optiStep;
+    _derivative(control, derivative);
+  }
+
+  // Optimization step
+  std::size_t getOptimizationStep() {
+    return _optimizationStep;
   }
 };
 
-template <typename S, typename C>
-OptiCaseFDQ(std::function<S (const C&)>, std::function<void (void)>)
-  -> OptiCaseFDQ<S,C>;
+/// @brief   OptiCase class specialized for optimizing simulation cases with template specialization for
+///          the util::ADf type.
+/// @tparam  MAP        Assigns names to cases to distinguish different simualtion types
+template <typename MAP>
+class OptiCase<derivatives::ADf, MAP>
+  : public AbstractOptiCase<ValueTypeFromControlledCase<MAP>> {
+public:
+  // Get value type and descriptor type from the case map
+  using value_t = ValueTypeFromControlledCase<MAP>;
+  using adf_value_t = ValueTypeFromDerivativesCase<MAP>;
+  using objective_t = std::function<value_t(const std::vector<value_t>&)>;
+  using adf_objective_t = std::function<adf_value_t(const std::vector<adf_value_t>&)>;
+  using derivative_t = std::function<void(const std::vector<value_t>&, std::vector<value_t>&)>;
 
-template <typename S, typename C>
-OptiCaseFDQ(std::function<S (const C&)>, S, std::function<void (void)>)
-  -> OptiCaseFDQ<S,C>;
+  template <typename CASE>
+  using ptr_to_case = CASE*;
 
-template <typename S, typename C>
-OptiCaseFDQ(std::function<S (const C&, unsigned)>, std::function<void (void)>)
-  -> OptiCaseFDQ<S,C>;
+  template <typename NAME>
+  using case_t = MAP::template value<NAME>;
 
-template <typename S, typename C>
-OptiCaseFDQ(std::function<S (const C&, unsigned)>, S, std::function<void (void)>)
-  -> OptiCaseFDQ<S,C>;
-
-template <typename S, typename C>
-OptiCaseFDQ(std::function<S (const C&)>)
-  -> OptiCaseFDQ<S,C>;
-
-template <typename S, typename C>
-OptiCaseFDQ(std::function<S (const C&)>, S)
-  -> OptiCaseFDQ<S,C>;
-
-template <typename S, typename C>
-OptiCaseFDQ(std::function<S (const C&, unsigned)>)
-  -> OptiCaseFDQ<S,C>;
-
-template <typename S, typename C>
-OptiCaseFDQ(std::function<S (const C&, unsigned)>, S)
-  -> OptiCaseFDQ<S,C>;
-
-/// Gradient computation with central difference quotients
-template <typename S, typename C>
-class OptiCaseCDQ : public OptiCaseDQ<S,C> {
 private:
-  OstreamManager                                  clout {std::cout, "OptiCaseCDQ"};
+  // Cases stored via non-owning pointers accessed by NAME types
+  utilities::TypeIndexedTuple<typename MAP::template map_values<
+    ptr_to_case
+  >> _cases;
+
+  // Instace for managing control parameters
+  Controller<value_t> _controller;
+  // Encapsulate logic how to compute objective starting from setting controls
+  objective_t _objective;
+  // Provide objective function with the ADf type
+  adf_objective_t _objectiveD;
+  // Encapsulate logic how to compute derivatives starting from setting controls
+  derivative_t _derivative;
+
+  std::size_t _optimizationStep = 0;
 
 public:
-  template <typename F>
-  explicit OptiCaseCDQ(F function,
-    std::function<void (void)> postEvaluation = [](){})
-   : OptiCaseCDQ::OptiCaseDQ(function, postEvaluation)
-  { }
+  OptiCase() : _derivative(derivatives::ADf::getDerivativeF(*this)) { };
 
-  template <typename F>
-  OptiCaseCDQ(F function, S stepWidth,
-    std::function<void (void)> postEvaluation = [](){})
-   : OptiCaseCDQ::OptiCaseDQ(function, stepWidth, postEvaluation)
-  { }
+  template <typename NAME>
+  void setCase(typename MAP::template value<NAME>& caseRef) {
+    _cases.template set<NAME>(&caseRef);
+    caseRef.setName(NAME{}.name);
+  }
 
-  void computeDerivatives(const C& control,
-    C& derivatives, unsigned optiStep=0) override
-  {
-    assert((control.size() == derivatives.size()));
-
-    for (std::size_t it = 0; it < control.size(); ++it)
-    {
-      C shiftedControl(control);
-      shiftedControl[it] += this->_stepWidth;
-      S shiftedObjective_plus = this->evaluateObjective(shiftedControl, optiStep);
-
-      shiftedControl[it] = control[it] - this->_stepWidth;
-      S shiftedObjective_minus = this->evaluateObjective(shiftedControl, optiStep);
-
-      derivatives[it] = 0.5 * (shiftedObjective_plus - shiftedObjective_minus) / this->_stepWidth;
+  template <typename NAME>
+  auto& getCase(NAME) {
+    if (_cases.template get<NAME>() == nullptr) {
+      throw std::runtime_error("Accessed case was not set.");
     }
+    return *_cases.template get<NAME>();
+  }
+
+  template <typename VALUE_TYPE>
+  auto& getCaseByType() {
+    if constexpr (util::is_adf_v<VALUE_TYPE>) {
+      return *_cases.template get<names::Derivatives>();
+    } else {
+      return *_cases.template get<names::Controlled>();
+    }
+  }
+
+  // Returns only-read Control instance with ADf type
+  // TODO Introduce concept::ForwardAD TYPE checking the requirement
+  template <typename VALUE_TYPE> requires (util::is_adf_v<VALUE_TYPE>)
+  const Controller<adf_value_t> getController() {
+    std::vector<adf_value_t> controls = util::copyAs<adf_value_t>(_controller.get());
+    util::iniDiagonal(controls);
+    return Controller<adf_value_t>{controls};
+  }
+  // Fallback case if TYPE is not ADf type
+  template <typename VALUE_TYPE>
+  Controller<VALUE_TYPE>& getController() {
+    return getController();
+  }
+  // Default case
+  Controller<value_t>& getController() {
+    return _controller;
+  }
+
+  std::vector<value_t>& getControlVector() override {
+    return _controller.get();
+  }
+
+  // Set objective evalution routine
+  void setObjective(objective_t f,
+                    adf_objective_t df) {
+    _objective = std::move(f);
+    _objectiveD = std::move(df);
+  }
+  // This overload is required when a free functions is passed
+  void setObjective(std::function<value_t(OptiCase<derivatives::ADf,MAP>&)> f,
+                    std::function<adf_value_t(OptiCase<derivatives::ADf,MAP>&)> df) {
+    _objective = [this, f](const std::vector<value_t>& control) -> value_t {
+      _controller.set(control);
+      return f(*this);
+    };
+    _objectiveD = [this, df](const std::vector<adf_value_t>& control) -> adf_value_t {
+      _controller.set(util::copyAs<value_t>(control));
+      return df(*this);
+    };
+  }
+
+  // Compute objective value, called by the optimizer
+  value_t computeObjective(const std::vector<value_t>& control, unsigned optiStep=0) override {
+    if (!_objective) {
+      throw std::runtime_error("Objective computation is not yet defined.");
+    }
+    _optimizationStep = optiStep;
+    return _objective(control);
+  }
+
+  // Evaluate objective computation with the ADf type
+  template <typename VALUE_TYPE> requires (util::is_adf_v<VALUE_TYPE>)
+  adf_value_t computeObjective(const std::vector<adf_value_t>& control) {
+    if (!_objectiveD) {
+      throw std::runtime_error("Objective computation (with ADf) is not yet defined.");
+    }
+    return _objectiveD(control);
+  }
+
+  // Fallback for the objective computation
+  template <typename VALUE_TYPE>
+  VALUE_TYPE computeObjective(const std::vector<VALUE_TYPE>& control) {
+    return computeObjective(control);
+  }
+
+  // Compute derivatives, called by the optimizer
+  void computeDerivatives(const std::vector<value_t>& control, std::vector<value_t>& derivative, unsigned optiStep=0) override {
+    if (!_derivative) {
+      throw std::runtime_error("Derivative computation is not yet defined. (Define derivative manually, e.g. for OptiCaseAdjoint)");
+    }
+    _optimizationStep = optiStep;
+    _derivative(control, derivative);
+  }
+
+  // Optimization step
+  std::size_t getOptimizationStep() {
+    return _optimizationStep;
   }
 };
 
-template <typename S, typename C>
-OptiCaseCDQ(std::function<S (const C&)>, std::function<void (void)>)
-  -> OptiCaseCDQ<S,C>;
+template <typename... MAP>
+using OptiCaseFDQ = OptiCase<derivatives::FDQ, meta::map<MAP...>>;
 
-template <typename S, typename C>
-OptiCaseCDQ(std::function<S (const C&)>, S, std::function<void (void)>)
-  -> OptiCaseCDQ<S,C>;
+template <typename... MAP>
+using OptiCaseCDQ = OptiCase<derivatives::CDQ, meta::map<MAP...>>;
 
-template <typename S, typename C>
-OptiCaseCDQ(std::function<S (const C&, unsigned)>, std::function<void (void)>)
-  -> OptiCaseCDQ<S,C>;
+template <typename... MAP>
+using OptiCaseAdjoint = OptiCase<derivatives::Manual, meta::map<MAP...>>;
 
-template <typename S, typename C>
-OptiCaseCDQ(std::function<S (const C&, unsigned)>, S, std::function<void (void)>)
-  -> OptiCaseCDQ<S,C>;
+template <typename... MAP>
+using OptiCaseADf = OptiCase<derivatives::ADf,meta::map<MAP...>>;
 
-template <typename S, typename C>
-OptiCaseCDQ(std::function<S (const C&)>)
-  -> OptiCaseCDQ<S,C>;
+template <unsigned N, typename... MAP>
+using OptiCaseADfFromDim = OptiCase<
+  derivatives::ADf,
+  std::conditional_t<
+    meta::map<MAP...>::template contains_key<names::Derivatives>(), // condition: if Derivatives exist
+    meta::map<MAP...>, // then do nothing
+    meta::map<MAP...,  // if not, extend the map
+              names::Derivatives, typename meta::map<MAP...>::template value<names::Controlled>
+                                                            ::template exchange_value_t<util::ADf<
+                typename meta::map<MAP...>::template value<names::Controlled>::reference_component_t::value_t, N
+                                                                                                    >
+                                                                                          >
+             >
+  >
+>;
 
-template <typename S, typename C>
-OptiCaseCDQ(std::function<S (const C&)>, S)
-  -> OptiCaseCDQ<S,C>;
+template <template <typename> typename CASE>
+struct DifferentiableCase {
+  template <typename TYPE> requires (util::is_adf_v<TYPE>)
+  using derive_with = CASE<TYPE>;
+};
 
-template <typename S, typename C>
-OptiCaseCDQ(std::function<S (const C&, unsigned)>)
-  -> OptiCaseCDQ<S,C>;
+// Wrapper class for analytical functions to pass to OptiCase
+template <typename T>
+class FunctionCase {
+private:
+  struct Discretization {
+    using value_t = T;
+  };
 
-template <typename S, typename C>
-OptiCaseCDQ(std::function<S (const C&, unsigned)>, S)
-  -> OptiCaseCDQ<S,C>;
+public:
+  using reference_component_t = Discretization;
+};
+
+template <typename T, typename DERIVATIVE>
+using OptiCaseAnalytical = std::conditional_t<
+  util::is_adf_v<T>,
+  OptiCase<derivatives::ADf, meta::map<names::Controlled, FunctionCase<BaseType<T>>,
+                                       names::Derivatives, FunctionCase<T>>>,
+  OptiCase<DERIVATIVE, meta::map<names::Controlled, FunctionCase<T>>>
+>;
 
 } // namespace opti
 

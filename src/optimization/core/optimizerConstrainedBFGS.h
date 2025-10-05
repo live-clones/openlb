@@ -43,6 +43,11 @@ namespace olb {
 /// All optimization code is contained in this namespace.
 namespace opti {
 
+namespace solver {
+
+template <typename S, std::size_t D, template <typename> typename C=util::StdVector> class OptiCaseAD;
+
+}
 /// Optimization algorithm: LineSearch.
 /// Optimization algorithm: LBFGS.
 /** OptimizerConstrainedBFGS optimizes an optimization problem
@@ -677,7 +682,7 @@ public:
     std::function<U (const std::vector<U>&)> adFunction =
       std::bind(&OptimizerConstrainedBFGS<S,totalDimConstr,C>::template subproblemObjective<U>, this, _1);
 
-    OptiCaseAD<S,totalDimConstr> subOptiCase(
+    solver::OptiCaseAD<S,totalDimConstr> subOptiCase(
       function, adFunction
     );
 

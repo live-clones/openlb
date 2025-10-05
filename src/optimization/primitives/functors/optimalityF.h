@@ -36,7 +36,7 @@ template <typename PRIMAL_DYNAMICS, typename CONTROLS>
 struct OptimalityF {
   using parameters = typename PRIMAL_DYNAMICS::parameters;
 
-  using result_t = opti::DJDALPHA<CONTROLS>;
+  using result_t = opti::SENSITIVITY<CONTROLS>;
 
   template <typename CELL, typename PARAMETERS>
   auto compute(CELL& cell, PARAMETERS& parameters) any_platform {
@@ -44,20 +44,22 @@ struct OptimalityF {
     using DESCRIPTOR = typename CELL::descriptor_t;
 
     /// Projecting optimization control to simulation variables
-    const V dProjectionDalpha = cell.template getFieldComponent<opti::DPROJECTIONDALPHA<CONTROLS>>(0);
+    Vector dProjectionDalpha = cell.template getField<opti::DPROJECTIONDALPHA<CONTROLS>>();
     auto phi = cell.template getField<descriptors::POPULATION>();
     auto dCDalpha = cell.template getField<opti::DCDALPHA<CONTROLS>>();
+    Vector dJDalpha = cell.template getField<opti::DJDALPHA<CONTROLS>>();
 
     /// Provides matrix-native view on the serial dCDalpha vector
     auto view = opti::DCDALPHA<CONTROLS>::template getTransposedMatrixView<V,DESCRIPTOR>(dCDalpha);
-    FieldD<V,DESCRIPTOR,typename OptimalityF::result_t> djdalpha;
+    FieldD<V,DESCRIPTOR,typename OptimalityF::result_t> sensitivity;
     for (unsigned row=0; row<view.rows; ++row) {
       for (unsigned col=0; col<view.cols; ++col) {
-        djdalpha[row] -= (view[row][col]*phi[col]);
+        sensitivity[row] -= (view[row][col]*phi[col]);
       }
-      djdalpha[row] *= dProjectionDalpha;
+      sensitivity[row] += dJDalpha[row];
+      sensitivity[row] *= dProjectionDalpha[row];
     }
-    return djdalpha;
+    return sensitivity;
   }
 
 };

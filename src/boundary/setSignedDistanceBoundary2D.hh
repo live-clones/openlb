@@ -66,7 +66,7 @@ void setSignedDistanceBoundary(BlockLattice<T,DESCRIPTOR>& block, BlockIndicator
       discreteNormal = indicator.getBlockGeometry().getStatistics().getType(iX, iY);
       T discreteNormalSum=0;
       for (int iD=0; iD<DESCRIPTOR::d; iD++) {
-        discreteNormalSum += abs(discreteNormal[iD+1]);
+        discreteNormalSum += util::abs(discreteNormal[iD+1]);
       }
       if (discreteNormalSum == 0) {
         block.addPostProcessor(typeid(stage::IterativePostProcess),{iX,iY},meta::id<normGradPsi>{});

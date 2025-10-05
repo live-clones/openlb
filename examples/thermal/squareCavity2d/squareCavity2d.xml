@@ -1,0 +1,36 @@
+<!-- certain parameters are read manually in the example -->
+<!-- they are indicated with "read manually in <respective method>". -->
+<!-- The other parameters are read automatically by the unit converter. -->
+<Param>
+  <Application>
+    <ConvergenceTest>
+        <Mode>0</Mode>
+        <StartResolution>32</StartResolution>
+        <NumberResolutions>3</NumberResolutions>
+    </ConvergenceTest>
+    <Discretization> <!--two discretization parameters are required for unit converter-->
+      <LatticeRelaxationTime>0.65</LatticeRelaxationTime>
+    </Discretization>
+    <PhysParameters>
+      <PhysMaxTime>1e4</PhysMaxTime>
+      <PhysDensity>1.19</PhysDensity>
+      <Prandtl>0.71</Prandtl>
+      <PrandtlTurb>0.87</PrandtlTurb>
+      <ThermalExpansion>3.41e-3</ThermalExpansion>
+      <ThermalDiffusivity>25.684e-3</ThermalDiffusivity>
+      <HeatCapacity>1.01309e3</HeatCapacity>
+      <KinematicViscosity>1.5126e-5</KinematicViscosity>
+      <GravitationalConstant>9.81</GravitationalConstant>
+      <CharLatticeVelocity>1</CharLatticeVelocity>
+      <HotTemperature>285.15</HotTemperature>
+      <ColdTemperature>275.15</ColdTemperature>
+      <SmagorinskyConstant>0.1</SmagorinskyConstant>
+      <Rayleigh>1e3</Rayleigh>
+    </PhysParameters>
+    <ConvergenceCheck>
+      <Type></Type>
+      <Interval>1</Interval>
+      <Residuum>1e-4</Residuum>
+    </ConvergenceCheck>
+  </Application>
+</Param>

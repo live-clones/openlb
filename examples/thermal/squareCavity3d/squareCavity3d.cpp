@@ -36,7 +36,7 @@ using namespace olb;
 using namespace olb::descriptors;
 using namespace olb::graphics;
 
-using T = FLOATING_POINT_TYPE;
+using T = double;// FLOATING_POINT_TYPE;
 
 typedef D3Q19<FORCE> NSDESCRIPTOR;
 typedef D3Q7<VELOCITY> TDESCRIPTOR;
@@ -378,7 +378,7 @@ int main(int argc, char *argv[])
   initialize(&argc, &argv);
   singleton::directories().setOutputDir("./tmp/");
 
-  T tau = 0.9;
+  T tau = 0.51;
 
   if (argc>=2) {
     Ra = atof(argv[1]);
@@ -405,18 +405,19 @@ int main(int argc, char *argv[])
   }
 
   ThermalUnitConverter<T, NSDESCRIPTOR, TDESCRIPTOR> converter(
-    (T) lx / N,
-    (T) (tau - 0.5) / descriptors::invCs2<T,NSDESCRIPTOR>() * util::pow((lx/N),2) / 15.126e-6,
-    (T) lx,
-    (T) charU,
-    (T) 15.126e-6,
-    (T) 1.0,
-    (T) 25.684e-3,
-    (T) Pr * 25.684e-3 / 15.126e-6 / 1.0,
-    (T) 0.00341,
-    (T) Tcold,
-    (T) Thot
+    (T) lx / N,                                                                                 // physDeltaX
+    (T) (tau - 0.5) / descriptors::invCs2<T,NSDESCRIPTOR>() * util::pow((lx/N),2) / 15.126e-6,  // physDeltaT
+    (T) lx,                                                                                     // charPhysLength
+    (T) charU,                                                                                  // charPhysVelocity
+    (T) 15.126e-6,                                                                              // physViscosity
+    (T) 1.19,                                                                                   // physDensity
+    (T) 25.684e-3,                                                                              // physThermalConductivity
+    (T) Pr * 25.684e-3 / 15.126e-6 / 1.19,                                                      // physSpecificHeatCapacity
+    (T) 0.00341,                                                                                // physThermalExpansionCoefficient
+    (T) Tcold,                                                                                  // charPhysLowTemperature
+    (T) Thot                                                                                    // charPhysHighTemperature
   );
+
   converter.print();
 
   UnitConverter<T,TDESCRIPTOR> dummy_converter(
@@ -480,6 +481,7 @@ int main(int argc, char *argv[])
 
       getResults(converter, NSlattice, ADlattice, iT, superGeometry, timer, converge.hasConverged());
 
+      clout << "Ma = " << converter.getCharPhysVelocity() * sqrt(descriptors::invCs2<T,NSDESCRIPTOR>()) << std::endl;
       break;
     }
 

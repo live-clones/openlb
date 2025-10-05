@@ -1,6 +1,6 @@
 /*  This file is part of the OpenLB library
  *
- *  Copyright (C) 2022 Julius Jeßberger
+ *  Copyright (C) 2022-2025 Julius Jeßberger, Shota Ito
  *  E-mail contact: info@openlb.net
  *  The most recent release of OpenLB can be downloaded at
  *  <http://www.openlb.net/>
@@ -101,14 +101,7 @@ void rosenbrockDerivAnalytical(const std::vector<T>& control,
 /* We can then instantiate the OptiCaseAnalytical, which takes the objective
  * function and its derivative as arguments
  */
-OptiCaseAnalytical ocAnalytical(
-  rosenbrock<T>, std::function(rosenbrockDerivAnalytical<T>));
-
-/* Remark: we do not need the manual conversion to std::function, but then some
- * compilers (clang, intel) need the template arguments explicitly.
- */
-OptiCaseAnalytical<T,C> ocAnalyticalVariant(
-  rosenbrock<T>, rosenbrockDerivAnalytical<T>);
+OptiCaseAnalytical<T,derivatives::Manual> ocAnalytical;
 
 /* For complex examples, it is no longer feasible to write down the derivative
  * by hand. We can e.g. use finite difference quotients (forward or central),
@@ -117,8 +110,8 @@ OptiCaseAnalytical<T,C> ocAnalyticalVariant(
  * reduce cancellation errors, for central DQ, one third of machine precision
  * is good.
  */
-OptiCaseFDQ ocForwardDQ(rosenbrock<T>, T(1.e-8));
-OptiCaseCDQ ocCentralDQ(rosenbrock<T>, T(5.e-6));
+OptiCaseAnalytical<T,derivatives::FDQ> ocForwardDQ;
+OptiCaseAnalytical<T,derivatives::CDQ> ocCentralDQ;
 
 /* For more accuracy, we can also use automatic differentiation.
  * To do so, we have to pass an ADf-typed version of the objective function.
@@ -126,7 +119,7 @@ OptiCaseCDQ ocCentralDQ(rosenbrock<T>, T(5.e-6));
  * arithmetic data type.
  */
 using U = util::ADf<T,N>;  // pass size of control vector as second argument
-OptiCaseAD<T,N> ocAD(rosenbrock<T>,rosenbrock<U>);
+OptiCaseAnalytical<U,derivatives::ADf> ocAD;
 
 // All of these opti-cases can later be used for optimization.
 
@@ -138,7 +131,6 @@ OptiCaseAD<T,N> ocAD(rosenbrock<T>,rosenbrock<U>);
  */
 
 void optimizationRosenbrock(){
-
   // set parameters for optimization algorithms (mamimal number of steps etc.)
   int dimCtrl = 4;
   int maxIt = 1000;
@@ -177,11 +169,26 @@ void optimizationRosenbrock(){
     {OptimizerLogType::value, OptimizerLogType::control});
   // The last argument tells which data shall be written and plotted by gnuplot
 
+  // Set objective functional and derivative
+  ocAnalytical.setObjective(rosenbrock<T>);
+  ocForwardDQ.setObjective(rosenbrock<T>);
+  ocCentralDQ.setObjective(rosenbrock<T>);
+  ocAD.setObjective(rosenbrock<T>, rosenbrock<U>);
+
+  //ocAnalytical.setDerivative(rosenbrockDerivAnalytical<T>);
+
   // Define start value for minimum search
-  std::vector<T> control {3.0, 0.0, 2.0, 0.0};
-  optimizerLBFGS.setControl(control);
+  ocAnalytical.getController().set({3.0, 0.0, 2.0, 0.0});
+  ocForwardDQ.getController().set({3.0, 0.0, 2.0, 0.0});
+  ocCentralDQ.getController().set({3.0, 0.0, 2.0, 0.0});
+  ocAD.getController().set({3.0, 0.0, 2.0, 0.0});
+
   // Execute optimization
+  //optimizerLBFGS.optimize(ocAnalytical);
+  //optimizerLBFGS.optimize(ocForwardDQ);
+  //optimizerLBFGS.optimize(ocCentralDQ);
   optimizerLBFGS.optimize(ocAD);
+
   // The result (minimizer) can now be accessed at optimizerLBFGS.getControl().
   // The selected data for output and their plot can be seen in files
   // tmp/gnuplotData/data/log.dat and tmp/gnuplotData/log.png, respectively.

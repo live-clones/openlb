@@ -72,7 +72,7 @@ SuperLatticePhysIncPressure2D(SuperLattice<T,DESCRIPTOR>&,
                               const UnitConverter<T,DESCRIPTOR>&)
   -> SuperLatticePhysIncPressure2D<T,DESCRIPTOR>;
 
-/// BlockLatticePhysPressure2D returns pointwise phys pressure from incompressible model on local lattices.
+/// BlockLatticePhysIncPressure2D returns pointwise phys pressure from incompressible model on local lattices.
 template <typename T, typename DESCRIPTOR>
 class BlockLatticePhysIncPressure2D final : public BlockLatticePhysF2D<T,DESCRIPTOR> {
 public:

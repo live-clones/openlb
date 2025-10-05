@@ -1,6 +1,7 @@
 /*  This file is part of the OpenLB library
  *
  *  Copyright (C) 2012 Mathias J. Krause
+ *                2025 Shota Ito
  *  E-mail contact: info@openlb.net
  *  The most recent release of OpenLB can be downloaded at
  *  <http://www.openlb.net/>
@@ -25,6 +26,7 @@
  * Groups all the 2D generic template files for the directory optimization.
  */
 
-#include "optimization/core/optiCaseDual.hh"
+#include "optimization/core/controller.hh"
 #include "optimization/core/optimizer.hh"
 #include "optimization/functors/dualFunctors3D.hh"
+#include "optimization/solver/optiCaseDual.hh"

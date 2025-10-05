@@ -265,6 +265,37 @@ struct MPIncompressible {
   };
 };
 
+struct CorrectedMPIncompressible {
+  using parameters = meta::list<>;
+
+  static std::string getName() {
+    return "Corrected-Multi-Phase-Incompressible";
+  }
+
+  template <typename DESCRIPTOR, typename MOMENTA>
+  struct type {
+    using MomentaF = typename MOMENTA::template type<DESCRIPTOR>;
+
+    template <typename CELL, typename P, typename U, typename FEQ, typename V=typename CELL::value_t>
+    CellStatistic<V> compute(CELL& cell, P& p, U& u, FEQ& fEq) any_platform {
+      const auto rho = cell.template getField<descriptors::RHO>();
+      const auto laplaceRho = cell.template getField<descriptors::LAPLACERHO>();
+      const V uSqr = util::normSqr<V,DESCRIPTOR::d>(u);
+      for (int iPop=0; iPop < DESCRIPTOR::q; ++iPop) {
+        fEq[iPop] = equilibrium<DESCRIPTOR>::cmpincompressible(iPop, rho, laplaceRho, u, uSqr, p);
+      }
+      return {rho, uSqr};
+    };
+
+    template <typename CELL, typename PARAMETERS, typename FEQ, typename V=typename CELL::value_t>
+    CellStatistic<V> compute(CELL& cell, PARAMETERS& parameters, FEQ& fEq) any_platform {
+      V p, u[DESCRIPTOR::d];
+      MomentaF().computeRhoU(cell, p, u);
+      return compute(cell, p, u, fEq);
+    };
+  };
+};
+
 struct P1 {
   using parameters = meta::list<>;
 

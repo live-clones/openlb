@@ -64,7 +64,7 @@ using namespace olb::graphics;
 
 using T = FLOATING_POINT_TYPE;
 using NSDESCRIPTOR = D2Q9<RHO,NABLARHO,FORCE,EXTERNAL_FORCE,TAU_EFF,STATISTIC>;
-using NSBulkDynamics = MultiPhaseIncompressbileBGKdynamics<T,NSDESCRIPTOR>;
+using NSBulkDynamics = MultiPhaseIncompressibleBGKdynamics<T,NSDESCRIPTOR>;
 #ifdef CAHN_HILLIARD
 using PFDESCRIPTOR = D2Q9<FORCE,SOURCE,SOURCE_OLD,VELOCITY,STATISTIC,CHEM_POTENTIAL,PHIWETTING>;
 using PFBulkDynamics = WellBalancedCahnHilliardBGKdynamics<T,PFDESCRIPTOR>;

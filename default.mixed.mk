@@ -125,6 +125,12 @@ build/olbcuda.cu: build/missing.txt
 CUDA_CPP_FILES := build/olbcuda.cu
 CUDA_OBJ_FILES := $(CUDA_CPP_FILES:.cu=.o)
 
+ifneq ($(strip $(GIT_VERSION)),)
+	CUDA_CXXFLAGS += -DOLB_VERSION=\"$(GIT_VERSION)\"
+else
+	CUDA_CXXFLAGS += -DOLB_VERSION=\"$(OLB_RELEASE)\"
+endif
+
 %.o: %.cu
 	$(CUDA_CXX) $(CUDA_CXXFLAGS) $(INCLUDE_FLAGS) $(PARALLEL_FLAGS) -DPLATFORM_CPU_SISD -DPLATFORM_GPU_CUDA -Xcompiler -fPIC -c -o $@ $<
 

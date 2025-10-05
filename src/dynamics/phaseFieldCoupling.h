@@ -25,6 +25,7 @@
 #define PHASE_FIELD_COUPLING_H
 
 #include "core/operator.h"
+#include "utilities/matrix.h"
 
 namespace olb {
 
@@ -43,7 +44,7 @@ struct initialPsi {
   using parameters = meta::list<descriptors::INTERFACE_WIDTH>;
 
   int getPriority() const {
-    return 1;
+    return 2;
   }
 
   template <typename CELL, typename PARAMETERS>
@@ -522,7 +523,6 @@ struct LiangPostProcessor {
     V phi = cellAC.template getFieldComponent<descriptors::STATISTIC>(0);
     Vector<V,DESCRIPTOR::d> gradPhi{};
     V laplacePhi = 0;
-    //TODO: use lattice gradient schemes here from Cahn-Hilliard implementation
     for (int iPop=0; iPop < DESCRIPTOR::q; ++iPop) {
       const V phi_i = cellAC.neighbor(descriptors::c<DESCRIPTOR>(iPop)).template getFieldComponent<descriptors::STATISTIC>(0);
       V tcs2 = descriptors::t<V,DESCRIPTOR>(iPop) * descriptors::invCs2<V,DESCRIPTOR>();
@@ -548,30 +548,104 @@ struct LiangPostProcessor {
     V mu = 4*beta*phi*(phi-1.)*(phi-0.5)-k*laplacePhi;
     forceNS += mu*gradPhi;
     auto externalForce = cellNS.template getField<descriptors::EXTERNAL_FORCE>();
-    cellNS.template setField<descriptors::FORCE>(externalForce + forceNS/rho);
     cellNS.template setField<descriptors::NABLARHO>((rho_l-rho_v)*gradPhi);
     cellNS.template setField<descriptors::TAU_EFF>(tau);
     cellNS.template setField<descriptors::RHO>(rho);
+    cellNS.template setField<descriptors::FORCE>(externalForce + forceNS/rho);
     cellNS.computeU(u);
 
     Vector<V,DESCRIPTOR::d> forceAC{};
     Vector<V,DESCRIPTOR::d> old_phiU{};
-    Vector<V,DESCRIPTOR::d> n{};
+    Vector<V,DESCRIPTOR::d> n = normalizeWithEpsilon(gradPhi,V(1),V(1e-7));
     Vector<V,DESCRIPTOR::d> phiU{};
     auto velo_switch = parameters.template get<SWITCH>();
-    V gradPhiSqr = 0;
     for (int iD=0; iD < DESCRIPTOR::d; ++iD) {
-      gradPhiSqr += gradPhi[iD]*gradPhi[iD];
       u[iD] *= velo_switch;
       phiU[iD] = phi*u[iD];
-    }
-    if (gradPhiSqr >= 1e-28) {
-      n += gradPhi/util::sqrt(gradPhiSqr);
     }
     old_phiU = cellAC.template getField<descriptors::OLD_PHIU>();
     cellAC.template setField<descriptors::OLD_PHIU>(phiU);
     V lambda = 4*phi*(1.-phi)/w;
     forceAC += (phiU - old_phiU) + lambda*n/descriptors::invCs2<V,DESCRIPTOR>();
+    cellAC.template setField<descriptors::FORCE>(forceAC);
+    cellAC.template setField<descriptors::VELOCITY>(u);
+  }
+};
+
+struct CorrectedLiangPostProcessor {
+  static constexpr OperatorScope scope = OperatorScope::PerCellWithParameters;
+  struct SIGMA       : public descriptors::FIELD_BASE<1> { };
+  struct W           : public descriptors::FIELD_BASE<1> { };
+  struct TAUS        : public descriptors::FIELD_BASE<2> { };
+  struct RHOS        : public descriptors::FIELD_BASE<2> { };
+  struct GRAVITY     : public descriptors::FIELD_BASE<0,1> { };
+  using parameters = meta::list<SIGMA,W,TAUS,RHOS,GRAVITY>;
+
+  int getPriority() const {
+    return 0;
+  }
+
+  template <typename CELL, typename PARAMETERS>
+  void apply(CELL& cells, PARAMETERS& parameters) any_platform
+  {
+    using V = typename CELL::template value_t<names::NavierStokes>::value_t;
+    using DESCRIPTOR = typename CELL::template value_t<names::NavierStokes>::descriptor_t;
+
+    auto& cellNS = cells.template get<names::NavierStokes>();
+    auto& cellAC = cells.template get<names::Component1>();
+
+    V phi = cellAC.template getFieldComponent<descriptors::STATISTIC>(0);
+    Vector<V,DESCRIPTOR::d> gradPhi{};
+    V laplacePhi = 0;
+    for (int iPop=0; iPop < DESCRIPTOR::q; ++iPop) {
+      const V phi_i = cellAC.neighbor(descriptors::c<DESCRIPTOR>(iPop)).template getFieldComponent<descriptors::STATISTIC>(0);
+      V tcs2 = descriptors::t<V,DESCRIPTOR>(iPop) * descriptors::invCs2<V,DESCRIPTOR>();
+      gradPhi += phi_i * descriptors::c<DESCRIPTOR>(iPop) * tcs2;
+      laplacePhi += 2*(phi_i - phi) * tcs2;
+    }
+
+    auto scale = cellNS.template getField<descriptors::SCALAR>();
+    auto sigma = parameters.template get<SIGMA>()*scale;
+    auto w = parameters.template get<W>();
+    auto rho_v = parameters.template get<RHOS>()[0];
+    auto rho_l = parameters.template get<RHOS>()[1];
+    V rho = rho_v + (rho_l-rho_v)*phi;
+    auto tau_v = parameters.template get<TAUS>()[0];
+    auto tau_l = parameters.template get<TAUS>()[1];
+    V tau = (tau_v + (tau_l-tau_v)*phi)*scale + (1-scale)*((tau_l-0.5)*125+0.5);
+
+    // Computation and storage of forces
+    Vector<V,DESCRIPTOR::d> surfaceTensionForce{};
+    V u[DESCRIPTOR::d] {};
+    V k = 1.5*sigma*w;
+    V beta = 12*sigma/w;
+    V mu = 4*beta*phi*(phi-1.)*(phi-0.5)-k*laplacePhi;
+    surfaceTensionForce += mu*gradPhi;
+    auto externalForce = parameters.template get<GRAVITY>()*rho;
+    cellNS.template setField<descriptors::NABLARHO>((rho_l-rho_v)*gradPhi);
+    cellNS.template setField<descriptors::LAPLACERHO>((rho_l-rho_v)*laplacePhi);
+    cellNS.template setField<descriptors::TAU_EFF>(tau);
+    cellNS.template setField<descriptors::RHO>(rho);
+    cellNS.template setField<descriptors::FORCE>((externalForce+surfaceTensionForce)/(rho+(rho_l-rho_v)*laplacePhi/4.));
+    cellNS.computeU(u);
+
+    Vector<V,DESCRIPTOR::d> forceAC{};
+    Vector<V,DESCRIPTOR::d> old_phiU{};
+    Vector<V,DESCRIPTOR::d> n = normalizeWithEpsilon(gradPhi,V(1),V(1e-7));
+    Vector<V,DESCRIPTOR::d> phiU{};
+    for (int iD=0; iD < DESCRIPTOR::d; ++iD) {
+      phiU[iD] = phi*u[iD];
+    }
+    old_phiU = cellAC.template getField<descriptors::OLD_PHIU>();
+    cellAC.template setField<descriptors::OLD_PHIU>(phiU);
+    V lambda = 4*phi*(1.-phi)/w;
+
+    V Y1 = util::min(util::max(V(0),util::min(V(1),(phi-V(0.8))/V(1e-4))),util::max(V(0),util::min(V(1),(V(1)-phi)/V(1e-4))));
+    V Y2 = util::min(util::max(V(0),util::min(V(1),phi/V(1e-4))),util::max(V(0),util::min(V(1),(V(0.2)-phi)/V(1e-4))));
+    V laplacePhiNorm = laplacePhi/util::abs(laplacePhi+V(1e-7));
+    V lambda_res = -22.5*util::norm<DESCRIPTOR::d>(gradPhi)/w*((V(1)+laplacePhiNorm)*Y1 + (V(1)-laplacePhiNorm)*Y2);
+
+    forceAC += (phiU - old_phiU) + (lambda+lambda_res)*n/descriptors::invCs2<V,DESCRIPTOR>();
     cellAC.template setField<descriptors::FORCE>(forceAC);
     cellAC.template setField<descriptors::VELOCITY>(u);
   }
@@ -594,11 +668,13 @@ struct RhoWettingStatistics  {
   }
 };
 
+template <typename MIXTURE_PROPERTIES>
 struct WellBalancedCahnHilliardPostProcessor {
   static constexpr OperatorScope scope = OperatorScope::PerCellWithParameters;
-  struct TAUS        : public descriptors::FIELD_BASE<2> { };
-  struct RHOS        : public descriptors::FIELD_BASE<2> { };
-  using parameters = meta::list<TAUS,RHOS>;
+  using parameters = typename meta::merge<
+    typename MIXTURE_PROPERTIES::parameters,
+    meta::list<>
+  >;
 
   int getPriority() const {
     return 0;
@@ -622,9 +698,6 @@ struct WellBalancedCahnHilliardPostProcessor {
     for (int iPop=0; iPop < DESCRIPTOR::q; ++iPop) {
       const V phi_i = cellCH.neighbor(descriptors::c<DESCRIPTOR>(iPop)).template getFieldComponent<descriptors::STATISTIC>(0);
       const V mu_i = cellCH.neighbor(descriptors::c<DESCRIPTOR>(iPop)).template getField<descriptors::CHEM_POTENTIAL>();
-      //const V phiMu_i = phi_i*mu_i;
-      //gradPhi += phi_i * descriptors::c<DESCRIPTOR>(iPop) * descriptors::t<V,DESCRIPTOR>(iPop) * descriptors::invCs2<V,DESCRIPTOR>();
-      //gradMu += mu_i * descriptors::c<DESCRIPTOR>(iPop) * descriptors::t<V,DESCRIPTOR>(iPop) * descriptors::invCs2<V,DESCRIPTOR>();
       if(int(cellCH.neighbor(descriptors::c<DESCRIPTOR>(iPop)).template getField<descriptors::BOUNDARY>())) gradMu += mu * descriptors::c<DESCRIPTOR>(iPop) * descriptors::t<V,DESCRIPTOR>(iPop) * descriptors::invCs2<V,DESCRIPTOR>();
       else gradMu += mu_i * descriptors::c<DESCRIPTOR>(iPop) * descriptors::t<V,DESCRIPTOR>(iPop) * descriptors::invCs2<V,DESCRIPTOR>();
       if(int(cellCH.neighbor(descriptors::c<DESCRIPTOR>(iPop)).template getField<descriptors::BOUNDARY>())) gradPhi += phi * descriptors::c<DESCRIPTOR>(iPop) * descriptors::t<V,DESCRIPTOR>(iPop) * descriptors::invCs2<V,DESCRIPTOR>();
@@ -632,21 +705,18 @@ struct WellBalancedCahnHilliardPostProcessor {
       laplacePhi += 2*(phi_i - phi) * descriptors::t<V,DESCRIPTOR>(iPop) * descriptors::invCs2<V,DESCRIPTOR>();
     }
 
-    auto rho_v = parameters.template get<RHOS>()[0];
-    auto rho_l = parameters.template get<RHOS>()[1];
-    V rho = rho_v + (rho_l-rho_v)*phi;
-    auto tau_v = parameters.template get<TAUS>()[0];
-    auto tau_l = parameters.template get<TAUS>()[1];
-    V tau = tau_v + (tau_l-tau_v)*phi;
+    auto rho_v = parameters.template get<typename MIXTURE_PROPERTIES::RHOS>()[0];
+    auto rho_l = parameters.template get<typename MIXTURE_PROPERTIES::RHOS>()[1];
+    V rho = MIXTURE_PROPERTIES().computeRho(phi, parameters);
+    V tau = MIXTURE_PROPERTIES().computeTau(phi, parameters);
 
     // Computation and storage of forces
     Vector<V,DESCRIPTOR::d> forceNS{};
     V u[DESCRIPTOR::d] {};
     forceNS += -phi*gradMu;
-    //V mu = cellCH.template getField<descriptors::CHEM_POTENTIAL>();
-    //forceNS += mu*gradPhi;
     auto externalBlockForce = cellNS.template getField<descriptors::EXTERNAL_FORCE>();
-    cellNS.template setField<descriptors::FORCE>(externalBlockForce + forceNS/rho);
+    auto bodyForce = cellNS.template getField<descriptors::BODY_FORCE>();
+    cellNS.template setField<descriptors::FORCE>(externalBlockForce + (bodyForce + forceNS)/rho);
     cellNS.template setField<descriptors::NABLARHO>((rho_l-rho_v)*gradPhi);
     cellNS.template setField<descriptors::TAU_EFF>(tau);
     cellNS.template setField<descriptors::RHO>(rho);
@@ -665,7 +735,7 @@ struct WellBalancedCahnHilliardPostProcessor {
 
 struct ChemPotentialPhaseFieldProcessor {
   static constexpr OperatorScope scope = OperatorScope::PerCellWithParameters;
-  using parameters = meta::list<descriptors::SCALAR,descriptors::INTERFACE_WIDTH>;
+  using parameters = meta::list<descriptors::SCALAR,descriptors::INTERFACE_WIDTH,descriptors::ADDEND>;
 
   int getPriority() const {
     return 0;
@@ -687,11 +757,12 @@ struct ChemPotentialPhaseFieldProcessor {
 
     auto sigma = parameters.template get<descriptors::SCALAR>();
     auto w = parameters.template get<descriptors::INTERFACE_WIDTH>();
+    auto penalty = parameters.template get<descriptors::ADDEND>();
 
     // Computation and storage of chemical potential
     V k = 1.5*sigma*w;
     V beta = 12*sigma/w;
-    V mu = 4*beta*phi*(phi-1.)*(phi-0.5)+0.25*(phi<0)*phi-k*laplacePhi;
+    V mu = 4*beta*phi*(phi-1.)*(phi-0.5)+penalty*(phi<0)*phi-k*laplacePhi;
     cell.template setField<descriptors::CHEM_POTENTIAL>(mu);
   }
 };
@@ -787,7 +858,7 @@ struct GeometricPhaseFieldWallProcessor2D {
 };
 
 template<typename T, typename DESCRIPTOR>
-struct GeometricPhaseFieldCurvedWallProcessor2D {
+struct GeometricPhaseFieldCurvedWallProcessor {
   static constexpr OperatorScope scope = OperatorScope::PerCellWithParameters;
   using parameters = meta::list<descriptors::THETA>;
 
@@ -826,10 +897,10 @@ struct IsoPhaseFieldCurvedWallProcessor2D {
   {
     auto phi_s = cell.template getField<descriptors::STATISTIC>();
     auto phi_b = cell.neighbor({-xNormal,-yNormal}).template getFieldComponent<descriptors::STATISTIC>(0);
-    if (phi_b >= 0.995) {
+    if (phi_b >= T(0.995)) {
       phi_s[0] = 1.;
     }
-    else if (phi_b <= 0.005) {
+    else if (phi_b <= T(0.005)) {
       phi_s[0] = 0.;
     }
     else {
@@ -848,8 +919,260 @@ struct IsoPhaseFieldCurvedWallProcessor2D {
   }
 };
 
+template<typename T, typename DESCRIPTOR, int xNormal, int yNormal, int zNormal>
+struct IsoPhaseFieldCurvedWallProcessor3D {
+  static constexpr OperatorScope scope = OperatorScope::PerCellWithParameters;
+  using parameters = meta::list<descriptors::INTERFACE_WIDTH, descriptors::THETA>;
+
+  int getPriority() const {
+    return 1;
+  }
+
+  template <typename CELL, typename PARAMETERS>
+  void apply(CELL& cell, PARAMETERS& parameters) any_platform
+  {
+    auto phi_s = cell.template getField<descriptors::STATISTIC>();
+    auto cell_b = cell.neighbor({-xNormal,-yNormal,-zNormal});
+    auto phi_b = cell_b.template getFieldComponent<descriptors::STATISTIC>(0);
+    auto theta = parameters.template get<descriptors::THETA>();
+    if (phi_b >= T(0.995) || theta == T(0)) {
+      phi_s[0] = T(1);
+    }
+    else if (phi_b <= T(0.005)) {
+      phi_s[0] = T(0);
+    }
+    else {
+      auto old_phiU = cell_b.template getField<descriptors::OLD_PHIU>();
+      auto u = cell_b.template getField<descriptors::VELOCITY>();
+      Vector<T,DESCRIPTOR::d> gradPhiFactored{};
+      for (int iPop=0; iPop < DESCRIPTOR::q; ++iPop) {
+        gradPhiFactored += descriptors::c<DESCRIPTOR>(iPop)*cell[iPop];
+      }
+      gradPhiFactored = gradPhiFactored - 0.5*(phi_b*u + old_phiU);
+
+      auto w = parameters.template get<descriptors::INTERFACE_WIDTH>();
+      T z_z0 = w/2.*util::atanh(2.*phi_b-1.);
+
+      Vector<T,DESCRIPTOR::d> n{T(xNormal),T(yNormal),T(zNormal)};
+      Vector<T,DESCRIPTOR::d> r{};
+      r = crossProduct3D(n, gradPhiFactored);
+      r = util::normalize(r);
+
+      // Compute rotation matrix (Rodrigues' formula)
+      T c = util::cos(-theta);
+      T s = util::sin(-theta);
+      T v = 1 - c;
+
+      Matrix<T, 3, 3> R{};
+      R[0][0] = c + r[0]*r[0]*v;
+      R[0][1] = r[0]*r[1]*v - r[2]*s;
+      R[0][2] = r[0]*r[2]*v + r[1]*s;
+      R[1][0] = r[1]*r[0]*v + r[2]*s;
+      R[1][1] = c + r[1]*r[1]*v;
+      R[1][2] = r[1]*r[2]*v - r[0]*s;
+      R[2][0] = r[2]*r[0]*v - r[1]*s;
+      R[2][1] = r[2]*r[1]*v + r[0]*s;
+      R[2][2] = c + r[2]*r[2]*v;
+
+      // Rotate gradient vector
+      Vector<T, DESCRIPTOR::d> cVec = R * n;
+
+      cVec = util::normalize(cVec);
+      // T d = util::scalarProduct(cVec,n);
+      T d = cVec * n;
+      phi_s[0] = T(0.5)*(T(1)+util::tanh(T(2)*(z_z0+d)/w));
+    }
+    cell.template setField<descriptors::STATISTIC>(phi_s);
+  }
+};
+
+template<typename T, typename DESCRIPTOR, int xNormal, int yNormal, int zNormal>
+struct IsoPhaseFieldCurvedWallLocalThetaProcessor3D {
+  static constexpr OperatorScope scope = OperatorScope::PerCellWithParameters;
+  using parameters = meta::list<descriptors::INTERFACE_WIDTH>;
+
+  int getPriority() const {
+    return 1;
+  }
+
+  template <typename CELL, typename PARAMETERS>
+  void apply(CELL& cell, PARAMETERS& parameters) any_platform
+  {
+    auto phi_s = cell.template getField<descriptors::STATISTIC>();
+    auto cell_b = cell.neighbor({-xNormal,-yNormal,-zNormal});
+    auto phi_b = cell_b.template getFieldComponent<descriptors::STATISTIC>(0);
+    if (phi_b >= T(0.995)) {
+      phi_s[0] = T(1);
+    }
+    else if (phi_b <= T(0.005)) {
+      phi_s[0] = T(0);
+    }
+    else {
+      auto old_phiU = cell_b.template getField<descriptors::OLD_PHIU>();
+      auto u = cell_b.template getField<descriptors::VELOCITY>();
+      Vector<T,DESCRIPTOR::d> gradPhiFactored{};
+      for (int iPop=0; iPop < DESCRIPTOR::q; ++iPop) {
+        gradPhiFactored += descriptors::c<DESCRIPTOR>(iPop)*cell[iPop];
+      }
+      gradPhiFactored = gradPhiFactored - 0.5*(phi_b*u + old_phiU);
+
+      auto theta = parameters.template get<descriptors::THETA>();
+      auto w = parameters.template get<descriptors::INTERFACE_WIDTH>();
+      T z_z0 = w/2.*util::atanh(2.*phi_b-1.);
+
+      Vector<T,DESCRIPTOR::d> n{T(xNormal),T(yNormal),T(zNormal)};
+      Vector<T,DESCRIPTOR::d> r{};
+      r = crossProduct3D(n, gradPhiFactored);
+      r = util::normalize(r);
+
+      // Compute rotation matrix (Rodrigues' formula)
+      T c = util::cos(-theta);
+      T s = util::sin(-theta);
+      T v = 1 - c;
+
+      Matrix<T, 3, 3> R{};
+      R[0][0] = c + r[0]*r[0]*v;
+      R[0][1] = r[0]*r[1]*v - r[2]*s;
+      R[0][2] = r[0]*r[2]*v + r[1]*s;
+      R[1][0] = r[1]*r[0]*v + r[2]*s;
+      R[1][1] = c + r[1]*r[1]*v;
+      R[1][2] = r[1]*r[2]*v - r[0]*s;
+      R[2][0] = r[2]*r[0]*v - r[1]*s;
+      R[2][1] = r[2]*r[1]*v + r[0]*s;
+      R[2][2] = c + r[2]*r[2]*v;
+
+      // Rotate gradient vector
+      Vector<T, DESCRIPTOR::d> cVec = R * n;
+
+      cVec = util::normalize(cVec);
+      // T d = util::scalarProduct(cVec,n);
+      T d = cVec * n;
+      phi_s[0] = T(0.5)*(T(1)+util::tanh(T(2)*(z_z0+d)/w));
+    }
+    cell.template setField<descriptors::STATISTIC>(phi_s);
+  }
+};
+
+struct LinearTauViscosity {
+  struct TAUS        : public descriptors::FIELD_BASE<2> { };
+  struct RHOS        : public descriptors::FIELD_BASE<2> { };
+  using parameters = meta::list<TAUS,RHOS>;
+
+  template <typename V, typename PARAMETERS>
+  V computeRho( V phi, PARAMETERS& parameters ) any_platform {
+    auto rho_g = parameters.template get<RHOS>()[0];
+    auto rho_l = parameters.template get<RHOS>()[1];
+    return rho_g + (rho_l-rho_g)*phi;
+  };
+
+  template <typename V, typename PARAMETERS>
+  V computeTau( V phi, PARAMETERS& parameters ) any_platform {
+    auto tau_g = parameters.template get<TAUS>()[0];
+    auto tau_l = parameters.template get<TAUS>()[1];
+    return tau_g + (tau_l-tau_g)*phi;
+  };
+};
+
+struct InverseTauViscosity {
+  struct TAUS        : public descriptors::FIELD_BASE<2> { };
+  struct RHOS        : public descriptors::FIELD_BASE<2> { };
+  using parameters = meta::list<TAUS,RHOS>;
+
+  template <typename V, typename PARAMETERS>
+  V computeRho( V phi, PARAMETERS& parameters ) any_platform {
+    auto rho_g = parameters.template get<RHOS>()[0];
+    auto rho_l = parameters.template get<RHOS>()[1];
+    return rho_g + (rho_l-rho_g)*phi;
+  };
+
+  template <typename V, typename PARAMETERS>
+  V computeTau( V phi, PARAMETERS& parameters ) any_platform {
+    auto tau_g = parameters.template get<TAUS>()[0];
+    auto tau_l = parameters.template get<TAUS>()[1];
+    return 1./(1./tau_g*(1-phi) + 1./tau_l*phi);
+  };
+};
+
+struct SharpTauViscosity {
+  struct TAUS        : public descriptors::FIELD_BASE<2> { };
+  struct RHOS        : public descriptors::FIELD_BASE<2> { };
+  using parameters = meta::list<TAUS,RHOS>;
+
+  template <typename V, typename PARAMETERS>
+  V computeRho( V phi, PARAMETERS& parameters ) any_platform {
+    auto rho_g = parameters.template get<RHOS>()[0];
+    auto rho_l = parameters.template get<RHOS>()[1];
+    return rho_g + (rho_l-rho_g)*phi;
+  };
+
+  template <typename V, typename PARAMETERS>
+  V computeTau( V phi, PARAMETERS& parameters ) any_platform {
+    auto tau_g = parameters.template get<TAUS>()[0];
+    auto tau_l = parameters.template get<TAUS>()[1];
+    if (phi <= 0.5) {
+      return tau_g;
+    } else {
+      return tau_l;
+    }
+  };
+};
+
+template <typename DESCRIPTOR>
+struct LinearDynamicViscosity {
+  struct TAUS        : public descriptors::FIELD_BASE<2> { };
+  struct RHOS        : public descriptors::FIELD_BASE<2> { };
+  using parameters = meta::list<TAUS,RHOS>;
+
+  template <typename V, typename PARAMETERS>
+  V computeRho( V phi, PARAMETERS& parameters ) any_platform {
+    auto rho_g = parameters.template get<RHOS>()[0];
+    auto rho_l = parameters.template get<RHOS>()[1];
+    return rho_g + (rho_l-rho_g)*phi;
+  };
+
+  template <typename V, typename PARAMETERS>
+  V computeTau( V phi, PARAMETERS& parameters ) any_platform {
+    auto tau_g = parameters.template get<TAUS>()[0];
+    auto tau_l = parameters.template get<TAUS>()[1];
+    auto rho_g = parameters.template get<RHOS>()[0];
+    auto rho_l = parameters.template get<RHOS>()[1];
+    V rho = computeRho(phi, parameters);
+    V mu_g = rho_g*(tau_g-0.5)/descriptors::invCs2<V,DESCRIPTOR>();
+    V mu_l = rho_l*(tau_l-0.5)/descriptors::invCs2<V,DESCRIPTOR>();
+    V mu = (mu_g*(1-phi) + mu_l*phi);
+    return mu/rho * descriptors::invCs2<V,DESCRIPTOR>() + 0.5;
+  };
+};
+
+template <typename DESCRIPTOR>
+struct InverseDynamicViscosity {
+  struct TAUS        : public descriptors::FIELD_BASE<2> { };
+  struct RHOS        : public descriptors::FIELD_BASE<2> { };
+  using parameters = meta::list<TAUS,RHOS>;
+
+  template <typename V, typename PARAMETERS>
+  V computeRho( V phi, PARAMETERS& parameters ) any_platform {
+    auto rho_g = parameters.template get<RHOS>()[0];
+    auto rho_l = parameters.template get<RHOS>()[1];
+    return rho_g + (rho_l-rho_g)*phi;
+  };
+
+  template <typename V, typename PARAMETERS>
+  V computeTau( V phi, PARAMETERS& parameters ) any_platform {
+    auto tau_g = parameters.template get<TAUS>()[0];
+    auto tau_l = parameters.template get<TAUS>()[1];
+    auto rho_g = parameters.template get<RHOS>()[0];
+    auto rho_l = parameters.template get<RHOS>()[1];
+    V rho = computeRho(phi, parameters);
+    V mu_g = rho_g*(tau_g-0.5)/descriptors::invCs2<V,DESCRIPTOR>();
+    V mu_l = rho_l*(tau_l-0.5)/descriptors::invCs2<V,DESCRIPTOR>();
+    V mu = 1./(1./mu_g*(1-phi) + 1./mu_l*phi);
+    return mu/rho * descriptors::invCs2<V,DESCRIPTOR>() + 0.5;
+  };
+};
+
 template<int xNormal, int yNormal>
-struct SetOutletCells {
+struct SetOutletCells2D {
   static constexpr OperatorScope scope = OperatorScope::PerCell;
 
   int getPriority() const {
@@ -874,6 +1197,53 @@ struct SetOutletCells {
   }
 };
 
+template<int xNormal, int yNormal, int zNormal>
+struct SetOutletCells3D {
+  static constexpr OperatorScope scope = OperatorScope::PerCell;
+
+  int getPriority() const {
+    return 0;
+  }
+
+  template <typename CELL>
+  void apply(CELL& cell) any_platform
+  {
+    using T = typename CELL::value_t;
+    using DESCRIPTOR = typename CELL::descriptor_t;
+    T phi, u[DESCRIPTOR::d];
+    auto outlet_cell = cell.template getField<descriptors::CONV_POPS>();
+    cell.computeRhoU(phi, u);
+    for (int iPop=0; iPop < DESCRIPTOR::q; ++iPop) {
+      outlet_cell[iPop] = equilibrium<DESCRIPTOR>::firstOrder(iPop, phi, u);
+    }
+    cell.template setField<descriptors::CONV_POPS>(outlet_cell);
+    auto phiGhost = cell.neighbor({xNormal,yNormal,zNormal}).template getField<descriptors::STATISTIC>();
+    phiGhost[0] = phi;
+    cell.neighbor({xNormal,yNormal,zNormal}).template setField<descriptors::STATISTIC>(phiGhost);
+  }
+};
+
+template<int xNormal, int yNormal, int zNormal>
+struct SetOutletGhosts3D {
+  static constexpr OperatorScope scope = OperatorScope::PerCell;
+
+  int getPriority() const {
+    return 0;
+  }
+
+  template <typename CELL>
+  void apply(CELL& cell) any_platform
+  {
+    using T = typename CELL::value_t;
+    using DESCRIPTOR = typename CELL::descriptor_t;
+    T phi, u[DESCRIPTOR::d];
+    cell.computeRhoU(phi, u);
+    auto phiGhost = cell.neighbor({xNormal,yNormal,zNormal}).template getField<descriptors::STATISTIC>();
+    phiGhost[0] = phi;
+    cell.neighbor({xNormal,yNormal,zNormal}).template setField<descriptors::STATISTIC>(phiGhost);
+  }
+};
+
 struct SetIncOutletCells {
   static constexpr OperatorScope scope = OperatorScope::PerCell;
 
@@ -893,6 +1263,159 @@ struct SetIncOutletCells {
       outlet_cell[iPop] = cell[iPop];
     }
     cell.template setField<descriptors::CONV_POPS>(outlet_cell);
+  }
+};
+
+struct uStatistics {
+  static constexpr OperatorScope scope = OperatorScope::PerCell;
+
+  int getPriority() const {
+    return 0;
+  }
+
+  template <typename CELL, typename V = typename CELL::value_t>
+  void apply(CELL& cell) any_platform
+  {
+    using DESCRIPTOR = typename CELL::descriptor_t;
+    V u[DESCRIPTOR::d] {};
+    cell.computeU(u);
+    cell.template setField<descriptors::VELOCITY>(u);
+  }
+};
+
+struct VeloGradFDMPostProcessor {
+public:
+  static constexpr OperatorScope scope = OperatorScope::PerCell;
+
+  int getPriority() const {
+    return 1;
+  }
+
+  template <typename CELL, typename V = typename CELL::value_t>
+  void apply(CELL& cell) any_platform{
+    using DESCRIPTOR = typename CELL::descriptor_t;
+    auto u = cell.template getField<descriptors::VELOCITY>();
+    if constexpr ( DESCRIPTOR::d == 2 ) {
+      using namespace olb::util::tensorIndices2D;
+      V uxDx = 0, uyDx = 0, uxDy = 0, uyDy = 0;
+      //----------- FDM in X-direction --------------------------------------------------//
+      if (cell.neighbor({-1,0}).template getField<descriptors::SCALAR>() == 2) {
+        auto uXp = cell.neighbor({1,0}).template getField<descriptors::VELOCITY>();
+        uxDx = uXp[0] - u[0];
+        uyDx = uXp[1] - u[1];
+      }
+      else if (cell.neighbor({1,0}).template getField<descriptors::SCALAR>() == 2) {
+        auto uXm = cell.neighbor({-1,0}).template getField<descriptors::VELOCITY>();
+        uxDx = u[0] - uXm[0];
+        uyDx = u[1] - uXm[1];
+      }
+      else {
+        auto uXp = cell.neighbor({1,0}).template getField<descriptors::VELOCITY>();
+        auto uXm = cell.neighbor({-1,0}).template getField<descriptors::VELOCITY>();
+        uxDx = V(0.5)*(uXp[0] - uXm[0]);
+        uyDx = V(0.5)*(uXp[1] - uXm[1]);
+      }
+      //----------- FDM in Y-direction --------------------------------------------------//
+      if (cell.neighbor({0,-1}).template getField<descriptors::SCALAR>() == 2) {
+        auto uYp = cell.neighbor({0,1}).template getField<descriptors::VELOCITY>();
+        uxDy = uYp[0] - u[0];
+        uyDy = uYp[1] - u[1];
+      }
+      else if (cell.neighbor({0,1}).template getField<descriptors::SCALAR>() == 2) {
+        auto uYm = cell.neighbor({0,-1}).template getField<descriptors::VELOCITY>();
+        uxDy = u[0] - uYm[0];
+        uyDy = u[1] - uYm[1];
+      }
+      else {
+        auto uYp = cell.neighbor({0,1}).template getField<descriptors::VELOCITY>();
+        auto uYm = cell.neighbor({0,-1}).template getField<descriptors::VELOCITY>();
+        uxDy = V(0.5)*(uYp[0] - uYm[0]);
+        uyDy = V(0.5)*(uYp[1] - uYm[1]);
+      }
+      //----------- TENSOR tensor with FDM --------------------------------------------------//
+      V gradU[DESCRIPTOR::d*DESCRIPTOR::d] {};
+      gradU[0] = uxDx;
+      gradU[1] = uxDy;
+      gradU[2] = uyDx;
+      gradU[3] = uyDy;
+      cell.template setField<descriptors::VELO_GRAD>(gradU);
+    }
+    else {
+      using namespace olb::util::tensorIndices3D;
+      V uxDx = 0, uyDx = 0, uzDx = 0, uxDy = 0, uyDy = 0, uzDy = 0, uxDz = 0, uyDz = 0, uzDz = 0;
+      //----------- FDM in X-direction --------------------------------------------------//
+      if (cell.neighbor({-1,0,0}).template getField<descriptors::SCALAR>() == 2) {
+        auto uXp = cell.neighbor({1,0,0}).template getField<descriptors::VELOCITY>();
+        uxDx = uXp[0] - u[0];
+        uyDx = uXp[1] - u[1];
+        uzDx = uXp[2] - u[2];
+      }
+      else if (cell.neighbor({1,0,0}).template getField<descriptors::SCALAR>() == 2) {
+        auto uXm = cell.neighbor({-1,0,0}).template getField<descriptors::VELOCITY>();
+        uxDx = u[0] - uXm[0];
+        uyDx = u[1] - uXm[1];
+        uzDx = u[2] - uXm[2];
+      }
+      else {
+        auto uXp = cell.neighbor({1,0,0}).template getField<descriptors::VELOCITY>();
+        auto uXm = cell.neighbor({-1,0,0}).template getField<descriptors::VELOCITY>();
+        uxDx = V(0.5)*(uXp[0] - uXm[0]);
+        uyDx = V(0.5)*(uXp[1] - uXm[1]);
+        uzDx = V(0.5)*(uXp[2] - uXm[2]);
+      }
+      //----------- FDM in Y-direction --------------------------------------------------//
+      if (cell.neighbor({0,-1,0}).template getField<descriptors::SCALAR>() == 2) {
+        auto uYp = cell.neighbor({0,1,0}).template getField<descriptors::VELOCITY>();
+        uxDy = uYp[0] - u[0];
+        uyDy = uYp[1] - u[1];
+        uzDy = uYp[2] - u[2];
+      }
+      else if (cell.neighbor({0,1,0}).template getField<descriptors::SCALAR>() == 2) {
+        auto uYm = cell.neighbor({0,-1,0}).template getField<descriptors::VELOCITY>();
+        uxDy = u[0] - uYm[0];
+        uyDy = u[1] - uYm[1];
+        uzDy = u[2] - uYm[2];
+      }
+      else {
+        auto uYp = cell.neighbor({0,1,0}).template getField<descriptors::VELOCITY>();
+        auto uYm = cell.neighbor({0,-1,0}).template getField<descriptors::VELOCITY>();
+        uxDy = V(0.5)*(uYp[0] - uYm[0]);
+        uyDy = V(0.5)*(uYp[1] - uYm[1]);
+        uzDy = V(0.5)*(uYp[2] - uYm[2]);
+      }
+      //----------- FDM in Z-direction --------------------------------------------------//
+      if (cell.neighbor({0,0,-1}).template getField<descriptors::SCALAR>() == 2) {
+        auto uZp = cell.neighbor({0,0,1}).template getField<descriptors::VELOCITY>();
+        uxDz = uZp[0] - u[0];
+        uyDz = uZp[1] - u[1];
+        uzDz = uZp[2] - u[2];
+      }
+      else if (cell.neighbor({0,0,1}).template getField<descriptors::SCALAR>() == 2) {
+        auto uZm = cell.neighbor({0,0,-1}).template getField<descriptors::VELOCITY>();
+        uxDz = u[0] - uZm[0];
+        uyDz = u[1] - uZm[1];
+        uzDz = u[2] - uZm[2];
+      }
+      else {
+        auto uZp = cell.neighbor({0,0,1}).template getField<descriptors::VELOCITY>();
+        auto uZm = cell.neighbor({0,0,-1}).template getField<descriptors::VELOCITY>();
+        uxDz = V(0.5)*(uZp[0] - uZm[0]);
+        uyDz = V(0.5)*(uZp[1] - uZm[1]);
+        uzDz = V(0.5)*(uZp[2] - uZm[2]);
+      }
+      //----------- TENSOR tensor with FDM --------------------------------------------------//
+      V gradU[DESCRIPTOR::d*DESCRIPTOR::d] {};
+      gradU[0] = uxDx;
+      gradU[1] = uxDy;
+      gradU[2] = uxDz;
+      gradU[3] = uyDx;
+      gradU[4] = uyDy;
+      gradU[5] = uyDz;
+      gradU[6] = uzDx;
+      gradU[7] = uzDy;
+      gradU[8] = uzDz;
+      cell.template setField<descriptors::VELO_GRAD>(gradU);
+    }
   }
 };
 

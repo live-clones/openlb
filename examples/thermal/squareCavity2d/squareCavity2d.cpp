@@ -32,16 +32,17 @@
 
 
 #include <olb.h>
+#include "squareCavity2d.h"
 
 using namespace olb;
 using namespace olb::descriptors;
 using namespace olb::graphics;
 
-using T = FLOATING_POINT_TYPE;
+using T = double;
 
-// #define SMAGORINSKY
+#define TURBULENT
 
-#ifdef SMAGORINSKY
+#ifdef TURBULENT
 typedef D2Q9<FORCE,TAU_EFF> NSDESCRIPTOR;
 typedef D2Q5<VELOCITY,TAU_EFF> TDESCRIPTOR;
 #else
@@ -49,52 +50,11 @@ typedef D2Q9<FORCE> NSDESCRIPTOR;
 typedef D2Q5<VELOCITY> TDESCRIPTOR;
 #endif
 
-// Parameters for the simulation setup
-T Ra = 1e6;  // Rayleigh-Zahl
-const T Pr = 0.71; // Prandtl-Zahl
 
-T lx;
-
-int N = 21; // resolution of the model
-
-const T maxPhysT = 1e4;   // max. simulation time in s, SI unit
-const T epsilon = 5.e-3;  // precision of the convergence (residuum)
-const T smagoConst = 0.1;       // Smagorisky Constant
-
-#ifdef SMAGORINSKY
+#ifdef TURBULENT
 const int statisticsIntervall = 10; // take the turbulent statistics every 10 time steps after convergence
 const int statisticsEnsembles = 20; // take 20 ensembles for the turbulent statistics
 #endif
-
-const T Tcold = 275.15;
-const T Thot = 285.15;
-const T Tmean = (Tcold + Thot) / 2.0;
-
-/// Values from the literature studies from Davis
-T LitVelocity3[] = { 3.649, 3.696, 1.013 };
-T LitPosition3[] = { 0.813, 0.178 };
-T LitVelocity4[] = { 16.178, 19.617, 1.212 };
-T LitPosition4[] = { 0.823, 0.119 };
-T LitVelocity5[] = { 34.730, 68.590, 1.975 };
-T LitPosition5[] = { 0.855, 0.066 };
-T LitVelocity6[] = { 64.530, 219.36, 3.400 };
-T LitPosition6[] = { 0.850, 0.036 };
-T LitVelocity7[] = { 164.24, 701.92, 4.831};
-T LitPosition7[] = { 0.851, 0.020 };
-T LitVelocity8[] = { 389.88, 2241.37, 5.749};
-T LitPosition8[] = { 0.937, 0.011 };
-T LitVelocity9[] = { 503.24, 6820.07, 13.552};
-T LitPosition9[] = { 0.966, 0.0064 };
-T LitVelocity10[] = { 2323.00, 21463.00, 9.239};
-T LitPosition10[] = { 0.940, 0.491 };
-T LitNusselt3 = 1.117;
-T LitNusselt4 = 2.238;
-T LitNusselt5 = 4.509;
-T LitNusselt6 = 8.817;
-T LitNusselt7 = 16.790;
-T LitNusselt8 = 30.506;
-T LitNusselt9 = 57.350;
-T LitNusselt10 = 103.663;
 
 /// Compute the nusselt number at the left wall
 T computeNusselt(SuperGeometry<T,2>& superGeometry,
@@ -194,11 +154,9 @@ void prepareLattice( ThermalUnitConverter<T, NSDESCRIPTOR, TDESCRIPTOR> const& c
   T omega  =  converter.getLatticeRelaxationFrequency();
   T Tomega  =  converter.getLatticeThermalRelaxationFrequency();
 
-  #ifdef SMAGORINSKY
+  #ifdef TURBULENT
     NSlattice.defineDynamics<ExternalTauEffLESForcedBGKdynamics<T,NSDESCRIPTOR,momenta::AdvectionDiffusionBulkTuple>>(superGeometry.getMaterialIndicator({1, 2, 3}));
     ADlattice.defineDynamics<ExternalTauEffLESBGKadvectionDiffusionDynamics>(superGeometry.getMaterialIndicator({1, 2, 3}));
-    NSlattice.setParameter<collision::LES::SMAGORINSKY>(smagoConst);
-    ADlattice.setParameter<collision::LES::SMAGORINSKY>(smagoConst);
   #else
     NSlattice.defineDynamics<ForcedBGKdynamics>(superGeometry.getMaterialIndicator({1, 2, 3}));
     ADlattice.defineDynamics<AdvectionDiffusionBGKdynamics>(superGeometry.getMaterialIndicator({1, 2, 3}));
@@ -229,7 +187,7 @@ void prepareLattice( ThermalUnitConverter<T, NSDESCRIPTOR, TDESCRIPTOR> const& c
   ADlattice.defineRho(superGeometry, 3, T_cold);
   ADlattice.iniEquilibrium(superGeometry, 3, T_cold, u0);
 
-#ifdef SMAGORINSKY
+#ifdef TURBULENT
   AnalyticalConst2D<T,T> tauNS(1./omega);
   AnalyticalConst2D<T,T> tauAD(1./Tomega);
 
@@ -257,7 +215,8 @@ void setBoundaryValues( ThermalUnitConverter<T, NSDESCRIPTOR, TDESCRIPTOR> const
 
 }
 
-void getResults( ThermalUnitConverter<T, NSDESCRIPTOR, TDESCRIPTOR> const& converter,
+void getResults( Vector<T, 18>& output,
+                 ThermalUnitConverter<T, NSDESCRIPTOR, TDESCRIPTOR> const& converter,
                  SuperLattice<T, NSDESCRIPTOR>& NSlattice,
                  SuperLattice<T, TDESCRIPTOR>& ADlattice, int iT,
                  SuperGeometry<T,2>& superGeometry,
@@ -362,216 +321,35 @@ void getResults( ThermalUnitConverter<T, NSDESCRIPTOR, TDESCRIPTOR> const& conve
       }
     }
 
-    // compare to De Vahl Davis' benchmark solutions
-    clout << "Comparison against De Vahl Davis (1983):" << std::endl;
-    if (Ra == 1e3) {
-      clout << "xVelocity in yDir=" <<  outputVelX[0] / converter.getPhysThermalDiffusivity() * converter.getCharPhysLength() << "; error(rel)=" << (T) util::fabs((LitVelocity3[0] - outputVelX[0] / converter.getPhysThermalDiffusivity() * converter.getCharPhysLength()) / LitVelocity3[0]) << std::endl;
-      clout << "yVelocity in xDir=" <<  outputVelY[0] / converter.getPhysThermalDiffusivity() * converter.getCharPhysLength() << "; error(rel)=" << (T) util::fabs((LitVelocity3[1] - outputVelY[0] / converter.getPhysThermalDiffusivity() * converter.getCharPhysLength()) / LitVelocity3[1]) << std::endl;
-      clout << "yMaxVel / xMaxVel="  <<  outputVelY[0] / outputVelX[0] << "; error(rel)=" << (T) util::fabs((LitVelocity3[2] - outputVelY[0] / outputVelX[0])  / LitVelocity3[2]) << std::endl;
-      clout << "yCoord of xMaxVel=" <<  outputVelX[1]/lx << "; error(rel)=" << (T) util::fabs((LitPosition3[0] - outputVelX[1] / lx) / LitPosition3[0]) << std::endl;
-      clout << "xCoord of yMaxVel=" <<   outputVelY[1]/lx << "; error(rel)=" << (T) util::fabs((LitPosition3[1] - outputVelY[1] / lx) / LitPosition3[1]) << std::endl;
-      clout << "Nusselt=" <<  nusselt << "; error(rel)=" << (T) util::fabs((LitNusselt3 - nusselt) / nusselt) << std::endl;
-    }
-    else if (Ra == 1e4) {
-      clout << "xVelocity in yDir=" <<  outputVelX[0] / converter.getPhysThermalDiffusivity() * converter.getCharPhysLength() << "; error(rel)=" << (T) util::fabs((LitVelocity4[0] - outputVelX[0] / converter.getPhysThermalDiffusivity() * converter.getCharPhysLength()) / LitVelocity4[0]) << std::endl;
-      clout << "yVelocity in xDir=" <<  outputVelY[0] / converter.getPhysThermalDiffusivity() * converter.getCharPhysLength() << "; error(rel)=" << (T) util::fabs((LitVelocity4[1] - outputVelY[0] / converter.getPhysThermalDiffusivity() * converter.getCharPhysLength()) / LitVelocity4[1]) << std::endl;
-      clout << "yMaxVel / xMaxVel="  <<  outputVelY[0] / outputVelX[0] << "; error(rel)=" << (T) util::fabs((LitVelocity4[2] - outputVelY[0] / outputVelX[0])  / LitVelocity4[2]) << std::endl;
-      clout << "yCoord of xMaxVel=" <<  outputVelX[1]/lx << "; error(rel)=" << (T) util::fabs((LitPosition4[0] - outputVelX[1] / lx) / LitPosition4[0]) << std::endl;
-      clout << "xCoord of yMaxVel=" <<   outputVelY[1]/lx << "; error(rel)=" << (T) util::fabs((LitPosition4[1] - outputVelY[1] / lx) / LitPosition4[1]) << std::endl;
-      clout << "Nusselt=" <<  nusselt << "; error(rel)=" << (T) util::fabs((LitNusselt4 - nusselt) / nusselt) << std::endl;
-    }
-    else if (Ra == 1e5) {
-      clout << "xVelocity in yDir=" <<  outputVelX[0] / converter.getPhysThermalDiffusivity() * converter.getCharPhysLength() << "; error(rel)=" << (T) util::fabs((LitVelocity5[0] - outputVelX[0] / converter.getPhysThermalDiffusivity() * converter.getCharPhysLength()) / LitVelocity5[0]) << std::endl;
-      clout << "yVelocity in xDir=" <<  outputVelY[0] / converter.getPhysThermalDiffusivity() * converter.getCharPhysLength() << "; error(rel)=" << (T) util::fabs((LitVelocity5[1] - outputVelY[0] / converter.getPhysThermalDiffusivity() * converter.getCharPhysLength()) / LitVelocity5[1]) << std::endl;
-      clout << "yMaxVel / xMaxVel="  <<  outputVelY[0] / outputVelX[0] << "; error(rel)=" << (T) util::fabs((LitVelocity5[2] - outputVelY[0] / outputVelX[0])  / LitVelocity5[2]) << std::endl;
-      clout << "yCoord of xMaxVel=" <<  outputVelX[1]/lx << "; error(rel)=" << (T) util::fabs((LitPosition5[0] - outputVelX[1] / lx) / LitPosition5[0]) << std::endl;
-      clout << "xCoord of yMaxVel=" <<   outputVelY[1]/lx << "; error(rel)=" << (T) util::fabs((LitPosition5[1] - outputVelY[1] / lx) / LitPosition5[1]) << std::endl;
-      clout << "Nusselt=" <<  nusselt << "; error(rel)=" << (T) util::fabs((LitNusselt5 - nusselt) / nusselt) << std::endl;
-    }
-    else if (Ra == 1e6) {
-      clout << "xVelocity in yDir=" <<  outputVelX[0] / converter.getPhysThermalDiffusivity() * converter.getCharPhysLength() << "; error(rel)=" << (T) util::fabs((LitVelocity6[0] - outputVelX[0] / converter.getPhysThermalDiffusivity() * converter.getCharPhysLength()) / LitVelocity6[0]) << std::endl;
-      clout << "yVelocity in xDir=" <<  outputVelY[0] / converter.getPhysThermalDiffusivity() * converter.getCharPhysLength() << "; error(rel)=" << (T) util::fabs((LitVelocity6[1] - outputVelY[0] / converter.getPhysThermalDiffusivity() * converter.getCharPhysLength()) / LitVelocity6[1]) << std::endl;
-      clout << "yMaxVel / xMaxVel="  <<  outputVelY[0] / outputVelX[0] << "; error(rel)=" << (T) util::fabs((LitVelocity6[2] - outputVelY[0] / outputVelX[0])  / LitVelocity6[2]) << std::endl;
-      clout << "yCoord of xMaxVel=" <<  outputVelX[1]/lx << "; error(rel)=" << (T) util::fabs((LitPosition6[0] - outputVelX[1] / lx) / LitPosition6[0]) << std::endl;
-      clout << "xCoord of yMaxVel=" <<   outputVelY[1]/lx << "; error(rel)=" << (T) util::fabs((LitPosition6[1] - outputVelY[1] / lx) / LitPosition6[1]) << std::endl;
-      clout << "Nusselt=" <<  nusselt << "; error(rel)=" << (T) util::fabs((LitNusselt6 - nusselt) / nusselt) << std::endl;
-    }
-    else if (Ra == 1e7) {
-      clout << "xVelocity in yDir=" <<  outputVelX[0] / converter.getPhysThermalDiffusivity() * converter.getCharPhysLength() << "; error(rel)=" << (T) util::fabs((LitVelocity7[0] - outputVelX[0] / converter.getPhysThermalDiffusivity() * converter.getCharPhysLength()) / LitVelocity7[0]) << std::endl;
-      clout << "yVelocity in xDir=" <<  outputVelY[0] / converter.getPhysThermalDiffusivity() * converter.getCharPhysLength() << "; error(rel)=" << (T) util::fabs((LitVelocity7[1] - outputVelY[0] / converter.getPhysThermalDiffusivity() * converter.getCharPhysLength()) / LitVelocity7[1]) << std::endl;
-      clout << "yMaxVel / xMaxVel="  <<  outputVelY[0] / outputVelX[0] << "; error(rel)=" << (T) util::fabs((LitVelocity7[2] - outputVelY[0] / outputVelX[0])  / LitVelocity7[2]) << std::endl;
-      clout << "yCoord of xMaxVel=" <<  outputVelX[1]/lx << "; error(rel)=" << (T) util::fabs((LitPosition7[0] - outputVelX[1] / lx) / LitPosition7[0]) << std::endl;
-      clout << "xCoord of yMaxVel=" <<   outputVelY[1]/lx << "; error(rel)=" << (T) util::fabs((LitPosition7[1] - outputVelY[1] / lx) / LitPosition7[1]) << std::endl;
-      clout << "Nusselt=" <<  nusselt << "; error(rel)=" << (T) util::fabs((LitNusselt7 - nusselt) / nusselt) << std::endl;
-    }
-    else if (Ra == 1e8) {
-      clout << "xVelocity in yDir=" <<  outputVelX[0] / converter.getPhysThermalDiffusivity() * converter.getCharPhysLength() << "; error(rel)=" << (T) util::fabs((LitVelocity8[0] - outputVelX[0] / converter.getPhysThermalDiffusivity() * converter.getCharPhysLength()) / LitVelocity8[0]) << std::endl;
-      clout << "yVelocity in xDir=" <<  outputVelY[0] / converter.getPhysThermalDiffusivity() * converter.getCharPhysLength() << "; error(rel)=" << (T) util::fabs((LitVelocity8[1] - outputVelY[0] / converter.getPhysThermalDiffusivity() * converter.getCharPhysLength()) / LitVelocity8[1]) << std::endl;
-      clout << "yMaxVel / xMaxVel="  <<  outputVelY[0] / outputVelX[0] << "; error(rel)=" << (T) util::fabs((LitVelocity8[2] - outputVelY[0] / outputVelX[0])  / LitVelocity8[2]) << std::endl;
-      clout << "yCoord of xMaxVel=" <<  outputVelX[1]/lx << "; error(rel)=" << (T) util::fabs((LitPosition8[0] - outputVelX[1] / lx) / LitPosition8[0]) << std::endl;
-      clout << "xCoord of yMaxVel=" <<   outputVelY[1]/lx << "; error(rel)=" << (T) util::fabs((LitPosition8[1] - outputVelY[1] / lx) / LitPosition8[1]) << std::endl;
-      clout << "Nusselt=" <<  nusselt << "; error(rel)=" << (T) util::fabs((LitNusselt8 - nusselt) / nusselt) << std::endl;
-    }
-    else if (Ra == 1e9) {
-      clout << "xVelocity in yDir=" <<  outputVelX[0] / converter.getPhysThermalDiffusivity() * converter.getCharPhysLength() << "; error(rel)=" << (T) util::fabs((LitVelocity9[0] - outputVelX[0] / converter.getPhysThermalDiffusivity() * converter.getCharPhysLength()) / LitVelocity9[0]) << std::endl;
-      clout << "yVelocity in xDir=" <<  outputVelY[0] / converter.getPhysThermalDiffusivity() * converter.getCharPhysLength() << "; error(rel)=" << (T) util::fabs((LitVelocity9[1] - outputVelY[0] / converter.getPhysThermalDiffusivity() * converter.getCharPhysLength()) / LitVelocity9[1]) << std::endl;
-      clout << "yMaxVel / xMaxVel="  <<  outputVelY[0] / outputVelX[0] << "; error(rel)=" << (T) util::fabs((LitVelocity9[2] - outputVelY[0] / outputVelX[0])  / LitVelocity9[2]) << std::endl;
-      clout << "yCoord of xMaxVel=" <<  outputVelX[1]/lx << "; error(rel)=" << (T) util::fabs((LitPosition9[0] - outputVelX[1] / lx) / LitPosition9[0]) << std::endl;
-      clout << "xCoord of yMaxVel=" <<   outputVelY[1]/lx << "; error(rel)=" << (T) util::fabs((LitPosition9[1] - outputVelY[1] / lx) / LitPosition9[1]) << std::endl;
-      clout << "Nusselt=" <<  nusselt << "; error(rel)=" << (T) util::fabs((LitNusselt9 - nusselt) / nusselt) << std::endl;
-    }
-    else if (Ra == 1e10) {
-      clout << "xVelocity in yDir=" <<  outputVelX[0] / converter.getPhysThermalDiffusivity() * converter.getCharPhysLength() << "; error(rel)=" << (T) util::fabs((LitVelocity10[0] - outputVelX[0] / converter.getPhysThermalDiffusivity() * converter.getCharPhysLength()) / LitVelocity10[0]) << std::endl;
-      clout << "yVelocity in xDir=" <<  outputVelY[0] / converter.getPhysThermalDiffusivity() * converter.getCharPhysLength() << "; error(rel)=" << (T) util::fabs((LitVelocity10[1] - outputVelY[0] / converter.getPhysThermalDiffusivity() * converter.getCharPhysLength()) / LitVelocity10[1]) << std::endl;
-      clout << "yMaxVel / xMaxVel="  <<  outputVelY[0] / outputVelX[0] << "; error(rel)=" << (T) util::fabs((LitVelocity10[2] - outputVelY[0] / outputVelX[0])  / LitVelocity10[2]) << std::endl;
-      clout << "yCoord of xMaxVel=" <<  outputVelX[1]/lx << "; error(rel)=" << (T) util::fabs((LitPosition10[0] - outputVelX[1] / lx) / LitPosition10[0]) << std::endl;
-      clout << "xCoord of yMaxVel=" <<   outputVelY[1]/lx << "; error(rel)=" << (T) util::fabs((LitPosition10[1] - outputVelY[1] / lx) / LitPosition10[1]) << std::endl;
-      clout << "Nusselt=" <<  nusselt << "; error(rel)=" << (T) util::fabs((LitNusselt10 - nusselt) / nusselt) << std::endl;
-    }
-    if (singleton::mpi().isMainProcessor()) {
-      std::fstream fs;
-      fs.open("output.txt",
-              std::fstream::in | std::fstream::out | std::fstream::app);
-      fs << "Comparison against De Vahl Davis (1983):" << std::endl;
-      if (Ra == 1e3) {
-        fs << "xVelocity in yDir=" <<  outputVelX[0] / converter.getPhysThermalDiffusivity() * converter.getCharPhysLength() << "; error(rel)=" << (T) util::fabs((LitVelocity3[0] - outputVelX[0] / converter.getPhysThermalDiffusivity() * converter.getCharPhysLength()) / LitVelocity3[0]) << std::endl;
-        fs << "yVelocity in xDir=" <<  outputVelY[0] / converter.getPhysThermalDiffusivity() * converter.getCharPhysLength() << "; error(rel)=" << (T) util::fabs((LitVelocity3[1] - outputVelY[0] / converter.getPhysThermalDiffusivity() * converter.getCharPhysLength()) / LitVelocity3[1]) << std::endl;
-        fs << "yMaxVel / xMaxVel="  <<  outputVelY[0] / outputVelX[0] << "; error(rel)=" << (T) util::fabs((LitVelocity3[2] - outputVelY[0] / outputVelX[0])  / LitVelocity3[2]) << std::endl;
-        fs << "yCoord of xMaxVel=" <<  outputVelX[1]/lx << "; error(rel)=" << (T) util::fabs((LitPosition3[0] - outputVelX[1] / lx) / LitPosition3[0]) << std::endl;
-        fs << "xCoord of yMaxVel=" <<   outputVelY[1]/lx << "; error(rel)=" << (T) util::fabs((LitPosition3[1] - outputVelY[1] / lx) / LitPosition3[1]) << std::endl;
-        fs << "Nusselt=" <<  nusselt << "; error(rel)=" << (T) util::fabs((LitNusselt3 - nusselt) / nusselt) << std::endl;
-      }
-      else if (Ra == 1e4) {
-        fs << "xVelocity in yDir=" <<  outputVelX[0] / converter.getPhysThermalDiffusivity() * converter.getCharPhysLength() << "; error(rel)=" << (T) util::fabs((LitVelocity4[0] - outputVelX[0] / converter.getPhysThermalDiffusivity() * converter.getCharPhysLength()) / LitVelocity4[0]) << std::endl;
-        fs << "yVelocity in xDir=" <<  outputVelY[0] / converter.getPhysThermalDiffusivity() * converter.getCharPhysLength() << "; error(rel)=" << (T) util::fabs((LitVelocity4[1] - outputVelY[0] / converter.getPhysThermalDiffusivity() * converter.getCharPhysLength()) / LitVelocity4[1]) << std::endl;
-        fs << "yMaxVel / xMaxVel="  <<  outputVelY[0] / outputVelX[0] << "; error(rel)=" << (T) util::fabs((LitVelocity4[2] - outputVelY[0] / outputVelX[0])  / LitVelocity4[2]) << std::endl;
-        fs << "yCoord of xMaxVel=" <<  outputVelX[1]/lx << "; error(rel)=" << (T) util::fabs((LitPosition4[0] - outputVelX[1] / lx) / LitPosition4[0]) << std::endl;
-        fs << "xCoord of yMaxVel=" <<   outputVelY[1]/lx << "; error(rel)=" << (T) util::fabs((LitPosition4[1] - outputVelY[1] / lx) / LitPosition4[1]) << std::endl;
-        fs << "Nusselt=" <<  nusselt << "; error(rel)=" << (T) util::fabs((LitNusselt4 - nusselt) / nusselt) << std::endl;
-      }
-      else if (Ra == 1e5) {
-        fs << "xVelocity in yDir=" <<  outputVelX[0] / converter.getPhysThermalDiffusivity() * converter.getCharPhysLength() << "; error(rel)=" << (T) util::fabs((LitVelocity5[0] - outputVelX[0] / converter.getPhysThermalDiffusivity() * converter.getCharPhysLength()) / LitVelocity5[0]) << std::endl;
-        fs << "yVelocity in xDir=" <<  outputVelY[0] / converter.getPhysThermalDiffusivity() * converter.getCharPhysLength() << "; error(rel)=" << (T) util::fabs((LitVelocity5[1] - outputVelY[0] / converter.getPhysThermalDiffusivity() * converter.getCharPhysLength()) / LitVelocity5[1]) << std::endl;
-        fs << "yMaxVel / xMaxVel="  <<  outputVelY[0] / outputVelX[0] << "; error(rel)=" << (T) util::fabs((LitVelocity5[2] - outputVelY[0] / outputVelX[0])  / LitVelocity5[2]) << std::endl;
-        fs << "yCoord of xMaxVel=" <<  outputVelX[1]/lx << "; error(rel)=" << (T) util::fabs((LitPosition5[0] - outputVelX[1] / lx) / LitPosition5[0]) << std::endl;
-        fs << "xCoord of yMaxVel=" <<   outputVelY[1]/lx << "; error(rel)=" << (T) util::fabs((LitPosition5[1] - outputVelY[1] / lx) / LitPosition5[1]) << std::endl;
-        fs << "Nusselt=" <<  nusselt << "; error(rel)=" << (T) util::fabs((LitNusselt5 - nusselt) / nusselt) << std::endl;
-      }
-      else if (Ra == 1e6) {
-        fs << "xVelocity in yDir=" <<  outputVelX[0] / converter.getPhysThermalDiffusivity() * converter.getCharPhysLength() << "; error(rel)=" << (T) util::fabs((LitVelocity6[0] - outputVelX[0] / converter.getPhysThermalDiffusivity() * converter.getCharPhysLength()) / LitVelocity6[0]) << std::endl;
-        fs << "yVelocity in xDir=" <<  outputVelY[0] / converter.getPhysThermalDiffusivity() * converter.getCharPhysLength() << "; error(rel)=" << (T) util::fabs((LitVelocity6[1] - outputVelY[0] / converter.getPhysThermalDiffusivity() * converter.getCharPhysLength()) / LitVelocity6[1]) << std::endl;
-        fs << "yMaxVel / xMaxVel="  <<  outputVelY[0] / outputVelX[0] << "; error(rel)=" << (T) util::fabs((LitVelocity6[2] - outputVelY[0] / outputVelX[0])  / LitVelocity6[2]) << std::endl;
-        fs << "yCoord of xMaxVel=" <<  outputVelX[1]/lx << "; error(rel)=" << (T) util::fabs((LitPosition6[0] - outputVelX[1] / lx) / LitPosition6[0]) << std::endl;
-        fs << "xCoord of yMaxVel=" <<   outputVelY[1]/lx << "; error(rel)=" << (T) util::fabs((LitPosition6[1] - outputVelY[1] / lx) / LitPosition6[1]) << std::endl;
-        fs << "Nusselt=" <<  nusselt << "; error(rel)=" << (T) util::fabs((LitNusselt6 - nusselt) / nusselt) << std::endl;
-      }
-      else if (Ra == 1e7) {
-        fs << "xVelocity in yDir=" <<  outputVelX[0] / converter.getPhysThermalDiffusivity() * converter.getCharPhysLength() << "; error(rel)=" << (T) util::fabs((LitVelocity7[0] - outputVelX[0] / converter.getPhysThermalDiffusivity() * converter.getCharPhysLength()) / LitVelocity7[0]) << std::endl;
-        fs << "yVelocity in xDir=" <<  outputVelY[0] / converter.getPhysThermalDiffusivity() * converter.getCharPhysLength() << "; error(rel)=" << (T) util::fabs((LitVelocity7[1] - outputVelY[0] / converter.getPhysThermalDiffusivity() * converter.getCharPhysLength()) / LitVelocity7[1]) << std::endl;
-        fs << "yMaxVel / xMaxVel="  <<  outputVelY[0] / outputVelX[0] << "; error(rel)=" << (T) util::fabs((LitVelocity7[2] - outputVelY[0] / outputVelX[0])  / LitVelocity7[2]) << std::endl;
-        fs << "yCoord of xMaxVel=" <<  outputVelX[1]/lx << "; error(rel)=" << (T) util::fabs((LitPosition7[0] - outputVelX[1] / lx) / LitPosition7[0]) << std::endl;
-        fs << "xCoord of yMaxVel=" <<   outputVelY[1]/lx << "; error(rel)=" << (T) util::fabs((LitPosition7[1] - outputVelY[1] / lx) / LitPosition7[1]) << std::endl;
-        fs << "Nusselt=" <<  nusselt << "; error(rel)=" << (T) util::fabs((LitNusselt7 - nusselt) / nusselt) << std::endl;
-      }
-      else if (Ra == 1e8) {
-        fs << "xVelocity in yDir=" <<  outputVelX[0] / converter.getPhysThermalDiffusivity() * converter.getCharPhysLength() << "; error(rel)=" << (T) util::fabs((LitVelocity8[0] - outputVelX[0] / converter.getPhysThermalDiffusivity() * converter.getCharPhysLength()) / LitVelocity8[0]) << std::endl;
-        fs << "yVelocity in xDir=" <<  outputVelY[0] / converter.getPhysThermalDiffusivity() * converter.getCharPhysLength() << "; error(rel)=" << (T) util::fabs((LitVelocity8[1] - outputVelY[0] / converter.getPhysThermalDiffusivity() * converter.getCharPhysLength()) / LitVelocity8[1]) << std::endl;
-        fs << "yMaxVel / xMaxVel="  <<  outputVelY[0] / outputVelX[0] << "; error(rel)=" << (T) util::fabs((LitVelocity8[2] - outputVelY[0] / outputVelX[0])  / LitVelocity8[2]) << std::endl;
-        fs << "yCoord of xMaxVel=" <<  outputVelX[1]/lx << "; error(rel)=" << (T) util::fabs((LitPosition8[0] - outputVelX[1] / lx) / LitPosition8[0]) << std::endl;
-        fs << "xCoord of yMaxVel=" <<   outputVelY[1]/lx << "; error(rel)=" << (T) util::fabs((LitPosition8[1] - outputVelY[1] / lx) / LitPosition8[1]) << std::endl;
-        fs << "Nusselt=" <<  nusselt << "; error(rel)=" << (T) util::fabs((LitNusselt8 - nusselt) / nusselt) << std::endl;
-      }
-      else if (Ra == 1e9) {
-        fs << "xVelocity in yDir=" <<  outputVelX[0] / converter.getPhysThermalDiffusivity() * converter.getCharPhysLength() << "; error(rel)=" << (T) util::fabs((LitVelocity9[0] - outputVelX[0] / converter.getPhysThermalDiffusivity() * converter.getCharPhysLength()) / LitVelocity9[0]) << std::endl;
-        fs << "yVelocity in xDir=" <<  outputVelY[0] / converter.getPhysThermalDiffusivity() * converter.getCharPhysLength() << "; error(rel)=" << (T) util::fabs((LitVelocity9[1] - outputVelY[0] / converter.getPhysThermalDiffusivity() * converter.getCharPhysLength()) / LitVelocity9[1]) << std::endl;
-        fs << "yMaxVel / xMaxVel="  <<  outputVelY[0] / outputVelX[0] << "; error(rel)=" << (T) util::fabs((LitVelocity9[2] - outputVelY[0] / outputVelX[0])  / LitVelocity9[2]) << std::endl;
-        fs << "yCoord of xMaxVel=" <<  outputVelX[1]/lx << "; error(rel)=" << (T) util::fabs((LitPosition9[0] - outputVelX[1] / lx) / LitPosition9[0]) << std::endl;
-        fs << "xCoord of yMaxVel=" <<   outputVelY[1]/lx << "; error(rel)=" << (T) util::fabs((LitPosition9[1] - outputVelY[1] / lx) / LitPosition9[1]) << std::endl;
-        fs << "Nusselt=" <<  nusselt << "; error(rel)=" << (T) util::fabs((LitNusselt9 - nusselt) / nusselt) << std::endl;
-      }
-      else if (Ra == 1e10) {
-        fs << "xVelocity in yDir=" <<  outputVelX[0] / converter.getPhysThermalDiffusivity() * converter.getCharPhysLength() << "; error(rel)=" << (T) util::fabs((LitVelocity10[0] - outputVelX[0] / converter.getPhysThermalDiffusivity() * converter.getCharPhysLength()) / LitVelocity10[0]) << std::endl;
-        fs << "yVelocity in xDir=" <<  outputVelY[0] / converter.getPhysThermalDiffusivity() * converter.getCharPhysLength() << "; error(rel)=" << (T) util::fabs((LitVelocity10[1] - outputVelY[0] / converter.getPhysThermalDiffusivity() * converter.getCharPhysLength()) / LitVelocity10[1]) << std::endl;
-        fs << "yMaxVel / xMaxVel="  <<  outputVelY[0] / outputVelX[0] << "; error(rel)=" << (T) util::fabs((LitVelocity10[2] - outputVelY[0] / outputVelX[0])  / LitVelocity10[2]) << std::endl;
-        fs << "yCoord of xMaxVel=" <<  outputVelX[1]/lx << "; error(rel)=" << (T) util::fabs((LitPosition10[0] - outputVelX[1] / lx) / LitPosition10[0]) << std::endl;
-        fs << "xCoord of yMaxVel=" <<   outputVelY[1]/lx << "; error(rel)=" << (T) util::fabs((LitPosition10[1] - outputVelY[1] / lx) / LitPosition10[1]) << std::endl;
-        fs << "Nusselt=" <<  nusselt << "; error(rel)=" << (T) util::fabs((LitNusselt10 - nusselt) / nusselt) << std::endl;
-      }
-    }
+    Vector<T, 5> parameterCollection = {outputVelX[0], outputVelY[0], outputVelX[1], outputVelY[1], nusselt};
+    compareToStudy(output, parameterCollection);
   }
 }
 
-int main(int argc, char *argv[])
+void simulate(Vector<T, 18>& output)
 {
-
-  /// === 1st Step: Initialization ===
-  OstreamManager clout(std::cout,"main");
-  initialize(&argc, &argv);
-  singleton::directories().setOutputDir("./tmp/");
-
-#ifndef SMAGORINSKY
-  T tau = 0.9;
-#endif
-  N = 32;
-
-  if (argc>=2) {
-    Ra = atof(argv[1]);
-  }
-
-  if (argc>=3) {
-    N = atof(argv[2]);
-  }
-  lx  = util::pow(Ra * 15.126e-6 * 15.126e-6 / Pr / 9.81 / (Thot - Tcold) / 0.00341, (T) 1/3);  // length of the square
-  T charU = 1.0 / lx /( Pr * 25.684e-3 / 15.126e-6 / 1.0 * 1.0 / 25.684e-3);
-
-  if (Ra==1e3) {
-    charU *= LitVelocity3[1];
-    N = 64;
-  }
-  if (Ra==1e4) {
-    charU *= LitVelocity4[1];
-    N = 128;
-  }
-  if (Ra==1e5) {
-    charU *= LitVelocity5[1];
-    N = 256;
-  }
-  if (Ra==1e6) {
-    charU *= LitVelocity6[1];
-    N = 512;
-  }
-  if (Ra==1e7) {
-    charU *= LitVelocity7[1];
-  }
-  if (Ra==1e8) {
-    charU *= LitVelocity8[1];
-  }
-  if (Ra==1e9) {
-    charU *= LitVelocity9[1];
-  }
-  if (Ra==1e10) {
-    charU *= LitVelocity10[1];
-  }
-
+  OstreamManager clout(std::cout,"simulate");
 
   ThermalUnitConverter<T, NSDESCRIPTOR, TDESCRIPTOR> converter(
     (T) lx / N,
-#ifdef SMAGORINSKY
-    (T) 2.*0.056/charU*lx/N,
-#else
-    (T) (tau - 0.5) / descriptors::invCs2<T,NSDESCRIPTOR>() * util::pow((lx/N),2) / 15.126e-6,
-#endif
+    #ifdef TURBULENT
+    // (T) 2.*0.056/charU*lx/N,
+    (T) 2. * 0.01 / charU * lx / N,
+    #else
+    (T) (tau - 0.5) / descriptors::invCs2<T,NSDESCRIPTOR>() * util::pow((lx/N),2) / kinematicViscosity,
+    #endif
     (T) lx,
     (T) charU,
-    (T) 15.126e-6,
-    (T) 1.0,
-    (T) 25.684e-3,
-    (T) Pr * 25.684e-3 / 15.126e-6 / 1.0,
-    (T) 0.00341,
+    (T) kinematicViscosity,
+    (T) density,
+    (T) thermalDiffusivity,
+    (T) Pr * thermalDiffusivity / kinematicViscosity / density,
+    (T) thermalExpansion,
     (T) Tcold,
     (T) Thot
   );
   converter.print();
+
 
   UnitConverter<T,TDESCRIPTOR> dummy_converter(
     (T)   converter.getPhysDeltaX(),      // deltaX
@@ -581,6 +359,8 @@ int main(int argc, char *argv[])
     (T)   converter.getPhysViscosity(),   // from converter
     (T)   converter.getPhysDensity()      // from converter
   );
+  physLambda = converter.getPhysThermalDiffusivity();
+  charL = converter.getCharPhysLength();
 
   /// === 2nd Step: Prepare Geometry ===
   std::vector<T> extend(2,T());
@@ -611,7 +391,7 @@ int main(int argc, char *argv[])
   T boussinesqForcePrefactor = 9.81 / converter.getConversionFactorVelocity() * converter.getConversionFactorTime() *
                                converter.getCharPhysTemperatureDifference() * converter.getPhysThermalExpansionCoefficient();
 
-#ifdef SMAGORINSKY
+#ifdef TURBULENT
   const T preFactor = smagoConst*smagoConst
                     * descriptors::invCs2<T,NSDESCRIPTOR>()*descriptors::invCs2<T,NSDESCRIPTOR>()
                     * 2*util::sqrt(2);
@@ -621,11 +401,11 @@ int main(int argc, char *argv[])
     names::NavierStokes{}, NSlattice,
     names::Temperature{},  ADlattice);
   coupling.setParameter<SmagorinskyBoussinesqCoupling::T0>(
-    converter.getLatticeTemperature(Tcold));
+    converter.getLatticeTemperature(Tmean));
   coupling.setParameter<SmagorinskyBoussinesqCoupling::FORCE_PREFACTOR>(
     boussinesqForcePrefactor * Vector<T,2>{0.0,1.0});
   coupling.setParameter<SmagorinskyBoussinesqCoupling::SMAGORINSKY_PREFACTOR>(preFactor);
-  coupling.setParameter<SmagorinskyBoussinesqCoupling::PR_TURB>(0.87);
+  coupling.setParameter<SmagorinskyBoussinesqCoupling::PR_TURB>(PrTurb);
   coupling.setParameter<SmagorinskyBoussinesqCoupling::OMEGA_NSE>(
     converter.getLatticeRelaxationFrequency());
   coupling.setParameter<SmagorinskyBoussinesqCoupling::OMEGA_ADE>(
@@ -641,7 +421,7 @@ int main(int argc, char *argv[])
     boussinesqForcePrefactor * Vector<T,2>{0.0,1.0});
 #endif
 
-#ifdef SMAGORINSKY
+#ifdef TURBULENT
   SuperVTMwriter2D<T> vtkWriter("squareCavity2d");
 
   SuperLatticePhysTemperature2D<T,NSDESCRIPTOR, TDESCRIPTOR> sTemp(ADlattice,converter);
@@ -666,7 +446,7 @@ int main(int argc, char *argv[])
       clout << "Simulation converged." << std::endl;
       clout << "Time " << iT << "." << std::endl;
 
-      getResults(converter, NSlattice, ADlattice, iT, superGeometry, timer, converge.hasConverged());
+      getResults(output, converter, NSlattice, ADlattice, iT, superGeometry, timer, converge.hasConverged());
     }
 
     /// === 5th Step: Definition of Initial and Boundary Conditions ===
@@ -680,13 +460,13 @@ int main(int argc, char *argv[])
 
     /// === 7th Step: Computation and Output of the Results ===
     if ( !converged ) {
-      getResults(converter, NSlattice, ADlattice, iT, superGeometry, timer, converge.hasConverged());
+      getResults(output, converter, NSlattice, ADlattice, iT, superGeometry, timer, converge.hasConverged());
     }
     if (!converged && iT % 1000 == 0) {
       ADlattice.setProcessingContext(ProcessingContext::Evaluation);
       converge.takeValue(computeNusselt(superGeometry, NSlattice, ADlattice),true);
     }
-#ifdef SMAGORINSKY
+#ifdef TURBULENT
     if (converged && iT % statisticsIntervall == 0) {
       NSlattice.communicate();
       ADlattice.communicate();
@@ -700,10 +480,10 @@ int main(int argc, char *argv[])
         break;
       }
     }
-#endif
+    #endif
+    if (converged) break;
   }
-
-#ifdef SMAGORINSKY
+#ifdef TURBULENT
   vtkWriter.write(sAveragedTemp);
   vtkWriter.write(sAveragedVel);
   vtkWriter.write(sTemp);
@@ -712,5 +492,115 @@ int main(int argc, char *argv[])
 
   timer.stop();
   timer.printSummary();
+  return;
+}
 
+void setRayleighDependentParameters(T& Ra)
+{
+  lx = util::pow(Ra * kinematicViscosity * kinematicViscosity / Pr / gravitationalConstant / (Thot - Tcold) / thermalExpansion, (T) 1 / 3);  // length of the square
+  charU = 1.0 / lx /( Pr * thermalDiffusivity / kinematicViscosity / 1.0 * 1.0 / thermalDiffusivity) * charUMultiplier();
+}
+
+void defineResolutions(std::vector<int>& convergenceRes, int startRes, int nRes) {
+  for (int i = 0; i < nRes; i++) {
+      convergenceRes[i] = startRes * (1 << i);
+  }
+}
+
+int main(int argc, char *argv[])
+{
+
+  /// === 1st Step: Initialization ===
+  OstreamManager clout(std::cout,"main");
+  initialize(&argc, &argv);
+  singleton::directories().setOutputDir("./tmp/");
+  CLIreader args(argc, argv);
+
+  std::string fName( "squareCavity2d.xml" );
+  XMLreader config( fName );
+
+#ifndef TURBULENT
+  tau                   = config["Application"]["Discretization"]["LatticeRelaxationTime"].get<T>();
+#endif
+  smagoConst            = config["Application"]["PhysParameters"]["SmagorinskyConstant"].get<T>();
+
+  maxPhysT              = config["Application"]["PhysParameters"]["PhysMaxTime"].get<T>();
+  Pr                    = config["Application"]["PhysParameters"]["Prandtl"].get<T>();
+  PrTurb                = config["Application"]["PhysParameters"]["PrandtlTurb"].get<T>();
+  thermalExpansion      = config["Application"]["PhysParameters"]["ThermalExpansion"].get<T>();
+  thermalDiffusivity    = config["Application"]["PhysParameters"]["ThermalDiffusivity"].get<T>();
+  density               = config["Application"]["PhysParameters"]["PhysDensity"].get<T>();
+  heatCapacity          = config["Application"]["PhysParameters"]["HeatCapacity"].get<T>();
+  kinematicViscosity    = config["Application"]["PhysParameters"]["KinematicViscosity"].get<T>();
+  gravitationalConstant = config["Application"]["PhysParameters"]["GravitationalConstant"].get<T>();
+  charUConfig           = config["Application"]["PhysParameters"]["CharLatticeVelocity"].get<T>();
+  Thot                  = config["Application"]["PhysParameters"]["HotTemperature"].get<T>();
+  Tcold                 = config["Application"]["PhysParameters"]["ColdTemperature"].get<T>();
+  Tmean                 = (Thot + Tcold) / 2.0;
+
+  epsilon               = config["Application"]["ConvergenceCheck"]["Residuum"].get<T>();
+
+  bool convergenceTest  = config["Application"]["ConvergenceTest"]["Mode"].get<bool>();
+  clout << "convergence test " << convergenceTest << std::endl;
+  Vector<T, 18> output;
+  if (convergenceTest)
+  {
+    Ra = config["Application"]["PhysParameters"]["Rayleigh"].get<T>();
+    const int startRes = config["Application"]["ConvergenceTest"]["StartResolution"].get<int>();
+    const int numRes = config["Application"]["ConvergenceTest"]["NumberResolutions"].get<int>();
+    std::vector<int> convergenceRes(numRes);
+    defineResolutions(convergenceRes, startRes, numRes);
+    chooseComparisonParameters(Ra);
+    if (comparable) {
+      std::fstream fs;
+      setRayleighDependentParameters(Ra);
+      if (singleton::mpi().isMainProcessor()) {
+        fs.open("convergence.csv",
+          std::fstream::in | std::fstream::out | std::fstream::app);
+        fs << "N;Ra;xVel_sim;xVel_ref;xVel_err;yVel_sim;yVel_ref;yVel_err;yVel_sim/xVel_sim;yVel_ref/xVel_ref;yVel/xVel_err;xmax_sim;xmax_ref;xmax_err;ymax_sim;ymax_ref;ymax_err;Nusselt_sim;Nusselt_ref;Nusselt_err" << std::endl;
+      }
+      for (int testId = 0; testId < numRes; testId++)
+      {
+        N = convergenceRes[testId];
+        simulate(output);
+        // if (singleton::mpi().isMainProcessor()) {
+        //  fs.open("convergence.csv",
+        //     std::fstream::in | std::fstream::out | std::fstream::app);
+          fs  <<     N  << ";"
+          <<        Ra  << ";"
+          << output[0]  << ";"
+          << output[1]  << ";"
+          << output[2]  << ";"
+          << output[3]  << ";"
+          << output[4]  << ";"
+          << output[5]  << ";"
+          << output[6]  << ";"
+          << output[7]  << ";"
+          << output[8]  << ";"
+          << output[9]  << ";"
+          << output[10] << ";"
+          << output[11] << ";"
+          << output[12] << ";"
+          << output[13] << ";"
+          << output[14] << ";"
+          << output[15] << ";"
+          << output[16] << ";"
+          << output[17] << ";"
+          << std::endl;
+        }
+      // }
+      fs.close();
+      } else {
+        clout << "No comparable values for Ra = " << Ra << " found in De Vahl Davis (1983)." << std::endl;
+      }
+  }
+  else
+  {
+    clout << "no convergence study." << std::endl;
+    Ra  = args.getValueOrFallback<std::size_t>("--Ra", 1000);
+    N  = args.getValueOrFallback<std::size_t>("--N", 64);
+    chooseComparisonParameters(Ra);
+    setRayleighDependentParameters(Ra);
+    simulate(output);
+  }
 }

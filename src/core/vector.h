@@ -293,6 +293,15 @@ constexpr Vector<T,D> normalize(const ScalarVector<T,D,IMPL>& a, T scale = T{1})
 }
 
 template <typename T, unsigned D, typename IMPL>
+constexpr Vector<T,D> normalizeWithEpsilon(const ScalarVector<T,D,IMPL>& a, T scale = T{1}, T epsilon = std::numeric_limits<T>::min())
+{
+  T invScale (scale / (norm(a) + epsilon));
+  return Vector<T,D>([invScale,&a](unsigned iDim) -> T {
+    return a[iDim] * invScale;
+  });
+}
+
+template <typename T, unsigned D, typename IMPL>
 constexpr Vector<T,D> abs(const ScalarVector<T,D,IMPL>& a)
 {
   using namespace util;
@@ -476,24 +485,30 @@ constexpr T max(const ScalarVector<T,D,IMPL>& v)
   }
   return max;
 }
-
 template <typename T, unsigned D>
 std::optional<Vector<T,D>> Vector<T,D>::fromString(const std::string& input) {
+  static_assert(D > 0, "Vector parsing from string requires D > 0.");
   Vector<T,D> o;
   std::stringstream is(input);
-  char c = 0;
-  // Consume leading whitespace and check for '['
-  if (!(is >> std::ws >> c) || c != '[') {
-    return std::nullopt;
-  }
-  for (unsigned i=0; i < D; ++i) {
-    if (!(is >> o[i])) {
+  if constexpr (D > 1) {
+    char c = 0;
+    // Consume leading whitespace and check for '['
+    if (!(is >> std::ws >> c) || c != '[') {
       return std::nullopt;
     }
-  }
-  // Consume internal whitespace and check for ']'
-  if (!(is >> std::ws >> c) || c != ']') {
-    return std::nullopt;
+    for (unsigned i=0; i < D; ++i) {
+      if (!(is >> o[i])) {
+        return std::nullopt;
+      }
+    }
+    // Consume internal whitespace and check for ']'
+    if (!(is >> std::ws >> c) || c != ']') {
+      return std::nullopt;
+    }
+  } else { // D == 1
+    if (!(is >> o[0])) {
+      return std::nullopt;
+    }
   }
   // Check that there is nothing left in the stream but whitespace
   is >> std::ws;

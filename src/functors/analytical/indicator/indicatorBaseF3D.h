@@ -83,12 +83,10 @@ public:
   /// Uses the fastest, but potentially less accurate method
   Vector<S,3> surfaceNormal(const Vector<S,3>& pos, const S meshSize,
                             std::function<Vector<S,3>(const Vector<S,3>&)> transformPos);
-
   /// Return surface normal after possible translation and rotation
   /// Uses the fastest, but potentially less accurate method
   Vector<S,3> surfaceNormalExact(const Vector<S,3>& pos, const S meshSize,
                             std::function<Vector<S,3>(const Vector<S,3>&)> transformPos);
-
   /// Returns true if `point` is inside a cube with corners `_myMin` and `_myMax`
   bool isInsideBox(Vector<S,3> point);
 

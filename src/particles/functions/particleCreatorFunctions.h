@@ -211,20 +211,26 @@ void saveParticlePositions(
     const std::string& filename, const std::vector<SpawnData<T, D>>& spawnData,
     const std::function<std::string(const std::size_t&)>& evalIdentifier)
 {
-  std::ofstream file;
-  file.open(filename.c_str(), std::ios::trunc);
-  std::size_t pID = 0;
-  for (const SpawnData<T, D>& entry : spawnData) {
-    for (unsigned iD = 0; iD < D; ++iD) {
-      file << std::setprecision(16) << entry.position[iD] << ';';
+#ifdef PARALLEL_MODE_MPI
+  if (singleton::mpi().isMainProcessor()) {
+#endif
+    std::ofstream file;
+    file.open(filename.c_str(), std::ios::trunc);
+    std::size_t pID = 0;
+    for (const SpawnData<T, D>& entry : spawnData) {
+      for (unsigned iD = 0; iD < D; ++iD) {
+        file << std::setprecision(16) << entry.position[iD] << ';';
+      }
+      for (unsigned iD = 0; iD < utilities::dimensions::convert<D>::rotation;
+           ++iD) {
+        file << std::setprecision(16) << entry.angleInDegree[iD] << ';';
+      }
+      file << evalIdentifier(pID++) << std::endl;
     }
-    for (unsigned iD = 0; iD < utilities::dimensions::convert<D>::rotation;
-         ++iD) {
-      file << std::setprecision(16) << entry.angleInDegree[iD] << ';';
-    }
-    file << evalIdentifier(pID++) << std::endl;
+    file.close();
+#ifdef PARALLEL_MODE_MPI
   }
-  file.close();
+#endif
 }
 
 template <typename T, unsigned D>
@@ -238,19 +244,26 @@ std::vector<SpawnData<T, D>> setParticles(
   std::vector<SpawnData<T, D>>          spawnData;
   std::vector<std::vector<std::string>> filecontent =
       particles::creators::readParticlePositions(filename);
+  T tmpVolume = T {0.};
   for (const std::vector<std::string>& line : filecontent) {
-    PhysR<T, D>                                            particlePosition;
-    Vector<T, utilities::dimensions::convert<D>::rotation> particleAngle;
-    unsigned                                               iD = 0;
-    for (; iD < D; ++iD) {
-      particlePosition[iD] = std::stod(line[iD]);
+    if (tmpVolume < fluidDomainVolume * wantedParticleVolumeFraction) {
+      PhysR<T, D>                                            particlePosition;
+      Vector<T, utilities::dimensions::convert<D>::rotation> particleAngle;
+      unsigned                                               iD = 0;
+      for (; iD < D; ++iD) {
+        particlePosition[iD] = std::stod(line[iD]);
+      }
+      for (; iD < (D + utilities::dimensions::convert<D>::rotation); ++iD) {
+        particleAngle[iD - D] = std::stod(line[iD]);
+      }
+      SpawnData<T, D> tmpSpawnData(particlePosition, particleAngle);
+      spawnData.push_back(tmpSpawnData);
+      createParticle(tmpSpawnData, line[iD]);
+      tmpVolume += getParticleVolume(std::stoi(line[iD]));
     }
-    for (; iD < (D + utilities::dimensions::convert<D>::rotation); ++iD) {
-      particleAngle[iD - D] = std::stod(line[iD]);
+    else {
+      break;
     }
-    SpawnData<T, D> tmpSpawnData(particlePosition, particleAngle);
-    spawnData.push_back(tmpSpawnData);
-    createParticle(tmpSpawnData, line[iD]);
   }
 
   return spawnData;

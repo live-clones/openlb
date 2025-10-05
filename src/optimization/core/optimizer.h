@@ -40,8 +40,7 @@ namespace olb {
 /// \namespace opti Optimization Code.
 namespace opti {
 
-
-template<typename, typename> class OptiCase;
+template<typename> class AbstractOptiCase;
 
 enum OptimizerLogType {control, derivative, value, error, norm_derivative};
 
@@ -94,7 +93,7 @@ protected:
 
   /// Provides the Optimizer with methods to evaluate the
   /// value of an object functional and compute derivatives
-  OptiCase<S,C>*                      _optiCase;
+  AbstractOptiCase<S>*                      _optiCase;
 
   /// control vector to compare with (for numerical evaluation)
   C                                   _referenceControl;
@@ -123,8 +122,9 @@ public:
 
   virtual void optimize();
 
-  virtual void optimize(OptiCase<S,C>& optiCase) {
+  virtual void optimize(AbstractOptiCase<S>& optiCase) {
     _optiCase = &optiCase;
+    setControl(_optiCase->getControlVector());
     optimize();
   }
 
@@ -132,17 +132,16 @@ public:
     evaluateObjective(_control, _value);
   }
 
-  void simulate(OptiCase<S,C>& optiCase) {
+  void simulate(AbstractOptiCase<S>& optiCase) {
     _optiCase = &optiCase;
     simulate();
   }
 
   void evaluateObjective(const C& control, S& result) {
-    result = _optiCase->evaluateObjective(control, _it);
+    result = _optiCase->computeObjective(control, _it);
   }
 
   void computeDerivatives(const C& control, C& derivatives) {
-
     _optiCase->computeDerivatives(control, derivatives, _it);
   }
 
@@ -179,9 +178,9 @@ public:
 
   void setStartValue(C startValues, S factor=S(1));
 
-  OptiCase<S,C>* getOptiCase() { return _optiCase; }
+  AbstractOptiCase<S>* getOptiCase() { return _optiCase; }
 
-  void setOptiCase(OptiCase<S,C>* optiCase) { _optiCase = optiCase; }
+  void setOptiCase(AbstractOptiCase<S>* optiCase) { _optiCase = optiCase; }
 
   void setGnuplotData();
 

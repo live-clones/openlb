@@ -816,6 +816,11 @@ public:
   }
 };
 
+template<typename T, typename DESCRIPTOR, typename MEMBER, typename... ARGS>
+std::unique_ptr<UnitConverter<T,DESCRIPTOR>> createUnitConverter(ARGS&&... args) {
+  return std::make_unique<MEMBER>(std::forward<ARGS>(args)...);
+}
+
 }  // namespace olb
 
 #include "thermalUnitConverter.h"

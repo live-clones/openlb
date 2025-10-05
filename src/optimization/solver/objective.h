@@ -35,6 +35,8 @@ namespace olb {
 
 namespace opti {
 
+namespace solver {
+
 /// @brief  Objective in optimization with adjoint LBM
 /// @tparam T floating point type
 // Provides interface for evaluation as well as relevant partial derivatives
@@ -243,6 +245,7 @@ protected:
 };
 
 
+}
 }
 }
 

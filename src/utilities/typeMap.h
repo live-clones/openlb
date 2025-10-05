@@ -24,6 +24,8 @@
 #ifndef UTILITIES_TYPE_MAP_H
 #define UTILITIES_TYPE_MAP_H
 
+#include <memory>
+
 #include "core/meta.h"
 
 namespace olb {
@@ -81,6 +83,11 @@ struct plain_map {
     });
   }
 
+  template <typename KEY>
+  static constexpr bool contains_key() {
+    return keys_t::template contains<KEY>();
+  }
+
 };
 
 /// Map of types
@@ -94,8 +101,12 @@ using map = plain_map<
 template <typename VALUE_TYPE>
 struct exchange_value_type {
   template <typename TYPE>
-  using type = typename TYPE::exchange_value_t<VALUE_TYPE>;
+  using type = typename TYPE::template exchange_value_t<VALUE_TYPE>;
 };
+
+/// Helper to satisfy intel being unable to use default args in map::map_values
+template <typename TYPE>
+using unique_ptr_to = std::unique_ptr<TYPE>;
 
 }
 

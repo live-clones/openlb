@@ -281,6 +281,7 @@ Vector<T,3> evalSurfaceNormalForPseudoNormal(const Vector<T,3>& origin, Vector<T
 
 
   short evalSignForSignedDistanceFromNormal(const Vector<T,3>& normal, const Vector<T,3>& distance);
+  short evalSignForSignedDistance(const Vector<T,3>& pt, [[maybe_unused]] const T distance);
   /// Evaluate sign for signed distance
   /// Computes the sign following 10.1109/TVCG.2005.49 (distance corresponds to p - c)
   /// p: the position that is evaluated

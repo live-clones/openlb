@@ -25,92 +25,105 @@
 #define CASE_CASE_H
 
 #include "mesh.h"
-#include "parameters.h"
+#include "parametersD.h"
+
+#include "core/superLattice.h"
 
 #include "utilities/typeMap.h"
 #include "utilities/typeIndexedContainers.h"
 
 namespace olb {
 
-template <typename T, typename DESCRIPTOR>
-struct Lattice {
-  using value_t = T;
-  using descriptor_t = DESCRIPTOR;
-
-  template <typename VALUE_TYPE>
-  using exchange_value_t = Lattice<VALUE_TYPE, DESCRIPTOR>;
-};
-
 template <typename MAP>
-class PlainCase {
+class ConcreteCase {
 public:
   // Select first descriptor as reference for value type and dimension (for now)
-  using reference_discretization_t = MAP::values_t::template get<0>;
-  
+  using reference_component_t = MAP::values_t::template get<0>;
+
   // Expose reference value type to use in apps
-  using value_t = reference_discretization_t::value_t;
+  using value_t = reference_component_t::value_t;
 
   template <typename VALUE_TYPE>
-  using exchange_value_t = PlainCase<typename MAP::template map_values<
-    meta::exchange_value_type<VALUE_TYPE>::template type>
-  >;
+  using exchange_value_t = ConcreteCase<typename MAP::template map_values<
+    meta::exchange_value_type<VALUE_TYPE>::template type
+  >>;
 
-  using ParametersD = olb::ParametersD<typename reference_discretization_t::value_t,
-                                       typename reference_discretization_t::descriptor_t>;
+  using ParametersD = olb::ParametersD<typename reference_component_t::value_t,
+                                       typename reference_component_t::descriptor_t>;
 
 private:
-  /// Reference to mesh (shared between multiple cases)
-  Mesh<typename reference_discretization_t::value_t,
-       reference_discretization_t::descriptor_t::d>& _mesh;
-
+  /// Reference to case parameters
   ParametersD& _parameters;
 
+  /// Reference to mesh (shared between multiple cases)
+  Mesh<typename reference_component_t::value_t,
+       reference_component_t::descriptor_t::d>& _mesh;
+
   /// Case-specific geometry
-  std::unique_ptr<SuperGeometry<typename reference_discretization_t::value_t,
-                                reference_discretization_t::descriptor_t::d>> _geometry;
+  std::unique_ptr<SuperGeometry<typename reference_component_t::value_t,
+                                reference_component_t::descriptor_t::d>> _geometry;
 
-  template <typename DISCRETIZATION>
-  using ptr_to_lattice = std::unique_ptr<SuperLattice<typename DISCRETIZATION::value_t,
-                                                      typename DISCRETIZATION::descriptor_t>>;
+  /// Case-specific named components (e.g. lattices, ...)
+  utilities::TypeIndexedTuple<typename MAP::template map_values<meta::unique_ptr_to>> _components;
 
-  /// Case-specific lattices
-  utilities::TypeIndexedTuple<typename MAP::template map_values<
-    ptr_to_lattice
-  >> _lattices;
-
+  /// Arbitrary case-specific operators
   std::unordered_map<std::string, std::unique_ptr<ApplicableO>> _operators;
 
+  std::string _name{"ConcreteCase"};
+
 public:
-  static constexpr unsigned d = reference_discretization_t::descriptor_t::d;
+  static constexpr unsigned d = reference_component_t::descriptor_t::d;
 
   template <typename NAME>
   using value_t_of = MAP::template value<NAME>::value_t;
   template <typename NAME>
-  using descriptor_t = MAP::template value<NAME>::descriptor_t;
+  using descriptor_t_of = MAP::template value<NAME>::descriptor_t;
 
-  void constructLatticesFromMesh() {
+  /// (Re)construct all named components and reset operators
+  void constructComponentsFromMesh() {
+    /// Necessary due to impending invalidation
+    _operators.clear();
     MAP::keys_t::for_each([&](auto name) {
-      using DISCRETIZATION = MAP::template value<typename decltype(name)::type>;
-      using V = DISCRETIZATION::value_t;
-      using DESCRIPTOR = DISCRETIZATION::descriptor_t;
-      _lattices.template set(name, std::make_unique<SuperLattice<V,DESCRIPTOR>>(
-          _mesh.getCuboidDecomposition()
-        , _mesh.getLoadBalancer()));
+      using COMPONENT = MAP::template value<typename decltype(name)::type>;
+      _components.set(name, std::make_unique<COMPONENT>(_mesh));
     });
   }
 
-  PlainCase(ParametersD& parameters,
-            Mesh<typename reference_discretization_t::value_t,d>& mesh)
+  ConcreteCase(ParametersD& parameters,
+               Mesh<typename reference_component_t::value_t,d>& mesh)
     : _parameters{parameters}
     , _mesh{mesh}
-    , _geometry{new SuperGeometry<typename reference_discretization_t::value_t,
-                                  reference_discretization_t::descriptor_t::d>(
+    , _geometry{new SuperGeometry<typename reference_component_t::value_t,
+                                  reference_component_t::descriptor_t::d>(
           mesh.getCuboidDecomposition()
-        , mesh.getLoadBalancer())}
-    , _lattices{}
+        , mesh.getLoadBalancer()
+        , mesh.getOverlap())}
+    , _components{}
   {
-    constructLatticesFromMesh();
+    OstreamManager clout(std::cout, "Case");
+    constructComponentsFromMesh();
+    clout << std::endl;
+    clout << "-- OpenLB Case Components --" << std::endl;
+    print(clout);
+    clout << std::endl;
+    clout << "-- Parameters --" << std::endl;
+    _parameters.print(clout);
+    clout << std::endl;
   };
+
+  void print(OstreamManager clout={std::cout, "Case"}) const {
+    std::size_t nCharName = 0;
+    MAP::keys_t::for_each([&](auto name) {
+      using NAME = typename decltype(name)::type;
+      nCharName = std::max(nCharName, fields::name<NAME>().length());
+    });
+    MAP::keys_t::for_each([&](auto name) {
+      using NAME = typename decltype(name)::type;
+      using COMPONENT = MAP::template value<NAME>;
+      clout << fields::name<NAME>() << std::string(nCharName - fields::name<NAME>().length(), ' ')
+            << " = " << fields::name<COMPONENT>() << std::endl;
+    });
+  }
 
   ParametersD& getParameters() {
     return _parameters;
@@ -124,9 +137,19 @@ public:
     return *_geometry;
   }
 
+  /// Returns reference to component of NAME
   template <typename NAME>
-  auto& getLattice(NAME) {
-    return *_lattices.template get<NAME>();
+  auto& get(NAME) {
+    return *_components.template get<NAME>();
+  }
+
+  /// Returns reference to lattice of NAME
+  template <typename NAME>
+  auto& getLattice(NAME name) {
+    using T = value_t_of<NAME>;
+    using DESCRIPTOR = descriptor_t_of<NAME>;
+    // Ensure that component with NAME is actually a lattice
+    return static_cast<Lattice<T,DESCRIPTOR>&>(get(name));
   }
 
   ApplicableO& getOperator(std::string name) {
@@ -141,10 +164,22 @@ public:
     return concrete;
   }
 
+  void resetLattices() {
+    constructComponentsFromMesh();
+  }
+
+  void setName(std::string name) {
+    _name = name;
+  }
+
+  template <typename NAME>
+  bool hasName(NAME) {
+    return  (NAME{}.name == _name);
+  }
 };
 
 template <typename... MAP>
-using Case = PlainCase<meta::map<MAP...>>;
+using Case = ConcreteCase<meta::map<MAP...>>;
 
 }
 

@@ -57,6 +57,7 @@
 #include "guoZhaoDynamics.h"
 #include "multiphaseBGKdynamics.h"
 #include "spongeLayerDynamics.h"
+#include "bubbleSpawner.h"
 
 #include "dynamics2D.hh"
 

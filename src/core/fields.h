@@ -25,29 +25,16 @@
 #define CORE_FIELDS_H
 
 #include "descriptor/fields.h"
-
-#include <source_location>
+#include "meta.h"
 
 namespace olb {
-
-template <typename FIELD>
-constexpr std::string_view getFieldName() {
-#ifndef USING_LEGACY_CODEGEN
-  const std::string_view raw = std::source_location::current().function_name();
-  return std::string_view(raw.cbegin() + raw.find_first_of('=')+2,
-                          raw.cbegin() + std::min(raw.find_first_of(']'),
-                                                  raw.find_first_of(';')));
-#else
-  return std::string_view();
-#endif
-}
 
 namespace fields {
 
 /// Returns name of FIELD for human consumption
 template <typename FIELD>
 std::string name() {
-  auto raw = getFieldName<FIELD>();
+  auto raw = meta::nice_name<FIELD>();
   if (raw.starts_with("olb::")) {
     raw = std::string_view(raw.cbegin() + 5,
                            raw.cend());
@@ -56,6 +43,7 @@ std::string name() {
   // alongside FIELD name
   return std::string(raw);
 }
+
 template <typename FIELD>
 using array_of = descriptors::POINTER_FIELD_BASE<FIELD>;
 

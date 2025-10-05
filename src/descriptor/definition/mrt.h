@@ -412,91 +412,91 @@ platform_constant_definition int bulkViscIndex<3,19> = 1;
 } // mrt_data
 
 template <typename T, unsigned D, unsigned Q>
-constexpr T t(unsigned iPop, tag::MRT) any_platform
+constexpr T t(unsigned iPop, tag::MRT)
 {
   return data::t<D,Q>[iPop].template as<T>();
 }
 
 template <typename T, unsigned D, unsigned Q>
-constexpr T m(unsigned iPop, unsigned jPop, tag::MRT) any_platform
+constexpr T m(unsigned iPop, unsigned jPop, tag::MRT)
 {
   return mrt_data::M<D,Q>[iPop][jPop].template as<T>();
 }
 
 template <typename T, typename DESCRIPTOR>
-constexpr T m(unsigned iPop, unsigned jPop) any_platform
+constexpr T m(unsigned iPop, unsigned jPop)
 {
   return m<T, DESCRIPTOR::d, DESCRIPTOR::q>(iPop, jPop, typename DESCRIPTOR::category_tag());
 }
 
 template <typename T, unsigned D, unsigned Q>
-constexpr T invM(unsigned iPop, unsigned jPop, tag::MRT) any_platform
+constexpr T invM(unsigned iPop, unsigned jPop, tag::MRT)
 {
   return mrt_data::invM<D,Q>[iPop][jPop].template as<T>();
 }
 
 template <typename T, typename DESCRIPTOR>
-constexpr T invM(unsigned iPop, unsigned jPop) any_platform
+constexpr T invM(unsigned iPop, unsigned jPop)
 {
   return invM<T, DESCRIPTOR::d, DESCRIPTOR::q>(iPop, jPop, typename DESCRIPTOR::category_tag());
 }
 
 template <typename T, unsigned D, unsigned Q>
-constexpr T s(unsigned iPop, tag::MRT) any_platform
+constexpr T s(unsigned iPop, tag::MRT)
 {
   return mrt_data::s<D,Q>[iPop].template as<T>();
 }
 
 template <typename T, typename DESCRIPTOR>
-constexpr T s(unsigned iPop) any_platform
+constexpr T s(unsigned iPop)
 {
   return s<T, DESCRIPTOR::d, DESCRIPTOR::q>(iPop, typename DESCRIPTOR::category_tag());
 }
 
 template <typename T, unsigned D, unsigned Q>
-constexpr T s_2(unsigned iPop, tag::MRT) any_platform
+constexpr T s_2(unsigned iPop, tag::MRT)
 {
   return mrt_data::s_2<D,Q>[iPop].template as<T>();
 }
 
 template <typename T, typename DESCRIPTOR>
-constexpr T s_2(unsigned iPop) any_platform
+constexpr T s_2(unsigned iPop)
 {
   return s_2<T, DESCRIPTOR::d, DESCRIPTOR::q>(iPop, typename DESCRIPTOR::category_tag());
 }
 
 template <unsigned D, unsigned Q>
-constexpr int shearIndexes(tag::MRT) any_platform
+constexpr int shearIndexes(tag::MRT)
 {
   return mrt_data::shearIndexes<D,Q>;
 }
 
 template <typename DESCRIPTOR>
-constexpr int shearIndexes() any_platform
+constexpr int shearIndexes()
 {
   return shearIndexes<DESCRIPTOR::d, DESCRIPTOR::q>(typename DESCRIPTOR::category_tag());
 }
 
 template <unsigned D, unsigned Q>
-constexpr int shearViscIndexes(unsigned iPop, tag::MRT) any_platform
+constexpr int shearViscIndexes(unsigned iPop, tag::MRT)
 {
   return mrt_data::shearViscIndexes<D,Q>[iPop];
 }
 
 template <typename DESCRIPTOR>
-constexpr int shearViscIndexes(unsigned iPop) any_platform
+constexpr int shearViscIndexes(unsigned iPop)
 {
   return shearViscIndexes<DESCRIPTOR::d, DESCRIPTOR::q>(iPop, typename DESCRIPTOR::category_tag());
 }
 
 template <unsigned D, unsigned Q>
-constexpr int bulkViscIndex(tag::MRT) any_platform
+constexpr int bulkViscIndex(tag::MRT)
 {
   return mrt_data::bulkViscIndex<D,Q>;
 }
 
 template <typename DESCRIPTOR>
-constexpr int bulkViscIndex() any_platform
+constexpr int bulkViscIndex()
 {
   return bulkViscIndex<DESCRIPTOR::d, DESCRIPTOR::q>(typename DESCRIPTOR::category_tag());
 }

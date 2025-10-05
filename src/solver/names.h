@@ -28,12 +28,30 @@
 
 #include "descriptor/tag.h"
 
-
 namespace olb {
+
+// Tag to differentiate different cases, e.g. for optimization
+struct CASE_TAG { };
 
 /// Define names as empty structs in order to enable calls like
 /// lattice(NavierStokes()).
 namespace names {
+
+struct Controlled : public CASE_TAG {
+  const std::string name{"Controlled"};
+};
+struct Primal : public CASE_TAG {
+  const std::string name{"Primal"};
+};
+struct Adjoint : public CASE_TAG {
+  const std::string name{"Adjoint"};
+};
+struct Reference : public CASE_TAG {
+  const std::string name{"Reference"};
+};
+struct Derivatives : public CASE_TAG {
+  const std::string name{"Derivative"};
+};
 
 struct A { };
 struct B { };
@@ -46,11 +64,12 @@ struct Component4 { };
 
 struct Lattice1 : public descriptors::DESCRIPTOR_TAG { };
 struct Lattice2 : public descriptors::DESCRIPTOR_TAG { };
-struct Primal : public descriptors::DESCRIPTOR_TAG { };
 struct Dual : public descriptors::DESCRIPTOR_TAG { };
 struct NavierStokes : public descriptors::DESCRIPTOR_TAG { };
 struct AdvectionDiffusion : public descriptors::DESCRIPTOR_TAG { };
 struct Temperature  : public descriptors::DESCRIPTOR_TAG { };
+struct SuperLattice : public descriptors::DESCRIPTOR_TAG { };
+struct SuperLattice2 : public descriptors::DESCRIPTOR_TAG { };
 struct Points : public descriptors::DESCRIPTOR_TAG { };
 
 struct TurbKineticEnergy : public descriptors::DESCRIPTOR_TAG { };
@@ -76,7 +95,6 @@ struct Stationarity          : public Parameter { };
 
 struct Errors       : public Parameter { };
 struct Results      : public Parameter { };
-struct Reference    : public Parameter { };
 
 struct OutputChannel { };
 struct debug        : public OutputChannel { };

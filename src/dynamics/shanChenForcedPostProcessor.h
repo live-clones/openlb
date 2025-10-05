@@ -130,6 +130,25 @@ struct RhoStatistics  {
   }
 };
 
+struct PhiStatistics  {
+  static constexpr OperatorScope scope = OperatorScope::PerCell;
+
+  int getPriority() const {
+    return 0;
+  }
+
+  template <typename CELL>
+  void apply(CELL& cell) any_platform
+  {
+    using V = typename CELL::value_t;
+    auto statistic = cell.template getField<descriptors::STATISTIC>();
+    statistic[0] = cell.computeRho();
+    if (statistic[0] > 1.0001) statistic[0] = V{1};
+    if (statistic[0] < -0.0001) statistic[0] = V{0};
+    cell.template setField<descriptors::STATISTIC>(statistic);
+  }
+};
+
 template <typename POTENTIAL, unsigned N_COMPONENTS>
 struct RhoPsiStatistics  {
   static constexpr OperatorScope scope = OperatorScope::PerCellWithParameters;

@@ -93,7 +93,7 @@ bool distance(S& distance, const Vector<S,D>& origin, const Vector<S,D>& directi
 
 template <typename S, unsigned D, typename F1, typename F2>
 bool distance(S& distance, const Vector<S,D>& origin, const Vector<S,D>& direction,
-              S precision, F1 sdf, F2 isInsideBoundingBox, const unsigned maxIt = 1e6)
+              S precision, F1 sdf, F2 isInsideBoundingBox, const unsigned maxIt = 5e3)
 {
   S signedDistance{sdf(origin)};
   Vector<S,D> currPos{origin};
@@ -121,7 +121,7 @@ bool distance(S& distance, const Vector<S,D>& origin, const Vector<S,D>& directi
 
 template <typename S, unsigned D, bool normalizeDirection = true>
 bool distance(S& distance, const Vector<S,D>& origin, const Vector<S,D>& direction,
-              S precision, std::function<S(const Vector<S,D>&)> sdf, S maxDistance, const unsigned maxIt = 1e6)
+              S precision, std::function<S(const Vector<S,D>&)> sdf, S maxDistance, const unsigned maxIt = 5e3)
 {
   S signedDistance{sdf(origin)};
   Vector<S,D> currPos{origin};

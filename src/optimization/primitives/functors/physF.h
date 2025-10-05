@@ -46,11 +46,76 @@ struct VelocityF {
     V u[DESCRIPTOR::d]{0};
     cell.computeU(u);
 
-    FieldD<V,DESCRIPTOR,descriptors::VELOCITY> physU;
+    FieldD<V,DESCRIPTOR,descriptors::VELOCITY> physU{};
     for (auto iDim=0; iDim<DESCRIPTOR::d; ++iDim) {
       physU[iDim] = u[iDim] * conversion;
     }
     return physU;
+  }
+};
+
+struct DissipationF {
+  using parameters = meta::list<descriptors::OMEGA,
+                                descriptors::DT,
+                                descriptors::PHYS_VISCOSITY>;
+
+  using result_t = descriptors::DISSIPATION;
+  using fields_t = meta::list<>;
+
+  template <typename CELL, typename PARAMETERS>
+  auto compute(CELL& cell, PARAMETERS& parameters) any_platform {
+    using V = typename CELL::value_t;
+    using DESCRIPTOR = typename CELL::descriptor_t;
+    const V omega = parameters.template get<descriptors::OMEGA>();
+    const V dt = parameters.template get<descriptors::DT>();
+    const V physViscosity = parameters.template get<descriptors::PHYS_VISCOSITY>();
+
+    V rho = 0; V u[DESCRIPTOR::d]{0}; V pi[util::TensorVal<DESCRIPTOR>::n]{0};
+    cell.computeAllMomenta(rho, u, pi);
+
+    V PiNeqNormSqr = pi[0] * pi[0] + 2. * pi[1] * pi[1] + pi[2] * pi[2];
+    if (util::TensorVal<DESCRIPTOR>::n == 6) {
+      PiNeqNormSqr += pi[2] * pi[2] + pi[3] * pi[3] + 2. * pi[4] * pi[4] + pi[5] * pi[5];
+    }
+
+    FieldD<V,DESCRIPTOR,descriptors::DISSIPATION> dissipation{};
+    dissipation[0] = PiNeqNormSqr *
+                     util::pow(omega * descriptors::invCs2<V,DESCRIPTOR>() / rho / dt, 2) /
+                     V(2) * physViscosity;
+    return dissipation;
+  }
+};
+
+struct PorousDissipationF {
+  using parameters = meta::list<descriptors::OMEGA,
+                                descriptors::DX,
+                                descriptors::VISCOSITY,
+                                descriptors::CONVERSION_VELOCITY,
+                                descriptors::PHYS_VISCOSITY>;
+
+  using result_t = descriptors::POROUS_DISSIPATION;
+  using fields_t = meta::list<descriptors::POROSITY>;
+
+  template <typename CELL, typename PARAMETERS>
+  auto compute(CELL& cell, PARAMETERS& parameters) any_platform {
+    using V = typename CELL::value_t;
+    using DESCRIPTOR = typename CELL::descriptor_t;
+    const V porosity = cell.template getField<descriptors::POROSITY>();
+    const V omega = parameters.template get<descriptors::OMEGA>();
+    const V dx = parameters.template get<descriptors::DX>();
+    const V viscosity = parameters.template get<descriptors::VISCOSITY>();
+    const V physViscosity = parameters.template get<descriptors::PHYS_VISCOSITY>();
+    const V conversionVelocity = parameters.template get<descriptors::CONVERSION_VELOCITY>();
+
+    V u[DESCRIPTOR::d]{0};
+    cell.computeU(u);
+    const V gridTerm = dx * dx * viscosity / omega;
+    const V invPermeability = (V(1) - porosity) / gridTerm;
+    const V uNormSq = util::euklidN2(u, DESCRIPTOR::d) * conversionVelocity * conversionVelocity;
+
+    FieldD<V,DESCRIPTOR,descriptors::POROUS_DISSIPATION> dissipation{};
+    dissipation[0] = physViscosity * invPermeability * uNormSq;
+    return dissipation;
   }
 };
 

@@ -37,6 +37,7 @@
 #include "communication/superStructure.hh"
 #include "utilities/functorPtr.h"
 #include "geometry/superGeometry.h"
+#include "case/mesh.h"
 
 namespace olb {
 
@@ -79,6 +80,9 @@ public:
   /// Descriptor / discrete velocity set of the lattice
   using descriptor_t = DESCRIPTOR;
 
+  template <typename VALUE_TYPE>
+  using exchange_value_t = SuperLattice<VALUE_TYPE, DESCRIPTOR>;
+
   using block_t = ConcretizableBlockLattice<T,DESCRIPTOR>;
 
   SuperLattice(CuboidDecomposition<T,DESCRIPTOR::d>& cuboidDecomposition,
@@ -89,6 +93,12 @@ public:
                CuboidDecomposition<T,DESCRIPTOR::d>& cuboidDecomposition,
                LoadBalancer<T>& loadBalancer,
                unsigned overlap = 3);
+
+  SuperLattice(Mesh<T,DESCRIPTOR::d>& mesh):
+    SuperLattice(mesh.getCuboidDecomposition(),
+                 mesh.getLoadBalancer(),
+                 mesh.getOverlap())
+  { }
 
   SuperLattice(UnitConverter<T,DESCRIPTOR> converter,
                SuperGeometry<T,DESCRIPTOR::d>& sGeometry)
@@ -446,6 +456,9 @@ public:
 
 };
 
+/// Placeholder for higher-level olb::Lattice
+template <typename T, typename DESCRIPTOR>
+using Lattice = SuperLattice<T,DESCRIPTOR>;
 
 }
 

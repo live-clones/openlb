@@ -609,7 +609,7 @@ Vector<S,2> SmoothIndicatorFactoredCuboid2D<T, S, PARTICLE>::calcMofiAndMass( co
   return Vector<S,2>(mofi, mass);
 }
 
-// returns true if x is inside the sphere
+// returns true if x is inside the cuboid
 template <typename T, typename S, bool PARTICLE>
 bool SmoothIndicatorFactoredCuboid2D<T,S,PARTICLE>::operator()(T output[], const S input[])
 {

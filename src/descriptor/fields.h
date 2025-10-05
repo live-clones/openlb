@@ -339,9 +339,13 @@ struct PRESSCORR            : public FIELD_BASE<1,  0, 0> { };
 struct FORCE                : public FIELD_BASE<0,  1, 0> { };
 struct EXTERNAL_FORCE       : public FIELD_BASE<0,  1, 0> { };
 struct NABLARHO             : public FIELD_BASE<0,  1, 0> { };
+struct LAPLACERHO           : public FIELD_BASE<1,  0, 0> { };
 struct TAU_EFF              : public FIELD_BASE<1,  0, 0> { };
 struct RHO                  : public FIELD_BASE<1,  0, 0> { };
+struct DISSIPATION          : public FIELD_BASE<1,  0, 0> { };
+struct POROUS_DISSIPATION   : public FIELD_BASE<1,  0, 0> { };
 struct VISCOSITY            : public FIELD_BASE<1,  0, 0> { };
+struct PHYS_VISCOSITY       : public FIELD_BASE<1,  0, 0> { };
 struct GAMMA                : public FIELD_BASE<1,  0, 0> { };
 struct CUTOFF_KIN_ENERGY    : public FIELD_BASE<1,  0, 0> { };
 struct CUTOFF_HEAT_FLUX     : public FIELD_BASE<1,  0, 0> { };
@@ -388,8 +392,10 @@ struct NEIGHBOR             : public FIELD_BASE<1,  0, 0>{
   }
 };
 struct CONVERSION           : public FIELD_BASE<1,  0, 0> { };
+struct CONVERSION_VELOCITY  : public FIELD_BASE<1,  0, 0> { };
 struct NORMALIZE            : public FIELD_BASE<1,  0, 0> { };
 struct DX                   : public FIELD_BASE<1,  0, 0> { };
+struct DT                   : public FIELD_BASE<1,  0, 0> { };
 struct AV_SHEAR             : public FIELD_BASE<1,  0, 0> { };
 struct SHEAR_RATE_MAGNITUDE : public FIELD_BASE<1,  0, 0> { };
 struct TAU_W                : public FIELD_BASE<1,  0, 0> { };
@@ -468,6 +474,18 @@ struct LOCATION             : public FIELD_BASE<0,  1, 0> { };
 struct Y1                   : public FIELD_BASE<0,  1, 0> { };
 struct Y2                   : public FIELD_BASE<0,  1, 0> { };
 struct VORTICITY            : public FIELD_BASE<1,  0, 0> { };
+
+struct COVARIANCE_VELOCITY : public FIELD_BASE_CUSTOM_SIZE {
+  template <typename DESCRIPTOR>
+  static constexpr unsigned size() {
+    return (DESCRIPTOR::d * DESCRIPTOR::d);
+  }
+
+  template <typename T, typename DESCRIPTOR>
+  static constexpr auto getInitialValue() {
+    return Vector<value_type<T>, size<DESCRIPTOR>()>{};
+  }
+};
 
 //TODO: This expression has been removed on master lately. As no obvious equivalent could be found immediately,
 //      it is added back in to enable some functionality on feature/unifiedParticleFramework.
@@ -572,50 +590,38 @@ struct FUNCTION_CALLS : public descriptors::OBJECT_POINTER_FIELD_BASE<std::vecto
 namespace opti {
 
 /// Objective functional results, always scalar
-struct J                    : public descriptors::FIELD_BASE<1,  0, 0> { };
+struct J                    : public descriptors::FIELD_BASE<1, 0, 0> { };
 /// Stores populations of the primal problems for adjoint simulations
-struct F                    : public descriptors::FIELD_BASE<0,  0, 1> { };
+struct F                    : public descriptors::FIELD_BASE<0, 0, 1> { };
 /// Derivative of Objective functional regarding populations
-struct DJDF                 : public descriptors::FIELD_BASE<0,  0, 1> { };
+struct DJDF                 : public descriptors::FIELD_BASE<0, 0, 1> { };
+/// Regularization of objective functionals
+struct REGULARIZATION       : public descriptors::FIELD_BASE<1, 0, 0> { };
+/// Factor to balance regularization and objective
+struct REG_ALPHA            : public descriptors::FIELD_BASE<1, 0, 0> { };
+
+template <typename CONTROLS>
+struct SCALAR_FIELD_DERIVED_BY_CONTROLS : public descriptors::FIELD_BASE_CUSTOM_SIZE {
+  template <typename DESCRIPTOR>
+  static constexpr unsigned size() {
+    return DESCRIPTOR::template size<CONTROLS>();
+  }
+
+  template <typename T, typename DESCRIPTOR>
+  static constexpr auto getInitialValue() {
+    return Vector<value_type<T>, size<DESCRIPTOR>()>{};
+  }
+};
+
 /// Derivative of control projection regarding control variable
 template <typename CONTROLS>
-struct DPROJECTIONDALPHA : public descriptors::FIELD_BASE_CUSTOM_SIZE {
-  template <typename DESCRIPTOR>
-  static constexpr unsigned size() {
-    return DESCRIPTOR::template size<CONTROLS>();
-  }
-
-  template <typename T, typename DESCRIPTOR>
-  static constexpr auto getInitialValue() {
-    return Vector<value_type<T>, size<DESCRIPTOR>()>{};
-  }
-};
+struct DPROJECTIONDALPHA : public opti::SCALAR_FIELD_DERIVED_BY_CONTROLS<CONTROLS> { };
 /// Total derivative of the objective functional regarding controls
 template <typename CONTROLS>
-struct SENSITIVITY : public descriptors::FIELD_BASE_CUSTOM_SIZE {
-  template <typename DESCRIPTOR>
-  static constexpr unsigned size() {
-    return DESCRIPTOR::template size<CONTROLS>();
-  }
-
-  template <typename T, typename DESCRIPTOR>
-  static constexpr auto getInitialValue() {
-    return Vector<value_type<T>, size<DESCRIPTOR>()>{};
-  }
-};
+struct SENSITIVITY : public opti::SCALAR_FIELD_DERIVED_BY_CONTROLS<CONTROLS> { };
 /// Objective functional derivative regarding optimization controls
 template <typename CONTROLS>
-struct DJDALPHA : public descriptors::FIELD_BASE_CUSTOM_SIZE {
-  template <typename DESCRIPTOR>
-  static constexpr unsigned size() {
-    return DESCRIPTOR::template size<CONTROLS>();
-  }
-
-  template <typename T, typename DESCRIPTOR>
-  static constexpr auto getInitialValue() {
-    return Vector<value_type<T>, size<DESCRIPTOR>()>{};
-  }
-};
+struct DJDALPHA : public opti::SCALAR_FIELD_DERIVED_BY_CONTROLS<CONTROLS> { };
 /// Collision operator derivative regarding optimization controls
 template <typename CONTROLS>
 struct DCDALPHA : public descriptors::FIELD_MATRIX<descriptors::POPULATION,CONTROLS> {

@@ -66,6 +66,16 @@ void copyDerivatives(T* target, const TAD* source, int length) {
   }
 }
 
+/** Extract the derivatives from an ADf into a vector
+ * \result the derivatives: result[i] = d/dx_i (source)
+ */
+template <typename TAD, typename T=TAD::base_t>
+std::vector<T> extractDerivatives(const TAD& source) {
+  std::vector<T> result(TAD::dim, 0);
+  copyDerivatives(result.data(), &source, 1);
+  return result;
+}
+
 
 /// copy vector with specified typecast
 template<typename T, typename S, template<typename> typename C>

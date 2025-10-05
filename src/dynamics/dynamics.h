@@ -309,7 +309,7 @@ using ExternalTauForcedIncBGKdynamics = dynamics::Tuple<
  * DOI: 10.1103/PhysRevE.97.033309
  **/
 template <typename T, typename DESCRIPTOR>
-using MultiPhaseIncompressbileBGKdynamics = dynamics::Tuple<
+using MultiPhaseIncompressibleBGKdynamics = dynamics::Tuple<
   T, DESCRIPTOR,
   momenta::IncBulkTuple<momenta::ForcedMomentum<momenta::IncompressibleBulkMomentum>>,
   equilibria::MPIncompressible,
@@ -318,7 +318,7 @@ using MultiPhaseIncompressbileBGKdynamics = dynamics::Tuple<
 >;
 
 template <typename T, typename DESCRIPTOR>
-using MultiPhaseIncompressbileTRTdynamics = dynamics::Tuple<
+using MultiPhaseIncompressibleTRTdynamics = dynamics::Tuple<
   T, DESCRIPTOR,
   momenta::IncBulkTuple<momenta::ForcedMomentum<momenta::IncompressibleBulkMomentum>>,
   equilibria::MPIncompressible,
@@ -327,7 +327,7 @@ using MultiPhaseIncompressbileTRTdynamics = dynamics::Tuple<
 >;
 
 template <typename T, typename DESCRIPTOR>
-using MultiPhaseIncompressbileInterfaceTRTdynamics = dynamics::Tuple<
+using MultiPhaseIncompressibleInterfaceTRTdynamics = dynamics::Tuple<
   T, DESCRIPTOR,
   momenta::IncBulkTuple<momenta::ForcedMomentum<momenta::IncompressibleBulkMomentum>>,
   equilibria::MPIncompressible,
@@ -336,7 +336,7 @@ using MultiPhaseIncompressbileInterfaceTRTdynamics = dynamics::Tuple<
 >;
 
 template <typename T, typename DESCRIPTOR>
-using MultiPhaseIncompressbileSmagorinskyBGKdynamics = dynamics::Tuple<
+using MultiPhaseIncompressibleSmagorinskyBGKdynamics = dynamics::Tuple<
   T, DESCRIPTOR,
   momenta::IncBulkTuple<momenta::ForcedMomentum<momenta::IncompressibleBulkMomentum>>,
   equilibria::MPIncompressible,
@@ -345,12 +345,65 @@ using MultiPhaseIncompressbileSmagorinskyBGKdynamics = dynamics::Tuple<
 >;
 
 template <typename T, typename DESCRIPTOR>
-using MultiPhaseIncompressbileSmagorinskyTRTdynamics = dynamics::Tuple<
+using MultiPhaseIncompressibleSmagorinskyTRTdynamics = dynamics::Tuple<
   T, DESCRIPTOR,
   momenta::IncBulkTuple<momenta::ForcedMomentum<momenta::IncompressibleBulkMomentum>>,
   equilibria::MPIncompressible,
   collision::OmegaFromCellTauEff<collision::IncompressibleSmagorinskyEffectiveOmega<collision::TRT>>,
   forcing::LiangTRT<momenta::ForcedWithIncompressibleStress>
+>;
+
+template <typename T, typename DESCRIPTOR>
+using SinglePhaseIncompressibleWMRLBdynamics = dynamics::Tuple<
+  T, DESCRIPTOR,
+  momenta::WMIncBulkTuple<momenta::MovingPorousMomentumCombination<momenta::IncompressibleBulkMomentum>>,
+  equilibria::MPIncompressible,
+  collision::ParameterFromCell<collision::HYBRID,
+  collision::ParameterFromCell<collision::HYBRID_RHO,
+  collision::OmegaFromCellTauEff<collision::IncompressibleLocalSmagorinskyEffectiveOmega<collision::WMIRLB>>>>
+>;
+
+template <typename T, typename DESCRIPTOR>
+using MultiPhaseIncompressibleRLBdynamics = dynamics::Tuple<
+  T, DESCRIPTOR,
+  momenta::IncBulkTuple<momenta::ForcedMomentum<momenta::IncompressibleBulkMomentum>>,
+  equilibria::MPIncompressible,
+  collision::OmegaFromCellTauEff<collision::IRLB>,
+  forcing::Liang<momenta::Forced>
+>;
+
+template <typename T, typename DESCRIPTOR>
+using SinglePhaseIncompressibleSmagorinskyRLBdynamics = dynamics::Tuple<
+  T, DESCRIPTOR,
+  momenta::IncBulkTuple<momenta::ForcedMomentum<momenta::IncompressibleBulkMomentum>>,
+  equilibria::MPIncompressible,
+  collision::OmegaFromCellTauEff<collision::IncompressibleSmagorinskyEffectiveOmega<collision::IRLB>>
+>;
+
+template <typename T, typename DESCRIPTOR>
+using SinglePhaseIncompressibleWALERLBdynamics = dynamics::Tuple<
+  T, DESCRIPTOR,
+  momenta::IncBulkTuple<momenta::ForcedMomentum<momenta::IncompressibleBulkMomentum>>,
+  equilibria::MPIncompressible,
+  collision::OmegaFromCellTauEff<collision::WaleEffectiveOmega<collision::IRLB>>
+>;
+
+template <typename T, typename DESCRIPTOR>
+using CorrectedMultiPhaseIncompressibleRLBdynamics = dynamics::Tuple<
+  T, DESCRIPTOR,
+  momenta::CorrectedIncBulkTuple<momenta::ForcedMomentum<momenta::CorrectedIncompressibleBulkMomentum>>,
+  equilibria::CorrectedMPIncompressible,
+  collision::OmegaFromCellTauEff<collision::CIRLB>,
+  forcing::CorrectedLiang<momenta::Forced>
+>;
+
+template <typename T, typename DESCRIPTOR>
+using CorrectedMultiPhaseIncompressibleSmagorinskyRLBdynamics = dynamics::Tuple<
+  T, DESCRIPTOR,
+  momenta::CorrectedIncBulkTuple<momenta::ForcedMomentum<momenta::CorrectedIncompressibleBulkMomentum>>,
+  equilibria::CorrectedMPIncompressible,
+  collision::OmegaFromCellTauEff<collision::IncompressibleSmagorinskyEffectiveOmega<collision::CIRLB>>,
+  forcing::CorrectedLiang<momenta::Forced>
 >;
 
 template <typename T, typename DESCRIPTOR, typename MOMENTA=momenta::ExternalVelocityTuple>

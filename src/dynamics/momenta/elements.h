@@ -527,6 +527,45 @@ struct IncompressibleBulkMomentum {
   }
 };
 
+struct CorrectedIncompressibleBulkMomentum {
+  // compute the momentum
+  template <typename TYPE, typename CELL, typename J, typename DESCRIPTOR=typename CELL::descriptor_t>
+  void compute(CELL& cell, J& j) any_platform
+  {
+    lbm<DESCRIPTOR>::computeJ(cell, j);
+  }
+
+  // compute the velocity
+  template <typename TYPE, typename CELL, typename U, typename V=typename CELL::value_t, typename DESCRIPTOR=typename CELL::descriptor_t>
+  void computeU(CELL& cell, U& u) any_platform
+  {
+    lbm<DESCRIPTOR>::computeJ(cell, u);
+    auto rho = cell.template getField<descriptors::RHO>();
+    auto laplace_rho = cell.template getField<descriptors::LAPLACERHO>();
+    for (int iD=0; iD < DESCRIPTOR::d; ++iD) {
+      u[iD] /= (rho + laplace_rho/4.);
+      // TODO do this check relatively / in a more controlled manner
+      // if (util::fabs(u[iD]) < 1e-15) {
+      //   u[iD] = 0;
+      // }
+    }
+  }
+
+  // define the velocity
+  template <typename TYPE, typename CELL, typename U>
+  void define(CELL& cell, const U& u) any_platform {};
+
+  template <typename TYPE, typename CELL>
+  void initialize(CELL& cell) any_platform {};
+
+  template <typename TYPE, typename CELL, typename U>
+  void inverseShift(CELL& cell, U& u) any_platform {};
+
+  static std::string getName() {
+    return "IncompressibleBulkMomentum";
+  }
+};
+
 /// The velocity is fixed and stored in the external field U.
 struct FixedVelocityMomentumGeneric {
   struct VELOCITY : public descriptors::FIELD_BASE<0, 1, 0> { };
@@ -669,8 +708,6 @@ struct PressureBoundaryMomentum {
     }
     auto rho = cell.template getField<descriptors::RHO>();
     auto gradRho = cell.template getField<descriptors::NABLARHO>();
-    //V rho = 10.;
-    //V gradRho[2] = {0.,0.};
     auto force = cell.template getField<descriptors::FORCE>();
     const V p = TYPE().computeRho(cell);
 
@@ -1633,9 +1670,7 @@ struct BulkStress {
   }
 };
 
-/** Standard stress computation as second moment of the population.
- * Utilizes the implementation in lbHelpers.
- */
+/** Incompressible stress computation as second moment of the population.*/
 struct IncompressibleBulkStress {
   template <typename TYPE, typename CELL, typename P, typename U, typename PI, typename V=typename CELL::value_t, typename DESCRIPTOR=typename CELL::descriptor_t>
   void compute(CELL& cell, const P& p, const U& u, PI& pi) any_platform
@@ -1676,6 +1711,21 @@ struct RegularizedBoundaryStress {
 
   static std::string getName() {
     return "RegularizedBoundaryStress";
+  }
+};
+
+/// Computation of the stress tensor for regularized incompressible boundary nodes
+template <int direction, int orientation>
+struct IncRegularizedBoundaryStress {
+  template <typename TYPE, typename CELL, typename RHO, typename U, typename PI, typename V=typename CELL::value_t, typename DESCRIPTOR=typename CELL::descriptor_t>
+  void compute(CELL& cell, RHO& p, const U& u, PI& pi) any_platform
+  {
+    BoundaryHelpers<V,DESCRIPTOR,direction,orientation>::computeIncompressibleStress(
+      cell, p, u, pi);
+  }
+
+  static std::string getName() {
+    return "IncRegularizedBoundaryStress";
   }
 };
 

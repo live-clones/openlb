@@ -228,6 +228,62 @@ struct Liang {
 };
 
 template <template <typename> typename Forced = momenta::Forced>
+struct CorrectedLiang {
+  static std::string getName() {
+    return "CorrectedLiangForcing";
+  }
+
+  template <typename DESCRIPTOR, typename MOMENTA>
+  using combined_momenta = typename Forced<MOMENTA>::template type<DESCRIPTOR>;
+
+  template <typename DESCRIPTOR, typename MOMENTA, typename EQUILIBRIUM>
+  using combined_equilibrium = typename EQUILIBRIUM::template type<DESCRIPTOR,Forced<MOMENTA>>;
+
+  template <typename DESCRIPTOR, typename MOMENTA, typename EQUILIBRIUM, typename COLLISION>
+  struct combined_collision {
+    using MomentaF   = typename Forced<MOMENTA>::template type<DESCRIPTOR>;
+    using CollisionO = typename COLLISION::template type<DESCRIPTOR,Forced<MOMENTA>,EQUILIBRIUM>;
+
+    constexpr static bool is_vectorizable = dynamics::is_vectorizable_v<CollisionO>
+      // hacky workaround until vectorizability is deduced by introspection
+      && !std::is_same_v<MOMENTA, momenta::IncBulkTuple<momenta::ForcedMomentum<momenta::IncompressibleBulkMomentum>>>;
+
+    static_assert(COLLISION::parameters::template contains<descriptors::OMEGA>(),
+                  "COLLISION must be parametrized using relaxation frequency OMEGA");
+
+    template <typename CELL, typename PARAMETERS, typename V=typename CELL::value_t>
+    CellStatistic<V> apply(CELL& cell, PARAMETERS& parameters) any_platform {
+      V u[DESCRIPTOR::d];
+      MomentaF().computeU(cell, u);
+      CollisionO().apply(cell, parameters);
+      const V omega = parameters.template get<descriptors::OMEGA>();
+      const auto force = cell.template getField<descriptors::FORCE>();
+      const auto rho = cell.template getField<descriptors::RHO>();
+      const auto gradRho = cell.template getField<descriptors::NABLARHO>();
+      const auto laplaceRho = cell.template getField<descriptors::LAPLACERHO>();
+      for (int iPop=0; iPop < DESCRIPTOR::q; ++iPop) {
+        V c_u{};
+        for (int iD=0; iD < DESCRIPTOR::d; ++iD) {
+          c_u += descriptors::c<DESCRIPTOR>(iPop,iD)*u[iD];
+        }
+        V forceTerm{};
+        for (int iD=0; iD < DESCRIPTOR::d; ++iD) {
+          forceTerm += descriptors::c<DESCRIPTOR>(iPop,iD) * force[iD] * (rho+laplaceRho/4.) +
+          c_u * descriptors::c<DESCRIPTOR>(iPop,iD) * gradRho[iD];
+        }
+        forceTerm *= descriptors::t<V,DESCRIPTOR>(iPop)*descriptors::invCs2<V,DESCRIPTOR>();
+        forceTerm *= V{1} - omega * V{0.5};
+        cell[iPop] += forceTerm;
+      }
+      return {rho, util::normSqr<V,DESCRIPTOR::d>(u)};
+    };
+  };
+
+  template <typename DESCRIPTOR, typename MOMENTA, typename EQUILIBRIUM, typename COLLISION>
+  using combined_parameters = typename COLLISION::parameters;
+};
+
+template <template <typename> typename Forced = momenta::Forced>
 struct LiangTRT {
   static std::string getName() {
     return "LiangTRTForcing";
@@ -325,9 +381,9 @@ struct AllenCahn {
       const V omega = parameters.template get<descriptors::OMEGA>();
       const auto force = cell.template getField<descriptors::FORCE>();
       const auto u = cell.template getField<descriptors::VELOCITY>();
-      const auto source = cell.template getField<descriptors::SOURCE>();
+      // const auto source = cell.template getField<descriptors::SOURCE>();
       lbm<DESCRIPTOR>::addAllenCahnForce(cell, omega, force);
-      lbm<DESCRIPTOR>::addAllenCahnSource(cell, omega, source);
+      // lbm<DESCRIPTOR>::addAllenCahnSource(cell, omega, source);
       return {phi, util::normSqr<V,DESCRIPTOR::d>(u)};
     };
   };

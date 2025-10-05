@@ -1,7 +1,8 @@
 /*  Lattice Boltzmann sample, written in C++, using the OpenLB
  *  library
  *
- *  Copyright (C) 2025 Shota Ito
+ *  Copyright (C) 2006-2025 Mathias J. Krause, Fabian Klemens,
+ *  Julius Jessberger, Shota Ito
  *  E-mail contact: info@openlb.net
  *  The most recent release of OpenLB can be downloaded at
  *  <http://www.openlb.net/>
@@ -22,192 +23,431 @@
  *  Boston, MA  02110-1301, USA.
  */
 
-// Disable SIMD for ADf
-#undef PLATFORM_CPU_SIMD
-
 #include <olb.h>
 #include "analyticalSolutionTestFlow3D.h"
-#include "helper.h"  // Will be removed once SuperLatticeFieldReductionO enables indicator support
+#include "../helper.h"   // Will be removed once SuperLatticeFieldReductionO enables indicator support
 
-#include "testFlowOpti3d.h"
+using namespace olb;
+using namespace olb::names;
+using namespace olb::opti;
 
-using DUAL_DYNAMICS = DualForcedBGKDynamics<T,DESCRIPTOR>;    // Dynamics of dual problem
-using OBJECTIVE = functors::L2DistanceF<functors::VelocityF>; // Objective functional
-using CONTROLS = descriptors::FORCE;                          // Controlled field
+using T = double;
+using DESCRIPTOR = descriptors::D3Q19<descriptors::FORCE>;
+using BulkDynamics = ForcedBGKdynamics<T,DESCRIPTOR>;
+using ObjectiveF = functors::L2DistanceF<functors::VelocityF>;
+using ControlledField = descriptors::FORCE;
 
-void prepareReference(auto& reference) {
-  prepareLattice(reference->getUnitConverter(), reference->getSuperGeometry(), reference->getSuperLattice());
-  reference->getLatticeResults().template add<SuperLatticePhysPressure3D<T,DESCRIPTOR>,
-                                              SuperLatticePhysVelocity3D<T,DESCRIPTOR>,
-                                              SuperLatticeField3D<T,DESCRIPTOR,CONTROLS>>();
+/// @brief Step 1: Declare simulation structure.
+/// Model name and lattice type are collected in a Case class
+using MyCase = Case<NavierStokes, Lattice<T, DESCRIPTOR>>;
+/// State the type(s) of the used simulation cases and give a name to each case
+using MyOptiCase = OptiCaseAdjoint<
+  Controlled, MyCase,
+  Adjoint, MyCase,
+  Reference, MyCase
+>;
+
+// Physical parameters
+const T physLength        = 1;      ///< length of the squared cube [m]
+const T physVelocity      = 1;      ///< characteristic velocity [m/s]
+const T physViscosity     = 0.1;    ///< kinetic viscosity of fluid [m*m/s]
+const T physDensity       = 1;      ///< fluid density [kg/(m*m*m)]
+const T physMaxT          = 6.0;    ///< maximal simulation time [s]
+const T physStartT        = 4.0;    ///< duration of smooth start up of simulation [s]
+
+// Discretization parameters
+const int resolution      = 11;     ///< number of cells at the side of the cube
+const T latticeVelocity   = 0.07;   ///< quotient of grid spacing to temporal spacing
+
+
+/// @brief Step 3: Create a simulation mesh, based on user-specific geometry
+/// @return An instance of Mesh, which keeps the relevant information
+Mesh<T,MyCase::d> createMesh()
+{
+  const Vector extend{physLength, physLength, physLength};
+  const Vector origin{0, 0, 0};
+  IndicatorCuboid3D<T> cubeI(extend, origin);
+
+  const T physDeltaX = physLength / resolution;
+  return Mesh<T,MyCase::d>(cubeI, physDeltaX, singleton::mpi().getSize());
 }
 
-void preparePrimal(auto& primal, const std::vector<T>& controls) {
-  auto& converter = primal->getUnitConverter();
-  auto& superGeometry = primal->getSuperGeometry();
-  auto& sLattice = primal->getSuperLattice();
-  auto objectiveDomain = superGeometry.getMaterialIndicator({1});
+/// @brief Step 5: Set material numbers for different parts of the domain
+/// @param myCase The Case instance which keeps the simulation data
+void prepareGeometry(MyCase& myCase) {
+  OstreamManager clout(std::cout, "prepareGeometry");
+  clout << "Prepare Geometry ..." << std::endl;
+  auto& geometry = myCase.getGeometry();
 
-  // Define primal physics
-  sLattice.template defineDynamics<DYNAMICS>(superGeometry.getMaterialIndicator({1}));
-  boundary::set<boundary::LocalVelocity>(sLattice, superGeometry.getMaterialIndicator({2}));
-  sLattice.template setParameter<descriptors::OMEGA>(converter.getLatticeRelaxationFrequency());
+  /// @li Set material numbers
+  geometry.rename(0, 2);
+  geometry.rename(2, 1, {1,1,1});
+  geometry.print();
+  clout << "Prepare Geometry ... OK" << std::endl;
+}
 
-  // Initialize primal problem
+/// @brief Step 6: Set lattice dynamics and boundary conditions
+/// @param myCase The Case instance which keeps the simulation data
+void prepareLattice(MyCase& myCase)
+{
+  OstreamManager clout(std::cout, "prepareLattice");
+  clout << "Prepare Lattice ..." << std::endl;
+  auto& geometry = myCase.getGeometry();
+  auto& lattice = myCase.getLattice(NavierStokes{});
+
+  /// @li Set up a unit converter with the characteristic physical units
+  lattice.setUnitConverter<UnitConverterFromResolutionAndLatticeVelocity<T,DESCRIPTOR>>(
+    resolution,        // resolution
+    latticeVelocity,   // charLatticeVelocity
+    physLength,        // charPhysLength: reference length of simulation geometry in [m]
+    physVelocity,      // charPhysVelocity: highest expected velocity during simulation in [m/s]
+    physViscosity,     // physViscosity: physical kinematic viscosity in [m^2/s]
+    physDensity        // physDensity: physical density [kg/m^3]
+  );
+  auto& converter = lattice.getUnitConverter();
+  converter.print();
+
+  /// @li Material=1 --> bulk dynamics
+  lattice.template defineDynamics<ForcedBGKdynamics>(geometry.getMaterialIndicator({1}));
+  /// @li Material=2,3 --> velocity boundary
+  boundary::set<boundary::LocalVelocity>(lattice, geometry.getMaterialIndicator({2}));
+  /// @li Set lattice relaxation frequency
+  lattice.template setParameter<descriptors::OMEGA>(converter.getLatticeRelaxationFrequency());
+}
+
+// Step 7: Set initial values for primal variables (e.g. velocity, density) and additional fields
+/// @param myCase The Case instance which keeps the simulation data
+/// @note Initial values have to be set using lattice units
+void setInitialValues(MyCase& myCase)
+{
+  auto& lattice = myCase.getLattice(NavierStokes{});
+  auto& geometry = myCase.getGeometry();
+  auto& converter = lattice.getUnitConverter();
+
+  /// @li Initialize density to one everywhere
+  /// @li Initialize velocity to be tangential at the lid and zero in the bulk and at the walls
   AnalyticalConst3D<T,T> rhoF(1);
-  Vector<T,3> u{0,0,0};
+  const Vector<T,3> u{0,0,0};
   AnalyticalConst3D<T,T> uF(u);
-  sLattice.defineRhoU(superGeometry.getMaterialIndicator({1,2}), rhoF, uF);
-  sLattice.iniEquilibrium(superGeometry.getMaterialIndicator({1,2}), rhoF, uF);
-  sLattice.stripeOffDensityOffset(sLattice.getStatistics().getAverageRho() - T{1});
 
-  // Convert control vector to force field
-  std::vector<T> force = opti::applyProjection<opti::projection::ForceFactor<T>>(controls, converter);
-  setFieldFromSerialized<CONTROLS>(force, sLattice, objectiveDomain);
-  sLattice.initialize();
+  /// @li Initialize populations to equilibrium state
+  lattice.defineRhoU(geometry.getMaterialIndicator({1,2}), rhoF, uF);
+  lattice.iniEquilibrium(geometry.getMaterialIndicator({1,2}), rhoF, uF);
 
-  primal->getLatticeResults().template add<SuperLatticePhysPressure3D<T,DESCRIPTOR>,
-                                           SuperLatticePhysVelocity3D<T,DESCRIPTOR>,
-                                           SuperLatticeField3D<T,DESCRIPTOR,CONTROLS>>();
+  /// @li Set force field
+  ForceTestFlow3D<T,T,DESCRIPTOR> forceF(converter);
+  const T latticeScaling(converter.getConversionFactorMass() / converter.getConversionFactorForce());
+  AnalyticalScaled3D<T,T> scaledForceF(forceF, latticeScaling);
+  lattice.template defineField<descriptors::FORCE>(geometry.getMaterialIndicator({1}), scaledForceF);
+  lattice.initialize();
 }
 
-T computeObjective(auto& reference, auto& primal) {
-  const auto& converter = reference->getUnitConverter();
-  auto& superGeometry = reference->getSuperGeometry();
-  auto& refLattice = reference->getSuperLattice();
-  auto& primalLattice = primal->getSuperLattice();
-  auto objectiveDomain = superGeometry.getMaterialIndicator({1});
+/// Step 8.1: Update boundary values at times (and additional fields, if needed)
+/// @param myCase The Case instance which keeps the simulation data
+/// @param iT The time step
+/// In order to start the simulation slowly, we start with zero boundary velocity and gradually increase it
+/// @note Boundary values have to be set using lattice units
+void setTemporalValues(MyCase& myCase,
+                       std::size_t iT)
+{
+  auto& lattice = myCase.getLattice(NavierStokes{});
+  auto& geometry = myCase.getGeometry();
+  auto& converter = lattice.getUnitConverter();
 
-  // Evaluate functor for objective computation
-  auto objectiveO = makeWriteFunctorO<OBJECTIVE,opti::J>(primalLattice);
-  objectiveO->restrictTo(objectiveDomain);
+  const std::size_t itStart = converter.getLatticeTime(physStartT);
+  if (iT <= itStart) {
+    /// @li Compute scaling factor
+    PolynomialStartScale<T,T> startScaleF(itStart, T(1));
+    const T iTvec[1] = {T(iT)};
+    T frac[1] = {};
+    startScaleF(frac, iTvec);
 
-  writePhysFunctorTo<functors::VelocityF,OBJECTIVE::Reference>(refLattice,
-                                                               objectiveDomain,
-                                                               converter.getConversionFactorVelocity());
-  // Get solution from the reference simulation for the inverse problem
-  copyFields<OBJECTIVE::Reference,OBJECTIVE::Reference>(refLattice, primalLattice);
-  objectiveO->template setParameter<descriptors::CONVERSION>(converter.getConversionFactorVelocity());
-  objectiveO->template setParameter<descriptors::NORMALIZE>(norm(refLattice, converter, objectiveDomain));
-  objectiveO->apply();
-
-  // Compute source term for the dual simulation
-  auto objectiveDerivativeO = makeWriteFunctorO<functors::DerivativeF<OBJECTIVE,descriptors::POPULATION,DYNAMICS>,
-                                                opti::DJDF>(primalLattice);
-  objectiveDerivativeO->restrictTo(objectiveDomain);
-  objectiveDerivativeO->template setParameter<descriptors::CONVERSION>(converter.getConversionFactorVelocity());
-  objectiveDerivativeO->template setParameter<descriptors::NORMALIZE>(norm(refLattice, converter, objectiveDomain));
-  objectiveDerivativeO->template setParameter<descriptors::DX>(converter.getPhysDeltaX());
-  objectiveDerivativeO->apply();
-
-  primalLattice.setProcessingContext(ProcessingContext::Evaluation);
-  return integrate<opti::J>(primalLattice, objectiveDomain)[0];
+    /// @li Take analytical velocity solution, scale it to lattice units, set the boundary data
+    VelocityTestFlow3D<T,T,DESCRIPTOR> velocityF(converter);
+    AnalyticalScaled3D<T,T> uBoundaryStartF(velocityF, frac[0] / converter.getConversionFactorVelocity());
+    lattice.defineU(geometry, 2, uBoundaryStartF);
+    lattice.template setProcessingContext<Array<momenta::FixedVelocityMomentumGeneric::VELOCITY>>(ProcessingContext::Simulation);
+  }
 }
 
-void prepareDual(auto& dual, auto& primal, auto& reference) {
-  auto& converter = dual->getUnitConverter();
-  auto& superGeometry = dual->getSuperGeometry();
-  auto& sLattice = dual->getSuperLattice();
-  auto& primalLattice = primal->getSuperLattice();
-  auto bulkIndicator = superGeometry.getMaterialIndicator({1});
+/// Step 8.3: Compute simulation results at times
+/// @param myCase The Case instance which keeps the simulation data
+/// @param iT The time step
+void getResults(MyCase& myCase,
+                util::Timer<T>& timer,
+                std::size_t iT)
+{
+  auto& lattice = myCase.getLattice(NavierStokes{});
+  auto& converter = lattice.getUnitConverter();
+  const std::size_t iTlog = converter.getLatticeTime(physMaxT/5);
+
+  /// @li Print some (numerical and computational) statistics
+  if (iT%iTlog == 0) {
+    lattice.getStatistics().print(iT, converter.getPhysTime(iT));
+    timer.print(iT);
+  }
+}
+
+/// Step 8: Execute simulation
+/// @param myCase The Case instance which keeps the simulation data
+/// Run time loop
+void simulate(MyCase& myCase)
+{
+  const std::size_t iTmax = myCase.getLattice(NavierStokes{}).getUnitConverter().getLatticeTime(physMaxT);
+  util::Timer<T> timer(iTmax, myCase.getGeometry().getStatistics().getNvoxel());
+  timer.start();
+
+  for (std::size_t iT=0; iT < iTmax; ++iT)
+  {
+    /// @li Step 8.1: Update the Boundary Values and Fields at Times
+    setTemporalValues(myCase, iT);
+
+    /// @li Step 8.2: Collide and Stream Execution
+    myCase.getLattice(NavierStokes{}).collideAndStream();
+
+    /// @li Stripe off density offset due to Dirichlet boundary conditions
+    myCase.getLattice(NavierStokes{}).stripeOffDensityOffset(
+      myCase.getLattice(NavierStokes{}).getStatistics().getAverageRho() - T{1});
+
+    /// @li Step 8.3: Computation and Output of the Results
+    getResults(myCase, timer, iT);
+  }
+  timer.stop();
+  timer.printSummary();
+  myCase.getLattice(NavierStokes{}).setProcessingContext(ProcessingContext::Evaluation);
+}
+
+void prepareAdjointLattice(MyOptiCase& optiCase) {
+  auto& adjointLattice = optiCase.getCase(Adjoint{}).getLattice(NavierStokes{});
+  auto& controlledLattice = optiCase.getCase(Controlled{}).getLattice(NavierStokes{});
+  auto& geometry = optiCase.getCase(Adjoint{}).getGeometry();
+
+  // Set adjoint unit converter as the controlled case
+  adjointLattice.setUnitConverter(controlledLattice.getUnitConverter());
 
   // Define dual physics
-  sLattice.template defineDynamics<DUAL_DYNAMICS>(bulkIndicator);
-  boundary::set<boundary::BounceBack>(sLattice, superGeometry.getMaterialIndicator({2}));
-  sLattice.template setParameter<descriptors::OMEGA>(converter.getLatticeRelaxationFrequency());
+  adjointLattice.template defineDynamics<DualForcedBGKDynamics<T,DESCRIPTOR>>(geometry.getMaterialIndicator({1}));
+  boundary::set<boundary::BounceBack>(adjointLattice, geometry.getMaterialIndicator({2}));
+  adjointLattice.template setParameter<descriptors::OMEGA>(adjointLattice.getUnitConverter().getLatticeRelaxationFrequency());
+}
+
+void setAdjointInitialValues(MyOptiCase& optiCase) {
+  auto& adjointLattice = optiCase.getCase(Adjoint{}).getLattice(NavierStokes{});
+  auto& controlledLattice = optiCase.getCase(Controlled{}).getLattice(NavierStokes{});
+  auto& referenceLattice = optiCase.getCase(Reference{}).getLattice(NavierStokes{});
+  auto& converter = adjointLattice.getUnitConverter();
+  auto& geometry = optiCase.getCase(Adjoint{}).getGeometry();
+  auto bulkIndicator = geometry.getMaterialIndicator({1});
 
   // Initialize dual problem
   AnalyticalConst3D<T,T> rhoF(1);
   Vector<T,3> velocity;
   AnalyticalConst3D<T,T> uF(velocity);
-  sLattice.defineRhoU(bulkIndicator, rhoF, uF);
-  sLattice.iniEquilibrium(bulkIndicator, rhoF, uF);
+  adjointLattice.defineRhoU(bulkIndicator, rhoF, uF);
+  adjointLattice.iniEquilibrium(bulkIndicator, rhoF, uF);
 
   // This needs to be before copying the fields as otherwise the the copied fields will be overwritten
-  sLattice.stripeOffDensityOffset(sLattice.getStatistics().getAverageRho() - T{1});
-  sLattice.initialize();
+  adjointLattice.stripeOffDensityOffset(adjointLattice.getStatistics().getAverageRho() - T{1});
+  adjointLattice.initialize();
+
+  // Compute source term for the dual simulation
+  auto objectiveDerivativeO = makeWriteFunctorO<functors::DerivativeF<ObjectiveF,descriptors::POPULATION,BulkDynamics>,
+                                                opti::DJDF>(controlledLattice);
+  objectiveDerivativeO->restrictTo(bulkIndicator);
+  objectiveDerivativeO->template setParameter<descriptors::CONVERSION>(converter.getConversionFactorVelocity());
+  objectiveDerivativeO->template setParameter<descriptors::NORMALIZE>(norm(referenceLattice, converter, bulkIndicator));
+  objectiveDerivativeO->template setParameter<descriptors::DX>(converter.getPhysDeltaX());
+  objectiveDerivativeO->apply();
+
+  // Write primal population in dedicated fields
+  writeFunctorTo<functors::PopulationF,opti::F>(controlledLattice, bulkIndicator);
 
   // Provide fields required by the dual collision operator
-  copyFields<CONTROLS,CONTROLS>(primalLattice, sLattice);
-  writeFunctorTo<functors::PopulationF,opti::F>(primalLattice, bulkIndicator);
-  copyFields<opti::F,opti::F>(primalLattice, sLattice);
-  copyFields<opti::DJDF,opti::DJDF>(primalLattice, sLattice);
-
-  dual->getLatticeResults().template add<SuperLatticePhysPressure3D<T,DESCRIPTOR>,
-                                         SuperLatticePhysVelocity3D<T,DESCRIPTOR>,
-                                         SuperLatticeField3D<T,DESCRIPTOR,CONTROLS>,
-                                         SuperLatticeField3D<T,DESCRIPTOR,opti::DJDF>>();
+  copyFields<ControlledField,ControlledField>(controlledLattice, adjointLattice);
+  copyFields<opti::F,opti::F>(controlledLattice, adjointLattice);
+  copyFields<opti::DJDF,opti::DJDF>(controlledLattice, adjointLattice);
 }
 
-std::vector<T> computeSensitivity(auto& dual, auto& primal, const std::vector<T>& controls) {
-  const auto& converter = primal->getUnitConverter();
-  auto& superGeometry = primal->getSuperGeometry();
-  auto& primalLattice = primal->getSuperLattice();
-  auto& dualLattice = dual->getSuperLattice();
-  auto objectiveDomain = superGeometry.getMaterialIndicator({1});
+void setInitialControl(MyOptiCase& optiCase) {
+  auto& controlledCase = optiCase.getCase(Controlled{});
+  auto& lattice = controlledCase.getLattice(NavierStokes{});
+  auto& geometry = controlledCase.getGeometry();
+  auto& control = optiCase.getController();
+
+  // Intialize controlled field in superLattice
+  AnalyticalConst3D<T,T> zero(0.0);
+  lattice.template defineField<ControlledField>(geometry, 1, zero);
+  control.template setProjection<projection::ForceFactor<T>>(lattice.getUnitConverter());
+  control.template set<ControlledField>(geometry, 1, lattice);
+}
+
+void applyControl(MyOptiCase& optiCase) {
+  auto& controlledCase = optiCase.getCase(Controlled{});
+  auto& lattice = controlledCase.getLattice(NavierStokes{});
+
+  optiCase.getController().template setUpdatedControlsOnField<ControlledField>(lattice);
+  lattice.template setProcessingContext<Array<ControlledField>>(ProcessingContext::Simulation);
+}
+
+T objectiveF(MyOptiCase& optiCase) {
+  auto& referenceLattice = optiCase.getCase(Reference{}).getLattice(NavierStokes{});
+  auto& controlledLattice = optiCase.getCase(Controlled{}).getLattice(NavierStokes{});
+  auto& converter = controlledLattice.getUnitConverter();
+  auto& objectiveDomain = optiCase.getController().getDesignDomain<DESCRIPTOR>();
+
+  // Evaluate functor for objective computation
+  auto objectiveO = makeWriteFunctorO<ObjectiveF,opti::J>(controlledLattice);
+  objectiveO->restrictTo(objectiveDomain);
+
+  // Write velocity field in the reference case
+  writePhysFunctorTo<functors::VelocityF,ObjectiveF::Reference>(referenceLattice,
+                                                                objectiveDomain,
+                                                                converter.getConversionFactorVelocity());
+
+  // Get solution from the reference simulation for the inverse problem
+  copyFields<ObjectiveF::Reference,ObjectiveF::Reference>(referenceLattice, controlledLattice);
+  objectiveO->template setParameter<descriptors::CONVERSION>(converter.getConversionFactorVelocity());
+  objectiveO->template setParameter<descriptors::NORMALIZE>(norm(referenceLattice, converter, objectiveDomain));
+  objectiveO->apply();
+
+  controlledLattice.setProcessingContext(ProcessingContext::Evaluation);
+  return integrate<opti::J>(controlledLattice, objectiveDomain)[0];
+}
+
+std::vector<T> derivativeF(MyOptiCase& optiCase) {
+  auto& adjointLattice = optiCase.getCase(Adjoint{}).getLattice(NavierStokes{});
+  auto& controlledLattice = optiCase.getCase(Controlled{}).getLattice(NavierStokes{});
+  auto& converter = controlledLattice.getUnitConverter();
 
   // Evaluate optimality condition
-  auto optimalityO = makeWriteFunctorO<functors::OptimalityF<DYNAMICS,CONTROLS>,
-                                       opti::SENSITIVITY<CONTROLS>>(dualLattice);
-  //std::vector<T> projectionD = opti::applyProjection<opti::projection::ForceFactorD<T>>(controls, converter);
-  std::vector<T> projectionD;
-  projectionD.resize(controls.size(), 1.);
-  setFieldFromSerialized<opti::DPROJECTIONDALPHA<CONTROLS>>(projectionD, dualLattice, objectiveDomain);
-  dualLattice.template setProcessingContext<Array<opti::DPROJECTIONDALPHA<CONTROLS>>>(ProcessingContext::Simulation);
+  auto optimalityO = makeWriteFunctorO<functors::OptimalityF<BulkDynamics,ControlledField>,
+                                       opti::SENSITIVITY<ControlledField>>(adjointLattice);
+  optiCase.getController().template setUpdatedProjectionDerivativesOnField<opti::DPROJECTIONDALPHA<ControlledField>>(adjointLattice);
+  adjointLattice.template setProcessingContext<Array<opti::DPROJECTIONDALPHA<ControlledField>>>(ProcessingContext::Simulation);
   // Compute jacobian of collision operator regarding control variable
-  auto dCDalphaO = makeWriteFunctorO<functors::DerivativeF<functors::CollisionF<DYNAMICS>,CONTROLS,DYNAMICS>,
-                                     opti::DCDALPHA<CONTROLS>>(primalLattice);
+  auto dCDalphaO = makeWriteFunctorO<functors::DerivativeF<functors::CollisionF<BulkDynamics>,ControlledField,BulkDynamics>,
+                                     opti::DCDALPHA<ControlledField>>(controlledLattice);
   dCDalphaO->template setParameter<descriptors::OMEGA>(converter.getLatticeRelaxationFrequency());
   dCDalphaO->template setParameter<descriptors::DX>(1.0);
   dCDalphaO->apply();
   // Jacobian is computed on primal lattice as jacobian is evaluated for primal populations
-  copyFields<opti::DCDALPHA<CONTROLS>,opti::DCDALPHA<CONTROLS>>(primalLattice, dualLattice);
+  copyFields<opti::DCDALPHA<ControlledField>,opti::DCDALPHA<ControlledField>>(controlledLattice, adjointLattice);
   optimalityO->template setParameter<descriptors::OMEGA>(converter.getLatticeRelaxationFrequency());
   optimalityO->apply();
 
   // Return serial vector containing total derivatives of objective regarding controls
-  dualLattice.setProcessingContext(ProcessingContext::Evaluation);
-  return getSerializedFromField<opti::SENSITIVITY<CONTROLS>>(dualLattice, objectiveDomain);
+  adjointLattice.setProcessingContext(ProcessingContext::Evaluation);
+  return getSerializedFromField<opti::SENSITIVITY<ControlledField>>(adjointLattice, optiCase.getController().getDesignDomain<DESCRIPTOR>());
 }
 
+void getOptiResults(MyOptiCase& optiCase) {
+  auto& controlledLattice = optiCase.getCase(Controlled{}).getLattice(NavierStokes{});
+  auto& converter = controlledLattice.getUnitConverter();
+  std::size_t iT = optiCase.getOptimizationStep();
+
+  SuperVTMwriter3D<T> vtmWriter("testFlowOpti3d");
+  SuperLatticePhysVelocity3D velocityF(controlledLattice, converter);
+  SuperLatticePhysPressure3D pressureF(controlledLattice, converter);
+  vtmWriter.addFunctor(velocityF);
+  vtmWriter.addFunctor(pressureF);
+
+  if (iT == 0) {
+    vtmWriter.createMasterFile();
+  }
+
+  // Writes the VTK files
+  if (iT > 0) {
+    controlledLattice.setProcessingContext(ProcessingContext::Evaluation);
+    vtmWriter.write(iT);
+  }
+}
+
+
+T computeObjective(MyOptiCase& optiCase) {
+  auto& controlledCase = optiCase.getCase(Controlled{});
+  // Reset prior simulation lattice
+  controlledCase.resetLattices();
+
+  // Prepare new lattices
+  prepareLattice(controlledCase);
+  setInitialValues(controlledCase);
+
+  // Set updated controls in the simulation
+  applyControl(optiCase);
+
+  // Execute simulation
+  simulate(controlledCase);
+
+  // Optimization related IO
+  getOptiResults(optiCase);
+
+  // Compute Objective value from simulation results
+  return objectiveF(optiCase);
+}
+
+std::vector<T> computeDerivative(MyOptiCase& optiCase) {
+  auto& adjointCase = optiCase.getCase(Adjoint{});
+  // Reset prior simulation lattice
+  adjointCase.resetLattices();
+
+  // Prepare new lattices
+  prepareAdjointLattice(optiCase);
+  setAdjointInitialValues(optiCase);
+
+  // Execute simulation
+  simulate(adjointCase);
+
+  // Compute Derivative value from simulation results
+  return derivativeF(optiCase);
+}
+
+/// Steps 2-8: Set up and run a simulation
 int main(int argc, char* argv[])
 {
+  /// @par Contents
+  /// @li Step 2: Initialization
   initialize(&argc, &argv);
 
-  // Create Simulation instances
-  auto refSimulation = build(" REFERENCE ");
-  auto primalSimulation = build(" PRIMAL ");
-  auto dualSimulation = build(" DUAL ");
+  // Step 2.1: Set parameters
+  MyCase::ParametersD myCaseParameters;
 
-  // Create instances for IO for each simulation
-  refSimulation->template create<LatticeResults<T,DESCRIPTOR>>("refSolution");
-  primalSimulation->template create<LatticeResults<T,DESCRIPTOR>>("primalSolution");
-  dualSimulation->template create<LatticeResults<T,DESCRIPTOR>>("dualSolution");
+  /// @li Step 3: Create Mesh
+  Mesh mesh = createMesh();
 
-  // Simulate reference solution
-  prepareReference(refSimulation);
-  simulate(refSimulation);
+  /// @li Step B: Create Cases and prepare
+  // Prepare controlled case
+  MyCase myCase(myCaseParameters, mesh);
+  prepareGeometry(myCase);
+  prepareLattice(myCase);
 
-  // Define routine for objective and derivative computation
-  opti::OptiCaseAnalytical<T,std::vector<T>> optiCase;
-  optiCase.setObjective([&](const std::vector<T>& controls) -> T {
-    primalSimulation->resetLattice();
-    preparePrimal(primalSimulation, controls);
-    simulate(primalSimulation);
-    return computeObjective(refSimulation, primalSimulation);
-  });
-  optiCase.setDerivative([&](const std::vector<T>& controls, std::vector<T>& derivatives) {
-    dualSimulation->resetLattice();
-    prepareDual(dualSimulation, primalSimulation, refSimulation);
-    simulate(dualSimulation);
-    derivatives = computeSensitivity(dualSimulation, primalSimulation, controls);
-  });
+  // Create adjoint case for gradient computation
+  MyCase adjointCase(myCaseParameters, mesh);
+  prepareGeometry(adjointCase);
 
-  // Optimizer setup
-  const std::size_t dimCtrl = getSerializedFieldSize<CONTROLS>(primalSimulation->getSuperLattice(),
-                                                               primalSimulation->getSuperGeometry().getMaterialIndicator({1}));
-  opti::OptimizerLBFGS<T,std::vector<T>> optimizer(
-      dimCtrl, 1.e-10, 10, 1., 20, "Wolfe", 20, 1.e-4);
-  optimizer.setStartValue(0);
+  // Compute solution for the objective functional
+  MyCase referenceCase(myCaseParameters, mesh);
+  prepareGeometry(referenceCase);
+  prepareLattice(referenceCase);
+  setInitialValues(referenceCase);
+  simulate(referenceCase);
+
+  /// @li Step C: Create OptiCase and set cases
+  MyOptiCase optiCase;
+  optiCase.setCase<Controlled>(myCase);
+  optiCase.setCase<Adjoint>(adjointCase);
+  optiCase.setCase<Reference>(referenceCase);
+
+  /// @li Step D: Set initial control
+  setInitialControl(optiCase);
+
+  /// @li Step E: Define objective routine
+  optiCase.setObjective(computeObjective);
+
+  /// @li Step F: Define derivative routine
+  optiCase.setDerivative(computeDerivative);
+
+  /// @li Step G: Create an Optimizer
+  OptimizerLBFGS<T,std::vector<T>> optimizer(
+    optiCase.getController().size(), 1.e-10, 10, 1., 20, "Wolfe", 20, 1.e-4);
   optimizer.optimize(optiCase);
 }

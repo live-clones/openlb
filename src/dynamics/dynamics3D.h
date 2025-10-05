@@ -60,6 +60,7 @@
 #include "multiphaseBGKdynamics.h"
 #include "kEpsilonRANSDynamics.h"
 #include "spongeLayerDynamics.h"
+#include "bubbleSpawner.h"
 
 #include "dynamics3D.hh"
 

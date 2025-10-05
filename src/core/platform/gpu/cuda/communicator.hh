@@ -50,20 +50,24 @@ void checkPlatform<Platform::GPU_CUDA>()
   int nDevices{};
   cudaGetDeviceCount(&nDevices);
 
+#ifdef OLB_DEBUG
   clout.setMultiOutput(true);
+#endif
   if (nDevices < 1) {
     clout << "No CUDA device found" << std::endl;
   } else if (nDevices > 1) {
     clout << "Found " << nDevices << " CUDA devices but only one can be used per MPI process." << std::endl;
+  } else {
+    clout << "Found a single CUDA device." << std::endl;
   }
-#ifdef OLB_DEBUG
   for (int deviceI=0; deviceI < nDevices; ++deviceI) {
     cudaDeviceProp deviceProp;
     cudaGetDeviceProperties(&deviceProp, deviceI);
-    clout << deviceProp.name << " visible" << std::endl;
+    clout << "Detected " << deviceProp.name << "." << std::endl;
   }
-#endif
+#ifdef OLB_DEBUG
   clout.setMultiOutput(false);
+#endif
 
 #ifdef PARALLEL_MODE_MPI
 #if defined(MPIX_CUDA_AWARE_SUPPORT) && MPIX_CUDA_AWARE_SUPPORT

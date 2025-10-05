@@ -918,12 +918,10 @@ void setBouzidiPhaseField(SuperLattice<T, DESCRIPTOR>& sLattice,
   /// Adds needed Cells to the Communicator _commBC in SuperLattice
   auto& communicator = sLattice.getCommunicator(stage::PostStream());
   communicator.template requestField<descriptors::STATISTIC>();
-  communicator.template requestField<descriptors::BOUNDARY>();
 
   SuperIndicatorBoundaryNeighbor<T,DESCRIPTOR::d> neighborIndicator(std::forward<decltype(boundaryIndicator)>(boundaryIndicator), _overlap);
   communicator.requestOverlap(_overlap, neighborIndicator);
   communicator.exchangeRequests();
-  //addPoints2CommBC<T,DESCRIPTOR>(sLattice, std::forward<decltype(boundaryIndicator)>(boundaryIndicator), _overlap);
   clout.setMultiOutput(false);
 }
 
@@ -964,7 +962,30 @@ void setBouzidiPhaseField(BlockLattice<T,DESCRIPTOR>& block,
     if ( blockGeometry.getNeighborhoodRadius(solidLatticeR) >= 1
         && boundaryIndicator(solidLatticeR)) {
       std::vector<int> discreteNormal(DESCRIPTOR::d+1, 0);
-      discreteNormal = boundaryIndicator.getBlockGeometry().getStatistics().getType(solidLatticeR[0],solidLatticeR[1]);
+      T discreteNormalSum=0;
+      if constexpr ( DESCRIPTOR::d == 2 ) {
+        discreteNormal = boundaryIndicator.getBlockGeometry().getStatistics().getType(solidLatticeR[0],solidLatticeR[1]);
+      } else if constexpr ( DESCRIPTOR::d == 3 ) {
+        discreteNormal = boundaryIndicator.getBlockGeometry().getStatistics().getType(solidLatticeR[0],solidLatticeR[1],solidLatticeR[2]);
+      }
+      for (int iD=0; iD<DESCRIPTOR::d; iD++) {
+        discreteNormalSum += util::abs(discreteNormal[iD+1]);
+      }
+
+      if (discreteNormalSum == 0) {
+        block.addPostProcessor(
+          typeid(stage::PreCoupling), solidLatticeR, meta::id<GeometricPhaseFieldCurvedWallProcessor<T,DESCRIPTOR>>());
+      } else {
+        if constexpr ( DESCRIPTOR::d == 2 ) {
+          block.addPostProcessor(
+            typeid(stage::PreCoupling), solidLatticeR,
+            boundaryhelper::promisePostProcessorForNormal<T,DESCRIPTOR,IsoPhaseFieldCurvedWallProcessor2D>(Vector<int,2>(discreteNormal.data() + 1)));
+        } else if constexpr ( DESCRIPTOR::d == 3 ) {
+          block.addPostProcessor(
+            typeid(stage::PreCoupling), solidLatticeR,
+            boundaryhelper::promisePostProcessorForNormal<T,DESCRIPTOR,IsoPhaseFieldCurvedWallProcessor3D>(Vector<int,3>(discreteNormal.data() + 1)));
+        }
+      }
 
       for (int iPop=1; iPop < DESCRIPTOR::q; ++iPop) {
         Vector<T,DESCRIPTOR::d> boundaryLatticeR(solidLatticeR + descriptors::c<DESCRIPTOR>(iPop));
@@ -1038,18 +1059,6 @@ void setBouzidiPhaseField(BlockLattice<T,DESCRIPTOR>& block,
           }
         }
       }
-      T discreteNormalSum=0;
-      for (int iD=0; iD<DESCRIPTOR::d; iD++) {
-        discreteNormalSum += abs(discreteNormal[iD+1]);
-      }
-      if (discreteNormalSum == 0) {
-        block.addPostProcessor(
-          typeid(stage::PreCoupling), solidLatticeR, meta::id<GeometricPhaseFieldCurvedWallProcessor2D<T,DESCRIPTOR>>());
-      } else {
-        block.addPostProcessor(
-          typeid(stage::PreCoupling), solidLatticeR,
-          boundaryhelper::promisePostProcessorForNormal<T,DESCRIPTOR,IsoPhaseFieldCurvedWallProcessor2D>(Vector<int,2>(discreteNormal.data() + 1)));
-      }
     }
   });
 }
@@ -1080,7 +1089,6 @@ void setBouzidiWellBalanced(SuperLattice<T, DESCRIPTOR>& sLattice,
   SuperIndicatorBoundaryNeighbor<T,DESCRIPTOR::d> neighborIndicator(std::forward<decltype(boundaryIndicator)>(boundaryIndicator), _overlap);
   communicator.requestOverlap(_overlap, neighborIndicator);
   communicator.exchangeRequests();
-  //addPoints2CommBC<T,DESCRIPTOR>(sLattice, std::forward<decltype(boundaryIndicator)>(boundaryIndicator), _overlap);
   clout.setMultiOutput(false);
 }
 

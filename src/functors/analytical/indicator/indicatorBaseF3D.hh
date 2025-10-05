@@ -330,12 +330,25 @@ Vector<S,3> IndicatorF3D<S>::surfaceNormal(const Vector<S,3>& pos, const S meshS
 }
 
 template <typename S>
+Vector<S,3> IndicatorF3D<S>::surfaceNormalExact(const Vector<S,3>& pos, const S meshSize)
+{
+  return this->surfaceNormal(pos, meshSize);
+}
+
+template <typename S>
 Vector<S,3> IndicatorF3D<S>::surfaceNormal(const Vector<S,3>& pos, const S meshSize,
     std::function<Vector<S,3>(const Vector<S,3>&)> transformPos)
 {
   return this->surfaceNormal(transformPos(pos), meshSize);
 }
 
+
+template <typename S>
+Vector<S,3> IndicatorF3D<S>::surfaceNormalExact(const Vector<S,3>& pos, const S meshSize,
+    std::function<Vector<S,3>(const Vector<S,3>&)> transformPos)
+{
+  return this->surfaceNormalExact(transformPos(pos), meshSize);
+}
 
 template <typename S>
 bool IndicatorF3D<S>::operator() (bool output[1], const S input[3])
@@ -358,20 +371,6 @@ bool IndicatorIdentity3D<S>::operator() (bool output[1], const S input[3])
   return (_f)->operator()(output, input);
 }
 
-
-template <typename S>
-Vector<S,3> IndicatorF3D<S>::surfaceNormalExact(const Vector<S,3>& pos, const S meshSize)
-{
-  return this->surfaceNormal(pos, meshSize);
-}
-
-
-template <typename S>
-Vector<S,3> IndicatorF3D<S>::surfaceNormalExact(const Vector<S,3>& pos, const S meshSize,
-    std::function<Vector<S,3>(const Vector<S,3>&)> transformPos)
-{
-  return this->surfaceNormalExact(transformPos(pos), meshSize);
-}
 
 
 } // namespace olb

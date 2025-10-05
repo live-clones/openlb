@@ -35,6 +35,7 @@
 #include "localVelocity3D.h"
 #include "phaseFieldWall3D.h"
 #include "phaseFieldInletOutlet3D.h"
+#include "regularizedTemperature3D.h"
 #include "interpolatedVelocity3D.h"
 #include "interpolatedPressure3D.h"
 #include "setZeroGradientBoundary3D.h"

@@ -396,11 +396,10 @@ void VTUsurfaceWriter<T>::writeAnalyticalFunctor(const std::string& fullName, st
         if (!_binary) {
           fout << valsCummulated[i * numPoints + j] << " ";
         }
-        else {
-          const float helper = float(valsCummulated[j]);
-          dataEncoder.encode(&helper, 1);
-        }
       }
+    }
+    if (_binary) {
+      dataEncoder.encode(reinterpret_cast<const float*>(valsCummulated.data()), valsCummulated.size());
     }
   }
 #endif

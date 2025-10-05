@@ -86,5 +86,45 @@ public:
   bool operator()(T output[], const T x[]) override;
 };
 
+// sharp velocity profile of layered poiseuille
+template <typename T>
+class LayeredPoiseuilleSharp2D : public AnalyticalF2D<T,T> {
+protected:
+  std::vector<T> _axisPoint;
+  std::vector<T> _axisDirection;
+  T _h_phys;
+  T _h_lat;
+  T _g;
+  T _mu_l;
+  T _mu_g;
+
+public:
+  LayeredPoiseuilleSharp2D(std::vector<T> axisPoint, std::vector<T> axisDirection, T h_phys, T h_lat, T g, T mu_l, T mu_g);
+  bool operator()(T output[], const T x[]) override;
+};
+
+template <typename T, typename DESCRIPTOR>
+class IncompressibleEquilibriumPopulations2D : public AnalyticalF2D<T,T> {
+protected:
+  FunctorPtr<AnalyticalF2D<T,T>> _density;
+  FunctorPtr<AnalyticalF2D<T,T>> _pressure;
+  FunctorPtr<AnalyticalF2D<T,T>> _velocity;
+
+public:
+  IncompressibleEquilibriumPopulations2D(FunctorPtr<AnalyticalF2D<T,T>> density, FunctorPtr<AnalyticalF2D<T,T>> pressure, FunctorPtr<AnalyticalF2D<T,T>> velocity);
+  bool operator()(T output[], const T input[]) override;
+};
+
+template <typename T, typename DESCRIPTOR>
+class FirstOrderEquilibriumPopulations2D : public AnalyticalF2D<T,T> {
+protected:
+  FunctorPtr<AnalyticalF2D<T,T>> _density;
+  FunctorPtr<AnalyticalF2D<T,T>> _velocity;
+
+public:
+  FirstOrderEquilibriumPopulations2D(FunctorPtr<AnalyticalF2D<T,T>> density, FunctorPtr<AnalyticalF2D<T,T>> velocity);
+  bool operator()(T output[], const T input[]) override;
+};
+
 } // end namespace olb
 #endif

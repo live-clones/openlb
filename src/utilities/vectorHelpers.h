@@ -73,6 +73,15 @@ inline void copy3(T c[], const T a[])
   }
 }
 
+template <typename T, unsigned DIM>
+std::vector<T> toStdVector(const Vector<T,DIM>& vec)
+{
+  std::vector<T> v;
+  for (unsigned d=0; d<DIM; ++d) {
+    v.push_back(vec[d]);
+  }
+  return v;
+}
 
 template <typename T>
 std::vector<T> fromVector3(const Vector<T,3>& vec)

@@ -187,6 +187,11 @@ using CuboidDecomposition3D = CuboidDecomposition<T,3>;
 template<typename T, unsigned D>
 std::unique_ptr<CuboidDecomposition<T,D>> createCuboidDecomposition(std::string fileName);
 
+template<typename T, unsigned D, typename MEMBER, typename... ARGS>
+std::unique_ptr<CuboidDecomposition<T,D>> createCuboidDecomposition(ARGS&&... args) {
+  return std::make_unique<MEMBER>(std::forward<ARGS>(args)...);
+}
+
 }
 
 #endif

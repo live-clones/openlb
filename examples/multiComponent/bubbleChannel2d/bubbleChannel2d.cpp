@@ -38,10 +38,10 @@ using namespace olb;
 using namespace olb::descriptors;
 using namespace olb::graphics;
 
-using T = FLOATING_POINT_TYPE;
+using T = double;
 using NSDESCRIPTOR = D2Q9<RHO,NABLARHO,FORCE,EXTERNAL_FORCE,TAU_EFF,STATISTIC,SCALAR>;
-using ACDESCRIPTOR = D2Q9<CONV_POPS,FORCE,SOURCE,VELOCITY,OLD_PHIU,STATISTIC,THETA,PSI,NORMGRADPSI,SCALAR,PSI0>;
-using NSBulkDynamics = MultiPhaseIncompressbileTRTdynamics<T,NSDESCRIPTOR>;
+using ACDESCRIPTOR = D2Q9<CONV_POPS,FORCE,SOURCE,VELOCITY,OLD_PHIU,STATISTIC,THETA>;
+using NSBulkDynamics = MultiPhaseIncompressibleTRTdynamics<T,NSDESCRIPTOR>;
 using ACBulkDynamics = AllenCahnBGKdynamics<T,ACDESCRIPTOR>;
 using Coupling = LiangPostProcessor;
 
@@ -61,8 +61,8 @@ T Re = 100;                                 // Reynolds number of channel flow [
 const T theta = M_PI*40./180.;              // contact angle (<90 is wetting) [radians]
 const T w = 6.;                             // lattice interface thickness [lattice units]
 int maxIter        = 200000;
-const int vtkIter  = 1000;
-const int statIter = 1000;
+const int vtkIter  = 2000;
+const int statIter = 2000;
 
 void prepareGeometry( SuperGeometry<T,2>& superGeometry, T dx )
 {
@@ -79,7 +79,7 @@ void prepareGeometry( SuperGeometry<T,2>& superGeometry, T dx )
   IndicatorCuboid2D<T> inlet( extend, origin );
   superGeometry.rename( 2, 3, inlet );
 
-  // bottom wall, MN=4
+  // outlet, MN=4
   origin[0] = dx*(Nx-0.5);
   IndicatorCuboid2D<T> outlet( extend, origin );
   superGeometry.rename( 2, 4, outlet );
@@ -91,34 +91,15 @@ void prepareGeometry( SuperGeometry<T,2>& superGeometry, T dx )
   clout << "Prepare Geometry ... OK" << std::endl;
 }
 
-template <typename STAGE>
-void signedDistanceFunction( SuperLattice<T,ACDESCRIPTOR>& sLatticeAC,
-                             SuperGeometry<T,2>& superGeometry, T w )
-{
-  T max = 1.;
-
-  while ( max <= 1.5*w ) {
-    int in[2];
-    sLatticeAC.getCommunicator(STAGE{}).communicate();
-    sLatticeAC.executePostProcessors(STAGE{});
-    SuperLatticeExternalScalarField2D<T, ACDESCRIPTOR, PSI> psi( sLatticeAC );
-    SuperMax2D<T,T> Max_psi_(psi, superGeometry, 1);
-    Max_psi_(&max, in);
-  }
-}
-
 T helperConvectiveU( SuperLattice<T,NSDESCRIPTOR>& sLatticeNS,
-                     SuperGeometry<T,2>& superGeometry, T dx )
+                     SuperIndicatorF2D<T>& indicator )
 {
-  std::vector<T> origin = {dx*(Nx-2.), dx};
-  std::vector<T> extend = {1.5*dx, dx*(Ny-2.)};
-  IndicatorCuboid2D<T> beforeOutlet_( extend, origin );
-  SuperIndicatorFfromIndicatorF2D<T> beforeOutlet(beforeOutlet_, superGeometry);
   int in[2];
   T uMax[2];
+  sLatticeNS.setProcessingContext(ProcessingContext::Evaluation);
   SuperLatticeVelocity2D<T, NSDESCRIPTOR> u( sLatticeNS );
-  SuperMax2D<T,T> uMax_(u, beforeOutlet);
-  uMax_(uMax, in);
+  SuperMax2D<T,T> uMaxFinder(u, indicator);
+  uMaxFinder(uMax, in);
   return uMax[0];
 }
 
@@ -208,17 +189,8 @@ void prepareLattice( SuperLattice<T,NSDESCRIPTOR>& sLatticeNS,
   sLatticeNS.defineRhoU( all, *p0, poiseuille );
   sLatticeNS.iniEquilibrium( all, *p0, poiseuille );
 
-  sLatticeAC.addPostProcessor<stage::InitOutlet>(outlet,meta::id<SetOutletCells<1,0>>());
+  sLatticeAC.addPostProcessor<stage::InitOutlet>(outlet,meta::id<SetOutletCells2D<1,0>>());
   sLatticeAC.addPostProcessor<stage::PreCoupling>(fluid,meta::id<RhoStatistics>());
-  sLatticeAC.addPostProcessor<stage::PhiLimiter>(meta::id<dispersionLimiter>{});
-
-  sLatticeAC.addPostProcessor<stage::PreCoupling>(meta::id<initialPsi>{});
-  sLatticeAC.addPostProcessor<stage::IterativePostProcess>(bulk,meta::id<normGradPsi>{});
-  sLatticeAC.addPostProcessor<stage::IterativePostProcess>(meta::id<psiEvolve>{});
-  sLatticeAC.setParameter<psiEvolve::DELTAT>(0.7);
-  setSignedDistanceBoundary<T,ACDESCRIPTOR>(sLatticeAC, wall);
-  setSignedDistanceBoundary<T,ACDESCRIPTOR>(sLatticeAC, inlet);
-  setSignedDistanceBoundary<T,ACDESCRIPTOR>(sLatticeAC, outlet);
 
   coupling.template setParameter<Coupling::SIGMA>(sigma);
   coupling.template setParameter<Coupling::W>(w);
@@ -233,26 +205,12 @@ void prepareLattice( SuperLattice<T,NSDESCRIPTOR>& sLatticeNS,
   sLatticeAC.setParameter<descriptors::EPSILON>( 1.5*w );
   sLatticeNS.setParameter<collision::TRT::MAGIC>( (tau_l-T(0.5))*(1.6-0.5) );
 
-  T uMax = helperConvectiveU(sLatticeNS,superGeometry,dx);
-  sLatticeAC.setParameter<descriptors::MAX_VELOCITY>( uMax );
-
   {
     auto& communicator = sLatticeAC.getCommunicator(stage::PreCoupling());
     communicator.requestOverlap(1);
     communicator.requestField<STATISTIC>();
-    communicator.requestField<PSI>();
     communicator.exchangeRequests();
   }
-  {
-    auto& communicator = sLatticeAC.getCommunicator(stage::IterativePostProcess());
-    communicator.requestOverlap(1);
-    communicator.requestField<PSI>();
-    communicator.exchangeRequests();
-  }
-
-  sLatticeAC.executePostProcessors(stage::InitOutlet());
-  sLatticeAC.executePostProcessors(stage::PreCoupling());
-  signedDistanceFunction<stage::IterativePostProcess>(sLatticeAC,superGeometry,w);
 
   sLatticeNS.initialize();
   sLatticeAC.initialize();
@@ -260,6 +218,7 @@ void prepareLattice( SuperLattice<T,NSDESCRIPTOR>& sLatticeNS,
   sLatticeAC.iniEquilibrium( all, phi0, poiseuille );
   sLatticeNS.iniEquilibrium( all, *p0, poiseuille );
 
+  sLatticeAC.executePostProcessors(stage::InitOutlet());
   sLatticeAC.getCommunicator(stage::PreCoupling()).communicate();
 
   clout << "Prepare Lattice ... OK" << std::endl;
@@ -291,6 +250,8 @@ void getResults( SuperLattice<T,NSDESCRIPTOR>& sLatticeNS,
 
   // Writes the VTK files
   if ( iT%vtkIter==0 ) {
+    sLatticeNS.setProcessingContext(ProcessingContext::Evaluation);
+    sLatticeAC.setProcessingContext(ProcessingContext::Evaluation);
     SuperLatticePhysIncPressure2D<T, NSDESCRIPTOR> p_total( sLatticeNS, converter );
     p_total.getName() = "p_total";
     SuperLatticeExternalScalarField2D<T, NSDESCRIPTOR, RHO> rho_L( sLatticeNS );
@@ -302,8 +263,6 @@ void getResults( SuperLattice<T,NSDESCRIPTOR>& sLatticeNS,
     velocity.getName() = "u";
     SuperLatticeField2D<T, ACDESCRIPTOR, STATISTIC> phi( sLatticeAC );
     phi.getName() = "phi";
-    SuperLatticeExternalScalarField2D<T, ACDESCRIPTOR, PSI> psi( sLatticeAC );
-    psi.getName() = "psi";
     SuperLatticeExternalScalarField2D<T, NSDESCRIPTOR, SCALAR> scale( sLatticeNS );
     scale.getName() = "scale";
     vtmWriter.addFunctor( scale );
@@ -312,7 +271,6 @@ void getResults( SuperLattice<T,NSDESCRIPTOR>& sLatticeNS,
     vtmWriter.addFunctor( rho );
     vtmWriter.addFunctor( velocity );
     vtmWriter.addFunctor( phi );
-    vtmWriter.addFunctor( psi );
     vtmWriter.write( iT );
   }
 }
@@ -379,31 +337,35 @@ void simulate( T Re )
   velocityCoupling.restrictTo(superGeometry.getMaterialIndicator(3));
   prepareLattice( sLatticeNS, sLatticeAC, coupling, converter, superGeometry );
 
+  Vector<T,2> origin2 = {dx*(Nx-2.), dx};
+  Vector<T,2> extend2 = {1.5*dx, dx*(Ny-2.)};
+  IndicatorCuboid2D<T> beforeOutlet_( extend2, origin2 );
+  SuperIndicatorFfromIndicatorF2D<T> beforeOutlet(beforeOutlet_, superGeometry);
+
   // === 4th Step: Main Loop with Timer ===
   int iT = 0;
-  maxIter = Nx/(Re/Ny*((tau_l-0.5)/3.))*1.3;
+  maxIter = Nx/(Re/Ny*((tau_l-0.5)/3.))*1.1;
   clout << "starting simulation..." << std::endl;
   clout << "with " << maxIter << " timesteps " << std::endl;
   util::Timer<T> timer( maxIter, superGeometry.getStatistics().getNvoxel() );
   timer.start();
   for ( iT=0; iT<=maxIter; ++iT ) {
+    // compute velocity for convective outlet
+    if ( iT%500==0 ) {
+      T uMax = helperConvectiveU(sLatticeNS,beforeOutlet);
+      sLatticeAC.setParameter<descriptors::MAX_VELOCITY>( uMax );
+    }
+
     // Collide and stream (and coupling) execution
     sLatticeNS.collideAndStream();
     sLatticeAC.collideAndStream();
 
     sLatticeAC.getCommunicator(stage::PreCoupling()).communicate();
     sLatticeAC.executePostProcessors(stage::PreCoupling());
-    if ( iT%200==0 ) {
-      signedDistanceFunction<stage::IterativePostProcess>(sLatticeAC,superGeometry,w);
-      sLatticeAC.executePostProcessors(stage::PhiLimiter());
-    }
     sLatticeAC.getCommunicator(stage::PreCoupling()).communicate();
 
     coupling.apply();
     velocityCoupling.apply();
-
-    T uMax = helperConvectiveU(sLatticeNS,superGeometry,dx);
-    sLatticeAC.setParameter<descriptors::MAX_VELOCITY>( uMax );
 
     // Computation and output of the results
     getResults( sLatticeNS, sLatticeAC, iT, superGeometry, timer, converter );

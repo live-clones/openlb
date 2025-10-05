@@ -190,23 +190,29 @@ public:
     // numerotation of the velocites are done according to the D2Q9
     // lattice of the OpenLB library.
 
-    // Find all the missing populations
-    // (directions 3,4,5)
-    constexpr auto missingIndexesTmp = util::subIndexOutgoing<DESCRIPTOR,direction,orientation>();
-    std::vector<int> missingIndexes(missingIndexesTmp.cbegin(), missingIndexesTmp.cend());
+    // Find all the missing populations (directions 3,4,5)
+    constexpr auto missingIndexesTmp = util::subIndexOutgoing<DESCRIPTOR, direction, orientation>();
+    constexpr int numMissing = missingIndexesTmp.size();
 
-    // Will contain the missing poputations that are not normal to the wall.
-    // (directions 3,5)
-    std::vector<int> missingDiagonalIndexes = missingIndexes;
-    for (unsigned iPop = 0; iPop < missingIndexes.size(); ++iPop) {
+    Vector<int, numMissing> missingIndexes;
+    for (int iPop = 0; iPop < numMissing; ++iPop) {
+      missingIndexes[iPop] = missingIndexesTmp[iPop];
+    }
+
+    // Will contain the missing populations that are not normal to the wall (e.g., directions 3,5)
+    int diagonalCount = 0;
+    Vector<int, numMissing-1> missingDiagonalIndexes;
+
+    // Filter out populations with only one non-zero component (i.e., normal directions)
+    for (int iPop = 0; iPop < numMissing; ++iPop) {
       int numOfNonNullComp = 0;
       for (int iDim = 0; iDim < DESCRIPTOR::d; ++iDim) {
-        numOfNonNullComp += util::abs(descriptors::c<DESCRIPTOR>(missingIndexes[iPop],iDim));
+        numOfNonNullComp += util::abs(descriptors::c<DESCRIPTOR>(missingIndexes[iPop], iDim));
       }
 
-      if (numOfNonNullComp == 1) {
-        missingDiagonalIndexes.erase(missingDiagonalIndexes.begin()+iPop);
-        break;
+      // Keep only diagonals (i.e., more than one non-zero component)
+      if (numOfNonNullComp > 1) {
+        missingDiagonalIndexes[diagonalCount++] = missingIndexes[iPop];
       }
     }
 
@@ -219,23 +225,23 @@ public:
     // The unknown non equilibrium populations are bounced back
     // (f[3] = feq[3] + fneq[7], f[4] = feq[4] + fneq[8],
     //  f[5] = feq[5] + fneq[1])
-    for (unsigned iPop = 0; iPop < missingIndexes.size(); ++iPop) {
+    for (int iPop = 0; iPop < numMissing; ++iPop) {
       cell[missingIndexes[iPop]] = cell[descriptors::opposite<DESCRIPTOR>(missingIndexes[iPop])]
         - computeEquilibriumMP(descriptors::opposite<DESCRIPTOR>(missingIndexes[iPop]), cell, parameters)
         + computeEquilibriumMP(missingIndexes[iPop], cell, parameters);
     }
 
-    // We recompute  u in order to have the new momentum. Since the momen-
+    // We recompute u in order to have the new momentum. Since the momen-
     // tum is not conserved from this scheme, we will correct it. By adding
     // a contribution to the missingDiagonalVelocities.
     OriginalMomentaF().computeU(cell,falseU);
 
     V diff[DESCRIPTOR::d] {};
     for (int iDim = 0; iDim < DESCRIPTOR::d; ++iDim) {
-      diff[iDim] = rho*(u[iDim] - falseU[iDim])/ V(missingDiagonalIndexes.size());
+      diff[iDim] = rho*(u[iDim] - falseU[iDim])/ V(diagonalCount);
     }
 
-    for (unsigned iPop = 0; iPop < missingDiagonalIndexes.size(); ++iPop) {
+    for (int iPop = 0; iPop < diagonalCount; ++iPop) {
       for (int iDim = 1; iDim < DESCRIPTOR::d; ++iDim) {
         cell[missingDiagonalIndexes[iPop]] +=
           descriptors::c<DESCRIPTOR>(missingDiagonalIndexes[iPop],(direction+iDim)%DESCRIPTOR::d) * diff[(direction+iDim)%DESCRIPTOR::d];

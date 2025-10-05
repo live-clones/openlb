@@ -36,3 +36,4 @@
 #include "indicator/indicator3D.h"
 #include "atmBoundary.h"
 #include "physWallShearStressOnSurface3D.h"
+#include "phaseFieldF3D.h"

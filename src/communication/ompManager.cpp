@@ -27,13 +27,10 @@
 
 namespace olb {
 
-void ompManager::init(bool verbose)
+bool ompManager::init(int *argc, char ***argv)
 {
   setDynamic(0);
-  if (verbose) {
-    olb::OstreamManager clout(std::cout,"OmpManager");
-    clout << "Sucessfully initialized, numThreads=" << getSize() << std::endl;
-  }
+  return true;
 }
 
 int ompManager::getSize() const

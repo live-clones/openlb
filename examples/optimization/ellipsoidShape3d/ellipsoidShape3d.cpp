@@ -38,7 +38,7 @@
 #include "ellipsoidShape3d.h"
 
 template<typename T>
-T objective(Vector<T,2> radiusEllipsoidYZ){
+T objective(std::vector<T> radiusEllipsoidYZ){
   return simulateEllipsoid3D<T>( radiusEllipsoidYZ );
 }
 
@@ -48,27 +48,27 @@ int main( int argc, char* argv[] )
   OstreamManager clout(std::cout, "main");
 
   if constexpr (false){
-    Vector<S,2> radiusEllipsoidYZ(.05, .05);
+    std::vector<S> radiusEllipsoidYZ({.05, .05});
     clout << simulateEllipsoid3D<S>( radiusEllipsoidYZ ) << std::endl;
   }
 
   if constexpr (false) {
-    Vector<U,2> radiusEllipsoidYZ(.05, .05);
+    std::vector<U> radiusEllipsoidYZ({.05, .05});
     radiusEllipsoidYZ[0].setDiffVariable(0);
     radiusEllipsoidYZ[1].setDiffVariable(1);
     clout << simulateEllipsoid3D<U>( radiusEllipsoidYZ ) << std::endl;
   }
 
   if constexpr (true){
-    OptiCaseAD<S,2,VectorHelp> optiCase(
+    solver::OptiCaseAD<S,2,std::vector> optiCase(
       objective<S>,
       objective<U>);
-    OptimizerLBFGS<S,Vector<S,2>> optimizer(
+    OptimizerLBFGS<S,std::vector<S>> optimizer(
     2, 1.e-16, 10, .01, 10, "StrongWolfe", 20, 1.e-4, true, "", "log",
     true, 0.19, true, 0.01, false, 0., true,
     {OptimizerLogType::value, OptimizerLogType::control, OptimizerLogType::derivative});
 
-    Vector<S,2> startValue(0.08, 0.08);
+    std::vector<S> startValue(0.08, 0.08);
     optimizer.setControl(startValue);
     optimizer.optimize(optiCase);
   }
