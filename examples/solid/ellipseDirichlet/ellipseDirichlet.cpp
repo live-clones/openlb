@@ -23,7 +23,6 @@
  */
 
 #include "olb.h"
-#include <cmath>
 
 using namespace olb;
 using namespace olb::names;
@@ -45,315 +44,309 @@ using MyCase = Case<
 
 namespace olb::parameters {
   struct KAPPA : public descriptors::FIELD_BASE<1> { };
-  struct PLATE_LENGTH public descriptors::FIELD_BASE<1> { };
 }
 
-constexpr FLOATING_POINT_TYPE pi = std::numbers::pi_v<FLOATING_POINT_TYPE>;
+class ellipse2D {
+  Vector<MyCase::value_t,2> center1;
+  Vector<MyCase::value_t,2> center2;
+  Vector<MyCase::value_t,2> center3;
 
-template <typename T, typename _DESCRIPTOR>
-class ForceField2D : public AnalyticalF2D<T, T> {
+  public:
+    ellipse2D(const MyCase::value_t charL) :
+      center1(Vector<MyCase::value_t,2>(.75 * charL, .75 * charL)),
+      center2(Vector<MyCase::value_t,2>(.95 * charL, .6 * charL)),
+      center3(Vector<MyCase::value_t,2>(.5 * charL, .9 * charL)),
+      ellipse1(IndicatorEllipse2D<MyCase::value_t>(center1, .693 * charL, .548 * charL, -20)),
+      ellipse2(IndicatorEllipse2D<MyCase::value_t>(center2, .1 * charL, .134 * charL)),
+      ellipse3(IndicatorEllipse2D<MyCase::value_t>(center3, .187 * charL, .1 * charL))
+    {};
 
-protected:
-  T dt;
-  T dx;
-  T charU;
-  T lambda;
-  T kappa;
-  T mu;
-  T theta;
-
-public:
-  ForceField2D(T inTheta, LinElaUnitConverter<T, NCDESCRIPTOR> converter)
-      : AnalyticalF2D<T, T>(2),
-      dt(converter.getConversionFactorTime()),
-      dx(converter.getConversionFactorLength()),
-      charU(converter.getCharPhysVelocity()),
-      lambda(converter.getLatticeLambda()),
-      kappa(converter.getDampingFactor()),
-      mu(converter.getLatticeShearModulus()),
-      theta(inTheta) {};
-
-  bool operator()(T output[], const T input[]) override
-  {
-
-    T x = input[0];
-    T y = input[1];
-
-    T omega_11 = 1. / (mu / theta + 0.5);
-    T omega_d  = 1. / (2 * mu / (1 - theta) + 0.5);
-    T omega_s  = 1. / (2 * (mu + lambda) / (1 + theta) + 0.5);
-
-    T tau_11 = 1. / omega_11 - 0.5;
-    T tau_s = 1. / omega_d - 0.5;
-    T tau_p = 1. / omega_s - 0.5;
-
-
-    T tau_12 = 0.5;
-    T tau_22 = 0.5;
-
-    T tau_21 = tau_12;
-
-    T omega_12 = 1. / (tau_12 + 0.5);
-    T omega_21 = 1. / (tau_21 + 0.5);
-    T omega_22 = 1. / (tau_22 + 0.5);
-
-    // These are correct
-    T d1 = -1. / 4. - 1. / 2. * theta * tau_12 * tau_s + pow(tau_s, 2) / 2.
-         -  1. / 2. * theta * pow(tau_s, 2) + 1. / 2. * theta * tau_12 * tau_p
-         +  pow(tau_p, 2) / 2. + 1. / 2. * theta * pow(tau_p, 2);
-    T d2 = -theta / 2. + theta * pow(tau_11, 2) + theta * tau_11 * tau_12
-         + 1. / 2. * theta * tau_12 * tau_s - pow(tau_s, 2) / 2.
-         + 1. / 2. * theta * pow(tau_s, 2) + 1. / 2. * theta * tau_12 * tau_p
-         + pow(tau_p, 2) / 2. + 1. / 2. * theta * pow(tau_p, 2);
-    T d3 = -theta / 4.
-         +  theta * pow(tau_11, 2)
-         +  theta * tau_11 * tau_12;
-
-    T mu_phys     =     mu * (dx * dx * kappa) / dt;
-    T lambda_phys = lambda * (dx * dx * kappa) / dt;
-
-
-    output[0] = bx(0, x, y, dx, mu_phys, lambda_phys, charU) * dt / kappa
-              + (d1 * d2bx_dx2(0, x, y, dx, mu_phys, lambda_phys, charU)
-              + d2 * d2by_dxdy(0, x, y, dx, mu_phys, lambda_phys, charU)
-              + d3 * d2bx_dy2(0, x, y, dx, mu_phys, lambda_phys, charU)) * dx * dx * dt / kappa;
-
-    output[1] = by(0, x, y, dx, mu_phys, lambda_phys, charU) * dt / kappa
-              + (d1 * d2by_dy2(0, x, y, dx, mu_phys, lambda_phys, charU)
-              + d2 * d2bx_dxdy(0, x, y, dx, mu_phys, lambda_phys, charU)
-              + d3 * d2by_dx2(0, x, y, dx, mu_phys, lambda_phys, charU)) * dx * dx * dt / kappa;
-
-    return true;
-  };
-
-  T bx(T t, T x, T y, T dx, T mu, T lambda, T charU)
-  {
-    return   0.0036 * mu * pi * pi * x * x * util::sin(2 * pi * x * y)
-           + 0.0036 * pi * pi * y * y * (lambda + 2 * mu) * util::sin(2 * pi * x * y)
-           + 0.0028 * pi * x * (lambda + mu) * util::sin(2 * pi * y);
-  }
-
-  T d2bx_dx2(T t, T x, T y, T dx, T mu, T lambda, T charU)
-  {
-    return   pi * pi * (-0.0144 * mu * pi * pi * x * x * y * y * util::sin(2 * pi * x * y)
-           + 0.0288 * mu * pi * x * y * util::cos(2 * pi * x * y)
-           + 0.0072 * mu * util::sin(2 * pi * x * y)
-           - 0.0144 * pi * pi * y * y * y * y * (lambda + 2 * mu) * util::sin(2 * pi * x * y));
-  }
-
-  T d2by_dxdy(T t, T x, T y, T dx, T mu, T lambda, T charU)
-  {
-    return    pi * pi * (-0.0112 * pi * x * (lambda + 2 * mu) * util::sin(2 * pi * y)
-           + (lambda + mu) * (-0.0144 * pi * pi * x * x * y * y * util::sin(2 * pi * x * y)
-           + 0.0288 * pi * x * y * util::cos(2 * pi * x * y)
-           + 0.0072 * util::sin(2 * pi * x * y)));
-  }
-
-  T d2bx_dy2(T t, T x, T y, T dx, T mu, T lambda, T charU)
-  {
-    return   pi * pi * (-0.0144 * mu * pi * pi * x * x * x * x * util::sin(2 * pi * x * y)
-           - 0.0144 * pi * pi * x * x * y * y * (lambda + 2 * mu) * util::sin(2 * pi * x * y)
-           + 0.0288 * pi * x * y * (lambda + 2 * mu) * util::cos(2 * pi * x * y)
-           - 0.0112 * pi * x * (lambda + mu) * util::sin(2 * pi * y)
-           + 0.0072 * (lambda + 2 * mu) * util::sin(2 * pi * x * y));
-  }
-
-  T by(T t, T x, T y, T dx, T mu, T lambda, T charU)
-  {
-    return - 0.0014 * mu * cos(2 * pi * y)
-           + 0.0028 * pi * pi * (lambda + 2 * mu) * (x * x + 1) * cos(2 * pi * y)
-           - pi * (lambda + mu) * (-0.0036 * pi * x * y * sin(2 * pi * x * y)
-           + 0.0018 * cos(2 * pi * x * y));
-  }
-
-  T d2by_dy2(T t, T x, T y, T dx, T mu, T lambda, T charU)
-  {
-    return   pi*pi*(0.0056*mu*cos(2*pi*y)
-           - 0.0112*pi*pi*(lambda + 2*mu)*(x*x + 1)*cos(2*pi*y)
-           - pi*x*x*(lambda + mu)*(0.0144*pi*x*y*sin(2*pi*x*y)
-           - 0.0216*cos(2*pi*x*y)));
-  }
-
-  T d2bx_dxdy(T t, T x, T y, T dx, T mu, T lambda, T charU)
-  {
-    return   pi*pi*(-0.0144*mu*pi*pi*x*x*x*y*sin(2*pi*x*y)
-           + 0.0216*mu*pi*x*x*cos(2*pi*x*y)
-           - 0.0144*pi*pi*x*y*y*y*(lambda + 2*mu)*sin(2*pi*x*y)
-           + 0.0216*pi*y*y*(lambda + 2*mu)*cos(2*pi*x*y)
-           + 0.0056*(lambda + mu)*cos(2*pi*y));
-  }
-
-  T d2by_dx2(T t, T x, T y, T dx, T mu, T lambda, T charU)
-  {
-    return   pi*pi*(-pi*y*y*(lambda + mu)*(0.0144*pi*x*y*sin(2*pi*x*y)
-           - 0.0216*cos(2*pi*x*y))
-           + 0.0056*(lambda + 2*mu)*cos(2*pi*y));
-  }
+    IndicatorEllipse2D<MyCase::value_t> ellipse1;
+    IndicatorEllipse2D<MyCase::value_t> ellipse2;
+    IndicatorEllipse2D<MyCase::value_t> ellipse3;
 };
 
-template <typename T, typename _DESCRIPTOR>
-class ManufacturedSolutionU2D : public AnalyticalF2D<T, T> {
+template<typename T>
+std::unique_ptr<AnalyticalF2D<T, T>> getForceField(MyCase& myCase)
+{
+  using _DESCRIPTOR = MyCase::descriptor_t_of<NavierCauchy>;
 
-protected:
-  T charU;
+  class ForceField2D : public AnalyticalF2D<T, T> {
+  protected:
+    MyCase& myCase;
+    const T pi = std::numbers::pi_v<T>;
 
-public:
-  ManufacturedSolutionU2D(LinElaUnitConverter<T, NCDESCRIPTOR> converter) : AnalyticalF2D<T, T>(2),
-      charU(converter.getCharPhysVelocity())
-      {};
+  public:
+    ForceField2D(MyCase& myCase) : AnalyticalF2D<T, T>(2), myCase(myCase) {};
 
-  bool operator()(T output[], const T input[]) override
-  {
-    T x = input[0];
-    T y = input[1];
+    bool operator()(T output[], const T input[]) override
+    {
+      constexpr T theta = invCs2<T, _DESCRIPTOR>();
+      auto& lattice = myCase.getLattice(NavierCauchy{});
+      const auto& converter = lattice.getUnitConverter();
+      T dx = converter.getPhysDeltaX();
+      T dt = converter.getPhysDeltaT();
+      T kappa = converter.getDampingFactor();
+      T lambda = converter.getLatticeLambda();
+      T mu = converter.getLatticeShearModulus();
+      T charU = converter.getCharPhysDisplacement();
 
-    // lattice units
-    output[0] = 9. / 10000. * util::sin(2. * pi * x * y);
-    output[1] = 7. / 10000. * util::cos(2. * pi * y) * (x * x + 1);
+      T x = input[0];
+      T y = input[1];
 
-    return true;
+      T omega_11 = 1. / (mu / theta + 0.5);
+      T omega_d  = 1. / (2 * mu / (1 - theta) + 0.5);
+      T omega_s  = 1. / (2 * (mu + lambda) / (1 + theta) + 0.5);
+
+      T tau_11 = 1. / omega_11 - 0.5;
+      T tau_s = 1. / omega_d - 0.5;
+      T tau_p = 1. / omega_s - 0.5;
+
+
+      T tau_12 = 0.5;
+      T tau_22 = 0.5;
+
+      T tau_21 = tau_12;
+
+      T omega_12 = 1. / (tau_12 + 0.5);
+      T omega_21 = 1. / (tau_21 + 0.5);
+      T omega_22 = 1. / (tau_22 + 0.5);
+
+      // These are correct
+      T d1 = -1. / 4. - 1. / 2. * theta * tau_12 * tau_s + pow(tau_s, 2) / 2.
+          -  1. / 2. * theta * pow(tau_s, 2) + 1. / 2. * theta * tau_12 * tau_p
+          +  pow(tau_p, 2) / 2. + 1. / 2. * theta * pow(tau_p, 2);
+      T d2 = -theta / 2. + theta * pow(tau_11, 2) + theta * tau_11 * tau_12
+          + 1. / 2. * theta * tau_12 * tau_s - pow(tau_s, 2) / 2.
+          + 1. / 2. * theta * pow(tau_s, 2) + 1. / 2. * theta * tau_12 * tau_p
+          + pow(tau_p, 2) / 2. + 1. / 2. * theta * pow(tau_p, 2);
+      T d3 = -theta / 4.
+          +  theta * pow(tau_11, 2)
+          +  theta * tau_11 * tau_12;
+
+      T mu_phys     =     mu * (dx * dx * kappa) / dt;
+      T lambda_phys = lambda * (dx * dx * kappa) / dt;
+
+
+      output[0] = bx(0, x, y, dx, mu_phys, lambda_phys, charU) * dt / kappa
+                + (d1 * d2bx_dx2(0, x, y, dx, mu_phys, lambda_phys, charU)
+                + d2 * d2by_dxdy(0, x, y, dx, mu_phys, lambda_phys, charU)
+                + d3 * d2bx_dy2(0, x, y, dx, mu_phys, lambda_phys, charU)) * dx * dx * dt / kappa;
+
+      output[1] = by(0, x, y, dx, mu_phys, lambda_phys, charU) * dt / kappa
+                + (d1 * d2by_dy2(0, x, y, dx, mu_phys, lambda_phys, charU)
+                + d2 * d2bx_dxdy(0, x, y, dx, mu_phys, lambda_phys, charU)
+                + d3 * d2by_dx2(0, x, y, dx, mu_phys, lambda_phys, charU)) * dx * dx * dt / kappa;
+
+      return true;
+    };
+
+    T bx(T t, T x, T y, T dx, T mu, T lambda, T charU)
+    {
+      return   0.0036 * mu * pi * pi * x * x * util::sin(2 * pi * x * y)
+            + 0.0036 * pi * pi * y * y * (lambda + 2 * mu) * util::sin(2 * pi * x * y)
+            + 0.0028 * pi * x * (lambda + mu) * util::sin(2 * pi * y);
+    }
+
+    T d2bx_dx2(T t, T x, T y, T dx, T mu, T lambda, T charU)
+    {
+      return   pi * pi * (-0.0144 * mu * pi * pi * x * x * y * y * util::sin(2 * pi * x * y)
+            + 0.0288 * mu * pi * x * y * util::cos(2 * pi * x * y)
+            + 0.0072 * mu * util::sin(2 * pi * x * y)
+            - 0.0144 * pi * pi * y * y * y * y * (lambda + 2 * mu) * util::sin(2 * pi * x * y));
+    }
+
+    T d2by_dxdy(T t, T x, T y, T dx, T mu, T lambda, T charU)
+    {
+      return    pi * pi * (-0.0112 * pi * x * (lambda + 2 * mu) * util::sin(2 * pi * y)
+            + (lambda + mu) * (-0.0144 * pi * pi * x * x * y * y * util::sin(2 * pi * x * y)
+            + 0.0288 * pi * x * y * util::cos(2 * pi * x * y)
+            + 0.0072 * util::sin(2 * pi * x * y)));
+    }
+
+    T d2bx_dy2(T t, T x, T y, T dx, T mu, T lambda, T charU)
+    {
+      return   pi * pi * (-0.0144 * mu * pi * pi * x * x * x * x * util::sin(2 * pi * x * y)
+            - 0.0144 * pi * pi * x * x * y * y * (lambda + 2 * mu) * util::sin(2 * pi * x * y)
+            + 0.0288 * pi * x * y * (lambda + 2 * mu) * util::cos(2 * pi * x * y)
+            - 0.0112 * pi * x * (lambda + mu) * util::sin(2 * pi * y)
+            + 0.0072 * (lambda + 2 * mu) * util::sin(2 * pi * x * y));
+    }
+
+    T by(T t, T x, T y, T dx, T mu, T lambda, T charU)
+    {
+      return - 0.0014 * mu * cos(2 * pi * y)
+            + 0.0028 * pi * pi * (lambda + 2 * mu) * (x * x + 1) * cos(2 * pi * y)
+            - pi * (lambda + mu) * (-0.0036 * pi * x * y * sin(2 * pi * x * y)
+            + 0.0018 * cos(2 * pi * x * y));
+    }
+
+    T d2by_dy2(T t, T x, T y, T dx, T mu, T lambda, T charU)
+    {
+      return   pi*pi*(0.0056*mu*cos(2*pi*y)
+            - 0.0112*pi*pi*(lambda + 2*mu)*(x*x + 1)*cos(2*pi*y)
+            - pi*x*x*(lambda + mu)*(0.0144*pi*x*y*sin(2*pi*x*y)
+            - 0.0216*cos(2*pi*x*y)));
+    }
+
+    T d2bx_dxdy(T t, T x, T y, T dx, T mu, T lambda, T charU)
+    {
+      return   pi*pi*(-0.0144*mu*pi*pi*x*x*x*y*sin(2*pi*x*y)
+            + 0.0216*mu*pi*x*x*cos(2*pi*x*y)
+            - 0.0144*pi*pi*x*y*y*y*(lambda + 2*mu)*sin(2*pi*x*y)
+            + 0.0216*pi*y*y*(lambda + 2*mu)*cos(2*pi*x*y)
+            + 0.0056*(lambda + mu)*cos(2*pi*y));
+    }
+
+    T d2by_dx2(T t, T x, T y, T dx, T mu, T lambda, T charU)
+    {
+      return   pi*pi*(-pi*y*y*(lambda + mu)*(0.0144*pi*x*y*sin(2*pi*x*y)
+            - 0.0216*cos(2*pi*x*y))
+            + 0.0056*(lambda + 2*mu)*cos(2*pi*y));
+    }
   };
-};
 
-template <typename T, typename _DESCRIPTOR>
-class ManufacturedSolutionStress2D : public AnalyticalF2D<T, T> {
+  return std::make_unique<ForceField2D>(myCase);
+}
 
-protected:
-  T dt;
-  T dx;
-  T lambda;
-  T mu;
-  T kappa;
 
-public:
-  ManufacturedSolutionStress2D(LinElaUnitConverter<T, NCDESCRIPTOR> converter) : AnalyticalF2D<T, T>(4),
-      dt(converter.getConversionFactorTime()),
-      dx(converter.getConversionFactorLength()),
-      mu(converter.getPhysShearModulus()),
-      lambda(converter.getPhysLambda()),
-      kappa(converter.getDampingFactor()) {};
+template <typename T>
+std::unique_ptr<AnalyticalF2D<T, T>> getManufacturedSolutionU2D(MyCase& myCase)
+{
+  class ManufacturedSolutionU2D : public AnalyticalF2D<T, T> {
 
-  bool operator()(T output[], const T input[]) override
-  {
-    T x = input[0];
-    T y = input[1];
+  protected:
+    MyCase& myCase;
 
-    T latticeFactor = dt / (kappa * dx);
+  public:
+    ManufacturedSolutionU2D(MyCase& _myCase) : AnalyticalF2D<T, T>(2), myCase(_myCase){};
 
-    // xx
-    output[0] = latticeFactor * ((2. * mu + lambda) * dux_dx(0, x, y)
-                                          + lambda  * duy_dy(0, x, y));
-    // xy
-    output[1] = latticeFactor * (mu * (  dux_dy(0, x, y)
-                                       + duy_dx(0, x, y)  ));
+    bool operator()(T output[], const T input[]) override
+    {
+      constexpr T pi = std::numbers::pi_v<T>;
+      T x = input[0];
+      T y = input[1];
 
-    // yx
-    output[2] = latticeFactor * (mu * (  dux_dy(0, x, y)
-              + duy_dx(0, x, y)  ));
+      // lattice units
+      output[0] = 9. / 10000. * util::sin(2. * pi * x * y);
+      output[1] = 7. / 10000. * util::cos(2. * pi * y) * (x * x + 1);
 
-    // yy
-    output[3] = latticeFactor * ((2. * mu + lambda) * duy_dy(0, x, y)
-                                          + lambda  * dux_dx(0, x, y));
-
-    return true;
+      return true;
+    };
   };
 
-  T dux_dx(T t, T x, T y) {
-    return 0.0018 * pi * y * util::cos(2. * pi * x * y);
-  }
+  return std::make_unique<ManufacturedSolutionU2D>(myCase);
+}
 
-  T dux_dy(T t, T x, T y) {
-    return 0.0018 * pi * x * util::cos(2 * pi * x * y);
-  }
+template <typename T>
+std::unique_ptr<AnalyticalF2D<T, T>> getManufacturedSolutionStress2D(MyCase& myCase)
+{
 
-  T duy_dx(T t, T x, T y) {
-    return 0.0014 * x * util::cos(2 * pi * y);
-  }
+  class ManufacturedSolutionStress2D : public AnalyticalF2D<T, T> {
+  protected:
+    MyCase& myCase;
+    const T pi = std::numbers::pi_v<T>;
 
-  T duy_dy(T t, T x, T y) {
-    return -0.0014 * pi * (x * x + 1.) * util::sin(2 * pi * y);
-  }
-};
+  public:
+    ManufacturedSolutionStress2D(MyCase& _myCase) : AnalyticalF2D<T, T>(4), myCase(_myCase) {};
+
+    bool operator()(T output[], const T input[]) override
+    {
+      constexpr T pi = std::numbers::pi_v<T>;
+      auto& lattice = myCase.getLattice(NavierCauchy{});
+      const auto& converter = lattice.getUnitConverter();
+      const T dx = converter.getPhysDeltaX();
+      const T dt = converter.getPhysDeltaT();
+      const T kappa = converter.getDampingFactor();
+      const T lambda = converter.getLatticeLambda();
+      const T mu = converter.getLatticeShearModulus();
+
+      T x = input[0];
+      T y = input[1];
+
+      T latticeFactor = dt / (kappa * dx);
+
+      // xx
+      output[0] = latticeFactor * ((2. * mu + lambda) * dux_dx(0, x, y)
+                                            + lambda  * duy_dy(0, x, y));
+      // xy
+      output[1] = latticeFactor * (mu * (  dux_dy(0, x, y)
+                                        + duy_dx(0, x, y)  ));
+
+      // yx
+      output[2] = latticeFactor * (mu * (  dux_dy(0, x, y)
+                + duy_dx(0, x, y)  ));
+
+      // yy
+      output[3] = latticeFactor * ((2. * mu + lambda) * duy_dy(0, x, y)
+                                            + lambda  * dux_dx(0, x, y));
+
+      return true;
+    };
+
+    T dux_dx(T t, T x, T y) {
+      return 0.0018 * pi * y * util::cos(2. * pi * x * y);
+    }
+
+    T dux_dy(T t, T x, T y) {
+      return 0.0018 * pi * x * util::cos(2 * pi * x * y);
+    }
+
+    T duy_dx(T t, T x, T y) {
+      return 0.0014 * x * util::cos(2 * pi * y);
+    }
+
+    T duy_dy(T t, T x, T y) {
+      return -0.0014 * pi * (x * x + 1.) * util::sin(2 * pi * y);
+    }
+  };
+
+  return std::make_unique<ManufacturedSolutionStress2D>(myCase);
+}
 
 Mesh<MyCase::value_t,MyCase::d> createMesh(MyCase::ParametersD& params) {
   using T = MyCase::value_t;
-  Vector extent = params.get<parameters::DOMAIN_EXTENT>();
-  std::vector<T> origin(2,T());
-  IndicatorCuboid2D<T> cuboid(extent, origin);
-
   const int noOfCuboids = singleton::mpi().getSize();
 
-  T origin = converter.getConversionFactorLength() / 3.;
-  IndicatorCuboid2D<T> cuboid({params.get<parameters::PLATE_LENGTH> * params.get<parameters::DOMAIN_LENGTH>(), params.get<parameters::PLATE_LENGTH> * params.get<parameters::DOMAIN_LENGTH>()}, {origin, origin});
-  CuboidDecomposition<T, 2> cuboidDecomposition(cuboid, converter.getConversionFactorLength(), noOfCuboids);
+  const T conversionFactorLength = params.get<parameters::DOMAIN_EXTENT>()[0] / params.get<parameters::RESOLUTION>();
+  const T origin = conversionFactorLength / 3.0;
+  const T charL = params.get<parameters::PHYS_CHAR_LENGTH>();
 
-  Vector<T,2> center1( .75 * charL, .75 * charL );
-  Vector<T,2> center2( .95 * charL, .6 * charL);
-  Vector<T,2> center3( .5 * charL, .9 * charL );
+  OstreamManager clout(std::cout, "createMesh");
 
-  IndicatorEllipse2D<T> ellipse1(center1, .693 * charL, .548 * charL, -20);
-  IndicatorEllipse2D<T> ellipse2(center2, .1 * charL, .134 * charL);
-  IndicatorEllipse2D<T> ellipse3(center3, .187 * charL, .1 * charL);
+  IndicatorCuboid2D<T> cuboid({params.get<parameters::DOMAIN_EXTENT>()[0] * charL,
+    params.get<parameters::DOMAIN_EXTENT>()[1] * charL}, {origin, origin});
+  CuboidDecomposition<T, 2> cuboidDecomposition(cuboid, conversionFactorLength, noOfCuboids);
 
-  /// Instantiation of a loadBalancer
-  HeuristicLoadBalancer<T> loadBalancer(cuboidDecomposition);
-  const T physDeltaX = 0.1 / params.get<parameters::RESOLUTION>();
+  const T physDeltaX = params.get<parameters::DOMAIN_EXTENT>()[0]/ params.get<parameters::RESOLUTION>();
+
   Mesh<T,MyCase::d> mesh(cuboid, physDeltaX, singleton::mpi().getSize());
   mesh.setOverlap(params.get<parameters::OVERLAP>());
-  mesh.getCuboidDecomposition().setPeriodicity({true,false});
+  mesh.getCuboidDecomposition().setPeriodicity({false,false});
   return mesh;
 }
 
-void prepareGeometry( SuperGeometry<T, 2>& superGeometry,
-                      LinElaUnitConverter<T,NCDESCRIPTOR> converter,
-                      IndicatorEllipse2D<T>& ellipse1,
-                      IndicatorEllipse2D<T>& ellipse2,
-                      IndicatorEllipse2D<T>& ellipse3)
+void prepareGeometry( MyCase& myCase, ellipse2D& ellipseCase)
 {
+  auto& geometry = myCase.getGeometry();
   OstreamManager clout(std::cout, "prepareGeometry");
   clout << "Prepare Geometry ..." << std::endl;
 
-  superGeometry.rename( 0, 2 );
+  geometry.rename( 0, 2 );
+  geometry.rename( 2, 1, ellipseCase.ellipse1);
+  geometry.rename( 1, 3, ellipseCase.ellipse2);
+  geometry.rename( 1, 4, ellipseCase.ellipse3);
 
-  superGeometry.rename( 2, 1, ellipse1 );
-  superGeometry.rename( 1, 3, ellipse2 );
-  superGeometry.rename( 1, 4, ellipse3 );
+  geometry.clean();
+  geometry.innerClean();
+  geometry.checkForErrors();
 
-  superGeometry.clean();
-  superGeometry.innerClean();
-  superGeometry.checkForErrors();
-
-  superGeometry.print();
+  geometry.print();
 
   clout << "Prepare Geometry ... OK" << std::endl;
 }
 
-void prepareOmegas( LinElaUnitConverter<T, NCDESCRIPTOR>  converter,
-                    T                                    theta,
-                    std::vector<T>&                      allOmegas ) {
-    T omega_11  = 1. / (      converter.getLatticeShearModulus()                                 /       theta  + 0.5);
-    T omega_d   = 1. / (2. *  converter.getLatticeShearModulus()                                 / (1. - theta) + 0.5);
-    T omega_s   = 1. / (2. * (converter.getLatticeShearModulus() + converter.getLatticeLambda()) / (1. + theta) + 0.5);
-
-    T tau_11    =  1. / omega_11 - 0.5;
-    T tau_s     =  1. / omega_d - 0.5;
-    T tau_p     =  1. / omega_s - 0.5;
-
-    T tau_12 = 0.5;
-    T tau_22 = 0.5;
-
-    T tau_21 = tau_12;
-
-    T omega_12  = 1. / (tau_12 + 0.5);
-    T omega_21  = 1. / (tau_21 + 0.5);
-    T omega_22  = 1. / (tau_22 + 0.5);
-
-    allOmegas   = {omega_11, omega_s, omega_d, omega_12, omega_21, omega_22};
-
-  return;
-}
-
-void prepareLattice(MyCase& myCase, const int bulkNum = 1) {
+void prepareLattice(MyCase& myCase, ellipse2D& ellipseCase, const int bulkNum = 1) {
   OstreamManager clout(std::cout,"prepareLattice");
   clout << "Prepare Lattice ..." << std::endl;
 
@@ -371,10 +364,19 @@ void prepareLattice(MyCase& myCase, const int bulkNum = 1) {
   const T physDeltaT = physDeltaX * physDeltaX;
   const T charDisplacement = params.get<parameters::PHYS_CHAR_DISPLACEMENT>();
   const T ELattice = params.get<parameters::YOUNGS_MODULUS>();
+  const T physPoissonRatio = params.get<parameters::POISSON_RATIO>();
   const T kappa = params.get<parameters::KAPPA>();
-  const T charLength = params.get<parameters::DOMAIN_EXTENT>()[0];
+  const T charLength = params.get<parameters::PHYS_CHAR_LENGTH>();
 
   constexpr T theta = invCs2<T, NCDESCRIPTOR>();
+
+  clout << "physDeltaX=" << physDeltaX << std::endl;
+  clout << "physDeltaT=" << physDeltaT << std::endl;
+  clout << "charDisplacement=" << charDisplacement << std::endl;
+  clout << "charLength=" << charLength << std::endl;
+  clout << "ELattice=" << ELattice << std::endl;
+  clout << "physPoissonRatio=" << physPoissonRatio << std::endl;
+  clout << "kappa=" << kappa << std::endl;
 
   NClattice.setUnitConverter<LinElaUnitConverter<T, NCDESCRIPTOR>>(
     (T) physDeltaX, // physDeltaX
@@ -382,23 +384,23 @@ void prepareLattice(MyCase& myCase, const int bulkNum = 1) {
     (T) charLength,  // charPhysLength
     (T) charDisplacement, // charPhysDisplacement
     (T) ELattice * (physDeltaX * physDeltaX * kappa) / physDeltaT,  // physViscosity
-    (T) 0.7, // physViscosity
-    (T) kappa, // physThermalConductivity
+    (T) physPoissonRatio, // physViscosity
+    (T) kappa // physThermalConductivity
   );
 
   const auto& converter = NClattice.getUnitConverter();
   converter.print();
 
-  auto bulkIndicator = superGeometry.getMaterialIndicator({ bulkNum });
+  auto bulkIndicator = geometry.getMaterialIndicator({ bulkNum });
 
-  lLattice.defineDynamics<BoolakeeLinearElasticityBoundary>( bulkIndicator );
+  NClattice.defineDynamics<BoolakeeLinearElasticityBoundary>( bulkIndicator );
 
-  setBoolakeeDirichletBoundary<T,NCDESCRIPTOR,BoolakeeDirichletPostProcessor<T,NCDESCRIPTOR>>(lLattice, superGeometry.getMaterialIndicator( 2 ), bulkIndicator, ellipse1);
-  setBoolakeeDirichletBoundary<T,NCDESCRIPTOR,BoolakeeDirichletPostProcessor<T,NCDESCRIPTOR>>(lLattice, superGeometry.getMaterialIndicator( 3 ), bulkIndicator, ellipse2);
-  setBoolakeeDirichletBoundary<T,NCDESCRIPTOR,BoolakeeDirichletPostProcessor<T,NCDESCRIPTOR>>(lLattice, superGeometry.getMaterialIndicator( 4 ), bulkIndicator, ellipse3);
+  setBoolakeeDirichletBoundary<T,NCDESCRIPTOR,BoolakeeDirichletPostProcessor<T,NCDESCRIPTOR>>(NClattice, geometry.getMaterialIndicator( 2 ), bulkIndicator, ellipseCase.ellipse1);
+  setBoolakeeDirichletBoundary<T,NCDESCRIPTOR,BoolakeeDirichletPostProcessor<T,NCDESCRIPTOR>>(NClattice, geometry.getMaterialIndicator( 3 ), bulkIndicator, ellipseCase.ellipse2);
+  setBoolakeeDirichletBoundary<T,NCDESCRIPTOR,BoolakeeDirichletPostProcessor<T,NCDESCRIPTOR>>(NClattice, geometry.getMaterialIndicator( 4 ), bulkIndicator, ellipseCase.ellipse3);
 
   {
-    auto& communicator = lLattice.getCommunicator(stage::PostCollide());
+    auto& communicator = NClattice.getCommunicator(stage::PostCollide());
     communicator.template requestField<descriptors::PREVIOUS_CELL>();
     communicator.template requestField<descriptors::SOLID_DISTANCE_FIELD>();
     communicator.template requestField<descriptors::BOUNDARY_COORDS_X>();
@@ -426,23 +428,41 @@ void prepareLattice(MyCase& myCase, const int bulkNum = 1) {
                 converter.getCharPhysVelocity(),
                 converter.getEpsilon()};
 
-  lLattice.setParameter<descriptors::MAGIC_SOLID>(magic);
+  const T omega_11  = 1. / (      converter.getLatticeShearModulus()                                 /       theta  + 0.5);
+  const T omega_d   = 1. / (2. *  converter.getLatticeShearModulus()                                 / (1. - theta) + 0.5);
+  const T omega_s   = 1. / (2. * (converter.getLatticeShearModulus() + converter.getLatticeLambda()) / (1. + theta) + 0.5);
 
-  lLattice.setParameter<descriptors::OMEGA_SOLID>(allOmegas);
+  const T tau_11    =  1. / omega_11 - 0.5;
+  const T tau_s     =  1. / omega_d - 0.5;
+  const T tau_p     =  1. / omega_s - 0.5;
 
-  ForceField2D<T, T> forceSol(theta, converter);
-  lLattice.defineField<FORCE>(superGeometry, bulkNum, forceSol);
-  lLattice.defineField<POPULATION>(superGeometry, bulkNum, initialPopulationF);
+  const T tau_12 = 0.5;
+  const T tau_22 = 0.5;
 
-  lLattice.defineField<DISP_SOLID>(superGeometry, bulkNum, initialDispF);
-  lLattice.defineField<SIGMA_SOLID>(superGeometry, bulkNum, initialStressF);
+  const T tau_21 = tau_12;
 
-  lLattice.defineField<PREVIOUS_CELL>(superGeometry, 2, initialPopulationF);
-  lLattice.defineField<PREVIOUS_CELL>(superGeometry, 3, initialPopulationF);
-  lLattice.defineField<PREVIOUS_CELL>(superGeometry, 4, initialPopulationF);
+  const T omega_12  = 1. / (tau_12 + 0.5);
+  const T omega_21  = 1. / (tau_21 + 0.5);
+  const T omega_22  = 1. / (tau_22 + 0.5);
+
+  std::vector<T> allOmegas   = {omega_11, omega_s, omega_d, omega_12, omega_21, omega_22};
+
+  NClattice.setParameter<descriptors::MAGIC_SOLID>(magic);
+  NClattice.setParameter<descriptors::OMEGA_SOLID>(allOmegas);
+
+  auto force = getForceField<T>(myCase);
+  NClattice.defineField<FORCE>(geometry, bulkNum, *force);
+  NClattice.defineField<POPULATION>(geometry, bulkNum, initialPopulationF);
+
+  NClattice.defineField<DISP_SOLID>(geometry, bulkNum, initialDispF);
+  NClattice.defineField<SIGMA_SOLID>(geometry, bulkNum, initialStressF);
+
+  NClattice.defineField<PREVIOUS_CELL>(geometry, 2, initialPopulationF);
+  NClattice.defineField<PREVIOUS_CELL>(geometry, 3, initialPopulationF);
+  NClattice.defineField<PREVIOUS_CELL>(geometry, 4, initialPopulationF);
 
   /// Make the lattice ready for simulation
-  lLattice.initialize();
+  NClattice.initialize();
 
   clout << "Prepare Lattice ... OK" << std::endl;
 }
@@ -518,47 +538,52 @@ void prepareLattice(MyCase& myCase, const int bulkNum = 1) {
 }
 */
 
-std::vector<T> getResults( SuperLattice<T, NCDESCRIPTOR>& lLattice,
-                           LinElaUnitConverter<T, NCDESCRIPTOR> converter,
-                           SuperGeometry<T, 2>& superGeometry,
+std::vector<MyCase::value_t> getResults( MyCase& myCase,
                            int iT,
                            int maxIt)
 {
+  using T = MyCase::value_t;
+  using NCDESCRIPTOR = MyCase::descriptor_t_of<NavierCauchy>;
+  auto& NClattice = myCase.getLattice(NavierCauchy{});
+  const auto& converter = NClattice.getUnitConverter();
+  auto& geometry = myCase.getGeometry();
+  auto& params = myCase.getParameters();
+
   OstreamManager clout(std::cout, "getResults");
 
   SuperVTMwriter2D<T> vtmWriter("ellipseDirichlet");
 
   CSV<T> csvWriter("TEMP_CSV");
 
-  SuperGeometryF<T,2> materials(superGeometry);
+  SuperGeometryF<T,2> materials(geometry);
   vtmWriter.addFunctor( materials );
 
   if (iT == 0) {
     // Writes the geometry, cuboid no. and rank no. as vti file for visualization
-    SuperLatticeCuboid2D<T, NCDESCRIPTOR>   cuboid(lLattice);
-    SuperLatticeRank2D<T, NCDESCRIPTOR>     rank(lLattice);
+    SuperLatticeCuboid2D<T, NCDESCRIPTOR>   cuboid(NClattice);
+    SuperLatticeRank2D<T, NCDESCRIPTOR>     rank(NClattice);
     vtmWriter.write(cuboid);
     vtmWriter.write(rank);
     vtmWriter.createMasterFile();
   }
 
-  SuperLatticePhysVelocity2D<T, NCDESCRIPTOR>          velocityPhys(lLattice, converter);
-  SuperLatticeVelocity2D<T, NCDESCRIPTOR>              velocity(lLattice);
-  SuperLatticeDensity2D<T, NCDESCRIPTOR>               density(lLattice);
-  SuperLatticeFpop2D<T, NCDESCRIPTOR>                  population(lLattice);
-  SuperLatticeField2D<T, NCDESCRIPTOR, FORCE>          forceField(lLattice);
+  SuperLatticePhysVelocity2D<T, NCDESCRIPTOR>          velocityPhys(NClattice, NClattice.getUnitConverter());
+  SuperLatticeVelocity2D<T, NCDESCRIPTOR>              velocity(NClattice);
+  SuperLatticeDensity2D<T, NCDESCRIPTOR>               density(NClattice);
+  SuperLatticeFpop2D<T, NCDESCRIPTOR>                  population(NClattice);
+  SuperLatticeField2D<T, NCDESCRIPTOR, FORCE>          forceField(NClattice);
 
-  ManufacturedSolutionU2D<T, NCDESCRIPTOR>             dispSol(converter);
-  SuperLatticeFfromAnalyticalF2D<T, NCDESCRIPTOR>      dispSolLattice(dispSol, lLattice);
+  auto dispSol = getManufacturedSolutionU2D<T>(myCase);
+  SuperLatticeFfromAnalyticalF2D<T, NCDESCRIPTOR>      dispSolLattice(dispSol, NClattice);
 
-  ManufacturedSolutionStress2D<T, NCDESCRIPTOR>        stressSol(converter);
-  SuperLatticeFfromAnalyticalF2D<T, NCDESCRIPTOR>      stressSolLattice(stressSol, lLattice);
+  auto stressSol = getManufacturedSolutionStress2D<T>(myCase);
+  SuperLatticeFfromAnalyticalF2D<T, NCDESCRIPTOR>      stressSolLattice(stressSol, NClattice);
 
   // Fields for error calc
-  SuperLatticeField2D<T, NCDESCRIPTOR, DISP_SOLID>     moments(lLattice);
-  SuperLatticeField2D<T, NCDESCRIPTOR, SIGMA_SOLID>    stress(lLattice);
+  SuperLatticeField2D<T, NCDESCRIPTOR, DISP_SOLID>     moments(NClattice);
+  SuperLatticeField2D<T, NCDESCRIPTOR, SIGMA_SOLID>    stress(NClattice);
 
-  auto indicatorF = superGeometry.getMaterialIndicator({1});
+  auto indicatorF = geometry.getMaterialIndicator({1});
 
   vtmWriter.addFunctor(population,       "population");
   vtmWriter.addFunctor(moments,          "numerical disp");
@@ -575,10 +600,10 @@ std::vector<T> getResults( SuperLattice<T, NCDESCRIPTOR>& lLattice,
   T   lInfStressResult[2] = {T(), T()};
   int tmp[]               = {int()};
 
-  SuperRelativeErrorL2Norm2D<T>   relUErrorL2Norm(lLattice, moments, dispSol, indicatorF);
-  SuperRelativeErrorLinfNorm2D<T> relUErrorLinfNorm(lLattice, moments, dispSol, indicatorF);
-  SuperRelativeErrorL2Norm2D<T>   relStressErrorL2Norm( lLattice, stress, stressSol, indicatorF );
-  SuperRelativeErrorLinfNorm2D<T> relStressErrorLinfNorm( lLattice, stress, stressSol, indicatorF );
+  SuperRelativeErrorL2Norm2D<T>   relUErrorL2Norm(NClattice, moments, dispSol, indicatorF);
+  SuperRelativeErrorLinfNorm2D<T> relUErrorLinfNorm(NClattice, moments, dispSol, indicatorF);
+  SuperRelativeErrorL2Norm2D<T>   relStressErrorL2Norm( NClattice, stress, stressSol, indicatorF );
+  SuperRelativeErrorLinfNorm2D<T> relStressErrorLinfNorm( NClattice, stress, stressSol, indicatorF );
 
   relUErrorL2Norm(l2UResult, tmp);
   relUErrorLinfNorm(lInfUResult, tmp);
@@ -597,6 +622,44 @@ std::vector<T> getResults( SuperLattice<T, NCDESCRIPTOR>& lLattice,
   return returnVec;
 }
 
+void simulate(MyCase& myCase){
+  using T = MyCase::value_t;
+  auto& NClattice = myCase.getLattice(NavierCauchy{});
+  const auto& converter = NClattice.getUnitConverter();
+  auto& geometry = myCase.getGeometry();
+  auto& parameters = myCase.getParameters();
+  const T simTime = parameters.get<parameters::MAX_PHYS_T>();
+
+  int maxIt = simTime / converter.getConversionFactorTime();
+
+  OstreamManager clout(std::cout, "main");
+  clout << "Awaiting " << maxIt << " Time steps. Starting simulation..." << std::endl;
+  util::Timer<T> timer(converter.getLatticeTime(simTime),
+                       geometry.getStatistics().getNvoxel());
+  timer.start();
+
+  int numDataPoints = 400.;
+  std::vector<T> errors = {};
+  std::ofstream fout;
+  std::string dataFile = singleton::directories().getLogOutDir() + std::to_string(parameters.get<parameters::RESOLUTION>()) +  "_Err.dat";
+  fout.open(dataFile.c_str(), std::ios::trunc);
+  fout << "N;it;l2UErr;lInfUErr;l2StressErr;lInfStressErr" << std::endl;
+
+  for (int iT = 0; iT <= maxIt; ++iT) {
+
+    timer.update(iT);
+
+    if (iT % (maxIt / numDataPoints) == 0) {
+      errors = getResults(myCase, iT, maxIt);
+      timer.printStep();
+      fout << parameters.get<parameters::RESOLUTION>() << ";" << converter.getPhysTime(iT) << ";" << errors[0] << ";" << errors[1] << ";" <<errors[2] << ";" << errors[3] << std::endl;
+    }
+    NClattice.collideAndStream();
+  }
+  fout.close();
+  timer.stop();
+}
+
 int main(int argc, char* argv[])
 {
   using T = MyCase::value_t;
@@ -606,59 +669,27 @@ int main(int argc, char* argv[])
   initialize(&argc, &argv);
   singleton::directories().setOutputDir("./tmp/");
 
-  //CLIreader args(argc, argv);
-  //const std::size_t N  = args.getValueOrFallback<std::size_t>("--res", 40);
-
   MyCase::ParametersD myCaseParameters;
   {
     using namespace olb::parameters;
     myCaseParameters.set<RESOLUTION>(40);
-    myCaseParameters.set<PLATE_LENGTH>(1.5);
-    myCaseParameters.set<DOMAIN_EXTENT>({1.0, 1.0});
-    myCaseParameters.set<YOUNG_MODULUS>(0.1);
-    myCaseParameters.set<PHYS_CHAR_DISPLACEMENT>(1.);
-    myCaseParameters.set<KAPPA>(1.);
+    myCaseParameters.set<PHYS_CHAR_LENGTH>(1.0);
+    myCaseParameters.set<DOMAIN_EXTENT>({1.5, 1.5});
+    myCaseParameters.set<YOUNGS_MODULUS>(0.1);
+    myCaseParameters.set<parameters::POISSON_RATIO>(0.7);
+    myCaseParameters.set<PHYS_CHAR_DISPLACEMENT>(1.0);
+    myCaseParameters.set<KAPPA>(1.0);
     myCaseParameters.set<MAX_PHYS_T>(60.);
   }
-  myCaseParameters.fromCLI(argc, argv)
+  myCaseParameters.fromCLI(argc, argv);
 
-  const int noOfCuboids = singleton::mpi().getSize();
+  Mesh mesh = createMesh(myCaseParameters);
+  ellipse2D ellipseCase(myCaseParameters.get<parameters::PHYS_CHAR_LENGTH>());
+  MyCase myCase(myCaseParameters, mesh);
 
-  /// Instantiation of a superGeometry
-  SuperGeometry<T, 2> superGeometry(cuboidDecomposition, loadBalancer);
-  prepareGeometry(superGeometry, converter, ellipse1, ellipse2, ellipse3);
+  prepareGeometry(myCase, ellipseCase);
 
-  std::vector<T> allOmegas = {0., 0., 0., 0., 0., 0.};
-  prepareOmegas(converter, theta, allOmegas);
+  prepareLattice(myCase, ellipseCase);
 
-  SuperLattice<T, NCDESCRIPTOR> lLattice(converter, superGeometry);
-  prepareLattice(lLattice, superGeometry, converter, allOmegas, theta, ellipse1, ellipse2, ellipse3);
-
-  int maxIt = simTime / converter.getConversionFactorTime();
-
-  clout << "Awaiting " << maxIt << " Time steps. Starting simulation..." << std::endl;
-  util::Timer<T> timer(converter.getLatticeTime(simTime),
-                       superGeometry.getStatistics().getNvoxel());
-  timer.start();
-
-  int numDataPoints = 400.;
-  std::vector<T> errors = {};
-  std::ofstream fout;
-  std::string dataFile = singleton::directories().getLogOutDir() + std::to_string(N) +  "_Err.dat";
-  fout.open(dataFile.c_str(), std::ios::trunc);
-  fout << "N;it;l2UErr;lInfUErr;l2StressErr;lInfStressErr" << std::endl;
-
-  for (int iT = 0; iT <= maxIt; ++iT) {
-
-    timer.update(iT);
-
-    if (iT % (maxIt / numDataPoints) == 0) {
-      errors = getResults(lLattice, converter, superGeometry, iT, maxIt);
-      timer.printStep();
-      fout << N << ";" << converter.getPhysTime(iT) << ";" << errors[0] << ";" << errors[1] << ";" <<errors[2] << ";" << errors[3] << std::endl;
-    }
-    lLattice.collideAndStream();
-  }
-  fout.close();
-  timer.stop();
+  simulate(myCase);
 }
