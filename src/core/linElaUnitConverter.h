@@ -89,6 +89,11 @@ namespace olb
       return 1 / _physDeltaX;
     };
 
+    constexpr T getEpsilon( ) const
+    {
+      return _physDeltaX / _charPhysLength;
+    };
+
     constexpr T getConversionFactorLength( ) const
     {
       return _physDeltaX;
