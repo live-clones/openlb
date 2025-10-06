@@ -41,7 +41,9 @@ Mesh<MyCase::value_t,MyCase::d> createMesh(MyCase::ParametersD& parameters) {
   IndicatorCuboid2D<T> cuboid(extent, origin);
 
   const T physDeltaX = parameters.get<parameters::PHYS_DELTA_X>();
-  return Mesh<T,MyCase::d>(cuboid, physDeltaX, singleton::mpi().getSize());
+  Mesh<T,MyCase::d> mesh(cuboid, physDeltaX, singleton::mpi().getSize());
+  mesh.setOverlap(parameters.get<parameters::OVERLAP>());
+  return mesh;
 }
 
 /// @brief Set material numbers for different parts of the domain

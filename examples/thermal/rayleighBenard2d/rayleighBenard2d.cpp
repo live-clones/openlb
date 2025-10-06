@@ -49,6 +49,7 @@ Mesh<MyCase::value_t,MyCase::d> createMesh(MyCase::ParametersD& params) {
 
   const T physDeltaX = 0.1 / params.get<parameters::RESOLUTION>();
   Mesh<T,MyCase::d> mesh(cuboid, physDeltaX, singleton::mpi().getSize());
+  mesh.setOverlap(params.get<parameters::OVERLAP>());
   mesh.getCuboidDecomposition().setPeriodicity({true,false});
   return mesh;
 }
