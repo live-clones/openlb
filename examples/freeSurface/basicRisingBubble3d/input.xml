@@ -29,15 +29,15 @@
             <MaxPhysTime>1.0</MaxPhysTime>                          <!-- Manual Read: max. simulation time [s] -->
             <CharPhysLength>0.0261</CharPhysLength>                 <!-- Auto.  Read: char. length [m] -->
             <CharPhysPressure>0.0</CharPhysPressure>                <!-- Auto.  Read: char. pressure [Pa] -->
-            <CharPhysVelocity>0.35331</CharPhysVelocity>            <!-- Auto.  Read: char. velocity [m/s] -->
-            <PhysViscosity>9.80996e-5</PhysViscosity>               <!-- Auto.  Read: fluid viscosity [m^2/s] -->
+            <CharPhysVelocity>0.3533088193</CharPhysVelocity>       <!-- Auto.  Read: char. velocity [m/s] -->
+            <PhysViscosity>0.0000980996</PhysViscosity>             <!-- Auto.  Read: fluid viscosity [m^2/s] -->
             <PhysDensity>1095.0</PhysDensity>                       <!-- Auto.  Read: fluid density [kg/m^3] -->
             <PhysGravity>0.0 0.0 -9.81</PhysGravity>                <!-- Manual Read: gravity vector [m/s^2] -->
             <DropIsolatedCells>true</DropIsolatedCells>             <!-- Manual Read: drop isolated cells in FSLBM -->
-            <TransitionThreshold>0.001</TransitionThreshold>        <!-- Manual Read: transition threshold in FSLBM -->
-            <LonelyThreshold>1.0</LonelyThreshold>                  <!-- Manual Read: lonely threshold in FSLBM -->
+            <TransitionThreshold>0.01</TransitionThreshold>         <!-- Manual Read: transition threshold in FSLBM -->
+            <LonelyThreshold>0.1</LonelyThreshold>                  <!-- Manual Read: lonely threshold in FSLBM -->
             <HasSurfaceTension>true</HasSurfaceTension>             <!-- Manual Read: enable surface tension in FSLBM -->
-            <SurfaceTensionCoeff>0.06363064</SurfaceTensionCoeff>   <!-- Manual Read: surface tension coefficient [N/m] -->
+            <SurfaceTensionCoeff>0.0636306414</SurfaceTensionCoeff> <!-- Manual Read: surface tension coefficient [N/m] -->
         </PhysParameters>
         <!-- Solver convergence criteria, , all must be read manually -->
         <ConvergenceCheck>

@@ -62,7 +62,7 @@ public:
 template<typename T, typename DESCRIPTOR>
 class FreeSurfaceInterfaceReconstructionPostProcessor2D {
 public:
-   using parameters = meta::list<
+  using parameters = meta::list<
     FreeSurface::DROP_ISOLATED_CELLS,
     FreeSurface::TRANSITION,
     FreeSurface::LONELY_THRESHOLD,
@@ -145,14 +145,18 @@ public:
 template<typename T, typename DESCRIPTOR>
 class FreeSurfaceFinalizeConversionPostProcessor2D {
 public:
-  static constexpr OperatorScope scope = OperatorScope::PerCell;
+  using parameters = meta::list<
+    FreeSurface::FORCE_DENSITY
+  >;
+
+  static constexpr OperatorScope scope = OperatorScope::PerCellWithParameters;
 
   int getPriority() const {
     return 6;
   }
 
-  template <typename CELL>
-  void apply(CELL& cell) any_platform;
+  template <typename CELL, typename PARAMETERS>
+  void apply(CELL& cell, PARAMETERS& params) any_platform;
 
 };
 

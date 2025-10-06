@@ -32,8 +32,7 @@
  *  3=damping (with periodic boundaries)
  */
 
-#include "olb3D.h"
-#include "olb3D.hh"
+#include <olb.h>
 #include "../noiseauxiliary.h"
 
 using namespace olb;

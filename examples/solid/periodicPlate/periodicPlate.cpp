@@ -394,8 +394,8 @@ void getResults(MyCase& myCase,
   auto& converter = lattice.getUnitConverter();
   auto& geometry = myCase.getGeometry();
 
-  const std::size_t iTlog = parameters.get<parameters::IT_LOG>();
-  const std::size_t iTvtk = parameters.get<parameters::IT_VTK>();
+  const std::size_t iTlog = parameters.get<parameters::IT_LOG_PSEUDO_TIME>();
+  const std::size_t iTvtk = parameters.get<parameters::IT_VTK_PSEUDO_TIME>();
   const std::size_t iTMax = converter.getLatticeTime(parameters.get<parameters::MAX_PHYS_T>());
 
   SuperVTMwriter2D<T> vtmWriter("periodicPlate");
@@ -498,8 +498,8 @@ int main(int argc, char* argv[]) {
     myCaseParameters.set<PHYS_CHAR_LENGTH       >(  1.0         );
     myCaseParameters.set<DOMAIN_EXTENT          >( { 1.0, 1.0 } );
     myCaseParameters.set<MAX_PHYS_T             >(  3.2         );
-    myCaseParameters.set<IT_LOG                 >(100           );
-    myCaseParameters.set<IT_VTK                 >(100           );
+    myCaseParameters.set<IT_LOG_PSEUDO_TIME     >(100           );
+    myCaseParameters.set<IT_VTK_PSEUDO_TIME     >(100           );
   }
   myCaseParameters.fromCLI(argc, argv);
 

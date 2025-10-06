@@ -27,8 +27,7 @@
 // in the center of the pipe. The total MFR is therefore 0.
 // Analytical solution is valid for b = 0 at Kn < 0.5
 
-#include "olb3D.h"
-#include "olb3D.hh"
+#include <olb.h>
 
 using namespace olb;
 using namespace olb::descriptors;
