@@ -38,8 +38,6 @@ using DESCRIPTOR = descriptors::D3Q19<
   descriptors::POROSITY,
   descriptors::VELOCITY,
   fields::fsi::ELEMENT_TAG,
-  fields::fsi::ELEMENT_FORCE,
-  fields::fsi::ELEMENT_TORQUE,
   descriptors::AVERAGE_VELOCITY
 >;
 
@@ -215,8 +213,8 @@ void getResults(SuperLattice<T,DESCRIPTOR>& sLattice,
 {
   OstreamManager clout(std::cout, "getResults");
 
-  const int vtkIter  = converter.getLatticeTime(1./30);
-  const int statIter = converter.getLatticeTime(1./60);
+  const int vtkIter  = converter.getLatticeTime(1);
+  const int statIter = converter.getLatticeTime(1./30);
 
   if (iT == 0) {
     {
@@ -304,18 +302,13 @@ int main(int argc, char* argv[]) {
     fields::fsi::ELEMENT_TAG{},      1,
     fields::fsi::ELEMENT_PIVOT{},    center,
     fields::fsi::ELEMENT_ROTATION{}, 0,
+    fields::fsi::ELEMENT_U_ROTATION{}, rotateU,
     CylinderPorosityF::RADIUS{},     innerR,
     CylinderPorosityF::CENTER{},     center,
     CylinderPorosityF::LENGTH{},     (length+T{10}*converter.getPhysDeltaX()),
     CylinderPorosityF::AXIS{},       axis
   );
   fsiEmbeddingO.add(valveParams);
-
-  SuperPorousElementReductionO<T,DESCRIPTOR,fields::fsi::ELEMENT_FORCE,fields::fsi::ELEMENT_TORQUE> fsiReductionO(
-    sLattice,
-    superGeometry.getMaterialIndicator(2));
-  fsiReductionO.resize(1);
-  fsiReductionO.addCollectionO(meta::id<CollectPorousBoundaryForceAndTorqueO>{});
 
   sLattice.setParameter<fields::converter::PHYS_LENGTH>(
     1/converter.getConversionFactorLength());
@@ -331,24 +324,12 @@ int main(int argc, char* argv[]) {
                        superGeometry.getStatistics().getNvoxel());
   timer.start();
 
-  for (std::size_t iT = 0; iT <= converter.getLatticeTime(maxPhysT); ++iT) {
-    fsiEmbeddingO.apply();
+  //fsiEmbeddingO.apply();
 
+  for (std::size_t iT = 0; iT <= converter.getLatticeTime(maxPhysT); ++iT) {
     sLattice.collideAndStream();
 
     sLattice.stripeOffDensityOffset(sLattice.getStatistics().getAverageRho()-(T)1);
-
-    fsiReductionO.apply();
-
-    if (fsiReductionO.rankDoesFSI()) {
-      for (unsigned iElement=1; iElement <= fsiReductionO.getElementCount(); ++iElement) {
-        fsiEmbeddingO.setField<fields::fsi::ELEMENT_ROTATION>(iElement-1, 0);
-        fsiEmbeddingO.setField<fields::fsi::ELEMENT_U_ROTATION>(iElement-1, rotateU);
-      }
-
-      fsiEmbeddingO.setProcessingContext<Array<fields::fsi::ELEMENT_ROTATION>>(ProcessingContext::Simulation);
-      fsiEmbeddingO.setProcessingContext<Array<fields::fsi::ELEMENT_U_ROTATION>>(ProcessingContext::Simulation);
-    }
 
     getResults(sLattice, converter, superGeometry, timer, iT);
   }
