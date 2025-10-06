@@ -36,7 +36,7 @@ using T          = FLOATING_POINT_TYPE;
 using DESCRIPTOR = D2Q9<POROSITY,VELOCITY>;
 
 // Parameters for the simulation setup
-const int N              = 250;             // resolution of the model
+const int N              = 100;             // resolution of the model
 const T   Re             = 1400000;         // Reynolds number
 const T   physViscosity  = 1.e-5;           // physical kinematic viscosity
 const T   intensity      = 0.02;            // turbulence intensity for inlet
