@@ -60,6 +60,7 @@ namespace olb::parameters {
 /// @return An instance of Mesh, which keeps the relevant information
 Mesh<MyCase::value_t, MyCase::d> createMesh(MyCase::ParametersD& params){
     using T = MyCase::value_t;
+
     Vector extent = params.get<parameters::DOMAIN_EXTENT>();
     std::vector<T> origin(2, T());
     IndicatorCuboid2D<T> cuboid(extent, origin);
@@ -68,6 +69,51 @@ Mesh<MyCase::value_t, MyCase::d> createMesh(MyCase::ParametersD& params){
     mesh.setOverlap(params.get<parameters::OVERLAP>());
 
     return mesh;
+}
+
+void prepareGeometry(MyCase& myCase){
+    OstreamManager clout(std::cout, "prepraringGeometry");
+    clout << "Prepare Geometry ..." << std::endl;
+
+    using T = MyCase::value_t;
+    auto& geometry = myCase.getGeometry();
+    auto& params = myCase.getParameters();
+
+    geometry.rename(0,4);
+
+    Vector extent = params.get<parameters::DOMAIN_EXTENT>();
+    std::vector<T> origin(2, T());
+    IndicatorCuboid2D<T> cuboid2(extent, origin);
+
+    geometry.rename(4, 1, cuboid2);
+
+    std::vector<T> extendwallleft(2,T(0));
+    extendwallleft[0] = params.get<parameters::PHYS_DELTA_X>();
+    extendwallleft[1] = params.get<parameters::DOMAIN_EXTENT>()[0];
+    std::vector<T> originwallleft(2,T(0));
+    originwallleft[0] = 0.0;
+    originwallleft[1] = 0.0;
+    IndicatorCuboid2D<T> wallleft(extendwallleft, originwallleft);
+
+      std::vector<T> extendwallright(2,T(0));
+    extendwallright[0] = params.get<parameters::PHYS_DELTA_X>();
+    extendwallright[1] = params.get<parameters::DOMAIN_EXTENT>()[0];
+    std::vector<T> originwallright(2,T(0));
+    originwallright[0] =  extendwallright[1] + 1.5*extendwallright[0];
+    originwallright[1] = 0.0;
+    IndicatorCuboid2D<T> wallright(extendwallright, originwallright);
+
+    geometry.rename(4,2,1,wallleft);
+    geometry.rename(4,3,1,wallright);
+
+    /// Removes all not needed boundary voxels outside the surface
+    geometry.clean();
+    /// Removes all not needed boundary voxels inside the surface
+    geometry.innerClean();
+    geometry.checkForErrors();
+
+    geometry.print();
+    clout << "Prepare Geometry ... OK" << std::endl;
 }
 
 int main(int argc, char* argv[]){
@@ -124,5 +170,7 @@ int main(int argc, char* argv[]){
 
     /// === Step 4: Create Case ===
     MyCase myCase(myCaseParameters, mesh);
+
+    prepareGeometry(myCase);
     
 }
