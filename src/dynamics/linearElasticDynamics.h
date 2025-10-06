@@ -239,7 +239,7 @@ struct BoolakeeLinearElasticityBoundary final : public dynamics::CustomCollision
     const V charU     = magic[6];
     const V epsilon   = magic[7];
     */
-    const V theta     = magic[2];
+    const V theta     = descriptors::invCs2<V, DESCRIPTOR>();
 
     const V omega_11  = allOmegas[0];
     const V omega_s   = allOmegas[1];
