@@ -312,8 +312,6 @@ Mesh<MyCase::value_t,MyCase::d> createMesh(MyCase::ParametersD& params) {
   const T origin = conversionFactorLength / 3.0;
   const T charL = params.get<parameters::PHYS_CHAR_LENGTH>();
 
-  OstreamManager clout(std::cout, "createMesh");
-
   IndicatorCuboid2D<T> cuboid({params.get<parameters::DOMAIN_EXTENT>()[0] * charL,
     params.get<parameters::DOMAIN_EXTENT>()[1] * charL}, {origin, origin});
   CuboidDecomposition<T, 2> cuboidDecomposition(cuboid, conversionFactorLength, noOfCuboids);
@@ -467,77 +465,6 @@ void prepareLattice(MyCase& myCase, ellipse2D& ellipseCase, const int bulkNum = 
   clout << "Prepare Lattice ... OK" << std::endl;
 }
 
-/*void prepareLattice(SuperLattice<T, NCDESCRIPTOR>&       lLattice,
-                    SuperGeometry<T, 2>&                superGeometry,
-                    LinElaUnitConverter<T, NCDESCRIPTOR> converter,
-                    std::vector<T>&                     allOmegas,
-                    T                                   theta,
-                    IndicatorEllipse2D<T>& ellipse1,
-                    IndicatorEllipse2D<T>& ellipse2,
-                    IndicatorEllipse2D<T>& ellipse3,
-                    int                                 bulkNum = 1)
-{
-  OstreamManager clout(std::cout, "prepareLattice");
-  clout << "Prepare Lattice ..." << std::endl;
-  auto bulkIndicator = superGeometry.getMaterialIndicator({ bulkNum });
-
-  lLattice.defineDynamics<BoolakeeLinearElasticityBoundary>( bulkIndicator );
-
-  setBoolakeeDirichletBoundary<T,NCDESCRIPTOR,BoolakeeDirichletPostProcessor<T,NCDESCRIPTOR>>(lLattice, superGeometry.getMaterialIndicator( 2 ), bulkIndicator, ellipse1);
-  setBoolakeeDirichletBoundary<T,NCDESCRIPTOR,BoolakeeDirichletPostProcessor<T,NCDESCRIPTOR>>(lLattice, superGeometry.getMaterialIndicator( 3 ), bulkIndicator, ellipse2);
-  setBoolakeeDirichletBoundary<T,NCDESCRIPTOR,BoolakeeDirichletPostProcessor<T,NCDESCRIPTOR>>(lLattice, superGeometry.getMaterialIndicator( 4 ), bulkIndicator, ellipse3);
-
-  {
-    auto& communicator = lLattice.getCommunicator(stage::PostCollide());
-    communicator.template requestField<descriptors::PREVIOUS_CELL>();
-    communicator.template requestField<descriptors::SOLID_DISTANCE_FIELD>();
-    communicator.template requestField<descriptors::BOUNDARY_COORDS_X>();
-    communicator.template requestField<descriptors::BOUNDARY_COORDS_Y>();
-    communicator.template requestField<descriptors::BARED_MOMENT_VECTOR>();
-    communicator.requestOverlap(1);
-    communicator.exchangeRequests();
-  }
-
-  std::vector<T>          iniPop = {0., 0., 0., 0., 0., 0., 0., 0.};
-  std::vector<T>          iniDisp = {0., 0.};
-  std::vector<T>          iniStress = {0., 0., 0.};
-
-  AnalyticalConst2D<T, T> initialPopulationF(iniPop);
-  AnalyticalConst2D<T, T> initialDispF(iniDisp);
-  AnalyticalConst2D<T, T> initialStressF(iniStress);
-
-  // dx, dt, theta, mü, lambda, kappa, uChar, epsilon
-  T magic[8] = {converter.getConversionFactorLength(),
-                converter.getConversionFactorTime(),
-                theta,
-                converter.getLatticeShearModulus(),
-                converter.getLatticeLambda(),
-                converter.getDampingFactor(),
-                converter.getCharPhysVelocity(),
-                converter.getEpsilon()};
-
-  lLattice.setParameter<descriptors::MAGIC_SOLID>(magic);
-
-  lLattice.setParameter<descriptors::OMEGA_SOLID>(allOmegas);
-
-  ForceField2D<T, T> forceSol(theta, converter);
-  lLattice.defineField<FORCE>(superGeometry, bulkNum, forceSol);
-  lLattice.defineField<POPULATION>(superGeometry, bulkNum, initialPopulationF);
-
-  lLattice.defineField<DISP_SOLID>(superGeometry, bulkNum, initialDispF);
-  lLattice.defineField<SIGMA_SOLID>(superGeometry, bulkNum, initialStressF);
-
-  lLattice.defineField<PREVIOUS_CELL>(superGeometry, 2, initialPopulationF);
-  lLattice.defineField<PREVIOUS_CELL>(superGeometry, 3, initialPopulationF);
-  lLattice.defineField<PREVIOUS_CELL>(superGeometry, 4, initialPopulationF);
-
-  /// Make the lattice ready for simulation
-  lLattice.initialize();
-
-  clout << "Prepare Lattice ... OK" << std::endl;
-}
-*/
-
 std::vector<MyCase::value_t> getResults( MyCase& myCase,
                            int iT,
                            int maxIt)
@@ -669,6 +596,7 @@ int main(int argc, char* argv[])
   initialize(&argc, &argv);
   singleton::directories().setOutputDir("./tmp/");
 
+  /// === Step 2: Set Parameters ===
   MyCase::ParametersD myCaseParameters;
   {
     using namespace olb::parameters;
@@ -683,13 +611,19 @@ int main(int argc, char* argv[])
   }
   myCaseParameters.fromCLI(argc, argv);
 
+  /// === Step 3: Create Mesh ===
   Mesh mesh = createMesh(myCaseParameters);
+
+  /// === Step 4: Create Case ===
   ellipse2D ellipseCase(myCaseParameters.get<parameters::PHYS_CHAR_LENGTH>());
   MyCase myCase(myCaseParameters, mesh);
 
+  /// === Step 5: Prepare Geometry ===
   prepareGeometry(myCase, ellipseCase);
 
+  /// === Step 6: Prepare Lattice ===
   prepareLattice(myCase, ellipseCase);
 
+  /// === Step 7: Simulate ===
   simulate(myCase);
 }
