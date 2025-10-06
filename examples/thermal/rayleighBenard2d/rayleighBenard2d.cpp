@@ -28,7 +28,7 @@
 using namespace olb;
 using namespace olb::names;
 
-// === Step 1: Declarations ===
+/// === Step 1: Declare Simulation Structure ===
 using MyCase = Case<
   NavierStokes, Lattice<double, descriptors::D2Q9<descriptors::FORCE>>,
   Temperature,  Lattice<double, descriptors::D2Q5<descriptors::VELOCITY>>
@@ -41,6 +41,7 @@ struct T_COLD : public descriptors::FIELD_BASE<1> { };
 
 }
 
+/// === Step 3: Create Mesh ===
 Mesh<MyCase::value_t,MyCase::d> createMesh(MyCase::ParametersD& params) {
   using T = MyCase::value_t;
   Vector extent = params.get<parameters::DOMAIN_EXTENT>();
@@ -54,6 +55,7 @@ Mesh<MyCase::value_t,MyCase::d> createMesh(MyCase::ParametersD& params) {
   return mesh;
 }
 
+/// === Step 5: Prepare Geometry ===
 void prepareGeometry(MyCase& myCase) {
   OstreamManager clout(std::cout, "prepareGeometry");
   clout << "Prepare Geometry ..." << std::endl;
@@ -98,6 +100,7 @@ void prepareGeometry(MyCase& myCase) {
   clout << "Prepare Geometry ... OK" << std::endl;
 }
 
+/// === Step 6: Prepare Lattice ===
 void prepareLattice(MyCase& myCase) {
   OstreamManager clout(std::cout,"prepareLattice");
 
@@ -174,6 +177,7 @@ void prepareLattice(MyCase& myCase) {
   clout << "Prepare Lattice ... OK" << std::endl;
 }
 
+/// === Step 7.1: Definition of Initial and Boundary Values and Fields ===
 void setInitialValues(MyCase& myCase) {
   using T = MyCase::value_t;
   auto& geometry = myCase.getGeometry();
@@ -213,10 +217,12 @@ void setInitialValues(MyCase& myCase) {
   ADlattice.initialize();
 }
 
+/// === Step 7.2.1: Update the Boundary Values and Fields at Times ===
 void setTemporalValues(MyCase& myCase,
                        std::size_t iT)
 { }
 
+/// === Step 7.2.3: Computation and Output of the Results ===
 void getResults(MyCase& myCase,
                 util::Timer<MyCase::value_t>& timer,
                 std::size_t iT)
@@ -267,10 +273,15 @@ void getResults(MyCase& myCase,
   }
 }
 
+/// === Step 7: Simulate ===
 void simulate(MyCase& myCase) {
   using T = MyCase::value_t;
   auto& parameters = myCase.getParameters();
 
+  /// === Step 7.1: Definition of Initial and Boundary Values and Fields ===
+  setInitialValues(myCase);
+
+  /// === Step 7.2: Main Loop with Timer ===
   const std::size_t iTmax = myCase.getLattice(NavierStokes{}).getUnitConverter().getLatticeTime(
     parameters.get<parameters::MAX_PHYS_T>());
 
@@ -278,16 +289,16 @@ void simulate(MyCase& myCase) {
   timer.start();
 
   for (std::size_t iT=0; iT < iTmax; ++iT) {
-    /// === Step 8.1: Update the Boundary Values and Fields at Times ===
+    /// === Step 7.2.1: Update the Boundary Values and Fields at Times ===
     setTemporalValues(myCase, iT);
 
-    /// === Step 8.2: Collide and Stream Execution ===
+    /// === Step 7.2.2: Collide and Stream Execution ===
     myCase.getLattice(NavierStokes{}).collideAndStream();
     myCase.getLattice(Temperature{}).collideAndStream();
 
     myCase.getOperator("Boussinesq").apply();
 
-    /// === Step 8.3: Computation and Output of the Results ===
+    /// === Step 7.2.3: Computation and Output of the Results ===
     getResults(myCase, timer, iT);
   }
 
@@ -296,9 +307,10 @@ void simulate(MyCase& myCase) {
 }
 
 int main(int argc, char* argv[]) {
+  /// === Step 2: Initialization ===
   initialize(&argc, &argv);
 
-  /// === Step 2: Set Parameters ===
+  /// === Step 2.1: Set Parameters ===
   MyCase::ParametersD myCaseParameters;
   {
     using namespace olb::parameters;
@@ -324,9 +336,6 @@ int main(int argc, char* argv[]) {
   /// === Step 6: Prepare Lattice ===
   prepareLattice(myCase);
 
-  /// === Step 7: Definition of Initial, Boundary Values, and Fields ===
-  setInitialValues(myCase);
-
-  /// === Step 8: Simulate ===
+  /// === Step 7: Simulate ===
   simulate(myCase);
 }
