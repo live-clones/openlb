@@ -260,11 +260,12 @@ public:
 /// @return An instance of Mesh, which keeps the relevant information
 Mesh<MyCase::value_t,MyCase::d> createMesh(MyCase::ParametersD& parameters) {
   using T = MyCase::value_t;
-  const Vector extent = parameters.get<parameters::DOMAIN_EXTENT>();
-  const Vector origin{0, 0};
+  const Vector domainExtent = parameters.get<parameters::DOMAIN_EXTENT>();
+  const T physDeltaX = domainExtent[0] / parameters.get<parameters::RESOLUTION>();
+  const Vector origin{physDeltaX / 2., physDeltaX / 2.};
+  const Vector extent = domainExtent - origin;
   IndicatorCuboid2D<T> cuboid(extent, origin);
 
-  const T physDeltaX = extent[0] / parameters.get<parameters::RESOLUTION>();
   Mesh<T,MyCase::d> mesh(cuboid, physDeltaX, singleton::mpi().getSize());
   mesh.setOverlap(parameters.get<parameters::OVERLAP>());
   mesh.getCuboidDecomposition().setPeriodicity({true,true});
@@ -286,6 +287,8 @@ void prepareGeometry(MyCase& myCase) {
 /// @brief Set lattice dynamics
 /// @param myCase The Case instance which keeps the simulation data
 void prepareLattice(MyCase& myCase) {
+  OstreamManager clout(std::cout, "prepareLattice");
+
   using T = MyCase::value_t;
   using DESCRIPTOR = MyCase::descriptor_t_of<NavierCauchy>;
   auto& parameters = myCase.getParameters();
@@ -332,6 +335,7 @@ void prepareLattice(MyCase& myCase) {
   T omega_22 = 1. / (tau_22 + 0.5);
 
   lattice.setParameter<descriptors::OMEGA_SOLID>({omega_11, omega_d, omega_s, omega_12, omega_21, omega_22});
+
   T magic[8] = {
     converter.getPhysDeltaX(),
     converter.getPhysDeltaT(),
@@ -366,88 +370,6 @@ void setTemporalValues(MyCase& myCase,
 {
   // Nothing to do here, because simulation does not depend on time
 }
-
-/*
-std::vector<T> getResults( SuperLattice<T, LDESCRIPTOR>& lattice,
-                            LinElaUnitConverter<T, LDESCRIPTOR> converter,
-                            SuperGeometry<T, 2>& superGeometry,
-                            int iT,
-                            int maxIt)
-{
-  OstreamManager clout(std::cout, "getResults");
-
-  SuperVTMwriter2D<T> vtmWriter("periodicPlate");
-
-  CSV<T> csvWriter("TEMP_CSV");
-
-  SuperGeometryF<T,2> materials(superGeometry);
-  vtmWriter.addFunctor( materials );
-
-  if (iT == 0) {
-    // Writes the geometry, cuboid no. and rank no. as vti file for visualization
-    SuperLatticeCuboid2D<T, LDESCRIPTOR>   cuboid(lattice);
-    SuperLatticeRank2D<T, LDESCRIPTOR>     rank(lattice);
-    vtmWriter.write(cuboid);
-    vtmWriter.write(rank);
-    vtmWriter.createMasterFile();
-  }
-
-  SuperLatticePhysVelocity2D<T, LDESCRIPTOR>          velocityPhys(lattice, converter);
-  SuperLatticeVelocity2D<T, LDESCRIPTOR>              velocity(lattice);
-  SuperLatticeDensity2D<T, LDESCRIPTOR>               density(lattice);
-  SuperLatticeFpop2D<T, LDESCRIPTOR>                  population(lattice);
-  SuperLatticeField2D<T, LDESCRIPTOR, FORCE>          forceField(lattice);
-
-  ManufacturedSolutionU2D<T, LDESCRIPTOR>             dispSol(converter);
-  SuperLatticeFfromAnalyticalF2D<T, LDESCRIPTOR>      dispSolLattice(dispSol, lattice);
-
-  ManufacturedSolutionStress2D<T, LDESCRIPTOR>        stressSol(converter);
-  SuperLatticeFfromAnalyticalF2D<T, LDESCRIPTOR>      stressSolLattice(stressSol, lattice);
-
-  // Fields for error calc
-  SuperLatticeField2D<T, LDESCRIPTOR, DISP_SOLID>     moments(lattice);
-  SuperLatticeField2D<T, LDESCRIPTOR, SIGMA_SOLID>    stress(lattice);
-
-  auto indicatorF = superGeometry.getMaterialIndicator({1});
-
-  vtmWriter.addFunctor(population,       "population");
-  vtmWriter.addFunctor(moments,          "numerical disp");
-  vtmWriter.addFunctor(forceField,       "force");
-  vtmWriter.addFunctor(dispSolLattice,   "analytical disp");
-  vtmWriter.addFunctor(stressSolLattice, "analytical stress");
-  vtmWriter.addFunctor(stress,           "numerical stress");
-
-  vtmWriter.write(iT);
-
-  T   l2UResult[2]        = {T(), T()};
-  T   lInfUResult[2]      = {T(), T()};
-  T   l2StressResult[2]   = {T(), T()};
-  T   lInfStressResult[2] = {T(), T()};
-  int tmp[]               = {int()};
-
-  SuperRelativeErrorL2Norm2D<T>   relUErrorL2Norm(lattice, moments, dispSol, indicatorF);
-  SuperRelativeErrorLinfNorm2D<T> relUErrorLinfNorm(lattice, moments, dispSol, indicatorF);
-  SuperRelativeErrorL2Norm2D<T>   relStressErrorL2Norm( lattice, stress, stressSol, indicatorF );
-  SuperRelativeErrorLinfNorm2D<T> relStressErrorLinfNorm( lattice, stress, stressSol, indicatorF );
-
-  relUErrorL2Norm(l2UResult, tmp);
-  relUErrorLinfNorm(lInfUResult, tmp);
-  relStressErrorL2Norm(l2StressResult, tmp);
-  relStressErrorLinfNorm(lInfStressResult, tmp);
-
-  csvWriter.writeDataFile(iT, l2UResult[0],  "l2UErr");
-  csvWriter.writeDataFile(iT, lInfUResult[0], "lInfUErr");
-  csvWriter.writeDataFile(iT, l2StressResult[0],  "l2StressErr");
-  csvWriter.writeDataFile(iT, lInfStressResult[0], "lInfStressErr");
-
-  std::vector<T> returnVec = {l2UResult[0], lInfUResult[0], l2StressResult[0], lInfStressResult[0]};
-  clout << "N\t" << "L2 U Error\t" << "LInf U Error\t" << "L2 Stress Error\t" << "LInf Stress Error" << std::endl;
-  clout << converter.getResolution() << "\t" << returnVec[0] << "\t" << returnVec[1] << "\t" << returnVec[2] << "\t\t" << returnVec[3] << std::endl;
-
-  return returnVec;
-
-}
-*/
 
 /// Compute simulation results at times
 /// @param myCase The Case instance which keeps the simulation data
@@ -529,6 +451,7 @@ void getResults(MyCase& myCase,
 /// @brief Execute simulation: set initial values and run time loop
 /// @param myCase The Case instance which keeps the simulation data
 void simulate(MyCase& myCase) {
+  OstreamManager clout(std::cout, "simulate");
   using T = MyCase::value_t;
   auto& parameters = myCase.getParameters();
   const T physMaxT = parameters.get<parameters::MAX_PHYS_T>();
@@ -552,119 +475,6 @@ void simulate(MyCase& myCase) {
   timer.printSummary();
 }
 
-/*
-int main(int argc, char **argv)
-{
-  // === 1st Step: Initialization ===
-  OstreamManager clout(std::cout, "main");
-  initialize(&argc, &argv);
-  singleton::directories().setOutputDir("./tmp/");
-
-  CLIreader args(argc, argv);
-  const std::size_t N  = args.getValueOrFallback<std::size_t>("--res", 40);
-
-  T simTime = 3.2;
-
-  // Characteristical physicial values
-  T dx = 1. / N;
-  T dt = dx * dx;
-  T charL = 1.;
-  T charU = 1.;
-
-  // Poisson Ratio
-  T nu = 0.8;
-
-  // Damping Factor
-  T kappa = 1.;
-
-  // Young Modulus
-  T ELattice = 0.11;
-  T E = ELattice * (dx * dx * kappa) / dt; // phys
-
-  // Length of square plate
-  T length = 1.0;
-
-  T descriptors::invCs2<T,DESCRIPTOR>() = T(1) / descriptors::invCs2<T,LDESCRIPTOR>();
-
-  LinElaUnitConverter<T, LDESCRIPTOR> converter(
-    dx, // deltaX
-    dt, // deltaT
-    charL, // charL
-    charU, // charU
-    E, // phys
-    nu, // phys
-    kappa // phys
-  );
-
-  converter.print();
-
-  const int noOfCuboids = singleton::mpi().getSize();
-
-  std::vector<T> extend(2,T());
-  std::vector<T> origin(2,T());
-
-  extend[0] = length - dx;
-  extend[1] = length - dx;
-
-  origin[0] = dx / 2.;
-  origin[1] = dx / 2.;
-
-  IndicatorCuboid2D<T> cuboid(extend, origin);
-
-  CuboidDecomposition<T, 2> cuboidDecomposition(cuboid, converter.getConversionFactorLength(), noOfCuboids);
-  // cuboidDecomposition2D<T> cuboidDecomposition(0.0, 0.0, converter.getConversionFactorLength(), N, N, noOfCuboids);
-  cuboidDecomposition.setPeriodicity({true, true});
-
-  HeuristicLoadBalancer<T> loadBalancer(cuboidDecomposition);
-
-  SuperGeometry<T, 2> superGeometry(cuboidDecomposition, loadBalancer);
-  prepareGeometry(superGeometry);
-
-  SuperLattice<T, LDESCRIPTOR> lattice(converter, superGeometry);
-
-  ForceField2D<T, T> forceSol(descriptors::invCs2<T,DESCRIPTOR>(), converter);
-
-  std::vector<T> allOmegas = {0., 0., 0., 0., 0., 0.};
-  prepareOmegas(converter, descriptors::invCs2<T,DESCRIPTOR>(), allOmegas);
-
-  prepareLattice(lattice, superGeometry, converter, allOmegas, forceSol, descriptors::invCs2<T,DESCRIPTOR>());
-
-  converter.print();
-
-  int maxIt = simTime / converter.getConversionFactorTime();
-
-  clout << "Awaiting " << maxIt << " Time steps. Starting simulation..." << std::endl;
-  util::Timer<T> timer(converter.getLatticeTime(simTime),
-                       superGeometry.getStatistics().getNvoxel());
-  timer.start();
-
-  std::vector<T> errors = {};
-  std::ofstream fout;
-  std::string dataFile = singleton::directories().getLogOutDir() + std::to_string(N) +  "_Err.dat";
-  fout.open(dataFile.c_str(), std::ios::trunc);
-  fout << "N;it;l2UErr;lInfUErr;l2StressErr;lInfStressErr" << std::endl;
-
-  int numDataPoints = 400.;
-
-  for (int iT = 0; iT <= maxIt; ++iT) {
-
-    timer.update(iT);
-
-    if (iT % (maxIt / numDataPoints) == 0) {
-      errors = getResults(lattice, converter, superGeometry, iT, maxIt);
-      timer.printStep();
-      if (singleton::mpi().isMainProcessor()) {
-        fout << N << ";" << converter.getPhysTime(iT) << ";" << errors[0] << ";" << errors[1] << ";" <<errors[2] << ";" << errors[3] << std::endl;
-      }
-    }
-
-    lattice.collideAndStream();
-  }
-  fout.close();
-  timer.stop();
-}
-*/
-
 /// Setup and run a simulation
 int main(int argc, char* argv[]) {
   initialize(&argc, &argv);
@@ -676,7 +486,7 @@ int main(int argc, char* argv[]) {
     myCaseParameters.set<KAPPA                  >(  1.          );
     myCaseParameters.set<RESOLUTION             >( 40           );
     myCaseParameters.set<YOUNGS_MODULUS         >(  0.11        );
-    myCaseParameters.set<POISSON_RATIO          >(  0.7         );
+    myCaseParameters.set<POISSON_RATIO          >(  0.8         );
     myCaseParameters.set<PHYS_CHAR_DISPLACEMENT >(  1.0         );
     myCaseParameters.set<PHYS_CHAR_LENGTH       >(  1.0         );
     myCaseParameters.set<DOMAIN_EXTENT          >( { 1.0, 1.0 } );
