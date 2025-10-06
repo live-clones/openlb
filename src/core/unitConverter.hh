@@ -67,7 +67,7 @@ void UnitConverter<T, DESCRIPTOR>::print(std::ostream& clout) const
 
   clout << "-------------------------------------------------------------" << std::endl;
 
-  if ( getLatticeRelaxationTime() < T(0.55) && getCharLatticeVelocity() > (T(8)*(getLatticeRelaxationTime() - T(0.5)) + T(1.e-8)) ) {
+  if ( getLatticeRelaxationTime() < T(0.55) && getCharLatticeVelocity() > (T(8) * (getLatticeRelaxationTime() - T(0.5)) + T(1.e-8)) ) {
     T tauStable = getCharLatticeVelocity() / T(8) + T(0.5);
     T timeToCell = getConversionFactorTime() / getConversionFactorLength();
     if (getCharLatticeVelocity() >= T(0.3)) {
@@ -149,13 +149,14 @@ UnitConverter<T, DESCRIPTOR>* createUnitConverter(XMLreader const& params)
   std::vector<std::string> discretizationParam = {"PhysDeltaX", "Resolution",
     "CharLatticeVelocity", "PhysDeltaT", "LatticeRelaxationTime"};
 
-  for(int i = 0; i<discretizationParam.size(); i++){
+  for (std::size_t i = 0; i < discretizationParam.size(); i++) {
     std::string test;
-    if(params["Application"]["Discretization"][discretizationParam[i]].read(test,false)){
+    if (params["Application"]["Discretization"][discretizationParam[i]].read(test, false)) {
       counter++;
     }
   }
-  if(counter>2){
+
+  if (counter > 2) {
     clout << "WARNING: More than 2 discretization parameters provided" << std::endl;
   }
 

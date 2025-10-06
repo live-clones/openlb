@@ -41,7 +41,8 @@ using NSDESCRIPTOR = D2Q9<RHO,NABLARHO,FORCE,EXTERNAL_FORCE,TAU_EFF,STATISTIC>;
 using CHDESCRIPTOR = D2Q9<FORCE,SOURCE,SOURCE_OLD,PHIWETTING,VELOCITY,OLD_PHIU,STATISTIC,CHEM_POTENTIAL,BOUNDARY>;
 using NSBulkDynamics = MultiPhaseIncompressibleBGKdynamics<T,NSDESCRIPTOR>;
 using CHBulkDynamics = WellBalancedCahnHilliardBGKdynamics<T,CHDESCRIPTOR>;
-using Coupling = WellBalancedCahnHilliardPostProcessor;
+using MixtureRules = LinearTauViscosity;
+using Coupling = WellBalancedCahnHilliardPostProcessor<MixtureRules>;
 
 // Parameters for the simulation domain
 const int Nx = 160;                   // domain resolution x [lattice units]
@@ -164,8 +165,8 @@ void prepareLattice( SuperLattice<T,NSDESCRIPTOR>& sLatticeNS,
   sLatticeCH.addPostProcessor<stage::PostStream>(bulk,meta::id<RhoWettingStatistics>());
 
   // give coupling the values of tau_l, tau_g, rho_l and rho_g so that it can update the viscosity and density
-  coupling.template setParameter<Coupling::TAUS>({tau_l,tau_g});
-  coupling.template setParameter<Coupling::RHOS>(rhos);
+  coupling.template setParameter<MixtureRules::TAUS>({tau_l,tau_g});
+  coupling.template setParameter<MixtureRules::RHOS>(rhos);
 
   // postprocessor to calculate the chemical potential
   sLatticeCH.addPostProcessor<stage::ChemPotCalc>(meta::id<ChemPotentialPhaseFieldProcessor>());
@@ -375,7 +376,7 @@ void simulate( int diameter )
   SuperLattice<T,NSDESCRIPTOR> sLatticeNS( converter, superGeometry );
   SuperLattice<T,CHDESCRIPTOR> sLatticeCH( dummy_converter, superGeometry );
   SuperLatticeCoupling coupling(
-      WellBalancedCahnHilliardPostProcessor{},
+      Coupling{},
       names::NavierStokes{}, sLatticeNS,
       names::Component1{}, sLatticeCH);
   coupling.restrictTo(superGeometry.getMaterialIndicator({1}));

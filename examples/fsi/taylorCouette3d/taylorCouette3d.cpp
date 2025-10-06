@@ -28,8 +28,7 @@
 // https://doi.org/10.1017/jfm.2014.134
 // https://doi.org/10.1063/1.4863312
 
-#include "olb3D.h"
-#include "olb3D.hh"
+#include <olb.h>
 
 using namespace olb;
 
