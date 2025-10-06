@@ -15,8 +15,10 @@ namespace olb {
       }
 
       template <typename CELL, typename PARAMETERS, typename V = typename CELL::value_t>
-      void apply(CELL& cell, PARAMETERS& parameters) any_platform {
+      void apply(CELL& cell, PARAMETERS& parameters) any_platform
+      {
 
+        V pi = std::numbers::pi_v<double>;
         auto tmp = parameters.template get<descriptors::NEUMANN_SOLID_C>();
         V constants[3] {tmp[0], tmp[1], tmp[2]};
         auto magic = parameters.template get<descriptors::MAGIC_SOLID>();
@@ -66,13 +68,13 @@ namespace olb {
             // Eq. 68 to 70
             /*
             */
-            V sigma_xx = latticeFactor * ((bulk + mu) * 0.0018*M_PI*boundaryY*util::cos(2*M_PI* boundaryX * boundaryY) + (bulk - mu) * -0.0014*M_PI*(boundaryX * boundaryX + 1)*util::sin(2*M_PI*boundaryY));
+            V sigma_xx = latticeFactor * ((bulk + mu) * 0.0018*pi*boundaryY*util::cos(2*pi* boundaryX * boundaryY) + (bulk - mu) * -0.0014*pi*(boundaryX * boundaryX + 1)*util::sin(2*pi*boundaryY));
 
-            V sigma_xy = latticeFactor * (mu * (0.0014*boundaryX*util::cos(2*M_PI*boundaryY) + 0.0018*M_PI*boundaryX*util::cos(2*M_PI*boundaryX*boundaryY)));
+            V sigma_xy = latticeFactor * (mu * (0.0014*boundaryX*util::cos(2*pi*boundaryY) + 0.0018*pi*boundaryX*util::cos(2*pi*boundaryX*boundaryY)));
 
             V sigma_yx = sigma_xy;
 
-            V sigma_yy = latticeFactor * ((bulk - mu) * 0.0018*M_PI*boundaryY*util::cos(2*M_PI* boundaryX * boundaryY) + (bulk + mu) * -0.0014*M_PI*(boundaryX * boundaryX + 1)*util::sin(2*M_PI*boundaryY));
+            V sigma_yy = latticeFactor * ((bulk - mu) * 0.0018*pi*boundaryY*util::cos(2*pi* boundaryX * boundaryY) + (bulk + mu) * -0.0014*pi*(boundaryX * boundaryX + 1)*util::sin(2*pi*boundaryY));
 
             V stress_tensor[4] = {sigma_xx, sigma_xy, sigma_yx, sigma_yy};
             // V stress_tensor[4] = {0., 0., 0., 0.};

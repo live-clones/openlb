@@ -343,8 +343,6 @@ void prepareGeometry(MyCase& myCase,
   geometry.checkForErrors();
 
   geometry.print();
-
-  geometry.getStatistics().print();
 }
 
 /// @brief Set lattice dynamics
@@ -360,7 +358,16 @@ void prepareLattice(MyCase& myCase,
   auto& geometry = myCase.getGeometry();
 
   /// Material=1 -->bulk dynamics
-  lattice.defineDynamics<BoolakeeLinearElasticityBoundary>(geometry, 1);
+  auto bulkIndicator = geometry.getMaterialIndicator( 1 );
+
+  lattice.defineDynamics<BoolakeeLinearElasticityBoundary>(bulkIndicator);
+
+  auto& ellipse1 = Ellipses.ellipse1;
+  auto& ellipse2 = Ellipses.ellipse2;
+  auto& ellipse3 = Ellipses.ellipse3;
+  setBoolakeeNeumannBoundary<T,DESCRIPTOR,BoolakeeNeumannPostProcessor<T,DESCRIPTOR>>(lattice, geometry.getMaterialIndicator( 5 ), bulkIndicator, ellipse1, true);
+  setBoolakeeNeumannBoundary<T,DESCRIPTOR,BoolakeeNeumannPostProcessor<T,DESCRIPTOR>>(lattice, geometry.getMaterialIndicator( 6 ), bulkIndicator, ellipse2, false);
+  setBoolakeeNeumannBoundary<T,DESCRIPTOR,BoolakeeNeumannPostProcessor<T,DESCRIPTOR>>(lattice, geometry.getMaterialIndicator( 7 ), bulkIndicator, ellipse3, false);
 
   const T physCharLength        = parameters.get<parameters::PHYS_CHAR_LENGTH>();
   const Vector extent           = parameters.get<parameters::DOMAIN_EXTENT>();
@@ -385,6 +392,19 @@ void prepareLattice(MyCase& myCase,
   const auto& converter = lattice.getUnitConverter();
   converter.print();
 
+  T magic[8] = {
+    converter.getPhysDeltaX(),
+    converter.getPhysDeltaT(),
+    descriptors::invCs2<T,DESCRIPTOR>(),
+    converter.getLatticeShearModulus(),
+    converter.getLatticeLambda(),
+    converter.getDampingFactor(),
+    converter.getCharPhysVelocity(),
+    converter.getEpsilon()
+  };
+
+  lattice.setParameter<descriptors::MAGIC_SOLID>(magic);
+
   T omega_11  = 1. / (      converter.getLatticeShearModulus()                                 /       descriptors::invCs2<T,DESCRIPTOR>()  + 0.5);
   T omega_d   = 1. / (2. *  converter.getLatticeShearModulus()                                 / (1. - descriptors::invCs2<T,DESCRIPTOR>()) + 0.5);
   T omega_s   = 1. / (2. * (converter.getLatticeShearModulus() + converter.getLatticeLambda()) / (1. + descriptors::invCs2<T,DESCRIPTOR>()) + 0.5);
@@ -405,15 +425,6 @@ void prepareLattice(MyCase& myCase,
   auto force = getForceField<T>(myCase);
   lattice.defineField<descriptors::FORCE>(geometry, 1, *force);
 
-  auto bulkIndicator = geometry.getMaterialIndicator( 1 );
-
-  auto& ellipse1 = Ellipses.ellipse1;
-  auto& ellipse2 = Ellipses.ellipse2;
-  auto& ellipse3 = Ellipses.ellipse3;
-  setBoolakeeNeumannBoundary<T,DESCRIPTOR,BoolakeeNeumannPostProcessor<T,DESCRIPTOR>>(lattice, geometry.getMaterialIndicator( 5 ), bulkIndicator, ellipse1, true);
-  setBoolakeeNeumannBoundary<T,DESCRIPTOR,BoolakeeNeumannPostProcessor<T,DESCRIPTOR>>(lattice, geometry.getMaterialIndicator( 6 ), bulkIndicator, ellipse2, false);
-  setBoolakeeNeumannBoundary<T,DESCRIPTOR,BoolakeeNeumannPostProcessor<T,DESCRIPTOR>>(lattice, geometry.getMaterialIndicator( 7 ), bulkIndicator, ellipse3, false);
-
   {
     auto& communicator = lattice.getCommunicator(stage::PostCollide());
     communicator.template requestField<descriptors::NEUMANN_SOLID_C>();
@@ -426,9 +437,11 @@ void prepareLattice(MyCase& myCase,
     communicator.exchangeRequests();
   }
 
-  T neumann_constants[3] = {(2. * (1. - descriptors::invCs2<T,DESCRIPTOR>()) * (converter.getLatticeBulkModulus() - converter.getLatticeShearModulus())) / (descriptors::invCs2<T,DESCRIPTOR>() * (1. - descriptors::invCs2<T,DESCRIPTOR>() - 4. * converter.getLatticeShearModulus())),
-                            2. * converter.getLatticeShearModulus() / (descriptors::invCs2<T,DESCRIPTOR>() - 2. * converter.getLatticeShearModulus()),
-                            4. * converter.getLatticeShearModulus() / (1. - descriptors::invCs2<T,DESCRIPTOR>() - 4. * converter.getLatticeShearModulus())};
+  T neumann_constants[3] = {
+    (2. * (1. - descriptors::invCs2<T,DESCRIPTOR>()) * (converter.getLatticeBulkModulus() - converter.getLatticeShearModulus())) / (descriptors::invCs2<T,DESCRIPTOR>() * (1. - descriptors::invCs2<T,DESCRIPTOR>() - 4. * converter.getLatticeShearModulus())),
+     2. * converter.getLatticeShearModulus() / (descriptors::invCs2<T,DESCRIPTOR>() - 2. * converter.getLatticeShearModulus()),
+     4. * converter.getLatticeShearModulus() / (1. - descriptors::invCs2<T,DESCRIPTOR>() - 4. * converter.getLatticeShearModulus())
+  };
 
   lattice.setParameter<descriptors::NEUMANN_SOLID_C>(neumann_constants);
 }
@@ -486,6 +499,8 @@ void getResults(MyCase& myCase,
   SuperLatticeField2D<T, DESCRIPTOR, olb::descriptors::BOUNDARY_COORDS_Y> boundary_y(lattice);
   SuperLatticeField2D<T, DESCRIPTOR, olb::descriptors::SOLID_DISTANCE_FIELD>     distance(lattice);
 
+  SuperGeometryF<T,2> materials(geometry);
+    vtmWriter.addFunctor(materials,          "geometry");
   if (iT == 0) {
     // Writes the geometry, cuboid no. and rank no. as vti file for visualization
     SuperLatticeCuboid2D<T, DESCRIPTOR>   cuboid(lattice);
@@ -501,10 +516,10 @@ void getResults(MyCase& myCase,
     vtmWriter.addFunctor(dispSolLattice,   "analytical disp");
     vtmWriter.addFunctor(stress,           "numerical stress");
     vtmWriter.addFunctor(stressSolLattice, "analytical stress");
-    vtmWriter.addFunctor(distance,          "distance");
-    vtmWriter.addFunctor(boundary_x,        "boundary_x");
-    vtmWriter.addFunctor(boundary_y,        "boundary_y");
-    vtmWriter.addFunctor(distance,          "q_ij");
+    vtmWriter.addFunctor(distance,         "distance");
+    vtmWriter.addFunctor(boundary_x,       "boundary_x");
+    vtmWriter.addFunctor(boundary_y,       "boundary_y");
+    vtmWriter.addFunctor(distance,         "q_ij");
 
     lattice.setProcessingContext(ProcessingContext::Evaluation);
     vtmWriter.write(iT);
@@ -549,6 +564,7 @@ void simulate(MyCase& myCase) {
   timer.start();
 
   for (std::size_t iT=0; iT < iTmax; ++iT) {
+    timer.update(iT);
     /// === Step 8.1: Update the Boundary Values and Fields at Times ===
     setTemporalValues(myCase, iT);
 

@@ -224,8 +224,6 @@ struct BoolakeeLinearElasticityBoundary final : public dynamics::CustomCollision
     template <typename CELL, typename PARAMETERS, typename V=typename CELL::value_t>
     CellStatistic<V> collide(CELL& cell, PARAMETERS& parameters) any_platform
     {
-
-    auto magic = parameters.template get<descriptors::MAGIC_SOLID>();
     auto allOmegas = parameters.template get<descriptors::OMEGA_SOLID>();
 
     // dx, dt, theta, mü, lambda, kappa, uChar, epsilon
