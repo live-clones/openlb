@@ -41,7 +41,7 @@ using DESCRIPTOR = descriptors::D3Q19<
   descriptors::AVERAGE_VELOCITY
 >;
 
-const int N = 40;
+const int N = 20;
 const T eta = 0.5; // \eta = r_i/r_o
 const T innerR = 0.3;
 const T outerR = innerR/eta;
@@ -232,7 +232,7 @@ void getResults(SuperLattice<T,DESCRIPTOR>& sLattice,
     }
   }
 
-  int iTstartAvg = converter.getLatticeTime(200.*gapW/charPhysU);
+  std::size_t iTstartAvg = converter.getLatticeTime(200.*gapW/charPhysU);
   if (iT == iTstartAvg) {
     sLattice.setProcessingContext(ProcessingContext::Evaluation);
     SuperLatticeVelocity3D<T,DESCRIPTOR> latticeVelocity(sLattice);
@@ -248,15 +248,20 @@ void getResults(SuperLattice<T,DESCRIPTOR>& sLattice,
   if (iT % vtkIter == 0 && iT > converter.getLatticeTime(1.)) {
     sLattice.executePostProcessors(stage::Evaluation{});
     sLattice.setProcessingContext(ProcessingContext::Evaluation);
-    sLattice.scheduleBackgroundOutputVTK([&,iT](auto task)
-    {
+    sLattice.scheduleBackgroundOutputVTK([&,iT,iTstartAvg](auto task) {
       SuperVTMwriter3D<T> vtkWriter("flow");
       SuperLatticePhysVelocity3D velocity(sLattice, converter);
       SuperLatticePhysPressure3D pressure(sLattice, converter);
-      SuperLatticePhysField3D<T,DESCRIPTOR,descriptors::AVERAGE_VELOCITY> velocityAv(sLattice, converter.getConversionFactorVelocity());
       vtkWriter.addFunctor(pressure);
       vtkWriter.addFunctor(velocity);
-      vtkWriter.addFunctor(velocityAv);
+
+      SuperLatticePhysField3D<T,DESCRIPTOR,descriptors::AVERAGE_VELOCITY> velocityAv(sLattice, converter.getConversionFactorVelocity());
+      velocityAv.getName() = "avgU";
+
+      if (iT > iTstartAvg) {
+        vtkWriter.addFunctor(velocityAv);
+      }
+
       task(vtkWriter, iT);
     });
   }
@@ -323,8 +328,6 @@ int main(int argc, char* argv[]) {
   util::Timer<T> timer(converter.getLatticeTime(maxPhysT),
                        superGeometry.getStatistics().getNvoxel());
   timer.start();
-
-  //fsiEmbeddingO.apply();
 
   for (std::size_t iT = 0; iT <= converter.getLatticeTime(maxPhysT); ++iT) {
     sLattice.collideAndStream();
