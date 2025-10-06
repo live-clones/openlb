@@ -51,7 +51,7 @@ namespace olb::parameters {
     struct T_COLD : public descriptors::FIELD_BASE<1> { };
     struct T_MEAN : public descriptors::FIELD_BASE<1> { };
 
-    struct EPSILON : public descriptors::FIELD_BASE<1> { };
+    struct RESIDUUM : public descriptors::FIELD_BASE<1> { };
     struct CONVERGENCE_TEST : public descriptors::TYPED_FIELD_BASE<bool, 1> { };
 
 }
@@ -75,6 +75,9 @@ int main(int argc, char* argv[]){
         myCaseParameters.set<MAX_PHYS_T>(1e4);
         myCaseParameters.set<GRAVITATIONAL_CONST>(9.81);
         myCaseParameters.set<LATTICE_CHAR_VELOCITY>(1.0);
+
+        myCaseParameters.set<RESIDUUM>(1e-4);
+        myCaseParameters.set<CONVERGENCE_TEST>(false);
 
         //Fluid-related Defaults
         myCaseParameters.set<PHYS_DENSITY>(1.19);
