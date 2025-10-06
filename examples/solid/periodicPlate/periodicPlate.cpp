@@ -22,43 +22,40 @@
  *  Boston, MA  02110-1301, USA.
  */
 
-#include "olb.h"
-#include <cmath>
+#include <olb.h>
 
 using namespace olb;
-using namespace olb::descriptors;
+using namespace olb::names;
 
-using T = FLOATING_POINT_TYPE;
+// === Step 1: Declarations ===
+using MyCase = Case<
+  NavierCauchy, Lattice<double, descriptors::D2Q8<descriptors::FORCE,descriptors::MOMENT_VECTOR,descriptors::DISP_SOLID,descriptors::SIGMA_SOLID>>
+>;
 
-using LDESCRIPTOR = D2Q8<tag::MRT,FORCE,MOMENT_VECTOR,DISP_SOLID,SIGMA_SOLID>;
+namespace olb::parameters {
+  struct KAPPA  : public descriptors::FIELD_BASE<1> { };
+}
 
-constexpr T pi = M_PI;
-
-template <typename T, typename _DESCRIPTOR>
+template <typename T> //, typename _DESCRIPTOR>
 class ForceField2D : public AnalyticalF2D<T, T> {
 
 protected:
-  T dt;
-  T dx;
-  T charU;
-  T lambda;
-  T kappa;
-  T mu;
-  T theta;
 
 public:
-  ForceField2D(T inTheta, LinElaUnitConverter<T, LDESCRIPTOR> converter)
-      : AnalyticalF2D<T, T>(2),
-      dt(converter.getConversionFactorTime()),
-      dx(converter.getConversionFactorLength()),
-      charU(converter.getCharPhysVelocity()),
-      lambda(converter.getLatticeLambda()),
-      kappa(converter.getDampingFactor()),
-      mu(converter.getLatticeShearModulus()),
-      theta(inTheta) {};
+  ForceField2D(MyCase& myCase) : AnalyticalF2D<T, T>(2) {};
 
   bool operator()(T output[], const T input[]) override
   {
+    using T = MyCase::value_t;
+    using pi = std::numbers::pi_v<double>;
+    using DESCRIPTOR = MyCase::descriptor_t_of<NavierCauchy>;
+
+    const auto& converter = myCase.getLattice(NavierCauchy{}).getUnitConverter();
+    T dx = converter.getPhysDeltaX();
+    T dt = converter.getPhysDeltaT();
+    T kappa = converter.getDampingFactor();
+    T lambda = converter.getLatticeLambda();
+    T mu = converter.getLatticeShearModulus();
 
     T x = input[0];
     T y = input[1];
@@ -68,9 +65,9 @@ public:
     T y_sx =  .1;
     T y_sy = -.7;
 
-    T omega_11 = 1. / (mu / theta + 0.5);
-    T omega_d  = 1. / (2 * mu / (1 - theta) + 0.5);
-    T omega_s  = 1. / (2 * (mu + lambda) / (1 + theta) + 0.5);
+    T omega_11 = 1. / (mu / descriptors::invCs2<T,DESCRIPTOR>() + 0.5);
+    T omega_d  = 1. / (2 * mu / (1 - descriptors::invCs2<T,DESCRIPTOR>()) + 0.5);
+    T omega_s  = 1. / (2 * (mu + lambda) / (1 + descriptors::invCs2<T,DESCRIPTOR>()) + 0.5);
 
     T tau_11 = 1. / omega_11 - 0.5;
     T tau_s = 1. / omega_d - 0.5;
@@ -85,16 +82,16 @@ public:
     T omega_22 = 1. / (tau_22 + 0.5);
 
     // These are correct
-    T d1 = -1. / 4. - 1. / 2. * theta * tau_12 * tau_s + pow(tau_s, 2) / 2.
-         -  1. / 2. * theta * pow(tau_s, 2) + 1. / 2. * theta * tau_12 * tau_p
-         +  pow(tau_p, 2) / 2. + 1. / 2. * theta * pow(tau_p, 2);
-    T d2 = -theta / 2. + theta * pow(tau_11, 2) + theta * tau_11 * tau_12
-         + 1. / 2. * theta * tau_12 * tau_s - pow(tau_s, 2) / 2.
-         + 1. / 2. * theta * pow(tau_s, 2) + 1. / 2. * theta * tau_12 * tau_p
-         + pow(tau_p, 2) / 2. + 1. / 2. * theta * pow(tau_p, 2);
-    T d3 = -theta / 4.
-         +  theta * pow(tau_11, 2)
-         +  theta * tau_11 * tau_12;
+    T d1 = -1. / 4. - 1. / 2. * descriptors::invCs2<T,DESCRIPTOR>() * tau_12 * tau_s + pow(tau_s, 2) / 2.
+         -  1. / 2. * descriptors::invCs2<T,DESCRIPTOR>() * pow(tau_s, 2) + 1. / 2. * descriptors::invCs2<T,DESCRIPTOR>() * tau_12 * tau_p
+         +  pow(tau_p, 2) / 2. + 1. / 2. * descriptors::invCs2<T,DESCRIPTOR>() * pow(tau_p, 2);
+    T d2 = -descriptors::invCs2<T,DESCRIPTOR>() / 2. + descriptors::invCs2<T,DESCRIPTOR>() * pow(tau_11, 2) + descriptors::invCs2<T,DESCRIPTOR>() * tau_11 * tau_12
+         + 1. / 2. * descriptors::invCs2<T,DESCRIPTOR>() * tau_12 * tau_s - pow(tau_s, 2) / 2.
+         + 1. / 2. * descriptors::invCs2<T,DESCRIPTOR>() * pow(tau_s, 2) + 1. / 2. * descriptors::invCs2<T,DESCRIPTOR>() * tau_12 * tau_p
+         + pow(tau_p, 2) / 2. + 1. / 2. * descriptors::invCs2<T,DESCRIPTOR>() * pow(tau_p, 2);
+    T d3 = -descriptors::invCs2<T,DESCRIPTOR>() / 4.
+         +  descriptors::invCs2<T,DESCRIPTOR>() * pow(tau_11, 2)
+         +  descriptors::invCs2<T,DESCRIPTOR>() * tau_11 * tau_12;
 
     T mu_phys     =     mu * (dx * dx * kappa) / dt;
     T lambda_phys = lambda * (dx * dx * kappa) / dt;
@@ -164,19 +161,20 @@ public:
   }
 };
 
-template <typename T, typename _DESCRIPTOR>
+template <typename T>
 class ManufacturedSolutionU2D : public AnalyticalF2D<T, T> {
 
 protected:
-  T charU;
 
 public:
-  ManufacturedSolutionU2D(LinElaUnitConverter<T, LDESCRIPTOR> converter) : AnalyticalF2D<T, T>(2),
-      charU(converter.getCharPhysVelocity())
+  ManufacturedSolutionU2D(MyCase& myCase) : AnalyticalF2D<T, T>(2),
       {};
 
   bool operator()(T output[], const T input[]) override
   {
+    using T = MyCase::value_t;
+    using pi = std::numbers::pi_v<double>;
+
     T x = input[0];
     T y = input[1];
 
@@ -193,26 +191,28 @@ public:
   };
 };
 
-template <typename T, typename _DESCRIPTOR>
+template <typename T>
 class ManufacturedSolutionStress2D : public AnalyticalF2D<T, T> {
 
 protected:
-  T dt;
-  T dx;
-  T lambda;
-  T mu;
-  T kappa;
 
 public:
-  ManufacturedSolutionStress2D(LinElaUnitConverter<T, LDESCRIPTOR> converter) : AnalyticalF2D<T, T>(4),
-      dt(converter.getConversionFactorTime()),
-      dx(converter.getConversionFactorLength()),
-      mu(converter.getPhysShearModulus()),
-      lambda(converter.getPhysLambda()),
-      kappa(converter.getDampingFactor()) {};
+  ManufacturedSolutionStress2D(MyCase& myCase) : AnalyticalF2D<T, T>(4),
+  {};
 
   bool operator()(T output[], const T input[]) override
   {
+    using T = MyCase::value_t;
+    using DESCRIPTOR = MyCase::descriptor_t_of<NavierCauchy>;
+    using pi = std::numbers::pi_v<double>;
+
+    const auto& converter = myCase.getLattice(NavierCauchy{}).getUnitConverter();
+    T dx = converter.getPhysDeltaX();
+    T dt = converter.getPhysDeltaT();
+    T kappa = converter.getDampingFactor();
+    T lambda = converter.getLatticeLambda();
+    T mu = converter.getLatticeShearModulus();
+
     T x = input[0];
     T y = input[1];
 
@@ -258,30 +258,42 @@ public:
   }
 };
 
-void prepareGeometry(SuperGeometry<T, 2>& superGeometry)
-{
-  OstreamManager clout(std::cout, "prepareGeometry");
-  clout << "Prepare Geometry ..." << std::endl;
+/// @brief Create a simulation mesh, based on user-specific geometry
+/// @return An instance of Mesh, which keeps the relevant information
+Mesh<MyCase::value_t,MyCase::d> createMesh(MyCase::ParametersD& parameters) {
+  using T = MyCase::value_t;
+  const Vector extent = parameters.get<parameters::DOMAIN_EXTENT>();
+  const Vector origin{0, 0};
+  IndicatorCuboid2D<T> cuboid(extent, origin);
 
-  superGeometry.rename( 0, 1 );
-
-  superGeometry.clean();
-  /// Removes all not needed boundary voxels inside the surface
-  superGeometry.innerClean();
-  superGeometry.checkForErrors();
-
-  superGeometry.print();
-
-  clout << "Prepare Geometry ... OK" << std::endl;
+  const T physDeltaX = extent[0] / parameters.get<parameters::RESOLUTION>();
+  Mesh<T,MyCase::d> mesh(cuboid, physDeltaX, singleton::mpi().getSize());
+  mesh.setOverlap(parameters.get<parameters::OVERLAP>());
+  mesh.getCuboidDecomposition().setPeriodicity({true,true});
+  return mesh;
 }
 
+/// @brief Set material numbers for different parts of the domain
+/// @param myCase The Case instance which keeps the simulation data
+/// @note The material numbers will be used to assign physics to lattice nodes
+void prepareGeometry(MyCase& myCase) {
+  using T = MyCase::value_t;
+  auto& geometry = myCase.getGeometry();
+
+  /// Set material numbers
+  geometry.rename(0, 1);
+
+  geometry.getStatistics().print();
+}
+
+/*
 void prepareOmegas(LinElaUnitConverter<T, LDESCRIPTOR> converter,
-                   T theta,
+                   T descriptors::invCs2<T,DESCRIPTOR>(),
                    std::vector<T>& allOmegas)
 {
-  T omega_11 = 1. / (converter.getLatticeShearModulus() / theta + 0.5);
-  T omega_d = 1. / (2. * converter.getLatticeShearModulus()/(1. - theta) + 0.5);
-  T omega_s = 1. / (2. * (converter.getLatticeShearModulus() + converter.getLatticeLambda()) / (1. + theta) + 0.5);
+  T omega_11 = 1. / (converter.getLatticeShearModulus() / descriptors::invCs2<T,DESCRIPTOR>() + 0.5);
+  T omega_d = 1. / (2. * converter.getLatticeShearModulus()/(1. - descriptors::invCs2<T,DESCRIPTOR>()) + 0.5);
+  T omega_s = 1. / (2. * (converter.getLatticeShearModulus() + converter.getLatticeLambda()) / (1. + descriptors::invCs2<T,DESCRIPTOR>()) + 0.5);
 
   T tau_11 = 1. / omega_11 - 0.5;
   T tau_s = 1. / omega_d - 0.5;
@@ -298,18 +310,20 @@ void prepareOmegas(LinElaUnitConverter<T, LDESCRIPTOR> converter,
   allOmegas = {omega_11, omega_d, omega_s, omega_12, omega_21, omega_22};
   return;
 }
+*/
 
-void prepareLattice(SuperLattice<T, LDESCRIPTOR>& lLattice,
-                    SuperGeometry<T, 2>& superGeometry,
-                    LinElaUnitConverter<T, LDESCRIPTOR> converter,
-                    std::vector<T>& allOmegas,
-                    ForceField2D<T, T>& forceSol,
-                    T theta)
+/*
+void prepareLattice(SuperLattice<T, LDESCRIPTOR>& lattice,
+SuperGeometry<T, 2>& superGeometry,
+LinElaUnitConverter<T, LDESCRIPTOR> converter,
+std::vector<T>& allOmegas,
+ForceField2D<T, T>& forceSol,
+T descriptors::invCs2<T,DESCRIPTOR>())
 {
   OstreamManager clout(std::cout, "prepareLattice");
   clout << "Prepare Lattice ..." << std::endl;
 
-  lLattice.defineDynamics<BoolakeeLinearElasticity>(superGeometry.getMaterialIndicator({1}));
+  lattice.defineDynamics<BoolakeeLinearElasticity>(superGeometry.getMaterialIndicator({1}));
 
   auto bulkIndicator = superGeometry.getMaterialIndicator({ 1 });
 
@@ -321,35 +335,104 @@ void prepareLattice(SuperLattice<T, LDESCRIPTOR>& lLattice,
   AnalyticalConst2D<T, T> initialMomentsF(iniMom);
   AnalyticalConst2D<T, T> initialStressF(iniStress);
 
-  // dx, dt, theta, mü, lambda, kappa, epsilon
+  // dx, dt, descriptors::invCs2<T,DESCRIPTOR>(), mü, lambda, kappa, epsilon
   T magic[8] = {converter.getConversionFactorLength(),
-                converter.getConversionFactorTime(),
-                theta,
-                converter.getLatticeShearModulus(),
-                converter.getLatticeLambda(),
-                converter.getDampingFactor(),
-                converter.getCharPhysVelocity(),
-                converter.getEpsilon()};
+  converter.getConversionFactorTime(),
+  descriptors::invCs2<T,DESCRIPTOR>(),
+  converter.getLatticeShearModulus(),
+  converter.getLatticeLambda(),
+  converter.getDampingFactor(),
+  converter.getCharPhysVelocity(),
+  converter.getEpsilon()};
 
-  lLattice.setParameter<descriptors::MAGIC_SOLID>(magic);
+  lattice.setParameter<descriptors::MAGIC_SOLID>(magic);
 
-  lLattice.setParameter<descriptors::OMEGA_SOLID>(allOmegas);
-  lLattice.defineField<FORCE>(        superGeometry, 1, forceSol);
-  lLattice.defineField<POPULATION>(   superGeometry, 1, initialPopulationF);
-  lLattice.defineField<MOMENT_VECTOR>(superGeometry, 1, initialMomentsF);
-  lLattice.defineField<SIGMA_SOLID>(  superGeometry, 1, initialStressF);
+  lattice.setParameter<descriptors::OMEGA_SOLID>(allOmegas);
+  lattice.defineField<FORCE>(        superGeometry, 1, forceSol);
+  lattice.defineField<POPULATION>(   superGeometry, 1, initialPopulationF);
+  lattice.defineField<MOMENT_VECTOR>(superGeometry, 1, initialMomentsF);
+  lattice.defineField<SIGMA_SOLID>(  superGeometry, 1, initialStressF);
 
   /// Make the lattice ready for simulation
-  lLattice.initialize();
+  lattice.initialize();
 
   clout << "Prepare Lattice ... OK" << std::endl;
 }
+*/
 
-std::vector<T> getResults( SuperLattice<T, LDESCRIPTOR>& lLattice,
-                           LinElaUnitConverter<T, LDESCRIPTOR> converter,
-                           SuperGeometry<T, 2>& superGeometry,
-                           int iT,
-                           int maxIt)
+/// @brief Set lattice dynamics
+/// @param myCase The Case instance which keeps the simulation data
+void prepareLattice(MyCase& myCase) {
+  using T = MyCase::value_t;
+  using DESCRIPTOR = MyCase::descriptor_t_of<NavierCauchy>;
+  auto& parameters = myCase.getParameters();
+  auto& lattice = myCase.getLattice(NavierCauchy{});
+
+  /// Material=1 -->bulk dynamics
+  lattice.defineDynamics<BoolakeeLinearElasticity>(myCase.getGeometry(), 1);
+
+  const T physDeltaX            = parameters.get<parameters::PHYS_DELTA_X>();
+  const T physDeltaT            = parameters.get<parameters::PHYS_DELTA_T>();
+  const T physCharLength        = parameters.get<parameters::PHYS_CHAR_LENGTH>();
+  const T physCharDisplacement  = parameters.get<parameters::PHYS_CHAR_DISPLACEMENT>();
+  const T physYoungsModulus     = parameters.get<parameters::YOUNGS_MODULUS>();
+  const T physPoissonRatio      = parameters.get<parameters::POISSON_RATIO>();
+  const T kappa                 = parameters.get<parameters::KAPPA>();
+
+  // Set up a unit converter with the characteristic physical units
+  lattice.setUnitConverter<LinElaUnitConverter<T, DESCRIPTOR>>(
+    physDeltaX,
+    physDeltaT,
+    physCharLength,
+    physCharDisplacement,
+    physYoungsModulus,
+    physPoissonRatio,
+    kappa
+  );
+  const auto& converter = lattice.getUnitConverter();
+  converter.print();
+
+  T omega_11 = 1. / (converter.getLatticeShearModulus() / descriptors::invCs2<T,DESCRIPTOR>() + 0.5);
+  T omega_d = 1. / (2. * converter.getLatticeShearModulus()/(1. - descriptors::invCs2<T,DESCRIPTOR>()) + 0.5);
+  T omega_s = 1. / (2. * (converter.getLatticeShearModulus() + converter.getLatticeLambda()) / (1. + descriptors::invCs2<T,DESCRIPTOR>()) + 0.5);
+
+  T tau_11 = 1. / omega_11 - 0.5;
+  T tau_s = 1. / omega_d - 0.5;
+  T tau_p = 1. / omega_s - 0.5;
+  T tau_12 = (1. / tau_11 + 4. * tau_11) / 8.;
+  T tau_21 = tau_12;
+  T tau_22 = -(12. * pow(tau_11, 3) + 28. * pow(tau_11, 2) * tau_p + tau_11 * (-5. + 32. * pow(tau_p, 2)) + tau_p * (-9. + 16. * tau_12 * tau_p + 64. * pow(tau_p, 2))) / (3. * (1. + 4. * pow(tau_11, 2) - 8. * tau_12 * tau_p));
+  T omega_12 = 1. / (tau_12 + 0.5);
+  T omega_21 = 1. / (tau_21 + 0.5);
+  T omega_22 = 1. / (tau_22 + 0.5);
+
+  lattice.setParameter<descriptors::OMEGA_SOLID>({omega_11, omega_d, omega_s, omega_12, omega_21, omega_22});
+}
+
+/// Set initial condition for primal variables (velocity and density)
+/// @param myCase The Case instance which keeps the simulation data
+/// @note Be careful: initial values have to be set using lattice units
+void setInitialValues(MyCase& myCase)
+{
+  // Nothing to do here, because simulation is initialized with 0
+}
+
+/// Update boundary values at times (and external fields, if they exist)
+/// @param myCase The Case instance which keeps the simulation data
+/// @param iT The time step
+/// @note Be careful: boundary values have to be set using lattice units
+void setTemporalValues(MyCase& myCase,
+                       std::size_t iT)
+{
+  // Nothing to do here, because simulation does not depend on time
+}
+
+/*
+std::vector<T> getResults( SuperLattice<T, LDESCRIPTOR>& lattice,
+                            LinElaUnitConverter<T, LDESCRIPTOR> converter,
+                            SuperGeometry<T, 2>& superGeometry,
+                            int iT,
+                            int maxIt)
 {
   OstreamManager clout(std::cout, "getResults");
 
@@ -362,28 +445,28 @@ std::vector<T> getResults( SuperLattice<T, LDESCRIPTOR>& lLattice,
 
   if (iT == 0) {
     // Writes the geometry, cuboid no. and rank no. as vti file for visualization
-    SuperLatticeCuboid2D<T, LDESCRIPTOR>   cuboid(lLattice);
-    SuperLatticeRank2D<T, LDESCRIPTOR>     rank(lLattice);
+    SuperLatticeCuboid2D<T, LDESCRIPTOR>   cuboid(lattice);
+    SuperLatticeRank2D<T, LDESCRIPTOR>     rank(lattice);
     vtmWriter.write(cuboid);
     vtmWriter.write(rank);
     vtmWriter.createMasterFile();
   }
 
-  SuperLatticePhysVelocity2D<T, LDESCRIPTOR>          velocityPhys(lLattice, converter);
-  SuperLatticeVelocity2D<T, LDESCRIPTOR>              velocity(lLattice);
-  SuperLatticeDensity2D<T, LDESCRIPTOR>               density(lLattice);
-  SuperLatticeFpop2D<T, LDESCRIPTOR>                  population(lLattice);
-  SuperLatticeField2D<T, LDESCRIPTOR, FORCE>          forceField(lLattice);
+  SuperLatticePhysVelocity2D<T, LDESCRIPTOR>          velocityPhys(lattice, converter);
+  SuperLatticeVelocity2D<T, LDESCRIPTOR>              velocity(lattice);
+  SuperLatticeDensity2D<T, LDESCRIPTOR>               density(lattice);
+  SuperLatticeFpop2D<T, LDESCRIPTOR>                  population(lattice);
+  SuperLatticeField2D<T, LDESCRIPTOR, FORCE>          forceField(lattice);
 
   ManufacturedSolutionU2D<T, LDESCRIPTOR>             dispSol(converter);
-  SuperLatticeFfromAnalyticalF2D<T, LDESCRIPTOR>      dispSolLattice(dispSol, lLattice);
+  SuperLatticeFfromAnalyticalF2D<T, LDESCRIPTOR>      dispSolLattice(dispSol, lattice);
 
   ManufacturedSolutionStress2D<T, LDESCRIPTOR>        stressSol(converter);
-  SuperLatticeFfromAnalyticalF2D<T, LDESCRIPTOR>      stressSolLattice(stressSol, lLattice);
+  SuperLatticeFfromAnalyticalF2D<T, LDESCRIPTOR>      stressSolLattice(stressSol, lattice);
 
   // Fields for error calc
-  SuperLatticeField2D<T, LDESCRIPTOR, DISP_SOLID>     moments(lLattice);
-  SuperLatticeField2D<T, LDESCRIPTOR, SIGMA_SOLID>    stress(lLattice);
+  SuperLatticeField2D<T, LDESCRIPTOR, DISP_SOLID>     moments(lattice);
+  SuperLatticeField2D<T, LDESCRIPTOR, SIGMA_SOLID>    stress(lattice);
 
   auto indicatorF = superGeometry.getMaterialIndicator({1});
 
@@ -402,10 +485,10 @@ std::vector<T> getResults( SuperLattice<T, LDESCRIPTOR>& lLattice,
   T   lInfStressResult[2] = {T(), T()};
   int tmp[]               = {int()};
 
-  SuperRelativeErrorL2Norm2D<T>   relUErrorL2Norm(lLattice, moments, dispSol, indicatorF);
-  SuperRelativeErrorLinfNorm2D<T> relUErrorLinfNorm(lLattice, moments, dispSol, indicatorF);
-  SuperRelativeErrorL2Norm2D<T>   relStressErrorL2Norm( lLattice, stress, stressSol, indicatorF );
-  SuperRelativeErrorLinfNorm2D<T> relStressErrorLinfNorm( lLattice, stress, stressSol, indicatorF );
+  SuperRelativeErrorL2Norm2D<T>   relUErrorL2Norm(lattice, moments, dispSol, indicatorF);
+  SuperRelativeErrorLinfNorm2D<T> relUErrorLinfNorm(lattice, moments, dispSol, indicatorF);
+  SuperRelativeErrorL2Norm2D<T>   relStressErrorL2Norm( lattice, stress, stressSol, indicatorF );
+  SuperRelativeErrorLinfNorm2D<T> relStressErrorLinfNorm( lattice, stress, stressSol, indicatorF );
 
   relUErrorL2Norm(l2UResult, tmp);
   relUErrorLinfNorm(lInfUResult, tmp);
@@ -424,7 +507,110 @@ std::vector<T> getResults( SuperLattice<T, LDESCRIPTOR>& lLattice,
   return returnVec;
 
 }
+*/
 
+/// Compute simulation results at times
+/// @param myCase The Case instance which keeps the simulation data
+/// @param iT The time step
+void getResults(MyCase& myCase,
+                util::Timer<MyCase::value_t>& timer,
+                std::size_t iT)
+{
+  /// Write vtk plots every 0.3 seconds (of phys. simulation time)
+  using T = MyCase::value_t;
+  auto& parameters = myCase.getParameters();
+  auto& lattice = myCase.getLattice(NavierCauchy{});
+  auto& converter = lattice.getUnitConverter();
+
+  const std::size_t iTlog = parameters.get<parameters::IT_LOG>();
+  const std::size_t iTvtk = parameters.get<parameters::IT_VTK>();
+
+  SuperVTMwriter2D<T> vtmWriter("periodicPlate");
+
+  SuperGeometryF<T,2> materials(superGeometry);
+  vtmWriter.addFunctor( materials );
+
+  ManufacturedSolutionU2D<T, LDESCRIPTOR>             dispSol(converter);
+  SuperLatticeFfromAnalyticalF2D<T, LDESCRIPTOR>      dispSolLattice(dispSol, lattice);
+
+  ManufacturedSolutionStress2D<T, LDESCRIPTOR>        stressSol(converter);
+  SuperLatticeFfromAnalyticalF2D<T, LDESCRIPTOR>      stressSolLattice(stressSol, lattice);
+
+  // Fields for error calc
+  SuperLatticeField2D<T, LDESCRIPTOR, DISP_SOLID>     moments(lattice);
+  SuperLatticeField2D<T, LDESCRIPTOR, SIGMA_SOLID>    stress(lattice);
+
+  if (iT == 0) {
+    // Writes the geometry, cuboid no. and rank no. as vti file for visualization
+    SuperLatticeCuboid2D<T, LDESCRIPTOR>   cuboid(lattice);
+    SuperLatticeRank2D<T, LDESCRIPTOR>     rank(lattice);
+    vtmWriter.write(cuboid);
+    vtmWriter.write(rank);
+    vtmWriter.createMasterFile();
+  }
+
+  // Writes the VTK files
+  if (iT%iTvtk == 0 && iT > 0) {
+    vtmWriter.addFunctor(moments,          "numerical disp");
+    vtmWriter.addFunctor(dispSolLattice,   "analytical disp");
+    vtmWriter.addFunctor(stress,           "numerical stress");
+    vtmWriter.addFunctor(stressSolLattice, "analytical stress");
+    lattice.setProcessingContext(ProcessingContext::Evaluation);
+    vtmWriter.write(iT);
+  }
+
+  /// Print some (numerical and computational) statistics
+  if (iT%iTlog == 0 || iT % iTMax == 0) {
+    T   l2UResult[2]        = {T(), T()};
+    T   lInfUResult[2]      = {T(), T()};
+    T   l2StressResult[2]   = {T(), T()};
+    T   lInfStressResult[2] = {T(), T()};
+    int tmp[]               = {int()};
+
+    SuperRelativeErrorL2Norm2D<T>   relUErrorL2Norm(lattice, moments, dispSol, indicatorF);
+    SuperRelativeErrorLinfNorm2D<T> relUErrorLinfNorm(lattice, moments, dispSol, indicatorF);
+    SuperRelativeErrorL2Norm2D<T>   relStressErrorL2Norm( lattice, stress, stressSol, indicatorF );
+    SuperRelativeErrorLinfNorm2D<T> relStressErrorLinfNorm( lattice, stress, stressSol, indicatorF );
+
+    relUErrorL2Norm(l2UResult, tmp);
+    relUErrorLinfNorm(lInfUResult, tmp);
+    relStressErrorL2Norm(l2StressResult, tmp);
+    relStressErrorLinfNorm(lInfStressResult, tmp);
+
+    clout << "N\t" << "L2 U Error\t" << "LInf U Error\t" << "L2 Stress Error\t" << "LInf Stress Error" << std::endl;
+    clout << converter.getResolution() << "\t" << returnVec[0] << "\t" << returnVec[1] << "\t" << returnVec[2] << "\t\t" << returnVec[3] << std::endl;
+    lattice.getStatistics().print(iT, converter.getPhysTime(iT));
+    timer.print(iT);
+  }
+}
+
+/// @brief Execute simulation: set initial values and run time loop
+/// @param myCase The Case instance which keeps the simulation data
+void simulate(MyCase& myCase) {
+  using T = MyCase::value_t;
+  auto& parameters = myCase.getParameters();
+  const T physMaxT = parameters.get<parameters::MAX_PHYS_T>();
+
+  const std::size_t iTmax = myCase.getLattice(NavierCauchy{}).getUnitConverter().getLatticeTime(physMaxT);
+  util::Timer<T> timer(iTmax, myCase.getGeometry().getStatistics().getNvoxel());
+  timer.start();
+
+  for (std::size_t iT=0; iT < iTmax; ++iT) {
+    /// === Step 8.1: Update the Boundary Values and Fields at Times ===
+    setTemporalValues(myCase, iT);
+
+    /// === Step 8.2: Collide and Stream Execution ===
+    myCase.getLattice(NavierCauchy{}).collideAndStream();
+
+    /// === Step 8.3: Computation and Output of the Results ===
+    getResults(myCase, timer, iT);
+  }
+
+  timer.stop();
+  timer.printSummary();
+}
+
+/*
 int main(int argc, char **argv)
 {
   // === 1st Step: Initialization ===
@@ -456,7 +642,7 @@ int main(int argc, char **argv)
   // Length of square plate
   T length = 1.0;
 
-  T theta = T(1) / descriptors::invCs2<T,LDESCRIPTOR>();
+  T descriptors::invCs2<T,DESCRIPTOR>() = T(1) / descriptors::invCs2<T,LDESCRIPTOR>();
 
   LinElaUnitConverter<T, LDESCRIPTOR> converter(
     dx, // deltaX
@@ -492,14 +678,14 @@ int main(int argc, char **argv)
   SuperGeometry<T, 2> superGeometry(cuboidDecomposition, loadBalancer);
   prepareGeometry(superGeometry);
 
-  SuperLattice<T, LDESCRIPTOR> lLattice(converter, superGeometry);
+  SuperLattice<T, LDESCRIPTOR> lattice(converter, superGeometry);
 
-  ForceField2D<T, T> forceSol(theta, converter);
+  ForceField2D<T, T> forceSol(descriptors::invCs2<T,DESCRIPTOR>(), converter);
 
   std::vector<T> allOmegas = {0., 0., 0., 0., 0., 0.};
-  prepareOmegas(converter, theta, allOmegas);
+  prepareOmegas(converter, descriptors::invCs2<T,DESCRIPTOR>(), allOmegas);
 
-  prepareLattice(lLattice, superGeometry, converter, allOmegas, forceSol, theta);
+  prepareLattice(lattice, superGeometry, converter, allOmegas, forceSol, descriptors::invCs2<T,DESCRIPTOR>());
 
   converter.print();
 
@@ -523,15 +709,57 @@ int main(int argc, char **argv)
     timer.update(iT);
 
     if (iT % (maxIt / numDataPoints) == 0) {
-      errors = getResults(lLattice, converter, superGeometry, iT, maxIt);
+      errors = getResults(lattice, converter, superGeometry, iT, maxIt);
       timer.printStep();
       if (singleton::mpi().isMainProcessor()) {
         fout << N << ";" << converter.getPhysTime(iT) << ";" << errors[0] << ";" << errors[1] << ";" <<errors[2] << ";" << errors[3] << std::endl;
       }
     }
 
-    lLattice.collideAndStream();
+    lattice.collideAndStream();
   }
   fout.close();
   timer.stop();
+}
+*/
+
+/// Setup and run a simulation
+int main(int argc, char* argv[]) {
+  initialize(&argc, &argv);
+
+  /// === Step 2: Set Parameters ===
+  MyCase::ParametersD myCaseParameters;
+  {
+    using namespace olb::parameters;
+    // myCaseParameters.set<OVERLAP                >(  1.          );
+    myCaseParameters.set<KAPPA                  >(  1.          );
+    myCaseParameters.set<RESOLUTION             >( 40           );
+    myCaseParameters.set<YOUNGS_MODULUS         >(  0.11        );
+    myCaseParameters.set<POISSON_RATIO          >(  0.7         );
+    myCaseParameters.set<PHYS_CHAR_DISPLACEMENT >(  1.0         );
+    myCaseParameters.set<PHYS_CHAR_LENGTH       >(  1.0         );
+    myCaseParameters.set<DOMAIN_EXTENT          >( { 1.0, 1.0 } );
+    myCaseParameters.set<MAX_PHYS_T             >(  3.2         );
+    myCaseParameters.set<IT_LOG                 >(100           );
+    myCaseParameters.set<IT_VTK                 >(100           );
+  }
+  myCaseParameters.fromCLI(argc, argv);
+
+  /// === Step 3: Create Mesh ===
+  Mesh mesh = createMesh(myCaseParameters);
+
+  /// === Step 4: Create Case ===
+  MyCase myCase(myCaseParameters, mesh);
+
+  /// === Step 5: Prepare Geometry ===
+  prepareGeometry(myCase);
+
+  /// === Step 6: Prepare Lattice ===
+  prepareLattice(myCase);
+
+  /// === Step 7: Definition of Initial, Boundary Values, and Fields ===
+  setInitialValues(myCase);
+
+  /// === Step 8: Simulate ===
+  simulate(myCase);
 }
