@@ -42,10 +42,8 @@ using MyCase = Case<NavierStokes, Lattice<double, descriptors::D2Q9<>>>;
 
 namespace olb::parameters {
 
-struct PHYS_CHAR_LENGTH : public descriptors::FIELD_BASE<1> {};
-struct RELAXATION_TIME : public descriptors::FIELD_BASE<1> {};
-struct PHYS_LENGTHSTEP : public descriptors::FIELD_BASE<1> {};
-struct PHYS_HEIGHTSTEP : public descriptors::FIELD_BASE<1> {};
+struct PHYS_LENGTH_OF_STEP : public descriptors::FIELD_BASE<1> {};
+struct PHYS_HEIGHT_OF_STEP : public descriptors::FIELD_BASE<1> {};
 
 } // namespace olb::parameters
 
@@ -59,8 +57,8 @@ Mesh<MyCase::value_t, MyCase::d> createMesh(MyCase::ParametersD& parameters)
   const Vector                     originChannel(0, 0);
   std::shared_ptr<IndicatorF2D<T>> channel = std::make_shared<IndicatorCuboid2D<T>>(extendChannel, originChannel);
   // setup step
-  const T lengthStep = parameters.get<parameters::PHYS_LENGTHSTEP>(); // length of step in meter
-  const T heightStep = parameters.get<parameters::PHYS_HEIGHTSTEP>(); // height of step in meter
+  const T lengthStep = parameters.get<parameters::PHYS_LENGTH_OF_STEP>(); // length of step in meter
+  const T heightStep = parameters.get<parameters::PHYS_HEIGHT_OF_STEP>(); // height of step in meter
 
   const Vector                     extendStep(lengthStep, heightStep);
   const Vector                     originStep(0, 0);
@@ -91,8 +89,8 @@ void prepareGeometry(MyCase& myCase)
   std::shared_ptr<IndicatorF2D<T>> channel = std::make_shared<IndicatorCuboid2D<T>>(extendChannel, originChannel);
 
   // setup step
-  const T lengthStep = parameters.get<parameters::PHYS_LENGTHSTEP>(); // length of step in meter
-  const T heightStep = parameters.get<parameters::PHYS_HEIGHTSTEP>(); // height of step in meter
+  const T lengthStep = parameters.get<parameters::PHYS_LENGTH_OF_STEP>(); // length of step in meter
+  const T heightStep = parameters.get<parameters::PHYS_HEIGHT_OF_STEP>(); // height of step in meter
 
   const Vector                     extendStep(lengthStep, heightStep);
   const Vector                     originStep(0, 0);
@@ -145,7 +143,7 @@ void prepareLattice(MyCase& myCase)
     using namespace olb::parameters;
     sLattice.setUnitConverter<UnitConverterFromResolutionAndRelaxationTime<T, DESCRIPTOR>>(
         parameters.get<RESOLUTION>(),       // resolution
-        parameters.get<RELAXATION_TIME>(),  // relaxation time
+        parameters.get<LATTICE_RELAXATION_TIME>(),  // relaxation time
         parameters.get<PHYS_CHAR_LENGTH>(), // charPhysLength: reference length of simulation geometry
         parameters.get<
             PHYS_CHAR_VELOCITY>(), // charPhysVelocity: maximal/highest expected velocity during simulation in __m / s__
@@ -254,8 +252,8 @@ void getResults(MyCase& myCase, std::size_t iT, util::Timer<T> timer)
   OstreamManager clout(std::cout, "getResults");
   auto&          parameters    = myCase.getParameters();
   const T        heightChannel = parameters.get<parameters::DOMAIN_EXTENT>()[1];
-  const T        heightStep    = parameters.get<parameters::PHYS_HEIGHTSTEP>(); // height of step in meter
-  const T        lengthStep    = parameters.get<parameters::PHYS_LENGTHSTEP>(); // length of step in meter
+  const T        heightStep    = parameters.get<parameters::PHYS_HEIGHT_OF_STEP>(); // height of step in meter
+  const T        lengthStep    = parameters.get<parameters::PHYS_LENGTH_OF_STEP>(); // length of step in meter
   const T        heightInlet   = heightChannel - heightStep;
   auto&          sLattice      = myCase.getLattice(NavierStokes {});
   auto&          converter     = sLattice.getUnitConverter();
@@ -354,15 +352,15 @@ int main(int argc, char* argv[])
   {
     using namespace olb::parameters;
     myCaseParameters.set<RESOLUTION>(60);
-    myCaseParameters.set<RELAXATION_TIME>(0.518);
-    myCaseParameters.set<PHYS_LENGTHSTEP>(0.2);
-    myCaseParameters.set<PHYS_HEIGHTSTEP>(0.0049);
+    myCaseParameters.set<LATTICE_RELAXATION_TIME>(0.518);
+    myCaseParameters.set<PHYS_LENGTH_OF_STEP>(0.2);
+    myCaseParameters.set<PHYS_HEIGHT_OF_STEP>(0.0049);
     myCaseParameters.set<PHYS_CHAR_VELOCITY>(1.0);
     myCaseParameters.set<PHYS_CHAR_VISCOSITY>(1.0 / 19230.76923);
     myCaseParameters.set<PHYS_CHAR_DENSITY>(1.0);
     myCaseParameters.set<DOMAIN_EXTENT>({0.7, 0.0101});
     myCaseParameters.set<PHYS_CHAR_LENGTH>(2.0 *
-                                           (myCaseParameters.get<DOMAIN_EXTENT>()[1] - myCaseParameters.get<PHYS_HEIGHTSTEP>()));
+                                           (myCaseParameters.get<DOMAIN_EXTENT>()[1] - myCaseParameters.get<PHYS_HEIGHT_OF_STEP>()));
     myCaseParameters.set<MAX_PHYS_T>(2.0);
   }
   myCaseParameters.fromCLI(argc, argv);
