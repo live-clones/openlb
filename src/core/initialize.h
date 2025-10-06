@@ -34,6 +34,13 @@ namespace olb {
  **/
 void initialize(int *argc, char ***argv, bool multiOutput=false, bool verbose=true)
 {
+#ifdef PARALLEL_MODE_MPI
+  bool mpiInitialized = false;
+  if (singleton::mpi().init(argc, argv)) {
+    mpiInitialized = true;
+  }
+#endif
+
   // create an OstreamManager object in order to enable multi output
   olb::OstreamManager clout(std::cout, "initialize");
 
@@ -66,7 +73,7 @@ void initialize(int *argc, char ***argv, bool multiOutput=false, bool verbose=tr
   clout.setMultiOutput(multiOutput);
 
 #ifdef PARALLEL_MODE_MPI
-  if (singleton::mpi().init(argc, argv)) {
+  if (mpiInitialized) {
     clout << "MPI      : " << singleton::mpi().getSize() << " ranks" << std::endl;
   } else {
     clout << "MPI      : Failed!" << std::endl;
