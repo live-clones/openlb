@@ -485,12 +485,6 @@ void getResults(MyCase& myCase,
   SuperLatticeField2D<T, DESCRIPTOR, olb::descriptors::DISP_SOLID>     disp(lattice);
   SuperLatticeField2D<T, DESCRIPTOR, olb::descriptors::SIGMA_SOLID>    stress(lattice);
 
-  SuperLatticeField2D<T, DESCRIPTOR, olb::descriptors::BOUNDARY_COORDS_X> boundary_x(lattice);
-  SuperLatticeField2D<T, DESCRIPTOR, olb::descriptors::BOUNDARY_COORDS_Y> boundary_y(lattice);
-  SuperLatticeField2D<T, DESCRIPTOR, olb::descriptors::SOLID_DISTANCE_FIELD>     distance(lattice);
-
-  SuperGeometryF<T,2> materials(geometry);
-    vtmWriter.addFunctor(materials,          "geometry");
   if (iT == 0) {
     // Writes the geometry, cuboid no. and rank no. as vti file for visualization
     SuperLatticeCuboid2D<T, DESCRIPTOR>   cuboid(lattice);
@@ -506,10 +500,6 @@ void getResults(MyCase& myCase,
     vtmWriter.addFunctor(dispSolLattice,   "analytical disp");
     vtmWriter.addFunctor(stress,           "numerical stress");
     vtmWriter.addFunctor(stressSolLattice, "analytical stress");
-    vtmWriter.addFunctor(distance,         "distance");
-    vtmWriter.addFunctor(boundary_x,       "boundary_x");
-    vtmWriter.addFunctor(boundary_y,       "boundary_y");
-    vtmWriter.addFunctor(distance,         "q_ij");
 
     lattice.setProcessingContext(ProcessingContext::Evaluation);
     vtmWriter.write(iT);
