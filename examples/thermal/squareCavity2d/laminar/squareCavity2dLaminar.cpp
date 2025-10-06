@@ -50,6 +50,7 @@ namespace olb::parameters {
     struct T_COLD : public descriptors::FIELD_BASE<1> { };
     struct T_MEAN : public descriptors::FIELD_BASE<1> { };
 
+    struct CONVERGENCE_EPSILON : public descriptors::FIELD_BASE<1> { };
 }
 
 /// @brief Create a simulation mesh, based on user-specific geometry
@@ -57,9 +58,14 @@ namespace olb::parameters {
 Mesh<MyCase::value_t, MyCase::d> createMesh(MyCase::ParametersD& params){
     using T = MyCase::value_t;
 
-    Vector extent = params.get<parameters::DOMAIN_EXTENT>();
+    const T lx = params.get<parameters::DOMAIN_EXTENT>()[0];
+    const T dx = params.get<parameters::PHYS_DELTA_X>();
+    std::vector<T> extend(2,T());
+    extend[0] = lx + 2*dx;
+    extend[1] = lx + dx;
+
     std::vector<T> origin(2, T());
-    IndicatorCuboid2D<T> cuboid(extent, origin);
+    IndicatorCuboid2D<T> cuboid(extend, origin);
 
     Mesh<T,MyCase::d> mesh(cuboid, params.get<parameters::PHYS_DELTA_X>(), singleton::mpi().getSize());
     mesh.setOverlap(params.get<parameters::OVERLAP>());
@@ -75,27 +81,36 @@ void prepareGeometry(MyCase& myCase){
     auto& geometry = myCase.getGeometry();
     auto& params = myCase.getParameters();
 
+    const T dx = params.get<parameters::PHYS_DELTA_X>();
+    const T lx = params.get<parameters::DOMAIN_EXTENT>()[0];
+
+    clout << dx << " " << lx << std::endl;
+
     geometry.rename(0,4);
 
-    Vector extent = params.get<parameters::DOMAIN_EXTENT>();
+    std::vector<T> extend(2,T());
+    extend[0] = lx;
+    extend[1] = lx;
     std::vector<T> origin(2, T());
-    IndicatorCuboid2D<T> cuboid2(extent, origin);
+    origin[0] = dx;
+    origin[1] = 0.5*dx;
+    IndicatorCuboid2D<T> cuboid2(extend, origin);
 
     geometry.rename(4, 1, cuboid2);
 
     std::vector<T> extendwallleft(2,T(0));
-    extendwallleft[0] = params.get<parameters::PHYS_DELTA_X>();
-    extendwallleft[1] = params.get<parameters::DOMAIN_EXTENT>()[0];
+    extendwallleft[0] = dx;
+    extendwallleft[1] = lx;
     std::vector<T> originwallleft(2,T(0));
     originwallleft[0] = 0.0;
     originwallleft[1] = 0.0;
     IndicatorCuboid2D<T> wallleft(extendwallleft, originwallleft);
 
-      std::vector<T> extendwallright(2,T(0));
-    extendwallright[0] = params.get<parameters::PHYS_DELTA_X>();
-    extendwallright[1] = params.get<parameters::DOMAIN_EXTENT>()[0];
+    std::vector<T> extendwallright(2,T(0));
+    extendwallright[0] = dx;
+    extendwallright[1] = lx;
     std::vector<T> originwallright(2,T(0));
-    originwallright[0] =  extendwallright[1] + 1.5*extendwallright[0];
+    originwallright[0] =  lx + 1.5*dx;
     originwallright[1] = 0.0;
     IndicatorCuboid2D<T> wallright(extendwallright, originwallright);
 
@@ -219,11 +234,80 @@ void setInitialValues(MyCase& myCase){
     NSElattice.initialize();
     ADlattice.initialize();
 
-    clout << "Set initial values ... OK" << std::endl;
+    T boussinesqForcePrefactor = 9.81 / converter.getConversionFactorVelocity() * converter.getConversionFactorTime() *
+                               converter.getCharPhysTemperatureDifference() * converter.getPhysThermalExpansionCoefficient();
 
+
+    auto& coupling = myCase.setCouplingOperator(
+        "Boussinesq",
+        NavierStokesAdvectionDiffusionCoupling{},
+        names::NavierStokes{}, NSElattice,
+        names::Temperature{},  ADlattice);
+        coupling.setParameter<NavierStokesAdvectionDiffusionCoupling::T0>(
+        converter.getLatticeTemperature(Tcold));
+        coupling.setParameter<NavierStokesAdvectionDiffusionCoupling::FORCE_PREFACTOR>(
+        boussinesqForcePrefactor * Vector<T,2>{0.0,1.0}
+    );
+    
+    clout << "Set initial values ... OK" << std::endl;
 }
 
+void simulate(MyCase& myCase){
+    OstreamManager clout(std::cout,"Simulation");
+    clout << "Starting Simulation ..." << std::endl;
 
+    using T = MyCase::value_t;
+    auto& parameters = myCase.getParameters();
+
+    auto& NSElattice = myCase.getLattice(NavierStokes{});
+    auto& ADlattice = myCase.getLattice(Temperature{});
+    const auto& converter = NSElattice.getUnitConverter();
+
+    const std::size_t iTmax = parameters.get<parameters::MAX_PHYS_T>();
+
+    util::Timer<T> timer(iTmax, myCase.getGeometry().getStatistics().getNvoxel());
+  
+    timer.start();
+
+    util::ValueTracer<T> converge(6, parameters.get<parameters::CONVERGENCE_EPSILON>());
+    bool converged = false;
+
+    for (std::size_t iT = 0; iT < iTmax; ++iT) {
+        
+        if (converge.hasConverged() && !converged) {
+            converged = true;
+            clout << "Simulation converged." << std::endl;
+            clout << "Time " << iT << "." << std::endl;
+
+            //getResults(output, converter, NSlattice, ADlattice, iT, superGeometry, timer, converge.hasConverged());
+        }
+
+        NSElattice.collideAndStream();
+        ADlattice.collideAndStream();
+        myCase.getOperator("Boussinesq").apply();
+
+        //clout << "hoi" << std::endl;
+
+        if(!converged){
+            //getResults
+        }
+        if(!converged && iT%1000 == 0){
+            timer.update(iT);
+            timer.printStep();
+            /// NSLattice statistics console output
+    NSElattice.getStatistics().print(iT,converter.getPhysTime(iT));
+    /// ADLattice statistics console output
+    ADlattice.getStatistics().print(iT,converter.getPhysTime(iT));
+            NSElattice.setProcessingContext(ProcessingContext::Evaluation);
+            //converge.takeValue()
+        }
+        if(converged) break;
+    }
+
+
+    timer.stop();
+    timer.printSummary();
+}
 
 
 int main(int argc, char* argv[]){
@@ -238,6 +322,7 @@ int main(int argc, char* argv[]){
         myCaseParameters.set<GRAVITATIONAL_CONST>(9.81);
         myCaseParameters.set<LATTICE_CHAR_VELOCITY>(0.00797276);
         myCaseParameters.set<LATTICE_RELAXATION_TIME>(0.65);
+        myCaseParameters.set<CONVERGENCE_EPSILON>(1e-4);
 
         //Fluid-related Defaults
         myCaseParameters.set<PHYS_DENSITY>(1.19);
@@ -282,5 +367,7 @@ int main(int argc, char* argv[]){
 
     /// === Step 7: Definition of Initial, Boundary Values, and Fields ===
     setInitialValues(myCase);
-    
+
+    /// === Step 8: Simulate ===
+    simulate(myCase);
 }
