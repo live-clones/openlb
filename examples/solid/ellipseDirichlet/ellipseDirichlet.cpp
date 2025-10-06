@@ -29,17 +29,7 @@ using namespace olb::names;
 using namespace olb::descriptors;
 
 using MyCase = Case<
-  NavierCauchy, Lattice<double, D2Q8<tag::MRT,
-                                FORCE,
-                                DISP_SOLID,
-                                SIGMA_SOLID,
-                                MAGIC_SOLID,
-                                OMEGA_SOLID,
-                                PREVIOUS_CELL,
-                                BOUNDARY_COORDS_X,
-                                BOUNDARY_COORDS_Y,
-                                SOLID_DISTANCE_FIELD,
-                                BARED_MOMENT_VECTOR>>
+  NavierCauchy, Lattice<double, D2Q8<tag::MRT>>
 >;
 
 namespace olb::parameters {
