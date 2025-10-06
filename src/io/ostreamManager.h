@@ -38,6 +38,7 @@ private:
   std::ostream* output;
   std::string text;
   static bool multiOutput;
+
 public:
   OMBuf();
   ~OMBuf() override;
