@@ -52,7 +52,7 @@ namespace olb
       T physDeltaX,
       T physDeltaT,
       T charPhysLength,
-      T charPhysVelocity,
+      T charPhysDisplacement,
       T youngsModulus,
       T poissonRatio,
       T dampingFactor
@@ -62,7 +62,7 @@ namespace olb
         physDeltaX,
         physDeltaT,
         charPhysLength,
-        charPhysVelocity,
+        charPhysDisplacement,
         youngsModulus,
         poissonRatio,
         dampingFactor
@@ -71,7 +71,7 @@ namespace olb
       _physDeltaX           ( physDeltaX ),
       _physDeltaT           ( physDeltaT ),
       _charPhysLength       ( charPhysLength ),
-      _charPhysVelocity     ( charPhysVelocity ),
+      _charPhysDisplacement     ( charPhysDisplacement ),
       _epsilon              ( physDeltaX / charPhysLength ),
       _charPhysTime         ( physDeltaT / (physDeltaX * physDeltaX / (charPhysLength * charPhysLength)) ),
       _youngsModulus        ( youngsModulus  * physDeltaT / (physDeltaX * physDeltaX * dampingFactor) ),
@@ -109,9 +109,9 @@ namespace olb
       return _physDeltaT;
     }
 
-    constexpr T getCharPhysVelocity( ) const
+    constexpr T getCharPhysDisplacement( ) const
     {
-      return _charPhysVelocity;
+      return _charPhysDisplacement;
     }
 
     constexpr T getCharPhysTime( ) const
@@ -174,11 +174,6 @@ namespace olb
       return _poissonRatio;
     };
 
-    constexpr T getEpsilon() const
-    {
-      return _epsilon;
-    };
-
     void print() const override;
 
     void write(std::string const& fileName = "LinElaUnitConverter") const override;
@@ -187,7 +182,7 @@ namespace olb
     // lattice units, discretization parameters
     const T _charPhysLength;
     const T _charPhysTime;
-    const T _charPhysVelocity;
+    const T _charPhysDisplacement;
     const T _physDeltaX;
     const T _physDeltaT;
     const T _epsilon;
@@ -209,10 +204,10 @@ namespace olb
   {
     clout << "----------------- UnitConverter information -----------------" << std::endl;
     clout << "-- Parameters:" << std::endl;
-    clout << "Resolution:                       N=              " << this->getResolution() << std::endl;
-    clout << "Characteristical length(m):       charL=          " << this->getCharPhysLength() << std::endl;
-    clout << "Characteristical time(s):         charT=          " << this->getCharPhysTime() << std::endl;
-    clout << "Characteristical speed(m/s):      charU=          " << this->getCharPhysVelocity() << std::endl;
+    clout << "Resolution:                           N=              " << this->getResolution() << std::endl;
+    clout << "Characteristical length(m):           charL=          " << this->getCharPhysLength() << std::endl;
+    clout << "Characteristical time(s):             charT=          " << this->getCharPhysTime() << std::endl;
+    clout << "Characteristical displacement (m/s):  charU=          " << this->getCharPhysDisplacement() << std::endl;
     clout << "Smallness Parameter:              epsilon=        " << this->getEpsilon() << std::endl;
     clout << std::endl;
 
@@ -247,7 +242,7 @@ namespace olb
       fout << "-- Parameters:" << std::endl;
       fout << "Resolution:                       N=              " << this->getResolution()                     << "\n";
       fout << "Characteristical length(m):       charL=          " << this->getCharPhysLength()                 << "\n";
-      fout << "Characteristical speed(m/s):      charU=          " << this->getCharPhysVelocity()               << "\n";
+      fout << "Characteristical Displacement(m/s):      charU=          " << this->getCharPhysDisplacement()           << "\n";
       fout << "\n";
       fout << "-- Conversion factors:"                                                                          << "\n";
       fout << "Voxel length(m):                  physDeltaX=     " << this->getConversionFactorLength()         << "\n";
@@ -267,7 +262,7 @@ namespace olb
       T epsilon,
       T charPhysLength,
       T charPhysTime,
-      T charPhysVelocity,
+      T charPhysDisplacement,
       T youngsModulus,
       T poissonRatio,
       T dampingFactor
@@ -277,7 +272,7 @@ namespace olb
         epsilon,
         charPhysLength,
         charPhysTime,
-        charPhysVelocity,
+        charPhysDisplacement,
         youngsModulus,
         poissonRatio,
         dampingFactor
@@ -286,7 +281,7 @@ namespace olb
         _epsilon              (  epsilon                                                                                                                                               ),
         _charPhysLength       (  charPhysLength                                                                                                                                        ),
         _charPhysTime         (  charPhysTime                                                                                                                                          ),
-        _charPhysVelocity     (  charPhysVelocity                                                                                                                                      ),
+        _charPhysDisplacement     (  charPhysDisplacement                                                                                                                                      ),
         _physDeltaX           (  charPhysLength * epsilon                                                                                                                              ),
         _physDeltaT           (  charPhysTime   * epsilon * epsilon                                                                                                                    ),
         _youngsModulus        (  youngsModulus                                                                      * charPhysTime / (charPhysLength * charPhysLength * dampingFactor) ),
@@ -314,9 +309,9 @@ namespace olb
       return _physDeltaT;
     }
 
-    constexpr T getCharPhysVelocity( ) const
+    constexpr T getCharPhysDisplacement( ) const
     {
-      return _charPhysVelocity;
+      return _charPhysDisplacement;
     }
 
     constexpr T getCharPhysTime( ) const
@@ -388,7 +383,7 @@ namespace olb
     const T _epsilon;
     const T _charPhysLength;
     const T _charPhysTime;
-    const T _charPhysVelocity;
+    const T _charPhysDisplacement;
     const T _physDeltaX;
     const T _physDeltaT;
     const T _youngsModulus;
@@ -412,25 +407,25 @@ namespace olb
     clout << "Epsilon:                                          " << this->getEpsilon() << std::endl;
     clout << "Characteristical time(s):         charT=          " << this->getCharPhysTime() << std::endl;
     clout << "Characteristical length(m):       charL=          " << this->getCharPhysLength() << std::endl;
-    clout << "Characteristical speed(m/s):      charU=          " << this->getCharPhysVelocity() << std::endl;
+    clout << "Characteristical Displacement(m/s):      charU=          " << this->getCharPhysDisplacement() << std::endl;
     clout << std::endl;
 
     clout << std::endl;
     clout << "-------------------- Conversion factors ----------------------" << std::endl;
-    clout << "Voxel length(m):                  physDeltaX=     " << this->getConversionFactorLength() << std::endl;
-    clout << "Time step(s):                     physDeltaT=     " << this->getConversionFactorTime() << std::endl;
-    clout << "Velocity factor(m/s):             physVelocity=   " << this->getConversionFactorVelocity() << std::endl;
+    clout << "Voxel length(m):                  physDeltaX=       " << this->getConversionFactorLength() << std::endl;
+    clout << "Time step(s):                     physDeltaT=       " << this->getConversionFactorTime() << std::endl;
+    clout << "Displacement factor(m/s):         physDisplacement= " << this->getConversionFactorDisplacement() << std::endl;
     std::cout << std::endl;
-    clout << "Youngs modulus (Phys):            physE=          " << this->getPhysYoungsModulus() << std::endl;
-    clout << "Youngs modulus (Lattice):         latticeE=       " << this->getLatticeYoungsModulus() << std::endl;
-    clout << "Shear modulus (Phys):             physMue=        " << this->getPhysShearModulus() << std::endl;
-    clout << "Shear modulus (Lattice):          latticeMue=     " << this->getLatticeShearModulus() << std::endl;
-    clout << "Bulk modulus (Phys):              physK=          " << this->getPhysBulkModulus() << std::endl;
-    clout << "Bulk modulus (Lattice):           latticeK=       " << this->getLatticeBulkModulus() << std::endl;
-    clout << "Lambda (Phys):                    physLambda=     " << this->getPhysLambda() << std::endl;
-    clout << "Lambda (Lattice):                 latticeLambda=  " << this->getLatticeLambda() << std::endl;
-    clout << "Damping factor:                   kappa=          " << this->getDampingFactor() << std::endl;
-    clout << "Poisson ratio:                    nu=             " << this->getPoissonRatio() << std::endl;
+    clout << "Youngs modulus (Phys):            physE=            " << this->getPhysYoungsModulus() << std::endl;
+    clout << "Youngs modulus (Lattice):         latticeE=         " << this->getLatticeYoungsModulus() << std::endl;
+    clout << "Shear modulus (Phys):             physMue=          " << this->getPhysShearModulus() << std::endl;
+    clout << "Shear modulus (Lattice):          latticeMue=       " << this->getLatticeShearModulus() << std::endl;
+    clout << "Bulk modulus (Phys):              physK=            " << this->getPhysBulkModulus() << std::endl;
+    clout << "Bulk modulus (Lattice):           latticeK=         " << this->getLatticeBulkModulus() << std::endl;
+    clout << "Lambda (Phys):                    physLambda=       " << this->getPhysLambda() << std::endl;
+    clout << "Lambda (Lattice):                 latticeLambda=    " << this->getLatticeLambda() << std::endl;
+    clout << "Damping factor:                   kappa=            " << this->getDampingFactor() << std::endl;
+    clout << "Poisson ratio:                    nu=               " << this->getPoissonRatio() << std::endl;
     clout << "-------------------------------------------------------------" << std::endl;
 
   }
@@ -447,16 +442,16 @@ namespace olb
 
       fout << "----------------- UnitConverter information -----------------" << std::endl;
       fout << "-- Parameters:" << std::endl;
-      fout << "Epsilon:                                          " << this->getEpsilon() << std::endl;
-      fout << "Characteristical time(s):         charT=          " << this->getCharPhysTime() << std::endl;
-      fout << "Characteristical length(m):       charL=          " << this->getCharPhysLength() << std::endl;
-      fout << "Characteristical speed(m/s):      charU=          " << this->getCharPhysVelocity() << std::endl;
+      fout << "Epsilon:                                   " << this->getEpsilon() << std::endl;
+      fout << "Characteristical time(s):           charT= " << this->getCharPhysTime() << std::endl;
+      fout << "Characteristical length(m):         charL= " << this->getCharPhysLength() << std::endl;
+      fout << "Characteristical Displacement(m/s): charU= " << this->getCharPhysDisplacement() << std::endl;
       fout << std::endl;
 
       fout << "-------------------- Conversion factors ----------------------" << std::endl;
-      fout << "Voxel length(m):                  physDeltaX=     " << this->getConversionFactorLength() << std::endl;
-      fout << "Time step(s):                     physDeltaT=     " << this->getConversionFactorTime() << std::endl;
-      fout << "Velocity factor(m/s):             physVelocity=   " << this->getConversionFactorVelocity() << std::endl;
+      fout << "Voxel length(m):                  physDeltaX=        " << this->getConversionFactorLength() << std::endl;
+      fout << "Time step(s):                     physDeltaT=        " << this->getConversionFactorTime() << std::endl;
+      fout << "Displacement factor(m/s):         physDisplacement=  " << this->getConversionFactorDisplacement() << std::endl;
       fout << std::endl;
 
       fout << "-------------------- Material Properties ----------------------" << std::endl;
@@ -484,14 +479,14 @@ namespace olb
         T physDeltaX,
         T physDeltaT,
         T charPhysLength,
-        T charPhysVelocity,
+        T charPhysDisplacement,
         T youngsModulus,
         T poissonRatio,
         T dampingFactor) : NewLinElaUnitConverter<T, DESCRIPTOR>(
           (physDeltaX /charPhysLength),
           charPhysLength,
           (physDeltaT / (physDeltaX * physDeltaX / (charPhysLength * charPhysLength))),
-          charPhysVelocity,
+          charPhysDisplacement,
           youngsModulus,
           poissonRatio,
           dampingFactor)
