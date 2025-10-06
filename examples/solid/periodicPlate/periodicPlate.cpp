@@ -46,15 +46,15 @@ template <typename T, typename DESCRIPTOR>
 class ForceField2D : public AnalyticalF2D<T, T> {
 
 protected:
-  MyCase _myCase;
+  MyCase& aCase;
 
 public:
   ForceField2D(MyCase& myCase) : AnalyticalF2D<T, T>(2),
-  _myCase(myCase) {};
+  aCase(myCase) {};
 
   bool operator()(T output[], const T input[]) override
   {
-    auto& lattice = _myCase.getLattice(NavierCauchy{});
+    auto& lattice = aCase.getLattice(NavierCauchy{});
     T pi = std::numbers::pi_v<double>;
 
     const auto& converter = lattice.getUnitConverter();
@@ -194,17 +194,17 @@ template <typename T, typename DESCRIPTOR>
 class ManufacturedSolutionStress2D : public AnalyticalF2D<T, T> {
 
 protected:
-  MyCase _myCase;
+  MyCase& aCase;
 
 public:
   ManufacturedSolutionStress2D(MyCase& myCase) : AnalyticalF2D<T, T>(4),
-  _myCase(myCase) {};
+  aCase(myCase) {};
 
   bool operator()(T output[], const T input[]) override
   {
     T pi = std::numbers::pi_v<double>;
 
-    const auto& converter = _myCase.getLattice(NavierCauchy{}).getUnitConverter();
+    const auto& converter = aCase.getLattice(NavierCauchy{}).getUnitConverter();
     T dx = converter.getPhysDeltaX();
     T dt = converter.getPhysDeltaT();
     T kappa = converter.getDampingFactor();
@@ -275,7 +275,6 @@ Mesh<MyCase::value_t,MyCase::d> createMesh(MyCase::ParametersD& parameters) {
 /// @param myCase The Case instance which keeps the simulation data
 /// @note The material numbers will be used to assign physics to lattice nodes
 void prepareGeometry(MyCase& myCase) {
-  using T = MyCase::value_t;
   auto& geometry = myCase.getGeometry();
 
   /// Set material numbers
@@ -283,80 +282,6 @@ void prepareGeometry(MyCase& myCase) {
 
   geometry.getStatistics().print();
 }
-
-/*
-void prepareOmegas(LinElaUnitConverter<T, LDESCRIPTOR> converter,
-                   T descriptors::invCs2<T,DESCRIPTOR>(),
-                   std::vector<T>& allOmegas)
-{
-  T omega_11 = 1. / (converter.getLatticeShearModulus() / descriptors::invCs2<T,DESCRIPTOR>() + 0.5);
-  T omega_d = 1. / (2. * converter.getLatticeShearModulus()/(1. - descriptors::invCs2<T,DESCRIPTOR>()) + 0.5);
-  T omega_s = 1. / (2. * (converter.getLatticeShearModulus() + converter.getLatticeLambda()) / (1. + descriptors::invCs2<T,DESCRIPTOR>()) + 0.5);
-
-  T tau_11 = 1. / omega_11 - 0.5;
-  T tau_s = 1. / omega_d - 0.5;
-  T tau_p = 1. / omega_s - 0.5;
-  // T tau_12 = 0.5;
-  T tau_12 = (1. / tau_11 + 4. * tau_11) / 8.;
-  T tau_21 = tau_12;
-  // T tau_22 = 0.5;
-  T tau_22 = -(12. * pow(tau_11, 3) + 28. * pow(tau_11, 2) * tau_p + tau_11 * (-5. + 32. * pow(tau_p, 2)) + tau_p * (-9. + 16. * tau_12 * tau_p + 64. * pow(tau_p, 2))) / (3. * (1. + 4. * pow(tau_11, 2) - 8. * tau_12 * tau_p));
-  T omega_12 = 1. / (tau_12 + 0.5);
-  T omega_21 = 1. / (tau_21 + 0.5);
-  T omega_22 = 1. / (tau_22 + 0.5);
-
-  allOmegas = {omega_11, omega_d, omega_s, omega_12, omega_21, omega_22};
-  return;
-}
-*/
-
-/*
-void prepareLattice(SuperLattice<T, LDESCRIPTOR>& lattice,
-SuperGeometry<T, 2>& superGeometry,
-LinElaUnitConverter<T, LDESCRIPTOR> converter,
-std::vector<T>& allOmegas,
-ForceField2D<T, T>& forceSol,
-T descriptors::invCs2<T,DESCRIPTOR>())
-{
-  OstreamManager clout(std::cout, "prepareLattice");
-  clout << "Prepare Lattice ..." << std::endl;
-
-  lattice.defineDynamics<BoolakeeLinearElasticity>(superGeometry.getMaterialIndicator({1}));
-
-  auto bulkIndicator = superGeometry.getMaterialIndicator({ 1 });
-
-  std::vector<T>          iniPop = {0., 0., 0., 0., 0., 0., 0., 0.};
-  std::vector<T>          iniMom = {0., 0.};
-  std::vector<T>          iniStress = {0., 0., 0.};
-
-  AnalyticalConst2D<T, T> initialPopulationF(iniPop);
-  AnalyticalConst2D<T, T> initialMomentsF(iniMom);
-  AnalyticalConst2D<T, T> initialStressF(iniStress);
-
-  // dx, dt, descriptors::invCs2<T,DESCRIPTOR>(), mü, lambda, kappa, epsilon
-  T magic[8] = {converter.getConversionFactorLength(),
-  converter.getConversionFactorTime(),
-  descriptors::invCs2<T,DESCRIPTOR>(),
-  converter.getLatticeShearModulus(),
-  converter.getLatticeLambda(),
-  converter.getDampingFactor(),
-  converter.getCharPhysVelocity(),
-  converter.getEpsilon()};
-
-  lattice.setParameter<descriptors::MAGIC_SOLID>(magic);
-
-  lattice.setParameter<descriptors::OMEGA_SOLID>(allOmegas);
-  lattice.defineField<FORCE>(        superGeometry, 1, forceSol);
-  lattice.defineField<POPULATION>(   superGeometry, 1, initialPopulationF);
-  lattice.defineField<MOMENT_VECTOR>(superGeometry, 1, initialMomentsF);
-  lattice.defineField<SIGMA_SOLID>(  superGeometry, 1, initialStressF);
-
-  /// Make the lattice ready for simulation
-  lattice.initialize();
-
-  clout << "Prepare Lattice ... OK" << std::endl;
-}
-*/
 
 /// @brief Set lattice dynamics
 /// @param myCase The Case instance which keeps the simulation data
@@ -370,9 +295,11 @@ void prepareLattice(MyCase& myCase) {
   /// Material=1 -->bulk dynamics
   lattice.defineDynamics<BoolakeeLinearElasticity>(geometry, 1);
 
-  const T physDeltaX            = parameters.get<parameters::PHYS_DELTA_X>();
-  const T physDeltaT            = parameters.get<parameters::PHYS_DELTA_T>();
   const T physCharLength        = parameters.get<parameters::PHYS_CHAR_LENGTH>();
+  const Vector extent           = parameters.get<parameters::DOMAIN_EXTENT>();
+  const T physDeltaX            = extent[0] / parameters.get<parameters::RESOLUTION>();
+  const T physDeltaT            = physDeltaX * physDeltaX;
+
   const T physCharDisplacement  = parameters.get<parameters::PHYS_CHAR_DISPLACEMENT>();
   const T physYoungsModulus     = parameters.get<parameters::YOUNGS_MODULUS>();
   const T physPoissonRatio      = parameters.get<parameters::POISSON_RATIO>();
