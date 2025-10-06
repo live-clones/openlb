@@ -54,53 +54,47 @@ using namespace olb;
 using namespace olb::names;
 using namespace olb::opti;
 
-using T = FLOATING_POINT_TYPE;
-using DESCRIPTOR = descriptors::PorousD2Q9Descriptor;
-using DYNAMICS = PorousBGKdynamics<T,DESCRIPTOR>;
+using MyCase = Case<
+  NavierStokes, Lattice<double,descriptors::PorousD2Q9Descriptor>
+>;
+using MyOptiCase = OptiCaseAdjoint<
+  Controlled, MyCase,
+  Adjoint, MyCase
+>;
+using DYNAMICS = PorousBGKdynamics<MyCase::value_t,MyCase::descriptor_t>;
 using ControlledField = descriptors::POROSITY;
 using ObjectiveF = functors::AddF<functors::AddF<functors::DissipationF,
                                                  functors::PorousDissipationF>,
                                   functors::TikhonovRegularizationF<ControlledField>>;
 
-using MyCase = Case<NavierStokes, Lattice<T,DESCRIPTOR>>;
-using MyOptiCase = OptiCaseAdjoint<
-  Controlled, MyCase,
-  Adjoint, MyCase
->;
-
-const int resolution = 25;
-const T relaxationTime = 0.51;
-const T charPhysLength = 0.5;
-const T charPhysVelocity = 0.1;
-const T charPhysViscosity = 0.001;
-const T charPhysDensity = 1.;
-const T L = charPhysLength / resolution;
-
-const T lengthX = charPhysLength + 2*L;
-const T lengthY = lengthX;
-const T inflowY = 0.8*charPhysLength + L;
-const T inflowRadius = 0.1*charPhysLength;
-const T inflowLength = 0.5*lengthX;
-const T outflowX = inflowY;
-const T outflowRadius = inflowRadius;
-const T outflowLength = inflowLength;
-
-const T physMaxT = 30.;
-const T physStartUpT = physMaxT / 4;
-const T physBoundaryValueUpdateT = 0.1;
-
-const T startValue = 1.5e-5;
-const T regAlpha = 0.003;
-
-Mesh<T, MyCase::d> createMesh() {
+auto createMesh(MyCase::ParametersD& parameters) {
+  using T = MyCase::value_t;
+  const T L = parameters.get<parameters::PHYS_CHAR_LENGTH>() / parameters.get<parameters::RESOLUTION>();
+  const T lengthX = parameters.get<parameters::PHYS_CHAR_LENGTH>() + 2*L;
+  const T lengthY = lengthX;
+  const T inflowLength = 0.5*lengthX;
+  const T outflowLength = inflowLength;
   const Vector<T,2> origin(-inflowLength, -outflowLength);
   const Vector<T,2> extend(lengthX + inflowLength, lengthY + outflowLength);
   IndicatorCuboid2D<T> domain(extend, origin);
-  return Mesh<T,MyCase::d>{domain, L, singleton::mpi().getSize()};
+  Mesh<T,MyCase::d> mesh{domain, L, singleton::mpi().getSize()};
+  mesh.setOverlap(parameters.get<parameters::OVERLAP>());
+  return mesh;
 }
 
 void prepareGeometry(MyCase& myCase) {
+  using T = MyCase::value_t;
   auto& superGeometry = myCase.getGeometry();
+  auto& parameters = myCase.getParameters();
+  const T L = parameters.get<parameters::PHYS_CHAR_LENGTH>() / parameters.get<parameters::RESOLUTION>();
+  const T lengthX = parameters.get<parameters::PHYS_CHAR_LENGTH>() + 2*L;
+  const T lengthY = lengthX;
+  const T inflowY = 0.8*parameters.get<parameters::PHYS_CHAR_LENGTH>() + L;
+  const T inflowRadius = 0.1*parameters.get<parameters::PHYS_CHAR_LENGTH>();
+  const T inflowLength = 0.5*lengthX;
+  const T outflowX = inflowY;
+  const T outflowRadius = inflowRadius;
+  const T outflowLength = inflowLength;
 
   // Flow domain
   Vector<T,2> origin(0., 0.);
@@ -142,17 +136,19 @@ void prepareGeometry(MyCase& myCase) {
 }
 
 void prepareLattice(MyCase& myCase) {
+  using T = MyCase::value_t;
   auto& superGeometry = myCase.getGeometry();
   auto& sLattice = myCase.getLattice(NavierStokes{});
+  auto& parameters = myCase.getParameters();
 
   // define UnitConverter
-  sLattice.setUnitConverter<UnitConverterFromResolutionAndRelaxationTime<T,DESCRIPTOR>>(
-    (int) resolution,
-    ( T ) relaxationTime,
-    ( T ) charPhysLength,
-    ( T ) charPhysVelocity,
-    ( T ) charPhysViscosity,
-    ( T ) charPhysDensity
+  sLattice.setUnitConverter<UnitConverterFromResolutionAndRelaxationTime<T,MyCase::descriptor_t>>(
+    (int) parameters.get<parameters::RESOLUTION>(),
+    ( T ) parameters.get<parameters::RELAXATION_TIME>(),
+    ( T ) parameters.get<parameters::PHYS_CHAR_LENGTH>(),
+    ( T ) parameters.get<parameters::PHYS_CHAR_VELOCITY>(),
+    ( T ) parameters.get<parameters::PHYS_CHAR_VISCOSITY>(),
+    ( T ) parameters.get<parameters::PHYS_CHAR_DENSITY>()
   );
   auto& converter = sLattice.getUnitConverter();
 
@@ -168,6 +164,7 @@ void prepareLattice(MyCase& myCase) {
 }
 
 void setInitialValues(MyCase& myCase) {
+  using T = MyCase::value_t;
   auto& superGeometry = myCase.getGeometry();
   auto& sLattice = myCase.getLattice(NavierStokes{});
 
@@ -193,9 +190,14 @@ void setInitialValues(MyCase& myCase) {
 }
 
 void setTemporalValues(MyCase& myCase, std::size_t iT) {
+  using T = MyCase::value_t;
   auto& superGeometry = myCase.getGeometry();
   auto& sLattice = myCase.getLattice(NavierStokes{});
   auto& converter = sLattice.getUnitConverter();
+  auto& parameters = myCase.getParameters();
+  const T L = parameters.get<parameters::PHYS_CHAR_LENGTH>() / parameters.get<parameters::RESOLUTION>();
+  const T physStartUpT = parameters.get<parameters::MAX_PHYS_T>() / 4;
+  const T physBoundaryValueUpdateT = parameters.get<parameters::PHYS_BOUNDARY_VALUE_UPDATE_T>();
 
   std::size_t iTmaxStart = converter.getLatticeTime(physStartUpT);
   std::size_t iTupdate = converter.getLatticeTime(physBoundaryValueUpdateT);
@@ -212,9 +214,12 @@ void setTemporalValues(MyCase& myCase, std::size_t iT) {
   }
 }
 
-void getResults(MyCase& myCase, util::Timer<T>& timer, std::size_t iT) {
+void getResults(MyCase& myCase, util::Timer<MyCase::value_t>& timer, std::size_t iT) {
+  using T = MyCase::value_t;
   auto& sLattice = myCase.getLattice(NavierStokes{});
   auto& converter = sLattice.getUnitConverter();
+  auto& parameters = myCase.getParameters();
+  const T physMaxT = parameters.get<parameters::MAX_PHYS_T>();
 
   const std::size_t iTlog = converter.getLatticeTime(physMaxT/5.);
 
@@ -224,13 +229,14 @@ void getResults(MyCase& myCase, util::Timer<T>& timer, std::size_t iT) {
   }
 }
 
-void simulate(MyCase& myCase)
-{
+void simulate(MyCase& myCase) {
+  using T = MyCase::value_t;
   auto& superGeometry = myCase.getGeometry();
   auto& sLattice = myCase.getLattice(NavierStokes{});
   auto& converter = sLattice.getUnitConverter();
+  auto& parameters = myCase.getParameters();
 
-  const std::size_t iTmax = converter.getLatticeTime(physMaxT);
+  const std::size_t iTmax = converter.getLatticeTime(parameters.get<parameters::MAX_PHYS_T>());
   util::Timer<T> timer(iTmax, superGeometry.getStatistics().getNvoxel());
   timer.start();
 
@@ -249,14 +255,16 @@ void simulate(MyCase& myCase)
 }
 
 void setInitialControl(MyOptiCase& optiCase) {
+  using T = MyCase::value_t;
   auto& controlledCase = optiCase.getCase(Controlled{});
   auto& lattice = controlledCase.getLattice(NavierStokes{});
   auto& geometry = controlledCase.getGeometry();
   auto& converter = lattice.getUnitConverter();
   auto& control = optiCase.getController();
+  auto& parameters = controlledCase.getParameters();
 
   // Intialize controlled field in superLattice
-  T porosity = projection::permeabilityToPorosity(startValue, converter);
+  T porosity = projection::permeabilityToPorosity(parameters.get<parameters::INITIAL_CONTROL_SCALAR>(), converter);
   std::cout << "POROSITY: " << porosity << std::endl;
   AnalyticalConst2D<T,T> controls(porosity);
   lattice.template defineField<ControlledField>(geometry, 6, controls);
@@ -272,7 +280,7 @@ void prepareAdjointLattice(MyOptiCase& optiCase) {
   adjointLattice.setUnitConverter(controlledLattice.getUnitConverter());
 
   // Define dual dynamics
-  adjointLattice.template defineDynamics<DualPorousBGKDynamics<T,DESCRIPTOR>>(geometry.getMaterialIndicator({1,6,7,8}));
+  adjointLattice.template defineDynamics<DualPorousBGKDynamics<MyCase::value_t,MyCase::descriptor_t>>(geometry.getMaterialIndicator({1,6,7,8}));
   boundary::set<boundary::BounceBack>(adjointLattice, geometry.getMaterialIndicator({2,3,4}));
   adjointLattice.template setParameter<descriptors::OMEGA>(adjointLattice.getUnitConverter().getLatticeRelaxationFrequency());
 }
@@ -317,12 +325,13 @@ void applyControl(MyOptiCase& optiCase) {
   lattice.setProcessingContext(ProcessingContext::Simulation);
 }
 
-T objectiveF(MyOptiCase& optiCase) {
+MyCase::value_t objectiveF(MyOptiCase& optiCase) {
   auto& controlledLattice = optiCase.getCase(Controlled{}).getLattice(NavierStokes{});
   auto& converter = controlledLattice.getUnitConverter();
   // Dissipation (6) or pressure drop (7,8)
   auto objectiveDomain = optiCase.getCase(Controlled{}).getGeometry().getMaterialIndicator({6});
   //auto objectiveDomain = optiCase.getCase(Controlled{}).getGeometry().getMaterialIndicator({7,8});
+  auto& parameters = optiCase.getCase(Controlled{}).getParameters();
 
   auto objectiveO = makeWriteFunctorO<ObjectiveF, opti::J>(controlledLattice);
   objectiveO->restrictTo(objectiveDomain);
@@ -332,7 +341,7 @@ T objectiveF(MyOptiCase& optiCase) {
   objectiveO->template setParameter<descriptors::DX>(converter.getPhysDeltaX());
   objectiveO->template setParameter<descriptors::VISCOSITY>(converter.getLatticeViscosity());
   objectiveO->template setParameter<descriptors::CONVERSION_VELOCITY>(converter.getConversionFactorVelocity());
-  objectiveO->template setParameter<opti::REG_ALPHA>(regAlpha);
+  objectiveO->template setParameter<opti::REG_ALPHA>(parameters.get<parameters::REGULARIZATION_FACTOR>());
   objectiveO->apply();
 
   auto volume_fraction = makeWriteFunctorO<functors::TikhonovRegularizationF<ControlledField>, opti::REGULARIZATION>(controlledLattice);
@@ -345,11 +354,12 @@ T objectiveF(MyOptiCase& optiCase) {
   return integrate<opti::J>(controlledLattice, objectiveDomain)[0];
 }
 
-std::vector<T> derivativeF(MyOptiCase& optiCase) {
+std::vector<MyCase::value_t> derivativeF(MyOptiCase& optiCase) {
   auto& adjointLattice = optiCase.getCase(Adjoint{}).getLattice(NavierStokes{});
   auto& controlledLattice = optiCase.getCase(Controlled{}).getLattice(NavierStokes{});
   auto& converter = controlledLattice.getUnitConverter();
   auto objectiveDomain = optiCase.getCase(Controlled{}).getGeometry().getMaterialIndicator({6});
+  auto& parameters = optiCase.getCase(Adjoint{}).getParameters();
 
   // Evaluate optimality condition
   auto optimalityO = makeWriteFunctorO<functors::OptimalityF<DYNAMICS,ControlledField>,
@@ -372,7 +382,7 @@ std::vector<T> derivativeF(MyOptiCase& optiCase) {
   objectiveDerivativeO->template setParameter<descriptors::CONVERSION_VELOCITY>(converter.getConversionFactorVelocity());
   objectiveDerivativeO->template setParameter<descriptors::DX>(converter.getPhysDeltaX());
   objectiveDerivativeO->template setParameter<descriptors::DT>(converter.getPhysDeltaT());
-  objectiveDerivativeO->template setParameter<opti::REG_ALPHA>(regAlpha);
+  objectiveDerivativeO->template setParameter<opti::REG_ALPHA>(parameters.get<parameters::REGULARIZATION_FACTOR>());
   objectiveDerivativeO->apply();
   // Jacobian is computed on primal lattice as jacobian is evaluated for primal populations
   copyFields<opti::DCDALPHA<ControlledField>,opti::DCDALPHA<ControlledField>>(controlledLattice, adjointLattice);
@@ -382,10 +392,12 @@ std::vector<T> derivativeF(MyOptiCase& optiCase) {
 
   // Return serial vector containing total derivatives of objective regarding controls
   adjointLattice.setProcessingContext(ProcessingContext::Evaluation);
-  return getSerializedFromField<opti::SENSITIVITY<ControlledField>>(adjointLattice, optiCase.getController().getDesignDomain<DESCRIPTOR>());
+  return getSerializedFromField<opti::SENSITIVITY<ControlledField>>(adjointLattice, optiCase.getController().getDesignDomain<MyCase::descriptor_t>());
 }
 
 void getOptiResults(MyOptiCase& optiCase) {
+  using T = MyCase::value_t;
+  using DESCRIPTOR = MyCase::descriptor_t;
   auto& controlledLattice = optiCase.getCase(Controlled{}).getLattice(NavierStokes{});
   auto& adjointLattice = optiCase.getCase(Adjoint{}).getLattice(NavierStokes{});
   auto& converter = controlledLattice.getUnitConverter();
@@ -415,7 +427,7 @@ void getOptiResults(MyOptiCase& optiCase) {
   }
 }
 
-T computeObjective(MyOptiCase& optiCase) {
+MyCase::value_t computeObjective(MyOptiCase& optiCase) {
   auto& controlledCase = optiCase.getCase(Controlled{});
   // Reset prior simulation lattice
   controlledCase.resetLattices();
@@ -434,7 +446,7 @@ T computeObjective(MyOptiCase& optiCase) {
   return objectiveF(optiCase);
 }
 
-std::vector<T> computeDerivative(MyOptiCase& optiCase) {
+std::vector<MyCase::value_t> computeDerivative(MyOptiCase& optiCase) {
   auto& adjointCase = optiCase.getCase(Adjoint{});
   // Reset prior simulation lattice
   adjointCase.resetLattices();
@@ -457,8 +469,21 @@ int main(int argc, char **argv) {
   initialize(&argc, &argv);
 
   MyCase::ParametersD myCaseParametersD;
+  {
+    using namespace parameters;
+    myCaseParametersD.set<RESOLUTION                  >(    25);
+    myCaseParametersD.set<RELAXATION_TIME             >(  0.51);
+    myCaseParametersD.set<PHYS_CHAR_LENGTH            >(   0.5);
+    myCaseParametersD.set<PHYS_CHAR_VELOCITY          >(   0.1);
+    myCaseParametersD.set<PHYS_CHAR_VISCOSITY         >( 0.001);
+    myCaseParametersD.set<PHYS_CHAR_DENSITY           >(   1.0);
+    myCaseParametersD.set<MAX_PHYS_T                  >(   30.);
+    myCaseParametersD.set<PHYS_BOUNDARY_VALUE_UPDATE_T>(   0.1);
+    myCaseParametersD.set<INITIAL_CONTROL_SCALAR      >(1.5e-5);
+    myCaseParametersD.set<REGULARIZATION_FACTOR       >( 0.003);
+  }
 
-  Mesh mesh = createMesh();
+  Mesh mesh = createMesh(myCaseParametersD);
   MyCase myCase(myCaseParametersD, mesh);
   prepareGeometry(myCase);
   prepareLattice(myCase);
@@ -474,7 +499,7 @@ int main(int argc, char **argv) {
   optiCase.setObjective(computeObjective);
   optiCase.setDerivative(computeDerivative);
 
-  OptimizerLBFGS<T,std::vector<T>> optimizer(
+  OptimizerLBFGS<MyCase::value_t,std::vector<MyCase::value_t>> optimizer(
     optiCase.getController().size(), 1.e-10, 25
     , 1., 20, "Wolfe", 20, 1.e-4);
   optimizer.optimize(optiCase);
