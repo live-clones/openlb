@@ -89,7 +89,7 @@ namespace olb
       return 1 / _physDeltaX;
     };
 
-    constexpr int getEpsilon( ) const
+    constexpr T getEpsilon( ) const
     {
       return _physDeltaX / _charPhysLength;
     };
