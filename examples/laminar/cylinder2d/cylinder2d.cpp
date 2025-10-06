@@ -52,15 +52,17 @@ using MyCase = Case<
 
 namespace olb::parameters {
 
-struct RADIUS_CYLINDER    : public descriptors::FIELD_BASE<1> { };
-struct CENTER_CYLINDER    : public descriptors::FIELD_BASE<0, 1> { };
+struct RADIUS_CYLINDER            : public descriptors::FIELD_BASE<1> { };
+struct CENTER_CYLINDER            : public descriptors::FIELD_BASE<0, 1> { };
+struct RAMP_UP_UPDATE             : public descriptors::FIELD_BASE<1> { };
+struct RAMP_UP_END_FRACTION       : public descriptors::FIELD_BASE<1> { };
 
 }
 
 Mesh<MyCase::value_t,MyCase::d> createMesh(MyCase::ParametersD& parameters) {
   using T = MyCase::value_t;
   const T physLengthX = parameters.get<parameters::DOMAIN_EXTENT>()[0];
-  const T physDeltaX  = 0.1/parameters.get<parameters::RESOLUTION>();
+  const T physDeltaX  = 2*parameters.get<parameters::RADIUS_CYLINDER>()/parameters.get<parameters::RESOLUTION>();
   const T physLengthY = parameters.get<parameters::DOMAIN_EXTENT>()[1] + physDeltaX;
   
   const Vector extent{physLengthX, physLengthY};
@@ -83,7 +85,7 @@ void prepareGeometry(MyCase& myCase)
   auto& geometry  = myCase.getGeometry();
 
   const T physLengthX = parameters.get<parameters::DOMAIN_EXTENT>()[0];
-  const T physDeltaX  = 0.1/parameters.get<parameters::RESOLUTION>();
+  const T physDeltaX  = 2*parameters.get<parameters::RADIUS_CYLINDER>()/parameters.get<parameters::RESOLUTION>();
   const T physLengthY = parameters.get<parameters::DOMAIN_EXTENT>()[1] + physDeltaX;
   
   geometry.rename(0, 2);
@@ -104,11 +106,9 @@ void prepareGeometry(MyCase& myCase)
   geometry.rename(2, 4, 1, outflow);
   
   // Set material number for cylinder
-  const T centerCylinderX = parameters.get<parameters::CENTER_CYLINDER>()[0];
-  const T centerCylinderY = parameters.get<parameters::CENTER_CYLINDER>()[1] + physDeltaX/2.;
   const T radiusCylinder  = parameters.get<parameters::RADIUS_CYLINDER>();
 
-  Vector<T,2> center(centerCylinderX, centerCylinderY);
+  Vector<T,2> center(parameters.get<parameters::CENTER_CYLINDER>()[0], parameters.get<parameters::CENTER_CYLINDER>()[1] + physDeltaX/2.);
   std::shared_ptr<IndicatorF2D<T>> circle = std::make_shared<IndicatorCircle2D<T>>(center, radiusCylinder);
   geometry.rename(1, 5, circle);
 
@@ -133,9 +133,9 @@ void prepareLattice(MyCase& myCase)
   auto& geometry   = myCase.getGeometry();
 
   const int resolution          = parameters.get<parameters::RESOLUTION>();
-  const T physDeltaX            = 0.1/resolution;
+  const T physDeltaX            = 2.*parameters.get<parameters::RADIUS_CYLINDER>()/resolution;
   const T latticeRelaxationTime = parameters.get<parameters::LATTICE_RELAXATION_TIME>();
-  const T diameterCylinder      = 2.0*parameters.get<parameters::RADIUS_CYLINDER>();
+  const T diameterCylinder      = 2.*parameters.get<parameters::RADIUS_CYLINDER>();
   const T charPhysVelocity      = parameters.get<parameters::PHYS_CHAR_VELOCITY>();
   const T Re                    = parameters.get<parameters::REYNOLDS>();
   const T physDensity           = parameters.get<parameters::PHYS_CHAR_DENSITY>();
@@ -207,19 +207,19 @@ void setTemporalValues(MyCase& myCase,
   auto& lattice    = myCase.getLattice(NavierStokes{});
   auto& geometry   = myCase.getGeometry();
 
-  const T maxPhysT  = parameters.get<parameters::MAX_PHYS_T>();
-  const T physDeltaX = 0.1/parameters.get<parameters::RESOLUTION>();
+  const T maxPhysT   = parameters.get<parameters::MAX_PHYS_T>();
+  const T physDeltaX = 2.*parameters.get<parameters::RADIUS_CYLINDER>()/parameters.get<parameters::RESOLUTION>();
 
   // No of time steps for smooth start-up
-  std::size_t iTmaxStart = lattice.getUnitConverter().getLatticeTime(maxPhysT*0.4);
-  std::size_t iTupdate   = 5;
+  std::size_t iTmaxStart = lattice.getUnitConverter().getLatticeTime(maxPhysT*parameters.get<parameters::RAMP_UP_END_FRACTION>());
+  std::size_t iTupdate   = lattice.getUnitConverter().getLatticeTime(parameters.get<parameters::RAMP_UP_UPDATE>());
 
   if (iT%iTupdate==0 && iT<= iTmaxStart) {
     // Smooth start curve, sinus
     // SinusStartScale<T,int> StartScale(iTmaxStart, T(1));
 
     // Smooth start curve, polynomial
-    PolynomialStartScale<T,T> StartScale(iTmaxStart, T(1));
+    PolynomialStartScale<T,T> StartScale(iTmaxStart, T(1)); 
 
     // Creates and sets the Poiseuille inflow profile using functors
     T iTvec[1] = {T(iT)};
@@ -261,11 +261,11 @@ void getResults(MyCase& myCase,
   vtmWriter.addFunctor(velocity);
   vtmWriter.addFunctor(pressure);
 
-  const std::size_t vtkIter  = converter.getLatticeTime(.3);
-  const std::size_t statIter = converter.getLatticeTime(.1);
+  const std::size_t vtkIter  = converter.getLatticeTime(parameters.get<parameters::VTK_ITER>());
+  const std::size_t statIter = converter.getLatticeTime(parameters.get<parameters::STAT_ITER>());
 
   const T maxPhysT        = parameters.get<parameters::MAX_PHYS_T>();
-  const T physDeltaX      = 0.1/parameters.get<parameters::RESOLUTION>();
+  const T physDeltaX      = 2.*parameters.get<parameters::RADIUS_CYLINDER>()/parameters.get<parameters::RESOLUTION>();
   const T centerCylinderX = parameters.get<parameters::CENTER_CYLINDER>()[0];
   const T centerCylinderY = parameters.get<parameters::CENTER_CYLINDER>()[1] + physDeltaX/2.;
   const T radiusCylinder  = parameters.get<parameters::RADIUS_CYLINDER>();
@@ -277,7 +277,7 @@ void getResults(MyCase& myCase,
   T p;
   intpolateP(&p, point);
 
-  if ( iT == 0 ) {
+  if (iT == 0) {
     // Writes the geometry, cuboid no. and rank no. as vti file for visualization
     SuperLatticeCuboid2D<T, DESCRIPTOR> cuboid(lattice);
     SuperLatticeRank2D<T, DESCRIPTOR> rank(lattice);
@@ -287,7 +287,7 @@ void getResults(MyCase& myCase,
     vtmWriter.createMasterFile();
   }
 
-  if ( iT%statIter == 0 ) {
+  if (iT%statIter == 0) {
     lattice.setProcessingContext(ProcessingContext::Evaluation);
 
     // Timer console output
@@ -381,7 +381,7 @@ void simulate(MyCase& myCase){
 }
 
 
-int main( int argc, char* argv[] )
+int main(int argc, char* argv[])
 {
   initialize(&argc, &argv);
   singleton::directories().setOutputDir("./tmp/");
@@ -399,6 +399,10 @@ int main( int argc, char* argv[] )
     myCaseParameters.set<PHYS_CHAR_DENSITY>(1.0);
     myCaseParameters.set<RADIUS_CYLINDER>(0.05);
     myCaseParameters.set<CENTER_CYLINDER>({0.2, 0.2});
+    myCaseParameters.set<VTK_ITER>(0.3);
+    myCaseParameters.set<STAT_ITER>(0.1);
+    myCaseParameters.set<RAMP_UP_UPDATE>(0.01);
+    myCaseParameters.set<RAMP_UP_END_FRACTION>(0.4);
   }
   myCaseParameters.fromCLI(argc, argv);
 
