@@ -147,7 +147,7 @@ void setTemporalValues(MyCase& myCase,
   auto& lattice = myCase.getLattice(NavierStokes{});
   auto& geometry = myCase.getGeometry();
   auto& converter = lattice.getUnitConverter();
-  const T physStartT = myCase.getParameters().get<parameters::MAX_PHYS_T>() * (2.0 / 3.0); 
+  const T physStartT = myCase.getParameters().get<parameters::MAX_PHYS_T>() * (2.0 / 3.0);
 
   const std::size_t itStart = converter.getLatticeTime(physStartT);
   if (iT <= itStart) {
