@@ -97,6 +97,23 @@ void prepareLattice( SuperLattice<T,DESCRIPTOR>& sLattice,
   OstreamManager clout( std::cout,"prepareLattice" );
   clout << "Prepare Lattice ..." << std::endl;
 
+  sLattice.setUnitConverter<UnitConverterFromResolutionAndRelaxationTime<T, DESCRIPTOR>>(
+    (T)   N,                 // resolution
+    (T)   relaxationTime,    // relaxation time
+    (T)   charL,             // charPhysLength: reference length of simulation geometry
+    (T)   1.,                // charPhysVelocity: maximal/highest expected velocity during simulation in __m / s__
+    (T)   1./19230.76923,    // physViscosity: physical kinematic viscosity in __m^2 / s__
+    (T)   1.                 // physDensity: physical density in __kg / m^3__
+  );
+  const auto& converter = sLattice.getUnitConverter();
+
+  // Prints the converter log as console output
+  converter.print();
+  // Writes the converter log in a file
+  converter.write("bstep2d");
+
+
+
   const T omega = sLattice.getUnitConverter().getLatticeRelaxationFrequency();
 
   auto bulkIndicator = superGeometry.getMaterialIndicator({1, 3, 4});
@@ -233,20 +250,6 @@ int main( int argc, char* argv[] )
   singleton::directories().setOutputDir( "./tmp/" );  // set output directory
   OstreamManager clout( std::cout, "main" );
 
-  UnitConverterFromResolutionAndRelaxationTime<T, DESCRIPTOR> converter(
-    (T)   N,                 // resolution
-    (T)   relaxationTime,    // relaxation time
-    (T)   charL,             // charPhysLength: reference length of simulation geometry
-    (T)   1.,                // charPhysVelocity: maximal/highest expected velocity during simulation in __m / s__
-    (T)   1./19230.76923,    // physViscosity: physical kinematic viscosity in __m^2 / s__
-    (T)   1.                 // physDensity: physical density in __kg / m^3__
-  );
-
-  // Prints the converter log as console output
-  converter.print();
-  // Writes the converter log in a file
-  converter.write("bstep2d");
-
   // === 2nd Step: Prepare Geometry ===
 
   // Instantiation of a cuboidDecomposition with weights
@@ -266,7 +269,9 @@ int main( int argc, char* argv[] )
   Vector<T,2> originStep( 0, 0);
   std::shared_ptr<IndicatorF2D<T>> step = std::make_shared<IndicatorCuboid2D<T>>( extendStep, originStep );
 
-  CuboidDecomposition2D<T> cuboidDecomposition( *(channel-step), converter.getPhysDeltaX(), noOfCuboids );
+  const T physDeltaX = charL / N;
+
+  CuboidDecomposition2D<T> cuboidDecomposition( *(channel-step), physDeltaX, noOfCuboids );
 
   // Instantiation of a loadBalancer
   HeuristicLoadBalancer<T> loadBalancer( cuboidDecomposition );
@@ -274,33 +279,35 @@ int main( int argc, char* argv[] )
   // Instantiation of a superGeometry
   SuperGeometry<T,2> superGeometry( cuboidDecomposition, loadBalancer );
 
-  prepareGeometry( superGeometry, channel, step, converter.getPhysDeltaX());
+  prepareGeometry( superGeometry, channel, step, physDeltaX);
 
   // === 3rd Step: Prepare Lattice ===
-  SuperLattice<T,DESCRIPTOR> sLattice(converter, superGeometry);
+  SuperLattice<T,DESCRIPTOR> sLattice(superGeometry);
 
   //prepare Lattice and set boundaryConditions
   prepareLattice( sLattice, superGeometry );
 
+  //  clout << "check physDeltaX and sLattice.getUnitConverter()= " << physDeltaX << ", " << sLattice.getUnitConverter().getPhysDeltaX() << std::endl;
+
   // instantiate reusable functors
   SuperPlaneIntegralFluxVelocity2D<T> velocityFlux( sLattice,
-      converter,
+      sLattice.getUnitConverter(),
       superGeometry,
   {lengthStep/T(2),  heightInlet / T(2)},
   {0.,  1.} );
 
   SuperPlaneIntegralFluxPressure2D<T> pressureFlux( sLattice,
-      converter,
+      sLattice.getUnitConverter(),
       superGeometry,
   {lengthStep/T(2),  heightInlet / T(2) },
   {0.,  1.} );
 
   // === 4th Step: Main Loop with Timer ===
   clout << "starting simulation..." << std::endl;
-  util::Timer<T> timer( converter.getLatticeTime( maxPhysT ), superGeometry.getStatistics().getNvoxel() );
+  util::Timer<T> timer( sLattice.getUnitConverter().getLatticeTime( maxPhysT ), superGeometry.getStatistics().getNvoxel() );
   timer.start();
 
-  for ( std::size_t iT = 0; iT < converter.getLatticeTime( maxPhysT ); ++iT ) {
+  for ( std::size_t iT = 0; iT < sLattice.getUnitConverter().getLatticeTime( maxPhysT ); ++iT ) {
     // === 5th Step: Definition of Initial and Boundary Conditions ===
     setBoundaryValues( sLattice, iT, superGeometry );
     // === 6th Step: Collide and Stream Execution ===
