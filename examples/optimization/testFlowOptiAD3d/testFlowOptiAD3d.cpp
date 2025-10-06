@@ -34,17 +34,20 @@ using namespace olb;
 using namespace olb::names;
 using namespace olb::opti;
 
+using ADf = util::ADf<double, 3>;
+
 /// @brief Step 1: Declare simulation structure.
 /// State the type(s) of the used simulation cases and give a name to each case
-using ADf = util::ADf<double,3>;
-
-template<typename T>
 using MyCase = Case<
-  NavierStokes, Lattice<T, descriptors::D3Q19<descriptors::FORCE>>
+  NavierStokes, Lattice<double, descriptors::D3Q19<descriptors::FORCE>>
 >;
-using MyOptiCase = OptiCaseADfFromDim<3,
-  Controlled, MyCase<double>,
-  Reference, MyCase<double>
+using MyADfCase = Case<
+  NavierStokes, Lattice<ADf, descriptors::D3Q19<descriptors::FORCE>>
+>;
+using MyOptiCase = OptiCaseADf<
+  Controlled, MyCase,
+  Derivatives, MyADfCase,
+  Reference, MyCase
 >;
 
 using OBJECTIVE = functors::L2DistanceF<functors::VelocityF>;
@@ -54,7 +57,7 @@ using CONTROLS = descriptors::FORCE;
 /// @return An instance of Mesh, which keeps the relevant information
 template<typename PARAMETERS>
 auto createMesh(PARAMETERS& parameters) {
-  using T = typename PARAMETERS::value_t;
+  using T = PARAMETERS::value_t;
   const int resolution = parameters.template get<parameters::RESOLUTION>();
   const T physLength = parameters.template get<parameters::PHYS_CHAR_LENGTH>();
   const Vector<T,3> origin{0, 0, 0};
@@ -70,8 +73,8 @@ auto createMesh(PARAMETERS& parameters) {
 /// @brief Step 5: Set material numbers for different parts of the domain
 /// @param myCase The Case instance which keeps the simulation data
 /// @note The material numbers are used to assign physics to lattice nodes
-template<typename S>
-void prepareGeometry(MyCase<S>& myCase) {
+template<typename CASE>
+void prepareGeometry(CASE& myCase) {
   OstreamManager clout(std::cout, "prepareGeometry");
   clout << "Prepare Geometry ..." << std::endl;
 
@@ -91,19 +94,20 @@ void prepareGeometry(MyCase<S>& myCase) {
 
 /// @brief Step 6: Set lattice dynamics and boundary conditions
 /// @param myCase The Case instance which keeps the simulation data
-template<typename S>
-void prepareLattice(MyCase<S>& myCase)
+template<typename CASE>
+void prepareLattice(CASE& myCase)
 {
   OstreamManager clout(std::cout, "prepareLattice");
   clout << "Prepare Lattice ..." << std::endl;
 
-  using T = MyCase<S>::value_t;
+  using T = CASE::value_t;
+  using DESCRIPTOR = CASE::descriptor_t;
   auto& geometry = myCase.getGeometry();
   auto& lattice = myCase.getLattice(NavierStokes{});
   auto& parameters = myCase.getParameters();
 
   /// @li Set up a unit converter with the characteristic physical units
-  lattice.template setUnitConverter<UnitConverterFromResolutionAndLatticeVelocity<T,typename MyCase<S>::descriptor_t>>(
+  lattice.template setUnitConverter<UnitConverterFromResolutionAndLatticeVelocity<T,DESCRIPTOR>>(
     parameters.template get<parameters::RESOLUTION>(),               // resolution
     parameters.template get<parameters::LATTICE_CHAR_VELOCITY>(),    // charLatticeVelocity
     parameters.template get<parameters::PHYS_CHAR_LENGTH>(),         // charPhysLength: reference length of simulation geometry in [m]
@@ -125,10 +129,11 @@ void prepareLattice(MyCase<S>& myCase)
 // Step 7: Set initial values for primal variables (e.g. velocity, density) and additional fields
 /// @param myCase The Case instance which keeps the simulation data
 /// @note Initial values have to be set using lattice units
-template<typename S>
-void setInitialValues(MyCase<S>& myCase)
+template<typename CASE>
+void setInitialValues(CASE& myCase)
 {
-  using T = MyCase<S>::value_t;
+  using T = CASE::value_t;
+  using DESCRIPTOR = CASE::descriptor_t;
   /// @li Store references for simplified access
   auto& lattice = myCase.getLattice(NavierStokes{});
   auto& geometry = myCase.getGeometry();
@@ -145,7 +150,7 @@ void setInitialValues(MyCase<S>& myCase)
   lattice.iniEquilibrium(geometry.getMaterialIndicator({1,2}), rhoF, uF);
 
   /// @li Set force field
-  ForceTestFlow3D<T,T,typename MyCase<S>::descriptor_t> forceF(converter);
+  ForceTestFlow3D<T,T,DESCRIPTOR> forceF(converter);
   const T latticeScaling(converter.getConversionFactorMass() / converter.getConversionFactorForce());
   AnalyticalScaled3D<T,T> scaledForceF(forceF, latticeScaling);  // conversion to lattice units
   lattice.template defineField<descriptors::FORCE>(geometry.getMaterialIndicator({1}), scaledForceF);
@@ -159,13 +164,12 @@ void setInitialValues(MyCase<S>& myCase)
 /// @param iT The time step
 /// In order to start the simulation slowly, we start with zero boundary velocity and gradually increase it
 /// @note Boundary values have to be set using lattice units
-template<typename S>
-void setTemporalValues(MyCase<S>& myCase,
+template<typename CASE>
+void setTemporalValues(CASE& myCase,
                        std::size_t iT)
 {
-  using T = MyCase<S>::value_t;
-  /// @par Contents
-  /// @li Store references for simplified access
+  using T = CASE::value_t;
+  using DESCRIPTOR = CASE::descriptor_t;
   auto& lattice = myCase.getLattice(NavierStokes{});
   auto& geometry = myCase.getGeometry();
   auto& converter = lattice.getUnitConverter();
@@ -180,7 +184,7 @@ void setTemporalValues(MyCase<S>& myCase,
     startScaleF(frac, iTvec);
 
     /// @li Take analytical velocity solution, scale it to lattice units, set the boundary data
-    VelocityTestFlow3D<T,T,typename MyCase<S>::descriptor_t> velocityF(converter);
+    VelocityTestFlow3D<T,T,DESCRIPTOR> velocityF(converter);
     AnalyticalScaled3D<T,T> uBoundaryStartF(velocityF, frac[0] / converter.getConversionFactorVelocity());
     lattice.defineU(geometry, 2, uBoundaryStartF);
 
@@ -192,12 +196,12 @@ void setTemporalValues(MyCase<S>& myCase,
 /// Step 8.3: Compute simulation results at times
 /// @param myCase The Case instance which keeps the simulation data
 /// @param iT The time step
-template<typename S>
-void getResults(MyCase<S>& myCase,
-                util::Timer<typename MyCase<S>::value_t>& timer,
+template<typename CASE>
+void getResults(CASE& myCase,
+                util::Timer<typename CASE::value_t>& timer,
                 std::size_t iT)
 {
-  using T = MyCase<S>::value_t;
+  using T = CASE::value_t;
   auto& lattice = myCase.getLattice(NavierStokes{});
   auto& converter = lattice.getUnitConverter();
   const T physMaxT = myCase.getParameters().template get<parameters::MAX_PHYS_T>();
@@ -232,10 +236,10 @@ void getResults(MyCase<S>& myCase,
 /// Step 8: Execute simulation
 /// @param myCase The Case instance which keeps the simulation data
 /// Run time loop
-template<typename S>
-void simulate(MyCase<S>& myCase)
+template<typename CASE>
+void simulate(CASE& myCase)
 {
-  using T = MyCase<S>::value_t;
+  using T = CASE::value_t;
   const T physMaxT = myCase.getParameters().template get<parameters::MAX_PHYS_T>();
   const std::size_t iTmax = myCase.getLattice(NavierStokes{}).getUnitConverter().getLatticeTime(physMaxT);
   util::Timer<T> timer(iTmax, myCase.getGeometry().getStatistics().getNvoxel());
@@ -244,7 +248,7 @@ void simulate(MyCase<S>& myCase)
   for (std::size_t iT=0; iT < iTmax; ++iT)
   {
     /// @li Step 8.1: Update the Boundary Values and Fields at Times
-    setTemporalValues<T>(myCase, iT);
+    setTemporalValues(myCase, iT);
 
     /// @li Step 8.2: Collide and Stream Execution
     myCase.getLattice(NavierStokes{}).collideAndStream();
@@ -254,7 +258,7 @@ void simulate(MyCase<S>& myCase)
       myCase.getLattice(NavierStokes{}).getStatistics().getAverageRho() - T{1});
 
     /// @li Step 8.3: Computation and Output of the Results
-    getResults<T>(myCase, timer, iT);
+    getResults(myCase, timer, iT);
   }
 
   /// @li Evaluate timer
@@ -267,20 +271,19 @@ void setInitialControl(MyOptiCase& optiCase) {
   optiCase.getController().set({0, 0, 0});
 }
 
-template<typename S>
-void applyControl(MyOptiCase& optiCase) {
-  using T = MyCase<S>::value_t;
-  // decide whether we solve for value or derivatives
-  auto& controlledCase = optiCase.getCaseByType<T>();
+template<typename CASE>
+void applyControl(const Controller<typename CASE::value_t>& controller, CASE& controlledCase) {
+  using T = CASE::value_t;
+  using DESCRIPTOR = CASE::descriptor_t;
   auto& lattice = controlledCase.getLattice(NavierStokes{});
   auto designDomain = controlledCase.getGeometry().getMaterialIndicator({1});
   auto& converter = lattice.getUnitConverter();
 
   /// Scale the force field component-wise by the control
-  std::vector<T> control = optiCase.getController<T>().get();
+  std::vector<T> control = controller.get();
   std::shared_ptr<AnalyticalF<3,T,T>> controlF
    = std::make_shared<AnalyticalConst3D<T,T>>(control);
-  ForceTestFlow3D<T,T,typename MyCase<T>::descriptor_t> forceF(converter);
+  ForceTestFlow3D<T,T,DESCRIPTOR> forceF(converter);
   const T latticeScaling(converter.getConversionFactorMass() / converter.getConversionFactorForce());
   std::shared_ptr<AnalyticalF<3,T,T>> latticeForceF
    = std::make_shared<AnalyticalScaled3D<T,T>>(forceF, latticeScaling);
@@ -289,10 +292,10 @@ void applyControl(MyOptiCase& optiCase) {
   lattice.setProcessingContext(ProcessingContext::Simulation);
 }
 
-template<typename S>
-MyCase<S>::value_t objectiveF(MyOptiCase& optiCase) {
+template<typename CASE>
+CASE::value_t objectiveF(MyOptiCase& optiCase) {
   // decide whether we solve for value or derivatives
-  using T = MyCase<S>::value_t;
+  using T = CASE::value_t;
   auto& controlledCase = optiCase.getCaseByType<T>();
   auto& controlledLattice = controlledCase.getLattice(NavierStokes{});
   auto& converter = controlledLattice.getUnitConverter();
@@ -322,26 +325,26 @@ MyCase<S>::value_t objectiveF(MyOptiCase& optiCase) {
   return integrate<opti::J>(controlledLattice, objectiveDomain)[0];
 }
 
-template<typename S>
-MyCase<S>::value_t computeObjective(MyOptiCase& optiCase) {
-  using T = MyCase<S>::value_t;
+template<typename CASE>
+CASE::value_t computeObjective(MyOptiCase& optiCase) {
+  using T = CASE::value_t;
   // decide whether we solve for value or derivatives
   auto& controlledCase = optiCase.getCaseByType<T>();
   // Reset prior simulation lattice
   controlledCase.resetLattices();
 
   // Prepare new lattices
-  prepareLattice<T>(controlledCase);
-  setInitialValues<T>(controlledCase);
+  prepareLattice(controlledCase);
+  setInitialValues(controlledCase);
 
   // Set updated controls in the simulation
-  applyControl<T>(optiCase);
+  applyControl(optiCase.getController<T>(), controlledCase);
 
   // Execute simulation
-  simulate<T>(controlledCase);
+  simulate(controlledCase);
 
   // Compute Objective value from simulation results
-  return objectiveF<T>(optiCase);
+  return objectiveF<CASE>(optiCase);
 }
 
 /// Steps 2-8: Set up and run a simulation
@@ -350,7 +353,7 @@ int main(int argc, char* argv[])
   /// @par Contents
   /// @li Step 2: Initialization
   initialize(&argc, &argv);
-  MyCase<double>::ParametersD myCaseParametersD;
+  MyCase::ParametersD myCaseParametersD;
   {
     using namespace parameters;
     myCaseParametersD.template set<PHYS_CHAR_VELOCITY   >(        1.0);
@@ -361,7 +364,7 @@ int main(int argc, char* argv[])
     myCaseParametersD.template set<RESOLUTION           >(         11);
     myCaseParametersD.template set<LATTICE_CHAR_VELOCITY>(       0.07);
   }
-  MyCase<ADf>::ParametersD myADfCaseParametersD;
+  MyADfCase::ParametersD myADfCaseParametersD;
   {
     using namespace parameters;
     myADfCaseParametersD.template set<PHYS_CHAR_VELOCITY   >( ADf{1.0});
@@ -380,19 +383,19 @@ int main(int argc, char* argv[])
   // ==== BELOW HERE OPTIMIZATION SPECIFIC ====
   /// @li Step B: Create Cases and prepare
   // Prepare controlled case
-  MyCase<double> myCase(myCaseParametersD, mesh);
-  prepareGeometry<double>(myCase);
+  MyCase myCase(myCaseParametersD, mesh);
+  prepareGeometry(myCase);
 
   // Create ADf-typed case for gradient computation
-  MyCase<ADf> aDfCase(myADfCaseParametersD, aDfMesh);
-  prepareGeometry<ADf>(aDfCase);
+  MyADfCase aDfCase(myADfCaseParametersD, aDfMesh);
+  prepareGeometry(aDfCase);
 
   // Compute solution for the objective functional
-  MyCase<double> referenceCase(myCaseParametersD, mesh);
-  prepareGeometry<double>(referenceCase);
-  prepareLattice<double>(referenceCase);
-  setInitialValues<double>(referenceCase);
-  simulate<double>(referenceCase);
+  MyCase referenceCase(myCaseParametersD, mesh);
+  prepareGeometry(referenceCase);
+  prepareLattice(referenceCase);
+  setInitialValues(referenceCase);
+  simulate(referenceCase);
 
   /// @li Step C: Create OptiCase and set cases
   MyOptiCase optiCase;
@@ -404,10 +407,10 @@ int main(int argc, char* argv[])
   setInitialControl(optiCase);
 
   /// @li Step E: Define objective routine
-  optiCase.setObjective(computeObjective<double>, computeObjective<ADf>);
+  optiCase.setObjective(computeObjective<MyCase>, computeObjective<MyADfCase>);
 
   /// @li Step G: Create an Optimizer
-  OptimizerLBFGS<double,std::vector<double>> optimizer(
+  OptimizerLBFGS<MyCase::value_t,std::vector<MyCase::value_t>> optimizer(
     optiCase.getController().size(), 1.e-10, 10, 1., 20, "Wolfe", 20, 1.e-4);
 
   /// @li Step H: Optimize
