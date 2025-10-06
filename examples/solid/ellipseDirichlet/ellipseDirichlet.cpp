@@ -45,6 +45,7 @@ using MyCase = Case<
 
 namespace olb::parameters {
   struct KAPPA : public descriptors::FIELD_BASE<1> { };
+  struct PLATE_LENGTH public descriptors::FIELD_BASE<1> { };
 }
 
 constexpr FLOATING_POINT_TYPE pi = std::numbers::pi_v<FLOATING_POINT_TYPE>;
@@ -274,6 +275,35 @@ public:
   }
 };
 
+Mesh<MyCase::value_t,MyCase::d> createMesh(MyCase::ParametersD& params) {
+  using T = MyCase::value_t;
+  Vector extent = params.get<parameters::DOMAIN_EXTENT>();
+  std::vector<T> origin(2,T());
+  IndicatorCuboid2D<T> cuboid(extent, origin);
+
+  const int noOfCuboids = singleton::mpi().getSize();
+
+  T origin = converter.getConversionFactorLength() / 3.;
+  IndicatorCuboid2D<T> cuboid({params.get<parameters::PLATE_LENGTH> * params.get<parameters::DOMAIN_LENGTH>(), params.get<parameters::PLATE_LENGTH> * params.get<parameters::DOMAIN_LENGTH>()}, {origin, origin});
+  CuboidDecomposition<T, 2> cuboidDecomposition(cuboid, converter.getConversionFactorLength(), noOfCuboids);
+
+  Vector<T,2> center1( .75 * charL, .75 * charL );
+  Vector<T,2> center2( .95 * charL, .6 * charL);
+  Vector<T,2> center3( .5 * charL, .9 * charL );
+
+  IndicatorEllipse2D<T> ellipse1(center1, .693 * charL, .548 * charL, -20);
+  IndicatorEllipse2D<T> ellipse2(center2, .1 * charL, .134 * charL);
+  IndicatorEllipse2D<T> ellipse3(center3, .187 * charL, .1 * charL);
+
+  /// Instantiation of a loadBalancer
+  HeuristicLoadBalancer<T> loadBalancer(cuboidDecomposition);
+  const T physDeltaX = 0.1 / params.get<parameters::RESOLUTION>();
+  Mesh<T,MyCase::d> mesh(cuboid, physDeltaX, singleton::mpi().getSize());
+  mesh.setOverlap(params.get<parameters::OVERLAP>());
+  mesh.getCuboidDecomposition().setPeriodicity({true,false});
+  return mesh;
+}
+
 void prepareGeometry( SuperGeometry<T, 2>& superGeometry,
                       LinElaUnitConverter<T,NCDESCRIPTOR> converter,
                       IndicatorEllipse2D<T>& ellipse1,
@@ -342,13 +372,14 @@ void prepareLattice(MyCase& myCase, const int bulkNum = 1) {
   const T charDisplacement = params.get<parameters::PHYS_CHAR_DISPLACEMENT>();
   const T ELattice = params.get<parameters::YOUNGS_MODULUS>();
   const T kappa = params.get<parameters::KAPPA>();
+  const T charLength = params.get<parameters::DOMAIN_EXTENT>()[0];
 
-  constexpr T theta = descriptors::cs2<NCDESCRIPTOR>();
+  constexpr T theta = invCs2<T, NCDESCRIPTOR>();
 
   NClattice.setUnitConverter<LinElaUnitConverter<T, NCDESCRIPTOR>>(
     (T) physDeltaX, // physDeltaX
     (T) physDeltaT, // physDeltaT
-    (T) 1.,  // charPhysLength
+    (T) charLength,  // charPhysLength
     (T) charDisplacement, // charPhysDisplacement
     (T) ELattice * (physDeltaX * physDeltaX * kappa) / physDeltaT,  // physViscosity
     (T) 0.7, // physViscosity
@@ -575,66 +606,23 @@ int main(int argc, char* argv[])
   initialize(&argc, &argv);
   singleton::directories().setOutputDir("./tmp/");
 
-  CLIreader args(argc, argv);
+  //CLIreader args(argc, argv);
   //const std::size_t N  = args.getValueOrFallback<std::size_t>("--res", 40);
 
   MyCase::ParametersD myCaseParameters;
   {
     using namespace olb::parameters;
     myCaseParameters.set<RESOLUTION>(40);
-    myCaseParameters.set<DOMAIN_EXTENT>(1.5);
+    myCaseParameters.set<PLATE_LENGTH>(1.5);
+    myCaseParameters.set<DOMAIN_EXTENT>({1.0, 1.0});
     myCaseParameters.set<YOUNG_MODULUS>(0.1);
     myCaseParameters.set<PHYS_CHAR_DISPLACEMENT>(1.);
     myCaseParameters.set<KAPPA>(1.);
     myCaseParameters.set<MAX_PHYS_T>(60.);
   }
-
-  // length of domain
-  /*T plateLength = 1.5;
-
-  T charL = 1.;
-  T dx = plateLength / N;
-
-  T simTime = 60.0;
-  T dt = dx * dx;
-  T charU = 1.;
-
-  T nu = 0.7;
-
-  T kappa = 1.;
-
-  T ELattice = 0.1;
-  T E = ELattice * (dx * dx * kappa) / dt; // phys
-  */
-
-  /*
-  LinElaUnitConverter<T, NCDESCRIPTOR> converter(
-    dx, // deltaX
-    dt, // deltaT
-    charL, // charL
-    charU, // charU
-    E, // phys
-    nu, // phys
-    kappa // phys
-  );
-  */
+  myCaseParameters.fromCLI(argc, argv)
 
   const int noOfCuboids = singleton::mpi().getSize();
-
-  T origin = converter.getConversionFactorLength() / 3.;
-  IndicatorCuboid2D<T> cuboid({plateLength * charL, plateLength * charL}, {origin, origin});
-  CuboidDecomposition<T, 2> cuboidDecomposition(cuboid, converter.getConversionFactorLength(), noOfCuboids);
-
-  Vector<T,2> center1( .75 * charL, .75 * charL );
-  Vector<T,2> center2( .95 * charL, .6 * charL);
-  Vector<T,2> center3( .5 * charL, .9 * charL );
-
-  IndicatorEllipse2D<T> ellipse1(center1, .693 * charL, .548 * charL, -20);
-  IndicatorEllipse2D<T> ellipse2(center2, .1 * charL, .134 * charL);
-  IndicatorEllipse2D<T> ellipse3(center3, .187 * charL, .1 * charL);
-
-  /// Instantiation of a loadBalancer
-  HeuristicLoadBalancer<T> loadBalancer(cuboidDecomposition);
 
   /// Instantiation of a superGeometry
   SuperGeometry<T, 2> superGeometry(cuboidDecomposition, loadBalancer);
