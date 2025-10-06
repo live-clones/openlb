@@ -34,17 +34,14 @@ using MyCase = Case<
 
 /// @brief Create a simulation mesh, based on user-specific geometry
 /// @return An instance of Mesh, which keeps the relevant information
-Mesh<MyCase::value_t,MyCase::d> createMesh(MyCase::ParametersD& params) {
+Mesh<MyCase::value_t,MyCase::d> createMesh(MyCase::ParametersD& parameters) {
   using T = MyCase::value_t;
-  const Vector extent = params.get<parameters::DOMAIN_EXTENT>();
+  const Vector extent = parameters.get<parameters::DOMAIN_EXTENT>();
   const Vector origin{0, 0};
   IndicatorCuboid2D<T> cuboid(extent, origin);
 
-  const T physDeltaX = params.get<parameters::PHYS_DELTA_X>();
-
-  Mesh<T,MyCase::d> mesh(cuboid, physDeltaX, singleton::mpi().getSize());
-  mesh.setOverlap(params.get<parameters::OVERLAP>());
-  return mesh;
+  const T physDeltaX = parameters.get<parameters::PHYS_DELTA_X>();
+  return Mesh<T,MyCase::d>(cuboid, physDeltaX, singleton::mpi().getSize());
 }
 
 /// @brief Set material numbers for different parts of the domain
@@ -52,11 +49,11 @@ Mesh<MyCase::value_t,MyCase::d> createMesh(MyCase::ParametersD& params) {
 /// @note The material numbers will be used to assign physics to lattice nodes
 void prepareGeometry(MyCase& myCase) {
   using T = MyCase::value_t;
-  auto& params = myCase.getParameters();
+  auto& parameters = myCase.getParameters();
   auto& geometry = myCase.getGeometry();
 
-  const T physLength = params.get<parameters::DOMAIN_EXTENT>()[0];
-  const T physDeltaX = params.get<parameters::PHYS_DELTA_X>();
+  const T physLength = parameters.get<parameters::DOMAIN_EXTENT>()[0];
+  const T physDeltaX = parameters.get<parameters::PHYS_DELTA_X>();
 
   /// Set material numbers
   geometry.rename(0, 2);
@@ -74,15 +71,15 @@ void prepareGeometry(MyCase& myCase) {
 /// @param myCase The Case instance which keeps the simulation data
 void prepareLattice(MyCase& myCase) {
   using T = MyCase::value_t;
-  auto& params = myCase.getParameters();
+  auto& parameters = myCase.getParameters();
   auto& lattice = myCase.getLattice(NavierStokes{});
 
-  const T physDeltaX = params.get<parameters::PHYS_DELTA_X>();
-  const T physDeltaT = params.get<parameters::PHYS_DELTA_T>();
-  const T physLength = params.get<parameters::DOMAIN_EXTENT>()[0];
-  const T physCharVelocity = params.get<parameters::PHYS_CHAR_VELOCITY>();
-  const T physCharViscosity = params.get<parameters::PHYS_CHAR_VISCOSITY>();
-  const T physCharDensity = params.get<parameters::PHYS_CHAR_DENSITY>();
+  const T physDeltaX = parameters.get<parameters::PHYS_DELTA_X>();
+  const T physDeltaT = parameters.get<parameters::PHYS_DELTA_T>();
+  const T physLength = parameters.get<parameters::DOMAIN_EXTENT>()[0];
+  const T physCharVelocity = parameters.get<parameters::PHYS_CHAR_VELOCITY>();
+  const T physCharViscosity = parameters.get<parameters::PHYS_CHAR_VISCOSITY>();
+  const T physCharDensity = parameters.get<parameters::PHYS_CHAR_DENSITY>();
 
   // Set up a unit converter with the characteristic physical units
   myCase.getLattice(NavierStokes{}).setUnitConverter(
@@ -147,11 +144,11 @@ void getResults(MyCase& myCase,
 {
   /// Write vtk plots every 0.3 seconds (of phys. simulation time)
   using T = MyCase::value_t;
-  auto& params = myCase.getParameters();
+  auto& parameters = myCase.getParameters();
   auto& lattice = myCase.getLattice(NavierStokes{});
   auto& converter = lattice.getUnitConverter();
 
-  const T physMaxT = params.get<parameters::MAX_PHYS_T>();
+  const T physMaxT = parameters.get<parameters::MAX_PHYS_T>();
   const std::size_t iTlog = converter.getLatticeTime(physMaxT/20.);
   const std::size_t iTvtk = converter.getLatticeTime(physMaxT/100.);
 
@@ -183,8 +180,8 @@ void getResults(MyCase& myCase,
 /// @param myCase The Case instance which keeps the simulation data
 void simulate(MyCase& myCase) {
   using T = MyCase::value_t;
-  auto& params = myCase.getParameters();
-  const T physMaxT = params.get<parameters::MAX_PHYS_T>();
+  auto& parameters = myCase.getParameters();
+  const T physMaxT = parameters.get<parameters::MAX_PHYS_T>();
 
   const std::size_t iTmax = myCase.getLattice(NavierStokes{}).getUnitConverter().getLatticeTime(physMaxT);
   util::Timer<T> timer(iTmax, myCase.getGeometry().getStatistics().getNvoxel());
