@@ -472,7 +472,7 @@ void getResults(MyCase& myCase,
   const std::size_t iTvtk = parameters.get<parameters::IT_VTK_PSEUDO_TIME>();
   const std::size_t iTMax = converter.getLatticeTime(parameters.get<parameters::MAX_PHYS_T>());
 
-  SuperVTMwriter2D<T> vtmWriter("ellipseNeumann");
+  SuperVTMwriter2D<T> vtmWriter("ellipseCombo");
 
   ManufacturedSolutionU2D<T> dispSol(myCase);
   SuperLatticeFfromAnalyticalF2D<T, DESCRIPTOR>      dispSolLattice(dispSol, lattice);
