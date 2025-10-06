@@ -33,13 +33,12 @@ using namespace olb::opti;
 
 using T = double;
 using DESCRIPTOR = descriptors::D3Q19<descriptors::FORCE>;
-using BulkDynamics = ForcedBGKdynamics<T,DESCRIPTOR>;
-using ObjectiveF = functors::L2DistanceF<functors::VelocityF>;
-using ControlledField = descriptors::FORCE;
 
 /// @brief Step 1: Declare simulation structure.
 /// Model name and lattice type are collected in a Case class
-using MyCase = Case<NavierStokes, Lattice<T, DESCRIPTOR>>;
+using MyCase = Case<
+  NavierStokes, Lattice<double, descriptors::D3Q19<descriptors::FORCE>>
+>;
 /// State the type(s) of the used simulation cases and give a name to each case
 using MyOptiCase = OptiCaseAdjoint<
   Controlled, MyCase,
@@ -47,29 +46,23 @@ using MyOptiCase = OptiCaseAdjoint<
   Reference, MyCase
 >;
 
-// Physical parameters
-const T physLength        = 1;      ///< length of the squared cube [m]
-const T physVelocity      = 1;      ///< characteristic velocity [m/s]
-const T physViscosity     = 0.1;    ///< kinetic viscosity of fluid [m*m/s]
-const T physDensity       = 1;      ///< fluid density [kg/(m*m*m)]
-const T physMaxT          = 6.0;    ///< maximal simulation time [s]
-const T physStartT        = 4.0;    ///< duration of smooth start up of simulation [s]
-
-// Discretization parameters
-const int resolution      = 11;     ///< number of cells at the side of the cube
-const T latticeVelocity   = 0.07;   ///< quotient of grid spacing to temporal spacing
-
+using BulkDynamics = ForcedBGKdynamics<MyCase::value_t,
+                                       MyCase::descriptor_t_of<NavierStokes>>;
+using ObjectiveF = functors::L2DistanceF<functors::VelocityF>;
+using ControlledField = descriptors::FORCE;
 
 /// @brief Step 3: Create a simulation mesh, based on user-specific geometry
 /// @return An instance of Mesh, which keeps the relevant information
-Mesh<T,MyCase::d> createMesh()
+Mesh<T,MyCase::d> createMesh(MyCase::ParametersD& parameters)
 {
-  const Vector extend{physLength, physLength, physLength};
+  const Vector extent = parameters.get<parameters::DOMAIN_EXTENT>();
   const Vector origin{0, 0, 0};
-  IndicatorCuboid3D<T> cubeI(extend, origin);
+  IndicatorCuboid3D<T> cuboid(extent, origin);
 
-  const T physDeltaX = physLength / resolution;
-  return Mesh<T,MyCase::d>(cubeI, physDeltaX, singleton::mpi().getSize());
+  const T physDeltaX = extent[0] / parameters.get<parameters::RESOLUTION>();
+  Mesh<T,MyCase::d> mesh(cuboid, physDeltaX, singleton::mpi().getSize());
+  mesh.setOverlap(parameters.get<parameters::OVERLAP>());
+  return mesh;
 }
 
 /// @brief Step 5: Set material numbers for different parts of the domain
@@ -94,15 +87,17 @@ void prepareLattice(MyCase& myCase)
   clout << "Prepare Lattice ..." << std::endl;
   auto& geometry = myCase.getGeometry();
   auto& lattice = myCase.getLattice(NavierStokes{});
+  auto& parameters = myCase.getParameters();
 
   /// @li Set up a unit converter with the characteristic physical units
-  lattice.setUnitConverter<UnitConverterFromResolutionAndLatticeVelocity<T,DESCRIPTOR>>(
-    resolution,        // resolution
-    latticeVelocity,   // charLatticeVelocity
-    physLength,        // charPhysLength: reference length of simulation geometry in [m]
-    physVelocity,      // charPhysVelocity: highest expected velocity during simulation in [m/s]
-    physViscosity,     // physViscosity: physical kinematic viscosity in [m^2/s]
-    physDensity        // physDensity: physical density [kg/m^3]
+  lattice.setUnitConverter<UnitConverterFromResolutionAndLatticeVelocity<MyCase::value_t,
+                                                                         MyCase::descriptor_t_of<NavierStokes>>>(
+    parameters.get<parameters::RESOLUTION>(),               // resolution
+    parameters.get<parameters::LATTICE_CHAR_VELOCITY>(),    // charLatticeVelocity
+    parameters.get<parameters::DOMAIN_EXTENT>()[0],         // charPhysLength: reference length of simulation geometry in [m]
+    parameters.get<parameters::PHYS_CHAR_VELOCITY>(),       // charPhysVelocity: highest expected velocity during simulation in [m/s]
+    parameters.get<parameters::PHYS_CHAR_VISCOSITY>(),      // physViscosity: physical kinematic viscosity in [m^2/s]
+    parameters.get<parameters::PHYS_CHAR_DENSITY>()         // physDensity: physical density [kg/m^3]
   );
   auto& converter = lattice.getUnitConverter();
   converter.print();
@@ -153,6 +148,7 @@ void setTemporalValues(MyCase& myCase,
   auto& lattice = myCase.getLattice(NavierStokes{});
   auto& geometry = myCase.getGeometry();
   auto& converter = lattice.getUnitConverter();
+  const T physStartT = myCase.getParameters().get<parameters::MAX_PHYS_T>() * (2.0 / 3.0); 
 
   const std::size_t itStart = converter.getLatticeTime(physStartT);
   if (iT <= itStart) {
@@ -179,6 +175,7 @@ void getResults(MyCase& myCase,
 {
   auto& lattice = myCase.getLattice(NavierStokes{});
   auto& converter = lattice.getUnitConverter();
+  const T physMaxT = myCase.getParameters().get<parameters::MAX_PHYS_T>();
   const std::size_t iTlog = converter.getLatticeTime(physMaxT/5);
 
   /// @li Print some (numerical and computational) statistics
@@ -193,6 +190,7 @@ void getResults(MyCase& myCase,
 /// Run time loop
 void simulate(MyCase& myCase)
 {
+  const T physMaxT = myCase.getParameters().get<parameters::MAX_PHYS_T>();
   const std::size_t iTmax = myCase.getLattice(NavierStokes{}).getUnitConverter().getLatticeTime(physMaxT);
   util::Timer<T> timer(iTmax, myCase.getGeometry().getStatistics().getNvoxel());
   timer.start();
@@ -404,17 +402,25 @@ std::vector<T> computeDerivative(MyOptiCase& optiCase) {
 /// Steps 2-8: Set up and run a simulation
 int main(int argc, char* argv[])
 {
-  /// @par Contents
-  /// @li Step 2: Initialization
+  // Step 2: Set parameters
   initialize(&argc, &argv);
 
-  // Step 2.1: Set parameters
   MyCase::ParametersD myCaseParameters;
+  {
+    using namespace parameters;
+    myCaseParameters.set<DOMAIN_EXTENT        >({1.0, 1.0, 1.0});
+    myCaseParameters.set<PHYS_CHAR_VELOCITY   >(            1.0);
+    myCaseParameters.set<PHYS_CHAR_VISCOSITY  >(            0.1);
+    myCaseParameters.set<PHYS_CHAR_DENSITY    >(            1.0);
+    myCaseParameters.set<MAX_PHYS_T           >(            6.0);
+    myCaseParameters.set<RESOLUTION           >(             11);
+    myCaseParameters.set<LATTICE_CHAR_VELOCITY>(           0.07);
+  }
 
-  /// @li Step 3: Create Mesh
-  Mesh mesh = createMesh();
+  /// Step 3: Create Mesh
+  Mesh mesh = createMesh(myCaseParameters);
 
-  /// @li Step B: Create Cases and prepare
+  /// Step B: Create Cases and prepare
   // Prepare controlled case
   MyCase myCase(myCaseParameters, mesh);
   prepareGeometry(myCase);
@@ -431,22 +437,22 @@ int main(int argc, char* argv[])
   setInitialValues(referenceCase);
   simulate(referenceCase);
 
-  /// @li Step C: Create OptiCase and set cases
+  /// Step C: Create OptiCase and set cases
   MyOptiCase optiCase;
   optiCase.setCase<Controlled>(myCase);
   optiCase.setCase<Adjoint>(adjointCase);
   optiCase.setCase<Reference>(referenceCase);
 
-  /// @li Step D: Set initial control
+  /// Step D: Set initial control
   setInitialControl(optiCase);
 
-  /// @li Step E: Define objective routine
+  /// Step E: Define objective routine
   optiCase.setObjective(computeObjective);
 
-  /// @li Step F: Define derivative routine
+  /// Step F: Define derivative routine
   optiCase.setDerivative(computeDerivative);
 
-  /// @li Step G: Create an Optimizer
+  /// Step G: Create an Optimizer
   OptimizerLBFGS<T,std::vector<T>> optimizer(
     optiCase.getController().size(), 1.e-10, 10, 1., 20, "Wolfe", 20, 1.e-4);
   optimizer.optimize(optiCase);
