@@ -19,6 +19,9 @@
  *  License along with this program; if not, write to the Free
  *  Software Foundation, Inc., 51 Franklin Street, Fifth Floor,
  *  Boston, MA  02110-1301, USA.
+ *
+ *  DISCLAIMER: Only rotate the geometry around points inside the bounds of the geometry (preferrably its center point).
+ *  Any other rotation may result in the geometry being cut off.
 */
 
 #ifndef INDICATOR_ROTATE_HH
@@ -107,31 +110,24 @@ bool IndicatorRotate<S,D>::rotate(S output[], const S input[], Vector<S,3> rotat
   return true;
 }
 
-// getMin function split by dimensions
 template <typename S, unsigned D>
 Vector<S,D>& IndicatorRotate<S,D>::getMin()
 {
   if constexpr (D == 2){
-    S minRot[2] {};
     const S inMin[2] = {_indicator.getMin()[0], _indicator.getMin()[1]};
-    IndicatorRotate<S,D>::rotate(minRot, inMin, _rotationPoint, _rotationAngle);
-    S maxRot[2] {};
     const S inMax[2] = {_indicator.getMax()[0], _indicator.getMax()[1]};
-    IndicatorRotate<S,D>::rotate(maxRot, inMax, _rotationPoint, _rotationAngle);
-    _min[0] = util::min(minRot[0],maxRot[0]);
-    _min[1] = util::min(minRot[1],maxRot[1]);
+    const S radius = util::sqrt(util::pow(inMax[0] - inMin[0], 2) + util::pow(inMax[1] - inMin[1], 2));
+    _min[0] = _rotationPoint[0] - radius;
+    _min[1] = _rotationPoint[1] - radius;
     return _min;
   }
   else if constexpr (D == 3){
-    S minRot[3] {};
     const S inMin[3] = {_indicator.getMin()[0], _indicator.getMin()[1], _indicator.getMin()[2]};
-    IndicatorRotate<S,D>::rotate(minRot, inMin, _rotationPoint, _rotationAxis, _rotationAngle);
-    S maxRot[3] {};
     const S inMax[3] = {_indicator.getMax()[0], _indicator.getMax()[1], _indicator.getMax()[2]};
-    IndicatorRotate<S,D>::rotate(maxRot, inMax, _rotationPoint, _rotationAxis, _rotationAngle);
-    _min[0] = util::min(minRot[0],maxRot[0]);
-    _min[1] = util::min(minRot[1],maxRot[1]);
-    _min[2] = util::min(minRot[2],maxRot[2]);
+    const S radius = util::sqrt(util::pow(inMax[0] - inMin[0], 2) + util::pow(inMax[1] - inMin[1], 2) + util::pow(inMax[2] - inMin[2], 2));
+    _min[0] = _rotationPoint[0] - radius;
+    _min[1] = _rotationPoint[1] - radius;
+    _min[2] = _rotationPoint[2] - radius;
     return _min;
   }
 }
@@ -140,26 +136,22 @@ template <typename S, unsigned D>
 Vector<S,D>& IndicatorRotate<S,D>::getMax()
 {
   if constexpr (D == 2){
-    S minRot[2] {};
     const S inMin[2] = {_indicator.getMin()[0], _indicator.getMin()[1]};
-    IndicatorRotate<S,D>::rotate(minRot, inMin, _rotationPoint, _rotationAngle);
-    S maxRot[2] {};
     const S inMax[2] = {_indicator.getMax()[0], _indicator.getMax()[1]};
-    IndicatorRotate<S,D>::rotate(maxRot, inMax, _rotationPoint, _rotationAngle);
-    _max[0] = util::max(minRot[0],maxRot[0]);
-    _max[1] = util::max(minRot[1],maxRot[1]);
+
+    const S radius = util::sqrt(util::pow(inMax[0] - inMin[0], 2) + util::pow(inMax[1] - inMin[1], 2));
+    _max[0] = _rotationPoint[0] + radius;
+    _max[1] = _rotationPoint[1] + radius;
     return _max;
   }
   else if constexpr (D == 3){
-    S minRot[3] {};
     const S inMin[3] = {_indicator.getMin()[0], _indicator.getMin()[1], _indicator.getMin()[2]};
-    IndicatorRotate<S,D>::rotate(minRot, inMin, _rotationPoint, _rotationAxis, _rotationAngle);
-    S maxRot[3] {};
     const S inMax[3] = {_indicator.getMax()[0], _indicator.getMax()[1], _indicator.getMax()[2]};
-    IndicatorRotate<S,D>::rotate(maxRot, inMax, _rotationPoint, _rotationAxis, _rotationAngle);
-    _max[0] = util::max(minRot[0],maxRot[0]);
-    _max[1] = util::max(minRot[1],maxRot[1]);
-    _max[2] = util::max(minRot[2],maxRot[2]);
+    const S radius = util::sqrt(util::pow(inMax[0] - inMin[0], 2) + util::pow(inMax[1] - inMin[1], 2) + util::pow(inMax[2] - inMin[2], 2));
+    _max[0] = _rotationPoint[0] + radius;
+    _max[1] = _rotationPoint[1] + radius;
+    _max[2] = _rotationPoint[2] + radius;
+
     return _max;
   }
 }
