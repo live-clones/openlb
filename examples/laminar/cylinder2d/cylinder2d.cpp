@@ -64,10 +64,10 @@ Mesh<MyCase::value_t,MyCase::d> createMesh(MyCase::ParametersD& parameters) {
   const T physLengthX = parameters.get<parameters::DOMAIN_EXTENT>()[0];
   const T physDeltaX  = 2*parameters.get<parameters::RADIUS_CYLINDER>()/parameters.get<parameters::RESOLUTION>();
   const T physLengthY = parameters.get<parameters::DOMAIN_EXTENT>()[1] + physDeltaX;
-  
+
   const Vector extent{physLengthX, physLengthY};
   const Vector origin{0, 0};
-  
+
   IndicatorCuboid2D<T> cuboid(extent, origin);
   Mesh<T,MyCase::d> mesh(cuboid, physDeltaX, singleton::mpi().getSize());
   mesh.setOverlap(parameters.get<parameters::OVERLAP>());
@@ -87,7 +87,7 @@ void prepareGeometry(MyCase& myCase)
   const T physLengthX = parameters.get<parameters::DOMAIN_EXTENT>()[0];
   const T physDeltaX  = 2*parameters.get<parameters::RADIUS_CYLINDER>()/parameters.get<parameters::RESOLUTION>();
   const T physLengthY = parameters.get<parameters::DOMAIN_EXTENT>()[1] + physDeltaX;
-  
+
   geometry.rename(0, 2);
   geometry.rename(2, 1, {1, 1});
 
@@ -104,7 +104,7 @@ void prepareGeometry(MyCase& myCase)
   origin[0] = physLengthX-physDeltaX;
   IndicatorCuboid2D<T> outflow(extent, origin);
   geometry.rename(2, 4, 1, outflow);
-  
+
   // Set material number for cylinder
   const T radiusCylinder  = parameters.get<parameters::RADIUS_CYLINDER>();
 
@@ -126,7 +126,7 @@ void prepareLattice(MyCase& myCase)
   OstreamManager clout( std::cout,"prepareLattice" );
   clout << "Prepare Lattice ..." << std::endl;
 
-  using T = MyCase::value_t; 
+  using T = MyCase::value_t;
   using DESCRIPTOR = MyCase::descriptor_t;
   auto& parameters = myCase.getParameters();
   auto& lattice    = myCase.getLattice(NavierStokes{});
@@ -219,7 +219,7 @@ void setTemporalValues(MyCase& myCase,
     // SinusStartScale<T,int> StartScale(iTmaxStart, T(1));
 
     // Smooth start curve, polynomial
-    PolynomialStartScale<T,T> StartScale(iTmaxStart, T(1)); 
+    PolynomialStartScale<T,T> StartScale(iTmaxStart, T(1));
 
     // Creates and sets the Poiseuille inflow profile using functors
     T iTvec[1] = {T(iT)};
@@ -360,7 +360,7 @@ void simulate(MyCase& myCase){
   auto& parameters = myCase.getParameters();
   const T physMaxT = parameters.get<parameters::MAX_PHYS_T>();
   const std::size_t iTmax = myCase.getLattice(NavierStokes{}).getUnitConverter().getLatticeTime(physMaxT);
-  
+
   clout << "starting simulation..." << std::endl;
   util::Timer<T> timer(iTmax, myCase.getGeometry().getStatistics().getNvoxel());
   timer.start();
@@ -411,7 +411,7 @@ int main(int argc, char* argv[])
 
   /// === Step 4: Create Case ===
   MyCase myCase(myCaseParameters, mesh);
-  
+
   /// === Step 5: Prepare Geometry ===
   prepareGeometry(myCase);
 
