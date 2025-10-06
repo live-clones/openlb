@@ -408,26 +408,38 @@ int main(int argc, char* argv[]) {
   {
     using namespace olb::parameters;
     myCaseParameters.set<RESOLUTION>(20);
-    myCaseParameters.set<ETA       >(0.5);
-    myCaseParameters.set<INNER_R   >(0.3);
-    myCaseParameters.set<TAYLOR    >(1e10);
+    myCaseParameters.set<ETA>(0.5);
+    myCaseParameters.set<INNER_R>(0.3);
+    myCaseParameters.set<TAYLOR>(1e10);
     myCaseParameters.set<PHYS_CHAR_VISCOSITY>(1e-5);
     myCaseParameters.set<TURBULENCE_INTENSITY>(0.05);
+
+    myCaseParameters.set<OUTER_R>([&] {
+      return myCaseParameters.get<INNER_R>() / myCaseParameters.get<ETA>();
+    });
+    myCaseParameters.set<LENGTH>([&] {
+      const auto gapW = myCaseParameters.get<OUTER_R>() - myCaseParameters.get<INNER_R>();
+      return 2 * std::numbers::pi * gapW / 3;
+    });
+    myCaseParameters.set<ROTATE_OMEGA>([&] {
+      const auto innerR = myCaseParameters.get<INNER_R>();
+      const auto outerR = myCaseParameters.get<OUTER_R>();
+      const auto sigma = util::pow((innerR + outerR)/2./util::sqrt(innerR*outerR), 4);
+      return util::sqrt(myCaseParameters.get<TAYLOR>()*util::pow(myCaseParameters.get<PHYS_CHAR_VISCOSITY>(), 2)/(0.25*sigma*util::pow(outerR-innerR, 3)));
+    });
+    myCaseParameters.set<PHYS_CHAR_VELOCITY>([&] {
+      return myCaseParameters.get<ROTATE_OMEGA>() * myCaseParameters.get<INNER_R>();
+    });
+    myCaseParameters.set<MAX_PHYS_T>([&] {
+      const auto gapW = myCaseParameters.get<OUTER_R>() - myCaseParameters.get<INNER_R>();
+      return 1000 * gapW / myCaseParameters.get<PHYS_CHAR_VELOCITY>();
+    });
+    myCaseParameters.set<PHYS_AVERAGING_START_T>([&] {
+      const auto gapW = myCaseParameters.get<OUTER_R>() - myCaseParameters.get<INNER_R>();
+      return 200 * gapW / myCaseParameters.get<PHYS_CHAR_VELOCITY>();
+    });
   }
   myCaseParameters.fromCLI(argc, argv);
-
-  {
-    using namespace olb::parameters;
-    myCaseParameters.set<OUTER_R   >(myCaseParameters.get<INNER_R>() / myCaseParameters.get<ETA>());
-    const auto gapW = myCaseParameters.get<OUTER_R>() - myCaseParameters.get<INNER_R>();
-    myCaseParameters.set<LENGTH    >(2*std::numbers::pi*gapW/3);
-    const auto sigma = util::pow((myCaseParameters.get<INNER_R>() + myCaseParameters.get<OUTER_R>())/2./util::sqrt(myCaseParameters.get<INNER_R>()*myCaseParameters.get<OUTER_R>()),4);
-    myCaseParameters.set<ROTATE_OMEGA>(util::sqrt(myCaseParameters.get<TAYLOR>()*myCaseParameters.get<PHYS_CHAR_VISCOSITY>()*myCaseParameters.get<PHYS_CHAR_VISCOSITY>()/(0.25*sigma*util::pow(myCaseParameters.get<OUTER_R>()-myCaseParameters.get<INNER_R>(),3))));
-    myCaseParameters.set<PHYS_CHAR_VELOCITY>(
-      myCaseParameters.get<ROTATE_OMEGA>()*myCaseParameters.get<INNER_R>());
-    myCaseParameters.set<MAX_PHYS_T>(1000*gapW/myCaseParameters.get<parameters::PHYS_CHAR_VELOCITY>());
-    myCaseParameters.set<PHYS_AVERAGING_START_T>(200*gapW/myCaseParameters.get<parameters::PHYS_CHAR_VELOCITY>());
-  }
 
   /// === Step 3: Create Mesh ===
   Mesh mesh = createMesh(myCaseParameters);
