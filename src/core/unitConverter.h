@@ -703,6 +703,41 @@ public:
     throw std::logic_error("Undefined");
   };
 
+  // from LinElaUnitConverter
+  virtual constexpr T getEpsilon() const {
+    throw std::logic_error("Undefined");
+  };
+  virtual constexpr T getLatticeShearModulus() const {
+    throw std::logic_error("Undefined");
+  };
+  virtual constexpr T getPhysShearModulus() const {
+    throw std::logic_error("Undefined");
+  };
+  virtual constexpr T getLatticeBulkModulus() const {
+    throw std::logic_error("Undefined");
+  };
+  virtual constexpr T getPhysBulkModulus() const {
+    throw std::logic_error("Undefined");
+  };
+  virtual constexpr T getLatticeLambda() const {
+    throw std::logic_error("Undefined");
+  };
+  virtual constexpr T getPhysLambda() const {
+    throw std::logic_error("Undefined");
+  };
+  virtual constexpr T getLatticeYoungsModulus() const {
+    throw std::logic_error("Undefined");
+  };
+  virtual constexpr T getPhysYoungsModulus() const {
+    throw std::logic_error("Undefined");
+  };
+  virtual constexpr T getDampingFactor() const {
+    throw std::logic_error("Undefined");
+  };
+  virtual constexpr T getPoissonRatio() const {
+    throw std::logic_error("Undefined");
+  };
+
 protected:
   // conversion factors
   const T _conversionLength;      // m
