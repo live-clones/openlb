@@ -53,14 +53,12 @@ platform_constant_definition int vicinity<2,8> = 1;
 
 template <>
 platform_constant_definition int c<2,8>[8][2] = {
-  // { 0, 0},
   {1, 0}, {0, 1}, {-1, 0}, {0,-1},
   {1, 1}, {-1, 1}, {-1, -1}, {1, -1}
 };
 
 template <>
 platform_constant_definition int opposite<2,8>[8] = {
-  // 3, 4, 1, 2, 7, 8, 5, 6
   2, 3, 0, 1, 6, 7, 4, 5
 };
 
@@ -71,7 +69,7 @@ platform_constant_definition Fraction t<2,8>[8] = {
 };
 
 template <>
-platform_constant_definition Fraction cs2<2,8> = {1, 3};
+platform_constant_definition Fraction cs2<2,8> = { 3, 1 };
 
 }
 

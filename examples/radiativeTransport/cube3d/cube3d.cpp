@@ -33,8 +33,7 @@
  * Quantitative Spectroscopy & Radiative Transfer, Volume 243 (2020). DOI: 10.1016/j.jqsrt.2019.106810.]
 */
 
-#include "olb3D.h"
-#include "olb3D.hh"   // include full template code
+#include <olb.h>
 
 #include <vector>
 #include <cmath>

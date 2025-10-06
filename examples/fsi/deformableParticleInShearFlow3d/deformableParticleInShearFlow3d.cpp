@@ -28,8 +28,7 @@
 
 #undef PARALLEL_MODE_MPI
 
-#include "olb3D.h"
-#include "olb3D.hh"
+#include <olb.h>
 
 using namespace olb;
 using namespace membrane;

@@ -40,8 +40,10 @@ public:
   // Select first descriptor as reference for value type and dimension (for now)
   using reference_component_t = MAP::values_t::template get<0>;
 
-  // Expose reference value type to use in apps
+  // Expose reference value type to use in apps with single lattice
   using value_t = reference_component_t::value_t;
+  // Expose reference descriptor type to use in apps with single lattice
+  using descriptor_t = reference_component_t::descriptor_t;
 
   template <typename VALUE_TYPE>
   using exchange_value_t = ConcreteCase<typename MAP::template map_values<

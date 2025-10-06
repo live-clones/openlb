@@ -567,23 +567,22 @@ struct lbm {
   template <concepts::MinimalCell CELL, typename RHO, typename U, typename OMEGA, typename FORCE, typename V=typename CELL::value_t>
   static void addExternalForce(CELL& cell, const RHO& rho, const U& u, const OMEGA& omega, const FORCE& force) any_platform
   {
-    for (int iPop=0; iPop < DESCRIPTOR::q; ++iPop) {
+    const V invCs2  = descriptors::invCs2<V, DESCRIPTOR>();
+    const V invCs4  = invCs2 * invCs2;
+
+    for (int iPop = 0; iPop < DESCRIPTOR::q; ++iPop) {
       V c_u{};
-      for (int iD=0; iD < DESCRIPTOR::d; ++iD) {
-        c_u += descriptors::c<DESCRIPTOR>(iPop,iD)*u[iD];
+      for (int iD = 0; iD < DESCRIPTOR::d; ++iD) {
+        c_u += descriptors::c<DESCRIPTOR>(iPop, iD) * u[iD];
       }
-      c_u *= descriptors::invCs2<V,DESCRIPTOR>() * descriptors::invCs2<V,DESCRIPTOR>();
+      c_u *= invCs4;
+
       V forceTerm{};
-      for (int iD=0; iD < DESCRIPTOR::d; ++iD) {
-        forceTerm +=
-          (   (descriptors::c<DESCRIPTOR>(iPop,iD) - u[iD]) * descriptors::invCs2<V,DESCRIPTOR>()
-              + c_u * descriptors::c<DESCRIPTOR>(iPop,iD)
-          )
-          * force[iD];
+      for (int iD = 0; iD < DESCRIPTOR::d; ++iD) {
+        forceTerm += ((descriptors::c<DESCRIPTOR>(iPop, iD) - u[iD]) * invCs2 + c_u * descriptors::c<DESCRIPTOR>(iPop, iD)) * force[iD];
       }
-      forceTerm *= descriptors::t<V,DESCRIPTOR>(iPop);
-      forceTerm *= V{1} - omega * V{0.5};
-      forceTerm *= rho;
+      forceTerm *= (rho * (V{1} - omega * V{0.5}) * descriptors::t<V, DESCRIPTOR>(iPop));
+
       cell[iPop] += forceTerm;
     }
   }
