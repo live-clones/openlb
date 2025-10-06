@@ -451,7 +451,7 @@ int main(int argc, char* argv[]) {
     using namespace olb::parameters;
     myCaseParameters.set<PHYS_CHAR_VELOCITY>(0.2);
     myCaseParameters.set<WIDTH        >(0.0133);  // hydraulic diameter = 4 * surface / perimeter
-    myCaseParameters.set<RESOLUTION   >(8);       // resolution of the hydraulic diameter // 20
+    myCaseParameters.set<RESOLUTION   >(20);       // resolution of the hydraulic diameter // 20
     myCaseParameters.set<REYNOLDS     >(50);
     myCaseParameters.set<SCHMIDT      >(100);
     myCaseParameters.set<TAU          >(0.6125);
