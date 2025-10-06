@@ -380,12 +380,11 @@ void simulate(MyCase& myCase) {
                      ';', {"time", "angle"}, ".csv");
   OstreamManager clresult(std::cout, "result");
 
-  util::Timer<T> timer(converter.getLatticeTime(params.get<parameters::MAX_PHYS_T>()),
-                       sGeometry.getStatistics().getNvoxel());
-  timer.start();
-
   const std::size_t iTmax = converter.getLatticeTime(
     params.get<parameters::MAX_PHYS_T>());
+
+  util::Timer<T> timer(iTmax, sGeometry.getStatistics().getNvoxel());
+  timer.start();
 
   for (std::size_t iT=0; iT < iTmax; ++iT) {
     /// === Step 8.1: Update the Boundary Values and Fields at Times ===
