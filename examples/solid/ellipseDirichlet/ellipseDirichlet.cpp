@@ -26,23 +26,28 @@
 #include <cmath>
 
 using namespace olb;
+using namespace olb::names;
 using namespace olb::descriptors;
 
-using T = FLOATING_POINT_TYPE;
+using MyCase = Case<
+  NavierCauchy, Lattice<double, D2Q8<tag::MRT,
+                                FORCE,
+                                DISP_SOLID,
+                                SIGMA_SOLID,
+                                MAGIC_SOLID,
+                                OMEGA_SOLID,
+                                PREVIOUS_CELL,
+                                BOUNDARY_COORDS_X,
+                                BOUNDARY_COORDS_Y,
+                                SOLID_DISTANCE_FIELD,
+                                BARED_MOMENT_VECTOR>>
+>;
 
-using LDESCRIPTOR = D2Q8<tag::MRT,
-                         FORCE,
-                         DISP_SOLID,
-                         SIGMA_SOLID,
-                         MAGIC_SOLID,
-                         OMEGA_SOLID,
-                         PREVIOUS_CELL,
-                         BOUNDARY_COORDS_X,
-                         BOUNDARY_COORDS_Y,
-                         SOLID_DISTANCE_FIELD,
-                         BARED_MOMENT_VECTOR>;
+namespace olb::parameters {
+  struct KAPPA : public descriptors::FIELD_BASE<1> { };
+}
 
-constexpr T pi = M_PI;
+constexpr FLOATING_POINT_TYPE pi = std::numbers::pi_v<FLOATING_POINT_TYPE>;
 
 template <typename T, typename _DESCRIPTOR>
 class ForceField2D : public AnalyticalF2D<T, T> {
@@ -57,7 +62,7 @@ protected:
   T theta;
 
 public:
-  ForceField2D(T inTheta, LinElaUnitConverter<T, LDESCRIPTOR> converter)
+  ForceField2D(T inTheta, LinElaUnitConverter<T, NCDESCRIPTOR> converter)
       : AnalyticalF2D<T, T>(2),
       dt(converter.getConversionFactorTime()),
       dx(converter.getConversionFactorLength()),
@@ -81,15 +86,9 @@ public:
     T tau_s = 1. / omega_d - 0.5;
     T tau_p = 1. / omega_s - 0.5;
 
-    #ifdef usetaucalc
-      T tau_12 = (1. / tau_11 + 4. * tau_11) / 8.;
-      T tau_22 = -(12. * pow(tau_11, 3)
-              + 28. * pow(tau_11, 2) * tau_p + tau_11 * (-5. + 32. * pow(tau_p, 2))
-              + tau_p * (-9. + 16. * tau_12 * tau_p + 64. * pow(tau_p, 2))) / (3. * (1. + 4. * pow(tau_11, 2) - 8. * tau_12 * tau_p));
-    #else
-      T tau_12 = 0.5;
-      T tau_22 = 0.5;
-    #endif
+
+    T tau_12 = 0.5;
+    T tau_22 = 0.5;
 
     T tau_21 = tau_12;
 
@@ -198,7 +197,7 @@ protected:
   T charU;
 
 public:
-  ManufacturedSolutionU2D(LinElaUnitConverter<T, LDESCRIPTOR> converter) : AnalyticalF2D<T, T>(2),
+  ManufacturedSolutionU2D(LinElaUnitConverter<T, NCDESCRIPTOR> converter) : AnalyticalF2D<T, T>(2),
       charU(converter.getCharPhysVelocity())
       {};
 
@@ -226,7 +225,7 @@ protected:
   T kappa;
 
 public:
-  ManufacturedSolutionStress2D(LinElaUnitConverter<T, LDESCRIPTOR> converter) : AnalyticalF2D<T, T>(4),
+  ManufacturedSolutionStress2D(LinElaUnitConverter<T, NCDESCRIPTOR> converter) : AnalyticalF2D<T, T>(4),
       dt(converter.getConversionFactorTime()),
       dx(converter.getConversionFactorLength()),
       mu(converter.getPhysShearModulus()),
@@ -276,7 +275,7 @@ public:
 };
 
 void prepareGeometry( SuperGeometry<T, 2>& superGeometry,
-                      LinElaUnitConverter<T,LDESCRIPTOR> converter,
+                      LinElaUnitConverter<T,NCDESCRIPTOR> converter,
                       IndicatorEllipse2D<T>& ellipse1,
                       IndicatorEllipse2D<T>& ellipse2,
                       IndicatorEllipse2D<T>& ellipse3)
@@ -299,7 +298,7 @@ void prepareGeometry( SuperGeometry<T, 2>& superGeometry,
   clout << "Prepare Geometry ... OK" << std::endl;
 }
 
-void prepareOmegas( LinElaUnitConverter<T, LDESCRIPTOR>  converter,
+void prepareOmegas( LinElaUnitConverter<T, NCDESCRIPTOR>  converter,
                     T                                    theta,
                     std::vector<T>&                      allOmegas ) {
     T omega_11  = 1. / (      converter.getLatticeShearModulus()                                 /       theta  + 0.5);
@@ -310,15 +309,8 @@ void prepareOmegas( LinElaUnitConverter<T, LDESCRIPTOR>  converter,
     T tau_s     =  1. / omega_d - 0.5;
     T tau_p     =  1. / omega_s - 0.5;
 
-    #ifdef usetaucalc
-      T tau_12 = (1. / tau_11 + 4. * tau_11) / 8.;
-      T tau_22 = -(12. * pow(tau_11, 3)
-                 + 28. * pow(tau_11, 2) * tau_p + tau_11 * (-5. + 32. * pow(tau_p, 2))
-                 + tau_p * (-9. + 16. * tau_12 * tau_p + 64. * pow(tau_p, 2))) / (3. * (1. + 4. * pow(tau_11, 2) - 8. * tau_12 * tau_p));
-    #else
-      T tau_12 = 0.5;
-      T tau_22 = 0.5;
-    #endif
+    T tau_12 = 0.5;
+    T tau_22 = 0.5;
 
     T tau_21 = tau_12;
 
@@ -331,25 +323,48 @@ void prepareOmegas( LinElaUnitConverter<T, LDESCRIPTOR>  converter,
   return;
 }
 
-void prepareLattice(SuperLattice<T, LDESCRIPTOR>&       lLattice,
-                    SuperGeometry<T, 2>&                superGeometry,
-                    LinElaUnitConverter<T, LDESCRIPTOR> converter,
-                    std::vector<T>&                     allOmegas,
-                    T                                   theta,
-                    IndicatorEllipse2D<T>& ellipse1,
-                    IndicatorEllipse2D<T>& ellipse2,
-                    IndicatorEllipse2D<T>& ellipse3,
-                    int                                 bulkNum = 1)
-{
-  OstreamManager clout(std::cout, "prepareLattice");
+void prepareLattice(MyCase& myCase, const int bulkNum = 1) {
+  OstreamManager clout(std::cout,"prepareLattice");
   clout << "Prepare Lattice ..." << std::endl;
+
+  using T = MyCase::value_t;
+  auto& geometry = myCase.getGeometry();
+  auto& params = myCase.getParameters();
+
+  auto& NClattice = myCase.getLattice(NavierCauchy{});
+
+  using NCDESCRIPTOR = MyCase::descriptor_t_of<NavierCauchy>;
+
+  // TODO for now, to be combined with unit converter refactor
+  const T plateLength = 1.5;
+  const T physDeltaX = plateLength / params.get<parameters::RESOLUTION>();
+  const T physDeltaT = physDeltaX * physDeltaX;
+  const T charDisplacement = params.get<parameters::PHYS_CHAR_DISPLACEMENT>();
+  const T ELattice = params.get<parameters::YOUNGS_MODULUS>();
+  const T kappa = params.get<parameters::KAPPA>();
+
+  constexpr T theta = descriptors::cs2<NCDESCRIPTOR>();
+
+  NClattice.setUnitConverter<LinElaUnitConverter<T, NCDESCRIPTOR>>(
+    (T) physDeltaX, // physDeltaX
+    (T) physDeltaT, // physDeltaT
+    (T) 1.,  // charPhysLength
+    (T) charDisplacement, // charPhysDisplacement
+    (T) ELattice * (physDeltaX * physDeltaX * kappa) / physDeltaT,  // physViscosity
+    (T) 0.7, // physViscosity
+    (T) kappa, // physThermalConductivity
+  );
+
+  const auto& converter = NClattice.getUnitConverter();
+  converter.print();
+
   auto bulkIndicator = superGeometry.getMaterialIndicator({ bulkNum });
 
   lLattice.defineDynamics<BoolakeeLinearElasticityBoundary>( bulkIndicator );
 
-  setBoolakeeDirichletBoundary<T,LDESCRIPTOR,BoolakeeDirichletPostProcessor<T,LDESCRIPTOR>>(lLattice, superGeometry.getMaterialIndicator( 2 ), bulkIndicator, ellipse1);
-  setBoolakeeDirichletBoundary<T,LDESCRIPTOR,BoolakeeDirichletPostProcessor<T,LDESCRIPTOR>>(lLattice, superGeometry.getMaterialIndicator( 3 ), bulkIndicator, ellipse2);
-  setBoolakeeDirichletBoundary<T,LDESCRIPTOR,BoolakeeDirichletPostProcessor<T,LDESCRIPTOR>>(lLattice, superGeometry.getMaterialIndicator( 4 ), bulkIndicator, ellipse3);
+  setBoolakeeDirichletBoundary<T,NCDESCRIPTOR,BoolakeeDirichletPostProcessor<T,NCDESCRIPTOR>>(lLattice, superGeometry.getMaterialIndicator( 2 ), bulkIndicator, ellipse1);
+  setBoolakeeDirichletBoundary<T,NCDESCRIPTOR,BoolakeeDirichletPostProcessor<T,NCDESCRIPTOR>>(lLattice, superGeometry.getMaterialIndicator( 3 ), bulkIndicator, ellipse2);
+  setBoolakeeDirichletBoundary<T,NCDESCRIPTOR,BoolakeeDirichletPostProcessor<T,NCDESCRIPTOR>>(lLattice, superGeometry.getMaterialIndicator( 4 ), bulkIndicator, ellipse3);
 
   {
     auto& communicator = lLattice.getCommunicator(stage::PostCollide());
@@ -401,8 +416,79 @@ void prepareLattice(SuperLattice<T, LDESCRIPTOR>&       lLattice,
   clout << "Prepare Lattice ... OK" << std::endl;
 }
 
-std::vector<T> getResults( SuperLattice<T, LDESCRIPTOR>& lLattice,
-                           LinElaUnitConverter<T, LDESCRIPTOR> converter,
+/*void prepareLattice(SuperLattice<T, NCDESCRIPTOR>&       lLattice,
+                    SuperGeometry<T, 2>&                superGeometry,
+                    LinElaUnitConverter<T, NCDESCRIPTOR> converter,
+                    std::vector<T>&                     allOmegas,
+                    T                                   theta,
+                    IndicatorEllipse2D<T>& ellipse1,
+                    IndicatorEllipse2D<T>& ellipse2,
+                    IndicatorEllipse2D<T>& ellipse3,
+                    int                                 bulkNum = 1)
+{
+  OstreamManager clout(std::cout, "prepareLattice");
+  clout << "Prepare Lattice ..." << std::endl;
+  auto bulkIndicator = superGeometry.getMaterialIndicator({ bulkNum });
+
+  lLattice.defineDynamics<BoolakeeLinearElasticityBoundary>( bulkIndicator );
+
+  setBoolakeeDirichletBoundary<T,NCDESCRIPTOR,BoolakeeDirichletPostProcessor<T,NCDESCRIPTOR>>(lLattice, superGeometry.getMaterialIndicator( 2 ), bulkIndicator, ellipse1);
+  setBoolakeeDirichletBoundary<T,NCDESCRIPTOR,BoolakeeDirichletPostProcessor<T,NCDESCRIPTOR>>(lLattice, superGeometry.getMaterialIndicator( 3 ), bulkIndicator, ellipse2);
+  setBoolakeeDirichletBoundary<T,NCDESCRIPTOR,BoolakeeDirichletPostProcessor<T,NCDESCRIPTOR>>(lLattice, superGeometry.getMaterialIndicator( 4 ), bulkIndicator, ellipse3);
+
+  {
+    auto& communicator = lLattice.getCommunicator(stage::PostCollide());
+    communicator.template requestField<descriptors::PREVIOUS_CELL>();
+    communicator.template requestField<descriptors::SOLID_DISTANCE_FIELD>();
+    communicator.template requestField<descriptors::BOUNDARY_COORDS_X>();
+    communicator.template requestField<descriptors::BOUNDARY_COORDS_Y>();
+    communicator.template requestField<descriptors::BARED_MOMENT_VECTOR>();
+    communicator.requestOverlap(1);
+    communicator.exchangeRequests();
+  }
+
+  std::vector<T>          iniPop = {0., 0., 0., 0., 0., 0., 0., 0.};
+  std::vector<T>          iniDisp = {0., 0.};
+  std::vector<T>          iniStress = {0., 0., 0.};
+
+  AnalyticalConst2D<T, T> initialPopulationF(iniPop);
+  AnalyticalConst2D<T, T> initialDispF(iniDisp);
+  AnalyticalConst2D<T, T> initialStressF(iniStress);
+
+  // dx, dt, theta, mü, lambda, kappa, uChar, epsilon
+  T magic[8] = {converter.getConversionFactorLength(),
+                converter.getConversionFactorTime(),
+                theta,
+                converter.getLatticeShearModulus(),
+                converter.getLatticeLambda(),
+                converter.getDampingFactor(),
+                converter.getCharPhysVelocity(),
+                converter.getEpsilon()};
+
+  lLattice.setParameter<descriptors::MAGIC_SOLID>(magic);
+
+  lLattice.setParameter<descriptors::OMEGA_SOLID>(allOmegas);
+
+  ForceField2D<T, T> forceSol(theta, converter);
+  lLattice.defineField<FORCE>(superGeometry, bulkNum, forceSol);
+  lLattice.defineField<POPULATION>(superGeometry, bulkNum, initialPopulationF);
+
+  lLattice.defineField<DISP_SOLID>(superGeometry, bulkNum, initialDispF);
+  lLattice.defineField<SIGMA_SOLID>(superGeometry, bulkNum, initialStressF);
+
+  lLattice.defineField<PREVIOUS_CELL>(superGeometry, 2, initialPopulationF);
+  lLattice.defineField<PREVIOUS_CELL>(superGeometry, 3, initialPopulationF);
+  lLattice.defineField<PREVIOUS_CELL>(superGeometry, 4, initialPopulationF);
+
+  /// Make the lattice ready for simulation
+  lLattice.initialize();
+
+  clout << "Prepare Lattice ... OK" << std::endl;
+}
+*/
+
+std::vector<T> getResults( SuperLattice<T, NCDESCRIPTOR>& lLattice,
+                           LinElaUnitConverter<T, NCDESCRIPTOR> converter,
                            SuperGeometry<T, 2>& superGeometry,
                            int iT,
                            int maxIt)
@@ -418,28 +504,28 @@ std::vector<T> getResults( SuperLattice<T, LDESCRIPTOR>& lLattice,
 
   if (iT == 0) {
     // Writes the geometry, cuboid no. and rank no. as vti file for visualization
-    SuperLatticeCuboid2D<T, LDESCRIPTOR>   cuboid(lLattice);
-    SuperLatticeRank2D<T, LDESCRIPTOR>     rank(lLattice);
+    SuperLatticeCuboid2D<T, NCDESCRIPTOR>   cuboid(lLattice);
+    SuperLatticeRank2D<T, NCDESCRIPTOR>     rank(lLattice);
     vtmWriter.write(cuboid);
     vtmWriter.write(rank);
     vtmWriter.createMasterFile();
   }
 
-  SuperLatticePhysVelocity2D<T, LDESCRIPTOR>          velocityPhys(lLattice, converter);
-  SuperLatticeVelocity2D<T, LDESCRIPTOR>              velocity(lLattice);
-  SuperLatticeDensity2D<T, LDESCRIPTOR>               density(lLattice);
-  SuperLatticeFpop2D<T, LDESCRIPTOR>                  population(lLattice);
-  SuperLatticeField2D<T, LDESCRIPTOR, FORCE>          forceField(lLattice);
+  SuperLatticePhysVelocity2D<T, NCDESCRIPTOR>          velocityPhys(lLattice, converter);
+  SuperLatticeVelocity2D<T, NCDESCRIPTOR>              velocity(lLattice);
+  SuperLatticeDensity2D<T, NCDESCRIPTOR>               density(lLattice);
+  SuperLatticeFpop2D<T, NCDESCRIPTOR>                  population(lLattice);
+  SuperLatticeField2D<T, NCDESCRIPTOR, FORCE>          forceField(lLattice);
 
-  ManufacturedSolutionU2D<T, LDESCRIPTOR>             dispSol(converter);
-  SuperLatticeFfromAnalyticalF2D<T, LDESCRIPTOR>      dispSolLattice(dispSol, lLattice);
+  ManufacturedSolutionU2D<T, NCDESCRIPTOR>             dispSol(converter);
+  SuperLatticeFfromAnalyticalF2D<T, NCDESCRIPTOR>      dispSolLattice(dispSol, lLattice);
 
-  ManufacturedSolutionStress2D<T, LDESCRIPTOR>        stressSol(converter);
-  SuperLatticeFfromAnalyticalF2D<T, LDESCRIPTOR>      stressSolLattice(stressSol, lLattice);
+  ManufacturedSolutionStress2D<T, NCDESCRIPTOR>        stressSol(converter);
+  SuperLatticeFfromAnalyticalF2D<T, NCDESCRIPTOR>      stressSolLattice(stressSol, lLattice);
 
   // Fields for error calc
-  SuperLatticeField2D<T, LDESCRIPTOR, DISP_SOLID>     moments(lLattice);
-  SuperLatticeField2D<T, LDESCRIPTOR, SIGMA_SOLID>    stress(lLattice);
+  SuperLatticeField2D<T, NCDESCRIPTOR, DISP_SOLID>     moments(lLattice);
+  SuperLatticeField2D<T, NCDESCRIPTOR, SIGMA_SOLID>    stress(lLattice);
 
   auto indicatorF = superGeometry.getMaterialIndicator({1});
 
@@ -482,16 +568,29 @@ std::vector<T> getResults( SuperLattice<T, LDESCRIPTOR>& lLattice,
 
 int main(int argc, char* argv[])
 {
+  using T = MyCase::value_t;
+
   // === 1st Step: Initialization ===
   OstreamManager clout(std::cout, "main");
   initialize(&argc, &argv);
   singleton::directories().setOutputDir("./tmp/");
 
   CLIreader args(argc, argv);
-  const std::size_t N  = args.getValueOrFallback<std::size_t>("--res", 40);
+  //const std::size_t N  = args.getValueOrFallback<std::size_t>("--res", 40);
+
+  MyCase::ParametersD myCaseParameters;
+  {
+    using namespace olb::parameters;
+    myCaseParameters.set<RESOLUTION>(40);
+    myCaseParameters.set<DOMAIN_EXTENT>(1.5);
+    myCaseParameters.set<YOUNG_MODULUS>(0.1);
+    myCaseParameters.set<PHYS_CHAR_DISPLACEMENT>(1.);
+    myCaseParameters.set<KAPPA>(1.);
+    myCaseParameters.set<MAX_PHYS_T>(60.);
+  }
 
   // length of domain
-  T plateLength = 1.5;
+  /*T plateLength = 1.5;
 
   T charL = 1.;
   T dx = plateLength / N;
@@ -506,10 +605,10 @@ int main(int argc, char* argv[])
 
   T ELattice = 0.1;
   T E = ELattice * (dx * dx * kappa) / dt; // phys
+  */
 
-  T theta = T(1) / descriptors::invCs2<T,LDESCRIPTOR>();
-
-  LinElaUnitConverter<T, LDESCRIPTOR> converter(
+  /*
+  LinElaUnitConverter<T, NCDESCRIPTOR> converter(
     dx, // deltaX
     dt, // deltaT
     charL, // charL
@@ -518,8 +617,7 @@ int main(int argc, char* argv[])
     nu, // phys
     kappa // phys
   );
-
-  converter.print();
+  */
 
   const int noOfCuboids = singleton::mpi().getSize();
 
@@ -545,7 +643,7 @@ int main(int argc, char* argv[])
   std::vector<T> allOmegas = {0., 0., 0., 0., 0., 0.};
   prepareOmegas(converter, theta, allOmegas);
 
-  SuperLattice<T, LDESCRIPTOR> lLattice(converter, superGeometry);
+  SuperLattice<T, NCDESCRIPTOR> lLattice(converter, superGeometry);
   prepareLattice(lLattice, superGeometry, converter, allOmegas, theta, ellipse1, ellipse2, ellipse3);
 
   int maxIt = simTime / converter.getConversionFactorTime();
