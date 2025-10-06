@@ -60,16 +60,16 @@ private:
   template <concepts::Field FIELD>
   void setupTypeErasedField(TypeErasedFieldD& typeErasedField) {
     typeErasedField.name = parameters::name<FIELD>();
-    typeErasedField.deleter = [&]() {
-      delete static_cast<FieldD<T, DESCRIPTOR, FIELD>*>(typeErasedField.field);
+    typeErasedField.deleter = [typeErasedField]() {
+      delete static_cast<FieldD<T,DESCRIPTOR,FIELD>*>(typeErasedField.field);
     };
     typeErasedField.value = [&]() -> std::string {
       std::stringstream out;
-      out << *static_cast<FieldD<T, DESCRIPTOR, FIELD>*>(this->getFieldPtr<FIELD>());
+      out << *static_cast<FieldD<T,DESCRIPTOR,FIELD>*>(this->getFieldPtr<FIELD>());
       return out.str();
     };
     typeErasedField.set = [&](std::string str) {
-      if (auto v = FieldD<T, DESCRIPTOR, FIELD>::fromString(str)) {
+      if (auto v = FieldD<T,DESCRIPTOR,FIELD>::fromString(str)) {
         this->set<FIELD>(*v);
       }
     };
@@ -90,7 +90,7 @@ private:
     TypeErasedFieldD& typeErasedField = _map[typeid(FIELD)];
     // If not initialized at all, use default value
     if (!typeErasedField.field && !typeErasedField.calculate) {
-      set<FIELD>(FIELD::template getInitialValue<T, DESCRIPTOR>());
+      set<FIELD>(FIELD::template getInitialValue<T,DESCRIPTOR>());
       tryUpdateFromCLI(typeErasedField); // Allow CLI override of default
     }
     else if (typeErasedField.calculate) {
@@ -136,9 +136,9 @@ public:
   auto get() {
     void* field_ptr = getFieldPtr<FIELD>();
     if constexpr (DESCRIPTOR::template size<FIELD>() == 1) {
-      return (*static_cast<FieldD<T, DESCRIPTOR, FIELD>*>(field_ptr))[0];
+      return (*static_cast<FieldD<T,DESCRIPTOR,FIELD>*>(field_ptr))[0];
     } else {
-      return *static_cast<FieldD<T, DESCRIPTOR, FIELD>*>(field_ptr);
+      return *static_cast<FieldD<T,DESCRIPTOR,FIELD>*>(field_ptr);
     }
   }
 
