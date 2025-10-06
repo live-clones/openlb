@@ -707,6 +707,9 @@ public:
   virtual constexpr T getEpsilon() const {
     throw std::logic_error("Undefined");
   };
+  virtual constexpr T getCharPhysDisplacement() const {
+    throw std::logic_error("Undefined");
+  };
   virtual constexpr T getLatticeShearModulus() const {
     throw std::logic_error("Undefined");
   };
