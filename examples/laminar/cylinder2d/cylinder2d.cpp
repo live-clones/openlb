@@ -41,191 +41,265 @@
 using namespace olb;
 using namespace olb::descriptors;
 using namespace olb::graphics;
-
-using T = FLOATING_POINT_TYPE;
-using DESCRIPTOR = D2Q9<>;
+using namespace olb::names;
 
 #define BOUZIDI
 
-// Parameters for the simulation setup
-const int N = 10;       // resolution of the model
-const T CFL = 0.05;     // characteristic CFL number
-const T Re = 20.;       // Reynolds number
-const T maxPhysT = 16;  // max. simulation time in s, SI unit
-const T L = 0.1/N;      // latticeL
-const T lengthX = 2.2;
-const T lengthY = .41+L;
-const T centerCylinderX = 0.2;
-const T centerCylinderY = 0.2+L/2.;
-const T radiusCylinder = 0.05;
+// === Step 1: Declarations ===
+using MyCase = Case<
+  NavierStokes, Lattice<FLOATING_POINT_TYPE, descriptors::D2Q9<>>
+>;
 
+namespace olb::parameters {
+
+struct RADIUS_CYLINDER            : public descriptors::FIELD_BASE<1> { };
+struct CENTER_CYLINDER            : public descriptors::FIELD_BASE<0, 1> { };
+struct RAMP_UP_UPDATE             : public descriptors::FIELD_BASE<1> { };
+struct RAMP_UP_END_FRACTION       : public descriptors::FIELD_BASE<1> { };
+
+}
+
+Mesh<MyCase::value_t,MyCase::d> createMesh(MyCase::ParametersD& parameters) {
+  using T = MyCase::value_t;
+  const T physLengthX = parameters.get<parameters::DOMAIN_EXTENT>()[0];
+  const T physDeltaX  = 2*parameters.get<parameters::RADIUS_CYLINDER>()/parameters.get<parameters::RESOLUTION>();
+  const T physLengthY = parameters.get<parameters::DOMAIN_EXTENT>()[1] + physDeltaX;
+
+  const Vector extent{physLengthX, physLengthY};
+  const Vector origin{0, 0};
+
+  IndicatorCuboid2D<T> cuboid(extent, origin);
+  Mesh<T,MyCase::d> mesh(cuboid, physDeltaX, singleton::mpi().getSize());
+  mesh.setOverlap(parameters.get<parameters::OVERLAP>());
+  return mesh;
+}
 
 // Stores geometry information in form of material numbers
-void prepareGeometry( SuperGeometry<T,2>& superGeometry,
-                      std::shared_ptr<IndicatorF2D<T>> circle)
+void prepareGeometry(MyCase& myCase)
 {
   OstreamManager clout( std::cout,"prepareGeometry" );
   clout << "Prepare Geometry ..." << std::endl;
 
-  Vector<T,2> extend( lengthX,lengthY );
-  Vector<T,2> origin;
+  using T = MyCase::value_t;
+  auto& parameters = myCase.getParameters();
+  auto& geometry  = myCase.getGeometry();
 
-  superGeometry.rename( 0,2 );
+  const T physLengthX = parameters.get<parameters::DOMAIN_EXTENT>()[0];
+  const T physDeltaX  = 2*parameters.get<parameters::RADIUS_CYLINDER>()/parameters.get<parameters::RESOLUTION>();
+  const T physLengthY = parameters.get<parameters::DOMAIN_EXTENT>()[1] + physDeltaX;
 
-  superGeometry.rename( 2,1,{1,1} );
+  geometry.rename(0, 2);
+  geometry.rename(2, 1, {1, 1});
+
+  Vector<T, 2> extent(physLengthX, physLengthY);
+  Vector<T, 2> origin;
 
   // Set material number for inflow
-  extend[0] = 2.*L;
-  origin[0] = -L;
-  IndicatorCuboid2D<T> inflow( extend, origin );
-  superGeometry.rename( 2,3,1,inflow );
+  extent[0] = 2.*physDeltaX;
+  origin[0] = -physDeltaX;
+  IndicatorCuboid2D<T> inflow(extent, origin );
+  geometry.rename(2, 3, 1, inflow);
+
   // Set material number for outflow
-  origin[0] = lengthX-L;
-  IndicatorCuboid2D<T> outflow( extend, origin );
-  superGeometry.rename( 2,4,1,outflow );
+  origin[0] = physLengthX-physDeltaX;
+  IndicatorCuboid2D<T> outflow(extent, origin);
+  geometry.rename(2, 4, 1, outflow);
+
   // Set material number for cylinder
-  superGeometry.rename( 1,5, circle );
+  const T radiusCylinder  = parameters.get<parameters::RADIUS_CYLINDER>();
+
+  Vector<T,2> center(parameters.get<parameters::CENTER_CYLINDER>()[0], parameters.get<parameters::CENTER_CYLINDER>()[1] + physDeltaX/2.);
+  std::shared_ptr<IndicatorF2D<T>> circle = std::make_shared<IndicatorCircle2D<T>>(center, radiusCylinder);
+  geometry.rename(1, 5, circle);
 
   // Removes all not needed boundary voxels outside the surface
-  superGeometry.clean();
-  superGeometry.checkForErrors();
-
-  superGeometry.print();
+  geometry.clean();
+  geometry.checkForErrors();
+  geometry.print();
 
   clout << "Prepare Geometry ... OK" << std::endl;
 }
 
 // Set up the geometry of the simulation
-void prepareLattice( SuperLattice<T,DESCRIPTOR>& sLattice,
-                     SuperGeometry<T,2>& superGeometry,
-                     std::shared_ptr<IndicatorF2D<T>> circle)
+void prepareLattice(MyCase& myCase)
 {
   OstreamManager clout( std::cout,"prepareLattice" );
   clout << "Prepare Lattice ..." << std::endl;
 
-  const T omega = sLattice.getUnitConverter().getLatticeRelaxationFrequency();
+  using T = MyCase::value_t;
+  using DESCRIPTOR = MyCase::descriptor_t;
+  auto& parameters = myCase.getParameters();
+  auto& lattice    = myCase.getLattice(NavierStokes{});
+  auto& geometry   = myCase.getGeometry();
+
+  const int resolution          = parameters.get<parameters::RESOLUTION>();
+  const T physDeltaX            = 2.*parameters.get<parameters::RADIUS_CYLINDER>()/resolution;
+  const T latticeRelaxationTime = parameters.get<parameters::LATTICE_RELAXATION_TIME>();
+  const T diameterCylinder      = 2.*parameters.get<parameters::RADIUS_CYLINDER>();
+  const T charPhysVelocity      = parameters.get<parameters::PHYS_CHAR_VELOCITY>();
+  const T Re                    = parameters.get<parameters::REYNOLDS>();
+  const T physDensity           = parameters.get<parameters::PHYS_CHAR_DENSITY>();
+
+  myCase.getLattice(NavierStokes{}).setUnitConverter<UnitConverterFromResolutionAndRelaxationTime<T,DESCRIPTOR>>(
+    resolution,                           // resolution: number of voxels per charPhysL
+    latticeRelaxationTime,                // latticeRelaxationTime: relaxation time, have to be greater than 0.5!
+    diameterCylinder,                     // charPhysLength: reference length of simulation geometry
+    charPhysVelocity,                     // charPhysVelocity: maximal/highest expected velocity during simulation in __m / s__
+    charPhysVelocity*diameterCylinder/Re, // physViscosity: physical kinematic viscosity in __m^2 / s__
+    physDensity                           // physDensity: physical density in __kg / m^3__
+  );
+  lattice.getUnitConverter().print();
 
   // Material=1 -->bulk dynamics
-  auto bulkIndicator = superGeometry.getMaterialIndicator({1});
-  sLattice.defineDynamics<BGKdynamics>(bulkIndicator);
+  auto bulkIndicator = geometry.getMaterialIndicator({1});
+  lattice.defineDynamics<BGKdynamics>(bulkIndicator);
 
   // Material=2 -->bounce back
-  boundary::set<boundary::BounceBack>(sLattice, superGeometry, 2);
+  boundary::set<boundary::BounceBack>(lattice, geometry, 2);
 
   //if boundary conditions are chosen to be interpolatedy, 3);
-  boundary::set<boundary::InterpolatedVelocity>(sLattice, superGeometry, 3);
-  boundary::set<boundary::InterpolatedPressure>(sLattice, superGeometry, 4);
+  boundary::set<boundary::InterpolatedVelocity>(lattice, geometry, 3);
+  boundary::set<boundary::InterpolatedPressure>(lattice, geometry, 4);
 
   // Material=5 -->bouzidi / bounce back
+  const T centerCylinderX = parameters.get<parameters::CENTER_CYLINDER>()[0];
+  const T centerCylinderY = parameters.get<parameters::CENTER_CYLINDER>()[1] + physDeltaX/2.;
+  const T radiusCylinder  = parameters.get<parameters::RADIUS_CYLINDER>();
+
+  Vector<T,2> center(centerCylinderX, centerCylinderY);
+  std::shared_ptr<IndicatorF2D<T>> circle = std::make_shared<IndicatorCircle2D<T>>(center, radiusCylinder);
+
   #ifdef BOUZIDI
-  setBouzidiBoundary(sLattice, superGeometry, 5, *circle);
+    setBouzidiBoundary(lattice, geometry, 5, *circle);
   #else
-  boundary::set<boundary::BounceBack>(sLattice, superGeometry, 5);
+    boundary::set<boundary::BounceBack>(lattice, geometry, 5);
   #endif
 
-  // Initial conditions
-  AnalyticalConst2D<T,T> rhoF( 1 );
-  std::vector<T> velocity( 2,T( 0 ) );
-  AnalyticalConst2D<T,T> uF( velocity );
-
-  // Initialize all values of distribution functions to their local equilibrium
-  sLattice.defineRhoU( bulkIndicator, rhoF, uF );
-  sLattice.iniEquilibrium( bulkIndicator, rhoF, uF );
-
-  sLattice.setParameter<descriptors::OMEGA>(omega);
-
-  // Make the lattice ready for simulation
-  sLattice.initialize();
-
+  lattice.setParameter<descriptors::OMEGA>(lattice.getUnitConverter().getLatticeRelaxationFrequency());
   clout << "Prepare Lattice ... OK" << std::endl;
 }
 
+void setInitialValues(MyCase& myCase) {
+  using T = MyCase::value_t;
+  auto& lattice = myCase.getLattice(NavierStokes{});
+  auto& geometry = myCase.getGeometry();
+
+  auto bulkIndicator = geometry.getMaterialIndicator({1});
+
+  AnalyticalConst2D<T,T> rhoF(1);
+  std::vector<T> velocity(2, T(0));
+  AnalyticalConst2D<T,T> uF(velocity);
+
+  // Initialize all values of distribution functions to their local equilibrium
+  lattice.defineRhoU(bulkIndicator, rhoF, uF);
+  lattice.iniEquilibrium(bulkIndicator, rhoF, uF);
+
+  // Make the lattice ready for simulation
+  lattice.initialize();
+}
+
 // Generates a slowly increasing inflow for the first iTMaxStart timesteps
-void setBoundaryValues( SuperLattice<T, DESCRIPTOR>& sLattice,
-                        std::size_t iT,
-                        SuperGeometry<T,2>& superGeometry)
+void setTemporalValues(MyCase& myCase,
+                      std::size_t iT)
 {
-  OstreamManager clout( std::cout,"setBoundaryValues" );
-  const UnitConverter<T,DESCRIPTOR>& converter = sLattice.getUnitConverter();
+  using T = MyCase::value_t;
+  auto& parameters = myCase.getParameters();
+  auto& lattice    = myCase.getLattice(NavierStokes{});
+  auto& geometry   = myCase.getGeometry();
+
+  const T maxPhysT   = parameters.get<parameters::MAX_PHYS_T>();
+  const T physDeltaX = 2.*parameters.get<parameters::RADIUS_CYLINDER>()/parameters.get<parameters::RESOLUTION>();
 
   // No of time steps for smooth start-up
-  std::size_t iTmaxStart = converter.getLatticeTime( maxPhysT*0.4 );
-  std::size_t iTupdate = 5;
+  std::size_t iTmaxStart = lattice.getUnitConverter().getLatticeTime(maxPhysT*parameters.get<parameters::RAMP_UP_END_FRACTION>());
+  std::size_t iTupdate   = lattice.getUnitConverter().getLatticeTime(parameters.get<parameters::RAMP_UP_UPDATE>());
 
-  if ( iT%iTupdate==0 && iT<= iTmaxStart ) {
+  if (iT%iTupdate==0 && iT<= iTmaxStart) {
     // Smooth start curve, sinus
     // SinusStartScale<T,int> StartScale(iTmaxStart, T(1));
 
     // Smooth start curve, polynomial
-    PolynomialStartScale<T,T> StartScale( iTmaxStart, T( 1 ) );
+    PolynomialStartScale<T,T> StartScale(iTmaxStart, T(1));
 
     // Creates and sets the Poiseuille inflow profile using functors
-    T iTvec[1] = {T( iT )};
-    T frac[1] = {};
-    StartScale( frac,iTvec );
-    T maxVelocity = converter.getCharLatticeVelocity()*3./2.*frac[0];
-    T distance2Wall = L/2.;
-    Poiseuille2D<T> poiseuilleU( superGeometry, 3, maxVelocity, distance2Wall );
+    T iTvec[1] = {T(iT)};
+    T frac[1]  = {};
+    StartScale(frac, iTvec);
+    T maxVelocity   = lattice.getUnitConverter().getCharLatticeVelocity()*3./2.*frac[0];
+    T distance2Wall = physDeltaX/2.;
+    Poiseuille2D<T> poiseuilleU(geometry, 3, maxVelocity, distance2Wall);
 
-    sLattice.defineU( superGeometry, 3, poiseuilleU );
+    lattice.defineU(geometry, 3, poiseuilleU);
 
-    sLattice.setProcessingContext<Array<momenta::FixedVelocityMomentumGeneric::VELOCITY>>(
+    lattice.setProcessingContext<Array<momenta::FixedVelocityMomentumGeneric::VELOCITY>>(
       ProcessingContext::Simulation);
   }
 }
 
 // Computes the pressure drop between the voxels before and after the cylinder
-void getResults( SuperLattice<T, DESCRIPTOR>& sLattice,
-                 std::size_t iT,
-                 SuperGeometry<T,2>& superGeometry, util::Timer<T>& timer )
+void getResults(MyCase& myCase,
+                util::Timer<MyCase::value_t>& timer,
+                std::size_t iT)
 {
   OstreamManager clout( std::cout,"getResults" );
-  const UnitConverter<T,DESCRIPTOR>& converter = sLattice.getUnitConverter();
+  using T          = MyCase::value_t;
+  using DESCRIPTOR = MyCase::descriptor_t;
+  auto& parameters = myCase.getParameters();
+  auto& lattice    = myCase.getLattice(NavierStokes{});
+  auto& geometry   = myCase.getGeometry();
+
+  const UnitConverter<T,DESCRIPTOR>& converter = lattice.getUnitConverter();
 
   // Gnuplot constructor (must be static!)
   // for real-time plotting: gplot("name", true) // experimental!
-  static Gnuplot<T> gplot( "drag" );
+  static Gnuplot<T> gplot("drag");
 
-  SuperVTMwriter2D<T> vtmWriter( "cylinder2d" );
-  SuperLatticePhysVelocity2D<T, DESCRIPTOR> velocity( sLattice, converter );
-  SuperLatticePhysPressure2D<T, DESCRIPTOR> pressure( sLattice, converter );
+  SuperVTMwriter2D<T> vtmWriter("cylinder2d");
+  SuperLatticePhysVelocity2D<T, DESCRIPTOR> velocity(lattice, converter);
+  SuperLatticePhysPressure2D<T, DESCRIPTOR> pressure(lattice, converter);
 
-  vtmWriter.addFunctor( velocity );
-  vtmWriter.addFunctor( pressure );
+  vtmWriter.addFunctor(velocity);
+  vtmWriter.addFunctor(pressure);
 
-  const std::size_t vtkIter  = converter.getLatticeTime( .3 );
-  const std::size_t statIter = converter.getLatticeTime( .1 );
+  const std::size_t vtkIter  = converter.getLatticeTime(parameters.get<parameters::VTK_ITER>());
+  const std::size_t statIter = converter.getLatticeTime(parameters.get<parameters::STAT_ITER>());
+
+  const T maxPhysT        = parameters.get<parameters::MAX_PHYS_T>();
+  const T physDeltaX      = 2.*parameters.get<parameters::RADIUS_CYLINDER>()/parameters.get<parameters::RESOLUTION>();
+  const T centerCylinderX = parameters.get<parameters::CENTER_CYLINDER>()[0];
+  const T centerCylinderY = parameters.get<parameters::CENTER_CYLINDER>()[1] + physDeltaX/2.;
+  const T radiusCylinder  = parameters.get<parameters::RADIUS_CYLINDER>();
 
   T point[2] = {};
   point[0] = centerCylinderX + 3*radiusCylinder;
   point[1] = centerCylinderY;
-  AnalyticalFfromSuperF2D<T> intpolateP( pressure, true );
+  AnalyticalFfromSuperF2D<T> intpolateP(pressure, true);
   T p;
-  intpolateP( &p,point );
+  intpolateP(&p, point);
 
-  if ( iT == 0 ) {
+  if (iT == 0) {
     // Writes the geometry, cuboid no. and rank no. as vti file for visualization
-    SuperLatticeCuboid2D<T, DESCRIPTOR> cuboid( sLattice );
-    SuperLatticeRank2D<T, DESCRIPTOR> rank( sLattice );
-    vtmWriter.write( cuboid );
-    vtmWriter.write( rank );
+    SuperLatticeCuboid2D<T, DESCRIPTOR> cuboid(lattice);
+    SuperLatticeRank2D<T, DESCRIPTOR> rank(lattice);
+    vtmWriter.write(cuboid);
+    vtmWriter.write(rank);
 
     vtmWriter.createMasterFile();
   }
 
-  if ( iT%statIter == 0 ) {
-    sLattice.setProcessingContext(ProcessingContext::Evaluation);
+  if (iT%statIter == 0) {
+    lattice.setProcessingContext(ProcessingContext::Evaluation);
 
     // Timer console output
-    timer.update( iT );
+    timer.update(iT);
     timer.printStep();
 
     // Lattice statistics console output
-    sLattice.getStatistics().print( iT,converter.getPhysTime( iT ) );
+    lattice.getStatistics().print(iT, converter.getPhysTime(iT));
 
     // Drag, lift, pressure drop
-    AnalyticalFfromSuperF2D<T> intpolatePressure( pressure, true );
-    SuperLatticePhysDrag2D<T,DESCRIPTOR> drag( sLattice, superGeometry, 5, converter );
+    AnalyticalFfromSuperF2D<T> intpolatePressure(pressure, true);
+    SuperLatticePhysDrag2D<T,DESCRIPTOR> drag(lattice, geometry, 5, converter );
 
     T point1[2] = {};
     T point2[2] = {};
@@ -237,8 +311,8 @@ void getResults( SuperLattice<T, DESCRIPTOR>& sLattice,
     point2[1] = centerCylinderY;
 
     T p1, p2;
-    intpolatePressure( &p1,point1 );
-    intpolatePressure( &p2,point2 );
+    intpolatePressure(&p1, point1);
+    intpolatePressure(&p2, point2);
 
     clout << "pressure1=" << p1;
     clout << "; pressure2=" << p2;
@@ -248,104 +322,105 @@ void getResults( SuperLattice<T, DESCRIPTOR>& sLattice,
 
     int input[3] = {};
     T _drag[drag.getTargetDim()];
-    drag( _drag,input );
+    drag(_drag, input);
     clout << "; drag=" << _drag[0] << "; lift=" << _drag[1] << std::endl;
 
     // set data for gnuplot: input={xValue, yValue(s), names (optional), position of key (optional)}
-    gplot.setData( converter.getPhysTime( iT ), {_drag[0], 5.58}, {"drag(openLB)", "drag(schaeferTurek)"}, "bottom right", {'l','l'} );
+    gplot.setData(converter.getPhysTime(iT), {_drag[0], 5.58}, {"drag(openLB)", "drag(schaeferTurek)"}, "bottom right", {'l','l'});
 
     // every (iT%vtkIter) write an png of the plot
-    if ( iT%( vtkIter ) == 0 ) {
+    if (iT % (vtkIter) == 0) {
       // writes pngs: input={name of the files (optional), x range for the plot (optional)}
-      gplot.writePNG( iT, maxPhysT );
+      gplot.writePNG(iT, maxPhysT);
     }
   }
 
   // Writes the vtk files
-  if ( iT%vtkIter == 0 && iT > 0 ) {
-    vtmWriter.write( iT );
+  if (iT % vtkIter == 0 && iT > 0) {
+    vtmWriter.write(iT);
 
     {
-      SuperEuklidNorm2D<T, DESCRIPTOR> normVel( velocity );
-      BlockReduction2D2D<T> planeReduction( normVel, 600, BlockDataSyncMode::ReduceOnly );
+      SuperEuklidNorm2D<T, DESCRIPTOR> normVel(velocity);
+      BlockReduction2D2D<T> planeReduction(normVel, 600, BlockDataSyncMode::ReduceOnly);
       // write output as JPEG
       heatmap::write(planeReduction, iT);
     }
   }
 
   // write pdf at last time step
-  if ( iT == converter.getLatticeTime( maxPhysT )-1 ) {
+  if (iT == converter.getLatticeTime(maxPhysT) - 1) {
     // writes pdf
     gplot.writePDF();
   }
 }
 
-int main( int argc, char* argv[] )
-{
-  // === 1st Step: Initialization ===
-  initialize( &argc, &argv );
-  singleton::directories().setOutputDir( "./tmp/" );
-  OstreamManager clout( std::cout,"main" );
+void simulate(MyCase& myCase){
+  OstreamManager clout(std::cout, "simulate");
+  using T = MyCase::value_t;
+  auto& parameters = myCase.getParameters();
+  const T physMaxT = parameters.get<parameters::MAX_PHYS_T>();
+  const std::size_t iTmax = myCase.getLattice(NavierStokes{}).getUnitConverter().getLatticeTime(physMaxT);
 
-  UnitConverterFromResolutionAndRelaxationTime<T, DESCRIPTOR> const converter(
-    int {N},                        // resolution: number of voxels per charPhysL
-    (T)   0.56,                     // latticeRelaxationTime: relaxation time, have to be greater than 0.5!
-    (T)   2.0*radiusCylinder,       // charPhysLength: reference length of simulation geometry
-    (T)   0.2,                      // charPhysVelocity: maximal/highest expected velocity during simulation in __m / s__
-    (T)   0.2*2.*radiusCylinder/Re, // physViscosity: physical kinematic viscosity in __m^2 / s__
-    (T)   1.0                       // physDensity: physical density in __kg / m^3__
-  );
-  // Prints the converter log as console output
-  converter.print();
-  // Writes the converter log in a file
-  converter.write("cylinder2d");
-
-  // === 2rd Step: Prepare Geometry ===
-  Vector<T,2> extend( lengthX, lengthY );
-  Vector<T,2> origin;
-  IndicatorCuboid2D<T> cuboid( extend, origin );
-
-  // Instantiation of a cuboidDecomposition with weights
-  #ifdef PARALLEL_MODE_MPI
-  const int noOfCuboids = singleton::mpi().getSize();
-  #else
-  const int noOfCuboids = 7;
-  #endif
-  CuboidDecomposition2D<T> cuboidDecomposition( cuboid, L, noOfCuboids );
-
-  // Instantiation of a loadBalancer
-  HeuristicLoadBalancer<T> loadBalancer( cuboidDecomposition );
-
-  // Instantiation of a superGeometry
-  SuperGeometry<T,2> superGeometry( cuboidDecomposition, loadBalancer );
-
-  Vector<T,2> center( centerCylinderX, centerCylinderY );
-  std::shared_ptr<IndicatorF2D<T>> circle = std::make_shared<IndicatorCircle2D<T>>( center, radiusCylinder );
-
-  prepareGeometry(superGeometry, circle);
-
-  // === 3rd Step: Prepare Lattice ===
-  SuperLattice<T, DESCRIPTOR> sLattice(converter, superGeometry);
-
-  prepareLattice( sLattice, superGeometry, circle );
-
-  // === 4th Step: Main Loop with Timer ===
   clout << "starting simulation..." << std::endl;
-  util::Timer<T> timer( converter.getLatticeTime( maxPhysT ), superGeometry.getStatistics().getNvoxel() );
+  util::Timer<T> timer(iTmax, myCase.getGeometry().getStatistics().getNvoxel());
   timer.start();
 
-  for ( std::size_t iT = 0; iT < converter.getLatticeTime( maxPhysT ); ++iT ) {
-    // === 5th Step: Definition of Initial and Boundary Conditions ===
-    setBoundaryValues( sLattice, iT, superGeometry);
+  for (std::size_t iT=0; iT < iTmax; ++iT) {
+    /// === Step 8.1: Update the Boundary Values and Fields at Times ===
+    setTemporalValues(myCase, iT);
 
-    // === 6th Step: Collide and Stream Execution ===
-    sLattice.collideAndStream();
+    /// === Step 8.2: Collide and Stream Execution ===
+    myCase.getLattice(NavierStokes{}).collideAndStream();
 
-    // === 7th Step: Computation and Output of the Results ===
-    getResults( sLattice, iT, superGeometry, timer );
-
+    /// === Step 8.3: Computation and Output of the Results ===
+    getResults(myCase, timer, iT);
   }
 
   timer.stop();
   timer.printSummary();
+}
+
+
+int main(int argc, char* argv[])
+{
+  initialize(&argc, &argv);
+  singleton::directories().setOutputDir("./tmp/");
+
+  /// === Step 2: Set Parameters ===
+  MyCase::ParametersD myCaseParameters;
+  {
+    using namespace olb::parameters;
+    myCaseParameters.set<RESOLUTION>(10);
+    myCaseParameters.set<REYNOLDS >(20.);
+    myCaseParameters.set<MAX_PHYS_T>(16.);
+    myCaseParameters.set<DOMAIN_EXTENT>({2.2, .41});
+    myCaseParameters.set<PHYS_CHAR_VELOCITY>(0.2);
+    myCaseParameters.set<LATTICE_RELAXATION_TIME>(0.56);
+    myCaseParameters.set<PHYS_CHAR_DENSITY>(1.0);
+    myCaseParameters.set<RADIUS_CYLINDER>(0.05);
+    myCaseParameters.set<CENTER_CYLINDER>({0.2, 0.2});
+    myCaseParameters.set<VTK_ITER>(0.3);
+    myCaseParameters.set<STAT_ITER>(0.1);
+    myCaseParameters.set<RAMP_UP_UPDATE>(0.01);
+    myCaseParameters.set<RAMP_UP_END_FRACTION>(0.4);
+  }
+  myCaseParameters.fromCLI(argc, argv);
+
+  /// === Step 3: Create Mesh ===
+  Mesh mesh = createMesh(myCaseParameters);
+
+  /// === Step 4: Create Case ===
+  MyCase myCase(myCaseParameters, mesh);
+
+  /// === Step 5: Prepare Geometry ===
+  prepareGeometry(myCase);
+
+  /// === Step 6: Prepare Lattice ===
+  prepareLattice(myCase);
+
+  /// === Step 7: Definition of Initial, Boundary Values, and Fields ===
+  setInitialValues(myCase);
+
+    /// === Step 8: Simulate ===
+  simulate(myCase);
 }
