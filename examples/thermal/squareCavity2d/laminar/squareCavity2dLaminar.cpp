@@ -252,6 +252,46 @@ void setInitialValues(MyCase& myCase){
     clout << "Set initial values ... OK" << std::endl;
 }
 
+void getResults(MyCase& myCase, util::Timer<MyCase::value_t>& timer, std::size_t iT, bool converged){
+    using T = MyCase::value_t;
+    auto& NSElattice = myCase.getLattice(NavierStokes{});
+    auto& ADlattice = myCase.getLattice(Temperature{});
+    const auto& converter = NSElattice.getUnitConverter();
+
+    using NSEDESCRIPTOR = MyCase::descriptor_t_of<NavierStokes>;
+    using TDESCRIPTOR = MyCase::descriptor_t_of<Temperature>;
+
+    SuperVTMwriter2D<T> vtkWriter("squareCavity2dLaminar");
+    SuperLatticePhysVelocity2D<T, NSEDESCRIPTOR> velocity(NSElattice, converter);
+    SuperLatticePhysPressure2D<T, NSEDESCRIPTOR> pressure(NSElattice, converter);
+    SuperLatticePhysTemperature2D<T, NSEDESCRIPTOR, TDESCRIPTOR> temperature(ADlattice, converter);
+    vtkWriter.addFunctor(pressure);
+    vtkWriter.addFunctor(velocity);
+    vtkWriter.addFunctor(temperature);
+
+    AnalyticalFfromSuperF2D<T> interpolation(velocity, true);
+
+    const int statIter = 2000.;
+
+    if(iT == 0){
+
+    }
+
+    if(iT%statIter == 0 || converged){
+        NSElattice.setProcessingContext(ProcessingContext::Evaluation);
+        ADlattice.setProcessingContext(ProcessingContext::Evaluation);
+
+        timer.update(iT);
+        timer.printStep();
+
+        /// NSLattice statistics console output
+        NSElattice.getStatistics().print(iT,converter.getPhysTime(iT));
+        /// ADLattice statistics console output
+        ADlattice.getStatistics().print(iT,converter.getPhysTime(iT));
+
+    }
+}
+
 void simulate(MyCase& myCase){
     OstreamManager clout(std::cout,"Simulation");
     clout << "Starting Simulation ..." << std::endl;
@@ -263,7 +303,7 @@ void simulate(MyCase& myCase){
     auto& ADlattice = myCase.getLattice(Temperature{});
     const auto& converter = NSElattice.getUnitConverter();
 
-    const std::size_t iTmax = parameters.get<parameters::MAX_PHYS_T>();
+    const std::size_t iTmax = converter.getLatticeTime(parameters.get<parameters::MAX_PHYS_T>());
 
     util::Timer<T> timer(iTmax, myCase.getGeometry().getStatistics().getNvoxel());
   
@@ -279,26 +319,20 @@ void simulate(MyCase& myCase){
             clout << "Simulation converged." << std::endl;
             clout << "Time " << iT << "." << std::endl;
 
-            //getResults(output, converter, NSlattice, ADlattice, iT, superGeometry, timer, converge.hasConverged());
+            getResults(myCase, timer, iT, converged);
         }
 
         NSElattice.collideAndStream();
         ADlattice.collideAndStream();
         myCase.getOperator("Boussinesq").apply();
 
-        //clout << "hoi" << std::endl;
-
         if(!converged){
-            //getResults
+            getResults(myCase, timer, iT, converged);
         }
         if(!converged && iT%1000 == 0){
-            timer.update(iT);
-            timer.printStep();
-            /// NSLattice statistics console output
-    NSElattice.getStatistics().print(iT,converter.getPhysTime(iT));
-    /// ADLattice statistics console output
-    ADlattice.getStatistics().print(iT,converter.getPhysTime(iT));
-            NSElattice.setProcessingContext(ProcessingContext::Evaluation);
+            
+
+            
             //converge.takeValue()
         }
         if(converged) break;
