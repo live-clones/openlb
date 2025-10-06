@@ -25,7 +25,6 @@ namespace olb {
 
         V dx = magic[0];
         V dt = magic[1];
-        V theta = magic[2];
         V mu = magic[3];
         V lambda = magic[4];
         V kappa = magic[5];
@@ -35,7 +34,7 @@ namespace olb {
         int i, j, zeta, dim, oppo;
         V nx, ny;
         Vector<int,2> c, oppoC;
-        V s_ij, a_ijkl, Tx, Ty, sum, weight, boundaryX, boundaryY;
+        V s_ij, Tx, Ty, sum, weight, boundaryX, boundaryY;
 
         V latticeFactor = dt / (kappa * dx);
 
@@ -50,7 +49,6 @@ namespace olb {
             j = c[1];
             boundaryX = neighbor.template getField<descriptors::BOUNDARY_COORDS_X>()[oppo];
             boundaryY = neighbor.template getField<descriptors::BOUNDARY_COORDS_Y>()[oppo];
-            V boundaryCoords[2] = {boundaryX, boundaryY};
 
             nx = neighbor.template getField<descriptors::NEUMANN_SOLID_NORMAL_X>()[oppo];
             ny = neighbor.template getField<descriptors::NEUMANN_SOLID_NORMAL_Y>()[oppo];

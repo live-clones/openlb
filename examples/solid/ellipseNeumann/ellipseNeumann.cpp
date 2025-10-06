@@ -26,23 +26,14 @@
 
 using namespace olb;
 using namespace olb::names;
+using namespace olb::descriptors;
 
 // === Step 1: Declarations ===
 using MyCase = Case<
   NavierCauchy,
   Lattice<double,
     descriptors::D2Q8<
-      descriptors::tag::MRT,
-      descriptors::FORCE,
-      descriptors::MOMENT_VECTOR,
-      descriptors::DISP_SOLID,
-      descriptors::SIGMA_SOLID,
-      descriptors::BOUNDARY_COORDS_X,
-      descriptors::BOUNDARY_COORDS_Y,
-      descriptors::SOLID_DISTANCE_FIELD,
-      descriptors::NEUMANN_SOLID_C,
-      descriptors::NEUMANN_SOLID_NORMAL_X,
-      descriptors::NEUMANN_SOLID_NORMAL_Y>>
+      tag::MRT>>
 >;
 
 namespace olb::parameters {
@@ -71,11 +62,7 @@ class Ellipse2D {
 };
 
 template <typename T>
-AnalyticalF2D<T, T>* getForceField(MyCase& myCase)
-{
-  using DESCRIPTOR = typename MyCase::template descriptor_t_of<NavierCauchy>;
-
-  class ForceField2D : public AnalyticalF2D<T, T> {
+class ForceField2D : public AnalyticalF2D<T, T> {
   protected:
     MyCase& aCase;
 
@@ -88,6 +75,7 @@ AnalyticalF2D<T, T>* getForceField(MyCase& myCase)
     {
       auto& lattice = aCase.getLattice(NavierCauchy{});
       T pi = std::numbers::pi_v<double>;
+      using DESCRIPTOR = MyCase::descriptor_t_of<NavierCauchy>;
 
       const auto& converter = lattice.getUnitConverter();
       T dx = converter.getPhysDeltaX();
@@ -108,13 +96,6 @@ AnalyticalF2D<T, T>* getForceField(MyCase& myCase)
       T tau_s = 1. / omega_d - 0.5;
       T tau_p = 1. / omega_s - 0.5;
       T tau_12 = 0.5;
-      T tau_22 = 0.5;
-
-      T tau_21 = tau_12;
-
-      T omega_12 = 1. / (tau_12 + 0.5);
-      T omega_21 = 1. / (tau_21 + 0.5);
-      T omega_22 = 1. / (tau_22 + 0.5);
 
       T d1 = -1. / 4. - 1. / 2. * descriptors::invCs2<T,DESCRIPTOR>() * tau_12 * tau_s + pow(tau_s, 2) / 2.
           -  1. / 2. * descriptors::invCs2<T,DESCRIPTOR>() * pow(tau_s, 2) + 1. / 2. * descriptors::invCs2<T,DESCRIPTOR>() * tau_12 * tau_p
@@ -207,102 +188,88 @@ AnalyticalF2D<T, T>* getForceField(MyCase& myCase)
             - 0.0216*cos(2*pi*x*y))
             + 0.0056*(lambda + 2*mu)*cos(2*pi*y));
     }
-  };
-
-  return new ForceField2D (myCase);;
-}
+};
 
 template <typename T>
-AnalyticalF2D<T, T>* getManufacturedSolutionU2D(MyCase& myCase)
-{
-  class ManufacturedSolutionU2D : public AnalyticalF2D<T, T> {
+class ManufacturedSolutionU2D : public AnalyticalF2D<T, T> {
+  protected:
 
-    protected:
+  public:
+  ManufacturedSolutionU2D(MyCase& myCase) : AnalyticalF2D<T, T>(2) {};
 
-    public:
-    ManufacturedSolutionU2D(MyCase& myCase) : AnalyticalF2D<T, T>(2) {};
+  bool operator()(T output[], const T input[]) override
+  {
+    T pi = std::numbers::pi_v<double>;
+
+    T x = input[0];
+    T y = input[1];
+
+    output[0] = 9. / 10000. * util::sin(2. * pi * x * y);
+    output[1] = 7. / 10000. * util::cos(2. * pi * y) * (x * x + 1);
+
+    return true;
+  };
+};
+
+template <typename T>
+class ManufacturedSolutionStress2D : public AnalyticalF2D<T, T> {
+  protected:
+    MyCase& aCase;
+
+  public:
+    ManufacturedSolutionStress2D(MyCase& myCase) : AnalyticalF2D<T, T>(4),
+    aCase(myCase) {};
 
     bool operator()(T output[], const T input[]) override
     {
       T pi = std::numbers::pi_v<double>;
 
+      const auto& converter = aCase.getLattice(NavierCauchy{}).getUnitConverter();
+      T dx = converter.getPhysDeltaX();
+      T dt = converter.getPhysDeltaT();
+      T kappa = converter.getDampingFactor();
+      T lambda = converter.getLatticeLambda();
+      T mu = converter.getLatticeShearModulus();
+
       T x = input[0];
       T y = input[1];
 
-      output[0] = 9. / 10000. * util::sin(2. * pi * x * y);
-      output[1] = 7. / 10000. * util::cos(2. * pi * y) * (x * x + 1);
+      T latticeFactor = dt / (kappa * dx);
+
+      // xx
+      output[0] = latticeFactor * ((2. * mu + lambda) * dux_dx(0, x, y, pi)
+                                            + lambda  * duy_dy(0, x, y, pi));
+      // xy
+      output[1] = latticeFactor * (mu * (  dux_dy(0, x, y, pi)
+                                        + duy_dx(0, x, y, pi)  ));
+
+      // yx
+      output[2] = latticeFactor * (mu * (  dux_dy(0, x, y, pi)
+                + duy_dx(0, x, y, pi)  ));
+
+      // yy
+      output[3] = latticeFactor * ((2. * mu + lambda) * duy_dy(0, x, y, pi)
+                                            + lambda  * dux_dx(0, x, y, pi));
 
       return true;
     };
-  };
 
-  return new ManufacturedSolutionU2D (myCase);
-}
+    T dux_dx(T t, T x, T y, T pi) {
+      return 0.0018 * pi * y * util::cos(2. * pi * x * y);
+    }
 
-template <typename T>
-AnalyticalF2D<T, T>* getManufacturedSolutionStress2D(MyCase& myCase)
-{
-  class ManufacturedSolutionStress2D : public AnalyticalF2D<T, T> {
-    protected:
-      MyCase& aCase;
+    T dux_dy(T t, T x, T y, T pi) {
+      return 0.0018 * pi * x * util::cos(2 * pi * x * y);
+    }
 
-    public:
-      ManufacturedSolutionStress2D(MyCase& myCase) : AnalyticalF2D<T, T>(4),
-      aCase(myCase) {};
+    T duy_dx(T t, T x, T y, T pi) {
+      return 0.0014 * x * util::cos(2 * pi * y);
+    }
 
-      bool operator()(T output[], const T input[]) override
-      {
-        T pi = std::numbers::pi_v<double>;
-
-        const auto& converter = aCase.getLattice(NavierCauchy{}).getUnitConverter();
-        T dx = converter.getPhysDeltaX();
-        T dt = converter.getPhysDeltaT();
-        T kappa = converter.getDampingFactor();
-        T lambda = converter.getLatticeLambda();
-        T mu = converter.getLatticeShearModulus();
-
-        T x = input[0];
-        T y = input[1];
-
-        T latticeFactor = dt / (kappa * dx);
-
-        // xx
-        output[0] = latticeFactor * ((2. * mu + lambda) * dux_dx(0, x, y, pi)
-                                              + lambda  * duy_dy(0, x, y, pi));
-        // xy
-        output[1] = latticeFactor * (mu * (  dux_dy(0, x, y, pi)
-                                          + duy_dx(0, x, y, pi)  ));
-
-        // yx
-        output[2] = latticeFactor * (mu * (  dux_dy(0, x, y, pi)
-                  + duy_dx(0, x, y, pi)  ));
-
-        // yy
-        output[3] = latticeFactor * ((2. * mu + lambda) * duy_dy(0, x, y, pi)
-                                              + lambda  * dux_dx(0, x, y, pi));
-
-        return true;
-      };
-
-      T dux_dx(T t, T x, T y, T pi) {
-        return 0.0018 * pi * y * util::cos(2. * pi * x * y);
-      }
-
-      T dux_dy(T t, T x, T y, T pi) {
-        return 0.0018 * pi * x * util::cos(2 * pi * x * y);
-      }
-
-      T duy_dx(T t, T x, T y, T pi) {
-        return 0.0014 * x * util::cos(2 * pi * y);
-      }
-
-      T duy_dy(T t, T x, T y, T pi) {
-        return -0.0014 * pi * (x * x + 1.) * util::sin(2 * pi * y);
-      }
-  };
-
-  return new ManufacturedSolutionStress2D (myCase);
-}
+    T duy_dy(T t, T x, T y, T pi) {
+      return -0.0014 * pi * (x * x + 1.) * util::sin(2 * pi * y);
+    }
+};
 
 /// @brief Create a simulation mesh, based on user-specific geometry
 /// @return An instance of Mesh, which keeps the relevant information
@@ -322,14 +289,17 @@ Mesh<MyCase::value_t,MyCase::d> createMesh(MyCase::ParametersD& parameters) {
 /// @brief Set material numbers for different parts of the domain
 /// @param myCase The Case instance which keeps the simulation data
 /// @note The material numbers will be used to assign physics to lattice nodes
-void prepareGeometry(MyCase& myCase,
-                     Ellipse2D& Ellipses) {
+void prepareGeometry(MyCase& myCase) {
   OstreamManager clout(std::cout, "prepareGeometry");
+  clout << "Prepare Geometry ..." << std::endl;
 
   auto& geometry = myCase.getGeometry();
+  auto& params = myCase.getParameters();
 
   geometry.rename( 0, 5 );
 
+  auto physCharLength = params.get<parameters::PHYS_CHAR_LENGTH>();
+  Ellipse2D Ellipses(physCharLength);
   auto& ellipse1 = Ellipses.ellipse1;
   auto& ellipse2 = Ellipses.ellipse2;
   auto& ellipse3 = Ellipses.ellipse3;
@@ -343,25 +313,52 @@ void prepareGeometry(MyCase& myCase,
   geometry.checkForErrors();
 
   geometry.print();
-}
 
-/// @brief Set lattice dynamics
-/// @param myCase The Case instance which keeps the simulation data
-void prepareLattice(MyCase& myCase,
-                    Ellipse2D& Ellipses) {
-  OstreamManager clout(std::cout, "prepareLattice");
+  clout << "Prepare Geometry ... OK" << std::endl;
+}
+//new
+void prepareLattice(MyCase& myCase) {
+  OstreamManager clout(std::cout,"prepareLattice");
+  clout << "Prepare Lattice ..." << std::endl;
 
   using T = MyCase::value_t;
-  using DESCRIPTOR = MyCase::descriptor_t_of<NavierCauchy>;
-  auto& parameters = myCase.getParameters();
-  auto& lattice = myCase.getLattice(NavierCauchy{});
   auto& geometry = myCase.getGeometry();
+  auto& params = myCase.getParameters();
 
-  /// Material=1 -->bulk dynamics
-  auto bulkIndicator = geometry.getMaterialIndicator( 1 );
+  auto& lattice = myCase.getLattice(NavierCauchy{});
 
-  lattice.defineDynamics<BoolakeeLinearElasticityBoundary>(bulkIndicator);
+  using DESCRIPTOR = MyCase::descriptor_t_of<NavierCauchy>;
 
+  auto extent = params.get<parameters::DOMAIN_EXTENT>();
+  const T physDeltaX = extent[0] / params.get<parameters::RESOLUTION>();
+  const T physDeltaT = physDeltaX * physDeltaX;
+  const T charDisplacement = params.get<parameters::PHYS_CHAR_DISPLACEMENT>();
+  const T ELattice = params.get<parameters::YOUNGS_MODULUS>();
+  const T physPoissonRatio = params.get<parameters::POISSON_RATIO>();
+  const T kappa = params.get<parameters::KAPPA>();
+  const T charLength = params.get<parameters::PHYS_CHAR_LENGTH>();
+
+  constexpr T theta = descriptors::invCs2<T, DESCRIPTOR>();
+
+  lattice.setUnitConverter<LinElaUnitConverter<T, DESCRIPTOR>>(
+    (T) physDeltaX, // physDeltaX
+    (T) physDeltaT, // physDeltaT
+    (T) charLength,  // charPhysLength
+    (T) charDisplacement, // charPhysDisplacement
+    (T) ELattice * (physDeltaX * physDeltaX * kappa) / physDeltaT,  // physViscosity
+    (T) physPoissonRatio, // physViscosity
+    (T) kappa // physThermalConductivity
+  );
+
+  const auto& converter = lattice.getUnitConverter();
+  converter.print();
+
+  auto bulkIndicator = geometry.getMaterialIndicator({ 1 });
+
+  lattice.defineDynamics<BoolakeeLinearElasticityBoundary>( bulkIndicator );
+
+  const T physCharLength = params.get<parameters::PHYS_CHAR_LENGTH>();
+  Ellipse2D Ellipses(physCharLength);
   auto& ellipse1 = Ellipses.ellipse1;
   auto& ellipse2 = Ellipses.ellipse2;
   auto& ellipse3 = Ellipses.ellipse3;
@@ -369,73 +366,61 @@ void prepareLattice(MyCase& myCase,
   setBoolakeeNeumannBoundary<T,DESCRIPTOR,BoolakeeNeumannPostProcessor<T,DESCRIPTOR>>(lattice, geometry.getMaterialIndicator( 6 ), bulkIndicator, ellipse2, false);
   setBoolakeeNeumannBoundary<T,DESCRIPTOR,BoolakeeNeumannPostProcessor<T,DESCRIPTOR>>(lattice, geometry.getMaterialIndicator( 7 ), bulkIndicator, ellipse3, false);
 
-  const T physCharLength        = parameters.get<parameters::PHYS_CHAR_LENGTH>();
-  const Vector extent           = parameters.get<parameters::DOMAIN_EXTENT>();
-  const T physDeltaX            = extent[0] / parameters.get<parameters::RESOLUTION>();
-  const T physDeltaT            = physDeltaX * physDeltaX;
-
-  const T physCharDisplacement  = parameters.get<parameters::PHYS_CHAR_DISPLACEMENT>();
-  const T physYoungsModulus     = parameters.get<parameters::YOUNGS_MODULUS>();
-  const T physPoissonRatio      = parameters.get<parameters::POISSON_RATIO>();
-  const T kappa                 = parameters.get<parameters::KAPPA>();
-
-  // Set up a unit converter with the characteristic physical units
-  lattice.setUnitConverter<LinElaUnitConverter<T, DESCRIPTOR>>(
-    physDeltaX,
-    physDeltaT,
-    physCharLength,
-    physCharDisplacement,
-    physYoungsModulus,
-    physPoissonRatio,
-    kappa
-  );
-  const auto& converter = lattice.getUnitConverter();
-  converter.print();
-
-  T magic[8] = {
-    converter.getPhysDeltaX(),
-    converter.getPhysDeltaT(),
-    descriptors::invCs2<T,DESCRIPTOR>(),
-    converter.getLatticeShearModulus(),
-    converter.getLatticeLambda(),
-    converter.getDampingFactor(),
-    converter.getCharPhysVelocity(),
-    converter.getEpsilon()
-  };
-
-  lattice.setParameter<descriptors::MAGIC_SOLID>(magic);
-
-  T omega_11  = 1. / (      converter.getLatticeShearModulus()                                 /       descriptors::invCs2<T,DESCRIPTOR>()  + 0.5);
-  T omega_d   = 1. / (2. *  converter.getLatticeShearModulus()                                 / (1. - descriptors::invCs2<T,DESCRIPTOR>()) + 0.5);
-  T omega_s   = 1. / (2. * (converter.getLatticeShearModulus() + converter.getLatticeLambda()) / (1. + descriptors::invCs2<T,DESCRIPTOR>()) + 0.5);
-
-  T tau_11    =  1. / omega_11 - 0.5;
-  T tau_s     =  1. / omega_d - 0.5;
-  T tau_p     =  1. / omega_s - 0.5;
-  T tau_12 = 0.5;
-  T tau_22 = 0.5;
-  T tau_21 = tau_12;
-
-  T omega_12  = 1. / (tau_12 + 0.5);
-  T omega_21  = 1. / (tau_21 + 0.5);
-  T omega_22  = 1. / (tau_22 + 0.5);
-
-  lattice.setParameter<descriptors::OMEGA_SOLID>({omega_11, omega_d, omega_s, omega_12, omega_21, omega_22});
-
-  auto force = getForceField<T>(myCase);
-  lattice.defineField<descriptors::FORCE>(geometry, 1, *force);
-
   {
     auto& communicator = lattice.getCommunicator(stage::PostCollide());
-    communicator.template requestField<descriptors::NEUMANN_SOLID_C>();
-    communicator.template requestField<descriptors::NEUMANN_SOLID_NORMAL_X>();
-    communicator.template requestField<descriptors::NEUMANN_SOLID_NORMAL_Y>();
+    communicator.template requestField<descriptors::PREVIOUS_CELL>();
     communicator.template requestField<descriptors::SOLID_DISTANCE_FIELD>();
     communicator.template requestField<descriptors::BOUNDARY_COORDS_X>();
     communicator.template requestField<descriptors::BOUNDARY_COORDS_Y>();
+    communicator.template requestField<descriptors::BARED_MOMENT_VECTOR>();
     communicator.requestOverlap(1);
     communicator.exchangeRequests();
   }
+
+  std::vector<T>          iniPop = {0., 0., 0., 0., 0., 0., 0., 0.};
+  std::vector<T>          iniDisp = {0., 0.};
+  std::vector<T>          iniStress = {0., 0., 0.};
+
+  AnalyticalConst2D<T, T> initialPopulationF(iniPop);
+  AnalyticalConst2D<T, T> initialDispF(iniDisp);
+  AnalyticalConst2D<T, T> initialStressF(iniStress);
+
+  // dx, dt, theta, mü, lambda, kappa, uChar, epsilon
+  T magic[8] = {converter.getConversionFactorLength(),
+                converter.getConversionFactorTime(),
+                theta,
+                converter.getLatticeShearModulus(),
+                converter.getLatticeLambda(),
+                converter.getDampingFactor(),
+                converter.getCharPhysVelocity(),
+                converter.getEpsilon()};
+
+  const T omega_11  = 1. / (      converter.getLatticeShearModulus()                                 /       theta  + 0.5);
+  const T omega_d   = 1. / (2. *  converter.getLatticeShearModulus()                                 / (1. - theta) + 0.5);
+  const T omega_s   = 1. / (2. * (converter.getLatticeShearModulus() + converter.getLatticeLambda()) / (1. + theta) + 0.5);
+
+  const T tau_12 = 0.5;
+  const T tau_22 = 0.5;
+
+  const T tau_21 = tau_12;
+
+  const T omega_12  = 1. / (tau_12 + 0.5);
+  const T omega_21  = 1. / (tau_21 + 0.5);
+  const T omega_22  = 1. / (tau_22 + 0.5);
+
+  lattice.setParameter<descriptors::MAGIC_SOLID>(magic);
+  lattice.setParameter<descriptors::OMEGA_SOLID>({omega_11, omega_s, omega_d, omega_12, omega_21, omega_22});
+
+  ForceField2D<T> force(myCase);
+  lattice.defineField<FORCE>(geometry, 1, force);
+  lattice.defineField<POPULATION>(geometry, 1, initialPopulationF);
+
+  lattice.defineField<DISP_SOLID>(geometry, 1, initialDispF);
+  lattice.defineField<SIGMA_SOLID>(geometry, 1, initialStressF);
+
+  lattice.defineField<PREVIOUS_CELL>(geometry, 2, initialPopulationF);
+  lattice.defineField<PREVIOUS_CELL>(geometry, 3, initialPopulationF);
+  lattice.defineField<PREVIOUS_CELL>(geometry, 4, initialPopulationF);
 
   T neumann_constants[3] = {
     (2. * (1. - descriptors::invCs2<T,DESCRIPTOR>()) * (converter.getLatticeBulkModulus() - converter.getLatticeShearModulus())) / (descriptors::invCs2<T,DESCRIPTOR>() * (1. - descriptors::invCs2<T,DESCRIPTOR>() - 4. * converter.getLatticeShearModulus())),
@@ -444,6 +429,11 @@ void prepareLattice(MyCase& myCase,
   };
 
   lattice.setParameter<descriptors::NEUMANN_SOLID_C>(neumann_constants);
+
+  /// Make the lattice ready for simulation
+  lattice.initialize();
+
+  clout << "Prepare Lattice ... OK" << std::endl;
 }
 
 /// Set initial condition for primal variables (velocity and density)
@@ -485,10 +475,10 @@ void getResults(MyCase& myCase,
 
   SuperVTMwriter2D<T> vtmWriter("ellipseNeumann");
 
-  auto dispSol = getManufacturedSolutionU2D<T>(myCase);
+  ManufacturedSolutionU2D<T> dispSol(myCase);
   SuperLatticeFfromAnalyticalF2D<T, DESCRIPTOR>      dispSolLattice(dispSol, lattice);
 
-  auto stressSol = getManufacturedSolutionStress2D<T>(myCase);
+  ManufacturedSolutionStress2D<T> stressSol(myCase);
   SuperLatticeFfromAnalyticalF2D<T, DESCRIPTOR>      stressSolLattice(stressSol, lattice);
 
   // Fields for error calc
@@ -587,16 +577,16 @@ int main(int argc, char* argv[]) {
   MyCase::ParametersD myCaseParameters;
   {
     using namespace olb::parameters;
-    myCaseParameters.set<KAPPA                  >(  1.          );
-    myCaseParameters.set<RESOLUTION             >( 40           );
-    myCaseParameters.set<YOUNGS_MODULUS         >(  0.11        );
-    myCaseParameters.set<POISSON_RATIO          >(  0.8         );
-    myCaseParameters.set<PHYS_CHAR_DISPLACEMENT >(  1.0         );
-    myCaseParameters.set<PHYS_CHAR_LENGTH       >(  1.0         );
-    myCaseParameters.set<DOMAIN_EXTENT          >( { 1.5, 1.5 } );
-    myCaseParameters.set<MAX_PHYS_T             >( 30           );
-    myCaseParameters.set<IT_LOG_PSEUDO_TIME     >(100           );
-    myCaseParameters.set<IT_VTK_PSEUDO_TIME     >(100           );
+    myCaseParameters.set<KAPPA                    >(  1.          );
+    myCaseParameters.set<RESOLUTION               >( 40           );
+    myCaseParameters.set<YOUNGS_MODULUS           >(  0.11        );
+    myCaseParameters.set<parameters::POISSON_RATIO>(  0.7         );
+    myCaseParameters.set<PHYS_CHAR_DISPLACEMENT   >(  1.0         );
+    myCaseParameters.set<PHYS_CHAR_LENGTH         >(  1.0         );
+    myCaseParameters.set<DOMAIN_EXTENT            >( { 1.5, 1.5 } );
+    myCaseParameters.set<MAX_PHYS_T               >( 30           );
+    myCaseParameters.set<IT_LOG_PSEUDO_TIME       >(100           );
+    myCaseParameters.set<IT_VTK_PSEUDO_TIME       >(100           );
   }
   myCaseParameters.fromCLI(argc, argv);
 
@@ -606,15 +596,11 @@ int main(int argc, char* argv[]) {
   /// === Step 4: Create Case ===
   MyCase myCase(myCaseParameters, mesh);
 
-  using T = MyCase::value_t;
-  const T physCharLength = myCaseParameters.get<parameters::PHYS_CHAR_LENGTH>();
-  Ellipse2D Ellipses(physCharLength);
-
   /// === Step 5: Prepare Geometry ===
-  prepareGeometry(myCase, Ellipses);
+  prepareGeometry(myCase);
 
   /// === Step 6: Prepare Lattice ===
-  prepareLattice(myCase, Ellipses);
+  prepareLattice(myCase);
 
   /// === Step 7: Definition of Initial, Boundary Values, and Fields ===
   setInitialValues(myCase);
