@@ -60,15 +60,15 @@ private:
   template <concepts::Field FIELD>
   void setupTypeErasedField(TypeErasedFieldD& typeErasedField) {
     typeErasedField.name = parameters::name<FIELD>();
-    typeErasedField.deleter = [typeErasedField]() {
+    typeErasedField.deleter = [&typeErasedField]() {
       delete static_cast<FieldD<T,DESCRIPTOR,FIELD>*>(typeErasedField.field);
     };
-    typeErasedField.value = [&]() -> std::string {
+    typeErasedField.value = [this]() -> std::string {
       std::stringstream out;
       out << *static_cast<FieldD<T,DESCRIPTOR,FIELD>*>(this->getFieldPtr<FIELD>());
       return out.str();
     };
-    typeErasedField.set = [&](std::string str) {
+    typeErasedField.set = [this](std::string str) {
       if (auto v = FieldD<T,DESCRIPTOR,FIELD>::fromString(str)) {
         this->set<FIELD>(*v);
       }
@@ -108,13 +108,13 @@ public:
 
   // Set parameter with a concrete value
   template <concepts::Field FIELD>
-  void set(FieldD<T, DESCRIPTOR, FIELD> value) {
+  void set(FieldD<T,DESCRIPTOR,FIELD> value) {
     TypeErasedFieldD& typeErasedField = _map[typeid(FIELD)];
     if (typeErasedField.field && typeErasedField.deleter) {
       typeErasedField.deleter();
     }
     typeErasedField.calculate = nullptr;
-    typeErasedField.field = new FieldD<T,DESCRIPTOR,FIELD>{std::move(value)};
+    typeErasedField.field = new FieldD<T,DESCRIPTOR,FIELD>{value};
     setupTypeErasedField<FIELD>(typeErasedField);
   }
 
@@ -134,11 +134,11 @@ public:
 
   template <concepts::Field FIELD>
   auto get() {
-    void* field_ptr = getFieldPtr<FIELD>();
+    void* ptr = getFieldPtr<FIELD>();
     if constexpr (DESCRIPTOR::template size<FIELD>() == 1) {
-      return (*static_cast<FieldD<T,DESCRIPTOR,FIELD>*>(field_ptr))[0];
+      return (*static_cast<FieldD<T,DESCRIPTOR,FIELD>*>(ptr))[0];
     } else {
-      return *static_cast<FieldD<T,DESCRIPTOR,FIELD>*>(field_ptr);
+      return *static_cast<FieldD<T,DESCRIPTOR,FIELD>*>(ptr);
     }
   }
 

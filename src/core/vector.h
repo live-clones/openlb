@@ -485,6 +485,7 @@ constexpr T max(const ScalarVector<T,D,IMPL>& v)
   }
   return max;
 }
+
 template <typename T, unsigned D>
 std::optional<Vector<T,D>> Vector<T,D>::fromString(const std::string& input) {
   static_assert(D > 0, "Vector parsing from string requires D > 0.");
