@@ -31,7 +31,6 @@
 // natural convection of air in a square cavity in 2D
 
 #include <olb.h>
-#include "referenceDataLaminar.cpp"
 
 using namespace olb;
 using namespace olb::descriptors;
@@ -50,9 +49,6 @@ namespace olb::parameters {
     struct T_HOT  : public descriptors::FIELD_BASE<1> { };
     struct T_COLD : public descriptors::FIELD_BASE<1> { };
     struct T_MEAN : public descriptors::FIELD_BASE<1> { };
-
-    struct RESIDUUM : public descriptors::FIELD_BASE<1> { };
-    struct CONVERGENCE_TEST : public descriptors::TYPED_FIELD_BASE<bool, 1> { };
 
 }
 
@@ -116,6 +112,120 @@ void prepareGeometry(MyCase& myCase){
     clout << "Prepare Geometry ... OK" << std::endl;
 }
 
+void prepareLattice(MyCase& myCase){
+    OstreamManager clout(std::cout,"prepareLattice");
+    clout << "Prepare Lattice ..." << std::endl;
+
+    using T = MyCase::value_t;
+    auto& geometry = myCase.getGeometry();
+    auto& params = myCase.getParameters();
+
+    auto& NSElattice = myCase.getLattice(NavierStokes{});
+    auto& ADlattice = myCase.getLattice(Temperature{});
+
+    using NSEDESCRIPTOR = MyCase::descriptor_t_of<NavierStokes>;
+    using TDESCRIPTOR = MyCase::descriptor_t_of<Temperature>;
+
+    const T dx = params.get<parameters::PHYS_DELTA_X>();
+    const T lx = params.get<parameters::DOMAIN_EXTENT>()[0];
+    const T charU = params.get<parameters::LATTICE_CHAR_VELOCITY>();
+    const T tau = params.get<parameters::LATTICE_RELAXATION_TIME>();
+
+    const T nu = params.get<parameters::PHYS_KINEMATIC_VISCOSITY>();
+    const T rho = params.get<parameters::PHYS_DENSITY>();
+
+    const T alpha = params.get<parameters::THERMAL_DIFFUSIVITY>();
+    const T beta = params.get<parameters::THERMAL_EXPANSION>();
+    const T cp = params.get<parameters::HEAT_CAPACITY>();
+    const T Pr = params.get<parameters::PRANDTL>();
+    const T T_cold = params.get<parameters::T_COLD>();
+    const T T_hot = params.get<parameters::T_HOT>();
+
+
+    NSElattice.setUnitConverter<ThermalUnitConverter<T,NSEDESCRIPTOR,TDESCRIPTOR>>(
+        (T) dx, //physDeltax
+        (T) (tau - 0.5) / descriptors::invCs2<T,NSEDESCRIPTOR>() * util::pow(dx,2) / nu, //physDeltaT
+        (T) lx, //charPhysLength
+        (T) charU, //charPhysVelocity
+        (T) nu, //physViscosity
+        (T) rho, //physDensity
+        (T) alpha, //physThermalConductivity
+        (T) cp, //physSpecificHeatCapacity
+        (T) beta, // physThermalExpansionCoefficient
+        (T) T_cold, // charPhysLowTemperature
+        (T) T_hot // charPhysHighTemperature
+    );
+    const auto& converter = NSElattice.getUnitConverter();
+    converter.print();
+
+    ADlattice.setUnitConverter(converter);
+
+    NSElattice.defineDynamics<ForcedBGKdynamics>(geometry.getMaterialIndicator({1,2,3}));
+    ADlattice.defineDynamics<AdvectionDiffusionBGKdynamics>(geometry.getMaterialIndicator({1,2,3}));
+
+    clout << "Prepare Lattice ... OK" << std::endl;
+}
+
+void setInitialValues(MyCase& myCase){
+    OstreamManager clout(std::cout,"setInitialValues");
+    clout << "Set initial values ..." << std::endl;
+
+    using T = MyCase::value_t;
+    auto& geometry = myCase.getGeometry();
+    auto& params = myCase.getParameters();
+
+    auto& NSElattice = myCase.getLattice(NavierStokes{});
+    auto& ADlattice = myCase.getLattice(Temperature{});
+
+    const auto& converter = NSElattice.getUnitConverter();
+    T omega = converter.getLatticeRelaxationFrequency();
+    T Tomega = converter.getLatticeThermalRelaxationFrequency();
+
+    T Tcold = params.get<parameters::T_COLD>();
+    T Thot = params.get<parameters::T_HOT>();
+    T Tmean = params.get<parameters::T_MEAN>();
+
+    boundary::set<boundary::BounceBack>(ADlattice, geometry, 4);
+    boundary::set<boundary::BounceBack>(NSElattice, geometry, 4);
+
+    /// sets boundary
+    boundary::set<boundary::AdvectionDiffusionDirichlet>(ADlattice, geometry.getMaterialIndicator({2, 3}));
+    boundary::set<boundary::LocalVelocity>(NSElattice, geometry.getMaterialIndicator({2, 3}));
+
+
+    /// define initial conditions
+    AnalyticalConst2D<T,T> rho(1.);
+    AnalyticalConst2D<T,T> u0(0.0, 0.0);
+    AnalyticalConst2D<T,T> T_cold(converter.getLatticeTemperature(Tcold));
+    AnalyticalConst2D<T,T> T_hot(converter.getLatticeTemperature(Thot));
+    AnalyticalConst2D<T,T> T_mean(converter.getLatticeTemperature(Tmean));
+
+
+    /// for each material set Rho, U and the Equilibrium
+    NSElattice.defineRhoU(geometry.getMaterialIndicator({1, 2, 3}), rho, u0);
+    NSElattice.iniEquilibrium(geometry.getMaterialIndicator({1, 2, 3}), rho, u0);
+
+    ADlattice.defineRho(geometry, 1, T_mean);
+    ADlattice.iniEquilibrium(geometry, 1, T_mean, u0);
+    ADlattice.defineRho(geometry, 2, T_hot);
+    ADlattice.iniEquilibrium(geometry, 2, T_hot, u0);
+    ADlattice.defineRho(geometry, 3, T_cold);
+    ADlattice.iniEquilibrium(geometry, 3, T_cold, u0);
+
+    NSElattice.setParameter<descriptors::OMEGA>(omega);
+    ADlattice.setParameter<descriptors::OMEGA>(Tomega);
+
+    /// Make the lattice ready for simulation
+    NSElattice.initialize();
+    ADlattice.initialize();
+
+    clout << "Set initial values ... OK" << std::endl;
+
+}
+
+
+
+
 int main(int argc, char* argv[]){
     initialize(&argc, &argv);
 
@@ -124,12 +234,10 @@ int main(int argc, char* argv[]){
         using namespace olb::parameters;
         //General Defaults
         myCaseParameters.set<MAX_PHYS_T>(1e4);
-        myCaseParameters.set<RESOLUTION>(32.0);
+        myCaseParameters.set<RESOLUTION>(64.0);
         myCaseParameters.set<GRAVITATIONAL_CONST>(9.81);
-        myCaseParameters.set<LATTICE_CHAR_VELOCITY>(1.0);
-
-        myCaseParameters.set<RESIDUUM>(1e-4);
-        myCaseParameters.set<CONVERGENCE_TEST>(false);
+        myCaseParameters.set<LATTICE_CHAR_VELOCITY>(0.00797276);
+        myCaseParameters.set<LATTICE_RELAXATION_TIME>(0.65);
 
         //Fluid-related Defaults
         myCaseParameters.set<PHYS_DENSITY>(1.19);
@@ -137,7 +245,6 @@ int main(int argc, char* argv[]){
 
         //Heat-related Defaults
         myCaseParameters.set<PRANDTL>(0.71);
-        myCaseParameters.set<PRANDTL_TURB>(0.87);
         myCaseParameters.set<RAYLEIGH>(1e3);
         myCaseParameters.set<THERMAL_EXPANSION>(3.41e-3);
         myCaseParameters.set<THERMAL_DIFFUSIVITY>(25.684e-3);
@@ -158,10 +265,6 @@ int main(int argc, char* argv[]){
         myCaseParameters.set<DOMAIN_EXTENT>({domain_l, domain_l});
         myCaseParameters.set<PHYS_DELTA_X>(domain_l / myCaseParameters.get<RESOLUTION>());
 
-        //Characteristic Velocity
-
-        //LES-related Defaults
-        myCaseParameters.set<SMAGORINTZKY_CONST>(0.1);
     }
     myCaseParameters.fromCLI(argc, argv);
 
@@ -171,6 +274,13 @@ int main(int argc, char* argv[]){
     /// === Step 4: Create Case ===
     MyCase myCase(myCaseParameters, mesh);
 
+    /// === Step 5: Prepare Geometry ===
     prepareGeometry(myCase);
+
+    /// === Step 6: Prepare Lattice ===
+    prepareLattice(myCase);
+
+    /// === Step 7: Definition of Initial, Boundary Values, and Fields ===
+    setInitialValues(myCase);
     
 }
