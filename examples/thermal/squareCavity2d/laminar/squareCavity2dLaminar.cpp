@@ -65,6 +65,7 @@ Mesh<MyCase::value_t, MyCase::d> createMesh(MyCase::ParametersD& params){
     IndicatorCuboid2D<T> cuboid(extent, origin);
 
     Mesh<T,MyCase::d> mesh(cuboid, params.get<parameters::PHYS_DELTA_X>(), singleton::mpi().getSize());
+    mesh.setOverlap(params.get<parameters::OVERLAP>());
 
     return mesh;
 }
