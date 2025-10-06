@@ -30,61 +30,38 @@
 #include <olb.h>
 
 using namespace olb;
-using namespace olb::descriptors;
+using namespace olb::names;
 
-using T          = FLOATING_POINT_TYPE;
-using DESCRIPTOR = D2Q9<POROSITY,VELOCITY>;
+// === Step 1: Declarations ===
 
-// Parameters for the simulation setup
-const int N              = 100;             // resolution of the model
-const T   Re             = 1400000;         // Reynolds number
-const T   physViscosity  = 1.e-5;           // physical kinematic viscosity
-const T   intensity      = 0.02;            // turbulence intensity for inlet
-const T   maxPhysT       = 16.;             // max. simulation time in s, SI unit
-const T   chordLength    = 1.;              // Length of airfoil from leading edge to trailing edge
-const T   L              = chordLength / N; // latticeL
-const T   lengthX        = 6.;
-const T   lengthY        = 2. + L;
-const T   centerAirfoilX = lengthX / 4.;
-const T   centerAirfoilY = lengthY / 2.;
-const T   angleOfAttack  = 5.*std::numbers::pi/90.;
+using MyCase = Case<NavierStokes, Lattice<float, descriptors::D2Q9<descriptors::POROSITY, descriptors::VELOCITY>>>;
 
-// The four digits in the index are the digits of the following numbers so NACA 1410 would be
-// camber = 0.01, camberPos = 0.4, thicknessPercentage = 0.10
-const T camber              = 0.01;
-const T camberPos           = 0.4;
-const T thicknessPercentage = 0.1; // max thickness to chord length ratio
+namespace olb::parameters {
+struct PHYS_VISCOSITY : public descriptors::FIELD_BASE<1> {};
+struct CHORD_LENGTH : public descriptors::FIELD_BASE<1> {};
+struct AIRFOIL_POSITION : public descriptors::FIELD_BASE<0, 1, 0> {};
+struct AIRFOIL_PARAMETERS : public descriptors::FIELD_BASE<3> {};
+struct ANGLE_OF_ATTACK : public descriptors::FIELD_BASE<1> {};
+} // namespace olb::parameters
 
-/// Wallfunction parameters
-//  Used method for density reconstruction
-//  0: use local density
-//  1: extrapolation (Guo)
-//  2: constant (rho = 1.)
-const int rhoMethod = 0;
-//  Used wall profile
-//  0: power law profile
-//  1: Spalding profile
-const int wallFunctionProfile = 1;
-// check if descriptor with body force is used
-const bool bodyForce = false;
-// interpolate sampling velocity along given normal between lattice voxels
-const bool interpolateSampleVelocity = true;
-// use van Driest damping function for turbulent viscosity in boundary cell
-const bool useVanDriest = false;
-//  distance from cell to real wall in lattice units if no geometry indicator is given as input
-const T latticeWallDistance = 0.5;
-//  distance from cell to velocity sampling point in lattice units
-const T samplingCellDistance = 3.5;
-const bool movingWall = false;
-const bool averageVelocity = false;
+// Create mesh for simulation case
+Mesh<MyCase::value_t, MyCase::d> createMesh(MyCase::ParametersD& params)
+{
+  using T                     = MyCase::value_t;
+  Vector               extent = params.get<parameters::DOMAIN_EXTENT>();
+  std::vector<T>       origin(2, T());
+  IndicatorCuboid2D<T> cuboid(extent, origin);
 
-using FringeDynamics = dynamics::Tuple<
-  T, DESCRIPTOR,
-  momenta::BulkTuple,
-  equilibria::ThirdOrder,
-  collision::ParameterFromCell<collision::LES::SMAGORINSKY,
-                               collision::SmagorinskyEffectiveOmega<collision::RLBThirdOrder>>
->;
+  const T            physDeltaX = params.get<parameters::CHORD_LENGTH>() / params.get<parameters::RESOLUTION>();
+  Mesh<T, MyCase::d> mesh(cuboid, physDeltaX, singleton::mpi().getSize());
+  mesh.setOverlap(params.get<parameters::OVERLAP>());
+  return mesh;
+}
+
+using FringeDynamics =
+    dynamics::Tuple<MyCase::value_t, MyCase::descriptor_t_of<NavierStokes>, momenta::BulkTuple, equilibria::ThirdOrder,
+                    collision::ParameterFromCell<collision::LES::SMAGORINSKY,
+                                                 collision::SmagorinskyEffectiveOmega<collision::RLBThirdOrder>>>;
 
 struct SmoothInflowUpdateO {
   static constexpr OperatorScope scope = OperatorScope::PerCellWithParameters;
@@ -97,145 +74,251 @@ struct SmoothInflowUpdateO {
   void apply(CELLS& cells, PARAMETERS& parameters) any_platform
   {
     auto& cell = cells.template get<names::NavierStokes>();
-    auto u = parameters.template get<VELOCITY>();
+    auto  u    = parameters.template get<VELOCITY>();
     cell.defineU(u.data());
   }
 };
 
-// Stores geometry information in form of material numbers
-void prepareGeometry(SuperGeometry<T, 2>&                superGeometry,
-                     IndicatorF2D<T>&                    airfoil)
+void prepareGeometry(MyCase& myCase)
 {
+  using T        = MyCase::value_t;
+  auto& params   = myCase.getParameters();
+  auto& geometry = myCase.getGeometry();
+
   OstreamManager clout(std::cout, "prepareGeometry");
   clout << "Prepare Geometry ..." << std::endl;
+
+  // Get relevant parameters for geometry creation
+  T lengthX = params.get<parameters::DOMAIN_EXTENT>()[0];
+  T lengthY = params.get<parameters::DOMAIN_EXTENT>()[1];
+
+  T deltaX = params.get<parameters::CHORD_LENGTH>() / params.get<parameters::RESOLUTION>();
 
   Vector<T, 2> extend(lengthX, lengthY);
   Vector<T, 2> origin;
 
-  superGeometry.rename(0, 2);
+  // Get airfoil parameters
+  Vector<T, 2>   airfoilCenter(params.get<parameters::AIRFOIL_POSITION>()[0],
+                               params.get<parameters::AIRFOIL_POSITION>()[1]);
+  Vector<int, 3> airfoilParams(params.get<parameters::AIRFOIL_PARAMETERS>()[0],
+                               params.get<parameters::AIRFOIL_PARAMETERS>()[1],
+                               params.get<parameters::AIRFOIL_PARAMETERS>()[2]);
+  T              chordLength   = params.get<parameters::CHORD_LENGTH>();
+  T              angleOfAttack = params.get<parameters::ANGLE_OF_ATTACK>();
 
-  superGeometry.rename(2, 1, {1, 1});
+  // Create airfoil geometry
+  IndicatorAirfoil2D<T> airfoilI(airfoilCenter, chordLength, airfoilParams[0] / 100., airfoilParams[1] / 10.,
+                                 airfoilParams[2] / 100.);
+  IndicatorRotate<T, 2> airfoil(airfoilCenter, angleOfAttack * std::numbers::pi / 90., airfoilI);
+
+  geometry.rename(0, 2);
+
+  geometry.rename(2, 1, {1, 1});
 
   // Set material number for inflow
-  extend[0] = 2. * L;
-  origin[0] = -L;
+  extend[0] = 2. * deltaX;
+  origin[0] = -deltaX;
   IndicatorCuboid2D<T> inflow(extend, origin);
-  superGeometry.rename(2, 3, 1, inflow);
+  geometry.rename(2, 3, 1, inflow);
 
   {
-    IndicatorCuboid2D<T> cornerI(L, Vector{-L/2, lengthY});
-    superGeometry.rename(2, 6, cornerI);
+    IndicatorCuboid2D<T> cornerI(deltaX, Vector {-deltaX / 2, lengthY});
+    geometry.rename(2, 6, cornerI);
   }
   {
-    IndicatorCuboid2D<T> cornerI(L, Vector{-L/2, -L/2});
-    superGeometry.rename(2, 6, cornerI);
+    IndicatorCuboid2D<T> cornerI(deltaX, Vector {-deltaX / 2, -deltaX / 2});
+    geometry.rename(2, 6, cornerI);
   }
 
   {
-    IndicatorCuboid2D<T> fringeI(Vector{20*L, lengthY}, Vector{lengthX-20*L, 0});
-    superGeometry.rename(1, 7, fringeI);
+    IndicatorCuboid2D<T> fringeI(Vector {20 * deltaX, lengthY}, Vector {lengthX - 20 * deltaX, 0});
+    geometry.rename(1, 7, fringeI);
   }
 
   // Set material number for outflow
-  origin[0] = lengthX - L;
+  origin[0] = lengthX - deltaX;
   IndicatorCuboid2D<T> outflow(extend, origin);
-  superGeometry.rename(2, 4, outflow);
+  geometry.rename(2, 4, outflow);
   // Set material number for airfoil
-  superGeometry.rename(1, 5, airfoil);
+  geometry.rename(1, 5, airfoil);
 
   // Removes all not needed boundary voxels outside the surface
-  superGeometry.clean(false, {1,7});
-  superGeometry.checkForErrors();
-  superGeometry.communicate();
-
-  superGeometry.print();
+  geometry.clean(false, {1, 7});
+  geometry.checkForErrors();
 
   clout << "Prepare Geometry ... OK" << std::endl;
+
+  geometry.getStatistics().print();
 }
 
-// Set up the geometry of the simulation
-void prepareLattice(SuperLattice<T, DESCRIPTOR>&        sLattice,
-                    SuperGeometry<T, 2>&                superGeometry,
-                    IndicatorF2D<T>&                    airfoil,
-                    WallModelParameters<T>&             wallModelParameters)
+void prepareLattice(MyCase& myCase)
 {
+  using T          = MyCase::value_t;
+  using DESCRIPTOR = MyCase::descriptor_t_of<NavierStokes>;
+  auto& params     = myCase.getParameters();
+  auto& lattice    = myCase.getLattice(NavierStokes {});
+  auto& geometry   = myCase.getGeometry();
+
   OstreamManager clout(std::cout, "prepareLattice");
   clout << "Prepare Lattice ..." << std::endl;
 
-  const auto& converter = sLattice.getUnitConverter();
-  const T omega = converter.getLatticeRelaxationFrequency();
+  // Wallfunction parameters
+  //  Used method for density reconstruction
+  //  0: use local density
+  //  1: extrapolation (Guo)
+  //  2: constant (rho = 1.)
+  const int rhoMethod = 0;
+  //  Used wall profile
+  //  0: power law profile
+  //  1: Spalding profile
+  const int wallFunctionProfile = 1;
+  // check if descriptor with body force is used
+  const bool bodyForce = false;
+  // interpolate sampling velocity along given normal between lattice voxels
+  const bool interpolateSampleVelocity = true;
+  // use van Driest damping function for turbulent viscosity in boundary cell
+  const bool useVanDriest = false;
+  //  distance from cell to real wall in lattice units if no geometry indicator is given as input
+  const T latticeWallDistance = 0.5;
+  //  distance from cell to velocity sampling point in lattice units
+  const T    samplingCellDistance = 3.5;
+  const bool movingWall           = false;
+  const bool averageVelocity      = false;
 
-  // Material=1 -->bulk dynamics
-  // auto bulkIndicator = superGeometry.getMaterialIndicator({1});
-  setTurbulentWallModelDynamics(sLattice, superGeometry, 1,
-                                wallModelParameters);
+  WallModelParameters<T> wallModelParameters;
+  wallModelParameters.bodyForce                 = bodyForce;
+  wallModelParameters.rhoMethod                 = rhoMethod;
+  wallModelParameters.samplingCellDistance      = samplingCellDistance;
+  wallModelParameters.interpolateSampleVelocity = interpolateSampleVelocity;
+  wallModelParameters.useVanDriest              = useVanDriest;
+  wallModelParameters.wallFunctionProfile       = wallFunctionProfile;
+  wallModelParameters.latticeWallDistance       = latticeWallDistance;
+  wallModelParameters.movingWall                = movingWall;
+  wallModelParameters.averageVelocity           = averageVelocity;
+
+  // Get parameters for Unit converter
+  int resolution    = params.get<parameters::RESOLUTION>();
+  int Re            = params.get<parameters::REYNOLDS>();
+  T   physViscosity = params.get<parameters::PHYS_VISCOSITY>();
+  T   chordLength   = params.get<parameters::CHORD_LENGTH>();
+
+  // Set UnitConverter
+  lattice.setUnitConverter<UnitConverterFromResolutionAndLatticeVelocity<T, DESCRIPTOR>>(
+      (T)resolution,  // resolution: number of voxels per charPhysL
+      (T)0.03,        // Max cell speed?
+      (T)chordLength, // charPhysLength: reference length of simulation geometry
+      (T)Re * physViscosity /
+          chordLength,  // charPhysVelocity: maximal/highest expected velocity during simulation in __m / s__
+      (T)physViscosity, // physViscosity: physical kinematic viscosity in __m^2 / s__
+      (T)1.0);
+  auto& converter = lattice.getUnitConverter();
+
+  // Get airfoil parameters
+  Vector<T, 2>   airfoilCenter(params.get<parameters::AIRFOIL_POSITION>()[0],
+                               params.get<parameters::AIRFOIL_POSITION>()[1]);
+  Vector<int, 3> airfoilParams(params.get<parameters::AIRFOIL_PARAMETERS>()[0],
+                               params.get<parameters::AIRFOIL_PARAMETERS>()[1],
+                               params.get<parameters::AIRFOIL_PARAMETERS>()[2]);
+  T              angleOfAttack = params.get<parameters::ANGLE_OF_ATTACK>();
+
+  // Create airfoil indicator
+  IndicatorAirfoil2D<T> airfoilI(airfoilCenter, chordLength, airfoilParams[0] / 100., airfoilParams[1] / 10.,
+                                 airfoilParams[2] / 100.);
+  IndicatorRotate<T, 2> airfoil(airfoilCenter, angleOfAttack * std::numbers::pi / 90., airfoilI);
+
+  // Bulk material --> Wall Model Dynamics
+  setTurbulentWallModelDynamics(lattice, geometry, 1, wallModelParameters);
 
   // Material=2 -->Full Slip
-  boundary::set<boundary::FullSlip>(sLattice, superGeometry, 2); // <-
+  boundary::set<boundary::FullSlip>(lattice, geometry, 2); // <-
 
-  boundary::set<boundary::BounceBack>(sLattice, superGeometry, 6);
+  // Material=6 -->Bounce Back
+  boundary::set<boundary::BounceBack>(lattice, geometry, 6);
 
-  // Setting of the boundary conditions
+  boundary::set<boundary::LocalVelocity>(lattice, geometry, 3);
+  boundary::set<T, DESCRIPTOR, boundary::InterpolatedPressure<T, DESCRIPTOR, FringeDynamics>>(
+      lattice, geometry.getMaterialIndicator(4), geometry.getMaterialIndicator(7), geometry.getMaterialIndicator(0));
 
-  //if boundary conditions are chosen to be local
+  // Turbulent Wall Model on airfoil indicator
+  setBouzidiBoundary(lattice, geometry, 5, airfoil);
+  setTurbulentWallModel(lattice, geometry, 5, wallModelParameters);
 
-  //if boundary conditions are chosen to be interpolated
-  boundary::set<boundary::LocalVelocity>(sLattice, superGeometry, 3);
-  boundary::set<T,DESCRIPTOR,boundary::InterpolatedPressure<T,DESCRIPTOR,FringeDynamics>>(sLattice,
-                                                                                          superGeometry.getMaterialIndicator(4),
-                                                                                          superGeometry.getMaterialIndicator(7),
-                                                                                          superGeometry.getMaterialIndicator(0));
+  clout << "Prepare Lattice ... OK" << std::endl;
+}
 
-  setBouzidiBoundary(sLattice, superGeometry, 5, airfoil);
-  setTurbulentWallModel(sLattice, superGeometry, 5, wallModelParameters);
+void setInitialValues(MyCase& myCase)
+{
+  using T          = MyCase::value_t;
+  using DESCRIPTOR = MyCase::descriptor_t_of<NavierStokes>;
+  auto& params     = myCase.getParameters();
+  auto& lattice    = myCase.getLattice(NavierStokes {});
+  auto& geometry   = myCase.getGeometry();
+  auto& converter  = lattice.getUnitConverter();
 
-  // Initial conditions
+  T lengthX = params.get<parameters::DOMAIN_EXTENT>()[0];
+  T lengthY = params.get<parameters::DOMAIN_EXTENT>()[1];
+
   AnalyticalConst2D<T, T> rhoF(1);
   AnalyticalConst2D<T, T> rho0(0);
   std::vector<T>          velocity(2, T(0));
   AnalyticalConst2D<T, T> uF(velocity);
 
   // Initialize all values of distribution functions to their local equilibrium
-  sLattice.defineRhoU(superGeometry.getMaterialIndicator({1,2,3,4,5,6,7}), rhoF, uF);
-  sLattice.iniEquilibrium(superGeometry.getMaterialIndicator({1,2,3,4,5,6,7}), rhoF, uF);
-  sLattice.defineField<VELOCITY>(superGeometry.getMaterialIndicator({1,2,3,4,5,6,7}), uF);
-  sLattice.defineField<POROSITY>(superGeometry.getMaterialIndicator({1,2,3,4,6,7}), rhoF);
-  sLattice.defineField<POROSITY>(superGeometry, 5, rho0);
+  lattice.defineRhoU(geometry.getMaterialIndicator({1, 2, 3, 4, 5, 6, 7}), rhoF, uF);
+  lattice.iniEquilibrium(geometry.getMaterialIndicator({1, 2, 3, 4, 5, 6, 7}), rhoF, uF);
+  lattice.defineField<descriptors::VELOCITY>(geometry.getMaterialIndicator({1, 2, 3, 4, 5, 6, 7}), uF);
+  lattice.defineField<descriptors::POROSITY>(geometry.getMaterialIndicator({1, 2, 3, 4, 6, 7}), rhoF);
+  lattice.defineField<descriptors::POROSITY>(geometry, 5, rho0);
 
-  sLattice.defineDynamics<FringeDynamics>(superGeometry, 7);
+  // Define fringe zone for end of simulation domain
+  lattice.defineDynamics<FringeDynamics>(geometry, 7);
   {
-    Vector<T,2> origin(lengthX-20*converter.getPhysDeltaX(),
-                       -converter.getPhysDeltaX());
-    Vector<T,2> extend(20*converter.getPhysDeltaX(),
-                       lengthY + 2*converter.getPhysDeltaX());
-    IndicatorCuboid2D<T> out(extend, origin);
-    SuperIndicatorFfromIndicatorF2D<T> outI(out, superGeometry);
+    Vector<T, 2>                       origin(lengthX - 20 * converter.getPhysDeltaX(), -converter.getPhysDeltaX());
+    Vector<T, 2>                       extend(20 * converter.getPhysDeltaX(), lengthY + 2 * converter.getPhysDeltaX());
+    IndicatorCuboid2D<T>               out(extend, origin);
+    SuperIndicatorFfromIndicatorF2D<T> outI(out, geometry);
 
-    AnalyticalFfromCallableF<2,T,T> smagorinskyF([&](Vector<T,2> physR) -> Vector<T,1> {
-      return 0.3 + ((physR[0] - origin[0]) / (20*converter.getPhysDeltaX())) * (2-0.3);
+    AnalyticalFfromCallableF<2, T, T> smagorinskyF([&](Vector<T, 2> physR) -> Vector<T, 1> {
+      return 0.3 + ((physR[0] - origin[0]) / (20 * converter.getPhysDeltaX())) * (2 - 0.3);
     });
 
-    sLattice.defineField<collision::LES::SMAGORINSKY>(outI, smagorinskyF);
+    lattice.defineField<collision::LES::SMAGORINSKY>(outI, smagorinskyF);
   }
 
-  sLattice.setParameter<descriptors::OMEGA>(omega);
-  sLattice.setParameter<collision::LES::SMAGORINSKY>(0.3);
+  const T omega = converter.getLatticeRelaxationFrequency();
+  lattice.setParameter<descriptors::OMEGA>(omega);
+  lattice.setParameter<collision::LES::SMAGORINSKY>(0.3);
 
   // Make the lattice ready for simulation
-  sLattice.initialize();
-
-  clout << "Prepare Lattice ... OK" << std::endl;
+  lattice.initialize();
 }
 
-// Computes the pressure drop between the voxels before and after the cylinder
-void getResults(SuperLattice<T, DESCRIPTOR>& sLattice,
-                std::size_t iT, SuperGeometry<T, 2>& sGeometry,
-                util::Timer<T>& timer, IndicatorF2D<T>& airfoil)
+void getResults(MyCase& myCase, util::Timer<MyCase::value_t>& timer, std::size_t iT)
 {
+
+  using T          = MyCase::value_t;
+  using DESCRIPTOR = MyCase::descriptor_t_of<NavierStokes>;
+  auto& params     = myCase.getParameters();
+  auto& lattice    = myCase.getLattice(NavierStokes {});
+  auto& geometry   = myCase.getGeometry();
+  auto& converter  = lattice.getUnitConverter();
+
   OstreamManager clout(std::cout, "getResults");
 
-  const int vtkIter  = sLattice.getUnitConverter().getLatticeTime(.3);
-  const int statIter = sLattice.getUnitConverter().getLatticeTime(.1);
+  const int vtkIter  = lattice.getUnitConverter().getLatticeTime(.3);
+  const int statIter = lattice.getUnitConverter().getLatticeTime(.1);
+
+  Vector<T, 2>   airfoilCenter(params.get<parameters::AIRFOIL_POSITION>()[0],
+                               params.get<parameters::AIRFOIL_POSITION>()[1]);
+  Vector<int, 3> airfoilParams(params.get<parameters::AIRFOIL_PARAMETERS>()[0],
+                               params.get<parameters::AIRFOIL_PARAMETERS>()[1],
+                               params.get<parameters::AIRFOIL_PARAMETERS>()[2]);
+  T              chordLength   = params.get<parameters::CHORD_LENGTH>();
+  T              angleOfAttack = params.get<parameters::ANGLE_OF_ATTACK>();
+
+  IndicatorAirfoil2D<T> airfoilI(airfoilCenter, chordLength, airfoilParams[0] / 100., airfoilParams[1] / 10.,
+                                 airfoilParams[2] / 100.);
+  IndicatorRotate<T, 2> airfoil(airfoilCenter, angleOfAttack * std::numbers::pi / 90., airfoilI);
 
   if (iT == 0) {
     SuperVTMwriter2D<T> vtmWriter("airfoil2d");
@@ -243,14 +326,14 @@ void getResults(SuperLattice<T, DESCRIPTOR>& sLattice,
   }
 
   if (iT % statIter == 0) {
-    sLattice.setProcessingContext(ProcessingContext::Evaluation);
+    lattice.setProcessingContext(ProcessingContext::Evaluation);
 
     T point[2] = {};
-    point[0]   = centerAirfoilX + chordLength;
-    point[1]   = centerAirfoilY;
-    SuperLatticePhysPressure2D<T, DESCRIPTOR> pressure(sLattice, sLattice.getUnitConverter());
-    AnalyticalFfromSuperF2D<T> intpolateP(pressure, true);
-    T                          p;
+    point[0]   = airfoilCenter[0] + chordLength;
+    point[1]   = airfoilCenter[1];
+    SuperLatticePhysPressure2D<T, DESCRIPTOR> pressure(lattice, lattice.getUnitConverter());
+    AnalyticalFfromSuperF2D<T>                intpolateP(pressure, true);
+    T                                         p;
     intpolateP(&p, point);
 
     // Timer console output
@@ -258,21 +341,20 @@ void getResults(SuperLattice<T, DESCRIPTOR>& sLattice,
     timer.printStep();
 
     // Lattice statistics console output
-    sLattice.getStatistics().print(iT, sLattice.getUnitConverter().getPhysTime(iT));
+    lattice.getStatistics().print(iT, lattice.getUnitConverter().getPhysTime(iT));
 
     // Drag, lift, pressure drop
     AnalyticalFfromSuperF2D<T>            intpolatePressure(pressure, true);
-    SuperLatticePhysDrag2D<T, DESCRIPTOR> drag(sLattice, sGeometry, 5,
-                                               sLattice.getUnitConverter());
+    SuperLatticePhysDrag2D<T, DESCRIPTOR> drag(lattice, geometry, 5, lattice.getUnitConverter());
 
     T point1[2] = {};
     T point2[2] = {};
 
-    point1[0] = centerAirfoilX - chordLength / 2;
-    point1[1] = centerAirfoilY;
+    point1[0] = airfoilCenter[0] - chordLength / 2;
+    point1[1] = airfoilCenter[1];
 
-    point2[0] = centerAirfoilX + chordLength / 2;
-    point2[1] = centerAirfoilY;
+    point2[0] = airfoilCenter[0] + chordLength / 2;
+    point2[1] = airfoilCenter[1];
 
     T p1, p2;
     intpolatePressure(&p1, point1);
@@ -291,13 +373,14 @@ void getResults(SuperLattice<T, DESCRIPTOR>& sLattice,
   }
 
   if (iT % vtkIter == 0) {
-    SuperVTMwriter2D<T>                       vtmWriter("airfoil2d");
-    SuperLatticePhysVelocity2D<T, DESCRIPTOR> velocity(sLattice, sLattice.getUnitConverter());
-    SuperLatticePhysPressure2D<T, DESCRIPTOR> pressure(sLattice, sLattice.getUnitConverter());
-    SuperLatticeField2D<T, DESCRIPTOR, descriptors::Y1> y1(sLattice);
-    SuperLatticePhysField2D<T, DESCRIPTOR, descriptors::WMVELOCITY> wmvelocity(sLattice, sLattice.getUnitConverter().getConversionFactorVelocity());
+    SuperVTMwriter2D<T>                                             vtmWriter("airfoil2d");
+    SuperLatticePhysVelocity2D<T, DESCRIPTOR>                       velocity(lattice, lattice.getUnitConverter());
+    SuperLatticePhysPressure2D<T, DESCRIPTOR>                       pressure(lattice, lattice.getUnitConverter());
+    SuperLatticeField2D<T, DESCRIPTOR, descriptors::Y1>             y1(lattice);
+    SuperLatticePhysField2D<T, DESCRIPTOR, descriptors::WMVELOCITY> wmvelocity(
+        lattice, lattice.getUnitConverter().getConversionFactorVelocity());
     wmvelocity.getName() = "wmvelocity";
-    SuperLatticePhysWallShearStress2D<T, DESCRIPTOR> wss(sLattice, sGeometry, 5, sLattice.getUnitConverter(), airfoil);
+    SuperLatticePhysWallShearStress2D<T, DESCRIPTOR> wss(lattice, geometry, 5, lattice.getUnitConverter(), airfoil);
 
     vtmWriter.addFunctor(velocity);
     vtmWriter.addFunctor(pressure);
@@ -309,100 +392,94 @@ void getResults(SuperLattice<T, DESCRIPTOR>& sLattice,
   }
 }
 
-int main(int argc, char* argv[])
+void simulate(MyCase& myCase)
 {
-  // === 1st Step: Initialization ===
-  initialize(&argc, &argv);
-  singleton::directories().setOutputDir("./tmp/");
-  OstreamManager clout(std::cout, "main");
+  using T           = MyCase::value_t;
+  auto&   params    = myCase.getParameters();
+  auto&   lattice   = myCase.getLattice(NavierStokes {});
+  auto&   geometry  = myCase.getGeometry();
+  auto&   converter = lattice.getUnitConverter();
+  const T physMaxT  = params.get<parameters::MAX_PHYS_T>();
 
-  const UnitConverterFromResolutionAndLatticeVelocity<T, DESCRIPTOR> converter(
-      int {N},                           // resolution: number of voxels per charPhysL
-      (T) 0.03,                           // Max cell speed?
-      (T) chordLength,                    // charPhysLength: reference length of simulation geometry
-      (T) Re * physViscosity/chordLength, // charPhysVelocity: maximal/highest expected velocity during simulation in __m / s__
-      (T) physViscosity,                  // physViscosity: physical kinematic viscosity in __m^2 / s__
-      (T) 1.0                             // physDensity: physical density in __kg / m^3__
-  );
-  // Prints the converter log as console output
-  converter.print();
-  // Writes the converter log in a file
-  converter.write("airfoil2d");
-
-  // === 2rd Step: Prepare Geometry ===
-  Vector<T, 2>         extend(lengthX, lengthY);
-  Vector<T, 2>         origin;
-  IndicatorCuboid2D<T> cuboid(extend, origin);
-
-  #ifdef PARALLEL_MODE_MPI
-    const int noOfCuboids = singleton::mpi().getSize();
-  #else
-    const int noOfCuboids = 1;
-  #endif
-
-  // Instantiation of a cuboidGeometry with weights
-  CuboidDecomposition2D<T> cuboidGeometry(cuboid, L, noOfCuboids);
-
-  // Instantiation of a loadBalancer
-  HeuristicLoadBalancer<T> loadBalancer(cuboidGeometry);
-
-  // Instantiation of a superGeometry
-  SuperGeometry<T, 2> superGeometry(cuboidGeometry, loadBalancer);
-
-  Vector<T, 2>          center(centerAirfoilX, centerAirfoilY);
-  IndicatorAirfoil2D<T> airfoilI = IndicatorAirfoil2D<T>(
-      center, chordLength, camber, camberPos, thicknessPercentage);
-  IndicatorRotate<T,2> airfoil(center, angleOfAttack, airfoilI);
-  prepareGeometry(superGeometry, airfoil);
-
-  // === 3rd Step: Prepare Lattice ===
-  SuperLattice<T,DESCRIPTOR> sLattice(converter, superGeometry);
-  WallModelParameters<T>      wallModelParameters;
-  wallModelParameters.bodyForce                 = bodyForce;
-  wallModelParameters.rhoMethod                 = rhoMethod;
-  wallModelParameters.samplingCellDistance      = samplingCellDistance;
-  wallModelParameters.interpolateSampleVelocity = interpolateSampleVelocity;
-  wallModelParameters.useVanDriest              = useVanDriest;
-  wallModelParameters.wallFunctionProfile       = wallFunctionProfile;
-  wallModelParameters.latticeWallDistance       = latticeWallDistance;
-  wallModelParameters.movingWall                = movingWall;
-  wallModelParameters.averageVelocity           = averageVelocity;
-
-  prepareLattice(sLattice, superGeometry, airfoil,
-                 wallModelParameters);
-
-  SuperLatticeCoupling smoothInflowUpdateO(
-    SmoothInflowUpdateO{},
-    names::NavierStokes{}, sLattice);
-  smoothInflowUpdateO.restrictTo(superGeometry.getMaterialIndicator(3));
-
-  // === 4th Step: Main Loop with Timer ===
-  clout << "starting simulation..." << std::endl;
-  util::Timer<T> timer(converter.getLatticeTime(maxPhysT),
-                       superGeometry.getStatistics().getNvoxel());
+  const std::size_t iTmax = myCase.getLattice(NavierStokes {}).getUnitConverter().getLatticeTime(physMaxT);
+  util::Timer<T>    timer(iTmax, myCase.getGeometry().getStatistics().getNvoxel());
   timer.start();
 
-  for (std::size_t iT = 0; iT < converter.getLatticeTime(maxPhysT); ++iT) {
+  SuperLatticeCoupling smoothInflowUpdateO(SmoothInflowUpdateO {}, names::NavierStokes {}, lattice);
+  smoothInflowUpdateO.restrictTo(geometry.getMaterialIndicator(3));
+
+  for (std::size_t iT = 0; iT < iTmax; ++iT) {
     {
-      const std::size_t iTmaxStart = converter.getLatticeTime(0.1 * maxPhysT);
+
+      const std::size_t iTmaxStart = converter.getLatticeTime(0.1 * physMaxT);
       const std::size_t iTupdate   = converter.getLatticeTime(0.001);
+
       if (iT % iTupdate == 0 && iT <= iTmaxStart) {
-        T frac[1] = {};
-        PolynomialStartScale<T,T> scale(iTmaxStart, T(1));
-        T iTvec[1] = {T( iT )};
+        T                          frac[1] = {};
+        PolynomialStartScale<T, T> scale(iTmaxStart, T(1));
+        T                          iTvec[1] = {T(iT)};
         scale(frac, iTvec);
-        smoothInflowUpdateO.setParameter<SmoothInflowUpdateO::VELOCITY>({frac[0] * converter.getCharLatticeVelocity(), 0});
+        smoothInflowUpdateO.setParameter<SmoothInflowUpdateO::VELOCITY>(
+            {frac[0] * converter.getCharLatticeVelocity(), 0});
         smoothInflowUpdateO.apply();
       }
     }
 
-    // === 6th Step: Collide and Stream Execution ===
-    sLattice.collideAndStream();
+    // === Collide and Stream Execution ===
+    lattice.collideAndStream();
 
-    // === 7th Step: Computation and Output of the Results ===
-    getResults(sLattice, iT, superGeometry, timer, airfoil);
+    // === Computation and Output of the Results ===
+    getResults(myCase, timer, iT);
   }
 
   timer.stop();
   timer.printSummary();
 }
+
+int main(int argc, char* argv[])
+{
+
+  initialize(&argc, &argv);
+
+  using T          = MyCase::value_t;
+
+  /// === Step 2: Set Parameters ===
+  MyCase::ParametersD myCaseParameters;
+  {
+    using namespace olb::parameters;
+    myCaseParameters.set<RESOLUTION>(100);
+    myCaseParameters.set<REYNOLDS>(1400000);
+    myCaseParameters.set<PHYS_VISCOSITY>((T)1.e-5);
+    myCaseParameters.set<MAX_PHYS_T>((T)16.);
+    myCaseParameters.set<CHORD_LENGTH>((T)1.);
+    myCaseParameters.set<DOMAIN_EXTENT>([&]() -> Vector<MyCase::value_t, 2>{
+        return {(T)6. * myCaseParameters.get<CHORD_LENGTH>(),(T)2. * myCaseParameters.get<CHORD_LENGTH>()};
+        });
+    myCaseParameters.set<AIRFOIL_POSITION>([&]() -> Vector<MyCase::value_t, 2>{
+        return {myCaseParameters.get<DOMAIN_EXTENT>()[0] / (T)4.,myCaseParameters.get<DOMAIN_EXTENT>()[1] / (T)2.};
+        });
+    myCaseParameters.set<AIRFOIL_PARAMETERS>({1, 4, 10});
+    myCaseParameters.set<ANGLE_OF_ATTACK>(5.);
+  }
+  myCaseParameters.fromCLI(argc, argv);
+
+  /// === Step 3: Create Mesh ===
+  Mesh mesh = createMesh(myCaseParameters);
+
+  /// === Step 4: Create Case ===
+  MyCase myCase(myCaseParameters, mesh);
+
+  /// === Step 5: Prepare Geometry ===
+  prepareGeometry(myCase);
+
+  /// === Step 6: Prepare Lattice ===
+  prepareLattice(myCase);
+
+  /// === Step 7: Definition of Initial, Boundary Values, and Fields ===
+  setInitialValues(myCase);
+
+  /// === Step 8: Simulate ===
+  simulate(myCase);
+  return 0;
+}
+
