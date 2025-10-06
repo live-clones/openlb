@@ -128,16 +128,20 @@ bool isHealthyInterface(CELL& cell) {
 }
 
 template <typename CELL, typename V>
-void computeMassExcessWeights
-(
-  CELL& cell, const Vector<V, CELL::descriptor_t::d>& normal,
-  const bool& enableAllInterfaces, Vector<V, CELL::descriptor_t::q>& weights
-) {
+void computeMassExcessWeights(CELL& cell, const bool& enableAllInterfaces, Vector<V, CELL::descriptor_t::q>& weights) {
+
   using DESCRIPTOR = typename CELL::descriptor_t;
+
+  // Compute normalized interface normal
+  auto normal = computeInterfaceNormal(cell);
+  normal = util::equal(norm_squared(normal), V(0), V(1), tolerance<V>)
+         ? Vector<V, DESCRIPTOR::d>{}
+         : util::normalize(normal);
 
   for (int iPop = 1; iPop < DESCRIPTOR::q; ++iPop) {
     auto direction = descriptors::c<DESCRIPTOR>(iPop);
     auto nbrCell = cell.neighbor(direction);
+    const bool hasNoFlags = !hasCellFlags(nbrCell, FreeSurface::Flags::ToGas | FreeSurface::Flags::ToFluid);
 
     Vector<V, DESCRIPTOR::d> ei{};
     if constexpr (DESCRIPTOR::d == 3) {
@@ -145,16 +149,16 @@ void computeMassExcessWeights
     }
     else { ei = {V(direction[0]), V(direction[1])}; }
 
-    if (isCellType(nbrCell, FreeSurface::Type::Interface) && hasCellFlags(nbrCell, FreeSurface::Flags::None)) {
+    if (isCellType(nbrCell, FreeSurface::Type::Interface) && hasNoFlags) {
       const V nDotDirection = util::dotProduct(normal, ei);
 
       if (hasCellFlags(cell, FreeSurface::Flags::ToFluid)) {
         // This cell was converted from interface to fluid, so the normal vector is used as is
-        weights[iPop] = nDotDirection > V(0) ? nDotDirection : V(0);
+        weights[iPop] = util::greater(nDotDirection, V(0)) ? nDotDirection : V(0);
       }
       else if (hasCellFlags(cell, FreeSurface::Flags::ToGas)) {
         // This cell was converted from interface to gas, so the normal vector is inverted
-        weights[iPop] = nDotDirection < V(0) ? -nDotDirection : V(0);
+        weights[iPop] = util::less(nDotDirection, V(0)) ? -nDotDirection : V(0);
       }
     }
     else if (hasCellFlags(nbrCell, FreeSurface::Flags::NewInterface) && enableAllInterfaces) {
@@ -162,11 +166,11 @@ void computeMassExcessWeights
 
       if (hasCellFlags(cell, FreeSurface::Flags::ToFluid)) {
         // This cell was converted from interface to fluid, so the normal vector is used as is
-        weights[iPop] = nDotDirection > V(0) ? nDotDirection : V(0);
+        weights[iPop] = util::greater(nDotDirection, V(0)) ? nDotDirection : V(0);
       }
       else if (hasCellFlags(cell, FreeSurface::Flags::ToGas)) {
         // This cell was converted from interface to gas, so the normal vector is inverted
-        weights[iPop] = nDotDirection < V(0) ? -nDotDirection : V(0);
+        weights[iPop] = util::less(nDotDirection, V(0)) ? -nDotDirection : V(0);
       }
     }
     else {
@@ -184,149 +188,319 @@ V getClampedEpsilon(const CELL& cell) {
 }
 
 template <typename CELL, typename V>
-V getSmoothEpsilon(CELL& cell) {
-  using DESCRIPTOR = typename CELL::descriptor_t;
+requires (CELL::descriptor_t::d == 3)
+V getClampedSmoothEpsilon(const CELL& cell) {
 
-  // K8 kernel of Williams et al.
-  // Avoid uisng expensive std::pow to boost performance
-  auto kernel = [](auto radius, const auto& direction) {
-    auto norm = norm_squared(direction);
-    if (norm < radius * radius) {
-      auto tmp = decltype(radius)(1) - norm / (radius * radius);
-      return tmp * tmp * tmp * tmp;
-    } else { return decltype(radius)(0); }
+  // Williams et al. K8 kernel, i.e., explicitly avoiding expensive std::pow method.
+  auto kernel = [](V inv_r2, const auto& direction) -> V {
+    const auto norm_2 = norm_squared(direction);
+    const V tmp = V{1} - V(norm_2) * inv_r2;
+    if (util::greater(tmp, V{0})) { return tmp * tmp * tmp * tmp; }
+    return V{0};
   };
 
-  // Kernel support radius is fixed at 2.0
-  V radius = V(2);
-  V denominator = V(0);
-  V tmp = V(0);
+  const V radius = V{2};
+  const V inv_r2 = V{1} / (radius * radius);
 
-  for (int iPop = 1; iPop < DESCRIPTOR::q; ++iPop) {
-    auto nbrCell = cell.neighbor(descriptors::c<DESCRIPTOR>(iPop));
-    const auto direction = descriptors::c<DESCRIPTOR>(iPop);
-    tmp += kernel(radius, direction) * nbrCell.template getField<FreeSurface::EPSILON>();
-    if (norm(direction) < radius) { denominator += kernel(radius, direction); }
+  V numer = V{0};
+  V denom = V{0};
+
+  for (int iPop = 1; iPop < descriptors::q<descriptors::D3Q27<>>(); ++iPop) {
+    const auto direction = descriptors::c<descriptors::D3Q27<>>(iPop);
+    const V weight = kernel(inv_r2, direction);
+    if (util::greater(weight, V{0})) {
+      const auto nbrCell = cell.neighbor(direction);
+      numer += weight * nbrCell.template getField<FreeSurface::EPSILON>();
+      denom += weight;
+    }
   }
 
-  return tmp / denominator;
+  return util::max(V(0), util::min(V(1), numer / denom));
 }
 
 template <typename CELL, typename V>
-V getClampedSmoothEpsilon(const CELL& cell) {
+requires (CELL::descriptor_t::d == 2)
+GradientGroups2D<V> EpsilonGradientGroups(CELL& cell) {
+  // Perform optimized arithmetics for D2Q9, i.e., used to compute interface normal.
+  GradientGroups2D<V> tmp;
 
-  V epsilon = getSmoothEpsilon(cell);
-  return util::max(V(0), util::min(V(1), epsilon));
+  auto eps_minusY       = getClampedEpsilon(cell.neighbor({0, -1}));
+  auto eps_plusY        = getClampedEpsilon(cell.neighbor({0, 1}));
+  auto eps_minusX       = getClampedEpsilon(cell.neighbor({-1, 0}));
+  auto eps_plusX        = getClampedEpsilon(cell.neighbor({1, 0}));
+  auto eps_minusYminusX = getClampedEpsilon(cell.neighbor({-1, -1}));
+  auto eps_minusYplusX  = getClampedEpsilon(cell.neighbor({1, -1}));
+  auto eps_plusYminusX  = getClampedEpsilon(cell.neighbor({-1, 1}));
+  auto eps_plusYplusX   = getClampedEpsilon(cell.neighbor({1, 1}));
+
+  // Rearrange arithmetic operations to minimize the number of cancellation events, i.e., positive and negative terms.
+  tmp.axes[0]      = eps_minusX - eps_plusX;
+  tmp.diagonals[0] = (eps_minusYminusX + eps_plusYminusX) - (eps_plusYplusX + eps_minusYplusX);
+
+  tmp.axes[1]      = eps_minusY - eps_plusY;
+  tmp.diagonals[1] = (eps_minusYminusX + eps_minusYplusX) - (eps_plusYplusX + eps_plusYminusX);
+
+  return tmp;
+}
+
+template <typename CELL, typename V>
+requires (CELL::descriptor_t::d == 3)
+GradientGroups3D<V> EpsilonGradientGroups(CELL& cell) {
+  // Perform optimized arithmetics for D3Q27, i.e., used to compute interface normal.
+  GradientGroups3D<V> tmp;
+
+  auto eps_minusY             = getClampedEpsilon(cell.neighbor({0, -1, 0}));
+  auto eps_plusY              = getClampedEpsilon(cell.neighbor({0, 1, 0}));
+  auto eps_minusX             = getClampedEpsilon(cell.neighbor({-1, 0, 0}));
+  auto eps_plusX              = getClampedEpsilon(cell.neighbor({1, 0, 0}));
+  auto eps_minusYminusX       = getClampedEpsilon(cell.neighbor({-1, -1, 0}));
+  auto eps_minusYplusX        = getClampedEpsilon(cell.neighbor({1, -1, 0}));
+  auto eps_plusYminusX        = getClampedEpsilon(cell.neighbor({-1, 1, 0}));
+  auto eps_plusYplusX         = getClampedEpsilon(cell.neighbor({1, 1, 0}));
+  auto eps_minusZ             = getClampedEpsilon(cell.neighbor({0, 0, -1}));
+  auto eps_plusZ              = getClampedEpsilon(cell.neighbor({0, 0, 1}));
+  auto eps_minusZminusY       = getClampedEpsilon(cell.neighbor({0, -1, -1}));
+  auto eps_minusZplusY        = getClampedEpsilon(cell.neighbor({0, 1, -1}));
+  auto eps_minusZminusX       = getClampedEpsilon(cell.neighbor({-1, 0, -1}));
+  auto eps_minusZplusX        = getClampedEpsilon(cell.neighbor({1, 0, -1}));
+  auto eps_plusZminusY        = getClampedEpsilon(cell.neighbor({0, -1, 1}));
+  auto eps_plusZplusY         = getClampedEpsilon(cell.neighbor({0, 1, 1}));
+  auto eps_plusZminusX        = getClampedEpsilon(cell.neighbor({-1, 0, 1}));
+  auto eps_plusZplusX         = getClampedEpsilon(cell.neighbor({1, 0, 1}));
+  auto eps_minusZminusYminusX = getClampedEpsilon(cell.neighbor({-1, -1, -1}));
+  auto eps_minusZplusYminusX  = getClampedEpsilon(cell.neighbor({-1, 1, -1}));
+  auto eps_minusZminusYplusX  = getClampedEpsilon(cell.neighbor({1, -1, -1}));
+  auto eps_minusZplusYplusX   = getClampedEpsilon(cell.neighbor({1, 1, -1}));
+  auto eps_plusZminusYminusX  = getClampedEpsilon(cell.neighbor({-1, -1, 1}));
+  auto eps_plusZplusYminusX   = getClampedEpsilon(cell.neighbor({-1, 1, 1}));
+  auto eps_plusZminusYplusX   = getClampedEpsilon(cell.neighbor({1, -1, 1}));
+  auto eps_plusZplusYplusX    = getClampedEpsilon(cell.neighbor({1, 1, 1}));
+
+  // Rearrange arithmetic operations to minimize the number of cancellation events, i.e., positive and negative terms.
+  tmp.faces[0]   = eps_minusX - eps_plusX;
+  tmp.edges[0]   = (eps_minusYminusX + eps_minusZminusX + eps_plusYminusX + eps_plusZminusX) - (eps_plusYplusX + eps_plusZplusX + eps_minusYplusX + eps_minusZplusX);
+  tmp.corners[0] = (eps_minusZminusYminusX + eps_plusZminusYminusX + eps_minusZplusYminusX + eps_plusZplusYminusX) - (eps_plusZplusYplusX + eps_minusZplusYplusX + eps_plusZminusYplusX + eps_minusZminusYplusX);
+
+  tmp.faces[1]   = eps_minusY - eps_plusY;
+  tmp.edges[1]   = (eps_minusYminusX + eps_minusZminusY + eps_minusYplusX + eps_plusZminusY) - (eps_plusYplusX + eps_plusZplusY + eps_plusYminusX + eps_minusZplusY);
+  tmp.corners[1] = (eps_minusZminusYminusX + eps_plusZminusYminusX + eps_plusZminusYplusX + eps_minusZminusYplusX) - (eps_plusZplusYplusX + eps_minusZplusYplusX + eps_minusZplusYminusX + eps_plusZplusYminusX);
+
+  tmp.faces[2]   = eps_minusZ - eps_plusZ;
+  tmp.edges[2]   = (eps_minusZminusX + eps_minusZminusY + eps_minusZplusX + eps_minusZplusY) - (eps_plusZplusX + eps_plusZplusY + eps_plusZminusX + eps_plusZminusY);
+  tmp.corners[2] = (eps_minusZminusYminusX + eps_minusZplusYplusX + eps_minusZplusYminusX + eps_minusZminusYplusX) - (eps_plusZplusYplusX + eps_plusZminusYminusX + eps_plusZminusYplusX + eps_plusZplusYminusX);
+
+  return tmp;
 }
 
 template <typename CELL, typename V>
 Vector<V, CELL::descriptor_t::d> computeInterfaceNormal(CELL& cell) {
+  if constexpr (method == NormalMethod::ParkerYoung) {
+    return ParkerYoungInterfaceNormal(cell);
+  }
+  else if constexpr (method == NormalMethod::LeastSquares) {
+    return LeastSquaresInterfaceNormal(cell);
+  }
+  else {
+    static_assert(method == NormalMethod::ParkerYoung || method == NormalMethod::LeastSquares,
+      "Unknown interface normal method, only ParkerYoung and LeastSquares methods are allowed.");
+  }
+}
+
+template <typename CELL, typename V>
+Vector<V, CELL::descriptor_t::d> ParkerYoungInterfaceNormal(CELL& cell) {
 
   // Compute interface normal using Parker-Young approximation
   Vector<V, CELL::descriptor_t::d> normal{};
+  // Compute interface normal (always) for D3Q27 descriptor, i.e., irrespective of cell descriptor.
   if constexpr (CELL::descriptor_t::d == 3) {
-    auto eps_minusY             = getClampedEpsilon(cell.neighbor({0, -1, 0}));
-    auto eps_plusY              = getClampedEpsilon(cell.neighbor({0, 1, 0}));
-    auto eps_minusX             = getClampedEpsilon(cell.neighbor({-1, 0, 0}));
-    auto eps_plusX              = getClampedEpsilon(cell.neighbor({1, 0, 0}));
-    auto eps_minusYminusX       = getClampedEpsilon(cell.neighbor({-1, -1, 0}));
-    auto eps_minusYplusX        = getClampedEpsilon(cell.neighbor({1, -1, 0}));
-    auto eps_plusYminusX        = getClampedEpsilon(cell.neighbor({-1, 1, 0}));
-    auto eps_plusYplusX         = getClampedEpsilon(cell.neighbor({1, 1, 0}));
-    auto eps_minusZ             = getClampedEpsilon(cell.neighbor({0, 0, -1}));
-    auto eps_plusZ              = getClampedEpsilon(cell.neighbor({0, 0, 1}));
-    auto eps_minusZminusY       = getClampedEpsilon(cell.neighbor({0, -1, -1}));
-    auto eps_minusZplusY        = getClampedEpsilon(cell.neighbor({0, 1, -1}));
-    auto eps_minusZminusX       = getClampedEpsilon(cell.neighbor({-1, 0, -1}));
-    auto eps_minusZplusX        = getClampedEpsilon(cell.neighbor({1, 0, -1}));
-    auto eps_plusZminusY        = getClampedEpsilon(cell.neighbor({0, -1, 1}));
-    auto eps_plusZplusY         = getClampedEpsilon(cell.neighbor({0, 1, 1}));
-    auto eps_plusZminusX        = getClampedEpsilon(cell.neighbor({-1, 0, 1}));
-    auto eps_plusZplusX         = getClampedEpsilon(cell.neighbor({1, 0, 1}));
-    auto eps_minusZminusYminusX = getClampedEpsilon(cell.neighbor({-1, -1, -1}));
-    auto eps_minusZplusYminusX  = getClampedEpsilon(cell.neighbor({-1, 1, -1}));
-    auto eps_minusZminusYplusX  = getClampedEpsilon(cell.neighbor({1, -1, -1}));
-    auto eps_minusZplusYplusX   = getClampedEpsilon(cell.neighbor({1, 1, -1}));
-    auto eps_plusZminusYminusX  = getClampedEpsilon(cell.neighbor({-1, -1, 1}));
-    auto eps_plusZplusYminusX   = getClampedEpsilon(cell.neighbor({-1, 1, 1}));
-    auto eps_plusZminusYplusX   = getClampedEpsilon(cell.neighbor({1, -1, 1}));
-    auto eps_plusZplusYplusX    = getClampedEpsilon(cell.neighbor({1, 1, 1}));
+    // Compute gradient of EPSILON using optimized arithmetics.
+    auto groups = EpsilonGradientGroups(cell);
 
-    // Rearrange arithmetic operations to minimize the number of cancellation events, i.e., positive and negative terms.
-    normal[0]  = V(4) * (eps_minusX - eps_plusX);
-    normal[0] += V(2) * ((eps_minusYminusX + eps_minusZminusX + eps_plusYminusX + eps_plusZminusX) - (eps_plusYplusX + eps_plusZplusX + eps_minusYplusX + eps_minusZplusX));
-    normal[0] += V(1) * ((eps_minusZminusYminusX + eps_plusZminusYminusX + eps_minusZplusYminusX + eps_plusZplusYminusX) - (eps_plusZplusYplusX + eps_minusZplusYplusX + eps_plusZminusYplusX + eps_minusZminusYplusX));
+    // Compute interface normal in each direction.
+    normal[0]  = V(4) * groups.faces[0];
+    normal[0] += V(2) * groups.edges[0];
+    normal[0] += V(1) * groups.corners[0];
 
-    normal[1]  = V(4) * (eps_minusY - eps_plusY);
-    normal[1] += V(2) * ((eps_minusYminusX + eps_minusZminusY + eps_minusYplusX + eps_plusZminusY) - (eps_plusYplusX + eps_plusZplusY + eps_plusYminusX + eps_minusZplusY));
-    normal[1] += V(1) * ((eps_minusZminusYminusX + eps_plusZminusYminusX + eps_plusZminusYplusX + eps_minusZminusYplusX) - (eps_plusZplusYplusX + eps_minusZplusYplusX + eps_minusZplusYminusX + eps_plusZplusYminusX));
+    normal[1]  = V(4) * groups.faces[1];
+    normal[1] += V(2) * groups.edges[1];
+    normal[1] += V(1) * groups.corners[1];
 
-    normal[2]  = V(4) * (eps_minusZ - eps_plusZ);
-    normal[2] += V(2) * ((eps_minusZminusX + eps_minusZminusY + eps_minusZplusX + eps_minusZplusY) - (eps_plusZplusX + eps_plusZplusY + eps_plusZminusX + eps_plusZminusY));
-    normal[2] += V(1) * ((eps_minusZminusYminusX + eps_minusZplusYplusX + eps_minusZplusYminusX + eps_minusZminusYplusX) - (eps_plusZplusYplusX + eps_plusZminusYminusX + eps_plusZminusYplusX + eps_plusZplusYminusX));
+    normal[2]  = V(4) * groups.faces[2];
+    normal[2] += V(2) * groups.edges[2];
+    normal[2] += V(1) * groups.corners[2];
+
+    return normal;
+  }
+  // Compute interface normal (always) for D2Q9 descriptor, i.e., irrespective of cell descriptor.
+  else if constexpr (CELL::descriptor_t::d == 2) {
+    // Compute gradient of EPSILON using optimized arithmetics.
+    auto groups = EpsilonGradientGroups(cell);
+
+    // Compute interface normal in each direction.
+    normal[0]  = V(4) * groups.axes[0];
+    normal[0] += V(2) * groups.diagonals[0];
+
+    normal[1]  = V(4) * groups.axes[1];
+    normal[1] += V(2) * groups.diagonals[1];
 
     return normal;
   }
   else {
-    auto eps_minusY       = getClampedEpsilon(cell.neighbor({0, -1}));
-    auto eps_plusY        = getClampedEpsilon(cell.neighbor({0, 1}));
-    auto eps_minusX       = getClampedEpsilon(cell.neighbor({-1, 0}));
-    auto eps_plusX        = getClampedEpsilon(cell.neighbor({1, 0}));
-    auto eps_minusYminusX = getClampedEpsilon(cell.neighbor({-1, -1}));
-    auto eps_minusYplusX  = getClampedEpsilon(cell.neighbor({1, -1}));
-    auto eps_plusYminusX  = getClampedEpsilon(cell.neighbor({-1, 1}));
-    auto eps_plusYplusX   = getClampedEpsilon(cell.neighbor({1, 1}));
+    static_assert(CELL::descriptor_t::d == 2 || CELL::descriptor_t::d == 3,
+      "Parker-Young interface normal is only implemented for 2D and 3D.");
+    return normal;
+  }
+}
 
-    // Rearrange arithmetic operations to minimize the number of cancellation events, i.e., positive and negative terms.
-    normal[0] = V(2) * (eps_minusX - eps_plusX);
-    normal[0] += V(1) * ((eps_minusYminusX + eps_plusYminusX) - (eps_plusYplusX + eps_minusYplusX));
+template <typename CELL, typename V>
+Vector<V, CELL::descriptor_t::d> LeastSquaresInterfaceNormal(CELL& cell) {
 
-    normal[1] = V(2) * (eps_minusY - eps_plusY);
-    normal[1] += V(1) * ((eps_minusYminusX + eps_minusYplusX) - (eps_plusYplusX + eps_plusYminusX));
+  // Compute interface normal using weighted least-squares gradient
+  Vector<V, CELL::descriptor_t::d> normal{};
 
+  // Compute interface normal (always) for D3Q27 descriptor, i.e., irrespective of cell descriptor.
+  if constexpr (CELL::descriptor_t::d == 3) {
+
+    // Construct the system of equations
+    std::array<V, 9> A{};
+    std::array<V, 3> x{};
+    std::array<V, 3> rhs{};
+
+    // Always use D3Q27 descriptor to build the linear system, i.e., corners are essential for geometry operations.
+    constexpr std::uint8_t exponent = std::uint8_t(1);
+    const V weight_1 = V(1);
+    const V weight_2 = (exponent == std::uint8_t(1)) ? (V(1) / util::sqrt(V(2))) : V(0.5);
+    const V weight_3 = (exponent == std::uint8_t(1)) ? (V(1) / util::sqrt(V(3))) : V(1) / V(3);
+
+    // Compute gradient of EPSILON using optimized arithmetics.
+    auto groups = EpsilonGradientGroups(cell);
+
+    // Prepare the linear system matrix A, exploiting D3Q27 stencil symmetry.
+    A[0] = V(2) * weight_1 + V(8) * weight_2 + V(8) * weight_3;
+    A[1] = V(0);
+    A[2] = V(0);
+    A[4] = V(2) * weight_1 + V(8) * weight_2 + V(8) * weight_3;
+    A[5] = V(0);
+    A[8] = V(2) * weight_1 + V(8) * weight_2 + V(8) * weight_3;
+
+    // Prepare the linear system matrix rhs, exploiting D3Q27 stencil symmetry.
+    rhs[0]  = (weight_1 * groups.faces[0]) + (weight_2 * groups.edges[0]) + (weight_3 * groups.corners[0]);
+    rhs[1]  = (weight_1 * groups.faces[1]) + (weight_2 * groups.edges[1]) + (weight_3 * groups.corners[1]);
+    rhs[2]  = (weight_1 * groups.faces[2]) + (weight_2 * groups.edges[2]) + (weight_3 * groups.corners[2]);
+
+    // Enforce symmetry to eliminate round-off errors.
+    for (std::uint8_t i = 1; i < 3; ++i) {
+      for (std::uint8_t j = 0; j < i; ++j) { A[i * 3 + j] = A[j * 3 + i]; }
+    }
+
+    // Solve the linear system A * n = rhs
+    if constexpr (solver == SolverType::plainLU) {
+      plainLUSolver<V, 3>(A, x, rhs, 3);
+    }
+    else if constexpr (solver == SolverType::rowPivotingLU) {
+      rowPivotingLUSolver<V, 3>(A, x, rhs, 3);
+    }
+    else if constexpr (solver == SolverType::completePivotingLU) {
+      completePivotingLUSolver<V, 3>(A, x, rhs, 3);
+    }
+    /*else if constexpr (solver == SolverType::eigen) {
+      eigenSolver<V, 3>(A, x, rhs, 3);
+    }*/
+    else {
+      // Fall back to default solver
+      plainLUSolver<V, 3>(A, x, rhs, 3);
+    }
+
+    normal[0] = x[0]; normal[1] = x[1]; normal[2] = x[2];
+    return normal;
+  }
+  // Compute interface normal (always) for D2Q9 descriptor, i.e., irrespective of cell descriptor.
+  else if constexpr (CELL::descriptor_t::d == 2) {
+
+    // Construct the system of equations
+    std::array<V, 4> A{};
+    std::array<V, 2> x{};
+    std::array<V, 2> rhs{};
+
+    // Always use D2Q9 descriptor to build the linear system, i.e., diagonals are essential for geometry operations.
+    constexpr std::uint8_t exponent = std::uint8_t(1);
+    const V weight_1 = V(1);
+    const V weight_2 = (exponent == std::uint8_t(1)) ? (V(1) / util::sqrt(V(2))) : V(0.5);
+
+    // Compute gradient of EPSILON using optimized arithmetics.
+    auto groups = EpsilonGradientGroups(cell);
+
+    // Prepare the linear system matrix A, exploiting D2Q9 stencil symmetry.
+    A[0] = V(2) * weight_1 + V(4) * weight_2;
+    A[1] = V(0);
+    A[3] = V(2) * weight_1 + V(4) * weight_2;
+
+    // Prepare the linear system matrix rhs, exploiting D2Q9 stencil symmetry.
+    rhs[0]  = (weight_1 * groups.axes[0]) + (weight_2 * groups.diagonals[0]);
+    rhs[1]  = (weight_1 * groups.axes[1]) + (weight_2 * groups.diagonals[1]);
+
+    // Enforce symmetry to eliminate round-off errors.
+    A[2] = A[1];
+
+    // Solve the linear system A * n = rhs
+    if constexpr (solver == SolverType::plainLU) {
+      plainLUSolver<V, 2>(A, x, rhs, 2);
+    }
+    else if constexpr (solver == SolverType::rowPivotingLU) {
+      rowPivotingLUSolver<V, 2>(A, x, rhs, 2);
+    }
+    else if constexpr (solver == SolverType::completePivotingLU) {
+      completePivotingLUSolver<V, 2>(A, x, rhs, 2);
+    }
+    /*else if constexpr (solver == SolverType::eigen) {
+      eigenSolver<V, 2>(A, x, rhs, 2);
+    }*/
+    else {
+      // Fall back to default solver
+      plainLUSolver<V, 2>(A, x, rhs, 2);
+    }
+
+    normal[0] = x[0]; normal[1] = x[1];
+    return normal;
+  }
+  else {
+    static_assert(CELL::descriptor_t::d == 2 || CELL::descriptor_t::d == 3,
+      "Least-Squares interface normal is only implemented for 2D and 3D.");
     return normal;
   }
 }
 
 template<typename T, int N>
-void iterativeRefinement
-(
-  const std::array<T, N * N>& A, const std::array<T, N * N>& M,
-  std::array<T, N>& x, const std::array<T, N>& b, const int Nsol, int maxIter
-) {
-  std::array<T, N> residual{};
-  for (int iter = 0; iter < maxIter; ++iter) {
-    // Compute the residual, i.e., r = b - A * x
-    for (int i = 0; i < Nsol; ++i) {
-      T sum = T(0);
-      for (int j = 0; j < Nsol; ++j) { sum += A[i * N + j] * x[j]; }
-      residual[i] = b[i] - sum;
-    }
+void plainLUSolver(std::array<T, N * N>& M, std::array<T, N>& x, std::array<T, N>& rhs, const int Nsol) {
+  // Add Tikhonov Regularization to the diagonal elements of M
+  for (int i = 0; i < Nsol; ++i) { M[i * N + i] += T(0); }
 
-    // Forward substitution
-    std::array<T, N> dx = residual;
-    for (int i = 0; i < Nsol; ++i) {
-      for (int k = 0; k < i; ++k) { dx[i] -= M[i * N + k] * dx[k]; }
+  // (1) Simple LU decomposition method.
+  for (int i = 0; i < Nsol; ++i) {
+    // Perform standard elimination procedure.
+    for (int j = i + 1; j < Nsol; ++j) {
+      M[j * N + i] /= M[i * N + i];
+      for (int k = i + 1; k < Nsol; ++k) { M[j * N + k] -= M[j * N + i] * M[i * N + k]; }
     }
+  }
 
-    // Backward substitution
-    for (int i = Nsol - 1; i >= 0; --i) {
-      for (int k = i + 1; k < Nsol; ++k) { dx[i] -= M[i * N + k] * dx[k]; }
-      dx[i] /= M[i * N + i];
-    }
+  // (2) Forward substitution step, i.e., solve L * x = b in place.
+  for (int i = 0; i < Nsol; ++i) {
+    x[i] = rhs[i];
+    for (int j = 0; j < i; ++j) { x[i] -= M[i * N + j] * x[j]; }
+  }
 
-    // Update the solution, i.e., x = x + dx
-    for (int i = 0; i < Nsol; ++i) { x[i] += dx[i]; }
+  // (3) Backward substitution step, i.e., solve U * x = b in place.
+  for (int i = Nsol - 1; i >= 0; --i) {
+    for (int j = i + 1; j < Nsol; ++j) { x[i] -= M[i * N + j] * x[j]; }
+    x[i] /= M[i * N + i];
   }
 }
 
 template<typename T, int N>
-void rowPivotingLUSolver(std::array<T, N * N>& M, std::array<T, N>& x, std::array<T, N>& b, const int Nsol) {
+void rowPivotingLUSolver(std::array<T, N * N>& M, std::array<T, N>& x, std::array<T, N>& rhs, const int Nsol) {
   // Add Tikhonov Regularization to the diagonal elements of M
   for (int i = 0; i < Nsol; ++i) { M[i * N + i] += T(0); }
-
-  // Make a copy of the original coefficient matrix.
-  std::array<T, N * N> Prev_M = M;
 
   // Permutation vector to record row swaps.
   std::array<int, N> row_perm{};
@@ -334,228 +508,154 @@ void rowPivotingLUSolver(std::array<T, N * N>& M, std::array<T, N>& x, std::arra
 
   // LU decomposition method with row pivoting.
   for (int i = 0; i < Nsol; ++i) {
-    int pivotRow = i;
-    T maxValue = std::abs(M[i * N + i]);
+    int pivot_row = i;
+    T max_value = std::abs(M[i * N + i]);
 
     for (int j = i + 1; j < Nsol; ++j) {
       T value = std::abs(M[j * N + i]);
-      if (value > maxValue) {
-        maxValue = value;
-        pivotRow = j;
-      }
+      if (value > max_value) { max_value = value; pivot_row = j; }
     }
 
-    if (pivotRow != i) {
-      for (int k = 0; k < Nsol; ++k) { std::swap(M[i * N + k], M[pivotRow * N + k]); }
-      std::swap(row_perm[i], row_perm[pivotRow]);
-      std::swap(b[i], b[pivotRow]);
+    // Apply row swap operation.
+    if (pivot_row != i) {
+      for (int k = 0; k < Nsol; ++k) { std::swap(M[i * N + k], M[pivot_row * N + k]); }
+      std::swap(row_perm[i], row_perm[pivot_row]);
+      std::swap(rhs[i], rhs[pivot_row]);
     }
 
+    // Perform standard elimination procedure.
     for (int j = i + 1; j < Nsol; ++j) {
       M[j * N + i] /= M[i * N + i];
       for (int k = i + 1; k < Nsol; ++k) { M[j * N + k] -= M[j * N + i] * M[i * N + k]; }
     }
   }
 
-  // Copy the right-hand side array into x array
-  for (int i = 0; i < Nsol; ++i) { x[i] = b[i]; }
+  // (1) Copy the permutated right-hand side array into x array.
+  for (int i = 0; i < Nsol; ++i) { x[i] = rhs[i]; }
 
-  // Forward substitution step, i.e., solve L * x = b in place.
+  // (2) Forward substitution step, i.e., solve L * x = b in place.
   for (int i = 0; i < Nsol; ++i) {
     for (int j = 0; j < i; ++j) { x[i] -= M[i * N + j] * x[j]; }
   }
 
-  // Backward substitution step, i.e., solve U * x = b in place.
+  // (3) Backward substitution step, i.e., solve U * x = b in place.
   for (int i = Nsol - 1; i >= 0; --i) {
     for (int j = i + 1; j < Nsol; ++j) { x[i] -= M[i * N + j] * x[j]; }
     x[i] /= M[i * N + i];
   }
-
-  // Perform iterative refinement of the solution.
-  std::array<T, N * N> tmp = Prev_M;
-  for (int i = 0; i < Nsol; ++i) {
-    for (int j = 0; j < Nsol; ++j) { Prev_M[i * N + j] = tmp[row_perm[i] * N + j]; }
-  }
-  iterativeRefinement<T, N>(Prev_M, M, x, b, Nsol);
 }
 
 template<typename T, int N>
-void completePivotingLUSolver(std::array<T, N * N>& M, std::array<T, N>& x, std::array<T, N>& b, const int Nsol) {
+void completePivotingLUSolver(std::array<T, N * N>& M, std::array<T, N>& x, std::array<T, N>& rhs, const int Nsol) {
   // Add Tikhonov Regularization to the diagonal elements of M
   for (int i = 0; i < Nsol; ++i) { M[i * N + i] += T(0); }
 
   // Permutation vectors to record row and columns swaps.
   std::array<int, N> row_perm{}, col_perm{};
-  for (int i = 0; i < N; ++i) {
-    row_perm[i] = i;
-    col_perm[i] = i;
-  }
+  for (int i = 0; i < N; ++i) { row_perm[i] = i; col_perm[i] = i; }
+
+  // Track rank-revealing behavior
+  int nonzero_pivots = Nsol;
+  T global_pivot = T(0);
 
   // LU decomposition method with complete pivoting.
   for (int i = 0; i < Nsol; ++i) {
-    int pivotRow = i, pivotCol = i;
-    T maxValue = std::abs(M[i * N + i]);
+    int pivot_row = i, pivot_col = i;
+    T max_value = std::abs(M[i * N + i]);
 
     for (int r = i; r < Nsol; ++r) {
       for (int c = i; c < Nsol; ++c) {
         T value = std::abs(M[r * N + c]);
-        if (value > maxValue) {
-          maxValue = value;
-          pivotRow = r;
-          pivotCol = c;
-        }
+        if (value > max_value) { max_value = value; pivot_row = r; pivot_col = c; }
       }
     }
 
-    if (pivotRow != i) {
-      for (int k = 0; k < Nsol; ++k) { std::swap(M[i * N + k], M[pivotRow * N + k]); }
-      std::swap(row_perm[i], row_perm[pivotRow]);
-      std::swap(b[i], b[pivotRow]);
+    // Break if the entire corner elements are zero, respecting a pre-defined tolerance.
+    if (max_value == T(0)) { nonzero_pivots = i; break; }
+
+    // Update the global maximum pivot.
+    if (max_value > global_pivot) { global_pivot = max_value; }
+
+    // Apply row swap operation.
+    if (pivot_row != i) {
+      for (int k = 0; k < Nsol; ++k) { std::swap(M[i * N + k], M[pivot_row * N + k]); }
+      std::swap(row_perm[i], row_perm[pivot_row]);
+      std::swap(rhs[i], rhs[pivot_row]);
     }
 
-    if (pivotCol != i) {
-      for (int k = 0; k < Nsol; ++k) { std::swap(M[k * N + i], M[k * N + pivotCol]); }
-      std::swap(col_perm[i], col_perm[pivotCol]);
+    // Apply column swap operation.
+    if (pivot_col != i) {
+      for (int k = 0; k < Nsol; ++k) { std::swap(M[k * N + i], M[k * N + pivot_col]); }
+      std::swap(col_perm[i], col_perm[pivot_col]);
     }
 
+    // Perform standard elimination procedure.
     for (int j = i + 1; j < Nsol; ++j) {
       M[j * N + i] /= M[i * N + i];
       for (int k = i + 1; k < Nsol; ++k) { M[j * N + k] -= M[j * N + i] * M[i * N + k]; }
     }
   }
 
-  // Copy the right-hand side array into x array
-  for (int i = 0; i < Nsol; ++i) { x[i] = b[i]; }
-
-  // Forward substitution step, i.e., solve L * x = b in place.
-  for (int i = 0; i < Nsol; ++i) {
-    for (int j = 0; j < i; ++j) { x[i] -= M[i * N + j] * x[j]; }
+  // Compute the number of reliably non-zero pivots, i.e., rank.
+  int rank = 0;
+  for (int i = 0; i < nonzero_pivots; ++i) {
+    if (std::abs(M[i * N + i]) > tolerance<T> * global_pivot) { ++rank; }
   }
 
-  // Backward substitution step, i.e., solve U * x = b in place.
-  for (int i = Nsol - 1; i >= 0; --i) {
-    for (int j = i + 1; j < Nsol; ++j) { x[i] -= M[i * N + j] * x[j]; }
-    x[i] /= M[i * N + i];
+  // (1) Copy the permutated right-hand side array into x array.
+  for (int i = 0; i < Nsol; ++i) { x[i] = rhs[i]; }
+
+  if (rank == 0) {
+    // No reliable rank found, set the solution array to zero.
+    for (int i = 0; i < Nsol; ++i) { x[i] = T(0); }
+  }
+  else {
+    // (2) Forward substitution step, i.e., solve L * x = b in place.
+    for (int i = 0; i < Nsol; ++i) {
+      for (int j = 0; j < i; ++j) { x[i] -= M[i * N + j] * x[j]; }
+    }
+
+    // (3) Backward substitution step, i.e., solve U * x = b in place.
+    // Note: only over the first "rank" pivots.
+    for (int i = rank; i < Nsol; ++i) { x[i] = T(0); }
+    for (int i = rank - 1; i >= 0; --i) {
+      for (int j = i + 1; j < rank; ++j) { x[i] -= M[i * N + j] * x[j]; }
+      x[i] /= M[i * N + i];
+    }
   }
 
-  // Reconstruct original x by inverting the permutation, i.e.,
+  // (4) Reconstruct original x by inverting the permutation, i.e.,
   // for each index i, the original index is given by col_perm[i].
   std::array<T, N> tmp = x;
   for (int i = 0; i < Nsol; ++i) { x[col_perm[i]] = tmp[i]; }
 }
 
-template<typename T, int N>
-void columnPivotingQRSolver(std::array<T, N * N>& M, std::array<T, N>& x, std::array<T, N>& b, const int Nsol) {
-  // Permutation array to record column swaps.
-  std::array<int, N> col_perm{};
-  for (int i = 0; i < N; ++i) { col_perm[i] = i; }
+/*template<typename T, int N>
+void eigenSolver(std::array<T, N * N>& M, std::array<T, N>& x, std::array<T, N>& rhs, const int Nsol) {
+  // Using Eigen fixed-size matrices to solve the linear system for Nsol.
+  Eigen::Matrix<T, N, N, Eigen::RowMajor> A = Eigen::Matrix<T, N, N, Eigen::RowMajor>::Zero();
+  Eigen::Matrix<T, N, 1> B = Eigen::Matrix<T, N, 1>::Zero();
+  const int n = std::max(0, std::min(Nsol, N));
 
-  // Pre-computed column norm array, i.e., L2-normalization of each column.
-  std::array<T, N> col_norm{}, col_norm_tmp{};
-  for (int i = 0; i < Nsol; ++i) {
-    T norm = T(0);
-    for (int j = 0; j < Nsol; ++j) { norm += M[j * N + i] * M[j * N + i]; }
-    col_norm[i] = util::sqrt(norm);
-    col_norm_tmp[i] = col_norm[i];
+  // Copy top-left (n×n) from M and first n of rhs.
+  for (int i = 0; i < n; ++i) {
+    B(i) = rhs[i];
+    for (int j = 0; j < n; ++j) { A(i, j) = M[i * N + j]; }
   }
 
-  // QR decomposition method with column pivoting.
-  for (int i = 0; i < Nsol; ++i) {
-    int pivotCol = i;
-    T maxValue = col_norm[i];
-
-    for (int j = i + 1; j < Nsol; ++j) {
-      if (col_norm[j] > maxValue) {
-        maxValue = col_norm[j];
-        pivotCol = j;
-      }
-    }
-
-    if (pivotCol != i) {
-      for (int k = 0; k < Nsol; ++k) { std::swap(M[k * N + i], M[k * N + pivotCol]); }
-      std::swap(col_perm[i], col_perm[pivotCol]);
-      std::swap(col_norm[i], col_norm[pivotCol]);
-      std::swap(col_norm_tmp[i], col_norm_tmp[pivotCol]);
-    }
-
-    // Compute the L2-norm of the i-th column, i.e., range is from row (i) to (Nsol - 1),
-    // and the reflection factor (r)
-    T r = T(0);
-    {
-      T norm = T(0);
-      for (int k = i; k < Nsol; ++k) { norm += M[k * N + i] * M[k * N + i]; }
-      norm = util::sqrt(norm);
-      r = M[i * N + i] >= T(0) ? -norm : norm;
-    }
-
-    // Prepare and normalize the Householder array for the i-th column.
-    std::array<T, N> v{};
-    {
-      v[0] = M[i * N + i] - r;
-      for (int k = i + 1; k < Nsol; ++k) { v[k - i] = M[k * N + i]; }
-
-      T norm = T(0);
-      for (int k = 0; k < Nsol - i; ++k) { norm += v[k] * v[k]; }
-      norm = util::sqrt(norm);
-
-      // Otherwise, the Householder array is already zero and no reflection is applied.
-      if (norm != T(0)) {
-        for (int k = 0; k < Nsol - i; ++k) { v[k] /= norm; }
-      }
-    }
-
-    // Apply the Householder reflection to the remaining columns.
-    for (int k = i; k < Nsol; ++k) {
-      T dot_product = T(0);
-      for (int j = 0; j < Nsol - i; ++j) { dot_product += v[j] * M[(j + i) * N + k]; }
-
-      dot_product *= T(2);
-      for (int j = 0; j < Nsol - i; ++j) { M[(j + i) * N + k] -= v[j] * dot_product; }
-    }
-
-    // Apply the Householder reflection to the right-hand side array.
-    {
-      T dot_product = T(0);
-      for (int k = 0; k < Nsol - i; ++k) { dot_product += v[k] * b[k + i]; }
-
-      dot_product *= T(2);
-      for (int k = 0; k < Nsol - i; ++k) { b[k + i] -= v[k] * dot_product; }
-    }
-
-    // Update the column norm array, i.e., adapted from LAPACK’s DGEQP3 routine.
-    for (int k = i + 1; k < Nsol; ++k) {
-      T tmp = col_norm[k] * col_norm[k] - M[i * N + k] * M[i * N + k];
-
-      // Recompute L2-norm from scratch, if tmp becomes negative or it drops below
-      // a specified threshold, e.g., T(0.1)
-      if (tmp <= T(0) || util::sqrt(tmp) < T(0.1) * col_norm_tmp[k]) {
-        T norm = T(0);
-        for (int j = i + 1; j < Nsol; ++j) { norm += M[j * N + k] * M[j * N + k]; }
-        col_norm[k] = util::sqrt(norm);
-        col_norm_tmp[k] = col_norm[k];
-      }
-      else {
-        col_norm[k] = util::sqrt(tmp);
-      }
-    }
-
-    // For the i-th column, replace diagonal elements with (r) and the non-diagonal elements with zero.
-    M[i * N + i] = r;
-    for (int k = i + 1; k < Nsol; ++k) { M[k * N + i] = T(0); }
+  // Pad the unused block of A with identity and the tail of B (rhs) with zeros.
+  if (n < N) {
+    A.block(n, n, N - n, N - n).setIdentity();
+    B.tail(N - n).setZero();
   }
 
-  // Backward substitution step, i.e., solve R*x = Qᵀ*b in place.
-  for (int i = Nsol - 1; i >= 0; --i) {
-    T sum = T(0);
-    for (int j = i + 1; j < Nsol; ++j) { sum += M[i * N + j] * x[j]; }
-    x[i] = (b[i] - sum) / M[i * N + i];
-  }
-
-  // Reconstruct x by inverting the permutation, i.e., for each
-  // index i, the original index is given by col_perm[i].
-  std::array<T, N> tmp = x;
-  for (int i = 0; i < Nsol; ++i) { x[col_perm[i]] = tmp[i]; }
-}
+  A = T(0.5) * (A + A.transpose());
+  auto solver = Eigen::FullPivLU<Eigen::Matrix<T, N, N, Eigen::RowMajor>>(A);
+  solver.setThreshold(tolerance<T>);
+  solver.compute(A);
+  Eigen::Matrix<T, N, 1> Y = solver.solve(B);
+  for (int i = 0; i < N; ++i) x[i] = Y(i);
+}*/
 
 // Offset helper: optimized PLIC algorithm taken from Moritz Lehmann FluidX3D
 template<typename T>
@@ -564,24 +664,24 @@ T plicCubeReduced(const T& volume, const Vector<T, 3>& n) {
   const T n12 = n1 + n2, n3V = n3 * volume;
 
   // (I) Case 5
-  if (n12 <= T(2) * n3V) { return n3V + T(0.5) * n12; }
+  if (util::lessOrEqual(n12, T(2) * n3V)) { return n3V + T(0.5) * n12; }
 
   // (II) After case 5, check n2 > 0 is true
   const T sqn1 = util::sqr(n1), n26 = T(6) * n2, v1 = sqn1 / n26;
 
   // (III) Case 2
-  if (v1 <= n3V && n3V < v1 + T(0.5) * (n2 - n1)) {
+  if (util::lessOrEqual(v1, n3V) && util::less(n3V, v1 + T(0.5) * (n2 - n1))) {
     return T(0.5) * (n1 + util::sqrt(sqn1 + T(8) * n2 * (n3V - v1)));
   }
 
   // (IV) Case 1
   const T V6 = n1 * n26 * n3V;
-  if (n3V < v1) { return std::cbrt(V6); }
+  if (util::less(n3V, v1)) { return std::cbrt(V6); }
 
   // (V) After case 2, check n1 > 0 is true
-  const T v3 = n3 < n12 ? (util::sqr(n3) * (T(3) * n12 - n3) + sqn1 * (n1 - T(3) * n3) + util::sqr(n2) * (n2 - T(3) * n3)) / (n1 * n26) : T(0.5) * n12;
+  const T v3 = util::less(n3, n12) ? (util::sqr(n3) * (T(3) * n12 - n3) + sqn1 * (n1 - T(3) * n3) + util::sqr(n2) * (n2 - T(3) * n3)) / (n1 * n26) : T(0.5) * n12;
   const T sqn12 = sqn1 + util::sqr(n2), V6cbn12 = V6 - util::cube(n1) - util::cube(n2);
-  const bool case34 = n3V < v3; // true: case (3), false: case (4)
+  const bool case34 = util::less(n3V, v3); // true: case (3), false: case (4)
   const T a = case34 ? V6cbn12 : T(0.5) * (V6cbn12 - util::cube(n3));
   const T b = case34 ? sqn12 : T(0.5) * (sqn12 + util::sqr(n3));
   const T c = case34 ? n12 : T(0.5);
@@ -619,15 +719,15 @@ T plicCubeInverse(const T& d0, const Vector<T, 3>& n) {
   const T d = T(0.5) * (n1 + n2 + n3) - util::abs(d0);
 
   T V = T(0);
-  if (util::min(n1 + n2, n3) <= d && d <= n3) {
+  if (util::lessOrEqual(util::min(n1 + n2, n3), d) && util::lessOrEqual(d, n3)) {
     // (I) Case 5
     V = (d - T(0.5) * (n1 + n2)) / n3;
   }
-  else if (d < n1) {
+  else if (util::less(d, n1)) {
     // (II) Case 1
     V = util::cube(d) / (T(6) * n1 * n2 * n3);
   }
-  else if (d <= n2) {
+  else if (util::lessOrEqual(d, n2)) {
     // (III) Case 2
     V = (T(3) * d * (d - n1) + util::sqr(n1)) / (T(6) * n2 * n3);
   }
@@ -636,7 +736,7 @@ T plicCubeInverse(const T& d0, const Vector<T, 3>& n) {
     V = (util::cube(d) - util::cube(d - n1) - util::cube(d - n2) - util::cube(std::fdim(d, n3))) / (T(6) * n1 * n2 * n3);
   }
 
-  return std::copysign(T(0.5) - V, d0) + V(0.5);
+  return std::copysign(T(0.5) - V, d0) + T(0.5);
 }
 
 // Compute 2D interface curvature using Moritz Lehmann's FluidX3D algorithm
@@ -648,7 +748,7 @@ V computeCurvaturePLIC2D(CELL& cell) {
   // tangent to the surface.
   const auto normal = computeInterfaceNormal(cell);
   Vector<V, 3> by = {normal[0], normal[1], V(0)};
-  if (norm_squared(by) < zeroThreshold<V>()) { return V(0); }
+  if (util::equal(norm_squared(by), V(0), V(1), tolerance<V>)) { return V(0); }
   by = util::normalize(by);
 
   const Vector<V, 3> rn{V(0), V(0), V(1)};
@@ -661,10 +761,13 @@ V computeCurvaturePLIC2D(CELL& cell) {
   const V centerOffset = plicCube<V>(getClampedEpsilon(cell), by);
 
   // Number of neighbouring interface points, i.e., less than or equal to 8 (neighbours) - 1 (liquid) - 1 (gas).
-  std::array<Vector<V, DESCRIPTOR::d>, 6> points;
+  // Note: increased to 8 to support rare cases where an interface cell only has interface neighbours.
+  std::array<Vector<V, DESCRIPTOR::d>, 8> points{};
 
-  for (int iPop = 1; iPop < DESCRIPTOR::q; ++iPop) {
-    auto nbrCell = cell.neighbor(descriptors::c<DESCRIPTOR>(iPop));
+  // Always use D2Q9 descriptor to build the linear system, i.e., diagonals are essential for geometry operations.
+  for (int iPop = 1; iPop < descriptors::q<descriptors::D2Q9<>>(); ++iPop) {
+    const auto direction = descriptors::c<descriptors::D2Q9<>>(iPop);
+    auto nbrCell = cell.neighbor(direction);
 
     // Check if the neighbour is an interface cell or has a gas neighbour
     if (!isCellType(nbrCell, FreeSurface::Type::Interface) || !hasNeighbour(nbrCell, FreeSurface::Type::Gas)) {
@@ -672,7 +775,6 @@ V computeCurvaturePLIC2D(CELL& cell) {
     }
 
     // Here it is assumed that neighbor normal vector is the same as center normal vector
-    const auto direction = descriptors::c<DESCRIPTOR>(iPop);
     const Vector<V, 3> ei = {V(direction[0]), V(direction[1]), V(0)};
     const V offset = plicCube<V>(getClampedEpsilon(nbrCell), by) - centerOffset;
 
@@ -699,40 +801,28 @@ V computeCurvaturePLIC2D(CELL& cell) {
     b[1] += x * y;
   }
 
-  // Fill the lower triangle of the symmetric matrix
+  // Enforce symmetry to eliminate round-off errors.
   M[2] = M[1];
 
   // Solve the linear system of equations, compile-time selection.
-  if constexpr (solver == SolverType::rowPivotingLU) {
-    if (nbrInterfaces >= 2) {
-      rowPivotingLUSolver<V, 2>(M, solution, b, 2);
-    } else {
-      rowPivotingLUSolver<V, 2>(M, solution, b, util::min(2, nbrInterfaces));
-    }
+  if constexpr (solver == SolverType::plainLU) {
+    plainLUSolver<V, 2>(M, solution, b, util::min(2, nbrInterfaces));
+  }
+  else if constexpr (solver == SolverType::rowPivotingLU) {
+    rowPivotingLUSolver<V, 2>(M, solution, b, util::min(2, nbrInterfaces));
   }
   else if constexpr (solver == SolverType::completePivotingLU) {
-    if (nbrInterfaces >= 2) {
-      completePivotingLUSolver<V, 2>(M, solution, b, 2);
-    } else {
-      completePivotingLUSolver<V, 2>(M, solution, b, util::min(2, nbrInterfaces));
-    }
+    completePivotingLUSolver<V, 2>(M, solution, b, util::min(2, nbrInterfaces));
   }
-  else if constexpr (solver == SolverType::columnPivotingQR) {
-    if (nbrInterfaces >= 2) {
-      columnPivotingQRSolver<V, 2>(M, solution, b, 2);
-    } else {
-      columnPivotingQRSolver<V, 2>(M, solution, b, util::min(2, nbrInterfaces));
-    }
-  }
+  /*else if constexpr (solver == SolverType::eigen) {
+    eigenSolver<V, 2>(M, solution, b, util::min(2, nbrInterfaces));
+  }*/
   else {
     // Fall back to default solver
-    if (nbrInterfaces >= 2) {
-      completePivotingLUSolver<V, 2>(M, solution, b, 2);
-    } else {
-      completePivotingLUSolver<V, 2>(M, solution, b, util::min(2, nbrInterfaces));
-    }
+    plainLUSolver<V, 2>(M, solution, b, util::min(2, nbrInterfaces));
   }
 
+  // Compute curvature from the linear system solution, i.e., fitting f(x) = A * x^2 + H * x.
   const V A = solution[0], H = solution[1];
   const V curvature = V(2) * A * util::cube(V(1) / util::sqrt(H * H + V(1)));
   return util::max(V(-1), util::min(V(1), curvature));
@@ -746,16 +836,27 @@ V computeCurvaturePLIC3D(CELL& cell) {
   // Setup a new coordinate system where bz is perpendicular to the surface, while bx and by are
   // tangent to the surface.
   auto bz = computeInterfaceNormal(cell);
-  if (norm_squared(bz) < zeroThreshold<V>()) { return V(0); }
+  if (util::equal(norm_squared(bz), V(0), V(1), tolerance<V>)) { return V(0); }
   bz = util::normalize(bz);
 
   // A random normalized vector that is just by random chance not collinear with bz
-  // const Vector<V, DESCRIPTOR::d> rn{V(0.56270900), V(0.32704452), V(0.75921047)};
-  const Vector<V, DESCRIPTOR::d> rn{V(0.5402151198529208), V(0.2765640977634561), V(0.7947829415070379)};
+  // const Vector<V, DESCRIPTOR::d> rn{V(0.5402151198529208), V(0.2765640977634561), V(0.7947829415070379)};
 
   // Normalization is necessary here because bz and rn are not perpendicular
-  const Vector<V, DESCRIPTOR::d> by = util::normalize(crossProduct(bz, rn));
-  const Vector<V, DESCRIPTOR::d> bx = crossProduct(by, bz);
+  // const Vector<V, DESCRIPTOR::d> by = util::normalize(crossProduct(bz, rn));
+  // const Vector<V, DESCRIPTOR::d> bx = crossProduct(by, bz);
+
+  // Build orthonormal basis (bx, by) from bz without a global reference vector, i.e., Duff et al., (2017).
+  Vector<V, DESCRIPTOR::d> bx, by;
+  {
+    const V sign   = std::copysign(V(1), bz[2]);
+    const V coef_a = V(-1) / (sign + bz[2]);
+    const V coef_b = bz[0] * bz[1] * coef_a;
+    bx = Vector<V, DESCRIPTOR::d>{ V(1) + sign * bz[0] * bz[0] * coef_a, sign * coef_b, -sign * bz[0] };
+    by = Vector<V, DESCRIPTOR::d>{ coef_b, sign + bz[1] * bz[1] * coef_a, -bz[1] };
+    bx = util::normalize(bx);
+    by = util::normalize(crossProduct(bz, bx));
+  }
 
   // Number of healthy interface neighbours
   std::uint8_t nbrInterfaces = std::uint8_t(0);
@@ -764,10 +865,13 @@ V computeCurvaturePLIC3D(CELL& cell) {
   const V centerOffset = plicCube<V>(getClampedEpsilon(cell), bz);
 
   // Number of neighbouring interface points, i.e., less than or equal to 26 (neighbours) - 1 (liquid) - 1 (gas).
-  std::array<Vector<V, DESCRIPTOR::d>, 24> points;
+  // Note: increased to 26 to support rare cases where an interface cell only has interface neighbours.
+  std::array<Vector<V, DESCRIPTOR::d>, 26> points{};
 
-  for (int iPop = 1; iPop < DESCRIPTOR::q; ++iPop) {
-    auto nbrCell = cell.neighbor(descriptors::c<DESCRIPTOR>(iPop));
+  // Always use D3Q27 descriptor to build the linear system, i.e., corners are essential for geometry operations.
+  for (int iPop = 1; iPop < descriptors::q<descriptors::D3Q27<>>(); ++iPop) {
+    const auto direction = descriptors::c<descriptors::D3Q27<>>(iPop);
+    auto nbrCell = cell.neighbor(direction);
 
     // Check if the neighbour is an interface cell or has a gas neighbour
     if (!isCellType(nbrCell, FreeSurface::Type::Interface) || !hasNeighbour(nbrCell, FreeSurface::Type::Gas)) {
@@ -775,7 +879,6 @@ V computeCurvaturePLIC3D(CELL& cell) {
     }
 
     // Here it is assumed that neighbor normal vector is the same as center normal vector
-    const auto direction = descriptors::c<DESCRIPTOR>(iPop);
     const Vector<V, DESCRIPTOR::d> ei = {V(direction[0]), V(direction[1]), V(direction[2])};
     const V offset = plicCube<V>(getClampedEpsilon(nbrCell), bz) - centerOffset;
 
@@ -820,89 +923,32 @@ V computeCurvaturePLIC3D(CELL& cell) {
     b[4] += y * z;
   }
 
-  // Fill the lower triangle of the symmetric matrix
+  // Enforce symmetry to eliminate round-off errors.
   for (std::uint8_t i = 1; i < 5; ++i) {
-    for (std::uint8_t j = 0; j < i; ++j) {
-      M[i * 5 + j] = M[j * 5 + i];
-    }
+    for (std::uint8_t j = 0; j < i; ++j) { M[i * 5 + j] = M[j * 5 + i]; }
   }
 
   // Solve the linear system of equations, compile-time selection.
-  if constexpr (solver == SolverType::rowPivotingLU) {
-    if (nbrInterfaces >= 5) {
-      rowPivotingLUSolver<V, 5>(M, solution, b, 5);
-    } else {
-      rowPivotingLUSolver<V, 5>(M, solution, b, util::min(5, nbrInterfaces));
-    }
+  if constexpr (solver == SolverType::plainLU) {
+    plainLUSolver<V, 5>(M, solution, b, util::min(5, nbrInterfaces));
+  }
+  else if constexpr (solver == SolverType::rowPivotingLU) {
+    rowPivotingLUSolver<V, 5>(M, solution, b, util::min(5, nbrInterfaces));
   }
   else if constexpr (solver == SolverType::completePivotingLU) {
-    if (nbrInterfaces >= 5) {
-      completePivotingLUSolver<V, 5>(M, solution, b, 5);
-    } else {
-      completePivotingLUSolver<V, 5>(M, solution, b, util::min(5, nbrInterfaces));
-    }
+    completePivotingLUSolver<V, 5>(M, solution, b, util::min(5, nbrInterfaces));
   }
-  else if constexpr (solver == SolverType::columnPivotingQR) {
-    if (nbrInterfaces >= 5) {
-      columnPivotingQRSolver<V, 5>(M, solution, b, 5);
-    } else {
-      columnPivotingQRSolver<V, 5>(M, solution, b, util::min(5, nbrInterfaces));
-    }
-  }
+  /*else if constexpr (solver == SolverType::eigen) {
+    eigenSolver<V, 5>(M, solution, b, util::min(5, nbrInterfaces));
+  }*/
   else {
     // Fall back to default solver
-    if (nbrInterfaces >= 5) {
-      completePivotingLUSolver<V, 5>(M, solution, b, 5);
-    } else {
-      completePivotingLUSolver<V, 5>(M, solution, b, util::min(5, nbrInterfaces));
-    }
+    plainLUSolver<V, 5>(M, solution, b, util::min(5, nbrInterfaces));
   }
 
+  // Compute curvature from the linear system solution, i.e., fitting f(x,y) = A * x^2 + B * y^2 + C * x * y + H * x + I * y.
   const V A = solution[0], B = solution[1], C = solution[2], H = solution[3], I = solution[4];
   const V curvature = (A * (I * I + V(1)) + B * (H * H + V(1)) - C * H * I) * util::cube(V(1) / util::sqrt(H * H + I * I + V(1)));
-  return util::max(V(-1), util::min(V(1), curvature));
-}
-
-template <typename CELL, typename V>
-V computeCurvatureFDM3D(CELL& cell) {
-  using DESCRIPTOR = typename CELL::descriptor_t;
-
-  const auto normal = computeInterfaceNormal(cell);
-  if (norm_squared(normal) < zeroThreshold<V>()) { return V(0); }
-
-  const std::uint32_t gaussianMultipliers [DESCRIPTOR::q] =
-  {
-    std::uint32_t(8),
-    std::uint32_t(4), std::uint32_t(4), std::uint32_t(4),
-    std::uint32_t(2), std::uint32_t(2), std::uint32_t(2),
-    std::uint32_t(2), std::uint32_t(2), std::uint32_t(2),
-    std::uint32_t(1), std::uint32_t(1), std::uint32_t(1), std::uint32_t(1),
-    std::uint32_t(4), std::uint32_t(4), std::uint32_t(4),
-    std::uint32_t(2), std::uint32_t(2), std::uint32_t(2),
-    std::uint32_t(2), std::uint32_t(2), std::uint32_t(2),
-    std::uint32_t(1), std::uint32_t(1), std::uint32_t(1), std::uint32_t(1)
-  };
-
-  V curvature = V(0);
-  V weightSum = V(0);
-
-  for (int iPop = 1; iPop < DESCRIPTOR::q; ++iPop) {
-    auto direction = descriptors::c<DESCRIPTOR>(iPop);
-    auto nbrCell = cell.neighbor(direction);
-
-    // Check if the neighbour is an interface cell or has a gas neighbour
-    if (!isCellType(nbrCell, FreeSurface::Type::Interface) || !hasNeighbour(nbrCell, FreeSurface::Type::Gas)) {
-      continue;
-    }
-
-    const Vector<V, DESCRIPTOR::d> ei = {V(direction[0]), V(direction[1]), V(direction[2])};
-    const auto nbrNormal = util::normalize(computeInterfaceNormal(nbrCell));
-    const V weight = gaussianMultipliers[iPop];
-    weightSum += weight;
-    curvature += weight * util::dotProduct(ei, nbrNormal);
-  }
-
-  curvature /= weightSum;
   return util::max(V(-1), util::min(V(1), curvature));
 }
 
@@ -912,11 +958,15 @@ V computeCurvature(CELL& cell) {
 
   if constexpr (DESCRIPTOR::d == 2) {
     return computeCurvaturePLIC2D(cell);
-  } else if (DESCRIPTOR::d == 3) {
+  }
+  else if constexpr (DESCRIPTOR::d == 3) {
     return computeCurvaturePLIC3D(cell);
   }
-
-  return V(0);
+  else {
+    static_assert(DESCRIPTOR::d == 2 || DESCRIPTOR::d == 3,
+      "Interface curvature method is only implemented for 2D and 3D.");
+    return V(0);
+  }
 }
 
 } // namespace FreeSurface

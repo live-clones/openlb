@@ -49,7 +49,8 @@ using NavierStokesDescriptor = D3Q27
   FreeSurface::CELL_TYPE,
   FreeSurface::CELL_FLAGS,
   FreeSurface::TEMP_MASS_EXCHANGE,
-  FreeSurface::PREVIOUS_VELOCITY
+  FreeSurface::PREVIOUS_VELOCITY,
+  FreeSurface::HAS_INTERFACE_NBRS
 >;
 using NavierStokesBulkDynamics = SmagorinskyForcedBGKdynamics<T, NavierStokesDescriptor>;
 
@@ -267,10 +268,12 @@ void prepareNavierStokesLattice
   NavierStokesLattice.defineDynamics<NavierStokesBulkDynamics>(bulkIndicator);
 
   //- Setting NSEs velocity boundary condition for the material (2), i.e. bottomWall
-  boundary::set<boundary::InterpolatedVelocity>(NavierStokesLattice, superGeometry, 2);
+  // boundary::set<boundary::InterpolatedVelocity>(NavierStokesLattice, superGeometry, 2);
+  boundary::set<boundary::BounceBack>(NavierStokesLattice, superGeometry, 2);
 
   //- Setting NSEs velocity boundary condition for the material (3), i.e. topWall
-  boundary::set<boundary::InterpolatedVelocity>(NavierStokesLattice, superGeometry, 3);
+  // boundary::set<boundary::InterpolatedVelocity>(NavierStokesLattice, superGeometry, 3);
+  boundary::set<boundary::BounceBack>(NavierStokesLattice, superGeometry, 3);
 
   //- Setting the lattice relaxation frequency and Smagorinsky constant
   NavierStokesLattice.setParameter<descriptors::OMEGA>(NavierStokesOmega);
@@ -349,8 +352,10 @@ void setFreeSurfaceParameters
   T tScale = util::pow(NavierStokesConverter.getConversionFactorTime(), 2)
     / (NavierStokesConverter.getPhysDensity() * util::pow(NavierStokesConverter.getPhysDeltaX(), 3));
 
-  //- Calculate the force conversion factor
-  // T gScale = T(1.0) / NavierStokesConverter.getConversionFactorForce() * NavierStokesConverter.getConversionFactorMass();
+  //- Setting the gravity force in the z-direction, i.e., in lattice units
+  std::vector<T> gravity;
+  configuration["Application"]["PhysParameters"]["PhysGravity"].read(gravity);
+  T gScale = T(1.0) / NavierStokesConverter.getConversionFactorForce() * NavierStokesConverter.getConversionFactorMass();
 
   //- Setting the free-surface parameters
   NavierStokesLattice.setParameter<FreeSurface::DROP_ISOLATED_CELLS>(dropIsolatedCells);
@@ -358,6 +363,7 @@ void setFreeSurfaceParameters
   NavierStokesLattice.setParameter<FreeSurface::LONELY_THRESHOLD>(lonelyThreshold);
   NavierStokesLattice.setParameter<FreeSurface::HAS_SURFACE_TENSION>(hasSurfaceTension);
   NavierStokesLattice.setParameter<FreeSurface::SURFACE_TENSION_PARAMETER>(tScale * surfaceTensionCoeff);
+  NavierStokesLattice.setParameter<FreeSurface::FORCE_DENSITY>({gravity[0] * gScale, gravity[1] * gScale, gravity[2] * gScale});
 }
 
 //- Set the output data for post-processing and visualization
@@ -433,7 +439,7 @@ void postprocess
     Vector<T, 3> centerOfMass = bubbleCenterOfMass(superGeometry, NavierStokesLattice);
     const T time = NavierStokesConverter.getPhysTime(iT);
     const T timePrev = NavierStokesConverter.getPhysTime(iTPrev);
-    const T riseVelocity = (centerOfMass[2] - CenterOfMassPrev[2]) / (time - timePrev + T(1e-14));
+    const T riseVelocity = (centerOfMass[2] - CenterOfMassPrev[2]) / (time - timePrev + util::numericLimits::epsilon<T>());
     csvWriter.writeDataFile(time, {centerOfMass[0], centerOfMass[1], centerOfMass[2], riseVelocity});
     iTPrev = iT;
     CenterOfMassPrev = centerOfMass;
