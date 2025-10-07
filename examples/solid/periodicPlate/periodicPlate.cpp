@@ -43,31 +43,164 @@ namespace olb::parameters {
 }
 
 template <typename T>
-AnalyticalF2D<T, T>* getForceField(MyCase& myCase)
-{
-  using DESCRIPTOR = typename MyCase::template descriptor_t_of<NavierCauchy>;
+class ForceField2D : public AnalyticalF2D<T, T> {
+  protected:
+  MyCase& aCase;
 
-  class ForceField2D : public AnalyticalF2D<T, T> {
+  public:
+  ForceField2D(MyCase& myCase)
+  : AnalyticalF2D<T, T>(2),
+  aCase(myCase) {};
+
+  bool operator()(T output[], const T input[]) override
+  {
+    using DESCRIPTOR = MyCase::descriptor_t_of<NavierCauchy>;
+    auto& lattice = aCase.getLattice(NavierCauchy{});
+    T pi = std::numbers::pi_v<double>;
+
+    const auto& converter = lattice.getUnitConverter();
+    T dx = converter.getPhysDeltaX();
+    T dt = converter.getPhysDeltaT();
+    T kappa = converter.getDampingFactor();
+    T lambda = converter.getLatticeLambda();
+    T mu = converter.getLatticeShearModulus();
+    T charU = converter.getCharPhysDisplacement();
+
+    T x = input[0];
+    T y = input[1];
+
+    T x_sx = -.3;
+    T x_sy =  .4;
+    T y_sx =  .1;
+    T y_sy = -.7;
+
+    T omega_11 = 1. / (mu / descriptors::invCs2<T,DESCRIPTOR>() + 0.5);
+    T omega_d  = 1. / (2 * mu / (1 - descriptors::invCs2<T,DESCRIPTOR>()) + 0.5);
+    T omega_s  = 1. / (2 * (mu + lambda) / (1 + descriptors::invCs2<T,DESCRIPTOR>()) + 0.5);
+
+    T tau_11 = 1. / omega_11 - 0.5;
+    T tau_s = 1. / omega_d - 0.5;
+    T tau_p = 1. / omega_s - 0.5;
+    T tau_12 = (1. / tau_11 + 4. * tau_11) / 8.;
+
+    T d1 = -1. / 4. - 1. / 2. * descriptors::invCs2<T,DESCRIPTOR>() * tau_12 * tau_s + pow(tau_s, 2) / 2.
+          -  1. / 2. * descriptors::invCs2<T,DESCRIPTOR>() * pow(tau_s, 2) + 1. / 2. * descriptors::invCs2<T,DESCRIPTOR>() * tau_12 * tau_p
+          +  pow(tau_p, 2) / 2. + 1. / 2. * descriptors::invCs2<T,DESCRIPTOR>() * pow(tau_p, 2);
+
+    T d2 = -descriptors::invCs2<T,DESCRIPTOR>() / 2. + descriptors::invCs2<T,DESCRIPTOR>() * pow(tau_11, 2) + descriptors::invCs2<T,DESCRIPTOR>() * tau_11 * tau_12
+          + 1. / 2. * descriptors::invCs2<T,DESCRIPTOR>() * tau_12 * tau_s - pow(tau_s, 2) / 2.
+          + 1. / 2. * descriptors::invCs2<T,DESCRIPTOR>() * pow(tau_s, 2) + 1. / 2. * descriptors::invCs2<T,DESCRIPTOR>() * tau_12 * tau_p
+          + pow(tau_p, 2) / 2. + 1. / 2. * descriptors::invCs2<T,DESCRIPTOR>() * pow(tau_p, 2);
+
+    T d3 = -descriptors::invCs2<T,DESCRIPTOR>() / 4.
+          +  descriptors::invCs2<T,DESCRIPTOR>() * pow(tau_11, 2)
+          +  descriptors::invCs2<T,DESCRIPTOR>() * tau_11 * tau_12;
+
+    T mu_phys     =     mu * (dx * dx * kappa) / dt;
+    T lambda_phys = lambda * (dx * dx * kappa) / dt;
+
+    output[0] = bx(0, x, y, x_sx, x_sy, y_sx, y_sy, dx, mu_phys, lambda_phys, charU, pi) * dt / kappa
+              + (d1 * d2bx_dx2(0, x, y, x_sx, x_sy, y_sx, y_sy, dx, mu_phys, lambda_phys, charU, pi)
+              + d2 * d2by_dxdy(0, x, y, x_sx, x_sy, y_sx, y_sy, dx, mu_phys, lambda_phys, charU, pi)
+              + d3 * d2bx_dy2(0, x, y, x_sx, x_sy, y_sx, y_sy, dx, mu_phys, lambda_phys, charU, pi)) * dx * dx * dt / kappa;
+
+    output[1] = by(0, x, y, x_sx, x_sy, y_sx, y_sy, dx, mu_phys, lambda_phys, charU, pi) * dt / kappa
+              + (d1 * d2by_dy2(0, x, y, x_sx, x_sy, y_sx, y_sy, dx, mu_phys, lambda_phys, charU, pi)
+              + d2 * d2bx_dxdy(0, x, y, x_sx, x_sy, y_sx, y_sy, dx, mu_phys, lambda_phys, charU, pi)
+              + d3 * d2by_dx2(0, x, y, x_sx, x_sy, y_sx, y_sy, dx, mu_phys, lambda_phys, charU, pi)) * dx * dx * dt / kappa;
+
+    return true;
+  };
+
+  // Output 0
+  T bx(T t, T x, T y, T x_sx, T x_sy, T y_sx, T y_sy, T dx, T mu, T lambda, T charU, T pi)
+  {
+    return 0.0036*mu*pi*pi*sin(2*pi*(y + y_sx))*cos(2*pi*(x + x_sx)) - 0.0028*pi*pi*(lambda + mu)*sin(2*pi*(x + x_sy))*sin(2*pi*(y + y_sy)) + 0.0036*pi*pi*(lambda + 2*mu)*sin(2*pi*(y + y_sx))*cos(2*pi*(x + x_sx));
+  }
+
+  T d2bx_dx2(T t, T x, T y, T x_sx, T x_sy, T y_sx, T y_sy, T dx, T mu, T lambda, T charU, T pi)
+  {
+    return pi*pi*pi*pi*(-0.0144*mu*sin(2*pi*(y + y_sx))*cos(2*pi*(x + x_sx)) + 0.0112*(lambda + mu)*sin(2*pi*(x + x_sy))*sin(2*pi*(y + y_sy)) - 0.0144*(lambda + 2*mu)*sin(2*pi*(y + y_sx))*cos(2*pi*(x + x_sx)));
+  }
+
+  T d2by_dxdy(T t, T x, T y, T x_sx, T x_sy, T y_sx, T y_sy, T dx, T mu, T lambda, T charU, T pi)
+  {
+    return pi*pi*pi*pi*(0.0112*mu*sin(2*pi*(x + x_sy))*sin(2*pi*(y + y_sy)) - 0.0144*(lambda + mu)*sin(2*pi*(y + y_sx))*cos(2*pi*(x + x_sx)) + 0.0112*(lambda + 2*mu)*sin(2*pi*(x + x_sy))*sin(2*pi*(y + y_sy)));
+  }
+
+  T d2bx_dy2(T t, T x, T y, T x_sx, T x_sy, T y_sx, T y_sy, T dx, T mu, T lambda, T charU, T pi)
+  {
+    return pi*pi*pi*pi*(-0.0144*mu*sin(2*pi*(y + y_sx))*cos(2*pi*(x + x_sx)) + 0.0112*(lambda + mu)*sin(2*pi*(x + x_sy))*sin(2*pi*(y + y_sy)) - 0.0144*(lambda + 2*mu)*sin(2*pi*(y + y_sx))*cos(2*pi*(x + x_sx)));
+  }
+
+  T by(T t, T x, T y, T x_sx, T x_sy, T y_sx, T y_sy, T dx, T mu, T lambda, T charU, T pi)
+  {
+    return 0.0028*mu*pi*pi*cos(2*pi*(x + x_sy))*cos(2*pi*(y + y_sy)) + 0.0036*pi*pi*(lambda + mu)*sin(2*pi*(x + x_sx))*cos(2*pi*(y + y_sx)) + 0.0028*pi*pi*(lambda + 2*mu)*cos(2*pi*(x + x_sy))*cos(2*pi*(y + y_sy));
+  }
+
+  T d2by_dy2(T t, T x, T y, T x_sx, T x_sy, T y_sx, T y_sy, T dx, T mu, T lambda, T charU, T pi)
+  {
+    return -pi*pi*pi*pi*(0.0112*mu*cos(2*pi*(x + x_sy))*cos(2*pi*(y + y_sy)) + 0.0144*(lambda + mu)*sin(2*pi*(x + x_sx))*cos(2*pi*(y + y_sx)) + 0.0112*(lambda + 2*mu)*cos(2*pi*(x + x_sy))*cos(2*pi*(y + y_sy)));
+  }
+
+  T d2bx_dxdy(T t, T x, T y, T x_sx, T x_sy, T y_sx, T y_sy, T dx, T mu, T lambda, T charU, T pi)
+  {
+    return -pi*pi*pi*pi*(0.0144*mu*sin(2*pi*(x + x_sx))*cos(2*pi*(y + y_sx)) + 0.0112*(lambda + mu)*cos(2*pi*(x + x_sy))*cos(2*pi*(y + y_sy)) + 0.0144*(lambda + 2*mu)*sin(2*pi*(x + x_sx))*cos(2*pi*(y + y_sx)));
+  }
+
+  T d2by_dx2(T t, T x, T y, T x_sx, T x_sy, T y_sx, T y_sy, T dx, T mu, T lambda, T charU, T pi)
+  {
+    return -pi*pi*pi*pi*(0.0112*mu*cos(2*pi*(x + x_sy))*cos(2*pi*(y + y_sy)) + 0.0144*(lambda + mu)*sin(2*pi*(x + x_sx))*cos(2*pi*(y + y_sx)) + 0.0112*(lambda + 2*mu)*cos(2*pi*(x + x_sy))*cos(2*pi*(y + y_sy)));
+  }
+};
+
+template <typename T>
+class ManufacturedSolutionU2D : public AnalyticalF2D<T, T> {
+
+  protected:
+
+  public:
+  ManufacturedSolutionU2D(MyCase& myCase) : AnalyticalF2D<T, T>(2) {};
+
+  bool operator()(T output[], const T input[]) override
+  {
+    T pi = std::numbers::pi_v<double>;
+
+    T x = input[0];
+    T y = input[1];
+
+    T x_sx = -.3;
+    T x_sy =  .4;
+    T y_sx =  .1;
+    T y_sy = -.7;
+
+    // lattice units
+    output[0] = 9. / 10000. * util::cos(2. * pi * (x + x_sx)) * util::sin(2. * pi * (y + y_sx));
+    output[1] = 7. / 10000. * util::cos(2. * pi * (x + x_sy)) * util::cos(2. * pi * (y + y_sy));
+
+    return true;
+  };
+};
+
+template <typename T>
+class ManufacturedSolutionStress2D : public AnalyticalF2D<T, T> {
   protected:
     MyCase& aCase;
 
   public:
-    ForceField2D(MyCase& myCase)
-      : AnalyticalF2D<T, T>(2),
-        aCase(myCase) {};
+    ManufacturedSolutionStress2D(MyCase& myCase) : AnalyticalF2D<T, T>(4),
+    aCase(myCase) {};
 
     bool operator()(T output[], const T input[]) override
     {
-      auto& lattice = aCase.getLattice(NavierCauchy{});
       T pi = std::numbers::pi_v<double>;
 
-      const auto& converter = lattice.getUnitConverter();
+      const auto& converter = aCase.getLattice(NavierCauchy{}).getUnitConverter();
       T dx = converter.getPhysDeltaX();
       T dt = converter.getPhysDeltaT();
       T kappa = converter.getDampingFactor();
       T lambda = converter.getLatticeLambda();
       T mu = converter.getLatticeShearModulus();
-      T charU = converter.getCharPhysDisplacement();
 
       T x = input[0];
       T y = input[1];
@@ -77,191 +210,42 @@ AnalyticalF2D<T, T>* getForceField(MyCase& myCase)
       T y_sx =  .1;
       T y_sy = -.7;
 
-      T omega_11 = 1. / (mu / descriptors::invCs2<T,DESCRIPTOR>() + 0.5);
-      T omega_d  = 1. / (2 * mu / (1 - descriptors::invCs2<T,DESCRIPTOR>()) + 0.5);
-      T omega_s  = 1. / (2 * (mu + lambda) / (1 + descriptors::invCs2<T,DESCRIPTOR>()) + 0.5);
+      T latticeFactor = dt / (kappa * dx);
 
-      T tau_11 = 1. / omega_11 - 0.5;
-      T tau_s = 1. / omega_d - 0.5;
-      T tau_p = 1. / omega_s - 0.5;
-      T tau_12 = (1. / tau_11 + 4. * tau_11) / 8.;
+      // xx
+      output[0] = latticeFactor * ((2. * mu + lambda) * dux_dx(0, x, y, x_sx, x_sy, y_sx, y_sy, pi)
+                + lambda * duy_dy(0, x, y, x_sx, x_sy, y_sx, y_sy, pi));
+      // xy
+      output[1] = latticeFactor * (mu * (dux_dy(0, x, y, x_sx, x_sy, y_sx, y_sy, pi)
+                + duy_dx(0, x, y, x_sx, x_sy, y_sx, y_sy, pi)));
 
-      T d1 = -1. / 4. - 1. / 2. * descriptors::invCs2<T,DESCRIPTOR>() * tau_12 * tau_s + pow(tau_s, 2) / 2.
-           -  1. / 2. * descriptors::invCs2<T,DESCRIPTOR>() * pow(tau_s, 2) + 1. / 2. * descriptors::invCs2<T,DESCRIPTOR>() * tau_12 * tau_p
-           +  pow(tau_p, 2) / 2. + 1. / 2. * descriptors::invCs2<T,DESCRIPTOR>() * pow(tau_p, 2);
+      // yx
+      output[2] = latticeFactor * (mu * (dux_dy(0, x, y, x_sx, x_sy, y_sx, y_sy, pi)
+                + duy_dx(0, x, y, x_sx, x_sy, y_sx, y_sy, pi)));
 
-      T d2 = -descriptors::invCs2<T,DESCRIPTOR>() / 2. + descriptors::invCs2<T,DESCRIPTOR>() * pow(tau_11, 2) + descriptors::invCs2<T,DESCRIPTOR>() * tau_11 * tau_12
-           + 1. / 2. * descriptors::invCs2<T,DESCRIPTOR>() * tau_12 * tau_s - pow(tau_s, 2) / 2.
-           + 1. / 2. * descriptors::invCs2<T,DESCRIPTOR>() * pow(tau_s, 2) + 1. / 2. * descriptors::invCs2<T,DESCRIPTOR>() * tau_12 * tau_p
-           + pow(tau_p, 2) / 2. + 1. / 2. * descriptors::invCs2<T,DESCRIPTOR>() * pow(tau_p, 2);
-
-      T d3 = -descriptors::invCs2<T,DESCRIPTOR>() / 4.
-           +  descriptors::invCs2<T,DESCRIPTOR>() * pow(tau_11, 2)
-           +  descriptors::invCs2<T,DESCRIPTOR>() * tau_11 * tau_12;
-
-      T mu_phys     =     mu * (dx * dx * kappa) / dt;
-      T lambda_phys = lambda * (dx * dx * kappa) / dt;
-
-      output[0] = bx(0, x, y, x_sx, x_sy, y_sx, y_sy, dx, mu_phys, lambda_phys, charU, pi) * dt / kappa
-                + (d1 * d2bx_dx2(0, x, y, x_sx, x_sy, y_sx, y_sy, dx, mu_phys, lambda_phys, charU, pi)
-                + d2 * d2by_dxdy(0, x, y, x_sx, x_sy, y_sx, y_sy, dx, mu_phys, lambda_phys, charU, pi)
-                + d3 * d2bx_dy2(0, x, y, x_sx, x_sy, y_sx, y_sy, dx, mu_phys, lambda_phys, charU, pi)) * dx * dx * dt / kappa;
-
-      output[1] = by(0, x, y, x_sx, x_sy, y_sx, y_sy, dx, mu_phys, lambda_phys, charU, pi) * dt / kappa
-                + (d1 * d2by_dy2(0, x, y, x_sx, x_sy, y_sx, y_sy, dx, mu_phys, lambda_phys, charU, pi)
-                + d2 * d2bx_dxdy(0, x, y, x_sx, x_sy, y_sx, y_sy, dx, mu_phys, lambda_phys, charU, pi)
-                + d3 * d2by_dx2(0, x, y, x_sx, x_sy, y_sx, y_sy, dx, mu_phys, lambda_phys, charU, pi)) * dx * dx * dt / kappa;
+      // yy
+      output[3] = latticeFactor * ((2. * mu + lambda) * duy_dy(0, x, y, x_sx, x_sy, y_sx, y_sy, pi)
+                + lambda * dux_dx(0, x, y, x_sx, x_sy, y_sx, y_sy, pi));
 
       return true;
     };
 
-    // Output 0
-    T bx(T t, T x, T y, T x_sx, T x_sy, T y_sx, T y_sy, T dx, T mu, T lambda, T charU, T pi)
-    {
-      return 0.0036*mu*pi*pi*sin(2*pi*(y + y_sx))*cos(2*pi*(x + x_sx)) - 0.0028*pi*pi*(lambda + mu)*sin(2*pi*(x + x_sy))*sin(2*pi*(y + y_sy)) + 0.0036*pi*pi*(lambda + 2*mu)*sin(2*pi*(y + y_sx))*cos(2*pi*(x + x_sx));
+    T dux_dx(T t, T x, T y, T x_sx, T x_sy, T y_sx, T y_sy, T pi) {
+      return -(9. * pi * sin(2. * pi * (x + x_sx)) * sin(2. * pi * (y + y_sx))) / 5000.;
     }
 
-    T d2bx_dx2(T t, T x, T y, T x_sx, T x_sy, T y_sx, T y_sy, T dx, T mu, T lambda, T charU, T pi)
-    {
-      return pi*pi*pi*pi*(-0.0144*mu*sin(2*pi*(y + y_sx))*cos(2*pi*(x + x_sx)) + 0.0112*(lambda + mu)*sin(2*pi*(x + x_sy))*sin(2*pi*(y + y_sy)) - 0.0144*(lambda + 2*mu)*sin(2*pi*(y + y_sx))*cos(2*pi*(x + x_sx)));
+    T dux_dy(T t, T x, T y, T x_sx, T x_sy, T y_sx, T y_sy, T pi) {
+      return (9. * pi * cos(2. * pi * (x + x_sx)) * cos(2. * pi * (y + y_sx))) / 5000.;
     }
 
-    T d2by_dxdy(T t, T x, T y, T x_sx, T x_sy, T y_sx, T y_sy, T dx, T mu, T lambda, T charU, T pi)
-    {
-      return pi*pi*pi*pi*(0.0112*mu*sin(2*pi*(x + x_sy))*sin(2*pi*(y + y_sy)) - 0.0144*(lambda + mu)*sin(2*pi*(y + y_sx))*cos(2*pi*(x + x_sx)) + 0.0112*(lambda + 2*mu)*sin(2*pi*(x + x_sy))*sin(2*pi*(y + y_sy)));
+    T duy_dx(T t, T x, T y, T x_sx, T x_sy, T y_sx, T y_sy, T pi) {
+      return -(7. * pi * cos(2. * pi * (y + y_sy)) * sin(2. * pi * (x + x_sy))) / 5000.;
     }
 
-    T d2bx_dy2(T t, T x, T y, T x_sx, T x_sy, T y_sx, T y_sy, T dx, T mu, T lambda, T charU, T pi)
-    {
-      return pi*pi*pi*pi*(-0.0144*mu*sin(2*pi*(y + y_sx))*cos(2*pi*(x + x_sx)) + 0.0112*(lambda + mu)*sin(2*pi*(x + x_sy))*sin(2*pi*(y + y_sy)) - 0.0144*(lambda + 2*mu)*sin(2*pi*(y + y_sx))*cos(2*pi*(x + x_sx)));
+    T duy_dy(T t, T x, T y, T x_sx, T x_sy, T y_sx, T y_sy, T pi) {
+      return -(7. * pi * cos(2. * pi * (x + x_sy)) * sin(2. * pi * (y + y_sy))) / 5000.;
     }
-
-    T by(T t, T x, T y, T x_sx, T x_sy, T y_sx, T y_sy, T dx, T mu, T lambda, T charU, T pi)
-    {
-      return 0.0028*mu*pi*pi*cos(2*pi*(x + x_sy))*cos(2*pi*(y + y_sy)) + 0.0036*pi*pi*(lambda + mu)*sin(2*pi*(x + x_sx))*cos(2*pi*(y + y_sx)) + 0.0028*pi*pi*(lambda + 2*mu)*cos(2*pi*(x + x_sy))*cos(2*pi*(y + y_sy));
-    }
-
-    T d2by_dy2(T t, T x, T y, T x_sx, T x_sy, T y_sx, T y_sy, T dx, T mu, T lambda, T charU, T pi)
-    {
-      return -pi*pi*pi*pi*(0.0112*mu*cos(2*pi*(x + x_sy))*cos(2*pi*(y + y_sy)) + 0.0144*(lambda + mu)*sin(2*pi*(x + x_sx))*cos(2*pi*(y + y_sx)) + 0.0112*(lambda + 2*mu)*cos(2*pi*(x + x_sy))*cos(2*pi*(y + y_sy)));
-    }
-
-    T d2bx_dxdy(T t, T x, T y, T x_sx, T x_sy, T y_sx, T y_sy, T dx, T mu, T lambda, T charU, T pi)
-    {
-      return -pi*pi*pi*pi*(0.0144*mu*sin(2*pi*(x + x_sx))*cos(2*pi*(y + y_sx)) + 0.0112*(lambda + mu)*cos(2*pi*(x + x_sy))*cos(2*pi*(y + y_sy)) + 0.0144*(lambda + 2*mu)*sin(2*pi*(x + x_sx))*cos(2*pi*(y + y_sx)));
-    }
-
-    T d2by_dx2(T t, T x, T y, T x_sx, T x_sy, T y_sx, T y_sy, T dx, T mu, T lambda, T charU, T pi)
-    {
-      return -pi*pi*pi*pi*(0.0112*mu*cos(2*pi*(x + x_sy))*cos(2*pi*(y + y_sy)) + 0.0144*(lambda + mu)*sin(2*pi*(x + x_sx))*cos(2*pi*(y + y_sx)) + 0.0112*(lambda + 2*mu)*cos(2*pi*(x + x_sy))*cos(2*pi*(y + y_sy)));
-    }
-  };
-
-  return new ForceField2D (myCase);;
-}
-
-template <typename T>
-AnalyticalF2D<T, T>* getManufacturedSolutionU2D(MyCase& myCase)
-{
-  class ManufacturedSolutionU2D : public AnalyticalF2D<T, T> {
-
-    protected:
-
-    public:
-    ManufacturedSolutionU2D(MyCase& myCase) : AnalyticalF2D<T, T>(2) {};
-
-    bool operator()(T output[], const T input[]) override
-    {
-      T pi = std::numbers::pi_v<double>;
-
-      T x = input[0];
-      T y = input[1];
-
-      T x_sx = -.3;
-      T x_sy =  .4;
-      T y_sx =  .1;
-      T y_sy = -.7;
-
-      // lattice units
-      output[0] = 9. / 10000. * util::cos(2. * pi * (x + x_sx)) * util::sin(2. * pi * (y + y_sx));
-      output[1] = 7. / 10000. * util::cos(2. * pi * (x + x_sy)) * util::cos(2. * pi * (y + y_sy));
-
-      return true;
-    };
-  };
-
-  return new ManufacturedSolutionU2D (myCase);
-}
-
-template <typename T>
-AnalyticalF2D<T, T>* getManufacturedSolutionStress2D(MyCase& myCase)
-{
-  class ManufacturedSolutionStress2D : public AnalyticalF2D<T, T> {
-    protected:
-      MyCase& aCase;
-
-    public:
-      ManufacturedSolutionStress2D(MyCase& myCase) : AnalyticalF2D<T, T>(4),
-      aCase(myCase) {};
-
-      bool operator()(T output[], const T input[]) override
-      {
-        T pi = std::numbers::pi_v<double>;
-
-        const auto& converter = aCase.getLattice(NavierCauchy{}).getUnitConverter();
-        T dx = converter.getPhysDeltaX();
-        T dt = converter.getPhysDeltaT();
-        T kappa = converter.getDampingFactor();
-        T lambda = converter.getLatticeLambda();
-        T mu = converter.getLatticeShearModulus();
-
-        T x = input[0];
-        T y = input[1];
-
-        T x_sx = -.3;
-        T x_sy =  .4;
-        T y_sx =  .1;
-        T y_sy = -.7;
-
-        T latticeFactor = dt / (kappa * dx);
-
-        // xx
-        output[0] = latticeFactor * ((2. * mu + lambda) * dux_dx(0, x, y, x_sx, x_sy, y_sx, y_sy, pi)
-                  + lambda * duy_dy(0, x, y, x_sx, x_sy, y_sx, y_sy, pi));
-        // xy
-        output[1] = latticeFactor * (mu * (dux_dy(0, x, y, x_sx, x_sy, y_sx, y_sy, pi)
-                  + duy_dx(0, x, y, x_sx, x_sy, y_sx, y_sy, pi)));
-
-        // yx
-        output[2] = latticeFactor * (mu * (dux_dy(0, x, y, x_sx, x_sy, y_sx, y_sy, pi)
-                  + duy_dx(0, x, y, x_sx, x_sy, y_sx, y_sy, pi)));
-
-        // yy
-        output[3] = latticeFactor * ((2. * mu + lambda) * duy_dy(0, x, y, x_sx, x_sy, y_sx, y_sy, pi)
-                  + lambda * dux_dx(0, x, y, x_sx, x_sy, y_sx, y_sy, pi));
-
-        return true;
-      };
-
-      T dux_dx(T t, T x, T y, T x_sx, T x_sy, T y_sx, T y_sy, T pi) {
-        return -(9. * pi * sin(2. * pi * (x + x_sx)) * sin(2. * pi * (y + y_sx))) / 5000.;
-      }
-
-      T dux_dy(T t, T x, T y, T x_sx, T x_sy, T y_sx, T y_sy, T pi) {
-        return (9. * pi * cos(2. * pi * (x + x_sx)) * cos(2. * pi * (y + y_sx))) / 5000.;
-      }
-
-      T duy_dx(T t, T x, T y, T x_sx, T x_sy, T y_sx, T y_sy, T pi) {
-        return -(7. * pi * cos(2. * pi * (y + y_sy)) * sin(2. * pi * (x + x_sy))) / 5000.;
-      }
-
-      T duy_dy(T t, T x, T y, T x_sx, T x_sy, T y_sx, T y_sy, T pi) {
-        return -(7. * pi * cos(2. * pi * (x + x_sy)) * sin(2. * pi * (y + y_sy))) / 5000.;
-      }
-  };
-
-  return new ManufacturedSolutionStress2D (myCase);
-}
+};
 
 /// @brief Create a simulation mesh, based on user-specific geometry
 /// @return An instance of Mesh, which keeps the relevant information
@@ -343,21 +327,8 @@ void prepareLattice(MyCase& myCase) {
 
   lattice.setParameter<descriptors::OMEGA_SOLID>({omega_11, omega_d, omega_s, omega_12, omega_21, omega_22});
 
-  T magic[8] = {
-    converter.getPhysDeltaX(),
-    converter.getPhysDeltaT(),
-    descriptors::invCs2<T,DESCRIPTOR>(),
-    converter.getLatticeShearModulus(),
-    converter.getLatticeLambda(),
-    converter.getDampingFactor(),
-    converter.getCharPhysDisplacement(),
-    converter.getEpsilon()
-  };
-
-  lattice.setParameter<descriptors::MAGIC_SOLID>(magic);
-
-  auto force = getForceField<T>(myCase);
-  lattice.defineField<descriptors::FORCE>(geometry, 1, *force);
+  ForceField2D<T> force(myCase);
+  lattice.defineField<descriptors::FORCE>(geometry, 1, force);
 }
 
 /// Set initial condition for primal variables (velocity and density)
@@ -400,10 +371,10 @@ void getResults(MyCase& myCase,
 
   SuperVTMwriter2D<T> vtmWriter("periodicPlate");
 
-  auto dispSol = getManufacturedSolutionU2D<T>(myCase);
+  ManufacturedSolutionU2D<T> dispSol(myCase);
   SuperLatticeFfromAnalyticalF2D<T, DESCRIPTOR>      dispSolLattice(dispSol, lattice);
 
-  auto stressSol = getManufacturedSolutionStress2D<T>(myCase);
+  ManufacturedSolutionStress2D<T> stressSol(myCase);
   SuperLatticeFfromAnalyticalF2D<T, DESCRIPTOR>      stressSolLattice(stressSol, lattice);
 
   // Fields for error calc

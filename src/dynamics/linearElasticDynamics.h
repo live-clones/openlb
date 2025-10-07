@@ -46,7 +46,7 @@ struct BoolakeeLinearElasticity final : public dynamics::CustomCollision<
 > {
   using MomentaF = typename momenta::BulkTuple::template type<DESCRIPTOR>;
   using EquilibriumF = typename equilibria::None::template type<DESCRIPTOR, momenta::BulkTuple>;
-  using parameters = meta::list<descriptors::MAGIC_SOLID,descriptors::OMEGA_SOLID>;
+  using parameters = meta::list<descriptors::OMEGA_SOLID>;
 
   template<typename M>
   using exchange_momenta = BoolakeeLinearElasticity<T,DESCRIPTOR>;
@@ -64,20 +64,9 @@ struct BoolakeeLinearElasticity final : public dynamics::CustomCollision<
   template <typename CELL, typename PARAMETERS, typename V=typename CELL::value_t>
   CellStatistic<V> collide(CELL& cell, PARAMETERS& parameters) any_platform
   {
-
-    auto magic = parameters.template get<descriptors::MAGIC_SOLID>();
     auto allOmegas = parameters.template get<descriptors::OMEGA_SOLID>();
 
-    // dx, dt, theta, mu, lambda, kappa, charU, epsilon
-    const V dx        = magic[0];
-    const V dt        = magic[1];
-    const V theta     = magic[2];
-    const V mu        = magic[3];
-    const V lambda    = magic[4];
-    const V bulk      = lambda + mu;
-    const V kappa     = magic[5];
-    const V charU     = magic[6];
-    const V epsilon   = magic[7];
+    const V theta     = descriptors::invCs2<V,DESCRIPTOR>();
 
     const V omega_11  = allOmegas[0];
     const V omega_d   = allOmegas[1];
