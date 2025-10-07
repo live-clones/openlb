@@ -27,7 +27,7 @@
  * Two porous media LB methods can be used here:
  * Spaid and Phelan (doi:10.1063/1.869392), or
  * Guo and Zhao (doi:10.1103/PhysRevE.66.036304)
- * 
+ *
  * Case-specific arguments:
  * BOUNDARY_TYPE: 0=bounceBack, 1=local, 2=interpolated
  * POROSITY_TYPE: 0=BGK, 1=SpaidPhelan, 2=GuoZhao, 3=GuoZhaoSmagorinsky
@@ -36,30 +36,36 @@
  */
 
 #include <olb.h>
+
 using namespace olb;
 using namespace olb::names;
+
 enum class BoundaryType: int {
   bounceBack    = 0,
   local         = 1,
   interpolated  = 2
 };
+
 enum class PorosityType: int {
   BGK             = 0,
   SPAID_PHELAN    = 1,
   GUO_ZHAO        = 2,
   GUO_ZHAO_SMAGO  = 3
 };
+
 namespace olb::parameters {
-  struct BOUNDARY_TYPE  : public descriptors::TYPED_FIELD_BASE<BoundaryType,1> { };
-  struct POROSITY_TYPE  : public descriptors::TYPED_FIELD_BASE<PorosityType,1> { };
-  struct CONVERGED      : public descriptors::TYPED_FIELD_BASE<bool,1> { };
-  struct PERMEABILITY   : public descriptors::FIELD_BASE<1> { };
-  struct EPSILON        : public descriptors::FIELD_BASE<1> { };
-  struct INITIAL_PRESSURE_L : public descriptors::FIELD_BASE<1> { };
-  struct PRESSURE_GRADIENT  : public descriptors::FIELD_BASE<1> { };
-  struct VISCOSITY       : public descriptors::FIELD_BASE<1> { };
-  struct CONVERGENCE_CHECK_T        : public descriptors::FIELD_BASE<1> { };
-  struct CONVERGENCE_CHECK_RESIDUUM : public descriptors::FIELD_BASE<1> { };
+
+struct BOUNDARY_TYPE  : public descriptors::TYPED_FIELD_BASE<BoundaryType,1> { };
+struct POROSITY_TYPE  : public descriptors::TYPED_FIELD_BASE<PorosityType,1> { };
+struct CONVERGED      : public descriptors::TYPED_FIELD_BASE<bool,1> { };
+struct PERMEABILITY   : public descriptors::FIELD_BASE<1> { };
+struct EPSILON        : public descriptors::FIELD_BASE<1> { };
+struct INITIAL_PRESSURE_L : public descriptors::FIELD_BASE<1> { };
+struct PRESSURE_GRADIENT  : public descriptors::FIELD_BASE<1> { };
+struct VISCOSITY       : public descriptors::FIELD_BASE<1> { };
+struct CONVERGENCE_CHECK_T        : public descriptors::FIELD_BASE<1> { };
+struct CONVERGENCE_CHECK_RESIDUUM : public descriptors::FIELD_BASE<1> { };
+
 }
 
 // === Step 1: Declarations ===
@@ -288,8 +294,8 @@ void setInitialValues( MyCase& myCase ) {
 
   T p0L = converter.getLatticePressure(p0);
 
-  AnalyticalLinear2D<T,T> rho( -p0L/lx*descriptors::invCs2<T,DESCRIPTOR>(), 
-                                0, 
+  AnalyticalLinear2D<T,T> rho( -p0L/lx*descriptors::invCs2<T,DESCRIPTOR>(),
+                                0,
                                 p0L*descriptors::invCs2<T,DESCRIPTOR>()+1 );
 
   T dp = p0/lx;
@@ -511,9 +517,7 @@ void simulate(MyCase& myCase) {
 int main( int argc, char* argv[] )
 {
   // === 1st Step: Initialization ===
-  initialize( &argc, &argv );
-  singleton::directories().setOutputDir( "./tmp/" );
-  OstreamManager clout( std::cout,"main" );
+  initialize(&argc, &argv);
 
   /// === Step 2: Set Parameters ===
   MyCase::ParametersD myCaseParameters;
