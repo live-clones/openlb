@@ -371,8 +371,7 @@ void applyControl(MyOptiCase& optiCase) {
   params.set<DIFFERENCE_PERIOD>(control[2]);
 
   OstreamManager clout(std::cout, "applyControl");
-  clout << std::setprecision (12)
-    << "Control: period length = " << control[0]
+  clout << "Control: period length = " << std::setprecision (12) << control[0]
     << ", amplitude = " << control[1]
     << ", akuteness = " << control[2] << std::endl;
 }
