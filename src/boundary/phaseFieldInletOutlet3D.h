@@ -34,6 +34,8 @@
 
 namespace olb {
 
+/*
+
 ///Initialising the setConvectivePhaseFieldBoundary function on the superLattice domain in 3d
 template<typename T, typename DESCRIPTOR>
 void setConvectivePhaseFieldBoundary(SuperLattice<T, DESCRIPTOR>& sLattice, SuperGeometry<T,3>& superGeometry, int material)
@@ -546,6 +548,8 @@ std::optional<PostProcessorPromise<T,DESCRIPTOR>> getPostProcessor(DiscreteNorma
 };
 
 }
+
+*/
 
 }
 
