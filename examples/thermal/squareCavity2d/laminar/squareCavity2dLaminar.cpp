@@ -46,9 +46,11 @@ using MyCase = Case<
 
 namespace olb::parameters {
 
-    struct T_HOT  : public descriptors::FIELD_BASE<1> { };
-    struct T_COLD : public descriptors::FIELD_BASE<1> { };
-    struct T_MEAN : public descriptors::FIELD_BASE<1> { };
+    struct DOMAIN_L : public descriptors::FIELD_BASE<1> { };
+
+    struct T_HOT    : public descriptors::FIELD_BASE<1> { };
+    struct T_COLD   : public descriptors::FIELD_BASE<1> { };
+    struct T_MEAN   : public descriptors::FIELD_BASE<1> { };
 
     struct CONVERGENCE_EPSILON : public descriptors::FIELD_BASE<1> { };
 }
@@ -428,12 +430,16 @@ int main(int argc, char* argv[]){
 
         //Computed Defaults
         //Size of Domain: ((Ra*nu^2)/(Pr*g*(T_hot - T_cold)*beta))^(1/3)
-        float domain_l = util::pow((myCaseParameters.get<RAYLEIGH>() * util::pow(myCaseParameters.get<PHYS_KINEMATIC_VISCOSITY>(), 2) ) /
-                                   (myCaseParameters.get<PRANDTL>() * myCaseParameters.get<GRAVITATIONAL_CONST>() * (myCaseParameters.get<T_HOT>() - myCaseParameters.get<T_COLD>()) * myCaseParameters.get<THERMAL_EXPANSION>()),
-                                   (MyCase::value_t) 1/3
-                                );
-        myCaseParameters.set<DOMAIN_EXTENT>({domain_l, domain_l});
-        myCaseParameters.set<PHYS_DELTA_X>(domain_l / myCaseParameters.get<RESOLUTION>());
+        myCaseParameters.set<DOMAIN_L>([&] { return
+            util::pow((myCaseParameters.get<RAYLEIGH>() * util::pow(myCaseParameters.get<PHYS_KINEMATIC_VISCOSITY>(), 2) ) /
+            (myCaseParameters.get<PRANDTL>() * myCaseParameters.get<GRAVITATIONAL_CONST>() * (myCaseParameters.get<T_HOT>() - myCaseParameters.get<T_COLD>()) * myCaseParameters.get<THERMAL_EXPANSION>()),
+            (MyCase::value_t) 1/3);
+        });
+
+        myCaseParameters.set<DOMAIN_EXTENT>({myCaseParameters.get<DOMAIN_L>(), myCaseParameters.get<DOMAIN_L>()});
+        myCaseParameters.set<PHYS_DELTA_X>([&] { return
+            myCaseParameters.get<DOMAIN_L>() / myCaseParameters.get<RESOLUTION>();
+        });
 
     }
     myCaseParameters.fromCLI(argc, argv);
