@@ -44,9 +44,9 @@ using MyCase = Case<
 
 namespace olb::parameters {
 
-  struct T_HOT            : public descriptors::FIELD_BASE<1> { };
-  struct T_COLD           : public descriptors::FIELD_BASE<1> { };
-  struct T_PERTURBATION   : public descriptors::FIELD_BASE<1> { };
+struct T_HOT            : public descriptors::FIELD_BASE<1> { };
+struct T_COLD           : public descriptors::FIELD_BASE<1> { };
+struct T_PERTURBATION   : public descriptors::FIELD_BASE<1> { };
 
 }
 
@@ -65,7 +65,6 @@ Mesh<MyCase::value_t,MyCase::d> createMesh(MyCase::ParametersD& parameters) {
 
 void prepareGeometry(MyCase& myCase)
 {
-
   OstreamManager clout(std::cout, "prepareGeometry");
   clout << "Prepare Geometry ..." << std::endl;
 
@@ -165,7 +164,6 @@ void prepareLattice(MyCase& myCase)
   boundary::set<boundary::BounceBack>(NSlattice, geometry, 3);
   NSlattice.defineDynamics<ForcedBGKdynamics>(geometry, 4);
 
-
   ADlattice.defineDynamics<AdvectionDiffusionBGKdynamics>(geometry.getMaterialIndicator({1, 2, 3, 4}));
   /// sets boundary conditions
   boundary::set<boundary::AdvectionDiffusionDirichlet>(ADlattice, geometry, 2);
@@ -178,7 +176,7 @@ void prepareLattice(MyCase& myCase)
 
   T boussinesqForcePrefactor = 9.81 / converter.getConversionFactorVelocity() * converter.getConversionFactorTime() *
                                converter.getCharPhysTemperatureDifference() * converter.getPhysThermalExpansionCoefficient();
-  
+
   auto& coupling = myCase.setCouplingOperator(
     "Boussinesq",
     NavierStokesAdvectionDiffusionCoupling{},
@@ -317,9 +315,9 @@ void simulate(MyCase& myCase) {
   util::Timer<T> timer(iTmax, myCase.getGeometry().getStatistics().getNvoxel());
   timer.start();
 
-  util::ValueTracer<T> converge(myCase.getLattice(NavierStokes{}).getUnitConverter().getLatticeTime(50.), 
+  util::ValueTracer<T> converge(myCase.getLattice(NavierStokes{}).getUnitConverter().getLatticeTime(50.),
                                 parameters.get<parameters::CONVERGENCE_PRECISION>());
-  
+
   for (std::size_t iT=0; iT < iTmax; ++iT) {
 
     if (converge.hasConverged()){
@@ -377,7 +375,7 @@ int main(int argc, char *argv[])
     });
 
     myCaseParameters.set<PHYS_CP>([&] {
-      return myCaseParameters.get<PRANDTL>() * myCaseParameters.get<PHYS_THERMAL_CONDUCTIVITY>() 
+      return myCaseParameters.get<PRANDTL>() * myCaseParameters.get<PHYS_THERMAL_CONDUCTIVITY>()
               / (myCaseParameters.get<PHYS_CHAR_VISCOSITY>()/myCaseParameters.get<PHYS_CHAR_DENSITY>());
     });
 
@@ -391,7 +389,7 @@ int main(int argc, char *argv[])
 
   /// === Step 3: Create Mesh ===
   Mesh mesh = createMesh(myCaseParameters);
-  
+
   /// === Step 4: Create Case ===
   MyCase myCase(myCaseParameters, mesh);
 
