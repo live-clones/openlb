@@ -72,6 +72,7 @@ struct Temperature  : public descriptors::DESCRIPTOR_TAG { };
 struct SuperLattice : public descriptors::DESCRIPTOR_TAG { };
 struct SuperLattice2 : public descriptors::DESCRIPTOR_TAG { };
 struct Points : public descriptors::DESCRIPTOR_TAG { };
+struct Radiation : public descriptors::DESCRIPTOR_TAG { } ;
 
 struct TurbKineticEnergy : public descriptors::DESCRIPTOR_TAG { };
 struct DissipationRate : public descriptors::DESCRIPTOR_TAG { };
