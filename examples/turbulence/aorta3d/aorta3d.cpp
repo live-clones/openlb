@@ -37,21 +37,19 @@
 
 #include <olb.h>
 
-
 using namespace olb;
 using namespace olb::descriptors;
 using namespace olb::graphics;
 
-using T = FLOATING_POINT_TYPE;
-using DESCRIPTOR = D3Q19<>;
+using MyCase = Case<
+  NavierStokes, Lattice<double, D3Q19<>>
+>;
+
+namespace olb::parameters {
+  struct BOUZIDI_ENABLED : public descriptors::TYPED_FIELD_BASE<bool,1> { };
+}
+
 using BulkDynamics = SmagorinskyBGKdynamics<T,DESCRIPTOR>;
-
-//simulation parameters
-const int N = 40;             // resolution of the model
-const int M = 20;             // time discretization refinement
-const bool bouzidiOn = true;  // choice of boundary condition
-const T maxPhysT = 2.;        // max. simulation time in s, SI unit
-
 
 // Stores data from stl file in geometry in form of material numbers
 void prepareGeometry( IndicatorF3D<T>& indicator, STLreader<T>& stlReader,
@@ -94,14 +92,36 @@ void prepareGeometry( IndicatorF3D<T>& indicator, STLreader<T>& stlReader,
 }
 
 // Set up the geometry of the simulation
-void prepareLattice( SuperLattice<T, DESCRIPTOR>& sLattice,
-                     STLreader<T>& stlReader, SuperGeometry<T,3>& superGeometry )
+void prepareLattice(MyCase& myCase)
 {
-
   OstreamManager clout( std::cout,"prepareLattice" );
   clout << "Prepare Lattice ..." << std::endl;
 
-  const T omega = sLattice.getUnitConverter().getLatticeRelaxationFrequency();
+  using T = MyCase::value_t;
+  auto& geometry = myCase.getGeometry();
+  auto& parameters = myCase.getParameters();
+
+  auto& lattice = myCase.getLattice(NavierStokes{});
+
+  const T physDeltaX = parameters.get<parameters::PHYS_CHAR_LENGTH>() / parameters.get<parameters::RESOLUTION>();
+  const T physDeltaT = parameters.get<parameters::PHYS_CHAR_LENGTH>() / (parameters.get<parameters::TIME_RESOLUTION>() * parameters.get<parameters::RESOLUTION>());
+  const T physLength = parameters.get<parameters::PHYS_CHAR_LENGTH>();
+  const T physCharVelocity = parameters.get<parameters::PHYS_CHAR_VELOCITY>();
+  const T physCharViscosity = parameters.get<parameters::PHYS_CHAR_VISCOSITY>();
+  const T physCharDensity = parameters.get<parameters::PHYS_CHAR_DENSITY>();
+
+  myCase.getLattice(NavierStokes{}).setUnitConverter(
+    physDeltaX,        // physDeltaX: spacing between two lattice cells in [m]
+    physDeltaT,        // physDeltaT: time step in [s]
+    physLength,        // charPhysLength: reference length of simulation geometry in [m]
+    physCharVelocity,  // charPhysVelocity: highest expected velocity during simulation in [m/s]
+    physCharViscosity, // physViscosity: physical kinematic viscosity in [m^2/s]
+    physCharDensity    // physDensity: physical density [kg/m^3]
+  );
+  lattice.getUnitConverter().print();
+  lattice.getUnitConverter().write("aorta3d");
+
+  const T omega = lattice.getUnitConverter().getLatticeRelaxationFrequency();
 
   // material=1 --> bulk dynamics
   sLattice.defineDynamics<BulkDynamics>(superGeometry, 1);
@@ -284,18 +304,19 @@ int main( int argc, char* argv[] )
   // display messages from every single mpi process
   //clout.setMultiOutput(true);
 
-  const UnitConverter<T,DESCRIPTOR> converter(
-    (T)   0.02246/N,     // physDeltaX: spacing between two lattice cells in __m__
-    (T)   0.02246/(M*N), // physDeltaT: time step in __s__
-    (T)   0.02246,       // charPhysLength: reference length of simulation geometry
-    (T)   0.45,          // charPhysVelocity: maximal/highest expected velocity during simulation in __m / s__
-    (T)   0.003/1055.,   // physViscosity: physical kinematic viscosity in __m^2 / s__
-    (T)   1055           // physDensity: physical density in __kg / m^3__
-  );
-  // Prints the converter log as console output
-  converter.print();
-  // Writes the converter log in a file
-  converter.write("aorta3d");
+  /// === Step 2: Set Parameters ===
+  MyCase::ParametersD myCaseParameters;
+  {
+    using namespace olb::parameters;
+    myCaseParameters.set<RESOLUTION         >(40);
+    myCaseParameters.set<TIME_RESOLUTION    >(20);
+    myCaseParameters.set<PHYS_CHAR_LENGTH   >(0.02246); // reference length of simulation geometry in m
+    myCaseParameters.set<PHYS_CHAR_VELOCITY >(0.45);
+    myCaseParameters.set<PHYS_CHAR_VISCOSITY>(0.003/1055.);
+    myCaseParameters.set<PHYS_CHAR_DENSITY  >(1055);
+    myCaseParameters.set<MAX_PHYS_T         >(2.); // max. simulation time in s, SI unit
+  }
+  myCaseParameters.fromCLI(argc, argv);
 
   // === 2nd Step: Prepare Geometry ===
 
