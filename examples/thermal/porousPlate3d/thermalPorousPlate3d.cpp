@@ -103,6 +103,7 @@ public:
   };
 };
 
+
 void computeError(MyCase& myCase)
 {
   OstreamManager clout( std::cout, "computeError" );
@@ -174,14 +175,15 @@ void prepareGeometry(MyCase& myCase) {
   auto& geometry  = myCase.getGeometry();
   auto& parameters    = myCase.getParameters();
 
-  geometry.rename(0,2);
-  geometry.rename(2,1,{0,1,0});
+  geometry.rename(0, 2);
+  geometry.rename(2, 1, {0, 1, 0});
 
   /// Set material number for bottom
   const Vector extent = parameters.get<parameters::DOMAIN_EXTENT>();
-  clout << "extent " << extent << std::endl;
-  const Vector bottomExtent{extent[0], 0., extent[2]};
+  const T physDeltaX = parameters.get<parameters::PHYS_DELTA_X>();
+  const Vector bottomExtent{extent[0], physDeltaX, extent[2]};
   const Vector origin{0., 0., 0.};
+  clout << "post" << std::endl;
   IndicatorCuboid3D<T> bottom(bottomExtent, origin);
 
   geometry.rename(2, 3, 1, bottom);
@@ -209,25 +211,26 @@ void prepareLattice(MyCase& myCase) {
   const T physCharLength          = parameters.get<parameters::PHYS_CHAR_LENGTH>();
   const int N                     = parameters.get<parameters::RESOLUTION>();
   const T physDeltaX              = parameters.get<parameters::PHYS_DELTA_X>();
-  const T physViscosity           = parameters.get<parameters::PHYS_CHAR_VISCOSITY>();
+  const T physVelocity            = parameters.get<parameters::PHYS_CHAR_VELOCITY>();
   const T physDensity             = parameters.get<parameters::PHYS_CHAR_DENSITY>();
   const T physThermalConductivity = parameters.get<parameters::PHYS_THERMAL_CONDUCTIVITY>();
   const T tau                     = parameters.get<parameters::LATTICE_RELAXATION_TIME>();
   const T Ra                      = parameters.get<parameters::RAYLEIGH>();
+  const T Re                      = parameters.get<parameters::REYNOLDS>();
   const T Pr                      = parameters.get<parameters::PRANDTL>();
   const T Tcold                   = parameters.get<parameters::T_COLD>();
   const T Thot                    = parameters.get<parameters::T_HOT>();
 
   NSElattice.setUnitConverter<ThermalUnitConverter<T,NSEDESCRIPTOR,ADEDESCRIPTOR>>(
-    (T) physDeltaX, // physDeltaX
-    (T) physDeltaX * 1.0 / physViscosity * (tau - 0.5) / 3 / N, // physDeltaT
+    (T) 1.0 / N, // physDeltaX
+    (T) 1.0 / N * 1.0 / 1e-3 * (tau - 0.5) / 3 / N, // physDeltaT
     (T) physCharLength, // charPhysLength
-    (T) util::sqrt( 9.81 * Ra * physViscosity * physViscosity / Pr / 9.81 / (Thot - Tcold) / util::pow(physDensity, 3) * (Thot - Tcold) * 1.0 ), // charPhysVelocity
-    (T) physViscosity, // physViscosity
-    (T) physDensity, // physDensity
-    (T) physThermalConductivity, // physThermalConductivity
-    (T) Pr * physThermalConductivity / physViscosity / physDensity, // physSpecificHeatCapacity
-    (T) Ra * physViscosity * physViscosity / Pr / 9.81 / (Thot - Tcold) / util::pow(physDensity, 3), // physThermalExpansionCoefficient
+    (T) physCharVelocity // charPhysVelocity
+    (T) 1e-3, // physViscosity
+    (T) 1.0, // physDensity
+    (T) 0.03, // physThermalConductivity
+    (T) Pr * 0.03 / 1e-3 / 1.0, // physSpecificHeatCapacity
+    (T) Ra * 1e-3 * 1e-3 / Pr / 9.81 / (Thot - Tcold) / util::pow(1.0, 3), // physThermalExpansionCoefficient
     (T) Tcold, // charPhysLowTemperature
     (T) Thot // charPhysHighTemperature
   );
@@ -458,13 +461,13 @@ int main(int argc, char* argv[]) {
   {
     using namespace olb::parameters;
     myCaseParameters.set<PHYS_CHAR_LENGTH         >( 1.0 );
-    myCaseParameters.set<LATTICE_CHAR_VELOCITY    >( 0.1 );
-    myCaseParameters.set<PHYS_CHAR_VISCOSITY      >( 1e-3 );
+    myCaseParameters.set<PHYS_CHAR_VELOCITY       >( 5e-3);
+    // myCaseParameters.set<PHYS_CHAR_VISCOSITY      >( 1e-3 );
     myCaseParameters.set<PHYS_CHAR_DENSITY        >( 1. );
-    myCaseParameters.set<PHYS_THERMAL_CONDUCTIVITY>( 0.03 );
+    //myCaseParameters.set<PHYS_THERMAL_CONDUCTIVITY>( 0.03 );
     myCaseParameters.set<RESOLUTION               >(20);
     myCaseParameters.set<LATTICE_RELAXATION_TIME  >(1.);
-    myCaseParameters.set<REYNOLDS                 >(5);
+    myCaseParameters.set<REYNOLDS                 >( 5 );
     myCaseParameters.set<RAYLEIGH                 >(100);
     myCaseParameters.set<PRANDTL                  >(0.71);
     myCaseParameters.set<MAX_PHYS_T               >(1e4);
