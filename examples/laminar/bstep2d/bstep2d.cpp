@@ -1,8 +1,8 @@
 /*  Lattice Boltzmann sample, written in C++, using the OpenLB
  *  library
  *
- *  Copyright (C) 2006, 2007, 2012 Jonas Latt, Mathias J. Krause,
- *  Louis Kronberg, Christian Vorwerk, Bastian Schäffauer
+ *  Copyright (C) 2006, 2007, 2012, 2025 Jonas Latt, Mathias J. Krause,
+ *  Louis Kronberg, Christian Vorwerk, Bastian Schäffauer, Yuji (Sam) Shimojima
  *  E-mail contact: info@openlb.net
  *  The most recent release of OpenLB can be downloaded at
  *  <http://www.openlb.net/>
@@ -34,281 +34,353 @@
  */
 
 #include <olb.h>
-
-
 using namespace olb;
-using namespace olb::descriptors;
-using T = FLOATING_POINT_TYPE;
-using DESCRIPTOR = D2Q9<>;
+using namespace olb::names;
+using T = double;
+// === Step 1: Declarations ===
+using MyCase = Case<NavierStokes, Lattice<double, descriptors::D2Q9<>>>;
 
-using BulkDynamics = BGKdynamics<T,DESCRIPTOR>;
+namespace olb::parameters {
 
-// Parameters for the simulation setup
-const T lengthStep        = 0.2;                           // length of step in meter
-const T heightStep        = 0.0049;                        // height of step in meter
-const T lengthChannel     = 0.7;                           // length of channel in meter
-const T heightChannel     = 0.0101;                        // height of channel in meter
-const T heightInlet       = heightChannel - heightStep;    // height of inlet channel in meter
-const T charL             = 2 * heightInlet;               // characteristic length
-const int N               = 60;                            // resolution of the model
-const T maxPhysT          = 2.;                            // max. simulation time in s, SI unit
-const T relaxationTime    = 0.518;
+struct PHYS_LENGTH_OF_STEP : public descriptors::FIELD_BASE<1> {};
+struct PHYS_HEIGHT_OF_STEP : public descriptors::FIELD_BASE<1> {};
 
+} // namespace olb::parameters
 
-// Stores geometry information in form of material numbers
-void prepareGeometry( SuperGeometry<T,2>& superGeometry,
-                      std::shared_ptr<IndicatorF2D<T>> channel,
-                      std::shared_ptr<IndicatorF2D<T>> step,
-                      T dx)
+/// @brief Create a simulation mesh, based on user-specific geometry
+/// @return An instance of Mesh, which keeps the relevant information
+Mesh<MyCase::value_t, MyCase::d> createMesh(MyCase::ParametersD& parameters)
 {
-  OstreamManager clout( std::cout,"prepareGeometry" );
+  using T = MyCase::value_t;
+  // setup channel
+  const Vector                     extendChannel = parameters.get<parameters::DOMAIN_EXTENT>();
+  const Vector                     originChannel(0, 0);
+  std::shared_ptr<IndicatorF2D<T>> channel = std::make_shared<IndicatorCuboid2D<T>>(extendChannel, originChannel);
+  // setup step
+  const T lengthStep = parameters.get<parameters::PHYS_LENGTH_OF_STEP>(); // length of step in meter
+  const T heightStep = parameters.get<parameters::PHYS_HEIGHT_OF_STEP>(); // height of step in meter
+
+  const Vector                     extendStep(lengthStep, heightStep);
+  const Vector                     originStep(0, 0);
+  std::shared_ptr<IndicatorF2D<T>> step = std::make_shared<IndicatorCuboid2D<T>>(extendStep, originStep);
+
+  const T physDeltaX = parameters.get<parameters::PHYS_CHAR_LENGTH>() / parameters.get<parameters::RESOLUTION>();
+
+  Mesh<T, MyCase::d> mesh(*(channel - step), physDeltaX, singleton::mpi().getSize());
+  mesh.setOverlap(parameters.get<parameters::OVERLAP>());
+  return mesh;
+}
+
+/// @brief Set material numbers for different parts of the domain
+/// @param myCase The Case instance which keeps the simulation data
+/// @note The material numbers will be used to assign physics to lattice nodes
+void prepareGeometry(MyCase& myCase)
+{
+  OstreamManager clout(std::cout, "prepareGeometry");
   clout << "Prepare Geometry ..." << std::endl;
+  using T          = MyCase::value_t;
+  auto& parameters = myCase.getParameters();
+  auto& sGeometry  = myCase.getGeometry();
+  // Parameters for the simulation setup
 
+  // setup channel
+  const Vector                     extendChannel = parameters.get<parameters::DOMAIN_EXTENT>();
+  const Vector                     originChannel(0, 0);
+  std::shared_ptr<IndicatorF2D<T>> channel = std::make_shared<IndicatorCuboid2D<T>>(extendChannel, originChannel);
+
+  // setup step
+  const T lengthStep = parameters.get<parameters::PHYS_LENGTH_OF_STEP>(); // length of step in meter
+  const T heightStep = parameters.get<parameters::PHYS_HEIGHT_OF_STEP>(); // height of step in meter
+
+  const Vector                     extendStep(lengthStep, heightStep);
+  const Vector                     originStep(0, 0);
+  std::shared_ptr<IndicatorF2D<T>> step = std::make_shared<IndicatorCuboid2D<T>>(extendStep, originStep);
+
+  const T physDeltaX = parameters.get<parameters::PHYS_CHAR_LENGTH>() / parameters.get<parameters::RESOLUTION>();
   // material numbers from zero to 2 inside geometry defined by indicator
-  superGeometry.rename(0,2, channel-step);
-  superGeometry.rename(2,1,{1,1} );
+  sGeometry.rename(0, 2, channel - step);
+  sGeometry.rename(2, 1, {1, 1});
+  const T      lengthChannel = parameters.get<parameters::DOMAIN_EXTENT>()[0];
+  const T      heightChannel = parameters.get<parameters::DOMAIN_EXTENT>()[1];
+  const T      heightInlet   = heightChannel - heightStep;
+  Vector<T, 2> extendBC_out((T)0.0 + (T)1.0 * physDeltaX, heightChannel);
+  Vector<T, 2> extendBC_in((T)0.0, heightInlet);
+  Vector<T, 2> originBC_out(lengthChannel - (T)1.0 * physDeltaX, 0);
+  Vector<T, 2> originBC_in((T)0.0, heightStep);
 
-  Vector<T,2> extendBC_out( 0 + 1.*dx,heightChannel );
-  Vector<T,2> extendBC_in( 0, heightInlet );
-  Vector<T,2> originBC_out( lengthChannel - 1.*dx,0 );
-  Vector<T,2> originBC_in( 0, heightStep);
-
-  IndicatorCuboid2D<T> inflow( extendBC_in, originBC_in );
+  IndicatorCuboid2D<T> inflow(extendBC_in, originBC_in);
   // Set material number for inflow
-  superGeometry.rename( 2,3,1,inflow );
+  sGeometry.rename(2, 3, 1, inflow);
 
-  IndicatorCuboid2D<T> outflow( extendBC_out, originBC_out );
+  IndicatorCuboid2D<T> outflow(extendBC_out, originBC_out);
   // Set material number for outflow
-  superGeometry.rename( 2,4,1,outflow );
+  sGeometry.rename(2, 4, 1, outflow);
 
   // Removes all not needed boundary voxels outside the surface
-  superGeometry.clean();
+  sGeometry.clean();
   // Removes all not needed boundary voxels inside the surface
-  superGeometry.innerClean();
-  superGeometry.checkForErrors();
-  superGeometry.getStatistics().print();
+  sGeometry.innerClean();
+  sGeometry.checkForErrors();
+  sGeometry.getStatistics().print();
   clout << "Prepare Geometry ... OK" << std::endl;
+  return;
 }
 
-// Set up the geometry of the simulation
-void prepareLattice( SuperLattice<T,DESCRIPTOR>& sLattice,
-                     SuperGeometry<T,2>& superGeometry )
+/// @brief Set lattice dynamics
+/// @param myCase The Case instance which keeps the simulation data
+void prepareLattice(MyCase& myCase)
 {
-  OstreamManager clout( std::cout,"prepareLattice" );
+  OstreamManager clout(std::cout, "prepareLattice");
   clout << "Prepare Lattice ..." << std::endl;
 
-  const T omega = sLattice.getUnitConverter().getLatticeRelaxationFrequency();
+  using T = MyCase::value_t;
 
-  auto bulkIndicator = superGeometry.getMaterialIndicator({1, 3, 4});
-
-  // Material=1 -->bulk dynamics
-  // Material=3 -->bulk dynamics (inflow)
-  // Material=4 -->bulk dynamics (outflow)
-  sLattice.defineDynamics<BulkDynamics>(bulkIndicator);
-  // Material=2 -->bounce back
-  boundary::set<boundary::BounceBack>(sLattice, superGeometry, 2);
-
-  //if boundary conditions are chosen to be local
-  boundary::set<boundary::LocalVelocity>(sLattice, superGeometry, 3);
-  boundary::set<boundary::LocalPressure>(sLattice, superGeometry, 4);
-
-  //if boundary conditions are chosen to be interpolated
-  // boundary::set<boundary::InterpolatedVelocity>(sLattice, superGeometry, 3);
-  // boundary::set<boundary::InterpolatedPressure>(sLattice, superGeometry, 4);
-
-  // Initial conditions
-  AnalyticalConst2D<T,T> ux( 0. );
-  AnalyticalConst2D<T,T> uy( 0. );
-  AnalyticalConst2D<T,T> rho( 1. );
-  AnalyticalComposed2D<T,T> u( ux,uy );
-
-  //Initialize all values of distribution functions to their local equilibrium
-  sLattice.defineRhoU( bulkIndicator, rho, u );
-  sLattice.iniEquilibrium( bulkIndicator, rho, u );
-
-  sLattice.setParameter<descriptors::OMEGA>(omega);
-
-  // Make the lattice ready for simulation
-  sLattice.initialize();
-
-  clout << "Prepare Lattice ... OK" << std::endl;
-}
-
-// Generates a slowly increasing inflow for the first iTMaxStart timesteps
-void setBoundaryValues( SuperLattice<T,DESCRIPTOR>& sLattice, int iT,
-                        SuperGeometry<T,2>& superGeometry )
-{
-  OstreamManager clout( std::cout,"setBoundaryValues" );
-  const UnitConverter<T,DESCRIPTOR>& converter = sLattice.getUnitConverter();
-
-  // time for smooth start-up
-  int iTmaxStart = converter.getLatticeTime( maxPhysT*0.2 );
-  int iTupdate = 100;
-
-  if ( iT%iTupdate == 0 && iT<= iTmaxStart ) {
-    // Smooth start curve, sinus
-    // SinusStartScale<T,int> StartScale(iTmaxStart, T(1));
-    // Smooth start curve, polynomial
-    PolynomialStartScale<T,int> StartScale( iTmaxStart, T( 1 ) );
-    // Creates and sets the Poiseuille inflow profile using functors
-    int iTvec[1] = {iT};
-    T frac[1] = {};
-    StartScale( frac,iTvec );
-    T maxVelocity = converter.getCharLatticeVelocity()*3./2.*frac[0];
-    T distance2Wall = converter.getPhysDeltaX()/2.;
-    Poiseuille2D<T> poiseuilleU( superGeometry, 3, maxVelocity, distance2Wall );
-    // define lattice speed on inflow
-    sLattice.defineU( superGeometry, 3, poiseuilleU );
-
-    sLattice.setProcessingContext<Array<momenta::FixedVelocityMomentumGeneric::VELOCITY>>(
-      ProcessingContext::Simulation);
+  auto& sGeometry  = myCase.getGeometry();
+  auto& parameters = myCase.getParameters();
+  auto& sLattice   = myCase.getLattice(NavierStokes {});
+  using DESCRIPTOR = MyCase::descriptor_t_of<NavierStokes>;
+  {
+    using namespace olb::parameters;
+    sLattice.setUnitConverter<UnitConverterFromResolutionAndRelaxationTime<T, DESCRIPTOR>>(
+        parameters.get<RESOLUTION>(),       // resolution
+        parameters.get<LATTICE_RELAXATION_TIME>(),  // relaxation time
+        parameters.get<PHYS_CHAR_LENGTH>(), // charPhysLength: reference length of simulation geometry
+        parameters.get<
+            PHYS_CHAR_VELOCITY>(), // charPhysVelocity: maximal/highest expected velocity during simulation in __m / s__
+        parameters.get<PHYS_CHAR_VISCOSITY>(), // physViscosity: physical kinematic viscosity in __m^2 / s__
+        parameters.get<PHYS_CHAR_DENSITY>()    // physDensity: physical density in __kg / m^3__
+    );
   }
-}
-
-// write data to termimal and file system
-void getResults( SuperLattice<T,DESCRIPTOR>& sLattice, std::size_t iT,
-                 SuperGeometry<T,2>& superGeometry, util::Timer<T>& timer,
-                 SuperPlaneIntegralFluxVelocity2D<T>& velocityFlux,
-                 SuperPlaneIntegralFluxPressure2D<T>& pressureFlux )
-{
-  OstreamManager clout( std::cout,"getResults" );
-  const UnitConverter<T,DESCRIPTOR>& converter = sLattice.getUnitConverter();
-  SuperVTMwriter2D<T> vtmWriter( "bstep2d" );
-
-  if ( iT==0 ) {
-    // Writes geometry, cuboid no. and rank no. to file system
-    SuperLatticeCuboid2D<T,DESCRIPTOR> cuboid( sLattice );
-    SuperLatticeRank2D<T,DESCRIPTOR> rank( sLattice );
-    vtmWriter.write( cuboid );
-    vtmWriter.write( rank );
-    vtmWriter.createMasterFile();
-  }
-
-  // Writes every 0.2  seconds
-  // Writes every 0.1 simulated
-  if ( iT%converter.getLatticeTime( 0.1 )==0 ) {
-    sLattice.setProcessingContext(ProcessingContext::Evaluation);
-
-    velocityFlux.print();
-    pressureFlux.print();
-
-    // write to terminal
-    timer.update( iT );
-    timer.printStep();
-    // Lattice statistics console output
-    sLattice.getStatistics().print( iT,converter.getPhysTime( iT ) );
-  }
-
-  if ( iT%converter.getLatticeTime( 0.2 )==0 ) {
-    SuperLatticePhysVelocity2D<T,DESCRIPTOR> velocity( sLattice, converter );
-    SuperLatticePhysPressure2D<T,DESCRIPTOR> pressure( sLattice, converter );
-    vtmWriter.addFunctor( velocity );
-    vtmWriter.addFunctor( pressure );
-    // write vtk to file system
-    vtmWriter.write( iT );
-    SuperEuklidNorm2D<T,DESCRIPTOR> normVel( velocity );
-    BlockReduction2D2D<T> planeReduction( normVel, 1200, BlockDataSyncMode::ReduceOnly );
-    // write output as JPEG
-    heatmap::plotParam<T> jpeg_Param;
-    jpeg_Param.maxValue = converter.getCharPhysVelocity() * 3./2.;
-    jpeg_Param.minValue = 0.0;
-    jpeg_Param.fullScreenPlot = true;
-    heatmap::write(planeReduction, iT, jpeg_Param);
-  }
-
-  // Saves lattice data
-  if ( iT%converter.getLatticeTime( 1 )==0 && iT>0 ) {
-    //clout << "Checkpointing the system at t=" << iT << std::endl;
-    //sLattice.save( "bstep2d.checkpoint" );
-    // The data can be reloaded using
-    //     sLattice.load("bstep2d.checkpoint");
-  }
-}
-
-
-int main( int argc, char* argv[] )
-{
-  // === 1st Step: Initialization ===
-  initialize( &argc, &argv );
-  singleton::directories().setOutputDir( "./tmp/" );  // set output directory
-  OstreamManager clout( std::cout, "main" );
-
-  UnitConverterFromResolutionAndRelaxationTime<T, DESCRIPTOR> converter(
-    (T)   N,                 // resolution
-    (T)   relaxationTime,    // relaxation time
-    (T)   charL,             // charPhysLength: reference length of simulation geometry
-    (T)   1.,                // charPhysVelocity: maximal/highest expected velocity during simulation in __m / s__
-    (T)   1./19230.76923,    // physViscosity: physical kinematic viscosity in __m^2 / s__
-    (T)   1.                 // physDensity: physical density in __kg / m^3__
-  );
+  const auto& converter = sLattice.getUnitConverter();
 
   // Prints the converter log as console output
   converter.print();
   // Writes the converter log in a file
   converter.write("bstep2d");
 
-  // === 2nd Step: Prepare Geometry ===
+  auto bulkIndicator = sGeometry.getMaterialIndicator({1, 3, 4});
 
-  // Instantiation of a cuboidDecomposition with weights
-#ifdef PARALLEL_MODE_MPI
-  const int noOfCuboids = singleton::mpi().getSize();
-#else
-  const int noOfCuboids = 6;
-#endif
+  // Material=1 -->bulk dynamics
+  // Material=3 -->bulk dynamics (inflow)
+  // Material=4 -->bulk dynamics (outflow)
+  sLattice.defineDynamics<BGKdynamics<T, DESCRIPTOR>>(bulkIndicator);
+  // Material=2 -->bounce back
+  boundary::set<boundary::BounceBack>(sLattice, sGeometry, 2);
 
-  // setup channel
-  Vector<T,2> extendChannel( lengthChannel, heightChannel );
-  Vector<T,2> originChannel( 0, 0 );
-  std::shared_ptr<IndicatorF2D<T>> channel = std::make_shared<IndicatorCuboid2D<T>>( extendChannel, originChannel );
+  //if boundary conditions are chosen to be local
+  boundary::set<boundary::LocalVelocity>(sLattice, sGeometry, 3);
+  boundary::set<boundary::LocalPressure>(sLattice, sGeometry, 4);
 
-  // setup step
-  Vector<T,2> extendStep( lengthStep, heightStep );
-  Vector<T,2> originStep( 0, 0);
-  std::shared_ptr<IndicatorF2D<T>> step = std::make_shared<IndicatorCuboid2D<T>>( extendStep, originStep );
+  //if boundary conditions are chosen to be interpolated
+  // boundary::set<boundary::InterpolatedVelocity>(sLattice, sGeometry, 3);
+  // boundary::set<boundary::InterpolatedPressure>(sLattice, sGeometry, 4);
 
-  CuboidDecomposition2D<T> cuboidDecomposition( *(channel-step), converter.getPhysDeltaX(), noOfCuboids );
+  clout << "Prepare Lattice ... OK" << std::endl;
+  return;
+}
 
-  // Instantiation of a loadBalancer
-  HeuristicLoadBalancer<T> loadBalancer( cuboidDecomposition );
+/// Set initial condition for primal variables (velocity and density)
+/// @param myCase The Case instance which keeps the simulation data
+/// @note Be careful: initial values have to be set using lattice units
+void setInitialValues(MyCase& myCase)
+{
+  OstreamManager clout(std::cout, "Initialization");
+  clout << "lattice initialization ..." << std::endl;
+  using T         = MyCase::value_t;
+  auto& sLattice  = myCase.getLattice(NavierStokes {});
+  auto& sGeometry = myCase.getGeometry();
 
-  // Instantiation of a superGeometry
-  SuperGeometry<T,2> superGeometry( cuboidDecomposition, loadBalancer );
+  // Initial conditions
+  AnalyticalConst2D<T, T>    ux(0.);
+  AnalyticalConst2D<T, T>    uy(0.);
+  AnalyticalConst2D<T, T>    rho(1.);
+  AnalyticalComposed2D<T, T> u(ux, uy);
 
-  prepareGeometry( superGeometry, channel, step, converter.getPhysDeltaX());
+  //Initialize all values of distribution functions to their local equilibrium
+  auto bulkIndicator = sGeometry.getMaterialIndicator({1, 3, 4});
+  sLattice.defineRhoU(bulkIndicator, rho, u);
+  sLattice.iniEquilibrium(bulkIndicator, rho, u);
 
-  // === 3rd Step: Prepare Lattice ===
-  SuperLattice<T,DESCRIPTOR> sLattice(converter, superGeometry);
+  const T omega = sLattice.getUnitConverter().getLatticeRelaxationFrequency();
+  sLattice.setParameter<descriptors::OMEGA>(omega);
 
-  //prepare Lattice and set boundaryConditions
-  prepareLattice( sLattice, superGeometry );
+  // Make the lattice ready for simulation
+  sLattice.initialize();
+  clout << "Initialization ... OK" << std::endl;
+  return;
+}
+
+// Generates a slowly increasing inflow for the first iTMaxStart timesteps
+void setBoundaryValues(MyCase& myCase, std::size_t iT)
+{
+  OstreamManager clout(std::cout, "setBoundaryValues");
+  using T = MyCase::value_t;
+
+  auto&   sLattice   = myCase.getLattice(NavierStokes {});
+  auto&   converter  = sLattice.getUnitConverter();
+  auto&   sGeometry  = myCase.getGeometry();
+  auto&   parameters = myCase.getParameters();
+  const T maxPhysT   = parameters.get<parameters::MAX_PHYS_T>();
+
+  // time for smooth start-up
+  std::size_t iTmaxStart = converter.getLatticeTime(maxPhysT * 0.2);
+  std::size_t iTupdate   = 100;
+
+  if (iT % iTupdate == 0 && iT <= iTmaxStart) {
+    // Smooth start curve, sinus
+    // SinusStartScale<T,std::size_t> StartScale(iTmaxStart, (T)1);
+    // Smooth start curve, polynomial
+    PolynomialStartScale<T, std::size_t> StartScale(iTmaxStart, T(1));
+    // Creates and sets the Poiseuille inflow profile using functors
+    std::size_t iTvec[1] = {iT};
+    T           frac[1]  = {};
+    StartScale(frac, iTvec);
+    T               maxVelocity   = converter.getCharLatticeVelocity() * (T)3.0 / (T)2.0 * frac[0];
+    T               distance2Wall = converter.getPhysDeltaX() / (T)2.0;
+    Poiseuille2D<T> poiseuilleU(sGeometry, 3, maxVelocity, distance2Wall);
+    // define lattice speed on inflow
+    sLattice.defineU(sGeometry, 3, poiseuilleU);
+
+    sLattice.setProcessingContext<Array<momenta::FixedVelocityMomentumGeneric::VELOCITY>>(
+        ProcessingContext::Simulation);
+  }
+  return;
+}
+
+void getResults(MyCase& myCase, std::size_t iT, util::Timer<T> timer)
+{
+  OstreamManager clout(std::cout, "getResults");
+  auto&          parameters    = myCase.getParameters();
+  const T        heightChannel = parameters.get<parameters::DOMAIN_EXTENT>()[1];
+  const T        heightStep    = parameters.get<parameters::PHYS_HEIGHT_OF_STEP>(); // height of step in meter
+  const T        lengthStep    = parameters.get<parameters::PHYS_LENGTH_OF_STEP>(); // length of step in meter
+  const T        heightInlet   = heightChannel - heightStep;
+  auto&          sLattice      = myCase.getLattice(NavierStokes {});
+  auto&          converter     = sLattice.getUnitConverter();
+  auto&          sGeometry     = myCase.getGeometry();
 
   // instantiate reusable functors
-  SuperPlaneIntegralFluxVelocity2D<T> velocityFlux( sLattice,
-      converter,
-      superGeometry,
-  {lengthStep/T(2),  heightInlet / T(2)},
-  {0.,  1.} );
+  SuperPlaneIntegralFluxVelocity2D<T> velocityFlux(sLattice, converter, sGeometry,
+                                                   {lengthStep / (T)2.0, heightInlet / (T)2.0}, {(T)0.0, (T)1.0});
 
-  SuperPlaneIntegralFluxPressure2D<T> pressureFlux( sLattice,
-      converter,
-      superGeometry,
-  {lengthStep/T(2),  heightInlet / T(2) },
-  {0.,  1.} );
+  SuperPlaneIntegralFluxPressure2D<T> pressureFlux(sLattice, converter, sGeometry,
+                                                   {lengthStep / (T)2.0, heightInlet / (T)2.0}, {(T)0.0, (T)1.0});
+  SuperVTMwriter2D<T>                 vtmWriter("bstep2d");
 
-  // === 4th Step: Main Loop with Timer ===
-  clout << "starting simulation..." << std::endl;
-  util::Timer<T> timer( converter.getLatticeTime( maxPhysT ), superGeometry.getStatistics().getNvoxel() );
-  timer.start();
-
-  for ( std::size_t iT = 0; iT < converter.getLatticeTime( maxPhysT ); ++iT ) {
-    // === 5th Step: Definition of Initial and Boundary Conditions ===
-    setBoundaryValues( sLattice, iT, superGeometry );
-    // === 6th Step: Collide and Stream Execution ===
-    sLattice.collideAndStream();
-    // === 7th Step: Computation and Output of the Results ===
-    getResults( sLattice, iT, superGeometry, timer, velocityFlux, pressureFlux );
+  if (iT == 0) {
+    // Writes geometry, cuboid no. and rank no. to file system
+    SuperLatticeCuboid2D cuboid(sLattice);
+    SuperLatticeRank2D   rank(sLattice);
+    vtmWriter.write(cuboid);
+    vtmWriter.write(rank);
+    vtmWriter.createMasterFile();
   }
 
+  // Writes every 0.1 simulated
+  if (iT % converter.getLatticeTime(0.1) == 0) {
+    sLattice.setProcessingContext(ProcessingContext::Evaluation);
+
+    velocityFlux.print();
+    pressureFlux.print();
+
+    // write to terminal
+    timer.update(iT);
+    timer.printStep();
+    // Lattice statistics console output
+    sLattice.getStatistics().print(iT, converter.getPhysTime(iT));
+  }
+
+  if (iT % converter.getLatticeTime(0.2) == 0) {
+    SuperLatticePhysVelocity2D velocity(sLattice, converter);
+    SuperLatticePhysPressure2D pressure(sLattice, converter);
+    vtmWriter.addFunctor(velocity);
+    vtmWriter.addFunctor(pressure);
+    // write vtk to file system
+    vtmWriter.write(iT);
+    using T = MyCase::value_t_of<NavierStokes>;
+    SuperEuklidNorm2D     normVel(velocity);
+    BlockReduction2D2D<T> planeReduction(normVel, 1200, BlockDataSyncMode::ReduceOnly);
+    // write output as JPEG
+    heatmap::plotParam<T> jpeg_Param;
+    jpeg_Param.maxValue       = converter.getCharPhysVelocity() * 3. / 2.;
+    jpeg_Param.minValue       = 0.0;
+    jpeg_Param.fullScreenPlot = true;
+    heatmap::write(planeReduction, iT, jpeg_Param);
+  }
+
+  // Saves lattice data
+  if (iT % converter.getLatticeTime(1) == 0 && iT > 0) {
+    //clout << "Checkpointing the system at t=" << iT << std::endl;
+    //sLattice.save( "bstep2d.checkpoint" );
+    // The data can be reloaded using
+    //     sLattice.load("bstep2d.checkpoint");
+  }
+  return;
+}
+
+void simulate(MyCase& myCase)
+{
+  OstreamManager clout(std::cout, "Time marching");
+  clout << "starting simulation..." << std::endl;
+  auto&          parameters = myCase.getParameters();
+  auto&          sLattice   = myCase.getLattice(NavierStokes {});
+  const T        maxPhysT   = parameters.get<parameters::MAX_PHYS_T>();
+  util::Timer<T> timer(sLattice.getUnitConverter().getLatticeTime(maxPhysT),
+                       myCase.getGeometry().getStatistics().getNvoxel());
+  timer.start();
+
+  for (std::size_t iT = 0; iT < sLattice.getUnitConverter().getLatticeTime(maxPhysT); ++iT) {
+
+    setBoundaryValues(myCase, iT);
+
+    sLattice.collideAndStream();
+
+    getResults(myCase, iT, timer);
+  }
+
+  sLattice.setProcessingContext(ProcessingContext::Evaluation);
   timer.stop();
   timer.printSummary();
+  return;
+}
+
+int main(int argc, char* argv[])
+{
+  initialize(&argc, &argv);
+  /// === Step 2: Set Parameters ===
+  MyCase::ParametersD myCaseParameters;
+  {
+    using namespace olb::parameters;
+    myCaseParameters.set<RESOLUTION>(60);
+    myCaseParameters.set<LATTICE_RELAXATION_TIME>(0.518);
+    myCaseParameters.set<PHYS_LENGTH_OF_STEP>(0.2);
+    myCaseParameters.set<PHYS_HEIGHT_OF_STEP>(0.0049);
+    myCaseParameters.set<PHYS_CHAR_VELOCITY>(1.0);
+    myCaseParameters.set<PHYS_CHAR_VISCOSITY>(1.0 / 19230.76923);
+    myCaseParameters.set<PHYS_CHAR_DENSITY>(1.0);
+    myCaseParameters.set<DOMAIN_EXTENT>({0.7, 0.0101});
+    myCaseParameters.set<PHYS_CHAR_LENGTH>(2.0 *
+                                           (myCaseParameters.get<DOMAIN_EXTENT>()[1] - myCaseParameters.get<PHYS_HEIGHT_OF_STEP>()));
+    myCaseParameters.set<MAX_PHYS_T>(2.0);
+  }
+  myCaseParameters.fromCLI(argc, argv);
+
+  /// === Step 3: Create Mesh ===
+  Mesh mesh = createMesh(myCaseParameters);
+  /// === Step 4: Create Case ===
+  MyCase myCase(myCaseParameters, mesh);
+
+  /// === Step 5: Prepare Geometry ===
+  prepareGeometry(myCase);
+
+  /// === Step 6: Prepare Lattice ===
+  prepareLattice(myCase);
+
+  /// === Step 7: Definition of Initial, Boundary Values, and Fields ===
+  setInitialValues(myCase);
+
+  /// === Step 8: Simulate ===
+  simulate(myCase);
+
+  return 0;
 }
