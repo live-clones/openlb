@@ -323,13 +323,6 @@ int main(int argc, char* argv[])
   initialize(&argc, &argv);
   OstreamManager clout(std::cout, "main");
 
-  std::string fName("cavity2d.xml");
-  XMLreader   config(fName);
-  std::string olbdir, outputdir;
-  config["Application"]["OlbDir"].read(olbdir);
-  config["Output"]["OutputDir"].read(outputdir);
-  singleton::directories().setOlbDir(olbdir);
-  singleton::directories().setOutputDir(outputdir);
 
   /// === Step 2: Set Parameters ===
   MyCase::ParametersD myCaseParameters;
