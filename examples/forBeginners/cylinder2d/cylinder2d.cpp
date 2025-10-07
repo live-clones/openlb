@@ -88,6 +88,17 @@ void prepareLattice(SuperLattice<T,DESCRIPTOR>& sLattice,
                     SuperGeometry<T,2>& superGeometry,
                     IndicatorF2D<T>& circle)
 {
+
+	// Set up the unit converter
+   sLattice.setUnitConverter(
+       (T)L,                        // physDeltaX: spacing between two lattice cells in [m]
+       (T)CFL * L / 0.2,                // physDeltaT: time step in [s]
+       (T)2.0 * radiusCylinder,       // charPhysLength: reference length of simulation geometry in [m]
+       (T)0.2,                      // charPhysVelocity: highest expected velocity during simulation in [m/s]
+       (T)0.2 * 2. * radiusCylinder / Re, // physViscosity: physical kinematic viscosity in [m^2/s]
+       (T)1.0                       // physDensity: physical density in [kg/m^3]
+   );
+   
   // Material=1 -->bulk dynamics
   sLattice.defineDynamics<BGKdynamics>(superGeometry, 1);
 
@@ -211,16 +222,7 @@ int main(int argc, char* argv[])
   initialize(&argc, &argv);
   OstreamManager clout(std::cout, "main");
 
-  // Set up the unit converter
-  const UnitConverter<T,DESCRIPTOR> converter(
-    (T)   L,                        // physDeltaX: spacing between two lattice cells in [m]
-    (T)   CFL*L/0.2,                // physDeltaT: time step in [s]
-    (T)   2.0*radiusCylinder,       // charPhysLength: reference length of simulation geometry in [m]
-    (T)   0.2,                      // charPhysVelocity: highest expected velocity during simulation in [m/s]
-    (T)   0.2*2.*radiusCylinder/Re, // physViscosity: physical kinematic viscosity in [m^2/s]
-    (T)   1.0                       // physDensity: physical density in [kg/m^3]
-  );
-  converter.print();
+ 
 
   // === 2rd Step: Prepare Geometry ===
   Vector extend{lengthX, lengthY};
@@ -236,8 +238,9 @@ int main(int argc, char* argv[])
   prepareGeometry(superGeometry, circle);
 
   // === 3rd Step: Prepare Lattice ===
-  SuperLattice<T,DESCRIPTOR> sLattice(converter, superGeometry);
+  SuperLattice<T,DESCRIPTOR> sLattice( superGeometry);
   prepareLattice(sLattice, superGeometry, circle);
+  auto& converter = sLattice.getUnitConverter();
 
   // === 4th Step: Main Loop with Timer ===
   std::size_t iTmax = converter.getLatticeTime(maxPhysT);
