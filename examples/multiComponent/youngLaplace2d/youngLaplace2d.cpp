@@ -37,15 +37,30 @@
 #include <olb.h>
 
 using namespace olb;
+using namespace olb::names;
+using namespace olb::descriptors;
 using namespace olb::descriptors;
 using namespace olb::graphics;
 
-using T = FLOATING_POINT_TYPE;
-typedef D2Q9<CHEM_POTENTIAL,FORCE> DESCRIPTOR;
+// === Step 1: Declarations ===
+using MyCase = Case<
+  NavierStokes, Lattice<double, D2Q9<CHEM_POTENTIAL,FORCE>>,
+  Component1,   Lattice<double, D2Q9<CHEM_POTENTIAL,FORCE>>,
+>;
 
 // Parameters for the simulation setup
 const int N  = 100;
 const T nx   = 100.;
+
+namespace olb::parameters {
+
+struct RADIUS : public descriptors::FIELD_BASE<1> { };
+struct ALPHA  : public descriptors::FIELD_BASE<1> { };
+struct KAPPA1 : public descriptors::FIELD_BASE<1> { };
+struct KAPPA2 : public descriptors::FIELD_BASE<1> { };
+struct GAMMA  : public descriptors::FIELD_BASE<1> { };
+}
+
 const T radius = 0.25 * nx;
 const T alpha = 1.5;     // Interfacial width         [lattice units]
 const T kappa1 = 0.0075; // For surface tensions      [lattice units]
@@ -57,32 +72,93 @@ const int vtkIter  = 200;
 const int statIter = 1000;
 
 
-void prepareGeometry( SuperGeometry<T,2>& superGeometry )
-{
+Mesh<MyCase::value_t,MyCase::d> createMesh(MyCase::ParametersD& params) {
+  using T = MyCase::value_t;
+  //DELTA X!!
+  std::vector<T> extend = { nx, nx, nx };
+  std::vector<T> origin = { 0, 0, 0 };
+  IndicatorCuboid2D<T> cuboid(extend,origin);
 
+  //const T physDeltaX = extent[1] / params.get<parameters::RESOLUTION>();
+  Mesh<T,MyCase::d> mesh(cuboid, physDeltaX, singleton::mpi().getSize());
+  mesh.setOverlap(params.get<parameters::OVERLAP>());
+
+  // set periodic boundaries to the domain
+  mesh.getCuboidDecomposition().setPeriodicity({ true, true });
+  return mesh;
+}
+
+void prepareGeometry( MyCase& myCase )
+{
   OstreamManager clout( std::cout,"prepareGeometry" );
   clout << "Prepare Geometry ..." << std::endl;
 
-  superGeometry.rename( 0,1 );
+  using T = MyCase::value_t;
+  auto& geometry = myCase.getGeometry();
 
-  superGeometry.innerClean();
-  superGeometry.checkForErrors();
-  superGeometry.print();
+  geometry.rename( 0,1 );
+
+  geometry.innerClean();
+  geometry.checkForErrors();
+  geometry.print();
 
   clout << "Prepare Geometry ... OK" << std::endl;
 }
 
-
-void prepareLattice( SuperLattice<T, DESCRIPTOR>& sLattice1,
-                     SuperLattice<T, DESCRIPTOR>& sLattice2,
-                     SuperGeometry<T,2>& superGeometry )
+void prepareLattice( MyCase& myCase )
 {
-
   OstreamManager clout( std::cout,"prepareLattice" );
   clout << "Prepare Lattice ..." << std::endl;
 
+  using T = MyCase::value_t;
+  auto& geometry = myCase.getGeometry();
+  auto& params = myCase.getParameters();
+
+  auto& sLattice1 = myCase.getLattice(NavierStokes{});
+  auto& sLattice2 = myCase.getLattice(Component1{});
+
+  using DESCRIPTOR = MyCase::descriptor_t;
+
+  sLattice1.setUnitConverter<UnitConverterFromResolutionAndRelaxationTime<T,DESCRIPTOR>>(
+    int   {N}, // resolution
+    (T)   1., // lattice relaxation time
+    (T)   nx, // charPhysLength: reference length of simulation geometry
+    (T)   1.e-6, // charPhysVelocity: maximal/highest expected velocity during simulation in __m / s__
+    (T)   0.1, // physViscosity: physical kinematic viscosity in __m^2 / s__
+    (T)   1. // physDensity: physical density in __kg / m^3__
+  );
+
+  const auto& converter = sLattice1.getUnitConverter();
+  converter.print();
+
+  sLattice2.setUnitConverter(converter);
+
   sLattice1.defineDynamics<ForcedBGKdynamics>(superGeometry, 1);
   sLattice2.defineDynamics<FreeEnergyBGKdynamics>( superGeometry, 1);
+
+  sLattice1.setParameter<descriptors::OMEGA>( sLattice1.getUnitConverter().getLatticeRelaxationFrequency() );
+  sLattice2.setParameter<descriptors::OMEGA>( sLattice2.getUnitConverter().getLatticeRelaxationFrequency() );
+  sLattice2.setParameter<collision::FreeEnergy::GAMMA>(gama);
+
+  clout << "Prepare Lattice ... OK" << std::endl;
+}
+
+void setInitialValues( MyCase& myCase )
+{
+  OstreamManager clout( std::cout,"initialValues" );
+
+  using T = MyCase::value_t;
+  auto& geometry = myCase.getGeometry();
+  auto& params = myCase.getParameters();
+
+  auto& sLattice1 = myCase.getLattice(NavierStokes{});
+  auto& sLattice2 = myCase.getLattice(Component1{});
+
+  using DESCRIPTOR = MyCase::descriptor_t;
+
+  const T radius = params.get<parameters::RADIUS>();
+  const T alpha = params.get<parameters::ALPHA>();
+  const T gama = params.get<parameters::GAMMA>();
 
   // bulk initial conditions
   // define circular domain for fluid 2
@@ -99,9 +175,6 @@ void prepareLattice( SuperLattice<T, DESCRIPTOR>& sLattice1,
   sLattice1.iniEquilibrium( superGeometry, 1, rho, zeroVelocity );
   sLattice2.iniEquilibrium( superGeometry, 1, phi, zeroVelocity );
 
-  sLattice1.setParameter<descriptors::OMEGA>( sLattice1.getUnitConverter().getLatticeRelaxationFrequency() );
-  sLattice2.setParameter<descriptors::OMEGA>( sLattice2.getUnitConverter().getLatticeRelaxationFrequency() );
-  sLattice2.setParameter<collision::FreeEnergy::GAMMA>(gama);
 
   sLattice1.initialize();
   sLattice2.initialize();
@@ -118,9 +191,9 @@ void prepareLattice( SuperLattice<T, DESCRIPTOR>& sLattice1,
     communicator.requestOverlap(sLattice2.getOverlap());
     communicator.exchangeRequests();
   }
-
-  clout << "Prepare Lattice ... OK" << std::endl;
 }
+
+
 
 void getResults( SuperLattice<T, DESCRIPTOR>& sLattice2,
                  SuperLattice<T, DESCRIPTOR>& sLattice1, int iT,
