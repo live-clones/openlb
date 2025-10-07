@@ -35,6 +35,7 @@
 
 #include <olb.h>
 
+#include <cmath>
 #include <iostream>
 #include <fstream>
 #include <format>
@@ -77,6 +78,42 @@ struct ComputeSourceTerm {
     cell.template setField<descriptors::SOURCE>(source);
   }
 };
+
+// Compute the analytical solution and error
+void calculate_error(MyCase& myCase){
+    OstreamManager clout(std::cout, "error");
+
+    using T = MyCase::value_t;
+    auto& geometry = myCase.getGeometry();
+    auto& params = myCase.getParameters();
+
+    auto& Rlattice = myCase.getLattice(Radiation{});
+    const auto& converter = Rlattice.getUnitConverter();
+
+    using RDESCRIPTOR = MyCase::descriptor_t_of<Radiation>;
+
+    const T absorption = params.get<parameters::ABSORPTION>();
+    const T scattering = params.get<parameters::SCATTERING>();
+
+    int input[1];
+    T   normAnaSol[1], absErr[1], relErr[1];
+    // analytical solution
+    PLSsolution3D<T, T, RDESCRIPTOR>               dSol(absorption, scattering);
+    SuperLatticeFfromAnalyticalF3D<T, RDESCRIPTOR> dSolLattice(dSol, Rlattice);
+    // approximated solution
+    SuperLatticeDensity3D<T, RDESCRIPTOR> d(Rlattice);
+
+    SuperL2Norm3D<T> dL2Norm(dSolLattice - d, geometry, 1);
+    SuperL2Norm3D<T> dSolL2Norm(dSolLattice, geometry, 1);
+    dL2Norm(absErr, input);
+    dSolL2Norm(normAnaSol, input);
+    relErr[0] = absErr[0] / normAnaSol[0];
+    clout << "density-L2-error(util::abs)=" << absErr[0] << "; density-L2-error(rel)=" << relErr[0] << std::endl;
+
+    SuperLinfNorm3D<T> dLinfNorm(dSolLattice - d, geometry, 1);
+    dLinfNorm(absErr, input);
+    clout << "density-Linf-error(util::abs)=" << absErr[0] << std::endl;
+}
 
 Mesh<MyCase::value_t,MyCase::d> createMesh(MyCase::ParametersD& params) {
     using T = MyCase::value_t;
@@ -347,6 +384,7 @@ void simulate(MyCase& myCase){
         if(iT%saveIter == 0){
             Rlattice.getStatistics().print(iT, converter.getPhysTime(iT));
             timer.print(iT);
+            calculate_error(myCase);
         }
         Rlattice.collideAndStream();
         getResults(myCase, timer, iT);
