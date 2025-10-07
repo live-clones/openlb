@@ -39,8 +39,8 @@ using namespace olb::names;
 
 // === Step 1: Declarations ===
 using MyCase = Case<
-  NavierStokes, Lattice<double, descriptors::D2Q9<descriptors::FORCE>>,
-  Temperature,  Lattice<double, descriptors::D2Q5<descriptors::VELOCITY>>
+  NavierStokes, Lattice<double, descriptors::D2Q9<descriptors::FORCE, TAU_EFF>>,
+  Temperature,  Lattice<double, descriptors::D2Q5<descriptors::VELOCITY, TAU_EFF>>
 >;
 
 
@@ -147,6 +147,7 @@ void prepareLattice(MyCase& myCase){
     const T lx = params.get<parameters::DOMAIN_EXTENT>()[0];
     const T charU = params.get<parameters::LATTICE_CHAR_VELOCITY>();
     const T tau = params.get<parameters::LATTICE_RELAXATION_TIME>();
+    const T N = params.get<parameters::RESOLUTION>();
 
     const T nu = params.get<parameters::PHYS_KINEMATIC_VISCOSITY>();
     const T rho = params.get<parameters::PHYS_DENSITY>();
@@ -161,7 +162,7 @@ void prepareLattice(MyCase& myCase){
 
     NSElattice.setUnitConverter<ThermalUnitConverter<T,NSEDESCRIPTOR,TDESCRIPTOR>>(
         (T) dx, //physDeltax
-        (T) (tau - 0.5) / descriptors::invCs2<T,NSEDESCRIPTOR>() * util::pow(dx,2) / nu, //physDeltaT
+        (T) 2.*0.01/charU*lx/N, //physDeltaT
         (T) lx, //charPhysLength
         (T) charU, //charPhysVelocity
         (T) nu, //physViscosity
@@ -194,6 +195,8 @@ void setInitialValues(MyCase& myCase){
     auto& NSElattice = myCase.getLattice(NavierStokes{});
     auto& ADlattice = myCase.getLattice(Temperature{});
 
+    using NSEDESCRIPTOR = MyCase::descriptor_t_of<NavierStokes>;
+
     const auto& converter = NSElattice.getUnitConverter();
     T omega = converter.getLatticeRelaxationFrequency();
     T Tomega = converter.getLatticeThermalRelaxationFrequency();
@@ -201,6 +204,7 @@ void setInitialValues(MyCase& myCase){
     T Tcold = params.get<parameters::T_COLD>();
     T Thot = params.get<parameters::T_HOT>();
     T Tmean = params.get<parameters::T_MEAN>();
+    T smagoConst = params.get<parameters::SMAGORINTZKY_CONST>();
 
     boundary::set<boundary::BounceBack>(ADlattice, geometry, 4);
     boundary::set<boundary::BounceBack>(NSElattice, geometry, 4);
@@ -242,15 +246,23 @@ void setInitialValues(MyCase& myCase){
 
     auto& coupling = myCase.setCouplingOperator(
         "Boussinesq",
-        NavierStokesAdvectionDiffusionCoupling{},
+        SmagorinskyBoussinesqCoupling{},
         names::NavierStokes{}, NSElattice,
-        names::Temperature{},  ADlattice);
-        coupling.setParameter<NavierStokesAdvectionDiffusionCoupling::T0>(
-        converter.getLatticeTemperature(Tcold));
-        coupling.setParameter<NavierStokesAdvectionDiffusionCoupling::FORCE_PREFACTOR>(
-        boussinesqForcePrefactor * Vector<T,2>{0.0,1.0}
+        names::Temperature{},  ADlattice
     );
-    
+  coupling.setParameter<SmagorinskyBoussinesqCoupling::T0>(
+    converter.getLatticeTemperature(Tmean));
+  coupling.setParameter<SmagorinskyBoussinesqCoupling::FORCE_PREFACTOR>(
+    boussinesqForcePrefactor * Vector<T,2>{0.0,1.0});
+  coupling.setParameter<SmagorinskyBoussinesqCoupling::SMAGORINSKY_PREFACTOR>(preFactor);
+  coupling.setParameter<SmagorinskyBoussinesqCoupling::PR_TURB>(PrTurb);
+  coupling.setParameter<SmagorinskyBoussinesqCoupling::OMEGA_NSE>(
+    converter.getLatticeRelaxationFrequency());
+  coupling.setParameter<SmagorinskyBoussinesqCoupling::OMEGA_ADE>(
+    converter.getLatticeThermalRelaxationFrequency());
+
+    const T preFactor = util::pow(smagoConst, 2) * util::pow(descriptors::invCs2<T, NSEDESCRIPTOR>(), 2) * 2*util::sqrt(2);
+
     clout << "Set initial values ... OK" << std::endl;
 }
 
@@ -361,14 +373,14 @@ void simulate(MyCase& myCase){
     const std::size_t iTmax = converter.getLatticeTime(parameters.get<parameters::MAX_PHYS_T>());
 
     util::Timer<T> timer(iTmax, myCase.getGeometry().getStatistics().getNvoxel());
-  
+
     timer.start();
 
     util::ValueTracer<T> converge(6, parameters.get<parameters::CONVERGENCE_EPSILON>());
     bool converged = false;
 
     for (std::size_t iT = 0; iT < iTmax; ++iT) {
-        
+
         if (converge.hasConverged() && !converged) {
             converged = true;
             clout << "Simulation converged." << std::endl;
@@ -417,7 +429,7 @@ int main(int argc, char* argv[]){
 
         //Heat-related Defaults
         myCaseParameters.set<PRANDTL>(0.71);
-        myCaseParameters.set<RAYLEIGH>(1e3);
+        myCaseParameters.set<RAYLEIGH>(1e5);
         myCaseParameters.set<THERMAL_EXPANSION>(3.41e-3);
         myCaseParameters.set<THERMAL_DIFFUSIVITY>(25.684e-3);
         myCaseParameters.set<HEAT_CAPACITY>(1.01309e3);
@@ -427,6 +439,9 @@ int main(int argc, char* argv[]){
         myCaseParameters.set<T_MEAN>(
             (myCaseParameters.get<T_HOT>() + myCaseParameters.get<T_COLD>())/2.0
         );
+
+        //LES-related Defaults
+        myCaseParameters.set<SMAGORINTZKY_CONST>(0.1);
 
         //Computed Defaults
         //Size of Domain: ((Ra*nu^2)/(Pr*g*(T_hot - T_cold)*beta))^(1/3)
@@ -460,5 +475,5 @@ int main(int argc, char* argv[]){
     setInitialValues(myCase);
 
     /// === Step 8: Simulate ===
-    simulate(myCase);
+    //simulate(myCase);
 }
