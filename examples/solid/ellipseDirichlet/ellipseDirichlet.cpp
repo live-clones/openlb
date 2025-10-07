@@ -56,12 +56,8 @@ class ellipse2D {
     IndicatorEllipse2D<MyCase::value_t> ellipse3;
 };
 
-template<typename T>
-std::unique_ptr<AnalyticalF2D<T, T>> getForceField(MyCase& myCase)
-{
-  using _DESCRIPTOR = MyCase::descriptor_t_of<NavierCauchy>;
-
-  class ForceField2D : public AnalyticalF2D<T, T> {
+template<typename T, typename DESCRIPTOR>
+class ForceField2D : public AnalyticalF2D<T, T> {
   protected:
     MyCase& myCase;
     const T pi = std::numbers::pi_v<T>;
@@ -71,7 +67,7 @@ std::unique_ptr<AnalyticalF2D<T, T>> getForceField(MyCase& myCase)
 
     bool operator()(T output[], const T input[]) override
     {
-      constexpr T theta = invCs2<T, _DESCRIPTOR>();
+      constexpr T theta = invCs2<T, DESCRIPTOR>();
       auto& lattice = myCase.getLattice(NavierCauchy{});
       const auto& converter = lattice.getUnitConverter();
       T dx = converter.getPhysDeltaX();
@@ -91,16 +87,7 @@ std::unique_ptr<AnalyticalF2D<T, T>> getForceField(MyCase& myCase)
       T tau_11 = 1. / omega_11 - 0.5;
       T tau_s = 1. / omega_d - 0.5;
       T tau_p = 1. / omega_s - 0.5;
-
-
       T tau_12 = 0.5;
-      T tau_22 = 0.5;
-
-      T tau_21 = tau_12;
-
-      T omega_12 = 1. / (tau_12 + 0.5);
-      T omega_21 = 1. / (tau_21 + 0.5);
-      T omega_22 = 1. / (tau_22 + 0.5);
 
       // These are correct
       T d1 = -1. / 4. - 1. / 2. * theta * tau_12 * tau_s + pow(tau_s, 2) / 2.
@@ -194,16 +181,10 @@ std::unique_ptr<AnalyticalF2D<T, T>> getForceField(MyCase& myCase)
             - 0.0216*cos(2*pi*x*y))
             + 0.0056*(lambda + 2*mu)*cos(2*pi*y));
     }
-  };
+};
 
-  return std::make_unique<ForceField2D>(myCase);
-}
-
-
-template <typename T>
-std::unique_ptr<AnalyticalF2D<T, T>> getManufacturedSolutionU2D(MyCase& myCase)
-{
-  class ManufacturedSolutionU2D : public AnalyticalF2D<T, T> {
+template<typename T>
+class ManufacturedSolutionU2D : public AnalyticalF2D<T, T> {
 
   protected:
     MyCase& myCase;
@@ -223,16 +204,10 @@ std::unique_ptr<AnalyticalF2D<T, T>> getManufacturedSolutionU2D(MyCase& myCase)
 
       return true;
     };
-  };
+};
 
-  return std::make_unique<ManufacturedSolutionU2D>(myCase);
-}
-
-template <typename T>
-std::unique_ptr<AnalyticalF2D<T, T>> getManufacturedSolutionStress2D(MyCase& myCase)
-{
-
-  class ManufacturedSolutionStress2D : public AnalyticalF2D<T, T> {
+template<typename T>
+class ManufacturedSolutionStress2D : public AnalyticalF2D<T, T> {
   protected:
     MyCase& myCase;
     const T pi = std::numbers::pi_v<T>;
@@ -242,7 +217,6 @@ std::unique_ptr<AnalyticalF2D<T, T>> getManufacturedSolutionStress2D(MyCase& myC
 
     bool operator()(T output[], const T input[]) override
     {
-      constexpr T pi = std::numbers::pi_v<T>;
       auto& lattice = myCase.getLattice(NavierCauchy{});
       const auto& converter = lattice.getUnitConverter();
       const T dx = converter.getPhysDeltaX();
@@ -289,10 +263,7 @@ std::unique_ptr<AnalyticalF2D<T, T>> getManufacturedSolutionStress2D(MyCase& myC
     T duy_dy(T t, T x, T y) {
       return -0.0014 * pi * (x * x + 1.) * util::sin(2 * pi * y);
     }
-  };
-
-  return std::make_unique<ManufacturedSolutionStress2D>(myCase);
-}
+};
 
 Mesh<MyCase::value_t,MyCase::d> createMesh(MyCase::ParametersD& params) {
   using T = MyCase::value_t;
@@ -420,10 +391,6 @@ void prepareLattice(MyCase& myCase, ellipse2D& ellipseCase, const int bulkNum = 
   const T omega_d   = 1. / (2. *  converter.getLatticeShearModulus()                                 / (1. - theta) + 0.5);
   const T omega_s   = 1. / (2. * (converter.getLatticeShearModulus() + converter.getLatticeLambda()) / (1. + theta) + 0.5);
 
-  const T tau_11    =  1. / omega_11 - 0.5;
-  const T tau_s     =  1. / omega_d - 0.5;
-  const T tau_p     =  1. / omega_s - 0.5;
-
   const T tau_12 = 0.5;
   const T tau_22 = 0.5;
 
@@ -438,8 +405,8 @@ void prepareLattice(MyCase& myCase, ellipse2D& ellipseCase, const int bulkNum = 
   NClattice.setParameter<descriptors::MAGIC_SOLID>(magic);
   NClattice.setParameter<descriptors::OMEGA_SOLID>(allOmegas);
 
-  auto force = getForceField<T>(myCase);
-  NClattice.defineField<FORCE>(geometry, bulkNum, *force);
+  ForceField2D<T, NCDESCRIPTOR> force(myCase);
+  NClattice.defineField<FORCE>(geometry, bulkNum, force);
   NClattice.defineField<POPULATION>(geometry, bulkNum, initialPopulationF);
 
   NClattice.defineField<DISP_SOLID>(geometry, bulkNum, initialDispF);
@@ -464,7 +431,6 @@ std::vector<MyCase::value_t> getResults( MyCase& myCase,
   auto& NClattice = myCase.getLattice(NavierCauchy{});
   const auto& converter = NClattice.getUnitConverter();
   auto& geometry = myCase.getGeometry();
-  auto& params = myCase.getParameters();
 
   OstreamManager clout(std::cout, "getResults");
 
@@ -490,17 +456,16 @@ std::vector<MyCase::value_t> getResults( MyCase& myCase,
   SuperLatticeFpop2D<T, NCDESCRIPTOR>                  population(NClattice);
   SuperLatticeField2D<T, NCDESCRIPTOR, FORCE>          forceField(NClattice);
 
-  auto dispSol = getManufacturedSolutionU2D<T>(myCase);
+  ManufacturedSolutionU2D<T> dispSol(myCase);
   SuperLatticeFfromAnalyticalF2D<T, NCDESCRIPTOR>      dispSolLattice(dispSol, NClattice);
 
-  auto stressSol = getManufacturedSolutionStress2D<T>(myCase);
+  ManufacturedSolutionStress2D<T> stressSol(myCase);
   SuperLatticeFfromAnalyticalF2D<T, NCDESCRIPTOR>      stressSolLattice(stressSol, NClattice);
 
   // Fields for error calc
   SuperLatticeField2D<T, NCDESCRIPTOR, DISP_SOLID>     moments(NClattice);
   SuperLatticeField2D<T, NCDESCRIPTOR, SIGMA_SOLID>    stress(NClattice);
-
-  auto indicatorF = geometry.getMaterialIndicator({1});
+  auto indicatorF = geometry.getMaterialIndicator(1);
 
   vtmWriter.addFunctor(population,       "population");
   vtmWriter.addFunctor(moments,          "numerical disp");
@@ -579,8 +544,6 @@ void simulate(MyCase& myCase){
 
 int main(int argc, char* argv[])
 {
-  using T = MyCase::value_t;
-
   // === 1st Step: Initialization ===
   OstreamManager clout(std::cout, "main");
   initialize(&argc, &argv);
