@@ -289,7 +289,7 @@ void setInitialValuesCRAD(MyCase& myCase) {
 
   auto rhos = params.get<parameters::CONCENTRATION>();
   const T physMaxVelocity = params.get<parameters::PHYS_MAX_VELOCITY>();
-  
+
   AnalyticalConst3D<T,T> rho0(1.e-8);
   AnalyticalConst3D<T,T> rhoA(rhos[2*ID+0]);
   AnalyticalConst3D<T,T> rhoB(rhos[2*ID+1]);
