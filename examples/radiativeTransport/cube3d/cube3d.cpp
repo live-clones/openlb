@@ -46,9 +46,9 @@ using namespace olb::descriptors;
 typedef double T;
 
 // select between different approaches: the mesoscopic method (default) or the macroscopic one based on the P1 approximation
-//#define MINK  //macroscopic approach
+#define MINK  //macroscopic approach
 // select between a directed or diffuse (default) boundary condition
-#define DIRECTED  //directed boundary condition
+//#define DIRECTED  //directed boundary condition
 
 using DESCRIPTOR = descriptors::D3Q27DescriptorLebedev;
 
@@ -318,6 +318,9 @@ int main( int argc, char *argv[] )
   LATTICERELAXATIONTIME = 1;// 1./(RESOLUTION*DESCRIPTOR<T>::invCs2*(1./(3*(ABSORPTION+SCATTERING)))+0.5);
   clout << "omega = .... " << LATTICERELAXATIONTIME << std::endl;
   RadiativeUnitConverter<T,DESCRIPTOR> const converter( RESOLUTION, LATTICERELAXATIONTIME, ABSORPTION, SCATTERING, ANISOTROPYFACTOR );
+
+
+
   clout << "omega = " << converter.getLatticeRelaxationTime() << std::endl;
 #ifdef MINK
   clout << "working with diffuse approximation" << std::endl;
@@ -336,7 +339,7 @@ int main( int argc, char *argv[] )
 
 
   // ===== 3rd Step: Prepare Lattice =====
-  SuperLattice<T,DESCRIPTOR> sLattice(superGeometry);
+  SuperLattice<T,DESCRIPTOR> sLattice(converter, superGeometry);
   #ifdef MINK
   prepareLatticeMink( sLattice,
                   converter,
