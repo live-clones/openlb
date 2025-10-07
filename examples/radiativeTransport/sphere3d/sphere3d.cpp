@@ -204,6 +204,85 @@ void setInitialValues(MyCase& myCase){
     clout << "Setting Initial Values and BC ... OK" << std::endl;
 }
 
+void getResults(MyCase& myCase, util::Timer<MyCase::value_t>& timer, std::size_t iT){
+    OstreamManager clout(std::cout,"getResults");
+
+    using T = MyCase::value_t;
+    auto& geometry = myCase.getGeometry();
+    auto& params = myCase.getParameters();
+
+    auto& Rlattice = myCase.getLattice(Radiation{});
+    const auto& converter = Rlattice.getUnitConverter();
+
+    using RDESCRIPTOR = MyCase::descriptor_t_of<Radiation>;
+
+
+    const auto saveIter = converter.getLatticeTime(params.get<parameters::WRITE_SEC>() / 32.);
+
+    SuperVTMwriter3D<T> vtmWriter("sphere3d");
+    SuperLatticeDensity3D<T,RDESCRIPTOR> density(Rlattice);
+    vtmWriter.addFunctor(density);
+
+    if(iT==0){
+        SuperLatticeCuboid3D cuboid(Rlattice);
+        SuperLatticeRank3D    rank(Rlattice);
+
+        vtmWriter.write(cuboid);
+        vtmWriter.write(rank);
+
+        vtmWriter.createMasterFile();
+    }
+
+    if(iT%saveIter == 0){
+        std::cout << "Write added functor at time " << iT << "." << std::endl;
+        vtmWriter.write(iT);
+
+        timer.update(iT);
+        timer.printStep();
+        Rlattice.getStatistics().print(iT, converter.getPhysTime(iT));
+    }
+
+}
+
+void simulate(MyCase& myCase){
+    OstreamManager clout(std::cout,"simulate");
+    clout << "Starting Simulation ..." << std::endl;
+
+    using T = MyCase::value_t;
+    auto& geometry = myCase.getGeometry();
+    auto& params = myCase.getParameters();
+
+    auto& Rlattice = myCase.getLattice(Radiation{});
+    const auto& converter = Rlattice.getUnitConverter();
+
+    using RDESCRIPTOR = MyCase::descriptor_t_of<Radiation>;
+
+    const auto maxPhysT = params.get<parameters::MAX_PHYS_T>();
+    const auto saveIter = converter.getLatticeTime(params.get<parameters::WRITE_SEC>() / 32.);
+
+    util::Timer<T> timer(converter.getLatticeTime(maxPhysT), geometry.getStatistics().getNvoxel());
+    timer.start();
+
+    util::ValueTracer<T> converge(params.get<parameters::RESOLUTION>(), 1e-6);
+
+    for(int iT = 0; iT <= converter.getLatticeTime(maxPhysT); ++iT){
+        converge.takeValue(Rlattice.getStatistics().getAverageRho(), true);
+
+        if(converge.hasConverged()){
+            clout << "Simulation converged. -- " << iT << std::endl;
+            break;
+        }
+
+        if(iT%saveIter == 0){
+            Rlattice.getStatistics().print(iT, converter.getPhysTime(iT));
+            timer.print(iT);
+        }
+        Rlattice.collideAndStream();
+        getResults(myCase, timer, iT);
+    }
+
+}
+
 
 int main(int argc, char* argv[]) {
     initialize(&argc, &argv);
@@ -245,5 +324,8 @@ int main(int argc, char* argv[]) {
 
     /// === Step 7: Definition of Initial, Boundary Values, and Fields ===
     setInitialValues(myCase);
+
+    /// === Step 8: Simulate ===
+    simulate(myCase);
 
 }
