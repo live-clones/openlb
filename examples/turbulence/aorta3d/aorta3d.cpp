@@ -54,8 +54,7 @@ Mesh<MyCase::value_t,MyCase::d> createMesh(MyCase::ParametersD& parameters) {
   using T = MyCase::value_t;
 
   // Instantiation of a cuboidDecomposition with weights
-  const int noOfCuboids = 2;
-  //const int noOfCuboids = util::min(16*parameters.get<parameters::RESOLUTION>(), 8*singleton::mpi().getSize());
+  const int noOfCuboids = util::min(16*parameters.get<parameters::RESOLUTION>(), 8*singleton::mpi().getSize());
   const T physDeltaX = parameters.get<parameters::PHYS_CHAR_LENGTH>() / parameters.get<parameters::RESOLUTION>();
 
   // Instantiation of the STLreader class
