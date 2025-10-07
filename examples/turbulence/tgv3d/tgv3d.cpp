@@ -172,7 +172,7 @@ using BulkDynamics = SmagorinskyBGKdynamics<T,DESCRIPTOR>;
 
   lattice.defineDynamics<BulkDynamics>(myCase.getGeometry(), 1);
 
-  #if !defined(RLB) && !defined(DNS) && !defined(KBC) && !defined(K_EPSILON)
+  #if !defined(RLB) && !defined(DNS) && !defined(KBC)
   lattice.setParameter<collision::LES::SMAGORINSKY>(smagoConst);
   #endif
 
@@ -492,7 +492,6 @@ int main(int argc, char* argv[])
     myCaseParameters.set<VOLUME     >(util::pow(2.*std::numbers::pi_v<MyCase::value_t>, 3.));
     myCaseParameters.set<REYNOLDS   >(                                                  800);
     myCaseParameters.set<SMAGORINSKY>(                                                  0.1);
-//    myCaseParameters.set<BULK_MODEL >(BulkModel::Smagorinsky);
   }
   myCaseParameters.fromCLI(argc, argv);
 
