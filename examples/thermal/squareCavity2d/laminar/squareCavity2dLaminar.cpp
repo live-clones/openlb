@@ -252,11 +252,44 @@ void setInitialValues(MyCase& myCase){
     clout << "Set initial values ... OK" << std::endl;
 }
 
+MyCase::value_t computeNusselt(MyCase& myCase){
+    auto& geometry = myCase.getGeometry();
+    auto& NSElattice = myCase.getLattice(NavierStokes{});
+    auto& ADlattice = myCase.getLattice(Temperature{});
+
+    auto const N = myCase.getParameters().get<parameters::RESOLUTION>();
+    int voxel = 0, material = 0;
+    MyCase::value_t T_x = 0, T_xplus1 = 0, T_xplus2 = 0;
+    MyCase::value_t q = 0;
+
+    for (int iC = 0; iC < NSElattice.getLoadBalancer().size(); iC++) {
+        int ny = NSElattice.getBlock(iC).getNy();
+        int iX = 0;
+        for (int iY = 0; iY < ny; ++iY) {
+            material = geometry.getBlockGeometry(iC).getMaterial(iX,iY);
+
+            T_x = ADlattice.getBlock(iC).get(iX,iY).computeRho();
+            T_xplus1 = ADlattice.getBlock(iC).get(iX+1,iY).computeRho();
+            T_xplus2 = ADlattice.getBlock(iC).get(iX+2,iY).computeRho();
+
+            if ( material == 2 ) {
+                q += (3.0*T_x - 4.0*T_xplus1 + 1.0*T_xplus2)/2.0*N;
+                voxel++;
+            }
+        }
+    }
+    return q / (MyCase::value_t)voxel;
+}
+
 void getResults(MyCase& myCase, util::Timer<MyCase::value_t>& timer, std::size_t iT, bool converged){
     using T = MyCase::value_t;
     auto& NSElattice = myCase.getLattice(NavierStokes{});
     auto& ADlattice = myCase.getLattice(Temperature{});
     const auto& converter = NSElattice.getUnitConverter();
+    auto& params = myCase.getParameters();
+
+    const auto Thot = params.get<parameters::T_HOT>();
+    const auto Tcold = params.get<parameters::T_COLD>();
 
     using NSEDESCRIPTOR = MyCase::descriptor_t_of<NavierStokes>;
     using TDESCRIPTOR = MyCase::descriptor_t_of<Temperature>;
@@ -274,7 +307,13 @@ void getResults(MyCase& myCase, util::Timer<MyCase::value_t>& timer, std::size_t
     const int statIter = 2000.;
 
     if(iT == 0){
+        /// Writes the geometry, cuboid no. and rank no. as vti file for visualization
+        SuperLatticeCuboid2D<T, NSEDESCRIPTOR> cuboid(NSElattice);
+        SuperLatticeRank2D<T, NSEDESCRIPTOR> rank(NSElattice);
+        vtkWriter.write(cuboid);
+        vtkWriter.write(rank);
 
+        vtkWriter.createMasterFile();
     }
 
     if(iT%statIter == 0 || converged){
@@ -288,6 +327,20 @@ void getResults(MyCase& myCase, util::Timer<MyCase::value_t>& timer, std::size_t
         NSElattice.getStatistics().print(iT,converter.getPhysTime(iT));
         /// ADLattice statistics console output
         ADlattice.getStatistics().print(iT,converter.getPhysTime(iT));
+
+        vtkWriter.write(iT);
+
+        BlockReduction2D2D<T> planeReduction(temperature, 600, BlockDataSyncMode::ReduceOnly);
+        BlockGifWriter<T> gifWriter;
+        gifWriter.write(planeReduction, Tcold-1, Thot+1, iT, "temperature");
+
+        SuperEuklidNorm2D<T, NSEDESCRIPTOR> normVel( velocity );
+        BlockReduction2D2D<T> planeReduction2(normVel, 600, BlockDataSyncMode::ReduceOnly);
+        BlockGifWriter<T> gifWriter2;
+        gifWriter2.write( planeReduction2, iT, "velocity" );
+    }
+
+    if(converged){
 
     }
 }
@@ -330,10 +383,8 @@ void simulate(MyCase& myCase){
             getResults(myCase, timer, iT, converged);
         }
         if(!converged && iT%1000 == 0){
-            
-
-            
-            //converge.takeValue()
+            ADlattice.setProcessingContext(ProcessingContext::Evaluation);
+            converge.takeValue(computeNusselt(myCase), true);
         }
         if(converged) break;
     }
@@ -372,7 +423,7 @@ int main(int argc, char* argv[]){
         myCaseParameters.set<T_HOT>(285.15);
         myCaseParameters.set<T_COLD>(275.15);
         myCaseParameters.set<T_MEAN>(
-            (myCaseParameters.get<T_HOT>() - myCaseParameters.get<T_COLD>())/2.0
+            (myCaseParameters.get<T_HOT>() + myCaseParameters.get<T_COLD>())/2.0
         );
 
         //Computed Defaults
