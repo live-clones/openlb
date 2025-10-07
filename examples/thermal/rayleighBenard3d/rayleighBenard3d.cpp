@@ -381,11 +381,6 @@ int main(int argc, char *argv[])
               / (myCaseParameters.get<PHYS_CHAR_VISCOSITY>()/myCaseParameters.get<PHYS_CHAR_DENSITY>());
     });
 
-    myCaseParameters.set<PHYS_CHAR_VELOCITY>([&] {
-      return myCaseParameters.get<PHYS_CHAR_VISCOSITY>() * util::sqrt(myCaseParameters.get<RAYLEIGH>()/myCaseParameters.get<PRANDTL>()) 
-             / myCaseParameters.get<PHYS_CHAR_LENGTH>();
-    });
-
     myCaseParameters.set<CONVERGENCE_PRECISION>(1e-5);
     myCaseParameters.set<CONVERGED>(false);
 
