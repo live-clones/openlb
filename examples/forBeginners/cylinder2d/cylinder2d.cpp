@@ -137,52 +137,6 @@ void prepareGeometry(MyCase& myCase)
     geometry.print();
 }
 
-//---------------------------------------------------------------------------
-// Set up the geometry of the simulation
-//void prepareLattice(SuperLattice<T, DESCRIPTOR>& sLattice,
-    //SuperGeometry<T, 2>& superGeometry,
-    //IndicatorF2D<T>& circle)
-//{
-
-    // Set up the unit converter
-    //sLattice.setUnitConverter(
-       // (T)L,                        // physDeltaX: spacing between two lattice cells in [m]
-       // (T)CFL * L / 0.2,                // physDeltaT: time step in [s]
-       // (T)2.0 * radiusCylinder,       // charPhysLength: reference length of simulation geometry in [m]
-        //(T)0.2,                      // charPhysVelocity: highest expected velocity during simulation in [m/s]
-        //(T)0.2 * 2. * radiusCylinder / Re, // physViscosity: physical kinematic viscosity in [m^2/s]
-        //(T)1.0                       // physDensity: physical density in [kg/m^3]
-    //);
-
-    // Material=1 -->bulk dynamics
-    //sLattice.defineDynamics<BGKdynamics>(superGeometry, 1);
-
-    // Material=2 -->bounce back
-    //boundary::set<boundary::BounceBack>(sLattice, superGeometry, 2);
-
-    // Material=3 -->fixed velocity
-    //boundary::set<boundary::InterpolatedVelocity>(sLattice, superGeometry, 3);
-
-    // Material=4 -->fixed pressure
-    //boundary::set<boundary::InterpolatedPressure>(sLattice, superGeometry, 4);
-
-    // Material=5 -->bouzidi
-    //setBouzidiBoundary(sLattice, superGeometry, 5, circle);
-
-    // Initial conditions
-    //AnalyticalConst2D<T, T> rhoF(1);
-    //AnalyticalConst2D<T, T> uF(0, 0);
-
-    // Initialize all values of distribution functions to their local equilibrium
-   // sLattice.defineRhoU(superGeometry, 1, rhoF, uF);
-    //sLattice.iniEquilibrium(superGeometry, 1, rhoF, uF);
-    //sLattice.setParameter<descriptors::OMEGA>(sLattice.getUnitConverter().getLatticeRelaxationFrequency());
-    //sLattice.initialize();
-//}
-
-
-// Set up the geometry of the simulation
-
 void prepareLattice(MyCase& myCase)
 {
     using T = MyCase::value_t;
@@ -221,17 +175,23 @@ void prepareLattice(MyCase& myCase)
 
     // Material=4 -->fixed pressure
     boundary::set<boundary::InterpolatedPressure>(lattice, geometry, 4);
-    
-    
-    
-   
    
     IndicatorCircle2D<T> circle(center, radiusCylinder);
     
     // Material=5 -->bouzidi
     setBouzidiBoundary(lattice, geometry, 5, circle);
 
-    // Initial conditions
+    
+}
+
+void setInitialValues(MyCase& myCase) {
+	
+    using T = MyCase::value_t;
+    auto& lattice = myCase.getLattice(NavierStokes{});
+    auto& geometry = myCase.getGeometry();
+	
+	
+	// Initial conditions
     AnalyticalConst2D<T, T> rhoF(1);
     AnalyticalConst2D<T, T> uF(0, 0);
 
@@ -240,19 +200,20 @@ void prepareLattice(MyCase& myCase)
     lattice.iniEquilibrium(geometry, 1, rhoF, uF);
     lattice.setParameter<descriptors::OMEGA>(lattice.getUnitConverter().getLatticeRelaxationFrequency());
     lattice.initialize();
+
 }
-/*
-// Generates a slowly increasing inflow for the first iTMaxStart timesteps
-void setBoundaryValues(SuperLattice<T, DESCRIPTOR>& sLattice,
-    std::size_t iT,
-    SuperGeometry<T, 2>& superGeometry)
+
+void setTemporalValues(MyCase& myCase,
+                      std::size_t iT)
+                      
 {
     using T = MyCase::value_t;
     auto& parameters = myCase.getParameters();
     auto& lattice = myCase.getLattice(NavierStokes{});
     auto& geometry = myCase.getGeometry();
     auto& converter = lattice.getUnitConverter();
-    
+    const T maxPhysT = parameters.get<parameters::MAX_PHYS_T>();
+    const T L = 0.1 / parameters.get<parameters::RESOLUTION>();
     // Number of time steps for smooth start-up
     const std::size_t iTmaxStart = converter.getLatticeTime(maxPhysT * 0.4);
     const std::size_t iTupdate = iTmaxStart / 1000;
@@ -267,15 +228,84 @@ void setBoundaryValues(SuperLattice<T, DESCRIPTOR>& sLattice,
         StartScale(frac, iTvec);
         T maxVelocity = converter.getCharLatticeVelocity() * 3. / 2. * frac[0];
         T distance2Wall = L / 2.;
-        Poiseuille2D<T> poiseuilleU(superGeometry, 3, maxVelocity, distance2Wall);
-        sLattice.defineU(superGeometry, 3, poiseuilleU);
+        Poiseuille2D<T> poiseuilleU(geometry, 3, maxVelocity, distance2Wall);
+        lattice.defineU(geometry, 3, poiseuilleU);
 
         // Update velocity on GPU
-        sLattice.setProcessingContext<Array<momenta::FixedVelocityMomentumGeneric::VELOCITY>>(
-            ProcessingContext::Simulation);
-    }
-}
+        lattice.setProcessingContext<Array<momenta::FixedVelocityMomentumGeneric::VELOCITY>>(
+            ProcessingContext::Simulation);}
+            }
+            
+            
+ void getResults(MyCase& myCase,
+                util::Timer<MyCase::value_t>& timer,
+                std::size_t iT)
+{
+    OstreamManager clout(std::cout, "getResults");
+    auto& lattice = myCase.getLattice(NavierStokes{});
+    auto& converter = lattice.getUnitConverter();
+    using T = MyCase::value_t;
+    using DESCRIPTOR = MyCase::descriptor_t;
+    auto& parameters = myCase.getParameters();
+    const Vector<T,2> center = parameters.get<parameters::CENTER_CYLINDER>();
+    const T centerCylinderX = center[0];
+    const T centerCylinderY = center[1];
+    const std::size_t vtkIter = converter.getLatticeTime(0.3);
+    const std::size_t statIter = converter.getLatticeTime(0.8);
+    const T radiusCylinder = parameters.get<parameters::RADIUS_CYLINDER>();
+    
+    SuperVTMwriter2D<T> vtmWriter("cylinder2d");
+    SuperLatticePhysVelocity2D<T, DESCRIPTOR> velocity(lattice, converter);
+    SuperLatticePhysPressure2D<T, DESCRIPTOR> pressure(lattice, converter);
+    vtmWriter.addFunctor(velocity);
+    vtmWriter.addFunctor(pressure);
 
+    if (iT == 0) {
+        vtmWriter.createMasterFile();
+    }
+
+    // Writes the vtk files
+    if (iT % vtkIter == 0 && iT > 0) {
+        // Send values from GPU to CPU for evaluation
+        lattice.setProcessingContext(ProcessingContext::Evaluation);
+        vtmWriter.write(iT);
+    }
+
+    // Writes the console log
+    if (iT % statIter == 0) {
+        // Send values from GPU to CPU for evaluation
+        lattice.setProcessingContext(ProcessingContext::Evaluation);
+
+        // Timer console output
+        timer.update(iT);
+        timer.printStep();
+        lattice.getStatistics().print(iT, converter.getPhysTime(iT));
+
+        // Pressure drop
+        AnalyticalFfromSuperF2D<T> intpolatePressure(pressure, true);
+
+        T point1[2] = {};
+        T point2[2] = {};
+
+        point1[0] = centerCylinderX - radiusCylinder;
+        point1[1] = centerCylinderY;
+
+        point2[0] = centerCylinderX + radiusCylinder;
+        point2[1] = centerCylinderY;
+
+        T p1, p2;
+        intpolatePressure(&p1, point1);
+        intpolatePressure(&p2, point2);
+
+        clout << "pressure1=" << p1;
+        clout << "; pressure2=" << p2;
+
+        T pressureDrop = p1 - p2;
+        clout << "; pressureDrop=" << pressureDrop << std::endl;
+    }
+    }
+
+/*
 // Computes the pressure drop between the voxels before and after the cylinder
 void getResults(SuperLattice<T, DESCRIPTOR>& sLattice,
     std::size_t iT,
@@ -335,26 +365,33 @@ void getResults(SuperLattice<T, DESCRIPTOR>& sLattice,
         T pressureDrop = p1 - p2;
         clout << "; pressureDrop=" << pressureDrop << std::endl;
     }
+}*/
 
-void simulate(MyCase& myCase){
-// === 4th Step: Main Loop with Timer ===
+void simulate(MyCase& myCase)
+{
+     using T = MyCase::value_t;
+     auto& parameters = myCase.getParameters();
+     auto& lattice = myCase.getLattice(NavierStokes{});
+     auto& converter = lattice.getUnitConverter();
+     const T maxPhysT = parameters.get<parameters::MAX_PHYS_T>();
+     
+     auto& geometry = myCase.getGeometry();
+     
     std::size_t iTmax = converter.getLatticeTime(maxPhysT);
-    util::Timer<T> timer(iTmax, superGeometry.getStatistics().getNvoxel());
+    util::Timer<T> timer(iTmax, geometry.getStatistics().getNvoxel());
     timer.start();
 
     for (std::size_t iT = 0; iT < iTmax; ++iT) {
         // === 5th Step: Definition of Initial and Boundary Conditions ===
-        setBoundaryValues(sLattice, iT, superGeometry);
+        setTemporalValues(myCase, iT);
         // === 6th Step: Collide and Stream Execution ===
-        sLattice.collideAndStream();
+        lattice.collideAndStream();
         // === 7th Step: Computation and Output of the Results ===
-        getResults(sLattice, iT, superGeometry, timer);
+        getResults(myCase, timer, iT);
     }
 
-    timer.stop();
-    timer.printSummary();
 }
-}*/
+
 
 int main(int argc, char* argv[])
 {
@@ -407,6 +444,12 @@ int main(int argc, char* argv[])
     prepareGeometry(myCase);
     
     prepareLattice(myCase);
+    
+    /// === Step 7: Definition of Initial, Boundary Values, and Fields ===
+	setInitialValues(myCase);
+
+  /// === Step 8: Simulate ===
+	simulate(myCase);
    
     
 }
