@@ -33,16 +33,18 @@ using namespace olb;
 using namespace olb::names;
 
 // === Step 1: Declarations ===
-
-using MyCase = Case<NavierStokes, Lattice<float, descriptors::D2Q9<descriptors::POROSITY, descriptors::VELOCITY>>>;
+using MyCase = Case<
+  NavierStokes, Lattice<float, descriptors::D2Q9<descriptors::POROSITY, descriptors::VELOCITY>>
+>;
 
 namespace olb::parameters {
-struct PHYS_VISCOSITY : public descriptors::FIELD_BASE<1> {};
+
 struct CHORD_LENGTH : public descriptors::FIELD_BASE<1> {};
 struct AIRFOIL_POSITION : public descriptors::FIELD_BASE<0, 1, 0> {};
 struct AIRFOIL_PARAMETERS : public descriptors::FIELD_BASE<3> {};
 struct ANGLE_OF_ATTACK : public descriptors::FIELD_BASE<1> {};
-} // namespace olb::parameters
+
+}
 
 // Create mesh for simulation case
 Mesh<MyCase::value_t, MyCase::d> createMesh(MyCase::ParametersD& params)
@@ -57,11 +59,6 @@ Mesh<MyCase::value_t, MyCase::d> createMesh(MyCase::ParametersD& params)
   mesh.setOverlap(params.get<parameters::OVERLAP>());
   return mesh;
 }
-
-using FringeDynamics =
-    dynamics::Tuple<MyCase::value_t, MyCase::descriptor_t_of<NavierStokes>, momenta::BulkTuple, equilibria::ThirdOrder,
-                    collision::ParameterFromCell<collision::LES::SMAGORINSKY,
-                                                 collision::SmagorinskyEffectiveOmega<collision::RLBThirdOrder>>>;
 
 struct SmoothInflowUpdateO {
   static constexpr OperatorScope scope = OperatorScope::PerCellWithParameters;
@@ -199,7 +196,7 @@ void prepareLattice(MyCase& myCase)
   // Get parameters for Unit converter
   int resolution    = params.get<parameters::RESOLUTION>();
   int Re            = params.get<parameters::REYNOLDS>();
-  T   physViscosity = params.get<parameters::PHYS_VISCOSITY>();
+  T   physViscosity = params.get<parameters::PHYS_CHAR_VISCOSITY>();
   T   chordLength   = params.get<parameters::CHORD_LENGTH>();
 
   // Set UnitConverter
@@ -210,8 +207,8 @@ void prepareLattice(MyCase& myCase)
       (T)Re * physViscosity /
           chordLength,  // charPhysVelocity: maximal/highest expected velocity during simulation in __m / s__
       (T)physViscosity, // physViscosity: physical kinematic viscosity in __m^2 / s__
-      (T)1.0);
-  auto& converter = lattice.getUnitConverter();
+      (T)1.0
+  );
 
   // Get airfoil parameters
   Vector<T, 2>   airfoilCenter(params.get<parameters::AIRFOIL_POSITION>()[0],
@@ -236,7 +233,17 @@ void prepareLattice(MyCase& myCase)
   boundary::set<boundary::BounceBack>(lattice, geometry, 6);
 
   boundary::set<boundary::LocalVelocity>(lattice, geometry, 3);
-  boundary::set<T, DESCRIPTOR, boundary::InterpolatedPressure<T, DESCRIPTOR, FringeDynamics>>(
+
+  using FringeDynamics = dynamics::Tuple<
+    MyCase::value_t,
+    MyCase::descriptor_t_of<NavierStokes>,
+    momenta::BulkTuple,
+    equilibria::ThirdOrder,
+    collision::ParameterFromCell<collision::LES::SMAGORINSKY,
+                                 collision::SmagorinskyEffectiveOmega<collision::RLBThirdOrder>>
+  >;
+
+  boundary::set<T, DESCRIPTOR, boundary::InterpolatedPressure<T,DESCRIPTOR,FringeDynamics>>(
       lattice, geometry.getMaterialIndicator(4), geometry.getMaterialIndicator(7), geometry.getMaterialIndicator(0));
 
   // Turbulent Wall Model on airfoil indicator
@@ -269,6 +276,15 @@ void setInitialValues(MyCase& myCase)
   lattice.defineField<descriptors::VELOCITY>(geometry.getMaterialIndicator({1, 2, 3, 4, 5, 6, 7}), uF);
   lattice.defineField<descriptors::POROSITY>(geometry.getMaterialIndicator({1, 2, 3, 4, 6, 7}), rhoF);
   lattice.defineField<descriptors::POROSITY>(geometry, 5, rho0);
+
+  using FringeDynamics = dynamics::Tuple<
+    MyCase::value_t,
+    MyCase::descriptor_t_of<NavierStokes>,
+    momenta::BulkTuple,
+    equilibria::ThirdOrder,
+    collision::ParameterFromCell<collision::LES::SMAGORINSKY,
+                                 collision::SmagorinskyEffectiveOmega<collision::RLBThirdOrder>>
+  >;
 
   // Define fringe zone for end of simulation domain
   lattice.defineDynamics<FringeDynamics>(geometry, 7);
@@ -438,28 +454,29 @@ void simulate(MyCase& myCase)
 
 int main(int argc, char* argv[])
 {
-
   initialize(&argc, &argv);
-
-  using T          = MyCase::value_t;
 
   /// === Step 2: Set Parameters ===
   MyCase::ParametersD myCaseParameters;
   {
     using namespace olb::parameters;
+    using T          = MyCase::value_t;
     myCaseParameters.set<RESOLUTION>(100);
     myCaseParameters.set<REYNOLDS>(1400000);
-    myCaseParameters.set<PHYS_VISCOSITY>((T)1.e-5);
+    myCaseParameters.set<PHYS_CHAR_VISCOSITY>((T)1.e-5);
     myCaseParameters.set<MAX_PHYS_T>((T)16.);
     myCaseParameters.set<CHORD_LENGTH>((T)1.);
-    myCaseParameters.set<DOMAIN_EXTENT>([&]() -> Vector<MyCase::value_t, 2>{
-        return {(T)6. * myCaseParameters.get<CHORD_LENGTH>(),(T)2. * myCaseParameters.get<CHORD_LENGTH>()};
-        });
-    myCaseParameters.set<AIRFOIL_POSITION>([&]() -> Vector<MyCase::value_t, 2>{
-        return {myCaseParameters.get<DOMAIN_EXTENT>()[0] / (T)4.,myCaseParameters.get<DOMAIN_EXTENT>()[1] / (T)2.};
-        });
     myCaseParameters.set<AIRFOIL_PARAMETERS>({1, 4, 10});
     myCaseParameters.set<ANGLE_OF_ATTACK>(5.);
+    myCaseParameters.set<DOMAIN_EXTENT>([&] {
+      return Vector{6,2} * myCaseParameters.get<CHORD_LENGTH>();
+    });
+    myCaseParameters.set<AIRFOIL_POSITION>([&] {
+      auto pos = myCaseParameters.get<DOMAIN_EXTENT>();
+      pos[0] /= 4;
+      pos[1] /= 2;
+      return pos;
+    });
   }
   myCaseParameters.fromCLI(argc, argv);
 
@@ -482,4 +499,3 @@ int main(int argc, char* argv[])
   simulate(myCase);
   return 0;
 }
-
