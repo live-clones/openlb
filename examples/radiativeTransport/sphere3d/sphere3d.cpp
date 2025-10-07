@@ -216,6 +216,8 @@ void getResults(MyCase& myCase, util::Timer<MyCase::value_t>& timer, std::size_t
 
     using RDESCRIPTOR = MyCase::descriptor_t_of<Radiation>;
 
+    const T absorption = params.get<parameters::ABSORPTION>();
+    const T scattering = params.get<parameters::SCATTERING>();
 
     const auto saveIter = converter.getLatticeTime(params.get<parameters::WRITE_SEC>() / 32.);
 
@@ -233,7 +235,7 @@ void getResults(MyCase& myCase, util::Timer<MyCase::value_t>& timer, std::size_t
         vtmWriter.createMasterFile();
     }
 
-    if(iT%saveIter == 0){
+    if(iT % saveIter == 0){
         std::cout << "Write added functor at time " << iT << "." << std::endl;
         vtmWriter.write(iT);
 
@@ -242,6 +244,23 @@ void getResults(MyCase& myCase, util::Timer<MyCase::value_t>& timer, std::size_t
         Rlattice.getStatistics().print(iT, converter.getPhysTime(iT));
     }
 
+    if(iT % 500 == 0){
+        SuperLatticeDensity3D<T, RDESCRIPTOR> density(Rlattice);
+        AnalyticalFfromSuperF3D<T> analyDensity(density, true, 1);
+        PLSsolution3D<T, T, RDESCRIPTOR> dSol(absorption, scattering);
+
+        for(int nY = -25; nY < 25; ++nY){
+            double position[3] = {0, ((double) nY )/25.0, 0.0 };
+
+            double densityEval[1] = {0};
+            analyDensity(densityEval, position);
+            double densitySol[1] = {0};
+            dSol(densitySol, position);
+
+            // printf("%1.3f\t%1.3f\t%1.3f\n", position[1], densityEval[0], densitySol[0] );
+            // fout << postition[1] << ", " << densityEval[0] << ", " << densitySol[0]  << std::endl;
+        }
+    }
 }
 
 void simulate(MyCase& myCase){
@@ -280,6 +299,11 @@ void simulate(MyCase& myCase){
         Rlattice.collideAndStream();
         getResults(myCase, timer, iT);
     }
+
+    writeToFile();
+
+    timer.stop();
+    timer.printSummary();
 
 }
 
