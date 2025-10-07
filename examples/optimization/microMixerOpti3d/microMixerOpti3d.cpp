@@ -22,6 +22,22 @@
  * Boston, MA 02110-1301, USA.
  */
 
+/** @file microMixerOpti3d.cpp
+ * In this example, the operation of a small mixer is optimized: pulsation
+ * at the inlet is chosen, s.t. the segregation intensity at the outlet is
+ * minimized.
+ * Control variables: period length, amplitude and acuteness of the inflow.
+ * Side condition: LB-Navier-Stokes equation for fluid, LB-Advection-Diffusion
+ * equation for solute concentration, with one-way coupling.
+ * Objective: Danckwerts' segregation intensity at the outlet, averaged over
+ * one time period.
+ * Cf. https://doi.org/10.3390/fluids7050144 for the full study.
+ * Note: In this example, the particle diffusivity has been increased and the
+ * resolution has been reduced, in order to allow for quick testing.
+ * For the physically reasonable diffusivity D=1.e-9, the resolution N=96 yields
+ * good results. The optimization runs stable already at N=36.
+ */
+
 #include <olb.h>
 
 using namespace olb;
@@ -30,20 +46,11 @@ using namespace olb::names;
 using namespace olb::opti;
 using namespace olb::parameters;
 
-using T = double;
-using NSDESCRIPTOR = D3Q19<>;
-using ADDESCRIPTOR = D3Q7<>;
-
 using MyCase = Case<
-  NavierStokes,       Lattice<T,NSDESCRIPTOR>,
-  Concentration0, Lattice<T,ADDESCRIPTOR>>;
+  NavierStokes,   Lattice<double,D3Q19<>>,
+  Concentration0, Lattice<double,D3Q7<VELOCITY>>>;
 
 using MyOptiCase = OptiCaseFDQ<Controlled, MyCase>;
-
-util::TimeIntegrator<T> density1(0.0, 1.0, 0.1);
-util::TimeIntegrator<T> density2(0.0, 1.0, 0.1);
-util::TimeIntegrator<T> variance(0.0, 1.0, 0.1);
-util::TimeIntegrator<T> varianceNorm(0.0, 1.0, 0.1);
 
 namespace olb::parameters {
 
@@ -60,7 +67,8 @@ struct AMPLITUDE_PHYS_PRESSURE : public descriptors::FIELD_BASE<1> { };
 struct DIFFERENCE_PERIOD : public descriptors::FIELD_BASE<1> { };
 }
 
-Mesh<T,MyCase::d> createMesh(MyCase::ParametersD& params) {
+Mesh<MyCase::value_t,MyCase::d> createMesh(MyCase::ParametersD& params) {
+  using T = MyCase::value_t;
   const int nC = util::max(16, 4 * singleton::mpi().getSize());
   const T dx = params.get<DX>();
   STLreader<T> stlReader("microMixer3d.stl", dx, T{1});
@@ -71,8 +79,7 @@ Mesh<T,MyCase::d> createMesh(MyCase::ParametersD& params) {
 }
 
 void prepareGeometry(MyCase& myCase) {
-  OstreamManager clout(std::cout, "prepareGeometry");
-  clout << "Prepare Geometry ..." << std::endl;
+  using T = MyCase::value_t;
   auto& geometry = myCase.getGeometry();
   auto& params = myCase.getParameters();
   const T dx = params.get<DX>();
@@ -106,20 +113,16 @@ void prepareGeometry(MyCase& myCase) {
   geometry.clean(false);
   geometry.innerClean(false);
   geometry.checkForErrors(false);
-
-  geometry.getStatistics().print();
-  clout << "Prepare Geometry ... OK" << std::endl;
 }
 
 void prepareLattice(MyCase& myCase) {
-  OstreamManager clout(std::cout, "prepareLattice");
-  clout << "Prepare Lattice ..." << std::endl;
+  using T = MyCase::value_t;
   auto& params = myCase.getParameters();
   auto& geometry = myCase.getGeometry();
   auto& sLattice = myCase.getLattice(NavierStokes{});
   auto& sLatticeAD = myCase.getLattice(Concentration0{});
 
-  sLattice.setUnitConverter<UnitConverterFromResolutionAndLatticeVelocity<T,NSDESCRIPTOR>>(
+  sLattice.setUnitConverter<UnitConverterFromResolutionAndLatticeVelocity<T,D3Q19<>>>(
     (int)   params.get<RESOLUTION>(),        //resolution
     ( T )   params.get<LATTICE_U>(),         //charLatticeVelocity
     ( T )   params.get<CHAR_PHYS_LENGTH>(),  //charPhysLength
@@ -127,7 +130,7 @@ void prepareLattice(MyCase& myCase) {
     ( T )   params.get<VISCOSITY>(),         //physViscosity
     ( T )   params.get<DENSITY>()            //physDensity
   );
-  sLatticeAD.setUnitConverter<UnitConverterFromResolutionAndLatticeVelocity<T,ADDESCRIPTOR>>(
+  sLatticeAD.setUnitConverter<UnitConverterFromResolutionAndLatticeVelocity<T,D3Q7<VELOCITY>>>(
     (int)   params.get<RESOLUTION>(),        //resolution
     ( T )   params.get<LATTICE_U>(),         //charLatticeVelocity
     ( T )   params.get<CHAR_PHYS_LENGTH>(),  //charPhysLength
@@ -137,7 +140,6 @@ void prepareLattice(MyCase& myCase) {
   );
 
   auto& converter = sLattice.getUnitConverter();
-  converter.print();
 
   auto bulkIndicator = geometry.getMaterialIndicator({1,3,4,5});
   // dynamics for fluid
@@ -149,21 +151,20 @@ void prepareLattice(MyCase& myCase) {
   boundary::set<boundary::InterpolatedPressure>(sLattice, geometry, 4);
   boundary::set<boundary::InterpolatedVelocity>(sLattice, geometry, 5);
 
-
   // dynamics for adsorptive
   auto bulkIndicatorAD = geometry.getMaterialIndicator({1,3,5});
   sLatticeAD.template defineDynamics<ParticleAdvectionDiffusionBGKdynamics>(bulkIndicatorAD);
 
-  // boundary for adsorptive
+  // boundary conditions for adsorptive
   boundary::set<boundary::BounceBack>(sLatticeAD, geometry, 2);
   boundary::set<boundary::BounceBack>(sLatticeAD, geometry, 4);
   boundary::set<boundary::AdvectionDiffusionDirichlet>(sLatticeAD, geometry, 3);
-  setZeroGradientBoundary<T,ADDESCRIPTOR>(sLatticeAD, geometry.getMaterialIndicator({5}));
+  setZeroGradientBoundary<T,D3Q7<VELOCITY>>(sLatticeAD, geometry.getMaterialIndicator({5}));
 
   // set parameters
   sLattice.template setParameter<descriptors::OMEGA>(converter.getLatticeRelaxationFrequency());
   sLatticeAD.template setParameter<descriptors::OMEGA>(
-    converter.getLatticeRelaxationFrequencyFromDiffusivity<ADDESCRIPTOR>(
+    converter.getLatticeRelaxationFrequencyFromDiffusivity<D3Q7<VELOCITY>>(
       params.get<DIFFUSION>()));
 
   // define lattice coupling operator
@@ -174,11 +175,10 @@ void prepareLattice(MyCase& myCase) {
     names::Concentration0{}, sLatticeAD
   );
   coupling.restrictTo(geometry.getMaterialIndicator({1}));
-
-  clout << "Prepare Lattice ... OK" << std::endl;
 }
 
 void setInitialValues(MyCase& myCase) {
+  using T = MyCase::value_t;
   auto& geometry = myCase.getGeometry();
   auto& sLattice = myCase.getLattice(NavierStokes{});
   auto& sLatticeAD = myCase.getLattice(Concentration0{});
@@ -199,14 +199,13 @@ void setInitialValues(MyCase& myCase) {
   sLatticeAD.iniEquilibrium(initIndicatorAD, rhoSmall, u0);
   sLatticeAD.iniEquilibrium(geometry, 3, rho1, u0);
 
-  // Make the lattice ready for simulation
   sLattice.initialize();
   sLatticeAD.initialize();
 }
 
 void setTemporalValues(MyCase& myCase,
                        std::size_t iT) {
-  OstreamManager clout(std::cout, "setBoundaryValues");
+  using T = MyCase::value_t;
   auto& params = myCase.getParameters();
   auto& sLattice = myCase.getLattice(NavierStokes{});
   auto& geometry = myCase.getGeometry();
@@ -240,7 +239,7 @@ void setTemporalValues(MyCase& myCase,
     T frac[1] = {T()};
     cos(frac, help);
 
-    rho = util::densityFromPressure<T,NSDESCRIPTOR>(T(-0.5) * amplitude + frac[0]);
+    rho = util::densityFromPressure<T,D3Q19<>>(T(-0.5) * amplitude + frac[0]);
     AnalyticalConst3D<T,T> rhovar(rho);
     sLattice.defineRho(geometry, 4, rhovar);
   }
@@ -252,7 +251,7 @@ void setTemporalValues(MyCase& myCase,
     T frac[1] = { T() };
     cosComp(frac, help);
 
-    rho = util::densityFromPressure<T,NSDESCRIPTOR>(-frac[0]);
+    rho = util::densityFromPressure<T,D3Q19<>>(-frac[0]);
     AnalyticalConst3D<T, T> rhovar( rho );
     sLattice.defineRho(geometry, 4, rhovar);
   }
@@ -260,36 +259,41 @@ void setTemporalValues(MyCase& myCase,
 
 void getResults(MyCase& myCase,
                 util::Timer<MyCase::value_t>& timer,
-                std::size_t iT) {
+                std::size_t iT,
+                util::TimeIntegrator<MyCase::value_t>& density,
+                util::TimeIntegrator<MyCase::value_t>& variance)
+{
+  using T = MyCase::value_t;
   auto& params = myCase.getParameters();
   auto& sLattice = myCase.getLattice(NavierStokes{});
   auto& sLatticeAD = myCase.getLattice(Concentration0{});
   auto& geometry = myCase.getGeometry();
   auto& converter = sLattice.getUnitConverter();
-  const unsigned vtkSaveT = converter.getLatticeTime(0.5);
-  const unsigned statIter = converter.getLatticeTime(0.5);
 
-  SuperLatticePhysVelocity3D<T,NSDESCRIPTOR> velocityNS(sLattice, converter);
-  SuperLatticePhysPressure3D<T,NSDESCRIPTOR> pressureNS(sLattice, converter);
+  SuperLatticePhysVelocity3D<T,D3Q19<>> velocityNS(sLattice, converter);
+  SuperLatticePhysPressure3D<T,D3Q19<>> pressureNS(sLattice, converter);
+  SuperLatticeDensity3D<T,D3Q7<VELOCITY>> adsorptive(sLatticeAD);
 
-  SuperLatticeDensity3D<T,ADDESCRIPTOR> adsorptive(sLatticeAD);
+  // activate this block if you want more simulation output (timer, stability, VTK)
+  if constexpr (false) {
+    const unsigned vtkSaveT = converter.getLatticeTime(1);
+    const unsigned statIter = converter.getLatticeTime(1);
+    SuperVTMwriter3D<T> vtmWriter("microMixer3d");
+    vtmWriter.addFunctor(velocityNS);
+    vtmWriter.addFunctor(adsorptive);
+    if (iT == 0) {
+      vtmWriter.createMasterFile();
+    }
 
-  SuperVTMwriter3D<T> vtmWriter("microMixer3d");
-  vtmWriter.addFunctor(velocityNS);
-  vtmWriter.addFunctor(adsorptive);
+    if (iT % vtkSaveT == 0) {
+      vtmWriter.write(iT);
+    }
 
-  if (iT == 0) {
-    vtmWriter.createMasterFile();
-  }
-
-  if (iT % vtkSaveT == 0) {
-    vtmWriter.write(iT);
-  }
-
-  if (iT % statIter == 0) {
-    timer.update(iT);
-    timer.printStep();
-    sLattice.getStatistics().print(iT, converter.getPhysTime(iT));
+    if (iT % statIter == 0) {
+      timer.update(iT);
+      timer.printStep();
+      sLattice.getStatistics().print(iT, converter.getPhysTime(iT));
+    }
   }
 
   const T time = converter.getPhysTime(iT);
@@ -298,10 +302,8 @@ void getResults(MyCase& myCase,
   const T physPeriod = params.get<PHYS_PERIOD>();
 
   if (iT == 0) {
-    density1.reset(physMaxTime - T(2) * physPeriod, physMaxTime - physPeriod, dt);
-    density2.reset(physMaxTime - physPeriod, physMaxTime, dt);
+    density.reset(physMaxTime - T(2) * physPeriod, physMaxTime - physPeriod, dt);
     variance.reset(physMaxTime - physPeriod, physMaxTime, dt);
-    varianceNorm.reset(physMaxTime - physPeriod, physMaxTime, dt);
   }
 
   if (time >= physMaxTime - 2.0 * physPeriod - dt) {
@@ -311,8 +313,7 @@ void getResults(MyCase& myCase,
 
     // average concentration at the outlet
     SuperAverage3D<T>(adsorptive, geometry, 5).operator()(output, input);
-    density1.takeValue(iT, output[0] / physPeriod);
-    density2.takeValue(iT, output[0] / physPeriod);
+    density.takeValue(iT, output[0] / physPeriod);
   }
 
   if (time >= physMaxTime - 1.0 * physPeriod - dt) {
@@ -321,18 +322,18 @@ void getResults(MyCase& myCase,
     T output1[1+1];  // for variance
 
     // variance of the density at the outlet
-    const T mu = density1.getResult();
+    const T mu = density.getResult();
     SuperConst3D<T> expectedValue(geometry, mu);
     SuperAverage3D<T>((adsorptive - expectedValue) * (adsorptive - expectedValue), geometry, 5).operator()(output1, input);
     variance.takeValue(iT, output1[0] / physPeriod);
-    // variance of the density at the outlet (with normalization)
-    SuperConst3D<T> factor(geometry, 0.25 / (mu * mu));
-    SuperAverage3D<T>(factor * (adsorptive - expectedValue) * (adsorptive - expectedValue), geometry, 5).operator()(output1, input);
-    varianceNorm.takeValue(iT, output1[0] / physPeriod);
   }
 }
 
-void simulate(MyCase& myCase) {
+void simulate(MyCase& myCase,
+  util::TimeIntegrator<MyCase::value_t>& density,
+  util::TimeIntegrator<MyCase::value_t>& variance)
+{
+  using T = MyCase::value_t;
   OstreamManager clout(std::cout, "simulate");
   auto& params = myCase.getParameters();
 
@@ -351,72 +352,77 @@ void simulate(MyCase& myCase) {
     myCase.getLattice(Concentration0{}).collideAndStream();
 
     /// === Step 8.3: Computation and Output of the Results ===
-    getResults(myCase, timer, iT);
+    getResults(myCase, timer, iT, density, variance);
   }
 
   timer.stop();
   timer.printSummary();
 }
 
-
-/*
 void setInitialControl(MyOptiCase& optiCase) {
-  optiCase.getController().set({0., 4., 0.5});
+  optiCase.getController().set({0.6, 3., 0.5});
 }
 
 void applyControl(MyOptiCase& optiCase) {
   auto& control = optiCase.getController();
-  physPeriod = control[0];
-  amplitudePhysPressure = control[1];
-  differencePeriod = control[2];
+  auto& params = optiCase.getCase(Controlled{}).getParameters();
+  params.set<PHYS_PERIOD>(control[0]);
+  params.set<AMPLITUDE_PHYS_PRESSURE>(control[1]);
+  params.set<DIFFERENCE_PERIOD>(control[2]);
+
+  OstreamManager clout(std::cout, "applyControl");
+  clout << std::setprecision (12)
+    << "Control: period length = " << control[0]
+    << ", amplitude = " << control[1]
+    << ", akuteness = " << control[2] << std::endl;
 }
 
 /// Return time-averaged std. deviation of the adsorptive density
-T objectiveF(MyOptiCase& optiCase) {
+MyCase::value_t objectiveF(MyOptiCase& optiCase,
+  util::TimeIntegrator<MyCase::value_t>& density,
+  util::TimeIntegrator<MyCase::value_t>& variance)
+{
+  using T = MyCase::value_t;
   OstreamManager clout (std::cout, "objectiveF");
   clout << "Optimize by segregation intensity." << std::endl;
 
-  // average over time
-  // number of time steps = length of period / step length
-  const T conversionTime = optiCase.getCase(Controlled{}).getLattice(NavierStokes{}).getUnitConverter().getConversionFactorTime();
-  const T timeStepsPeriod(util::floor(optiCase.getController().get()[0] / conversionTime));
-  clout << "Time steps per period            = " << timeStepsPeriod << std::endl;
-
-  T refVariance = density1.getResult() * (T(1) - density1.getResult());
-  T segIntensity = variance.getResult() / refVariance;
-  clout << "Average density over first int.  = " << std::setprecision (12) << T(density1.getResult()) << std::endl;
-  clout << "Av. density over second interval = " << std::setprecision (12) << T(density2.getResult()) << std::endl;
+  const T refVariance = density.getResult() * (T(1) - density.getResult());
+  const T segIntensity = variance.getResult() / refVariance;
+  clout << "Average density                  = " << std::setprecision (12) << T(density.getResult()) << std::endl;
   clout << "Average variance                 = " << std::setprecision (12) << T(variance.getResult()) << std::endl;
-  clout << "Norm. av. variance               = " << std::setprecision (12) << T(varianceNorm.getResult()) << std::endl;
   clout << "Danckwerts reference variance    = " << std::setprecision (12) << refVariance << std::endl;
-  clout << "Danckwerts segregation intensity = " << std::setprecision (12)<< segIntensity << std::endl << std::endl;
+  clout << "Danckwerts segregation intensity = " << std::setprecision (12) << segIntensity << std::endl << std::endl;
 
   return segIntensity;
 }
 
-T computeObjective(MyOptiCase& optiCase) {
+MyCase::value_t computeObjective(MyOptiCase& optiCase) {
+  using T = MyCase::value_t;
   auto& controlledCase = optiCase.getCase(Controlled{});
 
   // Set control variables
   controlledCase.resetLattices();
   applyControl(optiCase);
 
+  // initialize auxiliary variables for objective computation
+  util::TimeIntegrator<T> density(0.0, 1.0, 0.1);
+  util::TimeIntegrator<T> variance(0.0, 1.0, 0.1);
+
   // Prepare Case
   prepareGeometry(controlledCase);
   prepareLattice(controlledCase);
   setInitialValues(controlledCase);
-  simulate(controlledCase);
+  simulate(controlledCase, density, variance);
 
   // Evaluate objective functor to compute objective value
-  return objectiveF(optiCase);
+  return objectiveF(optiCase, density, variance);
 }
-*/
+
 int main(int argc, char* argv[])
 {
-  // Step 2: Initialization
+  using T = MyCase::value_t;
   initialize(&argc, &argv);
 
-  // Step 2.1: Set parameters
   MyCase::ParametersD myCaseParameters;
   {
     using namespace olb::parameters;
@@ -428,54 +434,34 @@ int main(int argc, char* argv[])
     myCaseParameters.set<PHYS_START_T       >(0.6);  // time to start fluid pulsation
     myCaseParameters.set<PHYS_START_PERIOD  >(0.4);  // time to start fluid pulsation
     myCaseParameters.set<DENSITY            >(1000);
-    myCaseParameters.set<DIFFUSION          >(1.e-6);  // 1.e-9
+    myCaseParameters.set<DIFFUSION          >(1.e-7);  // 1.e-9
     myCaseParameters.set<RESOLUTION         >(7);    // resolution of the hydraulic diameter  // 36
-    myCaseParameters.set<DX>(myCaseParameters.get<CHAR_PHYS_LENGTH>() / myCaseParameters.get<RESOLUTION>());
-
-    // to be removed for optimization?
-    myCaseParameters.set<PHYS_PERIOD        >(0.6);
-    myCaseParameters.set<AMPLITUDE_PHYS_PRESSURE>(3.);
-    myCaseParameters.set<DIFFERENCE_PERIOD  >(0.5);
+    myCaseParameters.set<DX>([&](){
+      return myCaseParameters.get<CHAR_PHYS_LENGTH>() / myCaseParameters.get<RESOLUTION>();
+    });
   }
   myCaseParameters.fromCLI(argc, argv);
 
-  // Step 3: Create Mesh
   Mesh mesh = createMesh(myCaseParameters);
 
-  // Step 4: Create Case
   MyCase myCase(myCaseParameters, mesh);
 
   MyOptiCase optiCase;
   optiCase.setCase<Controlled>(myCase);
 
-
-
-
-  /// === Step 5: Prepare Geometry ===
   prepareGeometry(myCase);
-
-  /// === Step 6: Prepare Lattice ===
   prepareLattice(myCase);
-
-  /// === Step 7: Definition of Initial, Boundary Values, and Fields ===
   setInitialValues(myCase);
-
-  /// === Step 8: Simulate ===
-  simulate(myCase);
-/*
-  // Initialize control parameters
   setInitialControl(optiCase);
+  // uncomment if a single simulation is desired
+  // simulate(myCase);
 
-  // set objective
   optiCase.setObjective(computeObjective);
 
-  /// @li Step E: Create an Optimizer
   OptimizerLBFGS<T,std::vector<T>> optimizer(
-    optiCase.getController().size(), 1.e-7, 20, 0.5, 10, "StrongWolfe", 20, 1.e-6, true, "", "log",
+    optiCase.getController().size(), 1.e-7, 2, 0.5, 10, "StrongWolfe", 20, 1.e-6, true, "", "log",
     true, 2.0, true, 0.1, false, 0., true,
     {OptimizerLogType::value, OptimizerLogType::control, OptimizerLogType::derivative});
 
-  /// @li Step F: Optimize
   optimizer.optimize(optiCase);
-*/
 }
