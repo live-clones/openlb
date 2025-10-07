@@ -56,13 +56,12 @@ const S wantedMassFlow = 0.00026159;
 
 
 template<typename T>
-void prepareGeometry( UnitConverter<T,DESCRIPTOR> const& converter,
-                      SuperGeometry<T,2>& superGeometry )
+void prepareGeometry( SuperGeometry<T,2>& superGeometry )
 {
   superGeometry.rename( 0,2 );
   superGeometry.rename( 2,1,{1,1} );
 
-  const T physSpacing = converter.getPhysDeltaX();
+  const T physSpacing = ly / N;
   const Vector<T,2> extend    {physSpacing / T(2), ly};
   const Vector<T,2> originIn  {-physSpacing / T(4), 0};
   const Vector<T,2> originOut {lx-physSpacing / T(4), 0};
@@ -79,11 +78,19 @@ void prepareGeometry( UnitConverter<T,DESCRIPTOR> const& converter,
 }
 
 template<typename T>
-void prepareLattice( UnitConverter<T,DESCRIPTOR> const& converter,
-                     SuperLattice<T, DESCRIPTOR>& sLattice,
+void prepareLattice( SuperLattice<T, DESCRIPTOR>& sLattice,
                      SuperGeometry<T,2>& superGeometry,
                      T inletPressure)
 {
+  sLattice.template setUnitConverter<UnitConverterFromResolutionAndRelaxationTime<T,DESCRIPTOR>>(
+    int {N},     // resolution: number of voxels per charPhysL
+    (T)   0.8,   // latticeRelaxationTime: relaxation time, have to be greater than 0.5!
+    (T)   1,     // charPhysLength: reference length of simulation geometry
+    (T)   1,     // charPhysVelocity: maximal/highest expected velocity during simulation in __m / s__
+    (T)   1./Re, // physViscosity: physical kinematic viscosity in __m^2 / s__
+    (T)   1.0    // physDensity: physical density in __kg / m^3__
+  );
+  auto& converter = sLattice.getUnitConverter();
   const T omega = converter.getLatticeRelaxationFrequency();
 
   sLattice.template defineDynamics<BGKdynamics<T,DESCRIPTOR>>(superGeometry, 1);
@@ -192,15 +199,6 @@ T simulatePoiseuille( T inletPressure )
 {
   OstreamManager clout( std::cout,"simulatePoiseuille" );
 
-  UnitConverterFromResolutionAndRelaxationTime<T, DESCRIPTOR> const converter(
-    int {N},     // resolution: number of voxels per charPhysL
-    (T)   0.8,   // latticeRelaxationTime: relaxation time, have to be greater than 0.5!
-    (T)   1,     // charPhysLength: reference length of simulation geometry
-    (T)   1,     // charPhysVelocity: maximal/highest expected velocity during simulation in __m / s__
-    (T)   1./Re, // physViscosity: physical kinematic viscosity in __m^2 / s__
-    (T)   1.0    // physDensity: physical density in __kg / m^3__
-  );
-
   // === 2nd Step: Prepare Geometry ===
   const Vector<T,2> extend( lx, ly );
   const Vector<T,2> origin;
@@ -212,21 +210,22 @@ T simulatePoiseuille( T inletPressure )
   const int noOfCuboids = 1;
 #endif
   CuboidDecomposition2D<T> cuboidDecomposition(
-    cuboid, converter.getPhysDeltaX(), noOfCuboids );
+    cuboid, ly / N, noOfCuboids );
 
   HeuristicLoadBalancer<T> loadBalancer( cuboidDecomposition );
 
   SuperGeometry<T,2> superGeometry( cuboidDecomposition, loadBalancer, 3 );
 
-  prepareGeometry( converter, superGeometry );
+  prepareGeometry( superGeometry );
 
   // === 3rd Step: Prepare Lattice ===
-  SuperLattice<T, DESCRIPTOR> sLattice( converter, superGeometry );
+  SuperLattice<T, DESCRIPTOR> sLattice( superGeometry );
 
   // Prepare lattice and set boundary conditions
-  prepareLattice<T>(converter, sLattice, superGeometry, inletPressure);
+  prepareLattice<T>(sLattice, superGeometry, inletPressure);
 
   // === 4th Step: Main Loop with Timer ===
+  auto& converter = sLattice.getUnitConverter();
   clout << "starting simulation with pressure = " << inletPressure << "..." << std::endl;
   util::Timer<T> timer( converter.getLatticeTime( maxPhysT ),
     superGeometry.getStatistics().getNvoxel() );
@@ -277,28 +276,22 @@ int main( int argc, char* argv[] )
   initialize( &argc, &argv );
   singleton::directories().setOutputDir( "./tmp/" );
 
-  if constexpr (false) {  // direct (standard) simulation
+  if constexpr (true) {  // direct (standard) simulation
     S pressure {0.000659};
     simulatePoiseuille<S,false>(pressure);
   }
-
+/*
   if constexpr (false) {  // direct simulation with ADf -> compute derivatives
     U pressure {0.000659};
     pressure.setDiffVariable(0);
     simulatePoiseuille<U,false>(pressure);
   }
 
-  if constexpr (true) {  // Optimization (fit mass flow rate) with ADf
-    OptiCaseAD<S,1,VectorHelp> optiCase(
+  if constexpr (false) {  // Optimization (fit mass flow rate) with ADf
+    solver::OptiCaseAD<S,1,VectorHelp> optiCase(
       poiseuilleMassFlowError<S,true>,
       poiseuilleMassFlowError<U,true>);
-    /*
-    // Perform optimization with steepest descent method
-    OptimizerSteepestDescent<S,Vector<S,1>> optimizer(
-      1, 1.e-7, 20, 1., 10, "Armijo", true, "", "log",
-      true, 0.01, true, 0., false, 0.,
-      {OptimizerLogType::value, OptimizerLogType::control, OptimizerLogType::derivative});
-    */
+
     // Perform optimization with LBFGS method.
     OptimizerLBFGS<S,Vector<S,1>> optimizer(
       1, 1.e-7, 20, 1., 10, "StrongWolfe", 20, 1.e-4, true, "", "log",
@@ -309,4 +302,5 @@ int main( int argc, char* argv[] )
     optimizer.setControl(startValue);
     optimizer.optimize(optiCase);
   }
+*/
 }
