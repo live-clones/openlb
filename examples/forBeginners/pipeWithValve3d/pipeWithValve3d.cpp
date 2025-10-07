@@ -31,142 +31,204 @@
 #include <olb.h>
 
 using namespace olb;
+using namespace olb::names;
 
-using T = FLOATING_POINT_TYPE;
-using DESCRIPTOR = descriptors::D3Q19<>;
+using MyCase = Case<
+  NavierStokes, Lattice<FLOATING_POINT_TYPE, descriptors::D3Q19<>>
+>;
 
-// Parameters for the simulation setup
-const int N = 40;                               // Number of cells in the pipe height
-const T Re = 20.;                               // Reynolds number
-const T maxPhysT = 16.;                         // max. simulation time in s, SI unit
-const T L = 0.05/N;                             // latticeL
-const T CFL = 0.05;                             // CFL number
-Vector<T,3> rotationPoint = {0.15, 0., 0.};     // coordinates of the rotation point for valve
-Vector<T,3> rotationAxis = {0., 0., 1.};        // axis of rotation
-T angle = 75;                                   // rotation angle in degrees
+namespace olb::parameters {
 
-// Stores data from stl file in geometry in form of material numbers
-void prepareGeometry( IndicatorF3D<T>& indicator, STLreader<T>& pipe, T dx,
-                      STLreader<T>& valve, SuperGeometry<T,3>& superGeometry )
-{
-  superGeometry.rename( 0,2,indicator );
-  superGeometry.rename( 2,1,pipe );
-  superGeometry.clean();
+struct ROTATION_POINT  : public descriptors::FIELD_BASE<0,1> { };
+struct ROTATION_AXIS : public descriptors::FIELD_BASE<0,1> { };
+struct ANGLE : public descriptors::FIELD_BASE<1> { };
+struct START_TIME : public descriptors::FIELD_BASE<1> { };
+struct UPDATE_TIME : public descriptors::FIELD_BASE<1> { };
+struct VTK_TIME : public descriptors::FIELD_BASE<1> { };
+struct STAT_TIME : public descriptors::FIELD_BASE<1> { };
+struct PHYS_LENGTH : public descriptors::FIELD_BASE<1> { };
 
-  Vector<T,3> origin = superGeometry.getStatistics().getMinPhysR( 2 );
-  origin[1] += dx/2.;
-  origin[2] += dx/2.;
-
-  Vector<T,3> extend = superGeometry.getStatistics().getMaxPhysR( 2 );
-  extend[1] = extend[1]-origin[1]-dx/2.;
-  extend[2] = extend[2]-origin[2]-dx/2.;
-
-  // Set material number for inflow
-  origin[0] = superGeometry.getStatistics().getMinPhysR( 2 )[0]-dx;
-  extend[0] = 2*dx;
-  IndicatorCuboid3D<T> inflow( extend,origin );
-  superGeometry.rename( 2,3,inflow );
-
-  // Set material number for outflow
-  origin[0] = superGeometry.getStatistics().getMaxPhysR( 2 )[0]-dx;
-  extend[0] = 2*dx;
-  IndicatorCuboid3D<T> outflow( extend,origin );
-  superGeometry.rename( 2,4,outflow );
-
-  // Rotate the valve and set material number for it
-  T rotationAngle = std::numbers::pi_v<T> / 180. *  angle;
-  IndicatorRotate<T,3> valveRot(rotationPoint, rotationAxis, rotationAngle, valve);
-  superGeometry.rename( 1,5, valveRot );
-
-  // Removes all not needed boundary voxels outside the surface
-  superGeometry.clean();
-  superGeometry.checkForErrors();
-  superGeometry.print();
 }
 
-// Set up the geometry of the simulation
-void prepareLattice( SuperLattice<T,DESCRIPTOR>& sLattice,
-                     SuperGeometry<T,3>& superGeometry )
-{
-  OstreamManager clout( std::cout,"prepareLattice" );
-  clout << "Prepare Lattice ..." << std::endl;
+Mesh<MyCase::value_t,MyCase::d> createMesh(MyCase::ParametersD& parameters) {
+  using T = MyCase::value_t;
+
+  const T physDeltaX = parameters.get<parameters::PHYS_DELTA_X>();
+  // Instantiation of the STLreader class
+  // file name, voxel size in meter, stl unit in meter, outer voxel no., inner voxel no.
+  // Reading the pipe STL
+  STLreader<T> pipe( "pipe.stl", physDeltaX, 0.001);
+  // Extending the pipe with 1 cell for outer boundaries
+  IndicatorLayer3D<T> extendedDomain( pipe, physDeltaX );
+
+  Mesh<T,MyCase::d> mesh(extendedDomain, physDeltaX, singleton::mpi().getSize());
+  mesh.setOverlap(parameters.get<parameters::OVERLAP>());
+  return mesh;
+}
+
+// Stores data from stl file in geometry in form of material numbers
+void prepareGeometry(MyCase& myCase) {
+  using T = MyCase::value_t;
+  auto& parameters = myCase.getParameters();
+  auto& geometry = myCase.getGeometry();
+
+  const T physDeltaX = parameters.get<parameters::PHYS_DELTA_X>();
+
+  STLreader<T> pipe( "pipe.stl", physDeltaX, 0.001);
+  IndicatorLayer3D<T> extendedDomain( pipe, physDeltaX );
+  STLreader<T> valve( "valve.stl", physDeltaX, 0.001);
+
+  geometry.rename( 0,2,extendedDomain );
+  geometry.rename( 2,1,pipe );
+  geometry.clean();
+
+  Vector<T,3> origin = geometry.getStatistics().getMinPhysR( 2 );
+  origin[1] += physDeltaX/2.;
+  origin[2] += physDeltaX/2.;
+
+  Vector<T,3> extend = geometry.getStatistics().getMaxPhysR( 2 );
+  extend[1] = extend[1]-origin[1]-physDeltaX/2.;
+  extend[2] = extend[2]-origin[2]-physDeltaX/2.;
+
+  // Set material number for inflow
+  origin[0] = geometry.getStatistics().getMinPhysR( 2 )[0]-physDeltaX;
+  extend[0] = 2*physDeltaX;
+  IndicatorCuboid3D<T> inflow( extend,origin );
+  geometry.rename( 2,3,inflow );
+
+  // Set material number for outflow
+  origin[0] = geometry.getStatistics().getMaxPhysR( 2 )[0]-physDeltaX;
+  extend[0] = 2*physDeltaX;
+  IndicatorCuboid3D<T> outflow( extend,origin );
+  geometry.rename( 2,4,outflow );
+
+  // Rotate the valve and set material number for it
+  const auto rotationPoint = parameters.get<parameters::ROTATION_POINT>();
+  const auto rotationAxis = parameters.get<parameters::ROTATION_AXIS>();
+  const T angle = parameters.get<parameters::ANGLE>();
+  T rotationAngle = std::numbers::pi_v<T> / T(180) *  angle;
+  IndicatorRotate<T,3> valveRot(rotationPoint, rotationAxis, rotationAngle, valve);
+  geometry.rename( 1,5, valveRot );
+
+  // Removes all not needed boundary voxels outside the surface
+  geometry.clean();
+  geometry.checkForErrors();
+  geometry.getStatistics().print();
+}
+
+// Set up the lattice of the simulation
+void prepareLattice(MyCase& myCase) {
+  using T = MyCase::value_t;
+  auto& parameters = myCase.getParameters();
+  auto& geometry = myCase.getGeometry();
+  auto& lattice = myCase.getLattice(NavierStokes{});
+
+  const T physDeltaX = parameters.get<parameters::PHYS_DELTA_X>();
+  const T physDeltaT = parameters.get<parameters::PHYS_DELTA_T>();
+  const T physLength = parameters.get<parameters::PHYS_LENGTH>();
+  const T physCharVelocity = parameters.get<parameters::PHYS_CHAR_VELOCITY>();
+  const T physCharViscosity = parameters.get<parameters::PHYS_CHAR_VISCOSITY>();
+  const T physCharDensity = parameters.get<parameters::PHYS_CHAR_DENSITY>();
+
+  // Set up a unit converter with the characteristic physical units
+  myCase.getLattice(NavierStokes{}).setUnitConverter(
+    physDeltaX,        // physDeltaX: spacing between two lattice cells in [m]
+    physDeltaT,        // physDeltaT: time step in [s]
+    physLength,        // charPhysLength: reference length of simulation geometry in [m]
+    physCharVelocity,  // charPhysVelocity: highest expected velocity during simulation in [m/s]
+    physCharViscosity, // physViscosity: physical kinematic viscosity in [m^2/s]
+    physCharDensity    // physDensity: physical density [kg/m^3]
+  );
+  lattice.getUnitConverter().print();
 
   // Material=1 -->bulk dynamics
-  sLattice.defineDynamics<BGKdynamics>(superGeometry, 1);
+  lattice.defineDynamics<BGKdynamics>(geometry, 1);
 
   // Material=2 -->bounce back
-  boundary::set<boundary::BounceBack>(sLattice, superGeometry, 2);
+  boundary::set<boundary::BounceBack>(lattice, geometry, 2);
 
   // Material=3 -->fixed velocity
-  boundary::set<boundary::InterpolatedVelocity>(sLattice, superGeometry, 3);
+  boundary::set<boundary::InterpolatedVelocity>(lattice, geometry, 3);
 
   // Material=4 -->fixed pressure
-  boundary::set<boundary::InterpolatedPressure>(sLattice, superGeometry, 4);
+  boundary::set<boundary::InterpolatedPressure>(lattice, geometry, 4);
 
   // Material=5 -->bounce back
-  boundary::set<boundary::BounceBack>(sLattice, superGeometry, 5);
+  boundary::set<boundary::BounceBack>(lattice, geometry, 5);
 
+  lattice.setParameter<descriptors::OMEGA>(lattice.getUnitConverter().getLatticeRelaxationFrequency());
+}
+
+void setInitialValues(MyCase& myCase) {
+  using T = MyCase::value_t;
+  auto& lattice = myCase.getLattice(NavierStokes{});
   // Initial conditions
   AnalyticalConst3D<T,T> rhoF( 1 );
   AnalyticalConst3D<T,T> uF(T(0), T(0), T(0));
 
   // Initialize all values of distribution functions to their local equilibrium
-  sLattice.defineRhoU( superGeometry, 1, rhoF, uF );
-  sLattice.iniEquilibrium( superGeometry, 1, rhoF, uF );
-
-  sLattice.setParameter<descriptors::OMEGA>(sLattice.getUnitConverter().getLatticeRelaxationFrequency());
+  auto domain = myCase.getGeometry().getMaterialIndicator({1,2,3,4});
+  lattice.defineRhoU( domain, rhoF, uF );
+  lattice.iniEquilibrium( domain, rhoF, uF );
 
   // Make the lattice ready for simulation
-  sLattice.initialize();
-
-  clout << "Prepare Lattice ... OK" << std::endl;
+  lattice.initialize();
 }
 
 // Generates a slowly increasing inflow for the first iTMaxStart timesteps
-void setBoundaryValues( SuperLattice<T, DESCRIPTOR>& sLattice,
-                        int iT,
-                        SuperGeometry<T,3>& superGeometry )
+void setTemporalValues(MyCase& myCase,
+                       std::size_t iT)
 {
-  OstreamManager clout( std::cout,"setBoundaryValues" );
-  const UnitConverter<T,DESCRIPTOR>& converter = sLattice.getUnitConverter();
+  using T = MyCase::value_t;
+  auto& parameters = myCase.getParameters();
+  auto& lattice = myCase.getLattice(NavierStokes{});
+  auto& converter = lattice.getUnitConverter();
 
   // No of time steps for smooth start-up
-  int iTmaxStart = converter.getLatticeTime( maxPhysT*0.4 );
-  int iTupdate = 30;
+  const T startTime = parameters.get<parameters::START_TIME>();
+  const T updateTime = parameters.get<parameters::UPDATE_TIME>();
+  int iTmaxStart = converter.getLatticeTime( startTime );
+  int iTupdate = converter.getLatticeTime( updateTime );
 
-  if ( iT%iTupdate == 0 && iT <= iTmaxStart ) {
+  if ( int(iT)%iTupdate == 0 && int(iT) <= iTmaxStart ) {
     PolynomialStartScale<T,int> StartScale( iTmaxStart, T( 1 ) );
 
     // Creates and sets the Poiseuille inflow profile using functors
-    int iTvec[1] = {iT};
+    int iTvec[1] = {int(iT)};
     T frac[1] = {};
     StartScale( frac,iTvec );
     std::vector<T> maxVelocity( 3,0 );
-    maxVelocity[0] = 2.25*frac[0]*converter.getCharLatticeVelocity();
-    T distance2Wall = converter.getPhysDeltaX()/2.;
-    CirclePoiseuille3D<T> poiseuilleU(superGeometry, 3, maxVelocity[0], distance2Wall);
-    sLattice.defineU( superGeometry, 3, poiseuilleU );
+    maxVelocity[0] = T(2.25)*frac[0]*converter.getCharLatticeVelocity();
+    T distance2Wall = converter.getPhysDeltaX()/T(2);
+    CirclePoiseuille3D<T> poiseuilleU(myCase.getGeometry(), 3, maxVelocity[0], distance2Wall);
+    lattice.defineU( myCase.getGeometry(), 3, poiseuilleU );
 
     // Update velocity on GPU
-    sLattice.setProcessingContext<Array<momenta::FixedVelocityMomentumGeneric::VELOCITY>>(
+    lattice.setProcessingContext<Array<momenta::FixedVelocityMomentumGeneric::VELOCITY>>(
       ProcessingContext::Simulation);
   }
 }
 
 // Computes the pressure drop between the voxels before and after the cylinder
-void getResults( SuperLattice<T, DESCRIPTOR>& sLattice,
-                 std::size_t iT,
-                 SuperGeometry<T,3>& superGeometry, util::Timer<T>& timer)
+void getResults(MyCase& myCase,
+                util::Timer<MyCase::value_t>& timer,
+                std::size_t iT)
 {
-  OstreamManager clout( std::cout,"getResults" );
-  const UnitConverter<T,DESCRIPTOR>& converter = sLattice.getUnitConverter();
+  /// Write vtk plots every 0.3 seconds (of phys. simulation time)
+  using T = MyCase::value_t;
+  auto& parameters = myCase.getParameters();
+  auto& lattice = myCase.getLattice(NavierStokes{});
+  auto& converter = lattice.getUnitConverter();
 
-  const std::size_t vtkIter  = converter.getLatticeTime( .3 );
-  const std::size_t statIter = converter.getLatticeTime( .1 );
+  const T physVtkIter = parameters.get<parameters::VTK_TIME>();
+  const T physStatIter = parameters.get<parameters::STAT_TIME>();
+
+  const std::size_t vtkIter  = converter.getLatticeTime( physVtkIter );
+  const std::size_t statIter = converter.getLatticeTime( physStatIter );
 
   SuperVTMwriter3D<T> vtmWriter( "pipeWithValve3d" );
-  SuperLatticePhysVelocity3D<T, DESCRIPTOR> velocity( sLattice, converter );
-  SuperLatticePhysPressure3D<T, DESCRIPTOR> pressure( sLattice, converter );
+  SuperLatticePhysVelocity3D velocity( lattice, converter );
+  SuperLatticePhysPressure3D pressure( lattice, converter );
   vtmWriter.addFunctor( velocity );
   vtmWriter.addFunctor( pressure );
 
@@ -177,80 +239,81 @@ void getResults( SuperLattice<T, DESCRIPTOR>& sLattice,
   // Writes the vtk files
   if (iT%vtkIter == 0) {
     // Send values from GPU to CPU for evaluation
-    sLattice.setProcessingContext(ProcessingContext::Evaluation);
+    lattice.setProcessingContext(ProcessingContext::Evaluation);
     vtmWriter.write(iT);
   }
 
   // Writes output on the console
   if ( iT%statIter == 0 ) {
-    sLattice.setProcessingContext(ProcessingContext::Evaluation);
-
-    // Timer console output
-    timer.update( iT );
-    timer.printStep();
-    sLattice.getStatistics().print( iT,converter.getPhysTime( iT ) );
+    lattice.getStatistics().print(iT, converter.getPhysTime(iT));
+    timer.print(iT);
   }
 }
 
-int main( int argc, char* argv[] )
-{
-  // === 1st Step: Initialization ===
-  initialize( &argc, &argv );
-  OstreamManager clout( std::cout,"main" );
+void simulate(MyCase& myCase) {
+  using T = MyCase::value_t;
+  auto& parameters = myCase.getParameters();
+  const T maxPhysT = parameters.get<parameters::MAX_PHYS_T>();
 
-  UnitConverter<T,DESCRIPTOR> converter(
-    (T)   L,                        // physDeltaX: spacing between two lattice cells in [m]
-    (T)   CFL*L/0.2,                // physDeltaT: time step in [s]
-    (T)   0.5,                      // charPhysLength: reference length of simulation geometry in [m]
-    (T)   0.2,                      // charPhysVelocity: highest expected velocity during simulation in [m/s]
-    (T)   0.2*0.05/Re,              // physViscosity: physical kinematic viscosity in [m^2/s]
-    (T)   1000.0                    // physDensity: physical density in [kg/m^3]
-  );
-  converter.print();
-
-  // === 2nd Step: Prepare Geometry ===
-  // Instantiation of the STLreader class
-  // file name, voxel size in meter, stl unit in meter, outer voxel no., inner voxel no.
-  // Reading the pipe STL
-  STLreader<T> pipe( "pipe.stl", converter.getPhysDeltaX(), 0.001);
-  // Extending the pipe with 1 cell for outer boundaries
-  IndicatorLayer3D<T> extendedDomain( pipe, converter.getPhysDeltaX() );
-  // Reading the valve STL
-  STLreader<T> valve( "valve.stl", converter.getPhysDeltaX(), 0.001);
-
-  // Instantiation of a cuboidDecomposition with weights
-  CuboidDecomposition3D<T> cuboidDecomposition( extendedDomain, converter.getPhysDeltaX(), singleton::mpi().getSize() );
-
-  // Instantiation of a loadBalancer
-  HeuristicLoadBalancer<T> loadBalancer( cuboidDecomposition );
-
-  // Instantiation of a superGeometry
-  SuperGeometry<T,3> superGeometry( cuboidDecomposition, loadBalancer );
-
-  prepareGeometry( extendedDomain, pipe, converter.getPhysDeltaX(), valve, superGeometry );
-
-  // === 3rd Step: Prepare Lattice ===
-  SuperLattice<T, DESCRIPTOR> sLattice( converter, superGeometry );
-
-  //prepareLattice and set boundaryCondition
-  prepareLattice( sLattice, superGeometry );
-
-  // === 4th Step: Main Loop with Timer ===
-  clout << "starting simulation..." << std::endl;
-  util::Timer<T> timer( converter.getLatticeTime( maxPhysT ), superGeometry.getStatistics().getNvoxel() );
+  const std::size_t iTmax = myCase.getLattice(NavierStokes{}).getUnitConverter().getLatticeTime(maxPhysT);
+  util::Timer<T> timer(iTmax, myCase.getGeometry().getStatistics().getNvoxel());
   timer.start();
 
-  for (std::size_t iT = 0; iT < converter.getLatticeTime( maxPhysT ); ++iT) {
-    // === 5th Step: Definition of Initial and Boundary Conditions ===
-    setBoundaryValues( sLattice, iT, superGeometry );
+  for (std::size_t iT=0; iT < iTmax; ++iT) {
+    /// === Step 8.1: Update the Boundary Values and Fields at Times ===
+    setTemporalValues(myCase, iT);
 
-    // === 6th Step: Collide and Stream Execution ===
-    sLattice.collideAndStream();
+    /// === Step 8.2: Collide and Stream Execution ===
+    myCase.getLattice(NavierStokes{}).collideAndStream();
 
-    // === 7th Step: Computation and Output of the Results ===
-    getResults( sLattice, iT, superGeometry, timer );
+    /// === Step 8.3: Computation and Output of the Results ===
+    getResults(myCase, timer, iT);
   }
 
   timer.stop();
   timer.printSummary();
+}
+
+/// Setup and run a simulation
+int main(int argc, char* argv[]) {
+  initialize(&argc, &argv);
+
+  /// === Step 2: Set Parameters ===
+  MyCase::ParametersD myCaseParameters;
+  {
+    using namespace olb::parameters;
+    myCaseParameters.set<PHYS_DELTA_X       >(       0.00125);
+    myCaseParameters.set<PHYS_DELTA_T       >(     0.0003125);
+    myCaseParameters.set<PHYS_LENGTH        >(           0.5);
+    myCaseParameters.set<PHYS_CHAR_VELOCITY >(           0.2);
+    myCaseParameters.set<PHYS_CHAR_VISCOSITY>(        0.0005);
+    myCaseParameters.set<PHYS_CHAR_DENSITY  >(        1000.0);
+    myCaseParameters.set<MAX_PHYS_T         >(           16.);
+    myCaseParameters.set<ROTATION_POINT     >({0.15, 0., 0.});
+    myCaseParameters.set<ROTATION_AXIS      >(  {0., 0., 1.});
+    myCaseParameters.set<ANGLE              >(           75.);
+    myCaseParameters.set<START_TIME         >(           6.4);
+    myCaseParameters.set<UPDATE_TIME        >(      0.009375);
+    myCaseParameters.set<VTK_TIME           >(           0.3);
+    myCaseParameters.set<STAT_TIME          >(           0.1);
+  }
+  myCaseParameters.fromCLI(argc, argv);
+
+  /// === Step 3: Create Mesh ===
+  Mesh mesh = createMesh(myCaseParameters);
+
+  /// === Step 4: Create Case ===
+  MyCase myCase(myCaseParameters, mesh);
+
+  /// === Step 5: Prepare Geometry ===
+  prepareGeometry(myCase);
+
+  /// === Step 6: Prepare Lattice ===
+  prepareLattice(myCase);
+
+  /// === Step 7: Definition of Initial, Boundary Values, and Fields ===
+  setInitialValues(myCase);
+
+  /// === Step 8: Simulate ===
+  simulate(myCase);
 }

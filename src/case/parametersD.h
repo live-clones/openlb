@@ -45,6 +45,7 @@ private:
     std::function<void()> deleter;
     std::function<std::string()> value;
     std::function<void(std::string)> set;
+    std::function<void()> calculate;
 
     ~TypeErasedFieldD() {
       if (field && deleter) {
@@ -52,37 +53,51 @@ private:
       }
     }
   };
+
   std::unordered_map<std::type_index, TypeErasedFieldD> _map;
+  std::optional<CLIreader> _args;
 
   template <concepts::Field FIELD>
-  void set(TypeErasedFieldD& typeErasedField,
-           const FieldD<T,DESCRIPTOR,FIELD>& value) {
-    typeErasedField.field = new FieldD<T,DESCRIPTOR,FIELD>{value};
+  void setupTypeErasedField(TypeErasedFieldD& typeErasedField) {
     typeErasedField.name = parameters::name<FIELD>();
     typeErasedField.deleter = [&typeErasedField]() {
       delete static_cast<FieldD<T,DESCRIPTOR,FIELD>*>(typeErasedField.field);
     };
-    typeErasedField.value = [&typeErasedField]() -> std::string {
+    typeErasedField.value = [this]() -> std::string {
       std::stringstream out;
-      out << *static_cast<FieldD<T,DESCRIPTOR,FIELD>*>(typeErasedField.field);
+      out << *static_cast<FieldD<T,DESCRIPTOR,FIELD>*>(this->getFieldPtr<FIELD>());
       return out.str();
     };
-    typeErasedField.set = [&typeErasedField](std::string str) {
+    typeErasedField.set = [this](std::string str) {
       if (auto v = FieldD<T,DESCRIPTOR,FIELD>::fromString(str)) {
-        *static_cast<FieldD<T,DESCRIPTOR,FIELD>*>(typeErasedField.field) = *v;
+        this->set<FIELD>(*v);
       }
     };
-  };
-
-  std::optional<CLIreader> _args;
+  }
 
   void tryUpdateFromCLI(TypeErasedFieldD& typeErasedField) {
-    if (typeErasedField.field && _args) {
+    if (_args) {
       const std::string key = "--" + typeErasedField.name;
       if (_args->contains(key)) {
         typeErasedField.set(_args->getValueOrFallback<std::string>(key, "[]"));
       }
     }
+  }
+
+  // Helper to get the typed field pointer, executing calculate if needed
+  template <concepts::Field FIELD>
+  void* getFieldPtr() {
+    TypeErasedFieldD& typeErasedField = _map[typeid(FIELD)];
+    // If not initialized at all, use default value
+    if (!typeErasedField.field && !typeErasedField.calculate) {
+      set<FIELD>(FIELD::template getInitialValue<T,DESCRIPTOR>());
+      tryUpdateFromCLI(typeErasedField); // Allow CLI override of default
+    }
+    else if (typeErasedField.calculate) {
+      typeErasedField.calculate();
+      typeErasedField.calculate = nullptr; // Ensure calculate runs only once
+    }
+    return typeErasedField.field;
   }
 
 public:
@@ -91,32 +106,43 @@ public:
 
   ParametersD() = default;
 
+  // Set parameter with a concrete value
   template <concepts::Field FIELD>
-  void set(FieldD<T,DESCRIPTOR,FIELD>&& value) {
+  void set(FieldD<T,DESCRIPTOR,FIELD> value) {
     TypeErasedFieldD& typeErasedField = _map[typeid(FIELD)];
-    if (!typeErasedField.field) {
-      set<FIELD>(typeErasedField, value);
-    } else {
-      *static_cast<FieldD<T,DESCRIPTOR,FIELD>*>(typeErasedField.field) = value;
+    if (typeErasedField.field && typeErasedField.deleter) {
+      typeErasedField.deleter();
     }
-  };
+    typeErasedField.calculate = nullptr;
+    typeErasedField.field = new FieldD<T,DESCRIPTOR,FIELD>{value};
+    setupTypeErasedField<FIELD>(typeErasedField);
+  }
+
+  // Set dependent parameter with a lambda for lazy evaluation
+  template <concepts::Field FIELD>
+  void set(std::function<FieldD<value_t,descriptor_t,FIELD>()> f) {
+    TypeErasedFieldD& typeErasedField = _map[typeid(FIELD)];
+    if (typeErasedField.field && typeErasedField.deleter) {
+      typeErasedField.deleter();
+      typeErasedField.field = nullptr;
+    }
+    typeErasedField.calculate = [this,f]() {
+      this->set<FIELD>(f());
+    };
+    setupTypeErasedField<FIELD>(typeErasedField);
+  }
 
   template <concepts::Field FIELD>
   auto get() {
-    TypeErasedFieldD& typeErasedField = _map[typeid(FIELD)];
-    if (!typeErasedField.field) {
-      set<FIELD>(typeErasedField, FIELD::template getInitialValue<T,DESCRIPTOR>());
-      // Catch potential updates of deferred parameter accesses
-      tryUpdateFromCLI(typeErasedField);
-    }
+    void* ptr = getFieldPtr<FIELD>();
     if constexpr (DESCRIPTOR::template size<FIELD>() == 1) {
-      return (*static_cast<FieldD<T,DESCRIPTOR,FIELD>*>(typeErasedField.field))[0];
+      return (*static_cast<FieldD<T,DESCRIPTOR,FIELD>*>(ptr))[0];
     } else {
-      return *static_cast<FieldD<T,DESCRIPTOR,FIELD>*>(typeErasedField.field);
+      return *static_cast<FieldD<T,DESCRIPTOR,FIELD>*>(ptr);
     }
   }
 
-  void print(OstreamManager clout={std::cout, "ParametersD"}) {
+  void print(OstreamManager clout = {std::cout, "ParametersD"}) {
     std::size_t nCharName = 0;
     for (auto& [_, typeErasedField] : _map) {
       nCharName = std::max(nCharName, typeErasedField.name.length());
@@ -147,7 +173,6 @@ public:
       tryUpdateFromCLI(typeErasedField);
     }
   }
-
 };
 
 }

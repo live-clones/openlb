@@ -39,7 +39,9 @@
  * It illustrates the error analysis.
  */
 
-#include "../../laminar/cylinder3d/cylinder3d.h"
+#include "../../laminar/cylinder3d/case.h"
+
+using T = MyCase::value_t;
 
 /// Initialize gnuplot
 static Gnuplot<T> gplot(
@@ -49,39 +51,78 @@ static Gnuplot<T> gplot(
   Gnuplot<T>::LOGLOG,
   Gnuplot<T>::LINREG);
 
-  int main( int argc, char* argv[] )
+namespace olb::parameters {
+
+struct START_RESOLUTION : public descriptors::TYPED_FIELD_BASE<int,1> { };
+struct NUM_SIMULATIONS : public descriptors::TYPED_FIELD_BASE<int,1> { };
+
+}
+
+int main( int argc, char* argv[] )
 {
   // === 1st Step: Initialization ===
-  initialize( &argc, &argv );
-  singleton::directories().setOutputDir( "./tmp/" );
-  OstreamManager clout( std::cout,"main" );
+  initialize(&argc, &argv);
+  OstreamManager clout(std::cout, "main");
 
-  /// Simulation Parameter
-  int startN = 10;
+  /// === Step 2: Set Parameters ===
+  MyCase::ParametersD myCaseParameters;
+  {
+    using namespace olb::parameters;
+    myCaseParameters.set<START_RESOLUTION>(10);
+    myCaseParameters.set<NUM_SIMULATIONS>(4);
 
-  int numSimulations = 4;
-  bool eoc = true;
+    myCaseParameters.set<REYNOLDS >(20.);
+    myCaseParameters.set<MAX_PHYS_T>(16.);
+    myCaseParameters.set<PHYS_CHAR_VELOCITY>(0.2);
+    myCaseParameters.set<LATTICE_RELAXATION_TIME>(0.53);
+    myCaseParameters.set<PHYS_CHAR_DENSITY>(1.0);
+    myCaseParameters.set<RADIUS_CYLINDER>(0.05);
+    myCaseParameters.set<PHYS_VTK_OUTPUT_ITER_T>(0.3);
+    myCaseParameters.set<PHYS_STAT_ITER_T>(0.1);
+    myCaseParameters.set<RAMP_UP_UPDATE>(0.03);
+    myCaseParameters.set<RAMP_UP_END_FRACTION>(0.4);
+    myCaseParameters.set<VTK_ENABLED>(false);
+    myCaseParameters.set<GNUPLOT_ENABLED>(false);
+  }
+  myCaseParameters.fromCLI(argc, argv);
 
-  T _drag[numSimulations];
+  T _drag[myCaseParameters.get<parameters::NUM_SIMULATIONS>()];
 
   // set the labels for the plot
   gplot.setLabel("Resolution test", "average Error");
 
   // loop over the different simulations
-  for(int i = 0; i < numSimulations; ++i){
-    int N = startN + 10 * i;
-    /// Run the simulations
-    clout << "Starting next simulation with N = " << N << std::endl;
-    _drag[i] = simulateCylinder(N, gplot, eoc);
+  for(int i = 0; i < myCaseParameters.get<parameters::NUM_SIMULATIONS>(); ++i){
+    myCaseParameters.set<parameters::RESOLUTION>(
+      myCaseParameters.get<parameters::START_RESOLUTION>() + i*10);
+
+    /// === Step 3: Create Mesh ===
+    Mesh mesh = createMesh(myCaseParameters);
+
+    /// === Step 4: Create Case ===
+    MyCase myCase(myCaseParameters, mesh);
+
+    /// === Step 5: Prepare Geometry ===
+    prepareGeometry(myCase);
+
+    /// === Step 6: Prepare Lattice ===
+    prepareLattice(myCase);
+
+    /// === Step 7: Definition of Initial, Boundary Values, and Fields ===
+    setInitialValues(myCase);
+
+    /// === Step 8: Simulate ===
+    simulate(myCase);
+
+    _drag[i] = myCaseParameters.get<parameters::DRAG>();
   }
 
-  for (int i = 0; i < numSimulations-1; ++i) {
-    int N = startN + 10 * i;
-    T error = abs(_drag[i] - _drag[numSimulations-1]) / _drag[numSimulations-1];
+  for(int i = 0; i < myCaseParameters.get<parameters::NUM_SIMULATIONS>(); ++i){
+    int N = myCaseParameters.get<parameters::START_RESOLUTION>() + 10 * i;
+    T error = util::abs(_drag[i] - _drag[myCaseParameters.get<parameters::NUM_SIMULATIONS>()-1])
+            / _drag[myCaseParameters.get<parameters::NUM_SIMULATIONS>()-1];
     gplot.setData(T(N), {error}, {"dragL1AbsError"}, "top right", {'p'});
   }
 
   gplot.writePNG();
-
-  return 0;
 }

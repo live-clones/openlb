@@ -34,94 +34,177 @@
 using namespace olb;
 using namespace olb::descriptors;
 using namespace olb::graphics;
+using namespace olb::names;
 
-using T = FLOATING_POINT_TYPE;
+// === Step 1: Declarations ===
+using MyCase = Case<
+  NavierStokes, Lattice<FLOATING_POINT_TYPE, descriptors::D3Q19<descriptors::FORCE>>,
+  Temperature,  Lattice<FLOATING_POINT_TYPE, descriptors::D3Q7<descriptors::VELOCITY>>
+>;
 
-using TDESCRIPTOR = D3Q7<VELOCITY>;
-using NSDESCRIPTOR = D3Q19<FORCE>;
+namespace olb::parameters {
 
-// Parameters for the simulation setup
-const T lx  = 0.2;      // length of the channel
-const T ly  = 0.1;      // height of the channel
-const T lz  = 0.1;      // width of the channel
-const int N = 80;       // resolution of the model
-const T Ra = 1e6;       // Rayleigh number
-const T Pr = 0.71;      // Prandtl number
-const T maxPhysT = 20.; // max. simulation time in s, SI unit
-const T epsilon = 1.e-5;   // precision of the convergence (residuum)
+struct T_HOT            : public descriptors::FIELD_BASE<1> { };
+struct T_COLD           : public descriptors::FIELD_BASE<1> { };
+struct T_PERTURBATION   : public descriptors::FIELD_BASE<1> { };
 
-const T Thot = 274.15;     // temperature of the lower wall in Kelvin
-const T Tcold = 273.15;    // temperature of the fluid in Kelvin
-const T Tperturb = 1./5. * Tcold + 4./5. * Thot; // temperature of the perturbation
+}
 
-void prepareGeometry(SuperGeometry<T,3>& superGeometry,
-                     ThermalUnitConverter<T, NSDESCRIPTOR, TDESCRIPTOR> &converter)
+Mesh<MyCase::value_t,MyCase::d> createMesh(MyCase::ParametersD& parameters) {
+  using T = MyCase::value_t;
+  Vector extent = parameters.get<parameters::DOMAIN_EXTENT>();
+  std::vector<T> origin(3, T());
+  IndicatorCuboid3D<T> cuboid(extent, origin);
+
+  const T physDeltaX = parameters.get<parameters::PHYS_CHAR_LENGTH>() / parameters.get<parameters::RESOLUTION>();
+  Mesh<T,MyCase::d> mesh(cuboid, physDeltaX, singleton::mpi().getSize());
+  mesh.setOverlap(parameters.get<parameters::OVERLAP>());
+  mesh.getCuboidDecomposition().setPeriodicity({true, false, true});
+  return mesh;
+}
+
+void prepareGeometry(MyCase& myCase)
 {
-
-  OstreamManager clout(std::cout,"prepareGeometry");
+  OstreamManager clout(std::cout, "prepareGeometry");
   clout << "Prepare Geometry ..." << std::endl;
 
+  using T = MyCase::value_t;
+  auto& parameters = myCase.getParameters();
+  auto& geometry   = myCase.getGeometry();
+
+  const T physDeltaX  = parameters.get<parameters::PHYS_CHAR_LENGTH>() / parameters.get<parameters::RESOLUTION>();
+  const T physLengthX = parameters.get<parameters::DOMAIN_EXTENT>()[0];
+  const T physLengthY = parameters.get<parameters::DOMAIN_EXTENT>()[1];
+  const T physLengthZ = parameters.get<parameters::DOMAIN_EXTENT>()[2];
+
   // Sets material number for fluid and boundary
-  superGeometry.rename(0,2);
-  superGeometry.rename(2,1,{0,1,0});
+  geometry.rename(0, 2);
+  geometry.rename(2, 1, {0, 1, 0});
 
-  std::vector<T> extend( 3, T(0) );
-  extend[0] = lx;
-  extend[1] = converter.getPhysLength(1);
-  extend[2] = lz;
-  std::vector<T> origin( 3, T(0) );
-  IndicatorCuboid3D<T> bottom(extend, origin);
+  std::vector<T> extent(3, T(0));
+  extent[0] = physLengthX;
+  extent[1] = physDeltaX;
+  extent[2] = physLengthZ;
+  std::vector<T> origin(3, T(0));
+  IndicatorCuboid3D<T> bottom(extent, origin);
 
-  origin[1] = ly-converter.getPhysLength(1);
-  IndicatorCuboid3D<T> top(extend, origin);
+  origin[1] = physLengthY-physDeltaX;
+  IndicatorCuboid3D<T> top(extent, origin);
 
-  origin[0] = lx/2.;
-  origin[1] = converter.getPhysLength(1);
-  origin[2] = lz/2.;
-  extend[0] = converter.getPhysLength(1);
-  extend[1] = converter.getPhysLength(1);
-  extend[2] = converter.getPhysLength(1);
-  IndicatorCuboid3D<T> perturbation(extend, origin);
+  origin[0] = physLengthX/2.;
+  origin[1] = physDeltaX;
+  origin[2] = physLengthZ/2.;
+  extent = {physDeltaX, physDeltaX, physDeltaX};
+  IndicatorCuboid3D<T> perturbation(extent, origin);
 
   /// Set material numbers for bottom, top and pertubation
-  superGeometry.rename(2,2,1,bottom);
-  superGeometry.rename(2,3,1,top);
-  superGeometry.rename(1,4,perturbation);
+  geometry.rename(2, 2, 1, bottom);
+  geometry.rename(2, 3, 1, top);
+  geometry.rename(1, 4, perturbation);
 
   /// Removes all not needed boundary voxels outside the surface
-  superGeometry.clean();
+  geometry.clean();
   /// Removes all not needed boundary voxels inside the surface
-  superGeometry.innerClean();
-  superGeometry.checkForErrors();
-
-  superGeometry.print();
+  geometry.innerClean();
+  geometry.checkForErrors();
+  geometry.print();
 
   clout << "Prepare Geometry ... OK" << std::endl;
 }
 
-void prepareLattice( ThermalUnitConverter<T, NSDESCRIPTOR, TDESCRIPTOR> &converter,
-                     SuperLattice<T, NSDESCRIPTOR>& NSlattice,
-                     SuperLattice<T, TDESCRIPTOR>& ADlattice,
-                     SuperGeometry<T,3>& superGeometry )
+void prepareLattice(MyCase& myCase)
 {
-
   OstreamManager clout(std::cout,"prepareLattice");
 
-  T Tomega  = converter.getLatticeThermalRelaxationFrequency();
-  T NSomega = converter.getLatticeRelaxationFrequency();
+  using T = MyCase::value_t;
+  auto& parameters = myCase.getParameters();
+  auto& geometry   = myCase.getGeometry();
+
+  auto& NSlattice = myCase.getLattice(NavierStokes{});
+  auto& ADlattice = myCase.getLattice(Temperature{});
+
+  using NSDESCRIPTOR = MyCase::descriptor_t_of<NavierStokes>;
+  using TDESCRIPTOR  = MyCase::descriptor_t_of<Temperature>;
+
+  const T charPhysLength          = parameters.get<parameters::PHYS_CHAR_LENGTH>();
+  const T charPhysDensity         = parameters.get<parameters::PHYS_CHAR_DENSITY>();
+  const T physViscosity           = parameters.get<parameters::PHYS_CHAR_VISCOSITY>();
+  const T physThermalConductivity = parameters.get<parameters::PHYS_THERMAL_CONDUCTIVITY>();
+  const T physCp                  = parameters.get<parameters::PHYS_CP>();
+  const T physDeltaX              = charPhysLength / parameters.get<parameters::RESOLUTION>();
+  const T Ra                      = parameters.get<parameters::RAYLEIGH>();
+  const T Pr                      = parameters.get<parameters::PRANDTL>();
+  const int N                     = parameters.get<parameters::RESOLUTION>();
+  const T Tcold                   = parameters.get<parameters::T_COLD>();
+  const T Thot                    = parameters.get<parameters::T_HOT>();
+
+  NSlattice.setUnitConverter<ThermalUnitConverter<T, NSDESCRIPTOR, TDESCRIPTOR>>(
+    physDeltaX,
+    charPhysLength / (physViscosity / charPhysLength* util::sqrt(Ra/Pr)) * physDeltaX, // physDeltaT = charLatticeVelocity / charPhysVelocity * physDeltaX
+    charPhysLength,
+    physViscosity / charPhysLength * util::sqrt(Ra/Pr), // charPhysVelocity
+    physViscosity,
+    charPhysDensity,
+    physThermalConductivity,
+    physCp,
+    Ra * physViscosity * physViscosity / Pr / 9.81 / (Thot - Tcold) / util::pow(charPhysLength, 3),  // physThermalExpansionCoefficient
+    Tcold,
+    Thot
+  );
+
+  const auto& converter = NSlattice.getUnitConverter();
+  converter.print();
+
+  ADlattice.setUnitConverter(converter);
 
   /// define lattice Dynamics
   clout << "defining dynamics" << std::endl;
+  NSlattice.defineDynamics<ForcedBGKdynamics>(geometry, 1);
+  boundary::set<boundary::BounceBack>(NSlattice, geometry, 2);
+  boundary::set<boundary::BounceBack>(NSlattice, geometry, 3);
+  NSlattice.defineDynamics<ForcedBGKdynamics>(geometry, 4);
 
-  ADlattice.defineDynamics<AdvectionDiffusionBGKdynamics>(superGeometry.getMaterialIndicator({1, 2, 3, 4}));
-  NSlattice.defineDynamics<ForcedBGKdynamics>(superGeometry, 4);
-  NSlattice.defineDynamics<ForcedBGKdynamics>(superGeometry, 1);
-  boundary::set<boundary::BounceBack>(NSlattice, superGeometry, 2);
-  boundary::set<boundary::BounceBack>(NSlattice, superGeometry, 3);
+  ADlattice.defineDynamics<AdvectionDiffusionBGKdynamics>(geometry.getMaterialIndicator({1, 2, 3, 4}));
+  /// sets boundary conditions
+  boundary::set<boundary::AdvectionDiffusionDirichlet>(ADlattice, geometry, 2);
+  boundary::set<boundary::AdvectionDiffusionDirichlet>(ADlattice, geometry, 3);
 
-  /// sets boundary
-  boundary::set<boundary::AdvectionDiffusionDirichlet>(ADlattice, superGeometry, 2);
-  boundary::set<boundary::AdvectionDiffusionDirichlet>(ADlattice, superGeometry, 3);
+  NSlattice.setParameter<descriptors::OMEGA>(converter.getLatticeRelaxationFrequency());
+  ADlattice.setParameter<descriptors::OMEGA>(converter.getLatticeThermalRelaxationFrequency());
+
+  clout << "Setup NSE-ADE coupling" << std::endl;
+
+  T boussinesqForcePrefactor = 9.81 / converter.getConversionFactorVelocity() * converter.getConversionFactorTime() *
+                               converter.getCharPhysTemperatureDifference() * converter.getPhysThermalExpansionCoefficient();
+
+  auto& coupling = myCase.setCouplingOperator(
+    "Boussinesq",
+    NavierStokesAdvectionDiffusionCoupling{},
+    names::NavierStokes{}, NSlattice,
+    names::Temperature{}, ADlattice);
+
+  coupling.setParameter<NavierStokesAdvectionDiffusionCoupling::T0>(
+    converter.getLatticeTemperature(Tcold));
+  coupling.setParameter<NavierStokesAdvectionDiffusionCoupling::FORCE_PREFACTOR>(
+    boussinesqForcePrefactor * Vector<T,3>{0.0, 1.0, 0.0});
+
+  clout << "Prepare Lattice ... OK" << std::endl;
+}
+
+void setInitialValues(MyCase& myCase) {
+
+  using T = MyCase::value_t;
+  auto& geometry   = myCase.getGeometry();
+  auto& parameters = myCase.getParameters();
+
+  auto& NSlattice = myCase.getLattice(NavierStokes{});
+  auto& ADlattice = myCase.getLattice(Temperature{});
+
+  const auto& converter = NSlattice.getUnitConverter();
+
+  const T Tcold    = parameters.get<parameters::T_COLD>();
+  const T Thot     = parameters.get<parameters::T_HOT>();
+  const T Tperturb = parameters.get<parameters::T_PERTURBATION>();
 
   /// define initial conditions
   AnalyticalConst3D<T,T> rho(1.);
@@ -131,35 +214,47 @@ void prepareLattice( ThermalUnitConverter<T, NSDESCRIPTOR, TDESCRIPTOR> &convert
   AnalyticalConst3D<T,T> T_perturb(converter.getLatticeTemperature(Tperturb));
 
   /// for each material set Rho, U and the Equilibrium
-  NSlattice.defineRhoU(superGeometry.getMaterialIndicator({1, 2, 3, 4}), rho, u0);
-  NSlattice.iniEquilibrium(superGeometry.getMaterialIndicator({1, 2, 3, 4}), rho, u0);
+  NSlattice.defineRhoU(geometry.getMaterialIndicator({1, 2, 3, 4}), rho, u0);
+  NSlattice.iniEquilibrium(geometry.getMaterialIndicator({1, 2, 3, 4}), rho, u0);
 
-  ADlattice.defineRho(superGeometry, 1, T_cold);
-  ADlattice.iniEquilibrium(superGeometry, 1, T_cold, u0);
-  ADlattice.defineRho(superGeometry, 2, T_hot);
-  ADlattice.iniEquilibrium(superGeometry, 2, T_hot, u0);
-  ADlattice.defineRho(superGeometry, 3, T_cold);
-  ADlattice.iniEquilibrium(superGeometry, 3, T_cold, u0);
-  ADlattice.defineRho(superGeometry, 4, T_perturb);
-  ADlattice.iniEquilibrium(superGeometry, 4, T_perturb, u0);
-
-  ADlattice.setParameter<descriptors::OMEGA>(Tomega);
-  NSlattice.setParameter<descriptors::OMEGA>(NSomega);
+  ADlattice.defineRho(geometry, 1, T_cold);
+  ADlattice.iniEquilibrium(geometry, 1, T_cold, u0);
+  ADlattice.defineRho(geometry, 2, T_hot);
+  ADlattice.iniEquilibrium(geometry, 2, T_hot, u0);
+  ADlattice.defineRho(geometry, 3, T_cold);
+  ADlattice.iniEquilibrium(geometry, 3, T_cold, u0);
+  ADlattice.defineRho(geometry, 4, T_perturb);
+  ADlattice.iniEquilibrium(geometry, 4, T_perturb, u0);
 
   /// Make the lattice ready for simulation
   NSlattice.initialize();
   ADlattice.initialize();
-
-  clout << "Prepare Lattice ... OK" << std::endl;
 }
 
-void getResults(ThermalUnitConverter<T, NSDESCRIPTOR, TDESCRIPTOR> &converter,
-                SuperLattice<T, NSDESCRIPTOR>&    NSlattice,
-                SuperLattice<T, TDESCRIPTOR>&    ADlattice, int iT,
-                SuperGeometry<T,3>& superGeometry,
-                util::Timer<T>& timer,
-                bool converged )
+void setTemporalValues(MyCase& myCase,
+                       std::size_t iT)
+{ }
+
+void getResults(MyCase& myCase,
+                util::Timer<MyCase::value_t>& timer,
+                std::size_t iT)
+
 {
+  using T = MyCase::value_t;
+  auto& parameters = myCase.getParameters();
+
+  auto& NSlattice = myCase.getLattice(NavierStokes{});
+  auto& ADlattice = myCase.getLattice(Temperature{});
+  const auto& converter = NSlattice.getUnitConverter();
+
+  using NSDESCRIPTOR = MyCase::descriptor_t_of<NavierStokes>;
+  using TDESCRIPTOR  = MyCase::descriptor_t_of<Temperature>;
+
+  const bool converged = parameters.get<parameters::CONVERGED>();
+  const T Tcold        = parameters.get<parameters::T_COLD>();
+  const T Thot         = parameters.get<parameters::T_HOT>();
+  const T physLengthZ  = parameters.get<parameters::DOMAIN_EXTENT>()[2];
+
   if (iT == 0) {
     /// Writes the geometry, cuboid no. and rank no. as vti file for visualization
     SuperVTMwriter3D<T> vtkWriter("rayleighBenard3d");
@@ -167,12 +262,11 @@ void getResults(ThermalUnitConverter<T, NSDESCRIPTOR, TDESCRIPTOR> &converter,
     SuperLatticeRank3D<T, NSDESCRIPTOR> rank(NSlattice);
     vtkWriter.write(cuboid);
     vtkWriter.write(rank);
-
     vtkWriter.createMasterFile();
   }
 
-  const int statIter = converter.getLatticeTime(0.1);
-  const int saveIter = converter.getLatticeTime(1.0);
+  const int statIter = converter.getLatticeTime(parameters.get<parameters::PHYS_STAT_ITER_T>());
+  const int vtkIter  = converter.getLatticeTime(parameters.get<parameters::PHYS_VTK_OUTPUT_ITER_T>());
 
   if (iT%statIter == 0 || converged) {
     /// Timer console output
@@ -185,27 +279,73 @@ void getResults(ThermalUnitConverter<T, NSDESCRIPTOR, TDESCRIPTOR> &converter,
   }
 
   /// Writes the VTK files and prints statistics
-  if (iT%saveIter == 0 || converged) {
+  if (iT%vtkIter == 0 || converged) {
     ADlattice.setProcessingContext(ProcessingContext::Evaluation);
     NSlattice.setProcessingContext(ProcessingContext::Evaluation);
+
+    using V = MyCase::value_t_of<NavierStokes>;
 
     NSlattice.scheduleBackgroundOutputVTK([&,iT](auto task) {
       SuperVTMwriter3D<T> vtkWriter("rayleighBenard3d");
       SuperLatticePhysVelocity3D velocity(NSlattice, converter);
-      SuperLatticePhysPressure3D presure(NSlattice, converter);
-      SuperLatticePhysTemperature3D<T,NSDESCRIPTOR,TDESCRIPTOR> temperature(ADlattice, converter);
-      vtkWriter.addFunctor(presure);
+      SuperLatticePhysPressure3D pressure(NSlattice, converter);
+      SuperLatticePhysTemperature3D<V,NSDESCRIPTOR,TDESCRIPTOR> temperature(ADlattice, static_cast<const ThermalUnitConverter<V,NSDESCRIPTOR,TDESCRIPTOR>&>(converter));
+      vtkWriter.addFunctor(pressure);
       vtkWriter.addFunctor(velocity);
       vtkWriter.addFunctor(temperature);
       task(vtkWriter, iT);
     });
 
-    SuperLatticePhysTemperature3D<T, NSDESCRIPTOR, TDESCRIPTOR> temperature(ADlattice, converter);
-    BlockReduction3D2D<T> planeReduction(temperature, {0, 0, lz / T(2)}, {0, 0, 1});
+    SuperLatticePhysTemperature3D<T, NSDESCRIPTOR, TDESCRIPTOR> temperature(ADlattice, static_cast<const ThermalUnitConverter<V,NSDESCRIPTOR,TDESCRIPTOR>&>(converter));
+    BlockReduction3D2D<T> planeReduction(temperature, {0, 0, physLengthZ/T(2)}, {0, 0, 1});
     BlockGifWriter<T> gifWriter;
     gifWriter.write(planeReduction, Tcold-T(0.1), Thot+T(0.1), iT, "temperature");
   }
 
+}
+
+void simulate(MyCase& myCase) {
+  OstreamManager clout(std::cout,"simulate");
+  using T = MyCase::value_t;
+  auto& parameters = myCase.getParameters();
+
+  const std::size_t iTmax = myCase.getLattice(NavierStokes{}).getUnitConverter().getLatticeTime(
+    parameters.get<parameters::MAX_PHYS_T>());
+
+  util::Timer<T> timer(iTmax, myCase.getGeometry().getStatistics().getNvoxel());
+  timer.start();
+
+  util::ValueTracer<T> converge(myCase.getLattice(NavierStokes{}).getUnitConverter().getLatticeTime(50.),
+                                parameters.get<parameters::CONVERGENCE_PRECISION>());
+
+  for (std::size_t iT=0; iT < iTmax; ++iT) {
+
+    if (converge.hasConverged()){
+      parameters.set<parameters::CONVERGED>(true);
+      getResults(myCase, timer, iT);
+      clout << "Converged after " << iT << " iterations." << std::endl;
+      break;
+    }
+
+    /// === Step 8.1: Update the Boundary Values and Fields at Times ===
+    setTemporalValues(myCase, iT);
+
+    /// === Step 8.2: Collide and Stream Execution ===
+    myCase.getLattice(NavierStokes{}).collideAndStream();
+    myCase.getLattice(Temperature{}).collideAndStream();
+
+    myCase.getOperator("Boussinesq").apply();
+
+    /// === Step 8.3: Computation and Output of the Results ===
+    getResults(myCase, timer, iT);
+    converge.takeValue(myCase.getLattice(Temperature{}).getStatistics().getAverageEnergy(), true);
+  }
+
+  myCase.getLattice(NavierStokes{}).setProcessingContext(ProcessingContext::Evaluation);
+  myCase.getLattice(Temperature{}).setProcessingContext(ProcessingContext::Evaluation);
+
+  timer.stop();
+  timer.printSummary();
 }
 
 int main(int argc, char *argv[])
@@ -215,97 +355,53 @@ int main(int argc, char *argv[])
   initialize(&argc, &argv);
   singleton::directories().setOutputDir("./tmp/");
 
-  ThermalUnitConverter<T, NSDESCRIPTOR, TDESCRIPTOR> converter(
-    (T) 0.1/N, // physDeltaX
-    (T) 0.1 / (1e-5 / 0.1 * util::sqrt( Ra / Pr)) * 0.1 / N, // physDeltaT = charLatticeVelocity / charPhysVelocity * physDeltaX
-    (T) 0.1,  // charPhysLength
-    (T) 1e-5 / 0.1 * util::sqrt( Ra / Pr ), // charPhysVelocity
-    (T) 1e-5,  // physViscosity
-    (T) 1.0, // physDensity
-    (T) 0.03, // physThermalConductivity
-    (T) Pr * 0.03 / 1e-5 / 1.0,    // physSpecificHeatCapacity
-    (T) Ra * 1e-5 * 1e-5 / Pr / 9.81 / (Thot - Tcold) / util::pow(0.1, 3), // physThermalExpansionCoefficient
-    (T) Tcold, // charPhysLowTemperature
-    (T) Thot // charPhysHighTemperature
-  );
-  converter.print();
+  MyCase::ParametersD myCaseParameters;
+  {
+    using namespace olb::parameters;
+    myCaseParameters.set<DOMAIN_EXTENT>({0.2, 0.1, 0.1});
+    myCaseParameters.set<RESOLUTION>(40);
+    myCaseParameters.set<RAYLEIGH>(1e6);
+    myCaseParameters.set<PRANDTL>(0.71);
+    myCaseParameters.set<MAX_PHYS_T>(20.);
+    myCaseParameters.set<T_HOT>(274.15);
+    myCaseParameters.set<T_COLD>(273.15);
+    myCaseParameters.set<PHYS_CHAR_LENGTH>(0.1);
+    myCaseParameters.set<PHYS_CHAR_DENSITY>(1.0);
+    myCaseParameters.set<PHYS_CHAR_VISCOSITY>(1e-5);
+    myCaseParameters.set<PHYS_THERMAL_CONDUCTIVITY>(0.03);
 
-  UnitConverter<T,TDESCRIPTOR> dummy_converter(
-    (T)   converter.getPhysDeltaX(),      // deltaX
-    (T)   converter.getPhysDeltaT(),      // deltaT
-    (T)   converter.getCharPhysLength(),  // from converter
-    (T)   converter.getCharPhysVelocity(),// from converter
-    (T)   converter.getPhysViscosity(),   // from converter
-    (T)   converter.getPhysDensity()      // from converter
-  );
+    myCaseParameters.set<T_PERTURBATION>([&] {
+      return myCaseParameters.get<T_COLD>()/5. + 4./5.*myCaseParameters.get<T_HOT>();
+    });
 
-  /// === 2nd Step: Prepare Geometry ===
-  std::vector<T> extend(3,T());
-  extend[0] = lx;
-  extend[1] = ly;
-  extend[2] = lz;
-  std::vector<T> origin(3,T());
-  IndicatorCuboid3D<T> cuboid(extend, origin);
+    myCaseParameters.set<PHYS_CP>([&] {
+      return myCaseParameters.get<PRANDTL>() * myCaseParameters.get<PHYS_THERMAL_CONDUCTIVITY>()
+              / (myCaseParameters.get<PHYS_CHAR_VISCOSITY>()/myCaseParameters.get<PHYS_CHAR_DENSITY>());
+    });
 
-  /// Instantiation of a cuboidDecomposition with weights
-  CuboidDecomposition3D<T> cuboidDecomposition(cuboid, converter.getPhysDeltaX(), singleton::mpi().getSize());
-  cuboidDecomposition.setPeriodicity({true, false, true});
+    myCaseParameters.set<CONVERGENCE_PRECISION>(1e-5);
+    myCaseParameters.set<CONVERGED>(false);
 
-  HeuristicLoadBalancer<T> loadBalancer(cuboidDecomposition);
-
-  SuperGeometry<T,3> superGeometry(cuboidDecomposition, loadBalancer);
-
-  prepareGeometry(superGeometry, converter);
-
-  /// === 3rd Step: Prepare Lattice ===
-
-  SuperLattice<T, TDESCRIPTOR> ADlattice(dummy_converter, superGeometry);
-  SuperLattice<T, NSDESCRIPTOR> NSlattice(converter, superGeometry);
-
-
-  prepareLattice(converter, NSlattice, ADlattice, superGeometry);
-
-  T boussinesqForcePrefactor = 9.81 / converter.getConversionFactorVelocity() * converter.getConversionFactorTime() *
-                               converter.getCharPhysTemperatureDifference() * converter.getPhysThermalExpansionCoefficient();
-  SuperLatticeCoupling coupling(
-    NavierStokesAdvectionDiffusionCoupling{},
-    names::NavierStokes{}, NSlattice,
-    names::Temperature{}, ADlattice);
-  coupling.setParameter<NavierStokesAdvectionDiffusionCoupling::T0>(
-    converter.getLatticeTemperature(Tcold));
-  coupling.setParameter<NavierStokesAdvectionDiffusionCoupling::FORCE_PREFACTOR>(
-    boussinesqForcePrefactor * Vector<T,3>{0.0,1.0,0.0});
-
-  /// === 4th Step: Main Loop with Timer ===
-  util::Timer<T> timer(converter.getLatticeTime(maxPhysT), superGeometry.getStatistics().getNvoxel() );
-  timer.start();
-
-  util::ValueTracer<T> converge(converter.getLatticeTime(50.),epsilon);
-  for (std::size_t iT = 0; iT < converter.getLatticeTime(maxPhysT); ++iT) {
-    if (converge.hasConverged()) {
-      clout << "Simulation converged." << std::endl;
-
-      getResults(converter, NSlattice, ADlattice, iT, superGeometry, timer, converge.hasConverged());
-
-      clout << "Time " << iT << "." << std::endl;
-
-      break;
-    }
-
-    /// === 6th Step: Collide and Stream Execution ===
-    ADlattice.collideAndStream();
-    NSlattice.collideAndStream();
-
-    coupling.apply();
-
-    /// === 7th Step: Computation and Output of the Results ===
-    getResults(converter, NSlattice, ADlattice, iT, superGeometry, timer, converge.hasConverged());
-    converge.takeValue(ADlattice.getStatistics().getAverageEnergy(),true);
+    myCaseParameters.set<PHYS_VTK_OUTPUT_ITER_T>(1.0);
+    myCaseParameters.set<PHYS_STAT_ITER_T>(0.1);
   }
+  myCaseParameters.fromCLI(argc, argv);
 
-  NSlattice.setProcessingContext(ProcessingContext::Evaluation);
-  ADlattice.setProcessingContext(ProcessingContext::Evaluation);
+  /// === Step 3: Create Mesh ===
+  Mesh mesh = createMesh(myCaseParameters);
 
-  timer.stop();
-  timer.printSummary();
+  /// === Step 4: Create Case ===
+  MyCase myCase(myCaseParameters, mesh);
+
+  /// === Step 5: Prepare Geometry ===
+  prepareGeometry(myCase);
+
+  /// === Step 6: Prepare Lattice ===
+  prepareLattice(myCase);
+
+  /// === Step 7: Definition of Initial, Boundary Values, and Fields ===
+  setInitialValues(myCase);
+
+  /// === Step 8: Simulate ===
+  simulate(myCase);
 }

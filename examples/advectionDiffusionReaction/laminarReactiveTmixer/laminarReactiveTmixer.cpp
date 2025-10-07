@@ -35,252 +35,356 @@
 #include <olb.h>
 
 using namespace olb;
+using namespace olb::names;
 using namespace olb::descriptors;
-using namespace olb::graphics;
 
-using T = double;
-using NSDESCRIPTOR = D3Q19<>;
-using NSBulkDynamics = BGKdynamics<T,NSDESCRIPTOR>;
+// === Step 1: Declarations ===
+using MyCase = Case<
+  NavierStokes, Lattice<double, descriptors::D3Q19<>>,
+  Concentration<0>,  Lattice<double, descriptors::D3Q7<VELOCITY, SOURCE, OMEGA>>,
+  Concentration<1>,  Lattice<double, descriptors::D3Q7<VELOCITY, SOURCE, OMEGA>>,
+  Concentration<2>,  Lattice<double, descriptors::D3Q7<VELOCITY, SOURCE, OMEGA>>
+>;
 
-#define plotOverLine
+namespace olb::parameters {
 
-using RADDESCRIPTOR = D3Q7<VELOCITY,SOURCE,OMEGA>;
-using ReactionADBulkDynamics = SourcedLimitedAdvectionDiffusionBGKdynamics<T,RADDESCRIPTOR>;
+struct LX_INLET  : public descriptors::FIELD_BASE<1> { };
+struct LY_OUTLET : public descriptors::FIELD_BASE<1> { };
+struct PLOT_OVER_LINE : public TYPED_FIELD_BASE<bool,1> { };
+struct MAX_PHYS_TIME : public descriptors::FIELD_BASE<1> { };
+struct MAX_PHYS_TIME_AD : public descriptors::FIELD_BASE<1> { };
+struct START_TIME : public descriptors::FIELD_BASE<1> { };
+struct DIFFUSION : public descriptors::FIELD_BASE<3> { };
+struct CONCENTRATION : public descriptors::FIELD_BASE<6> { };
+struct PHYS_MAX_VELOCITY : public descriptors::FIELD_BASE<1> { };
 
-// Parameters for the simulation setup
-const T lx         = 1600e-6;                         // length of channel
-const T ly         = 800e-6;                          // width of channel
-const T lz         = 100e-6;                          // hight of channel
-const T lx_inlet   = 100e-6;                          // inlet length
-const T ly_outlet  = 200e-6;                          // outlet width
-const int N        = 40;                              // resolution of the model
-const T nu         = 1.002e-6;                        // water viscosity
-const T density    = 1000.;                           // water density
-const T hydrInlet  = 2.*ly_outlet*lz/(ly_outlet + lz);// hydraulic inlet diameter
-const T u_mean     = 1.4;                             // mean velocity at inlets
-const T u_max      = u_mean*2.1;                      // max velocity for poiseuille profile
-const T residenceT = (lx + ly/2)/u_mean;              // residence time
-const T maxPhysT   = 25*residenceT;                   // max. NSE simulation time in s, SI unit
-const T maxPhysTAD = 0.01;                            // max. ADE simulation time in s, SI unit
-const T D_A        = 1.6e-9;                          // main diffusion coefficient of component A
-const T D_B        = 2.e-10;                          // diffusion coefficient of component B
-const T D_P        = 2.e-10;                          // diffusion coefficient of reaction product
+}
 
+Mesh<MyCase::value_t,MyCase::d> createMesh(MyCase::ParametersD& params) {
+  using T = MyCase::value_t;
+  Vector extent = params.get<parameters::DOMAIN_EXTENT>();
+  const T lx_inlet = params.get<parameters::LX_INLET>();
+  const T ly_outlet = params.get<parameters::LY_OUTLET>();
+
+  const T hydrInlet  = T(2)*ly_outlet*extent[2]/(ly_outlet + extent[2]);
+  const T physDeltaX = hydrInlet / params.get<parameters::RESOLUTION>();
+
+  Vector<T,3> extendReactor( extent[0] + T(2)*physDeltaX, ly_outlet + T(2)*physDeltaX, extent[2] + T(2)*physDeltaX );
+  Vector<T,3> originReactor( -physDeltaX, -(ly_outlet + T(2)*physDeltaX)/T(2), -(extent[2] + T(2)*physDeltaX)/T(2) );
+  std::shared_ptr<IndicatorCuboid3D<T> > reactor( new IndicatorCuboid3D<T> ( extendReactor, originReactor ));
+
+  Vector<T,3> extendInflow( lx_inlet + T(2)*physDeltaX, extent[1] + T(2)*physDeltaX, extent[2] + T(2)*physDeltaX );
+  Vector<T,3> originInflow( -physDeltaX, -(extent[1] + T(2)*physDeltaX)/T(2), -(extent[2] + T(2)*physDeltaX)/T(2) );
+  std::shared_ptr<IndicatorCuboid3D<T> > inflow( new IndicatorCuboid3D<T> ( extendInflow, originInflow ));
+
+  IndicatorIdentity3D<T> mixer(reactor + inflow);
+
+  Mesh<T,MyCase::d> mesh(mixer, physDeltaX, singleton::mpi().getSize(), "volume");
+  mesh.setOverlap(params.get<parameters::OVERLAP>());
+  return mesh;
+}
 
 // Stores geometry information in form of material numbers
-void prepareGeometry( UnitConverter<T,NSDESCRIPTOR> const& converter,
-                      SuperGeometry<T,3>& superGeometry )
-{
-
-  OstreamManager clout( std::cout,"prepareGeometry" );
+void prepareGeometry(MyCase& myCase) {
+  OstreamManager clout(std::cout, "prepareGeometry");
   clout << "Prepare Geometry ..." << std::endl;
 
-  T dx = converter.getConversionFactorLength();
+  using T = MyCase::value_t;
+  auto& geometry = myCase.getGeometry();
+  auto& params = myCase.getParameters();
 
-  superGeometry.rename( 0,2 );
+  Vector extent = params.get<parameters::DOMAIN_EXTENT>();
+  const T lx_inlet = params.get<parameters::LX_INLET>();
+  const T ly_outlet = params.get<parameters::LY_OUTLET>();
 
-  Vector<T,3> extendReactor( lx, ly_outlet, lz );
-  Vector<T,3> originReactor( 0., -ly_outlet/2, -lz/2 );
+  const T hydrInlet  = T(2)*ly_outlet*extent[2]/(ly_outlet + extent[2]);
+  const T physDeltaX = hydrInlet / params.get<parameters::RESOLUTION>();
+
+  geometry.rename( 0,2 );
+
+  Vector<T,3> extendReactor( extent[0], ly_outlet, extent[2] );
+  Vector<T,3> originReactor( 0., -ly_outlet/T(2), -extent[2]/T(2) );
   IndicatorCuboid3D<T> reactor( extendReactor, originReactor );
 
-  Vector<T,3> extendInflow( lx_inlet, ly, lz );
-  Vector<T,3> originInflow( 0., -ly/2, -lz/2 );
+  Vector<T,3> extendInflow( lx_inlet, extent[1], extent[2] );
+  Vector<T,3> originInflow( 0., -extent[1]/T(2), -extent[2]/T(2) );
   IndicatorCuboid3D<T> inflow( extendInflow, originInflow );
 
-  superGeometry.rename( 2, 1, reactor );
-  superGeometry.rename( 2, 1, inflow );
+  geometry.rename( 2, 1, reactor );
+  geometry.rename( 2, 1, inflow );
 
-  Vector<T,3> extendInlet1( lx_inlet, dx, lz);
-  Vector<T,3> originInlet1( 0., -ly/2, -lz/2 );
+  Vector<T,3> extendInlet1( lx_inlet, physDeltaX, extent[2]);
+  Vector<T,3> originInlet1( 0., -extent[1]/T(2), -extent[2]/T(2) );
   IndicatorCuboid3D<T> inlet1( extendInlet1, originInlet1 );
-  superGeometry.rename( 1, 3, inlet1 );
+  geometry.rename( 1, 3, inlet1 );
 
-  Vector<T,3> extendInlet2( lx_inlet, dx, lz);
-  Vector<T,3> originInlet2( 0., ly/2-dx, -lz/2 );
+  Vector<T,3> extendInlet2( lx_inlet, physDeltaX, extent[2]);
+  Vector<T,3> originInlet2( 0., extent[1]/T(2)-physDeltaX, -extent[2]/T(2) );
   IndicatorCuboid3D<T> inlet2( extendInlet2, originInlet2 );
-  superGeometry.rename( 1, 4, inlet2 );
+  geometry.rename( 1, 4, inlet2 );
 
-  Vector<T,3> extendOutlet( dx, ly_outlet, lz );
-  Vector<T,3> originOutlet( lx-dx, -ly_outlet/2, -lz/2 );
+  Vector<T,3> extendOutlet( physDeltaX, ly_outlet, extent[2] );
+  Vector<T,3> originOutlet( extent[0]-physDeltaX, -ly_outlet/T(2), -extent[2]/T(2) );
   IndicatorCuboid3D<T> outlet( extendOutlet, originOutlet );
-  superGeometry.rename( 1, 5, outlet );
+  geometry.rename( 1, 5, outlet );
 
   // Removes all not needed boundary voxels outside the surface
-  superGeometry.clean();
+  geometry.clean();
   // Removes all not needed boundary voxels inside the surface
-  superGeometry.innerClean();
-  superGeometry.checkForErrors();
-  superGeometry.print();
+  geometry.innerClean();
+  geometry.checkForErrors();
+  geometry.print();
 
   clout << "Prepare Geometry ... OK" << std::endl;
 }
 
-// Set up the geometry of the simulation
-void prepareLatticeNS( UnitConverter<T,NSDESCRIPTOR> const& converter,
-                     SuperLattice<T,NSDESCRIPTOR>& sLatticeNS,
-                     SuperGeometry<T,3>& superGeometry )
-{
+// Set up the NS lattice of the simulation
+void prepareLatticeNS(MyCase& myCase) {
+  OstreamManager clout(std::cout,"prepareLattice");
 
-  OstreamManager clout( std::cout,"prepareLatticeNS" );
-  clout << "Prepare Lattice for NSE..." << std::endl;
+  using T = MyCase::value_t;
+  auto& geometry = myCase.getGeometry();
+  auto& params = myCase.getParameters();
+
+  auto& lattice = myCase.getLattice(NavierStokes{});
+
+  using DESCRIPTOR = MyCase::descriptor_t_of<NavierStokes>;
+  using RADDESCRIPTOR = MyCase::descriptor_t_of<Concentration<0>>;
+
+  const int N = params.get<parameters::RESOLUTION>();
+  Vector extent = params.get<parameters::DOMAIN_EXTENT>();
+  const T ly_outlet = params.get<parameters::LY_OUTLET>();
+  const T hydrInlet  = T(2)*ly_outlet*extent[2]/(ly_outlet + extent[2]);
+  const T physCharVelocity = params.get<parameters::PHYS_CHAR_VELOCITY>();
+  const T latticeCharVelocity = params.get<parameters::LATTICE_CHAR_VELOCITY>();
+  const T physCharViscosity = params.get<parameters::PHYS_CHAR_VISCOSITY>();
+  const T physCharDensity = params.get<parameters::PHYS_CHAR_DENSITY>();
+
+  lattice.setUnitConverter<UnitConverterFromResolutionAndLatticeVelocity<T,DESCRIPTOR>>(
+    (T)   N,                   // resolution
+    (T)   latticeCharVelocity, // maximal lattice velocity
+    (T)   hydrInlet,           // charPhysLength: reference length of simulation geometry
+    (T)   physCharVelocity,    // charPhysVelocity
+    (T)   physCharViscosity,   // physViscosity: physical kinematic viscosity in __m^2 / s__
+    (T)   physCharDensity      // physDensity: physical density in __kg / m^3__
+  );
+  const auto& converter = lattice.getUnitConverter();
+  converter.print();
 
   const T omega = converter.getLatticeRelaxationFrequency();
 
   // Material=0 -->do nothing
-  sLatticeNS.defineDynamics<NoDynamics>(superGeometry, 0);
+  lattice.defineDynamics<NoDynamics>(geometry, 0);
 
   // Material=1 -->bulk dynamics
   // Material=3 -->bulk dynamics (inlet1 (-Y))
   // Material=4 -->bulk dynamics (inlet2 (+Y))
   // Material=5 -->bulk dynamics (outlet)
-  auto bulkIndicator = superGeometry.getMaterialIndicator({1, 3, 4, 5});
-  sLatticeNS.defineDynamics<NSBulkDynamics>(bulkIndicator);
+  auto bulkIndicator = geometry.getMaterialIndicator({1, 3, 4, 5});
+  lattice.defineDynamics<BGKdynamics>(bulkIndicator);
 
   // Material=2 -->bounce back
-  sLatticeNS.defineDynamics<BounceBack>(superGeometry, 2);
+  lattice.defineDynamics<BounceBack>(geometry, 2);
 
   //if interpolated boundary conditions are chosen
-  boundary::set<boundary::InterpolatedVelocity>(sLatticeNS, superGeometry, 3);
-  boundary::set<boundary::InterpolatedVelocity>(sLatticeNS, superGeometry, 4);
-  boundary::set<boundary::InterpolatedPressure>(sLatticeNS, superGeometry, 5);
+  boundary::set<boundary::InterpolatedVelocity>(lattice, geometry, 3);
+  boundary::set<boundary::InterpolatedVelocity>(lattice, geometry, 4);
+  boundary::set<boundary::InterpolatedPressure>(lattice, geometry, 5);
 
-  // Initial conditions
-  AnalyticalConst3D<T,T> rho1( 1. );
-  std::vector<T> velocity( 3,T() );
-  AnalyticalConst3D<T,T> u( velocity );
+  lattice.setParameter<descriptors::OMEGA>(omega);
 
-  //Initialize all values of distribution functions to their local equilibrium
-  sLatticeNS.defineRhoU( bulkIndicator, rho1, u );
-  sLatticeNS.iniEquilibrium( bulkIndicator, rho1, u );
-
-  sLatticeNS.setParameter<descriptors::OMEGA>(omega);
-
-  // Make the lattice ready for simulation
-  sLatticeNS.initialize();
+  auto DIFFUSION = params.get<parameters::DIFFUSION>();
+  T omegaA = converter.getLatticeRelaxationFrequencyFromDiffusivity<RADDESCRIPTOR>( DIFFUSION[0] );
+  T omegaB = converter.getLatticeRelaxationFrequencyFromDiffusivity<RADDESCRIPTOR>( DIFFUSION[1] );
+  T omegaC = converter.getLatticeRelaxationFrequencyFromDiffusivity<RADDESCRIPTOR>( DIFFUSION[2] );
+  auto& coupling = myCase.setCouplingOperator(
+    "LESReaction",
+    LESReactionCoupling<T,3>{},
+    names::NavierStokes{}, lattice,
+    names::Concentration0{}, myCase.getLattice(Concentration<0>{}),
+    names::Concentration1{}, myCase.getLattice(Concentration<1>{}),
+    names::Concentration2{}, myCase.getLattice(Concentration<2>{}));
+  coupling.setParameter<LESReactionCoupling<T,3>::LATTICE_REACTION_COEFF>(converter.getConversionFactorTime()*1.e5);
+  coupling.setParameter<LESReactionCoupling<T,3>::STOCH_COEFF>({-1, -1., 1.});
+  coupling.setParameter<LESReactionCoupling<T,3>::REACTION_ORDER>({1., 1., 0.});
+  coupling.setParameter<LESReactionCoupling<T,3>::SMAGORINSKY_PREFACTOR>(0.2);
+  coupling.setParameter<LESReactionCoupling<T,3>::SCHMIDT>({0.03, 0.03, 0.03});
+  coupling.setParameter<LESReactionCoupling<T,3>::OMEGA_NSE>(1./converter.getLatticeRelaxationFrequency());
+  coupling.setParameter<LESReactionCoupling<T,3>::OMEGAS_ADE>({omegaA, omegaB, omegaC});
 
   clout << "Prepare Lattice for NSE... OK" << std::endl;
 }
 
-void prepareLatticeCRAD(SuperLattice<T, NSDESCRIPTOR>& sLatticeNS,
-                        SuperLattice<T, RADDESCRIPTOR>*& CRADlattice,
-                        SuperGeometry<T,3>& superGeometry,
-                        UnitConverter<T,NSDESCRIPTOR> const& converter,
-                        T rhoA_ = 1.e-8, T rhoB_ = 1.e-8, T D = D_P)
-{
+// Set up the CRAD lattice of the simulation
+template<int ID>
+void prepareLatticeCRAD(MyCase& myCase) {
   OstreamManager clout(std::cout,"prepareLatticeCRAD");
   clout << "Prepare Lattice for Coupled Reaction simualtion..." << std::endl;
-  T omega = converter.getLatticeRelaxationFrequencyFromDiffusivity<RADDESCRIPTOR>( D );
+
+  using T = MyCase::value_t;
+  auto& geometry = myCase.getGeometry();
+  auto& params = myCase.getParameters();
+
+  auto& NSlattice = myCase.getLattice(NavierStokes{});
+  auto& CRADlattice = myCase.getLattice(Concentration<ID>{});
+  using RADDESCRIPTOR = MyCase::descriptor_t_of<Concentration<ID>>;
+
+  const auto& NSconverter = NSlattice.getUnitConverter();
+  CRADlattice.setUnitConverter(NSconverter);
 
   // buffer layer
-  CRADlattice->defineDynamics<NoDynamics>(superGeometry, 0);
+  CRADlattice.template defineDynamics<NoDynamics>(geometry, 0);
 
   // bulk
-  CRADlattice->defineDynamics<ReactionADBulkDynamics>(superGeometry.getMaterialIndicator({1, 3, 4}));
+  CRADlattice.template defineDynamics<SourcedLimitedAdvectionDiffusionBGKdynamics>(geometry.getMaterialIndicator({1, 3, 4}));
 
   // Material=2 -->bounce back
-  CRADlattice->defineDynamics<BounceBack>(superGeometry.getMaterialIndicator({2}));
+  CRADlattice.template defineDynamics<BounceBack>(geometry.getMaterialIndicator({2}));
 
   // Setting of the boundary conditions, inflow and outflow with Dirichlet and Neumann BCs
-  boundary::set<boundary::AdvectionDiffusionDirichlet>(*CRADlattice, superGeometry.getMaterialIndicator({3}));
-  boundary::set<boundary::AdvectionDiffusionDirichlet>(*CRADlattice, superGeometry.getMaterialIndicator({4}));
-  setZeroGradientBoundary<T, RADDESCRIPTOR>(*CRADlattice, superGeometry.getMaterialIndicator({5}));
+  boundary::set<boundary::AdvectionDiffusionDirichlet>(CRADlattice, geometry.getMaterialIndicator({3}));
+  boundary::set<boundary::AdvectionDiffusionDirichlet>(CRADlattice, geometry.getMaterialIndicator({4}));
+  setZeroGradientBoundary<T, RADDESCRIPTOR>(CRADlattice, geometry.getMaterialIndicator({5}));
 
-  AnalyticalConst3D<T,T> rho0(1.e-8);
-  AnalyticalConst3D<T,T> rhoA(rhoA_);
-  AnalyticalConst3D<T,T> rhoB(rhoB_);
-
-  T distance2Wall = converter.getConversionFactorLength()/2.;
-  std::vector<T> maxVelocity1( 3,0 );
-  std::vector<T> maxVelocity2( 3,0 );
-  maxVelocity1[1] = converter.getLatticeVelocity(u_max);
-  maxVelocity2[1] = converter.getLatticeVelocity(u_max);
-  RectanglePoiseuille3D<T> poiseuilleU1( superGeometry, 3, maxVelocity1, distance2Wall, distance2Wall, distance2Wall );
-  RectanglePoiseuille3D<T> poiseuilleU2( superGeometry, 4, maxVelocity2, distance2Wall, distance2Wall, distance2Wall );
-
-  std::vector<T> velocity( 3,T() );
-  AnalyticalConst3D<T,T> u( velocity );
-  CRADlattice->defineField<descriptors::VELOCITY>(superGeometry.getMaterialIndicator({1, 2, 3, 4, 5 }), u );
+  auto DIFFUSION = params.get<parameters::DIFFUSION>();
+  T omega = NSconverter.getLatticeRelaxationFrequencyFromDiffusivity<RADDESCRIPTOR>( DIFFUSION[ID] );
   AnalyticalConst3D<T,T> omegaD( omega );
-  CRADlattice->defineField<descriptors::OMEGA>(superGeometry.getMaterialIndicator({1, 2, 3, 4, 5 }), omegaD );
-  CRADlattice->setParameter<descriptors::OMEGA>(omega);
-
-  // setting actual values for the boundary
-  CRADlattice->defineRho( superGeometry, 3, rhoA);
-  CRADlattice->iniEquilibrium( superGeometry, 3, rhoA, poiseuilleU1 );
-  CRADlattice->defineRho( superGeometry, 4, rhoB);
-  CRADlattice->iniEquilibrium( superGeometry, 4, rhoB, poiseuilleU2 );
-  CRADlattice->defineField<descriptors::SOURCE>(superGeometry.getMaterialIndicator({1, 2, 3, 4, 5 }), rho0);
-  CRADlattice->defineRho( superGeometry.getMaterialIndicator({1, 2, 5}), rho0 );
-  CRADlattice->iniEquilibrium( superGeometry.getMaterialIndicator({1, 2, 5}), rho0, u );
-  CRADlattice->initialize();
+  CRADlattice.template defineField<descriptors::OMEGA>(geometry.getMaterialIndicator({1, 2, 3, 4, 5 }), omegaD );
+  CRADlattice.template setParameter<descriptors::OMEGA>(omega);
 
   {
-    auto& communicatorCR = CRADlattice->getCommunicator(stage::PreCollide());
-    communicatorCR.requestOverlap(3);
+    auto& communicatorCR = CRADlattice.template getCommunicator(stage::PreCollide());
+    communicatorCR.requestOverlap(params.get<parameters::OVERLAP>());
     communicatorCR.exchangeRequests();
   }
 
   clout << "Prepare Lattice for Coupled Reaction simualtion... OK" << std::endl;
 }
 
-// Generates a slowly increasing inflow for the first iTMaxStart timesteps
-void setBoundaryValues( UnitConverter<T,NSDESCRIPTOR> const& converter,
-                        SuperLattice<T,NSDESCRIPTOR>& sLatticeNS, int iT,
-                        SuperGeometry<T,3>& superGeometry )
-{
+void setInitialValuesNS(MyCase& myCase) {
+  using T = MyCase::value_t;
+  auto& geometry = myCase.getGeometry();
 
-  OstreamManager clout( std::cout,"setBoundaryValues" );
+  auto& lattice = myCase.getLattice(NavierStokes{});
+
+  AnalyticalConst3D<T,T> rho1( 1. );
+  std::vector<T> velocity( 3,T() );
+  AnalyticalConst3D<T,T> u( velocity );
+
+  //Initialize all values of distribution functions to their local equilibrium
+  auto bulkIndicator = geometry.getMaterialIndicator({1, 3, 4, 5});
+  lattice.defineRhoU( bulkIndicator, rho1, u );
+  lattice.iniEquilibrium( bulkIndicator, rho1, u );
+  // Make the lattice ready for simulation
+  lattice.initialize();
+}
+
+template<int ID>
+void setInitialValuesCRAD(MyCase& myCase) {
+  using T = MyCase::value_t;
+  auto& geometry = myCase.getGeometry();
+  auto& params = myCase.getParameters();
+  auto& CRADlattice = myCase.getLattice(Concentration<ID>{});
+  const auto& converter = myCase.getLattice(NavierStokes{}).getUnitConverter();
+
+  auto rhos = params.get<parameters::CONCENTRATION>();
+  const T physMaxVelocity = params.get<parameters::PHYS_MAX_VELOCITY>();
+
+  AnalyticalConst3D<T,T> rho0(1.e-8);
+  AnalyticalConst3D<T,T> rhoA(rhos[2*ID+0]);
+  AnalyticalConst3D<T,T> rhoB(rhos[2*ID+1]);
+
+  T distance2Wall = converter.getConversionFactorLength()/T(2);
+  std::vector<T> maxVelocity1( 3,0 );
+  std::vector<T> maxVelocity2( 3,0 );
+  maxVelocity1[1] = converter.getLatticeVelocity(physMaxVelocity);
+  maxVelocity2[1] = converter.getLatticeVelocity(physMaxVelocity);
+  RectanglePoiseuille3D<T> poiseuilleU1( geometry, 3, maxVelocity1, distance2Wall, distance2Wall, distance2Wall );
+  RectanglePoiseuille3D<T> poiseuilleU2( geometry, 4, maxVelocity2, distance2Wall, distance2Wall, distance2Wall );
+
+  std::vector<T> velocity( 3,T() );
+  AnalyticalConst3D<T,T> u( velocity );
+  CRADlattice.template defineField<descriptors::VELOCITY>(geometry.getMaterialIndicator({1, 2, 3, 4, 5 }), u );
+
+  // setting actual values for the boundary
+  CRADlattice.template defineRho( geometry, 3, rhoA);
+  CRADlattice.template iniEquilibrium( geometry, 3, rhoA, poiseuilleU1 );
+  CRADlattice.template defineRho( geometry, 4, rhoB);
+  CRADlattice.template iniEquilibrium( geometry, 4, rhoB, poiseuilleU2 );
+  CRADlattice.template defineField<descriptors::SOURCE>(geometry.getMaterialIndicator({1, 2, 3, 4, 5 }), rho0);
+  CRADlattice.template defineRho( geometry.getMaterialIndicator({1, 2, 5}), rho0 );
+  CRADlattice.template iniEquilibrium( geometry.getMaterialIndicator({1, 2, 5}), rho0, u );
+  CRADlattice.template initialize();
+}
+
+// Generates a slowly increasing inflow for the first iTMaxStart timesteps
+void setTemporalValues(MyCase& myCase,
+                       std::size_t iT)
+{
+  OstreamManager clout( std::cout,"setTemporalValues" );
+  using T = MyCase::value_t;
+  auto& geometry = myCase.getGeometry();
+  auto& params = myCase.getParameters();
+  auto& lattice = myCase.getLattice(NavierStokes{});
+  const auto& converter = lattice.getUnitConverter();
 
   // No of time steps for smooth start-up
-  const int iTmaxStart = converter.getLatticeTime( maxPhysT*0.02 );
+  const T startTime = params.get<parameters::START_TIME>();
+  const int iTmaxStart = converter.getLatticeTime( startTime );
+  const T physMaxVelocity = params.get<parameters::PHYS_MAX_VELOCITY>();
 
-  if ( iT%100 == 0 && iT <= iTmaxStart ) {
+  if ( int(iT)%100 == 0 && int(iT) <= iTmaxStart ) {
 
     // Smooth start curve, sinus
     SinusStartScale<T,int> startScale(iTmaxStart, T(1));
 
     // Creates and sets the Poiseuille inflow profile using functors
-    int iTvec[1]= {iT};
+    int iTvec[1]= {int(iT)};
     T frac[1]= {};
     startScale( frac,iTvec );
     std::vector<T> maxVelocity1( 3,0 );
     std::vector<T> maxVelocity2( 3,0 );
-    maxVelocity1[1] = frac[0]*converter.getLatticeVelocity(u_max);
-    maxVelocity2[1] = -frac[0]*converter.getLatticeVelocity(u_max);
+    maxVelocity1[1] = frac[0]*converter.getLatticeVelocity(physMaxVelocity);
+    maxVelocity2[1] = -frac[0]*converter.getLatticeVelocity(physMaxVelocity);
 
-    T distance2Wall = converter.getConversionFactorLength()/2.;
-    RectanglePoiseuille3D<T> poiseuilleU1( superGeometry, 3, maxVelocity1, distance2Wall, distance2Wall, distance2Wall );
-    RectanglePoiseuille3D<T> poiseuilleU2( superGeometry, 4, maxVelocity2, distance2Wall, distance2Wall, distance2Wall );
-    sLatticeNS.defineU( superGeometry, 3, poiseuilleU1 );
-    sLatticeNS.defineU( superGeometry, 4, poiseuilleU2 );
+    T distance2Wall = converter.getConversionFactorLength()/T(2);
+    RectanglePoiseuille3D<T> poiseuilleU1( geometry, 3, maxVelocity1, distance2Wall, distance2Wall, distance2Wall );
+    RectanglePoiseuille3D<T> poiseuilleU2( geometry, 4, maxVelocity2, distance2Wall, distance2Wall, distance2Wall );
+    lattice.defineU( geometry, 3, poiseuilleU1 );
+    lattice.defineU( geometry, 4, poiseuilleU2 );
 
-    sLatticeNS.setProcessingContext<Array<momenta::FixedVelocityMomentumGeneric::VELOCITY>>(
+    lattice.setProcessingContext<Array<momenta::FixedVelocityMomentumGeneric::VELOCITY>>(
       ProcessingContext::Simulation);
-
   }
 }
 
 // Output to console and files
-void getResultsNS( SuperLattice<T,NSDESCRIPTOR>& sLatticeNS,
-                 UnitConverter<T,NSDESCRIPTOR> const& converter,
-                 int iT,
-                 SuperGeometry<T,3>& superGeometry, util::Timer<T>& timer)
+void getResultsNS(MyCase& myCase,
+                  util::Timer<MyCase::value_t>& timer,
+                  std::size_t iT)
 {
+  using T = MyCase::value_t;
+  using DESCRIPTOR = MyCase::descriptor_t_of<NavierStokes>;
+  auto& geometry = myCase.getGeometry();
+  auto& lattice = myCase.getLattice(NavierStokes{});
+  auto& params = myCase.getParameters();
+  const auto& converter = lattice.getUnitConverter();
   OstreamManager clout( std::cout,"getResultsNS" );
 
   SuperVTMwriter3D<T> vtmWriterNS( "mixer_fluid" );
-  SuperLatticePhysVelocity3D<T, NSDESCRIPTOR> velocity( sLatticeNS, converter );
-  SuperLatticePhysPressure3D<T, NSDESCRIPTOR> pressure( sLatticeNS, converter );
+  SuperLatticePhysVelocity3D<T, DESCRIPTOR> velocity( lattice, converter );
+  SuperLatticePhysPressure3D<T, DESCRIPTOR> pressure( lattice, converter );
   vtmWriterNS.addFunctor( velocity );
   vtmWriterNS.addFunctor( pressure );
 
+  const T maxPhysT = params.get<parameters::MAX_PHYS_TIME>();
   const int  vtkIter  = converter.getLatticeTime( maxPhysT/10 );
   const int  statIter = converter.getLatticeTime( maxPhysT/100 );
 
   if ( iT==0 ) {
     // Writes the geometry, cuboid no. and rank no. as vti file for visualization
-    SuperLatticeCuboid3D<T, NSDESCRIPTOR> cuboid( sLatticeNS );
-    SuperLatticeRank3D<T, NSDESCRIPTOR> rank( sLatticeNS );
+    SuperLatticeCuboid3D<T, DESCRIPTOR> cuboid( lattice );
+    SuperLatticeRank3D<T, DESCRIPTOR> rank( lattice );
     vtmWriterNS.write( cuboid );
     vtmWriterNS.write( rank );
     vtmWriterNS.createMasterFile();
@@ -288,7 +392,7 @@ void getResultsNS( SuperLattice<T,NSDESCRIPTOR>& sLatticeNS,
 
   // Writes the ppm files
   if ( iT%vtkIter==0 ) {
-    sLatticeNS.setProcessingContext(ProcessingContext::Evaluation);
+    lattice.setProcessingContext(ProcessingContext::Evaluation);
     vtmWriterNS.write( iT );
   }
 
@@ -297,65 +401,79 @@ void getResultsNS( SuperLattice<T,NSDESCRIPTOR>& sLatticeNS,
     // Timer console output
     timer.update( iT );
     timer.printStep();
-    sLatticeNS.getStatistics().print(iT,converter.getPhysTime(iT));
+    lattice.getStatistics().print(iT,converter.getPhysTime(iT));
   }
 
-#ifdef plotOverLine
-  if (iT == (converter.getLatticeTime( maxPhysT ) - 1)) {
-    // Preparation
-    sLatticeNS.setProcessingContext(ProcessingContext::Evaluation);
-    Gnuplot<T> csvWriter("flowField");
-    int dummy[4];
-    T result[4];
-    const int nX = superGeometry.getCuboidDecomposition().getMotherCuboid().getNx();  // number of voxels in x-direction
-    const int minX = converter.getLatticeLength(lx_inlet);                       // beginning of the mixing channel
-    auto mat = new SuperIndicatorIdentity3D<T> (superGeometry.getMaterialIndicator({1,5}));
-    const Vector<T,3> normal( 1, 0, 0 );
+  const T lx_inlet = params.get<parameters::LX_INLET>();
+  const bool plotOverLine = params.get<parameters::PLOT_OVER_LINE>();
+  if(plotOverLine) {
+    if (iT == (converter.getLatticeTime( maxPhysT ) - 1)) {
+      // Preparation
+      lattice.setProcessingContext(ProcessingContext::Evaluation);
+      Gnuplot<T> csvWriter("flowField");
+      int dummy[4];
+      T result[4];
+      const int nX = geometry.getCuboidDecomposition().getMotherCuboid().getNx();  // number of voxels in x-direction
+      const int minX = converter.getLatticeLength(lx_inlet);                       // beginning of the mixing channel
+      auto mat = new SuperIndicatorIdentity3D<T> (geometry.getMaterialIndicator({1,5}));
+      const Vector<T,3> normal( 1, 0, 0 );
 
-    for (int iX = minX; iX < nX - 3; ++iX) {
-      const T x = converter.getPhysLength(iX);
-      const Vector<T,3> center( x, 0, 0 );
-      auto circle = new SuperIndicatorFfromIndicatorF3D<T>(
-        std::shared_ptr<IndicatorF3D<T>>(new IndicatorCircle3D<T> ( center, normal, 0.0003)), superGeometry);
-      SuperIndicatorMultiplication3D<T> plane(circle, mat);
+      for (int iX = minX; iX < nX - 3; ++iX) {
+        const T x = converter.getPhysLength(iX);
+        const Vector<T,3> center( x, 0, 0 );
+        auto circle = new SuperIndicatorFfromIndicatorF3D<T>(
+          std::shared_ptr<IndicatorF3D<T>>(new IndicatorCircle3D<T> ( center, normal, 0.0003)), geometry);
+        SuperIndicatorMultiplication3D<T> plane(circle, mat);
 
-      // Average concentration: use average functor
-      SuperAverage3D<T> (velocity, plane).operator()(result, dummy);
-      const T avVel = result[0];
-      SuperAverage3D<T> (pressure, plane).operator()(result, dummy);
-      const T avPres = result[0];
+        // Average concentration: use average functor
+        SuperAverage3D<T> (velocity, plane).operator()(result, dummy);
+        const T avVel = result[0];
+        SuperAverage3D<T> (pressure, plane).operator()(result, dummy);
+        const T avPres = result[0];
 
-      csvWriter.setData(x, {avVel, avPres});
+        csvWriter.setData(x, {avVel, avPres});
+      }
+      csvWriter.writePNG();
     }
-    csvWriter.writePNG();
   }
-#endif
 }
 
-void getResultsCRAD( std::vector<SuperLattice<T, RADDESCRIPTOR>*>& adlattices,
-                     UnitConverter<T,NSDESCRIPTOR> const& converter,
-                     UnitConverter<T,RADDESCRIPTOR> const& converterAD,
-                     int iT,
-                     SuperGeometry<T,3>& superGeometry, util::Timer<T>& timer)
+void getResultsCRAD(MyCase& myCase,
+                    util::Timer<MyCase::value_t>& timer,
+                    std::size_t iT)
 {
+  using T = MyCase::value_t;
+  using RADDESCRIPTOR = MyCase::descriptor_t_of<Concentration<0>>;
+  auto& geometry = myCase.getGeometry();
+  const auto& converter = myCase.getLattice(NavierStokes{}).getUnitConverter();
+  const auto& converterAD = myCase.getLattice(Concentration<0>{}).getUnitConverter();
+  auto& params = myCase.getParameters();
   OstreamManager clout( std::cout,"getResultsCRAD" );
 
   SuperVTMwriter3D<T> vtmWriterCRAD( "mixer_wholeReaction" );
 
   // insert concentrations and velocoties for each component into vector and vtk
-    std::vector<SuperLatticeDensity3D<T, RADDESCRIPTOR>*> densities;
-    std::vector<SuperLatticePhysViscosity3D<T, RADDESCRIPTOR>*> diffs;
-    std::vector<std::string> names = {"A","B","P"};
+  std::vector<SuperLatticeDensity3D<T, RADDESCRIPTOR>*> densities;
+  std::vector<SuperLatticePhysViscosity3D<T, RADDESCRIPTOR>*> diffs;
+  std::vector<std::string> names = {"A","B","P"};
 
+  densities.emplace_back( new SuperLatticeDensity3D<T, RADDESCRIPTOR> (myCase.getLattice(Concentration<0>{})));
+  densities.emplace_back( new SuperLatticeDensity3D<T, RADDESCRIPTOR> (myCase.getLattice(Concentration<1>{})));
+  densities.emplace_back( new SuperLatticeDensity3D<T, RADDESCRIPTOR> (myCase.getLattice(Concentration<2>{})));
   for (int i = 0; i<3;i++){
-      densities.emplace_back( new SuperLatticeDensity3D<T, RADDESCRIPTOR> (*adlattices[i]));
-      densities[i]->getName() = "Concentration " + names[i];
-      vtmWriterCRAD.addFunctor(*densities[i]);
-      diffs.emplace_back( new SuperLatticePhysViscosity3D<T, RADDESCRIPTOR> (*adlattices[i], converterAD));
-      diffs[i]->getName() = "Diffusisvity " + names[i];
-      vtmWriterCRAD.addFunctor(*diffs[i]);
-    }
+    densities[i]->getName() = "Concentration " + names[i];
+    vtmWriterCRAD.addFunctor(*densities[i]);
+  }
+  diffs.emplace_back( new SuperLatticePhysViscosity3D<T, RADDESCRIPTOR> (myCase.getLattice(Concentration<0>{}), converterAD));
+  diffs.emplace_back( new SuperLatticePhysViscosity3D<T, RADDESCRIPTOR> (myCase.getLattice(Concentration<1>{}), converterAD));
+  diffs.emplace_back( new SuperLatticePhysViscosity3D<T, RADDESCRIPTOR> (myCase.getLattice(Concentration<2>{}), converterAD));
+  for (int i = 0; i<3;i++){
+    diffs[i]->getName() = "Diffusisvity " + names[i];
+    vtmWriterCRAD.addFunctor(*diffs[i]);
+  }
 
+  const T maxPhysT = params.get<parameters::MAX_PHYS_TIME>();
+  const T maxPhysTAD = params.get<parameters::MAX_PHYS_TIME_AD>();
   const int  vtkIter  = converter.getLatticeTime( maxPhysTAD/10 );
   const int  statIter = converter.getLatticeTime( maxPhysTAD/100 );
 
@@ -365,207 +483,157 @@ void getResultsCRAD( std::vector<SuperLattice<T, RADDESCRIPTOR>*>& adlattices,
 
   // Writes the ppm files
   if ( iT%vtkIter==0 ) {
-    adlattices[0]->setProcessingContext(ProcessingContext::Evaluation);
-    adlattices[1]->setProcessingContext(ProcessingContext::Evaluation);
-    adlattices[2]->setProcessingContext(ProcessingContext::Evaluation);
+    myCase.getLattice(Concentration<0>{}).setProcessingContext(ProcessingContext::Evaluation);
+    myCase.getLattice(Concentration<1>{}).setProcessingContext(ProcessingContext::Evaluation);
+    myCase.getLattice(Concentration<2>{}).setProcessingContext(ProcessingContext::Evaluation);
     vtmWriterCRAD.write( iT );
   }
 
   // Writes output on the console
   if ( iT%statIter==0 && iT>=0 ) {
     // Lattice statistics console output
-    adlattices[1]->getStatistics().print(iT,converter.getPhysTime(iT));
+    myCase.getLattice(Concentration<1>{}).getStatistics().print(iT,converter.getPhysTime(iT));
   }
 
-  #ifdef plotOverLine
-  // Compute mixing quantities along central axis
-  if (iT == (converter.getLatticeTime( maxPhysT ) - 1)) {
-    adlattices[0]->setProcessingContext(ProcessingContext::Evaluation);
-    adlattices[1]->setProcessingContext(ProcessingContext::Evaluation);
-    adlattices[2]->setProcessingContext(ProcessingContext::Evaluation);
-    // Preparation
-    Gnuplot<T> csvWriter("mixing");
-    int dummy[4];
-    T result[4];
-    const int nX = superGeometry.getCuboidDecomposition().getMotherCuboid().getNx();  // number of voxels in x-direction
-    const int minX = 3;                      // beginning of the mixing channel
-    auto mat = new SuperIndicatorIdentity3D<T> (superGeometry.getMaterialIndicator({1/*,5*/}));
-    const Vector<T,3> normal( 1, 0, 0 );
+  const bool plotOverLine = params.get<parameters::PLOT_OVER_LINE>();
+  if(plotOverLine) {
+    // Compute mixing quantities along central axis
+    if (iT == (converter.getLatticeTime( maxPhysT ) - 1)) {
+      myCase.getLattice(Concentration<0>{}).setProcessingContext(ProcessingContext::Evaluation);
+      myCase.getLattice(Concentration<1>{}).setProcessingContext(ProcessingContext::Evaluation);
+      myCase.getLattice(Concentration<2>{}).setProcessingContext(ProcessingContext::Evaluation);
+      // Preparation
+      Gnuplot<T> csvWriter("mixing");
+      int dummy[4];
+      T result[4];
+      const int nX = geometry.getCuboidDecomposition().getMotherCuboid().getNx();  // number of voxels in x-direction
+      const int minX = 3;                      // beginning of the mixing channel
+      auto mat = new SuperIndicatorIdentity3D<T> (geometry.getMaterialIndicator({1/*,5*/}));
+      const Vector<T,3> normal( 1, 0, 0 );
 
-    for (int iX = minX; iX < nX - 3; ++iX) {
-      const T x = converter.getPhysLength(iX);
-      const Vector<T,3> center( x, 0, 0 );
-      auto circle = new SuperIndicatorFfromIndicatorF3D<T>(
-        std::shared_ptr<IndicatorF3D<T>>(new IndicatorCircle3D<T> ( center, normal, 0.0003)), superGeometry);
-      SuperIndicatorMultiplication3D<T> plane(circle, mat);
+      for (int iX = minX; iX < nX - 3; ++iX) {
+        const T x = converter.getPhysLength(iX);
+        const Vector<T,3> center( x, 0, 0 );
+        auto circle = new SuperIndicatorFfromIndicatorF3D<T>(
+          std::shared_ptr<IndicatorF3D<T>>(new IndicatorCircle3D<T> ( center, normal, 0.0003)), geometry);
+        SuperIndicatorMultiplication3D<T> plane(circle, mat);
 
-      // Average concentration: use average functor
-      SuperAverage3D<T> (densities[2], plane).operator()(result, dummy);
-      const T avConc = result[0];
-      if (iX == nX - 8) {  // at outlet
-        clout << "av. conc. at outlet = " << avConc << std::endl;
+        // Average concentration: use average functor
+        SuperAverage3D<T> (densities[2], plane).operator()(result, dummy);
+        const T avConc = result[0];
+        if (iX == nX - 8) {  // at outlet
+          clout << "av. conc. at outlet = " << avConc << std::endl;
+        }
+        csvWriter.setData(x, avConc);
       }
-      csvWriter.setData(x, avConc);
+      csvWriter.writePNG();
     }
-    csvWriter.writePNG();
   }
-#endif
 }
 
-int main( int argc, char* argv[] )
-{
-
-  // === 1st Step: Initialization ===
-  initialize( &argc, &argv );
-  singleton::directories().setOutputDir( "./tmp/" );
-  OstreamManager clout( std::cout,"main" );
-  // display messages from every single mpi process
-  //clout.setMultiOutput(true);
-
-  UnitConverterFromResolutionAndLatticeVelocity<T,NSDESCRIPTOR> converter(
-    (T)   N,               // resolution
-    (T)   0.05,            // maximal lattice velocity
-    (T)   hydrInlet,       // charPhysLength: reference length of simulation geometry
-    (T)   u_mean,          // charPhysVelocity
-    (T)   nu,              // physViscosity: physical kinematic viscosity in __m^2 / s__
-    (T)   density          // physDensity: physical density in __kg / m^3__
-  );
-
-  // Prints the converter log as console output
-  converter.print();
-  // Writes the converter log in a file
-  converter.write("laminarReactiveTmixer");
-  clout << "Maximal simulated time for NSE: " << maxPhysT << std::endl;
-
-  UnitConverterFromResolutionAndLatticeVelocity<T,RADDESCRIPTOR> converterAD(
-    (T)   N,               // resolution
-    (T)   0.05,            // maximal lattice velocity
-    (T)   hydrInlet,       // charPhysLength: reference length of simulation geometry
-    (T)   u_mean,          // charPhysVelocity
-    (T)   nu,              // physViscosity: physical kinematic viscosity in __m^2 / s__
-    (T)   density          // physDensity: physical density in __kg / m^3__
-  );
-
-  // === 2nd Step: Prepare Geometry ===
-  T dx = converter.getConversionFactorLength();
-  Vector<T,3> extendReactor( lx + 2*dx, ly_outlet + 2*dx, lz + 2*dx );
-  Vector<T,3> originReactor( -dx, -(ly_outlet + 2*dx)/2, -(lz + 2*dx)/2 );
-  std::shared_ptr<IndicatorCuboid3D<T> > reactor( new IndicatorCuboid3D<T> ( extendReactor, originReactor ));
-
-  Vector<T,3> extendInflow( lx_inlet + 2*dx, ly + 2*dx, lz + 2*dx );
-  Vector<T,3> originInflow( -dx, -(ly + 2*dx)/2, -(lz + 2*dx)/2 );
-  std::shared_ptr<IndicatorCuboid3D<T> > inflow( new IndicatorCuboid3D<T> ( extendInflow, originInflow ));
-
-  IndicatorIdentity3D<T> mixer(reactor + inflow);
-
-#ifdef PARALLEL_MODE_MPI
-  const int noOfCuboids = singleton::mpi().getSize();
-#else
-  const int noOfCuboids = 4;
-#endif
-  CuboidDecomposition3D<T> cuboidDecomposition( mixer, converter.getConversionFactorLength(), noOfCuboids, "volume" );
-
-  HeuristicLoadBalancer<T> loadBalancer( cuboidDecomposition );
-
-  SuperGeometry<T,3> superGeometry( cuboidDecomposition, loadBalancer, 3 );
-
-  prepareGeometry( converter, superGeometry );
-
-  SuperLattice<T, NSDESCRIPTOR> sLatticeNS( converter, superGeometry );
-
-  prepareLatticeNS( converter, sLatticeNS, superGeometry );
-
-  SuperLattice<T, RADDESCRIPTOR> CRADlattice( converterAD, superGeometry );
-
-  // initiate reference lattice for coupling, this lattice will be the first component
-  std::vector<SuperLattice<T, RADDESCRIPTOR>*> adlattices;
-  adlattices.push_back(&CRADlattice);
-
-  // initiate further lattices for the remaining components
-  for (int i =1; i<3;i++){
-    adlattices.emplace_back( new SuperLattice<T, RADDESCRIPTOR> ( converterAD, superGeometry));
-  }
-  // partners are used for coupling; coupled with adlattice[0]
-  std::vector<SuperLattice<T, RADDESCRIPTOR>*> partners;
-  for (int i =1; i<3; i++){
-    partners.emplace_back(adlattices[i]);
-  }
-
-  // prepare all lattices with the respective concentration
-  T rhoA = 1.e-8;
-  T rhoB = 1.e-8;
-  T D = D_P;
-  for(int i = 0; i<3; i++){
-    if ( i == 0 ) {rhoA = 1.; D = D_A;}
-    if ( i == 1 ) {rhoA = 1.e-8; rhoB = 0.001; D = D_B;}
-    if ( i == 2 ) {rhoA = 1.e-8; rhoB = 1.e-8; D = D_P;}
-    prepareLatticeCRAD(sLatticeNS, adlattices[i], superGeometry, converter, rhoA, rhoB, D);
-  }
-  sLatticeNS.setStatisticsOff();
-  adlattices[0] -> setStatisticsOff();
-  adlattices[1] -> setStatisticsOff();
-  adlattices[2] -> setStatisticsOff();
-  T omegaA = converter.getLatticeRelaxationFrequencyFromDiffusivity<RADDESCRIPTOR>( D_A );
-  T omegaB = converter.getLatticeRelaxationFrequencyFromDiffusivity<RADDESCRIPTOR>( D_B );
-  T omegaP = converter.getLatticeRelaxationFrequencyFromDiffusivity<RADDESCRIPTOR>( D_P );
-
-  clout << "Tau A: " << 1./omegaA << std::endl;
-  clout << "Tau B: " << 1./omegaB << std::endl;
-  clout << "Tau P: " << 1./omegaP << std::endl;
-
-  /// === 3.1 Step: Prepare Coupling ===
-  SuperLatticeCoupling coupling(
-    LESReactionCoupling<T,3>{},
-    names::NavierStokes{}, sLatticeNS,
-    names::Concentration0{}, *adlattices[0],
-    names::Concentration1{}, *adlattices[1],
-    names::Concentration2{}, *adlattices[2]);
-  coupling.setParameter<LESReactionCoupling<T,3>::LATTICE_REACTION_COEFF>(converter.getConversionFactorTime()*1.e5);
-  coupling.setParameter<LESReactionCoupling<T,3>::STOCH_COEFF>({-1, -1., 1.});
-  coupling.setParameter<LESReactionCoupling<T,3>::REACTION_ORDER>({1., 1., 0.});
-  coupling.setParameter<LESReactionCoupling<T,3>::SMAGORINSKY_PREFACTOR>(0.2);
-  coupling.setParameter<LESReactionCoupling<T,3>::SCHMIDT>({0.03, 0.03, 0.03});
-  coupling.setParameter<LESReactionCoupling<T,3>::OMEGA_NSE>(1./converter.getLatticeRelaxationFrequency());
-  coupling.setParameter<LESReactionCoupling<T,3>::OMEGAS_ADE>({omegaA, omegaB, omegaP});
-
+void simulate(MyCase& myCase) {
+  using T = MyCase::value_t;
+  auto& params = myCase.getParameters();
+  const auto& converter = myCase.getLattice(NavierStokes{}).getUnitConverter();
+  const T maxPhysT = params.get<parameters::MAX_PHYS_TIME>();
+  const T maxPhysTAD = params.get<parameters::MAX_PHYS_TIME_AD>();
+  const std::size_t iTmax = converter.getLatticeTime(maxPhysT);
   const int  statIterNS = converter.getLatticeTime( maxPhysT/100 );
   const int  statIterAD = converter.getLatticeTime( maxPhysTAD/100 );
 
-  clout << "starting Coupled LES - Reactive ADE simulation..." << std::endl;
-  util::Timer<T> timer( converter.getLatticeTime( maxPhysT ), superGeometry.getStatistics().getNvoxel() );
+  myCase.getLattice(NavierStokes{}).setStatisticsOff();
+  myCase.getLattice(Concentration<0>{}).setStatisticsOff();
+  myCase.getLattice(Concentration<1>{}).setStatisticsOff();
+  myCase.getLattice(Concentration<2>{}).setStatisticsOff();
+
+  util::Timer<T> timer(iTmax, myCase.getGeometry().getStatistics().getNvoxel());
   timer.start();
 
-  for ( std::size_t iT = 0; iT < converter.getLatticeTime( maxPhysT ); ++iT ) {
+  for (std::size_t iT=0; iT < iTmax; ++iT) {
     if(iT%statIterNS == 0){
-      sLatticeNS.setStatisticsOn();
+      myCase.getLattice(NavierStokes{}).setStatisticsOn();
     }
     if(iT == 0){
-      adlattices[1] -> setStatisticsOn();
+      myCase.getLattice(Concentration<1>{}).setStatisticsOn();
     }
-    setBoundaryValues( converter, sLatticeNS, iT, superGeometry );
-    sLatticeNS.collideAndStream();
-    getResultsNS( sLatticeNS, converter, iT, superGeometry, timer );
-    if(iT == 0){getResultsCRAD( adlattices, converter, converterAD, iT, superGeometry, timer );}
+
+    setTemporalValues(myCase, iT);
+
+    myCase.getLattice(NavierStokes{}).collideAndStream();
+
+    getResultsNS(myCase, timer, iT);
+
+    if(iT == 0){getResultsCRAD(myCase, timer, iT);}
     if(iT >= converter.getLatticeTime( maxPhysT - maxPhysTAD )){
       if(iT%statIterAD == 0){
-      adlattices[1] -> setStatisticsOn();
+        myCase.getLattice(Concentration<1>{}).setStatisticsOn();
       }
       if(iT%100 == 0){
-        coupling.apply();
+        myCase.getOperator("LESReaction").apply();
       }
-      for (int i = 0; i<3; i++){
-        adlattices[i]->collideAndStream();
-      }
-      getResultsCRAD( adlattices, converter, converterAD, iT, superGeometry, timer );
+      myCase.getLattice(Concentration<0>{}).collideAndStream();
+      myCase.getLattice(Concentration<1>{}).collideAndStream();
+      myCase.getLattice(Concentration<2>{}).collideAndStream();
+      getResultsCRAD(myCase, timer, iT);
     }
     if(iT%statIterNS == 0){
-      sLatticeNS.setStatisticsOff();
+      myCase.getLattice(NavierStokes{}).setStatisticsOff();
     }
     if(iT%statIterAD == 0){
-      adlattices[1] -> setStatisticsOff();
+      myCase.getLattice(Concentration<1>{}).setStatisticsOff();
     }
   }
 
   timer.stop();
   timer.printSummary();
+}
+
+int main(int argc, char* argv[]) {
+  initialize(&argc, &argv);
+
+  /// === Step 2: Set Parameters ===
+  MyCase::ParametersD myCaseParameters;
+  {
+    using namespace olb::parameters;
+    myCaseParameters.set<DOMAIN_EXTENT        >({1600e-6,800e-6,100e-6});
+    myCaseParameters.set<RESOLUTION           >(40);
+    myCaseParameters.set<MAX_PHYS_TIME        >(25*(1600e-6 + 800e-6/2)/1.4);
+    myCaseParameters.set<MAX_PHYS_TIME_AD     >(0.01);
+    myCaseParameters.set<PHYS_CHAR_VELOCITY   >(1.4);
+    myCaseParameters.set<PHYS_MAX_VELOCITY    >(1.4*2.1);
+    myCaseParameters.set<LATTICE_CHAR_VELOCITY>(0.05);
+    myCaseParameters.set<PHYS_CHAR_DENSITY    >(1000.);
+    myCaseParameters.set<PHYS_CHAR_VISCOSITY  >(1.002e-6);
+    myCaseParameters.set<LX_INLET             >(100.e-6);
+    myCaseParameters.set<LY_OUTLET            >(200.e-6);
+    myCaseParameters.set<DIFFUSION            >({1.6e-9,2.e-10,2.e-10});
+    myCaseParameters.set<CONCENTRATION        >({1., 1.e-8,1.e-8,0.001,1.e-8,1.e-8});
+    myCaseParameters.set<PLOT_OVER_LINE       >(true);
+    myCaseParameters.set<START_TIME           >(0.02*25*(1600e-6 + 800e-6/2)/1.4);
+  }
+  myCaseParameters.fromCLI(argc, argv);
+
+  /// === Step 3: Create Mesh ===
+  Mesh mesh = createMesh(myCaseParameters);
+
+  /// === Step 4: Create Case ===
+  MyCase myCase(myCaseParameters, mesh);
+
+  /// === Step 5: Prepare Geometry ===
+  prepareGeometry(myCase);
+
+  /// === Step 6: Prepare Lattice ===
+  prepareLatticeNS(myCase);
+  prepareLatticeCRAD<0>(myCase);
+  prepareLatticeCRAD<1>(myCase);
+  prepareLatticeCRAD<2>(myCase);
+
+  /// === Step 7: Definition of Initial, Boundary Values, and Fields ===
+  setInitialValuesNS(myCase);
+  setInitialValuesCRAD<0>(myCase);
+  setInitialValuesCRAD<1>(myCase);
+  setInitialValuesCRAD<2>(myCase);
+
+  /// === Step 8: Simulate ===
+  simulate(myCase);
 }

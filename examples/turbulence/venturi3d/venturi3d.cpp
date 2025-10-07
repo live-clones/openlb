@@ -37,19 +37,38 @@
 #include <olb.h>
 
 using namespace olb;
+using namespace olb::names;
 using namespace olb::descriptors;
 using namespace olb::graphics;
 
-using T = FLOATING_POINT_TYPE;
-using DESCRIPTOR = D3Q19<>;
 
-T maxPhysT = 200.0; // max. simulation time in s, SI unit
 
-SuperGeometry<T,3> prepareGeometry( )
-{
+// === Step 1: Declarations ===
+using MyCase = Case<
+  NavierStokes, Lattice<FLOATING_POINT_TYPE, descriptors::D3Q19<>>
+>;
 
-  OstreamManager clout( std::cout,"prepareGeometry" );
-  clout << "Prepare Geometry ..." << std::endl;
+Mesh<MyCase::value_t,MyCase::d> createMesh(MyCase::ParametersD& parameters) {
+  using T = MyCase::value_t;
+  std::string fName("venturi3d.xml");
+  XMLreader config(fName);
+
+  std::shared_ptr<IndicatorF3D<T> > inflow = createIndicatorCylinder3D<T>(config["Geometry"]["Inflow"]["IndicatorCylinder3D"], false);
+  std::shared_ptr<IndicatorF3D<T> > outflow0 = createIndicatorCylinder3D<T>(config["Geometry"]["Outflow0"]["IndicatorCylinder3D"], false);
+  std::shared_ptr<IndicatorF3D<T> > outflow1 = createIndicatorCylinder3D<T>(config["Geometry"]["Outflow1"]["IndicatorCylinder3D"], false);
+
+  std::shared_ptr<IndicatorF3D<T> > venturi = createIndicatorF3D<T>(config["Geometry"]["Venturi"], false);
+
+  int N = config["Application"]["Discretization"]["Resolution"].get<int>();
+
+  Mesh<T,MyCase::d> mesh(*venturi, 1./N, singleton::mpi().getSize());
+  mesh.setOverlap(parameters.get<parameters::OVERLAP>());
+  return mesh;
+}
+
+void prepareGeometry(MyCase& myCase) {
+  using T = MyCase::value_t;
+  auto& geometry = myCase.getGeometry();
 
   std::string fName("venturi3d.xml");
   XMLreader config(fName);
@@ -60,129 +79,117 @@ SuperGeometry<T,3> prepareGeometry( )
 
   std::shared_ptr<IndicatorF3D<T> > venturi = createIndicatorF3D<T>(config["Geometry"]["Venturi"], false);
 
-  // Build CoboidGeometry from IndicatorF (weights are set, remove and shrink is done)
-  int N = config["Application"]["Discretization"]["Resolution"].get<int>();
-  CuboidDecomposition3D<T>* cuboidDecomposition = new CuboidDecomposition3D<T>( *venturi, 1./N, singleton::mpi().getSize() );
-
-  // Build LoadBalancer from CuboidDecomposition (weights are respected)
-  HeuristicLoadBalancer<T>* loadBalancer = new HeuristicLoadBalancer<T>( *cuboidDecomposition );
-
-  // Default instantiation of superGeometry
-  SuperGeometry<T,3> superGeometry( *cuboidDecomposition, *loadBalancer, 3 );
-
   // Set boundary voxels by rename material numbers
-  superGeometry.rename( 0,2, venturi );
-  superGeometry.rename( 2,1,{1,1,1} );
-  superGeometry.rename( 2,3,1, inflow );
-  superGeometry.rename( 2,4,1, outflow0 );
-  superGeometry.rename( 2,5,1, outflow1 );
-
-  // print some node here to check the geometry
-  //clout << "edge of the upper pipe" << std::endl;
-  //double physR[3] = {120, 5, 50};
-  //superGeometry.print(physR, 2);
-
-  //clout << "center of the right pipe" << std::endl;
-  //double physR2[3] = {5, 50, 50};
-  //superGeometry.print(physR2, 2);
-
+  geometry.rename( 0,2, venturi );
+  geometry.rename( 2,1,{1,1,1} );
+  geometry.rename( 2,3,1, inflow );
+  geometry.rename( 2,4,1, outflow0 );
+  geometry.rename( 2,5,1, outflow1 );
 
   // Removes all not needed boundary voxels outside the surface
-  superGeometry.clean();
+  geometry.clean();
   // Removes all not needed boundary voxels inside the surface
-  superGeometry.innerClean();
-  superGeometry.checkForErrors();
+  geometry.innerClean();
+  geometry.checkForErrors();
 
-
-  superGeometry.getStatistics().print();
-  superGeometry.communicate();
-
-  clout << "Prepare Geometry ... OK" << std::endl;
-  return superGeometry;
+  geometry.getStatistics().print();
+  geometry.communicate();
 }
 
+void prepareLattice(MyCase& myCase) {
+  using T = MyCase::value_t;
+  using DESCRIPTOR = MyCase::descriptor_t;
 
-void prepareLattice( SuperLattice<T,DESCRIPTOR>& sLattice,
-                     SuperGeometry<T,3>& superGeometry )
-{
+  auto& lattice = myCase.getLattice(NavierStokes{});
+  auto& geometry = myCase.getGeometry();
 
-  OstreamManager clout( std::cout,"prepareLattice" );
-  clout << "Prepare Lattice ..." << std::endl;
+  std::string fName("venturi3d.xml");
+  XMLreader config(fName);
 
-  const T omega = sLattice.getUnitConverter().getLatticeRelaxationFrequency();
+  UnitConverter<T, DESCRIPTOR>* converter = createUnitConverter<T, DESCRIPTOR>(config);
+  myCase.getLattice(NavierStokes{}).setUnitConverter(converter);
+  lattice.getUnitConverter().print();
 
-  // Material=1 -->bulk dynamics
-  sLattice.defineDynamics<RLBdynamics>(superGeometry, 1);
+// Material=1 -->bulk dynamics
+  lattice.defineDynamics<RLBdynamics>(geometry, 1);
 
   // Material=2 -->bounce back
-  boundary::set<boundary::BounceBack>(sLattice, superGeometry, 2);
+  boundary::set<boundary::BounceBack>(lattice, geometry, 2);
 
   // Setting of the boundary conditions
-  boundary::set<boundary::InterpolatedVelocity>(sLattice, superGeometry, 3);
-  boundary::set<boundary::InterpolatedPressure>(sLattice, superGeometry, 4);
-  boundary::set<boundary::InterpolatedPressure>(sLattice, superGeometry, 5);
+  boundary::set<boundary::InterpolatedVelocity>(lattice, geometry, 3);
+  boundary::set<boundary::InterpolatedPressure>(lattice, geometry, 4);
+  boundary::set<boundary::InterpolatedPressure>(lattice, geometry, 5);
 
-  sLattice.setParameter<descriptors::OMEGA>(omega);
+  lattice.setParameter<descriptors::OMEGA>(lattice.getUnitConverter().getLatticeRelaxationFrequency());
 
-  sLattice.initialize();
+  lattice.initialize();
 
-  clout << "Prepare Lattice ... OK" << std::endl;
 }
 
-// Generates a slowly increasing sinuidal inflow for the first iTMax timesteps
-void setBoundaryValues( SuperLattice<T, DESCRIPTOR>& sLattice, int iT,
-                        SuperGeometry<T,3>& superGeometry )
-{
-  OstreamManager clout( std::cout,"setBoundaryValues" );
+void setInitialValues(MyCase& myCase) {
+}
 
-  // No of time steps for smooth start-up
-  int iTmaxStart = sLattice.getUnitConverter().getLatticeTime( maxPhysT*0.8 );
+void setTemporalValues(MyCase& myCase,
+                       std::size_t iT)
+{
+  using T = MyCase::value_t;
+
+  auto& parameters = myCase.getParameters();
+  auto& lattice = myCase.getLattice(NavierStokes{});
+  auto& geometry = myCase.getGeometry();
+
+  const T maxPhysT = parameters.get<parameters::MAX_PHYS_T>();
+  int iTmaxStart = lattice.getUnitConverter().getLatticeTime( maxPhysT*0.8 );
   int iTperiod = 50;
 
   if ( iT%iTperiod==0 && iT<= iTmaxStart ) {
-    clout << "Set Boundary Values ..." << std::endl;
-
-    //SinusStartScale<T,int> startScale(iTmaxStart, (T) 1);
     PolynomialStartScale<T,int> startScale( iTmaxStart, T( 1 ) );
     int iTvec[1]= {iT};
     T frac = T();
     startScale( &frac,iTvec );
 
     // Creates and sets the Poiseuille inflow profile using functors
-    CirclePoiseuille3D<T> poiseuilleU( superGeometry, 3, frac*sLattice.getUnitConverter().getCharLatticeVelocity(), T(), sLattice.getUnitConverter().getPhysDeltaX() );
-    sLattice.defineU( superGeometry, 3, poiseuilleU );
+    CirclePoiseuille3D<T> poiseuilleU( geometry, 3, frac*lattice.getUnitConverter().getCharLatticeVelocity(), T(), lattice.getUnitConverter().getPhysDeltaX() );
+    lattice.defineU( geometry, 3, poiseuilleU );
 
-    clout << "step=" << iT << "; scalingFactor=" << frac << std::endl;
-
-    sLattice.setProcessingContext<Array<momenta::FixedVelocityMomentumGeneric::VELOCITY>>(
+    lattice.setProcessingContext<Array<momenta::FixedVelocityMomentumGeneric::VELOCITY>>(
       ProcessingContext::Simulation);
   }
-  //clout << "Set Boundary Values ... ok" << std::endl;
 }
 
-void getResults( SuperLattice<T, DESCRIPTOR>& sLattice, int iT,
-                 SuperGeometry<T,3>& superGeometry, util::Timer<T>& timer )
+void getResults(MyCase& myCase,
+                util::Timer<MyCase::value_t>& timer,
+                std::size_t iT)
 {
+  /// Write vtk plots every 0.3 seconds (of phys. simulation time)
+  using T = MyCase::value_t;
+  using DESCRIPTOR = MyCase::descriptor_t;
 
-  OstreamManager clout( std::cout,"getResults" );
+  auto& lattice = myCase.getLattice(NavierStokes{});
+  auto& converter = lattice.getUnitConverter();
+
+  const std::size_t iTlog = converter.getLatticeTime(1.);
+  const std::size_t iTvtk = converter.getLatticeTime(1.);
+
   SuperVTMwriter3D<T> vtmWriter( "venturi3d" );
 
   if ( iT==0 ) {
     // Writes the geometry, cuboid no. and rank no. as vti file for visualization
-    SuperLatticeCuboid3D<T, DESCRIPTOR> cuboid( sLattice );
-    SuperLatticeRank3D<T, DESCRIPTOR> rank( sLattice );
+    SuperLatticeCuboid3D<T, DESCRIPTOR> cuboid( lattice );
+    SuperLatticeRank3D<T, DESCRIPTOR> rank( lattice );
     vtmWriter.write( cuboid );
     vtmWriter.write( rank );
     vtmWriter.createMasterFile();
   }
 
   // Writes the vtm files
-  if ( iT%sLattice.getUnitConverter().getLatticeTime( 1. )==0 ) {
-    sLattice.setProcessingContext(ProcessingContext::Evaluation);
+  if ( iT % iTvtk == 0 ) {
+    lattice.setProcessingContext(ProcessingContext::Evaluation);
 
     // Create the data-reading functors...
-    SuperLatticePhysVelocity3D<T, DESCRIPTOR> velocity( sLattice, sLattice.getUnitConverter() );
-    SuperLatticePhysPressure3D<T, DESCRIPTOR> pressure( sLattice, sLattice.getUnitConverter() );
+    SuperLatticePhysVelocity3D<T, DESCRIPTOR> velocity( lattice, converter );
+    SuperLatticePhysPressure3D<T, DESCRIPTOR> pressure( lattice, converter );
     vtmWriter.addFunctor( velocity );
     vtmWriter.addFunctor( pressure );
     vtmWriter.write( iT );
@@ -204,61 +211,65 @@ void getResults( SuperLattice<T, DESCRIPTOR>& sLattice, int iT,
   }
 
   // Writes output on the console
-  if ( iT%sLattice.getUnitConverter().getLatticeTime( 1. )==0 ) {
+  if ( iT % iTlog == 0 ) {
     timer.update( iT );
     timer.printStep();
-    sLattice.getStatistics().print( iT, sLattice.getUnitConverter().getPhysTime( iT ) );
+    lattice.getStatistics().print( iT, lattice.getUnitConverter().getPhysTime( iT ) );
   }
+}
+
+void simulate(MyCase& myCase) {
+  using T = MyCase::value_t;
+  auto& parameters = myCase.getParameters();
+  const T maxPhysT = parameters.get<parameters::MAX_PHYS_T>();
+
+  const std::size_t iTmax = myCase.getLattice(NavierStokes{}).getUnitConverter().getLatticeTime(maxPhysT);
+  util::Timer<T> timer(iTmax, myCase.getGeometry().getStatistics().getNvoxel());
+  timer.start();
+
+  for (std::size_t iT=0; iT < iTmax; ++iT) {
+    /// === Step 8.1: Update the Boundary Values and Fields at Times ===
+    setTemporalValues(myCase, iT);
+
+    /// === Step 8.2: Collide and Stream Execution ===
+    myCase.getLattice(NavierStokes{}).collideAndStream();
+
+    /// === Step 8.3: Computation and Output of the Results ===
+    getResults(myCase, timer, iT);
+  }
+
+  timer.stop();
+  timer.printSummary();
 }
 
 
 int main( int argc, char* argv[] )
 {
-  // === 1st Step: Initialization ===
-
   initialize( &argc, &argv );
-  singleton::directories().setOutputDir( "./tmp/" );
-  OstreamManager clout( std::cout,"main" );
-  // display messages from every single mpi process
-  // clout.setMultiOutput(true);
 
-  std::string fName("venturi3d.xml");
-  XMLreader config(fName);
-
-  UnitConverter<T, DESCRIPTOR>* converter = createUnitConverter<T, DESCRIPTOR>(config);
-
-  // Prints the converter log as console output
-  converter->print();
-  // Writes the converter log in a file
-  converter->write("venturi3d");
-
-  // === 2nd Step: Prepare Geometry ===
-
-  SuperGeometry<T,3> superGeometry( prepareGeometry() );
-
-  // === 3rd Step: Prepare Lattice ===
-
-  SuperLattice<T, DESCRIPTOR> sLattice( *converter, superGeometry );
-
-  prepareLattice( sLattice, superGeometry );
-
-  util::Timer<T> timer( converter->getLatticeTime( maxPhysT ), superGeometry.getStatistics().getNvoxel() );
-  timer.start();
-  getResults( sLattice, 0, superGeometry, timer );
-
-  // === 4th Step: Main Loop with Timer ===
-  for ( std::size_t iT = 0; iT <= converter->getLatticeTime( maxPhysT ); ++iT ) {
-
-    // === 5th Step: Definition of Initial and Boundary Conditions ===
-    setBoundaryValues( sLattice, iT, superGeometry );
-
-    // === 6th Step: Collide and Stream Execution ===
-    sLattice.collideAndStream();
-
-    // === 7th Step: Computation and Output of the Results ===
-    getResults( sLattice, iT, superGeometry, timer );
+  /// === Step 2: Set Parameters ===
+  MyCase::ParametersD myCaseParameters;
+  {
+    using namespace olb::parameters;
+    myCaseParameters.set<MAX_PHYS_T>(200.);
   }
+  myCaseParameters.fromCLI(argc, argv);
 
-  timer.stop();
-  timer.printSummary();
+  /// === Step 3: Create Mesh ===
+  Mesh mesh = createMesh(myCaseParameters);
+
+  /// === Step 4: Create Case ===
+  MyCase myCase(myCaseParameters, mesh);
+
+  /// === Step 5: Prepare Geometry ===
+  prepareGeometry(myCase);
+
+  /// === Step 6: Prepare Lattice ===
+  prepareLattice(myCase);
+
+  /// === Step 7: Definition of Initial, Boundary Values, and Fields ===
+  setInitialValues(myCase);
+
+  /// === Step 8: Simulate ===
+  simulate(myCase);
 }

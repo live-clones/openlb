@@ -28,52 +28,58 @@
 // https://doi.org/10.1017/jfm.2014.134
 // https://doi.org/10.1063/1.4863312
 
-#include "olb3D.h"
-#include "olb3D.hh"
+#include <olb.h>
 
 using namespace olb;
+using namespace olb::names;
 
-using T = float;
-using DESCRIPTOR = descriptors::D3Q19<
-  descriptors::POROSITY,
-  descriptors::VELOCITY,
-  fields::fsi::ELEMENT_TAG,
-  fields::fsi::ELEMENT_FORCE,
-  fields::fsi::ELEMENT_TORQUE,
-  descriptors::AVERAGE_VELOCITY
+// === Step 1: Declarations ===
+using MyCase = Case<
+  NavierStokes, Lattice<float, descriptors::D3Q19<
+    descriptors::POROSITY,
+    descriptors::VELOCITY,
+    fields::fsi::ELEMENT_TAG,
+    descriptors::AVERAGE_VELOCITY
+  >>
 >;
 
-const int N = 40;
-const T eta = 0.5; // \eta = r_i/r_o
-const T innerR = 0.3;
-const T outerR = innerR/eta;
-const T gapW = outerR - innerR;
-const T length = 2.*std::numbers::pi*gapW/3.;
-const T Ta = util::pow(10.,10.); // Taylor number
-const T viscosity = 1.e-5;
-const T sigma = util::pow((innerR + outerR)/2./util::sqrt(innerR*outerR),4.);
-const T rotateOmega = util::sqrt(Ta*viscosity*viscosity/(0.25*sigma*(outerR-innerR)*(outerR-innerR)*(outerR+innerR)*(outerR+innerR)));
-const T charPhysU = rotateOmega*innerR;
-Vector<T,3> rotateU{0.,0.,-rotateOmega};
-const T turbI = 0.05;
-const T maxPhysT = 1000*gapW/charPhysU;
-std::default_random_engine generator(0x1337533DAAAAAAAA);
+namespace olb::parameters {
+
+struct ETA : public descriptors::FIELD_BASE<1> { };
+struct INNER_R : public descriptors::FIELD_BASE<1> { };
+struct OUTER_R : public descriptors::FIELD_BASE<1> { };
+struct LENGTH : public descriptors::FIELD_BASE<1> { };
+struct SIGMA : public  descriptors::FIELD_BASE<1> { };
+struct ROTATE_OMEGA : public  descriptors::FIELD_BASE<1> { };
+struct PHYS_AVERAGING_START_T : public  descriptors::FIELD_BASE<1> { };
+
+}
 
 template <typename T, typename S>
 class TaylorCouette3D : public AnalyticalF3D<T,S> {
-protected:
+private:
   T turbulenceIntensity;
   T maxVelocity;
   T a;
   T b;
+  T innerR;
+  T outerR;
+
+  std::default_random_engine generator;
 
 public:
-  TaylorCouette3D(UnitConverter<T,DESCRIPTOR> const& converter) : AnalyticalF3D<T,S>(3)
+  TaylorCouette3D(MyCase& myCase)
+    : AnalyticalF3D<T,S>(3)
+    , generator(0x1337533DAAAAAAAA)
   {
-    turbulenceIntensity = turbI;
-    maxVelocity = converter.getLatticeVelocity(charPhysU);
+    auto& params = myCase.getParameters();
+    const auto& converter = myCase.getLattice(NavierStokes()).getUnitConverter();
+    innerR = params.get<parameters::INNER_R>();
+    outerR = params.get<parameters::OUTER_R>();
+    turbulenceIntensity = params.get<parameters::TURBULENCE_INTENSITY>();
+    maxVelocity = converter.getLatticeVelocity(params.get<parameters::PHYS_CHAR_VELOCITY>());
     a = -1.;
-    b = 1.;
+    b =  1.;
   };
 
   bool operator()(T output[], const S input[])
@@ -91,7 +97,7 @@ public:
 
     if( radius >= innerR && radius <= outerR ){
 
-    T u_calc_tang = maxVelocity*(outerR - radius)/gapW;
+    T u_calc_tang = maxVelocity*(outerR - radius)/(outerR-innerR);
     T u_calc_x = u_calc_tang*util::sin(std::acos((input[0] - outerR)/radius));
     T u_calc_y = -u_calc_tang*util::cos(std::acos((input[0] - outerR)/radius));
 
@@ -110,39 +116,71 @@ public:
   };
 };
 
-std::shared_ptr<IndicatorF3D<T>> makeDomainI() {
+std::shared_ptr<IndicatorF3D<MyCase::value_t>> createDomainI(MyCase::ParametersD& params) {
+  using T = MyCase::value_t;
+
+  const T outerR = params.get<parameters::OUTER_R>();
+  const T length = params.get<parameters::LENGTH>();
+
   std::shared_ptr<IndicatorF3D<T>> boxI(new IndicatorCuboid3D<T>({2*outerR,2*outerR,length},{0,0,0}));
   return boxI;
 }
 
-std::shared_ptr<IndicatorF3D<T>> makeFsiRegionI() {
-  return makeDomainI();
+Mesh<MyCase::value_t,MyCase::d> createMesh(MyCase::ParametersD& params) {
+  using T = MyCase::value_t;
+
+  const T gapW = params.get<parameters::OUTER_R>() - params.get<parameters::INNER_R>();
+  const T deltaX = gapW / params.get<parameters::RESOLUTION>();
+
+  auto domainI = createDomainI(params);
+
+  Mesh<T,MyCase::d> mesh(*domainI, deltaX, singleton::mpi().getSize());
+  mesh.getCuboidDecomposition().setPeriodicity({false, false, true});
+  mesh.setOverlap(params.get<parameters::OVERLAP>());
+  return mesh;
 }
 
-void prepareGeometry(const UnitConverter<T,DESCRIPTOR>& converter,
-                     SuperGeometry<T,3>& superGeometry)
-{
+void prepareGeometry(MyCase& myCase) {
   OstreamManager clout(std::cout, "prepareGeometry");
   clout << "Prepare Geometry ..." << std::endl;
 
-  auto domainI = makeDomainI();
-  auto fsiRegionI = makeFsiRegionI();
+  auto& params = myCase.getParameters();
+  auto domainI = createDomainI(params);
+  auto& sGeometry = myCase.getGeometry();
 
-  superGeometry.rename(0, 3);
-  superGeometry.rename(3, 2, {1,1,0});
+  sGeometry.rename(0, 3);
+  sGeometry.rename(3, 2, {1,1,0});
 
-  superGeometry.checkForErrors();
-  superGeometry.print();
+  sGeometry.checkForErrors();
+  sGeometry.print();
 
   clout << "Prepare Geometry ... OK" << std::endl;
 }
 
-void prepareLattice(SuperLattice<T, DESCRIPTOR>& sLattice,
-                    const UnitConverter<T, DESCRIPTOR>& converter,
-                    SuperGeometry<T,3>& superGeometry)
-{
+void prepareLattice(MyCase& myCase) {
   OstreamManager clout( std::cout,"prepareLattice" );
   clout << "Prepare Lattice ..." << std::endl;
+
+  using T = MyCase::value_t;
+  using DESCRIPTOR = MyCase::descriptor_t_of<NavierStokes>;
+
+  auto& sGeometry = myCase.getGeometry();
+  auto& params = myCase.getParameters();
+
+  auto& sLattice = myCase.getLattice(NavierStokes());
+
+  const T gapW = params.get<parameters::OUTER_R>() - params.get<parameters::INNER_R>();
+
+  sLattice.setUnitConverter<UnitConverterFromResolutionAndLatticeVelocity<T,DESCRIPTOR>>(
+    (int) params.get<parameters::RESOLUTION>(), // resolution of gap
+    (T)   0.1,              // CFL
+    (T)   gapW,             // charPhysLength: reference length of simulation geometry
+    (T)   params.get<parameters::PHYS_CHAR_VELOCITY>(),   // charPhysVelocity: maximal/highest expected velocity during simulation in __m / s__
+    (T)   params.get<parameters::PHYS_CHAR_VISCOSITY>(), // physViscosity: physical kinematic viscosity in __m^3 / s__
+    (T)   1.                // physDensity: physical density in __kg / m^3__
+  );
+  const auto& converter = sLattice.getUnitConverter();
+  converter.print();
 
   WallModelParameters<T> wallModelParameters;
   wallModelParameters.bodyForce = false;
@@ -154,31 +192,55 @@ void prepareLattice(SuperLattice<T, DESCRIPTOR>& sLattice,
   wallModelParameters.wallFunctionProfile = 1;
   wallModelParameters.movingWall = true;
   wallModelParameters.averageVelocity = true;
-  setTurbulentWallModelDynamics(sLattice, superGeometry.getMaterialIndicator({1,2}), wallModelParameters);
+  setTurbulentWallModelDynamics(sLattice,
+                                sGeometry.getMaterialIndicator({1,2}),
+                                wallModelParameters);
 
-  sLattice.defineDynamics<NoDynamics>(superGeometry, 0);
+  sLattice.addPostProcessor(sGeometry.getMaterialIndicator(2),
+                            meta::id<TurbulentWallModelPostProcessor<false,true,false,1,true>>{});
+  sLattice.addPostProcessor(sGeometry.getMaterialIndicator({1,2}),
+                            meta::id<TurbulentWallModelPorousFneqFDMPostProcessor<0>>{});
 
-  boundary::set<boundary::BounceBack>(sLattice, superGeometry, 3);
   sLattice.setParameter<descriptors::OMEGA>(converter.getLatticeRelaxationFrequency());
+  sLattice.setParameter<collision::LES::SMAGORINSKY>(0.2);
+  sLattice.setParameter<descriptors::SAMPLING_DISTANCE>(wallModelParameters.samplingCellDistance);
+
+  sLattice.defineDynamics<NoDynamics>(sGeometry, 0);
+  boundary::set<boundary::BounceBack>(sLattice, sGeometry, 3);
+  sLattice.setParameter<descriptors::OMEGA>(converter.getLatticeRelaxationFrequency());
+
+  clout << "Prepare Lattice ... OK" << std::endl;
+}
+
+void setInitialValues(MyCase& myCase) {
+  using T = MyCase::value_t;
+
+  auto& params  = myCase.getParameters();
+  auto& sGeometry = myCase.getGeometry();
+  auto& sLattice  = myCase.getLattice(NavierStokes());
+  const auto& converter  = sLattice.getUnitConverter();
+
+  const T outerR = params.get<parameters::OUTER_R>();
+  const T length = params.get<parameters::LENGTH>();
 
   AnalyticalConst3D<T,T> rhoF(1);
   AnalyticalConst3D<T,T> u0(0.,0.,0.);
-  TaylorCouette3D<T,T> uCalc(converter);
-  auto bulkIndicator = superGeometry.getMaterialIndicator({1,2});
+  TaylorCouette3D<T,T> uCalc(myCase);
+  auto bulkIndicator = sGeometry.getMaterialIndicator({1,2});
   sLattice.iniEquilibrium(bulkIndicator, rhoF, uCalc);
   sLattice.defineRhoU(bulkIndicator, rhoF, uCalc);
-  sLattice.defineField<descriptors::AVERAGE_VELOCITY>(superGeometry.getMaterialIndicator({0,1,2,3}), u0);
+  sLattice.defineField<descriptors::AVERAGE_VELOCITY>(sGeometry.getMaterialIndicator({0,1,2,3}), u0);
 
   {
     // set everywhere 0 porosity
     AnalyticalConst3D<T,T> porosityF(0);
-    sLattice.defineField<descriptors::POROSITY>(superGeometry.getMaterialIndicator({0,1,2,3}), porosityF);
+    sLattice.defineField<descriptors::POROSITY>(sGeometry.getMaterialIndicator({0,1,2,3}), porosityF);
   }
   {
     // set porosity & wall-model-porosity 1 in the bulk and rotating inner cylinder
     AnalyticalConst3D<T,T> porosityF(1);
     IndicatorCylinder3D<T> cylinderI({outerR - T{0.25}*converter.getPhysDeltaX(), outerR - T{0.25}*converter.getPhysDeltaX(), -T{5.}*converter.getPhysDeltaX()},{outerR - T{0.25}*converter.getPhysDeltaX(), outerR - T{0.25}*converter.getPhysDeltaX(), length+T{10.}*converter.getPhysDeltaX()}, outerR);
-    SuperIndicatorFfromIndicatorF3D<T> cylinderIndicatorF(cylinderI, superGeometry);
+    SuperIndicatorFfromIndicatorF3D<T> cylinderIndicatorF(cylinderI, sGeometry);
     sLattice.defineField<descriptors::POROSITY>(cylinderIndicatorF, porosityF);
     sLattice.defineField<descriptors::WMPOROSITY>(bulkIndicator, porosityF);
   }
@@ -187,36 +249,35 @@ void prepareLattice(SuperLattice<T, DESCRIPTOR>& sLattice,
     IndicatorCuboid3D<T> cuboid({2*outerR,2*outerR,length},{0,0,0});
     std::shared_ptr<IndicatorF3D<T>> cuboidLayer(new IndicatorLayer3D<T>(cuboid, T{5.}*converter.getPhysDeltaX()));
     std::shared_ptr<IndicatorF3D<T>> cylinderOutI(new IndicatorCylinder3D<T>({outerR - T{0.25}*converter.getPhysDeltaX(), outerR - T{0.25}*converter.getPhysDeltaX(), -T{5.}*converter.getPhysDeltaX()},{outerR - T{0.25}*converter.getPhysDeltaX(), outerR - T{0.25}*converter.getPhysDeltaX(), length+T{10.}*converter.getPhysDeltaX()}, outerR));
-    SuperIndicatorFfromIndicatorF3D<T> cylinderIndicatorOutF(cylinderOutI, superGeometry);
-    SuperIndicatorFfromIndicatorF3D<T> outerF((cuboidLayer - cylinderOutI), superGeometry);
+    SuperIndicatorFfromIndicatorF3D<T> cylinderIndicatorOutF(cylinderOutI, sGeometry);
+    SuperIndicatorFfromIndicatorF3D<T> outerF((cuboidLayer - cylinderOutI), sGeometry);
 
     setWallDistance(sLattice, outerF, cylinderIndicatorOutF, cylinderOutI.get());
-
-    sLattice.addPostProcessor(superGeometry.getMaterialIndicator(2),
-                              meta::id<TurbulentWallModelPostProcessor<false,true,false,1,true>>{});
-    sLattice.addPostProcessor(superGeometry.getMaterialIndicator({1,2}),
-                              meta::id<TurbulentWallModelPorousFneqFDMPostProcessor<0>>{});
-
-    sLattice.setParameter<descriptors::OMEGA>(converter.getLatticeRelaxationFrequency());
-    sLattice.setParameter<collision::LES::SMAGORINSKY>(0.2);
-    sLattice.setParameter<descriptors::SAMPLING_DISTANCE>(wallModelParameters.samplingCellDistance);
   }
 
   sLattice.initialize();
-
-  clout << "Prepare Lattice ... OK" << std::endl;
 }
 
-void getResults(SuperLattice<T,DESCRIPTOR>& sLattice,
-                const UnitConverter<T,DESCRIPTOR>& converter,
-                SuperGeometry<T,3>& superGeometry,
-                util::Timer<T>& timer,
+void setTemporalValues(MyCase& myCase,
+                       std::size_t iT)
+{ }
+
+void getResults(MyCase& myCase,
+                util::Timer<MyCase::value_t>& timer,
                 std::size_t iT)
 {
   OstreamManager clout(std::cout, "getResults");
 
-  const int vtkIter  = converter.getLatticeTime(1./30);
-  const int statIter = converter.getLatticeTime(1./60);
+  using T = MyCase::value_t;
+  using DESCRIPTOR = MyCase::descriptor_t_of<NavierStokes>;
+
+  auto& sGeometry = myCase.getGeometry();
+  auto& sLattice  = myCase.getLattice(NavierStokes());
+  const auto& converter  = sLattice.getUnitConverter();
+  auto& params  = myCase.getParameters();
+
+  const int vtkIter  = converter.getLatticeTime(1);
+  const int statIter = converter.getLatticeTime(1./30);
 
   if (iT == 0) {
     {
@@ -234,11 +295,14 @@ void getResults(SuperLattice<T,DESCRIPTOR>& sLattice,
     }
   }
 
-  int iTstartAvg = converter.getLatticeTime(200.*gapW/charPhysU);
+  const T gapW = params.get<parameters::OUTER_R>() - params.get<parameters::INNER_R>();
+  const T charPhysU = params.get<parameters::PHYS_CHAR_VELOCITY>();
+  std::size_t iTstartAvg = converter.getLatticeTime(200.*gapW/charPhysU);
+
   if (iT == iTstartAvg) {
     sLattice.setProcessingContext(ProcessingContext::Evaluation);
     SuperLatticeVelocity3D<T,DESCRIPTOR> latticeVelocity(sLattice);
-    sLattice.defineField<descriptors::AVERAGE_VELOCITY>(superGeometry.getMaterialIndicator({1,2,3,4,5,6,7}), latticeVelocity);
+    sLattice.defineField<descriptors::AVERAGE_VELOCITY>(sGeometry.getMaterialIndicator({1,2,3,4,5,6,7}), latticeVelocity);
   }
   if (iT < iTstartAvg) {
     sLattice.setParameter<descriptors::LATTICE_TIME>(2);
@@ -250,72 +314,56 @@ void getResults(SuperLattice<T,DESCRIPTOR>& sLattice,
   if (iT % vtkIter == 0 && iT > converter.getLatticeTime(1.)) {
     sLattice.executePostProcessors(stage::Evaluation{});
     sLattice.setProcessingContext(ProcessingContext::Evaluation);
-    sLattice.scheduleBackgroundOutputVTK([&,iT](auto task)
-    {
+    sLattice.scheduleBackgroundOutputVTK([&,iT,iTstartAvg](auto task) {
       SuperVTMwriter3D<T> vtkWriter("flow");
       SuperLatticePhysVelocity3D velocity(sLattice, converter);
       SuperLatticePhysPressure3D pressure(sLattice, converter);
-      SuperLatticePhysField3D<T,DESCRIPTOR,descriptors::AVERAGE_VELOCITY> velocityAv(sLattice, converter.getConversionFactorVelocity());
       vtkWriter.addFunctor(pressure);
       vtkWriter.addFunctor(velocity);
-      vtkWriter.addFunctor(velocityAv);
+
+      SuperLatticePhysField3D<T,DESCRIPTOR,descriptors::AVERAGE_VELOCITY> velocityAv(
+        sLattice, converter.getConversionFactorVelocity());
+      velocityAv.getName() = "avgU";
+
+      if (iT > iTstartAvg) {
+        vtkWriter.addFunctor(velocityAv);
+      }
+
       task(vtkWriter, iT);
     });
   }
 }
 
-int main(int argc, char* argv[]) {
-  initialize( &argc, &argv );
-  singleton::directories().setOutputDir( "./tmp/" );
+void simulate(MyCase& myCase) {
+  using T = MyCase::value_t;
 
-  OstreamManager clout(std::cout, "main");
-  OstreamManager clresult(std::cout, "result");
-
-  const UnitConverterFromResolutionAndLatticeVelocity<T, DESCRIPTOR> converter(
-    (int) N,                // resolution of gap
-    (T)   0.1,              // CFL
-    (T)   gapW,             // charPhysLength: reference length of simulation geometry
-    (T)   charPhysU,        // charPhysVelocity: maximal/highest expected velocity during simulation in __m / s__
-    (T)   viscosity,        // physViscosity: physical kinematic viscosity in __m^3 / s__
-    (T)   1.                // physDensity: physical density in __kg / m^3__
-  );
-  converter.print();
-  clout << "maxPhysT: " << maxPhysT << std::endl;
-
-  auto domainI = makeDomainI();
-  std::shared_ptr<IndicatorF3D<T>> paddedDomainI(new IndicatorLayer3D<T>(*domainI, 3.*converter.getPhysDeltaX()));
-
-  CuboidDecomposition3D<T> cDecomposition(*paddedDomainI, converter.getPhysDeltaX(), singleton::mpi().getSize());
-  cDecomposition.setPeriodicity({false, false, true});
-  BlockLoadBalancer<T> loadBalancer(cDecomposition);
-
-  SuperGeometry<T,3> superGeometry(cDecomposition, loadBalancer, 5);
-  prepareGeometry(converter, superGeometry);
-
-  SuperLattice sLattice(converter, superGeometry);
-  prepareLattice(sLattice, converter, superGeometry);
+  auto& params = myCase.getParameters();
+  auto& sGeometry = myCase.getGeometry();
+  auto& sLattice = myCase.getLattice(NavierStokes());
+  const auto& converter = sLattice.getUnitConverter();
 
   SuperPorousElementEmbeddingO fsiEmbeddingO(sLattice);
-  fsiEmbeddingO.registerElementType<CylinderWithWallModelPorosityF>(superGeometry.getMaterialIndicator(2));
+  fsiEmbeddingO.registerElementType<CylinderWithWallModelPorosityF>(sGeometry.getMaterialIndicator(2));
 
-  Vector center{outerR- T{0.25}*converter.getPhysDeltaX(), outerR- T{0.25}*converter.getPhysDeltaX(), -T{5}*converter.getPhysDeltaX()};
+  const T innerR = params.get<parameters::INNER_R>();
+  const T outerR = params.get<parameters::OUTER_R>();
+  const T length = params.get<parameters::LENGTH>();
+  const T omega = params.get<parameters::ROTATE_OMEGA>();
+  Vector center{outerR - T{0.25}*converter.getPhysDeltaX(),
+                outerR - T{0.25}*converter.getPhysDeltaX(),
+                       - T{   5}*converter.getPhysDeltaX()};
   Vector<T,3> axis{0,0,1};
   auto valveParams = makeParametersD<T,descriptors::SPATIAL_DESCRIPTOR<3>>(
     fields::fsi::ELEMENT_TAG{},      1,
     fields::fsi::ELEMENT_PIVOT{},    center,
     fields::fsi::ELEMENT_ROTATION{}, 0,
+    fields::fsi::ELEMENT_U_ROTATION{}, Vector<T,3>{0, 0, -omega},
     CylinderPorosityF::RADIUS{},     innerR,
     CylinderPorosityF::CENTER{},     center,
     CylinderPorosityF::LENGTH{},     (length+T{10}*converter.getPhysDeltaX()),
     CylinderPorosityF::AXIS{},       axis
   );
   fsiEmbeddingO.add(valveParams);
-
-  SuperPorousElementReductionO<T,DESCRIPTOR,fields::fsi::ELEMENT_FORCE,fields::fsi::ELEMENT_TORQUE> fsiReductionO(
-    sLattice,
-    superGeometry.getMaterialIndicator(2));
-  fsiReductionO.resize(1);
-  fsiReductionO.addCollectionO(meta::id<CollectPorousBoundaryForceAndTorqueO>{});
 
   sLattice.setParameter<fields::converter::PHYS_LENGTH>(
     1/converter.getConversionFactorLength());
@@ -327,34 +375,87 @@ int main(int argc, char* argv[]) {
   sLattice.setProcessingContext(ProcessingContext::Simulation);
   fsiEmbeddingO.initialize();
 
-  util::Timer<T> timer(converter.getLatticeTime(maxPhysT),
-                       superGeometry.getStatistics().getNvoxel());
+  const std::size_t iTmax = converter.getLatticeTime(
+    params.get<parameters::MAX_PHYS_T>());
+
+  util::Timer<T> timer(iTmax, sGeometry.getStatistics().getNvoxel());
   timer.start();
 
-  for (std::size_t iT = 0; iT <= converter.getLatticeTime(maxPhysT); ++iT) {
-    fsiEmbeddingO.apply();
+  for (std::size_t iT=0; iT < iTmax; ++iT) {
+    /// === Step 8.1: Update the Boundary Values and Fields at Times ===
+    setTemporalValues(myCase, iT);
 
-    sLattice.collideAndStream();
+    /// === Step 8.2: Collide and Stream Execution ===
+    myCase.getLattice(NavierStokes{}).collideAndStream();
 
     sLattice.stripeOffDensityOffset(sLattice.getStatistics().getAverageRho()-(T)1);
 
-    fsiReductionO.apply();
-
-    if (fsiReductionO.rankDoesFSI()) {
-      for (unsigned iElement=1; iElement <= fsiReductionO.getElementCount(); ++iElement) {
-        fsiEmbeddingO.setField<fields::fsi::ELEMENT_ROTATION>(iElement-1, 0);
-        fsiEmbeddingO.setField<fields::fsi::ELEMENT_U_ROTATION>(iElement-1, rotateU);
-      }
-
-      fsiEmbeddingO.setProcessingContext<Array<fields::fsi::ELEMENT_ROTATION>>(ProcessingContext::Simulation);
-      fsiEmbeddingO.setProcessingContext<Array<fields::fsi::ELEMENT_U_ROTATION>>(ProcessingContext::Simulation);
-    }
-
-    getResults(sLattice, converter, superGeometry, timer, iT);
+    /// === Step 8.3: Computation and Output of the Results ===
+    getResults(myCase, timer, iT);
   }
 
   sLattice.setProcessingContext(ProcessingContext::Evaluation);
 
   timer.stop();
   timer.printSummary();
+}
+
+int main(int argc, char* argv[]) {
+  initialize( &argc, &argv );
+
+  /// === Step 2: Set Parameters ===
+  MyCase::ParametersD myCaseParameters;
+  {
+    using namespace olb::parameters;
+    myCaseParameters.set<RESOLUTION>(20);
+    myCaseParameters.set<ETA>(0.5);
+    myCaseParameters.set<INNER_R>(0.3);
+    myCaseParameters.set<TAYLOR>(1e10);
+    myCaseParameters.set<PHYS_CHAR_VISCOSITY>(1e-5);
+    myCaseParameters.set<TURBULENCE_INTENSITY>(0.05);
+
+    myCaseParameters.set<OUTER_R>([&] {
+      return myCaseParameters.get<INNER_R>() / myCaseParameters.get<ETA>();
+    });
+    myCaseParameters.set<LENGTH>([&] {
+      const auto gapW = myCaseParameters.get<OUTER_R>() - myCaseParameters.get<INNER_R>();
+      return 2 * std::numbers::pi * gapW / 3;
+    });
+    myCaseParameters.set<ROTATE_OMEGA>([&] {
+      const auto innerR = myCaseParameters.get<INNER_R>();
+      const auto outerR = myCaseParameters.get<OUTER_R>();
+      const auto sigma = util::pow((innerR + outerR)/2./util::sqrt(innerR*outerR), 4);
+      return util::sqrt(myCaseParameters.get<TAYLOR>()*util::pow(myCaseParameters.get<PHYS_CHAR_VISCOSITY>(), 2)/(0.25*sigma*util::pow(outerR-innerR, 3)));
+    });
+    myCaseParameters.set<PHYS_CHAR_VELOCITY>([&] {
+      return myCaseParameters.get<ROTATE_OMEGA>() * myCaseParameters.get<INNER_R>();
+    });
+    myCaseParameters.set<MAX_PHYS_T>([&] {
+      const auto gapW = myCaseParameters.get<OUTER_R>() - myCaseParameters.get<INNER_R>();
+      return 1000 * gapW / myCaseParameters.get<PHYS_CHAR_VELOCITY>();
+    });
+    myCaseParameters.set<PHYS_AVERAGING_START_T>([&] {
+      const auto gapW = myCaseParameters.get<OUTER_R>() - myCaseParameters.get<INNER_R>();
+      return 200 * gapW / myCaseParameters.get<PHYS_CHAR_VELOCITY>();
+    });
+  }
+  myCaseParameters.fromCLI(argc, argv);
+
+  /// === Step 3: Create Mesh ===
+  Mesh mesh = createMesh(myCaseParameters);
+
+  /// === Step 4: Create Case ===
+  MyCase myCase(myCaseParameters, mesh);
+
+  /// === Step 5: Prepare Geometry ===
+  prepareGeometry(myCase);
+
+  /// === Step 6: Prepare Lattice ===
+  prepareLattice(myCase);
+
+  /// === Step 7: Definition of Initial, Boundary Values, and Fields ===
+  setInitialValues(myCase);
+
+  /// === Step 8: Simulate ===
+  simulate(myCase);
 }

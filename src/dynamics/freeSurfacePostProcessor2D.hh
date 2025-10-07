@@ -44,6 +44,9 @@ void FreeSurfaceMassFlowPostProcessor2D<T, DESCRIPTOR>::apply(CELL& cell) {
   Vector<T, DESCRIPTOR::q> zero_mass_exchange{};
   cell.template setField<FreeSurface::TEMP_MASS_EXCHANGE>(zero_mass_exchange);
 
+  // Reset HAS_INTERFACE_NBRS to default, i.e., true
+  cell.template setField<FreeSurface::HAS_INTERFACE_NBRS>(true);
+
   // Skip if the current cell is not an interface cell.
   if (!isCellType(cell, FreeSurface::Type::Interface)) {
     return;
@@ -71,20 +74,27 @@ void FreeSurfaceMassFlowPostProcessor2D<T, DESCRIPTOR>::apply(CELL& cell) {
   // post-stream, i.e., cell[i](*) = nbrCell[i].
   // Keep in mind that each cell has DESCRIPTOR::q neighbours, and each neighbor contains DESCRIPTOR::q
   // distribution functions.
+  const T epsilon = cell.template getField<FreeSurface::EPSILON>();
   T mass_exchange = T(0);
   for (int iPop = 1; iPop < DESCRIPTOR::q; ++iPop) {
+    // Get the neighbour and its opposite population index, used to compute the mass exchange.
     auto nbrCell = cell.neighbor(descriptors::c<DESCRIPTOR>(iPop));
+    const auto opposite_iPop = descriptors::opposite<DESCRIPTOR>(iPop);
 
-    // Skip if the neighbour is a gas cell, i.e., no mass exchange
+    // (1) Skip if the neighbour is a solid cell, i.e., no mass exchange
+    if (isCellType(nbrCell, FreeSurface::Type::Solid)) { continue; }
+
+    // (2) Skip if the neighbour is a gas cell, i.e., no mass exchange
     if (isCellType(nbrCell, FreeSurface::Type::Gas)) { continue; }
 
-    // Mass exchange with a liquid neighbour, i.e., computed uisng the difference between incoming and outgoing DFs
+    // (3) Exchange mass if the neighbour is a liquid cell, i.e., uisng the difference between incoming and outgoing DFs.
     if (isCellType(nbrCell, FreeSurface::Type::Fluid)) {
-      mass_exchange += cell[descriptors::opposite<DESCRIPTOR>(iPop)] - nbrCell[iPop];
+      mass_exchange += (cell[opposite_iPop] - nbrCell[iPop]);
       continue;
     }
 
-    // Check if the neighbour cell has gas or fluid neighbours
+    // (4) Exchange mass when the neighbour is an interface cell, i.e., Table 4.1 of N. Thuerey dissertation, 2007.
+    // Check if the neighbour interface cell has gas or fluid neighbours
     FreeSurface::NeighbourInfo nbrNeighbourInfo = getNeighbourInfo(nbrCell);
     bool nbrHasNoGasNeighbours = !nbrNeighbourInfo.has_gas_neighbours;
     bool nbrHasNoFluidNeighbours = !nbrNeighbourInfo.has_fluid_neighbours;
@@ -97,43 +107,48 @@ void FreeSurfaceMassFlowPostProcessor2D<T, DESCRIPTOR>::apply(CELL& cell) {
       nbrIsHealthyInterfaceCell = true;
     }
 
+    // Simple mass exchange if both current cell and neighbour cell are healthy interfaces
     T pdf_difference = T(0);
-    if (isCellType(nbrCell, FreeSurface::Type::Interface)) {
-      // Simple mass exchange if both current cell and neighbour cell are healthy interfaces
-      if (isHealthyInterfaceCell && nbrIsHealthyInterfaceCell) {
-        pdf_difference = cell[descriptors::opposite<DESCRIPTOR>(iPop)] - nbrCell[iPop];
+    if (isHealthyInterfaceCell && nbrIsHealthyInterfaceCell) {
+      pdf_difference = cell[opposite_iPop] - nbrCell[iPop];
+    }
+    else {
+      // A healthy interface cell with a neighbour that has no gas neighbours itself,
+      // or an interface cell with no liquid neighbours, but its neighbor has a liquid neighbour.
+      // make this cell empty, ref. N. Thuerey dissertation, 2007.
+      if ((isHealthyInterfaceCell && nbrHasNoGasNeighbours) || (hasNoFluidNeighbours && !nbrHasNoFluidNeighbours)) {
+        // The lattice weight must be included here because OpenLB stores shifted population values.
+        // However, including this term introduces adverse effects that require further investigation.
+        pdf_difference = -nbrCell[iPop] - descriptors::t<T, DESCRIPTOR>(iPop);
       }
       else {
-        // A healthy interface cell with a neighbour that has no gas neighbours itself,
-        // or an interface cell with no liquid neighbours, but its neighbor has a liquid neighbour.
-        // make this cell empty, ref. N. Thuerey dissertation, 2007.
-        if ((isHealthyInterfaceCell && nbrHasNoGasNeighbours) || (hasNoFluidNeighbours && !nbrHasNoFluidNeighbours)) {
-          pdf_difference = -nbrCell[iPop];
+        // A healthy interface cell with a neighbour that has no fluid neighbours itself,
+        // or an interface cell with no gas neighbours, but its neighbour has a gas neighbour.
+        // make the neighbour cell empty, ref. N. Thuerey dissertation, 2007.
+        if ((isHealthyInterfaceCell && nbrHasNoFluidNeighbours) || (hasNoGasNeighbours && !nbrHasNoGasNeighbours)) {
+          // The lattice weight must be included here because OpenLB stores shifted population values.
+          // However, including this term introduces adverse effects that require further investigation.
+          pdf_difference = cell[opposite_iPop] + descriptors::t<T, DESCRIPTOR>(opposite_iPop);
         }
         else {
-          // A healthy interface cell with a neighbour that has no fluid neighbours itself,
-          // or an interface cell with no gas neighbours, but its neighbour has a gas neighbour.
-          // make the neighbour cell empty, ref. N. Thuerey dissertation, 2007.
-          if ((isHealthyInterfaceCell && nbrHasNoFluidNeighbours) || (hasNoGasNeighbours && !nbrHasNoGasNeighbours)) {
-            pdf_difference = cell[descriptors::opposite<DESCRIPTOR>(iPop)];
+          // An interface cell with no liquid neighbors, whose neighbor also has no liquid neighbors,
+          // or an interface cell with no gas neighbors, whose neighbor also has no liquid neighbors.
+          // ref. N. Thuerey dissertation, 2007.
+          if ((hasNoFluidNeighbours && nbrHasNoFluidNeighbours) || (hasNoGasNeighbours && nbrHasNoGasNeighbours)) {
+            pdf_difference = cell[opposite_iPop] - nbrCell[iPop];
           }
           else {
-            // An interface cell with no liquid neighbors, whose neighbor also has no liquid neighbors,
-            // or an interface cell with no gas neighbors, whose neighbor also has no liquid neighbors.
-            // ref. N. Thuerey dissertation, 2007.
-            if ((hasNoFluidNeighbours && nbrHasNoFluidNeighbours) || (hasNoGasNeighbours && nbrHasNoGasNeighbours)) {
-              pdf_difference = cell[descriptors::opposite<DESCRIPTOR>(iPop)] - nbrCell[iPop];
-            }
+            printf("Warning: Undefined mass exchange configuration detected.\n");
           }
         }
       }
     }
 
-    const T epsilon_average = T(0.5) * (getClampedEpsilon(cell) + getClampedEpsilon(nbrCell));
-    mass_exchange += pdf_difference * epsilon_average;
+    const T nbr_epsilon = nbrCell.template getField<FreeSurface::EPSILON>();
+    mass_exchange += (pdf_difference * T(0.5) * (epsilon + nbr_epsilon));
   }
 
-  // Update the mass of interface cell
+  // Update the mass of interface cell using the computed mass exchange
   const auto mass = cell.template getField<FreeSurface::MASS>();
   cell.template setField<FreeSurface::MASS>(mass + mass_exchange);
 }
@@ -173,28 +188,29 @@ void FreeSurfaceInterfaceReconstructionPostProcessor2D<T, DESCRIPTOR>::apply(CEL
   // of an interface cell are modified, while only the distribution functions of
   // a neighboring gas cell are read.
   Vector<T, DESCRIPTOR::q> dfs{};
+  Vector<T, DESCRIPTOR::d> prev_velocity = cell.template getField<FreeSurface::PREVIOUS_VELOCITY>();
   for (int iPop = 1; iPop < DESCRIPTOR::q; iPop++) {
     auto nbrCell = cell.neighbor(descriptors::c<DESCRIPTOR>(iPop));
+
+    // Get the opposite population index
+    const auto opposite_iPop = descriptors::opposite<DESCRIPTOR>(iPop);
 
     // Distribution functions of an interface cell are reconstructed only for the missing directions,
     // i.e., incoming DFs from gas cells, using the pressure anti bounce back boundary condition.
     // Note: the notation used here differs from that in N. Thuerey's dissertation (2007), refer to the
     // explanation given above.
     if (isCellType(nbrCell, FreeSurface::Type::Gas)) {
-      constexpr bool usePrecise = true;
-      Vector<T, DESCRIPTOR::d> prev_velocity = cell.template getField<FreeSurface::PREVIOUS_VELOCITY>();
-
       // (1) Precise formulation of the pressure anti bounce back boundary condition: feq_(i) + feq_(-i) - nbr(i)
       // This is mathematically identical to the regular formulation, but the linear term of the 2nd order
       // equilibrium equation is manually eliminated due to its cancellation during summation, i.e., c_(-i).u = -(c_(i).u).
       // This formulation offers consistent floating-point rounding behaviour during arithmetic operations.
-      if constexpr (usePrecise) {
+      if constexpr (precise_formulation) {
         const T uSqr = util::normSqr<T, DESCRIPTOR::d>(prev_velocity);
         Vector<T, DESCRIPTOR::d> direction{};
         for (int i = 0; i < DESCRIPTOR::d; ++i) { direction[i] = descriptors::c<DESCRIPTOR>(iPop, i); }
         const T c_u = util::dotProduct(direction, prev_velocity);
 
-        dfs[descriptors::opposite<DESCRIPTOR>(iPop)] =
+        dfs[opposite_iPop] =
             T(2) * gas_density * descriptors::t<T, DESCRIPTOR>(iPop) * (T(1) + T(4.5) * c_u * c_u - T(1.5) * uSqr)
           - T(2) * descriptors::t<T, DESCRIPTOR>(iPop)
           - nbrCell[iPop];
@@ -204,15 +220,14 @@ void FreeSurfaceInterfaceReconstructionPostProcessor2D<T, DESCRIPTOR>::apply(CEL
       // operations, where the expression c_(-i).u = -(c_(i).u) could become untrue.
       else {
         T u[DESCRIPTOR::d] = {prev_velocity[0], prev_velocity[1]};
-        dfs[descriptors::opposite<DESCRIPTOR>(iPop)] =
+        dfs[opposite_iPop] =
             equilibrium<DESCRIPTOR>::secondOrder(iPop, gas_density, u)
-          + equilibrium<DESCRIPTOR>::secondOrder(descriptors::opposite<DESCRIPTOR>(iPop), gas_density, u)
+          + equilibrium<DESCRIPTOR>::secondOrder(opposite_iPop, gas_density, u)
           - nbrCell[iPop];
       }
     }
     else {
-      dfs[descriptors::opposite<DESCRIPTOR>(iPop)] =
-        cell[descriptors::opposite<DESCRIPTOR>(iPop)];
+      dfs[opposite_iPop] = cell[opposite_iPop];
     }
   }
 
@@ -224,13 +239,13 @@ void FreeSurfaceInterfaceReconstructionPostProcessor2D<T, DESCRIPTOR>::apply(CEL
   const auto mass = cell.template getField<FreeSurface::MASS>();
 
   // An interface cell is flagged as toGas if its volume fraction is below the threshold
-  if (mass < -transition * rho) {
+  if (util::less(mass, -transition * rho)) {
     setCellFlags(cell, FreeSurface::Flags::ToGas);
     return;
   }
 
   // An interface cell is flagged as toFluid if its volume fraction is above the (1.0 + threshold)
-  if (mass > (T(1) + transition) * rho) {
+  if (util::greater(mass, (T(1) + transition) * rho)) {
     setCellFlags(cell, FreeSurface::Flags::ToFluid);
     return;
   }
@@ -239,12 +254,12 @@ void FreeSurfaceInterfaceReconstructionPostProcessor2D<T, DESCRIPTOR>::apply(CEL
   // (1) If its volume fraction is below the (lonely threshold) and has interface neighbours (not isolated)
   // (2) If it has no interface neighbours (isolated) and drop_isolated_cells is set
   if (!nbrInfo.has_fluid_neighbours) {
-    if (mass < lonely_threshold * rho && nbrInfo.interface_neighbours != 0) {
+    if (util::less(mass, lonely_threshold * rho) && nbrInfo.interface_neighbours != std::uint8_t(0)) {
       setCellFlags(cell, FreeSurface::Flags::ToGas);
       return;
     }
 
-    if (nbrInfo.interface_neighbours == 0 && drop_isolated_cells) {
+    if (nbrInfo.interface_neighbours == std::uint8_t(0) && drop_isolated_cells) {
       setCellFlags(cell, FreeSurface::Flags::ToGas);
       return;
     }
@@ -254,12 +269,12 @@ void FreeSurfaceInterfaceReconstructionPostProcessor2D<T, DESCRIPTOR>::apply(CEL
   // (1) If its volume fraction is above the (1.0 - lonely threshold) and has interface neighbours (not isolated)
   // (2) If it has no interface neighbours (isolated) and drop_isolated_cells is set
   if (!nbrInfo.has_gas_neighbours) {
-    if (mass > (T(1) - lonely_threshold) * rho && nbrInfo.interface_neighbours != 0) {
+    if (util::greater(mass, (T(1) - lonely_threshold) * rho) && nbrInfo.interface_neighbours != std::uint8_t(0)) {
       setCellFlags(cell, FreeSurface::Flags::ToFluid);
       return;
     }
 
-    if (nbrInfo.interface_neighbours == 0 && drop_isolated_cells) {
+    if (nbrInfo.interface_neighbours == std::uint8_t(0) && drop_isolated_cells) {
       setCellFlags(cell, FreeSurface::Flags::ToFluid);
       return;
     }
@@ -294,25 +309,17 @@ void FreeSurfaceToFluidCellConversionPostProcessor2D<T, DESCRIPTOR>::apply(CELL&
         ++count;
         nbrCell.computeRhoU(rho_tmp, u_tmp);
         rho_average += rho_tmp;
-        for (std::size_t i = 0; i < DESCRIPTOR::d; ++i) { u_average[i] += u_tmp[i]; }
+        for (int i = 0; i < DESCRIPTOR::d; ++i) { u_average[i] += u_tmp[i]; }
       }
     }
 
-    if (count > std::uint8_t(0)) {
-      rho_average /= static_cast<T>(count);
-      for (std::size_t i = 0; i < DESCRIPTOR::d; ++i) { u_average[i] /= static_cast<T>(count); }
-    }
-    else {
-      // If no valid neighbouring cells are found
-      rho_average = T(1);
-      for (std::size_t i = 0; i < DESCRIPTOR::d; ++i) { u_average[i] = T(0); }
-    }
-
+    // Compute average density and velocity, and set equilibrium for the cell
+    rho_average = count ? (rho_average / T(count)) : T(1);
+    if (count) { for (int i = 0; i < DESCRIPTOR::d; ++i) { u_average[i] /= T(count); } }
     cell.iniEquilibrium(rho_average, u_average);
   }
-
   // If an interface cell with a ToGas flag has a neighbouring ToFluid cell, unset the ToGas flag
-  if (hasCellFlags(cell, FreeSurface::Flags::ToGas)) {
+  else if (hasCellFlags(cell, FreeSurface::Flags::ToGas)) {
     if (hasNeighbourFlags(cell, FreeSurface::Flags::ToFluid)) {
       setCellFlags(cell, FreeSurface::Flags::None);
     }
@@ -327,20 +334,11 @@ template<typename CELL>
 void FreeSurfaceToGasCellConversionPostProcessor2D<T, DESCRIPTOR>::apply(CELL& cell) {
   using namespace olb::FreeSurface;
 
-  if (isCellType(cell, FreeSurface::Type::Fluid)) {
-    for (int iPop = 1; iPop < DESCRIPTOR::q; ++iPop) {
-      auto nbrCell = cell.neighbor(descriptors::c<DESCRIPTOR>(iPop));
-
-      // Convert a liquid cell to interface if it is in the neighborhood of a toGas cell
-      if (hasCellFlags(nbrCell, FreeSurface::Flags::ToGas)) {
-        setCellFlags(cell, FreeSurface::Flags::NewInterface);
-        T rho = cell.computeRho();
-        cell.template setField<FreeSurface::MASS>(rho);
-
-        // Cell already flagged as NewInterface, skip the remaining neighbours.
-        break;
-      }
-    }
+  // Convert a liquid cell to interface if it is in the neighborhood of a toGas cell
+  if (isCellType(cell, FreeSurface::Type::Fluid) && hasNeighbourFlags(cell, FreeSurface::Flags::ToGas)) {
+    setCellFlags(cell, FreeSurface::Flags::NewInterface);
+    T rho = cell.computeRho();
+    cell.template setField<FreeSurface::MASS>(rho);
   }
 }
 
@@ -385,10 +383,11 @@ void FreeSurfaceMassExcessPostProcessor2D<T, DESCRIPTOR>::apply(CELL& cell) {
   std::uint8_t newIntefaceNbrs = std::uint8_t(0);
   for (int iPop = 1; iPop < DESCRIPTOR::q; ++iPop) {
     auto nbrCell = cell.neighbor(descriptors::c<DESCRIPTOR>(iPop));
+    const bool hasNoFlags = !hasCellFlags(nbrCell, FreeSurface::Flags::ToGas | FreeSurface::Flags::ToFluid);
 
     // Note that CELL_TYPE is not updated yet, and if no flag is set for this neighbour cell, it is an old interface cell
     // This means that this neighbour cell will remain an interface cell for the next time step
-    if (isCellType(nbrCell, FreeSurface::Type::Interface) && hasCellFlags(nbrCell, FreeSurface::Flags::None)) {
+    if (isCellType(nbrCell, FreeSurface::Type::Interface) && hasNoFlags) {
       ++oldIntefaceNbrs;
     }
     // If the neighbour cell is flagged as Newinterface, it is a new interface cell
@@ -399,35 +398,42 @@ void FreeSurfaceMassExcessPostProcessor2D<T, DESCRIPTOR>::apply(CELL& cell) {
 
   // Return if no interface cell is available to distribute the excess mass, i.e., the mass is lost or gained.
   const std::uint8_t intefaceNbrs = newIntefaceNbrs + oldIntefaceNbrs;
-  if (intefaceNbrs == std::uint8_t(0)) { return; }
+  if (intefaceNbrs == std::uint8_t(0)) {
+    /*std::string conversionType = hasCellFlags(cell, FreeSurface::Flags::ToGas) ? "toGas" : "toFluid";
+    printf("Warning: Interface %d with mass excess %f is flagged as %s, but no interface nbrs found.\n",
+      cell.getCellId(),
+      mass_excess,
+      conversionType.c_str()
+    );*/
+    cell.template setField<FreeSurface::HAS_INTERFACE_NBRS>(false);
+    return;
+  }
 
   // Distribution of excess mass among the neighbouring interface cells, weighted or evenly.
   bool enableAllInterfaces = true;
-  constexpr bool weightedDistribution = true;
   Vector<T, DESCRIPTOR::q> weights{};
   T weightsSum = T(0);
 
   // (1) Distribute excess mass among the neighbouring interface cells, weighted by normal vector.
-  if constexpr (weightedDistribution) {
+  if constexpr (weighted_distribution) {
     // Compute the weights for the mass excess distribution using normal vector of the current interface cell.
-    auto normal = computeInterfaceNormal(cell);
-    computeMassExcessWeights(cell, normal, enableAllInterfaces, weights);
+    computeMassExcessWeights(cell, enableAllInterfaces, weights);
 
     // Calculate sum of the computed weights
     for (const auto& weight : weights) { weightsSum += weight; }
 
-    if (util::fabs(weightsSum) < zeroThreshold<T>()) {
+    if (util::equal(weightsSum, T(0), T(1), tolerance<T>)) {
       // (a) If no old interface cell is available in normal direction,
       //     fall back to weighted all interface cells distribution model.
       if (!enableAllInterfaces) {
         enableAllInterfaces = true;
         weightsSum = T(0);
-        computeMassExcessWeights(cell, normal, enableAllInterfaces, weights);
+        computeMassExcessWeights(cell, enableAllInterfaces, weights);
         for (const auto& weight : weights) { weightsSum += weight; }
 
         // (b) If no interface cell is available in normal direction,
         //     fall back to evenly all interface cells distribution model.
-        if (util::fabs(weightsSum) < zeroThreshold<T>()) {
+        if (util::equal(weightsSum, T(0), T(1), tolerance<T>)) {
           for (auto& weight : weights) { weight = T(1); }
           weightsSum = T(intefaceNbrs);
         }
@@ -458,8 +464,9 @@ void FreeSurfaceMassExcessPostProcessor2D<T, DESCRIPTOR>::apply(CELL& cell) {
   Vector<T, DESCRIPTOR::q> mass_exchange{};
   for (int iPop = 1; iPop < DESCRIPTOR::q; ++iPop) {
     auto nbrCell = cell.neighbor(descriptors::c<DESCRIPTOR>(iPop));
+    const bool hasNoFlags = !hasCellFlags(nbrCell, FreeSurface::Flags::ToGas | FreeSurface::Flags::ToFluid);
 
-    if (isCellType(nbrCell, FreeSurface::Type::Interface) && hasCellFlags(nbrCell, FreeSurface::Flags::None)) {
+    if (isCellType(nbrCell, FreeSurface::Type::Interface) && hasNoFlags) {
       mass_exchange[iPop] = mass_excess * weights[iPop] / weightsSum;
     }
     else if (hasCellFlags(nbrCell, FreeSurface::Flags::NewInterface) && enableAllInterfaces) {
@@ -477,12 +484,14 @@ void FreeSurfaceMassExcessPostProcessor2D<T, DESCRIPTOR>::apply(CELL& cell) {
  * Free Surface Processor 7: Finalize Conversion
  */
 template<typename T, typename DESCRIPTOR>
-template<typename CELL>
-void FreeSurfaceFinalizeConversionPostProcessor2D<T, DESCRIPTOR>::apply(CELL& cell) {
+template<typename CELL, typename PARAMETERS>
+void FreeSurfaceFinalizeConversionPostProcessor2D<T, DESCRIPTOR>::apply(CELL& cell, PARAMETERS& params) {
 
   using namespace olb::FreeSurface;
 
-  // Convert flagged cells to appropriate cell types
+  const auto force_density = params.template get<FreeSurface::FORCE_DENSITY>();
+
+  // (1) Convert flagged cells to appropriate cell types according to the flags.
   if (hasCellFlags(cell, FreeSurface::Flags::ToFluid)) {
     setCellType(cell, FreeSurface::Type::Fluid);
     cell.template setField<FreeSurface::EPSILON>(T(1));
@@ -494,37 +503,49 @@ void FreeSurfaceFinalizeConversionPostProcessor2D<T, DESCRIPTOR>::apply(CELL& ce
   else if (hasCellFlags(cell, FreeSurface::Flags::NewInterface)) {
     setCellType(cell, FreeSurface::Type::Interface);
   }
-  else {
-    // if (hasCellFlags(cell, FreeSurface::Flags::None) == true),
-    // no further action is needed, as no conversion is triggered.
+
+  // (2) Update fields according to the cell types.
+  if (isCellType(cell, FreeSurface::Type::Gas)) {
+    // Resets the population distribution functions of a gas cell.
+    // This is intended solely for visualization purposes and
+    // should have no impact on the computations.
+    if constexpr (weighted_force) { cell.template setField<descriptors::FORCE>({T(0), T(0)}); }
+    T rho_gas = T(1);
+    T u_gas[DESCRIPTOR::d] = {T(0), T(0)};
+    cell.iniEquilibrium(rho_gas, u_gas);
   }
-
-  // Mass excess is distributed to old and new interface cells only,
-  // thus skip the non-interface cells.
-  if (!isCellType(cell, FreeSurface::Type::Interface)) {
-    return;
+  else if (isCellType(cell, FreeSurface::Type::Fluid)) {
+    // Update descriptors::FORCE field according to Koerner et al., 2005.
+    if constexpr (weighted_force) { cell.template setField<descriptors::FORCE>(force_density); }
   }
+  else if (isCellType(cell, FreeSurface::Type::Interface)) {
+    // Mass excess is distributed to old and new interface cells only.
+    // Gather excess mass from converted interface cells, either toFluid or toGas,
+    // and adjust the mass of the current interface cells accordingly.
+    T mass_collected = T(0);
+    for (int iPop = 1; iPop < DESCRIPTOR::q; ++iPop) {
+      // Check neighboring cell flags and collect excess mass if present.
+      auto nbrCell = cell.neighbor(descriptors::c<DESCRIPTOR>(iPop));
+      if (!hasCellFlags(nbrCell, FreeSurface::Flags::ToFluid | FreeSurface::Flags::ToGas)) { continue; }
+      auto mass_exchange = nbrCell.template getField<FreeSurface::TEMP_MASS_EXCHANGE>();
+      mass_collected += mass_exchange[descriptors::opposite<DESCRIPTOR>(iPop)];
+    }
 
-  // Collection of mass excess in a pulling step for the interface cells
-  T collected_excess = T(0);
-  for (int iPop = 1; iPop < DESCRIPTOR::q; ++iPop) {
-    auto nbrCell = cell.neighbor(descriptors::c<DESCRIPTOR>(iPop));
+    T mass_tmp = cell.template getField<FreeSurface::MASS>();
+    mass_tmp += mass_collected;
+    T rho = T(0);
+    T u_tmp[DESCRIPTOR::d] = {T(0), T(0)};
+    cell.computeRhoU(rho, u_tmp);
+    Vector<T,DESCRIPTOR::d> u_vel{u_tmp[0], u_tmp[1]};
+    cell.template setField<FreeSurface::EPSILON>(mass_tmp / rho);
+    cell.template setField<FreeSurface::MASS>(mass_tmp);
+    cell.template setField<FreeSurface::PREVIOUS_VELOCITY>(u_vel);
 
-    if (hasCellFlags(nbrCell, FreeSurface::Flags::ToFluid | FreeSurface::Flags::ToGas)) {
-      auto tempMassExchange = nbrCell.template getField<FreeSurface::TEMP_MASS_EXCHANGE>();
-      collected_excess += tempMassExchange[descriptors::opposite<DESCRIPTOR>(iPop)];
+    // Update descriptors::FORCE field according to Koerner et al., 2005.
+    if constexpr (weighted_force) {
+      cell.template setField<descriptors::FORCE>(force_density * mass_tmp / rho);
     }
   }
-
-  T mass_tmp = cell.template getField<FreeSurface::MASS>();
-  mass_tmp += collected_excess;
-  T rho = T(0);
-  T u_tmp[DESCRIPTOR::d] = {T(0), T(0)};
-  cell.computeRhoU(rho, u_tmp);
-  Vector<T,DESCRIPTOR::d> u_vel{u_tmp[0], u_tmp[1]};
-  cell.template setField<FreeSurface::EPSILON>(mass_tmp / rho);
-  cell.template setField<FreeSurface::MASS>(mass_tmp);
-  cell.template setField<FreeSurface::PREVIOUS_VELOCITY>(u_vel);
 }
 
 // Setup
@@ -532,7 +553,43 @@ template<typename T, typename DESCRIPTOR>
 FreeSurface2DSetup<T,DESCRIPTOR>::FreeSurface2DSetup(SuperLattice<T, DESCRIPTOR>& sLattice)
 :
   _sLattice(sLattice)
-{}
+{
+  for (int iC = 0; iC < _sLattice.getLoadBalancer().size(); ++iC) {
+    auto& blockLattice = _sLattice.getBlock(iC);
+    blockLattice.forCoreSpatialLocations([&](auto iX, auto iY) {
+      auto cell = blockLattice.get({iX, iY});
+
+      // (1) Corrects the FreeSurface::MASS field using FreeSurface::EPSILON and the updated density,
+      // typically in cases where hydrostatic pressure is applied.
+      const auto epsilon = cell.template getField<FreeSurface::EPSILON>();
+      const auto rho = cell.computeRho();
+      cell.template setField<FreeSurface::MASS>(rho * epsilon);
+
+      // (2) Set density in gas cells to 1.0, i.e., if hydrostatic pressure is applied.
+      if (isCellType(cell, FreeSurface::Type::Gas)) {
+        T rho_gas = T(1);
+        T u_gas[DESCRIPTOR::d] = {T(0), T(0)};
+        cell.iniEquilibrium(rho_gas, u_gas);
+      }
+
+      // (3) Corrects the descriptors::FORCE field according to Koerner et al., 2005.
+      if constexpr (FreeSurface::weighted_force) {
+        const auto force_density =
+          cell.getDynamics()->getParameters(blockLattice).template getOrFallback<FreeSurface::FORCE_DENSITY>({T(0), T(0)});
+
+        if (isCellType(cell, FreeSurface::Type::Gas)) {
+          cell.template setField<descriptors::FORCE>({T(0), T(0)});
+        }
+        else if (isCellType(cell, FreeSurface::Type::Fluid)) {
+          cell.template setField<descriptors::FORCE>(force_density);
+        }
+        else if (isCellType(cell, FreeSurface::Type::Interface)) {
+          cell.template setField<descriptors::FORCE>(force_density * epsilon);
+        }
+      }
+    });
+  }
+}
 
 template<typename T, typename DESCRIPTOR>
 void FreeSurface2DSetup<T,DESCRIPTOR>::addPostProcessor() {
@@ -556,7 +613,6 @@ void FreeSurface2DSetup<T,DESCRIPTOR>::addPostProcessor() {
     communicator.template requestField<FreeSurface::EPSILON>();
     communicator.template requestField<FreeSurface::CELL_TYPE>();
     communicator.template requestField<descriptors::POPULATION>();
-    communicator.template requestField<FreeSurface::PREVIOUS_VELOCITY>();
     communicator.exchangeRequests();
   }
 
@@ -599,6 +655,7 @@ void FreeSurface2DSetup<T,DESCRIPTOR>::addPostProcessor() {
     auto& communicator = _sLattice.getCommunicator(FreeSurface::Stage5());
     communicator.requestOverlap(_sLattice.getOverlap());
     communicator.template requestField<FreeSurface::TEMP_MASS_EXCHANGE>();
+    communicator.template requestField<FreeSurface::HAS_INTERFACE_NBRS>();
     communicator.exchangeRequests();
   }
 

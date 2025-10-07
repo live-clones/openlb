@@ -38,24 +38,47 @@
  * to set boundary conditions automatically.
  */
 
+#include "case.h"
 
-#include "cylinder3d.h"
-
-int main( int argc, char* argv[] )
+int main(int argc, char* argv[])
 {
-  // === 1st Step: Initialization ===
-  initialize( &argc, &argv );
-  singleton::directories().setOutputDir( "./tmp/" );
-  OstreamManager clout( std::cout,"main" );
+  initialize(&argc, &argv);
 
-  /// Simulation Parameter
-  int N = 10;
+  /// === Step 2: Set Parameters ===
+  MyCase::ParametersD myCaseParameters;
+  {
+    using namespace olb::parameters;
+    myCaseParameters.set<RESOLUTION>(10);
+    myCaseParameters.set<REYNOLDS >(20.);
+    myCaseParameters.set<MAX_PHYS_T>(16.);
+    myCaseParameters.set<PHYS_CHAR_VELOCITY>(0.2);
+    myCaseParameters.set<LATTICE_RELAXATION_TIME>(0.53);
+    myCaseParameters.set<PHYS_CHAR_DENSITY>(1.0);
+    myCaseParameters.set<RADIUS_CYLINDER>(0.05);
+    myCaseParameters.set<PHYS_VTK_OUTPUT_ITER_T>(0.3);
+    myCaseParameters.set<PHYS_STAT_ITER_T>(0.1);
+    myCaseParameters.set<RAMP_UP_UPDATE>(0.03);
+    myCaseParameters.set<RAMP_UP_END_FRACTION>(0.4);
+    myCaseParameters.set<VTK_ENABLED>(true);
+    myCaseParameters.set<GNUPLOT_ENABLED>(true);
+  }
+  myCaseParameters.fromCLI(argc, argv);
 
-  bool eoc = false;
+  /// === Step 3: Create Mesh ===
+  Mesh mesh = createMesh(myCaseParameters);
 
-  static Gnuplot<T> gplot( "drag" );
+  /// === Step 4: Create Case ===
+  MyCase myCase(myCaseParameters, mesh);
 
-  simulateCylinder(N, gplot, eoc);
+  /// === Step 5: Prepare Geometry ===
+  prepareGeometry(myCase);
 
-  return 0;
+  /// === Step 6: Prepare Lattice ===
+  prepareLattice(myCase);
+
+  /// === Step 7: Definition of Initial, Boundary Values, and Fields ===
+  setInitialValues(myCase);
+
+  /// === Step 8: Simulate ===
+  simulate(myCase);
 }

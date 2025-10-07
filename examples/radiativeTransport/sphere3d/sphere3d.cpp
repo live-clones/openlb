@@ -33,8 +33,7 @@
  * 10.1016/j.jocs.2016.03.014.]
  */
 
-#include "olb3D.h"
-#include "olb3D.hh"     // include full template code
+#include <olb.h>
 
 #include <cmath>
 #include <iostream>
