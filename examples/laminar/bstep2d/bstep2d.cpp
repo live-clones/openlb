@@ -330,11 +330,11 @@ void simulate(MyCase& myCase)
   timer.start();
 
   for (std::size_t iT = 0; iT < sLattice.getUnitConverter().getLatticeTime(maxPhysT); ++iT) {
-    // === 5th Step: Definition of Initial and Boundary Conditions ===
+
     setBoundaryValues(myCase, iT);
-    // === 6th Step: Collide and Stream Execution ===
+
     sLattice.collideAndStream();
-    // === 7th Step: Computation and Output of the Results ===
+
     getResults(myCase, iT, timer);
   }
 
