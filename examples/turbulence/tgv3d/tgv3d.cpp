@@ -45,6 +45,7 @@ using namespace olb::names;
 using namespace olb::descriptors;
 using namespace olb::graphics;
 
+// === Step 1: Declarations ===
 using MyCase = Case<
   NavierStokes, Lattice<FLOATING_POINT_TYPE, descriptors::D3Q19<>>
 >;
@@ -122,19 +123,18 @@ void prepareGeometry(MyCase& myCase) {
   geometry.rename(0,1);
 
   geometry.communicate();
-  /// Removes all not needed boundary voxels outside the surface
   geometry.clean();
-  /// Removes all not needed boundary voxels inside the surface
   geometry.innerClean();
   geometry.checkForErrors();
-
   geometry.getStatistics().print();
 }
 
 void prepareLattice(MyCase& myCase) {
   using T = MyCase::value_t;
   using DESCRIPTOR = MyCase::descriptor_t;
+
   auto& parameters = myCase.getParameters();
+ auto& lattice = myCase.getLattice(NavierStokes{});
 
  #if defined(RLB)
 using BulkDynamics = RLBdynamics<T,DESCRIPTOR>;
@@ -153,8 +153,6 @@ using BulkDynamics = KBCdynamics<T, DESCRIPTOR>;
 #else
 using BulkDynamics = SmagorinskyBGKdynamics<T,DESCRIPTOR>;
 #endif
-
- auto& lattice = myCase.getLattice(NavierStokes{});
 
   const T N = parameters.get<parameters::RESOLUTION>();
   const T Re = parameters.get<parameters::REYNOLDS>();
@@ -185,11 +183,10 @@ using BulkDynamics = SmagorinskyBGKdynamics<T,DESCRIPTOR>;
 void setInitialValues(MyCase& myCase) {
   using T = MyCase::value_t;
   using DESCRIPTOR = MyCase::descriptor_t;
+
   auto& lattice = myCase.getLattice(NavierStokes{});
 
-
   /// Initialize density to one everywhere
-  /// Initialize velocity to be tangential at the lid and zero in the bulk and at the walls
   AnalyticalConst3D<T,T> rho(1);
   Tgv3D<T,DESCRIPTOR> uSol(lattice.getUnitConverter(), 1);
 
@@ -211,11 +208,13 @@ void setTemporalValues(MyCase& myCase,
 // Interpolate the data points to the output interval
 std::vector<std::vector<MyCase::value_t>> getDNSValues(MyCase& myCase)
 {
+  using T = MyCase::value_t;
+
   auto& parameters = myCase.getParameters();
 
-  using T = MyCase::value_t;
   std::string file_name;
   std::vector<std::vector<T>> values_DNS;
+
   //Brachet, Marc E., et al. "Small-scale structure of the Taylor–Green vortex." Journal of Fluid Mechanics 130 (1983): 411-452; Figure 7
   const T Re = parameters.get<parameters::REYNOLDS>();
   const T maxPhysT = parameters.get<parameters::MAX_PHYS_T>();
@@ -281,23 +280,19 @@ void getResults(MyCase& myCase,
                 std::size_t iT)
 {
   /// Write vtk plots every 0.3 seconds (of phys. simulation time)
+  using T = MyCase::value_t;
+  using DESCRIPTOR = MyCase::descriptor_t;
+
   auto& parameters = myCase.getParameters();
   auto& lattice = myCase.getLattice(NavierStokes{});
   auto& geometry = myCase.getGeometry();
   auto& converter = lattice.getUnitConverter();
-
-  using T = MyCase::value_t;
-  using DESCRIPTOR = MyCase::descriptor_t;
 
   const T maxPhysT = parameters.get<parameters::MAX_PHYS_T>();
   const std::size_t iTlog = converter.getLatticeTime(maxPhysT/40.);
   const std::size_t iTvtk = converter.getLatticeTime(maxPhysT/40.);
 
   SuperVTMwriter3D<T> vtmWriter("tgv3d");
-  SuperLatticePhysVelocity3D velocity(lattice, converter);
-  SuperLatticePhysPressure3D pressure(lattice, converter);
-  vtmWriter.addFunctor(velocity);
-  vtmWriter.addFunctor(pressure);
 
   if (iT == 0) {
     // Writes the geometry, cuboid no. and rank no. as vti file for visualization
@@ -314,11 +309,11 @@ void getResults(MyCase& myCase,
   if (iT%iTvtk == 0 && iT >= 0) {
     lattice.setProcessingContext(ProcessingContext::Evaluation);
 
-    SuperLatticePhysVelocity3D<T, DESCRIPTOR> velocity(lattice, lattice.getUnitConverter());
-    SuperLatticePhysPressure3D<T, DESCRIPTOR> pressure(lattice, lattice.getUnitConverter());
+    SuperLatticePhysVelocity3D velocity(lattice, converter);
+    SuperLatticePhysPressure3D pressure(lattice, converter);
+    vtmWriter.addFunctor(velocity);
+    vtmWriter.addFunctor(pressure);
 
-    vtmWriter.addFunctor( velocity );
-    vtmWriter.addFunctor( pressure );
     vtmWriter.write(iT);
   }
 
@@ -336,13 +331,13 @@ void computeDissipation(MyCase& myCase,
                         util::Timer<MyCase::value_t>& timer,
                         std::size_t iT)
   {
+  using T = MyCase::value_t;
+  using DESCRIPTOR = MyCase::descriptor_t;
+
   auto& parameters = myCase.getParameters();
   auto& lattice = myCase.getLattice(NavierStokes{});
   auto& geometry = myCase.getGeometry();
   auto& converter = lattice.getUnitConverter();
-
-  using T = MyCase::value_t;
-  using DESCRIPTOR = MyCase::descriptor_t;
 
  #if defined(RLB)
 using BulkDynamics = RLBdynamics<T,DESCRIPTOR>;
@@ -445,8 +440,10 @@ using BulkDynamics = SmagorinskyBGKdynamics<T,DESCRIPTOR>;
 
 void simulate(MyCase& myCase) {
   using T = MyCase::value_t;
+
   auto& lattice = myCase.getLattice(NavierStokes{});
   auto& parameters = myCase.getParameters();
+
   const T physMaxT = parameters.get<parameters::MAX_PHYS_T>();
 
   const std::size_t iTmax = myCase.getLattice(NavierStokes{}).getUnitConverter().getLatticeTime(physMaxT);
@@ -485,7 +482,6 @@ void simulate(MyCase& myCase) {
 int main(int argc, char* argv[])
 {
 
-  /// === 1st Step: Initialization ===
   initialize(&argc, &argv);
 
   MyCase::ParametersD myCaseParameters;
@@ -496,7 +492,7 @@ int main(int argc, char* argv[])
     myCaseParameters.set<VOLUME     >(util::pow(2.*std::numbers::pi_v<MyCase::value_t>, 3.));
     myCaseParameters.set<REYNOLDS   >(                                                  800);
     myCaseParameters.set<SMAGORINSKY>(                                                  0.1);
-    myCaseParameters.set<INTENSITY  >(                                                 0.04);
+//    myCaseParameters.set<BULK_MODEL >(BulkModel::Smagorinsky);
   }
   myCaseParameters.fromCLI(argc, argv);
 
