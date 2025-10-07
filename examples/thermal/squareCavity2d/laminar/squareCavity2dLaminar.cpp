@@ -250,7 +250,7 @@ void setInitialValues(MyCase& myCase){
         coupling.setParameter<NavierStokesAdvectionDiffusionCoupling::FORCE_PREFACTOR>(
         boussinesqForcePrefactor * Vector<T,2>{0.0,1.0}
     );
-    
+
     clout << "Set initial values ... OK" << std::endl;
 }
 
@@ -366,14 +366,14 @@ void simulate(MyCase& myCase){
     const std::size_t iTmax = converter.getLatticeTime(parameters.get<parameters::MAX_PHYS_T>());
 
     util::Timer<T> timer(iTmax, myCase.getGeometry().getStatistics().getNvoxel());
-  
+
     timer.start();
 
     util::ValueTracer<T> converge(6, parameters.get<parameters::CONVERGENCE_EPSILON>());
     bool converged = false;
 
     for (std::size_t iT = 0; iT < iTmax; ++iT) {
-        
+
         if (converge.hasConverged() && !converged) {
             converged = true;
             clout << "Simulation converged." << std::endl;
