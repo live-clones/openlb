@@ -36,14 +36,12 @@
 #include <olb.h>
 
 using namespace olb;
+using namespace olb::names;
 using namespace olb::opti;
 
 using S = double;
 using U = util::ADf<S,1>;
 using DESCRIPTOR = descriptors::D2Q9<>;
-
-template <typename T>
-using VectorHelp = Vector<T,1>;
 
 const int N = 50;             // resolution
 const S lx  = 2.;             // length of the channel
@@ -53,11 +51,33 @@ const S maxPhysT = 30.;       // max. simulation time in s, SI unit
 const S physInterval = 0.25;  // interval for the convergence check in s
 const S residuum = 1e-9;      // residuum for the convergence check
 const S wantedMassFlow = 0.00026159;
+S inletPressure = 0.000659;
 
+using MyCase = Case<
+  NavierStokes, Lattice<double, descriptors::D2Q9<>>
+>;
+using MyOptiCase = OptiCaseFDQ<
+  Controlled, MyCase
+>;
 
-template<typename T>
-void prepareGeometry( SuperGeometry<T,2>& superGeometry )
+template <typename PARAMETERS>
+auto createMesh(PARAMETERS& parameters) {
+  using T = PARAMETERS::value_t;
+  const Vector<T,2> extend( lx, ly );
+  const Vector<T,2> origin;
+  IndicatorCuboid2D<T> cuboid( extend, origin );
+
+  Mesh<T,2> mesh(cuboid, ly / N, singleton::mpi().getSize());
+  mesh.setOverlap(parameters.template get<parameters::OVERLAP>());
+  return mesh; 
+}
+
+template<typename CASE>
+void prepareGeometry(CASE& myCase)
 {
+  using T = CASE::value_t;
+  auto& superGeometry = myCase.getGeometry();
+
   superGeometry.rename( 0,2 );
   superGeometry.rename( 2,1,{1,1} );
 
@@ -77,11 +97,12 @@ void prepareGeometry( SuperGeometry<T,2>& superGeometry )
   superGeometry.checkForErrors(false);
 }
 
-template<typename T>
-void prepareLattice( SuperLattice<T, DESCRIPTOR>& sLattice,
-                     SuperGeometry<T,2>& superGeometry,
-                     T inletPressure)
+template<typename CASE>
+void prepareLattice(CASE& myCase)
 {
+  using T = CASE::value_t;
+  auto& sLattice = myCase.getLattice(NavierStokes{});
+  auto& superGeometry = myCase.getGeometry();
   sLattice.template setUnitConverter<UnitConverterFromResolutionAndRelaxationTime<T,DESCRIPTOR>>(
     int {N},     // resolution: number of voxels per charPhysL
     (T)   0.8,   // latticeRelaxationTime: relaxation time, have to be greater than 0.5!
@@ -99,6 +120,16 @@ void prepareLattice( SuperLattice<T, DESCRIPTOR>& sLattice,
   boundary::set<boundary::InterpolatedVelocity>(sLattice, superGeometry, 3);
   boundary::set<boundary::InterpolatedPressure>(sLattice, superGeometry, 4);
 
+  sLattice.template setParameter<descriptors::OMEGA>(omega);
+}
+
+template <typename CASE>
+void setInitialValues(CASE& myCase) {
+  using T = CASE::value_t;
+  auto& sLattice = myCase.getLattice(NavierStokes{});
+  auto& superGeometry = myCase.getGeometry();
+  auto& converter = sLattice.getUnitConverter();
+ 
   // Initial conditions
   AnalyticalLinear2D<T,T> rho(
     - inletPressure / lx * descriptors::invCs2<T,DESCRIPTOR>(),
@@ -124,44 +155,15 @@ void prepareLattice( SuperLattice<T, DESCRIPTOR>& sLattice,
   sLattice.defineRhoU( domain, rho, u );
   sLattice.iniEquilibrium( domain, rho, u );
 
-  sLattice.template setParameter<descriptors::OMEGA>(omega);
-
   sLattice.initialize();
 }
 
-template<typename T>
-T getResults( SuperLattice<T,DESCRIPTOR>& sLattice,
-                 UnitConverter<T,DESCRIPTOR> const& converter, std::size_t iT,
-                 SuperGeometry<T,2>& superGeometry, util::Timer<T>& timer)
-{
-  OstreamManager clout( std::cout,"getResults" );
-  sLattice.communicate();
-  sLattice.setProcessingContext(ProcessingContext::Evaluation);
+template<typename CASE>
+void getResults(CASE& myCase, std::size_t iT, util::Timer<typename CASE::value_t>& timer, bool hasConverged) {
+  using T = CASE::value_t;
+  auto& sLattice = myCase.getLattice(NavierStokes{});
+  auto& converter = sLattice.getUnitConverter();
 
-  // Output on the console
-  timer.update( iT );
-  timer.printStep();
-  sLattice.getStatistics().print( iT,converter.getPhysTime( iT ) );
-
-  SuperLatticeVelocity2D velocity(sLattice);
-  SuperLatticeDensity2D density(sLattice);
-  SuperPlaneIntegralFluxMass2D<T> massFlowRate(
-    velocity, density, superGeometry, converter.getConversionFactorMass(),
-    converter.getConversionFactorTime(), Vector<T,2>({T(0.5)*lx, T(0.5)*ly}),
-    Vector<T,2>({0, 1}), BlockDataReductionMode::Analytical
-  );
-  const int input[3] = {0};
-  T mFlow[4] = {0.};
-  massFlowRate(mFlow, input);
-  clout << "Mass flow rate = " << mFlow[0] << std::endl;
-  return mFlow[0];
-}
-
-template <typename T>
-void writeVTK( SuperLattice<T,DESCRIPTOR>& sLattice,
-                 UnitConverter<T,DESCRIPTOR> const& converter, std::size_t iT,
-                 SuperGeometry<T,2>& superGeometry, bool hasConverged)
-{
   SuperVTMwriter2D<T> vtmWriter( "poiseuille2d" );
   const bool lastTimeStep
    = ( hasConverged || (iT + 1 == converter.getLatticeTime( maxPhysT )) );
@@ -180,6 +182,12 @@ void writeVTK( SuperLattice<T,DESCRIPTOR>& sLattice,
       vtmWriter.write( rank );
       vtmWriter.createMasterFile();
   }
+
+  // Output on the console
+  timer.update( iT );
+  timer.printStep();
+  sLattice.getStatistics().print( iT,converter.getPhysTime( iT ) );
+
   if ( iT%vtmIter==0 || lastTimeStep )
   {
     sLattice.communicate();
@@ -188,84 +196,67 @@ void writeVTK( SuperLattice<T,DESCRIPTOR>& sLattice,
   }
 }
 
-/** Perform a single flow simulation.
- * \param inletPressure: The pressure at the inlet. Pressure at outlet is fixed
- * to 0.
- * \param optiMode: this is true when the method is called from an Optimization
- * loop. In that case, less vtk output is produced.
- */
-template<typename T, bool optiMode>
-T simulatePoiseuille( T inletPressure )
-{
-  OstreamManager clout( std::cout,"simulatePoiseuille" );
-
-  // === 2nd Step: Prepare Geometry ===
-  const Vector<T,2> extend( lx, ly );
-  const Vector<T,2> origin;
-  IndicatorCuboid2D<T> cuboid( extend, origin );
-
-#ifdef PARALLEL_MODE_MPI
-  const int noOfCuboids = singleton::mpi().getSize();
-#else
-  const int noOfCuboids = 1;
-#endif
-  CuboidDecomposition2D<T> cuboidDecomposition(
-    cuboid, ly / N, noOfCuboids );
-
-  HeuristicLoadBalancer<T> loadBalancer( cuboidDecomposition );
-
-  SuperGeometry<T,2> superGeometry( cuboidDecomposition, loadBalancer, 3 );
-
-  prepareGeometry( superGeometry );
-
-  // === 3rd Step: Prepare Lattice ===
-  SuperLattice<T, DESCRIPTOR> sLattice( superGeometry );
-
-  // Prepare lattice and set boundary conditions
-  prepareLattice<T>(sLattice, superGeometry, inletPressure);
-
-  // === 4th Step: Main Loop with Timer ===
+template <typename CASE>
+void simulate(CASE& myCase) {
+  using T = CASE::value_t;
+  auto& sLattice = myCase.getLattice(NavierStokes{});
+  auto& superGeometry = myCase.getGeometry();
   auto& converter = sLattice.getUnitConverter();
-  clout << "starting simulation with pressure = " << inletPressure << "..." << std::endl;
+
+  std::cout << "starting simulation with pressure = " << inletPressure << "..." << std::endl;
   util::Timer<T> timer( converter.getLatticeTime( maxPhysT ),
     superGeometry.getStatistics().getNvoxel() );
   util::ValueTracer<T> converge( converter.getLatticeTime( physInterval ), residuum );
   timer.start();
-
-  std::size_t iT {0};
-  for ( ; iT < converter.getLatticeTime( maxPhysT ); ++iT ) {
+  for (std::size_t iT=0 ; iT < converter.getLatticeTime( maxPhysT ); ++iT ) {
     if ( converge.hasConverged() ) {
-      clout << "Simulation converged." << std::endl;
-      if constexpr (! optiMode) {
-        writeVTK<T>(sLattice, converter, iT, superGeometry, true);
-      }
+      std::cout << "Simulation converged." << std::endl;
+      getResults(myCase, iT, timer, converge.hasConverged());
       break;
     }
-
-    // === 5th Step: Definition of Initial and Boundary Conditions ===
-    // in this application no boundary conditions have to be adjusted
-
-    // === 6th Step: Collide and Stream Execution ===
     sLattice.collideAndStream();
-
-    // === 7th Step: Computation and Output of the Results ===
-    if constexpr (! optiMode) {
-      writeVTK<T>(sLattice, converter, iT, superGeometry, converge.hasConverged());
-    }
-    converge.takeValue( sLattice.getStatistics().getMaxU(), false );
-  }
-  const T massFlow = getResults( sLattice, converter, iT, superGeometry, timer );
-
+    converge.takeValue(sLattice.getStatistics().getMaxU(), false );
+  } 
+  
   timer.stop();
+  timer.printSummary();
+}
 
-  return massFlow;
+template <typename CASE>
+void setInitialControls(MyOptiCase& optiCase) {
+  using T = CASE::value_t;
+  std::vector<T> control({0.0001});
+  optiCase.getController().set(control);
+}
+
+template <typename CASE>
+void applyControls(MyOptiCase& optiCase) {
+  inletPressure = optiCase.getController()[0];
 }
 
 /// Compute squared error between simulated and wanted mass flow rate
-template<typename T, bool optiMode>
-T poiseuilleMassFlowError(Vector<T,1> inletPressure)
+template <typename CASE>
+CASE::value_t massFlowError(MyOptiCase& optiCase)
 {
-  const T res = simulatePoiseuille<T,optiMode>(inletPressure[0]);
+  using T = CASE::value_t;
+  auto& myCase = optiCase.getCase(Controlled{});
+  auto& sLattice = myCase.getLattice(NavierStokes{});
+  auto& superGeometry = myCase.getGeometry();
+  auto& converter = sLattice.getUnitConverter();
+  sLattice.setProcessingContext(ProcessingContext::Evaluation);
+
+  SuperLatticeVelocity2D velocity(sLattice);
+  SuperLatticeDensity2D density(sLattice);
+  SuperPlaneIntegralFluxMass2D<T> massFlowRate(
+    velocity, density, superGeometry, converter.getConversionFactorMass(),
+    converter.getConversionFactorTime(), Vector<T,2>({T(0.5)*lx, T(0.5)*ly}),
+    Vector<T,2>({0, 1}), BlockDataReductionMode::Analytical
+  );
+  const int input[3] = {0};
+  T mFlow[4] = {0.};
+  massFlowRate(mFlow, input);
+  std::cout << "Mass flow rate = " << mFlow[0] << std::endl;
+  const T res = mFlow[0];
   const T wantedRes {wantedMassFlow};
   return 0.5 * (res - wantedRes) * (res - wantedRes);
 }
@@ -274,33 +265,39 @@ int main( int argc, char* argv[] )
 {
   // === 1st Step: Initialization ===
   initialize( &argc, &argv );
-  singleton::directories().setOutputDir( "./tmp/" );
 
-  if constexpr (true) {  // direct (standard) simulation
-    S pressure {0.000659};
-    simulatePoiseuille<S,false>(pressure);
-  }
-/*
-  if constexpr (false) {  // direct simulation with ADf -> compute derivatives
-    U pressure {0.000659};
-    pressure.setDiffVariable(0);
-    simulatePoiseuille<U,false>(pressure);
-  }
+  // === Step 2: Set Parameters ===
+  MyCase::ParametersD myCaseParametersD;
+  
+  // === Step 3: Create Mesh ===
+  auto mesh = createMesh(myCaseParametersD);
 
-  if constexpr (false) {  // Optimization (fit mass flow rate) with ADf
-    solver::OptiCaseAD<S,1,VectorHelp> optiCase(
-      poiseuilleMassFlowError<S,true>,
-      poiseuilleMassFlowError<U,true>);
+  // === Step 4: Create Case ===
+  MyCase myCase(myCaseParametersD, mesh);
 
-    // Perform optimization with LBFGS method.
-    OptimizerLBFGS<S,Vector<S,1>> optimizer(
-      1, 1.e-7, 20, 1., 10, "StrongWolfe", 20, 1.e-4, true, "", "log",
-      true, 0.01, true, 0., false, 0., true,
-      {OptimizerLogType::value, OptimizerLogType::control, OptimizerLogType::derivative});
+  // Create OptiCase
+  MyOptiCase optiCase;
 
-    Vector<S,1> startValue {0.0001};
-    optimizer.setControl(startValue);
-    optimizer.optimize(optiCase);
-  }
-*/
+  // Set Case
+  optiCase.setCase<Controlled>(myCase);
+
+  // Define initial values for the control
+  setInitialControls<MyCase>(optiCase);
+
+  // Define objective computation routine
+  optiCase.setObjective([&](MyOptiCase& optiCase) {
+    myCase.resetLattices();
+    applyControls<MyCase>(optiCase);
+    prepareGeometry(myCase);
+    prepareLattice(myCase);
+    setInitialValues(myCase);
+    simulate(myCase);
+    return massFlowError<MyCase>(optiCase);
+  });
+
+  OptimizerLBFGS<S,std::vector<S>> optimizer(
+    1, 1.e-7, 20, 1., 10, "StrongWolfe", 20, 1.e-4, true, "", "log",
+    true, 0.01, true, 0., false, 0., true,
+    {OptimizerLogType::value, OptimizerLogType::control, OptimizerLogType::derivative});
+  optimizer.optimize(optiCase);
 }
