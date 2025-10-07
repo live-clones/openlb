@@ -57,9 +57,7 @@ namespace olb::parameters {
 
 struct BOUNDARY_TYPE  : public descriptors::TYPED_FIELD_BASE<BoundaryType,1> { };
 struct POROSITY_TYPE  : public descriptors::TYPED_FIELD_BASE<PorosityType,1> { };
-struct CONVERGED      : public descriptors::TYPED_FIELD_BASE<bool,1> { };
 struct PERMEABILITY   : public descriptors::FIELD_BASE<1> { };
-struct EPSILON        : public descriptors::FIELD_BASE<1> { };
 struct INITIAL_PRESSURE_L : public descriptors::FIELD_BASE<1> { };
 struct PRESSURE_GRADIENT  : public descriptors::FIELD_BASE<1> { };
 struct VISCOSITY       : public descriptors::FIELD_BASE<1> { };

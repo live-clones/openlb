@@ -264,7 +264,7 @@ void getResults(MyCase& myCase,
   SuperRoundingF3D<T, T> roundedQuality(quality, RoundingMode::NearestInteger);
   SuperDiscretizationF3D<T> discretization(roundedQuality, 0., 2.);
 
-  const std::size_t vtkIter  = converter.getLatticeTime(parameters.get<parameters::PHYS_VTK_OUTPUT_ITER_T>());
+  const std::size_t vtkIter  = converter.getLatticeTime(parameters.get<parameters::PHYS_VTK_ITER_T>());
   const std::size_t statIter = converter.getLatticeTime(parameters.get<parameters::PHYS_STAT_ITER_T>());
   const T maxPhysT           = parameters.get<parameters::MAX_PHYS_T>();
 

@@ -42,14 +42,6 @@ using MyCase = Case<
   Temperature,  Lattice<FLOATING_POINT_TYPE, descriptors::D3Q7<descriptors::VELOCITY>>
 >;
 
-namespace olb::parameters {
-
-struct T_HOT            : public descriptors::FIELD_BASE<1> { };
-struct T_COLD           : public descriptors::FIELD_BASE<1> { };
-struct T_PERTURBATION   : public descriptors::FIELD_BASE<1> { };
-
-}
-
 Mesh<MyCase::value_t,MyCase::d> createMesh(MyCase::ParametersD& parameters) {
   using T = MyCase::value_t;
   Vector extent = parameters.get<parameters::DOMAIN_EXTENT>();
@@ -134,7 +126,6 @@ void prepareLattice(MyCase& myCase)
   const T physDeltaX              = charPhysLength / parameters.get<parameters::RESOLUTION>();
   const T Ra                      = parameters.get<parameters::RAYLEIGH>();
   const T Pr                      = parameters.get<parameters::PRANDTL>();
-  const int N                     = parameters.get<parameters::RESOLUTION>();
   const T Tcold                   = parameters.get<parameters::T_COLD>();
   const T Thot                    = parameters.get<parameters::T_HOT>();
 
@@ -266,7 +257,7 @@ void getResults(MyCase& myCase,
   }
 
   const int statIter = converter.getLatticeTime(parameters.get<parameters::PHYS_STAT_ITER_T>());
-  const int vtkIter  = converter.getLatticeTime(parameters.get<parameters::PHYS_VTK_OUTPUT_ITER_T>());
+  const int vtkIter  = converter.getLatticeTime(parameters.get<parameters::PHYS_VTK_ITER_T>());
 
   if (iT%statIter == 0 || converged) {
     /// Timer console output
@@ -382,7 +373,7 @@ int main(int argc, char *argv[])
     myCaseParameters.set<CONVERGENCE_PRECISION>(1e-5);
     myCaseParameters.set<CONVERGED>(false);
 
-    myCaseParameters.set<PHYS_VTK_OUTPUT_ITER_T>(1.0);
+    myCaseParameters.set<PHYS_VTK_ITER_T>(1.0);
     myCaseParameters.set<PHYS_STAT_ITER_T>(0.1);
   }
   myCaseParameters.fromCLI(argc, argv);
