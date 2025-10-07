@@ -51,14 +51,14 @@ template <typename T, typename DESCRIPTOR, typename TDESCRIPTOR>
 class SuperLatticePhysTemperature3D final : public SuperLatticeThermalPhysF3D<T,DESCRIPTOR,TDESCRIPTOR> { // templatename before <
 public:
   SuperLatticePhysTemperature3D(SuperLattice<T,TDESCRIPTOR>& sLattice,
-                                ThermalUnitConverter<T,DESCRIPTOR,TDESCRIPTOR> const& converter);
+                                UnitConverter<T,DESCRIPTOR> const& converter);
 };
 
 template <typename T, typename DESCRIPTOR, typename TDESCRIPTOR>
 class BlockLatticePhysTemperature3D final : public BlockLatticeThermalPhysF3D<T,DESCRIPTOR,TDESCRIPTOR> {
 public:
   BlockLatticePhysTemperature3D(BlockLattice<T,TDESCRIPTOR>& blockLattice,
-                                ThermalUnitConverter<T,DESCRIPTOR,TDESCRIPTOR> const& converter);
+                                UnitConverter<T,DESCRIPTOR> const& converter);
   bool operator() (T output[], const int input[]) override;
 };
 
