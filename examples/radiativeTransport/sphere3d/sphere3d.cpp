@@ -35,6 +35,10 @@
 
 #include <olb.h>
 
+#include <iostream>
+#include <fstream>
+#include <format>
+
 using namespace olb;
 using namespace olb::names;
 
@@ -263,6 +267,53 @@ void getResults(MyCase& myCase, util::Timer<MyCase::value_t>& timer, std::size_t
     }
 }
 
+void writeToFile(MyCase& myCase, std::size_t iT){
+    OstreamManager clout(std::cout,"writeToFile");
+    using T = MyCase::value_t;
+    auto& geometry = myCase.getGeometry();
+    auto& params = myCase.getParameters();
+
+    auto& Rlattice = myCase.getLattice(Radiation{});
+    const auto& converter = Rlattice.getUnitConverter();
+
+    using RDESCRIPTOR = MyCase::descriptor_t_of<Radiation>;
+
+    const T absorption = params.get<parameters::ABSORPTION>();
+    const T scattering = params.get<parameters::SCATTERING>();
+
+    const auto saveIter = converter.getLatticeTime(params.get<parameters::WRITE_SEC>() / 32.);
+
+    std::string name = std::format("Results_along_line_at_time_{}.txt", std::to_string(iT));
+    std::ofstream fout(name, std::ios::trunc);
+
+    if(!fout){
+        clout << "Error: could not open " << name << std::endl;
+    }
+
+    SuperLatticeDensity3D<T, RDESCRIPTOR> density(Rlattice);
+    AnalyticalFfromSuperF3D<T>            analytDensity(density, true, 1);
+    PLSsolution3D<T, T, RDESCRIPTOR>      dSol(absorption, scattering);
+
+    int n = converter.getResolution() / 2;
+
+    for (int nY = 0; nY < n; ++nY) {
+        double position[3]    = {0, double(nY) / n, 0};
+        double densityEval[1] = {0};
+        analytDensity(densityEval, position);
+        double densitySol[1] = {0};
+        dSol(densitySol, position);
+        if (singleton::mpi().getRank() == 0) {
+        fout << position[1] << ", " << densityEval[0] << ", " << densitySol[0] << ", "
+            << util::abs(densityEval[0] - densitySol[0]) / densitySol[0] << std::endl;
+        printf("%1.3f\t%1.3f\t%1.3f\t%1.4f\n", position[1], densityEval[0], densitySol[0],
+                util::abs(densityEval[0] - densitySol[0]) / densitySol[0]);
+        }
+    }
+
+
+    fout.close();
+}
+
 void simulate(MyCase& myCase){
     OstreamManager clout(std::cout,"simulate");
     clout << "Starting Simulation ..." << std::endl;
@@ -284,7 +335,8 @@ void simulate(MyCase& myCase){
 
     util::ValueTracer<T> converge(params.get<parameters::RESOLUTION>(), 1e-6);
 
-    for(int iT = 0; iT <= converter.getLatticeTime(maxPhysT); ++iT){
+    int iT;
+    for(iT = 0; iT <= converter.getLatticeTime(maxPhysT); ++iT){
         converge.takeValue(Rlattice.getStatistics().getAverageRho(), true);
 
         if(converge.hasConverged()){
@@ -300,7 +352,7 @@ void simulate(MyCase& myCase){
         getResults(myCase, timer, iT);
     }
 
-    writeToFile();
+    writeToFile(myCase, converter.getPhysTime(iT));
 
     timer.stop();
     timer.printSummary();
