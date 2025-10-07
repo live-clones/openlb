@@ -102,13 +102,13 @@ void prepareGeometry(MyCase& myCase)
     const T lengthX = parameters.get<parameters::DOMAIN_EXTENT>()[0];
     const T L = 0.1 / parameters.get<parameters::RESOLUTION>();
     const T lengthY = parameters.get<parameters::DOMAIN_EXTENT>()[1];
-    
+
     const Vector<T,2> center = parameters.get<parameters::CENTER_CYLINDER>();
-    
+
     const T radiusCylinder = parameters.get<parameters::RADIUS_CYLINDER>();
-   
+
     IndicatorCircle2D<T> circle(center, radiusCylinder);
-   
+
     geometry.rename(0, 2);
     geometry.rename(2, 1, { 1, 1 });
 
@@ -150,7 +150,7 @@ void prepareLattice(MyCase& myCase)
     const T CFL = parameters.get<parameters::CFL>();
     const T Re = parameters.get<parameters::REYNOLDS>();
     const Vector<T,2> center = parameters.get<parameters::CENTER_CYLINDER>();
-    
+
     // Set up the unit converter
     lattice.setUnitConverter(
         (T)L,                        // physDeltaX: spacing between two lattice cells in [m]
@@ -160,10 +160,10 @@ void prepareLattice(MyCase& myCase)
         (T)0.2 * 2. * radiusCylinder / Re, // physViscosity: physical kinematic viscosity in [m^2/s]
         (T)1.0                       // physDensity: physical density in [kg/m^3]
     );
-    
+
     lattice.getUnitConverter().print();
-    
-    
+
+
     // Material=1 -->bulk dynamics
     lattice.defineDynamics<BGKdynamics>(geometry, 1);
 
@@ -175,22 +175,22 @@ void prepareLattice(MyCase& myCase)
 
     // Material=4 -->fixed pressure
     boundary::set<boundary::InterpolatedPressure>(lattice, geometry, 4);
-   
+
     IndicatorCircle2D<T> circle(center, radiusCylinder);
-    
+
     // Material=5 -->bouzidi
     setBouzidiBoundary(lattice, geometry, 5, circle);
 
-    
+
 }
 
 void setInitialValues(MyCase& myCase) {
-	
+
     using T = MyCase::value_t;
     auto& lattice = myCase.getLattice(NavierStokes{});
     auto& geometry = myCase.getGeometry();
-	
-	
+
+
 	// Initial conditions
     AnalyticalConst2D<T, T> rhoF(1);
     AnalyticalConst2D<T, T> uF(0, 0);
@@ -205,7 +205,7 @@ void setInitialValues(MyCase& myCase) {
 
 void setTemporalValues(MyCase& myCase,
                       std::size_t iT)
-                      
+
 {
     using T = MyCase::value_t;
     auto& parameters = myCase.getParameters();
@@ -235,8 +235,8 @@ void setTemporalValues(MyCase& myCase,
         lattice.setProcessingContext<Array<momenta::FixedVelocityMomentumGeneric::VELOCITY>>(
             ProcessingContext::Simulation);}
             }
-            
-            
+
+
  void getResults(MyCase& myCase,
                 util::Timer<MyCase::value_t>& timer,
                 std::size_t iT)
@@ -253,7 +253,7 @@ void setTemporalValues(MyCase& myCase,
     const std::size_t vtkIter = converter.getLatticeTime(0.3);
     const std::size_t statIter = converter.getLatticeTime(0.8);
     const T radiusCylinder = parameters.get<parameters::RADIUS_CYLINDER>();
-    
+
     SuperVTMwriter2D<T> vtmWriter("cylinder2d");
     SuperLatticePhysVelocity2D<T, DESCRIPTOR> velocity(lattice, converter);
     SuperLatticePhysPressure2D<T, DESCRIPTOR> pressure(lattice, converter);
@@ -374,9 +374,9 @@ void simulate(MyCase& myCase)
      auto& lattice = myCase.getLattice(NavierStokes{});
      auto& converter = lattice.getUnitConverter();
      const T maxPhysT = parameters.get<parameters::MAX_PHYS_T>();
-     
+
      auto& geometry = myCase.getGeometry();
-     
+
     std::size_t iTmax = converter.getLatticeTime(maxPhysT);
     util::Timer<T> timer(iTmax, geometry.getStatistics().getNvoxel());
     timer.start();
@@ -403,15 +403,14 @@ int main(int argc, char* argv[])
     MyCase::ParametersD myCaseParameters;
     {
         using namespace olb::parameters;
+        using T = MyCase::value_t;
         myCaseParameters.set<RESOLUTION>(10);
-        myCaseParameters.set<REYNOLDS >(20.);
-        myCaseParameters.set<MAX_PHYS_T>(16.);
-        myCaseParameters.set<PHYS_CHAR_VELOCITY>(0.2);
-        myCaseParameters.set<LATTICE_RELAXATION_TIME>(0.56);
-        myCaseParameters.set<RADIUS_CYLINDER>(0.05);
-        myCaseParameters.set<CFL>(0.05);
-        myCaseParameters.set<CENTER_CYLINDER>([&] {return Vector{ 0.2, 0.2 + 0.1/ myCaseParameters.get<RESOLUTION>()};  });
-        myCaseParameters.set<DOMAIN_EXTENT>([&] {return  Vector{ 2.2, .41 + 0.1/ myCaseParameters.get<RESOLUTION>()};});
+        myCaseParameters.set<REYNOLDS >((T)20.);
+        myCaseParameters.set<MAX_PHYS_T>((T)16.);
+        myCaseParameters.set<RADIUS_CYLINDER>((T)0.05);
+        myCaseParameters.set<CFL>((T)0.05);
+        myCaseParameters.set<CENTER_CYLINDER>([&] {return Vector{ (T)0.2, (T)0.2 + ((T)0.1/ myCaseParameters.get<RESOLUTION>())/(T)2.};  });
+        myCaseParameters.set<DOMAIN_EXTENT>([&] {return  Vector{ (T)2.2, (T).41 + (T)0.1/ myCaseParameters.get<RESOLUTION>()};});
     }
     myCaseParameters.fromCLI(argc, argv);
 
@@ -440,16 +439,16 @@ int main(int argc, char* argv[])
 
     /// === Step 4: Create Case ===
     MyCase myCase(myCaseParameters, mesh);
-    
+
     prepareGeometry(myCase);
-    
+
     prepareLattice(myCase);
-    
+
     /// === Step 7: Definition of Initial, Boundary Values, and Fields ===
 	setInitialValues(myCase);
 
   /// === Step 8: Simulate ===
 	simulate(myCase);
-   
-    
+
+
 }
