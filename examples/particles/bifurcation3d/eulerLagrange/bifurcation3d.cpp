@@ -42,12 +42,47 @@ using namespace olb;
 using namespace olb::descriptors;
 using namespace olb::graphics;
 using namespace olb::util;
+using namespace olb::names;
 using namespace particles;
 using namespace particles::subgrid;
 using namespace particles::communication;
 using namespace particles::dynamics;
 using namespace particles::creators;
 using namespace particles::io;
+
+using MyCase = Case<
+  NavierStokes, Lattice<double, descriptors::D3Q19<>>
+>;
+
+// === Step 1: Declarations ===
+namespace olb::parameters {
+
+struct PART_RADIUS : public descriptors::FIELD_BASE<1> {};
+struct PART_RHO : public descriptors::FIELD_BASE<1> {};
+struct IT_PERIOD : public descriptors::FIELD_BASE<1> {};
+struct INLET_RADIUS : public descriptors::FIELD_BASE<1> {};
+struct INLET_CENTER : public descriptors::FIELD_BASE<0, 1> {};
+struct INLET_NORMAL : public descriptors::FIELD_BASE<0, 1> {};
+struct OUTLET_RADIUS0 : public descriptors::FIELD_BASE<1> {};
+struct OUTLET_CENTER0 : public descriptors::FIELD_BASE<0, 1> {};
+struct OUTLET_NORMAL0 : public descriptors::FIELD_BASE<0, 1> {};
+struct OUTLET_RADIUS1 : public descriptors::FIELD_BASE<1> {};
+struct OUTLET_CENTER1 : public descriptors::FIELD_BASE<0, 1> {};
+struct OUTLET_NORMAL1 : public descriptors::FIELD_BASE<0, 1> {};
+
+} // namespace olb::parameters
+
+Mesh<MyCase::value_t, MyCase::d> createMesh(MyCase::ParametersD& parameters)
+{
+  using T                 = MyCase::value_t;
+  const T      physDeltaX = 2 * parameters.get<parameters::INLET_RADIUS>() / parameters.get<parameters::RESOLUTION>();
+  STLreader<T> stlReader("../bifurcation3d.stl", physDeltaX);
+  IndicatorLayer3D<T> extendedDomain(stlReader, physDeltaX);
+  std::size_t         noOfCuboids = util::max(20, singleton::mpi().getSize());
+  Mesh<T, MyCase::d>  mesh(extendedDomain, physDeltaX, noOfCuboids);
+  mesh.setOverlap(parameters.get<parameters::OVERLAP>());
+  return mesh;
+}
 
 using T = FLOATING_POINT_TYPE;
 typedef D3Q19<> DESCRIPTOR;
@@ -95,60 +130,71 @@ Vector<T, 3> outletNormal1( -0.483331, -0.0102764, 0.875377 );
 //Ensure that parallel mode is used
 #ifdef PARALLEL_MODE_MPI
 
-void prepareGeometry( UnitConverter<T,DESCRIPTOR> const& converter,
-                      IndicatorF3D<T>& indicator, STLreader<T>& stlReader,
-                      SuperGeometry<T,3>& superGeometry )
+void prepareGeometry(MyCase& myCase)
 {
-
-  OstreamManager clout( std::cout, "prepareGeometry" );
-
+  OstreamManager clout(std::cout, "prepareGeometry");
   clout << "Prepare Geometry ..." << std::endl;
 
-  superGeometry.rename( 0, 2, indicator );
-  superGeometry.rename( 2, 1, stlReader );
+  using T          = MyCase::value_t;
+  auto& parameters = myCase.getParameters();
+  auto& geometry   = myCase.getGeometry();
 
-  superGeometry.clean();
+  const T      physDeltaX = 2 * parameters.get<parameters::INLET_RADIUS>() / parameters.get<parameters::RESOLUTION>();
+  STLreader<T> stlReader("../bifurcation3d.stl", physDeltaX);
+  IndicatorLayer3D<T> extendedDomain(stlReader, physDeltaX);
+  geometry.rename(0, 2, extendedDomain);
+  geometry.rename(2, 1, stlReader);
+  geometry.clean();
 
   // rename the material at the inlet
-  IndicatorCircle3D<T> inletCircle( inletCenter, inletNormal,
-                                    inletRadius );
-  IndicatorCylinder3D<T> inlet( inletCircle,
-                                2 * converter.getPhysDeltaX() );
-  superGeometry.rename( 2, 3, 1, inlet );
+  IndicatorCircle3D<T>   inletCircle(parameters.get<parameters::INLET_CENTER>(),
+                                     parameters.get<parameters::INLET_NORMAL>(),
+                                     parameters.get<parameters::INLET_RADIUS>());
+  IndicatorCylinder3D<T> inlet(inletCircle, 2 * physDeltaX);
+
+  geometry.rename(2, 3, 1, inlet);
 
   // rename the material at the outlet0
-  IndicatorCircle3D<T> outletCircle0( outletCenter0, outletNormal0,
-                                      0.95 * outletRadius0 );
-  IndicatorCylinder3D<T> outlet0( outletCircle0,
-                                  4 * converter.getPhysDeltaX() );
-  superGeometry.rename( 2, 4, outlet0 );
+  IndicatorCircle3D<T>   outletCircle0(parameters.get<parameters::OUTLET_CENTER0>(),
+                                       parameters.get<parameters::OUTLET_NORMAL0>(),
+                                       0.95 * parameters.get<parameters::OUTLET_RADIUS0>());
+  IndicatorCylinder3D<T> outlet0(outletCircle0, 4 * physDeltaX);
+  geometry.rename(2, 4, outlet0);
 
   // rename the material at the outlet1
-  IndicatorCircle3D<T> outletCircle1( outletCenter1, outletNormal1,
-                                      0.95 * outletRadius1 );
-  IndicatorCylinder3D<T> outlet1( outletCircle1,
-                                  4 * converter.getPhysDeltaX() );
-  superGeometry.rename( 2, 5, outlet1 );
+  IndicatorCircle3D<T>   outletCircle1(parameters.get<parameters::OUTLET_CENTER1>(),
+                                       parameters.get<parameters::OUTLET_NORMAL1>(),
+                                       0.95 * parameters.get<parameters::OUTLET_RADIUS1>());
+  IndicatorCylinder3D<T> outlet1(outletCircle1, 4 * physDeltaX);
+  geometry.rename(2, 5, outlet1);
 
-  superGeometry.clean();
-  #ifndef BOUZIDI
-  superGeometry.innerClean( true );
-  #endif
-  superGeometry.checkForErrors();
+  IndicatorCircle3D<T>   inletCircleExtended(parameters.get<parameters::INLET_CENTER>(),
+                                             parameters.get<parameters::INLET_NORMAL>(),
+                                             parameters.get<parameters::INLET_RADIUS>() + 2 * physDeltaX);
+  IndicatorCylinder3D<T> inletExtended(inletCircleExtended, 2 * physDeltaX);
+  geometry.rename(2, 6, inletExtended);
 
-  superGeometry.print();
+  geometry.clean();
+  geometry.innerClean(true);
+  geometry.checkForErrors();
 
   clout << "Prepare Geometry ... OK" << std::endl;
   return;
 }
 
-void prepareLattice( SuperLattice<T, DESCRIPTOR>& superLattice,
-                     STLreader<T>& stlReader, SuperGeometry<T,3>& superGeometry )
+
+void prepareLattice( MyCase& myCase )
 {
 
   OstreamManager clout( std::cout, "prepareLattice" );
   clout << "Prepare Lattice ..." << std::endl;
-  superLattice.setUnitConverter<UnitConverterFromResolutionAndRelaxationTime<T,DESCRIPTOR>>(
+  using T            = MyCase::value_t;
+  auto& parameters   = myCase.getParameters();
+  auto& geometry     = myCase.getGeometry();
+  auto& lattice    = myCase.getLattice(NavierStokes {});
+  using DESCRIPTOR = MyCase::descriptor_t_of<NavierStokes>;
+
+  lattice.setUnitConverter<UnitConverterFromResolutionAndRelaxationTime<T,DESCRIPTOR>>(
     int {N}, // resolution: number of voxels per charPhysL
     (T)   0.557646,                    // latticeRelaxationTime: relaxation time, have to be greater than 0.5!
     (T)   inletRadius*2.,              // charPhysLength: reference length of simulation geometry
@@ -156,47 +202,50 @@ void prepareLattice( SuperLattice<T, DESCRIPTOR>& superLattice,
     (T)   1.5e-5,                      // physViscosity: physical kinematic viscosity in __m^2 / s__
     (T)   1.225                        // physDensity: physical density in __kg / m^3__
   );
-  auto& converter = superLattice.getUnitConverter();
+  auto& converter = lattice.getUnitConverter();
   const T omega = converter.getLatticeRelaxationFrequency();
 
   // Material=1 -->bulk dynamics
-  superLattice.defineDynamics<BGKdynamics>(superGeometry, 1);
+  lattice.defineDynamics<BGKdynamics>(superGeometry, 1);
 
   #ifdef BOUZIDI
-  setBouzidiBoundary(superLattice, superGeometry, 2, stlReader);
+  setBouzidiBoundary(lattice, superGeometry, 2, stlReader);
   #else
-  boundary::set<boundary::BounceBack>(superLattice, superGeometry, 2);
+  boundary::set<boundary::BounceBack>(lattice, superGeometry, 2);
   #endif
 
   // Material=3 -->bulk dynamics (inflow)
-  superLattice.defineDynamics<BGKdynamics>(superGeometry, 3);
+  lattice.defineDynamics<BGKdynamics>(superGeometry, 3);
 
   // Material=4 -->bulk dynamics (outflow)
-  superLattice.defineDynamics<BGKdynamics>(superGeometry, 4);
-  superLattice.defineDynamics<BGKdynamics>(superGeometry, 5);
+  lattice.defineDynamics<BGKdynamics>(superGeometry, 4);
+  lattice.defineDynamics<BGKdynamics>(superGeometry, 5);
 
   // Setting of the boundary conditions
-  boundary::set<boundary::InterpolatedPressure>(superLattice, superGeometry, 3);
-  boundary::set<boundary::InterpolatedVelocity>(superLattice, superGeometry, 4);
-  boundary::set<boundary::InterpolatedVelocity>(superLattice, superGeometry, 5);
+  boundary::set<boundary::InterpolatedPressure>(lattice, superGeometry, 3);
+  boundary::set<boundary::InterpolatedVelocity>(lattice, superGeometry, 4);
+  boundary::set<boundary::InterpolatedVelocity>(lattice, superGeometry, 5);
 
-  superLattice.setParameter<descriptors::OMEGA>(omega);
+  lattice.setParameter<descriptors::OMEGA>(omega);
 
   clout << "Prepare Lattice ... OK" << std::endl;
   return;
 }
 
+
 // Generates a slowly increasing sinusoidal inflow for the first iTMax timesteps
-void setBoundaryValues( SuperLattice<T, DESCRIPTOR>& superLattice,
-                        UnitConverter<T,DESCRIPTOR> const& converter, int iT, T maxPhysT,
-                        SuperGeometry<T,3>& superGeometry )
+void setBoundaryValues( MyCase& myCase, std::size_t iT )
 {
-
   OstreamManager clout( std::cout, "setBoundaryValues" );
-
+  using T            = MyCase::value_t;
+  auto& parameters   = myCase.getParameters();
+  auto& geometry     = myCase.getGeometry();
+  auto& lattice    = myCase.getLattice(NavierStokes {});
+  auto& converter = lattice.getUnitConverter();
+  using DESCRIPTOR = MyCase::descriptor_t_of<NavierStokes>;
   // No of time steps for smooth start-up
-  int iTmaxStart = converter.getLatticeTime( 0.8*maxPhysT );
-  int iTperiod = 100;  // amount of timesteps when new boundary conditions are reset
+  std::size_t iTmaxStart = converter.getLatticeTime( 0.8 * parameters::get<parameters::FLUID_MAX_PHYS_T>() );
+  std::size_t iTperiod = parameters::get<parameters::IT_PERIOD>()/converter.getPhysDeltaT();  // amount of timesteps when new boundary conditions are reset
 
   if ( iT == 0 ) {
 
@@ -204,30 +253,36 @@ void setBoundaryValues( SuperLattice<T, DESCRIPTOR>& superLattice,
     std::vector<T> velocity( 3, T() );
     AnalyticalConst3D<T, T> uF( velocity );
 
-    superLattice.iniEquilibrium( superGeometry, 1, rhoF, uF );
-    superLattice.iniEquilibrium( superGeometry, 2, rhoF, uF );
-    superLattice.iniEquilibrium( superGeometry, 3, rhoF, uF );
-    superLattice.iniEquilibrium( superGeometry, 4, rhoF, uF );
-    superLattice.iniEquilibrium( superGeometry, 5, rhoF, uF );
+    lattice.iniEquilibrium( geometry, 1, rhoF, uF );
+    lattice.iniEquilibrium( geometry, 2, rhoF, uF );
+    lattice.iniEquilibrium( geometry, 3, rhoF, uF );
+    lattice.iniEquilibrium( geometry, 4, rhoF, uF );
+    lattice.iniEquilibrium( geometry, 5, rhoF, uF );
 
-    superLattice.defineRhoU( superGeometry, 1, rhoF, uF );
-    superLattice.defineRhoU( superGeometry, 2, rhoF, uF );
-    superLattice.defineRhoU( superGeometry, 3, rhoF, uF );
-    superLattice.defineRhoU( superGeometry, 4, rhoF, uF );
-    superLattice.defineRhoU( superGeometry, 5, rhoF, uF );
+    lattice.defineRhoU( geometry, 1, rhoF, uF );
+    lattice.defineRhoU( geometry, 2, rhoF, uF );
+    lattice.defineRhoU( geometry, 3, rhoF, uF );
+    lattice.defineRhoU( geometry, 4, rhoF, uF );
+    lattice.defineRhoU( geometry, 5, rhoF, uF );
 
     // Make the lattice ready for simulation
-    superLattice.initialize();
+    lattice.initialize();
   }
 
   else if ( iT <= iTmaxStart && iT % iTperiod == 0 ) {
     SinusStartScale<T, int> startScale( iTmaxStart, T( 1 ) );
-    int iTvec[1] = { iT };
+    std::size_t iTvec[1] = { iT };
     T frac[1] = { T( 0 ) };
     startScale( frac, iTvec );
     T maxVelocity = frac[0] * converter.getCharLatticeVelocity() * 3. / 4.
-                    * util::pow( inletRadius, 2 ) / util::pow( outletRadius0, 2 );
+                    * util::pow( parameters::get<parameters::INLET_RADIUS>(), 2 ) / util::pow( parameters::get<parameters::OUTLET_RADIUS_0>(), 2 );
 
+    Vector<T,3> outletNormal0 = parameters::get<parameters::OUTLET_NORMAL0>();
+    Vector<T,3> outletNormal1 = parameters::get<parameters::OUTLET_NORMAL1>();
+    Vector<T,3> outletCenter0 = parameters::get<parameters::OUTLET_CENTER0>();
+    Vector<T,3> outletCenter1 = parameters::get<parameters::OUTLET_CENTER1>();
+    T outletRadius0 = parameters::get<parameters::OUTLET_RADIUS0>();
+    T outletRadius1 = parameters::get<parameters::OUTLET_RADIUS1>();
     CirclePoiseuille3D<T> poiseuilleU4( outletCenter0[0], outletCenter0[1],
                                         outletCenter0[2], outletNormal0[0],
                                         outletNormal0[1], outletNormal0[2],
@@ -238,18 +293,16 @@ void setBoundaryValues( SuperLattice<T, DESCRIPTOR>& superLattice,
                                         outletNormal1[1], outletNormal1[2],
                                         outletRadius1 * 0.95, -maxVelocity );
 
-    superLattice.defineU( superGeometry, 4, poiseuilleU4 );
-    superLattice.defineU( superGeometry, 5, poiseuilleU5 );
+    superLattice.defineU( geometry, 4, poiseuilleU4 );
+    superLattice.defineU( geometry, 5, poiseuilleU5 );
   }
 }
 
 //Prepare particles
-void prepareParticles( UnitConverter<T,DESCRIPTOR> const& converter,
+void prepareParticles( MyCase& myCase,
   SuperParticleSystem<T,PARTICLETYPE>& superParticleSystem,
   SolidBoundary<T,3>& wall,
-  SuperGeometry<T,3>& superGeometry,
-  ParticleDynamicsSetup particleDynamicsSetup,
-  Randomizer<T>& randomizer )
+  ParticleDynamicsSetup particleDynamicsSetup )
 {
   OstreamManager clout( std::cout, "prepareParticles" );
   clout << "Prepare Particles ..." << std::endl;
@@ -276,34 +329,28 @@ void prepareParticles( UnitConverter<T,DESCRIPTOR> const& converter,
   }
 
   // particles generation at inlet3
-  Vector<T, 3> c( inletCenter );
-  c[2] = 0.074;
-  IndicatorCircle3D<T> inflowCircle( c, inletNormal, inletRadius -
+  Vector<T, 3> center( parameters::get<parameters::INLET_CENTER>() );
+  center[2] = 0.074;
+  IndicatorCircle3D<T> inflowCircle( center, parameters::get<parameters::INLET_NORMAL>(), parameters::get<parameters::INLET_RADIUS>() -
                                      converter.getPhysDeltaX() * 2.5 );
   IndicatorCylinder3D<T> inletCylinder( inflowCircle, 0.01 *
                                         converter.getPhysDeltaX() );
 
   //Add particles
-  addParticles( superParticleSystem, inletCylinder, partRho, radius, noOfParticles, randomizer );
+  Randomizer<T> randomizer;
+  addParticles( superParticleSystem, inletCylinder, parameters::get<parameters::PARTICLE_DENSITY>(),
+                parameters::get<parameters::PARTICLE_RADIUS>(), parameters::get<parameters::NO_OF_PARTICLES>(), randomizer );
 
   //Print super particle system summary
   superParticleSystem.print();
   clout << "Prepare Particles ... OK" << std::endl;
 }
 
-
-
-
-
-// Computes the pressure drop between voxels before and after the cylinder
-bool getResults( SuperLattice<T, DESCRIPTOR>& superLattice,
-                 UnitConverter<T,DESCRIPTOR> const& converter, std::size_t iT, int iTperiod,
-                 SuperGeometry<T,3>& superGeometry,
+bool getResults( MyCase& myCase, std::size_t iT,
                  Timer<double>& fluidTimer, STLreader<T>& stlReader, bool fluidExists,
                  SuperParticleSystem<T,PARTICLETYPE>& superParticleSystem,
                  Timer<double>& particleTimer )
 {
-
   OstreamManager clout( std::cout, "getResults" );
   SuperVTMwriter3D<T> vtmWriter( "bifurcation3d" );
   SuperVTMwriter3D<T> vtmWriterStartTime( "startingTimeBifurcation3d" );
@@ -316,10 +363,8 @@ bool getResults( SuperLattice<T, DESCRIPTOR>& superLattice,
   vtmWriterStartTime.addFunctor( velocity );
   vtmWriterStartTime.addFunctor( pressure );
 
-  //Create VTK writer for particles
   VTUwriter<T,PARTICLETYPE,true> superParticleWriter("particles_master",false,false);
 
-  //Create functors
   SuperParticleGroupedFieldF<T,PARTICLETYPE,GENERAL,POSITION>
     particlePosition( superParticleSystem );
   SuperParticleGroupedFieldF<T,PARTICLETYPE,PHYSPROPERTIES,MASS>
@@ -339,7 +384,7 @@ bool getResults( SuperLattice<T, DESCRIPTOR>& superLattice,
   superParticleWriter.addFunctor(particleForce,"Force");
   superParticleWriter.addFunctor(particleActivity,"Active");
 
-  std::size_t fluidMaxT = converter.getLatticeTime( fluidMaxPhysT );
+  std::size_t fluidMaxT = converter.getLatticeTime( parameters::get<parameters::FLUID_MAX_PHYS_T>() );
 
   if ( iT == 0 ) {
     SuperLatticeCuboid3D<T, DESCRIPTOR> cuboid( superLattice );
@@ -350,14 +395,14 @@ bool getResults( SuperLattice<T, DESCRIPTOR>& superLattice,
     superParticleWriter.createMasterFile();
     vtmWriterStartTime.createMasterFile();
 
-
-    // Print some output of the chosen simulation setup
-    clout << "N=" << N <<"; maxTimeSteps(fluid)="
+    clout << "N=" << parameters::get<parameters::RESOUTION>() <<"; maxTimeSteps(fluid)="
           << converter.getLatticeTime( fluidMaxPhysT ) << "; noOfCuboid="
-          << superGeometry.getCuboidDecomposition().size() << "; Re=" << Re
-          <<  "; noOfParticles=" << noOfParticles << "; maxTimeSteps(particle)="
-          << converter.getLatticeTime( particleMaxPhysT )
-          << "; St=" << ( 2.*partRho*radius*radius*converter.getCharPhysVelocity() ) / ( 9.*converter.getPhysViscosity()*converter.getPhysDensity()*converter.getCharPhysLength() ) << std::endl;
+          << geometry.getCuboidDecomposition().size() << "; Re=" << parameters::get<parameters::REYNOLDS>()
+          <<  "; noOfParticles=" << parameters::get<parameters::NO_OF_PARTICLES>() << "; maxTimeSteps(particle)="
+          << converter.getLatticeTime( parameters::get<parameters::PARTICLE_MAX_PHYS_T>() )
+          << "; St=" << ( 2.* parameters::get<parameters::PARTICLE_DENSITY>()
+              * parameters::get<parameters::PARTICLE_RADIUS>() *parameters::get<parameters::PARTICLE_RADIUS>()  * converter.getCharPhysVelocity() )
+              / ( 9.*converter.getPhysViscosity()*converter.getPhysDensity()*converter.getCharPhysLength() ) << std::endl;
   }
 
   // Writes the .vtk and .gif files
@@ -419,23 +464,22 @@ bool getResults( SuperLattice<T, DESCRIPTOR>& superLattice,
     // advance particle timer
     particleTimer.print( iT - fluidMaxT );
 
-    //Purge invalid particles (delete invalidated particles)
+    //delete invalidated particles
     purgeInvalidParticles<T,PARTICLETYPE>( superParticleSystem );
 
     //Define materials for capture rate
     std::vector<int> materialsOutout {4,5};
     SuperIndicatorMaterial<T,3> materialIndicatorOutput (superGeometry, materialsOutout);
 
-    //Perform capture statistics
     std::size_t noActive;
     captureStatistics( superParticleSystem, materialIndicatorOutput, noActive );
 
-    // only write .vtk-files after the fluid calculation is finished
+
     superParticleWriter.write( iT - fluidMaxT );
 
     // true as long as certain amount of active particles
-    if ( noActive < 0.001 * noOfParticles
-         && iT > 0.9*converter.getLatticeTime( fluidMaxPhysT + particleMaxPhysT ) ) {
+    if ( noActive < 0.001 * parameters::get<parameters::NO_OF_PARTICLES>()
+         && iT > 0.9*converter.getLatticeTime( parameters::get<parameters::MAX_PHYS_T>() + particleMaxPhysT ) ) {
       return false;
     }
     //Additional criterion added 02.02.23
@@ -456,99 +500,62 @@ bool getResults( SuperLattice<T, DESCRIPTOR>& superLattice,
 int main( int argc, char* argv[] )
 {
 
-  // === 1st Step: Initialization ===
-
   initialize( &argc, &argv );
 
   singleton::directories().setOutputDir( "./tmp/" );
   OstreamManager clout( std::cout, "main" );
 
-  //Create randomizer
-  Randomizer<T> randomizer;
+  MyCase::ParametersD myCaseParameters;
+  {
+    using namespace olb::parameters;
+    myCaseParameters.set<REYNOLDS>(50);
+    myCaseParameters.set<RESOLUTION>(19);
+    myCaseParameters.set<IT_PERIOD>(0.1419);   // time interval in s after which boundary conditions are updated
+    myCaseParameters.set<PART_RADIUS>(1.5e-4); // particles radius
+    myCaseParameters.set<PART_RHO>(998.2);     // particles density
+    myCaseParameters.set<FLUID_MAX_PHYS_T>(5);      // max. simulation time in s, SI unit
+    myCaseParameters.set<PARTICLE_MAX_PHYS_T>(20); // max. particle simulation time in s, SI unit
+    myCaseParameters.set<NO_OF_PARTICLES>(1000); // total number of inserted particles
+    myCaseParameters.set<INLET_CENTER>({0., 0., 0.0786395});
+    myCaseParameters.set<OUTLET_CENTER0>({-0.0235929682287551, -0.000052820468762797, -0.021445708949909});
+    myCaseParameters.set<OUTLET_CENTER1>({0.0233643529416147, 0.00000212439067050152, -0.0211994104877918});
+    myCaseParameters.set<INLET_RADIUS>(0.00999839);
+    myCaseParameters.set<OUTLET_RADIUS0>(0.007927);
+    myCaseParameters.set<OUTLET_RADIUS1>(0.00787134);
+    myCaseParameters.set<INLET_NORMAL>({0., 0., -1.});
+    myCaseParameters.set<OUTLET_NORMAL0>({0.505126, -0.04177, 0.862034});
+    myCaseParameters.set<OUTLET_NORMAL1>({-0.483331, -0.0102764, 0.875377});
+  }
+  myCaseParameters.fromCLI(argc, argv);
 
-// Ensure that parallel mode is used
+  Mesh mesh = createMesh(myCaseParameters);
+  MyCase myCase = MyCase(myCaseParameters, mesh);
+
+
+
 #ifdef PARALLEL_MODE_MPI
-
-  // Input treatment
-  if (argc>1) {
-    if (argv[1][0]=='-' && argv[1][1]=='h') {
-      OstreamManager clout( std::cout,"help" );
-      clout << std::endl << "Optional arguments: [N] [noP]" << std::endl;
-      return 0;
-    }
-    N = atoi(argv[1]);
-    if (N<1) {
-      std::cerr << "ERROR: Resolution was set to N < 1" << std::endl;
-      return 1;
-    }
-  }
-  if (argc>2) { noOfParticles = atoi(argv[2]);}
-  if (argc>3) {
-    std::cerr << "ERROR: too many arguments!" << std::endl;
-    return 1;
-  }
-
-  // Creat unit converter
-  UnitConverterFromResolutionAndRelaxationTime<T,DESCRIPTOR> const converter(
-    int {N}, // resolution: number of voxels per charPhysL
-    (T)   0.557646,                    // latticeRelaxationTime: relaxation time, have to be greater than 0.5!
-    (T)   inletRadius*2.,              // charPhysLength: reference length of simulation geometry
-    (T)   Re*1.5e-5/( inletRadius*2 ), // charPhysVelocity: maximal/highest expected velocity during simulation in __m / s__
-    (T)   1.5e-5,                      // physViscosity: physical kinematic viscosity in __m^2 / s__
-    (T)   1.225                        // physDensity: physical density in __kg / m^3__
-  );
-  // Prints the converter log as console output
-  converter.print();
-  // Writes the converter log in a file
-  converter.write("converter");
-
-  // === 2nd Step: Prepare Geometry ===
   STLreader<T> stlReader( "../bifurcation3d.stl", converter.getPhysDeltaX() );
   IndicatorLayer3D<T> extendedDomain( stlReader,
                                       converter.getPhysDeltaX() );
 
-  // Create solid wall
   const unsigned latticeMaterial = 2; //Material number of wall
   const unsigned contactMaterial = 0; //Material identifier (only relevant for contact model)
   SolidBoundary<T,3> wall( std::make_unique<IndicInverse<T,3>>(stlReader),
                            latticeMaterial, contactMaterial );
 
-  // Instantiation of an empty cuboidDecomposition
-  int noOfCuboids = util::max( 16, 4 * singleton::mpi().getSize() );
+  prepareGeometry( myCase );
 
-  CuboidDecomposition3D<T> cuboidDecomposition( extendedDomain, converter.getPhysDeltaX(),
-                                                noOfCuboids );
+  prepareLattice(  myCase );
 
-  // Instantiation of an empty loadBalancer
-  HeuristicLoadBalancer<T> loadBalancer( cuboidDecomposition );
-
-  // Default instantiation of superGeometry
-  SuperGeometry<T,3> superGeometry( cuboidDecomposition, loadBalancer, 3 );
-
-  prepareGeometry( converter, extendedDomain, stlReader, superGeometry );
-
-  // === 3rd Step: Prepare Lattice ===
-
-  SuperLattice<T, DESCRIPTOR> superLattice( superGeometry );
-
-  //prepareLattice and setBoundaryConditions
-  prepareLattice( superLattice, stlReader, superGeometry );
-
-  // === 3.1 Step: Particles ===
-
-  // SuperParticleSystems
   SuperParticleSystem<T,PARTICLETYPE> superParticleSystem(superGeometry);
 
-  //Create particle manager
   ParticleManager<T,DESCRIPTOR,PARTICLETYPE> particleManager(
     superParticleSystem, superGeometry, superLattice, converter);
 
-  //Prepare particles
-  prepareParticles( converter, superParticleSystem, wall, superGeometry,
+  prepareParticles( myCase, superParticleSystem, wall,
     particleDynamicsSetup, randomizer );
 
 
-  // === 4th Step: Main Loop with Timer ===
 
   Timer<double> fluidTimer( converter.getLatticeTime( fluidMaxPhysT ),
                             superGeometry.getStatistics().getNvoxel() );
@@ -573,10 +580,10 @@ int main( int argc, char* argv[] )
 
       // during run up time boundary values are set, collide and stream step,
       // results of fluid, afterwards only particles are simulated
-      setBoundaryValues( superLattice, converter, iT, fluidMaxPhysT, superGeometry );
+      setBoundaryValues( myCase, iT );
       superLattice.collideAndStream();
 
-      getResults( superLattice, converter, iT, iTperiod, superGeometry,
+      getResults( myCase, iT, iTperiod,
                   fluidTimer, stlReader, fluidExists,
                   superParticleSystem, particleTimer );
     }
