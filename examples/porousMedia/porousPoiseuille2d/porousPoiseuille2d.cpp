@@ -134,28 +134,24 @@ void prepareGeometry( MyCase& myCase ) {
   using T = MyCase::value_t;
   auto& geometry = myCase.getGeometry();
   auto& parameters = myCase.getParameters();
-  auto& lattice = myCase.getLattice(NavierStokes{});
-  auto& converter = lattice.getUnitConverter();
+  T physDeltaX2 = parameters.get<parameters::PHYS_DELTA_X>() / 2.;
 
-  geometry.rename( 0,2 );
-  geometry.rename( 2,1,{1,1} );
+  geometry.rename( 0, 2 );
+  geometry.rename( 2, 1, {1, 1} );
 
   Vector<T,2> extentDomain = parameters.get<parameters::DOMAIN_EXTENT>();
   Vector<T,2> extent = extentDomain;
-  Vector<T,2> origin;
-  T physDeltaX2 = converter.getPhysDeltaX() / 2.;
+  extent[0] = 2 * physDeltaX2;
+  Vector<T,2> origin(-physDeltaX2);
 
   // Set material number for inflow
-  extent[0] = 2 * physDeltaX2;
-  extent[0] = physDeltaX2;
-  origin[0] -= physDeltaX2;
   IndicatorCuboid2D<T> inflow( extent, origin );
-  geometry.rename( 2,3,1,inflow );
+  geometry.rename( 2, 3, 1, inflow );
 
   // Set material number for outflow
   origin[0] = extentDomain[0] - physDeltaX2;
   IndicatorCuboid2D<T> outflow( extent, origin );
-  geometry.rename( 2,4,1,outflow );
+  geometry.rename( 2, 4, 1, outflow );
 
   // Removes all not needed boundary voxels outside the surface
   geometry.clean();
@@ -320,9 +316,8 @@ void setTemporalValues(MyCase& myCase,
                        std::size_t iT)
 { }
 
-// Compute error norms
 void convergenceCheck(MyCase& myCase) {
-  OstreamManager clout( std::cout,"convergenceCheck" );
+  OstreamManager clout( std::cout,"error" );
   using T = MyCase::value_t;
   using DESCRIPTOR = MyCase::descriptor_t_of<NavierStokes>;
   auto& parameters  = myCase.getParameters();
@@ -342,6 +337,7 @@ void convergenceCheck(MyCase& myCase) {
   SuperLatticePhysVelocity2D<T,DESCRIPTOR> u( lattice,converter );
   auto indicatorF = geometry.getMaterialIndicator(1);
 
+  // velocity error
   SuperAbsoluteErrorL1Norm2D<T> absVelocityErrorNormL1(u, uSol, indicatorF);
   absVelocityErrorNormL1(result, tmp);
   clout << "velocity-L1-error(abs)=" << result[0];
@@ -538,6 +534,11 @@ int main( int argc, char* argv[] )
     OLB_ASSERT( myCaseParameters.get<PERMEABILITY>()  >= 0, "Permeability must be non-negative" );
   }
   myCaseParameters.fromCLI(argc, argv);
+  if ( myCaseParameters.get<parameters::PHYS_DELTA_X>() == 0 ) {
+    myCaseParameters.set<parameters::PHYS_DELTA_X>( 1. / myCaseParameters.get<parameters::RESOLUTION>() );
+  } else {
+    myCaseParameters.set<parameters::RESOLUTION>( 1. / myCaseParameters.get<parameters::PHYS_DELTA_X>() );
+  }
 
   /// === Step 3: Create Mesh ===
   Mesh mesh = createMesh(myCaseParameters);
