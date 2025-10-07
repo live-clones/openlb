@@ -27,7 +27,7 @@
  * Two porous media LB methods can be used here:
  * Spaid and Phelan (doi:10.1063/1.869392), or
  * Guo and Zhao (doi:10.1103/PhysRevE.66.036304)
- * 
+ *
  * Case-specific arguments:
  * BOUNDARY_TYPE: 0=bounceBack, 1=local, 2=interpolated
  * POROSITY_TYPE: 0=BGK, 1=SpaidPhelan, 2=GuoZhao
@@ -36,20 +36,25 @@
  */
 
 #include <olb.h>
+
 using namespace olb;
 using namespace olb::names;
+
 enum class PorosityType: int {
   BGK             = 0,
   SPAID_PHELAN    = 1,
   GUO_ZHAO        = 2
 };
+
 namespace olb::parameters {
-  struct POROSITY_TYPE  : public descriptors::TYPED_FIELD_BASE<PorosityType,1> { };
-  struct PERMEABILITY   : public descriptors::FIELD_BASE<1> { };
-  struct INITIAL_PRESSURE_L : public descriptors::FIELD_BASE<1> { };
-  struct PRESSURE_GRADIENT  : public descriptors::FIELD_BASE<1> { };
-  struct VISCOSITY       : public descriptors::FIELD_BASE<1> { };
-  struct CONVERGENCE_CHECK_T        : public descriptors::FIELD_BASE<1> { };
+
+struct POROSITY_TYPE  : public descriptors::TYPED_FIELD_BASE<PorosityType,1> { };
+struct PERMEABILITY   : public descriptors::FIELD_BASE<1> { };
+struct INITIAL_PRESSURE_L : public descriptors::FIELD_BASE<1> { };
+struct PRESSURE_GRADIENT  : public descriptors::FIELD_BASE<1> { };
+struct VISCOSITY       : public descriptors::FIELD_BASE<1> { };
+struct CONVERGENCE_CHECK_T        : public descriptors::FIELD_BASE<1> { };
+
 }
 
 // === Step 1: Declarations ===
@@ -106,7 +111,7 @@ protected:
   bool trunc;
 public:
   PorousPoiseuille3D( MyCase& myCase, T radius_ )
-    : AnalyticalF3D<T,T>(3), radius(radius_) 
+    : AnalyticalF3D<T,T>(3), radius(radius_)
   {
     auto& parameters = myCase.getParameters();
     Kin       = parameters.get<parameters::PERMEABILITY>();
@@ -530,12 +535,9 @@ void simulate(MyCase& myCase) {
 
 int main( int argc, char* argv[] )
 {
-
   // === 1st Step: Initialization ===
   initialize( &argc, &argv );
-  singleton::directories().setOutputDir( "./tmp/" );
-  OstreamManager clout( std::cout,"main" );
-  
+
   /// === Step 2: Set Parameters ===
   MyCase::ParametersD myCaseParameters;
   {
@@ -557,6 +559,7 @@ int main( int argc, char* argv[] )
     OLB_ASSERT( myCaseParameters.get<PERMEABILITY>()  >= 0, "Permeability must be non-negative" );
   }
   myCaseParameters.fromCLI(argc, argv);
+
   if ( myCaseParameters.get<parameters::PHYS_DELTA_X>() == 0 ) {
     myCaseParameters.set<parameters::PHYS_DELTA_X>( 1. / myCaseParameters.get<parameters::RESOLUTION>() );
   } else {

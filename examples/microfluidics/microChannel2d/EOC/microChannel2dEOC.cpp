@@ -43,7 +43,6 @@ struct END_RESOLUTION : public descriptors::TYPED_FIELD_BASE<int,1> { };
 
 }
 
-
 int main(int argc, char* argv[]) {
   initialize(&argc, &argv);
 
@@ -132,7 +131,7 @@ int main(int argc, char* argv[]) {
       { "velocity L1 rel Error","velocity L2 rel Error",
         "velocity Linf rel error"},
       "top right",
-      { 'p','p','p' } 
+      { 'p','p','p' }
     );
   }
 

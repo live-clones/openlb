@@ -58,8 +58,8 @@ using MyCase = Case<
 >;
 
 namespace olb::parameters {
+
 // Microfluidics
-struct KNUDSEN  : public descriptors::FIELD_BASE<1> { };
 struct B_COEFF : public descriptors::FIELD_BASE<1> { };
 struct ACCOMODATION_COEFF : public descriptors::FIELD_BASE<1> { };
 struct RELAXATION_TIME : public descriptors::FIELD_BASE<1> { };
@@ -411,7 +411,7 @@ void simulate(MyCase& myCase) {
   timer.start();
   util::ValueTracer<T> converge( myCase.getLattice(NavierStokes{}).getUnitConverter().getLatticeTime( physInterval ), residuum );
   timer.start();
-  
+
   parameters.set<parameters::HAS_CONVERGED>(false);
   for (std::size_t iT=0; iT < iTmax; ++iT) {
     if ( converge.hasConverged() ) {
