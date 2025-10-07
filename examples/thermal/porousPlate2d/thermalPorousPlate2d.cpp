@@ -219,7 +219,7 @@ void prepareLattice(MyCase& myCase) {
   const T physViscosity           = parameters.get<parameters::PHYS_CHAR_VISCOSITY>();
   const T physDensity             = parameters.get<parameters::PHYS_CHAR_DENSITY>();
   const T physThermalConductivity = parameters.get<parameters::PHYS_THERMAL_CONDUCTIVITY>();
-  const T tau                     = parameters.get<parameters::RELAXATION_TIME>();
+  const T tau                     = parameters.get<parameters::LATTICE_RELAXATION_TIME>();
   const T Ra                      = parameters.get<parameters::RAYLEIGH>();
   const T Pr                      = parameters.get<parameters::PRANDTL>();
   const T Tcold                   = parameters.get<parameters::T_COLD>();
@@ -505,7 +505,7 @@ int main(int argc, char* argv[]) {
     myCaseParameters.set<PHYS_CHAR_DENSITY        >( 1. );
     myCaseParameters.set<PHYS_THERMAL_CONDUCTIVITY>( 0.03 );
     myCaseParameters.set<RESOLUTION               >(20);
-    myCaseParameters.set<RELAXATION_TIME          >(1.);
+    myCaseParameters.set<LATTICE_RELAXATION_TIME  >(1.);
     myCaseParameters.set<REYNOLDS                 >(20);
     myCaseParameters.set<RAYLEIGH                 >(100);
     myCaseParameters.set<PRANDTL                  >(0.71);
