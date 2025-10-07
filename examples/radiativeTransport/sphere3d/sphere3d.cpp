@@ -43,12 +43,36 @@ using MyCase = Case<
 >;
 
 namespace olb::parameters{
+
+    struct WRITE_SEC : public descriptors::FIELD_BASE<1> { };
     struct DOMAIN_L : public descriptors::FIELD_BASE<1> { };
 
     struct ABSORPTION : public descriptors::FIELD_BASE<1> { };
     struct SCATTERING : public descriptors::FIELD_BASE<1> { };
     struct MU_EFF : public descriptors::FIELD_BASE<1> { };
 }
+
+// PostProcessor for updating the source term in each cell
+struct ComputeSourceTerm {
+  static constexpr OperatorScope scope = OperatorScope::PerCellWithParameters;
+
+  struct C_T : public descriptors::FIELD_BASE<1> {};
+  struct MU_EFF : public descriptors::FIELD_BASE<1> {};
+
+  using parameters = meta::list<C_T, MU_EFF>;
+
+  int getPriority() const { return 0; }
+
+  template <typename CELL, typename PARAMETERS>
+  void apply(CELL& cell, PARAMETERS& parameters) any_platform
+  {
+    using V  = typename CELL::value_t;
+    V phi    = cell.computeRho();
+    V mu_eff = parameters.template get<MU_EFF>();
+    V source = -mu_eff * mu_eff * phi * parameters.template get<C_T>();
+    cell.template setField<descriptors::SOURCE>(source);
+  }
+};
 
 Mesh<MyCase::value_t,MyCase::d> createMesh(MyCase::ParametersD& params) {
     using T = MyCase::value_t;
@@ -139,8 +163,45 @@ void prepareLattice(MyCase& myCase){
     Rlattice.setParameter<descriptors::OMEGA>(omega);
     // Rlattice.setParameter<collision::Poisson::SINK>(latticeSink);
 
+    // Add PostProcessor and set parameters
+    Rlattice.addPostProcessor<stage::PreCollide>(meta::id<ComputeSourceTerm> {});
+    Rlattice.setParameter<ComputeSourceTerm::C_T>(converter.getConversionFactorTime());
+    Rlattice.setParameter<ComputeSourceTerm::MU_EFF>(params.get<parameters::MU_EFF>());
+
     clout << "Prepare Lattice ... OK" << std::endl;
     return;
+}
+
+void setInitialValues(MyCase& myCase){
+    OstreamManager clout(std::cout,"setInitialValues");
+    clout << "Setting Initial Values and BC ..." << std::endl;
+
+    using T = MyCase::value_t;
+    auto& geometry = myCase.getGeometry();
+    auto& params = myCase.getParameters();
+
+    auto& Rlattice = myCase.getLattice(Radiation{});
+
+    using RDESCRIPTOR = MyCase::descriptor_t_of<Radiation>;
+
+    const T absorption = params.get<parameters::ABSORPTION>();
+    const T scattering = params.get<parameters::SCATTERING>();
+
+    // since adv-diffusion model is used, the velocity it set to 0
+    AnalyticalConst3D<T, T>         u0(0.0, 0.0, 0.0);            // 3D -> 3D
+    AnalyticalConst3D<T, T>         rho0(0.0);                    // 3D -> 3D
+    PLSsolution3D<T, T, RDESCRIPTOR> dSol(absorption, scattering); // analytical Solution
+
+    // initialize media with density from analytical solution
+    // at iT=0 the error is given by the maschinen genauigkeit
+    Rlattice.iniEquilibrium(geometry, 1, rho0, u0);
+    Rlattice.iniEquilibrium(geometry, 2, dSol, u0);
+    Rlattice.iniEquilibrium(geometry, 3, dSol, u0);
+    Rlattice.defineRho(geometry, 2, dSol);
+    Rlattice.defineRho(geometry, 3, dSol);
+    Rlattice.initialize();
+
+    clout << "Setting Initial Values and BC ... OK" << std::endl;
 }
 
 
@@ -151,6 +212,7 @@ int main(int argc, char* argv[]) {
     MyCase::ParametersD myCaseParameters;
     {
         using namespace olb::parameters;
+        myCaseParameters.set<WRITE_SEC>(1.0);
         myCaseParameters.set<RESOLUTION>(40);
         myCaseParameters.set<MAX_PHYS_T>(100);
         myCaseParameters.set<DOMAIN_L>(1.0);
@@ -180,5 +242,8 @@ int main(int argc, char* argv[]) {
 
     /// === Step 6: Prepare Lattice ===
     prepareLattice(myCase);
+
+    /// === Step 7: Definition of Initial, Boundary Values, and Fields ===
+    setInitialValues(myCase);
 
 }
