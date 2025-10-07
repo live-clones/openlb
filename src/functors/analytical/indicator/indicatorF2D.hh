@@ -47,8 +47,8 @@ IndicatorAirfoil2D<S>::IndicatorAirfoil2D(Vector<S,2> center, S chordLength, S c
 {
   // Set bounding box
   S maxThickness = _chordLength * _thicknessPercentage;
-  this->_myMin = {_center[0] - _chordLength/S(2), _center[1] - maxThickness/S(2) - computeCamber(_camber)};
-  this->_myMax = {_center[0] + _chordLength/S(2), _center[1] + maxThickness/S(2) + computeCamber(_camber)};
+  this->_myMin = {_center[0] - _chordLength/S(2), _center[1] - maxThickness/S(2) - computeCamber(_camberPos)};
+  this->_myMax = {_center[0] + _chordLength/S(2), _center[1] + maxThickness/S(2) + computeCamber(_camberPos)};
 }
 
 template <typename S>

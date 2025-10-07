@@ -144,7 +144,7 @@ void prepareLattice(MyCase& myCase) {
   // define UnitConverter
   sLattice.setUnitConverter<UnitConverterFromResolutionAndRelaxationTime<T,MyCase::descriptor_t>>(
     (int) parameters.get<parameters::RESOLUTION>(),
-    ( T ) parameters.get<parameters::RELAXATION_TIME>(),
+    ( T ) parameters.get<parameters::LATTICE_RELAXATION_TIME>(),
     ( T ) parameters.get<parameters::PHYS_CHAR_LENGTH>(),
     ( T ) parameters.get<parameters::PHYS_CHAR_VELOCITY>(),
     ( T ) parameters.get<parameters::PHYS_CHAR_VISCOSITY>(),
@@ -472,7 +472,7 @@ int main(int argc, char **argv) {
   {
     using namespace parameters;
     myCaseParametersD.set<RESOLUTION                  >(    25);
-    myCaseParametersD.set<RELAXATION_TIME             >(  0.51);
+    myCaseParametersD.set<LATTICE_RELAXATION_TIME     >(  0.51);
     myCaseParametersD.set<PHYS_CHAR_LENGTH            >(   0.5);
     myCaseParametersD.set<PHYS_CHAR_VELOCITY          >(   0.1);
     myCaseParametersD.set<PHYS_CHAR_VISCOSITY         >( 0.001);

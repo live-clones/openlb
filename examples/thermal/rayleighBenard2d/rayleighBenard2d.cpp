@@ -41,13 +41,13 @@ struct T_COLD : public descriptors::FIELD_BASE<1> { };
 
 }
 
-Mesh<MyCase::value_t,MyCase::d> createMesh(MyCase::ParametersD& params) {
+Mesh<MyCase::value_t,MyCase::d> createMesh(MyCase::ParametersD& parameters) {
   using T = MyCase::value_t;
-  Vector extent = params.get<parameters::DOMAIN_EXTENT>();
+  Vector extent = parameters.get<parameters::DOMAIN_EXTENT>();
   std::vector<T> origin(2,T());
   IndicatorCuboid2D<T> cuboid(extent, origin);
 
-  const T physDeltaX = 0.1 / params.get<parameters::RESOLUTION>();
+  const T physDeltaX = 0.1 / parameters.get<parameters::RESOLUTION>();
   Mesh<T,MyCase::d> mesh(cuboid, physDeltaX, singleton::mpi().getSize());
   mesh.setOverlap(params.get<parameters::OVERLAP>());
   mesh.getCuboidDecomposition().setPeriodicity({true,false});
@@ -61,24 +61,24 @@ void prepareGeometry(MyCase& myCase) {
   using T = MyCase::value_t;
   //using T = MyCase::template value_t_of<NavierStokes>();
   auto& geometry = myCase.getGeometry();
-  auto& params = myCase.getParameters();
+  auto& parameters = myCase.getParameters();
 
   geometry.rename(0,2);
   geometry.rename(2,1,{0,1});
 
   // TODO Parameterization uncovers hidden duplications, deltaX should not be recomputed at use!
-  const T physDeltaX = 0.1 / params.get<parameters::RESOLUTION>();
+  const T physDeltaX = 0.1 / parameters.get<parameters::RESOLUTION>();
 
   std::vector<T> extend( 2, T(0) );
-  extend[0] = params.get<parameters::DOMAIN_EXTENT>()[0];
+  extend[0] = parameters.get<parameters::DOMAIN_EXTENT>()[0];
   extend[1] = physDeltaX;
   std::vector<T> origin( 2, T(0) );
   IndicatorCuboid2D<T> bottom(extend, origin);
 
-  origin[1] = params.get<parameters::DOMAIN_EXTENT>()[1]-physDeltaX;
+  origin[1] = parameters.get<parameters::DOMAIN_EXTENT>()[1]-physDeltaX;
   IndicatorCuboid2D<T> top(extend, origin);
 
-  origin[0] = params.get<parameters::DOMAIN_EXTENT>()[0]/2.;
+  origin[0] = parameters.get<parameters::DOMAIN_EXTENT>()[0]/2.;
   origin[1] = physDeltaX;
   extend[0] = physDeltaX;
   extend[1] = physDeltaX;
@@ -103,7 +103,7 @@ void prepareLattice(MyCase& myCase) {
 
   using T = MyCase::value_t;
   auto& geometry = myCase.getGeometry();
-  auto& params = myCase.getParameters();
+  auto& parameters = myCase.getParameters();
 
   auto& NSlattice = myCase.getLattice(NavierStokes{});
   auto& ADlattice = myCase.getLattice(Temperature{});
@@ -112,12 +112,12 @@ void prepareLattice(MyCase& myCase) {
   using TDESCRIPTOR = MyCase::descriptor_t_of<Temperature>;
 
   // TODO for now, to be combined with unit converter refactor
-  const T physDeltaX = 0.1 / params.get<parameters::RESOLUTION>();
-  const T Ra = params.get<parameters::RAYLEIGH>();
-  const T Pr = params.get<parameters::PRANDTL>();
-  const int N = params.get<parameters::RESOLUTION>();
-  const T Tcold = params.get<parameters::T_COLD>();
-  const T Thot = params.get<parameters::T_HOT>();
+  const T physDeltaX = 0.1 / parameters.get<parameters::RESOLUTION>();
+  const T Ra = parameters.get<parameters::RAYLEIGH>();
+  const T Pr = parameters.get<parameters::PRANDTL>();
+  const int N = parameters.get<parameters::RESOLUTION>();
+  const T Tcold = parameters.get<parameters::T_COLD>();
+  const T Thot = parameters.get<parameters::T_HOT>();
 
   NSlattice.setUnitConverter<ThermalUnitConverter<T,NSDESCRIPTOR,TDESCRIPTOR>>(
     (T) physDeltaX, // physDeltaX
@@ -177,15 +177,15 @@ void prepareLattice(MyCase& myCase) {
 void setInitialValues(MyCase& myCase) {
   using T = MyCase::value_t;
   auto& geometry = myCase.getGeometry();
-  auto& params = myCase.getParameters();
+  auto& parameters = myCase.getParameters();
 
   auto& NSlattice = myCase.getLattice(NavierStokes{});
   auto& ADlattice = myCase.getLattice(Temperature{});
 
   const auto& converter = NSlattice.getUnitConverter();
 
-  const T Tcold = params.get<parameters::T_COLD>();
-  const T Thot = params.get<parameters::T_HOT>();
+  const T Tcold = parameters.get<parameters::T_COLD>();
+  const T Thot = parameters.get<parameters::T_HOT>();
   const T Tperturb = 1./5. * Tcold + 4./5. * Thot; // temperature of the perturbation
 
   /// define initial conditions
