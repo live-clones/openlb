@@ -83,14 +83,14 @@ std::shared_ptr<IndicatorF3D<MyCase::value_t>> makeInletI(MyCase::ParametersD& p
 {
   using T = MyCase::value_t;
   Vector<T,3> origin(
-    T(),
-    params.get<parameters::DOMAIN_EXTENT>()[1] / 2.0 + params.get<parameters::PHYS_DELTA_X>(),
-    params.get<parameters::DOMAIN_EXTENT>()[2] / 2.0 + params.get<parameters::PHYS_DELTA_X>()
+    params.get<parameters::PHYS_DELTA_X>(),
+    params.get<parameters::DOMAIN_EXTENT>()[1] / 2.,
+    params.get<parameters::DOMAIN_EXTENT>()[2] / 2.
   );
   Vector<T,3> extend(
-    params.get<parameters::INLET_CYLINDER_SIZE>()[0] + 5 * params.get<parameters::PHYS_DELTA_X>(),
-    params.get<parameters::DOMAIN_EXTENT>()[1] / 2.0 + params.get<parameters::PHYS_DELTA_X>(),
-    params.get<parameters::DOMAIN_EXTENT>()[2] / 2.0 + params.get<parameters::PHYS_DELTA_X>()
+    params.get<parameters::INLET_CYLINDER_SIZE>()[0] + 5. * params.get<parameters::PHYS_DELTA_X>(),
+    params.get<parameters::DOMAIN_EXTENT>()[1] / 2.,
+    params.get<parameters::DOMAIN_EXTENT>()[2] / 2.
   );
   return std::shared_ptr<IndicatorF3D<T>>(
     new IndicatorCylinder3D<T>(extend, origin, params.get<parameters::INLET_CYLINDER_SIZE>()[1])
@@ -103,19 +103,20 @@ std::shared_ptr<IndicatorF3D<MyCase::value_t>> makeInjectionTubeI(MyCase::Parame
   using T = MyCase::value_t;
   Vector<T,3> origin(
     params.get<parameters::INLET_CYLINDER_SIZE>()[0],
-    params.get<parameters::DOMAIN_EXTENT>()[1] / 2.0 + params.get<parameters::PHYS_DELTA_X>(),
-    params.get<parameters::DOMAIN_EXTENT>()[2] / 2.0 + params.get<parameters::PHYS_DELTA_X>()
+    params.get<parameters::DOMAIN_EXTENT>()[1] / 2.,
+    params.get<parameters::DOMAIN_EXTENT>()[2] / 2.
   );
   Vector<T,3> extend(
     params.get<parameters::DOMAIN_EXTENT>()[0],
-    params.get<parameters::DOMAIN_EXTENT>()[1] / 2.0 + params.get<parameters::PHYS_DELTA_X>(),
-    params.get<parameters::DOMAIN_EXTENT>()[2] / 2.0 + params.get<parameters::PHYS_DELTA_X>()
+    params.get<parameters::DOMAIN_EXTENT>()[1] / 2.,
+    params.get<parameters::DOMAIN_EXTENT>()[2] / 2.
   );
   return std::shared_ptr<IndicatorF3D<T>>(
     new IndicatorCylinder3D<T>(
       extend, 
       origin, 
-      std::min(params.get<parameters::DOMAIN_EXTENT>()[1], params.get<parameters::DOMAIN_EXTENT>()[2]))
+      std::min(params.get<parameters::DOMAIN_EXTENT>()[1], params.get<parameters::DOMAIN_EXTENT>()[2]) / 2.
+    ) 
   );
 }
 
@@ -144,30 +145,30 @@ void prepareGeometry(MyCase& myCase) {
 
   {
     Vector<T,3> origin(T(),
-      params.get<parameters::DOMAIN_EXTENT>()[1] / 2.0  + params.get<parameters::PHYS_DELTA_X>(),
-      params.get<parameters::DOMAIN_EXTENT>()[2] / 2.0  + params.get<parameters::PHYS_DELTA_X>()
+      params.get<parameters::DOMAIN_EXTENT>()[1] / 2.0,
+      params.get<parameters::DOMAIN_EXTENT>()[2] / 2.0
     );
     Vector<T,3> extend(params.get<parameters::PHYS_DELTA_X>(),
-      params.get<parameters::DOMAIN_EXTENT>()[1] / 2.0  + params.get<parameters::PHYS_DELTA_X>(),
-      params.get<parameters::DOMAIN_EXTENT>()[2] / 2.0  + params.get<parameters::PHYS_DELTA_X>()
+      params.get<parameters::DOMAIN_EXTENT>()[1] / 2.0,
+      params.get<parameters::DOMAIN_EXTENT>()[2] / 2.0
     );
 
     IndicatorCylinder3D<T> cylinderIN(extend, origin, params.get<parameters::INLET_CYLINDER_SIZE>()[1]);
-    geometry.rename(1,3, cylinderIN);
+    geometry.rename(1, 3, cylinderIN);
   }
 
   {
-    Vector<T,3> origin(params.get<parameters::INLET_CYLINDER_SIZE>()[0] - params.get<parameters::PHYS_DELTA_X>(),
-      params.get<parameters::DOMAIN_EXTENT>()[1] / 2.0  + params.get<parameters::PHYS_DELTA_X>(),
-      params.get<parameters::DOMAIN_EXTENT>()[2] / 2.0  + params.get<parameters::PHYS_DELTA_X>()
+    Vector<T,3> origin(params.get<parameters::DOMAIN_EXTENT>()[0] - params.get<parameters::PHYS_DELTA_X>(),
+      params.get<parameters::DOMAIN_EXTENT>()[1] / 2.0,
+      params.get<parameters::DOMAIN_EXTENT>()[2] / 2.0
     );
-    Vector<T,3> extend(params.get<parameters::INLET_CYLINDER_SIZE>()[0],
-      params.get<parameters::DOMAIN_EXTENT>()[1] / 2.0  + params.get<parameters::PHYS_DELTA_X>(),
-      params.get<parameters::DOMAIN_EXTENT>()[2] / 2.0  + params.get<parameters::PHYS_DELTA_X>()
+    Vector<T,3> extend(params.get<parameters::DOMAIN_EXTENT>()[0],
+      params.get<parameters::DOMAIN_EXTENT>()[1] / 2.0,
+      params.get<parameters::DOMAIN_EXTENT>()[2] / 2.0
     );
 
     IndicatorCylinder3D<T> cylinderOUT(extend, origin, params.get<parameters::DOMAIN_EXTENT>()[2]);
-    geometry.rename(1,4, cylinderOUT);
+    geometry.rename(1, 4, cylinderOUT);
   }
 
   geometry.clean();
