@@ -143,13 +143,20 @@ void prepareGeometry( UnitConverter<T,DESCRIPTOR> const& converter,
 }
 
 void prepareLattice( SuperLattice<T, DESCRIPTOR>& superLattice,
-                     UnitConverter<T,DESCRIPTOR> const& converter,
                      STLreader<T>& stlReader, SuperGeometry<T,3>& superGeometry )
 {
 
   OstreamManager clout( std::cout, "prepareLattice" );
   clout << "Prepare Lattice ..." << std::endl;
-
+  superLattice.setUnitConverter<UnitConverterFromResolutionAndRelaxationTime<T,DESCRIPTOR>>(
+    int {N}, // resolution: number of voxels per charPhysL
+    (T)   0.557646,                    // latticeRelaxationTime: relaxation time, have to be greater than 0.5!
+    (T)   inletRadius*2.,              // charPhysLength: reference length of simulation geometry
+    (T)   Re*1.5e-5/( inletRadius*2 ), // charPhysVelocity: maximal/highest expected velocity during simulation in __m / s__
+    (T)   1.5e-5,                      // physViscosity: physical kinematic viscosity in __m^2 / s__
+    (T)   1.225                        // physDensity: physical density in __kg / m^3__
+  );
+  auto& converter = superLattice.getUnitConverter();
   const T omega = converter.getLatticeRelaxationFrequency();
 
   // Material=1 -->bulk dynamics
@@ -522,10 +529,10 @@ int main( int argc, char* argv[] )
 
   // === 3rd Step: Prepare Lattice ===
 
-  SuperLattice<T, DESCRIPTOR> superLattice( converter, superGeometry );
+  SuperLattice<T, DESCRIPTOR> superLattice( superGeometry );
 
   //prepareLattice and setBoundaryConditions
-  prepareLattice( superLattice, converter, stlReader, superGeometry );
+  prepareLattice( superLattice, stlReader, superGeometry );
 
   // === 3.1 Step: Particles ===
 
