@@ -40,7 +40,7 @@ using namespace olb::graphics;
 
 using T = double;
 
-#define TURBULENT
+//#define TURBULENT
 
 #ifdef TURBULENT
 typedef D2Q9<FORCE,TAU_EFF> NSDESCRIPTOR;
@@ -438,6 +438,8 @@ void simulate(Vector<T, 18>& output)
   timer.start();
 
   util::ValueTracer<T> converge(6,epsilon);
+  clout << "MaxPhysT: " << converter.getLatticeTime(maxPhysT) << std::endl; 
+
   bool converged = false;
   for (std::size_t iT = 0; iT < converter.getLatticeTime(maxPhysT); ++iT) {
 
@@ -480,7 +482,7 @@ void simulate(Vector<T, 18>& output)
         break;
       }
     }
-    #endif
+#endif
     if (converged) break;
   }
 #ifdef TURBULENT
