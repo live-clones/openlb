@@ -280,6 +280,11 @@ MyCase::value_t computeNusselt(MyCase& myCase){
             }
         }
     }
+
+#ifdef PARALLEL_MODE_MPI
+    singleton::mpi().reduceAndBcast(q, MPI_SUM);
+    singleton::mpi().reduceAndBcast(voxel, MPI_SUM);
+#endif
     return q / (MyCase::value_t)voxel;
 }
 
