@@ -41,10 +41,13 @@
 #include <olb.h>
 
 using namespace olb;
+using namespace olb::names;
 using namespace olb::descriptors;
 using namespace olb::graphics;
 
-using T = FLOATING_POINT_TYPE;
+using MyCase = Case<
+  NavierStokes, Lattice<FLOATING_POINT_TYPE, descriptors::D3Q19<>>
+>;
 
 // Choose turbulence model or collision scheme
 //#define RLB
@@ -55,7 +58,6 @@ using T = FLOATING_POINT_TYPE;
 //#define Krause
 //#define DNS
 //#define KBC
-//#define K_EPSILON
 
 #define finiteDiff //for N<256
 
@@ -65,50 +67,12 @@ typedef D3Q19<AV_SHEAR> DESCRIPTOR;
 typedef D3Q19<EFFECTIVE_OMEGA,VELO_GRAD> DESCRIPTOR;
 #elif defined(KBC)
 typedef D3Q19<GAMMA> DESCRIPTOR;
-#elif defined(K_EPSILON)
-using DESCRIPTOR = D3Q19<OMEGA>;
-using KEDESCRIPTOR = D3Q19<VELOCITY, SOURCE, OMEGA, K, EPSILON>;
 #else
 typedef D3Q19<> DESCRIPTOR;
 #endif
 
-#if defined(RLB)
-using BulkDynamics = RLBdynamics<T,DESCRIPTOR>;
-#elif defined(DNS)
-using BulkDynamics = BGKdynamics<T,DESCRIPTOR>;
-#elif defined(WALE)
-using BulkDynamics = WALEBGKdynamics<T,DESCRIPTOR>;
-#elif defined(ShearSmagorinsky)
-using BulkDynamics = ShearSmagorinskyBGKdynamics<T,DESCRIPTOR>;
-#elif defined(Krause)
-using BulkDynamics = KrauseBGKdynamics<T,DESCRIPTOR>;
-#elif defined(ConsistentStrainSmagorinsky)
-using BulkDynamics = ConStrainSmagorinskyBGKdynamics<T,DESCRIPTOR>;
-#elif defined(KBC)
-using BulkDynamics = KBCdynamics<T, DESCRIPTOR>;
-#elif defined(K_EPSILON)
-using BulkDynamics = dynamics::Tuple<T,DESCRIPTOR,momenta::BulkTuple,equilibria::SecondOrder,collision::ParameterFromCell<descriptors::OMEGA,collision::BGK>>;
-using KEBulkDynamics = SourcedLimitedAdvectionDiffusionBGKdynamics<T,KEDESCRIPTOR>;
-#else
-using BulkDynamics = SmagorinskyBGKdynamics<T,DESCRIPTOR>;
-#endif
-
-// Global constants
-const T pi = 4.0 * util::atan(1.0);
-const T volume = util::pow(2. * pi, 3.); // volume of the 2pi periodic box
-
-
-// Parameters for the simulation setup
-const T maxPhysT = 10;    // max. simulation time in s, SI unit
-int N = 64;              // resolution of the model
-T Re = 800;               // defined as 1/kinematic viscosity
-T smagoConst = 0.1;       // Smagorisky Constant, for ConsistentStrainSmagorinsky smagoConst = 0.033
-T vtkSave = 0.25;         // time interval in s for vtk and gnuplot output
-const T intensity = 0.04; // turbulent intensity for K_EPSILON dynamics
-
 
 bool plotDNS = true;      //available for Re=800, Re=1600, Re=3000 (maxPhysT<=10)
-std::vector<std::vector<T>> values_DNS;
 
 template <typename T, typename _DESCRIPTOR>
 class Tgv3D : public AnalyticalF3D<T,T> {
@@ -137,196 +101,125 @@ public:
   };
 };
 
-#ifdef K_EPSILON
-template <typename T, typename _DESCRIPTOR>
-class TgvK3D : public AnalyticalF3D<T,T> {
 
-protected:
-  T u0;
+Mesh<MyCase::value_t,MyCase::d> createMesh(MyCase::ParametersD& parameters) {
+  using T = MyCase::value_t;
 
-// initial values of k for the the TGV
-public:
-  TgvK3D(UnitConverter<T,_DESCRIPTOR> const& converter, T frac) : AnalyticalF3D<T,T>(1)
-  {
-    u0 = converter.getCharLatticeVelocity();
-  };
+  const T N = parameters.get<parameters::RESOLUTION>();
+  const T physDeltaX = 1./int(std::nearbyint(N/(2*std::numbers::pi_v<T>)));
 
-  bool operator()(T output[], const T input[]) override
-  {
-    output[0] = 3./2. * intensity * intensity * u0 * u0;
-    return true;
-  };
-};
-
-template <typename T, typename _DESCRIPTOR>
-class TgvE3D : public AnalyticalF3D<T,T> {
-
-protected:
-  T u0, length, dX;
-
-// initial values of epsilon for the TGV
-public:
-  TgvE3D(UnitConverter<T,_DESCRIPTOR> const& converter, T frac) : AnalyticalF3D<T,T>(1)
-  {
-    u0 = converter.getCharLatticeVelocity();
-    length = converter.getCharPhysLength();
-    dX = converter.getPhysDeltaX();
-  };
-
-  bool operator()(T output[], const T input[]) override
-  {
-    T k = 3./2. * intensity * intensity * u0 * u0;
-    output[0] = util::pow(0.09, 3./4.)*util::pow(k, 3./2.)/(length/dX)/0.04;
-
-    return true;
-  };
-};
-#endif
-
-
-
-void prepareGeometry(SuperGeometry<T,3>& superGeometry)
-{
-  OstreamManager clout(std::cout,"prepareGeometry");
-  clout << "Prepare Geometry ..." << std::endl;
-
-  superGeometry.rename(0,1);
-  superGeometry.communicate();
-
-  /// Removes all not needed boundary voxels outside the surface
-  superGeometry.clean();
-  /// Removes all not needed boundary voxels inside the surface
-  superGeometry.innerClean();
-  superGeometry.checkForErrors();
-
-  superGeometry.print();
-  clout << "Prepare Geometry ... OK" << std::endl;
-  return;
+  //Mesh<T,MyCase::d> mesh(0, physDeltaX, N, noOfCuboids);
+  Mesh<T,MyCase::d> mesh(0, physDeltaX, N, singleton::mpi().getSize());
+  mesh.getCuboidDecomposition().setPeriodicity({true, true, true});
+  mesh.setOverlap(parameters.get<parameters::OVERLAP>());
+  return mesh;
 }
 
-// Set up the geometry of the simulation
-void prepareLattice(SuperLattice<T,DESCRIPTOR>& sLattice,
-                    SuperGeometry<T,3>& superGeometry)
-{
-  OstreamManager clout(std::cout,"prepareLattice");
-  clout << "Prepare Lattice ..." << std::endl;
+void prepareGeometry(MyCase& myCase) {
+  auto& geometry = myCase.getGeometry();
 
-  /// Material=1 -->bulk dynamics
-  const T omega = sLattice.getUnitConverter().getLatticeRelaxationFrequency();
-  sLattice.defineDynamics<BulkDynamics>(superGeometry, 1);
-  sLattice.setParameter<descriptors::OMEGA>(omega);
+  /// Set material numbers
+  geometry.rename(0,1);
+
+  geometry.communicate();
+  /// Removes all not needed boundary voxels outside the surface
+  geometry.clean();
+  /// Removes all not needed boundary voxels inside the surface
+  geometry.innerClean();
+  geometry.checkForErrors();
+
+  geometry.getStatistics().print();
+}
+
+void prepareLattice(MyCase& myCase) {
+  using T = MyCase::value_t;
+  using DESCRIPTOR = MyCase::descriptor_t;
+  auto& parameters = myCase.getParameters();
+
+ #if defined(RLB)
+using BulkDynamics = RLBdynamics<T,DESCRIPTOR>;
+#elif defined(DNS)
+using BulkDynamics = BGKdynamics<T,DESCRIPTOR>;
+#elif defined(WALE)
+using BulkDynamics = WALEBGKdynamics<T,DESCRIPTOR>;
+#elif defined(ShearSmagorinsky)
+using BulkDynamics = ShearSmagorinskyBGKdynamics<T,DESCRIPTOR>;
+#elif defined(Krause)
+using BulkDynamics = KrauseBGKdynamics<T,DESCRIPTOR>;
+#elif defined(ConsistentStrainSmagorinsky)
+using BulkDynamics = ConStrainSmagorinskyBGKdynamics<T,DESCRIPTOR>;
+#elif defined(KBC)
+using BulkDynamics = KBCdynamics<T, DESCRIPTOR>;
+#else
+using BulkDynamics = SmagorinskyBGKdynamics<T,DESCRIPTOR>;
+#endif
+
+ auto& lattice = myCase.getLattice(NavierStokes{});
+
+  const T N = parameters.get<parameters::RESOLUTION>();
+  const T Re = parameters.get<parameters::REYNOLDS>();
+  const T smagoConst = parameters.get<parameters::SMAGORINSKY>();
+
+  // Set up a unit converter with the characteristic physical units
+  myCase.getLattice(NavierStokes{}).setUnitConverter<UnitConverterFromResolutionAndRelaxationTime<T,DESCRIPTOR>>(
+    int(std::nearbyint(N/(2*std::numbers::pi_v<T>))),        // resolution: number of voxels per charPhysL
+    0.507639, // latticeRelaxationTime: relaxation time, have to be greater than 0.5!
+    1,        // charPhysLength: reference length of simulation geometry
+    1,        // charPhysVelocity: maximal/highest expected velocity during simulation in __m / s__
+    1./Re,    // physViscosity: physical kinematic viscosity in __m^2 / s__
+    1.0       // physDensity: physical density in __kg / m^3__
+  );
+  lattice.getUnitConverter().print();
+  lattice.getUnitConverter().write("tgv3d");
+
+  lattice.defineDynamics<BulkDynamics>(myCase.getGeometry(), 1);
+
   #if !defined(RLB) && !defined(DNS) && !defined(KBC) && !defined(K_EPSILON)
-  sLattice.setParameter<collision::LES::SMAGORINSKY>(smagoConst);
+  lattice.setParameter<collision::LES::SMAGORINSKY>(smagoConst);
   #endif
 
-  sLattice.initialize();
-  clout << "Prepare Lattice ... OK" << std::endl;
+  lattice.setParameter<descriptors::OMEGA>(lattice.getUnitConverter().getLatticeRelaxationFrequency());
 }
 
-#ifdef K_EPSILON
-void prepareLatticeKE(SuperLattice<T,KEDESCRIPTOR>& sLatticeKE,
-                    SuperGeometry<T,3>& superGeometry)
+
+void setInitialValues(MyCase& myCase) {
+  using T = MyCase::value_t;
+  using DESCRIPTOR = MyCase::descriptor_t;
+  auto& lattice = myCase.getLattice(NavierStokes{});
+
+
+  /// Initialize density to one everywhere
+  /// Initialize velocity to be tangential at the lid and zero in the bulk and at the walls
+  AnalyticalConst3D<T,T> rho(1);
+  Tgv3D<T,DESCRIPTOR> uSol(lattice.getUnitConverter(), 1);
+
+  /// Initialize populations to equilibrium state
+  auto domain = myCase.getGeometry().getMaterialIndicator(1);
+  lattice.iniEquilibrium(domain, rho, uSol);
+  lattice.defineRhoU(domain, rho, uSol);
+
+  lattice.initialize();
+}
+
+/// Update boundary values at times (and external fields, if they exist)
+void setTemporalValues(MyCase& myCase,
+                       std::size_t iT)
 {
-  OstreamManager clout(std::cout,"prepareLattice");
-  clout << "Prepare Lattice KE ...";
-
-  /// Material=1 -->bulk dynamics
-  sLatticeKE.defineDynamics<KEBulkDynamics>(superGeometry, 1);
-
-  clout << " OK" << std::endl;
+  // Nothing to do here, because simulation does not depend on time
 }
-
-void setBoundaryValues(SuperLattice<T, DESCRIPTOR>& sLatticeRANS,
-                       SuperLattice<T, KEDESCRIPTOR>& sLatticeK,
-                       SuperLattice<T, KEDESCRIPTOR>& sLatticeE,
-                       SuperGeometry<T,3>& superGeometry)
-{
-  OstreamManager clout(std::cout,"setBoundaryValues");
-
-  const T omega = sLattice.getUnitConverter().getLatticeRelaxationFrequency();
-  const T dX = sLattice.getUnitConverter().getPhysDeltaX();
-  const T dT = sLattice.getUnitConverter().getPhysDeltaT();
-  T convK = dX*dX/dT/dT;
-  T convE = dX*dX/dT/dT/dT;
-  T lMix = sLattice.getUnitConverter().getCharPhysLength()*0.04;
-  T turbKinEnergy = util::pow(sLattice.getUnitConverter().getPhysViscosity()/0.1/(lMix),2.);
-
-  AnalyticalConst3D<T,T> omega0(omega);
-  AnalyticalConst3D<T,T> rho0(1e-8);
-  AnalyticalConst3D<T,T> rhoK(turbKinEnergy/convK);
-  AnalyticalConst3D<T,T> rhoE(0.09*util::pow(turbKinEnergy, 1.5)/lMix/0.1/convE);
-  std::vector<T> velocity( 3,T() );
-  AnalyticalConst3D<T,T> u( velocity );
-
-  AnalyticalConst3D<T,T> rho(1.);
-  Tgv3D<T,DESCRIPTOR> uSol(sLattice.getUnitConverter(), 1);
-  TgvE3D<T,DESCRIPTOR> eSol(sLattice.getUnitConverter(), 1);
-  TgvK3D<T,DESCRIPTOR> kSol(sLattice.getUnitConverter(), 1);
-
-  sLatticeRANS.defineRhoU(superGeometry, 1, rho, uSol);
-  sLatticeRANS.iniEquilibrium(superGeometry, 1, rho, uSol);
-  sLatticeRANS.defineField<descriptors::OMEGA>(superGeometry.getMaterialIndicator(1), omega0);
-  sLatticeRANS.defineField<descriptors::SCALAR>(superGeometry.getMaterialIndicator(1), rho0);
-
-  sLatticeK.defineRhoU(superGeometry, 1, kSol, uSol);
-  sLatticeK.iniEquilibrium(superGeometry, 1, kSol, uSol);
-  sLatticeE.defineRhoU(superGeometry, 1, eSol, uSol);
-  sLatticeE.iniEquilibrium(superGeometry, 1, eSol, uSol);
-
-  sLatticeK.defineField<descriptors::SOURCE>(superGeometry.getMaterialIndicator(1), rho0);
-  sLatticeK.defineField<descriptors::K>(superGeometry.getMaterialIndicator(1), kSol);
-  sLatticeK.defineField<descriptors::OMEGA>(superGeometry.getMaterialIndicator(1), omega0);
-  sLatticeK.defineField<descriptors::VELOCITY>(superGeometry.getMaterialIndicator(1), uSol);
-  sLatticeK.setParameter<descriptors::OMEGA>(omega);
-
-  sLatticeE.defineField<descriptors::SOURCE>(superGeometry.getMaterialIndicator(1), rho0);
-  sLatticeE.defineField<descriptors::EPSILON>(superGeometry.getMaterialIndicator(1), eSol);
-  sLatticeE.defineField<descriptors::OMEGA>(superGeometry.getMaterialIndicator(1), omega0);
-  sLatticeE.defineField<descriptors::VELOCITY>(superGeometry.getMaterialIndicator(1), uSol);
-  sLatticeE.setParameter<descriptors::OMEGA>(omega);
-
-  sLatticeRANS.initialize();
-  sLatticeK.initialize();
-  sLatticeE.initialize();
-
-  {
-    auto& communicatorK = sLatticeK.getCommunicator(stage::PostCoupling());
-    communicatorK.requestField<descriptors::VELOCITY>();
-    communicatorK.requestField<descriptors::K>();
-    communicatorK.requestOverlap(2);
-    communicatorK.exchangeRequests();
-  }
-
-  {
-    auto& communicatorE = sLatticeE.getCommunicator(stage::PostCoupling());
-    communicatorE.requestField<descriptors::VELOCITY>();
-    communicatorE.requestField<descriptors::EPSILON>();
-    communicatorE.requestOverlap(2);
-    communicatorE.exchangeRequests();
-  }
-}
-
-#else
-void setBoundaryValues(SuperLattice<T, DESCRIPTOR>& sLattice,
-                       SuperGeometry<T,3>& superGeometry)
-{
-  OstreamManager clout(std::cout,"setBoundaryValues");
-
-  AnalyticalConst3D<T,T> rho(1.);
-  Tgv3D<T,DESCRIPTOR> uSol(sLattice.getUnitConverter(), 1);
-
-  sLattice.defineRhoU(superGeometry, 1, rho, uSol);
-  sLattice.iniEquilibrium(superGeometry, 1, rho, uSol);
-
-  sLattice.initialize();
-}
-#endif
 
 // Interpolate the data points to the output interval
-void getDNSValues()
+std::vector<std::vector<MyCase::value_t>> getDNSValues(MyCase& myCase)
 {
+  auto& parameters = myCase.getParameters();
+
+  using T = MyCase::value_t;
   std::string file_name;
+  std::vector<std::vector<T>> values_DNS;
   //Brachet, Marc E., et al. "Small-scale structure of the Taylor–Green vortex." Journal of Fluid Mechanics 130 (1983): 411-452; Figure 7
+  const T Re = parameters.get<parameters::REYNOLDS>();
+  const T maxPhysT = parameters.get<parameters::MAX_PHYS_T>();
+  const T vtkSave = maxPhysT / 40.;
   if (util::abs(Re - 800.0) < std::numeric_limits<T>::epsilon() && maxPhysT <= 10.0 + std::numeric_limits<T>::epsilon()) {
     file_name= "Re800_Brachet.inp";
   }
@@ -339,7 +232,6 @@ void getDNSValues()
   else {
     std::cout<<"Reynolds number not supported or maxPhysT>10: DNS plot will be disabled"<<std::endl;
     plotDNS = false;
-    return;
   }
   std::ifstream data(file_name);
   std::string line;
@@ -379,66 +271,117 @@ void getDNSValues()
     }
     values_DNS.push_back(inValues_temp);
   }
+  return values_DNS;
 }
 
 
-
-void getResults(SuperLattice<T, DESCRIPTOR>& sLattice, std::size_t iT,
-#ifdef K_EPSILON
-                SuperLattice<T, KEDESCRIPTOR>& sLatticeK,
-                SuperLattice<T, KEDESCRIPTOR>& sLatticeE,
-#endif
-                SuperGeometry<T,3>& superGeometry, util::Timer<double>& timer)
+/// Compute simulation results at times
+void getResults(MyCase& myCase,
+                util::Timer<MyCase::value_t>& timer,
+                std::size_t iT)
 {
-  OstreamManager clout(std::cout,"getResults");
+  /// Write vtk plots every 0.3 seconds (of phys. simulation time)
+  auto& parameters = myCase.getParameters();
+  auto& lattice = myCase.getLattice(NavierStokes{});
+  auto& geometry = myCase.getGeometry();
+  auto& converter = lattice.getUnitConverter();
+
+  using T = MyCase::value_t;
+  using DESCRIPTOR = MyCase::descriptor_t;
+
+  const T maxPhysT = parameters.get<parameters::MAX_PHYS_T>();
+  const std::size_t iTlog = converter.getLatticeTime(maxPhysT/40.);
+  const std::size_t iTvtk = converter.getLatticeTime(maxPhysT/40.);
 
   SuperVTMwriter3D<T> vtmWriter("tgv3d");
-
-  T omega = sLattice.getUnitConverter().getLatticeRelaxationFrequency();
+  SuperLatticePhysVelocity3D velocity(lattice, converter);
+  SuperLatticePhysPressure3D pressure(lattice, converter);
+  vtmWriter.addFunctor(velocity);
+  vtmWriter.addFunctor(pressure);
 
   if (iT == 0) {
     // Writes the geometry, cuboid no. and rank no. as vti file for visualization
-    SuperLatticeCuboid3D<T, DESCRIPTOR> cuboid(sLattice);
-    SuperLatticeRank3D<T, DESCRIPTOR> rank(sLattice);
-    superGeometry.rename(0,2);
+    SuperLatticeCuboid3D<T, DESCRIPTOR> cuboid(lattice);
+    SuperLatticeRank3D<T, DESCRIPTOR> rank(lattice);
+    geometry.rename(0,2);
     vtmWriter.write(cuboid);
     vtmWriter.write(rank);
     vtmWriter.createMasterFile();
-    if (plotDNS==true) {
-      getDNSValues();
-    }
   }
 
-  static Gnuplot<T> gplot("Turbulence_Dissipation_Rate");
 
-  if (iT % sLattice.getUnitConverter().getLatticeTime(vtkSave) == 0) {
-    sLattice.setProcessingContext(ProcessingContext::Evaluation);
+  // Writes the VTK files
+  if (iT%iTvtk == 0 && iT >= 0) {
+    lattice.setProcessingContext(ProcessingContext::Evaluation);
 
-    SuperLatticePhysVelocity3D<T, DESCRIPTOR> velocity(sLattice, sLattice.getUnitConverter());
-    SuperLatticePhysPressure3D<T, DESCRIPTOR> pressure(sLattice, sLattice.getUnitConverter());
+    SuperLatticePhysVelocity3D<T, DESCRIPTOR> velocity(lattice, lattice.getUnitConverter());
+    SuperLatticePhysPressure3D<T, DESCRIPTOR> pressure(lattice, lattice.getUnitConverter());
 
-#ifdef K_EPSILON
-    SuperLatticeDensity3D<T, KEDESCRIPTOR> K(sLatticeK);
-    SuperLatticeDensity3D<T, KEDESCRIPTOR> E(sLatticeE);
-
-    K.getName() = "k";
-    E.getName() = "e";
-
-    vtmWriter.addFunctor( K );
-    vtmWriter.addFunctor( E );
-#endif
     vtmWriter.addFunctor( velocity );
     vtmWriter.addFunctor( pressure );
     vtmWriter.write(iT);
+  }
 
+
+
+  /// Print some (numerical and computational) statistics
+  if (iT%iTlog == 0) {
+    timer.print(iT);
+    lattice.getStatistics().print(iT, converter.getPhysTime(iT));
+  }
+
+}
+
+void computeDissipation(MyCase& myCase,
+                        util::Timer<MyCase::value_t>& timer,
+                        std::size_t iT)
+  {
+  auto& parameters = myCase.getParameters();
+  auto& lattice = myCase.getLattice(NavierStokes{});
+  auto& geometry = myCase.getGeometry();
+  auto& converter = lattice.getUnitConverter();
+
+  using T = MyCase::value_t;
+  using DESCRIPTOR = MyCase::descriptor_t;
+
+ #if defined(RLB)
+using BulkDynamics = RLBdynamics<T,DESCRIPTOR>;
+#elif defined(DNS)
+using BulkDynamics = BGKdynamics<T,DESCRIPTOR>;
+#elif defined(WALE)
+using BulkDynamics = WALEBGKdynamics<T,DESCRIPTOR>;
+#elif defined(ShearSmagorinsky)
+using BulkDynamics = ShearSmagorinskyBGKdynamics<T,DESCRIPTOR>;
+#elif defined(Krause)
+using BulkDynamics = KrauseBGKdynamics<T,DESCRIPTOR>;
+#elif defined(ConsistentStrainSmagorinsky)
+using BulkDynamics = ConStrainSmagorinskyBGKdynamics<T,DESCRIPTOR>;
+#elif defined(KBC)
+using BulkDynamics = KBCdynamics<T, DESCRIPTOR>;
+#else
+using BulkDynamics = SmagorinskyBGKdynamics<T,DESCRIPTOR>;
+#endif
+
+  const T maxPhysT = parameters.get<parameters::MAX_PHYS_T>();
+  const T smagoConst = parameters.get<parameters::SMAGORINSKY>();
+  const std::size_t iTvtk = converter.getLatticeTime(maxPhysT/40.);
+  T omega = lattice.getUnitConverter().getLatticeRelaxationFrequency();
+  const T volume = parameters.get<parameters::VOLUME>();
+
+  static Gnuplot<T> gplot("Turbulence_Dissipation_Rate");
+
+  if (iT%iTvtk == 0 && iT > 0) {
+    std::vector<std::vector<T>> values_DNS;
+    if (plotDNS==true) {
+      values_DNS = getDNSValues(myCase);
+    }
     // write output of velocity as JPEG
+    SuperLatticePhysVelocity3D velocity(lattice, converter);
     SuperEuklidNorm3D<T> normVel( velocity );
     BlockReduction3D2D<T> planeReduction( normVel, {0, 0, 1} );
     heatmap::write(planeReduction, iT);
 
     timer.update(iT);
-    timer.printStep(2);
-    sLattice.getStatistics().print(iT,sLattice.getUnitConverter().getPhysTime( iT ));
 
     int input[3];
     T output[1];
@@ -452,63 +395,91 @@ void getResults(SuperLattice<T, DESCRIPTOR>& sLattice, std::size_t iT,
 #if defined (finiteDiff)
     std::list<int> matNumber;
     matNumber.push_back(1);
-    SuperLatticePhysDissipationFD3D<T, DESCRIPTOR> diss(superGeometry, sLattice, matNumber, sLattice.getUnitConverter());
+    SuperLatticePhysDissipationFD3D<T, DESCRIPTOR> diss(geometry, lattice, matNumber, lattice.getUnitConverter());
 #if !defined (DNS) && !defined(KBC) && !defined(RLB) && !defined(K_EPSILON)
     bulkDynamicsParams.set<collision::LES::SMAGORINSKY>(smagoConst);
     SuperLatticePhysEffectiveDissipationFD3D<T, DESCRIPTOR> effectiveDiss(
-      superGeometry, sLattice, matNumber, sLattice.getUnitConverter(),
+      geometry, lattice, matNumber, lattice.getUnitConverter(),
       [&](Cell<T,DESCRIPTOR>& cell) -> double {
         return BulkDynamics::CollisionO().computeEffectiveOmega(cell, bulkDynamicsParams);
       });
 #endif
 #else
-    SuperLatticePhysDissipation3D<T, DESCRIPTOR> diss(sLattice, sLattice.getUnitConverter());
+    SuperLatticePhysDissipation3D<T, DESCRIPTOR> diss(lattice, lattice.getUnitConverter());
 #if !defined (DNS) && !defined(KBC) && !defined(RLB) && !defined(K_EPSILON)
     bulkDynamicsParams.set<collision::LES::SMAGORINSKY>(smagoConst);
     SuperLatticePhysEffectiveDissipation3D<T, DESCRIPTOR> effectiveDiss(
-      sLattice, sLattice.getUnitConverter(), smagoConst,
+      lattice, lattice.getUnitConverter(), smagoConst,
       [&](Cell<T,DESCRIPTOR>& cell) -> double {
         return BulkDynamics::CollisionO().computeEffectiveOmega(cell, bulkDynamicsParams);
       });
 #endif
 #endif
-    SuperIntegral3D<T> integralDiss(diss, superGeometry, 1);
+    SuperIntegral3D<T> integralDiss(diss, geometry, 1);
     integralDiss(output, input);
     T diss_mol = output[0];
     diss_mol /= volume;
     T diss_eff = diss_mol;
 
-#if !defined (DNS) && !defined(KBC) && !defined(RLB) && !defined(K_EPSILON)
-    SuperIntegral3D<T> integralEffectiveDiss(effectiveDiss, superGeometry, 1);
+#if !defined (DNS) && !defined(KBC) && !defined(RLB)
+    SuperIntegral3D<T> integralEffectiveDiss(effectiveDiss, geometry, 1);
     integralEffectiveDiss(output, input);
     diss_eff = output[0];
-    diss_eff /= volume;
-#elif defined(K_EPSILON)
-    const T dX = sLattice.getUnitConverter().getPhysDeltaX();
-    const T dT = sLattice.getUnitConverter().getPhysDeltaT();
-    T convE = dX*dX/dT/dT/dT;
-    SuperLatticeDensity3D<T, KEDESCRIPTOR> effectiveDiss(sLatticeE);
-    SuperIntegral3D<T> integralEffectiveDiss(effectiveDiss, superGeometry, 1);
-    integralEffectiveDiss(output, input);
-    diss_eff = output[0]*convE;
     diss_eff /= volume;
 #endif
 
     T diss_eddy = diss_eff - diss_mol;
     if (plotDNS==true) {
-      int step = sLattice.getUnitConverter().getPhysTime(iT) / vtkSave + 0.5;
-      gplot.setData(sLattice.getUnitConverter().getPhysTime(iT), {diss_mol, diss_eddy, diss_eff, values_DNS[step][1]}, {"molecular dissipation rate", "eddy dissipation rate", "effective dissipation rate","Brachet et al."}, "bottom right");
+      int step = T(iT) / T(iTvtk) + 0.5;
+      gplot.setData(lattice.getUnitConverter().getPhysTime(iT), {diss_mol, diss_eddy, diss_eff, values_DNS[step][1]}, {"molecular dissipation rate", "eddy dissipation rate", "effective dissipation rate","Brachet et al."}, "bottom right");
     }
     else {
-      gplot.setData(sLattice.getUnitConverter().getPhysTime(iT), {diss_mol, diss_eddy, diss_eff}, {"molecular dissipation rate", "eddy dissipation rate", "effective dissipation rate"}, "bottom right");
+      gplot.setData(lattice.getUnitConverter().getPhysTime(iT), {diss_mol, diss_eddy, diss_eff}, {"molecular dissipation rate", "eddy dissipation rate", "effective dissipation rate"}, "bottom right");
     }
     gplot.writePNG();
   }
-
-  /// write pdf at last time step
-  if (iT == sLattice.getUnitConverter().getLatticeTime(maxPhysT)-1) {
+  if (iT == lattice.getUnitConverter().getLatticeTime(maxPhysT)-1) {
     gplot.writePDF();
   }
+}
+
+void simulate(MyCase& myCase) {
+  using T = MyCase::value_t;
+  auto& lattice = myCase.getLattice(NavierStokes{});
+  auto& parameters = myCase.getParameters();
+  const T physMaxT = parameters.get<parameters::MAX_PHYS_T>();
+
+  const std::size_t iTmax = myCase.getLattice(NavierStokes{}).getUnitConverter().getLatticeTime(physMaxT);
+  util::Timer<T> timer(iTmax, myCase.getGeometry().getStatistics().getNvoxel());
+  timer.start();
+
+#if defined(WALE)
+  std::list<int> mat;
+  mat.push_back(1);
+  std::unique_ptr<SuperLatticeF3D<T, DESCRIPTOR>> functor(new SuperLatticeVelocityGradientFD3D<T, DESCRIPTOR>(geometry, lattice, mat));
+#endif
+
+  for (std::size_t iT=0; iT < iTmax; ++iT) {
+    lattice.setParameter<descriptors::LATTICE_TIME>(iT);
+#if defined(WALE)
+    lattice.defineField<descriptors::VELO_GRAD>(geometry, 1, *functor);
+#endif
+#if defined(ShearSmagorinsky)
+    lattice.setParameter<descriptors::LATTICE_TIME>(iT);
+#endif
+    /// === Step 8.1: Update the Boundary Values and Fields at Times ===
+    setTemporalValues(myCase, iT);
+
+    /// === Step 8.2: Collide and Stream Execution ===
+    myCase.getLattice(NavierStokes{}).collideAndStream();
+
+    /// === Step 8.3: Computation and Output of the Results ===
+    getResults(myCase, timer, iT);
+    computeDissipation(myCase, timer, iT);
+  }
+
+  timer.stop();
+  timer.printSummary();
 }
 
 int main(int argc, char* argv[])
@@ -516,104 +487,36 @@ int main(int argc, char* argv[])
 
   /// === 1st Step: Initialization ===
   initialize(&argc, &argv);
-  singleton::directories().setOutputDir("./tmp/");
-  OstreamManager clout( std::cout,"main" );
 
-  UnitConverterFromResolutionAndRelaxationTime<T,DESCRIPTOR> converter(
-    int {int(std::nearbyint(N/(2*pi)))},        // resolution: number of voxels per charPhysL
-    (T)   0.507639, // latticeRelaxationTime: relaxation time, have to be greater than 0.5!
-    (T)   1,        // charPhysLength: reference length of simulation geometry
-    (T)   1,        // charPhysVelocity: maximal/highest expected velocity during simulation in __m / s__
-    (T)   1./Re,    // physViscosity: physical kinematic viscosity in __m^2 / s__
-    (T)   1.0       // physDensity: physical density in __kg / m^3__
-  );
-
-
-  // Prints the converter log as console output
-  converter.print();
-  // Writes the converter log in a file
-  converter.write("tgv3d");
-
-#ifdef PARALLEL_MODE_MPI
-  const int noOfCuboids = singleton::mpi().getSize();
-#else
-  const int noOfCuboids = 1;
-#endif
-
-  CuboidDecomposition3D<T> cuboidDecomposition(0, converter.getPhysDeltaX(), N, noOfCuboids);
-
-  cuboidDecomposition.setPeriodicity({true, true, true});
-
-  HeuristicLoadBalancer<T> loadBalancer(cuboidDecomposition);
-
-  // === 2nd Step: Prepare Geometry ===
-  SuperGeometry<T,3> superGeometry(cuboidDecomposition, loadBalancer, 3);
-  prepareGeometry(superGeometry);
-
-  /// === 3rd Step: Prepare Lattice ===
-  SuperLattice<T, DESCRIPTOR> sLattice(converter, superGeometry);
-  prepareLattice(sLattice, superGeometry);
-
-#ifdef K_EPSILON
-  SuperLattice<T, KEDESCRIPTOR> sLatticeK(superGeometry);
-  prepareLatticeKE(sLatticeK, superGeometry);
-
-  SuperLattice<T, KEDESCRIPTOR> sLatticeE(superGeometry);
-  prepareLatticeKE(sLatticeE, superGeometry);
-#endif
-
-#if defined(WALE)
-  std::list<int> mat;
-  mat.push_back(1);
-  std::unique_ptr<SuperLatticeF3D<T, DESCRIPTOR>> functor(new SuperLatticeVelocityGradientFD3D<T, DESCRIPTOR>(superGeometry, sLattice, mat));
-#endif
-#if defined(K_EPSILON)
-  SuperLatticeCoupling coupling(
-    RANSKE<T>{},
-    names::NavierStokes{}, sLattice,
-    names::TurbKineticEnergy{}, sLatticeK,
-    names::DissipationRate{}, sLatticeE);
-    coupling.setParameter<RANSKE<T>::VISC>(converter.getLatticeViscosity());
-    coupling.setParameter<RANSKE<T>::RNG>(T{1});
-#endif
-
-  /// === 4th Step: Main Loop with Timer ===
-  util::Timer<double> timer(converter.getLatticeTime(maxPhysT), superGeometry.getStatistics().getNvoxel() );
-  timer.start();
-
-  // === 5th Step: Definition of Initial and Boundary Conditions ===
-#if !defined(K_EPSILON)
-  setBoundaryValues(sLattice, superGeometry);
-#else
-  setBoundaryValues(sLattice, sLatticeK, sLatticeE, superGeometry);
-#endif
-
-  for (std::size_t iT = 0; iT <= converter.getLatticeTime(maxPhysT); ++iT) {
-    sLattice.setParameter<descriptors::LATTICE_TIME>(iT);
-#if defined(WALE)
-    sLattice.defineField<descriptors::VELO_GRAD>(superGeometry, 1, *functor);
-#endif
-#if defined(ShearSmagorinsky)
-    sLattice.setParameter<descriptors::LATTICE_TIME>(iT);
-#endif
-
-    /// === 6th Step: Computation and Output of the Results ===
-#if !defined(K_EPSILON)
-    getResults(sLattice, iT, superGeometry, timer);
-#else
-    getResults(sLattice, sLatticeK, sLatticeE, iT, superGeometry, timer);
-#endif
-
-    /// === 7th Step: Collide and Stream Execution ===
-    sLattice.collideAndStream();
-#if defined(K_EPSILON)
-    coupling.apply();
-    sLatticeK.collideAndStream();
-    sLatticeE.collideAndStream();
-#endif
+  MyCase::ParametersD myCaseParameters;
+  {
+    using namespace olb::parameters;
+    myCaseParameters.set<RESOLUTION >(                                                   64);
+    myCaseParameters.set<MAX_PHYS_T >(                                                   10);
+    myCaseParameters.set<VOLUME     >(util::pow(2.*std::numbers::pi_v<MyCase::value_t>, 3.));
+    myCaseParameters.set<REYNOLDS   >(                                                  800);
+    myCaseParameters.set<SMAGORINSKY>(                                                  0.1);
+    myCaseParameters.set<INTENSITY  >(                                                 0.04);
   }
-  timer.stop();
-  timer.printSummary();
+  myCaseParameters.fromCLI(argc, argv);
+
+
+  Mesh mesh = createMesh(myCaseParameters);
+
+  /// === Step 4: Create Case ===
+  MyCase myCase(myCaseParameters, mesh);
+
+  /// === Step 5: Prepare Geometry ===
+  prepareGeometry(myCase);
+
+  /// === Step 6: Prepare Lattice ===
+  prepareLattice(myCase);
+
+  /// === Step 7: Definition of Initial, Boundary Values, and Fields ===
+  setInitialValues(myCase);
+
+  /// === Step 8: Simulate ===
+  simulate(myCase);
 
   return 0;
 }
