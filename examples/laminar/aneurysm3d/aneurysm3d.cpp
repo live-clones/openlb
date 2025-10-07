@@ -35,7 +35,7 @@ using T          = FLOATING_POINT_TYPE;
 using DESCRIPTOR = descriptors::D3Q19<>;
 
 // Parameters for the simulation setup
-const int N        = 160;      // Number of cells in the length of the aneurysm
+const int N        = 120;      // Number of cells in the length of the aneurysm
 const T   Re       = 708.;     // Reynolds number
 const T   maxPhysT = 16.;      // max. simulation time in s, SI unit
 const T   L        = 0.05 / N; // latticeL
@@ -204,7 +204,7 @@ void getResults(SuperLattice<T, DESCRIPTOR>& sLattice, UnitConverter<T, DESCRIPT
   if ( iT%vtkIter==0 ) {
     sLattice.setProcessingContext(ProcessingContext::Evaluation);
     sLattice.scheduleBackgroundOutputVTK([&,iT](auto task) {
-      SuperVTMwriter3D<T> vtmWriter("aorta3d");
+      SuperVTMwriter3D<T> vtmWriter("aneurysm");
       SuperLatticePhysVelocity3D velocity(sLattice, sLattice.getUnitConverter());
       SuperLatticePhysPressure3D pressure(sLattice, sLattice.getUnitConverter());
       vtmWriter.addFunctor(velocity);
