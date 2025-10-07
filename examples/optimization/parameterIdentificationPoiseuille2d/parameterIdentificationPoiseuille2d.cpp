@@ -39,19 +39,15 @@ using namespace olb;
 using namespace olb::names;
 using namespace olb::opti;
 
-using S = double;
-using U = util::ADf<S,1>;
-using DESCRIPTOR = descriptors::D2Q9<>;
+using U = util::ADf<double,1>;
 
-const int N = 50;             // resolution
-const S lx  = 2.;             // length of the channel
-const S ly  = 1.;             // height of the channel
-const S Re = 10.;             // Reynolds number
-const S maxPhysT = 30.;       // max. simulation time in s, SI unit
-const S physInterval = 0.25;  // interval for the convergence check in s
-const S residuum = 1e-9;      // residuum for the convergence check
-const S wantedMassFlow = 0.00026159;
-S inletPressure = 0.000659;
+namespace olb::parameters {
+
+struct WANTED_MASS_FLOW : public descriptors::FIELD_BASE<1> { };
+struct REFERENCE_INLET_PRESSURE : public descriptors::FIELD_BASE<1> { };
+struct INLET_PRESSURE : public descriptors::FIELD_BASE<1> { };
+
+}
 
 using MyCase = Case<
   NavierStokes, Lattice<double, descriptors::D2Q9<>>
@@ -63,11 +59,13 @@ using MyOptiCase = OptiCaseFDQ<
 template <typename PARAMETERS>
 auto createMesh(PARAMETERS& parameters) {
   using T = PARAMETERS::value_t;
-  const Vector<T,2> extend( lx, ly );
-  const Vector<T,2> origin;
-  IndicatorCuboid2D<T> cuboid( extend, origin );
+  const Vector extent = parameters.template get<parameters::DOMAIN_EXTENT>();
+  const Vector origin {0., 0.};
+  IndicatorCuboid2D<T> cuboid(extent, origin);
 
-  Mesh<T,2> mesh(cuboid, ly / N, singleton::mpi().getSize());
+  Mesh<T,2> mesh(cuboid,
+                 extent[1] / parameters.template get<parameters::RESOLUTION>(),
+                 singleton::mpi().getSize());
   mesh.setOverlap(parameters.template get<parameters::OVERLAP>());
   return mesh; 
 }
@@ -76,21 +74,24 @@ template<typename CASE>
 void prepareGeometry(CASE& myCase)
 {
   using T = CASE::value_t;
+  auto& parameters = myCase.getParameters();
+  const Vector domain_extent = parameters.template get<parameters::DOMAIN_EXTENT>();
+  const int N = parameters.template get<parameters::RESOLUTION>();
   auto& superGeometry = myCase.getGeometry();
 
-  superGeometry.rename( 0,2 );
-  superGeometry.rename( 2,1,{1,1} );
+  superGeometry.rename(0, 2);
+  superGeometry.rename(2, 1, {1,1});
 
-  const T physSpacing = ly / N;
-  const Vector<T,2> extend    {physSpacing / T(2), ly};
+  const T physSpacing = domain_extent[1] / N;
+  const Vector<T,2> extent    {physSpacing / T(2), domain_extent[1]};
   const Vector<T,2> originIn  {-physSpacing / T(4), 0};
-  const Vector<T,2> originOut {lx-physSpacing / T(4), 0};
+  const Vector<T,2> originOut {domain_extent[0]-physSpacing / T(4), 0};
 
-  IndicatorCuboid2D<T> inflow( extend, originIn );
-  superGeometry.rename( 2,3,1,inflow );
+  IndicatorCuboid2D<T> inflow(extent, originIn);
+  superGeometry.rename(2, 3, 1, inflow);
 
-  IndicatorCuboid2D<T> outflow( extend, originOut );
-  superGeometry.rename( 2,4,1,outflow );
+  IndicatorCuboid2D<T> outflow(extent, originOut);
+  superGeometry.rename(2, 4, 1, outflow);
 
   superGeometry.clean(false);
   superGeometry.innerClean(false);
@@ -101,8 +102,12 @@ template<typename CASE>
 void prepareLattice(CASE& myCase)
 {
   using T = CASE::value_t;
+  using DESCRIPTOR = CASE::descriptor_t;
   auto& sLattice = myCase.getLattice(NavierStokes{});
   auto& superGeometry = myCase.getGeometry();
+  auto& parameters = myCase.getParameters();
+  const int N = parameters.template get<parameters::RESOLUTION>();
+  const T Re = parameters.template get<parameters::REYNOLDS>();
   sLattice.template setUnitConverter<UnitConverterFromResolutionAndRelaxationTime<T,DESCRIPTOR>>(
     int {N},     // resolution: number of voxels per charPhysL
     (T)   0.8,   // latticeRelaxationTime: relaxation time, have to be greater than 0.5!
@@ -126,22 +131,27 @@ void prepareLattice(CASE& myCase)
 template <typename CASE>
 void setInitialValues(CASE& myCase) {
   using T = CASE::value_t;
+  using DESCRIPTOR = CASE::descriptor_t;
   auto& sLattice = myCase.getLattice(NavierStokes{});
   auto& superGeometry = myCase.getGeometry();
   auto& converter = sLattice.getUnitConverter();
+  auto& parameters = myCase.getParameters();
+  const Vector domain_extent = parameters.template get<parameters::DOMAIN_EXTENT>();
+  const T inletPressure = parameters.template get<parameters::INLET_PRESSURE>();
+  std::cout << "starting simulation with pressure = " << inletPressure << "..." << std::endl;
  
   // Initial conditions
   AnalyticalLinear2D<T,T> rho(
-    - inletPressure / lx * descriptors::invCs2<T,DESCRIPTOR>(),
+    - inletPressure / domain_extent[0] * descriptors::invCs2<T,DESCRIPTOR>(),
     0,
     inletPressure * descriptors::invCs2<T,DESCRIPTOR>() + 1 );
 
-  const T Lx = converter.getLatticeLength( lx ) - 1;
-  const T Ly = converter.getLatticeLength( ly ) - 1;
+  const T Lx = converter.getLatticeLength( domain_extent[0] ) - 1;
+  const T Ly = converter.getLatticeLength( domain_extent[1] ) - 1;
   const T maxVelocity = inletPressure * Ly * Ly
     / (8.0 * converter.getLatticeViscosity() * Lx);
-  const T radius = T(0.5) * (ly - converter.getPhysDeltaX());
-  const std::vector<T> axisPoint { lx/T(2), ly/T(2) };
+  const T radius = T(0.5) * (domain_extent[1] - converter.getPhysDeltaX());
+  const std::vector<T> axisPoint { domain_extent[0]/T(2), domain_extent[1]/T(2) };
   const std::vector<T> axisDirection { 1, 0 };
   Poiseuille2D<T> u( axisPoint, axisDirection, maxVelocity, radius );
 
@@ -161,8 +171,10 @@ void setInitialValues(CASE& myCase) {
 template<typename CASE>
 void getResults(CASE& myCase, std::size_t iT, util::Timer<typename CASE::value_t>& timer, bool hasConverged) {
   using T = CASE::value_t;
+  using DESCRIPTOR = CASE::descriptor_t;
   auto& sLattice = myCase.getLattice(NavierStokes{});
   auto& converter = sLattice.getUnitConverter();
+  const T maxPhysT = myCase.getParameters().template get<parameters::MAX_PHYS_T>();
 
   SuperVTMwriter2D<T> vtmWriter( "poiseuille2d" );
   const bool lastTimeStep
@@ -202,13 +214,13 @@ void simulate(CASE& myCase) {
   auto& sLattice = myCase.getLattice(NavierStokes{});
   auto& superGeometry = myCase.getGeometry();
   auto& converter = sLattice.getUnitConverter();
+  const T maxPhysT = myCase.getParameters().template get<parameters::MAX_PHYS_T>();
 
-  std::cout << "starting simulation with pressure = " << inletPressure << "..." << std::endl;
-  util::Timer<T> timer( converter.getLatticeTime( maxPhysT ),
-    superGeometry.getStatistics().getNvoxel() );
-  util::ValueTracer<T> converge( converter.getLatticeTime( physInterval ), residuum );
+  util::Timer<T> timer(converter.getLatticeTime(maxPhysT),
+                       superGeometry.getStatistics().getNvoxel());
+  util::ValueTracer<T> converge(converter.getLatticeTime(0.25), 1e-9);
   timer.start();
-  for (std::size_t iT=0 ; iT < converter.getLatticeTime( maxPhysT ); ++iT ) {
+  for (std::size_t iT=0 ; iT < converter.getLatticeTime(maxPhysT); ++iT ) {
     if ( converge.hasConverged() ) {
       std::cout << "Simulation converged." << std::endl;
       getResults(myCase, iT, timer, converge.hasConverged());
@@ -217,7 +229,6 @@ void simulate(CASE& myCase) {
     sLattice.collideAndStream();
     converge.takeValue(sLattice.getStatistics().getMaxU(), false );
   } 
-  
   timer.stop();
   timer.printSummary();
 }
@@ -225,13 +236,13 @@ void simulate(CASE& myCase) {
 template <typename CASE>
 void setInitialControls(MyOptiCase& optiCase) {
   using T = CASE::value_t;
-  std::vector<T> control({0.0001});
+  std::vector<T> control({optiCase.getCase(Controlled{}).getParameters().template get<parameters::INLET_PRESSURE>()});
   optiCase.getController().set(control);
 }
 
 template <typename CASE>
 void applyControls(MyOptiCase& optiCase) {
-  inletPressure = optiCase.getController()[0];
+  optiCase.getCase(Controlled{}).getParameters().template set<parameters::INLET_PRESSURE>(optiCase.getController()[0]);
 }
 
 /// Compute squared error between simulated and wanted mass flow rate
@@ -243,13 +254,16 @@ CASE::value_t massFlowError(MyOptiCase& optiCase)
   auto& sLattice = myCase.getLattice(NavierStokes{});
   auto& superGeometry = myCase.getGeometry();
   auto& converter = sLattice.getUnitConverter();
+  auto& parameters = myCase.getParameters();
+  const Vector domain_extent = parameters.template get<parameters::DOMAIN_EXTENT>();
   sLattice.setProcessingContext(ProcessingContext::Evaluation);
 
   SuperLatticeVelocity2D velocity(sLattice);
   SuperLatticeDensity2D density(sLattice);
   SuperPlaneIntegralFluxMass2D<T> massFlowRate(
     velocity, density, superGeometry, converter.getConversionFactorMass(),
-    converter.getConversionFactorTime(), Vector<T,2>({T(0.5)*lx, T(0.5)*ly}),
+    converter.getConversionFactorTime(), Vector<T,2>({T(0.5)*domain_extent[0],
+                                                      T(0.5)*domain_extent[1]}),
     Vector<T,2>({0, 1}), BlockDataReductionMode::Analytical
   );
   const int input[3] = {0};
@@ -257,7 +271,7 @@ CASE::value_t massFlowError(MyOptiCase& optiCase)
   massFlowRate(mFlow, input);
   std::cout << "Mass flow rate = " << mFlow[0] << std::endl;
   const T res = mFlow[0];
-  const T wantedRes {wantedMassFlow};
+  const T wantedRes = parameters.template get<parameters::WANTED_MASS_FLOW>();
   return 0.5 * (res - wantedRes) * (res - wantedRes);
 }
 
@@ -268,6 +282,16 @@ int main( int argc, char* argv[] )
 
   // === Step 2: Set Parameters ===
   MyCase::ParametersD myCaseParametersD;
+  {
+    using namespace parameters;
+    myCaseParametersD.set<RESOLUTION              >(        50);
+    myCaseParametersD.set<DOMAIN_EXTENT           >(  {2., 1.});
+    myCaseParametersD.set<REYNOLDS                >(       10.);
+    myCaseParametersD.set<MAX_PHYS_T              >(       30.);
+    myCaseParametersD.set<WANTED_MASS_FLOW        >(0.00026159);
+    myCaseParametersD.set<REFERENCE_INLET_PRESSURE>(  0.000659);
+    myCaseParametersD.set<INLET_PRESSURE          >(    0.0001);
+  }
   
   // === Step 3: Create Mesh ===
   auto mesh = createMesh(myCaseParametersD);
@@ -295,7 +319,7 @@ int main( int argc, char* argv[] )
     return massFlowError<MyCase>(optiCase);
   });
 
-  OptimizerLBFGS<S,std::vector<S>> optimizer(
+  OptimizerLBFGS<MyCase::value_t,std::vector<MyCase::value_t>> optimizer(
     1, 1.e-7, 20, 1., 10, "StrongWolfe", 20, 1.e-4, true, "", "log",
     true, 0.01, true, 0., false, 0., true,
     {OptimizerLogType::value, OptimizerLogType::control, OptimizerLogType::derivative});
