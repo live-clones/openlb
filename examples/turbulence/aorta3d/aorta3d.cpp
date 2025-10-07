@@ -38,6 +38,7 @@
 #include <olb.h>
 
 using namespace olb;
+using namespace olb::names;
 using namespace olb::descriptors;
 using namespace olb::graphics;
 
@@ -49,45 +50,66 @@ namespace olb::parameters {
   struct BOUZIDI_ENABLED : public descriptors::TYPED_FIELD_BASE<bool,1> { };
 }
 
-using BulkDynamics = SmagorinskyBGKdynamics<T,DESCRIPTOR>;
+Mesh<MyCase::value_t,MyCase::d> createMesh(MyCase::ParametersD& parameters) {
+  using T = MyCase::value_t;
+
+  // Instantiation of a cuboidDecomposition with weights
+  const int noOfCuboids = util::min(16*parameters.get<parameters::RESOLUTION>(), 8*singleton::mpi().getSize());
+  const T physDeltaX = parameters.get<parameters::PHYS_CHAR_LENGTH>() / parameters.get<parameters::RESOLUTION>();
+
+  // Instantiation of the STLreader class
+  // file name, voxel size in meter, stl unit in meter, outer voxel no., inner voxel no.
+  STLreader<T> stlReader( "aorta3d.stl", physDeltaX, 0.001,  olb::RayMode::FastRayZ, true );
+  IndicatorLayer3D<T> extendedDomain( stlReader, physDeltaX );
+  Mesh<T,MyCase::d> mesh(extendedDomain, physDeltaX, noOfCuboids, "volume");
+
+  mesh.setOverlap(parameters.get<parameters::OVERLAP>());
+  return mesh;
+}
 
 // Stores data from stl file in geometry in form of material numbers
-void prepareGeometry( IndicatorF3D<T>& indicator, STLreader<T>& stlReader,
-                      SuperGeometry<T,3>& superGeometry, T dx )
+void prepareGeometry(MyCase& myCase)
 {
+  using T = MyCase::value_t;
 
   OstreamManager clout( std::cout,"prepareGeometry" );
   clout << "Prepare Geometry ..." << std::endl;
+  auto& geometry = myCase.getGeometry();
+  auto& parameters = myCase.getParameters();
 
-  superGeometry.rename( 0,2,indicator );
-  superGeometry.rename( 2,1,stlReader );
+  const T dx = parameters.get<parameters::PHYS_CHAR_LENGTH>() / parameters.get<parameters::RESOLUTION>();
+  STLreader<T> stlReader( "aorta3d.stl", dx, 0.001,  olb::RayMode::FastRayZ, true );
+  IndicatorLayer3D<T> indicator( stlReader, dx);
 
-  superGeometry.clean();
+  geometry.rename( 0,2,indicator );
+  geometry.rename( 2,1,stlReader );
+
+  geometry.clean();
 
   // Set material number for inflow
   IndicatorCircle3D<T> inflow(  0.218125,0.249987,0.0234818, 0., 1.,0., 0.0112342 );
-  IndicatorCylinder3D<T> layerInflow( inflow, 2.*dx );
-  superGeometry.rename( 2,3,1,layerInflow );
+  IndicatorCylinder3D<T> layerInflow( inflow, 2.* dx);
+  geometry.rename( 2,3,1,layerInflow );
 
   // Set material number for outflow0
   //IndicatorCircle3D<T> outflow0(0.2053696,0.0900099,0.0346537,  2.5522,5.0294,-1.5237, 0.0054686 );
   IndicatorCircle3D<T> outflow0( 0.2053696,0.0900099,0.0346537, 0.,-1.,0., 0.0054686 );
   IndicatorCylinder3D<T> layerOutflow0( outflow0, 2.*dx );
-  superGeometry.rename( 2,4,1,layerOutflow0 );
+  geometry.rename( 2,4,1,layerOutflow0 );
 
   // Set material number for outflow1
   //IndicatorCircle3D<T> outflow1(0.2388403,0.0900099,0.0343228, -1.5129,5.1039,-2.8431, 0.0058006 );
   IndicatorCircle3D<T> outflow1( 0.2388403,0.0900099,0.0343228, 0.,-1.,0., 0.0058006 );
   IndicatorCylinder3D<T> layerOutflow1( outflow1, 2.*dx );
-  superGeometry.rename( 2,5,1,layerOutflow1 );
+  geometry.rename( 2,5,1,layerOutflow1 );
 
   // Removes all not needed boundary voxels outside the surface
-  superGeometry.clean();
+  geometry.clean();
   // Removes all not needed boundary voxels inside the surface
-  superGeometry.innerClean( 3 );
-  superGeometry.checkForErrors();
+  geometry.innerClean( 3 );
+  geometry.checkForErrors();
 
-  superGeometry.print();
+  geometry.print();
   clout << "Prepare Geometry ... OK" << std::endl;
 }
 
@@ -98,6 +120,9 @@ void prepareLattice(MyCase& myCase)
   clout << "Prepare Lattice ..." << std::endl;
 
   using T = MyCase::value_t;
+  using DESCRIPTOR = MyCase::descriptor_t_of<NavierStokes{}>;
+  using BulkDynamics = SmagorinskyBGKdynamics<T,DESCRIPTOR>;
+
   auto& geometry = myCase.getGeometry();
   auto& parameters = myCase.getParameters();
 
@@ -109,6 +134,7 @@ void prepareLattice(MyCase& myCase)
   const T physCharVelocity = parameters.get<parameters::PHYS_CHAR_VELOCITY>();
   const T physCharViscosity = parameters.get<parameters::PHYS_CHAR_VISCOSITY>();
   const T physCharDensity = parameters.get<parameters::PHYS_CHAR_DENSITY>();
+  const bool bouzidiOn = parameters.get<parameters::BOUZIDI_ENABLED>();
 
   myCase.getLattice(NavierStokes{}).setUnitConverter(
     physDeltaX,        // physDeltaX: spacing between two lattice cells in [m]
@@ -123,8 +149,10 @@ void prepareLattice(MyCase& myCase)
 
   const T omega = lattice.getUnitConverter().getLatticeRelaxationFrequency();
 
+  STLreader<T> stlReader( "aorta3d.stl", physDeltaX, 0.001,  olb::RayMode::FastRayZ, true );
+
   // material=1 --> bulk dynamics
-  sLattice.defineDynamics<BulkDynamics>(superGeometry, 1);
+  lattice.defineDynamics<BulkDynamics>(geometry, 1);
 
   if ( bouzidiOn ) {
     // material=2 --> no dynamics + bouzidi zero velocity
@@ -295,6 +323,34 @@ void getResults(SuperLattice<T, DESCRIPTOR>& sLattice,
   }
 }
 
+void simulate(MyCase& myCase) {
+  using T = MyCase::value_t;
+
+  SuperVtuSurfaceWriter<T> vtuWriter("surface", cuboidDecomposition, loadBalancer, stlReader);
+
+  timer1.stop();
+  timer1.printSummary();
+
+  // === 4th Step: Main Loop with Timer ===
+  clout << "starting simulation..." << std::endl;
+  util::Timer<T> timer( converter.getLatticeTime( maxPhysT ), superGeometry.getStatistics().getNvoxel() );
+  timer.start();
+
+  for ( std::size_t iT = 0; iT <= converter.getLatticeTime( maxPhysT ); iT++ ) {
+    // === 5th Step: Definition of Initial and Boundary Conditions ===
+    setBoundaryValues( sLattice, iT, superGeometry );
+
+    // === 6th Step: Collide and Stream Execution ===
+    sLattice.collideAndStream();
+
+    // === 7th Step: Computation and Output of the Results ===
+    getResults( sLattice, iT, superGeometry, timer, stlReader, vtuWriter );
+  }
+
+  timer.stop();
+  timer.printSummary();
+}
+
 int main( int argc, char* argv[] )
 {
   // === 1st Step: Initialization ===
@@ -318,12 +374,25 @@ int main( int argc, char* argv[] )
   }
   myCaseParameters.fromCLI(argc, argv);
 
-  // === 2nd Step: Prepare Geometry ===
+  Mesh mesh = createMesh(myCaseParameters);
 
-  // Instantiation of the STLreader class
-  // file name, voxel size in meter, stl unit in meter, outer voxel no., inner voxel no.
-  STLreader<T> stlReader( "aorta3d.stl", converter.getPhysDeltaX(), 0.001,  olb::RayMode::FastRayZ, true );
-  IndicatorLayer3D<T> extendedDomain( stlReader, converter.getPhysDeltaX() );
+  MyCase myCase(myCaseParameters, mesh);
+
+  /// === Step 5: Prepare Geometry ===
+  prepareGeometry(myCase);
+
+  /// === Step 6: Prepare Lattice ===
+  prepareLattice(myCase);
+
+  /// === Step 7: Definition of Initial, Boundary Values, and Fields ===
+  setInitialValues(myCase);
+
+  /// === Step 8: Simulate ===
+  simulate(myCase);
+
+}
+
+  // === 2nd Step: Prepare Geometry ===
 
   // Instantiation of a cuboidDecomposition with weights
 #ifdef PARALLEL_MODE_MPI
@@ -371,4 +440,3 @@ int main( int argc, char* argv[] )
 
   timer.stop();
   timer.printSummary();
-}
