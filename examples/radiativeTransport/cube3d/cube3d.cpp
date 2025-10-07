@@ -35,12 +35,63 @@
 
 #include <olb.h>
 
+#include <stdexcept>
+
 using namespace olb;
 using namespace olb::descriptors;
 using namespace olb::names;
 
 using MyCase = Case<Radiation, Lattice<double, descriptors::D3Q27<tag::RTLBM>>>;
 
+namespace olb::parameters {
+    struct ANINOSOTROPY_FACTOR : public descriptors::FIELD_BASE<1> { };
+
+    struct ABSORPTION : public descriptors::FIELD_BASE<1> { };
+    struct SCATTERING : public descriptors::FIELD_BASE<1> { };
+    struct MCVALUE : public descriptors::FIELD_BASE<1> { };
+    struct TOTAL_ENERGY : public descriptors::FIELD_BASE<1> { };
+
+    struct CASE_NUMBER : public descriptors::TYPED_FIELD_BASE<int, 1> { };
+    struct DYNAMICS_NAME : public descriptors::TYPED_FIELD_BASE<std::string, 1> { };
+    struct USE_MINK : public descriptors::TYPED_FIELD_BASE<bool, 1> { };
+
+} // namespace olb::parameters
+
+
+
 int main( int argc, char *argv[] ){
+    OstreamManager clout(std::cout,"main");
     initialize(&argc, &argv);
+
+    MyCase::ParametersD myCaseParameters;
+    {
+        using namespace olb::parameters;
+        myCaseParameters.set<RESOLUTION>(50);
+        myCaseParameters.set<LATTICE_RELAXATION_TIME>(1.0);
+        myCaseParameters.set<MAX_PHYS_T>(12);
+        myCaseParameters.set<PHYS_SAVE_ITER>(2.0);
+
+        myCaseParameters.set<CASE_NUMBER>(1);
+        myCaseParameters.set<DYNAMICS_NAME>(std::string("mink"));
+        myCaseParameters.set<USE_MINK>(true);
+
+    }
+    myCaseParameters.fromCLI(argc, argv);
+
+    //Check if given case number is valid
+    int case_number = myCaseParameters.get<parameters::CASE_NUMBER>();
+    if(case_number < 1 || case_number > 35){
+        throw std::runtime_error("Please select a case number between 1 and 35");
+    }
+
+    //Check if given dynamics name is valid
+    std::string s = myCaseParameters.get<parameters::DYNAMICS_NAME>();
+    std::transform(s.begin(), s.end(), s.begin(), ::toupper);
+    clout << s << std::endl;
+    if(!(std::string("MINK") == s || std::string("MCHARDY") == s)){
+        throw std::runtime_error("Incompatible dynamics selected!\n\t\t Please choose between mink or mchardy");
+    }
+    if(std::string("MCHARDY") == s){myCaseParameters.set<parameters::USE_MINK>(false);}
+
+    myCaseParameters.print();
 }
