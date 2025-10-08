@@ -21,27 +21,30 @@
  *  Boston, MA  02110-1301, USA.
  */
 
- #pragma once
+#pragma once
 
- namespace olb {
+using namespace olb;
+using namespace olb::descriptors;
+
 //======================================================================
 // ======== Radiative Transport Boundary PostProcessor ======//
 //======================================================================
-struct INTENSITY : public olb::descriptors::FIELD_BASE<1> { };
-
-
+namespace olb::parameters {
+    struct BC_INTENSITY : public descriptors::FIELD_BASE<1> { };
+}
 template<typename T, typename DESCRIPTOR, int discreteNormalX, int discreteNormalY, int discreteNormalZ>
 class RtlbmDirectedBoundaryPostProcessor3D{
     public:
-    using parameters = meta::list<INTENSITY>;
+    static constexpr OperatorScope scope = OperatorScope::PerCellWithParameters;
+    using parameters = meta::list<parameters::BC_INTENSITY>;
 
     int getPriority() const {
         return 0;
     }
 
     template <typename CELL, typename PARAMETERS>
-    void apply(CELL& cell) any_platform{
-        T intensity = parameters.template get<INTENSITY>();
+    void apply(CELL& cell, PARAMETERS& parameters) any_platform{
+        T intensity = parameters.template get<olb::parameters::BC_INTENSITY>();
         for(int iPop = 0; iPop<DESCRIPTOR::q; iPop++){
             const auto c = descriptors::c<DESCRIPTOR>(iPop);
             T k = c[0]*discreteNormalX + c[1]*discreteNormalY + c[2]*discreteNormalZ;
@@ -80,7 +83,7 @@ void setRtlbmDirectedBoundary(BlockLattice<T,DESCRIPTOR>& _block, BlockIndicator
       }
     }
   });
-}
+};
 
 // Initialising the setRtlbmDirectedBoundary function on the superLattice domain
 template<typename T, typename DESCRIPTOR>
@@ -91,6 +94,4 @@ void setRtlbmDirectedBoundary(SuperLattice<T, DESCRIPTOR>& sLattice, FunctorPtr<
   for (int iCloc = 0; iCloc < sLattice.getLoadBalancer().size(); iCloc++) {
     setRtlbmDirectedBoundary<T,DESCRIPTOR>(sLattice.getBlock(iCloc), indicator->getBlockIndicatorF(iCloc), intensity);
   }
-}
-
-}
+};

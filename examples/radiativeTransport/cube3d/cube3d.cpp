@@ -34,7 +34,6 @@
 */
 
 #include <olb.h>
-#include "rtlbmDirectedBoundary.h"
 
 #include <stdexcept>
 
@@ -166,6 +165,7 @@ void prepareLatticeMink(MyCase& myCase){
     T latticeRelaxationFrequency = converter.getLatticeRelaxationFrequency();
     T latticeAbsorption = converter.getLatticeAbsorption();
     T latticeScattering = converter.getLatticeScattering();
+    T intensity = params.get<parameters::INTENSITY>();
     clout << "latticeSink= " << latticeSink << std::endl;
 
     Rlattice.defineDynamics<NoDynamics<T, RDESCRIPTOR>>(geometry, 0);
@@ -173,11 +173,12 @@ void prepareLatticeMink(MyCase& myCase){
     Rlattice.defineDynamics<EquilibriumBoundaryFirstOrder<T, RDESCRIPTOR>>(geometry, 2);
     Rlattice.defineDynamics<EquilibriumBoundaryFirstOrder<T, RDESCRIPTOR>>(geometry, 3);
 
+    //Activate directed BC
     if(params.get<parameters::USE_DIRECTED>()){
+        clout << "Using directed BC" << std::endl;
         setRtlbmDirectedBoundary<T,RDESCRIPTOR>(Rlattice, geometry.getMaterialIndicator({3}), params.get<parameters::INTENSITY>());
-        Rlattice.setParameter<>
+        Rlattice.setParameter<parameters::BC_INTENSITY>(intensity);
     }
-
 
     Rlattice.setParameter<descriptors::OMEGA>(latticeRelaxationFrequency);
     Rlattice.setParameter<collision::P1::ABSORPTION>( latticeAbsorption );
@@ -232,6 +233,12 @@ void prepareLatticeMcHardy(MyCase& myCase){
     Rlattice.defineDynamics<EquilibriumBoundaryFirstOrder>( geometry, 2 );
     Rlattice.defineDynamics<EquilibriumBoundaryFirstOrder>( geometry, 3 );
 
+    //Activate directed BC
+    if(params.get<parameters::USE_DIRECTED>()){
+        clout << "Using directed BC" << std::endl;
+        setRtlbmDirectedBoundary<T,RDESCRIPTOR>(Rlattice, geometry.getMaterialIndicator({3}), params.get<parameters::INTENSITY>());
+        Rlattice.setParameter<parameters::BC_INTENSITY>(intensity);
+    }
 
     Rlattice.setParameter<descriptors::OMEGA>( latticeRelaxationFrequency );
     Rlattice.setParameter<Light::ANISOMATRIX>( anisoMatrix );
