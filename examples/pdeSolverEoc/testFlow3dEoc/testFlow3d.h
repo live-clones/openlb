@@ -49,6 +49,11 @@
 using namespace olb;
 using namespace olb::names;
 
+enum class GeometryType : int {
+  cube = 0,
+  sphere = 1
+};
+
 namespace olb::parameters {
 
 struct ERROR_VELOCITY_L1 : public descriptors::FIELD_BASE<1> { };
@@ -64,6 +69,8 @@ struct ERROR_DISSIPATION_L1 : public descriptors::FIELD_BASE<1> { };
 struct ERROR_DISSIPATION_L2 : public descriptors::FIELD_BASE<1> { };
 struct ERROR_DISSIPATION_LINF : public descriptors::FIELD_BASE<1> { };
 
+struct GEOMETRY_TYPE : public descriptors::TYPED_FIELD_BASE<GeometryType,1> { };
+
 }
 
 /// @brief Step 1: Declare simulation structure.
@@ -76,12 +83,19 @@ using MyCase = Case<
 /// @return An instance of Mesh, which keeps the relevant information
 Mesh<MyCase::value_t,MyCase::d> createMesh(MyCase::ParametersD& parameters) {
   using T = MyCase::value_t;
-  const Vector extent = parameters.get<parameters::DOMAIN_EXTENT>();
-  const Vector origin{0, 0, 0};
-  IndicatorCuboid3D<T> cuboid(extent, origin);
-
-  const T physDeltaX = extent[0] / parameters.get<parameters::RESOLUTION>();
-  Mesh<T,MyCase::d> mesh(cuboid, physDeltaX, singleton::mpi().getSize());
+  std::shared_ptr<IndicatorF3D<T>> domain;
+  Vector<T,3> extent = parameters.get<parameters::DOMAIN_EXTENT>();
+  const T physDeltaX = extent[0] /
+                       parameters.get<parameters::RESOLUTION>();
+  if (parameters.get<parameters::GEOMETRY_TYPE>() == GeometryType::sphere) {  
+    Vector<T,3> center{extent[0]/2., extent[1]/2., extent[2]/2.};
+    std::shared_ptr<IndicatorF3D<T>> sphere = std::make_shared<IndicatorSphere3D<T>>(center, extent[0] / 2.);
+    domain = std::make_shared<IndicatorLayer3D<T>>(*sphere, physDeltaX);
+  } else {
+    Vector<T,3> origin{0, 0, 0};
+    domain = std::make_shared<IndicatorCuboid3D<T>>(extent, origin);
+  }
+  Mesh<T,MyCase::d> mesh(*domain, physDeltaX, singleton::mpi().getSize());
   mesh.setOverlap(parameters.get<parameters::OVERLAP>());
   return mesh;
 }
@@ -92,11 +106,26 @@ Mesh<MyCase::value_t,MyCase::d> createMesh(MyCase::ParametersD& parameters) {
 void prepareGeometry(MyCase& myCase) {
   OstreamManager clout(std::cout, "prepareGeometry");
   clout << "Prepare Geometry ..." << std::endl;
+  using T = MyCase::value_t;
   auto& geometry = myCase.getGeometry();
+  auto& parameters = myCase.getParameters();
+  Vector<T,3> extent = parameters.get<parameters::DOMAIN_EXTENT>();
+  const T physDeltaX = extent[0] /
+                       parameters.get<parameters::RESOLUTION>();
 
-  /// @li Set material numbers
-  geometry.rename(0, 2);
-  geometry.rename(2, 1, {1,1,1});
+  if (parameters.get<parameters::GEOMETRY_TYPE>() == GeometryType::sphere) {  
+    Vector<T,3> center{extent[0]/2., extent[1]/2., extent[2]/2.};
+    IndicatorSphere3D<T> sphere(center, extent[0] / 2.);
+    IndicatorLayer3D<T> sphereLayer(sphere, physDeltaX);
+    geometry.rename(0,2,sphereLayer);
+    geometry.rename(2,1,sphere);
+
+    geometry.clean();
+    geometry.checkForErrors();
+  } else {
+    geometry.rename(0, 2);
+    geometry.rename(2, 1, {1,1,1});
+  }
   geometry.print();
   clout << "Prepare Geometry ... OK" << std::endl;
 }

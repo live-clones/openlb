@@ -49,28 +49,29 @@ int main(int argc, char* argv[])
   MyCase::ParametersD myCaseParametersD;
   {
     using namespace parameters;
-    myCaseParametersD.set<START_RESOLUTION           >(             11);
-    myCaseParametersD.set<NUM_SIMULATIONS            >(              3);
+    myCaseParametersD.set<START_RESOLUTION           >(               11);
+    myCaseParametersD.set<NUM_SIMULATIONS            >(                3);
 
-    myCaseParametersD.set<DOMAIN_EXTENT             >({1.0, 1.0, 1.0});
-    myCaseParametersD.set<PHYS_CHAR_VELOCITY        >(            1.0);
-    myCaseParametersD.set<PHYS_CHAR_VISCOSITY       >(            0.1);
-    myCaseParametersD.set<PHYS_CHAR_DENSITY         >(              1);
-    myCaseParametersD.set<MAX_PHYS_T                >(            6.0);
-    myCaseParametersD.set<RESOLUTION                >(             11);
-    myCaseParametersD.set<LATTICE_CHAR_VELOCITY     >(           0.07);
-    myCaseParametersD.set<ERROR_VELOCITY_L1         >(             0.);
-    myCaseParametersD.set<ERROR_VELOCITY_L2         >(             0.);
-    myCaseParametersD.set<ERROR_VELOCITY_LINF       >(             0.);
-    myCaseParametersD.set<ERROR_PRESSURE_L1         >(             0.);
-    myCaseParametersD.set<ERROR_PRESSURE_L2         >(             0.);
-    myCaseParametersD.set<ERROR_PRESSURE_LINF       >(             0.);
-    myCaseParametersD.set<ERROR_STRAIN_RATE_L1      >(             0.);
-    myCaseParametersD.set<ERROR_STRAIN_RATE_L2      >(             0.);
-    myCaseParametersD.set<ERROR_STRAIN_RATE_LINF    >(             0.);
-    myCaseParametersD.set<ERROR_DISSIPATION_L1      >(             0.);
-    myCaseParametersD.set<ERROR_DISSIPATION_L2      >(             0.);
-    myCaseParametersD.set<ERROR_DISSIPATION_LINF    >(             0.);
+    myCaseParametersD.set<DOMAIN_EXTENT             >(   {1.0, 1.0, 1.0});
+    myCaseParametersD.set<PHYS_CHAR_VELOCITY        >(               1.0);
+    myCaseParametersD.set<PHYS_CHAR_VISCOSITY       >(               0.1);
+    myCaseParametersD.set<PHYS_CHAR_DENSITY         >(                 1);
+    myCaseParametersD.set<MAX_PHYS_T                >(               6.0);
+    myCaseParametersD.set<RESOLUTION                >(                11);
+    myCaseParametersD.set<LATTICE_CHAR_VELOCITY     >(              0.07);
+    myCaseParametersD.set<ERROR_VELOCITY_L1         >(                0.);
+    myCaseParametersD.set<ERROR_VELOCITY_L2         >(                0.);
+    myCaseParametersD.set<ERROR_VELOCITY_LINF       >(                0.);
+    myCaseParametersD.set<ERROR_PRESSURE_L1         >(                0.);
+    myCaseParametersD.set<ERROR_PRESSURE_L2         >(                0.);
+    myCaseParametersD.set<ERROR_PRESSURE_LINF       >(                0.);
+    myCaseParametersD.set<ERROR_STRAIN_RATE_L1      >(                0.);
+    myCaseParametersD.set<ERROR_STRAIN_RATE_L2      >(                0.);
+    myCaseParametersD.set<ERROR_STRAIN_RATE_LINF    >(                0.);
+    myCaseParametersD.set<ERROR_DISSIPATION_L1      >(                0.);
+    myCaseParametersD.set<ERROR_DISSIPATION_L2      >(                0.);
+    myCaseParametersD.set<ERROR_DISSIPATION_LINF    >(                0.);
+    myCaseParametersD.set<GEOMETRY_TYPE             >(GeometryType::cube);
   }
   myCaseParametersD.fromCLI(argc, argv);
 
