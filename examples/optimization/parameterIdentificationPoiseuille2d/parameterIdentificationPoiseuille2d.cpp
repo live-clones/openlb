@@ -39,8 +39,6 @@ using namespace olb;
 using namespace olb::names;
 using namespace olb::opti;
 
-using U = util::ADf<double,1>;
-
 namespace olb::parameters {
 
 struct WANTED_MASS_FLOW : public descriptors::FIELD_BASE<1> { };
@@ -52,8 +50,13 @@ struct INLET_PRESSURE : public descriptors::FIELD_BASE<1> { };
 using MyCase = Case<
   NavierStokes, Lattice<double, descriptors::D2Q9<>>
 >;
-using MyOptiCase = OptiCaseFDQ<
-  Controlled, MyCase
+using MyADfCase = Case<
+  NavierStokes, Lattice<util::ADf<double,1>, descriptors::D2Q9<>>
+>;
+//using MyOptiCase = OptiCaseFDQ<
+using MyOptiCase = OptiCaseADf<
+  Controlled, MyCase,
+  Derivatives, MyADfCase
 >;
 
 template <typename PARAMETERS>
@@ -67,7 +70,7 @@ auto createMesh(PARAMETERS& parameters) {
                  extent[1] / parameters.template get<parameters::RESOLUTION>(),
                  singleton::mpi().getSize());
   mesh.setOverlap(parameters.template get<parameters::OVERLAP>());
-  return mesh; 
+  return mesh;
 }
 
 template<typename CASE>
@@ -139,7 +142,7 @@ void setInitialValues(CASE& myCase) {
   const Vector domain_extent = parameters.template get<parameters::DOMAIN_EXTENT>();
   const T inletPressure = parameters.template get<parameters::INLET_PRESSURE>();
   std::cout << "starting simulation with pressure = " << inletPressure << "..." << std::endl;
- 
+
   // Initial conditions
   AnalyticalLinear2D<T,T> rho(
     - inletPressure / domain_extent[0] * descriptors::invCs2<T,DESCRIPTOR>(),
@@ -171,7 +174,6 @@ void setInitialValues(CASE& myCase) {
 template<typename CASE>
 void getResults(CASE& myCase, std::size_t iT, util::Timer<typename CASE::value_t>& timer, bool hasConverged) {
   using T = CASE::value_t;
-  using DESCRIPTOR = CASE::descriptor_t;
   auto& sLattice = myCase.getLattice(NavierStokes{});
   auto& converter = sLattice.getUnitConverter();
   const T maxPhysT = myCase.getParameters().template get<parameters::MAX_PHYS_T>();
@@ -181,29 +183,16 @@ void getResults(CASE& myCase, std::size_t iT, util::Timer<typename CASE::value_t
    = ( hasConverged || (iT + 1 == converter.getLatticeTime( maxPhysT )) );
   const int vtmIter  = converter.getLatticeTime( maxPhysT/20. );
 
-  SuperLatticePhysVelocity2D<T,DESCRIPTOR> velocity( sLattice, converter );
-  SuperLatticePhysPressure2D<T,DESCRIPTOR> pressure( sLattice, converter );
-  vtmWriter.addFunctor( velocity );
-  vtmWriter.addFunctor( pressure );
-
   if (iT == 0) {
-      sLattice.communicate();
-      SuperLatticeCuboid2D<T, DESCRIPTOR> cuboid( sLattice );
-      SuperLatticeRank2D<T, DESCRIPTOR> rank( sLattice );
-      vtmWriter.write( cuboid );
-      vtmWriter.write( rank );
       vtmWriter.createMasterFile();
   }
 
-  // Output on the console
-  timer.update( iT );
-  timer.printStep();
-  sLattice.getStatistics().print( iT,converter.getPhysTime( iT ) );
-
   if ( iT%vtmIter==0 || lastTimeStep )
   {
-    sLattice.communicate();
     sLattice.setProcessingContext(ProcessingContext::Evaluation);
+    timer.update( iT );
+    timer.printStep();
+    sLattice.getStatistics().print( iT,converter.getPhysTime( iT ) );
     vtmWriter.write( iT );
   }
 }
@@ -228,7 +217,7 @@ void simulate(CASE& myCase) {
     }
     sLattice.collideAndStream();
     converge.takeValue(sLattice.getStatistics().getMaxU(), false );
-  } 
+  }
   timer.stop();
   timer.printSummary();
 }
@@ -242,7 +231,9 @@ void setInitialControls(MyOptiCase& optiCase) {
 
 template <typename CASE>
 void applyControls(MyOptiCase& optiCase) {
-  optiCase.getCase(Controlled{}).getParameters().template set<parameters::INLET_PRESSURE>(optiCase.getController()[0]);
+  using T = CASE::value_t;
+  std::vector<T> control = optiCase.getController<T>().get();
+  optiCase.getCaseByType<T>().getParameters().template set<parameters::INLET_PRESSURE>(control[0]);
 }
 
 /// Compute squared error between simulated and wanted mass flow rate
@@ -250,7 +241,7 @@ template <typename CASE>
 CASE::value_t massFlowError(MyOptiCase& optiCase)
 {
   using T = CASE::value_t;
-  auto& myCase = optiCase.getCase(Controlled{});
+  auto& myCase = optiCase.getCaseByType<T>();
   auto& sLattice = myCase.getLattice(NavierStokes{});
   auto& superGeometry = myCase.getGeometry();
   auto& converter = sLattice.getUnitConverter();
@@ -275,10 +266,23 @@ CASE::value_t massFlowError(MyOptiCase& optiCase)
   return 0.5 * (res - wantedRes) * (res - wantedRes);
 }
 
+template <typename CASE>
+CASE::value_t computeObjective(MyOptiCase& optiCase) {
+  auto& myCase = optiCase.getCaseByType<typename CASE::value_t>();
+  myCase.resetLattices();
+  applyControls<CASE>(optiCase);
+  prepareGeometry(myCase);
+  prepareLattice(myCase);
+  setInitialValues(myCase);
+  simulate(myCase);
+  return massFlowError<CASE>(optiCase);
+}
+
 int main( int argc, char* argv[] )
 {
   // === 1st Step: Initialization ===
   initialize( &argc, &argv );
+  using ADf = util::ADf<double,1>;
 
   // === Step 2: Set Parameters ===
   MyCase::ParametersD myCaseParametersD;
@@ -292,32 +296,38 @@ int main( int argc, char* argv[] )
     myCaseParametersD.set<REFERENCE_INLET_PRESSURE>(  0.000659);
     myCaseParametersD.set<INLET_PRESSURE          >(    0.0001);
   }
-  
+  MyADfCase::ParametersD myADfCaseParametersD;
+  {
+    using namespace parameters;
+    myADfCaseParametersD.set<RESOLUTION              >(                50);
+    myADfCaseParametersD.set<DOMAIN_EXTENT           >({ADf(2.), ADf(1.)});
+    myADfCaseParametersD.set<REYNOLDS                >(          ADf(10.));
+    myADfCaseParametersD.set<MAX_PHYS_T              >(         ADf( 30.));
+    myADfCaseParametersD.set<WANTED_MASS_FLOW        >(   ADf(0.00026159));
+    myADfCaseParametersD.set<REFERENCE_INLET_PRESSURE>(     ADf(0.000659));
+    myADfCaseParametersD.set<INLET_PRESSURE          >(       ADf(0.0001));
+  }
+
   // === Step 3: Create Mesh ===
   auto mesh = createMesh(myCaseParametersD);
+  auto ADfmesh = createMesh(myADfCaseParametersD);
 
   // === Step 4: Create Case ===
   MyCase myCase(myCaseParametersD, mesh);
+  MyADfCase myADfCase(myADfCaseParametersD, ADfmesh);
 
   // Create OptiCase
   MyOptiCase optiCase;
 
   // Set Case
   optiCase.setCase<Controlled>(myCase);
+  optiCase.setCase<Derivatives>(myADfCase);
 
   // Define initial values for the control
   setInitialControls<MyCase>(optiCase);
 
   // Define objective computation routine
-  optiCase.setObjective([&](MyOptiCase& optiCase) {
-    myCase.resetLattices();
-    applyControls<MyCase>(optiCase);
-    prepareGeometry(myCase);
-    prepareLattice(myCase);
-    setInitialValues(myCase);
-    simulate(myCase);
-    return massFlowError<MyCase>(optiCase);
-  });
+  optiCase.setObjective(computeObjective<MyCase>, computeObjective<MyADfCase>);
 
   OptimizerLBFGS<MyCase::value_t,std::vector<MyCase::value_t>> optimizer(
     1, 1.e-7, 20, 1., 10, "StrongWolfe", 20, 1.e-4, true, "", "log",
