@@ -444,4 +444,5 @@ void simulate(MyCase& myCase) {
 
   timer.stop();
   timer.printSummary();
+  singleton::pool().wait();
 }
