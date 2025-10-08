@@ -277,7 +277,7 @@ void setInitialValues(MyCase& myCase){
     Rlattice.initialize();
 }
 
-void getResults(MyCase& myCase, util::Timer<MyCase::value_t>& timer, std::size_t iT){
+void getResults(MyCase& myCase, util::Timer<MyCase::value_t>& timer, std::size_t iT, bool converged){
     using T = MyCase::value_t;
     auto& geometry = myCase.getGeometry();
     auto& params   = myCase.getParameters();
@@ -311,6 +311,10 @@ void getResults(MyCase& myCase, util::Timer<MyCase::value_t>& timer, std::size_t
         timer.printStep();
         vtmWriter.write(iT);
     }
+
+    if(converged){
+        vtmWriter.write(iT);
+    }
 }
 
 void simulate(MyCase& myCase){
@@ -333,9 +337,55 @@ void simulate(MyCase& myCase){
 
     for(int iT = 0; iT >= -1; ++iT){
 
-        getResults(myCase, timer, iT);
+        getResults(myCase, timer, iT, false);
 
         converge.takeValue( Rlattice.getStatistics().getAverageRho(), true );
+
+        // ===== 5.5th Step: Check for Convergence =====
+        T resolution = params.get<parameters::RESOLUTION>();
+        if (converge.hasConverged() && iT > 4*resolution) {
+        clout << "Simulation converged. -- " << iT << std::endl;
+        getResults(myCase, timer, iT, true);
+        clout << "------" << iT << std::endl;
+
+        // write and save results in a text file
+        SuperLatticeDensity3D<T,RDESCRIPTOR> density( Rlattice );
+        SuperLatticeFlux3D<T,RDESCRIPTOR> flux( Rlattice );
+        AnalyticalFfromSuperF3D<T> analytDen( density, true, 1 );
+        AnalyticalFfromSuperF3D<T> analytFlu( flux, true, 1 );
+
+        std::string caseName = "case" + std::to_string(params.get<parameters::CASE_NUMBER>());
+        std::string outFile = singleton::directories().getLogOutDir() + std::to_string((int)resolution) + "_" + caseName + ".csv";
+        clout << outFile << std::endl;
+        const char * fileName = outFile.data();
+
+        FILE * pFile;
+        pFile  = fopen(fileName, "w");
+        //fprintf(pFile, "%i\n", iT);
+        //fprintf(pFile, "%s, %s, %s, %s\n", "position x", "0.0", "0.25", "0.375");
+        fprintf(pFile, "Position1, Light1, Ligh2, Light3\n");
+        for ( int nZ = 0; nZ <= 100; ++nZ ) {
+            double position1[3] = {1.0*double(nZ)/100, 0, 0};
+            double position2[3] = {1.0*double(nZ)/100, 0.25, 0};
+            double position3[3] = {1.0*double(nZ)/100, 0.375, 0};
+            double light1[1] = {0};
+            double fluxx1[3] = {0.,0.,0.};
+            double light2[1] = {0};
+            double light3[1] = {0};
+            analytDen( light1, position1 );
+            analytFlu( fluxx1, position1 );
+            analytDen( light2, position2 );
+            analytDen( light3, position3 );
+            if (singleton::mpi().getRank()==0) {
+            printf("%4.3f, %8.6e, %8.6e, %8.6e, %8.6e, %8.6e, %8.6e\n", position1[0], light1[0], light2[0], light3[0],
+                    fluxx1[0], fluxx1[1], fluxx1[2]);
+            fprintf(pFile, "%4.3f, %8.6e, %8.6e, %8.6e, %8.6e, %8.6e, %8.6e\n", position1[0], light1[0], light2[0], light3[0],
+                    fluxx1[0], fluxx1[1], fluxx1[2]);
+            }
+        }
+        fclose(pFile);
+        break;
+        }
 
         Rlattice.collideAndStream();
     }
