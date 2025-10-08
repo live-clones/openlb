@@ -277,6 +277,73 @@ void setInitialValues(MyCase& myCase){
     Rlattice.initialize();
 }
 
+void getResults(MyCase& myCase, util::Timer<MyCase::value_t>& timer, std::size_t iT){
+    using T = MyCase::value_t;
+    auto& geometry = myCase.getGeometry();
+    auto& params   = myCase.getParameters();
+
+    auto& Rlattice = myCase.getLattice(Radiation {});
+    using RDESCRIPTOR = MyCase::descriptor_t_of<Radiation>;
+
+    const auto& converter = Rlattice.getUnitConverter();
+
+    SuperLatticeDensity3D<T,RDESCRIPTOR> density( Rlattice );
+    SuperLatticeFlux3D<T,RDESCRIPTOR> flux( Rlattice );
+
+    T resolution = params.get<parameters::RESOLUTION>();
+    T statIter = (params.get<parameters::USE_MINK>()) ? (2*resolution) : (resolution/5);
+
+    SuperVTMwriter3D<T> vtmWriter("cube3d");
+    SuperGeometryF3D<T> geo(geometry);
+
+    vtmWriter.addFunctor(density);
+    vtmWriter.addFunctor(flux);
+    vtmWriter.addFunctor(geo);
+
+    if(iT == 0){
+        vtmWriter.write(geo);
+        vtmWriter.createMasterFile();
+    }
+
+    if(iT%(int)statIter == 0){
+        Rlattice.getStatistics().print(iT, converter.getPhysTime(iT));
+        timer.print(iT);
+        timer.printStep();
+        vtmWriter.write(iT);
+    }
+}
+
+void simulate(MyCase& myCase){
+    OstreamManager clout( std::cout, "simulate");
+
+    using T = MyCase::value_t;
+    auto& geometry = myCase.getGeometry();
+    auto& params   = myCase.getParameters();
+
+    auto& Rlattice = myCase.getLattice(Radiation {});
+    using RDESCRIPTOR = MyCase::descriptor_t_of<Radiation>;
+
+    const auto& converter = Rlattice.getUnitConverter();
+
+    util::Timer<double> timer(converter.getLatticeTime(params.get<parameters::MAX_PHYS_T>()), geometry.getStatistics().getNvoxel());
+    timer.start();
+
+    util::ValueTracer<T> converge( 160, 1e-8);
+    clout << "iT convergence criteria: " << 160 << std::endl;
+
+    for(int iT = 0; iT >= -1; ++iT){
+
+        getResults(myCase, timer, iT);
+
+        converge.takeValue( Rlattice.getStatistics().getAverageRho(), true );
+
+        Rlattice.collideAndStream();
+    }
+
+    timer.stop();
+    timer.printSummary();
+}
+
 int main( int argc, char *argv[] ){
     OstreamManager clout(std::cout,"main");
 
@@ -368,4 +435,6 @@ int main( int argc, char *argv[] ){
     /// === Step 7: Definition of Initial, Boundary Values, and Fields ===
     setInitialValues(myCase);
 
+    /// === Step 8: Simulate ===
+    simulate(myCase);
 }
