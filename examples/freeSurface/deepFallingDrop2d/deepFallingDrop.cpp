@@ -33,34 +33,40 @@
 #include <sstream>
 
 using namespace olb;
-using namespace olb::descriptors;
+using namespace olb::names;
 
-using T = FLOATING_POINT_TYPE;
-
-using DESCRIPTOR = D2Q9
-<
-  descriptors::FORCE,
+// === Step 1: Declarations ===
+using MyCase = Case<
+  NavierStokes, Lattice<double, descriptors::D2Q9<descriptors::FORCE,
   FreeSurface::MASS,
   FreeSurface::EPSILON,
   FreeSurface::CELL_TYPE,
   FreeSurface::CELL_FLAGS,
   FreeSurface::TEMP_MASS_EXCHANGE,
-  FreeSurface::PREVIOUS_VELOCITY,
-  FreeSurface::HAS_INTERFACE_NBRS
+  FreeSurface::PREVIOUS_VELOCITY>>
 >;
 
-struct FreeSurfaceAppHelper {
-  std::array<T,2> area{{0.04, 0.04}};
-  std::array<T,2> gravity_force = {{0., -9.81}};
 
-  T char_phys_length = 0.04;
-  T char_phys_vel = 1.0;
-  bool has_surface_tension = true;
-  T surface_tension_coefficient = 0.0206;
+/// @brief Create a simulation mesh, based on user-specified geometry
+/// @return An instance of a mesh with the relevant information
+Mesh<MyCase::value_t, MyCase::d> createMesh(MyCase::ParametersD& parameters) {
+  using T = MyCase::value_t;
+  using DESCRIPTOR = MyCase::descriptor_t_of<NavierStokes>;
 
-  std::array<T,2> initial_falling_speed{{0., -1.8}};
-};
+  Vector<T,2> extend(parameters.get<parameters::DOMAIN_EXTENT>()[0], parameters.get<parameters::DOMAIN_EXTENT>()[1]);
+  Vector<T,2> origin;
+  IndicatorCuboid2D<T> cuboid (extend, origin);
 
+  T characteristic_length = parameters.get<parameters::DOMAIN_EXTENT>()[0];
+  T physDeltaX = characteristic_length / parameters.get<parameters::RESOLUTION>();
+
+  Mesh<T, MyCase::d> mesh = Mesh<MyCase::value_t, MyCase::d>(cuboid, physDeltaX, singleton::mpi().getSize());
+  mesh.setOverlap(3);
+
+  return mesh;
+}
+
+/// @brief Define which cells should be filled with liquid at the beginning
 template <typename T, typename DESCRIPTOR>
 class FreeSurfaceDeepFallingDrop2D final : public AnalyticalF2D<T,T> {
 private:
@@ -101,6 +107,7 @@ public:
   }
 };
 
+/// @brief Define the initial state of the drop that is falling
 template <typename T, typename DESCRIPTOR>
 class FreeSurfaceDeepFallingDropVel2D final : public AnalyticalF<2,T,T> {
 private:
@@ -133,28 +140,75 @@ public:
   }
 };
 
-void prepareGeometry( UnitConverter<T,DESCRIPTOR> const& converter,
-                      SuperGeometry<T,2>& superGeometry ) {
+
+/// @brief Set material numbers for different parts of the domain
+/// @param myCase The Case instance which keeps the simulation data
+/// @note The material numbers will be used to assign physics to lattice nodes
+void prepareGeometry( MyCase& myCase ) {
 
   OstreamManager clout( std::cout,"prepareGeometry" );
   clout << "Prepare Geometry ..." << std::endl;
 
-  superGeometry.rename( 0,2 );
-  superGeometry.rename( 2,1,{1,1} );
+  auto& geometry = myCase.getGeometry();
 
-  superGeometry.clean();
-  superGeometry.innerClean();
-  superGeometry.checkForErrors();
+  geometry.rename( 0,2 );
+  geometry.rename( 2,1,{1,1} );
 
-  superGeometry.print();
+  geometry.clean();
+  geometry.innerClean();
+  geometry.checkForErrors();
+
+  geometry.print();
 
   clout << "Prepare Geometry ... OK" << std::endl;
 }
 
-void prepareFallingDrop(UnitConverter<T,DESCRIPTOR> const& converter,
-                     SuperLattice<T, DESCRIPTOR>& sLattice,
-                     SuperGeometry<T,2>& superGeometry, T lattice_size, const FreeSurfaceAppHelper& helper)
-{
+/// @brief Set lattice dynamics
+/// @param myCase The Case instance which keeps the simulation data
+void prepareLattice(MyCase& myCase) {
+
+  using DESCRIPTOR = MyCase::descriptor_t_of<NavierStokes>;
+  using T = MyCase::value_t;
+  auto& lattice = myCase.getLattice(NavierStokes{});
+  auto& geometry = myCase.getGeometry();
+  auto& parameters = myCase.getParameters();
+
+  OstreamManager clout( std::cout,"prepareLattice" );
+  clout << "Prepare Lattice ..." << std::endl;
+
+  const int resolution = parameters.get<parameters::RESOLUTION>();
+  const T latticeRelaxationTime = parameters.get<parameters::LATTICE_RELAXATION_TIME>();
+  const T char_phys_length = parameters.get<parameters::DOMAIN_EXTENT>()[0];
+  const T char_phys_vel = parameters.get<parameters::PHYS_CHAR_VELOCITY>();
+  const T viscosity = parameters.get<parameters::PHYS_CHAR_VISCOSITY>();
+  const T density = parameters.get<parameters::PHYS_CHAR_DENSITY>();
+
+  lattice.setUnitConverter<UnitConverterFromResolutionAndRelaxationTime<T, DESCRIPTOR>>(
+    int  {resolution},          // resolution: number of voxels per charPhysL
+    (T)  latticeRelaxationTime, // latticeRelaxationTime: relaxation time, have to be greater than 0.5!
+    (T)  char_phys_length,      // charPhysLength: reference length of simulation geometry
+    (T)  char_phys_vel,         // charPhysVelocity: maximal/highest expected velocity during simulation in __m / s__
+    (T)  viscosity,             // physViscosity: physical kinematic viscosity in __m^2 / s__
+    (T)  density                // physDensity: physical density in __kg / m^3__
+  );
+
+  auto& converter = lattice.getUnitConverter();
+
+
+  // Material=0 -->do nothing
+  lattice.defineDynamics<NoDynamics<T,DESCRIPTOR>>(geometry, 0);
+  // Material=1 --> dynamics
+  lattice.defineDynamics<SmagorinskyForcedBGKdynamics<T,DESCRIPTOR>>(geometry, 1);
+  // Material=2 -->no-slip boundary
+  lattice.defineDynamics<BounceBack<T,DESCRIPTOR>>(geometry, 2);
+  //setSlipBoundary<T,DESCRIPTOR>(lattice, geometry, 2);
+
+  lattice.setParameter<descriptors::OMEGA>(converter.getLatticeRelaxationFrequency());
+  lattice.setParameter<collision::LES::SMAGORINSKY>(T(0.2));
+
+  // prepareFallingDrop(...);
+  T lattice_size = char_phys_length / resolution;
+
   AnalyticalConst2D<T,T> zero( 0. );
   AnalyticalConst2D<T,T> one( 1. );
   AnalyticalConst2D<T,T> two( 2. );
@@ -165,87 +219,127 @@ void prepareFallingDrop(UnitConverter<T,DESCRIPTOR> const& converter,
   AnalyticalConst2D<T,T> force_zero{0., 0.};
 
   for (int i: {0,1,2}) {
-    sLattice.defineField<FreeSurface::MASS>(superGeometry, i, zero);
-    sLattice.defineField<FreeSurface::EPSILON>(superGeometry, i, zero);
-    sLattice.defineField<FreeSurface::CELL_TYPE>(superGeometry, i, zero);
-    sLattice.defineField<FreeSurface::CELL_FLAGS>(superGeometry, i, zero);
-    sLattice.defineField<descriptors::FORCE>(superGeometry, i, force_zero);
+    lattice.defineField<FreeSurface::MASS>(geometry, i, zero);
+    lattice.defineField<FreeSurface::EPSILON>(geometry, i, zero);
+    lattice.defineField<FreeSurface::CELL_TYPE>(geometry, i, zero);
+    lattice.defineField<FreeSurface::CELL_FLAGS>(geometry, i, zero);
+    lattice.defineField<descriptors::FORCE>(geometry, i, force_zero);
   }
 
-  sLattice.defineField<FreeSurface::CELL_TYPE>(superGeometry, 1, cells_analytical);
+  lattice.defineField<FreeSurface::CELL_TYPE>(geometry, 1, cells_analytical);
 
-  sLattice.defineField<FreeSurface::MASS>(superGeometry, 1, mass_analytical);
-  sLattice.defineField<FreeSurface::EPSILON>(superGeometry, 1, mass_analytical);
+  lattice.defineField<FreeSurface::MASS>(geometry, 1, mass_analytical);
+  lattice.defineField<FreeSurface::EPSILON>(geometry, 1, mass_analytical);
 
   for (int i: {0,2}) {
-    //sLattice.defineField<FreeSurface::MASS>(superGeometry, i, one);
-    sLattice.defineField<FreeSurface::EPSILON>(superGeometry, i, one);
-    sLattice.defineField<FreeSurface::CELL_TYPE>(superGeometry, i, four);
+    //lattice.defineField<FreeSurface::MASS>(geometry, i, one);
+    lattice.defineField<FreeSurface::EPSILON>(geometry, i, one);
+    lattice.defineField<FreeSurface::CELL_TYPE>(geometry, i, four);
   }
 
+  std::array<T,2> gravity;
+  gravity[0] = parameters.get<parameters::GRAVITY>()[0];
+  gravity[1] = parameters.get<parameters::GRAVITY>()[1];
+
   T force_factor = T(1) / converter.getConversionFactorForce() * converter.getConversionFactorMass();
-  AnalyticalConst2D<T,T> force_a{helper.gravity_force[0] * force_factor, helper.gravity_force[1] * force_factor};
-  sLattice.defineField<descriptors::FORCE>(superGeometry.getMaterialIndicator(1), force_a);
+  AnalyticalConst2D<T,T> force_a{gravity[0] * force_factor, gravity[1] * force_factor};
+  lattice.defineField<descriptors::FORCE>(geometry.getMaterialIndicator({1}), force_a);
 
-}
+  // Convert kg / s^2
+  // Basically it is multiplied with s^2 / kg = s^2 * m^3 / (kg * m^2 * m) = 1. / (velocity_factor^2 * density * length_factor)
+  T surface_tension_coefficient_factor = std::pow(converter.getConversionFactorTime(),2)/ (density * std::pow(converter.getPhysDeltaX(),3));
 
-void prepareLattice( UnitConverter<T,DESCRIPTOR> const& converter,
-                     SuperLattice<T, DESCRIPTOR>& sLattice,
-                     SuperGeometry<T,2>& superGeometry, T lattice_size, const FreeSurfaceAppHelper& helper) {
+  static FreeSurface2DSetup<T,DESCRIPTOR> free_surface_setup{lattice};
+  free_surface_setup.addPostProcessor();
 
-  OstreamManager clout( std::cout,"prepareLattice" );
-  clout << "Prepare Lattice ..." << std::endl;
+  const bool drop_isolated_cells = parameters.get<FreeSurface::DROP_ISOLATED_CELLS>();
+  const bool has_surface_tension = parameters.get<FreeSurface::HAS_SURFACE_TENSION>();
+  const T surface_tension_coefficient = parameters.get<FreeSurface::SURFACE_TENSION_PARAMETER>();
+  const T transitionThreshold = parameters.get<FreeSurface::TRANSITION>();
+  const T lonelyThreshold = parameters.get<FreeSurface::LONELY_THRESHOLD>();
 
-  // Material=0 -->do nothing
-  sLattice.defineDynamics<NoDynamics<T,DESCRIPTOR>>(superGeometry, 0);
-  // Material=1 --> dynamics
-  sLattice.defineDynamics<SmagorinskyForcedBGKdynamics<T,DESCRIPTOR>>(superGeometry, 1);
-  // Material=2 -->no-slip boundary
-  sLattice.defineDynamics<BounceBack<T,DESCRIPTOR>>(superGeometry, 2);
-  //setSlipBoundary<T,DESCRIPTOR>(sLattice, superGeometry, 2);
+  // Set variables from freeSurfaceHelpers.h
+  lattice.setParameter<FreeSurface::DROP_ISOLATED_CELLS>(drop_isolated_cells);
+  lattice.setParameter<FreeSurface::TRANSITION>(transitionThreshold);
+  lattice.setParameter<FreeSurface::LONELY_THRESHOLD>(lonelyThreshold);
+  lattice.setParameter<FreeSurface::HAS_SURFACE_TENSION>(has_surface_tension);
+  lattice.setParameter<FreeSurface::SURFACE_TENSION_PARAMETER>(surface_tension_coefficient_factor * surface_tension_coefficient);
+  lattice.setParameter<FreeSurface::FORCE_DENSITY>({gravity[0] * force_factor, gravity[1] * force_factor});
 
-  sLattice.setParameter<descriptors::OMEGA>(converter.getLatticeRelaxationFrequency());
-  sLattice.setParameter<collision::LES::SMAGORINSKY>(T(0.2));
-
-  prepareFallingDrop(converter, sLattice, superGeometry, lattice_size, helper);
   clout << "Prepare Lattice ... OK" << std::endl;
 }
 
-void setInitialValues(SuperLattice<T, DESCRIPTOR>& sLattice, SuperGeometry<T,2>& sGeometry, T lattice_length, UnitConverter<T,DESCRIPTOR> const& converter, const FreeSurfaceAppHelper& helper){
+/// Set initial condition for primal variables (velocity and density)
+/// @param myCase The Case instance which keeps the simulation data
+/// @note Be careful: initial values have to be set using lattice units
+void setInitialValues(MyCase& myCase){
+  using DESCRIPTOR = MyCase::descriptor_t_of<NavierStokes>;
+  using T = MyCase::value_t;
+  auto& lattice = myCase.getLattice(NavierStokes{});
+  auto& geometry = myCase.getGeometry();
+  auto& parameters = myCase.getParameters();
+  auto& converter = lattice.getUnitConverter();
+
   OstreamManager clout( std::cout,"setInitialValues" );
 
+  std::array<T,2> initial_falling_speed;
+  initial_falling_speed[0] = parameters.get<parameters::INITIAL_FALLING_SPEED>()[0];
+  initial_falling_speed[1] = parameters.get<parameters::INITIAL_FALLING_SPEED>()[1];
 
-    std::array<T,DESCRIPTOR::d> lattice_speed;
-    for(size_t i = 0; i < DESCRIPTOR::d; ++i){
-      lattice_speed[i] = helper.initial_falling_speed[i] * converter.getPhysDeltaT() / converter.getPhysDeltaX();
-    }
+  std::array<T,DESCRIPTOR::d> lattice_speed;
+  for(size_t i = 0; i < DESCRIPTOR::d; ++i){
+    lattice_speed[i] = initial_falling_speed[i] * converter.getPhysDeltaT() / converter.getPhysDeltaX();
+  }
 
-    FreeSurfaceDeepFallingDropVel2D<T,DESCRIPTOR> u{lattice_length, lattice_speed};
-    AnalyticalConst2D<T,T> one(1.);
+  T characteristic_length = parameters.get<parameters::DOMAIN_EXTENT>()[0];
+  T lattice_size = characteristic_length / parameters.get<parameters::RESOLUTION>();
 
-    sLattice.defineRhoU( sGeometry.getMaterialIndicator({0,1,2}), one, u );
-    for (int i: {0,1,2}) {
-      sLattice.iniEquilibrium( sGeometry, i, one, u );
-    }
+  FreeSurfaceDeepFallingDropVel2D<T,DESCRIPTOR> u{lattice_size, lattice_speed};
+  AnalyticalConst2D<T,T> one(1.);
+
+  lattice.defineRhoU( geometry.getMaterialIndicator({0,1,2}), one, u );
+  for (int i: {0,1,2}) {
+    lattice.iniEquilibrium( geometry, i, one, u );
+  }
 
   // Set up free surface communicator stages
-  FreeSurface::initialize(sLattice);
+  FreeSurface::initialize(lattice);
   // Make the lattice ready for simulation
-  sLattice.initialize();
+  lattice.initialize();
 }
 
-void getResults( SuperLattice<T,DESCRIPTOR>& sLattice,
-                 UnitConverter<T,DESCRIPTOR> const& converter, int iT,
-                 SuperGeometry<T,2>& superGeometry, util::Timer<T>& timer)
+
+/// Update boundary values at times (and external fields, if they exist)
+/// @param myCase The Case instance which keeps the simulation data
+/// @param iT The time step
+/// @note Be careful: boundary values have to be set using lattice units
+void setTemporalValues(MyCase& myCase,
+                       std::size_t iT)
 {
+  // Nothing to do here, because simulation does not depend on time
+}
+
+
+/// Compute simulation results at times
+/// @param myCase The Case instance which keeps the simulation data
+/// @param iT The time step, timer
+void getResults(MyCase& myCase, int iT, util::Timer<MyCase::value_t>& timer)
+{
+  using DESCRIPTOR = MyCase::descriptor_t_of<NavierStokes>;
+  using T = MyCase::value_t;
+  auto& lattice = myCase.getLattice(NavierStokes{});
+  auto& converter = lattice.getUnitConverter();
+
+  OstreamManager clout( std::cout,"getResults" );
+
   const int vtmIter  = 500;
   const int statIter = 500;
 
   if ( iT==0 ) {
     // Writes the geometry, cuboid no. and rank no. as vti file for visualization
     SuperVTMwriter2D<T> vtmWriter( "deepFallingDrop2d" );
-    SuperLatticeCuboid2D<T, DESCRIPTOR> cuboid( sLattice );
-    SuperLatticeRank2D<T, DESCRIPTOR> rank( sLattice );
+    SuperLatticeCuboid2D<T, DESCRIPTOR> cuboid( lattice );
+    SuperLatticeRank2D<T, DESCRIPTOR> rank( lattice );
     vtmWriter.write( cuboid );
     vtmWriter.write( rank );
 
@@ -254,14 +348,14 @@ void getResults( SuperLattice<T,DESCRIPTOR>& sLattice,
 
   // Writes the vtm files and profile text file
   if ( iT%vtmIter==0 ) {
-    sLattice.setProcessingContext(ProcessingContext::Evaluation);
+    lattice.setProcessingContext(ProcessingContext::Evaluation);
 
     SuperVTMwriter2D<T> vtmWriter( "deepFallingDrop2d" );
-    SuperLatticePhysVelocity2D<T, DESCRIPTOR> velocity( sLattice, converter );
-    SuperLatticePhysPressure2D<T, DESCRIPTOR> pressure( sLattice, converter );
-    SuperLatticeExternalScalarField2D<T, DESCRIPTOR, FreeSurface::EPSILON> epsilon( sLattice );
-    SuperLatticeExternalScalarField2D<T, DESCRIPTOR, FreeSurface::CELL_TYPE> cells( sLattice );
-    SuperLatticeExternalScalarField2D<T, DESCRIPTOR, FreeSurface::MASS> mass( sLattice );
+    SuperLatticePhysVelocity2D<T, DESCRIPTOR> velocity( lattice, converter );
+    SuperLatticePhysPressure2D<T, DESCRIPTOR> pressure( lattice, converter );
+    SuperLatticeExternalScalarField2D<T, DESCRIPTOR, FreeSurface::EPSILON> epsilon( lattice );
+    SuperLatticeExternalScalarField2D<T, DESCRIPTOR, FreeSurface::CELL_TYPE> cells( lattice );
+    SuperLatticeExternalScalarField2D<T, DESCRIPTOR, FreeSurface::MASS> mass( lattice );
     epsilon.getName() = "epsilon";
     cells.getName() = "cell_type";
     mass.getName() = "mass";
@@ -281,128 +375,81 @@ void getResults( SuperLattice<T,DESCRIPTOR>& sLattice,
     timer.printStep();
 
     // Lattice statistics console output
-    sLattice.getStatistics().print( iT,converter.getPhysTime( iT ) );
+    lattice.getStatistics().print( iT,converter.getPhysTime( iT ) );
   }
 }
 
-namespace {
-FreeSurfaceAppHelper free_surface_config;
 
-class FreeSurfaceConfig {
-public:
-  T viscosity = 1e-4;
-  T density = 1e3;
-  T physTime = 0.05;
-  T latticeRelaxationTime = .516;
-  int N = 256; // 512
+/// @brief Execute simulation: set initial values and run time loop
+/// @param myCase The Case instance which keeps the simulation data
+void simulate( MyCase& myCase ){
+  using DESCRIPTOR = MyCase::descriptor_t_of<NavierStokes>;
+  using T = MyCase::value_t;
+  auto& lattice = myCase.getLattice(NavierStokes{});
+  auto& geometry = myCase.getGeometry();
+  auto& converter = lattice.getUnitConverter();
+  auto& parameters = myCase.getParameters();
 
-  // Anti jitter value
-  T transitionThreshold = 1e-3;
-  // When to remove lonely cells
-  T lonelyThreshold = 1.0;
-};
+  // Main Loop with Timer
+  OstreamManager clout( std::cout,"starting simulation..." );
 
-}
-
-int main(int argc, char **argv)
-{
-
-  initialize(&argc, &argv, false, false);
-
-  FreeSurfaceConfig c;
-  OstreamManager clerr( std::cerr, "main" );
-  OstreamManager clout( std::cout, "main" );
-
-  singleton::directories().setOutputDir("./tmp/");
-
-  FreeSurfaceAppHelper& helper = free_surface_config;
-
-  UnitConverterFromResolutionAndRelaxationTime<T, DESCRIPTOR> const converter(
-    int {c.N},     // resolution: number of voxels per charPhysL
-    (T)   c.latticeRelaxationTime,   // latticeRelaxationTime: relaxation time, have to be greater than 0.5!
-    (T)   helper.char_phys_length,     // charPhysLength: reference length of simulation geometry
-    (T)   helper.char_phys_vel,     // charPhysVelocity: maximal/highest expected velocity during simulation in __m / s__
-    (T)   c.viscosity, // physViscosity: physical kinematic viscosity in __m^2 / s__
-    (T)   c.density     // physDensity: physical density in __kg / m^3__
-  );
-
-  // Prints the converter log as console output
-  converter.print();
-  // Writes the converter log in a file
-  converter.write("free surface");
-
-  T lattice_size = helper.char_phys_length / c.N;
-
-  T force_factor = T(1) / converter.getConversionFactorForce() * converter.getConversionFactorMass();
-
-  // Convert kg / s^2
-  // Basically it is multiplied with s^2 / kg = s^2 * m^3 / (kg * m^2 * m) = 1. / (velocity_factor^2 * density * length_factor)
-  T surface_tension_coefficient_factor = std::pow(converter.getConversionFactorTime(),2)/ (c.density * std::pow(converter.getPhysDeltaX(),3));
-
-  clout<<"Surface: "<<surface_tension_coefficient_factor * helper.surface_tension_coefficient<<std::endl;
-  clout<<"Lattice Size: "<<converter.getPhysDeltaX()<<std::endl;
-
-  // === 2nd Step: Prepare Geometry ===
-  Vector<T,2> extend( helper.area[0], helper.area[1] );
-  Vector<T,2> origin;
-  IndicatorCuboid2D<T> cuboid( extend, origin );
-
-  // Instantiation of a cuboidDecomposition with weights
-#ifdef PARALLEL_MODE_MPI
-  const int noOfCuboids = singleton::mpi().getSize();
-#else
-  const int noOfCuboids = 4;
-#endif
-  CuboidDecomposition2D<T> cuboidDecomposition( cuboid, converter.getPhysDeltaX(), noOfCuboids );
-
-  HeuristicLoadBalancer<T> loadBalancer( cuboidDecomposition );
-  SuperGeometry<T,2> superGeometry( cuboidDecomposition, loadBalancer, 2 );
-
-  prepareGeometry( converter, superGeometry );
-
-  SuperLattice<T, DESCRIPTOR> sLattice( converter, superGeometry );
-
-  clout<<"Overlap: "<<sLattice.getOverlap()<<std::endl;
-
-  prepareLattice( converter, sLattice, superGeometry, lattice_size, helper);
-
-  /*
-  * @param 1 Communicator struct
-  * @param 2 Variable struct
-  ***** subparams
-  ***** 1 - isolated cells drop
-  ***** 2 - conversion threshold
-  ***** 3 - lonely threshold (the same as unhealthy cell threshold)
-  ***** 4 - surface tension active
-  ***** 5 - lattice surface tension coefficient
-  ***** 6 - lattice force conversion factor
-  ***** 7 - lattice length
-  */
-  FreeSurface2DSetup<T,DESCRIPTOR> free_surface_setup{sLattice};
-
-  free_surface_setup.addPostProcessor();
-
-  // Set variables from freeSurfaceHelpers.h
-  sLattice.setParameter<FreeSurface::DROP_ISOLATED_CELLS>(true);
-  sLattice.setParameter<FreeSurface::TRANSITION>(c.transitionThreshold);
-  sLattice.setParameter<FreeSurface::LONELY_THRESHOLD>(c.lonelyThreshold);
-  sLattice.setParameter<FreeSurface::HAS_SURFACE_TENSION>(helper.has_surface_tension);
-  sLattice.setParameter<FreeSurface::SURFACE_TENSION_PARAMETER>(surface_tension_coefficient_factor * helper.surface_tension_coefficient);
-  sLattice.setParameter<FreeSurface::FORCE_DENSITY>({helper.gravity_force[0] * force_factor, helper.gravity_force[1] * force_factor});
-
-  // === 4th Step: Main Loop with Timer ===
-  clout << "starting simulation..." << std::endl;
-  util::Timer<T> timer( converter.getLatticeTime( c.physTime ), superGeometry.getStatistics().getNvoxel() );
+  T physTime = parameters.get<parameters::MAX_PHYS_T>();
+  util::Timer<T> timer( converter.getLatticeTime( physTime ), geometry.getStatistics().getNvoxel() );
   timer.start();
-  setInitialValues(sLattice, superGeometry, lattice_size, converter, helper);
 
-  for ( std::size_t iT = 0; iT < converter.getLatticeTime( c.physTime ); ++iT ) {
-    getResults( sLattice, converter, iT, superGeometry, timer );
-    sLattice.collideAndStream();
+  for ( std::size_t iT = 0; iT < converter.getLatticeTime( physTime ); ++iT ) {
+    getResults( myCase, iT, timer );
+    lattice.collideAndStream();
   }
 
   timer.stop();
   timer.printSummary();
 
-  return 0;
+}
+
+/// Setup and run a simulation
+int main(int argc, char **argv)
+{
+  initialize(&argc, &argv, false, false);
+
+  /// === Step 2: Set Parameters ===
+  MyCase::ParametersD myCaseParameters;
+  {
+    using namespace olb::parameters;
+    myCaseParameters.set<RESOLUTION>(256); // 512
+    myCaseParameters.set<PHYS_CHAR_VELOCITY>(1.0);
+    myCaseParameters.set<PHYS_CHAR_VISCOSITY>(1e-4);
+    myCaseParameters.set<PHYS_CHAR_DENSITY>(1e3);
+    myCaseParameters.set<MAX_PHYS_T>(0.05);
+    myCaseParameters.set<DOMAIN_EXTENT>({0.04, 0.04});
+    myCaseParameters.set<GRAVITY>({0., -9.81});
+    myCaseParameters.set<LATTICE_RELAXATION_TIME>(.516);
+    myCaseParameters.set<INITIAL_FALLING_SPEED>({0., -1.08});
+
+    myCaseParameters.set<FreeSurface::DROP_ISOLATED_CELLS>(true);
+    myCaseParameters.set<FreeSurface::HAS_SURFACE_TENSION>(true);
+    myCaseParameters.set<FreeSurface::SURFACE_TENSION_PARAMETER>(0.0206);
+    myCaseParameters.set<FreeSurface::TRANSITION>(1e-3);
+    myCaseParameters.set<FreeSurface::LONELY_THRESHOLD>(1.0);
+  }
+  myCaseParameters.fromCLI(argc, argv);
+
+  /// === Step 3: Create Mesh ===
+  Mesh mesh = createMesh(myCaseParameters);
+
+  /// === Step 4: Create Case ===
+  MyCase myCase(myCaseParameters, mesh);
+
+  /// === Step 5: Prepare Geometry ===
+  prepareGeometry( myCase );
+
+  /// === Step 6: Prepare Lattice ===
+  prepareLattice( myCase );
+
+  /// === Step 7: Definition of Initial, Boundary Values, and Fields ===
+  setInitialValues(myCase);
+
+  /// === Step 8: Simulate ===
+  simulate(myCase);
+
 }
