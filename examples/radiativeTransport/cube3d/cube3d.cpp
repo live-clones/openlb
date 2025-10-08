@@ -174,7 +174,8 @@ void prepareLatticeMink(MyCase& myCase){
     Rlattice.defineDynamics<EquilibriumBoundaryFirstOrder<T, RDESCRIPTOR>>(geometry, 3);
 
     if(params.get<parameters::USE_DIRECTED>()){
-        //setRtlbmDirectedBoundary<T,RDESCRIPTOR>(Rlattice, geometry.getMaterialIndicator({3}), params.get<parameters::INTENSITY>());
+        setRtlbmDirectedBoundary<T,RDESCRIPTOR>(Rlattice, geometry.getMaterialIndicator({3}), params.get<parameters::INTENSITY>());
+        Rlattice.setParameter<>
     }
 
 
@@ -183,7 +184,6 @@ void prepareLatticeMink(MyCase& myCase){
     Rlattice.setParameter<collision::P1::SCATTERING>( latticeScattering );
     Rlattice.setParameter<collision::Poisson::SINK>( latticeSink );
     Rlattice.setParameter<parameters::INTENSITY>( inletDirichlet );
-    //Rlattice.setParameter<>
 
     clout << "Prepare Lattice ... OK" << std::endl;
     return;
