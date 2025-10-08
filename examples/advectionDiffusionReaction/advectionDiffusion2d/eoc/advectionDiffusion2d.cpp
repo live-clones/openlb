@@ -34,7 +34,12 @@
  *  the experimental order of convergence towards the analytical solution.
  */
 
-#include "case.h"
+#include "../case.h"
+
+using namespace olb;
+using namespace olb::graphics;
+using namespace olb::names;
+
 
 int main(int argc, char *argv[])
 {
@@ -43,29 +48,47 @@ int main(int argc, char *argv[])
 
   singleton::directories().setOutputDir("./tmp/");
 
+  /// file clean-up
+  CSV<MyCase::value_t> csvWriter;
+  csvWriter.clearFile("averageSimL2RelErr");
+
   MyCase::ParametersD myCaseParameters;
   {
     using namespace olb::parameters;
+    myCaseParameters.set<RUNS>(3);
     myCaseParameters.set<RESOLUTION>(50);
     myCaseParameters.set<OUTPUT_INTERVAL>(50);
     myCaseParameters.set<PHYS_CHAR_LENGTH>(2.);
     myCaseParameters.set<PHYS_CHAR_DENSITY>(1.);
     myCaseParameters.set<PHYS_DIFFUSIVITY>(0.05);
-    myCaseParameters.set<PECLET>(100.); // Peclet number (Pe = u*L/mue)
+    myCaseParameters.set<PECLET>(100.);
     myCaseParameters.set<PULSE_DIFF_BOUND>(1e-1);
-    myCaseParameters.set<MAX_RESOLUTION>(myCaseParameters.get<RESOLUTION>());
   }
   myCaseParameters.fromCLI(argc, argv);
 
-  Mesh mesh = createMesh(myCaseParameters);
+  const MyCase::value_t N0 = myCaseParameters.get<parameters::RESOLUTION>();
+  const MyCase::value_t statIter0 = myCaseParameters.get<parameters::OUTPUT_INTERVAL>();
+  myCaseParameters.set<parameters::MAX_RESOLUTION>(
+    util::pow(2, myCaseParameters.get<parameters::RUNS>()-1) * myCaseParameters.get<parameters::RESOLUTION>()
+  );
 
-  MyCase myCase(myCaseParameters, mesh);
+  for (std::size_t i = 0; i < myCaseParameters.get<parameters::RUNS>(); ++i) {
 
-  prepareGeometry(myCase);
+    //Adjust Resolution and output interval
+    myCaseParameters.set<parameters::RESOLUTION>(util::pow(2,i) * N0);
+    myCaseParameters.set<parameters::OUTPUT_INTERVAL>(util::pow(4,i) * statIter0);
 
-  prepareLattice(myCase);
 
-  setInitialValues(myCase);
+    Mesh mesh = createMesh(myCaseParameters);
 
-  simulate(myCase);
+    MyCase myCase(myCaseParameters, mesh);
+
+    prepareGeometry(myCase);
+
+    prepareLattice(myCase);
+
+    setInitialValues(myCase);
+
+    simulate(myCase);
+  }
 }
