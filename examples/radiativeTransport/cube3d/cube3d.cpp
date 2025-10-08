@@ -50,10 +50,13 @@ namespace olb::parameters {
     struct SCATTERING : public descriptors::FIELD_BASE<1> { };
     struct MCVALUE : public descriptors::FIELD_BASE<1> { };
     struct TOTAL_ENERGY : public descriptors::FIELD_BASE<1> { };
+    struct INTENSITY : public descriptors::FIELD_BASE<1> { };
 
     struct CASE_NUMBER : public descriptors::TYPED_FIELD_BASE<int, 1> { };
     struct DYNAMICS_NAME : public descriptors::TYPED_FIELD_BASE<std::string, 1> { };
     struct USE_MINK : public descriptors::TYPED_FIELD_BASE<bool, 1> { };
+
+    struct INLET_DIRICHLET : public descriptors::FIELD_BASE<1> { };
 
     struct BOUNDARY_SHIFT : public descriptors::FIELD_BASE<1> { };
 
@@ -118,8 +121,9 @@ void prepareGeometry(MyCase& myCase){
 }
 
 void attachUnitConverter(MyCase& myCase){
+    OstreamManager clout( std::cout, "attachUnitConverter" );
+
     using T = MyCase::value_t;
-    auto& geometry = myCase.getGeometry();
     auto& params   = myCase.getParameters();
 
     auto& Rlattice = myCase.getLattice(Radiation {});
@@ -132,11 +136,15 @@ void attachUnitConverter(MyCase& myCase){
         params.get<parameters::SCATTERING>(),
         params.get<parameters::ANINOSOTROPY_FACTOR>()
     );
+
+    const auto& converter = Rlattice.getUnitConverter();
+    clout << "omega = " << converter.getLatticeRelaxationTime() << std::endl;
 }
 
 void prepareLatticeMink(MyCase& myCase){
     OstreamManager clout( std::cout, "prepareLattice" );
     clout << "Prepare Lattice for Mink ..." << std::endl;
+    clout << "working with diffuse approximation" << std::endl;
 
     using T = MyCase::value_t;
     auto& geometry = myCase.getGeometry();
@@ -148,12 +156,35 @@ void prepareLatticeMink(MyCase& myCase){
     attachUnitConverter(myCase);
     const auto& converter = Rlattice.getUnitConverter();
     converter.print();
+    converter.write();
 
+    T latticeSink = converter.getLatticeAbsorption()/converter.getLatticeDiffusion()/8.;
+    T inletDirichlet = params.get<parameters::INLET_DIRICHLET>();
+
+    T latticeRelaxationFrequency = converter.getLatticeRelaxationFrequency();
+    T latticeAbsorption = converter.getLatticeAbsorption();
+    T latticeScattering = converter.getLatticeScattering();
+    clout << "latticeSink= " << latticeSink << std::endl;
+
+    Rlattice.defineDynamics<NoDynamics<T, RDESCRIPTOR>>(geometry, 0);
+    Rlattice.defineDynamics<P1Dynamics<T, RDESCRIPTOR>>(geometry, 1);
+    Rlattice.defineDynamics<EquilibriumBoundaryFirstOrder<T, RDESCRIPTOR>>(geometry, 2);
+    Rlattice.defineDynamics<EquilibriumBoundaryFirstOrder<T, RDESCRIPTOR>>(geometry, 3);
+
+    Rlattice.setParameter<descriptors::OMEGA>(latticeRelaxationFrequency);
+    Rlattice.setParameter<collision::P1::ABSORPTION>( latticeAbsorption );
+    Rlattice.setParameter<collision::P1::SCATTERING>( latticeScattering );
+    Rlattice.setParameter<collision::Poisson::SINK>( latticeSink );
+    Rlattice.setParameter<parameters::INTENSITY>( inletDirichlet );
+
+    clout << "Prepare Lattice ... OK" << std::endl;
+    return;
 }
 
 void prepareLatticeMcHardy(MyCase& myCase){
     OstreamManager clout( std::cout, "prepareLattice" );
     clout << "Prepare Lattice for McHardy ..." << std::endl;
+    clout << "working with direct discretization" << std::endl;
 
 }
 
@@ -171,6 +202,7 @@ int main( int argc, char *argv[] ){
         myCaseParameters.set<LATTICE_RELAXATION_TIME>(1.0);
         myCaseParameters.set<MAX_PHYS_T>(12);
         myCaseParameters.set<PHYS_SAVE_ITER>(2.0);
+        myCaseParameters.set<INLET_DIRICHLET>(1.0);
 
         myCaseParameters.set<CASE_NUMBER>(1.);
         myCaseParameters.set<DYNAMICS_NAME>(std::string("mink"));
