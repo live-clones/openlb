@@ -1,6 +1,6 @@
 /*  This file is part of the OpenLB library
  *
- *  Copyright (C) 2012-2019 Mathias J. Krause, Adrian Kummerlaender
+ *  Copyright (C) 2012-2019 2025 Mathias J. Krause, Adrian Kummerlaender, Yuji (Sam) Shimojima
  *  E-mail contact: info@openlb.net
  *  The most recent release of OpenLB can be downloaded at
  *  <http://www.openlb.net
@@ -25,17 +25,12 @@
 
 using namespace olb;
 using namespace olb::names;
-//ys using DESCRIPTOR   = descriptors::D3Q19<>;
-//ys using T            = float;
-//ys using BulkDynamics = BGKdynamics<T, DESCRIPTOR>;
-
 // === Step 1: Declarations ===
-using MyCase = Case<NavierStokes, Lattice<double, descriptors::D3Q19<>>>;
+using MyCase = Case<NavierStokes, Lattice<float, descriptors::D3Q19<>>>;
 
 namespace olb::parameters {
 struct NO_EXPORT_RESULTS : public descriptors::TYPED_FIELD_BASE<bool, 1> {};
 struct CUBOIDS_PER_PROCESS : public descriptors::TYPED_FIELD_BASE<std::size_t, 1> {};
-
 } // namespace olb::parameters
 
 // Undefine to test a minimal bounce back cavity
@@ -96,7 +91,7 @@ void prepareGeometry(MyCase& myCase)
   sGeometry.innerClean(verbose);
   sGeometry.checkForErrors(verbose);
 
-  //  sGeometry.print();
+  //sGeometry.print();
 
   //clout << "Prepare Geometry ... OK" << std::endl;
   return;
@@ -108,22 +103,23 @@ void prepareLattice(MyCase& myCase)
 {
   OstreamManager clout(std::cout, "prepareLattice");
   using T          = MyCase::value_t;
+  using DESCRIPTOR = MyCase::descriptor_t_of<NavierStokes>;
   auto& sGeometry  = myCase.getGeometry();
   auto& sLattice   = myCase.getLattice(NavierStokes {});
   auto& parameters = myCase.getParameters();
+  sLattice.setStatisticsOff();
   {
     using namespace olb::parameters;
-    sLattice.setUnitConverter<UnitConverterFromResolutionAndLatticeVelocity<T, MyCase::descriptor_t_of<NavierStokes>>>(
-        parameters.get<RESOLUTION>(), // resolution: number of voxels per charPhysL
-        0.01,                         //lattice_char_velocity : characteristic non-dimensional(lattice) valocity
-                                      //ys         parameters
-        //ys .get<LATTICE_CHAR_VELOCITY>(),  //lattice_char_velocity : characteristic non-dimensional(lattice) valocity
+    sLattice.setUnitConverter<UnitConverterFromResolutionAndLatticeVelocity<T, DESCRIPTOR>>(
+        parameters.get<RESOLUTION>(),       // resolution: number of voxels per charPhysL
+        0.01,                               //lattice_char_velocity : characteristic non-dimensional(lattice) valocity
         parameters.get<PHYS_CHAR_LENGTH>(), // charPhysLength: reference length of simulation geometry
         1.0,        // charPhysVelocity: maximal/highest expected velocity during simulation in __m / s__
-        1. / 1000., // physViscosity: physical kinematic viscosity in __m^2 / s__
+        1.0 / 1000.0, // physViscosity: physical kinematic viscosity in __m^2 / s__
         1.0         // physDensity: physical density in __kg / m^3__
     );
   }
+  //sLattice.getUnitConverter().print();
 
   /// Material=1 -->bulk dynamics
   sLattice.defineDynamics<BGKdynamics>(sGeometry, 1);
@@ -133,8 +129,8 @@ void prepareLattice(MyCase& myCase)
   boundary::set<boundary::BounceBack>(sLattice, sGeometry, 2);
   sLattice.defineDynamics<BounceBackVelocity>(sGeometry, 3);
 #else // Local velocity boundaries
-  boundary::set<boundary::LocalVelocity>(sLattice, sGeometry, 2);
-  boundary::set<boundary::LocalVelocity>(sLattice, sGeometry, 3);
+  boundary::set<boundary::LocalVelocity<T, DESCRIPTOR, BGKdynamics<T, DESCRIPTOR>>>(sLattice, sGeometry, 2);
+  boundary::set<boundary::LocalVelocity<T, DESCRIPTOR, BGKdynamics<T, DESCRIPTOR>>>(sLattice, sGeometry, 3);
 #endif
 #else
   boundary::set<boundary::BounceBack>(sLattice, sGeometry, 2);
@@ -146,20 +142,34 @@ void prepareLattice(MyCase& myCase)
 #ifdef LID_DRIVEN_BOUNCE_BACK
   // Enable non-virtual dispatching of common collision operators (optional, improves performance)
   sLattice.forBlocksOnPlatform<Platform::GPU_CUDA>([](auto& block) {
-    block.setCollisionO(gpu::cuda::getFusedCollisionO<T, DESCRIPTOR, BulkDynamics, BounceBack<T, DESCRIPTOR>,
-                                                      BounceBackVelocity<T, DESCRIPTOR>>());
+    block.setCollisionO(gpu::cuda::getFusedCollisionO<T, DESCRIPTOR, BGKdynamics<T, DESCRIPTOR>,
+                                                      BounceBack<T, DESCRIPTOR>, BounceBackVelocity<T, DESCRIPTOR>>());
   });
+
 #else // Local velocity boundaries
   sLattice.forBlocksOnPlatform<Platform::GPU_CUDA>([](auto& block) {
     block.setCollisionO(
-        gpu::cuda::getFusedCollisionO<
-            T, DESCRIPTOR, BulkDynamics,
-            CombinedRLBdynamics<T, DESCRIPTOR, BulkDynamics, momenta::RegularizedVelocityBoundaryTuple<0, -1>>,
-            CombinedRLBdynamics<T, DESCRIPTOR, BulkDynamics, momenta::RegularizedVelocityBoundaryTuple<0, 1>>,
-            CombinedRLBdynamics<T, DESCRIPTOR, BulkDynamics, momenta::RegularizedVelocityBoundaryTuple<1, -1>>,
-            CombinedRLBdynamics<T, DESCRIPTOR, BulkDynamics, momenta::RegularizedVelocityBoundaryTuple<1, 1>>,
-            CombinedRLBdynamics<T, DESCRIPTOR, BulkDynamics, momenta::RegularizedVelocityBoundaryTuple<2, -1>>,
-            CombinedRLBdynamics<T, DESCRIPTOR, BulkDynamics, momenta::RegularizedVelocityBoundaryTuple<2, 1>>>());
+        gpu::cuda::getFusedCollisionO<T, DESCRIPTOR,
+
+                                      BGKdynamics<T, DESCRIPTOR>,
+
+                                      CombinedRLBdynamics<T, DESCRIPTOR, BGKdynamics<T, DESCRIPTOR>,
+                                                          momenta::RegularizedVelocityBoundaryTuple<0, -1>>,
+
+                                      CombinedRLBdynamics<T, DESCRIPTOR, BGKdynamics<T, DESCRIPTOR>,
+                                                          momenta::RegularizedVelocityBoundaryTuple<0, 1>>,
+
+                                      CombinedRLBdynamics<T, DESCRIPTOR, BGKdynamics<T, DESCRIPTOR>,
+                                                          momenta::RegularizedVelocityBoundaryTuple<1, -1>>,
+
+                                      CombinedRLBdynamics<T, DESCRIPTOR, BGKdynamics<T, DESCRIPTOR>,
+                                                          momenta::RegularizedVelocityBoundaryTuple<1, 1>>,
+
+                                      CombinedRLBdynamics<T, DESCRIPTOR, BGKdynamics<T, DESCRIPTOR>,
+                                                          momenta::RegularizedVelocityBoundaryTuple<2, -1>>,
+
+                                      CombinedRLBdynamics<T, DESCRIPTOR, BGKdynamics<T, DESCRIPTOR>,
+                                                          momenta::RegularizedVelocityBoundaryTuple<2, 1>>>());
   });
 #endif
 #endif // PLATFORM_GPU_CUDA
@@ -228,13 +238,13 @@ void simulate(MyCase& myCase)
   using T          = MyCase::value_t;
   auto& sLattice   = myCase.getLattice(NavierStokes {});
   auto& parameters = myCase.getParameters();
-  sLattice.setStatisticsOff();
+
   if (!parameters.get<parameters::NO_EXPORT_RESULTS>()) {
     sLattice.writeSummary();
     getResults(myCase);
   }
 
-  //this time marching to make MLUPs idling.
+  //this 10 time step marchings are to make MLUPs idling and warming up.
   for (std::size_t iT = 0; iT < 10; ++iT) {
     sLattice.collideAndStream();
   }
