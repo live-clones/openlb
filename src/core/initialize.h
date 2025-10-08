@@ -41,10 +41,23 @@ void initialize(int *argc, char ***argv, bool multiOutput=false, bool verbose=tr
   }
 #endif
 
+#ifndef FEATURE_HIDE_LOGO
   // create an OstreamManager object in order to enable multi output
-  olb::OstreamManager clout(std::cout, "initialize");
+  if (singleton::mpi().isMainProcessor()) {
+  std::cout << R"(
+    ┃
+    ┃  ┏━━━━┓      ▁▁▁▁                   ▁▁    ▁▁▁▁
+    ┃  ┃    ┃     ╱ ▁▁ ╲▁▁▁▁  ▁▁▁  ▁▁▁▁  ╱ ╱   ╱ ▁▁ ╲
+ ┏━━╋━┓┃    ┃    ╱ ╱ ╱ ╱ ▁▁ ╲╱ ▁ ╲╱ ▁▁ ╲╱ ╱   ╱ ╱▁╱ ╱
+ ┃  ┗━╋╋━━━━┻┓  ╱ ╱▁╱ ╱ ╱▁╱ ╱  ▁▁╱ ╱ ╱ ╱ ╱▁▁▁╱ ╱▁╱ ╱
+ ┃    ┃┃     ┃  ╲▁▁▁▁╱ ▁▁▁▁╱╲▁▁▁╱▁╱ ╱▁╱▁▁▁▁▁╱▁▁▁▁▁╱
+ ┗━━━━┛┃     ┃      ╱▁╱ ==========================>>
+       ┗━━━━━┛
+)" << std::endl;
+  }
+#endif
 
-  clout << "== OpenLB ==" << std::endl;
+  olb::OstreamManager clout(std::cout, "initialize");
   clout << "Version  : " << OLB_VERSION << std::endl;
   clout << "Platform :";
 #ifdef PLATFORM_CPU_SISD

@@ -277,7 +277,10 @@ template <class T, unsigned DIM>
 inline std::ostream& operator << (std::ostream& os, const ADf<T,DIM>& o)
 {
   os << o._v;
-  if constexpr (DIM>0) {
+  if constexpr (DIM == 1) {
+    os << "[" << o._d[0] << "]";
+  }
+  if constexpr (DIM>1) {
     os << o._d;
   }
   return os;

@@ -30,24 +30,43 @@
 #include <olb.h>
 
 using namespace olb;
+using namespace olb::names;
 
-using T          = FLOATING_POINT_TYPE;
-using DESCRIPTOR = descriptors::D3Q19<>;
+using MyCase = Case<
+  NavierStokes, Lattice<float, descriptors::D3Q19<>>
+>;
 
-// Parameters for the simulation setup
-const int N        = 160;      // Number of cells in the length of the aneurysm
-const T   Re       = 708.;     // Reynolds number
-const T   maxPhysT = 16.;      // max. simulation time in s, SI unit
-const T   L        = 0.05 / N; // latticeL
-const T   CFL      = 0.02;     // CFL number
+namespace olb::parameters {
+struct CFL : public descriptors::FIELD_BASE<1> {};
+} // namespace olb::parameters
 
-// Stores data from stl file in geometry in form of material numbers
-void prepareGeometry(UnitConverter<T, DESCRIPTOR> const& converter, IndicatorF3D<T>& indicator, STLreader<T>& aneurysm,
-                     SuperGeometry<T, 3>& superGeometry)
+Mesh<MyCase::value_t, MyCase::d> createMesh(MyCase::ParametersD& params)
 {
-  superGeometry.rename(0, 2, indicator);
-  superGeometry.rename(2, 1, aneurysm);
-  superGeometry.clean();
+  using T            = MyCase::value_t;
+  const T physDeltaX = 0.05 / params.get<parameters::RESOLUTION>();
+
+  STLreader<T>        aneurysm("aneurysm3d.stl", physDeltaX, 1);
+  IndicatorLayer3D<T> extendedDomain(aneurysm, 2. * physDeltaX);
+
+  Mesh<T, MyCase::d> mesh(extendedDomain, physDeltaX, singleton::mpi().getSize());
+  mesh.setOverlap(params.get<parameters::OVERLAP>());
+  return mesh;
+}
+
+void prepareGeometry(MyCase& myCase)
+{
+  using T        = MyCase::value_t;
+  auto& params   = myCase.getParameters();
+  auto& geometry = myCase.getGeometry();
+
+  const T physDeltaX = 0.05 / params.get<parameters::RESOLUTION>();
+
+  STLreader<T>        aneurysm("aneurysm3d.stl", physDeltaX, 1);
+  IndicatorLayer3D<T> domain(aneurysm, 2. * physDeltaX);
+
+  geometry.rename(0, 2, domain);
+  geometry.rename(2, 1, aneurysm);
+  geometry.clean();
 
   std::vector<Vector<T, 3>> normals(5);
   normals[0] = {-0.026646, 0.963492, -0.266408};
@@ -75,65 +94,98 @@ void prepareGeometry(UnitConverter<T, DESCRIPTOR> const& converter, IndicatorF3D
   IndicatorCircle3D<T> outletCircle(centerpoints[3], normals[3], radii[3]);
   IndicatorCircle3D<T> outletCircle2(centerpoints[4], normals[4], radii[4]);
 
-  IndicatorCylinder3D<T> inletCylinder(inletCircle, 2. * converter.getPhysDeltaX());
-  IndicatorCylinder3D<T> inletCylinder2(inletCircle2, 2. * converter.getPhysDeltaX());
-  IndicatorCylinder3D<T> inletCylinder3(inletCircle3, 2. * converter.getPhysDeltaX());
-  IndicatorCylinder3D<T> outletCylinder(outletCircle, 2. * converter.getPhysDeltaX());
-  IndicatorCylinder3D<T> outletCylinder2(outletCircle2, 2. * converter.getPhysDeltaX());
+  IndicatorCylinder3D<T> inletCylinder(inletCircle, 2. * physDeltaX);
+  IndicatorCylinder3D<T> inletCylinder2(inletCircle2, 2. * physDeltaX);
+  IndicatorCylinder3D<T> inletCylinder3(inletCircle3, 2. * physDeltaX);
+  IndicatorCylinder3D<T> outletCylinder(outletCircle, 2. * physDeltaX);
+  IndicatorCylinder3D<T> outletCylinder2(outletCircle2, 2. * physDeltaX);
 
-  superGeometry.rename(2, 4, 1, inletCylinder);
-  superGeometry.rename(2, 4, 1, inletCylinder2);
-  superGeometry.rename(2, 3, 1, inletCylinder3);
-  superGeometry.rename(2, 4, 1, outletCylinder);
-  superGeometry.rename(2, 4, 1, outletCylinder2);
+  geometry.rename(2, 4, 1, inletCylinder);
+  geometry.rename(2, 4, 1, inletCylinder2);
+  geometry.rename(2, 3, 1, inletCylinder3);
+  geometry.rename(2, 4, 1, outletCylinder);
+  geometry.rename(2, 4, 1, outletCylinder2);
 
-  superGeometry.clean();
-  superGeometry.checkForErrors();
-  superGeometry.print();
+  geometry.clean();
+  geometry.checkForErrors();
+  geometry.print();
 }
 
-// Set up the geometry of the simulation
-void prepareLattice(SuperLattice<T, DESCRIPTOR>& sLattice, UnitConverter<T, DESCRIPTOR> const& converter,
-                    SuperGeometry<T, 3>& superGeometry)
+void prepareLattice(MyCase& myCase)
 {
+  using T        = MyCase::value_t;
+  auto& params   = myCase.getParameters();
+  auto& geometry = myCase.getGeometry();
+  auto& lattice  = myCase.getLattice(NavierStokes {});
+
+  const T L   = 0.05 / params.get<parameters::RESOLUTION>();
+  const T CFL = params.get<parameters::CFL>();
+  const T Re  = params.get<parameters::REYNOLDS>();
+
+  lattice.setUnitConverter(
+      (T)L,               // physDeltaX: spacing between two lattice cells in [m]
+      (T)CFL * L / 0.2,   // physDeltaT: time step in [s]
+      (T)0.007,           // charPhysLength: reference length of simulation geometry in [m]
+      (T)0.2,             // charPhysVelocity: highest expected velocity during simulation in [m/s]
+      (T)0.2 * 0.05 / Re, // physViscosity: physical kinematic viscosity in [m^2/s] 3.7e-6
+      (T)1080.0           // physDensity: physical density in [kg/m^3]
+  );
+
+  lattice.getUnitConverter().write();
+
   OstreamManager clout(std::cout, "prepareLattice");
   clout << "Prepare Lattice ..." << std::endl;
 
   // Material=1 -->bulk dynamics
-  sLattice.defineDynamics<BGKdynamics>(superGeometry, 1);
+  lattice.defineDynamics<BGKdynamics>(geometry, 1);
 
   // Material=2 -->bounce back
-  boundary::set<boundary::BounceBack>(sLattice, superGeometry, 2);
+  boundary::set<boundary::BounceBack>(lattice, geometry, 2);
 
   // Material=3 -->fixed velocity
-  boundary::set<boundary::InterpolatedVelocity>(sLattice, superGeometry, 3);
+  boundary::set<boundary::InterpolatedVelocity>(lattice, geometry, 3);
 
   // Material=4 -->fixed pressure
-  boundary::set<boundary::InterpolatedPressure>(sLattice, superGeometry, 4);
+  boundary::set<boundary::InterpolatedPressure>(lattice, geometry, 4);
 
   // Material=5 -->bounce back
-  boundary::set<boundary::BounceBack>(sLattice, superGeometry, 5);
+  boundary::set<boundary::BounceBack>(lattice, geometry, 5);
+}
+
+void setInitialValues(MyCase& myCase)
+{
+  using T        = MyCase::value_t;
+  auto& geometry = myCase.getGeometry();
+  auto& lattice  = myCase.getLattice(NavierStokes {});
+
+  OstreamManager clout(std::cout, "prepareLattice");
 
   // Initial conditions
   AnalyticalConst3D<T, T> rhoF(1);
   AnalyticalConst3D<T, T> uF(T(0), T(0), T(0));
 
   // Initialize all values of distribution functions to their local equilibrium
-  sLattice.defineRhoU(superGeometry, 1, rhoF, uF);
-  sLattice.iniEquilibrium(superGeometry, 1, rhoF, uF);
+  lattice.defineRhoU(geometry, 1, rhoF, uF);
+  lattice.iniEquilibrium(geometry, 1, rhoF, uF);
 
-  sLattice.setParameter<descriptors::OMEGA>(converter.getLatticeRelaxationFrequency());
+  lattice.setParameter<descriptors::OMEGA>(lattice.getUnitConverter().getLatticeRelaxationFrequency());
 
   // Make the lattice ready for simulation
-  sLattice.initialize();
+  lattice.initialize();
 
   clout << "Prepare Lattice ... OK" << std::endl;
 }
 
-// Generates a slowly increasing inflow for the first iTMaxStart timesteps
-void setBoundaryValues(SuperLattice<T, DESCRIPTOR>& sLattice, UnitConverter<T, DESCRIPTOR> const& converter, int iT,
-                       SuperGeometry<T, 3>& superGeometry)
+void setTemporalValues(MyCase& myCase, int iT)
 {
+  using T         = MyCase::value_t;
+  auto& params    = myCase.getParameters();
+  auto& geometry  = myCase.getGeometry();
+  auto& lattice   = myCase.getLattice(NavierStokes {});
+  auto& converter = lattice.getUnitConverter();
+
+  const T maxPhysT = params.get<parameters::MAX_PHYS_T>();
+
   OstreamManager clout(std::cout, "setBoundaryValues");
 
   // No of time steps for smooth start-up
@@ -150,20 +202,22 @@ void setBoundaryValues(SuperLattice<T, DESCRIPTOR>& sLattice, UnitConverter<T, D
     std::vector<T> maxVelocity(3, 0);
     maxVelocity[0]                      = 2.25 * frac[0] * converter.getCharLatticeVelocity();
     T                     distance2Wall = converter.getPhysDeltaX() / 2.;
-    CirclePoiseuille3D<T> poiseuilleU(superGeometry, 3, maxVelocity[0], distance2Wall);
-    sLattice.defineU(superGeometry, 3, poiseuilleU);
+    CirclePoiseuille3D<T> poiseuilleU(geometry, 3, maxVelocity[0], distance2Wall);
+    lattice.defineU(geometry, 3, poiseuilleU);
 
     // Update velocity on GPU
-    sLattice.setProcessingContext<Array<momenta::FixedVelocityMomentumGeneric::VELOCITY>>(
-        ProcessingContext::Simulation);
+    lattice.setProcessingContext<Array<momenta::FixedVelocityMomentumGeneric::VELOCITY>>(ProcessingContext::Simulation);
   }
 }
 
-// Computes the pressure drop between the voxels before and after the cylinder
-void getResults(SuperLattice<T, DESCRIPTOR>& sLattice, UnitConverter<T, DESCRIPTOR> const& converter, int iT,
-                SuperGeometry<T, 3>& superGeometry, util::Timer<T>& timer, STLreader<T>& stlReader,
-                VTUsurfaceWriter<T>& vtuWriter)
+void getResults(MyCase& myCase, util::Timer<MyCase::value_t>& timer, std::size_t iT,
+                STLreader<MyCase::value_t>& stlReader, VTUsurfaceWriter<MyCase::value_t>& vtuWriter)
 {
+  using T          = MyCase::value_t;
+  using DESCRIPTOR = MyCase::descriptor_t_of<NavierStokes>;
+  auto& params     = myCase.getParameters();
+  auto& lattice    = myCase.getLattice(NavierStokes {});
+  auto& converter  = lattice.getUnitConverter();
 
   OstreamManager clout(std::cout, "getResults");
 
@@ -172,12 +226,12 @@ void getResults(SuperLattice<T, DESCRIPTOR>& sLattice, UnitConverter<T, DESCRIPT
 
   SuperVTMwriter3D<T> vtmWriter("aneurysm");
 
-  SuperLatticePhysVelocity3D<T, DESCRIPTOR> velocity(sLattice, converter);
-  SuperLatticePhysPressure3D<T, DESCRIPTOR> pressure(sLattice, converter);
-  SuperLatticeDensity3D                     densityF(sLattice);
+  SuperLatticePhysVelocity3D<T, DESCRIPTOR> velocity(lattice, converter);
+  SuperLatticePhysPressure3D<T, DESCRIPTOR> pressure(lattice, converter);
+  SuperLatticeDensity3D                     densityF(lattice);
   AnalyticalFfromSuperF3D                   smoothDensityF(densityF);
 
-  SuperLatticeStress3D    stressF(sLattice);
+  SuperLatticeStress3D    stressF(lattice);
   AnalyticalFfromSuperF3D smoothStressF(stressF);
 
   PhysWallShearStressOnSurface3D<T, DESCRIPTOR> interpolatedWssF(converter, smoothDensityF, smoothStressF, stlReader);
@@ -196,93 +250,95 @@ void getResults(SuperLattice<T, DESCRIPTOR>& sLattice, UnitConverter<T, DESCRIPT
   // Writes the vtu files
   if (iT % vtkIter == 0) {
     // Send values from GPU to CPU for evaluation
-    sLattice.setProcessingContext(ProcessingContext::Evaluation);
+    lattice.setProcessingContext(ProcessingContext::Evaluation);
     vtuWriter.write(iT);
   }
 
   // Writes the vtk files
-  if ( iT%vtkIter==0 ) {
-    sLattice.setProcessingContext(ProcessingContext::Evaluation);
-    sLattice.scheduleBackgroundOutputVTK([&,iT](auto task) {
-      SuperVTMwriter3D<T> vtmWriter("aorta3d");
-      SuperLatticePhysVelocity3D velocity(sLattice, sLattice.getUnitConverter());
-      SuperLatticePhysPressure3D pressure(sLattice, sLattice.getUnitConverter());
+  if (iT % vtkIter == 0) {
+    lattice.setProcessingContext(ProcessingContext::Evaluation);
+    lattice.scheduleBackgroundOutputVTK([&, iT](auto task) {
+      SuperVTMwriter3D<T>        vtmWriter("aneurysm");
+      SuperLatticePhysVelocity3D velocity(lattice, converter);
+      SuperLatticePhysPressure3D pressure(lattice, converter);
       vtmWriter.addFunctor(velocity);
       vtmWriter.addFunctor(pressure);
       task(vtmWriter, iT);
-  });
-}
+    });
+  }
 
   // Writes output on the console
   if (iT % statIter == 0) {
-    sLattice.setProcessingContext(ProcessingContext::Evaluation);
+    lattice.setProcessingContext(ProcessingContext::Evaluation);
 
     // Timer console output
     timer.update(iT);
     timer.printStep();
-    sLattice.getStatistics().print(iT, converter.getPhysTime(iT));
+    lattice.getStatistics().print(iT, converter.getPhysTime(iT));
   }
 }
 
-int main(int argc, char* argv[])
+void simulate(MyCase& myCase)
 {
-  // === 1st Step: Initialization ===
-  initialize(&argc, &argv);
-  OstreamManager clout(std::cout, "main");
+  using T         = MyCase::value_t;
+  auto& params    = myCase.getParameters();
+  auto& geometry  = myCase.getGeometry();
+  auto& lattice   = myCase.getLattice(NavierStokes {});
+  auto& converter = lattice.getUnitConverter();
 
-  UnitConverter<T, DESCRIPTOR> converter(
-      (T)L,               // physDeltaX: spacing between two lattice cells in [m]
-      (T)CFL * L / 0.2,   // physDeltaT: time step in [s]
-      (T)0.007,           // charPhysLength: reference length of simulation geometry in [m]
-      (T)0.2,             // charPhysVelocity: highest expected velocity during simulation in [m/s]
-      (T)0.2 * 0.05 / Re, // physViscosity: physical kinematic viscosity in [m^2/s] 3.7e-6
-      (T)1080.0           // physDensity: physical density in [kg/m^3]
-  );
-  converter.print();
+  const T maxPhysT = params.get<parameters::MAX_PHYS_T>();
 
-  // === 2nd Step: Prepare Geometry ===
-  // Instantiation of the STLreader class
-  // file name, voxel size in meter, stl unit in meter, outer voxel no., inner voxel no.
-  // Reading the pipe STL
-  STLreader<T> aneurysm("aneurysm3d.stl", converter.getPhysDeltaX(), 1);
-  // Extending the geometry with 1 cell for outer boundaries
-  IndicatorLayer3D<T> extendedDomain(aneurysm, 2. * converter.getPhysDeltaX());
+  OstreamManager clout(std::cout, "getResults");
 
-  // Instantiation of a cuboidDecomposition with weights
-  CuboidDecomposition3D<T> cuboidDecomposition(extendedDomain, converter.getPhysDeltaX(), singleton::mpi().getSize());
-
-  // Instantiation of a loadBalancer
-  HeuristicLoadBalancer<T> loadBalancer(cuboidDecomposition);
-
-  // Instantiation of a superGeometry
-  SuperGeometry<T, 3> superGeometry(cuboidDecomposition, loadBalancer);
-
-  prepareGeometry(converter, extendedDomain, aneurysm, superGeometry);
-
-  // === 3rd Step: Prepare Lattice ===
-  SuperLattice<T, DESCRIPTOR> sLattice(converter, superGeometry);
-
-  //prepareLattice and set boundaryCondition
-  prepareLattice(sLattice, converter, superGeometry);
-
-  VTUsurfaceWriter<T> vtuWriter("Mesh", sLattice.getCuboidDecomposition(), sLattice.getLoadBalancer());
-  vtuWriter.addSTL(aneurysm);
-  // === 4th Step: Main Loop with Timer ===
   clout << "starting simulation..." << std::endl;
-  util::Timer<T> timer(converter.getLatticeTime(maxPhysT), superGeometry.getStatistics().getNvoxel());
+
+  STLreader<T> aneurysm("aneurysm3d.stl", converter.getPhysDeltaX(), 1);
+
+  VTUsurfaceWriter<T> vtuWriter("Mesh", lattice.getCuboidDecomposition(), lattice.getLoadBalancer());
+  vtuWriter.addSTL(aneurysm);
+
+  util::Timer<T> timer(converter.getLatticeTime(maxPhysT), geometry.getStatistics().getNvoxel());
   timer.start();
 
   for (std::size_t iT = 0; iT < converter.getLatticeTime(maxPhysT); ++iT) {
-    // === 5th Step: Definition of Initial and Boundary Conditions ===
-    setBoundaryValues(sLattice, converter, iT, superGeometry);
+    setTemporalValues(myCase, iT);
 
-    // === 6th Step: Collide and Stream Execution ===
-    sLattice.collideAndStream();
+    lattice.collideAndStream();
 
-    // === 7th Step: Computation and Output of the Results ===
-    getResults(sLattice, converter, iT, superGeometry, timer, aneurysm, vtuWriter);
+    getResults(myCase, timer, iT, aneurysm, vtuWriter);
   }
 
   timer.stop();
   timer.printSummary();
+}
+
+int main(int argc, char* argv[])
+{
+  initialize(&argc, &argv);
+
+  MyCase::ParametersD myCaseParameters;
+  {
+    using namespace olb::parameters;
+    using T = MyCase::value_t;
+
+    myCaseParameters.set<RESOLUTION>(120);
+    myCaseParameters.set<REYNOLDS>((T)708.);
+    myCaseParameters.set<MAX_PHYS_T>((T)16.);
+    myCaseParameters.set<CFL>((T)0.02);
+  }
+  myCaseParameters.fromCLI(argc, argv);
+
+  Mesh mesh = createMesh(myCaseParameters);
+
+  MyCase myCase(myCaseParameters, mesh);
+
+  prepareGeometry(myCase);
+
+  prepareLattice(myCase);
+
+  setInitialValues(myCase);
+
+  simulate(myCase);
+
+  return 0;
 }

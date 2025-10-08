@@ -34,13 +34,6 @@ using MyCase = Case<
   Temperature,  Lattice<double, descriptors::D2Q5<descriptors::VELOCITY>>
 >;
 
-namespace olb::parameters {
-
-struct T_HOT  : public descriptors::FIELD_BASE<1> { };
-struct T_COLD : public descriptors::FIELD_BASE<1> { };
-
-}
-
 Mesh<MyCase::value_t,MyCase::d> createMesh(MyCase::ParametersD& params) {
   using T = MyCase::value_t;
   Vector extent = params.get<parameters::DOMAIN_EXTENT>();

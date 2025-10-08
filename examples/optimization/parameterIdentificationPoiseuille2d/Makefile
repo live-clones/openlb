@@ -1,3 +1,3 @@
-EXAMPLE = microMixerOpti3d
+EXAMPLE = parameterIdentificationPoiseuille2d
 OLB_ROOT := ../../..
 include $(OLB_ROOT)/default.mk
