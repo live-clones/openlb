@@ -61,11 +61,6 @@ Mesh<MyCase::value_t,MyCase::d> createMesh(MyCase::ParametersD& params) {
   return mesh;
 }
 
-// Time and plot parameters
-const int maxIter  = 1000; // amount of time steps to complete simulation
-const int vtkIter  = 10;   // amount of time steps to save vtk files
-const int statIter = 10;   // amount of time steps to display simulation parameters
-
 /**
  * Correction for initial population
  * Take into account the force effect in initial population
@@ -271,13 +266,13 @@ void getResults( MyCase& myCase,
   using DESCRIPTOR = MyCase::descriptor_t;
 
   auto& sLattice = myCase.getLattice(NavierStokes{});
+  auto& params = myCase.getParameters();
   const auto& converter = sLattice.getUnitConverter();
 
   SuperVTMwriter2D<T> vtkWriter( "dropletSplashing2d" );
 
-  // TODO such times should also be parameters
-  const int statIter = 10;
-  const int saveIter = 10;
+  const int statIter = params.get<parameters::LATTICE_STAT_ITER_T>();
+  const int saveIter = params.get<parameters::LATTICE_VTK_ITER_T>();
 
   if ( iT==0 ) {
     SuperLatticeCuboid2D cuboid( sLattice );
@@ -356,7 +351,8 @@ void getResults( MyCase& myCase,
 
 void simulate(MyCase& myCase) {
   using T = MyCase::value_t;
-  const std::size_t iTmax = 1000;
+  auto& params = myCase.getParameters();
+  const std::size_t iTmax = params.get<parameters::MAX_LATTICE_T>();
   auto& sLattice = myCase.getLattice(NavierStokes{});
 
   util::Timer<T> timer(iTmax, myCase.getGeometry().getStatistics().getNvoxel());
@@ -401,6 +397,9 @@ int main( int argc, char *argv[] )
     myCaseParameters.set<SURFACE_TENSION>(7.58e-3);// surface tension for water-air [N.m-1]
   // Lattice parameters
     myCaseParameters.set<parameters::INTERFACE_WIDTH>(1.);// interface thickness in grid nodes; physThickness = delta_x * thickness
+    myCaseParameters.set<MAX_LATTICE_T      >(1000);   // max iterations [lattice units]
+    myCaseParameters.set<LATTICE_STAT_ITER_T>(10);     // statistics iterations [lattice units]
+    myCaseParameters.set<LATTICE_VTK_ITER_T >(10);     // vtk iterations density [lattice units]
   }
   myCaseParameters.fromCLI(argc, argv);
 
