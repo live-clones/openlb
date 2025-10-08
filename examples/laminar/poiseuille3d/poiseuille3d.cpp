@@ -647,6 +647,9 @@ int main( int argc, char* argv[] )
     myCaseParameters.set<TUNER                  >(           0.); // for partialSlip only: 0->bounceBack, 1->freeSlip
     myCaseParameters.set<FLOW_TYPE              >(    NON_FORCED);
     myCaseParameters.set<BOUNDARY               >(  INTERPOLATED);
+    myCaseParameters.set<OVERLAP                >([&] {
+      return (myCaseParameters.get<FLOW_TYPE>()==FORCED)? 2: 3;
+    });
     myCaseParameters.set<INTERVAL_CONVERGENCE_CHECK>([&] {        // interval for the convergence check in s
       return myCaseParameters.get<MAX_PHYS_T>()*0.0125;
     });
