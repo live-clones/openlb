@@ -343,14 +343,7 @@ int main(int argc, char* argv[]) {
   initialize(&argc, &argv);
   singleton::directories().setOutputDir("./tmp/");
 
-  if constexpr(true) {
-    const S diffusivity = 0.07407;
-    simulateFlow<S>(diffusivity);
-  }
+  const S diffusivity = 0.07407;
+  simulateFlow<S>(diffusivity);
 
-  if constexpr(false) {
-    U diffusivity = 0.07407;
-    diffusivity.setDiffVariable(0);
-    simulateFlow<U>(diffusivity);
-  }
 }
