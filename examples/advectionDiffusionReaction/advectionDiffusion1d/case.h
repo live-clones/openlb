@@ -38,7 +38,7 @@ using MyCase = Case<
 namespace olb::parameters {
 
   struct RUNS : public descriptors::FIELD_BASE<1> {};
-  struct OUTPUT_TIMESTEP : public descriptors::FIELD_BASE<1> {};
+  struct OUTPUT_INTERVAL : public descriptors::FIELD_BASE<1> {};
   struct PULSE_DIFF_BOUND : public descriptors::FIELD_BASE<1> {};
 
 }
@@ -293,8 +293,8 @@ void simulate(MyCase& myCase)
   auto& parameters = myCase.getParameters();
   const auto& converter = lattice.getUnitConverter();
 
-  const T statIter = parameters.get<parameters::OUTPUT_TIMESTEP>();
-  const T N = parameters.get<parameters::RESOLUTION>();
+  const T statIter = parameters.get<parameters::OUTPUT_INTERVAL>();
+  const std::size_t N = std::size_t(parameters.get<parameters::RESOLUTION>());
 
   OstreamManager clout(std::cout,"simulate");
   clout << "Executing the simulation with N=" << std::to_string(N) << std::endl;
