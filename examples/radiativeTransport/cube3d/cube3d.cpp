@@ -186,6 +186,53 @@ void prepareLatticeMcHardy(MyCase& myCase){
     clout << "Prepare Lattice for McHardy ..." << std::endl;
     clout << "working with direct discretization" << std::endl;
 
+    using T = MyCase::value_t;
+    auto& geometry = myCase.getGeometry();
+    auto& params   = myCase.getParameters();
+
+    auto& Rlattice = myCase.getLattice(Radiation {});
+    using RDESCRIPTOR = MyCase::descriptor_t_of<Radiation>;
+
+    attachUnitConverter(myCase);
+    const auto& converter = Rlattice.getUnitConverter();
+    converter.print();
+    converter.write();
+
+    T latticeRelaxationFrequency = converter.getLatticeRelaxationFrequency();
+    T anisotropyFactor = params.get<parameters::ANINOSOTROPY_FACTOR>();
+
+    int const q = descriptors::q<RDESCRIPTOR>() - 1;
+    std::array<std::array<T,q>, q> phi;
+    T solution [q*(q +1)/2];
+    computeAnisotropyMatrix<RDESCRIPTOR>(1e-4, anisotropyFactor, solution, phi);
+
+    T anisoMatrix[(q+1)*(q+1)] {};
+    for ( int m = 0; m < q; m++ ) {
+        for ( int n = 0; n < q; n++ ) {
+        anisoMatrix[m+1+n+1] = phi[m][n];
+        }
+    }
+
+    T latticeAbsorption = converter.getLatticeAbsorption();
+    T latticeScattering = converter.getLatticeScattering();
+    T inletDirichlet = params.get<parameters::INLET_DIRICHLET>();
+
+    Rlattice.defineDynamics<NoDynamics<T, RDESCRIPTOR>>( geometry, 0 );
+    // select between the mesoscopic method with or without a Runge Kutta scheme
+    Rlattice.defineDynamics<RTLBMdynamicsMcHardyRK<T, RDESCRIPTOR>>( geometry, 1 );
+    // Rlattice.defineDynamics<RTLBMdynamicsMcHardy<T, RDESCRIPTOR>>( geometry, 1 );
+    Rlattice.defineDynamics<EquilibriumBoundaryFirstOrder>( geometry, 2 );
+    Rlattice.defineDynamics<EquilibriumBoundaryFirstOrder>( geometry, 3 );
+
+
+    Rlattice.setParameter<descriptors::OMEGA>( latticeRelaxationFrequency );
+    Rlattice.setParameter<Light::ANISOMATRIX>( anisoMatrix );
+    Rlattice.setParameter<Light::ABSORPTION>( latticeAbsorption );
+    Rlattice.setParameter<Light::SCATTERING>( latticeScattering );
+    Rlattice.setParameter<parameters::INTENSITY>( inletDirichlet );
+
+    clout << "Prepare Lattice ... OK" << std::endl;
+    return;
 }
 
 int main( int argc, char *argv[] ){
