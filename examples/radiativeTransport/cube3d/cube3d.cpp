@@ -55,6 +55,7 @@ namespace olb::parameters {
     struct CASE_NUMBER : public descriptors::TYPED_FIELD_BASE<int, 1> { };
     struct DYNAMICS_NAME : public descriptors::TYPED_FIELD_BASE<std::string, 1> { };
     struct USE_MINK : public descriptors::TYPED_FIELD_BASE<bool, 1> { };
+    struct USE_DIRECTED : public descriptors::FIELD_BASE<1> { };
 
     struct INLET_DIRICHLET : public descriptors::FIELD_BASE<1> { };
 
@@ -254,6 +255,7 @@ int main( int argc, char *argv[] ){
         myCaseParameters.set<CASE_NUMBER>(1.);
         myCaseParameters.set<DYNAMICS_NAME>(std::string("mink"));
         myCaseParameters.set<USE_MINK>(true);
+        myCaseParameters.set<USE_DIRECTED>(false);
 
         myCaseParameters.set<BOUNDARY_SHIFT>(0.);
 
