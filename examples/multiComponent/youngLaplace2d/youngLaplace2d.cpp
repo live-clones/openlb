@@ -45,13 +45,10 @@ using namespace olb::graphics;
 // === Step 1: Declarations ===
 using MyCase = Case<
   NavierStokes, Lattice<double, D2Q9<CHEM_POTENTIAL,FORCE>>,
-  Component1,   Lattice<double, D2Q9<CHEM_POTENTIAL,FORCE>>,
+  Component1,   Lattice<double, D2Q9<CHEM_POTENTIAL,FORCE>>
 >;
 
 // Parameters for the simulation setup
-const int N  = 100;
-const T nx   = 100.;
-
 namespace olb::parameters {
 
 struct RADIUS : public descriptors::FIELD_BASE<1> { };
@@ -61,25 +58,19 @@ struct KAPPA2 : public descriptors::FIELD_BASE<1> { };
 struct GAMMA  : public descriptors::FIELD_BASE<1> { };
 }
 
-const T radius = 0.25 * nx;
-const T alpha = 1.5;     // Interfacial width         [lattice units]
-const T kappa1 = 0.0075; // For surface tensions      [lattice units]
-const T kappa2 = 0.005;  // For surface tensions      [lattice units]
-const T gama = 1.;       // For mobility of interface [lattice units]
-
-const int maxIter  = 60000;
-const int vtkIter  = 200;
-const int statIter = 1000;
 
 
 Mesh<MyCase::value_t,MyCase::d> createMesh(MyCase::ParametersD& params) {
   using T = MyCase::value_t;
-  //DELTA X!!
+
+  Vector extent = params.get<parameters::DOMAIN_EXTENT>();
+  const T nx = extent[0];
+  const T physDeltaX = nx / params.get<parameters::RESOLUTION>();
+
   std::vector<T> extend = { nx, nx, nx };
   std::vector<T> origin = { 0, 0, 0 };
   IndicatorCuboid2D<T> cuboid(extend,origin);
 
-  //const T physDeltaX = extent[1] / params.get<parameters::RESOLUTION>();
   Mesh<T,MyCase::d> mesh(cuboid, physDeltaX, singleton::mpi().getSize());
   mesh.setOverlap(params.get<parameters::OVERLAP>());
 
@@ -93,7 +84,6 @@ void prepareGeometry( MyCase& myCase )
   OstreamManager clout( std::cout,"prepareGeometry" );
   clout << "Prepare Geometry ..." << std::endl;
 
-  using T = MyCase::value_t;
   auto& geometry = myCase.getGeometry();
 
   geometry.rename( 0,1 );
@@ -111,13 +101,21 @@ void prepareLattice( MyCase& myCase )
   clout << "Prepare Lattice ..." << std::endl;
 
   using T = MyCase::value_t;
+  using DESCRIPTOR = MyCase::descriptor_t;
+
   auto& geometry = myCase.getGeometry();
   auto& params = myCase.getParameters();
 
   auto& sLattice1 = myCase.getLattice(NavierStokes{});
   auto& sLattice2 = myCase.getLattice(Component1{});
 
-  using DESCRIPTOR = MyCase::descriptor_t;
+  const int N = params.get<parameters::RESOLUTION>();
+  Vector extent = params.get<parameters::DOMAIN_EXTENT>();
+  const T nx = extent[0];
+  const T gama = params.get<parameters::GAMMA>();
+  const T alpha = params.get<parameters::ALPHA>();
+  const T kappa1 = params.get<parameters::KAPPA1>();
+  const T kappa2 = params.get<parameters::KAPPA2>();
 
   sLattice1.setUnitConverter<UnitConverterFromResolutionAndRelaxationTime<T,DESCRIPTOR>>(
     int   {N}, // resolution
@@ -133,12 +131,49 @@ void prepareLattice( MyCase& myCase )
 
   sLattice2.setUnitConverter(converter);
 
-  sLattice1.defineDynamics<ForcedBGKdynamics>(superGeometry, 1);
-  sLattice2.defineDynamics<FreeEnergyBGKdynamics>( superGeometry, 1);
+  sLattice1.defineDynamics<ForcedBGKdynamics>(geometry, 1);
+  sLattice2.defineDynamics<FreeEnergyBGKdynamics>( geometry, 1);
 
   sLattice1.setParameter<descriptors::OMEGA>( sLattice1.getUnitConverter().getLatticeRelaxationFrequency() );
   sLattice2.setParameter<descriptors::OMEGA>( sLattice2.getUnitConverter().getLatticeRelaxationFrequency() );
   sLattice2.setParameter<collision::FreeEnergy::GAMMA>(gama);
+
+  auto& coupling1 = myCase.setCouplingOperator(
+  "Chemical_potential",
+  ChemicalPotentialCoupling2D{},
+  names::A{}, sLattice1,
+  names::B{}, sLattice2);
+
+  coupling1.template setParameter<ChemicalPotentialCoupling2D::ALPHA>(alpha);
+  coupling1.template setParameter<ChemicalPotentialCoupling2D::KAPPA1>(kappa1);
+  coupling1.template setParameter<ChemicalPotentialCoupling2D::KAPPA2>(kappa2);
+
+  myCase.setCouplingOperator(
+  "Force",
+  ForceCoupling2D{},
+  names::A{}, sLattice2,
+  names::B{}, sLattice1);
+
+  {
+    auto& communicator = sLattice1.getCommunicator(stage::PostCoupling());
+    communicator.requestField<CHEM_POTENTIAL>();
+    communicator.requestOverlap(sLattice1.getOverlap());
+    communicator.exchangeRequests();
+  }
+  {
+    auto& communicator = sLattice2.getCommunicator(stage::PreCoupling());
+    communicator.requestField<CHEM_POTENTIAL>();
+    communicator.requestField<RhoStatistics>();
+    communicator.requestOverlap(sLattice2.getOverlap());
+    communicator.exchangeRequests();
+  }
+
+  sLattice1.addPostProcessor<stage::PreCoupling>(meta::id<RhoStatistics>());
+  sLattice2.addPostProcessor<stage::PreCoupling>(meta::id<RhoStatistics>());
+
+  sLattice1.initialize();
+  sLattice2.initialize();
+
 
   clout << "Prepare Lattice ... OK" << std::endl;
 }
@@ -148,17 +183,16 @@ void setInitialValues( MyCase& myCase )
   OstreamManager clout( std::cout,"initialValues" );
 
   using T = MyCase::value_t;
+
   auto& geometry = myCase.getGeometry();
   auto& params = myCase.getParameters();
-
   auto& sLattice1 = myCase.getLattice(NavierStokes{});
   auto& sLattice2 = myCase.getLattice(Component1{});
 
-  using DESCRIPTOR = MyCase::descriptor_t;
-
+  const Vector extent = params.get<parameters::DOMAIN_EXTENT>();
+  const T nx = extent[0];
   const T radius = params.get<parameters::RADIUS>();
   const T alpha = params.get<parameters::ALPHA>();
-  const T gama = params.get<parameters::GAMMA>();
 
   // bulk initial conditions
   // define circular domain for fluid 2
@@ -172,8 +206,8 @@ void setInitialValues( MyCase& myCase )
   AnalyticalIdentity2D<T,T> rho( one );
   AnalyticalIdentity2D<T,T> phi( one - circle - circle );
 
-  sLattice1.iniEquilibrium( superGeometry, 1, rho, zeroVelocity );
-  sLattice2.iniEquilibrium( superGeometry, 1, phi, zeroVelocity );
+  sLattice1.iniEquilibrium( geometry, 1, rho, zeroVelocity );
+  sLattice2.iniEquilibrium( geometry, 1, phi, zeroVelocity );
 
 
   sLattice1.initialize();
@@ -193,15 +227,36 @@ void setInitialValues( MyCase& myCase )
   }
 }
 
+void setTemporalValues(MyCase& myCase,
+                       std::size_t iT)
+{ }
 
-
-void getResults( SuperLattice<T, DESCRIPTOR>& sLattice2,
-                 SuperLattice<T, DESCRIPTOR>& sLattice1, int iT,
-                 SuperGeometry<T,2>& superGeometry, util::Timer<T>& timer )
+void getResults(MyCase& myCase,
+                util::Timer<MyCase::value_t>& timer,
+                std::size_t iT)
 {
-
   OstreamManager clout( std::cout,"getResults" );
+
+  using T = MyCase::value_t;
+  using DESCRIPTOR = MyCase::descriptor_t;
+
+  auto& sLattice1 = myCase.getLattice(NavierStokes{});
+  auto& sLattice2 = myCase.getLattice(Component1{});
+  auto& params = myCase.getParameters();
+
+
+  const int N = params.get<parameters::RESOLUTION>();
+  Vector extent = params.get<parameters::DOMAIN_EXTENT>();
+  const T nx = extent[0];
+  const T radius = params.get<parameters::RADIUS>();
+  const T alpha = params.get<parameters::ALPHA>();
+  const T kappa1 = params.get<parameters::KAPPA1>();
+  const T kappa2 = params.get<parameters::KAPPA2>();
+
   SuperVTMwriter2D<T> vtmWriter( "youngLaplace2d" );
+
+  const int vtkIter  = 200;
+  const int statIter = 1000;
 
   if ( iT==0 ) {
     // Writes the geometry, cuboid no. and rank no. as vti file for visualization
@@ -257,9 +312,6 @@ void getResults( SuperLattice<T, DESCRIPTOR>& sLattice2,
       SuperLatticeFfromAnalyticalF2D<T, DESCRIPTOR> cs2(cs2_, sLattice1);
 
       // Calculation of bulk pressure:
-      // c_1 = density of fluid 1; c_2 = density of fluid 2
-      // p_bulk = rho*c_s^2 + kappa1 * (3/2*c_1^4 - 2*c_1^3 + 0.5*c_1^2)
-      //                    + kappa2 * (3/2*c_2^4 - 2*c_2^3 + 0.5*c_2^2)
       SuperIdentity2D<T,T> bulkPressure ( density1*cs2
                                           + k1*( onefive*c1*c1*c1*c1 - two*c1*c1*c1 + half*c1*c1 )
                                           + k2*( onefive*c2*c2*c2*c2 - two*c2*c2*c2 + half*c2*c2 ) );
@@ -281,102 +333,28 @@ void getResults( SuperLattice<T, DESCRIPTOR>& sLattice2,
   }
 }
 
+void simulate(MyCase& myCase) {
+  OstreamManager clout( std::cout,"simulate" );
 
-int main( int argc, char *argv[] )
-{
+  using T = MyCase::value_t;
 
-  // === 1st Step: Initialization ===
+  auto& geometry = myCase.getGeometry();
+  auto& sLattice1 = myCase.getLattice(NavierStokes{});
+  auto& sLattice2 = myCase.getLattice(Component1{});
+  auto& coupling1 = myCase.getOperator("Chemical_potential");
+  auto& coupling2 = myCase.getOperator("Force");
 
-  initialize( &argc, &argv );
-  singleton::directories().setOutputDir( "./tmp/" );
-  OstreamManager clout( std::cout,"main" );
+  const int maxIter  = 60000;
 
-  UnitConverterFromResolutionAndRelaxationTime<T,DESCRIPTOR> converter(
-    (T)   N, // resolution
-    (T)   1., // lattice relaxation time (tau)
-    (T)   nx, // charPhysLength: reference length of simulation geometry
-    (T)   1.e-6, // charPhysVelocity: maximal/highest expected velocity during simulation in __m / s__
-    (T)   0.1, // physViscosity: physical kinematic viscosity in __m^2 / s__
-    (T)   1. // physDensity: physical density in __kg / m^3__
-  );
-
-  // Prints the converter log as console output
-  converter.print();
-
-  // === 2nd Step: Prepare Geometry ===
-  std::vector<T> extend = { nx, nx, nx };
-  std::vector<T> origin = { 0, 0, 0 };
-  IndicatorCuboid2D<T> cuboid(extend,origin);
-#ifdef PARALLEL_MODE_MPI
-  CuboidDecomposition2D<T> cuboidDecomposition( cuboid, converter.getPhysDeltaX(), singleton::mpi().getSize() );
-#else
-  CuboidDecomposition2D<T> cuboidDecomposition( cuboid, converter.getPhysDeltaX() );
-#endif
-
-  // set periodic boundaries to the domain
-  cuboidDecomposition.setPeriodicity({ true, true });
-
-  // Instantiation of loadbalancer
-  HeuristicLoadBalancer<T> loadBalancer( cuboidDecomposition );
-  loadBalancer.print();
-
-  // Instantiation of superGeometry
-  SuperGeometry<T,2> superGeometry( cuboidDecomposition,loadBalancer,2 );
-
-  prepareGeometry( superGeometry );
-
-  // === 3rd Step: Prepare Lattice ===
-  SuperLattice<T, DESCRIPTOR> sLattice1( converter, superGeometry );
-  SuperLattice<T, DESCRIPTOR> sLattice2( converter, superGeometry );
-
-  prepareLattice( sLattice1, sLattice2, superGeometry );
-
-  // === 4th Step: Prepare Coupling ===
-  SuperLatticeCoupling coupling1(
-  ChemicalPotentialCoupling2D{},
-  names::A{}, sLattice1,
-  names::B{}, sLattice2);
-
-  coupling1.template setParameter<ChemicalPotentialCoupling2D::ALPHA>(alpha);
-  coupling1.template setParameter<ChemicalPotentialCoupling2D::KAPPA1>(kappa1);
-  coupling1.template setParameter<ChemicalPotentialCoupling2D::KAPPA2>(kappa2);
-
-  SuperLatticeCoupling coupling2(
-  ForceCoupling2D{},
-  names::A{}, sLattice2,
-  names::B{}, sLattice1);
-
-  {
-    auto& communicator = sLattice1.getCommunicator(stage::PostCoupling());
-    communicator.requestField<CHEM_POTENTIAL>();
-    communicator.requestOverlap(sLattice1.getOverlap());
-    communicator.exchangeRequests();
-  }
-  {
-    auto& communicator = sLattice2.getCommunicator(stage::PreCoupling());
-    communicator.requestField<CHEM_POTENTIAL>();
-    communicator.requestField<RhoStatistics>();
-    communicator.requestOverlap(sLattice2.getOverlap());
-    communicator.exchangeRequests();
-  }
-
-  sLattice1.addPostProcessor<stage::PreCoupling>(meta::id<RhoStatistics>());
-  sLattice2.addPostProcessor<stage::PreCoupling>(meta::id<RhoStatistics>());
-
-  sLattice1.initialize();
-  sLattice2.initialize();
-
-
-  // === 5th Step: Main Loop with Timer ===
   int iT = 0;
   clout << "starting simulation..." << std::endl;
-  util::Timer<T> timer( maxIter, superGeometry.getStatistics().getNvoxel() );
+  util::Timer<T> timer( maxIter, geometry.getStatistics().getNvoxel() );
   timer.start();
 
 
   for ( iT=0; iT<=maxIter; ++iT ) {
     // Computation and output of the results
-    getResults( sLattice2, sLattice1, iT, superGeometry, timer );
+    getResults(myCase, timer, iT);
 
 
     // Collide and stream execution
@@ -401,5 +379,42 @@ int main( int argc, char *argv[] )
 
   timer.stop();
   timer.printSummary();
+}
 
+int main( int argc, char *argv[] ) {
+  initialize( &argc, &argv );
+
+  // === Step 2: Set Parameters ===
+  MyCase::ParametersD myCaseParameters;
+  {
+    using namespace olb::parameters;
+    myCaseParameters.set<DOMAIN_EXTENT    >({100., 100.});// [lattice units]
+    myCaseParameters.set<RESOLUTION       >(100);         // [lattice units]
+    myCaseParameters.set<ALPHA            >(1.5);         // Interfacial width          [lattice units]
+    myCaseParameters.set<KAPPA1           >(0.0075);      // For surface tensions       [lattice units]
+    myCaseParameters.set<KAPPA2           >(0.005);       // For surface tensions       [lattice units]
+    myCaseParameters.set<parameters::GAMMA>(1.);          // For mobility of interfaces [lattice units]
+    myCaseParameters.set<parameters::RADIUS>([&] {
+      return myCaseParameters.get<DOMAIN_EXTENT>()[0] * 0.25;
+    });
+  }
+  myCaseParameters.fromCLI(argc, argv);
+
+  /// === Step 3: Create Mesh ===
+  Mesh mesh = createMesh(myCaseParameters);
+
+  /// === Step 4: Create Case ===
+  MyCase myCase(myCaseParameters, mesh);
+
+  /// === Step 5: Prepare Geometry ===
+  prepareGeometry(myCase);
+
+  /// === Step 6: Prepare Lattice ===
+  prepareLattice(myCase);
+
+  /// === Step 7: Definition of Initial, Boundary Values, and Fields ===
+  setInitialValues(myCase);
+
+  /// === Step 8: Simulate ===
+  simulate(myCase);
 }
