@@ -485,6 +485,17 @@ constexpr T max(const ScalarVector<T,D,IMPL>& v)
   }
   return max;
 }
+
+template <typename T>
+requires std::is_enum_v<T>
+std::istream& operator>>(std::istream& is, T& e) {
+  std::underlying_type_t<T> underlying_value;
+  if (is >> underlying_value) {
+    e = static_cast<T>(underlying_value);
+  }
+  return is;
+}
+
 template <typename T, unsigned D>
 std::optional<Vector<T,D>> Vector<T,D>::fromString(const std::string& input) {
   static_assert(D > 0, "Vector parsing from string requires D > 0.");

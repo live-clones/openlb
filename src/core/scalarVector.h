@@ -192,6 +192,24 @@ std::ostream& operator << (std::ostream& os, const ScalarVector<T,D,IMPL>& o)
   return os;
 }
 
+template<typename T, unsigned D, typename IMPL>
+requires std::is_enum_v<T>
+std::ostream& operator << (std::ostream& os, const ScalarVector<T,D,IMPL>& o)
+{
+  if (D > 1) {
+    os << "[";
+  }
+  for (unsigned iDim=0; iDim < D-1; ++iDim) {
+    os << static_cast<std::underlying_type_t<T>>(o[iDim]) << " ";
+  }
+  if (D > 1) {
+    os << static_cast<std::underlying_type_t<T>>(o[D-1]) << "]";
+  } else {
+    os << static_cast<std::underlying_type_t<T>>(o[D-1]);
+  }
+  return os;
+}
+
 }
 
 #endif

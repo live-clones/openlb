@@ -26,8 +26,19 @@
 using namespace olb;
 using namespace olb::descriptors;
 
-using T = float;
-using DESCRIPTOR = D3Q27<descriptors::FORCE, FreeSurface::MASS, FreeSurface::EPSILON, FreeSurface::CELL_TYPE, FreeSurface::CELL_FLAGS, FreeSurface::TEMP_MASS_EXCHANGE, FreeSurface::PREVIOUS_VELOCITY>;
+using T = FLOATING_POINT_TYPE;
+
+using DESCRIPTOR = D3Q27
+<
+  descriptors::FORCE,
+  FreeSurface::MASS,
+  FreeSurface::EPSILON,
+  FreeSurface::CELL_TYPE,
+  FreeSurface::CELL_FLAGS,
+  FreeSurface::TEMP_MASS_EXCHANGE,
+  FreeSurface::PREVIOUS_VELOCITY,
+  FreeSurface::HAS_INTERFACE_NBRS
+>;
 
 using BulkDynamics = SmagorinskyForcedBGKdynamics<T,DESCRIPTOR>;
 
@@ -303,7 +314,7 @@ int main(int argc, char **argv)
 
   T lattice_size = helper.char_phys_length / c.N;
 
-  T force_conversion_factor = 1./converter.getConversionFactorForce()*converter.getConversionFactorMass();
+  T force_factor = T(1) / converter.getConversionFactorForce() * converter.getConversionFactorMass();
 
   // Convert kg / s^2
   // Basically it is multiplied with s^2 / kg = s^2 * m^3 / (kg * m^2 * m) = 1. / (velocity_factor^2 * density * length_factor)
@@ -348,6 +359,7 @@ int main(int argc, char **argv)
   sLattice.setParameter<FreeSurface::LONELY_THRESHOLD>(c.lonelyThreshold);
   sLattice.setParameter<FreeSurface::HAS_SURFACE_TENSION>(helper.has_surface_tension);
   sLattice.setParameter<FreeSurface::SURFACE_TENSION_PARAMETER>(surface_tension_coefficient_factor * helper.surface_tension_coefficient);
+  sLattice.setParameter<FreeSurface::FORCE_DENSITY>({helper.gravity_force[0] * force_factor, helper.gravity_force[1] * force_factor, helper.gravity_force[2] * force_factor});
 
   // === 4th Step: Main Loop with Timer ===
   clout << "starting simulation..." << std::endl;
