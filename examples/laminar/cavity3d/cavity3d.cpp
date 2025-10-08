@@ -159,8 +159,6 @@ void setInitialValues(MyCase& myCase)
   sLattice.iniEquilibrium(bulkIndicator, rhoF, uF);
   sLattice.defineRhoU(bulkIndicator, rhoF, uF);
 
-  clout << sLattice.getUnitConverter().getCharLatticeVelocity() << std::endl;
-
   AnalyticalConst3D<T, T> uTop(sLattice.getUnitConverter().getCharLatticeVelocity(), (T)0, (T)0);
 
   sLattice.defineU(sGeometry, 3, uTop);

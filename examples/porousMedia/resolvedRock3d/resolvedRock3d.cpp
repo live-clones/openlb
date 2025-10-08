@@ -28,6 +28,8 @@
  *
  * 1. Provide or download a medium.
  *    For example: https://www.digitalrocksportal.org/projects/92
+ *    NOTE: This redirects to https://digitalporousmedia.org/published-datasets
+ *          and you need to see yourself if you find an appropriate geometry
  * 2. Convert the TIFF series to VTI using ParaView
  *    (Point data are mandatory, cell data do not work)
  *     - Open TIFF series in ParaView
@@ -35,45 +37,37 @@
  *     - Save the result as VTI
  *     - Use ASCII formatting
  *     - Solely export one array and use the name as an input when running the simulation (see <arrayname>)
- * 3. Start the simulation with the following parameters (in that order):
- *    <filename> <arrayname> <scaling-factor> <time-scaling-factor> <resolution> <pressure_drop>
- *    Example: mpirun -np 6 ./resolvedRock3d rock.vti "Tiff Scalars" 2.5e-6 1.0 200 1.0
+ * 3. Change "vtiName" and "arrayName" in the main() function
+ * 4. Start the simulation
  */
 
 #include <olb.h>
 
 using namespace olb;
-using namespace olb::descriptors;
-using namespace olb::graphics;
+using namespace olb::names;
 
-using T          = FLOATING_POINT_TYPE;
-using DESCRIPTOR = D3Q19<>;
+namespace olb::parameters {
 
-// Parameters for the simulation setup
-int          N; // resolution of the model
-constexpr T  tau = 0.75;
-T            maxPhysT; // max. simulation time in s, SI unit
-T            pressureDrop;
-T            scalingFactor;
-Vector<T, 3> extent;
+struct CONVERGENCE_CHECK_T  : public descriptors::FIELD_BASE<1> { };
+struct PRESSURE_DROP        : public descriptors::FIELD_BASE<1> { };
+struct SCALING_FACTOR       : public descriptors::FIELD_BASE<1> { };
+struct TIME_SCALING_FACTOR  : public descriptors::FIELD_BASE<1> { };
+struct AVG_VELOCITY         : public descriptors::FIELD_BASE<0,1> { };
 
-// Fluid parameters
-constexpr T fluidDensity       = 1000;
-constexpr T kinematicViscosity = 1e-6;
+}
 
-// Rock geometry
-std::shared_ptr<BlockVTIreader3D<T, T>> vtiReader; // to ensure that the data persists
+// === Step 1: Declarations ===
+using MyCase = Case<
+  NavierStokes, Lattice<double, descriptors::D3Q19<>>
+>;
 
-// Results
-Vector<T, 3> currentAverageVelocity;
-T            currentPermeability;
-
-std::shared_ptr<IndicatorBlockData3D<T>>
-generateIndicatorFromVTI(const std::string vtiFile, const std::string arrayName)
+template <typename T>
+IndicatorBlockData3D<T>
+generateIndicatorFromVTI(std::string vtiFile,  std::string arrayName)
 {
   const T sourceScale = scalingFactor;
 
-  vtiReader = std::make_shared<BlockVTIreader3D<T, T>>(vtiFile, arrayName);
+  vtiReader = BlockVTIreader3D<T, T>(vtiFile, arrayName);
 
   auto           cuboidSample     = vtiReader->getCuboid();
   T              deltaRsample     = cuboidSample.getDeltaR() * sourceScale;
@@ -85,83 +79,133 @@ generateIndicatorFromVTI(const std::string vtiFile, const std::string arrayName)
   for (unsigned i = 0; i < 3; ++i) {
     extent[i] = extentSamplePhys[i];
   }
-
-
-  std::shared_ptr<IndicatorBlockData3D<T>> ind(
-      new IndicatorBlockData3D<T>(vtiReader->getBlockData(), extentSamplePhys,
-                                  originSamplePhys, deltaRsample, false));
-
-  return ind;
+  clout << "Rock x-length: " << extent[0] << " m" << std::endl;
+  clout << "Rock y-length: " << extent[1] << " m" << std::endl;
+  clout << "Rock z-length: " << extent[2] << " m" << std::endl;
+  myCaseParameters.set<DOMAIN_EXTENT>( {extent[0], extent[1], extent[2]} );
+  return IndicatorBlockData3D<T>(vtiReader->getBlockData(), extentSamplePhys,
+                                  originSamplePhys, deltaRsample, false);
 }
 
-void prepareGeometry(UnitConverter<T, DESCRIPTOR> const& converter,
-                     IndicatorF3D<T>&                    layer,
-                     SuperGeometry<T, 3>&                superGeometry)
-{
+Mesh<MyCase::value_t,MyCase::d> createMesh(MyCase::ParametersD& parameters, std::string vtiFile, std::string arrayName) {
+  using T = MyCase::value_t;
+  const T physDeltaX = parameters.get<parameters::PHYS_DELTA_X>();
+  IndicatorBlockData3D<T> rock =
+      generateIndicatorFromVTI<T>(vtiFile, arrayName);
+  IndicatorLayer3D<T> layer(rock, physDeltaX);
 
-  OstreamManager clout(std::cout, "prepareGeometry");
+  Mesh<T,MyCase::d> mesh(layer, physDeltaX, singleton::mpi().getSize());
+  mesh.setOverlap(parameters.get<parameters::OVERLAP>());
+  mesh.getCuboidDecomposition().setPeriodicity({false, true, true});
+  return mesh;
+}
+
+void prepareGeometry( MyCase& myCase, std::string vtiFile,  std::string arrayName ) {
+  OstreamManager clout( std::cout,"prepareGeometry" );
   clout << "Prepare Geometry ..." << std::endl;
 
+  using T = MyCase::value_t;
+  auto& geometry = myCase.getGeometry();
+  auto& parameters = myCase.getParameters();
+  T physDeltaX = parameters.get<parameters::PHYS_DELTA_X>();
+
   // Set the cells inside of the layer indicator to MN 2
-  superGeometry.rename(0, 2, layer);
+  IndicatorBlockData3D<T> rock =
+      generateIndicatorFromVTI<T>(vtiFile, arrayName);
+  IndicatorLayer3D<T> layer(rock, physDeltaX);
+  geometry.rename(0, 2, layer);
 
   // Set material number 1 for cells in the rock cavity with 1 cell offset in each direction
-  superGeometry.rename(2, 1, {1,1,1});
+  geometry.rename(2, 1, {1,1,1});
 
-  Vector<T, 3> origin = superGeometry.getStatistics().getMinPhysR(2);
-  Vector<T, 3> extend = superGeometry.getStatistics().getMaxPhysR(2);
+  Vector<T, 3> origin = geometry.getStatistics().getMinPhysR(2);
+  Vector<T, 3> extend = geometry.getStatistics().getMaxPhysR(2);
 
   // Set material number for inflow
-  origin[0] = superGeometry.getStatistics().getMinPhysR(2)[0] -
-              T {0.5} * converter.getPhysDeltaX();
-  extend[0] = T {1} * converter.getPhysDeltaX();
+  origin[0] = geometry.getStatistics().getMinPhysR(2)[0] -
+              T {0.5} * physDeltaX;
+  extend[0] = T {1} * physDeltaX;
   IndicatorCuboid3D<T> inflow(extend, origin);
   // MN 3 is set only if the neighbor cell has MN 1
-  superGeometry.rename(2, 3, 1, inflow);
+  geometry.rename(2, 3, 1, inflow);
 
   // Set material number for outflow
-  origin[0] = superGeometry.getStatistics().getMaxPhysR(2)[0] -
-              T {0.5} * converter.getPhysDeltaX();
-  extend[0] = T {1} * converter.getPhysDeltaX();
+  origin[0] = geometry.getStatistics().getMaxPhysR(2)[0] -
+              T {0.5} * physDeltaX;
+  extend[0] = T {1} * physDeltaX;
   IndicatorCuboid3D<T> outflow(extend, origin);
   // MN 4 is set only if the neighbor cell has MN 1
-  superGeometry.rename(2, 4, 1, outflow);
+  geometry.rename(2, 4, 1, outflow);
 
-  superGeometry.clean();
+  geometry.clean();
 
   // Removes all not needed boundary voxels outside the surface
-  superGeometry.clean();
-  superGeometry.checkForErrors();
+  geometry.clean();
+  geometry.checkForErrors();
 
-  superGeometry.print();
+  geometry.print();
 
   clout << "Prepare Geometry ... OK" << std::endl;
 }
 
-void prepareLattice(SuperLattice<T, DESCRIPTOR>&        sLattice,
-                    UnitConverter<T, DESCRIPTOR> const& converter,
-                    SuperGeometry<T, 3>&                superGeometry)
-{
-  OstreamManager clout(std::cout, "prepareLattice");
+void prepareLattice( MyCase& myCase ) {
+  OstreamManager clout(std::cout,"prepareLattice");
   clout << "Prepare Lattice ..." << std::endl;
 
-  const T omega = converter.getLatticeRelaxationFrequency();
+  using T = MyCase::value_t;
+  using DESCRIPTOR = MyCase::descriptor_t_of<NavierStokes>;
+  auto& geometry = myCase.getGeometry();
+  auto& parameters = myCase.getParameters();
+  auto& lattice = myCase.getLattice(NavierStokes{});
+  size_t  N   = parameters.get<parameters::RESOLUTION>();
+  T       tau = parameters.get<parameters::LATTICE_RELAXATION_TIME>();
+  T       fluidDensity = parameters.get<parameters::PHYS_CHAR_DENSITY>();
+  T       kinematicViscosity = parameters.get<parameters::PHYS_CHAR_VISCOSITY>();
+  T       charPhysVelocityEstimation = parameters.get<parameters::PHYS_CHAR_VELOCITY>();
+  Vector extent = parameters.get<parameters::DOMAIN_EXTENT>();
+
+  lattice.setUnitConverter<UnitConverterFromResolutionAndRelaxationTime<T, DESCRIPTOR>>(
+      int {N}, // resolution: number of voxels per charPhysL
+      (T)tau, // latticeRelaxationTime: relaxation time, have to be greater than 0.5!
+      (T)extent[1], // charPhysLength: reference length of simulation geometry
+      (T)charPhysVelocityEstimation, // charPhysVelocity: maximal/highest expected velocity during simulation in __m / s__
+      (T)kinematicViscosity, // physViscosity: physical kinematic viscosity in __m^2 / s__
+      (T)fluidDensity // physDensity: physical density in __kg / m^3__
+  );
+  auto& converter = lattice.getUnitConverter();
+  // Prints the converter log as console output
+  converter.print();
+  // Writes the converter log in a file
+  converter.write("rock");
 
   // Material=1 -->bulk dynamics
-  auto bulkIndicator = superGeometry.getMaterialIndicator({1, 3, 4});
-  sLattice.defineDynamics<BGKdynamics>(bulkIndicator);
+  auto bulkIndicator = geometry.getMaterialIndicator({1, 3, 4});
+  lattice.defineDynamics<BGKdynamics>(bulkIndicator);
 
   // Material=2 -->bounce back
-  boundary::set<boundary::BounceBack>(sLattice, superGeometry, 2);
+  boundary::set<boundary::BounceBack>(lattice, geometry, 2);
 
   // Setting of the boundary conditions
   // local boundary conditions
-  boundary::set<boundary::LocalPressure>(sLattice, superGeometry, 3);
-  boundary::set<boundary::LocalPressure>(sLattice, superGeometry, 4);
+  boundary::set<boundary::LocalPressure>(lattice, geometry, 3);
+  boundary::set<boundary::LocalPressure>(lattice, geometry, 4);
 
   // interpolated boundary conditions
-  boundary::set<boundary::InterpolatedPressure>(sLattice, superGeometry, 3);
-  boundary::set<boundary::InterpolatedPressure>(sLattice, superGeometry, 4);
+  boundary::set<boundary::InterpolatedPressure>(lattice, geometry, 3);
+  boundary::set<boundary::InterpolatedPressure>(lattice, geometry, 4);
+
+  lattice.setParameter<descriptors::OMEGA>(converter.getLatticeRelaxationFrequency());
+
+  clout << "Prepare Lattice ... OK" << std::endl;
+}
+void setInitialValues( MyCase& myCase ) {
+  using T = MyCase::value_t;
+  using DESCRIPTOR = MyCase::descriptor_t_of<NavierStokes>;
+  auto& lattice   = myCase.getLattice(NavierStokes{});
+  auto& geometry  = myCase.getGeometry();
+  auto& converter = lattice.getUnitConverter();
+  auto& parameters= myCase.getParameters();
+  auto bulkIndicator = geometry.getMaterialIndicator({1, 3, 4});
 
   // Initial conditions
   AnalyticalConst3D<T, T> rhoF(T {1});
@@ -169,26 +213,28 @@ void prepareLattice(SuperLattice<T, DESCRIPTOR>&        sLattice,
   AnalyticalConst3D<T, T> uF(velocityV);
 
   // Initialize all values of distribution functions to their local equilibrium
-  sLattice.defineRhoU(bulkIndicator, rhoF, uF);
-  sLattice.iniEquilibrium(bulkIndicator, rhoF, uF);
-
-  sLattice.setParameter<descriptors::OMEGA>(omega);
+  lattice.defineRhoU(bulkIndicator, rhoF, uF);
+  lattice.iniEquilibrium(bulkIndicator, rhoF, uF);
 
   // Make the lattice ready for simulation
-  sLattice.initialize();
-
-  clout << "Prepare Lattice ... OK" << std::endl;
+  lattice.initialize();
 }
 
-// Generates a slowly increasing inflow for the first iTMaxStart timesteps
-void setBoundaryValues(SuperLattice<T, DESCRIPTOR>&        sLattice,
-                       UnitConverter<T, DESCRIPTOR> const& converter, int iT,
-                       SuperGeometry<T, 3>& superGeometry, int iTmaxStart)
+void setTemporalValues( MyCase& myCase,
+                        std::size_t iT )
 {
-  OstreamManager clout(std::cout, "setBoundaryValues");
+  OstreamManager clout(std::cout, "setTemporalValues");
+  using T = MyCase::value_t;
+  using DESCRIPTOR = MyCase::descriptor_t_of<NavierStokes>;
+  auto& geometry = myCase.getGeometry();
+  auto& parameters = myCase.getParameters();
+  auto& lattice = myCase.getLattice(NavierStokes{});
+  auto& converter = lattice.getUnitConverter();
+  const int iTmaxStart = parameters.get<parameters::PHYS_START_T>();
+  const T pressureDrop = parameters.get<parameters::PRESSURE_DROP>();
 
   // No of time steps for smooth start-up
-  int iTupdate = std::max(iTmaxStart / 200, 1);
+  const int iTupdate = std::max(iTmaxStart / 200, 1);
 
   if (iT % iTupdate == 0 && iT <= iTmaxStart) {
     // Smooth start curve, sinus
@@ -205,38 +251,49 @@ void setBoundaryValues(SuperLattice<T, DESCRIPTOR>&        sLattice,
     AnalyticalConst3D<T, T> rhoFromPressure(
         converter.getLatticeDensityFromPhysPressure(currentPressure));
 
-    sLattice.defineRho(superGeometry, 3, rhoFromPressure);
+    lattice.defineRho(geometry, 3, rhoFromPressure);
 
     clout << "step=" << iT << "; currentPressureDifference=" << currentPressure
           << std::endl;
 
-    sLattice.setProcessingContext<Array<momenta::FixedDensity::RHO>>(
+    lattice.setProcessingContext<Array<momenta::FixedDensity::RHO>>(
         ProcessingContext::Simulation);
   }
 }
 
-void getResults(SuperLattice<T, DESCRIPTOR>&        sLattice,
-                UnitConverter<T, DESCRIPTOR> const& converter, int iT,
-                SuperGeometry<T, 3>& superGeometry, util::Timer<T>& timer,
-                util::ValueTracer<T>& converge, int iTmaxStart)
+void getResults(MyCase& myCase,
+                util::Timer<MyCase::value_t>& timer,
+                std::size_t iT)
 {
-
-  OstreamManager clout(std::cout, "getResults");
+  OstreamManager clout( std::cout,"getResults" );
+  using T = MyCase::value_t;
+  using DESCRIPTOR  = MyCase::descriptor_t_of<NavierStokes>;
+  auto& lattice     = myCase.getLattice(NavierStokes{});
+  auto& geometry    = myCase.getGeometry();
+  auto& converter   = lattice.getUnitConverter();
+  auto& parameters  = myCase.getParameters();
+  const T maxPhysT            = parameters.get<parameters::MAX_PHYS_T>();
+  const T lx                  = parameters.get<parameters::DOMAIN_EXTENT>()[0];
+  const T kinematicViscosity  = parameters.get<parameters::PHYS_CHAR_VISCOSITY>();
+  const T fluidDensity        = parameters.get<parameters::PHYS_CHAR_DENSITY>();
+  const T pressureDrop        = parameters.get<parameters::PRESSURE_DROP>();
+  bool converged              = parameters.get<parameters::CONVERGED>();
+  const int iTmaxStart        = converter.getLatticeTime(parameters.get<parameters::PHYS_START_T>());
+  const int statIter          = converter.getLatticeTime(parameters.get<parameters::PHYS_STAT_ITER_T>());
+  const int vtkIter           = converter.getLatticeTime(parameters.get<parameters::PHYS_VTK_ITER_T>());
+  T currentPermeability;
 
   SuperVTMwriter3D<T>                       vtmWriter("resolvedRock3d");
-  SuperLatticePhysVelocity3D<T, DESCRIPTOR> velocity(sLattice, converter);
-  SuperLatticePhysPressure3D<T, DESCRIPTOR> pressure(sLattice, converter);
+  SuperLatticePhysVelocity3D<T, DESCRIPTOR> velocity(lattice, converter);
+  SuperLatticePhysPressure3D<T, DESCRIPTOR> pressure(lattice, converter);
 
   vtmWriter.addFunctor(velocity);
   vtmWriter.addFunctor(pressure);
 
-  const int vtkIter  = converter.getLatticeTime(maxPhysT * T {0.05});
-  const int statIter = converter.getLatticeTime(maxPhysT * T {0.01});
-
   if (iT == 0) {
     // Writes the geometry, cuboid no. and rank no. as vti file for visualization
-    SuperLatticeCuboid3D<T, DESCRIPTOR>   cuboid(sLattice);
-    SuperLatticeRank3D<T, DESCRIPTOR>     rank(sLattice);
+    SuperLatticeCuboid3D<T, DESCRIPTOR>   cuboid(lattice);
+    SuperLatticeRank3D<T, DESCRIPTOR>     rank(lattice);
     vtmWriter.write(cuboid);
     vtmWriter.write(rank);
 
@@ -244,34 +301,32 @@ void getResults(SuperLattice<T, DESCRIPTOR>&        sLattice,
   }
 
   // Writes output on the console
-  if (iT % statIter == 0 || converge.hasConverged()) {
-    sLattice.setProcessingContext(ProcessingContext::Evaluation);
+  if ( iT % statIter == 0 || converged ) {
+    lattice.setProcessingContext(ProcessingContext::Evaluation);
 
     // Timer console output
     timer.update(iT);
     timer.printStep();
 
     // Lattice statistics console output
-    sLattice.getStatistics().print(iT, converter.getPhysTime(iT));
+    lattice.getStatistics().print(iT, converter.getPhysTime(iT));
 
-    SuperAverage3D<T> avgVel(velocity, superGeometry, 1);
+    SuperAverage3D<T> avgVel(velocity, geometry, 1);
     int               input[1] {};
+    Vector<T,3> currentAverageVelocity;
     avgVel(currentAverageVelocity.data(), input);
     clout << "Average x-velocity: " << currentAverageVelocity[0] << " m/s"
           << std::endl;
+    parameters.set<parameters::AVG_VELOCITY>(currentAverageVelocity);
 
     currentPermeability = currentAverageVelocity[0] * kinematicViscosity *
-                          fluidDensity * extent[0] / pressureDrop;
+                          fluidDensity * lx / pressureDrop;
 
     clout << "Permeability: " << currentPermeability << " m^2" << std::endl;
-
-    if (iT > iTmaxStart) {
-      converge.takeValue(currentAverageVelocity[0], true);
-    }
   }
 
   // Writes the vtk files
-  if (iT % vtkIter == 0 || converge.hasConverged()) {
+  if ( iT % vtkIter == 0 || maxPhysT ) {
     vtmWriter.write(iT);
 
     {
@@ -283,138 +338,122 @@ void getResults(SuperLattice<T, DESCRIPTOR>&        sLattice,
   }
 }
 
-int main(int argc, char* argv[])
-{
-
-  // === 1st Step: Initialization ===
-  initialize(&argc, &argv);
-  singleton::directories().setOutputDir("./tmp/");
-  OstreamManager clout(std::cout, "main");
-
-  std::string vtiFile;
-  std::string arrayName;
-  T           timeScalingFactor {1};
-
-  std::vector<std::string> cmdInput;
-  if (argc > 1) {
-    cmdInput.assign(argv + 1, argv + argc);
-    vtiFile = cmdInput[0];
-  }
-  if (argc > 2) {
-    arrayName = cmdInput[1];
-  }
-  if (argc > 3) {
-    scalingFactor = std::stod(cmdInput[2]);
-  }
-  if (argc > 4) {
-    timeScalingFactor = std::stod(cmdInput[3]);
-  }
-  if (argc > 5) {
-    N = std::stoi(cmdInput[4]);
-  }
-  if (argc > 6) {
-    pressureDrop = std::stod(cmdInput[5]);
-  }
-  else {
-    clout
-        << "Define <filename> <arrayname> <scaling-factor> "
-           "<time-scaling-factor> <resolution> <pressure_drop> (in that order)"
-        << std::endl;
-    return 1;
-  }
-
-  clout << "Using the following input:" << std::endl;
-  clout << "VTI file: " << vtiFile << std::endl;
-  clout << "Array name: " << arrayName << std::endl;
-  clout << "Pressure drop: " << pressureDrop << " Pa" << std::endl;
-
-  std::shared_ptr<IndicatorBlockData3D<T>> rock =
-      generateIndicatorFromVTI(vtiFile, arrayName);
-  clout << "Rock x-length: " << extent[0] << " m" << std::endl;
-  clout << "Rock y-length: " << extent[1] << " m" << std::endl;
-  clout << "Rock z-length: " << extent[2] << " m" << std::endl;
+void simulate( MyCase& myCase ) {
+  OstreamManager clout( std::cout, "simulation" );
+  using T = MyCase::value_t;
+  auto& lattice     = myCase.getLattice(NavierStokes{});
+  auto& geometry    = myCase.getGeometry();
+  auto& converter   = lattice.getUnitConverter();
+  auto& parameters  = myCase.getParameters();
+  const T   epsilon             = parameters.get<parameters::CONVERGENCE_PRECISION>();
+  const T   pressureDrop        = parameters.get<parameters::PRESSURE_DROP>();
+  const T   kinematicViscosity  = parameters.get<parameters::PHYS_CHAR_VISCOSITY>();
+  const T   fluidDensity        = parameters.get<parameters::PHYS_CHAR_DENSITY>();
+  const T   timeScalingFactor   = parameters.get<parameters::TIME_SCALING_FACTOR>();
+  const T   lx                  = parameters.get<parameters::DOMAIN_EXTENT>()[0];
 
   constexpr T permeabilityForVelocityEstimation = T {1e-7};
   // Estimating velocity using Darcy's law
   const T charPhysVelocityEstimation =
       permeabilityForVelocityEstimation * pressureDrop /
-      (kinematicViscosity * fluidDensity * extent[0]);
+      (kinematicViscosity * fluidDensity * lx);
   // Assumption. Likely needs an update after some experience is gained
-  maxPhysT = timeScalingFactor * extent[0] / charPhysVelocityEstimation;
+  const T maxPhysT = timeScalingFactor * lx / charPhysVelocityEstimation;
+
+  parameters.set<parameters::MAX_PHYS_T             >( maxPhysT );
+  parameters.set<parameters::PHYS_START_T           >( maxPhysT * 0.4 );
+  parameters.set<parameters::PHYS_STAT_ITER_T       >( maxPhysT * .01 );
+  parameters.set<parameters::PHYS_VTK_ITER_T        >( maxPhysT * .05 );
+  parameters.set<parameters::CONVERGENCE_CHECK_T    >( maxPhysT / 100. );
+
+  const T   iTmax               = converter.getLatticeTime(parameters.get<parameters::MAX_PHYS_T>());
+  const int iTmaxStart          = converter.getLatticeTime(parameters.get<parameters::PHYS_START_T>());
+  const int statIter            = converter.getLatticeTime(parameters.get<parameters::PHYS_STAT_ITER_T>());
+  const int interval            = converter.getLatticeTime(parameters.get<parameters::CONVERGENCE_CHECK_T>());
+  T currentUx;
+  util::ValueTracer<T> converge(interval, epsilon);
 
   clout << "Timeframe to be simulated: " << maxPhysT << " s" << std::endl;
 
-  UnitConverterFromResolutionAndRelaxationTime<T, DESCRIPTOR> const converter(
-      int {N}, // resolution: number of voxels per charPhysL
-      (T)tau, // latticeRelaxationTime: relaxation time, have to be greater than 0.5!
-      (T)extent[1], // charPhysLength: reference length of simulation geometry
-      (T)charPhysVelocityEstimation, // charPhysVelocity: maximal/highest expected velocity during simulation in __m / s__
-      (T)kinematicViscosity, // physViscosity: physical kinematic viscosity in __m^2 / s__
-      (T)fluidDensity // physDensity: physical density in __kg / m^3__
-  );
-  // Prints the converter log as console output
-  converter.print();
-  // Writes the converter log in a file
-  converter.write("rock");
-
-  // === 2nd Step: Prepare Geometry ===
-  // Instantiation of a cuboidDecomposition with weights
-#ifdef PARALLEL_MODE_MPI
-  const int noOfCuboids = singleton::mpi().getSize();
-#else
-  const int noOfCuboids = 7;
-#endif
-
-  //layer of 1 cell around the rock geometry for correct definition of bondary matreial numbers
-  IndicatorLayer3D<T> layer(*rock, converter.getPhysDeltaX());
-
-  CuboidDecomposition3D<T> cuboidDecomposition(
-      layer, converter.getPhysDeltaX(), noOfCuboids);
-  cuboidDecomposition.setPeriodicity({false, true, true});
-
-  // Instantiation of a loadBalancer
-  HeuristicLoadBalancer<T> loadBalancer(cuboidDecomposition);
-
-  // Instantiation of a superGeometry
-  SuperGeometry<T, 3> superGeometry(cuboidDecomposition, loadBalancer);
-
-  prepareGeometry(converter, layer, superGeometry);
-
-  // === 3rd Step: Prepare Lattice ===
-  SuperLattice<T, DESCRIPTOR> sLattice(converter, superGeometry);
-
-  //prepareLattice and set boundaryCondition
-  prepareLattice(sLattice, converter, superGeometry);
-
-  // === 4th Step: Main Loop with Timer ===
-  int                  iTmaxStart = converter.getLatticeTime(maxPhysT * 0.4);
-  int                  interval = converter.getLatticeTime(maxPhysT / T {100});
-  constexpr T          epsilon  = 1e-6;
-  util::ValueTracer<T> converge(interval, epsilon);
   clout << "starting simulation..." << std::endl;
-  clout << "MaxIT: " << converter.getLatticeTime(maxPhysT) << std::endl;
-  util::Timer<T> timer(converter.getLatticeTime(maxPhysT),
-                       superGeometry.getStatistics().getNvoxel());
+  clout << "MaxIT: " << iTmax << std::endl;
+  util::Timer<T> timer(iTmax,
+                       geometry.getStatistics().getNvoxel());
   timer.start();
 
-  for (std::size_t iT = 0; iT < converter.getLatticeTime(maxPhysT); ++iT) {
+  for (std::size_t iT = 0; iT < iTmax; ++iT) {
     // === 5th Step: Definition of Initial and Boundary Conditions ===
-    setBoundaryValues(sLattice, converter, iT, superGeometry, iTmaxStart);
+    setTemporalValues( myCase, iT );
 
     // === 6th Step: Collide and Stream Execution ===
-    sLattice.collideAndStream();
+    lattice.collideAndStream();
 
     // === 7th Step: Computation and Output of the Results ===
-    getResults(sLattice, converter, iT, superGeometry, timer, converge,
-               iTmaxStart);
+    getResults( myCase, timer, iT );
+
+    if ( iT > iTmaxStart ) {
+      currentUx = parameters.get<parameters::AVG_VELOCITY>()[0];
+      converge.takeValue(currentUx, true);
+    }
 
     if (converge.hasConverged()) {
-      getResults(sLattice, converter, iT, superGeometry, timer, converge,
-                 iTmaxStart);
+      parameters.set<parameters::CONVERGED>( true );
+      getResults( myCase, timer, iT );
       break;
     }
   }
 
   timer.stop();
   timer.printSummary();
+}
+
+int main(int argc, char* argv[])
+{
+  // === 1st Step: Initialization ===
+  initialize(&argc, &argv);
+
+  /// === Step 2: Set Parameters ===
+  MyCase::ParametersD myCaseParameters;
+  {
+    using namespace olb::parameters;
+    myCaseParameters.set<LATTICE_RELAXATION_TIME    >(      .75 );
+    myCaseParameters.set<PHYS_CHAR_DENSITY          >(     1000 );
+    myCaseParameters.set<PHYS_CHAR_VISCOSITY        >(     1e-6 );
+    myCaseParameters.set<CONVERGENCE_PRECISION      >(     1e-5 );
+    myCaseParameters.set<RESOLUTION                 >(       50 );
+    myCaseParameters.set<REYNOLDS                   >(       1. );
+    myCaseParameters.set<CONVERGED                  >(    false );
+    myCaseParameters.set<PRESSURE_DROP              >(       1. );
+    myCaseParameters.set<SCALING_FACTOR             >(   2.5e-6 );
+    myCaseParameters.set<TIME_SCALING_FACTOR        >(       1. );
+    myCaseParameters.set<EPSILON                    >(       1. );  // Porosity (Spaid and Phelan can only handle epsilon=1)
+    OLB_ASSERT( myCaseParameters.get<RESOLUTION>()    >= 1, "Fluid domain is too small" );
+  }
+  myCaseParameters.fromCLI(argc, argv);
+  if ( myCaseParameters.get<parameters::PHYS_DELTA_X>() == 0 ) {
+    myCaseParameters.set<parameters::PHYS_DELTA_X>( 1. / myCaseParameters.get<parameters::RESOLUTION>() );
+  } else {
+    myCaseParameters.set<parameters::RESOLUTION>( 1. / myCaseParameters.get<parameters::PHYS_DELTA_X>() );
+  }
+
+  std::string vtiFile = "rock.vti";
+  std::string arrayName = "Tiff Scalars";
+
+  /// === Step 3: Create Mesh ===
+  Mesh mesh = createMesh(myCaseParameters, vtiFile, arrayName);
+
+  /// === Step 4: Create Case ===
+  MyCase myCase(myCaseParameters, mesh);
+
+  /// === Step 5: Prepare Geometry ===
+  prepareGeometry(myCase, vtiFile, arrayName);
+
+  /// === Step 6: Prepare Lattice ===
+  prepareLattice(myCase);
+
+  /// === Step 7: Definition of Initial, Boundary Values, and Fields ===
+  setInitialValues(myCase);
+
+  /// === Step 8: Simulate ===
+  simulate(myCase);
 }
