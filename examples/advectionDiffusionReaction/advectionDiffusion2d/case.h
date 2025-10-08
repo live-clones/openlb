@@ -23,48 +23,35 @@
  *  Boston, MA  02110-1301, USA.
  */
 
-/*  adePeriodic2d:
- *  The solution to a linear, scalar, two-dimensional advection-diffusion
- *  equation is approximated.
- *  The numerical setup and the analytical solution are taken from
- *  Simonis, S., Frank, M., and Krause M. J. Applied Mathematics Letters
- *  (2023) 135:108484, DOI: https://doi.org/10.1016/j.aml.2022.108484.
- *  Error norms are calculated for three subsequent resolutions and stored
- *  in the respective /tmp folders. A python script is provided to calculate
- *  the experimental order of convergence towards the analytical solution.
- */
+#pragma once
 
-
-#include "case.h"
-
-using namespace olb;
-using namespace olb::descriptors;
-using namespace olb::graphics;
-
-using T = FLOATING_POINT_TYPE;
-typedef D2Q5<VELOCITY> TDESCRIPTOR;
+#include <olb.h>
 
 /// uncomment for console output of other norms
 //#define allNorms
 
-const int runs = 3;                // # simulations with increasing resolution
+using namespace olb;
+using namespace olb::graphics;
+using namespace olb::names;
 
-const int N0 = 50;                 // initial # discrete points per dimension
-const int statIter0 = N0;          // initial # lattice output timesteps
-const T mue0 = 0.05;                // physical diffusivity
-const T peclet0 = 100.;            // Peclet number (Pe = u*L/mue)
-const T physLength0 = 2.;          // physical domain length in each dimension
-const int maxN = util::pow(2,runs-1)*N0; // maximum resolution
+using MyCase = Case<
+  AdvectionDiffusion, Lattice<double, descriptors::D2Q5<descriptors::VELOCITY>>
+>;
 
+namespace olb::parameters {
+
+  struct RUNS : public descriptors::FIELD_BASE<1> {};
+  struct OUTPUT_INTERVAL : public descriptors::FIELD_BASE<1> {};
+  struct PULSE_DIFF_BOUND : public descriptors::FIELD_BASE<1> {};
+
+}
 
 template <typename T>
 class AdePhysTemp2D : public AnalyticalF2D<T,T> {
 
 protected:
+  MyCase& myCase;
   T t;
-  T mue;
-  T uMag;
-  T res;
 public:
   AdePhysTemp2D(T time, AdeUnitConverter<T, TDESCRIPTOR> converter) : AnalyticalF2D<T,T>(1),
     t(time),
@@ -92,6 +79,14 @@ public:
   };
 };
 
+const int runs = 3;                // # simulations with increasing resolution
+
+const int N0 = 50;                 // initial # discrete points per dimension
+const int statIter0 = N0;          // initial # lattice output timesteps
+const T mue0 = 0.05;                // physical diffusivity
+const T peclet0 = 100.;            // Peclet number (Pe = u*L/mue)
+const T physLength0 = 2.;          // physical domain length in each dimension
+const int maxN = util::pow(2,runs-1)*N0; // maximum resolution
 
 void prepareGeometry(SuperGeometry<T,2>& superGeometry,
                      IndicatorF2D<T>& indicator )
