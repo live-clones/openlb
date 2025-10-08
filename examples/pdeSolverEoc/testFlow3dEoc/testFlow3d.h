@@ -49,6 +49,23 @@
 using namespace olb;
 using namespace olb::names;
 
+namespace olb::parameters {
+
+struct ERROR_VELOCITY_L1 : public descriptors::FIELD_BASE<1> { };
+struct ERROR_VELOCITY_L2 : public descriptors::FIELD_BASE<1> { };
+struct ERROR_VELOCITY_LINF : public descriptors::FIELD_BASE<1> { };
+struct ERROR_PRESSURE_L1 : public descriptors::FIELD_BASE<1> { };
+struct ERROR_PRESSURE_L2 : public descriptors::FIELD_BASE<1> { };
+struct ERROR_PRESSURE_LINF : public descriptors::FIELD_BASE<1> { };
+struct ERROR_STRAIN_RATE_L1 : public descriptors::FIELD_BASE<1> { };
+struct ERROR_STRAIN_RATE_L2 : public descriptors::FIELD_BASE<1> { };
+struct ERROR_STRAIN_RATE_LINF : public descriptors::FIELD_BASE<1> { };
+struct ERROR_DISSIPATION_L1 : public descriptors::FIELD_BASE<1> { };
+struct ERROR_DISSIPATION_L2 : public descriptors::FIELD_BASE<1> { };
+struct ERROR_DISSIPATION_LINF : public descriptors::FIELD_BASE<1> { };
+
+}
+
 /// @brief Step 1: Declare simulation structure.
 /// Model name and lattice type are collected in a Case class
 using MyCase = Case<
@@ -110,7 +127,7 @@ void prepareLattice(MyCase& myCase)
   /// @li Material=1 --> bulk dynamics
   lattice.template defineDynamics<ForcedBGKdynamics>(geometry.getMaterialIndicator({1}));
   /// @li Material=2,3 --> velocity boundary
-  boundary::set<boundary::LocalVelocity>(lattice, geometry.getMaterialIndicator({2}));
+  boundary::set<boundary::InterpolatedVelocity>(lattice, geometry.getMaterialIndicator({2}));
   /// @li Set lattice relaxation frequency
   lattice.template setParameter<descriptors::OMEGA>(converter.getLatticeRelaxationFrequency());
 }
@@ -157,7 +174,7 @@ void setTemporalValues(MyCase& myCase,
   auto& lattice = myCase.getLattice(NavierStokes{});
   auto& geometry = myCase.getGeometry();
   auto& converter = lattice.getUnitConverter();
-  const T physStartT = myCase.getParameters().get<parameters::MAX_PHYS_T>() * (2.0 / 3.0);
+  const T physStartT = myCase.getParameters().get<parameters::MAX_PHYS_T>() * (1.0 / 3.0);
 
   const std::size_t itStart = converter.getLatticeTime(physStartT);
   if (iT <= itStart) {
@@ -221,7 +238,9 @@ void simulate(MyCase& myCase)
 {
   using T = MyCase::value_t;
   const T physMaxT = myCase.getParameters().get<parameters::MAX_PHYS_T>();
-  const std::size_t iTmax = myCase.getLattice(NavierStokes{}).getUnitConverter().getLatticeTime(physMaxT);
+  auto& sLattice = myCase.getLattice(NavierStokes{});
+  auto& converter = sLattice.getUnitConverter();
+  const std::size_t iTmax = converter.getLatticeTime(physMaxT);
   util::Timer<T> timer(iTmax, myCase.getGeometry().getStatistics().getNvoxel());
   timer.start();
 
@@ -231,11 +250,11 @@ void simulate(MyCase& myCase)
     setTemporalValues(myCase, iT);
 
     /// @li Step 8.2: Collide and Stream Execution
-    myCase.getLattice(NavierStokes{}).collideAndStream();
+    sLattice.collideAndStream();
 
     /// @li Stripe off density offset due to Dirichlet boundary conditions
-    myCase.getLattice(NavierStokes{}).stripeOffDensityOffset(
-      myCase.getLattice(NavierStokes{}).getStatistics().getAverageRho() - T{1});
+    sLattice.stripeOffDensityOffset(
+      sLattice.getStatistics().getAverageRho() - T{1});
 
     /// @li Step 8.3: Computation and Output of the Results
     getResults(myCase, timer, iT);
@@ -244,43 +263,61 @@ void simulate(MyCase& myCase)
   /// @li Evaluate timer
   timer.stop();
   timer.printSummary();
-}
 
+  // Compute error to analytic solution
+  // Analytic solutions
+  VelocityTestFlow3D<T,T,MyCase::descriptor_t> analytic_vel(converter);
+  PressureTestFlow3D<T,T,MyCase::descriptor_t> analytic_pre(converter);
+  StrainRateTestFlow3D<T,T,MyCase::descriptor_t> analytic_str(converter);
+  DissipationTestFlow3D<T,T,MyCase::descriptor_t> analytic_dis(converter);
 
-/// Steps 2-8: Set up and run a simulation
-int main(int argc, char* argv[])
-{
-  /// @par Contents
-  /// @li Step 2: Initialization
-  initialize(&argc, &argv);
-  // Step 2.1: Set parameters
-  MyCase::ParametersD myCaseParametersD;
-  {
-    using namespace parameters;
-    myCaseParametersD.set<DOMAIN_EXTENT        >({1.0, 1.0, 1.0});
-    myCaseParametersD.set<PHYS_CHAR_VELOCITY   >(            1.0);
-    myCaseParametersD.set<PHYS_CHAR_VISCOSITY  >(            0.1);
-    myCaseParametersD.set<PHYS_CHAR_DENSITY    >(            1.0);
-    myCaseParametersD.set<MAX_PHYS_T           >(            6.0);
-    myCaseParametersD.set<RESOLUTION           >(             11);
-    myCaseParametersD.set<LATTICE_CHAR_VELOCITY>(           0.07);
-  }
+  // Interpolated analytic solutions
+  SuperLatticeFfromAnalyticalF3D<T,MyCase::descriptor_t> lattice_analytical_vel(analytic_vel, sLattice);
+  SuperLatticeFfromAnalyticalF3D<T,MyCase::descriptor_t> lattice_analytical_pre(analytic_pre, sLattice);
+  SuperLatticeFfromAnalyticalF3D<T,MyCase::descriptor_t> lattice_analytical_str(analytic_str, sLattice);
+  SuperLatticeFfromAnalyticalF3D<T,MyCase::descriptor_t> lattice_analytical_dis(analytic_dis, sLattice);
 
-  /// @li Step 3: Create Mesh
-  Mesh mesh = createMesh(myCaseParametersD);
+  // Simulated solutions
+  SuperLatticePhysVelocity3D<T,MyCase::descriptor_t> vel(sLattice, converter);
+  SuperLatticePhysPressure3D<T,MyCase::descriptor_t> pre(sLattice, converter);
+  SuperLatticePhysStrainRate3D<T,MyCase::descriptor_t> str(sLattice, converter);
+  SuperLatticePhysDissipation3D<T,MyCase::descriptor_t> dis(sLattice, converter);
 
-  /// @li Step 4: Create Case
-  MyCase myCase(myCaseParametersD, mesh);
-
-  /// @li Step 5: Prepare Geometry
-  prepareGeometry(myCase);
-
-  /// @li Step 6: Prepare Lattice
-  prepareLattice(myCase);
-
-  /// @li Step 7: Definition of Initial and Boundary Values and Fields
-  setInitialValues(myCase);
-
-  /// @li Step 8: Simulate
-  simulate(myCase);
+  int tmp[4]{0}; T norm[1]{0};
+  SuperL1Norm3D<T> uL1Norm(lattice_analytical_vel - vel, myCase.getGeometry(), 1);
+  uL1Norm(norm, tmp);
+  myCase.getParameters().set<parameters::ERROR_VELOCITY_L1>(norm[0]);
+  SuperL2Norm3D<T> uL2Norm(lattice_analytical_vel - vel, myCase.getGeometry(), 1);
+  uL2Norm(norm, tmp);
+  myCase.getParameters().set<parameters::ERROR_VELOCITY_L2>(norm[0]);
+  SuperLinfNorm3D<T> uLinfNorm(lattice_analytical_vel - vel, myCase.getGeometry(), 1);
+  uLinfNorm(norm, tmp);
+  myCase.getParameters().set<parameters::ERROR_VELOCITY_LINF>(norm[0]);
+  SuperL1Norm3D<T> pL1Norm(lattice_analytical_pre - pre, myCase.getGeometry(), 1);
+  pL1Norm(norm, tmp);
+  myCase.getParameters().set<parameters::ERROR_PRESSURE_L1>(norm[0]);
+  SuperL2Norm3D<T> pL2Norm(lattice_analytical_pre - pre, myCase.getGeometry(), 1);
+  pL2Norm(norm, tmp);
+  myCase.getParameters().set<parameters::ERROR_PRESSURE_L2>(norm[0]);
+  SuperLinfNorm3D<T> pLinfNorm(lattice_analytical_pre - pre, myCase.getGeometry(), 1);
+  pLinfNorm(norm, tmp);
+  myCase.getParameters().set<parameters::ERROR_PRESSURE_LINF>(norm[0]);
+  SuperL1Norm3D<T> sL1Norm(lattice_analytical_str - str, myCase.getGeometry(), 1);
+  sL1Norm(norm, tmp);
+  myCase.getParameters().set<parameters::ERROR_STRAIN_RATE_L1>(norm[0]);
+  SuperL2Norm3D<T> sL2Norm(lattice_analytical_str - str, myCase.getGeometry(), 1);
+  sL2Norm(norm, tmp);
+  myCase.getParameters().set<parameters::ERROR_STRAIN_RATE_L2>(norm[0]);
+  SuperLinfNorm3D<T> sLinfNorm(lattice_analytical_str - str, myCase.getGeometry(), 1);
+  sLinfNorm(norm, tmp);
+  myCase.getParameters().set<parameters::ERROR_STRAIN_RATE_LINF>(norm[0]);
+  SuperL1Norm3D<T> dL1Norm(lattice_analytical_dis - dis, myCase.getGeometry(), 1);
+  dL1Norm(norm, tmp);
+  myCase.getParameters().set<parameters::ERROR_DISSIPATION_L1>(norm[0]);
+  SuperL2Norm3D<T> dL2Norm(lattice_analytical_dis - dis, myCase.getGeometry(), 1);
+  dL2Norm(norm, tmp);
+  myCase.getParameters().set<parameters::ERROR_DISSIPATION_L2>(norm[0]);
+  SuperLinfNorm3D<T> dLinfNorm(lattice_analytical_dis - dis, myCase.getGeometry(), 1);
+  dLinfNorm(norm, tmp);
+  myCase.getParameters().set<parameters::ERROR_DISSIPATION_LINF>(norm[0]);
 }
