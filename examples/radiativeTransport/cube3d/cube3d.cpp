@@ -55,25 +55,133 @@ namespace olb::parameters {
     struct DYNAMICS_NAME : public descriptors::TYPED_FIELD_BASE<std::string, 1> { };
     struct USE_MINK : public descriptors::TYPED_FIELD_BASE<bool, 1> { };
 
+    struct BOUNDARY_SHIFT : public descriptors::FIELD_BASE<1> { };
+
 } // namespace olb::parameters
 
+Mesh<MyCase::value_t,MyCase::d> createMesh(MyCase::ParametersD& parameters) {
+    using T = MyCase::value_t;
 
+    T boundaryShift = parameters.get<parameters::BOUNDARY_SHIFT>();
+    T lx = parameters.get<parameters::DOMAIN_L>();
+    T dx = parameters.get<parameters::PHYS_DELTA_X>();
+    T originShift = lx/2;
+
+    Vector<T,3> origin = {0.+boundaryShift, -originShift, -originShift};
+    Vector<T,3> extent = {lx-boundaryShift, lx, lx};
+    IndicatorCuboid3D<T> span(extent, origin);
+
+
+    Mesh<T, MyCase::d> mesh(span, dx, 2*singleton::mpi().getSize());
+    mesh.setOverlap(parameters.get<parameters::OVERLAP>());
+
+    return mesh;
+}
+
+void prepareGeometry(MyCase& myCase){
+    OstreamManager clout( std::cout, "prepareGeometryCube" );
+    clout << "Prepare cubeGeometry ..." << std::endl;
+
+    using T = MyCase::value_t;
+    auto& geometry = myCase.getGeometry();
+    auto& parameters = myCase.getParameters();
+
+    T dx = parameters.get<parameters::PHYS_DELTA_X>();
+    T boundaryShift = parameters.get<parameters::BOUNDARY_SHIFT>();
+    T lx = parameters.get<parameters::DOMAIN_L>();
+    T originShift = lx/2;
+
+    Vector<T,3> origin = {0.+boundaryShift, -originShift, -originShift};
+    Vector<T,3> extent = {lx-boundaryShift, lx, lx};
+    IndicatorCuboid3D<T> span(extent, origin);
+
+    origin = {0+boundaryShift,0,0};
+
+    // select between a finite or infinite source of light
+    // finite light beam source
+    IndicatorCuboid3D<T> emittor(2*dx, 0.2, 0.2, origin);
+    // infinite light beam source
+    //IndicatorCuboid3D<T> emittor(2*conversionFactorLength, 1.0-2*conversionFactorLength, 1.0-2*conversionFactorLength, origin);
+
+    // set material number, 0 outside, 1 domain, 2 outflow, 3 inflow
+    geometry.rename(0, 2, span);
+    geometry.rename(2, 1, {1,1,1});
+    geometry.rename(2, 3, emittor);
+
+    geometry.clean();
+    geometry.innerClean();
+    geometry.checkForErrors();
+
+    geometry.print();
+
+    clout << "Prepare cubeGeometry ... OK" << std::endl;
+}
+
+void attachUnitConverter(MyCase& myCase){
+    using T = MyCase::value_t;
+    auto& geometry = myCase.getGeometry();
+    auto& params   = myCase.getParameters();
+
+    auto& Rlattice = myCase.getLattice(Radiation {});
+    using RDESCRIPTOR = MyCase::descriptor_t_of<Radiation>;
+
+    Rlattice.setUnitConverter<RadiativeUnitConverter<T,RDESCRIPTOR>>(
+        params.get<parameters::RESOLUTION>(),
+        params.get<parameters::LATTICE_RELAXATION_TIME>(),
+        params.get<parameters::ABSORPTION>(),
+        params.get<parameters::SCATTERING>(),
+        params.get<parameters::ANINOSOTROPY_FACTOR>()
+    );
+}
+
+void prepareLatticeMink(MyCase& myCase){
+    OstreamManager clout( std::cout, "prepareLattice" );
+    clout << "Prepare Lattice for Mink ..." << std::endl;
+
+    using T = MyCase::value_t;
+    auto& geometry = myCase.getGeometry();
+    auto& params   = myCase.getParameters();
+
+    auto& Rlattice = myCase.getLattice(Radiation {});
+    using RDESCRIPTOR = MyCase::descriptor_t_of<Radiation>;
+
+    attachUnitConverter(myCase);
+    const auto& converter = Rlattice.getUnitConverter();
+    converter.print();
+
+}
+
+void prepareLatticeMcHardy(MyCase& myCase){
+    OstreamManager clout( std::cout, "prepareLattice" );
+    clout << "Prepare Lattice for McHardy ..." << std::endl;
+
+}
 
 int main( int argc, char *argv[] ){
     OstreamManager clout(std::cout,"main");
+    using T = MyCase::value_t;
+
     initialize(&argc, &argv);
 
     MyCase::ParametersD myCaseParameters;
     {
         using namespace olb::parameters;
         myCaseParameters.set<RESOLUTION>(50);
+        myCaseParameters.set<DOMAIN_L>(1.);
         myCaseParameters.set<LATTICE_RELAXATION_TIME>(1.0);
         myCaseParameters.set<MAX_PHYS_T>(12);
         myCaseParameters.set<PHYS_SAVE_ITER>(2.0);
 
-        myCaseParameters.set<CASE_NUMBER>(1);
+        myCaseParameters.set<CASE_NUMBER>(1.);
         myCaseParameters.set<DYNAMICS_NAME>(std::string("mink"));
         myCaseParameters.set<USE_MINK>(true);
+
+        myCaseParameters.set<BOUNDARY_SHIFT>(0.);
+
+        //Copmuted Values
+        myCaseParameters.set<PHYS_DELTA_X>([&]{
+            return myCaseParameters.get<DOMAIN_L>() / myCaseParameters.get<RESOLUTION>();
+        });
 
     }
     myCaseParameters.fromCLI(argc, argv);
@@ -82,6 +190,29 @@ int main( int argc, char *argv[] ){
     int case_number = myCaseParameters.get<parameters::CASE_NUMBER>();
     if(case_number < 1 || case_number > 35){
         throw std::runtime_error("Please select a case number between 1 and 35");
+    }else{
+        //Load appropriate data from xml
+        std::string fName("cube3d.xml");
+        std::string case_name = "case" + std::to_string(case_number);
+        clout << case_name << std::endl;
+        XMLreader config(fName);
+
+        T absorption, scattering, mcvalue, totalEnergy;
+        std::stringstream xmlAbsorption(config["Application"][case_name].getAttribute("absorption"));
+        xmlAbsorption >> absorption;
+        myCaseParameters.set<parameters::ABSORPTION>(absorption);
+
+        std::stringstream xmlScattering(config["Application"][case_name].getAttribute("scattering"));
+        xmlScattering >> scattering;
+        myCaseParameters.set<parameters::SCATTERING>(scattering);
+
+        std::stringstream xmlMcValue(config["Application"][case_name].getAttribute("mcvalue"));
+        xmlMcValue >> mcvalue;
+        myCaseParameters.set<parameters::MCVALUE>(mcvalue);
+
+        std::stringstream xmlTotalEnergy(config["Application"][case_name].getAttribute("totalEnergy"));
+        xmlTotalEnergy >> totalEnergy;
+        myCaseParameters.set<parameters::TOTAL_ENERGY>(totalEnergy);
     }
 
     //Check if given dynamics name is valid
@@ -93,5 +224,22 @@ int main( int argc, char *argv[] ){
     }
     if(std::string("MCHARDY") == s){myCaseParameters.set<parameters::USE_MINK>(false);}
 
-    myCaseParameters.print();
+    // Set output directory
+    std::string caseName = "case" + std::to_string(case_number);
+    std::string caseExtension = myCaseParameters.get<parameters::USE_MINK>() ? std::string("_mink/") : std::string("_mcHardy/");
+    singleton::directories().setOutputDir( "./"+std::to_string(myCaseParameters.get<parameters::RESOLUTION>())+caseName+caseExtension );
+
+
+    /// === Step 3: Create Mesh ===
+    Mesh mesh = createMesh(myCaseParameters);
+
+    /// === Step 4: Create Case ===
+    MyCase myCase(myCaseParameters, mesh);
+
+    /// === Step 5: Prepare Geometry ===
+    prepareGeometry(myCase);
+
+    /// === Step 6: Prepare Lattice ===
+    myCaseParameters.get<parameters::USE_MINK>() ? prepareLatticeMink(myCase) : prepareLatticeMcHardy(myCase);
+
 }
