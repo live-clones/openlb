@@ -63,27 +63,25 @@ using MyCase = Case<
 
 template <typename T>
 IndicatorBlockData3D<T>
-generateIndicatorFromVTI(std::string vtiFile,  std::string arrayName)
+generateIndicatorFromVTI(MyCase::ParametersD& parameters, std::string vtiFile,  std::string arrayName)
 {
-  const T sourceScale = scalingFactor;
+  const T sourceScale = parameters.get<parameters::SCALING_FACTOR>();
 
-  vtiReader = BlockVTIreader3D<T, T>(vtiFile, arrayName);
+  BlockVTIreader3D<T, T> vtiReader(vtiFile, arrayName);
 
-  auto           cuboidSample     = vtiReader->getCuboid();
+  auto           cuboidSample     = vtiReader.getCuboid();
   T              deltaRsample     = cuboidSample.getDeltaR() * sourceScale;
   Vector<int, 3> extentSample     = cuboidSample.getExtent();
   Vector<T, 3>   originSamplePhys = cuboidSample.getOrigin() * sourceScale;
   Vector<T, 3>   extentSamplePhys = {deltaRsample * T(extentSample[0] + 0.5),
                                      deltaRsample * T(extentSample[1] + 0.5),
                                      deltaRsample * T(extentSample[2] + 0.5)};
-  for (unsigned i = 0; i < 3; ++i) {
-    extent[i] = extentSamplePhys[i];
-  }
-  clout << "Rock x-length: " << extent[0] << " m" << std::endl;
-  clout << "Rock y-length: " << extent[1] << " m" << std::endl;
-  clout << "Rock z-length: " << extent[2] << " m" << std::endl;
-  myCaseParameters.set<DOMAIN_EXTENT>( {extent[0], extent[1], extent[2]} );
-  return IndicatorBlockData3D<T>(vtiReader->getBlockData(), extentSamplePhys,
+  OstreamManager clout(std::cout, "vti");
+  clout << "Rock x-length: " << extentSample[0] << " m" << std::endl;
+  clout << "Rock y-length: " << extentSample[1] << " m" << std::endl;
+  clout << "Rock z-length: " << extentSample[2] << " m" << std::endl;
+  parameters.set<parameters::DOMAIN_EXTENT>(extentSamplePhys);
+  return IndicatorBlockData3D<T>(vtiReader.getBlockData(), extentSamplePhys,
                                   originSamplePhys, deltaRsample, false);
 }
 
@@ -91,7 +89,7 @@ Mesh<MyCase::value_t,MyCase::d> createMesh(MyCase::ParametersD& parameters, std:
   using T = MyCase::value_t;
   const T physDeltaX = parameters.get<parameters::PHYS_DELTA_X>();
   IndicatorBlockData3D<T> rock =
-      generateIndicatorFromVTI<T>(vtiFile, arrayName);
+      generateIndicatorFromVTI<T>(parameters, vtiFile, arrayName);
   IndicatorLayer3D<T> layer(rock, physDeltaX);
 
   Mesh<T,MyCase::d> mesh(layer, physDeltaX, singleton::mpi().getSize());
@@ -111,7 +109,7 @@ void prepareGeometry( MyCase& myCase, std::string vtiFile,  std::string arrayNam
 
   // Set the cells inside of the layer indicator to MN 2
   IndicatorBlockData3D<T> rock =
-      generateIndicatorFromVTI<T>(vtiFile, arrayName);
+      generateIndicatorFromVTI<T>(parameters, vtiFile, arrayName);
   IndicatorLayer3D<T> layer(rock, physDeltaX);
   geometry.rename(0, 2, layer);
 
