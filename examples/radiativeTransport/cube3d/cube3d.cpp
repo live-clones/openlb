@@ -246,16 +246,6 @@ void prepareLatticeMcHardy(MyCase& myCase){
 int main( int argc, char *argv[] ){
     OstreamManager clout(std::cout,"main");
 
-    clout << std::endl;
-    clout << "  ┃          ____                   __    ____  " <<std::endl;
-    clout << "  ┃ ┏━━┓    / __ \\____  ___  ____  / /   / __ ) " <<std::endl;
-    clout << "┏━╋┓┃  ┃   / / / / __ \\/ _ \\/ __ \\/ /   / __  | " <<std::endl;
-    clout << "┃ ┗╋╋━━┻┓ / /_/ / /_/ /  __/ / / / /___/ /_/ /  " <<std::endl;
-    clout << "┗━━┛┃   ┃ \\____/ .___/\\___/_/ /_/_____/_____/   " <<std::endl;
-    clout << "    ┗━━━┛     /_/                               " <<std::endl;
-    clout << std::endl;
-
-
     using T = MyCase::value_t;
 
     initialize(&argc, &argv);

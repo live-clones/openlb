@@ -27,10 +27,12 @@
 //======================================================================
 // ======== Radiative Transport Boundary PostProcessor ======//
 //======================================================================
+struct INTENSITY : public olb::descriptors::FIELD_BASE<1> { };
+
+
 template<typename T, typename DESCRIPTOR, int discreteNormalX, int discreteNormalY, int discreteNormalZ>
 class RtlbmDirectedBoundaryPostProcessor3D{
     public:
-    struct INTENSITY : public descriptors::FIELD_BASE<1> { };
     using parameters = meta::list<INTENSITY>;
 
     int getPriority() const {
