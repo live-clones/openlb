@@ -51,22 +51,24 @@ enum class BoundaryCondition: int {
 };
 
 namespace olb::parameters {
-  // DOMAIN
-  struct LATT_CHAR_VELOCITY : public descriptors::FIELD_BASE<1> { };    // characteristic lattice velocity ("Mach number")
-  struct CORE_EXTENT        : public descriptors::FIELD_BASE<0,1> { };  // fluid domain size [m]
-  // PULSE
-  struct AMPLITUDE          : public descriptors::FIELD_BASE<1> { };    // pressure amplitude of Gaussian pulse
-  struct ALPHA              : public descriptors::FIELD_BASE<1> { };    // distribution factor of Gaussian pulse
-  // BOUNDARY CONDITIONS
-  struct BOUNDARY_CONDITION : public descriptors::TYPED_FIELD_BASE<BoundaryCondition,1> { };  // counter, see beginning of file
-  struct ETERNALSCALE       : public descriptors::FIELD_BASE<1> { };               // amout to extend domain by for 'eternal' case
-  struct DAMPING_DEPTH_LU   : public descriptors::TYPED_FIELD_BASE<size_t,1> { };  // number of points for sponge layer
-  struct DAMPING_STRENGTH   : public descriptors::FIELD_BASE<1> { };               // maximum damping strength of sponge layer
-  // TIMING AND OUTPUTS
-  struct T_TABLE            : public descriptors::FIELD_BASE<1> { };  // tabular outputs every T_TABLE seconds (for line plot)
-  struct T_GRAPHICAL_OUTPUT : public descriptors::FIELD_BASE<1> { };  // graphical outputs every T_GRAPHICAL seconds
-  struct T_LOG              : public descriptors::FIELD_BASE<1> { };  // timer outputs every T_LOG seconds
-  struct DO_GRAPHICAL_OUTPUT: public descriptors::TYPED_FIELD_BASE<bool,1> { };    // set to do images
+
+// DOMAIN
+struct LATT_CHAR_VELOCITY : public descriptors::FIELD_BASE<1> { };    // characteristic lattice velocity ("Mach number")
+struct CORE_EXTENT        : public descriptors::FIELD_BASE<0,1> { };  // fluid domain size [m]
+// PULSE
+struct AMPLITUDE          : public descriptors::FIELD_BASE<1> { };    // pressure amplitude of Gaussian pulse
+struct ALPHA              : public descriptors::FIELD_BASE<1> { };    // distribution factor of Gaussian pulse
+// BOUNDARY CONDITIONS
+struct BOUNDARY_CONDITION : public descriptors::TYPED_FIELD_BASE<BoundaryCondition,1> { };  // counter, see beginning of file
+struct ETERNALSCALE       : public descriptors::FIELD_BASE<1> { };               // amout to extend domain by for 'eternal' case
+struct DAMPING_DEPTH_LU   : public descriptors::TYPED_FIELD_BASE<size_t,1> { };  // number of points for sponge layer
+struct DAMPING_STRENGTH   : public descriptors::FIELD_BASE<1> { };               // maximum damping strength of sponge layer
+// TIMING AND OUTPUTS
+struct T_TABLE            : public descriptors::FIELD_BASE<1> { };  // tabular outputs every T_TABLE seconds (for line plot)
+struct T_GRAPHICAL_OUTPUT : public descriptors::FIELD_BASE<1> { };  // graphical outputs every T_GRAPHICAL seconds
+struct T_LOG              : public descriptors::FIELD_BASE<1> { };  // timer outputs every T_LOG seconds
+struct DO_GRAPHICAL_OUTPUT: public descriptors::TYPED_FIELD_BASE<bool,1> { };    // set to do images
+
 }
 
 Mesh<MyCase::value_t,MyCase::d> createMesh(MyCase::ParametersD& parameters) {
@@ -154,20 +156,15 @@ void prepareGeometry( MyCase& myCase ) {
     origin[2] = geometry.getStatistics().getMaxPhysR(2)[2] - physDeltaX2;
     IndicatorCuboid3D<T> back(extent, origin);
     geometry.rename(2, 6, 1, back);
-
   } else if ( boundaryCondition == BoundaryCondition::damping ) {
-
     extent -= 6 * physDeltaX2;
     origin += 3 * physDeltaX2;
     IndicatorCuboid3D<T> spongeOutside(extent, origin);
     geometry.rename(2, 3, spongeOutside);
     geometry.rename(3, 1, domainFluid);
     geometry.rename(2, 1);
-
   } else {
-
     geometry.rename(2, 1);
-
   }
 
   geometry.checkForErrors();
@@ -416,7 +413,7 @@ void simulate(MyCase& myCase) {
       timer.print(iT);
     }
   }
-  
+
   gplot_l2_abs.setYrange(1e-5, 1);
   gplot_l2_abs.setLogScale(2);
   gplot_l2_abs.writePNG(-1, -1, "gplot_l2_abs");
@@ -460,7 +457,7 @@ int main(int argc, char* argv[])
     myCaseParameters.set<PHYS_CHAR_DENSITY  >(        1.0 );
     myCaseParameters.set<RESOLUTION         >(        101 );
     myCaseParameters.set<PHYS_DELTA_X       >(
-      myCaseParameters.get<CORE_EXTENT>()[0] 
+      myCaseParameters.get<CORE_EXTENT>()[0]
       / myCaseParameters.get<RESOLUTION>());
   }
   myCaseParameters.fromCLI(argc, argv);
@@ -519,6 +516,4 @@ int main(int argc, char* argv[])
 
   /// === Step 8: Simulate ===
   simulate(myCase);
-
-  clout << "gausspulse3d ... done" << std::endl;
 }

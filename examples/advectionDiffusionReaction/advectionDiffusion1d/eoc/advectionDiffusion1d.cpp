@@ -35,7 +35,7 @@
  *  the experimental order of convergence towards the analytical solution.
  */
 
-#include "case.h"
+#include "../case.h"
 
 using namespace olb;
 using namespace olb::graphics;
@@ -55,9 +55,14 @@ int main(int argc, char *argv[])
   //CSV<T> csvWriter(filename, tags);
   //csvWriter.setColumnTags(tags, filename);
 
+  /// file clean-up
+  CSV<MyCase::value_t> csvWriter;
+  csvWriter.clearFile("averageSimL2RelErr");
+
   MyCase::ParametersD myCaseParameters;
   {
     using namespace olb::parameters;
+    myCaseParameters.set<RUNS>(3);
     myCaseParameters.set<RESOLUTION>(50);
     myCaseParameters.set<OUTPUT_INTERVAL>(50);
     myCaseParameters.set<PHYS_CHAR_LENGTH>(2.);
@@ -68,19 +73,26 @@ int main(int argc, char *argv[])
   }
   myCaseParameters.fromCLI(argc, argv);
 
-  Mesh mesh = createMesh(myCaseParameters);
+  const MyCase::value_t N0 = myCaseParameters.get<parameters::RESOLUTION>();
+  const MyCase::value_t statIter0 = myCaseParameters.get<parameters::OUTPUT_INTERVAL>();
 
-  MyCase myCase(myCaseParameters, mesh);
+  for (std::size_t i = 0; i < myCaseParameters.get<parameters::RUNS>(); ++i) {
 
-  /// === Step 5: Prepare Geometry ===
-  prepareGeometry(myCase);
+    //Adjust Resolution and output interval
+    myCaseParameters.set<parameters::RESOLUTION>(util::pow(2,i) * N0);
+    myCaseParameters.set<parameters::OUTPUT_INTERVAL>(util::pow(4,i) * statIter0);
 
-  /// === Step 6: Prepare Lattice ===
-  prepareLattice(myCase);
 
-  /// === Step 7: Definition of Initial, Boundary Values, and Fields ===
-  setInitialValues(myCase);
+    Mesh mesh = createMesh(myCaseParameters);
 
-  /// === Step 8: Simulate ===
-  simulate(myCase);
+    MyCase myCase(myCaseParameters, mesh);
+
+    prepareGeometry(myCase);
+
+    prepareLattice(myCase);
+
+    setInitialValues(myCase);
+
+    simulate(myCase);
+  }
 }

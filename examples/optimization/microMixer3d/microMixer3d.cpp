@@ -54,12 +54,8 @@ using MyOptiCase = OptiCaseFDQ<Controlled, MyCase>;
 
 namespace olb::parameters {
 
-struct CHAR_PHYS_LENGTH : public descriptors::FIELD_BASE<1> { };
-struct CHAR_PHYS_U : public descriptors::FIELD_BASE<1> { };
 struct DIFFUSION : public descriptors::FIELD_BASE<1> { };
 struct LATTICE_U : public descriptors::FIELD_BASE<1> { };
-struct PHYS_START_PERIOD : public descriptors::FIELD_BASE<1> { };
-struct PHYS_START_T : public descriptors::FIELD_BASE<1> { };
 
 // control variables
 struct PHYS_PERIOD  : public descriptors::FIELD_BASE<1> { };
@@ -123,20 +119,20 @@ void prepareLattice(MyCase& myCase) {
   auto& sLatticeAD = myCase.getLattice(Concentration0{});
 
   sLattice.setUnitConverter<UnitConverterFromResolutionAndLatticeVelocity<T,D3Q19<>>>(
-    (int)   params.get<RESOLUTION>(),        //resolution
-    ( T )   params.get<LATTICE_U>(),         //charLatticeVelocity
-    ( T )   params.get<CHAR_PHYS_LENGTH>(),  //charPhysLength
-    ( T )   params.get<CHAR_PHYS_U>(),       //charPhysVelocity
-    ( T )   params.get<VISCOSITY>(),         //physViscosity
-    ( T )   params.get<DENSITY>()            //physDensity
+    (int)   params.get<parameters::RESOLUTION>(),        //resolution
+    ( T )   params.get<parameters::LATTICE_U>(),         //charLatticeVelocity
+    ( T )   params.get<parameters::PHYS_CHAR_LENGTH>(),  //charPhysLength
+    ( T )   params.get<parameters::PHYS_CHAR_VELOCITY>(),  //charPhysVelocity
+    ( T )   params.get<parameters::PHYS_CHAR_VISCOSITY>(), //physViscosity
+    ( T )   params.get<parameters::PHYS_CHAR_DENSITY>()    //physDensity
   );
   sLatticeAD.setUnitConverter<UnitConverterFromResolutionAndLatticeVelocity<T,D3Q7<VELOCITY>>>(
-    (int)   params.get<RESOLUTION>(),        //resolution
-    ( T )   params.get<LATTICE_U>(),         //charLatticeVelocity
-    ( T )   params.get<CHAR_PHYS_LENGTH>(),  //charPhysLength
-    ( T )   params.get<CHAR_PHYS_U>(),       //charPhysVelocity
-    ( T )   params.get<VISCOSITY>(),         //physViscosity
-    ( T )   params.get<DENSITY>()            //physDensity
+    (int)   params.get<parameters::RESOLUTION>(),        //resolution
+    ( T )   params.get<parameters::LATTICE_U>(),         //charLatticeVelocity
+    ( T )   params.get<parameters::PHYS_CHAR_LENGTH>(),  //charPhysLength
+    ( T )   params.get<parameters::PHYS_CHAR_VELOCITY>(),  //charPhysVelocity
+    ( T )   params.get<parameters::PHYS_CHAR_VISCOSITY>(), //physViscosity
+    ( T )   params.get<parameters::PHYS_CHAR_DENSITY>()    //physDensity
   );
 
   auto& converter = sLattice.getUnitConverter();
@@ -426,17 +422,18 @@ int main(int argc, char* argv[])
   {
     using namespace olb::parameters;
     myCaseParameters.set<LATTICE_U          >(0.1);
-    myCaseParameters.set<CHAR_PHYS_U        >(0.0332);
-    myCaseParameters.set<VISCOSITY          >(1.e-6);
-    myCaseParameters.set<CHAR_PHYS_LENGTH   >(0.00133);
+    myCaseParameters.set<PHYS_CHAR_VELOCITY >(0.0332);
+    myCaseParameters.set<PHYS_CHAR_VISCOSITY>(1.e-6);
+    myCaseParameters.set<PHYS_CHAR_LENGTH   >(0.00133);
     myCaseParameters.set<MAX_PHYS_T         >(5.);   // time for fluid simulation
     myCaseParameters.set<PHYS_START_T       >(0.6);  // time to start fluid pulsation
     myCaseParameters.set<PHYS_START_PERIOD  >(0.4);  // time to start fluid pulsation
-    myCaseParameters.set<DENSITY            >(1000);
+    myCaseParameters.set<PHYS_CHAR_DENSITY  >(1000);
     myCaseParameters.set<DIFFUSION          >(1.e-7);  // 1.e-9
     myCaseParameters.set<RESOLUTION         >(7);    // resolution of the hydraulic diameter  // 36
     myCaseParameters.set<DX>([&](){
-      return myCaseParameters.get<CHAR_PHYS_LENGTH>() / myCaseParameters.get<RESOLUTION>();
+      return myCaseParameters.get<PHYS_CHAR_LENGTH>()
+           / myCaseParameters.get<RESOLUTION>();
     });
   }
   myCaseParameters.fromCLI(argc, argv);
