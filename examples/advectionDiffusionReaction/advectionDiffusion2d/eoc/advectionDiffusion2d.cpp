@@ -63,13 +63,14 @@ int main(int argc, char *argv[])
     myCaseParameters.set<PHYS_DIFFUSIVITY>(0.05);
     myCaseParameters.set<PECLET>(100.);
     myCaseParameters.set<PULSE_DIFF_BOUND>(1e-1);
-    myCaseParameters.set<MAX_RESOLUTION>([&]{return util::pow(2, myCaseParameters.get<RUNS>()-1) * myCaseParameters.get<RESOLUTION>();
-    });
   }
   myCaseParameters.fromCLI(argc, argv);
 
   const MyCase::value_t N0 = myCaseParameters.get<parameters::RESOLUTION>();
   const MyCase::value_t statIter0 = myCaseParameters.get<parameters::OUTPUT_INTERVAL>();
+  myCaseParameters.set<parameters::MAX_RESOLUTION>(
+    util::pow(2, myCaseParameters.get<parameters::RUNS>()-1) * myCaseParameters.get<parameters::RESOLUTION>()
+  );
 
   for (std::size_t i = 0; i < myCaseParameters.get<parameters::RUNS>(); ++i) {
 

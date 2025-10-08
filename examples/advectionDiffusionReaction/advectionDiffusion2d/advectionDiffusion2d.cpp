@@ -53,6 +53,7 @@ int main(int argc, char *argv[])
     myCaseParameters.set<PHYS_DIFFUSIVITY>(0.05);
     myCaseParameters.set<PECLET>(100.); // Peclet number (Pe = u*L/mue)
     myCaseParameters.set<PULSE_DIFF_BOUND>(1e-1);
+    myCaseParameters.set<MAX_RESOLUTION>(myCaseParameters.get<RESOLUTION>());
   }
   myCaseParameters.fromCLI(argc, argv);
 
