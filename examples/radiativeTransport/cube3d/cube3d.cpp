@@ -34,6 +34,7 @@
 */
 
 #include <olb.h>
+#include "rtlbmDirectedBoundary.h"
 
 #include <stdexcept>
 
@@ -172,11 +173,17 @@ void prepareLatticeMink(MyCase& myCase){
     Rlattice.defineDynamics<EquilibriumBoundaryFirstOrder<T, RDESCRIPTOR>>(geometry, 2);
     Rlattice.defineDynamics<EquilibriumBoundaryFirstOrder<T, RDESCRIPTOR>>(geometry, 3);
 
+    if(params.get<parameters::USE_DIRECTED>()){
+        //setRtlbmDirectedBoundary<T,RDESCRIPTOR>(Rlattice, geometry.getMaterialIndicator({3}), params.get<parameters::INTENSITY>());
+    }
+
+
     Rlattice.setParameter<descriptors::OMEGA>(latticeRelaxationFrequency);
     Rlattice.setParameter<collision::P1::ABSORPTION>( latticeAbsorption );
     Rlattice.setParameter<collision::P1::SCATTERING>( latticeScattering );
     Rlattice.setParameter<collision::Poisson::SINK>( latticeSink );
     Rlattice.setParameter<parameters::INTENSITY>( inletDirichlet );
+    //Rlattice.setParameter<>
 
     clout << "Prepare Lattice ... OK" << std::endl;
     return;
@@ -238,6 +245,17 @@ void prepareLatticeMcHardy(MyCase& myCase){
 
 int main( int argc, char *argv[] ){
     OstreamManager clout(std::cout,"main");
+
+    clout << std::endl;
+    clout << "  ┃          ____                   __    ____  " <<std::endl;
+    clout << "  ┃ ┏━━┓    / __ \\____  ___  ____  / /   / __ ) " <<std::endl;
+    clout << "┏━╋┓┃  ┃   / / / / __ \\/ _ \\/ __ \\/ /   / __  | " <<std::endl;
+    clout << "┃ ┗╋╋━━┻┓ / /_/ / /_/ /  __/ / / / /___/ /_/ /  " <<std::endl;
+    clout << "┗━━┛┃   ┃ \\____/ .___/\\___/_/ /_/_____/_____/   " <<std::endl;
+    clout << "    ┗━━━┛     /_/                               " <<std::endl;
+    clout << std::endl;
+
+
     using T = MyCase::value_t;
 
     initialize(&argc, &argv);
