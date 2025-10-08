@@ -28,7 +28,7 @@
  *
  * 1. Provide or download a medium.
  *    For example: https://www.digitalrocksportal.org/projects/92
- *    NOTE: This redirects to https://digitalporousmedia.org/published-datasets 
+ *    NOTE: This redirects to https://digitalporousmedia.org/published-datasets
  *          and you need to see yourself if you find an appropriate geometry
  * 2. Convert the TIFF series to VTI using ParaView
  *    (Point data are mandatory, cell data do not work)
@@ -220,7 +220,7 @@ void setInitialValues( MyCase& myCase ) {
 
 void setTemporalValues( MyCase& myCase,
                         std::size_t iT )
-{ 
+{
   OstreamManager clout(std::cout, "setTemporalValues");
   using T = MyCase::value_t;
   using DESCRIPTOR = MyCase::descriptor_t_of<NavierStokes>;
@@ -349,7 +349,7 @@ void simulate( MyCase& myCase ) {
   const T   fluidDensity        = parameters.get<parameters::PHYS_CHAR_DENSITY>();
   const T   timeScalingFactor   = parameters.get<parameters::TIME_SCALING_FACTOR>();
   const T   lx                  = parameters.get<parameters::DOMAIN_EXTENT>()[0];
-  
+
   constexpr T permeabilityForVelocityEstimation = T {1e-7};
   // Estimating velocity using Darcy's law
   const T charPhysVelocityEstimation =
@@ -372,7 +372,7 @@ void simulate( MyCase& myCase ) {
   util::ValueTracer<T> converge(interval, epsilon);
 
   clout << "Timeframe to be simulated: " << maxPhysT << " s" << std::endl;
-  
+
   clout << "starting simulation..." << std::endl;
   clout << "MaxIT: " << iTmax << std::endl;
   util::Timer<T> timer(iTmax,
