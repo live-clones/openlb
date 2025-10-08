@@ -47,37 +47,18 @@ using MyCase = Case<
 >;
 
 
-const std::array<double,2> area = {0.03,0.025};
-const std::array<double,2> gravity_force = {{0., -9.81}};
-
-const double char_phys_length = 0.03;
-const double char_phys_vel = 0.1;
-const bool has_surface_tension = true;
-const double surface_tension_coefficient = 0.0661;
-
-const std::array<double,2> initial_falling_speed{{0., -6.03}};
-
-const double viscosity = 1e-4;
-const double density = 1e3;
-const double physTime = 0.05;
-const double latticeRelaxationTime = 0.516;
-const int N = 520;
-
-const double transitionThreshold = 1e-3; // Anti jitter value
-const double lonelyThreshold = 1.0; // When to remove lonely cells
-
 /// @brief Create a simulation mesh, based on user-specified geometry
 /// @return An instance of a mesh with the relevant information
 Mesh<MyCase::value_t, MyCase::d> createMesh(MyCase::ParametersD& parameters) {
   using T = MyCase::value_t;
   using DESCRIPTOR = MyCase::descriptor_t_of<NavierStokes>;
 
-  Vector<T,2> extend(area[0], area[1]);
+  Vector<T,2> extend(parameters.get<parameters::DOMAIN_EXTENT>()[0], parameters.get<parameters::DOMAIN_EXTENT>()[1]);
   Vector<T,2> origin;
   IndicatorCuboid2D<T> cuboid (extend, origin);
 
-  T characteristic_length = area[0];
-  T physDeltaX = characteristic_length / N;
+  T characteristic_length = parameters.get<parameters::DOMAIN_EXTENT>()[0];
+  T physDeltaX = characteristic_length / parameters.get<parameters::RESOLUTION>();
 
   Mesh<T, MyCase::d> mesh = Mesh<MyCase::value_t, MyCase::d>(cuboid, physDeltaX, singleton::mpi().getSize());
   mesh.setOverlap(3);
@@ -189,12 +170,18 @@ void prepareLattice(MyCase& myCase) {
   auto& geometry = myCase.getGeometry();
   auto& parameters = myCase.getParameters();
 
-
   OstreamManager clout( std::cout,"prepareLattice" );
   clout << "Prepare Lattice ..." << std::endl;
 
+  const int resolution = parameters.get<parameters::RESOLUTION>();
+  const T latticeRelaxationTime = parameters.get<parameters::LATTICE_RELAXATION_TIME>();
+  const T char_phys_length = parameters.get<parameters::DOMAIN_EXTENT>()[0];
+  const T char_phys_vel = parameters.get<parameters::PHYS_CHAR_VELOCITY>();
+  const T viscosity = parameters.get<parameters::PHYS_CHAR_VISCOSITY>();
+  const T density = parameters.get<parameters::PHYS_CHAR_DENSITY>();
+
   lattice.setUnitConverter<UnitConverterFromResolutionAndRelaxationTime<T, DESCRIPTOR>>(
-    int  {N},                   // resolution: number of voxels per charPhysL
+    int  {resolution},          // resolution: number of voxels per charPhysL
     (T)  latticeRelaxationTime, // latticeRelaxationTime: relaxation time, have to be greater than 0.5!
     (T)  char_phys_length,      // charPhysLength: reference length of simulation geometry
     (T)  char_phys_vel,         // charPhysVelocity: maximal/highest expected velocity during simulation in __m / s__
@@ -214,7 +201,7 @@ void prepareLattice(MyCase& myCase) {
   lattice.setParameter<collision::LES::SMAGORINSKY>(T(0.2));
 
   // prepareFallingDrop(...);
-  T lattice_size = char_phys_length / N;
+  T lattice_size = char_phys_length / resolution;
 
   AnalyticalConst2D<T,T> zero( 0. );
   AnalyticalConst2D<T,T> one( 1. );
@@ -244,8 +231,12 @@ void prepareLattice(MyCase& myCase) {
     lattice.defineField<FreeSurface::CELL_TYPE>(geometry, i, four);
   }
 
+  std::array<T,2> gravity;
+  gravity[0] = parameters.get<parameters::GRAVITY>()[0];
+  gravity[1] = parameters.get<parameters::GRAVITY>()[1];
+
   T force_factor = T(1) / converter.getConversionFactorForce() * converter.getConversionFactorMass();
-  AnalyticalConst2D<T,T> force_a{gravity_force[0] * force_factor, gravity_force[1] * force_factor};
+  AnalyticalConst2D<T,T> force_a{gravity[0] * force_factor, gravity[1] * force_factor};
   lattice.defineField<descriptors::FORCE>(geometry.getMaterialIndicator({1}), force_a);
 
   // Convert kg / s^2
@@ -255,13 +246,19 @@ void prepareLattice(MyCase& myCase) {
   static FreeSurface2DSetup<T,DESCRIPTOR> free_surface_setup{lattice};
   free_surface_setup.addPostProcessor();
 
+  const bool drop_isolated_cells = parameters.get<FreeSurface::DROP_ISOLATED_CELLS>();
+  const bool has_surface_tension = parameters.get<FreeSurface::HAS_SURFACE_TENSION>();
+  const T surface_tension_coefficient = parameters.get<FreeSurface::SURFACE_TENSION_PARAMETER>();
+  const T transitionThreshold = parameters.get<FreeSurface::TRANSITION>();
+  const T lonelyThreshold = parameters.get<FreeSurface::LONELY_THRESHOLD>();
+
   // Set variables from freeSurfaceHelpers.h
-  lattice.setParameter<FreeSurface::DROP_ISOLATED_CELLS>(true);
+  lattice.setParameter<FreeSurface::DROP_ISOLATED_CELLS>(drop_isolated_cells);
   lattice.setParameter<FreeSurface::TRANSITION>(transitionThreshold);
   lattice.setParameter<FreeSurface::LONELY_THRESHOLD>(lonelyThreshold);
   lattice.setParameter<FreeSurface::HAS_SURFACE_TENSION>(has_surface_tension);
   lattice.setParameter<FreeSurface::SURFACE_TENSION_PARAMETER>(surface_tension_coefficient_factor * surface_tension_coefficient);
-  lattice.setParameter<FreeSurface::FORCE_DENSITY>({gravity_force[0] * force_factor, gravity_force[1] * force_factor});
+  lattice.setParameter<FreeSurface::FORCE_DENSITY>({gravity[0] * force_factor, gravity[1] * force_factor});
 
   clout << "Prepare Lattice ... OK" << std::endl;
 }
@@ -279,12 +276,17 @@ void setInitialValues(MyCase& myCase){
 
   OstreamManager clout( std::cout,"setInitialValues" );
 
+  std::array<T,2> initial_falling_speed;
+  initial_falling_speed[0] = parameters.get<parameters::INITIAL_FALLING_SPEED>()[0];
+  initial_falling_speed[1] = parameters.get<parameters::INITIAL_FALLING_SPEED>()[1];
+
   std::array<T,DESCRIPTOR::d> lattice_speed;
   for(size_t i = 0; i < DESCRIPTOR::d; ++i){
     lattice_speed[i] = initial_falling_speed[i] * converter.getPhysDeltaT() / converter.getPhysDeltaX();
   }
 
-  T lattice_size = char_phys_length / N;
+  T characteristic_length = parameters.get<parameters::DOMAIN_EXTENT>()[0];
+  T lattice_size = characteristic_length / parameters.get<parameters::RESOLUTION>();
 
   FallingDropVel2D<T,DESCRIPTOR> u{lattice_size, lattice_speed};
   AnalyticalConst2D<T,T> one(1.);
@@ -320,7 +322,6 @@ void getResults(MyCase& myCase, int iT, util::Timer<MyCase::value_t>& timer)
   using DESCRIPTOR = MyCase::descriptor_t_of<NavierStokes>;
   using T = MyCase::value_t;
   auto& lattice = myCase.getLattice(NavierStokes{});
-  auto& geometry = myCase.getGeometry();
   auto& converter = lattice.getUnitConverter();
 
   OstreamManager clout( std::cout,"getResults" );
@@ -383,9 +384,12 @@ void simulate( MyCase& myCase ){
   auto& lattice = myCase.getLattice(NavierStokes{});
   auto& geometry = myCase.getGeometry();
   auto& converter = lattice.getUnitConverter();
+  auto& parameters = myCase.getParameters();
 
   // Main Loop with Timer
-  std::cout << "starting simulation..." << std::endl;
+  OstreamManager clout( std::cout,"starting simulation..." );
+
+  T physTime = parameters.get<parameters::MAX_PHYS_T>();
   util::Timer<T> timer( converter.getLatticeTime( physTime ), geometry.getStatistics().getNvoxel() );
   timer.start();
 
@@ -406,6 +410,25 @@ int main(int argc, char **argv)
 
   /// === Step 2: Set Parameters ===
   MyCase::ParametersD myCaseParameters;
+  {
+    using namespace olb::parameters;
+    myCaseParameters.set<RESOLUTION>(520);
+    myCaseParameters.set<PHYS_CHAR_VELOCITY>(2.);
+    myCaseParameters.set<PHYS_CHAR_VISCOSITY>(1e-4);
+    myCaseParameters.set<PHYS_CHAR_DENSITY>(1e3);
+    myCaseParameters.set<MAX_PHYS_T>(0.05);
+    myCaseParameters.set<DOMAIN_EXTENT>({0.03, 0.025});
+    myCaseParameters.set<GRAVITY>({0., -9.81});
+    myCaseParameters.set<LATTICE_RELAXATION_TIME>(.516);
+    myCaseParameters.set<INITIAL_FALLING_SPEED>({0., -6.03});
+
+    myCaseParameters.set<FreeSurface::DROP_ISOLATED_CELLS>(true);
+    myCaseParameters.set<FreeSurface::HAS_SURFACE_TENSION>(true);
+    myCaseParameters.set<FreeSurface::SURFACE_TENSION_PARAMETER>(0.0661);
+    myCaseParameters.set<FreeSurface::TRANSITION>(1e-3);
+    myCaseParameters.set<FreeSurface::LONELY_THRESHOLD>(1.0);
+  }
+  myCaseParameters.fromCLI(argc, argv);
 
   /// === Step 3: Create Mesh ===
   Mesh mesh = createMesh(myCaseParameters);
