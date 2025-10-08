@@ -52,6 +52,7 @@ int main(int argc, char* argv[]) {
     using namespace olb::parameters;
     myCaseParameters.set<START_RESOLUTION>(21);
     myCaseParameters.set<END_RESOLUTION>(41);
+    myCaseParameters.set<OVERLAP>(5);
     myCaseParameters.set<KNUDSEN>(0.45);
     myCaseParameters.set<B_COEFF>(-1);
     myCaseParameters.set<ACCOMODATION_COEFF>(1);
