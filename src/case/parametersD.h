@@ -120,7 +120,7 @@ public:
 
   // Set dependent parameter with a lambda for lazy evaluation
   template <concepts::Field FIELD>
-  void set(std::function<FieldD<value_t,descriptor_t,FIELD>()> f) {
+  void set(concepts::CallableReturning<FieldD<T,DESCRIPTOR,FIELD>> auto&& f) {
     TypeErasedFieldD& typeErasedField = _map[typeid(FIELD)];
     if (typeErasedField.field && typeErasedField.deleter) {
       typeErasedField.deleter();

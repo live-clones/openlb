@@ -296,6 +296,12 @@ concept BlockOperator = requires(OPERATOR op) {
   // Todo: Operator provides apply method template
 };
 
+/// Non-nullptr F returning T
+template <typename F, typename T>
+concept CallableReturning = !std::same_as<std::decay_t<F>, std::nullptr_t>
+                         &&  std::invocable<F>
+                         &&  std::convertible_to<std::invoke_result_t<F>, T>;
+
 }
 
 }

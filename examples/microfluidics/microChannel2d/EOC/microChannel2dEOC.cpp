@@ -25,7 +25,23 @@
 // This is an 2D example for a laminar flow at higher Knudsen numbers
 // with Knudsen slip condition and thermal creep along the wall
 
-#include "microChannel2d.h"
+#include "../microChannel2d.h"
+
+using T = MyCase::value_t;
+
+static Gnuplot<T> gplot(
+  "Velocity_eoc",
+  false,
+  "set terminal png size 720, 720 font 'Arial,10'",
+  Gnuplot<T>::LOGLOG,
+  Gnuplot<T>::LINREG);
+
+namespace olb::parameters {
+
+struct START_RESOLUTION : public descriptors::TYPED_FIELD_BASE<int,1> { };
+struct END_RESOLUTION : public descriptors::TYPED_FIELD_BASE<int,1> { };
+
+}
 
 int main(int argc, char* argv[]) {
   initialize(&argc, &argv);
@@ -34,10 +50,11 @@ int main(int argc, char* argv[]) {
   MyCase::ParametersD myCaseParameters;
   {
     using namespace olb::parameters;
+    myCaseParameters.set<START_RESOLUTION>(21);
+    myCaseParameters.set<END_RESOLUTION>(41);
     myCaseParameters.set<KNUDSEN>(0.45);
     myCaseParameters.set<B_COEFF>(-1);
     myCaseParameters.set<ACCOMODATION_COEFF>(1);
-    myCaseParameters.set<RESOLUTION>(21);
     myCaseParameters.set<RELAXATION_TIME>(1.13);
     myCaseParameters.set<MAX_PHYS_T>(2.e-6);
     myCaseParameters.set<START_TIME>([&] {
@@ -83,21 +100,40 @@ int main(int argc, char* argv[]) {
   }
   myCaseParameters.fromCLI(argc, argv);
 
-  /// === Step 3: Create Mesh ===
-  Mesh mesh = createMesh(myCaseParameters);
+  gplot.setLabel("Resolution test", "average Error");
 
-  /// === Step 4: Create Case ===
-  MyCase myCase(myCaseParameters, mesh);
+  for(int simuN =  myCaseParameters.get<parameters::START_RESOLUTION>();
+      simuN <=  myCaseParameters.get<parameters::END_RESOLUTION>();
+      simuN = simuN*2 - 1) {
+    myCaseParameters.set<parameters::RESOLUTION>(simuN);
+    /// === Step 3: Create Mesh ===
+    Mesh mesh = createMesh(myCaseParameters);
 
-  /// === Step 5: Prepare Geometry ===
-  prepareGeometry(myCase);
+    /// === Step 4: Create Case ===
+    MyCase myCase(myCaseParameters, mesh);
 
-  /// === Step 6: Prepare Lattice ===
-  prepareLattice(myCase);
+    /// === Step 5: Prepare Geometry ===
+    prepareGeometry(myCase);
 
-  /// === Step 7: Definition of Initial, Boundary Values, and Fields ===
-  setInitialValues(myCase);
+    /// === Step 6: Prepare Lattice ===
+    prepareLattice(myCase);
 
-  /// === Step 8: Simulate ===
-  simulate(myCase);
+    /// === Step 7: Definition of Initial, Boundary Values, and Fields ===
+    setInitialValues(myCase);
+
+    /// === Step 8: Simulate ===
+    simulate(myCase);
+
+    auto errors = myCaseParameters.get<parameters::ERROR_NORMS>();
+    gplot.setData (
+      T(simuN),
+      { errors[1], errors[3], errors[5]},
+      { "velocity L1 rel Error","velocity L2 rel Error",
+        "velocity Linf rel error"},
+      "top right",
+      { 'p','p','p' }
+    );
+  }
+
+  gplot.writePNG();
 }
