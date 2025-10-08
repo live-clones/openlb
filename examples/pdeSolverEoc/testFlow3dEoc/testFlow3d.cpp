@@ -86,14 +86,14 @@ int main(int argc, char* argv[])
   T _errorDisL1[myCaseParametersD.get<parameters::NUM_SIMULATIONS>()];
   T _errorDisL2[myCaseParametersD.get<parameters::NUM_SIMULATIONS>()];
   T _errorDisLInf[myCaseParametersD.get<parameters::NUM_SIMULATIONS>()];
- 
+
   for(int i = 0; i < myCaseParametersD.get<parameters::NUM_SIMULATIONS>(); ++i) {
     myCaseParametersD.set<parameters::RESOLUTION>(
       myCaseParametersD.get<parameters::START_RESOLUTION>() + i*10);
     myCaseParametersD.set<parameters::LATTICE_CHAR_VELOCITY>(
       myCaseParametersD.get<parameters::DOMAIN_EXTENT>()[0] /
       myCaseParametersD.get<parameters::RESOLUTION>());
-  
+
     /// @li Step 3: Create Mesh
     Mesh mesh = createMesh(myCaseParametersD);
 
