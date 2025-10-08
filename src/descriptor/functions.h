@@ -110,12 +110,6 @@ constexpr T invCs2() any_platform
 }
 
 template <typename T, unsigned D, unsigned Q>
-constexpr T cs2() any_platform
-{
-  return data::cs2<D,Q>;
-}
-
-template <typename T, unsigned D, unsigned Q>
 constexpr T lambda_e() any_platform
 {
   return data::lambda_e<D,Q>.template inverseAs<T>();
