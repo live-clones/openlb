@@ -40,21 +40,24 @@ using DESCRIPTOR = D3Q27
   FreeSurface::HAS_INTERFACE_NBRS
 >;
 
+const std::array<T,3> area{{512., 50., 50.}};
+const std::array<T,3> gravity_force = {{0.,0., 0.}};
+
+const T char_phys_length = 512;
+const T char_phys_vel = 0.1;
+const bool has_surface_tension = true;
+const T surface_tension_coefficient = 1.0;
+
+const T viscosity = 1./6.;
+const T density = 1e0;
+const T physTime = 500;
+const T latticeRelaxationTime = .6;
+const int N = 512;
+
+const T transitionThreshold = 1e-3; // Anti jitter value
+const T lonelyThreshold = 1.0; // When to remove lonely cells
+
 using BulkDynamics = SmagorinskyForcedBGKdynamics<T,DESCRIPTOR>;
-
-/*
- * Helper since there are a lot of values to set and giving a reference to this object is easier than
- * defining the function calls accordingly
- */
-struct FreeSurfaceAppHelper {
-  std::array<T,3> area{{512., 50., 50.}};
-  std::array<T,3> gravity_force = {{0.,0., 0.}};
-
-  T char_phys_length = 512;
-  T char_phys_vel = 0.1;
-  bool has_surface_tension = true;
-  T surface_tension_coefficient = 1.0;
-};
 
 template <typename T, typename DESCRIPTOR>
 class FreeSurfaceRayleighInstability3D final : public AnalyticalF<DESCRIPTOR::d, T,T> {
@@ -142,14 +145,14 @@ void prepareGeometry( UnitConverter<T,DESCRIPTOR> const& converter,
 
 void prepareRayleighInstability(UnitConverter<T,DESCRIPTOR> const& converter,
                                 SuperLattice<T, DESCRIPTOR>& sLattice,
-                                SuperGeometry<T,3>& superGeometry, T lattice_size, const FreeSurfaceAppHelper& helper)
+                                SuperGeometry<T,3>& superGeometry, T lattice_size)
 {
   AnalyticalConst3D<T,T> zero( 0. );
   AnalyticalConst3D<T,T> one( 1. );
   AnalyticalConst3D<T,T> two( 2. );
   AnalyticalConst3D<T,T> four( 4. );
-  FreeSurfaceRayleighInstability3D<T,DESCRIPTOR> cells_analytical{ lattice_size, helper.area, {0., 1., 2.}, false};
-  FreeSurfaceRayleighInstability3D<T,DESCRIPTOR> mass_analytical{ lattice_size, helper.area, {0., 0.5, 1.}, true};
+  FreeSurfaceRayleighInstability3D<T,DESCRIPTOR> cells_analytical{ lattice_size, area, {0., 1., 2.}, false};
+  FreeSurfaceRayleighInstability3D<T,DESCRIPTOR> mass_analytical{ lattice_size, area, {0., 0.5, 1.}, true};
 
   AnalyticalConst3D<T,T> force_zero{0., 0., 0.};
 
@@ -172,7 +175,7 @@ void prepareRayleighInstability(UnitConverter<T,DESCRIPTOR> const& converter,
 
 void prepareLattice( UnitConverter<T,DESCRIPTOR> const& converter,
                      SuperLattice<T, DESCRIPTOR>& sLattice,
-                     SuperGeometry<T,3>& superGeometry, T lattice_size, const FreeSurfaceAppHelper& helper) {
+                     SuperGeometry<T,3>& superGeometry, T lattice_size) {
 
   OstreamManager clout( std::cout,"prepareLattice" );
   clout << "Prepare Lattice ..." << std::endl;
@@ -186,7 +189,7 @@ void prepareLattice( UnitConverter<T,DESCRIPTOR> const& converter,
   sLattice.setParameter<descriptors::OMEGA>(converter.getLatticeRelaxationFrequency());
   sLattice.setParameter<collision::LES::SMAGORINSKY>(T(0.2));
 
-  prepareRayleighInstability(converter, sLattice, superGeometry, lattice_size, helper);
+  prepareRayleighInstability(converter, sLattice, superGeometry, lattice_size);
   clout << "Prepare Lattice ... OK" << std::endl;
 
   {
@@ -199,7 +202,7 @@ void prepareLattice( UnitConverter<T,DESCRIPTOR> const& converter,
   }
 }
 
-void setInitialValues(SuperLattice<T, DESCRIPTOR>& sLattice, SuperGeometry<T,3>& sGeometry, T lattice_length, UnitConverter<T,DESCRIPTOR> const& converter, const FreeSurfaceAppHelper& helper){
+void setInitialValues(SuperLattice<T, DESCRIPTOR>& sLattice, SuperGeometry<T,3>& sGeometry, T lattice_length, UnitConverter<T,DESCRIPTOR> const& converter){
   OstreamManager clout( std::cout,"setInitialValues" );
 
   AnalyticalConst3D<T,T> u(0,0,0);
@@ -267,6 +270,7 @@ void getResults( SuperLattice<T,DESCRIPTOR>& sLattice,
   }
 }
 
+/*
 namespace {
 FreeSurfaceAppHelper free_surface_config;
 
@@ -282,7 +286,7 @@ public:
   T transitionThreshold = 1e-3;
   // When to remove lonely cells
   T lonelyThreshold = 1.0;
-};
+};*/
 
 }
 
@@ -296,13 +300,12 @@ int main(int argc, char **argv)
 
   singleton::directories().setOutputDir("./tmp/");
 
-  FreeSurfaceAppHelper& helper = free_surface_config;
 
   UnitConverterFromResolutionAndRelaxationTime<T, DESCRIPTOR> const converter(
     int {c.N},     // resolution: number of voxels per charPhysL
     (T)   c.latticeRelaxationTime,   // latticeRelaxationTime: relaxation time, have to be greater than 0.5!
-    (T)   helper.char_phys_length,     // charPhysLength: reference length of simulation geometry
-    (T)   helper.char_phys_vel,     // charPhysVelocity: maximal/highest expected velocity during simulation in __m / s__
+    (T)   char_phys_length,     // charPhysLength: reference length of simulation geometry
+    (T)   char_phys_vel,     // charPhysVelocity: maximal/highest expected velocity during simulation in __m / s__
     (T)   c.viscosity, // physViscosity: physical kinematic viscosity in __m^2 / s__
     (T)   c.density     // physDensity: physical density in __kg / m^3__
   );
@@ -312,7 +315,7 @@ int main(int argc, char **argv)
   // Writes the converter log in a file
   converter.write("free surface");
 
-  T lattice_size = helper.char_phys_length / c.N;
+  T lattice_size = char_phys_length / c.N;
 
   T force_factor = T(1) / converter.getConversionFactorForce() * converter.getConversionFactorMass();
 
@@ -320,11 +323,11 @@ int main(int argc, char **argv)
   // Basically it is multiplied with s^2 / kg = s^2 * m^3 / (kg * m^2 * m) = 1. / (velocity_factor^2 * density * length_factor)
   T surface_tension_coefficient_factor = std::pow(converter.getConversionFactorTime(),2)/ (c.density * std::pow(converter.getPhysDeltaX(),3));
 
-  clout<<"Surface: "<<surface_tension_coefficient_factor * helper.surface_tension_coefficient<<std::endl;
+  clout<<"Surface: "<<surface_tension_coefficient_factor * surface_tension_coefficient<<std::endl;
   clout<<"Lattice Size: "<<converter.getPhysDeltaX()<<std::endl;
 
   // === 2nd Step: Prepare Geometry ===
-  Vector<T,3> extend( helper.area[0], helper.area[1], helper.area[2] );
+  Vector<T,3> extend( area[0], area[1], area[2] );
   Vector<T,3> origin;
   IndicatorCuboid3D<T> cuboid( extend, origin );
 
@@ -347,7 +350,7 @@ int main(int argc, char **argv)
 
   clout<<"Overlap: "<<sLattice.getOverlap()<<std::endl;
 
-  prepareLattice( converter, sLattice, superGeometry, lattice_size, helper);
+  prepareLattice( converter, sLattice, superGeometry, lattice_size);
 
   FreeSurface3DSetup<T,DESCRIPTOR> free_surface_setup{sLattice};
 
@@ -357,15 +360,15 @@ int main(int argc, char **argv)
   sLattice.setParameter<FreeSurface::DROP_ISOLATED_CELLS>(true);
   sLattice.setParameter<FreeSurface::TRANSITION>(c.transitionThreshold);
   sLattice.setParameter<FreeSurface::LONELY_THRESHOLD>(c.lonelyThreshold);
-  sLattice.setParameter<FreeSurface::HAS_SURFACE_TENSION>(helper.has_surface_tension);
-  sLattice.setParameter<FreeSurface::SURFACE_TENSION_PARAMETER>(surface_tension_coefficient_factor * helper.surface_tension_coefficient);
-  sLattice.setParameter<FreeSurface::FORCE_DENSITY>({helper.gravity_force[0] * force_factor, helper.gravity_force[1] * force_factor, helper.gravity_force[2] * force_factor});
+  sLattice.setParameter<FreeSurface::HAS_SURFACE_TENSION>(has_surface_tension);
+  sLattice.setParameter<FreeSurface::SURFACE_TENSION_PARAMETER>(surface_tension_coefficient_factor * surface_tension_coefficient);
+  sLattice.setParameter<FreeSurface::FORCE_DENSITY>({gravity_force[0] * force_factor, gravity_force[1] * force_factor, gravity_force[2] * force_factor});
 
   // === 4th Step: Main Loop with Timer ===
   clout << "starting simulation..." << std::endl;
   util::Timer<T> timer( converter.getLatticeTime( c.physTime ), superGeometry.getStatistics().getNvoxel() );
   timer.start();
-  setInitialValues(sLattice, superGeometry, lattice_size, converter, helper);
+  setInitialValues(sLattice, superGeometry, lattice_size, converter);
 
   for ( std::size_t iT = 0; iT < converter.getLatticeTime( c.physTime ); ++iT ) {
     getResults( sLattice, converter, iT, superGeometry, timer );
