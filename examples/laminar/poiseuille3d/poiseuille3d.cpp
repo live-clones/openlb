@@ -112,9 +112,7 @@ Mesh<MyCase::value_t,MyCase::d> createMesh(MyCase::ParametersD& parameters) {
   Vector<T, 3> center1(length + 0.5 * parameters.get<parameters::PHYS_DELTA_X>(), radius, radius);
   IndicatorCylinder3D<T> pipe(center0, center1, radius);
   IndicatorLayer3D<T> extendedDomain(pipe, parameters.get<parameters::PHYS_DELTA_X>());
-  clout << "Indicators done" << std::endl;
   Mesh<T, MyCase::d> mesh(extendedDomain, parameters.get<parameters::PHYS_DELTA_X>(), singleton::mpi().getSize());
-  clout << "Construktor mesh done" << std::endl;
   mesh.setOverlap(parameters.get<parameters::OVERLAP>());
   return mesh;
 }
@@ -468,7 +466,6 @@ void getResults( std::size_t iT,
   auto& parameters = myCase.getParameters();
   auto& superGeometry = myCase.getGeometry();
   auto& sLattice = myCase.getLattice(NavierStokes{});
-  OstreamManager clout( std::cout,"getResults" );
   const UnitConverter<T,DESCRIPTOR>& converter = sLattice.getUnitConverter();
   const bool lastTimeStep = ( hasConverged || (iT + 1 == converter.getLatticeTime( parameters.get<parameters::MAX_PHYS_T>() )) );
   const bool noslipBoundary = ((parameters.get<parameters::BOUNDARY_TYPE>() != FREE_SLIP) && (parameters.get<parameters::BOUNDARY_TYPE>() != PARTIAL_SLIP));
