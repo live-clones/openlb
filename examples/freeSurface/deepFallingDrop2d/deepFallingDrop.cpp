@@ -294,7 +294,7 @@ public:
   T density = 1e3;
   T physTime = 0.05;
   T latticeRelaxationTime = .516;
-  int N = 512;
+  int N = 256; // 512
 
   // Anti jitter value
   T transitionThreshold = 1e-3;
