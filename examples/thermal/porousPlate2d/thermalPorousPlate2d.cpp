@@ -216,27 +216,34 @@ void prepareLattice(MyCase& myCase) {
   const T physCharLength          = parameters.get<parameters::PHYS_CHAR_LENGTH>();
   const int N                     = parameters.get<parameters::RESOLUTION>();
   const T physDeltaX              = parameters.get<parameters::PHYS_DELTA_X>();
-  const T physViscosity           = parameters.get<parameters::PHYS_CHAR_VISCOSITY>();
+  const T physCharVelocity        = parameters.get<parameters::PHYS_CHAR_VELOCITY>();
   const T physDensity             = parameters.get<parameters::PHYS_CHAR_DENSITY>();
+  const T gravitationalConstant   = parameters.get<parameters::GRAVITATIONAL_ACC>();
   const T physThermalConductivity = parameters.get<parameters::PHYS_THERMAL_CONDUCTIVITY>();
   const T tau                     = parameters.get<parameters::LATTICE_RELAXATION_TIME>();
   const T Ra                      = parameters.get<parameters::RAYLEIGH>();
+  const T Re                      = parameters.get<parameters::REYNOLDS>();
   const T Pr                      = parameters.get<parameters::PRANDTL>();
   const T Tcold                   = parameters.get<parameters::T_COLD>();
   const T Thot                    = parameters.get<parameters::T_HOT>();
 
+  const T physViscosity = physCharVelocity * physCharLength / Re;
+  const T physDeltaT = physDeltaX * physDeltaX * (1. / descriptors::invCs2<T, NSEDESCRIPTOR>()) * (tau - 0.5) / physViscosity; // physDeltaT
+  const T physThermalExpansionCoefficient = Ra * physViscosity * physViscosity / (Pr * gravitationalConstant * (Thot - Tcold) * physCharLength * physCharLength * physCharLength);
+  const T physSpecificHeatCapacity = Pr * physThermalConductivity / (physViscosity * physDensity);
+
   NSElattice.setUnitConverter<ThermalUnitConverter<T,NSEDESCRIPTOR,ADEDESCRIPTOR>>(
-    (T) physDeltaX, // physDeltaX
-    (T) physDeltaX * 1.0 / physViscosity * (tau - 0.5) / 3 / N,
-    (T) physCharLength, // charPhysLength
-    (T) util::sqrt( 9.81 * Ra * physViscosity * physViscosity / Pr / 9.81 / (Thot - Tcold) / util::pow(physDensity, 3) * (Thot - Tcold) * physDensity ), // charPhysVelocity
-    (T) physViscosity, // physViscosity
-    (T) physDensity, // physDensity
-    (T) physThermalConductivity, // physThermalConductivity
-    (T) Pr * physThermalConductivity / physViscosity / physDensity, // physSpecificHeatCapacity
-    (T) Ra * physViscosity * physViscosity / Pr / 9.81 / (Thot - Tcold) / util::pow(physDensity, 3), // physThermalExpansionCoefficient
-    (T) Tcold, // charPhysLowTemperature
-    (T) Thot // charPhysHighTemperature
+    (T) physDeltaX,
+    (T) physDeltaT,
+    (T) physCharLength,
+    (T) physCharVelocity,
+    (T) physViscosity,
+    (T) physDensity,
+    (T) physThermalConductivity,
+    (T) physSpecificHeatCapacity,
+    (T) physThermalExpansionCoefficient,
+    (T) Tcold,
+    (T) Thot
   );
   const auto& converter = NSElattice.getUnitConverter();
   converter.print();
