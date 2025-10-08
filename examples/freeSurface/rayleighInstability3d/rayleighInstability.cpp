@@ -286,15 +286,17 @@ public:
   T transitionThreshold = 1e-3;
   // When to remove lonely cells
   T lonelyThreshold = 1.0;
-};*/
+};
 
 }
+*/
+
 
 int main(int argc, char **argv)
 {
   initialize(&argc, &argv, false, false);
 
-  FreeSurfaceConfig c;
+  //FreeSurfaceConfig c;
   OstreamManager clerr( std::cerr, "main" );
   OstreamManager clout( std::cout, "main" );
 
@@ -302,12 +304,12 @@ int main(int argc, char **argv)
 
 
   UnitConverterFromResolutionAndRelaxationTime<T, DESCRIPTOR> const converter(
-    int {c.N},     // resolution: number of voxels per charPhysL
-    (T)   c.latticeRelaxationTime,   // latticeRelaxationTime: relaxation time, have to be greater than 0.5!
+    int {N},     // resolution: number of voxels per charPhysL
+    (T)   latticeRelaxationTime,   // latticeRelaxationTime: relaxation time, have to be greater than 0.5!
     (T)   char_phys_length,     // charPhysLength: reference length of simulation geometry
     (T)   char_phys_vel,     // charPhysVelocity: maximal/highest expected velocity during simulation in __m / s__
-    (T)   c.viscosity, // physViscosity: physical kinematic viscosity in __m^2 / s__
-    (T)   c.density     // physDensity: physical density in __kg / m^3__
+    (T)   viscosity, // physViscosity: physical kinematic viscosity in __m^2 / s__
+    (T)   density     // physDensity: physical density in __kg / m^3__
   );
 
   // Prints the converter log as console output
@@ -315,13 +317,13 @@ int main(int argc, char **argv)
   // Writes the converter log in a file
   converter.write("free surface");
 
-  T lattice_size = char_phys_length / c.N;
+  T lattice_size = char_phys_length / N;
 
   T force_factor = T(1) / converter.getConversionFactorForce() * converter.getConversionFactorMass();
 
   // Convert kg / s^2
   // Basically it is multiplied with s^2 / kg = s^2 * m^3 / (kg * m^2 * m) = 1. / (velocity_factor^2 * density * length_factor)
-  T surface_tension_coefficient_factor = std::pow(converter.getConversionFactorTime(),2)/ (c.density * std::pow(converter.getPhysDeltaX(),3));
+  T surface_tension_coefficient_factor = std::pow(converter.getConversionFactorTime(),2)/ (density * std::pow(converter.getPhysDeltaX(),3));
 
   clout<<"Surface: "<<surface_tension_coefficient_factor * surface_tension_coefficient<<std::endl;
   clout<<"Lattice Size: "<<converter.getPhysDeltaX()<<std::endl;
@@ -358,19 +360,19 @@ int main(int argc, char **argv)
 
   // Set variables from freeSurfaceHelpers.h
   sLattice.setParameter<FreeSurface::DROP_ISOLATED_CELLS>(true);
-  sLattice.setParameter<FreeSurface::TRANSITION>(c.transitionThreshold);
-  sLattice.setParameter<FreeSurface::LONELY_THRESHOLD>(c.lonelyThreshold);
+  sLattice.setParameter<FreeSurface::TRANSITION>(transitionThreshold);
+  sLattice.setParameter<FreeSurface::LONELY_THRESHOLD>(lonelyThreshold);
   sLattice.setParameter<FreeSurface::HAS_SURFACE_TENSION>(has_surface_tension);
   sLattice.setParameter<FreeSurface::SURFACE_TENSION_PARAMETER>(surface_tension_coefficient_factor * surface_tension_coefficient);
   sLattice.setParameter<FreeSurface::FORCE_DENSITY>({gravity_force[0] * force_factor, gravity_force[1] * force_factor, gravity_force[2] * force_factor});
 
   // === 4th Step: Main Loop with Timer ===
   clout << "starting simulation..." << std::endl;
-  util::Timer<T> timer( converter.getLatticeTime( c.physTime ), superGeometry.getStatistics().getNvoxel() );
+  util::Timer<T> timer( converter.getLatticeTime( physTime ), superGeometry.getStatistics().getNvoxel() );
   timer.start();
   setInitialValues(sLattice, superGeometry, lattice_size, converter);
 
-  for ( std::size_t iT = 0; iT < converter.getLatticeTime( c.physTime ); ++iT ) {
+  for ( std::size_t iT = 0; iT < converter.getLatticeTime( physTime ); ++iT ) {
     getResults( sLattice, converter, iT, superGeometry, timer );
     sLattice.collideAndStream();
   }
