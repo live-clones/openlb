@@ -416,7 +416,7 @@ void simulate(MyCase& myCase) {
       timer.print(iT);
     }
   }
-  
+
   gplot_l2_abs.setYrange(1e-5, 1);
   gplot_l2_abs.setLogScale(2);
   gplot_l2_abs.writePNG(-1, -1, "gplot_l2_abs");
@@ -460,7 +460,7 @@ int main(int argc, char* argv[])
     myCaseParameters.set<PHYS_CHAR_DENSITY  >(        1.0 );
     myCaseParameters.set<RESOLUTION         >(        101 );
     myCaseParameters.set<PHYS_DELTA_X       >(
-      myCaseParameters.get<CORE_EXTENT>()[0] 
+      myCaseParameters.get<CORE_EXTENT>()[0]
       / myCaseParameters.get<RESOLUTION>());
   }
   myCaseParameters.fromCLI(argc, argv);
