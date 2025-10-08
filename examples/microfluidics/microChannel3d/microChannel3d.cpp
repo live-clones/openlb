@@ -39,7 +39,8 @@ int main(int argc, char* argv[]) {
     myCaseParameters.set<B_COEFF>(-1);
     myCaseParameters.set<ACCOMODATION_COEFF>(1);
     myCaseParameters.set<RESOLUTION>(21);
-    myCaseParameters.set<RELAXATION_TIME>(1.1);
+    myCaseParameters.set<OVERLAP>(5);
+    myCaseParameters.set<RELAXATION_TIME>(1.4);
     myCaseParameters.set<MAX_PHYS_T>(2.e-6);
     myCaseParameters.set<START_TIME>([&] {
       return 0.05*myCaseParameters.get<parameters::MAX_PHYS_T>();
