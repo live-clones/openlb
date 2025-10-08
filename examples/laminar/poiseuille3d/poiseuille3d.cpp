@@ -147,6 +147,7 @@ void prepareGeometry(MyCase& myCase)
   geometry.rename(2, 1, pipe);
 
   if (flowType == NON_FORCED) {
+    clout << "non-forced" << std::endl;
     geometry.clean();
     Vector<T, 3> origin(0, radius, radius);
     Vector<T, 3> extend = origin;
@@ -210,6 +211,7 @@ void prepareLattice(MyCase& myCase)
 
   if (flowType == NON_FORCED) {
     lattice.defineDynamics<BulkDynamics>(myCase.getGeometry(), 1);
+    clout<<"lattice nonforced"<<std::endl;
   } else {
     lattice.defineDynamics<ForcedBulkDynamics>(myCase.getGeometry(), 1);
   }
@@ -248,6 +250,7 @@ void prepareLattice(MyCase& myCase)
     }
     else {
       boundary::set<boundary::InterpolatedVelocity>(lattice, myCase.getGeometry(), 2);
+      clout<<"interpolated"<<std::endl;
     }
   }
 
@@ -263,6 +266,7 @@ void prepareLattice(MyCase& myCase)
       }
       else {
         boundary::set<boundary::InterpolatedVelocity>(lattice, myCase.getGeometry(), 3);
+        clout<<"interpolated"<<std::endl;
       }
     }
     // Material=4 -->bulk dynamics
