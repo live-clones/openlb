@@ -42,16 +42,18 @@ void initialize(int *argc, char ***argv, bool multiOutput=false, bool verbose=tr
 #endif
 
   // create an OstreamManager object in order to enable multi output
+  if (singleton::mpi().isMainProcessor()) {
+  std::cout << R"(
+   ┃          ▁▁▁▁                   ▁▁    ▁▁▁▁
+   ┃ ┏━━┓    ╱ ▁▁ ╲▁▁▁▁  ▁▁▁  ▁▁▁▁  ╱ ╱   ╱ ▁▁ ╲
+ ┏━╋┓┃  ┃   ╱ ╱ ╱ ╱ ▁▁ ╲╱ ▁ ╲╱ ▁▁ ╲╱ ╱   ╱ ╱▁╱ ╱
+ ┃ ┗╋╋━━┻┓ ╱ ╱▁╱ ╱ ╱▁╱ ╱  ▁▁╱ ╱ ╱ ╱ ╱▁▁▁╱ ╱▁╱ ╱
+ ┗━━┛┃   ┃ ╲▁▁▁▁╱ ▁▁▁▁╱╲▁▁▁╱▁╱ ╱▁╱▁▁▁▁▁╱▁▁▁▁▁╱
+     ┗━━━┛     ╱▁╱ ==========================>>
+)" << std::endl;
+  }
+
   olb::OstreamManager clout(std::cout, "initialize");
-
-  clout << std::endl;
-  clout << "  ┃" << std::endl;
-  clout << "  ┃ ┏━━┓  ▞▀▖         ▌  ▛▀▖" << std::endl;
-  clout << "┏━╋┓┃  ┃  ▌ ▌▛▀▖▞▀▖▛▀▖▌  ▙▄▘" << std::endl;
-  clout << "┃ ┗╋╋━━┻┓ ▌ ▌▙▄▘▛▀ ▌ ▌▌  ▌ ▌" << std::endl;
-  clout << "┗━━┛┃   ┃ ▝▀ ▌  ▝▀▘▘ ▘▀▀▘▀▀ " << std::endl;
-  clout << "    ┗━━━┛" << std::endl;
-
   clout << "Version  : " << OLB_VERSION << std::endl;
   clout << "Platform :";
 #ifdef PLATFORM_CPU_SISD
