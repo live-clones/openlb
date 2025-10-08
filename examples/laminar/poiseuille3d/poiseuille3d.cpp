@@ -73,9 +73,6 @@ using namespace olb::names;
 
 using DESCRIPTOR = D3Q19<FORCE>;
 
-//typedef enum {forced, nonForced} FlowType;//TODO porpoer enums
-//typedef enum {bounceBack, local, interpolated, bouzidi, freeSlip, partialSlip} BoundaryType;
-  
 enum FlowType : int {
   FORCED = 0,
   NON_FORCED = 1
@@ -98,26 +95,26 @@ namespace olb::parameters {
   struct FLOW_TYPE : public TYPED_FIELD_BASE<FlowType,1> { };
   struct BOUNDARY_TYPE : public TYPED_FIELD_BASE<BoundaryType,1> { };
   
-  struct RE : public descriptors::FIELD_BASE<1> { }; // reynolds number
-  //struct TAU : public descriptors::FIELD_BASE<1> { }; //lattice relaxation time
   struct DIAMETER : public descriptors::FIELD_BASE<1> { }; // diameter of the pipe
   struct LENGTH : public descriptors::FIELD_BASE<1> { }; // length of the pipe
-  struct INTERVAL : public descriptors::FIELD_BASE<1> { }; // interval for the convergence check in s
   struct RESIDUUM : public descriptors::FIELD_BASE<1> { }; //residuum for the convergence check
-  //struct TUNE : public descriptors::FIELD_BASE<1> { }; // for partialSlip only: 0->bounceBack, 1->freeSlip
+
 }
 
 /// @brief Create a simulation mesh, based on user-specific geometry
 /// @return An instance of Mesh, which keeps the relevant information
 Mesh<MyCase::value_t,MyCase::d> createMesh(MyCase::ParametersD& parameters) {
   using T = MyCase::value_t;
+  OstreamManager clout(std::cout, "prepareGeometry");
   const T radius = parameters.get<parameters::DIAMETER>()/2;
   const T length = parameters.get<parameters::LENGTH>();
   Vector<T, 3> center0(0, radius, radius);
   Vector<T, 3> center1(length + 0.5 * parameters.get<parameters::PHYS_DELTA_X>(), radius, radius);
   IndicatorCylinder3D<T> pipe(center0, center1, radius);
   IndicatorLayer3D<T> extendedDomain(pipe, parameters.get<parameters::PHYS_DELTA_X>());
+  clout << "Indicators done" << std::endl;
   Mesh<T, MyCase::d> mesh(extendedDomain, parameters.get<parameters::PHYS_DELTA_X>(), singleton::mpi().getSize());
+  clout << "Construktor mesh done" << std::endl;
   mesh.setOverlap(parameters.get<parameters::OVERLAP>());
   return mesh;
 }
@@ -200,10 +197,10 @@ void prepareLattice(MyCase& myCase)
   
   lattice.setUnitConverter<UnitConverterFromResolutionAndRelaxationTime<T,DESCRIPTOR>>(
     int {parameters.get<parameters::RESOLUTION>()},                  // resolution: number of voxels per charPhysL
-    (T)   parameters.get<TAU>(), // latticeRelaxationTime: relaxation time, have to be greater than 0.5!
+    (T)   parameters.get<parameters::LATTICE_RELAXATION_TIME>(), // latticeRelaxationTime: relaxation time, have to be greater than 0.5!
     (T)   diameter,           // charPhysLength: reference length of simulation geometry
     (T)   physU,// charPhysVelocity: maximal/highest expected velocity during simulation in __m / s__
-    (T)   diameter*physU/parameters.get<parameters::RE>(),  // physViscosity: physical kinematic viscosity in __m^2 / s__
+    (T)   diameter*physU/parameters.get<parameters::REYNOLDS>(),  // physViscosity: physical kinematic viscosity in __m^2 / s__
     (T)   parameters.get<parameters::PHYS_CHAR_DENSITY>() // physDensity: physical density in __kg / m^3__
   );
 
@@ -334,7 +331,7 @@ void prepareLattice(MyCase& myCase)
 }
 
 // Compute error norms
-void error_calc(MyCase& myCase)
+void error_calc(MyCase& myCase, SuperLatticePhysWallShearStress3D<MyCase::value_t,DESCRIPTOR>& wss)
 {
   using T = MyCase::value_t;
   auto& parameters = myCase.getParameters();
@@ -346,17 +343,6 @@ void error_calc(MyCase& myCase)
   
   const T radius = parameters.get<parameters::DIAMETER>()/2.0;
   const T length = parameters.get<parameters::LENGTH>();
-  
-  // set up size-increased indicator and instantiate wall shear stress functor (wss)
-  Vector<T, 3> center0Extended(-converter.getPhysDeltaX() * 0.2, radius, radius);
-  Vector<T, 3> center1Extended(length, radius, radius);
-  if (parameters.get<parameters::FLOW_TYPE>() == FORCED) {
-    center0Extended[0] -= 4.*converter.getPhysDeltaX();
-    center1Extended[0] += 4.*converter.getPhysDeltaX();
-  }
-  IndicatorCylinder3D<T> pipeExtended(center0Extended, center1Extended, radius);
-  IndicatorLayer3D<T> indicatorExtended (pipeExtended, 0.9*converter.getPhysDeltaX()*parameters.get<parameters::RESOLUTION>()/11.);
-  SuperLatticePhysWallShearStress3D<T,DESCRIPTOR> wss(sLattice, superGeometry, 2, converter, indicatorExtended);
 
   int tmp[]= { };
   T result[2]= { };
@@ -372,7 +358,6 @@ void error_calc(MyCase& myCase)
   SuperAbsoluteErrorL1Norm3D<T> absVelocityErrorNormL1(u, uSol, indicatorF);
   absVelocityErrorNormL1(result, tmp);
   clout << "velocity-L1-error(abs)=" << result[0];
-  T velocityL1AbsError = result[0];
   SuperRelativeErrorL1Norm3D<T> relVelocityErrorNormL1(u, uSol, indicatorF);
   relVelocityErrorNormL1(result, tmp);
   clout << "; velocity-L1-error(rel)=" << result[0] << std::endl;
@@ -380,7 +365,6 @@ void error_calc(MyCase& myCase)
   SuperAbsoluteErrorL2Norm3D<T> absVelocityErrorNormL2(u, uSol, indicatorF);
   absVelocityErrorNormL2(result, tmp);
   clout << "velocity-L2-error(abs)=" << result[0];
-  T velocityL2AbsError = result[0];
   SuperRelativeErrorL2Norm3D<T> relVelocityErrorNormL2(u, uSol, indicatorF);
   relVelocityErrorNormL2(result, tmp);
   clout << "; velocity-L2-error(rel)=" << result[0] << std::endl;
@@ -388,7 +372,6 @@ void error_calc(MyCase& myCase)
   SuperAbsoluteErrorLinfNorm3D<T> absVelocityErrorNormLinf(u, uSol, indicatorF);
   absVelocityErrorNormLinf(result, tmp);
   clout << "velocity-Linf-error(abs)=" << result[0];
-  T velocityLinfAbsError = result[0];
   SuperRelativeErrorLinfNorm3D<T> relVelocityErrorNormLinf(u, uSol, indicatorF);
   relVelocityErrorNormLinf(result, tmp);
   clout << "; velocity-Linf-error(rel)=" << result[0] << std::endl;
@@ -400,7 +383,6 @@ void error_calc(MyCase& myCase)
   SuperAbsoluteErrorL1Norm3D<T> absStrainRateErrorNormL1(s, sSol, indicatorF);
   absStrainRateErrorNormL1(result, tmp);
   clout << "strainRate-L1-error(abs)=" << result[0];
-  T strainRateL1AbsError = result[0];
   SuperRelativeErrorL1Norm3D<T> relStrainRateErrorNormL1(s, sSol, indicatorF);
   relStrainRateErrorNormL1(result, tmp);
   clout << "; strainRate-L1-error(rel)=" << result[0] << std::endl;
@@ -408,7 +390,6 @@ void error_calc(MyCase& myCase)
   SuperAbsoluteErrorL2Norm3D<T> absStrainRateErrorNormL2(s, sSol, indicatorF);
   absStrainRateErrorNormL2(result, tmp);
   clout << "strainRate-L2-error(abs)=" << result[0];
-  T strainRateL2AbsError = result[0];
   SuperRelativeErrorL2Norm3D<T> relStrainRateErrorNormL2(s, sSol, indicatorF);
   relStrainRateErrorNormL2(result, tmp);
   clout << "; strainRate-L2-error(rel)=" << result[0] << std::endl;
@@ -416,7 +397,6 @@ void error_calc(MyCase& myCase)
   SuperAbsoluteErrorLinfNorm3D<T> absStrainRateErrorNormLinf(s, sSol, indicatorF);
   absStrainRateErrorNormLinf(result, tmp);
   clout << "strainRate-Linf-error(abs)=" << result[0];
-  T strainRateLinfAbsError = result[0];
   SuperRelativeErrorLinfNorm3D<T> relStrainRateErrorNormLinf(s, sSol, indicatorF);
   relStrainRateErrorNormLinf(result, tmp);
   clout << "; strainRate-Linf-error(rel)=" << result[0] << std::endl;
@@ -430,7 +410,6 @@ void error_calc(MyCase& myCase)
   SuperAbsoluteErrorL1Norm3D<T> absWallShearStressErrorNormL1(wss, wssSol, indicatorB);
   absWallShearStressErrorNormL1(result, tmp);
   clout << "wss-L1-error(abs)=" << result[0];
-  T wssL1AbsError = result[0];
   SuperRelativeErrorL1Norm3D<T> relWallShearStressErrorNormL1(wss, wssSol, indicatorB);
   relWallShearStressErrorNormL1(result, tmp);
   clout << "; wss-L1-error(rel)=" << result[0] << std::endl;
@@ -438,7 +417,6 @@ void error_calc(MyCase& myCase)
   SuperAbsoluteErrorL2Norm3D<T> absWallShearStressErrorNormL2(wss, wssSol, indicatorB);
   absWallShearStressErrorNormL2(result, tmp);
   clout << "wss-L2-error(abs)=" << result[0];
-  T wssL2AbsError = result[0];
   SuperRelativeErrorL2Norm3D<T> relWallShearStressErrorNormL2(wss, wssSol, indicatorB);
   relWallShearStressErrorNormL2(result, tmp);
   clout << "; wss-L2-error(rel)=" << result[0] << std::endl;
@@ -446,7 +424,6 @@ void error_calc(MyCase& myCase)
   SuperAbsoluteErrorLinfNorm3D<T> absWallShearStressErrorNormLinf(wss, wssSol, indicatorB);
   absWallShearStressErrorNormLinf(result, tmp);
   clout << "wss-Linf-error(abs)=" << result[0];
-  T wssLinfAbsError = result[0];
   SuperRelativeErrorLinfNorm3D<T> relWallShearStressErrorNormLinf(wss, wssSol, indicatorB);
   relWallShearStressErrorNormLinf(result, tmp);
   clout << "; wss-Linf-error(rel)=" << result[0] << std::endl;
@@ -460,7 +437,6 @@ void error_calc(MyCase& myCase)
     SuperAbsoluteErrorL1Norm3D<T> absPressureErrorNormL1(pressure, pressureSol, indicatorF);
     absPressureErrorNormL1(result, tmp);
     clout << "pressure-L1-error(abs)=" << result[0];
-    T pressureL1AbsError = result[0];
     SuperRelativeErrorL1Norm3D<T> relPressureErrorNormL1(pressure, pressureSol, indicatorF);
     relPressureErrorNormL1(result, tmp);
     clout << "; pressure-L1-error(rel)=" << result[0] << std::endl;
@@ -468,7 +444,6 @@ void error_calc(MyCase& myCase)
     SuperAbsoluteErrorL2Norm3D<T> absPressureErrorNormL2(pressure, pressureSol, indicatorF);
     absPressureErrorNormL2(result, tmp);
     clout << "pressure-L2-error(abs)=" << result[0];
-    T pressureL2AbsError = result[0];
     SuperRelativeErrorL2Norm3D<T> relPressureErrorNormL2(pressure, pressureSol, indicatorF);
     relPressureErrorNormL2(result, tmp);
     clout << "; pressure-L2-error(rel)=" << result[0] << std::endl;
@@ -476,7 +451,6 @@ void error_calc(MyCase& myCase)
     SuperAbsoluteErrorLinfNorm3D<T> absPressureErrorNormLinf(pressure, pressureSol, indicatorF);
     absPressureErrorNormLinf(result, tmp);
     clout << "pressure-Linf-error(abs)=" << result[0];
-    T pressureLinfAbsError = result[0];
     SuperRelativeErrorLinfNorm3D<T> relPressureErrorNormLinf(pressure, pressureSol, indicatorF);
     relPressureErrorNormLinf(result, tmp);
     clout << "; pressure-Linf-error(rel)=" << result[0] << std::endl;
@@ -485,7 +459,7 @@ void error_calc(MyCase& myCase)
 
 // Output to console and files
 void getResults( std::size_t iT,
-                 util::Timer<MyCase::value_t>& timer, bool hasConverged, MyCase& myCase)
+                 util::Timer<MyCase::value_t>& timer, bool hasConverged, MyCase& myCase, SuperLatticePhysWallShearStress3D<MyCase::value_t,DESCRIPTOR>& wss)
 {
   using T = MyCase::value_t;
   //Initialize Gnuplot
@@ -502,17 +476,6 @@ void getResults( std::size_t iT,
   
   const T radius = parameters.get<parameters::DIAMETER>()/2;
   const T length = parameters.get<parameters::LENGTH>();
-  
-  // set up size-increased indicator and instantiate wall shear stress functor (wss)
-  Vector<T, 3> center0Extended(-converter.getPhysDeltaX() * 0.2, radius, radius);
-  Vector<T, 3> center1Extended(length, radius, radius);
-  if (parameters.get<parameters::FLOW_TYPE>() == FORCED) {
-    center0Extended[0] -= 4.*converter.getPhysDeltaX();
-    center1Extended[0] += 4.*converter.getPhysDeltaX();
-  }
-  IndicatorCylinder3D<T> pipeExtended(center0Extended, center1Extended, radius);
-  IndicatorLayer3D<T> indicatorExtended (pipeExtended, 0.9*converter.getPhysDeltaX()*parameters.get<parameters::RESOLUTION>()/11.);
-  SuperLatticePhysWallShearStress3D<T,DESCRIPTOR> wss(sLattice, superGeometry, 2, converter, indicatorExtended);
   
   SuperVTMwriter3D<T> vtmWriter( "poiseuille3d" );
   SuperLatticePhysVelocity3D<T, DESCRIPTOR> velocity( sLattice, converter );
@@ -570,7 +533,7 @@ void getResults( std::size_t iT,
     // Error norms
     if (noslipBoundary) {
       if ( lastTimeStep ) {
-        error_calc(myCase);
+        error_calc(myCase, wss);
       }
     }
   }
@@ -632,14 +595,14 @@ void simulate(MyCase& myCase) {
   
   clout << "starting simulation..." << std::endl;
   util::Timer<T> timer(iTmax, superGeometry.getStatistics().getNvoxel());
-    util::ValueTracer<T> converge( converter.getLatticeTime( parameters.get<parameters::INTERVAL>() ), parameters.get<parameters::RESIDUUM>() );
+    util::ValueTracer<T> converge( converter.getLatticeTime( parameters.get<parameters::INTERVAL_CONVERGENCE_CHECK>() ), parameters.get<parameters::RESIDUUM>() );
   timer.start();
   
   for ( std::size_t iT = 0; iT < converter.getLatticeTime( parameters.get<parameters::MAX_PHYS_T>() ); ++iT ) {
     if ( converge.hasConverged() ) {
       clout << "Simulation converged." << std::endl;
       getResults( iT, timer,
-        converge.hasConverged(), myCase);
+        converge.hasConverged(), myCase, wss);
       break;
     }
 
@@ -651,7 +614,7 @@ void simulate(MyCase& myCase) {
 
     // === 7th Step: Computation and Output of the Results ===
     getResults( iT, timer,
-      converge.hasConverged(), myCase );
+      converge.hasConverged(), myCase, wss);
     converge.takeValue( sLattice.getStatistics().getAverageEnergy(), true );
   }
 
@@ -663,43 +626,38 @@ void simulate(MyCase& myCase) {
 
 int main( int argc, char* argv[] )
 {
-  //int N = 21;
-  //bool eoc = false;
+  singleton::directories().setOutputDir( "./tmp/" );
+  OstreamManager clout( std::cout,"main" );
   
   // === 1st Step: Initialization ===
   initialize( &argc, &argv );
   MyCase::ParametersD myCaseParameters;
   {
     using namespace olb::parameters;
-    myCaseParameters.set<RESOLUTION         >(           21);//TODO check N?
-    //myCaseParameters.set<PHYS_DELTA_X       >(       0.1/21);//TODO hier schon defininieren?
-    //myCaseParameters.set<PHYS_DELTA_T       >(0.00078125);
-    myCaseParameters.set<PHYS_CHAR_VELOCITY >(          1.0);
-    //myCaseParameters.set<PHYS_CHAR_VISCOSITY>(     0.001);
-    myCaseParameters.set<PHYS_CHAR_DENSITY  >(          1.0);
-    //myCaseParameters.set<DOMAIN_EXTENT      >({1.0, 1.0});
-    myCaseParameters.set<MAX_PHYS_T         >(          20.);
-    myCaseParameters.set<LENGTH             >(           2.);
-    myCaseParameters.set<DIAMETER           >(           1.);
-    myCaseParameters.set<RE                 >(          10.);
-    myCaseParameters.set<TAU                >(          0.8);
-    myCaseParameters.set<RESIDUUM           >(         1e-5);
-    myCaseParameters.set<TUNER              >(           0.);
-    myCaseParameters.set<FLOW_TYPE          >(    NON_FORCED);
-    myCaseParameters.set<BOUNDARY           >(  INTERPOLATED);
+    myCaseParameters.set<RESOLUTION             >(           21);
+    myCaseParameters.set<PHYS_CHAR_VELOCITY     >(          1.0);
+    myCaseParameters.set<PHYS_CHAR_DENSITY      >(          1.0);
+    myCaseParameters.set<MAX_PHYS_T             >(          20.); // max. simulation time in s, SI unit
+    myCaseParameters.set<LENGTH                 >(           2.); // length of the pie
+    myCaseParameters.set<DIAMETER               >(           1.); // diameter of the pipe
+    myCaseParameters.set<REYNOLDS               >(          10.);
+    myCaseParameters.set<LATTICE_RELAXATION_TIME>(          0.8);
+    myCaseParameters.set<RESIDUUM               >(         1e-5);
+    myCaseParameters.set<TUNER                  >(           0.); // for partialSlip only: 0->bounceBack, 1->freeSlip
+    myCaseParameters.set<FLOW_TYPE              >(    NON_FORCED);
+    myCaseParameters.set<BOUNDARY               >(  INTERPOLATED);
+    myCaseParameters.set<INTERVAL_CONVERGENCE_CHECK>([&] {        // interval for the convergence check in s
+      return myCaseParameters.get<MAX_PHYS_T>()*0.0125;
+    });
+    myCaseParameters.set<PHYS_DELTA_X>([&] {
+      return myCaseParameters.get<DIAMETER>()/myCaseParameters.get<RESOLUTION>();
+    });
   }
   myCaseParameters.fromCLI(argc, argv);
-  {
-    using namespace olb::parameters;
-    myCaseParameters.set<INTERVAL           >(myCaseParameters.get<MAX_PHYS_T>()*0.0125); //TODO CHECK
-    myCaseParameters.set<PHYS_DELTA_X       >(myCaseParameters.get<DIAMETER>()/myCaseParameters.get<RESOLUTION>()*0.0125);//TODO CHECk defininieren?
-  }
-  
-  singleton::directories().setOutputDir( "./tmp/" );
-  OstreamManager clout( std::cout,"main" );
   
   /// === Step 3: Create Mesh ===
   Mesh mesh = createMesh(myCaseParameters);
+  
   
   /// === Step 4: Create Case ===
   MyCase myCase(myCaseParameters, mesh);
@@ -711,13 +669,9 @@ int main( int argc, char* argv[] )
   prepareLattice(myCase);
   
   /// === Step 7: Definition of Initial, Boundary Values, and Fields ===
-  //setInitialValues(myCase); TODO sections in prepareLattice?
+  //setInitialValues(myCase);
   
   /// === Step 8: Simulate ===
   simulate(myCase);
-
-  // Instantiation of a superGeometry
-  //const int overlap = (flowType == FORCED) ? 2 : 3;
-  //SuperGeometry<T,3> superGeometry(cuboidDecomposition, loadBalancer, overlap);
 
 }
