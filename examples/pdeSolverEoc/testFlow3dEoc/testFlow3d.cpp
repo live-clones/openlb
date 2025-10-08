@@ -55,7 +55,7 @@ int main(int argc, char* argv[])
     myCaseParametersD.set<DOMAIN_EXTENT             >({1.0, 1.0, 1.0});
     myCaseParametersD.set<PHYS_CHAR_VELOCITY        >(            1.0);
     myCaseParametersD.set<PHYS_CHAR_VISCOSITY       >(            0.1);
-    myCaseParametersD.set<PHYS_CHAR_DENSITY         >(            1.0);
+    myCaseParametersD.set<PHYS_CHAR_DENSITY         >(              1);
     myCaseParametersD.set<MAX_PHYS_T                >(            6.0);
     myCaseParametersD.set<RESOLUTION                >(             11);
     myCaseParametersD.set<LATTICE_CHAR_VELOCITY     >(           0.07);
@@ -138,8 +138,8 @@ int main(int argc, char* argv[])
                   "Pressure L1", "Pressure L2", "Pressure LInf",
                   "Strain rate L1", "Strain rate L2", "Strain rate LInf",
                   "Dissipation L1", "Dissipation L2", "Dissipation LInf"},
-		 "top right",
-		 {'p', 'p', 'p', 'p', 'p', 'p', 'p', 'p', 'p', 'p', 'p', 'p',});
+         "top right",
+         {'p', 'p', 'p', 'p', 'p', 'p', 'p', 'p', 'p', 'p', 'p', 'p',});
   }
   gplot.writePNG();
 }

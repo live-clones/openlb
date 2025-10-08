@@ -145,7 +145,7 @@ void setInitialValues(MyCase& myCase)
   /// @li Initialize density to one everywhere
   /// @li Initialize velocity to be tangential at the lid and zero in the bulk and at the walls
   AnalyticalConst3D<T,T> rhoF(1);
-  const Vector<T,3> u{0,0,0};
+  const Vector<T,3> u{0.,0.,0.};
   AnalyticalConst3D<T,T> uF(u);
 
   /// @li Initialize populations to equilibrium state
@@ -162,14 +162,8 @@ void setInitialValues(MyCase& myCase)
   lattice.initialize();
 }
 
-/// Step 8.1: Update boundary values at times (and additional fields, if needed)
-/// @param myCase The Case instance which keeps the simulation data
-/// @param iT The time step
-/// In order to start the simulation slowly, we start with zero boundary velocity and gradually increase it
-/// @note Boundary values have to be set using lattice units
 void setTemporalValues(MyCase& myCase,
-                       std::size_t iT)
-{
+                       std::size_t iT) {
   using T = MyCase::value_t;
   auto& lattice = myCase.getLattice(NavierStokes{});
   auto& geometry = myCase.getGeometry();
@@ -192,6 +186,94 @@ void setTemporalValues(MyCase& myCase,
     /// @li Communicate the new boundary velocity to GPU (if needed)
     lattice.template setProcessingContext<Array<momenta::FixedVelocityMomentumGeneric::VELOCITY>>(ProcessingContext::Simulation);
   }
+}
+
+void computeErrorNorms(MyCase& myCase) {
+  using T = MyCase::value_t;
+  OstreamManager clout(std::cout, "ErrorNorm");
+  auto& sLattice = myCase.getLattice(NavierStokes{});
+  auto& converter = sLattice.getUnitConverter();
+
+  // Compute error to analytic solution
+  // Analytic solutions
+  VelocityTestFlow3D<T,T,MyCase::descriptor_t> analytic_vel(converter);
+  PressureTestFlow3D<T,T,MyCase::descriptor_t> analytic_pre(converter);
+  StrainRateTestFlow3D<T,T,MyCase::descriptor_t> analytic_str(converter);
+  DissipationTestFlow3D<T,T,MyCase::descriptor_t> analytic_dis(converter);
+
+  // Interpolated analytic solutions
+  SuperLatticeFfromAnalyticalF3D<T,MyCase::descriptor_t> lattice_analytical_vel(analytic_vel, sLattice);
+  SuperLatticeFfromAnalyticalF3D<T,MyCase::descriptor_t> lattice_analytical_pre(analytic_pre, sLattice);
+  SuperLatticeFfromAnalyticalF3D<T,MyCase::descriptor_t> lattice_analytical_str(analytic_str, sLattice);
+  SuperLatticeFfromAnalyticalF3D<T,MyCase::descriptor_t> lattice_analytical_dis(analytic_dis, sLattice);
+
+  // Simulated solutions
+  SuperLatticePhysVelocity3D<T,MyCase::descriptor_t> vel(sLattice, converter);
+  SuperLatticePhysPressure3D<T,MyCase::descriptor_t> pre(sLattice, converter);
+  SuperLatticePhysStrainRate3D<T,MyCase::descriptor_t> str(sLattice, converter);
+  SuperLatticePhysDissipation3D<T,MyCase::descriptor_t> dis(sLattice, converter);
+
+  int tmp[4]{0}; T norm[1]{0}; int tmp2[4]{0}; T norm2[1]{0};
+  SuperL1Norm3D<T> uL1Norm(lattice_analytical_vel - vel, myCase.getGeometry(), 1);
+  SuperL1Norm3D<T> uAnaL1Norm(lattice_analytical_vel, myCase.getGeometry(), 1);
+  uL1Norm(norm, tmp); uAnaL1Norm(norm2, tmp2);
+  clout << "velocity-L1-error(abs)=" << norm[0] << "; velocity-L1-error(rel)=" << norm[0] / norm2[0] << std::endl;
+  myCase.getParameters().set<parameters::ERROR_VELOCITY_L1>(norm[0]);
+  SuperL2Norm3D<T> uL2Norm(lattice_analytical_vel - vel, myCase.getGeometry(), 1);
+  SuperL2Norm3D<T> uAnaL2Norm(lattice_analytical_vel, myCase.getGeometry(), 1);
+  uL2Norm(norm, tmp); uAnaL2Norm(norm2, tmp2);
+  clout << "velocity-L2-error(abs)=" << norm[0] << "; velocity-L2-error(rel)=" << norm[0] / norm2[0] << std::endl;
+  myCase.getParameters().set<parameters::ERROR_VELOCITY_L2>(norm[0]);
+  SuperLinfNorm3D<T> uLinfNorm(lattice_analytical_vel - vel, myCase.getGeometry(), 1);
+  SuperLinfNorm3D<T> uAnaLinfNorm(lattice_analytical_vel, myCase.getGeometry(), 1);
+  uLinfNorm(norm, tmp); uAnaLinfNorm(norm2, tmp2);
+  clout << "velocity-Linf-error(abs)=" << norm[0] << "; velocity-Linf-error(rel)=" << norm[0] / norm2[0] << std::endl;
+  myCase.getParameters().set<parameters::ERROR_VELOCITY_LINF>(norm[0]);
+  SuperL1Norm3D<T> pL1Norm(lattice_analytical_pre - pre, myCase.getGeometry(), 1);
+  SuperL1Norm3D<T> pAnaL1Norm(lattice_analytical_pre, myCase.getGeometry(), 1);
+  pL1Norm(norm, tmp); pAnaL1Norm(norm2, tmp2);
+  clout << "pressure-L1-error(abs)=" << norm[0] << "; pressure-L1-error(rel)=" << norm[0] / norm2[0] << std::endl;
+  myCase.getParameters().set<parameters::ERROR_PRESSURE_L1>(norm[0]);
+  SuperL2Norm3D<T> pL2Norm(lattice_analytical_pre - pre, myCase.getGeometry(), 1);
+  SuperL2Norm3D<T> pAnaL2Norm(lattice_analytical_pre, myCase.getGeometry(), 1);
+  pL2Norm(norm, tmp); pAnaL2Norm(norm2, tmp2);
+  clout << "pressure-L2-error(abs)=" << norm[0] << "; pressure-L2-error(rel)=" << norm[0] / norm2[0] << std::endl;
+  myCase.getParameters().set<parameters::ERROR_PRESSURE_L2>(norm[0]);
+  SuperLinfNorm3D<T> pLinfNorm(lattice_analytical_pre - pre, myCase.getGeometry(), 1);
+  SuperLinfNorm3D<T> pAnaLinfNorm(lattice_analytical_pre, myCase.getGeometry(), 1);
+  pLinfNorm(norm, tmp); pAnaLinfNorm(norm2, tmp2);
+  clout << "pressure-Linf-error(abs)=" << norm[0] << "; pressure-Linf-error(rel)=" << norm[0] / norm2[0] << std::endl;
+  myCase.getParameters().set<parameters::ERROR_PRESSURE_LINF>(norm[0]);
+  SuperL1Norm3D<T> sL1Norm(lattice_analytical_str - str, myCase.getGeometry(), 1);
+  SuperL1Norm3D<T> sAnaL1Norm(lattice_analytical_str, myCase.getGeometry(), 1);
+  sL1Norm(norm, tmp); sAnaL1Norm(norm2, tmp2);
+  clout << "dissipation-L1-error(abs)=" << norm[0] << "; dissipation-L1-error(rel)=" << norm[0] / norm2[0] << std::endl;
+  myCase.getParameters().set<parameters::ERROR_STRAIN_RATE_L1>(norm[0]);
+  SuperL2Norm3D<T> sL2Norm(lattice_analytical_str - str, myCase.getGeometry(), 1);
+  SuperL2Norm3D<T> sAnaL2Norm(lattice_analytical_str, myCase.getGeometry(), 1);
+  sL2Norm(norm, tmp); sAnaL2Norm(norm2, tmp2);
+  clout << "dissipation-L2-error(abs)=" << norm[0] << "; dissipation-L2-error(rel)=" << norm[0] / norm2[0] << std::endl;
+  myCase.getParameters().set<parameters::ERROR_STRAIN_RATE_L2>(norm[0]);
+  SuperLinfNorm3D<T> sLinfNorm(lattice_analytical_str - str, myCase.getGeometry(), 1);
+  SuperLinfNorm3D<T> sAnaLinfNorm(lattice_analytical_str, myCase.getGeometry(), 1);
+  sLinfNorm(norm, tmp); sAnaLinfNorm(norm2, tmp2);
+  clout << "dissipation-Linf-error(abs)=" << norm[0] << "; dissipation-Linf-error(rel)" << norm[0] / norm2[0] << std::endl;
+  myCase.getParameters().set<parameters::ERROR_STRAIN_RATE_LINF>(norm[0]);
+  SuperL1Norm3D<T> dL1Norm(lattice_analytical_dis - dis, myCase.getGeometry(), 1);
+  SuperL1Norm3D<T> dAnaL1Norm(lattice_analytical_dis, myCase.getGeometry(), 1);
+  dL1Norm(norm, tmp); dAnaL1Norm(norm2, tmp2);
+  clout << "stress-L1-error(abs)=" << norm[0] << "; stress-L1-error(rel)=" << norm[0] / norm2[0] << std::endl;
+  myCase.getParameters().set<parameters::ERROR_DISSIPATION_L1>(norm[0]);
+  SuperL2Norm3D<T> dL2Norm(lattice_analytical_dis - dis, myCase.getGeometry(), 1);
+  SuperL2Norm3D<T> dAnaL2Norm(lattice_analytical_dis, myCase.getGeometry(), 1);
+  dL2Norm(norm, tmp); dAnaL2Norm(norm2, tmp2);
+  clout << "stress-L2-error(abs)=" << norm[0] << "; stress-L2-error(rel)=" << norm[0] / norm2[0] << std::endl;
+  myCase.getParameters().set<parameters::ERROR_DISSIPATION_L2>(norm[0]);
+  SuperLinfNorm3D<T> dLinfNorm(lattice_analytical_dis - dis, myCase.getGeometry(), 1);
+  SuperLinfNorm3D<T> dAnaLinfNorm(lattice_analytical_dis, myCase.getGeometry(), 1);
+  dLinfNorm(norm, tmp); dAnaLinfNorm(norm2, tmp2);
+  clout << "stress-Linf-error(abs)=" << norm[0] << "; stress-Linf-error(rel)=" << norm[0] / norm2[0] << std::endl;
+  myCase.getParameters().set<parameters::ERROR_DISSIPATION_LINF>(norm[0]);
 }
 
 /// Step 8.3: Compute simulation results at times
@@ -227,6 +309,7 @@ void getResults(MyCase& myCase,
   /// @li Print some (numerical and computational) statistics
   if (iT%iTlog == 0) {
     lattice.getStatistics().print(iT, converter.getPhysTime(iT));
+    computeErrorNorms(myCase);
     timer.print(iT);
   }
 }
@@ -242,11 +325,14 @@ void simulate(MyCase& myCase)
   auto& converter = sLattice.getUnitConverter();
   const std::size_t iTmax = converter.getLatticeTime(physMaxT);
   util::Timer<T> timer(iTmax, myCase.getGeometry().getStatistics().getNvoxel());
+  util::ValueTracer<T> converge(converter.getLatticeTime(1.0), 1e-8);
   timer.start();
 
   for (std::size_t iT=0; iT < iTmax; ++iT)
   {
-    /// @li Step 8.1: Update the Boundary Values and Fields at Times
+    if(converge.hasConverged()) {
+      break;
+    }
     setTemporalValues(myCase, iT);
 
     /// @li Step 8.2: Collide and Stream Execution
@@ -258,66 +344,13 @@ void simulate(MyCase& myCase)
 
     /// @li Step 8.3: Computation and Output of the Results
     getResults(myCase, timer, iT);
+    converge.takeValue(sLattice.getStatistics().getAverageEnergy(), true);
   }
 
   /// @li Evaluate timer
   timer.stop();
   timer.printSummary();
 
-  // Compute error to analytic solution
-  // Analytic solutions
-  VelocityTestFlow3D<T,T,MyCase::descriptor_t> analytic_vel(converter);
-  PressureTestFlow3D<T,T,MyCase::descriptor_t> analytic_pre(converter);
-  StrainRateTestFlow3D<T,T,MyCase::descriptor_t> analytic_str(converter);
-  DissipationTestFlow3D<T,T,MyCase::descriptor_t> analytic_dis(converter);
-
-  // Interpolated analytic solutions
-  SuperLatticeFfromAnalyticalF3D<T,MyCase::descriptor_t> lattice_analytical_vel(analytic_vel, sLattice);
-  SuperLatticeFfromAnalyticalF3D<T,MyCase::descriptor_t> lattice_analytical_pre(analytic_pre, sLattice);
-  SuperLatticeFfromAnalyticalF3D<T,MyCase::descriptor_t> lattice_analytical_str(analytic_str, sLattice);
-  SuperLatticeFfromAnalyticalF3D<T,MyCase::descriptor_t> lattice_analytical_dis(analytic_dis, sLattice);
-
-  // Simulated solutions
-  SuperLatticePhysVelocity3D<T,MyCase::descriptor_t> vel(sLattice, converter);
-  SuperLatticePhysPressure3D<T,MyCase::descriptor_t> pre(sLattice, converter);
-  SuperLatticePhysStrainRate3D<T,MyCase::descriptor_t> str(sLattice, converter);
-  SuperLatticePhysDissipation3D<T,MyCase::descriptor_t> dis(sLattice, converter);
-
-  int tmp[4]{0}; T norm[1]{0};
-  SuperL1Norm3D<T> uL1Norm(lattice_analytical_vel - vel, myCase.getGeometry(), 1);
-  uL1Norm(norm, tmp);
-  myCase.getParameters().set<parameters::ERROR_VELOCITY_L1>(norm[0]);
-  SuperL2Norm3D<T> uL2Norm(lattice_analytical_vel - vel, myCase.getGeometry(), 1);
-  uL2Norm(norm, tmp);
-  myCase.getParameters().set<parameters::ERROR_VELOCITY_L2>(norm[0]);
-  SuperLinfNorm3D<T> uLinfNorm(lattice_analytical_vel - vel, myCase.getGeometry(), 1);
-  uLinfNorm(norm, tmp);
-  myCase.getParameters().set<parameters::ERROR_VELOCITY_LINF>(norm[0]);
-  SuperL1Norm3D<T> pL1Norm(lattice_analytical_pre - pre, myCase.getGeometry(), 1);
-  pL1Norm(norm, tmp);
-  myCase.getParameters().set<parameters::ERROR_PRESSURE_L1>(norm[0]);
-  SuperL2Norm3D<T> pL2Norm(lattice_analytical_pre - pre, myCase.getGeometry(), 1);
-  pL2Norm(norm, tmp);
-  myCase.getParameters().set<parameters::ERROR_PRESSURE_L2>(norm[0]);
-  SuperLinfNorm3D<T> pLinfNorm(lattice_analytical_pre - pre, myCase.getGeometry(), 1);
-  pLinfNorm(norm, tmp);
-  myCase.getParameters().set<parameters::ERROR_PRESSURE_LINF>(norm[0]);
-  SuperL1Norm3D<T> sL1Norm(lattice_analytical_str - str, myCase.getGeometry(), 1);
-  sL1Norm(norm, tmp);
-  myCase.getParameters().set<parameters::ERROR_STRAIN_RATE_L1>(norm[0]);
-  SuperL2Norm3D<T> sL2Norm(lattice_analytical_str - str, myCase.getGeometry(), 1);
-  sL2Norm(norm, tmp);
-  myCase.getParameters().set<parameters::ERROR_STRAIN_RATE_L2>(norm[0]);
-  SuperLinfNorm3D<T> sLinfNorm(lattice_analytical_str - str, myCase.getGeometry(), 1);
-  sLinfNorm(norm, tmp);
-  myCase.getParameters().set<parameters::ERROR_STRAIN_RATE_LINF>(norm[0]);
-  SuperL1Norm3D<T> dL1Norm(lattice_analytical_dis - dis, myCase.getGeometry(), 1);
-  dL1Norm(norm, tmp);
-  myCase.getParameters().set<parameters::ERROR_DISSIPATION_L1>(norm[0]);
-  SuperL2Norm3D<T> dL2Norm(lattice_analytical_dis - dis, myCase.getGeometry(), 1);
-  dL2Norm(norm, tmp);
-  myCase.getParameters().set<parameters::ERROR_DISSIPATION_L2>(norm[0]);
-  SuperLinfNorm3D<T> dLinfNorm(lattice_analytical_dis - dis, myCase.getGeometry(), 1);
-  dLinfNorm(norm, tmp);
-  myCase.getParameters().set<parameters::ERROR_DISSIPATION_LINF>(norm[0]);
+  sLattice.setProcessingContext(ProcessingContext::Evaluation);
+  computeErrorNorms(myCase);
 }
