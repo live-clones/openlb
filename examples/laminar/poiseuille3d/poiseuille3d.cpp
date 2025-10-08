@@ -112,8 +112,16 @@ Mesh<MyCase::value_t,MyCase::d> createMesh(MyCase::ParametersD& parameters) {
   Vector<T, 3> center1(length + 0.5 * parameters.get<parameters::PHYS_DELTA_X>(), radius, radius);
   IndicatorCylinder3D<T> pipe(center0, center1, radius);
   IndicatorLayer3D<T> extendedDomain(pipe, parameters.get<parameters::PHYS_DELTA_X>());
-  Mesh<T, MyCase::d> mesh(extendedDomain, parameters.get<parameters::PHYS_DELTA_X>(), singleton::mpi().getSize());
+  #ifdef PARALLEL_MODE_MPI
+  const int noOfCuboids = singleton::mpi().getSize();
+  #else // ifdef PARALLEL_MODE_MPI
+  const int noOfCuboids = 1;
+  #endif // ifdef PARALLEL_MODE_MPI
+  Mesh<T, MyCase::d> mesh(extendedDomain, parameters.get<parameters::PHYS_DELTA_X>(), noOfCuboids);
   mesh.setOverlap(parameters.get<parameters::OVERLAP>());
+  if (parameters.get<parameters::FLOW_TYPE>()==FORCED) {
+    mesh.getCuboidDecomposition().setPeriodicity({true, false, false});
+  }
   return mesh;
 }
 
@@ -211,7 +219,6 @@ void prepareLattice(MyCase& myCase)
 
   if (flowType == NON_FORCED) {
     lattice.defineDynamics<BulkDynamics>(myCase.getGeometry(), 1);
-    clout<<"lattice nonforced"<<std::endl;
   } else {
     lattice.defineDynamics<ForcedBulkDynamics>(myCase.getGeometry(), 1);
   }
@@ -250,7 +257,6 @@ void prepareLattice(MyCase& myCase)
     }
     else {
       boundary::set<boundary::InterpolatedVelocity>(lattice, myCase.getGeometry(), 2);
-      clout<<"interpolated"<<std::endl;
     }
   }
 
