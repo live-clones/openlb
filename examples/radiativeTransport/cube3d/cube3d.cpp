@@ -225,6 +225,7 @@ void prepareLatticeMcHardy(MyCase& myCase){
     T latticeAbsorption = converter.getLatticeAbsorption();
     T latticeScattering = converter.getLatticeScattering();
     T inletDirichlet = params.get<parameters::INLET_DIRICHLET>();
+    T intensity = params.get<parameters::INTENSITY>();
 
     Rlattice.defineDynamics<NoDynamics<T, RDESCRIPTOR>>( geometry, 0 );
     // select between the mesoscopic method with or without a Runge Kutta scheme
@@ -248,6 +249,32 @@ void prepareLatticeMcHardy(MyCase& myCase){
 
     clout << "Prepare Lattice ... OK" << std::endl;
     return;
+}
+
+void setInitialValues(MyCase& myCase){
+    using T = MyCase::value_t;
+    auto& geometry = myCase.getGeometry();
+    auto& params   = myCase.getParameters();
+
+    auto& Rlattice = myCase.getLattice(Radiation {});
+    using RDESCRIPTOR = MyCase::descriptor_t_of<Radiation>;
+
+    T inletDirichlet = params.get<parameters::INLET_DIRICHLET>();
+
+
+    // since adv-diffusion model is used, the velocity it set to 0
+    AnalyticalConst3D<T,T> u0( 0.0, 0.0, 0.0 );        // 3D -> 3D
+    AnalyticalConst3D<T,T> rho0( 0.0 );                // 3D -> 1D
+    AnalyticalConst3D<T,T> rho1( inletDirichlet );                // 3D -> 1D
+
+    // initialize media with density from analytical solution
+    // at iT=0 the error is given by the maschinen genauigkeit
+    Rlattice.iniEquilibrium( geometry, 1, rho0, u0 );
+    Rlattice.iniEquilibrium( geometry, 2, rho0, u0 );
+    Rlattice.iniEquilibrium( geometry, 3, rho1, u0 );
+    Rlattice.defineRho( geometry, 2, rho0 );
+    Rlattice.defineRho( geometry, 3, rho1 );
+    Rlattice.initialize();
 }
 
 int main( int argc, char *argv[] ){
@@ -337,5 +364,8 @@ int main( int argc, char *argv[] ){
 
     /// === Step 6: Prepare Lattice ===
     myCaseParameters.get<parameters::USE_MINK>() ? prepareLatticeMink(myCase) : prepareLatticeMcHardy(myCase);
+
+    /// === Step 7: Definition of Initial, Boundary Values, and Fields ===
+    setInitialValues(myCase);
 
 }
