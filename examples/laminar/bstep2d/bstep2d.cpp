@@ -36,7 +36,7 @@
 #include <olb.h>
 using namespace olb;
 using namespace olb::names;
-using T = double;
+
 // === Step 1: Declarations ===
 using MyCase = Case<NavierStokes, Lattice<double, descriptors::D2Q9<>>>;
 
@@ -247,9 +247,10 @@ void setBoundaryValues(MyCase& myCase, std::size_t iT)
   return;
 }
 
-void getResults(MyCase& myCase, std::size_t iT, util::Timer<T> timer)
+void getResults(MyCase& myCase, std::size_t iT, util::Timer<MyCase::value_t> &timer)
 {
   OstreamManager clout(std::cout, "getResults");
+  using T = MyCase::value_t;
   auto&          parameters    = myCase.getParameters();
   const T        heightChannel = parameters.get<parameters::DOMAIN_EXTENT>()[1];
   const T        heightStep    = parameters.get<parameters::PHYS_HEIGHT_OF_STEP>(); // height of step in meter
@@ -321,12 +322,15 @@ void getResults(MyCase& myCase, std::size_t iT, util::Timer<T> timer)
 void simulate(MyCase& myCase)
 {
   OstreamManager clout(std::cout, "Time marching");
-  clout << "starting simulation..." << std::endl;
+
+
+  using T = MyCase::value_t;
   auto&          parameters = myCase.getParameters();
   auto&          sLattice   = myCase.getLattice(NavierStokes {});
   const T        maxPhysT   = parameters.get<parameters::MAX_PHYS_T>();
   util::Timer<T> timer(sLattice.getUnitConverter().getLatticeTime(maxPhysT),
                        myCase.getGeometry().getStatistics().getNvoxel());
+  clout << "starting simulation..." << std::endl;
   timer.start();
 
   for (std::size_t iT = 0; iT < sLattice.getUnitConverter().getLatticeTime(maxPhysT); ++iT) {
@@ -359,8 +363,8 @@ int main(int argc, char* argv[])
     myCaseParameters.set<PHYS_CHAR_VISCOSITY>(1.0 / 19230.76923);
     myCaseParameters.set<PHYS_CHAR_DENSITY>(1.0);
     myCaseParameters.set<DOMAIN_EXTENT>({0.7, 0.0101});
-    myCaseParameters.set<PHYS_CHAR_LENGTH>(2.0 *
-                                           (myCaseParameters.get<DOMAIN_EXTENT>()[1] - myCaseParameters.get<PHYS_HEIGHT_OF_STEP>()));
+    myCaseParameters.set<PHYS_CHAR_LENGTH>([&]{return 2.0 *
+          (myCaseParameters.get<DOMAIN_EXTENT>()[1] - myCaseParameters.get<PHYS_HEIGHT_OF_STEP>());});
     myCaseParameters.set<MAX_PHYS_T>(2.0);
   }
   myCaseParameters.fromCLI(argc, argv);

@@ -38,12 +38,22 @@
 #include <cmath>
 #include <iostream>
 #include <fstream>
+#include <format>
 
 using namespace olb;
+using namespace olb::names;
 
-typedef double T;
+using MyCase = Case<Radiation, Lattice<double, descriptors::D3Q7<descriptors::VELOCITY>>>;
 
-#define DESCRIPTOR descriptors::D3Q7<descriptors::VELOCITY> // descriptors::D3Q27DescriptorLebedev
+namespace olb::parameters {
+
+struct WRITE_SEC : public descriptors::FIELD_BASE<1> {};
+struct DOMAIN_L : public descriptors::FIELD_BASE<1> {};
+
+struct ABSORPTION : public descriptors::FIELD_BASE<1> {};
+struct SCATTERING : public descriptors::FIELD_BASE<1> {};
+struct MU_EFF : public descriptors::FIELD_BASE<1> {};
+} // namespace olb::parameters
 
 // PostProcessor for updating the source term in each cell
 struct ComputeSourceTerm {
@@ -68,106 +78,199 @@ struct ComputeSourceTerm {
 };
 
 // Compute the analytical solution and error
-void error(SuperGeometry<T, 3>& superGeometry, SuperLattice<T, DESCRIPTOR>& lattice,
-           T absorption, T scattering)
+void calculate_error(MyCase& myCase)
 {
   OstreamManager clout(std::cout, "error");
+
+  using T        = MyCase::value_t;
+  auto& geometry = myCase.getGeometry();
+  auto& params   = myCase.getParameters();
+
+  auto& Rlattice = myCase.getLattice(Radiation {});
+
+  using RDESCRIPTOR = MyCase::descriptor_t_of<Radiation>;
+
+  const T absorption = params.get<parameters::ABSORPTION>();
+  const T scattering = params.get<parameters::SCATTERING>();
 
   int input[1];
   T   normAnaSol[1], absErr[1], relErr[1];
   // analytical solution
-  PLSsolution3D<T, T, DESCRIPTOR>               dSol(absorption, scattering);
-  SuperLatticeFfromAnalyticalF3D<T, DESCRIPTOR> dSolLattice(dSol, lattice);
+  PLSsolution3D<T, T, RDESCRIPTOR>               dSol(absorption, scattering);
+  SuperLatticeFfromAnalyticalF3D<T, RDESCRIPTOR> dSolLattice(dSol, Rlattice);
   // approximated solution
-  SuperLatticeDensity3D<T, DESCRIPTOR> d(lattice);
+  SuperLatticeDensity3D<T, RDESCRIPTOR> d(Rlattice);
 
-  SuperL2Norm3D<T> dL2Norm(dSolLattice - d, superGeometry, 1);
-  SuperL2Norm3D<T> dSolL2Norm(dSolLattice, superGeometry, 1);
+  SuperL2Norm3D<T> dL2Norm(dSolLattice - d, geometry, 1);
+  SuperL2Norm3D<T> dSolL2Norm(dSolLattice, geometry, 1);
   dL2Norm(absErr, input);
   dSolL2Norm(normAnaSol, input);
   relErr[0] = absErr[0] / normAnaSol[0];
   clout << "density-L2-error(util::abs)=" << absErr[0] << "; density-L2-error(rel)=" << relErr[0] << std::endl;
 
-  SuperLinfNorm3D<T> dLinfNorm(dSolLattice - d, superGeometry, 1);
+  SuperLinfNorm3D<T> dLinfNorm(dSolLattice - d, geometry, 1);
   dLinfNorm(absErr, input);
   clout << "density-Linf-error(util::abs)=" << absErr[0] << std::endl;
 }
 
-// Stores geometry information in form of material numbers
-void prepareGeometry(SuperGeometry<T, 3>& superGeometry,
-                     IndicatorSphere3D<T>& sphereAll, IndicatorSphere3D<T>& sphereEm)
+Mesh<MyCase::value_t, MyCase::d> createMesh(MyCase::ParametersD& params)
 {
-  OstreamManager clout(std::cout, "prepareGeometry");
-  clout << "Prepare Geometry ..." << std::endl;
+  using T = MyCase::value_t;
 
-  // Material numbers from 0 to 3 defined by indicators
-  // the domain, a sphere of radius 1
-  superGeometry.rename(0, 2, sphereAll);
-  superGeometry.rename(2, 1, {1, 1, 1});
-  // the emitter sphere of radius 0.1
-  superGeometry.rename(1, 3, sphereEm);
+  const auto lx = params.get<parameters::DOMAIN_L>();
+  const auto dx = params.get<parameters::PHYS_DELTA_X>();
 
-  // Removes all not needed boundary voxels outside the surface
-  superGeometry.clean();
-  // Removes all not needed boundary voxels inside the surface
-  superGeometry.innerClean();
-  superGeometry.checkForErrors();
+  Vector<T, 3>         origin;
+  IndicatorSphere3D<T> sphereAll(origin, 1 * lx);
 
-  superGeometry.print();
-  clout << "Prepare Geometry ... OK" << std::endl;
-  return;
+  Mesh<T, MyCase::d> mesh(sphereAll, dx, 2 * singleton::mpi().getSize());
+  mesh.setOverlap(params.get<parameters::OVERLAP>());
+
+  return mesh;
 }
 
-// Set up the geometry of the simulation
-void prepareLattice(SuperLattice<T, DESCRIPTOR>& sLattice,
-                    SuperGeometry<T, 3>& superGeometry)
+void prepareGeometry(MyCase& myCase)
+{
+  OstreamManager clout(std::cout, "prepraringGeometry");
+  clout << "Prepare Geometry ..." << std::endl;
+
+  using T        = MyCase::value_t;
+  auto& geometry = myCase.getGeometry();
+  auto& params   = myCase.getParameters();
+
+  const T lx = params.get<parameters::DOMAIN_L>();
+
+  Vector<T, 3> origin;
+
+  //Domain, Sphere of Size lx
+  IndicatorSphere3D<T> sphereAll(origin, 1 * lx);
+  geometry.rename(0, 2, sphereAll);
+  geometry.rename(2, 1, {1, 1, 1});
+
+  //Emitter Spehere of 10% domain:l
+  IndicatorSphere3D<T> sphereEm(origin, 0.1 * lx);
+  geometry.rename(1, 3, sphereEm);
+
+  geometry.clean();
+  geometry.innerClean();
+  geometry.checkForErrors();
+
+  geometry.print();
+}
+
+void prepareLattice(MyCase& myCase)
 {
   OstreamManager clout(std::cout, "prepareLattice");
   clout << "Prepare Lattice ..." << std::endl;
 
-  // the simulation parameters
-  const T omega = sLattice.getUnitConverter().getLatticeRelaxationFrequency();
-  // T latticeSink = 3.*converter.getLatticeAbsorption()*(converter.getLatticeAbsorption()+converter.getLatticeScattering()) / 8.;
+  using T        = MyCase::value_t;
+  auto& geometry = myCase.getGeometry();
+  auto& params   = myCase.getParameters();
 
-  // define dynamics
+  auto& Rlattice = myCase.getLattice(Radiation {});
+
+  using RDESCRIPTOR = MyCase::descriptor_t_of<Radiation>;
+
+  Rlattice.setUnitConverter<UnitConverterFromResolutionAndRelaxationTime<T, RDESCRIPTOR>>(
+      (int)params.get<parameters::RESOLUTION>(), // resolution: number of voxels per charPhysL
+      (T)params.get<
+          parameters::LATTICE_RELAXATION_TIME>(), // latticeRelaxationTime: relaxation time, has to be greater than 0.5!
+      (T)1.0,                                     // charPhysLength: reference length of simulation geometry
+      (T)0.0, // charPhysVelocity: maximal/highest expected velocity during simulation in __m / s__  || none for radiation
+      (T)1.0, // physViscosity: physical kinematic viscosity in __m^2 / s__  || radiative diffusion coefficient D
+      (T)1.0  // physDensity: physical density in __kg / m^3__
+  );
+
+  const auto& converter = Rlattice.getUnitConverter();
+  converter.print();
+
+  const T omega = converter.getLatticeRelaxationFrequency();
+
+  //define dynamics
   // Material=0 -->do nothing
-  sLattice.defineDynamics<NoDynamics<T, DESCRIPTOR>>(superGeometry, 0);
+  Rlattice.defineDynamics<NoDynamics<T, RDESCRIPTOR>>(geometry, 0);
 
   // Material=1 -->sourced advection diffusion dynamics OR poisson dynamics with sink term
   // when using poisson dynamics, setting the sink parameter is necessary
   // when using sourced advection diffusion dynamics, the sink term is handeled by the post processor
-  auto bulkIndicator = superGeometry.getMaterialIndicator({1});
+  auto bulkIndicator = geometry.getMaterialIndicator({1});
   // sLattice.defineDynamics<PoissonDynamics<T,DESCRIPTOR>>(bulkIndicator);
-  sLattice.defineDynamics<SourcedAdvectionDiffusionBGKdynamics<T, DESCRIPTOR>>(bulkIndicator);
+  Rlattice.defineDynamics<SourcedAdvectionDiffusionBGKdynamics<T, RDESCRIPTOR>>(bulkIndicator);
 
   // Material=2,3 -->first order equilibrium
-  sLattice.defineDynamics<EquilibriumBoundaryFirstOrder>(superGeometry, 2);
-  sLattice.defineDynamics<EquilibriumBoundaryFirstOrder>(superGeometry, 3);
+  Rlattice.defineDynamics<EquilibriumBoundaryFirstOrder>(geometry, 2);
+  Rlattice.defineDynamics<EquilibriumBoundaryFirstOrder>(geometry, 3);
 
   // set the parameters for the dynamics
-  sLattice.setParameter<descriptors::OMEGA>(omega);
-  // sLattice.setParameter<collision::Poisson::SINK>(latticeSink);
+  Rlattice.setParameter<descriptors::OMEGA>(omega);
+  // Rlattice.setParameter<collision::Poisson::SINK>(latticeSink);
 
-  AnalyticalConst3D<T, T> velocity(0.0, 0.0, 0.0);
-  sLattice.defineField<descriptors::VELOCITY>(bulkIndicator, velocity);
+  // Add PostProcessor and set parameters
+  Rlattice.addPostProcessor<stage::PreCollide>(meta::id<ComputeSourceTerm> {});
+  Rlattice.setParameter<ComputeSourceTerm::C_T>(converter.getConversionFactorTime());
+  Rlattice.setParameter<ComputeSourceTerm::MU_EFF>(params.get<parameters::MU_EFF>());
 
   clout << "Prepare Lattice ... OK" << std::endl;
   return;
 }
 
-// Write data to termimal and file system
-void getResults(SuperLattice<T, DESCRIPTOR>& sLattice, int iT,
-                SuperGeometry<T, 3>& superGeometry, util::Timer<T>& timer, int saveIter, T absorption, T scattering)
+void setInitialValues(MyCase& myCase)
 {
-  OstreamManager                       clout(std::cout, "getResults");
-  SuperVTMwriter3D<T>                  vtmWriter("sphere3d");
-  SuperLatticeDensity3D<T, DESCRIPTOR> density(sLattice);
+  OstreamManager clout(std::cout, "setInitialValues");
+  clout << "Setting Initial Values and BC ..." << std::endl;
+
+  using T        = MyCase::value_t;
+  auto& geometry = myCase.getGeometry();
+  auto& params   = myCase.getParameters();
+
+  auto& Rlattice = myCase.getLattice(Radiation {});
+
+  using RDESCRIPTOR = MyCase::descriptor_t_of<Radiation>;
+
+  const T absorption = params.get<parameters::ABSORPTION>();
+  const T scattering = params.get<parameters::SCATTERING>();
+
+  // since adv-diffusion model is used, the velocity it set to 0
+  AnalyticalConst3D<T, T>          u0(0.0, 0.0, 0.0);            // 3D -> 3D
+  AnalyticalConst3D<T, T>          rho0(0.0);                    // 3D -> 3D
+  PLSsolution3D<T, T, RDESCRIPTOR> dSol(absorption, scattering); // analytical Solution
+
+  // initialize media with density from analytical solution
+  // at iT=0 the error is given by the maschinen genauigkeit
+  Rlattice.iniEquilibrium(geometry, 1, rho0, u0);
+  Rlattice.iniEquilibrium(geometry, 2, dSol, u0);
+  Rlattice.iniEquilibrium(geometry, 3, dSol, u0);
+  Rlattice.defineRho(geometry, 2, dSol);
+  Rlattice.defineRho(geometry, 3, dSol);
+  Rlattice.initialize();
+
+  clout << "Setting Initial Values and BC ... OK" << std::endl;
+}
+
+void getResults(MyCase& myCase, util::Timer<MyCase::value_t>& timer, std::size_t iT)
+{
+  OstreamManager clout(std::cout, "getResults");
+
+  using T      = MyCase::value_t;
+  auto& params = myCase.getParameters();
+
+  auto&       Rlattice  = myCase.getLattice(Radiation {});
+  const auto& converter = Rlattice.getUnitConverter();
+
+  using RDESCRIPTOR = MyCase::descriptor_t_of<Radiation>;
+
+  const T absorption = params.get<parameters::ABSORPTION>();
+  const T scattering = params.get<parameters::SCATTERING>();
+
+  const auto saveIter = converter.getLatticeTime(params.get<parameters::WRITE_SEC>() / 32.);
+
+  SuperVTMwriter3D<T>                   vtmWriter("sphere3d");
+  SuperLatticeDensity3D<T, RDESCRIPTOR> density(Rlattice);
   vtmWriter.addFunctor(density);
 
   if (iT == 0) {
-    // Writes geometry, cuboid no. and rank no. to file system
-    SuperLatticeCuboid3D cuboid(sLattice);
-    SuperLatticeRank3D   rank(sLattice);
+    SuperLatticeCuboid3D cuboid(Rlattice);
+    SuperLatticeRank3D   rank(Rlattice);
 
     vtmWriter.write(cuboid);
     vtmWriter.write(rank);
@@ -178,145 +281,58 @@ void getResults(SuperLattice<T, DESCRIPTOR>& sLattice, int iT,
   if (iT % saveIter == 0) {
     std::cout << "Write added functor at time " << iT << "." << std::endl;
     vtmWriter.write(iT);
-  }
 
-  // Writes output on the console
-  if (iT % saveIter == 0) {
     timer.update(iT);
     timer.printStep();
-    sLattice.getStatistics().print(iT, sLattice.getUnitConverter().getPhysTime(iT));
+    Rlattice.getStatistics().print(iT, converter.getPhysTime(iT));
   }
 
   if (iT % 500 == 0) {
-    SuperLatticeDensity3D<T, DESCRIPTOR> density(sLattice);
-    AnalyticalFfromSuperF3D<T>           analytDensity(density, true, 1);
-    PLSsolution3D<T, T, DESCRIPTOR>      dSol(absorption, scattering);
+    SuperLatticeDensity3D<T, RDESCRIPTOR> density(Rlattice);
+    AnalyticalFfromSuperF3D<T>            analyDensity(density, true, 1);
+    PLSsolution3D<T, T, RDESCRIPTOR>      dSol(absorption, scattering);
+
     for (int nY = -25; nY < 25; ++nY) {
-      double position[3] = {0, nY / 25., 0};
-      // double postition[3] = {0, 0, 0};
+      double position[3] = {0, ((double)nY) / 25.0, 0.0};
+
       double densityEval[1] = {0};
-      analytDensity(densityEval, position);
+      analyDensity(densityEval, position);
       double densitySol[1] = {0};
       dSol(densitySol, position);
+
       // printf("%1.3f\t%1.3f\t%1.3f\n", position[1], densityEval[0], densitySol[0] );
       // fout << postition[1] << ", " << densityEval[0] << ", " << densitySol[0]  << std::endl;
     }
-    // fout.close();
   }
 }
 
-void setBoundaryValues(SuperLattice<T, DESCRIPTOR>& lattice, SuperGeometry<T, 3>& superGeometry, T absorption,
-                       T scattering)
+void writeToFile(MyCase& myCase, std::size_t iT)
 {
-  // since adv-diffusion model is used, the velocity it set to 0
-  AnalyticalConst3D<T, T>         u0(0.0, 0.0, 0.0);            // 3D -> 3D
-  AnalyticalConst3D<T, T>         rho0(0.0);                    // 3D -> 3D
-  PLSsolution3D<T, T, DESCRIPTOR> dSol(absorption, scattering); // analytical Solution
+  OstreamManager clout(std::cout, "writeToFile");
+  using T      = MyCase::value_t;
+  auto& params = myCase.getParameters();
 
-  // initialize media with density from analytical solution
-  // at iT=0 the error is given by the maschinen genauigkeit
-  lattice.iniEquilibrium(superGeometry, 1, rho0, u0);
-  lattice.iniEquilibrium(superGeometry, 2, dSol, u0);
-  lattice.iniEquilibrium(superGeometry, 3, dSol, u0);
-  lattice.defineRho(superGeometry, 2, dSol);
-  lattice.defineRho(superGeometry, 3, dSol);
-  lattice.initialize();
-}
+  auto&       Rlattice  = myCase.getLattice(Radiation {});
+  const auto& converter = Rlattice.getUnitConverter();
 
-int main(int argc, char* argv[])
-{
-  // ===== 1st Step: Initialization ===
-  initialize(&argc, &argv);
-  singleton::directories().setOutputDir("./tmp/");
-  OstreamManager clout(std::cout, "main");
+  using RDESCRIPTOR = MyCase::descriptor_t_of<Radiation>;
 
-  std::string fName("sphere3d.xml");
-  XMLreader   config(fName);
+  const T absorption = params.get<parameters::ABSORPTION>();
+  const T scattering = params.get<parameters::SCATTERING>();
 
-  int N, maxPhysT, saveIter;
-  T   writeSec, ABSORPTION, SCATTERING;
-  config["Application"]["DiscParam"]["resolution"].read(N);
-  config["Application"]["PhysParam"]["maxTime"].read(maxPhysT);
-  config["Application"]["absorption"].read(ABSORPTION);
-  config["Application"]["scattering"].read(SCATTERING);
-  config["Output"]["saveSec"].read(writeSec);
-
-  T latticeRelaxationTime = 1.0;
-  T mu_eff                = util::sqrt(3 * ABSORPTION * (ABSORPTION + SCATTERING));
-  // the radiative unit converter specifically deals with values associated with radiation, necessary when using poisson dynamics
-  // const RadiativeUnitConverter<T,DESCRIPTOR> converter( N, 1, ABSORPTION, SCATTERING);
-  UnitConverterFromResolutionAndRelaxationTime<T, DESCRIPTOR> const converter(
-      (int)N,                   // resolution: number of voxels per charPhysL
-      (T)latticeRelaxationTime, // latticeRelaxationTime: relaxation time, has to be greater than 0.5!
-      (T)1.0,                   // charPhysLength: reference length of simulation geometry
-      (T)0.0, // charPhysVelocity: maximal/highest expected velocity during simulation in __m / s__  || none for radiation
-      (T)1.0, // physViscosity: physical kinematic viscosity in __m^2 / s__  || radiative diffusion coefficient D
-      (T)1.0  // physDensity: physical density in __kg / m^3__
-  );
-  converter.print();
-
-  saveIter = converter.getLatticeTime(writeSec / 32.);
-
-  // ===== 2nd Step: Prepare Geometry =====
-  Vector<T, 3>         origin;
-  IndicatorSphere3D<T> sphereEm(origin, 0.1);
-  IndicatorSphere3D<T> sphereAll(origin, 1);
-
-  // Instantiation of a cuboid
-  CuboidDecomposition<T, 3>* cuboid =
-      new CuboidDecomposition<T, 3>(sphereAll, converter.getConversionFactorLength(), 2 * singleton::mpi().getSize());
-  // Instantiation of a loadBalancer
-  HeuristicLoadBalancer<T>* loadBalancer = new HeuristicLoadBalancer<T>(*cuboid);
-  // Instatiation of a superGeometry
-  SuperGeometry<T, 3> superGeometry(*cuboid, *loadBalancer, 2);
-
-  prepareGeometry(superGeometry, sphereAll, sphereEm);
-
-  // ===== 3rd Step: Prepare Lattice =====
-  SuperLattice<T, DESCRIPTOR> sLattice(converter, superGeometry);
-  prepareLattice(sLattice, superGeometry);
-
-  // Add PostProcessor and set parameters
-  sLattice.addPostProcessor<stage::PreCollide>(meta::id<ComputeSourceTerm> {});
-  sLattice.setParameter<ComputeSourceTerm::C_T>(converter.getConversionFactorTime());
-  sLattice.setParameter<ComputeSourceTerm::MU_EFF>(mu_eff);
-
-  // === 4th Step: Main Loop with Timer ===
-  util::Timer<T> timer(converter.getLatticeTime(maxPhysT), superGeometry.getStatistics().getNvoxel());
-  timer.start();
-
-  setBoundaryValues(sLattice, superGeometry, ABSORPTION, SCATTERING);
-
-  util::ValueTracer<T> converge(N, 1e-6);
-  int                  iT;
-  for (iT = 0; iT <= converter.getLatticeTime(maxPhysT); ++iT) {
-    // === 5th Step: Definition of Initial and Boundary Conditions ===
-    converge.takeValue(sLattice.getStatistics().getAverageRho(), true);
-    if (converge.hasConverged()) {
-      clout << "Simulation converged. -- " << iT << std::endl;
-      break;
-    }
-    if (iT % saveIter == 0) {
-      sLattice.getStatistics().print(iT, converter.getPhysTime(iT));
-      timer.print(iT);
-      error(superGeometry, sLattice, ABSORPTION, SCATTERING);
-    }
-
-    // === 6th Step: Collide and Stream Execution ===
-    sLattice.collideAndStream();
-    // === 7th Step: Computation and Output of the Results ===
-    getResults(sLattice, iT, superGeometry, timer, saveIter, ABSORPTION, SCATTERING);
-  }
-  // Write and save the results in a text file
-  std::string   name = std::string("line") + std::to_string(iT) + std::string(".txt");
+  std::string   name = std::format("Results_along_line_at_time_{}.txt", std::to_string(iT));
   std::ofstream fout(name, std::ios::trunc);
+
   if (!fout) {
     clout << "Error: could not open " << name << std::endl;
   }
-  SuperLatticeDensity3D<T, DESCRIPTOR> density(sLattice);
-  AnalyticalFfromSuperF3D<T>           analytDensity(density, true, 1);
-  PLSsolution3D<T, T, DESCRIPTOR>      dSol(ABSORPTION, SCATTERING);
-  int                                  n = converter.getResolution() / 2;
+
+  SuperLatticeDensity3D<T, RDESCRIPTOR> density(Rlattice);
+  AnalyticalFfromSuperF3D<T>            analytDensity(density, true, 1);
+  PLSsolution3D<T, T, RDESCRIPTOR>      dSol(absorption, scattering);
+
+  int n = converter.getResolution() / 2;
+
   for (int nY = 0; nY < n; ++nY) {
     double position[3]    = {0, double(nY) / n, 0};
     double densityEval[1] = {0};
@@ -330,10 +346,96 @@ int main(int argc, char* argv[])
              util::abs(densityEval[0] - densitySol[0]) / densitySol[0]);
     }
   }
+
   fout.close();
+}
+
+void simulate(MyCase& myCase)
+{
+  OstreamManager clout(std::cout, "simulate");
+  clout << "Starting Simulation ..." << std::endl;
+
+  using T        = MyCase::value_t;
+  auto& geometry = myCase.getGeometry();
+  auto& params   = myCase.getParameters();
+
+  auto&       Rlattice  = myCase.getLattice(Radiation {});
+  const auto& converter = Rlattice.getUnitConverter();
+
+  const auto maxPhysT = params.get<parameters::MAX_PHYS_T>();
+  const auto saveIter = converter.getLatticeTime(params.get<parameters::WRITE_SEC>() / 32.);
+
+  util::Timer<T> timer(converter.getLatticeTime(maxPhysT), geometry.getStatistics().getNvoxel());
+  timer.start();
+
+  util::ValueTracer<T> converge(params.get<parameters::RESOLUTION>(), 1e-6);
+
+  std::size_t iT;
+  for (iT = 0; iT <= converter.getLatticeTime(maxPhysT); ++iT) {
+    converge.takeValue(Rlattice.getStatistics().getAverageRho(), true);
+
+    if (converge.hasConverged()) {
+      clout << "Simulation converged. -- " << iT << std::endl;
+      break;
+    }
+
+    if (iT % saveIter == 0) {
+      Rlattice.getStatistics().print(iT, converter.getPhysTime(iT));
+      timer.print(iT);
+      calculate_error(myCase);
+    }
+    Rlattice.collideAndStream();
+    getResults(myCase, timer, iT);
+  }
+
+  writeToFile(myCase, converter.getPhysTime(iT));
 
   timer.stop();
   timer.printSummary();
+}
 
-  return 0;
+int main(int argc, char* argv[])
+{
+  initialize(&argc, &argv);
+
+  /// === Step 2: Set Parameters ===
+  MyCase::ParametersD myCaseParameters;
+  {
+    using namespace olb::parameters;
+    myCaseParameters.set<WRITE_SEC>(1.0);
+    myCaseParameters.set<RESOLUTION>(40);
+    myCaseParameters.set<MAX_PHYS_T>(100);
+    myCaseParameters.set<DOMAIN_L>(1.0);
+    myCaseParameters.set<ABSORPTION>(0.5);
+    myCaseParameters.set<SCATTERING>(1.5);
+
+    myCaseParameters.set<LATTICE_RELAXATION_TIME>(1.0);
+    myCaseParameters.set<MU_EFF>([&] {
+      return util::sqrt(3 * myCaseParameters.get<ABSORPTION>() *
+                        (myCaseParameters.get<ABSORPTION>() + myCaseParameters.get<SCATTERING>()));
+    });
+
+    myCaseParameters.set<PHYS_DELTA_X>([&] {
+      return myCaseParameters.get<DOMAIN_L>() / myCaseParameters.get<RESOLUTION>();
+    });
+  }
+  myCaseParameters.fromCLI(argc, argv);
+
+  /// === Step 3: Create Mesh ===
+  Mesh mesh = createMesh(myCaseParameters);
+
+  /// === Step 4: Create Case ===
+  MyCase myCase(myCaseParameters, mesh);
+
+  /// === Step 5: Prepare Geometry ===
+  prepareGeometry(myCase);
+
+  /// === Step 6: Prepare Lattice ===
+  prepareLattice(myCase);
+
+  /// === Step 7: Definition of Initial, Boundary Values, and Fields ===
+  setInitialValues(myCase);
+
+  /// === Step 8: Simulate ===
+  simulate(myCase);
 }

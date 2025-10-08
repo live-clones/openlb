@@ -1,7 +1,7 @@
 /*  Lattice Boltzmann sample, written in C++, using the OpenLB
  *  library
  *
- *  Copyright (C) 2014 Mathias J. Krause
+ *  Copyright (C) 2014, 2025 Mathias J. Krause, Yuji (Sam) Shimojima
  *  E-mail contact: info@openlb.net
  *  The most recent release of OpenLB can be downloaded at
  *  <http://www.openlb.net/>
@@ -28,123 +28,183 @@
  * is also available.
  */
 
-
 #include <olb.h>
 
 using namespace olb;
-using namespace olb::descriptors;
-using namespace olb::graphics;
+using namespace olb::names;
+// === Step 1: Declarations ===
+using MyCase = Case<NavierStokes, Lattice<double, descriptors::D3Q19<>>>;
 
-using T = FLOATING_POINT_TYPE;
-using DESCRIPTOR = D3Q19<>;
-using BulkDynamics = ConstRhoBGKdynamics<T,DESCRIPTOR>;
+namespace olb::parameters {
 
-const int N = 30;        // resolution of the model
-const T maxT = 100.;     // max. simulation time in s, SI unit
+struct RESIDUUM : public descriptors::FIELD_BASE<1> {};      // Residuum for convergence check
+struct TIME_INTERVAL : public descriptors::FIELD_BASE<1> {}; // Time intervall in seconds for convergence check
 
-const T interval = 1.0; // Time intervall in seconds for convergence check
-const T epsilon = 1e-3; // Residuum for convergence check
+} // namespace olb::parameters
 
-void prepareGeometry(IndicatorF3D<T>& indicator,
-                     SuperGeometry<T,3>& superGeometry,
-                     T dx, T length)
+/// @brief Create a simulation mesh, based on user-specific geometry
+/// @return An instance of Mesh, which keeps the relevant information
+Mesh<MyCase::value_t, MyCase::d> createMesh(MyCase::ParametersD& parameters)
 {
-  OstreamManager clout( std::cout,"prepareGeometry" );
+  using T                 = MyCase::value_t;
+  const T      physDeltaX = parameters.get<parameters::PHYS_DELTA_X>();
+  const T      length = parameters.get<parameters::PHYS_CHAR_LENGTH>(); // length of the cavity in x- and z-direction
+  Vector<T, 3> origin(T(0));
+  Vector<T, 3> extend(length + 0.5 * physDeltaX);
+  IndicatorCuboid3D<T> cuboid(extend, origin);
+
+  Mesh<T, MyCase::d> mesh(cuboid, physDeltaX, singleton::mpi().getSize());
+  mesh.setOverlap(parameters.get<parameters::OVERLAP>());
+  return mesh;
+}
+
+/// @brief Set material numbers for different parts of the domain
+/// @param myCase The Case instance which keeps the simulation data
+/// @note The material numbers will be used to assign physics to lattice nodes
+void prepareGeometry(MyCase& myCase)
+{
+
+  OstreamManager clout(std::cout, "prepareGeometry");
   clout << "Prepare Geometry ..." << std::endl;
+  using T          = MyCase::value_t;
+  auto& sGeometry  = myCase.getGeometry();
+  auto& parameters = myCase.getParameters();
+
+  const T physDeltaX = parameters.get<parameters::PHYS_DELTA_X>();
+
+  const T length = parameters.get<parameters::PHYS_CHAR_LENGTH>(); // length of the cavity in x- and z-direction
+
+  Vector<T, 3>         origin((T)0);
+  Vector<T, 3>         extend(length + 0.5 * physDeltaX);
+  IndicatorCuboid3D<T> cuboid(extend, origin);
 
   // Sets material number for fluid and boundary
-  superGeometry.rename( 0,2,indicator );
-  superGeometry.rename( 2,1,{1,1,1} );
+  sGeometry.rename(0, 2, cuboid);
+  sGeometry.rename(2, 1, {1, 1, 1});
 
-  T eps = dx;
-  Vector<T,3> origin( -eps, length - eps, -eps );
-  Vector<T,3> extend( length + 2*eps, 2*eps, length + 2*eps );
-  IndicatorCuboid3D<T> lid( extend,origin );
+  T                    eps = physDeltaX;
+  Vector<T, 3>         libOrigin(-eps, length - eps, -eps);
+  Vector<T, 3>         libExtend(length + 2 * eps, 2 * eps, length + 2 * eps);
+  IndicatorCuboid3D<T> lid(libExtend, libOrigin);
 
-  superGeometry.rename( 2,3,1,lid );
+  sGeometry.rename(2, 3, 1, lid);
 
   // Removes all not needed boundary voxels outside the surface
-  superGeometry.clean();
+  sGeometry.clean();
   // Removes all not needed boundary voxels inside the surface
-  superGeometry.innerClean();
-  superGeometry.checkForErrors();
+  sGeometry.innerClean();
+  sGeometry.checkForErrors();
 
-  superGeometry.print();
+  sGeometry.print();
 
   clout << "Prepare Geometry ... OK" << std::endl;
+  return;
 }
-
-
-void prepareLattice(SuperLattice<T,DESCRIPTOR>& lattice,
-                    SuperGeometry<T,3>& superGeometry )
+/// @brief Set lattice dynamics
+/// @param myCase The Case instance which keeps the simulation data
+void prepareLattice(MyCase& myCase)
 {
-  OstreamManager clout( std::cout,"prepareLattice" );
+  OstreamManager clout(std::cout, "prepareLattice");
+  using T          = MyCase::value_t;
+  auto& sGeometry  = myCase.getGeometry();
+  auto& sLattice   = myCase.getLattice(NavierStokes {});
+  auto& parameters = myCase.getParameters();
   clout << "Prepare Lattice ..." << std::endl;
-
-  const T omega = lattice.getUnitConverter().getLatticeRelaxationFrequency();
+  {
+    using namespace olb::parameters;
+    sLattice.setUnitConverter<UnitConverterFromResolutionAndRelaxationTime<T, MyCase::descriptor_t_of<NavierStokes>>>(
+        parameters.get<RESOLUTION>(), // resolution: number of voxels per charPhysL
+        parameters
+            .get<LATTICE_RELAXATION_TIME>(), // latticeRelaxationTime: relaxation time, have to be greater than 0.5!
+        parameters.get<PHYS_CHAR_LENGTH>(),  // charPhysLength: reference length of simulation geometry
+        parameters.get<
+            PHYS_CHAR_VELOCITY>(), // charPhysVelocity: maximal/highest expected velocity during simulation in __m / s__
+        parameters.get<PHYS_CHAR_VISCOSITY>(), // physViscosity: physical kinematic viscosity in __m^2 / s__
+        parameters.get<PHYS_CHAR_DENSITY>()    // physDensity: physical density in __kg / m^3__
+    );
+  }
+  // Prints the converter log as console output
+  sLattice.getUnitConverter().print();
+  // Writes the converter log in a file
+  sLattice.getUnitConverter().write("cavity3d");
 
   // Material=1 -->bulk dynamics
-  lattice.defineDynamics<BulkDynamics>(superGeometry, 1);
+  sLattice.defineDynamics<ConstRhoBGKdynamics>(sGeometry, 1);
 
   // Material=2,3 -->bulk dynamics, velocity boundary
-  boundary::set<boundary::InterpolatedVelocity>(lattice, superGeometry, 2);
-  boundary::set<boundary::InterpolatedVelocity>(lattice, superGeometry, 3);
-
-  lattice.setParameter<descriptors::OMEGA>(omega);
-
+  boundary::set<boundary::InterpolatedVelocity>(sLattice, sGeometry, 2);
+  boundary::set<boundary::InterpolatedVelocity>(sLattice, sGeometry, 3);
   clout << "Prepare Lattice ... OK" << std::endl;
+  return;
 }
 
-void setBoundaryValues(SuperLattice<T,DESCRIPTOR>& lattice, SuperGeometry<T,3>& superGeometry, std::size_t iT)
+/// Set initial condition for primal variables (velocity and density)
+/// @param myCase The Case instance which keeps the simulation data
+/// @note Be careful: initial values have to be set using lattice units
+void setInitialValues(MyCase& myCase)
 {
+  OstreamManager clout(std::cout, "Initialization");
+  clout << "lattice initialization ..." << std::endl;
 
-  OstreamManager clout( std::cout,"setBoundaryValues" );
+  using T = MyCase::value_t;
 
-  if ( iT==0 ) {
-    AnalyticalConst3D<T,T> rhoF( T( 1 ) );
-    AnalyticalConst3D<T,T> uF( T( 0 ), T( 0 ), T( 0 ) );
+  auto& sLattice = myCase.getLattice(NavierStokes {});
 
-    auto bulkIndicator = superGeometry.getMaterialIndicator({1, 2, 3});
-    lattice.iniEquilibrium( bulkIndicator, rhoF, uF );
-    lattice.defineRhoU( bulkIndicator, rhoF, uF );
+  auto& sGeometry = myCase.getGeometry();
 
-    clout << lattice.getUnitConverter().getCharLatticeVelocity() << std::endl;
-    AnalyticalConst3D<T,T> uTop(lattice.getUnitConverter().getCharLatticeVelocity(), T( 0 ), T( 0 ));
-    lattice.defineU(superGeometry,3, uTop);
+  AnalyticalConst3D<T, T> rhoF((T)1);
+  AnalyticalConst3D<T, T> uF((T)0, (T)0, (T)0);
 
-    // Make the lattice ready for simulation
-    lattice.initialize();
-  }
+  auto bulkIndicator = sGeometry.getMaterialIndicator({1, 2, 3});
+  sLattice.iniEquilibrium(bulkIndicator, rhoF, uF);
+  sLattice.defineRhoU(bulkIndicator, rhoF, uF);
+
+  AnalyticalConst3D<T, T> uTop(sLattice.getUnitConverter().getCharLatticeVelocity(), (T)0, (T)0);
+
+  sLattice.defineU(sGeometry, 3, uTop);
+  const T omega = sLattice.getUnitConverter().getLatticeRelaxationFrequency();
+
+  sLattice.setParameter<descriptors::OMEGA>(omega);
+
+  // Make the lattice ready for simulation
+  sLattice.initialize();
+  clout << "Initialization ... OK" << std::endl;
+  return;
 }
 
-void getResults(SuperLattice<T,DESCRIPTOR>& sLattice,
-                SuperGeometry<T,3>& superGeometry,
-                std::size_t iT, util::Timer<T>& timer, bool converged)
+void setBoundaryValues(MyCase& myCase, std::size_t iT) { return; }
+
+void getResults(MyCase& myCase, std::size_t iT, util::Timer<MyCase::value_t>& timer, bool converged)
 {
 
-  OstreamManager clout( std::cout,"getResults" );
-  SuperVTMwriter3D<T> vtmWriter( "cavity3d" );
-  const auto& converter = sLattice.getUnitConverter();
+  OstreamManager clout(std::cout, "getResults");
+  using T                       = MyCase::value_t;
+  auto&               sLattice  = myCase.getLattice(NavierStokes {});
+  const auto&         converter = sLattice.getUnitConverter();
+  auto&               sGeometry = myCase.getGeometry();
+  SuperVTMwriter3D<T> vtmWriter("cavity3d");
 
-  const T logT   = ( T )1.;
-  const T saveT  = ( T )1.;
+  const T logT  = (T)1.0;
+  const T saveT = (T)1.0;
 
-  if ( iT==0 ) {
-    SuperLatticeCuboid3D<T, DESCRIPTOR> cuboid( sLattice );
-    SuperLatticeRank3D<T, DESCRIPTOR> rank( sLattice );
-    SuperLatticeDiscreteNormal3D<T, DESCRIPTOR> discreteNormal( sLattice, superGeometry, superGeometry.getMaterialIndicator({2, 3}) );
-    SuperLatticeDiscreteNormalType3D<T, DESCRIPTOR> discreteNormalType( sLattice, superGeometry, superGeometry.getMaterialIndicator({2, 3}) );
-    vtmWriter.write( cuboid );
-    vtmWriter.write( rank );
-    vtmWriter.write( discreteNormal );
-    vtmWriter.write( discreteNormalType );
+  if (iT == 0) {
+    SuperLatticeCuboid3D                                                   cuboid(sLattice);
+    SuperLatticeRank3D                                                     rank(sLattice);
+    SuperLatticeDiscreteNormal3D<T, MyCase::descriptor_t_of<NavierStokes>> discreteNormal(
+        sLattice, sGeometry, sGeometry.getMaterialIndicator({2, 3}));
+    SuperLatticeDiscreteNormalType3D<T, MyCase::descriptor_t_of<NavierStokes>> discreteNormalType(
+        sLattice, sGeometry, sGeometry.getMaterialIndicator({2, 3}));
+    vtmWriter.write(cuboid);
+    vtmWriter.write(rank);
+    vtmWriter.write(discreteNormal);
+    vtmWriter.write(discreteNormalType);
     vtmWriter.createMasterFile();
   }
 
   // Get statistics
   if ((iT % converter.getLatticeTime(logT) == 0 && iT > 0) || converged) {
-    timer.update( iT );
-    timer.printStep( 2 );
+    timer.update(iT);
+    timer.printStep(2);
     sLattice.getStatistics().print(iT, converter.getPhysTime(iT));
   }
 
@@ -152,98 +212,109 @@ void getResults(SuperLattice<T,DESCRIPTOR>& sLattice,
   if ((iT % converter.getLatticeTime(saveT) == 0 && iT > 0) || converged) {
     sLattice.setProcessingContext(ProcessingContext::Evaluation);
 
-    SuperLatticePhysVelocity3D<T, DESCRIPTOR> velocity( sLattice, converter );
-    SuperLatticePhysPressure3D<T, DESCRIPTOR> pressure( sLattice, converter );
+    SuperLatticePhysVelocity3D velocity(sLattice, converter);
+    SuperLatticePhysPressure3D pressure(sLattice, converter);
 
-    vtmWriter.addFunctor( velocity );
-    vtmWriter.addFunctor( pressure );
+    vtmWriter.addFunctor(velocity);
+    vtmWriter.addFunctor(pressure);
 
-    vtmWriter.write( iT );
+    vtmWriter.write(iT);
 
     // define vector which span the plane
-    Vector<T,3> u( 1,0,0 );
-    Vector<T,3> v( 0,1,0 );
-    T tmp = T( converter.getCharPhysLength() / 2. );
-    T origin[3] = {tmp,tmp,tmp};
+    Vector<T, 3> u(1, 0, 0);
+    Vector<T, 3> v(0, 1, 0);
+    T            tmp       = (T)converter.getCharPhysLength() / 2.0;
+    T            origin[3] = {tmp, tmp, tmp};
 
-    SuperEuklidNorm3D<T> normVel( velocity );
-    BlockReduction3D2D<T> planeReduction( normVel, origin, u, v, 600, BlockDataSyncMode::ReduceOnly );
+    SuperEuklidNorm3D<T>  normVel(velocity);
+    BlockReduction3D2D<T> planeReduction(normVel, origin, u, v, 600, BlockDataSyncMode::ReduceOnly);
 
     // write a heatmap
     heatmap::plotParam<T> plotParam;
-    plotParam.maxValue = 1.;
-    plotParam.name = "velocity";
+    plotParam.maxValue = (T)1.0;
+    plotParam.name     = "velocity";
     heatmap::write(planeReduction, iT, plotParam);
   }
+  return;
 }
 
-int main(int argc, char **argv) {
-  // === 1st Step: Initialization ===
-  initialize(&argc, &argv);
-  singleton::directories().setOutputDir("./tmp/");
-  OstreamManager clout(std::cout, "main");
+/// @brief Execute simulation: set initial values and run time loop
+/// @param myCase The Case instance which keeps the simulation data
+void simulate(MyCase& myCase)
+{
+  OstreamManager clout(std::cout, "Time marching");
+  using T           = MyCase::value_t;
+  auto& sLattice    = myCase.getLattice(NavierStokes {});
+  auto& parameters  = myCase.getParameters();
+  auto  maxLatticeT = sLattice.getUnitConverter().getLatticeTime(parameters.get<parameters::MAX_PHYS_T>());
 
-  const UnitConverterFromResolutionAndRelaxationTime<T, DESCRIPTOR> converter(
-    int {N},     // resolution: number of voxels per charPhysL
-    (T)   0.509, // latticeRelaxationTime: relaxation time, have to be greater than 0.5!
-    (T)   1.0,   // charPhysLength: reference length of simulation geometry
-    (T)   1.0,   // charPhysVelocity: maximal/highest expected velocity during simulation in __m / s__
-    (T)   0.001, // physViscosity: physical kinematic viscosity in __m^2 / s__
-    (T)   1.0    // physDensity: physical density in __kg / m^3__
-  );
-  // Prints the converter log as console output
-  converter.print();
-  // Writes the converter log in a file
-  converter.write("cavity3d");
+  util::ValueTracer<T> converge(sLattice.getUnitConverter().getLatticeTime(parameters.get<parameters::TIME_INTERVAL>()),
+                                parameters.get<parameters::RESIDUUM>());
 
-  // === 2nd Step: Prepare Geometry ===
-  // Instantiation of a unit cube by an indicator
-  Vector<T,3> origin( T( 0 ) );
-  Vector<T,3> extend( converter.getCharPhysLength() + 0.5 * converter.getPhysDeltaX() );
-  IndicatorCuboid3D<T> cube( extend,origin );
+  util::Timer<T> timer(maxLatticeT, util::pow<int>(sLattice.getUnitConverter().getResolution(), 3));
 
-  // Instantiation of a cuboid geometry with weights
-  int noCuboids = singleton::mpi().getSize();
-  CuboidDecomposition3D<T> cuboidDecomposition( cube, converter.getPhysDeltaX(), noCuboids );
-
-  // Instantiation of a load balancer
-  HeuristicLoadBalancer<T> loadBalancer( cuboidDecomposition );
-
-  // Instantiation of a super geometry
-  SuperGeometry<T,3> superGeometry( cuboidDecomposition, loadBalancer );
-
-  prepareGeometry(cube, superGeometry, converter.getPhysDeltaX(), converter.getCharPhysLength());
-
-  // === 3rd Step: Prepare Lattice ===
-  SuperLattice<T,DESCRIPTOR> sLattice(converter, superGeometry);
-
-  //prepareLattice and setBoundaryConditions
-  prepareLattice(sLattice, superGeometry);
-
-  // === 4th Step: Main Loop with Timer ===
-  util::ValueTracer<T> converge( converter.getLatticeTime(interval), epsilon );
-
-  util::Timer<T> timer( converter.getLatticeTime( maxT ), util::pow<int>(converter.getResolution(),3) );
+  clout << "starting simulation..." << std::endl;
   timer.start();
 
-  for (std::size_t iT = 0; iT <= converter.getLatticeTime( maxT ); ++iT) {
+  for (std::size_t iT = 0; iT <= maxLatticeT; ++iT) {
     if (converge.hasConverged()) {
       clout << "Simulation converged." << std::endl;
-      getResults( sLattice, superGeometry, iT, timer, converge.hasConverged() );
+      getResults(myCase, iT, timer, converge.hasConverged());
       break;
     }
 
-    // === 5th Step: Definition of Initial and Boundary Conditions ===
-    setBoundaryValues(sLattice, superGeometry, iT);
+    setBoundaryValues(myCase, iT);
 
-    // === 6th Step: Collide and Stream Execution ===
     sLattice.collideAndStream();
 
-    // === 7th Step: Computation and Output of the Results ===
-    getResults(sLattice, superGeometry, iT, timer, converge.hasConverged());
+    getResults(myCase, iT, timer, converge.hasConverged());
     converge.takeValue(sLattice.getStatistics().getAverageEnergy(), true);
   }
-
+  sLattice.setProcessingContext(ProcessingContext::Evaluation);
   timer.stop();
   timer.printSummary();
+  return;
+}
+
+// Setup and run a simulation
+int main(int argc, char** argv)
+{
+
+  initialize(&argc, &argv);
+  /// === Step 2: Set Parameters ===
+  MyCase::ParametersD myCaseParameters;
+  {
+    using namespace olb::parameters;
+    myCaseParameters.set<RESOLUTION>(30);
+    myCaseParameters.set<LATTICE_RELAXATION_TIME>(0.509);
+    myCaseParameters.set<PHYS_CHAR_LENGTH>(1.0);
+    myCaseParameters.set<PHYS_CHAR_VELOCITY>(1.0);
+    myCaseParameters.set<PHYS_CHAR_VISCOSITY>(0.001);
+    myCaseParameters.set<PHYS_CHAR_DENSITY>(1.0);
+    myCaseParameters.set<MAX_PHYS_T>(100);
+    myCaseParameters.set<TIME_INTERVAL>(1.0);
+    myCaseParameters.set<RESIDUUM>(1.0e-3);
+    myCaseParameters.set<PHYS_DELTA_X>([&] {
+      return myCaseParameters.get<PHYS_CHAR_LENGTH>() / myCaseParameters.get<RESOLUTION>();
+    });
+  }
+  myCaseParameters.fromCLI(argc, argv);
+
+  /// === Step 3: Create Mesh ===
+  Mesh mesh = createMesh(myCaseParameters);
+  /// === Step 4: Create Case ===
+  MyCase myCase(myCaseParameters, mesh);
+
+  /// === Step 5: Prepare Geometry ===
+  prepareGeometry(myCase);
+  /// === Step 6: Prepare Lattice ===
+  prepareLattice(myCase);
+
+  /// === Step 7: Definition of Initial, Boundary Values, and Fields ===
+  setInitialValues(myCase);
+
+  /// === Step 8: Simulate ===
+  simulate(myCase);
+
+  return 0;
 }

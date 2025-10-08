@@ -44,7 +44,14 @@ void initialize(int *argc, char ***argv, bool multiOutput=false, bool verbose=tr
   // create an OstreamManager object in order to enable multi output
   olb::OstreamManager clout(std::cout, "initialize");
 
-  clout << "== OpenLB ==" << std::endl;
+  clout << std::endl;
+  clout << "  ┃" << std::endl;
+  clout << "  ┃ ┏━━┓  ▞▀▖         ▌  ▛▀▖" << std::endl;
+  clout << "┏━╋┓┃  ┃  ▌ ▌▛▀▖▞▀▖▛▀▖▌  ▙▄▘" << std::endl;
+  clout << "┃ ┗╋╋━━┻┓ ▌ ▌▙▄▘▛▀ ▌ ▌▌  ▌ ▌" << std::endl;
+  clout << "┗━━┛┃   ┃ ▝▀ ▌  ▝▀▘▘ ▘▀▀▘▀▀ " << std::endl;
+  clout << "    ┗━━━┛" << std::endl;
+
   clout << "Version  : " << OLB_VERSION << std::endl;
   clout << "Platform :";
 #ifdef PLATFORM_CPU_SISD

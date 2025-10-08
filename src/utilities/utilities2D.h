@@ -45,3 +45,4 @@
 #include "matrix.h"
 #include "geometricOperations.h"
 #include "permeability.h"
+#include "physHelpers.h"

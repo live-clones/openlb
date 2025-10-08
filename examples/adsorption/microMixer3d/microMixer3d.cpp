@@ -48,10 +48,7 @@ namespace olb::parameters {
 
 struct WIDTH : public descriptors::FIELD_BASE<1> { };
 struct STL_SIZE : public descriptors::FIELD_BASE<1> { };
-struct PHYS_START_T : public descriptors::FIELD_BASE<1> { };
 
-struct REYNOLDS : public descriptors::FIELD_BASE<1> { };
-struct SCHMIDT : public descriptors::FIELD_BASE<1> { };
 struct PARTICLE_RADIUS : public descriptors::FIELD_BASE<1> { };
 struct PARTICLE_CONCENTRATION : public descriptors::FIELD_BASE<1> { };
 struct PARTICLE_DENSITY : public descriptors::FIELD_BASE<1> { };
@@ -63,6 +60,7 @@ struct C_0 : public descriptors::FIELD_BASE<1> { };
 struct D_S : public descriptors::FIELD_BASE<1> { };
 
 struct TAU : public descriptors::FIELD_BASE<1> { };
+
 }
 
 /// === Step 3: Create Mesh ===
