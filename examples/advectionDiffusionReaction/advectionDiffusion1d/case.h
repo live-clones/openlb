@@ -38,15 +38,16 @@ using MyCase = Case<
 namespace olb::parameters {
 
   struct RUNS : public descriptors::FIELD_BASE<1> {};
-  struct START_RESOLUTION : public descriptors::FIELD_BASE<1> {};
+  struct OUTPUT_TIMESTEP : public descriptors::FIELD_BASE<1> {};
+  struct PULSE_DIFF_BOUND : public descriptors::FIELD_BASE<1> {};
 
 }
 
-template <typename T, typename TDESCRIPTOR>
+template <typename T>
 class AdePhysTemp1D : public AnalyticalF2D<T,T> {
 
 protected:
-  MyCase myCase;
+  MyCase& myCase;
   T t;
 public:
   AdePhysTemp1D(T time, MyCase& _myCase) : AnalyticalF2D<T,T>(1), myCase(_myCase),
@@ -54,7 +55,6 @@ public:
 
   bool operator()(T output[], const T input[]) override
   {
-    using T = MyCase::value_t;
     auto& lattice = myCase.getLattice(AdvectionDiffusion{});
     const auto& converter = lattice.getUnitConverter();
     const T mue = converter.getPhysDiffusivity();
@@ -74,7 +74,7 @@ public:
 Mesh<MyCase::value_t,MyCase::d> createMesh(MyCase::ParametersD& params) {
   using T = MyCase::value_t;
   const T physCharLength = params.get<parameters::PHYS_CHAR_LENGTH>();
-  Vector extent = params.get<parameters::DOMAIN_EXTENT>();
+  Vector extent(physCharLength, physCharLength);
   Vector origin(-physCharLength/2, -physCharLength/2);
 
   IndicatorCuboid2D<T> cuboid(extent, origin);
@@ -117,7 +117,7 @@ void prepareLattice(MyCase& myCase)
   using DESCRIPTOR = MyCase::descriptor_t_of<AdvectionDiffusion>;
   using namespace olb::parameters;
 
-  auto& ADlattice = myCase.getLattice(AdvectionDiffusion{});
+  auto& lattice = myCase.getLattice(AdvectionDiffusion{});
   auto& geometry = myCase.getGeometry();
   auto& parameters = myCase.getParameters();
 
@@ -131,7 +131,7 @@ void prepareLattice(MyCase& myCase)
   const T physVelocity = parameters.get<PECLET>() * mue / physLength;
   const T physDensity = parameters.get<PHYS_CHAR_DENSITY>();
 
-  ADlattice.setUnitConverter<AdeUnitConverter<T,DESCRIPTOR>>(
+  lattice.setUnitConverter<AdeUnitConverter<T,DESCRIPTOR>>(
     physDeltaX,    // physDeltaX
     physDeltaT,    // physDeltaT (diffusive scaling)
     physLength,    // charPhysLength
@@ -140,47 +140,50 @@ void prepareLattice(MyCase& myCase)
     physDensity    // physDensity,
   );
 
-  const auto& converter = ADlattice.getUnitConverter();
+  const auto& converter = lattice.getUnitConverter();
   converter.print();
 
-  ADlattice.defineDynamics<AdvectionDiffusionBGKdynamics>(geometry.getMaterialIndicator({1}));
+  lattice.defineDynamics<AdvectionDiffusionBGKdynamics>(geometry.getMaterialIndicator({1}));
 }
 
 void setInitialValues(MyCase& myCase) {
-  using T = myCase::value_t;
-  auto& ADlattice = myCase.getLattice();
+  using T = MyCase::value_t;
+  auto& lattice = myCase.getLattice(AdvectionDiffusion{});
   auto& geometry = myCase.getGeometry();
-  const auto& converter = ADlattice.getUnitConverter();
+  const auto& converter = lattice.getUnitConverter();
 
-  //TODO make 1D?
-  AnalyticalConst1D<T,T> u0( converter.getCharLatticeVelocity());
-  AdePhysTemp1D<T> Tinit( 0.0, converter );
+  AnalyticalConst2D<T,T> u0( converter.getCharLatticeVelocity(), 0.0);
+  AdePhysTemp1D<T> Tinit( 0.0, myCase);
 
   auto bulkIndicator = geometry.getMaterialIndicator({0,1});
 
-  ADlattice.defineField<descriptors::VELOCITY>( bulkIndicator, u0 );
-  ADlattice.defineRho( bulkIndicator, Tinit );
-  ADlattice.iniEquilibrium( bulkIndicator, Tinit, u0 );
+  lattice.defineField<descriptors::VELOCITY>( bulkIndicator, u0 );
+  lattice.defineRho( bulkIndicator, Tinit );
+  lattice.iniEquilibrium( bulkIndicator, Tinit, u0 );
 
-  ADlattice.setParameter<descriptors::OMEGA>( converter.getLatticeAdeRelaxationFrequency() );
+  lattice.setParameter<descriptors::OMEGA>( converter.getLatticeAdeRelaxationFrequency() );
 
   /// Make the lattice ready for simulation
-  ADlattice.initialize();
+  lattice.initialize();
 }
 
-T errorOverLine( SuperLattice<T, TDESCRIPTOR>& ADlattice,
-                 SuperGeometry<T,2>& superGeometry,
-                 int iT,
-                 AdeUnitConverter<T, TDESCRIPTOR> converter )
+MyCase::value_t errorOverLine( MyCase& myCase, const int iT )
 {
+  using T = MyCase::value_t;
+  auto& lattice = myCase.getLattice(AdvectionDiffusion{});
+  auto& geometry = myCase.getGeometry();
+  const auto& converter = lattice.getUnitConverter();
+
+  using TDESCRIPTOR = MyCase::descriptor_t_of<AdvectionDiffusion>;
+
   OstreamManager clout(std::cout,"error");
 
   T lx = converter.getCharPhysLength();
   T dist = converter.getPhysDeltaX();
 
-  SuperLatticeDensity2D<T, TDESCRIPTOR> temperature(ADlattice);
+  SuperLatticeDensity2D<T, TDESCRIPTOR> temperature(lattice);
   AnalyticalFfromSuperF2D<T> aTemp( temperature, true, 1);
-  AdePhysTemp1D<T> temperatureSol( converter.getPhysTime(iT), converter);
+  AdePhysTemp1D<T> temperatureSol( converter.getPhysTime(iT), myCase);
 
   T result[1] = {0.};    // will contain result of analytical solution
   T resultSim[1] = {0.}; // will contain result of lattice evaluation
@@ -210,31 +213,36 @@ T errorOverLine( SuperLattice<T, TDESCRIPTOR>& ADlattice,
 }
 
 
-T getResults( SuperLattice<T, TDESCRIPTOR>& ADlattice,
+MyCase::value_t getResults( MyCase& myCase,
               int iT,
               int statIter,
-              AdeUnitConverter<T, TDESCRIPTOR> converter,
-              SuperGeometry<T,2>& superGeometry,
-              util::Timer<T>& timer)
+              util::Timer<MyCase::value_t>& timer)
 {
+  using T = MyCase::value_t;
+  auto& lattice = myCase.getLattice(AdvectionDiffusion{});
+  auto& geometry = myCase.getGeometry();
+  const auto& converter = lattice.getUnitConverter();
+
+  using TDESCRIPTOR = MyCase::descriptor_t_of<AdvectionDiffusion>;
+
   OstreamManager clout(std::cout,"getResults");
   SuperVTMwriter2D<T> vtkWriter("advectionDiffusion1d");
 
-  AdePhysTemp1D<T> temperatureSol( converter.getPhysTime(iT), converter );
+  AdePhysTemp1D<T> temperatureSol( converter.getPhysTime(iT), myCase);
 
   T avg = 0;
 
   if (iT == 0) {
     /// Writes the geometry, cuboid no. and rank no. as vti file for visualization
-    SuperLatticeCuboid2D<T, TDESCRIPTOR> cuboid(ADlattice);
-    SuperLatticeRank2D<T, TDESCRIPTOR> rank(ADlattice);
+    SuperLatticeCuboid2D<T, TDESCRIPTOR> cuboid(lattice);
+    SuperLatticeRank2D<T, TDESCRIPTOR> rank(lattice);
     vtkWriter.write(cuboid);
     vtkWriter.write(rank);
 
     vtkWriter.createMasterFile();
 
-    SuperLatticeDensity2D<T, TDESCRIPTOR> temperature(ADlattice);
-    SuperLatticeFfromAnalyticalF2D<T, TDESCRIPTOR> solution(temperatureSol, ADlattice);
+    SuperLatticeDensity2D<T, TDESCRIPTOR> temperature(lattice);
+    SuperLatticeFfromAnalyticalF2D<T, TDESCRIPTOR> solution(temperatureSol, lattice);
 
     vtkWriter.addFunctor( temperature );
     vtkWriter.addFunctor( solution );
@@ -242,7 +250,7 @@ T getResults( SuperLattice<T, TDESCRIPTOR>& ADlattice,
 
     timer.update(iT);
     timer.printStep();
-    ADlattice.getStatistics().print( iT, converter.getPhysTime(iT) );
+    lattice.getStatistics().print( iT, converter.getPhysTime(iT) );
 
     /// Output data for plot of inital temperatre value of lattice
     CSV<T> csvWriterInit("initalValue");
@@ -256,100 +264,64 @@ T getResults( SuperLattice<T, TDESCRIPTOR>& ADlattice,
   }
   else if (iT % statIter == 0 ) {
     /// Writes the VTK files
-    SuperLatticeDensity2D<T, TDESCRIPTOR> temperature(ADlattice);
-    SuperLatticeFfromAnalyticalF2D<T, TDESCRIPTOR> solution(temperatureSol, ADlattice);
-    ADlattice.setProcessingContext(ProcessingContext::Evaluation);
+    SuperLatticeDensity2D<T, TDESCRIPTOR> temperature(lattice);
+    SuperLatticeFfromAnalyticalF2D<T, TDESCRIPTOR> solution(temperatureSol, lattice);
+    lattice.setProcessingContext(ProcessingContext::Evaluation);
 
     vtkWriter.addFunctor( temperature );
     vtkWriter.addFunctor( solution );
     vtkWriter.write( iT );
 
-    /// ADLattice statistics console output
+    /// lattice statistics console output
     timer.update(iT);
     timer.printStep();
-    ADlattice.getStatistics().print(iT, converter.getPhysTime( iT ));
+    lattice.getStatistics().print(iT, converter.getPhysTime( iT ));
 
     // compute relative error
-    avg = errorOverLine(ADlattice, superGeometry, iT, converter);
+    avg = errorOverLine(myCase, iT);
     clout << "Relative L2-error norm over centerline: "  << avg << std::endl;
   }
 
   return avg;
 }
 
-void simulate(int N, int statIter, T mue, T peclet, T physLength)
+void simulate(MyCase& myCase)
 {
+  using T = MyCase::value_t;
+  auto& lattice = myCase.getLattice(AdvectionDiffusion{});
+  auto& geometry = myCase.getGeometry();
+  auto& parameters = myCase.getParameters();
+  const auto& converter = lattice.getUnitConverter();
+
+  const T statIter = parameters.get<parameters::OUTPUT_TIMESTEP>();
+  const T N = parameters.get<parameters::RESOLUTION>();
 
   OstreamManager clout(std::cout,"simulate");
   clout << "Executing the simulation with N=" << std::to_string(N) << std::endl;
 
-  AdeUnitConverter<T,TDESCRIPTOR> converter(
-    physLength/N,            // physDeltaX
-    util::pow(physLength/N, 2),    // physDeltaT (diffusive scaling)
-    physLength,              // charPhysLength
-    peclet*mue/physLength,   // charPhysVelocity from Peclet
-    mue,                     // physDiffusivity
-    1                        // physDensity,
-  );
-
-  converter.print();
-
   // switch outdirectory only if there are multiple simulation runs
-  if (runs > 1) {
+  if (parameters.get<parameters::RUNS>() > 1) {
     singleton::directories().setOutputDir("./tmp/N" + std::to_string(N) + "/");
     /// file clean-up
     CSV<T> csvWriterErr("averageL2RelError");
     csvWriterErr.clearFile();
   }
 
-  /// === 2nd Step: Prepare Geometry ===
-  std::vector<T> extend(2,T());
-  std::vector<T> origin(2,T());
-
-  extend[0] = converter.getCharPhysLength();
-  extend[1] = converter.getCharPhysLength();
-
-  origin[0] = - converter.getCharPhysLength()/2;
-  origin[1] = - converter.getCharPhysLength()/2;
-
-  IndicatorCuboid2D<T> cuboid(extend, origin);
-
-  /// Instantiation of an empty cuboidDecomposition
-#ifdef PARALLEL_MODE_MPI
-  const int noOfCuboids = singleton::mpi().getSize();
-#else
-  const int noOfCuboids = 1;
-#endif
-  CuboidDecomposition2D<T> cuboidDecomposition(cuboid, converter.getPhysDeltaX(), noOfCuboids);
-  cuboidDecomposition.setPeriodicity({true, true});
-
-  /// Instantiation of a loadBalancer
-  HeuristicLoadBalancer<T> loadBalancer(cuboidDecomposition);
-
-  /// Instantiation of a superGeometry
-  SuperGeometry<T,2> superGeometry(cuboidDecomposition, loadBalancer, 2);
-  prepareGeometry(superGeometry, cuboid);
-
-  /// === 3rd Step: Prepare Lattice ===
-  SuperLattice<T, TDESCRIPTOR> ADlattice(converter, superGeometry);
-
-  prepareLattice(ADlattice, superGeometry, converter);
-
-  /// === 4th Step: Main Loop with Timer ===
-  util::Timer<T> timer( superGeometry.getStatistics().getNvoxel() );
+    /// === 4th Step: Main Loop with Timer ===
+  util::Timer<T> timer( geometry.getStatistics().getNvoxel() );
   timer.start();
 
-  T pulseDiffBound = 1e-3;
+  const T pulseDiffBound = parameters.get<parameters::PULSE_DIFF_BOUND>();
   int timeCount = util::ceil( -1./converter.getPhysDeltaT() * util::log(pulseDiffBound)/(converter.getPhysDiffusivity()*util::pow(M_PI,2)) /statIter );
   int iTmax = timeCount * statIter;
 
   int iT;
-  T simulationAverage = .0;
+  T simulationAverage{0.0};
   for (iT = 0; iT < iTmax; ++iT) {
-    simulationAverage += getResults(ADlattice, iT, statIter, converter, superGeometry, timer);
+    simulationAverage += getResults(myCase, iT, statIter, timer);
 
     /// === 6th Step: Collide and Stream Execution ===
-    ADlattice.collideAndStream();
+    lattice.collideAndStream();
   }
 
   simulationAverage /= timeCount;
@@ -361,7 +333,7 @@ void simulate(int N, int statIter, T mue, T peclet, T physLength)
 
   clout << "Simulation Average Relative L2 Error: " << simulationAverage << std::endl;
 
-  ADlattice.setProcessingContext(ProcessingContext::Evaluation);
+  lattice.setProcessingContext(ProcessingContext::Evaluation);
   timer.stop();
   timer.printSummary();
 }
