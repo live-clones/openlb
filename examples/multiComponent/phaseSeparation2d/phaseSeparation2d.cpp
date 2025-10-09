@@ -159,6 +159,82 @@ void setInitialValues(MyCase& myCase){
     clout << "Setting Initial Conditions ... OK" << std::endl;
 }
 
+void getResults(MyCase& myCase, util::Timer<MyCase::value_t>& timer, std::size_t iT){
+    OstreamManager clout( std::cout,"getResults" );
+    using T = MyCase::value_t;
+    auto& geometry = myCase.getGeometry();
+    auto& params   = myCase.getParameters();
+
+    auto& NSElattice = myCase.getLattice(NavierStokes {});
+    using NSEDESCRIPTOR = MyCase::descriptor_t_of<NavierStokes>;
+
+    SuperVTMwriter2D<T> vtmWriter( "phaseSeparation2d" );
+    SuperLatticeVelocity2D<T, NSEDESCRIPTOR> velocity( NSElattice );
+    SuperLatticeDensity2D<T, NSEDESCRIPTOR> density( NSElattice );
+    vtmWriter.addFunctor( velocity );
+    vtmWriter.addFunctor( density );
+
+    const int vtkIter  = params.get<parameters::LATTICE_VTK_ITER_T>();
+    const int statIter = params.get<parameters::LATTICE_STAT_ITER_T>();
+
+    if ( iT==0 ) {
+        // Writes the geometry, cuboid no. and rank no. as vti file for visualization
+        SuperLatticeCuboid2D<T, NSEDESCRIPTOR> cuboid( NSElattice );
+        SuperLatticeRank2D<T, NSEDESCRIPTOR> rank( NSElattice );
+        vtmWriter.write( cuboid );
+        vtmWriter.write( rank );
+
+        vtmWriter.createMasterFile();
+    }
+    // Writes the vtk files
+    if ( iT%vtkIter==0 ) {
+        NSElattice.setProcessingContext(ProcessingContext::Evaluation);
+
+        clout << "Writing VTK and JPEG..." << std::endl;
+        vtmWriter.write( iT );
+
+        BlockReduction2D2D<T> planeReduction( density, 600, BlockDataSyncMode::ReduceOnly );
+        // write output as JPEG
+        heatmap::write(planeReduction, iT);
+    }
+
+    // Writes output on the console
+    if ( iT%statIter==0 ) {
+        // Timer console output
+        timer.update( iT );
+        timer.printStep();
+
+        // Lattice statistics console output
+        NSElattice.getStatistics().print( iT,iT );
+    }
+}
+
+
+void simulate(MyCase& myCase){
+    OstreamManager clout(std::cout,"simulate");
+    using T = MyCase::value_t;
+    auto& geometry = myCase.getGeometry();
+    auto& params   = myCase.getParameters();
+
+    auto& NSElattice = myCase.getLattice(NavierStokes {});
+    using NSEDESCRIPTOR = MyCase::descriptor_t_of<NavierStokes>;
+
+    std::size_t iT = 0;
+    const T maxIter = params.get<parameters::MAX_LATTICE_T>();
+
+    clout << "starting simulation..." << std::endl;
+    util::Timer<T> timer( maxIter, geometry.getStatistics().getNvoxel() );
+    timer.start();
+
+    for(iT = 0; iT < maxIter; ++iT){
+        NSElattice.collideAndStream();
+        getResults(myCase, timer, iT);
+    }
+
+    timer.stop();
+    timer.printSummary();
+}
+
 int main(int argc, char *argv[]){
     initialize( &argc, &argv );
 
@@ -196,4 +272,7 @@ int main(int argc, char *argv[]){
 
     /// === Step 7: Definition of Initial, Boundary Values, and Fields ===
     setInitialValues(myCase);
+
+    /// === Step 8: Simulate ===
+    simulate(myCase);
 }
