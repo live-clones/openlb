@@ -100,6 +100,20 @@ void prepareLattice( SuperLattice<T, DESCRIPTOR>& sLattice,
 {
   OstreamManager clout( std::cout,"prepareLattice" );
   clout << "Prepare Lattice ..." << std::endl;
+
+  // Unit Converter
+  sLattice.setUnitConverter<MultiPhaseUnitConverterFromRelaxationTime<T,DESCRIPTOR>>(
+    (T)   Nx,                        // resolution
+    (T)   tau,                       // lattice relaxation time
+    (T)   rho_liquid,                // lattice density
+    (T)   Lx,                        // charPhysLength: reference length of simulation geometry
+    (T)   nu,                        // physViscosity: physical kinematic viscosity in __m^2 / s__
+    (T)   rho_liquid                 // physDensity: physical density in __kg / m^3__
+  );
+
+  // Prints the converter log as console output
+  sLattice.getUnitConverter().print();
+
   // define lattice Dynamics
   sLattice.defineDynamics<NoDynamics>(superGeometry, 0);
   sLattice.defineDynamics<BulkDynamics>(superGeometry, 1);
@@ -421,18 +435,6 @@ int main( int argc, char *argv[] )
 
   // === 3rd Step: Prepare Lattice ===
   SuperLattice<T, DESCRIPTOR> sLattice( superGeometry );
-
-  // Unit Converter
-  sLattice.setUnitConverter<MultiPhaseUnitConverterFromRelaxationTime<T,DESCRIPTOR>>(
-    (T)   Nx,                        // resolution
-    (T)   tau,                       // lattice relaxation time
-    (T)   rho_liquid,                // lattice density
-    (T)   Lx,                        // charPhysLength: reference length of simulation geometry
-    (T)   nu,                        // physViscosity: physical kinematic viscosity in __m^2 / s__
-    (T)   rho_liquid                 // physDensity: physical density in __kg / m^3__
-  );
-  // Prints the converter log as console output
-  sLattice.getUnitConverter().print();
 
   prepareLattice( sLattice, superGeometry );
 
