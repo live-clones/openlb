@@ -32,31 +32,32 @@
 #include <olb.h>
 
 using namespace olb;
+using namespace olb::names;
 using namespace olb::descriptors;
 using namespace olb::graphics;
 
-typedef double T;
-using DESCRIPTOR = D2Q9<STATISTIC, // Store density field
-                        CHEM_POTENTIAL, // Chemical potential for multiphase system
-                        FORCE, // Thermodynamic forced based on chemical potential
-                        EXTERNAL_FORCE, // Other forces such as gravity (optional in this case)
-                        OMEGA, // Store density dependent relaxation frequency
-                        SCALAR>; // Store laplacian of the density
-using BulkDynamics = ForcedWagnerBGKdynamics<T, DESCRIPTOR>;
+using MyCase = Case<NavierStokes, Lattice<double, descriptors::D2Q9<STATISTIC,      // Store density field
+                                                                    CHEM_POTENTIAL, // Chemical potential for multiphase system
+                                                                    FORCE,          // Thermodynamic forced based on chemical potential
+                                                                    EXTERNAL_FORCE, // Other forces such as gravity (optional in this case)
+                                                                    OMEGA,          // Store density dependent relaxation frequency
+                                                                    SCALAR>>>;      // Store laplacian of the density
+
+
 using COUPLING1 = ChemicalPotentialPostProcessor<EOS::Landau>;
 using COUPLING2 = FreeEnergyForcedPostProcessor;
 
 // Parameters in physical units
-const T Lx = 400;     // domain length [m]
-const T Ly = 10;      // domain height [m]
-const T length = 300; // liquid phase length [m]
+const double Lx = 400;     // domain length [m]
+const double Ly = 10;      // domain height [m]
+const double length = 300; // liquid phase length [m]
 
-const T nu = 0.1; // interface viscosity [m2.s-1]
+const double nu = 0.1; // interface viscosity [m2.s-1]
 
-const T surfTension = 1.e-3; // surface tension [N.m-1]
+const double surfTension = 1.e-3; // surface tension [N.m-1]
 
-const T rho_vapor = 1.; // vapor density [kg.m-3]
-const T rho_liquid = 2.; // liquid density [kg.m-3]
+const double rho_vapor = 1.; // vapor density [kg.m-3]
+const double rho_liquid = 2.; // liquid density [kg.m-3]
 
 // Boundary conditions in physical units
 /**
@@ -64,117 +65,52 @@ const T rho_liquid = 2.; // liquid density [kg.m-3]
  * we use the analytical solution to initialize
  * the system close to the final solution
  */
-const T rho_V = 0.9809107952180959; // analytical solution vapor density
-const T rho_L = 1.9926932521825274; // analytical solution liquid density
-const T mu_b = -3.4274274827508194e-05; // boundary chemical potential
-const T Ui_sol = 0.0021753492521563193; // interface velocity - analytical solution
+const double rho_V = 0.9809107952180959; // analytical solution vapor density
+const double rho_L = 1.9926932521825274; // analytical solution liquid density
+const double mu_b = -3.4274274827508194e-05; // boundary chemical potential
+const double Ui_sol = 0.0021753492521563193; // interface velocity - analytical solution
 
 // Resolution
 const int Nx = 400;
 const int Ny = 10;
 
 // Parameters in lattice units
-const T tau = 0.8; // relaxation time in lattice units
-const T thickness = 5.; // interface thickness in lattice units; physThickness = delta_x * thickness
+const double tau = 0.8; // relaxation time in lattice units
+const double thickness = 5.; // interface thickness in lattice units; physThickness = delta_x * thickness
 
 // Time parameters in lattice units
 const int maxIter  = 30000;
 const int vtkIter  = 100;
 const int statIter = 100;
 
+/// @brief Create a simulation mesh, based on user-specified geometry
+/// @return An instance of a mesh with the relevant information
+Mesh<MyCase::value_t, MyCase::d> createMesh(MyCase::ParametersD& parameters) {
+  using T = MyCase::value_t;
 
-void prepareGeometry( SuperGeometry<T,2>& superGeometry )
-{
-  OstreamManager clout( std::cout,"prepareGeometry" );
-  clout << "Prepare Geometry ..." << std::endl;
-  superGeometry.rename( 0,2 );
-  superGeometry.rename( 2,1,{1,0} );
-  superGeometry.innerClean();
-  superGeometry.checkForErrors();
-  superGeometry.print();
-  clout << "Prepare Geometry ... OK" << std::endl;
+  Vector<T,2> extend(Lx, Ly);
+  Vector<T,2> origin;
+  IndicatorCuboid2D<T> cuboid(extend, origin);
+
+  Mesh<T,MyCase::d> mesh = Mesh<MyCase::value_t, MyCase::d>(cuboid, Lx / Nx, singleton::mpi().getSize());
+  mesh.setOverlap(3);
+  mesh.getCuboidDecomposition().setPeriodicity({false,true});
+  return mesh;
 }
 
-void prepareLattice( SuperLattice<T, DESCRIPTOR>& sLattice,
-                     SuperGeometry<T,2>& superGeometry )
+/// @brief Set material numbers for different parts of the domain
+/// @param myCase The Case instance which keeps the simulation data
+void prepareGeometry(MyCase& myCase)
 {
-  OstreamManager clout( std::cout,"prepareLattice" );
-  clout << "Prepare Lattice ..." << std::endl;
-
-  // Unit Converter
-  sLattice.setUnitConverter<MultiPhaseUnitConverterFromRelaxationTime<T,DESCRIPTOR>>(
-    (T)   Nx,                        // resolution
-    (T)   tau,                       // lattice relaxation time
-    (T)   rho_liquid,                // lattice density
-    (T)   Lx,                        // charPhysLength: reference length of simulation geometry
-    (T)   nu,                        // physViscosity: physical kinematic viscosity in __m^2 / s__
-    (T)   rho_liquid                 // physDensity: physical density in __kg / m^3__
-  );
-
-  // Prints the converter log as console output
-  sLattice.getUnitConverter().print();
-
-  // define lattice Dynamics
-  sLattice.defineDynamics<NoDynamics>(superGeometry, 0);
-  sLattice.defineDynamics<BulkDynamics>(superGeometry, 1);
-  sLattice.defineDynamics<BulkDynamics>(superGeometry, 2);
-
-  clout << "Check Point" << std::endl;
-
-  // Set boundary pressure condition
-  boundary::set<boundary::LocalPressure<T, DESCRIPTOR, BulkDynamics>>(sLattice, superGeometry, 2);
-
-  std::vector<T> zeroV = {0., 0.};
-  AnalyticalConst2D<T,T> zeroVelocity( zeroV );
-
-  // Computing the density
-  AnalyticalConst2D<T,T> vapor ( rho_V/sLattice.getUnitConverter().getConversionFactorDensity() );
-  SmoothIndicatorFactoredCuboid2D<T,T> liquid ( {Lx/2., Ly/2.}, length, Lx,
-                                                 sqrt(2.)*thickness*sLattice.getUnitConverter().getConversionFactorLength(),
-                                                 0, {0,0}, 0,
-                                                 ( rho_L - rho_V )/sLattice.getUnitConverter().getConversionFactorDensity() );
-  AnalyticalIdentity2D<T,T> rho ( vapor + liquid );
-
-  // sign function
-  AnalyticalConst2D<T,T> left ( -1. );
-  SmoothIndicatorFactoredCuboid2D<T,T> right ( {Lx, Ly/2.}, Lx, Lx,
-                                                sqrt(2.)*thickness*sLattice.getUnitConverter().getConversionFactorLength(),
-                                                0, {0,0}, 0, 2. );
-  AnalyticalIdentity2D<T,T> sign ( left + right );
-
-  // Computing the velocity
-  AnalyticalConst2D<T,T> _rho_L ( rho_L/sLattice.getUnitConverter().getConversionFactorDensity() );
-  AnalyticalConst2D<T,T> _Ui ( Ui_sol/sLattice.getUnitConverter().getConversionFactorVelocity() );
-  AnalyticalIdentity2D<T,T> solVelocity ( sign * _Ui * _rho_L / rho - sign * _Ui );
-
-  sLattice.defineRhoU( superGeometry, 1, rho, solVelocity );
-  sLattice.iniEquilibrium( superGeometry, 1, rho, solVelocity );
-  sLattice.defineRhoU( superGeometry, 2, rho, solVelocity );
-  sLattice.iniEquilibrium( superGeometry, 2, rho, solVelocity );
-
-  // Set Chemical Potential
-  AnalyticalConst2D<T,T> chemical( mu_b/sLattice.getUnitConverter().getConversionFactorChemicalPotential() );
-  sLattice.defineField<descriptors::CHEM_POTENTIAL>( superGeometry, 2, chemical );
-
-  // Set OMEGA
-  AnalyticalConst2D<T,T> omega( T( 1./sLattice.getUnitConverter().computeRelaxationTimefromPhysViscosity(nu) ) );
-  sLattice.defineField<descriptors::OMEGA>( superGeometry, 1, omega );
-
-  sLattice.addPostProcessor<stage::PreCoupling>(meta::id<RhoStatistics>());
-
-  {
-    auto& communicator = sLattice.getCommunicator(stage::PreCoupling());
-    communicator.requestOverlap(1);
-    communicator.requestField<STATISTIC>();
-    communicator.requestField<CHEM_POTENTIAL>();
-    communicator.exchangeRequests();
-  }
-
-  sLattice.initialize();
-  sLattice.getCommunicator(stage::PreCoupling()).communicate();
-  sLattice.executePostProcessors(stage::PreCoupling());
-
-  clout << "Prepare Lattice ... OK" << std::endl;
+  auto& geometry = myCase.getGeometry();
+  OstreamManager clout( std::cout,"prepareGeometry" );
+  clout << "Prepare Geometry ..." << std::endl;
+  geometry.rename( 0,2 );
+  geometry.rename( 2,1,{1,0} );
+  geometry.innerClean();
+  geometry.checkForErrors();
+  geometry.print();
+  clout << "Prepare Geometry ... OK" << std::endl;
 }
 
 /**
@@ -193,6 +129,9 @@ struct initialVelocityCorrection  {
   template <typename CELL>
   void apply(CELL& cell) any_platform
   {
+    using DESCRIPTOR = MyCase::descriptor_t_of<NavierStokes>;
+    using T = MyCase::value_t;
+
     T U[descriptors::d<DESCRIPTOR>()];
     const auto force = cell.template getField<descriptors::FORCE>();
 
@@ -207,53 +146,185 @@ struct initialVelocityCorrection  {
   }
 };
 
+
+/// @brief Set lattice dynamics
+/// @param myCase The Case instance which keeps the simulation data
+void prepareLattice(MyCase& myCase)
+{
+  using DESCRIPTOR = MyCase::descriptor_t_of<NavierStokes>;
+  using T = MyCase::value_t;
+  auto& lattice = myCase.getLattice(NavierStokes{});
+  auto& geometry = myCase.getGeometry();
+  //auto& converter = lattice.getUnitConverter();
+  //auto& parameters = myCase.getParameters();
+
+  OstreamManager clout( std::cout,"prepareLattice" );
+  clout << "Prepare Lattice ..." << std::endl;
+
+  // Unit Converter
+  lattice.setUnitConverter<MultiPhaseUnitConverterFromRelaxationTime<T,DESCRIPTOR>>(
+    (T)   Nx,                        // resolution
+    (T)   tau,                       // lattice relaxation time
+    (T)   rho_liquid,                // lattice density
+    (T)   Lx,                        // charPhysLength: reference length of simulation geometry
+    (T)   nu,                        // physViscosity: physical kinematic viscosity in __m^2 / s__
+    (T)   rho_liquid                 // physDensity: physical density in __kg / m^3__
+  );
+
+  // Prints the converter log as console output
+  lattice.getUnitConverter().print();
+
+  // define lattice Dynamics
+  lattice.defineDynamics<NoDynamics>(geometry, 0);
+  lattice.defineDynamics<ForcedWagnerBGKdynamics<T, DESCRIPTOR>>(geometry, 1);
+  lattice.defineDynamics<ForcedWagnerBGKdynamics<T, DESCRIPTOR>>(geometry, 2);
+
+  clout << "Check Point" << std::endl;
+
+  // Set boundary pressure condition
+  boundary::set<boundary::LocalPressure<T, DESCRIPTOR, ForcedWagnerBGKdynamics<T, DESCRIPTOR>>>(lattice, geometry, 2);
+
+  std::vector<T> zeroV = {0., 0.};
+  AnalyticalConst2D<T,T> zeroVelocity( zeroV );
+
+  // Computing the density
+  AnalyticalConst2D<T,T> vapor ( rho_V/lattice.getUnitConverter().getConversionFactorDensity() );
+  SmoothIndicatorFactoredCuboid2D<T,T> liquid ( {Lx/2., Ly/2.}, length, Lx,
+                                                 sqrt(2.)*thickness*lattice.getUnitConverter().getConversionFactorLength(),
+                                                 0, {0,0}, 0,
+                                                 ( rho_L - rho_V )/lattice.getUnitConverter().getConversionFactorDensity() );
+  AnalyticalIdentity2D<T,T> rho ( vapor + liquid );
+
+  // sign function
+  AnalyticalConst2D<T,T> left ( -1. );
+  SmoothIndicatorFactoredCuboid2D<T,T> right ( {Lx, Ly/2.}, Lx, Lx,
+                                                sqrt(2.)*thickness*lattice.getUnitConverter().getConversionFactorLength(),
+                                                0, {0,0}, 0, 2. );
+  AnalyticalIdentity2D<T,T> sign ( left + right );
+
+  // Computing the velocity
+  AnalyticalConst2D<T,T> _rho_L ( rho_L/lattice.getUnitConverter().getConversionFactorDensity() );
+  AnalyticalConst2D<T,T> _Ui ( Ui_sol/lattice.getUnitConverter().getConversionFactorVelocity() );
+  AnalyticalIdentity2D<T,T> solVelocity ( sign * _Ui * _rho_L / rho - sign * _Ui );
+
+  lattice.defineRhoU( geometry, 1, rho, solVelocity );
+  lattice.iniEquilibrium( geometry, 1, rho, solVelocity );
+  lattice.defineRhoU( geometry, 2, rho, solVelocity );
+  lattice.iniEquilibrium( geometry, 2, rho, solVelocity );
+
+  // Set Chemical Potential
+  AnalyticalConst2D<T,T> chemical( mu_b/lattice.getUnitConverter().getConversionFactorChemicalPotential() );
+  lattice.defineField<descriptors::CHEM_POTENTIAL>( geometry, 2, chemical );
+
+  // Set OMEGA
+  AnalyticalConst2D<T,T> omega( T( 1./lattice.getUnitConverter().computeRelaxationTimefromPhysViscosity(nu) ) );
+  lattice.defineField<descriptors::OMEGA>( geometry, 1, omega );
+
+  lattice.addPostProcessor<stage::PreCoupling>(meta::id<RhoStatistics>());
+
+  {
+    auto& communicator = lattice.getCommunicator(stage::PreCoupling());
+    communicator.requestOverlap(1);
+    communicator.requestField<STATISTIC>();
+    communicator.requestField<CHEM_POTENTIAL>();
+    communicator.exchangeRequests();
+  }
+
+  lattice.initialize();
+  lattice.getCommunicator(stage::PreCoupling()).communicate();
+  lattice.executePostProcessors(stage::PreCoupling());
+
+  // Set chemical and force couplings
+  auto& chemicalCoupling = myCase.setCouplingOperator(
+    "Chemical",
+    COUPLING1{},
+    names::Component1{}, lattice
+  );
+
+  chemicalCoupling.restrictTo(geometry.getMaterialIndicator({1}));
+
+  chemicalCoupling.template setParameter<EOS::Landau::RHOV>(
+                  rho_vapor/lattice.getUnitConverter().getConversionFactorDensity());
+  chemicalCoupling.template setParameter<EOS::Landau::RHOL>(
+                  rho_liquid/lattice.getUnitConverter().getConversionFactorDensity());
+  chemicalCoupling.template setParameter<EOS::Landau::THICKNESS>(thickness);
+  chemicalCoupling.template setParameter<EOS::Landau::SURFTENSION>(
+                  surfTension/lattice.getUnitConverter().getConversionFactorSurfaceTension());
+
+  // Compute the EOS parameters
+  EOS::Landau::computeParameters<T>(chemicalCoupling);
+
+  auto& forceCoupling = myCase.setCouplingOperator(
+    "Force",
+    COUPLING2{},
+    names::Component1{}, lattice
+  );
+
+  forceCoupling.restrictTo(geometry.getMaterialIndicator({1}));
+
+  // Initial condition
+  // Compute force
+  lattice.executePostProcessors(stage::PreCoupling());
+  lattice.getCommunicator(stage::PreCoupling()).communicate();
+  chemicalCoupling.apply();
+  lattice.executePostProcessors(stage::PreCoupling());
+  lattice.getCommunicator(stage::PreCoupling()).communicate();
+  forceCoupling.apply();
+
+  // Correct velocity
+  lattice.addPostProcessor<stage::PostCoupling>(meta::id<initialVelocityCorrection>());
+  lattice.executePostProcessors(stage::PostCoupling());
+
+  clout << "Prepare Lattice ... OK" << std::endl;
+}
+
+
+
+/*
 template<typename COUPLING1, typename COUPLING2>
-void initialCondition( SuperLattice<T, DESCRIPTOR>& sLattice,
-                       SuperGeometry<T,2>& superGeometry,
+void initialCondition( MyCase& myCase,
                        COUPLING1& chemicalCoupling,
                        COUPLING2& forceCoupling )
 {
+  auto& lattice = myCase.getLattice(NavierStokes{});
+  auto& geometry = myCase.getGeometry();
+
   OstreamManager clout( std::cout,"initialCondition" );
   clout << "Initial Condition ..." << std::endl;
 
 
-  // Compute force
-  sLattice.executePostProcessors(stage::PreCoupling());
-  sLattice.getCommunicator(stage::PreCoupling()).communicate();
-  chemicalCoupling.apply();
-  sLattice.executePostProcessors(stage::PreCoupling());
-  sLattice.getCommunicator(stage::PreCoupling()).communicate();
-  forceCoupling.apply();
-
-  // Correct velocity
-  sLattice.addPostProcessor<stage::PostCoupling>(meta::id<initialVelocityCorrection>());
-  sLattice.executePostProcessors(stage::PostCoupling());
 
   clout << "Initial Condition ... OK" << std::endl;
-
 }
+*/
 
-void boundaryCondition( SuperLattice<T, DESCRIPTOR>& sLattice,
-                        SuperGeometry<T,2>& superGeometry )
+
+void boundaryCondition(MyCase& myCase)
 {
+  using DESCRIPTOR = MyCase::descriptor_t_of<NavierStokes>;
+  using T = MyCase::value_t;
+  auto& lattice = myCase.getLattice(NavierStokes{});
+  auto& geometry = myCase.getGeometry();
+  //auto& converter = lattice.getUnitConverter();
+  //auto& parameters = myCase.getParameters();
+
   // Compute density at MN1
-    SuperLatticeDensity2D<T, DESCRIPTOR> _density( sLattice );
-    AnalyticalFfromSuperF2D<T,T> interpolRHO( _density, true, 1 );
-    T dx = sLattice.getUnitConverter().getConversionFactorLength();
-    T pos_MN1[2] = {dx, 0.};
-    T rho_MN1;
-    interpolRHO( &rho_MN1, pos_MN1 );
+  SuperLatticeDensity2D<T, DESCRIPTOR> _density( lattice );
+  AnalyticalFfromSuperF2D<T,T> interpolRHO( _density, true, 1 );
+  T dx = lattice.getUnitConverter().getConversionFactorLength();
+  T pos_MN1[2] = {dx, 0.};
+  T rho_MN1;
+  interpolRHO( &rho_MN1, pos_MN1 );
 
-    // Set boundary density at MN2
-    AnalyticalConst2D<T,T> densityV ( rho_V );
-    AnalyticalConst2D<T,T> densityMN1 ( rho_MN1 );
-    AnalyticalConst2D<T,T> half ( T(0.5) );
-    AnalyticalIdentity2D<T,T> densityMN2 ( half * densityV + half * densityMN1 );
-    AnalyticalConst2D<T,T> chemicalMN2 ( mu_b );
+  // Set boundary density at MN2
+  AnalyticalConst2D<T,T> densityV ( rho_V );
+  AnalyticalConst2D<T,T> densityMN1 ( rho_MN1 );
+  AnalyticalConst2D<T,T> half ( T(0.5) );
+  AnalyticalIdentity2D<T,T> densityMN2 ( half * densityV + half * densityMN1 );
+  AnalyticalConst2D<T,T> chemicalMN2 ( mu_b );
 
-    sLattice.defineRho( superGeometry, 2, densityMN2 );
-    sLattice.defineField<descriptors::CHEM_POTENTIAL>( superGeometry, 2, chemicalMN2 );
-
+  lattice.defineRho( geometry, 2, densityMN2 );
+  lattice.defineField<descriptors::CHEM_POTENTIAL>( geometry, 2, chemicalMN2 );
 }
 
 /**
@@ -262,61 +333,71 @@ void boundaryCondition( SuperLattice<T, DESCRIPTOR>& sLattice,
  * Bulk: omega = 1
  * Interface: omega = 1/tau
 */
-void computeRelaxationFrequency( SuperLattice<T, DESCRIPTOR>& sLattice,
-                                 SuperGeometry<T,2>& superGeometry )
+void computeRelaxationFrequency(MyCase& myCase)
 {
-    // Get density
-    SuperLatticeDensity2D<T, DESCRIPTOR> _density( sLattice );
+  using DESCRIPTOR = MyCase::descriptor_t_of<NavierStokes>;
+  using T = MyCase::value_t;
+  auto& lattice = myCase.getLattice(NavierStokes{});
+  auto& geometry = myCase.getGeometry();
 
-    // Find interface position
-    T rhom = 0.5*(rho_V+rho_L)/sLattice.getUnitConverter().getConversionFactorDensity();
-    T dx = sLattice.getUnitConverter().getConversionFactorLength();
-    AnalyticalFfromSuperF2D<T,T> interpolRHO( _density, true, 1 );
-    T pos1[2] = {0., 0.};
-    T pos2[2] = {0., 0.};
-    T h1 = 0, h2 = 0;
-    for (int ix=1; ix<Nx-1; ix++) {
-      pos1[0] = ix * dx;
-      pos2[0] = ( ix + 1 ) * dx;
-      T rho1, rho2;
-      interpolRHO( &rho1, pos1 );
-      interpolRHO( &rho2, pos2 );
-      if ( rho1 < rhom && rho2 > rhom )
-        h1 = ix * dx;
-      if ( rho1 > rhom && rho2 < rhom )
-        h2 = ix * dx;
-    }
+  // Get density
+  SuperLatticeDensity2D<T, DESCRIPTOR> _density( lattice );
 
-    // Computing indicator
-    AnalyticalConst2D<T,T> bulk ( 1./tau );
-    SmoothIndicatorFactoredCuboid2D<T,T> left ( {0., Ly/2.}, 2.*h1-15.*thickness*dx,
+  // Find interface position
+  T rhom = 0.5*(rho_V+rho_L)/lattice.getUnitConverter().getConversionFactorDensity();
+  T dx = lattice.getUnitConverter().getConversionFactorLength();
+  AnalyticalFfromSuperF2D<T,T> interpolRHO( _density, true, 1 );
+  T pos1[2] = {0., 0.};
+  T pos2[2] = {0., 0.};
+  T h1 = 0, h2 = 0;
+  for (int ix=1; ix<Nx-1; ix++) {
+    pos1[0] = ix * dx;
+    pos2[0] = ( ix + 1 ) * dx;
+    T rho1, rho2;
+    interpolRHO( &rho1, pos1 );
+    interpolRHO( &rho2, pos2 );
+    if ( rho1 < rhom && rho2 > rhom )
+      h1 = ix * dx;
+    if ( rho1 > rhom && rho2 < rhom )
+      h2 = ix * dx;
+  }
+
+  // Computing indicator
+  AnalyticalConst2D<T,T> bulk ( 1./tau );
+  SmoothIndicatorFactoredCuboid2D<T,T> left ( {0., Ly/2.}, 2.*h1-15.*thickness*dx,
+                    Lx, 1., 0, {0,0}, 0,
+                      1. - 1./tau );
+  SmoothIndicatorFactoredCuboid2D<T,T> center ( {Lx/2., Ly/2.}, h2-h1-15.*thickness*dx,
                       Lx, 1., 0, {0,0}, 0,
                       1. - 1./tau );
-    SmoothIndicatorFactoredCuboid2D<T,T> center ( {Lx/2., Ly/2.}, h2-h1-15.*thickness*dx,
+  SmoothIndicatorFactoredCuboid2D<T,T> right ( {Lx, Ly/2.}, 2.*h1-15.*thickness*dx,
                       Lx, 1., 0, {0,0}, 0,
                       1. - 1./tau );
-    SmoothIndicatorFactoredCuboid2D<T,T> right ( {Lx, Ly/2.}, 2.*h1-15.*thickness*dx,
-                      Lx, 1., 0, {0,0}, 0,
-                      1. - 1./tau );
-    AnalyticalIdentity2D<T,T> _omega ( bulk + left + center + right );
+  AnalyticalIdentity2D<T,T> _omega ( bulk + left + center + right );
 
-    // Setting Omega field
-    sLattice.defineField<descriptors::OMEGA>( superGeometry, 1, _omega );
-    sLattice.defineField<descriptors::OMEGA>( superGeometry, 2, _omega );
-
+  // Setting Omega field
+  lattice.defineField<descriptors::OMEGA>( geometry, 1, _omega );
+  lattice.defineField<descriptors::OMEGA>( geometry, 2, _omega );
 }
 
-//std::vector<T>
-void getResults( SuperLattice<T, DESCRIPTOR>& sLattice,
-                 int iT, SuperGeometry<T,2>& superGeometry,
-                 util::Timer<T>& timer )
+/// Compute simulation results at times
+/// @param myCase The Case instance which keeps the simulation data
+/// @param iT The time step, timer
+void getResults(MyCase& myCase, int iT, util::Timer<MyCase::value_t>& timer)
 {
+  using DESCRIPTOR = MyCase::descriptor_t_of<NavierStokes>;
+  using T = MyCase::value_t;
+  auto& lattice = myCase.getLattice(NavierStokes{});
+  //auto& geometry = myCase.getGeometry();
+  //auto& converter = lattice.getUnitConverter();
+  //auto& parameters = myCase.getParameters();
+
   OstreamManager clout( std::cout,"getResults" );
   SuperVTMwriter2D<T> vtmWriter( "isothermalEvaporation2D" );
   if ( iT==0 ) {
     // Writes the cuboid no. and rank no. as vti file for visualization
-    SuperLatticeCuboid2D<T, DESCRIPTOR> cuboid( sLattice );
-    SuperLatticeRank2D<T, DESCRIPTOR> rank( sLattice );
+    SuperLatticeCuboid2D<T, DESCRIPTOR> cuboid( lattice );
+    SuperLatticeRank2D<T, DESCRIPTOR> rank( lattice );
     vtmWriter.write( cuboid );
     vtmWriter.write( rank );
     vtmWriter.createMasterFile();
@@ -326,57 +407,57 @@ void getResults( SuperLattice<T, DESCRIPTOR>& sLattice,
     // Timer console output
     timer.update( iT );
     timer.printStep();
-    sLattice.getStatistics().print( iT, iT );
+    lattice.getStatistics().print( iT, iT );
   }
 
   //T delta_p = 0.;
   //T final_radius = 1.;
   // Writes the VTK files
   if ( iT%vtkIter==0 ) {
-    sLattice.setProcessingContext(ProcessingContext::Evaluation);
+    lattice.setProcessingContext(ProcessingContext::Evaluation);
 
-    SuperLatticeDensity2D<T, DESCRIPTOR> density_lat( sLattice );
+    SuperLatticeDensity2D<T, DESCRIPTOR> density_lat( lattice );
     SuperIdentity2D<T,T> _density_lat( density_lat );
     _density_lat.getName() = "lattice density";
 
-    AnalyticalConst2D<T,T> C_rho( sLattice.getUnitConverter().getConversionFactorDensity() );
-    SuperLatticeFfromAnalyticalF2D<T, DESCRIPTOR> _C_rho( C_rho, sLattice );
+    AnalyticalConst2D<T,T> C_rho( lattice.getUnitConverter().getConversionFactorDensity() );
+    SuperLatticeFfromAnalyticalF2D<T, DESCRIPTOR> _C_rho( C_rho, lattice );
     SuperIdentity2D<T,T> _density_phs( density_lat * _C_rho );
     _density_phs.getName() = "physical density";
 
-    SuperLatticeVelocity2D<T, DESCRIPTOR> velocityEq_lat( sLattice );
+    SuperLatticeVelocity2D<T, DESCRIPTOR> velocityEq_lat( lattice );
     SuperIdentity2D<T,T> _velocityEq_lat( velocityEq_lat );
     _velocityEq_lat.getName() = "equibibrium distribution lattice velocity";
 
-    SuperLatticeField2D<T, DESCRIPTOR, FORCE> force_lat( sLattice );
+    SuperLatticeField2D<T, DESCRIPTOR, FORCE> force_lat( lattice );
     SuperIdentity2D<T,T> _force_lat( force_lat );
     _force_lat.getName() = "lattice force";
 
-    AnalyticalConst2D<T,T> C_F( sLattice.getUnitConverter().getConversionFactorForce() );
-    SuperLatticeFfromAnalyticalF2D<T, DESCRIPTOR> _C_F( C_F, sLattice );
+    AnalyticalConst2D<T,T> C_F( lattice.getUnitConverter().getConversionFactorForce() );
+    SuperLatticeFfromAnalyticalF2D<T, DESCRIPTOR> _C_F( C_F, lattice );
     SuperIdentity2D<T,T> _force_phs( force_lat * _C_F );
     _force_phs.getName() = "physical force";
 
-    SuperLatticeExternalScalarField2D<T, DESCRIPTOR, CHEM_POTENTIAL> chemical_lat( sLattice );
+    SuperLatticeExternalScalarField2D<T, DESCRIPTOR, CHEM_POTENTIAL> chemical_lat( lattice );
     SuperIdentity2D<T,T> _chemical_lat( chemical_lat );
     _chemical_lat.getName() = "lattice chemical potential";
 
-    AnalyticalConst2D<T,T> C_MU( sLattice.getUnitConverter().getConversionFactorChemicalPotential() );
-    SuperLatticeFfromAnalyticalF2D<T, DESCRIPTOR> _C_MU( C_MU, sLattice );
+    AnalyticalConst2D<T,T> C_MU( lattice.getUnitConverter().getConversionFactorChemicalPotential() );
+    SuperLatticeFfromAnalyticalF2D<T, DESCRIPTOR> _C_MU( C_MU, lattice );
     SuperIdentity2D<T,T> _chemical_phs( chemical_lat * _C_MU );
     _chemical_phs.getName() = "physical chemical potential";
 
-    SuperLatticeExternalScalarField2D<T, DESCRIPTOR, OMEGA> omega( sLattice );
+    SuperLatticeExternalScalarField2D<T, DESCRIPTOR, OMEGA> omega( lattice );
     SuperIdentity2D<T,T> _omega( omega );
     _omega.getName() = "omega";
 
     AnalyticalConst2D<T,T> half( T(0.5) );
-    SuperLatticeFfromAnalyticalF2D<T, DESCRIPTOR> _half( half, sLattice );
+    SuperLatticeFfromAnalyticalF2D<T, DESCRIPTOR> _half( half, lattice );
     SuperIdentity2D<T,T> _velocity_lat( velocityEq_lat + _half * force_lat );
     _velocity_lat.getName() = "lattice velocity";
 
-    AnalyticalConst2D<T,T> C_U( sLattice.getUnitConverter().getConversionFactorVelocity() );
-    SuperLatticeFfromAnalyticalF2D<T, DESCRIPTOR> _C_U( C_U, sLattice );
+    AnalyticalConst2D<T,T> C_U( lattice.getUnitConverter().getConversionFactorVelocity() );
+    SuperLatticeFfromAnalyticalF2D<T, DESCRIPTOR> _C_U( C_U, lattice );
     SuperIdentity2D<T,T> _velocity_phs( _velocity_lat * _C_U );
     _velocity_phs.getName() = "physical velocity";
 
@@ -394,7 +475,7 @@ void getResults( SuperLattice<T, DESCRIPTOR>& sLattice,
     // Compute error in Interface velocity
     // first: compute vapor phase velocity
     AnalyticalFfromSuperF2D<T,T> interpolVelocity( _velocity_phs, true, 1 );
-    T dx = sLattice.getUnitConverter().getConversionFactorLength();
+    T dx = lattice.getUnitConverter().getConversionFactorLength();
     T pos[2] = {dx, 0.};
     T Ui_num[2] = {0., 0.};
     interpolVelocity( &Ui_num[0], pos );
@@ -409,99 +490,52 @@ void getResults( SuperLattice<T, DESCRIPTOR>& sLattice,
 }
 
 
-int main( int argc, char *argv[] )
+/// @brief Execute simulation: set initial values and run time loop
+/// @param myCase The Case instance which keeps the simulation data
+void simulate(MyCase& myCase)
 {
+  using T = MyCase::value_t;
+  auto& lattice = myCase.getLattice(NavierStokes{});
+  auto& geometry = myCase.getGeometry();
+  //auto& converter = lattice.getUnitConverter();
+  //auto& parameters = myCase.getParameters();
 
-  // Initialization for the parallel processing
-  initialize( &argc, &argv );
-  OstreamManager clout(std::cout, "main");
-
-  // === 2nd Step: Prepare Geometry ===
-  // Instantiation of a cuboidDecomposition with weights
-#ifdef PARALLEL_MODE_MPI
-  const int noOfCuboids = singleton::mpi().getSize();
-#else
-  const int noOfCuboids = 1;
-#endif
-  CuboidDecomposition2D<T> cuboidDecomposition({0, 0}, Lx/Nx, {Nx, Ny}, noOfCuboids );
-  // set periodic boundaries to the vertical direction
-  cuboidDecomposition.setPeriodicity({ false, true });
-  // Instantiation of loadbalancer
-  HeuristicLoadBalancer<T> loadBalancer( cuboidDecomposition );
-  loadBalancer.print();
-  // Instantiation of superGeometry
-  SuperGeometry<T,2> superGeometry( cuboidDecomposition,loadBalancer, 3 );
-  prepareGeometry( superGeometry );
-
-  // === 3rd Step: Prepare Lattice ===
-  SuperLattice<T, DESCRIPTOR> sLattice( superGeometry );
-
-  prepareLattice( sLattice, superGeometry );
-
-  // === 4th Step: Prepare Couplings ===
-  // Chemical potential coupling
-  SuperLatticeCoupling chemicalCoupling(
-    COUPLING1{},
-    names::Component1{}, sLattice
-  );
-
-  chemicalCoupling.restrictTo(superGeometry.getMaterialIndicator({1}));
-
-  chemicalCoupling.template setParameter<EOS::Landau::RHOV>(
-                  rho_vapor/sLattice.getUnitConverter().getConversionFactorDensity());
-  chemicalCoupling.template setParameter<EOS::Landau::RHOL>(
-                  rho_liquid/sLattice.getUnitConverter().getConversionFactorDensity());
-  chemicalCoupling.template setParameter<EOS::Landau::THICKNESS>(thickness);
-  chemicalCoupling.template setParameter<EOS::Landau::SURFTENSION>(
-                  surfTension/sLattice.getUnitConverter().getConversionFactorSurfaceTension());
-
-  // Compute the EOS parameters
-  EOS::Landau::computeParameters<T>(chemicalCoupling);
-
-  // Force coupling
-  SuperLatticeCoupling forceCoupling(
-    COUPLING2{},
-    names::Component1{}, sLattice
-  );
-
-  forceCoupling.restrictTo(superGeometry.getMaterialIndicator({1}));
-
-  // Initial Condition
-  initialCondition( sLattice, superGeometry, chemicalCoupling, forceCoupling );
-
-  // === 5th Step: Main Loop with Timer ===
+  // Main Loop with Timer
+  OstreamManager clout(std::cout, "simulate");
   int iT = 0;
   clout << "starting simulation..." << std::endl;
-  util::Timer<T> timer( maxIter, superGeometry.getStatistics().getNvoxel() );
+  util::Timer<T> timer( maxIter, geometry.getStatistics().getNvoxel() );
   timer.start();
   std::vector<T> output = {1./length,0};
   for ( iT=0; iT<=maxIter; ++iT ) {
 
     // Apply boundary conditions
-    boundaryCondition( sLattice, superGeometry );
+    boundaryCondition(myCase);
 
     // Compute relaxation frequency
-    computeRelaxationFrequency( sLattice, superGeometry );
+    computeRelaxationFrequency(myCase);
 
     // Computation and output of the results
-    getResults( sLattice, iT, superGeometry, timer );
-    if ( std::isnan( sLattice.getStatistics().getAverageEnergy() ) ) {
+    getResults(myCase, iT, timer);
+    if ( std::isnan(lattice.getStatistics().getAverageEnergy())) {
       clout << "unstable!" << std::endl;
       break;
     }
 
     // Collide and stream (and coupling) execution
-    sLattice.collideAndStream();
+    lattice.collideAndStream();
 
     // Compute chemical potential
-    sLattice.executePostProcessors(stage::PreCoupling());
-    sLattice.getCommunicator(stage::PreCoupling()).communicate();
-    chemicalCoupling.apply();
+    lattice.executePostProcessors(stage::PreCoupling());
+    lattice.getCommunicator(stage::PreCoupling()).communicate();
+    //chemicalCoupling.apply();
+    myCase.getOperator("Chemical").apply();
 
     // Compute thermodynamic force
-    sLattice.executePostProcessors(stage::PreCoupling());
-    sLattice.getCommunicator(stage::PreCoupling()).communicate();
-    forceCoupling.apply();
+    lattice.executePostProcessors(stage::PreCoupling());
+    lattice.getCommunicator(stage::PreCoupling()).communicate();
+    //forceCoupling.apply();
+    myCase.getOperator("Force").apply();
 
   }
   timer.stop();
@@ -509,5 +543,51 @@ int main( int argc, char *argv[] )
 
   clout << "Finish" << std::endl;
 
-  return 0;
+}
+
+/// Update boundary values at times (and external fields, if they exist)
+/// @param myCase The Case instance which keeps the simulation data
+/// @param iT The time step
+/// @note Be careful: boundary values have to be set using lattice units
+void setTemporalValues(MyCase& myCase, std::size_t iT)
+{
+  // Nothing to do here, because simulation does not depend on time
+}
+
+
+/// Set initial condition for primal variables
+/// @param myCase The Case instance which keeps the simulation data
+/// @note Be careful: initial values have to be set using lattice units
+void setInitialValues(MyCase& myCase)
+{
+  // Nothing to do here
+}
+
+
+int main( int argc, char *argv[] )
+{
+  // Initialization for the parallel processing
+  initialize( &argc, &argv );
+
+  /// === Step 2: Set Parameters ===
+  MyCase::ParametersD myCaseParameters;
+
+  /// === Step 3: Create Mesh ===
+  Mesh mesh = createMesh(myCaseParameters);
+
+  /// === Step 4: Create Case ===
+  MyCase myCase(myCaseParameters, mesh);
+
+  /// === Step 5: Prepare Geometry ===
+  prepareGeometry(myCase);
+
+  /// === Step 6: Prepare Lattice ===
+  prepareLattice(myCase);
+
+  /// === Step 7: Definition of Initial, Boundary Values, and Fields ===
+  setInitialValues(myCase);
+
+  /// === Step 8: Simulate ===
+  simulate(myCase);
+
 }
