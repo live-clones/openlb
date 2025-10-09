@@ -41,7 +41,43 @@ using MyCase = Case<
     NavierStokes, Lattice<double, descriptors::D2Q9<descriptors::VELOCITY, descriptors::EXTERNAL_FORCE, descriptors::STATISTIC>>
 >;
 
+Mesh<MyCase::value_t,MyCase::d> createMesh(MyCase::ParametersD& params) {
+    using T = MyCase::value_t;
+    Vector extent = params.get<parameters::DOMAIN_EXTENT>();
+    std::vector<T> origin(2,T());
+    IndicatorCuboid2D<T> cuboid(extent, origin);
+
+    T dx = 1;
+    Mesh<T,MyCase::d> mesh(cuboid, dx, singleton::mpi().getSize());
+    mesh.setOverlap(params.get<parameters::OVERLAP>());
+    mesh.getCuboidDecomposition().setPeriodicity({true,true});
+
+    return mesh;
+}
+
 int main(int argc, char *argv[]){
-    // === 1st Step: Initialization ===
     initialize( &argc, &argv );
+
+    /// === Step 2: Set Parameters ===
+    MyCase::ParametersD myCaseParameters;
+    {
+        using namespace olb::parameters;
+        myCaseParameters.set<MAX_LATTICE_T>(10000);
+        myCaseParameters.set<LATTICE_STAT_ITER_T>(20);
+        myCaseParameters.set<LATTICE_VTK_ITER_T>(20);
+
+        myCaseParameters.set<LATTICE_RELAXATION_TIME>(1);
+        myCaseParameters.set<PHYS_CHAR_LENGTH>(1e-5);
+        myCaseParameters.set<PHYS_CHAR_VELOCITY>(1e-6);
+        myCaseParameters.set<PHYS_CHAR_VISCOSITY>(0.1);
+        //TODO: hard code density 1 in unit converter
+
+        myCaseParameters.set<DOMAIN_EXTENT>({201, 201});
+
+    }
+    myCaseParameters.fromCLI(argc, argv);
+    myCaseParameters.print();
+
+    /// === Step 3: Create Mesh ===
+    Mesh mesh = createMesh(myCaseParameters);
 }
