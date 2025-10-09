@@ -92,9 +92,9 @@ int main(int argc, char* argv[]){
     myCaseParameters.set<PHYS_HEAT_CAPACITY         >(1.01309e3);
 
     myCaseParameters.set<GRAVITATIONAL_ACC          >(9.81);
-    myCaseParameters.set<PRANDTL                    >(0.71);
     myCaseParameters.set<RAYLEIGH                   >(1e7);
-    myCaseParameters.set<SMAGORINSKY_CONST          >(0.1);
+    myCaseParameters.set<SMAGORINSKY                >(0.1);
+    myCaseParameters.set<PRANDTL                    >(0.71);
     myCaseParameters.set<PRANDTL_TURB               >(0.87);
 
     myCaseParameters.set<T_HOT                      >(285.15);
@@ -105,8 +105,8 @@ int main(int argc, char* argv[]){
     myCaseParameters.set<CONV_ITER                  >(1000);
     myCaseParameters.set<CONVERGENCE_PRECISION      >(1e-4);
 
-    myCaseParameters.set<VTK_ITER                   >(10);
-    myCaseParameters.set<STAT_ITER                  >(10);
+    myCaseParameters.set<PHYS_VTK_ITER_T            >(10);
+    myCaseParameters.set<PHYS_STAT_ITER_T           >(10);
   }
   myCaseParameters.fromCLI(argc, argv);
 

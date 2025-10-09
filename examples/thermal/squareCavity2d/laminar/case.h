@@ -121,7 +121,6 @@ void prepareLattice(MyCase& myCase){
     auto& ADElattice = myCase.getLattice(Temperature{});
 
     const T physCharLength          = parameters.get<parameters::PHYS_CHAR_LENGTH>();
-    const int N             = parameters.get<parameters::RESOLUTION>();
     const T tau                     = parameters.get<parameters::LATTICE_RELAXATION_TIME>();
     const T physViscosity           = parameters.get<parameters::PHYS_KINEMATIC_VISCOSITY>();
     const T physDeltaX              = parameters.get<parameters::PHYS_DELTA_X>();
@@ -132,7 +131,6 @@ void prepareLattice(MyCase& myCase){
     const T physThermalConductivity = parameters.get<parameters::PHYS_THERMAL_CONDUCTIVITY>();
     const T physHeatCapacity        = parameters.get<parameters::PHYS_HEAT_CAPACITY>();
     const T g                       = parameters.get<parameters::GRAVITATIONAL_ACC>();
-    const T Ra                      = parameters.get<parameters::RAYLEIGH>();
     const T Tcold                   = parameters.get<parameters::T_COLD>();
     const T Thot                    = parameters.get<parameters::T_HOT>();
 
@@ -198,7 +196,7 @@ void setInitialValues(MyCase& myCase){
 
     T Tcold = converter.getCharPhysLowTemperature();
     T Thot  = converter.getCharPhysHighTemperature();
-    T Tmean = (Thot + Tcol) / 2.;
+    T Tmean = (Thot + Tcold) / 2.;
 
     /// define initial conditions
     AnalyticalConst2D<T,T> rho(1.);
@@ -277,8 +275,8 @@ void getResults(MyCase& myCase,
   auto& ADElattice        = myCase.getLattice(Temperature{});
   const auto& converter   = NSElattice.getUnitConverter();
   auto& parameters        = myCase.getParameters();
-  const int statIter      = converter.getLatticeTime(parameters.get<parameters::STAT_ITER>());
-  const int vtkIter       = converter.getLatticeTime(parameters.get<parameters::VTK_ITER>());
+  const int statIter      = converter.getLatticeTime(parameters.get<parameters::PHYS_STAT_ITER_T>());
+  const int vtkIter       = converter.getLatticeTime(parameters.get<parameters::PHYS_VTK_ITER_T>());
   const bool converged    = parameters.get<parameters::CONVERGED>();
 
   const T Thot            = parameters.get<parameters::T_HOT>();

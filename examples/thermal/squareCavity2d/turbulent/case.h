@@ -131,7 +131,7 @@ void prepareLattice(MyCase& myCase){
     const T physThermalConductivity = parameters.get<parameters::PHYS_THERMAL_CONDUCTIVITY>();
     const T physHeatCapacity        = parameters.get<parameters::PHYS_HEAT_CAPACITY>();
     const T g                       = parameters.get<parameters::GRAVITATIONAL_ACC>();
-    const T smagoConst              = parameters.get<parameters::SMAGORINSKY_CONST>();
+    const T smagoConst              = parameters.get<parameters::SMAGORINSKY>();
     const T prTurb                  = parameters.get<parameters::PRANDTL_TURB>();
     const T Tcold                   = parameters.get<parameters::T_COLD>();
     const T Thot                    = parameters.get<parameters::T_HOT>();
@@ -296,8 +296,8 @@ void getResults(MyCase& myCase,
   auto& ADElattice        = myCase.getLattice(Temperature{});
   const auto& converter   = NSElattice.getUnitConverter();
   auto& parameters        = myCase.getParameters();
-  const int statIter      = converter.getLatticeTime(parameters.get<parameters::STAT_ITER>());
-  const int vtkIter       = converter.getLatticeTime(parameters.get<parameters::VTK_ITER>());
+  const int statIter      = converter.getLatticeTime(parameters.get<parameters::PHYS_STAT_ITER_T>());
+  const int vtkIter       = converter.getLatticeTime(parameters.get<parameters::PHYS_VTK_ITER_T>());
   const bool converged    = parameters.get<parameters::CONVERGED>();
 
   const T Thot            = parameters.get<parameters::T_HOT>();

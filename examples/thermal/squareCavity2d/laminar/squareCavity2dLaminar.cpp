@@ -43,7 +43,7 @@ void compareToStudy(MyCase& myCase)
   auto& converter           = myCase.getLattice(NavierStokes{}).getUnitConverter();
   int Ra                    = parameters.get<parameters::RAYLEIGH>();
   T physThermalDiffusivity  = converter.getPhysThermalDiffusivity();
-  T charL                   = converter.converter.getCharPhysLength();
+  T charL                   = converter.getCharPhysLength();
 
   ReferenceData<T> ref{};
   if (ref.hasRayleigh(Ra) && singleton::mpi().isMainProcessor()) {
@@ -102,8 +102,8 @@ int main(int argc, char* argv[]){
         (myCaseParameters.get<T_HOT>() + myCaseParameters.get<T_COLD>()) / 2.0
     );
     myCaseParameters.set<CONV_ITER                  >(1000);
-    myCaseParameters.set<VTK_ITER                   >(10);
-    myCaseParameters.set<STAT_ITER                  >(10);
+    myCaseParameters.set<PHYS_VTK_ITER_T            >(10);
+    myCaseParameters.set<PHYS_STAT_ITER_T           >(10);
     myCaseParameters.set<CONVERGENCE_PRECISION      >(1e-5);
   }
   myCaseParameters.fromCLI(argc, argv);
@@ -116,7 +116,6 @@ int main(int argc, char* argv[]){
   double Thot                   = myCaseParameters.get<parameters::T_HOT                    >();
   double Tcold                  = myCaseParameters.get<parameters::T_COLD                   >();
   double thermalExpansion       = myCaseParameters.get<parameters::PHYS_THERMAL_EXPANSION   >();
-  double thermalConductivity    = myCaseParameters.get<parameters::PHYS_THERMAL_CONDUCTIVITY>();
 
   // lx from Rayleigh number
   double lx = util::pow(Ra * physViscosity * physViscosity / (Pr * g * (Thot - Tcold) * thermalExpansion), (MyCase::value_t_of<NavierStokes>) 1 / 3);  // length of the square
