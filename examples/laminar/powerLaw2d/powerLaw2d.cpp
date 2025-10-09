@@ -36,187 +36,274 @@
 
 #include <olb.h>
 
-
 using namespace olb;
 using namespace olb::descriptors;
 using namespace olb::graphics;
+using namespace olb::names;
 
-using T = FLOATING_POINT_TYPE;
-typedef D2Q9<OMEGA> DESCRIPTOR;
+// === Step 1: Declarations ===
+using MyCase = Case<
+  NavierStokes, Lattice<FLOATING_POINT_TYPE, descriptors::D2Q9<OMEGA>>
+>;
 
-// Parameters for the simulation setup
-int N = 40;           // resolution of the model
-T Re = 10.;           // Reynolds number
-T tau = 0.8;
-T lx = 2.;            // channel lenght
-T ly = 1.;            // channel width
-T maxU = 1;           // Max velocity
-T Tmax = 20;          // max. phys. time in s
-T Tprint = 1;         // Phys time at which the status of the system is print
-// set the changes for n and m in powerLawBGKdynamics.h
-T n = .5;             // parameter in power law model (n=1 Newtonian fluid)
-bool bcTypePeriodic = true;
+namespace olb::parameters {
 
-const T residuum = 1.e-6;      // residuum for the convergence check
+  struct PERIODIC_BC        : public descriptors::TYPED_FIELD_BASE<bool,1> { };
+  struct POWER_LAW_EXPONENT : public descriptors::FIELD_BASE<1> { };
+  struct NU_MIN             : public descriptors::FIELD_BASE<1> { };
+  struct NU_MAX             : public descriptors::FIELD_BASE<1> { };
 
-void prepareGeometry( PowerLawUnitConverter<T,DESCRIPTOR> const& converter,
-                      SuperGeometry<T,2>& superGeometry )
+}
+
+Mesh<MyCase::value_t,MyCase::d> createMesh(MyCase::ParametersD& parameters) {
+  using T = MyCase::value_t;
+  const T physLengthX   = parameters.get<parameters::DOMAIN_EXTENT>()[0];
+  const T physDeltaX    = parameters.get<parameters::DOMAIN_EXTENT>()[1]/parameters.get<parameters::RESOLUTION>();
+  const T physLengthY   = parameters.get<parameters::DOMAIN_EXTENT>()[1];
+  const bool bcPeriodic = parameters.get<parameters::PERIODIC_BC>();
+
+  const Vector extent{physLengthX, physLengthY};
+  const Vector origin{0, 0};
+  IndicatorCuboid2D<T> cuboid(extent, origin);
+
+  #ifdef PARALLEL_MODE_MPI
+    Mesh<T,MyCase::d> mesh(cuboid, physDeltaX, singleton::mpi().getSize());
+  #else
+    Mesh<T,MyCase::d> mesh(cuboid, physDeltaX, 1);
+  #endif
+
+  if (bcPeriodic) parameters.set<parameters::OVERLAP>(2);
+  mesh.setOverlap(parameters.get<parameters::OVERLAP>());
+
+  // Periodic boundaries in x-direction
+  if (bcPeriodic) mesh.getCuboidDecomposition().setPeriodicity({true, false});
+  return mesh;
+}
+
+void prepareGeometry(MyCase& myCase)
 {
-  OstreamManager clout( std::cout,"prepareGeometry" );
+  OstreamManager clout(std::cout, "prepareGeometry");
   clout << "Prepare Geometry ..." << std::endl;
 
-  Vector<T,2> extend( lx, ly );
+  using T = MyCase::value_t;
+  auto& parameters = myCase.getParameters();
+  auto& geometry   = myCase.getGeometry();
+
+  const T physLengthX   = parameters.get<parameters::DOMAIN_EXTENT>()[0];
+  const T physLengthY   = parameters.get<parameters::DOMAIN_EXTENT>()[1];
+  const T physDeltaX    = parameters.get<parameters::DOMAIN_EXTENT>()[1] / parameters.get<parameters::RESOLUTION>();
+  const bool bcPeriodic = parameters.get<parameters::PERIODIC_BC>();
+
+  Vector<T,2> extent(physLengthX, physLengthY);
   Vector<T,2> origin;
 
-  superGeometry.rename( 0,2 );
-  superGeometry.rename( 2,1,{1,1} );
+  geometry.rename(0, 2);
+  geometry.rename(2, 1, {1, 1});
 
   // Set material number for inflow
-  extend[0] = 1.2*converter.getPhysDeltaX();
-  origin[0] = -converter.getPhysDeltaX();
-  IndicatorCuboid2D<T> inflow( extend, origin );
-  if (bcTypePeriodic) {
-    superGeometry.rename( 1,3,inflow );
-  }
-  else {
-    superGeometry.rename( 2,3,1,inflow );
-  }
+  extent[0] = 1.2*physDeltaX;
+  origin[0] = -physDeltaX;
+  IndicatorCuboid2D<T> inflow(extent, origin);
+
+  if (bcPeriodic) geometry.rename(1, 3, inflow);
+  else geometry.rename(2, 3, 1, inflow);
+
   // Set material number for outflow
-  origin[0] = lx-.5*converter.getPhysDeltaX();
-  IndicatorCuboid2D<T> outflow( extend, origin );
-  if (bcTypePeriodic) {
-    superGeometry.rename( 1,4,outflow );
-  }
-  else {
-    superGeometry.rename( 2,4,1,outflow );
-  }
+  origin[0] = physLengthX - .5*physDeltaX;
+  IndicatorCuboid2D<T> outflow(extent, origin);
+
+  if (bcPeriodic) geometry.rename(1, 4, outflow);
+  else geometry.rename(2, 4, 1, outflow);
+
   // Removes all not needed boundary voxels outside the surface
-  superGeometry.clean();
+  geometry.clean();
   // Removes all not needed boundary voxels inside the surface
-  superGeometry.innerClean();
-  superGeometry.checkForErrors();
-  superGeometry.getStatistics().print();
+  geometry.innerClean();
+  geometry.checkForErrors();
+  geometry.getStatistics().print();
 
   clout << "Prepare Geometry ... OK" << std::endl;
   return;
 }
 
 // Set up the geometry of the simulation
-void prepareLattice( SuperLattice<T,DESCRIPTOR>& sLattice,
-                     PowerLawUnitConverter<T,DESCRIPTOR> const& converter,
-                     SuperGeometry<T,2>& superGeometry )
+void prepareLattice(MyCase& myCase)
 {
-  OstreamManager clout( std::cout,"prepareLattice" );
+  OstreamManager clout(std::cout, "prepareLattice");
   clout << "Prepare Lattice ..." << std::endl;
 
+  using T = MyCase::value_t;
+  using DESCRIPTOR = MyCase::descriptor_t;
+  auto& parameters = myCase.getParameters();
+  auto& lattice    = myCase.getLattice(NavierStokes{});
+  auto& geometry   = myCase.getGeometry();
+
+  const T physDeltaX    = parameters.get<parameters::DOMAIN_EXTENT>()[1] / parameters.get<parameters::RESOLUTION>();
+  const T physLengthX   = parameters.get<parameters::DOMAIN_EXTENT>()[0];
+  const T physLengthY   = parameters.get<parameters::DOMAIN_EXTENT>()[1];
+  const bool bcPeriodic = parameters.get<parameters::PERIODIC_BC>();
+  const int resolution  = parameters.get<parameters::RESOLUTION>();
+  const T latticeRelaxationTime = parameters.get<parameters::LATTICE_RELAXATION_TIME>();
+  const T maxVelocity   = parameters.get<parameters::PHYS_CHAR_VELOCITY>();
+  const T Re            = parameters.get<parameters::REYNOLDS>();
+  const T n             = parameters.get<parameters::POWER_LAW_EXPONENT>();
+  const T physDensity   = parameters.get<parameters::PHYS_CHAR_DENSITY>();
+
+
+  lattice.setUnitConverter<PowerLawUnitConverterFrom_Resolution_RelaxationTime_Reynolds_PLindex<T, DESCRIPTOR>>(
+    resolution,                           // resolution: number of voxels per charPhysL
+    latticeRelaxationTime,                // latticeRelaxationTime: relaxation time, have to be greater than 0.5!
+    physLengthY,                          // charPhysLength: reference length of simulation geometry
+    maxVelocity,                          // charPhysVelocity: maximal/highest expected velocity during simulation in __m / s__
+    Re,                                   // Reynolds number
+    n,                                    // power-law index
+    physDensity                           // physDensity: physical density in __kg / m^3__
+  );
+
+  const auto& converter = lattice.getUnitConverter();
+  lattice.getUnitConverter().print();
+
   // Material=1 -->bulk dynamics
-#ifdef _SMAGORINSKY
-  sLattice.defineDynamics<SmagorinskyPowerLawBGKdynamics>(superGeometry.getMaterialIndicator(1));
-#else
-  sLattice.defineDynamics<PowerLawBGKdynamics>(superGeometry.getMaterialIndicator(1));
-#endif
+  #ifdef _SMAGORINSKY
+    lattice.defineDynamics<SmagorinskyPowerLawBGKdynamics>(geometry.getMaterialIndicator(1));
+  #else
+    lattice.defineDynamics<PowerLawBGKdynamics>(geometry.getMaterialIndicator(1));
+  #endif
 
   // Material=2 -->bounce back
-  boundary::set<boundary::BounceBack>(sLattice, superGeometry.getMaterialIndicator(2));
+  boundary::set<boundary::BounceBack>(lattice, geometry.getMaterialIndicator(2));
 
-  T distance2Wall = converter.getPhysDeltaX()/2.;
-  T p0 = converter.getPhysConsistencyCoeff()*util::pow( converter.getCharPhysVelocity(),n )*util::pow( ( n + 1. )/n,n )*util::pow( 2./( ly-distance2Wall*2 ), n + 1.);
+  T distance2Wall = physDeltaX/2.;
+  T p0 = converter.getPhysConsistencyCoeff()*util::pow(converter.getCharPhysVelocity(), n)*util::pow((n + 1.)/n, n)*util::pow(2./(physLengthY-distance2Wall*2), n + 1.);
 
   // Material=3 -->bulk dynamics (inflow)
-  if (bcTypePeriodic) {
-    sLattice.defineDynamics<
+  if (bcPeriodic) {
+    lattice.defineDynamics<
       typename PowerLawBGKdynamics<T,DESCRIPTOR>::template exchange_combination_rule<
         powerlaw::PeriodicPressureOffset<-1,0>
-      >>(superGeometry, 3);
-    sLattice.setParameter<powerlaw::PRESSURE_OFFSET<-1,0>>(
-      -converter.getLatticeDensityFromPhysPressure( p0*(lx + distance2Wall*2. ))+1);
+      >>(geometry, 3);
+    lattice.setParameter<powerlaw::PRESSURE_OFFSET<-1,0>>(
+      -converter.getLatticeDensityFromPhysPressure(p0*(physLengthX + distance2Wall*2.))+1);
   }
   else {
-    sLattice.defineDynamics<PowerLawBGKdynamics>(superGeometry.getMaterialIndicator(3));
+    lattice.defineDynamics<PowerLawBGKdynamics>(geometry.getMaterialIndicator(3));
     // Setting of the boundary conditions
-    boundary::set<boundary::InterpolatedVelocity>(sLattice, superGeometry, 3);
+    boundary::set<boundary::InterpolatedVelocity>(lattice, geometry, 3);
   }
 
   // Material=4 -->bulk dynamics (outflow)
-  if (bcTypePeriodic) {
-    sLattice.defineDynamics<
+  if (bcPeriodic) {
+    lattice.defineDynamics<
       typename PowerLawBGKdynamics<T,DESCRIPTOR>::template exchange_combination_rule<
         powerlaw::PeriodicPressureOffset<1,0>
-      >>(superGeometry, 4);
-    sLattice.setParameter<powerlaw::PRESSURE_OFFSET<1,0>>(
-      converter.getLatticeDensityFromPhysPressure( p0*(lx + distance2Wall*2.))-1);
+      >>(geometry, 4);
+    lattice.setParameter<powerlaw::PRESSURE_OFFSET<1,0>>(
+      converter.getLatticeDensityFromPhysPressure(p0*(physLengthX + distance2Wall*2.))-1);
   }
   else {
-    sLattice.defineDynamics<PowerLawBGKdynamics>(superGeometry.getMaterialIndicator(4));
+    lattice.defineDynamics<PowerLawBGKdynamics>(geometry.getMaterialIndicator(4));
     // Setting of the boundary conditions
-    boundary::set<boundary::InterpolatedPressure>(sLattice, superGeometry, 4);
+    boundary::set<boundary::InterpolatedPressure>(lattice, geometry, 4);
   }
 
-  sLattice.setParameter<descriptors::OMEGA>(converter.getLatticeRelaxationFrequency());
-  sLattice.setParameter<powerlaw::M>(converter.getLatticeConsistencyCoeff());
-  sLattice.setParameter<powerlaw::N>(n);
+    clout << "Setting dynamics..." << std::endl;
 
-  const T nuMin = 2.9686e-3;
-  const T nuMax = 3.1667;
-  sLattice.setParameter<powerlaw::OMEGA_MIN>(1./(nuMax*descriptors::invCs2<T,DESCRIPTOR>() + 0.5));
-  sLattice.setParameter<powerlaw::OMEGA_MAX>(1./(nuMin*descriptors::invCs2<T,DESCRIPTOR>() + 0.5));
+  lattice.setParameter<descriptors::OMEGA>(converter.getLatticeRelaxationFrequency());
+  lattice.setParameter<powerlaw::M>(converter.getLatticeConsistencyCoeff());
+  lattice.setParameter<powerlaw::N>(n);
+
+  const T nuMin = parameters.get<parameters::NU_MIN>();
+  const T nuMax = parameters.get<parameters::NU_MAX>();
+  lattice.setParameter<powerlaw::OMEGA_MIN>(1./(nuMax*descriptors::invCs2<T,DESCRIPTOR>() + 0.5));
+  lattice.setParameter<powerlaw::OMEGA_MAX>(1./(nuMin*descriptors::invCs2<T,DESCRIPTOR>() + 0.5));
 #ifdef _SMAGORINSKY
-  sLattice.setParameter<collision::LES::SMAGORINSKY>(T(0.15));
+  lattice.setParameter<collision::LES::SMAGORINSKY>(parameters.get<parameters::SMAGORINSKY>());
 #endif
 
-  // Define the analytical solutions for pressure and velocity
-  AnalyticalLinear2D<T,T> rho( converter.getLatticeDensityFromPhysPressure( -p0 ) - 1., 0, converter.getLatticeDensityFromPhysPressure(  p0*(lx + distance2Wall*2.)/2. ) );
-  T maxVelocity = converter.getCharLatticeVelocity();
-  PowerLaw2D<T> u( superGeometry, 3, maxVelocity, distance2Wall, ( n + 1. )/n );
-
   // Set the analytical solutions for pressure and velocity
-  AnalyticalConst2D<T,T> omega0( converter.getLatticeRelaxationFrequency() );
-  sLattice.defineField<descriptors::OMEGA>( superGeometry, 1, omega0 );
-  sLattice.defineField<descriptors::OMEGA>( superGeometry, 3, omega0 );
-  sLattice.defineField<descriptors::OMEGA>( superGeometry, 4, omega0 );
-
-  // Set the analytical solutions for pressure and velocity
-  // Initialize all values of distribution functions to their local equilibrium
-
-  sLattice.defineRhoU( superGeometry, 1, rho, u );
-  sLattice.iniEquilibrium( superGeometry, 1, rho, u );
-
-  sLattice.defineRhoU( superGeometry, 2, rho, u );
-  sLattice.iniEquilibrium( superGeometry, 2, rho, u );
-
-  sLattice.defineRhoU( superGeometry, 3, rho, u );
-  sLattice.iniEquilibrium( superGeometry, 3, rho, u );
-
-  sLattice.defineRhoU( superGeometry, 4, rho, u );
-  sLattice.iniEquilibrium( superGeometry, 4, rho, u );
-
-  // Make the lattice ready for simulation
-  sLattice.initialize();
+  AnalyticalConst2D<T,T> omega0(converter.getLatticeRelaxationFrequency());
+  lattice.defineField<descriptors::OMEGA>(geometry, 1, omega0);
+  lattice.defineField<descriptors::OMEGA>(geometry, 3, omega0);
+  lattice.defineField<descriptors::OMEGA>(geometry, 4, omega0);
 
   clout << "Prepare Lattice ... OK" << std::endl;
 }
 
+void setInitialValues(MyCase& myCase) {
+  OstreamManager clout(std::cout, "setInitialValues");
+  using T = MyCase::value_t;
+  auto& lattice    = myCase.getLattice(NavierStokes{});
+  auto& geometry   = myCase.getGeometry();
+  auto& parameters = myCase.getParameters();
+  const auto& converter = lattice.getUnitConverter();
+
+  const T n             = parameters.get<parameters::POWER_LAW_EXPONENT>();
+  const T physLengthX   = parameters.get<parameters::DOMAIN_EXTENT>()[0];
+  const T physLengthY   = parameters.get<parameters::DOMAIN_EXTENT>()[1];
+  const T physDeltaX    = parameters.get<parameters::DOMAIN_EXTENT>()[1] / parameters.get<parameters::RESOLUTION>();
+
+  T distance2Wall = physDeltaX/2.;
+  T p0 = converter.getPhysConsistencyCoeff()*util::pow(converter.getCharPhysVelocity(), n)*util::pow((n + 1.)/n, n)*util::pow(2./(physLengthY-distance2Wall*2), n + 1.);
+
+  // Define the analytical solutions for pressure and velocity
+  AnalyticalLinear2D<T,T> rho(converter.getLatticeDensityFromPhysPressure(-p0) - 1., 0, converter.getLatticeDensityFromPhysPressure(p0*(physLengthX + distance2Wall*2.)/2.));
+  T maxVelocity = converter.getCharLatticeVelocity();
+  PowerLaw2D<T> u(geometry, 3, maxVelocity, distance2Wall, (n + 1.)/n);
+
+  // Set the analytical solutions for pressure and velocity
+  // Initialize all values of distribution functions to their local equilibrium
+
+  lattice.defineRhoU(geometry, 1, rho, u);
+  lattice.iniEquilibrium(geometry, 1, rho, u);
+
+  lattice.defineRhoU(geometry, 2, rho, u);
+  lattice.iniEquilibrium(geometry, 2, rho, u);
+
+  lattice.defineRhoU(geometry, 3, rho, u);
+  lattice.iniEquilibrium(geometry, 3, rho, u);
+
+  lattice.defineRhoU(geometry, 4, rho, u);
+  lattice.iniEquilibrium(geometry, 4, rho, u);
+
+  // Make the lattice ready for simulation
+  lattice.initialize();
+  clout << "Set Initial Values ... OK" << std::endl;
+}
+
+void setTemporalValues(MyCase& myCase,
+                       std::size_t iT)
+{ }
 
 // Compute error norms
-void error( SuperGeometry<T,2>& superGeometry,
-            SuperLattice<T, DESCRIPTOR>& sLattice,
-            PowerLawUnitConverter<T,DESCRIPTOR> const& converter)
+void errorNorms(MyCase& myCase)
 {
-  OstreamManager clout( std::cout,"error" );
+  OstreamManager clout(std::cout, "error");
+  using T          = MyCase::value_t;
+  using DESCRIPTOR = MyCase::descriptor_t;
+  auto& parameters = myCase.getParameters();
+  auto& lattice    = myCase.getLattice(NavierStokes{});
+  auto& geometry   = myCase.getGeometry();
+
+  const UnitConverter<T,DESCRIPTOR>& converter = lattice.getUnitConverter();
+
+  const T physDeltaX    = parameters.get<parameters::DOMAIN_EXTENT>()[1] / parameters.get<parameters::RESOLUTION>();
+  const T physLengthX   = parameters.get<parameters::DOMAIN_EXTENT>()[0];
+  const T physLengthY   = parameters.get<parameters::DOMAIN_EXTENT>()[1];
+  const T n             = parameters.get<parameters::POWER_LAW_EXPONENT>();
 
   int input[1] = { };
   T result[1]  = { };
 
-  T distance2Wall = converter.getPhysDeltaX()/2.;
+  T distance2Wall = physDeltaX/2.;
 
-  PowerLaw2D<T> uSol( superGeometry,3,converter.getCharPhysVelocity(),distance2Wall,( n + 1. )/n );
-  SuperLatticePhysVelocity2D<T,DESCRIPTOR> u( sLattice,converter );
+  PowerLaw2D<T> uSol(geometry, 3, converter.getCharPhysVelocity(), distance2Wall, (n + 1.)/n);
+  SuperLatticePhysVelocity2D<T,DESCRIPTOR> u(lattice, converter);
 
-  T p0 = converter.getPhysConsistencyCoeff()*util::pow( converter.getCharPhysVelocity(),n )*util::pow( ( n + 1. )/n,n )*util::pow( 2./( ly-distance2Wall*2 ),n + 1. );
-  AnalyticalLinear2D<T,T> pressureSol( -p0, 0, p0*(lx + distance2Wall*2.)/2. );
-  SuperLatticePhysPressure2D<T,DESCRIPTOR> pressure( sLattice,converter );
+  T p0 = converter.getPhysConsistencyCoeff()*util::pow(converter.getCharPhysVelocity(), n)*util::pow((n + 1.)/n, n)*util::pow(2./(physLengthY-distance2Wall*2), n + 1.);
+  AnalyticalLinear2D<T,T> pressureSol(-p0, 0, p0*(physLengthX + distance2Wall*2.)/2.);
+  SuperLatticePhysPressure2D<T,DESCRIPTOR> pressure(lattice, converter);
 
-  auto indicatorF = superGeometry.getMaterialIndicator(1);
+  auto indicatorF = geometry.getMaterialIndicator(1);
 
   // velocity error
   SuperAbsoluteErrorL1Norm2D<T> absVelocityErrorNormL1(u, uSol, indicatorF);
@@ -264,157 +351,185 @@ void error( SuperGeometry<T,2>& superGeometry,
 }
 
 // Output to console and files
-void getResults( SuperLattice<T, DESCRIPTOR>& sLattice,
-                 PowerLawUnitConverter<T,DESCRIPTOR> const& converter, int iT,
-                 SuperGeometry<T,2>& superGeometry, util::Timer<double>& timer )
+void getResults(MyCase& myCase,
+                util::Timer<MyCase::value_t>& timer,
+                std::size_t iT
+)
 {
-  OstreamManager clout( std::cout,"getResults" );
+  OstreamManager clout(std::cout, "getResults");
+  using T          = MyCase::value_t;
+  using DESCRIPTOR = MyCase::descriptor_t;
+  auto& parameters = myCase.getParameters();
+  auto& lattice    = myCase.getLattice(NavierStokes{});
 
-  SuperVTMwriter2D<T> vtmWriter( "powerLaw2d" );
-  SuperLatticePhysVelocity2D<T, DESCRIPTOR> velocity( sLattice, converter );
-  SuperLatticePhysPressure2D<T, DESCRIPTOR> pressure( sLattice, converter );
-  SuperLatticePhysViscosity2D<T, DESCRIPTOR> viscosity( sLattice, converter );
+  const UnitConverter<T,DESCRIPTOR>& converter = lattice.getUnitConverter();
 
-  vtmWriter.addFunctor( velocity );
-  vtmWriter.addFunctor( pressure );
-  vtmWriter.addFunctor( viscosity );
+  const int vtkIter  = converter.getLatticeTime(parameters.get<parameters::PHYS_VTK_OUTPUT_ITER_T>());
 
-  if ( iT==0 ) {
-    SuperLatticeCuboid2D<T, DESCRIPTOR> cuboid( sLattice );
-    SuperLatticeRank2D<T, DESCRIPTOR> rank( sLattice );
-    vtmWriter.write( cuboid );
-    vtmWriter.write( rank );
+  SuperVTMwriter2D<T> vtmWriter("powerLaw2d");
+  SuperLatticePhysVelocity2D<T, DESCRIPTOR> velocity(lattice, converter);
+  SuperLatticePhysPressure2D<T, DESCRIPTOR> pressure(lattice, converter);
+  SuperLatticePhysViscosity2D<T, DESCRIPTOR> viscosity(lattice, converter);
+
+  vtmWriter.addFunctor(velocity);
+  vtmWriter.addFunctor(pressure);
+  vtmWriter.addFunctor(viscosity);
+
+  if (iT==0) {
+    SuperLatticeCuboid2D<T, DESCRIPTOR> cuboid(lattice);
+    SuperLatticeRank2D<T, DESCRIPTOR> rank(lattice);
+    vtmWriter.write(cuboid);
+    vtmWriter.write(rank);
     vtmWriter.createMasterFile();
   }
 
-  if ( iT%converter.getLatticeTime( Tprint )==0 ) {
-    sLattice.setProcessingContext(ProcessingContext::Evaluation);
+  if (iT%vtkIter==0) {
+    lattice.setProcessingContext(ProcessingContext::Evaluation);
 
-    vtmWriter.write( iT );
+    vtmWriter.write(iT);
 
-    SuperEuklidNorm2D<T, DESCRIPTOR> normVel( velocity );
-    BlockReduction2D2D<T> planeReduction( normVel, 600, BlockDataSyncMode::ReduceOnly );
+    SuperEuklidNorm2D<T, DESCRIPTOR> normVel(velocity);
+    BlockReduction2D2D<T> planeReduction(normVel, 600, BlockDataSyncMode::ReduceOnly);
     // write output of velocity as JPEG
     heatmap::write(planeReduction, iT);
 
-    timer.update( iT );
+    timer.update(iT);
     timer.printStep();
-    sLattice.getStatistics().print( iT,converter.getPhysTime( iT ) );
-    error( superGeometry, sLattice, converter );
+    lattice.getStatistics().print(iT, converter.getPhysTime(iT));
+    errorNorms(myCase);
   }
 }
 
+void simulate(MyCase& myCase){
+  OstreamManager clout(std::cout,"simulate");
+  using T = MyCase::value_t;
+  using DESCRIPTOR = MyCase::descriptor_t;
 
-int main( int argc, char* argv[] )
-{
-  // === 1st Step: Initialization ===
-  initialize( &argc, &argv );
-  singleton::directories().setOutputDir( "./tmp/" );
-  OstreamManager clout( std::cout,"main" );
+  auto& parameters = myCase.getParameters();
+  auto& geometry   = myCase.getGeometry();
+  auto& lattice    = myCase.getLattice(NavierStokes{});
 
-  singleton::directories().setOutputDir( "./tmp/" );
+  const UnitConverter<T,DESCRIPTOR>& converter = lattice.getUnitConverter();
 
-  XMLreader config("input.xml");
-  config["geometry"]["N"].read(N);
-  config["geometry"]["lx"].read(lx);
-  config["geometry"]["ly"].read(ly);
-  config["dynamics"]["maxU"].read(maxU);
-  config["dynamics"]["Re"].read(Re);
-  config["dynamics"]["tau"].read(tau);
-  config["dynamics"]["n"].read(n);
-  config["time"]["Tmax"].read(Tmax);
-  config["time"]["Tprint"].read(Tprint);
+  const int resolution  = parameters.get<parameters::RESOLUTION>();
+  const T physDeltaX    = parameters.get<parameters::DOMAIN_EXTENT>()[1] / parameters.get<parameters::RESOLUTION>();
+  const T physLengthX   = parameters.get<parameters::DOMAIN_EXTENT>()[0];
+  const T physLengthY   = parameters.get<parameters::DOMAIN_EXTENT>()[1];
+  const T n             = parameters.get<parameters::POWER_LAW_EXPONENT>();
+  const T maxVelocity   = parameters.get<parameters::PHYS_CHAR_VELOCITY>();
+  const bool bcPeriodic = parameters.get<parameters::PERIODIC_BC>();
 
-  PowerLawUnitConverterFrom_Resolution_RelaxationTime_Reynolds_PLindex<T, DESCRIPTOR> const converter(
-    int {N},     // resolution: number of voxels per charPhysL
-    (T)   tau,   // latticeRelaxationTime: relaxation time, have to be greater than 0.5!
-    (T)   ly,     // charPhysLength: reference length of simulation geometry
-    (T)   maxU,     // charPhysVelocity: maximal/highest expected velocity during simulation in __m / s__
-    (T)   Re,        // Reynolds number
-    (T)   n,     // power-law index
-    (T)   1.0    // physDensity: physical density in __kg / m^3__
-  );
-  // Prints the converter log as console output
-  converter.print();
-  // Writes the converter log in a file
-  converter.write("powerLaw2d");
+  const std::size_t iTmax = converter.getLatticeTime(
+    parameters.get<parameters::MAX_PHYS_T>());
 
-  // === 2rd Step: Prepare Geometry ===
-  // Instantiation of a cuboidDecomposition with weights
-  Vector<T,2> extend( lx, ly );
-  Vector<T,2> origin;
-  IndicatorCuboid2D<T> cuboid( extend, origin );
-
-#ifdef PARALLEL_MODE_MPI
-  CuboidDecomposition2D<T> cuboidDecomposition( cuboid, converter.getPhysDeltaX(), singleton::mpi().getSize() );
-#else
-  CuboidDecomposition2D<T> cuboidDecomposition( cuboid, converter.getPhysDeltaX(), 1 );
-#endif
-
-  // Periodic boundaries in x-direction
-  if (bcTypePeriodic) {
-    cuboidDecomposition.setPeriodicity({ true, false });
-  }
-
-  HeuristicLoadBalancer<T> loadBalancer( cuboidDecomposition );
-  const int overlap = (bcTypePeriodic) ? 2 : 3;
-  SuperGeometry<T,2> superGeometry( cuboidDecomposition, loadBalancer, overlap );
-  prepareGeometry( converter, superGeometry );
-
-  // === 3rd Step: Prepare Lattice ===
-  SuperLattice<T,DESCRIPTOR> sLattice(converter, superGeometry);
-
-  //prepareLattice and set boundaryConditions
-  prepareLattice( sLattice, converter, superGeometry );
-
-  // === 4th Step: Main Loop with Timer ===
-  util::Timer<double> timer( converter.getLatticeTime( Tmax ), superGeometry.getStatistics().getNvoxel() );
-  util::ValueTracer<T> converge( converter.getLatticeTime( 0.1*Tprint ), residuum );
+  clout << "Starting simulation.. " << std::endl;
+  util::Timer<T> timer(iTmax, myCase.getGeometry().getStatistics().getNvoxel());
   timer.start();
 
-  for ( std::size_t iT=0; iT<converter.getLatticeTime( Tmax ); ++iT ) {
-    if ( converge.hasConverged() ) {
-      clout << "Simulation converged." << std::endl;
-      getResults( sLattice, converter, iT, superGeometry, timer );
+  util::ValueTracer<T> converge(converter.getLatticeTime(0.1 * parameters.get<parameters::PHYS_VTK_OUTPUT_ITER_T>()),
+                                parameters.get<parameters::CONVERGENCE_PRECISION>());
+
+  for (std::size_t iT=0; iT<iTmax; ++iT) {
+
+    if (converge.hasConverged()) {
+      clout << "Convergence reached." << std::endl;
+      parameters.set<parameters::CONVERGED>(true);
+      getResults(myCase, timer, iT);
+      clout << "Converged after " << iT << " iterations." << std::endl;
       break;
     }
-    // === 7th Step: Computation and Output of the Results ===
-    getResults( sLattice, converter, iT, superGeometry, timer );
-    converge.takeValue(sLattice.getStatistics().getAverageEnergy(), true);
-    // === 6th Step: Collide and Stream Execution ===
-    sLattice.collideAndStream();
 
-    if (bcTypePeriodic) {
-      sLattice.stripeOffDensityOffset(sLattice.getStatistics().getAverageRho()-(T)1);
+    /// === Step 8.1: Update the Boundary Values and Fields at Times ===
+    setTemporalValues(myCase, iT);
+
+    /// === Step 8.2 & Step 8.3: Computation and Output of the Results, Collide and Stream Execution ===
+    getResults(myCase, timer, iT);
+    converge.takeValue(lattice.getStatistics().getAverageEnergy(), true);
+    lattice.collideAndStream();
+
+    if (bcPeriodic) {
+      lattice.stripeOffDensityOffset(lattice.getStatistics().getAverageRho()-(T)1);
     }
   }
   timer.stop();
   timer.printSummary();
 
   // === 7th Step: Gnuplot ===
-  Gnuplot<T> gplot( "centerVelocity" );
-  T Ly = converter.getLatticeLength( ly );
-  for ( int iY=0; iY<=Ly; ++iY ) {
-    T dx = 1. / T(converter.getResolution());
+  Gnuplot<T> gplot("centerVelocity");
+  T charLengthY = converter.getLatticeLength(physLengthY);
+  for (int iY=0; iY<=charLengthY; ++iY) {
+    T dx = 1. / resolution;
     T point[2]= {T(),T()};
-    point[0] = .9*lx;
-    point[1] = ( T )iY/Ly;
-    std::vector<T> axisPoint( 2,T() );
-    axisPoint[0] = lx/2.;
-    axisPoint[1] = ly/2.;
-    std::vector<T> axisDirection( 2,T() );
+    point[0] = .9*physLengthX;
+    point[1] = (T)iY/charLengthY;
+    std::vector<T> axisPoint(2, T());
+    axisPoint[0] = physLengthX/2.;
+    axisPoint[1] = physLengthY/2.;
+    std::vector<T> axisDirection(2, T());
     axisDirection[0] = 1;
     axisDirection[1] = 0;
-    T distance2Wall = converter.getPhysDeltaX()/2.;
-    PowerLaw2D<T> uSol( superGeometry,3,converter.getCharPhysVelocity(),distance2Wall,( n + 1. )/n );
-    T analytical[2] = {T(),T()};
-    uSol( analytical,point );
-    SuperLatticePhysVelocity2D<T, DESCRIPTOR> velocity( sLattice, converter );
-    AnalyticalFfromSuperF2D<T> intpolateVelocity( velocity, true );
+    T distance2Wall = physDeltaX/2.;
+    PowerLaw2D<T> uSol(geometry, 3, maxVelocity, distance2Wall, (n + 1.)/n);
+    T analytical[2] = {T(), T()};
+    uSol(analytical, point);
+    SuperLatticePhysVelocity2D<T, DESCRIPTOR> velocity(lattice, converter);
+    AnalyticalFfromSuperF2D<T> intpolateVelocity(velocity, true);
     T numerical[2] = {T(),T()};
-    intpolateVelocity( numerical,point );
-    gplot.setData( iY*dx, {analytical[0],numerical[0]}, {"analytical","numerical"} );
+    intpolateVelocity(numerical,point);
+    gplot.setData(iY*dx, {analytical[0], numerical[0]}, {"analytical", "numerical"});
   }
   // Create PNG file
   gplot.writePNG();
+}
+
+
+int main( int argc, char* argv[] )
+{
+  initialize( &argc, &argv );
+  singleton::directories().setOutputDir( "./tmp/" );
+  OstreamManager clout( std::cout,"main" );
+
+  XMLreader config("input.xml");
+
+  MyCase::ParametersD myCaseParameters;
+  {
+    using namespace olb::parameters;
+    using T = MyCase::value_t;
+    myCaseParameters.set<RESOLUTION>(config["geometry"]["N"].get<int>());
+    myCaseParameters.set<DOMAIN_EXTENT>({config["geometry"]["lx"].get<T>(), config["geometry"]["ly"].get<T>()});
+    myCaseParameters.set<PHYS_CHAR_VELOCITY>(config["dynamics"]["maxU"].get<T>());
+    myCaseParameters.set<REYNOLDS>(config["dynamics"]["Re"].get<T>());
+    myCaseParameters.set<LATTICE_RELAXATION_TIME>(config["dynamics"]["tau"].get<T>());
+    myCaseParameters.set<POWER_LAW_EXPONENT>(config["dynamics"]["n"].get<T>());
+    myCaseParameters.set<MAX_PHYS_T>(config["time"]["Tmax"].get<T>());
+    myCaseParameters.set<PHYS_CHAR_DENSITY>(1.0);
+    myCaseParameters.set<NU_MIN>(2.9686e-3);
+    myCaseParameters.set<NU_MAX>(3.1667);
+    myCaseParameters.set<SMAGORINSKY>(0.15);
+    myCaseParameters.set<PERIODIC_BC>(true);
+
+    myCaseParameters.set<PHYS_VTK_OUTPUT_ITER_T>(config["time"]["Tprint"].get<T>());
+    myCaseParameters.set<CONVERGENCE_PRECISION>(1e-6);
+    myCaseParameters.set<CONVERGED>(false);
+
+  }
+  myCaseParameters.fromCLI(argc, argv);
+
+  /// === Step 3: Create Mesh ===
+  Mesh mesh = createMesh(myCaseParameters);
+
+  /// === Step 4: Create Case ===
+  MyCase myCase(myCaseParameters, mesh);
+
+  /// === Step 5: Prepare Geometry ===
+  prepareGeometry(myCase);
+
+  /// === Step 6: Prepare Lattice ===
+  prepareLattice(myCase);
+
+  /// === Step 7: Set Initial Conditions ===
+  setInitialValues(myCase);
+
+  /// === Step 8: Simulate ===
+  simulate(myCase);
 }
