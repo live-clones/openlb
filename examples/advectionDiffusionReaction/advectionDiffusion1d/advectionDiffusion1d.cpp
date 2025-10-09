@@ -49,12 +49,6 @@ int main(int argc, char *argv[])
 
   singleton::directories().setOutputDir("./tmp/");
 
-  /// set the tags for the csv datafile of averageSiml2RelErr
-  //std::vector<std::string> tags{"N", "error"};
-  //std::string filename = "averageSimL2RelErr";
-  //CSV<T> csvWriter(filename, tags);
-  //csvWriter.setColumnTags(tags, filename);
-
   MyCase::ParametersD myCaseParameters;
   {
     using namespace olb::parameters;

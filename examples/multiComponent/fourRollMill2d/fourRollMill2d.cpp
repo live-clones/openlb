@@ -41,84 +41,71 @@
 #include <olb.h>
 
 using namespace olb;
+using namespace olb::names;
 using namespace olb::descriptors;
 using namespace olb::graphics;
 
-using T = FLOATING_POINT_TYPE;
-#define DESCRIPTOR D2Q9<CHEM_POTENTIAL,FORCE>
+// === Step 1: Declarations ===
+using MyCase = Case<
+  NavierStokes, Lattice<double, D2Q9<CHEM_POTENTIAL,FORCE>>,
+  Component1,   Lattice<double, D2Q9<CHEM_POTENTIAL,FORCE>>
+>;
 
-// Guideline parameters:
-// Ca = 0.1  for steady state
-// Ca = 0.42 for drop breakup
-// Recommended xi = 1.14, min 1.0
+namespace olb::parameters {
 
-//Set physical input parameters
-const T radius = 1.;                                // [pu] physical droplet radius
-const T nx = 20.;                                   // [pu] domain length H = 20
-const T cylinderOffset = nx / 2. / 3.;              // [pu] cylinder offset from x- and y- axis, symmetrical!
-const T radiusCylinder = cylinderOffset * 0.625;    // [pu] radius of the cylinder
+struct RADIUS : public descriptors::FIELD_BASE<1> { };
+struct STRAIN_RATE : public descriptors::FIELD_BASE<1> { };
+struct CONT_VISC  : public descriptors::FIELD_BASE<1> { };
+struct DROPLET_REYNOLDS : public descriptors::FIELD_BASE<1> { };
+struct PHYS_INTERVAL : public descriptors::FIELD_BASE<1> { };
+struct CAPILLARY : public descriptors::FIELD_BASE<1> { };
+struct CAHN  : public descriptors::FIELD_BASE<1> { };
+struct DEFORMATION_RESIDUUM  : public descriptors::FIELD_BASE<1> { };
+struct DEFORMATION_CONVERGENCE_PRECISION  : public descriptors::FIELD_BASE<1> { };
+struct H1  : public descriptors::FIELD_BASE<1> { };
+struct H2  : public descriptors::FIELD_BASE<1> { };
+}
 
-const T contVisc = 1.;                              // [pu] physical(!) kinematic viscosity of continuous phase
-const T physDensity = 1.;                           // [pu] physical density
 
-// Set numerical parameters
-const T N = 10;                                     // droplet radius [lu] = N/radius
-const T latticeRelaxationTime = 1.;                 // [lu] tau for first lattice (f)
-const T latticeRelaxationTime_g = 1.;               // [lu] caution: not used..., i.e. tau_f = tau_g
+Mesh<MyCase::value_t,MyCase::d> createMesh(MyCase::ParametersD& params) {
+  using T = MyCase::value_t;
 
-// Set (model) dimensionless numbers
-const T dropRe = 0.0625;                            // definition: extensionRate * radius^2 / continuousViscosity
-//T capillaryNr = 0.1;                              // definition: radius * extensionRate * viscosity(non kinematic) / surfTen
-const T capillaryNr = 0.42;                         // capillary number for breakup
+  Vector extent = params.get<parameters::DOMAIN_EXTENT>();
+  const T nx = extent[0];
+  const T N = params.get<parameters::RESOLUTION>();
+  const T radius = params.get<parameters::RADIUS>();
 
-// Set (numerical) dimensionless numbers
-const T cahnNr = 0.114;                             // Cahn Number = xi / radius;
-const T pecletNr = 0.43;                            // Pe = extensionRate * radius * xi / ( M A )
+  std::vector<T> extend = { nx, nx };
+  std::vector<T> origin = { 0, 0 };
 
-// Set time interval to simulate and normalized output
-const T maxPhysTime = 160.;                         // normalized time normT = T * extensionRate [either in lu or pu]
-const T physVtkIter = 1.;                           // normalized vtk output (i.e. per normalized time step, one output!)
-const T physStatIter = 1.;                          // normalized vtk output (i.e. per normalized time step, one output!)
-const T physInterval = 1.;                          // interval for the convergence check in s
-const T residuum = 7e-5;                            // residuum for the convergence check
-const T defResiduum = 0.001;                        // deformation residuum criterion
+  //Set physical input parameters
+  const T cylinderOffset = nx / 2. / 3.;              // [pu] cylinder offset from x- and y- axis, symmetrical!
+  const T radiusCylinder = cylinderOffset * 0.625;    // [pu] radius of the cylinder
 
-// Set contact angles
-// no boundary touching here...
-// h_i= Parameter related to resulting contact angle of the boundary. [lattice units]
-const T h1 = 0.;                                    // Contact angle 90 degrees   [lattice units]
-const T h2 = 0.;                                    // Contact angle 90 degrees   [lattice units]
+  // Center of rotating cylinders
+  const T cylinderOffsetMinus = (nx/2. - cylinderOffset);
+  const T cylinderOffsetPlus = (nx/2. + cylinderOffset);
+  std::vector<T> center1 = {cylinderOffsetMinus, cylinderOffsetMinus};
+  std::vector<T> center2 = {cylinderOffsetPlus, cylinderOffsetMinus};
+  std::vector<T> center3 = {cylinderOffsetPlus, cylinderOffsetPlus};
+  std::vector<T> center4 = {cylinderOffsetMinus, cylinderOffsetPlus};
 
-// Center of rotating cylinders
-const T cylinderOffsetMinus = (nx/2. - cylinderOffset);
-const T cylinderOffsetPlus = (nx/2. + cylinderOffset);
-std::vector<T> center1 = {cylinderOffsetMinus, cylinderOffsetMinus};
-std::vector<T> center2 = {cylinderOffsetPlus, cylinderOffsetMinus};
-std::vector<T> center3 = {cylinderOffsetPlus, cylinderOffsetPlus};
-std::vector<T> center4 = {cylinderOffsetMinus, cylinderOffsetPlus};
+  std::shared_ptr<IndicatorF2D<T>> cuboid = std::make_shared<IndicatorCuboid2D<T>>( extend, origin );
+  std::shared_ptr<IndicatorF2D<T>> cylind1 = std::make_shared<IndicatorCircle2D<T>>( center1, radiusCylinder );
+  std::shared_ptr<IndicatorF2D<T>> cylind2 = std::make_shared<IndicatorCircle2D<T>>( center2, radiusCylinder );
+  std::shared_ptr<IndicatorF2D<T>> cylind3 = std::make_shared<IndicatorCircle2D<T>>( center3, radiusCylinder );
+  std::shared_ptr<IndicatorF2D<T>> cylind4 = std::make_shared<IndicatorCircle2D<T>>( center4, radiusCylinder );
 
-// Initialize remaining parameters (conversion, computation, free energy)
-T strainRate;       // [pu] physical shear rate [1/s]
-T rotVelo;          // [pu] physical shear speed corr. to dropRe [m/s]
+  T charL = util::pow(radius, 2.);
+  T physDeltaX = charL/N;
 
-T surfTen;          // [pu] physical surface tension
-T surfTenLatt;      // [lu]
+  Mesh<T,MyCase::d> mesh(*(cuboid-(cylind1+cylind2+cylind3+cylind4)), physDeltaX, singleton::mpi().getSize());
+  mesh.setOverlap(params.get<parameters::OVERLAP>());
 
-T kappa;            // [lu] this is kappa1+kappa2, to simplify, and meet komrakova model. this is NOT kappa in Komrakova2013!!
-T kappa1;           // [lu]
-T kappa2;           // [lu]
-T alpha;            // [lu] free energy alpha in surface tension
-T gama;             // [lu] gama "Diffusivity of the interface" same as in Komrakova2013
-
-T xiThickness;      // [lu] characteristical thickness of interface (xi from Komrakova2013)
-T kappaKomra;       // [lu] this is kappa from Komrakova2013
-T aKomra;           // [lu] this is A from Komrakova2013
-T transportCoeff;   // [lu] this is M from Komrakova2013
-
-int maxIter;        // [lu] maximum lattice time
-int vtkIter;        // [lu] lattice time step, when output happens
-int statIter;       // [lu] lattice timestep when statistics apper in terminal
-
+  // set periodic boundaries to the domain
+  mesh.getCuboidDecomposition().setPeriodicity({ true, true });
+  return mesh;
+}
 
 // Functors for rotating cylinders;
 // cylinders rotate with tangential speed rotVel[lu]
@@ -156,9 +143,17 @@ bool RotatingMill2D<T>::operator()(T output[], const T input[]){
 
 // Measurement of droplet: interpolation in x-direction
 // Simple interpolation on y = ny/2 with assumption of droplet center in domain center
-T horizontalMeasure(SuperLattice<T, DESCRIPTOR>& sLattice2, int points){
-  SuperLattice<T, DESCRIPTOR> *sLatticeTest = &sLattice2;;
-  SuperLatticeDensity2D<T, DESCRIPTOR> density2( *sLatticeTest );
+MyCase::value_t horizontalMeasure(MyCase& myCase, int points){
+  using T = MyCase::value_t;
+  using DESCRIPTOR = MyCase::descriptor_t;
+
+  auto* latticeTest = &myCase.getLattice(Component1{});
+  auto& params = myCase.getParameters();
+
+  Vector extent = params.get<parameters::DOMAIN_EXTENT>();
+  const T nx = extent[0];
+
+  SuperLatticeDensity2D<T, DESCRIPTOR> density2( *latticeTest );
 
   AnalyticalFfromSuperF2D<T> aDensityH(density2, true, 1);
 
@@ -180,9 +175,17 @@ T horizontalMeasure(SuperLattice<T, DESCRIPTOR>& sLattice2, int points){
 
 // Measurement of droplet: interpolation in y-direction
 // Simple interpolation on x = nx/2 with assumption of droplet center in domain center
-T verticalMeasure(SuperLattice<T, DESCRIPTOR>& sLattice2, int points){
-  SuperLattice<T, DESCRIPTOR> *sLatticeTest = &sLattice2;;
-  SuperLatticeDensity2D<T, DESCRIPTOR> density2( *sLatticeTest );
+MyCase::value_t verticalMeasure(MyCase& myCase, int points){
+  using T = MyCase::value_t;
+  using DESCRIPTOR = MyCase::descriptor_t;
+
+  auto* latticeTest = &myCase.getLattice(Component1{});
+  auto& params = myCase.getParameters();
+
+  Vector extent = params.get<parameters::DOMAIN_EXTENT>();
+  const T nx = extent[0];
+
+  SuperLatticeDensity2D<T, DESCRIPTOR> density2( *latticeTest );
 
   AnalyticalFfromSuperF2D<T> aDensityV(density2, true, 1);
 
@@ -202,244 +205,159 @@ T verticalMeasure(SuperLattice<T, DESCRIPTOR>& sLattice2, int points){
   return dropletLength;
 }
 
-SuperGeometry<T,2> prepareGeometry(UnitConverter<T,DESCRIPTOR> const& converter)
+void prepareGeometry( MyCase& myCase )
 {
   OstreamManager clout( std::cout,"prepareGeometry" );
   clout << "Prepare Geometry ..." << std::endl;
+  using T = MyCase::value_t;
 
-  std::vector<T> extend = { nx, nx };
-  std::vector<T> origin = { 0, 0 };
-  std::shared_ptr<IndicatorF2D<T>> cuboid = std::make_shared<IndicatorCuboid2D<T>>( extend, origin );
-#ifdef PARALLEL_MODE_MPI
-  const int noOfCuboids = singleton::mpi().getSize();
-#else
-  const int noOfCuboids = 1;
-#endif
+  auto& geometry = myCase.getGeometry();
+  auto& params = myCase.getParameters();
+
+  Vector extent = params.get<parameters::DOMAIN_EXTENT>();
+  const T nx = extent[0];
+
+  //Set physical input parameters
+  const T cylinderOffset = nx / 2. / 3.;              // [pu] cylinder offset from x- and y- axis, symmetrical!
+  const T radiusCylinder = cylinderOffset * 0.625;    // [pu] radius of the cylinder
+
+  // Center of rotating cylinders
+  const T cylinderOffsetMinus = (nx/2. - cylinderOffset);
+  const T cylinderOffsetPlus = (nx/2. + cylinderOffset);
+  std::vector<T> center1 = {cylinderOffsetMinus, cylinderOffsetMinus};
+  std::vector<T> center2 = {cylinderOffsetPlus, cylinderOffsetMinus};
+  std::vector<T> center3 = {cylinderOffsetPlus, cylinderOffsetPlus};
+  std::vector<T> center4 = {cylinderOffsetMinus, cylinderOffsetPlus};
+
   std::shared_ptr<IndicatorF2D<T>> cylind1 = std::make_shared<IndicatorCircle2D<T>>( center1, radiusCylinder );
   std::shared_ptr<IndicatorF2D<T>> cylind2 = std::make_shared<IndicatorCircle2D<T>>( center2, radiusCylinder );
   std::shared_ptr<IndicatorF2D<T>> cylind3 = std::make_shared<IndicatorCircle2D<T>>( center3, radiusCylinder );
   std::shared_ptr<IndicatorF2D<T>> cylind4 = std::make_shared<IndicatorCircle2D<T>>( center4, radiusCylinder );
 
-  CuboidDecomposition2D<T>* cuboidDecomposition = new CuboidDecomposition2D<T>( *(cuboid-(cylind1+cylind2+cylind3+cylind4)),
-                                converter.getPhysDeltaX(), noOfCuboids );
-  cuboidDecomposition->setPeriodicity({ true, true });
-  HeuristicLoadBalancer<T>* loadBalancer = new HeuristicLoadBalancer<T>( *cuboidDecomposition );
-  SuperGeometry<T,2> superGeometry( *cuboidDecomposition,*loadBalancer );
-
-  superGeometry.rename( 0,2 );
-  superGeometry.rename( 2,1,{0,0} );
-  superGeometry.rename( 1,3,cylind1 );    //Material number 3: cylinder bottom left
-  superGeometry.rename( 1,4,cylind2 );    //Material number 4: cylinder bottom right
-  superGeometry.rename( 1,5,cylind3 );    //Material number 5: cylinder top right
-  superGeometry.rename( 1,6,cylind4 );    //Material number 6: cylinder top left
+  geometry.rename( 0,2 );
+  geometry.rename( 2,1,{0,0} );
+  geometry.rename( 1,3,cylind1 );    //Material number 3: cylinder bottom left
+  geometry.rename( 1,4,cylind2 );    //Material number 4: cylinder bottom right
+  geometry.rename( 1,5,cylind3 );    //Material number 5: cylinder top right
+  geometry.rename( 1,6,cylind4 );    //Material number 6: cylinder top left
 
   // clean up
-  superGeometry.clean();
-  superGeometry.innerClean();
-  superGeometry.checkForErrors();
-  superGeometry.getStatistics().print();
+  geometry.clean();
+  geometry.innerClean();
+  geometry.checkForErrors();
+  geometry.getStatistics().print();
 
   clout << "Prepare Geometry ... OK" << std::endl;
-  return superGeometry;
 }
 
-void prepareLattice( SuperLattice<T, DESCRIPTOR>& sLattice1,
-                     SuperLattice<T, DESCRIPTOR>& sLattice2,
-                     UnitConverter<T, DESCRIPTOR>& converter,
-                     SuperGeometry<T,2>& superGeometry)
+void prepareLattice( MyCase& myCase )
 {
   OstreamManager clout( std::cout,"prepareLattice" );
   clout << "Prepare Lattice ..." << std::endl;
 
-  T omega = converter.getLatticeRelaxationFrequency();
+  using T = MyCase::value_t;
+  using DESCRIPTOR = MyCase::descriptor_t;
 
-  sLattice1.defineDynamics<ForcedBGKdynamics>( superGeometry, 1 );
-  sLattice2.defineDynamics<FreeEnergyBGKdynamics>( superGeometry, 1 );
+  auto& geometry = myCase.getGeometry();
+  auto& params = myCase.getParameters();
 
+  auto& lattice1 = myCase.getLattice(NavierStokes{});
+  auto& lattice2 = myCase.getLattice(Component1{});
 
-  auto cylinderIndicator1 = superGeometry.getMaterialIndicator(3);
-  boundary::set<boundary::FreeEnergyVelocity>(sLattice1, cylinderIndicator1);
-  boundary::set<boundary::FreeEnergyOrderParameter>(sLattice2, cylinderIndicator1);
-  auto cylinderIndicator2 = superGeometry.getMaterialIndicator(4);
-  boundary::set<boundary::FreeEnergyVelocity>(sLattice1, cylinderIndicator2);
-  boundary::set<boundary::FreeEnergyOrderParameter>(sLattice2, cylinderIndicator2);
-  auto cylinderIndicator3 = superGeometry.getMaterialIndicator(5);
-  boundary::set<boundary::FreeEnergyVelocity>(sLattice1, cylinderIndicator3);
-  boundary::set<boundary::FreeEnergyOrderParameter>(sLattice2, cylinderIndicator3);
-  auto cylinderIndicator4 = superGeometry.getMaterialIndicator(6);
-  boundary::set<boundary::FreeEnergyVelocity>(sLattice1, cylinderIndicator4);
-  boundary::set<boundary::FreeEnergyOrderParameter>(sLattice2, cylinderIndicator4);
+  Vector extent = params.get<parameters::DOMAIN_EXTENT>();
+  const T nx = extent[0];
+  const T radius = params.get<parameters::RADIUS>();
+  const T strainRate = params.get<parameters::STRAIN_RATE>();
+  const int N = params.get<parameters::RESOLUTION>();
+  const T latticeRelaxationTime = params.get<parameters::LATTICE_RELAXATION_TIME>();
+  const T contVisc = params.get<parameters::CONT_VISC>();
+  const T physDensity = params.get<parameters::PHYS_CHAR_DENSITY>();
+  const T capillaryNr = params.get<parameters::CAPILLARY>();
+  const T cahnNr = params.get<parameters::CAHN>();
+  const T pecletNr = params.get<parameters::PECLET>();
+  const T dropRe = params.get<parameters::DROPLET_REYNOLDS>();
+  const T maxPhysT = params.get<parameters::MAX_PHYS_T>();
+  const T physStatIterT = params.get<parameters::PHYS_STAT_ITER_T>();
+  const T physVtkIterT = params.get<parameters::PHYS_VTK_ITER_T>();
 
-  sLattice1.setParameter<OMEGA>(omega);
-  sLattice2.setParameter<OMEGA>(omega);
-  sLattice2.setParameter<collision::FreeEnergy::GAMMA>(gama);
-
-  // bulk initial conditions
-  // define circular domain for fluid 2
-  std::vector<T> v( 2,T() );
-  AnalyticalConst2D<T,T> zeroVelocity( v );
-
-  AnalyticalConst2D<T,T> zero( 0. );
-  AnalyticalConst2D<T,T> one ( 1. );
-
-  SmoothIndicatorCircle2D<T,T> circle( {T(nx)/T(2), T(nx)/T(2)}, radius, converter.getPhysLength(alpha) );
-  AnalyticalIdentity2D<T,T> rho( one );
-  AnalyticalIdentity2D<T,T> phi( one - circle - circle );
-
-  RotatingMill2D<T> rotator1 ( center1, radiusCylinder, converter.getCharLatticeVelocity(), true);
-  RotatingMill2D<T> rotator2 ( center2, radiusCylinder, converter.getCharLatticeVelocity(), false);
-  RotatingMill2D<T> rotator3 ( center3, radiusCylinder, converter.getCharLatticeVelocity(), true);
-  RotatingMill2D<T> rotator4 ( center4, radiusCylinder, converter.getCharLatticeVelocity(), false);
-
-  sLattice1.defineRhoU( cylinderIndicator1, rho, rotator1 );
-  sLattice2.defineRho ( cylinderIndicator1, phi );
-  sLattice1.defineRhoU( cylinderIndicator2, rho, rotator2 );
-  sLattice2.defineRho ( cylinderIndicator2, phi );
-  sLattice1.defineRhoU( cylinderIndicator3, rho, rotator3 );
-  sLattice2.defineRho ( cylinderIndicator3, phi );
-  sLattice1.defineRhoU( cylinderIndicator4, rho, rotator4 );
-  sLattice2.defineRho ( cylinderIndicator4, phi );
-
-  // equilibrium population initialization
-  sLattice1.iniEquilibrium( superGeometry, 1, rho, zeroVelocity );
-  sLattice2.iniEquilibrium( superGeometry, 1, phi, zeroVelocity );
-  sLattice1.iniEquilibrium( superGeometry, 3, rho, rotator1 );
-  sLattice2.iniEquilibrium( superGeometry, 3, phi, rotator1 );
-  sLattice1.iniEquilibrium( superGeometry, 4, rho, rotator2 );
-  sLattice2.iniEquilibrium( superGeometry, 4, phi, rotator2 );
-  sLattice1.iniEquilibrium( superGeometry, 5, rho, rotator3 );
-  sLattice2.iniEquilibrium( superGeometry, 5, phi, rotator3 );
-  sLattice1.iniEquilibrium( superGeometry, 6, rho, rotator4 );
-  sLattice2.iniEquilibrium( superGeometry, 6, phi, rotator4 );
-
-
-  sLattice1.initialize();
-  sLattice2.initialize();
-
-  sLattice1.communicate();
-  sLattice2.communicate();
-
-  clout << "Prepare Lattice ... OK" << std::endl;
-}
-
-
-void getResults( SuperLattice<T, DESCRIPTOR>& sLattice2,
-                 SuperLattice<T, DESCRIPTOR>& sLattice1, int iT,
-                 SuperGeometry<T,2>& superGeometry, util::Timer<T>& timer,
-                 UnitConverter<T, DESCRIPTOR> converter) {
-
-  OstreamManager clout( std::cout,"getResults" );
-  SuperVTMwriter2D<T> vtmWriter( "fourRollMill2D" );
-
-  if ( iT==0 ) {
-    // Writes the geometry, cuboid no. and rank no. as vti file for visualization
-    SuperLatticeCuboid2D<T, DESCRIPTOR> cuboid( sLattice1 );
-    SuperLatticeRank2D<T, DESCRIPTOR> rank( sLattice1 );
-    vtmWriter.write( cuboid );
-    vtmWriter.write( rank );
-    vtmWriter.createMasterFile();
-  }
-
-  // Get statistics
-  if ( iT%statIter==0 ) {
-    // Timer console output
-    timer.update( iT );
-    timer.printStep();
-    sLattice1.getStatistics().print( iT, converter.getPhysTime(iT) );
-    sLattice2.getStatistics().print( iT, converter.getPhysTime(iT) );
-  }
-
-  // Writes the VTK files
-   if ( iT%statIter==0 ) {
-    sLattice1.setProcessingContext(ProcessingContext::Evaluation);
-    AnalyticalConst2D<T,T> half_( 0.5 );
-    SuperLatticeFfromAnalyticalF2D<T, DESCRIPTOR> half(half_, sLattice1);
-
-    SuperLatticeDensity2D<T, DESCRIPTOR> density1( sLattice1 );
-    density1.getName() = "rho";
-    SuperLatticeDensity2D<T, DESCRIPTOR> density2( sLattice2 );
-    density2.getName() = "phi";
-
-    SuperIdentity2D<T,T> c1 (half*(density1+density2));
-    c1.getName() = "density-fluid-1";
-    SuperIdentity2D<T,T> c2 (half*(density1-density2));
-    c2.getName() = "density-fluid-2";
-
-    // velocity (seperately and combined)
-    SuperLatticePhysVelocity2D<T, DESCRIPTOR> velocity1( sLattice1, converter );
-    SuperLatticePhysVelocity2D<T, DESCRIPTOR> velocity2( sLattice2, converter );
-    SuperIdentity2D<T,T> velocityMittel (half*(velocity1+velocity2));
-    velocityMittel.getName() = "velocity-Mittel";
-
-    vtmWriter.addFunctor( density1 );
-    vtmWriter.addFunctor( density2 );
-    vtmWriter.addFunctor( c1 );
-    vtmWriter.addFunctor( c2 );
-    vtmWriter.addFunctor( velocityMittel );
-    vtmWriter.write( iT );
-  }
-}
-
-int main( int argc, char *argv[] )
-{
-  // === 1st Step: Initialization ===
-  initialize( &argc, &argv );
-  singleton::directories().setOutputDir( "./tmp/" );
-  OstreamManager clout( std::cout,"main" );
-
-  // use remaining equations from Komrakova2013 to calculate missing parameters:
-  // 0. compute velocity from Re (first strainRate, then velocity)
-  // formula: https://doi.org/10.1016/S0377-0257(01)00123-9
-  // (do that before converter, since it is required as argument!)
-  strainRate = contVisc * dropRe * 0.35/ util::pow(radius, 2);
   // apparatus specific constant (~0.35) is only for this simulations setup with this cylinderRadius and offset
   // has to be calculated empirically: https://doi.org/10.1098/rspa.1934.0169
-  rotVelo = strainRate / 0.35;
+  T rotVelo = strainRate / 0.35;
+  T charL = util::pow(radius, 2.);
 
-  UnitConverterFromResolutionAndRelaxationTime<T,DESCRIPTOR> converter(
+  lattice1.setUnitConverter<UnitConverterFromResolutionAndRelaxationTime<T,DESCRIPTOR>>(
     (T)   N,                     // resolution
     (T)   latticeRelaxationTime, // lattice relaxation time
-    (T)   util::pow(radius, 2.), // charPhysLength: reference length of simulation geometry (dropRe!!)
+    (T)   charL,                 // charPhylength: reference length of simulation geometry (dropRe!!)
     (T)   rotVelo,               // charPhysVelocity: maximal/highest expected velocity during simulation in __m / s__
     (T)   contVisc,              // physViscosity: physical kinematic viscosity in __m^2 / s__
     (T)   physDensity            // physDensity: physical density in __kg / m^3__
   );
 
-  T deborahNumber = strainRate * converter.getLatticeRelaxationTime();
-
-  // 1. compute surface tension from Ca
-  surfTen = radius * strainRate * physDensity * contVisc / capillaryNr;
-
-  surfTenLatt = surfTen / (converter.getConversionFactorPressure() * converter.getPhysDeltaX());
-
-  // 2. compute interface thickness from Ch
-  xiThickness = cahnNr * converter.getLatticeLength(radius);
-
-  // 3. compute kappa from xi (Komrakova2013 equation (12))
-  kappaKomra = (3./4.) * surfTenLatt * xiThickness;
-
-  // 4. compute A from kappa (Komrakova2013 equation (11), neglect minus sign, since solely multiplications here)
-  aKomra = 2. * kappaKomra / util::pow(xiThickness, 2);
-
-  // 5. compute M from Pe (Komrakova2013 equation (17), there's a typo in the paper, should be a minus on the right hand side... we dropped that anyway.)
-  transportCoeff = strainRate * converter.getConversionFactorTime() * converter.getLatticeLength(radius) * xiThickness / (pecletNr * aKomra);
-
-  // 6. compute gamma from M (Komrakova2013 equation (8), caution: \Delta t is unity in lattice units!)
-  gama = transportCoeff / (converter.getLatticeRelaxationTime() - .5);
-
-  // Parameter fit from Komrakova to OpenLB (Semprebon2016):
-  kappa1 = 4. * aKomra;
-  kappa2 = kappa1;
-  alpha = xiThickness / 2.;
-
-  // transform normalized time to physical and then to lattice:
-  maxIter = converter.getLatticeTime( maxPhysTime );
-  vtkIter = converter.getLatticeTime( physVtkIter );
-  statIter = converter.getLatticeTime( physStatIter );;
-
-  // Prints the converter log as console output
+  const auto& converter = lattice1.getUnitConverter();
   converter.print();
 
+  lattice2.setUnitConverter(converter);
+
+  //Set physical input parameters
+  const T cylinderOffset = nx / 2. / 3.;              // [pu] cylinder offset from x- and y- axis, symmetrical!
+  const T radiusCylinder = cylinderOffset * 0.625;    // [pu] radius of the cylinder
+
+  const T deborahNumber = strainRate * converter.getLatticeRelaxationTime();
+
+  // 1. compute surface tension from Ca
+  const T surfTen = radius * strainRate * physDensity * contVisc / capillaryNr;
+
+  const T surfTenLatt = surfTen / (converter.getConversionFactorPressure() * converter.getPhysDeltaX());
+
+  // 2. compute interface thickness from Ch
+  const T xiThickness = cahnNr * converter.getLatticeLength(radius);
+
+  // 3. compute kappa from xi (Komrakova2013 equation (12))
+  const T kappaKomra = (3./4.) * surfTenLatt * xiThickness;
+
+  // 4. compute A from kappa (Komrakova2013 equation (11), neglect minus sign, since solely multiplications here)
+  const T aKomra = 2. * kappaKomra / util::pow(xiThickness, 2);
+
+  // 5. compute M from Pe (Komrakova2013 equation (17), there's a typo in the paper, should be a minus on the right hand side... we dropped that anyway.)
+  const T transportCoeff = strainRate * converter.getConversionFactorTime() * converter.getLatticeLength(radius) * xiThickness / (pecletNr * aKomra);
+
+  // 6. compute gamma from M (Komrakova2013 equation (8), caution: \Delta t is unity in lattice units!)
+  const T gama = transportCoeff / (converter.getLatticeRelaxationTime() - .5);
+
+  // Parameter fit from Komrakova to OpenLB (Semprebon2016):
+  const T kappa1 = 4. * aKomra;
+  const T kappa2 = kappa1;
+  const T alpha = xiThickness / 2.;
+
+  // transform normalized time to physical and then to lattice:
+  const T maxIter = converter.getLatticeTime( maxPhysT );
+  const T vtkIter = converter.getLatticeTime( physVtkIterT );
+  const T statIter = converter.getLatticeTime( physStatIterT );;
+
+  T omega = converter.getLatticeRelaxationFrequency();
+
+  lattice1.defineDynamics<ForcedBGKdynamics>( geometry, 1 );
+  lattice2.defineDynamics<FreeEnergyBGKdynamics>( geometry, 1 );
+
+
+  auto cylinderIndicator1 = geometry.getMaterialIndicator(3);
+  boundary::set<boundary::FreeEnergyVelocity>(lattice1, cylinderIndicator1);
+  boundary::set<boundary::FreeEnergyOrderParameter>(lattice2, cylinderIndicator1);
+  auto cylinderIndicator2 = geometry.getMaterialIndicator(4);
+  boundary::set<boundary::FreeEnergyVelocity>(lattice1, cylinderIndicator2);
+  boundary::set<boundary::FreeEnergyOrderParameter>(lattice2, cylinderIndicator2);
+  auto cylinderIndicator3 = geometry.getMaterialIndicator(5);
+  boundary::set<boundary::FreeEnergyVelocity>(lattice1, cylinderIndicator3);
+  boundary::set<boundary::FreeEnergyOrderParameter>(lattice2, cylinderIndicator3);
+  auto cylinderIndicator4 = geometry.getMaterialIndicator(6);
+  boundary::set<boundary::FreeEnergyVelocity>(lattice1, cylinderIndicator4);
+  boundary::set<boundary::FreeEnergyOrderParameter>(lattice2, cylinderIndicator4);
+
+  lattice1.setParameter<OMEGA>(omega);
+  lattice2.setParameter<OMEGA>(omega);
+  lattice2.setParameter<collision::FreeEnergy::GAMMA>(gama);
+  //
   // now print everything additionally to the unit converter (helps for double-checking)
   clout << "----------------------------------------------------------------------" << std::endl;
   clout << "----------------------------------------------------------------------" << std::endl;
@@ -464,66 +382,240 @@ int main( int argc, char *argv[] )
   clout << "----------------------------------------------------------------------" << std::endl;
   clout << "----------------------------------------------------------------------" << std::endl;
 
-  // === 2nd Step: Prepare Geometry ===
-  // Instantiation of superGeometry
-  SuperGeometry<T,2> superGeometry( prepareGeometry( converter ) );
-
-  // === 3rd Step: Prepare Lattice ===
-  SuperLattice<T, DESCRIPTOR> sLattice1( converter, superGeometry );
-  SuperLattice<T, DESCRIPTOR> sLattice2( converter, superGeometry );
-
-  prepareLattice( sLattice1, sLattice2, converter, superGeometry );
-
-  //prepareCoupling( sLattice1, sLattice2, superGeometry );
-  SuperLatticeCoupling coupling1(
+  //prepareCoupling( lattice1, lattice2, geometry );
+  auto& coupling1 = myCase.setCouplingOperator(
+  "Chemical_potential",
   ChemicalPotentialCoupling2D{},
-  names::A{}, sLattice1,
-  names::B{}, sLattice2);
+  names::A{}, lattice1,
+  names::B{}, lattice2);
 
-  coupling1.restrictTo(superGeometry.getMaterialIndicator({1}));
+  coupling1.restrictTo(geometry.getMaterialIndicator({1}));
 
   coupling1.template setParameter<ChemicalPotentialCoupling2D::ALPHA>(alpha);
   coupling1.template setParameter<ChemicalPotentialCoupling2D::KAPPA1>(kappa1);
   coupling1.template setParameter<ChemicalPotentialCoupling2D::KAPPA2>(kappa2);
 
-  SuperLatticeCoupling coupling2(
+  auto& coupling2 = myCase.setCouplingOperator(
+  "Force",
   ForceCoupling2D{},
-  names::A{}, sLattice2,
-  names::B{}, sLattice1);
+  names::A{}, lattice2,
+  names::B{}, lattice1);
 
-  coupling2.restrictTo(superGeometry.getMaterialIndicator({1}));
+  coupling2.restrictTo(geometry.getMaterialIndicator({1}));
 
   // Walls
-  SuperLatticeCoupling coupling3(
+  auto& coupling3 = myCase.setCouplingOperator(
+  "Inlet_outlet",
   InletOutletCoupling2D{},
-  names::A{}, sLattice2,
-  names::B{}, sLattice1);
+  names::A{}, lattice2,
+  names::B{}, lattice1);
 
-  coupling3.restrictTo(superGeometry.getMaterialIndicator({3,4,5,6}));
+  coupling3.restrictTo(geometry.getMaterialIndicator({3,4,5,6}));
 
-  sLattice1.addPostProcessor<stage::PreCoupling>(meta::id<RhoStatistics>());
-  sLattice2.addPostProcessor<stage::PreCoupling>(meta::id<RhoStatistics>());
+  lattice1.addPostProcessor<stage::PreCoupling>(meta::id<RhoStatistics>());
+  lattice2.addPostProcessor<stage::PreCoupling>(meta::id<RhoStatistics>());
 
   {
-    auto& communicator = sLattice1.getCommunicator(stage::PostCoupling());
+    auto& communicator = lattice1.getCommunicator(stage::PostCoupling());
     communicator.requestField<CHEM_POTENTIAL>();
-    communicator.requestOverlap(sLattice1.getOverlap());
+    communicator.requestOverlap(lattice1.getOverlap());
     communicator.exchangeRequests();
   }
   {
-    auto& communicator = sLattice2.getCommunicator(stage::PreCoupling());
+    auto& communicator = lattice2.getCommunicator(stage::PreCoupling());
     communicator.requestField<CHEM_POTENTIAL>();
     communicator.requestField<RhoStatistics>();
-    communicator.requestOverlap(sLattice2.getOverlap());
+    communicator.requestOverlap(lattice2.getOverlap());
     communicator.exchangeRequests();
   }
 
+  clout << "Prepare Lattice ... OK" << std::endl;
+}
 
-  // === 4th Step: Main Loop with Timer ===
+void setInitialValues( MyCase& myCase )
+{
+  OstreamManager clout( std::cout,"initialValues" );
+
+  using T = MyCase::value_t;
+
+  auto& geometry = myCase.getGeometry();
+  auto& params = myCase.getParameters();
+  auto& converter = myCase.getLattice(NavierStokes{}).getUnitConverter();
+
+  auto& lattice1 = myCase.getLattice(NavierStokes{});
+  auto& lattice2 = myCase.getLattice(Component1{});
+
+  Vector extent = params.get<parameters::DOMAIN_EXTENT>();
+  const T nx = extent[0];
+  const T radius = params.get<parameters::RADIUS>();
+  const T cahnNr = params.get<parameters::CAHN>();
+
+  const T xiThickness = cahnNr * converter.getLatticeLength(radius);
+  const T alpha = xiThickness / 2.;
+
+  //Set physical input parameters
+  const T cylinderOffset = nx / 2. / 3.;              // [pu] cylinder offset from x- and y- axis, symmetrical!
+  const T radiusCylinder = cylinderOffset * 0.625;    // [pu] radius of the cylinder
+
+  // Center of rotating cylinders
+  const T cylinderOffsetMinus = (nx/2. - cylinderOffset);
+  const T cylinderOffsetPlus = (nx/2. + cylinderOffset);
+  std::vector<T> center1 = {cylinderOffsetMinus, cylinderOffsetMinus};
+  std::vector<T> center2 = {cylinderOffsetPlus, cylinderOffsetMinus};
+  std::vector<T> center3 = {cylinderOffsetPlus, cylinderOffsetPlus};
+  std::vector<T> center4 = {cylinderOffsetMinus, cylinderOffsetPlus};
+
+  // bulk initial conditions
+  // define circular domain for fluid 2
+  std::vector<T> v( 2,T() );
+  AnalyticalConst2D<T,T> zeroVelocity( v );
+
+  AnalyticalConst2D<T,T> zero( 0. );
+  AnalyticalConst2D<T,T> one ( 1. );
+
+  SmoothIndicatorCircle2D<T,T> circle( {T(nx)/T(2), T(nx)/T(2)}, radius, converter.getPhysLength(alpha) );
+  AnalyticalIdentity2D<T,T> rho( one );
+  AnalyticalIdentity2D<T,T> phi( one - circle - circle );
+
+  RotatingMill2D<T> rotator1 ( center1, radiusCylinder, converter.getCharLatticeVelocity(), true);
+  RotatingMill2D<T> rotator2 ( center2, radiusCylinder, converter.getCharLatticeVelocity(), false);
+  RotatingMill2D<T> rotator3 ( center3, radiusCylinder, converter.getCharLatticeVelocity(), true);
+  RotatingMill2D<T> rotator4 ( center4, radiusCylinder, converter.getCharLatticeVelocity(), false);
+
+  auto cylinderIndicator1 = geometry.getMaterialIndicator(3);
+  auto cylinderIndicator2 = geometry.getMaterialIndicator(4);
+  auto cylinderIndicator3 = geometry.getMaterialIndicator(5);
+  auto cylinderIndicator4 = geometry.getMaterialIndicator(6);
+
+  lattice1.defineRhoU( cylinderIndicator1, rho, rotator1 );
+  lattice2.defineRho ( cylinderIndicator1, phi );
+  lattice1.defineRhoU( cylinderIndicator2, rho, rotator2 );
+  lattice2.defineRho ( cylinderIndicator2, phi );
+  lattice1.defineRhoU( cylinderIndicator3, rho, rotator3 );
+  lattice2.defineRho ( cylinderIndicator3, phi );
+  lattice1.defineRhoU( cylinderIndicator4, rho, rotator4 );
+  lattice2.defineRho ( cylinderIndicator4, phi );
+
+  // equilibrium population initialization
+  lattice1.iniEquilibrium( geometry, 1, rho, zeroVelocity );
+  lattice2.iniEquilibrium( geometry, 1, phi, zeroVelocity );
+  lattice1.iniEquilibrium( geometry, 3, rho, rotator1 );
+  lattice2.iniEquilibrium( geometry, 3, phi, rotator1 );
+  lattice1.iniEquilibrium( geometry, 4, rho, rotator2 );
+  lattice2.iniEquilibrium( geometry, 4, phi, rotator2 );
+  lattice1.iniEquilibrium( geometry, 5, rho, rotator3 );
+  lattice2.iniEquilibrium( geometry, 5, phi, rotator3 );
+  lattice1.iniEquilibrium( geometry, 6, rho, rotator4 );
+  lattice2.iniEquilibrium( geometry, 6, phi, rotator4 );
+
+
+  lattice1.initialize();
+  lattice2.initialize();
+
+  lattice1.communicate();
+  lattice2.communicate();
+}
+
+void setTemporalValues(MyCase& myCase,
+                       std::size_t iT)
+{ }
+
+void getResults(MyCase& myCase,
+                util::Timer<MyCase::value_t>& timer,
+                std::size_t iT)
+{
+  OstreamManager clout( std::cout,"getResults" );
+
+  using T = MyCase::value_t;
+  using DESCRIPTOR = MyCase::descriptor_t;
+
+  auto& lattice1 = myCase.getLattice(NavierStokes{});
+  auto& lattice2 = myCase.getLattice(Component1{});
+  auto& params = myCase.getParameters();
+  auto& converter = myCase.getLattice(NavierStokes{}).getUnitConverter();
+
+  const T physStatIterT = params.get<parameters::PHYS_STAT_ITER_T>();
+  const int statIter = converter.getLatticeTime(physStatIterT);
+
+  SuperVTMwriter2D<T> vtmWriter( "fourRollMill2D" );
+
+  if ( iT==0 ) {
+    // Writes the geometry, cuboid no. and rank no. as vti file for visualization
+    SuperLatticeCuboid2D<T, DESCRIPTOR> cuboid( lattice1 );
+    SuperLatticeRank2D<T, DESCRIPTOR> rank( lattice1 );
+    vtmWriter.write( cuboid );
+    vtmWriter.write( rank );
+    vtmWriter.createMasterFile();
+  }
+
+  // Get statistics
+  if ( iT%statIter==0 ) {
+    // Timer console output
+    timer.update( iT );
+    timer.printStep();
+    lattice1.getStatistics().print( iT, converter.getPhysTime(iT) );
+    lattice2.getStatistics().print( iT, converter.getPhysTime(iT) );
+  }
+
+  // Writes the VTK files
+   if ( iT%statIter==0 ) {
+    lattice1.setProcessingContext(ProcessingContext::Evaluation);
+    AnalyticalConst2D<T,T> half_( 0.5 );
+    SuperLatticeFfromAnalyticalF2D<T, DESCRIPTOR> half(half_, lattice1);
+
+    SuperLatticeDensity2D<T, DESCRIPTOR> density1( lattice1 );
+    density1.getName() = "rho";
+    SuperLatticeDensity2D<T, DESCRIPTOR> density2( lattice2 );
+    density2.getName() = "phi";
+
+    SuperIdentity2D<T,T> c1 (half*(density1+density2));
+    c1.getName() = "density-fluid-1";
+    SuperIdentity2D<T,T> c2 (half*(density1-density2));
+    c2.getName() = "density-fluid-2";
+
+    // velocity (seperately and combined)
+    SuperLatticePhysVelocity2D<T, DESCRIPTOR> velocity1( lattice1, converter );
+    SuperLatticePhysVelocity2D<T, DESCRIPTOR> velocity2( lattice2, converter );
+    SuperIdentity2D<T,T> velocityMittel (half*(velocity1+velocity2));
+    velocityMittel.getName() = "velocity-Mittel";
+
+    vtmWriter.addFunctor( density1 );
+    vtmWriter.addFunctor( density2 );
+    vtmWriter.addFunctor( c1 );
+    vtmWriter.addFunctor( c2 );
+    vtmWriter.addFunctor( velocityMittel );
+    vtmWriter.write( iT );
+  }
+}
+
+void simulate(MyCase& myCase) {
+  OstreamManager clout( std::cout,"simulate" );
+
+  using T = MyCase::value_t;
+
+  auto& geometry = myCase.getGeometry();
+  auto& converter = myCase.getLattice(NavierStokes{}).getUnitConverter();
+  auto& params = myCase.getParameters();
+  auto& lattice1 = myCase.getLattice(NavierStokes{});
+  auto& lattice2 = myCase.getLattice(Component1{});
+  auto& coupling1 = myCase.getOperator("Chemical_potential");
+  auto& coupling2 = myCase.getOperator("Force");
+  auto& coupling3 = myCase.getOperator("Inlet_outlet");
+
+  const int N = params.get<parameters::RESOLUTION>();
+  const T radius = params.get<parameters::RADIUS>();
+  const T physInterval = params.get<parameters::PHYS_INTERVAL>();
+  const T maxPhysT = params.get<parameters::MAX_PHYS_T>();
+  const T physStatIterT = params.get<parameters::PHYS_STAT_ITER_T>();
+  const int maxIter = converter.getLatticeTime(maxPhysT);
+  const int statIter = converter.getLatticeTime(physStatIterT);
+  const T residuum = params.get<parameters::CONVERGENCE_PRECISION>();
+  const T defResiduum = params.get<parameters::DEFORMATION_RESIDUUM>();
+
   int iT = 0;
   clout << "starting simulation..." << std::endl;
   util::ValueTracer<T> converge( converter.getLatticeTime( physInterval ), residuum );
-  util::Timer<T> timer( maxIter, superGeometry.getStatistics().getNvoxel() );
+  util::Timer<T> timer( maxIter, geometry.getStatistics().getNvoxel() );
   timer.start();
 
   T old_deformation = 0;
@@ -531,15 +623,15 @@ int main( int argc, char *argv[] )
 
   for ( iT=0; iT<=maxIter; ++iT ) {
 
-    sLattice2.setProcessingContext(ProcessingContext::Evaluation);
-    sLattice1.setProcessingContext(ProcessingContext::Evaluation);
+    lattice2.setProcessingContext(ProcessingContext::Evaluation);
+    lattice1.setProcessingContext(ProcessingContext::Evaluation);
 
     // doplet measurement
   if ( iT%statIter==0 ) {
       clout<<"--------------- t: "<< converter.getPhysTime(iT) <<" ----------------"<<std::endl;
     old_deformation = deformation;
-      T lengthHorizontal = horizontalMeasure( sLattice2, N * 1000);
-      T lengthVertical   = verticalMeasure(   sLattice2, N * 1000);
+      T lengthHorizontal = horizontalMeasure( myCase, N * 1000);
+      T lengthVertical   = verticalMeasure(   myCase, N * 1000);
     deformation = (lengthHorizontal - lengthVertical) / (lengthHorizontal + lengthVertical);
       clout << "Length(horizontal): " << lengthHorizontal << std::endl;
       clout << "Length(vertical):   " << lengthVertical   << std::endl;
@@ -550,38 +642,97 @@ int main( int argc, char *argv[] )
     // Convergence check
     if ( converge.hasConverged() && util::abs(deformation - old_deformation) < defResiduum ) {
       clout << "Simulation converged." << std::endl;
-      getResults( sLattice2, sLattice1, iT, superGeometry, timer, converter );
+      getResults( myCase, timer, iT );
       break;
     }
-    sLattice1.setProcessingContext(ProcessingContext::Simulation);
-    sLattice2.setProcessingContext(ProcessingContext::Simulation);
+    lattice1.setProcessingContext(ProcessingContext::Simulation);
+    lattice2.setProcessingContext(ProcessingContext::Simulation);
 
     // Computation and output of the results
-    getResults( sLattice2, sLattice1, iT, superGeometry, timer, converter );
+    getResults( myCase, timer, iT );
 
     // Collide and stream execution
-    sLattice1.collideAndStream();
-    sLattice2.collideAndStream();
+    lattice1.collideAndStream();
+    lattice2.collideAndStream();
 
-    sLattice1.executePostProcessors(stage::PreCoupling());
-    sLattice2.executePostProcessors(stage::PreCoupling());
+    lattice1.executePostProcessors(stage::PreCoupling());
+    lattice2.executePostProcessors(stage::PreCoupling());
 
     // Execute coupling between the two lattices
-    sLattice1.getCommunicator(stage::PreCoupling()).communicate();
+    lattice1.getCommunicator(stage::PreCoupling()).communicate();
     coupling1.apply();
-    sLattice1.getCommunicator(stage::PostCoupling()).communicate();
+    lattice1.getCommunicator(stage::PostCoupling()).communicate();
 
-    sLattice2.executePostProcessors(stage::PreCoupling());
+    lattice2.executePostProcessors(stage::PreCoupling());
 
-    sLattice2.getCommunicator(stage::PreCoupling()).communicate();
+    lattice2.getCommunicator(stage::PreCoupling()).communicate();
     coupling2.apply();
-    sLattice2.getCommunicator(stage::PostCoupling()).communicate();
+    lattice2.getCommunicator(stage::PostCoupling()).communicate();
 
     coupling3.apply();
 
-    converge.takeValue( sLattice2.getStatistics().getAverageRho(), true );
+    converge.takeValue( lattice2.getStatistics().getAverageRho(), true );
   }
 
   timer.stop();
   timer.printSummary();
+}
+
+int main( int argc, char *argv[] )
+{
+  // === 1st Step: Initialization ===
+  initialize( &argc, &argv );
+  singleton::directories().setOutputDir( "./tmp/" );
+  OstreamManager clout( std::cout,"main" );
+
+// Guideline parameters:
+// Ca = 0.1  for steady state
+// Ca = 0.42 for drop breakup
+// Recommended xi = 1.14, min 1.0
+
+  // === Step 2: Set Parameters ===
+  MyCase::ParametersD myCaseParameters;
+  {
+    using namespace olb::parameters;
+    myCaseParameters.set<parameters::RADIUS     >(1.);        // [pu] physical droplet radius
+    myCaseParameters.set<DOMAIN_EXTENT          >({20, 20});  // [pu] physical domain size
+    myCaseParameters.set<RESOLUTION             >(10);        // resolution N cells per charL = radius/2
+    myCaseParameters.set<CONT_VISC              >(1.);        // [pu] physical(!) kinematic viscosity of continuous phase
+    myCaseParameters.set<PHYS_CHAR_DENSITY      >(1.);        // [pu] physical density
+    myCaseParameters.set<LATTICE_RELAXATION_TIME>(1.);        // [lu] tau for first lattice (f)
+    myCaseParameters.set<DROPLET_REYNOLDS       >(0.0625);    // definition: strainRate * radius^2 / continuousViscosity
+    myCaseParameters.set<CAPILLARY              >(0.42);      // capillary number for droplet breakup
+    myCaseParameters.set<CAHN                   >(0.114);     // Cahn Number = xi / radius;
+    myCaseParameters.set<PECLET                 >(0.43);      // Peclet Number = strainRate * radius * xi / (M A)
+    myCaseParameters.set<MAX_PHYS_T             >(160.);
+    myCaseParameters.set<PHYS_VTK_ITER_T        >(1.);
+    myCaseParameters.set<PHYS_STAT_ITER_T       >(1.);
+    myCaseParameters.set<PHYS_INTERVAL          >(1.);        // interval for the convergence check in s
+    myCaseParameters.set<CONVERGENCE_PRECISION  >(7e-5);      // residuum for the convergence check
+    myCaseParameters.set<H1                     >(0.);        // Contact angle 90 degrees   [lattice units]
+    myCaseParameters.set<H2                     >(0.);        // Contact angle 90 degrees   [lattice units]
+    myCaseParameters.set<DEFORMATION_CONVERGENCE_PRECISION>(0.001);  // deformation residuum criterion
+    myCaseParameters.set<parameters::STRAIN_RATE>([&] {
+      return myCaseParameters.get<CONT_VISC>() * myCaseParameters.get<DROPLET_REYNOLDS>() * 0.35 / util::pow(myCaseParameters.get<parameters::RADIUS>(), 2);
+    }); // [pu] physical strain rate [1/s]
+  }
+  myCaseParameters.fromCLI(argc, argv);
+
+  /// === Step 3: Create Mesh ===
+  Mesh mesh = createMesh(myCaseParameters);
+
+  /// === Step 4: Create Case ===
+  MyCase myCase(myCaseParameters, mesh);
+
+  /// === Step 5: Prepare Geometry ===
+  prepareGeometry(myCase);
+
+  /// === Step 6: Prepare Lattice ===
+  prepareLattice(myCase);
+
+  /// === Step 7: Definition of Initial, Boundary Values, and Fields ===
+  setInitialValues(myCase);
+
+  /// === Step 8: Simulate ===
+  simulate(myCase);
 }

@@ -35,401 +35,466 @@
 
 #include <olb.h>
 
-#include <vector>
-#include <cmath>
-#include <iostream>
-#include <fstream>
+#include <stdexcept>
 
 using namespace olb;
 using namespace olb::descriptors;
+using namespace olb::names;
 
-typedef double T;
+using MyCase = Case<Radiation, Lattice<double, descriptors::D3Q27<tag::RTLBM>>>;
 
-// select between different approaches: the mesoscopic method (default) or the macroscopic one based on the P1 approximation
-//#define MINK  //macroscopic approach
-// select between a directed or diffuse (default) boundary condition
-#define DIRECTED  //directed boundary condition
+namespace olb::parameters {
 
-using DESCRIPTOR = descriptors::D3Q27DescriptorLebedev;
+struct ANINOSOTROPY_FACTOR : public descriptors::FIELD_BASE<1> {};
 
-struct INTENSITY : public descriptors::FIELD_BASE<1> { };
+struct ABSORPTION : public descriptors::FIELD_BASE<1> {};
+struct SCATTERING : public descriptors::FIELD_BASE<1> {};
+struct MCVALUE : public descriptors::FIELD_BASE<1> {};
+struct TOTAL_ENERGY : public descriptors::FIELD_BASE<1> {};
+struct INTENSITY : public descriptors::FIELD_BASE<1> {};
 
-// PostProcessor to implement a directed boundary at the emittor
-template<typename T, typename DESCRIPTOR, int discreteNormalX, int discreteNormalY, int discreteNormalZ>
-struct RtlbmDirectedBoundaryPostProcessor3D
-{
-static constexpr OperatorScope scope = OperatorScope::PerCellWithParameters;
+struct CASE_NUMBER : public descriptors::TYPED_FIELD_BASE<int, 1> {};
+struct DYNAMICS_NAME : public descriptors::TYPED_FIELD_BASE<std::string, 1> {};
+struct USE_MINK : public descriptors::TYPED_FIELD_BASE<bool, 1> {};
+struct USE_DIRECTED : public descriptors::FIELD_BASE<1> {};
 
-  using parameters = meta::list<INTENSITY>;
+struct INLET_DIRICHLET : public descriptors::FIELD_BASE<1> {};
 
-  int getPriority() const {
-    return 0;
-  }
+struct BOUNDARY_SHIFT : public descriptors::FIELD_BASE<1> {};
 
-  template <typename CELL, typename PARAMETERS>
-  void apply(CELL& cell, PARAMETERS& parameters) any_platform{
-    T intensity = parameters.template get<INTENSITY>();
-    for(int iPop = 0; iPop<DESCRIPTOR::q; iPop++){
-      const auto c = descriptors::c<DESCRIPTOR>(iPop);
-      T k = c[0]*discreteNormalX + c[1]*discreteNormalY + c[2]*discreteNormalZ;
-      T norm_c = std::sqrt(c[0]*c[0] + c[1]*c[1] + c[2]*c[2]);
-      T norm_n = std::sqrt(discreteNormalX*discreteNormalX + discreteNormalY*discreteNormalY + discreteNormalZ*discreteNormalZ);
-      T cos_theta = k / (norm_c * norm_n);
-      if (util::nearZero(cos_theta + 1.)) {
-        cell[iPop] = (1 - descriptors::t<T,DESCRIPTOR>(0))*intensity - descriptors::t<T,DESCRIPTOR>(iPop);
-      } else {
-        cell[iPop] = - descriptors::t<T,DESCRIPTOR>(iPop);
-      }
-    }
-  }
-};
-
-// Set RtlbmDirectedBoundary for any indicated cells inside the block domain
-template<typename T, typename DESCRIPTOR>
-void setRtlbmDirectedBoundary(BlockLattice<T,DESCRIPTOR>& _block, BlockIndicatorF3D<T>& indicator)
-{
-  using namespace boundaryhelper;
-  const auto& blockGeometryStructure = indicator.getBlockGeometry();
-  std::vector<int> discreteNormal(4,0);
-  blockGeometryStructure.forSpatialLocations([&](auto iX, auto iY, auto iZ) {
-    if (indicator(iX, iY, iZ)) {
-      discreteNormal = blockGeometryStructure.getStatistics().getType(iX, iY, iZ);
-      if (discreteNormal[1]!=0 || discreteNormal[2]!=0 || discreteNormal[3]!=0) {
-        _block.addPostProcessor(
-          typeid(stage::PostCollide), {iX,iY,iZ},
-          promisePostProcessorForNormal<T, DESCRIPTOR, RtlbmDirectedBoundaryPostProcessor3D>(
-            Vector<int,3>(discreteNormal.data()+1)
-          )
-        );
-        _block.template defineDynamics<NoCollideDynamics>({iX, iY, iZ});
-      } else {
-        _block.template defineDynamics<BounceBack>({iX, iY, iZ});
-      }
-    }
-  });
 }
 
-// Initialising the setRtlbmDirectedBoundary function on the superLattice domain
-template<typename T, typename DESCRIPTOR>
-void setRtlbmDirectedBoundary(SuperLattice<T, DESCRIPTOR>& sLattice, FunctorPtr<SuperIndicatorF3D<T>>&& indicator)
+Mesh<MyCase::value_t, MyCase::d> createMesh(MyCase::ParametersD& parameters)
 {
-  OstreamManager clout(std::cout, "setRtlbmDirectedBoundary");
+  using T = MyCase::value_t;
 
-  for (int iCloc = 0; iCloc < sLattice.getLoadBalancer().size(); iCloc++) {
-    setRtlbmDirectedBoundary<T,DESCRIPTOR>(sLattice.getBlock(iCloc), indicator->getBlockIndicatorF(iCloc));
-  }
+  T boundaryShift = parameters.get<parameters::BOUNDARY_SHIFT>();
+  T lx            = parameters.get<parameters::DOMAIN_L>();
+  T dx            = parameters.get<parameters::PHYS_DELTA_X>();
+  T originShift   = lx / 2;
+
+  Vector<T, 3>         origin = {0. + boundaryShift, -originShift, -originShift};
+  Vector<T, 3>         extent = {lx - boundaryShift, lx, lx};
+  IndicatorCuboid3D<T> span(extent, origin);
+
+  Mesh<T, MyCase::d> mesh(span, dx, 2 * singleton::mpi().getSize());
+  mesh.setOverlap(parameters.get<parameters::OVERLAP>());
+
+  return mesh;
 }
 
-// Store all geometric information in material numbers
-SuperGeometry<T,3> prepareGeometryCube( T conversionFactorLength, T boundaryShift )
+void prepareGeometry(MyCase& myCase)
 {
-  OstreamManager clout( std::cout, "prepareGeometryCube" );
+  OstreamManager clout(std::cout, "prepareGeometryCube");
   clout << "Prepare cubeGeometry ..." << std::endl;
 
-  Vector<T,3> origin = {0+boundaryShift,-0.5,-0.5};
-  Vector<T,3> extent = {1-boundaryShift,1,1};
+  using T          = MyCase::value_t;
+  auto& geometry   = myCase.getGeometry();
+  auto& parameters = myCase.getParameters();
+
+  T dx            = parameters.get<parameters::PHYS_DELTA_X>();
+  T boundaryShift = parameters.get<parameters::BOUNDARY_SHIFT>();
+  T lx            = parameters.get<parameters::DOMAIN_L>();
+  T originShift   = lx / 2;
+
+  Vector<T, 3>         origin = {0. + boundaryShift, -originShift, -originShift};
+  Vector<T, 3>         extent = {lx - boundaryShift, lx, lx};
   IndicatorCuboid3D<T> span(extent, origin);
-  origin = {0+boundaryShift,0,0};
+
+  origin = {0 + boundaryShift, 0, 0};
 
   // select between a finite or infinite source of light
   // finite light beam source
-  IndicatorCuboid3D<T> emittor(2*conversionFactorLength, 0.2, 0.2, origin);
+  IndicatorCuboid3D<T> emittor(2 * dx, 0.2, 0.2, origin);
   // infinite light beam source
   //IndicatorCuboid3D<T> emittor(2*conversionFactorLength, 1.0-2*conversionFactorLength, 1.0-2*conversionFactorLength, origin);
 
-  //CuboidDecomposition<T,3>* cuboid = new CuboidDecomposition<T,3>( span, conversionFactorLength, 1 );
-  CuboidDecomposition<T,3>* cuboid = new CuboidDecomposition<T,3>( span, conversionFactorLength, 2*singleton::mpi().getSize() );
-  HeuristicLoadBalancer<T>* loadBalancer = new HeuristicLoadBalancer<T>( *cuboid );
-
-  SuperGeometry<T,3> superGeometry( *cuboid, *loadBalancer, 2 );
   // set material number, 0 outside, 1 domain, 2 outflow, 3 inflow
-  superGeometry.rename( 0, 2, span );
-  superGeometry.rename( 2, 1, {1, 1, 1} ); // last 3 digits form overlap
-  superGeometry.rename( 2, 3, emittor );
-  // clean voxels with material number 0, inside and outside geometry
-  superGeometry.clean();
-  superGeometry.innerClean();
-  superGeometry.checkForErrors();
+  geometry.rename(0, 2, span);
+  geometry.rename(2, 1, {1, 1, 1});
+  geometry.rename(2, 3, emittor);
 
-  superGeometry.print();
+  geometry.clean();
+  geometry.innerClean();
+  geometry.checkForErrors();
+
+  geometry.print();
+
   clout << "Prepare cubeGeometry ... OK" << std::endl;
-  return superGeometry;
 }
 
-// Set up the geometry of the simulation in the macroscopic case
-void prepareLatticeMink( SuperLattice<T,DESCRIPTOR>& sLattice,
-                     RadiativeUnitConverter<T, DESCRIPTOR>const& converter,
-                     SuperGeometry<T,3>& superGeometry,
-                     T inletDirichlet)
+void attachUnitConverter(MyCase& myCase)
 {
-  OstreamManager clout( std::cout, "prepareLatticeMink" );
-  clout << "Prepare Lattice ..." << std::endl;
+  OstreamManager clout(std::cout, "attachUnitConverter");
 
-  T latticeRelaxationFrequency = converter.getLatticeRelaxationFrequency();
-  T latticeSink = 3.*converter.getLatticeAbsorption()*(converter.getLatticeAbsorption()+converter.getLatticeScattering()) / 8.;
-  T latticeAbsorption = converter.getLatticeAbsorption();
-  T latticeScattering = converter.getLatticeScattering();
+  using T      = MyCase::value_t;
+  auto& params = myCase.getParameters();
 
-  sLattice.defineDynamics<NoDynamics<T, DESCRIPTOR>>( superGeometry, 0 );
-  //sLattice.defineDynamics<PoissonDynamics<T, DESCRIPTOR>>( superGeometry, 1 );
-  sLattice.defineDynamics<P1Dynamics<T, DESCRIPTOR>>( superGeometry, 1 );
-  sLattice.defineDynamics<EquilibriumBoundaryFirstOrder>( superGeometry, 2 );
-  sLattice.defineDynamics<EquilibriumBoundaryFirstOrder>( superGeometry, 3 );
+  auto& Rlattice    = myCase.getLattice(Radiation {});
+  using RDESCRIPTOR = MyCase::descriptor_t_of<Radiation>;
 
-  #ifdef DIRECTED
-    setRtlbmDirectedBoundary<T,DESCRIPTOR>(sLattice, superGeometry.getMaterialIndicator({3}));
-  #endif
+  Rlattice.setUnitConverter<RadiativeUnitConverter<T, RDESCRIPTOR>>(
+      params.get<parameters::RESOLUTION>(), params.get<parameters::LATTICE_RELAXATION_TIME>(),
+      params.get<parameters::ABSORPTION>(), params.get<parameters::SCATTERING>(),
+      params.get<parameters::ANINOSOTROPY_FACTOR>());
 
-  sLattice.setParameter<descriptors::OMEGA>( latticeRelaxationFrequency );
-  sLattice.setParameter<collision::P1::ABSORPTION>( latticeAbsorption );
-  sLattice.setParameter<collision::P1::SCATTERING>( latticeScattering );
-  sLattice.setParameter<collision::Poisson::SINK>( latticeSink );
-  sLattice.setParameter<INTENSITY>( inletDirichlet );
-
-
-  clout << "Prepare Lattice ... OK" << std::endl;
-  return;
-}
-
-// Set up the geometry of the simulation in the mesoscopic case
-void prepareLatticeMcHardy( SuperLattice<T,DESCRIPTOR>& sLattice,
-                     RadiativeUnitConverter<T, DESCRIPTOR>const& converter,
-                     SuperGeometry<T,3>& superGeometry,
-                     T inletDirichlet,
-                     T anisotropyFactor )
-{
-  OstreamManager clout( std::cout, "prepareLatticeMcHardy" );
-  clout << "Prepare Lattice ..." << std::endl;
-
-  T latticeRelaxationFrequency = converter.getLatticeRelaxationFrequency();
-
-  int const q = descriptors::q<DESCRIPTOR>() - 1;
-  std::array<std::array<T,q>, q> phi;
-  T solution [q*(q +1)/2];
-  computeAnisotropyMatrix<DESCRIPTOR>(1e-4, anisotropyFactor, solution, phi);
-
-  T anisoMatrix[(q+1)*(q+1)] {};
-  for ( int m = 0; m < q; m++ ) {
-    for ( int n = 0; n < q; n++ ) {
-      anisoMatrix[m+1+n+1] = phi[m][n];
-    }
-  }
-
-  T latticeAbsorption = converter.getLatticeAbsorption();
-  T latticeScattering = converter.getLatticeScattering();
-
-  sLattice.defineDynamics<NoDynamics<T, DESCRIPTOR>>( superGeometry, 0 );
-  // select between the mesoscopic method with or without a Runge Kutta scheme
-  sLattice.defineDynamics<RTLBMdynamicsMcHardyRK<T, DESCRIPTOR>>( superGeometry, 1 );
-  // sLattice.defineDynamics<RTLBMdynamicsMcHardy<T, DESCRIPTOR>>( superGeometry, 1 );
-  sLattice.defineDynamics<EquilibriumBoundaryFirstOrder>( superGeometry, 2 );
-  sLattice.defineDynamics<EquilibriumBoundaryFirstOrder>( superGeometry, 3 );
-
-  #ifdef DIRECTED
-    setRtlbmDirectedBoundary<T,DESCRIPTOR>(sLattice, superGeometry.getMaterialIndicator({3}));
-  #endif
-
-  sLattice.setParameter<descriptors::OMEGA>( latticeRelaxationFrequency );
-  sLattice.setParameter<Light::ANISOMATRIX>( anisoMatrix );
-  sLattice.setParameter<Light::ABSORPTION>( latticeAbsorption );
-  sLattice.setParameter<Light::SCATTERING>( latticeScattering );
-  sLattice.setParameter<INTENSITY>( inletDirichlet );
-
-
-
-  clout << "Prepare Lattice ... OK" << std::endl;
-  return;
-}
-
-
-void setBoundaryValues( SuperLattice<T,DESCRIPTOR>& sLattice,
-                        UnitConverter<T,DESCRIPTOR> const& converter,
-                        SuperGeometry<T,3>& superGeometry,
-                        T inletDirichlet )
-{
-  // since adv-diffusion model is used, the velocity it set to 0
-  AnalyticalConst3D<T,T> u0( 0.0, 0.0, 0.0 );        // 3D -> 3D
-  AnalyticalConst3D<T,T> rho0( 0.0 );                // 3D -> 1D
-  AnalyticalConst3D<T,T> rho1( inletDirichlet );                // 3D -> 1D
-
-  // initialize media with density from analytical solution
-  // at iT=0 the error is given by the maschinen genauigkeit
-  sLattice.iniEquilibrium( superGeometry, 1, rho0, u0 );
-  sLattice.iniEquilibrium( superGeometry, 2, rho0, u0 );
-  sLattice.iniEquilibrium( superGeometry, 3, rho1, u0 );
-  sLattice.defineRho( superGeometry, 2, rho0 );
-  sLattice.defineRho( superGeometry, 3, rho1 );
-  sLattice.initialize();
-}
-
-int main( int argc, char *argv[] )
-{
-  // ===== 1st Step: Initialization =====
-  initialize( &argc, &argv );
-  std::string fName("cube3d.xml");
-  XMLreader config(fName);
-
-  int RESOLUTION;
-  T LATTICERELAXATIONTIME, ANISOTROPYFACTOR;
-  std::string NAME;
-  config["Application"]["Name"].read(NAME);
-  config["Application"]["Discretization"]["Resolution"].read<int>(RESOLUTION);
-  config["Application"]["Discretization"]["LatticeRelaxationTime"].read(LATTICERELAXATIONTIME);
-  T maxPhysT;
-  config["Application"]["PhysParam"]["maxTime"].read(maxPhysT);
-  config["Application"]["AnisotropyFactor"].read(ANISOTROPYFACTOR);
-
-  std::string caseName{"case"};
-  if ( argc < 2 ) {
-    std::cerr << "Error: Please provide the case number (1 to 35) as a first argument and optionally the resolution as a second argument." << std::endl;
-    return 1;
-  }
-  else if ( argc < 3 && argc > 1 ) {
-    caseName.append(argv[1]);
-  }
-  else if ( argc < 4 && argc > 2 ) {
-    caseName.append(argv[1]);
-    RESOLUTION = std::atoi(argv[2]);
-  }
-  else if ( argc > 4 ) {
-    std::cerr << "Error: Too many arguments provided." << std::endl;
-    return 1;
-  }
-#ifdef MINK
-  singleton::directories().setOutputDir( "./"+std::to_string(RESOLUTION)+caseName+"_mink/" );
-#else
-  singleton::directories().setOutputDir( "./"+std::to_string(RESOLUTION)+caseName+"_mcHardy/" );
-#endif
-  OstreamManager clout( std::cout, "main" );
-  clout << caseName << std::endl;
-
-
-  T ABSORPTION, SCATTERING, MCVALUE, TOTENERGY;
-  std::stringstream xmlAbsorption(config["Application"][caseName].getAttribute( "absorption"));
-  xmlAbsorption >> ABSORPTION;
-  std::stringstream xmlScattering(config["Application"][caseName].getAttribute( "scattering"));
-  xmlScattering >> SCATTERING;
-  std::stringstream xmlMCBoundary(config["Application"][caseName].getAttribute( "mcvalue"));
-  xmlMCBoundary >> MCVALUE;
-  std::stringstream xmlTotalEnergy(config["Application"][caseName].getAttribute( "totalEnergy"));
-  xmlMCBoundary >> TOTENERGY;
-
-  //LATTICERELAXATIONTIME = 1./(RESOLUTION*DESCRIPTOR<T>::invCs2*(1./(3*(ABSORPTION+SCATTERING))));
-  LATTICERELAXATIONTIME = 1;// 1./(RESOLUTION*DESCRIPTOR<T>::invCs2*(1./(3*(ABSORPTION+SCATTERING)))+0.5);
-  clout << "omega = .... " << LATTICERELAXATIONTIME << std::endl;
-  RadiativeUnitConverter<T,DESCRIPTOR> const converter( RESOLUTION, LATTICERELAXATIONTIME, ABSORPTION, SCATTERING, ANISOTROPYFACTOR );
+  const auto& converter = Rlattice.getUnitConverter();
   clout << "omega = " << converter.getLatticeRelaxationTime() << std::endl;
-#ifdef MINK
+}
+
+void prepareLatticeMink(MyCase& myCase)
+{
+  OstreamManager clout(std::cout, "prepareLattice");
+  clout << "Prepare Lattice for Mink ..." << std::endl;
   clout << "working with diffuse approximation" << std::endl;
-  T latticeSink = converter.getLatticeAbsorption()/converter.getLatticeDiffusion()/8.;
-  clout << "latticeSink=" << latticeSink << std::endl;
-#else
-  clout << "working with direct discretization" << std::endl;
-#endif
+
+  using T        = MyCase::value_t;
+  auto& geometry = myCase.getGeometry();
+  auto& params   = myCase.getParameters();
+
+  auto& Rlattice    = myCase.getLattice(Radiation {});
+  using RDESCRIPTOR = MyCase::descriptor_t_of<Radiation>;
+
+  attachUnitConverter(myCase);
+  const auto& converter = Rlattice.getUnitConverter();
   converter.print();
   converter.write();
 
+  T latticeSink    = converter.getLatticeAbsorption() / converter.getLatticeDiffusion() / 8.;
+  T inletDirichlet = params.get<parameters::INLET_DIRICHLET>();
 
-  // ===== 2nd Step: Prepare Geometry =====
-  SuperGeometry<T,3> superGeometry( prepareGeometryCube(converter.getConversionFactorLength(), 0. ) );
-  //SuperGeometry<T,3> superGeometry( prepareGeometryCube(converter.getConversionFactorLength(), 1./converter.getExtinction() ) );
+  T latticeRelaxationFrequency = converter.getLatticeRelaxationFrequency();
+  T latticeAbsorption          = converter.getLatticeAbsorption();
+  T latticeScattering          = converter.getLatticeScattering();
+  //T intensity                  = params.get<parameters::INTENSITY>();
+  clout << "latticeSink= " << latticeSink << std::endl;
 
+  Rlattice.defineDynamics<NoDynamics<T, RDESCRIPTOR>>(geometry, 0);
+  Rlattice.defineDynamics<P1Dynamics<T, RDESCRIPTOR>>(geometry, 1);
+  Rlattice.defineDynamics<EquilibriumBoundaryFirstOrder<T, RDESCRIPTOR>>(geometry, 2);
+  Rlattice.defineDynamics<EquilibriumBoundaryFirstOrder<T, RDESCRIPTOR>>(geometry, 3);
 
-  // ===== 3rd Step: Prepare Lattice =====
-  SuperLattice<T,DESCRIPTOR> sLattice(superGeometry);
-  #ifdef MINK
-  prepareLatticeMink( sLattice,
-                  converter,
-                  superGeometry,
-                  1.0 );
-  #else
-    prepareLatticeMcHardy( sLattice,
-                  converter,
-                  superGeometry,
-                  1.0,
-                  ANISOTROPYFACTOR );
-  #endif
+  clout << "Input intensity as: " << inletDirichlet << std::endl;
+  //Activate directed BC
+  if (params.get<parameters::USE_DIRECTED>()) {
+    clout << "Using directed BC" << std::endl;
+    setRtlbmDirectedBoundary<T, RDESCRIPTOR>(Rlattice, geometry.getMaterialIndicator({3}));
+    Rlattice.setParameter<parameters::BC_INTENSITY>(inletDirichlet);
+  }
 
+  Rlattice.setParameter<descriptors::OMEGA>(latticeRelaxationFrequency);
+  Rlattice.setParameter<collision::P1::ABSORPTION>(latticeAbsorption);
+  Rlattice.setParameter<collision::P1::SCATTERING>(latticeScattering);
+  Rlattice.setParameter<collision::Poisson::SINK>(latticeSink);
+  Rlattice.setParameter<parameters::INTENSITY>(inletDirichlet);
 
-  // ===== 4th Step: Main Loop with Timer =====
-  util::Timer<double> timer( converter.getLatticeTime( maxPhysT ), superGeometry.getStatistics().getNvoxel() );
-  timer.start();
+  clout << "Prepare Lattice ... OK" << std::endl;
+  return;
+}
 
-  // ===== 5th Step: Definition of Initial and Boundary Conditions =====
-  setBoundaryValues(sLattice, converter, superGeometry, 1.0);
-  // setBoundaryValues(sLattice, converter, superGeometry, MCVALUE);
+void prepareLatticeMcHardy(MyCase& myCase)
+{
+  OstreamManager clout(std::cout, "prepareLattice");
+  clout << "Prepare Lattice for McHardy ..." << std::endl;
+  clout << "working with direct discretization" << std::endl;
+
+  using T        = MyCase::value_t;
+  auto& geometry = myCase.getGeometry();
+  auto& params   = myCase.getParameters();
+
+  auto& Rlattice    = myCase.getLattice(Radiation {});
+  using RDESCRIPTOR = MyCase::descriptor_t_of<Radiation>;
+
+  attachUnitConverter(myCase);
+  const auto& converter = Rlattice.getUnitConverter();
+  converter.print();
+  converter.write();
+
+  T latticeRelaxationFrequency = converter.getLatticeRelaxationFrequency();
+  T anisotropyFactor           = params.get<parameters::ANINOSOTROPY_FACTOR>();
+
+  int const                       q = descriptors::q<RDESCRIPTOR>() - 1;
+  std::array<std::array<T, q>, q> phi;
+  T                               solution[q * (q + 1) / 2];
+  computeAnisotropyMatrix<RDESCRIPTOR>(1e-4, anisotropyFactor, solution, phi);
+
+  T anisoMatrix[(q + 1) * (q + 1)] {};
+  for (int m = 0; m < q; m++) {
+    for (int n = 0; n < q; n++) {
+      anisoMatrix[m + 1 + n + 1] = phi[m][n];
+    }
+  }
+
+  T latticeAbsorption = converter.getLatticeAbsorption();
+  T latticeScattering = converter.getLatticeScattering();
+  T inletDirichlet    = params.get<parameters::INLET_DIRICHLET>();
+  T intensity         = params.get<parameters::INTENSITY>();
+
+  Rlattice.defineDynamics<NoDynamics<T, RDESCRIPTOR>>(geometry, 0);
+  // select between the mesoscopic method with or without a Runge Kutta scheme
+  Rlattice.defineDynamics<RTLBMdynamicsMcHardyRK<T, RDESCRIPTOR>>(geometry, 1);
+  // Rlattice.defineDynamics<RTLBMdynamicsMcHardy<T, RDESCRIPTOR>>( geometry, 1 );
+  Rlattice.defineDynamics<EquilibriumBoundaryFirstOrder>(geometry, 2);
+  Rlattice.defineDynamics<EquilibriumBoundaryFirstOrder>(geometry, 3);
+
+  //Activate directed BC
+  if (params.get<parameters::USE_DIRECTED>()) {
+    clout << "Using directed BC" << std::endl;
+    setRtlbmDirectedBoundary<T, RDESCRIPTOR>(Rlattice, geometry.getMaterialIndicator({3}));
+    Rlattice.setParameter<parameters::BC_INTENSITY>(inletDirichlet);
+  }
+
+  Rlattice.setParameter<descriptors::OMEGA>(latticeRelaxationFrequency);
+  Rlattice.setParameter<Light::ANISOMATRIX>(anisoMatrix);
+  Rlattice.setParameter<Light::ABSORPTION>(latticeAbsorption);
+  Rlattice.setParameter<Light::SCATTERING>(latticeScattering);
+  Rlattice.setParameter<parameters::INTENSITY>(inletDirichlet);
+
+  clout << "Prepare Lattice ... OK" << std::endl;
+  return;
+}
+
+void setInitialValues(MyCase& myCase)
+{
+  using T        = MyCase::value_t;
+  auto& geometry = myCase.getGeometry();
+  auto& params   = myCase.getParameters();
+
+  auto& Rlattice    = myCase.getLattice(Radiation {});
+
+  T inletDirichlet = params.get<parameters::INLET_DIRICHLET>();
+
+  // since adv-diffusion model is used, the velocity it set to 0
+  AnalyticalConst3D<T, T> u0(0.0, 0.0, 0.0);    // 3D -> 3D
+  AnalyticalConst3D<T, T> rho0(0.0);            // 3D -> 1D
+  AnalyticalConst3D<T, T> rho1(inletDirichlet); // 3D -> 1D
+
+  // initialize media with density from analytical solution
+  // at iT=0 the error is given by the maschinen genauigkeit
+  Rlattice.iniEquilibrium(geometry, 1, rho0, u0);
+  Rlattice.iniEquilibrium(geometry, 2, rho0, u0);
+  Rlattice.iniEquilibrium(geometry, 3, rho1, u0);
+  Rlattice.defineRho(geometry, 2, rho0);
+  Rlattice.defineRho(geometry, 3, rho1);
+  Rlattice.initialize();
+}
+
+void getResults(MyCase& myCase, util::Timer<MyCase::value_t>& timer, std::size_t iT, bool converged)
+{
+  using T        = MyCase::value_t;
+  auto& geometry = myCase.getGeometry();
+  auto& params   = myCase.getParameters();
+
+  auto& Rlattice    = myCase.getLattice(Radiation {});
+  using RDESCRIPTOR = MyCase::descriptor_t_of<Radiation>;
+
+  const auto& converter = Rlattice.getUnitConverter();
+
+  SuperLatticeDensity3D<T, RDESCRIPTOR> density(Rlattice);
+  SuperLatticeFlux3D<T, RDESCRIPTOR>    flux(Rlattice);
+
+  T resolution = params.get<parameters::RESOLUTION>();
+  T statIter   = (params.get<parameters::USE_MINK>()) ? (2 * resolution) : (resolution / 5);
 
   SuperVTMwriter3D<T> vtmWriter("cube3d");
-  SuperGeometryF3D<T> geometry(superGeometry);
-  vtmWriter.write( geometry );
-  vtmWriter.createMasterFile();
-  SuperLatticeDensity3D<T,DESCRIPTOR> density( sLattice );
-  SuperLatticeFlux3D<T,DESCRIPTOR> flux( sLattice );
+  SuperGeometryF3D<T> geo(geometry);
+
   vtmWriter.addFunctor(density);
   vtmWriter.addFunctor(flux);
-  vtmWriter.addFunctor(geometry);
+  vtmWriter.addFunctor(geo);
 
-  util::ValueTracer<T> converge( 160, 1e-8);
+  if (iT == 0) {
+    vtmWriter.write(geo);
+    vtmWriter.createMasterFile();
+  }
+
+  if (iT % (int)statIter == 0) {
+    Rlattice.getStatistics().print(iT, converter.getPhysTime(iT));
+    timer.print(iT);
+    timer.printStep();
+    vtmWriter.write(iT);
+  }
+
+  if (converged) {
+    vtmWriter.write(iT);
+  }
+}
+
+void simulate(MyCase& myCase)
+{
+  OstreamManager clout(std::cout, "simulate");
+
+  using T        = MyCase::value_t;
+  auto& geometry = myCase.getGeometry();
+  auto& params   = myCase.getParameters();
+
+  auto& Rlattice    = myCase.getLattice(Radiation {});
+  using RDESCRIPTOR = MyCase::descriptor_t_of<Radiation>;
+
+  const auto& converter = Rlattice.getUnitConverter();
+
+  util::Timer<double> timer(converter.getLatticeTime(params.get<parameters::MAX_PHYS_T>()),
+                            geometry.getStatistics().getNvoxel());
+  timer.start();
+
+  util::ValueTracer<T> converge(160, 1e-8);
   clout << "iT convergence criteria: " << 160 << std::endl;
 
-  for ( int iT = 0; iT >= -1  /*converter.getLatticeTime( maxPhysT )*/; ++iT ) {
+  for (int iT = 0; iT >= -1; ++iT) {
 
-#ifdef MINK
-    if ( iT % (2*RESOLUTION) == 0 ) {
-#else
-    if ( iT % (RESOLUTION/5) == 0 ) {
-#endif
-      sLattice.getStatistics().print( iT, converter.getPhysTime( iT ) );
-      timer.print( iT );
-      timer.printStep();
-      vtmWriter.write(iT);
-    }
+    getResults(myCase, timer, iT, false);
 
-    converge.takeValue( sLattice.getStatistics().getAverageRho(), true );
+    converge.takeValue(Rlattice.getStatistics().getAverageRho(), true);
+
     // ===== 5.5th Step: Check for Convergence =====
-    if ( converge.hasConverged() && iT > 4*RESOLUTION ) {
+    T resolution = params.get<parameters::RESOLUTION>();
+    if (converge.hasConverged() && iT > 4 * resolution) {
       clout << "Simulation converged. -- " << iT << std::endl;
-      vtmWriter.write(iT);
+      getResults(myCase, timer, iT, true);
       clout << "------" << iT << std::endl;
 
       // write and save results in a text file
-      AnalyticalFfromSuperF3D<T> analytDen( density, true, 1 );
-      std::string str = singleton::directories().getLogOutDir() + std::to_string(RESOLUTION) + caseName + ".csv";
-      AnalyticalFfromSuperF3D<T> analytFlu( flux, true, 1 );
-      clout << str << std::endl;
-      FILE * pFile;
-      const char * fileName = str.data();
-      pFile  = fopen(fileName, "w");
+      SuperLatticeDensity3D<T, RDESCRIPTOR> density(Rlattice);
+      SuperLatticeFlux3D<T, RDESCRIPTOR>    flux(Rlattice);
+      AnalyticalFfromSuperF3D<T>            analytDen(density, true, 1);
+      AnalyticalFfromSuperF3D<T>            analytFlu(flux, true, 1);
+
+      std::string caseName = "case" + std::to_string(params.get<parameters::CASE_NUMBER>());
+      std::string outFile =
+          singleton::directories().getLogOutDir() + std::to_string((int)resolution) + "_" + caseName + ".csv";
+      clout << outFile << std::endl;
+      const char* fileName = outFile.data();
+
+      FILE* pFile;
+      pFile = fopen(fileName, "w");
       //fprintf(pFile, "%i\n", iT);
       //fprintf(pFile, "%s, %s, %s, %s\n", "position x", "0.0", "0.25", "0.375");
-      for ( int nZ = 0; nZ <= 100; ++nZ ) {
-        double position1[3] = {1.0*double(nZ)/100, 0, 0};
-        double position2[3] = {1.0*double(nZ)/100, 0.25, 0};
-        double position3[3] = {1.0*double(nZ)/100, 0.375, 0};
-        double light1[1] = {0};
-        double fluxx1[3] = {0.,0.,0.};
-        double light2[1] = {0};
-        double light3[1] = {0};
-        analytDen( light1, position1 );
-        analytFlu( fluxx1, position1 );
-        analytDen( light2, position2 );
-        analytDen( light3, position3 );
-        if (singleton::mpi().getRank()==0) {
+      fprintf(pFile, "Position1, Light1, Ligh2, Light3, Fux1, Flux2, Flux3\n");
+      for (int nZ = 0; nZ <= 100; ++nZ) {
+        double position1[3] = {1.0 * double(nZ) / 100, 0, 0};
+        double position2[3] = {1.0 * double(nZ) / 100, 0.25, 0};
+        double position3[3] = {1.0 * double(nZ) / 100, 0.375, 0};
+        double light1[1]    = {0};
+        double fluxx1[3]    = {0., 0., 0.};
+        double light2[1]    = {0};
+        double light3[1]    = {0};
+        analytDen(light1, position1);
+        analytFlu(fluxx1, position1);
+        analytDen(light2, position2);
+        analytDen(light3, position3);
+        if (singleton::mpi().getRank() == 0) {
           printf("%4.3f, %8.6e, %8.6e, %8.6e, %8.6e, %8.6e, %8.6e\n", position1[0], light1[0], light2[0], light3[0],
                  fluxx1[0], fluxx1[1], fluxx1[2]);
-          fprintf(pFile, "%4.3f, %8.6e, %8.6e, %8.6e, %8.6e, %8.6e, %8.6e\n", position1[0], light1[0], light2[0], light3[0],
-                  fluxx1[0], fluxx1[1], fluxx1[2]);
+          fprintf(pFile, "%4.3f, %8.6e, %8.6e, %8.6e, %8.6e, %8.6e, %8.6e\n", position1[0], light1[0], light2[0],
+                  light3[0], fluxx1[0], fluxx1[1], fluxx1[2]);
         }
       }
       fclose(pFile);
       break;
     }
-    // ===== 6th Step: Collide and Stream Execution =====
-    sLattice.collideAndStream();
+
+    Rlattice.collideAndStream();
   }
 
   timer.stop();
   timer.printSummary();
+}
 
-  return 0;
+int main(int argc, char* argv[])
+{
+  OstreamManager clout(std::cout, "main");
+
+  using T = MyCase::value_t;
+
+  initialize(&argc, &argv);
+
+  MyCase::ParametersD myCaseParameters;
+  {
+    using namespace olb::parameters;
+    myCaseParameters.set<RESOLUTION>(50);
+    myCaseParameters.set<DOMAIN_L>(1.);
+    myCaseParameters.set<LATTICE_RELAXATION_TIME>(1.0);
+    myCaseParameters.set<MAX_PHYS_T>(12);
+    myCaseParameters.set<PHYS_SAVE_ITER>(2.0);
+    myCaseParameters.set<INLET_DIRICHLET>(1.0);
+
+    myCaseParameters.set<CASE_NUMBER>(1.);
+    myCaseParameters.set<DYNAMICS_NAME>(std::string("mink"));
+    myCaseParameters.set<USE_MINK>(true);
+    myCaseParameters.set<USE_DIRECTED>(false);
+
+    myCaseParameters.set<BOUNDARY_SHIFT>(0.);
+
+    //Copmuted Values
+    myCaseParameters.set<PHYS_DELTA_X>([&] {
+      return myCaseParameters.get<DOMAIN_L>() / myCaseParameters.get<RESOLUTION>();
+    });
+  }
+  myCaseParameters.fromCLI(argc, argv);
+
+  //Check if given case number is valid
+  int case_number = myCaseParameters.get<parameters::CASE_NUMBER>();
+  if (case_number < 1 || case_number > 35) {
+    throw std::runtime_error("Please select a case number between 1 and 35");
+  }
+  else {
+    //Load appropriate data from xml
+    std::string fName("cube3d.xml");
+    std::string case_name = "case" + std::to_string(case_number);
+    clout << case_name << std::endl;
+    XMLreader config(fName);
+
+    T                 absorption, scattering, mcvalue, totalEnergy;
+    std::stringstream xmlAbsorption(config["Application"][case_name].getAttribute("absorption"));
+    xmlAbsorption >> absorption;
+    myCaseParameters.set<parameters::ABSORPTION>(absorption);
+
+    std::stringstream xmlScattering(config["Application"][case_name].getAttribute("scattering"));
+    xmlScattering >> scattering;
+    myCaseParameters.set<parameters::SCATTERING>(scattering);
+
+    std::stringstream xmlMcValue(config["Application"][case_name].getAttribute("mcvalue"));
+    xmlMcValue >> mcvalue;
+    myCaseParameters.set<parameters::MCVALUE>(mcvalue);
+
+    std::stringstream xmlTotalEnergy(config["Application"][case_name].getAttribute("totalEnergy"));
+    xmlTotalEnergy >> totalEnergy;
+    myCaseParameters.set<parameters::TOTAL_ENERGY>(totalEnergy);
+  }
+
+  //Check if given dynamics name is valid
+  std::string s = myCaseParameters.get<parameters::DYNAMICS_NAME>();
+  std::transform(s.begin(), s.end(), s.begin(), ::toupper);
+  clout << s << std::endl;
+  if (!(std::string("MINK") == s || std::string("MCHARDY") == s)) {
+    throw std::runtime_error("Incompatible dynamics selected!\n\t\t Please choose between mink or mchardy");
+  }
+  if (std::string("MCHARDY") == s) {
+    myCaseParameters.set<parameters::USE_MINK>(false);
+  }
+
+  // Set output directory
+  std::string caseName = "case" + std::to_string(case_number);
+  std::string caseExtension =
+      myCaseParameters.get<parameters::USE_MINK>() ? std::string("_mink/") : std::string("_mcHardy/");
+  singleton::directories().setOutputDir("./" + std::to_string(myCaseParameters.get<parameters::RESOLUTION>()) +
+                                        caseName + caseExtension);
+
+  /// === Step 3: Create Mesh ===
+  Mesh mesh = createMesh(myCaseParameters);
+
+  /// === Step 4: Create Case ===
+  MyCase myCase(myCaseParameters, mesh);
+
+  /// === Step 5: Prepare Geometry ===
+  prepareGeometry(myCase);
+
+  /// === Step 6: Prepare Lattice ===
+  myCaseParameters.get<parameters::USE_MINK>() ? prepareLatticeMink(myCase) : prepareLatticeMcHardy(myCase);
+
+  /// === Step 7: Definition of Initial, Boundary Values, and Fields ===
+  setInitialValues(myCase);
+
+  /// === Step 8: Simulate ===
+  simulate(myCase);
 }

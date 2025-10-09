@@ -59,7 +59,7 @@ private:
   std::shared_ptr<AnalyticalF3D<T,T>> _velocityProfileF;
   std::shared_ptr<AnalyticalF3D<T,T>> _intensityProfileF;
 
-  UnitConverter<T,DESCRIPTOR>& _converter;
+  const UnitConverter<T,DESCRIPTOR>& _converter;
   SuperLattice<T, DESCRIPTOR>& _sLattice;
 
   const int _nSeeds;
@@ -82,7 +82,7 @@ public:
   VortexMethodTurbulentVelocityBoundary(
     FunctorPtr<SuperIndicatorF3D<T>>&& inletLatticeI,
     FunctorPtr<IndicatorF3D<T>>&& inletPhysI,
-    UnitConverter<T,DESCRIPTOR>& converter,
+    const UnitConverter<T,DESCRIPTOR>& converter,
     SuperLattice<T, DESCRIPTOR>& sLattice,
     int nSeeds,
     T nTime,
@@ -100,7 +100,7 @@ template <typename T, typename DESCRIPTOR>
 VortexMethodTurbulentVelocityBoundary<T,DESCRIPTOR>::VortexMethodTurbulentVelocityBoundary(
   FunctorPtr<SuperIndicatorF3D<T>>&& inletLatticeI,
   FunctorPtr<IndicatorF3D<T>>&& inletPhysI,
-  UnitConverter<T,DESCRIPTOR>& converter,
+  const UnitConverter<T,DESCRIPTOR>& converter,
   SuperLattice<T, DESCRIPTOR>& sLattice,
   int nSeeds,
   T nTime,
