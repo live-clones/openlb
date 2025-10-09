@@ -28,6 +28,7 @@
 #include <cmath>
 using namespace olb;
 using namespace olb::descriptors;
+//using namespace olb::names;
 
 using S = FLOATING_POINT_TYPE;
 using U = util::ADf<S,1>;
@@ -54,7 +55,7 @@ protected:
   T bulkVel;
   T dx;
 public:
-  ConvPlate3D(AdeUnitConverter<T,RADDESCRIPTOR> converter) :
+  ConvPlate3D(UnitConverter<T,RADDESCRIPTOR> converter) :
     AnalyticalF3D<T,T>(1),
     diff(converter.getPhysDiffusivity()),
     bulkVel(converter.getCharPhysVelocity()) {};
@@ -85,8 +86,7 @@ void writeGeometry3D(SuperVTMwriter3D<T> vtmWriter,
 
 // prepare numerical domain
 template<typename T>
-void prepareGeometry(AdeUnitConverter<T,RADDESCRIPTOR> const& converter,
-                     SuperGeometry<T,3>& superGeometry)
+void prepareGeometry(SuperGeometry<T,3>& superGeometry)
 {
   OstreamManager clout(std::cout, "prepareGeometry");
   clout << "Prepare Geometry ..." << std::endl;
@@ -136,15 +136,21 @@ void prepareGeometry(AdeUnitConverter<T,RADDESCRIPTOR> const& converter,
 }
 
 template<typename T>
-void prepareLattice(AdeUnitConverter<T,RADDESCRIPTOR> const& converter,
-                    SuperLattice<T,RADDESCRIPTOR>& adLattice,
-                    SuperGeometry<T,3>& superGeometry)
+void prepareLattice(SuperLattice<T,RADDESCRIPTOR>& adLattice,
+                    SuperGeometry<T,3>& superGeometry, T D)
 {
   OstreamManager clout(std::cout, "prepareLattice");
   clout << "Prepare Lattice ..." << std::endl;
-
+  adLattice.template setUnitConverter<AdeUnitConverter<T, RADDESCRIPTOR>>(
+    (T)   height / N,                        // physDeltaX
+    (T)   util::pow(height / N, 2),          // physDeltaY
+    (T)   height,                            // charPhysLength: reference length of simulation geometry
+    (T)   Pe * D / height,                   // charPhysVelocity: maximal/highest expected velocity during simulation in __m / s__
+    (T)   D,                                 // physDiffusiviy
+    (T)   1.0                                // physDensity: physical density in __kg / m^3__
+  );
   // get the relaxation time from unitConverter
-  const T omega = 1.0 / converter.getLatticeRelaxationTime();
+  const T omega = 1.0 / adLattice.getUnitConverter().getLatticeRelaxationTime();
 
   // define dynamics and boundary conditions
   const auto bulkIndicator = superGeometry.getMaterialIndicator({1, 2, 3, 4, 5});
@@ -160,7 +166,7 @@ void prepareLattice(AdeUnitConverter<T,RADDESCRIPTOR> const& converter,
   // Initial conditions
   AnalyticalConst3D<T,T> rho0(1.e-8);
   AnalyticalConst3D<T,T> rho_plate(1.0);
-  Vector<T,3> velocity(converter.getCharLatticeVelocity(), 0.0, 0.0);
+  Vector<T,3> velocity(adLattice.getUnitConverter().getCharLatticeVelocity(), 0.0, 0.0);
   AnalyticalConst3D<T,T> u(velocity);
 
   // set the convective velocity field
@@ -183,7 +189,6 @@ void prepareLattice(AdeUnitConverter<T,RADDESCRIPTOR> const& converter,
 // compute error to analytical solution
 template<typename T>
 void error(SuperGeometry<T,3>& superGeometry,
-           AdeUnitConverter<T,RADDESCRIPTOR> const& converter,
            SuperLattice<T,RADDESCRIPTOR>& adLattice,
            T& relError)
 {
@@ -194,7 +199,7 @@ void error(SuperGeometry<T,3>& superGeometry,
 
   // Compute L2-norm error to the analytic concentration field
   SuperLatticeDensity3D<T,RADDESCRIPTOR> concentration(adLattice);
-  ConvPlate3D<T> analyticSol(converter);
+  ConvPlate3D<T> analyticSol(adLattice.getUnitConverter());
   auto indicatorF = superGeometry.getMaterialIndicator({1});
 
   SuperRelativeErrorL2Norm3D<T> relCErrorL2Norm(concentration, analyticSol, indicatorF);
@@ -207,7 +212,6 @@ void error(SuperGeometry<T,3>& superGeometry,
 // compute results and generate output
 template<typename T>
 void getResults(SuperLattice<T,RADDESCRIPTOR>& adLattice,
-                AdeUnitConverter<T,RADDESCRIPTOR> const& converter,
                 std::size_t iT,
                 SuperGeometry<T,3>& superGeometry,
                 util::Timer<T>& timer,
@@ -219,19 +223,19 @@ void getResults(SuperLattice<T,RADDESCRIPTOR>& adLattice,
   // generate vtm files for visualisation
   SuperVTMwriter3D<T> vtmWriter("convectedPlate");
   SuperLatticeDensity3D<T,RADDESCRIPTOR> concentration(adLattice);
-  SuperLatticePhysField3D<T,RADDESCRIPTOR,VELOCITY> velocity(adLattice, converter.getConversionFactorVelocity());
-  ConvPlate3D<T> analyticSol(converter);
-  SuperLatticeFfromAnalyticalF3D<T,RADDESCRIPTOR> analyticalC(analyticSol, adLattice);
+  SuperLatticePhysField3D<T,RADDESCRIPTOR,VELOCITY> velocity(adLattice, adLattice.getUnitConverter().getConversionFactorVelocity());
+  //ConvPlate3D<T> analyticSol(adLattice.getUnitConverter());
+  //SuperLatticeFfromAnalyticalF3D<T,RADDESCRIPTOR> analyticalC(analyticSol, adLattice);
 
   concentration.getName() = "C";
   velocity.getName() = "u0";
-  analyticalC.getName() = "analyticC";
+  //analyticalC.getName() = "analyticC";
   vtmWriter.addFunctor(concentration);
   vtmWriter.addFunctor(velocity);
-  vtmWriter.addFunctor(analyticalC);
+  //vtmWriter.addFunctor(analyticalC);
 
-  const std::size_t vtkIter = converter.getLatticeTime(maxPhysT / 100);
-  const std::size_t statIter = converter.getLatticeTime(maxPhysT / 100);
+  const std::size_t vtkIter = adLattice.getUnitConverter().getLatticeTime(maxPhysT / 100);
+  const std::size_t statIter = adLattice.getUnitConverter().getLatticeTime(maxPhysT / 100);
 
   if (iT == 0) {
     // write the geometry
@@ -245,14 +249,14 @@ void getResults(SuperLattice<T,RADDESCRIPTOR>& adLattice,
     adLattice.setProcessingContext(ProcessingContext::Evaluation);
 
     // print L2 error
-    error<T>(superGeometry, converter, adLattice, relError);
+    //error<T>(superGeometry, adLattice, relError);
 
     // Timer console output
     timer.update(iT);
     timer.printStep();
 
     // Lattice statistics console output
-    adLattice.getStatistics().print(iT, converter.getPhysTime(iT));
+    adLattice.getStatistics().print(iT, adLattice.getUnitConverter().getPhysTime(iT));
     clout << "concentration-L2-relative-error = " << relError << std::endl;
 
     converge.takeValue( relError, false );
@@ -271,15 +275,15 @@ int simulateFlow(T D)
   // === 1. Initialization ===
   OstreamManager clout(std::cout, "main");
 
-  AdeUnitConverter<T, RADDESCRIPTOR> const converter(
-    (T)   height / N,                        // physDeltaX
-    (T)   util::pow(height / N, 2),          // physDeltaY
-    (T)   height,                            // charPhysLength: reference length of simulation geometry
-    (T)   Pe * D / height,                   // charPhysVelocity: maximal/highest expected velocity during simulation in __m / s__
-    (T)   D,                                 // physDiffusiviy
-    (T)   1.0                                // physDensity: physical density in __kg / m^3__
-  );
-  converter.print();
+  //AdeUnitConverter<T, RADDESCRIPTOR> const converter(
+  //  (T)   height / N,                        // physDeltaX
+  //  (T)   util::pow(height / N, 2),          // physDeltaY
+  //  (T)   height,                            // charPhysLength: reference length of simulation geometry
+  //  (T)   Pe * D / height,                   // charPhysVelocity: maximal/highest expected velocity during simulation in __m / s__
+  //  (T)   D,                                 // physDiffusiviy
+  //  (T)   1.0                                // physDensity: physical density in __kg / m^3__
+  //);
+  //converter.print();
 
   // === 2. Prepare geometry ===
   const Vector<T,3> origin;
@@ -304,33 +308,33 @@ int simulateFlow(T D)
   const int overlap = 3;
   SuperGeometry<T,3> superGeometry(cuboidDecomposition, loadBalancer, overlap);
 
-  prepareGeometry<T>(converter, superGeometry);
+  prepareGeometry<T>(superGeometry);
 
   // === 3. Prepare lattice ====
-  SuperLattice<T,RADDESCRIPTOR> adLattice(converter, superGeometry);
+  SuperLattice<T,RADDESCRIPTOR> adLattice(superGeometry);
 
-  prepareLattice<T>(converter, adLattice, superGeometry);
+  prepareLattice<T>(adLattice, superGeometry, D);
 
   // === 4. Main Loop with Timer ===
-  util::Timer<T> timer(converter.getLatticeTime(maxPhysT), superGeometry.getStatistics().getNvoxel());
+  util::Timer<T> timer(adLattice.getUnitConverter().getLatticeTime(maxPhysT), superGeometry.getStatistics().getNvoxel());
 
   // Convergence check
-  util::ValueTracer<T> converge(converter.getLatticeTime(physInterval), residuum);
+  util::ValueTracer<T> converge(adLattice.getUnitConverter().getLatticeTime(physInterval), residuum);
   timer.start();
   T relError{};
 
-  for (std::size_t iT = 0; iT < converter.getLatticeTime(maxPhysT); ++iT) {
+  for (std::size_t iT = 0; iT < adLattice.getUnitConverter().getLatticeTime(maxPhysT); ++iT) {
     // === 5. Set boundary values ===
 
     // === 6. Collide and stream ===
     adLattice.collideAndStream();
 
     // === 7. Computation and output of the results ===
-    getResults<T>(adLattice, converter, iT, superGeometry, timer,  converge, relError);
-    if (converge.hasConverged()) {
-      clout << "Simulation stops." << std::endl;
-      break;
-    }
+    getResults<T>(adLattice, iT, superGeometry, timer,  converge, relError);
+    //if (converge.hasConverged()) {
+    //  clout << "Simulation stops." << std::endl;
+    //  break;
+    //}
   }
 
   timer.stop();
