@@ -66,7 +66,6 @@ using MyCase = Case<
   NavierStokes, Lattice<double, descriptors::PorousParticleWithContactD2Q9Descriptor>
 >;
 
-// === Step 1: Declarations ===
 namespace olb::parameters {
 
 struct COEFFICIENT_OF_RESTITUTION : public descriptors::FIELD_BASE<1> { };
@@ -79,6 +78,8 @@ struct PARTICLE_CONTACT_MATERIAL : public descriptors::FIELD_BASE<1> { };
 struct WALL_CONTACT_MATERIAL : public descriptors::FIELD_BASE<1> { };
 struct LENGTH_X : public descriptors::FIELD_BASE<1> { };
 struct LENGTH_Y : public descriptors::FIELD_BASE<1> { };
+struct EPS : public descriptors::FIELD_BASE<1> { };
+struct PART_POISSON_RATIO : public descriptors::FIELD_BASE<1> { };
 
 }
 
@@ -98,7 +99,6 @@ void prepareGeometry(MyCase& myCase)
 {
   OstreamManager clout(std::cout, "prepareGeometry");
   clout << "Prepare Geometry ..." << std::endl;
-  using T = MyCase::value_t;
   auto& geometry = myCase.getGeometry();
 
   geometry.rename(0, 2);
@@ -128,6 +128,7 @@ void prepareLattice(MyCase& myCase)
     ( T )   parameters.get<parameters::PHYS_CHAR_DENSITY>()
   );
   auto& converter = lattice.getUnitConverter();
+  converter.print();
   clout << "Prepare Lattice ..." << std::endl;
 
   lattice.defineDynamics<PorousParticleBGKdynamics>(geometry, 1);
@@ -148,17 +149,14 @@ void setBoundaryValues(MyCase& myCase)
   AnalyticalConst2D<T, T> one(1.);
   lattice.defineField<POROSITY>(geometry.getMaterialIndicator({1,2}), one);
 
-  // Set initial condition
   AnalyticalConst2D<T, T> ux(0.);
   AnalyticalConst2D<T, T> uy(0.);
   AnalyticalConst2D<T, T> rho(1.);
   AnalyticalComposed2D<T, T> u(ux, uy);
 
-  //Initialize all values of distribution functions to their local equilibrium
   lattice.defineRhoU(geometry, 1, rho, u);
   lattice.iniEquilibrium(geometry, 1, rho, u);
 
-  // Make the lattice ready for simulation
   lattice.initialize();
   clout << "Set Boundary Values ... OK" << std::endl;
 }
@@ -175,7 +173,6 @@ void getResults(MyCase& myCase, int iT,
   auto& converter = lattice.getUnitConverter();
   using DESCRIPTOR = MyCase::descriptor_t_of<NavierStokes>;
   using PARTICLETYPE = ResolvedCircleWithContact2D;
-
 
   if(parameters.get<parameters::VTK_ENABLED>()){
     SuperVTMwriter2D<T> vtkWriter("sedimentation");
@@ -231,7 +228,6 @@ if (parameters.get<parameters::GNUPLOT_ENABLED>()) {
   }
 }
 
-  /// Writes output on the console
   if (iT % converter.getLatticeTime(parameters.get<parameters::PHYS_VTK_ITER_T>()) == 0) {
     timer.update(iT);
     timer.printStep();
@@ -245,7 +241,8 @@ if (parameters.get<parameters::GNUPLOT_ENABLED>()) {
   return;
 }
 
-void simulate(MyCase& myCase ){
+void simulate(MyCase& myCase )
+{
   using T = MyCase::value_t;
   auto& parameters = myCase.getParameters();
   auto& lattice = myCase.getLattice(NavierStokes{});
@@ -257,16 +254,14 @@ void simulate(MyCase& myCase ){
   using WALLCONTACTTYPE = WallContactArbitraryFromOverlapVolume<T, DESCRIPTOR::d, true>;
   Timer<T> timer(converter.getLatticeTime(parameters.get<parameters::MAX_PHYS_T>()), geometry.getStatistics().getNvoxel());
   timer.start();
+  OstreamManager clout(std::cout, "simulate");
 
   ParticleSystem<T,PARTICLETYPE> particleSystem;
 
   ParticleManager<T,DESCRIPTOR,PARTICLETYPE> particleManager(
     particleSystem, geometry, lattice, converter, parameters.get<parameters::GRAVITY>());
 
-  particleSystem.defineDynamics<
-                                VerletParticleDynamics<T,PARTICLETYPE>
-                                >();
-
+  particleSystem.defineDynamics<VerletParticleDynamics<T,PARTICLETYPE>>();
 
   std::vector<SolidBoundary<T, DESCRIPTOR::d>> solidBoundaries;
   const Vector extent = {parameters.get<parameters::LENGTH_X>(), parameters.get<parameters::LENGTH_Y>()};
@@ -288,7 +283,7 @@ void simulate(MyCase& myCase ){
                                                   parameters.get<parameters::COEFFICIENT_STATIC_FRICTION>());
 
 
-  T epsilon = parameters.get<parameters::EPSILON>() * converter.getPhysDeltaX();
+  T epsilon = parameters.get<parameters::EPS>() * converter.getPhysDeltaX();
 
   creators::addResolvedCircle2D( particleSystem, parameters.get<parameters::CENTER_1>(),
                                  parameters.get<parameters::PART_RADIUS>(), epsilon, parameters.get<parameters::PART_RHO>() );
@@ -300,7 +295,7 @@ void simulate(MyCase& myCase ){
 
   for (std::size_t iP = 0; iP < particleSystem.size(); ++iP) {
     auto particle = particleSystem.get(iP);
-    setContactMaterial(particle, particleContactMaterial);
+    setContactMaterial(particle, parameters.get<parameters::PARTICLE_CONTACT_MATERIAL>());
   }
 
   setBoundaryValues(myCase);
@@ -315,21 +310,17 @@ void simulate(MyCase& myCase ){
   clout << "MaxIT: " << converter.getLatticeTime( parameters.get<parameters::MAX_PHYS_T>() ) << std::endl;
   for (std::size_t iT = 0; iT < converter.getLatticeTime( parameters.get<parameters::MAX_PHYS_T>() ) + 10; ++iT) {
 
-    // Execute particle manager
     particleManager.execute<
       couple_lattice_to_particles<T,DESCRIPTOR,PARTICLETYPE>,
       apply_gravity<T,PARTICLETYPE>
     >();
 
-    // Calculate and apply contact forces
     processContacts<T, PARTICLETYPE, PARTICLECONTACTTYPE, WALLCONTACTTYPE, ContactProperties<T, 1>>(
         particleSystem, solidBoundaries, contactContainer, contactProperties,
-        geometry, contactBoxResolutionPerDirection);
+        geometry, parameters.get<parameters::CONTACT_BOX_RESOLUTION_PER_DIRECTION>());
 
-    // Solve equations of motion
     particleManager.execute<process_dynamics<T,PARTICLETYPE>>();
 
-    // Couple particles to lattice (with contact detection)
     coupleResolvedParticlesToLattice<T, DESCRIPTOR, PARTICLETYPE, PARTICLECONTACTTYPE, WALLCONTACTTYPE>(
         particleSystem, contactContainer, geometry, lattice, converter, solidBoundaries);
 
@@ -360,39 +351,39 @@ int main(int argc, char* argv[])
   singleton::directories().setOutputDir("./tmp/");
   OstreamManager clout(std::cout, "main");
 
-  converter.print();
    MyCase::ParametersD myCaseParameters;
   {
     using namespace olb::parameters;
-    myCaseParameters.set<EPSILON                              >(0.5);
-    myCaseParameters.set<MAX_PHYS_T                           >(6.);
-    myCaseParameters.set<LENGTH_X                             >(0.02);
-    myCaseParameters.set<LENGTH_Y                             >(0.08);
-    myCaseParameters.set<CENTER_1                             >({0.01, 0.068});
-    myCaseParameters.set<CENTER_2                             >({0.00999, 0.072});
-    myCaseParameters.set<PART_RHO                             >(1010.);
-    myCaseParameters.set<PART_RADIUS                          >(0.001);
-    myCaseParameters.set<GRAVITATIONAL_ACC                    >(-9.81);
-    myCaseParameters.set<GRAVITY>([&] {
-      return {0., myCaseParameters.get(GRAVITATIONAL_ACC)* (1-myCaseParameters.get<PHYS_CHAR_DENSITY>())/myCaseParameters.get(PART_RHO)};
-    });
+    myCaseParameters.set<EPS                         >(0.5);
+    myCaseParameters.set<MAX_PHYS_T                  >(6.);
+    myCaseParameters.set<LENGTH_X                    >(0.02);
+    myCaseParameters.set<LENGTH_Y                    >(0.08);
+    myCaseParameters.set<CENTER_1                    >({0.01, 0.068});
+    myCaseParameters.set<CENTER_2                    >({0.00999, 0.072});
+    myCaseParameters.set<PART_RHO                    >(1010.);
+    myCaseParameters.set<PART_RADIUS                 >(0.001);
     myCaseParameters.set<CONTACT_BOX_RESOLUTION_PER_DIRECTION >(8);
-    myCaseParameters.set<PARTICLE_CONTACT_MATERIAL            >(0);
-    myCaseParameters.set<WALL_CONTACT_MATERIAL                >(0);
-    myCaseParameters.set<YOUNGS_MODULUS                       >(1e6);
-    myCaseParameters.set<POISSON_RATIO                        >(0.3);
-    myCaseParameters.set<COEFFICIENT_OF_RESTITUTION           >(0.9);
-    myCaseParameters.set<COEFFICIENT_STATIC_FRICTION          >(0.6);
-    myCaseParameters.set<COEFFICIENT_KINETIC_FRICTION         >(0.3);
-    myCaseParameters.set<PHYS_CHAR_DENSITY                    >(1000);
-    myCaseParameters.set<PHYS_CHAR_VELOCITY                   >(0.2);
-    myCaseParameters.set<PHYS_CHAR_LENGTH                     >(0.002);
-    myCaseParameters.set<PHYS_VISCOSITY                       >(1E-6);
-    myCaseParameters.set<PHYS_DELTA_X                         >(0.0001);
-    myCaseParameters.set<PHYS_DELTA_T                         >(5.e-4);
-    myCaseParameters.set<PHYS_VTK_ITER_T                      >(0.125);
-    myCaseParameters.set<VTK_ENABLED                          >(true);
-    myCaseParameters.set<GNUPLOT_ENABLED                      >(true);
+    myCaseParameters.set<PARTICLE_CONTACT_MATERIAL   >(0);
+    myCaseParameters.set<WALL_CONTACT_MATERIAL       >(0);
+    myCaseParameters.set<YOUNGS_MODULUS              >(1e6);
+    myCaseParameters.set<PART_POISSON_RATIO          >(0.3);
+    myCaseParameters.set<COEFFICIENT_OF_RESTITUTION  >(0.9);
+    myCaseParameters.set<COEFFICIENT_STATIC_FRICTION >(0.6);
+    myCaseParameters.set<COEFFICIENT_KINETIC_FRICTION>(0.3);
+    myCaseParameters.set<PHYS_CHAR_DENSITY           >(1000);
+    myCaseParameters.set<PHYS_CHAR_VELOCITY          >(0.2);
+    myCaseParameters.set<PHYS_CHAR_LENGTH            >(0.002);
+    myCaseParameters.set<PHYS_CHAR_VISCOSITY          >(1E-6);
+    myCaseParameters.set<PHYS_DELTA_X                >(0.0001);
+    myCaseParameters.set<PHYS_DELTA_T                >(5.e-4);
+    myCaseParameters.set<PHYS_VTK_ITER_T             >(0.125);
+    myCaseParameters.set<VTK_ENABLED                 >(true);
+    myCaseParameters.set<GNUPLOT_ENABLED             >(true);
+    myCaseParameters.set<GRAVITATIONAL_ACC           >(-9.81);
+    myCaseParameters.set<GRAVITY>([&] {
+      return Vector<double, 2>{0., myCaseParameters.get<GRAVITATIONAL_ACC>()*
+       (1.-myCaseParameters.get<PHYS_CHAR_DENSITY>() / myCaseParameters.get<PART_RHO>())};
+    });
   }
 
   Mesh mesh = createMesh(myCaseParameters);
@@ -403,6 +394,5 @@ int main(int argc, char* argv[])
   prepareLattice(myCase);
 
   simulate(myCase);
-
 
 }
