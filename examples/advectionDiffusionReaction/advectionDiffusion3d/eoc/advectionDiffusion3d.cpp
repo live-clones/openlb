@@ -37,7 +37,7 @@
  *  the experimental order of convergence towards the analytical solution.
  */
 
-#include "case.h"
+#include "../case.h"
 
 int main(int argc, char *argv[]) {
   OstreamManager clout(std::cout, "main");
@@ -46,6 +46,7 @@ int main(int argc, char *argv[]) {
   MyCase::ParametersD myCaseParameters;
   {
     using namespace olb::parameters;
+    myCaseParameters.set<RUNS>(4);
     myCaseParameters.set<RESOLUTION>(21);
     myCaseParameters.set<OUTPUT_INTERVAL>(20);
     myCaseParameters.set<PHYS_CHAR_LENGTH>(2.);
@@ -59,18 +60,40 @@ int main(int argc, char *argv[]) {
   }
   myCaseParameters.fromCLI(argc, argv);
 
+  const MyCase::value_t N0 = myCaseParameters.get<parameters::RESOLUTION>();
+  const MyCase::value_t statIter0 = myCaseParameters.get<parameters::OUTPUT_INTERVAL>();
+  const MyCase::value_t physVel0 = myCaseParameters.get<parameters::PHYS_CHAR_VELOCITY>();
+  const MyCase::value_t physLength0 = myCaseParameters.get<parameters::PHYS_CHAR_LENGTH>();
+
+  myCaseParameters.set<parameters::MAX_RESOLUTION>(
+    util::pow(2, myCaseParameters.get<parameters::RUNS>()-1) * myCaseParameters.get<parameters::RESOLUTION>()
+  );
+
   // Get peclet number passed as argument
-  singleton::directories().setOutputDir("./tmp/p_" + std::to_string((int)myCaseParameters.get<parameters::PECLET>()) + "/");
+  const std::size_t peclet(myCaseParameters.get<parameters::PECLET>());
+  singleton::directories().setOutputDir("./tmp/p_" + std::to_string((int) peclet) + "/");
 
-  Mesh mesh = createMesh(myCaseParameters);
+  for (std::size_t i = 0; i < myCaseParameters.get<parameters::RUNS>(); ++i) {
 
-  MyCase myCase(myCaseParameters, mesh);
+    //Adjust Resolution and output interval
+    myCaseParameters.set<parameters::RESOLUTION>(util::pow(2,i) * N0);
+    myCaseParameters.set<parameters::OUTPUT_INTERVAL>(util::pow(4,i) * statIter0);
 
-  prepareGeometry(myCase);
+    clout << "<------- Simulate with -------> " << std::endl;
+    clout << "Resolution: " << util::pow(2,i)*N0 << std::endl;
+    clout << "Grid Peclet number: " << peclet/(util::pow(2,i)*N0) << std::endl;
+    clout << "Courant number: " << physLength0*physVel0/(util::pow(2,i)*N0) << std::endl;
 
-  prepareLattice(myCase);
+    Mesh mesh = createMesh(myCaseParameters);
 
-  setInitialValues(myCase);
+    MyCase myCase(myCaseParameters, mesh);
 
-  simulate(myCase);
+    prepareGeometry(myCase);
+
+    prepareLattice(myCase);
+
+    setInitialValues(myCase);
+
+    simulate(myCase);
+  }
 }
