@@ -40,33 +40,15 @@ using namespace olb::descriptors;
 // === Step 1: Declarations ===
 using MyCase = Case<
   NavierStokes, Lattice<double, descriptors::D3Q27<descriptors::FORCE,
-    FreeSurface::MASS,
-    FreeSurface::EPSILON,
-    FreeSurface::CELL_TYPE,
-    FreeSurface::CELL_FLAGS,
-    FreeSurface::TEMP_MASS_EXCHANGE,
-    FreeSurface::PREVIOUS_VELOCITY,
-    FreeSurface::HAS_INTERFACE_NBRS>>
+  FreeSurface::MASS,
+  FreeSurface::EPSILON,
+  FreeSurface::CELL_TYPE,
+  FreeSurface::CELL_FLAGS,
+  FreeSurface::TEMP_MASS_EXCHANGE,
+  FreeSurface::PREVIOUS_VELOCITY,
+  FreeSurface::HAS_INTERFACE_NBRS>>
 >;
 
-//----
-//const T viscosity = 1e-4;
-//const T density = 1e3;
-//const T physTime = 0.01;
-//const T latticeRelaxationTime = .516;
-//const int N = 100; // resolution: number of voxels per charPhysL
-//const std::array<T, 3> area{ {0.03, 0.03, 0.025} };
-//const std::array<T, 3> gravity_force = { {0.,0., -9.81} };
-//const T char_phys_length = 0.03;
-//const T char_phys_vel = 0.1;
-//const bool has_surface_tension = true;
-//const T surface_tension_coefficient = 0.0661;
-//const std::array<T, 3> initial_falling_speed{ {0.,0., -6.03} };
-// Anti jitter value
-//const T transitionThreshold = 1e-3;
-// When to remove lonely cells
-//const T lonelyThreshold = 1.0;
-//descriptors::FIELD_BASE<1,D,Q>
 
 namespace olb::parameters {
 //struct GRAVITY                      : public descriptors::FIELD_BASE<0,1> { };
@@ -75,7 +57,6 @@ struct HAS_SURFACE_TENSION          : public descriptors::TYPED_FIELD_BASE<bool,
 struct SURFACE_TENSION_COEFFICIENT  : public descriptors::FIELD_BASE<1> { };
 struct TRANSITION_THRESHOLD         : public descriptors::FIELD_BASE<1> { };
 struct LONELY_THRESHOLD             : public descriptors::FIELD_BASE<1> { };
-
 }
 
 
@@ -102,29 +83,29 @@ Mesh<MyCase::value_t, MyCase::d> createMesh(MyCase::ParametersD& parameters) {
 /// @brief Define which cells should be filled with liquid at the beginning
 template <typename T, typename DESCRIPTOR>
 class FreeSurfaceFallingDrop3D final : public AnalyticalF3D<T, T> {
-private:
+  private:
     T lattice_size;
     // This value doesn't depend on the dimension of the descriptor. It's always 3
     std::array<T, 3> cell_values;
-public:
+  public:
     FreeSurfaceFallingDrop3D(T lattice_size_, const std::array<T, 3>& cell_vals) :AnalyticalF3D<T, T>{ 1 }, lattice_size{ lattice_size_ }, cell_values{ cell_vals }{}
 
     bool operator()(T output[], const T x[]) override {
-        output[0] = cell_values[0];
-        T radius = 0.00155;
+      output[0] = cell_values[0];
+      T radius = 0.00155;
 
-        if (x[2] <= radius) {
-            output[0] = cell_values[2];
+      if (x[2] <= radius) {
+        output[0] = cell_values[2];
         }
-        else if (x[2] <= radius + lattice_size * 1.5) {
-            output[0] = cell_values[1];
+      else if (x[2] <= radius + lattice_size * 1.5) {
+        output[0] = cell_values[1];
         }
 
-        std::array<T, DESCRIPTOR::d> point = { 0.015, 0.015, 2 * radius + lattice_size * 4 };
-        std::array<T, DESCRIPTOR::d> diff = { x[0] - point[0], x[1] - point[1], x[2] - point[2] };
+      std::array<T, DESCRIPTOR::d> point = { 0.015, 0.015, 2 * radius + lattice_size * 4 };
+      std::array<T, DESCRIPTOR::d> diff = { x[0] - point[0], x[1] - point[1], x[2] - point[2] };
 
-        if ((diff[0] * diff[0] + diff[1] * diff[1] + diff[2] * diff[2]) <= radius * radius) {
-            output[0] = cell_values[2];
+      if ((diff[0] * diff[0] + diff[1] * diff[1] + diff[2] * diff[2]) <= radius * radius) {
+        output[0] = cell_values[2];
         }
         else {
             for (int i = -1; i <= 1; ++i) {
@@ -140,7 +121,7 @@ public:
             }
         }
 
-        return true;
+      return true;
     }
 };
 
@@ -221,31 +202,31 @@ void prepareFallingDrop(MyCase& myCase)
   // prepareFallingDrop(...);
   const T lattice_size = char_phys_length / resolution;
   
-    AnalyticalConst3D<T, T> zero(0.);
-    AnalyticalConst3D<T, T> one(1.);
-    AnalyticalConst3D<T, T> two(2.);
-    AnalyticalConst3D<T, T> four(4.);
-    FreeSurfaceFallingDrop3D<T, DESCRIPTOR> cells_analytical{ lattice_size, {0., 1., 2.} };
-    FreeSurfaceFallingDrop3D<T, DESCRIPTOR> mass_analytical{ lattice_size, {0., 0.5, 1.} };
+  AnalyticalConst3D<T, T> zero(0.);
+  AnalyticalConst3D<T, T> one(1.);
+  AnalyticalConst3D<T, T> two(2.);
+  AnalyticalConst3D<T, T> four(4.);
+  FreeSurfaceFallingDrop3D<T, DESCRIPTOR> cells_analytical{ lattice_size, {0., 1., 2.} };
+  FreeSurfaceFallingDrop3D<T, DESCRIPTOR> mass_analytical{ lattice_size, {0., 0.5, 1.} };
 
-    AnalyticalConst3D<T, T> force_zero{ 0., 0., 0. };
+  AnalyticalConst3D<T, T> force_zero{ 0., 0., 0. };
 
-    for (int i : {0, 1, 2}) {
-        lattice.defineField<FreeSurface::MASS>(geometry, i, zero);
-        lattice.defineField<FreeSurface::EPSILON>(geometry, i, zero);
-        lattice.defineField<FreeSurface::CELL_TYPE>(geometry, i, zero);
-        lattice.defineField<FreeSurface::CELL_FLAGS>(geometry, i, zero);
-        lattice.defineField<descriptors::FORCE>(geometry, i, force_zero);
-        lattice.defineField<FreeSurface::PREVIOUS_VELOCITY>(geometry, i, force_zero);
+  for (int i : {0, 1, 2}) {
+    lattice.defineField<FreeSurface::MASS>(geometry, i, zero);
+    lattice.defineField<FreeSurface::EPSILON>(geometry, i, zero);
+    lattice.defineField<FreeSurface::CELL_TYPE>(geometry, i, zero);
+    lattice.defineField<FreeSurface::CELL_FLAGS>(geometry, i, zero);
+    lattice.defineField<descriptors::FORCE>(geometry, i, force_zero);
+    lattice.defineField<FreeSurface::PREVIOUS_VELOCITY>(geometry, i, force_zero);
     }
 
     lattice.defineField<FreeSurface::CELL_TYPE>(geometry, 1, cells_analytical);
     lattice.defineField<FreeSurface::MASS>(geometry, 1, mass_analytical);
     lattice.defineField<FreeSurface::EPSILON>(geometry, 1, mass_analytical);
 
-    for (int i : {0, 2}) {
-        lattice.defineField<FreeSurface::EPSILON>(geometry, i, one);
-        lattice.defineField<FreeSurface::CELL_TYPE>(geometry, i, four);
+  for (int i : {0, 2}) {
+    lattice.defineField<FreeSurface::EPSILON>(geometry, i, one);
+    lattice.defineField<FreeSurface::CELL_TYPE>(geometry, i, four);
     }
 
     T force_factor = T(1) / converter.getConversionFactorForce() * converter.getConversionFactorMass();
@@ -271,36 +252,29 @@ void prepareLattice(MyCase& myCase) {
   const T char_phys_vel = parameters.get<parameters::PHYS_CHAR_VELOCITY>();
   const T viscosity = parameters.get<parameters::PHYS_CHAR_VISCOSITY>();
   const T density = parameters.get<parameters::PHYS_CHAR_DENSITY>();
-  
-
   const T lattice_size = char_phys_length / resolution;
   
   lattice.setUnitConverter < UnitConverterFromResolutionAndRelaxationTime<T, DESCRIPTOR>>(
-        int{ resolution },     // resolution: number of voxels per charPhysL
-        (T)latticeRelaxationTime,   // latticeRelaxationTime: relaxation time, have to be greater than 0.5!
-        (T)char_phys_length,     // charPhysLength: reference length of simulation geometry
-        (T)char_phys_vel,     // charPhysVelocity: maximal/highest expected velocity during simulation in __m / s__
-        (T)viscosity, // physViscosity: physical kinematic viscosity in __m^2 / s__
-        (T)density     // physDensity: physical density in __kg / m^3__
+    int{ resolution },     // resolution: number of voxels per charPhysL
+    (T)latticeRelaxationTime,   // latticeRelaxationTime: relaxation time, have to be greater than 0.5!
+    (T)char_phys_length,     // charPhysLength: reference length of simulation geometry
+    (T)char_phys_vel,     // charPhysVelocity: maximal/highest expected velocity during simulation in __m / s__
+    (T)viscosity, // physViscosity: physical kinematic viscosity in __m^2 / s__
+    (T)density     // physDensity: physical density in __kg / m^3__
     );
-    auto& converter = lattice.getUnitConverter();
+  auto& converter = lattice.getUnitConverter();
     
 
     // Material=1 -->bulk dynamics
-    lattice.defineDynamics<SmagorinskyForcedBGKdynamics<T, DESCRIPTOR>>(geometry, 1);
+  lattice.defineDynamics<SmagorinskyForcedBGKdynamics<T, DESCRIPTOR>>(geometry, 1);
     // Material=2 -->no-slip boundary
-    lattice.defineDynamics<BounceBack<T, DESCRIPTOR>>(geometry, 2);
+  lattice.defineDynamics<BounceBack<T, DESCRIPTOR>>(geometry, 2);
     //setSlipBoundary<T,DESCRIPTOR>(sLattice, superGeometry, 2);
 
-    lattice.setParameter<descriptors::OMEGA>(converter.getLatticeRelaxationFrequency());
-    lattice.setParameter<collision::LES::SMAGORINSKY>(T(0.2));
+  lattice.setParameter<descriptors::OMEGA>(converter.getLatticeRelaxationFrequency());
+  lattice.setParameter<collision::LES::SMAGORINSKY>(T(0.2));
 
-    prepareFallingDrop(myCase);
-    
-      // === Step 7.5: Set up FreeSurface parameters (crucial!) ===
-
- 
-
+  prepareFallingDrop(myCase);
   T transitionThreshold = parameters.get<parameters::TRANSITION_THRESHOLD>();
   T lonelyThreshold = parameters.get<parameters::LONELY_THRESHOLD>();
   bool has_surface_tension = parameters.get<parameters::HAS_SURFACE_TENSION>();
@@ -340,26 +314,26 @@ void setInitialValues(MyCase& myCase){
   initial_falling_speed[1] = parameters.get<parameters::INITIAL_VELOCITY>()[1];
   initial_falling_speed[2] = parameters.get<parameters::INITIAL_VELOCITY>()[2];
 
-    std::array<T, DESCRIPTOR::d> lattice_speed;
+  std::array<T, DESCRIPTOR::d> lattice_speed;
     for (size_t i = 0; i < DESCRIPTOR::d; ++i) {
         lattice_speed[i] = initial_falling_speed[i] * converter.getPhysDeltaT() / converter.getPhysDeltaX();
     }
 
-    T characteristic_length = parameters.get<parameters::DOMAIN_EXTENT>()[0];
-    T lattice_size = characteristic_length / parameters.get<parameters::RESOLUTION>();
+  T characteristic_length = parameters.get<parameters::DOMAIN_EXTENT>()[0];
+  T lattice_size = characteristic_length / parameters.get<parameters::RESOLUTION>();
   
-    FallingDropVel3D<T, DESCRIPTOR> u{ lattice_size, lattice_speed };
-    AnalyticalConst3D<T, T> one(1.);
+  FallingDropVel3D<T, DESCRIPTOR> u{ lattice_size, lattice_speed };
+  AnalyticalConst3D<T, T> one(1.);
 
-    lattice.defineRhoU(geometry.getMaterialIndicator({ 0,1,2 }), one, u);
-    for (int i : {0, 1, 2}) {
+  lattice.defineRhoU(geometry.getMaterialIndicator({ 0,1,2 }), one, u);
+  for (int i : {0, 1, 2}) {
         lattice.iniEquilibrium(geometry, i, one, u);
     }
 
     // Set up free surface communicator stages
-    FreeSurface::initialize(lattice);
+  FreeSurface::initialize(lattice);
     // Make the lattice ready for simulation
-    lattice.initialize();
+  lattice.initialize();
     
     
 }
