@@ -77,24 +77,23 @@ void prepareGeometry(MyCase& myCase) {
   const T ny              = extend[1];
 
   // Sets material number for fluid and boundary
-  geometry.rename( 0,1 );
+  geometry.rename( 0, 1 );
 
-  Vector<T,2> origin1( -.5, -.5 );
-  Vector<T,2> origin2( -.5,ny/2. );
-  Vector<T,2> origin3( -.5, ny-1.5 );
-  Vector<T,2> extend1( nx+2, 1. );
-  Vector<T,2> extend2( nx+2., ny/2.+2. );
-
-  IndicatorCuboid2D<T> bottom( extend1, origin1 );
-  IndicatorCuboid2D<T> upper( extend2, origin2 );
-  IndicatorCuboid2D<T> top( extend1, origin3 );
-
+  Vector<T,2> originUpper( -1, ny/2. );
+  Vector<T,2> extendUpper( nx+2., ny/2.+2. );
+  IndicatorCuboid2D<T> upper( extendUpper, originUpper );
   geometry.rename( 1, 2, upper );
-  geometry.rename( 1, 3, bottom );
+
+  Vector<T,2> originTop( -.5, ny - .5);
+  Vector<T,2> extendTop( nx+2, 1. );
+  IndicatorCuboid2D<T> top( extendTop, originTop );
   geometry.rename( 2, 4, top );
 
-  geometry.clean();
-  geometry.innerClean();
+  Vector<T,2> originBottom( -.5, -.5 );
+  Vector<T,2> extendBottom( nx+2, 1. );
+  IndicatorCuboid2D<T> bottom( extendBottom, originBottom );
+  geometry.rename( 1, 3, bottom );
+
   geometry.checkForErrors();
 
   geometry.print();
