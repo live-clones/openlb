@@ -47,10 +47,23 @@ const T boltzmannConstant() any_platform
 }
 
 template<typename T>
+const T faradayConstant() any_platform
+{
+  return 96485.33;
+}
+
+template<typename T>
 const T universalGasConst() any_platform
 {
   return 8.31446261815324;
 }
+
+template<typename T>
+const T elementaryCharge() any_platform
+{
+  return 1.602177e-19;
+}
+
 
 }
 
@@ -87,6 +100,12 @@ T meanFreePath( T molarMass, T pressure, T temperature, T viscosity) any_platfor
 {
   T mass = util::molecularMass(molarMass);
   return viscosity/pressure * util::sqrt(std::numbers::pi*physConstants::boltzmannConstant<T>()*temperature/2./mass);
+}
+
+template<typename T>
+T debyeLength( T dielectricC, T valence, T temperature, T concentration) any_platform
+{
+  return util::sqrt(dielectricC*physConstants::boltzmannConstant<T>()*temperature/T(2)/physConstants::elementaryCharge<T>()/physConstants::elementaryCharge<T>()/valence/valence/concentration/physConstants::avogadroNumber<T>());
 }
 
 }
