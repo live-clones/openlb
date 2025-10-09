@@ -45,11 +45,33 @@
 #include <chrono>
 
 using namespace olb;
+using namespace olb::names;
 using namespace olb::descriptors;
 using namespace olb::graphics;
 
-using T = FLOATING_POINT_TYPE;
-#define DESCRIPTOR D2Q9<CHEM_POTENTIAL,FORCE>
+// === Step 1: Declarations ===
+using MyCase = Case<
+  NavierStokes, Lattice<double, D2Q9<CHEM_POTENTIAL,FORCE>>,
+  Component1,   Lattice<double, D2Q9<CHEM_POTENTIAL,FORCE>>
+>;
+
+namespace olb::parameters {
+
+struct NORM_VTK_ITER_T       : public descriptors::FIELD_BASE<1> { };
+struct NORM_STAT_ITER_T       : public descriptors::FIELD_BASE<1> { };
+struct MAX_NORM_T : public descriptors::FIELD_BASE<1> { };
+struct RADIUS : public descriptors::FIELD_BASE<1> { };
+struct SHEAR_RATE : public descriptors::FIELD_BASE<1> { };
+struct CONT_VISC  : public descriptors::FIELD_BASE<1> { };
+struct DROPLET_REYNOLDS : public descriptors::FIELD_BASE<1> { };
+struct PHYS_INTERVAL : public descriptors::FIELD_BASE<1> { };
+struct CAPILLARY : public descriptors::FIELD_BASE<1> { };
+struct CAHN  : public descriptors::FIELD_BASE<1> { };
+struct DEFORMATION_RESIDUUM  : public descriptors::FIELD_BASE<1> { };
+struct DEFORMATION_CONVERGENCE_PRECISION  : public descriptors::FIELD_BASE<1> { };
+struct H1  : public descriptors::FIELD_BASE<1> { };
+struct H2  : public descriptors::FIELD_BASE<1> { };
+}
 
 // // DEFAULT [lu] Setup Komrakova et al. 2013 "Lattice Boltzmann ... " Fig. 9
 // // Simulated Domain LxHxW = 12*radius x 8*radius x 2*radius;
@@ -65,79 +87,48 @@ using T = FLOATING_POINT_TYPE;
 // Ca = 1.0  for drop breakup
 // Recommended xi = 1.14, min 1.0
 
-// Set physical input parameters
-const T radius = 1.;                          // [pu] physical droplet radius
-const T nx = 20 * radius;                     // [pu] domain length H = 12*radius
-const T ny = 4 * radius;                      // [pu] domain height H = 4*radius (this makes no difference to komra 8, since Re equal!)
-const T contVisc = 1.;                        // [pu] physical(!) kinematic viscosity of continuous phase
-const T physDensity = 1.;                     // [pu] physical density
 
-// Set numerical parameters
-const T N = 10;                               // resolution N cells per charL = radius/2;
-const T latticeRelaxationTime = 1.;           // [lu] tau for first lattice (f)
-const T latticeRelaxationTime_g = 1.;         // [lu] caution: not used..., i.e. tau_f = tau_g
+Mesh<MyCase::value_t,MyCase::d> createMesh(MyCase::ParametersD& params) {
+  using T = MyCase::value_t;
 
-// Set (model) dimensionless numbers
-const T dropRe = 1.;                          // definition: shearRate * radius^2 / continuousViscosity
-const T capillaryNr = 1.;                     // capillary number for droplet breakup
-//const T capillaryNr = 0.25;                 // definition: radius * shearRate * viscosity(non kinematic) / surfTen
+  Vector extent = params.get<parameters::DOMAIN_EXTENT>();
+  const T nx = extent[0];
+  const T ny = extent[1];
+  const T N = params.get<parameters::RESOLUTION>();
+  const T radius = params.get<parameters::RADIUS>();
+  std::vector<T> extend = { nx, ny };
+  std::vector<T> origin = { 0, 0 };
+  IndicatorCuboid2D<T> cuboid(extend,origin);
 
+  T charL = 2*util::pow(radius, 2.)/ny;
+  T physDeltaX = charL/N;
 
-// Set (numerical) dimensionless numbers
-const T cahnNr = 0.057;                       // Cahn Number = xi / radius;
-const T pecletNr = .43;                       // Peclet Number = shearRate * radius * xi / (M A)
+  Mesh<T,MyCase::d> mesh(cuboid, physDeltaX, singleton::mpi().getSize());
+  mesh.setOverlap(params.get<parameters::OVERLAP>());
 
-// Set time interval to simulate and normalized output
-const T maxNormTime = 30.;                    // normalized time normT = T * shearRate [either in lu or pu]
-const T vtkNormIter = 0.2;                    // normalized vtk output (i.e. per normalized time step, one output!)
-const T statNormIter = 0.2;                   // normalized stat output (i.e. per normalized time step, one output!)
-const T physInterval = 0.1;                   // interval for the convergence check in s
-const T residuum = 1e-5;                      // residuum for the convergence check
-const T defResiduum = 0.0015;                 // deformation residuum criterion
-
-// Set contact angles
-// no boundary touching here...
-// h_i= Parameter related to resulting contact angle of the boundary. [lattice units]
-const T h1 = 0.;                              // Contact angle 90 degrees   [lattice units]
-const T h2 = 0.;                              // Contact angle 90 degrees   [lattice units]
-
-// Initialize remaining parameters (conversion, computation, free energy)
-T shearRate;        // [pu] physical shear rate [1/s]
-T shearVelo;        // [pu] physical shear speed corr. to dropRe [m/s]
-
-T surfTen;          // [pu] physical surface tension
-T surfTenLatt;      // [lu] lattice surface tension
-
-T kappa;            // [lu] this is kappa1+kappa2, to simplify, and meet komrakova model. this is NOT kappa in Komrakova2013!!
-T kappa1;           // [lu] variable for interface tension tuning
-T kappa2;           // [lu] variable for interface tension tuning
-T alpha;            // [lu] free energy alpha in surface tension
-T gama;             // [lu] gama "Diffusivity of the interface" same as in Komrakova2013
-
-T xiThickness;      // [lu] characteristical thickness of interface (xi from Komrakova2013)
-T xiThicknessPU;    // [pu] interface thickness in physical units
-T kappaKomra;       // [lu] this is kappa from Komrakova2013
-T aKomra;           // [lu] this is A from Komrakova2013
-T transportCoeff;   // [lu] this is M from Komrakova2013
-
-T maxPhysTime;      // [pu] maximum physical time
-int maxIter;        // [lu] maximum lattice time
-
-T physVtkIter;      // [pu] physical time step, when output vtk happens
-T physStatIter;     // [pu] physical time step, when output happens
-int vtkIter;        // [lu] lattice time step, when output happens
-int statIter;       // [lu] lattice timestep when statistics apper in terminal
-
-const T PI_2 = 1.57079632679;   // PI/2
+  // set periodic boundaries to the domain
+  mesh.getCuboidDecomposition().setPeriodicity({ true, false });
+  return mesh;
+}
 
 // Interpolation for large axis - smallest circle outside droplet
 // This will only work for single ellipsoid droplets with stationary center
 // Particularly in cases of droplet breakup, this will not work
-std::vector<T> circleApproximationBig(SuperLattice<T, DESCRIPTOR>& sLattice2,
-      T minDistance,    // stop criterion: minimum distance for radii
+std::vector<MyCase::value_t> circleApproximationBig(MyCase& myCase,
+      MyCase::value_t minDistance,    // stop criterion: minimum distance for radii
       int points,       // number of points on the circle
-      T factor ){       // expansion and retraction of the circle with factor 1+factor or 1-factor
-  SuperLattice<T, DESCRIPTOR> *sLatticeTest = &sLattice2;;
+      MyCase::value_t factor ){       // expansion and retraction of the circle with factor 1+factor or 1-factor
+  using T = MyCase::value_t;
+  using DESCRIPTOR = MyCase::descriptor_t;
+
+  auto* sLatticeTest = &myCase.getLattice(Component1{});
+  auto& params = myCase.getParameters();
+
+  Vector extent = params.get<parameters::DOMAIN_EXTENT>();
+  const T nx = extent[0];
+  const T ny = extent[1];
+  const T radius = params.get<parameters::RADIUS>();
+
   SuperLatticeDensity2D<T, DESCRIPTOR> densityCircle( *sLatticeTest );
 
   AnalyticalFfromSuperF2D<T> aDensity(densityCircle, true, 1);
@@ -150,7 +141,7 @@ std::vector<T> circleApproximationBig(SuperLattice<T, DESCRIPTOR>& sLattice2,
   T theta = 0.;
 
   while(std::abs(oldRadius-newRadius) > minDistance){
-    T maxAngle = PI_2;      // third quadrant, as shear direction is known beforehand
+    T maxAngle = std::numbers::pi_v<T>/2.;      // third quadrant, as shear direction is known beforehand
     if( ny/2. + newRadius >= ny - safety) maxAngle = util::asin( ( ny/2. - safety) / newRadius );       // eliminate points in proximity to no-slip wall (phi=0 there)
     for(int i=0; i<=points-1; i++){
       coordinates[0] = nx/2. + util::cos(maxAngle * (T) i/ ((T) (points-1.)) ) * newRadius;
@@ -163,7 +154,7 @@ std::vector<T> circleApproximationBig(SuperLattice<T, DESCRIPTOR>& sLattice2,
         oldRadius = newRadius;
         newRadius *= 1. + factor;
         //theta is only assigned if the circle intersects the droplet
-        theta = 90./PI_2 * util::atan( (coordinates[1] - ny/2.) / (coordinates[0] - nx/2.) );
+        theta = 90./std::numbers::pi_v<T>/2. * util::atan( (coordinates[1] - ny/2.) / (coordinates[0] - nx/2.) );
         break;
       } else if ( i == points - 1){
         oldRadius = newRadius;
@@ -176,11 +167,21 @@ std::vector<T> circleApproximationBig(SuperLattice<T, DESCRIPTOR>& sLattice2,
 }
 
 // Interpolation for small axis - largest circle inside droplet
-T circleApproximationSmall(SuperLattice<T, DESCRIPTOR>& sLattice2,
-      T minDistance,
+MyCase::value_t circleApproximationSmall(MyCase& myCase,
+      MyCase::value_t minDistance,
       int points,
-      T factor){
-  SuperLattice<T, DESCRIPTOR> *sLatticeTest = &sLattice2;;
+      MyCase::value_t factor){
+  using T = MyCase::value_t;
+  using DESCRIPTOR = MyCase::descriptor_t;
+
+  auto& params = myCase.getParameters();
+
+  Vector extent = params.get<parameters::DOMAIN_EXTENT>();
+  const T nx = extent[0];
+  const T ny = extent[1];
+  const T radius = params.get<parameters::RADIUS>();
+
+  auto* sLatticeTest = &myCase.getLattice(Component1{});
   SuperLatticeDensity2D<T, DESCRIPTOR> densityCircle( *sLatticeTest );
 
   AnalyticalFfromSuperF2D<T> aDensity(densityCircle, true, 1);
@@ -191,7 +192,7 @@ T circleApproximationSmall(SuperLattice<T, DESCRIPTOR>& sLattice2,
   T coordinates[2] = {T(0),T(0)};
 
     while(std::abs(oldRadius-newRadius) > minDistance){
-    T maxAngle = 2 * PI_2;
+    T maxAngle = std::numbers::pi_v<T>;
     for(int i=0; i<=points-1; i++){
       coordinates[0] = nx/2. + util::cos(maxAngle * (T) i/ ((T) (points-1.)) ) * newRadius;
       coordinates[1] = ny/2. + util::sin(maxAngle * (T) i/ ((T) (points-1.)) ) * newRadius;
@@ -215,14 +216,14 @@ T circleApproximationSmall(SuperLattice<T, DESCRIPTOR>& sLattice2,
 
 // The accuracy of this is dependent on the resolution
 // Additionally droplet deformation is only valid for ellipsoidal droplets
-T measureDroplet(SuperLattice<T, DESCRIPTOR>& sLattice2,
-                    SuperGeometry<T,2>& superGeometry,
-                    UnitConverter<T,DESCRIPTOR>& converter){
+MyCase::value_t measureDroplet(MyCase& myCase){
   OstreamManager clout( std::cout,"Measurement" );
 
+  using T = MyCase::value_t;
+
   //axis approximation
-  std::vector<T> circleMeasurementsBig = circleApproximationBig( sLattice2, 0.001, 5000, 0.8 );
-  T circleMeasurementsSmall = circleApproximationSmall( sLattice2, 0.001, 5000, 0.8 );
+  std::vector<T> circleMeasurementsBig = circleApproximationBig( myCase, 0.001, 5000, 0.8 );
+  T circleMeasurementsSmall = circleApproximationSmall( myCase, 0.001, 5000, 0.8 );
 
   T deformation = (circleMeasurementsBig[0] - circleMeasurementsSmall) / (circleMeasurementsBig[0] + circleMeasurementsSmall);
 
@@ -230,19 +231,26 @@ T measureDroplet(SuperLattice<T, DESCRIPTOR>& sLattice2,
   return deformation;
 }
 
-void prepareGeometry( SuperGeometry<T,2>& superGeometry,
-                      UnitConverter<T,DESCRIPTOR> const& converter )
+void prepareGeometry( MyCase& myCase )
 {
-
   OstreamManager clout( std::cout,"prepareGeometry" );
   clout << "Prepare Geometry ..." << std::endl;
+  using T = MyCase::value_t;
 
-  superGeometry.rename( 0, 2 );
+  auto& geometry = myCase.getGeometry();
+  auto& params = myCase.getParameters();
+
+  Vector extent = params.get<parameters::DOMAIN_EXTENT>();
+  const T nx = extent[0];
+  const T ny = extent[1];
+  const int N = params.get<parameters::RESOLUTION>();
+
+  geometry.rename( 0, 2 );
 
   // bulk, MN=1
-  superGeometry.rename( 2, 1, {0, 1} );
+  geometry.rename( 2, 1, {0, 1} );
 
-  T eps = converter.getPhysLength(1);
+  T eps = nx/N;
   T edge = 0.5*eps;
   T safety = 2*eps;
 
@@ -250,51 +258,224 @@ void prepareGeometry( SuperGeometry<T,2>& superGeometry,
   std::vector<T> origin = {T(0) - safety, T(ny)-edge};
   std::vector<T> extend = {nx + 2*safety, edge+safety};
   IndicatorCuboid2D<T> top( extend, origin );
-  superGeometry.rename(2, 3, top );
+  geometry.rename(2, 3, top );
 
   // bottom wall, MN=4
   origin[1] = 0.0 - safety;
   IndicatorCuboid2D<T> bottom( extend, origin);
-  superGeometry.rename(2, 4, bottom);
+  geometry.rename(2, 4, bottom);
 
   // clean up
-  superGeometry.clean();
-  superGeometry.innerClean();
-  superGeometry.checkForErrors();
-  superGeometry.print();
+  geometry.clean();
+  geometry.innerClean();
+  geometry.checkForErrors();
+  geometry.print();
 
   clout << "Prepare Geometry ... OK" << std::endl;
 }
 
-void prepareLattice( SuperLattice<T, DESCRIPTOR>& sLattice1,
-                     SuperLattice<T, DESCRIPTOR>& sLattice2,
-                     UnitConverter<T, DESCRIPTOR>& converter,
-                     SuperGeometry<T,2>& superGeometry )
+void prepareLattice( MyCase& myCase )
 {
-
   OstreamManager clout( std::cout,"prepareLattice" );
   clout << "Prepare Lattice ..." << std::endl;
 
+  using T = MyCase::value_t;
+  using DESCRIPTOR = MyCase::descriptor_t;
+
+  auto& geometry = myCase.getGeometry();
+  auto& params = myCase.getParameters();
+
+  auto& sLattice1 = myCase.getLattice(NavierStokes{});
+  auto& sLattice2 = myCase.getLattice(Component1{});
+
+  Vector extent = params.get<parameters::DOMAIN_EXTENT>();
+  const T ny = extent[1];
+  const T radius = params.get<parameters::RADIUS>();
+  const T shearRate = params.get<parameters::SHEAR_RATE>();
+  const int N = params.get<parameters::RESOLUTION>();
+  const T latticeRelaxationTime = params.get<parameters::LATTICE_RELAXATION_TIME>();
+  const T contVisc = params.get<parameters::CONT_VISC>();
+  const T physDensity = params.get<parameters::PHYS_CHAR_DENSITY>();
+  const T capillaryNr = params.get<parameters::CAPILLARY>();
+  const T cahnNr = params.get<parameters::CAHN>();
+  const T pecletNr = params.get<parameters::PECLET>();
+  const T dropRe = params.get<parameters::DROPLET_REYNOLDS>();
+  const T physInterval = params.get<parameters::PHYS_INTERVAL>();
+  const T maxPhysT = params.get<parameters::MAX_PHYS_T>();
+  const T physStatIterT = params.get<parameters::PHYS_STAT_ITER_T>();
+  const T physVtkIterT = params.get<parameters::PHYS_VTK_ITER_T>();
+  const T residuum = params.get<parameters::CONVERGENCE_PRECISION>();
+  const T maxNormTime = params.get<parameters::MAX_NORM_T>();
+
+  T shearVelo = ny * shearRate / 2.;  // [pu] physical shear speed corr. to dropRe [m/s]
+  T charL = 2*util::pow(radius, 2.)/ny;
+
+  sLattice1.setUnitConverter<UnitConverterFromResolutionAndRelaxationTime<T,DESCRIPTOR>>(
+    int   {N},                            // resolution
+    (T)   latticeRelaxationTime,        // lattice relaxation time
+    (T)   charL,   // charPhysLength: reference length of simulation geometry (dropRe!!)
+    (T)   shearVelo,                    // charPhysVelocity: maximal/highest expected velocity during simulation in __m / s__
+    (T)   contVisc,                     // physViscosity: physical kinematic viscosity in __m^2 / s__
+    (T)   physDensity                   // physDensity: physical density in __kg / m^3__
+  );
+
+  const auto& converter = sLattice1.getUnitConverter();
+  converter.print();
+
+  sLattice2.setUnitConverter(converter);
+
   // define lattice Dynamics
-  sLattice1.defineDynamics<ForcedBGKdynamics>( superGeometry, 1 );
-  sLattice2.defineDynamics<FreeEnergyBGKdynamics>( superGeometry, 1 );
+  sLattice1.defineDynamics<ForcedBGKdynamics>( geometry, 1 );
+  sLattice2.defineDynamics<FreeEnergyBGKdynamics>( geometry, 1 );
 
   // moving walls (inlet boundary with tangetial velocity condition)
   T omega = converter.getLatticeRelaxationFrequency();
 
-  auto topIndicator = superGeometry.getMaterialIndicator(3);
+  auto topIndicator = geometry.getMaterialIndicator(3);
   boundary::set<boundary::FreeEnergyVelocity>(sLattice1, topIndicator);
   boundary::set<boundary::FreeEnergyOrderParameter>(sLattice2, topIndicator);
 
-  auto bottomIndicator = superGeometry.getMaterialIndicator(4);
+  auto bottomIndicator = geometry.getMaterialIndicator(4);
   boundary::set<boundary::FreeEnergyVelocity>(sLattice1, bottomIndicator);
   boundary::set<boundary::FreeEnergyOrderParameter>(sLattice2, bottomIndicator);
 
   sLattice1.setParameter<OMEGA>(omega);
   sLattice2.setParameter<OMEGA>(omega);
+
+  // 1. compute surface tension from Ca
+  const T surfTen = radius * shearRate * physDensity * contVisc / capillaryNr;  // [pu] physical surface tension
+  const T surfTenLatt = surfTen / (converter.getConversionFactorPressure() * converter.getPhysDeltaX());  // [lu] lattice surface tension
+
+  // 2. compute interface thickness from Ch
+  const T xiThickness = cahnNr * converter.getLatticeLength(radius);  // [lu] characteristical thickness of interface (xi from Komrakova2013)
+
+  // 3. compute kappa from xi (Komrakova2013 equation (12))
+  const T kappaKomra = (3./4.) * surfTenLatt * xiThickness; // [lu] this is kappa from Komrakova2013
+
+  // 4. compute A from kappa (Komrakova2013 equation (11), neglect minus sign, since solely multiplications here)
+  const T aKomra = 2. * kappaKomra / util::pow(xiThickness, 2); // [lu] this is A from Komrakova2013
+
+  // 5. compute M from Pe (Komrakova2013 equation (17), there's a typo in the paper, should be a minus on the right hand side... we dropped that anyway.)
+  const T transportCoeff = shearRate * converter.getConversionFactorTime() * converter.getLatticeLength(radius) * xiThickness / (pecletNr * aKomra);  // [lu] this is M from Komrakova2013
+
+  // 6. compute gamma from M (Komrakova2013 equation (8), caution: \Delta t is unity in lattice units!)
+  const T gama = transportCoeff / (converter.getLatticeRelaxationTime() - .5);  // [lu] gama "Diffusivity of the interface" same as in Komrakova2013
+
+  // Parameter fit from Komrakova to OpenLB (Semprebon2016):
+  const T kappa1 = 4. * aKomra; // [lu] variable for interface tension tuning
+  const T kappa2 = kappa1;  // [lu] variable for interface tension tuning
+  const T alpha = xiThickness / 2.; // [lu] free energy alpha in surface tension
+
+  const int maxIter = converter.getLatticeTime(maxPhysT);
+  const int statIter = converter.getLatticeTime(physStatIterT);
+  const int vtkIter = converter.getLatticeTime(physVtkIterT);
+
+  // now print everything additionally to the unit converter (helps for double-checking)
+  clout << "----------------------------------------------------------------------" << std::endl;
+  clout << "----------------------------------------------------------------------" << std::endl;
+  clout << "shear rate             " << shearRate      << "[pu], " << converter.getLatticeVelocity(shearRate) << "[lu]" << std::endl;
+  clout << "shear rate             " << shearRate      << "[pu], " << shearRate * converter.getPhysDeltaT()   << "[lu]" << std::endl;
+  clout << "Re_drop                " << dropRe         << std::endl;
+  clout << "Ca                     " << capillaryNr    << std::endl;
+  clout << "radius                 " << radius         << "[pu], " << converter.getLatticeLength(radius)      << "[lu]" << std::endl;
+  clout << "normalized t_end       " << maxNormTime    << std::endl;
+  clout << "surface tension        " << surfTen        << "[pu], " << surfTenLatt << "[lu]" << std::endl;
+  clout << "Cahn Nr.               " << cahnNr         << std::endl;
+  clout << "xi                     " << xiThickness    << "[lu]" << std::endl;
+  clout << "alpha                  " << alpha          << "[lu]" << std::endl;
+  clout << "kappa1                 " << kappa1         << "[lu]" << std::endl;
+  clout << "kappa2                 " << kappa2         << "[lu]" << std::endl;
+  clout << "Peclet Nr.             " << pecletNr       << std::endl;
+  clout << "A                      " << aKomra         << "[lu]" << std::endl;
+  clout << "Mobility M             " << transportCoeff << "[lu]" << std::endl;
+  clout << "Gamma                  " << gama           << "[lu]" << std::endl;
+  clout << "vtkIter                " << vtkIter        << "[lu]" << std::endl;
+  clout << "statIter               " << statIter       << "[lu]" << std::endl;
+  clout << "maxIter                " << maxIter        << "[lu]" << std::endl;
+  clout << "physInterval convCheck " << physInterval   << "[pu]" << std::endl;
+  clout << "residuum convCheck     " << residuum       << std::endl;
+  clout << "----------------------------------------------------------------------" << std::endl;
+  clout << "----------------------------------------------------------------------" << std::endl;
+
   sLattice2.setParameter<collision::FreeEnergy::GAMMA>(gama);
 
-  // bulk initial conditions
+  // Add the lattice couplings
+  // The chemical potential coupling must come before the force coupling
+  auto& coupling1 = myCase.setCouplingOperator(
+  "Chemical_potential",
+  ChemicalPotentialCoupling2D{},
+  names::A{}, sLattice1,
+  names::B{}, sLattice2);
+
+  coupling1.template setParameter<ChemicalPotentialCoupling2D::ALPHA>(alpha);
+  coupling1.template setParameter<ChemicalPotentialCoupling2D::KAPPA1>(kappa1);
+  coupling1.template setParameter<ChemicalPotentialCoupling2D::KAPPA2>(kappa2);
+
+  auto& coupling2 = myCase.setCouplingOperator(
+  "Force",
+  ForceCoupling2D{},
+  names::A{}, sLattice2,
+  names::B{}, sLattice1);
+
+  coupling1.restrictTo(geometry.getMaterialIndicator({1}));
+  coupling2.restrictTo(geometry.getMaterialIndicator({1}));
+
+  // Walls
+  auto& coupling3 = myCase.setCouplingOperator(
+  "Inlet_outlet",
+  InletOutletCoupling2D{},
+  names::A{}, sLattice2,
+  names::B{}, sLattice1);
+
+  coupling3.restrictTo(geometry.getMaterialIndicator({3,4}));
+
+  sLattice1.addPostProcessor<stage::PreCoupling>(meta::id<RhoStatistics>());
+  sLattice2.addPostProcessor<stage::PreCoupling>(meta::id<RhoStatistics>());
+
+  {
+    auto& communicator = sLattice1.getCommunicator(stage::PostCoupling());
+    communicator.requestField<CHEM_POTENTIAL>();
+    communicator.requestOverlap(sLattice1.getOverlap());
+    communicator.exchangeRequests();
+  }
+  {
+    auto& communicator = sLattice2.getCommunicator(stage::PreCoupling());
+    communicator.requestField<CHEM_POTENTIAL>();
+    communicator.requestField<RhoStatistics>();
+    communicator.requestOverlap(sLattice2.getOverlap());
+    communicator.exchangeRequests();
+  }
+
+  clout << "Prepare Lattice ... OK" << std::endl;
+}
+
+void setInitialValues( MyCase& myCase )
+{
+  OstreamManager clout( std::cout,"initialValues" );
+
+  using T = MyCase::value_t;
+
+  auto& geometry = myCase.getGeometry();
+  auto& params = myCase.getParameters();
+  auto& converter = myCase.getLattice(NavierStokes{}).getUnitConverter();
+
+  auto& sLattice1 = myCase.getLattice(NavierStokes{});
+  auto& sLattice2 = myCase.getLattice(Component1{});
+
+  Vector extent = params.get<parameters::DOMAIN_EXTENT>();
+  const T nx = extent[0];
+  const T ny = extent[1];
+  const T radius = params.get<parameters::RADIUS>();
+  const T cahnNr = params.get<parameters::CAHN>();
+
+  // 1. compute interface thickness from Ch
+  const T xiThickness = cahnNr * converter.getLatticeLength(radius);
+
+  // 2. compute M from Pe (Komrakova2013 equation (17), there's a typo in the paper, should be a minus on the right hand side... we dropped that anyway.)
+
+  // Parameter fit from Komrakova to OpenLB (Semprebon2016):
+  const T alpha = xiThickness / 2.;
+
   // define circular domain for fluid 2
   std::vector<T> v( 2,T() );
   AnalyticalConst2D<T,T> zeroVelocity( v );
@@ -311,36 +492,53 @@ void prepareLattice( SuperLattice<T, DESCRIPTOR>& sLattice1,
   AnalyticalConst2D<T,T> uBottom( -1.*converter.getCharLatticeVelocity(), T( 0 ) );
 
   // top
+  auto topIndicator = geometry.getMaterialIndicator(3);
   sLattice1.defineRhoU( topIndicator, rho, uTop );
   sLattice2.defineRho( topIndicator, phi );
 
   // bottom
+  auto bottomIndicator = geometry.getMaterialIndicator(4);
   sLattice1.defineRhoU( bottomIndicator, rho, uBottom );
   sLattice2.defineRho( bottomIndicator, phi );
 
   // equilibrium population initialization
-  sLattice1.iniEquilibrium( superGeometry, 1, rho, zeroVelocity );
-  sLattice2.iniEquilibrium( superGeometry, 1, phi, zeroVelocity );
-  sLattice1.iniEquilibrium( superGeometry, 3, rho, uTop );
-  sLattice2.iniEquilibrium( superGeometry, 3, phi, uTop );
-  sLattice1.iniEquilibrium( superGeometry, 4, rho, uBottom );
-  sLattice2.iniEquilibrium( superGeometry, 4, phi, uBottom );
+  sLattice1.iniEquilibrium( geometry, 1, rho, zeroVelocity );
+  sLattice2.iniEquilibrium( geometry, 1, phi, zeroVelocity );
+  sLattice1.iniEquilibrium( geometry, 3, rho, uTop );
+  sLattice2.iniEquilibrium( geometry, 3, phi, uTop );
+  sLattice1.iniEquilibrium( geometry, 4, rho, uBottom );
+  sLattice2.iniEquilibrium( geometry, 4, phi, uBottom );
 
   sLattice1.initialize();
   sLattice2.initialize();
 
   sLattice1.communicate();
   sLattice2.communicate();
-
-  clout << "Prepare Lattice ... OK" << std::endl;
 }
 
-void getResults( SuperLattice<T, DESCRIPTOR>& sLattice2,
-                 SuperLattice<T, DESCRIPTOR>& sLattice1, int iT,
-                 SuperGeometry<T,2>& superGeometry, util::Timer<T>& timer,
-                 UnitConverter<T, DESCRIPTOR> converter) {
+void setTemporalValues(MyCase& myCase,
+                       std::size_t iT)
+{ }
 
+void getResults(MyCase& myCase,
+                util::Timer<MyCase::value_t>& timer,
+                std::size_t iT)
+{
   OstreamManager clout( std::cout,"getResults" );
+
+  using T = MyCase::value_t;
+  using DESCRIPTOR = MyCase::descriptor_t;
+
+  auto& sLattice1 = myCase.getLattice(NavierStokes{});
+  auto& sLattice2 = myCase.getLattice(Component1{});
+  auto& params = myCase.getParameters();
+  auto& converter = myCase.getLattice(NavierStokes{}).getUnitConverter();
+
+  const T physStatIterT = params.get<parameters::PHYS_STAT_ITER_T>();
+  const T physVtkIterT = params.get<parameters::PHYS_VTK_ITER_T>();
+  const int statIter = converter.getLatticeTime(physStatIterT);
+  const int vtkIter = converter.getLatticeTime(physVtkIterT);
+
   SuperVTMwriter2D<T> vtmWriter( "binaryShearFlow2d" );
 
   if ( iT==0 ) {
@@ -394,174 +592,32 @@ void getResults( SuperLattice<T, DESCRIPTOR>& sLattice2,
   }
 }
 
-int main( int argc, char *argv[] )
-{
-  // === 1st Step: Initialization ===
+void simulate(MyCase& myCase) {
+  OstreamManager clout( std::cout,"simulate" );
 
-  initialize( &argc, &argv );
-  singleton::directories().setOutputDir( "./tmp/" );
-  OstreamManager clout( std::cout,"main" );
+  using T = MyCase::value_t;
 
-  // use remaining equations from Komrakova2013 to calculate missing parameters:
-  // 0. compute velocity from Re (first shearrate, than velocity)
-  // (do that before converter, since it is required as argument!)
-  shearRate = contVisc * dropRe / util::pow(radius, 2);
-  shearVelo = ny * shearRate / 2.;
+  auto& geometry = myCase.getGeometry();
+  auto& converter = myCase.getLattice(NavierStokes{}).getUnitConverter();
+  auto& params = myCase.getParameters();
+  auto& sLattice1 = myCase.getLattice(NavierStokes{});
+  auto& sLattice2 = myCase.getLattice(Component1{});
+  auto& coupling1 = myCase.getOperator("Chemical_potential");
+  auto& coupling2 = myCase.getOperator("Force");
+  auto& coupling3 = myCase.getOperator("Inlet_outlet");
 
-  UnitConverterFromResolutionAndRelaxationTime<T,DESCRIPTOR> converter(
-    (T)   N,                            // resolution
-    (T)   latticeRelaxationTime,        // lattice relaxation time
-    (T)   2*util::pow(radius, 2.)/ny,   // charPhysLength: reference length of simulation geometry (dropRe!!)
-    (T)   shearVelo,                    // charPhysVelocity: maximal/highest expected velocity during simulation in __m / s__
-    (T)   contVisc,                     // physViscosity: physical kinematic viscosity in __m^2 / s__
-    (T)   physDensity                   // physDensity: physical density in __kg / m^3__
-  );
+  const T physInterval = params.get<parameters::PHYS_INTERVAL>();
+  const T maxPhysT = params.get<parameters::MAX_PHYS_T>();
+  const T physStatIterT = params.get<parameters::PHYS_STAT_ITER_T>();
+  const int maxIter = converter.getLatticeTime(maxPhysT);
+  const int statIter = converter.getLatticeTime(physStatIterT);
+  const T residuum = params.get<parameters::CONVERGENCE_PRECISION>();
+  const T defResiduum = params.get<parameters::DEFORMATION_RESIDUUM>();
 
-  // 1. compute surface tension from Ca
-  surfTen = radius * shearRate * physDensity * contVisc / capillaryNr;
-  surfTenLatt = surfTen / (converter.getConversionFactorPressure() * converter.getPhysDeltaX());
-
-  // 2. compute interface thickness from Ch
-  xiThickness = cahnNr * converter.getLatticeLength(radius);
-  xiThicknessPU = converter.getPhysLength(xiThickness);
-
-  // 3. compute kappa from xi (Komrakova2013 equation (12))
-  kappaKomra = (3./4.) * surfTenLatt * xiThickness;
-
-  // 4. compute A from kappa (Komrakova2013 equation (11), neglect minus sign, since solely multiplications here)
-  aKomra = 2. * kappaKomra / util::pow(xiThickness, 2);
-
-  // 5. compute M from Pe (Komrakova2013 equation (17), there's a typo in the paper, should be a minus on the right hand side... we dropped that anyway.)
-  transportCoeff = shearRate * converter.getConversionFactorTime() * converter.getLatticeLength(radius) * xiThickness / (pecletNr * aKomra);
-
-  // 6. compute gamma from M (Komrakova2013 equation (8), caution: \Delta t is unity in lattice units!)
-  gama = transportCoeff / (converter.getLatticeRelaxationTime() - .5);
-
-  // Parameter fit from Komrakova to OpenLB (Semprebon2016):
-  kappa1 = 4. * aKomra;
-  kappa2 = kappa1;
-  alpha = xiThickness / 2.;
-
-  // transform normalized time to physical and then to lattice:
-  maxPhysTime = maxNormTime / shearRate;
-  maxIter = converter.getLatticeTime( maxPhysTime );
-
-  physVtkIter = vtkNormIter / shearRate;
-  physStatIter = statNormIter / shearRate;
-  vtkIter = converter.getLatticeTime( physVtkIter );
-  statIter = converter.getLatticeTime( physStatIter );;
-
-
-  // Prints the converter log as console output
-  converter.print();
-
-  // now print everything additionally to the unit converter (helps for double-checking)
-  clout << "----------------------------------------------------------------------" << std::endl;
-  clout << "----------------------------------------------------------------------" << std::endl;
-  clout << "shear rate             " << shearRate      << "[pu], " << converter.getLatticeVelocity(shearRate) << "[lu]" << std::endl;
-  clout << "shear rate             " << shearRate      << "[pu], " << shearRate * converter.getPhysDeltaT()   << "[lu]" << std::endl;
-  clout << "Re_drop                " << dropRe         << std::endl;
-  clout << "Ca                     " << capillaryNr    << std::endl;
-  clout << "radius                 " << radius         << "[pu], " << converter.getLatticeLength(radius)      << "[lu]" << std::endl;
-  clout << "normalized t_end       " << maxNormTime    << std::endl;
-  clout << "surface tension        " << surfTen        << "[pu], " << surfTenLatt << "[lu]" << std::endl;
-  clout << "Cahn Nr.               " << cahnNr         << std::endl;
-  clout << "xi                     " << xiThickness    << "[lu]" << std::endl;
-  clout << "alpha                  " << alpha          << "[lu]" << std::endl;
-  clout << "kappa1                 " << kappa1         << "[lu]" << std::endl;
-  clout << "kappa2                 " << kappa2         << "[lu]" << std::endl;
-  clout << "Peclet Nr.             " << pecletNr       << std::endl;
-  clout << "A                      " << aKomra         << "[lu]" << std::endl;
-  clout << "Mobility M             " << transportCoeff << "[lu]" << std::endl;
-  clout << "Gamma                  " << gama           << "[lu]" << std::endl;
-  clout << "vtkIter                " << vtkIter        << "[lu]" << std::endl;
-  clout << "statIter               " << statIter       << "[lu]" << std::endl;
-  clout << "maxIter                " << maxIter        << "[lu]" << std::endl;
-  clout << "physInterval convCheck " << physInterval   << "[pu]" << std::endl;
-  clout << "residuum convCheck     " << residuum       << std::endl;
-  clout << "----------------------------------------------------------------------" << std::endl;
-  clout << "----------------------------------------------------------------------" << std::endl;
-
-  // === 2nd Step: Prepare Geometry ===
-  std::vector<T> extend = { nx, ny };
-  std::vector<T> origin = { 0, 0 };
-  IndicatorCuboid2D<T> cuboid(extend,origin);
-
-  //changed because of segmentation fault
-  #ifdef PARALLEL_MODE_MPI
-  const int noOfCuboids = 1 * singleton::mpi().getSize();
-  #else
-  const int noOfCuboids = 1;
-  #endif
-  CuboidDecomposition2D<T> cuboidDecomposition( cuboid, converter.getPhysDeltaX(), noOfCuboids);
-
-  // set periodic boundaries to the domain
-  cuboidDecomposition.setPeriodicity({ true, false });
-
-  // Instantiation of loadbalancer
-  HeuristicLoadBalancer<T> loadBalancer( cuboidDecomposition );
-  loadBalancer.print();
-
-  // Instantiation of superGeometry
-  SuperGeometry<T,2> superGeometry( cuboidDecomposition,loadBalancer );
-
-  prepareGeometry( superGeometry, converter );
-
-  // === 3rd Step: Prepare Lattice ===
-  SuperLattice<T, DESCRIPTOR> sLattice1( converter, superGeometry );
-  SuperLattice<T, DESCRIPTOR> sLattice2( converter, superGeometry );
-
-  prepareLattice( sLattice1, sLattice2, converter, superGeometry );
-
-  // Add the lattice couplings
-  // The chemical potential coupling must come before the force coupling
-  SuperLatticeCoupling coupling1(
-  ChemicalPotentialCoupling2D{},
-  names::A{}, sLattice1,
-  names::B{}, sLattice2);
-
-  coupling1.template setParameter<ChemicalPotentialCoupling2D::ALPHA>(alpha);
-  coupling1.template setParameter<ChemicalPotentialCoupling2D::KAPPA1>(kappa1);
-  coupling1.template setParameter<ChemicalPotentialCoupling2D::KAPPA2>(kappa2);
-
-  SuperLatticeCoupling coupling2(
-  ForceCoupling2D{},
-  names::A{}, sLattice2,
-  names::B{}, sLattice1);
-
-  coupling1.restrictTo(superGeometry.getMaterialIndicator({1}));
-  coupling2.restrictTo(superGeometry.getMaterialIndicator({1}));
-
-  // Walls
-  SuperLatticeCoupling coupling3(
-  InletOutletCoupling2D{},
-  names::A{}, sLattice2,
-  names::B{}, sLattice1);
-
-  coupling3.restrictTo(superGeometry.getMaterialIndicator({3,4}));
-
-  sLattice1.addPostProcessor<stage::PreCoupling>(meta::id<RhoStatistics>());
-  sLattice2.addPostProcessor<stage::PreCoupling>(meta::id<RhoStatistics>());
-
-  {
-    auto& communicator = sLattice1.getCommunicator(stage::PostCoupling());
-    communicator.requestField<CHEM_POTENTIAL>();
-    communicator.requestOverlap(sLattice1.getOverlap());
-    communicator.exchangeRequests();
-  }
-  {
-    auto& communicator = sLattice2.getCommunicator(stage::PreCoupling());
-    communicator.requestField<CHEM_POTENTIAL>();
-    communicator.requestField<RhoStatistics>();
-    communicator.requestOverlap(sLattice2.getOverlap());
-    communicator.exchangeRequests();
-  }
-
-  // === 4th Step: Main Loop with Timer ===
   int iT = 0;
   clout << "starting simulation..." << std::endl;
   util::ValueTracer<T> converge( converter.getLatticeTime( physInterval ), residuum );
-  util::Timer<T> timer( maxIter, superGeometry.getStatistics().getNvoxel() );
+  util::Timer<T> timer( maxIter, geometry.getStatistics().getNvoxel() );
   timer.start();
 
   T old_deformation = 0;
@@ -575,20 +631,20 @@ int main( int argc, char *argv[] )
     if ( iT%statIter==0 ) {
       old_deformation = deformation;
       clout<<"--------------- t: "<< converter.getPhysTime(iT) <<" ----------------"<<std::endl;
-      deformation = measureDroplet( sLattice2, superGeometry, converter );
+      deformation = measureDroplet( myCase );
     }
 
     // Convergence check
     if ( converge.hasConverged() && util::abs(deformation - old_deformation) < defResiduum ) {
       clout << "Simulation converged." << std::endl;
-      getResults( sLattice2, sLattice1, iT, superGeometry, timer, converter );
+      getResults( myCase, timer, iT );
       break;
     }
     sLattice1.setProcessingContext(ProcessingContext::Simulation);
     sLattice2.setProcessingContext(ProcessingContext::Simulation);
 
     // Computation and output of the results
-    getResults( sLattice2, sLattice1, iT, superGeometry, timer, converter );
+    getResults( myCase, timer, iT );
 
     // Collide and stream execution
     sLattice1.collideAndStream();
@@ -612,4 +668,66 @@ int main( int argc, char *argv[] )
   timer.stop();
   timer.printSummary();
 
+
+}
+int main( int argc, char *argv[] )
+{
+  initialize( &argc, &argv );
+
+  // === Step 2: Set Parameters ===
+  MyCase::ParametersD myCaseParameters;
+  {
+    using namespace olb::parameters;
+    myCaseParameters.set<parameters::RADIUS    >(1.);                 // [pu] physical droplet radius
+    myCaseParameters.set<RESOLUTION       >(10);         // resolution N cells per charL = radius/2
+    myCaseParameters.set<CONT_VISC       >(1.);         // [pu] physical(!) kinematic viscosity of continuous phase
+    myCaseParameters.set<PHYS_CHAR_DENSITY>(1.);         // [pu] physical density
+    myCaseParameters.set<LATTICE_RELAXATION_TIME>(1.);         // [lu] tau for first lattice (f)
+    myCaseParameters.set<DROPLET_REYNOLDS >(1.);         // definition: shearRate * radius^2 / continuousViscosity
+    myCaseParameters.set<CAPILLARY    >(1.);// capillary number for droplet breakup
+    myCaseParameters.set<CAHN    >(0.057);// Cahn Number = xi / radius;
+    myCaseParameters.set<PECLET    >(.43);// Peclet Number = shearRate * radius * xi / (M A)
+    myCaseParameters.set<MAX_NORM_T    >(30.);// normalized time normT = T * shearRate [either in lu or pu]
+    myCaseParameters.set<NORM_VTK_ITER_T    >(0.2);// normalized vtk output (i.e. per normalized time step, one output!)
+    myCaseParameters.set<NORM_STAT_ITER_T    >(0.2);// normalized stat output (i.e. per normalized time step, one output!)
+    myCaseParameters.set<PHYS_INTERVAL    >(0.1);// interval for the convergence check in s
+    myCaseParameters.set<CONVERGENCE_PRECISION    >(1e-5);// residuum for the convergence check
+    myCaseParameters.set<DEFORMATION_CONVERGENCE_PRECISION    >(0.0015);// deformation residuum criterion
+    myCaseParameters.set<H1    >(0.);// Contact angle 90 degrees   [lattice units]
+    myCaseParameters.set<H2    >(0.);// Contact angle 90 degrees   [lattice units]
+    myCaseParameters.set<parameters::SHEAR_RATE>([&] {
+      return myCaseParameters.get<CONT_VISC>() * myCaseParameters.get<DROPLET_REYNOLDS>() / util::pow(myCaseParameters.get<parameters::RADIUS>(), 2);
+    });// [pu] physical shear rate [1/s]
+    myCaseParameters.set<parameters::MAX_PHYS_T>([&] {
+      return myCaseParameters.get<MAX_NORM_T>() / myCaseParameters.get<SHEAR_RATE>();
+    });
+    myCaseParameters.set<parameters::PHYS_VTK_ITER_T>([&] {
+      return myCaseParameters.get<NORM_VTK_ITER_T>() / myCaseParameters.get<SHEAR_RATE>();
+    });
+    myCaseParameters.set<parameters::PHYS_STAT_ITER_T>([&] {
+      return myCaseParameters.get<NORM_STAT_ITER_T>() / myCaseParameters.get<SHEAR_RATE>();
+    });
+    myCaseParameters.set<parameters::DOMAIN_EXTENT>([&]() -> Vector<MyCase::value_t, 2>{
+      return {20 * myCaseParameters.get<parameters::RADIUS>(), 4 * myCaseParameters.get<parameters::RADIUS>()};
+    });
+  }
+  myCaseParameters.fromCLI(argc, argv);
+
+  /// === Step 3: Create Mesh ===
+  Mesh mesh = createMesh(myCaseParameters);
+
+  /// === Step 4: Create Case ===
+  MyCase myCase(myCaseParameters, mesh);
+
+  /// === Step 5: Prepare Geometry ===
+  prepareGeometry(myCase);
+
+  /// === Step 6: Prepare Lattice ===
+  prepareLattice(myCase);
+
+  /// === Step 7: Definition of Initial, Boundary Values, and Fields ===
+  setInitialValues(myCase);
+
+  /// === Step 8: Simulate ===
+  simulate(myCase);
 }
