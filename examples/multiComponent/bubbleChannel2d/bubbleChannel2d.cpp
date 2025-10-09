@@ -40,9 +40,9 @@ using namespace olb::graphics;
 
 using T = double;
 using NSDESCRIPTOR = D2Q9<RHO,NABLARHO,FORCE,EXTERNAL_FORCE,TAU_EFF,STATISTIC,SCALAR>;
-using ACDESCRIPTOR = D2Q9<CONV_POPS,FORCE,SOURCE,VELOCITY,OLD_PHIU,STATISTIC,THETA>;
+using ACDESCRIPTOR = D2Q9<CONV_POPS,FORCE,VELOCITY,OLD_PHIU,STATISTIC,THETA>;
 using NSBulkDynamics = MultiPhaseIncompressibleTRTdynamics<T,NSDESCRIPTOR>;
-using ACBulkDynamics = AllenCahnBGKdynamics<T,ACDESCRIPTOR>;
+using ACBulkDynamics = ConservativePhaseFieldBGKdynamics<T,ACDESCRIPTOR>;
 using Coupling = LiangPostProcessor;
 
 // Parameters for the simulation setup

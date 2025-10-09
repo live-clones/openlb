@@ -416,6 +416,15 @@ using CorrectedMultiPhaseIncompressibleSmagorinskyRLBdynamics = dynamics::Tuple<
 >;
 
 template <typename T, typename DESCRIPTOR, typename MOMENTA=momenta::ExternalVelocityTuple>
+using ConservativePhaseFieldBGKdynamics = dynamics::Tuple<
+  T, DESCRIPTOR,
+  MOMENTA,
+  equilibria::FirstOrder,
+  collision::BGK,
+  forcing::ConservativePhaseField
+>;
+
+template <typename T, typename DESCRIPTOR, typename MOMENTA=momenta::ExternalVelocityTuple>
 using AllenCahnBGKdynamics = dynamics::Tuple<
   T, DESCRIPTOR,
   MOMENTA,
