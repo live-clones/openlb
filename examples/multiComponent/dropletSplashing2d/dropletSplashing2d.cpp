@@ -120,7 +120,7 @@ void prepareLattice( MyCase& myCase )
 
   // TODO for now, to be combined with unit converter refactor
   const int Nx = params.get<parameters::RESOLUTION>();
-  const T tau = params.get<parameters::RELAXATION_TIME>();
+  const T tau = params.get<parameters::LATTICE_RELAXATION_TIME>();
   const T radius = params.get<parameters::RADIUS>();
   const T Lx = 8*radius;
   const T nu_vapor = params.get<parameters::NU_VAPOR>();
@@ -385,7 +385,7 @@ int main( int argc, char *argv[] )
   {
     using namespace olb::parameters;
     myCaseParameters.set<RESOLUTION        >(400);      // Nx [lattice units]
-    myCaseParameters.set<RELAXATION_TIME   >(0.6);    // relaxation time [lattice units]
+    myCaseParameters.set<LATTICE_RELAXATION_TIME>(0.6);    // relaxation time [lattice units]
     myCaseParameters.set<parameters::RADIUS>(5e-6);     // radius of liquid phase [m]
     myCaseParameters.set<U_DROPLET         >(6.);       // droplet velocity [m.s-1]
   // Properties of R134 vapor and liquid
