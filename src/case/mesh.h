@@ -24,9 +24,19 @@
 #ifndef CASE_MESH_H
 #define CASE_MESH_H
 
+#include "parametersD.h"
 #include "io/stlReader.h"
 
 namespace olb {
+
+namespace parameters {
+
+struct STL_PATH : public descriptors::TYPED_FIELD_BASE<std::string,1> { };
+struct STL_SCALING : public descriptors::FIELD_BASE<1> { };
+struct STL_RAY_MODE : public descriptors::TYPED_FIELD_BASE<RayMode,1> { };
+struct DECOMPOSITION_STRATEGY : public descriptors::TYPED_FIELD_BASE<std::string,1> { };
+
+}
 
 template <typename T, unsigned D>
 class Mesh {
@@ -84,10 +94,15 @@ public:
   }
 
   /// Reads STL with the given settings and stores under its path
-  std::shared_ptr<IndicatorF<T,D>> readSTL(std::string path, T deltaX, T scaling) {
+  std::shared_ptr<STLreader<T>> readSTL(std::string path, T deltaX, T scaling) {
     std::shared_ptr<IndicatorF<T,D>> stlI(new STLreader<T>(path, deltaX, scaling));
     addIndicator(path, stlI);
-    return stlI;
+    return std::static_pointer_cast<STLreader<T>>(stlI);
+  }
+
+  /// Reads STL with the given settings and stores under its path
+  std::shared_ptr<STLreader<T>> readSTL(std::string path) {
+    return std::static_pointer_cast<STLreader<T>>(getIndicator(path));
   }
 
   /// Return indicator by name
@@ -101,6 +116,24 @@ public:
     IndicatorLayer3D<T> extendedDomain(*stlI, physDeltaX);
     Mesh mesh(extendedDomain, physDeltaX, singleton::mpi().getSize());
     mesh.addIndicator(path, stlI);
+    return mesh;
+  }
+
+  template <typename V, typename DESCRIPTOR>
+  static Mesh fromSTL(ParametersD<V,DESCRIPTOR>& params) {
+    using namespace parameters;
+    std::shared_ptr<STLreader<T>> stlI(new STLreader<T>(
+      params.template get<STL_PATH>(),
+      params.template get<PHYS_DELTA_X>(),
+      params.template get<STL_SCALING>(),
+      params.template get<STL_RAY_MODE>()));
+    IndicatorLayer3D<T> extendedDomain(*stlI, params.template get<PHYS_DELTA_X>());
+    Mesh mesh(extendedDomain,
+              params.template get<PHYS_DELTA_X>(),
+              singleton::mpi().getSize(),
+              params.template get<DECOMPOSITION_STRATEGY>());
+    mesh.addIndicator(params.template get<STL_PATH>(), stlI);
+    mesh.setOverlap(params.template get<parameters::OVERLAP>());
     return mesh;
   }
 

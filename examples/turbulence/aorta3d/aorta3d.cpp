@@ -51,20 +51,7 @@ namespace olb::parameters {
 }
 
 Mesh<MyCase::value_t,MyCase::d> createMesh(MyCase::ParametersD& parameters) {
-  using T = MyCase::value_t;
-
-  // Instantiation of a cuboidDecomposition with weights
-  const int noOfCuboids = util::min(16*parameters.get<parameters::RESOLUTION>(), 8*singleton::mpi().getSize());
-  const T physDeltaX = parameters.get<parameters::PHYS_CHAR_LENGTH>() / parameters.get<parameters::RESOLUTION>();
-
-  // Instantiation of the STLreader class
-  // file name, voxel size in meter, stl unit in meter, outer voxel no., inner voxel no.
-  STLreader<T> stlReader( "aorta3d.stl", physDeltaX, 0.001,  olb::RayMode::FastRayZ, true );
-  IndicatorLayer3D<T> extendedDomain( stlReader, physDeltaX );
-  Mesh<T,MyCase::d> mesh(extendedDomain, physDeltaX, noOfCuboids, "volume");
-
-  mesh.setOverlap(parameters.get<parameters::OVERLAP>());
-  return mesh;
+  return Mesh<MyCase::value_t,MyCase::d>::fromSTL(parameters);
 }
 
 // Stores data from stl file in geometry in form of material numbers
@@ -78,11 +65,11 @@ void prepareGeometry(MyCase& myCase)
   auto& parameters = myCase.getParameters();
 
   const T dx = parameters.get<parameters::PHYS_CHAR_LENGTH>() / parameters.get<parameters::RESOLUTION>();
-  STLreader<T> stlReader( "aorta3d.stl", dx, 0.001,  olb::RayMode::FastRayZ, true );
-  IndicatorLayer3D<T> indicator( stlReader, dx);
+  auto stlI = myCase.getMesh().getIndicator(parameters.get<parameters::STL_PATH>());
+  IndicatorLayer3D<T> indicator(*stlI, dx);
 
-  geometry.rename( 0,2,indicator );
-  geometry.rename( 2,1,stlReader );
+  geometry.rename(0,2, indicator);
+  geometry.rename(2,1, *stlI);
 
   geometry.clean();
 
@@ -150,16 +137,16 @@ void prepareLattice(MyCase& myCase)
   util::Timer<T> timer1( lattice.getUnitConverter().getLatticeTime(parameters.get<parameters::MAX_PHYS_T>()), geometry.getStatistics().getNvoxel() );
   timer1.start();
 
-  STLreader<T> stlReader( "aorta3d.stl", physDeltaX, 0.001,  olb::RayMode::FastRayZ, true );
+  auto stlI = myCase.getMesh().getIndicator(parameters.get<parameters::STL_PATH>());
 
   // material=1 --> bulk dynamics
   dynamics::set<BulkDynamics>(lattice, geometry.getMaterialIndicator({1}));
 
   if ( bouzidiOn ) {
     // material=2 --> no dynamics + bouzidi zero velocity
-    setBouzidiBoundary<T,DESCRIPTOR>(lattice, geometry, 2, stlReader);
+    setBouzidiBoundary<T,DESCRIPTOR>(lattice, geometry, 2, *stlI);
     // material=3 --> no dynamics + bouzidi velocity (inflow)
-    setBouzidiBoundary<T,DESCRIPTOR,BouzidiVelocityPostProcessor>(lattice, geometry, 3, stlReader);
+    setBouzidiBoundary<T,DESCRIPTOR,BouzidiVelocityPostProcessor>(lattice, geometry, 3, *stlI);
   }
   else {
     // material=2 --> bounceBack dynamics
@@ -229,7 +216,7 @@ void setBoundaryValues(MyCase& myCase, std::size_t iT)
 }
 
 // Computes flux at inflow and outflow
-void getResults(MyCase& myCase, SuperVtuSurfaceWriter<MyCase::value_t>& vtuWriter, STLreader<MyCase::value_t>& stlReader, util::Timer<MyCase::value_t>& timer, std::size_t iT)
+void getResults(MyCase& myCase, SuperVtuSurfaceWriter<MyCase::value_t>& vtuWriter, util::Timer<MyCase::value_t>& timer, std::size_t iT)
 {
   using T = MyCase::value_t;
   auto& lattice = myCase.getLattice(NavierStokes{});
@@ -240,6 +227,8 @@ void getResults(MyCase& myCase, SuperVtuSurfaceWriter<MyCase::value_t>& vtuWrite
 
   const T physDeltaX = converter.getPhysDeltaX();
   const bool bouzidiOn = parameters.get<parameters::BOUZIDI_ENABLED>();
+
+  auto stlI = myCase.getMesh().readSTL(parameters.get<parameters::STL_PATH>());
 
   OstreamManager clout( std::cout,"getResults" );
 
@@ -279,9 +268,8 @@ void getResults(MyCase& myCase, SuperVtuSurfaceWriter<MyCase::value_t>& vtuWrite
       SuperLatticeStress3D stressF(lattice);
       AnalyticalFfromSuperF3D smoothStressF(stressF);
 
-      PhysWallShearStressOnSurface3D<T,DESCRIPTOR> interpolatedWssF(converter, smoothDensityF, smoothStressF, stlReader);
+      PhysWallShearStressOnSurface3D<T,DESCRIPTOR> interpolatedWssF(converter, smoothDensityF, smoothStressF, *stlI);
       interpolatedWssF.getName() = "interpolatedWss";
-
       vtuWriter.addFunctor(interpolatedWssF);
 
       vtuWriter.write(iT);
@@ -319,7 +307,7 @@ void getResults(MyCase& myCase, SuperVtuSurfaceWriter<MyCase::value_t>& vtuWrite
     pFluxOutflow1.print( "outflow1","N","mmHg" );
 
     if ( bouzidiOn ) {
-      SuperLatticeYplus3D<T, DESCRIPTOR> yPlus( lattice, converter, geometry, stlReader, 3 );
+      SuperLatticeYplus3D<T, DESCRIPTOR> yPlus( lattice, converter, geometry, *stlI, 3 );
       SuperMax3D<T> yPlusMaxF( yPlus, geometry, 1 );
       int input[4]= {};
       T yPlusMax[1];
@@ -342,13 +330,11 @@ void simulate(MyCase& myCase) {
   auto& geometry = myCase.getGeometry();
 
   const T maxPhysT = parameters.get<parameters::MAX_PHYS_T>();
-  const T physDeltaX = converter.getPhysDeltaX();
 
-  OstreamManager clout( std::cout,"simulate" );
+  OstreamManager clout(std::cout, "simulate");
 
-  STLreader<T> stlReader( "aorta3d.stl", physDeltaX, 0.001,  olb::RayMode::FastRayZ, true );
-
-  SuperVtuSurfaceWriter<T> vtuWriter("surface", myCase.getMesh().getCuboidDecomposition(), myCase.getMesh().getLoadBalancer(), stlReader);
+  auto stlI = myCase.getMesh().readSTL(parameters.get<parameters::STL_PATH>());
+  SuperVtuSurfaceWriter<T> vtuWriter("surface", myCase.getMesh().getCuboidDecomposition(), myCase.getMesh().getLoadBalancer(), *stlI);
 
   // === 4th Step: Main Loop with Timer ===
   clout << "starting simulation..." << std::endl;
@@ -363,7 +349,7 @@ void simulate(MyCase& myCase) {
     lattice.collideAndStream();
 
     // === 7th Step: Computation and Output of the Results ===
-    getResults(myCase, vtuWriter, stlReader, timer, iT);
+    getResults(myCase, vtuWriter, timer, iT);
   }
 
   timer.stop();
@@ -383,6 +369,11 @@ int main( int argc, char* argv[] )
   MyCase::ParametersD myCaseParameters;
   {
     using namespace olb::parameters;
+    myCaseParameters.set<STL_PATH>(std::string("aorta3d.stl"));
+    myCaseParameters.set<STL_SCALING>(0.001);
+    myCaseParameters.set<STL_RAY_MODE>(RayMode::FastRayZ);
+    myCaseParameters.set<DECOMPOSITION_STRATEGY>(std::string("volume"));
+
     myCaseParameters.set<RESOLUTION         >(40);
     myCaseParameters.set<TIME_RESOLUTION    >(20);
     myCaseParameters.set<PHYS_CHAR_LENGTH   >(0.02246); // reference length of simulation geometry in m
@@ -391,6 +382,10 @@ int main( int argc, char* argv[] )
     myCaseParameters.set<PHYS_CHAR_DENSITY  >(1055);
     myCaseParameters.set<MAX_PHYS_T         >(2.); // max. simulation time in s, SI unit
     myCaseParameters.set<BOUZIDI_ENABLED    >(true);
+    myCaseParameters.set<PHYS_DELTA_X>([&] {
+      return myCaseParameters.get<parameters::PHYS_CHAR_LENGTH>()
+           / myCaseParameters.get<parameters::RESOLUTION>();
+    });
   }
   myCaseParameters.fromCLI(argc, argv);
 
