@@ -46,9 +46,9 @@ int main(int argc, char* argv[]) {
     myCaseParameters.set<PSI_BC>(-0.02);
     myCaseParameters.set<DEBYE>([&] {
       return util::debyeLength<T>(myCaseParameters.get<DIELECTRIC_CONST>(),
-                                                 myCaseParameters.get<VALENCE>(),
-                                                 myCaseParameters.get<parameters::TEMPERATURE>(),
-                                                 myCaseParameters.get<C_0>());
+                                  myCaseParameters.get<VALENCE>(),
+                                  myCaseParameters.get<parameters::TEMPERATURE>(),
+                                  myCaseParameters.get<C_0>());
     });
     myCaseParameters.set<DOMAIN_EXTENT>([&] {
       return Vector<T,3>(13./4.*myCaseParameters.get<DEBYE>(), 13.*myCaseParameters.get<DEBYE>(),0.);

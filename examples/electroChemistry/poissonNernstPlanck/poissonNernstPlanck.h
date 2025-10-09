@@ -128,7 +128,7 @@ Mesh<MyCase::value_t,MyCase::d> createMesh(MyCase::ParametersD& parameters) {
 
   Mesh<T,MyCase::d> mesh(cuboid, physDeltaX, singleton::mpi().getSize());
   mesh.setOverlap(parameters.get<parameters::OVERLAP>());
-  mesh.getCuboidDecomposition().setPeriodicity({{true,false,true}});
+  mesh.getCuboidDecomposition().setPeriodicity({true,false,true});
   return mesh;
 }
 
@@ -601,6 +601,7 @@ void simulate(MyCase& myCase) {
   util::ValueTracer<T> converge( 500, residuum );
   timer.start();
 
+  parameters.set<parameters::HAS_CONVERGED>(false);
   for (std::size_t iT=0; iT < iTmax; ++iT) {
     if ( converge.hasConverged() ) {
       clout << "Simulation converged." << std::endl;
