@@ -22,8 +22,22 @@
  *  Boston, MA  02110-1301, USA.
  */
 
-#include "electroosmosis.h"
+#include "../electroosmosis.h"
 using T = MyCase::value_t;
+
+static Gnuplot<T> gplot(
+  "ElectroosmosisEOC",
+  false,
+  "set terminal png size 720, 720 font 'Arial,10'",
+  Gnuplot<T>::LOGLOG,
+  Gnuplot<T>::LINREG);
+
+namespace olb::parameters {
+
+struct START_RESOLUTION : public descriptors::TYPED_FIELD_BASE<int,1> { };
+struct END_RESOLUTION : public descriptors::TYPED_FIELD_BASE<int,1> { };
+
+}
 
 int main(int argc, char* argv[]) {
   initialize(&argc, &argv);
@@ -32,7 +46,8 @@ int main(int argc, char* argv[]) {
   MyCase::ParametersD myCaseParameters;
   {
     using namespace olb::parameters;
-    myCaseParameters.set<RESOLUTION>(40);
+    myCaseParameters.set<START_RESOLUTION>(20);
+    myCaseParameters.set<END_RESOLUTION>(80);
     myCaseParameters.set<E_FIELD>(250);
     myCaseParameters.set<POISSON_RELAXATION_TIME>(0.9);
     myCaseParameters.set<IONS_RELAXATION_TIME>(0.7);
@@ -79,29 +94,56 @@ int main(int argc, char* argv[]) {
   }
   myCaseParameters.fromCLI(argc, argv);
 
-  /// === Step 3: Create Mesh ===
-  Mesh mesh = createMesh(myCaseParameters);
+  gplot.setLabel("Resolution test", "average Error");
 
-  /// === Step 4: Create Case ===
-  MyCase myCase(myCaseParameters, mesh);
+  for(int simuN =  myCaseParameters.get<parameters::START_RESOLUTION>();
+      simuN <=  myCaseParameters.get<parameters::END_RESOLUTION>();
+      simuN *= 2) {
+    myCaseParameters.set<parameters::RESOLUTION>(simuN);
 
-  /// === Step 5: Prepare Geometry ===
-  prepareGeometry(myCase);
+    /// === Step 3: Create Mesh ===
+    Mesh mesh = createMesh(myCaseParameters);
 
-  /// === Step 6: Prepare Lattice ===
-  prepareLatticePoisson(myCase);
-  prepareLatticeNernstPlanck<0>(myCase);
-  prepareLatticeNernstPlanck<1>(myCase);
-  prepareLatticeNSE(myCase);
+    /// === Step 4: Create Case ===
+    MyCase myCase(myCaseParameters, mesh);
 
-  prepareLatticeCoupling(myCase);
+    /// === Step 5: Prepare Geometry ===
+    prepareGeometry(myCase);
 
-  /// === Step 7: Definition of Initial, Boundary Values, and Fields ===
-  setInitialValuesPoisson(myCase);
-  setInitialValuesCation(myCase);
-  setInitialValuesAnion(myCase);
-  setInitialValuesNSE(myCase);
+    /// === Step 6: Prepare Lattice ===
+    prepareLatticePoisson(myCase);
+    prepareLatticeNernstPlanck<0>(myCase);
+    prepareLatticeNernstPlanck<1>(myCase);
+    prepareLatticeNSE(myCase);
 
-  /// === Step 8: Simulate ===
-  simulate(myCase);
+    prepareLatticeCoupling(myCase);
+
+    /// === Step 7: Definition of Initial, Boundary Values, and Fields ===
+    setInitialValuesPoisson(myCase);
+    setInitialValuesCation(myCase);
+    setInitialValuesAnion(myCase);
+    setInitialValuesNSE(myCase);
+
+    /// === Step 8: Simulate ===
+    simulate(myCase);
+
+    auto errorsPsi = myCaseParameters.get<parameters::ERROR_NORMS_PSI>();
+    auto errorsCation = myCaseParameters.get<parameters::ERROR_NORMS_CATION>();
+    auto errorsAnion = myCaseParameters.get<parameters::ERROR_NORMS_ANION>();
+    auto errorsNSE = myCaseParameters.get<parameters::ERROR_NORMS_NSE>();
+    gplot.setData (
+          MyCase::value_t(simuN),
+          { errorsPsi[0], errorsPsi[1], errorsPsi[2],
+            errorsCation[0], errorsCation[1], errorsCation[2],
+            errorsAnion[0], errorsAnion[1], errorsAnion[2],
+            errorsNSE[0], errorsNSE[1], errorsNSE[2]},
+          { "psi L1 Rel Error","psi L2 Rel Error",
+            "psi Linf Rel error","conc L1 Rel Error","conc L2 Rel Error",
+            "conc Linf Rel error","conc2 L1 Rel Error","conc2 L2 Rel Error",
+            "conc2 Linf Rel error","vel L1 Rel Error","vel  L2 Rel Error",
+            "vel  Linf Rel error"},
+          "top right",
+          { 'p','p','p','p','p','p','p','p','p','p','p','p' } );
+  }
+  gplot.writePNG();
 }
