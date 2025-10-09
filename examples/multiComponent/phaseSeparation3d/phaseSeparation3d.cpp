@@ -251,7 +251,7 @@ int main(int argc, char* argv[])
   MyCase::ParametersD myCaseParameters;
   {
     using namespace olb::parameters;
-    myCaseParameters.set<MAX_LATTICE_T>(200);
+    myCaseParameters.set<MAX_LATTICE_T>(2000);
     myCaseParameters.set<LATTICE_STAT_ITER_T>(20);
     myCaseParameters.set<LATTICE_VTK_ITER_T>(20);
 
