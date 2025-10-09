@@ -39,8 +39,11 @@ using namespace olb::names;
 using MyCase = Case<NavierStokes, Lattice<double, descriptors::D2Q9<>>>;
 namespace olb::parameters {
 
-struct RESIDUUM : public descriptors::FIELD_BASE<1> {};      // Residuum for convergence check
-struct TIME_INTERVAL : public descriptors::FIELD_BASE<1> {}; // Time intervall in seconds for convergence check
+struct RESIDUUM : public descriptors::FIELD_BASE<1> {};                    // Residuum for convergence check
+struct PHYS_LOG_ITER_T : public descriptors::FIELD_BASE<1> {};             // physical time interval for loging
+struct PHYS_IMAGE_ITER_T : public descriptors::FIELD_BASE<1> {};           // physical time interval for saving images
+struct PHYS_GNUPLOT_ITER_T : public descriptors::FIELD_BASE<1> {};         // physical time interval for saving gnuplot
+struct TIMER_PRINT_MODE : public descriptors::TYPED_FIELD_BASE<int, 1> {}; // Timer print mode
 
 } // namespace olb::parameters
 
@@ -169,26 +172,31 @@ void setInitialValues(MyCase& myCase)
 /// @note Be careful: boundary values have to be set using lattice units
 void setBoundaryValues(MyCase& myCase, std::size_t iT) { return; }
 
-void getResults(MyCase& myCase, std::size_t iT, util::Timer<MyCase::value_t>& timer, const MyCase::value_t logT, const MyCase::value_t maxPhysT,
-                const MyCase::value_t imSave, const MyCase::value_t vtkSave, const MyCase::value_t gnuplotSave, std::string filenameGif, std::string filenameVtk,
-                std::string filenameGnuplot, const int timerPrintMode, bool converged)
+void getResults(MyCase& myCase, std::size_t iT, util::Timer<MyCase::value_t>& timer, bool converged)
 {
   OstreamManager clout(std::cout, "getResults");
-  using T               = MyCase::value_t;
-  auto&       sLattice  = myCase.getLattice(NavierStokes {});
-  const auto& converter = sLattice.getUnitConverter();
-  auto&       sGeometry = myCase.getGeometry();
+  using T                    = MyCase::value_t;
+  auto&       sLattice       = myCase.getLattice(NavierStokes {});
+  const auto& converter      = sLattice.getUnitConverter();
+  auto&       sGeometry      = myCase.getGeometry();
+  auto&       parameters     = myCase.getParameters();
+  auto        logT           = parameters.get<parameters::PHYS_LOG_ITER_T>();
+  auto        maxPhysT       = parameters.get<parameters::MAX_PHYS_T>();
+  auto        imSave         = parameters.get<parameters::PHYS_IMAGE_ITER_T>();
+  auto        vtkSave        = parameters.get<parameters::PHYS_VTK_ITER_T>();
+  auto        gnuplotSave    = parameters.get<parameters::PHYS_GNUPLOT_ITER_T>();
+  auto        timerPrintMode = parameters.get<parameters::TIMER_PRINT_MODE>();
 
-  SuperVTMwriter2D<T> vtmWriter(filenameVtk);
+  SuperVTMwriter2D<T> vtmWriter("cavity2dvtk");
 
   if (iT == 0) {
     // Writes the geometry, cuboid no. and rank no. as vti file for visualization
-    SuperLatticeCuboid2D             cuboid(sLattice);
-    SuperLatticeRank2D               rank(sLattice);
-    SuperLatticeDiscreteNormal2D<T, MyCase::descriptor_t_of<NavierStokes>>     discreteNormal(sLattice, sGeometry,
-                                                                   sGeometry.getMaterialIndicator({2, 3}));
-    SuperLatticeDiscreteNormalType2D<T, MyCase::descriptor_t_of<NavierStokes>> discreteNormalType(sLattice, sGeometry,
-                                                                       sGeometry.getMaterialIndicator({2, 3}));
+    SuperLatticeCuboid2D                                                   cuboid(sLattice);
+    SuperLatticeRank2D                                                     rank(sLattice);
+    SuperLatticeDiscreteNormal2D<T, MyCase::descriptor_t_of<NavierStokes>> discreteNormal(
+        sLattice, sGeometry, sGeometry.getMaterialIndicator({2, 3}));
+    SuperLatticeDiscreteNormalType2D<T, MyCase::descriptor_t_of<NavierStokes>> discreteNormalType(
+        sLattice, sGeometry, sGeometry.getMaterialIndicator({2, 3}));
 
     vtmWriter.write(cuboid);
     vtmWriter.write(rank);
@@ -217,9 +225,9 @@ void getResults(MyCase& myCase, std::size_t iT, util::Timer<MyCase::value_t>& ti
 
   // Writes the Gif files
   if ((iT % converter.getLatticeTime(imSave) == 0 && iT > 0) || converged) {
-    SuperLatticePhysVelocity2D velocity(sLattice, converter);
-    SuperEuklidNorm2D<T, MyCase::descriptor_t_of<NavierStokes>>          normVel(velocity);
-    BlockReduction2D2D<T>                     planeReduction(normVel, 600, BlockDataSyncMode::ReduceOnly);
+    SuperLatticePhysVelocity2D                                  velocity(sLattice, converter);
+    SuperEuklidNorm2D<T, MyCase::descriptor_t_of<NavierStokes>> normVel(velocity);
+    BlockReduction2D2D<T> planeReduction(normVel, 600, BlockDataSyncMode::ReduceOnly);
     // write output of velocity as JPEG
     heatmap::write(planeReduction, iT);
   }
@@ -241,7 +249,7 @@ void getResults(MyCase& myCase, std::size_t iT, util::Timer<MyCase::value_t>& ti
     Vector<T, 17> vel_simulation;
 
     // Gnuplot interface to create plots
-    Gnuplot<T> gplot(filenameGnuplot + "_iT" + std::to_string(iT));
+    Gnuplot<T> gplot("centerVelocityX_iT" + std::to_string(iT));
     // Define comparison values
     Vector<T, 17> comparison = vel_ghia_RE1000;
 
@@ -270,23 +278,13 @@ void simulate(MyCase& myCase)
   OstreamManager clout(std::cout, "Time marching");
   using T = MyCase::value_t;
 
-  std::string       fName("cavity2d.xml");
-  XMLreader         config(fName);
-  const T           logT            = config["Output"]["Log"]["SaveTime"].get<T>();
-  const T           imSave          = config["Output"]["VisualizationImages"]["SaveTime"].get<T>();
-  const T           vtkSave         = config["Output"]["VisualizationVTK"]["SaveTime"].get<T>();
-  const T           gnuplotSave     = config["Output"]["VisualizationGnuplot"]["SaveTime"].get<T>();
-  const int         timerPrintMode  = config["Output"]["Timer"]["PrintMode"].get<int>();
-  const std::string filenameGif     = config["Output"]["VisualizationImages"]["Filename"].get<std::string>();
-  const std::string filenameVtk     = config["Output"]["VisualizationVTK"]["Filename"].get<std::string>();
-  const std::string filenameGnuplot = config["Output"]["VisualizationGnuplot"]["Filename"].get<std::string>();
+  auto& sLattice   = myCase.getLattice(NavierStokes {});
+  auto& parameters = myCase.getParameters();
+  auto  maxPhysT   = parameters.get<parameters::MAX_PHYS_T>();
 
-  auto& sLattice    = myCase.getLattice(NavierStokes {});
-  auto& parameters  = myCase.getParameters();
-  auto  maxPhysT    = parameters.get<parameters::MAX_PHYS_T>();
-  auto  maxLatticeT = sLattice.getUnitConverter().getLatticeTime(maxPhysT);
+  auto maxLatticeT = sLattice.getUnitConverter().getLatticeTime(maxPhysT);
 
-  util::ValueTracer<T> converge(sLattice.getUnitConverter().getLatticeTime(parameters.get<parameters::TIME_INTERVAL>()),
+  util::ValueTracer<T> converge(sLattice.getUnitConverter().getLatticeTime(parameters.get<parameters::CONV_ITER>()),
                                 parameters.get<parameters::RESIDUUM>());
 
   util::Timer<T> timer(maxLatticeT, myCase.getGeometry().getStatistics().getNvoxel());
@@ -296,8 +294,7 @@ void simulate(MyCase& myCase)
   for (std::size_t iT = 0; iT <= maxLatticeT; ++iT) {
     if (converge.hasConverged()) {
       clout << "Simulation converged." << std::endl;
-      getResults(myCase, iT, timer, logT, maxPhysT, imSave, vtkSave, gnuplotSave, filenameGif, filenameVtk,
-                 filenameGnuplot, timerPrintMode, converge.hasConverged());
+      getResults(myCase, iT, timer, converge.hasConverged());
 
       break;
     }
@@ -306,8 +303,7 @@ void simulate(MyCase& myCase)
 
     sLattice.collideAndStream();
 
-    getResults(myCase, iT, timer, logT, maxPhysT, imSave, vtkSave, gnuplotSave, filenameGif, filenameVtk,
-               filenameGnuplot, timerPrintMode, converge.hasConverged());
+    getResults(myCase, iT, timer, converge.hasConverged());
 
     converge.takeValue(sLattice.getStatistics().getAverageEnergy(), true);
   }
@@ -323,23 +319,36 @@ int main(int argc, char* argv[])
   initialize(&argc, &argv);
   OstreamManager clout(std::cout, "main");
 
-
+  std::string fName("cavity2d.xml");
+  XMLreader   config(fName);
+  std::string olbdir, outputdir;
+  config["Application"]["OlbDir"].read(olbdir);
+  config["Output"]["OutputDir"].read(outputdir);
+  singleton::directories().setOlbDir(olbdir);
+  singleton::directories().setOutputDir(outputdir);
   /// === Step 2: Set Parameters ===
   MyCase::ParametersD myCaseParameters;
   {
     using namespace olb::parameters;
-    myCaseParameters.set<RESOLUTION>(128);
-    myCaseParameters.set<LATTICE_RELAXATION_TIME>(0.5384);
-    myCaseParameters.set<PHYS_CHAR_LENGTH>(1.0);
-    myCaseParameters.set<PHYS_CHAR_VELOCITY>(1.0);
-    myCaseParameters.set<PHYS_CHAR_VISCOSITY>(0.001);
-    myCaseParameters.set<PHYS_CHAR_DENSITY>(1.0);
-    myCaseParameters.set<MAX_PHYS_T>(100);
-    myCaseParameters.set<TIME_INTERVAL>(1.0);
-    myCaseParameters.set<RESIDUUM>(1.0e-3);
+    using T = MyCase::value_t;
+    myCaseParameters.set<RESOLUTION>(config["Application"]["Discretization"]["Resolution"].get<int>());
+    myCaseParameters.set<LATTICE_RELAXATION_TIME>(
+        config["Application"]["Discretization"]["LatticeRelaxationTime"].get<T>());
+    myCaseParameters.set<PHYS_CHAR_LENGTH>(config["Application"]["PhysParameters"]["CharPhysLength"].get<T>());
+    myCaseParameters.set<PHYS_CHAR_VELOCITY>(config["Application"]["PhysParameters"]["CharPhysVelocity"].get<T>());
+    myCaseParameters.set<PHYS_CHAR_VISCOSITY>(config["Application"]["PhysParameters"]["PhysViscosity"].get<T>());
+    myCaseParameters.set<PHYS_CHAR_DENSITY>(config["Application"]["PhysParameters"]["PhysDensity"].get<T>());
+    myCaseParameters.set<MAX_PHYS_T>(config["Application"]["PhysParameters"]["PhysMaxTime"].get<T>());
+    myCaseParameters.set<CONV_ITER>(config["Application"]["ConvergenceCheck"]["Interval"].get<T>());
+    myCaseParameters.set<RESIDUUM>(config["Application"]["ConvergenceCheck"]["Residuum"].get<T>());
     myCaseParameters.set<PHYS_DELTA_X>([&] {
       return myCaseParameters.get<PHYS_CHAR_LENGTH>() / myCaseParameters.get<RESOLUTION>();
     });
+    myCaseParameters.set<PHYS_VTK_ITER_T>(config["Output"]["VisualizationVTK"]["SaveTime"].get<T>());
+    myCaseParameters.set<PHYS_LOG_ITER_T>(config["Output"]["Log"]["SaveTime"].get<T>());
+    myCaseParameters.set<PHYS_IMAGE_ITER_T>(config["Output"]["VisualizationImages"]["SaveTime"].get<T>());
+    myCaseParameters.set<PHYS_GNUPLOT_ITER_T>(config["Output"]["VisualizationGnuplot"]["SaveTime"].get<T>());
+    myCaseParameters.set<TIMER_PRINT_MODE>(config["Output"]["Timer"]["PrintMode"].get<int>());
   }
 
   myCaseParameters.fromCLI(argc, argv);
