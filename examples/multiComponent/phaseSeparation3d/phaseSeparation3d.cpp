@@ -29,207 +29,254 @@
  * usage of multiphase flow.
  */
 
-
 #include <olb.h>
 
 using namespace olb;
-using namespace olb::descriptors;
+using namespace olb::names;
 using namespace olb::graphics;
 
-using T = FLOATING_POINT_TYPE;
-using DESCRIPTOR = D3Q19<VELOCITY,FORCE,EXTERNAL_FORCE,OMEGA,STATISTIC>;
-using BulkDynamics = ForcedShanChenBGKdynamics<T,DESCRIPTOR,momenta::ExternalVelocityTuple>;
+// === Step 1: Declarations ===
+using MyCase = Case<NavierStokes, Lattice<double, descriptors::D3Q19<descriptors::VELOCITY, descriptors::EXTERNAL_FORCE,
+                                                                     descriptors::OMEGA, descriptors::STATISTIC>>>;
 
+namespace olb::parameters {
+struct SHEN_OMEGA : public descriptors::FIELD_BASE<1> {};
+} // namespace olb::parameters
 
-// Parameters for the simulation setup
-const int maxIter  = 2000;
-const int nx   = 76;
-const int ny   = 76;
-const int nz   = 76;
-
-
-// Stores geometry information in form of material numbers
-void prepareGeometry( SuperGeometry<T,3>& superGeometry )
+Mesh<MyCase::value_t, MyCase::d> createMesh(MyCase::ParametersD& params)
 {
+  using T                     = MyCase::value_t;
+  Vector               extent = params.get<parameters::DOMAIN_EXTENT>();
+  std::vector<T>       origin(3, T());
+  IndicatorCuboid3D<T> cuboid(extent, origin);
 
-  OstreamManager clout( std::cout,"prepareGeometry" );
+  T                  dx = 1;
+  Mesh<T, MyCase::d> mesh(cuboid, dx, singleton::mpi().getSize());
+  mesh.setOverlap(params.get<parameters::OVERLAP>());
+  mesh.getCuboidDecomposition().setPeriodicity({true, true, true});
+
+  return mesh;
+}
+
+void prepareGeometry(MyCase& myCase)
+{
+  auto& geometry = myCase.getGeometry();
+
+  OstreamManager clout(std::cout, "prepareGeometry");
   clout << "Prepare Geometry ..." << std::endl;
 
   // Sets material number for fluid
-  superGeometry.rename( 0,1 );
+  geometry.rename(0, 1);
 
   // Removes all not needed boundary voxels outside the surface
-  superGeometry.clean();
+  geometry.clean();
   // Removes all not needed boundary voxels inside the surface
-  superGeometry.innerClean();
-  superGeometry.checkForErrors();
+  geometry.innerClean();
+  geometry.checkForErrors();
 
-  superGeometry.print();
+  geometry.print();
 
   clout << "Prepare Geometry ... OK" << std::endl;
 }
 
-// Set up the geometry of the simulation
-void prepareLattice( SuperLattice<T, DESCRIPTOR>& sLattice,
-                     SuperGeometry<T,3>& superGeometry )
+void prepareLattice(MyCase& myCase)
 {
-  const T omega1 = 1.0;
+  OstreamManager clout(std::cout, "prepareLattice");
+  clout << "Prepare Lattice ..." << std::endl;
 
-  // Material=1 -->bulk dynamics
-  sLattice.defineDynamics<BulkDynamics>( superGeometry, 1);
+  using T        = MyCase::value_t;
+  auto& geometry = myCase.getGeometry();
+  auto& params   = myCase.getParameters();
 
-  // Initial conditions
-  AnalyticalConst3D<T,T> noise( .01 );
-  std::vector<T> v( 3,T() );
-  AnalyticalConst3D<T,T> zeroVelocity( v );
-  AnalyticalConst3D<T,T> oldRho( .125 );
-  AnalyticalRandom3D<T,T> random;
-  AnalyticalIdentity3D<T,T> newRho( random*noise+oldRho );
+  auto& NSElattice    = myCase.getLattice(NavierStokes {});
+  using NSEDESCRIPTOR = MyCase::descriptor_t_of<NavierStokes>;
 
-  // Initialize all values of distribution functions to their local equilibrium
-  sLattice.defineRhoU( superGeometry, 1, newRho, zeroVelocity );
-  sLattice.iniEquilibrium( superGeometry, 1, newRho, zeroVelocity );
+  NSElattice.setUnitConverter<UnitConverterFromResolutionAndRelaxationTime<T, NSEDESCRIPTOR>>(
+      (T)params.get<parameters::DOMAIN_EXTENT>()[0], //resolution
+      (T)params.get<parameters::LATTICE_RELAXATION_TIME>(), (T)params.get<parameters::PHYS_CHAR_LENGTH>(),
+      (T)params.get<parameters::PHYS_CHAR_VELOCITY>(), (T)params.get<parameters::PHYS_CHAR_VISCOSITY>(),
+      (T)1. //density
+  );
+  const auto converter = NSElattice.getUnitConverter();
+  converter.print();
 
-  sLattice.setParameter<descriptors::OMEGA>(omega1);
+  using BulkDynamics = ForcedShanChenBGKdynamics<T, NSEDESCRIPTOR, momenta::ExternalVelocityTuple>;
+  const T omega1     = params.get<parameters::SHEN_OMEGA>();
 
-  sLattice.addPostProcessor<stage::PreCoupling>(meta::id<RhoStatistics>());
+  NSElattice.defineDynamics<BulkDynamics>(geometry, 1);
+
+  NSElattice.addPostProcessor<stage::PreCoupling>(meta::id<RhoStatistics>());
   {
-    auto& communicator = sLattice.getCommunicator(stage::Coupling());
+    auto& communicator = NSElattice.getCommunicator(stage::Coupling());
     communicator.requestField<descriptors::STATISTIC>();
     communicator.requestOverlap(1);
     communicator.exchangeRequests();
   }
 
-  using COUPLING = ShanChenForcedSingleComponentPostProcessor<T,DESCRIPTOR,interaction::CarnahanStarling>;
-  sLattice.addPostProcessor<stage::Coupling>(meta::id<COUPLING>{});
-  sLattice.setParameter<COUPLING::G>(T(-1));
-  sLattice.setParameter<COUPLING::RHO0>(T(1));
-  sLattice.setParameter<COUPLING::OMEGA>(omega1);
-  sLattice.setParameter<interaction::CarnahanStarling::G>(T(-1));
-  sLattice.setParameter<interaction::CarnahanStarling::A>(T(1));
-  sLattice.setParameter<interaction::CarnahanStarling::B>(T(4));
-  sLattice.setParameter<interaction::CarnahanStarling::T>(T(0.7));
+  using COUPLING = ShanChenForcedSingleComponentPostProcessor<T, NSEDESCRIPTOR, interaction::CarnahanStarling>;
+  NSElattice.addPostProcessor<stage::Coupling>(meta::id<COUPLING> {});
+  NSElattice.setParameter<COUPLING::G>(T(-1));
+  NSElattice.setParameter<COUPLING::RHO0>(T(1));
+  NSElattice.setParameter<COUPLING::OMEGA>(omega1);
+  NSElattice.setParameter<interaction::CarnahanStarling::G>(T(-1));
+  NSElattice.setParameter<interaction::CarnahanStarling::A>(T(1));
+  NSElattice.setParameter<interaction::CarnahanStarling::B>(T(4));
+  NSElattice.setParameter<interaction::CarnahanStarling::T>(T(0.7));
 
-  sLattice.template addCustomTask<stage::PostStream>([&]() {
-    sLattice.executePostProcessors(stage::PreCoupling());
-    sLattice.executePostProcessors(stage::Coupling());
+  NSElattice.template addCustomTask<stage::PostStream>([&]() {
+    NSElattice.executePostProcessors(stage::PreCoupling());
+    NSElattice.executePostProcessors(stage::Coupling());
   });
 
   // Make the lattice ready for simulation
-  sLattice.initialize();
+  NSElattice.initialize();
+  clout << "Prepare Lattice ... OK" << std::endl;
 }
 
-// Output to console and files
-void getResults( SuperLattice<T, DESCRIPTOR>& sLattice, int iT,
-                 SuperGeometry<T,3>& superGeometry, util::Timer<T>& timer )
+void setInitialValues(MyCase& myCase)
 {
+  OstreamManager clout(std::cout, "setInitialConditions");
+  clout << "Setting Initial Conditions ..." << std::endl;
+  using T        = MyCase::value_t;
+  auto& geometry = myCase.getGeometry();
+  auto& params   = myCase.getParameters();
 
-  OstreamManager clout( std::cout,"getResults" );
+  auto& NSElattice = myCase.getLattice(NavierStokes {});
 
-  SuperVTMwriter3D<T> vtmWriter( "phaseSeparation3d" );
-  SuperLatticeVelocity3D<T, DESCRIPTOR> velocity( sLattice );
-  SuperLatticeDensity3D<T, DESCRIPTOR> density( sLattice );
-  vtmWriter.addFunctor( velocity );
-  vtmWriter.addFunctor( density );
+  const T omega1 = params.get<parameters::SHEN_OMEGA>();
 
-  const int vtkIter  = 20;
-  const int statIter = 20;
+  // Initial conditions
+  AnalyticalConst3D<T, T>    noise(.01);
+  std::vector<T>             v(3, T());
+  AnalyticalConst3D<T, T>    zeroVelocity(v);
+  AnalyticalConst3D<T, T>    oldRho(.125);
+  AnalyticalRandom3D<T, T>   random;
+  AnalyticalIdentity3D<T, T> newRho(random * noise + oldRho);
 
-  if ( iT==0 ) {
+  // Initialize all values of distribution functions to their local equilibrium
+  NSElattice.defineRhoU(geometry, 1, newRho, zeroVelocity);
+  NSElattice.iniEquilibrium(geometry, 1, newRho, zeroVelocity);
+
+  NSElattice.setParameter<descriptors::OMEGA>(omega1);
+
+  clout << "Setting Initial Conditions ... OK" << std::endl;
+}
+
+void getResults(MyCase& myCase, util::Timer<MyCase::value_t>& timer, std::size_t iT)
+{
+  OstreamManager clout(std::cout, "getResults");
+  using T      = MyCase::value_t;
+  auto& params = myCase.getParameters();
+
+  auto& NSElattice    = myCase.getLattice(NavierStokes {});
+  using NSEDESCRIPTOR = MyCase::descriptor_t_of<NavierStokes>;
+
+  SuperVTMwriter3D<T>                      vtmWriter("phaseSeparation3d");
+  SuperLatticeVelocity3D<T, NSEDESCRIPTOR> velocity(NSElattice);
+  SuperLatticeDensity3D<T, NSEDESCRIPTOR>  density(NSElattice);
+  vtmWriter.addFunctor(velocity);
+  vtmWriter.addFunctor(density);
+
+  const int vtkIter  = params.get<parameters::LATTICE_VTK_ITER_T>();
+  const int statIter = params.get<parameters::LATTICE_STAT_ITER_T>();
+
+  if (iT == 0) {
     // Writes the geometry, cuboid no. and rank no. as vti file for visualization
-    SuperLatticeCuboid3D<T, DESCRIPTOR> cuboid( sLattice );
-    SuperLatticeRank3D<T, DESCRIPTOR> rank( sLattice );
-    vtmWriter.write( cuboid );
-    vtmWriter.write( rank );
+    SuperLatticeCuboid3D<T, NSEDESCRIPTOR> cuboid(NSElattice);
+    SuperLatticeRank3D<T, NSEDESCRIPTOR>   rank(NSElattice);
+    vtmWriter.write(cuboid);
+    vtmWriter.write(rank);
 
     vtmWriter.createMasterFile();
   }
-
-  // Writes output on the console
-  if ( iT%statIter==0 ) {
-    // Timer console output
-    timer.update( iT );
-    timer.printStep();
-
-    // Lattice statistics console output
-    sLattice.getStatistics().print( iT,iT );
-  }
-
   // Writes the vtk files
-  if ( iT%vtkIter==0 ) {
-    sLattice.setProcessingContext(ProcessingContext::Evaluation);
+  if (iT % vtkIter == 0) {
+    NSElattice.setProcessingContext(ProcessingContext::Evaluation);
 
     clout << "Writing VTK and JPEG..." << std::endl;
-    vtmWriter.write( iT );
+    vtmWriter.write(iT);
 
-    BlockReduction3D2D<T> planeReduction( density, {0, 0, 1} );
+    BlockReduction3D2D<T> planeReduction(density, {0, 0, 1});
     // write output as JPEG
     heatmap::write(planeReduction, iT);
   }
+
+  // Writes output on the console
+  if (iT % statIter == 0) {
+    // Timer console output
+    timer.update(iT);
+    timer.printStep();
+
+    // Lattice statistics console output
+    NSElattice.getStatistics().print(iT, iT);
+  }
 }
 
-int main( int argc, char *argv[] )
+void simulate(MyCase& myCase)
 {
-  // === 1st Step: Initialization ===
-  initialize( &argc, &argv );
-  singleton::directories().setOutputDir( "./tmp/" );
-  OstreamManager clout( std::cout,"main" );
+  OstreamManager clout(std::cout, "simulate");
+  using T        = MyCase::value_t;
+  auto& geometry = myCase.getGeometry();
+  auto& params   = myCase.getParameters();
 
-  UnitConverterFromResolutionAndRelaxationTime<T,DESCRIPTOR> converter(
-    (T)   nx, // resolution
-    (T)   1., // lattice relaxation time (tau)
-    (T)   1e-5, // charPhysLength: reference length of simulation geometry
-    (T)   1.e-6, // charPhysVelocity: maximal/highest expected velocity during simulation in __m / s__
-    (T)   0.1, // physViscosity: physical kinematic viscosity in __m^2 / s__
-    (T)   1. // physDensity: physical density in __kg / m^3__
-  );
+  auto& NSElattice    = myCase.getLattice(NavierStokes {});
+  using NSEDESCRIPTOR = MyCase::descriptor_t_of<NavierStokes>;
 
-  // display messages from every single mpi process
-  //clout.setMultiOutput(true);
+  std::size_t iT      = 0;
+  const T     maxIter = params.get<parameters::MAX_LATTICE_T>();
 
-  // === 2rd Step: Prepare Geometry ===
-
-  // Instantiation of a cuboidDecomposition with weights
-#ifdef PARALLEL_MODE_MPI
-  const int noOfCuboids = singleton::mpi().getSize();
-#else
-  const int noOfCuboids = 1;
-#endif
-  CuboidDecomposition3D<T> cuboidDecomposition(0, 1, {nx, ny, nz}, noOfCuboids);
-
-  // Periodic boundaries in x- and y- and z-direction
-  cuboidDecomposition.setPeriodicity({ true, true, true });
-
-  // Instantiation of a loadBalancer
-  HeuristicLoadBalancer<T> loadBalancer( cuboidDecomposition );
-
-  // Instantiation of a superGeometry
-  SuperGeometry<T,3> superGeometry( cuboidDecomposition,loadBalancer,2 );
-
-  prepareGeometry( superGeometry );
-
-  // === 3rd Step: Prepare Lattice ===
-  SuperLattice<T, DESCRIPTOR> sLattice( converter, superGeometry );
-
-  prepareLattice( sLattice, superGeometry );
-
-  // === 4th Step: Main Loop ===
-  int iT = 0;
   clout << "starting simulation..." << std::endl;
-  util::Timer<T> timer( maxIter, superGeometry.getStatistics().getNvoxel() );
+  util::Timer<T> timer(maxIter, geometry.getStatistics().getNvoxel());
   timer.start();
 
-  for ( iT = 0; iT < maxIter; ++iT ) {
-    // === 5th Step: Definition of Initial and Boundary Conditions ===
-    // in this application no boundary conditions have to be adjusted
-
-    // === 6th Step: Collide and Stream Execution ===
-    sLattice.collideAndStream();
-
-    // === 7th Step: Computation and Output of the Results ===
-    getResults( sLattice, iT, superGeometry, timer );
+  for (iT = 0; iT < maxIter; ++iT) {
+    NSElattice.collideAndStream();
+    getResults(myCase, timer, iT);
   }
 
   timer.stop();
   timer.printSummary();
+}
+
+int main(int argc, char* argv[])
+{
+  initialize(&argc, &argv);
+  singleton::directories().setOutputDir("./tmp/");
+
+  /// === Step 2: Set Parameters ===
+  MyCase::ParametersD myCaseParameters;
+  {
+    using namespace olb::parameters;
+    myCaseParameters.set<MAX_LATTICE_T>(2000);
+    myCaseParameters.set<LATTICE_STAT_ITER_T>(20);
+    myCaseParameters.set<LATTICE_VTK_ITER_T>(20);
+
+    myCaseParameters.set<LATTICE_RELAXATION_TIME>(1.);
+    myCaseParameters.set<PHYS_CHAR_LENGTH>(1e-5);
+    myCaseParameters.set<PHYS_CHAR_VELOCITY>(1e-6);
+    myCaseParameters.set<PHYS_CHAR_VISCOSITY>(0.1);
+
+    myCaseParameters.set<DOMAIN_EXTENT>({76, 76, 76});
+
+    myCaseParameters.set<SHEN_OMEGA>(1);
+  }
+  myCaseParameters.fromCLI(argc, argv);
+
+  /// === Step 3: Create Mesh ===
+  Mesh mesh = createMesh(myCaseParameters);
+
+  /// === Step 4: Create Case ===
+  MyCase myCase(myCaseParameters, mesh);
+
+  /// === Step 5: Prepare Geometry ===
+  prepareGeometry(myCase);
+
+  /// === Step 6: Prepare Lattice ===
+  prepareLattice(myCase);
+
+  /// === Step 7: Definition of Initial, Boundary Values, and Fields ===
+  setInitialValues(myCase);
+
+  /// === Step 8: Simulate ===
+  simulate(myCase);
 }

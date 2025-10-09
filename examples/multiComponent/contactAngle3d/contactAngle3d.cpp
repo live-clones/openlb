@@ -34,141 +34,131 @@
 
 using namespace olb;
 using namespace olb::descriptors;
-using namespace olb::graphics;
+using namespace olb::names;
 
-using T = FLOATING_POINT_TYPE;
-using NSDESCRIPTOR = D3Q19<RHO,NABLARHO,FORCE,EXTERNAL_FORCE,TAU_EFF,STATISTIC>;
-using CHDESCRIPTOR = D3Q19<FORCE,SOURCE,SOURCE_OLD,PHIWETTING,VELOCITY,OLD_PHIU,STATISTIC,CHEM_POTENTIAL,BOUNDARY>;
-using NSBulkDynamics = MultiPhaseIncompressibleBGKdynamics<T,NSDESCRIPTOR>;
-using CHBulkDynamics = WellBalancedCahnHilliardBGKdynamics<T,CHDESCRIPTOR>;
+// === Step 1: Declarations ===
+using MyCase = Case<
+  NavierStokes, Lattice<double, D3Q19<RHO,NABLARHO,FORCE,EXTERNAL_FORCE,TAU_EFF>>,
+  Component1,  Lattice<double, D3Q19<FORCE,SOURCE,SOURCE_OLD,PHIWETTING,VELOCITY,OLD_PHIU,STATISTIC,CHEM_POTENTIAL,BOUNDARY>>
+>;
+
+using NSBulkDynamics = MultiPhaseIncompressibleBGKdynamics<MyCase::value_t, MyCase::descriptor_t>;
+using CHBulkDynamics = WellBalancedCahnHilliardBGKdynamics<MyCase::value_t_of<Component1>, MyCase::descriptor_t_of<Component1>>;
 using MixtureRules = LinearTauViscosity;
 using Coupling = WellBalancedCahnHilliardPostProcessor<MixtureRules>;
 
-// Parameters for the simulation domain
-const int Nx = 120;                   // domain resolution x [lattice units]
-const int Ny = 75;                    // domain resolution y [lattice units]
-const int Nz = 120;
-int diameter = 70;                    // droplet diameter [lattice units]
-const int maxIter  = 500000;          // number of iterations to perform
-const int vtkIter  = 1000;            // interval to save vtk output
-const int statIter = 1000;            // interval to print statistics
+namespace olb::parameters {
 
-// Characteristic physical parameters
-const T L_char = 70e-6;               // charPhysLength [physical units]
-const T DeltaRho = 1000.;               // physViscosity H2O liquid [physical units]
-const T viscosityH2O = 9e-7;          // physViscosity H2O liquid [physical units]
+struct LATTICE_RELAXATION_TIME_PF : public descriptors::FIELD_BASE<1> { };
+struct LATTICE_RELAXATION_TIME_2  : public descriptors::FIELD_BASE<1> { };
+struct C_RHO                      : public descriptors::FIELD_BASE<1> { };
 
-// Lattice parameters for fluid properties
-const T tau_mobil = 1.00;             // relaxation time for interface mobility in Cahn-Hilliard equation (mobility=(tau_mobil-0.5)/3) [lattice units]
-const T tau_l = 1.0;                  // relaxation time H2O liquid lattice (kinematic viscosity=(tau_l-0.5)/3) [lattice units]
-const T tau_g = 0.52;                  // relaxation time gas lattice (kinematic viscosity=(tau_g-0.5)/3) [lattice units]
-const T sigma = 0.01;                 // liquid-gas surface tension [lattice units]
-const T w = 4.;                       // diffuse interface width [lattice units]
-const T g = 0*9.81;                   // gravitational force magnitude [lattice units]
-const std::vector<T> rhos = {1., 1.}; // densities of the {gas, liquid} [lattice units]
-const T theta = 100.;         // equilibrium contact angle [degrees]
+}
+
+Mesh<MyCase::value_t,MyCase::d> createMesh(MyCase::ParametersD& params) {
+  using T = MyCase::value_t;
+  Vector extent = params.get<parameters::DOMAIN_EXTENT>();
+  std::vector<T> origin(3,T());
+  IndicatorCuboid3D<T> cuboid(extent, origin);
+
+  const T dx = 1.; // lattice units case
+  Mesh<T,MyCase::d> mesh(cuboid, dx, singleton::mpi().getSize());
+  mesh.setOverlap(params.get<parameters::OVERLAP>());
+  mesh.getCuboidDecomposition().setPeriodicity({true,false,true});
+  return mesh;
+}
 
 // Labels for boundary and fluid locations
-void prepareGeometry( SuperGeometry<T,3>& superGeometry )
+void prepareGeometry( MyCase& myCase )
 {
   OstreamManager clout( std::cout,"prepareGeometry" );
   clout << "Prepare Geometry ..." << std::endl;
+  auto& geometry = myCase.getGeometry();
   // Fluid nodes labelled 2
-  superGeometry.rename( 0,2 );
+  geometry.rename( 0,2 );
   // Label edges as 1
-  superGeometry.rename( 2, 1, {0, 1, 0} );
+  geometry.rename( 2, 1, {0, 1, 0} );
 
-  superGeometry.clean();
-  superGeometry.innerClean();
-  superGeometry.checkForErrors();
-  superGeometry.print();
+  geometry.clean();
+  geometry.innerClean();
+  geometry.checkForErrors();
+  geometry.print();
   clout << "Prepare Geometry ... OK" << std::endl;
 }
 
-template <typename SuperLatticeCoupling>
-void prepareLattice( SuperLattice<T,NSDESCRIPTOR>& sLatticeNS,
-                     SuperLattice<T,CHDESCRIPTOR>& sLatticeCH,
-                     SuperLatticeCoupling& coupling,
-                     UnitConverter<T,NSDESCRIPTOR> const& converter,
-                     SuperGeometry<T,3>& superGeometry, int diameter )
+void prepareLattice( MyCase& myCase )
 {
   OstreamManager clout( std::cout,"prepareLattice" );
   clout << "Prepare Lattice ..." << std::endl;
 
+  using T = MyCase::value_t;
+  auto& geometry = myCase.getGeometry();
+  auto& params = myCase.getParameters();
+
+  auto& sLatticeNS = myCase.getLattice(NavierStokes{});
+  auto& sLatticeCH = myCase.getLattice(Component1{});
+
+  using NSDESCRIPTOR = MyCase::descriptor_t_of<NavierStokes>;
+
+  const Vector extent = params.get<parameters::DOMAIN_EXTENT>();
+  const int N = params.get<parameters::RESOLUTION>();
+  const T tau_l = params.get<parameters::LATTICE_RELAXATION_TIME>();
+  const T tau_g = params.get<parameters::LATTICE_RELAXATION_TIME_2>();
+  const T tau_mobil = params.get<parameters::LATTICE_RELAXATION_TIME_PF>();
+  const T L_char = params.get<parameters::PHYS_CHAR_LENGTH>();
+  const T C_rho = params.get<parameters::C_RHO>();
+  const T viscosityH2O = params.get<parameters::NU_LIQUID>();
+  const T rho_l = params.get<parameters::RHO_LIQUID>();
+  const T rho_g = params.get<parameters::RHO_VAPOR>();
+  const T sigma = params.get<parameters::SURFACE_TENSION>();
+  const T w = params.get<parameters::INTERFACE_WIDTH>();
+  const T theta = params.get<parameters::THETA>();
+
+  sLatticeNS.setUnitConverter<UnitConverterFromResolutionAndRelaxationTime<T,NSDESCRIPTOR>>(
+    int   {N},          // resolution
+    (T)   tau_l,        // lattice relaxation time
+    (T)   L_char,       // charPhysLength: reference length of simulation geometry
+    (T)   0,            // charPhysVelocity: maximal/highest expected velocity during simulation in __m / s__
+    (T)   viscosityH2O, // physViscosity: physical kinematic viscosity in __m^2 / s__
+    (T)   C_rho         // physDensity: physical density in __kg / m^3__
+  );
+
+  const auto& converter = sLatticeNS.getUnitConverter();
+  converter.print();
+
+  sLatticeCH.setUnitConverter(converter);
+
   // lattice dynamics for Navier-Stokes equation, only needed in fluid domain with id 1
-  sLatticeNS.defineDynamics<NoDynamics>(superGeometry, 0);
-  sLatticeNS.defineDynamics<NSBulkDynamics>(superGeometry, 1);
-  sLatticeNS.defineDynamics<NoDynamics>(superGeometry, 2);
+  sLatticeNS.defineDynamics<NoDynamics>(geometry, 0);
+  sLatticeNS.defineDynamics<NSBulkDynamics>(geometry, 1);
+  sLatticeNS.defineDynamics<NoDynamics>(geometry, 2);
 
   // lattice dynamics for Cahn-Hilliard equation, only needed in fluid domain with id 1
-  sLatticeCH.defineDynamics<NoDynamics>(superGeometry, 0);
-  sLatticeCH.defineDynamics<CHBulkDynamics>(superGeometry, 1);
-  sLatticeCH.defineDynamics<NoDynamics>(superGeometry, 2);
+  sLatticeCH.defineDynamics<NoDynamics>(geometry, 0);
+  sLatticeCH.defineDynamics<CHBulkDynamics>(geometry, 1);
+  sLatticeCH.defineDynamics<NoDynamics>(geometry, 2);
 
-  // set velocity to zero everywhere initially
-  Vector<T,3> u(0., 0., 0.);
-  AnalyticalConst3D<T,T> zeroVelocity( u );
-
-  // analytical constants to use in initialisation
-  AnalyticalConst3D<T,T> one ( 1. );
-  AnalyticalConst3D<T,T> two ( 2. );
-  AnalyticalConst3D<T,T> zero ( 0. );
-  AnalyticalConst3D<T,T> rhov ( rhos[0] );
-  AnalyticalConst3D<T,T> rhol ( rhos[1] );
-  AnalyticalConst3D<T,T> tauv ( tau_g );
-  AnalyticalConst3D<T,T> taul ( tau_l );
-
-  // regions with different material ids
-  auto bulk = superGeometry.getMaterialIndicator( 1 );
-  auto walls = superGeometry.getMaterialIndicator( 2 );
-  auto all = superGeometry.getMaterialIndicator( {0,1,2} );
-
-  // initialise phi with a circle with centre at (Nx/2,1) and radius (diameter/2), smoothed by w/2
-  IndicatorSphere3D<T> sphere( {Nx/2., 0., Nz/2.}, diameter/2. );
-  SmoothIndicatorSphere3D<T,T> smoothSphere( sphere, w/2. );
-  AnalyticalIdentity3D<T,T> phi( one - smoothSphere );
-
-  // initial values for interpolated rho and tau across interfaces
-  AnalyticalIdentity3D<T,T> rho( rhov + (rhol-rhov)*phi );
-  AnalyticalIdentity3D<T,T> tau( tauv + (taul-tauv)*phi );
-
-  // initial (hydrodynamic) pressure
-  AnalyticalIdentity3D<T,T> pressure( zero );
-
-  // set the initial values for the fields
-  sLatticeNS.defineField<descriptors::RHO>( all, rho );                          // density
-  sLatticeNS.defineField<descriptors::TAU_EFF>( superGeometry, 1, tau );         // relaxation time for navier-stokes lattice
-  sLatticeCH.defineField<descriptors::SOURCE>( superGeometry, 1, zero );         // source term for Cahn-Hilliard lattice
-  sLatticeCH.defineField<descriptors::PHIWETTING>( superGeometry, 1, phi );      // fluid concentration used by wetting boundaries
-  sLatticeCH.defineField<descriptors::CHEM_POTENTIAL>( superGeometry, 1, zero ); // chemical potential
-  sLatticeCH.defineField<descriptors::BOUNDARY>( walls, two );                   // boundary field used by wetting boundaries
-  sLatticeCH.defineField<descriptors::BOUNDARY>( bulk, zero );                   // boundary field used by wetting boundaries
+  auto bulk = geometry.getMaterialIndicator( 1 );
 
   // use interpolated bounce back conditions for the distribution function
   std::vector<T> origin = { -1.5, 0.5 ,-1.5};
-  std::vector<T> extend = { Nx+2, Ny-2, Nz+2 };
+  std::vector<T> extend = { extent[0]+2, extent[1]-2, extent[2]+2 };
   IndicatorCuboid3D<T> cuboid( extend, origin ); // rectangle spans from (0,0.5) to (Nx-1,Ny-1.5), in the x direction we add padding for the periodic boundaries
-  setBouzidiBoundary( sLatticeNS, superGeometry, 2, cuboid );
-  setBouzidiWellBalanced( sLatticeCH, superGeometry, 2, cuboid );
-
-  // apply gravitational force
-  std::vector<T> F( 3,T() );
-  F[1] = -g/(converter.getPhysDeltaX()/converter.getPhysDeltaT()/converter.getPhysDeltaT());
-  AnalyticalConst3D<T,T> f( F );
-  sLatticeNS.defineField<descriptors::EXTERNAL_FORCE>( superGeometry, 1, f );
-
-  // initialise distribution functions in equilibrium with initial values of phi, velocity and pressure
-  sLatticeCH.defineRhoU( all, phi, zeroVelocity );
-  sLatticeCH.iniEquilibrium( all, phi, zeroVelocity );
-  sLatticeNS.defineRhoU( all, pressure, zeroVelocity );
-  sLatticeNS.iniEquilibrium( all, pressure, zeroVelocity );
+  setBouzidiBoundary( sLatticeNS, geometry, 2, cuboid );
+  setBouzidiWellBalanced( sLatticeCH, geometry, 2, cuboid );
 
   // postprocessor to update rhowetting
   sLatticeCH.addPostProcessor<stage::PostStream>(bulk,meta::id<RhoWettingStatistics>());
 
+  auto& coupling = myCase.setCouplingOperator(
+    "Coupling",
+    Coupling{},
+    names::NavierStokes{}, sLatticeNS,
+    names::Component1{}, sLatticeCH);
+  coupling.restrictTo(geometry.getMaterialIndicator({1}));
   // give coupling the values of tau_l, tau_g, rho_l and rho_g so that it can update the viscosity and density
-  coupling.template setParameter<MixtureRules::TAUS>({tau_l,tau_g});
-  coupling.template setParameter<MixtureRules::RHOS>(rhos);
+  coupling.setParameter<MixtureRules::TAUS>({tau_g,tau_l});
+  coupling.setParameter<MixtureRules::RHOS>({rho_g,rho_l});
 
   // postprocessor to calculate the chemical potential
   sLatticeCH.addPostProcessor<stage::ChemPotCalc>(meta::id<ChemPotentialPhaseFieldProcessor>());
@@ -176,7 +166,7 @@ void prepareLattice( SuperLattice<T,NSDESCRIPTOR>& sLatticeNS,
   // parameters needed by models
   sLatticeNS.setParameter<descriptors::OMEGA>( 1./tau_l );     // collision rate for Navier-Stokes lattice
   sLatticeCH.setParameter<descriptors::OMEGA>( 1./tau_mobil ); // collision rate for Cahn-Hilliard lattice
-  sLatticeCH.setParameter<descriptors::THETA>( (M_PI-theta*M_PI/180.) );        // contact angle
+  sLatticeCH.setParameter<descriptors::THETA>( (M_PI-theta*M_PI/180.) ); // contact angle
   sLatticeCH.setParameter<descriptors::INTERFACE_WIDTH>( w );  // diffuse interface width
   sLatticeCH.setParameter<descriptors::SCALAR>( sigma );       // surface tension
 
@@ -190,6 +180,70 @@ void prepareLattice( SuperLattice<T,NSDESCRIPTOR>& sLatticeNS,
     communicator.exchangeRequests();
   }
 
+  clout << "Prepare Lattice ... OK" << std::endl;
+}
+
+void setInitialValues(MyCase& myCase) {
+  using T = MyCase::value_t;
+  auto& geometry = myCase.getGeometry();
+  auto& params = myCase.getParameters();
+
+  auto& sLatticeNS = myCase.getLattice(NavierStokes{});
+  auto& sLatticeCH = myCase.getLattice(Component1{});
+
+  const Vector extent = params.get<parameters::DOMAIN_EXTENT>();
+  const int diameter = params.get<parameters::RESOLUTION>();
+  const T tau_l = params.get<parameters::LATTICE_RELAXATION_TIME>();
+  const T tau_g = params.get<parameters::LATTICE_RELAXATION_TIME_2>();
+  const T rho_l = params.get<parameters::RHO_LIQUID>();
+  const T rho_g = params.get<parameters::RHO_VAPOR>();
+  const T w = params.get<parameters::INTERFACE_WIDTH>();
+
+  // set velocity to zero everywhere initially
+  Vector<T,3> u(0., 0., 0.);
+  AnalyticalConst3D<T,T> zeroVelocity( u );
+
+  // analytical constants to use in initialisation
+  AnalyticalConst3D<T,T> one ( 1. );
+  AnalyticalConst3D<T,T> two ( 2. );
+  AnalyticalConst3D<T,T> zero ( 0. );
+  AnalyticalConst3D<T,T> rhov ( rho_g );
+  AnalyticalConst3D<T,T> rhol ( rho_l );
+  AnalyticalConst3D<T,T> tauv ( tau_g );
+  AnalyticalConst3D<T,T> taul ( tau_l );
+
+  // regions with different material ids
+  auto bulk = geometry.getMaterialIndicator( 1 );
+  auto walls = geometry.getMaterialIndicator( 2 );
+  auto all = geometry.getMaterialIndicator( {0,1,2} );
+
+  // initialise phi with a circle with centre at (Nx/2,1) and radius (diameter/2), smoothed by w/2
+  IndicatorSphere3D<T> sphere( {extent[0]/2., 0., extent[2]/2.}, diameter/2. );
+  SmoothIndicatorSphere3D<T,T> smoothSphere( sphere, w/2. );
+  AnalyticalIdentity3D<T,T> phi( one - smoothSphere );
+
+  // initial values for interpolated rho and tau across interfaces
+  AnalyticalIdentity3D<T,T> rho( rhov + (rhol-rhov)*phi );
+  AnalyticalIdentity3D<T,T> tau( tauv + (taul-tauv)*phi );
+
+  // initial (hydrodynamic) pressure
+  AnalyticalIdentity3D<T,T> pressure( zero );
+
+  // initialise distribution functions in equilibrium with initial values of phi, velocity and pressure
+  sLatticeCH.defineRhoU( all, phi, zeroVelocity );
+  sLatticeCH.iniEquilibrium( all, phi, zeroVelocity );
+  sLatticeNS.defineRhoU( all, pressure, zeroVelocity );
+  sLatticeNS.iniEquilibrium( all, pressure, zeroVelocity );
+
+  // set the initial values for the fields
+  sLatticeNS.defineField<descriptors::RHO>( all, rho );                     // density
+  sLatticeNS.defineField<descriptors::TAU_EFF>( geometry, 1, tau );         // relaxation time for navier-stokes lattice
+  sLatticeCH.defineField<descriptors::SOURCE>( geometry, 1, zero );         // source term for Cahn-Hilliard lattice
+  sLatticeCH.defineField<descriptors::PHIWETTING>( geometry, 1, phi );      // fluid concentration used by wetting boundaries
+  sLatticeCH.defineField<descriptors::CHEM_POTENTIAL>( geometry, 1, zero ); // chemical potential
+  sLatticeCH.defineField<descriptors::BOUNDARY>( walls, two );              // boundary field used by wetting boundaries
+  sLatticeCH.defineField<descriptors::BOUNDARY>( bulk, zero );              // boundary field used by wetting boundaries
+
   // some initial steps
   sLatticeCH.executePostProcessors(stage::PreCoupling());
   sLatticeCH.getCommunicator(stage::PreCoupling()).communicate();
@@ -199,31 +253,43 @@ void prepareLattice( SuperLattice<T,NSDESCRIPTOR>& sLatticeNS,
   sLatticeCH.initialize();
   sLatticeCH.iniEquilibrium( all, phi, zeroVelocity );
   sLatticeCH.getCommunicator(stage::PreCoupling()).communicate();
-
-  clout << "Prepare Lattice ... OK" << std::endl;
 }
 
+void setTemporalValues(MyCase& myCase,
+                       std::size_t iT)
+{ }
+
 // for statistic output and vtk saving
-T getResults( SuperLattice<T,NSDESCRIPTOR>& sLatticeNS,
-              SuperLattice<T,CHDESCRIPTOR>& sLatticeCH,
-              int iT, SuperGeometry<T,3>& superGeometry, util::Timer<T>& timer,
-              UnitConverter<T,NSDESCRIPTOR> converter )
+template <typename T>
+T getResults( MyCase& myCase,
+              util::Timer<MyCase::value_t>& timer,
+              std::size_t iT )
 {
   OstreamManager clout( std::cout,"getResults" );
-  SuperVTMwriter3D<T> vtmWriter( "contactAngle3d" );
+  auto& params = myCase.getParameters();
 
+  auto& sLatticeNS = myCase.getLattice(NavierStokes{});
+  auto& sLatticeCH = myCase.getLattice(Component1{});
+
+  using NSDESCRIPTOR = MyCase::descriptor_t_of<NavierStokes>;
+  using CHDESCRIPTOR = MyCase::descriptor_t_of<Component1>;
+  const auto& converter = sLatticeNS.getUnitConverter();
+
+  const Vector extent = params.get<parameters::DOMAIN_EXTENT>();
+  const int statIter = params.get<parameters::LATTICE_STAT_ITER_T>();
+  const int saveIter = params.get<parameters::LATTICE_VTK_ITER_T>();
+  const T theta = params.get<parameters::THETA>();
+
+  SuperVTMwriter3D<T> vtmWriter( "contactAngle3d" );
   if ( iT==0 ) {
-    // Writes the geometry, cuboid no. and rank no. as vti file for visualization
-    SuperLatticeCuboid3D<T, NSDESCRIPTOR> cuboid( sLatticeNS );
-    SuperLatticeRank3D<T, NSDESCRIPTOR> rank( sLatticeNS );
+    SuperLatticeCuboid3D cuboid( sLatticeNS );
+    SuperLatticeRank3D rank( sLatticeNS );
     vtmWriter.write( cuboid );
     vtmWriter.write( rank );
     vtmWriter.createMasterFile();
   }
 
-  // Get statistics
   if ( iT%statIter==0 ) {
-    // Timer console output
     timer.update( iT );
     timer.printStep();
     sLatticeNS.getStatistics().print( iT, converter.getPhysTime(iT) );
@@ -231,8 +297,7 @@ T getResults( SuperLattice<T,NSDESCRIPTOR>& sLatticeNS,
   }
 
   T contact_angle = 0;
-  // Writes the VTK files
-  if ( iT%vtkIter==0 ) {
+  if ( iT%saveIter==0 ) {
 
     SuperLatticeDensity3D<T, NSDESCRIPTOR> p_hydro( sLatticeNS );
     p_hydro.getName() = "p_hydro";
@@ -262,8 +327,8 @@ T getResults( SuperLattice<T,NSDESCRIPTOR>& sLatticeNS,
     // contact angle fitting, will be done by finding three points on the circlular droplet
 
     // point 1, x = ? y = 2
-    T pos[3] = {0., 2., Nz/2.};
-    for (int ix=0; ix<0.5*Nx; ix++) {
+    T pos[3] = {0., 2., extent[2]/2.};
+    for (int ix=0; ix<0.5*extent[0]; ix++) {
       T phi1, phi2;
       pos[0] = ix;
       interpolPhi( &phi1, pos );
@@ -277,7 +342,7 @@ T getResults( SuperLattice<T,NSDESCRIPTOR>& sLatticeNS,
     }
 
     // point 2, x = ? y = 2
-    for (int ix=0.5*Nx; ix<Nx; ix++) {
+    for (int ix=0.5*extent[0]; ix<extent[0]; ix++) {
       T phi1, phi2;
       pos[0] = ix;
       interpolPhi( &phi1, pos );
@@ -290,8 +355,8 @@ T getResults( SuperLattice<T,NSDESCRIPTOR>& sLatticeNS,
     }
 
     // point 3, x = Nx/2 y = ?
-    pos[0] = 0.5*(Nx);
-    for (int iy=3; iy<Ny; iy++) {
+    pos[0] = 0.5*(extent[0]);
+    for (int iy=3; iy<extent[1]; iy++) {
       T phi1, phi2;
       pos[1] = iy;
       interpolPhi( &phi1, pos );
@@ -307,7 +372,7 @@ T getResults( SuperLattice<T,NSDESCRIPTOR>& sLatticeNS,
     T y1=2;
     T x2=point2;
     T y2=2;
-    T x3=0.5*(Nx);
+    T x3=0.5*(extent[0]);
     T y3=point3;
 
     // estimate centre and radius from three points, we must solve three simulatneous equations
@@ -330,72 +395,32 @@ T getResults( SuperLattice<T,NSDESCRIPTOR>& sLatticeNS,
 }
 
 // run the simulation
-void simulate( int diameter )
+void simulate( MyCase& myCase )
 {
-  OstreamManager clout( std::cout,"main" );
-  // === 1st Step: Initialization ===
-  UnitConverterFromResolutionAndRelaxationTime<T,NSDESCRIPTOR> converter(
-    int   {diameter},               // resolution
-    (T)   tau_l,                    // lattice relaxation time
-    (T)   L_char,                   // charPhysLength: reference length of simulation geometry
-    (T)   0,                        // charPhysVelocity: maximal/highest expected velocity during simulation in __m / s__
-    (T)   viscosityH2O,             // physViscosity: physical kinematic viscosity in __m^2 / s__
-    (T)   DeltaRho                  // physDensity: physical density in __kg / m^3__
-  );
+  OstreamManager clout( std::cout,"simulate" );
+  using T = MyCase::value_t;
+  auto& params = myCase.getParameters();
 
-  UnitConverter<T,CHDESCRIPTOR> dummy_converter(
-    (T)   converter.getPhysDeltaX(),      // deltaX
-    (T)   converter.getPhysDeltaT(),      // deltaT
-    (T)   converter.getCharPhysLength(),  // from converter
-    (T)   converter.getCharPhysVelocity(),// from converter
-    (T)   converter.getPhysViscosity(),   // from converter
-    (T)   converter.getPhysDensity()      // from converter
-  );
+  auto& sLatticeNS = myCase.getLattice(NavierStokes{});
+  auto& sLatticeCH = myCase.getLattice(Component1{});
 
-  // Prints the converter log as console output
-  converter.print();
-  // === 2nd Step: Prepare Geometry ===
-  // Instantiation of a cuboidGeometry with weights
-  std::vector<T> extend = { Nx, Ny, Nz };
-  std::vector<T> origin = { 0., 0., 0. };
-  IndicatorCuboid3D<T> cuboid(extend,origin);
-#ifdef PARALLEL_MODE_MPI
-  CuboidDecomposition3D<T> cuboidDecomposition( cuboid, 1., singleton::mpi().getSize() );
-#else
-  CuboidDecomposition3D<T> cuboidDecomposition( cuboid, 1. );
-#endif
+  const std::size_t iTmax = params.get<parameters::MAX_LATTICE_T>();
+  const int saveIter = params.get<parameters::LATTICE_VTK_ITER_T>();
 
-  // Set periodic boundaries to the domain
-  cuboidDecomposition.setPeriodicity({ true, false, true });
+  const auto& converter = sLatticeNS.getUnitConverter();
 
-  // Instantiation of loadbalancer
-  HeuristicLoadBalancer<T> loadBalancer( cuboidDecomposition );
-  loadBalancer.print();
-  // Instantiation of superGeometry
-  SuperGeometry<T,3> superGeometry( cuboidDecomposition,loadBalancer );
-  prepareGeometry( superGeometry );
-
-  // === 3rd Step: Prepare Lattice ===
-  SuperLattice<T,NSDESCRIPTOR> sLatticeNS( converter, superGeometry );
-  SuperLattice<T,CHDESCRIPTOR> sLatticeCH( dummy_converter, superGeometry );
-  SuperLatticeCoupling coupling(
-      Coupling{},
-      names::NavierStokes{}, sLatticeNS,
-      names::Component1{}, sLatticeCH);
-  coupling.restrictTo(superGeometry.getMaterialIndicator({1}));
-  prepareLattice( sLatticeNS, sLatticeCH, coupling, converter, superGeometry, diameter );
-
-  // === 4th Step: Main Loop with Timer ===
-  int iT = 0;
-  clout << "starting simulation..." << std::endl;
-  util::Timer<T> timer( maxIter, superGeometry.getStatistics().getNvoxel() );
+  util::Timer<T> timer(iTmax, myCase.getGeometry().getStatistics().getNvoxel());
   timer.start();
+
   std::ofstream outfile;
   outfile.open ("contactAngleVsTime.dat");
   T old_angle = 1.;
 
-  for ( iT=0; iT<=maxIter; ++iT ) {
-    // Collide and stream (and coupling) execution
+  for (std::size_t iT=0; iT <= iTmax; ++iT) {
+    /// === Step 8.1: Update the Boundary Values and Fields at Times ===
+    setTemporalValues(myCase, iT);
+
+    /// === Step 8.2: Collide and Stream Execution ===
     sLatticeNS.collideAndStream();
     sLatticeCH.collideAndStream();
 
@@ -405,11 +430,11 @@ void simulate( int diameter )
     sLatticeCH.executePostProcessors(stage::ChemPotCalc());
     sLatticeCH.getCommunicator(stage::PreCoupling()).communicate();
 
-    coupling.apply();
+    myCase.getOperator("Coupling").apply();
 
-    // Computation and output of the results
-    T angle = getResults( sLatticeNS, sLatticeCH, iT, superGeometry, timer, converter );
-    if ( iT%vtkIter == 0 ) {
+    /// === Step 8.3: Computation and Output of the Results ===
+    T angle = getResults<T>( myCase, timer, iT );
+    if ( iT%saveIter == 0 ) {
       outfile << iT*converter.getPhysDeltaT() << "," ;
       outfile << angle << "\n";
       if ( fabs(angle-old_angle)/fabs(old_angle) < 5e-4 ) {
@@ -431,10 +456,44 @@ void simulate( int diameter )
 int main( int argc, char *argv[] )
 {
   initialize( &argc, &argv );
-  if (argc > 1) {
-    diameter = atof(argv[1]);
-  }
 
-  singleton::directories().setOutputDir( "./tmp/" );
-  simulate( diameter );
+  MyCase::ParametersD myCaseParameters;
+  {
+    using namespace olb::parameters;
+    myCaseParameters.set<DOMAIN_EXTENT          >({120, 75, 120}); // domain size [lattice units]
+    myCaseParameters.set<RESOLUTION             >(70);         // diameter of droplet [lattice units]
+    myCaseParameters.set<LATTICE_RELAXATION_TIME>(1.);         // tau liquid [lattice units]
+    myCaseParameters.set<LATTICE_RELAXATION_TIME_2>(0.52);     // tau gas [lattice units]
+    myCaseParameters.set<LATTICE_RELAXATION_TIME_PF>(1.);      // tau mobility [lattice units]
+    myCaseParameters.set<MAX_LATTICE_T          >(500000);     // max iterations [lattice units]
+    myCaseParameters.set<LATTICE_VTK_ITER_T     >(1000);       // vtk iterations [lattice units]
+    myCaseParameters.set<LATTICE_STAT_ITER_T    >(1000);       // statistics iterations [lattice units]
+    myCaseParameters.set<PHYS_CHAR_LENGTH>(70e-6);        // charPhysLength [physical units]
+    myCaseParameters.set<C_RHO           >(1000.);        // conversion factor density [physical units]
+    myCaseParameters.set<NU_LIQUID       >(9e-7);         // physViscosity liquid [physical units]
+    myCaseParameters.set<RHO_LIQUID      >(1.);           // lattice density liquid [lattice units]
+    myCaseParameters.set<RHO_VAPOR       >(1.);           // lattice density gas [lattice units]
+    myCaseParameters.set<SURFACE_TENSION >(0.01);         // lattice surface tension [lattice units]
+    myCaseParameters.set<parameters::INTERFACE_WIDTH>(4.);// interface thickness [lattice units]
+    myCaseParameters.set<parameters::THETA >(100.);       // contact angle in degrees [deg]
+  }
+  myCaseParameters.fromCLI(argc, argv);
+
+  /// === Step 3: Create Mesh ===
+  Mesh mesh = createMesh(myCaseParameters);
+
+  /// === Step 4: Create Case ===
+  MyCase myCase(myCaseParameters, mesh);
+
+  /// === Step 5: Prepare Geometry ===
+  prepareGeometry(myCase);
+
+  /// === Step 6: Prepare Lattice ===
+  prepareLattice(myCase);
+
+  /// === Step 7: Definition of Initial, Boundary Values, and Fields ===
+  setInitialValues(myCase);
+
+  /// === Step 8: Simulate ===
+  simulate(myCase);
 }

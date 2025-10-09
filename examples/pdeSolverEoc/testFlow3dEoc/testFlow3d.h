@@ -49,6 +49,17 @@
 using namespace olb;
 using namespace olb::names;
 
+enum class GeometryType : int {
+  cube = 0,
+  sphere = 1
+};
+
+enum class BoundaryType : int {
+  interpolated = 0,
+  local = 1,
+  bouzidi = 2
+};
+
 namespace olb::parameters {
 
 struct ERROR_VELOCITY_L1 : public descriptors::FIELD_BASE<1> { };
@@ -63,6 +74,12 @@ struct ERROR_STRAIN_RATE_LINF : public descriptors::FIELD_BASE<1> { };
 struct ERROR_DISSIPATION_L1 : public descriptors::FIELD_BASE<1> { };
 struct ERROR_DISSIPATION_L2 : public descriptors::FIELD_BASE<1> { };
 struct ERROR_DISSIPATION_LINF : public descriptors::FIELD_BASE<1> { };
+struct ERROR_STRESS_L1 : public descriptors::FIELD_BASE<1> { };
+struct ERROR_STRESS_L2 : public descriptors::FIELD_BASE<1> { };
+struct ERROR_STRESS_LINF : public descriptors::FIELD_BASE<1> { };
+
+struct GEOMETRY_TYPE : public descriptors::TYPED_FIELD_BASE<GeometryType,1> { };
+struct BOUNDARY_TYPE : public descriptors::TYPED_FIELD_BASE<BoundaryType,1> { };
 
 }
 
@@ -76,12 +93,23 @@ using MyCase = Case<
 /// @return An instance of Mesh, which keeps the relevant information
 Mesh<MyCase::value_t,MyCase::d> createMesh(MyCase::ParametersD& parameters) {
   using T = MyCase::value_t;
-  const Vector extent = parameters.get<parameters::DOMAIN_EXTENT>();
-  const Vector origin{0, 0, 0};
-  IndicatorCuboid3D<T> cuboid(extent, origin);
-
-  const T physDeltaX = extent[0] / parameters.get<parameters::RESOLUTION>();
-  Mesh<T,MyCase::d> mesh(cuboid, physDeltaX, singleton::mpi().getSize());
+  std::shared_ptr<IndicatorF3D<T>> domain, sphere;
+  Vector<T,3> extent = parameters.get<parameters::DOMAIN_EXTENT>();
+  const T physDeltaX = extent[0] /
+                       parameters.get<parameters::RESOLUTION>();
+  switch (parameters.get<parameters::GEOMETRY_TYPE>()) {
+    case GeometryType::sphere: {
+      Vector<T,3> center{extent[0]/2., extent[1]/2., extent[2]/2.};
+      sphere = std::make_shared<IndicatorSphere3D<T>>(center, extent[0] / 2.);
+      domain = std::make_shared<IndicatorLayer3D<T>>(*sphere, physDeltaX);
+      break;
+    }
+    default: {
+      Vector<T,3> origin{0, 0, 0};
+      domain = std::make_shared<IndicatorCuboid3D<T>>(extent, origin);
+    }
+  }
+  Mesh<T,MyCase::d> mesh(*domain, physDeltaX, singleton::mpi().getSize());
   mesh.setOverlap(parameters.get<parameters::OVERLAP>());
   return mesh;
 }
@@ -92,11 +120,30 @@ Mesh<MyCase::value_t,MyCase::d> createMesh(MyCase::ParametersD& parameters) {
 void prepareGeometry(MyCase& myCase) {
   OstreamManager clout(std::cout, "prepareGeometry");
   clout << "Prepare Geometry ..." << std::endl;
+  using T = MyCase::value_t;
   auto& geometry = myCase.getGeometry();
+  auto& parameters = myCase.getParameters();
+  Vector<T,3> extent = parameters.get<parameters::DOMAIN_EXTENT>();
+  const T physDeltaX = extent[0] /
+                       parameters.get<parameters::RESOLUTION>();
 
-  /// @li Set material numbers
-  geometry.rename(0, 2);
-  geometry.rename(2, 1, {1,1,1});
+  switch (parameters.get<parameters::GEOMETRY_TYPE>()) {
+    case GeometryType::sphere: {
+      Vector<T,3> center{extent[0]/2., extent[1]/2., extent[2]/2.};
+      IndicatorSphere3D<T> sphere(center, extent[0] / 2.);
+      IndicatorLayer3D<T> sphereLayer(sphere, physDeltaX);
+      geometry.rename(0,2,sphereLayer);
+      geometry.rename(2,1,sphere);
+
+      geometry.clean();
+      geometry.checkForErrors();
+      break;
+    }
+    default: {
+      geometry.rename(0, 2);
+      geometry.rename(2, 1, {1,1,1});
+    }
+  }
   geometry.print();
   clout << "Prepare Geometry ... OK" << std::endl;
 }
@@ -107,6 +154,7 @@ void prepareLattice(MyCase& myCase)
 {
   OstreamManager clout(std::cout, "prepareLattice");
   clout << "Prepare Lattice ..." << std::endl;
+  using T = MyCase::value_t;
   auto& geometry = myCase.getGeometry();
   auto& lattice = myCase.getLattice(NavierStokes{});
   auto& parameters = myCase.getParameters();
@@ -127,7 +175,26 @@ void prepareLattice(MyCase& myCase)
   /// @li Material=1 --> bulk dynamics
   lattice.template defineDynamics<ForcedBGKdynamics>(geometry.getMaterialIndicator({1}));
   /// @li Material=2,3 --> velocity boundary
-  boundary::set<boundary::InterpolatedVelocity>(lattice, geometry.getMaterialIndicator({2}));
+  switch (parameters.get<parameters::BOUNDARY_TYPE>()) {
+    case BoundaryType::interpolated: {
+      boundary::set<boundary::InterpolatedVelocity>(lattice, geometry.getMaterialIndicator({2}));
+      break;
+    }
+    case BoundaryType::local: {
+      boundary::set<boundary::LocalVelocity>(lattice, geometry.getMaterialIndicator({2}));
+      break;
+    }
+    case BoundaryType::bouzidi: {
+      Vector<T,3> extent = parameters.get<parameters::DOMAIN_EXTENT>();
+      Vector<T,3> center{extent[0]/2., extent[1]/2., extent[2]/2.};
+      IndicatorSphere3D<T> sphere(center, extent[0] / 2.);
+      setBouzidiBoundary<T,MyCase::descriptor_t,BouzidiVelocityPostProcessor>(lattice, geometry, 2, sphere);
+      break;
+    }
+    default: {
+      std::runtime_error("Invalid Boundary Type");
+    }
+  }
   /// @li Set lattice relaxation frequency
   lattice.template setParameter<descriptors::OMEGA>(converter.getLatticeRelaxationFrequency());
 }
@@ -168,10 +235,15 @@ void setTemporalValues(MyCase& myCase,
   auto& lattice = myCase.getLattice(NavierStokes{});
   auto& geometry = myCase.getGeometry();
   auto& converter = lattice.getUnitConverter();
-  const T physStartT = myCase.getParameters().get<parameters::MAX_PHYS_T>() * (1.0 / 3.0);
+  auto& parameters = myCase.getParameters();
+  const T physStartT = parameters.get<parameters::MAX_PHYS_T>() * (1.0 / 3.0);
+  const T physBoundaryValueUpdateT = parameters.get<parameters::PHYS_BOUNDARY_VALUE_UPDATE_T>();
 
   const std::size_t itStart = converter.getLatticeTime(physStartT);
-  if (iT <= itStart) {
+  const std::size_t itLatticeUpdate = converter.getLatticeTime(physBoundaryValueUpdateT);
+  const std::size_t itUpdate = (itLatticeUpdate == 0) ? 1 : itLatticeUpdate;
+
+  if (iT <= itStart && iT % itUpdate == 0) {
     /// @li Compute scaling factor
     PolynomialStartScale<T,T> startScaleF(itStart, T(1));
     const T iTvec[1] = {T(iT)};
@@ -181,10 +253,17 @@ void setTemporalValues(MyCase& myCase,
     /// @li Take analytical velocity solution, scale it to lattice units, set the boundary data
     VelocityTestFlow3D<T,T,MyCase::descriptor_t> velocityF(converter);
     AnalyticalScaled3D<T,T> uBoundaryStartF(velocityF, frac[0] / converter.getConversionFactorVelocity());
-    lattice.defineU(geometry, 2, uBoundaryStartF);
-
-    /// @li Communicate the new boundary velocity to GPU (if needed)
-    lattice.template setProcessingContext<Array<momenta::FixedVelocityMomentumGeneric::VELOCITY>>(ProcessingContext::Simulation);
+    switch (parameters.get<parameters::BOUNDARY_TYPE>()) {
+      case BoundaryType::bouzidi: {
+        setBouzidiVelocity(lattice, geometry, 2, uBoundaryStartF);
+        lattice.template setProcessingContext<Array<descriptors::BOUZIDI_VELOCITY>>(ProcessingContext::Simulation);
+    break;
+      }
+      default: {
+        lattice.defineU(geometry, 2, uBoundaryStartF);
+        lattice.template setProcessingContext<Array<momenta::FixedVelocityMomentumGeneric::VELOCITY>>(ProcessingContext::Simulation);
+      }
+    }
   }
 }
 
@@ -193,6 +272,7 @@ void computeErrorNorms(MyCase& myCase) {
   OstreamManager clout(std::cout, "ErrorNorm");
   auto& sLattice = myCase.getLattice(NavierStokes{});
   auto& converter = sLattice.getUnitConverter();
+  sLattice.setProcessingContext(ProcessingContext::Evaluation);
 
   // Compute error to analytic solution
   // Analytic solutions
@@ -200,18 +280,21 @@ void computeErrorNorms(MyCase& myCase) {
   PressureTestFlow3D<T,T,MyCase::descriptor_t> analytic_pre(converter);
   StrainRateTestFlow3D<T,T,MyCase::descriptor_t> analytic_str(converter);
   DissipationTestFlow3D<T,T,MyCase::descriptor_t> analytic_dis(converter);
+  StressTensorTestFlow3D<T,T,MyCase::descriptor_t> analytic_stress(converter);
 
   // Interpolated analytic solutions
   SuperLatticeFfromAnalyticalF3D<T,MyCase::descriptor_t> lattice_analytical_vel(analytic_vel, sLattice);
   SuperLatticeFfromAnalyticalF3D<T,MyCase::descriptor_t> lattice_analytical_pre(analytic_pre, sLattice);
   SuperLatticeFfromAnalyticalF3D<T,MyCase::descriptor_t> lattice_analytical_str(analytic_str, sLattice);
   SuperLatticeFfromAnalyticalF3D<T,MyCase::descriptor_t> lattice_analytical_dis(analytic_dis, sLattice);
+  SuperLatticeFfromAnalyticalF3D<T,MyCase::descriptor_t> lattice_analytical_stress(analytic_stress, sLattice);
 
   // Simulated solutions
   SuperLatticePhysVelocity3D<T,MyCase::descriptor_t> vel(sLattice, converter);
   SuperLatticePhysPressure3D<T,MyCase::descriptor_t> pre(sLattice, converter);
   SuperLatticePhysStrainRate3D<T,MyCase::descriptor_t> str(sLattice, converter);
   SuperLatticePhysDissipation3D<T,MyCase::descriptor_t> dis(sLattice, converter);
+  SuperLatticePhysStressTensor3D<T,MyCase::descriptor_t> stress(sLattice, converter);
 
   int tmp[4]{0}; T norm[1]{0}; int tmp2[4]{0}; T norm2[1]{0};
   SuperL1Norm3D<T> uL1Norm(lattice_analytical_vel - vel, myCase.getGeometry(), 1);
@@ -247,33 +330,48 @@ void computeErrorNorms(MyCase& myCase) {
   SuperL1Norm3D<T> sL1Norm(lattice_analytical_str - str, myCase.getGeometry(), 1);
   SuperL1Norm3D<T> sAnaL1Norm(lattice_analytical_str, myCase.getGeometry(), 1);
   sL1Norm(norm, tmp); sAnaL1Norm(norm2, tmp2);
-  clout << "dissipation-L1-error(abs)=" << norm[0] << "; dissipation-L1-error(rel)=" << norm[0] / norm2[0] << std::endl;
+  clout << "strainRate-L1-error(abs)=" << norm[0] << "; strainRate-L1-error(rel)=" << norm[0] / norm2[0] << std::endl;
   myCase.getParameters().set<parameters::ERROR_STRAIN_RATE_L1>(norm[0]);
   SuperL2Norm3D<T> sL2Norm(lattice_analytical_str - str, myCase.getGeometry(), 1);
   SuperL2Norm3D<T> sAnaL2Norm(lattice_analytical_str, myCase.getGeometry(), 1);
   sL2Norm(norm, tmp); sAnaL2Norm(norm2, tmp2);
-  clout << "dissipation-L2-error(abs)=" << norm[0] << "; dissipation-L2-error(rel)=" << norm[0] / norm2[0] << std::endl;
+  clout << "strainRate-L2-error(abs)=" << norm[0] << "; strainRate-L2-error(rel)=" << norm[0] / norm2[0] << std::endl;
   myCase.getParameters().set<parameters::ERROR_STRAIN_RATE_L2>(norm[0]);
   SuperLinfNorm3D<T> sLinfNorm(lattice_analytical_str - str, myCase.getGeometry(), 1);
   SuperLinfNorm3D<T> sAnaLinfNorm(lattice_analytical_str, myCase.getGeometry(), 1);
   sLinfNorm(norm, tmp); sAnaLinfNorm(norm2, tmp2);
-  clout << "dissipation-Linf-error(abs)=" << norm[0] << "; dissipation-Linf-error(rel)" << norm[0] / norm2[0] << std::endl;
+  clout << "strainRate-Linf-error(abs)=" << norm[0] << "; strainRate-Linf-error(rel)" << norm[0] / norm2[0] << std::endl;
   myCase.getParameters().set<parameters::ERROR_STRAIN_RATE_LINF>(norm[0]);
   SuperL1Norm3D<T> dL1Norm(lattice_analytical_dis - dis, myCase.getGeometry(), 1);
   SuperL1Norm3D<T> dAnaL1Norm(lattice_analytical_dis, myCase.getGeometry(), 1);
   dL1Norm(norm, tmp); dAnaL1Norm(norm2, tmp2);
-  clout << "stress-L1-error(abs)=" << norm[0] << "; stress-L1-error(rel)=" << norm[0] / norm2[0] << std::endl;
+  clout << "dissipation-L1-error(abs)=" << norm[0] << "; dissipation-L1-error(rel)=" << norm[0] / norm2[0] << std::endl;
   myCase.getParameters().set<parameters::ERROR_DISSIPATION_L1>(norm[0]);
   SuperL2Norm3D<T> dL2Norm(lattice_analytical_dis - dis, myCase.getGeometry(), 1);
   SuperL2Norm3D<T> dAnaL2Norm(lattice_analytical_dis, myCase.getGeometry(), 1);
   dL2Norm(norm, tmp); dAnaL2Norm(norm2, tmp2);
-  clout << "stress-L2-error(abs)=" << norm[0] << "; stress-L2-error(rel)=" << norm[0] / norm2[0] << std::endl;
+  clout << "dissipation-L2-error(abs)=" << norm[0] << "; dissipation-L2-error(rel)=" << norm[0] / norm2[0] << std::endl;
   myCase.getParameters().set<parameters::ERROR_DISSIPATION_L2>(norm[0]);
   SuperLinfNorm3D<T> dLinfNorm(lattice_analytical_dis - dis, myCase.getGeometry(), 1);
   SuperLinfNorm3D<T> dAnaLinfNorm(lattice_analytical_dis, myCase.getGeometry(), 1);
   dLinfNorm(norm, tmp); dAnaLinfNorm(norm2, tmp2);
-  clout << "stress-Linf-error(abs)=" << norm[0] << "; stress-Linf-error(rel)=" << norm[0] / norm2[0] << std::endl;
+  clout << "dissipation-Linf-error(abs)=" << norm[0] << "; dissipation-Linf-error(rel)=" << norm[0] / norm2[0] << std::endl;
   myCase.getParameters().set<parameters::ERROR_DISSIPATION_LINF>(norm[0]);
+  SuperL1Norm3D<T> stL1Norm(lattice_analytical_stress - stress, myCase.getGeometry(), 1);
+  SuperL1Norm3D<T> stAnaL1Norm(lattice_analytical_stress, myCase.getGeometry(), 1);
+  stL1Norm(norm, tmp); stAnaL1Norm(norm2, tmp2);
+  clout << "stress-L1-error(abs)=" << norm[0] << "; stress-L1-error(rel)=" << norm[0] / norm2[0] << std::endl;
+  myCase.getParameters().set<parameters::ERROR_STRESS_L1>(norm[0]);
+  SuperL2Norm3D<T> stL2Norm(lattice_analytical_stress - stress, myCase.getGeometry(), 1);
+  SuperL2Norm3D<T> stAnaL2Norm(lattice_analytical_stress, myCase.getGeometry(), 1);
+  stL2Norm(norm, tmp); stAnaL2Norm(norm2, tmp2);
+  clout << "stress-L2-error(abs)=" << norm[0] << "; stress-L2-error(rel)=" << norm[0] / norm2[0] << std::endl;
+  myCase.getParameters().set<parameters::ERROR_STRESS_L2>(norm[0]);
+  SuperLinfNorm3D<T> stLinfNorm(lattice_analytical_stress - stress, myCase.getGeometry(), 1);
+  SuperLinfNorm3D<T> stAnaLinfNorm(lattice_analytical_stress, myCase.getGeometry(), 1);
+  stLinfNorm(norm, tmp); stAnaLinfNorm(norm2, tmp2);
+  clout << "stress-Linf-error(abs)=" << norm[0] << "; stress-Linf-error(rel)=" << norm[0] / norm2[0] << std::endl;
+  myCase.getParameters().set<parameters::ERROR_STRESS_LINF>(norm[0]);
 }
 
 /// Step 8.3: Compute simulation results at times
@@ -287,8 +385,8 @@ void getResults(MyCase& myCase,
   auto& lattice = myCase.getLattice(NavierStokes{});
   auto& converter = lattice.getUnitConverter();
   const T physMaxT = myCase.getParameters().get<parameters::MAX_PHYS_T>();
-  const std::size_t iTvtk = converter.getLatticeTime(physMaxT/5);
-  const std::size_t iTlog = converter.getLatticeTime(physMaxT/5);
+  const std::size_t iTvtk = converter.getLatticeTime(physMaxT/1);
+  const std::size_t iTlog = converter.getLatticeTime(physMaxT/10);
 
   SuperVTMwriter3D<T> vtmWriter("testFlow3d");
   SuperLatticePhysVelocity3D velocityF(lattice, converter);
@@ -325,14 +423,20 @@ void simulate(MyCase& myCase)
   auto& converter = sLattice.getUnitConverter();
   const std::size_t iTmax = converter.getLatticeTime(physMaxT);
   util::Timer<T> timer(iTmax, myCase.getGeometry().getStatistics().getNvoxel());
+#ifndef PLATFORM_GPU_CUDA
   util::ValueTracer<T> converge(converter.getLatticeTime(1.0), 1e-8);
+#endif
   timer.start();
 
   for (std::size_t iT=0; iT < iTmax; ++iT)
   {
+#ifndef PLATFORM_GPU_CUDA
     if(converge.hasConverged()) {
+      getResults(myCase, timer, iT);
+      computeErrorNorms(myCase);
       break;
     }
+#endif
     setTemporalValues(myCase, iT);
 
     /// @li Step 8.2: Collide and Stream Execution
@@ -344,13 +448,12 @@ void simulate(MyCase& myCase)
 
     /// @li Step 8.3: Computation and Output of the Results
     getResults(myCase, timer, iT);
+#ifndef PLATFORM_GPU_CUDA
     converge.takeValue(sLattice.getStatistics().getAverageEnergy(), true);
+#endif
   }
 
   /// @li Evaluate timer
   timer.stop();
   timer.printSummary();
-
-  sLattice.setProcessingContext(ProcessingContext::Evaluation);
-  computeErrorNorms(myCase);
 }
