@@ -172,15 +172,20 @@ void setInitialValues(MyCase& myCase)
 /// @note Be careful: boundary values have to be set using lattice units
 void setBoundaryValues(MyCase& myCase, std::size_t iT) { return; }
 
-void getResults(MyCase& myCase, std::size_t iT, util::Timer<MyCase::value_t>& timer, const MyCase::value_t logT,
-                const MyCase::value_t maxPhysT, const MyCase::value_t imSave, const MyCase::value_t vtkSave,
-                const MyCase::value_t gnuplotSave, const int timerPrintMode, bool converged)
+void getResults(MyCase& myCase, std::size_t iT, util::Timer<MyCase::value_t>& timer, bool converged)
 {
   OstreamManager clout(std::cout, "getResults");
-  using T               = MyCase::value_t;
-  auto&       sLattice  = myCase.getLattice(NavierStokes {});
-  const auto& converter = sLattice.getUnitConverter();
-  auto&       sGeometry = myCase.getGeometry();
+  using T                    = MyCase::value_t;
+  auto&       sLattice       = myCase.getLattice(NavierStokes {});
+  const auto& converter      = sLattice.getUnitConverter();
+  auto&       sGeometry      = myCase.getGeometry();
+  auto&       parameters     = myCase.getParameters();
+  auto        logT           = parameters.get<parameters::PHYS_LOG_ITER_T>();
+  auto        maxPhysT       = parameters.get<parameters::MAX_PHYS_T>();
+  auto        imSave         = parameters.get<parameters::PHYS_IMAGE_ITER_T>();
+  auto        vtkSave        = parameters.get<parameters::PHYS_VTK_ITER_T>();
+  auto        gnuplotSave    = parameters.get<parameters::PHYS_GNUPLOT_ITER_T>();
+  auto        timerPrintMode = parameters.get<parameters::TIMER_PRINT_MODE>();
 
   SuperVTMwriter2D<T> vtmWriter("cavity2dvtk");
 
@@ -273,14 +278,9 @@ void simulate(MyCase& myCase)
   OstreamManager clout(std::cout, "Time marching");
   using T = MyCase::value_t;
 
-  auto& sLattice       = myCase.getLattice(NavierStokes {});
-  auto& parameters     = myCase.getParameters();
-  auto  logT           = parameters.get<parameters::PHYS_LOG_ITER_T>();
-  auto  maxPhysT       = parameters.get<parameters::MAX_PHYS_T>();
-  auto  imSave         = parameters.get<parameters::PHYS_IMAGE_ITER_T>();
-  auto  vtkSave        = parameters.get<parameters::PHYS_VTK_ITER_T>();
-  auto  gnuplotSave    = parameters.get<parameters::PHYS_GNUPLOT_ITER_T>();
-  auto  timerPrintMode = parameters.get<parameters::TIMER_PRINT_MODE>();
+  auto& sLattice   = myCase.getLattice(NavierStokes {});
+  auto& parameters = myCase.getParameters();
+  auto  maxPhysT   = parameters.get<parameters::MAX_PHYS_T>();
 
   auto maxLatticeT = sLattice.getUnitConverter().getLatticeTime(maxPhysT);
 
@@ -294,8 +294,7 @@ void simulate(MyCase& myCase)
   for (std::size_t iT = 0; iT <= maxLatticeT; ++iT) {
     if (converge.hasConverged()) {
       clout << "Simulation converged." << std::endl;
-      getResults(myCase, iT, timer, logT, maxPhysT, imSave, vtkSave, gnuplotSave, timerPrintMode,
-                 converge.hasConverged());
+      getResults(myCase, iT, timer, converge.hasConverged());
 
       break;
     }
@@ -304,8 +303,7 @@ void simulate(MyCase& myCase)
 
     sLattice.collideAndStream();
 
-    getResults(myCase, iT, timer, logT, maxPhysT, imSave, vtkSave, gnuplotSave, timerPrintMode,
-               converge.hasConverged());
+    getResults(myCase, iT, timer, converge.hasConverged());
 
     converge.takeValue(sLattice.getStatistics().getAverageEnergy(), true);
   }
