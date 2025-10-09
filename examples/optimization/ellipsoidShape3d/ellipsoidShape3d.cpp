@@ -41,12 +41,24 @@
 #include "olb.h"
 
 using namespace olb;
-using namespace olb::descriptors;
 using namespace olb::opti;
 
-using S = FLOATING_POINT_TYPE;
-using U = util::ADf<S,2>;
-using DESCRIPTOR = D3Q19<>;
+using MyCase = Case<
+  NavierStokes, Lattice<double, descriptors::D3Q19<>
+>;
+using MyADfCase = Case<
+  NavierStokes, Lattice<util::ADf<double,2>, descriptors::D3Q19<>
+>;
+using MyOptiCase = OptiCaseADf<
+  Controlled, MyCase,
+  Derivatives, MyADfCase
+>;
+
+namespace olb::parameters{
+
+struct CONTROLS : public descriptors::FIELD_BASE<2>();
+
+}
 
 const int N = 20;                    // resolution of the model
 const S Re = 50;                     // Reynolds number
@@ -60,19 +72,35 @@ const S latticeRelaxationTime = 0.55;
 const S charPhysViscosity = 0.001;
 const S physDensity = 1.0;
 
-const S centerEllipsoidX = 0.5;
-const S centerChannelYZ = heightChannel / 2.0;
+template <typename PARAMETERS>
+auto createMesh(PARAMETERS& parameters) {
+  using T = PARAMETERS::value_t;
+  const Vector extent = parameters.template get<parameters::DOMAIN_EXTENT>();
+  const Vector origin{0., 0., 0.};
+  IndicatorCuboid3D<T> channel( extent, origin );
 
-template<typename T>
-void prepareGeometry( UnitConverter<T,DESCRIPTOR> const& converter, IndicatorF3D<T>& channel,
-                      SuperGeometry<T,3>& superGeometry)
+  Mesh<T,3> mesh(channel,
+                 extent[0] / parameters.template get<parameters::RESOLUTION>(),
+		 singleton::mpi().getSize());
+  mesh.setOverlap(parameters.template get<parameters::OVERLAP>());
+  return mesh;
+}
+
+template<typename CASE>
+void prepareGeometry(CASE& myCase)
 {
   OstreamManager clout( std::cout,"prepareGeometry" );
   clout << "Prepare Geometry ..." << std::endl;
+  using T = CASE::value_t;
+  auto& parameters = myCase.getParmeters();
+  auto& superGeometry = myCase.getGeometry();
+  const T delta = parameters.get<parameters::DOMAIN_EXTENT>()[0] / parameters.get<parameters::RESOLUTION>() / 2.0;
 
+  const Vector extent = parameters.template get<parameters::DOMAIN_EXTENT>();
+  const Vector origin{0., 0., 0.};
+  IndicatorCuboid3D<T> channel( extent, origin );
   superGeometry.rename( 0, 1, channel );
 
-  T delta = converter.getPhysDeltaX()/2.;
   auto min = channel.getMin();
   auto max = channel.getMax();
   Vector<T,3> origin { min[0]-delta, min[1]-delta, min[2]-delta};
@@ -92,15 +120,27 @@ void prepareGeometry( UnitConverter<T,DESCRIPTOR> const& converter, IndicatorF3D
   clout << "Prepare Geometry ... OK" << std::endl;
 }
 
-template<typename T>
+template<typename CASE>
 void prepareLattice( SuperLattice<T,DESCRIPTOR>& sLattice,
-                     UnitConverter<T,DESCRIPTOR> const& converter,
                      SuperGeometry<T,3>& superGeometry,
                      std::shared_ptr<AnalyticalF3D<T,T>> smoothEllipsoid)
 {
   OstreamManager clout( std::cout,"prepareLattice" );
   clout << "Prepare Lattice ..." << std::endl;
+  auto& sLattice = myCase.getLattice(NavierStokes{});
+  auto& superGeometry = myCase.getGeometry();
+  auto& parameters = myCase.getParameters();
 
+  sLattice.setUnitConverter<UnitConverterFromResolutionAndRelaxationTime<T,DESCRIPTOR>>(
+    parameters.get<parameters::RESOLUTION>()          // resolution: number of voxels per charPhysL
+    parameters.get<parameters::RELAXATION_TIME>(),    // latticeRelaxationTime: relaxation time, have to be greater than 0.5!
+    parameters.get<parameters::DOMAIN_EXTENT>()[0],   // charPhysLength: reference length of simulation geometry
+    parameters.get<parameters::PHYS_CHAR_VELOCITY>(), // physVelocity: maximal/highest expected velocity during simulation in __m / s__
+    parameters.get<parameters::PHYS_CHAR_VISCOSITY>(),// charPhysViscosity: physical kinematic viscosity in __m^2 / s__
+    parameters.get<parameters::PHYS_CHAR_DENSITY>()   // physDensity: physical density in __kg / m^3__
+  );
+  auto& converter = sLattice.getUnitConverter();
+  converter.print();
   const T omega = converter.getLatticeRelaxationFrequency();
 
   // Bulk dynamics for all materials
@@ -112,6 +152,18 @@ void prepareLattice( SuperLattice<T,DESCRIPTOR>& sLattice,
   boundary::set<boundary::InterpolatedPressure>(sLattice, superGeometry, 4);
 
   // Set required porosities
+  Vector radius = parameters.get<parameters::ELLIPSOID_RADII>();
+  Vector radius_plus_eps = radius;
+  const T eps = parameters.get<parameters::SMOOTH_LAYER_THICKNESS>() *
+	        parameters.get<parameters::EXTENT_DOMAIN>()[0] /
+	        parameters.get<parameters::RESOLUTION>(); 
+  for (int i=0; i < 3; ++i) {
+    radius_plus_eps += eps;
+  }
+  std::shared_ptr<IndicatorF3D<T>> ellipsoid = std::make_shared<IndicatorEllipsoid3D<T>>( parameters.get<parameters::ELLIPSOID_POS>(), radius_plus_eps );
+
+  // Smooth ellipsoid to set porosity field
+  std::shared_ptr<AnalyticalF3D<T,T>> smoothEllipsoid = std::make_shared<SmoothIndicatorSigmoidEllipsoid3D<T,T,false>>( parameters.get<parameters::ELLIPSOID_RADII>(), radius, eps);
   std::shared_ptr<AnalyticalF3D<T,T>> one = std::make_shared<AnalyticalConst3D<T,T>>(1.);
   std::shared_ptr<AnalyticalF3D<T,T>> ellipsoidField = one - smoothEllipsoid;
 
@@ -132,11 +184,11 @@ void prepareLattice( SuperLattice<T,DESCRIPTOR>& sLattice,
   clout << "Prepare Lattice ... OK" << std::endl;
 }
 
-template<typename T>
+template<typename CASE>
 void setBoundaryValues( SuperLattice<T,DESCRIPTOR>& sLattice,
-                        UnitConverter<T,DESCRIPTOR> const& converter,
                         SuperGeometry<T,3>& superGeometry, int iT )
 {
+  auto& converter = sLattice.getUnitConverter();
   int iTmaxStart = converter.getLatticeTime( rampStartT );
   int iTupdate = converter.getLatticeTime( rampUpdateT );
 
@@ -154,12 +206,12 @@ void setBoundaryValues( SuperLattice<T,DESCRIPTOR>& sLattice,
   }
 }
 
-template<typename T>
+template<typename CASE>
 T objective_details( SuperLattice<T,DESCRIPTOR>& sLattice,
-                     UnitConverter<T,DESCRIPTOR> const& converter,
                      SuperGeometry<T,3>& superGeometry )
 {
   OstreamManager clout( std::cout,"objective_details" );
+  auto& converter = sLattice.getUnitConverter();
   T result = 0.0;
   Vector<T,3> center( centerEllipsoidX, centerChannelYZ, centerChannelYZ );
   IndicatorCuboid3D<T> integrationDomain(1.0, 0.4, 0.4, center);
@@ -193,13 +245,14 @@ T objective_details( SuperLattice<T,DESCRIPTOR>& sLattice,
 }
 
 // Computes and visualizes Lattice fields, computes dissipation
-template<typename T>
+template<typename CASE>
 void getResults( SuperLattice<T, DESCRIPTOR>& sLattice,
-                 const UnitConverter<T,DESCRIPTOR>& converter, int iT,
+                 int iT,
                  SuperGeometry<T,3>& superGeometry,
                  util::Timer<T>& timer)
 {
   OstreamManager clout( std::cout,"getResults" );
+  auto& converter = sLattice.getUnitConverter();
 
   SuperVTMwriter3D<T> vtmWriter( "ellipsoid3dOpti" );
   SuperLatticePhysVelocity3D<T,DESCRIPTOR> velocity( sLattice, converter );
@@ -256,24 +309,39 @@ int main( int argc, char* argv[] )
   initialize( &argc, &argv );
   using T = S;
   OstreamManager clout( std::cout,"simulateEllipsoid" );
-  std::vector<S> controls({.05, .05});
+  MyCase::ParametersD myCaseParametersD;
+  {
+    using namespace parameters;
+    myCaseParametersD.set<DOMAIN_EXTENT>({0.4, 1.2, 1.2});
+    myCaseParametersD.set<RESOLUTION>(20);
+    myCaseParametersD.set<RELAXATION_TIME>(0.55);
+    myCaseParametersD.set<PHYS_CHAR_VISCOSITY>(0.001);
+    myCaseParametersD.set<REYNOLDS>(50);
+    myCaseParametersD.set<PHYS_CHAR_VELOCITY>([&]() {
+      return myCaseParameters.get<PHYS_CHAR_VISCOSITY>() *
+             myCaseParameters.get<REYNOLDS>() /
+	     myCaseParameters.get<EXTENT_DOMAIN>()[0];
+    });
+    myCaseParametersD.set<PHYS_CHAR_DENSITY>(1.0);
+    myCaseParametersD.set<CONTROLS>({0.05, 0.05});
+    myCaseParametersD.set<ELLIPSOID_VOLUME>(0.001);
+    myCaseParametersD.set<SMOOTH_LAYER_THICKNESS>(5);
+    myCaseParametersD.set<ELLIPSOID_RADII>([&]() {
+      const T radiusZ = 0.75*myCaseParametersD.get<ELLIPSOID_VOLUME>() /
+	      (M_PI*myCaseParametersD.get<CONTROLS>()[0]*myCaseParametersD.get<CONTROLS>()[1]);
+      return {myCaseParametersD.get<CONTROLS>()[0],
+              myCaseParametersD.get<CONTROLS>()[1],
+	      radiusZ};
+    });
+    myCaseParametersD.set<ELLIPSOID_POS>([&]() {
+      return {0.5,
+              myCaseParametersD.get<DOMAIN_EXTENT>()[1] / 2.0,
+	      myCaseParametersD.get<DOMAIN_EXTENT>()[2] / 2.0};
+    });
+  }
 
-  UnitConverterFromResolutionAndRelaxationTime<T, DESCRIPTOR> converter(
-    int {N},                                      // resolution: number of voxels per charPhysL
-    (T)   latticeRelaxationTime,                  // latticeRelaxationTime: relaxation time, have to be greater than 0.5!
-    (T)   heightChannel,                          // charPhysLength: reference length of simulation geometry
-    (T)   charPhysViscosity * Re / heightChannel, // physVelocity: maximal/highest expected velocity during simulation in __m / s__
-    (T)   charPhysViscosity,                      // charPhysViscosity: physical kinematic viscosity in __m^2 / s__
-    (T)   physDensity                             // physDensity: physical density in __kg / m^3__
-  );
-  converter.print();
+  auto mesh = createMesh(myCaseParametersD);
 
-  const T radiusEllipsoidY = controls[0];
-  const T radiusEllipsoidZ = controls[1];
-  const T volumeEllipsoid  = 0.001;
-  const T radiusEllipsoidX = 0.75 * volumeEllipsoid / (M_PI*radiusEllipsoidY*radiusEllipsoidZ);
-
-  Vector<T,3> center( centerEllipsoidX, centerChannelYZ, centerChannelYZ ); // Fixed center of ellipsoid
   Vector<T,3> radius( radiusEllipsoidX, radiusEllipsoidY, radiusEllipsoidZ );
   clout << "Radius X: " << radiusEllipsoidX  << std::endl;
   clout << "Radius Y: " << radiusEllipsoidY  << std::endl;
@@ -289,28 +357,12 @@ int main( int argc, char* argv[] )
   // Smooth ellipsoid to set porosity field
   std::shared_ptr<AnalyticalF3D<T,T>> smoothEllipsoid = std::make_shared<SmoothIndicatorSigmoidEllipsoid3D<T,T,false>>( center, radius, epsilon * converter.getConversionFactorLength() );
 
-  // === Initial 2nd Step: Prepare Geometry ===
-  // Construct channel
-  Vector<T,3> origin( 0., 0., 0. );
-  Vector<T,3> extent( lengthChannel, heightChannel, heightChannel );
-  IndicatorCuboid3D<T> channel( extent, origin );
-
-  // Instantiation of a cuboidGeometry with weights
-  CuboidDecomposition3D<T> cuboidGeometry( channel, converter.getConversionFactorLength(), singleton::mpi().getSize() );
-
-  // Periodic boundaries
-  cuboidGeometry.setPeriodicity({false, true, true});
-
-  // Instantiation of a loadBalancer
-  HeuristicLoadBalancer<T> loadBalancer( cuboidGeometry );
-
   // Instantiation of a superGeometry
-  SuperGeometry<T,3> superGeometry( cuboidGeometry, loadBalancer );
-  prepareGeometry( converter, channel, superGeometry);
+  prepareGeometry( channel, superGeometry);
 
   // === Initial 3rd Step: Prepare Lattice ===
-  SuperLattice<T,DESCRIPTOR> sLattice( converter, superGeometry );
-  prepareLattice( sLattice, converter, superGeometry, smoothEllipsoid);
+  SuperLattice<T,DESCRIPTOR> sLattice( superGeometry );
+  prepareLattice( sLattice, superGeometry, smoothEllipsoid);
 
   // === 4th Step: Main Loop with Timer ===
   clout << "starting simulation" << std::endl;
@@ -320,17 +372,17 @@ int main( int argc, char* argv[] )
 
   for (std::size_t iT = 0; iT < maxiT; ++iT) {
     // === 5th Step: Definition of Initial and Boundary Conditions === can be skipped for forced flow type
-    setBoundaryValues( sLattice, converter, superGeometry, iT );
+    setBoundaryValues( sLattice, superGeometry, iT );
 
     // === 6th Step: Collide and Stream Execution ===
     sLattice.collideAndStream();
 
     // === 7th Step: Computation and Output of the Results ===
-    getResults( sLattice, converter, iT, superGeometry, timer );
+    getResults( sLattice, iT, superGeometry, timer );
   }
   timer.stop();
   timer.printSummary();
-  clout << util::pow(objective_details(sLattice, converter, superGeometry), 2.) << std::endl;
+  clout << util::pow(objective_details(sLattice, superGeometry), 2.) << std::endl;
 
   /*if constexpr (false) {
     std::vector<U> radiusEllipsoidYZ({.05, .05});
