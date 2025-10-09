@@ -1,7 +1,8 @@
 /*  Lattice Boltzmann sample, written in C++, using the OpenLB
  *  library
  *
- *  Copyright (C) 2008 Orestis Malaspinas, Andrea Parmigiani
+ *  Copyright (C) 2025 Florian Kaiser
+ *                2008 Orestis Malaspinas, Andrea Parmigiani
  *  E-mail contact: info@openlb.net
  *  The most recent release of OpenLB can be downloaded at
  *  <http://www.openlb.net/>
@@ -33,201 +34,266 @@
 #include <olb.h>
 
 using namespace olb;
-using namespace olb::descriptors;
-using namespace olb::graphics;
+using namespace olb::names;
 
-using T = FLOATING_POINT_TYPE;
-using DESCRIPTOR = D2Q9<FORCE,EXTERNAL_FORCE,STATISTIC>;
+// === Step 1: Declarations ===
+using MyCase = Case<
+  Component1, Lattice<float,
+                        descriptors::D2Q9<descriptors::FORCE,
+                        descriptors::EXTERNAL_FORCE,
+                        descriptors::STATISTIC>>,
+  Component2, Lattice<float,
+                        descriptors::D2Q9<descriptors::FORCE,
+                        descriptors::EXTERNAL_FORCE,
+                        descriptors::STATISTIC>>
+>;
 
-using COUPLING = PseudopotentialForcedCoupling<interaction::PsiEqualsRho,
-                                               multicomponent_velocity::ShanChen>;
+/// @brief Create a simulation mesh, based on user-specific geometry
+/// @return An instance of Mesh, which keeps the relevant information
+Mesh<MyCase::value_t,MyCase::d> createMesh(MyCase::ParametersD& parameters) {
+  using T = MyCase::value_t_of<Component1>;
+  const Vector extent = parameters.get<parameters::DOMAIN_EXTENT>();
+  const Vector origin = parameters.get<parameters::ORIGIN>();
+  const T physDeltaX  = parameters.get<parameters::PHYS_DELTA_X>();
+  IndicatorCuboid2D<T> cuboid(extent, origin);
 
-// Parameters for the simulation setup
-const int nx   = 800;
-const int ny   = 400;
-const int maxIter = 20000;
+  Mesh<T,MyCase::d> mesh(cuboid, physDeltaX, singleton::mpi().getSize());
+  mesh.setOverlap(parameters.get<parameters::OVERLAP>());
+  mesh.getCuboidDecomposition().setPeriodicity({true, false});
+  return mesh;
+}
 
-// Stores geometry information in form of material numbers
-void prepareGeometry( SuperGeometry<T,2>& superGeometry )
-{
-
+void prepareGeometry(MyCase& myCase) {
   OstreamManager clout( std::cout,"prepareGeometry" );
   clout << "Prepare Geometry ..." << std::endl;
 
+  using T = MyCase::value_t_of<Component1>;
+
+  auto& geometry    = myCase.getGeometry();
+  auto& parameters  = myCase.getParameters();
+
+  const Vector extend     = parameters.get<parameters::DOMAIN_EXTENT>();
+  const T dx         = parameters.get<parameters::PHYS_DELTA_X>();
+  const T nx              = extend[0];
+  const T ny              = extend[1];
+
   // Sets material number for fluid and boundary
-  superGeometry.rename( 0,1 );
+  geometry.rename( 0, 1 );
 
-  Vector<T,2> origin1( -.5, -.5 );
-  Vector<T,2> origin2( -.5,ny/2. );
-  Vector<T,2> origin3( -.5, ny-1.5 );
-  Vector<T,2> extend1( nx+2, 1. );
-  Vector<T,2> extend2( nx+2., ny/2.+2. );
+  Vector<T,2> originUpper( -dx, ny / 2. );
+  Vector<T,2> extendUpper( nx + 2. * dx, ny / 2. + 2. * dx );
+  IndicatorCuboid2D<T> upper( extendUpper, originUpper );
+  geometry.rename( 1, 2, upper );
 
-  IndicatorCuboid2D<T> bottom( extend1, origin1 );
-  IndicatorCuboid2D<T> upper( extend2, origin2 );
-  IndicatorCuboid2D<T> top( extend1, origin3 );
+  Vector<T,2> originTop( -dx, ny - dx / 2.);
+  Vector<T,2> extendTop( nx + 2. * dx, dx );
+  IndicatorCuboid2D<T> top( extendTop, originTop );
+  geometry.rename( 2, 4, top );
 
-  superGeometry.rename( 1,2,upper );
-  superGeometry.rename( 1,3,bottom );
-  superGeometry.rename( 2,4,top );
+  Vector<T,2> originBottom( -dx, -dx / 2. );
+  Vector<T,2> extendBottom( nx + 2. * dx, dx );
+  IndicatorCuboid2D<T> bottom( extendBottom, originBottom );
+  geometry.rename( 1, 3, bottom );
 
-  // Removes all not needed boundary voxels outside the surface
-  //superGeometry.clean();
-  // Removes all not needed boundary voxels inside the surface
-  superGeometry.innerClean();
-  superGeometry.checkForErrors();
+  geometry.checkForErrors();
 
-  superGeometry.print();
+  geometry.print();
 
   clout << "Prepare Geometry ... OK" << std::endl;
 }
 
-template <typename SuperLatticeCoupling>
-void prepareLattice(SuperLattice<T,DESCRIPTOR>& sLatticeOne,
-                    SuperLattice<T,DESCRIPTOR>& sLatticeTwo,
-                    SuperLatticeCoupling& coupling,
-                    SuperGeometry<T,2>& superGeometry)
-{
-  OstreamManager clout( std::cout,"prepareLattice" );
+void prepareLattice(MyCase& myCase) {
+  OstreamManager clout(std::cout,"prepareLattice");
   clout << "Prepare Lattice ..." << std::endl;
 
-  const T omega1 = 1.0;
-  const T omega2 = 1.0;
-  AnalyticalConst2D<T,T> rho0(0.0);
-  AnalyticalConst2D<T,T> rho1(1.0);
+  using T          = MyCase::value_t_of<Component1>;
+  using DESCRIPTOR = MyCase::descriptor_t_of<Component1>;
+
+  auto& geometry   = myCase.getGeometry();
+  auto& latticeOne = myCase.getLattice(Component1{});
+  auto& latticeTwo = myCase.getLattice(Component2{});
+  auto& parameters = myCase.getParameters();
 
   // The setup is: periodicity along horizontal direction, bounce-back on top
   // and bottom. The upper half is initially filled with fluid 1 + random noise,
   // and the lower half with fluid 2. Only fluid 1 experiences a forces,
   // directed downwards.
 
-  using BulkDynamics = ForcedShanChenBGKdynamics<T, DESCRIPTOR, momenta::ExternalVelocityTuple>;
+  const int N               = parameters.get<parameters::RESOLUTION>();
+  const T tau               = parameters.get<parameters::LATTICE_RELAXATION_TIME>();
+  const T physCharLength    = parameters.get<parameters::PHYS_CHAR_LENGTH>();
+  const T physCharVelocity  = parameters.get<parameters::PHYS_CHAR_VELOCITY>();
+  const T physCharViscosity = parameters.get<parameters::PHYS_CHAR_VISCOSITY>();
+  const T physCharDensity   = parameters.get<parameters::PHYS_CHAR_DENSITY>();
+  const T couplingG         = parameters.get<parameters::COUPLING_G>();
+  latticeOne.setUnitConverter<UnitConverterFromResolutionAndRelaxationTime<T,DESCRIPTOR>>(
+    N,
+    tau,
+    physCharLength,
+    physCharVelocity,
+    physCharViscosity,
+    physCharDensity
+  );
 
-  sLatticeOne.defineDynamics<BulkDynamics>(superGeometry, 1);
-  sLatticeOne.defineDynamics<BulkDynamics>(superGeometry, 2);
-  sLatticeOne.defineDynamics<BulkDynamics>(superGeometry, 3);
-  sLatticeOne.defineDynamics<BulkDynamics>(superGeometry, 4);
+  auto& converter = latticeOne.getUnitConverter();
+  converter.print();
 
-  sLatticeTwo.defineDynamics<BulkDynamics>(superGeometry, 1);
-  sLatticeTwo.defineDynamics<BulkDynamics>(superGeometry, 2);
-  sLatticeTwo.defineDynamics<BulkDynamics>(superGeometry, 3);
-  sLatticeTwo.defineDynamics<BulkDynamics>(superGeometry, 4);
+  latticeTwo.setUnitConverter(converter);
 
-  boundary::set<boundary::BounceBack>(sLatticeOne, superGeometry, 3);
-  boundary::set<boundary::BounceBack>(sLatticeOne, superGeometry, 4);
-  boundary::set<boundary::BounceBack>(sLatticeTwo, superGeometry, 3);
-  boundary::set<boundary::BounceBack>(sLatticeTwo, superGeometry, 4);
+  latticeOne.defineDynamics<ForcedShanChenBGKdynamics<T, DESCRIPTOR, momenta::ExternalVelocityTuple>>(geometry, 1);
+  latticeOne.defineDynamics<ForcedShanChenBGKdynamics<T, DESCRIPTOR, momenta::ExternalVelocityTuple>>(geometry, 2);
+  latticeOne.defineDynamics<ForcedShanChenBGKdynamics<T, DESCRIPTOR, momenta::ExternalVelocityTuple>>(geometry, 3);
+  latticeOne.defineDynamics<ForcedShanChenBGKdynamics<T, DESCRIPTOR, momenta::ExternalVelocityTuple>>(geometry, 4);
 
-  sLatticeOne.setParameter<descriptors::OMEGA>(omega1);
-  sLatticeTwo.setParameter<descriptors::OMEGA>(omega2);
+  latticeTwo.defineDynamics<ForcedShanChenBGKdynamics<T, DESCRIPTOR, momenta::ExternalVelocityTuple>>(geometry, 1);
+  latticeTwo.defineDynamics<ForcedShanChenBGKdynamics<T, DESCRIPTOR, momenta::ExternalVelocityTuple>>(geometry, 2);
+  latticeTwo.defineDynamics<ForcedShanChenBGKdynamics<T, DESCRIPTOR, momenta::ExternalVelocityTuple>>(geometry, 3);
+  latticeTwo.defineDynamics<ForcedShanChenBGKdynamics<T, DESCRIPTOR, momenta::ExternalVelocityTuple>>(geometry, 4);
 
-  // A bounce-back node with fictitious density 0, which is experienced by the partner fluid
-  sLatticeOne.defineRho(superGeometry, 3, rho0);
-  sLatticeTwo.defineRho(superGeometry, 4, rho0);
-  // A bounce-back node with fictitious density 0, which is experienced by the partner fluid
-  sLatticeOne.defineRho(superGeometry, 4, rho1);
-  sLatticeTwo.defineRho(superGeometry, 3, rho1);
+  boundary::set<boundary::BounceBack>(latticeOne, geometry, 3);
+  boundary::set<boundary::BounceBack>(latticeOne, geometry, 4);
+  boundary::set<boundary::BounceBack>(latticeTwo, geometry, 3);
+  boundary::set<boundary::BounceBack>(latticeTwo, geometry, 4);
 
-  coupling.template setParameter<COUPLING::G>(T(3.));
-  coupling.template setParameter<multicomponent_velocity::ShanChen::OMEGA_A>(omega1);
-  coupling.template setParameter<multicomponent_velocity::ShanChen::OMEGA_B>(omega2);
+  const T omega1  = converter.getLatticeRelaxationFrequency();
+  const T omega2  = converter.getLatticeRelaxationFrequency();
+  latticeOne.setParameter<descriptors::OMEGA>(omega1);
+  latticeTwo.setParameter<descriptors::OMEGA>(omega2);
 
-  sLatticeOne.addPostProcessor<stage::PreCoupling>(meta::id<RhoStatistics>());
-  sLatticeTwo.addPostProcessor<stage::PreCoupling>(meta::id<RhoStatistics>());
+  using COUPLING = PseudopotentialForcedCoupling<
+    interaction::PsiEqualsRho,
+    multicomponent_velocity::ShanChen
+  >;
+
+  auto& coupling = myCase.setCouplingOperator(
+    "MultiComponent",
+    COUPLING{},
+    names::A{}, latticeOne,
+    names::B{}, latticeTwo
+  );
+
+  coupling.setParameter<COUPLING::G>(couplingG);
+  coupling.setParameter<multicomponent_velocity::ShanChen::OMEGA_A>(omega1);
+  coupling.setParameter<multicomponent_velocity::ShanChen::OMEGA_B>(omega2);
+
+  latticeOne.addPostProcessor<stage::PreCoupling>(meta::id<RhoStatistics>());
+  latticeTwo.addPostProcessor<stage::PreCoupling>(meta::id<RhoStatistics>());
 
   {
-    auto& communicator = sLatticeOne.getCommunicator(stage::PreCoupling());
+    auto& communicator = latticeOne.getCommunicator(stage::PreCoupling());
     communicator.requestOverlap(1);
-    communicator.requestField<STATISTIC>();
+    communicator.requestField<descriptors::STATISTIC>();
     communicator.exchangeRequests();
   }
 
   {
-    auto& communicator = sLatticeTwo.getCommunicator(stage::PreCoupling());
+    auto& communicator = latticeTwo.getCommunicator(stage::PreCoupling());
     communicator.requestOverlap(1);
-    communicator.requestField<STATISTIC>();
+    communicator.requestField<descriptors::STATISTIC>();
     communicator.exchangeRequests();
   }
 
   clout << "Prepare Lattice ... OK" << std::endl;
 }
 
-void setBoundaryValues( SuperLattice<T, DESCRIPTOR>& sLatticeOne,
-                        SuperLattice<T, DESCRIPTOR>& sLatticeTwo,
-                        T force, int iT, SuperGeometry<T,2>& superGeometry )
-{
-  if ( iT==0 ) {
+void setInitialValues(MyCase& myCase) {
+  OstreamManager clout(std::cout, "setInitialValues");
+  clout << "Setting initial values ..." << std::endl;
 
-    AnalyticalConst2D<T,T> noise( 4.e-2 );
-    std::vector<T> v( 2,T() );
-    AnalyticalConst2D<T,T> zeroV( v );
-    AnalyticalConst2D<T,T> zero( 1.e-6 );
-    AnalyticalLinear2D<T,T> one( 0.,-force*invCs2<T,DESCRIPTOR>(),0.98+force*ny*invCs2<T,DESCRIPTOR>() );
-    AnalyticalConst2D<T,T> onePlus( 0.98+force*ny/2.*invCs2<T,DESCRIPTOR>() );
-    AnalyticalRandom2D<T,T> random;
-    AnalyticalIdentity2D<T,T> randomOne( random*noise+one );
-    AnalyticalIdentity2D<T,T> randomPlus( random*noise+onePlus );
-    std::vector<T> F( 2,T() );
-    F[1] = -force;
-    AnalyticalConst2D<T,T> f( F );
+  using T          = MyCase::value_t_of<Component1>;
+  using DESCRIPTOR = MyCase::descriptor_t_of<Component1>;
 
-    // for each material set the defineRhou and the Equilibrium
+  auto& geometry    = myCase.getGeometry();
+  auto& latticeOne  = myCase.getLattice(Component1{});
+  auto& latticeTwo  = myCase.getLattice(Component2{});
+  auto& parameters  = myCase.getParameters();
 
-    sLatticeOne.defineRhoU( superGeometry, 1, zero, zeroV );
-    sLatticeOne.iniEquilibrium( superGeometry, 1, zero, zeroV );
-    sLatticeOne.defineField<descriptors::EXTERNAL_FORCE>( superGeometry, 1, f );
-    sLatticeTwo.defineRhoU( superGeometry, 1, randomPlus, zeroV );
-    sLatticeTwo.iniEquilibrium( superGeometry, 1, randomPlus, zeroV );
+  const T noiseVal        = parameters.get<parameters::NOISE>();
+  const T zeroVal         = parameters.get<parameters::ZERO>();
+  const T force           = parameters.get<parameters::FORCE>();
+  const T ny              = parameters.get<parameters::DOMAIN_EXTENT>()[1];
 
-    sLatticeOne.defineRhoU( superGeometry, 2, randomOne, zeroV );
-    sLatticeOne.iniEquilibrium( superGeometry, 2, randomOne, zeroV );
-    sLatticeOne.defineField<descriptors::EXTERNAL_FORCE>( superGeometry, 2, f );
-    sLatticeTwo.defineRhoU( superGeometry, 2, zero, zeroV );
-    sLatticeTwo.iniEquilibrium( superGeometry, 2, zero, zeroV );
+  AnalyticalConst2D<T,T> noise( noiseVal );
+  AnalyticalConst2D<T,T> zeroV(0., 0.);
+  AnalyticalConst2D<T,T> zero( zeroVal );
+  AnalyticalLinear2D<T,T> one( 0., -force * descriptors::invCs2<T,DESCRIPTOR>(), 0.98 + force * ny * descriptors::invCs2<T,DESCRIPTOR>() );
+  AnalyticalConst2D<T,T> onePlus( 0.98 + force * ny / 2. * descriptors::invCs2<T,DESCRIPTOR>() );
+  AnalyticalRandom2D<T,T> random;
+  AnalyticalIdentity2D<T,T> randomOne( random * noise + one );
+  AnalyticalIdentity2D<T,T> randomPlus( random * noise + onePlus );
+  AnalyticalConst2D<T,T> f( 0, -force );
 
-    // Make the lattice ready for simulation
-    sLatticeOne.initialize();
-    sLatticeTwo.initialize();
-  }
+  // for each material set the defineRhou and the Equilibrium
+
+  latticeOne.defineRhoU( geometry, 1, zero, zeroV );
+  latticeOne.iniEquilibrium( geometry, 1, zero, zeroV );
+  latticeOne.defineField<descriptors::EXTERNAL_FORCE>( geometry, 1, f );
+  latticeTwo.defineRhoU( geometry, 1, randomPlus, zeroV );
+  latticeTwo.iniEquilibrium( geometry, 1, randomPlus, zeroV );
+
+  latticeOne.defineRhoU( geometry, 2, randomOne, zeroV );
+  latticeOne.iniEquilibrium( geometry, 2, randomOne, zeroV );
+  latticeOne.defineField<descriptors::EXTERNAL_FORCE>( geometry, 2, f );
+  latticeTwo.defineRhoU( geometry, 2, zero, zeroV );
+  latticeTwo.iniEquilibrium( geometry, 2, zero, zeroV );
+
+  // Make the lattice ready for simulation
+  latticeOne.initialize();
+  latticeTwo.initialize();
+
+  clout << "Setting initial values ... OK" << std::endl;
 }
 
-void getResults( SuperLattice<T, DESCRIPTOR>&    sLatticeTwo,
-                 SuperLattice<T, DESCRIPTOR>&    sLatticeOne, int iT,
-                 SuperGeometry<T,2>& superGeometry, util::Timer<T>& timer )
+void setTemporalValues(MyCase& myCase,
+                       std::size_t iT)
 {
+  // Nothing to do here
+}
 
-  OstreamManager clout( std::cout,"getResults" );
+void getResults(MyCase& myCase,
+                util::Timer<MyCase::value_t>& timer,
+                std::size_t iT)
+{
+  OstreamManager clout(std::cout,"getResults");
+
+  using T          = MyCase::value_t_of<Component1>;
+  using DESCRIPTOR = MyCase::descriptor_t_of<Component1>;
+
+  auto& latticeOne  = myCase.getLattice(Component1{});
+  auto& latticeTwo  = myCase.getLattice(Component2{});
+  auto& parameters  = myCase.getParameters();
+
   SuperVTMwriter2D<T> vtmWriter( "rayleighTaylor2dsLatticeOne" );
 
-  const int vtkIter  = 100;
-  const int statIter = 100;
+  const int vtkIter   = parameters.get<parameters::PHYS_VTK_ITER_T>();
+  const int statIter  = parameters.get<parameters::PHYS_STAT_ITER_T>();
 
-  if ( iT==0 ) {
+  if ( iT == 0 ) {
     // Writes the geometry, cuboid no. and rank no. as vti file for visualization
-    SuperLatticeCuboid2D<T, DESCRIPTOR> cuboid( sLatticeOne );
-    SuperLatticeRank2D<T, DESCRIPTOR> rank( sLatticeOne );
+    SuperLatticeCuboid2D<T, DESCRIPTOR> cuboid( latticeOne );
+    SuperLatticeRank2D<T, DESCRIPTOR> rank( latticeOne );
     vtmWriter.write( cuboid );
     vtmWriter.write( rank );
     vtmWriter.createMasterFile();
   }
 
   // Get statistics
-  if ( iT%statIter==0 && iT > 0 ) {
+  if ( iT % statIter == 0 && iT > 0 ) {
     // Timer console output
     timer.update( iT );
     timer.printStep();
 
-    clout << "averageRhoFluidOne="   << sLatticeOne.getStatistics().getAverageRho();
-    clout << "; averageRhoFluidTwo=" << sLatticeTwo.getStatistics().getAverageRho() << std::endl;
+    clout << "averageRhoFluidOne="   << latticeOne.getStatistics().getAverageRho();
+    clout << "; averageRhoFluidTwo=" << latticeTwo.getStatistics().getAverageRho() << std::endl;
   }
 
   // Writes the VTK files
-  if ( iT % vtkIter==0 ) {
-    sLatticeOne.setProcessingContext(ProcessingContext::Evaluation);
-    sLatticeTwo.setProcessingContext(ProcessingContext::Evaluation);
+  if ( iT % vtkIter == 0 ) {
+    latticeOne.setProcessingContext(ProcessingContext::Evaluation);
+    latticeTwo.setProcessingContext(ProcessingContext::Evaluation);
 
-    SuperLatticeVelocity2D<T, DESCRIPTOR> velocity( sLatticeOne );
-    SuperLatticeDensity2D<T, DESCRIPTOR> density( sLatticeOne );
+    SuperLatticeVelocity2D<T, DESCRIPTOR> velocity( latticeOne );
+    SuperLatticeDensity2D<T, DESCRIPTOR> density( latticeOne );
     vtmWriter.addFunctor( velocity );
     vtmWriter.addFunctor( density );
     vtmWriter.write( iT );
@@ -238,76 +304,85 @@ void getResults( SuperLattice<T, DESCRIPTOR>&    sLatticeTwo,
   }
 }
 
-int main( int argc, char *argv[] )
-{
-  // === 1st Step: Initialization ===
-
-  initialize( &argc, &argv );
-  singleton::directories().setOutputDir( "./tmp/" );
-  OstreamManager clout( std::cout,"main" );
-
-  UnitConverterFromResolutionAndRelaxationTime<T,DESCRIPTOR> converter(
-    (T)   nx, // resolution
-    (T)   1., // lattice relaxation time (tau)
-    (T)   1e-5, // charPhysLength: reference length of simulation geometry
-    (T)   1.e-6, // charPhysVelocity: maximal/highest expected velocity during simulation in __m / s__
-    (T)   0.1, // physViscosity: physical kinematic viscosity in __m^2 / s__
-    (T)   1. // physDensity: physical density in __kg / m^3__
-  );
-
-  T force = 30./( T )ny/( T )ny;
-
-  // === 2nd Step: Prepare Geometry ===
-  // Instantiation of a cuboidDecomposition with weights
-
-#ifdef PARALLEL_MODE_MPI
-  CuboidDecomposition2D<T> cuboidDecomposition(0, 1, {nx, ny}, singleton::mpi().getSize());
-#else
-  CuboidDecomposition2D<T> cuboidDecomposition(0, 1, {nx, ny}, 1);
-#endif
-
-  cuboidDecomposition.setPeriodicity({ true, false });
-
-  HeuristicLoadBalancer<T> loadBalancer( cuboidDecomposition );
-
-  SuperGeometry<T,2> superGeometry( cuboidDecomposition, loadBalancer, 2 );
-
-  prepareGeometry( superGeometry );
-
-  // === 3rd Step: Prepare Lattice ===
-
-  SuperLattice<T, DESCRIPTOR> sLatticeOne( converter, superGeometry );
-  SuperLattice<T, DESCRIPTOR> sLatticeTwo( converter, superGeometry );
-
-  SuperLatticeCoupling coupling(
-    COUPLING{},
-    names::A{}, sLatticeOne,
-    names::B{}, sLatticeTwo);
-
-  prepareLattice( sLatticeOne, sLatticeTwo, coupling, superGeometry );
-
-  // === 4th Step: Main Loop with Timer ===
-  int iT = 0;
+void simulate(MyCase& myCase) {
+  OstreamManager clout(std::cout,"simulate");
   clout << "starting simulation..." << std::endl;
-  util::Timer<T> timer( maxIter, superGeometry.getStatistics().getNvoxel() );
+
+  using T = MyCase::value_t;
+  auto& parameters  = myCase.getParameters();
+
+  const int iTmax   = parameters.get<parameters::MAX_ITER>();
+
+  util::Timer<T> timer(iTmax, myCase.getGeometry().getStatistics().getNvoxel());
   timer.start();
 
-  for ( iT=0; iT<maxIter; ++iT ) {
-    // === 5th Step: Definition of Initial and Boundary Conditions ===
-    setBoundaryValues( sLatticeOne, sLatticeTwo, force, iT, superGeometry );
+  for (int iT = 0; iT < iTmax; ++iT ) {
 
-    // === 6th Step: Collide and Stream Execution ===
-    sLatticeOne.collideAndStream();
-    sLatticeTwo.collideAndStream();
+    setTemporalValues(myCase, iT);
 
-    sLatticeOne.executePostProcessors(stage::PreCoupling());
-    sLatticeTwo.executePostProcessors(stage::PreCoupling());
-    coupling.apply();
+    myCase.getLattice(Component1{}).collideAndStream();
+    myCase.getLattice(Component2{}).collideAndStream();
 
-    // === 7th Step: Computation and Output of the Results ===
-    getResults( sLatticeTwo, sLatticeOne, iT, superGeometry, timer );
+    myCase.getLattice(Component1{}).executePostProcessors(stage::PreCoupling());
+    myCase.getLattice(Component2{}).executePostProcessors(stage::PreCoupling());
+    myCase.getOperator("MultiComponent").apply();
+
+    getResults( myCase, timer, iT );
   }
 
   timer.stop();
   timer.printSummary();
+
+  clout << "simulation finished ... Goodbye!" << std::endl;
+}
+
+int main(int argc, char* argv[]) {
+  initialize(&argc, &argv);
+
+  /// === Step 2: Set Parameters ===
+  MyCase::ParametersD myCaseParameters;
+  {
+    using namespace olb::parameters;
+    myCaseParameters.set<RESOLUTION>(800);
+    myCaseParameters.set<ORIGIN>({0, 0});
+    myCaseParameters.set<PHYS_DELTA_X>(1.);
+    myCaseParameters.set<MAX_ITER>(20000);
+    myCaseParameters.set<RHO_1>(0.0);
+    myCaseParameters.set<RHO_2>(1.0);
+    myCaseParameters.set<LATTICE_RELAXATION_TIME>(1.);
+    myCaseParameters.set<PHYS_CHAR_LENGTH>(1e-5);
+    myCaseParameters.set<PHYS_CHAR_VELOCITY>(1.e-6);
+    myCaseParameters.set<PHYS_CHAR_VISCOSITY>(0.1);
+    myCaseParameters.set<PHYS_CHAR_DENSITY>(1.);
+    myCaseParameters.set<COUPLING_G>(3.);
+    myCaseParameters.set<ZERO>(1.e-6);
+    myCaseParameters.set<NOISE>(4.e-2);
+    myCaseParameters.set<PHYS_VTK_ITER_T>(100);
+    myCaseParameters.set<PHYS_STAT_ITER_T>(100);
+  }
+  myCaseParameters.set<parameters::DOMAIN_EXTENT>([&]() -> Vector<MyCase::value_t, 2> {
+    return {myCaseParameters.get<parameters::RESOLUTION>(), myCaseParameters.get<parameters::RESOLUTION>() / 2};
+  });
+  myCaseParameters.set<parameters::FORCE>([&]() -> MyCase::value_t {
+    return {30. / (myCaseParameters.get<parameters::DOMAIN_EXTENT>()[1] * myCaseParameters.get<parameters::DOMAIN_EXTENT>()[1])};
+  });
+  myCaseParameters.fromCLI(argc, argv);
+
+  /// === Step 3: Create Mesh ===
+  Mesh mesh = createMesh(myCaseParameters);
+
+  /// === Step 4: Create Case ===
+  MyCase myCase(myCaseParameters, mesh);
+
+  /// === Step 5: Prepare Geometry ===
+  prepareGeometry(myCase);
+
+  /// === Step 6: Prepare Lattice ===
+  prepareLattice(myCase);
+
+  /// === Step 7: Definition of Initial, Boundary Values, and Fields ===
+  setInitialValues(myCase);
+
+  /// === Step 8: Simulate ===
+  simulate(myCase);
 }
