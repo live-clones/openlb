@@ -41,6 +41,10 @@ using MyCase = Case<
     NavierStokes, Lattice<double, descriptors::D2Q9<descriptors::VELOCITY, descriptors::EXTERNAL_FORCE, descriptors::STATISTIC>>
 >;
 
+namespace olb::parameters {
+    struct SHEN_OMEGA : public descriptors::FIELD_BASE<1> { };
+}
+
 Mesh<MyCase::value_t,MyCase::d> createMesh(MyCase::ParametersD& params) {
     using T = MyCase::value_t;
     Vector extent = params.get<parameters::DOMAIN_EXTENT>();
@@ -98,23 +102,9 @@ void prepareLattice(MyCase& myCase){
     //converter.print();
 
     using BulkDynamics = ForcedShanChenBGKdynamics<T, NSEDESCRIPTOR, momenta::ExternalVelocityTuple>;
-    const T omega1 = 1.0;
+    const T omega1 = params.get<parameters::SHEN_OMEGA>();
 
     NSElattice.defineDynamics<BulkDynamics>(geometry, 1);
-
-    // Initial conditions
-    AnalyticalConst2D<T,T> noise( 2. );
-    std::vector<T> v( 2,T() );
-    AnalyticalConst2D<T,T> zeroVelocity( v );
-    AnalyticalConst2D<T,T> oldRho( 199. );
-    AnalyticalRandom2D<T,T> random;
-    AnalyticalIdentity2D<T,T> newRho( random*noise+oldRho );
-
-    // Initialize all values of distribution functions to their local equilibrium
-    NSElattice.defineRhoU( geometry, 1, newRho, zeroVelocity );
-    NSElattice.iniEquilibrium( geometry, 1, newRho, zeroVelocity );
-
-    NSElattice.setParameter<descriptors::OMEGA>(omega1);
 
     NSElattice.addPostProcessor<stage::PreCoupling>(meta::id<RhoStatistics>());
     {
@@ -140,6 +130,35 @@ void prepareLattice(MyCase& myCase){
     clout << "Prepare Lattice ... OK" << std::endl;
 }
 
+void setInitialValues(MyCase& myCase){
+    OstreamManager clout(std::cout,"setInitialConditions");
+    clout << "Setting Initial Conditions ..." << std::endl;
+    using T = MyCase::value_t;
+    auto& geometry = myCase.getGeometry();
+    auto& params   = myCase.getParameters();
+
+    auto& NSElattice = myCase.getLattice(NavierStokes {});
+    using NSEDESCRIPTOR = MyCase::descriptor_t_of<NavierStokes>;
+
+    const T omega1 = params.get<parameters::SHEN_OMEGA>();
+
+    // Initial conditions
+    AnalyticalConst2D<T,T> noise( 2. );
+    std::vector<T> v( 2,T() );
+    AnalyticalConst2D<T,T> zeroVelocity( v );
+    AnalyticalConst2D<T,T> oldRho( 199. );
+    AnalyticalRandom2D<T,T> random;
+    AnalyticalIdentity2D<T,T> newRho( random*noise+oldRho );
+
+    // Initialize all values of distribution functions to their local equilibrium
+    NSElattice.defineRhoU( geometry, 1, newRho, zeroVelocity );
+    NSElattice.iniEquilibrium( geometry, 1, newRho, zeroVelocity );
+
+    NSElattice.setParameter<descriptors::OMEGA>(omega1);
+
+    clout << "Setting Initial Conditions ... OK" << std::endl;
+}
+
 int main(int argc, char *argv[]){
     initialize( &argc, &argv );
 
@@ -158,6 +177,8 @@ int main(int argc, char *argv[]){
 
         myCaseParameters.set<DOMAIN_EXTENT>({200, 200});
 
+        myCaseParameters.set<SHEN_OMEGA>(1);
+
     }
     myCaseParameters.fromCLI(argc, argv);
 
@@ -172,4 +193,7 @@ int main(int argc, char *argv[]){
 
     /// === Step 6: Prepare Lattice ===
     prepareLattice(myCase);
+
+    /// === Step 7: Definition of Initial, Boundary Values, and Fields ===
+    setInitialValues(myCase);
 }
