@@ -58,8 +58,13 @@ using namespace olb::particles::access;
 using namespace olb::particles::contact;
 using namespace olb::particles::dynamics;
 using namespace olb::util;
+using namespace olb::names;
 
-using T = FLOATING_POINT_TYPE;
+
+// === Step 1: Declarations ===
+using MyCase = Case<
+  NavierStokes, Lattice<double, descriptors::PorousParticleWithContactD2Q9Descriptor<>>
+>;
 
 //Define lattice type
 typedef PorousParticleWithContactD2Q9Descriptor DESCRIPTOR;
@@ -130,10 +135,19 @@ void prepareGeometry(UnitConverter<T,DESCRIPTOR> const& converter,
 }
 
 void prepareLattice(
-  SuperLattice<T, DESCRIPTOR>& sLattice, UnitConverter<T,DESCRIPTOR> const& converter,
+  SuperLattice<T, DESCRIPTOR>& sLattice,
   SuperGeometry<T,2>& superGeometry)
 {
   OstreamManager clout(std::cout, "prepareLattice");
+  sLattice.setUnitConverter(
+    ( T )   0.0001/ N, //physDeltaX
+    ( T )   5.e-4/(N*M), //physDeltaT,
+    ( T )   .002, //charPhysLength
+    ( T )   0.2, //charPhysVelocity
+    ( T )   1E-6, //physViscosity
+    ( T )   1000. //physDensity
+  );
+  auto& converter = sLattice.getUnitConverter();
   clout << "Prepare Lattice ..." << std::endl;
 
   /// Material=0 -->do nothing
@@ -258,6 +272,53 @@ int main(int argc, char* argv[])
     ( T )   1000. //physDensity
   );
   converter.print();
+   MyCase::ParametersD myCaseParameters;
+  {
+    using namespace olb::parameters;
+    myCaseParameters.set<EPS        >( 0.5);
+    myCaseParameters.set<MAX_PHYS_T >( 6  );
+    myCaseParameters.set<LENGTH_X   >( 0.02);
+    myCaseParameters.set<LENGTH_Y   >( 0.08);
+    myCaseParameters.set<CENTER_X   >( {0.01, 0.068});
+    myCaseParameters.set<CENTER_X_2 >( {0.00999, 0.072});
+    myCaseParameters.set<PART_RHO   >( 1010.);
+    myCaseParameters.set<PART_RADIUS>( 0.001);
+
+
+  }
+
+// Parameters for the simulation setup
+int N = 1;
+int M = N;
+
+T eps = 0.5;      // eps*latticeL: width of transition area
+
+T maxPhysT = 6.;  // max. simulation time in s, SI unit
+T iTwrite = 0.125;  //converter.getLatticeTime(.3);
+
+T lengthX = 0.02;
+T lengthY = 0.08;
+
+T centerX1 = 0.01;
+T centerY1 = 0.068;
+Vector<T,2> center1 = {centerX1,centerY1};
+T centerX2 = 0.00999;
+T centerY2 = 0.072;
+Vector<T,2> center2 = {centerX2,centerY2};
+
+T rhoP = 1010.;
+T radiusP = 0.001;
+Vector<T,2> accExt = {.0, -T(9.81) * (T(1) - T(1000) / rhoP)};
+
+unsigned contactBoxResolutionPerDirection = 8;
+unsigned particleContactMaterial = 0;
+unsigned wallContactMaterial = 0;
+T youngsModulus = 1e6;
+T poissonRatio = 0.3;
+T coefficientOfRestitution = 0.9;
+T coefficientStaticFriction = 0.6;
+T coefficientKineticFriction = 0.3;
+
 
   /// === 2nd Step: Prepare Geometry ===
   std::vector<T> extend(2, T());
@@ -279,7 +340,7 @@ int main(int argc, char* argv[])
   /// === 3rd Step: Prepare Lattice ===
   SuperLattice<T, DESCRIPTOR> sLattice(converter, superGeometry);
 
-  prepareLattice(sLattice, converter, superGeometry);
+  prepareLattice(sLattice, superGeometry);
 
   /// === 4th Step: Main Loop with Timer ===
   Timer<double> timer(converter.getLatticeTime(maxPhysT), superGeometry.getStatistics().getNvoxel());
