@@ -165,7 +165,7 @@ void prepareLatticeMink(MyCase& myCase)
   T latticeRelaxationFrequency = converter.getLatticeRelaxationFrequency();
   T latticeAbsorption          = converter.getLatticeAbsorption();
   T latticeScattering          = converter.getLatticeScattering();
-  T intensity                  = params.get<parameters::INTENSITY>();
+  //T intensity                  = params.get<parameters::INTENSITY>();
   clout << "latticeSink= " << latticeSink << std::endl;
 
   Rlattice.defineDynamics<NoDynamics<T, RDESCRIPTOR>>(geometry, 0);
@@ -173,12 +173,12 @@ void prepareLatticeMink(MyCase& myCase)
   Rlattice.defineDynamics<EquilibriumBoundaryFirstOrder<T, RDESCRIPTOR>>(geometry, 2);
   Rlattice.defineDynamics<EquilibriumBoundaryFirstOrder<T, RDESCRIPTOR>>(geometry, 3);
 
+  clout << "Input intensity as: " << inletDirichlet << std::endl;
   //Activate directed BC
   if (params.get<parameters::USE_DIRECTED>()) {
     clout << "Using directed BC" << std::endl;
-    setRtlbmDirectedBoundary<T, RDESCRIPTOR>(Rlattice, geometry.getMaterialIndicator({3}),
-                                             params.get<parameters::INTENSITY>());
-    Rlattice.setParameter<parameters::BC_INTENSITY>(intensity);
+    setRtlbmDirectedBoundary<T, RDESCRIPTOR>(Rlattice, geometry.getMaterialIndicator({3}));
+    Rlattice.setParameter<parameters::BC_INTENSITY>(inletDirichlet);
   }
 
   Rlattice.setParameter<descriptors::OMEGA>(latticeRelaxationFrequency);
@@ -239,9 +239,8 @@ void prepareLatticeMcHardy(MyCase& myCase)
   //Activate directed BC
   if (params.get<parameters::USE_DIRECTED>()) {
     clout << "Using directed BC" << std::endl;
-    setRtlbmDirectedBoundary<T, RDESCRIPTOR>(Rlattice, geometry.getMaterialIndicator({3}),
-                                             params.get<parameters::INTENSITY>());
-    Rlattice.setParameter<parameters::BC_INTENSITY>(intensity);
+    setRtlbmDirectedBoundary<T, RDESCRIPTOR>(Rlattice, geometry.getMaterialIndicator({3}));
+    Rlattice.setParameter<parameters::BC_INTENSITY>(inletDirichlet);
   }
 
   Rlattice.setParameter<descriptors::OMEGA>(latticeRelaxationFrequency);
@@ -369,7 +368,7 @@ void simulate(MyCase& myCase)
       pFile = fopen(fileName, "w");
       //fprintf(pFile, "%i\n", iT);
       //fprintf(pFile, "%s, %s, %s, %s\n", "position x", "0.0", "0.25", "0.375");
-      fprintf(pFile, "Position1, Light1, Ligh2, Light3\n");
+      fprintf(pFile, "Position1, Light1, Ligh2, Light3, Fux1, Flux2, Flux3\n");
       for (int nZ = 0; nZ <= 100; ++nZ) {
         double position1[3] = {1.0 * double(nZ) / 100, 0, 0};
         double position2[3] = {1.0 * double(nZ) / 100, 0.25, 0};

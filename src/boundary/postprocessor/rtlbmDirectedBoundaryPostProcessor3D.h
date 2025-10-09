@@ -23,15 +23,16 @@
 
 #pragma once
 
-using namespace olb;
-using namespace olb::descriptors;
+namespace olb{
+namespace parameters {
+    struct BC_INTENSITY : public descriptors::FIELD_BASE<1> { };
+}
+
 
 //======================================================================
 // ======== Radiative Transport Boundary PostProcessor ======//
 //======================================================================
-namespace olb::parameters {
-    struct BC_INTENSITY : public descriptors::FIELD_BASE<1> { };
-}
+
 template<typename T, typename DESCRIPTOR, int discreteNormalX, int discreteNormalY, int discreteNormalZ>
 class RtlbmDirectedBoundaryPostProcessor3D{
     public:
@@ -44,7 +45,7 @@ class RtlbmDirectedBoundaryPostProcessor3D{
 
     template <typename CELL, typename PARAMETERS>
     void apply(CELL& cell, PARAMETERS& parameters) any_platform{
-        T intensity = parameters.template get<olb::parameters::BC_INTENSITY>();
+        const T intensity = parameters.template get<olb::parameters::BC_INTENSITY>();
         for(int iPop = 0; iPop<DESCRIPTOR::q; iPop++){
             const auto c = descriptors::c<DESCRIPTOR>(iPop);
             T k = c[0]*discreteNormalX + c[1]*discreteNormalY + c[2]*discreteNormalZ;
@@ -62,7 +63,7 @@ class RtlbmDirectedBoundaryPostProcessor3D{
 
 // Set RtlbmDirectedBoundary for any indicated cells inside the block domain
 template<typename T, typename DESCRIPTOR>
-void setRtlbmDirectedBoundary(BlockLattice<T,DESCRIPTOR>& _block, BlockIndicatorF3D<T>& indicator, T intensity)
+void setRtlbmDirectedBoundary(BlockLattice<T,DESCRIPTOR>& _block, BlockIndicatorF3D<T>& indicator)
 {
   using namespace boundaryhelper;
   const auto& blockGeometryStructure = indicator.getBlockGeometry();
@@ -87,11 +88,13 @@ void setRtlbmDirectedBoundary(BlockLattice<T,DESCRIPTOR>& _block, BlockIndicator
 
 // Initialising the setRtlbmDirectedBoundary function on the superLattice domain
 template<typename T, typename DESCRIPTOR>
-void setRtlbmDirectedBoundary(SuperLattice<T, DESCRIPTOR>& sLattice, FunctorPtr<SuperIndicatorF3D<T>>&& indicator, T intensity)
+void setRtlbmDirectedBoundary(SuperLattice<T, DESCRIPTOR>& sLattice, FunctorPtr<SuperIndicatorF3D<T>>&& indicator)
 {
   OstreamManager clout(std::cout, "setRtlbmDirectedBoundary");
 
   for (int iCloc = 0; iCloc < sLattice.getLoadBalancer().size(); iCloc++) {
-    setRtlbmDirectedBoundary<T,DESCRIPTOR>(sLattice.getBlock(iCloc), indicator->getBlockIndicatorF(iCloc), intensity);
+    setRtlbmDirectedBoundary<T,DESCRIPTOR>(sLattice.getBlock(iCloc), indicator->getBlockIndicatorF(iCloc));
   }
 };
+
+}
