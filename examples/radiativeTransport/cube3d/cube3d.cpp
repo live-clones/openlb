@@ -261,7 +261,6 @@ void setInitialValues(MyCase& myCase)
   auto& params   = myCase.getParameters();
 
   auto& Rlattice    = myCase.getLattice(Radiation {});
-  using RDESCRIPTOR = MyCase::descriptor_t_of<Radiation>;
 
   T inletDirichlet = params.get<parameters::INLET_DIRICHLET>();
 
