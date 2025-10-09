@@ -55,6 +55,26 @@ Mesh<MyCase::value_t,MyCase::d> createMesh(MyCase::ParametersD& params) {
     return mesh;
 }
 
+void prepareGeometry(MyCase& myCase){
+    auto& geometry = myCase.getGeometry();
+
+    OstreamManager clout( std::cout,"prepareGeometry" );
+    clout << "Prepare Geometry ..." << std::endl;
+
+    // Sets material number for fluid
+    geometry.rename( 0,1 );
+
+    // Removes all not needed boundary voxels outside the surface
+    geometry.clean();
+    // Removes all not needed boundary voxels inside the surface
+    geometry.innerClean();
+    geometry.checkForErrors();
+
+    geometry.print();
+
+    clout << "Prepare Geometry ... OK" << std::endl;
+}
+
 int main(int argc, char *argv[]){
     initialize( &argc, &argv );
 
@@ -76,8 +96,13 @@ int main(int argc, char *argv[]){
 
     }
     myCaseParameters.fromCLI(argc, argv);
-    myCaseParameters.print();
 
     /// === Step 3: Create Mesh ===
     Mesh mesh = createMesh(myCaseParameters);
+
+    /// === Step 4: Create Case ===
+    MyCase myCase(myCaseParameters, mesh);
+
+    /// === Step 5: Prepare Geometry ===
+    prepareGeometry(myCase);
 }
