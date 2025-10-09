@@ -73,7 +73,7 @@ struct NO_OF_PARTICLES : public descriptors::FIELD_BASE<1> {};
 
 struct PARTICLE_DYNAMICS_SETUP : public descriptors::TYPED_FIELD_BASE<bool, 1> {};
 struct FLUID_EXISTS : public descriptors::TYPED_FIELD_BASE<bool, 1> {};
-struct USE_BOUZIDI : public descriptors::TYPED_FIELD_BASE<bool, 1> {};
+struct BOUZIDI : public descriptors::TYPED_FIELD_BASE<bool, 1> {};
 
 }
 
@@ -171,7 +171,7 @@ void prepareLattice(MyCase& myCase)
   // Material=1 -->bulk dynamics
   lattice.defineDynamics<BGKdynamics>(geometry, 1);
 
-  if (parameters.get<parameters::USE_BOUZIDI>()) {
+  if (parameters.get<parameters::BOUZIDI>()) {
     STLreader<T> stlReader("../bifurcation3d.stl", converter.getPhysDeltaX());
     setBouzidiBoundary(lattice, geometry, 2, stlReader);
   }
@@ -265,6 +265,7 @@ void prepareParticles(MyCase& myCase,
   OstreamManager clout(std::cout, "prepareParticles");
   clout << "Prepare Particles ..." << std::endl;
   using T          = MyCase::value_t;
+  using PARTICLETYPE = SubgridParticle3D;
   auto& parameters = myCase.getParameters();
   auto& geometry   = myCase.getGeometry();
   auto& lattice    = myCase.getLattice(NavierStokes {});
@@ -281,12 +282,12 @@ void prepareParticles(MyCase& myCase,
   //Add selected particle dynamics
   if (parameters.get<parameters::PARTICLE_DYNAMICS_SETUP>() == 1) {
     superParticleSystem.defineDynamics<
-        VerletParticleDynamicsMaterialAwareWallCaptureAndEscape<T, SubgridParticle3D>
+        VerletParticleDynamicsMaterialAwareWallCaptureAndEscape<T, PARTICLETYPE>
         >( wall, wallMaterialIndicator, outletMaterialIndicator );
   }
   else {
     superParticleSystem.defineDynamics<
-        VerletParticleDynamicsMaterialCaptureAndEscape<T, SubgridParticle3D>
+        VerletParticleDynamicsMaterialCaptureAndEscape<T, PARTICLETYPE>
         >( wallMaterialIndicator, outletMaterialIndicator );
   }
 
@@ -303,10 +304,10 @@ void prepareParticles(MyCase& myCase,
 
   //Print super particle system summary
   superParticleSystem.print();
-  VTUwriter<T, SubgridParticle3D, true> superParticleWriter("particles_master", false, false);
+  VTUwriter<T, PARTICLETYPE, true> superParticleWriter("particles_master", false, false);
 
-  SuperParticleGroupedFieldF<T, SubgridParticle3D, GENERAL, POSITION>    particlePosition(superParticleSystem);
-  SuperParticleGroupedFieldF<T, SubgridParticle3D, PHYSPROPERTIES, MASS> particleMass(superParticleSystem);
+  SuperParticleGroupedFieldF<T, PARTICLETYPE, GENERAL, POSITION>    particlePosition(superParticleSystem);
+  SuperParticleGroupedFieldF<T, PARTICLETYPE, PHYSPROPERTIES, MASS> particleMass(superParticleSystem);
   clout << "Prepare Particles ... OK" << std::endl;
 }
 
@@ -317,11 +318,13 @@ bool getResults(MyCase& myCase, std::size_t iT, Timer<MyCase::value_t>& fluidTim
 {
   OstreamManager clout(std::cout, "getResults");
   using T          = MyCase::value_t;
+  using DESCRIPTOR = MyCase::descriptor_t_of<NavierStokes>;
+  using PARTICLETYPE = SubgridParticle3D;
   auto& parameters = myCase.getParameters();
   auto& geometry   = myCase.getGeometry();
   auto& lattice    = myCase.getLattice(NavierStokes {});
   auto& converter  = lattice.getUnitConverter();
-  using DESCRIPTOR = MyCase::descriptor_t_of<NavierStokes>;
+
   SuperVTMwriter3D<T> vtmWriter("bifurcation3d");
   SuperVTMwriter3D<T> vtmWriterStartTime("startingTimeBifurcation3d");
 
@@ -341,14 +344,14 @@ bool getResults(MyCase& myCase, std::size_t iT, Timer<MyCase::value_t>& fluidTim
   vtmWriterStartTime.addFunctor(velocity);
   vtmWriterStartTime.addFunctor(pressure);
 
-  VTUwriter<T, SubgridParticle3D, true> superParticleWriter("particles_master", false, false);
+  VTUwriter<T, PARTICLETYPE, true> superParticleWriter("particles_master", false, false);
 
-  SuperParticleGroupedFieldF<T, SubgridParticle3D, GENERAL, POSITION>      particlePosition(superParticleSystem);
-  SuperParticleGroupedFieldF<T, SubgridParticle3D, PHYSPROPERTIES, MASS>   particleMass(superParticleSystem);
-  SuperParticleGroupedFieldF<T, SubgridParticle3D, PHYSPROPERTIES, RADIUS> particleRadius(superParticleSystem);
-  SuperParticleGroupedFieldF<T, SubgridParticle3D, MOBILITY, VELOCITY>     particleVelocity(superParticleSystem);
-  SuperParticleGroupedFieldF<T, SubgridParticle3D, FORCING, FORCE>         particleForce(superParticleSystem);
-  SuperParticleGroupedFieldF<T, SubgridParticle3D, DYNBEHAVIOUR, ACTIVE>   particleActivity(superParticleSystem);
+  SuperParticleGroupedFieldF<T, PARTICLETYPE, GENERAL, POSITION>      particlePosition(superParticleSystem);
+  SuperParticleGroupedFieldF<T, PARTICLETYPE, PHYSPROPERTIES, MASS>   particleMass(superParticleSystem);
+  SuperParticleGroupedFieldF<T, PARTICLETYPE, PHYSPROPERTIES, RADIUS> particleRadius(superParticleSystem);
+  SuperParticleGroupedFieldF<T, PARTICLETYPE, MOBILITY, VELOCITY>     particleVelocity(superParticleSystem);
+  SuperParticleGroupedFieldF<T, PARTICLETYPE, FORCING, FORCE>         particleForce(superParticleSystem);
+  SuperParticleGroupedFieldF<T, PARTICLETYPE, DYNBEHAVIOUR, ACTIVE>   particleActivity(superParticleSystem);
   superParticleWriter.addFunctor(particlePosition, "Position");
   superParticleWriter.addFunctor(particleMass, "Mass");
   superParticleWriter.addFunctor(particleRadius, "Radius");
@@ -431,7 +434,7 @@ bool getResults(MyCase& myCase, std::size_t iT, Timer<MyCase::value_t>& fluidTim
     particleTimer.print(iT - fluidMaxT);
 
     //delete invalidated particles
-    purgeInvalidParticles<T, SubgridParticle3D>(superParticleSystem);
+    purgeInvalidParticles<T, PARTICLETYPE>(superParticleSystem);
 
     //Define materials for capture rate
     std::vector<int>             materialsOutput {4, 5};
@@ -456,21 +459,22 @@ void simulate( MyCase& myCase )
 {
   using T                   = MyCase::value_t;
   using DESCRIPTOR          = MyCase::descriptor_t_of<NavierStokes>;
+  using PARTICLETYPE        = SubgridParticle3D;
   auto& parameters          = myCase.getParameters();
   auto& geometry            = myCase.getGeometry();
   auto& lattice             = myCase.getLattice(NavierStokes {});
   auto& converter           = lattice.getUnitConverter();
+
   OstreamManager clout(std::cout, "simulate");
 
     /// === Step 9: Create SuperParticleSystem and ParticleManager ===
-  SuperParticleSystem<MyCase::value_t, SubgridParticle3D> superParticleSystem(myCase.getGeometry());
+  SuperParticleSystem<T, PARTICLETYPE> superParticleSystem(geometry);
 
-  ParticleManager<MyCase::value_t, MyCase::descriptor_t_of<NavierStokes>, SubgridParticle3D> particleManager(
-      superParticleSystem, myCase.getGeometry(), myCase.getLattice(NavierStokes {}),
-      myCase.getLattice(NavierStokes {}).getUnitConverter());
+  ParticleManager<T, DESCRIPTOR, PARTICLETYPE> particleManager(
+      superParticleSystem, geometry,  lattice, converter);
 
   STLreader<T>   stlReader("../bifurcation3d.stl", converter.getPhysDeltaX());
-  // Create solid wall
+
   const unsigned latticeMaterial = 2; //Material number of wall
   const unsigned contactMaterial = 0; //Material identifier (only relevant for contact model)
   SolidBoundary<T,3> wall( std::make_unique<IndicInverse<T,3>>(stlReader),
@@ -532,9 +536,9 @@ void simulate( MyCase& myCase )
        ++iT) {
     // particles simulation starts after run up time is over
     particleManager.execute<
-                    couple_lattice_to_particles<T, DESCRIPTOR, SubgridParticle3D>,
-                    process_dynamics<T, SubgridParticle3D>,
-                    update_particle_core_distribution<T, SubgridParticle3D>
+                    couple_lattice_to_particles<T, DESCRIPTOR, PARTICLETYPE>,
+                    process_dynamics<T, PARTICLETYPE>,
+                    update_particle_core_distribution<T, PARTICLETYPE>
     >();
     if (iT % iTperiod == 0) {
       getResults(myCase, iT, fluidTimer, stlReader, superParticleSystem, particleTimer);
@@ -576,7 +580,7 @@ int main(int argc, char* argv[])
     myCaseParameters.set<INLET_NORMAL>({0., 0., -1.});
     myCaseParameters.set<OUTLET_NORMAL0>({0.505126, -0.04177, 0.862034});
     myCaseParameters.set<OUTLET_NORMAL1>({-0.483331, -0.0102764, 0.875377});
-    myCaseParameters.set<USE_BOUZIDI>(1);
+    myCaseParameters.set<BOUZIDI>(1);
     myCaseParameters.set<PHYS_CHAR_VISCOSITY>(1.5e-5);
     myCaseParameters.set<PHYS_CHAR_DENSITY>(1.225);
     myCaseParameters.set<STOKES>([&] {
