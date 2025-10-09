@@ -37,11 +37,12 @@
 void compareToStudy(MyCase& myCase)
 {
   OstreamManager clout(std::cout,"compareToStudy");
-  using T           = MyCase::value_t_of<NavierStokes>;
-  auto& parameters  = myCase.getParameters();
-  std::size_t Ra    = parameters.get<parameters::RAYLEIGH>();
-  T physLambda      = parameters.get<parameters::PHYS_THERMAL_CONDUCTIVITY>();
-  T charL           = parameters.get<parameters::PHYS_CHAR_LENGTH>();
+  using T                   = MyCase::value_t_of<NavierStokes>;
+  auto& parameters          = myCase.getParameters();
+  auto& converter           = myCase.getLattice(NavierStokes{}).getUnitConverter();
+  std::size_t Ra            = parameters.get<parameters::RAYLEIGH>();
+  T physThermalDiffusivity  = converter.getPhysThermalDiffusivity();
+  T charL                   = converter.converter.getCharPhysLength();
 
   ReferenceData<T> ref{};
   if (ref.hasRayleigh(Ra) && singleton::mpi().isMainProcessor()) {
@@ -52,21 +53,21 @@ void compareToStudy(MyCase& myCase)
     T nusseltComp   = ref.getNusselt(Ra);
     auto simValues  = parameters.get<parameters::SIM_VALUES>();
     clout << "Comparison against De Vahl Davis (1983):" << std::endl;
-    clout << "xVelocity in yDir="   <<  simValues[0] / physLambda * charL   << "; error(rel)=" << (T) util::fabs((xVelComp - simValues[0] / physLambda * charL) / xVelComp) << std::endl;
-    clout << "yVelocity in xDir="   <<  simValues[1] / physLambda * charL   << "; error(rel)=" << (T) util::fabs((yVelComp - simValues[1] / physLambda * charL) / yVelComp) << std::endl;
-    clout << "yMaxVel / xMaxVel="   <<  simValues[1] / simValues[0]         << "; error(rel)=" << (T) util::fabs((yVelComp - simValues[1] / simValues[0])  / yVelComp) << std::endl;
-    clout << "yCoord of xMaxVel="   <<  simValues[2] / charL                << "; error(rel)=" << (T) util::fabs((yCoordComp - simValues[2] / charL) / yCoordComp) << std::endl;
-    clout << "xCoord of yMaxVel="   <<  simValues[3] / charL                << "; error(rel)=" << (T) util::fabs((xCoordComp - simValues[3] / charL) / xCoordComp) << std::endl;
-    clout << "Nusselt="             <<  simValues[4]                        << "; error(rel)=" << (T) util::fabs((nusseltComp - simValues[4]) / nusseltComp) << std::endl;
+    clout << "xVelocity in yDir="   <<  simValues[0] / physThermalDiffusivity * charL   << "; error(rel)=" << (T) util::fabs((xVelComp - simValues[0] / physThermalDiffusivity * charL) / xVelComp) << std::endl;
+    clout << "yVelocity in xDir="   <<  simValues[1] / physThermalDiffusivity * charL   << "; error(rel)=" << (T) util::fabs((yVelComp - simValues[1] / physThermalDiffusivity * charL) / yVelComp) << std::endl;
+    clout << "yMaxVel / xMaxVel="   <<  simValues[1] / simValues[0]                     << "; error(rel)=" << (T) util::fabs((yVelComp - simValues[1] / simValues[0])  / yVelComp) << std::endl;
+    clout << "yCoord of xMaxVel="   <<  simValues[2] / charL                            << "; error(rel)=" << (T) util::fabs((yCoordComp - simValues[2] / charL) / yCoordComp) << std::endl;
+    clout << "xCoord of yMaxVel="   <<  simValues[3] / charL                            << "; error(rel)=" << (T) util::fabs((xCoordComp - simValues[3] / charL) / xCoordComp) << std::endl;
+    clout << "Nusselt="             <<  simValues[4]                                    << "; error(rel)=" << (T) util::fabs((nusseltComp - simValues[4]) / nusseltComp) << std::endl;
     std::fstream fs;
     fs.open("output.txt",
       std::fstream::in | std::fstream::out | std::fstream::app);
-    fs  << "xVelocity in yDir="   <<  simValues[0] / physLambda * charL   << "; error(rel)=" << (T) util::fabs((xVelComp - simValues[0] / physLambda * charL) / xVelComp) << std::endl;
-    fs  << "yVelocity in xDir="   <<  simValues[1] / physLambda * charL   << "; error(rel)=" << (T) util::fabs((yVelComp - simValues[1] / physLambda * charL) / yVelComp) << std::endl;
-    fs  << "yMaxVel / xMaxVel="   <<  simValues[1] / simValues[0]         << "; error(rel)=" << (T) util::fabs((yVelComp - simValues[1] / simValues[0])  / yVelComp) << std::endl;
-    fs  << "yCoord of xMaxVel="   <<  simValues[2] / charL                << "; error(rel)=" << (T) util::fabs((yCoordComp - simValues[2] / charL) / yCoordComp) << std::endl;
-    fs  << "xCoord of yMaxVel="   <<  simValues[3] / charL                << "; error(rel)=" << (T) util::fabs((xCoordComp - simValues[3] / charL) / xCoordComp) << std::endl;
-    fs  << "Nusselt="             <<  simValues[4]                        << "; error(rel)=" << (T) util::fabs((nusseltComp - simValues[4]) / nusseltComp) << std::endl;
+    fs  << "xVelocity in yDir="   <<  simValues[0] / physThermalDiffusivity * charL     << "; error(rel)=" << (T) util::fabs((xVelComp - simValues[0] / physThermalDiffusivity * charL) / xVelComp) << std::endl;
+    fs  << "yVelocity in xDir="   <<  simValues[1] / physThermalDiffusivity * charL     << "; error(rel)=" << (T) util::fabs((yVelComp - simValues[1] / physThermalDiffusivity * charL) / yVelComp) << std::endl;
+    fs  << "yMaxVel / xMaxVel="   <<  simValues[1] / simValues[0]                       << "; error(rel)=" << (T) util::fabs((yVelComp - simValues[1] / simValues[0])  / yVelComp) << std::endl;
+    fs  << "yCoord of xMaxVel="   <<  simValues[2] / charL                              << "; error(rel)=" << (T) util::fabs((yCoordComp - simValues[2] / charL) / yCoordComp) << std::endl;
+    fs  << "xCoord of yMaxVel="   <<  simValues[3] / charL                              << "; error(rel)=" << (T) util::fabs((xCoordComp - simValues[3] / charL) / xCoordComp) << std::endl;
+    fs  << "Nusselt="             <<  simValues[4]                                      << "; error(rel)=" << (T) util::fabs((nusseltComp - simValues[4]) / nusseltComp) << std::endl;
     fs.close();
   } else {
     clout << "Comparison against De Vahl Davis (1983) not possible. Received Ra = " << Ra << "." << std::endl;
@@ -126,9 +127,11 @@ int main(int argc, char* argv[]){
   myCaseParameters.set<parameters::DOMAIN_EXTENT>({lx, lx});
 
   ReferenceData<double> ref{};
+  /*
   double charU  = 1.0 / lx / ( Pr * thermalConductivity / physViscosity / 1.0 * 1.0 / thermalConductivity);
   charU         = ref.multiplyCharU(Ra, charU);
-  myCaseParameters.set<parameters::PHYS_CHAR_VELOCITY>(charU);
+  */
+  myCaseParameters.set<parameters::PHYS_CHAR_VELOCITY>(ref.getUy_max(Ra));
 
   /// === Step 3: Create Mesh ===
   Mesh mesh = createMesh(myCaseParameters);

@@ -54,11 +54,11 @@ Mesh<MyCase::value_t, MyCase::d> createMesh(MyCase::ParametersD& parameters){
 
     const T dx = parameters.get<parameters::PHYS_DELTA_X>();
     const Vector domainExtend = parameters.get<parameters::DOMAIN_EXTENT>();
-    const Vector extend = {domainExtend[0] + 2. * dx, domainExtend[1] + 2. * dx};
-    Vector origin{0., 0.};
+    const Vector extend = {domainExtend[0] + dx, domainExtend[1] + dx};
+    Vector origin{-dx / 2., -dx / 2.};
     IndicatorCuboid2D<T> cuboid(extend, origin);
 
-    Mesh<T,MyCase::d> mesh(cuboid, parameters.get<parameters::PHYS_DELTA_X>(), singleton::mpi().getSize());
+    Mesh<T,MyCase::d> mesh(cuboid, dx, singleton::mpi().getSize());
     mesh.setOverlap(parameters.get<parameters::OVERLAP>());
     mesh.getCuboidDecomposition().setPeriodicity({false,false});
 
@@ -74,23 +74,24 @@ void prepareGeometry(MyCase& myCase){
     auto& geometry = myCase.getGeometry();
     auto& parameters = myCase.getParameters();
 
-    const T dx          = parameters.get<parameters::PHYS_DELTA_X>();
-    const Vector extend = parameters.get<parameters::DOMAIN_EXTENT>();
-    const T lx          = extend[0];
+    const T dx                = parameters.get<parameters::PHYS_DELTA_X>();
+    const Vector domainExtend = parameters.get<parameters::DOMAIN_EXTENT>();
+    const T lx                = domainExtend[0];
 
     geometry.rename(0, 4);
 
-    Vector origin {dx / 2., dx / 2.};
+    Vector origin {0, 0};
+    Vector extend {lx, lx};
     IndicatorCuboid2D<T> cuboid2(extend, origin);
 
     geometry.rename(4, 1, cuboid2);
 
-    Vector extendwallleft{dx, lx};
-    Vector originwallleft{0.0, 0.0};
+    Vector extendwallleft{dx, lx + dx};
+    Vector originwallleft{-dx / 2., -dx / 2.};
     IndicatorCuboid2D<T> wallleft(extendwallleft, originwallleft);
 
-    Vector extendwallright{dx, lx};
-    Vector originwallright{lx - dx / 2., 0.0};
+    Vector extendwallright{dx, lx + dx};
+    Vector originwallright{lx, -dx / 2.};
     IndicatorCuboid2D<T> wallright(extendwallright, originwallright);
 
     geometry.rename(4,2,1,wallleft);
@@ -109,14 +110,14 @@ void prepareLattice(MyCase& myCase){
     clout << "Prepare Lattice ..." << std::endl;
 
     using T = MyCase::value_t;
+    using NSEDESCRIPTOR = MyCase::descriptor_t_of<NavierStokes>;
+    using ADEDESCRIPTOR = MyCase::descriptor_t_of<Temperature>;
+
     auto& geometry = myCase.getGeometry();
     auto& parameters = myCase.getParameters();
 
     auto& NSElattice = myCase.getLattice(NavierStokes{});
     auto& ADElattice = myCase.getLattice(Temperature{});
-
-    using NSEDESCRIPTOR = MyCase::descriptor_t_of<NavierStokes>;
-    using ADEDESCRIPTOR = MyCase::descriptor_t_of<Temperature>;
 
     const T physCharLength          = parameters.get<parameters::PHYS_CHAR_LENGTH>();
     const std::size_t N             = parameters.get<parameters::RESOLUTION>();
