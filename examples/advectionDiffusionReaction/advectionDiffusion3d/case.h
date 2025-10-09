@@ -46,6 +46,7 @@ namespace olb::parameters {
   struct MAX_RESOLUTION : public descriptors::FIELD_BASE<1> {};
   struct NON_SMOOTH_ENABLED : public descriptors::TYPED_FIELD_BASE<bool,1> {};
 
+  struct AVG_L2_ERROR : public descriptors::FIELD_BASE<1> {};
 }
 
 template <typename T>
@@ -274,8 +275,7 @@ MyCase::value_t errorEval( MyCase& myCase, const int iT )
   const auto& converter = lattice.getUnitConverter();
 
   OstreamManager clout(std::cout, "error");
-  Gnuplot <T> plt("UNUSED_FILE");
-  CSV<T> csvWriter("UNUSED_CSV_FILE");
+  CSV<T> csvWriter("errors");
 
   T result[3] = {T(), T(), T()};
   int tmp[] = {int()};
@@ -435,12 +435,7 @@ void simulate(MyCase& myCase)
   }
 
   simulationAverage /= timeCount;
-
-  // this outputs into ./tmp/gnuplotData/data/averageSimL2RelErr
-  singleton::directories().setOutputDir("./tmp/p_" + std::to_string((int)peclet) + "/");
-  Gnuplot <T> plt("UNUSED");
-  CSV<T> csvWriter("UNUSED_CSV");
-  csvWriter.writeDataFile(N, simulationAverage, "averageSimL2RelErr");
+  parameters.set<parameters::AVG_L2_ERROR>(simulationAverage);
 
   clout << "Simulation Average Relative L2 Error: " << simulationAverage << std::endl;
 

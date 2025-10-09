@@ -64,14 +64,14 @@ int main(int argc, char *argv[]) {
   const MyCase::value_t statIter0 = myCaseParameters.get<parameters::OUTPUT_INTERVAL>();
   const MyCase::value_t physVel0 = myCaseParameters.get<parameters::PHYS_CHAR_VELOCITY>();
   const MyCase::value_t physLength0 = myCaseParameters.get<parameters::PHYS_CHAR_LENGTH>();
+  const std::size_t peclet(myCaseParameters.get<parameters::PECLET>());
 
   myCaseParameters.set<parameters::MAX_RESOLUTION>(
     util::pow(2, myCaseParameters.get<parameters::RUNS>()-1) * myCaseParameters.get<parameters::RESOLUTION>()
   );
 
-  // Get peclet number passed as argument
-  const std::size_t peclet(myCaseParameters.get<parameters::PECLET>());
   singleton::directories().setOutputDir("./tmp/p_" + std::to_string((int) peclet) + "/");
+  CSV<MyCase::value_t> csvWriter("averageSimL2RelErr");
 
   for (std::size_t i = 0; i < myCaseParameters.get<parameters::RUNS>(); ++i) {
 
@@ -95,5 +95,10 @@ int main(int argc, char *argv[]) {
     setInitialValues(myCase);
 
     simulate(myCase);
+
+    singleton::directories().setOutputDir("./tmp/p_" + std::to_string((int) peclet) + "/");
+    csvWriter.writeDataFile(myCaseParameters.get<parameters::RESOLUTION>(),
+                            myCaseParameters.get<parameters::AVG_L2_ERROR>(),
+                            "averageSimL2RelErr");
   }
 }

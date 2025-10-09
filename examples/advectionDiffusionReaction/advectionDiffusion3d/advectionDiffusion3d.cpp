@@ -59,9 +59,6 @@ int main(int argc, char *argv[]) {
   }
   myCaseParameters.fromCLI(argc, argv);
 
-  // Get peclet number passed as argument
-  singleton::directories().setOutputDir("./tmp/p_" + std::to_string((int)myCaseParameters.get<parameters::PECLET>()) + "/");
-
   Mesh mesh = createMesh(myCaseParameters);
 
   MyCase myCase(myCaseParameters, mesh);
