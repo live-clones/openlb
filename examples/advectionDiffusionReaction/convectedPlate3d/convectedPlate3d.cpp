@@ -28,11 +28,15 @@
 #include <cmath>
 using namespace olb;
 using namespace olb::descriptors;
-//using namespace olb::names;
+using namespace olb::names;
+using RADDESCRIPTOR = D3Q7<VELOCITY,OMEGA>; // the scalar field contains material values if a cell should be considered for the zero gradient BC or not
+
+using MyCase = Case<
+NavierStokes, Lattice<double, RADDESCRIPTOR>
+>;
 
 using S = FLOATING_POINT_TYPE;
 using U = util::ADf<S,1>;
-using RADDESCRIPTOR = D3Q7<VELOCITY,OMEGA>; // the scalar field contains material values if a cell should be considered for the zero gradient BC or not
 
 // parameters for the simulation setup
 const int N = 40;                                 // resolution
@@ -73,6 +77,23 @@ public:
     return true;
   };
 };
+
+Mesh<MyCase::value_t, MyCase::d> createMesh(MyCase::ParametersD& parameters) {
+  using T = MyCase::value_t;
+  // === 2. Prepare geometry ===
+  const Vector<T,3> origin;
+  const Vector<T,3> extend(length, height, width);
+  IndicatorCuboid3D<T> cuboid(extend, origin);
+
+  const T physDeltaX = dx;
+  Mesh<T,MyCase::d> mesh(cuboid, physDeltaX, singleton::mpi().getSize());
+
+  mesh.setOverlap(params.get<parameters::OVERLAP>());
+  mesh.getCuboidDecomposition().setPeriodicity({false, false, true});
+
+  return mesh;
+ }
+
 
 // write geometry file to check geometry
 template <typename T>
@@ -346,6 +367,10 @@ int simulateFlow(T D)
 int main(int argc, char* argv[]) {
   initialize(&argc, &argv);
   singleton::directories().setOutputDir("./tmp/");
+
+  MyCase::ParametersD myCaseParameters;
+
+  Mesh mesh = createMesh(myCaseParameters);
 
   const S diffusivity = 0.07407;
   simulateFlow<S>(diffusivity);
