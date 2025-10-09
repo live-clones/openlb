@@ -172,7 +172,7 @@ void setInitialValues(MyCase& myCase)
 /// @note Be careful: boundary values have to be set using lattice units
 void setBoundaryValues(MyCase& myCase, std::size_t iT) { return; }
 
-void getResults(MyCase& myCase, std::size_t iT, util::Timer<MyCase::value_t>& timer, bool converged)
+void getResults(MyCase& myCase, std::size_t iT, util::Timer<MyCase::value_t>& timer)
 {
   OstreamManager clout(std::cout, "getResults");
   using T                    = MyCase::value_t;
@@ -186,6 +186,7 @@ void getResults(MyCase& myCase, std::size_t iT, util::Timer<MyCase::value_t>& ti
   auto        vtkSave        = parameters.get<parameters::PHYS_VTK_ITER_T>();
   auto        gnuplotSave    = parameters.get<parameters::PHYS_GNUPLOT_ITER_T>();
   auto        timerPrintMode = parameters.get<parameters::TIMER_PRINT_MODE>();
+  const bool converged = parameters.get<parameters::CONVERGED>();
 
   SuperVTMwriter2D<T> vtmWriter("cavity2dvtk");
 
@@ -293,8 +294,9 @@ void simulate(MyCase& myCase)
   timer.start();
   for (std::size_t iT = 0; iT <= maxLatticeT; ++iT) {
     if (converge.hasConverged()) {
+      parameters.set<parameters::CONVERGED>(true);
       clout << "Simulation converged." << std::endl;
-      getResults(myCase, iT, timer, converge.hasConverged());
+      getResults(myCase, iT, timer);
 
       break;
     }
@@ -303,7 +305,7 @@ void simulate(MyCase& myCase)
 
     sLattice.collideAndStream();
 
-    getResults(myCase, iT, timer, converge.hasConverged());
+    getResults(myCase, iT, timer);
 
     converge.takeValue(sLattice.getStatistics().getAverageEnergy(), true);
   }
