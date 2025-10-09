@@ -1,7 +1,8 @@
 /*  Lattice Boltzmann sample, written in C++, using the OpenLB
  *  library
  *
- *  Copyright (C) 2008 Orestis Malaspinas
+ *  Copyright (C) 2025 Florian Kaiser
+ *                2008 Orestis Malaspinas
  *  E-mail contact: info@openlb.net
  *  The most recent release of OpenLB can be downloaded at
  *  <http://www.openlb.net/>
@@ -22,7 +23,7 @@
  *  Boston, MA  02110-1301, USA.
  */
 
-/* squareCavity2d.cpp
+/* squareCavity2dLaminar.cpp
  * The reference is the paper in "Gaedtke, M., Wachter, S., Raedle, M., Nirschl, H., & Krause, M. J. (2018).
  * Application of a lattice Boltzmann method combined with a Smagorinsky turbulence model to spatially resolved heat flux inside a refrigerated vehicle.
  * Computers & Mathematics with Applications, 76(10), 2315-2329."

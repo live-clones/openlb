@@ -23,7 +23,7 @@
  *  Boston, MA  02110-1301, USA.
  */
 
-/* Header related to squareCavity2dLaminar.cpp
+/* Header related to squareCavity2dTurbulent.cpp
  * The reference is the paper in "Gaedtke, M., Wachter, S., Raedle, M., Nirschl, H., & Krause, M. J. (2018).
  * Application of a lattice Boltzmann method combined with a Smagorinsky turbulence model to spatially resolved heat flux inside a refrigerated vehicle.
  * Computers & Mathematics with Applications, 76(10), 2315-2329."
@@ -125,13 +125,15 @@ void prepareLattice(MyCase& myCase){
     const T tau                     = parameters.get<parameters::LATTICE_RELAXATION_TIME>();
     const T physViscosity           = parameters.get<parameters::PHYS_KINEMATIC_VISCOSITY>();
     const T physDeltaX              = parameters.get<parameters::PHYS_DELTA_X>();
-    const T physDeltaT              = (tau - 0.5) / descriptors::invCs2<T,NSEDESCRIPTOR>() * physDeltaX * physDeltaX / physViscosity;
     const T physCharVelocity        = parameters.get<parameters::PHYS_CHAR_VELOCITY>();
+    const T physDeltaT              = 2. * 0.056 / physCharVelocity * physCharLength / N;
     const T physDensity             = parameters.get<parameters::PHYS_CHAR_DENSITY>();
     const T physThermalExpansion    = parameters.get<parameters::PHYS_THERMAL_EXPANSION>();
     const T physThermalConductivity = parameters.get<parameters::PHYS_THERMAL_CONDUCTIVITY>();
     const T physHeatCapacity        = parameters.get<parameters::PHYS_HEAT_CAPACITY>();
     const T gravitationalConstant   = parameters.get<parameters::GRAVITATIONAL_ACC>();
+    const T smagoConst              = parameters.get<parameters::SMAGORINSKY_CONST>();
+    const T prTurb                  = parameters.get<parameters::PR_TURB>();
     const T Ra                      = parameters.get<parameters::RAYLEIGH>();
     const T Tcold                   = parameters.get<parameters::T_COLD>();
     const T Thot                    = parameters.get<parameters::T_HOT>();
@@ -154,8 +156,8 @@ void prepareLattice(MyCase& myCase){
 
     ADElattice.setUnitConverter(converter);
 
-    NSElattice.defineDynamics<ForcedBGKdynamics>(geometry.getMaterialIndicator({1,2,3}));
-    ADElattice.defineDynamics<AdvectionDiffusionBGKdynamics>(geometry.getMaterialIndicator({1,2,3}));
+    NSElattice.defineDynamics<ExternalTauEffLESForcedBGKdynamics<T,NSEDESCRIPTOR,momenta::AdvectionDiffusionBulkTuple>>(geometry.getMaterialIndicator({1, 2, 3}));
+    ADElattice.defineDynamics<ExternalTauEffLESBGKadvectionDiffusionDynamics>(geometry.getMaterialIndicator({1, 2, 3}));
 
     boundary::set<boundary::BounceBack>(ADElattice, geometry, 4);
     boundary::set<boundary::BounceBack>(NSElattice, geometry, 4);
@@ -164,19 +166,37 @@ void prepareLattice(MyCase& myCase){
     boundary::set<boundary::AdvectionDiffusionDirichlet>(ADElattice, geometry.getMaterialIndicator({2, 3}));
     boundary::set<boundary::LocalVelocity>(NSElattice, geometry.getMaterialIndicator({2, 3}));
 
+    T NSEomega  =  converter.getLatticeRelaxationFrequency();
+    T ADEomega  =  converter.getLatticeThermalRelaxationFrequency();
+
+    AnalyticalConst2D<T,T> tauNSE(1. / NSEomega);
+    AnalyticalConst2D<T,T> tauADE(1. / ADEomega);
+
+    NSlattice.defineField<descriptors::TAU_EFF>( geometry.getMaterialIndicator({1, 2, 3}), tauNSE );
+    ADlattice.defineField<descriptors::TAU_EFF>( geometry.getMaterialIndicator({1, 2, 3}), tauADE );
+
     T boussinesqForcePrefactor = gravitationalConstant / converter.getConversionFactorVelocity() * converter.getConversionFactorTime() *
                                converter.getCharPhysTemperatureDifference() * converter.getPhysThermalExpansionCoefficient();
 
-    auto& coupling = myCase.setCouplingOperator(
-        "Boussinesq",
-        NavierStokesAdvectionDiffusionCoupling{},
-        names::NavierStokes{}, NSElattice,
-        names::Temperature{},  ADElattice);
-        coupling.setParameter<NavierStokesAdvectionDiffusionCoupling::T0>(
-        converter.getLatticeTemperature(Tcold));
-        coupling.setParameter<NavierStokesAdvectionDiffusionCoupling::FORCE_PREFACTOR>(
-        boussinesqForcePrefactor * Vector<T,2>{0.0,1.0}
-    );
+    const T preFactor = smagoConst*smagoConst
+                    * descriptors::invCs2<T,NSDESCRIPTOR>()*descriptors::invCs2<T,NSDESCRIPTOR>()
+                    * 2*util::sqrt(2);
+
+    SuperLatticeCoupling coupling(
+      SmagorinskyBoussinesqCoupling{},
+      names::NavierStokes{}, NSlattice,
+      names::Temperature{},  ADlattice);
+    coupling.setParameter<SmagorinskyBoussinesqCoupling::T0>(
+      converter.getLatticeTemperature(Tcold));
+    coupling.setParameter<SmagorinskyBoussinesqCoupling::FORCE_PREFACTOR>(
+      boussinesqForcePrefactor * Vector<T,2>{0.0,1.0});
+    coupling.setParameter<SmagorinskyBoussinesqCoupling::SMAGORINSKY_PREFACTOR>(preFactor);
+    coupling.setParameter<SmagorinskyBoussinesqCoupling::PR_TURB>(prTurb);
+    coupling.setParameter<SmagorinskyBoussinesqCoupling::OMEGA_NSE>(
+      NSEomega);
+    coupling.setParameter<SmagorinskyBoussinesqCoupling::OMEGA_ADE>(
+      ADEomega);
+
 
     clout << "Prepare Lattice ... OK" << std::endl;
 }
@@ -185,19 +205,19 @@ void setInitialValues(MyCase& myCase){
     OstreamManager clout(std::cout,"setInitialValues");
     clout << "Set initial values ..." << std::endl;
 
-    using T               = MyCase::value_t;
+    using T = MyCase::value_t;
 
-    auto& geometry        = myCase.getGeometry();
-    auto& NSElattice      = myCase.getLattice(NavierStokes{});
-    auto& ADElattice      = myCase.getLattice(Temperature{});
+    auto& geometry = myCase.getGeometry();
+    auto& NSElattice = myCase.getLattice(NavierStokes{});
+    auto& ADElattice = myCase.getLattice(Temperature{});
+
     const auto& converter = NSElattice.getUnitConverter();
-
     T NSEomega = converter.getLatticeRelaxationFrequency();
     T ADEomega = converter.getLatticeThermalRelaxationFrequency();
 
-    T Tcold = converter.getCharPhysLowTemperature();
-    T Thot  = converter.getCharPhysHighTemperature();
-    T Tmean = (Thot + Tcol) / 2.;
+    T Tcold = parameters.get<parameters::T_COLD>();
+    T Thot  = parameters.get<parameters::T_HOT>();
+    T Tmean = parameters.get<parameters::T_MEAN>();
 
     /// define initial conditions
     AnalyticalConst2D<T,T> rho(1.);
@@ -284,7 +304,7 @@ void getResults(MyCase& myCase,
   const T Tcold           = parameters.get<parameters::T_COLD>();
   const T lx              = parameters.get<parameters::DOMAIN_EXTENT>()[0];
 
-  SuperVTMwriter2D<T> vtkWriter("squareCavity2dLaminar");
+  SuperVTMwriter2D<T> vtkWriter("squareCavity2dTurbulent");
 
   SuperLatticePhysVelocity2D<T, NSEDESCRIPTOR> velocity(NSElattice, converter);
   SuperLatticePhysPressure2D<T, NSEDESCRIPTOR> pressure(NSElattice, converter);
