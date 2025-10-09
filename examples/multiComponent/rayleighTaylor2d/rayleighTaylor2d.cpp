@@ -73,24 +73,25 @@ void prepareGeometry(MyCase& myCase) {
   auto& parameters  = myCase.getParameters();
 
   const Vector extend     = parameters.get<parameters::DOMAIN_EXTENT>();
+  const T dx         = parameters.get<parameters::PHYS_DELTA_X>();
   const T nx              = extend[0];
   const T ny              = extend[1];
 
   // Sets material number for fluid and boundary
   geometry.rename( 0, 1 );
 
-  Vector<T,2> originUpper( -1, ny/2. );
-  Vector<T,2> extendUpper( nx+2., ny/2.+2. );
+  Vector<T,2> originUpper( -dx, ny / 2. );
+  Vector<T,2> extendUpper( nx + 2. * dx, ny / 2. + 2. * dx );
   IndicatorCuboid2D<T> upper( extendUpper, originUpper );
   geometry.rename( 1, 2, upper );
 
-  Vector<T,2> originTop( -.5, ny - .5);
-  Vector<T,2> extendTop( nx+2, 1. );
+  Vector<T,2> originTop( -dx, ny - dx / 2.);
+  Vector<T,2> extendTop( nx + 2. * dx, dx );
   IndicatorCuboid2D<T> top( extendTop, originTop );
   geometry.rename( 2, 4, top );
 
-  Vector<T,2> originBottom( -.5, -.5 );
-  Vector<T,2> extendBottom( nx+2, 1. );
+  Vector<T,2> originBottom( -dx, -dx / 2. );
+  Vector<T,2> extendBottom( nx + 2. * dx, dx );
   IndicatorCuboid2D<T> bottom( extendBottom, originBottom );
   geometry.rename( 1, 3, bottom );
 
