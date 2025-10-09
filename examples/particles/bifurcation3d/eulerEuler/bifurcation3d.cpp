@@ -50,8 +50,6 @@ using MyCase = Case<
 namespace olb::parameters {
 
 struct DIFFUSION : public descriptors::FIELD_BASE<1> {};
-struct PART_RADIUS : public descriptors::FIELD_BASE<1> {};
-struct PART_RHO : public descriptors::FIELD_BASE<1> {};
 struct IT_PERIOD : public descriptors::FIELD_BASE<1> {};
 struct INLET_RADIUS : public descriptors::FIELD_BASE<1> {};
 struct INLET_CENTER : public descriptors::FIELD_BASE<0, 1> {};
