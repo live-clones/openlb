@@ -63,110 +63,90 @@ using namespace olb::names;
 
 // === Step 1: Declarations ===
 using MyCase = Case<
-  NavierStokes, Lattice<double, descriptors::PorousParticleWithContactD2Q9Descriptor<>>
+  NavierStokes, Lattice<double, descriptors::PorousParticleWithContactD2Q9Descriptor>
 >;
 
-//Define lattice type
-typedef PorousParticleWithContactD2Q9Descriptor DESCRIPTOR;
+// === Step 1: Declarations ===
+namespace olb::parameters {
 
-//Define particle type
-typedef ResolvedCircleWithContact2D PARTICLETYPE;
+struct COEFFICIENT_OF_RESTITUTION : public descriptors::FIELD_BASE<1> { };
+struct COEFFICIENT_STATIC_FRICTION : public descriptors::FIELD_BASE<1> { };
+struct COEFFICIENT_KINETIC_FRICTION : public descriptors::FIELD_BASE<1> { };
+struct CENTER_1 : public descriptors::FIELD_BASE<0,1> { };
+struct CENTER_2 : public descriptors::FIELD_BASE<0,1> { };
+struct CONTACT_BOX_RESOLUTION_PER_DIRECTION : public descriptors::FIELD_BASE<1> { };
+struct PARTICLE_CONTACT_MATERIAL : public descriptors::FIELD_BASE<1> { };
+struct WALL_CONTACT_MATERIAL : public descriptors::FIELD_BASE<1> { };
+struct LENGTH_X : public descriptors::FIELD_BASE<1> { };
+struct LENGTH_Y : public descriptors::FIELD_BASE<1> { };
 
-// Define particle-particle contact type
-typedef ParticleContactArbitraryFromOverlapVolume<T, DESCRIPTOR::d, true>
-    PARTICLECONTACTTYPE;
-// Define particle-wall contact type
-typedef WallContactArbitraryFromOverlapVolume<T, DESCRIPTOR::d, true>
-    WALLCONTACTTYPE;
+}
 
+Mesh<MyCase::value_t,MyCase::d> createMesh(MyCase::ParametersD& parameters) {
+  using T = MyCase::value_t;
+  const Vector extent = {parameters.get<parameters::LENGTH_X>(), parameters.get<parameters::LENGTH_Y>()};
+  const Vector origin{0, 0};
+  IndicatorCuboid2D<T> cuboid(extent, origin);
 
-#define WriteVTK
-#define WriteGnuPlot
+  const T physDeltaX = parameters.get<parameters::PHYS_DELTA_X>();
+  Mesh<T,MyCase::d> mesh(cuboid, physDeltaX, singleton::mpi().getSize());
+  mesh.setOverlap(parameters.get<parameters::OVERLAP>());
+  return mesh;
+}
 
-std::string gnuplotFilename = "gnuplot.dat";
-
-// Parameters for the simulation setup
-int N = 1;
-int M = N;
-
-T eps = 0.5;      // eps*latticeL: width of transition area
-
-T maxPhysT = 6.;  // max. simulation time in s, SI unit
-T iTwrite = 0.125;  //converter.getLatticeTime(.3);
-
-T lengthX = 0.02;
-T lengthY = 0.08;
-
-T centerX1 = 0.01;
-T centerY1 = 0.068;
-Vector<T,2> center1 = {centerX1,centerY1};
-T centerX2 = 0.00999;
-T centerY2 = 0.072;
-Vector<T,2> center2 = {centerX2,centerY2};
-
-T rhoP = 1010.;
-T radiusP = 0.001;
-Vector<T,2> accExt = {.0, -T(9.81) * (T(1) - T(1000) / rhoP)};
-
-unsigned contactBoxResolutionPerDirection = 8;
-unsigned particleContactMaterial = 0;
-unsigned wallContactMaterial = 0;
-T youngsModulus = 1e6;
-T poissonRatio = 0.3;
-T coefficientOfRestitution = 0.9;
-T coefficientStaticFriction = 0.6;
-T coefficientKineticFriction = 0.3;
-
-void prepareGeometry(UnitConverter<T,DESCRIPTOR> const& converter,
-                     SuperGeometry<T,2>& superGeometry)
+void prepareGeometry(MyCase& myCase)
 {
   OstreamManager clout(std::cout, "prepareGeometry");
   clout << "Prepare Geometry ..." << std::endl;
+  using T = MyCase::value_t;
+  auto& geometry = myCase.getGeometry();
 
-  superGeometry.rename(0, 2);
-  superGeometry.rename(2, 1, {1, 1});
+  geometry.rename(0, 2);
+  geometry.rename(2, 1, {1, 1});
 
-  superGeometry.clean();
-  superGeometry.innerClean();
+  geometry.clean();
+  geometry.innerClean();
 
-  superGeometry.checkForErrors();
-  superGeometry.getStatistics().print();
+  geometry.checkForErrors();
+  geometry.getStatistics().print();
   clout << "Prepare Geometry ... OK" << std::endl;
 }
 
-void prepareLattice(
-  SuperLattice<T, DESCRIPTOR>& sLattice,
-  SuperGeometry<T,2>& superGeometry)
+void prepareLattice(MyCase& myCase)
 {
   OstreamManager clout(std::cout, "prepareLattice");
-  sLattice.setUnitConverter(
-    ( T )   0.0001/ N, //physDeltaX
-    ( T )   5.e-4/(N*M), //physDeltaT,
-    ( T )   .002, //charPhysLength
-    ( T )   0.2, //charPhysVelocity
-    ( T )   1E-6, //physViscosity
-    ( T )   1000. //physDensity
+  auto& lattice = myCase.getLattice(NavierStokes{});
+  auto& geometry = myCase.getGeometry();
+  auto& parameters = myCase.getParameters();
+  using T = MyCase::value_t;
+  lattice.setUnitConverter(
+    ( T )   parameters.get<parameters::PHYS_DELTA_X>(),
+    ( T )   parameters.get<parameters::PHYS_DELTA_T>(),
+    ( T )   parameters.get<parameters::PHYS_CHAR_LENGTH>(),
+    ( T )   parameters.get<parameters::PHYS_CHAR_VELOCITY>(),
+    ( T )   parameters.get<parameters::PHYS_CHAR_VISCOSITY>(),
+    ( T )   parameters.get<parameters::PHYS_CHAR_DENSITY>()
   );
-  auto& converter = sLattice.getUnitConverter();
+  auto& converter = lattice.getUnitConverter();
   clout << "Prepare Lattice ..." << std::endl;
 
-  /// Material=0 -->do nothing
-  sLattice.defineDynamics<PorousParticleBGKdynamics>(superGeometry, 1);
-  boundary::set<boundary::BounceBack>(sLattice, superGeometry, 2);
+  lattice.defineDynamics<PorousParticleBGKdynamics>(geometry, 1);
+  boundary::set<boundary::BounceBack>(lattice, geometry, 2);
 
-  sLattice.setParameter<descriptors::OMEGA>(converter.getLatticeRelaxationFrequency());
+  lattice.setParameter<descriptors::OMEGA>(converter.getLatticeRelaxationFrequency());
 
   clout << "Prepare Lattice ... OK" << std::endl;
 }
 
-void setBoundaryValues(SuperLattice<T, DESCRIPTOR>& sLattice,
-                       UnitConverter<T,DESCRIPTOR> const& converter,
-                       SuperGeometry<T,2>& superGeometry)
+void setBoundaryValues(MyCase& myCase)
 {
   OstreamManager clout(std::cout, "setBoundaryValues");
-
+  clout << "Set Boundary Values ..." << std::endl;
+  using T = MyCase::value_t;
+  auto& lattice = myCase.getLattice(NavierStokes{});
+  auto& geometry = myCase.getGeometry();
   AnalyticalConst2D<T, T> one(1.);
-  sLattice.defineField<POROSITY>(superGeometry.getMaterialIndicator({1,2}), one);
+  lattice.defineField<POROSITY>(geometry.getMaterialIndicator({1,2}), one);
 
   // Set initial condition
   AnalyticalConst2D<T, T> ux(0.);
@@ -175,53 +155,62 @@ void setBoundaryValues(SuperLattice<T, DESCRIPTOR>& sLattice,
   AnalyticalComposed2D<T, T> u(ux, uy);
 
   //Initialize all values of distribution functions to their local equilibrium
-  sLattice.defineRhoU(superGeometry, 1, rho, u);
-  sLattice.iniEquilibrium(superGeometry, 1, rho, u);
+  lattice.defineRhoU(geometry, 1, rho, u);
+  lattice.iniEquilibrium(geometry, 1, rho, u);
 
   // Make the lattice ready for simulation
-  sLattice.initialize();
+  lattice.initialize();
+  clout << "Set Boundary Values ... OK" << std::endl;
 }
 
-void getResults(SuperLattice<T, DESCRIPTOR>& sLattice,
-                UnitConverter<T,DESCRIPTOR> const& converter, int iT,
-                SuperGeometry<T,2>& superGeometry, Timer<double>& timer,
-                ParticleSystem<T,PARTICLETYPE>& particleSystem )
+void getResults(MyCase& myCase, int iT,
+                Timer<MyCase::value_t>& timer,
+                ParticleSystem<MyCase::value_t,ResolvedCircleWithContact2D>& particleSystem )
 {
   OstreamManager clout(std::cout, "getResults");
+  using T = MyCase::value_t;
+  auto& parameters = myCase.getParameters();
+  auto& lattice = myCase.getLattice(NavierStokes{});
+  auto& geometry = myCase.getGeometry();
+  auto& converter = lattice.getUnitConverter();
+  using DESCRIPTOR = MyCase::descriptor_t_of<NavierStokes>;
+  using PARTICLETYPE = ResolvedCircleWithContact2D;
 
-#ifdef WriteVTK
-  SuperVTMwriter2D<T> vtkWriter("sedimentation");
-  SuperLatticePhysVelocity2D<T, DESCRIPTOR> velocity(sLattice, converter);
-  SuperLatticePhysPressure2D<T, DESCRIPTOR> pressure(sLattice, converter);
-  SuperLatticePhysExternalPorosity2D<T, DESCRIPTOR> externalPor(sLattice, converter);
-  SuperLatticeMomentumExchangeForceLocal<T, DESCRIPTOR, PARTICLETYPE> momentumExchange(
-    sLattice, converter, superGeometry, particleSystem);
 
-  vtkWriter.addFunctor(velocity);
-  vtkWriter.addFunctor(pressure);
-  vtkWriter.addFunctor(externalPor);
-  vtkWriter.addFunctor(momentumExchange);
+  if(parameters.get<parameters::VTK_ENABLED>()){
+    SuperVTMwriter2D<T> vtkWriter("sedimentation");
+    SuperLatticePhysVelocity2D<T, DESCRIPTOR> velocity(lattice, converter);
+    SuperLatticePhysPressure2D<T, DESCRIPTOR> pressure(lattice, converter);
+    SuperLatticePhysExternalPorosity2D<T, DESCRIPTOR> externalPor(lattice, converter);
+    SuperLatticeMomentumExchangeForceLocal<T, DESCRIPTOR, PARTICLETYPE> momentumExchange(
+      lattice, converter, geometry, particleSystem);
 
-  if (iT == 0) {
-    converter.write("dkt");
-    SuperLatticeCuboid2D<T, DESCRIPTOR> cuboid(sLattice);
-    SuperLatticeRank2D<T, DESCRIPTOR> rank(sLattice);
-    vtkWriter.write(cuboid);
-    vtkWriter.write(rank);
-    vtkWriter.createMasterFile();
+    vtkWriter.addFunctor(velocity);
+    vtkWriter.addFunctor(pressure);
+    vtkWriter.addFunctor(externalPor);
+    vtkWriter.addFunctor(momentumExchange);
+
+    if (iT == 0) {
+      converter.write("dkt");
+      SuperLatticeCuboid2D<T, DESCRIPTOR> cuboid(lattice);
+      SuperLatticeRank2D<T, DESCRIPTOR> rank(lattice);
+      vtkWriter.write(cuboid);
+      vtkWriter.write(rank);
+      vtkWriter.createMasterFile();
+    }
+
+    if (iT % converter.getLatticeTime(parameters.get<parameters::PHYS_VTK_ITER_T>()) == 0) {
+      vtkWriter.write(iT);
+    }
   }
-
-  if (iT % converter.getLatticeTime(iTwrite) == 0) {
-    vtkWriter.write(iT);
-  }
-#endif
 
 
   auto particleA = particleSystem.get( 0 );
   auto particleB = particleSystem.get( 1 );
 
-#ifdef WriteGnuPlot
-  if (iT % converter.getLatticeTime(iTwrite) == 0) {
+if (parameters.get<parameters::GNUPLOT_ENABLED>()) {
+  std::string gnuplotFilename = "gnuplot.dat";
+  if (iT % converter.getLatticeTime(parameters.get<parameters::PHYS_VTK_ITER_T>()) == 0) {
     if (singleton::mpi().getRank() == 0) {
 
       std::ofstream myfile;
@@ -240,13 +229,13 @@ void getResults(SuperLattice<T, DESCRIPTOR>& sLattice,
       myfile.close();
     }
   }
-#endif
+}
 
   /// Writes output on the console
-  if (iT % converter.getLatticeTime(iTwrite) == 0) {
+  if (iT % converter.getLatticeTime(parameters.get<parameters::PHYS_VTK_ITER_T>()) == 0) {
     timer.update(iT);
     timer.printStep();
-    sLattice.getStatistics().print(iT, converter.getPhysTime(iT));
+    lattice.getStatistics().print(iT, converter.getPhysTime(iT));
     for (std::size_t iP=0; iP<particleSystem.size(); ++iP) {
       auto particle = particleSystem.get(iP);
       io::printResolvedParticleInfo(particle);
@@ -256,156 +245,75 @@ void getResults(SuperLattice<T, DESCRIPTOR>& sLattice,
   return;
 }
 
-int main(int argc, char* argv[])
-{
-  /// === 1st Step: Initialization ===
-  initialize(&argc, &argv);
-  singleton::directories().setOutputDir("./tmp/");
-  OstreamManager clout(std::cout, "main");
-
-  UnitConverter<T,DESCRIPTOR> converter(
-    ( T )   0.0001/ N, //physDeltaX
-    ( T )   5.e-4/(N*M), //physDeltaT,
-    ( T )   .002, //charPhysLength
-    ( T )   0.2, //charPhysVelocity
-    ( T )   1E-6, //physViscosity
-    ( T )   1000. //physDensity
-  );
-  converter.print();
-   MyCase::ParametersD myCaseParameters;
-  {
-    using namespace olb::parameters;
-    myCaseParameters.set<EPS        >( 0.5);
-    myCaseParameters.set<MAX_PHYS_T >( 6  );
-    myCaseParameters.set<LENGTH_X   >( 0.02);
-    myCaseParameters.set<LENGTH_Y   >( 0.08);
-    myCaseParameters.set<CENTER_X   >( {0.01, 0.068});
-    myCaseParameters.set<CENTER_X_2 >( {0.00999, 0.072});
-    myCaseParameters.set<PART_RHO   >( 1010.);
-    myCaseParameters.set<PART_RADIUS>( 0.001);
-
-
-  }
-
-// Parameters for the simulation setup
-int N = 1;
-int M = N;
-
-T eps = 0.5;      // eps*latticeL: width of transition area
-
-T maxPhysT = 6.;  // max. simulation time in s, SI unit
-T iTwrite = 0.125;  //converter.getLatticeTime(.3);
-
-T lengthX = 0.02;
-T lengthY = 0.08;
-
-T centerX1 = 0.01;
-T centerY1 = 0.068;
-Vector<T,2> center1 = {centerX1,centerY1};
-T centerX2 = 0.00999;
-T centerY2 = 0.072;
-Vector<T,2> center2 = {centerX2,centerY2};
-
-T rhoP = 1010.;
-T radiusP = 0.001;
-Vector<T,2> accExt = {.0, -T(9.81) * (T(1) - T(1000) / rhoP)};
-
-unsigned contactBoxResolutionPerDirection = 8;
-unsigned particleContactMaterial = 0;
-unsigned wallContactMaterial = 0;
-T youngsModulus = 1e6;
-T poissonRatio = 0.3;
-T coefficientOfRestitution = 0.9;
-T coefficientStaticFriction = 0.6;
-T coefficientKineticFriction = 0.3;
-
-
-  /// === 2nd Step: Prepare Geometry ===
-  std::vector<T> extend(2, T());
-  extend[0] = lengthX;
-  extend[1] = lengthY;
-  std::vector<T> origin(2, T());
-  IndicatorCuboid2D<T> cuboid(extend, origin);
-
-#ifdef PARALLEL_MODE_MPI
-  CuboidDecomposition2D<T> cuboidDecomposition(cuboid, converter.getPhysDeltaX(), singleton::mpi().getSize());
-#else
-  CuboidDecomposition2D<T> cuboidDecomposition(cuboid, converter.getPhysDeltaX(), 1);
-#endif
-
-  HeuristicLoadBalancer<T> loadBalancer(cuboidDecomposition);
-  SuperGeometry<T,2> superGeometry(cuboidDecomposition, loadBalancer, 2);
-  prepareGeometry(converter, superGeometry);
-
-  /// === 3rd Step: Prepare Lattice ===
-  SuperLattice<T, DESCRIPTOR> sLattice(converter, superGeometry);
-
-  prepareLattice(sLattice, superGeometry);
-
-  /// === 4th Step: Main Loop with Timer ===
-  Timer<double> timer(converter.getLatticeTime(maxPhysT), superGeometry.getStatistics().getNvoxel());
+void simulate(MyCase& myCase ){
+  using T = MyCase::value_t;
+  auto& parameters = myCase.getParameters();
+  auto& lattice = myCase.getLattice(NavierStokes{});
+  auto& geometry = myCase.getGeometry();
+  auto& converter = lattice.getUnitConverter();
+  using DESCRIPTOR = MyCase::descriptor_t_of<NavierStokes>;
+  using PARTICLETYPE = ResolvedCircleWithContact2D;
+  using PARTICLECONTACTTYPE = ParticleContactArbitraryFromOverlapVolume<T, DESCRIPTOR::d, true>;
+  using WALLCONTACTTYPE = WallContactArbitraryFromOverlapVolume<T, DESCRIPTOR::d, true>;
+  Timer<T> timer(converter.getLatticeTime(parameters.get<parameters::MAX_PHYS_T>()), geometry.getStatistics().getNvoxel());
   timer.start();
 
-  // Create ParticleSystem
   ParticleSystem<T,PARTICLETYPE> particleSystem;
 
-  //Create particle manager handling coupling, gravity and particle dynamics
   ParticleManager<T,DESCRIPTOR,PARTICLETYPE> particleManager(
-    particleSystem, superGeometry, sLattice, converter, accExt);
+    particleSystem, geometry, lattice, converter, parameters.get<parameters::GRAVITY>());
 
-  // Create and assign resolved particle dynamics
   particleSystem.defineDynamics<
-    VerletParticleDynamics<T,PARTICLETYPE>>();
+                                VerletParticleDynamics<T,PARTICLETYPE>
+                                >();
 
-  // Create solid boundaries for particle interaction
+
   std::vector<SolidBoundary<T, DESCRIPTOR::d>> solidBoundaries;
+  const Vector extent = {parameters.get<parameters::LENGTH_X>(), parameters.get<parameters::LENGTH_Y>()};
+  IndicatorCuboid2D<T> cuboid(extent, {0, 0});
+
   solidBoundaries.push_back(  SolidBoundary<T, DESCRIPTOR::d>(
         std::make_unique<IndicInverse<T, DESCRIPTOR::d>>(
           cuboid, cuboid.getMin() - 5 * converter.getPhysDeltaX(),
-          cuboid.getMax() + 5 * converter.getPhysDeltaX()), 2, wallContactMaterial));
+          cuboid.getMax() + 5 * converter.getPhysDeltaX()), 2, parameters.get<parameters::WALL_CONTACT_MATERIAL>()));
 
   // Create objects for contact treatment
   ContactContainer<T, PARTICLECONTACTTYPE, WALLCONTACTTYPE> contactContainer;
   // Generate lookup table for contact properties
   ContactProperties<T, 1> contactProperties;
-  contactProperties.set(particleContactMaterial, wallContactMaterial,
-                        evalEffectiveYoungModulus(youngsModulus, youngsModulus,
-                                                  poissonRatio, poissonRatio),
-                        coefficientOfRestitution, coefficientKineticFriction, coefficientStaticFriction);
+  contactProperties.set(parameters.get<parameters::PARTICLE_CONTACT_MATERIAL>(), parameters.get<parameters::WALL_CONTACT_MATERIAL>(),
+                        evalEffectiveYoungModulus(parameters.get<parameters::YOUNGS_MODULUS>(), parameters.get<parameters::YOUNGS_MODULUS>(),
+                                                  parameters.get<parameters::POISSON_RATIO>(), parameters.get<parameters::POISSON_RATIO>()),
+                                                  parameters.get<parameters::COEFFICIENT_OF_RESTITUTION>(), parameters.get<parameters::COEFFICIENT_KINETIC_FRICTION>(),
+                                                  parameters.get<parameters::COEFFICIENT_STATIC_FRICTION>());
 
 
-  T epsilon = eps * converter.getPhysDeltaX();
-  T radius = radiusP;
+  T epsilon = parameters.get<parameters::EPSILON>() * converter.getPhysDeltaX();
 
-  // Create Particle 1
-  creators::addResolvedCircle2D( particleSystem, center1,
-                                 radius, epsilon, rhoP );
+  creators::addResolvedCircle2D( particleSystem, parameters.get<parameters::CENTER_1>(),
+                                 parameters.get<parameters::PART_RADIUS>(), epsilon, parameters.get<parameters::PART_RHO>() );
 
-  // Create Particle 2
-  creators::addResolvedCircle2D( particleSystem, center2,
-                                 radius, epsilon, rhoP );
+  creators::addResolvedCircle2D( particleSystem, parameters.get<parameters::CENTER_2>(),
+                                 parameters.get<parameters::PART_RADIUS>(), epsilon, parameters.get<parameters::PART_RHO>() );
 
-  //Check ParticleSystem
   particleSystem.checkForErrors();
 
-  // Set contact material
   for (std::size_t iP = 0; iP < particleSystem.size(); ++iP) {
     auto particle = particleSystem.get(iP);
     setContactMaterial(particle, particleContactMaterial);
   }
 
-  /// === 5th Step: Definition of Initial and Boundary Conditions ===
-  setBoundaryValues(sLattice, converter, superGeometry);
+  setBoundaryValues(myCase);
 
   {
-    auto& communicator = sLattice.getCommunicator(stage::PostPostProcess());
-    communicator.requestOverlap(sLattice.getOverlap());
+    auto& communicator = lattice.getCommunicator(stage::PostPostProcess());
+    communicator.requestOverlap(lattice.getOverlap());
     communicator.requestFields<POROSITY,VELOCITY_NUMERATOR,VELOCITY_DENOMINATOR>();
     communicator.exchangeRequests();
   }
 
-  clout << "MaxIT: " << converter.getLatticeTime(maxPhysT) << std::endl;
-  for (std::size_t iT = 0; iT < converter.getLatticeTime(maxPhysT)+10; ++iT) {
+  clout << "MaxIT: " << converter.getLatticeTime( parameters.get<parameters::MAX_PHYS_T>() ) << std::endl;
+  for (std::size_t iT = 0; iT < converter.getLatticeTime( parameters.get<parameters::MAX_PHYS_T>() ) + 10; ++iT) {
 
     // Execute particle manager
     particleManager.execute<
@@ -416,20 +324,18 @@ T coefficientKineticFriction = 0.3;
     // Calculate and apply contact forces
     processContacts<T, PARTICLETYPE, PARTICLECONTACTTYPE, WALLCONTACTTYPE, ContactProperties<T, 1>>(
         particleSystem, solidBoundaries, contactContainer, contactProperties,
-        superGeometry, contactBoxResolutionPerDirection);
+        geometry, contactBoxResolutionPerDirection);
 
     // Solve equations of motion
     particleManager.execute<process_dynamics<T,PARTICLETYPE>>();
 
     // Couple particles to lattice (with contact detection)
     coupleResolvedParticlesToLattice<T, DESCRIPTOR, PARTICLETYPE, PARTICLECONTACTTYPE, WALLCONTACTTYPE>(
-        particleSystem, contactContainer, superGeometry, sLattice, converter, solidBoundaries);
+        particleSystem, contactContainer, geometry, lattice, converter, solidBoundaries);
 
-    // Get Results
-    getResults(sLattice, converter, iT, superGeometry, timer, particleSystem);
+    getResults(myCase, iT, timer, particleSystem);
 
-    // Collide and stream
-    sLattice.collideAndStream();
+    lattice.collideAndStream();
   }
 
   // Run Gnuplot
@@ -445,4 +351,58 @@ T coefficientKineticFriction = 0.3;
 
   timer.stop();
   timer.printSummary();
+}
+
+int main(int argc, char* argv[])
+{
+  /// === 1st Step: Initialization ===
+  initialize(&argc, &argv);
+  singleton::directories().setOutputDir("./tmp/");
+  OstreamManager clout(std::cout, "main");
+
+  converter.print();
+   MyCase::ParametersD myCaseParameters;
+  {
+    using namespace olb::parameters;
+    myCaseParameters.set<EPSILON                              >(0.5);
+    myCaseParameters.set<MAX_PHYS_T                           >(6.);
+    myCaseParameters.set<LENGTH_X                             >(0.02);
+    myCaseParameters.set<LENGTH_Y                             >(0.08);
+    myCaseParameters.set<CENTER_1                             >({0.01, 0.068});
+    myCaseParameters.set<CENTER_2                             >({0.00999, 0.072});
+    myCaseParameters.set<PART_RHO                             >(1010.);
+    myCaseParameters.set<PART_RADIUS                          >(0.001);
+    myCaseParameters.set<GRAVITATIONAL_ACC                    >(-9.81);
+    myCaseParameters.set<GRAVITY>([&] {
+      return {0., myCaseParameters.get(GRAVITATIONAL_ACC)* (1-myCaseParameters.get<PHYS_CHAR_DENSITY>())/myCaseParameters.get(PART_RHO)};
+    });
+    myCaseParameters.set<CONTACT_BOX_RESOLUTION_PER_DIRECTION >(8);
+    myCaseParameters.set<PARTICLE_CONTACT_MATERIAL            >(0);
+    myCaseParameters.set<WALL_CONTACT_MATERIAL                >(0);
+    myCaseParameters.set<YOUNGS_MODULUS                       >(1e6);
+    myCaseParameters.set<POISSON_RATIO                        >(0.3);
+    myCaseParameters.set<COEFFICIENT_OF_RESTITUTION           >(0.9);
+    myCaseParameters.set<COEFFICIENT_STATIC_FRICTION          >(0.6);
+    myCaseParameters.set<COEFFICIENT_KINETIC_FRICTION         >(0.3);
+    myCaseParameters.set<PHYS_CHAR_DENSITY                    >(1000);
+    myCaseParameters.set<PHYS_CHAR_VELOCITY                   >(0.2);
+    myCaseParameters.set<PHYS_CHAR_LENGTH                     >(0.002);
+    myCaseParameters.set<PHYS_VISCOSITY                       >(1E-6);
+    myCaseParameters.set<PHYS_DELTA_X                         >(0.0001);
+    myCaseParameters.set<PHYS_DELTA_T                         >(5.e-4);
+    myCaseParameters.set<PHYS_VTK_ITER_T                      >(0.125);
+    myCaseParameters.set<VTK_ENABLED                          >(true);
+    myCaseParameters.set<GNUPLOT_ENABLED                      >(true);
+  }
+
+  Mesh mesh = createMesh(myCaseParameters);
+  MyCase myCase(myCaseParameters, mesh);
+
+  prepareGeometry(myCase);
+
+  prepareLattice(myCase);
+
+  simulate(myCase);
+
+
 }
