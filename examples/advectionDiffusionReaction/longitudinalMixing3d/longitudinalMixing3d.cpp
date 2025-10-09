@@ -70,9 +70,9 @@ int main(int argc, char *argv[]) {
 
   simulate(myCase);
 
-  clout << "Errors with N="<<(myCaseParameters.get<parameters::RESOLUTION>())
-        <<" after "<< myCaseParameters.get<parameters::ERROR_TIME>() << " s:   "
-        << "log L1:" << std::log(myCaseParameters.get<parameters::L1_ERROR>())
+  clout <<"Errors with N="<<(myCaseParameters.get<parameters::RESOLUTION>())
+        <<" after "<< myCaseParameters.get<parameters::ERROR_TIME>() << " s: "
+        <<" log L1:" << std::log(myCaseParameters.get<parameters::L1_ERROR>())
         <<" log L2:"<< std::log(myCaseParameters.get<parameters::L2_ERROR>())
         <<" log Linf:"<< std::log(myCaseParameters.get<parameters::LINF_ERROR>())
         << std::endl;

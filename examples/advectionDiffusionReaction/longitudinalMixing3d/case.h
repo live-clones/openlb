@@ -60,7 +60,7 @@ private:
 
 public:
 
-  Solution(MyCase& _myCase, std::size_t iT) : AnalyticalF3D<T,S>(1), myCase(_myCase) {};
+  Solution(MyCase& _myCase, std::size_t _iT) : AnalyticalF3D<T,S>(1), myCase(_myCase), iT(_iT) {};
 
   bool operator()(T output[], const S input[])
   {
