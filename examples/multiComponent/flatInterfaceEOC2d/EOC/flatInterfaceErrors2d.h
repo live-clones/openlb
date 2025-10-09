@@ -47,8 +47,8 @@ void errorFlatInterface( MyCase& myCase, bool Cahn_const )
   OstreamManager clout( std::cout,"error" );
 
   using T = MyCase::value_t;
-  using NSDESCRIPTOR = typename MyCase::descriptor_t_of<NavierStokes>;
-  using PFDESCRIPTOR = typename MyCase::descriptor_t_of<Component1>;
+  using NSDESCRIPTOR = typename MyCase::template descriptor_t_of<NavierStokes>;
+  using PFDESCRIPTOR = typename MyCase::template descriptor_t_of<Component1>;
   auto& geometry = myCase.getGeometry();
   auto& params = myCase.getParameters();
 
