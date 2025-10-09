@@ -46,15 +46,15 @@ struct SHEN_OMEGA : public descriptors::FIELD_BASE<1> {};
 
 Mesh<MyCase::value_t, MyCase::d> createMesh(MyCase::ParametersD& params)
 {
-  using T                     = MyCase::value_t;
-  Vector               extent = params.get<parameters::DOMAIN_EXTENT>();
-  std::vector<T>       origin(3, T());
+  using T = MyCase::value_t;
+  Vector extent = params.get<parameters::DOMAIN_EXTENT>();
+  std::vector<T> origin(3, T());
   IndicatorCuboid3D<T> cuboid(extent, origin);
 
-  T                  dx = 1;
+  T dx = 1;
   Mesh<T, MyCase::d> mesh(cuboid, dx, singleton::mpi().getSize());
   mesh.setOverlap(params.get<parameters::OVERLAP>());
-  mesh.getCuboidDecomposition().setPeriodicity({true, true});
+  mesh.getCuboidDecomposition().setPeriodicity({true, true, true});
 
   return mesh;
 }
@@ -98,8 +98,10 @@ void prepareLattice(MyCase& myCase)
       (T)params.get<parameters::PHYS_CHAR_LENGTH>(),
       (T)params.get<parameters::PHYS_CHAR_VELOCITY>(),
       (T)params.get<parameters::PHYS_CHAR_VISCOSITY>(),
-      (T)1 //density
+      (T)1. //density
   );
+  const auto converter = NSElattice.getUnitConverter();
+  converter.print();
 
   using BulkDynamics = ForcedShanChenBGKdynamics<T, NSEDESCRIPTOR, momenta::ExternalVelocityTuple>;
   const T omega1     = params.get<parameters::SHEN_OMEGA>();
@@ -147,7 +149,7 @@ void setInitialValues(MyCase& myCase)
   const T omega1 = params.get<parameters::SHEN_OMEGA>();
 
   // Initial conditions
-  AnalyticalConst3D<T, T>    noise(0.01);
+  AnalyticalConst3D<T, T>    noise(.01);
   std::vector<T>             v(3, T());
   AnalyticalConst3D<T, T>    zeroVelocity(v);
   AnalyticalConst3D<T, T>    oldRho(.125);
@@ -253,12 +255,12 @@ int main(int argc, char* argv[])
     myCaseParameters.set<LATTICE_STAT_ITER_T>(20);
     myCaseParameters.set<LATTICE_VTK_ITER_T>(20);
 
-    myCaseParameters.set<LATTICE_RELAXATION_TIME>(1);
+    myCaseParameters.set<LATTICE_RELAXATION_TIME>(1.);
     myCaseParameters.set<PHYS_CHAR_LENGTH>(1e-5);
     myCaseParameters.set<PHYS_CHAR_VELOCITY>(1e-6);
     myCaseParameters.set<PHYS_CHAR_VISCOSITY>(0.1);
 
-    myCaseParameters.set<DOMAIN_EXTENT>({75, 75, 75});
+    myCaseParameters.set<DOMAIN_EXTENT>({76, 76, 76});
 
     myCaseParameters.set<SHEN_OMEGA>(1);
   }
