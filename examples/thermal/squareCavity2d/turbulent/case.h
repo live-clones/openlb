@@ -121,8 +121,7 @@ void prepareLattice(MyCase& myCase){
     auto& ADElattice = myCase.getLattice(Temperature{});
 
     const T physCharLength          = parameters.get<parameters::PHYS_CHAR_LENGTH>();
-    const std::size_t N             = parameters.get<parameters::RESOLUTION>();
-    const T tau                     = parameters.get<parameters::LATTICE_RELAXATION_TIME>();
+    const int N             = parameters.get<parameters::RESOLUTION>();
     const T physViscosity           = parameters.get<parameters::PHYS_KINEMATIC_VISCOSITY>();
     const T physDeltaX              = parameters.get<parameters::PHYS_DELTA_X>();
     const T physCharVelocity        = parameters.get<parameters::PHYS_CHAR_VELOCITY>();
@@ -131,10 +130,9 @@ void prepareLattice(MyCase& myCase){
     const T physThermalExpansion    = parameters.get<parameters::PHYS_THERMAL_EXPANSION>();
     const T physThermalConductivity = parameters.get<parameters::PHYS_THERMAL_CONDUCTIVITY>();
     const T physHeatCapacity        = parameters.get<parameters::PHYS_HEAT_CAPACITY>();
-    const T gravitationalConstant   = parameters.get<parameters::GRAVITATIONAL_ACC>();
+    const T g                       = parameters.get<parameters::GRAVITATIONAL_ACC>();
     const T smagoConst              = parameters.get<parameters::SMAGORINSKY_CONST>();
-    const T prTurb                  = parameters.get<parameters::PR_TURB>();
-    const T Ra                      = parameters.get<parameters::RAYLEIGH>();
+    const T prTurb                  = parameters.get<parameters::PRANDTL_TURB>();
     const T Tcold                   = parameters.get<parameters::T_COLD>();
     const T Thot                    = parameters.get<parameters::T_HOT>();
 
@@ -172,20 +170,22 @@ void prepareLattice(MyCase& myCase){
     AnalyticalConst2D<T,T> tauNSE(1. / NSEomega);
     AnalyticalConst2D<T,T> tauADE(1. / ADEomega);
 
-    NSlattice.defineField<descriptors::TAU_EFF>( geometry.getMaterialIndicator({1, 2, 3}), tauNSE );
-    ADlattice.defineField<descriptors::TAU_EFF>( geometry.getMaterialIndicator({1, 2, 3}), tauADE );
+    NSElattice.defineField<descriptors::TAU_EFF>( geometry.getMaterialIndicator({1, 2, 3}), tauNSE );
+    ADElattice.defineField<descriptors::TAU_EFF>( geometry.getMaterialIndicator({1, 2, 3}), tauADE );
 
-    T boussinesqForcePrefactor = gravitationalConstant / converter.getConversionFactorVelocity() * converter.getConversionFactorTime() *
+    T boussinesqForcePrefactor = g / converter.getConversionFactorVelocity() * converter.getConversionFactorTime() *
                                converter.getCharPhysTemperatureDifference() * converter.getPhysThermalExpansionCoefficient();
 
     const T preFactor = smagoConst*smagoConst
-                    * descriptors::invCs2<T,NSDESCRIPTOR>()*descriptors::invCs2<T,NSDESCRIPTOR>()
+                    * descriptors::invCs2<T,NSEDESCRIPTOR>()*descriptors::invCs2<T,NSEDESCRIPTOR>()
                     * 2*util::sqrt(2);
 
-    SuperLatticeCoupling coupling(
-      SmagorinskyBoussinesqCoupling{},
-      names::NavierStokes{}, NSlattice,
-      names::Temperature{},  ADlattice);
+    auto& coupling = myCase.setCouplingOperator(
+        "Boussinesq",
+        SmagorinskyBoussinesqCoupling{},
+        names::NavierStokes{}, NSElattice,
+        names::Temperature{},  ADElattice
+    );
     coupling.setParameter<SmagorinskyBoussinesqCoupling::T0>(
       converter.getLatticeTemperature(Tcold));
     coupling.setParameter<SmagorinskyBoussinesqCoupling::FORCE_PREFACTOR>(
@@ -196,7 +196,6 @@ void prepareLattice(MyCase& myCase){
       NSEomega);
     coupling.setParameter<SmagorinskyBoussinesqCoupling::OMEGA_ADE>(
       ADEomega);
-
 
     clout << "Prepare Lattice ... OK" << std::endl;
 }
@@ -215,9 +214,9 @@ void setInitialValues(MyCase& myCase){
     T NSEomega = converter.getLatticeRelaxationFrequency();
     T ADEomega = converter.getLatticeThermalRelaxationFrequency();
 
-    T Tcold = parameters.get<parameters::T_COLD>();
-    T Thot  = parameters.get<parameters::T_HOT>();
-    T Tmean = parameters.get<parameters::T_MEAN>();
+    T Tcold = converter.getCharPhysLowTemperature();
+    T Thot  = converter.getCharPhysHighTemperature();
+    T Tmean = (Thot + Tcold) / 2.;
 
     /// define initial conditions
     AnalyticalConst2D<T,T> rho(1.);
@@ -257,14 +256,14 @@ void computeNusselt(MyCase& myCase){
   auto& converter     = NSElattice.getUnitConverter();
   auto& parameters    = myCase.getParameters();
 
-  const std::size_t N = converter.getResolution();
-  std::size_t material = 0;
+  const int N = converter.getResolution();
+  int material = 0;
   T T_x = 0, T_xplus1 = 0, T_xplus2 = 0, q = 0, voxel = 0;
 
-  for (std::size_t iC = 0; iC < NSElattice.getLoadBalancer().size(); iC++) {
-    std::size_t ny = NSElattice.getBlock(iC).getNy();
-    std::size_t iX = 0;
-    for (std::size_t iY = 0; iY < ny; ++iY) {
+  for (int iC = 0; iC < NSElattice.getLoadBalancer().size(); iC++) {
+    int ny = NSElattice.getBlock(iC).getNy();
+    int iX = 0;
+    for (int iY = 0; iY < ny; ++iY) {
       material = geometry.getBlockGeometry(iC).getMaterial(iX,iY);
 
       T_x = ADElattice.getBlock(iC).get(iX,iY).computeRho();
@@ -287,8 +286,9 @@ void computeNusselt(MyCase& myCase){
 
 void getResults(MyCase& myCase,
                 util::Timer<MyCase::value_t>& timer,
-                std::size_t iT)
+                int iT)
 {
+  OstreamManager clout(std::cout, "getResults");
   using NSEDESCRIPTOR = MyCase::descriptor_t_of<NavierStokes>;
   using ADEDESCRIPTOR = MyCase::descriptor_t_of<Temperature>;
   using T = MyCase::value_t_of<NavierStokes>;
@@ -321,7 +321,7 @@ void getResults(MyCase& myCase,
     vtkWriter.write(iT);
   }
 
-  if ((iT % vtkIter == 0 & iT > 0) || converged) {
+  if ((iT % vtkIter == 0 && iT > 0) || converged) {
     vtkWriter.addFunctor(pressure);
     vtkWriter.addFunctor(velocity);
     vtkWriter.addFunctor(temperature);
@@ -413,26 +413,23 @@ void simulate(MyCase& myCase){
     clout << "Starting Simulation ..." << std::endl;
 
     using T = MyCase::value_t;
-    auto& parameters = myCase.getParameters();
-    auto& NSElattice = myCase.getLattice(NavierStokes{});
-    auto& ADElattice = myCase.getLattice(Temperature{});
+    auto& parameters      = myCase.getParameters();
+    auto& NSElattice      = myCase.getLattice(NavierStokes{});
+    auto& ADElattice      = myCase.getLattice(Temperature{});
     const auto& converter = NSElattice.getUnitConverter();
 
-    const std::size_t iTmax = converter.getLatticeTime(parameters.get<parameters::MAX_PHYS_T>());
+    const int iTmax       = converter.getLatticeTime(parameters.get<parameters::MAX_PHYS_T>());
 
     util::Timer<T> timer(iTmax, myCase.getGeometry().getStatistics().getNvoxel());
 
     timer.start();
 
-    const std::size_t convIter = parameters.get<parameters::CONV_ITER>();
+    const int convIter = parameters.get<parameters::CONV_ITER>();
     util::ValueTracer<T> converge(6, parameters.get<parameters::CONVERGENCE_PRECISION>());
 
-    bool converged = false;
-    T nusselt;
-    for (std::size_t iT = 0; iT < iTmax; ++iT) {
+    for (int iT = 0; iT < iTmax; ++iT) {
 
-      converged = parameters.get<parameters::CONVERGED>();
-      if (converge.hasConverged() && !converged) {
+      if (converge.hasConverged() && !parameters.get<parameters::CONVERGED>()) {
         parameters.set<parameters::CONVERGED>(true);
         clout << "Simulation converged." << std::endl;
         clout << "Time " << iT << "." << std::endl;
@@ -444,9 +441,8 @@ void simulate(MyCase& myCase){
       NSElattice.collideAndStream();
       ADElattice.collideAndStream();
       myCase.getOperator("Boussinesq").apply();
-
       getResults(myCase, timer, iT);
-      if(!converged && iT % convIter == 0){
+      if(!parameters.get<parameters::CONVERGED>() && iT % convIter == 0){
         ADElattice.setProcessingContext(ProcessingContext::Evaluation);
         computeNusselt(myCase);
         converge.takeValue(parameters.get<parameters::NUSSELT>(), true);

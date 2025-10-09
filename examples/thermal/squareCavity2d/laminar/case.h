@@ -121,7 +121,7 @@ void prepareLattice(MyCase& myCase){
     auto& ADElattice = myCase.getLattice(Temperature{});
 
     const T physCharLength          = parameters.get<parameters::PHYS_CHAR_LENGTH>();
-    const std::size_t N             = parameters.get<parameters::RESOLUTION>();
+    const int N             = parameters.get<parameters::RESOLUTION>();
     const T tau                     = parameters.get<parameters::LATTICE_RELAXATION_TIME>();
     const T physViscosity           = parameters.get<parameters::PHYS_KINEMATIC_VISCOSITY>();
     const T physDeltaX              = parameters.get<parameters::PHYS_DELTA_X>();
@@ -131,7 +131,7 @@ void prepareLattice(MyCase& myCase){
     const T physThermalExpansion    = parameters.get<parameters::PHYS_THERMAL_EXPANSION>();
     const T physThermalConductivity = parameters.get<parameters::PHYS_THERMAL_CONDUCTIVITY>();
     const T physHeatCapacity        = parameters.get<parameters::PHYS_HEAT_CAPACITY>();
-    const T gravitationalConstant   = parameters.get<parameters::GRAVITATIONAL_ACC>();
+    const T g                       = parameters.get<parameters::GRAVITATIONAL_ACC>();
     const T Ra                      = parameters.get<parameters::RAYLEIGH>();
     const T Tcold                   = parameters.get<parameters::T_COLD>();
     const T Thot                    = parameters.get<parameters::T_HOT>();
@@ -164,18 +164,19 @@ void prepareLattice(MyCase& myCase){
     boundary::set<boundary::AdvectionDiffusionDirichlet>(ADElattice, geometry.getMaterialIndicator({2, 3}));
     boundary::set<boundary::LocalVelocity>(NSElattice, geometry.getMaterialIndicator({2, 3}));
 
-    T boussinesqForcePrefactor = gravitationalConstant / converter.getConversionFactorVelocity() * converter.getConversionFactorTime() *
+    T boussinesqForcePrefactor = g / converter.getConversionFactorVelocity() * converter.getConversionFactorTime() *
                                converter.getCharPhysTemperatureDifference() * converter.getPhysThermalExpansionCoefficient();
 
     auto& coupling = myCase.setCouplingOperator(
-        "Boussinesq",
-        NavierStokesAdvectionDiffusionCoupling{},
-        names::NavierStokes{}, NSElattice,
-        names::Temperature{},  ADElattice);
-        coupling.setParameter<NavierStokesAdvectionDiffusionCoupling::T0>(
-        converter.getLatticeTemperature(Tcold));
-        coupling.setParameter<NavierStokesAdvectionDiffusionCoupling::FORCE_PREFACTOR>(
-        boussinesqForcePrefactor * Vector<T,2>{0.0,1.0}
+      "Boussinesq",
+      NavierStokesAdvectionDiffusionCoupling{},
+      names::NavierStokes{}, NSElattice,
+      names::Temperature{},  ADElattice
+    );
+    coupling.setParameter<NavierStokesAdvectionDiffusionCoupling::T0>(
+      converter.getLatticeTemperature(Tcold));
+    coupling.setParameter<NavierStokesAdvectionDiffusionCoupling::FORCE_PREFACTOR>(
+      boussinesqForcePrefactor * Vector<T,2>{0.0,1.0}
     );
 
     clout << "Prepare Lattice ... OK" << std::endl;
@@ -237,14 +238,14 @@ void computeNusselt(MyCase& myCase){
   auto& converter     = NSElattice.getUnitConverter();
   auto& parameters    = myCase.getParameters();
 
-  const std::size_t N = converter.getResolution();
-  std::size_t material = 0;
+  const int N = converter.getResolution();
+  int material = 0;
   T T_x = 0, T_xplus1 = 0, T_xplus2 = 0, q = 0, voxel = 0;
 
-  for (std::size_t iC = 0; iC < NSElattice.getLoadBalancer().size(); iC++) {
-    std::size_t ny = NSElattice.getBlock(iC).getNy();
-    std::size_t iX = 0;
-    for (std::size_t iY = 0; iY < ny; ++iY) {
+  for (int iC = 0; iC < NSElattice.getLoadBalancer().size(); iC++) {
+    int ny = NSElattice.getBlock(iC).getNy();
+    int iX = 0;
+    for (int iY = 0; iY < ny; ++iY) {
       material = geometry.getBlockGeometry(iC).getMaterial(iX,iY);
 
       T_x = ADElattice.getBlock(iC).get(iX,iY).computeRho();
@@ -267,7 +268,7 @@ void computeNusselt(MyCase& myCase){
 
 void getResults(MyCase& myCase,
                 util::Timer<MyCase::value_t>& timer,
-                std::size_t iT)
+                int iT)
 {
   using NSEDESCRIPTOR = MyCase::descriptor_t_of<NavierStokes>;
   using ADEDESCRIPTOR = MyCase::descriptor_t_of<Temperature>;
@@ -301,7 +302,7 @@ void getResults(MyCase& myCase,
     vtkWriter.write(iT);
   }
 
-  if ((iT % vtkIter == 0 & iT > 0) || converged) {
+  if ((iT % vtkIter == 0 && iT > 0) || converged) {
     vtkWriter.addFunctor(pressure);
     vtkWriter.addFunctor(velocity);
     vtkWriter.addFunctor(temperature);
@@ -398,21 +399,18 @@ void simulate(MyCase& myCase){
     auto& ADElattice = myCase.getLattice(Temperature{});
     const auto& converter = NSElattice.getUnitConverter();
 
-    const std::size_t iTmax = converter.getLatticeTime(parameters.get<parameters::MAX_PHYS_T>());
+    const int iTmax = converter.getLatticeTime(parameters.get<parameters::MAX_PHYS_T>());
 
     util::Timer<T> timer(iTmax, myCase.getGeometry().getStatistics().getNvoxel());
 
     timer.start();
 
-    const std::size_t convIter = parameters.get<parameters::CONV_ITER>();
+    const int convIter = parameters.get<parameters::CONV_ITER>();
     util::ValueTracer<T> converge(6, parameters.get<parameters::CONVERGENCE_PRECISION>());
 
-    bool converged = false;
-    T nusselt;
-    for (std::size_t iT = 0; iT < iTmax; ++iT) {
+    for (int iT = 0; iT < iTmax; ++iT) {
 
-      converged = parameters.get<parameters::CONVERGED>();
-      if (converge.hasConverged() && !converged) {
+      if (converge.hasConverged() && !parameters.get<parameters::CONVERGED>()) {
         parameters.set<parameters::CONVERGED>(true);
         clout << "Simulation converged." << std::endl;
         clout << "Time " << iT << "." << std::endl;
@@ -426,7 +424,7 @@ void simulate(MyCase& myCase){
       myCase.getOperator("Boussinesq").apply();
 
       getResults(myCase, timer, iT);
-      if(!converged && iT % convIter == 0){
+      if(!parameters.get<parameters::CONVERGED>() && iT % convIter == 0){
         ADElattice.setProcessingContext(ProcessingContext::Evaluation);
         computeNusselt(myCase);
         converge.takeValue(parameters.get<parameters::NUSSELT>(), true);

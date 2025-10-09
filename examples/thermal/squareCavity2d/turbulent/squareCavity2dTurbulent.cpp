@@ -40,9 +40,9 @@ void compareToStudy(MyCase& myCase)
   using T                   = MyCase::value_t_of<NavierStokes>;
   auto& parameters          = myCase.getParameters();
   auto& converter           = myCase.getLattice(NavierStokes{}).getUnitConverter();
-  std::size_t Ra            = parameters.get<parameters::RAYLEIGH>();
+  int Ra                    = parameters.get<parameters::RAYLEIGH>();
   T physThermalDiffusivity  = converter.getPhysThermalDiffusivity();
-  T charL                   = converter.converter.getCharPhysLength();
+  T charL                   = converter.getCharPhysLength();
 
   ReferenceData<T> ref{};
   if (ref.hasRayleigh(Ra) && singleton::mpi().isMainProcessor()) {
@@ -95,7 +95,7 @@ int main(int argc, char* argv[]){
     myCaseParameters.set<PRANDTL                    >(0.71);
     myCaseParameters.set<RAYLEIGH                   >(1e7);
     myCaseParameters.set<SMAGORINSKY_CONST          >(0.1);
-    myCaseParameters.set<PR_TURB                    >(0.87);
+    myCaseParameters.set<PRANDTL_TURB               >(0.87);
 
     myCaseParameters.set<T_HOT                      >(285.15);
     myCaseParameters.set<T_COLD                     >(275.15);
@@ -111,7 +111,7 @@ int main(int argc, char* argv[]){
   myCaseParameters.fromCLI(argc, argv);
 
   double N                      = myCaseParameters.get<parameters::RESOLUTION               >();
-  double Ra                     = myCaseParameters.get<parameters::RAYLEIGH                 >();
+  int Ra                        = myCaseParameters.get<parameters::RAYLEIGH                 >();
   double physViscosity          = myCaseParameters.get<parameters::PHYS_KINEMATIC_VISCOSITY >();
   double Pr                     = myCaseParameters.get<parameters::PRANDTL                  >();
   double g                      = myCaseParameters.get<parameters::GRAVITATIONAL_ACC        >();
@@ -119,10 +119,9 @@ int main(int argc, char* argv[]){
   double Tcold                  = myCaseParameters.get<parameters::T_COLD                   >();
   double thermalExpansion       = myCaseParameters.get<parameters::PHYS_THERMAL_EXPANSION   >();
   double thermalConductivity    = myCaseParameters.get<parameters::PHYS_THERMAL_CONDUCTIVITY>();
-  double gravitationalConstant  = myCaseParameters.get<parameters::GRAVITATIONAL_ACC        >();
 
   // lx from Rayleigh number
-  double lx = util::pow(Ra * physViscosity * physViscosity / (Pr * gravitationalConstant * (Thot - Tcold) * thermalExpansion), (MyCase::value_t_of<NavierStokes>) 1 / 3);  // length of the square
+  double lx = util::pow(Ra * physViscosity * physViscosity / (Pr * g * (Thot - Tcold) * thermalExpansion), (MyCase::value_t_of<NavierStokes>) 1 / 3);  // length of the square
   myCaseParameters.set<parameters::PHYS_CHAR_LENGTH>(lx);
   myCaseParameters.set<parameters::PHYS_DELTA_X>(lx / N);
   myCaseParameters.set<parameters::DOMAIN_EXTENT>({lx, lx});
