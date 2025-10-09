@@ -69,8 +69,10 @@ struct OUTLET_CENTER1 : public descriptors::FIELD_BASE<0, 1> {};
 struct OUTLET_NORMAL1 : public descriptors::FIELD_BASE<0, 1> {};
 struct FLUID_MAX_PHYS_T : public descriptors::FIELD_BASE<1> {};
 struct PARTICLE_MAX_PHYS_T : public descriptors::FIELD_BASE<1> {};
-struct PARTICLE_DYNAMICS_SETUP : public descriptors::TYPED_FIELD_BASE<int, 1> {};
+struct PARTICLE_DYNAMICS_SETUP : public descriptors::TYPED_FIELD_BASE<bool, 1> {};
 struct NO_OF_PARTICLES : public descriptors::FIELD_BASE<1> {};
+struct FLUID_EXISTS : public descriptors::TYPED_FIELD_BASE<bool, 1> {};
+struct STOKES : public descriptors::FIELD_BASE<1> {};
 
 }
 
@@ -159,8 +161,8 @@ void prepareLattice(MyCase& myCase)
       (T)parameters.get<parameters::INLET_RADIUS>() * 2., // charPhysLength: reference length of simulation geometry
       (T)parameters.get<parameters::REYNOLDS>() * 1.5e-5 / (parameters.get<parameters::INLET_RADIUS>() * 2.),
       // charPhysVelocity: maximal/highest expected velocity during simulation in __m / s__
-      (T)1.5e-5, // physViscosity: physical kinematic viscosity in __m^2 / s__
-      (T)1.225   // physDensity: physical density in __kg / m^3__
+      (T)parameters.get<parameters::PHYS_CHAR_VISCOSITY>() , // physViscosity: physical kinematic viscosity in __m^2 / s__
+      (T)parameters.get<parameters::PHYS_CHAR_DENSITY>()   // physDensity: physical density in __kg / m^3__
   );
   auto& converter   = lattice.getUnitConverter();
   const T omega     = converter.getLatticeRelaxationFrequency();
@@ -254,8 +256,10 @@ void setTemporalValues(MyCase& myCase, std::size_t iT)
   lattice.defineU(geometry, 5, poiseuilleU5);
 }
 
-void prepareParticles(MyCase& myCase, SuperParticleSystem<MyCase::value_t, SubgridParticle3D>& superParticleSystem,
-  SolidBoundary<MyCase::value_t, 3>& wall, STLreader<MyCase::value_t>& stlReader)
+void prepareParticles(MyCase& myCase,
+                      SuperParticleSystem<MyCase::value_t, SubgridParticle3D>& superParticleSystem,
+                      SolidBoundary<MyCase::value_t, 3>& wall,
+                      STLreader<MyCase::value_t>& stlReader)
 {
   OstreamManager clout(std::cout, "prepareParticles");
   clout << "Prepare Particles ..." << std::endl;
@@ -306,9 +310,9 @@ void prepareParticles(MyCase& myCase, SuperParticleSystem<MyCase::value_t, Subgr
 }
 
 bool getResults(MyCase& myCase, std::size_t iT, Timer<MyCase::value_t>& fluidTimer,
-                STLreader<MyCase::value_t>& stlReader, bool fluidExists,
+                STLreader<MyCase::value_t>& stlReader,
                 SuperParticleSystem<MyCase::value_t, SubgridParticle3D>& superParticleSystem,
-                Timer<MyCase::value_t>&                                  particleTimer)
+                Timer<MyCase::value_t>& particleTimer)
 {
   OstreamManager clout(std::cout, "getResults");
   using T          = MyCase::value_t;
@@ -361,6 +365,9 @@ bool getResults(MyCase& myCase, std::size_t iT, Timer<MyCase::value_t>& fluidTim
     vtmWriter.createMasterFile();
     superParticleWriter.createMasterFile();
     vtmWriterStartTime.createMasterFile();
+    T stokes= (2. * parameters.get<parameters::PART_RHO>() * parameters.get<parameters::PART_RADIUS>() *
+              parameters.get<parameters::PART_RADIUS>() * converter.getCharPhysVelocity()) /
+                 (9. * converter.getPhysViscosity() * converter.getPhysDensity() * converter.getCharPhysLength());
 
     clout << "N=" << parameters.get<parameters::RESOLUTION>()
           << "; maxTimeSteps(fluid)=" << converter.getLatticeTime(parameters.get<parameters::FLUID_MAX_PHYS_T>())
@@ -369,15 +376,13 @@ bool getResults(MyCase& myCase, std::size_t iT, Timer<MyCase::value_t>& fluidTim
           << "; noOfParticles=" << parameters.get<parameters::NO_OF_PARTICLES>()
           << "; maxTimeSteps(particle)=" << converter.getLatticeTime(parameters.get<parameters::PARTICLE_MAX_PHYS_T>())
           << "; St="
-          << (2. * parameters.get<parameters::PART_RHO>() * parameters.get<parameters::PART_RADIUS>() *
-              parameters.get<parameters::PART_RADIUS>() * converter.getCharPhysVelocity()) /
-                 (9. * converter.getPhysViscosity() * converter.getPhysDensity() * converter.getCharPhysLength())
+          << stokes
           << std::endl;
   }
 
   // Writes the .vtk and .gif files
   if (iT < fluidMaxT) {
-    if (!fluidExists) {
+    if (!parameters.get<parameters::FLUID_EXISTS>()) {
       vtmWriterStartTime.write(iT);
       SuperEuklidNorm3D<T>  normVel(velocity);
       BlockReduction3D2D<T> planeReduction(normVel, {0, -1, 0}, 600, BlockDataSyncMode::ReduceOnly);
@@ -484,12 +489,11 @@ void simulate( MyCase& myCase )
   std::size_t iTperiod   = converter.getLatticeTime(0.5 * parameters.get<parameters::IT_PERIOD>());
   std::size_t iTmaxStart = converter.getLatticeTime(0.8 * parameters.get<parameters::FLUID_MAX_PHYS_T>());
 
-  bool fluidExists = true;
 
   /// === Step 10.1 loading fluid solution or simulating ===
   if (!(lattice.load("fluidSolution_N" + std::to_string(parameters.get<parameters::RESOLUTION>())))) {
     clout << "No fluid data available, generating new data" << std::endl;
-    fluidExists = false;
+    parameters.set<parameters::FLUID_EXISTS>(false);
 
     for (; iT <= converter.getLatticeTime(parameters.get<parameters::FLUID_MAX_PHYS_T>()); ++iT) {
       if (iT <= iTmaxStart && iT % iTperiod == 0) {
@@ -497,7 +501,7 @@ void simulate( MyCase& myCase )
       }
       lattice.collideAndStream();
       if (iT % iTperiod == 0) {
-        getResults(myCase, iT, fluidTimer, stlReader, fluidExists, superParticleSystem, particleTimer);
+        getResults(myCase, iT, fluidTimer, stlReader, superParticleSystem, particleTimer);
       }
     }
 
@@ -513,7 +517,7 @@ void simulate( MyCase& myCase )
   else {
     clout << "using existing fluid data" << std::endl;
     iT = converter.getLatticeTime(parameters.get<parameters::FLUID_MAX_PHYS_T>());
-    getResults(myCase, iT, fluidTimer, stlReader, fluidExists, superParticleSystem, particleTimer);
+    getResults(myCase, iT, fluidTimer, stlReader, superParticleSystem, particleTimer);
     fluidTimer.stop();
   }
 
@@ -535,7 +539,7 @@ void simulate( MyCase& myCase )
                     update_particle_core_distribution<T, SubgridParticle3D>
     >();
     if (iT % iTperiod == 0) {
-      getResults(myCase, iT, fluidTimer, stlReader, fluidExists, superParticleSystem, particleTimer);
+      getResults(myCase, iT, fluidTimer, stlReader, superParticleSystem, particleTimer);
     }
   }
   particleTimer.stop();
@@ -551,11 +555,6 @@ int main(int argc, char* argv[])
 
   singleton::directories().setOutputDir("./tmp/");
   OstreamManager clout(std::cout, "main");
-  //Set capture method:
-  // materialCapture: based on material number, output 0
-  // wallCapture:     based on more accurate stl description, output 1
-  typedef enum { materialCapture, wallCapture } ParticleDynamicsSetup;
-  ParticleDynamicsSetup particleDynamicsSetup = wallCapture;
 
   /// === Step 2: Set Parameters ===
   MyCase::ParametersD myCaseParameters;
@@ -569,7 +568,9 @@ int main(int argc, char* argv[])
     myCaseParameters.set<FLUID_MAX_PHYS_T>(5);     // max. simulation time in s
     myCaseParameters.set<PARTICLE_MAX_PHYS_T>(20); // max. particle simulation time in s
     myCaseParameters.set<NO_OF_PARTICLES>(1000);
-    myCaseParameters.set<PARTICLE_DYNAMICS_SETUP>(particleDynamicsSetup);
+    // materialCapture: based on material number, output 0
+    // wallCapture:     based on more accurate stl description, output 1
+    myCaseParameters.set<PARTICLE_DYNAMICS_SETUP>(1);
     myCaseParameters.set<INLET_CENTER>({0., 0., 0.0786395});
     myCaseParameters.set<OUTLET_CENTER0>({-0.0235929682287551, -0.000052820468762797, -0.021445708949909});
     myCaseParameters.set<OUTLET_CENTER1>({0.0233643529416147, 0.00000212439067050152, -0.0211994104877918});
@@ -580,6 +581,16 @@ int main(int argc, char* argv[])
     myCaseParameters.set<OUTLET_NORMAL0>({0.505126, -0.04177, 0.862034});
     myCaseParameters.set<OUTLET_NORMAL1>({-0.483331, -0.0102764, 0.875377});
     myCaseParameters.set<BOUZIDI>(1);
+    myCaseParameters.set<PHYS_CHAR_VISCOSITY>(1.5e-5);
+    myCaseParameters.set<PHYS_CHAR_DENSITY>(1.225);
+    myCaseParameters.set<STOKES>([&]{
+              return  myCaseParameters.get<PART_RHO>() * myCaseParameters.get<PART_RADIUS>()
+                    * myCaseParameters.get<PART_RADIUS>() * myCaseParameters.get<REYNOLDS>()
+                    / (9. *myCaseParameters.get<INLET_RADIUS>() * myCaseParameters.get<PHYS_CHAR_DENSITY>()
+                    * myCaseParameters.get<INLET_RADIUS>() );
+                });
+    myCaseParameters.set<FLUID_EXISTS> (1);
+
   }
   myCaseParameters.fromCLI(argc, argv);
   /// === Step 3: Create Mesh ===
