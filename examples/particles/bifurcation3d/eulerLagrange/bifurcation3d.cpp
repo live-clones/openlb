@@ -151,10 +151,11 @@ void prepareLattice(MyCase& myCase)
   OstreamManager clout(std::cout, "prepareLattice");
   clout << "Prepare Lattice ..." << std::endl;
   using T          = MyCase::value_t;
+  using DESCRIPTOR = MyCase::descriptor_t_of<NavierStokes>;
   auto& parameters = myCase.getParameters();
   auto& geometry   = myCase.getGeometry();
   auto& lattice    = myCase.getLattice(NavierStokes {});
-  using DESCRIPTOR = MyCase::descriptor_t_of<NavierStokes>;
+
 
   lattice.setUnitConverter<UnitConverterFromResolutionAndRelaxationTime<T, DESCRIPTOR>>(
       parameters.get<parameters::RESOLUTION>(),

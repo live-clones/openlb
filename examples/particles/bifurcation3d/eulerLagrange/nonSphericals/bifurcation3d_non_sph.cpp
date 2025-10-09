@@ -269,12 +269,13 @@ void prepareParticles(MyCase& myCase,
 {
   OstreamManager clout(std::cout, "seedParticles");
   using T          = MyCase::value_t;
+  using DESCRIPTOR = MyCase::descriptor_t_of<NavierStokes>;
+  using PARTICLETYPE = SubgridParticle3DparallelEulerRotation;
   auto& parameters = myCase.getParameters();
   auto& lattice    = myCase.getLattice(NavierStokes {});
   auto& converter  = lattice.getUnitConverter();
   auto& geometry   = myCase.getGeometry();
-  using DESCRIPTOR = MyCase::descriptor_t_of<NavierStokes>;
-  using PARTICLETYPE = SubgridParticle3DparallelEulerRotation;
+
 
   std::vector<int>             mat {2, 3, 4, 5};
   SuperIndicatorMaterial<T, 3> matind(geometry, mat);
@@ -330,12 +331,13 @@ bool getResults(MyCase& myCase, std::size_t iT, Timer<MyCase::value_t>& fluidTim
 {
   OstreamManager clout(std::cout, "getResults");
   using T          = MyCase::value_t;
+  using DESCRIPTOR = MyCase::descriptor_t_of<NavierStokes>;
+  using PARTICLETYPE = SubgridParticle3DparallelEulerRotation;
   auto& parameters = myCase.getParameters();
   auto& geometry   = myCase.getGeometry();
   auto& lattice    = myCase.getLattice(NavierStokes {});
   auto& converter  = lattice.getUnitConverter();
-  using DESCRIPTOR = MyCase::descriptor_t_of<NavierStokes>;
-  using PARTICLETYPE = SubgridParticle3DparallelEulerRotation;
+
   SuperVTMwriter3D<T> vtmWriter("bifurcation3d");
   SuperVTMwriter3D<T> vtmWriterStartTime("startingTimeBifurcation3d");
 
