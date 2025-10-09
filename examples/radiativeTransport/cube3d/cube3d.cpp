@@ -44,6 +44,7 @@ using namespace olb::names;
 using MyCase = Case<Radiation, Lattice<double, descriptors::D3Q27<tag::RTLBM>>>;
 
 namespace olb::parameters {
+
 struct ANINOSOTROPY_FACTOR : public descriptors::FIELD_BASE<1> {};
 
 struct ABSORPTION : public descriptors::FIELD_BASE<1> {};
@@ -61,7 +62,7 @@ struct INLET_DIRICHLET : public descriptors::FIELD_BASE<1> {};
 
 struct BOUNDARY_SHIFT : public descriptors::FIELD_BASE<1> {};
 
-} // namespace olb::parameters
+}
 
 Mesh<MyCase::value_t, MyCase::d> createMesh(MyCase::ParametersD& parameters)
 {
