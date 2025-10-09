@@ -253,8 +253,6 @@ void prepareLattice(MyCase& myCase) {
   T ADEomega  = converter.getLatticeThermalRelaxationFrequency();
   T NSEomega  = converter.getLatticeRelaxationFrequency();
 
-  const T Re = converter.getReynoldsNumber();
-
   ADElattice.defineDynamics<AdvectionDiffusionBGKdynamics>(geometry, 1);
   ADElattice.defineDynamics<AdvectionDiffusionBGKdynamics>(geometry, 2);
   ADElattice.defineDynamics<AdvectionDiffusionBGKdynamics>(geometry, 3);
