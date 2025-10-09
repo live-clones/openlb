@@ -69,9 +69,11 @@ struct OUTLET_CENTER1 : public descriptors::FIELD_BASE<0, 1> {};
 struct OUTLET_NORMAL1 : public descriptors::FIELD_BASE<0, 1> {};
 struct FLUID_MAX_PHYS_T : public descriptors::FIELD_BASE<1> {};
 struct PARTICLE_MAX_PHYS_T : public descriptors::FIELD_BASE<1> {};
-struct PARTICLE_DYNAMICS_SETUP : public descriptors::TYPED_FIELD_BASE<bool, 1> {};
 struct NO_OF_PARTICLES : public descriptors::FIELD_BASE<1> {};
+
+struct PARTICLE_DYNAMICS_SETUP : public descriptors::TYPED_FIELD_BASE<bool, 1> {};
 struct FLUID_EXISTS : public descriptors::TYPED_FIELD_BASE<bool, 1> {};
+struct USE_BOUZIDI : public descriptors::TYPED_FIELD_BASE<bool, 1> {};
 
 }
 
@@ -169,7 +171,7 @@ void prepareLattice(MyCase& myCase)
   // Material=1 -->bulk dynamics
   lattice.defineDynamics<BGKdynamics>(geometry, 1);
 
-  if(parameters.get<parameters::BOUZIDI>()) {
+  if (parameters.get<parameters::USE_BOUZIDI>()) {
     STLreader<T> stlReader("../bifurcation3d.stl", converter.getPhysDeltaX());
     setBouzidiBoundary(lattice, geometry, 2, stlReader);
   }
@@ -574,7 +576,7 @@ int main(int argc, char* argv[])
     myCaseParameters.set<INLET_NORMAL>({0., 0., -1.});
     myCaseParameters.set<OUTLET_NORMAL0>({0.505126, -0.04177, 0.862034});
     myCaseParameters.set<OUTLET_NORMAL1>({-0.483331, -0.0102764, 0.875377});
-    myCaseParameters.set<BOUZIDI>(1);
+    myCaseParameters.set<USE_BOUZIDI>(1);
     myCaseParameters.set<PHYS_CHAR_VISCOSITY>(1.5e-5);
     myCaseParameters.set<PHYS_CHAR_DENSITY>(1.225);
     myCaseParameters.set<STOKES>([&] {
