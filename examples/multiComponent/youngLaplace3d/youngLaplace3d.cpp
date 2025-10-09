@@ -386,7 +386,7 @@ int main( int argc, char *argv[] ) {
   MyCase::ParametersD myCaseParameters;
   {
     using namespace olb::parameters;
-    myCaseParameters.set<DOMAIN_EXTENT    >({100., 100.});// [lattice units]
+    myCaseParameters.set<DOMAIN_EXTENT    >(100);         // [lattice units]
     myCaseParameters.set<RESOLUTION       >(100);         // [lattice units]
     myCaseParameters.set<ALPHA            >(1.5);         // Interfacial width          [lattice units]
     myCaseParameters.set<KAPPA1           >(0.0075);      // For surface tensions       [lattice units]
