@@ -72,7 +72,6 @@ struct PARTICLE_MAX_PHYS_T : public descriptors::FIELD_BASE<1> {};
 struct PARTICLE_DYNAMICS_SETUP : public descriptors::TYPED_FIELD_BASE<bool, 1> {};
 struct NO_OF_PARTICLES : public descriptors::FIELD_BASE<1> {};
 struct FLUID_EXISTS : public descriptors::TYPED_FIELD_BASE<bool, 1> {};
-struct STOKES : public descriptors::FIELD_BASE<1> {};
 
 }
 
@@ -365,9 +364,6 @@ bool getResults(MyCase& myCase, std::size_t iT, Timer<MyCase::value_t>& fluidTim
     vtmWriter.createMasterFile();
     superParticleWriter.createMasterFile();
     vtmWriterStartTime.createMasterFile();
-    T stokes= (2. * parameters.get<parameters::PART_RHO>() * parameters.get<parameters::PART_RADIUS>() *
-              parameters.get<parameters::PART_RADIUS>() * converter.getCharPhysVelocity()) /
-                 (9. * converter.getPhysViscosity() * converter.getPhysDensity() * converter.getCharPhysLength());
 
     clout << "N=" << parameters.get<parameters::RESOLUTION>()
           << "; maxTimeSteps(fluid)=" << converter.getLatticeTime(parameters.get<parameters::FLUID_MAX_PHYS_T>())
@@ -376,7 +372,7 @@ bool getResults(MyCase& myCase, std::size_t iT, Timer<MyCase::value_t>& fluidTim
           << "; noOfParticles=" << parameters.get<parameters::NO_OF_PARTICLES>()
           << "; maxTimeSteps(particle)=" << converter.getLatticeTime(parameters.get<parameters::PARTICLE_MAX_PHYS_T>())
           << "; St="
-          << stokes
+          << parameters.get<parameters::STOKES>()
           << std::endl;
   }
 
@@ -568,9 +564,7 @@ int main(int argc, char* argv[])
     myCaseParameters.set<FLUID_MAX_PHYS_T>(5);     // max. simulation time in s
     myCaseParameters.set<PARTICLE_MAX_PHYS_T>(20); // max. particle simulation time in s
     myCaseParameters.set<NO_OF_PARTICLES>(1000);
-    // materialCapture: based on material number, output 0
-    // wallCapture:     based on more accurate stl description, output 1
-    myCaseParameters.set<PARTICLE_DYNAMICS_SETUP>(1);
+    myCaseParameters.set<PARTICLE_DYNAMICS_SETUP>(1);// 0: based on material number,  1: based on more accurate stl description
     myCaseParameters.set<INLET_CENTER>({0., 0., 0.0786395});
     myCaseParameters.set<OUTLET_CENTER0>({-0.0235929682287551, -0.000052820468762797, -0.021445708949909});
     myCaseParameters.set<OUTLET_CENTER1>({0.0233643529416147, 0.00000212439067050152, -0.0211994104877918});
@@ -583,10 +577,10 @@ int main(int argc, char* argv[])
     myCaseParameters.set<BOUZIDI>(1);
     myCaseParameters.set<PHYS_CHAR_VISCOSITY>(1.5e-5);
     myCaseParameters.set<PHYS_CHAR_DENSITY>(1.225);
-    myCaseParameters.set<STOKES>([&]{
+    myCaseParameters.set<STOKES>([&] {
               return  myCaseParameters.get<PART_RHO>() * myCaseParameters.get<PART_RADIUS>()
                     * myCaseParameters.get<PART_RADIUS>() * myCaseParameters.get<REYNOLDS>()
-                    / (9. *myCaseParameters.get<INLET_RADIUS>() * myCaseParameters.get<PHYS_CHAR_DENSITY>()
+                    / (18. *myCaseParameters.get<INLET_RADIUS>() * myCaseParameters.get<PHYS_CHAR_DENSITY>()
                     * myCaseParameters.get<INLET_RADIUS>() );
                 });
     myCaseParameters.set<FLUID_EXISTS> (1);
