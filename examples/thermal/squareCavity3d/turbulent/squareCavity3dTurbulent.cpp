@@ -22,13 +22,13 @@
  *  Boston, MA  02110-1301, USA.
  */
 
-/* squareCavity2dTurbulent.cpp
+/* squareCavity3dTurbulent.cpp
  * The reference is the paper in "Gaedtke, M., Wachter, S., Raedle, M., Nirschl, H., & Krause, M. J. (2018).
  * Application of a lattice Boltzmann method combined with a Smagorinsky turbulence model to spatially resolved heat flux inside a refrigerated vehicle.
  * Computers & Mathematics with Applications, 76(10), 2315-2329."
  */
 
-// natural convection of air in a square cavity in 2D
+// natural convection of air in a square cavity in 3D
 
 #include <olb.h>
 #include "case.h"
@@ -90,6 +90,8 @@ int main(int argc, char* argv[]){
     myCaseParameters.set<PHYS_THERMAL_EXPANSION     >(3.41e-3);
     myCaseParameters.set<PHYS_THERMAL_CONDUCTIVITY  >(25.684e-3);
     myCaseParameters.set<PHYS_HEAT_CAPACITY         >(1.01309e3);
+
+    myCaseParameters.set<N_CELLS_Z>(3);
 
     myCaseParameters.set<GRAVITATIONAL_ACC          >(9.81);
     myCaseParameters.set<RAYLEIGH                   >(1e7);
