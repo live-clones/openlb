@@ -36,9 +36,8 @@ using namespace olb::names;
 using namespace olb::graphics;
 
 // === Step 1: Declarations ===
-using MyCase = Case<
-    NavierStokes,
-    Lattice<double, descriptors::D3Q19<descriptors::VELOCITY, descriptors::EXTERNAL_FORCE, descriptors::OMEGA, descriptors::STATISTIC>>>;
+using MyCase = Case<NavierStokes, Lattice<double, descriptors::D3Q19<descriptors::VELOCITY, descriptors::EXTERNAL_FORCE,
+                                                                     descriptors::OMEGA, descriptors::STATISTIC>>>;
 
 namespace olb::parameters {
 struct SHEN_OMEGA : public descriptors::FIELD_BASE<1> {};
@@ -46,12 +45,12 @@ struct SHEN_OMEGA : public descriptors::FIELD_BASE<1> {};
 
 Mesh<MyCase::value_t, MyCase::d> createMesh(MyCase::ParametersD& params)
 {
-  using T = MyCase::value_t;
-  Vector extent = params.get<parameters::DOMAIN_EXTENT>();
-  std::vector<T> origin(3, T());
+  using T                     = MyCase::value_t;
+  Vector               extent = params.get<parameters::DOMAIN_EXTENT>();
+  std::vector<T>       origin(3, T());
   IndicatorCuboid3D<T> cuboid(extent, origin);
 
-  T dx = 1;
+  T                  dx = 1;
   Mesh<T, MyCase::d> mesh(cuboid, dx, singleton::mpi().getSize());
   mesh.setOverlap(params.get<parameters::OVERLAP>());
   mesh.getCuboidDecomposition().setPeriodicity({true, true, true});
@@ -94,10 +93,8 @@ void prepareLattice(MyCase& myCase)
 
   NSElattice.setUnitConverter<UnitConverterFromResolutionAndRelaxationTime<T, NSEDESCRIPTOR>>(
       (T)params.get<parameters::DOMAIN_EXTENT>()[0], //resolution
-      (T)params.get<parameters::LATTICE_RELAXATION_TIME>(),
-      (T)params.get<parameters::PHYS_CHAR_LENGTH>(),
-      (T)params.get<parameters::PHYS_CHAR_VELOCITY>(),
-      (T)params.get<parameters::PHYS_CHAR_VISCOSITY>(),
+      (T)params.get<parameters::LATTICE_RELAXATION_TIME>(), (T)params.get<parameters::PHYS_CHAR_LENGTH>(),
+      (T)params.get<parameters::PHYS_CHAR_VELOCITY>(), (T)params.get<parameters::PHYS_CHAR_VISCOSITY>(),
       (T)1. //density
   );
   const auto converter = NSElattice.getUnitConverter();
@@ -116,8 +113,8 @@ void prepareLattice(MyCase& myCase)
     communicator.exchangeRequests();
   }
 
-  using COUPLING = ShanChenForcedSingleComponentPostProcessor<T,NSEDESCRIPTOR,interaction::CarnahanStarling>;
-  NSElattice.addPostProcessor<stage::Coupling>(meta::id<COUPLING>{});
+  using COUPLING = ShanChenForcedSingleComponentPostProcessor<T, NSEDESCRIPTOR, interaction::CarnahanStarling>;
+  NSElattice.addPostProcessor<stage::Coupling>(meta::id<COUPLING> {});
   NSElattice.setParameter<COUPLING::G>(T(-1));
   NSElattice.setParameter<COUPLING::RHO0>(T(1));
   NSElattice.setParameter<COUPLING::OMEGA>(omega1);
@@ -199,7 +196,7 @@ void getResults(MyCase& myCase, util::Timer<MyCase::value_t>& timer, std::size_t
     clout << "Writing VTK and JPEG..." << std::endl;
     vtmWriter.write(iT);
 
-    BlockReduction3D2D<T> planeReduction(density, {0,0,1});
+    BlockReduction3D2D<T> planeReduction(density, {0, 0, 1});
     // write output as JPEG
     heatmap::write(planeReduction, iT);
   }
@@ -244,8 +241,7 @@ void simulate(MyCase& myCase)
 int main(int argc, char* argv[])
 {
   initialize(&argc, &argv);
-  singleton::directories().setOutputDir( "./tmp/" );
-
+  singleton::directories().setOutputDir("./tmp/");
 
   /// === Step 2: Set Parameters ===
   MyCase::ParametersD myCaseParameters;
