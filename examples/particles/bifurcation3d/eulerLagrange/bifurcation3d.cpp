@@ -254,7 +254,8 @@ void setTemporalValues(MyCase& myCase, std::size_t iT)
   lattice.defineU(geometry, 5, poiseuilleU5);
 }
 
-void prepareParticles(MyCase& myCase, SuperParticleSystem<MyCase::value_t, SubgridParticle3D>& superParticleSystem)
+void prepareParticles(MyCase& myCase, SuperParticleSystem<MyCase::value_t, SubgridParticle3D>& superParticleSystem,
+  SolidBoundary<MyCase::value_t, 3>& wall, STLreader<MyCase::value_t>& stlReader)
 {
   OstreamManager clout(std::cout, "prepareParticles");
   clout << "Prepare Particles ..." << std::endl;
@@ -263,9 +264,6 @@ void prepareParticles(MyCase& myCase, SuperParticleSystem<MyCase::value_t, Subgr
   auto& geometry   = myCase.getGeometry();
   auto& lattice    = myCase.getLattice(NavierStokes {});
   auto& converter  = lattice.getUnitConverter();
-
-  const unsigned latticeMaterial = 2; //Material number of wall
-  const unsigned contactMaterial = 0; //Material identifier (only relevant for contact model)
 
   //Create material indicators for particle boundaries
   std::vector<int>                              wallMaterials {2};
@@ -277,8 +275,6 @@ void prepareParticles(MyCase& myCase, SuperParticleSystem<MyCase::value_t, Subgr
 
   //Add selected particle dynamics
   if (parameters.get<parameters::PARTICLE_DYNAMICS_SETUP>() == 1) {
-    STLreader<T>        stlReader("../bifurcation3d.stl", converter.getPhysDeltaX());
-    SolidBoundary<T, 3> wall(std::make_unique<IndicInverse<T, 3>>(stlReader), latticeMaterial, contactMaterial);
     superParticleSystem.defineDynamics<
         VerletParticleDynamicsMaterialAwareWallCaptureAndEscape<T, SubgridParticle3D>
         >( wall, wallMaterialIndicator, outletMaterialIndicator );
@@ -323,6 +319,14 @@ bool getResults(MyCase& myCase, std::size_t iT, Timer<MyCase::value_t>& fluidTim
   using DESCRIPTOR = MyCase::descriptor_t_of<NavierStokes>;
   SuperVTMwriter3D<T> vtmWriter("bifurcation3d");
   SuperVTMwriter3D<T> vtmWriterStartTime("startingTimeBifurcation3d");
+
+  //Create material indicators for particle boundaries
+  std::vector<int>                              wallMaterials {2};
+  std::shared_ptr<SuperIndicatorMaterial<T, 3>> wallMaterialIndicator =
+      std::make_shared<SuperIndicatorMaterial<T, 3>>(geometry, wallMaterials);
+  std::vector<int>                              outletMaterials {4, 5};
+  std::shared_ptr<SuperIndicatorMaterial<T, 3>> outletMaterialIndicator =
+      std::make_shared<SuperIndicatorMaterial<T, 3>>(geometry, outletMaterials);
 
   SuperLatticePhysVelocity3D<T, DESCRIPTOR> velocity(lattice, converter);
   SuperLatticePhysPressure3D<T, DESCRIPTOR> pressure(lattice, converter);
@@ -435,23 +439,17 @@ bool getResults(MyCase& myCase, std::size_t iT, Timer<MyCase::value_t>& fluidTim
     superParticleWriter.write(iT - fluidMaxT);
 
     // true as long as certain amount of active particles
-    if (noActive < 0.001 * parameters.get<parameters::NO_OF_PARTICLES>() &&
+    if ((noActive < 0.001 * parameters.get<parameters::NO_OF_PARTICLES>() &&
         iT > 0.9 * converter.getLatticeTime(parameters.get<parameters::FLUID_MAX_PHYS_T>() +
-                                            parameters.get<parameters::PARTICLE_MAX_PHYS_T>())) {
-      clout << "exiting particle simulation " << std::endl;
-      return false;
-    }
-    //Additional criterion added 02.02.23
-    if (noActive == 0) {
+                                            parameters.get<parameters::PARTICLE_MAX_PHYS_T>()))
+        || noActive == 0) {
       return false;
     }
   }
   return true;
 }
 
-void simulate(
-    MyCase& myCase, SuperParticleSystem<MyCase::value_t, SubgridParticle3D>& superParticleSystem,
-    ParticleManager<MyCase::value_t, MyCase::descriptor_t_of<NavierStokes>, SubgridParticle3D>& particleManager)
+void simulate( MyCase& myCase )
 {
   using T                   = MyCase::value_t;
   using DESCRIPTOR          = MyCase::descriptor_t_of<NavierStokes>;
@@ -460,7 +458,21 @@ void simulate(
   auto& lattice             = myCase.getLattice(NavierStokes {});
   auto& converter           = lattice.getUnitConverter();
   OstreamManager clout(std::cout, "simulate");
+
+    /// === Step 9: Create SuperParticleSystem and ParticleManager ===
+  SuperParticleSystem<MyCase::value_t, SubgridParticle3D> superParticleSystem(myCase.getGeometry());
+
+  ParticleManager<MyCase::value_t, MyCase::descriptor_t_of<NavierStokes>, SubgridParticle3D> particleManager(
+      superParticleSystem, myCase.getGeometry(), myCase.getLattice(NavierStokes {}),
+      myCase.getLattice(NavierStokes {}).getUnitConverter());
+
   STLreader<T>   stlReader("../bifurcation3d.stl", converter.getPhysDeltaX());
+  // Create solid wall
+  const unsigned latticeMaterial = 2; //Material number of wall
+  const unsigned contactMaterial = 0; //Material identifier (only relevant for contact model)
+  SolidBoundary<T,3> wall( std::make_unique<IndicInverse<T,3>>(stlReader),
+                           latticeMaterial, contactMaterial );
+
   Timer<T>       fluidTimer(converter.getLatticeTime(parameters.get<parameters::FLUID_MAX_PHYS_T>()),
                             geometry.getStatistics().getNvoxel());
 
@@ -505,9 +517,10 @@ void simulate(
     fluidTimer.stop();
   }
 
+  /// === Step 10.2: Prepare Particle dynamics and add particles ===
+  prepareParticles(myCase, superParticleSystem, wall, stlReader);
 
-
-  /// === Step 10.2 Particle simulation ===
+  /// === Step 10.3 Particle simulation ===
   initializeParticleVelocity(lattice, geometry, converter, superParticleSystem);
   particleTimer.start();
   clout << " starting particle simulation " << std::endl;
@@ -542,7 +555,7 @@ int main(int argc, char* argv[])
   // materialCapture: based on material number, output 0
   // wallCapture:     based on more accurate stl description, output 1
   typedef enum { materialCapture, wallCapture } ParticleDynamicsSetup;
-  ParticleDynamicsSetup particleDynamicsSetup = materialCapture;
+  ParticleDynamicsSetup particleDynamicsSetup = wallCapture;
 
   /// === Step 2: Set Parameters ===
   MyCase::ParametersD myCaseParameters;
@@ -550,7 +563,7 @@ int main(int argc, char* argv[])
     using namespace olb::parameters;
     myCaseParameters.set<REYNOLDS>(50);
     myCaseParameters.set<RESOLUTION>(19);
-    myCaseParameters.set<IT_PERIOD>(0.1); // time interval for writeout and updating boundary values in s
+    myCaseParameters.set<IT_PERIOD>(0.2); // time interval for writeout and updating boundary values in s
     myCaseParameters.set<PART_RADIUS>(1.5e-4);
     myCaseParameters.set<PART_RHO>(998.2);
     myCaseParameters.set<FLUID_MAX_PHYS_T>(5);     // max. simulation time in s
@@ -583,21 +596,11 @@ int main(int argc, char* argv[])
   /// === Step 6: Prepare Lattice ===
   prepareLattice(myCase);
 
-  /// === Step 7: Create SuperParticleSystem and ParticleManager ===
-  SuperParticleSystem<MyCase::value_t, SubgridParticle3D> superParticleSystem(myCase.getGeometry());
-
-  ParticleManager<MyCase::value_t, MyCase::descriptor_t_of<NavierStokes>, SubgridParticle3D> particleManager(
-      superParticleSystem, myCase.getGeometry(), myCase.getLattice(NavierStokes {}),
-      myCase.getLattice(NavierStokes {}).getUnitConverter());
-
-  /// === Step 8: Prepare Particle dynamics and add particles ===
-  prepareParticles(myCase, superParticleSystem);
-
-  /// === Step 9: Definition of Initial, Boundary Values, and Fields ===
+  /// === Step 7: Definition of Initial, Boundary Values, and Fields ===
   setInitialValues(myCase);
 
-  /// === Step 10: Simulate ===
-  simulate(myCase, superParticleSystem, particleManager);
+  /// === Step 8: Simulate ===
+  simulate(myCase);
 
 #else
   std::cerr << std::endl << "ERROR: Subgrid particles can only be used with MPI!" << std::endl << std::endl;
