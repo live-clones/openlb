@@ -36,7 +36,7 @@
  *  Error norms are calculated for three norms.
  */
 
-#include "case.h"
+#include "../case.h"
 
 int main(int argc, char *argv[]) {
   OstreamManager clout(std::cout, "main");
@@ -55,25 +55,45 @@ int main(int argc, char *argv[]) {
     myCaseParameters.set<MAX_PHYS_T>(1.01);
     myCaseParameters.set<C_EQ>(50.);
     myCaseParameters.set<PHYS_DENSITY>(1.);
+    myCaseParameters.set<RUNS>(4);
   }
   myCaseParameters.fromCLI(argc, argv);
 
-  Mesh mesh = createMesh(myCaseParameters);
+  const MyCase::value_t N0 = myCaseParameters.get<parameters::RESOLUTION>();
+  const MyCase::value_t statIter0 = myCaseParameters.get<parameters::OUTPUT_INTERVAL>();
 
-  MyCase myCase(myCaseParameters, mesh);
+  std::vector<MyCase::value_t> L1Errors((unsigned) myCaseParameters.get<parameters::RUNS>());
+  std::vector<MyCase::value_t> L2Errors((unsigned) myCaseParameters.get<parameters::RUNS>());
+  std::vector<MyCase::value_t> LinfErrors((unsigned) myCaseParameters.get<parameters::RUNS>());
 
-  prepareGeometry(myCase);
+  for ( std::size_t i = 0; i < myCaseParameters.get<parameters::RUNS>(); ++i) {
+    //Adjust Resolution and output interval
+    myCaseParameters.set<parameters::RESOLUTION>(util::pow(2,i) * N0);
+    myCaseParameters.set<parameters::OUTPUT_INTERVAL>(util::pow(4,i) * statIter0);
 
-  prepareLattice(myCase);
+    Mesh mesh = createMesh(myCaseParameters);
 
-  setInitialValues(myCase);
+    MyCase myCase(myCaseParameters, mesh);
 
-  simulate(myCase);
+    prepareGeometry(myCase);
 
-  clout <<"Errors with N="<<(myCaseParameters.get<parameters::RESOLUTION>())
-        <<" after "<< myCaseParameters.get<parameters::ERROR_TIME>() << " s: "
-        <<" log L1: " << myCaseParameters.get<parameters::L1_ERROR>()
-        <<" log L2: "<< myCaseParameters.get<parameters::L2_ERROR>()
-        <<" log Linf: "<< myCaseParameters.get<parameters::LINF_ERROR>()
-        << std::endl;
+    prepareLattice(myCase);
+
+    setInitialValues(myCase);
+
+    simulate(myCase);
+
+    L1Errors[i] = myCaseParameters.get<parameters::L1_ERROR>();
+    L2Errors[i] = myCaseParameters.get<parameters::L2_ERROR>();
+    LinfErrors[i] = myCaseParameters.get<parameters::LINF_ERROR>();
+  }
+
+  for (std::size_t i = 0; i < myCaseParameters.get<parameters::RUNS>(); ++i) {
+    clout << "Errors with N="<<(util::pow(2,i) * N0)
+          <<" after "<< myCaseParameters.get<parameters::ERROR_TIME>() << " s:   "
+          << "log L1: " << L1Errors[i]
+          <<" log L2: "<< L2Errors[i]
+          <<" log Linf: "<< LinfErrors[i]
+          << std::endl;
+  }
 }
