@@ -91,9 +91,9 @@ int main(int argc, char *argv[]) {
   for (std::size_t i = 0; i < myCaseParameters.get<parameters::RUNS>(); ++i) {
     clout << "Errors with N="<<(util::pow(2,i) * N0)
           <<" after "<< myCaseParameters.get<parameters::ERROR_TIME>() << " s:   "
-          << "log L1:" << L1Errors[i]
-          <<" log L2:"<< L2Errors[i]
-          <<" log Linf:"<< LinfErrors[i]
+          << "log L1: " << L1Errors[i]
+          <<" log L2: "<< L2Errors[i]
+          <<" log Linf: "<< LinfErrors[i]
           << std::endl;
   }
 }

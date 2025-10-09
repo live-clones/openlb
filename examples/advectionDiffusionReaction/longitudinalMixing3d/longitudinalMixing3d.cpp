@@ -72,8 +72,8 @@ int main(int argc, char *argv[]) {
 
   clout <<"Errors with N="<<(myCaseParameters.get<parameters::RESOLUTION>())
         <<" after "<< myCaseParameters.get<parameters::ERROR_TIME>() << " s: "
-        <<" log L1:" << myCaseParameters.get<parameters::L1_ERROR>()
-        <<" log L2:"<< myCaseParameters.get<parameters::L2_ERROR>()
-        <<" log Linf:"<< myCaseParameters.get<parameters::LINF_ERROR>()
+        <<" log L1: " << myCaseParameters.get<parameters::L1_ERROR>()
+        <<" log L2: "<< myCaseParameters.get<parameters::L2_ERROR>()
+        <<" log Linf: "<< myCaseParameters.get<parameters::LINF_ERROR>()
         << std::endl;
 }
