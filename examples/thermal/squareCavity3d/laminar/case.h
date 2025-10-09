@@ -23,13 +23,13 @@
  *  Boston, MA  02110-1301, USA.
  */
 
-/* Header related to squareCavity2dLaminar.cpp
+/* Header related to squareCavity3dLaminar.cpp
  * The reference is the paper in "Gaedtke, M., Wachter, S., Raedle, M., Nirschl, H., & Krause, M. J. (2018).
  * Application of a lattice Boltzmann method combined with a Smagorinsky turbulence model to spatially resolved heat flux inside a refrigerated vehicle.
  * Computers & Mathematics with Applications, 76(10), 2315-2329."
  */
 
-// natural convection of air in a square cavity in 2D
+// natural convection of air in a square cavity in 3D
 
 #include <olb.h>
 
@@ -54,16 +54,16 @@ using MyCase = Case<
 Mesh<MyCase::value_t, MyCase::d> createMesh(MyCase::ParametersD& parameters){
     using T = MyCase::value_t;
 
-    const T dx = parameters.get<parameters::PHYS_DELTA_X>();
+    const T dx                = parameters.get<parameters::PHYS_DELTA_X>();
     const Vector domainExtend = parameters.get<parameters::DOMAIN_EXTENT>();
-    const Vector cellsZ = parameters.get<parameters::N_CELLS_Z>();
-    const Vector extend = {domainExtend[0] + dx, domainExtend[1] + dx, cellsZ * dx};
-    Vector origin{-dx / 2., -dx / 2.};
-    IndicatorCuboid2D<T> cuboid(extend, origin);
+    const T cellsZ            = parameters.get<parameters::N_CELLS_Z>();
+    const Vector extend{domainExtend[0] + dx, domainExtend[1] + dx, cellsZ * dx };
+    const Vector origin{-dx / 2., -dx / 2., -dx / 2.};
+    IndicatorCuboid3D<T> cuboid(extend, origin);
 
     Mesh<T,MyCase::d> mesh(cuboid, dx, singleton::mpi().getSize());
     mesh.setOverlap(parameters.get<parameters::OVERLAP>());
-    mesh.getCuboidDecomposition().setPeriodicity({false,false});
+    mesh.getCuboidDecomposition().setPeriodicity({false, false, true});
 
     return mesh;
 }
@@ -79,26 +79,27 @@ void prepareGeometry(MyCase& myCase){
 
     const T dx                = parameters.get<parameters::PHYS_DELTA_X>();
     const Vector domainExtend = parameters.get<parameters::DOMAIN_EXTENT>();
+    const T cellsZ            = parameters.get<parameters::N_CELLS_Z>();
     const T lx                = domainExtend[0];
 
     geometry.rename(0, 4);
 
-    Vector origin {0, 0};
-    Vector extend {lx, lx};
-    IndicatorCuboid2D<T> cuboid2(extend, origin);
+    Vector origin {0, 0, 0};
+    Vector extend {lx, lx, cellsZ * dx};
+    IndicatorCuboid3D<T> cuboid2(extend, origin);
 
     geometry.rename(4, 1, cuboid2);
 
-    Vector extendwallleft{dx, lx + dx};
-    Vector originwallleft{-dx / 2., -dx / 2.};
-    IndicatorCuboid2D<T> wallleft(extendwallleft, originwallleft);
+    Vector extendwallleft{dx, lx + dx, cellsZ * dx};
+    Vector originwallleft{-dx / 2., -dx / 2., -dx / 2.};
+    IndicatorCuboid3D<T> wallleft(extendwallleft, originwallleft);
 
-    Vector extendwallright{dx, lx + dx};
-    Vector originwallright{lx, -dx / 2.};
-    IndicatorCuboid2D<T> wallright(extendwallright, originwallright);
+    Vector extendwallright{dx, lx + dx, cellsZ * dx};
+    Vector originwallright{lx - dx / 2., -dx / 2., -dx / 2.};
+    IndicatorCuboid3D<T> wallright(extendwallright, originwallright);
 
-    geometry.rename(4,2,1,wallleft);
-    geometry.rename(4,3,1,wallright);
+    geometry.rename(4, 2, 1, wallleft  );
+    geometry.rename(4, 3, 1, wallright );
 
     geometry.clean();
     geometry.innerClean();
@@ -154,13 +155,12 @@ void prepareLattice(MyCase& myCase){
 
     ADElattice.setUnitConverter(converter);
 
-    NSElattice.defineDynamics<ForcedBGKdynamics>(geometry.getMaterialIndicator({1,2,3}));
-    ADElattice.defineDynamics<AdvectionDiffusionBGKdynamics>(geometry.getMaterialIndicator({1,2,3}));
+    NSElattice.defineDynamics<ForcedBGKdynamics>(geometry.getMaterialIndicator({1, 2, 3}));
+    ADElattice.defineDynamics<AdvectionDiffusionBGKdynamics>(geometry.getMaterialIndicator({1, 2, 3}));
 
     boundary::set<boundary::BounceBack>(ADElattice, geometry, 4);
     boundary::set<boundary::BounceBack>(NSElattice, geometry, 4);
 
-    /// sets boundary
     boundary::set<boundary::AdvectionDiffusionDirichlet>(ADElattice, geometry.getMaterialIndicator({2, 3}));
     boundary::set<boundary::LocalVelocity>(NSElattice, geometry.getMaterialIndicator({2, 3}));
 
@@ -176,7 +176,7 @@ void prepareLattice(MyCase& myCase){
     coupling.setParameter<NavierStokesAdvectionDiffusionCoupling::T0>(
       converter.getLatticeTemperature(Tcold));
     coupling.setParameter<NavierStokesAdvectionDiffusionCoupling::FORCE_PREFACTOR>(
-      boussinesqForcePrefactor * Vector<T,2>{0.0,1.0}
+      boussinesqForcePrefactor * Vector{0.0,1.0, 0.0}
     );
 
     clout << "Prepare Lattice ... OK" << std::endl;
@@ -201,11 +201,11 @@ void setInitialValues(MyCase& myCase){
     T Tmean = (Thot + Tcold) / 2.;
 
     /// define initial conditions
-    AnalyticalConst2D<T,T> rho(1.);
-    AnalyticalConst2D<T,T> u0(0.0, 0.0);
-    AnalyticalConst2D<T,T> T_cold(converter.getLatticeTemperature(Tcold));
-    AnalyticalConst2D<T,T> T_hot(converter.getLatticeTemperature(Thot));
-    AnalyticalConst2D<T,T> T_mean(converter.getLatticeTemperature(Tmean));
+    AnalyticalConst3D<T,T> rho(1.);
+    AnalyticalConst3D<T,T> u0(0.0, 0.0, 0.0);
+    AnalyticalConst3D<T,T> T_cold(converter.getLatticeTemperature(Tcold));
+    AnalyticalConst3D<T,T> T_hot(converter.getLatticeTemperature(Thot));
+    AnalyticalConst3D<T,T> T_mean(converter.getLatticeTemperature(Tmean));
 
     /// for each material set Rho, U and the Equilibrium
     NSElattice.defineRhoU(geometry.getMaterialIndicator({1, 2, 3}), rho, u0);
@@ -239,18 +239,21 @@ void computeNusselt(MyCase& myCase){
   auto& parameters    = myCase.getParameters();
 
   const int N = converter.getResolution();
-  int material = 0;
-  T T_x = 0, T_xplus1 = 0, T_xplus2 = 0, q = 0, voxel = 0;
+  int material = 0, voxel = 0;
+  T T_x = 0, T_xplus1 = 0, T_xplus2 = 0, q = 0;
 
   for (int iC = 0; iC < NSElattice.getLoadBalancer().size(); iC++) {
     int ny = NSElattice.getBlock(iC).getNy();
-    int iX = 0;
-    for (int iY = 0; iY < ny; ++iY) {
-      material = geometry.getBlockGeometry(iC).getMaterial(iX,iY);
 
-      T_x = ADElattice.getBlock(iC).get(iX,iY).computeRho();
-      T_xplus1 = ADElattice.getBlock(iC).get(iX+1,iY).computeRho();
-      T_xplus2 = ADElattice.getBlock(iC).get(iX+2,iY).computeRho();
+    int iX = 0;
+    int iZ = 1;
+
+    for (int iY = 0; iY < ny; ++iY) {
+      material = geometry.getBlockGeometry(iC).getMaterial(iX,iY,iZ);
+
+      T_x = ADElattice.getBlock(iC).get(iX,iY,iZ).computeRho();
+      T_xplus1 = ADElattice.getBlock(iC).get(iX+1,iY,iZ).computeRho();
+      T_xplus2 = ADElattice.getBlock(iC).get(iX+2,iY,iZ).computeRho();
 
       if ( material == 2 ) {
         q += (3.0*T_x - 4.0*T_xplus1 + 1.0*T_xplus2)/2.0*N;
@@ -270,6 +273,7 @@ void getResults(MyCase& myCase,
                 util::Timer<MyCase::value_t>& timer,
                 int iT)
 {
+  OstreamManager clout(std::cout, "getResults");
   using NSEDESCRIPTOR = MyCase::descriptor_t_of<NavierStokes>;
   using ADEDESCRIPTOR = MyCase::descriptor_t_of<Temperature>;
   using T = MyCase::value_t_of<NavierStokes>;
@@ -285,21 +289,20 @@ void getResults(MyCase& myCase,
   const T Tcold           = parameters.get<parameters::T_COLD>();
   const T lx              = parameters.get<parameters::DOMAIN_EXTENT>()[0];
 
-  SuperVTMwriter2D<T> vtkWriter("squareCavity2dLaminar");
+  SuperVTMwriter3D<T> vtkWriter("squareCavity3dLaminar");
 
-  SuperLatticePhysVelocity2D<T, NSEDESCRIPTOR> velocity(NSElattice, converter);
-  SuperLatticePhysPressure2D<T, NSEDESCRIPTOR> pressure(NSElattice, converter);
-  SuperLatticePhysTemperature2D<T, NSEDESCRIPTOR, ADEDESCRIPTOR> temperature(ADElattice, converter);
-  AnalyticalFfromSuperF2D<T> interpolation(velocity, true);
+  SuperLatticePhysVelocity3D<T, NSEDESCRIPTOR> velocity(NSElattice, converter);
+  SuperLatticePhysPressure3D<T, NSEDESCRIPTOR> pressure(NSElattice, converter);
+  SuperLatticePhysTemperature3D<T, NSEDESCRIPTOR, ADEDESCRIPTOR> temperature(ADElattice, converter);
+  AnalyticalFfromSuperF3D<T> interpolation(velocity, true);
 
   if (iT == 0) {
     /// Writes the geometry, cuboid no. and rank no. as vti file for visualization
-    SuperLatticeCuboid2D<T, NSEDESCRIPTOR> cuboid(NSElattice);
-    SuperLatticeRank2D<T, NSEDESCRIPTOR> rank(NSElattice);
+    SuperLatticeCuboid3D<T, NSEDESCRIPTOR> cuboid(NSElattice);
+    SuperLatticeRank3D<T, NSEDESCRIPTOR> rank(NSElattice);
     vtkWriter.write(cuboid);
     vtkWriter.write(rank);
     vtkWriter.createMasterFile();
-    vtkWriter.write(iT);
   }
 
   if ((iT % vtkIter == 0 && iT > 0) || converged) {
@@ -316,18 +319,18 @@ void getResults(MyCase& myCase,
     timer.update(iT);
     timer.printStep();
 
-    /// NSLattice statistics console output
+    /// NSElattice statistics console output
     NSElattice.getStatistics().print(iT,converter.getPhysTime(iT));
     /// ADElattice statistics console output
     ADElattice.getStatistics().print(iT,converter.getPhysTime(iT));
 
-
-    BlockReduction2D2D<T> planeReduction(temperature, 600, BlockDataSyncMode::ReduceOnly);
+    const double a[3] = {0, 0, 1.};
+    BlockReduction3D2D<T> planeReduction(temperature, a);
     BlockGifWriter<T> gifWriter;
-    gifWriter.write(planeReduction, Tcold-1, Thot+1, iT, "temperature");
+    gifWriter.write(planeReduction, Tcold*0.98, Thot*1.02, iT, "temperature");
 
-    SuperEuklidNorm2D<T, NSEDESCRIPTOR> normVel( velocity );
-    BlockReduction2D2D<T> planeReduction2(normVel, 600, BlockDataSyncMode::ReduceOnly);
+    SuperEuklidNorm3D<T> normVel( velocity );
+    BlockReduction3D2D<T> planeReduction2(normVel, {0, 0, 1});
     BlockGifWriter<T> gifWriter2;
     gifWriter2.write( planeReduction2, iT, "velocity" );
   }
@@ -335,21 +338,23 @@ void getResults(MyCase& myCase,
   if ( converged ) {
     computeNusselt(myCase);
 
-    /// Initialize vectors for data output
-    T xVelocity[2] = { T() };
-    T outputVelX[2] = { T() };
-    T yVelocity[2] = { T() };
-    T outputVelY[2] = { T() };
+    T xVelocity[3] = { T() };
+    T outputVelX[3] = { T() };
+    T yVelocity[3] = { T() };
+    T outputVelY[3] = { T() };
+
     const int outputSize = 512;
     Vector<T, outputSize> velX;
     Vector<T, outputSize> posX;
     Vector<T, outputSize> velY;
     Vector<T, outputSize> posY;
 
+    const T N           = parameters.get<parameters::RESOLUTION>();
+
     /// loop for the resolution of the cavity at x = lx/2 in yDirection and vice versa
     for (int n = 0; n < outputSize; ++n) {
-      T yPosition[2] = { lx / 2, lx * n / (T) outputSize };
-      T xPosition[2] = { lx * n / (T) outputSize, lx / 2 };
+      T yPosition[3] = { lx / 2, lx * n / (T) outputSize, lx / N * 2 / 2 };
+      T xPosition[3] = { lx * n / (T) outputSize, lx / 2, lx / N * 2 / 2 };
 
       /// Interpolate xVelocity at x = lx/2 for each yPosition
       interpolation(xVelocity, yPosition);
@@ -381,12 +386,12 @@ void getResults(MyCase& myCase,
 
     parameters.set<parameters::SIM_VALUES>(
       {outputVelX[0],
-       outputVelY[0],
-       outputVelX[1],
-       outputVelY[1],
-       parameters.get<parameters::NUSSELT>()}
-    );
-  }
+        outputVelY[0],
+        outputVelX[1],
+        outputVelY[1],
+        parameters.get<parameters::NUSSELT>()}
+      );
+    }
 }
 
 void simulate(MyCase& myCase){

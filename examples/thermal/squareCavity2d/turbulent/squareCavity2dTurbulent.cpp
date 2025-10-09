@@ -52,7 +52,7 @@ void compareToStudy(MyCase& myCase)
     T yCoordComp    = ref.getY_max(Ra);
     T nusseltComp   = ref.getNusselt(Ra);
     auto simValues  = parameters.get<parameters::SIM_VALUES>();
-    clout << "Comparison against De Vahl Davis (1983):" << std::endl;
+    clout << "Comparison against <STUDY>" << std::endl;
     clout << "xVelocity in yDir="   <<  simValues[0] / physThermalDiffusivity * charL   << "; error(rel)=" << (T) util::fabs((xVelComp - simValues[0] / physThermalDiffusivity * charL) / xVelComp) << std::endl;
     clout << "yVelocity in xDir="   <<  simValues[1] / physThermalDiffusivity * charL   << "; error(rel)=" << (T) util::fabs((yVelComp - simValues[1] / physThermalDiffusivity * charL) / yVelComp) << std::endl;
     clout << "yMaxVel / xMaxVel="   <<  simValues[1] / simValues[0]                     << "; error(rel)=" << (T) util::fabs((yVelComp - simValues[1] / simValues[0])  / yVelComp) << std::endl;

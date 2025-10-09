@@ -44,8 +44,8 @@ namespace olb::parameters {
 
 // === Step 1: Declarations ===
 using MyCase = Case<
-  NavierStokes, Lattice<double, descriptors::D2Q9<descriptors::FORCE>>,
-  Temperature,  Lattice<double, descriptors::D2Q5<descriptors::VELOCITY>>
+  NavierStokes, Lattice<double, descriptors::D2Q9<descriptors::FORCE, descriptors::TAU_EFF>>,
+  Temperature,  Lattice<double, descriptors::D2Q5<descriptors::VELOCITY, descriptors::TAU_EFF>>
 >;
 
 /// @brief Create a simulation mesh, based on user-specific geometry
