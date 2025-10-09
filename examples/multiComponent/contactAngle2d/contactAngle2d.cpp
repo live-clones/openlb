@@ -165,7 +165,7 @@ void prepareLattice( SuperLattice<T,NSDESCRIPTOR>& sLatticeNS,
   sLatticeCH.addPostProcessor<stage::PostStream>(bulk,meta::id<RhoWettingStatistics>());
 
   // give coupling the values of tau_l, tau_g, rho_l and rho_g so that it can update the viscosity and density
-  coupling.template setParameter<MixtureRules::TAUS>({tau_l,tau_g});
+  coupling.template setParameter<MixtureRules::TAUS>({tau_g,tau_l});
   coupling.template setParameter<MixtureRules::RHOS>(rhos);
 
   // postprocessor to calculate the chemical potential
