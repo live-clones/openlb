@@ -678,26 +678,26 @@ int main( int argc, char *argv[] )
   MyCase::ParametersD myCaseParameters;
   {
     using namespace olb::parameters;
-    myCaseParameters.set<parameters::RADIUS    >(1.);                 // [pu] physical droplet radius
-    myCaseParameters.set<RESOLUTION       >(10);         // resolution N cells per charL = radius/2
-    myCaseParameters.set<CONT_VISC       >(1.);         // [pu] physical(!) kinematic viscosity of continuous phase
-    myCaseParameters.set<PHYS_CHAR_DENSITY>(1.);         // [pu] physical density
-    myCaseParameters.set<LATTICE_RELAXATION_TIME>(1.);         // [lu] tau for first lattice (f)
-    myCaseParameters.set<DROPLET_REYNOLDS >(1.);         // definition: shearRate * radius^2 / continuousViscosity
-    myCaseParameters.set<CAPILLARY    >(1.);// capillary number for droplet breakup
-    myCaseParameters.set<CAHN    >(0.057);// Cahn Number = xi / radius;
-    myCaseParameters.set<PECLET    >(.43);// Peclet Number = shearRate * radius * xi / (M A)
-    myCaseParameters.set<MAX_NORM_T    >(30.);// normalized time normT = T * shearRate [either in lu or pu]
-    myCaseParameters.set<NORM_VTK_ITER_T    >(0.2);// normalized vtk output (i.e. per normalized time step, one output!)
-    myCaseParameters.set<NORM_STAT_ITER_T    >(0.2);// normalized stat output (i.e. per normalized time step, one output!)
-    myCaseParameters.set<PHYS_INTERVAL    >(0.1);// interval for the convergence check in s
-    myCaseParameters.set<CONVERGENCE_PRECISION    >(1e-5);// residuum for the convergence check
-    myCaseParameters.set<DEFORMATION_CONVERGENCE_PRECISION    >(0.0015);// deformation residuum criterion
-    myCaseParameters.set<H1    >(0.);// Contact angle 90 degrees   [lattice units]
-    myCaseParameters.set<H2    >(0.);// Contact angle 90 degrees   [lattice units]
+    myCaseParameters.set<parameters::RADIUS     >(1.);    // [pu] physical droplet radius
+    myCaseParameters.set<RESOLUTION             >(10);    // resolution N cells per charL = radius/2
+    myCaseParameters.set<CONT_VISC              >(1.);    // [pu] physical(!) kinematic viscosity of continuous phase
+    myCaseParameters.set<PHYS_CHAR_DENSITY      >(1.);    // [pu] physical density
+    myCaseParameters.set<LATTICE_RELAXATION_TIME>(1.);    // [lu] tau for first lattice (f)
+    myCaseParameters.set<DROPLET_REYNOLDS       >(1.);    // definition: shearRate * radius^2 / continuousViscosity
+    myCaseParameters.set<CAPILLARY              >(1.);    // capillary number for droplet breakup
+    myCaseParameters.set<CAHN                   >(0.057); // Cahn Number = xi / radius;
+    myCaseParameters.set<PECLET                 >(.43);   // Peclet Number = shearRate * radius * xi / (M A)
+    myCaseParameters.set<MAX_NORM_T             >(30.);   // normalized time normT = T * shearRate [either in lu or pu]
+    myCaseParameters.set<NORM_VTK_ITER_T        >(0.2);   // normalized vtk output (i.e. per normalized time step, one output!)
+    myCaseParameters.set<NORM_STAT_ITER_T       >(0.2);   // normalized stat output (i.e. per normalized time step, one output!)
+    myCaseParameters.set<PHYS_INTERVAL          >(0.1);   // interval for the convergence check in s
+    myCaseParameters.set<CONVERGENCE_PRECISION  >(1e-5);  // residuum for the convergence check
+    myCaseParameters.set<H1                     >(0.);    // Contact angle 90 degrees   [lattice units]
+    myCaseParameters.set<H2                     >(0.);    // Contact angle 90 degrees   [lattice units]
+    myCaseParameters.set<DEFORMATION_CONVERGENCE_PRECISION>(0.0015);  // deformation residuum criterion
     myCaseParameters.set<parameters::SHEAR_RATE>([&] {
       return myCaseParameters.get<CONT_VISC>() * myCaseParameters.get<DROPLET_REYNOLDS>() / util::pow(myCaseParameters.get<parameters::RADIUS>(), 2);
-    });// [pu] physical shear rate [1/s]
+    }); // [pu] physical shear rate [1/s]
     myCaseParameters.set<parameters::MAX_PHYS_T>([&] {
       return myCaseParameters.get<MAX_NORM_T>() / myCaseParameters.get<SHEAR_RATE>();
     });
