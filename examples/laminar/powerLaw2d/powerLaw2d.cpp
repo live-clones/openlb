@@ -214,8 +214,8 @@ void prepareLattice(MyCase& myCase)
 
   const T nuMin = parameters.get<parameters::NU_MIN>();
   const T nuMax = parameters.get<parameters::NU_MAX>();
-  lattice.setParameter<powerlaw::OMEGA_MIN>(1./(nuMin*descriptors::invCs2<T,DESCRIPTOR>() + 0.5));
-  lattice.setParameter<powerlaw::OMEGA_MAX>(1./(nuMax*descriptors::invCs2<T,DESCRIPTOR>() + 0.5));
+  lattice.setParameter<powerlaw::OMEGA_MIN>(1./(nuMax*descriptors::invCs2<T,DESCRIPTOR>() + 0.5));
+  lattice.setParameter<powerlaw::OMEGA_MAX>(1./(nuMin*descriptors::invCs2<T,DESCRIPTOR>() + 0.5));
 #ifdef _SMAGORINSKY
   lattice.setParameter<collision::LES::SMAGORINSKY>(parameters.get<parameters::SMAGORINSKY>());
 #endif
@@ -426,11 +426,8 @@ void simulate(MyCase& myCase){
   util::Timer<T> timer(iTmax, myCase.getGeometry().getStatistics().getNvoxel());
   timer.start();
 
-  util::ValueTracer<T> converge(0.1 * parameters.get<parameters::PHYS_VTK_OUTPUT_ITER_T>(),
+  util::ValueTracer<T> converge(converter.getLatticeTime(0.1 * parameters.get<parameters::PHYS_VTK_OUTPUT_ITER_T>()),
                                 parameters.get<parameters::CONVERGENCE_PRECISION>());
-
-
-  clout << "Starting iterations.. " << std::endl;
 
   for (std::size_t iT=0; iT<iTmax; ++iT) {
 
@@ -441,12 +438,14 @@ void simulate(MyCase& myCase){
       clout << "Converged after " << iT << " iterations." << std::endl;
       break;
     }
-    
-    clout << "Getting results.. " << std::endl;
-    lattice.collideAndStream();
-    clout << "Collision and streaming done.. " << std::endl;
+  
+    /// === Step 8.1: Update the Boundary Values and Fields at Times ===
+    setTemporalValues(myCase, iT);
 
+    /// === Step 8.2 & Step 8.3: Computation and Output of the Results, Collide and Stream Execution ===
+    getResults(myCase, timer, iT);
     converge.takeValue(lattice.getStatistics().getAverageEnergy(), true);
+    lattice.collideAndStream();
 
     if (bcPeriodic) {
       lattice.stripeOffDensityOffset(lattice.getStatistics().getAverageRho()-(T)1);
