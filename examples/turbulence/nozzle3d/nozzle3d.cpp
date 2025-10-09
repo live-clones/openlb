@@ -1,8 +1,8 @@
 /*  Lattice Boltzmann sample, written in C++, using the OpenLB
  *  library
  *
- *  Copyright (C) 2015 Mathias J. Krause, Patrick Nathan
- *                2023-2025 Adrian Kummerlaender, Fedor Bukreev, Stephan Simonis
+ *  Copyright (C) 2008 Orestis Malaspinas
+ *                2025 Adrian Kummerlaender
  *  E-mail contact: info@openlb.net
  *  The most recent release of OpenLB can be downloaded at
  *  <http://www.openlb.net/>
@@ -27,274 +27,332 @@
 
 #include "fringeZone.h"
 
+const std::string xmlPath = "decomposition/n9.xml"; 
+
 using namespace olb;
-using namespace olb::descriptors;
+using namespace olb::names;
 
-using T = FLOATING_POINT_TYPE;
-using DESCRIPTOR = D3Q27<>;
+// === Step 1: Declarations ===
+using MyCase = Case<
+  NavierStokes, Lattice<double, descriptors::D3Q27<>>
+>;
 
-/// Selectable bulk models in this case
 enum class BulkModel {
-  RLB,
-  Smagorinsky,
-  LocalSmagorinsky,
-  ShearSmagorinsky,
-  ConsistentStrainSmagorinsky,
-  Krause,
+
+  RLB = 0,
+  SmagorinskyBGK = 1,
+  LocalSmagorinskyBGK = 2,
+  ShearSmagorinskyBGK = 3,
+  ConsistentStrainSmagorinskyBGK = 4,
+  KrauseBGK = 5,
+
 };
 
-/// Returns BulkModel from CLI argument
-BulkModel bulkModelFromString(std::string name) {
-  if (name == "RLB") {
-    return BulkModel::RLB;
-  }
-  if (name == "Smagorinsky") {
-    return BulkModel::Smagorinsky;
-  }
-  if (name == "LocalSmagorinsky") {
-    return BulkModel::LocalSmagorinsky;
-  }
-  if (name == "ShearSmagorinsky") {
-    return BulkModel::ShearSmagorinsky;
-  }
-  if (name == "ConsistentStrainSmagorinsky") {
-    return BulkModel::ConsistentStrainSmagorinsky;
-  }
-  if (name == "Krause") {
-    return BulkModel::Krause;
-  }
-  throw std::runtime_error(name + " is not a valid BulkModel");
+namespace olb::parameters {
+
+  struct BULK_MODEL              : public descriptors::TYPED_FIELD_BASE<int, 1> { };
+  struct INLET_CYLINDER_SIZE     : public descriptors::FIELD_BASE<2> { }; // 0 -> length; 1 -> radius and char length
+
+  struct SMAGORINSKY             : public descriptors::FIELD_BASE<1> { };
+  struct LATTICE_RELAXATION_TIME : public descriptors::FIELD_BASE<1> { };
+
+  struct TURBULENCE_INTENSITY    : public descriptors::FIELD_BASE<1> { };
+  struct TURBULENCE_N_SEEDS      : public descriptors::FIELD_BASE<1> { };
+  struct TURBULENCE_N_TIME       : public descriptors::FIELD_BASE<1> { };
+  struct TURBULENCE_SIGMA        : public descriptors::FIELD_BASE<1> { };
+
+  struct STAT_ITER               : public descriptors::TYPED_FIELD_BASE<int, 1> { };
+  struct VTK_SAVE_ITER           : public descriptors::TYPED_FIELD_BASE<int, 1> { };
+
 }
 
-#if defined(PLATFORM_CPU_SIMD) && defined(PLATFORM_GPU_CUDA) && defined(PARALLEL_MODE_MPI)
-#define HETEROGENEITY_AVAILABLE
-#endif
+Mesh<MyCase::value_t,MyCase::d> createMesh(MyCase::ParametersD& params) {
+  using T = MyCase::value_t;
+  Vector extent = params.get<parameters::DOMAIN_EXTENT>();
+  std::vector<T> origin(3,T());
+  IndicatorCuboid3D<T> cuboid(extent, origin);
+
+  const T physDeltaX = params.get<parameters::PHYS_DELTA_X>(); 
+  Mesh<T,MyCase::d> mesh(cuboid, physDeltaX, singleton::mpi().getSize());
+  mesh.setOverlap(params.get<parameters::OVERLAP>());
+  return mesh;
+}
 
 /// Constructs indicator of inlet tube geometry
-std::shared_ptr<IndicatorF3D<T>> makeInletI(const UnitConverter<T,DESCRIPTOR>& converter)
+std::shared_ptr<IndicatorF3D<MyCase::value_t>> makeInletI(MyCase::ParametersD& params)
 {
-  Vector<T,3> origin(T(),
-                      5.5*converter.getCharPhysLength()+converter.getPhysDeltaX(),
-                      5.5*converter.getCharPhysLength()+converter.getPhysDeltaX());
-  Vector<T,3> extend(4.*converter.getCharPhysLength()+5*converter.getPhysDeltaX(),
-                      5.5*converter.getCharPhysLength()+converter.getPhysDeltaX(),
-                      5.5*converter.getCharPhysLength()+converter.getPhysDeltaX());
-  return std::shared_ptr<IndicatorF3D<T>>(new IndicatorCylinder3D<T>(extend, origin, converter.getCharPhysLength()));
+  using T = MyCase::value_t;
+  Vector<T,3> origin(
+    params.get<parameters::PHYS_DELTA_X>(),
+    params.get<parameters::DOMAIN_EXTENT>()[1] / 2.,
+    params.get<parameters::DOMAIN_EXTENT>()[2] / 2.
+  );
+  Vector<T,3> extend(
+    params.get<parameters::INLET_CYLINDER_SIZE>()[0] + 5. * params.get<parameters::PHYS_DELTA_X>(),
+    params.get<parameters::DOMAIN_EXTENT>()[1] / 2.,
+    params.get<parameters::DOMAIN_EXTENT>()[2] / 2.
+  );
+  return std::shared_ptr<IndicatorF3D<T>>(
+    new IndicatorCylinder3D<T>(extend, origin, params.get<parameters::INLET_CYLINDER_SIZE>()[1])
+  );
 }
 
 /// Constructs indicator of injection tube geometry
-std::shared_ptr<IndicatorF3D<T>> makeInjectionTubeI(const UnitConverter<T,DESCRIPTOR>& converter)
+std::shared_ptr<IndicatorF3D<MyCase::value_t>> makeInjectionTubeI(MyCase::ParametersD& params)
 {
-  Vector<T,3> origin(4.*converter.getCharPhysLength(),
-                     5.5*converter.getCharPhysLength()+converter.getPhysDeltaX(),
-                     5.5*converter.getCharPhysLength()+converter.getPhysDeltaX());
-  Vector<T,3> extend(60.*converter.getCharPhysLength(),
-                     5.5*converter.getCharPhysLength()+converter.getPhysDeltaX(),
-                     5.5*converter.getCharPhysLength()+converter.getPhysDeltaX());
-  return std::shared_ptr<IndicatorF3D<T>>(new IndicatorCylinder3D<T>(extend, origin, 5.5*converter.getCharPhysLength()));
+  using T = MyCase::value_t;
+  Vector<T,3> origin(
+    params.get<parameters::INLET_CYLINDER_SIZE>()[0],
+    params.get<parameters::DOMAIN_EXTENT>()[1] / 2.,
+    params.get<parameters::DOMAIN_EXTENT>()[2] / 2.
+  );
+  Vector<T,3> extend(
+    params.get<parameters::DOMAIN_EXTENT>()[0],
+    params.get<parameters::DOMAIN_EXTENT>()[1] / 2.,
+    params.get<parameters::DOMAIN_EXTENT>()[2] / 2.
+  );
+  return std::shared_ptr<IndicatorF3D<T>>(
+    new IndicatorCylinder3D<T>(
+      extend, 
+      origin, 
+      std::min(params.get<parameters::DOMAIN_EXTENT>()[1], params.get<parameters::DOMAIN_EXTENT>()[2]) / 2.
+    ) 
+  );
 }
 
-std::shared_ptr<IndicatorF3D<T>> makeDomainI(const UnitConverter<T,DESCRIPTOR>& converter)
+std::shared_ptr<IndicatorF3D<MyCase::value_t>> makeNozzleI(MyCase::ParametersD& params)
 {
-  auto inletCylinder = makeInletI(converter);
-  auto injectionTube = makeInjectionTubeI(converter);
+  auto inletCylinder = makeInletI(params);
+  auto injectionTube = makeInjectionTubeI(params);
   return inletCylinder + injectionTube;
 }
 
-std::shared_ptr<IndicatorF3D<T>> makeBoundingI(const UnitConverter<T,DESCRIPTOR>& converter)
-{
-  return std::shared_ptr<IndicatorF3D<T>>(
-    new IndicatorLayer3D<T>(makeDomainI(converter),
-                            converter.getPhysDeltaX()));
-}
-
-void prepareGeometry(const UnitConverter<T,DESCRIPTOR>& converter,
-                     SuperGeometry<T,3>& superGeometry)
-{
-  OstreamManager clout(std::cout,"prepareGeometry");
+void prepareGeometry(MyCase& myCase) {
+  OstreamManager clout(std::cout, "prepareGeometry");
   clout << "Prepare Geometry ..." << std::endl;
 
-  // Sets material number for fluid and boundary
-  superGeometry.rename(0,2);
+  using T = MyCase::value_t;
+  auto& geometry = myCase.getGeometry();
+  auto& params = myCase.getParameters();
 
-  auto inletCylinder = makeInletI(converter);
-  superGeometry.rename(2, 1, *inletCylinder);
+  geometry.rename(0, 2);
 
-  auto injectionTube = makeInjectionTubeI(converter);
-  superGeometry.rename(2, 1, *injectionTube);
+  auto inletCylinder = makeInletI(myCase.getParameters());
+  geometry.rename(2, 1, *inletCylinder);
+
+  auto injectionTube = makeInjectionTubeI(myCase.getParameters());
+  geometry.rename(2, 1, *injectionTube);
 
   {
-    Vector<T,3> origin(converter.getPhysDeltaX(),
-                       5.5*converter.getCharPhysLength()+converter.getPhysDeltaX(),
-                       5.5*converter.getCharPhysLength()+converter.getPhysDeltaX());
-    Vector<T,3> extend(T(),
-                       5.5*converter.getCharPhysLength()+converter.getPhysDeltaX(),
-                       5.5*converter.getCharPhysLength()+converter.getPhysDeltaX());
+    Vector<T,3> origin(T(),
+      params.get<parameters::DOMAIN_EXTENT>()[1] / 2.0,
+      params.get<parameters::DOMAIN_EXTENT>()[2] / 2.0
+    );
+    Vector<T,3> extend(params.get<parameters::PHYS_DELTA_X>(),
+      params.get<parameters::DOMAIN_EXTENT>()[1] / 2.0,
+      params.get<parameters::DOMAIN_EXTENT>()[2] / 2.0
+    );
 
-    IndicatorCylinder3D<T> cylinderIN(extend, origin, converter.getCharPhysLength());
-    superGeometry.rename(1,3, cylinderIN);
+    IndicatorCylinder3D<T> cylinderIN(extend, origin, params.get<parameters::INLET_CYLINDER_SIZE>()[1]);
+    geometry.rename(1, 3, cylinderIN);
   }
 
   {
-    Vector<T,3> origin(60.*converter.getCharPhysLength()-converter.getPhysDeltaX(),
-                       5.5*converter.getCharPhysLength()+converter.getPhysDeltaX(),
-                       5.5*converter.getCharPhysLength()+converter.getPhysDeltaX());
-    Vector<T,3> extend(60.*converter.getCharPhysLength(),
-                       5.5*converter.getCharPhysLength()+converter.getPhysDeltaX(),
-                       5.5*converter.getCharPhysLength()+converter.getPhysDeltaX());
+    Vector<T,3> origin(params.get<parameters::DOMAIN_EXTENT>()[0] - params.get<parameters::PHYS_DELTA_X>(),
+      params.get<parameters::DOMAIN_EXTENT>()[1] / 2.0,
+      params.get<parameters::DOMAIN_EXTENT>()[2] / 2.0
+    );
+    Vector<T,3> extend(params.get<parameters::DOMAIN_EXTENT>()[0],
+      params.get<parameters::DOMAIN_EXTENT>()[1] / 2.0,
+      params.get<parameters::DOMAIN_EXTENT>()[2] / 2.0
+    );
 
-    IndicatorCylinder3D<T> cylinderOUT(extend, origin, 5.5*converter.getCharPhysLength());
-    superGeometry.rename(1,4, cylinderOUT);
+    IndicatorCylinder3D<T> cylinderOUT(extend, origin, params.get<parameters::DOMAIN_EXTENT>()[2]);
+    geometry.rename(1, 4, cylinderOUT);
   }
 
-  superGeometry.clean();
-  superGeometry.innerClean();
-  superGeometry.checkForErrors();
+  geometry.clean();
+  geometry.innerClean();
+  geometry.checkForErrors();
 
-  superGeometry.print();
+  geometry.print();
 
   clout << "Prepare Geometry ... OK" << std::endl;
 }
 
-void prepareLattice(SuperLattice<T,DESCRIPTOR>& sLattice,
-                    SuperGeometry<T,3>& superGeometry,
-                    BulkModel bulkModel)
-{
+void prepareLattice(MyCase& myCase) {
   OstreamManager clout(std::cout,"prepareLattice");
   clout << "Prepare Lattice ..." << std::endl;
 
+  using T = MyCase::value_t;
+  auto& geometry = myCase.getGeometry();
+  auto& params = myCase.getParameters();
+  auto& lattice = myCase.getLattice(NavierStokes{});
+
+  using DESCRIPTOR = MyCase::descriptor_t_of<NavierStokes>;
+
+  const T resolution = params.get<parameters::RESOLUTION>();
+  const T latticeRelaxationTime = params.get<parameters::LATTICE_RELAXATION_TIME>();
+  const T physCharLength = params.get<parameters::INLET_CYLINDER_SIZE>()[1];
+  const T physCharVelocity = params.get<parameters::PHYS_CHAR_VELOCITY>();
+  const T physViscosity = params.get<parameters::PHYS_CHAR_VISCOSITY>();
+  const T physDensity = params.get<parameters::PHYS_CHAR_DENSITY>();
+
+  lattice.setUnitConverter<UnitConverterFromResolutionAndRelaxationTime<T,DESCRIPTOR>>(
+    resolution,              // resolution: number of voxels per charPhysL
+    latticeRelaxationTime,   // latticeRelaxationTime: relaxation time, have to be greater than 0.5!
+    physCharLength,          // charPhysLength: reference length of simulation geometry
+    physCharVelocity,        // charPhysVelocity: maximal/highest expected velocity during simulation in __m / s__
+    physViscosity,           // physViscosity: physical kinematic viscosity in __m^2 / s__
+    physDensity              // physDensity: physical density in __kg / m^3__
+  );
+
+  const auto& converter = lattice.getUnitConverter();
+  converter.print();
+
   // Material=0 -->do nothing
-  sLattice.defineDynamics<NoDynamics>(superGeometry, 0);
+  lattice.defineDynamics<NoDynamics>(geometry, 0);
 
   // Material=1 -->bulk dynamics
   // Material=3 -->bulk dynamics (inflow)
   // Material=4 -->bulk dynamics (outflow)
-  auto bulkIndicator = superGeometry.getMaterialIndicator({1, 3, 4});
+  auto bulkIndicator = geometry.getMaterialIndicator({1, 3, 4});
 
-  switch (bulkModel) {
-    case BulkModel::RLB:
-      sLattice.defineDynamics<RLBdynamics>(bulkIndicator);
+  switch (params.get<parameters::BULK_MODEL>()) {
+    case static_cast<int>(BulkModel::RLB):
+      lattice.defineDynamics<RLBdynamics>(bulkIndicator);
       break;
-    case BulkModel::ShearSmagorinsky:
-      sLattice.defineDynamics<ShearSmagorinskyBGKdynamics>(bulkIndicator);
-      sLattice.setParameter<collision::LES::SMAGORINSKY>(0.15);
+    case static_cast<int>(BulkModel::ShearSmagorinskyBGK):
+      lattice.defineDynamics<ShearSmagorinskyBGKdynamics>(bulkIndicator);
+      lattice.setParameter<collision::LES::SMAGORINSKY>(params.get<parameters::SMAGORINSKY>());
       break;
-    case BulkModel::Krause:
-      sLattice.defineDynamics<KrauseBGKdynamics>(bulkIndicator);
-      sLattice.setParameter<collision::LES::SMAGORINSKY>(0.15);
-    case BulkModel::ConsistentStrainSmagorinsky:
-      sLattice.defineDynamics<ConStrainSmagorinskyBGKdynamics>(bulkIndicator);
-      sLattice.setParameter<collision::LES::SMAGORINSKY>(0.15);
+    case static_cast<int>(BulkModel::KrauseBGK):
+      lattice.defineDynamics<KrauseBGKdynamics>(bulkIndicator);
+      lattice.setParameter<collision::LES::SMAGORINSKY>(params.get<parameters::SMAGORINSKY>());
+    case static_cast<int>(BulkModel::ConsistentStrainSmagorinskyBGK):
+      lattice.defineDynamics<ConStrainSmagorinskyBGKdynamics>(bulkIndicator);
+      lattice.setParameter<collision::LES::SMAGORINSKY>(params.get<parameters::SMAGORINSKY>());
       break;
-    case BulkModel::Smagorinsky:
-      sLattice.defineDynamics<SmagorinskyBGKdynamics>(bulkIndicator);
-      sLattice.setParameter<collision::LES::SMAGORINSKY>(T(0.15));
+    case static_cast<int>(BulkModel::SmagorinskyBGK):
+      lattice.defineDynamics<SmagorinskyBGKdynamics>(bulkIndicator);
+      lattice.setParameter<collision::LES::SMAGORINSKY>(params.get<parameters::SMAGORINSKY>());
       break;
-    case BulkModel::LocalSmagorinsky:
+    case static_cast<int>(BulkModel::LocalSmagorinskyBGK):
     default:
-      sLattice.defineDynamics<LocalSmagorinskyBGKdynamics>(bulkIndicator);
-      FringeZoneSmagorinskyConstant smagorinskyFringe(sLattice.getUnitConverter(), T{0.15});
-      sLattice.defineField<collision::LES::SMAGORINSKY>(bulkIndicator, smagorinskyFringe);
+      lattice.defineDynamics<LocalSmagorinskyBGKdynamics>(bulkIndicator);
+      FringeZoneSmagorinskyConstant smagorinskyFringe(converter, T{0.15});
+      lattice.defineField<collision::LES::SMAGORINSKY>(bulkIndicator, smagorinskyFringe);
       break;
   }
 
   // Material=2 -->bounce back
-  sLattice.defineDynamics<BounceBack>(superGeometry, 2);
+  lattice.defineDynamics<BounceBack>(geometry, 2);
 
-  const T omega = sLattice.getUnitConverter().getLatticeRelaxationFrequency();
-  boundary::set<boundary::LocalVelocity>(sLattice, superGeometry, 3);
-  boundary::set<boundary::InterpolatedConvection>(sLattice, superGeometry, 4);
+  const T omega = converter.getLatticeRelaxationFrequency();
+  boundary::set<boundary::LocalVelocity>(lattice, geometry, 3);
+  boundary::set<boundary::InterpolatedConvection>(lattice, geometry, 4);
 
-  sLattice.setParameter<descriptors::OMEGA>(omega);
+  lattice.setParameter<descriptors::OMEGA>(omega);
 
   {
-    auto& communicator = sLattice.getCommunicator(stage::PostCollide());
+    auto& communicator = lattice.getCommunicator(stage::PostCollide());
     communicator.clearRequestedCells();
-    communicator.requestOverlap(1, superGeometry.getMaterialIndicator({1,2,3,4}));
+    communicator.requestOverlap(1, geometry.getMaterialIndicator({1,2,3,4}));
     communicator.exchangeRequests();
   }
 
   clout << "Prepare Lattice ... OK" << std::endl;
 }
 
-void setBoundaryValues(SuperLattice<T,DESCRIPTOR>& sLattice,
-                       SuperGeometry<T,3>& superGeometry,
-                       VortexMethodTurbulentVelocityBoundary<T,DESCRIPTOR>& vortex,
-                       BulkModel bulkModel,
-                       std::size_t iT)
-{
-  if (bulkModel == BulkModel::ShearSmagorinsky) {
-    sLattice.setParameter<descriptors::LATTICE_TIME>(iT);
+void setInitialValues(
+  MyCase& myCase
+) {
+  using T = MyCase::value_t;
+  auto& geometry = myCase.getGeometry();
+  auto& lattice = myCase.getLattice(NavierStokes{});
+
+  AnalyticalConst3D<T,T> rhoF(1);
+  Vector<T,3> velocity{};
+  AnalyticalConst3D<T,T> uF(velocity);
+
+  lattice.defineRhoU(geometry.getMaterialIndicator({1, 2, 3, 4}), rhoF, uF);
+  lattice.iniEquilibrium(geometry.getMaterialIndicator({1, 2, 3, 4}), rhoF, uF);
+  lattice.initialize();
+  geometry.updateStatistics();
+
+}
+
+void setTemporalValues(
+  MyCase& myCase,
+  std::size_t iT,
+  VortexMethodTurbulentVelocityBoundary<MyCase::value_t, MyCase::descriptor_t_of<NavierStokes>>& vortex
+) { 
+  using T = MyCase::value_t;
+  auto& geometry = myCase.getGeometry();
+  auto& params = myCase.getParameters();
+  auto& lattice = myCase.getLattice(NavierStokes{});
+  const auto& converter = lattice.getUnitConverter();
+
+  if (params.get<parameters::BULK_MODEL>() == static_cast<int>(BulkModel::ShearSmagorinskyBGK)) {
+    lattice.setParameter<descriptors::LATTICE_TIME>(iT);
   }
 
-  if (iT == 0) {
-    AnalyticalConst3D<T,T> rhoF(1);
-    Vector<T,3> velocity{};
-    AnalyticalConst3D<T,T> uF(velocity);
+  const T startUpFactor = 0.001 * 1.0 / converter.getCharLatticeVelocity();
+  const T maxStartTPhys = (60*converter.getCharPhysLength()/converter.getCharPhysVelocity()) * startUpFactor;
+  const auto maxStartT = converter.getLatticeTime(maxStartTPhys);
 
-    sLattice.defineRhoU(superGeometry.getMaterialIndicator({1, 2, 3, 4}), rhoF, uF);
-    sLattice.iniEquilibrium(superGeometry.getMaterialIndicator({1, 2, 3, 4}), rhoF, uF);
-
-    sLattice.initialize();
-
-    superGeometry.updateStatistics();
-
-    auto intensity = std::shared_ptr<AnalyticalF3D<T,T>>(new AnalyticalConst3D<T,T>(0.05));
-    vortex.setIntensityProfile(intensity);
-  }
-
-  const T startUpFactor = 0.001 * 1.0 / sLattice.getUnitConverter().getCharLatticeVelocity();
-  const T maxStartTPhys = (60*sLattice.getUnitConverter().getCharPhysLength()/sLattice.getUnitConverter().getCharPhysVelocity()) * startUpFactor;
-  const auto maxStartT = sLattice.getUnitConverter().getLatticeTime(maxStartTPhys);
-
-  auto uSol = std::shared_ptr<AnalyticalF3D<T,T>>(new CirclePowerLaw3D<T>(superGeometry, 3, sLattice.getUnitConverter().getCharLatticeVelocity(), 8, T()));
+  auto uSol = std::shared_ptr<AnalyticalF3D<T,T>>(new CirclePowerLaw3D<T>(geometry, 3, converter.getCharLatticeVelocity(), 8, T()));
 
   if (iT <= maxStartT) {
     PolynomialStartScale<T,std::size_t> scale(maxStartT, 1);
     T frac{};
     scale(&frac, &iT);
 
-    vortex.setVelocityProfile(sLattice.getUnitConverter().getConversionFactorVelocity() * frac * uSol);
-    sLattice.template setProcessingContext<Array<U_PROFILE>>(ProcessingContext::Simulation);
+    vortex.setVelocityProfile(converter.getConversionFactorVelocity() * frac * uSol);
+    lattice.template setProcessingContext<Array<U_PROFILE>>(ProcessingContext::Simulation);
     vortex.apply(iT);
   } else {
     vortex.apply(iT);
   }
 }
 
-void getResults(SuperLattice<T, DESCRIPTOR>& sLattice, std::size_t iT,
-                SuperGeometry<T,3>& superGeometry, util::Timer<T>& timer,
-                bool vtkOut)
+void getResults(MyCase& myCase,
+                util::Timer<MyCase::value_t>& timer,
+                std::size_t iT)
 {
-  OstreamManager clout(std::cout,"getResults");
+  using T = MyCase::value_t;
+  auto& lattice = myCase.getLattice(NavierStokes{});
+  auto& params = myCase.getParameters();
+  const auto& converter = lattice.getUnitConverter();
+
+  SuperVTMwriter3D<T> vtkWriter("nozzle3d");
 
   if (iT==0) {
-    SuperVTMwriter3D<T> vtmWriter("nozzle3d");
-    SuperLatticeCuboid3D cuboid(sLattice);
-    SuperLatticeRank3D rank(sLattice);
-    SuperLatticePlatform platform(sLattice);
-    vtmWriter.write(cuboid);
-    vtmWriter.write(rank);
-    vtmWriter.write(platform);
-    vtmWriter.createMasterFile();
+    SuperLatticeCuboid3D cuboid(lattice);
+    SuperLatticeRank3D rank(lattice);
+    SuperLatticePlatform platform(lattice);
+    vtkWriter.write(cuboid);
+    vtkWriter.write(rank);
+    vtkWriter.write(platform);
+    vtkWriter.createMasterFile();
   }
 
-  if (iT % sLattice.getUnitConverter().getLatticeTime(0.1) == 0) {
+  if (iT % params.get<parameters::STAT_ITER>() == 0) {
     timer.update(iT);
     timer.printStep();
-    sLattice.getStatistics().print(iT, sLattice.getUnitConverter().getPhysTime(iT));
-    if (std::isnan(sLattice.getStatistics().getAverageRho())) {
+    lattice.getStatistics().print(iT, converter.getPhysTime(iT));
+    if (std::isnan(lattice.getStatistics().getAverageRho())) {
       std::exit(-1);
     }
   }
 
   // Writes the vtk files
-  if (vtkOut && iT % sLattice.getUnitConverter().getLatticeTime(1) == 0) {
-    sLattice.setProcessingContext(ProcessingContext::Evaluation);
-    sLattice.scheduleBackgroundOutputVTK([&,iT](auto task) {
+  if (iT % params.get<parameters::VTK_SAVE_ITER>() == 0) {
+    lattice.setProcessingContext(ProcessingContext::Evaluation);
+    lattice.scheduleBackgroundOutputVTK([&,iT](auto task) {
       SuperVTMwriter3D<T> vtkWriter("nozzle3d");
-      SuperLatticePhysVelocity3D velocity(sLattice, sLattice.getUnitConverter());
-      SuperLatticePhysPressure3D pressure(sLattice, sLattice.getUnitConverter());
+      SuperLatticePhysVelocity3D velocity(lattice, converter);
+      SuperLatticePhysPressure3D pressure(lattice, converter);
       vtkWriter.addFunctor(velocity);
       vtkWriter.addFunctor(pressure);
       task(vtkWriter, iT);
@@ -302,106 +360,118 @@ void getResults(SuperLattice<T, DESCRIPTOR>& sLattice, std::size_t iT,
   }
 }
 
-int main(int argc, char* argv[])
-{
-  CLIreader args(argc, argv);
-  const int resolution = args.getValueOrFallback("--resolution", 5);
-  const int maxPhysT   = args.getValueOrFallback("--max-phys-t", 150);
-  const bool noResults = args.contains("--no-results");
-  const BulkModel bulkModel = bulkModelFromString(args.getValueOrFallback<std::string>("--bulk-model", "LocalSmagorinsky"));
-#ifdef HETEROGENEITY_AVAILABLE
-  const bool heterogeneous = args.contains("--heterogeneous");
-#endif
+void simulate(
+  MyCase& myCase
+) {
+  using T = MyCase::value_t;
+  using DESCRIPTOR = MyCase::descriptor_t_of<NavierStokes>;
 
-  // === 1st Step: Initialization ===
-  initialize(&argc, &argv);
-  singleton::directories().setOutputDir("./tmp/");
-  OstreamManager clout(std::cout, "main");
+  auto& geometry = myCase.getGeometry();
+  auto& lattice = myCase.getLattice(NavierStokes{});
+  auto& params = myCase.getParameters();
+  const auto& converter = lattice.getUnitConverter();
 
-  UnitConverterFromResolutionAndRelaxationTime<T,DESCRIPTOR> converter(
-    int {resolution}, // resolution: number of voxels per charPhysL
-    (T)   0.500018,   // latticeRelaxationTime: relaxation time, have to be greater than 0.5!
-    (T)   1,          // charPhysLength: reference length of simulation geometry
-    (T)   1,          // charPhysVelocity: maximal/highest expected velocity during simulation in __m / s__
-    (T)   0.0002,     // physViscosity: physical kinematic viscosity in __m^2 / s__
-    (T)   1.0         // physDensity: physical density in __kg / m^3__
+  /// === Vortex Method Setup (Turbulent inlet condition)
+  Vector<T,3> originI(
+    params.get<parameters::PHYS_DELTA_X>(), 
+    params.get<parameters::DOMAIN_EXTENT>()[1] / 2.0 + params.get<parameters::PHYS_DELTA_X>(), 
+    params.get<parameters::DOMAIN_EXTENT>()[2] / 2.0 + params.get<parameters::PHYS_DELTA_X>()
   );
-  converter.print();
-
-  auto boundingI = makeBoundingI(converter);
-
-  clout << "Instantiate cuboid geometry... " << std::endl;
-  std::unique_ptr<CuboidDecomposition3D<T>> cuboidDecomposition;
-  if (args.contains("--load-decomposition-from")) {
-    const std::string xmlPath = args.getValueOrFallback<std::string>("--load-decomposition-from", "");
-    clout << "Load decomposition from " << xmlPath << std::endl;
-    cuboidDecomposition = createCuboidDecomposition<T,3>(xmlPath);
-    if (!cuboidDecomposition->tryRefineTo(converter.getPhysDeltaX())) {
-      throw std::invalid_argument("Cuboid geometry is not refineable to reach goal deltaR");
-    }
-    continueMinimizeByVolume(*cuboidDecomposition, *boundingI, singleton::mpi().getSize());
-  } else {
-    cuboidDecomposition.reset(new CuboidDecomposition3D<T>(*boundingI, converter.getPhysDeltaX(), singleton::mpi().getSize()));
-  }
-  clout << "Done." << std::endl;
-
-  clout << "Balance load... " << std::endl;
-  std::unique_ptr<LoadBalancer<T>> loadBalancer;
-#ifdef HETEROGENEITY_AVAILABLE
-  if (heterogeneous) {
-    loadBalancer.reset(new OrthogonalHeterogeneousLoadBalancer<T>(*cuboidDecomposition, 0.99));
-  } else {
-    loadBalancer.reset(new BlockLoadBalancer<T>(*cuboidDecomposition));
-  }
-#else
-  loadBalancer.reset(new BlockLoadBalancer<T>(*cuboidDecomposition));
-#endif
-  clout << "Done." << std::endl;
-
-  // === 2nd Step: Prepare Geometry ===
-  SuperGeometry<T,3> superGeometry(*cuboidDecomposition, *loadBalancer);
-  prepareGeometry(converter, superGeometry);
-
-  // === 3rd Step: Prepare Lattice ===
-  SuperLattice<T,DESCRIPTOR> sLattice(converter, superGeometry);
-  prepareLattice(sLattice, superGeometry, bulkModel);
-
-  // === Setup turbulent inlet condition ===
-  Vector<T,3> originI(1./resolution, 5.5+1./resolution, 5.5+1./resolution);
-  Vector<T,3> extendI(0., 5.5+1./resolution, 5.5+1./resolution);
+  Vector<T,3> extendI(
+    T(), 
+    params.get<parameters::DOMAIN_EXTENT>()[1] / 2.0 + params.get<parameters::PHYS_DELTA_X>(), 
+    params.get<parameters::DOMAIN_EXTENT>()[2] / 2.0 + params.get<parameters::PHYS_DELTA_X>()
+  );
   Vector<T,3> inflowAxis{1, 0, 0};
   IndicatorCylinder3D<T> cylinderIN(extendI, originI, 1.);
   VortexMethodTurbulentVelocityBoundary<T,DESCRIPTOR> vortex(
-    superGeometry.getMaterialIndicator(3),
+    geometry.getMaterialIndicator(3),
     cylinderIN,
     converter,
-    sLattice,
-    50,                                // nSeeds
-    0.1,                               // nTime (s)
-    converter.getCharPhysLength()*0.1, // sigma
-    inflowAxis);
+    lattice,
+    params.get<parameters::TURBULENCE_N_SEEDS>(),                                
+    params.get<parameters::TURBULENCE_N_TIME>(),                               
+    params.get<parameters::TURBULENCE_SIGMA>(), 
+    inflowAxis
+  );
+  
+  auto intensity = std::shared_ptr<AnalyticalF3D<T,T>>(
+    new AnalyticalConst3D<T,T>(params.get<parameters::TURBULENCE_INTENSITY>())
+  );
+  vortex.setIntensityProfile(intensity);
 
-  // === 4th Step: Main Loop with Timer ===
-  setBoundaryValues(sLattice, superGeometry, vortex, bulkModel, 0);
+  const std::size_t iTmax = myCase.getLattice(NavierStokes{}).getUnitConverter().getLatticeTime(
+    params.get<parameters::MAX_PHYS_T>()
+  );
 
-  sLattice.writeSummary();
-
-  util::Timer<T> timer(converter.getLatticeTime(maxPhysT), superGeometry.getStatistics().getNvoxel());
-
-  setBoundaryValues(sLattice, superGeometry, vortex, bulkModel, 0);
-  sLattice.collideAndStream();
-  getResults(sLattice, 0, superGeometry, timer, !noResults);
-
+  util::Timer<T> timer(iTmax, myCase.getGeometry().getStatistics().getNvoxel());
   timer.start();
 
-  for (std::size_t iT = 1; iT <= converter.getLatticeTime(maxPhysT); ++iT) {
-    setBoundaryValues(sLattice, superGeometry, vortex, bulkModel, iT);
-    sLattice.collideAndStream();
-    getResults(sLattice, iT, superGeometry, timer, !noResults);
+  for (std::size_t iT=0; iT < iTmax; ++iT) {
+    /// === Step 8.1: Update the Boundary Values and Fields at Times ===
+    setTemporalValues(myCase, iT, vortex);
+
+    /// === Step 8.2: Collide and Stream Execution ===
+    myCase.getLattice(NavierStokes{}).collideAndStream();
+
+    /// === Step 8.3: Computation and Output of the Results ===
+    getResults(myCase, timer, iT);
   }
 
   timer.stop();
   timer.printSummary();
+}
 
-  sLattice.setProcessingContext(ProcessingContext::Evaluation);
+int main(int argc, char* argv[]) {
+  initialize(&argc, &argv);
+
+  /// === Step 2: Set Parameters ===
+  MyCase::ParametersD myCaseParameters;
+  {
+    using namespace olb::parameters;
+    myCaseParameters.set<BULK_MODEL>(static_cast<int>(BulkModel::LocalSmagorinskyBGK));
+
+    myCaseParameters.set<DOMAIN_EXTENT>({60, 11, 11});
+    myCaseParameters.set<INLET_CYLINDER_SIZE>({4, 1});
+
+    myCaseParameters.set<RESOLUTION   >(5);
+    myCaseParameters.set<PHYS_DELTA_X >(
+      myCaseParameters.get<INLET_CYLINDER_SIZE>()[1] / myCaseParameters.get<RESOLUTION>()
+    );
+    myCaseParameters.set<PHYS_CHAR_VELOCITY>(1);
+    myCaseParameters.set<PHYS_CHAR_VISCOSITY>(0.0002);
+    myCaseParameters.set<PHYS_CHAR_DENSITY>(1);
+    myCaseParameters.set<LATTICE_RELAXATION_TIME>(0.500018);
+    myCaseParameters.set<SMAGORINSKY>(0.15);
+    myCaseParameters.set<MAX_PHYS_T   >(150);
+
+    myCaseParameters.set<TURBULENCE_INTENSITY>(0.05);
+    myCaseParameters.set<TURBULENCE_N_SEEDS>(50);
+    myCaseParameters.set<TURBULENCE_N_TIME>(0.1);
+    myCaseParameters.set<TURBULENCE_SIGMA>(
+      0.1 * myCaseParameters.get<INLET_CYLINDER_SIZE>()[1]
+    );
+
+    myCaseParameters.set<STAT_ITER>(200);
+    myCaseParameters.set<VTK_SAVE_ITER>(500);
+  }
+  myCaseParameters.fromCLI(argc, argv);
+
+  /// === Step 3: Create Mesh ===
+  Mesh mesh = createMesh(myCaseParameters);
+
+  /// === Step 4: Create Case ===
+  MyCase myCase(myCaseParameters, mesh);
+
+  /// === Step 5: Prepare Geometry ===
+  prepareGeometry(myCase);
+
+  /// === Step 6: Prepare Lattice ===
+  prepareLattice(myCase);
+
+  /// === Step 7: Definition of Initial, Boundary Values, and Fields ===
+  setInitialValues(myCase);
+
+  /// === Step 8: Simulate ===
+  simulate(myCase);
 }
