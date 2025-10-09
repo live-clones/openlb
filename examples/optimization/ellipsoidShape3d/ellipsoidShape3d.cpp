@@ -41,13 +41,16 @@
 #include "olb.h"
 
 using namespace olb;
+using namespace olb::names;
 using namespace olb::opti;
 
+using S = double;
+
 using MyCase = Case<
-  NavierStokes, Lattice<double, descriptors::D3Q19<>
+  NavierStokes, Lattice<double, descriptors::D3Q19<>>
 >;
 using MyADfCase = Case<
-  NavierStokes, Lattice<util::ADf<double,2>, descriptors::D3Q19<>
+  NavierStokes, Lattice<util::ADf<double,2>, descriptors::D3Q19<>>
 >;
 using MyOptiCase = OptiCaseADf<
   Controlled, MyCase,
@@ -56,7 +59,11 @@ using MyOptiCase = OptiCaseADf<
 
 namespace olb::parameters{
 
-struct CONTROLS : public descriptors::FIELD_BASE<2>();
+struct CONTROLS : public descriptors::FIELD_BASE<2>{ };
+struct ELLIPSOID_VOLUME : public descriptors::FIELD_BASE<1>{ };
+struct ELLIPSOID_RADII : public descriptors::FIELD_BASE<0,1>{ };
+struct ELLIPSOID_POS : public descriptors::FIELD_BASE<0,1>{ };
+struct SMOOTH_LAYER_THICKNESS : public descriptors::FIELD_BASE<1>{ };
 
 }
 
@@ -80,9 +87,10 @@ auto createMesh(PARAMETERS& parameters) {
   IndicatorCuboid3D<T> channel( extent, origin );
 
   Mesh<T,3> mesh(channel,
-                 extent[0] / parameters.template get<parameters::RESOLUTION>(),
+                 extent[1] / parameters.template get<parameters::RESOLUTION>(),
 		 singleton::mpi().getSize());
   mesh.setOverlap(parameters.template get<parameters::OVERLAP>());
+  mesh.getCuboidDecomposition().setPeriodicity({false, true, true});
   return mesh;
 }
 
@@ -92,14 +100,14 @@ void prepareGeometry(CASE& myCase)
   OstreamManager clout( std::cout,"prepareGeometry" );
   clout << "Prepare Geometry ..." << std::endl;
   using T = CASE::value_t;
-  auto& parameters = myCase.getParmeters();
+  auto& parameters = myCase.getParameters();
   auto& superGeometry = myCase.getGeometry();
-  const T delta = parameters.get<parameters::DOMAIN_EXTENT>()[0] / parameters.get<parameters::RESOLUTION>() / 2.0;
-
+  const T delta = parameters.template get<parameters::DOMAIN_EXTENT>()[1] /
+                  parameters.template get<parameters::RESOLUTION>() / 2.0;
   const Vector extent = parameters.template get<parameters::DOMAIN_EXTENT>();
-  const Vector origin{0., 0., 0.};
-  IndicatorCuboid3D<T> channel( extent, origin );
-  superGeometry.rename( 0, 1, channel );
+  const Vector origin_channel{0., 0., 0.};
+  IndicatorCuboid3D<T> channel(extent, origin_channel);
+  superGeometry.rename(0, 1, channel);
 
   auto min = channel.getMin();
   auto max = channel.getMax();
@@ -121,54 +129,66 @@ void prepareGeometry(CASE& myCase)
 }
 
 template<typename CASE>
-void prepareLattice( SuperLattice<T,DESCRIPTOR>& sLattice,
-                     SuperGeometry<T,3>& superGeometry,
-                     std::shared_ptr<AnalyticalF3D<T,T>> smoothEllipsoid)
-{
+void prepareLattice(CASE& myCase) {
   OstreamManager clout( std::cout,"prepareLattice" );
   clout << "Prepare Lattice ..." << std::endl;
+  using T = CASE::value_t;
+  using DESCRIPTOR = CASE::descriptor_t;
   auto& sLattice = myCase.getLattice(NavierStokes{});
   auto& superGeometry = myCase.getGeometry();
   auto& parameters = myCase.getParameters();
 
-  sLattice.setUnitConverter<UnitConverterFromResolutionAndRelaxationTime<T,DESCRIPTOR>>(
-    parameters.get<parameters::RESOLUTION>()          // resolution: number of voxels per charPhysL
-    parameters.get<parameters::RELAXATION_TIME>(),    // latticeRelaxationTime: relaxation time, have to be greater than 0.5!
-    parameters.get<parameters::DOMAIN_EXTENT>()[0],   // charPhysLength: reference length of simulation geometry
-    parameters.get<parameters::PHYS_CHAR_VELOCITY>(), // physVelocity: maximal/highest expected velocity during simulation in __m / s__
-    parameters.get<parameters::PHYS_CHAR_VISCOSITY>(),// charPhysViscosity: physical kinematic viscosity in __m^2 / s__
-    parameters.get<parameters::PHYS_CHAR_DENSITY>()   // physDensity: physical density in __kg / m^3__
+  sLattice.template setUnitConverter<UnitConverterFromResolutionAndRelaxationTime<T,DESCRIPTOR>>(
+    parameters.template get<parameters::RESOLUTION>(),                 // resolution: number of voxels per charPhysL
+    parameters.template get<parameters::LATTICE_RELAXATION_TIME>(),    // latticeRelaxationTime: relaxation time, have to be greater than 0.5!
+    parameters.template get<parameters::DOMAIN_EXTENT>()[1],           // charPhysLength: reference length of simulation geometry
+    parameters.template get<parameters::PHYS_CHAR_VELOCITY>(),         // physVelocity: maximal/highest expected velocity during simulation in __m / s__
+    parameters.template get<parameters::PHYS_CHAR_VISCOSITY>(),        // charPhysViscosity: physical kinematic viscosity in __m^2 / s__
+    parameters.template get<parameters::PHYS_CHAR_DENSITY>()           // physDensity: physical density in __kg / m^3__
   );
   auto& converter = sLattice.getUnitConverter();
   converter.print();
   const T omega = converter.getLatticeRelaxationFrequency();
 
   // Bulk dynamics for all materials
-  auto bulkIndicator = superGeometry.getMaterialIndicator( { 1,3,4,5 } );
+  auto bulkIndicator = superGeometry.getMaterialIndicator({1});
   sLattice.template defineDynamics<PorousBGKdynamics<T,DESCRIPTOR>>(bulkIndicator);
 
   // boundary conditions
   boundary::set<boundary::InterpolatedVelocity>(sLattice, superGeometry, 3);
   boundary::set<boundary::InterpolatedPressure>(sLattice, superGeometry, 4);
+  
+  sLattice.template setParameter<descriptors::OMEGA>(omega);
+  clout << "Prepare Lattice ... OK" << std::endl;
+}
+
+template <typename CASE>
+void setInitialValues(CASE& myCase) {
+  using T = CASE::value_t;
+  auto& parameters = myCase.getParameters();
+  auto& sLattice = myCase.getLattice(NavierStokes{});
+  auto bulkIndicator = myCase.getGeometry().getMaterialIndicator( { 1,3,4,5 } );
 
   // Set required porosities
-  Vector radius = parameters.get<parameters::ELLIPSOID_RADII>();
+  Vector radius = parameters.template get<parameters::ELLIPSOID_RADII>();
   Vector radius_plus_eps = radius;
-  const T eps = parameters.get<parameters::SMOOTH_LAYER_THICKNESS>() *
-	        parameters.get<parameters::EXTENT_DOMAIN>()[0] /
-	        parameters.get<parameters::RESOLUTION>(); 
+  const T eps = parameters.template get<parameters::SMOOTH_LAYER_THICKNESS>() *
+	        parameters.template get<parameters::DOMAIN_EXTENT>()[1] /
+	        parameters.template get<parameters::RESOLUTION>(); 
   for (int i=0; i < 3; ++i) {
-    radius_plus_eps += eps;
+    radius_plus_eps[i] += eps;
   }
-  std::shared_ptr<IndicatorF3D<T>> ellipsoid = std::make_shared<IndicatorEllipsoid3D<T>>( parameters.get<parameters::ELLIPSOID_POS>(), radius_plus_eps );
+  std::shared_ptr<IndicatorF3D<T>> ellipsoid =
+    std::make_shared<IndicatorEllipsoid3D<T>>(parameters.template get<parameters::ELLIPSOID_POS>(), radius_plus_eps);
 
   // Smooth ellipsoid to set porosity field
-  std::shared_ptr<AnalyticalF3D<T,T>> smoothEllipsoid = std::make_shared<SmoothIndicatorSigmoidEllipsoid3D<T,T,false>>( parameters.get<parameters::ELLIPSOID_RADII>(), radius, eps);
+  std::shared_ptr<AnalyticalF3D<T,T>> smoothEllipsoid =
+    std::make_shared<SmoothIndicatorSigmoidEllipsoid3D<T,T,false>>(parameters.template get<parameters::ELLIPSOID_POS>(), radius, eps);
   std::shared_ptr<AnalyticalF3D<T,T>> one = std::make_shared<AnalyticalConst3D<T,T>>(1.);
   std::shared_ptr<AnalyticalF3D<T,T>> ellipsoidField = one - smoothEllipsoid;
 
   // Initialize porosity
-  sLattice.template defineField<POROSITY>( bulkIndicator, *ellipsoidField );
+  sLattice.template defineField<descriptors::POROSITY>( bulkIndicator, *ellipsoidField );
 
   // Initialize rho and u
   AnalyticalConst3D<T,T> rhoF(1);
@@ -178,16 +198,15 @@ void prepareLattice( SuperLattice<T,DESCRIPTOR>& sLattice,
   sLattice.defineRhoU(bulkIndicator, rhoF, u);
   sLattice.iniEquilibrium(bulkIndicator, rhoF, u);
 
-  sLattice.template setParameter<descriptors::OMEGA>(omega);
-
   sLattice.initialize();
-  clout << "Prepare Lattice ... OK" << std::endl;
 }
 
 template<typename CASE>
-void setBoundaryValues( SuperLattice<T,DESCRIPTOR>& sLattice,
-                        SuperGeometry<T,3>& superGeometry, int iT )
+void setBoundaryValues(CASE& myCase, int iT )
 {
+  using T = CASE::value_t;
+  auto& sLattice = myCase.getLattice(NavierStokes{});
+  auto& superGeometry = myCase.getGeometry();
   auto& converter = sLattice.getUnitConverter();
   int iTmaxStart = converter.getLatticeTime( rampStartT );
   int iTupdate = converter.getLatticeTime( rampUpdateT );
@@ -206,60 +225,24 @@ void setBoundaryValues( SuperLattice<T,DESCRIPTOR>& sLattice,
   }
 }
 
-template<typename CASE>
-T objective_details( SuperLattice<T,DESCRIPTOR>& sLattice,
-                     SuperGeometry<T,3>& superGeometry )
-{
-  OstreamManager clout( std::cout,"objective_details" );
-  auto& converter = sLattice.getUnitConverter();
-  T result = 0.0;
-  Vector<T,3> center( centerEllipsoidX, centerChannelYZ, centerChannelYZ );
-  IndicatorCuboid3D<T> integrationDomain(1.0, 0.4, 0.4, center);
-  SuperIndicatorFfromIndicatorF3D<T> iDomain(integrationDomain, superGeometry);
-
-  // Viscous Dissipation
-  SuperLatticePhysDissipation3D<T,DESCRIPTOR> viscous_dissipation( sLattice, converter );
-  SuperIntegral3D<T,T> dissipationIntegral1(viscous_dissipation, iDomain);
-  T vDissipation[1] = {0.};
-  int input1[1];
-  dissipationIntegral1( vDissipation, input1 );
-  clout << "Viscous dissipation = " << vDissipation[0] << std::endl;
-  result = vDissipation[0];
-
-  // Porous Dissipation
-  SuperLatticeFfromCallableF<T,DESCRIPTOR> porous_Dissipation(sLattice, [&](T* output, auto cell){
-    T uTemp[DESCRIPTOR::d];
-    cell.computeU(uTemp);
-    const T porosity = cell.template getField<descriptors::POROSITY>();
-
-    const T invPermeability = projection::porosityToInvPermeability(porosity, converter);
-    const T uNormSq = util::euklidN2(uTemp, DESCRIPTOR::d);
-    output[0] = converter.getPhysViscosity() * invPermeability * uNormSq;
-  });
-  SuperIntegral3D<T,T> dissipationIntegral2(porous_Dissipation, iDomain);
-  T pDissipation[1] = {0.};
-  dissipationIntegral2( pDissipation, input1 );
-  clout << "Porous dissipation = " << pDissipation[0] << std::endl;
-  result += pDissipation[0];
-  return result;
-}
-
 // Computes and visualizes Lattice fields, computes dissipation
 template<typename CASE>
-void getResults( SuperLattice<T, DESCRIPTOR>& sLattice,
-                 int iT,
-                 SuperGeometry<T,3>& superGeometry,
-                 util::Timer<T>& timer)
+void getResults(CASE& myCase,
+                int iT,
+                util::Timer<typename CASE::value_t>& timer)
 {
-  OstreamManager clout( std::cout,"getResults" );
+  OstreamManager clout(std::cout,"getResults");
+  using T = CASE::value_t;
+  using DESCRIPTOR = CASE::descriptor_t;
+  auto& sLattice = myCase.getLattice(NavierStokes{});
   auto& converter = sLattice.getUnitConverter();
 
-  SuperVTMwriter3D<T> vtmWriter( "ellipsoid3dOpti" );
-  SuperLatticePhysVelocity3D<T,DESCRIPTOR> velocity( sLattice, converter );
-  SuperLatticePhysPressure3D<T,DESCRIPTOR> pressure( sLattice, converter );
-  SuperLatticePorosity3D<T,DESCRIPTOR> porosity( sLattice );
-  SuperLatticePhysDissipation3D<T,DESCRIPTOR> viscous_dissipation( sLattice, converter );
-  SuperLatticeFfromCallableF<T,DESCRIPTOR> porous_dissipation(sLattice, [&](T* output, auto cell){
+  SuperVTMwriter3D<T> vtmWriter("ellipsoid3dOpti");
+  SuperLatticePhysVelocity3D velocity(sLattice, converter);
+  SuperLatticePhysPressure3D pressure(sLattice, converter);
+  SuperLatticePorosity3D porosity(sLattice);
+  SuperLatticePhysDissipation3D viscous_dissipation(sLattice, converter);
+  SuperLatticeFfromCallableF porous_dissipation(sLattice, [&](T* output, auto cell){
     T uTemp[DESCRIPTOR::d];
     cell.computeU(uTemp);
     const T porosity = cell.template getField<descriptors::POROSITY>();
@@ -294,14 +277,82 @@ void getResults( SuperLattice<T, DESCRIPTOR>& sLattice,
     timer.printStep();
 
     // Lattice statistics console output
-    sLattice.getStatistics().print( iT,converter.getPhysTime( iT ) );
-    objective_details(sLattice, converter, superGeometry);
+    sLattice.getStatistics().print(iT, converter.getPhysTime( iT ));
   }
 
   // Writes the vtk files, currently only for last simulation
   if ( iT%vtkIter == 0 ) {
-    vtmWriter.write( iT );
+    vtmWriter.write(iT);
   }
+}
+
+
+template <typename CASE>
+void simulate(CASE& myCase) {
+  using T = CASE::value_t;
+  auto& sLattice = myCase.getLattice(NavierStokes{});
+  auto& superGeometry = myCase.getGeometry();
+  auto& converter = sLattice.getUnitConverter();
+  
+  // === 4th Step: Main Loop with Timer ===
+  util::Timer<T> timer( converter.getLatticeTime( maxPhysT ), superGeometry.getStatistics().getNvoxel() );
+  auto maxiT = converter.getLatticeTime( maxPhysT );
+  timer.start();
+
+  for (std::size_t iT = 0; iT < maxiT; ++iT) {
+    // === 5th Step: Definition of Initial and Boundary Conditions === can be skipped for forced flow type
+    setBoundaryValues(myCase, iT);
+
+    // === 6th Step: Collide and Stream Execution ===
+    sLattice.collideAndStream();
+
+    // === 7th Step: Computation and Output of the Results ===
+    getResults(myCase, iT, timer );
+  }
+  timer.stop();
+  timer.printSummary();
+} 
+
+template<typename CASE>
+CASE::value_t objectiveF(CASE& myCase)
+{
+  OstreamManager clout( std::cout,"objectiveF" );
+  using T = CASE::value_t;
+  using DESCRIPTOR = CASE::descriptor_t;
+  auto& sLattice = myCase.getLattice(NavierStokes{});
+  auto& converter = sLattice.getUnitConverter();
+  auto& superGeometry = myCase.getGeometry();
+  auto& parameters = myCase.getParameters();
+  T result = 0.0;
+  Vector<T,3> center = parameters.template get<parameters::ELLIPSOID_POS>();
+  IndicatorCuboid3D<T> integrationDomain(1.0, 0.4, 0.4, center);
+  SuperIndicatorFfromIndicatorF3D<T> iDomain(integrationDomain, superGeometry);
+
+  // Viscous Dissipation
+  SuperLatticePhysDissipation3D<T,DESCRIPTOR> viscous_dissipation( sLattice, converter );
+  SuperIntegral3D<T,T> dissipationIntegral1(viscous_dissipation, iDomain);
+  T vDissipation[1] = {0.};
+  int input1[1];
+  dissipationIntegral1( vDissipation, input1 );
+  clout << "Viscous dissipation = " << vDissipation[0] << std::endl;
+  result = vDissipation[0];
+
+  // Porous Dissipation
+  SuperLatticeFfromCallableF<T,DESCRIPTOR> porous_Dissipation(sLattice, [&](T* output, auto cell){
+    T uTemp[DESCRIPTOR::d];
+    cell.computeU(uTemp);
+    const T porosity = cell.template getField<descriptors::POROSITY>();
+
+    const T invPermeability = projection::porosityToInvPermeability(porosity, converter);
+    const T uNormSq = util::euklidN2(uTemp, DESCRIPTOR::d);
+    output[0] = converter.getPhysViscosity() * invPermeability * uNormSq;
+  });
+  SuperIntegral3D<T,T> dissipationIntegral2(porous_Dissipation, iDomain);
+  T pDissipation[1] = {0.};
+  dissipationIntegral2( pDissipation, input1 );
+  clout << "Porous dissipation = " << pDissipation[0] << std::endl;
+  result += pDissipation[0];
+  return result;
 }
 
 int main( int argc, char* argv[] )
@@ -312,77 +363,45 @@ int main( int argc, char* argv[] )
   MyCase::ParametersD myCaseParametersD;
   {
     using namespace parameters;
-    myCaseParametersD.set<DOMAIN_EXTENT>({0.4, 1.2, 1.2});
-    myCaseParametersD.set<RESOLUTION>(20);
-    myCaseParametersD.set<RELAXATION_TIME>(0.55);
-    myCaseParametersD.set<PHYS_CHAR_VISCOSITY>(0.001);
-    myCaseParametersD.set<REYNOLDS>(50);
-    myCaseParametersD.set<PHYS_CHAR_VELOCITY>([&]() {
-      return myCaseParameters.get<PHYS_CHAR_VISCOSITY>() *
-             myCaseParameters.get<REYNOLDS>() /
-	     myCaseParameters.get<EXTENT_DOMAIN>()[0];
+    myCaseParametersD.template set<DOMAIN_EXTENT>({1.2, 0.4, 0.4});
+    myCaseParametersD.template set<RESOLUTION>(20);
+    myCaseParametersD.template set<LATTICE_RELAXATION_TIME>(0.55);
+    myCaseParametersD.template set<PHYS_CHAR_VISCOSITY>(0.001);
+    myCaseParametersD.template set<REYNOLDS>(50);
+    myCaseParametersD.template set<PHYS_CHAR_VELOCITY>([&] {
+      return myCaseParametersD.template get<PHYS_CHAR_VISCOSITY>() *
+             myCaseParametersD.template get<REYNOLDS>() /
+	     myCaseParametersD.template get<DOMAIN_EXTENT>()[1];
     });
-    myCaseParametersD.set<PHYS_CHAR_DENSITY>(1.0);
-    myCaseParametersD.set<CONTROLS>({0.05, 0.05});
-    myCaseParametersD.set<ELLIPSOID_VOLUME>(0.001);
-    myCaseParametersD.set<SMOOTH_LAYER_THICKNESS>(5);
-    myCaseParametersD.set<ELLIPSOID_RADII>([&]() {
-      const T radiusZ = 0.75*myCaseParametersD.get<ELLIPSOID_VOLUME>() /
-	      (M_PI*myCaseParametersD.get<CONTROLS>()[0]*myCaseParametersD.get<CONTROLS>()[1]);
-      return {myCaseParametersD.get<CONTROLS>()[0],
-              myCaseParametersD.get<CONTROLS>()[1],
-	      radiusZ};
+    myCaseParametersD.template set<PHYS_CHAR_DENSITY>(1.0);
+    myCaseParametersD.template set<CONTROLS>({0.05, 0.05});
+    myCaseParametersD.template set<ELLIPSOID_VOLUME>(0.001);
+    myCaseParametersD.template set<SMOOTH_LAYER_THICKNESS>(5);
+    myCaseParametersD.template set<ELLIPSOID_RADII>([&] {
+      const T radiusX = 0.75*myCaseParametersD.template get<ELLIPSOID_VOLUME>() /
+	      (M_PI*myCaseParametersD.template get<CONTROLS>()[0]*myCaseParametersD.template get<CONTROLS>()[1]);
+      return FieldD<T,MyCase::descriptor_t,ELLIPSOID_RADII>{radiusX,
+                                                            myCaseParametersD.template get<CONTROLS>()[0],
+                                                            myCaseParametersD.template get<CONTROLS>()[1]};
     });
-    myCaseParametersD.set<ELLIPSOID_POS>([&]() {
-      return {0.5,
-              myCaseParametersD.get<DOMAIN_EXTENT>()[1] / 2.0,
-	      myCaseParametersD.get<DOMAIN_EXTENT>()[2] / 2.0};
+    myCaseParametersD.template set<ELLIPSOID_POS>([&] {
+      return FieldD<T,MyCase::descriptor_t,ELLIPSOID_POS>{0.5,
+              myCaseParametersD.template get<DOMAIN_EXTENT>()[1] / 2.0,
+	      myCaseParametersD.template get<DOMAIN_EXTENT>()[2] / 2.0};
     });
   }
 
   auto mesh = createMesh(myCaseParametersD);
-
-  Vector<T,3> radius( radiusEllipsoidX, radiusEllipsoidY, radiusEllipsoidZ );
-  clout << "Radius X: " << radiusEllipsoidX  << std::endl;
-  clout << "Radius Y: " << radiusEllipsoidY  << std::endl;
-  clout << "Radius Z: " << radiusEllipsoidZ  << std::endl;
-  Vector<T,3> radius_plus_eps = radius;
-  for (int i=0; i < 3; ++i) {
-    radius_plus_eps[i] += epsilon * converter.getConversionFactorLength();
-  }
-
-  // Indicator ellipsoid
-  std::shared_ptr<IndicatorF3D<T>> ellipsoid = std::make_shared<IndicatorEllipsoid3D<T>>( center, radius_plus_eps );
-
-  // Smooth ellipsoid to set porosity field
-  std::shared_ptr<AnalyticalF3D<T,T>> smoothEllipsoid = std::make_shared<SmoothIndicatorSigmoidEllipsoid3D<T,T,false>>( center, radius, epsilon * converter.getConversionFactorLength() );
+  MyCase myCase(myCaseParametersD, mesh);
 
   // Instantiation of a superGeometry
-  prepareGeometry( channel, superGeometry);
+  prepareGeometry(myCase);
 
   // === Initial 3rd Step: Prepare Lattice ===
-  SuperLattice<T,DESCRIPTOR> sLattice( superGeometry );
-  prepareLattice( sLattice, superGeometry, smoothEllipsoid);
-
-  // === 4th Step: Main Loop with Timer ===
-  clout << "starting simulation" << std::endl;
-  util::Timer<T> timer( converter.getLatticeTime( maxPhysT ), superGeometry.getStatistics().getNvoxel() );
-  auto maxiT = converter.getLatticeTime( maxPhysT );
-  timer.start();
-
-  for (std::size_t iT = 0; iT < maxiT; ++iT) {
-    // === 5th Step: Definition of Initial and Boundary Conditions === can be skipped for forced flow type
-    setBoundaryValues( sLattice, superGeometry, iT );
-
-    // === 6th Step: Collide and Stream Execution ===
-    sLattice.collideAndStream();
-
-    // === 7th Step: Computation and Output of the Results ===
-    getResults( sLattice, iT, superGeometry, timer );
-  }
-  timer.stop();
-  timer.printSummary();
-  clout << util::pow(objective_details(sLattice, superGeometry), 2.) << std::endl;
+  prepareLattice(myCase);
+  setInitialValues(myCase);
+  simulate(myCase);
+  clout << util::pow(objectiveF(myCase), 2.) << std::endl;
 
   /*if constexpr (false) {
     std::vector<U> radiusEllipsoidYZ({.05, .05});
