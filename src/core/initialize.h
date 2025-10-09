@@ -41,17 +41,21 @@ void initialize(int *argc, char ***argv, bool multiOutput=false, bool verbose=tr
   }
 #endif
 
+#ifndef FEATURE_HIDE_LOGO
   // create an OstreamManager object in order to enable multi output
   if (singleton::mpi().isMainProcessor()) {
   std::cout << R"(
-   ┃          ▁▁▁▁                   ▁▁    ▁▁▁▁
-   ┃ ┏━━┓    ╱ ▁▁ ╲▁▁▁▁  ▁▁▁  ▁▁▁▁  ╱ ╱   ╱ ▁▁ ╲
- ┏━╋┓┃  ┃   ╱ ╱ ╱ ╱ ▁▁ ╲╱ ▁ ╲╱ ▁▁ ╲╱ ╱   ╱ ╱▁╱ ╱
- ┃ ┗╋╋━━┻┓ ╱ ╱▁╱ ╱ ╱▁╱ ╱  ▁▁╱ ╱ ╱ ╱ ╱▁▁▁╱ ╱▁╱ ╱
- ┗━━┛┃   ┃ ╲▁▁▁▁╱ ▁▁▁▁╱╲▁▁▁╱▁╱ ╱▁╱▁▁▁▁▁╱▁▁▁▁▁╱
-     ┗━━━┛     ╱▁╱ ==========================>>
+    ┃
+    ┃  ┏━━━━┓      ▁▁▁▁                   ▁▁    ▁▁▁▁
+    ┃  ┃    ┃     ╱ ▁▁ ╲▁▁▁▁  ▁▁▁  ▁▁▁▁  ╱ ╱   ╱ ▁▁ ╲
+ ┏━━╋━┓┃    ┃    ╱ ╱ ╱ ╱ ▁▁ ╲╱ ▁ ╲╱ ▁▁ ╲╱ ╱   ╱ ╱▁╱ ╱
+ ┃  ┗━╋╋━━━━┻┓  ╱ ╱▁╱ ╱ ╱▁╱ ╱  ▁▁╱ ╱ ╱ ╱ ╱▁▁▁╱ ╱▁╱ ╱
+ ┃    ┃┃     ┃  ╲▁▁▁▁╱ ▁▁▁▁╱╲▁▁▁╱▁╱ ╱▁╱▁▁▁▁▁╱▁▁▁▁▁╱
+ ┗━━━━┛┃     ┃      ╱▁╱ ==========================>>
+       ┗━━━━━┛
 )" << std::endl;
   }
+#endif
 
   olb::OstreamManager clout(std::cout, "initialize");
   clout << "Version  : " << OLB_VERSION << std::endl;

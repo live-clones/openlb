@@ -1,3 +1,3 @@
 EXAMPLE = flatInterfaceEOC2d
-OLB_ROOT := ../../..
+OLB_ROOT := ../../../..
 include $(OLB_ROOT)/default.mk

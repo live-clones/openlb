@@ -201,8 +201,6 @@ void setInitialValues( MyCase& myCase ) {
   using DESCRIPTOR = MyCase::descriptor_t_of<NavierStokes>;
   auto& lattice   = myCase.getLattice(NavierStokes{});
   auto& geometry  = myCase.getGeometry();
-  auto& converter = lattice.getUnitConverter();
-  auto& parameters= myCase.getParameters();
   auto bulkIndicator = geometry.getMaterialIndicator({1, 3, 4});
 
   // Initial conditions

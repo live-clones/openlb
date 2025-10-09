@@ -145,7 +145,7 @@ void setTemporalValues(MyCase& myCase,
 
   if ( iT%iTperiod==0 && iT<= iTmaxStart ) {
     PolynomialStartScale<T,int> startScale( iTmaxStart, T( 1 ) );
-    int iTvec[1]= {iT};
+    int iTvec[1] = { static_cast<std::size_t>(iT) };
     T frac = T();
     startScale( &frac,iTvec );
 

@@ -33,14 +33,13 @@ namespace olb {
 
         int i, j, zeta, dim, oppo;
         V nx, ny;
-        Vector<int,2> c, oppoC;
         V s_ij, Tx, Ty, sum, weight, boundaryX, boundaryY;
 
         V latticeFactor = dt / (kappa * dx);
 
         // Iterate over all directions
         for (int iPop = 0; iPop < DESCRIPTOR::q; ++iPop) {
-          c = descriptors::c<DESCRIPTOR>(iPop);
+          auto c = descriptors::c<DESCRIPTOR>(iPop);
           oppo = descriptors::opposite<DESCRIPTOR>(iPop);
           auto neighbor = cell.neighbor(c);
           auto q_ij = neighbor.template getField<descriptors::SOLID_DISTANCE_FIELD>();
@@ -220,14 +219,13 @@ namespace olb {
 
         int i, j, zeta, dim, oppo;
         V nx, ny;
-        Vector<int,2> c, oppoC;
         V s_ij, a_ijkl, Tx, Ty, sum, epsilon, weight, boundaryX, boundaryY;
 
         V latticeFactor = dt / (kappa * dx);
 
         // Iterate over all directions
         for (int iPop = 0; iPop < DESCRIPTOR::q; ++iPop) {
-          c = descriptors::c<DESCRIPTOR>(iPop);
+          auto c = descriptors::c<DESCRIPTOR>(iPop);
           oppo = descriptors::opposite<DESCRIPTOR>(iPop);
           auto neighbor = cell.neighbor(c);
           auto q_ij = neighbor.template getField<descriptors::SOLID_DISTANCE_FIELD>();
