@@ -60,6 +60,7 @@
 #include "zouHePressure.h"
 #include "zouHePressure3D.h"
 #include "setTurbulentWallModel.h"
+#include "postprocessor/rtlbmDirectedBoundaryPostProcessor3D.h"
 
 
 #include "boundary3D.hh"
