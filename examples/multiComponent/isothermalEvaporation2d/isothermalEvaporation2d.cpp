@@ -47,52 +47,18 @@ using MyCase = Case<NavierStokes, Lattice<double, descriptors::D2Q9<STATISTIC,  
 using COUPLING1 = ChemicalPotentialPostProcessor<EOS::Landau>;
 using COUPLING2 = FreeEnergyForcedPostProcessor;
 
-// Parameters in physical units
-const double Lx = 400;     // domain length [m]
-const double Ly = 10;      // domain height [m]
-const double length = 300; // liquid phase length [m]
-
-const double nu = 0.1; // interface viscosity [m2.s-1]
-
-const double surfTension = 1.e-3; // surface tension [N.m-1]
-
-const double rho_vapor = 1.; // vapor density [kg.m-3]
-const double rho_liquid = 2.; // liquid density [kg.m-3]
-
-// Boundary conditions in physical units
-/**
- * Boundary conditions for: p_sat/p_c = 0.99,
- * we use the analytical solution to initialize
- * the system close to the final solution
- */
-const double rho_V = 0.9809107952180959; // analytical solution vapor density
-const double rho_L = 1.9926932521825274; // analytical solution liquid density
-const double mu_b = -3.4274274827508194e-05; // boundary chemical potential
-const double Ui_sol = 0.0021753492521563193; // interface velocity - analytical solution
-
-// Resolution
-const int Nx = 400;
-const int Ny = 10;
-
-// Parameters in lattice units
-const double tau = 0.8; // relaxation time in lattice units
-const double thickness = 5.; // interface thickness in lattice units; physThickness = delta_x * thickness
-
-// Time parameters in lattice units
-const int maxIter  = 30000;
-const int vtkIter  = 100;
-const int statIter = 100;
-
 /// @brief Create a simulation mesh, based on user-specified geometry
 /// @return An instance of a mesh with the relevant information
 Mesh<MyCase::value_t, MyCase::d> createMesh(MyCase::ParametersD& parameters) {
   using T = MyCase::value_t;
 
-  Vector<T,2> extend(Lx, Ly);
+  Vector<T,2> extend(parameters.get<parameters::DOMAIN_EXTENT>()[0], parameters.get<parameters::DOMAIN_EXTENT>()[1]);
   Vector<T,2> origin;
   IndicatorCuboid2D<T> cuboid(extend, origin);
 
-  Mesh<T,MyCase::d> mesh = Mesh<MyCase::value_t, MyCase::d>(cuboid, Lx / Nx, singleton::mpi().getSize());
+  T physDeltaX = parameters.get<parameters::DOMAIN_EXTENT>()[0] / parameters.get<parameters::RESOLUTION>();
+
+  Mesh<T,MyCase::d> mesh = Mesh<T, MyCase::d>(cuboid, physDeltaX , singleton::mpi().getSize());
   mesh.setOverlap(3);
   mesh.getCuboidDecomposition().setPeriodicity({false,true});
   return mesh;
@@ -146,7 +112,6 @@ struct initialVelocityCorrection  {
   }
 };
 
-
 /// @brief Set lattice dynamics
 /// @param myCase The Case instance which keeps the simulation data
 void prepareLattice(MyCase& myCase)
@@ -155,11 +120,16 @@ void prepareLattice(MyCase& myCase)
   using T = MyCase::value_t;
   auto& lattice = myCase.getLattice(NavierStokes{});
   auto& geometry = myCase.getGeometry();
-  //auto& converter = lattice.getUnitConverter();
-  //auto& parameters = myCase.getParameters();
+  auto& parameters = myCase.getParameters();
 
   OstreamManager clout( std::cout,"prepareLattice" );
   clout << "Prepare Lattice ..." << std::endl;
+
+  const int Nx = parameters.get<parameters::RESOLUTION>();
+  const T tau = parameters.get<parameters::LATTICE_RELAXATION_TIME>();
+  const T rho_liquid = parameters.get<parameters::RHO_LIQUID>();
+  const T Lx = parameters.get<parameters::DOMAIN_EXTENT>()[0];
+  const T nu = parameters.get<parameters::NU>();
 
   // Unit Converter
   lattice.setUnitConverter<MultiPhaseUnitConverterFromRelaxationTime<T,DESCRIPTOR>>(
@@ -188,6 +158,12 @@ void prepareLattice(MyCase& myCase)
   AnalyticalConst2D<T,T> zeroVelocity( zeroV );
 
   // Computing the density
+  const T rho_V = parameters.get<parameters::RHO_VAPOR_ANALYTICAL>();
+  const T Ly = parameters.get<parameters::DOMAIN_EXTENT>()[1];
+  const T length = parameters.get<parameters::LIQUID_PHASE_LENGTH>();
+  const T thickness = parameters.get<parameters::THICKNESS>();
+  const T rho_L = parameters.get<parameters::RHO_LIQUID_ANALYTICAL>();
+
   AnalyticalConst2D<T,T> vapor ( rho_V/lattice.getUnitConverter().getConversionFactorDensity() );
   SmoothIndicatorFactoredCuboid2D<T,T> liquid ( {Lx/2., Ly/2.}, length, Lx,
                                                  sqrt(2.)*thickness*lattice.getUnitConverter().getConversionFactorLength(),
@@ -203,6 +179,7 @@ void prepareLattice(MyCase& myCase)
   AnalyticalIdentity2D<T,T> sign ( left + right );
 
   // Computing the velocity
+  const T Ui_sol = parameters.get<parameters::INTERFACE_VELOCITY_ANALYTICAL>();
   AnalyticalConst2D<T,T> _rho_L ( rho_L/lattice.getUnitConverter().getConversionFactorDensity() );
   AnalyticalConst2D<T,T> _Ui ( Ui_sol/lattice.getUnitConverter().getConversionFactorVelocity() );
   AnalyticalIdentity2D<T,T> solVelocity ( sign * _Ui * _rho_L / rho - sign * _Ui );
@@ -213,6 +190,7 @@ void prepareLattice(MyCase& myCase)
   lattice.iniEquilibrium( geometry, 2, rho, solVelocity );
 
   // Set Chemical Potential
+  const T mu_b = parameters.get<parameters::BOUNDARY_CHEMICAL_POTENTIAL>();
   AnalyticalConst2D<T,T> chemical( mu_b/lattice.getUnitConverter().getConversionFactorChemicalPotential() );
   lattice.defineField<descriptors::CHEM_POTENTIAL>( geometry, 2, chemical );
 
@@ -243,6 +221,8 @@ void prepareLattice(MyCase& myCase)
 
   chemicalCoupling.restrictTo(geometry.getMaterialIndicator({1}));
 
+  const T rho_vapor = parameters.get<parameters::RHO_VAPOR>();
+  const T surfTension = parameters.get<parameters::SURFACE_TENSION>();
   chemicalCoupling.template setParameter<EOS::Landau::RHOV>(
                   rho_vapor/lattice.getUnitConverter().getConversionFactorDensity());
   chemicalCoupling.template setParameter<EOS::Landau::RHOL>(
@@ -279,34 +259,13 @@ void prepareLattice(MyCase& myCase)
 }
 
 
-
-/*
-template<typename COUPLING1, typename COUPLING2>
-void initialCondition( MyCase& myCase,
-                       COUPLING1& chemicalCoupling,
-                       COUPLING2& forceCoupling )
-{
-  auto& lattice = myCase.getLattice(NavierStokes{});
-  auto& geometry = myCase.getGeometry();
-
-  OstreamManager clout( std::cout,"initialCondition" );
-  clout << "Initial Condition ..." << std::endl;
-
-
-
-  clout << "Initial Condition ... OK" << std::endl;
-}
-*/
-
-
 void boundaryCondition(MyCase& myCase)
 {
   using DESCRIPTOR = MyCase::descriptor_t_of<NavierStokes>;
   using T = MyCase::value_t;
   auto& lattice = myCase.getLattice(NavierStokes{});
   auto& geometry = myCase.getGeometry();
-  //auto& converter = lattice.getUnitConverter();
-  //auto& parameters = myCase.getParameters();
+  auto& parameters = myCase.getParameters();
 
   // Compute density at MN1
   SuperLatticeDensity2D<T, DESCRIPTOR> _density( lattice );
@@ -317,6 +276,8 @@ void boundaryCondition(MyCase& myCase)
   interpolRHO( &rho_MN1, pos_MN1 );
 
   // Set boundary density at MN2
+  const T rho_V = parameters.get<parameters::RHO_VAPOR_ANALYTICAL>();
+  const T mu_b = parameters.get<parameters::BOUNDARY_CHEMICAL_POTENTIAL>();
   AnalyticalConst2D<T,T> densityV ( rho_V );
   AnalyticalConst2D<T,T> densityMN1 ( rho_MN1 );
   AnalyticalConst2D<T,T> half ( T(0.5) );
@@ -339,17 +300,21 @@ void computeRelaxationFrequency(MyCase& myCase)
   using T = MyCase::value_t;
   auto& lattice = myCase.getLattice(NavierStokes{});
   auto& geometry = myCase.getGeometry();
+  auto& parameters = myCase.getParameters();
 
   // Get density
   SuperLatticeDensity2D<T, DESCRIPTOR> _density( lattice );
 
   // Find interface position
+  const T rho_V = parameters.get<parameters::RHO_VAPOR_ANALYTICAL>();
+  const T rho_L = parameters.get<parameters::RHO_LIQUID_ANALYTICAL>();
   T rhom = 0.5*(rho_V+rho_L)/lattice.getUnitConverter().getConversionFactorDensity();
   T dx = lattice.getUnitConverter().getConversionFactorLength();
   AnalyticalFfromSuperF2D<T,T> interpolRHO( _density, true, 1 );
   T pos1[2] = {0., 0.};
   T pos2[2] = {0., 0.};
   T h1 = 0, h2 = 0;
+  const T Nx = parameters.get<parameters::RESOLUTION>();
   for (int ix=1; ix<Nx-1; ix++) {
     pos1[0] = ix * dx;
     pos2[0] = ( ix + 1 ) * dx;
@@ -363,6 +328,11 @@ void computeRelaxationFrequency(MyCase& myCase)
   }
 
   // Computing indicator
+  const T Lx = parameters.get<parameters::DOMAIN_EXTENT>()[0];
+  const T Ly = parameters.get<parameters::DOMAIN_EXTENT>()[1];
+  const T thickness = parameters.get<parameters::THICKNESS>();
+  const T tau = parameters.get<parameters::LATTICE_RELAXATION_TIME>();
+
   AnalyticalConst2D<T,T> bulk ( 1./tau );
   SmoothIndicatorFactoredCuboid2D<T,T> left ( {0., Ly/2.}, 2.*h1-15.*thickness*dx,
                     Lx, 1., 0, {0,0}, 0,
@@ -388,12 +358,14 @@ void getResults(MyCase& myCase, int iT, util::Timer<MyCase::value_t>& timer)
   using DESCRIPTOR = MyCase::descriptor_t_of<NavierStokes>;
   using T = MyCase::value_t;
   auto& lattice = myCase.getLattice(NavierStokes{});
-  //auto& geometry = myCase.getGeometry();
-  //auto& converter = lattice.getUnitConverter();
-  //auto& parameters = myCase.getParameters();
+  auto& parameters = myCase.getParameters();
 
   OstreamManager clout( std::cout,"getResults" );
   SuperVTMwriter2D<T> vtmWriter( "isothermalEvaporation2D" );
+
+  const int vtkIter = parameters.get<parameters::LATTICE_VTK_ITER_T>();
+  const int statIter = parameters.get<parameters::LATTICE_STAT_ITER_T>();
+
   if ( iT==0 ) {
     // Writes the cuboid no. and rank no. as vti file for visualization
     SuperLatticeCuboid2D<T, DESCRIPTOR> cuboid( lattice );
@@ -474,6 +446,9 @@ void getResults(MyCase& myCase, int iT, util::Timer<MyCase::value_t>& timer)
 
     // Compute error in Interface velocity
     // first: compute vapor phase velocity
+    const T rho_V = parameters.get<parameters::RHO_VAPOR_ANALYTICAL>();
+    const T rho_L = parameters.get<parameters::RHO_LIQUID_ANALYTICAL>();
+    const T Ui_sol = parameters.get<parameters::INTERFACE_VELOCITY_ANALYTICAL>();
     AnalyticalFfromSuperF2D<T,T> interpolVelocity( _velocity_phs, true, 1 );
     T dx = lattice.getUnitConverter().getConversionFactorLength();
     T pos[2] = {dx, 0.};
@@ -484,11 +459,8 @@ void getResults(MyCase& myCase, int iT, util::Timer<MyCase::value_t>& timer)
     clout << "Numerical interface velocity [m/s]: " << Ui_num[0] << std::endl;
     clout << "Analytical interface velocity [m/s]: " << Ui_sol << std::endl;
     clout << "Relative error [%]: " << 100. * abs( Ui_num[0] - Ui_sol ) / abs( Ui_sol ) << std::endl;
-
   }
-
 }
-
 
 /// @brief Execute simulation: set initial values and run time loop
 /// @param myCase The Case instance which keeps the simulation data
@@ -497,12 +469,14 @@ void simulate(MyCase& myCase)
   using T = MyCase::value_t;
   auto& lattice = myCase.getLattice(NavierStokes{});
   auto& geometry = myCase.getGeometry();
+  auto& parameters = myCase.getParameters();
   //auto& converter = lattice.getUnitConverter();
-  //auto& parameters = myCase.getParameters();
 
   // Main Loop with Timer
   OstreamManager clout(std::cout, "simulate");
   int iT = 0;
+  const size_t maxIter = parameters.get<parameters::MAX_LATTICE_T>();
+  const T length = parameters.get<parameters::LIQUID_PHASE_LENGTH>();
   clout << "starting simulation..." << std::endl;
   util::Timer<T> timer( maxIter, geometry.getStatistics().getNvoxel() );
   timer.start();
@@ -528,13 +502,11 @@ void simulate(MyCase& myCase)
     // Compute chemical potential
     lattice.executePostProcessors(stage::PreCoupling());
     lattice.getCommunicator(stage::PreCoupling()).communicate();
-    //chemicalCoupling.apply();
     myCase.getOperator("Chemical").apply();
 
     // Compute thermodynamic force
     lattice.executePostProcessors(stage::PreCoupling());
     lattice.getCommunicator(stage::PreCoupling()).communicate();
-    //forceCoupling.apply();
     myCase.getOperator("Force").apply();
 
   }
@@ -542,7 +514,6 @@ void simulate(MyCase& myCase)
   timer.printSummary();
 
   clout << "Finish" << std::endl;
-
 }
 
 /// Update boundary values at times (and external fields, if they exist)
@@ -554,7 +525,6 @@ void setTemporalValues(MyCase& myCase, std::size_t iT)
   // Nothing to do here, because simulation does not depend on time
 }
 
-
 /// Set initial condition for primal variables
 /// @param myCase The Case instance which keeps the simulation data
 /// @note Be careful: initial values have to be set using lattice units
@@ -563,14 +533,43 @@ void setInitialValues(MyCase& myCase)
   // Nothing to do here
 }
 
-
+/// Setup and run a simulation
 int main( int argc, char *argv[] )
 {
-  // Initialization for the parallel processing
   initialize( &argc, &argv );
 
   /// === Step 2: Set Parameters ===
   MyCase::ParametersD myCaseParameters;
+  {
+    using namespace olb::parameters;
+    myCaseParameters.set<RESOLUTION>(400);
+    myCaseParameters.set<LIQUID_PHASE_LENGTH>(300); // liquid phase length [m]
+    myCaseParameters.set<parameters::NU>(0.1); // interface viscosity [m2.s-1]
+    myCaseParameters.set<RHO_VAPOR>(1.); // vapor density [kg.m-3]
+    myCaseParameters.set<RHO_LIQUID>(2.); // liquid density [kg.m-3]
+    myCaseParameters.set<SURFACE_TENSION>(1.e-3); // surface tension [N.m-1]
+    myCaseParameters.set<DOMAIN_EXTENT>({400, 10}); // domain length and height [m]
+
+   // Boundary conditions in physical units
+   /**
+    * Boundary conditions for: p_sat/p_c = 0.99,
+    * we use the analytical solution to initialize
+    * the system close to the final solution
+    */
+    myCaseParameters.set<RHO_VAPOR_ANALYTICAL>(0.9809107952180959);
+    myCaseParameters.set<RHO_LIQUID_ANALYTICAL>(1.9926932521825274);
+    myCaseParameters.set<BOUNDARY_CHEMICAL_POTENTIAL>(-3.4274274827508194e-05);
+    myCaseParameters.set<INTERFACE_VELOCITY_ANALYTICAL>(0.0021753492521563193);
+
+    myCaseParameters.set<LATTICE_RELAXATION_TIME>(0.8); // Relaxation time in lattice units
+    myCaseParameters.set<THICKNESS>(5.); // Interface thickness in lattice units; physThickness = delta_x * thickness
+
+    // Time parameters in lattice units
+    myCaseParameters.set<MAX_LATTICE_T>(30000);
+    myCaseParameters.set<LATTICE_VTK_ITER_T>(100);
+    myCaseParameters.set<LATTICE_STAT_ITER_T>(100);
+  }
+  myCaseParameters.fromCLI(argc, argv);
 
   /// === Step 3: Create Mesh ===
   Mesh mesh = createMesh(myCaseParameters);
