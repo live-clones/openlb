@@ -1,8 +1,8 @@
 /*  Lattice Boltzmann sample, written in C++, using the OpenLB
  *  library
  *
- *  Copyright (C) 2008 Orestis Malaspinas
- *                2025 Adrian Kummerlaender
+ *  Copyright (C) 2015 Mathias J. Krause, Patrick Nathan
+ *                2023-2025 Adrian Kummerlaender, Fedor Bukreev, Stephan Simonis, Tikhon Riazantsev
  *  E-mail contact: info@openlb.net
  *  The most recent release of OpenLB can be downloaded at
  *  <http://www.openlb.net/>
@@ -27,8 +27,6 @@
 
 #include "fringeZone.h"
 
-const std::string xmlPath = "decomposition/n9.xml"; 
-
 using namespace olb;
 using namespace olb::names;
 
@@ -37,32 +35,19 @@ using MyCase = Case<
   NavierStokes, Lattice<double, descriptors::D3Q27<>>
 >;
 
-enum class BulkModel {
-
+enum class BulkModel : int {
   RLB = 0,
   SmagorinskyBGK = 1,
   LocalSmagorinskyBGK = 2,
   ShearSmagorinskyBGK = 3,
   ConsistentStrainSmagorinskyBGK = 4,
   KrauseBGK = 5,
-
 };
 
 namespace olb::parameters {
 
-  struct BULK_MODEL              : public descriptors::TYPED_FIELD_BASE<int, 1> { };
-  struct INLET_CYLINDER_SIZE     : public descriptors::FIELD_BASE<2> { }; // 0 -> length; 1 -> radius and char length
-
-  struct SMAGORINSKY             : public descriptors::FIELD_BASE<1> { };
-  struct LATTICE_RELAXATION_TIME : public descriptors::FIELD_BASE<1> { };
-
-  struct TURBULENCE_INTENSITY    : public descriptors::FIELD_BASE<1> { };
-  struct TURBULENCE_N_SEEDS      : public descriptors::FIELD_BASE<1> { };
-  struct TURBULENCE_N_TIME       : public descriptors::FIELD_BASE<1> { };
-  struct TURBULENCE_SIGMA        : public descriptors::FIELD_BASE<1> { };
-
-  struct STAT_ITER               : public descriptors::TYPED_FIELD_BASE<int, 1> { };
-  struct VTK_SAVE_ITER           : public descriptors::TYPED_FIELD_BASE<int, 1> { };
+struct BULK_MODEL          : public descriptors::TYPED_FIELD_BASE<BulkModel, 1> { };
+struct INLET_CYLINDER_SIZE : public descriptors::FIELD_BASE<2> { }; // 0 -> length; 1 -> radius and char length
 
 }
 
@@ -72,7 +57,7 @@ Mesh<MyCase::value_t,MyCase::d> createMesh(MyCase::ParametersD& params) {
   std::vector<T> origin(3,T());
   IndicatorCuboid3D<T> cuboid(extent, origin);
 
-  const T physDeltaX = params.get<parameters::PHYS_DELTA_X>(); 
+  const T physDeltaX = params.get<parameters::PHYS_DELTA_X>();
   Mesh<T,MyCase::d> mesh(cuboid, physDeltaX, singleton::mpi().getSize());
   mesh.setOverlap(params.get<parameters::OVERLAP>());
   return mesh;
@@ -113,10 +98,10 @@ std::shared_ptr<IndicatorF3D<MyCase::value_t>> makeInjectionTubeI(MyCase::Parame
   );
   return std::shared_ptr<IndicatorF3D<T>>(
     new IndicatorCylinder3D<T>(
-      extend, 
-      origin, 
+      extend,
+      origin,
       std::min(params.get<parameters::DOMAIN_EXTENT>()[1], params.get<parameters::DOMAIN_EXTENT>()[2]) / 2.
-    ) 
+    )
   );
 }
 
@@ -219,25 +204,25 @@ void prepareLattice(MyCase& myCase) {
   auto bulkIndicator = geometry.getMaterialIndicator({1, 3, 4});
 
   switch (params.get<parameters::BULK_MODEL>()) {
-    case static_cast<int>(BulkModel::RLB):
+    case BulkModel::RLB:
       lattice.defineDynamics<RLBdynamics>(bulkIndicator);
       break;
-    case static_cast<int>(BulkModel::ShearSmagorinskyBGK):
+    case BulkModel::ShearSmagorinskyBGK:
       lattice.defineDynamics<ShearSmagorinskyBGKdynamics>(bulkIndicator);
       lattice.setParameter<collision::LES::SMAGORINSKY>(params.get<parameters::SMAGORINSKY>());
       break;
-    case static_cast<int>(BulkModel::KrauseBGK):
+    case BulkModel::KrauseBGK:
       lattice.defineDynamics<KrauseBGKdynamics>(bulkIndicator);
       lattice.setParameter<collision::LES::SMAGORINSKY>(params.get<parameters::SMAGORINSKY>());
-    case static_cast<int>(BulkModel::ConsistentStrainSmagorinskyBGK):
+    case BulkModel::ConsistentStrainSmagorinskyBGK:
       lattice.defineDynamics<ConStrainSmagorinskyBGKdynamics>(bulkIndicator);
       lattice.setParameter<collision::LES::SMAGORINSKY>(params.get<parameters::SMAGORINSKY>());
       break;
-    case static_cast<int>(BulkModel::SmagorinskyBGK):
+    case BulkModel::SmagorinskyBGK:
       lattice.defineDynamics<SmagorinskyBGKdynamics>(bulkIndicator);
       lattice.setParameter<collision::LES::SMAGORINSKY>(params.get<parameters::SMAGORINSKY>());
       break;
-    case static_cast<int>(BulkModel::LocalSmagorinskyBGK):
+    case BulkModel::LocalSmagorinskyBGK:
     default:
       lattice.defineDynamics<LocalSmagorinskyBGKdynamics>(bulkIndicator);
       FringeZoneSmagorinskyConstant smagorinskyFringe(converter, T{0.15});
@@ -264,9 +249,7 @@ void prepareLattice(MyCase& myCase) {
   clout << "Prepare Lattice ... OK" << std::endl;
 }
 
-void setInitialValues(
-  MyCase& myCase
-) {
+void setInitialValues(MyCase& myCase) {
   using T = MyCase::value_t;
   auto& geometry = myCase.getGeometry();
   auto& lattice = myCase.getLattice(NavierStokes{});
@@ -286,14 +269,14 @@ void setTemporalValues(
   MyCase& myCase,
   std::size_t iT,
   VortexMethodTurbulentVelocityBoundary<MyCase::value_t, MyCase::descriptor_t_of<NavierStokes>>& vortex
-) { 
+) {
   using T = MyCase::value_t;
   auto& geometry = myCase.getGeometry();
   auto& params = myCase.getParameters();
   auto& lattice = myCase.getLattice(NavierStokes{});
   const auto& converter = lattice.getUnitConverter();
 
-  if (params.get<parameters::BULK_MODEL>() == static_cast<int>(BulkModel::ShearSmagorinskyBGK)) {
+  if (params.get<parameters::BULK_MODEL>() == BulkModel::ShearSmagorinskyBGK) {
     lattice.setParameter<descriptors::LATTICE_TIME>(iT);
   }
 
@@ -337,7 +320,7 @@ void getResults(MyCase& myCase,
     vtkWriter.createMasterFile();
   }
 
-  if (iT % params.get<parameters::STAT_ITER>() == 0) {
+  if (iT % converter.getLatticeTime(params.get<parameters::PHYS_STAT_ITER_T>()) == 0) {
     timer.update(iT);
     timer.printStep();
     lattice.getStatistics().print(iT, converter.getPhysTime(iT));
@@ -347,7 +330,7 @@ void getResults(MyCase& myCase,
   }
 
   // Writes the vtk files
-  if (iT % params.get<parameters::VTK_SAVE_ITER>() == 0) {
+  if (iT % converter.getLatticeTime(params.get<parameters::PHYS_VTK_ITER_T>()) == 0) {
     lattice.setProcessingContext(ProcessingContext::Evaluation);
     lattice.scheduleBackgroundOutputVTK([&,iT](auto task) {
       SuperVTMwriter3D<T> vtkWriter("nozzle3d");
@@ -373,13 +356,13 @@ void simulate(
 
   /// === Vortex Method Setup (Turbulent inlet condition)
   Vector<T,3> originI(
-    params.get<parameters::PHYS_DELTA_X>(), 
-    params.get<parameters::DOMAIN_EXTENT>()[1] / 2.0 + params.get<parameters::PHYS_DELTA_X>(), 
+    params.get<parameters::PHYS_DELTA_X>(),
+    params.get<parameters::DOMAIN_EXTENT>()[1] / 2.0 + params.get<parameters::PHYS_DELTA_X>(),
     params.get<parameters::DOMAIN_EXTENT>()[2] / 2.0 + params.get<parameters::PHYS_DELTA_X>()
   );
   Vector<T,3> extendI(
-    T(), 
-    params.get<parameters::DOMAIN_EXTENT>()[1] / 2.0 + params.get<parameters::PHYS_DELTA_X>(), 
+    T(),
+    params.get<parameters::DOMAIN_EXTENT>()[1] / 2.0 + params.get<parameters::PHYS_DELTA_X>(),
     params.get<parameters::DOMAIN_EXTENT>()[2] / 2.0 + params.get<parameters::PHYS_DELTA_X>()
   );
   Vector<T,3> inflowAxis{1, 0, 0};
@@ -389,12 +372,12 @@ void simulate(
     cylinderIN,
     converter,
     lattice,
-    params.get<parameters::TURBULENCE_N_SEEDS>(),                                
-    params.get<parameters::TURBULENCE_N_TIME>(),                               
-    params.get<parameters::TURBULENCE_SIGMA>(), 
+    params.get<parameters::TURBULENCE_N_SEEDS>(),
+    params.get<parameters::TURBULENCE_N_TIME>(),
+    params.get<parameters::TURBULENCE_SIGMA>(),
     inflowAxis
   );
-  
+
   auto intensity = std::shared_ptr<AnalyticalF3D<T,T>>(
     new AnalyticalConst3D<T,T>(params.get<parameters::TURBULENCE_INTENSITY>())
   );
@@ -429,7 +412,7 @@ int main(int argc, char* argv[]) {
   MyCase::ParametersD myCaseParameters;
   {
     using namespace olb::parameters;
-    myCaseParameters.set<BULK_MODEL>(static_cast<int>(BulkModel::LocalSmagorinskyBGK));
+    myCaseParameters.set<BULK_MODEL>(BulkModel::LocalSmagorinskyBGK);
 
     myCaseParameters.set<DOMAIN_EXTENT>({60, 11, 11});
     myCaseParameters.set<INLET_CYLINDER_SIZE>({4, 1});
@@ -445,15 +428,15 @@ int main(int argc, char* argv[]) {
     myCaseParameters.set<SMAGORINSKY>(0.15);
     myCaseParameters.set<MAX_PHYS_T   >(150);
 
+    myCaseParameters.set<PHYS_STAT_ITER_T>(0.1);
+    myCaseParameters.set<PHYS_VTK_ITER_T>(1.0);
+
     myCaseParameters.set<TURBULENCE_INTENSITY>(0.05);
     myCaseParameters.set<TURBULENCE_N_SEEDS>(50);
     myCaseParameters.set<TURBULENCE_N_TIME>(0.1);
     myCaseParameters.set<TURBULENCE_SIGMA>(
       0.1 * myCaseParameters.get<INLET_CYLINDER_SIZE>()[1]
     );
-
-    myCaseParameters.set<STAT_ITER>(200);
-    myCaseParameters.set<VTK_SAVE_ITER>(500);
   }
   myCaseParameters.fromCLI(argc, argv);
 

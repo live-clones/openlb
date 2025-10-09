@@ -2,7 +2,7 @@
  *  library
  *
  *  Copyright (C) 2015 Mathias J. Krause, Patrick Nathan
- *                2023-2025 Adrian Kummerlaender, Fedor Bukreev, Stephan Simonis
+ *                2023-2025 Adrian Kummerlaender, Fedor Bukreev, Stephan Simonis, Tikhon Riazantsev
  *  E-mail contact: info@openlb.net
  *  The most recent release of OpenLB can be downloaded at
  *  <http://www.openlb.net/>
