@@ -65,12 +65,12 @@ Mesh<MyCase::value_t,MyCase::d> createMesh(MyCase::ParametersD& parameters) {
   const Vector extent{physLengthX, physLengthY};
   const Vector origin{0, 0};
   IndicatorCuboid2D<T> cuboid(extent, origin);
-  
+
   #ifdef PARALLEL_MODE_MPI
     Mesh<T,MyCase::d> mesh(cuboid, physDeltaX, singleton::mpi().getSize());
   #else
     Mesh<T,MyCase::d> mesh(cuboid, physDeltaX, 1);
-  #endif  
+  #endif
 
   if (bcPeriodic) parameters.set<parameters::OVERLAP>(2);
   mesh.setOverlap(parameters.get<parameters::OVERLAP>());
@@ -107,14 +107,14 @@ void prepareGeometry(MyCase& myCase)
 
   if (bcPeriodic) geometry.rename(1, 3, inflow);
   else geometry.rename(2, 3, 1, inflow);
-  
+
   // Set material number for outflow
   origin[0] = physLengthX - .5*physDeltaX;
   IndicatorCuboid2D<T> outflow(extent, origin);
 
   if (bcPeriodic) geometry.rename(1, 4, outflow);
   else geometry.rename(2, 4, 1, outflow);
-  
+
   // Removes all not needed boundary voxels outside the surface
   geometry.clean();
   // Removes all not needed boundary voxels inside the surface
@@ -438,7 +438,7 @@ void simulate(MyCase& myCase){
       clout << "Converged after " << iT << " iterations." << std::endl;
       break;
     }
-  
+
     /// === Step 8.1: Update the Boundary Values and Fields at Times ===
     setTemporalValues(myCase, iT);
 
@@ -501,7 +501,7 @@ int main( int argc, char* argv[] )
     myCaseParameters.set<REYNOLDS>(config["dynamics"]["Re"].get<T>());
     myCaseParameters.set<LATTICE_RELAXATION_TIME>(config["dynamics"]["tau"].get<T>());
     myCaseParameters.set<POWER_LAW_EXPONENT>(config["dynamics"]["n"].get<T>());
-    myCaseParameters.set<MAX_PHYS_T>(config["time"]["Tmax"].get<T>()); 
+    myCaseParameters.set<MAX_PHYS_T>(config["time"]["Tmax"].get<T>());
     myCaseParameters.set<PHYS_CHAR_DENSITY>(1.0);
     myCaseParameters.set<NU_MIN>(2.9686e-3);
     myCaseParameters.set<NU_MAX>(3.1667);
