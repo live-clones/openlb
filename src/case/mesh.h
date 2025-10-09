@@ -24,6 +24,8 @@
 #ifndef CASE_MESH_H
 #define CASE_MESH_H
 
+#include "io/stlReader.h"
+
 namespace olb {
 
 template <typename T, unsigned D>
@@ -32,6 +34,9 @@ private:
   std::unique_ptr<CuboidDecomposition<T,D>> _decomposition;
   std::unique_ptr<LoadBalancer<T>> _balancer;
   std::optional<unsigned> _overlap;
+
+  /// Arbitrary indicators related to the mesh
+  std::unordered_map<std::string, std::shared_ptr<IndicatorF<T,D>>> _indicators;
 
 public:
   Mesh(std::unique_ptr<CuboidDecomposition<T, D>> decomposition,
@@ -71,6 +76,32 @@ public:
 
   T getDeltaX() const {
     return _decomposition->getDeltaX();
+  }
+
+  /// Stores indicator under name
+  void addIndicator(std::string name, std::shared_ptr<IndicatorF<T,D>> indicatorF) {
+    _indicators[name] = indicatorF;
+  }
+
+  /// Reads STL with the given settings and stores under its path
+  std::shared_ptr<IndicatorF<T,D>> readSTL(std::string path, T deltaX, T scaling) {
+    std::shared_ptr<IndicatorF<T,D>> stlI(new STLreader<T>(path, deltaX, scaling));
+    addIndicator(path, stlI);
+    return stlI;
+  }
+
+  /// Return indicator by name
+  std::shared_ptr<IndicatorF<T,D>> getIndicator(std::string name) {
+    return _indicators.at(name);
+  }
+
+  /// Easy construction of mesh from STL
+  static Mesh fromSTL(std::string path, T physDeltaX, T scaling) {
+    std::shared_ptr<STLreader<T>> stlI(new STLreader<T>(path, physDeltaX, scaling));
+    IndicatorLayer3D<T> extendedDomain(*stlI, physDeltaX);
+    Mesh mesh(extendedDomain, physDeltaX, singleton::mpi().getSize());
+    mesh.addIndicator(path, stlI);
+    return mesh;
   }
 
 };
