@@ -64,7 +64,6 @@ public:
 
   bool operator()(T output[], const S input[])
   {
-    using T = MyCase::value_t;
     auto& lattice = myCase.getLattice(AdvectionDiffusion{});
     const auto& converter = lattice.getUnitConverter();
 
@@ -121,12 +120,12 @@ void prepareGeometry(MyCase& myCase) {
   using T = MyCase::value_t;
   auto& geometry = myCase.getGeometry();
   auto& lattice = myCase.getLattice(AdvectionDiffusion{});
-  const auto& converter = lattice.getUnitConverter();
 
   OstreamManager clout(std::cout, "prepareGeometry");
   clout << "Prepare Geometry ..." << std::endl;
 
-  const T delta = converter.getPhysDeltaX();
+  const T delta = myCase.getParameters().get<parameters::PHYS_CHAR_LENGTH>() /
+                  myCase.getParameters().get<parameters::RESOLUTION>();
   const T physLength = myCase.getParameters().get<parameters::PHYS_CHAR_LENGTH>();
 
   Vector<T,3> extend( 2*delta, physLength+2*delta, physLength+2*delta );
@@ -166,28 +165,31 @@ void prepareLattice(MyCase& myCase)
   auto& ADlattice = myCase.getLattice(AdvectionDiffusion{});
   auto& geometry = myCase.getGeometry();
   auto& parameters = myCase.getParameters();
-  const auto& converter = ADlattice.getUnitConverter();
 
   OstreamManager clout(std::cout, "prepareLattice");
   clout << "Prepare Lattice ..." << std::endl;
 
-  const T omega = converter.getLatticeRelaxationFrequency();
-  const T N = converter.getResolution();
-  const T relaxationTime = converter.getLatticeRelaxationTime();
-  const T physLength = converter.getPhysLength();
-  const T Pe = converter.getPecletNumber();
-  const T physDiffusivity = converter.getPhysDiffusivity();
-  const T physDensity = converter.getPhysDensity();
+  const T N = parameters.get<RESOLUTION>();
+  const T relaxationTime = parameters.get<LATTICE_RELAXATION_TIME>();
+  const T physLength = parameters.get<PHYS_CHAR_LENGTH>();
+  const T Pe = parameters.get<PECLET>();
+  const T physDiffusivity = parameters.get<PHYS_DIFFUSIVITY>();
+  const T physDensity = parameters.get<PHYS_DENSITY>();
+  const T Ceq = parameters.get<C_EQ>();
 
   ADlattice.setUnitConverter<AdeUnitConverterFromResolutionAndRelaxationTime<T,DESCRIPTOR>>(
-      N,                              // Resolution
-      relaxationTime,                 // Relaxation Time
-      physLength,                     // charPhysLength
-      Pe*physDiffusivity/physLength,  // charPhysVelocity from peclet
-      physDiffusivity,                // physDiffusivity
-      physDensity                     // physDensity
+    N,                              // Resolution
+    relaxationTime,                 // Relaxation Time
+    physLength,                     // charPhysLength
+    Pe*physDiffusivity/physLength,  // charPhysVelocity from peclet
+    physDiffusivity,                // physDiffusivity
+    physDensity                     // physDensity
   );
+
+  const auto& converter = ADlattice.getUnitConverter();
   converter.print();
+
+  const T omega = converter.getLatticeRelaxationFrequency();
 
 #ifdef BOUNDARY_CONDITION_APPROACH
   auto bulkIndicator = geometry.getMaterialIndicator({1,3,4});
@@ -361,11 +363,11 @@ void simulate(MyCase& myCase)
   const T runs = parameters.get<parameters::RUNS>();
 
   OstreamManager clout(std::cout, "simulate");
-  clout << "Executing the simulation with N=" << std::to_string(N) << std::endl;
+  clout << "Executing the simulation with N=" << std::to_string((std::size_t)N) << std::endl;
 
   // change directory for different runs
   if (runs > 1) {
-    singleton::directories().setOutputDir("./tmp/N" + std::to_string(N) + "/");
+    singleton::directories().setOutputDir("./tmp/N" + std::to_string((std::size_t)N) + "/");
   }
 
   util::Timer<T> timer(converter.getLatticeTime(maxPhysT), geometry.getStatistics().getNvoxel());
