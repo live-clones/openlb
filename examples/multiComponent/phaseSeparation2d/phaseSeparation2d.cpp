@@ -75,6 +75,71 @@ void prepareGeometry(MyCase& myCase){
     clout << "Prepare Geometry ... OK" << std::endl;
 }
 
+void prepareLattice(MyCase& myCase){
+    OstreamManager clout(std::cout,"prepareLattice");
+    clout << "Prepare Lattice ..." << std::endl;
+
+    using T = MyCase::value_t;
+    auto& geometry = myCase.getGeometry();
+    auto& params   = myCase.getParameters();
+
+    auto& NSElattice = myCase.getLattice(NavierStokes {});
+    using NSEDESCRIPTOR = MyCase::descriptor_t_of<NavierStokes>;
+
+    NSElattice.setUnitConverter<UnitConverterFromResolutionAndRelaxationTime<T,NSEDESCRIPTOR>>(
+        (T) params.get<parameters::DOMAIN_EXTENT>()[0], //resolution
+        (T) params.get<parameters::LATTICE_RELAXATION_TIME>(),
+        (T) params.get<parameters::PHYS_CHAR_LENGTH>(),
+        (T) params.get<parameters::PHYS_CHAR_VELOCITY>(),
+        (T) params.get<parameters::PHYS_CHAR_VISCOSITY>(),
+        (T) 1 //density
+    );
+    const auto& converter = NSElattice.getUnitConverter();
+    //converter.print();
+
+    using BulkDynamics = ForcedShanChenBGKdynamics<T, NSEDESCRIPTOR, momenta::ExternalVelocityTuple>;
+    const T omega1 = 1.0;
+
+    NSElattice.defineDynamics<BulkDynamics>(geometry, 1);
+
+    // Initial conditions
+    AnalyticalConst2D<T,T> noise( 2. );
+    std::vector<T> v( 2,T() );
+    AnalyticalConst2D<T,T> zeroVelocity( v );
+    AnalyticalConst2D<T,T> oldRho( 199. );
+    AnalyticalRandom2D<T,T> random;
+    AnalyticalIdentity2D<T,T> newRho( random*noise+oldRho );
+
+    // Initialize all values of distribution functions to their local equilibrium
+    NSElattice.defineRhoU( geometry, 1, newRho, zeroVelocity );
+    NSElattice.iniEquilibrium( geometry, 1, newRho, zeroVelocity );
+
+    NSElattice.setParameter<descriptors::OMEGA>(omega1);
+
+    NSElattice.addPostProcessor<stage::PreCoupling>(meta::id<RhoStatistics>());
+    {
+        auto& communicator = NSElattice.getCommunicator(stage::Coupling());
+        communicator.requestField<descriptors::STATISTIC>();
+        communicator.requestOverlap(1);
+        communicator.exchangeRequests();
+    }
+
+    using COUPLING = ShanChenForcedSingleComponentPostProcessor<T,NSEDESCRIPTOR,interaction::ShanChen94>;
+    NSElattice.addPostProcessor<stage::Coupling>(meta::id<COUPLING>{});
+    NSElattice.setParameter<COUPLING::G>(T(-120));
+    NSElattice.setParameter<COUPLING::RHO0>(T(1));
+    NSElattice.setParameter<COUPLING::OMEGA>(omega1);
+
+    NSElattice.template addCustomTask<stage::PostStream>([&]() {
+        NSElattice.executePostProcessors(stage::PreCoupling());
+        NSElattice.executePostProcessors(stage::Coupling());
+    });
+
+    // Make the lattice ready for simulation
+    NSElattice.initialize();
+    clout << "Prepare Lattice ... OK" << std::endl;
+}
+
 int main(int argc, char *argv[]){
     initialize( &argc, &argv );
 
@@ -90,9 +155,8 @@ int main(int argc, char *argv[]){
         myCaseParameters.set<PHYS_CHAR_LENGTH>(1e-5);
         myCaseParameters.set<PHYS_CHAR_VELOCITY>(1e-6);
         myCaseParameters.set<PHYS_CHAR_VISCOSITY>(0.1);
-        //TODO: hard code density 1 in unit converter
 
-        myCaseParameters.set<DOMAIN_EXTENT>({201, 201});
+        myCaseParameters.set<DOMAIN_EXTENT>({200, 200});
 
     }
     myCaseParameters.fromCLI(argc, argv);
@@ -105,4 +169,7 @@ int main(int argc, char *argv[]){
 
     /// === Step 5: Prepare Geometry ===
     prepareGeometry(myCase);
+
+    /// === Step 6: Prepare Lattice ===
+    prepareLattice(myCase);
 }
