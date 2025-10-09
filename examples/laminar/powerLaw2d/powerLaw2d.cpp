@@ -364,7 +364,7 @@ void getResults(MyCase& myCase,
 
   const UnitConverter<T,DESCRIPTOR>& converter = lattice.getUnitConverter();
 
-  const int vtkIter  = converter.getLatticeTime(parameters.get<parameters::PHYS_VTK_OUTPUT_ITER_T>());
+  const int vtkIter  = converter.getLatticeTime(parameters.get<parameters::PHYS_VTK_ITER_T>());
 
   SuperVTMwriter2D<T> vtmWriter("powerLaw2d");
   SuperLatticePhysVelocity2D<T, DESCRIPTOR> velocity(lattice, converter);
@@ -426,7 +426,7 @@ void simulate(MyCase& myCase){
   util::Timer<T> timer(iTmax, myCase.getGeometry().getStatistics().getNvoxel());
   timer.start();
 
-  util::ValueTracer<T> converge(converter.getLatticeTime(0.1 * parameters.get<parameters::PHYS_VTK_OUTPUT_ITER_T>()),
+  util::ValueTracer<T> converge(converter.getLatticeTime(0.1 * parameters.get<parameters::PHYS_VTK_ITER_T>()),
                                 parameters.get<parameters::CONVERGENCE_PRECISION>());
 
   for (std::size_t iT=0; iT<iTmax; ++iT) {
@@ -508,7 +508,7 @@ int main( int argc, char* argv[] )
     myCaseParameters.set<SMAGORINSKY>(0.15);
     myCaseParameters.set<PERIODIC_BC>(true);
 
-    myCaseParameters.set<PHYS_VTK_OUTPUT_ITER_T>(config["time"]["Tprint"].get<T>());
+    myCaseParameters.set<PHYS_VTK_ITER_T>(config["time"]["Tprint"].get<T>());
     myCaseParameters.set<CONVERGENCE_PRECISION>(1e-6);
     myCaseParameters.set<CONVERGED>(false);
 
