@@ -22,8 +22,22 @@
  *  Boston, MA  02110-1301, USA.
  */
 
-#include "poissonNernstPlanck.h"
+#include "../poissonNernstPlanck.h"
 using T = MyCase::value_t;
+
+static Gnuplot<T> gplot(
+  "PoissonNernstPlanckEOC",
+  false,
+  "set terminal png size 720, 720 font 'Arial,10'",
+  Gnuplot<T>::LOGLOG,
+  Gnuplot<T>::LINREG);
+
+namespace olb::parameters {
+
+struct START_RESOLUTION : public descriptors::TYPED_FIELD_BASE<int,1> { };
+struct END_RESOLUTION : public descriptors::TYPED_FIELD_BASE<int,1> { };
+
+}
 
 int main(int argc, char* argv[]) {
   initialize(&argc, &argv);
@@ -32,7 +46,8 @@ int main(int argc, char* argv[]) {
   MyCase::ParametersD myCaseParameters;
   {
     using namespace olb::parameters;
-    myCaseParameters.set<RESOLUTION>(40);
+    myCaseParameters.set<START_RESOLUTION>(20);
+    myCaseParameters.set<END_RESOLUTION>(80);
     myCaseParameters.set<POISSON_RELAXATION_TIME>(0.9);
     myCaseParameters.set<IONS_RELAXATION_TIME>(0.9);
     myCaseParameters.set<PHYS_CHAR_VELOCITY>(0.001);
@@ -75,27 +90,47 @@ int main(int argc, char* argv[]) {
   }
   myCaseParameters.fromCLI(argc, argv);
 
-  /// === Step 3: Create Mesh ===
-  Mesh mesh = createMesh(myCaseParameters);
+  gplot.setLabel("Resolution test", "average Error");
 
-  /// === Step 4: Create Case ===
-  MyCase myCase(myCaseParameters, mesh);
+  for(int simuN =  myCaseParameters.get<parameters::START_RESOLUTION>();
+      simuN <=  myCaseParameters.get<parameters::END_RESOLUTION>();
+      simuN *= 2) {
+    myCaseParameters.set<parameters::RESOLUTION>(simuN);
 
-  /// === Step 5: Prepare Geometry ===
-  prepareGeometry(myCase);
+    /// === Step 3: Create Mesh ===
+    Mesh mesh = createMesh(myCaseParameters);
 
-  /// === Step 6: Prepare Lattice ===
-  prepareLatticePoisson(myCase);
-  prepareLatticeNernstPlanck<0>(myCase);
-  prepareLatticeNernstPlanck<1>(myCase);
+    /// === Step 4: Create Case ===
+    MyCase myCase(myCaseParameters, mesh);
 
-  prepareLatticeCoupling(myCase);
+    /// === Step 5: Prepare Geometry ===
+    prepareGeometry(myCase);
 
-  /// === Step 7: Definition of Initial, Boundary Values, and Fields ===
-  setInitialValuesPoisson(myCase);
-  setInitialValuesCation(myCase);
-  setInitialValuesAnion(myCase);
+    /// === Step 6: Prepare Lattice ===
+    prepareLatticePoisson(myCase);
+    prepareLatticeNernstPlanck<0>(myCase);
+    prepareLatticeNernstPlanck<1>(myCase);
 
-  /// === Step 8: Simulate ===
-  simulate(myCase);
+    prepareLatticeCoupling(myCase);
+
+    /// === Step 7: Definition of Initial, Boundary Values, and Fields ===
+    setInitialValuesPoisson(myCase);
+    setInitialValuesCation(myCase);
+    setInitialValuesAnion(myCase);
+
+    /// === Step 8: Simulate ===
+    simulate(myCase);
+
+    auto errorsPsi = myCaseParameters.get<parameters::ERROR_NORMS_PSI>();
+    gplot.setData (
+      MyCase::value_t(simuN),
+      { errorsPsi[0], errorsPsi[1], errorsPsi[2]},
+      { "psi L1 rel Error","psi L2 rel Error",
+        "psi Linf rel error"},
+      "top right",
+      { 'p','p','p' }
+    );
+  }
+
+  gplot.writePNG();
 }

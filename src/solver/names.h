@@ -74,6 +74,8 @@ struct SuperLattice2 : public descriptors::DESCRIPTOR_TAG { };
 struct Points : public descriptors::DESCRIPTOR_TAG { };
 struct Radiation : public descriptors::DESCRIPTOR_TAG { };
 struct Poisson : public descriptors::DESCRIPTOR_TAG { };
+struct Cation : public descriptors::DESCRIPTOR_TAG { };
+struct Anion : public descriptors::DESCRIPTOR_TAG { };
 
 struct TurbKineticEnergy : public descriptors::DESCRIPTOR_TAG { };
 struct DissipationRate : public descriptors::DESCRIPTOR_TAG { };
