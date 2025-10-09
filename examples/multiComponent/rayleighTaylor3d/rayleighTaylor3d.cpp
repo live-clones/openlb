@@ -38,7 +38,7 @@ using namespace olb::names;
 
 // === Step 1: Declarations ===
 using MyCase = Case<
-  Component1, Lattice<double,
+  Component1, Lattice<float,
     descriptors::D3Q19<
       descriptors::FORCE,
       descriptors::EXTERNAL_FORCE,
@@ -46,7 +46,7 @@ using MyCase = Case<
     >
   >,
 
-  Component2, Lattice<double,
+  Component2, Lattice<float,
     descriptors::D3Q19<
       descriptors::FORCE,
       descriptors::EXTERNAL_FORCE,
@@ -88,8 +88,8 @@ void prepareGeometry(MyCase& myCase) {
   // Sets material number for fluid and boundary
   geometry.rename( 0, 1 );
 
-  Vector upperOrigin{          -dx, ny / 2.,                   -dx };
-  Vector upperExtend{ nx + 2. * dx, ny / 2. + 2. * dx, nz + 2. * dx };
+  Vector upperOrigin{          -dx, ny / (T) 2.,                 -dx };
+  Vector upperExtend{ nx + 2. * dx, ny / 2.  + 2. * dx, nz + 2. * dx };
   IndicatorCuboid3D<T> upper( upperExtend, upperOrigin );
   geometry.rename( 1, 2, upper );
 
@@ -361,34 +361,34 @@ int main(int argc, char* argv[]) {
   MyCase::ParametersD myCaseParameters;
   {
     using namespace olb::parameters;
+    using T = MyCase::value_t;
     myCaseParameters.set<RESOLUTION>(200);
     myCaseParameters.set<ORIGIN>({0, 0, 0});
-    myCaseParameters.set<PHYS_DELTA_X>(1.);
+    myCaseParameters.set<PHYS_DELTA_X>((T) 1.);
     myCaseParameters.set<MAX_LATTICE_T>(10000);
-    myCaseParameters.set<RHO_1>(0.0);
-    myCaseParameters.set<RHO_2>(1.0);
-    myCaseParameters.set<LATTICE_RELAXATION_TIME>(1.);
-    myCaseParameters.set<PHYS_CHAR_LENGTH>(1e-5);
-    myCaseParameters.set<PHYS_CHAR_VELOCITY>(1.e-6);
-    myCaseParameters.set<PHYS_CHAR_VISCOSITY>(0.1);
-    myCaseParameters.set<PHYS_CHAR_DENSITY>(1.);
-    myCaseParameters.set<COUPLING_G>(3.);
-    myCaseParameters.set<ZERO>(1.e-6);
-    myCaseParameters.set<NOISE>(4.e-2);
-    myCaseParameters.set<LATTICE_VTK_ITER_T>(100);
-    myCaseParameters.set<LATTICE_STAT_ITER_T>(100);
+    myCaseParameters.set<RHO_1>((T) 0.0);
+    myCaseParameters.set<RHO_2>((T) 1.0);
+    myCaseParameters.set<LATTICE_RELAXATION_TIME>((T) 1.);
+    myCaseParameters.set<PHYS_CHAR_LENGTH>((T) 1e-5);
+    myCaseParameters.set<PHYS_CHAR_VELOCITY>((T) 1.e-6);
+    myCaseParameters.set<PHYS_CHAR_VISCOSITY>((T) 0.1);
+    myCaseParameters.set<PHYS_CHAR_DENSITY>((T) 1.);
+    myCaseParameters.set<COUPLING_G>((T) 3.);
+    myCaseParameters.set<ZERO>((T) 1.e-6);
+    myCaseParameters.set<NOISE>((T) 4.e-2);
+    myCaseParameters.set<LATTICE_VTK_ITER_T>((T) 500);
+    myCaseParameters.set<LATTICE_STAT_ITER_T>((T) 100);
+    myCaseParameters.set<parameters::DOMAIN_EXTENT>([&]() -> Vector<MyCase::value_t, 3> {
+      return{
+        (T) myCaseParameters.get<parameters::RESOLUTION>(),
+        (T) myCaseParameters.get<parameters::RESOLUTION>() / (T)2.,
+        (T) myCaseParameters.get<parameters::RESOLUTION>()
+      };
+    });
+    myCaseParameters.set<parameters::FORCE>([&]() -> MyCase::value_t {
+      return 7.0 / (myCaseParameters.get<parameters::DOMAIN_EXTENT>()[1] * myCaseParameters.get<parameters::DOMAIN_EXTENT>()[1]);
+    });
   }
-  myCaseParameters.set<parameters::DOMAIN_EXTENT>([&]() -> Vector<MyCase::value_t, 3> {
-    const auto resolution = myCaseParameters.get<parameters::RESOLUTION>();
-    return Vector<MyCase::value_t,3>(
-      resolution,
-      resolution / 2.0,
-      resolution
-    );
-  });
-  myCaseParameters.set<parameters::FORCE>([&]() -> MyCase::value_t {
-    return static_cast<MyCase::value_t>(7.0) / (myCaseParameters.get<parameters::DOMAIN_EXTENT>()[1] * myCaseParameters.get<parameters::DOMAIN_EXTENT>()[1]); // Fehler 389 behoben
-  });
   myCaseParameters.fromCLI(argc, argv);
 
   /// === Step 3: Create Mesh ===
