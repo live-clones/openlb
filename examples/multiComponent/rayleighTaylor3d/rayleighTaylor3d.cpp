@@ -279,6 +279,7 @@ void getResults(MyCase& myCase,
 
   const int vtkIter   = parameters.get<parameters::LATTICE_VTK_ITER_T>();
   const int statIter  = parameters.get<parameters::LATTICE_STAT_ITER_T>();
+  const int maxIter   = parameters.get<parameters::MAX_LATTICE_T>();
 
   if ( iT == 0 ) {
     // Writes the geometry, cuboid no. and rank no. as vti file for visualization
@@ -290,7 +291,7 @@ void getResults(MyCase& myCase,
   }
 
   // Get statistics
-  if ( iT % statIter == 0 && iT > 0 ) {
+  if ( ( iT % statIter == 0 && iT > 0 ) || iT == maxIter) {
     // Timer console output
     timer.update( iT );
     timer.printStep();
@@ -300,7 +301,7 @@ void getResults(MyCase& myCase,
   }
 
   // Writes the VTK files
-  if ( iT % vtkIter==0 ) {
+  if ( iT % vtkIter == 0 || iT == maxIter ) {
     latticeOne.setProcessingContext(ProcessingContext::Evaluation);
     latticeTwo.setProcessingContext(ProcessingContext::Evaluation);
 
