@@ -91,6 +91,8 @@ int main(int argc, char *argv[])
 
     // this outputs into ./tmp/gnuplotData/data/averageSimL2RelErr
     singleton::directories().setOutputDir("./tmp/");
-    csvWriter.writeDataFile(myCaseParameters.get<parameters::RESOLUTION>(), myCaseParameters.get<parameters::AVG_L2_ERROR>(), "averageSimL2RelErr");
+    csvWriter.writeDataFile(myCaseParameters.get<parameters::RESOLUTION>(),
+                            myCaseParameters.get<parameters::AVG_L2_ERROR>(),
+                            "averageSimL2RelErr");
   }
 }
