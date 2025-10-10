@@ -31,33 +31,45 @@
  * - forced/ nonForced flow
  * - different boundary conditions
  * - simulation only or eoc convergence analysis
+ * 
+ * The main code of the simulation is in case.h as it is also used by the
+ * example ../../pdeSolverEoc/poiseuille3dEoc
+ * 
+ * Set flag in order to use mrt collision operators instead of bgk
+ * #define ENABLE_MRT
  */
 
-// the main code of the simulation is in poiseuille3d.h as it is also used by the
-// example ../../pdeSolverEoc/poiseuille3dEoc
+#include <olb.h>
+#include "case.h"
 
-// set flag in order to use mrt collision operators instead of bgk
-//#define ENABLE_MRT
-
-#include "poiseuille3d.h"
-
-//Initialize Gnuplot
-static Gnuplot<T> gplot("centerVelocity");
+using namespace olb;
 
 int main( int argc, char* argv[] )
 {
+  OstreamManager clout( std::cout,"main" );
+  
   // === 1st Step: Initialization ===
   initialize( &argc, &argv );
+  MyCase::ParametersD myCaseParameters;
+  setGetParameters(myCaseParameters, argc, argv);
   singleton::directories().setOutputDir( "./tmp/" );
-  OstreamManager clout( std::cout,"main" );
-
-  int N = 21;
-  bool eoc = false;
-
-  int status = readParameters(argc, argv, N, flowType, boundaryType);
-  if (status != 0) {
-    return status;
-  }
-  simulatePoiseuille(N, gplot, eoc);
+  
+  /// === Step 3: Create Mesh ===
+  Mesh mesh = createMesh(myCaseParameters);
+  
+  /// === Step 4: Create Case ===
+  MyCase myCase(myCaseParameters, mesh);
+  
+  /// === Step 5: Prepare Geometry ===
+  prepareGeometry(myCase);
+  
+  /// === Step 6: Prepare Lattice ===
+  prepareLattice(myCase);
+  
+  /// === Step 7: Definition of Initial, Boundary Values, and Fields ===
+  setInitialValues(myCase);
+  
+  /// === Step 8: Simulate ===
+  simulate(myCase);
 
 }
