@@ -62,7 +62,6 @@ namespace olb::parameters {
   struct RADIUS             : public descriptors::FIELD_BASE<1> {};
   struct EOC                : public descriptors::TYPED_FIELD_BASE<bool,1> {};
   struct VISCOSITY_MODEL    : public descriptors::TYPED_FIELD_BASE<ViscosityModel,1> {};
-  struct ORIGIN             : public descriptors::FIELD_BASE<0,1> {};
   struct AXIS               : public descriptors::FIELD_BASE<0,1> {};
   struct EOC_RESOLUTIONS    : public descriptors::TYPED_FIELD_BASE<int,4> {};
 
