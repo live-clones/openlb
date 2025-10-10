@@ -1,6 +1,6 @@
 /*  This file is part of the OpenLB library
  *
- *  Copyright (C) 2012-2019 Mathias J. Krause, Adrian Kummerlaender
+ *  Copyright (C) 2012-2019 2025 Mathias J. Krause, Adrian Kummerlaender, Yuji (Sam) Shimojima
  *  E-mail contact: info@openlb.net
  *  The most recent release of OpenLB can be downloaded at
  *  <http://www.openlb.net
@@ -24,125 +24,205 @@
 #include "olb.h"
 
 using namespace olb;
+using namespace olb::names;
+// === Step 1: Declarations ===
+using MyCase = Case<NavierStokes, Lattice<float, descriptors::D3Q19<>>>;
 
-using DESCRIPTOR = descriptors::D3Q19<>;
-using T = float;
-using BulkDynamics = BGKdynamics<T,DESCRIPTOR>;
+namespace olb::parameters {
+struct NO_EXPORT_RESULTS : public descriptors::TYPED_FIELD_BASE<bool, 1> {};
+struct CUBOIDS_PER_PROCESS : public descriptors::TYPED_FIELD_BASE<std::size_t, 1> {};
+} // namespace olb::parameters
 
 // Undefine to test a minimal bounce back cavity
 #define LID_DRIVEN
-
 //// Use bounce back (velocity) boundaries instead of local velocity
 //#define LID_DRIVEN_BOUNCE_BACK
 //// Use single fused collision kernel instead of individual dispatch on GPUs
 //#define GPU_USE_FUSED_COLLISION
 
-void prepareGeometry(IndicatorF3D<T>& indicator,
-                     SuperGeometry<T,3>& superGeometry,
-                     T dx, T length)
+/// @brief Create a simulation mesh, based on user-specific geometry
+/// @return An instance of Mesh, which keeps the relevant information
+Mesh<MyCase::value_t, MyCase::d> createMesh(MyCase::ParametersD& parameters)
 {
-  // Sets material number for fluid and boundary
-  superGeometry.rename(0,2,indicator);
-  superGeometry.rename(2,1,{1,1,1});
+  using T                 = MyCase::value_t;
+  const T      physDeltaX = parameters.get<parameters::PHYS_DELTA_X>();
+  const T      length = parameters.get<parameters::PHYS_CHAR_LENGTH>(); // length of the cavity in x- and z-direction
+  Vector<T, 3> origin((T)0);
+  Vector<T, 3> extend(length + 0.5 * physDeltaX);
+  IndicatorCuboid3D<T> cuboid(extend, origin);
 
-  T eps = dx;
-  Vector<T,3> origin(-eps, length - eps, -eps);
-  Vector<T,3> extend(length + 2*eps, 2*eps, length + 2*eps);
-  IndicatorCuboid3D<T> lid(extend,origin);
-
-  superGeometry.rename(2,3,1,lid);
-
-  const bool verbose = false;
-  superGeometry.clean(verbose);
-  superGeometry.innerClean(verbose);
-  superGeometry.checkForErrors(verbose);
+  Mesh<T, MyCase::d> mesh(cuboid, physDeltaX, singleton::mpi().getSize());
+  mesh.setOverlap(parameters.get<parameters::OVERLAP>());
+  return mesh;
 }
 
-void prepareLattice(SuperLattice<T,DESCRIPTOR>& superLattice,
-                    SuperGeometry<T,3>& superGeometry)
+/// @brief Set material numbers for different parts of the domain
+/// @param myCase The Case instance which keeps the simulation data
+/// @note The material numbers will be used to assign physics to lattice nodes
+void prepareGeometry(MyCase& myCase)
 {
-  const T omega = superLattice.getUnitConverter().getLatticeRelaxationFrequency();
+
+  OstreamManager clout(std::cout, "prepareGeometry");
+  //clout << "Prepare Geometry ..." << std::endl;
+  using T          = MyCase::value_t;
+  auto& sGeometry  = myCase.getGeometry();
+  auto& parameters = myCase.getParameters();
+
+  const T physDeltaX = parameters.get<parameters::PHYS_DELTA_X>();
+  const T length     = parameters.get<parameters::PHYS_CHAR_LENGTH>(); // length of the cavity in x- and z-direction
+
+  Vector<T, 3>         origin((T)0);
+  Vector<T, 3>         extend(length + 0.25 * physDeltaX);
+  IndicatorCuboid3D<T> cuboid(extend, origin);
+
+  sGeometry.rename(0, 2, cuboid);
+  sGeometry.rename(2, 1, {1, 1, 1});
+
+  T                    eps = physDeltaX;
+  Vector<T, 3>         libOrigin(-eps, length - eps, -eps);
+  Vector<T, 3>         libExtend(length + 2 * eps, 2 * eps, length + 2 * eps);
+  IndicatorCuboid3D<T> lid(libExtend, libOrigin);
+
+  sGeometry.rename(2, 3, 1, lid);
+
+  const bool verbose = false;
+  sGeometry.clean(verbose);
+
+  sGeometry.innerClean(verbose);
+  sGeometry.checkForErrors(verbose);
+
+  //sGeometry.print();
+
+  //clout << "Prepare Geometry ... OK" << std::endl;
+  return;
+}
+
+/// @brief Set lattice dynamics
+/// @param myCase The Case instance which keeps the simulation data
+void prepareLattice(MyCase& myCase)
+{
+  OstreamManager clout(std::cout, "prepareLattice");
+  using T          = MyCase::value_t;
+  using DESCRIPTOR = MyCase::descriptor_t_of<NavierStokes>;
+  auto& sGeometry  = myCase.getGeometry();
+  auto& sLattice   = myCase.getLattice(NavierStokes {});
+  auto& parameters = myCase.getParameters();
+  sLattice.setStatisticsOff();
+  {
+    using namespace olb::parameters;
+    sLattice.setUnitConverter<UnitConverterFromResolutionAndLatticeVelocity<T, DESCRIPTOR>>(
+        parameters.get<RESOLUTION>(),       // resolution: number of voxels per charPhysL
+        0.01,                               //lattice_char_velocity : characteristic non-dimensional(lattice) valocity
+        parameters.get<PHYS_CHAR_LENGTH>(), // charPhysLength: reference length of simulation geometry
+        1.0,        // charPhysVelocity: maximal/highest expected velocity during simulation in __m / s__
+        1.0 / 1000.0, // physViscosity: physical kinematic viscosity in __m^2 / s__
+        1.0         // physDensity: physical density in __kg / m^3__
+    );
+  }
+  //sLattice.getUnitConverter().print();
 
   /// Material=1 -->bulk dynamics
-  superLattice.defineDynamics<BulkDynamics>(superGeometry, 1);
+  sLattice.defineDynamics<BGKdynamics>(sGeometry, 1);
 
 #ifdef LID_DRIVEN
-  #ifdef LID_DRIVEN_BOUNCE_BACK
-  boundary::set<boundary::BounceBack>(superLattice, superGeometry, 2);
-  superLattice.defineDynamics<BounceBackVelocity>(superGeometry, 3);
-  #else // Local velocity boundaries
-  boundary::set<boundary::LocalVelocity<T,DESCRIPTOR,BulkDynamics>>(superLattice, superGeometry, 2);
-  boundary::set<boundary::LocalVelocity<T,DESCRIPTOR,BulkDynamics>>(superLattice, superGeometry, 3);
-  #endif
-#else
-  boundary::set<boundary::BounceBack>(superLattice, superGeometry, 2);
-  boundary::set<boundary::BounceBack>(superLattice, superGeometry, 3);
+#ifdef LID_DRIVEN_BOUNCE_BACK
+  boundary::set<boundary::BounceBack>(sLattice, sGeometry, 2);
+  sLattice.defineDynamics<BounceBackVelocity>(sGeometry, 3);
+#else // Local velocity boundaries
+  boundary::set<boundary::LocalVelocity<T, DESCRIPTOR, BGKdynamics<T, DESCRIPTOR>>>(sLattice, sGeometry, 2);
+  boundary::set<boundary::LocalVelocity<T, DESCRIPTOR, BGKdynamics<T, DESCRIPTOR>>>(sLattice, sGeometry, 3);
 #endif
-
-  superLattice.setParameter<descriptors::OMEGA>(omega);
+#else
+  boundary::set<boundary::BounceBack>(sLattice, sGeometry, 2);
+  boundary::set<boundary::BounceBack>(sLattice, sGeometry, 3);
+#endif
 
   // Alternative GPU-specific performance tuning option
 #if defined(PLATFORM_GPU_CUDA) && defined(GPU_USE_FUSED_COLLISION)
-  #ifdef LID_DRIVEN_BOUNCE_BACK
+#ifdef LID_DRIVEN_BOUNCE_BACK
   // Enable non-virtual dispatching of common collision operators (optional, improves performance)
-  superLattice.forBlocksOnPlatform<Platform::GPU_CUDA>([](auto& block) {
-    block.setCollisionO(
-      gpu::cuda::getFusedCollisionO<T,DESCRIPTOR,
-                                    BulkDynamics,
-                                    BounceBack<T,DESCRIPTOR>,
-                                    BounceBackVelocity<T,DESCRIPTOR>>());
+  sLattice.forBlocksOnPlatform<Platform::GPU_CUDA>([](auto& block) {
+    block.setCollisionO(gpu::cuda::getFusedCollisionO<T, DESCRIPTOR, BGKdynamics<T, DESCRIPTOR>,
+                                                      BounceBack<T, DESCRIPTOR>, BounceBackVelocity<T, DESCRIPTOR>>());
   });
-  #else // Local velocity boundaries
-  superLattice.forBlocksOnPlatform<Platform::GPU_CUDA>([](auto& block) {
+
+#else // Local velocity boundaries
+  sLattice.forBlocksOnPlatform<Platform::GPU_CUDA>([](auto& block) {
     block.setCollisionO(
-      gpu::cuda::getFusedCollisionO<T,DESCRIPTOR,
-        BulkDynamics,
-        CombinedRLBdynamics<T,DESCRIPTOR,BulkDynamics,momenta::RegularizedVelocityBoundaryTuple<0,-1>>,
-        CombinedRLBdynamics<T,DESCRIPTOR,BulkDynamics,momenta::RegularizedVelocityBoundaryTuple<0, 1>>,
-        CombinedRLBdynamics<T,DESCRIPTOR,BulkDynamics,momenta::RegularizedVelocityBoundaryTuple<1,-1>>,
-        CombinedRLBdynamics<T,DESCRIPTOR,BulkDynamics,momenta::RegularizedVelocityBoundaryTuple<1, 1>>,
-        CombinedRLBdynamics<T,DESCRIPTOR,BulkDynamics,momenta::RegularizedVelocityBoundaryTuple<2,-1>>,
-        CombinedRLBdynamics<T,DESCRIPTOR,BulkDynamics,momenta::RegularizedVelocityBoundaryTuple<2, 1>>>());
+        gpu::cuda::getFusedCollisionO<T, DESCRIPTOR,
+
+                                      BGKdynamics<T, DESCRIPTOR>,
+
+                                      CombinedRLBdynamics<T, DESCRIPTOR, BGKdynamics<T, DESCRIPTOR>,
+                                                          momenta::RegularizedVelocityBoundaryTuple<0, -1>>,
+
+                                      CombinedRLBdynamics<T, DESCRIPTOR, BGKdynamics<T, DESCRIPTOR>,
+                                                          momenta::RegularizedVelocityBoundaryTuple<0, 1>>,
+
+                                      CombinedRLBdynamics<T, DESCRIPTOR, BGKdynamics<T, DESCRIPTOR>,
+                                                          momenta::RegularizedVelocityBoundaryTuple<1, -1>>,
+
+                                      CombinedRLBdynamics<T, DESCRIPTOR, BGKdynamics<T, DESCRIPTOR>,
+                                                          momenta::RegularizedVelocityBoundaryTuple<1, 1>>,
+
+                                      CombinedRLBdynamics<T, DESCRIPTOR, BGKdynamics<T, DESCRIPTOR>,
+                                                          momenta::RegularizedVelocityBoundaryTuple<2, -1>>,
+
+                                      CombinedRLBdynamics<T, DESCRIPTOR, BGKdynamics<T, DESCRIPTOR>,
+                                                          momenta::RegularizedVelocityBoundaryTuple<2, 1>>>());
   });
-  #endif
+#endif
 #endif // PLATFORM_GPU_CUDA
 }
 
-void setBoundaryValues(SuperLattice<T,DESCRIPTOR>& superLattice,
-                       SuperGeometry<T,3>& superGeometry)
+/// Set initial condition for primal variables (velocity and density)
+/// @param myCase The Case instance which keeps the simulation data
+/// @note Be careful: initial values have to be set using lattice units
+void setInitialValues(MyCase& myCase)
 {
-  const UnitConverter<T,DESCRIPTOR>& converter = superLattice.getUnitConverter();
-  AnalyticalConst3D<T,T> rhoF(1);
-  Vector<T,3> velocity{};
-  AnalyticalConst3D<T,T> uF(velocity);
+  OstreamManager clout(std::cout, "Initialization");
+  //clout << "lattice initialization ..." << std::endl;
 
-  superLattice.iniEquilibrium(superGeometry, 1, rhoF, uF);
-  superLattice.iniEquilibrium(superGeometry, 2, rhoF, uF);
-  superLattice.iniEquilibrium(superGeometry, 3, rhoF, uF);
+  using T = MyCase::value_t;
 
-  superLattice.defineRhoU(superGeometry, 1, rhoF, uF);
-  superLattice.defineRhoU(superGeometry, 2, rhoF, uF);
-  superLattice.defineRhoU(superGeometry, 3, rhoF, uF);
+  auto& sLattice = myCase.getLattice(NavierStokes {});
+
+  auto& sGeometry = myCase.getGeometry();
+
+  AnalyticalConst3D<T, T> rhoF((T)1);
+  AnalyticalConst3D<T, T> uF((T)0, (T)0, (T)0);
+
+  auto bulkIndicator = sGeometry.getMaterialIndicator({1, 2, 3});
+  sLattice.iniEquilibrium(bulkIndicator, rhoF, uF);
+  sLattice.defineRhoU(bulkIndicator, rhoF, uF);
 
 #ifdef LID_DRIVEN
-  velocity[0] = converter.getCharLatticeVelocity();
-  AnalyticalConst3D<T,T> u(velocity);
-  superLattice.defineU(superGeometry,3,u);
+  AnalyticalConst3D<T, T> uTop(sLattice.getUnitConverter().getCharLatticeVelocity(), (T)0, (T)0);
+  sLattice.defineU(sGeometry, 3, uTop);
 #endif
 
-  superLattice.initialize();
+  const T omega = sLattice.getUnitConverter().getLatticeRelaxationFrequency();
+
+  sLattice.setParameter<descriptors::OMEGA>(omega);
+
+  // Make the lattice ready for simulation
+  sLattice.initialize();
+  //clout << "Initialization ... OK" << std::endl;
+  return;
 }
 
-void getResults(SuperLattice<T,DESCRIPTOR>& superLattice,
-                SuperGeometry<T,3>& superGeometry)
+void getResults(MyCase& myCase)
 {
-  SuperVTMwriter3D<T> vtmWriter("cavity3d");
-  const UnitConverter<T,DESCRIPTOR>& converter = superLattice.getUnitConverter();
+  using T        = MyCase::value_t;
+  auto& sLattice = myCase.getLattice(NavierStokes {});
 
-  SuperLatticeCuboid3D<T,DESCRIPTOR> cuboidF(superLattice);
-  SuperLatticeRank3D<T,DESCRIPTOR> rankF(superLattice);
-  SuperLatticePhysVelocity3D<T,DESCRIPTOR> velocityF(superLattice, converter);
-  SuperLatticePhysPressure3D<T,DESCRIPTOR> pressureF(superLattice, converter);
+  SuperVTMwriter3D<T> vtmWriter("cavity3d");
+  const auto&         converter = sLattice.getUnitConverter();
+
+  SuperLatticeCuboid3D       cuboidF(sLattice);
+  SuperLatticeRank3D         rankF(sLattice);
+  SuperLatticePhysVelocity3D velocityF(sLattice, converter);
+  SuperLatticePhysPressure3D pressureF(sLattice, converter);
 
   vtmWriter.write(cuboidF);
   vtmWriter.write(rankF);
@@ -150,89 +230,48 @@ void getResults(SuperLattice<T,DESCRIPTOR>& superLattice,
   vtmWriter.write(pressureF);
 }
 
-int main(int argc, char **argv)
+/// @brief Execute simulation: set initial values and run time loop
+/// @param myCase The Case instance which keeps the simulation data
+void simulate(MyCase& myCase)
 {
-  initialize(&argc, &argv, false, false);
+  OstreamManager clout(std::cout, "Time marching");
+  using T          = MyCase::value_t;
+  auto& sLattice   = myCase.getLattice(NavierStokes {});
+  auto& parameters = myCase.getParameters();
 
-  CLIreader args(argc, argv);
-  const std::size_t size  = args.getValueOrFallback<std::size_t>("--size", 100);
-  const std::size_t steps = args.getValueOrFallback<std::size_t>("--steps", 100);
-  const std::size_t cuboidsPerProcess = args.getValueOrFallback<std::size_t>("--cuboids-per-process", 1);
-  const bool exportResults = !args.contains("--no-results");
-
-  if (exportResults) {
-    singleton::directories().setOutputDir("./tmp/");
+  if (!parameters.get<parameters::NO_EXPORT_RESULTS>()) {
+    sLattice.writeSummary();
+    getResults(myCase);
   }
 
-  UnitConverterFromResolutionAndLatticeVelocity<T,DESCRIPTOR> const converter(
-    size,      // resolution: number of voxels per charPhysL
-    0.01,      // lattice velocity
-    1.0,       // charPhysLength: reference length of simulation geometry
-    1.0,       // charPhysVelocity: maximal/highest expected velocity during simulation in __m / s__
-    1./1000.,  // physViscosity: physical kinematic viscosity in __m^2 / s__
-    1.0        // physDensity: physical density in __kg / m^3__
-  );
+  //this 10 time step marchings are to make MLUPs idling and warming up.
+  for (std::size_t iT = 0; iT < 10; ++iT) {
+    sLattice.collideAndStream();
+  }
 
-  Vector<T,3> origin{};
-  Vector<T,3> extend(converter.getCharPhysLength() + 0.25 * converter.getPhysDeltaX());
-  IndicatorCuboid3D<T> cube(extend, origin);
-
-#ifdef PARALLEL_MODE_MPI
-  CuboidDecomposition3D<T> cuboidDecomposition(cube, converter.getPhysDeltaX(), cuboidsPerProcess*singleton::mpi().getSize());
-#else
-  CuboidDecomposition3D<T> cuboidDecomposition(cube, converter.getPhysDeltaX(), cuboidsPerProcess);
+#ifdef PLATFORM_GPU_CUDA
+  gpu::cuda::device::synchronize();
 #endif
 
-  BlockLoadBalancer<T> loadBalancer(singleton::mpi().getRank(), singleton::mpi().getSize(), cuboidDecomposition.size(), 0);
-
-  SuperGeometry<T,3> superGeometry(cuboidDecomposition, loadBalancer);
-
-  prepareGeometry(cube, superGeometry, converter.getPhysDeltaX(), converter.getCharPhysLength());
-
-  SuperLattice<T,DESCRIPTOR> superLattice(converter,
-                                          cuboidDecomposition,
-                                          loadBalancer,
-                                          3);
-  superLattice.setStatisticsOff();
-
-  prepareLattice(superLattice, superGeometry);
-
-  setBoundaryValues(superLattice, superGeometry);
-
-  if (exportResults) {
-    superLattice.writeSummary();
-    getResults(superLattice, superGeometry);
-  }
-
-  for (std::size_t iT=0; iT < 10; ++iT) {
-    superLattice.collideAndStream();
-  }
-
-  #ifdef PLATFORM_GPU_CUDA
-  gpu::cuda::device::synchronize();
-  #endif
-
-  util::Timer<T> timer(steps, superGeometry.getStatistics().getNvoxel());
+  util::Timer<T> timer(parameters.get<parameters::TIME_STEPS>(), myCase.getGeometry().getStatistics().getNvoxel());
   timer.start();
 
-  for (std::size_t iT=0; iT < steps; ++iT) {
-    superLattice.collideAndStream();
+  for (std::size_t iT = 0; iT < parameters.get<parameters::TIME_STEPS>(); ++iT) {
+    sLattice.collideAndStream();
   }
 
-  #ifdef PLATFORM_GPU_CUDA
+#ifdef PLATFORM_GPU_CUDA
   gpu::cuda::device::synchronize();
-  #endif
+#endif
 
   timer.stop();
-  timer.update(steps);
+  timer.update(parameters.get<parameters::TIME_STEPS>());
 
-  superLattice.setProcessingContext(ProcessingContext::Evaluation);
+  sLattice.setProcessingContext(ProcessingContext::Evaluation);
 
   if (singleton::mpi().isMainProcessor()) {
-    std::cout << size << ", "
-              << steps << ", "
-              << cuboidsPerProcess << ", "
-              << singleton::mpi().getSize() << ", "
+    std::cout << parameters.get<parameters::RESOLUTION>() << ", " << parameters.get<parameters::TIME_STEPS>() << ", "
+              << parameters.get<parameters::CUBOIDS_PER_PROCESS>() << ", " << singleton::mpi().getSize() << ", "
 #ifdef PARALLEL_MODE_OMP
               << singleton::omp().getSize() << ", "
 #else
@@ -241,9 +280,48 @@ int main(int argc, char **argv)
               << timer.getTotalMLUPs() << std::endl;
   }
 
-  if (exportResults) {
-    getResults(superLattice, superGeometry);
+  if (!parameters.get<parameters::NO_EXPORT_RESULTS>()) {
+    getResults(myCase);
   }
+}
+
+int main(int argc, char** argv)
+{
+  initialize(&argc, &argv, false, false);
+  /// === Step 2: Set Parameters ===
+  MyCase::ParametersD myCaseParameters;
+  {
+    using namespace olb::parameters;
+    myCaseParameters.set<RESOLUTION>(100);
+    myCaseParameters.set<TIME_STEPS>(100);
+    myCaseParameters.set<PHYS_CHAR_LENGTH>(1.0);
+    myCaseParameters.set<NO_EXPORT_RESULTS>(true);
+    myCaseParameters.set<CUBOIDS_PER_PROCESS>(1);
+    myCaseParameters.set<PHYS_DELTA_X>([&] {
+      return myCaseParameters.get<PHYS_CHAR_LENGTH>() / myCaseParameters.get<RESOLUTION>();
+    });
+  }
+  myCaseParameters.fromCLI(argc, argv);
+
+  if (!myCaseParameters.get<parameters::NO_EXPORT_RESULTS>()) {
+    singleton::directories().setOutputDir("./tmp/");
+  }
+
+  /// === Step 3: Create Mesh ===
+  Mesh mesh = createMesh(myCaseParameters);
+  /// === Step 4: Create Case ===
+  MyCase myCase(myCaseParameters, mesh);
+
+  /// === Step 5: Prepare Geometry ===
+  prepareGeometry(myCase);
+  /// === Step 6: Prepare Lattice ===
+  prepareLattice(myCase);
+
+  /// === Step 7: Definition of Initial, Boundary Values, and Fields ===
+  setInitialValues(myCase);
+
+  /// === Step 8: Simulate ===
+  simulate(myCase);
 
   return 0;
 }

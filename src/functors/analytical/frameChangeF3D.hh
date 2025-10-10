@@ -169,6 +169,11 @@ CirclePowerLaw3D<T>::CirclePowerLaw3D(olb::Vector<T, 3> center, std::vector<T> n
     _radius(radius), _maxVelocity(maxVelocity), _n(n), _scale(scale) { }
 
 template <typename T>
+CirclePowerLaw3D<T>::CirclePowerLaw3D(olb::Vector<T, 3> center, olb::Vector<T, 3> normal,
+                                      T maxVelocity, T radius, T n, T scale)
+  : CirclePowerLaw3D(center,std::vector<T>({normal[0],normal[1],normal[2]}),maxVelocity,radius,n,scale) { }
+
+template <typename T>
 CirclePowerLaw3D<T>::CirclePowerLaw3D(T center0, T center1, T center2, T normal0, T normal1, T normal2, T radius, T maxVelocity, T n, T scale )
   : AnalyticalF3D<T,T>(3), _radius(radius), _maxVelocity(maxVelocity), _n(n), _scale(scale)
 {
@@ -319,6 +324,11 @@ CircleCasson3D<T>::CircleCasson3D(olb::Vector<T, 3> center, std::vector<T> norma
     _radius(radius), _cassonViscosity(cassonViscosity), _pressureDrop(pressureDrop), _yieldStress(yieldStress), _scale(scale) { }
 
 template <typename T>
+CircleCasson3D<T>::CircleCasson3D(olb::Vector<T, 3> center, olb::Vector<T, 3> normal,
+                                      T radius, T cassonViscosity, T pressureDrop, T yieldStress, T scale)
+  : CircleCasson3D(center,std::vector<T>({normal[0],normal[1],normal[2]}),radius,cassonViscosity,pressureDrop,yieldStress,scale) { }
+
+template <typename T>
 bool CircleCasson3D<T>::operator()(T output[], const T x[])
 {
   T r_c = _yieldStress / (_pressureDrop / 2.);
@@ -343,6 +353,11 @@ template <typename T>
 CirclePoiseuille3D<T>::CirclePoiseuille3D(std::vector<T> center, std::vector<T> normal,
     T maxVelocity, T radius, T scale)
   : CirclePowerLaw3D<T>(center, normal, maxVelocity, radius, 1., scale) { }
+
+template <typename T>
+CirclePoiseuille3D<T>::CirclePoiseuille3D(Vector<T,3> center, Vector<T,3> normal,
+    T maxVelocity, T radius, T scale)
+  : CirclePowerLaw3D<T>(std::vector<T>({center[0], center[1], center[2]}), std::vector<T>({normal[0],normal[1],normal[2]}), maxVelocity, radius, 1., scale) { }
 
 template <typename T>
 CirclePoiseuille3D<T>::CirclePoiseuille3D(T center0, T center1, T center2, T normal0,

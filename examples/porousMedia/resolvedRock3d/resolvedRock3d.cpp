@@ -155,7 +155,6 @@ void prepareLattice( MyCase& myCase ) {
   auto& geometry = myCase.getGeometry();
   auto& parameters = myCase.getParameters();
   auto& lattice = myCase.getLattice(NavierStokes{});
-  size_t  N   = parameters.get<parameters::RESOLUTION>();
   T       tau = parameters.get<parameters::LATTICE_RELAXATION_TIME>();
   T       fluidDensity = parameters.get<parameters::PHYS_CHAR_DENSITY>();
   T       kinematicViscosity = parameters.get<parameters::PHYS_CHAR_VISCOSITY>();
@@ -163,7 +162,7 @@ void prepareLattice( MyCase& myCase ) {
   Vector extent = parameters.get<parameters::DOMAIN_EXTENT>();
 
   lattice.setUnitConverter<UnitConverterFromResolutionAndRelaxationTime<T, DESCRIPTOR>>(
-      int {N}, // resolution: number of voxels per charPhysL
+      parameters.get<parameters::RESOLUTION>(), // resolution: number of voxels per charPhysL
       (T)tau, // latticeRelaxationTime: relaxation time, have to be greater than 0.5!
       (T)extent[1], // charPhysLength: reference length of simulation geometry
       (T)charPhysVelocityEstimation, // charPhysVelocity: maximal/highest expected velocity during simulation in __m / s__
@@ -201,8 +200,6 @@ void setInitialValues( MyCase& myCase ) {
   using DESCRIPTOR = MyCase::descriptor_t_of<NavierStokes>;
   auto& lattice   = myCase.getLattice(NavierStokes{});
   auto& geometry  = myCase.getGeometry();
-  auto& converter = lattice.getUnitConverter();
-  auto& parameters= myCase.getParameters();
   auto bulkIndicator = geometry.getMaterialIndicator({1, 3, 4});
 
   // Initial conditions
@@ -239,12 +236,11 @@ void setTemporalValues( MyCase& myCase,
     // SinusStartScale<T,int> StartScale(iTmaxStart, T(1));
 
     // Smooth start curve, polynomial
-    PolynomialStartScale<T, int> StartScale(iTmaxStart, T(1));
+    PolynomialStartScale<T, std::size_t> StartScale(iTmaxStart, T(1));
 
     // Creates and sets the Poiseuille inflow profile using functors
-    int iTvec[1] = {iT};
     T   frac[1]  = {};
-    StartScale(frac, iTvec);
+    StartScale(frac, &iT);
     const T                 currentPressure = frac[0] * pressureDrop;
     AnalyticalConst3D<T, T> rhoFromPressure(
         converter.getLatticeDensityFromPhysPressure(currentPressure));

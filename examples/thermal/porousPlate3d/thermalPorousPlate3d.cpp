@@ -206,7 +206,6 @@ void prepareLattice(MyCase& myCase) {
   auto& ADElattice    = myCase.getLattice(Temperature{});
 
   const T physCharLength          = parameters.get<parameters::PHYS_CHAR_LENGTH>();
-  const int N                     = parameters.get<parameters::RESOLUTION>();
   const T physDeltaX              = parameters.get<parameters::PHYS_DELTA_X>();
   const T physCharVelocity        = parameters.get<parameters::PHYS_CHAR_VELOCITY>();
   const T physDensity             = parameters.get<parameters::PHYS_CHAR_DENSITY>();
@@ -348,11 +347,10 @@ void getResults(MyCase& myCase,
   const auto& converter = NSElattice.getUnitConverter();
   const T Re            = converter.getReynoldsNumber();
   const T Pr            = converter.getPrandtlNumber();
-  const std::size_t N   = converter.getResolution();
   const T Tcold = converter.getCharPhysLowTemperature();
   const T Thot = converter.getCharPhysHighTemperature();
-  const int statIter = converter.getLatticeTime(parameters.get<parameters::STAT_ITER>());
-  const int vtkIter = converter.getLatticeTime(parameters.get<parameters::VTK_ITER>());
+  const int statIter = converter.getLatticeTime(parameters.get<parameters::PHYS_STAT_ITER_T>());
+  const int vtkIter = converter.getLatticeTime(parameters.get<parameters::PHYS_VTK_ITER_T>());
   const bool converged = parameters.get<parameters::CONVERGED>();
 
   SuperVTMwriter3D<T> vtkWriter("thermalPorousPlate3d");
@@ -472,8 +470,8 @@ int main(int argc, char* argv[]) {
     myCaseParameters.set<T_COLD                   >(273.15);
     myCaseParameters.set<EPSILON                  >(1e-7);
     myCaseParameters.set<CONV_ITER                >(1.);
-    myCaseParameters.set<STAT_ITER                >(10.0);
-    myCaseParameters.set<VTK_ITER                 >(100.);
+    myCaseParameters.set<PHYS_STAT_ITER_T         >(10.0);
+    myCaseParameters.set<PHYS_VTK_ITER_T          >(100.);
   }
   myCaseParameters.set<parameters::PHYS_DELTA_X>([&]() -> MyCase::value_t {
     return {myCaseParameters.get<parameters::PHYS_CHAR_LENGTH>() / myCaseParameters.get<parameters::RESOLUTION>()};

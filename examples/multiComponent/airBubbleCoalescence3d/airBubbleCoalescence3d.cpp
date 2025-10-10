@@ -31,93 +31,153 @@
 
 using namespace olb;
 using namespace olb::descriptors;
-using namespace olb::graphics;
+using namespace olb::names;
 
-using T = double;
-
-using DESCRIPTOR = D3Q19<VELOCITY,FORCE,EXTERNAL_FORCE,STATISTIC,SCALAR,PSI>;
-using BulkDynamics = MultiComponentForcedBGKdynamics<T, DESCRIPTOR>;
-
-constexpr unsigned N_COMPONENTS = 3;
-using COUPLING = MCMPForcedPostProcessor<N_COMPONENTS>;
-using STATISTICS = RhoPsiStatistics<interaction::MCPRpseudoPotential<N_COMPONENTS>,N_COMPONENTS>;
-
-// Parameters for the simulation setup
-const int N  = 70;                                              // domain resolution
-int radius = 20;
-const T L_char = 1e-7;                                          // charPhysLength [physical units]
-const T Re = 0.;                                                // definition: Reynolds number of continuous phase
-const T tau_nuH2O = 1.;                                         // relaxation time H2O lattice [lattice units]
-const T tau_nuAir = (tau_nuH2O-0.5)*15.32+0.5;                  // relaxation time N2+O2 lattice [lattice units]
-const T viscosityH2O = 1.0e-6;                                  // physViscosity H2O lattice [physical units]
-const T viscosityAir = viscosityH2O*15.32;                      // physViscosity N2+O2 lattice [physical units]
-const T g = 0;                                                  // gravitational acceleration [physical units]
-T a_0L = 3./245.;                                               // tune for stability/accuracy
-T initEpsilon = 2.8;                                            // tune for chemical potential equilibrium in phases
-const T pressure = 1.013e5;                                     // For Vapor-Liquid-Equilibrium [physical units] Pascal
-const T temperature = 298.15;                                   // For Vapor-Liquid-Equilibrium [physical units] Kelvin
-const T surfaceTension = 0.07;                                  // For physical accuracy and unit conversion [physical units]
+// === Step 1: Declarations ===
+using MyCase = Case<
+  Component1, Lattice<double, D3Q19<VELOCITY,FORCE,EXTERNAL_FORCE,STATISTIC,SCALAR,PSI>>,
+  Component2, Lattice<double, D3Q19<VELOCITY,FORCE,EXTERNAL_FORCE,STATISTIC,SCALAR,PSI>>,
+  Component3, Lattice<double, D3Q19<VELOCITY,FORCE,EXTERNAL_FORCE,STATISTIC,SCALAR,PSI>>
+>;
 
 /*==============================================================
  * go to src/dynamics/shanChenForcedPostProcessor.h and enable *
  * the THIRD_COMPONENT by uncommenting #define THIRD_COMPONENT *
  ==============================================================*/
-//H2O, N2, O2
-const std::vector<T> z = {0.99, 0.0079, 0.0021};                // feed composition for Vapor-Liquid-Equilibrium as molar fraction
-const std::vector<T> a = {0.5995808, 0.1480650, 0.1506765};
-const std::vector<T> b = {1.8955853e-5, 2.4010114e-5, 1.9893672e-5};
-const std::vector<T> M = {0.01802, 0.02801, 0.03200};
-const std::vector<T> T_c = {647.3, 126.2, 155.0};
-const std::vector<T> p_c{22089000, 3400000, 5040000};
-const std::vector<T> omega{0.34, 0.0377, 0.025};
-const std::vector<T> devi = {0.867805648, 0.432399567, 0.41302780};
 
-//H2OH2O, H2ON2, H2OO2, N2H2O, N2N2, N2O2, O2H2O, O2N2, O2O2
-const std::vector<T> alpha = {0., 0.199222317, 0.193233601, 0.199222317, 0., 0., 0.193233601, 0., 0.};
-const std::vector<T> g_I = {0., -4.29088111e3, -1.95640777e2, 3.02126911e4, 0., 5.65244934e2, 6.13396078e4, -5.01392189e2, 0.};
-const std::vector<T> g_II = {0., 3.47847412e1, 2.10776021e1, -3.70834075e1, 0., 0., -1.22744109e2, 0., 0.};
-std::vector<T> rho0L(3), rho0V(3);
-const int maxIter  = 10000;
-const int vtkIter  = 100;
-const int statIter = 20;
+using BulkDynamics = MultiComponentForcedBGKdynamics<MyCase::value_t, MyCase::descriptor_t>;
+constexpr unsigned N_COMPONENTS = 3;
+using COUPLING = MCMPForcedPostProcessor<N_COMPONENTS>;
+using STATISTICS = RhoPsiStatistics<interaction::MCPRpseudoPotential<N_COMPONENTS>,N_COMPONENTS>;
 
-void prepareGeometry( SuperGeometry<T,3>& superGeometry )
+namespace olb::parameters {
+
+struct A0_LATTICE : public descriptors::FIELD_BASE<1> { };
+struct FEED       : public descriptors::FIELD_BASE<N_COMPONENTS> { };
+struct A          : public descriptors::FIELD_BASE<N_COMPONENTS> { };
+struct B          : public descriptors::FIELD_BASE<N_COMPONENTS> { };
+struct M          : public descriptors::FIELD_BASE<N_COMPONENTS> { };
+struct T_C        : public descriptors::FIELD_BASE<N_COMPONENTS> { };
+struct P_C        : public descriptors::FIELD_BASE<N_COMPONENTS> { };
+struct OMEGA      : public descriptors::FIELD_BASE<N_COMPONENTS> { };
+struct DEVI       : public descriptors::FIELD_BASE<N_COMPONENTS> { };
+
+struct RHO0_L      : public descriptors::FIELD_BASE<N_COMPONENTS> { };
+struct RHO0_V      : public descriptors::FIELD_BASE<N_COMPONENTS> { };
+
+struct ALPHA      : public descriptors::FIELD_BASE<N_COMPONENTS*N_COMPONENTS> { };
+struct G_I        : public descriptors::FIELD_BASE<N_COMPONENTS*N_COMPONENTS> { };
+struct G_II       : public descriptors::FIELD_BASE<N_COMPONENTS*N_COMPONENTS> { };
+
+struct VLE        : public descriptors::FIELD_BASE<2*(N_COMPONENTS+1)> { };
+
+}
+
+Mesh<MyCase::value_t,MyCase::d> createMesh(MyCase::ParametersD& params) {
+  using T = MyCase::value_t;
+  Vector extent = params.get<parameters::DOMAIN_EXTENT>();
+  std::vector<T> origin(2,T());
+  IndicatorCuboid3D<T> cuboid(extent, origin);
+
+  const T dx = 1.; // lattice units case
+  Mesh<T,MyCase::d> mesh(cuboid, dx, singleton::mpi().getSize());
+  mesh.setOverlap(params.get<parameters::OVERLAP>());
+  mesh.getCuboidDecomposition().setPeriodicity({true,true,true});
+  return mesh;
+}
+
+void prepareGeometry( MyCase& myCase )
 {
   OstreamManager clout( std::cout,"prepareGeometry" );
   clout << "Prepare Geometry ..." << std::endl;
-  superGeometry.rename( 0,1 );
-  superGeometry.clean();
-  superGeometry.innerClean();
-  superGeometry.checkForErrors();
-  superGeometry.print();
+  auto& geometry = myCase.getGeometry();
+  geometry.rename( 0,1 );
+  // bulk, MN=1
+
+  geometry.clean();
+  geometry.innerClean();
+  geometry.checkForErrors();
+  geometry.print();
   clout << "Prepare Geometry ... OK" << std::endl;
 }
 
-template <typename SuperLatticeCoupling, typename StatisticsCoupling>
-void prepareLattice( SuperLattice<T, DESCRIPTOR>& sLattice1,
-                     SuperLattice<T, DESCRIPTOR>& sLattice2,
-                     SuperLattice<T, DESCRIPTOR>& sLattice3,
-                     SuperLatticeCoupling& coupling,
-                     StatisticsCoupling& statistics,
-                     MultiPhaseUnitConverter<T, DESCRIPTOR> const& converter,
-                     SuperGeometry<T,3>& superGeometry )
+void prepareLattice( MyCase& myCase )
 {
   OstreamManager clout( std::cout,"prepareLattice" );
   clout << "Prepare Lattice ..." << std::endl;
-  clout << "epsilon: " << initEpsilon << std::endl;
+
+  using T = MyCase::value_t;
+  auto& geometry = myCase.getGeometry();
+  auto& params = myCase.getParameters();
+
+  auto& sLattice1 = myCase.getLattice(Component1{});
+  auto& sLattice2 = myCase.getLattice(Component2{});
+  auto& sLattice3 = myCase.getLattice(Component3{});
+
+  using DESCRIPTOR = MyCase::descriptor_t;
+
+  const int N = params.get<parameters::RESOLUTION>();
+  const T tau_H2O = params.get<parameters::LATTICE_RELAXATION_TIME>();
+  const T L_char = params.get<parameters::PHYS_CHAR_LENGTH>();
+  const T viscosityH2O = params.get<parameters::NU_LIQUID>();
+  const T viscosityAir = params.get<parameters::NU_VAPOR>();
+  const T tau_Air = viscosityAir/viscosityH2O*(tau_H2O-0.5)+0.5;
+  const T a_0L = params.get<parameters::A0_LATTICE>();
+  const T eps = params.get<parameters::EPSILON>();
+  const T sigma = params.get<parameters::SURFACE_TENSION>();
+  const T pressure = params.get<parameters::PHYS_CHAR_PRESSURE>();
+  const T temperature = params.get<parameters::PHYS_CHAR_TEMPERATURE>();
+
+  const Vector<T,N_COMPONENTS> z = params.get<parameters::FEED>();
+  const Vector<T,N_COMPONENTS> a = params.get<parameters::A>();
+  const Vector<T,N_COMPONENTS> b = params.get<parameters::B>();
+  const Vector<T,N_COMPONENTS> M = params.get<parameters::M>();
+  const Vector<T,N_COMPONENTS> T_c = params.get<parameters::T_C>();
+  const Vector<T,N_COMPONENTS> p_c = params.get<parameters::P_C>();
+  const Vector<T,N_COMPONENTS> omega = params.get<parameters::OMEGA>();
+  const Vector<T,N_COMPONENTS> devi = params.get<parameters::DEVI>();
+
+  Vector<T,N_COMPONENTS> rho0L(0.,0.,0.);
+  Vector<T,N_COMPONENTS> rho0V(0.,0.,0.);
+
+  const Vector<T,N_COMPONENTS*N_COMPONENTS> alpha = params.get<parameters::ALPHA>();
+  const Vector<T,N_COMPONENTS*N_COMPONENTS> g_I = params.get<parameters::G_I>();
+  const Vector<T,N_COMPONENTS*N_COMPONENTS> g_II = params.get<parameters::G_II>();
+
+  sLattice1.setUnitConverter<MultiPhaseUnitConverter<T,DESCRIPTOR>>(
+    int   {N},         // resolution
+    (T)   L_char,      // charPhysLength: reference length of simulation geometry
+    (T)   0.,          // charPhysVelocity: maximal/highest expected velocity during simulation in __m / s__
+    (T)   viscosityH2O,// physViscosity: physical kinematic viscosity in __m^2 / s__
+    (T)   a[0],        // physEoSa: H2O energy parameter in __kg m^5 / mol^2 s^2__
+    (T)   a_0L,        // latticeEoSa: first component's energy parameter in lattice units
+    (T)   b[0],        // physEoSb: H2O co-volume parameter in __m^3 / mol__
+    (T)   M[0],        // physMolarMass: H2O molar mass for EoS in __kg / mol__
+    (T)   sigma,       // physSurfaceTension: physical surface tension of mixture in __kg / s^2__
+    (T)   temperature, // charPhysTemperature: temperature of VLE in __K__
+    (T)   pressure     // charPhysPressure: pressure of VLE in __kg / m s^2__
+  );
+
+  const auto& converter = sLattice1.getUnitConverter();
+  converter.print();
+
+  sLattice2.setUnitConverter(converter);
+  sLattice3.setUnitConverter(converter);
+
   // define lattice Dynamics
-  sLattice1.defineDynamics<NoDynamics>(superGeometry, 0);
-  sLattice2.defineDynamics<NoDynamics>(superGeometry, 0);
-  sLattice3.defineDynamics<NoDynamics>(superGeometry, 0);
-  sLattice1.defineDynamics<BulkDynamics>(superGeometry, 1);
-  sLattice2.defineDynamics<BulkDynamics>(superGeometry, 1);
-  sLattice3.defineDynamics<BulkDynamics>(superGeometry, 1);
+  sLattice1.defineDynamics<NoDynamics>(geometry, 0);
+  sLattice2.defineDynamics<NoDynamics>(geometry, 0);
+  sLattice3.defineDynamics<NoDynamics>(geometry, 0);
+  sLattice1.defineDynamics<BulkDynamics>(geometry, 1);
+  sLattice2.defineDynamics<BulkDynamics>(geometry, 1);
+  sLattice3.defineDynamics<BulkDynamics>(geometry, 1);
 
   //thermodynamic initial conditions in lattice units
   T p_L = pressure/converter.getConversionFactorPressure();
   T T_L = temperature/converter.getConversionFactorTemperature();
-  std::vector<T> a_L(10), b_L(10), M_L(10), Tc_L(10), pc_L(10), omega_L(10), devi_L(10), alpha_L(100), gI_L(100), gII_L(100);
-  for(unsigned i = 0; i < N_COMPONENTS; i++){
+  std::vector<T> z_L(N_COMPONENTS), a_L(10), b_L(10), M_L(10), Tc_L(10), pc_L(10), omega_L(10), devi_L(10), alpha_L(100), gI_L(100), gII_L(100);
+  for(std::size_t i = 0; i < N_COMPONENTS; i++){
+    z_L[i]     = z[i];
     a_L[i]     = a[i]/converter.getConversionFactorEoSa();
     b_L[i]     = b[i]/converter.getConversionFactorEoSb();
     M_L[i]     = M[i]/converter.getConversionFactorMolarMass();
@@ -134,75 +194,50 @@ void prepareLattice( SuperLattice<T, DESCRIPTOR>& sLattice1,
     gII_L[i]   = g_II[i]/C_R;
   }
 
-  MultiComponentPengRobinson VLE(p_L, T_L, z, a_L, b_L, M_L, Tc_L, pc_L, omega, devi, alpha, gI_L, gII_L);
+  MultiComponentPengRobinson VLE(p_L, T_L, z_L, a_L, b_L, M_L, Tc_L, pc_L, omega_L, devi_L, alpha_L, gI_L, gII_L);
   T beta0 = (z[1]+z[2]);
   std::vector<T> vxVLE = VLE.iterate_VLE(1e-11, beta0);   // Molar volumes and fractions of equilibrium phases [lattice units]
   clout <<"VLE: "<<vxVLE[0]<<", "<<vxVLE[1]<<", "<<vxVLE[2]<<", "<<vxVLE[3]<<", "<<vxVLE[4]<<", "<<vxVLE[5]<<", "<<vxVLE[6]<<", "<<vxVLE[7]<<std::endl;
-  std::vector<T> chi = VLE.getChis(3);                             // Force split factor from VLE
+  std::vector<T> chi = VLE.getChis(3);                    // Force split factor from VLE
   clout <<"Chis: "<<chi[0]<<", "<<chi[1]<<", "<<chi[2]<<std::endl;
+  params.set<parameters::VLE>(vxVLE);
 
-  // bulk initial conditions
-  // define spherical domain for gas phase
-  std::vector<T> v = {0., 0., 0.};
-  AnalyticalConst3D<T,T> zeroVelocity( v );
+  sLattice1.setParameter<descriptors::OMEGA>( 1./tau_H2O );
+  sLattice2.setParameter<descriptors::OMEGA>( 1./tau_Air );
+  sLattice3.setParameter<descriptors::OMEGA>( 1./tau_Air );
 
-  AnalyticalConst3D<T,T> liquidH2O ( 1./vxVLE[0]*vxVLE[2]*M_L[0] );
-  AnalyticalConst3D<T,T> liquidN2  ( 1./vxVLE[0]*vxVLE[3]*M_L[1] );
-  AnalyticalConst3D<T,T> liquidO2  ( 1./vxVLE[0]*vxVLE[4]*M_L[2] );
+  T sigma_L = converter.getLatticeSurfaceTension()*(-2.6);
 
-  SmoothIndicatorFactoredCircle3D<T,T> vaporH2O_1( {23., 23., 23.}, radius, 2., 0, {0,0,0}, 0, (1./vxVLE[1]*vxVLE[5]*M_L[0] - 1./vxVLE[0]*vxVLE[2]*M_L[0]) );
-  SmoothIndicatorFactoredCircle3D<T,T> vaporN2_1 ( {23., 23., 23.}, radius, 2., 0, {0,0,0}, 0, (1./vxVLE[1]*vxVLE[6]*M_L[1] - 1./vxVLE[0]*vxVLE[3]*M_L[1]) );
-  SmoothIndicatorFactoredCircle3D<T,T> vaporO2_1 ( {23., 23., 23.}, radius, 2., 0, {0,0,0}, 0, (1./vxVLE[1]*vxVLE[7]*M_L[2] - 1./vxVLE[0]*vxVLE[4]*M_L[2]) );
+  auto& coupling = myCase.setCouplingOperator(
+    "Coupling",
+    COUPLING{},
+    names::Component1{}, sLattice1,
+    names::Component2{}, sLattice2,
+    names::Component3{}, sLattice3);
 
-  SmoothIndicatorFactoredCircle3D<T,T> vaporH2O_2( {47., 47., 47.}, radius, 2., 0, {0,0,0}, 0, (1./vxVLE[1]*vxVLE[5]*M_L[0] - 1./vxVLE[0]*vxVLE[2]*M_L[0]) );
-  SmoothIndicatorFactoredCircle3D<T,T> vaporN2_2 ( {47., 47., 47.}, radius, 2., 0, {0,0,0}, 0, (1./vxVLE[1]*vxVLE[6]*M_L[1] - 1./vxVLE[0]*vxVLE[3]*M_L[1]) );
-  SmoothIndicatorFactoredCircle3D<T,T> vaporO2_2 ( {47., 47., 47.}, radius, 2., 0, {0,0,0}, 0, (1./vxVLE[1]*vxVLE[7]*M_L[2] - 1./vxVLE[0]*vxVLE[4]*M_L[2]) );
+  auto& statistics = myCase.setCouplingOperator(
+    "Statistics",
+    STATISTICS{},
+    names::Component1{}, sLattice1,
+    names::Component2{}, sLattice2,
+    names::Component3{}, sLattice3);
 
-  //AnalyticalIdentity3D<T,T> rhoH2O( liquidH2O + vaporH2O_1 );
-  //AnalyticalIdentity3D<T,T> rhoN2 ( liquidN2  + vaporN2_1 );
-  //AnalyticalIdentity3D<T,T> rhoO2 ( liquidO2  + vaporO2_1 );
-  AnalyticalIdentity3D<T,T> rhoH2O( liquidH2O + vaporH2O_1 + vaporH2O_2 );
-  AnalyticalIdentity3D<T,T> rhoN2 ( liquidN2  + vaporN2_1  + vaporN2_2 );
-  AnalyticalIdentity3D<T,T> rhoO2 ( liquidO2  + vaporO2_1  + vaporO2_2 );
+  coupling.setParameter<COUPLING::CHI>(chi);
+  coupling.setParameter<COUPLING::G>(-1.);
+  coupling.setParameter<COUPLING::SIGMA>(sigma_L);
+  coupling.setParameter<COUPLING::EPSILON>(eps);
 
-  sLattice1.defineRhoU( superGeometry, 1, rhoH2O, zeroVelocity );
-  sLattice2.defineRhoU( superGeometry, 1, rhoN2, zeroVelocity );
-  sLattice3.defineRhoU( superGeometry, 1, rhoO2, zeroVelocity );
-  sLattice1.iniEquilibrium( superGeometry, 1, rhoH2O, zeroVelocity );
-  sLattice2.iniEquilibrium( superGeometry, 1, rhoN2, zeroVelocity );
-  sLattice3.iniEquilibrium( superGeometry, 1, rhoO2, zeroVelocity );
-
-  // Only works properly after implementing walls at the top and bottom
-  std::vector<T> F( 3,T() );
-  F[1] = -g/(converter.getPhysDeltaX()/converter.getPhysDeltaT()/converter.getPhysDeltaT());
-  clout << "Gravitational acceleration in lattice units: " << g/(converter.getPhysDeltaX()/converter.getPhysDeltaT()/converter.getPhysDeltaT()) << std::endl;
-  AnalyticalConst3D<T,T> f( F );
-  sLattice1.defineField<descriptors::EXTERNAL_FORCE>( superGeometry, 1, f );
-  sLattice2.defineField<descriptors::EXTERNAL_FORCE>( superGeometry, 1, f );
-  sLattice3.defineField<descriptors::EXTERNAL_FORCE>( superGeometry, 1, f );
-
-  sLattice1.setParameter<descriptors::OMEGA>( 1./tau_nuH2O );
-  sLattice2.setParameter<descriptors::OMEGA>( 1./tau_nuAir );
-  sLattice3.setParameter<descriptors::OMEGA>( 1./tau_nuAir );
-
-  T sigma = converter.getLatticeSurfaceTension()*(-2.6);
-  clout << "Sigma for correct unit conversion: " << sigma << std::endl;
-  coupling.template setParameter<COUPLING::CHI>(chi);
-  coupling.template setParameter<COUPLING::G>(-1.);
-  coupling.template setParameter<COUPLING::SIGMA>(sigma);
-  coupling.template setParameter<COUPLING::EPSILON>(initEpsilon);
-
-  statistics.template setParameter<STATISTICS::TEMPERATURE>(T_L);
-  statistics.template setParameter<STATISTICS::G>(-1.);
-  statistics.template setParameter<STATISTICS::K>(1.);
-  statistics.template setParameter<STATISTICS::A>(a_L);
-  statistics.template setParameter<STATISTICS::B>(b_L);
-  statistics.template setParameter<STATISTICS::MM>(M_L);
-  statistics.template setParameter<STATISTICS::TCRIT>(Tc_L);
-  statistics.template setParameter<STATISTICS::DEVI>(devi);
-  statistics.template setParameter<STATISTICS::ALPHA>(alpha);
-  statistics.template setParameter<STATISTICS::GI>(gI_L);
-  statistics.template setParameter<STATISTICS::GII>(gII_L);
+  statistics.setParameter<STATISTICS::TEMPERATURE>(T_L);
+  statistics.setParameter<STATISTICS::G>(-1.);
+  statistics.setParameter<STATISTICS::K>(1.);
+  statistics.setParameter<STATISTICS::A>(a_L);
+  statistics.setParameter<STATISTICS::B>(b_L);
+  statistics.setParameter<STATISTICS::MM>(M_L);
+  statistics.setParameter<STATISTICS::TCRIT>(Tc_L);
+  statistics.setParameter<STATISTICS::DEVI>(devi_L);
+  statistics.setParameter<STATISTICS::ALPHA>(alpha_L);
+  statistics.setParameter<STATISTICS::GI>(gI_L);
+  statistics.setParameter<STATISTICS::GII>(gII_L);
 
   {
     auto& communicator = sLattice1.getCommunicator(stage::PreCoupling());
@@ -226,33 +261,108 @@ void prepareLattice( SuperLattice<T, DESCRIPTOR>& sLattice1,
     communicator.exchangeRequests();
   }
 
-  sLattice1.initialize();
-  sLattice2.initialize();
-  sLattice3.initialize();
-  statistics.apply();
-
   clout << "Prepare Lattice ... OK" << std::endl;
 }
 
-void getResults( SuperLattice<T, DESCRIPTOR>& sLattice1,
-                 SuperLattice<T, DESCRIPTOR>& sLattice2,
-                 SuperLattice<T, DESCRIPTOR>& sLattice3,
-                 int iT, SuperGeometry<T,3>& superGeometry, util::Timer<T>& timer,
-                 MultiPhaseUnitConverter<T, DESCRIPTOR> const& converter )
+void setInitialValues(MyCase& myCase) {
+  using T = MyCase::value_t;
+  auto& geometry = myCase.getGeometry();
+  auto& params = myCase.getParameters();
+
+  auto& sLattice1 = myCase.getLattice(Component1{});
+  auto& sLattice2 = myCase.getLattice(Component2{});
+  auto& sLattice3 = myCase.getLattice(Component3{});
+
+  const auto& converter = sLattice1.getUnitConverter();
+
+    const int N = params.get<parameters::RESOLUTION>();
+  const int radius = N/2;
+  Vector g = params.get<parameters::GRAVITY>();
+
+  const Vector<T,N_COMPONENTS> M = params.get<parameters::M>();
+  const Vector<T,2*(N_COMPONENTS+1)> vle = params.get<parameters::VLE>();
+
+  std::vector<T> M_L(10);
+  for(std::size_t i = 0; i < N_COMPONENTS; i++){
+    M_L[i] = M[i]/converter.getConversionFactorMolarMass();
+  }
+
+  // define spherical domain for gas phase
+  std::vector<T> v = {0., 0., 0.};
+  AnalyticalConst3D<T,T> zeroVelocity( v );
+
+  AnalyticalConst3D<T,T> liquidH2O ( 1./vle[0]*vle[2]*M_L[0] );
+  AnalyticalConst3D<T,T> liquidN2  ( 1./vle[0]*vle[3]*M_L[1] );
+  AnalyticalConst3D<T,T> liquidO2  ( 1./vle[0]*vle[4]*M_L[2] );
+
+  SmoothIndicatorFactoredCircle3D<T,T> vaporH2O_1( {23., 23., 23.}, radius, 2., 0, {0,0,0}, 0, (1./vle[1]*vle[5]*M_L[0] - 1./vle[0]*vle[2]*M_L[0]) );
+  SmoothIndicatorFactoredCircle3D<T,T> vaporN2_1 ( {23., 23., 23.}, radius, 2., 0, {0,0,0}, 0, (1./vle[1]*vle[6]*M_L[1] - 1./vle[0]*vle[3]*M_L[1]) );
+  SmoothIndicatorFactoredCircle3D<T,T> vaporO2_1 ( {23., 23., 23.}, radius, 2., 0, {0,0,0}, 0, (1./vle[1]*vle[7]*M_L[2] - 1./vle[0]*vle[4]*M_L[2]) );
+
+  SmoothIndicatorFactoredCircle3D<T,T> vaporH2O_2( {47., 47., 47.}, radius, 2., 0, {0,0,0}, 0, (1./vle[1]*vle[5]*M_L[0] - 1./vle[0]*vle[2]*M_L[0]) );
+  SmoothIndicatorFactoredCircle3D<T,T> vaporN2_2 ( {47., 47., 47.}, radius, 2., 0, {0,0,0}, 0, (1./vle[1]*vle[6]*M_L[1] - 1./vle[0]*vle[3]*M_L[1]) );
+  SmoothIndicatorFactoredCircle3D<T,T> vaporO2_2 ( {47., 47., 47.}, radius, 2., 0, {0,0,0}, 0, (1./vle[1]*vle[7]*M_L[2] - 1./vle[0]*vle[4]*M_L[2]) );
+
+  //AnalyticalIdentity3D<T,T> rhoH2O( liquidH2O + vaporH2O_1 );
+  //AnalyticalIdentity3D<T,T> rhoN2 ( liquidN2  + vaporN2_1 );
+  //AnalyticalIdentity3D<T,T> rhoO2 ( liquidO2  + vaporO2_1 );
+  AnalyticalIdentity3D<T,T> rhoH2O( liquidH2O + vaporH2O_1 + vaporH2O_2 );
+  AnalyticalIdentity3D<T,T> rhoN2 ( liquidN2  + vaporN2_1  + vaporN2_2 );
+  AnalyticalIdentity3D<T,T> rhoO2 ( liquidO2  + vaporO2_1  + vaporO2_2 );
+
+  sLattice1.defineRhoU( geometry, 1, rhoH2O, zeroVelocity );
+  sLattice2.defineRhoU( geometry, 1, rhoN2, zeroVelocity );
+  sLattice3.defineRhoU( geometry, 1, rhoO2, zeroVelocity );
+  sLattice1.iniEquilibrium( geometry, 1, rhoH2O, zeroVelocity );
+  sLattice2.iniEquilibrium( geometry, 1, rhoN2, zeroVelocity );
+  sLattice3.iniEquilibrium( geometry, 1, rhoO2, zeroVelocity );
+
+  g = g/(converter.getPhysDeltaX()/converter.getPhysDeltaT()/converter.getPhysDeltaT());
+  AnalyticalConst3D<T,T> f( g );
+  sLattice1.defineField<descriptors::EXTERNAL_FORCE>( geometry, 1, f );
+  sLattice2.defineField<descriptors::EXTERNAL_FORCE>( geometry, 1, f );
+  sLattice3.defineField<descriptors::EXTERNAL_FORCE>( geometry, 1, f );
+
+  sLattice1.initialize();
+  sLattice2.initialize();
+  sLattice3.initialize();
+  myCase.getOperator("Statistics").apply();
+}
+
+void setTemporalValues(MyCase& myCase,
+                       std::size_t iT)
+{ }
+
+void getResults( MyCase& myCase,
+                 util::Timer<MyCase::value_t>& timer,
+                 std::size_t iT )
 {
   OstreamManager clout( std::cout,"getResults" );
-  SuperVTMwriter3D<T> vtmWriter( "airBubbleCoalescence3d" );
+  using T = MyCase::value_t;
+  auto& params = myCase.getParameters();
+
+  auto& sLattice1 = myCase.getLattice(Component1{});
+  auto& sLattice2 = myCase.getLattice(Component2{});
+  auto& sLattice3 = myCase.getLattice(Component3{});
+
+  using DESCRIPTOR = MyCase::descriptor_t;
+  const auto& converter = sLattice1.getUnitConverter();
+
+  const Vector extent = params.get<parameters::DOMAIN_EXTENT>();
+  const int radius = params.get<parameters::RESOLUTION>()/2;
+  const int statIter = params.get<parameters::LATTICE_STAT_ITER_T>();
+  const int saveIter = params.get<parameters::LATTICE_VTK_ITER_T>();
+
+  SuperVTMwriter3D<T> vtkWriter( "airBubbleCoalescence3d" );
   if ( iT==0 ) {
-    // Writes the geometry, cuboid no. and rank no. as vti file for visualization
-    SuperLatticeCuboid3D<T, DESCRIPTOR> cuboid( sLattice1 );
-    SuperLatticeRank3D<T, DESCRIPTOR> rank( sLattice1 );
-    vtmWriter.write( cuboid );
-    vtmWriter.write( rank );
-    vtmWriter.createMasterFile();
+    SuperLatticeCuboid3D cuboid( sLattice1 );
+    SuperLatticeRank3D rank( sLattice1 );
+    vtkWriter.write( cuboid );
+    vtkWriter.write( rank );
+    vtkWriter.createMasterFile();
   }
-  // Get statistics
+
   if ( iT%statIter==0 ) {
-    // Timer console output
     timer.update( iT );
     timer.printStep();
     sLattice1.getStatistics().print( iT, converter.getPhysTime(iT) );
@@ -260,8 +370,7 @@ void getResults( SuperLattice<T, DESCRIPTOR>& sLattice1,
     sLattice3.getStatistics().print( iT, converter.getPhysTime(iT) );
   }
 
-  // Writes the VTK files
-  if ( iT%vtkIter==0 ) {
+  if ( iT%saveIter==0 ) {
     sLattice1.setProcessingContext(ProcessingContext::Evaluation);
     sLattice2.setProcessingContext(ProcessingContext::Evaluation);
     sLattice3.setProcessingContext(ProcessingContext::Evaluation);
@@ -294,17 +403,17 @@ void getResults( SuperLattice<T, DESCRIPTOR>& sLattice1,
     SuperIdentity3D<T,T> bulkPressure( C_p*bulkPressureL );
     bulkPressure.getName() = "bulkPressure";
 
-    vtmWriter.addFunctor( density1 );
-    vtmWriter.addFunctor( density2 );
-    vtmWriter.addFunctor( density3 );
-    vtmWriter.addFunctor( density );
-    vtmWriter.addFunctor( velocity );
-    vtmWriter.addFunctor( bulkPressure );
-    vtmWriter.write( iT );
+    vtkWriter.addFunctor( density1 );
+    vtkWriter.addFunctor( density2 );
+    vtkWriter.addFunctor( density3 );
+    vtkWriter.addFunctor( density );
+    vtkWriter.addFunctor( velocity );
+    vtkWriter.addFunctor( bulkPressure );
+    vtkWriter.write( iT );
 
     // calculate bulk pressure, pressure difference and surface tension for one central bubble
     AnalyticalFfromSuperF3D<T,T> interpolPressure( bulkPressure, true, 1);
-    T position[3] = { 0.5*N, 0.5*N, 0.5*N };
+    T position[3] = { 0.5*extent[0], 0.5*extent[1], 0.5*extent[2] };
     T pressureIn = 0.;
     T pressureOut = 0.;
     interpolPressure(&pressureIn, position);
@@ -317,83 +426,38 @@ void getResults( SuperLattice<T, DESCRIPTOR>& sLattice1,
   }
 }
 
-void simulate()
+void simulate( MyCase& myCase )
 {
-  // === 1st Step: Initialization ===
-  OstreamManager clout( std::cout,"main" );
-  MultiPhaseUnitConverter<T,DESCRIPTOR> const converter(
-    int   {radius*2},               // resolution
-    (T)   L_char,                   // charPhysLength: reference length of simulation geometry
-    (T)   Re/L_char*viscosityH2O,   // charPhysVelocity: maximal/highest expected velocity during simulation in __m / s__
-    (T)   viscosityH2O,             // physViscosity: physical kinematic viscosity in __m^2 / s__
-    (T)   a[0],                     // physEoSa: H2O energy parameter in __kg m^5 / mol^2 s^2__
-    (T)   a_0L,                     // latticeEoSa: first component's energy parameter in lattice units
-    (T)   b[0],                     // physEoSb: H2O co-volume parameter in __m^3 / mol__
-    (T)   M[0],                     // physMolarMass: H2O molar mass for EoS in __kg / mol__
-    (T)   surfaceTension,           // physSurfaceTension: physical surface tension of mixture in __kg / s^2__
-    (T)   temperature,              // charPhysTemperature: temperature of VLE in __K__
-    (T)   pressure                  // charPhysPressure: pressure of VLE in __kg / m s^2__
-  );
+  using T = MyCase::value_t;
+  auto& params = myCase.getParameters();
 
-  // Prints the converter log as console output
-  converter.print();
-  // === 2nd Step: Prepare Geometry ===
-  // Instantiation of a cuboidDecomposition with weights
-#ifdef PARALLEL_MODE_MPI
-  const int noOfCuboids = singleton::mpi().getSize();
-#else
-  const int noOfCuboids = 1;
-#endif
-  CuboidDecomposition3D<T> cuboidDecomposition(0, 1, N, noOfCuboids );
-  // set periodic boundaries to the domain
-  cuboidDecomposition.setPeriodicity({ true, true, true });
-  // Instantiation of loadbalancer
-  HeuristicLoadBalancer<T> loadBalancer( cuboidDecomposition );
-  loadBalancer.print();
-  // Instantiation of superGeometry
-  SuperGeometry<T,3> superGeometry( cuboidDecomposition,loadBalancer,2 );
-  prepareGeometry( superGeometry );
+  auto& sLattice1 = myCase.getLattice(Component1{});
+  auto& sLattice2 = myCase.getLattice(Component2{});
+  auto& sLattice3 = myCase.getLattice(Component3{});
 
-  // === 3rd Step: Prepare Lattice ===
-  SuperLattice<T, DESCRIPTOR> sLattice1( converter, superGeometry );
-  SuperLattice<T, DESCRIPTOR> sLattice2( converter, superGeometry );
-  SuperLattice<T, DESCRIPTOR> sLattice3( converter, superGeometry );
+  const std::size_t iTmax = params.get<parameters::MAX_LATTICE_T>();
 
-  SuperLatticeCoupling coupling(
-    COUPLING{},
-    names::Component1{}, sLattice1,
-    names::Component2{}, sLattice2,
-    names::Component3{}, sLattice3);
-
-  SuperLatticeCoupling statistics(
-    STATISTICS{},
-    names::Component1{}, sLattice1,
-    names::Component2{}, sLattice2,
-    names::Component3{}, sLattice3);
-
-  prepareLattice( sLattice1, sLattice2, sLattice3, coupling, statistics, converter, superGeometry );
-
-  // === 4th Step: Main Loop with Timer ===
-  int iT = 0;
-  clout << "starting simulation..." << std::endl;
-  util::Timer<T> timer( maxIter, superGeometry.getStatistics().getNvoxel() );
+  util::Timer<T> timer(iTmax, myCase.getGeometry().getStatistics().getNvoxel());
   timer.start();
-  for ( iT=0; iT<=maxIter; ++iT ) {
-    // Collide and stream (and coupling) execution
+
+  for (std::size_t iT=0; iT <= iTmax; ++iT) {
+    /// === Step 8.1: Update the Boundary Values and Fields at Times ===
+    setTemporalValues(myCase, iT);
+
+    /// === Step 8.2: Collide and Stream Execution ===
     sLattice1.collideAndStream();
     sLattice2.collideAndStream();
     sLattice3.collideAndStream();
 
-    statistics.apply();
+    myCase.getOperator("Statistics").apply();
     sLattice1.getCommunicator(stage::PreCoupling()).communicate();
     sLattice2.getCommunicator(stage::PreCoupling()).communicate();
     sLattice3.getCommunicator(stage::PreCoupling()).communicate();
-    coupling.apply();
+    myCase.getOperator("Coupling").apply();
 
-    // Computation and output of the results
-    getResults( sLattice1, sLattice2, sLattice3, iT, superGeometry, timer, converter );
+    /// === Step 8.3: Computation and Output of the Results ===
+    getResults(myCase, timer, iT);
     if ( std::isnan( sLattice1.getStatistics().getAverageEnergy() ) ) {
-      clout << "unstable!" << std::endl;
       break;
     }
   }
@@ -404,12 +468,63 @@ void simulate()
 int main( int argc, char *argv[] )
 {
   initialize( &argc, &argv );
-  if (argc > 1) {
-    initEpsilon = atof(argv[1]);
+
+  /// === Step 2: Set Parameters ===
+  MyCase::ParametersD myCaseParameters;
+  {
+    using namespace olb::parameters;
+    myCaseParameters.set<DOMAIN_EXTENT          >({70, 70, 70}); // domain size [lattice units]
+    myCaseParameters.set<RESOLUTION             >(40);           // resolution [lattice units]
+    myCaseParameters.set<LATTICE_RELAXATION_TIME>(1.);     // tau_H2O [lattice units]
+    myCaseParameters.set<MAX_LATTICE_T          >(10000);  // max iterations [lattice units]
+    myCaseParameters.set<LATTICE_VTK_ITER_T     >(100);    // vtk iterations [lattice units]
+    myCaseParameters.set<LATTICE_STAT_ITER_T    >(20);     // statistics iterations [lattice units]
+    myCaseParameters.set<PHYS_CHAR_LENGTH>(1e-7);        // charPhysLength [physical units]
+    myCaseParameters.set<NU_VAPOR        >(1.532e-5);    // physViscosity N2+O2 lattice [physical units]
+    myCaseParameters.set<NU_LIQUID       >(1e-6);        // physViscosity H2O lattice [physical units]
+    myCaseParameters.set<GRAVITY         >({0.,0.,0.});  // gravitational acceleration [physical units]
+    myCaseParameters.set<A0_LATTICE      >(3./245.);     // tune for stability/accuracy [lattice units]
+    myCaseParameters.set<parameters::EPSILON>(2.8);      // tune for chemical potential equilibrium in phases []
+    myCaseParameters.set<SURFACE_TENSION >(0.07);        // For unit conversion [physical units], not crucial for phase composition
+    myCaseParameters.set<PHYS_CHAR_PRESSURE   >(1.013e5);// For Vapor-Liquid-Equilibrium [physical units]
+    myCaseParameters.set<PHYS_CHAR_TEMPERATURE>(298.15); // For Vapor-Liquid-Equilibrium [physical units]
+    //H2O, N2, O2
+    myCaseParameters.set<FEED >({0.99, 0.0079, 0.0021});  // feed composition for Vapor-Liquid-Equilibrium as molar fraction
+    myCaseParameters.set<parameters::A>({0.5995808, 0.1480650, 0.1506765});
+    myCaseParameters.set<parameters::B>({1.8955853e-5, 2.4010114e-5, 1.9893672e-5});
+    myCaseParameters.set<M    >({0.01802, 0.02801, 0.03200});
+    myCaseParameters.set<T_C  >({647.3, 126.2, 155.0});
+    myCaseParameters.set<P_C  >({22089000, 3400000, 5040000});
+    myCaseParameters.set<parameters::OMEGA>({0.34, 0.0377, 0.025});
+    myCaseParameters.set<DEVI >({0.867805648, 0.432399567, 0.41302780});
+    //H2OH2O, H2ON2, H2OO2, N2H2O, N2N2, N2O2, O2H2O, O2N2, O2O2
+    myCaseParameters.set<ALPHA>(
+      {0., 0.199222317, 0.193233601, 0.199222317, 0., 0., 0.193233601, 0., 0.});
+    myCaseParameters.set<G_I  >(
+      {0., -4.29088111e3, -1.95640777e2, 3.02126911e4, 0., 5.65244934e2, 6.13396078e4, -5.01392189e2, 0.});
+    myCaseParameters.set<G_II >(
+      {0., 3.47847412e1, 2.10776021e1, -3.70834075e1, 0., 0., -1.22744109e2, 0., 0.});
+    myCaseParameters.set<RHO0_L >({0., 0., 0.});
+    myCaseParameters.set<RHO0_V >({0., 0., 0.});
+    myCaseParameters.set<VLE    >({0., 0., 0., 0., 0., 0., 0., 0.});
   }
-  if (argc > 2) {
-    a_0L = atof(argv[2]);
-  }
-  singleton::directories().setOutputDir( "./tmp/" );
-  simulate();
+  myCaseParameters.fromCLI(argc, argv);
+
+  /// === Step 3: Create Mesh ===
+  Mesh mesh = createMesh(myCaseParameters);
+
+  /// === Step 4: Create Case ===
+  MyCase myCase(myCaseParameters, mesh);
+
+  /// === Step 5: Prepare Geometry ===
+  prepareGeometry(myCase);
+
+  /// === Step 6: Prepare Lattice ===
+  prepareLattice(myCase);
+
+  /// === Step 7: Definition of Initial, Boundary Values, and Fields ===
+  setInitialValues(myCase);
+
+  /// === Step 8: Simulate ===
+  simulate(myCase);
 }

@@ -48,11 +48,7 @@ using MyCase = Case<Radiation, Lattice<double, descriptors::D3Q7<descriptors::VE
 namespace olb::parameters {
 
 struct WRITE_SEC : public descriptors::FIELD_BASE<1> {};
-struct DOMAIN_L : public descriptors::FIELD_BASE<1> {};
 
-struct ABSORPTION : public descriptors::FIELD_BASE<1> {};
-struct SCATTERING : public descriptors::FIELD_BASE<1> {};
-struct MU_EFF : public descriptors::FIELD_BASE<1> {};
 } // namespace olb::parameters
 
 // PostProcessor for updating the source term in each cell

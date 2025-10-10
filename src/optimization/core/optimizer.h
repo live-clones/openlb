@@ -40,7 +40,7 @@ namespace olb {
 /// \namespace opti Optimization Code.
 namespace opti {
 
-template<typename> class AbstractOptiCase;
+template<typename> struct AbstractOptiCase;
 
 enum OptimizerLogType {control, derivative, value, error, norm_derivative};
 

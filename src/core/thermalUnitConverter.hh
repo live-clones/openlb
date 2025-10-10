@@ -59,7 +59,7 @@ void ThermalUnitConverter<T, DESCRIPTOR, ThermalLattice>::print() const
   clout << "Phys. Delta X(m):                           physDeltaX=                     " << this->getPhysDeltaX() << std::endl;
   clout << "Phys. Delta T(s):                           physDeltaT=                     " << this->getPhysDeltaT() << std::endl;
   clout << "Characteristical pressure(N/m^2):           charPressure=                   " << this->getCharPhysPressure() << std::endl;
-  clout << "Phys. Thermal Conductivity(W/m/K):          physThermalCondcticity=         " << getThermalConductivity() << std::endl;
+  clout << "Phys. Thermal Conductivity(W/m/K):          physThermalConductivity=        " << getThermalConductivity() << std::endl;
   clout << "Phys. specific Heat Capacity(J/kg/K):       physSpecificHeatCapacity=       " << getPhysSpecificHeatCapacity() << std::endl;
   clout << "Phys. Thermal Expasion Coefficent(K^-1):    physThermalExpansionCoefficent= " << getPhysThermalExpansionCoefficient() << std::endl;
   clout << "Characteristical Phys. low Temperature(K):  charPhysLowTemperature=         " << getCharPhysLowTemperature() << std::endl;
@@ -86,7 +86,7 @@ void ThermalUnitConverter<T, DESCRIPTOR, ThermalLattice>::print() const
   clout << "Temperature(K):                             temperature=                    " << getConversionFactorTemperature() << std::endl;
   clout << "Thermal Diffusity(m^2/s):                   physThermalDiffusity=           " << getConversionFactorThermalDiffusivity() << std::endl;
   clout << "specific Heat Capacity(J/kg):               physSpecificHeatCapacity=       " << getConversionFactorSpecificHeatCapacity() << std::endl;
-  clout << "Thermal Coductivity(W/m/K):                 physThermalCondcticity=         " << getConversionFactorThermalConductivity() <<  std::endl;
+  clout << "Thermal Coductivity(W/m/K):                 physThermalConductivity=        " << getConversionFactorThermalConductivity() <<  std::endl;
   clout << "HeatFlux(W):                                physHeatFlux=                   " << getConversionFactorHeatFlux() << std::endl;
 
   clout << "-------------------------------------------------------------" << std::endl;
@@ -108,7 +108,7 @@ void ThermalUnitConverter<T, DESCRIPTOR, ThermalLattice>::writeDatFile(std::stri
   fout << "Phys. Delta X:                    physDeltaX=              " << getPhysDeltaX() << std::endl;
   fout << "Phys. Delta T:                    physDeltaT=            " << getPhysDeltaT() << std::endl;
   fout << "Characteristical pressure(N/m^2): charPressure=   " << getCharPhysPressure() << std::endl;
-  fout << "Phys. Thermal Conductivity:       physThermalCondcticity=   " << getPhysThermalCondcticity() << std::endl;
+  fout << "Phys. Thermal Conductivity:       physThermalConductivity=   " << getPhysThermalCondcticity() << std::endl;
   fout << "Phys. specific Heat Capacity:     physSpecificHeatCapacity= " << getPhysSpecificHeatCapacity() << std::endl;
   fout << "Phys. Thermal Expasion Coefficent physThermalExpansionCoefficent= " << getPhysThermalExpasionCoefficent << std::endl;
   fout << "Characteristical Phys. low Temperature charPhysLowTemperature= " << getCharPhysLowTemperature << std::endl;
@@ -119,7 +119,7 @@ void ThermalUnitConverter<T, DESCRIPTOR, ThermalLattice>::writeDatFile(std::stri
   fout << "Temperature:                      temperature=       " << getConversionFactorTemperature() << std::endl;
   fout << "Thermal Duffusity:                physThermalDiffusity=       " << getConversionFactorThermalDiffusivity() << std::endl;
   fout << "specific Heat Capacity:           physSpecificHeatCapacity=   " << getConversionFactorSpecificHeatCapacity() << std::endl;
-  fout << "Thermal Coductivity:              physThermalCondcticity=    " << getConversionFactorThermalConductivity() <<  std::endl;
+  fout << "Thermal Coductivity:              physThermalConductivity=    " << getConversionFactorThermalConductivity() <<  std::endl;
   fout << "HeatFlux:                         physHeatFlux=       " << getConversionFactorHeatFlux() << std::endl;
 
   fout << "-------------------------------------------------------------" << std::endl;

@@ -41,6 +41,7 @@ namespace olb::parameters {
   struct OUTPUT_INTERVAL : public descriptors::FIELD_BASE<1> {};
   struct PULSE_DIFF_BOUND : public descriptors::FIELD_BASE<1> {};
 
+  struct AVG_L2_ERROR : public descriptors::FIELD_BASE<1> {};
 }
 
 template <typename T>
@@ -325,11 +326,7 @@ void simulate(MyCase& myCase)
   }
 
   simulationAverage /= timeCount;
-
-  // this outputs into ./tmp/gnuplotData/data/averageSimL2RelErr
-  singleton::directories().setOutputDir("./tmp/");
-  CSV<T> csvWriterErr;
-  csvWriterErr.writeDataFile(N, simulationAverage, "averageSimL2RelErr", 16);
+  parameters.set<parameters::AVG_L2_ERROR>(simulationAverage);
 
   clout << "Simulation Average Relative L2 Error: " << simulationAverage << std::endl;
 
