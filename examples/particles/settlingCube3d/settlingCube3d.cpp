@@ -46,7 +46,7 @@
 #include <olb.h>
 
 using namespace olb;
-using namespace olb::descriptors;
+using namespace olb::names;
 using namespace olb::graphics;
 using namespace olb::util;
 using namespace olb::particles;
@@ -54,147 +54,165 @@ using namespace olb::particles::dynamics;
 
 using T = FLOATING_POINT_TYPE;
 
-// Define lattice type
-typedef PorousParticleD3Q19Descriptor DESCRIPTOR;
+using MyCase = Case<
+NavierStokes, Lattice<double, descriptors::PorousParticleD3Q19Descriptor>
+>;
 
-// Define particleType
-#ifdef PARALLEL_MODE_MPI
-// Particle decomposition improves parallel performance
-typedef ResolvedDecomposedParticle3D PARTICLETYPE;
-#else
-typedef ResolvedParticle3D PARTICLETYPE;
-#endif
+namespace olb::parameters {
+struct PHYS_VISCOSITY : public descriptors::FIELD_BASE<1> {};
+struct CUBE_DENSITY : public descriptors::FIELD_BASE<1> {};
+struct CUBE_1_EDGE_LENGTH : public descriptors::FIELD_BASE<1> {};
+struct CUBE_2_EDGE_LENGTH : public descriptors::FIELD_BASE<1> {};
+struct CUBE_1_ORIENTATION : public descriptors::FIELD_BASE<0,1,0> {};
+struct CUBE_1_POSITION : public descriptors::FIELD_BASE<0,1,0> {};
+struct CUBE_2_ORIENTATION : public descriptors::FIELD_BASE<0, 1, 0> {};
+struct CUBE_2_POSITION : public descriptors::FIELD_BASE<0,1,0> {};
+struct EXTERNAL_ACCELERATION : public descriptors::FIELD_BASE<0, 1, 0> {};
+struct CUBE_1_VELOCITY : public descriptors::FIELD_BASE<0, 1, 0> {};
+struct CUBE_2_VELOCITY : public descriptors::FIELD_BASE<0, 1, 0> {};
+}
+
+Mesh<MyCase::value_t, MyCase::d> createMesh(MyCase::ParametersD& parameters)
+{
+  using T                     = MyCase::value_t;
+  const Vector         extent = parameters.get<parameters::DOMAIN_EXTENT>();
+  const Vector         origin {0., 0., 0.};
+  IndicatorCuboid3D<T> cuboid(extent, origin);
+
+  const T physDeltaX = parameters.get<parameters::DOMAIN_EXTENT>()[0] / parameters.get<parameters::RESOLUTION>();
+  #ifdef PARALLEL_MODE_MPI
+    Mesh<T, MyCase::d> mesh(cuboid, physDeltaX, singleton::mpi().getSize());
+  #else
+    Mesh<T, MyCase::d> mesh(cuboid, physDeltaX, 7);
+  #endif
+  mesh.setOverlap(parameters.get<parameters::OVERLAP>());
+  return mesh;
+}
 
 #define WriteVTK
 
-// Discretization Settings
-int res = 30;
-T const charLatticeVelocity = 0.01;
-
-// Time Settings
-T const maxPhysT = 0.5;       // max. simulation time in s
-T const iTwrite = 0.02;       // write out intervall in s
-
-// Domain Settings
-T const lengthX = 0.01;
-T const lengthY = 0.01;
-T const lengthZ = 0.05;
-
-// Fluid Settings
-T const physDensity = 1000;
-T const physViscosity = 1E-5;
-
-//Particle Settings
-T centerX = lengthX*.5;
-T centerY = lengthY*.5;
-T centerZ = lengthZ*.9;
-T const cubeDensity = 2500;
-T const cubeEdgeLength = 0.0025;
-Vector<T,3> cubeCenter = {centerX,centerY,centerZ};
-Vector<T,3> cubeOrientation = {0.,15.,0.};
-Vector<T,3> cubeVelocity = {0.,0.,0.};
-Vector<T,3> externalAcceleration = {.0, .0, -T(9.81) * (T(1) - physDensity / cubeDensity)};
-
-// Characteristic Quantities
-T const charPhysLength = lengthX;
-T const charPhysVelocity = 0.15;    // Assumed maximal velocity
-
-
-// Prepare geometry
-void prepareGeometry(UnitConverter<T,DESCRIPTOR> const& converter,
-                     SuperGeometry<T,3>& superGeometry)
+void prepareGeometry(MyCase& myCase)
 {
   OstreamManager clout(std::cout, "prepareGeometry");
   clout << "Prepare Geometry ..." << std::endl;
 
-  superGeometry.rename(0, 2);
-  superGeometry.rename(2, 1, {1, 1, 1});
+  auto& geometry = myCase.getGeometry();
 
-  superGeometry.clean();
-  superGeometry.innerClean();
+  geometry.rename(0, 2);
+  geometry.rename(2, 1, {1, 1, 1});
 
-  superGeometry.checkForErrors();
-  superGeometry.getStatistics().print();
+  geometry.clean();
+  geometry.innerClean();
+
+  geometry.checkForErrors();
+  geometry.getStatistics().print();
   clout << "Prepare Geometry ... OK" << std::endl;
   return;
 }
 
-
-// Set up the geometry of the simulation
-void prepareLattice(
-  SuperLattice<T, DESCRIPTOR>& sLattice, UnitConverter<T,DESCRIPTOR> const& converter,
-  SuperGeometry<T,3>& superGeometry)
+void prepareLattice(MyCase& myCase)
 {
   OstreamManager clout(std::cout, "prepareLattice");
   clout << "Prepare Lattice ..." << std::endl;
   clout << "setting Velocity Boundaries ..." << std::endl;
 
-  /// Material=0 -->do nothing
-  sLattice.defineDynamics<PorousParticleBGKdynamics>(superGeometry, 1);
-  boundary::set<boundary::BounceBack>(sLattice, superGeometry, 2);
+  using T = MyCase::value_t;
+  typedef descriptors::PorousParticleD3Q19Descriptor DESCRIPTOR;
 
-  sLattice.setParameter<descriptors::OMEGA>(converter.getLatticeRelaxationFrequency());
+  auto& params   = myCase.getParameters();
+  auto& geometry = myCase.getGeometry();
+  auto& lattice  = myCase.getLattice(NavierStokes {});
+
+  const int res                 = params.get<parameters::RESOLUTION>();
+  const T   charLatticeVelocity = params.get<parameters::LATTICE_CHAR_VELOCITY>();
+  const T   charPhysLength      = params.get<parameters::PHYS_CHAR_LENGTH>();
+  const T   charPhysVelocity    = params.get<parameters::PHYS_CHAR_VELOCITY>();
+  const T   physViscosity       = params.get<parameters::PHYS_VISCOSITY>();
+  const T   physDensity         = params.get<parameters::PHYS_DENSITY>();
+
+  lattice.setUnitConverter<UnitConverterFromResolutionAndLatticeVelocity<T, DESCRIPTOR>>(
+      (int)res,
+      (T)charLatticeVelocity,
+      (T)charPhysLength,
+      (T)charPhysVelocity,
+      (T)physViscosity,
+      (T)physDensity
+  );
+
+  auto& converter = lattice.getUnitConverter();
+
+  lattice.defineDynamics<PorousParticleBGKdynamics>(geometry, 1);
+  boundary::set<boundary::BounceBack>(lattice, geometry, 2);
+
+  lattice.setParameter<descriptors::OMEGA>(converter.getLatticeRelaxationFrequency());
 
   {
-    auto& communicator = sLattice.getCommunicator(stage::PostPostProcess());
-    communicator.requestFields<POROSITY,VELOCITY_NUMERATOR,VELOCITY_DENOMINATOR>();
-    communicator.requestOverlap(sLattice.getOverlap());
+    auto& communicator = lattice.getCommunicator(stage::PostPostProcess());
+    communicator
+        .requestFields<descriptors::POROSITY, descriptors::VELOCITY_NUMERATOR, descriptors::VELOCITY_DENOMINATOR>();
+    communicator.requestOverlap(lattice.getOverlap());
     communicator.exchangeRequests();
   }
 
   clout << "Prepare Lattice ... OK" << std::endl;
 }
 
-
-//Set Boundary Values
-void setBoundaryValues(SuperLattice<T, DESCRIPTOR>& sLattice,
-                       UnitConverter<T,DESCRIPTOR> const& converter, int iT,
-                       SuperGeometry<T,3>& superGeometry)
+void setInitialValues(MyCase& myCase)
 {
   OstreamManager clout(std::cout, "setBoundaryValues");
+  auto&          geometry = myCase.getGeometry();
+  auto&          lattice  = myCase.getLattice(NavierStokes {});
 
-  if (iT == 0) {
-    AnalyticalConst3D<T, T> zero(0.);
-    AnalyticalConst3D<T, T> one(1.);
-    sLattice.defineField<descriptors::POROSITY>(superGeometry.getMaterialIndicator({0,1,2}), one);
-    // Set initial condition
-    AnalyticalConst3D<T, T> ux(0.);
-    AnalyticalConst3D<T, T> uy(0.);
-    AnalyticalConst3D<T, T> uz(0.);
-    AnalyticalConst3D<T, T> rho(1.);
-    AnalyticalComposed3D<T, T> u(ux, uy, uz);
+  AnalyticalConst3D<T, T> zero(0.);
+  AnalyticalConst3D<T, T> one(1.);
+  lattice.defineField<descriptors::POROSITY>(geometry.getMaterialIndicator({0, 1, 2}), one);
 
-    //Initialize all values of distribution functions to their local equilibrium
-    sLattice.defineRhoU(superGeometry, 1, rho, u);
-    sLattice.iniEquilibrium(superGeometry, 1, rho, u);
+  AnalyticalConst3D<T, T>    ux(0.);
+  AnalyticalConst3D<T, T>    uy(0.);
+  AnalyticalConst3D<T, T>    uz(0.);
+  AnalyticalConst3D<T, T>    rho(1.);
+  AnalyticalComposed3D<T, T> u(ux, uy, uz);
 
-    // Make the lattice ready for simulation
-    sLattice.initialize();
-  }
+  lattice.defineRhoU(geometry, 1, rho, u);
+  lattice.iniEquilibrium(geometry, 1, rho, u);
+
+  lattice.initialize();
 }
 
-
-/// Computes the pressure drop between the voxels before and after the cylinder
-void getResults(SuperLattice<T, DESCRIPTOR>& sLattice,
-                UnitConverter<T,DESCRIPTOR> const& converter, int iT,
-                SuperGeometry<T,3>& superGeometry, Timer<T>& timer,
-                XParticleSystem<T, PARTICLETYPE>& xParticleSystem )
+void getResults(MyCase& myCase, int iT, Timer<T>& timer,
+                XParticleSystem<MyCase::value_t,
+                #ifdef PARALLEL_MODE_MPI
+                  descriptors::ResolvedDecomposedParticle3D
+                #else
+                  descriptors::ResolvedParticle3D
+                #endif
+                >& xParticleSystem)
 {
-  OstreamManager clout(std::cout, "getResults");
+  #ifdef PARALLEL_MODE_MPI
+    typedef descriptors::ResolvedDecomposedParticle3D PARTICLETYPE;
+  #endif
 
-#ifdef WriteVTK
-  SuperVTMwriter3D<T> vtkWriter("sedimentation");
-  SuperLatticePhysVelocity3D<T, DESCRIPTOR> velocity(sLattice, converter);
-  SuperLatticePhysPressure3D<T, DESCRIPTOR> pressure(sLattice, converter);
-  SuperLatticePhysExternalPorosity3D<T, DESCRIPTOR> externalPor(sLattice, converter);
+  using T = MyCase::value_t;
+  typedef descriptors::PorousParticleD3Q19Descriptor DESCRIPTOR;
+
+  auto& params    = myCase.getParameters();
+  auto& lattice   = myCase.getLattice(NavierStokes {});
+  auto& converter = lattice.getUnitConverter();
+
+  const T iTwrite = params.get<parameters::PHYS_VTK_ITER_T>();
+
+  #ifdef WriteVTK
+  SuperVTMwriter3D<T>                               vtkWriter("sedimentation");
+  SuperLatticePhysVelocity3D<T, DESCRIPTOR>         velocity(lattice, converter);
+  SuperLatticePhysPressure3D<T, DESCRIPTOR>         pressure(lattice, converter);
+  SuperLatticePhysExternalPorosity3D<T, DESCRIPTOR> externalPor(lattice, converter);
   vtkWriter.addFunctor(velocity);
   vtkWriter.addFunctor(pressure);
   vtkWriter.addFunctor(externalPor);
 
   if (iT == 0) {
-    /// Writes the converter log file
-    SuperLatticeCuboid3D<T, DESCRIPTOR> cuboid(sLattice);
-    SuperLatticeRank3D<T, DESCRIPTOR> rank(sLattice);
+    SuperLatticeCuboid3D<T, DESCRIPTOR> cuboid(lattice);
+    SuperLatticeRank3D<T, DESCRIPTOR>   rank(lattice);
     vtkWriter.write(cuboid);
     vtkWriter.write(rank);
     vtkWriter.createMasterFile();
@@ -203,134 +221,151 @@ void getResults(SuperLattice<T, DESCRIPTOR>& sLattice,
   if (iT % converter.getLatticeTime(iTwrite) == 0) {
     vtkWriter.write(iT);
   }
-#endif
+  #endif
 
-  /// Writes output on the console
   if (iT % converter.getLatticeTime(iTwrite) == 0) {
     timer.update(iT);
     timer.printStep();
-    sLattice.getStatistics().print(iT, converter.getPhysTime(iT));
-#ifdef PARALLEL_MODE_MPI
-    communication::forParticlesInSuperParticleSystem<
-        T, PARTICLETYPE, conditions::valid_particle_centres>(
-        xParticleSystem,
-        [&](Particle<T, PARTICLETYPE>&       particle,
-            ParticleSystem<T, PARTICLETYPE>& particleSystem, int globiC) {
-          io::printResolvedParticleInfo(particle);
-        });
-#else
-    for (std::size_t iP=0; iP<xParticleSystem.size(); ++iP) {
+    lattice.getStatistics().print(iT, converter.getPhysTime(iT));
+    #ifdef PARALLEL_MODE_MPI
+      communication::forParticlesInSuperParticleSystem<T, PARTICLETYPE, conditions::valid_particle_centres>(
+          xParticleSystem,
+          [&](Particle<T, PARTICLETYPE>& particle, ParticleSystem<T, PARTICLETYPE>& particleSystem, int globiC) {
+            io::printResolvedParticleInfo(particle);
+          });
+    #else
+    for (std::size_t iP = 0; iP < xParticleSystem.size(); ++iP) {
       auto particle = xParticleSystem.get(iP);
       io::printResolvedParticleInfo(particle);
     }
-#endif
+    #endif
   }
 }
 
-int main(int argc, char* argv[])
+void simulate(MyCase& myCase)
 {
-  /// === 1st Step: Initialization ===
-  initialize(&argc, &argv);
-  singleton::directories().setOutputDir("./tmp/");
-  OstreamManager clout(std::cout, "main");
+  OstreamManager clout(std::cout, "getResults");
+  using T = MyCase::value_t;
+  typedef descriptors::PorousParticleD3Q19Descriptor DESCRIPTOR;
 
-  UnitConverterFromResolutionAndLatticeVelocity<T,DESCRIPTOR> converter(
-    (int)   res,                  //resolution
-    ( T )   charLatticeVelocity,  //charLatticeVelocity
-    ( T )   charPhysLength,       //charPhysLength
-    ( T )   charPhysVelocity,     //charPhysVelocity
-    ( T )   physViscosity,        //physViscosity
-    ( T )   physDensity           //physDensity
-  );
-  converter.print();
+  auto& params    = myCase.getParameters();
+  auto& geometry  = myCase.getGeometry();
+  auto& lattice   = myCase.getLattice(NavierStokes {});
+  auto& converter = lattice.getUnitConverter();
 
-  /// === 2rd Step: Prepare Geometry ===
-  /// Instantiation of a cuboidDecomposition with weights
-  Vector<T,3> origin( 0. );
-  Vector<T,3> extend( lengthX, lengthY, lengthZ );
-  IndicatorCuboid3D<T> cuboid(extend, origin);
+  const Vector externalAcceleration  = params.get<parameters::EXTERNAL_ACCELERATION>();
+  const T maxPhysT              = params.get<parameters::MAX_PHYS_T>();
+  const Vector cube1Center      = params.get<parameters::CUBE_1_POSITION>();
+  const Vector cube2Center      = params.get<parameters::CUBE_2_POSITION>();
+  const T      cube1EdgeLength  = params.get<parameters::CUBE_1_EDGE_LENGTH>();
+  const T      cube2EdgeLength  = params.get<parameters::CUBE_2_EDGE_LENGTH>();
+  const T      cubeDensity      = params.get<parameters::CUBE_DENSITY>();
+  const Vector cube1Orientation = params.get<parameters::CUBE_1_ORIENTATION>();
+  const Vector cube2Orientation = params.get<parameters::CUBE_2_ORIENTATION>();
 
-#ifdef PARALLEL_MODE_MPI
-  CuboidDecomposition3D<T> cuboidDecomposition(cuboid, converter.getPhysDeltaX(), singleton::mpi().getSize());
-#else
-  CuboidDecomposition3D<T> cuboidDecomposition(cuboid, converter.getPhysDeltaX(), 7);
-#endif
-  cuboidDecomposition.print();
+  #ifdef PARALLEL_MODE_MPI
+    typedef descriptors::ResolvedDecomposedParticle3D PARTICLETYPE;
+  #else
+    typedef descriptors::ResolvedParticle3D PARTICLETYPE;
+  #endif
 
-  HeuristicLoadBalancer<T> loadBalancer(cuboidDecomposition);
-  SuperGeometry<T,3> superGeometry(cuboidDecomposition, loadBalancer, 2);
-  prepareGeometry(converter, superGeometry);
+  #ifdef PARALLEL_MODE_MPI
+    SuperParticleSystem<T, PARTICLETYPE> particleSystem(geometry);
+  #else
+    ParticleSystem<T, PARTICLETYPE> particleSystem;
+  #endif
 
-  /// === 3rd Step: Prepare Lattice ===
-  SuperLattice<T, DESCRIPTOR> sLattice(converter, superGeometry);
+  ParticleManager<T, DESCRIPTOR, PARTICLETYPE> particleManager(particleSystem, geometry, lattice, converter,
+                                                               externalAcceleration);
 
-  // Prepare lattice
-  prepareLattice(sLattice, converter, superGeometry);
+  particleSystem.defineDynamics<VerletParticleDynamics<T, PARTICLETYPE>>();
 
-  // Create ParticleSystem
-#ifdef PARALLEL_MODE_MPI
-  SuperParticleSystem<T,PARTICLETYPE> particleSystem(superGeometry);
-#else
-  ParticleSystem<T,PARTICLETYPE> particleSystem;
-#endif
+  T            epsilon = 0.5 * converter.getPhysDeltaX();
+  Vector<T, 3> cube1Extend(cube1EdgeLength);
+  Vector<T, 3> cube2Extend(cube2EdgeLength);
 
-  //Create particle manager handling coupling, gravity and particle dynamics
-  ParticleManager<T,DESCRIPTOR,PARTICLETYPE> particleManager(
-    particleSystem, superGeometry, sLattice, converter, externalAcceleration);
+  creators::addResolvedCuboid3D<T, PARTICLETYPE>(particleSystem, cube1Center, cube1Extend, epsilon, cubeDensity, cube1Orientation);
 
-  // Create and assign resolved particle dynamics
-  particleSystem.defineDynamics<
-    VerletParticleDynamics<T,PARTICLETYPE>>();
+  creators::addResolvedCuboid3D<T, PARTICLETYPE>(particleSystem, cube2Center, cube2Extend, epsilon, cubeDensity, cube2Orientation);
 
-  // Calculate particle quantities
-  T epsilon = 0.5*converter.getPhysDeltaX();
-  Vector<T,3> cubeExtend( cubeEdgeLength );
-
-  // Create Particle 1
-  creators::addResolvedCuboid3D( particleSystem, cubeCenter,
-                                 cubeExtend, epsilon, cubeDensity, cubeOrientation );
-
-  // Create Particle 2
-  cubeCenter = {centerX,lengthY*T(0.51),lengthZ*T(.7)};
-  cubeOrientation = {0.,0.,15.};
-  creators::addResolvedCuboid3D( particleSystem, cubeCenter,
-                                 cubeExtend, epsilon, cubeDensity, cubeOrientation );
-
-  // Check ParticleSystem
   particleSystem.checkForErrors();
 
-  /// === 4th Step: Main Loop with Timer ===
-  Timer<T> timer(converter.getLatticeTime(maxPhysT), superGeometry.getStatistics().getNvoxel());
+  Timer<T> timer(converter.getLatticeTime(maxPhysT), geometry.getStatistics().getNvoxel());
   timer.start();
 
-  /// === 5th Step: Definition of Initial and Boundary Conditions ===
-  setBoundaryValues(sLattice, converter, 0, superGeometry);
+  setInitialValues(myCase);
 
   clout << "MaxIT: " << converter.getLatticeTime(maxPhysT) << std::endl;
 
-  for (std::size_t iT = 0; iT < converter.getLatticeTime(maxPhysT)+10; ++iT) {
+  for (std::size_t iT = 0; iT < converter.getLatticeTime(maxPhysT) + 10; ++iT) {
 
-    // Execute particle manager
-    particleManager.execute<
-      couple_lattice_to_particles<T,DESCRIPTOR,PARTICLETYPE>,
-#ifdef PARALLEL_MODE_MPI
-      communicate_surface_force<T,PARTICLETYPE>,
-#endif
-      apply_gravity<T,PARTICLETYPE>,
-      process_dynamics<T,PARTICLETYPE>,
-#ifdef PARALLEL_MODE_MPI
+    particleManager.execute<couple_lattice_to_particles<T, DESCRIPTOR, PARTICLETYPE>,
+
+    #ifdef PARALLEL_MODE_MPI
+      communicate_surface_force<T, PARTICLETYPE>,
+    #endif
+      apply_gravity<T, PARTICLETYPE>, process_dynamics<T, PARTICLETYPE>,
+    #ifdef PARALLEL_MODE_MPI
       update_particle_core_distribution<T, PARTICLETYPE>,
-#endif
-      couple_particles_to_lattice<T,DESCRIPTOR,PARTICLETYPE>
-    >();
+    #endif
+    couple_particles_to_lattice<T, DESCRIPTOR, PARTICLETYPE>>();
 
-    // Get Results
-    getResults(sLattice, converter, iT, superGeometry, timer, particleSystem );
+    getResults(myCase, iT, timer, particleSystem);
 
-    // Collide and stream
-    sLattice.collideAndStream();
+    lattice.collideAndStream();
   }
 
   timer.stop();
   timer.printSummary();
+}
+
+int main(int argc, char* argv[])
+{
+  initialize(&argc, &argv);
+  singleton::directories().setOutputDir("./tmp/");
+  OstreamManager clout(std::cout, "main");
+
+  MyCase::ParametersD myCaseParameters;
+  {
+    using namespace olb::parameters;
+    using T = MyCase::value_t;
+    myCaseParameters.set<RESOLUTION>(30);
+    myCaseParameters.set<LATTICE_CHAR_VELOCITY>(0.01);
+    myCaseParameters.set<MAX_PHYS_T>(0.5);
+    myCaseParameters.set<PHYS_VTK_ITER_T>(0.02);
+    myCaseParameters.set<DOMAIN_EXTENT>({0.01, 0.01, 0.05});
+    myCaseParameters.set<PHYS_DENSITY>(1000);
+    myCaseParameters.set<PHYS_VISCOSITY>(1.e-5);
+    myCaseParameters.set<CUBE_DENSITY>(2500);
+    myCaseParameters.set<CUBE_1_EDGE_LENGTH>(0.0025);
+    myCaseParameters.set<CUBE_2_EDGE_LENGTH>(0.0025);
+    myCaseParameters.set<CUBE_1_ORIENTATION>({0., 15., 0.});
+    myCaseParameters.set<CUBE_2_ORIENTATION>({0., 0., 15.});
+    myCaseParameters.set<CUBE_1_VELOCITY>({0., 0., 0.});
+    myCaseParameters.set<CUBE_2_VELOCITY>({0., 0., 0.});
+    myCaseParameters.set<PHYS_CHAR_LENGTH>(myCaseParameters.get<DOMAIN_EXTENT>()[0]);
+    myCaseParameters.set<PHYS_CHAR_VELOCITY>(0.15);
+    myCaseParameters.set<EXTERNAL_ACCELERATION>([&]() -> Vector<T,3>{
+      return {.0,.0, -T(9.81) * (T(1) - myCaseParameters.get<PHYS_DENSITY>() / myCaseParameters.get<CUBE_DENSITY>())};
+    });
+    myCaseParameters.set<CUBE_1_POSITION>([&]() -> Vector<T,3>{
+      return {myCaseParameters.get<DOMAIN_EXTENT>()[0] * (T).5, myCaseParameters.get<DOMAIN_EXTENT>()[1] * (T).5,
+              myCaseParameters.get<DOMAIN_EXTENT>()[2] * (T).9};
+    });
+    myCaseParameters.set<CUBE_2_POSITION>([&]() -> Vector<T,3>{
+      return {myCaseParameters.get<DOMAIN_EXTENT>()[0] * (T).5, myCaseParameters.get<DOMAIN_EXTENT>()[1] * (T).51,
+              myCaseParameters.get<DOMAIN_EXTENT>()[2] * (T).7};
+    });
+  }
+  myCaseParameters.fromCLI(argc, argv);
+
+  Mesh mesh = createMesh(myCaseParameters);
+
+  MyCase myCase(myCaseParameters, mesh);
+
+  prepareGeometry(myCase);
+
+  prepareLattice(myCase);
+
+  simulate(myCase);
 }
