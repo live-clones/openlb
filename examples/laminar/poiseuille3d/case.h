@@ -510,7 +510,6 @@ void getResults(MyCase& myCase, std::size_t iT, util::Timer<MyCase::value_t>& ti
   auto& lattice     = myCase.getLattice(NavierStokes{});
   auto& converter   = lattice.getUnitConverter();
   
-  const FlowType flowType       = parameters.get<parameters::FLOW_TYPE>();
   const bool    eoc             = parameters.get<parameters::EOC>();
   const BoundaryType boundaryType = parameters.get<parameters::BOUNDARY_TYPE>();
   const bool    noslipBoundary  = ((boundaryType != FREE_SLIP) && (boundaryType != PARTIAL_SLIP));
@@ -587,80 +586,31 @@ void getResults(MyCase& myCase, std::size_t iT, util::Timer<MyCase::value_t>& ti
   }
 
   // Gnuplot output
-  if ((noslipBoundary) && (lastTimeStep)) {
+  if ((noslipBoundary) && (lastTimeStep) && (!eoc)) {
     lattice.setProcessingContext(ProcessingContext::Evaluation);
-    if ( eoc ) {
-      if (flowType == NON_FORCED){
-        gplot.setData (
-          T(converter.getResolution()),
-          { parameters.get<parameters::VELOCITY_L1_ABS_ERROR>(),
-            parameters.get<parameters::VELOCITY_L2_ABS_ERROR>(),
-            parameters.get<parameters::VELOCITY_LINF_ABS_ERROR>(),
-            parameters.get<parameters::STRAIN_RATE_L1_ABS_ERROR>(),
-            parameters.get<parameters::STRAIN_RATE_L2_ABS_ERROR>(),
-            parameters.get<parameters::STRAIN_RATE_LINF_ABS_ERROR>(),
-            parameters.get<parameters::WSS_L1_ABS_ERROR>(),
-            parameters.get<parameters::WSS_L2_ABS_ERROR>(),
-            parameters.get<parameters::WSS_LINF_ABS_ERROR>(),
-            parameters.get<parameters::PRESSURE_L1_ABS_ERROR>(),
-            parameters.get<parameters::PRESSURE_L2_ABS_ERROR>(),
-            parameters.get<parameters::PRESSURE_LINF_ABS_ERROR>() },
-          { "velocity L1 abs Error","velocity L2 abs Error",
-            "velocity Linf abs error",
-            "strain rate L1 abs error", "strain rate L2 abs error",
-            "strain rate Linf abs error",
-            "wall shear stress L1 abs error", "wall shear stress L2 abs error",
-            "wall shear stress Linf abs error",
-            "pressure L1 abs error", "pressure L2 abs error",
-            "pressure Linf abs error" },
-          "top right",
-          { 'p','p','p','p','p','p','p','p','p','p','p','p' } );
-      } else {
-        // same as above, but without pressure computation
-        gplot.setData (
-          T(converter.getResolution()),
-          { parameters.get<parameters::VELOCITY_L1_ABS_ERROR>(),
-            parameters.get<parameters::VELOCITY_L2_ABS_ERROR>(),
-            parameters.get<parameters::VELOCITY_LINF_ABS_ERROR>(),
-            parameters.get<parameters::STRAIN_RATE_L1_ABS_ERROR>(),
-            parameters.get<parameters::STRAIN_RATE_L2_ABS_ERROR>(),
-            parameters.get<parameters::STRAIN_RATE_LINF_ABS_ERROR>(),
-            parameters.get<parameters::WSS_L1_ABS_ERROR>(),
-            parameters.get<parameters::WSS_L2_ABS_ERROR>(),
-            parameters.get<parameters::WSS_LINF_ABS_ERROR>() },
-          { "velocity L1 abs Error","velocity L2 abs Error",
-            "velocity Linf abs error",
-            "strain rate L1 abs error", "strain rate L2 abs error",
-            "strain rate Linf abs error",
-            "wall shear stress L1 abs error", "wall shear stress L2 abs error",
-            "wall shear stress Linf abs error",},
-          "top right",
-          { 'p','p','p','p','p','p','p','p', 'p' } );
-      }
-    } else {  // if !eoc
-      // plot velocity magnitude over line through the center of the simulation domain
-      const T maxVelocity = converter.getCharPhysVelocity();
-      T D = converter.getLatticeLength( parameters.get<parameters::DIAMETER>() );
-      T dx = 1. / T(converter.getResolution());
-      T point[3] { };
-      point[0] = length/2.;
-      point[2] = ( T )radius;
-      std::vector<T> axisPoint {length, radius, radius};
-      std::vector<T> axisDirection { 1, 0, 0 };
-      CirclePoiseuille3D<T> uSol(axisPoint, axisDirection, maxVelocity, radius);
-      T analytical[3] { };
-      SuperLatticePhysVelocity3D<T, DESCRIPTOR> velocity( lattice, converter );
-      AnalyticalFfromSuperF3D<T> intpolateVelocity( velocity, true, 1 );
-      T numerical[3] { };
-      for ( int iY=0; iY<=D; ++iY ) {
-        point[1] = ( T )converter.getPhysLength(iY);
-        uSol( analytical,point );
-        intpolateVelocity( numerical,point );
-        gplot.setData( iY*dx, {analytical[0],numerical[0]}, {"analytical","numerical"} );
-      }
-      // Create PNG file
-      gplot.writePNG();
+
+    // plot velocity magnitude over line through the center of the simulation domain
+    const T maxVelocity = converter.getCharPhysVelocity();
+    T D = converter.getLatticeLength( parameters.get<parameters::DIAMETER>() );
+    T dx = 1. / T(converter.getResolution());
+    T point[3] { };
+    point[0] = length/2.;
+    point[2] = ( T )radius;
+    std::vector<T> axisPoint {length, radius, radius};
+    std::vector<T> axisDirection { 1, 0, 0 };
+    CirclePoiseuille3D<T> uSol(axisPoint, axisDirection, maxVelocity, radius);
+    T analytical[3] { };
+    SuperLatticePhysVelocity3D<T, DESCRIPTOR> velocity( lattice, converter );
+    AnalyticalFfromSuperF3D<T> intpolateVelocity( velocity, true, 1 );
+    T numerical[3] { };
+    for ( int iY=0; iY<=D; ++iY ) {
+      point[1] = ( T )converter.getPhysLength(iY);
+      uSol( analytical,point );
+      intpolateVelocity( numerical,point );
+      gplot.setData( iY*dx, {analytical[0],numerical[0]}, {"analytical","numerical"} );
     }
+    // Create PNG file
+    gplot.writePNG();
   }
 }
 

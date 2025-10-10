@@ -61,6 +61,61 @@ void simulatePoiseuilleForEOC(MyCase::ParametersD& parameters, Gnuplot<MyCase::v
   /// === Step 8: Simulate ===
   simulate(myCase);
 
+  const FlowType      flowType        = parameters.get<parameters::FLOW_TYPE>();
+  const BoundaryType  boundaryType    = parameters.get<parameters::BOUNDARY_TYPE>();
+  const bool          noslipBoundary  = ((boundaryType != FREE_SLIP) && (boundaryType != PARTIAL_SLIP));
+  const size_t        res             = parameters.get<parameters::RESOLUTION>();
+
+  // Gnuplot output
+  if (noslipBoundary) {
+    if (flowType == NON_FORCED){
+      gplot.setData (
+        MyCase::value_t(res),
+        { parameters.get<parameters::VELOCITY_L1_ABS_ERROR>(),
+          parameters.get<parameters::VELOCITY_L2_ABS_ERROR>(),
+          parameters.get<parameters::VELOCITY_LINF_ABS_ERROR>(),
+          parameters.get<parameters::STRAIN_RATE_L1_ABS_ERROR>(),
+          parameters.get<parameters::STRAIN_RATE_L2_ABS_ERROR>(),
+          parameters.get<parameters::STRAIN_RATE_LINF_ABS_ERROR>(),
+          parameters.get<parameters::WSS_L1_ABS_ERROR>(),
+          parameters.get<parameters::WSS_L2_ABS_ERROR>(),
+          parameters.get<parameters::WSS_LINF_ABS_ERROR>(),
+          parameters.get<parameters::PRESSURE_L1_ABS_ERROR>(),
+          parameters.get<parameters::PRESSURE_L2_ABS_ERROR>(),
+          parameters.get<parameters::PRESSURE_LINF_ABS_ERROR>() },
+        { "velocity L1 abs Error","velocity L2 abs Error",
+          "velocity Linf abs error",
+          "strain rate L1 abs error", "strain rate L2 abs error",
+          "strain rate Linf abs error",
+          "wall shear stress L1 abs error", "wall shear stress L2 abs error",
+          "wall shear stress Linf abs error",
+          "pressure L1 abs error", "pressure L2 abs error",
+          "pressure Linf abs error" },
+        "top right",
+        { 'p','p','p','p','p','p','p','p','p','p','p','p' } );
+    } else {
+      // same as above, but without pressure computation
+      gplot.setData (
+        MyCase::value_t(res),
+        { parameters.get<parameters::VELOCITY_L1_ABS_ERROR>(),
+          parameters.get<parameters::VELOCITY_L2_ABS_ERROR>(),
+          parameters.get<parameters::VELOCITY_LINF_ABS_ERROR>(),
+          parameters.get<parameters::STRAIN_RATE_L1_ABS_ERROR>(),
+          parameters.get<parameters::STRAIN_RATE_L2_ABS_ERROR>(),
+          parameters.get<parameters::STRAIN_RATE_LINF_ABS_ERROR>(),
+          parameters.get<parameters::WSS_L1_ABS_ERROR>(),
+          parameters.get<parameters::WSS_L2_ABS_ERROR>(),
+          parameters.get<parameters::WSS_LINF_ABS_ERROR>() },
+        { "velocity L1 abs Error","velocity L2 abs Error",
+          "velocity Linf abs error",
+          "strain rate L1 abs error", "strain rate L2 abs error",
+          "strain rate Linf abs error",
+          "wall shear stress L1 abs error", "wall shear stress L2 abs error",
+          "wall shear stress Linf abs error",},
+        "top right",
+        { 'p','p','p','p','p','p','p','p', 'p' } );
+    }
+  }
 }
 
 int main( int argc, char* argv[] )
@@ -107,7 +162,7 @@ int main( int argc, char* argv[] )
     simulatePoiseuilleForEOC(myCaseParameters, gplot);
   }
 
-  gplot.writePNG(-1,-1,runName);
+  gplot.writePNG();
 
   return 0;
 }
