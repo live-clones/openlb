@@ -40,7 +40,7 @@
 // set flag in order to use mrt collision operators instead of bgk
 //#define ENABLE_MRT
 
-#include "../../laminar/poiseuille2d/poiseuille2d.h"
+#include "../../laminar/poiseuille2d/case.h"
 
 /// Initialize gnuplot
 static Gnuplot<T> gplot(
@@ -50,37 +50,94 @@ static Gnuplot<T> gplot(
   Gnuplot<T>::LOGLOG,
   Gnuplot<T>::LINREG);
 
+namespace olb::parameters {
+
+struct START_RESOLUTION : public descriptors::TYPED_FIELD_BASE<int,1> { };
+struct NUM_SIMULATIONS : public descriptors::TYPED_FIELD_BASE<int,1> { };
+
+}
+
 int main( int argc, char* argv[] )
 {
   // === 1st Step: Initialization ===
-  initialize( &argc, &argv );
-  singleton::directories().setOutputDir( "./tmp/" );
-  OstreamManager clout( std::cout,"main" );
+  initialize(&argc, &argv);
+  singleton::directories().setOutputDir("./tmp/");
+  OstreamManager clout(std::cout, "main");
 
-  /// Simulation Parameter
-  int startN = 50;
-  int maxN = startN + 31;
-  bool eoc = true;
+    MyCase::ParametersD myCaseParameters;
+  {
+    using namespace olb::parameters;
+    myCaseParameters.set<START_RESOLUTION>(50);
+    myCaseParameters.set<NUM_SIMULATIONS>(4);
+    myCaseParameters.set<DOMAIN_EXTENT>({2., 1.});
+    myCaseParameters.set<PHYS_CHAR_VELOCITY>(1.0);
+    myCaseParameters.set<REYNOLDS>(10);
+    myCaseParameters.set<LATTICE_RELAXATION_TIME>(0.8);
+    myCaseParameters.set<MAX_PHYS_T>(30.);
+    myCaseParameters.set<PHYS_CHAR_DENSITY>(1.0);
+    myCaseParameters.set<TUNER_PARAM>(0.5);
 
-  int status = readParameters(argc, argv, startN, flowType, boundaryType);
-  if (status != 0) {
-    return status;
+    myCaseParameters.set<FLOW_TYPE>(FlowType::nonForced);
+    myCaseParameters.set<BOUNDARY_TYPE>(BoundaryType::interpolated);
+
+    myCaseParameters.set<CONVERGENCE_PRECISION>(1e-9);
+    myCaseParameters.set<CONVERGED>(false);
+    myCaseParameters.set<CONV_ITER>(0.25);
+    myCaseParameters.set<VTK_ENABLED>(false);
+    myCaseParameters.set<GNUPLOT_ENABLED>(false);
+    myCaseParameters.set<COMPUTE_ERROR>(true);
+
+    myCaseParameters.set<PHYS_VTK_ITER_T>([&] {
+      return myCaseParameters.get<MAX_PHYS_T>()/20.;
+    });
+
+    myCaseParameters.set<PHYS_STAT_ITER_T>([&] {
+      return myCaseParameters.get<MAX_PHYS_T>()/20.;
+    });
+
   }
+  myCaseParameters.fromCLI(argc, argv);
 
-  if ((boundaryType == freeSlip) || (boundaryType == partialSlip)) {
-    throw std::invalid_argument(
-      "eoc computation is currently not supported for slip boundary conditions");
-  }
+  switch(myCaseParameters.get<parameters::BOUNDARY_TYPE>()){
+    case BoundaryType::freeSlip:
+      throw std::invalid_argument(
+        "eoc computation is currently not supported for free slip boundary conditions");
+      break;
+    case BoundaryType::partialSlip:
+      throw std::invalid_argument(
+        "eoc computation is currently not supported for partial slip boundary conditions");
+  };
 
   // set the labels for the plot
   gplot.setLabel("Resolution test", "average Error");
 
   // loop over the different simulations
-  for(int simuN = startN; simuN < maxN; simuN += 10){
+  for(int i = 0; i < myCaseParameters.get<parameters::NUM_SIMULATIONS>(); i++){
 
+    myCaseParameters.set<parameters::RESOLUTION>(myCaseParameters.get<parameters::START_RESOLUTION>() + i*10);
+
+    myCaseParameters.set<parameters::CONVERGED>(false);
     /// Run the simulations
-    clout << "Starting next simulation with N = " << simuN << std::endl;
-    simulatePoiseuille(simuN, gplot, eoc);
+    clout << "Starting next simulation with N = " << myCaseParameters.get<parameters::RESOLUTION>() << std::endl;
+
+    /// === Step 3: Create Mesh ===
+    Mesh mesh = createMesh(myCaseParameters);
+
+    /// === Step 4: Create Case ===
+    MyCase myCase(myCaseParameters, mesh);
+
+    /// === Step 5: Prepare Geometry ===
+    prepareGeometry(myCase);
+
+    /// === Step 6: Prepare Lattice ===
+    prepareLattice(myCase);
+
+    /// === Step 7: Set Initial Conditions ===
+    setInitialValues(myCase);
+
+    /// === Step 8: Simulate ===
+    simulate(myCase);
+
   }
 
   gplot.writePNG();
