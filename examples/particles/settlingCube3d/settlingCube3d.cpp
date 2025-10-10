@@ -52,8 +52,6 @@ using namespace olb::util;
 using namespace olb::particles;
 using namespace olb::particles::dynamics;
 
-using T = FLOATING_POINT_TYPE;
-
 using MyCase = Case<
 NavierStokes, Lattice<double, descriptors::PorousParticleD3Q19Descriptor>
 >;
@@ -74,22 +72,24 @@ struct CUBE_2_VELOCITY : public descriptors::FIELD_BASE<0, 1, 0> {};
 
 Mesh<MyCase::value_t, MyCase::d> createMesh(MyCase::ParametersD& parameters)
 {
-  using T                     = MyCase::value_t;
-  const Vector         extent = parameters.get<parameters::DOMAIN_EXTENT>();
-  const Vector         origin {0., 0., 0.};
+  using T = MyCase::value_t;
+
+  const Vector extent = parameters.get<parameters::DOMAIN_EXTENT>();
+  const Vector origin {0., 0., 0.};
+
   IndicatorCuboid3D<T> cuboid(extent, origin);
 
   const T physDeltaX = parameters.get<parameters::DOMAIN_EXTENT>()[0] / parameters.get<parameters::RESOLUTION>();
+
   #ifdef PARALLEL_MODE_MPI
     Mesh<T, MyCase::d> mesh(cuboid, physDeltaX, singleton::mpi().getSize());
   #else
     Mesh<T, MyCase::d> mesh(cuboid, physDeltaX, 7);
   #endif
+
   mesh.setOverlap(parameters.get<parameters::OVERLAP>());
   return mesh;
 }
-
-#define WriteVTK
 
 void prepareGeometry(MyCase& myCase)
 {
@@ -106,6 +106,7 @@ void prepareGeometry(MyCase& myCase)
 
   geometry.checkForErrors();
   geometry.getStatistics().print();
+
   clout << "Prepare Geometry ... OK" << std::endl;
   return;
 }
@@ -116,8 +117,8 @@ void prepareLattice(MyCase& myCase)
   clout << "Prepare Lattice ..." << std::endl;
   clout << "setting Velocity Boundaries ..." << std::endl;
 
-  using T = MyCase::value_t;
-  typedef descriptors::PorousParticleD3Q19Descriptor DESCRIPTOR;
+  using T          = MyCase::value_t;
+  using DESCRIPTOR = MyCase::descriptor_t_of<NavierStokes>;
 
   auto& params   = myCase.getParameters();
   auto& geometry = myCase.getGeometry();
@@ -160,8 +161,10 @@ void prepareLattice(MyCase& myCase)
 void setInitialValues(MyCase& myCase)
 {
   OstreamManager clout(std::cout, "setBoundaryValues");
-  auto&          geometry = myCase.getGeometry();
-  auto&          lattice  = myCase.getLattice(NavierStokes {});
+  using T = MyCase::value_t;
+
+  auto& geometry = myCase.getGeometry();
+  auto& lattice  = myCase.getLattice(NavierStokes {});
 
   AnalyticalConst3D<T, T> zero(0.);
   AnalyticalConst3D<T, T> one(1.);
@@ -179,21 +182,15 @@ void setInitialValues(MyCase& myCase)
   lattice.initialize();
 }
 
-void getResults(MyCase& myCase, int iT, Timer<T>& timer,
-                XParticleSystem<MyCase::value_t,
-                #ifdef PARALLEL_MODE_MPI
-                  descriptors::ResolvedDecomposedParticle3D
-                #else
-                  descriptors::ResolvedParticle3D
-                #endif
-                >& xParticleSystem)
+template <typename PARTICLESYSTEM>
+void getResults(MyCase& myCase, int iT, Timer<MyCase::value_t>& timer, PARTICLESYSTEM& xParticleSystem)
 {
   #ifdef PARALLEL_MODE_MPI
-    typedef descriptors::ResolvedDecomposedParticle3D PARTICLETYPE;
+    using PARTICLETYPE = descriptors::ResolvedDecomposedParticle3D;
   #endif
 
-  using T = MyCase::value_t;
-  typedef descriptors::PorousParticleD3Q19Descriptor DESCRIPTOR;
+  using T          = MyCase::value_t;
+  using DESCRIPTOR = MyCase::descriptor_t_of<NavierStokes>;
 
   auto& params    = myCase.getParameters();
   auto& lattice   = myCase.getLattice(NavierStokes {});
@@ -201,27 +198,27 @@ void getResults(MyCase& myCase, int iT, Timer<T>& timer,
 
   const T iTwrite = params.get<parameters::PHYS_VTK_ITER_T>();
 
-  #ifdef WriteVTK
-  SuperVTMwriter3D<T>                               vtkWriter("sedimentation");
-  SuperLatticePhysVelocity3D<T, DESCRIPTOR>         velocity(lattice, converter);
-  SuperLatticePhysPressure3D<T, DESCRIPTOR>         pressure(lattice, converter);
-  SuperLatticePhysExternalPorosity3D<T, DESCRIPTOR> externalPor(lattice, converter);
-  vtkWriter.addFunctor(velocity);
-  vtkWriter.addFunctor(pressure);
-  vtkWriter.addFunctor(externalPor);
+  if(params.get<parameters::VTK_ENABLED>()){
+    SuperVTMwriter3D<T>                               vtkWriter("sedimentation");
+    SuperLatticePhysVelocity3D<T, DESCRIPTOR>         velocity(lattice, converter);
+    SuperLatticePhysPressure3D<T, DESCRIPTOR>         pressure(lattice, converter);
+    SuperLatticePhysExternalPorosity3D<T, DESCRIPTOR> externalPor(lattice, converter);
+    vtkWriter.addFunctor(velocity);
+    vtkWriter.addFunctor(pressure);
+    vtkWriter.addFunctor(externalPor);
 
-  if (iT == 0) {
-    SuperLatticeCuboid3D<T, DESCRIPTOR> cuboid(lattice);
-    SuperLatticeRank3D<T, DESCRIPTOR>   rank(lattice);
-    vtkWriter.write(cuboid);
-    vtkWriter.write(rank);
-    vtkWriter.createMasterFile();
-  }
+    if (iT == 0) {
+      SuperLatticeCuboid3D<T, DESCRIPTOR> cuboid(lattice);
+      SuperLatticeRank3D<T, DESCRIPTOR>   rank(lattice);
+      vtkWriter.write(cuboid);
+      vtkWriter.write(rank);
+      vtkWriter.createMasterFile();
+    }
 
-  if (iT % converter.getLatticeTime(iTwrite) == 0) {
-    vtkWriter.write(iT);
+    if (iT % converter.getLatticeTime(iTwrite) == 0) {
+      vtkWriter.write(iT);
+    }
   }
-  #endif
 
   if (iT % converter.getLatticeTime(iTwrite) == 0) {
     timer.update(iT);
@@ -245,8 +242,9 @@ void getResults(MyCase& myCase, int iT, Timer<T>& timer,
 void simulate(MyCase& myCase)
 {
   OstreamManager clout(std::cout, "getResults");
+
   using T = MyCase::value_t;
-  typedef descriptors::PorousParticleD3Q19Descriptor DESCRIPTOR;
+  using DESCRIPTOR = MyCase::descriptor_t_of<NavierStokes>;
 
   auto& params    = myCase.getParameters();
   auto& geometry  = myCase.getGeometry();
@@ -264,9 +262,9 @@ void simulate(MyCase& myCase)
   const Vector cube2Orientation = params.get<parameters::CUBE_2_ORIENTATION>();
 
   #ifdef PARALLEL_MODE_MPI
-    typedef descriptors::ResolvedDecomposedParticle3D PARTICLETYPE;
+    using PARTICLETYPE = descriptors::ResolvedDecomposedParticle3D;
   #else
-    typedef descriptors::ResolvedParticle3D PARTICLETYPE;
+    using PARTICLETYPE = descriptors::ResolvedParticle3D;
   #endif
 
   #ifdef PARALLEL_MODE_MPI
@@ -292,8 +290,6 @@ void simulate(MyCase& myCase)
 
   Timer<T> timer(converter.getLatticeTime(maxPhysT), geometry.getStatistics().getNvoxel());
   timer.start();
-
-  setInitialValues(myCase);
 
   clout << "MaxIT: " << converter.getLatticeTime(maxPhysT) << std::endl;
 
@@ -333,6 +329,7 @@ int main(int argc, char* argv[])
     myCaseParameters.set<LATTICE_CHAR_VELOCITY>(0.01);
     myCaseParameters.set<MAX_PHYS_T>(0.5);
     myCaseParameters.set<PHYS_VTK_ITER_T>(0.02);
+    myCaseParameters.set<VTK_ENABLED>(true);
     myCaseParameters.set<DOMAIN_EXTENT>({0.01, 0.01, 0.05});
     myCaseParameters.set<PHYS_DENSITY>(1000);
     myCaseParameters.set<PHYS_VISCOSITY>(1.e-5);
@@ -366,6 +363,8 @@ int main(int argc, char* argv[])
   prepareGeometry(myCase);
 
   prepareLattice(myCase);
+
+  setInitialValues(myCase);
 
   simulate(myCase);
 }
