@@ -26,61 +26,30 @@
 
 #include <olb.h>
 #include <cmath>
+
 using namespace olb;
 using namespace olb::descriptors;
 using namespace olb::names;
-using RADDESCRIPTOR = D3Q7<VELOCITY,OMEGA>; // the scalar field contains material values if a cell should be considered for the zero gradient BC or not
 
 namespace olb::parameters{
-  struct HEIGHT : public descriptors::FIELD_BASE<1> { };
-  struct WIDTH : public descriptors::FIELD_BASE<1> { };
-  struct LENGTH : public descriptors::FIELD_BASE<1> { };
-  struct BULK_VELOCITY : public descriptors::FIELD_BASE<1> { };
-  struct RESIDUUM : public descriptors::FIELD_BASE<1> { };
-  struct DIFFUSIVITY : public descriptors::FIELD_BASE<1> { };
+struct HEIGHT : public descriptors::FIELD_BASE<1> { };
+struct BULK_VELOCITY : public descriptors::FIELD_BASE<1> { };
+struct RESIDUUM : public descriptors::FIELD_BASE<1> { };
+struct DIFFUSIVITY : public descriptors::FIELD_BASE<1> { };
 }
 
 using MyCase = Case<
-NavierStokes, Lattice<double, RADDESCRIPTOR>
+NavierStokes, Lattice<double, D3Q7<VELOCITY,OMEGA>>// the scalar field contains material values if a cell should be considered for the zero gradient BC or not
 >;
 
-//using S = FLOATING_POINT_TYPE;
-//using U = util::ADf<S,1>;
-
-
-// Analytic concentration field for the convected plate
-template<typename T>
-class ConvPlate3D : public AnalyticalF3D<T,T> {
-
-protected:
-  T diff;
-  T bulkVel;
-  T dx;
-public:
-  ConvPlate3D(UnitConverter<T,RADDESCRIPTOR> converter) :
-    AnalyticalF3D<T,T>(1),
-    diff(converter.getPhysDiffusivity()),
-    bulkVel(converter.getCharPhysVelocity()) {};
-
-  bool operator()(T output[], const T input[]) override {
-    T x = input[0];
-    T y = input[1];
-
-    if (x >= 0.0 && y >= 0.0) {
-      output[0] = erfc(y / sqrt(4 * diff * x / bulkVel));
-    }
-    else {
-      output [0] = 0.0;
-    }
-    return true;
-  };
-};
 
 Mesh<MyCase::value_t, MyCase::d> createMesh(MyCase::ParametersD& parameters) {
   using T = MyCase::value_t;
-  // === 2. Prepare geometry ===
+  T height = parameters.get<parameters::DOMAIN_EXTENT>()[2];
+  T width = parameters.get<parameters::DOMAIN_EXTENT>()[1];
+  T length = parameters.get<parameters::DOMAIN_EXTENT>()[0];
   const Vector<T,3> origin;
-  const Vector<T,3> extend(parameters.get<parameters::LENGTH>(), parameters.get<parameters::HEIGHT>(), parameters.get<parameters::WIDTH>());
+  const Vector<T,3> extend(length, height, width);
   IndicatorCuboid3D<T> cuboid(extend, origin);
 
   Mesh<T,MyCase::d> mesh(cuboid, parameters.get<parameters::PHYS_DELTA_X>(), singleton::mpi().getSize());
@@ -110,11 +79,10 @@ void prepareGeometry(MyCase& myCase){
   // ======================== //
 
   superGeometry.rename(0, 1);
-
   T eps = parameters.get<parameters::PHYS_DELTA_X>() * T(0.5);
-  T height = parameters.get<parameters::HEIGHT>();
-  T width = parameters.get<parameters::WIDTH>();
-  T length = parameters.get<parameters::LENGTH>();
+  T height = parameters.get<parameters::DOMAIN_EXTENT>()[2];
+  T width = parameters.get<parameters::DOMAIN_EXTENT>()[1];
+  T length = parameters.get<parameters::DOMAIN_EXTENT>()[0];
   T dx = parameters.get<parameters::PHYS_DELTA_X>();
   
   {
@@ -157,17 +125,14 @@ void prepareLattice(MyCase& myCase){
 
   auto& adLattice = myCase.getLattice(NavierStokes{});
 
-  adLattice.setUnitConverter<AdeUnitConverter<T, RADDESCRIPTOR>>(
-    (T)   parameters.get<parameters::PHYS_DELTA_X>(),                        // physDeltaX
-    (T)   util::pow(parameters.get<parameters::HEIGHT>() / parameters.get<parameters::RESOLUTION>(), 2),          // physDeltaY
-    (T)   parameters.get<parameters::HEIGHT>(),                            // charPhysLength: reference length of simulation geometry
-    (T)   parameters.get<parameters::PECLET>() * parameters.get<parameters::DIFFUSIVITY>() / parameters.get<parameters::HEIGHT>(),                   // charPhysVelocity: maximal/highest expected velocity during simulation in __m / s__
-    (T)   parameters.get<parameters::DIFFUSIVITY>(),                                 // physDiffusiviy
-    (T)   parameters.get<parameters::PHYS_CHAR_DENSITY>()                                // physDensity: physical density in __kg / m^3__
+  adLattice.setUnitConverter<AdeUnitConverter<T, MyCase::descriptor_t_of<NavierStokes>>>(
+    (T)   parameters.get<parameters::PHYS_DELTA_X>(),                                                                               // physDeltaX
+    (T)   util::pow(parameters.get<parameters::HEIGHT>() / parameters.get<parameters::RESOLUTION>(), 2),                            // physDeltaY
+    (T)   parameters.get<parameters::HEIGHT>(),                                                                                     // charPhysLength: reference length of simulation geometry
+    (T)   parameters.get<parameters::PECLET>() * parameters.get<parameters::DIFFUSIVITY>() / parameters.get<parameters::HEIGHT>(),  // charPhysVelocity: maximal/highest expected velocity during simulation in __m / s__
+    (T)   parameters.get<parameters::DIFFUSIVITY>(),                                                                                // physDiffusiviy
+    (T)   parameters.get<parameters::PHYS_CHAR_DENSITY>()                                                                           // physDensity: physical density in __kg / m^3__
   );
-
-  // get the relaxation time from unitConverter
-  const T omega = 1.0 / adLattice.getUnitConverter().getLatticeRelaxationTime();
 
   // define dynamics and boundary conditions
   const auto bulkIndicator = superGeometry.getMaterialIndicator({1, 2, 3, 4, 5});
@@ -176,8 +141,8 @@ void prepareLattice(MyCase& myCase){
   adLattice.template defineDynamics<AdvectionDiffusionBGKdynamics>(bulkIndicator);
 
   boundary::set<boundary::AdvectionDiffusionDirichlet>(adLattice, superGeometry.getMaterialIndicator({2}));
-  setZeroGradientBoundary<T, RADDESCRIPTOR>(adLattice, superGeometry.getMaterialIndicator({3}));
-  setZeroGradientBoundary<T, RADDESCRIPTOR>(adLattice, superGeometry.getMaterialIndicator({4}));
+  setZeroGradientBoundary<T, MyCase::descriptor_t_of<NavierStokes>>(adLattice, superGeometry.getMaterialIndicator({3}));
+  setZeroGradientBoundary<T, MyCase::descriptor_t_of<NavierStokes>>(adLattice, superGeometry.getMaterialIndicator({4}));
   boundary::set<boundary::AdvectionDiffusionDirichlet>(adLattice, superGeometry.getMaterialIndicator({5}));
 
   clout << "Prepare Lattice ... OK" << std::endl;
@@ -190,7 +155,6 @@ void setInitialValues(MyCase& myCase) {
   clout << "Setting initial values ..." << std::endl;
 
   auto& superGeometry = myCase.getGeometry();
-  auto& parameters = myCase.getParameters();
   auto& adLattice = myCase.getLattice(NavierStokes{});
   
   const T omega = 1.0 / adLattice.getUnitConverter().getLatticeRelaxationTime();
@@ -232,7 +196,7 @@ void errorCalc(MyCase& myCase, MyCase::value_t& relError){
   int tmp[] = {int()};
 
   // Compute L2-norm error to the analytic concentration field
-  SuperLatticeDensity3D<T,RADDESCRIPTOR> concentration(adLattice);
+  SuperLatticeDensity3D<T,MyCase::descriptor_t_of<NavierStokes>> concentration(adLattice);
  AnalyticalFfromCallableF<MyCase::d, T, T> analyticSol([&] (Vector<T,3> input)->Vector<T,1>{
   
     if (input[0] >= 0.0 && input[1] >= 0.0) {
@@ -264,16 +228,13 @@ void getResults(MyCase& myCase,
   auto& adLattice = myCase.getLattice(NavierStokes{});
   auto& converter = adLattice.getUnitConverter();
   auto& parameters = myCase.getParameters();
-  //auto& superGeometry = myCase.getGeometry();
 
   // generate vtm files for visualisation
   SuperVTMwriter3D<T> vtmWriter("convectedPlate");
-  SuperLatticeDensity3D<T,RADDESCRIPTOR> concentration(adLattice);
-  SuperLatticePhysField3D<T,RADDESCRIPTOR,VELOCITY> velocity(adLattice, adLattice.getUnitConverter().getConversionFactorVelocity());
-  //ConvPlate3D<T> analyticSol(converter);
+  SuperLatticeDensity3D<T,MyCase::descriptor_t_of<NavierStokes>> concentration(adLattice);
+  SuperLatticePhysField3D<T,MyCase::descriptor_t_of<NavierStokes>,VELOCITY> velocity(adLattice, adLattice.getUnitConverter().getConversionFactorVelocity());
   
   AnalyticalFfromCallableF<MyCase::d, T, T> analyticSol([&] (Vector<T,3> input)->Vector<T,1>{
-  
     if (input[0] >= 0.0 && input[1] >= 0.0) {
       return erfc(input[1] / sqrt(4 * converter.getPhysDiffusivity() * input[0] / converter.getCharPhysVelocity()));
     }
@@ -282,7 +243,7 @@ void getResults(MyCase& myCase,
     }
   });
   
-  SuperLatticeFfromAnalyticalF3D<T,RADDESCRIPTOR> analyticalC(analyticSol, adLattice);
+  SuperLatticeFfromAnalyticalF3D<T,MyCase::descriptor_t_of<NavierStokes>> analyticalC(analyticSol, adLattice);
 
   concentration.getName() = "C";
   velocity.getName() = "u0";
@@ -367,29 +328,25 @@ int main(int argc, char* argv[]) {
   MyCase::ParametersD myCaseParameters;
   {
     using namespace olb::parameters;
-    myCaseParameters.set<RESOLUTION   >(40);
-    myCaseParameters.set<HEIGHT>(160);
+    myCaseParameters.set<RESOLUTION                 >(       40);
+    myCaseParameters.set<HEIGHT                     >(      160);
+    myCaseParameters.set<BULK_VELOCITY              >(     0.05);
+    myCaseParameters.set<PHYS_CHAR_DENSITY          >(      1.0);
+    myCaseParameters.set<PECLET                     >(  108.005);
+    myCaseParameters.set<MAX_PHYS_T                 >( 100000.0);
+    myCaseParameters.set<RESIDUUM                   >(    1e-10);
+    myCaseParameters.set<DIFFUSIVITY                >(  0.07407);
+    
     myCaseParameters.set<PHYS_DELTA_X>([&] {
       return myCaseParameters.get<HEIGHT>()/myCaseParameters.get<RESOLUTION>();
     });
-    myCaseParameters.set<WIDTH>([&] {
-      return myCaseParameters.get<PHYS_DELTA_X>();
+    myCaseParameters.set<DOMAIN_EXTENT>([&] {
+      return Vector{myCaseParameters.get<RESOLUTION>()*myCaseParameters.get<PHYS_DELTA_X>()*10, myCaseParameters.get<PHYS_DELTA_X>(), myCaseParameters.get<HEIGHT>()};
     });
-    myCaseParameters.set<LENGTH>([&] {
-      return myCaseParameters.get<RESOLUTION>()*myCaseParameters.get<PHYS_DELTA_X>()*10;
-    });
-    //myCaseParameters.set<DOMAIN_EXTENT>([&] {
-    //  return {myCaseParameters.get<LENGTH>(), myCaseParameters.get<WIDTH>(), myCaseParameters.get<HEIGHT>()};
-    //});
-    myCaseParameters.set<BULK_VELOCITY>(0.05);
-    myCaseParameters.set<PHYS_CHAR_DENSITY>(1.0);
-    myCaseParameters.set<PECLET>(108.005);
-    myCaseParameters.set<MAX_PHYS_T>(100000.0);
     myCaseParameters.set<INTERVAL_CONVERGENCE_CHECK>([&] {
       return myCaseParameters.get<MAX_PHYS_T>()*0.001;
     });
-    myCaseParameters.set<RESIDUUM>(1e-10);
-    myCaseParameters.set<DIFFUSIVITY>(0.07407);
+    
   }
   myCaseParameters.fromCLI(argc, argv);
 
