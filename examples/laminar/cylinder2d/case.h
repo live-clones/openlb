@@ -58,6 +58,8 @@ struct CENTER_CYLINDER            : public descriptors::FIELD_BASE<0, 1> { };
 struct RAMP_UP_UPDATE             : public descriptors::FIELD_BASE<1> { };
 struct RAMP_UP_END_FRACTION       : public descriptors::FIELD_BASE<1> { };
 
+struct DRAG : public descriptors::FIELD_BASE<1> { };
+
 }
 
 Mesh<MyCase::value_t,MyCase::d> createMesh(MyCase::ParametersD& parameters) {
@@ -325,6 +327,8 @@ void getResults(MyCase& myCase,
     T _drag[drag.getTargetDim()];
     drag(_drag, input);
     clout << "; drag=" << _drag[0] << "; lift=" << _drag[1] << std::endl;
+
+    myCase.getParameters().set<parameters::DRAG>(_drag[0]);
 
     // set data for gnuplot: input={xValue, yValue(s), names (optional), position of key (optional)}
     gplot.setData(converter.getPhysTime(iT), {_drag[0], 5.58}, {"drag(openLB)", "drag(schaeferTurek)"}, "bottom right", {'l','l'});

@@ -37,12 +37,20 @@
  * It illustrates the error analysis.
  */
 
- #include "../../laminar/cylinder2d/case.h"
+#include "../../laminar/cylinder2d/case.h"
 
+/// Initialize gnuplot
+static Gnuplot<MyCase::value_t> gplot(
+  "drag_eoc",
+  false,
+  "set terminal png size 720, 720 font 'Arial,10'",
+  Gnuplot<MyCase::value_t>::LOGLOG,
+  Gnuplot<MyCase::value_t>::LINREG);
 
 namespace olb::parameters {
 struct START_RESOLUTION : public descriptors::TYPED_FIELD_BASE<int,1> { };
 struct NUM_SIMULATIONS : public descriptors::TYPED_FIELD_BASE<int,1> { };
+struct RESOLUTION_STEP : public descriptors::FIELD_BASE<1> { };
 }
 
 int main( int argc, char* argv[] )
@@ -70,7 +78,48 @@ int main( int argc, char* argv[] )
 
     myCaseParameters.set<START_RESOLUTION>(10);
     myCaseParameters.set<NUM_SIMULATIONS>(4);
+    myCaseParameters.set<RESOLUTION_STEP>(10);
   }
   myCaseParameters.fromCLI(argc, argv);
+
+  MyCase::value_t _drag[myCaseParameters.get<parameters::NUM_SIMULATIONS>()];
+
+  gplot.setLabel("Resolution [-]", "Average Error [-]");
+
+  //Run Sims
+  for(std::size_t i = 0; i < myCaseParameters.get<parameters::NUM_SIMULATIONS>(); ++i){
+    myCaseParameters.set<parameters::RESOLUTION>(myCaseParameters.get<parameters::START_RESOLUTION>() + (MyCase::value_t) i * myCaseParameters.get<parameters::RESOLUTION_STEP>());
+
+        /// === Step 3: Create Mesh ===
+    Mesh mesh = createMesh(myCaseParameters);
+
+    /// === Step 4: Create Case ===
+    MyCase myCase(myCaseParameters, mesh);
+
+    /// === Step 5: Prepare Geometry ===
+    prepareGeometry(myCase);
+
+    /// === Step 6: Prepare Lattice ===
+    prepareLattice(myCase);
+
+    /// === Step 7: Definition of Initial, Boundary Values, and Fields ===
+    setInitialValues(myCase);
+
+    /// === Step 8: Simulate ===
+    simulate(myCase);
+
+    _drag[i] = myCaseParameters.get<parameters::DRAG>();
+  }
+
+    for(std::size_t i = 0; i < myCaseParameters.get<parameters::NUM_SIMULATIONS>(); ++i){
+        int cur_resolution = myCaseParameters.get<parameters::START_RESOLUTION>() + (MyCase::value_t) i * myCaseParameters.get<parameters::RESOLUTION_STEP>();
+        int last_i = myCaseParameters.get<parameters::NUM_SIMULATIONS>() - 1;
+
+        MyCase::value_t error = util::abs(_drag[i] - _drag[last_i]) / _drag[last_i];
+
+        gplot.setData(MyCase::value_t(cur_resolution), {error}, {"dragL1AbsError"}, "top right", {'p'});
+    }
+
+    gplot.writePNG();
 
 }
