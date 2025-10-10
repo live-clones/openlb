@@ -132,7 +132,8 @@ int main( int argc, char* argv[] )
   bool forbiddenEOCCombination = (boundaryType == FREE_SLIP) || (boundaryType == PARTIAL_SLIP);
   if ( forbiddenEOCCombination ) std::runtime_error("eoc computation is currently not supported for slip boundary conditions");
 
-  std::string runName = "bc" + std::to_string(int(myCaseParameters.get<parameters::BOUNDARY_TYPE>())) + "_force" + std::to_string(int(myCaseParameters.get<parameters::FLOW_TYPE>()));
+  std::string bcName = "bc" + std::to_string(int(myCaseParameters.get<parameters::BOUNDARY_TYPE>()));
+  std::string runName = (myCaseParameters.get<parameters::FLOW_TYPE>() == FORCED) ? bcName + "_force" : bcName + "_nonForce";
   singleton::directories().setOutputDir( "./tmp/" + runName + "/" );
 
   // Initialize gnuplot
