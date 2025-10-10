@@ -78,7 +78,7 @@ int main( int argc, char* argv[] )
   if ( forbiddenEOCCombination ) std::runtime_error("eoc computation is currently not supported for slip boundary conditions");
 
   std::string runName = "bc" + std::to_string(int(myCaseParameters.get<parameters::BOUNDARY_TYPE>())) + "_force" + std::to_string(int(myCaseParameters.get<parameters::FLOW_TYPE>()));
-  singleton::directories().setOutputDir( "./tmp/" + runName "/" );
+  singleton::directories().setOutputDir( "./tmp/" + runName + "/" );
 
   // Initialize gnuplot
   Gnuplot<MyCase::value_t> gplot(
@@ -100,6 +100,10 @@ int main( int argc, char* argv[] )
     /// Run the simulations
     clout << "Starting next simulation with N = " << simuN << std::endl;
     myCaseParameters.set<parameters::RESOLUTION>(simuN);
+    myCaseParameters.set<parameters::PHYS_DELTA_X>(
+      myCaseParameters.get<parameters::DIAMETER>()
+      / myCaseParameters.get<parameters::RESOLUTION>()
+    );
     simulatePoiseuilleForEOC(myCaseParameters, gplot);
   }
 

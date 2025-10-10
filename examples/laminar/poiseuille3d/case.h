@@ -60,10 +60,24 @@ enum BoundaryType : int {
 namespace olb::parameters {  
   struct FLOW_TYPE      : public descriptors::TYPED_FIELD_BASE<FlowType,1> { };
   struct BOUNDARY_TYPE  : public descriptors::TYPED_FIELD_BASE<BoundaryType,1> { };
-  struct PARTIAL_SLIP_TUNER : public descriptors::TYPED_FIELD_BASE<int,1> { };
+  struct PARTIAL_SLIP_TUNER   : public descriptors::TYPED_FIELD_BASE<int,1> { };
   struct EOC_START_RESOLUTION : public descriptors::TYPED_FIELD_BASE<size_t,1> { };
-  struct EOC_MAX_RESOLUTION : public descriptors::TYPED_FIELD_BASE<size_t,1> { };
+  struct EOC_MAX_RESOLUTION   : public descriptors::TYPED_FIELD_BASE<size_t,1> { };
+  struct EOC_RESOLUTION_STEP  : public descriptors::TYPED_FIELD_BASE<size_t,1> { };
   struct EOC            : public descriptors::TYPED_FIELD_BASE<bool,1> { };
+
+  struct VELOCITY_L1_ABS_ERROR    : public descriptors::FIELD_BASE<1> { };
+  struct VELOCITY_L2_ABS_ERROR    : public descriptors::FIELD_BASE<1> { };
+  struct VELOCITY_LINF_ABS_ERROR  : public descriptors::FIELD_BASE<1> { };
+  struct STRAIN_RATE_L1_ABS_ERROR    : public descriptors::FIELD_BASE<1> { };
+  struct STRAIN_RATE_L2_ABS_ERROR    : public descriptors::FIELD_BASE<1> { };
+  struct STRAIN_RATE_LINF_ABS_ERROR  : public descriptors::FIELD_BASE<1> { };
+  struct WSS_L1_ABS_ERROR    : public descriptors::FIELD_BASE<1> { };
+  struct WSS_L2_ABS_ERROR    : public descriptors::FIELD_BASE<1> { };
+  struct WSS_LINF_ABS_ERROR  : public descriptors::FIELD_BASE<1> { };
+  struct PRESSURE_L1_ABS_ERROR    : public descriptors::FIELD_BASE<1> { };
+  struct PRESSURE_L2_ABS_ERROR    : public descriptors::FIELD_BASE<1> { };
+  struct PRESSURE_LINF_ABS_ERROR  : public descriptors::FIELD_BASE<1> { };
   
   struct DIAMETER       : public descriptors::FIELD_BASE<1> { };  // diameter of the pipe
   struct LENGTH         : public descriptors::FIELD_BASE<1> { };  // length of the pipe
@@ -320,12 +334,12 @@ void setInitialValues(MyCase& myCase) {
 
 SuperLatticePhysWallShearStress3D<MyCase::value_t,MyCase::descriptor_t_of<NavierStokes>> WSS(MyCase& myCase)
 {
-  using T = MyCase::value_t;
-  using DESCRIPTOR = MyCase::descriptor_t_of<NavierStokes>;
-  auto& lattice = myCase.getLattice(NavierStokes{});
-  auto& geometry = myCase.getGeometry();
-  auto& parameters = myCase.getParameters();
-  auto& converter = lattice.getUnitConverter();
+  using T           = MyCase::value_t;
+  using DESCRIPTOR  = MyCase::descriptor_t_of<NavierStokes>;
+  auto& lattice     = myCase.getLattice(NavierStokes{});
+  auto& geometry    = myCase.getGeometry();
+  auto& parameters  = myCase.getParameters();
+  auto& converter   = lattice.getUnitConverter();
 
   const T radius    = parameters.get<parameters::DIAMETER>()/2.0;
   const T length    = parameters.get<parameters::LENGTH>();
@@ -363,8 +377,6 @@ void error_calc(MyCase& myCase)
   CirclePoiseuille3D<T> uSol(axisPoint, axisDirection, maxVelocity, radius);
   SuperLatticePhysVelocity3D<T,DESCRIPTOR> u( lattice,converter );
   auto indicatorF = geometry.getMaterialIndicator(1);
-
-
   
   int tmp[]= { };
   T result[2]= { };
@@ -372,6 +384,7 @@ void error_calc(MyCase& myCase)
   SuperAbsoluteErrorL1Norm3D<T> absVelocityErrorNormL1(u, uSol, indicatorF);
   absVelocityErrorNormL1(result, tmp);
   clout << "velocity-L1-error(abs)=" << result[0];
+  parameters.set<parameters::VELOCITY_L1_ABS_ERROR>(result[0]);
   SuperRelativeErrorL1Norm3D<T> relVelocityErrorNormL1(u, uSol, indicatorF);
   relVelocityErrorNormL1(result, tmp);
   clout << "; velocity-L1-error(rel)=" << result[0] << std::endl;
@@ -379,6 +392,7 @@ void error_calc(MyCase& myCase)
   SuperAbsoluteErrorL2Norm3D<T> absVelocityErrorNormL2(u, uSol, indicatorF);
   absVelocityErrorNormL2(result, tmp);
   clout << "velocity-L2-error(abs)=" << result[0];
+  parameters.set<parameters::VELOCITY_L2_ABS_ERROR>(result[0]);
   SuperRelativeErrorL2Norm3D<T> relVelocityErrorNormL2(u, uSol, indicatorF);
   relVelocityErrorNormL2(result, tmp);
   clout << "; velocity-L2-error(rel)=" << result[0] << std::endl;
@@ -386,6 +400,7 @@ void error_calc(MyCase& myCase)
   SuperAbsoluteErrorLinfNorm3D<T> absVelocityErrorNormLinf(u, uSol, indicatorF);
   absVelocityErrorNormLinf(result, tmp);
   clout << "velocity-Linf-error(abs)=" << result[0];
+  parameters.set<parameters::VELOCITY_LINF_ABS_ERROR>(result[0]);
   SuperRelativeErrorLinfNorm3D<T> relVelocityErrorNormLinf(u, uSol, indicatorF);
   relVelocityErrorNormLinf(result, tmp);
   clout << "; velocity-Linf-error(rel)=" << result[0] << std::endl;
@@ -397,6 +412,7 @@ void error_calc(MyCase& myCase)
   SuperAbsoluteErrorL1Norm3D<T> absStrainRateErrorNormL1(s, sSol, indicatorF);
   absStrainRateErrorNormL1(result, tmp);
   clout << "strainRate-L1-error(abs)=" << result[0];
+  parameters.set<parameters::STRAIN_RATE_L1_ABS_ERROR>(result[0]);
   SuperRelativeErrorL1Norm3D<T> relStrainRateErrorNormL1(s, sSol, indicatorF);
   relStrainRateErrorNormL1(result, tmp);
   clout << "; strainRate-L1-error(rel)=" << result[0] << std::endl;
@@ -404,6 +420,7 @@ void error_calc(MyCase& myCase)
   SuperAbsoluteErrorL2Norm3D<T> absStrainRateErrorNormL2(s, sSol, indicatorF);
   absStrainRateErrorNormL2(result, tmp);
   clout << "strainRate-L2-error(abs)=" << result[0];
+  parameters.set<parameters::STRAIN_RATE_L2_ABS_ERROR>(result[0]);
   SuperRelativeErrorL2Norm3D<T> relStrainRateErrorNormL2(s, sSol, indicatorF);
   relStrainRateErrorNormL2(result, tmp);
   clout << "; strainRate-L2-error(rel)=" << result[0] << std::endl;
@@ -411,6 +428,7 @@ void error_calc(MyCase& myCase)
   SuperAbsoluteErrorLinfNorm3D<T> absStrainRateErrorNormLinf(s, sSol, indicatorF);
   absStrainRateErrorNormLinf(result, tmp);
   clout << "strainRate-Linf-error(abs)=" << result[0];
+  parameters.set<parameters::STRAIN_RATE_LINF_ABS_ERROR>(result[0]);
   SuperRelativeErrorLinfNorm3D<T> relStrainRateErrorNormLinf(s, sSol, indicatorF);
   relStrainRateErrorNormLinf(result, tmp);
   clout << "; strainRate-Linf-error(rel)=" << result[0] << std::endl;
@@ -425,6 +443,7 @@ void error_calc(MyCase& myCase)
   SuperAbsoluteErrorL1Norm3D<T> absWallShearStressErrorNormL1(wss, wssSol, indicatorB);
   absWallShearStressErrorNormL1(result, tmp);
   clout << "wss-L1-error(abs)=" << result[0];
+  parameters.set<parameters::WSS_L1_ABS_ERROR>(result[0]);
   SuperRelativeErrorL1Norm3D<T> relWallShearStressErrorNormL1(wss, wssSol, indicatorB);
   relWallShearStressErrorNormL1(result, tmp);
   clout << "; wss-L1-error(rel)=" << result[0] << std::endl;
@@ -432,6 +451,7 @@ void error_calc(MyCase& myCase)
   SuperAbsoluteErrorL2Norm3D<T> absWallShearStressErrorNormL2(wss, wssSol, indicatorB);
   absWallShearStressErrorNormL2(result, tmp);
   clout << "wss-L2-error(abs)=" << result[0];
+  parameters.set<parameters::WSS_L2_ABS_ERROR>(result[0]);
   SuperRelativeErrorL2Norm3D<T> relWallShearStressErrorNormL2(wss, wssSol, indicatorB);
   relWallShearStressErrorNormL2(result, tmp);
   clout << "; wss-L2-error(rel)=" << result[0] << std::endl;
@@ -439,6 +459,7 @@ void error_calc(MyCase& myCase)
   SuperAbsoluteErrorLinfNorm3D<T> absWallShearStressErrorNormLinf(wss, wssSol, indicatorB);
   absWallShearStressErrorNormLinf(result, tmp);
   clout << "wss-Linf-error(abs)=" << result[0];
+  parameters.set<parameters::WSS_LINF_ABS_ERROR>(result[0]);
   SuperRelativeErrorLinfNorm3D<T> relWallShearStressErrorNormLinf(wss, wssSol, indicatorB);
   relWallShearStressErrorNormLinf(result, tmp);
   clout << "; wss-Linf-error(rel)=" << result[0] << std::endl;
@@ -452,6 +473,7 @@ void error_calc(MyCase& myCase)
     SuperAbsoluteErrorL1Norm3D<T> absPressureErrorNormL1(pressure, pressureSol, indicatorF);
     absPressureErrorNormL1(result, tmp);
     clout << "pressure-L1-error(abs)=" << result[0];
+    parameters.set<parameters::PRESSURE_L1_ABS_ERROR>(result[0]);
     SuperRelativeErrorL1Norm3D<T> relPressureErrorNormL1(pressure, pressureSol, indicatorF);
     relPressureErrorNormL1(result, tmp);
     clout << "; pressure-L1-error(rel)=" << result[0] << std::endl;
@@ -459,6 +481,7 @@ void error_calc(MyCase& myCase)
     SuperAbsoluteErrorL2Norm3D<T> absPressureErrorNormL2(pressure, pressureSol, indicatorF);
     absPressureErrorNormL2(result, tmp);
     clout << "pressure-L2-error(abs)=" << result[0];
+    parameters.set<parameters::PRESSURE_L2_ABS_ERROR>(result[0]);
     SuperRelativeErrorL2Norm3D<T> relPressureErrorNormL2(pressure, pressureSol, indicatorF);
     relPressureErrorNormL2(result, tmp);
     clout << "; pressure-L2-error(rel)=" << result[0] << std::endl;
@@ -466,6 +489,7 @@ void error_calc(MyCase& myCase)
     SuperAbsoluteErrorLinfNorm3D<T> absPressureErrorNormLinf(pressure, pressureSol, indicatorF);
     absPressureErrorNormLinf(result, tmp);
     clout << "pressure-Linf-error(abs)=" << result[0];
+    parameters.set<parameters::PRESSURE_LINF_ABS_ERROR>(result[0]);
     SuperRelativeErrorLinfNorm3D<T> relPressureErrorNormLinf(pressure, pressureSol, indicatorF);
     relPressureErrorNormLinf(result, tmp);
     clout << "; pressure-Linf-error(rel)=" << result[0] << std::endl;
@@ -485,60 +509,66 @@ void getResults(MyCase& myCase, std::size_t iT, util::Timer<MyCase::value_t>& ti
   auto& geometry    = myCase.getGeometry();
   auto& lattice     = myCase.getLattice(NavierStokes{});
   auto& converter   = lattice.getUnitConverter();
+  
+  const FlowType flowType       = parameters.get<parameters::FLOW_TYPE>();
+  const bool    eoc             = parameters.get<parameters::EOC>();
   const BoundaryType boundaryType = parameters.get<parameters::BOUNDARY_TYPE>();
   const bool    noslipBoundary  = ((boundaryType != FREE_SLIP) && (boundaryType != PARTIAL_SLIP));
+
   const size_t  statIter        = converter.getLatticeTime( parameters.get<parameters::PHYS_STAT_ITER_T>() );
+  const int     vtmIter         = converter.getLatticeTime( parameters.get<parameters::PHYS_VTK_ITER_T>() );
   bool          lastTimeStep    = ( converged || (iT + 1 == converter.getLatticeTime( parameters.get<parameters::MAX_PHYS_T>() )) );
-  const bool    eoc             = parameters.get<parameters::EOC>();
 
   const T       radius          = parameters.get<parameters::DIAMETER>()/2.0;
   const T       length          = parameters.get<parameters::LENGTH>();
 
-  // set up size-increased indicator and instantiate wall shear stress functor (wss)
-  SuperLatticePhysWallShearStress3D<T,DESCRIPTOR> wss = WSS(myCase);
-  
-  SuperVTMwriter3D<T> vtmWriter( "poiseuille3d" );
-  SuperLatticePhysVelocity3D<T, DESCRIPTOR> velocity( lattice, converter );
-  SuperLatticePhysPressure3D<T, DESCRIPTOR> pressure( lattice, converter );
-  vtmWriter.addFunctor( velocity );
-  vtmWriter.addFunctor( pressure );
-  vtmWriter.addFunctor( wss );
-  const T maxVelocity = converter.getCharPhysVelocity();
-  std::vector<T> axisPoint = {length, radius, radius};
-  std::vector<T> axisDirection = { 1, 0, 0 };
-  CirclePoiseuille3D<T> uSol(axisPoint, axisDirection, maxVelocity, radius);
-  SuperLatticeFfromAnalyticalF3D<T,DESCRIPTOR> analyticalVelocityLattice(uSol, lattice);
-  analyticalVelocityLattice.getName() = "analytical solution";
-  vtmWriter.addFunctor(analyticalVelocityLattice);
+  // VTK and image output only if no EOC analysis
+  if (!eoc) {
+    // set up size-increased indicator and instantiate wall shear stress functor (wss)
+    SuperLatticePhysWallShearStress3D<T,DESCRIPTOR> wss = WSS(myCase);
+    
+    SuperVTMwriter3D<T> vtmWriter( "poiseuille3d" );
+    SuperLatticePhysVelocity3D<T, DESCRIPTOR> velocity( lattice, converter );
+    SuperLatticePhysPressure3D<T, DESCRIPTOR> pressure( lattice, converter );
+    vtmWriter.addFunctor( velocity );
+    vtmWriter.addFunctor( pressure );
+    vtmWriter.addFunctor( wss );
 
-  const int vtmIter  = converter.getLatticeTime( parameters.get<parameters::MAX_PHYS_T>()/20. );
+    const T maxVelocity = converter.getCharPhysVelocity();
+    std::vector<T> axisPoint = {length, radius, radius};
+    std::vector<T> axisDirection = { 1, 0, 0 };
+    CirclePoiseuille3D<T> uSol(axisPoint, axisDirection, maxVelocity, radius);
+    SuperLatticeFfromAnalyticalF3D<T,DESCRIPTOR> analyticalVelocityLattice(uSol, lattice);
+    analyticalVelocityLattice.getName() = "analytical solution";
+    vtmWriter.addFunctor(analyticalVelocityLattice);
 
-  if ( iT==0 ) {
-    // Writes the geometry, cuboid no. and rank no. as vti file for visualization
-    SuperLatticeCuboid3D<T, DESCRIPTOR> cuboid( lattice );
-    SuperLatticeRank3D<T, DESCRIPTOR> rank( lattice );
-    SuperLatticeDiscreteNormal3D<T, DESCRIPTOR> discreteNormal( lattice, geometry, geometry.getMaterialIndicator({2, 3}) );
-    SuperLatticeDiscreteNormalType3D<T, DESCRIPTOR> discreteNormalType( lattice, geometry, geometry.getMaterialIndicator({2, 3, 4, 5}) );
-    vtmWriter.write( cuboid );
-    vtmWriter.write( rank );
-    vtmWriter.write( discreteNormal );
-    vtmWriter.write( discreteNormalType );
+    if ( iT==0 ) {
+      // Writes the geometry, cuboid no. and rank no. as vti file for visualization
+      SuperLatticeCuboid3D<T, DESCRIPTOR> cuboid( lattice );
+      SuperLatticeRank3D<T, DESCRIPTOR> rank( lattice );
+      SuperLatticeDiscreteNormal3D<T, DESCRIPTOR> discreteNormal( lattice, geometry, geometry.getMaterialIndicator({2, 3}) );
+      SuperLatticeDiscreteNormalType3D<T, DESCRIPTOR> discreteNormalType( lattice, geometry, geometry.getMaterialIndicator({2, 3, 4, 5}) );
+      vtmWriter.write( cuboid );
+      vtmWriter.write( rank );
+      vtmWriter.write( discreteNormal );
+      vtmWriter.write( discreteNormalType );
 
-    vtmWriter.createMasterFile();
+      vtmWriter.createMasterFile();
+    }
+
+    // Writes the vtm files and profile text file
+    if ( iT%vtmIter==0 || lastTimeStep ) {
+      lattice.setProcessingContext(ProcessingContext::Evaluation);
+
+      vtmWriter.write( iT );
+
+      SuperEuklidNorm3D<T> normVel( velocity );
+      BlockReduction3D2D<T> planeReduction( normVel, Vector<T,3>({0,0,1}), 600, BlockDataSyncMode::ReduceOnly );
+      // write output as JPEG
+      heatmap::write(planeReduction, iT);
+    }
   }
 
-  // Writes the vtm files and profile text file
-  if ( iT%vtmIter==0 || lastTimeStep ) {
-    lattice.setProcessingContext(ProcessingContext::Evaluation);
-
-    vtmWriter.write( iT );
-
-    SuperEuklidNorm3D<T> normVel( velocity );
-    BlockReduction3D2D<T> planeReduction( normVel, Vector<T,3>({0,0,1}), 600, BlockDataSyncMode::ReduceOnly );
-    // write output as JPEG
-    heatmap::write(planeReduction, iT);
-  }
-  
   // Writes output on the console
   if ( iT%statIter==0 || lastTimeStep ) {
     // Timer console output
@@ -559,28 +589,78 @@ void getResults(MyCase& myCase, std::size_t iT, util::Timer<MyCase::value_t>& ti
   // Gnuplot output
   if ((noslipBoundary) && (lastTimeStep)) {
     lattice.setProcessingContext(ProcessingContext::Evaluation);
-    // plot velocity magnitude over line through the center of the simulation domain
-    const T maxVelocity = converter.getCharPhysVelocity();
-    T D = converter.getLatticeLength( parameters.get<parameters::DIAMETER>() );
-    T dx = 1. / T(converter.getResolution());
-    T point[3] { };
-    point[0] = length/2.;
-    point[2] = ( T )radius;
-    std::vector<T> axisPoint {length, radius, radius};
-    std::vector<T> axisDirection { 1, 0, 0 };
-    CirclePoiseuille3D<T> uSol(axisPoint, axisDirection, maxVelocity, radius);
-    T analytical[3] { };
-    SuperLatticePhysVelocity3D<T, DESCRIPTOR> velocity( lattice, converter );
-    AnalyticalFfromSuperF3D<T> intpolateVelocity( velocity, true, 1 );
-    T numerical[3] { };
-    for ( int iY=0; iY<=D; ++iY ) {
-      point[1] = ( T )converter.getPhysLength(iY);
-      uSol( analytical,point );
-      intpolateVelocity( numerical,point );
-      gplot.setData( iY*dx, {analytical[0],numerical[0]}, {"analytical","numerical"} );
+    if ( eoc ) {
+      if (flowType == NON_FORCED){
+        gplot.setData (
+          T(converter.getResolution()),
+          { parameters.get<parameters::VELOCITY_L1_ABS_ERROR>(),
+            parameters.get<parameters::VELOCITY_L2_ABS_ERROR>(),
+            parameters.get<parameters::VELOCITY_LINF_ABS_ERROR>(),
+            parameters.get<parameters::STRAIN_RATE_L1_ABS_ERROR>(),
+            parameters.get<parameters::STRAIN_RATE_L2_ABS_ERROR>(),
+            parameters.get<parameters::STRAIN_RATE_LINF_ABS_ERROR>(),
+            parameters.get<parameters::WSS_L1_ABS_ERROR>(),
+            parameters.get<parameters::WSS_L2_ABS_ERROR>(),
+            parameters.get<parameters::WSS_LINF_ABS_ERROR>(),
+            parameters.get<parameters::PRESSURE_L1_ABS_ERROR>(),
+            parameters.get<parameters::PRESSURE_L2_ABS_ERROR>(),
+            parameters.get<parameters::PRESSURE_LINF_ABS_ERROR>() },
+          { "velocity L1 abs Error","velocity L2 abs Error",
+            "velocity Linf abs error",
+            "strain rate L1 abs error", "strain rate L2 abs error",
+            "strain rate Linf abs error",
+            "wall shear stress L1 abs error", "wall shear stress L2 abs error",
+            "wall shear stress Linf abs error",
+            "pressure L1 abs error", "pressure L2 abs error",
+            "pressure Linf abs error" },
+          "top right",
+          { 'p','p','p','p','p','p','p','p','p','p','p','p' } );
+      } else {
+        // same as above, but without pressure computation
+        gplot.setData (
+          T(converter.getResolution()),
+          { parameters.get<parameters::VELOCITY_L1_ABS_ERROR>(),
+            parameters.get<parameters::VELOCITY_L2_ABS_ERROR>(),
+            parameters.get<parameters::VELOCITY_LINF_ABS_ERROR>(),
+            parameters.get<parameters::STRAIN_RATE_L1_ABS_ERROR>(),
+            parameters.get<parameters::STRAIN_RATE_L2_ABS_ERROR>(),
+            parameters.get<parameters::STRAIN_RATE_LINF_ABS_ERROR>(),
+            parameters.get<parameters::WSS_L1_ABS_ERROR>(),
+            parameters.get<parameters::WSS_L2_ABS_ERROR>(),
+            parameters.get<parameters::WSS_LINF_ABS_ERROR>() },
+          { "velocity L1 abs Error","velocity L2 abs Error",
+            "velocity Linf abs error",
+            "strain rate L1 abs error", "strain rate L2 abs error",
+            "strain rate Linf abs error",
+            "wall shear stress L1 abs error", "wall shear stress L2 abs error",
+            "wall shear stress Linf abs error",},
+          "top right",
+          { 'p','p','p','p','p','p','p','p', 'p' } );
+      }
+    } else {  // if !eoc
+      // plot velocity magnitude over line through the center of the simulation domain
+      const T maxVelocity = converter.getCharPhysVelocity();
+      T D = converter.getLatticeLength( parameters.get<parameters::DIAMETER>() );
+      T dx = 1. / T(converter.getResolution());
+      T point[3] { };
+      point[0] = length/2.;
+      point[2] = ( T )radius;
+      std::vector<T> axisPoint {length, radius, radius};
+      std::vector<T> axisDirection { 1, 0, 0 };
+      CirclePoiseuille3D<T> uSol(axisPoint, axisDirection, maxVelocity, radius);
+      T analytical[3] { };
+      SuperLatticePhysVelocity3D<T, DESCRIPTOR> velocity( lattice, converter );
+      AnalyticalFfromSuperF3D<T> intpolateVelocity( velocity, true, 1 );
+      T numerical[3] { };
+      for ( int iY=0; iY<=D; ++iY ) {
+        point[1] = ( T )converter.getPhysLength(iY);
+        uSol( analytical,point );
+        intpolateVelocity( numerical,point );
+        gplot.setData( iY*dx, {analytical[0],numerical[0]}, {"analytical","numerical"} );
+      }
+      // Create PNG file
+      gplot.writePNG();
     }
-    // Create PNG file
-    gplot.writePNG();
   }
 }
 
@@ -592,8 +672,7 @@ void simulate(MyCase& myCase) {
   auto& geometry    = myCase.getGeometry();
   auto& converter   = lattice.getUnitConverter();
   
-  const size_t  iTmax   = myCase.getLattice(NavierStokes{}).getUnitConverter().getLatticeTime(
-    parameters.get<parameters::MAX_PHYS_T>());
+  const size_t  iTmax   = converter.getLatticeTime( parameters.get<parameters::MAX_PHYS_T>() );
   const size_t  iTcheck = converter.getLatticeTime( parameters.get<parameters::INTERVAL_CONVERGENCE_CHECK>() );
   const T       epsilon = parameters.get<parameters::RESIDUUM>();
 
@@ -617,7 +696,7 @@ void simulate(MyCase& myCase) {
 
     // === 7th Step: Computation and Output of the Results ===
     getResults( myCase, iT, timer );
-    converge.takeValue( lattice.getStatistics().getAverageEnergy(), true );
+    converge.takeValue( lattice.getStatistics().getAverageEnergy(), false );
   }
 
   timer.stop();
@@ -649,11 +728,15 @@ void setGetParameters( MyCase::ParametersD& myCaseParameters, int& argc, char** 
     myCaseParameters.set<PHYS_STAT_ITER_T>([&] {  // interval for the statistics output in s
       return myCaseParameters.get<MAX_PHYS_T>()/20.;
     });
+    myCaseParameters.set<PHYS_VTK_ITER_T>([&] {  // interval for the vtk output in s
+      return myCaseParameters.get<MAX_PHYS_T>()/20.;
+    });
     myCaseParameters.set<PHYS_DELTA_X>([&] {
       return myCaseParameters.get<DIAMETER>()/myCaseParameters.get<RESOLUTION>();
     });
     myCaseParameters.set<parameters::EOC_START_RESOLUTION>(21);
     myCaseParameters.set<parameters::EOC_MAX_RESOLUTION>(52);
+    myCaseParameters.set<parameters::EOC_RESOLUTION_STEP>(10);
   }
   myCaseParameters.fromCLI(argc, argv);
 }
