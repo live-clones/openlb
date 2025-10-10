@@ -33,104 +33,141 @@
  *
  * curl "https://openlb.net/data/gas_storage/gasStorage2d.vti" -o storage.vti
  *
- * and execute
- *
- * ./gasStorage2d storage.vti "Tiff Scalars"
+ * and give the file name as the VTI_INPUT parameter.
  **/
 
 #include <olb.h>
 
-using namespace std;
 using namespace olb;
 using namespace olb::descriptors;
-using namespace olb::graphics;
+using namespace olb::names;
 
-using T = FLOATING_POINT_TYPE;
-using NSDESCRIPTOR = D2Q9<RHO, NABLARHO, FORCE, EXTERNAL_FORCE, TAU_EFF, STATISTIC, SCALAR>;
-using ACDESCRIPTOR = D2Q9<CONV_POPS, FORCE, SOURCE, SOURCE_OLD, VELOCITY, OLD_PHIU, STATISTIC,
-                          PSI, NORMGRADPSI, SCALAR, PSI0, THETA, BOUNDARY>;
-using NSBulkDynamics = MultiPhaseIncompressibleInterfaceTRTdynamics<T,NSDESCRIPTOR>;
-using ACBulkDynamics = AllenCahnBGKdynamics<T, ACDESCRIPTOR>;
+// === Step 1: Declarations ===
+using MyCase = Case<
+  NavierStokes, Lattice<double, D2Q9<RHO,NABLARHO,FORCE,EXTERNAL_FORCE,TAU_EFF,SCALAR>>,
+  Component1,  Lattice<double, D2Q9<CONV_POPS,FORCE,VELOCITY,OLD_PHIU,STATISTIC,PSI,NORMGRADPSI,SCALAR,PSI0,THETA,BOUNDARY>>
+>;
+
+using NSBulkDynamics = MultiPhaseIncompressibleInterfaceTRTdynamics<MyCase::value_t,MyCase::descriptor_t>;
+using ACBulkDynamics = ConservativePhaseFieldBGKdynamics<MyCase::value_t,MyCase::descriptor_t_of<Component1>>;
 using Coupling = LiangPostProcessor;
 
-// Parameters in physical units
-Vector<T, 2> length;                           // domain length [m]
-T inletLength = 0.1;                           // length of inlet region; % of total length
-T outletLength = 0.1;                          // length of outlet region; % of total length
+namespace olb::parameters {
 
-T pressureDrop = 50000.;                       // pressure drop [N.m-2]
+struct VTI_INPUT : public descriptors::TYPED_FIELD_BASE<std::string,1> { };
+struct ARRAY_NAME : public descriptors::TYPED_FIELD_BASE<std::string,1> { };
+struct LATTICE_RELAXATION_TIME_PF : public descriptors::FIELD_BASE<1> { };
+struct INLET_LENGTH_F : public descriptors::FIELD_BASE<1> { };
+struct OUTLET_LENGTH_F : public descriptors::FIELD_BASE<1> { };
+struct PRESSURE_DROP : public descriptors::FIELD_BASE<1> { };
+struct SCALE : public descriptors::FIELD_BASE<1> { };
+struct INLET_LENGTH : public descriptors::FIELD_BASE<1> { };
+struct OUTLET_LENGTH : public descriptors::FIELD_BASE<1> { };
+struct C_RHO : public descriptors::FIELD_BASE<1> { };
 
-const T densityGas = 7.1;                      // gas density [kg.m-3]
-const T densityLiquid = 992;                   // liquid density [kg.m-3]
+}
 
-const T viscosityGas = 1.34e-6;                // gas kinematic viscosity [m2.s-1]
-const T viscosityLiquid = 5.5e-7;              // liquid kinematic viscosity [m2.s-1]
+Mesh<MyCase::value_t,MyCase::d> createMesh(MyCase::ParametersD& params) {
+  using T = MyCase::value_t;
+  Vector extent = params.get<parameters::DOMAIN_EXTENT>();
+  const T inletLength = params.get<parameters::INLET_LENGTH>();
+  const T outletLength = params.get<parameters::OUTLET_LENGTH>();
 
-const T surfaceTension = 72e-3;                // surface tension [N.m-1]
+  // Indicator containing porous medium, inlet and outlet zones
+  IndicatorCuboid2D<T> cuboid( extent[0] + inletLength + outletLength, extent[1],
+                               { ( extent[0] + outletLength - inletLength )/2., extent[1]/2. }, 0);
 
-const T contactAngle = M_PI * 40. / 180.;      // Contact angle [radians]
+  const T dx = extent[1] / params.get<parameters::RESOLUTION>();
+  Mesh<T,MyCase::d> mesh(cuboid, dx, singleton::mpi().getSize());
+  mesh.setOverlap(params.get<parameters::OVERLAP>());
+  return mesh;
+}
 
-const T maxPhysTime  = 0.012;                  // max simulation time [s]
-const T vtkIter      = maxPhysTime/400;        // write simulation output [s]
-const T statIter     = maxPhysTime/400;        // simulation statistics time [s]
-
-// Parameters in lattice units
-const T interfaceThickness = 6.;               // interface thickness [l.u.]
-const T tau_mobil = 0.8;                       // relaxation time order parameter [l.u.]
-
-void prepareGeometry(MultiPhaseUnitConverterFromRelaxationTime<T, NSDESCRIPTOR> const& converter,
-                     IndicatorBlockData2Dvti<T>& indicator,
-                     SuperGeometry<T, 2>& superGeometry)
+void prepareGeometry( MyCase& myCase )
 {
   OstreamManager clout(std::cout, "prepareGeometry");
   clout << "Prepare Geometry ..." << std::endl;
 
-  superGeometry.rename(0, 2);
-  superGeometry.rename(2, 1, {1, 1});
+  using T = MyCase::value_t;
+  auto& geometry = myCase.getGeometry();
+  auto& params = myCase.getParameters();
+
+  const T dx = params.get<parameters::DOMAIN_EXTENT>()[1] / params.get<parameters::RESOLUTION>();
+  const Vector extent = params.get<parameters::DOMAIN_EXTENT>();
+  const T deltaRsample = params.get<parameters::SCALE>();
+  const T inletLength = params.get<parameters::INLET_LENGTH>();
+  const T outletLength = params.get<parameters::OUTLET_LENGTH>();
+  std::string vtiFile = params.get<parameters::VTI_INPUT>();
+  std::string arrayName = params.get<parameters::ARRAY_NAME>();
+  BlockVTIreader2D<T,T> vtiReader( vtiFile, arrayName );
+  auto cuboidSample = vtiReader.getCuboid();
+  BlockData<2,T,T>& block = vtiReader.getBlockData();
+
+  Vector<int, 2> extentSample     = cuboidSample.getExtent();
+  Vector<T, 2>   originSamplePhys = cuboidSample.getOrigin() * deltaRsample;
+
+  Vector<T, 2> extentSamplePhys = {deltaRsample * T(extentSample[0]), deltaRsample * T(extentSample[1])};
+  IndicatorBlockData2Dvti<T> indicator(block, extentSamplePhys, originSamplePhys, deltaRsample, false);
+
+  geometry.rename(0, 2);
+  geometry.rename(2, 1, {1, 1});
 
   // internal domain, solid rocks - not fluid
-  superGeometry.rename(1, 5, indicator);
-
-  T dx = converter.getPhysDeltaX();
+  geometry.rename(1, 5, indicator);
 
   // inlet and outlet
-  IndicatorCuboid2D<T> inlet( dx, length[1] - dx, { -inletLength, length[1]/2. }, 0 );
-  superGeometry.rename(2, 3, inlet);
+  IndicatorCuboid2D<T> inlet( dx, extent[1] - dx, { -inletLength, extent[1]/2. }, 0 );
+  geometry.rename(2, 3, inlet);
 
-  IndicatorCuboid2D<T> outlet( dx, length[1] - dx, { outletLength + length[0] - 0.5*dx, length[1]/2. }, 0);
-  superGeometry.rename(2, 4, outlet);
+  IndicatorCuboid2D<T> outlet( dx, extent[1] - dx, { outletLength + extent[0] - 0.5*dx, extent[1]/2. }, 0);
+  geometry.rename(2, 4, outlet);
 
-  superGeometry.clean();
-  superGeometry.innerClean();
-  superGeometry.outerClean();
-  superGeometry.checkForErrors();
-  superGeometry.print();
+  geometry.clean();
+  geometry.innerClean();
+  geometry.outerClean();
+  geometry.checkForErrors();
+  geometry.print();
 
   clout << "Prepare Geometry ... OK" << std::endl;
 }
 
 template <typename STAGE>
-void signedDistanceFunction( SuperLattice<T,ACDESCRIPTOR>& sLatticeAC,
-                             SuperGeometry<T,2>& superGeometry, T w )
+void signedDistanceFunction( MyCase& myCase )
 {
+  using T = MyCase::value_t;
+  auto& geometry = myCase.getGeometry();
+  auto& params = myCase.getParameters();
+  const T w = params.get<parameters::INTERFACE_WIDTH>();
+
+  auto& sLatticeAC = myCase.getLattice(Component1{});
+  using PFDESCRIPTOR = MyCase::descriptor_t_of<Component1>;
+
   T max = 1.;
   while ( max <= 1.5*w ) {
     int in[2];
     sLatticeAC.getCommunicator(STAGE{}).communicate();
     sLatticeAC.executePostProcessors(STAGE{});
-    SuperLatticeExternalScalarField2D<T, ACDESCRIPTOR, PSI> psi( sLatticeAC );
-    SuperMax2D<T,T> Max_psi_(psi, superGeometry, 1);
+    SuperLatticeField2D<T, PFDESCRIPTOR, PSI> psi( sLatticeAC );
+    SuperMax2D<T,T> Max_psi_(psi, geometry, 1);
     Max_psi_(&max, in);
   }
 }
 
-T helperConvectiveU(SuperLattice<T, NSDESCRIPTOR>& sLatticeNS,
-                    SuperGeometry<T, 2>& superGeometry,
-                    MultiPhaseUnitConverterFromRelaxationTime<T, NSDESCRIPTOR> const& converter)
+template <typename T>
+T helperConvectiveU( MyCase& myCase )
 {
+  auto& geometry = myCase.getGeometry();
+  auto& params = myCase.getParameters();
+  Vector extent = params.get<parameters::DOMAIN_EXTENT>();
+  const T outletLength = params.get<parameters::OUTLET_LENGTH>();
+
+  auto& sLatticeNS = myCase.getLattice(NavierStokes{});
+  using NSDESCRIPTOR = MyCase::descriptor_t;
+
+  const auto& converter = sLatticeNS.getUnitConverter();
   T dx = converter.getPhysDeltaX();
-  IndicatorCuboid2D<T> beforeOutlet_( 1.1*dx, length[1], { length[0] + outletLength - 2.*dx, length[1]/2. }, 0 );
-  SuperIndicatorFfromIndicatorF2D<T> beforeOutlet(beforeOutlet_, superGeometry);
+  IndicatorCuboid2D<T> beforeOutlet_( 1.1*dx, extent[1], { extent[0] + outletLength - 2.*dx, extent[1]/2. }, 0 );
+  SuperIndicatorFfromIndicatorF2D<T> beforeOutlet(beforeOutlet_, geometry);
   int in[2];
   T uMax[2];
   SuperLatticeVelocity2D<T, NSDESCRIPTOR> u(sLatticeNS);
@@ -139,65 +176,61 @@ T helperConvectiveU(SuperLattice<T, NSDESCRIPTOR>& sLatticeNS,
   return uMax[0];
 }
 
-template <typename SuperLatticeCoupling>
-void prepareLattice(SuperLattice<T, NSDESCRIPTOR>& sLatticeNS,
-                    SuperLattice<T, ACDESCRIPTOR>& sLatticeAC,
-                    SuperLatticeCoupling& coupling,
-                    MultiPhaseUnitConverterFromRelaxationTime<T, NSDESCRIPTOR> const& converter,
-                    SuperGeometry<T,2>& superGeometry)
+void prepareLattice( MyCase& myCase )
 {
   OstreamManager clout(std::cout, "prepareLattice");
   clout << "Prepare Lattice ..." << std::endl;
 
+  using T = MyCase::value_t;
+  auto& geometry = myCase.getGeometry();
+  auto& params = myCase.getParameters();
+
+  auto& sLatticeNS = myCase.getLattice(NavierStokes{});
+  auto& sLatticeAC = myCase.getLattice(Component1{});
+
+  using NSDESCRIPTOR = MyCase::descriptor_t_of<NavierStokes>;
+  using ACDESCRIPTOR = MyCase::descriptor_t_of<Component1>;
+
+  Vector extent = params.get<parameters::DOMAIN_EXTENT>();
+  const int N = params.get<parameters::RESOLUTION>();
+  const T tau_mobil = params.get<parameters::LATTICE_RELAXATION_TIME_PF>();
+  const T rho_g = params.get<parameters::RHO_VAPOR>();
+  const T rho_l = params.get<parameters::RHO_LIQUID>();
+  const T nu_g = params.get<parameters::NU_VAPOR>();
+  const T nu_l = params.get<parameters::NU_LIQUID>();
+  const T tau_l = params.get<parameters::LATTICE_RELAXATION_TIME>();
+  const T tau_g = nu_g/nu_l*(tau_l-0.5)+0.5;
+  const T sigma = params.get<parameters::SURFACE_TENSION>();
+  const T w = params.get<parameters::INTERFACE_WIDTH>();
+  const T C_rho = params.get<parameters::C_RHO>();
+
+  sLatticeNS.setUnitConverter<MultiPhaseUnitConverterFromRelaxationTime<T,NSDESCRIPTOR>>(
+    int   {N},           // resolution
+    (T)   tau_l,         // lattice relaxation time
+    (T)   rho_l/C_rho,   // lattice density
+    (T)   extent[1],     // charPhysLength: reference length of simulation geometry
+    (T)   nu_l,          // physViscosity: physical kinematic viscosity in __m^2 / s__
+    (T)   rho_l          // physDensity: physical density in __kg / m^3__
+  );
+
+  const auto& converter = sLatticeNS.getUnitConverter();
+  converter.print();
+
+  sLatticeAC.setUnitConverter(converter);
+
   // define lattice Dynamics
-  sLatticeNS.defineDynamics<NoDynamics>(superGeometry, 0);
-  sLatticeNS.defineDynamics<NSBulkDynamics>(superGeometry, 1);
+  sLatticeNS.defineDynamics<NoDynamics>(geometry, 0);
+  sLatticeNS.defineDynamics<NSBulkDynamics>(geometry, 1);
 
-  sLatticeAC.defineDynamics<NoDynamics>(superGeometry, 0);
-  sLatticeAC.defineDynamics<ACBulkDynamics>(superGeometry, 1);
+  sLatticeAC.defineDynamics<NoDynamics>(geometry, 0);
+  sLatticeAC.defineDynamics<ACBulkDynamics>(geometry, 1);
 
-  // initial conditions
-  AnalyticalConst2D<T, T> one(1.);
-  AnalyticalConst2D<T, T> two(2.);
-  AnalyticalConst2D<T, T> rhov(densityGas/converter.getConversionFactorDensity());
-  AnalyticalConst2D<T, T> rhol(densityLiquid/converter.getConversionFactorDensity());
-  T tau_g = converter.computeRelaxationTimefromPhysViscosity( viscosityGas );
-  AnalyticalConst2D<T, T> tauv( tau_g );
-  T tau_l = converter.computeRelaxationTimefromPhysViscosity( viscosityLiquid );
-  AnalyticalConst2D<T, T> taul( tau_l );
-  AnalyticalConst2D<T, T> angleInside( contactAngle );
-  AnalyticalConst2D<T, T> angleOutside( M_PI/2. );
-  AnalyticalConst2D<T, T> p0(0.);
-  AnalyticalConst2D<T, T> u0(0, 0);
-
-  auto bulk   = superGeometry.getMaterialIndicator(1);
-  auto wall   = superGeometry.getMaterialIndicator({2, 5});
-  auto inlet  = superGeometry.getMaterialIndicator(3);
-  auto outlet = superGeometry.getMaterialIndicator(4);
-  auto fluid  = superGeometry.getMaterialIndicator({1, 3});
-  auto all    = superGeometry.getMaterialIndicator({0, 1, 2, 3, 4, 5});
-
-  T dx = converter.getPhysDeltaX();
-
-  // water enters on the left, gas in the porous rock
-  SmoothIndicatorFactoredCuboid2D<T, T> phi0( {-inletLength, length[1]/2.},
-                                              2.2*inletLength, 2.*length[1],
-                                              interfaceThickness*dx/2., 0, {0, 0}, 0, 1. );
-  AnalyticalIdentity2D<T, T> rho0(rhov + (rhol - rhov) * phi0);
-  AnalyticalIdentity2D<T, T> tau0(tauv + (taul - tauv) * phi0);
-
-  SmoothIndicatorFactoredCuboid2D<T,T> fringe( {-inletLength, length[1]/2.},
-                                                2.*(inletLength+length[0]+0.5*outletLength), 0,
-                                                0.25*outletLength, 0, {0,0}, 0, 1. );
-  sLatticeNS.defineField<descriptors::SCALAR>(all, fringe);
-
-  sLatticeNS.defineField<descriptors::RHO>(all, rho0);
-  sLatticeNS.defineField<descriptors::TAU_EFF>(all, tau0);
-  sLatticeAC.defineField<descriptors::OLD_PHIU>(all, u0);
-  sLatticeAC.defineField<descriptors::BOUNDARY>(wall, two);
-  sLatticeAC.defineField<descriptors::BOUNDARY>(superGeometry.getMaterialIndicator({1, 3, 4}), one);
-  sLatticeAC.defineField<descriptors::THETA>(superGeometry.getMaterialIndicator(2), angleOutside);
-  sLatticeAC.defineField<descriptors::THETA>(superGeometry.getMaterialIndicator(5), angleInside);
+  auto bulk   = geometry.getMaterialIndicator(1);
+  auto wall   = geometry.getMaterialIndicator({2, 5});
+  auto inlet  = geometry.getMaterialIndicator(3);
+  auto outlet = geometry.getMaterialIndicator(4);
+  auto fluid  = geometry.getMaterialIndicator({1, 3});
+  auto all    = geometry.getMaterialIndicator({0, 1, 2, 3, 4, 5});
 
   boundary::set<boundary::BounceBackIncompressible>(sLatticeNS, wall);
   boundary::set<boundary::PhaseFieldCurvedWall>(sLatticeAC, wall);
@@ -205,11 +238,6 @@ void prepareLattice(SuperLattice<T, NSDESCRIPTOR>& sLatticeNS,
   boundary::set<boundary::IncompressibleZouHePressure>(sLatticeNS, inlet);
   boundary::set<boundary::IncompressibleZouHePressure>(sLatticeNS, outlet);
   setConvectivePhaseFieldBoundary<T,ACDESCRIPTOR>(sLatticeAC, outlet);
-
-  sLatticeAC.defineRhoU(all, phi0, u0);
-  sLatticeAC.iniEquilibrium(all, phi0, u0);
-  sLatticeNS.defineRhoU(all, p0, u0);
-  sLatticeNS.iniEquilibrium(all, p0, u0);
 
   sLatticeAC.addPostProcessor<stage::InitOutlet>(outlet, meta::id<SetOutletCells2D<1, 0>>());
   sLatticeAC.addPostProcessor<stage::PreCoupling>(fluid,meta::id<RhoStatistics>());
@@ -222,23 +250,36 @@ void prepareLattice(SuperLattice<T, NSDESCRIPTOR>& sLatticeNS,
   setSignedDistanceBoundary<T,ACDESCRIPTOR>(sLatticeAC, inlet);
   setSignedDistanceBoundary<T,ACDESCRIPTOR>(sLatticeAC, outlet);
 
-  coupling.template setParameter<Coupling::SIGMA>( surfaceTension / converter.getConversionFactorSurfaceTension() );
-  coupling.template setParameter<Coupling::W>( interfaceThickness );
-  coupling.template setParameter<Coupling::TAUS>({tau_g, tau_l});
-  coupling.template setParameter<Coupling::RHOS>( {densityGas/converter.getConversionFactorDensity(),
-                                                   densityLiquid/converter.getConversionFactorDensity()});
+  auto& coupling = myCase.setCouplingOperator(
+      "Coupling",
+      LiangPostProcessor {},
+      names::NavierStokes {}, sLatticeNS,
+      names::Component1 {}, sLatticeAC);
+  coupling.restrictTo(geometry.getMaterialIndicator({1, 4}));
+
+  auto& velocityCoupling = myCase.setCouplingOperator(
+      "VeloCoupling",
+      VelocityCoupling{},
+      names::NavierStokes {}, sLatticeNS,
+      names::Component1 {}, sLatticeAC);
+  velocityCoupling.restrictTo(geometry.getMaterialIndicator({3}));
+
+  coupling.setParameter<Coupling::SIGMA>( sigma / converter.getConversionFactorSurfaceTension() );
+  coupling.setParameter<Coupling::W>( w );
+  coupling.setParameter<Coupling::TAUS>({tau_g, tau_l});
+  coupling.setParameter<Coupling::RHOS>( {rho_g/C_rho, rho_l/C_rho});
   coupling.template setParameter<Coupling::SWITCH>(1);
 
   sLatticeNS.setParameter<descriptors::OMEGA>( 1. / tau_l );
-  T maxRhoGradient = (densityLiquid-densityGas)/converter.getConversionFactorDensity()/interfaceThickness;
+  T maxRhoGradient = (rho_l-rho_g)/converter.getConversionFactorDensity()/w;
   sLatticeNS.setParameter<collision::ITRT::TAU_MINUS>( T(1.5) );
   sLatticeNS.setParameter<collision::ITRT::MAXNABLARHO>( maxRhoGradient );
   sLatticeAC.setParameter<descriptors::OMEGA>( 1. / tau_mobil );
   sLatticeAC.addPostProcessor<stage::PhiLimiter>(fluid,meta::id<dispersionLimiter>{});
-  sLatticeAC.setParameter<descriptors::EPSILON>( 1.5*interfaceThickness );
-  sLatticeAC.setParameter<descriptors::INTERFACE_WIDTH>( interfaceThickness );
+  sLatticeAC.setParameter<descriptors::EPSILON>( 1.5*w );
+  sLatticeAC.setParameter<descriptors::INTERFACE_WIDTH>( w );
 
-  T uMax = helperConvectiveU(sLatticeNS, superGeometry, converter);
+  T uMax = helperConvectiveU<T>( myCase );
   sLatticeAC.setParameter<descriptors::MAX_VELOCITY>(uMax);
 
   {
@@ -256,27 +297,107 @@ void prepareLattice(SuperLattice<T, NSDESCRIPTOR>& sLatticeNS,
     communicator.exchangeRequests();
   }
 
+  clout << "Prepare Lattice ... OK" << std::endl;
+}
+
+void setInitialValues(MyCase& myCase) {
+  OstreamManager clout(std::cout, "setInitialValues");
+  clout << "Set initial values ..." << std::endl;
+
+  using T = MyCase::value_t;
+  auto& geometry = myCase.getGeometry();
+  auto& params = myCase.getParameters();
+
+  auto& sLatticeNS = myCase.getLattice(NavierStokes{});
+  auto& sLatticeAC = myCase.getLattice(Component1{});
+
+  const auto& converter = sLatticeNS.getUnitConverter();
+
+  Vector extent = params.get<parameters::DOMAIN_EXTENT>();
+  const T inletLength = params.get<parameters::INLET_LENGTH>();
+  const T outletLength = params.get<parameters::OUTLET_LENGTH>();
+  const int N = params.get<parameters::RESOLUTION>();
+  const T dx = extent[1] / N;
+  const T rho_g = params.get<parameters::RHO_VAPOR>();
+  const T rho_l = params.get<parameters::RHO_LIQUID>();
+  const T nu_g = params.get<parameters::NU_VAPOR>();
+  const T nu_l = params.get<parameters::NU_LIQUID>();
+  const T w = params.get<parameters::INTERFACE_WIDTH>();
+  const T theta = params.get<parameters::THETA>();
+
+  AnalyticalConst2D<T, T> one(1.);
+  AnalyticalConst2D<T, T> two(2.);
+  AnalyticalConst2D<T, T> rhov(rho_g/converter.getConversionFactorDensity());
+  AnalyticalConst2D<T, T> rhol(rho_l/converter.getConversionFactorDensity());
+  T tau_g = converter.computeRelaxationTimefromPhysViscosity( nu_g );
+  AnalyticalConst2D<T, T> tauv( tau_g );
+  T tau_l = converter.computeRelaxationTimefromPhysViscosity( nu_l );
+  AnalyticalConst2D<T, T> taul( tau_l );
+  AnalyticalConst2D<T, T> angleInside( theta );
+  AnalyticalConst2D<T, T> angleOutside( M_PI/2. );
+  AnalyticalConst2D<T, T> p0(0.);
+  AnalyticalConst2D<T, T> u0(0, 0);
+
+  auto bulk   = geometry.getMaterialIndicator(1);
+  auto wall   = geometry.getMaterialIndicator({2, 5});
+  auto inlet  = geometry.getMaterialIndicator(3);
+  auto outlet = geometry.getMaterialIndicator(4);
+  auto fluid  = geometry.getMaterialIndicator({1, 3});
+  auto all    = geometry.getMaterialIndicator({0, 1, 2, 3, 4, 5});
+
+  // water enters on the left, gas in the porous rock
+  SmoothIndicatorFactoredCuboid2D<T, T> phi0( {-inletLength, extent[1]/2.},
+                                              2.2*inletLength, 2.*extent[1],
+                                              w*dx/2., 0, {0, 0}, 0, 1. );
+  AnalyticalIdentity2D<T, T> rho0(rhov + (rhol - rhov) * phi0);
+  AnalyticalIdentity2D<T, T> tau0(tauv + (taul - tauv) * phi0);
+
+  SmoothIndicatorFactoredCuboid2D<T,T> fringe( {-inletLength, extent[1]/2.},
+                                                2.*(inletLength+extent[0]+0.5*outletLength), 0,
+                                                0.25*outletLength, 0, {0,0}, 0, 1. );
+  sLatticeNS.defineField<descriptors::SCALAR>(all, fringe);
+
+  sLatticeNS.defineField<descriptors::RHO>(all, rho0);
+  sLatticeNS.defineField<descriptors::TAU_EFF>(all, tau0);
+  sLatticeAC.defineField<descriptors::OLD_PHIU>(all, u0);
+  sLatticeAC.defineField<descriptors::BOUNDARY>(wall, two);
+  sLatticeAC.defineField<descriptors::BOUNDARY>(geometry.getMaterialIndicator({1, 3, 4}), one);
+  sLatticeAC.defineField<descriptors::THETA>(geometry.getMaterialIndicator(2), angleOutside);
+  sLatticeAC.defineField<descriptors::THETA>(geometry.getMaterialIndicator(5), angleInside);
+
+  sLatticeAC.defineRhoU(all, phi0, u0);
+  sLatticeAC.iniEquilibrium(all, phi0, u0);
+  sLatticeNS.defineRhoU(all, p0, u0);
+  sLatticeNS.iniEquilibrium(all, p0, u0);
+
   sLatticeAC.executePostProcessors(stage::InitOutlet());
   sLatticeAC.executePostProcessors(stage::PreCoupling());
-  signedDistanceFunction<stage::IterativePostProcess>(sLatticeAC,superGeometry,interfaceThickness);
+  signedDistanceFunction<stage::IterativePostProcess>(myCase);
 
   sLatticeNS.initialize();
   sLatticeAC.initialize();
 
   sLatticeAC.getCommunicator(stage::PreCoupling()).communicate();
-  clout << "Prepare Lattice ... OK" << std::endl;
+
+  clout << "Set initial values ... OK" << std::endl;
 }
 
-void setBoundaryValues(SuperLattice<T, NSDESCRIPTOR>& sLatticeNS,
-                       SuperLattice<T, ACDESCRIPTOR>& sLatticeAC,
-                       MultiPhaseUnitConverterFromRelaxationTime<T, NSDESCRIPTOR> const& converter,
-                       SuperGeometry<T, 2>& superGeometry, int iT)
+void setTemporalValues(MyCase& myCase, std::size_t iT)
 {
-  OstreamManager clout(std::cout, "setBoundaryValues");
+  OstreamManager clout(std::cout, "setTemporalValues");
 
-  int iTmaxStart = 10000;
+  using T = MyCase::value_t;
+  auto& geometry = myCase.getGeometry();
+  auto& params = myCase.getParameters();
+
+  auto& sLatticeNS = myCase.getLattice(NavierStokes{});
+
+  const auto& converter = sLatticeNS.getUnitConverter();
+  const T pressureDrop = params.get<parameters::PRESSURE_DROP>();
+
+  std::size_t iTmaxStart = 10000;
   int  iTupdate   = 1;
-  auto inlet      = superGeometry.getMaterialIndicator(3);
+  auto inlet      = geometry.getMaterialIndicator(3);
 
   // Ramp pressure gradient of domain by increasing inlet pressure
   if (iT % iTupdate == 0 && iT <= iTmaxStart) {
@@ -293,33 +414,40 @@ void setBoundaryValues(SuperLattice<T, NSDESCRIPTOR>& sLatticeNS,
   }
 }
 
-void getResults(SuperLattice<T, NSDESCRIPTOR>& sLatticeNS,
-                SuperLattice<T, ACDESCRIPTOR>& sLatticeAC, int iT,
-                SuperGeometry<T, 2>& superGeometry, util::Timer<T>& timer,
-                UnitConverter<T, NSDESCRIPTOR> converter)
+void getResults( MyCase& myCase,
+                util::Timer<MyCase::value_t>& timer,
+                std::size_t iT )
 {
-  OstreamManager      clout(std::cout, "getResults");
-  SuperVTMwriter2D<T> vtmWriter("gasStorage2d");
+  using T = MyCase::value_t;
+  using NSDESCRIPTOR = MyCase::descriptor_t_of<NavierStokes>;
+  using ACDESCRIPTOR = MyCase::descriptor_t_of<Component1>;
+  auto& params = myCase.getParameters();
 
+  auto& sLatticeNS = myCase.getLattice(NavierStokes{});
+  auto& sLatticeAC = myCase.getLattice(Component1{});
+
+  const auto& converter = sLatticeNS.getUnitConverter();
+
+  const T statIter = params.get<parameters::PHYS_STAT_ITER_T>();
+  const T saveIter = params.get<parameters::PHYS_VTK_ITER_T>();
+
+  SuperVTMwriter2D<T> vtkWriter("gasStorage2d");
   if (iT == 0) {
-    // Writes the geometry, cuboid no. and rank no. as vti file for visualization
-    SuperLatticeCuboid2D<T, NSDESCRIPTOR> cuboid(sLatticeNS);
-    SuperLatticeRank2D<T, NSDESCRIPTOR>   rank(sLatticeNS);
-    vtmWriter.write(cuboid);
-    vtmWriter.write(rank);
-    vtmWriter.createMasterFile();
+    SuperLatticeCuboid2D cuboid(sLatticeNS);
+    SuperLatticeRank2D rank(sLatticeNS);
+    vtkWriter.write(cuboid);
+    vtkWriter.write(rank);
+    vtkWriter.createMasterFile();
   }
-  // Get statistics
+
   if (iT % converter.getLatticeTime(statIter) == 0) {
-    // Timer console output
     timer.update(iT);
     timer.printStep();
     sLatticeNS.getStatistics().print(iT, converter.getPhysTime(iT));
     sLatticeAC.getStatistics().print(iT, converter.getPhysTime(iT));
   }
 
-  // Writes the VTK files
-  if (iT % converter.getLatticeTime(vtkIter) == 0) {
+  if (iT % converter.getLatticeTime(saveIter) == 0) {
     SuperLatticeDensity2D<T, NSDESCRIPTOR> p_total(sLatticeNS);
     p_total.getName() = "p_total";
 
@@ -335,156 +463,133 @@ void getResults(SuperLattice<T, NSDESCRIPTOR>& sLatticeNS,
     SuperLatticeExternalScalarField2D<T, ACDESCRIPTOR, BOUNDARY> boundary(sLatticeAC);
     boundary.getName() = "boundary";
 
-    vtmWriter.addFunctor(p_total);
-    vtmWriter.addFunctor(rho);
-    vtmWriter.addFunctor(velocity);
-    vtmWriter.addFunctor(boundary); // can be used to cut the rock parts in i.e. Paraview
-    vtmWriter.write(iT);
+    vtkWriter.addFunctor(p_total);
+    vtkWriter.addFunctor(rho);
+    vtkWriter.addFunctor(velocity);
+    vtkWriter.addFunctor(boundary); // can be used to cut the rock parts in i.e. Paraview
+    vtkWriter.write(iT);
   }
 }
 
-int main(int argc, char* argv[])
+void simulate(MyCase& myCase)
 {
-  ///- Code init
-  initialize(&argc, &argv);
+  OstreamManager clout( std::cout,"simulate" );
 
-  singleton::directories().setOutputDir("./tmp/");
-  OstreamManager clout(std::cout, "main");
+  using T = MyCase::value_t;
+  auto& parameters = myCase.getParameters();
 
-  ///-Import vti
-  std::string vtiFile;
-  std::string arrayName;
+  auto& sLatticeNS = myCase.getLattice(NavierStokes{});
+  auto& sLatticeAC = myCase.getLattice(Component1{});
 
-  std::vector<std::string> cmdInput;
-  if (argc > 1) {
-    cmdInput.assign(argv + 1, argv + argc);
-    vtiFile = cmdInput[0];
-  }
-  if (argc > 2) {
-    arrayName = cmdInput[1];
-  }
-  else {
-    clout << "Define <filename> <arrayname>(in that order)" << std::endl;
-    return 1;
-  }
+  const std::size_t iTmax = myCase.getLattice(NavierStokes{}).getUnitConverter().getLatticeTime(
+    parameters.get<parameters::MAX_PHYS_T>());
 
-  BlockVTIreader2D<T,T> vtiReader( vtiFile, arrayName ); // to ensure that the data persists
-
-  T scalingFactor     = 0.0000004; // scale down
-  auto cuboidSample = vtiReader.getCuboid();
-  T    deltaRsample = scalingFactor;
-
-  Vector<int, 2> extentSample     = cuboidSample.getExtent();
-  Vector<T, 2>   originSamplePhys = cuboidSample.getOrigin() * scalingFactor;
-
-  Vector<T, 2> extentSamplePhys = {deltaRsample * T(extentSample[0]),
-                                   deltaRsample * T(extentSample[1])};
-  for (unsigned i = 0; i < 2; ++i) {
-    length[i] = extentSamplePhys[i];
-  }
-
-  // === 1st Step: Unit Converter ===
-  MultiPhaseUnitConverterFromRelaxationTime<T,NSDESCRIPTOR> converter(
-    (T)   1000,                      // resolution
-    (T)   0.52,                      // lattice relaxation time
-    (T)   densityLiquid/500.,        // lattice density
-    (T)   length[1],                 // charPhysLength: reference length of simulation geometry
-    (T)   viscosityLiquid,           // physViscosity: physical kinematic viscosity in __m^2 / s__
-    (T)   densityLiquid              // physDensity: physical density in __kg / m^3__
-  );
-
-  UnitConverter<T,ACDESCRIPTOR> const converterAC(
-    (T) converter.getPhysDeltaX(),
-    (T) converter.getPhysDeltaT(),
-    (T) converter.getCharPhysLength(),
-    (T) converter.getCharPhysVelocity(),
-    (T) converter.getPhysViscosity(),
-    (T) converter.getPhysDensity()
-  );
-
-  // Prints the converter log as console output
-  converter.print();
-
-  // === 2nd Step: Prepare Geometry ===
-  // Instantiation of a cuboidGeometry with weights
-  BlockData<2,T,T>& blocco = vtiReader.getBlockData();
-  BlockDataF2D<T,T> blockData(blocco);
-  IndicatorBlockData2Dvti<T> ind(blocco, extentSamplePhys, originSamplePhys,
-                                 deltaRsample, false);
-
-  // Indicator containing porous medium, inlet and outlet zones
-  inletLength *= length[0]; // computing inlet size
-  outletLength *= length[0]; // computing outlet size
-  IndicatorCuboid2D<T> domain( length[0] + inletLength + outletLength, length[1],
-                               { ( length[0] + outletLength - inletLength )/2., length[1]/2. }, 0);
-
-  // Creating cuboid geometry from domain indicator and voxel size
-#ifdef PARALLEL_MODE_MPI
-  CuboidDecomposition2D<T> cuboidDecomposition( domain, converter.getPhysDeltaX(), singleton::mpi().getSize() );
-#else
-  CuboidDecomposition2D<T> cuboidDecomposition( domain, converter.getPhysDeltaX() );
-#endif
-  // Instantiation of a loadBalancer
-  HeuristicLoadBalancer<T> loadBalancer(cuboidDecomposition);
-  loadBalancer.print();
-  // Instantiation of a superGeometry
-  SuperGeometry<T, 2> superGeometry(cuboidDecomposition, loadBalancer);
-  prepareGeometry(converter, ind, superGeometry);
-
-  // === 3rd Step: Prepare Lattice ===
-  SuperLattice<T, NSDESCRIPTOR> sLatticeNS(converter, superGeometry);
-  SuperLattice<T, ACDESCRIPTOR> sLatticeAC(converterAC, superGeometry);
-  SuperLatticeCoupling coupling(LiangPostProcessor {},
-                                names::NavierStokes {}, sLatticeNS,
-                                names::Component1 {}, sLatticeAC);
-  coupling.restrictTo(superGeometry.getMaterialIndicator({1, 4}));
-
-  SuperLatticeCoupling velocityCoupling(VelocityCoupling{},
-                                         names::NavierStokes {}, sLatticeNS,
-                                         names::Component1 {}, sLatticeAC);
-  velocityCoupling.restrictTo(superGeometry.getMaterialIndicator({3}));
-
-  prepareLattice(sLatticeNS, sLatticeAC, coupling, converter, superGeometry);
-
-  // === 4th Step: Main Loop with Timer ===
-  int iT = 0;
-  clout << "starting simulation..." << std::endl;
-  int maxIter = converter.getLatticeTime(maxPhysTime)+1;
-  util::Timer<T> timer(maxIter, superGeometry.getStatistics().getNvoxel());
+  util::Timer<T> timer(iTmax, myCase.getGeometry().getStatistics().getNvoxel());
   timer.start();
 
-  for (iT = 0; iT <= maxIter; ++iT) {
-    setBoundaryValues(sLatticeNS, sLatticeAC, converter, superGeometry, iT);
+  for ( std::size_t iT=0; iT<=iTmax; ++iT ) {
+    /// === Step 8.1: Update the Boundary Values and Fields at Times ===
+    setTemporalValues(myCase, iT);
 
-    // Collide and stream (and coupling) execution
+    /// === Step 8.2: Collide and Stream Execution ===
     sLatticeNS.collideAndStream();
     sLatticeAC.collideAndStream();
 
     sLatticeAC.getCommunicator(stage::PreCoupling()).communicate();
     sLatticeAC.executePostProcessors(stage::PreCoupling());
     if ( iT%100==0 ) {
-      signedDistanceFunction<stage::IterativePostProcess>(sLatticeAC,superGeometry,interfaceThickness);
+      signedDistanceFunction<stage::IterativePostProcess>(myCase);
       sLatticeAC.executePostProcessors(stage::PhiLimiter());
     }
     sLatticeAC.getCommunicator(stage::PreCoupling()).communicate();
 
-    coupling.apply();
+    myCase.getOperator("Coupling").apply();
 
-    velocityCoupling.apply();
+    myCase.getOperator("VeloCoupling").apply();
 
-    T uMax = helperConvectiveU(sLatticeNS, superGeometry, converter);
+    T uMax = helperConvectiveU<T>( myCase );
     sLatticeAC.setParameter<descriptors::MAX_VELOCITY>(uMax);
 
-    // Computation and output of the results
-    getResults(sLatticeNS, sLatticeAC, iT, superGeometry, timer, converter);
+    /// === Step 8.3: Computation and Output of the Results ===
+    getResults(myCase, timer, iT);
 
     if (std::isnan(sLatticeNS.getStatistics().getAverageEnergy())) {
-      clout << "Code Diverged iteration: " << iT << endl;
+      clout << "Code Diverged iteration: " << iT << std::endl;
       break;
     }
   }
   timer.stop();
   timer.printSummary();
+}
 
-  return 0;
+int main(int argc, char* argv[])
+{
+  initialize(&argc, &argv);
+  using T = MyCase::value_t;
+
+  /// === Step 2: Set Parameters ===
+  MyCase::ParametersD myCaseParameters;
+  {
+    using namespace olb::parameters;
+    myCaseParameters.set<RESOLUTION     >(1000);               // resolution inlet [lattice units]
+    myCaseParameters.set<VTI_INPUT      >(std::string("gasStorage2d.vti")); // vti file name
+    myCaseParameters.set<ARRAY_NAME     >(std::string("Tiff Scalars"));     // data array name
+    myCaseParameters.set<LATTICE_RELAXATION_TIME   >(0.52);    // tau liquid [lattice units]
+    myCaseParameters.set<LATTICE_RELAXATION_TIME_PF>(0.8);     // tau mobility [lattice units]
+    myCaseParameters.set<INLET_LENGTH_F  >(0.1);     // length of inlet region; % of total length []
+    myCaseParameters.set<OUTLET_LENGTH_F >(0.1);     // length of outlet region; % of total length []
+    myCaseParameters.set<PRESSURE_DROP  >(50000.);  // pressure drop [physical units]
+    myCaseParameters.set<RHO_LIQUID     >(992.);    // liquid density [physical units]
+    myCaseParameters.set<RHO_VAPOR      >(7.1);     // gas density [physical units]
+    myCaseParameters.set<NU_LIQUID      >(5.5e-7);  // liquid kinematic viscosity [physical units]
+    myCaseParameters.set<NU_VAPOR       >(1.34e-6); // gas kinematic viscosity [physical units]
+    myCaseParameters.set<SURFACE_TENSION>(0.072);   // surface tension [physical units]
+    myCaseParameters.set<C_RHO          >(500.);    // conversion factor density [physical units]
+    myCaseParameters.set<parameters::THETA>(M_PI*40./180.); // contact angle [radians]
+    myCaseParameters.set<MAX_PHYS_T     >(0.012);   // max simulation time [physical units]
+    myCaseParameters.set<PHYS_VTK_ITER_T >(0.012/4000.);   // write simulation output [physical units]
+    myCaseParameters.set<PHYS_STAT_ITER_T>(0.012/4000.);   // simulation statistics time [physical units]
+    myCaseParameters.set<parameters::INTERFACE_WIDTH>(6.); // resolution inlet [lattice units]
+
+    myCaseParameters.set<SCALE>(0.0000004); // scale down of vti to physical size []
+    myCaseParameters.set<DOMAIN_EXTENT>([&] {
+      std::string vtiFile = myCaseParameters.get<VTI_INPUT>();
+      std::string arrayName = myCaseParameters.get<ARRAY_NAME>();
+      BlockVTIreader2D<T,T> vtiReader( vtiFile, arrayName );
+
+      T deltaRsample = myCaseParameters.get<SCALE>();
+      auto cuboidSample = vtiReader.getCuboid();
+
+      Vector<int, 2> extentSample     = cuboidSample.getExtent();
+      Vector<T, 2> extentSamplePhys = {deltaRsample * T(extentSample[0]), deltaRsample * T(extentSample[1])};
+      return extentSamplePhys;
+    });
+    myCaseParameters.set<INLET_LENGTH>([&] {
+      Vector extent = myCaseParameters.get<DOMAIN_EXTENT>();
+      return extent[0]*myCaseParameters.get<INLET_LENGTH_F>();
+    });
+    myCaseParameters.set<OUTLET_LENGTH>([&] {
+      Vector extent = myCaseParameters.get<DOMAIN_EXTENT>();
+      return extent[0]*myCaseParameters.get<OUTLET_LENGTH_F>();
+    });
+  }
+  myCaseParameters.fromCLI(argc, argv);
+
+  /// === Step 3: Create Mesh ===
+  Mesh mesh = createMesh(myCaseParameters);
+
+  /// === Step 4: Create Case ===
+  MyCase myCase(myCaseParameters, mesh);
+
+  /// === Step 5: Prepare Geometry ===
+  prepareGeometry(myCase);
+
+  /// === Step 6: Prepare Lattice ===
+  prepareLattice(myCase);
+
+  /// === Step 7: Definition of Initial, Boundary Values, and Fields ===
+  setInitialValues(myCase);
+
+  /// === Step 8: Simulate ===
+  simulate(myCase);
 }
