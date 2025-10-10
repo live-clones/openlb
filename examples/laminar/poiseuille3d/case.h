@@ -253,7 +253,7 @@ void prepareLattice(MyCase& myCase)
         break;
     }
     if (boundaryType == LOCAL)  boundary::set<boundary::LocalPressure>(lattice, myCase.getGeometry(), 4);
-    else                        boundary::set<boundary::LocalPressure>(lattice, myCase.getGeometry(), 4);
+    else                        boundary::set<boundary::InterpolatedPressure>(lattice, myCase.getGeometry(), 4);
   }
 
   clout << "Prepare Lattice ... OK" << std::endl;
