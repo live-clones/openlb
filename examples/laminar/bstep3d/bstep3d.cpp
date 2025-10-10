@@ -36,7 +36,7 @@ using namespace olb::names;
 // === Step 1: Declarations ===
 using MyCase = Case<
   NavierStokes,
-  Lattice<double,
+  Lattice<float,
           descriptors::D3Q19<>
   >
 >;
@@ -53,18 +53,14 @@ struct PHYS_STEP_ORIGIN : public descriptors::FIELD_BASE<0,1> {};
 Mesh<MyCase::value_t, MyCase::d> createMesh(MyCase::ParametersD& parameters)
 {
   using T = MyCase::value_t;
+
   // setup channel
   const Vector extendChannel = parameters.get<parameters::DOMAIN_EXTENT>();
   const Vector originChannel = parameters.get<parameters::ORIGIN>();
-  std::shared_ptr<IndicatorF3D<T>> channel = std::make_shared<IndicatorCuboid3D<T>>(extendChannel, originChannel);
-  // setup step
-  const Vector originStep = parameters.get<parameters::PHYS_STEP_ORIGIN>();
-  const Vector extendStep = parameters.get<parameters::PHYS_STEP_EXTENT>();
-  std::shared_ptr<IndicatorF3D<T>> step = std::make_shared<IndicatorCuboid3D<T>>(extendStep, originStep);
+  IndicatorCuboid3D<T> channel(extendChannel, originChannel);
 
   const T physDeltaX = parameters.get<parameters::PHYS_DELTA_X>();
-
-  Mesh<T, MyCase::d> mesh(*(channel - step), physDeltaX, singleton::mpi().getSize());
+  Mesh<T, MyCase::d> mesh(channel, physDeltaX, singleton::mpi().getSize());
   mesh.setOverlap(parameters.get<parameters::OVERLAP>());
   return mesh;
 }
@@ -79,24 +75,23 @@ void prepareGeometry(MyCase& myCase)
   using T          = MyCase::value_t;
   auto& parameters = myCase.getParameters();
   auto& geometry  = myCase.getGeometry();
-  // Parameters for the simulation setup
 
   geometry.rename( 0, 2 );
 
   geometry.rename( 2, 1, {1, 1, 1} );
 
-  const Vector channelExtent  = parameters.get<parameters::PHYS_STEP_EXTENT>();
-  const Vector channelOrigin  = parameters.get<parameters::PHYS_STEP_ORIGIN>();
-  const Vector stepExtent     = parameters.get<parameters::DOMAIN_EXTENT>();
-  const Vector stepOrigin     = parameters.get<parameters::DOMAIN_EXTENT>();
+  const Vector channelExtent  = parameters.get<parameters::DOMAIN_EXTENT>();
+  const Vector channelOrigin  = parameters.get<parameters::ORIGIN>();
+  const Vector stepExtent     = parameters.get<parameters::PHYS_STEP_EXTENT>();
+  const Vector stepOrigin     = parameters.get<parameters::PHYS_STEP_ORIGIN>();
   const T physDeltaX          = parameters.get<parameters::PHYS_DELTA_X>();
 
-  std::shared_ptr<IndicatorF3D<T>> step = std::make_shared<IndicatorCuboid3D<T>>( stepExtent, stepOrigin );
+  IndicatorCuboid3D<T> step( stepExtent, stepOrigin );
 
   geometry.rename( 1, 2, step );
 
   // Set material number for inflow
-  const Vector inflowExtent{2 * physDeltaX, channelExtent[1], channelExtent[2]};
+  const Vector inflowExtent{physDeltaX, channelExtent[1], channelExtent[2]};
   const Vector inflowOrigin{-physDeltaX/2., 0., 0.};
   IndicatorCuboid3D<T> inflow( inflowExtent, inflowOrigin );
   geometry.rename( 2, 3, 1, inflow );
@@ -207,12 +202,8 @@ void setTemporalValues(MyCase& myCase,
   auto&             converter  = lattice.getUnitConverter();
   auto&             geometry   = myCase.getGeometry();
   auto&             parameters = myCase.getParameters();
-  const T           maxPhysT   = parameters.get<parameters::MAX_PHYS_T>();
-  const T           physStartT = parameters.get<parameters::PHYS_START_T>();
-  const std::size_t iTUpdate   = parameters.get<parameters::PHYS_BOUNDARY_VALUE_UPDATE_T>();
-
-  // time for smooth start-up
-  std::size_t iTmaxStart = converter.getLatticeTime(physStartT);
+  const std::size_t iTmaxStart = converter.getLatticeTime(parameters.get<parameters::PHYS_START_T>());
+  const std::size_t iTUpdate   = converter.getLatticeTime(parameters.get<parameters::PHYS_BOUNDARY_VALUE_UPDATE_T>());
 
   if ( iT % iTUpdate == 0 && iT <= iTmaxStart ) {
     lattice.setProcessingContext(ProcessingContext::Evaluation);
@@ -221,10 +212,10 @@ void setTemporalValues(MyCase& myCase,
     // SinusStartScale<T,int> StartScale(iTmaxStart, T(1));
 
     // Smooth start curve, polynomial
-    PolynomialStartScale<T, int> startScale( iTmaxStart, T( 1 ) );
+    PolynomialStartScale<T, std::size_t> startScale( iTmaxStart, T( 1 ) );
 
     // Creates and sets the Poiseuille inflow profile using functors
-    int iTvec[1]= {iT};
+    std::size_t iTvec[1]= {iT};
     T frac[1]= {};
     startScale( frac,iTvec );
     std::vector<T> maxVelocity( 3,0 );
@@ -259,8 +250,8 @@ void getResults(MyCase& myCase,
 
   SuperVTMwriter3D<T> vtmWriter( "bstep3d" );
 
-  const int vtkIter  = converter.getLatticeTime(parameters.get<parameters::PHYS_VTK_ITER_T>());
-  const int statIter = converter.getLatticeTime(parameters.get<parameters::PHYS_STAT_ITER_T>());
+  const std::size_t vtkIter  = converter.getLatticeTime(parameters.get<parameters::PHYS_VTK_ITER_T>());
+  const std::size_t statIter = converter.getLatticeTime(parameters.get<parameters::PHYS_STAT_ITER_T>());
 
   if ( iT == 0 ) {
     // Writes the geometry, cuboid no. and rank no. as vti file for visualization
@@ -313,13 +304,17 @@ void simulate(MyCase& myCase)
   auto& lattice     = myCase.getLattice(NavierStokes{});
   const T maxPhysT  = parameters.get<parameters::MAX_PHYS_T>();
 
-  util::Timer<T> timer(lattice.getUnitConverter().getLatticeTime(maxPhysT),
+  const std::size_t iTmax = myCase.getLattice(NavierStokes{}).getUnitConverter().getLatticeTime(
+    parameters.get<parameters::MAX_PHYS_T>()
+  );
+
+  util::Timer<T> timer(iTmax,
                        myCase.getGeometry().getStatistics().getNvoxel());
 
   clout << "Starting simulation..." << std::endl;
   timer.start();
 
-  for (std::size_t iT = 0; iT < lattice.getUnitConverter().getLatticeTime(maxPhysT); ++iT) {
+  for (std::size_t iT = 0; iT < iTmax; ++iT) {
 
     setTemporalValues(myCase, iT);
 
@@ -332,7 +327,6 @@ void simulate(MyCase& myCase)
   lattice.setProcessingContext(ProcessingContext::Evaluation);
   timer.stop();
   timer.printSummary();
-  return;
 }
 
 int main(int argc, char* argv[])
@@ -369,7 +363,7 @@ int main(int argc, char* argv[])
     myCaseParameters.set<PHYS_STEP_EXTENT>({5.0, 0.75, 1.5});
     myCaseParameters.set<PHYS_STEP_ORIGIN>({0., 0., 0.});
 
-    // Statistics
+    // Output
     myCaseParameters.set<PHYS_STAT_ITER_T>(0.2);
     myCaseParameters.set<PHYS_VTK_ITER_T>(0.2);
   }
