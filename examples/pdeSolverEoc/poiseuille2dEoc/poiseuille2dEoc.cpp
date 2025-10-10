@@ -119,7 +119,7 @@ int main( int argc, char* argv[] )
     myCaseParameters.set<parameters::CONVERGED>(false);
     /// Run the simulations
     clout << "Starting next simulation with N = " << myCaseParameters.get<parameters::RESOLUTION>() << std::endl;
-    
+
     /// === Step 3: Create Mesh ===
     Mesh mesh = createMesh(myCaseParameters);
 
@@ -136,8 +136,8 @@ int main( int argc, char* argv[] )
     setInitialValues(myCase);
 
     /// === Step 8: Simulate ===
-    simulate(myCase);  
-  
+    simulate(myCase);
+
   }
 
   gplot.writePNG();
