@@ -407,6 +407,8 @@ bool getResults(MyCase& myCase, std::size_t iT, Timer<MyCase::value_t>& fluidTim
     fluidTimer.update(iT);
     fluidTimer.printStep();
 
+    vtmWriter.write(iT);
+
     // Lattice statistics
     lattice.getStatistics().print(iT, converter.getPhysTime(iT));
 
