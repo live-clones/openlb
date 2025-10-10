@@ -40,7 +40,7 @@ using MyCase = Case<
 >;
 
 using NSBulkDynamics = MultiPhaseIncompressibleBGKdynamics<MyCase::value_t,MyCase::descriptor_t>;
-using PFBulkDynamics = AllenCahnBGKdynamics<MyCase::value_t,MyCase::descriptor_t_of<Component1>>;
+using PFBulkDynamics = ConservativePhaseFieldBGKdynamics<MyCase::value_t,MyCase::descriptor_t_of<Component1>>;
 using Coupling = LiangPostProcessor;
 
 namespace olb::parameters {

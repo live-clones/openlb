@@ -59,14 +59,14 @@ struct IncompressibleConvective;
 template <
   concepts::BaseType T,
   concepts::LatticeDescriptor DESCRIPTOR,
-  typename MixinDynamics = AllenCahnBGKdynamics<T,DESCRIPTOR>
+  typename MixinDynamics = ConservativePhaseFieldBGKdynamics<T,DESCRIPTOR>
 >
 struct PhaseFieldInlet;
 
 template <
   concepts::BaseType T,
   concepts::LatticeDescriptor DESCRIPTOR,
-  typename MixinDynamics = AllenCahnBGKdynamics<T,DESCRIPTOR>
+  typename MixinDynamics = ConservativePhaseFieldBGKdynamics<T,DESCRIPTOR>
 >
 struct PhaseFieldConvective;
 
