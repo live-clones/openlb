@@ -51,7 +51,7 @@ template <typename T, typename DESCRIPTOR, typename TDESCRIPTOR>
 class SuperLatticePhysHeatFlux3D final : public SuperLatticeThermalPhysF3D<T,DESCRIPTOR,TDESCRIPTOR> {
 public:
   SuperLatticePhysHeatFlux3D(SuperLattice<T,TDESCRIPTOR>& sLattice,
-                             const ThermalUnitConverter<T,DESCRIPTOR,TDESCRIPTOR>& converter);
+                             const UnitConverter<T,DESCRIPTOR>& converter);
 };
 
 /// BlockLatticePhysHeatFlux3D returns pointwise phys heat flux on local lattice.
@@ -59,7 +59,7 @@ template <typename T, typename DESCRIPTOR, typename TDESCRIPTOR>
 class BlockLatticePhysHeatFlux3D final : public BlockLatticeThermalPhysF3D<T,DESCRIPTOR,TDESCRIPTOR> {
 public:
   BlockLatticePhysHeatFlux3D(BlockLattice<T,TDESCRIPTOR>& blockLattice,
-                             const ThermalUnitConverter<T,DESCRIPTOR,TDESCRIPTOR>& converter);
+                             const UnitConverter<T,DESCRIPTOR>& converter);
   bool operator() (T output[], const int input[]) override;
 private:
   T _temp; // contains latticeSpecificHeatCapacity * (tau - 0.5) / tau
