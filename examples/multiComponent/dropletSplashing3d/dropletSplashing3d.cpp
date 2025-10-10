@@ -46,12 +46,12 @@ using COUPLING     = PseudopotentialForcedPostProcessor<interaction::Polinomial>
 
 namespace olb::parameters {
 
-  struct RADIUS          : public descriptors::FIELD_BASE<1> { }; // radius of liquid phase [m]
-  struct U_DROPLET       : public descriptors::FIELD_BASE<1> { }; // droplet velocity [m.s-1]
-  struct RELAXATION_TIME : public descriptors::FIELD_BASE<1> { }; // lattice relaxation time 
-  struct MAX_ITER        : public descriptors::FIELD_BASE<1> { }; // amount of time steps to complete simulation
-  struct VTK_ITER        : public descriptors::FIELD_BASE<1> { }; // amount of time steps to save vtk files
-  struct STAT_ITER       : public descriptors::FIELD_BASE<1> { }; // amount of time steps to display simulation parameters
+struct RADIUS          : public descriptors::FIELD_BASE<1> { }; // radius of liquid phase [m]
+struct U_DROPLET       : public descriptors::FIELD_BASE<1> { }; // droplet velocity [m.s-1]
+struct RELAXATION_TIME : public descriptors::FIELD_BASE<1> { }; // lattice relaxation time
+struct MAX_ITER        : public descriptors::FIELD_BASE<1> { }; // amount of time steps to complete simulation
+struct VTK_ITER        : public descriptors::FIELD_BASE<1> { }; // amount of time steps to save vtk files
+struct STAT_ITER       : public descriptors::FIELD_BASE<1> { }; // amount of time steps to display simulation parameters
 
 }
 
@@ -218,7 +218,7 @@ void setInitialValues(MyCase& myCase) {
   AnalyticalConst3D<T,T> _dropletVelocity_y(dropletVelocity_y);
 
   SmoothIndicatorFactoredCircle3D<T,T> dropletVelocity_z(
-    {Lx/2., Ly/2., Lz/2.}, 
+    {Lx/2., Ly/2., Lz/2.},
     radius,
     sqrt(2.)*thickness*converter.getConversionFactorLength(),
     0, {0,0, 0}, 0,
@@ -230,22 +230,22 @@ void setInitialValues(MyCase& myCase) {
 
   AnalyticalConst3D<T,T> vapor (rho_vapor/converter.getConversionFactorDensity());
   SmoothIndicatorFactoredCircle3D<T,T> liquid (
-    {Lx/2., Ly/2., Lz/2.}, 
+    {Lx/2., Ly/2., Lz/2.},
     radius,
     sqrt(2.)*thickness*converter.getConversionFactorLength(),
     0, {0,0,0}, 0,
-    (rho_liquid - rho_vapor)/converter.getConversionFactorDensity() 
+    (rho_liquid - rho_vapor)/converter.getConversionFactorDensity()
   );
 
   SmoothIndicatorCuboid3D<T,T> film(
-    2.*Lx, 2.*Ly, 
-    radius, 
+    2.*Lx, 2.*Ly,
+    radius,
     {Lx/2., Ly/2., 0.},
     sqrt(2.)*thickness*converter.getConversionFactorLength(),
     {0,0,0}
   );
   AnalyticalConst3D<T,T> difference (
-    (rho_liquid - rho_vapor) / converter.getConversionFactorDensity() 
+    (rho_liquid - rho_vapor) / converter.getConversionFactorDensity()
   );
 
   AnalyticalIdentity3D<T,T> fluidDensity(vapor + liquid + film * difference);
@@ -282,7 +282,7 @@ void getResults(
   util::Timer<MyCase::value_t>& timer,
   std::size_t iT
 ) {
-  OstreamManager      clout(std::cout, "getResults"); 
+  OstreamManager      clout(std::cout, "getResults");
 
   using T = MyCase::value_t;
   using DESCRIPTOR = MyCase::descriptor_t;
