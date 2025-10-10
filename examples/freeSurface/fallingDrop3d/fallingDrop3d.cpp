@@ -463,6 +463,6 @@ int main(int argc, char** argv)
   setInitialValues(myCase);
 
   /// === Step 8: Simulate ===
-  simulate(myCase); 
+  simulate(myCase);
 
 }

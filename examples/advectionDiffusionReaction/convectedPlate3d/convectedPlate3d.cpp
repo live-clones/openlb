@@ -31,11 +31,13 @@ using namespace olb;
 using namespace olb::descriptors;
 using namespace olb::names;
 
-namespace olb::parameters{
+namespace olb::parameters {
+
 struct HEIGHT : public descriptors::FIELD_BASE<1> { };
 struct BULK_VELOCITY : public descriptors::FIELD_BASE<1> { };
 struct RESIDUUM : public descriptors::FIELD_BASE<1> { };
 struct DIFFUSIVITY : public descriptors::FIELD_BASE<1> { };
+
 }
 
 using MyCase = Case<
@@ -84,7 +86,7 @@ void prepareGeometry(MyCase& myCase){
   T width = parameters.get<parameters::DOMAIN_EXTENT>()[1];
   T length = parameters.get<parameters::DOMAIN_EXTENT>()[0];
   T dx = parameters.get<parameters::PHYS_DELTA_X>();
-  
+
   {
     Vector<T,3>origin(-eps, -eps, -eps - dx);
     Vector<T,3>extend(eps * T(2.), height + T(2.) * eps, width + T(2.) * eps + T(2.) * dx);
@@ -156,7 +158,7 @@ void setInitialValues(MyCase& myCase) {
 
   auto& superGeometry = myCase.getGeometry();
   auto& adLattice = myCase.getLattice(NavierStokes{});
-  
+
   const T omega = 1.0 / adLattice.getUnitConverter().getLatticeRelaxationTime();
   const auto bulkIndicator = superGeometry.getMaterialIndicator({1, 2, 3, 4, 5});
 
@@ -190,7 +192,7 @@ void errorCalc(MyCase& myCase, MyCase::value_t& relError){
   auto& superGeometry = myCase.getGeometry();
   auto& adLattice = myCase.getLattice(NavierStokes{});
   auto& converter = adLattice.getUnitConverter();
- 
+
 
   T result[3] = {T(), T(), T()};
   int tmp[] = {int()};
@@ -198,7 +200,7 @@ void errorCalc(MyCase& myCase, MyCase::value_t& relError){
   // Compute L2-norm error to the analytic concentration field
   SuperLatticeDensity3D<T,MyCase::descriptor_t_of<NavierStokes>> concentration(adLattice);
  AnalyticalFfromCallableF<MyCase::d, T, T> analyticSol([&] (Vector<T,3> input)->Vector<T,1>{
-  
+
     if (input[0] >= 0.0 && input[1] >= 0.0) {
       return erfc(input[1] / sqrt(4 * converter.getPhysDiffusivity() * input[0] / converter.getCharPhysVelocity()));
     }
@@ -206,7 +208,7 @@ void errorCalc(MyCase& myCase, MyCase::value_t& relError){
       return 0.0;
     }
   });
- 
+
   auto indicatorF = superGeometry.getMaterialIndicator({1});
 
   SuperRelativeErrorL2Norm3D<T> relCErrorL2Norm(concentration, analyticSol, indicatorF);
@@ -233,7 +235,7 @@ void getResults(MyCase& myCase,
   SuperVTMwriter3D<T> vtmWriter("convectedPlate");
   SuperLatticeDensity3D<T,MyCase::descriptor_t_of<NavierStokes>> concentration(adLattice);
   SuperLatticePhysField3D<T,MyCase::descriptor_t_of<NavierStokes>,VELOCITY> velocity(adLattice, adLattice.getUnitConverter().getConversionFactorVelocity());
-  
+
   AnalyticalFfromCallableF<MyCase::d, T, T> analyticSol([&] (Vector<T,3> input)->Vector<T,1>{
     if (input[0] >= 0.0 && input[1] >= 0.0) {
       return erfc(input[1] / sqrt(4 * converter.getPhysDiffusivity() * input[0] / converter.getCharPhysVelocity()));
@@ -242,7 +244,7 @@ void getResults(MyCase& myCase,
       return 0.0;
     }
   });
-  
+
   SuperLatticeFfromAnalyticalF3D<T,MyCase::descriptor_t_of<NavierStokes>> analyticalC(analyticSol, adLattice);
 
   concentration.getName() = "C";
@@ -336,7 +338,7 @@ int main(int argc, char* argv[]) {
     myCaseParameters.set<MAX_PHYS_T                 >( 100000.0);
     myCaseParameters.set<RESIDUUM                   >(    1e-10);
     myCaseParameters.set<DIFFUSIVITY                >(  0.07407);
-    
+
     myCaseParameters.set<PHYS_DELTA_X>([&] {
       return myCaseParameters.get<HEIGHT>()/myCaseParameters.get<RESOLUTION>();
     });
@@ -346,7 +348,7 @@ int main(int argc, char* argv[]) {
     myCaseParameters.set<INTERVAL_CONVERGENCE_CHECK>([&] {
       return myCaseParameters.get<MAX_PHYS_T>()*0.001;
     });
-    
+
   }
   myCaseParameters.fromCLI(argc, argv);
 

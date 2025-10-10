@@ -23,6 +23,7 @@
  */
 
 #include "../poissonNernstPlanckSphere3d.h"
+
 using T = MyCase::value_t;
 
 static Gnuplot<T> gplot(
@@ -130,7 +131,7 @@ int main(int argc, char* argv[]) {
       MyCase::value_t(simuN),
       { errorsPsi[0], errorsPsi[1], errorsPsi[2],
         errorsCation[0], errorsCation[1], errorsCation[2],
-        errorsAnion[0], errorsAnion[1], errorsAnion[2]}, 
+        errorsAnion[0], errorsAnion[1], errorsAnion[2]},
       { "psi L1 abs Error","psi L2 abs Error",
         "psi Linf abs error","conc L1 abs Error","conc L2 abs Error",
         "conc Linf abs error","conc2 L1 abs Error","conc2 L2 abs Error",

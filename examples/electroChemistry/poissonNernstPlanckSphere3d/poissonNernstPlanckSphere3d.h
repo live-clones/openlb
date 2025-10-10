@@ -66,8 +66,8 @@ public:
       T phi = util::atan2(x[1],x[0]);
       T theta = util::acos(x[2]/coord);
       T vel = -sign * physConstants::elementaryCharge<T>() * valence * diffusion / physConstants::boltzmannConstant<T>() / temperature / converter.getConversionFactorVelocity() * psi0 * util::exp( -distY/Debye ) * (-1./Debye);
-      output[0] = vel*util::sin(theta)*util::cos(phi); 
-      output[1] = vel*util::sin(theta)*util::sin(phi); 
+      output[0] = vel*util::sin(theta)*util::cos(phi);
+      output[1] = vel*util::sin(theta)*util::sin(phi);
       output[2] = vel*util::cos(theta);
     }
     return true;
@@ -535,7 +535,7 @@ void getResults(MyCase& myCase,
     latticeAnion.setProcessingContext(ProcessingContext::Evaluation);
     latticePoisson.setProcessingContext(ProcessingContext::Evaluation);
     SuperVTMwriter3D<T> vtmWriter( "poissonNernstPlanckSphere3d" );
-    
+
     const T C0 = parameters.get<parameters::C_0>();
     const T psi0 = parameters.get<parameters::PSI_BC>();
     const T Debye = parameters.get<parameters::DEBYE>();

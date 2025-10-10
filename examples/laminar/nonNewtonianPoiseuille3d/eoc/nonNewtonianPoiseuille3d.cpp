@@ -29,7 +29,7 @@
  * the analytical solution for the Newtonian case.
  * Carreau-Yasuda model is provided as a popular alternative model but still
  * remains untested yet.
- * 
+ *
  * Pass parameter VISCOSITY_MODEL to choose (default=0)
  * 0 -> Newtonian
  * 1 -> Power Law
@@ -60,7 +60,7 @@ void setupAndEOC( MyCase::ParametersD& myCaseParameters,
 
     /// === Step 3: Create Mesh ===
     Mesh mesh = createMesh(myCaseParameters);
-    
+
     /// === Step 4: Create Case ===
     MyCase myCase(myCaseParameters, mesh);
 
@@ -83,7 +83,7 @@ int main(int argc, char* argv[])
   // === 1st Step: Initialization ===
   initialize( &argc, &argv );
   OstreamManager clout( std::cout,"main" );
-  
+
   /// === Step 2: Set Parameters ===
   MyCase::ParametersD myCaseParameters;
   using T = MyCase::value_t;

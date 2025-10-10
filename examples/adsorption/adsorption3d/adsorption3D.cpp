@@ -117,7 +117,7 @@ void prepareLatticeAD(MyCase& myCase) {
   auto& parameters = myCase.getParameters();
   auto& geometry = myCase.getGeometry();
   auto& lattice = myCase.getLattice(Concentration<ID>{});
-  
+
   Vector extend = parameters.get<parameters::DOMAIN_EXTENT>();
   const T Sc = parameters.get<parameters::SCHMIDT_NUMBER>();
   const T Re = parameters.get<parameters::REYNOLDS_NUMBER>();
@@ -169,7 +169,7 @@ void prepareLatticeNS(MyCase& myCase) {
   auto& latticePAD = myCase.getLattice(Concentration<0>{});
   auto& latticeCAD = myCase.getLattice(Concentration<1>{});
   auto& latticeQAD = myCase.getLattice(Concentration<2>{});
-  
+
   Vector extend = parameters.get<parameters::DOMAIN_EXTENT>();
   const T physDeltaX = extend[0]/parameters.get<parameters::RESOLUTION>();
   const T fluidViscosity = parameters.get<parameters::PHYS_CHAR_VISCOSITY>();
@@ -200,7 +200,7 @@ void prepareLatticeNS(MyCase& myCase) {
     communicator.requestOverlap(lattice.getOverlap());
     communicator.exchangeRequests();
   }
-  
+
   auto& coupling = myCase.setCouplingOperator(
     "ParticleTransport",
     AdsorptionFullCoupling3D<AdsorptionReaction<Isotherm::LinearIsotherm>,

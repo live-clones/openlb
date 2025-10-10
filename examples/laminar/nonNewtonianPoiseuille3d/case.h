@@ -74,7 +74,7 @@ Mesh<MyCase::value_t, MyCase::d> createMesh(MyCase::ParametersD& parameters)
   const T physDeltaX  = parameters.get<parameters::PHYS_DELTA_X>();
   const T length      = parameters.get<parameters::LENGTH>();
   const T radius      = parameters.get<parameters::RADIUS>();
-  
+
   Vector<T, 3> center0(T(0), radius, radius);
   Vector<T, 3> center1(length + 0.5 * physDeltaX, radius, radius);
   IndicatorCylinder3D<T> pipe(center0, center1, radius);
@@ -375,7 +375,7 @@ void setInitialValues(MyCase& myCase) {
   using T           = MyCase::value_t;
   auto& geometry    = myCase.getGeometry();
   auto& lattice     = myCase.getLattice(NavierStokes {});
-  auto& converter   = lattice.getUnitConverter();  
+  auto& converter   = lattice.getUnitConverter();
 
   AnalyticalConst3D<T,T> rho(1.);
   std::unique_ptr<AnalyticalF3D<T,T>> profileU = MODEL{}.getLatticeVelocityProfile( myCase );
@@ -519,10 +519,10 @@ Vector<T,3> simulatePoiseuilleWith( MyCase& myCase)
 }
 
 void setGetParameters( MyCase::ParametersD& myCaseParameters, int& argc, char** argv ) {
-  
+
   using namespace olb::parameters;
   using T = MyCase::value_t;
-  
+
   myCaseParameters.set<EOC>(false);
   myCaseParameters.set<VISCOSITY_MODEL>(ViscosityModel::NEWTONIAN);
   myCaseParameters.set<RESOLUTION>(31);
@@ -572,13 +572,13 @@ void setGetParameters( MyCase::ParametersD& myCaseParameters, int& argc, char** 
     return  util::pow(dynamicViscosity,n)
             * util::pow((radius*pressureDrop/8.)
                         * util::pow(n/(n+1),n)
-                        , 1-n);  
+                        , 1-n);
   });  // consistency index in Pa s^n, SI unit
 
   // Casson model parameter
   myCaseParameters.set<K0>(0.07);  // k0 constant (Pa)^0.5, k0^2 corresponds to yield stress
   myCaseParameters.set<K1>([&] {
-    return  util::sqrt(myCaseParameters.get<DYNAMIC_VISCOSITY>());  
+    return  util::sqrt(myCaseParameters.get<DYNAMIC_VISCOSITY>());
   });  // k1 constant (Pa*s)^0.5, k1^2 corresponds to Casson viscosity
 
   // CarreauYasuda model parameter
@@ -586,12 +586,12 @@ void setGetParameters( MyCase::ParametersD& myCaseParameters, int& argc, char** 
   myCaseParameters.set<MODEL_CONSTANT_A>(1.5);  // model constant
   myCaseParameters.set<CHAR_TIME_CONSTANT>(3.313);  // characteristic time constant lambda (s)
   myCaseParameters.set<MU_ZERO>([&] {
-    return myCaseParameters.get<DYNAMIC_VISCOSITY>()*1.45;  
+    return myCaseParameters.get<DYNAMIC_VISCOSITY>()*1.45;
   });  // zero viscosity (Pa*s)
   myCaseParameters.set<MU_INF>([&] {
-    return myCaseParameters.get<DYNAMIC_VISCOSITY>()/10.;  
+    return myCaseParameters.get<DYNAMIC_VISCOSITY>()/10.;
   });  // infinity viscosity (Pa*s)
   myCaseParameters.set<N_PL>(0.708);  // PL fluid index
-  
+
   myCaseParameters.fromCLI(argc, argv);
 }
