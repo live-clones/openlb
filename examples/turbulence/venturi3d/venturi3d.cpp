@@ -143,11 +143,10 @@ void setTemporalValues(MyCase& myCase,
   int iTmaxStart = lattice.getUnitConverter().getLatticeTime( maxPhysT*0.8 );
   int iTperiod = 50;
 
-  if ( iT%iTperiod==0 && iT<= iTmaxStart ) {
-    PolynomialStartScale<T,int> startScale( iTmaxStart, T( 1 ) );
-    int iTvec[1] = { static_cast<std::size_t>(iT) };
+  if (iT % iTperiod == 0 && iT <= iTmaxStart) {
+    PolynomialStartScale<T,std::size_t> startScale( iTmaxStart, T( 1 ) );
     T frac = T();
-    startScale( &frac,iTvec );
+    startScale(&frac, &iT);
 
     // Creates and sets the Poiseuille inflow profile using functors
     CirclePoiseuille3D<T> poiseuilleU( geometry, 3, frac*lattice.getUnitConverter().getCharLatticeVelocity(), T(), lattice.getUnitConverter().getPhysDeltaX() );
