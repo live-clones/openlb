@@ -73,7 +73,7 @@ auto createMesh(PARAMETERS& parameters) {
 
   Mesh<T,3> mesh(channel,
                  extent[1] / parameters.template get<parameters::RESOLUTION>(),
-		 singleton::mpi().getSize());
+         singleton::mpi().getSize());
   mesh.setOverlap(parameters.template get<parameters::OVERLAP>());
   mesh.getCuboidDecomposition().setPeriodicity({false, true, true});
   return mesh;
@@ -142,7 +142,7 @@ void prepareLattice(CASE& myCase) {
   // boundary conditions
   boundary::set<boundary::InterpolatedVelocity>(sLattice, superGeometry, 3);
   boundary::set<boundary::InterpolatedPressure>(sLattice, superGeometry, 4);
-  
+
   sLattice.template setParameter<descriptors::OMEGA>(omega);
   clout << "Prepare Lattice ... OK" << std::endl;
 }
@@ -156,13 +156,13 @@ void setInitialValues(CASE& myCase) {
 
   // Set required porosities
   Vector radiusYZ = parameters.template get<parameters::CONTROLS>();
-  const T radiusX = 0.75*parameters.template get<parameters::ELLIPSOID_VOLUME>() / 
+  const T radiusX = 0.75*parameters.template get<parameters::ELLIPSOID_VOLUME>() /
         (M_PI*radiusYZ[0]*radiusYZ[1]);
   Vector radius{radiusX, radiusYZ[0], radiusYZ[1]};
   Vector radius_plus_eps = radius;
   const T eps = parameters.template get<parameters::SMOOTH_LAYER_THICKNESS>() *
-	        parameters.template get<parameters::DOMAIN_EXTENT>()[1] /
-	        parameters.template get<parameters::RESOLUTION>(); 
+            parameters.template get<parameters::DOMAIN_EXTENT>()[1] /
+            parameters.template get<parameters::RESOLUTION>();
   for (int i=0; i < 3; ++i) {
     radius_plus_eps[i] += eps;
   }
@@ -287,7 +287,7 @@ void simulate(CASE& myCase) {
   auto& superGeometry = myCase.getGeometry();
   auto& converter = sLattice.getUnitConverter();
   auto& parameters = myCase.getParameters();
-  
+
   // === 4th Step: Main Loop with Timer ===
   const T maxPhysT = parameters.template get<parameters::MAX_PHYS_T>();
   util::Timer<T> timer( converter.getLatticeTime( maxPhysT ), superGeometry.getStatistics().getNvoxel() );
@@ -306,7 +306,7 @@ void simulate(CASE& myCase) {
   }
   timer.stop();
   timer.printSummary();
-} 
+}
 
 template <typename CASE>
 void setInitialControls(MyOptiCase& optiCase) {
@@ -395,7 +395,7 @@ int main( int argc, char* argv[] ) {
     myCaseParametersD.template set<PHYS_CHAR_VELOCITY          >([&] {
       return myCaseParametersD.template get<PHYS_CHAR_VISCOSITY>() *
              myCaseParametersD.template get<REYNOLDS>() /
-	     myCaseParametersD.template get<DOMAIN_EXTENT>()[1];
+         myCaseParametersD.template get<DOMAIN_EXTENT>()[1];
     });
     myCaseParametersD.template set<PHYS_CHAR_DENSITY           >(            1.0);
     myCaseParametersD.template set<CONTROLS                    >(   {0.08, 0.08});
@@ -405,7 +405,7 @@ int main( int argc, char* argv[] ) {
       return FieldD<MyCase::value_t,MyCase::descriptor_t,ELLIPSOID_POS>{
         0.5,
         myCaseParametersD.template get<DOMAIN_EXTENT>()[1] / 2.0,
-	myCaseParametersD.template get<DOMAIN_EXTENT>()[2] / 2.0};
+    myCaseParametersD.template get<DOMAIN_EXTENT>()[2] / 2.0};
     });
   }
   MyADfCase::ParametersD myADfCaseParametersD;
@@ -422,7 +422,7 @@ int main( int argc, char* argv[] ) {
     myADfCaseParametersD.template set<PHYS_CHAR_VELOCITY          >([&] {
       return ADf{myADfCaseParametersD.template get<PHYS_CHAR_VISCOSITY>() *
                  myADfCaseParametersD.template get<REYNOLDS>() /
-	         myADfCaseParametersD.template get<DOMAIN_EXTENT>()[1]};
+             myADfCaseParametersD.template get<DOMAIN_EXTENT>()[1]};
     });
     myADfCaseParametersD.template set<PHYS_CHAR_DENSITY           >(                      ADf{1.0});
     myADfCaseParametersD.template set<CONTROLS                    >(        {ADf{0.08}, ADf{0.08}});
@@ -432,14 +432,14 @@ int main( int argc, char* argv[] ) {
       return FieldD<MyADfCase::value_t,MyADfCase::descriptor_t,ELLIPSOID_POS>{
         ADf{0.5},
         ADf{myADfCaseParametersD.template get<DOMAIN_EXTENT>()[1] / 2.0},
-	ADf{myADfCaseParametersD.template get<DOMAIN_EXTENT>()[2] / 2.0}};
+    ADf{myADfCaseParametersD.template get<DOMAIN_EXTENT>()[2] / 2.0}};
     });
   }
   auto mesh = createMesh(myCaseParametersD);
   auto ADfmesh = createMesh(myADfCaseParametersD);
   MyCase myCase(myCaseParametersD, mesh);
   MyADfCase myADfCase(myADfCaseParametersD, ADfmesh);
-  
+
   MyOptiCase optiCase;
   optiCase.setCase<Controlled>(myCase);
   optiCase.setCase<Derivatives>(myADfCase);
