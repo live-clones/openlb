@@ -37,284 +37,445 @@
 
 #include <olb.h>
 
-
 using namespace olb;
 using namespace olb::descriptors;
-using namespace olb::graphics;
-
-using T = double;
-using DESCRIPTOR = D3Q19<VELOCITY,SOURCE>;
-using BulkDynamicsPsi = SourcedAdvectionDiffusionBGKdynamics<T,DESCRIPTOR>;
-using BulkDynamicsConc = AdvectionDiffusionBGKdynamics<T,DESCRIPTOR>;
-
-const T maxPhysT = 10.;// maximal physical temperature
-const T dielectricC = 6.95e-10; //  C/V/m dielectric constant: extent to which a material holds or concentrates electric flux
-const T Faraday = 96485.33;  // C/mol  Faraday constant: quotient of the total electric charge (q) by the amount (n) of elementary charge carriers in any given sample of matter
-const T valence = 1.;// valence: electrons in the outermost shell of an atom
-const T diffusion = 1.e-9;// diffusion: process resulting from random motion of molecules by which there is a net flow of matter from a region of high concentration to a region of low concentration
-const T temperature = 298.15;// temperature in Kelvin
-const T Boltzmann = 1.38065e-23; // VC/K the Bolzmann constant: the proportionality factor that relates the average relative thermal energy of particles in a gas with the thermodynamic temperature of the gas
-const T charge = 1.602177e-19; // C
-const T NA = 6.02e23;// Avogadro number: number of constituent particles in a sample
-const T psi0 = -0.02; // V electric potential
-const T C0 = 0.01; // mol/L  molar concentration
-const T Debye = util::sqrt(dielectricC*Boltzmann*temperature/2./charge/charge/valence/valence/C0/NA);// the debye length is a measure of the charge carriers electrostatic effect in a solution and how far the electostatic effect persists
-const T width = Debye*13.;// distance between the outer solid bodies and the domain boundaries
-const T length = width/4.;
-
-//the relative error norms
-T psiL1RelError = 0;
-T psiL2RelError = 0;
-T psiLinfRelError = 0;
-
-T concL1RelError = 0;
-T concL2RelError = 0;
-T concLinfRelError = 0;
-
-T conc2L1RelError = 0;
-T conc2L2RelError = 0;
-T conc2LinfRelError = 0;
+using namespace olb::names;
 
 // Analytical Profile for electric potential
 template <typename T, typename S, typename DESCRIPTOR>
- class PotentialProfile1D : public AnalyticalF3D<T, S>
-    {
-    private:
-        T y0, y1;
-        UnitConverter<T, DESCRIPTOR> const &converter;
-    public:
-        PotentialProfile1D(T y0_, T y1_, UnitConverter<T, DESCRIPTOR> const &converter_) : AnalyticalF3D<T, S>(1),
-                                                                          y0(y0_), y1(y1_), converter(converter_)
-        {
-            this->getName() = "PotentialProfile1D";
-        };
+class PotentialProfile1D : public AnalyticalF3D<T, S>
+{
+private:
+  T y0, y1, psi0, Debye;
+  UnitConverter<T, DESCRIPTOR> const &converter;
+public:
+  PotentialProfile1D(T y0_, T y1_, T psi0_, T Debye_, UnitConverter<T, DESCRIPTOR> const &converter_) :
+  AnalyticalF3D<T, S>(1), y0(y0_), y1(y1_), psi0(psi0_), Debye(Debye_), converter(converter_)
+  {
+    this->getName() = "PotentialProfile1D";
+  };
 
-        bool operator()(T output[1], const S x[3])
-        {
-            T distY = x[1] - y0;
-            output[0] = psi0 * util::exp( -distY/Debye );
-            return true;
-        };
-    };
+  bool operator()(T output[1], const S x[3])
+  {
+    T distY = x[1] - y0;
+    output[0] = psi0 * util::exp( -distY/Debye );
+    return true;
+  };
+};
 
 // Analytical Profile for ion concentrations
 template <typename T, typename S, typename DESCRIPTOR>
-    class ConcentrationProfile1D : public AnalyticalF3D<T, S>
-    {
-    private:
-        T valence;
-        PotentialProfile1D<T,T,DESCRIPTOR> &potential;
-
-    public:
-        ConcentrationProfile1D(T valence_, PotentialProfile1D<T,T,DESCRIPTOR> &potential_) : AnalyticalF3D<T, S>(1),
-                                                                          valence(valence_), potential(potential_)
-        {
-            this->getName() = "ConcentrationProfile1D";
-        };
-
-        bool operator()(T output[1], const S x[3])
-        {
-            T psi[1];
-            potential(psi,x);
-            output[0] = C0 * util::exp(-charge*valence*psi[0]/Boltzmann/temperature);
-            return true;
-        };
-    };
-
-void prepareGeometry( T eps,
-                      SuperGeometry<T,3>& superGeometry )
+class ConcentrationProfile1D : public AnalyticalF3D<T, S>
 {
+private:
+  T C0, valence, temperature;
+  PotentialProfile1D<T,T,DESCRIPTOR> &potential;
+
+public:
+  ConcentrationProfile1D(T C0_, T valence_, T temperature_, PotentialProfile1D<T,T,DESCRIPTOR> &potential_) :
+  AnalyticalF3D<T, S>(1), C0(C0_), valence(valence_), temperature(temperature_), potential(potential_)
+  {
+    this->getName() = "ConcentrationProfile1D";
+  };
+
+  bool operator()(T output[1], const S x[3])
+  {
+    T psi[1];
+    potential(psi,x);
+    output[0] = C0 * util::exp(-physConstants::elementaryCharge<T>()*valence*psi[0]/physConstants::boltzmannConstant<T>()/temperature);
+    return true;
+  };
+};
+
+using MyCase = Case<
+  Poisson, Lattice<double, descriptors::D3Q19<VELOCITY,SOURCE>>,
+  Concentration<0>, Lattice<double, descriptors::D3Q19<VELOCITY,SOURCE>>,
+  Concentration<1>, Lattice<double, descriptors::D3Q19<VELOCITY,SOURCE>>
+>;
+
+namespace olb::parameters {
+
+struct IONS_RELAXATION_TIME : public descriptors::FIELD_BASE<1> { };
+struct POISSON_RELAXATION_TIME : public descriptors::FIELD_BASE<1> { };
+struct RESIDUUM : public descriptors::FIELD_BASE<1> { };
+struct DIFFUSION : public descriptors::FIELD_BASE<1> { };
+struct VALENCE : public descriptors::FIELD_BASE<1> { };
+struct TEMPERATURE : public descriptors::FIELD_BASE<1> { };
+struct DIELECTRIC_CONST : public descriptors::FIELD_BASE<1> { };
+struct C_0 : public descriptors::FIELD_BASE<1> { };
+struct PSI_BC : public descriptors::FIELD_BASE<1> { };
+struct DEBYE : public descriptors::FIELD_BASE<1> { };
+struct CB_CATION : public descriptors::FIELD_BASE<1> { };
+struct CB_ANION : public descriptors::FIELD_BASE<1> { };
+struct ERROR_NORMS_PSI : public descriptors::FIELD_BASE<3> { };
+struct ERROR_NORMS_CATION : public descriptors::FIELD_BASE<3> { };
+struct ERROR_NORMS_ANION : public descriptors::FIELD_BASE<3> { };
+struct HAS_CONVERGED : public descriptors::TYPED_FIELD_BASE<bool,1> { };
+struct POISSON_LOOP : public descriptors::TYPED_FIELD_BASE<bool,1> { };
+struct POISSON_LOOP_PER_TOTAL_TIME_STEP : public descriptors::TYPED_FIELD_BASE<int,1> { };
+struct INTERVAL : public descriptors::FIELD_BASE<1> { };
+
+}
+
+Mesh<MyCase::value_t,MyCase::d> createMesh(MyCase::ParametersD& parameters) {
+  using T = MyCase::value_t;
+  Vector extend = parameters.get<parameters::DOMAIN_EXTENT>();
+  const T physDeltaX = extend[1]/parameters.get<parameters::RESOLUTION>();
+
+  extend[2] = 5*physDeltaX;
+  Vector<T,3> origin( 0,0,0 );
+  IndicatorCuboid3D<T> cuboid( extend, origin );
+
+  Mesh<T,MyCase::d> mesh(cuboid, physDeltaX, singleton::mpi().getSize());
+  mesh.setOverlap(parameters.get<parameters::OVERLAP>());
+  mesh.getCuboidDecomposition().setPeriodicity({true,false,true});
+  return mesh;
+}
+
+void prepareGeometry(MyCase& myCase) {
   OstreamManager clout( std::cout,"prepareGeometry" );
   clout << "Prepare Geometry ..." << std::endl;
 
-  superGeometry.rename( 0,2 );
-  superGeometry.rename( 2,1,{0,1,0} );
-  superGeometry.clean();
+  using T = MyCase::value_t;
+  auto& parameters = myCase.getParameters();
+  auto& geometry = myCase.getGeometry();
 
-  Vector<T,3> extend(length, 2*eps, 5*eps);
+  const Vector extend = parameters.get<parameters::DOMAIN_EXTENT>();
+  const T physDeltaX = extend[1]/parameters.get<parameters::RESOLUTION>();
+
+  geometry.rename( 0,2 );
+  geometry.rename( 2,1,{0,1,0} );
+  geometry.clean();
+
+  Vector<T,3> extendI(extend[0], 2*physDeltaX, 5*physDeltaX);
   Vector<T,3> origin;
-  IndicatorCuboid3D<T> inlet( extend, origin );
-  superGeometry.rename( 2,3,1,inlet );
+  IndicatorCuboid3D<T> inlet( extendI, origin );
+  geometry.rename( 2,3,1,inlet );
 
-  origin[1] = width-2*eps;
-  IndicatorCuboid3D<T> outlet( extend, origin );
-  superGeometry.rename( 2,4,1,outlet );
+  origin[1] = extend[1]-2*physDeltaX;
+  IndicatorCuboid3D<T> outlet( extendI, origin );
+  geometry.rename( 2,4,1,outlet );
 
   // Removes all not needed boundary voxels outside the surface
-  superGeometry.clean();
+  geometry.clean();
   // Removes all not needed boundary voxels inside the surface
-  superGeometry.innerClean();
-  superGeometry.checkForErrors();
-  superGeometry.getStatistics().print();
+  geometry.innerClean();
+  geometry.checkForErrors();
+  geometry.getStatistics().print();
   clout << "Prepare Geometry ... OK" << std::endl;
 }
 
-void prepareLatticePoisson( SuperLattice<T, DESCRIPTOR>& sLattice,
-                            SuperGeometry<T,3>& superGeometry )
-{
+void prepareLatticePoisson(MyCase& myCase) {
+  OstreamManager clout( std::cout,"prepareLattice" );
+  clout << "Prepare Lattice Poisson..." << std::endl;
 
-  OstreamManager clout( std::cout,"prepareLatticePoisson" );
-  //clout << "Prepare Lattice Poisson..." << std::endl;
+  using T = MyCase::value_t;
+  using DESCRIPTOR = MyCase::descriptor_t_of<Poisson>;
+  auto& parameters = myCase.getParameters();
+  auto& geometry = myCase.getGeometry();
+  auto& lattice = myCase.getLattice(Poisson{});
 
-  const T omega = sLattice.getUnitConverter().getLatticeRelaxationFrequency();
+  const int N = parameters.get<parameters::RESOLUTION>();
+  const T relaxationTimePoisson = parameters.get<parameters::POISSON_RELAXATION_TIME>();
+  Vector extend = parameters.get<parameters::DOMAIN_EXTENT>();
+  const T charPhysVelocity = parameters.get<parameters::PHYS_CHAR_VELOCITY>();
+
+  // Set up a unit converter with the characteristic physical units
+  lattice.setUnitConverter<UnitConverterFromResolutionAndRelaxationTime<T, DESCRIPTOR>>(
+    N,
+    relaxationTimePoisson,
+    extend[1],
+    charPhysVelocity,
+    1.,
+    1.
+  );
+  lattice.getUnitConverter().print();
+
+  const T omega = lattice.getUnitConverter().getLatticeRelaxationFrequency();
 
   // Material=1,3,4 -->bulk dynamics
-  sLattice.defineDynamics<BulkDynamicsPsi>(superGeometry.getMaterialIndicator({1, 3, 4}));
+  lattice.defineDynamics<SourcedAdvectionDiffusionBGKdynamics>(geometry.getMaterialIndicator({1, 3, 4}));
 
   // Material=3,4 -->Dirichlet boundary for electric potential
-  boundary::set<boundary::AdvectionDiffusionDirichlet>(sLattice, superGeometry, 3);
-  boundary::set<boundary::AdvectionDiffusionDirichlet>(sLattice, superGeometry, 4);
+  boundary::set<boundary::AdvectionDiffusionDirichlet>(lattice, geometry, 3);
+  boundary::set<boundary::AdvectionDiffusionDirichlet>(lattice, geometry, 4);
 
+  lattice.setParameter<descriptors::OMEGA>(omega);
+
+  clout << "Prepare Lattice Poisson ... OK" << std::endl;
+}
+
+template<int ID>
+void prepareLatticeNernstPlanck(MyCase& myCase) {
+  OstreamManager clout( std::cout,"prepareLattice" );
+  clout << "Prepare Lattice Nernst-Planck ..." << std::endl;
+
+  using T = MyCase::value_t;
+  using DESCRIPTOR = MyCase::descriptor_t_of<Concentration<ID>>;
+  auto& parameters = myCase.getParameters();
+  auto& geometry = myCase.getGeometry();
+  auto& lattice = myCase.getLattice(Concentration<ID>{});
+
+  const int N = parameters.get<parameters::RESOLUTION>();
+  const T relaxationTime = parameters.get<parameters::IONS_RELAXATION_TIME>();
+  Vector extend = parameters.get<parameters::DOMAIN_EXTENT>();
+  const T charPhysVelocity = parameters.get<parameters::PHYS_CHAR_VELOCITY>();
+  const T diffusion = parameters.get<parameters::DIFFUSION>();
+
+  // Set up a unit converter with the characteristic physical units
+  lattice.template setUnitConverter<UnitConverterFromResolutionAndRelaxationTime<T, DESCRIPTOR>>(
+    N,
+    relaxationTime,
+    extend[1],
+    charPhysVelocity,
+    diffusion,
+    1.
+  );
+  lattice.getUnitConverter().print();
+
+  const T omega = lattice.getUnitConverter().getLatticeRelaxationFrequency();
+
+  // Material=1, 4 -->bulk dynamics
+  lattice.template defineDynamics<AdvectionDiffusionBGKdynamics>(geometry.getMaterialIndicator({1, 4}));
+
+  // Material=3 -->Bounce Back (Zero Gradient)
+  lattice.template defineDynamics<BounceBack>(geometry, 3);
+
+  // Material=4 -->Dirichlet boundary for concentrations
+  boundary::set<boundary::AdvectionDiffusionDirichlet>(lattice, geometry, 4);
+
+  lattice.template setParameter<descriptors::OMEGA>(omega);
+
+  clout << "Prepare Lattice Nernst-Planck ... OK" << std::endl;
+}
+
+void prepareLatticeCoupling(MyCase& myCase) {
+  using T = MyCase::value_t;
+  auto& parameters = myCase.getParameters();
+  auto& geometry = myCase.getGeometry();
+  auto& latticePoisson = myCase.getLattice(Poisson{});
+  auto& latticeCation = myCase.getLattice(Concentration<0>{});
+  auto& latticeAnion = myCase.getLattice(Concentration<1>{});
+  const T diffusion = parameters.get<parameters::DIFFUSION>();
+  const T valence = parameters.get<parameters::VALENCE>();
+  const T temperature = parameters.get<parameters::TEMPERATURE>();
+  const T dielectricC = parameters.get<parameters::DIELECTRIC_CONST>();
+  const T npVelCoeff = physConstants::elementaryCharge<T>() * valence * diffusion / physConstants::boltzmannConstant<T>() / temperature / latticeCation.getUnitConverter().getConversionFactorVelocity();
+  const T sourceCoeff = 1./dielectricC * physConstants::faradayConstant<T>() * valence * latticePoisson.getUnitConverter().getConversionFactorTime();
+  auto& coupling = myCase.setCouplingOperator(
+    "PNP",
+    PNPCoupling<T>{},
+    names::Concentration0{}, latticeCation,
+    names::Concentration1{}, latticePoisson,
+    names::Concentration2{}, latticeAnion);
+  coupling.setParameter<PNPCoupling<T>::DX>(latticePoisson.getUnitConverter().getPhysDeltaX());
+  coupling.setParameter<PNPCoupling<T>::NPVELCOEFF>(npVelCoeff);
+  coupling.setParameter<PNPCoupling<T>::POISSONCOEFF>(sourceCoeff);
+  coupling.setParameter<PNPCoupling<T>::OMEGA>(latticePoisson.getUnitConverter().getLatticeRelaxationFrequency());
+  coupling.restrictTo(geometry.getMaterialIndicator({1}));
+}
+
+void setInitialValuesPoisson(MyCase& myCase) {
+  using T = MyCase::value_t;
+  auto& geometry = myCase.getGeometry();
+  auto& lattice = myCase.getLattice(Poisson{});
+  auto& parameters = myCase.getParameters();
+
+  const T psi0 = parameters.get<parameters::PSI_BC>();
   AnalyticalConst3D<T,T> rhoF( psi0 );
   AnalyticalConst3D<T,T> rho0( 0 );
   std::vector<T> velocity( 3,T() );
   AnalyticalConst3D<T,T> uF( velocity );
-  sLattice.defineField<descriptors::VELOCITY>(superGeometry.getMaterialIndicator({0, 1, 3, 4}),uF);
-  sLattice.defineField<descriptors::SOURCE>(superGeometry.getMaterialIndicator({0, 1, 3, 4}),rho0);
+  lattice.defineField<descriptors::VELOCITY>(geometry.getMaterialIndicator({0, 1, 3, 4}),uF);
+  lattice.defineField<descriptors::SOURCE>(geometry.getMaterialIndicator({0, 1, 3, 4}),rho0);
 
-  sLattice.iniEquilibrium( superGeometry, 3, rhoF, uF );
-  sLattice.defineRhoU( superGeometry, 3, rhoF, uF );
+  lattice.iniEquilibrium( geometry, 3, rhoF, uF );
+  lattice.defineRhoU( geometry, 3, rhoF, uF );
 
-  auto bulkIndicator = superGeometry.getMaterialIndicator({0, 1, 4});
-  sLattice.iniEquilibrium( bulkIndicator, rho0, uF );
-  sLattice.defineRhoU( bulkIndicator, rho0, uF );
+  auto bulkIndicator = geometry.getMaterialIndicator({0, 1, 4});
+  lattice.iniEquilibrium( bulkIndicator, rho0, uF );
+  lattice.defineRhoU( bulkIndicator, rho0, uF );
 
-  sLattice.setParameter<descriptors::OMEGA>(omega);
-
-  sLattice.initialize();
+  // Make the lattice ready for simulation
+  lattice.initialize();
 }
 
-void prepareLatticeNernstPlanck( SuperLattice<T, DESCRIPTOR>& sLattice,
-                                 SuperGeometry<T,3>& superGeometry,
-                                 T CB, T sign )
-{
+void setInitialValuesCation(MyCase& myCase) {
+  OstreamManager clout( std::cout,"setInitialValuesCation" );
+  using T = MyCase::value_t;
+  auto& parameters = myCase.getParameters();
+  auto& geometry = myCase.getGeometry();
+  auto& lattice = myCase.getLattice(Concentration<0>{});
 
-  OstreamManager clout( std::cout,"prepareLatticeNernstPlanck" );
-  clout << "Prepare Lattice Nernst-Planck..." << std::endl;
-
-  const T omega = sLattice.getUnitConverter().getLatticeRelaxationFrequency();
-
-  // Material=1, 4 -->bulk dynamics
-  sLattice.defineDynamics<BulkDynamicsConc>(superGeometry.getMaterialIndicator({1, 4}));
-
-  // Material=3 -->Bounce Back (Zero Gradient)
-  sLattice.defineDynamics<BounceBack>(superGeometry, 3);
-
-  // Material=4 -->Dirichlet boundary for concentrations
-  boundary::set<boundary::AdvectionDiffusionDirichlet>(sLattice, superGeometry, 4);
-
+  const T C0 = parameters.get<parameters::C_0>();
   AnalyticalConst3D<T,T> rhoF( C0 );
   AnalyticalConst3D<T,T> rho0( 0 );
   std::vector<T> velocity( 3,T() );
   AnalyticalConst3D<T,T> uF( velocity );
-  sLattice.defineField<descriptors::VELOCITY>(superGeometry.getMaterialIndicator({0, 1, 3, 4}),uF);
+  lattice.defineField<descriptors::VELOCITY>(geometry.getMaterialIndicator({0, 1, 3, 4}),uF);
 
+  const T CB = parameters.get<parameters::CB_CATION>();
   AnalyticalConst3D<T,T> rhoB( CB );
   clout << "Concentration at boundary: " << CB << std::endl;
 
-  sLattice.iniEquilibrium( superGeometry, 4, rhoF, uF );
-  sLattice.defineRhoU( superGeometry, 4, rhoF, uF );
+  lattice.iniEquilibrium( geometry, 4, rhoF, uF );
+  lattice.defineRhoU( geometry, 4, rhoF, uF );
 
-  auto bulkIndicator1 = superGeometry.getMaterialIndicator({0,1,3});
-  sLattice.iniEquilibrium( bulkIndicator1, rho0, uF );
-  sLattice.defineRhoU( bulkIndicator1, rho0, uF );
+  auto bulkIndicator1 = geometry.getMaterialIndicator({0,1,3});
+  lattice.iniEquilibrium( bulkIndicator1, rho0, uF );
+  lattice.defineRhoU( bulkIndicator1, rho0, uF );
 
-  sLattice.setParameter<descriptors::OMEGA>(omega);
-
-  sLattice.initialize();
-
-  clout << "Prepare Lattice Nernst-Planck... OK" << std::endl;
+  // Make the lattice ready for simulation
+  lattice.initialize();
 }
 
-void error( SuperLattice<T, DESCRIPTOR>& sLatticePoisson,
-            SuperLattice<T, DESCRIPTOR>& sLatticeCation,
-            SuperLattice<T, DESCRIPTOR>& sLatticeAnion,
-            SuperGeometry<T,3>& superGeometry, bool var)
-{
-  OstreamManager clout( std::cout,"Errors" );
-  if( var ){
-    sLatticePoisson.setProcessingContext(ProcessingContext::Evaluation);
-    sLatticeCation.setProcessingContext(ProcessingContext::Evaluation);
-    sLatticeAnion.setProcessingContext(ProcessingContext::Evaluation);
-    int tmp[]= { };
-    T result[2] = { };
+void setInitialValuesAnion(MyCase& myCase) {
+  OstreamManager clout( std::cout,"setInitialValuesAnion" );
+  using T = MyCase::value_t;
+  auto& parameters = myCase.getParameters();
+  auto& geometry = myCase.getGeometry();
+  auto& lattice = myCase.getLattice(Concentration<1>{});
 
-    T eps = sLatticeCation.getUnitConverter().getPhysDeltaX();
-    PotentialProfile1D<T,T,DESCRIPTOR> psiSol(0.*eps, width - 0.*eps, sLatticeCation.getUnitConverter());
-    ConcentrationProfile1D<T,T,DESCRIPTOR> concSolCation(valence, psiSol);
-    ConcentrationProfile1D<T,T,DESCRIPTOR> concSolAnion(-valence, psiSol);
-    SuperLatticeDensity3D<T, DESCRIPTOR> psi( sLatticePoisson );
-    SuperLatticeDensity3D<T, DESCRIPTOR> cation( sLatticeCation );
-    SuperLatticeDensity3D<T, DESCRIPTOR> anion( sLatticeAnion );
+  const T C0 = parameters.get<parameters::C_0>();
+  AnalyticalConst3D<T,T> rhoF( C0 );
+  AnalyticalConst3D<T,T> rho0( 0 );
+  std::vector<T> velocity( 3,T() );
+  AnalyticalConst3D<T,T> uF( velocity );
+  lattice.defineField<descriptors::VELOCITY>(geometry.getMaterialIndicator({0, 1, 3, 4}),uF);
 
-    auto material = superGeometry.getMaterialIndicator(1);
-    SuperRelativeErrorL1Norm3D<T>   errorPsiL1Norm(psi, psiSol, *material);
-    SuperRelativeErrorL2Norm3D<T>   errorPsiL2Norm(psi, psiSol, *material);
-    SuperRelativeErrorLinfNorm3D<T> errorPsiLinfNorm(psi, psiSol, *material);
+  const T CB = parameters.get<parameters::CB_ANION>();
+  AnalyticalConst3D<T,T> rhoB( CB );
+  clout << "Concentration at boundary: " << CB << std::endl;
 
-    SuperRelativeErrorL1Norm3D<T>   errorConcL1Norm(cation, concSolCation, *material);
-    SuperRelativeErrorL2Norm3D<T>   errorConcL2Norm(cation, concSolCation, *material);
-    SuperRelativeErrorLinfNorm3D<T> errorConcLinfNorm(cation, concSolCation, *material);
+  lattice.iniEquilibrium( geometry, 4, rhoF, uF );
+  lattice.defineRhoU( geometry, 4, rhoF, uF );
 
-    SuperRelativeErrorL1Norm3D<T>   errorConc2L1Norm(anion, concSolAnion, *material);
-    SuperRelativeErrorL2Norm3D<T>   errorConc2L2Norm(anion, concSolAnion, *material);
-    SuperRelativeErrorLinfNorm3D<T> errorConc2LinfNorm(anion, concSolAnion, *material);
+  auto bulkIndicator1 = geometry.getMaterialIndicator({0,1,3});
+  lattice.iniEquilibrium( bulkIndicator1, rho0, uF );
+  lattice.defineRhoU( bulkIndicator1, rho0, uF );
 
-    errorPsiL1Norm(result,tmp);
-    clout << "Relative Potential-L1-error: " << result[0] << std::endl;
-    psiL1RelError = result[0];
-
-    errorPsiL2Norm(result,tmp);
-    clout << "Relative Potential-L2-error: " << result[0] << std::endl;
-    psiL2RelError = result[0];
-
-    errorPsiLinfNorm(result,tmp);
-    clout << "Relative Potential-Linf-error: " << result[0] << std::endl;
-    psiLinfRelError = result[0];
-
-    errorConcL1Norm(result,tmp);
-    clout << "Relative Cation Conc-L1-error: " << result[0] << std::endl;
-    concL1RelError = result[0];
-
-    errorConcL2Norm(result,tmp);
-    clout << "Relative Cation Conc-L2-error: " << result[0] << std::endl;
-    concL2RelError = result[0];
-
-    errorConcLinfNorm(result,tmp);
-    clout << "Relative Cation Conc-Linf-error: " << result[0] << std::endl;
-    concLinfRelError = result[0];
-
-    errorConc2L1Norm(result,tmp);
-    clout << "Relative Anion Conc-L1-error: " << result[0] << std::endl;
-    conc2L1RelError = result[0];
-
-    errorConc2L2Norm(result,tmp);
-    clout << "Relative Anion Conc-L2-error: " << result[0] << std::endl;
-    conc2L2RelError = result[0];
-
-    errorConc2LinfNorm(result,tmp);
-    clout << "Relative Anion Conc-Linf-error: " << result[0] << std::endl;
-    conc2LinfRelError = result[0];
-  }
+  // Make the lattice ready for simulation
+  lattice.initialize();
 }
 
-void getResultsNernstPlanck( SuperLattice<T, DESCRIPTOR>& sLatticeCation,
-                             SuperLattice<T, DESCRIPTOR>& sLatticeAnion,
-                             SuperLattice<T, DESCRIPTOR>& sLatticePoisson,
-                             std::size_t iT, SuperGeometry<T,3>& superGeometry,
-                             util::Timer<T>& timer, bool hasConverged, Gnuplot<T>& gplot)
+void evaluateError(MyCase& myCase) {
+  OstreamManager clout( std::cout,"error" );
+  using T = MyCase::value_t;
+  using PDESCRIPTOR = MyCase::descriptor_t_of<Poisson>;
+  using CDESCRIPTOR = MyCase::descriptor_t_of<Concentration<0>>;
+  auto& parameters = myCase.getParameters();
+  auto& geometry = myCase.getGeometry();
+  auto& latticePoisson = myCase.getLattice(Poisson{});
+  auto& latticeCation = myCase.getLattice(Concentration<0>{});
+  auto& latticeAnion = myCase.getLattice(Concentration<1>{});
+  latticePoisson.setProcessingContext(ProcessingContext::Evaluation);
+  latticeCation.setProcessingContext(ProcessingContext::Evaluation);
+  latticeAnion.setProcessingContext(ProcessingContext::Evaluation);
+  int tmp[]= { };
+  T result[2] = { };
+
+  const Vector extend = parameters.get<parameters::DOMAIN_EXTENT>();
+  const T valence = parameters.get<parameters::VALENCE>();
+  const T psi0 = parameters.get<parameters::PSI_BC>();
+  const T C0 = parameters.get<parameters::C_0>();
+  const T Debye = parameters.get<parameters::DEBYE>();
+  const T temperature = parameters.get<parameters::TEMPERATURE>();
+  PotentialProfile1D<T,T,PDESCRIPTOR> psiSol(0., extend[1], psi0, Debye, latticePoisson.getUnitConverter());
+  ConcentrationProfile1D<T,T,CDESCRIPTOR> concSolCation(C0, valence, temperature, psiSol);
+  ConcentrationProfile1D<T,T,CDESCRIPTOR> concSolAnion(C0, -valence, temperature, psiSol);
+  SuperLatticeDensity3D<T, PDESCRIPTOR> psi( latticePoisson );
+  SuperLatticeDensity3D<T, CDESCRIPTOR> cation( latticeCation );
+  SuperLatticeDensity3D<T, CDESCRIPTOR> anion( latticeAnion );
+
+  auto material = geometry.getMaterialIndicator(1);
+  SuperRelativeErrorL1Norm3D<T>   errorPsiL1Norm(psi, psiSol, *material);
+  SuperRelativeErrorL2Norm3D<T>   errorPsiL2Norm(psi, psiSol, *material);
+  SuperRelativeErrorLinfNorm3D<T> errorPsiLinfNorm(psi, psiSol, *material);
+
+  SuperRelativeErrorL1Norm3D<T>   errorConcL1Norm(cation, concSolCation, *material);
+  SuperRelativeErrorL2Norm3D<T>   errorConcL2Norm(cation, concSolCation, *material);
+  SuperRelativeErrorLinfNorm3D<T> errorConcLinfNorm(cation, concSolCation, *material);
+
+  SuperRelativeErrorL1Norm3D<T>   errorConc2L1Norm(anion, concSolAnion, *material);
+  SuperRelativeErrorL2Norm3D<T>   errorConc2L2Norm(anion, concSolAnion, *material);
+  SuperRelativeErrorLinfNorm3D<T> errorConc2LinfNorm(anion, concSolAnion, *material);
+
+  Vector<T,3> errorsPsi;
+  Vector<T,3> errorsCation;
+  Vector<T,3> errorsAnion;
+  errorPsiL1Norm(result,tmp);
+  clout << "Relative Potential-L1-error: " << result[0] << std::endl;
+  errorsPsi[0] = result[0];
+
+  errorPsiL2Norm(result,tmp);
+  clout << "Relative Potential-L2-error: " << result[0] << std::endl;
+  errorsPsi[1] = result[0];
+
+  errorPsiLinfNorm(result,tmp);
+  clout << "Relative Potential-Linf-error: " << result[0] << std::endl;
+  errorsPsi[2] = result[0];
+
+  errorConcL1Norm(result,tmp);
+  clout << "Relative Cation Conc-L1-error: " << result[0] << std::endl;
+  errorsCation[0] = result[0];
+
+  errorConcL2Norm(result,tmp);
+  clout << "Relative Cation Conc-L2-error: " << result[0] << std::endl;
+  errorsCation[1] = result[0];
+
+  errorConcLinfNorm(result,tmp);
+  clout << "Relative Cation Conc-Linf-error: " << result[0] << std::endl;
+  errorsCation[2] = result[0];
+
+  errorConc2L1Norm(result,tmp);
+  clout << "Relative Anion Conc-L1-error: " << result[0] << std::endl;
+  errorsAnion[0] = result[0];
+
+  errorConc2L2Norm(result,tmp);
+  clout << "Relative Anion Conc-L2-error: " << result[0] << std::endl;
+  errorsAnion[1] = result[0];
+
+  errorConc2LinfNorm(result,tmp);
+  clout << "Relative Anion Conc-Linf-error: " << result[0] << std::endl;
+  errorsAnion[2] = result[0];
+
+  parameters.set<parameters::ERROR_NORMS_PSI>(errorsPsi);
+  parameters.set<parameters::ERROR_NORMS_CATION>(errorsCation);
+  parameters.set<parameters::ERROR_NORMS_ANION>(errorsAnion);
+}
+
+void getResults(MyCase& myCase,
+                util::Timer<MyCase::value_t>& timer,
+                std::size_t iT)
 {
+  OstreamManager clout( std::cout,"getResults" );
+  using T = MyCase::value_t;
+  using PDESCRIPTOR = MyCase::descriptor_t_of<Poisson>;
+  using CDESCRIPTOR = MyCase::descriptor_t_of<Concentration<0>>;
+  auto& parameters = myCase.getParameters();
+  auto& geometry = myCase.getGeometry();
+  auto& latticePoisson = myCase.getLattice(Poisson{});
+  auto& latticeCation = myCase.getLattice(Concentration<0>{});
+  auto& latticeAnion = myCase.getLattice(Concentration<1>{});
+  const T maxPhysT = parameters.get<parameters::MAX_PHYS_T>();
+  bool hasConverged = parameters.get<parameters::HAS_CONVERGED>();
+  const bool lastTimeStep = ( hasConverged || (iT + 1 == latticeCation.getUnitConverter().getLatticeTime( maxPhysT )) );
+  const Vector extend = parameters.get<parameters::DOMAIN_EXTENT>();
+  const T valence = parameters.get<parameters::VALENCE>();
+  const T psi0 = parameters.get<parameters::PSI_BC>();
+  const T C0 = parameters.get<parameters::C_0>();
+  const T Debye = parameters.get<parameters::DEBYE>();
+  const T temperature = parameters.get<parameters::TEMPERATURE>();
+  const T outputInterval = parameters.get<parameters::INTERVAL>();
 
-  OstreamManager clout( std::cout,"getResultsNernstPlanck" );
-
-  const int vtkIter  = sLatticeCation.getUnitConverter().getLatticeTime( .5 );
-  const int statIter = sLatticeCation.getUnitConverter().getLatticeTime( .5 );
+  const int vtkIter  = latticeCation.getUnitConverter().getLatticeTime( outputInterval );
+  const int statIter = latticeCation.getUnitConverter().getLatticeTime( outputInterval );
 
   if ( iT==0 ) {
     // Writes the geometry, cuboid no. and rank no. as vti file for visualization
     SuperVTMwriter3D<T> vtmWriterCation( "cation" );
-    SuperLatticeCuboid3D<T, DESCRIPTOR> cuboid( sLatticeCation );
-    SuperLatticeRank3D<T, DESCRIPTOR> rank( sLatticeCation );
+    SuperLatticeCuboid3D<T, CDESCRIPTOR> cuboid( latticeCation );
+    SuperLatticeRank3D<T, CDESCRIPTOR> rank( latticeCation );
 
     vtmWriterCation.write( cuboid );
     vtmWriterCation.write( rank );
@@ -328,63 +489,66 @@ void getResultsNernstPlanck( SuperLattice<T, DESCRIPTOR>& sLatticeCation,
   }
 
   // Get statistics
-  if ( iT%statIter == 0 || hasConverged ) {
+  if ( iT%statIter == 0 || lastTimeStep ) {
 
     // Timer console output
     timer.update( iT );
     timer.printStep();
 
     // Lattice statistics console output
-    sLatticeCation.getStatistics().print( iT,sLatticeCation.getUnitConverter().getPhysTime( iT ) );
+    latticeCation.getStatistics().print( iT,latticeCation.getUnitConverter().getPhysTime( iT ) );
   }
 
   // Writes the VTK files
-  if ( iT%vtkIter == 0 || hasConverged) {
-    sLatticeCation.setProcessingContext(ProcessingContext::Evaluation);
-    sLatticeAnion.setProcessingContext(ProcessingContext::Evaluation);
-    sLatticePoisson.setProcessingContext(ProcessingContext::Evaluation);
+  if ( iT%vtkIter == 0 || lastTimeStep) {
+    latticeCation.setProcessingContext(ProcessingContext::Evaluation);
+    latticeAnion.setProcessingContext(ProcessingContext::Evaluation);
+    latticePoisson.setProcessingContext(ProcessingContext::Evaluation);
 
-    sLatticePoisson.scheduleBackgroundOutputVTK([&,iT](auto task) {
+    latticePoisson.scheduleBackgroundOutputVTK([&,iT](auto task) {
       SuperVTMwriter3D<T> vtmWriterPoisson( "poisson" );
-      SuperLatticeDensity3D psi( sLatticePoisson);
+      SuperLatticeDensity3D psi( latticePoisson);
       psi.getName() = "psi";
-      T eps = sLatticeCation.getUnitConverter().getPhysDeltaX();
-      PotentialProfile1D<T,T,DESCRIPTOR> psiSol(0.*eps, width - 0.*eps, sLatticeCation.getUnitConverter());
-      SuperLatticeFfromAnalyticalF3D<T,DESCRIPTOR> analyticalPsi(psiSol, sLatticePoisson);
+      PotentialProfile1D<T,T,PDESCRIPTOR> psiSol(0., extend[1], psi0, Debye, latticePoisson.getUnitConverter());
+      SuperLatticeFfromAnalyticalF3D<T,PDESCRIPTOR> analyticalPsi(psiSol, latticePoisson);
       analyticalPsi.getName() = "analytical potential";
+      SuperGeometryF3D<T> geom(geometry);
+      vtmWriterPoisson.addFunctor(geom);
       vtmWriterPoisson.addFunctor(psi);
       vtmWriterPoisson.addFunctor(analyticalPsi);
       task(vtmWriterPoisson, iT);
     });
 
-    sLatticeCation.scheduleBackgroundOutputVTK([&,iT](auto task) {
+    latticeCation.scheduleBackgroundOutputVTK([&,iT](auto task) {
       SuperVTMwriter3D<T> vtmWriterCation( "cation" );
-      SuperLatticeDensity3D<T,DESCRIPTOR> cation( sLatticeCation );
+      SuperLatticeDensity3D<T,CDESCRIPTOR> cation( latticeCation );
       cation.getName() = "cation";
-      SuperLatticePhysField3D<T,DESCRIPTOR,VELOCITY> velCation( sLatticeCation, sLatticeCation.getUnitConverter().getConversionFactorVelocity() );
+      SuperLatticePhysField3D<T,CDESCRIPTOR,VELOCITY> velCation( latticeCation, latticeCation.getUnitConverter().getConversionFactorVelocity() );
       velCation.getName() = "velCation";
-      T eps = sLatticeCation.getUnitConverter().getPhysDeltaX();
-      PotentialProfile1D<T,T,DESCRIPTOR> psiSol(0.*eps, width - 0.*eps, sLatticeCation.getUnitConverter());
-      ConcentrationProfile1D<T,T,DESCRIPTOR> concSol(valence, psiSol);
-      SuperLatticeFfromAnalyticalF3D<T,DESCRIPTOR> analyticalConcCation(concSol, sLatticeCation);
+      PotentialProfile1D<T,T,PDESCRIPTOR> psiSol(0., extend[1], psi0, Debye, latticePoisson.getUnitConverter());
+      ConcentrationProfile1D<T,T,CDESCRIPTOR> concSolCation(C0, valence, temperature, psiSol);
+      SuperLatticeFfromAnalyticalF3D<T,CDESCRIPTOR> analyticalConcCation(concSolCation, latticeCation);
       analyticalConcCation.getName() = "analytical concentration cation";
+      SuperGeometryF3D<T> geom(geometry);
+      vtmWriterCation.addFunctor(geom);
       vtmWriterCation.addFunctor(cation);
       vtmWriterCation.addFunctor(velCation);
       vtmWriterCation.addFunctor(analyticalConcCation);
       task(vtmWriterCation, iT);
     });
 
-    sLatticeAnion.scheduleBackgroundOutputVTK([&,iT](auto task) {
+    latticeAnion.scheduleBackgroundOutputVTK([&,iT](auto task) {
       SuperVTMwriter3D<T> vtmWriterAnion( "anion" );
-      SuperLatticeDensity3D<T,DESCRIPTOR> anion( sLatticeAnion );
+      SuperLatticeDensity3D<T,CDESCRIPTOR> anion( latticeAnion );
       anion.getName() = "anion";
-      SuperLatticePhysField3D<T,DESCRIPTOR,VELOCITY> velAnion( sLatticeAnion, sLatticeCation.getUnitConverter().getConversionFactorVelocity() );
+      SuperLatticePhysField3D<T,CDESCRIPTOR,VELOCITY> velAnion( latticeAnion, latticeCation.getUnitConverter().getConversionFactorVelocity() );
       velAnion.getName() = "velAnion";
-      T eps = sLatticeCation.getUnitConverter().getPhysDeltaX();
-      PotentialProfile1D<T,T,DESCRIPTOR> psiSol(0.*eps, width - 0.*eps, sLatticeCation.getUnitConverter());
-      ConcentrationProfile1D<T,T,DESCRIPTOR> concSol2(-valence, psiSol);
-      SuperLatticeFfromAnalyticalF3D<T,DESCRIPTOR> analyticalConcAnion(concSol2, sLatticeAnion);
+      PotentialProfile1D<T,T,PDESCRIPTOR> psiSol(0., extend[1], psi0, Debye, latticePoisson.getUnitConverter());
+      ConcentrationProfile1D<T,T,CDESCRIPTOR> concSolAnion(C0, -valence, temperature, psiSol);
+      SuperLatticeFfromAnalyticalF3D<T,CDESCRIPTOR> analyticalConcAnion(concSolAnion, latticeAnion);
       analyticalConcAnion.getName() = "analytical concentration anion";
+      SuperGeometryF3D<T> geom(geometry);
+      vtmWriterAnion.addFunctor(geom);
       vtmWriterAnion.addFunctor(anion);
       vtmWriterAnion.addFunctor(velAnion);
       vtmWriterAnion.addFunctor(analyticalConcAnion);
@@ -392,155 +556,72 @@ void getResultsNernstPlanck( SuperLattice<T, DESCRIPTOR>& sLatticeCation,
     });
    }
 
-  if(hasConverged){
-    gplot.setData (
-          T(sLatticeCation.getUnitConverter().getResolution()),
-          { psiL1RelError, psiL2RelError, psiLinfRelError,
-            concL1RelError, concL2RelError, concLinfRelError,
-            conc2L1RelError, conc2L2RelError, conc2LinfRelError},
-          { "potential L1 Rel Error","potential L2 Rel Error",
-            "potential Linf Rel error","[cation] L1 Rel Error","[cation] L2 Rel Error",
-            "[cation] Linf Rel error","[anion] L1 Rel Error","[anion] L2 Rel Error",
-            "[anion] Linf Rel error"},
-          "top right",
-          { 'p','p','p','p','p','p','p','p','p' } );
-    psiL1RelError = 0;
-    psiL2RelError = 0;
-    psiLinfRelError = 0;
-    concL1RelError = 0;
-    concL2RelError = 0;
-    concLinfRelError = 0;
-    conc2L1RelError = 0;
-    conc2L2RelError = 0;
-    conc2LinfRelError = 0;
-  }
+   if ( lastTimeStep ) {
+     evaluateError(myCase);
+   }
 }
 
-void simulatePoisson(SuperLattice<T, DESCRIPTOR>& sLattice,
-                     SuperGeometry<T,3>& superGeometry,
-                     bool poissonLoop)
-{
+void simulatePoisson(MyCase& myCase) {
+  OstreamManager clout( std::cout,"simulatePoisson" );
+  using T = MyCase::value_t;
+  auto& parameters = myCase.getParameters();
+  auto& geometry = myCase.getGeometry();
+  auto& lattice = myCase.getLattice(Poisson{});
+  const T maxPhysT = parameters.get<parameters::MAX_PHYS_T>();
+  const T residuum = parameters.get<parameters::RESIDUUM>();
+  const bool poissonLoop = parameters.get<parameters::POISSON_LOOP>();
 
-  util::Timer<T> timer( sLattice.getUnitConverter().getLatticeTime( maxPhysT ), superGeometry.getStatistics().getNvoxel() );
-  util::ValueTracer<T> converge( 10, 1.e-9 );
+  util::Timer<T> timer( lattice.getUnitConverter().getLatticeTime( maxPhysT ), geometry.getStatistics().getNvoxel() );
+  util::ValueTracer<T> converge( 10, residuum );
   timer.start();
 
-  for ( std::size_t iT = 0; iT < (!poissonLoop)*1 + (poissonLoop)*sLattice.getUnitConverter().getLatticeTime( maxPhysT ); ++iT ) {
+  for ( std::size_t iT = 0; iT < (!poissonLoop)*1 + (poissonLoop)*lattice.getUnitConverter().getLatticeTime(maxPhysT ); ++iT ) {
 
-    sLattice.collideAndStream();
+    lattice.collideAndStream();
 
     if(converge.hasConverged()) { break; }
 
-    converge.takeValue( sLattice.getStatistics().getAverageRho(), false );
+    converge.takeValue( lattice.getStatistics().getAverageRho(), false );
   }
-
   timer.stop();
 }
 
-void simulatePoissonNernstPlanck3D(int N, bool poissonLoop, Gnuplot<T>& gplot)
-{
+void simulate(MyCase& myCase) {
+  OstreamManager clout( std::cout,"simulate" );
+  using T = MyCase::value_t;
+  auto& parameters = myCase.getParameters();
+  const bool poissonLoop = parameters.get<parameters::POISSON_LOOP>();
+  const int poissonLoopPerTotalSteps = parameters.get<parameters::POISSON_LOOP_PER_TOTAL_TIME_STEP>();
 
-  // === 1st Step: Initialization ===
-  OstreamManager clout( std::cout,"main" );
+  const std::size_t iTmax = myCase.getLattice(Concentration<0>{}).getUnitConverter().getLatticeTime(
+    parameters.get<parameters::MAX_PHYS_T>());
 
-  UnitConverterFromResolutionAndRelaxationTime<T, DESCRIPTOR> const converterPoisson(
-    (int) N,                        // resolution: number of voxels per charPhysL
-    (T)   0.9,                     // latticeRelaxationTime: relaxation time, have to be greater than 0.5!
-    (T)   width,       // charPhysLength: reference length of simulation geometry
-    (T)   0.001,                      // charPhysVelocity: maximal/highest expected velocity during simulation in __m / s__
-    (T)   1.0, // physViscosity: physical kinematic viscosity in __m^2 / s__
-    (T)   1.0                       // physDensity: physical density in __kg / m^3__
-  );
-  // Prints the converter log as console output
-  converterPoisson.print();
-  // Writes the converter log in a file
-  converterPoisson.write("poisson");
-
-  UnitConverterFromResolutionAndRelaxationTime<T, DESCRIPTOR> const converterNernstPlanck(
-    (int) N,                        // resolution: number of voxels per charPhysL
-    (T)   0.9,                     // latticeRelaxationTime: relaxation time, have to be greater than 0.5!
-    (T)   width,       // charPhysLength: reference length of simulation geometry
-    (T)   0.001,                      // charPhysVelocity: maximal/highest expected velocity during simulation in __m / s__
-    (T)   diffusion, // physViscosity: physical kinematic viscosity in __m^2 / s__
-    (T)   1.0                       // physDensity: physical density in __kg / m^3__
-  );
-  // Prints the converter log as console output
-  converterNernstPlanck.print();
-  // Writes the converter log in a file
-  converterNernstPlanck.write("nernstPlanck");
-
-  // === 2nd Step: Prepare Geometry ===
-  T L = converterNernstPlanck.getPhysDeltaX();
-  Vector<T,3> extend( length,width, 5*L );
-  Vector<T,3> origin( 0,0,0 );
-  IndicatorCuboid3D<T> cuboid( extend, origin );
-
-#ifdef PARALLEL_MODE_MPI
-  CuboidDecomposition3D<T> cuboidDecomposition( cuboid, converterNernstPlanck.getPhysDeltaX(), singleton::mpi().getSize() );
-#else
-  CuboidDecomposition3D<T> cuboidDecomposition( cuboid, converterNernstPlanck.getPhysDeltaX(), 1 );
-#endif
-
-  cuboidDecomposition.print();
-  cuboidDecomposition.setPeriodicity({true,false,true});
-
-  HeuristicLoadBalancer<T> loadBalancer( cuboidDecomposition );
-  SuperGeometry<T,3> superGeometry( cuboidDecomposition, loadBalancer );
-  prepareGeometry( converterNernstPlanck.getPhysDeltaX(), superGeometry );
-
-  // === 3rd Step: Prepare Lattice ===
-
-  SuperLattice<T, DESCRIPTOR> sLatticeCation( converterNernstPlanck, superGeometry );
-  SuperLattice<T, DESCRIPTOR> sLatticePoisson( converterPoisson, superGeometry );
-  SuperLattice<T, DESCRIPTOR> sLatticeAnion( converterNernstPlanck, superGeometry );
-
-  T CationWall = C0 * util::exp(-charge*valence*psi0/Boltzmann/temperature);
-  T AnionWall = C0 * util::exp(charge*valence*psi0/Boltzmann/temperature);
-
-  prepareLatticeNernstPlanck( sLatticeCation, superGeometry, CationWall, 1. );
-  prepareLatticeNernstPlanck( sLatticeAnion, superGeometry, AnionWall, -1. );
-  prepareLatticePoisson( sLatticePoisson, superGeometry );
-
-  T npVelCoeff = charge * valence * diffusion / Boltzmann / temperature / converterNernstPlanck.getConversionFactorVelocity();
-  T sourceCoeff = 1./dielectricC * Faraday * valence * converterPoisson.getConversionFactorTime();
-
-  clout << "Debye length [m]: " << Debye << std::endl;
-
-  SuperLatticeCoupling coupling(
-    PNPCoupling<T>{},
-    names::Concentration0{}, sLatticeCation,
-    names::Concentration1{}, sLatticePoisson,
-    names::Concentration2{}, sLatticeAnion);
-  coupling.setParameter<PNPCoupling<T>::DX>(converterPoisson.getPhysDeltaX());
-  coupling.setParameter<PNPCoupling<T>::NPVELCOEFF>(npVelCoeff);
-  coupling.setParameter<PNPCoupling<T>::POISSONCOEFF>(sourceCoeff);
-  coupling.setParameter<PNPCoupling<T>::OMEGA>(converterPoisson.getLatticeRelaxationFrequency());
-  coupling.restrictTo(superGeometry.getMaterialIndicator({1}));
-
-  // === 4th Step: Main Loop with Timer ===
-
-  clout << "starting simulation..." << std::endl;
-  util::Timer<T> timer( converterNernstPlanck.getLatticeTime( maxPhysT ), superGeometry.getStatistics().getNvoxel() );
-  util::ValueTracer<T> converge( 500, 1.e-9 );
+  util::Timer<T> timer(iTmax, myCase.getGeometry().getStatistics().getNvoxel());
+  const T residuum = parameters.get<parameters::RESIDUUM>();
+  util::ValueTracer<T> converge( 500, residuum );
   timer.start();
 
-  for ( std::size_t iT = 0; iT < converterNernstPlanck.getLatticeTime( maxPhysT ); ++iT ) {
+  parameters.set<parameters::HAS_CONVERGED>(false);
+  for (std::size_t iT=0; iT < iTmax; ++iT) {
+    if ( converge.hasConverged() ) {
+      clout << "Simulation converged." << std::endl;
+      parameters.set<parameters::HAS_CONVERGED>(true);
+      getResults(myCase, timer, iT);
+
+      break;
+    }
     // internal Poisson loop. In terms of efficiency choose an appropriate frequency of Poisson equation updates
-    int poissonLoopPerTotalSteps = 5;
     if( iT == 0 || iT%((!poissonLoop)*1 + (poissonLoop)*poissonLoopPerTotalSteps) == 0){
-      simulatePoisson(sLatticePoisson, superGeometry, poissonLoop);
+      simulatePoisson(myCase);
     }
 
-    coupling.apply();
+    myCase.getOperator("PNP").apply();
 
-    sLatticeCation.collideAndStream();
-    sLatticeAnion.collideAndStream();
+    myCase.getLattice(Concentration<0>{}).collideAndStream();
+    myCase.getLattice(Concentration<1>{}).collideAndStream();
 
-    error( sLatticePoisson, sLatticeCation, sLatticeAnion,superGeometry, converge.hasConverged());
-    getResultsNernstPlanck( sLatticeCation, sLatticeAnion, sLatticePoisson, iT, superGeometry, timer, converge.hasConverged(), gplot);
-
-    if(converge.hasConverged()) { break; }
-    converge.takeValue( sLatticePoisson.getStatistics().getAverageRho(), false );
+    getResults(myCase, timer, iT);
+    converge.takeValue( myCase.getLattice(Poisson{}).getStatistics().getAverageRho(), false );
   }
 
   timer.stop();

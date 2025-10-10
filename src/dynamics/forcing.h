@@ -394,6 +394,41 @@ struct LiangTRT {
   using combined_parameters = typename COLLISION::parameters;
 };
 
+struct ConservativePhaseField {
+  static std::string getName() {
+    return "ConservativePhaseFieldForcing";
+  }
+
+  template <typename DESCRIPTOR, typename MOMENTA>
+  using combined_momenta = typename MOMENTA::template type<DESCRIPTOR>;
+
+  template <typename DESCRIPTOR, typename MOMENTA, typename EQUILIBRIUM>
+  using combined_equilibrium = typename EQUILIBRIUM::template type<DESCRIPTOR,MOMENTA>;
+
+  template <typename DESCRIPTOR, typename MOMENTA, typename EQUILIBRIUM, typename COLLISION>
+  struct combined_collision {
+    using MomentaF   = typename MOMENTA::template type<DESCRIPTOR>;
+    using CollisionO = typename COLLISION::template type<DESCRIPTOR,MOMENTA,EQUILIBRIUM>;
+
+    static_assert(COLLISION::parameters::template contains<descriptors::OMEGA>(),
+                  "COLLISION must be parametrized using relaxation frequency OMEGA");
+
+    template <typename CELL, typename PARAMETERS, typename V=typename CELL::value_t>
+    CellStatistic<V> apply(CELL& cell, PARAMETERS& parameters) any_platform {
+      V phi = MomentaF().computeRho(cell);
+      CollisionO().apply(cell, parameters);
+      const V omega = parameters.template get<descriptors::OMEGA>();
+      const auto force = cell.template getField<descriptors::FORCE>();
+      const auto u = cell.template getField<descriptors::VELOCITY>();
+      lbm<DESCRIPTOR>::addAllenCahnForce(cell, omega, force);
+      return {phi, util::normSqr<V,DESCRIPTOR::d>(u)};
+    };
+  };
+
+  template <typename DESCRIPTOR, typename MOMENTA, typename EQUILIBRIUM, typename COLLISION>
+  using combined_parameters = typename COLLISION::parameters;
+};
+
 struct AllenCahn {
   static std::string getName() {
     return "AllenCahnForcing";
@@ -420,9 +455,9 @@ struct AllenCahn {
       const V omega = parameters.template get<descriptors::OMEGA>();
       const auto force = cell.template getField<descriptors::FORCE>();
       const auto u = cell.template getField<descriptors::VELOCITY>();
-      // const auto source = cell.template getField<descriptors::SOURCE>();
+      const auto source = cell.template getField<descriptors::SOURCE>();
       lbm<DESCRIPTOR>::addAllenCahnForce(cell, omega, force);
-      // lbm<DESCRIPTOR>::addAllenCahnSource(cell, omega, source);
+      lbm<DESCRIPTOR>::addAllenCahnSource(cell, omega, source);
       return {phi, util::normSqr<V,DESCRIPTOR::d>(u)};
     };
   };

@@ -181,6 +181,40 @@ public:
   };
 };
 
+template <typename T, typename S, typename DESCRIPTOR>
+class StressTensorTestFlow3D : public AnalyticalF3D<T,S> {
+public:
+  const UnitConverter<S,DESCRIPTOR>& _converter;
+  PressureTestFlow3D<T,S,DESCRIPTOR> _pressureF;
+  StrainRateTestFlow3D<T,S,DESCRIPTOR> _strainRateF;
+
+public:
+  StressTensorTestFlow3D(const UnitConverter<S,DESCRIPTOR>& converter)
+    : AnalyticalF3D<T,S>(9)
+    , _converter(converter)
+    , _pressureF(converter)
+    , _strainRateF(converter)
+  {
+    this->getName() = "StressTensorTestFlow3d";
+  };
+
+  bool operator()(T output[9], const S input[3])
+  {
+    T pressure{};
+    _pressureF(&pressure, input);
+    _strainRateF(output, input);
+
+    for (int i=0; i < 9; ++i) {
+      output[i] *= 2*_converter.getPhysViscosity()*_converter.getPhysDensity();
+    }
+
+    output[0] -= pressure;
+    output[4] -= pressure;
+    output[8] -= pressure;
+
+    return true;
+  };
+};
 
 template <typename T, typename S, typename DESCRIPTOR>
 class DissipationTestFlow3D : public AnalyticalF3D<T,S> {

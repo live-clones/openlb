@@ -29,7 +29,7 @@ using T = MyCase::value_t;
 
 /// Initialize gnuplot
 static Gnuplot<T> gplot(
-  "drag_eoc",
+  "eoc",
   false,
   "set terminal png size 720, 720 font 'Arial,10'",
   Gnuplot<T>::LOGLOG,
@@ -49,28 +49,33 @@ int main(int argc, char* argv[])
   MyCase::ParametersD myCaseParametersD;
   {
     using namespace parameters;
-    myCaseParametersD.set<START_RESOLUTION           >(             11);
-    myCaseParametersD.set<NUM_SIMULATIONS            >(              3);
-
-    myCaseParametersD.set<DOMAIN_EXTENT             >({1.0, 1.0, 1.0});
-    myCaseParametersD.set<PHYS_CHAR_VELOCITY        >(            1.0);
-    myCaseParametersD.set<PHYS_CHAR_VISCOSITY       >(            0.1);
-    myCaseParametersD.set<PHYS_CHAR_DENSITY         >(              1);
-    myCaseParametersD.set<MAX_PHYS_T                >(            6.0);
-    myCaseParametersD.set<RESOLUTION                >(             11);
-    myCaseParametersD.set<LATTICE_CHAR_VELOCITY     >(           0.07);
-    myCaseParametersD.set<ERROR_VELOCITY_L1         >(             0.);
-    myCaseParametersD.set<ERROR_VELOCITY_L2         >(             0.);
-    myCaseParametersD.set<ERROR_VELOCITY_LINF       >(             0.);
-    myCaseParametersD.set<ERROR_PRESSURE_L1         >(             0.);
-    myCaseParametersD.set<ERROR_PRESSURE_L2         >(             0.);
-    myCaseParametersD.set<ERROR_PRESSURE_LINF       >(             0.);
-    myCaseParametersD.set<ERROR_STRAIN_RATE_L1      >(             0.);
-    myCaseParametersD.set<ERROR_STRAIN_RATE_L2      >(             0.);
-    myCaseParametersD.set<ERROR_STRAIN_RATE_LINF    >(             0.);
-    myCaseParametersD.set<ERROR_DISSIPATION_L1      >(             0.);
-    myCaseParametersD.set<ERROR_DISSIPATION_L2      >(             0.);
-    myCaseParametersD.set<ERROR_DISSIPATION_LINF    >(             0.);
+    myCaseParametersD.set<START_RESOLUTION            >(                   11);
+    myCaseParametersD.set<NUM_SIMULATIONS             >(                    3);
+    myCaseParametersD.set<DOMAIN_EXTENT               >(      {1.0, 1.0, 1.0});
+    myCaseParametersD.set<PHYS_CHAR_VELOCITY          >(                  1.0);
+    myCaseParametersD.set<PHYS_CHAR_VISCOSITY         >(                 0.01);
+    myCaseParametersD.set<PHYS_CHAR_DENSITY           >(                    1);
+    myCaseParametersD.set<MAX_PHYS_T                  >(                 50.0);
+    myCaseParametersD.set<PHYS_BOUNDARY_VALUE_UPDATE_T>(                0.001);
+    myCaseParametersD.set<RESOLUTION                  >(                   11);
+    myCaseParametersD.set<LATTICE_CHAR_VELOCITY       >(                 0.07);
+    myCaseParametersD.set<ERROR_VELOCITY_L1           >(                   0.);
+    myCaseParametersD.set<ERROR_VELOCITY_L2           >(                   0.);
+    myCaseParametersD.set<ERROR_VELOCITY_LINF         >(                   0.);
+    myCaseParametersD.set<ERROR_PRESSURE_L1           >(                   0.);
+    myCaseParametersD.set<ERROR_PRESSURE_L2           >(                   0.);
+    myCaseParametersD.set<ERROR_PRESSURE_LINF         >(                   0.);
+    myCaseParametersD.set<ERROR_STRAIN_RATE_L1        >(                   0.);
+    myCaseParametersD.set<ERROR_STRAIN_RATE_L2        >(                   0.);
+    myCaseParametersD.set<ERROR_STRAIN_RATE_LINF      >(                   0.);
+    myCaseParametersD.set<ERROR_DISSIPATION_L1        >(                   0.);
+    myCaseParametersD.set<ERROR_DISSIPATION_L2        >(                   0.);
+    myCaseParametersD.set<ERROR_DISSIPATION_LINF      >(                   0.);
+    myCaseParametersD.set<ERROR_STRESS_L1             >(                   0.);
+    myCaseParametersD.set<ERROR_STRESS_L2             >(                   0.);
+    myCaseParametersD.set<ERROR_STRESS_LINF           >(                   0.);
+    myCaseParametersD.set<GEOMETRY_TYPE               >( GeometryType::sphere);
+    myCaseParametersD.set<BOUNDARY_TYPE               >(BoundaryType::bouzidi);
   }
   myCaseParametersD.fromCLI(argc, argv);
 
@@ -86,6 +91,9 @@ int main(int argc, char* argv[])
   T _errorDisL1[myCaseParametersD.get<parameters::NUM_SIMULATIONS>()];
   T _errorDisL2[myCaseParametersD.get<parameters::NUM_SIMULATIONS>()];
   T _errorDisLInf[myCaseParametersD.get<parameters::NUM_SIMULATIONS>()];
+  T _errorStressL1[myCaseParametersD.get<parameters::NUM_SIMULATIONS>()];
+  T _errorStressL2[myCaseParametersD.get<parameters::NUM_SIMULATIONS>()];
+  T _errorStressLInf[myCaseParametersD.get<parameters::NUM_SIMULATIONS>()];
 
   for(int i = 0; i < myCaseParametersD.get<parameters::NUM_SIMULATIONS>(); ++i) {
     myCaseParametersD.set<parameters::RESOLUTION>(
@@ -125,6 +133,9 @@ int main(int argc, char* argv[])
     _errorDisL1[i] = myCaseParametersD.get<parameters::ERROR_DISSIPATION_L1>();
     _errorDisL2[i] = myCaseParametersD.get<parameters::ERROR_DISSIPATION_L2>();
     _errorDisLInf[i] = myCaseParametersD.get<parameters::ERROR_DISSIPATION_LINF>();
+    _errorStressL1[i] = myCaseParametersD.get<parameters::ERROR_STRESS_L1>();
+    _errorStressL2[i] = myCaseParametersD.get<parameters::ERROR_STRESS_L2>();
+    _errorStressLInf[i] = myCaseParametersD.get<parameters::ERROR_STRESS_LINF>();
   }
 
   for(int i = 0; i < myCaseParametersD.get<parameters::NUM_SIMULATIONS>(); ++i){
@@ -133,13 +144,15 @@ int main(int argc, char* argv[])
                  {_errorVelL1[i], _errorVelL2[i], _errorVelLInf[i],
                   _errorPreL1[i], _errorPreL2[i], _errorPreLInf[i],
                   _errorStrL1[i], _errorStrL2[i], _errorStrLInf[i],
-                  _errorDisL1[i], _errorDisL2[i], _errorDisLInf[i]},
+                  _errorDisL1[i], _errorDisL2[i], _errorDisLInf[i],
+                  _errorStressL1[i], _errorStressL2[i], _errorStressLInf[i]},
                  {"Velocity L1", "Velocity L2", "Velocity LInf",
                   "Pressure L1", "Pressure L2", "Pressure LInf",
                   "Strain rate L1", "Strain rate L2", "Strain rate LInf",
-                  "Dissipation L1", "Dissipation L2", "Dissipation LInf"},
+                  "Dissipation L1", "Dissipation L2", "Dissipation LInf",
+                  "Stress L1", "Stress L2", "Stress LInf"},
          "top right",
-         {'p', 'p', 'p', 'p', 'p', 'p', 'p', 'p', 'p', 'p', 'p', 'p',});
+         {'p', 'p', 'p', 'p', 'p', 'p', 'p', 'p', 'p', 'p', 'p', 'p', 'p', 'p', 'p'});
   }
   gplot.writePNG();
 }

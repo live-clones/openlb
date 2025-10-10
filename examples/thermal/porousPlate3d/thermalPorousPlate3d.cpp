@@ -206,7 +206,6 @@ void prepareLattice(MyCase& myCase) {
   auto& ADElattice    = myCase.getLattice(Temperature{});
 
   const T physCharLength          = parameters.get<parameters::PHYS_CHAR_LENGTH>();
-  const int N                     = parameters.get<parameters::RESOLUTION>();
   const T physDeltaX              = parameters.get<parameters::PHYS_DELTA_X>();
   const T physCharVelocity        = parameters.get<parameters::PHYS_CHAR_VELOCITY>();
   const T physDensity             = parameters.get<parameters::PHYS_CHAR_DENSITY>();
@@ -348,7 +347,6 @@ void getResults(MyCase& myCase,
   const auto& converter = NSElattice.getUnitConverter();
   const T Re            = converter.getReynoldsNumber();
   const T Pr            = converter.getPrandtlNumber();
-  const std::size_t N   = converter.getResolution();
   const T Tcold = converter.getCharPhysLowTemperature();
   const T Thot = converter.getCharPhysHighTemperature();
   const int statIter = converter.getLatticeTime(parameters.get<parameters::PHYS_STAT_ITER_T>());
