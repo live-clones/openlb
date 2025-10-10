@@ -96,16 +96,16 @@ struct ENABLE_AVERAGE_VELOCITY : public descriptors::TYPED_FIELD_BASE<bool, 1> {
 //  distance from cell to velocity sampling point in lattice units
 struct LATTICE_DISTANCE_SAMPLING : public descriptors::FIELD_BASE<1> {};
 
-// time until until statistics sampling in seconds. This value will be multiple by characteristic pysical time in main function.
+// time until until statistics sampling in seconds. This value will be multiple by characteristic physical time in main function.
 struct PHYS_CONVERGE_TIME : public descriptors::FIELD_BASE<1> {};
 
 // statistics sampling time in seconds.
 struct PHYS_STATISTICS_TIME : public descriptors::FIELD_BASE<1> {};
 
-// This value will be multiple by characteristic pysical time and stored in PHYS_CONVERGE_TIME in main function.
+// This value will be multiple by characteristic physical time and stored in PHYS_CONVERGE_TIME in main function.
 struct PHYS_CONVERGE_TIME_BASE : public descriptors::FIELD_BASE<1> {};
 
-// This value will be multiple by characteristic pysical time and stored in PHYS_STATISTICS_TIME in main function.
+// This value will be multiple by characteristic physical time and stored in PHYS_STATISTICS_TIME in main function.
 struct PHYS_STATISTICS_TIME_BASE : public descriptors::FIELD_BASE<1> {};
 
 //HRR Collision paramertes
@@ -416,7 +416,7 @@ void getResults(MyCase& myCase, std::size_t iT, util::Timer<MyCase::value_t>& ti
       SuperLatticePhysField3D<T, DESCRIPTOR, descriptors::WMVELOCITY> wmvelocity(
           sLattice, sLattice.getUnitConverter().getConversionFactorVelocity());
       wmvelocity.getName() = "wmvelocity";
-      SuperGeometryF<T, 3>                                   geom(sGeometry);
+      SuperGeometryF<T, 3> geom(sGeometry);
       vtmWriter.addFunctor(velocity);
       vtmWriter.addFunctor(pressure);
       vtmWriter.addFunctor(sAveragedVel);
