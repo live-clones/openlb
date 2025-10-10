@@ -39,46 +39,128 @@
 // set flag in order to use mrt collision operators instead of bgk
 //#define ENABLE_MRT
 
-#include "../../laminar/poiseuille3d/poiseuille3d.h"
+#include "../../laminar/poiseuille3d/case.h"
 
-/// Initialize gnuplot
-  static Gnuplot<T> gplot(
-    "Velocity_and_StrainRate_eoc",
-    false,
-    "set terminal png size 720, 720 font 'Arial,10'",
-    Gnuplot<T>::LOGLOG,
-    Gnuplot<T>::LINREG);
+void simulatePoiseuilleForEOC(MyCase::ParametersD& parameters, Gnuplot<MyCase::value_t>& gplot) {
+
+  /// === Step 3: Create Mesh ===
+  Mesh mesh = createMesh(parameters);
+  
+  /// === Step 4: Create Case ===
+  MyCase myCase(parameters, mesh);
+  
+  /// === Step 5: Prepare Geometry ===
+  prepareGeometry(myCase);
+  
+  /// === Step 6: Prepare Lattice ===
+  prepareLattice(myCase);
+  
+  /// === Step 7: Definition of Initial, Boundary Values, and Fields ===
+  setInitialValues(myCase);
+  
+  /// === Step 8: Simulate ===
+  simulate(myCase);
+
+  const FlowType      flowType        = parameters.get<parameters::FLOW_TYPE>();
+  const BoundaryType  boundaryType    = parameters.get<parameters::BOUNDARY_TYPE>();
+  const bool          noslipBoundary  = ((boundaryType != FREE_SLIP) && (boundaryType != PARTIAL_SLIP));
+  const size_t        res             = parameters.get<parameters::RESOLUTION>();
+
+  // Gnuplot output
+  if (noslipBoundary) {
+    if (flowType == NON_FORCED){
+      gplot.setData (
+        MyCase::value_t(res),
+        { parameters.get<parameters::VELOCITY_L1_ABS_ERROR>(),
+          parameters.get<parameters::VELOCITY_L2_ABS_ERROR>(),
+          parameters.get<parameters::VELOCITY_LINF_ABS_ERROR>(),
+          parameters.get<parameters::STRAIN_RATE_L1_ABS_ERROR>(),
+          parameters.get<parameters::STRAIN_RATE_L2_ABS_ERROR>(),
+          parameters.get<parameters::STRAIN_RATE_LINF_ABS_ERROR>(),
+          parameters.get<parameters::WSS_L1_ABS_ERROR>(),
+          parameters.get<parameters::WSS_L2_ABS_ERROR>(),
+          parameters.get<parameters::WSS_LINF_ABS_ERROR>(),
+          parameters.get<parameters::PRESSURE_L1_ABS_ERROR>(),
+          parameters.get<parameters::PRESSURE_L2_ABS_ERROR>(),
+          parameters.get<parameters::PRESSURE_LINF_ABS_ERROR>() },
+        { "velocity L1 abs Error","velocity L2 abs Error",
+          "velocity Linf abs error",
+          "strain rate L1 abs error", "strain rate L2 abs error",
+          "strain rate Linf abs error",
+          "wall shear stress L1 abs error", "wall shear stress L2 abs error",
+          "wall shear stress Linf abs error",
+          "pressure L1 abs error", "pressure L2 abs error",
+          "pressure Linf abs error" },
+        "top right",
+        { 'p','p','p','p','p','p','p','p','p','p','p','p' } );
+    } else {
+      // same as above, but without pressure computation
+      gplot.setData (
+        MyCase::value_t(res),
+        { parameters.get<parameters::VELOCITY_L1_ABS_ERROR>(),
+          parameters.get<parameters::VELOCITY_L2_ABS_ERROR>(),
+          parameters.get<parameters::VELOCITY_LINF_ABS_ERROR>(),
+          parameters.get<parameters::STRAIN_RATE_L1_ABS_ERROR>(),
+          parameters.get<parameters::STRAIN_RATE_L2_ABS_ERROR>(),
+          parameters.get<parameters::STRAIN_RATE_LINF_ABS_ERROR>(),
+          parameters.get<parameters::WSS_L1_ABS_ERROR>(),
+          parameters.get<parameters::WSS_L2_ABS_ERROR>(),
+          parameters.get<parameters::WSS_LINF_ABS_ERROR>() },
+        { "velocity L1 abs Error","velocity L2 abs Error",
+          "velocity Linf abs error",
+          "strain rate L1 abs error", "strain rate L2 abs error",
+          "strain rate Linf abs error",
+          "wall shear stress L1 abs error", "wall shear stress L2 abs error",
+          "wall shear stress Linf abs error",},
+        "top right",
+        { 'p','p','p','p','p','p','p','p', 'p' } );
+    }
+  }
+}
 
 int main( int argc, char* argv[] )
 {
-  // === 1st Step: Initialization ===
-  initialize( &argc, &argv );
-  singleton::directories().setOutputDir( "./tmp/" );
   OstreamManager clout( std::cout,"main" );
 
-  int startN = 21;
-  int maxN = startN + 31;
-  bool eoc = true;
+  // === 1st Step: Initialization ===
+  initialize( &argc, &argv );
+  MyCase::ParametersD myCaseParameters;
+  setGetParameters(myCaseParameters, argc, argv);
+  myCaseParameters.set<parameters::EOC>(true);
+  
+  BoundaryType boundaryType = myCaseParameters.get<parameters::BOUNDARY_TYPE>();
+  bool forbiddenEOCCombination = (boundaryType == FREE_SLIP) || (boundaryType == PARTIAL_SLIP);
+  if ( forbiddenEOCCombination ) std::runtime_error("eoc computation is currently not supported for slip boundary conditions");
 
-  int status = readParameters(argc, argv, startN, flowType, boundaryType);
-  if (status != 0) {
-    return status;
-  }
+  std::string bcName = "bc" + std::to_string(int(myCaseParameters.get<parameters::BOUNDARY_TYPE>()));
+  std::string runName = (myCaseParameters.get<parameters::FLOW_TYPE>() == FORCED) ? bcName + "_force" : bcName + "_nonForce";
+  singleton::directories().setOutputDir( "./tmp/" + runName + "/" );
 
-  if ((boundaryType == freeSlip) || (boundaryType == partialSlip)) {
-    throw std::invalid_argument(
-      "eoc computation is currently not supported for slip boundary conditions");
-  }
-
+  // Initialize gnuplot
+  Gnuplot<MyCase::value_t> gplot(
+    "Velocity_and_StrainRate_eoc",
+    false,
+    "set terminal png size 720, 720 font 'Arial,10'",
+    Gnuplot<MyCase::value_t>::LOGLOG,
+    Gnuplot<MyCase::value_t>::LINREG);
+  
   // set the labels for the plot
   gplot.setLabel("Resolution test", "average Error");
 
-  // loop over the different simulations
-  for(int simuN = startN; simuN < maxN; simuN += 10){
+  size_t startN = myCaseParameters.get<parameters::EOC_START_RESOLUTION>();
+  size_t maxN   = myCaseParameters.get<parameters::EOC_MAX_RESOLUTION>();
+  size_t stepN  = myCaseParameters.get<parameters::EOC_RESOLUTION_STEP>();
 
+  // loop over the different simulations
+  for(size_t simuN = startN; simuN < maxN; simuN += stepN){
     /// Run the simulations
     clout << "Starting next simulation with N = " << simuN << std::endl;
-    simulatePoiseuille(simuN, gplot, eoc);
+    myCaseParameters.set<parameters::RESOLUTION>(simuN);
+    myCaseParameters.set<parameters::PHYS_DELTA_X>(
+      myCaseParameters.get<parameters::DIAMETER>()
+      / myCaseParameters.get<parameters::RESOLUTION>()
+    );
+    simulatePoiseuilleForEOC(myCaseParameters, gplot);
   }
 
   gplot.writePNG();
