@@ -37,14 +37,49 @@
  * It illustrates the error analysis.
  */
 
- #include "../../laminar/cylinder2d/case.h"
+#include "../../pdeSolverEoc/cylinder2dEoc/cylinder2d.h"
 
-
-namespace olb::parameters {
-struct START_RESOLUTION : public descriptors::TYPED_FIELD_BASE<int,1> { };
-struct NUM_SIMULATIONS : public descriptors::TYPED_FIELD_BASE<int,1> { };
-}
+/// Initialize gnuplot
+static Gnuplot<T> gplot(
+  "drag_eoc",
+  false,
+  "set terminal png size 720, 720 font 'Arial,10'",
+  Gnuplot<T>::LOGLOG,
+  Gnuplot<T>::LINREG);
 
 int main( int argc, char* argv[] )
 {
+  // === 1st Step: Initialization ===
+  initialize( &argc, &argv );
+  singleton::directories().setOutputDir( "./tmp/" );
+  OstreamManager clout( std::cout,"main" );
+
+  /// Simulation Parameter
+  int startN = 10;
+
+  int numSimulations = 4;
+  bool eoc = true;
+
+  T _drag[numSimulations];
+
+  // set the labels for the plot
+  gplot.setLabel("Resolution test", "average Error");
+
+  // loop over the different simulations
+  for(int i = 0; i < numSimulations; ++i){
+    int N = startN + 10 * i;
+    /// Run the simulations
+    clout << "Starting next simulation with N = " << N << std::endl;
+    _drag[i] = simulateCylinder(N, gplot, eoc);
+  }
+
+  for (int i = 0; i < numSimulations-1; ++i) {
+    int N = startN + 10 * i;
+    T error = abs(_drag[i] - _drag[numSimulations-1]) / _drag[numSimulations-1];
+    gplot.setData(T(N), {error}, {"dragL1AbsError"}, "top right", {'p'});
+  }
+
+  gplot.writePNG();
+
+  return 0;
 }
