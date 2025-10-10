@@ -33,197 +33,320 @@
  */
 
 #include <olb.h>
-#include <vector>
-#include <iostream>
 
 //#include "../isotherms.h"
 
 using namespace olb;
+using namespace olb::names;
 using namespace olb::descriptors;
-using namespace olb::graphics;
-
-typedef double T;
-typedef D3Q19<VELOCITY> NSDESCRIPTOR;
-typedef D3Q7<VELOCITY, SOURCE> ADEDESCRIPTOR;
-
-using bulkDynamics = BGKdynamics<T, NSDESCRIPTOR>;
-using bulkDynamicsAD = SourcedAdvectionDiffusionBGKdynamics<T, ADEDESCRIPTOR>;
-
-const int dim = 3;
-T cubeLength = 0.1;
-
-const int N = 21;          // resolution of the model
-const T Re = 17;           // Reynolds number
-const T Sc = 1.5;
-const T particleRadius = 1.5e-04;  // particles radius
-const T partRho = 0.940;   // particles density
-const T c_0 = 1;
-const T tau_ads = 0.6952380952380952;
-const T fluidViscosity = 0.00011764705882352942;
-const T maxPhysT = 15;
-
-const T isoConstA = 45;
-const T isoConstB = 0.5;
-const T k_f = 5.37E-5;  //5.*7E-11/particleRadius;
-const T D_s = 5E-11;
 
 template <typename T>
 class BatchSolution: public AnalyticalF3D<T, T> {
 protected:
-    T t;
-    T D_b_;
+  T t;
+  T D_b_;
 
 public:
-    BatchSolution(T time, T D_b, T ks) : AnalyticalF3D<T, T>(1), t(/*time * ks*/time*3.*k_f/particleRadius/D_b), D_b_(D_b) {}
-    bool operator () (T output[], const T input[]) override {
-      output[0] = T(1)/(D_b_+T(1)) + D_b_ / (D_b_+T(1)) * util::exp(-(D_b_+T(1))*t);
-      return true;
-    }
+  BatchSolution(T time, T D_b, T ks, T k_f, T particleRadius) : AnalyticalF3D<T, T>(1), t(time*3.*k_f/particleRadius/D_b), D_b_(D_b) {}
+  bool operator () (T output[], const T input[]) override {
+    output[0] = T(1)/(D_b_+T(1)) + D_b_ / (D_b_+T(1)) * util::exp(-(D_b_+T(1))*t);
+    return true;
+  }
 };
 
-enum material {
-  buffer = 0,
-  fluid = 1,
-  boundary = 2
-};
+using MyCase = Case<
+  NavierStokes,       Lattice<double, descriptors::D3Q19<>>,
+  Concentration<0>,     Lattice<double, descriptors::D3Q7<VELOCITY,SOURCE>>,
+  Concentration<1>,     Lattice<double, descriptors::D3Q7<VELOCITY,SOURCE>>,
+  Concentration<2>,     Lattice<double, descriptors::D3Q7<VELOCITY,SOURCE>>
+>;
 
-void prepareGeometry(SuperGeometry<T, dim> &superGeometry) {
+namespace olb::parameters {
+
+struct PARTICLE_RADIUS : public descriptors::FIELD_BASE<1> { };
+struct RHO : public descriptors::FIELD_BASE<3> { };
+struct PARTICLE_DENSITY : public descriptors::FIELD_BASE<1> { };
+struct SCHMIDT_NUMBER : public descriptors::FIELD_BASE<1> { };
+struct REYNOLDS_NUMBER : public descriptors::FIELD_BASE<1> { };
+struct ISO_CONST_A : public descriptors::FIELD_BASE<1> { };
+struct ISO_CONST_B : public descriptors::FIELD_BASE<1> { };
+struct K_F : public descriptors::FIELD_BASE<1> { };
+struct C_0 : public descriptors::FIELD_BASE<1> { };
+struct D_S : public descriptors::FIELD_BASE<1> { };
+struct D_B : public descriptors::FIELD_BASE<1> { };
+
+}
+
+Mesh<MyCase::value_t,MyCase::d> createMesh(MyCase::ParametersD& parameters) {
+  using T = MyCase::value_t;
+  Vector extend = parameters.get<parameters::DOMAIN_EXTENT>();
+  const T physDeltaX = extend[0]/parameters.get<parameters::RESOLUTION>();
+
+  Vector<T,3> origin(-extend[0] / 2, -extend[0] / 2, -extend[0] / 2);
+  IndicatorCuboid3D<T> cuboid(extend, origin);
+
+  Mesh<T,MyCase::d> mesh(cuboid, physDeltaX, singleton::mpi().getSize());
+  mesh.setOverlap(parameters.get<parameters::OVERLAP>());
+  mesh.getCuboidDecomposition().setPeriodicity({true,true,true});
+  return mesh;
+}
+
+void prepareGeometry(MyCase& myCase) {
   OstreamManager clout(std::cout, "prepareGeometry");
   clout << "Prepare Geometry ..." << std::endl;
 
-  superGeometry.rename(buffer, fluid);
+  auto& geometry = myCase.getGeometry();
 
-  superGeometry.communicate();
+  geometry.rename(0, 1);
+  geometry.communicate();
 
-  // Removes all not needed boundary voxels outside the surface
-  superGeometry.clean();
-  superGeometry.checkForErrors();
+  geometry.clean();
+  geometry.checkForErrors();
 
-  superGeometry.print();
+  geometry.print();
 
   clout << "Prepare Geometry ... OK" << std::endl;
 }
 
-void prepareLatticeNS(SuperLattice<T, NSDESCRIPTOR> &NSLattice,
-                      SuperGeometry<T, dim> &superGeometry,
-                      T omega) {
-  OstreamManager clout(std::cout, "prepareLatticeNS");
-  clout << "Prepare NSE Lattice ..." << std::endl;
-
-  // Material=1 --> bulk dynamics
-  NSLattice.defineDynamics<bulkDynamics>(superGeometry, 1);
-
-  // Initial conditions
-  AnalyticalConst3D<T, T> rhoFluid(1.);
-  AnalyticalConst3D<T, T> u0(0.0, 0.0, 0.0);
-
-  auto bulkIndicator = superGeometry.getMaterialIndicator({0, 1});
-
-  // Initialize all values of distribution functions to their local equilibrium
-  NSLattice.defineRhoU(bulkIndicator, rhoFluid, u0);
-  NSLattice.iniEquilibrium(bulkIndicator, rhoFluid, u0);
-
-  // Lattice initialize
-  NSLattice.setParameter<descriptors::OMEGA>(omega);
-  NSLattice.initialize();
-
-  {
-    auto &communicator = NSLattice.getCommunicator(stage::Full());
-    communicator.requestField<descriptors::VELOCITY>();
-    communicator.requestOverlap(NSLattice.getOverlap());
-    communicator.exchangeRequests();
-  }
-
-  clout << "Prepare NSE Lattice ... OK" << std::endl;
-}
-
-void prepareLatticeAD(SuperLattice<T, ADEDESCRIPTOR>*& ADLattice,
-                      SuperGeometry<T, dim> &superGeometry,
-                      T rho_,
-                      T omegaAD) {
+template<size_t ID>
+void prepareLatticeAD(MyCase& myCase) {
   OstreamManager clout(std::cout, "prepareLatticeAD");
   clout << "Prepare ADE Lattice ..." << std::endl;
+  using T = MyCase::value_t;
+  using DESCRIPTOR = MyCase::descriptor_t_of<Concentration<ID>>;
+  auto& parameters = myCase.getParameters();
+  auto& geometry = myCase.getGeometry();
+  auto& lattice = myCase.getLattice(Concentration<ID>{});
+  
+  Vector extend = parameters.get<parameters::DOMAIN_EXTENT>();
+  const T Sc = parameters.get<parameters::SCHMIDT_NUMBER>();
+  const T Re = parameters.get<parameters::REYNOLDS_NUMBER>();
+  const T tau_ads = parameters.get<parameters::LATTICE_RELAXATION_TIME>();
+  const T partRho = parameters.get<parameters::PARTICLE_DENSITY>();
+  const int N = parameters.get<parameters::RESOLUTION>();
+
+  // Set up a unit converter with the characteristic physical units
+  lattice.template setUnitConverter<AdsorptionConverterFromSchmidtNumberAndRelaxation<T, DESCRIPTOR>>(
+   (T) Sc,
+   (T) Re,
+   (T) tau_ads,
+   (T) extend[0],
+   (T) extend[0],
+   (T) N,
+   (T) 0.02,
+   (T) 1,
+   (T) partRho
+ );
+  lattice.getUnitConverter().print();
+
+  const T omega = lattice.getUnitConverter().getLatticeRelaxationFrequency();
 
   // Material=1 --> bulk dynamics
-  ADLattice->defineDynamics<bulkDynamicsAD>(superGeometry, 1);
-
-  // Initial conditions
-  AnalyticalConst3D<T, T> rho(rho_);
-  AnalyticalConst3D<T, T> u0(0.0, 0.0, 0.0);
-
-  auto bulkIndicator = superGeometry.getMaterialIndicator({0, 1});
-
-  // Initialize all values of distribution functions to their local equilibrium
-  ADLattice->defineRho(bulkIndicator, rho);
-  ADLattice->iniEquilibrium(bulkIndicator, rho, u0);
+  lattice.template defineDynamics<SourcedAdvectionDiffusionBGKdynamics>(geometry, 1);
 
   // Lattice initialize
-  ADLattice->setParameter<descriptors::OMEGA>(omegaAD);
-  ADLattice->initialize();
+  lattice.template setParameter<descriptors::OMEGA>(omega);
 
   {
-    auto& communicator = ADLattice->getCommunicator(stage::Full());
-    communicator.requestField<descriptors::VELOCITY>();
-    communicator.requestField<descriptors::SOURCE>();
-    communicator.requestOverlap(ADLattice->getOverlap());
-    communicator.exchangeRequests();
+    auto& communicator = lattice.template getCommunicator(stage::Full());
+    communicator.template requestField<descriptors::VELOCITY>();
+    communicator.template requestField<descriptors::SOURCE>();
+    communicator.template requestOverlap(parameters.get<parameters::OVERLAP>());
+    communicator.template exchangeRequests();
   }
 
   clout << "Prepare ADE Lattice ... OK" << std::endl;
 }
 
-template<typename COUPLING>
-void getResults(SuperLattice<T, NSDESCRIPTOR> &NSLattice,
-                SuperLattice<T, ADEDESCRIPTOR> &PADLattice,
-                SuperLattice<T, ADEDESCRIPTOR> &QADLattice,
-                SuperLattice<T, ADEDESCRIPTOR> &CADLattice,
-                COUPLING& coupling,
-                int iT,
-                SuperGeometry<T, dim> &superGeometry,
-                util::Timer<T> &timer,
-                T D_b ) {
+void prepareLatticeNS(MyCase& myCase) {
+  OstreamManager clout(std::cout, "prepareLatticeNS");
+  clout << "Prepare NSE Lattice ..." << std::endl;
+  using T = MyCase::value_t;
+  using DESCRIPTOR = MyCase::descriptor_t_of<NavierStokes>;
+  auto& parameters = myCase.getParameters();
+  auto& geometry = myCase.getGeometry();
+  auto& lattice = myCase.getLattice(NavierStokes{});
+  auto& latticePAD = myCase.getLattice(Concentration<0>{});
+  auto& latticeCAD = myCase.getLattice(Concentration<1>{});
+  auto& latticeQAD = myCase.getLattice(Concentration<2>{});
+  
+  Vector extend = parameters.get<parameters::DOMAIN_EXTENT>();
+  const T physDeltaX = extend[0]/parameters.get<parameters::RESOLUTION>();
+  const T fluidViscosity = parameters.get<parameters::PHYS_CHAR_VISCOSITY>();
+  const T Re = parameters.get<parameters::REYNOLDS_NUMBER>();
+
+  // Set up a unit converter with the characteristic physical units
+  lattice.setUnitConverter<UnitConverter<T,DESCRIPTOR>>(
+    physDeltaX,
+    latticePAD.getUnitConverter().getPhysDeltaT(),
+    extend[0],
+    Re * fluidViscosity / extend[0],
+    fluidViscosity,
+    1.225
+  );
+  lattice.getUnitConverter().print();
+
+  const T omega = lattice.getUnitConverter().getLatticeRelaxationFrequency();
+
+  // Material=1 --> bulk dynamics
+  lattice.defineDynamics<BGKdynamics>(geometry, 1);
+
+  // Lattice initialize
+  lattice.setParameter<descriptors::OMEGA>(omega);
+
+  {
+    auto &communicator = lattice.getCommunicator(stage::Full());
+    communicator.requestField<descriptors::VELOCITY>();
+    communicator.requestOverlap(lattice.getOverlap());
+    communicator.exchangeRequests();
+  }
+  
+  auto& coupling = myCase.setCouplingOperator(
+    "ParticleTransport",
+    AdsorptionFullCoupling3D<AdsorptionReaction<Isotherm::LinearIsotherm>,
+                             ade_forces::AdvDiffDragForce3D>{},
+    names::NavierStokes{}, lattice,
+    names::Concentration0{}, latticePAD,
+    names::Concentration1{}, latticeCAD,
+    names::Concentration2{}, latticeQAD );
+
+  // Setting Isotherm Parameters
+  const T isoConstA = parameters.get<parameters::ISO_CONST_A>();
+  const T isoConstB = parameters.get<parameters::ISO_CONST_B>();
+  Isotherm::LinearIsotherm::setParameters<T>(isoConstA, isoConstB, coupling);
+
+  // Setting Adsorption Reaction Parameters
+  const T k_f = parameters.get<parameters::K_F>();
+  const T D_s = parameters.get<parameters::D_S>();
+  const T c_0 = parameters.get<parameters::C_0>();
+  const T particleRadius = parameters.get<parameters::PARTICLE_RADIUS>();
+  coupling.template setParameter<AdsorptionReaction<Isotherm::LinearIsotherm>::K_F>(k_f);
+  coupling.template setParameter<AdsorptionReaction<Isotherm::LinearIsotherm>::D_S>(D_s);
+  coupling.template setParameter<AdsorptionReaction<Isotherm::LinearIsotherm>::C_0>(c_0);
+  coupling.template setParameter<AdsorptionReaction<Isotherm::LinearIsotherm>::R_P>(particleRadius);
+
+  // Compute the interaction parameters
+  AdsorptionReaction<Isotherm::LinearIsotherm>::computeParameters<T>(coupling, latticePAD.getUnitConverter());
+
+  AdsorptionReaction<Isotherm::LinearIsotherm>::print<T>(clout, coupling, latticePAD.getUnitConverter());
+
+  // Compute the drag force parameters
+  const T partRho = parameters.get<parameters::PARTICLE_DENSITY>();
+  ade_forces::AdvDiffDragForce3D::computeParametersFromRhoAndRadius<T>(partRho, particleRadius, coupling, lattice.getUnitConverter());
+
+  T V_l = extend[0] * extend[1] * extend[2];
+  T D_b = V_l*partRho * Isotherm::LinearIsotherm::getLoadingFromCoupling<T>(c_0, coupling)/(V_l*c_0);
+  parameters.set<parameters::D_B>(D_b);
+
+  clout << "Prepare NSE Lattice ... OK" << std::endl;
+}
+
+void setInitialValuesNSE(MyCase& myCase) {
+  using T = MyCase::value_t;
+  auto& geometry = myCase.getGeometry();
+  auto& lattice = myCase.getLattice(NavierStokes{});
+
+  // Initial conditions
+  AnalyticalConst3D<T, T> rhoFluid(1.);
+  AnalyticalConst3D<T, T> u0(0.0, 0.0, 0.0);
+
+  auto bulkIndicator = geometry.getMaterialIndicator({0, 1});
+
+  // Initialize all values of distribution functions to their local equilibrium
+  lattice.defineRhoU(bulkIndicator, rhoFluid, u0);
+  lattice.iniEquilibrium(bulkIndicator, rhoFluid, u0);
+
+  // Make the lattice ready for simulation
+  lattice.initialize();
+}
+
+template<size_t ID>
+void setInitialValuesADE(MyCase& myCase) {
+  using T = MyCase::value_t;
+  auto& geometry = myCase.getGeometry();
+  auto& lattice = myCase.getLattice(Concentration<ID>{});
+  auto& parameters = myCase.getParameters();
+
+  // Initial conditions
+  const T rho_ = parameters.get<parameters::RHO>()[ID];
+  AnalyticalConst3D<T, T> rho(rho_);
+  AnalyticalConst3D<T, T> u0(0.0, 0.0, 0.0);
+
+  auto bulkIndicator = geometry.getMaterialIndicator({0, 1});
+
+  // Initialize all values of distribution functions to their local equilibrium
+  lattice.defineRho(bulkIndicator, rho);
+  lattice.iniEquilibrium(bulkIndicator, rho, u0);
+
+  // Make the lattice ready for simulation
+  lattice.initialize();
+}
+
+void getResults(MyCase& myCase,
+                util::Timer<double>& timer,
+                size_t iT)
+{
   OstreamManager clout(std::cout, "getResults");
+  using T = MyCase::value_t;
+  using NSDESCRIPTOR = MyCase::descriptor_t_of<NavierStokes>;
+  using ADEDESCRIPTOR = MyCase::descriptor_t_of<Concentration<0>>;
+  auto& geometry = myCase.getGeometry();
+  auto& parameters = myCase.getParameters();
+  auto& latticeNS = myCase.getLattice(NavierStokes{});
+  auto& latticePAD = myCase.getLattice(Concentration<0>{});
+  auto& latticeCAD = myCase.getLattice(Concentration<1>{});
+  auto& latticeQAD = myCase.getLattice(Concentration<2>{});
 
   SuperVTMwriter3D<T> vtmWriter("adsorption3D");
 
-  const int vtkIter = CADLattice.getUnitConverter().getLatticeTime(maxPhysT/T(100))+1;
+  const int N = parameters.get<parameters::RESOLUTION>();
+  const T maxPhysT = parameters.get<parameters::MAX_PHYS_T>();
+  const int vtkIter = latticeCAD.getUnitConverter().getLatticeTime(maxPhysT/T(100))+1;
+
+  const T particleRadius = parameters.get<parameters::PARTICLE_RADIUS>();
+  const T Re = parameters.get<parameters::REYNOLDS_NUMBER>();
+  const T partRho = parameters.get<parameters::PARTICLE_DENSITY>();
 
   if (iT == 0) {
-    NSLattice.setProcessingContext(ProcessingContext::Evaluation);
-    SuperLatticeCuboid3D<T, NSDESCRIPTOR> cuboid(NSLattice);
-    SuperLatticeRank3D<T, NSDESCRIPTOR> rank(NSLattice);
+    latticeNS.setProcessingContext(ProcessingContext::Evaluation);
+    SuperLatticeCuboid3D<T, NSDESCRIPTOR> cuboid(latticeNS);
+    SuperLatticeRank3D<T, NSDESCRIPTOR> rank(latticeNS);
     vtmWriter.write(cuboid);
     vtmWriter.write(rank);
     vtmWriter.createMasterFile();
 
     // Print some output of the chosen simulation setup
-    clout << "N=" << N << "; maxTimeSteps=" << NSLattice.getUnitConverter().getLatticeTime(maxPhysT)
-          << "; noOfCuboid=" << superGeometry.getCuboidDecomposition().size() << "; Re=" << Re
+    clout << "N=" << N << "; maxTimeSteps=" << latticeNS.getUnitConverter().getLatticeTime(maxPhysT)
+          << "; noOfCuboid=" << geometry.getCuboidDecomposition().size() << "; Re=" << Re
           << "; St="
-          << (T(2) * partRho * particleRadius * particleRadius * NSLattice.getUnitConverter().getCharPhysVelocity())
-              / (T(9) * NSLattice.getUnitConverter().getPhysViscosity() * NSLattice.getUnitConverter().getPhysDensity() * NSLattice.getUnitConverter().getCharPhysLength())
+          << (T(2) * partRho * particleRadius * particleRadius * latticeNS.getUnitConverter().getCharPhysVelocity())
+              / (T(9) * latticeNS.getUnitConverter().getPhysViscosity() * latticeNS.getUnitConverter().getPhysDensity() * latticeNS.getUnitConverter().getCharPhysLength())
           << std::endl;
   }
 
 
   if (iT % vtkIter == 0) {
     // Writes the vtk files
-    NSLattice.setProcessingContext(ProcessingContext::Evaluation);
-    PADLattice.setProcessingContext(ProcessingContext::Evaluation);
-    QADLattice.setProcessingContext(ProcessingContext::Evaluation);
-    CADLattice.setProcessingContext(ProcessingContext::Evaluation);
-    SuperGeometryF<T,3> materials(superGeometry);
-    SuperLatticeDensity3D<T, ADEDESCRIPTOR> particles(PADLattice);
-    SuperLatticeDensity3D<T, ADEDESCRIPTOR> loading(QADLattice);
-    SuperLatticeDensity3D<T, ADEDESCRIPTOR> phosphateConcentration(CADLattice);
-    SuperLatticePhysField3D<T, ADEDESCRIPTOR, descriptors::VELOCITY> extFieldParticles(PADLattice, NSLattice.getUnitConverter().getConversionFactorVelocity());
-    SuperLatticePhysField3D<T, ADEDESCRIPTOR, descriptors::VELOCITY> extFieldPhosphate(CADLattice, NSLattice.getUnitConverter().getConversionFactorVelocity());
-    SuperLatticePhysField3D<T, ADEDESCRIPTOR, descriptors::SOURCE> sourcePhosphate(CADLattice, 1);
+    latticeNS.setProcessingContext(ProcessingContext::Evaluation);
+    latticePAD.setProcessingContext(ProcessingContext::Evaluation);
+    latticeQAD.setProcessingContext(ProcessingContext::Evaluation);
+    latticeCAD.setProcessingContext(ProcessingContext::Evaluation);
+    SuperGeometryF<T,3> materials(geometry);
+    SuperLatticeDensity3D<T, ADEDESCRIPTOR> particles(latticePAD);
+    SuperLatticeDensity3D<T, ADEDESCRIPTOR> loading(latticeQAD);
+    SuperLatticeDensity3D<T, ADEDESCRIPTOR> phosphateConcentration(latticeCAD);
+    SuperLatticePhysField3D<T, ADEDESCRIPTOR, descriptors::VELOCITY> extFieldParticles(latticePAD, latticeNS.getUnitConverter().getConversionFactorVelocity());
+    SuperLatticePhysField3D<T, ADEDESCRIPTOR, descriptors::VELOCITY> extFieldPhosphate(latticeCAD, latticeNS.getUnitConverter().getConversionFactorVelocity());
+    SuperLatticePhysField3D<T, ADEDESCRIPTOR, descriptors::SOURCE> sourcePhosphate(latticeCAD, 1);
     AnalyticalFfromSuperF3D<T> concentrationInterpolation(phosphateConcentration, true, true);
     AnalyticalFfromSuperF3D<T> loadingInterpolation(loading, true, true);
+
+    const T D_s = parameters.get<parameters::D_S>();
+    const T D_b = parameters.get<parameters::D_B>();
+    const T k_f = parameters.get<parameters::K_F>();
     T k_s= T(15.) * D_s / ( particleRadius * particleRadius );
-    BatchSolution<T> concentrationSol(CADLattice.getUnitConverter().getPhysTime(iT), D_b, k_s);
-    SuperLatticeFfromAnalyticalF3D<T, ADEDESCRIPTOR> solution(concentrationSol, QADLattice);
+    BatchSolution<T> concentrationSol(latticeCAD.getUnitConverter().getPhysTime(iT), D_b, k_s, k_f, particleRadius);
+    SuperLatticeFfromAnalyticalF3D<T, ADEDESCRIPTOR> solution(concentrationSol, latticeQAD);
 
     vtmWriter.addFunctor(materials);
     vtmWriter.addFunctor(particles, "particle density");
@@ -237,156 +360,91 @@ void getResults(SuperLattice<T, NSDESCRIPTOR> &NSLattice,
     timer.update(iT);
     timer.printStep();
 
-    auto indicatorF = superGeometry.getMaterialIndicator(1);
+    auto indicatorF = geometry.getMaterialIndicator(1);
     int tmp{};
     T result[2] { };
     SuperRelativeErrorL2Norm3D<T> relConcentrationError(phosphateConcentration, concentrationSol, indicatorF);
     relConcentrationError(result, &tmp);
     clout << "concentration-L2-error(rel)=" << result[0] << std::endl;
 
-    NSLattice.getStatistics().print(iT, NSLattice.getUnitConverter().getPhysTime(iT));
+    latticeNS.getStatistics().print(iT, latticeNS.getUnitConverter().getPhysTime(iT));
   }
 }
 
-int main(int argc, char *argv[]) {
-  // === 1st Step: Initialization ===
-  initialize(&argc, &argv);
-  singleton::directories().setOutputDir("./tmp/");
-  OstreamManager
-  clout(std::cout, "main");
+void simulate(MyCase& myCase) {
+  using T = MyCase::value_t;
+  auto& parameters = myCase.getParameters();
 
- AdsorptionConverterFromSchmidtNumberAndRelaxation<T, ADEDESCRIPTOR> const adsConverter(
-   (T) Sc,
-   (T) Re,
-   (T) tau_ads,
-   (T) cubeLength,
-   (T) cubeLength,
-   (T) N,
-   (T) 0.02,
-   (T) 1,
-   (T) partRho
- );
+  const std::size_t iTmax = myCase.getLattice(Concentration<0>{}).getUnitConverter().getLatticeTime(
+    parameters.get<parameters::MAX_PHYS_T>());
 
- UnitConverter<T, NSDESCRIPTOR> const converter(
-   adsConverter.getPhysDeltaX(),
-   adsConverter.getPhysDeltaT(),
-   cubeLength,
-   Re * fluidViscosity / (cubeLength),
-   fluidViscosity,
-   1.225
-   );
-
-  time_t now = time(nullptr);
-  char buffer [80];
-  strftime (buffer,80,"%F %H-%M", localtime(&now));
-
-  // Prints the converter log as console output
-  converter.print();
-  adsConverter.print();
-  // Writes the converter log in a file
-  converter.write("adsorption3D");
-  adsConverter.write("phosphate");
-
-  // compute relaxation parameter to solve the advection-diffusion equation in the lattice Boltzmann context
-  T omegaAD = adsConverter.getLatticeRelaxationFrequency();
-  T omega = converter.getLatticeRelaxationFrequency();
-
-  // === 2rd Step: Prepare Geometry ===
-  Vector<T, dim> extend(cubeLength, cubeLength, cubeLength);
-  Vector<T, dim> origin
-      (-converter.getCharPhysLength() / 2, -converter.getCharPhysLength() / 2, -converter.getCharPhysLength() / 2);
-  IndicatorCuboid3D<T> cuboid(extend, origin);
-
-  // Instantiation of a cuboidDecomposition with weights
-#ifdef PARALLEL_MODE_MPI
-  const int noOfCuboids = singleton::mpi().getSize();
-#else
-  const int noOfCuboids = 1;
-#endif
-  CuboidDecomposition3D<T> cuboidDecomposition(cuboid, converter.getPhysDeltaX(), noOfCuboids);
-  cuboidDecomposition.setPeriodicity({true, true, true});
-
-  // Instantiation of a loadBalancer
-  HeuristicLoadBalancer<T> loadBalancer(cuboidDecomposition);
-
-  // Instantiation of a superGeometry
-  SuperGeometry<T, dim> superGeometry(cuboidDecomposition, loadBalancer, 2);
-
-  prepareGeometry(superGeometry);
-
-  // === 3rd Step: Prepare Lattice ===
-  SuperLattice<T, NSDESCRIPTOR> NSLattice(converter, superGeometry);
-  SuperLattice<T, ADEDESCRIPTOR> PADLattice(adsConverter, superGeometry);
-  SuperLattice<T, ADEDESCRIPTOR> QADLattice(adsConverter, superGeometry);
-  SuperLattice<T, ADEDESCRIPTOR> CADLattice(adsConverter, superGeometry);
-
-  //prepareLattice and setBoundaryConditions
-  T rho[3] = {0.};
-  rho[0] = 1; //particle density at the start
-  rho[1] = c_0; //concentration at the start
-  rho[2] = 0.; //adsorbed load at the start
-
-  std::vector<SuperLattice < T, ADEDESCRIPTOR>*> partners;
-  partners.emplace_back(&PADLattice);
-  partners.emplace_back(&CADLattice);
-  partners.emplace_back(&QADLattice);
-
-  prepareLatticeNS(NSLattice,
-                   superGeometry,
-                   omega);
-
-  for(int i = 0; i<3; i++){
-    prepareLatticeAD(partners[i],
-                     superGeometry,
-                     rho[i],
-                     omegaAD);
-  }
-
-  SuperLatticeCoupling coupling(
-    AdsorptionFullCoupling3D<AdsorptionReaction<Isotherm::LinearIsotherm>,
-                             ade_forces::AdvDiffDragForce3D>{},
-    names::NavierStokes{}, NSLattice,
-    names::Concentration0{}, PADLattice,
-    names::Concentration1{}, CADLattice,
-    names::Concentration2{}, QADLattice );
-
-  // Setting Isotherm Parameters
-  Isotherm::LinearIsotherm::setParameters<T>(isoConstA, isoConstB, coupling);
-
-  // Setting Adsorption Reaction Parameters
-  coupling.template setParameter<AdsorptionReaction<Isotherm::LinearIsotherm>::K_F>(k_f);
-  coupling.template setParameter<AdsorptionReaction<Isotherm::LinearIsotherm>::D_S>(D_s);
-  coupling.template setParameter<AdsorptionReaction<Isotherm::LinearIsotherm>::C_0>(c_0);
-  coupling.template setParameter<AdsorptionReaction<Isotherm::LinearIsotherm>::R_P>(particleRadius);
-
-  // Compute the interaction parameters
-  AdsorptionReaction<Isotherm::LinearIsotherm>::computeParameters<T>(coupling, adsConverter);
-
-  AdsorptionReaction<Isotherm::LinearIsotherm>::print<T>(clout, coupling, adsConverter);
-
-  // Compute the drag force parameters
-  ade_forces::AdvDiffDragForce3D::computeParametersFromRhoAndRadius<T>(partRho, particleRadius, coupling, converter);
-
-  T V_l = cubeLength * cubeLength * cubeLength;
-  T D_b = V_l*partRho * Isotherm::LinearIsotherm::getLoadingFromCoupling<T>(c_0, coupling)/(V_l*c_0);
-
-  // === 4th Step: Main Loop with Timer ===
-  util::Timer<T> timer(adsConverter.getLatticeTime(maxPhysT), superGeometry.getStatistics().getNvoxel());
+  util::Timer<T> timer(iTmax, myCase.getGeometry().getStatistics().getNvoxel());
   timer.start();
-  for (std::size_t iT = 0; iT < adsConverter.getLatticeTime(maxPhysT); ++iT) {
-    // === 6th Step: Computation and Output of the Results ===
-    getResults(NSLattice, PADLattice, QADLattice, CADLattice, coupling, iT, superGeometry, timer, D_b);
 
-    // === 7th Step: Collide and Stream Execution ===
-    coupling.apply();
+  for (std::size_t iT=0; iT < iTmax; ++iT) {
 
-    for(int i = 0; i<3; i++) {
-      partners[i]->collideAndStream();
-      }
-    NSLattice.collideAndStream();
+    myCase.getOperator("ParticleTransport").apply();
+
+    /// === Step 7.2.2: Computation and Output of the Results ===
+    getResults(myCase, timer, iT);
+
+    /// === Step 7.2.3: Collide and Stream Execution ===
+    myCase.getLattice(Concentration<0>{}).collideAndStream();
+    myCase.getLattice(Concentration<1>{}).collideAndStream();
+    myCase.getLattice(Concentration<2>{}).collideAndStream();
+    myCase.getLattice(NavierStokes{}).collideAndStream();
   }
 
   timer.stop();
   timer.printSummary();
+}
 
+int main(int argc, char* argv[]) {
+  /// === Step 2: Initialization ===
+  initialize(&argc, &argv);
+
+  /// === Step 2.1: Set Parameters ===
+  MyCase::ParametersD myCaseParameters;
+  {
+    using namespace olb::parameters;
+    myCaseParameters.set<RESOLUTION   >(21);       // resolution of the hydraulic diameter // 20
+    myCaseParameters.set<REYNOLDS_NUMBER     >(17);
+    myCaseParameters.set<SCHMIDT_NUMBER      >(1.5);
+    myCaseParameters.set<LATTICE_RELAXATION_TIME>(0.6952380952380952);
+    myCaseParameters.set<PARTICLE_RADIUS       >(1.5e-04);
+    myCaseParameters.set<PARTICLE_DENSITY      >(0.940);
+    myCaseParameters.set<DOMAIN_EXTENT   >({0.1,0.1,0.1});
+    myCaseParameters.set<ISO_CONST_A  >(45);
+    myCaseParameters.set<ISO_CONST_B  >(0.5);
+    myCaseParameters.set<K_F  >(5.37E-5);
+    myCaseParameters.set<C_0  >(1);
+    myCaseParameters.set<D_S  >(5.e-11);
+    myCaseParameters.set<PHYS_CHAR_VISCOSITY>(0.00011764705882352942);
+    myCaseParameters.set<parameters::RHO  >({1,1,0});
+    myCaseParameters.set<MAX_PHYS_T   >(15);    // time for fluid simulation
+  }
+  myCaseParameters.fromCLI(argc, argv);
+
+  /// === Step 3: Create Mesh ===
+  Mesh mesh = createMesh(myCaseParameters);
+
+  /// === Step 4: Create Case ===
+  MyCase myCase(myCaseParameters, mesh);
+
+  /// === Step 5: Prepare Geometry ===
+  prepareGeometry(myCase);
+
+  /// === Step 6: Prepare Lattice ===
+  prepareLatticeAD<0>(myCase);
+  prepareLatticeAD<1>(myCase);
+  prepareLatticeAD<2>(myCase);
+  prepareLatticeNS(myCase);
+
+  setInitialValuesADE<0>(myCase);
+  setInitialValuesADE<1>(myCase);
+  setInitialValuesADE<2>(myCase);
+  setInitialValuesNSE(myCase);
+
+  /// === Step 7: Simulate ===
+  simulate(myCase);
 }

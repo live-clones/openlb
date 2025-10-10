@@ -162,6 +162,7 @@ protected:
 
 public:
   CirclePowerLaw3D(olb::Vector<T, 3> axisPoint, std::vector<T> axisDirection,  T maxVelocity, T radius, T n, T scale = T(1));
+  CirclePowerLaw3D(olb::Vector<T, 3> axisPoint, olb::Vector<T, 3> axisDirection,  T maxVelocity, T radius, T n, T scale = T(1));
   CirclePowerLaw3D(T center0, T center1, T center2, T normal0, T normal1, T normal2, T radius, T maxVelocity, T n, T scale = T(1));
   CirclePowerLaw3D(const SuperGeometry<T,3>& superGeometry, int material, T maxVelocity, T n, T distance2Wall, T scale = T(1));
 
@@ -229,6 +230,7 @@ protected:
 
 public:
   CircleCasson3D(olb::Vector<T, 3> axisPoint, std::vector<T> axisDirection, T radius, T cassonViscosity, T pressureDrop, T yieldStress, T scale = 1.0);
+  CircleCasson3D(olb::Vector<T, 3> axisPoint, olb::Vector<T, 3> axisDirection, T radius, T cassonViscosity, T pressureDrop, T yieldStress, T scale = 1.0);
 
   /// Returns centerpoint vector
   olb::Vector<T, 3> getCenter()
@@ -255,6 +257,7 @@ class CirclePoiseuille3D final : public CirclePowerLaw3D<T> {
 
 public:
   CirclePoiseuille3D(std::vector<T> axisPoint, std::vector<T> axisDirection,  T maxVelocity, T radius, T scale = T(1));
+  CirclePoiseuille3D(Vector<T,3> axisPoint, Vector<T,3> axisDirection,  T maxVelocity, T radius, T scale = T(1));
   CirclePoiseuille3D(T center0, T center1, T center2, T normal0, T normal1, T normal2, T radius, T maxVelocity, T scale = T(1));
   CirclePoiseuille3D(SuperGeometry<T,3>& superGeometry, int material, T maxVelocity, T distance2Wall, T scale = T(1));
 

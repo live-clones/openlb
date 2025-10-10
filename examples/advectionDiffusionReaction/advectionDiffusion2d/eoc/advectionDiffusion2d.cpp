@@ -48,10 +48,6 @@ int main(int argc, char *argv[])
 
   singleton::directories().setOutputDir("./tmp/");
 
-  /// file clean-up
-  CSV<MyCase::value_t> csvWriter;
-  csvWriter.clearFile("averageSimL2RelErr");
-
   MyCase::ParametersD myCaseParameters;
   {
     using namespace olb::parameters;
@@ -72,6 +68,8 @@ int main(int argc, char *argv[])
     util::pow(2, myCaseParameters.get<parameters::RUNS>()-1) * myCaseParameters.get<parameters::RESOLUTION>()
   );
 
+  CSV<MyCase::value_t> csvWriter("averageSimL2RelErr");
+
   for (std::size_t i = 0; i < myCaseParameters.get<parameters::RUNS>(); ++i) {
 
     //Adjust Resolution and output interval
@@ -90,5 +88,11 @@ int main(int argc, char *argv[])
     setInitialValues(myCase);
 
     simulate(myCase);
+
+    // this outputs into ./tmp/gnuplotData/data/averageSimL2RelErr
+    singleton::directories().setOutputDir("./tmp/");
+    csvWriter.writeDataFile(myCaseParameters.get<parameters::RESOLUTION>(),
+                            myCaseParameters.get<parameters::AVG_L2_ERROR>(),
+                            "averageSimL2RelErr");
   }
 }

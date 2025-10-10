@@ -45,6 +45,7 @@ namespace olb::parameters {
   struct PULSE_DIFF_BOUND : public descriptors::FIELD_BASE<1> {};
   struct MAX_RESOLUTION : public descriptors::FIELD_BASE<1> {};
 
+  struct AVG_L2_ERROR : public descriptors::FIELD_BASE<1> {};
 }
 
 template <typename T>
@@ -189,8 +190,7 @@ MyCase::value_t errorEval( MyCase& myCase, const int iT)
   using TDESCRIPTOR = MyCase::descriptor_t_of<AdvectionDiffusion>;
 
   OstreamManager clout(std::cout,"error");
-  Gnuplot<T> plt("UNUSED_FILE");
-  CSV<T> csvWriter("UNUSED_CSV_FILE");
+  CSV<T> csvWriter("errors");
 
   T result[2] = {T(), T()};
   int tmp[] = {int()};
@@ -365,12 +365,7 @@ void simulate(MyCase& myCase)
   }
 
   simulationAverage /= timeCount;
-
-  // this outputs into ./tmp/gnuplotData/data/averageSimL2RelErr
-  singleton::directories().setOutputDir("./tmp/");
-  Gnuplot<T> plt("UNUSED");
-  CSV<T> csvWriter("UNUSED_CSV");
-  csvWriter.writeDataFile(N, simulationAverage, "averageSimL2RelErr");
+  parameters.set<parameters::AVG_L2_ERROR>(simulationAverage);
 
   clout << "Simulation Average Relative L2 Error: " << simulationAverage << std::endl;
 
