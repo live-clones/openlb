@@ -148,11 +148,11 @@ void prepareLatticeAD(MyCase& myCase) {
   lattice.template setParameter<descriptors::OMEGA>(omega);
 
   {
-    auto& communicator = lattice.template getCommunicator(stage::Full());
+    auto& communicator = lattice.getCommunicator(stage::Full());
     communicator.template requestField<descriptors::VELOCITY>();
     communicator.template requestField<descriptors::SOURCE>();
-    communicator.template requestOverlap(parameters.get<parameters::OVERLAP>());
-    communicator.template exchangeRequests();
+    communicator.requestOverlap(parameters.get<parameters::OVERLAP>());
+    communicator.exchangeRequests();
   }
 
   clout << "Prepare ADE Lattice ... OK" << std::endl;
