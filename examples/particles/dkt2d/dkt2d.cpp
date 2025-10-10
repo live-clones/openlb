@@ -45,9 +45,6 @@
  * to print simulation results.
  */
 
-#define NEW_FRAMEWORK
-
-
 #include <olb.h>
 
 using namespace olb;
@@ -385,6 +382,7 @@ int main(int argc, char* argv[])
        (1.-myCaseParameters.get<PHYS_CHAR_DENSITY>() / myCaseParameters.get<PART_RHO>())};
     });
   }
+  myCaseParameters.fromCLI(argc, argv);
 
   Mesh mesh = createMesh(myCaseParameters);
   MyCase myCase(myCaseParameters, mesh);
@@ -394,5 +392,4 @@ int main(int argc, char* argv[])
   prepareLattice(myCase);
 
   simulate(myCase);
-
 }
