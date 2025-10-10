@@ -258,6 +258,7 @@ struct CarreauYasuda
   }
 
   void setModelParameter(MyCase& myCase) {
+    OstreamManager clout(std::cout, "setModelParameter");
     auto&   lattice       = myCase.getLattice(NavierStokes {});
     auto&   converter     = lattice.getUnitConverter();
     const T conversionMU  = converter.getConversionFactorViscosity();
@@ -274,7 +275,7 @@ struct CarreauYasuda
     lattice.setParameter<visco::MU_ZERO>(mu_zero / (physRho * conversionMU));
     lattice.setParameter<visco::MU_INF>(mu_inf / (physRho * conversionMU));
   }
-};                          // PowerLaw index used for comparison
+};
 
 void prepareGeometry(MyCase& myCase)
 {
@@ -588,7 +589,7 @@ void setGetParameters( MyCase::ParametersD& myCaseParameters, int& argc, char** 
     return myCaseParameters.get<DYNAMIC_VISCOSITY>()*1.45;  
   });  // zero viscosity (Pa*s)
   myCaseParameters.set<MU_INF>([&] {
-    return myCaseParameters.get<DYNAMIC_VISCOSITY>()*10.;  
+    return myCaseParameters.get<DYNAMIC_VISCOSITY>()/10.;  
   });  // infinity viscosity (Pa*s)
   myCaseParameters.set<N_PL>(0.708);  // PL fluid index
   
