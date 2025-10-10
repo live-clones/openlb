@@ -52,7 +52,7 @@ int main( int argc, char* argv[] )
   initialize( &argc, &argv );
   MyCase::ParametersD myCaseParameters;
   setGetParameters(myCaseParameters, argc, argv);
-  singleton::directories().setOutputDir( "./tmp/bc" + std::to_string(int(myCaseParameters.get<parameters::BOUNDARY_TYPE>())) + "_force" + std::to_string(int(myCaseParameters.get<parameters::FLOW_TYPE>())) + "/" );
+  singleton::directories().setOutputDir( "./tmp/" );
   
   /// === Step 3: Create Mesh ===
   Mesh mesh = createMesh(myCaseParameters);

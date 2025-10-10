@@ -60,7 +60,7 @@ enum BoundaryType : int {
 namespace olb::parameters {  
   struct FLOW_TYPE      : public descriptors::TYPED_FIELD_BASE<FlowType,1> { };
   struct BOUNDARY_TYPE  : public descriptors::TYPED_FIELD_BASE<BoundaryType,1> { };
-  struct PARTIAL_SLIP_TUNER : public descriptors::TYPED_FIELD_BASE<int,1> { };
+  struct PARTIAL_SLIP_TUNER : public descriptors::FIELD_BASE<1> { };
   struct EOC            : public descriptors::TYPED_FIELD_BASE<bool,1> { };
   
   struct DIAMETER       : public descriptors::FIELD_BASE<1> { };  // diameter of the pipe
@@ -237,7 +237,7 @@ void prepareLattice(MyCase& myCase)
         break;
     }
     if (boundaryType == LOCAL)  boundary::set<boundary::LocalPressure>(lattice, myCase.getGeometry(), 4);
-    else                        boundary::set<boundary::LocalPressure>(lattice, myCase.getGeometry(), 4);
+    else                        boundary::set<boundary::InterpolatedPressure>(lattice, myCase.getGeometry(), 4);
   }
 
   clout << "Prepare Lattice ... OK" << std::endl;
