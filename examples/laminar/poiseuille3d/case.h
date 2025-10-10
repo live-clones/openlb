@@ -61,6 +61,8 @@ namespace olb::parameters {
   struct FLOW_TYPE      : public descriptors::TYPED_FIELD_BASE<FlowType,1> { };
   struct BOUNDARY_TYPE  : public descriptors::TYPED_FIELD_BASE<BoundaryType,1> { };
   struct PARTIAL_SLIP_TUNER : public descriptors::TYPED_FIELD_BASE<int,1> { };
+  struct EOC_START_RESOLUTION : public descriptors::TYPED_FIELD_BASE<size_t,1> { };
+  struct EOC_MAX_RESOLUTION : public descriptors::TYPED_FIELD_BASE<size_t,1> { };
   struct EOC            : public descriptors::TYPED_FIELD_BASE<bool,1> { };
   
   struct DIAMETER       : public descriptors::FIELD_BASE<1> { };  // diameter of the pipe
@@ -650,7 +652,8 @@ void setGetParameters( MyCase::ParametersD& myCaseParameters, int& argc, char** 
     myCaseParameters.set<PHYS_DELTA_X>([&] {
       return myCaseParameters.get<DIAMETER>()/myCaseParameters.get<RESOLUTION>();
     });
+    myCaseParameters.set<parameters::EOC_START_RESOLUTION>(21);
+    myCaseParameters.set<parameters::EOC_MAX_RESOLUTION>(52);
   }
   myCaseParameters.fromCLI(argc, argv);
-
 }
