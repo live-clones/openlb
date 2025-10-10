@@ -253,7 +253,7 @@ void prepareLatticeCRAD(MyCase& myCase) {
   CRADlattice.template setParameter<descriptors::OMEGA>(omega);
 
   {
-    auto& communicatorCR = CRADlattice.template getCommunicator(stage::PreCollide());
+    auto& communicatorCR = CRADlattice.getCommunicator(stage::PreCollide());
     communicatorCR.requestOverlap(params.get<parameters::OVERLAP>());
     communicatorCR.exchangeRequests();
   }
@@ -307,14 +307,14 @@ void setInitialValuesCRAD(MyCase& myCase) {
   CRADlattice.template defineField<descriptors::VELOCITY>(geometry.getMaterialIndicator({1, 2, 3, 4, 5 }), u );
 
   // setting actual values for the boundary
-  CRADlattice.template defineRho( geometry, 3, rhoA);
-  CRADlattice.template iniEquilibrium( geometry, 3, rhoA, poiseuilleU1 );
-  CRADlattice.template defineRho( geometry, 4, rhoB);
-  CRADlattice.template iniEquilibrium( geometry, 4, rhoB, poiseuilleU2 );
+  CRADlattice.defineRho( geometry, 3, rhoA);
+  CRADlattice.iniEquilibrium( geometry, 3, rhoA, poiseuilleU1 );
+  CRADlattice.defineRho( geometry, 4, rhoB);
+  CRADlattice.iniEquilibrium( geometry, 4, rhoB, poiseuilleU2 );
   CRADlattice.template defineField<descriptors::SOURCE>(geometry.getMaterialIndicator({1, 2, 3, 4, 5 }), rho0);
-  CRADlattice.template defineRho( geometry.getMaterialIndicator({1, 2, 5}), rho0 );
-  CRADlattice.template iniEquilibrium( geometry.getMaterialIndicator({1, 2, 5}), rho0, u );
-  CRADlattice.template initialize();
+  CRADlattice.defineRho( geometry.getMaterialIndicator({1, 2, 5}), rho0 );
+  CRADlattice.iniEquilibrium( geometry.getMaterialIndicator({1, 2, 5}), rho0, u );
+  CRADlattice.initialize();
 }
 
 // Generates a slowly increasing inflow for the first iTMaxStart timesteps

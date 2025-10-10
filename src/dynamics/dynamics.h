@@ -219,6 +219,15 @@ using ForcedBGKdynamics = dynamics::Tuple<
   forcing::PlainGuo
 >;
 
+template <typename T, typename DESCRIPTOR, typename MOMENTA=momenta::BulkTuple>
+using ScaledForcedBGKdynamics = dynamics::Tuple<
+  T, DESCRIPTOR,
+  MOMENTA,
+  equilibria::SecondOrder,
+  collision::BGK,
+  forcing::ScaledPlainGuo
+>;
+
 // BGK collision step with external force (Guo) for multiple component lattices
 template <typename T, typename DESCRIPTOR, typename MOMENTA=momenta::ExternalVelocityTuple>
 using MultiComponentForcedBGKdynamics = dynamics::Tuple<

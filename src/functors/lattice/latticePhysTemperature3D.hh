@@ -43,7 +43,7 @@ namespace olb {
 
 template <typename T, typename DESCRIPTOR, typename TDESCRIPTOR>
 SuperLatticePhysTemperature3D<T,DESCRIPTOR,TDESCRIPTOR>::SuperLatticePhysTemperature3D(
-  SuperLattice<T,TDESCRIPTOR>& sLattice, ThermalUnitConverter<T,DESCRIPTOR,TDESCRIPTOR> const& converter)
+  SuperLattice<T,TDESCRIPTOR>& sLattice, UnitConverter<T,DESCRIPTOR> const& converter)
   : SuperLatticeThermalPhysF3D<T,DESCRIPTOR,TDESCRIPTOR>(sLattice, converter, 1)
 {
   this->getName() = "physTemperature";
@@ -56,7 +56,7 @@ SuperLatticePhysTemperature3D<T,DESCRIPTOR,TDESCRIPTOR>::SuperLatticePhysTempera
 
 template <typename T, typename DESCRIPTOR, typename TDESCRIPTOR>
 BlockLatticePhysTemperature3D<T,DESCRIPTOR,TDESCRIPTOR>::BlockLatticePhysTemperature3D
-(BlockLattice<T,TDESCRIPTOR>& blockLattice, ThermalUnitConverter<T,DESCRIPTOR,TDESCRIPTOR> const& converter)
+(BlockLattice<T,TDESCRIPTOR>& blockLattice, UnitConverter<T,DESCRIPTOR> const& converter)
   : BlockLatticeThermalPhysF3D<T,DESCRIPTOR,TDESCRIPTOR>(blockLattice,converter,1)
 {
   this->getName() = "physTemperature";
