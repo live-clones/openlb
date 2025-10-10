@@ -361,10 +361,12 @@ int main(int argc, char* argv[]) {
     myCaseParameters.set<PHYS_STAT_ITER_T>(100);
   }
   myCaseParameters.set<parameters::DOMAIN_EXTENT>([&]() -> Vector<MyCase::value_t, 2> {
-    return {myCaseParameters.get<parameters::RESOLUTION>(), myCaseParameters.get<parameters::RESOLUTION>() / 2};
+    return {static_cast<MyCase::value_t>(myCaseParameters.get<parameters::RESOLUTION>()),
+            static_cast<MyCase::value_t>(myCaseParameters.get<parameters::RESOLUTION>() / 2)};
   });
   myCaseParameters.set<parameters::FORCE>([&]() -> MyCase::value_t {
-    return {30. / (myCaseParameters.get<parameters::DOMAIN_EXTENT>()[1] * myCaseParameters.get<parameters::DOMAIN_EXTENT>()[1])};
+    return 30. / (  myCaseParameters.get<parameters::DOMAIN_EXTENT>()[1]
+                  * myCaseParameters.get<parameters::DOMAIN_EXTENT>()[1]);
   });
   myCaseParameters.fromCLI(argc, argv);
 
