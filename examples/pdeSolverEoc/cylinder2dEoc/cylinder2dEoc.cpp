@@ -47,4 +47,30 @@ struct NUM_SIMULATIONS : public descriptors::TYPED_FIELD_BASE<int,1> { };
 
 int main( int argc, char* argv[] )
 {
+      initialize(&argc, &argv);
+  singleton::directories().setOutputDir("./tmp/");
+
+  /// === Step 2: Set Parameters ===
+  MyCase::ParametersD myCaseParameters;
+  {
+    using namespace olb::parameters;
+    myCaseParameters.set<RESOLUTION>(10);
+    myCaseParameters.set<REYNOLDS >(20.);
+    myCaseParameters.set<MAX_PHYS_T>(16.);
+    myCaseParameters.set<DOMAIN_EXTENT>({2.2, .41});
+    myCaseParameters.set<PHYS_CHAR_VELOCITY>(0.2);
+    myCaseParameters.set<LATTICE_RELAXATION_TIME>(0.56);
+    myCaseParameters.set<PHYS_CHAR_DENSITY>(1.0);
+    myCaseParameters.set<RADIUS_CYLINDER>(0.05);
+    myCaseParameters.set<CENTER_CYLINDER>({0.2, 0.2});
+    myCaseParameters.set<PHYS_VTK_ITER_T>(0.3);
+    myCaseParameters.set<PHYS_STAT_ITER_T>(0.1);
+    myCaseParameters.set<RAMP_UP_UPDATE>(0.01);
+    myCaseParameters.set<RAMP_UP_END_FRACTION>(0.4);
+
+    myCaseParameters.set<START_RESOLUTION>(10);
+    myCaseParameters.set<NUM_SIMULATIONS>(4);
+  }
+  myCaseParameters.fromCLI(argc, argv);
+
 }
