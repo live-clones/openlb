@@ -120,7 +120,6 @@ void prepareGeometry(MyCase& myCase)
   geometry.rename(2, 1, pipe);
 
   if (flowType == NON_FORCED) {
-    clout << "non-forced" << std::endl;
     geometry.clean();
     Vector<T, 3> origin(0, radius, radius);
     Vector<T, 3> extend = origin;
@@ -238,7 +237,7 @@ void prepareLattice(MyCase& myCase)
         break;
     }
     if (boundaryType == LOCAL)  boundary::set<boundary::LocalPressure>(lattice, myCase.getGeometry(), 4);
-    else                        boundary::set<boundary::InterpolatedPressure>(lattice, myCase.getGeometry(), 4);
+    else                        boundary::set<boundary::LocalPressure>(lattice, myCase.getGeometry(), 4);
   }
 
   clout << "Prepare Lattice ... OK" << std::endl;
