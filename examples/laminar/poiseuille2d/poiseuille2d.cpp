@@ -48,7 +48,7 @@ using namespace olb::graphics;
 using namespace olb::names;
 
 #ifdef ENABLE_MRT
-  using MyCase = Case< 
+  using MyCase = Case<
     NavierStokes, Lattice<FLOATING_POINT_TYPE, descriptors::D2Q9<tag::MRT, FORCE>>
   >;
 
@@ -58,7 +58,7 @@ using namespace olb::names;
   using BulkDynamics       = MRTdynamics<T,DESCRIPTOR>;
   using ForcedBulkDynamics = ForcedMRTdynamics<T,DESCRIPTOR>;
 #else
-  using MyCase = Case< 
+  using MyCase = Case<
     NavierStokes, Lattice<FLOATING_POINT_TYPE, descriptors::D2Q9<FORCE>>
   >;
 
@@ -641,7 +641,7 @@ void simulate(MyCase& myCase){
 
   clout << "starting simulation..." << std::endl;
   util::Timer<T> timer(iTmax, myCase.getGeometry().getStatistics().getNvoxel());
-  util::ValueTracer<T> converge(myCase.getLattice(NavierStokes{}).getUnitConverter().getLatticeTime(parameters.get<parameters::CONV_ITER>()), 
+  util::ValueTracer<T> converge(myCase.getLattice(NavierStokes{}).getUnitConverter().getLatticeTime(parameters.get<parameters::CONV_ITER>()),
                                 parameters.get<parameters::CONVERGENCE_PRECISION>());
   timer.start();
 
