@@ -45,19 +45,19 @@ void simulatePoiseuilleForEOC(MyCase::ParametersD& parameters, Gnuplot<MyCase::v
 
   /// === Step 3: Create Mesh ===
   Mesh mesh = createMesh(parameters);
-  
+
   /// === Step 4: Create Case ===
   MyCase myCase(parameters, mesh);
-  
+
   /// === Step 5: Prepare Geometry ===
   prepareGeometry(myCase);
-  
+
   /// === Step 6: Prepare Lattice ===
   prepareLattice(myCase);
-  
+
   /// === Step 7: Definition of Initial, Boundary Values, and Fields ===
   setInitialValues(myCase);
-  
+
   /// === Step 8: Simulate ===
   simulate(myCase);
 
@@ -127,7 +127,7 @@ int main( int argc, char* argv[] )
   MyCase::ParametersD myCaseParameters;
   setGetParameters(myCaseParameters, argc, argv);
   myCaseParameters.set<parameters::EOC>(true);
-  
+
   BoundaryType boundaryType = myCaseParameters.get<parameters::BOUNDARY_TYPE>();
   bool forbiddenEOCCombination = (boundaryType == FREE_SLIP) || (boundaryType == PARTIAL_SLIP);
   if ( forbiddenEOCCombination ) std::runtime_error("eoc computation is currently not supported for slip boundary conditions");
@@ -143,7 +143,7 @@ int main( int argc, char* argv[] )
     "set terminal png size 720, 720 font 'Arial,10'",
     Gnuplot<MyCase::value_t>::LOGLOG,
     Gnuplot<MyCase::value_t>::LINREG);
-  
+
   // set the labels for the plot
   gplot.setLabel("Resolution test", "average Error");
 

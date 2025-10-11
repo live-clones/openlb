@@ -45,14 +45,6 @@ using MyCase = Case<Radiation, Lattice<double, descriptors::D3Q27<tag::RTLBM>>>;
 
 namespace olb::parameters {
 
-struct ANINOSOTROPY_FACTOR : public descriptors::FIELD_BASE<1> {};
-
-struct ABSORPTION : public descriptors::FIELD_BASE<1> {};
-struct SCATTERING : public descriptors::FIELD_BASE<1> {};
-struct MCVALUE : public descriptors::FIELD_BASE<1> {};
-struct TOTAL_ENERGY : public descriptors::FIELD_BASE<1> {};
-struct INTENSITY : public descriptors::FIELD_BASE<1> {};
-
 struct CASE_NUMBER : public descriptors::TYPED_FIELD_BASE<int, 1> {};
 struct DYNAMICS_NAME : public descriptors::TYPED_FIELD_BASE<std::string, 1> {};
 struct USE_MINK : public descriptors::TYPED_FIELD_BASE<bool, 1> {};

@@ -265,8 +265,8 @@ void getResults(MyCase& myCase,
 
   SuperVTMwriter2D<T> vtmWriter( "rayleighTaylor2dsLatticeOne" );
 
-  const int vtkIter   = parameters.get<parameters::PHYS_VTK_ITER_T>();
-  const int statIter  = parameters.get<parameters::PHYS_STAT_ITER_T>();
+  const int vtkIter   = parameters.get<parameters::LATTICE_VTK_ITER_T>();
+  const int statIter  = parameters.get<parameters::LATTICE_STAT_ITER_T>();
 
   if ( iT == 0 ) {
     // Writes the geometry, cuboid no. and rank no. as vti file for visualization
@@ -311,7 +311,7 @@ void simulate(MyCase& myCase) {
   using T = MyCase::value_t;
   auto& parameters  = myCase.getParameters();
 
-  const int iTmax   = parameters.get<parameters::MAX_ITER>();
+  const std::size_t iTmax = parameters.get<parameters::MAX_LATTICE_T>();
 
   util::Timer<T> timer(iTmax, myCase.getGeometry().getStatistics().getNvoxel());
   timer.start();
@@ -346,7 +346,7 @@ int main(int argc, char* argv[]) {
     myCaseParameters.set<RESOLUTION>(800);
     myCaseParameters.set<ORIGIN>({0, 0});
     myCaseParameters.set<PHYS_DELTA_X>(1.);
-    myCaseParameters.set<MAX_ITER>(20000);
+    myCaseParameters.set<MAX_LATTICE_T>(20000);
     myCaseParameters.set<RHO_1>(0.0);
     myCaseParameters.set<RHO_2>(1.0);
     myCaseParameters.set<LATTICE_RELAXATION_TIME>(1.);
@@ -357,8 +357,8 @@ int main(int argc, char* argv[]) {
     myCaseParameters.set<COUPLING_G>(3.);
     myCaseParameters.set<ZERO>(1.e-6);
     myCaseParameters.set<NOISE>(4.e-2);
-    myCaseParameters.set<PHYS_VTK_ITER_T>(100);
-    myCaseParameters.set<PHYS_STAT_ITER_T>(100);
+    myCaseParameters.set<LATTICE_VTK_ITER_T>(100);
+    myCaseParameters.set<LATTICE_STAT_ITER_T>(100);
   }
   myCaseParameters.set<parameters::DOMAIN_EXTENT>([&]() -> Vector<MyCase::value_t, 2> {
     return {static_cast<MyCase::value_t>(myCaseParameters.get<parameters::RESOLUTION>()),

@@ -31,10 +31,10 @@
  * - forced/ nonForced flow
  * - different boundary conditions
  * - simulation only or eoc convergence analysis
- * 
+ *
  * The main code of the simulation is in case.h as it is also used by the
  * example ../../pdeSolverEoc/poiseuille3dEoc
- * 
+ *
  * Set flag in order to use mrt collision operators instead of bgk
  * #define ENABLE_MRT
  */
@@ -57,7 +57,8 @@ enum BoundaryType : int {
   PARTIAL_SLIP = 5
 };
 
-namespace olb::parameters {  
+namespace olb::parameters {
+
   struct FLOW_TYPE      : public descriptors::TYPED_FIELD_BASE<FlowType,1> { };
   struct BOUNDARY_TYPE  : public descriptors::TYPED_FIELD_BASE<BoundaryType,1> { };
   struct PARTIAL_SLIP_TUNER   : public descriptors::TYPED_FIELD_BASE<int,1> { };
@@ -78,10 +79,11 @@ namespace olb::parameters {
   struct PRESSURE_L1_ABS_ERROR    : public descriptors::FIELD_BASE<1> { };
   struct PRESSURE_L2_ABS_ERROR    : public descriptors::FIELD_BASE<1> { };
   struct PRESSURE_LINF_ABS_ERROR  : public descriptors::FIELD_BASE<1> { };
-  
+
   struct DIAMETER       : public descriptors::FIELD_BASE<1> { };  // diameter of the pipe
   struct LENGTH         : public descriptors::FIELD_BASE<1> { };  // length of the pipe
   struct RESIDUUM       : public descriptors::FIELD_BASE<1> { };  //residuum for the convergence check
+
 }
 
 using MyCase = Case<
@@ -113,10 +115,10 @@ void prepareGeometry(MyCase& myCase)
   OstreamManager clout(std::cout, "prepareGeometry");
 
   clout << "Prepare Geometry ..." << std::endl;
-  
+
   auto&parameters = myCase.getParameters();
   auto& geometry = myCase.getGeometry();
-  
+
   const T radius = parameters.get<parameters::DIAMETER>()/2.0;
   const T length = parameters.get<parameters::LENGTH>();
   FlowType flowType = parameters.get<parameters::FLOW_TYPE>();
@@ -173,14 +175,14 @@ void prepareLattice(MyCase& myCase)
   using DESCRIPTOR = MyCase::descriptor_t_of<NavierStokes>;
   auto& parameters = myCase.getParameters();
   auto& lattice = myCase.getLattice(NavierStokes{});
-  
+
   const T radius = parameters.get<parameters::DIAMETER>()/2.0;
   const T length = parameters.get<parameters::LENGTH>();
-  
+
   const T diameter = parameters.get<parameters::DIAMETER>();
   const T physU = parameters.get<parameters::PHYS_CHAR_VELOCITY>();
   const T physDeltaX = parameters.get<parameters::PHYS_DELTA_X>();
-  
+
   lattice.setUnitConverter<UnitConverterFromResolutionAndRelaxationTime<T,DESCRIPTOR>>(
     int {parameters.get<parameters::RESOLUTION>()},                  // resolution: number of voxels per charPhysL
     (T)   parameters.get<parameters::LATTICE_RELAXATION_TIME>(), // latticeRelaxationTime: relaxation time, have to be greater than 0.5!
@@ -233,7 +235,7 @@ void prepareLattice(MyCase& myCase)
     case INTERPOLATED:
     default:
       boundary::set<boundary::InterpolatedVelocity>(lattice, myCase.getGeometry(), 2);
-      break;      
+      break;
   }
 
   if (flowType == NON_FORCED) {
@@ -377,7 +379,7 @@ void error_calc(MyCase& myCase)
   CirclePoiseuille3D<T> uSol(axisPoint, axisDirection, maxVelocity, radius);
   SuperLatticePhysVelocity3D<T,DESCRIPTOR> u( lattice,converter );
   auto indicatorF = geometry.getMaterialIndicator(1);
-  
+
   int tmp[]= { };
   T result[2]= { };
 
@@ -500,7 +502,7 @@ void getResults(MyCase& myCase, std::size_t iT, util::Timer<MyCase::value_t>& ti
 {
   using T = MyCase::value_t;
   using DESCRIPTOR = MyCase::descriptor_t_of<NavierStokes>;
-  
+
   OstreamManager clout( std::cout,"getResults" );
   //Initialize Gnuplot
   static Gnuplot<T> gplot("centerVelocity");
@@ -509,7 +511,7 @@ void getResults(MyCase& myCase, std::size_t iT, util::Timer<MyCase::value_t>& ti
   auto& geometry    = myCase.getGeometry();
   auto& lattice     = myCase.getLattice(NavierStokes{});
   auto& converter   = lattice.getUnitConverter();
-  
+
   const bool    eoc             = parameters.get<parameters::EOC>();
   const BoundaryType boundaryType = parameters.get<parameters::BOUNDARY_TYPE>();
   const bool    noslipBoundary  = ((boundaryType != FREE_SLIP) && (boundaryType != PARTIAL_SLIP));
@@ -525,7 +527,7 @@ void getResults(MyCase& myCase, std::size_t iT, util::Timer<MyCase::value_t>& ti
   if (!eoc) {
     // set up size-increased indicator and instantiate wall shear stress functor (wss)
     SuperLatticePhysWallShearStress3D<T,DESCRIPTOR> wss = WSS(myCase);
-    
+
     SuperVTMwriter3D<T> vtmWriter( "poiseuille3d" );
     SuperLatticePhysVelocity3D<T, DESCRIPTOR> velocity( lattice, converter );
     SuperLatticePhysPressure3D<T, DESCRIPTOR> pressure( lattice, converter );
@@ -621,7 +623,7 @@ void simulate(MyCase& myCase) {
   auto& lattice     = myCase.getLattice(NavierStokes{});
   auto& geometry    = myCase.getGeometry();
   auto& converter   = lattice.getUnitConverter();
-  
+
   const size_t  iTmax   = converter.getLatticeTime( parameters.get<parameters::MAX_PHYS_T>() );
   const size_t  iTcheck = converter.getLatticeTime( parameters.get<parameters::INTERVAL_CONVERGENCE_CHECK>() );
   const T       epsilon = parameters.get<parameters::RESIDUUM>();
@@ -630,7 +632,7 @@ void simulate(MyCase& myCase) {
   util::Timer<T>        timer(iTmax, geometry.getStatistics().getNvoxel());
   util::ValueTracer<T>  converge( iTcheck, epsilon );
   timer.start();
-  
+
   for ( std::size_t iT = 0; iT < iTmax; ++iT ) {
     if ( converge.hasConverged() ) {
       clout << "Simulation converged." << std::endl;
@@ -650,7 +652,7 @@ void simulate(MyCase& myCase) {
   }
 
   timer.stop();
-  timer.printSummary();  
+  timer.printSummary();
 }
 
 void setGetParameters( MyCase::ParametersD& myCaseParameters, int& argc, char** argv ) {

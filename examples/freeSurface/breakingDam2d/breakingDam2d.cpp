@@ -1,6 +1,6 @@
 /*  This file is part of the OpenLB library
  *
- *  Copyright (C) 2021 Claudius Holeksa
+ *  Copyright (C) 2021 Claudius Holeksa, Maximilian Schecher, Adrian Kummerlaender
  *  E-mail contact: info@openlb.net
  *  The most recent release of OpenLB can be downloaded at
  *  <http://www.openlb.net
@@ -23,17 +23,8 @@
 
 #include <olb.h>
 
-#include <vector>
-#include <cmath>
-#include <iostream>
-#include <iomanip>
-#include <memory>
-#include <fstream>
-#include <sstream>
-
 using namespace olb;
 using namespace olb::names;
-
 
 // === Step 1: Declarations ===
 using MyCase = Case<
@@ -45,7 +36,6 @@ using MyCase = Case<
   FreeSurface::TEMP_MASS_EXCHANGE,
   FreeSurface::PREVIOUS_VELOCITY>>
 >;
-
 
 /// @brief Create a simulation mesh, based on user-specified geometry
 /// @return An instance of a mesh with the relevant information
@@ -92,7 +82,6 @@ public:
 /// @param myCase The Case instance which keeps the simulation data
 /// @note The material numbers will be used to assign physics to lattice nodes
 void prepareGeometry( MyCase& myCase ) {
-
   OstreamManager clout( std::cout,"prepareGeometry" );
   clout << "Prepare Geometry ..." << std::endl;
 
@@ -113,7 +102,6 @@ void prepareGeometry( MyCase& myCase ) {
 /// @brief Set lattice dynamics
 /// @param myCase The Case instance which keeps the simulation data
 void prepareLattice( MyCase& myCase ) {
-
   OstreamManager clout( std::cout,"prepareLattice" );
   clout << "Prepare Lattice ..." << std::endl;
 
