@@ -36,6 +36,12 @@ struct STL_SCALING : public descriptors::FIELD_BASE<1> { };
 struct STL_RAY_MODE : public descriptors::TYPED_FIELD_BASE<RayMode,1> { };
 
 struct DECOMPOSITION_STRATEGY : public descriptors::TYPED_FIELD_BASE<std::string,1> { };
+struct DECOMPOSITION_MULTIPLIER : public descriptors::TYPED_FIELD_BASE<std::size_t,1> {
+  template <typename T, typename DESCRIPTOR>
+  static constexpr auto getInitialValue() {
+    return Vector<std::size_t,1>{1};
+  }
+};
 
 }
 
@@ -61,7 +67,7 @@ public:
     IndicatorLayer3D<T> extendedDomain(*stlI, params.template get<PHYS_DELTA_X>());
     Mesh mesh(extendedDomain,
               params.template get<PHYS_DELTA_X>(),
-              singleton::mpi().getSize(),
+              singleton::mpi().getSize() * params.template get<DECOMPOSITION_MULTIPLIER>(),
               params.template get<DECOMPOSITION_STRATEGY>());
     mesh.addIndicator(params.template get<STL_PATH>(), stlI);
     mesh.setOverlap(params.template get<parameters::OVERLAP>());

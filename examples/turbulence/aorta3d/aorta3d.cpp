@@ -373,6 +373,7 @@ int main( int argc, char* argv[] )
     myCaseParameters.set<STL_SCALING>(0.001);
     myCaseParameters.set<STL_RAY_MODE>(RayMode::FastRayZ);
     myCaseParameters.set<DECOMPOSITION_STRATEGY>(std::string("volume"));
+    myCaseParameters.set<DECOMPOSITION_MULTIPLIER>(3);
 
     myCaseParameters.set<RESOLUTION         >(40);
     myCaseParameters.set<TIME_RESOLUTION    >(20);
