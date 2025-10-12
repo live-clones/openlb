@@ -47,7 +47,9 @@ using MyCase = Case<
 >;
 
 namespace olb::parameters {
-  struct BOUZIDI_ENABLED : public descriptors::TYPED_FIELD_BASE<bool,1> { };
+
+struct BOUZIDI_ENABLED : public descriptors::TYPED_FIELD_BASE<bool,1> { };
+
 }
 
 Mesh<MyCase::value_t,MyCase::d> createMesh(MyCase::ParametersD& parameters) {

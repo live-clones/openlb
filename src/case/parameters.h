@@ -76,6 +76,8 @@ struct VOLUME : public descriptors::FIELD_BASE<1> { };
 struct LATTICE_CHAR_VELOCITY : public descriptors::FIELD_BASE<1> { };
 struct LATTICE_RELAXATION_TIME : public descriptors::FIELD_BASE<1> { };
 
+struct CFL : public descriptors::FIELD_BASE<1> {};
+
 struct TIME_STEPS: public descriptors::TYPED_FIELD_BASE<std::size_t,1> { };
 
 struct DOMAIN_EXTENT : public descriptors::FIELD_BASE<0,1> { };
