@@ -369,10 +369,10 @@ int main( int argc, char* argv[] )
   MyCase::ParametersD myCaseParameters;
   {
     using namespace olb::parameters;
-    myCaseParameters.set<STL_PATH>(std::string("aorta3d.stl"));
+    myCaseParameters.set<STL_PATH>("aorta3d.stl");
     myCaseParameters.set<STL_SCALING>(0.001);
     myCaseParameters.set<STL_RAY_MODE>(RayMode::FastRayZ);
-    myCaseParameters.set<DECOMPOSITION_STRATEGY>(std::string("volume"));
+    myCaseParameters.set<DECOMPOSITION_STRATEGY>("volume");
     myCaseParameters.set<DECOMPOSITION_MULTIPLIER>(3);
 
     myCaseParameters.set<RESOLUTION         >(40);

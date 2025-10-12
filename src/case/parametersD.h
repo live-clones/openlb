@@ -118,12 +118,12 @@ public:
     setupTypeErasedField<FIELD>(typeErasedField);
   }
 
-  //template <concepts::Field FIELD>
-  //requires (   DESCRIPTOR::template size<FIELD>() == 1
-  //          && std::is_same_v<typename FIELD::value_t,std::string>)
-  //void set(char* text) {
-  //  set<FIELD>(std::string(text));
-  //}
+  template <concepts::Field FIELD>
+  requires (   DESCRIPTOR::template size<FIELD>() == 1
+            && std::is_same_v<typename FIELD::template value_type<T>,std::string>)
+  void set(const char* text) {
+    set<FIELD>(std::string(text));
+  }
 
   // Set dependent parameter with a lambda for lazy evaluation
   template <concepts::Field FIELD>
