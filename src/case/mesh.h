@@ -118,21 +118,14 @@ public:
     _indicators[name] = indicatorF;
   }
 
-  /// Reads STL with the given settings and stores under its path
-  std::shared_ptr<STLreader<T>> readSTL(std::string path, T deltaX, T scaling) {
-    std::shared_ptr<IndicatorF<T,D>> stlI(new STLreader<T>(path, deltaX, scaling));
-    addIndicator(path, stlI);
-    return std::static_pointer_cast<STLreader<T>>(stlI);
-  }
-
-  /// Reads STL with the given settings and stores under its path
-  std::shared_ptr<STLreader<T>> readSTL(std::string path) {
-    return std::static_pointer_cast<STLreader<T>>(getIndicator(path));
-  }
-
   /// Return indicator by name
   std::shared_ptr<IndicatorF<T,D>> getIndicator(std::string name) {
     return _indicators.at(name);
+  }
+
+  /// Return previously read STL
+  std::shared_ptr<STLreader<T>> getSTL(std::string path) {
+    return std::static_pointer_cast<STLreader<T>>(getIndicator(path));
   }
 
 };

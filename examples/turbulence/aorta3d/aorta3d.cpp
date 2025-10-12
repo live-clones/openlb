@@ -228,7 +228,7 @@ void getResults(MyCase& myCase, SuperVtuSurfaceWriter<MyCase::value_t>& vtuWrite
   const T physDeltaX = converter.getPhysDeltaX();
   const bool bouzidiOn = parameters.get<parameters::BOUZIDI_ENABLED>();
 
-  auto stlI = myCase.getMesh().readSTL(parameters.get<parameters::STL_PATH>());
+  auto stlI = myCase.getMesh().getSTL(parameters.get<parameters::STL_PATH>());
 
   OstreamManager clout( std::cout,"getResults" );
 
@@ -333,7 +333,7 @@ void simulate(MyCase& myCase) {
 
   OstreamManager clout(std::cout, "simulate");
 
-  auto stlI = myCase.getMesh().readSTL(parameters.get<parameters::STL_PATH>());
+  auto stlI = myCase.getMesh().getSTL(parameters.get<parameters::STL_PATH>());
   SuperVtuSurfaceWriter<T> vtuWriter("surface", myCase.getMesh().getCuboidDecomposition(), myCase.getMesh().getLoadBalancer(), *stlI);
 
   // === 4th Step: Main Loop with Timer ===
