@@ -40,10 +40,7 @@ struct DIFFUSIVITY : public descriptors::FIELD_BASE<1> { };
 
 }
 
-using MyCase = Case<
-NavierStokes, Lattice<double, D3Q7<VELOCITY,OMEGA>>// the scalar field contains material values if a cell should be considered for the zero gradient BC or not
->;
-
+using MyCase = Case<NavierStokes, Lattice<double, D3Q7<VELOCITY,OMEGA>>>;
 
 Mesh<MyCase::value_t, MyCase::d> createMesh(MyCase::ParametersD& parameters) {
   using T = MyCase::value_t;
@@ -165,15 +162,17 @@ void setInitialValues(MyCase& myCase) {
   // Initial conditions
   AnalyticalConst3D<T,T> rho0(1.e-8);
   AnalyticalConst3D<T,T> rho_plate(1.0);
-  Vector<T,3> velocity(adLattice.getUnitConverter().getCharLatticeVelocity(), 0.0, 0.0);
+
+  Vector<T,3> velocity(adLattice.getUnitConverter().getCharPhysVelocity(), 0.0, 0.0);
   AnalyticalConst3D<T,T> u(velocity);
 
   // set the convective velocity field
-  adLattice.template defineField<descriptors::VELOCITY>(bulkIndicator, u);
+  fields::setVelocity<descriptors::VELOCITY>(adLattice, bulkIndicator, velocity);
 
   // set initail population to equilibrium
   adLattice.defineRho(superGeometry.getMaterialIndicator({1, 2, 3, 4}), rho0);
   adLattice.iniEquilibrium(superGeometry.getMaterialIndicator({1, 2, 3, 4}), rho0, u);
+
   adLattice.defineRho(superGeometry, 5, rho_plate);
   adLattice.iniEquilibrium(superGeometry, 5, rho_plate, u);
 

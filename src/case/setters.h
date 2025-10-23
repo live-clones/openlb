@@ -40,6 +40,16 @@ void set(SuperLattice<T,DESCRIPTOR>& sLattice,
   sLattice.template defineField<FIELD>(std::move(domainI), fieldF);
 }
 
+template <typename FIELD, typename T, typename DESCRIPTOR, typename VALUE>
+void setVelocity(SuperLattice<T,DESCRIPTOR>& sLattice,
+                 FunctorPtr<SuperIndicatorF<T,DESCRIPTOR::d>>&& domainI,
+                 VALUE fieldD)
+  requires std::constructible_from<FieldD<T,DESCRIPTOR,FIELD>, VALUE>
+{
+  AnalyticalConst<DESCRIPTOR::d,T,T> fieldF(sLattice.getUnitConverter().getLatticeVelocity(fieldD));
+  sLattice.template defineField<FIELD>(std::move(domainI), fieldF);
+}
+
 }
 
 namespace momenta {
