@@ -359,6 +359,11 @@ struct OMEGA                : public FIELD_BASE<1,  0, 0> {
     return value > 0;
   }
 };
+struct CRYSTLAYER           : public FIELD_BASE<1,  0, 0> { };
+struct SOLUBILITY           : public FIELD_BASE<1,  0, 0> { };
+struct NUCL                 : public FIELD_BASE<1,  0, 0> { };
+struct MOMENTA_DENSITY      : public FIELD_BASE<1,  0, 0> { };
+struct MOMENTA_VELOCITY     : public FIELD_BASE<0,  1, 0> { };
 struct TAU                  : public FIELD_BASE<1,  0, 0> { };
 struct INTERFACE_WIDTH      : public FIELD_BASE<1,  0, 0> { };
 struct MAGIC                : public FIELD_BASE<1,  0, 0> { };

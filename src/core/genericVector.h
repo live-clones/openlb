@@ -35,11 +35,11 @@ namespace olb {
 /// Generic vector of values supporting basic arithmetic
 template<typename T, unsigned D, typename IMPL>
 struct GenericVector {
-  constexpr GenericVector() = default;
-  GenericVector(const GenericVector&) = delete;
-  GenericVector(GenericVector&&) = delete;
+  any_platform constexpr GenericVector() = default;
+  any_platform GenericVector(const GenericVector&) = delete;
+  any_platform GenericVector(GenericVector&&) = delete;
 
-  GenericVector& operator = (GenericVector&& rhs) = delete;
+  any_platform GenericVector& operator = (GenericVector&& rhs) = delete;
 
   using value_type = T;
   static constexpr unsigned d = D;

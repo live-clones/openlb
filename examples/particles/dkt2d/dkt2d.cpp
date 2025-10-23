@@ -158,9 +158,10 @@ void setBoundaryValues(MyCase& myCase)
   clout << "Set Boundary Values ... OK" << std::endl;
 }
 
+template<typename PARTICLESYSTEM>
 void getResults(MyCase& myCase, int iT,
                 Timer<MyCase::value_t>& timer,
-                ParticleSystem<MyCase::value_t,ResolvedCircleWithContact2D>& particleSystem )
+                PARTICLESYSTEM& particleSystem )
 {
   OstreamManager clout(std::cout, "getResults");
   using T = MyCase::value_t;
@@ -202,28 +203,28 @@ void getResults(MyCase& myCase, int iT,
   auto particleA = particleSystem.get( 0 );
   auto particleB = particleSystem.get( 1 );
 
-if (parameters.get<parameters::GNUPLOT_ENABLED>()) {
-  std::string gnuplotFilename = "gnuplot.dat";
-  if (iT % converter.getLatticeTime(parameters.get<parameters::PHYS_VTK_ITER_T>()) == 0) {
-    if (singleton::mpi().getRank() == 0) {
+  if (parameters.get<parameters::GNUPLOT_ENABLED>()) {
+    std::string gnuplotFilename = "gnuplot.dat";
+    if (iT % converter.getLatticeTime(parameters.get<parameters::PHYS_VTK_ITER_T>()) == 0) {
+      if (singleton::mpi().getRank() == 0) {
 
-      std::ofstream myfile;
-      myfile.open (gnuplotFilename.c_str(), std::ios::app);
-      T p2PosY = particleB.getField<GENERAL,POSITION>()[1];
-      T p1PosY = particleA.getField<GENERAL,POSITION>()[1];
-      T p2PosX = particleB.getField<GENERAL,POSITION>()[0];
-      T p1PosX = particleA.getField<GENERAL,POSITION>()[0];
-      myfile
-          << converter.getPhysTime(iT) << " "
-          << std::setprecision(9)
-          << p2PosY << " "
-          << p1PosY << " "
-          << p2PosX << " "
-          << p1PosX << std::endl;
-      myfile.close();
+        std::ofstream myfile;
+        myfile.open (gnuplotFilename.c_str(), std::ios::app);
+        T p2PosY = particleB.template getField<GENERAL,POSITION>()[1];
+        T p1PosY = particleA.template getField<GENERAL,POSITION>()[1];
+        T p2PosX = particleB.template getField<GENERAL,POSITION>()[0];
+        T p1PosX = particleA.template getField<GENERAL,POSITION>()[0];
+        myfile
+            << converter.getPhysTime(iT) << " "
+            << std::setprecision(9)
+            << p2PosY << " "
+            << p1PosY << " "
+            << p2PosX << " "
+            << p1PosX << std::endl;
+        myfile.close();
+      }
     }
   }
-}
 
   if (iT % converter.getLatticeTime(parameters.get<parameters::PHYS_VTK_ITER_T>()) == 0) {
     timer.update(iT);

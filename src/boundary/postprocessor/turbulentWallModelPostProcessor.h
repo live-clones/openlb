@@ -177,9 +177,9 @@ namespace olb {
 //======================================================================
 
 template <bool bodyForce, bool interpolateSampleVelocity, bool useVanDriest, int wallFunctionProfile, bool movingWall>
-class TurbulentWallModelPostProcessor {
-public:
+struct TurbulentWallModelPostProcessor {
   static constexpr OperatorScope scope = OperatorScope::PerCellWithParameters;
+
   using parameters = meta::list<descriptors::OMEGA, descriptors::SAMPLING_DISTANCE>;
 
   int getPriority() const {
@@ -204,7 +204,7 @@ public:
       V u_plusF {};
       auto y1y2 = y2 - y1;
       V u_y2[DESCRIPTOR::d] = {0.};
-      if ( interpolateSampleVelocity ) {
+      if constexpr ( interpolateSampleVelocity ) {
         interpolateVelocity(cell, y1y2, u_y2);
       } else {
         Vector<V,DESCRIPTOR::d> roundedNormal;
@@ -213,7 +213,7 @@ public:
         }
         cell.neighbor(roundedNormal).computeU(u_y2);
       }
-      if (movingWall) {
+      if constexpr (movingWall) {
         // I need to go backwards along the normal and take the solid velocity there
         uWall = cell.template getField<descriptors::VELOCITY>();
         for ( int iD = 0; iD < DESCRIPTOR::d; iD++ ) {
@@ -221,10 +221,10 @@ public:
         }
       }
       V u_y2Norm =  util::norm<DESCRIPTOR::d>(u_y2);
-      if( u_y2Norm >= V(1.e-7)) {
+      if (u_y2Norm >= V(1.e-7)) {
         V u_1Actual[DESCRIPTOR::d] = {0.};
         cell.computeU(u_1Actual);
-        if (movingWall) {
+        if constexpr (movingWall) {
           for ( int iD = 0; iD < DESCRIPTOR::d; iD++ ) {
             u_1Actual[iD] -= uWall[iD];
           }
@@ -255,7 +255,7 @@ public:
           u_1t += u_1Actual[iD]*tangent[iD];
         }
         if ( u_2 != 0. ) {
-          if ( wallFunctionProfile == 0 ) {
+          if constexpr ( wallFunctionProfile == 0 ) {
             Vector<V,2> wf = powerLawWallFunction(nu, util::abs(u_2), y2Norm, y1Norm);
             u_tau = wf[0];
           } else {
@@ -270,7 +270,7 @@ public:
             //// Newton Approx. u1_+
             u_plus = util::abs(u_1t)/u_tau;
             y_plus = y1Norm/nu*u_tau;
-            if ( wallFunctionProfile == 0 ) {
+            if constexpr (wallFunctionProfile == 0) {
               Vector<V,2> wf = powerLawWallFunction(nu, util::abs(u_2), y2Norm, y1Norm);
               u_plus = wf[1];
             } else {
@@ -280,7 +280,7 @@ public:
             }
             u_plusF = u_plus;
 
-            if(useVanDriest){
+            if constexpr (useVanDriest) {
               // Van Driest damping
               V dUdY = (u_2 - u_plusF*u_tau)/util::norm<DESCRIPTOR::d>(y1y2);
               V nuTurb = util::pow((V(0.4)*y1Norm*(V(1)-util::exp(-y_plus/V(26)))),2) * util::abs(dUdY);
@@ -292,12 +292,12 @@ public:
         // Exchange the computed tangential boundary velocity through the modelled one
         if(util::norm<DESCRIPTOR::d>(u_t) != 0. && u_1 > 0.){
           auto ub = u_1*tangent;
-          if (movingWall) {
+          if constexpr (movingWall) {
             ub = ub + uWall;
             auto ub_prev = cell.template getField<descriptors::WMVELOCITY>();
             ub = V{0.9}*ub_prev + V{0.1}*ub;
           }
-          if (bodyForce) {
+          if constexpr (bodyForce) {
             auto force = cell.template getField<descriptors::FORCE>();
             V u_b[DESCRIPTOR::d] { };
             for ( int iD = 0; iD < DESCRIPTOR::d; iD++ ) {
@@ -574,208 +574,262 @@ public:
 // PostProcessor for fNeq from finite difference method (FDM) stress tensor for wall modelling at porous domains
 //======================================================================
 
-  template<int rhoMethod>
-  class TurbulentWallModelPorousFneqFDMPostProcessor {
-  public:
-    static constexpr OperatorScope scope = OperatorScope::PerCell;
+template<int rhoMethod>
+struct TurbulentWallModelPorousFneqFDMPostProcessor {
+  static constexpr OperatorScope scope = OperatorScope::PerCell;
 
-    int getPriority() const {
-      return 2;
+  int getPriority() const {
+    return 2;
+  }
+
+  template <typename CELL, typename V = typename CELL::value_t, typename DESCRIPTOR = typename CELL::descriptor_t>
+  void interpolateDensity(CELL& cell, Vector<V,DESCRIPTOR::d> distance, V rho[1]) any_platform {
+    Vector<V,DESCRIPTOR::d> floorV;
+    for( int iD = 0; iD < DESCRIPTOR::d; iD++ ) {
+      floorV[iD] = util::floor(distance[iD]);
     }
+    Vector<Vector<V,DESCRIPTOR::d>,(DESCRIPTOR::d==2)*4+(DESCRIPTOR::d==3)*8> surroundingPoints(floorV);
+    surroundingPoints[1][0] += 1.;
+    surroundingPoints[2][1] += 1.;
+    surroundingPoints[3][0] += 1.; surroundingPoints[3][1] += 1.;
+    if constexpr (DESCRIPTOR::d == 3) {
+      surroundingPoints[4][2] += 1.;
+      surroundingPoints[5][0] += 1.; surroundingPoints[5][2] += 1.;
+      surroundingPoints[6][1] += 1.; surroundingPoints[6][2] += 1.;
+      surroundingPoints[7][0] += 1.; surroundingPoints[7][1] += 1.; surroundingPoints[7][2] += 1.;
+    }
+    for (auto point : surroundingPoints) {
+      const Vector<V,DESCRIPTOR::d> dist = distance - point;
+      V weight = V(1);
+      for( int iD = 0; iD < DESCRIPTOR::d; iD++ ) {
+        weight *=(V(1.) - util::abs(dist[iD]));
+      }
+      V rhoNP = cell.neighbor(point).computeRho();
+      rho[0] += rhoNP*weight;
+    }
+  }
 
-    template <typename CELL, typename V = typename CELL::value_t>
-    void apply(CELL& cell) any_platform{
-      using DESCRIPTOR = typename CELL::descriptor_t;
-      auto y1 = cell.template getField<descriptors::Y1>();
-      V y1Norm = util::norm<DESCRIPTOR::d>(y1);
-      if( y1Norm > V(1.e-3)){
-        auto u = cell.template getField<descriptors::WMVELOCITY>();
-        V uNorm =  util::norm<DESCRIPTOR::d>(u);
-        if ( uNorm < V(1.e-7) ) {
-          cell.template setField<descriptors::WMPOROSITY>(V(1));
-          cell.template setField<collision::HYBRID>(V(1));
-          if( rhoMethod == 1) {
-            cell.template setField<collision::HYBRID_RHO>(V(1));
-          }
-          else if( rhoMethod == 2) {
-            cell.template setField<collision::HYBRID_RHO>(V(1));
-          }
-        } else {
-        cell.template setField<descriptors::WMPOROSITY>(V(0));
-        cell.template setField<collision::HYBRID>(V(0));
-          if constexpr ( DESCRIPTOR::d == 2 ) {
-            using namespace olb::util::tensorIndices2D;
-            V uxDx = 0, uyDx = 0, uxDy = 0, uyDy = 0;
-            //----------- FDM in X-direction --------------------------------------------------//
-            if (y1[0] > V(0) || cell.neighbor({-1,0}).template getField<descriptors::POROSITY>() == V(0)) {
-              V uXp[DESCRIPTOR::d] {};
-              cell.neighbor({1,0}).computeU(uXp);
-              uxDx = uXp[0] - u[0];
-              uyDx = uXp[1] - u[1];
-            }
-            else if (y1[0] < V(0) || cell.neighbor({1,0}).template getField<descriptors::POROSITY>() == V(0)) {
-              V uXm[DESCRIPTOR::d] {};
-              cell.neighbor({-1,0}).computeU(uXm);
-              uxDx = u[0] - uXm[0];
-              uyDx = u[1] - uXm[1];
-            }
-            if (util::abs(y1[0]) < V(1.e-8) &&
-                cell.neighbor({-1,0}).template getField<descriptors::POROSITY>() != V(0) &&
-                cell.neighbor({1,0}).template getField<descriptors::POROSITY>() != V(0)) {
-              V uXp[DESCRIPTOR::d], uXm[DESCRIPTOR::d] {};
-              cell.neighbor({1,0}).computeU(uXp);
-              cell.neighbor({-1,0}).computeU(uXm);
-              uxDx = V(0.5)*(uXp[0] - uXm[0]);
-              uyDx = V(0.5)*(uXp[1] - uXm[1]);
-            }
-            //----------- FDM in Y-direction --------------------------------------------------//
-            if (y1[1] > V(0) || cell.neighbor({0,-1}).template getField<descriptors::POROSITY>() == V(0)) {
-              V uYp[DESCRIPTOR::d] {};
-              cell.neighbor({0,1}).computeU(uYp);
-              uxDy = uYp[0] - u[0];
-              uyDy = uYp[1] - u[1];
-            }
-            else if (y1[1] < V(0) || cell.neighbor({0,1}).template getField<descriptors::POROSITY>() == V(0)) {
-              V uYm[DESCRIPTOR::d] {};
-              cell.neighbor({0,-1}).computeU(uYm);
-              uxDy = u[0] - uYm[0];
-              uyDy = u[1] - uYm[1];
-            }
-            if (util::abs(y1[1]) < V(1.e-8) &&
-                cell.neighbor({0,-1}).template getField<descriptors::POROSITY>() != V(0) &&
-                cell.neighbor({0,1}).template getField<descriptors::POROSITY>() != V(0)) {
-              V uYp[DESCRIPTOR::d], uYm[DESCRIPTOR::d] {};
-              cell.neighbor({0,1}).computeU(uYp);
-              cell.neighbor({0,-1}).computeU(uYm);
-              uxDy = V(0.5)*(uYp[0] - uYm[0]);
-              uyDy = V(0.5)*(uYp[1] - uYm[1]);
-            }
-            //----------- TENSOR tensor with FDM --------------------------------------------------//
-            V pi[util::TensorVal<DESCRIPTOR>::n] {V(0)};
-            pi[xx] = V(0.5)*(V)2 * uxDx;
-            pi[yy] = V(0.5)*(V)2 * uyDy;
-            pi[xy] = V(0.5)*(uxDy + uyDx);
-            cell.template setField<descriptors::TENSOR>(pi);
-          }
-          else {
-            using namespace olb::util::tensorIndices3D;
-            V uxDx = 0, uyDx = 0, uzDx = 0, uxDy = 0, uyDy = 0, uzDy = 0, uxDz = 0, uyDz = 0, uzDz = 0;
-            //----------- FDM in X-direction --------------------------------------------------//
-            if (y1[0] > V(0) || cell.neighbor({-1,0,0}).template getField<descriptors::POROSITY>() == V(0)) {
-              V uXp[DESCRIPTOR::d] {};
-              cell.neighbor({1,0,0}).computeU(uXp);
-              uxDx = uXp[0] - u[0];
-              uyDx = uXp[1] - u[1];
-              uzDx = uXp[2] - u[2];
-            }
-            else if (y1[0] < V(0) || cell.neighbor({1,0,0}).template getField<descriptors::POROSITY>() == V(0)) {
-              V uXm[DESCRIPTOR::d] {};
-              cell.neighbor({-1,0,0}).computeU(uXm);
-              uxDx = u[0] - uXm[0];
-              uyDx = u[1] - uXm[1];
-              uzDx = u[2] - uXm[2];
-            }
-            if (util::abs(y1[0]) < V(1.e-8) &&
-                cell.neighbor({-1,0,0}).template getField<descriptors::POROSITY>() != V(0) &&
-                cell.neighbor({1,0,0}).template getField<descriptors::POROSITY>() != V(0)) {
-              V uXp[DESCRIPTOR::d], uXm[DESCRIPTOR::d] {};
-              cell.neighbor({1,0,0}).computeU(uXp);
-              cell.neighbor({-1,0,0}).computeU(uXm);
-              uxDx = V(0.5)*(uXp[0] - uXm[0]);
-              uyDx = V(0.5)*(uXp[1] - uXm[1]);
-              uzDx = V(0.5)*(uXp[2] - uXm[2]);
-            }
-            //----------- FDM in Y-direction --------------------------------------------------//
-            if (y1[1] > V(0) || cell.neighbor({0,-1,0}).template getField<descriptors::POROSITY>() == V(0)) {
-              V uYp[DESCRIPTOR::d] {};
-              cell.neighbor({0,1,0}).computeU(uYp);
-              uxDy = uYp[0] - u[0];
-              uyDy = uYp[1] - u[1];
-              uzDy = uYp[2] - u[2];
-            }
-            else if (y1[1] < V(0) || cell.neighbor({0,1,0}).template getField<descriptors::POROSITY>() == V(0)) {
-              V uYm[DESCRIPTOR::d] {};
-              cell.neighbor({0,-1,0}).computeU(uYm);
-              uxDy = u[0] - uYm[0];
-              uyDy = u[1] - uYm[1];
-              uzDy = u[2] - uYm[2];
-            }
-            if (util::abs(y1[1]) < V(1.e-8) &&
-                cell.neighbor({0,-1,0}).template getField<descriptors::POROSITY>() != V(0) &&
-                cell.neighbor({0,1,0}).template getField<descriptors::POROSITY>() != V(0)) {
-              V uYp[DESCRIPTOR::d], uYm[DESCRIPTOR::d] {};
-              cell.neighbor({0,1,0}).computeU(uYp);
-              cell.neighbor({0,-1,0}).computeU(uYm);
-              uxDy = V(0.5)*(uYp[0] - uYm[0]);
-              uyDy = V(0.5)*(uYp[1] - uYm[1]);
-              uzDy = V(0.5)*(uYp[2] - uYm[2]);
-            }
-            //----------- FDM in Z-direction --------------------------------------------------//
-            if (y1[2] > V(0) || cell.neighbor({0,0,-1}).template getField<descriptors::POROSITY>() == V(0)) {
-              V uZp[DESCRIPTOR::d] {};
-              cell.neighbor({0,0,1}).computeU(uZp);
-              uxDz = uZp[0] - u[0];
-              uyDz = uZp[1] - u[1];
-              uzDz = uZp[2] - u[2];
-            }
-            else if (y1[2] < V(0) || cell.neighbor({0,0,1}).template getField<descriptors::POROSITY>() == V(0)) {
-              V uZm[DESCRIPTOR::d] {};
-              cell.neighbor({0,0,-1}).computeU(uZm);
-              uxDz = u[0] - uZm[0];
-              uyDz = u[1] - uZm[1];
-              uzDz = u[2] - uZm[2];
-            }
-            if (util::abs(y1[2]) < V(1.e-8) &&
-                cell.neighbor({0,0,-1}).template getField<descriptors::POROSITY>() != V(0) &&
-                cell.neighbor({0,0,1}).template getField<descriptors::POROSITY>() != V(0)) {
-              V uZp[DESCRIPTOR::d], uZm[DESCRIPTOR::d] {};
-              cell.neighbor({0,0,1}).computeU(uZp);
-              cell.neighbor({0,0,-1}).computeU(uZm);
-              uxDz = V(0.5)*(uZp[0] - uZm[0]);
-              uyDz = V(0.5)*(uZp[1] - uZm[1]);
-              uzDz = V(0.5)*(uZp[2] - uZm[2]);
-            }
-            //----------- TENSOR tensor with FDM --------------------------------------------------//
-            V pi[util::TensorVal<DESCRIPTOR>::n] {V(0)};
-            pi[xx] = V(0.5)*(V)2 * uxDx;
-            pi[yy] = V(0.5)*(V)2 * uyDy;
-            pi[zz] = V(0.5)*(V)2 * uzDz;
-            pi[xy] = V(0.5)*(uxDy + uyDx);
-            pi[xz] = V(0.5)*(uxDz + uzDx);
-            pi[yz] = V(0.5)*(uyDz + uzDy);
-            cell.template setField<descriptors::TENSOR>(pi);
-          }
-
-          if( rhoMethod == 1) {
-            Vector<V,DESCRIPTOR::d> normal;
-            for ( int iD = 0; iD < DESCRIPTOR::d; iD++ ) {
-              normal[iD] = y1[iD] / y1Norm;
-            }
-            Vector<V,DESCRIPTOR::d> roundedNormal;
-            for ( int iD = 0; iD < DESCRIPTOR::d; iD++ ) {
-              roundedNormal[iD] = int(util::round(normal[iD]));
-            }
-            V extRho = cell.neighbor(roundedNormal).computeRho();
-            cell.template setField<descriptors::DENSITY>(extRho);
-            cell.template setField<collision::HYBRID_RHO>(V(0));
-          }
-          else if( rhoMethod == 2) {
-            cell.template setField<descriptors::DENSITY>(V(1.));
-            cell.template setField<collision::HYBRID_RHO>(V(0));
-          }
-        }
-      } else {
+  template <typename CELL, typename V = typename CELL::value_t>
+  void apply(CELL& cell) any_platform {
+    using DESCRIPTOR = typename CELL::descriptor_t;
+    auto y1 = cell.template getField<descriptors::Y1>();
+    V y1Norm = util::norm<DESCRIPTOR::d>(y1);
+    if( y1Norm > V(1.e-3)){
+      auto u = cell.template getField<descriptors::WMVELOCITY>();
+      V uNorm =  util::norm<DESCRIPTOR::d>(u);
+      if ( uNorm < V(1.e-7) ) {
         cell.template setField<descriptors::WMPOROSITY>(V(1));
         cell.template setField<collision::HYBRID>(V(1));
-        if( rhoMethod == 1) {
+        if constexpr ( rhoMethod == 1) {
           cell.template setField<collision::HYBRID_RHO>(V(1));
         }
-        else if( rhoMethod == 2) {
+        else if constexpr ( rhoMethod == 2) {
           cell.template setField<collision::HYBRID_RHO>(V(1));
+        }
+      } else {
+        cell.template setField<descriptors::WMPOROSITY>(V(0));
+        cell.template setField<collision::HYBRID>(V(0));
+        if constexpr ( DESCRIPTOR::d == 2 ) {
+          using namespace olb::util::tensorIndices2D;
+          V uxDx = 0, uyDx = 0, uxDy = 0, uyDy = 0;
+          //----------- FDM in X-direction --------------------------------------------------//
+          if (y1[0] > V(0) || cell.neighbor({-1,0}).template getField<descriptors::POROSITY>() == V(0)) {
+            V uXp[DESCRIPTOR::d] {};
+            cell.neighbor({1,0}).computeU(uXp);
+            uxDx = uXp[0] - u[0];
+            uyDx = uXp[1] - u[1];
+          }
+          else if (y1[0] < V(0) || cell.neighbor({1,0}).template getField<descriptors::POROSITY>() == V(0)) {
+            V uXm[DESCRIPTOR::d] {};
+            cell.neighbor({-1,0}).computeU(uXm);
+            uxDx = u[0] - uXm[0];
+            uyDx = u[1] - uXm[1];
+          }
+          if (util::abs(y1[0]) < V(1.e-8) &&
+              cell.neighbor({-1,0}).template getField<descriptors::POROSITY>() != V(0) &&
+              cell.neighbor({1,0}).template getField<descriptors::POROSITY>() != V(0)) {
+            V uXp[DESCRIPTOR::d], uXm[DESCRIPTOR::d] {};
+            cell.neighbor({1,0}).computeU(uXp);
+            cell.neighbor({-1,0}).computeU(uXm);
+            uxDx = V(0.5)*(uXp[0] - uXm[0]);
+            uyDx = V(0.5)*(uXp[1] - uXm[1]);
+          }
+          //----------- FDM in Y-direction --------------------------------------------------//
+          if (y1[1] > V(0) || cell.neighbor({0,-1}).template getField<descriptors::POROSITY>() == V(0)) {
+            V uYp[DESCRIPTOR::d] {};
+            cell.neighbor({0,1}).computeU(uYp);
+            uxDy = uYp[0] - u[0];
+            uyDy = uYp[1] - u[1];
+          }
+          else if (y1[1] < V(0) || cell.neighbor({0,1}).template getField<descriptors::POROSITY>() == V(0)) {
+            V uYm[DESCRIPTOR::d] {};
+            cell.neighbor({0,-1}).computeU(uYm);
+            uxDy = u[0] - uYm[0];
+            uyDy = u[1] - uYm[1];
+          }
+          if (util::abs(y1[1]) < V(1.e-8) &&
+              cell.neighbor({0,-1}).template getField<descriptors::POROSITY>() != V(0) &&
+              cell.neighbor({0,1}).template getField<descriptors::POROSITY>() != V(0)) {
+            V uYp[DESCRIPTOR::d], uYm[DESCRIPTOR::d] {};
+            cell.neighbor({0,1}).computeU(uYp);
+            cell.neighbor({0,-1}).computeU(uYm);
+            uxDy = V(0.5)*(uYp[0] - uYm[0]);
+            uyDy = V(0.5)*(uYp[1] - uYm[1]);
+          }
+          //----------- TENSOR tensor with FDM --------------------------------------------------//
+          V pi[util::TensorVal<DESCRIPTOR>::n] {V(0)};
+          pi[xx] = V(0.5)*(V)2 * uxDx;
+          pi[yy] = V(0.5)*(V)2 * uyDy;
+          pi[xy] = V(0.5)*(uxDy + uyDx);
+          cell.template setField<descriptors::TENSOR>(pi);
+        }
+        else {
+          using namespace olb::util::tensorIndices3D;
+          V uxDx = 0, uyDx = 0, uzDx = 0, uxDy = 0, uyDy = 0, uzDy = 0, uxDz = 0, uyDz = 0, uzDz = 0;
+          //----------- FDM in X-direction --------------------------------------------------//
+          if (y1[0] > V(0) || cell.neighbor({-1,0,0}).template getField<descriptors::POROSITY>() == V(0)) {
+            V uXp[DESCRIPTOR::d] {};
+            cell.neighbor({1,0,0}).computeU(uXp);
+            uxDx = uXp[0] - u[0];
+            uyDx = uXp[1] - u[1];
+            uzDx = uXp[2] - u[2];
+          }
+          else if (y1[0] < V(0) || cell.neighbor({1,0,0}).template getField<descriptors::POROSITY>() == V(0)) {
+            V uXm[DESCRIPTOR::d] {};
+            cell.neighbor({-1,0,0}).computeU(uXm);
+            uxDx = u[0] - uXm[0];
+            uyDx = u[1] - uXm[1];
+            uzDx = u[2] - uXm[2];
+          }
+          if (util::abs(y1[0]) < V(1.e-8) &&
+              cell.neighbor({-1,0,0}).template getField<descriptors::POROSITY>() != V(0) &&
+              cell.neighbor({1,0,0}).template getField<descriptors::POROSITY>() != V(0)) {
+            V uXp[DESCRIPTOR::d], uXm[DESCRIPTOR::d] {};
+            cell.neighbor({1,0,0}).computeU(uXp);
+            cell.neighbor({-1,0,0}).computeU(uXm);
+            uxDx = V(0.5)*(uXp[0] - uXm[0]);
+            uyDx = V(0.5)*(uXp[1] - uXm[1]);
+            uzDx = V(0.5)*(uXp[2] - uXm[2]);
+          }
+          //----------- FDM in Y-direction --------------------------------------------------//
+          if (y1[1] > V(0) || cell.neighbor({0,-1,0}).template getField<descriptors::POROSITY>() == V(0)) {
+            V uYp[DESCRIPTOR::d] {};
+            cell.neighbor({0,1,0}).computeU(uYp);
+            uxDy = uYp[0] - u[0];
+            uyDy = uYp[1] - u[1];
+            uzDy = uYp[2] - u[2];
+          }
+          else if (y1[1] < V(0) || cell.neighbor({0,1,0}).template getField<descriptors::POROSITY>() == V(0)) {
+            V uYm[DESCRIPTOR::d] {};
+            cell.neighbor({0,-1,0}).computeU(uYm);
+            uxDy = u[0] - uYm[0];
+            uyDy = u[1] - uYm[1];
+            uzDy = u[2] - uYm[2];
+          }
+          if (util::abs(y1[1]) < V(1.e-8) &&
+              cell.neighbor({0,-1,0}).template getField<descriptors::POROSITY>() != V(0) &&
+              cell.neighbor({0,1,0}).template getField<descriptors::POROSITY>() != V(0)) {
+            V uYp[DESCRIPTOR::d], uYm[DESCRIPTOR::d] {};
+            cell.neighbor({0,1,0}).computeU(uYp);
+            cell.neighbor({0,-1,0}).computeU(uYm);
+            uxDy = V(0.5)*(uYp[0] - uYm[0]);
+            uyDy = V(0.5)*(uYp[1] - uYm[1]);
+            uzDy = V(0.5)*(uYp[2] - uYm[2]);
+          }
+          //----------- FDM in Z-direction --------------------------------------------------//
+          if (y1[2] > V(0) || cell.neighbor({0,0,-1}).template getField<descriptors::POROSITY>() == V(0)) {
+            V uZp[DESCRIPTOR::d] {};
+            cell.neighbor({0,0,1}).computeU(uZp);
+            uxDz = uZp[0] - u[0];
+            uyDz = uZp[1] - u[1];
+            uzDz = uZp[2] - u[2];
+          }
+          else if (y1[2] < V(0) || cell.neighbor({0,0,1}).template getField<descriptors::POROSITY>() == V(0)) {
+            V uZm[DESCRIPTOR::d] {};
+            cell.neighbor({0,0,-1}).computeU(uZm);
+            uxDz = u[0] - uZm[0];
+            uyDz = u[1] - uZm[1];
+            uzDz = u[2] - uZm[2];
+          }
+          if (util::abs(y1[2]) < V(1.e-8) &&
+              cell.neighbor({0,0,-1}).template getField<descriptors::POROSITY>() != V(0) &&
+              cell.neighbor({0,0,1}).template getField<descriptors::POROSITY>() != V(0)) {
+            V uZp[DESCRIPTOR::d], uZm[DESCRIPTOR::d] {};
+            cell.neighbor({0,0,1}).computeU(uZp);
+            cell.neighbor({0,0,-1}).computeU(uZm);
+            uxDz = V(0.5)*(uZp[0] - uZm[0]);
+            uyDz = V(0.5)*(uZp[1] - uZm[1]);
+            uzDz = V(0.5)*(uZp[2] - uZm[2]);
+          }
+
+          //V rhoNeighbor { };
+          //interpolateDensity(cell, V{2}/y1Norm*y1, &rhoNeighbor);
+          //const V rhoActual = cell.computeRho();
+          //Vector<V,DESCRIPTOR::d> force = -(rhoNeighbor - rhoActual) / V{2}/descriptors::invCs2<V,DESCRIPTOR>() * V{1}/y1Norm * y1;
+          //cell.template setField<descriptors::FORCE>(force);
+
+          //----------- TENSOR tensor with FDM --------------------------------------------------//
+          V pi[util::TensorVal<DESCRIPTOR>::n] {V(0)};
+          pi[xx] = V(0.5)*(V)2 * uxDx;
+          pi[yy] = V(0.5)*(V)2 * uyDy;
+          pi[zz] = V(0.5)*(V)2 * uzDz;
+          pi[xy] = V(0.5)*(uxDy + uyDx);
+          pi[xz] = V(0.5)*(uxDz + uzDx);
+          pi[yz] = V(0.5)*(uyDz + uzDy);
+
+          //V uNew[DESCRIPTOR::d] { };
+          //V uOld[DESCRIPTOR::d] { };
+          //cell.computeU(uOld);
+          //for (unsigned iD=0; iD < DESCRIPTOR::d; ++iD) {
+          //  uNew[iD] = uOld[iD] - V{0.5} * force[iD];
+          //}
+          //V forceTensor[util::TensorVal<DESCRIPTOR>::n];
+          //int iPi = 0;
+          //for (int iAlpha=0; iAlpha < DESCRIPTOR::d; ++iAlpha) {
+          //  for (int iBeta=iAlpha; iBeta < DESCRIPTOR::d; ++iBeta) {
+          //    forceTensor[iPi] = V{0.5} * (force[iAlpha]*uNew[iBeta] + uNew[iAlpha]*force[iBeta]);
+          //    ++iPi;
+          //  }
+          //}
+          //// Creation of second-order moment off-equilibrium tensor
+          //for (int iPi=0; iPi < util::TensorVal<DESCRIPTOR>::n; ++iPi) {
+          //  pi[iPi] += forceTensor[iPi];
+          //}
+
+          cell.template setField<descriptors::TENSOR>(pi);
+        }
+
+        if constexpr ( rhoMethod == 1) {
+          Vector<V,DESCRIPTOR::d> normal;
+          for ( int iD = 0; iD < DESCRIPTOR::d; iD++ ) {
+            normal[iD] = y1[iD] / y1Norm;
+          }
+          Vector<V,DESCRIPTOR::d> roundedNormal;
+          for ( int iD = 0; iD < DESCRIPTOR::d; iD++ ) {
+            roundedNormal[iD] = int(util::round(normal[iD]));
+          }
+          V extRho = cell.neighbor(roundedNormal).computeRho();
+          cell.template setField<descriptors::DENSITY>(extRho);
+          cell.template setField<collision::HYBRID_RHO>(V(0));
+        }
+        else if constexpr ( rhoMethod == 2) {
+          cell.template setField<descriptors::DENSITY>(V(1.));
+          cell.template setField<collision::HYBRID_RHO>(V(0));
         }
       }
+    } else {
+      cell.template setField<descriptors::FORCE>(0);
+      cell.template setField<descriptors::WMPOROSITY>(V(1));
+      cell.template setField<collision::HYBRID>(V(1));
+      if constexpr ( rhoMethod == 1) {
+        cell.template setField<collision::HYBRID_RHO>(V(1));
+      }
+      else if constexpr ( rhoMethod == 2) {
+        cell.template setField<collision::HYBRID_RHO>(V(1));
+      }
     }
-  };
+  }
+};
 
 
 //======================================================================

@@ -178,7 +178,7 @@ public:
     _iCell(iCell)
   { }
 
-  void setCellId(std::size_t iCell) __device__ {
+  void setCellId(CellID iCell) __device__ {
     _iCell = iCell;
   }
 
@@ -186,12 +186,7 @@ public:
     return _iCell;
   }
 
-  template <typename FIELD>
-  typename FIELD::template value_type<T> getFieldComponent(unsigned iD) __device__ {
-    return _data.template getField<FIELD>()[iD][_iCell];
-  }
-
-  value_t& operator[](int iPop) __device__ {
+  value_t& operator[](unsigned iPop) __device__ {
     return _data.template getField<descriptors::POPULATION>()[iPop][_iCell];
   }
 
@@ -208,14 +203,15 @@ public:
   }
 
   template <typename FIELD>
-  FieldPtr<T,DESCRIPTOR,FIELD> getFieldPointer() __device__ {
-    return FieldPtr<T,DESCRIPTOR,FIELD>(_data, _iCell);
+  typename FIELD::template value_type<T> getFieldComponent(unsigned iD) const __device__ {
+    auto fieldArray = _data.template getField<FIELD>();
+    return fieldArray[iD][_iCell];
   }
 
   template <typename FIELD>
-  auto getFieldComponent(unsigned iD) const __device__ {
+  void setFieldComponent(unsigned iD, typename FIELD::template value_type<T> value) __device__ {
     auto fieldArray = _data.template getField<FIELD>();
-    return fieldArray[iD][_iCell];
+    fieldArray[iD][_iCell] = value;
   }
 
   template <typename FIELD>
@@ -232,6 +228,11 @@ public:
     for (unsigned iD=0; iD < descriptor_t::template size<FIELD>(); ++iD) {
       fieldArray[iD][_iCell] = value[iD];
     }
+  }
+
+  template <typename FIELD>
+  FieldPtr<T,DESCRIPTOR,FIELD> getFieldPointer() __device__ {
+    return FieldPtr<T,DESCRIPTOR,FIELD>(_data, _iCell);
   }
 
 };
@@ -337,11 +338,11 @@ public:
     return *this->template getField<DYNAMICS<T,DESCRIPTOR>>();
   }
 
-  std::size_t getCellId() const __device__ {
+  CellID getCellId() const __device__ {
     return this->_iCell;
   }
 
-  void setCellId(std::size_t iCell) __device__ {
+  void setCellId(CellID iCell) __device__ {
     this->_iCell = iCell;
   }
 

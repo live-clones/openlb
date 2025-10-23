@@ -102,6 +102,22 @@ public:
     }
   }
 
+  constexpr Vector(T scalar) any_platform
+  {
+    for (unsigned iDim=0; iDim < D; ++iDim) {
+      _data[iDim] = scalar;
+    }
+  }
+
+  /// Construct with entries given by a lambda expression
+  template <typename F, typename = decltype(std::declval<F&>()(std::size_t{0}))>
+  constexpr Vector(F&& f) any_platform
+  {
+    for (unsigned iDim=0; iDim < D; ++iDim) {
+      _data[iDim] = f(iDim);
+    }
+  }
+
   // Should be declared explicit
   constexpr Vector(const std::vector<T>& v)
   {
@@ -118,22 +134,6 @@ public:
     std::copy(v.begin(), v.end(), _data.begin());
   }
   #endif
-
-  constexpr Vector(T scalar) any_platform
-  {
-    for (unsigned iDim=0; iDim < D; ++iDim) {
-      _data[iDim] = scalar;
-    }
-  }
-
-  /// Construct with entries given by a lambda expression
-  template <typename F, typename = decltype(std::declval<F&>()(std::size_t{0}))>
-  constexpr Vector(F&& f) any_platform
-  {
-    for (unsigned iDim=0; iDim < D; ++iDim) {
-      _data[iDim] = f(iDim);
-    }
-  }
 
   constexpr const T* getComponentPointer(unsigned iDim) const any_platform
   {
@@ -456,26 +456,25 @@ operator>= (const ScalarVector<T,D,IMPL>& lhs, U rhs) any_platform
   return lhs >= Vector<U,D>(rhs);
 }
 
-template <typename T, unsigned D, typename IMPL, typename IMPL_>
-constexpr Vector<T,D> minv(
-  const ScalarVector<T,D,IMPL>& v, const ScalarVector<T,D,IMPL_>& w)
+template <typename T, unsigned D>
+constexpr Vector<T,D> minv(Vector<T,D> v, Vector<T,D> w) any_platform
 {
-  return Vector<T,D>([&v,&w](unsigned iDim) -> T {
+  return Vector<T,D>([v,w] any_platform (unsigned iDim) -> T {
     return util::min(v[iDim], w[iDim]);
   });
 }
 
-template <typename T, unsigned D, typename IMPL, typename IMPL_>
+template <typename T, unsigned D>
 constexpr Vector<T,D> maxv(
-  const ScalarVector<T,D,IMPL>& v, const ScalarVector<T,D,IMPL_>& w)
+  const Vector<T,D>& v, const Vector<T,D>& w) any_platform
 {
-  return Vector<T,D>([&v,&w](unsigned iDim) -> T {
+  return Vector<T,D>([v,w] any_platform (unsigned iDim) -> T {
     return util::max(v[iDim], w[iDim]);
   });
 }
 
 template <typename T, unsigned D, typename IMPL>
-constexpr T max(const ScalarVector<T,D,IMPL>& v)
+constexpr T max(const ScalarVector<T,D,IMPL>& v) any_platform
 {
   T max = v[0];
   for (unsigned iD=1; iD < D; ++iD) {

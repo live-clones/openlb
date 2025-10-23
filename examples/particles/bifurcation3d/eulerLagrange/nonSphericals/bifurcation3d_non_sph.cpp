@@ -324,9 +324,10 @@ void prepareParticles(MyCase& myCase,
   }
 }
 
+template<typename PARTICLESYSTEM>
 bool getResults(MyCase& myCase, std::size_t iT, Timer<MyCase::value_t>& fluidTimer,
                 STLreader<MyCase::value_t>& stlReader,
-                SuperParticleSystem<MyCase::value_t, SubgridParticle3DparallelEulerRotation>& superParticleSystem,
+                PARTICLESYSTEM& superParticleSystem,
                 Timer<MyCase::value_t>& particleTimer)
 {
   OstreamManager clout(std::cout, "getResults");

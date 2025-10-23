@@ -24,9 +24,9 @@
 
  /*
   * the expressions used in this file are used for validational part of the paper
-  * F. Bukreev, A. Kummerländer, J. Jeßberger, D.Teutscher, S. Ito, S. Simonis, H. Nirschl, M. J. Krause,
-  * Hydro-electrochemical Saturation in Nano-scale Porous Media. Part I: Sensitivity Assessing Simulation Approach,
-  * submitted to Chemical Engineering Science 2024
+  * Bukreev, F., Kummerländer, A., Jeßberger, J. et al. A hybrid Lattice-Boltzmann model for hydro-electrochemical modeling
+  * and sensitivity analysis of crystallization potential in nanoporous media. Part I: simulation model. Engineering with
+  * Computers (2025). https://doi.org/10.1007/s00366-025-02216-x
   *
   * The current example solves the electroosmosis 1D problem
   *[Lattice Boltzmann Simulation of Electroosmotic Flows in Micro- and Nanochannels; Fuzhi Tian1, Baoming Li1,2, and Daniel Y. Kwok1]
@@ -341,18 +341,18 @@ void prepareLatticeCoupling(MyCase& myCase) {
 
   auto& coupling = myCase.setCouplingOperator(
     "NSPNP",
-    NSPNPCoupling<T>{},
+    NSPNPCoupling{},
     names::Concentration0{}, latticeCation,
     names::Temperature{}, latticePoisson,
     names::Concentration1{}, latticeAnion,
     names::NavierStokes{}, latticeNSE);
-  coupling.setParameter<NSPNPCoupling<T>::DX>(latticePoisson.getUnitConverter().getPhysDeltaX());
-  coupling.setParameter<NSPNPCoupling<T>::NPVELCOEFF>(npVelCoeff);
-  coupling.setParameter<NSPNPCoupling<T>::POISSONCOEFF>(sourceCoeff);
-  coupling.setParameter<NSPNPCoupling<T>::FORCECOEFF>(forceCoeff);
-  coupling.setParameter<NSPNPCoupling<T>::DTADE>(latticeCation.getUnitConverter().getConversionFactorTime());
-  coupling.setParameter<NSPNPCoupling<T>::DTNSE>(latticeNSE.getUnitConverter().getConversionFactorTime());
-  coupling.setParameter<NSPNPCoupling<T>::OMEGA>(latticePoisson.getUnitConverter().getLatticeRelaxationFrequency());
+  coupling.setParameter<NSPNPCoupling::DX>(latticePoisson.getUnitConverter().getPhysDeltaX());
+  coupling.setParameter<NSPNPCoupling::NPVELCOEFF>(npVelCoeff);
+  coupling.setParameter<NSPNPCoupling::POISSONCOEFF>(sourceCoeff);
+  coupling.setParameter<NSPNPCoupling::FORCECOEFF>(forceCoeff);
+  coupling.setParameter<NSPNPCoupling::DTADE>(latticeCation.getUnitConverter().getConversionFactorTime());
+  coupling.setParameter<NSPNPCoupling::DTNSE>(latticeNSE.getUnitConverter().getConversionFactorTime());
+  coupling.setParameter<NSPNPCoupling::OMEGA>(latticePoisson.getUnitConverter().getLatticeRelaxationFrequency());
   coupling.restrictTo(geometry.getMaterialIndicator({1,3}));
 }
 

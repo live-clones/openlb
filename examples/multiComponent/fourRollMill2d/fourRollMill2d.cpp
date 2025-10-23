@@ -53,7 +53,6 @@ using MyCase = Case<
 
 namespace olb::parameters {
 
-struct RADIUS : public descriptors::FIELD_BASE<1> { };
 struct STRAIN_RATE : public descriptors::FIELD_BASE<1> { };
 struct CONT_VISC  : public descriptors::FIELD_BASE<1> { };
 struct DROPLET_REYNOLDS : public descriptors::FIELD_BASE<1> { };

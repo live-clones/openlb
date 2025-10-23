@@ -26,54 +26,85 @@
 #define REFINEMENT_PLATFORM_CPU_OPERATOR_H
 
 #include "refinement/operator.h"
-#include "refinement/coarseCell.h"
+
+#include "refinement/context.h"
+#include "refinement/vertexCentered.h"
+#include "refinement/cellCentered.h"
 
 namespace olb {
 
 template <typename T, typename DESCRIPTOR, Platform PLATFORM, typename OPERATOR>
-requires (isPlatformCPU(PLATFORM))
+requires (isPlatformCPU(PLATFORM) && OPERATOR::scope == refinement::OperatorScope::PerCoarseCell)
 struct ConcreteBlockRefinementO<T,DESCRIPTOR,PLATFORM,OPERATOR> {
   void apply(ConcreteBlockRefinementContextD<T,DESCRIPTOR,PLATFORM>& data) {
     const auto& cellIdCoarse = data.getConcreteData().template getField<fields::refinement::CELL_ID_COARSE>();
     const auto& cellIdFine = data.getConcreteData().template getField<fields::refinement::CELL_ID_FINE>();
     auto parameters = data.getConcreteData().template getData<OperatorParameters<OPERATOR>>().parameters;
 
-           if constexpr (OPERATOR::scope == refinement::OperatorScope::PerCoarseCell) {
+    #ifdef PARALLEL_MODE_OMP
+    #pragma omp parallel for schedule(static)
+    #endif
+    for (CellID i=0; i < cellIdFine.getSize(); ++i) {
+      if (cellIdCoarse[0][i] != 0) {
+        cpu::Cell cCell{data.getCoarseLattice(), cellIdCoarse[0][i]};
+        cpu::Cell fCell{data.getFineLattice(), cellIdFine[0][i]};
+        cpu::Row  cData{data.getConcreteData(), i};
+        OPERATOR().apply(cCell, fCell, cData, parameters);
+      }
+    }
+  }
+};
+
+template <typename T, typename DESCRIPTOR, Platform PLATFORM, typename OPERATOR>
+requires (isPlatformCPU(PLATFORM) && OPERATOR::scope == refinement::OperatorScope::PerFineCell)
+struct ConcreteBlockRefinementO<T,DESCRIPTOR,PLATFORM,OPERATOR> {
+  void apply(ConcreteBlockRefinementContextD<T,DESCRIPTOR,PLATFORM>& data) {
+    const auto& cellIdCoarse = data.getConcreteData().template getField<fields::refinement::CELL_ID_COARSE>();
+    const auto& cellIdFine = data.getConcreteData().template getField<fields::refinement::CELL_ID_FINE>();
+    auto parameters = data.getConcreteData().template getData<OperatorParameters<OPERATOR>>().parameters;
+
+    if constexpr (OPERATOR::data::template contains<fields::refinement::CONTEXT_NEIGHBORS>()) {
       #ifdef PARALLEL_MODE_OMP
       #pragma omp parallel for schedule(static)
       #endif
       for (CellID i=0; i < cellIdFine.getSize(); ++i) {
-        if (cellIdCoarse[0][i] != 0) {
-          cpu::Cell cCell{data.getCoarseLattice(), cellIdCoarse[0][i]};
-          cpu::Cell fCell{data.getFineLattice(), cellIdFine[0][i]};
-          cpu::Row  cData{data.getConcreteData(), i};
-          OPERATOR().apply(cCell, fCell, cData, parameters);
-        }
+        cpu::Cell fCell{data.getFineLattice(), cellIdFine[0][i]};
+        refinement::VertexCenteredCoarseCell cCell{cpu::Cell{data.getCoarseLattice(), cellIdCoarse[0][i]},
+                                                   data.getFineLattice().getLatticeR(cellIdFine[0][i])};
+        refinement::ContextDataWithNeighbors cData{cpu::Row{data.getConcreteData(), i}};
+        OPERATOR().apply(cCell, fCell, cData, parameters);
       }
-    } else if constexpr (OPERATOR::scope == refinement::OperatorScope::PerFineCell) {
-      if constexpr (OPERATOR::data::template contains<fields::refinement::CONTEXT_NEIGHBORS>()) {
-        #ifdef PARALLEL_MODE_OMP
-        #pragma omp parallel for schedule(static)
-        #endif
-        for (CellID i=0; i < cellIdFine.getSize(); ++i) {
-          cpu::Cell fCell{data.getFineLattice(), cellIdFine[0][i]};
-          refinement::CoarseCell cCell{cpu::Cell{data.getCoarseLattice(), cellIdCoarse[0][i]},
-                                       data.getFineLattice().getLatticeR(cellIdFine[0][i])};
-          refinement::ContextDataWithNeighbors cData{cpu::Row{data.getConcreteData(), i}};
-          OPERATOR().apply(cCell, fCell, cData, parameters);
-        }
-      } else {
-        #ifdef PARALLEL_MODE_OMP
-        #pragma omp parallel for schedule(static)
-        #endif
-        for (CellID i=0; i < cellIdFine.getSize(); ++i) {
-          cpu::Cell fCell{data.getFineLattice(), cellIdFine[0][i]};
-          refinement::CoarseCell cCell{cpu::Cell{data.getCoarseLattice(), cellIdCoarse[0][i]},
-                                       data.getFineLattice().getLatticeR(cellIdFine[0][i])};
-          refinement::ContextData cData{cpu::Row{data.getConcreteData(), i}};
-          OPERATOR().apply(cCell, fCell, cData, parameters);
-        }
+    } else {
+      #ifdef PARALLEL_MODE_OMP
+      #pragma omp parallel for schedule(static)
+      #endif
+      for (CellID i=0; i < cellIdFine.getSize(); ++i) {
+        cpu::Cell fCell{data.getFineLattice(), cellIdFine[0][i]};
+        refinement::VertexCenteredCoarseCell cCell{cpu::Cell{data.getCoarseLattice(), cellIdCoarse[0][i]},
+                                                   data.getFineLattice().getLatticeR(cellIdFine[0][i])};
+        refinement::ContextData cData{cpu::Row{data.getConcreteData(), i}};
+        OPERATOR().apply(cCell, fCell, cData, parameters);
       }
+    }
+  }
+};
+
+template <typename T, typename DESCRIPTOR, Platform PLATFORM, typename OPERATOR>
+requires (isPlatformCPU(PLATFORM) && OPERATOR::scope == refinement::OperatorScope::PerCellCenteredCoarseCell)
+struct ConcreteBlockRefinementO<T,DESCRIPTOR,PLATFORM,OPERATOR> {
+  void apply(ConcreteBlockRefinementContextD<T,DESCRIPTOR,PLATFORM>& data) {
+    const auto& cellIdCoarse = data.getConcreteData().template getField<fields::refinement::CELL_ID_COARSE>();
+    const auto& cellIdFine = data.getConcreteData().template getField<fields::refinement::CELL_ID_FINE>();
+    auto parameters = data.getConcreteData().template getData<OperatorParameters<OPERATOR>>().parameters;
+
+    #ifdef PARALLEL_MODE_OMP
+    #pragma omp parallel for schedule(static)
+    #endif
+    for (CellID i=0; i < cellIdCoarse.getSize(); ++i) {
+      cpu::Cell cCell{data.getCoarseLattice(), cellIdCoarse[0][i]};
+      refinement::CellCenteredFineCells fCells{cpu::Cell{data.getFineLattice(), cellIdFine[0][i]}};
+      cpu::Row  cData{data.getConcreteData(), i};
+      OPERATOR().apply(cCell, fCells, cData, parameters);
     }
   }
 };

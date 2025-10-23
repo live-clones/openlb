@@ -46,7 +46,6 @@ using COUPLING     = PseudopotentialForcedPostProcessor<interaction::Polinomial>
 
 namespace olb::parameters {
 
-struct RADIUS          : public descriptors::FIELD_BASE<1> { }; // radius of liquid phase [m]
 struct U_DROPLET       : public descriptors::FIELD_BASE<1> { }; // droplet velocity [m.s-1]
 struct RELAXATION_TIME : public descriptors::FIELD_BASE<1> { }; // lattice relaxation time
 struct MAX_ITER        : public descriptors::FIELD_BASE<1> { }; // amount of time steps to complete simulation

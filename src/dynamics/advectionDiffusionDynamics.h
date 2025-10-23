@@ -966,6 +966,84 @@ using NoCollideDynamics = dynamics::Tuple<
   equilibria::None,
   collision::None
 >;
+
+
+//Crystal sourced ADE dynamics with bounce back on crystal
+template<typename T, typename DESCRIPTOR, typename MOMENTA=momenta::AdvectionDiffusionBulkTuple>
+struct CrystalSourcedAdvectionDiffusionBGKdynamics final : public dynamics::CustomCollision<
+  T,DESCRIPTOR,
+  momenta::Tuple<
+    momenta::CrystalDensity<typename MOMENTA::density>,
+    typename MOMENTA::momentum,
+    typename MOMENTA::stress,
+    typename MOMENTA::definition
+  >
+> {
+  using MomentaF = typename momenta::Tuple<
+    momenta::SourcedDensity<typename MOMENTA::density>,
+    typename MOMENTA::momentum,
+    typename MOMENTA::stress,
+    typename MOMENTA::definition
+  >::template type<DESCRIPTOR>;
+  using EquilibriumF = typename equilibria::FirstOrder::template type<DESCRIPTOR,MOMENTA>;
+
+  using parameters = meta::list<descriptors::OMEGA>;
+
+  template<typename M>
+  using exchange_momenta = CrystalSourcedAdvectionDiffusionBGKdynamics<T,DESCRIPTOR,M>;
+
+  std::type_index id() override {
+    return typeid(CrystalSourcedAdvectionDiffusionBGKdynamics);
+  };
+
+  AbstractParameters<T,DESCRIPTOR>& getParameters(BlockLattice<T,DESCRIPTOR>& block) override {
+    return block.template getData<OperatorParameters<CrystalSourcedAdvectionDiffusionBGKdynamics>>();
+  }
+
+  template <typename CELL, typename PARAMETERS, typename V=typename CELL::value_t>
+  CellStatistic<V> collide(CELL& cell, PARAMETERS& parameters) any_platform  {
+    V crystal = cell.template getField<descriptors::CRYSTLAYER>();
+    if(crystal < V(0.5)){
+      const auto u = cell.template getField<descriptors::VELOCITY>();
+      const V temperature = MomentaF().computeRho(cell);
+      const V omega = parameters.template get<descriptors::OMEGA>();
+
+      const V uSqr = lbm<DESCRIPTOR>::adeBgkCollision(cell, temperature, u, omega);
+      const V sourceMod = cell.template getField<descriptors::SOURCE>() * (V{1} - V{0.5} * omega);
+
+      for ( int iPop = 0; iPop < DESCRIPTOR::q; iPop++ ) {
+        cell[iPop] += sourceMod * descriptors::t<V,DESCRIPTOR>(iPop);
+      }
+
+      V newRho = typename momenta::Tuple<
+        momenta::CrystalDensity<typename MOMENTA::density>,
+        typename MOMENTA::momentum,
+        typename MOMENTA::stress,
+        typename MOMENTA::definition
+      >::template type<DESCRIPTOR>().computeRho(cell);
+      cell.template setField<descriptors::MOMENTA_DENSITY>(newRho);
+
+      return {temperature, uSqr};
+    }else{
+      for (int iPop=1; iPop <= DESCRIPTOR::q/2; ++iPop) {
+        V cell_iPop = cell[iPop];
+        cell[iPop] = cell[descriptors::opposite<DESCRIPTOR>(iPop)];
+        cell[descriptors::opposite<DESCRIPTOR>(iPop)] = cell_iPop;
+      }
+      return {V{-1}, V{-1}};
+    }
+  };
+
+  void computeEquilibrium(ConstCell<T,DESCRIPTOR>& cell, T rho, const T u[DESCRIPTOR::d], T fEq[DESCRIPTOR::q]) const override {
+    for ( int iPop = 0; iPop < DESCRIPTOR::q; iPop++ ) {
+      fEq[iPop] = equilibrium<DESCRIPTOR>::firstOrder(iPop, rho, u);
+    }
+  };
+
+  std::string getName() const override {
+    return "CrystalSourcedAdvectionDiffusionBGKdynamics<" + MomentaF().getName() + ">";
+  };
+};
 } // namespace olb
 
 #endif

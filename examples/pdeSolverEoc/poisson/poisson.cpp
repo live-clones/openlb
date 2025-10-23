@@ -24,9 +24,9 @@
 
  /*
   * the expressions used in this file are used for validational part of the paper
-  * F. Bukreev, A. Kummerländer, J. Jeßberger, D.Teutscher, S. Ito, S. Simonis, H. Nirschl, M. J. Krause,
-  * Hydro-electrochemical Saturation in Nano-scale Porous Media. Part I: Sensitivity Assessing Simulation Approach,
-  * submitted to Chemical Engineering Science 2024
+  * Bukreev, F., Kummerländer, A., Jeßberger, J. et al. A hybrid Lattice-Boltzmann model for hydro-electrochemical modeling
+  * and sensitivity analysis of crystallization potential in nanoporous media. Part I: simulation model. Engineering with
+  * Computers (2025). https://doi.org/10.1007/s00366-025-02216-x
   *
   * In current example, Poisson equation with one-dimensional analytical solution is discretized with LBM.
   * This equation is often used for electric potential distribution. The analytical solution for this case is taken from

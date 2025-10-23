@@ -181,8 +181,8 @@ struct SpherePorosityF {
 
     const auto physDeltaX = params.template get<fields::converter::PHYS_DELTA_X>();
 
-    const V d = sdf::sphere(physR - elementPivot, elementRadius);
-    const V eps = V{0.5}*physDeltaX;
+    const V eps = physDeltaX;
+    const V d = sdf::sphere(physR - elementPivot, elementRadius-V{0.5}*eps);
     if (d < eps) {
       return util::max(d / eps, 0);
     } else {
@@ -284,12 +284,12 @@ struct CylinderPorosityF {
 
     const auto physDeltaX = params.template get<fields::converter::PHYS_DELTA_X>();
 
+    const V eps = physDeltaX;
     const V d = sdf::cylinder(physR,
                               elementCenter,
                               elementAxis*elementLength,
                               elementLength*elementLength,
-                              elementRadius);
-    const V eps = V{0.5}*physDeltaX;
+                              elementRadius-V{0.5}*eps);
     if (d < eps) {
       return util::max(d / eps, 0);
     } else {
@@ -328,37 +328,40 @@ struct CylinderWithWallModelPorosityF : public CylinderPorosityF {
   template <typename PARAMETERS, typename PHYS_R>
   auto computeY1(PARAMETERS& params,
                  PHYS_R& physR,
-                 unsigned iElement) any_platform requires (PHYS_R::d == 3) {
+                 unsigned iElement) any_platform {
     using V = typename PARAMETERS::value_t;
     using DESCRIPTOR = typename PARAMETERS::descriptor_t;
+    if constexpr (PHYS_R::d == 3) {
+      const auto centers = params.template get<fields::array_of<CENTER>>();
+      const auto radii    = params.template get<fields::array_of<RADIUS>>();
+      const auto length   = params.template get<fields::array_of<LENGTH>>();
+      const auto axis     = params.template get<fields::array_of<AXIS>>();
 
-    const auto centers = params.template get<fields::array_of<CENTER>>();
-    const auto radii    = params.template get<fields::array_of<RADIUS>>();
-    const auto length   = params.template get<fields::array_of<LENGTH>>();
-    const auto axis     = params.template get<fields::array_of<AXIS>>();
+      const Vector<V,DESCRIPTOR::d> elementAxis{axis, iElement};
+      const V elementRadius = radii[iElement];
+      const V elementLength = length[iElement];
 
-    const Vector<V,DESCRIPTOR::d> elementAxis{axis, iElement};
-    const V elementRadius = radii[iElement];
-    const V elementLength = length[iElement];
+      const Vector<V,DESCRIPTOR::d> elementCenterR{centers, iElement};
+      const auto closestCenter = elementCenterR
+                               + (physR - elementCenterR)*elementAxis
+                               * elementAxis;
 
-    const Vector<V,DESCRIPTOR::d> elementCenterR{centers, iElement};
-    const auto closestCenter = elementCenterR
-                             + (physR - elementCenterR)*elementAxis
-                             * elementAxis;
+      Vector<V,DESCRIPTOR::d> normal = physR - closestCenter;
+      normal /= util::norm<DESCRIPTOR::d>(normal);
 
-    Vector<V,DESCRIPTOR::d> normal = physR - closestCenter;
-    normal /= util::norm<DESCRIPTOR::d>(normal);
+      const auto physDeltaX = params.template get<fields::converter::PHYS_DELTA_X>();
 
-    const V d = sdf::cylinder(physR,
-                              elementCenterR,
-                              elementAxis*elementLength,
-                              elementLength*elementLength,
-                              elementRadius);
+      const V d = sdf::cylinder(physR,
+                                elementCenterR,
+                                elementAxis*elementLength,
+                                elementLength*elementLength,
+                                elementRadius-V{0.5}*physDeltaX);
 
-    const auto physDeltaX = params.template get<fields::converter::PHYS_DELTA_X>();
-
-    if (d > 0 && d < V{1.5}*physDeltaX) {
-      return normal * (d / physDeltaX);
+      if (d > 0 && d < V{2}*physDeltaX) {
+        return normal * (d / physDeltaX);
+      } else {
+        return Vector<V,DESCRIPTOR::d>{};
+      }
     } else {
       return Vector<V,DESCRIPTOR::d>{};
     }

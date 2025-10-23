@@ -34,31 +34,54 @@
 #include <olb.h>
 
 using namespace olb;
+using namespace olb::names;
 using namespace olb::descriptors;
 using namespace olb::graphics;
 
-//- Define the floating point type: single- or double-precision
-using T = FLOATING_POINT_TYPE;
 
-//- Define the lattice descriptor and bulk dynamics for the Navier-Stokes equations
-using NavierStokesDescriptor = D3Q27
-<
-  descriptors::FORCE,
+// === Step 1: Declarations ===
+using MyCase = Case<
+  NavierStokes, Lattice<double, descriptors::D3Q27<  descriptors::FORCE,
   FreeSurface::MASS,
   FreeSurface::EPSILON,
   FreeSurface::CELL_TYPE,
   FreeSurface::CELL_FLAGS,
   FreeSurface::TEMP_MASS_EXCHANGE,
   FreeSurface::PREVIOUS_VELOCITY,
-  FreeSurface::HAS_INTERFACE_NBRS
+  FreeSurface::HAS_INTERFACE_NBRS>>
 >;
-using NavierStokesBulkDynamics = SmagorinskyForcedBGKdynamics<T, NavierStokesDescriptor>;
+
+
+/// @brief Create a simulation mesh, based on user-specified geometry
+/// @return An instance of a mesh with the relevant information
+Mesh<MyCase::value_t, MyCase::d> createMesh(MyCase::ParametersD& parameters) {
+  using T = MyCase::value_t;
+
+  const T length = parameters.get<parameters::DOMAIN_EXTENT>()[0];
+  const T height = parameters.get<parameters::DOMAIN_EXTENT>()[1];
+  const T width  = parameters.get<parameters::DOMAIN_EXTENT>()[2];
+
+  const std::vector<T> origin(3, T(0));
+  const std::vector<T> extend = {length, height, width};
+  IndicatorCuboid3D<T> cuboid(extend, origin);
+
+  const T physDeltaX = parameters.get<parameters::PHYS_CHAR_LENGTH>() / parameters.get<parameters::RESOLUTION>();
+
+  Mesh<T, MyCase::d> mesh = Mesh<T, MyCase::d>(cuboid, physDeltaX, singleton::mpi().getSize());
+  mesh.setOverlap(3);
+
+  mesh.getCuboidDecomposition().setPeriodicity({true, true, false});
+
+  return mesh;
+}
+
 
 //- Set the fields based on the initial volume fraction: a spherical gas bubble in a liquid
 template<typename T>
 class bubble final : public AnalyticalF3D<T, T>
 {
 protected:
+  MyCase& myCase_;
 
   //- Lattice grid spacing in SI units [m]
   T deltaX_;
@@ -67,7 +90,8 @@ protected:
   T radius_;
 
   //- Bubble center in SI units [m]
-  std::vector<T> center_;
+  //std::vector<T> center_;
+  std::array<T,3> center_;
 
   //- Sets field values, i.e., independent of the descriptor dimension; always uses 3 components.
   std::array<T, 3> values_;
@@ -77,17 +101,20 @@ public:
   //- Constructor from the input file, Navier-Stokes unit converter, and field values
   bubble
   (
-    XMLreader& configuration, UnitConverter<T, NavierStokesDescriptor> const& NavierStokesConverter,
-    const std::array<T,3>& values
-  ) : AnalyticalF3D<T, T>(1), deltaX_(NavierStokesConverter.getPhysDeltaX()), radius_(T(0)), values_(values)
+    MyCase& myCase,
+    UnitConverter<MyCase::value_t, MyCase::descriptor_t_of<NavierStokes>> const& NavierStokesConverter,
+    const std::array<MyCase::value_t,3>& values
+  ) : AnalyticalF3D<MyCase::value_t, MyCase::value_t>(1), myCase_(myCase), deltaX_(NavierStokesConverter.getPhysDeltaX()), radius_(MyCase::value_t(0)), values_(values)
   {
-    //- Reading bubble radius [m] and its center [m] from the input file
-    radius_ = configuration["Geometry"]["Bubble"]["Radius"].get<T>();
-    configuration["Geometry"]["Bubble"]["Center"].read(center_);
+    auto& parameters = myCase_.getParameters();
+    radius_ =   static_cast<T>(parameters.get<parameters::RADIUS>());
+    center_ = { static_cast<T>(parameters.get<parameters::CENTER>()[0]),
+                static_cast<T>(parameters.get<parameters::CENTER>()[1]),
+                static_cast<T>(parameters.get<parameters::CENTER>()[2]) };
   }
 
   //- Set the initial volume fraction field based on the bubble geometry, i.e., gas (0), interface (1), fluid (2)
-  bool operator()(T output[], const T x[]) override {
+  bool operator()(MyCase::value_t output[], const MyCase::value_t x[]) override {
     //- Initially, set the current node as fluid
     output[0] = values_[2];
 
@@ -125,27 +152,33 @@ template<typename T>
 class HydroStaticPressure3D final : public AnalyticalF3D<T, T>
 {
 protected:
+  MyCase& myCase_;
 
   //- Navier-Stokes unit converter
-  UnitConverter<T, NavierStokesDescriptor> const& converter_;
+  UnitConverter<T, MyCase::descriptor_t_of<NavierStokes>> const& converter_;
 
   //- Liquid column width in z-direction [m]
   T width_;
 
   //- The gravity vector [m/s^2]
-  std::vector<T> gravity_;
+  std::array<T,3> gravity_;
 
 public:
 
   //- Constructor from the Advection-Diffusion unit converter
   HydroStaticPressure3D
   (
-    XMLreader& configuration, UnitConverter<T, NavierStokesDescriptor> const& NavierStokesConverter
-  ) : AnalyticalF3D<T, T>(1), converter_(NavierStokesConverter)
+    MyCase& myCase,
+    UnitConverter<T, MyCase::descriptor_t_of<NavierStokes>> const& NavierStokesConverter
+  ) : AnalyticalF3D<T, T>(1), myCase_(myCase), converter_(NavierStokesConverter)
   {
+    auto& parameters = myCase_.getParameters();
     //- Reading the liquid column width [m] and gravity [m/s^2] from the input file
-    width_ = configuration["Geometry"]["Width"].get<T>();
-    configuration["Application"]["PhysParameters"]["PhysGravity"].read(gravity_);
+    width_ = parameters.get<parameters::DOMAIN_EXTENT>()[2];
+    //configuration["Application"]["PhysParameters"]["PhysGravity"].read(gravity_);
+    gravity_ = { static_cast<T>(parameters.get<parameters::GRAVITY>()[0]),
+                 static_cast<T>(parameters.get<parameters::GRAVITY>()[1]),
+                 static_cast<T>(parameters.get<parameters::GRAVITY>()[2]) };
   }
 
   //- Density computed using hydrostatic pressure (p = p0 + rho * g * h),
@@ -160,27 +193,27 @@ public:
   }
 };
 
+
 //- Calculate the center of mass of the bubble, i.e., works only for a single bubble
-Vector<T, 3> bubbleCenterOfMass
-(
-    SuperGeometry<T, 3>& superGeometry,
-    SuperLattice<T, NavierStokesDescriptor>& NavierStokesLattice
-)
-{
+Vector<MyCase::value_t, 3> bubbleCenterOfMass(MyCase& myCase) {
+  using T = MyCase::value_t;
+  auto& lattice = myCase.getLattice(NavierStokes{});
+  auto& geometry = myCase.getGeometry();
+
   //- Initialize the center of mass of the bubble
   Vector<T, 3> centerOfMass(T(0));
   T nCells = T(0);
 
-  for (int iC = 0; iC < NavierStokesLattice.getLoadBalancer().size(); ++iC)
+  for (int iC = 0; iC < lattice.getLoadBalancer().size(); ++iC)
   {
-    const auto& block = NavierStokesLattice.getBlock(iC);
+    const auto& block = lattice.getBlock(iC);
     block.forCoreSpatialLocations([&](auto iX, auto iY, auto iZ) {
       auto cell = block.get({iX, iY, iZ});
 
       //- Calculate the center of mass of the bubble, i.e., is Gas Type (0)
       if (isCellType(cell, FreeSurface::Type::Gas))
       {
-        centerOfMass += superGeometry.getBlockGeometry(iC).getPhysR({iX, iY, iZ});
+        centerOfMass += geometry.getBlockGeometry(iC).getPhysR({iX, iY, iZ});
         nCells += T(1);
       }
     });
@@ -202,82 +235,104 @@ Vector<T, 3> bubbleCenterOfMass
 }
 
 //- Prepare the geometry using the indicator method
-void prepareGeometry
-(
-  XMLreader& configuration, SuperGeometry<T, 3>& superGeometry,
-  UnitConverter<T, NavierStokesDescriptor> const& NavierStokesConverter
-)
+void prepareGeometry(MyCase& myCase)
 {
+  //using DESCRIPTOR = MyCase::descriptor_t_of<NavierStokes>;
+  using T = MyCase::value_t;
+  auto& geometry = myCase.getGeometry();
+  auto& parameters = myCase.getParameters();
+
   OstreamManager clout(std::cout, "prepareGeometry");
 
   //- Setting the material ID to (1) for all voxels, i.e. domain-wide
   //- Note that the side walls in x- and y-directions are periodic
-  superGeometry.rename(0, 1);
+  geometry.rename(0, 1);
 
   //- Reading cuboid length, height, and width [m] from the input file
-  const T length = configuration["Geometry"]["Length"].get<T>();
-  const T height = configuration["Geometry"]["Height"].get<T>();
-  const T width = configuration["Geometry"]["Width"].get<T>();
-  const T epsilon = T(0.5) * NavierStokesConverter.getPhysDeltaX();
+  const T length = parameters.get<parameters::DOMAIN_EXTENT>()[0];
+  const T height = parameters.get<parameters::DOMAIN_EXTENT>()[1];
+  const T width  = parameters.get<parameters::DOMAIN_EXTENT>()[2];
+  const T epsilon = T(0.5) * parameters.get<parameters::PHYS_CHAR_LENGTH>() / parameters.get<parameters::RESOLUTION>();
   std::vector<T> origin = {-epsilon, -epsilon, -epsilon};
   std::vector<T> extend = {length + T(2) * epsilon, height + T(2) * epsilon, T(2) * epsilon};
 
   //- Setting material ID 2 for the bottom wall boundary voxels
   IndicatorCuboid3D<T> bottomWall(extend, origin);
-  superGeometry.rename(1, 2, bottomWall);
+  geometry.rename(1, 2, bottomWall);
 
   //- Setting material ID 3 for the top wall boundary voxels
   origin[2] += width;
   IndicatorCuboid3D<T> topWall(extend, origin);
-  superGeometry.rename(1, 3, topWall);
+  geometry.rename(1, 3, topWall);
 
   //- Removes all not needed boundary voxels outside the surface
   //- Removes all not needed boundary voxels inside the surface
   //- Checks the geometry for possible errors
-  superGeometry.clean();
-  superGeometry.innerClean();
-  superGeometry.checkForErrors();
-  superGeometry.print();
+  geometry.clean();
+  geometry.innerClean();
+  geometry.checkForErrors();
+  geometry.print();
 
   clout << "Geometry created successfully." << std::endl;
 }
 
 //- Prepare lattice for the Navier-Stokes equations with the free-surface model
-void prepareNavierStokesLattice
-(
-  XMLreader& configuration, SuperGeometry<T, 3>& superGeometry,
-  UnitConverter<T, NavierStokesDescriptor> const& NavierStokesConverter,
-  SuperLattice<T, NavierStokesDescriptor>& NavierStokesLattice
-)
-{
-  OstreamManager clout(std::cout, "prepareNavierStokesLattice");
+void prepareLattice (MyCase& myCase) {
+  using DESCRIPTOR = MyCase::descriptor_t_of<NavierStokes>;
+  using T = MyCase::value_t;
+  auto& lattice = myCase.getLattice(NavierStokes{});
+  auto& geometry = myCase.getGeometry();
+  auto& parameters = myCase.getParameters();
+
+  OstreamManager clout(std::cout, "prepareLattice");
+
+  const int resolution = parameters.get<parameters::RESOLUTION>();
+  const T lattice_relaxation_time = parameters.get<parameters::LATTICE_RELAXATION_TIME>();
+  const T charPhysLength = parameters.get<parameters::PHYS_CHAR_LENGTH>();
+  const T charPhysVelocity = parameters.get<parameters::PHYS_CHAR_VELOCITY>();
+  const T physViscosity = parameters.get<parameters::PHYS_CHAR_VISCOSITY>();
+  const T physDensity = parameters.get<parameters::PHYS_CHAR_DENSITY>();
+
+  lattice.setUnitConverter<UnitConverterFromResolutionAndRelaxationTime<T, DESCRIPTOR>>(
+    int {resolution},              // resolution: number of voxels per charPhysL
+    (T) lattice_relaxation_time,   // latticeRelaxationTime: relaxation time, have to be greater than 0.5!
+    (T) charPhysLength,            // charPhysLength: reference length of simulation geometry
+    (T) charPhysVelocity,          // charPhysVelocity: maximal/highest expected velocity during simulation in __m / s__
+    (T) physViscosity,             // physViscosity: physical kinematic viscosity in __m^2 / s__
+    (T) physDensity                // physDensity: physical density in __kg / m^3__
+  );
+
+  auto& converter = lattice.getUnitConverter();
+
+  //converter.print();
+  //converter.write("NavierStokesConverter");
 
   //- Lattice relaxation frequency for the Navier-Stokes equations
-  T NavierStokesOmega  = NavierStokesConverter.getLatticeRelaxationFrequency();
+  T NavierStokesOmega = converter.getLatticeRelaxationFrequency();
 
   //- rho0 is the initial density profile calculated from the hydro-static pressure
-  HydroStaticPressure3D<T> rho0(configuration, NavierStokesConverter);
+  HydroStaticPressure3D<T> rho0(myCase, converter);
 
   //- velocity0 is the uniform initial velocity profile
   AnalyticalConst3D<T, T> velocity0(T(0), T(0), T(0));
 
   //- Setting NSEs bulk dynamics for the defined material IDs
   //- Bulk materials: (1) fluid, (2) bottomWall, and (3) topWall
-  auto bulkIndicator = superGeometry.getMaterialIndicator({1, 2, 3});
-  NavierStokesLattice.defineDynamics<NoDynamics>(superGeometry, 0);
-  NavierStokesLattice.defineDynamics<NavierStokesBulkDynamics>(bulkIndicator);
+  auto bulkIndicator = geometry.getMaterialIndicator({1, 2, 3});
+  lattice.defineDynamics<NoDynamics>(geometry, 0);
+  lattice.defineDynamics<SmagorinskyForcedBGKdynamics<T, DESCRIPTOR>>(bulkIndicator);
 
   //- Setting NSEs velocity boundary condition for the material (2), i.e. bottomWall
-  // boundary::set<boundary::InterpolatedVelocity>(NavierStokesLattice, superGeometry, 2);
-  boundary::set<boundary::BounceBack>(NavierStokesLattice, superGeometry, 2);
+  // boundary::set<boundary::InterpolatedVelocity>(lattice, geometry, 2);
+  boundary::set<boundary::BounceBack>(lattice, geometry, 2);
 
   //- Setting NSEs velocity boundary condition for the material (3), i.e. topWall
-  // boundary::set<boundary::InterpolatedVelocity>(NavierStokesLattice, superGeometry, 3);
-  boundary::set<boundary::BounceBack>(NavierStokesLattice, superGeometry, 3);
+  // boundary::set<boundary::InterpolatedVelocity>(lattice, geometry, 3);
+  boundary::set<boundary::BounceBack>(lattice, geometry, 3);
 
   //- Setting the lattice relaxation frequency and Smagorinsky constant
-  NavierStokesLattice.setParameter<descriptors::OMEGA>(NavierStokesOmega);
-  NavierStokesLattice.setParameter<collision::LES::SMAGORINSKY>(T(0.2));
+  lattice.setParameter<descriptors::OMEGA>(NavierStokesOmega);
+  lattice.setParameter<collision::LES::SMAGORINSKY>(T(0.2));
 
   //- Define user-defined constants for field initialization
   AnalyticalConst3D<T, T> zero(T(0));
@@ -287,145 +342,124 @@ void prepareNavierStokesLattice
   AnalyticalConst3D<T, T> zeros(T(0), T(0), T(0));
 
   //- Create a single bubble with the specified center and radius
-  bubble<T> types(configuration, NavierStokesConverter, {T(0), T(1), T(2)});
-  bubble<T> mass(configuration, NavierStokesConverter, {T(0), T(0.5), T(1)});
+  bubble<T> types( myCase, converter, {T(0), T(1), T(2)});
+  bubble<T> mass( myCase, converter, {T(0), T(0.5), T(1)});
 
   //- Initialize the free surface fields on the lattice
   for (auto i : {0, 1, 2, 3}) {
-    NavierStokesLattice.defineField<FreeSurface::MASS>(superGeometry, i, zero);
-    NavierStokesLattice.defineField<FreeSurface::EPSILON>(superGeometry, i, zero);
-    NavierStokesLattice.defineField<FreeSurface::CELL_TYPE>(superGeometry, i, zero);
-    NavierStokesLattice.defineField<FreeSurface::CELL_FLAGS>(superGeometry, i, zero);
-    NavierStokesLattice.defineField<FreeSurface::PREVIOUS_VELOCITY>(superGeometry, i, zeros);
-    NavierStokesLattice.defineField<FORCE>(superGeometry, i, zeros);
+    lattice.defineField<FreeSurface::MASS>(geometry, i, zero);
+    lattice.defineField<FreeSurface::EPSILON>(geometry, i, zero);
+    lattice.defineField<FreeSurface::CELL_TYPE>(geometry, i, zero);
+    lattice.defineField<FreeSurface::CELL_FLAGS>(geometry, i, zero);
+    lattice.defineField<FreeSurface::PREVIOUS_VELOCITY>(geometry, i, zeros);
+    lattice.defineField<FORCE>(geometry, i, zeros);
   }
 
   //- Setting the initial types, volume fraction, and mass based on the bubble geometry for the material IDs
   //- Material ID 1 denotes the internal fluid nodes
-  NavierStokesLattice.defineField<FreeSurface::CELL_TYPE>(superGeometry, 1, types);
-  NavierStokesLattice.defineField<FreeSurface::MASS>(superGeometry, 1, mass);
-  NavierStokesLattice.defineField<FreeSurface::EPSILON>(superGeometry, 1, mass);
+  lattice.defineField<FreeSurface::CELL_TYPE>(geometry, 1, types);
+  lattice.defineField<FreeSurface::MASS>(geometry, 1, mass);
+  lattice.defineField<FreeSurface::EPSILON>(geometry, 1, mass);
 
   //- Materials ID 2 and 3 denote the bottom and top wall boundary voxels
   //- Note that epsilon is set to 1.0 for the wall boundary voxels, i.e., a wetting wall condition
   for (auto i : {2, 3}) {
-    NavierStokesLattice.defineField<FreeSurface::CELL_TYPE>(superGeometry, i, four);
-    NavierStokesLattice.defineField<FreeSurface::EPSILON>(superGeometry, i, one);
+    lattice.defineField<FreeSurface::CELL_TYPE>(geometry, i, four);
+    lattice.defineField<FreeSurface::EPSILON>(geometry, i, one);
   }
 
   //- Setting the gravity force in the z-direction, i.e., in lattice units
-  std::vector<T> gravity;
-  configuration["Application"]["PhysParameters"]["PhysGravity"].read(gravity);
-  T gScale = T(1.0) / NavierStokesConverter.getConversionFactorForce() * NavierStokesConverter.getConversionFactorMass();
+  std::array<T,3> gravity;
+  gravity[0] = parameters.get<parameters::GRAVITY>()[0];
+  gravity[1] = parameters.get<parameters::GRAVITY>()[1];
+  gravity[2] = parameters.get<parameters::GRAVITY>()[2];
+  T gScale = T(1.0) / converter.getConversionFactorForce() * converter.getConversionFactorMass();
   AnalyticalConst3D<T,T> gForce{gravity[0] * gScale, gravity[1] * gScale, gravity[2] * gScale};
-  NavierStokesLattice.defineField<FORCE>(superGeometry, 1, gForce);
+  lattice.defineField<FORCE>(geometry, 1, gForce);
 
   //- Setting the initial conditions for the Navier-Stokes equations
-  NavierStokesLattice.defineRhoU(bulkIndicator, rho0, velocity0);
-  NavierStokesLattice.iniEquilibrium(bulkIndicator, rho0, velocity0);
+  lattice.defineRhoU(bulkIndicator, rho0, velocity0);
+  lattice.iniEquilibrium(bulkIndicator, rho0, velocity0);
 
-  FreeSurface::initialize(NavierStokesLattice);
-  NavierStokesLattice.initialize();
+  FreeSurface::initialize(lattice);
+  lattice.initialize();
+
+  static FreeSurface3DSetup<T, DESCRIPTOR> freeSurfaceHandler(lattice);
+  freeSurfaceHandler.addPostProcessor();
+
+  T tScale = util::pow(converter.getConversionFactorTime(), 2)
+    / (converter.getPhysDensity() * util::pow(converter.getPhysDeltaX(), 3));
+
+  bool drop_isolated_cells = parameters.get<FreeSurface::DROP_ISOLATED_CELLS>();
+  bool hasSurfaceTension = parameters.get<FreeSurface::HAS_SURFACE_TENSION>();
+  T surfaceTensionCoeff = parameters.get<FreeSurface::SURFACE_TENSION_PARAMETER>();
+  T transitionThreshold = parameters.get<FreeSurface::TRANSITION>();
+  T lonelyThreshold = parameters.get<FreeSurface::LONELY_THRESHOLD>();
+
+  //- Setting the free-surface parameters
+  lattice.setParameter<FreeSurface::DROP_ISOLATED_CELLS>(drop_isolated_cells);
+  lattice.setParameter<FreeSurface::TRANSITION>(transitionThreshold);
+  lattice.setParameter<FreeSurface::LONELY_THRESHOLD>(lonelyThreshold);
+  lattice.setParameter<FreeSurface::HAS_SURFACE_TENSION>(hasSurfaceTension);
+  lattice.setParameter<FreeSurface::SURFACE_TENSION_PARAMETER>(tScale * surfaceTensionCoeff);
+  lattice.setParameter<FreeSurface::FORCE_DENSITY>({gravity[0] * gScale, gravity[1] * gScale, gravity[2] * gScale});
 
   clout << "Lattice created successfully." << std::endl;
 }
 
-//- Reading and setting the free-surface parameters from the input file
-void setFreeSurfaceParameters
-(
-  XMLreader& configuration, UnitConverter<T, NavierStokesDescriptor> const& NavierStokesConverter,
-  SuperLattice<T, NavierStokesDescriptor>& NavierStokesLattice
-)
-{
-  //- Setting the drop isolated cells switch
-  bool dropIsolatedCells = false;
-  configuration["Application"]["PhysParameters"]["DropIsolatedCells"].read<bool>(dropIsolatedCells);
-
-  //- Setting the anti-jitter and lonely cells removal threshold
-  T transitionThreshold = configuration["Application"]["PhysParameters"]["TransitionThreshold"].get<T>();
-  T lonelyThreshold = configuration["Application"]["PhysParameters"]["LonelyThreshold"].get<T>();
-
-  //- Setting the surface tension coefficient value
-  bool hasSurfaceTension = false;
-  configuration["Application"]["PhysParameters"]["HasSurfaceTension"].read<bool>(hasSurfaceTension);
-  T surfaceTensionCoeff = configuration["Application"]["PhysParameters"]["SurfaceTensionCoeff"].get<T>();
-  T tScale = util::pow(NavierStokesConverter.getConversionFactorTime(), 2)
-    / (NavierStokesConverter.getPhysDensity() * util::pow(NavierStokesConverter.getPhysDeltaX(), 3));
-
-  //- Setting the gravity force in the z-direction, i.e., in lattice units
-  std::vector<T> gravity;
-  configuration["Application"]["PhysParameters"]["PhysGravity"].read(gravity);
-  T gScale = T(1.0) / NavierStokesConverter.getConversionFactorForce() * NavierStokesConverter.getConversionFactorMass();
-
-  //- Setting the free-surface parameters
-  NavierStokesLattice.setParameter<FreeSurface::DROP_ISOLATED_CELLS>(dropIsolatedCells);
-  NavierStokesLattice.setParameter<FreeSurface::TRANSITION>(transitionThreshold);
-  NavierStokesLattice.setParameter<FreeSurface::LONELY_THRESHOLD>(lonelyThreshold);
-  NavierStokesLattice.setParameter<FreeSurface::HAS_SURFACE_TENSION>(hasSurfaceTension);
-  NavierStokesLattice.setParameter<FreeSurface::SURFACE_TENSION_PARAMETER>(tScale * surfaceTensionCoeff);
-  NavierStokesLattice.setParameter<FreeSurface::FORCE_DENSITY>({gravity[0] * gScale, gravity[1] * gScale, gravity[2] * gScale});
-}
 
 //- Set the output data for post-processing and visualization
-void postprocess
-(
-  XMLreader& configuration, const std::size_t& iT, util::Timer<T>& timer,
-  SuperGeometry<T, 3>& superGeometry,
-  UnitConverter<T, NavierStokesDescriptor> const& NavierStokesConverter,
-  SuperLattice<T, NavierStokesDescriptor>& NavierStokesLattice,
-  std::size_t& iTPrev, Vector<T, 3>& CenterOfMassPrev
-)
+void postprocess(MyCase& myCase, const std::size_t& iT, util::Timer<MyCase::value_t>& timer, std::size_t& iTPrev, Vector<MyCase::value_t, 3>& CenterOfMassPrev)
 {
   OstreamManager clout(std::cout, "postprocess");
+  using DESCRIPTOR = MyCase::descriptor_t_of<NavierStokes>;
+  using T = MyCase::value_t;
+  auto& lattice = myCase.getLattice(NavierStokes{});
+  auto& converter = lattice.getUnitConverter();
+  auto& parameters = myCase.getParameters();
 
-  //- Setting the output file name and save time for visualization
-  std::string VTKFileName;
-  configuration["Output"]["VisualizationVTK"]["FileName"].read(VTKFileName);
-  SuperVTMwriter3D<T> vtmWriter(VTKFileName);
-  std::string CSVFileName;
-  configuration["Output"]["SampleData"]["FileName"].read(CSVFileName);
-  static CSV<T> csvWriter(CSVFileName, ',', {"Time", "X", "Y", "Z", "RiseVelocity"});
-  const T vtkSaveTime = configuration["Output"]["VisualizationVTK"]["SaveTime"].get<T>();
-  const T logTime = configuration["Output"]["VisualizationVTK"]["SaveTime"].get<T>();
-  const T maxPhysTime = configuration["Application"]["PhysParameters"]["MaxPhysTime"].get<T>();
-  const bool lastTimeStep = (iT + 1 == NavierStokesConverter.getLatticeTime(maxPhysTime));
+  SuperVTMwriter3D<T> vtmWriter("basicRisingBubble3d");
+  static CSV<T> csvWriter("basicRisingBubble3d", ',', {"Time", "X", "Y", "Z", "RiseVelocity"});
+  T maxPhysTime = parameters.get<parameters::MAX_PHYS_T>();
+  const bool lastTimeStep = (iT + 1 == converter.getLatticeTime(maxPhysTime));
+
+  const T vtkSaveTime = parameters.get<parameters::PHYS_VTK_ITER_T>();
+  const T logTime     = parameters.get<parameters::PHYS_STAT_ITER_T>();
 
   if (iT == 0) {
-    SuperLatticeCuboid3D<T, NavierStokesDescriptor> cuboid(NavierStokesLattice);
-    SuperLatticeRank3D<T, NavierStokesDescriptor> rank(NavierStokesLattice);
+    SuperLatticeCuboid3D<T, DESCRIPTOR> cuboid(lattice);
+    SuperLatticeRank3D<T, DESCRIPTOR> rank(lattice);
 
     vtmWriter.write(cuboid);
     vtmWriter.write(rank);
     vtmWriter.createMasterFile();
 
-    //- Reading the material properties from the input file in SI units
-    const T physDensity = NavierStokesConverter.getPhysDensity();
-    const T physViscosity = NavierStokesConverter.getPhysViscosity();
-    const T surfaceTensionCoeff = configuration["Application"]["PhysParameters"]["SurfaceTensionCoeff"].get<T>();
-    std::vector<T> gravity;
-    configuration["Application"]["PhysParameters"]["PhysGravity"].read(gravity);
-    const T radius = configuration["Geometry"]["Bubble"]["Radius"].get<T>();
+    T surfaceTensionCoeff = parameters.get<FreeSurface::SURFACE_TENSION_PARAMETER>();
 
     //- Calculate the Bond number for the rising bubble
-    const T Bond = util::abs(T(4) * physDensity * gravity[2] * util::pow(radius, 2) / surfaceTensionCoeff);
+    const T Bond = util::abs(T(4) * converter.getPhysDensity()
+                                  * parameters.get<parameters::GRAVITY>()[2]
+                                  * util::pow(parameters.get<parameters::RADIUS>(), 2)
+                                  / surfaceTensionCoeff);
     clout << "Bond number = " << Bond << std::endl;
 
     //- Calculate the Morton number for the rising bubble
-    const T Morton = util::abs(gravity[2] * util::pow(physViscosity, 4) * util::pow(physDensity / surfaceTensionCoeff, 3));
+    const T Morton = util::abs(parameters.get<parameters::GRAVITY>()[2] * util::pow(converter.getPhysViscosity(), 4)
+                               * util::pow(parameters.get<parameters::PHYS_CHAR_DENSITY>() / surfaceTensionCoeff, 3));
     clout << "Morton number = " << Morton << std::endl;
   }
 
   //- Write the output data for visualization in VTK format
-  if (iT % NavierStokesConverter.getLatticeTime(vtkSaveTime) == 0 || lastTimeStep) {
+  if (iT % converter.getLatticeTime(vtkSaveTime) == 0 || lastTimeStep) {
     //- Triggers data transfer between the host (CPU) and the device (GPU)
-    NavierStokesLattice.setProcessingContext(ProcessingContext::Evaluation);
+    lattice.setProcessingContext(ProcessingContext::Evaluation);
 
-    SuperLatticePhysVelocity3D<T, NavierStokesDescriptor> velocity(NavierStokesLattice, NavierStokesConverter);
-    SuperLatticePhysPressure3D<T, NavierStokesDescriptor> pressure(NavierStokesLattice, NavierStokesConverter);
-    SuperLatticeDensity3D<T, NavierStokesDescriptor> density(NavierStokesLattice);
-    SuperLatticeExternalScalarField3D<T, NavierStokesDescriptor, FreeSurface::CELL_TYPE> types(NavierStokesLattice);
-    SuperLatticeExternalScalarField3D<T, NavierStokesDescriptor, FreeSurface::EPSILON> epsilon(NavierStokesLattice);
-    SuperLatticeExternalScalarField3D<T, NavierStokesDescriptor, FreeSurface::MASS> mass(NavierStokesLattice);
+    SuperLatticePhysVelocity3D<T, DESCRIPTOR> velocity(lattice, converter);
+    SuperLatticePhysPressure3D<T, DESCRIPTOR> pressure(lattice, converter);
+    SuperLatticeDensity3D<T, DESCRIPTOR> density(lattice);
+    SuperLatticeExternalScalarField3D<T, DESCRIPTOR, FreeSurface::CELL_TYPE> types(lattice);
+    SuperLatticeExternalScalarField3D<T, DESCRIPTOR, FreeSurface::EPSILON> epsilon(lattice);
+    SuperLatticeExternalScalarField3D<T, DESCRIPTOR, FreeSurface::MASS> mass(lattice);
 
     vtmWriter.addFunctor(velocity, "Velocity");
     vtmWriter.addFunctor(pressure, "Pressure");
@@ -436,113 +470,129 @@ void postprocess
     vtmWriter.write(iT);
 
     //- Write bubble statistics in SI units: id, center of mass [m], and rise velocity [m/s]
-    Vector<T, 3> centerOfMass = bubbleCenterOfMass(superGeometry, NavierStokesLattice);
-    const T time = NavierStokesConverter.getPhysTime(iT);
-    const T timePrev = NavierStokesConverter.getPhysTime(iTPrev);
+    Vector<T, 3> centerOfMass = bubbleCenterOfMass(myCase);
+    const T time = converter.getPhysTime(iT);
+    const T timePrev = converter.getPhysTime(iTPrev);
     const T riseVelocity = (centerOfMass[2] - CenterOfMassPrev[2]) / (time - timePrev + util::numericLimits::epsilon<T>());
     csvWriter.writeDataFile(time, {centerOfMass[0], centerOfMass[1], centerOfMass[2], riseVelocity});
     iTPrev = iT;
     CenterOfMassPrev = centerOfMass;
-    const T Reynolds = riseVelocity * NavierStokesConverter.getCharPhysLength() / NavierStokesConverter.getPhysViscosity();
+    const T Reynolds = riseVelocity * converter.getCharPhysLength() / converter.getPhysViscosity();
     clout << "Calculated Re = " << Reynolds << ", Experimental Re = 94" << std::endl;
     clout << "Bubble's center of mass = (" << centerOfMass[0] << ", " << centerOfMass[1] << ", " << centerOfMass[2] << ")" << std::endl;
   }
 
   //- Write the output data for logging in the console
-  if (iT % NavierStokesConverter.getLatticeTime(logTime) == 0 || lastTimeStep) {
+  if (iT % converter.getLatticeTime(logTime) == 0 || lastTimeStep) {
     timer.update(iT);
     timer.printStep();
-    NavierStokesLattice.getStatistics().print(iT, NavierStokesConverter.getPhysTime(iT));
+    lattice.getStatistics().print(iT, converter.getPhysTime(iT));
   }
 }
 
-int main(int argc, char* argv[])
+
+/// Set initial condition for primal variables (velocity and density)
+/// @param myCase The Case instance which keeps the simulation data
+/// @note Be careful: initial values have to be set using lattice units
+void setInitialValues( MyCase& myCase ){
+  // Nothing to do here
+}
+
+/// Update boundary values at times (and external fields, if they exist)
+/// @param myCase The Case instance which keeps the simulation data
+/// @param iT The time step
+/// @note Be careful: boundary values have to be set using lattice units
+void setTemporalValues(MyCase& myCase,
+                       std::size_t iT)
 {
-  //-- 1st Step: Reading input files and solver initialization
-  OstreamManager clout(std::cout, "main");
-  initialize(&argc, &argv, false, false);
+  // Nothing to do here, because simulation does not depend on time
+}
 
-  std::string inputFileName("input.xml");
-  XMLreader configuration(inputFileName);
 
-  //- Reading and setting olb source directory
-  std::string olbPath;
-  configuration["Application"]["OlbDir"].read(olbPath);
-  singleton::directories().setOlbDir(olbPath);
+/// @brief Execute simulation: set initial values and run time loop
+/// @param myCase The Case instance which keeps the simulation data
+void simulate( MyCase& myCase ){
 
-  //- Reading and setting the output directory
-  std::string outputPath;
-  configuration["Output"]["OutputDir"].read(outputPath);
-  singleton::directories().setOutputDir(outputPath);
+  using T = MyCase::value_t;
+  auto& lattice = myCase.getLattice(NavierStokes{});
+  auto& geometry = myCase.getGeometry();
+  auto& converter = lattice.getUnitConverter();
+  auto& parameters = myCase.getParameters();
 
-  //- Reading the maximum simulation time [s]
-  const T maxPhysTime = configuration["Application"]["PhysParameters"]["MaxPhysTime"].get<T>();
-
-  //- Reading cuboid length, height, and width [m] from the input file
-  const T length = configuration["Geometry"]["Length"].get<T>();
-  const T height = configuration["Geometry"]["Height"].get<T>();
-  const T width = configuration["Geometry"]["Width"].get<T>();
-
-  //- Setting up lattice unit converters using physical parameters in SI units
-  //- The Navier- Stokes (NSE) unit converter read the input parameters automatically from
-  //- the configuration file, while a few parameters must be read manually
-  UnitConverter<T, NavierStokesDescriptor>* NavierStokesConverterPtr =
-    createUnitConverter<T, NavierStokesDescriptor>(configuration);
-
-  UnitConverter<T, NavierStokesDescriptor> const& NavierStokesConverter = *NavierStokesConverterPtr;
-  NavierStokesConverter.print();
-  NavierStokesConverter.write("NavierStokesConverter");
-
-  //-- 2nd Step: Prepare the geometry using indicator method
-  const std::vector<T> origin(3, T(0));
-  const std::vector<T> extend = {length, height, width};
-  IndicatorCuboid3D<T> cube(extend, origin);
-
-  //- Construct a 3D cuboid geometry, with weights and load balancing
-#ifdef PARALLEL_MODE_MPI
-  const int noOfCuboids = singleton::mpi().getSize();
-#else
-  const int noOfCuboids = 1;
-#endif
-  CuboidDecomposition3D<T> cuboidDecomposition(cube, NavierStokesConverter.getPhysDeltaX(), noOfCuboids);
-
-  //- Setting periodic condition in the x and y-directions
-  cuboidDecomposition.setPeriodicity({true, true, false});
-
-  //- Construct a load balancer by assigning cuboids to threads or MPI processes
-  HeuristicLoadBalancer<T> loadBalancer(cuboidDecomposition);
-
-  //- Construct a load-balanced super geometry from a 3d cuboidGeometry
-  SuperGeometry<T, 3> superGeometry(cuboidDecomposition, loadBalancer, 2);
-
-  //- Prepare the geometry by assigning material IDs to individual voxels
-  prepareGeometry(configuration, superGeometry, NavierStokesConverter);
-
-  //-- 3rd Step: Prepare Navier-Stokes lattice with the free-surface model
-  SuperLattice<T, NavierStokesDescriptor> NavierStokesLattice(NavierStokesConverter, superGeometry);
-  prepareNavierStokesLattice(configuration, superGeometry, NavierStokesConverter, NavierStokesLattice);
-  FreeSurface3DSetup<T, NavierStokesDescriptor> freeSurfaceHandler(NavierStokesLattice);
-  freeSurfaceHandler.addPostProcessor();
-  setFreeSurfaceParameters(configuration, NavierStokesConverter, NavierStokesLattice);
-
-  //-- 4th Step: Prepare the main time loop using Timer and convergence check
-  util::Timer<T> timer(NavierStokesConverter.getLatticeTime(maxPhysTime), superGeometry.getStatistics().getNvoxel());
+  // Prepare the main time loop using Timer and convergence check
+  T maxPhysTime = parameters.get<parameters::MAX_PHYS_T>();
+  util::Timer<T> timer(converter.getLatticeTime(maxPhysTime), geometry.getStatistics().getNvoxel());
   timer.start();
 
   //- Enable statistics by tracking bubble's center of mass
   std::size_t iTPrev = 0;
-  Vector<T, 3> CenterOfMassPrev = bubbleCenterOfMass(superGeometry, NavierStokesLattice);
+  Vector<T, 3> CenterOfMassPrev = bubbleCenterOfMass(myCase);
 
-  for (std::size_t iT = 0; iT < NavierStokesConverter.getLatticeTime(maxPhysTime); ++iT) {
+  for (std::size_t iT = 0; iT < converter.getLatticeTime(maxPhysTime); ++iT) {
     //-- 5th Step: write the output data for post-processing and visualization
-    postprocess(configuration, iT, timer, superGeometry, NavierStokesConverter,
-      NavierStokesLattice, iTPrev, CenterOfMassPrev
-    );
+    postprocess( myCase, iT, timer, iTPrev, CenterOfMassPrev);
 
     //-- 6th Step: evolve the Navier-Stokes equations using FSLBM approximation
-    NavierStokesLattice.collideAndStream();
+    lattice.collideAndStream();
   }
 
   timer.stop();
   timer.printSummary();
+
+}
+
+
+/// Setup and run a simulation
+int main(int argc, char* argv[])
+{
+  //-- 1st Step: Reading input files and solver initialization
+  initialize(&argc, &argv, false, false);
+
+  /// === Step 2: Set Parameters ===
+  MyCase::ParametersD myCaseParameters;
+  {
+    using namespace olb::parameters;
+    myCaseParameters.set<RESOLUTION>(16);
+    myCaseParameters.set<CENTER>({0.1044, 0.1044, 0.0261});
+    myCaseParameters.set<olb::parameters::RADIUS>(0.01305);
+    myCaseParameters.set<DOMAIN_EXTENT>({0.2088, 0.2088, 0.522});
+
+    myCaseParameters.set<PHYS_CHAR_LENGTH>(0.0261);
+    myCaseParameters.set<PHYS_CHAR_PRESSURE>(0.0);
+    myCaseParameters.set<PHYS_CHAR_VELOCITY>(0.3533088193);
+    myCaseParameters.set<PHYS_CHAR_VISCOSITY>(0.0000980996);
+    myCaseParameters.set<PHYS_CHAR_DENSITY>(1095.0);
+    myCaseParameters.set<MAX_PHYS_T>(1.0);
+    myCaseParameters.set<GRAVITY>({0., 0., -9.81});
+    myCaseParameters.set<LATTICE_RELAXATION_TIME>(.501);
+
+    myCaseParameters.set<PHYS_VTK_ITER_T>(0.05);
+    myCaseParameters.set<PHYS_STAT_ITER_T>(0.05);
+
+    myCaseParameters.set<FreeSurface::DROP_ISOLATED_CELLS>(true);
+    myCaseParameters.set<FreeSurface::HAS_SURFACE_TENSION>(true);
+    myCaseParameters.set<FreeSurface::SURFACE_TENSION_PARAMETER>(0.0636306414);
+    myCaseParameters.set<FreeSurface::TRANSITION>(0.01);
+    myCaseParameters.set<FreeSurface::LONELY_THRESHOLD>(0.1);
+  }
+  myCaseParameters.fromCLI(argc, argv);
+
+  /// === Step 3: Create Mesh ===
+  Mesh mesh = createMesh(myCaseParameters);
+
+  /// === Step 4: Create Case ===
+  MyCase myCase(myCaseParameters, mesh);
+
+  /// === Step 5: Prepare Geometry ===
+  prepareGeometry( myCase );
+
+  /// === Step 6: Prepare Lattice ===
+  prepareLattice( myCase );
+
+  /// === Step 7: Definition of Initial, Boundary Values, and Fields ===
+  setInitialValues(myCase);
+
+  /// === Step 8: Simulate ===
+  simulate(myCase);
+
 }

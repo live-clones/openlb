@@ -52,7 +52,7 @@ private:
       auto latticeR = _fLattice.getLatticeR(cellIdFine[0][i]);
       FieldD<T,DESCRIPTOR,CONTEXT_NEIGHBORS> neighbors(std::numeric_limits<CellID>::max());
       for (unsigned iN=0; iN < CONTEXT_NEIGHBORS::count<DESCRIPTOR>(); ++iN) {
-        if (auto index = getDataIndex(latticeR + CONTEXT_NEIGHBORS::c<DESCRIPTOR>(iN))) {
+        if (auto index = getFineDataIndex(latticeR + CONTEXT_NEIGHBORS::c<DESCRIPTOR>(iN))) {
           neighbors[iN] = *index;
         }
       }
@@ -102,7 +102,8 @@ public:
     return _data;
   }
 
-  void add(LatticeR<DESCRIPTOR::d> latticeR) override {
+  /// Adds fine latticeR, assuming vertex-centered refinement
+  void addVertexCentered(LatticeR<DESCRIPTOR::d> latticeR) override {
     CellID iCell = _fLattice.getCellId(latticeR);
     if (_dataIndex.find(iCell) == _dataIndex.end()) {
       _dataIndexChanged = true;
@@ -127,8 +128,35 @@ public:
     }
   }
 
-  std::optional<std::size_t> getDataIndex(LatticeR<DESCRIPTOR::d> latticeR) const override {
+  /// Adds coarse latticeR, asssuming cell-centered refinement
+  void addCellCentered(LatticeR<DESCRIPTOR::d> latticeR) override {
+    CellID iCell = _cLattice.getCellId(latticeR);
+    if (_dataIndex.find(iCell) == _dataIndex.end()) {
+      _dataIndexChanged = true;
+      _dataIndex[iCell] = _data.getNcells();
+
+      auto size = _data.getCore();
+      size[0] += 1;
+      _data.resize(size);
+
+      _data.template getField<fields::refinement::CELL_ID_COARSE>().set(
+        _dataIndex[iCell], iCell);
+      _data.template getField<fields::refinement::CELL_ID_FINE>().set(
+        _dataIndex[iCell], _fLattice.getCellId(2*latticeR));
+    }
+  }
+
+  std::optional<std::size_t> getFineDataIndex(LatticeR<DESCRIPTOR::d> latticeR) const override {
     auto iter = _dataIndex.find(_fLattice.getCellId(latticeR));
+    if (iter != _dataIndex.end()) {
+      return std::get<1>(*iter);
+    } else {
+      return std::nullopt;
+    }
+  }
+
+  std::optional<std::size_t> getCoarseDataIndex(LatticeR<DESCRIPTOR::d> latticeR) const override {
+    auto iter = _dataIndex.find(_cLattice.getCellId(latticeR));
     if (iter != _dataIndex.end()) {
       return std::get<1>(*iter);
     } else {

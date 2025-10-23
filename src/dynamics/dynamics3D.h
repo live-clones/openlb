@@ -40,6 +40,7 @@
 #include "mrtDynamics.h"
 #include "navierStokesAdvectionDiffusionCoupling.h"
 #include "navierStokesAdvectionDiffusionCouplingPostProcessor3D.h"
+#include "nernstPlanckCoupling.h"
 #include "nonNewtonianBGKdynamics.h"
 #include "shanChenForcedSingleComponentCoupling.h"
 #include "phaseFieldCoupling.h"

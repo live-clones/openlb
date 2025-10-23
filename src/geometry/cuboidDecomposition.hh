@@ -730,6 +730,15 @@ bool CuboidDecomposition<T,D>::tryRefineTo(T goalDeltaR)
 }
 
 template <typename T, unsigned D>
+void CuboidDecomposition<T,D>::refineCellCentered(int factor)
+{
+  _motherCuboid.refineCellCentered(factor);
+  for (auto& cuboid : _cuboids) {
+    cuboid.refineCellCentered(factor);
+  }
+}
+
+template <typename T, unsigned D>
 void CuboidDecomposition<T,D>::split(int iC, int p)
 {
   Cuboid<T,D> temp(_cuboids[iC]);

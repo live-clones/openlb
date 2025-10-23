@@ -1339,6 +1339,15 @@ void MpiManager::reduce<float>(float* sendVal, float* recvVal, int count, MPI_Op
 }
 
 template <>
+void MpiManager::reduce<double>(double* sendVal, double* recvVal, int count, MPI_Op op, int root, MPI_Comm comm)
+{
+  if (!ok) {
+    return;
+  }
+  MPI_Reduce(sendVal, recvVal, count, MPI_DOUBLE, op, root, comm);
+}
+
+template <>
 void MpiManager::reduce<double>(double& sendVal, double& recvVal,  MPI_Op op, int root, MPI_Comm comm)
 {
   if (!ok) {

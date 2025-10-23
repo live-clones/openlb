@@ -60,7 +60,6 @@ namespace olb::parameters {
 struct NORM_VTK_ITER_T       : public descriptors::FIELD_BASE<1> { };
 struct NORM_STAT_ITER_T       : public descriptors::FIELD_BASE<1> { };
 struct MAX_NORM_T : public descriptors::FIELD_BASE<1> { };
-struct RADIUS : public descriptors::FIELD_BASE<1> { };
 struct SHEAR_RATE : public descriptors::FIELD_BASE<1> { };
 struct CONT_VISC  : public descriptors::FIELD_BASE<1> { };
 struct DROPLET_REYNOLDS : public descriptors::FIELD_BASE<1> { };

@@ -127,6 +127,11 @@ public:
     return _lattice->template getField<FIELD>()[iD][_iCell];
   }
 
+  template <typename FIELD>
+  void setFieldComponent(unsigned iD, typename FIELD::template value_type<T> value) {
+    _lattice->template getField<FIELD>()[iD][_iCell] = value;
+  }
+
 };
 
 /// CPU specific field mirroring BlockDynamicsMap
@@ -193,6 +198,11 @@ public:
   template <typename FIELD>
   auto& getFieldComponent(unsigned iD) {
     return _lattice->template getField<FIELD>()[iD][_iCell];
+  }
+
+  template <typename FIELD>
+  void setFieldComponent(unsigned iD, typename FIELD::template value_type<T> value) {
+    _lattice->template getField<FIELD>()[iD][_iCell] = value;
   }
 
   Cell<T,DESCRIPTOR,PLATFORM> neighbor(LatticeR<DESCRIPTOR::d> offset) {

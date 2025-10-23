@@ -36,7 +36,6 @@ _vimrc_local.vim
 *.notempty
 *.json
 *.pvsm
-*.stl
 
 .cproject
 .settings

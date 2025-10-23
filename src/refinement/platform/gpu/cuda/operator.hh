@@ -27,6 +27,10 @@
 
 #include "operator.h"
 
+#include "refinement/context.h"
+#include "refinement/vertexCentered.h"
+#include "refinement/cellCentered.h"
+
 namespace olb {
 
 namespace gpu::cuda {
@@ -34,6 +38,7 @@ namespace gpu::cuda {
 namespace kernel {
 
 template <typename COARSE, typename FINE, typename CONTEXT, typename PARAMETERS, typename OPERATOR>
+requires (OPERATOR::scope == refinement::OperatorScope::PerCoarseCell)
 void call_refinement_coupling_operator(COARSE cLattice,
                                        FINE fLattice,
                                        CONTEXT data,
@@ -47,28 +52,63 @@ void call_refinement_coupling_operator(COARSE cLattice,
   auto cellIdCoarse = data.template getField<fields::refinement::CELL_ID_COARSE>();
   auto cellIdFine = data.template getField<fields::refinement::CELL_ID_FINE>();
 
-         if constexpr (OPERATOR::scope == refinement::OperatorScope::PerCoarseCell) {
-    if (cellIdCoarse[0][i] != 0) {
-      Cell cCell{cLattice, cellIdCoarse[0][i]};
-      Cell fCell{fLattice, cellIdFine[0][i]};
-      DataOnlyCell cData{data, i};
-      OPERATOR().apply(cCell, fCell, cData, parameters);
-    }
-  } else if constexpr (OPERATOR::scope == refinement::OperatorScope::PerFineCell) {
-    if constexpr (OPERATOR::data::template contains<fields::refinement::CONTEXT_NEIGHBORS>()) {
-      Cell fCell{fLattice, cellIdFine[0][i]};
-      refinement::CoarseCell cCell{Cell{cLattice, cellIdCoarse[0][i]},
-                                   fLattice.getLatticeR(cellIdFine[0][i])};
-      refinement::ContextDataWithNeighbors cData{DataOnlyCell{data, i}};
-      OPERATOR().apply(cCell, fCell, cData, parameters);
-    } else {
-      Cell fCell{fLattice, cellIdFine[0][i]};
-      refinement::CoarseCell cCell{Cell{cLattice, cellIdCoarse[0][i]},
-                                   fLattice.getLatticeR(cellIdFine[0][i])};
-      refinement::ContextData cData{DataOnlyCell{data, i}};
-      OPERATOR().apply(cCell, fCell, cData, parameters);
-    }
+  if (cellIdCoarse[0][i] != 0) {
+    Cell cCell{cLattice, cellIdCoarse[0][i]};
+    Cell fCell{fLattice, cellIdFine[0][i]};
+    DataOnlyCell cData{data, i};
+    OPERATOR().apply(cCell, fCell, cData, parameters);
   }
+}
+
+template <typename COARSE, typename FINE, typename CONTEXT, typename PARAMETERS, typename OPERATOR>
+requires (OPERATOR::scope == refinement::OperatorScope::PerFineCell)
+void call_refinement_coupling_operator(COARSE cLattice,
+                                       FINE fLattice,
+                                       CONTEXT data,
+                                       PARAMETERS parameters,
+                                       std::size_t n) __global__ {
+  const CellID i = blockIdx.x * blockDim.x + threadIdx.x;
+  if (!(i < n)) {
+    return;
+  }
+
+  auto cellIdCoarse = data.template getField<fields::refinement::CELL_ID_COARSE>();
+  auto cellIdFine = data.template getField<fields::refinement::CELL_ID_FINE>();
+
+  if constexpr (OPERATOR::data::template contains<fields::refinement::CONTEXT_NEIGHBORS>()) {
+    Cell fCell{fLattice, cellIdFine[0][i]};
+    refinement::VertexCenteredCoarseCell cCell{Cell{cLattice, cellIdCoarse[0][i]},
+                                               fLattice.getLatticeR(cellIdFine[0][i])};
+    refinement::ContextDataWithNeighbors cData{DataOnlyCell{data, i}};
+    OPERATOR().apply(cCell, fCell, cData, parameters);
+  } else {
+    Cell fCell{fLattice, cellIdFine[0][i]};
+    refinement::VertexCenteredCoarseCell cCell{Cell{cLattice, cellIdCoarse[0][i]},
+                                               fLattice.getLatticeR(cellIdFine[0][i])};
+    refinement::ContextData cData{DataOnlyCell{data, i}};
+    OPERATOR().apply(cCell, fCell, cData, parameters);
+  }
+}
+
+template <typename COARSE, typename FINE, typename CONTEXT, typename PARAMETERS, typename OPERATOR>
+requires (OPERATOR::scope == refinement::OperatorScope::PerCellCenteredCoarseCell)
+void call_refinement_coupling_operator(COARSE cLattice,
+                                       FINE fLattice,
+                                       CONTEXT data,
+                                       PARAMETERS parameters,
+                                       std::size_t n) __global__ {
+  const CellID i = blockIdx.x * blockDim.x + threadIdx.x;
+  if (!(i < n)) {
+    return;
+  }
+
+  auto cellIdCoarse = data.template getField<fields::refinement::CELL_ID_COARSE>();
+  auto cellIdFine = data.template getField<fields::refinement::CELL_ID_FINE>();
+
+  Cell cCell{cLattice, cellIdCoarse[0][i]};
+  refinement::CellCenteredFineCells fCells{Cell{fLattice, cellIdFine[0][i]}};
+  DataOnlyCell cData{data, i};
+  OPERATOR().apply(cCell, fCells, cData, parameters);
 }
 
 }

@@ -14,7 +14,7 @@ class ReferenceData{
     public:
     ReferenceData(){};
 
-    bool hasRayleigh(T Ra) {
+    bool hasRayleigh(std::size_t Ra) {
         std::unordered_map<T, T> mult_map =
             {
                 {1e7,   true},
@@ -26,7 +26,7 @@ class ReferenceData{
         return mult_map.contains(Ra) ? mult_map[Ra] : false;
     }
 
-    T multiplyCharU(T Ra, T charU){
+    T multiplyCharU(std::size_t Ra, T charU){
         std::unordered_map<T, T> mult_map =
             {
                 {1e7,   compVals[0][1]},
@@ -38,7 +38,7 @@ class ReferenceData{
         return mult_map.contains(Ra) ? mult_map[Ra] * charU : charU;
     }
 
-    T getUx_max(T Ra){
+    T getUx_max(std::size_t Ra){
         std::unordered_map<T, T> mult_map =
             {
                 {1e7,  compVals[0][0]},
@@ -50,7 +50,7 @@ class ReferenceData{
         return mult_map.contains(Ra) ? mult_map[Ra] : -1;
     }
 
-    T getUy_max(T Ra){
+    T getUy_max(std::size_t Ra){
         std::unordered_map<T, T> mult_map =
             {
                 {1e7,  compVals[0][1]},
@@ -62,7 +62,7 @@ class ReferenceData{
         return mult_map.contains(Ra) ? mult_map[Ra] : -1;
     }
 
-    T getY_max(T Ra){
+    T getY_max(std::size_t Ra){
         std::unordered_map<T, T> mult_map =
             {
                 {1e7,  compVals[0][3]},
@@ -74,7 +74,7 @@ class ReferenceData{
         return mult_map.contains(Ra) ? mult_map[Ra] : -1;
     }
 
-    T getX_max(T Ra){
+    T getX_max(std::size_t Ra){
         std::unordered_map<T, T> mult_map =
             {
                 {1e7,  compVals[0][4]},
@@ -86,7 +86,7 @@ class ReferenceData{
         return mult_map.contains(Ra) ? mult_map[Ra] : -1;
     }
 
-    T getNusselt(T Ra){
+    T getNusselt(std::size_t Ra){
         std::unordered_map<T, T> mult_map =
             {
                 {1e7,  compVals[0][5]},

@@ -371,6 +371,18 @@ struct PorousParticle {
   >;
 };
 
+template <typename MOMENTA>
+struct Crystal {
+  template <typename DESCRIPTOR>
+  using type = ConcreteTuple<
+    DESCRIPTOR,
+    typename MOMENTA::template type<DESCRIPTOR>::density,
+    CrystalMomentum<typename MOMENTA::template type<DESCRIPTOR>::momentum>,
+    typename MOMENTA::template type<DESCRIPTOR>::stress,
+    typename MOMENTA::template type<DESCRIPTOR>::definition
+  >;
+};
+
 }  // namespace momenta
 
 }  // namespace olb

@@ -51,14 +51,12 @@ using MyCase = Case<
 // Parameters for the simulation setup
 namespace olb::parameters {
 
-struct RADIUS : public descriptors::FIELD_BASE<1> { };
 struct ALPHA  : public descriptors::FIELD_BASE<1> { };
 struct KAPPA1 : public descriptors::FIELD_BASE<1> { };
 struct KAPPA2 : public descriptors::FIELD_BASE<1> { };
 struct GAMMA  : public descriptors::FIELD_BASE<1> { };
+
 }
-
-
 
 Mesh<MyCase::value_t,MyCase::d> createMesh(MyCase::ParametersD& params) {
   using T = MyCase::value_t;

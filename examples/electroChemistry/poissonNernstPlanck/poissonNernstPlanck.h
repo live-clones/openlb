@@ -24,9 +24,9 @@
 
  /*
   * the expressions used in this file are used for validational part of the paper
-  * F. Bukreev, A. Kummerländer, J. Jeßberger, D.Teutscher, S. Ito, S. Simonis, H. Nirschl, M. J. Krause,
-  * Hydro-electrochemical Saturation in Nano-scale Porous Media. Part I: Sensitivity Assessing Simulation Approach,
-  * submitted to Chemical Engineering Science 2024
+  * Bukreev, F., Kummerländer, A., Jeßberger, J. et al. A hybrid Lattice-Boltzmann model for hydro-electrochemical modeling
+  * and sensitivity analysis of crystallization potential in nanoporous media. Part I: simulation model. Engineering with
+  * Computers (2025). https://doi.org/10.1007/s00366-025-02216-x
   *
   * The current example solves the Poisson-Boltzmann equation describing Gouy-Chapman double electric layer model for one dimension.
   * Example contains 3 lattices:
@@ -264,14 +264,14 @@ void prepareLatticeCoupling(MyCase& myCase) {
   const T sourceCoeff = 1./dielectricC * physConstants::faradayConstant<T>() * valence * latticePoisson.getUnitConverter().getConversionFactorTime();
   auto& coupling = myCase.setCouplingOperator(
     "PNP",
-    PNPCoupling<T>{},
+    PNPCoupling{},
     names::Concentration0{}, latticeCation,
     names::Concentration1{}, latticePoisson,
     names::Concentration2{}, latticeAnion);
-  coupling.setParameter<PNPCoupling<T>::DX>(latticePoisson.getUnitConverter().getPhysDeltaX());
-  coupling.setParameter<PNPCoupling<T>::NPVELCOEFF>(npVelCoeff);
-  coupling.setParameter<PNPCoupling<T>::POISSONCOEFF>(sourceCoeff);
-  coupling.setParameter<PNPCoupling<T>::OMEGA>(latticePoisson.getUnitConverter().getLatticeRelaxationFrequency());
+  coupling.setParameter<PNPCoupling::DX>(latticePoisson.getUnitConverter().getPhysDeltaX());
+  coupling.setParameter<PNPCoupling::NPVELCOEFF>(npVelCoeff);
+  coupling.setParameter<PNPCoupling::POISSONCOEFF>(sourceCoeff);
+  coupling.setParameter<PNPCoupling::OMEGA>(latticePoisson.getUnitConverter().getLatticeRelaxationFrequency());
   coupling.restrictTo(geometry.getMaterialIndicator({1}));
 }
 

@@ -65,6 +65,8 @@ public:
   void writeGlobalVTI(int iT, int iC);
   ///  writes the vti file for cuboid iCloc at timestep iT
   void writeVTI(int iT, int iCloc);
+  ///  writes the vti file for cuboid iCloc and global name iGlob at timestep iT
+  void writeVTI(int iT, int iCloc, int iGlob);
 
   ///  writes functor instantaneously, same vti-pvd file structure as above
   void write(SuperF3D<T,W>& f, int iT=0);

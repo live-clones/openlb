@@ -43,6 +43,7 @@
 
 // TODO: Check this later
 #include "collisionLES.h"
+#include "crystalCollision.h"
 
 namespace olb {
 
@@ -95,6 +96,15 @@ using BGKdynamics = dynamics::Tuple<
                         equilibria::FirstOrder,
                         equilibria::SecondOrder>,
   collision::BGK
+>;
+
+template <typename T, typename DESCRIPTOR, typename MOMENTA=momenta::BulkTuple>
+using CrystalForcedBGKdynamics = dynamics::Tuple<
+  T, DESCRIPTOR,
+  MOMENTA,
+  equilibria::SecondOrder,
+  collision::CrystalCollision,
+  dynamics::ExposeCrystalMomenta
 >;
 
 //BGK collision with third order equilibrium function

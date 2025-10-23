@@ -53,7 +53,7 @@ public:
     std::vector<int> rankBuffer(fineGeometry.size(), 0);
     std::vector<int> locBuffer(fineGeometry.size(), 0);
     std::map<int,int> nLoc;
-    for (unsigned iC=0; iC < fineGeometry.size(); ++iC) {
+    for (int iC=0; iC < fineGeometry.size(); ++iC) {
       const auto& fineCuboid = fineGeometry.get(iC);
       if (auto latticeR = coarseGeometry.getLatticeR(fineCuboid.getOrigin())) {
         const int coarseC = (*latticeR)[0];
@@ -79,7 +79,7 @@ public:
     #endif
 
     // Update internal LoadBalancer structure to match given assignment
-    for (unsigned iC=0; iC < fineGeometry.size(); ++iC) {
+    for (int iC=0; iC < fineGeometry.size(); ++iC) {
       this->_rank[iC] = globalRankBuffer[iC];
       this->_loc[iC] = globalLocBuffer[iC];
       if (globalRankBuffer[iC] == singleton::mpi().getRank()) {

@@ -26,7 +26,6 @@
 #define REFINEMENT_PLATFORM_GPU_CUDA_OPERATOR_H
 
 #include "refinement/operator.h"
-#include "refinement/coarseCell.h"
 
 namespace olb {
 

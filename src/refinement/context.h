@@ -21,63 +21,12 @@
  *  Boston, MA  02110-1301, USA.
 */
 
-#ifndef REFINEMENT_COARSE_CELL_H
-#define REFINEMENT_COARSE_CELL_H
+#ifndef REFINEMENT_CONTEXT_H
+#define REFINEMENT_CONTEXT_H
 
 namespace olb {
 
 namespace refinement {
-
-template <typename CELL>
-class CoarseCell {
-private:
-  CELL _cell;
-  LatticeR<CELL::descriptor_t::d> _fineLatticeR;
-
-public:
-  using value_t = typename CELL::value_t;
-  using descriptor_t = typename CELL::descriptor_t;
-
-  CoarseCell(CELL&& cell, const LatticeR<CELL::descriptor_t::d>& fineLatticeR) any_platform
-  : _cell{std::move(cell)}
-  , _fineLatticeR{fineLatticeR}
-  {
-    _cell.setLatticeR(_fineLatticeR / 2);
-  }
-
-  CoarseCell(const CELL& cell, const LatticeR<CELL::descriptor_t::d>& fineLatticeR) any_platform
-  : _cell{cell}
-  , _fineLatticeR{fineLatticeR}
-  {
-    _cell.setLatticeR(_fineLatticeR / 2);
-  }
-
-  CoarseCell(const CoarseCell& rhs) any_platform
-  : _cell(rhs._cell)
-  , _fineLatticeR(rhs._fineLatticeR)
-  { }
-
-  /// Returns true iff present fine location is co-incident with a coarse cell
-  operator bool() const any_platform {
-    using DESCRIPTOR = typename CELL::descriptor_t;
-    bool coIncident = true;
-    for (unsigned iD=0; iD < DESCRIPTOR::d; ++iD) {
-      coIncident &= !(_fineLatticeR[iD] & 1);
-    }
-    return coIncident;
-  }
-
-  /// Return reference to coarse cell (only well defined if isCoIncident)
-  CELL& operator*() any_platform {
-    return _cell;
-  }
-
-  /// Return neighbor along fine offset
-  CoarseCell neighbor(LatticeR<descriptor_t::d> offset) any_platform {
-    return CoarseCell{_cell, _fineLatticeR + offset};
-  }
-
-};
 
 template <typename DATA>
 class ContextData {

@@ -33,7 +33,7 @@ namespace fields::refinement {
 struct CELL_ID_COARSE : public descriptors::TYPED_FIELD_BASE<CellID,1> { };
 struct CELL_ID_FINE : public descriptors::TYPED_FIELD_BASE<CellID,1> { };
 
-struct NORMAL : public descriptors::FIELD_BASE<0,1> { };
+struct NORMAL : public descriptors::TYPED_FIELD_BASE<int,0,1> { };
 
 struct PREV_RHO  : public descriptors::FIELD_BASE<1> { };
 struct PREV_U    : public descriptors::FIELD_BASE<0,1> { };
@@ -72,6 +72,9 @@ struct CONTEXT_NEIGHBORS : public descriptors::NEIGHBOR_FIELD {
   }
 
 };
+
+struct DEBUG_MATERIAL : public descriptors::TYPED_FIELD_BASE<int,1> { };
+struct DEBUG_RECONSTRUCTED : public descriptors::TYPED_FIELD_BASE<bool,0,0,1> { };
 
 }
 

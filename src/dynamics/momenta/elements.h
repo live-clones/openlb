@@ -168,6 +168,39 @@ struct BulkDensity {
   }
 };
 
+template<typename DENSITY>
+struct CrystalDensity {
+  template <typename TYPE, typename CELL, typename RHO, typename V=typename CELL::value_t>
+  void compute(CELL& cell, RHO& rho) any_platform
+  {
+    V crystal = cell.template getField<descriptors::CRYSTLAYER>();
+    const auto source = cell.template getField<descriptors::SOURCE>();
+    DENSITY().template compute<TYPE>(cell, rho);
+    rho += V(0.5) * source;
+    rho *= V(1-int(crystal));
+  }
+
+  template <typename TYPE, typename CELL, typename RHO>
+  void define(CELL& cell, const RHO& rho) any_platform {};
+
+  template <typename TYPE, typename CELL>
+  void initialize(CELL& cell) any_platform {};
+
+  template <typename TYPE, typename CELL, typename RHO, typename V=typename CELL::value_t>
+  void inverseShift(CELL& cell, RHO& rho) any_platform
+  {
+    V crystal = cell.template getField<descriptors::CRYSTLAYER>();
+    if(crystal < V{0.5}){
+      const auto source = cell.template getField<descriptors::SOURCE>();
+      rho -= V(0.5) * source;
+    }
+  }
+
+  static std::string getName(){
+    return "CrystalDensity<" + DENSITY().getName() + ">";
+  }
+};
+
 /// Computation of hydrodynamic pressure as zeroth moment of the population.
 template<typename MOMENTUM>
 struct BulkPressure {
@@ -1083,6 +1116,54 @@ struct GuoZhaoMomentum {
   }
 };
 
+template<typename MOMENTUM>
+struct CrystalMomentum {
+  template <typename TYPE, typename CELL, typename RHO, typename V=typename CELL::value_t, typename DESCRIPTOR=typename CELL::descriptor_t>
+  void compute(CELL& cell, RHO& rho) any_platform
+  {
+    V crystal = cell.template getField<descriptors::CRYSTLAYER>();
+    *rho = V(1-int(crystal))*lbm<DESCRIPTOR>::computeRho(cell);
+  }
+
+  template <typename TYPE, typename CELL, typename U, typename V=typename CELL::value_t, typename DESCRIPTOR=typename CELL::descriptor_t>
+  void computeU(CELL& cell, U& u) any_platform
+  {
+    V crystal = cell.template getField<descriptors::CRYSTLAYER>();
+    MOMENTUM().template computeU<TYPE>(cell, u);
+    const auto force = cell.template getFieldPointer<descriptors::FORCE>();
+    for (int iVel=0; iVel < DESCRIPTOR::d; ++iVel) {
+      u[iVel] += force[iVel] * V(0.5);
+      u[iVel] *= V(1-int(crystal));
+    }
+  }
+
+  template <typename TYPE, typename CELL, typename U, typename DESCRIPTOR=typename CELL::descriptor_t>
+  void define(CELL& cell, const U& u) any_platform
+  {
+    MOMENTUM().template define<TYPE>(cell, u);
+  }
+
+  template <typename TYPE, typename CELL>
+  void initialize(CELL& cell) any_platform
+  {
+    MOMENTUM().template initialize<TYPE>(cell);
+  }
+
+  template <typename TYPE, typename CELL, typename U, typename V=typename CELL::value_t, typename DESCRIPTOR=typename CELL::descriptor_t>
+  void inverseShift(CELL& cell, U& u) any_platform
+  {
+    V crystal = cell.template getField<descriptors::CRYSTLAYER>();
+    const auto force = cell.template getFieldPointer<descriptors::FORCE>();
+    for (int iVel=0; iVel < DESCRIPTOR::d; ++iVel) {
+      u[iVel] -= force[iVel] * V(0.5);
+      u[iVel] *= V(1-int(crystal));
+    }
+  }
+
+  static std::string getName() {
+    return "CrystalMomentum<" + MOMENTUM().getName() + ">";
+  }
+};
 
 /// For offLattice boundary conditions
 struct OffBoundaryMomentum {

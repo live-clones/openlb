@@ -139,6 +139,8 @@ public:
   /// Tries to refine mesh to given deltaR
   bool tryRefineTo(T deltaR);
 
+  void refineCellCentered(int factor);
+
   /// Prints cuboid geometry details
   void print() const;
   /// Prints cuboid geometry details plus details of all cuboids

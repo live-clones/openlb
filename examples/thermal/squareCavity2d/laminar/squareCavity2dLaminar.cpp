@@ -38,12 +38,15 @@
 void compareToStudy(MyCase& myCase)
 {
   OstreamManager clout(std::cout,"compareToStudy");
-  using T                   = MyCase::value_t_of<NavierStokes>;
-  auto& parameters          = myCase.getParameters();
-  auto& converter           = myCase.getLattice(NavierStokes{}).getUnitConverter();
-  int Ra                    = parameters.get<parameters::RAYLEIGH>();
-  T physThermalDiffusivity  = converter.getPhysThermalDiffusivity();
-  T charL                   = converter.getCharPhysLength();
+
+  using T                         = MyCase::value_t_of<NavierStokes>;
+
+  auto& parameters                = myCase.getParameters();
+  auto& converter                 = myCase.getLattice(NavierStokes{}).getUnitConverter();
+
+  const std::size_t Ra            = parameters.get<parameters::RAYLEIGH>();
+  const T physThermalDiffusivity  = converter.getPhysThermalDiffusivity();
+  const T charL                   = converter.getCharPhysLength();
 
   ReferenceData<T> ref{};
   if (ref.hasRayleigh(Ra) && singleton::mpi().isMainProcessor()) {
@@ -75,16 +78,20 @@ void compareToStudy(MyCase& myCase)
   }
 }
 
-int main(int argc, char* argv[]){
+int main(int argc, char* argv[])
+{
   initialize(&argc, &argv);
+
+  using T = MyCase::value_t_of<NavierStokes>;
 
   MyCase::ParametersD myCaseParameters;
   {
     using namespace olb::parameters;
     myCaseParameters.set<MAX_PHYS_T                 >(1e4);
-    myCaseParameters.set<RESOLUTION                 >(64.0);
+    myCaseParameters.set<RESOLUTION                 >(64);
     myCaseParameters.set<GRAVITATIONAL_ACC          >(9.81);
     myCaseParameters.set<PHYS_CHAR_VELOCITY         >(1);
+    myCaseParameters.set<ORIGIN                     >({0., 0.});
     myCaseParameters.set<LATTICE_RELAXATION_TIME    >(0.65);
     myCaseParameters.set<CONVERGENCE_PRECISION      >(1e-4);
     myCaseParameters.set<PHYS_THERMAL_EXPANSION     >(3.41e-3);
@@ -101,34 +108,36 @@ int main(int argc, char* argv[]){
     myCaseParameters.set<T_MEAN>(
         (myCaseParameters.get<T_HOT>() + myCaseParameters.get<T_COLD>()) / 2.0
     );
+
     myCaseParameters.set<CONV_ITER                  >(1000);
-    myCaseParameters.set<PHYS_VTK_ITER_T            >(10);
-    myCaseParameters.set<PHYS_STAT_ITER_T           >(10);
+    myCaseParameters.set<PHYS_VTK_ITER_T            >(5);
+    myCaseParameters.set<PHYS_STAT_ITER_T           >(1);
     myCaseParameters.set<CONVERGENCE_PRECISION      >(1e-5);
   }
   myCaseParameters.fromCLI(argc, argv);
 
-  double N                      = myCaseParameters.get<parameters::RESOLUTION               >();
-  int Ra                        = myCaseParameters.get<parameters::RAYLEIGH                 >();
-  double physViscosity          = myCaseParameters.get<parameters::PHYS_KINEMATIC_VISCOSITY >();
-  double Pr                     = myCaseParameters.get<parameters::PRANDTL                  >();
-  double g                      = myCaseParameters.get<parameters::GRAVITATIONAL_ACC        >();
-  double Thot                   = myCaseParameters.get<parameters::T_HOT                    >();
-  double Tcold                  = myCaseParameters.get<parameters::T_COLD                   >();
-  double thermalExpansion       = myCaseParameters.get<parameters::PHYS_THERMAL_EXPANSION   >();
+  const int N              = myCaseParameters.get<parameters::RESOLUTION               >();
+  const std::size_t Ra     = myCaseParameters.get<parameters::RAYLEIGH                 >();
+  const T physViscosity    = myCaseParameters.get<parameters::PHYS_KINEMATIC_VISCOSITY >();
+  const T Pr               = myCaseParameters.get<parameters::PRANDTL                  >();
+  const T g                = myCaseParameters.get<parameters::GRAVITATIONAL_ACC        >();
+  const T Thot             = myCaseParameters.get<parameters::T_HOT                    >();
+  const T Tcold            = myCaseParameters.get<parameters::T_COLD                   >();
+  const T thermalExpansion = myCaseParameters.get<parameters::PHYS_THERMAL_EXPANSION   >();
 
   // lx from Rayleigh number
-  double lx = util::pow(Ra * physViscosity * physViscosity / (Pr * g * (Thot - Tcold) * thermalExpansion), (MyCase::value_t_of<NavierStokes>) 1 / 3);  // length of the square
+  const T lx               = util::pow(Ra * physViscosity * physViscosity / (Pr * g * (Thot - Tcold) * thermalExpansion),
+                                      (T) 1 / 3);  // length of the square
   myCaseParameters.set<parameters::PHYS_CHAR_LENGTH>(lx);
   myCaseParameters.set<parameters::PHYS_DELTA_X>(lx / N);
-  myCaseParameters.set<parameters::DOMAIN_EXTENT>({lx, lx});
+  myCaseParameters.set<parameters::DOMAIN_EXTENT>([&]() -> Vector<T, MyCase::d> {
+    return {
+      lx, lx
+    };
+  });
 
-  ReferenceData<double> ref{};
-  /*
-  double charU  = 1.0 / lx / ( Pr * thermalConductivity / physViscosity / 1.0 * 1.0 / thermalConductivity);
-  charU         = ref.multiplyCharU(Ra, charU);
-  */
-  myCaseParameters.set<parameters::PHYS_CHAR_VELOCITY>(ref.getUy_max(Ra));
+  const T charU = physViscosity / lx * sqrt((T) Ra / Pr);
+  myCaseParameters.set<parameters::PHYS_CHAR_VELOCITY>(charU);
 
   /// === Step 3: Create Mesh ===
   Mesh mesh = createMesh(myCaseParameters);

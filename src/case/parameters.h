@@ -66,6 +66,7 @@ struct PHYS_CHAR_PRESSURE : public descriptors::FIELD_BASE<1> { };
 struct PHYS_CHAR_TEMPERATURE : public descriptors::FIELD_BASE<1> { };
 struct PHYS_THERMAL_CONDUCTIVITY : public descriptors::FIELD_BASE<1> { };
 struct PHYS_HEAT_CAPACITY : public descriptors::FIELD_BASE<1> { };
+struct PHYS_THERMAL_DIFFUSIVITY : public descriptors::FIELD_BASE<1> { };
 struct PHYS_THERMAL_EXPANSION : public descriptors::FIELD_BASE<1> { };
 
 struct PHYS_CP : public descriptors::FIELD_BASE<1> { };
@@ -173,6 +174,11 @@ struct PART_RHO : public descriptors::FIELD_BASE<1> {};
 // Optimization
 struct INITIAL_CONTROL_SCALAR : public descriptors::FIELD_BASE<1> { };
 struct REGULARIZATION_FACTOR : public descriptors::FIELD_BASE<1> { };
+
+
+struct RADIUS : public descriptors::FIELD_BASE<1> { };
+struct CENTER : public descriptors::FIELD_BASE<0,1> { };
+
 
 /// Returns name of PARAMETER for human consumption
 template <typename PARAMETER>

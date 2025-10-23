@@ -100,6 +100,18 @@ void Cuboid<T,D>::refine(int factor) {
 }
 
 template <typename T, unsigned D>
+void Cuboid<T,D>::refineCellCentered(int factor) {
+  if (factor < 1) {
+    throw std::invalid_argument("refinement factor must be >= 1");
+  } else {
+    _delta /= factor;
+    _extent *= factor;
+    _weight *= util::pow(factor,D);
+    _origin -= _delta / 2;
+  }
+}
+
+template <typename T, unsigned D>
 void Cuboid<T,D>::write(std::ostream& cout) const
 {
   cout << "--------Cuboid Details----------" << std::endl;

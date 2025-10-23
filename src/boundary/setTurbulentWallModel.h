@@ -302,9 +302,8 @@ void setTurbulentWallModelDynamics(SuperLattice<T, DESCRIPTOR>& sLattice,
   }
   {
     auto& communicator = sLattice.getCommunicator(stage::PostStream());
-    communicator.template requestField<descriptors::WMVELOCITY>();
     communicator.template requestField<descriptors::POPULATION>();
-    communicator.requestOverlap(sLattice.getOverlap());
+    communicator.requestOverlap(sLattice.getOverlap(), *bulkIndicator);
     communicator.exchangeRequests();
   }
 }
@@ -745,8 +744,6 @@ void setTurbulentWallModel(BlockLattice<T,DESCRIPTOR>& block,
   }
 }
 
-
-
 template<typename T, typename DESCRIPTOR>
 void setWallDistance(SuperLattice<T, DESCRIPTOR>& sLattice,
                      FunctorPtr<SuperIndicatorF<T,DESCRIPTOR::d>>&& boundaryIndicator,
@@ -833,5 +830,6 @@ void setWallDistance(BlockLattice<T,DESCRIPTOR>& block,
     }
   });
 }
+
 }
 #endif

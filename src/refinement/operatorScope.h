@@ -37,6 +37,8 @@ enum struct OperatorScope {
   PerCoarseCell,
   /// OPERATOR is provided a fine cell and a coarse cell proxy
   PerFineCell,
+  /// OPERATOR is provided a coarse cell and a proxy to access its fine child cells
+  PerCellCenteredCoarseCell
 };
 
 }

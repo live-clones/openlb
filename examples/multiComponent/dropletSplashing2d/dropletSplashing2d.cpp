@@ -42,7 +42,6 @@ using COUPLING = PseudopotentialForcedPostProcessor<interaction::Polinomial>;
 
 namespace olb::parameters {
 
-struct RADIUS    : public descriptors::FIELD_BASE<1> { };
 struct U_DROPLET : public descriptors::FIELD_BASE<1> { };
 
 }

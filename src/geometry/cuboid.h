@@ -137,6 +137,7 @@ public:
   void resize(Vector<int,D> offset, Vector<int,D> extent);
 
   void refine(int factor);
+  void refineCellCentered(int factor);
 
   void write(std::ostream& cout) const;
   void print() const;

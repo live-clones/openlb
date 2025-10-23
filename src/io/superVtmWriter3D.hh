@@ -181,6 +181,33 @@ void SuperVTMwriter3D<T,OUT_T,W>::writeVTI(int iT, int iCloc)
 }
 
 template<typename T, typename OUT_T, typename W>
+void SuperVTMwriter3D<T,OUT_T,W>::writeVTI(int iT, int iCloc, int iGlob)
+{
+  const auto it_begin = _pointerVec.cbegin();
+  const auto& cGeometry = (**it_begin).getSuperStructure().getCuboidDecomposition();
+  LoadBalancer<T>& load = (**it_begin).getSuperStructure().getLoadBalancer();
+  const T delta = cGeometry.getMotherCuboid().getDeltaR();
+
+  // get piece/whole extent
+  const Vector<int,3> extent0(-_overlap,-_overlap,-_overlap);
+  const Vector<int,3> extent1(cGeometry.get(load.glob(iCloc)).getExtent());
+
+  const std::string fullNameVTI = singleton::directories().getVtkOutDir() + "data/"
+                                + createFileName(_name, iT, iGlob) + ".vti";
+
+  // get dimension/extent for each cuboid
+  const int originLatticeR[4] = {load.glob(iCloc),0,0,0};
+  auto originPhysR = cGeometry.getPhysR(originLatticeR);
+
+  preambleVTI(fullNameVTI, extent0, (extent1+_overlap-1), originPhysR.data(), delta);
+  for (auto it : _pointerVec) {
+    dataArray(fullNameVTI, *it, load.glob(iCloc), extent1);
+  }
+  closePiece(fullNameVTI);
+  closeVTI(fullNameVTI);
+}
+
+template<typename T, typename OUT_T, typename W>
 void SuperVTMwriter3D<T,OUT_T,W>::write(SuperF3D<T,W>& f, int iT)
 {
   const auto& cGeometry = f.getSuperStructure().getCuboidDecomposition();

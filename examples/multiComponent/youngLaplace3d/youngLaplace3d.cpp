@@ -51,7 +51,6 @@ using MyCase = Case<
 // Parameters for the simulation setup
 namespace olb::parameters {
 
-struct RADIUS : public descriptors::FIELD_BASE<1> { };
 struct ALPHA  : public descriptors::FIELD_BASE<1> { };
 struct KAPPA1 : public descriptors::FIELD_BASE<1> { };
 struct KAPPA2 : public descriptors::FIELD_BASE<1> { };

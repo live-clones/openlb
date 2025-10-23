@@ -111,8 +111,6 @@ struct HalfTimeCoarseToFineO {
             auto ncCell = *ncCellPtr;
             if (auto nData = data.neighbor(iN)) {
               nNeighbors += 1;
-              //auto nData = data.neighbor(iN);
-              OLB_ASSERT(nData, "Context data must be available by design, check makeCoarseToFineCoupler");
 
               auto rhoPrev  = nData->template getField<fields::refinement::PREV_RHO>();
               auto uPrev    = nData->template getField<fields::refinement::PREV_U>();
@@ -282,7 +280,6 @@ std::unique_ptr<SuperLatticeRefinement<T,DESCRIPTOR>> makeCoarseToFineCoupler(
 {
   auto& loadBalancerFine = dynamic_cast<RefinedLoadBalancer<T,DESCRIPTOR::d>&>(
     sLatticeFine.getLoadBalancer());
-  auto& loadBalancerCoarse = sLatticeCoarse.getLoadBalancer();
   auto& cDecompositionFine = sLatticeFine.getCuboidDecomposition();
   const auto& converterCoarse = sLatticeCoarse.getUnitConverter();
 
@@ -309,11 +306,11 @@ std::unique_ptr<SuperLatticeRefinement<T,DESCRIPTOR>> makeCoarseToFineCoupler(
       if (   c2fFrontierI.getBlockIndicatorF(iC)(fineLatticeR)
           && fineBulkI->getBlockIndicatorF(iC)(fineLatticeR)) {
         if (fBlock.isInsideCore(fineLatticeR)) {
-          coarseToFine->getBlock(iC).add(fineLatticeR);
+          coarseToFine->getBlock(iC).addVertexCentered(fineLatticeR);
         } else {
           // Couple co-incident nodes in overlap s.t. context data for interpolation is available
           if (fineLatticeR % 2 == Vector<int,DESCRIPTOR::d>(0)) {
-            coarseToFine->getBlock(iC).add(fineLatticeR);
+            coarseToFine->getBlock(iC).addVertexCentered(fineLatticeR);
             // Coarse populations need to be up to date for FullTimeCoarseToFineO
             auto coarseLatticeR = (fineLatticeR / 2).withPrefix(
               loadBalancerFine.cloc(iC));
@@ -327,7 +324,7 @@ std::unique_ptr<SuperLatticeRefinement<T,DESCRIPTOR>> makeCoarseToFineCoupler(
     auto& outsideI = c2fOutsideI.getBlockIndicatorF(iC);
 
     fBlock.forSpatialLocations([&](LatticeR<DESCRIPTOR::d> fineLatticeR) {
-      if (auto index = coarseToFine->getBlock(iC).getDataIndex(fineLatticeR)) {
+      if (auto index = coarseToFine->getBlock(iC).getFineDataIndex(fineLatticeR)) {
         auto [type, normal] = computeBoundaryTypeAndNormal(insideI, outsideI, fineLatticeR);
         coarseToFine->getBlock(iC).getData()
                      .template getField<fields::refinement::NORMAL>().set(*index, normal);
@@ -373,7 +370,7 @@ std::unique_ptr<SuperLatticeRefinement<T,DESCRIPTOR>> makeFineToCoarseCoupler(
     cBlock.forCoreSpatialLocations([&](LatticeR<DESCRIPTOR::d> coarseLatticeR) {
       if (   f2cFrontierI.getBlockIndicatorF(iC)(2*coarseLatticeR)
           && fineBulkI->getBlockIndicatorF(iC)(2*coarseLatticeR)) {
-        fineToCoarse->getBlock(iC).add(2*coarseLatticeR);
+        fineToCoarse->getBlock(iC).addVertexCentered(2*coarseLatticeR);
       }
     });
     fineToCoarse->getBlock(iC).getData()

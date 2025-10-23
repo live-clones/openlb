@@ -258,8 +258,9 @@ void setTemporalValues(MyCase& myCase, std::size_t iT)
   lattice.defineU(geometry, 5, poiseuilleU5);
 }
 
+template<typename PARTICLESYSTEM>
 void prepareParticles(MyCase& myCase,
-                      SuperParticleSystem<MyCase::value_t, SubgridParticle3D>& superParticleSystem,
+                      PARTICLESYSTEM& superParticleSystem,
                       SolidBoundary<MyCase::value_t, 3>& wall,
                       STLreader<MyCase::value_t>& stlReader)
 {
@@ -282,12 +283,12 @@ void prepareParticles(MyCase& myCase,
 
   //Add selected particle dynamics
   if (parameters.get<parameters::PARTICLE_DYNAMICS_SETUP>() == 1) {
-    superParticleSystem.defineDynamics<
+    superParticleSystem.template defineDynamics<
         VerletParticleDynamicsMaterialAwareWallCaptureAndEscape<T, PARTICLETYPE>
         >( wall, wallMaterialIndicator, outletMaterialIndicator );
   }
   else {
-    superParticleSystem.defineDynamics<
+    superParticleSystem.template defineDynamics<
         VerletParticleDynamicsMaterialCaptureAndEscape<T, PARTICLETYPE>
         >( wallMaterialIndicator, outletMaterialIndicator );
   }
@@ -312,9 +313,10 @@ void prepareParticles(MyCase& myCase,
   clout << "Prepare Particles ... OK" << std::endl;
 }
 
+template<typename PARTICLESYSTEM>
 bool getResults(MyCase& myCase, std::size_t iT, Timer<MyCase::value_t>& fluidTimer,
                 STLreader<MyCase::value_t>& stlReader,
-                SuperParticleSystem<MyCase::value_t, SubgridParticle3D>& superParticleSystem,
+                PARTICLESYSTEM& superParticleSystem,
                 Timer<MyCase::value_t>& particleTimer)
 {
   OstreamManager clout(std::cout, "getResults");

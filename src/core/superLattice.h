@@ -401,6 +401,9 @@ public:
    **/
   void collideAndStream();
 
+  void collide();
+  void AndStream();
+
   /// Subtract constant offset from the density
   void stripeOffDensityOffset(T offset);
 

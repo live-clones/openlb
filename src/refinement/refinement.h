@@ -37,6 +37,6 @@
 #include "platform/gpu/cuda/operator.h"
 
 #include "algorithm/lagrava.h"
-
+#include "algorithm/rohde.h"
 
 #endif

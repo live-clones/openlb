@@ -713,6 +713,77 @@ void SuperLattice<T,DESCRIPTOR>::collideAndStream()
 }
 
 template<typename T, typename DESCRIPTOR>
+void SuperLattice<T,DESCRIPTOR>::collide()
+{
+  if (!_initialized) [[unlikely]] {
+    initialize();
+  }
+
+  using namespace stage;
+
+  waitForBackgroundTasks(PreCollide());
+  auto& load = this->_loadBalancer;
+
+  if (_statisticsEnabled) {
+    setParameter<statistics::AVERAGE_RHO>(getStatistics().getAverageRho());
+  }
+
+  // Optional pre processing stage
+  executePostProcessors(PreCollide());
+
+  // Execute custom tasks (arbitrary callables)
+  // (used for multi-stage models such as bubble model)
+  executeCustomTasks(PreCollide());
+
+  #ifdef PARALLEL_MODE_OMP
+  #pragma omp taskloop
+  #endif
+  for (int iC = 0; iC < load.size(); ++iC) {
+    _block[iC]->collide();
+  }
+
+  // Communicate propagation overlap, optional post processing
+  executePostProcessors(PostCollide());
+}
+
+template<typename T, typename DESCRIPTOR>
+void SuperLattice<T,DESCRIPTOR>::AndStream()
+{
+  using namespace stage;
+  auto& load = this->_loadBalancer;
+
+  // Block-local propagation
+  for (int iC = 0; iC < load.size(); ++iC) {
+    _block[iC]->stream();
+  }
+
+  // Communicate (default) post processor neighborhood and apply them
+  executePostProcessors(PostStream());
+
+  // Execute custom tasks (arbitrary callables)
+  // (used for multi-stage models such as free surface)
+  executeCustomTasks(PostStream());
+
+  // Final communication stage (e.g. for external coupling)
+  getCommunicator(PostPostProcess()).communicate();
+
+  if (_statisticsEnabled) {
+    collectStatistics();
+  }
+  _communicationNeeded = true;
+
+#ifdef FEATURE_EXPORT_CODE_GENERATION_TARGETS
+  if (introspection::iLattice > 1) {
+    introspection::iLattice -= 1;
+  } else {
+    this->clout << "Terminating after export of code generation targets." << std::endl
+                << "If you are confused by this message EXPORT_CODE_GENERATION_TARGETS was wrongly enabled." << std::endl;
+    std::exit(0);
+  }
+#endif
+}
+
+template<typename T, typename DESCRIPTOR>
 template<typename STAGE>
 void SuperLattice<T,DESCRIPTOR>::executePostProcessors(STAGE stage)
 {

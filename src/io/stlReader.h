@@ -354,6 +354,51 @@ public:
   /// Computes distance to closest triangle intersection
   bool distance(T& distance,const Vector<T,3>& origin, const Vector<T,3>& direction, int iC=-1) override;
 
+  Vector<T,3> getSurfaceNormal(Vector<T,3> physR) {
+    Vector<int,3> sum_vec{};
+    for (int iPop = 1; iPop < descriptors::D3Q27<>::q; ++iPop) {
+      auto c_i = descriptors::c<descriptors::D3Q27<>>(iPop);
+      Vector neighborPos = physR + c_i * _voxelSize;
+      bool inside{};
+      if (operator()(&inside, neighborPos.data())) {
+        if (inside) {
+          sum_vec += c_i;
+        }
+      }
+    }
+    Vector<T,3> normal = -1*sum_vec;
+    if (util::norm<3>(normal) > 1e-9) {
+      normal /= util::norm<3>(normal);
+    } else {
+      normal = 0;
+    }
+    return normal;
+  }
+
+  std::pair<Vector<T,3>,T> getY1(Vector<T,3> physR) {
+    bool inside{};
+    if (operator()(&inside, physR.data())) {
+      if (!inside) {
+        auto normal = getSurfaceNormal(physR);
+        return {normal, _voxelSize};
+        if (normal != 0) {
+          T d{};
+          if (distance(d, physR, -1*normal)) {
+            return {normal, util::min(_voxelSize, util::abs(d))};
+          } else {
+            return {normal, _voxelSize};
+          }
+        } else {
+          return {0, 0};
+        }
+      } else {
+        return {0, 0};
+      }
+    } else {
+      return {0, 0};
+    }
+  }
+
   T distanceToClosestSurfacePoint(Vector<T,3> physR) {
     T closest = std::numeric_limits<T>::max();
     if (auto tree = _tree->find(physR)) {

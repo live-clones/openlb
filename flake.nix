@@ -430,7 +430,7 @@
           export PLATFORMS="CPU_SISD GPU_CUDA"
 
           export CUDA_CXX=nvcc
-          export CUDA_CXXFLAGS="-O3 -std=c++20"
+          export CUDA_CXXFLAGS="-O3 -std=c++20 -I${pkgs.vtk_9}/include/vtk"
           export CUDA_LDFLAGS="-L/run/opengl-driver/lib"
           # try to auto-fill CUDA_ARCH for first GPU (override when in doubt)
           export CUDA_ARCH=$(nvidia-smi --query-gpu=compute_cap --format=csv,noheader | head -n 1 | grep -o [0-9] | tr -d '\n')
@@ -439,7 +439,7 @@
 
           export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/run/opengl-driver/lib
 
-          export FEATURES="PRECICE VDB VTK"
+          export FEATURES="PRECICE VDB VTK INSPECT_DYNAMICS"
 
           export VTK_VERSION=
           export CXXFLAGS="$CXXFLAGS -I${pkgs.vtk_9}/include/vtk"

@@ -57,10 +57,15 @@ struct BlockRefinementContextD {
   /// Return reference to contextual data
   virtual Data& getData() = 0;
 
-  /// Connect the coarse and fine lattice at position latticeR
-  virtual void add(LatticeR<DESCRIPTOR::d> latticeR) = 0;
   /// Return index where contextual data of connection point latticeR is stored
-  virtual std::optional<std::size_t> getDataIndex(LatticeR<DESCRIPTOR::d> latticeR) const = 0;
+  virtual std::optional<std::size_t> getCoarseDataIndex(LatticeR<DESCRIPTOR::d> latticeR) const = 0;
+  /// Return index where contextual data of connection point latticeR is stored
+  virtual std::optional<std::size_t> getFineDataIndex(LatticeR<DESCRIPTOR::d> latticeR) const = 0;
+
+  /// Connect the coarse and fine lattice at position latticeR
+  virtual void addVertexCentered(LatticeR<DESCRIPTOR::d> latticeR) = 0;
+  /// Connect the coarse and fine lattice at position latticeR (cell-centered)
+  virtual void addCellCentered(LatticeR<DESCRIPTOR::d> latticeR) = 0;
 
   /// Apply promised algorithm step to the previously added connection points
   /**

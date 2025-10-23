@@ -119,16 +119,15 @@ concept PorosityElementF3DcomputesU = requires(placeholder::Parameters3D paramet
 };
 
 template <typename PorosityF>
-concept PorosityElementFcomputesU = requires() {
-  requires PorosityElementF2DcomputesU<PorosityF> || PorosityElementF3DcomputesU<PorosityF>;
-};
+concept PorosityElementFcomputesU =  PorosityElementF2DcomputesU<PorosityF>
+                                  || PorosityElementF3DcomputesU<PorosityF>;
 
 template <typename PorosityF>
 concept PorosityElementF2DcomputesY1 = requires(placeholder::Parameters2D parameters,
                                                 Vector<placeholder::Parameters2D::value_t,
                                                        placeholder::Parameters2D::descriptor_t::d> physR,
                                                 unsigned iElement) {
-  // Returns solid velocity at physR
+  // Returns Y1 at physR
   { PorosityF().computeY1(parameters, physR, iElement) } -> std::same_as<
     Vector<typename placeholder::Parameters::value_t,
            placeholder::Parameters::descriptor_t::d>
@@ -140,7 +139,6 @@ concept PorosityElementF3DcomputesY1 = requires(placeholder::Parameters3D parame
                                                 Vector<placeholder::Parameters3D::value_t,
                                                        placeholder::Parameters3D::descriptor_t::d> physR,
                                                 unsigned iElement) {
-  // Returns solid velocity at physR
   { PorosityF().computeY1(parameters, physR, iElement) } -> std::same_as<
     Vector<typename placeholder::Parameters::value_t,
            placeholder::Parameters::descriptor_t::d>
@@ -148,8 +146,8 @@ concept PorosityElementF3DcomputesY1 = requires(placeholder::Parameters3D parame
 };
 
 template <typename PorosityF>
-concept PorosityElementFcomputesY1 = PorosityElementF2DcomputesY1<PorosityF>
-                                  || PorosityElementF3DcomputesY1<PorosityF>;
+concept PorosityElementFcomputesY1 =  PorosityElementF2DcomputesY1<PorosityF>
+                                   || PorosityElementF3DcomputesY1<PorosityF>;
 
 }
 

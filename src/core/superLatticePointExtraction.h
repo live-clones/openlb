@@ -43,7 +43,8 @@ struct PointExtractionO {
   {
     auto point = cells.template get<names::Points>();
     auto cell = cells.template get<names::Lattice1>();
-    auto result = FUNCTOR().compute(cell, parameters);
+    auto samplingR = point.template getField<fields::PHYS_R>();
+    auto result = FUNCTOR().compute(cell, samplingR, parameters);
     point.template setField<typename FUNCTOR::result_field>(result);
   }
 };
