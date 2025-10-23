@@ -96,6 +96,27 @@ void setVelocity(SuperLattice<T,DESCRIPTOR>& sLattice,
   setVelocity(sLattice, std::move(domainI), velocityF);
 }
 
+template <typename T, typename DESCRIPTOR>
+void setTemperature(SuperLattice<T,DESCRIPTOR>& sLattice,
+                    FunctorPtr<SuperIndicatorF<T,DESCRIPTOR::d>>&& domainI,
+                    AnalyticalF<DESCRIPTOR::d,T,T>& temperatureF)
+{
+  const auto& converter = sLattice.getUnitConverter();
+  AnalyticCalcMultiplication<DESCRIPTOR::d,T,T> scaledDensityF(1/converter.getConversionFactorTemperature(),
+                                                               temperatureF);
+  sLattice.defineRho(std::move(domainI), scaledDensityF);
+}
+
+template <typename T, typename DESCRIPTOR, typename VALUE>
+void setTemperature(SuperLattice<T,DESCRIPTOR>& sLattice,
+                    FunctorPtr<SuperIndicatorF<T,DESCRIPTOR::d>>&& domainI,
+                    VALUE temperatureD)
+  requires std::constructible_from<FieldD<T,DESCRIPTOR,descriptors::SCALAR>, VALUE>
+{
+  AnalyticalConst<DESCRIPTOR::d,T,T> temperatureF(temperatureD);
+  setTemperature(sLattice, std::move(domainI), temperatureF);
+}
+
 }
 
 }

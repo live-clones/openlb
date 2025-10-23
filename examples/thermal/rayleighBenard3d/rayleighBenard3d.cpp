@@ -183,7 +183,6 @@ void prepareLattice(MyCase& myCase)
 }
 
 void setInitialValues(MyCase& myCase) {
-
   using T = MyCase::value_t;
   auto& geometry   = myCase.getGeometry();
   auto& parameters = myCase.getParameters();
@@ -191,33 +190,15 @@ void setInitialValues(MyCase& myCase) {
   auto& NSlattice = myCase.getLattice(NavierStokes{});
   auto& ADlattice = myCase.getLattice(Temperature{});
 
-  const auto& converter = NSlattice.getUnitConverter();
-
   const T Tcold    = parameters.get<parameters::T_COLD>();
   const T Thot     = parameters.get<parameters::T_HOT>();
   const T Tperturb = parameters.get<parameters::T_PERTURBATION>();
 
-  /// define initial conditions
-  AnalyticalConst3D<T,T> rho(1.);
-  AnalyticalConst3D<T,T> u0(0.0, 0.0, 0.0);
-  AnalyticalConst3D<T,T> T_cold(converter.getLatticeTemperature(Tcold));
-  AnalyticalConst3D<T,T> T_hot(converter.getLatticeTemperature(Thot));
-  AnalyticalConst3D<T,T> T_perturb(converter.getLatticeTemperature(Tperturb));
+  momenta::setTemperature(ADlattice, geometry.getMaterialIndicator(1), Tcold);
+  momenta::setTemperature(ADlattice, geometry.getMaterialIndicator(2), Thot);
+  momenta::setTemperature(ADlattice, geometry.getMaterialIndicator(3), Tcold);
+  momenta::setTemperature(ADlattice, geometry.getMaterialIndicator(4), Tperturb);
 
-  /// for each material set Rho, U and the Equilibrium
-  NSlattice.defineRhoU(geometry.getMaterialIndicator({1, 2, 3, 4}), rho, u0);
-  NSlattice.iniEquilibrium(geometry.getMaterialIndicator({1, 2, 3, 4}), rho, u0);
-
-  ADlattice.defineRho(geometry, 1, T_cold);
-  ADlattice.iniEquilibrium(geometry, 1, T_cold, u0);
-  ADlattice.defineRho(geometry, 2, T_hot);
-  ADlattice.iniEquilibrium(geometry, 2, T_hot, u0);
-  ADlattice.defineRho(geometry, 3, T_cold);
-  ADlattice.iniEquilibrium(geometry, 3, T_cold, u0);
-  ADlattice.defineRho(geometry, 4, T_perturb);
-  ADlattice.iniEquilibrium(geometry, 4, T_perturb, u0);
-
-  /// Make the lattice ready for simulation
   NSlattice.initialize();
   ADlattice.initialize();
 }
