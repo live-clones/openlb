@@ -240,9 +240,10 @@ void setTemporalValues(MyCase& myCase,
     int iTvec = static_cast<int>(iT);
     T frac[1] = {};
     scale(frac, &iTvec);
-    const T targetVelocityX = frac[0]*converter.getLatticeVelocity(u_ref);
+    const T targetVelocityX = frac[0]*u_ref;
     AnalyticalConst2D<T,T> poiseuilleU(targetVelocityX, 0);
-    sLattice.defineU(sGeometry, 4, poiseuilleU);
+
+    momenta::setVelocity(sLattice, sGeometry.getMaterialIndicator(4), poiseuilleU);
     sLattice.setProcessingContext<Array<momenta::FixedVelocityMomentumGeneric::VELOCITY>>(
       ProcessingContext::Simulation);
   }
@@ -255,9 +256,9 @@ void setTemporalValues(MyCase& myCase,
       u = u_ref + 0.5 * u_amp * util::sin(2*std::numbers::pi_v<T>*(t/T_p+0.26)/1.26);
     }
 
-    const T targetVelocityX = converter.getLatticeVelocity(u);
+    const T targetVelocityX = u;
     AnalyticalConst2D<T,T> poiseuilleU(targetVelocityX, 0);
-    sLattice.defineU(sGeometry, 4, poiseuilleU);
+    momenta::setVelocity(sLattice, sGeometry.getMaterialIndicator(4), poiseuilleU);
     sLattice.setProcessingContext<Array<momenta::FixedVelocityMomentumGeneric::VELOCITY>>(
       ProcessingContext::Simulation);
   }

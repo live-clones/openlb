@@ -32,6 +32,8 @@
 #include "utilities/typeMap.h"
 #include "utilities/typeIndexedContainers.h"
 
+#include "setters.h"
+
 namespace olb {
 
 template <typename MAP>
