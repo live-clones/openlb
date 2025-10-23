@@ -24,7 +24,23 @@
 #ifndef CASE_SETTERS_H
 #define CASE_SETTERS_H
 
+#include <concepts>
+
 namespace olb {
+
+namespace fields {
+
+template <typename FIELD, typename T, typename DESCRIPTOR, typename VALUE>
+void set(SuperLattice<T,DESCRIPTOR>& sLattice,
+         FunctorPtr<SuperIndicatorF<T,DESCRIPTOR::d>>&& domainI,
+         VALUE fieldD)
+  requires std::constructible_from<FieldD<T,DESCRIPTOR,FIELD>, VALUE>
+{
+  AnalyticalConst<DESCRIPTOR::d,T,T> fieldF(fieldD);
+  sLattice.template defineField<FIELD>(std::move(domainI), fieldF);
+}
+
+}
 
 namespace momenta {
 
@@ -37,6 +53,17 @@ void setVelocity(SuperLattice<T,DESCRIPTOR>& sLattice,
   AnalyticCalcMultiplication<DESCRIPTOR::d,T,T> scaledVelocityF(1/converter.getConversionFactorVelocity(),
                                                                 velocityF);
   sLattice.defineU(std::move(domainI), scaledVelocityF);
+}
+
+template <typename T, typename DESCRIPTOR, typename VALUE>
+void setVelocity(SuperLattice<T,DESCRIPTOR>& sLattice,
+                 FunctorPtr<SuperIndicatorF<T,DESCRIPTOR::d>>&& domainI,
+                 VALUE velocityD)
+  requires std::constructible_from<FieldD<T,DESCRIPTOR,descriptors::VELOCITY>, VALUE>
+{
+  const auto& converter = sLattice.getUnitConverter();
+  AnalyticalConst<DESCRIPTOR::d,T,T> velocityF(velocityD);
+  sLattice.defineU(std::move(domainI), velocityF);
 }
 
 }
