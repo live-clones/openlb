@@ -55,6 +55,27 @@ void setVelocity(SuperLattice<T,DESCRIPTOR>& sLattice,
 namespace momenta {
 
 template <typename T, typename DESCRIPTOR>
+void setDensity(SuperLattice<T,DESCRIPTOR>& sLattice,
+                FunctorPtr<SuperIndicatorF<T,DESCRIPTOR::d>>&& domainI,
+                AnalyticalF<DESCRIPTOR::d,T,T>& densityF)
+{
+  const auto& converter = sLattice.getUnitConverter();
+  AnalyticCalcMultiplication<DESCRIPTOR::d,T,T> scaledDensityF(1/converter.getConversionFactorDensity(),
+                                                               densityF);
+  sLattice.defineRho(std::move(domainI), scaledDensityF);
+}
+
+template <typename T, typename DESCRIPTOR, typename VALUE>
+void setDensity(SuperLattice<T,DESCRIPTOR>& sLattice,
+                FunctorPtr<SuperIndicatorF<T,DESCRIPTOR::d>>&& domainI,
+                VALUE densityD)
+  requires std::constructible_from<FieldD<T,DESCRIPTOR,descriptors::SCALAR>, VALUE>
+{
+  AnalyticalConst<DESCRIPTOR::d,T,T> densityF(densityD);
+  setDensity(sLattice, std::move(domainI), densityF);
+}
+
+template <typename T, typename DESCRIPTOR>
 void setVelocity(SuperLattice<T,DESCRIPTOR>& sLattice,
                  FunctorPtr<SuperIndicatorF<T,DESCRIPTOR::d>>&& domainI,
                  AnalyticalF<DESCRIPTOR::d,T,T>& velocityF)
@@ -71,9 +92,8 @@ void setVelocity(SuperLattice<T,DESCRIPTOR>& sLattice,
                  VALUE velocityD)
   requires std::constructible_from<FieldD<T,DESCRIPTOR,descriptors::VELOCITY>, VALUE>
 {
-  const auto& converter = sLattice.getUnitConverter();
   AnalyticalConst<DESCRIPTOR::d,T,T> velocityF(velocityD);
-  sLattice.defineU(std::move(domainI), velocityF);
+  setVelocity(sLattice, std::move(domainI), velocityF);
 }
 
 }

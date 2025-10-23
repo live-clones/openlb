@@ -155,30 +155,20 @@ void setInitialValues(MyCase& myCase) {
 
   auto& superGeometry = myCase.getGeometry();
   auto& adLattice = myCase.getLattice(NavierStokes{});
-
-  const T omega = 1.0 / adLattice.getUnitConverter().getLatticeRelaxationTime();
-  const auto bulkIndicator = superGeometry.getMaterialIndicator({1, 2, 3, 4, 5});
-
-  // Initial conditions
-  AnalyticalConst3D<T,T> rho0(1.e-8);
-  AnalyticalConst3D<T,T> rho_plate(1.0);
-
-  Vector<T,3> velocity(adLattice.getUnitConverter().getCharPhysVelocity(), 0.0, 0.0);
-  AnalyticalConst3D<T,T> u(velocity);
+  const auto& converter = adLattice.getUnitConverter();
 
   // set the convective velocity field
-  fields::setVelocity<descriptors::VELOCITY>(adLattice, bulkIndicator, velocity);
+  Vector<T,3> u(adLattice.getUnitConverter().getCharPhysVelocity(), 0.0, 0.0);
+  fields::setVelocity<descriptors::VELOCITY>(adLattice,
+                                             superGeometry.getMaterialIndicator({1, 2, 3, 4, 5}),
+                                             u);
 
-  // set initail population to equilibrium
-  adLattice.defineRho(superGeometry.getMaterialIndicator({1, 2, 3, 4}), rho0);
-  adLattice.iniEquilibrium(superGeometry.getMaterialIndicator({1, 2, 3, 4}), rho0, u);
+  momenta::setDensity(adLattice, superGeometry.getMaterialIndicator({1,2,3,4}), 1e-8);
+  momenta::setDensity(adLattice, superGeometry.getMaterialIndicator(5), 1);
 
-  adLattice.defineRho(superGeometry, 5, rho_plate);
-  adLattice.iniEquilibrium(superGeometry, 5, rho_plate, u);
+  adLattice.template setParameter<descriptors::OMEGA>(
+    converter.getLatticeRelaxationFrequency());
 
-  adLattice.template setParameter<descriptors::OMEGA>(omega);
-
-  // Make the lattice ready for simulation
   adLattice.initialize();
 
   clout << "Setting initial values OK" << std::endl;
