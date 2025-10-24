@@ -119,6 +119,36 @@ void setTemperature(SuperLattice<T,DESCRIPTOR>& sLattice,
 
 }
 
+namespace dynamics {
+
+template <typename T, typename DESCRIPTOR, typename ID>
+void set(SuperLattice<T,DESCRIPTOR>& sLattice,
+         FunctorPtr<SuperIndicatorF<T,DESCRIPTOR::d>>&& domainI,
+         ID&& dynamics)
+  requires std::constructible_from<DynamicsPromise<T,DESCRIPTOR>, ID>
+{
+  sLattice.defineDynamics(std::move(domainI), std::move(dynamics));
+}
+
+template <template<typename...> typename DYNAMICS, typename T, typename DESCRIPTOR>
+void set(SuperLattice<T,DESCRIPTOR>& sLattice,
+         FunctorPtr<SuperIndicatorF<T,DESCRIPTOR::d>>&& domainI)
+{
+  set(sLattice, std::move(domainI), meta::id<DYNAMICS<T,DESCRIPTOR>>{});
+}
+
+template <template<typename...> typename DYNAMICS, typename T, typename DESCRIPTOR>
+void set(SuperLattice<T,DESCRIPTOR>& sLattice,
+         SuperGeometry<T,DESCRIPTOR::d>& sGeometry,
+         int material)
+{
+  set(sLattice,
+      sGeometry.getMaterialIndicator(material),
+      meta::id<DYNAMICS<T,DESCRIPTOR>>{});
+}
+
+}
+
 }
 
 #endif

@@ -148,15 +148,13 @@ void prepareLattice(MyCase& myCase)
 
   ADlattice.setUnitConverter(converter);
 
-  /// define lattice Dynamics
-  clout << "defining dynamics" << std::endl;
-  NSlattice.defineDynamics<ForcedBGKdynamics>(geometry, 1);
+  dynamics::set<ForcedBGKdynamics>(NSlattice, geometry, 1);
   boundary::set<boundary::BounceBack>(NSlattice, geometry, 2);
   boundary::set<boundary::BounceBack>(NSlattice, geometry, 3);
-  NSlattice.defineDynamics<ForcedBGKdynamics>(geometry, 4);
+  dynamics::set<ForcedBGKdynamics>(NSlattice, geometry, 4);
 
-  ADlattice.defineDynamics<AdvectionDiffusionBGKdynamics>(geometry.getMaterialIndicator({1, 2, 3, 4}));
-  /// sets boundary conditions
+  dynamics::set<AdvectionDiffusionBGKdynamics>(ADlattice,
+                                               geometry.getMaterialIndicator({1, 2, 3, 4}));
   boundary::set<boundary::AdvectionDiffusionDirichlet>(ADlattice, geometry, 2);
   boundary::set<boundary::AdvectionDiffusionDirichlet>(ADlattice, geometry, 3);
 
