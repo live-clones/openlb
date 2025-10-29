@@ -1000,6 +1000,8 @@ struct CrystalSourcedAdvectionDiffusionBGKdynamics final : public dynamics::Cust
     return block.template getData<OperatorParameters<CrystalSourcedAdvectionDiffusionBGKdynamics>>();
   }
 
+  static constexpr bool is_vectorizable = false;
+
   template <typename CELL, typename PARAMETERS, typename V=typename CELL::value_t>
   CellStatistic<V> collide(CELL& cell, PARAMETERS& parameters) any_platform  {
     V crystal = cell.template getField<descriptors::CRYSTLAYER>();

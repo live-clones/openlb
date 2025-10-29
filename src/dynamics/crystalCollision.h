@@ -42,6 +42,8 @@ namespace collision {
     using MomentaF = typename MOMENTA::template type<DESCRIPTOR>;
     using EquilibriumF = typename EQUILIBRIUM::template type<DESCRIPTOR,MOMENTA>;
 
+    static constexpr bool is_vectorizable = false;
+
     template <typename CELL, typename PARAMETERS, typename V=typename CELL::value_t>
     CellStatistic<V> apply(CELL& cell, PARAMETERS& parameters) any_platform {
       V crystal = cell.template getField<descriptors::CRYSTLAYER>();

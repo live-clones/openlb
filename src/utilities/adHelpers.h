@@ -78,9 +78,10 @@ std::vector<T> extractDerivatives(const TAD& source) {
 
 
 /// copy vector with specified typecast
-template<typename T, typename S, template<typename> typename C>
-C<T> copyAs(const C<S>& input) {
-  C<T> result = ContainerCreator<C<T>>::create(input.size());
+template<typename T, typename S>
+std::vector<T> copyAs(const std::vector<S>& input) {
+  std::vector<T> result;
+  result.resize(input.size());
 
   for(std::size_t it = 0; it < input.size(); ++it) {
     result[it] = T(input[it]);

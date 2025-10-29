@@ -170,7 +170,7 @@ struct CouplingFaceF2D {
     auto u = (distPrev <= distNext) * ((1 - distCurr/totalPrev) * currU + (distCurr/totalPrev) * prevU)
            + (distPrev >  distNext) * ((1 - distCurr/totalNext) * currU + (distCurr/totalNext) * nextU);
     u *= params.template get<fields::converter::PHYS_VELOCITY>();
-    return Vector<V,DESCRIPTOR::d>{};
+    return u;
   }
 };
 

@@ -59,9 +59,9 @@ struct copy_of {
   template <typename T>
   using column_type = typename FIELD::template column_type<T>;
 
-  template <unsigned D, unsigned Q>
+  template <typename DESCRIPTOR>
   static constexpr unsigned size() {
-    return FIELD::template size<D,Q>();
+    return FIELD::template size<DESCRIPTOR>();
   }
 
   template <typename T, typename DESCRIPTOR>
