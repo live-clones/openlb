@@ -70,7 +70,7 @@ struct ThermalUnitConverter : public UnitConverter<T, DESCRIPTOR> {
     this->_conversionThermalDiffusivity = this->_conversionViscosity;
     this->_conversionSpecificHeatCapacity = this->_conversionVelocity * this->_conversionVelocity / this->_conversionTemperature;
     this->_conversionThermalConductivity = this->_conversionForce / this->_conversionTime / this->_conversionTemperature;
-    this->_conversionHeatFlux = this->_conversionMass / util::pow(this->_conversionTime, 3);
+    this->_conversionHeatFlux = this->_conversionMass / util::pow(this->_conversionTime.value(), 3);
     this->_charPhysLowTemperature = charPhysLowTemperature;
     this->_charPhysHighTemperature = charPhysHighTemperature;
     this->_charPhysTemperatureDifference = charPhysHighTemperature - charPhysLowTemperature;

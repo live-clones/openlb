@@ -100,6 +100,67 @@ struct LATTICE_VISCOSITY : public descriptors::FIELD_BASE<1> { };
 
 }
 
+template<typename T>
+class OptionalValue {
+private:
+  std::optional<T> _value;
+
+public:
+  OptionalValue() = default;
+  OptionalValue(T value): _value(value) { }
+
+  OptionalValue(const OptionalValue&) = default;
+  OptionalValue(OptionalValue&&) = default;
+  OptionalValue& operator=(const OptionalValue&) = default;
+  OptionalValue& operator=(OptionalValue&&) = default;
+
+  OptionalValue& operator=(T val) {
+    _value = val;
+    return *this;
+  }
+
+  operator T&() {
+    return _value.value();
+  }
+
+  operator const T&() const {
+    return _value.value();
+  }
+
+  T& operator*() {
+    return _value.value();
+  }
+
+  const T& operator*() const {
+    return _value.value();
+  }
+
+  T* operator->() {
+      return &_value.value();
+  }
+
+  const T* operator->() const {
+    return &_value.value();
+  }
+
+  T& value() {
+    return _value.value();
+  }
+
+  const T& value() const {
+    return _value.value();
+  }
+
+  bool hasValue() const {
+    return _value.has_value();
+  }
+
+  void reset() {
+    _value.reset();
+  }
+
+};
+
 template <typename T>
 class UnitConverterBase {
 public:
@@ -173,7 +234,7 @@ public:
   /// return Mach number
   T getMachNumber() const
   {
-    return getCharLatticeVelocity() * util::sqrt(_invCs2);
+    return getCharLatticeVelocity() * util::sqrt(_invCs2.value());
   }
   /// return Knudsen number
   virtual T getKnudsenNumber(  ) const
@@ -498,7 +559,7 @@ public:
   };
   T getRayleighNumber() const
   {
-    return 9.81 * _physThermalExpansionCoefficient/this->_physViscosity/_physThermalDiffusivity * (_charPhysHighTemperature - _charPhysLowTemperature) * util::pow(this->_charPhysLength,3);
+    return 9.81 * _physThermalExpansionCoefficient/this->_physViscosity/_physThermalDiffusivity * (_charPhysHighTemperature - _charPhysLowTemperature) * util::pow(this->_charPhysLength.value(),3);
   };
 
   // from multiPhaseUnitConverter
@@ -703,49 +764,49 @@ public:
   };
 
 protected:
-  T _invCs2;
+  OptionalValue<T> _invCs2;
 
   // conversion factors
-  T _conversionLength;      // m
-  T _conversionTime;        // s
-  T _conversionVelocity;    // m / s
-  T _conversionDensity;     // kg / m^3
-  T _conversionMass;        // kg
-  T _conversionViscosity;   // m^2 / s
-  T _conversionForce;       // kg m / s^2
-  T _conversionTorque;      // kg m^2 / s^2
-  T _conversionPressure;    // kg / m s^2
+  OptionalValue<T> _conversionLength;      // m
+  OptionalValue<T> _conversionTime;        // s
+  OptionalValue<T> _conversionVelocity;    // m / s
+  OptionalValue<T> _conversionDensity;     // kg / m^3
+  OptionalValue<T> _conversionMass;        // kg
+  OptionalValue<T> _conversionViscosity;   // m^2 / s
+  OptionalValue<T> _conversionForce;       // kg m / s^2
+  OptionalValue<T> _conversionTorque;      // kg m^2 / s^2
+  OptionalValue<T> _conversionPressure;    // kg / m s^2
 
   // physical units, e.g characteristic or reference values
-  T _charPhysLength;        // m
-  T _charPhysVelocity;      // m / s
-  T _physViscosity;         // m^2 / s
-  T _physDensity;           // kg / m^3
-  T _charPhysPressure;      // kg / m s^2
+  OptionalValue<T> _charPhysLength;        // m
+  OptionalValue<T> _charPhysVelocity;      // m / s
+  OptionalValue<T> _physViscosity;         // m^2 / s
+  OptionalValue<T> _physDensity;           // kg / m^3
+  OptionalValue<T> _charPhysPressure;      // kg / m s^2
 
   // lattice units, discretization parameters
-  size_t _resolution;
-  T _latticeRelaxationTime;
-  T _charLatticeVelocity;   //
+  OptionalValue<std::size_t> _resolution;
+  OptionalValue<T> _latticeRelaxationTime;
+  OptionalValue<T> _charLatticeVelocity;   //
 
   // conversion factors
-  T _conversionTemperature; // K
-  T _conversionThermalDiffusivity; // m^2 / s
-  T _conversionSpecificHeatCapacity; // J / kg K = m^2 / s^2 K
-  T _conversionThermalConductivity; // W / m K = kg m / s^3 K
-  T _conversionHeatFlux; // W / m^2 = kg / s^3
+  OptionalValue<T> _conversionTemperature; // K
+  OptionalValue<T> _conversionThermalDiffusivity; // m^2 / s
+  OptionalValue<T> _conversionSpecificHeatCapacity; // J / kg K = m^2 / s^2 K
+  OptionalValue<T> _conversionThermalConductivity; // W / m K = kg m / s^3 K
+  OptionalValue<T> _conversionHeatFlux; // W / m^2 = kg / s^3
 
   // physical units, e.g characteristic or reference values
-  T _charPhysLowTemperature; // K
-  T _charPhysHighTemperature; // K
-  T _charPhysTemperatureDifference; // K
-  T _physThermalExpansionCoefficient; // 1 / K
-  T _physThermalDiffusivity; // m^2 / s
-  T _physSpecificHeatCapacity; // J / kg K = m^2 / s^2 K
-  T _physThermalConductivity; // W / m K = kg m / s^3 K
+  OptionalValue<T> _charPhysLowTemperature; // K
+  OptionalValue<T> _charPhysHighTemperature; // K
+  OptionalValue<T> _charPhysTemperatureDifference; // K
+  OptionalValue<T> _physThermalExpansionCoefficient; // 1 / K
+  OptionalValue<T> _physThermalDiffusivity; // m^2 / s
+  OptionalValue<T> _physSpecificHeatCapacity; // J / kg K = m^2 / s^2 K
+  OptionalValue<T> _physThermalConductivity; // W / m K = kg m / s^3 K
 
   // lattice units, discretization parameters
-  T _latticeThermalRelaxationTime; // -
+  OptionalValue<T> _latticeThermalRelaxationTime; // -
 };
 
 
@@ -797,11 +858,11 @@ public:
     this->_conversionTime = physDeltaT,
     this->_conversionVelocity = this->_conversionLength / this->_conversionTime;
     this->_conversionDensity = physDensity;
-    this->_conversionMass = this->_conversionDensity * util::pow(this->_conversionLength, 3);
+    this->_conversionMass = this->_conversionDensity * util::pow(this->_conversionLength.value(), 3);
     this->_conversionViscosity = this->_conversionLength * this->_conversionLength / this->_conversionTime;
     this->_conversionForce = this->_conversionMass * this->_conversionLength / (this->_conversionTime * this->_conversionTime);
     this->_conversionTorque = this->_conversionMass * this->_conversionLength * this->_conversionLength / (this->_conversionTime * this->_conversionTime);
-    this->_conversionPressure = this->_conversionForce / util::pow(this->_conversionLength, 2);
+    this->_conversionPressure = this->_conversionForce / util::pow(this->_conversionLength.value(), 2);
     this->_charPhysLength = charPhysLength;
     this->_charPhysVelocity = charPhysVelocity;
     this->_physViscosity = physViscosity;
