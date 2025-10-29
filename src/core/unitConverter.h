@@ -706,38 +706,38 @@ public:
   };
 
   // from radiativeUnitConverter
-  virtual T getPhysAbsorption() const {
-    throw std::logic_error("Undefined");
+  T getPhysAbsorption() const {
+    return _physAbsorption;
   };
-  virtual T getPhysScattering() const {
-    throw std::logic_error("Undefined");
+  T getPhysScattering() const {
+    return _physScattering;
   };
-  virtual T getAnisotropyFactor() const {
-    throw std::logic_error("Undefined");
+  T getAnisotropyFactor() const {
+    return _anisotropyFactor;
   };
-  virtual T getExtinction() const {
-    throw std::logic_error("Undefined");
+  T getExtinction() const {
+    return _extinction;
   };
-  virtual T getScatteringAlbedo() const {
-    throw std::logic_error("Undefined");
+  T getScatteringAlbedo() const {
+    return _scatteringAlbedo;
   };
-  virtual T getPhysDiffusion() const {
-    throw std::logic_error("Undefined");
+  T getPhysDiffusion() const {
+    return _physDiffusion;
   };
-  virtual T getEffectiveAttenuation() const {
-    throw std::logic_error("Undefined");
+  T getEffectiveAttenuation() const {
+    return _effectiveAttenuation;
   };
-  virtual T getLatticeAbsorption() const {
-    throw std::logic_error("Undefined");
+  T getLatticeAbsorption() const {
+    return _latticeAbsorption;
   };
-  virtual T getLatticeScattering() const {
-    throw std::logic_error("Undefined");
+  T getLatticeScattering() const {
+    return _latticeScattering;
   };
-  virtual T getLatticeDiffusion() const {
-    throw std::logic_error("Undefined");
+  T getLatticeDiffusion() const {
+    return _latticeDiffusion;
   };
-  virtual T getRefractiveRelative() const {
-    throw std::logic_error("Undefined");
+  T getRefractiveRelative() const {
+    return _refractiveRelative;
   };
 
   // from LinElaUnitConverter
@@ -853,6 +853,19 @@ protected:
   OptionalValue<T> _physViscosityAdsorption;
   OptionalValue<T> _conversionViscosityAdsorption;
   OptionalValue<T> _particleConcentrationAdsorption;
+
+  // radiative factors
+  OptionalValue<T> _physAbsorption;
+  OptionalValue<T> _physScattering;
+  OptionalValue<T> _anisotropyFactor;
+  OptionalValue<T> _extinction;
+  OptionalValue<T> _scatteringAlbedo;
+  OptionalValue<T> _physDiffusion;
+  OptionalValue<T> _effectiveAttenuation;
+  OptionalValue<T> _refractiveRelative;
+  OptionalValue<T> _latticeAbsorption;
+  OptionalValue<T> _latticeScattering;
+  OptionalValue<T> _latticeDiffusion;
 
 };
 
