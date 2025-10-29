@@ -21,15 +21,10 @@
  *  Boston, MA  02110-1301, USA.
 */
 
-
 #ifndef THERMALUNITCONVERTER_HH
 #define THERMALUNITCONVERTER_HH
 
-#include <fstream>
-#include <iostream>
-#include <unistd.h>
-#include "core/singleton.h"
-#include "io/fileName.h"
+#include "thermalUnitConverter.h"
 
 // All OpenLB code is contained in this namespace.
 namespace olb {
@@ -37,6 +32,7 @@ namespace olb {
 template <typename T, typename DESCRIPTOR, typename ThermalLattice>
 void ThermalUnitConverter<T, DESCRIPTOR, ThermalLattice>::print() const
 {
+  OstreamManager clout(std::cout, "ThermalUnitConverter");
   clout << "----------------- UnitConverter information -----------------" << std::endl;
   clout << "-- Parameters:" << std::endl;
   clout << "Resolution:                                 N=                              " << this->getResolution() << std::endl;
@@ -90,117 +86,8 @@ void ThermalUnitConverter<T, DESCRIPTOR, ThermalLattice>::print() const
   clout << "HeatFlux(W):                                physHeatFlux=                   " << this->getConversionFactorHeatFlux() << std::endl;
 
   clout << "-------------------------------------------------------------" << std::endl;
+}
 
 }
-/*
-template <typename T, typename DESCRIPTOR, typename ThermalLattice>
-void ThermalUnitConverter<T, DESCRIPTOR, ThermalLattice>::writeDatFile(std::string const& title) const
-{
-  std::string dataFile = singleton::directories().getLogOutDir() + title + ".dat";
-
-  if (singleton::mpi().isMainProcessor())
-  {
-    std::ofstream fout;
-    fout.open(dataFile.c_str(), std::ios::trunc);
-
-  fout << "----------------- ThermalUnitConverter information -----------------" << std::endl;
-  fout << "-- Parameters:" << std::endl;
-  fout << "Phys. Delta X:                    physDeltaX=              " << getPhysDeltaX() << std::endl;
-  fout << "Phys. Delta T:                    physDeltaT=            " << getPhysDeltaT() << std::endl;
-  fout << "Characteristical pressure(N/m^2): charPressure=   " << getCharPhysPressure() << std::endl;
-  fout << "Phys. Thermal Conductivity:       physThermalConductivity=   " << getPhysThermalCondcticity() << std::endl;
-  fout << "Phys. specific Heat Capacity:     physSpecificHeatCapacity= " << getPhysSpecificHeatCapacity() << std::endl;
-  fout << "Phys. Thermal Expasion Coefficent physThermalExpansionCoefficent= " << getPhysThermalExpasionCoefficent << std::endl;
-  fout << "Characteristical Phys. low Temperature charPhysLowTemperature= " << getCharPhysLowTemperature << std::endl;
-  fout << "Characteristical Phys. high Temperature charPhysHighTemperature= " << getCharPhysHighTemperature << std::endl;
-  fout << std::endl;
-
-  fout << "-- Conversion factors:" << std::endl;
-  fout << "Temperature:                      temperature=       " << getConversionFactorTemperature() << std::endl;
-  fout << "Thermal Duffusity:                physThermalDiffusity=       " << getConversionFactorThermalDiffusivity() << std::endl;
-  fout << "specific Heat Capacity:           physSpecificHeatCapacity=   " << getConversionFactorSpecificHeatCapacity() << std::endl;
-  fout << "Thermal Coductivity:              physThermalConductivity=    " << getConversionFactorThermalConductivity() <<  std::endl;
-  fout << "HeatFlux:                         physHeatFlux=       " << getConversionFactorHeatFlux() << std::endl;
-
-  fout << "-------------------------------------------------------------" << std::endl;
-
-    fout.close();
-  }
-}
-*/
-/*
-template<typename T, typename DESCRIPTOR>
-ThermalUnitConverter<T, DESCRIPTOR>* createThermalUnitConverter(XMLreader const& params)
-{
-  OstreamManager clout(std::cout,"createThermalUnitConverter");
-  params.setWarningsOn(false);
-
-  T physDeltaX;
-  T physDeltaT;
-
-  T charPhysHighTemperature;
-  T charPhysLowTemperature;
-  T physThermalCondcticity;
-  T physDensity;
-  T charPhysPressure = 0;
-
-  int resolution;
-  T latticeRelaxationTime;
-  T charLatticeVelocity;
-
-  // params[parameter].read(value) sets the value or returns false if the parameter can not be found
-  params["Application"]["ThermalPhysParameters"]["CharPhysLowTemperature"].read(charPhysLowTemperature);
-  params["Application"]["ThermalPhysParameters"]["charPhysHighTemperature"].read(charPhysHighTemperature);
-  params["Application"]["ThermalPhysParameters"]["PhysThermalCondcticity"].read(physThermalCondcticity);
-  params["Application"]["ThermalPhysParameters"]["PhysDensity"].read(physDensity);
-  params["Application"]["ThermalPhysParameters"]["CharPhysPressure"].read(charPhysPressure);
-
-  if (!params["Application"]["Discretization"]["PhysDeltaX"].read(physDeltaX,false)) {
-    if (!params["Application"]["Discretization"]["Resolution"].read<int>(resolution,false)) {
-      if (!params["Application"]["Discretization"]["CharLatticeVelocity"].read(charLatticeVelocity,false)) {
-        // NOT found physDeltaX, resolution or charLatticeVelocity
-        clout << "Error: Have not found PhysDeltaX, Resolution or CharLatticeVelocity in XML file."
-              << std::endl;
-        exit (1);
-      }
-      else {
-        // found charLatticeVelocity
-        if (params["Application"]["Discretization"]["PhysDeltaT"].read(physDeltaT,false)) {
-          physDeltaX = charPhysVelocity / charLatticeVelocity * physDeltaT;
-        }
-        else if (params["Application"]["Discretization"]["LatticeRelaxationTime"].read(latticeRelaxationTime,false)) {
-          physDeltaX = physViscosity * charLatticeVelocity / charPhysVelocity * descriptors::invCs2<T,DESCRIPTOR>() / (latticeRelaxationTime - 0.5);
-        }
-      }
-    }
-    else {
-      // found resolution
-      physDeltaX = charPhysLength / resolution;
-    }
-  }
-  // found physDeltaX
-  if (!params["Application"]["Discretization"]["PhysDeltaT"].read(physDeltaT,false)) {
-    if (!params["Application"]["Discretization"]["LatticeRelaxationTime"].read(latticeRelaxationTime,false)) {
-      if (!params["Application"]["Discretization"]["CharLatticeVelocity"].read(charLatticeVelocity,false)) {
-        // NOT found physDeltaT, latticeRelaxationTime and charLatticeVelocity
-        clout << "Error: Have not found PhysDeltaT, LatticeRelaxationTime or CharLatticeVelocity in XML file."
-              << std::endl;
-        exit (1);
-      }
-      else {
-        // found charLatticeVelocity
-        physDeltaT = charLatticeVelocity / charPhysVelocity * physDeltaX;
-      }
-    }
-    else {
-      // found latticeRelaxationTime
-      physDeltaT = (latticeRelaxationTime - 0.5) / descriptors::invCs2<T,DESCRIPTOR>() * physDeltaX * physDeltaX / physViscosity;
-    }
-  }
-
-  return new ThermalUnitConverter<T, DESCRIPTOR, ThermalLattice>(physDeltaX, physDeltaT, charPhysLength, charPhysVelocity, physViscosity, physDensity,T physThermalConductivity,T physSpecificHeatCapacity,T physThermalExpansionCoefficient,T charPhysLowTemperature,T charPhysHighTemperature, charPhysPressure);
-}*/
-
-}  // namespace olb
 
 #endif

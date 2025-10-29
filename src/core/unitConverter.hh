@@ -98,14 +98,15 @@ void UnitConverter<T, DESCRIPTOR>::print(std::ostream& clout) const
 template <typename T, class DESCRIPTOR>
 void UnitConverter<T, DESCRIPTOR>::print() const
 {
+  OstreamManager clout(std::cout, "UnitConverter");
   print(clout);
 }
 
 template <typename T, typename DESCRIPTOR>
 void UnitConverter<T, DESCRIPTOR>::write(std::string const& fileName) const
 {
+  OstreamManager clout(std::cout, "UnitConverter");
   std::string dataFile = singleton::directories().getLogOutDir() + fileName + ".dat";
-
   if (singleton::mpi().isMainProcessor()) {
     std::ofstream fout(dataFile.c_str(), std::ios::trunc);
     if (!fout) {
@@ -122,6 +123,7 @@ template<typename T, typename DESCRIPTOR>
 UnitConverter<T, DESCRIPTOR>* createUnitConverter(XMLreader const& params)
 {
   OstreamManager clout(std::cout,"createUnitConverter");
+
   params.setWarningsOn(false);
 
   T physDeltaX{};

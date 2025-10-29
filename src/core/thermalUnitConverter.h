@@ -63,8 +63,7 @@ struct ThermalUnitConverter : public UnitConverter<T, DESCRIPTOR> {
     T charPhysPressure = 0 )
     : UnitConverter<T, DESCRIPTOR>(
         physDeltaX, physDeltaT, charPhysLength, charPhysVelocity,
-        physViscosity, physDensity, charPhysPressure),
-      clout(std::cout,"ThermalUnitConv")
+        physViscosity, physDensity, charPhysPressure)
   {
     this->_conversionTemperature = charPhysHighTemperature - charPhysLowTemperature;
     this->_conversionThermalDiffusivity = this->_conversionViscosity;
@@ -84,8 +83,6 @@ struct ThermalUnitConverter : public UnitConverter<T, DESCRIPTOR> {
   /// nice terminal output for conversion factors, characteristical and physical data
   void print() const override;
 
-private:
-  mutable OstreamManager clout;
 };
 
 }  // namespace olb

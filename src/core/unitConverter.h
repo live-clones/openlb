@@ -850,8 +850,7 @@ public:
     *  \param charPhysPressure        reference/characteristic physical pressure in Pa = kg / m s^2
     */
   UnitConverter( T physDeltaX, T physDeltaT, T charPhysLength, T charPhysVelocity,
-                           T physViscosity, T physDensity, T charPhysPressure = 0 ):
-    clout(std::cout,"UnitConverter")
+                           T physViscosity, T physDensity, T charPhysPressure = 0 )
   {
     this->_invCs2 = descriptors::invCs2<T,DESCRIPTOR>();
     this->_conversionLength = physDeltaX;
@@ -874,11 +873,8 @@ public:
   }
 
   template <typename _DESCRIPTOR>
-  UnitConverter(const UnitConverter<T,_DESCRIPTOR>& rhs):
-    clout(std::cout,"UnitConverter")
-  {
+  UnitConverter(const UnitConverter<T,_DESCRIPTOR>& rhs) {
     static_cast<UnitConverterBase<T>&>(*this) = static_cast<const UnitConverterBase<T>&>(rhs);
-    print();
   }
 
   virtual void print() const;
@@ -886,9 +882,6 @@ public:
   void print(std::ostream& fout) const;
 
   virtual void write(std::string const& fileName = "unitConverter") const;
-
-private:
-  mutable OstreamManager clout;
 
 };
 
