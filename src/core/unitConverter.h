@@ -25,16 +25,15 @@
  * Unit conversion handling -- header file.
  */
 
-#ifndef UNITCONVERTER_H
-#define UNITCONVERTER_H
-
+#ifndef CORE_UNITCONVERTER_H
+#define CORE_UNITCONVERTER_H
 
 #include "utilities/omath.h"
 #include "io/ostreamManager.h"
 #include "core/util.h"
 #include "io/xmlReader.h"
-
 #include "descriptor/fields.h"
+#include "utilities/optionalValue.h"
 
 // known design issues
 //    1. How can we prevent abuse of constructur by mixing up parameters?
@@ -99,67 +98,6 @@ struct LATTICE_VISCOSITY : public descriptors::FIELD_BASE<1> { };
 }
 
 }
-
-template<typename T>
-class OptionalValue {
-private:
-  std::optional<T> _value;
-
-public:
-  OptionalValue() = default;
-  OptionalValue(T value): _value(value) { }
-
-  OptionalValue(const OptionalValue&) = default;
-  OptionalValue(OptionalValue&&) = default;
-  OptionalValue& operator=(const OptionalValue&) = default;
-  OptionalValue& operator=(OptionalValue&&) = default;
-
-  OptionalValue& operator=(T val) {
-    _value = val;
-    return *this;
-  }
-
-  operator T&() {
-    return _value.value();
-  }
-
-  operator const T&() const {
-    return _value.value();
-  }
-
-  T& operator*() {
-    return _value.value();
-  }
-
-  const T& operator*() const {
-    return _value.value();
-  }
-
-  T* operator->() {
-      return &_value.value();
-  }
-
-  const T* operator->() const {
-    return &_value.value();
-  }
-
-  T& value() {
-    return _value.value();
-  }
-
-  const T& value() const {
-    return _value.value();
-  }
-
-  bool hasValue() const {
-    return _value.has_value();
-  }
-
-  void reset() {
-    _value.reset();
-  }
-
-};
 
 template <typename T>
 class UnitConverterBase {
@@ -912,8 +850,7 @@ protected:
 *  \param charLatticeVelocity
 */
 template <typename T, typename DESCRIPTOR>
-class UnitConverter : public UnitConverterBase<T> {
-public:
+struct UnitConverter : public UnitConverterBase<T> {
   /** Documentation of constructor:
     *  \param physDeltaX              spacing between two lattice cells in __m__
     *  \param physDeltaT              time step in __s__
@@ -980,8 +917,7 @@ template <typename T, typename DESCRIPTOR>
 UnitConverter<T, DESCRIPTOR>* createUnitConverter(XMLreader const& params);
 
 template <typename T, typename DESCRIPTOR>
-class UnitConverterFromResolutionAndRelaxationTime : public UnitConverter<T, DESCRIPTOR> {
-public:
+struct UnitConverterFromResolutionAndRelaxationTime : public UnitConverter<T, DESCRIPTOR> {
   UnitConverterFromResolutionAndRelaxationTime(
     size_t resolution,
     T latticeRelaxationTime,
@@ -1001,8 +937,7 @@ public:
 };
 
 template <typename T, typename DESCRIPTOR>
-class UnitConverterFromResolutionAndLatticeVelocity : public UnitConverter<T, DESCRIPTOR> {
-public:
+struct UnitConverterFromResolutionAndLatticeVelocity : public UnitConverter<T, DESCRIPTOR> {
   UnitConverterFromResolutionAndLatticeVelocity(
     size_t resolution,
     T charLatticeVelocity,
@@ -1022,8 +957,7 @@ public:
 };
 
 template <typename T, typename DESCRIPTOR>
-class UnitConverterFromRelaxationTimeAndLatticeVelocity : public UnitConverter<T, DESCRIPTOR> {
-public:
+struct UnitConverterFromRelaxationTimeAndLatticeVelocity : public UnitConverter<T, DESCRIPTOR> {
   UnitConverterFromRelaxationTimeAndLatticeVelocity(
     T latticeRelaxationTime,
     T charLatticeVelocity,
@@ -1048,8 +982,9 @@ std::unique_ptr<UnitConverter<T,DESCRIPTOR>> createUnitConverter(ARGS&&... args)
   return std::make_unique<MEMBER>(std::forward<ARGS>(args)...);
 }
 
-}  // namespace olb
+}
 
 #include "thermalUnitConverter.h"
 #include "multiPhaseUnitConverter.h"
+
 #endif
