@@ -200,20 +200,8 @@ void setInitialValues(MyCase& myCase) {
   auto& sGeometry = myCase.getGeometry();
   auto& sLattice = myCase.getLattice(NavierStokes());
 
-  AnalyticalConst2D<T,T> rhoF(1);
-  AnalyticalConst2D<T,T> uF(0,0);
-  auto bulkIndicator = sGeometry.getMaterialIndicator({1,2});
-  sLattice.iniEquilibrium(bulkIndicator, rhoF, uF);
-  sLattice.defineRhoU(bulkIndicator, rhoF, uF);
-
-  {
-    AnalyticalConst2D<T,T> porosityF(1);
-    sLattice.defineField<descriptors::POROSITY>(bulkIndicator, porosityF);
-  }
-  {
-    AnalyticalConst2D<T,T> porosityF(0);
-    sLattice.defineField<descriptors::POROSITY>(sGeometry.getMaterialIndicator({0,3}), porosityF);
-  }
+  fields::set<descriptors::POROSITY>(sLattice, sGeometry.getMaterialIndicator({1,2}), 1);
+  fields::set<descriptors::POROSITY>(sLattice, sGeometry.getMaterialIndicator({0,3}), 0);
 
   sLattice.initialize();
 }
@@ -236,13 +224,10 @@ void setTemporalValues(MyCase& myCase,
   const std::size_t iTstart = converter.getLatticeTime(T_p);
 
   if (iT % iTupdate == 0 && iT < iTstart) {
-    PolynomialStartScale<T,int> scale(iTstart, T{1});
-    int iTvec = static_cast<int>(iT);
-    T frac[1] = {};
-    scale(frac, &iTvec);
-    const T targetVelocityX = frac[0]*converter.getLatticeVelocity(u_ref);
-    AnalyticalConst2D<T,T> poiseuilleU(targetVelocityX, 0);
-    sLattice.defineU(sGeometry, 4, poiseuilleU);
+    T frac{};
+    PolynomialStartScale<T,std::size_t>(iTstart, T{1})(&frac, &iT);
+    momenta::setVelocity(sLattice, sGeometry.getMaterialIndicator(4), Vector{frac*u_ref, 0});
+
     sLattice.setProcessingContext<Array<momenta::FixedVelocityMomentumGeneric::VELOCITY>>(
       ProcessingContext::Simulation);
   }
@@ -255,9 +240,7 @@ void setTemporalValues(MyCase& myCase,
       u = u_ref + 0.5 * u_amp * util::sin(2*std::numbers::pi_v<T>*(t/T_p+0.26)/1.26);
     }
 
-    const T targetVelocityX = converter.getLatticeVelocity(u);
-    AnalyticalConst2D<T,T> poiseuilleU(targetVelocityX, 0);
-    sLattice.defineU(sGeometry, 4, poiseuilleU);
+    momenta::setVelocity(sLattice, sGeometry.getMaterialIndicator(4), Vector{u, 0});
     sLattice.setProcessingContext<Array<momenta::FixedVelocityMomentumGeneric::VELOCITY>>(
       ProcessingContext::Simulation);
   }

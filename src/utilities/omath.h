@@ -35,7 +35,6 @@ namespace olb {
 namespace util {
 
 // Pow
-
 template <typename T, typename S>
 any_platform inline auto pow(T x, S y)
     -> std::enable_if_t<std::is_floating_point_v<T> &&

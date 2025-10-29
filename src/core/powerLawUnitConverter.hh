@@ -67,29 +67,6 @@ void PowerLawUnitConverter<T, DESCRIPTOR>::print(std::ostream& clout) const
 
 }
 
-template <typename T, class DESCRIPTOR>
-void PowerLawUnitConverter<T, DESCRIPTOR>::print() const
-{
-  print(clout);
-}
-
-template <typename T, typename DESCRIPTOR>
-void PowerLawUnitConverter<T, DESCRIPTOR>::write(std::string const& fileName) const
-{
-  std::string dataFile = singleton::directories().getLogOutDir() + fileName + ".dat";
-
-  if (singleton::mpi().isMainProcessor()) {
-    std::ofstream fout(dataFile.c_str(), std::ios::trunc);
-    if (!fout) {
-      clout << "error write() function: can not open std::ofstream" << std::endl;
-    }
-    else {
-      print( fout );
-      fout.close();
-    }
-  }
-}
-
 template<typename T, typename DESCRIPTOR>
 PowerLawUnitConverter<T, DESCRIPTOR>* createPowerLawUnitConverter(XMLreader const& params)
 {
@@ -182,33 +159,6 @@ PowerLawUnitConverter<T, DESCRIPTOR>* createPowerLawUnitConverter(XMLreader cons
 
   return new PowerLawUnitConverter<T, DESCRIPTOR>(physDeltaX, physDeltaT, charPhysLength, charPhysVelocity, physConsistencyCoeff, powerLawIndex, physDensity, charPhysPressure);
 }
-
-///////////////////////////////////////////////////////////////////////////////////////////////////
-/*
-template <typename T, typename DESCRIPTOR>
-constexpr PowerLawUnitConverterFrom_Resolution_RelaxationTime_Reynolds_PLindex<T, DESCRIPTOR>::
-PowerLawUnitConverterFrom_Resolution_RelaxationTime_Reynolds_PLindex(
-    int resolution,
-    T latticeRelaxationTime,
-    T charPhysLength,
-    T charPhysVelocity,
-    T Re,
-   T powerLawIndex,
-    T physDensity,
-    T charPhysPressure)
-{
-  T physDeltaX = (charPhysLength/resolution);
-  T physConsistencyCoeff = charPhysLength * charPhysVelocity * util::pow( charPhysVelocity / ( 2 * charPhysLength ), 1 - powerLawIndex ) / Re;
-  T physViscosity = physConsistencyCoeff * util::pow( charPhysVelocity / (2 * charPhysLength ), powerLawIndex - 1 );
-  T physDeltaT = (latticeRelaxationTime - 0.5) / descriptors::invCs2<T,DESCRIPTOR>() * util::pow((charPhysLength/resolution),2) / physViscosity;
-
-PowerLawUnitConverter<T, DESCRIPTOR>( physDeltaX, physDeltaT, charPhysLength, charPhysVelocity,
-              physConsistencyCoeff, powerLawIndex, physDensity, charPhysPressure );
-}
-*/
-
-
-
 
 }  // namespace olb
 

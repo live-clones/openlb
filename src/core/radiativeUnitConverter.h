@@ -35,8 +35,6 @@
 #include "core/singleton.h"
 #include "utilities/omath.h"
 
-
-// All OpenLB code is contained in this namespace.
 namespace olb {
 
 double getThetaRefracted(double const& thetaIncident, double const& refractiveRelative);
@@ -64,113 +62,34 @@ double getRefractionFunction(RadiativeUnitConverter<T,DESCRIPTOR> const& convert
   return getRefractionFunction(converter.getRefractiveRelative());
 };
 
-/** Conversion between physical and lattice units, as well as discretization.
-* Be aware of the nomenclature:
-* We distingish between physical (dimensioned) and lattice (dimensionless) values.
-* A specific conversion factor maps the two different scopes,
-* e.g. __physLength = conversionLength * latticeLength__
-*
-*/
 template <typename T, typename DESCRIPTOR>
-class RadiativeUnitConverter : public UnitConverterFromResolutionAndRelaxationTime<T,DESCRIPTOR> {
-public:
+struct RadiativeUnitConverter : public UnitConverterFromResolutionAndRelaxationTime<T,DESCRIPTOR> {
   /** Documentation of constructor:
     *   \param resolution   is number of voxel per 1 meter
     *   \param latticeRelaxationTime    see class UnitConverterFromResolutionAndRelaxationTime
     *   \param physAbsorption   physical absorption in 1/meter
     *   \param physScattering   physical scattering in 1/meter
     */
-  constexpr RadiativeUnitConverter( int resolution, T latticeRelaxationTime, T physAbsorption, T physScattering, T anisotropyFactor=0, T charPhysLength=1, T refractiveMedia=1, T refractiveAmbient=1 )
-    : UnitConverterFromResolutionAndRelaxationTime<T, DESCRIPTOR>( resolution, latticeRelaxationTime, charPhysLength, /*visc*/ 1./(3*(physAbsorption+physScattering)), T(1), T(1) ),
-      clout(std::cout, "RadiativeUnitConverter"),
-      _physAbsorption(physAbsorption),
-      _physScattering(physScattering),
-      _anisotropyFactor(anisotropyFactor),
-      _extinction( physAbsorption+physScattering ),
-      _scatteringAlbedo( physScattering/(physAbsorption+physScattering) ),
-      _physDiffusion( 1.0 / (3.0*(physAbsorption+physScattering)) ),
-      _effectiveAttenuation( util::sqrt(3*physAbsorption*(physAbsorption+physScattering)) ),
-      _refractiveRelative(refractiveMedia/refractiveAmbient),
-      _latticeAbsorption( physAbsorption*this->getConversionFactorLength() ),
-      _latticeScattering( physScattering*this->getConversionFactorLength() ),
-      _latticeDiffusion(_physDiffusion/this->getConversionFactorLength())
-  { };
-
-  constexpr T getPhysAbsorption() const override
+  RadiativeUnitConverter( int resolution, T latticeRelaxationTime, T physAbsorption, T physScattering, T anisotropyFactor=0, T charPhysLength=1, T refractiveMedia=1, T refractiveAmbient=1 )
+    : UnitConverterFromResolutionAndRelaxationTime<T, DESCRIPTOR>( resolution, latticeRelaxationTime, charPhysLength, /*visc*/ 1./(3*(physAbsorption+physScattering)), T(1), T(1) )
   {
-    return _physAbsorption;
-  };
+    this->_physAbsorption = physAbsorption;
+    this->_physScattering = physScattering;
+    this->_anisotropyFactor = anisotropyFactor;
+    this->_extinction = physAbsorption+physScattering;
+    this->_scatteringAlbedo = physScattering/(physAbsorption+physScattering);
+    this->_physDiffusion = 1.0 / (3.0*(physAbsorption+physScattering));
+    this->_effectiveAttenuation = util::sqrt(3*physAbsorption*(physAbsorption+physScattering));
+    this->_refractiveRelative = refractiveMedia/refractiveAmbient;
+    this->_latticeAbsorption = physAbsorption*this->getConversionFactorLength();
+    this->_latticeScattering = physScattering*this->getConversionFactorLength();
+    this->_latticeDiffusion = this->_physDiffusion/this->getConversionFactorLength();
+  }
 
-  constexpr T getPhysScattering() const override
-  {
-    return _physScattering;
-  };
+  void print(std::ostream& fout) const override;
 
-  constexpr T getAnisotropyFactor() const override
-  {
-    return _anisotropyFactor;
-  };
+  using UnitConverter<T,DESCRIPTOR>::print;
 
-  constexpr T getExtinction() const override
-  {
-    return _extinction;
-  };
-
-  constexpr T getScatteringAlbedo() const override
-  {
-    return _scatteringAlbedo;
-  };
-
-  constexpr T getPhysDiffusion() const override
-  {
-    return _physDiffusion;
-  };
-
-  constexpr T getEffectiveAttenuation() const override
-  {
-    return _effectiveAttenuation;
-  };
-
-  constexpr T getLatticeAbsorption() const override
-  {
-    return _latticeAbsorption;
-  };
-
-  constexpr T getLatticeScattering() const override
-  {
-    return _latticeScattering;
-  };
-
-  constexpr T getLatticeDiffusion() const override
-  {
-    return _latticeDiffusion;
-  };
-
-  constexpr T getRefractiveRelative() const override
-  {
-    return _refractiveRelative;
-  };
-
-  void print() const override;
-  void print(std::ostream& fout) const;
-  void write() const;
-
-private:
-  mutable OstreamManager clout;
-
-  double _physAbsorption;
-  double _physScattering;
-  double _anisotropyFactor;
-  double _extinction;
-  double _scatteringAlbedo;
-  double _physDiffusion;
-  double _effectiveAttenuation;
-
-  double _refractiveRelative;
-
-  double _latticeAbsorption;
-  double _latticeScattering;
-  double _latticeDiffusion;
 };
 
 template <typename T, class DESCRIPTOR>
@@ -183,21 +102,21 @@ void RadiativeUnitConverter<T, DESCRIPTOR>::print(std::ostream& clout) const
   clout << "Lattice relaxation time:          tau=            " << this->getLatticeRelaxationTime() << std::endl;
   clout << "Characteristical length(m):       charL=          " << this->getCharPhysLength() << std::endl;
   clout << "Phys. density(kg/m^d):            charRho=        " << this->getPhysDensity() << std::endl;
-  clout << "Phys. absorption(1/m):            mu_a=           " << getPhysAbsorption() << std::endl;
-  clout << "Phys. scattering(1/m):            mu_s=           " << getPhysScattering() << std::endl;
-  clout << "Extinction(1/m):                  mu_t=           " << getExtinction() << std::endl;
-  clout << "Effective attenuation(1/m):       mu_eff=         " << getEffectiveAttenuation() << std::endl;
-  clout << "Phys. diffusion(m):               D=              " << getPhysDiffusion() << std::endl;
-  clout << "Single scattering albedo:         albedo=         " << getScatteringAlbedo() << std::endl;
-  clout << "Anisotropy factor:                g=              " << getAnisotropyFactor() << std::endl;
+  clout << "Phys. absorption(1/m):            mu_a=           " << this->getPhysAbsorption() << std::endl;
+  clout << "Phys. scattering(1/m):            mu_s=           " << this->getPhysScattering() << std::endl;
+  clout << "Extinction(1/m):                  mu_t=           " << this->getExtinction() << std::endl;
+  clout << "Effective attenuation(1/m):       mu_eff=         " << this->getEffectiveAttenuation() << std::endl;
+  clout << "Phys. diffusion(m):               D=              " << this->getPhysDiffusion() << std::endl;
+  clout << "Single scattering albedo:         albedo=         " << this->getScatteringAlbedo() << std::endl;
+  clout << "Anisotropy factor:                g=              " << this->getAnisotropyFactor() << std::endl;
 
   clout << std::endl;
-  clout << "Lattice diffusion:                D^*=            " << getLatticeDiffusion() << std::endl;
-  clout << "Lattice absorption:               absorption=     " << getLatticeAbsorption() << std::endl;
-  clout << "Lattice scattering:               scattering=     " << getLatticeScattering() << std::endl;
-  clout << "Lattice sink:                     sink=           " << 3./8.*getLatticeAbsorption()*(getLatticeScattering()+getLatticeAbsorption()) << std::endl;
-  clout << "C_R: " << getRefractionFunction(getRefractiveRelative()) << std::endl;
-  clout << "r_F: " << getPartialBBCoefficient(getLatticeDiffusion(),getRefractiveRelative()) << std::endl;
+  clout << "Lattice diffusion:                D^*=            " << this->getLatticeDiffusion() << std::endl;
+  clout << "Lattice absorption:               absorption=     " << this->getLatticeAbsorption() << std::endl;
+  clout << "Lattice scattering:               scattering=     " << this->getLatticeScattering() << std::endl;
+  clout << "Lattice sink:                     sink=           " << 3./8.*this->getLatticeAbsorption()*(this->getLatticeScattering()+this->getLatticeAbsorption()) << std::endl;
+  clout << "C_R: " << getRefractionFunction(this->getRefractiveRelative()) << std::endl;
+  clout << "r_F: " << getPartialBBCoefficient(this->getLatticeDiffusion(),this->getRefractiveRelative()) << std::endl;
 
   clout << std::endl;
   clout << "-- Conversion factors:" << std::endl;
@@ -207,31 +126,7 @@ void RadiativeUnitConverter<T, DESCRIPTOR>::print(std::ostream& clout) const
   clout << "-------------------------------------------------------------" << std::endl;
 }
 
-template <typename T, class DESCRIPTOR>
-void RadiativeUnitConverter<T, DESCRIPTOR>::print() const
-{
-  print(clout);
-}
-
-template <typename T, class DESCRIPTOR>
-void RadiativeUnitConverter<T, DESCRIPTOR>::write() const
-{
-  std::string dataFile = singleton::directories().getLogOutDir() + "radiativeUnitConverter.dat";
-  if (singleton::mpi().isMainProcessor()) {
-    std::ofstream fout(dataFile.c_str(), std::ios::trunc);
-    if (!fout) {
-      clout << "error write() function: can not open std::ofstream" << std::endl;
-    }
-    else {
-      print( fout );
-      fout.close();
-    }
-  }
-
-}
-
 /// Documentation of implemented functions found in 5.2.2 Biomedical Optics, Principles and Imaging; Wang 2007
-
 double getThetaRefracted(double const& thetaIncident, double const& refractiveRelative)
 {
   double thetaRefracted = M_PI/2.;

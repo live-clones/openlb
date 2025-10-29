@@ -88,7 +88,8 @@ void prepareGeometry(MyCase& myCase)
   auto& geometry  = myCase.getGeometry();
 
   const T physLengthX = parameters.get<parameters::DOMAIN_EXTENT>()[0];
-  const T physDeltaX  = 2*parameters.get<parameters::RADIUS_CYLINDER>()/parameters.get<parameters::RESOLUTION>();
+  const T physDeltaX  = 2*parameters.get<parameters::RADIUS_CYLINDER>()
+                      /   parameters.get<parameters::RESOLUTION>();
   const T physLengthY = parameters.get<parameters::DOMAIN_EXTENT>()[1] + physDeltaX;
 
   geometry.rename(0, 2);
@@ -142,8 +143,8 @@ void prepareLattice(MyCase& myCase)
   const T charPhysVelocity      = parameters.get<parameters::PHYS_CHAR_VELOCITY>();
   const T Re                    = parameters.get<parameters::REYNOLDS>();
   const T physDensity           = parameters.get<parameters::PHYS_CHAR_DENSITY>();
-
-  myCase.getLattice(NavierStokes{}).setUnitConverter<UnitConverterFromResolutionAndRelaxationTime<T,DESCRIPTOR>>(
+  myCase.getLattice(NavierStokes{})
+        .setUnitConverter<UnitConverterFromResolutionAndRelaxationTime<T,DESCRIPTOR>>(
     resolution,                           // resolution: number of voxels per charPhysL
     latticeRelaxationTime,                // latticeRelaxationTime: relaxation time, have to be greater than 0.5!
     diameterCylinder,                     // charPhysLength: reference length of simulation geometry
@@ -173,9 +174,9 @@ void prepareLattice(MyCase& myCase)
   std::shared_ptr<IndicatorF2D<T>> circle = std::make_shared<IndicatorCircle2D<T>>(center, radiusCylinder);
 
   #ifdef BOUZIDI
-    setBouzidiBoundary(lattice, geometry, 5, *circle);
+  setBouzidiBoundary(lattice, geometry, 5, *circle);
   #else
-    boundary::set<boundary::BounceBack>(lattice, geometry, 5);
+  boundary::set<boundary::BounceBack>(lattice, geometry, 5);
   #endif
 
   lattice.setParameter<descriptors::OMEGA>(lattice.getUnitConverter().getLatticeRelaxationFrequency());
@@ -183,22 +184,7 @@ void prepareLattice(MyCase& myCase)
 }
 
 void setInitialValues(MyCase& myCase) {
-  using T = MyCase::value_t;
-  auto& lattice = myCase.getLattice(NavierStokes{});
-  auto& geometry = myCase.getGeometry();
-
-  auto bulkIndicator = geometry.getMaterialIndicator({1});
-
-  AnalyticalConst2D<T,T> rhoF(1);
-  std::vector<T> velocity(2, T(0));
-  AnalyticalConst2D<T,T> uF(velocity);
-
-  // Initialize all values of distribution functions to their local equilibrium
-  lattice.defineRhoU(bulkIndicator, rhoF, uF);
-  lattice.iniEquilibrium(bulkIndicator, rhoF, uF);
-
-  // Make the lattice ready for simulation
-  lattice.initialize();
+  myCase.getLattice(NavierStokes()).initialize();
 }
 
 // Generates a slowly increasing inflow for the first iTMaxStart timesteps
@@ -211,29 +197,22 @@ void setTemporalValues(MyCase& myCase,
   auto& geometry   = myCase.getGeometry();
 
   const T maxPhysT   = parameters.get<parameters::MAX_PHYS_T>();
-  const T physDeltaX = 2.*parameters.get<parameters::RADIUS_CYLINDER>()/parameters.get<parameters::RESOLUTION>();
+  const T physDeltaX = 2*parameters.get<parameters::RADIUS_CYLINDER>()
+                     /   parameters.get<parameters::RESOLUTION>();
 
   // No of time steps for smooth start-up
-  std::size_t iTmaxStart = lattice.getUnitConverter().getLatticeTime(maxPhysT*parameters.get<parameters::RAMP_UP_END_FRACTION>());
-  std::size_t iTupdate   = lattice.getUnitConverter().getLatticeTime(parameters.get<parameters::RAMP_UP_UPDATE>());
+  std::size_t iTmaxStart = lattice.getUnitConverter().getLatticeTime(
+    maxPhysT*parameters.get<parameters::RAMP_UP_END_FRACTION>());
+  std::size_t iTupdate   = lattice.getUnitConverter().getLatticeTime(
+    parameters.get<parameters::RAMP_UP_UPDATE>());
 
-  if (iT%iTupdate==0 && iT<= iTmaxStart) {
-    // Smooth start curve, sinus
-    // SinusStartScale<T,int> StartScale(iTmaxStart, T(1));
-
-    // Smooth start curve, polynomial
-    PolynomialStartScale<T,T> StartScale(iTmaxStart, T(1));
-
-    // Creates and sets the Poiseuille inflow profile using functors
-    T iTvec[1] = {T(iT)};
-    T frac[1]  = {};
-    StartScale(frac, iTvec);
-    T maxVelocity   = lattice.getUnitConverter().getCharLatticeVelocity()*3./2.*frac[0];
-    T distance2Wall = physDeltaX/2.;
+  if (iT % iTupdate == 0 && iT <= iTmaxStart) {
+    T frac{};
+    PolynomialStartScale<T,std::size_t>(iTmaxStart, T(1))(&frac, &iT);
+    T maxVelocity   = 1.5*lattice.getUnitConverter().getCharPhysVelocity()*frac;
+    T distance2Wall = 0.5*physDeltaX;
     Poiseuille2D<T> poiseuilleU(geometry, 3, maxVelocity, distance2Wall);
-
-    lattice.defineU(geometry, 3, poiseuilleU);
-
+    momenta::setVelocity(lattice, geometry.getMaterialIndicator(3), poiseuilleU);
     lattice.setProcessingContext<Array<momenta::FixedVelocityMomentumGeneric::VELOCITY>>(
       ProcessingContext::Simulation);
   }

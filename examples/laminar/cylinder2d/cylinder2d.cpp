@@ -44,7 +44,6 @@ using namespace olb::descriptors;
 using namespace olb::graphics;
 using namespace olb::names;
 
-
 int main(int argc, char* argv[])
 {
   initialize(&argc, &argv);

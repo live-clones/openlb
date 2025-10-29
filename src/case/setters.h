@@ -1,0 +1,156 @@
+/*  This file is part of the OpenLB library
+ *
+ *  Copyright (C) 2025 Adrian Kummerlaender
+ *  E-mail contact: info@openlb.net
+ *  The most recent release of OpenLB can be downloaded at
+ *  <http://www.openlb.net/>
+ *
+ *  This program is free software; you can redistribute it and/or
+ *  modify it under the terms of the GNU General Public License
+ *  as published by the Free Software Foundation; either version 2
+ *  of the License, or (at your option) any later version.
+ *
+ *  This program is distributed in the hope that it will be useful,
+ *  but WITHOUT ANY WARRANTY; without even the implied warranty of
+ *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ *  GNU General Public License for more details.
+ *
+ *  You should have received a copy of the GNU General Public
+ *  License along with this program; if not, write to the Free
+ *  Software Foundation, Inc., 51 Franklin Street, Fifth Floor,
+ *  Boston, MA  02110-1301, USA.
+ */
+
+#ifndef CASE_SETTERS_H
+#define CASE_SETTERS_H
+
+#include <concepts>
+
+namespace olb {
+
+namespace fields {
+
+template <typename FIELD, typename T, typename DESCRIPTOR, typename VALUE>
+void set(SuperLattice<T,DESCRIPTOR>& sLattice,
+         FunctorPtr<SuperIndicatorF<T,DESCRIPTOR::d>>&& domainI,
+         VALUE fieldD)
+  requires std::constructible_from<FieldD<T,DESCRIPTOR,FIELD>, VALUE>
+{
+  AnalyticalConst<DESCRIPTOR::d,T,T> fieldF(fieldD);
+  sLattice.template defineField<FIELD>(std::move(domainI), fieldF);
+}
+
+template <typename FIELD, typename T, typename DESCRIPTOR, typename VALUE>
+void setVelocity(SuperLattice<T,DESCRIPTOR>& sLattice,
+                 FunctorPtr<SuperIndicatorF<T,DESCRIPTOR::d>>&& domainI,
+                 VALUE fieldD)
+  requires std::constructible_from<FieldD<T,DESCRIPTOR,FIELD>, VALUE>
+{
+  AnalyticalConst<DESCRIPTOR::d,T,T> fieldF(sLattice.getUnitConverter().getLatticeVelocity(fieldD));
+  sLattice.template defineField<FIELD>(std::move(domainI), fieldF);
+}
+
+}
+
+namespace momenta {
+
+template <typename T, typename DESCRIPTOR>
+void setDensity(SuperLattice<T,DESCRIPTOR>& sLattice,
+                FunctorPtr<SuperIndicatorF<T,DESCRIPTOR::d>>&& domainI,
+                AnalyticalF<DESCRIPTOR::d,T,T>& densityF)
+{
+  const auto& converter = sLattice.getUnitConverter();
+  AnalyticCalcMultiplication<DESCRIPTOR::d,T,T> scaledDensityF(1/converter.getConversionFactorDensity(),
+                                                               densityF);
+  sLattice.defineRho(std::move(domainI), scaledDensityF);
+}
+
+template <typename T, typename DESCRIPTOR, typename VALUE>
+void setDensity(SuperLattice<T,DESCRIPTOR>& sLattice,
+                FunctorPtr<SuperIndicatorF<T,DESCRIPTOR::d>>&& domainI,
+                VALUE densityD)
+  requires std::constructible_from<FieldD<T,DESCRIPTOR,descriptors::SCALAR>, VALUE>
+{
+  AnalyticalConst<DESCRIPTOR::d,T,T> densityF(densityD);
+  setDensity(sLattice, std::move(domainI), densityF);
+}
+
+template <typename T, typename DESCRIPTOR>
+void setVelocity(SuperLattice<T,DESCRIPTOR>& sLattice,
+                 FunctorPtr<SuperIndicatorF<T,DESCRIPTOR::d>>&& domainI,
+                 AnalyticalF<DESCRIPTOR::d,T,T>& velocityF)
+{
+  const auto& converter = sLattice.getUnitConverter();
+  AnalyticCalcMultiplication<DESCRIPTOR::d,T,T> scaledVelocityF(1/converter.getConversionFactorVelocity(),
+                                                                velocityF);
+  sLattice.defineU(std::move(domainI), scaledVelocityF);
+}
+
+template <typename T, typename DESCRIPTOR, typename VALUE>
+void setVelocity(SuperLattice<T,DESCRIPTOR>& sLattice,
+                 FunctorPtr<SuperIndicatorF<T,DESCRIPTOR::d>>&& domainI,
+                 VALUE velocityD)
+  requires std::constructible_from<FieldD<T,DESCRIPTOR,descriptors::VELOCITY>, VALUE>
+{
+  AnalyticalConst<DESCRIPTOR::d,T,T> velocityF(velocityD);
+  setVelocity(sLattice, std::move(domainI), velocityF);
+}
+
+template <typename T, typename DESCRIPTOR>
+void setTemperature(SuperLattice<T,DESCRIPTOR>& sLattice,
+                    FunctorPtr<SuperIndicatorF<T,DESCRIPTOR::d>>&& domainI,
+                    AnalyticalF<DESCRIPTOR::d,T,T>& temperatureF)
+{
+  const auto& converter = sLattice.getUnitConverter();
+  AnalyticCalcMinus<DESCRIPTOR::d,T,T> relativeTemperatureF(temperatureF, converter.getCharPhysLowTemperature());
+  AnalyticCalcMultiplication<DESCRIPTOR::d,T,T> scaledTemperatureF(1/converter.getConversionFactorTemperature(),
+                                                               relativeTemperatureF);
+  AnalyticCalcPlus<DESCRIPTOR::d,T,T> latticeTemperatureF(scaledTemperatureF, 0.5);
+  sLattice.defineRho(std::move(domainI), scaledTemperatureF);
+}
+
+template <typename T, typename DESCRIPTOR, typename VALUE>
+void setTemperature(SuperLattice<T,DESCRIPTOR>& sLattice,
+                    FunctorPtr<SuperIndicatorF<T,DESCRIPTOR::d>>&& domainI,
+                    VALUE temperatureD)
+  requires std::constructible_from<FieldD<T,DESCRIPTOR,descriptors::SCALAR>, VALUE>
+{
+  AnalyticalConst<DESCRIPTOR::d,T,T> temperatureF(temperatureD);
+  setTemperature(sLattice, std::move(domainI), temperatureF);
+}
+
+}
+
+namespace dynamics {
+
+template <typename T, typename DESCRIPTOR, typename ID>
+void set(SuperLattice<T,DESCRIPTOR>& sLattice,
+         FunctorPtr<SuperIndicatorF<T,DESCRIPTOR::d>>&& domainI,
+         ID&& dynamics)
+  requires std::constructible_from<DynamicsPromise<T,DESCRIPTOR>, ID>
+{
+  sLattice.defineDynamics(std::move(domainI), std::move(dynamics));
+}
+
+template <template<typename...> typename DYNAMICS, typename T, typename DESCRIPTOR>
+void set(SuperLattice<T,DESCRIPTOR>& sLattice,
+         FunctorPtr<SuperIndicatorF<T,DESCRIPTOR::d>>&& domainI)
+{
+  set(sLattice, std::move(domainI), meta::id<DYNAMICS<T,DESCRIPTOR>>{});
+}
+
+template <template<typename...> typename DYNAMICS, typename T, typename DESCRIPTOR>
+void set(SuperLattice<T,DESCRIPTOR>& sLattice,
+         SuperGeometry<T,DESCRIPTOR::d>& sGeometry,
+         int material)
+{
+  set(sLattice,
+      sGeometry.getMaterialIndicator(material),
+      meta::id<DYNAMICS<T,DESCRIPTOR>>{});
+}
+
+}
+
+}
+
+#endif

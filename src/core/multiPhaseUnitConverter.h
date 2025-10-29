@@ -28,17 +28,13 @@
 #ifndef MULTIPHASEUNITCONVERTER_H
 #define MULTIPHASEUNITCONVERTER_H
 
-
 #include <math.h>
 #include "io/ostreamManager.h"
 #include "core/util.h"
 #include "io/xmlReader.h"
 #include "core/unitConverter.h"
 
-// All OpenLB code is contained in this namespace.
 namespace olb {
-
-
 
 /** Conversion between physical and lattice units, as well as discretization for multiple component lattices.
 * Be aware of the nomenclature:
@@ -49,17 +45,11 @@ namespace olb {
 * For the basic units of length L, time T, mass M, particle number N and temperature theta,
 * 5 elemental conversion factors are deduced from EoS parameters a,b and R, molar mass M and surface tension sigma.
 * For multiple components, the conversion factors are computed for the lightest condensable component.
-*
-* TODO: Extend documentation for MultiPhaseUnitConverter
 */
 template <typename T, typename DESCRIPTOR>
-class MultiPhaseUnitConverter : public UnitConverter<T, DESCRIPTOR> {
-public:
-  /** Documentation of constructor:
-    * TODO: Extend constructur documentation
-    */
-  constexpr MultiPhaseUnitConverter(
-    size_t resolution,
+struct MultiPhaseUnitConverter : public UnitConverter<T, DESCRIPTOR> {
+  MultiPhaseUnitConverter(
+    std::size_t resolution,
     T charPhysLength,
     T charPhysVelocity,
     T physViscosity,
@@ -77,121 +67,24 @@ public:
         charPhysVelocity,
         physViscosity,
         physMolarMass*1/(physEoSb*10.5/1.),
-        charPhysPressure),
-      _conversionEoSa(physEoSa/latticeEoSa),
-      _conversionEoSb(physEoSb*10.5/1.),
-      _conversionMolarMass(physMolarMass*1),
-      _conversionSurfaceTension(this->_conversionLength*_conversionEoSa*util::pow(_conversionEoSb, -2)),
-      _conversionTemperature(_conversionEoSa/_conversionEoSb/_conversionGasConstant),
-      _physEoSa(physEoSa),
-      _physEoSb(physEoSb),
-      _physMolarMass(physMolarMass),
-      _physSurfaceTension(physSurfaceTension),
-      _charPhysTemperature(charPhysTemperature),
-      _latticeSurfaceTension( physSurfaceTension / _conversionSurfaceTension ),
-      clout(std::cout,"MultiPhaseUnitConv")
+        charPhysPressure)
   {
+    this->_conversionEoSa = physEoSa/latticeEoSa;
+    this->_conversionEoSb = physEoSb*10.5/1.;
+    this->_conversionMolarMass = physMolarMass*1;
+    this->_conversionSurfaceTension = this->_conversionLength*this->_conversionEoSa*util::pow(this->_conversionEoSb.value(), -2);
+    this->_conversionTemperature = this->_conversionEoSa/this->_conversionEoSb/this->_conversionGasConstant;
+    this->_physEoSav = physEoSa;
+    this->_physEoSbv = physEoSb;
+    this->_physMolarMass = physMolarMass;
+    this->_physSurfaceTension = physSurfaceTension;
+    this->_charPhysTemperature = charPhysTemperature;
+    this->_latticeSurfaceTension = physSurfaceTension / this->_conversionSurfaceTension;
   };
 
-  /// return characteristic temperature in physical units
-  constexpr T getCharPhysTemperature(  ) const override
-  {
-    return _charPhysTemperature;
-  };
-  /// return equation of state parameter a in physical units
-  constexpr T getPhysEoSa(  ) const override
-  {
-    return _physEoSa;
-  };
-  /// return equation of state parameter b in physical units
-  constexpr T getPhysEoSb(  ) const override
-  {
-    return _physEoSb;
-  };
-  /// return molar mass in physical units
-  constexpr T getPhysMolarMass(  ) const override
-  {
-    return _physMolarMass;
-  };
-  /// return surface tension in physical units
-  constexpr T getPhysSurfaceTension(  ) const override
-  {
-    return _physSurfaceTension;
-  };
-  /// return characteristic temperature in physical units
-  constexpr T getPhysTemperature(  ) const override
-  {
-    return _charPhysTemperature;
-  };
+  using UnitConverter<T,DESCRIPTOR>::print;
 
-  /// access (read-only) to private member variable
-  constexpr T getConversionFactorEoSa() const override
-  {
-    return _conversionEoSa;
-  };
-
-  /// access (read-only) to private member variable
-  constexpr T getConversionFactorEoSb() const override
-  {
-    return _conversionEoSb;
-  };
-
-  /// access (read-only) to private member variable
-  constexpr T getConversionFactorMolarMass() const override
-  {
-    return _conversionMolarMass;
-  };
-
-  /// access (read-only) to private member variable
-  constexpr T getConversionFactorGasConstant() const override
-  {
-    return _conversionGasConstant;
-  };
-
-  /// access (read-only) to private member variable
-  constexpr T getConversionFactorSurfaceTension() const override
-  {
-    return _conversionSurfaceTension;
-  };
-
-  /// access (read-only) to private member variable
-  constexpr T getConversionFactorTemperature(  ) const override
-  {
-    return _conversionTemperature;
-  };
-
-  /// return lattice surface tension for parameter fitting
-  constexpr T getLatticeSurfaceTension(  ) const override
-  {
-    return _latticeSurfaceTension;
-  };
-
-/// nice terminal output for conversion factors, characteristical and physical data
-  void print() const override;
-
-
-
-protected:
-  // conversion factors
-  const T _conversionEoSa;                      // kg m^5 / s^2 mol^2
-  const T _conversionEoSb;                      // m^3 / mol
-  const T _conversionMolarMass;                 // kg / mol
-  const T _conversionGasConstant = 8.314462618; // J / mol K = kg m^2 / s^2 mol K
-  const T _conversionSurfaceTension;            // J / m^2 = kg / s^2
-  const T _conversionTemperature;               // K
-
-  // physical units, e.g characteristic or reference values
-  const T _physEoSa;                            // kg m^5 / s^2 mol^2
-  const T _physEoSb;                            // m^3 / mol
-  const T _physMolarMass;                       // kg / mol
-  const T _physSurfaceTension;                  // J / m^2 = kg / s^2
-  const T _charPhysTemperature;                 // K
-
-  // lattice units, discretization parameters
-  const T _latticeSurfaceTension;               // -
-
-private:
-  mutable OstreamManager clout;
+  void print(std::ostream& clout) const override;
 };
 
 /** Conversion between physical and lattice units, as well as discretization for multiple component lattices.
@@ -203,17 +96,11 @@ private:
 * For the basic units of length L, time T, mass M, particle number N and temperature theta,
 * 5 elemental conversion factors are deduced from EoS parameters a,b and R, molar mass M and surface tension sigma.
 * For multiple components, the conversion factors are computed for the lightest condensable component.
-*
-* TODO: Extend documentation for MultiPhaseUnitConverter
 */
 template <typename T, typename DESCRIPTOR>
-class MultiPhaseUnitConverterFromRelaxationTime : public UnitConverter<T, DESCRIPTOR> {
-public:
-  /** Documentation of constructor:
-    * TODO: Extend constructur documentation
-    */
-  constexpr MultiPhaseUnitConverterFromRelaxationTime(
-    size_t resolution,
+struct MultiPhaseUnitConverterFromRelaxationTime : public UnitConverter<T, DESCRIPTOR> {
+  MultiPhaseUnitConverterFromRelaxationTime(
+    std::size_t resolution,
     T latticeRelaxationTime,
     T latticeDensity,
     T charPhysLength,
@@ -226,65 +113,21 @@ public:
         0,
         physViscosity,
         (physDensity/latticeDensity),
-        charPhysPressure),
-      _conversionSurfaceTension(
+        charPhysPressure)
+  {
+    this->_conversionSurfaceTension =
         this->_conversionDensity *
         this->_conversionViscosity * this->_conversionViscosity /
-        this->_conversionLength ),
-      _conversionChemicalPotential( this->_conversionVelocity * this->_conversionVelocity ),
-      clout(std::cout,"MultiPhaseUnitConv")
-  {
-  };
+        this->_conversionLength;
+    this->_conversionChemicalPotential = this->_conversionVelocity * this->_conversionVelocity;
+  }
 
-  /// access (read-only) to private member variable
-  constexpr T getConversionFactorSurfaceTension() const override
-  {
-    return _conversionSurfaceTension;
-  };
+  using UnitConverter<T,DESCRIPTOR>::print;
 
-  /// access (read-only) to private member variable
-  constexpr T getConversionFactorChemicalPotential() const override
-  {
-    return _conversionChemicalPotential;
-  };
+  void print(std::ostream& clout) const override;
 
-  /// compute relaxation time from physical viscosity
-  constexpr T computeRelaxationTimefromPhysViscosity( T userViscosity ) const override
-  {
-    return 0.5 + descriptors::invCs2<T,DESCRIPTOR>() *
-                 userViscosity / this->_conversionViscosity;
-  };
-
-  /// compute lattice surface tension from physical one
-  constexpr T computeLatticeSurfaceTension( T userSurfaceTension ) const override
-  {
-    return userSurfaceTension / this->_conversionSurfaceTension;
-  };
-
-  /// compute Reynolds from kinematic viscosity
-  constexpr T computeReynolds( T userVelocity, T userLength, T userViscosity ) const override
-  {
-    return userVelocity * userLength / userViscosity;
-  };
-
-  /// compute Weber
-  constexpr T computeWeber( T userVelocity, T userLength, T userSurfaceTension ) const override
-  {
-    return userLength * userVelocity * userVelocity / userSurfaceTension;
-  };
-
-/// nice terminal output for conversion factors, characteristical and physical data
-  void print() const override;
-
-protected:
-  // conversion factors
-  const T _conversionSurfaceTension;            // J / m^2 = kg / s^2
-  const T _conversionChemicalPotential;         // J / kg = m^2 / s^2
-
-private:
-  mutable OstreamManager clout;
 };
 
-}  // namespace olb
+}
 
 #endif

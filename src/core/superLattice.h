@@ -180,14 +180,7 @@ public:
   /// Replaces internal unit converter by copying the given converter
   template <typename _DESCRIPTOR>
   void setUnitConverter(const UnitConverter<T,_DESCRIPTOR>& converter) {
-    _converter.reset(new UnitConverter<T,DESCRIPTOR>(
-      (T)   converter.getPhysDeltaX(),
-      (T)   converter.getPhysDeltaT(),
-      (T)   converter.getCharPhysLength(),
-      (T)   converter.getCharPhysVelocity(),
-      (T)   converter.getPhysViscosity(),
-      (T)   converter.getPhysDensity()
-    ));
+    _converter.reset(new UnitConverter<T,DESCRIPTOR>(converter));
   }
   /// Replaces internal unit converter by taking ownership of the given converter
   void setUnitConverter(UnitConverter<T,DESCRIPTOR>* converter) {

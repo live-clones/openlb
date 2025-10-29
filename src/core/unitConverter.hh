@@ -40,52 +40,52 @@ void UnitConverter<T, DESCRIPTOR>::print(std::ostream& clout) const
 {
   clout << "----------------- UnitConverter information -----------------" << std::endl;
   clout << "-- Parameters:" << std::endl;
-  clout << "Resolution:                       N=              " << getResolution() << std::endl;
-  clout << "Lattice velocity:                 latticeU=       " << getCharLatticeVelocity() << std::endl;
-  clout << "Lattice relaxation frequency:     omega=          " << getLatticeRelaxationFrequency(  ) << std::endl;
-  clout << "Lattice relaxation time:          tau=            " << getLatticeRelaxationTime() << std::endl;
-  clout << "Characteristical length(m):       charL=          " << getCharPhysLength() << std::endl;
-  clout << "Characteristical speed(m/s):      charU=          " << getCharPhysVelocity() << std::endl;
-  clout << "Phys. kinematic viscosity(m^2/s): charNu=         " << getPhysViscosity() << std::endl;
-  clout << "Phys. density(kg/m^d):            charRho=        " << getPhysDensity() << std::endl;
-  clout << "Characteristical pressure(N/m^2): charPressure=   " << getCharPhysPressure() << std::endl;
-  clout << "Mach number:                      machNumber=     " << getMachNumber() << std::endl;
-  clout << "Reynolds number:                  reynoldsNumber= " << getReynoldsNumber() << std::endl;
-  clout << "Knudsen number:                   knudsenNumber=  " << getKnudsenNumber() << std::endl;
-  clout << "Characteristical CFL number:      charCFLnumber=  " << getCharCFLnumber() << std::endl;
+  clout << "Resolution:                       N=              " << this->getResolution() << std::endl;
+  clout << "Lattice velocity:                 latticeU=       " << this->getCharLatticeVelocity() << std::endl;
+  clout << "Lattice relaxation frequency:     omega=          " << this->getLatticeRelaxationFrequency(  ) << std::endl;
+  clout << "Lattice relaxation time:          tau=            " << this->getLatticeRelaxationTime() << std::endl;
+  clout << "Characteristical length(m):       charL=          " << this->getCharPhysLength() << std::endl;
+  clout << "Characteristical speed(m/s):      charU=          " << this->getCharPhysVelocity() << std::endl;
+  clout << "Phys. kinematic viscosity(m^2/s): charNu=         " << this->getPhysViscosity() << std::endl;
+  clout << "Phys. density(kg/m^d):            charRho=        " << this->getPhysDensity() << std::endl;
+  clout << "Characteristical pressure(N/m^2): charPressure=   " << this->getCharPhysPressure() << std::endl;
+  clout << "Mach number:                      machNumber=     " << this->getMachNumber() << std::endl;
+  clout << "Reynolds number:                  reynoldsNumber= " << this->getReynoldsNumber() << std::endl;
+  clout << "Knudsen number:                   knudsenNumber=  " << this->getKnudsenNumber() << std::endl;
+  clout << "Characteristical CFL number:      charCFLnumber=  " << this->getCharCFLnumber() << std::endl;
 
   clout << std::endl;
   clout << "-- Conversion factors:" << std::endl;
-  clout << "Voxel length(m):                  physDeltaX=     " << getConversionFactorLength() << std::endl;
-  clout << "Time step(s):                     physDeltaT=     " << getConversionFactorTime() << std::endl;
-  clout << "Velocity factor(m/s):             physVelocity=   " << getConversionFactorVelocity() << std::endl;
-  clout << "Density factor(kg/m^3):           physDensity=    " << getConversionFactorDensity() <<  std::endl;
-  clout << "Mass factor(kg):                  physMass=       " << getConversionFactorMass() << std::endl;
-  clout << "Viscosity factor(m^2/s):          physViscosity=  " << getConversionFactorViscosity() << std::endl;
-  clout << "Force factor(N):                  physForce=      " << getConversionFactorForce() << std::endl;
-  clout << "Pressure factor(N/m^2):           physPressure=   " << getConversionFactorPressure() << std::endl;
+  clout << "Voxel length(m):                  physDeltaX=     " << this->getConversionFactorLength() << std::endl;
+  clout << "Time step(s):                     physDeltaT=     " << this->getConversionFactorTime() << std::endl;
+  clout << "Velocity factor(m/s):             physVelocity=   " << this->getConversionFactorVelocity() << std::endl;
+  clout << "Density factor(kg/m^3):           physDensity=    " << this->getConversionFactorDensity() <<  std::endl;
+  clout << "Mass factor(kg):                  physMass=       " << this->getConversionFactorMass() << std::endl;
+  clout << "Viscosity factor(m^2/s):          physViscosity=  " << this->getConversionFactorViscosity() << std::endl;
+  clout << "Force factor(N):                  physForce=      " << this->getConversionFactorForce() << std::endl;
+  clout << "Pressure factor(N/m^2):           physPressure=   " << this->getConversionFactorPressure() << std::endl;
 
   clout << "-------------------------------------------------------------" << std::endl;
 
-  if ( getLatticeRelaxationTime() < T(0.55) && getCharLatticeVelocity() > (T(8) * (getLatticeRelaxationTime() - T(0.5)) + T(1.e-8)) ) {
-    T tauStable = getCharLatticeVelocity() / T(8) + T(0.5);
-    T timeToCell = getConversionFactorTime() / getConversionFactorLength();
-    if (getCharLatticeVelocity() >= T(0.3)) {
+  if (this->getLatticeRelaxationTime() < T(0.55) && this->getCharLatticeVelocity() > (T(8) * (this->getLatticeRelaxationTime() - T(0.5)) + T(1.e-8)) ) {
+    T tauStable = this->getCharLatticeVelocity() / T(8) + T(0.5);
+    T timeToCell = this->getConversionFactorTime() / this->getConversionFactorLength();
+    if (this->getCharLatticeVelocity() >= T(0.3)) {
       tauStable = T(0.15) / T(8) + T(0.5);
-      timeToCell = T(0.15) / getCharPhysVelocity();
+      timeToCell = T(0.15) / this->getCharPhysVelocity();
     }
-    T dxNew = timeToCell * getPhysViscosity() * descriptors::invCs2<T,DESCRIPTOR>() / (tauStable - T(0.5));
+    T dxNew = timeToCell * this->getPhysViscosity() * descriptors::invCs2<T,DESCRIPTOR>() / (tauStable - T(0.5));
     T dtNew = dxNew * timeToCell;
     clout << "WARNING:" << std::endl;
-    clout << "Potentially UNSTABLE combination of relaxation time (tau=" << getLatticeRelaxationTime() << ")" << std::endl;
-    clout << "and characteristical CFL number (lattice velocity) charCFLnumber=" << getCharCFLnumber() << "!" << std::endl;
-    clout << "Potentially maximum characteristical CFL number (maxCharCFLnumber=" << T(8)*(getLatticeRelaxationTime() - T(0.5)) << ")" << std::endl;
-    clout << "Actual characteristical CFL number (charCFLnumber=" << getCharCFLnumber() << ") > " << T(8)*(getLatticeRelaxationTime() - T(0.5)) << std::endl;
-    if (getCharLatticeVelocity() >= T(0.3)) {
+    clout << "Potentially UNSTABLE combination of relaxation time (tau=" << this->getLatticeRelaxationTime() << ")" << std::endl;
+    clout << "and characteristical CFL number (lattice velocity) charCFLnumber=" << this->getCharCFLnumber() << "!" << std::endl;
+    clout << "Potentially maximum characteristical CFL number (maxCharCFLnumber=" << T(8)*(this->getLatticeRelaxationTime() - T(0.5)) << ")" << std::endl;
+    clout << "Actual characteristical CFL number (charCFLnumber=" << this->getCharCFLnumber() << ") > " << T(8)*(this->getLatticeRelaxationTime() - T(0.5)) << std::endl;
+    if (this->getCharLatticeVelocity() >= T(0.3)) {
       clout << "Please make the CFL number smaller than 0.3!" << std::endl;
     }
     clout << "Please reduce the the cell size or the time step size!" << std::endl;
-    if (getCharLatticeVelocity() >= T(0.3)) {
+    if (this->getCharLatticeVelocity() >= T(0.3)) {
       clout << "We recommend to use the cell size of " << dxNew << " m and the time step size of " << dtNew << " s (CFL = 0.15)." << std::endl;
     } else {
       clout << "We recommend to use the cell size of " << dxNew << " m and the time step size of " << dtNew << " s." << std::endl;
@@ -98,14 +98,15 @@ void UnitConverter<T, DESCRIPTOR>::print(std::ostream& clout) const
 template <typename T, class DESCRIPTOR>
 void UnitConverter<T, DESCRIPTOR>::print() const
 {
+  OstreamManager clout(std::cout, "UnitConverter");
   print(clout);
 }
 
 template <typename T, typename DESCRIPTOR>
 void UnitConverter<T, DESCRIPTOR>::write(std::string const& fileName) const
 {
+  OstreamManager clout(std::cout, "UnitConverter");
   std::string dataFile = singleton::directories().getLogOutDir() + fileName + ".dat";
-
   if (singleton::mpi().isMainProcessor()) {
     std::ofstream fout(dataFile.c_str(), std::ios::trunc);
     if (!fout) {
@@ -122,6 +123,7 @@ template<typename T, typename DESCRIPTOR>
 UnitConverter<T, DESCRIPTOR>* createUnitConverter(XMLreader const& params)
 {
   OstreamManager clout(std::cout,"createUnitConverter");
+
   params.setWarningsOn(false);
 
   T physDeltaX{};
