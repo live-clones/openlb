@@ -741,41 +741,44 @@ public:
   };
 
   // from LinElaUnitConverter
-  virtual T getEpsilon() const {
-    throw std::logic_error("Undefined");
+  T getCharPhysDisplacement( ) const {
+    return _charPhysDisplacement;
+  }
+  T getLatticeShearModulus( ) const {
+    return _shearModulus;
   };
-  virtual T getCharPhysDisplacement() const {
-    throw std::logic_error("Undefined");
+  T getPhysShearModulus( ) const {
+    return _shearModulus * (_conversionLength * _conversionLength * _dampingFactor) / _conversionTime;
   };
-  virtual T getLatticeShearModulus() const {
-    throw std::logic_error("Undefined");
+  T getLatticeBulkModulus( ) const {
+    return _bulkModulus;
   };
-  virtual T getPhysShearModulus() const {
-    throw std::logic_error("Undefined");
+  T getPhysBulkModulus( ) const {
+    return _bulkModulus * (_conversionLength * _conversionLength * _dampingFactor) / _conversionTime;
   };
-  virtual T getLatticeBulkModulus() const {
-    throw std::logic_error("Undefined");
+  T getLatticeLambda( ) const {
+    return _lambda;
   };
-  virtual T getPhysBulkModulus() const {
-    throw std::logic_error("Undefined");
+  T getPhysLambda( ) const {
+    return _lambda * (_conversionLength * _conversionLength * _dampingFactor) / _conversionTime;
   };
-  virtual T getLatticeLambda() const {
-    throw std::logic_error("Undefined");
+  T getLatticeYoungsModulus() const {
+    return _youngsModulus;
   };
-  virtual T getPhysLambda() const {
-    throw std::logic_error("Undefined");
+  T getEpsilon() const {
+    return _epsilon;
   };
-  virtual T getLatticeYoungsModulus() const {
-    throw std::logic_error("Undefined");
+  T getCharPhysTime() const {
+    return _charPhysTime;
   };
-  virtual T getPhysYoungsModulus() const {
-    throw std::logic_error("Undefined");
+  T getPhysYoungsModulus() const {
+    return _youngsModulus * (_conversionLength * _conversionLength * _dampingFactor) / _conversionTime;
   };
-  virtual T getDampingFactor() const {
-    throw std::logic_error("Undefined");
+  T getDampingFactor() const {
+    return _dampingFactor;
   };
-  virtual T getPoissonRatio() const {
-    throw std::logic_error("Undefined");
+  T getPoissonRatio() const {
+    return _poissonRatio;
   };
 
 protected:
@@ -866,6 +869,17 @@ protected:
   OptionalValue<T> _latticeAbsorption;
   OptionalValue<T> _latticeScattering;
   OptionalValue<T> _latticeDiffusion;
+
+  // linear elasticity factors
+  OptionalValue<T> _charPhysTime;
+  OptionalValue<T> _charPhysDisplacement;
+  OptionalValue<T> _epsilon;
+  OptionalValue<T> _youngsModulus;
+  OptionalValue<T> _bulkModulus;
+  OptionalValue<T> _shearModulus;
+  OptionalValue<T> _lambda;
+  OptionalValue<T> _poissonRatio;
+  OptionalValue<T> _dampingFactor;
 
 };
 
