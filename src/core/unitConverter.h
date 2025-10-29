@@ -486,11 +486,6 @@ public:
   {
     return (physTemperature - _charPhysLowTemperature) / _conversionTemperature + 0.5;
   };
-  /// access (read-only) to private member variable
-  T getConversionFactorTemperature() const
-  {
-    return _conversionTemperature;
-  };
 
   /// conversion from lattice to physical thermal diffusivity
   T getPhysThermalDiffusivity( T latticeThermalDiffusivity ) const
@@ -567,67 +562,77 @@ public:
 
   // from multiPhaseUnitConverter
   /// return characteristic temperature in physical units
-  virtual T getCharPhysTemperature() const {
-    throw std::logic_error("Undefined");
+  T getCharPhysTemperature(  ) const {
+    return _charPhysTemperature;
   };
   /// return equation of state parameter a in physical units
-  virtual T getPhysEoSa() const {
-    throw std::logic_error("Undefined");
-  };
-  /// return characteristic temperature in physical units
-  virtual T getPhysTemperature(  ) const  {
-    throw std::logic_error("Undefined");
+  T getPhysEoSa(  ) const {
+    return _physEoSa;
   };
   /// return equation of state parameter b in physical units
-  virtual T getPhysEoSb() const {
-    throw std::logic_error("Undefined");
+  T getPhysEoSb(  ) const {
+    return _physEoSb;
   };
   /// return molar mass in physical units
-  virtual T getPhysMolarMass() const {
-    throw std::logic_error("Undefined");
+  T getPhysMolarMass(  ) const {
+    return _physMolarMass;
   };
   /// return surface tension in physical units
-  virtual T getPhysSurfaceTension() const {
-    throw std::logic_error("Undefined");
+  T getPhysSurfaceTension(  ) const {
+    return _physSurfaceTension;
+  };
+  /// return characteristic temperature in physical units
+  T getPhysTemperature(  ) const {
+    return _charPhysTemperature;
   };
   /// access (read-only) to private member variable
-  virtual T getConversionFactorEoSa() const {
-    throw std::logic_error("Undefined");
+  T getConversionFactorEoSa() const {
+    return _conversionEoSa;
   };
   /// access (read-only) to private member variable
-  virtual T getConversionFactorEoSb() const {
-    throw std::logic_error("Undefined");
+  T getConversionFactorEoSb() const {
+    return _conversionEoSb;
   };
   /// access (read-only) to private member variable
-  virtual T getConversionFactorMolarMass() const  {
-    throw std::logic_error("Undefined");
+  T getConversionFactorMolarMass() const {
+    return _conversionMolarMass;
   };
   /// access (read-only) to private member variable
-  virtual T getConversionFactorGasConstant() const  {
-    throw std::logic_error("Undefined");
+  T getConversionFactorGasConstant() const {
+    return _conversionGasConstant;
   };
   /// access (read-only) to private member variable
-  virtual T getLatticeSurfaceTension() const  {
-    throw std::logic_error("Undefined");
+  T getConversionFactorSurfaceTension() const {
+    return _conversionSurfaceTension;
   };
-
-  virtual T getConversionFactorSurfaceTension() const {
-    throw std::logic_error("Undefined");
+  /// access (read-only) to private member variable
+  T getConversionFactorTemperature(  ) const {
+    return _conversionTemperature;
   };
-  virtual T getConversionFactorChemicalPotential() const {
-    throw std::logic_error("Undefined");
+  /// return lattice surface tension for parameter fitting
+  T getLatticeSurfaceTension(  ) const {
+    return _latticeSurfaceTension;
   };
-  virtual T computeRelaxationTimefromPhysViscosity( T userViscosity ) const {
-    throw std::logic_error("Undefined");
+  /// access (read-only) to private member variable
+  T getConversionFactorChemicalPotential() const {
+    return _conversionChemicalPotential;
   };
-  virtual T computeLatticeSurfaceTension( T userSurfaceTension ) const {
-    throw std::logic_error("Undefined");
+  /// compute relaxation time from physical viscosity
+  T computeRelaxationTimefromPhysViscosity(T userViscosity) const {
+    return 0.5 + _invCs2 *
+                 userViscosity / this->_conversionViscosity;
   };
-  virtual T computeReynolds(  T userVelocity, T userLength, T userViscosity  ) const {
-    throw std::logic_error("Undefined");
+  /// compute lattice surface tension from physical one
+  T computeLatticeSurfaceTension(T userSurfaceTension) const {
+    return userSurfaceTension / this->_conversionSurfaceTension;
   };
-  virtual T computeWeber( T userVelocity, T userLength, T userSurfaceTension ) const {
-    throw std::logic_error("Undefined");
+  /// compute Reynolds from kinematic viscosity
+  T computeReynolds(T userVelocity, T userLength, T userViscosity) const {
+    return userVelocity * userLength / userViscosity;
+  };
+  /// compute Weber
+  T computeWeber(T userVelocity, T userLength, T userSurfaceTension) const {
+    return userLength * userVelocity * userVelocity / userSurfaceTension;
   };
 
   //from powerLawUnitConverter
@@ -817,6 +822,22 @@ protected:
   OptionalValue<T> _physDiffusivity;
   OptionalValue<T> _conversionDiffusivity;
   OptionalValue<T> _latticeAdeRelaxationTime;
+
+  // MultiPhase conversion factors
+  OptionalValue<T> _conversionEoSa;                      // kg m^5 / s^2 mol^2
+  OptionalValue<T> _conversionEoSb;                      // m^3 / mol
+  OptionalValue<T> _conversionMolarMass;                 // kg / mol
+  OptionalValue<T> _conversionGasConstant = 8.314462618; // J / mol K = kg m^2 / s^2 mol K
+  OptionalValue<T> _conversionSurfaceTension;            // J / m^2 = kg / s^2
+  OptionalValue<T> _physEoSa;                            // kg m^5 / s^2 mol^2
+  OptionalValue<T> _physEoSb;                            // m^3 / mol
+  OptionalValue<T> _physEoSav;
+  OptionalValue<T> _physEoSbv;
+  OptionalValue<T> _physMolarMass;                       // kg / mol
+  OptionalValue<T> _physSurfaceTension;                  // J / m^2 = kg / s^2
+  OptionalValue<T> _charPhysTemperature;                 // K
+  OptionalValue<T> _latticeSurfaceTension;               // -
+  OptionalValue<T> _conversionChemicalPotential;         // J / kg = m^2 / s^2
 
 };
 

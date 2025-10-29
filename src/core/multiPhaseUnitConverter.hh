@@ -25,17 +25,13 @@
 #ifndef MULTIPHASEUNITCONVERTER_HH
 #define MULTIPHASEUNITCONVERTER_HH
 
-#include <fstream>
-#include <iostream>
-#include <unistd.h>
-#include "core/singleton.h"
-#include "io/fileName.h"
+#include "multiPhaseUnitConverter.h"
 
 // All OpenLB code is contained in this namespace.
 namespace olb {
 
 template <typename T, typename DESCRIPTOR>
-void MultiPhaseUnitConverter<T, DESCRIPTOR>::print() const
+void MultiPhaseUnitConverter<T, DESCRIPTOR>::print(std::ostream& clout) const
 {
   clout << "----------------- MultiPhaseUnitConverter information ------------------" << std::endl;
   clout << "-- Parameters:" << std::endl;
@@ -50,8 +46,8 @@ void MultiPhaseUnitConverter<T, DESCRIPTOR>::print() const
   clout << "Reynolds number:                            reynoldsNumber=                 " << this->getReynoldsNumber() << std::endl;
   clout << "Phys. Delta X(m):                           physDeltaX=                     " << this->getPhysDeltaX() << std::endl;
   clout << "Phys. Delta T(s):                           physDeltaT=                     " << this->getPhysDeltaT() << std::endl;
-  clout << "Phys. Surface Tension(J/m^2):               physSurfaceTension=             " << getPhysSurfaceTension() << std::endl;
-  clout << "Characteristical Phys. Temperature(K):      charPhysTemperature=            " << getCharPhysTemperature() << std::endl;
+  clout << "Phys. Surface Tension(J/m^2):               physSurfaceTension=             " << this->getPhysSurfaceTension() << std::endl;
+  clout << "Characteristical Phys. Temperature(K):      charPhysTemperature=            " << this->getCharPhysTemperature() << std::endl;
 
   clout << "----------------- Conversion factors:-----------------------------------" << std::endl;
   clout << "Voxel length(m):                            physDeltaX=                     " << this->getConversionFactorLength() << std::endl;
@@ -62,18 +58,18 @@ void MultiPhaseUnitConverter<T, DESCRIPTOR>::print() const
   clout << "Viscosity factor(m^2/s):                    physViscosity=                  " << this->getConversionFactorViscosity() << std::endl;
   clout << "Force factor(N):                            physForce=                      " << this->getConversionFactorForce() << std::endl;
   clout << "Pressure factor(N/m^2):                     physPressure=                   " << this->getConversionFactorPressure() << std::endl;
-  clout << "Equation of state a(Jm^3/mol^2):            physEoSa=                       " << getConversionFactorEoSa() << std::endl;
-  clout << "Equation of state b(m^3/mol):               physEoSb=                       " << getConversionFactorEoSb() << std::endl;
-  clout << "Molar mass(kg/mol):                         physMolarMass=                  " << getConversionFactorMolarMass() <<  std::endl;
-  clout << "Surface tension(J/m^2):                     physSurfaceTension=             " << getConversionFactorSurfaceTension() << std::endl;
-  clout << "Temperature(K):                             physTemperature=                " << getConversionFactorTemperature() << std::endl;
+  clout << "Equation of state a(Jm^3/mol^2):            physEoSa=                       " << this->getConversionFactorEoSa() << std::endl;
+  clout << "Equation of state b(m^3/mol):               physEoSb=                       " << this->getConversionFactorEoSb() << std::endl;
+  clout << "Molar mass(kg/mol):                         physMolarMass=                  " << this->getConversionFactorMolarMass() <<  std::endl;
+  clout << "Surface tension(J/m^2):                     physSurfaceTension=             " << this->getConversionFactorSurfaceTension() << std::endl;
+  clout << "Temperature(K):                             physTemperature=                " << this->getConversionFactorTemperature() << std::endl;
 
   clout << "------------------------------------------------------------------------" << std::endl;
 
 }
 
 template <typename T, typename DESCRIPTOR>
-void MultiPhaseUnitConverterFromRelaxationTime<T, DESCRIPTOR>::print() const
+void MultiPhaseUnitConverterFromRelaxationTime<T, DESCRIPTOR>::print(std::ostream& clout) const
 {
   clout << "----------------- MultiPhaseUnitConverter information ------------------" << std::endl;
   clout << "--------------------- Parameters in lattice units: ---------------------" << std::endl;
@@ -99,12 +95,12 @@ void MultiPhaseUnitConverterFromRelaxationTime<T, DESCRIPTOR>::print() const
   clout << "Viscosity factor(m^2/s):                    physViscosity=                  " << this->getConversionFactorViscosity() << std::endl;
   clout << "Force factor(N):                            physForce=                      " << this->getConversionFactorForce() << std::endl;
   clout << "Pressure factor(N/m^2):                     physPressure=                   " << this->getConversionFactorPressure() << std::endl;
-  clout << "Surface tension factor(J/m^2):              physSurfaceTension=             " << getConversionFactorSurfaceTension() << std::endl;
+  clout << "Surface tension factor(J/m^2):              physSurfaceTension=             " << this->getConversionFactorSurfaceTension() << std::endl;
 
   clout << "------------------------------------------------------------------------" << std::endl;
 
 }
 
-}  // namespace olb
+}
 
 #endif
