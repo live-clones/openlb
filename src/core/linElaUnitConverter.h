@@ -64,6 +64,8 @@ struct LinElaUnitConverter : public UnitConverter<T, DESCRIPTOR> {
 
   void print(std::ostream& clout) const override;
 
+  using UnitConverter<T,DESCRIPTOR>::print;
+
 };
 
 template <typename T, class DESCRIPTOR>

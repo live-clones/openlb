@@ -82,6 +82,8 @@ struct MultiPhaseUnitConverter : public UnitConverter<T, DESCRIPTOR> {
     this->_latticeSurfaceTension = physSurfaceTension / this->_conversionSurfaceTension;
   };
 
+  using UnitConverter<T,DESCRIPTOR>::print;
+
   void print(std::ostream& clout) const override;
 };
 
@@ -120,7 +122,8 @@ struct MultiPhaseUnitConverterFromRelaxationTime : public UnitConverter<T, DESCR
     this->_conversionChemicalPotential = this->_conversionVelocity * this->_conversionVelocity;
   }
 
-/// nice terminal output for conversion factors, characteristical and physical data
+  using UnitConverter<T,DESCRIPTOR>::print;
+
   void print(std::ostream& clout) const override;
 
 };

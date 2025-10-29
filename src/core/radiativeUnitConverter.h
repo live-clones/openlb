@@ -88,6 +88,8 @@ struct RadiativeUnitConverter : public UnitConverterFromResolutionAndRelaxationT
 
   void print(std::ostream& fout) const override;
 
+  using UnitConverter<T,DESCRIPTOR>::print;
+
 };
 
 template <typename T, class DESCRIPTOR>

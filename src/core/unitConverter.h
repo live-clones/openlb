@@ -889,9 +889,9 @@ struct UnitConverter : public UnitConverterBase<T> {
   }
 
   virtual void print(std::ostream& fout) const;
+  virtual void write(std::string const& fileName = "unitConverter") const;
 
   void print() const;
-  virtual void write(std::string const& fileName = "unitConverter") const;
 
 };
 

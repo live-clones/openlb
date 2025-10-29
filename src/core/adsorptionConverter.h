@@ -111,6 +111,8 @@ struct AdsorptionConverter : public UnitConverter<T, DESCRIPTOR> {
       clout << "-------------------------------------------------------------" << std::endl;
   }
 
+  using UnitConverter<T,DESCRIPTOR>::print;
+
 };
 
 template<typename T, typename DESCRIPTOR>
@@ -149,6 +151,8 @@ class AdsorptionConverterFromSchmidtNumberAndRelaxation : public AdsorptionConve
                                                           particleConcentration,
                                                           charPhysVelocity*particleLength/(reynoldsNumber)) {};
 
+  using UnitConverter<T,DESCRIPTOR>::print;
 };
+
 }
 #endif // OLB_APPS_FLORIAN_ADSORPTIONCONVERTER_H_
