@@ -242,6 +242,9 @@ public:
     // This calculates the lattice Knudsen number.
     // See e.g. (7.22) in "The Lattice Boltzmann Method: Principles and Practice" [kruger2017lattice].
     return getMachNumber() / getReynoldsNumber();
+
+    // ADE unit converter
+    //return this->getMachNumber()/getPecletNumber();
   }
   /// conversion from lattice to  physical length
   T getPhysLength( int latticeLength ) const
@@ -651,23 +654,25 @@ public:
 
 
   // from adeUnitConverter
-  virtual T getLatticeAdeRelaxationTime() const {
-    throw std::logic_error("Undefined");
+  /// return thermal relaxation time in lattice units
+  T getLatticeAdeRelaxationTime() const {
+    return _latticeAdeRelaxationTime;
   };
-  virtual T getLatticeAdeRelaxationFrequency() const {
-    throw std::logic_error("Undefined");
+  /// return thermal relaxation frequency in lattice units
+  T getLatticeAdeRelaxationFrequency() const {
+    return 1.0 / _latticeAdeRelaxationTime;
   };
-  virtual T getPhysDiffusivity() const {
-    throw std::logic_error("Undefined");
-  };
-  virtual T getLatticeDiffusivity() const {
-    throw std::logic_error("Undefined");
-  };
-  virtual T getConversionFactorDiffusivity() const {
-    throw std::logic_error("Undefined");
-  };
-  virtual T getPecletNumber() const {
-    throw std::logic_error("Undefined");
+  T getPhysDiffusivity() const {
+    return _physDiffusivity;
+  }
+  T getLatticeDiffusivity() const {
+    return _physDiffusivity / _conversionDiffusivity ;
+  }
+  T getConversionFactorDiffusivity() const {
+    return _conversionDiffusivity;
+  }
+  T getPecletNumber() const {
+    return getCharPhysVelocity()  * getCharPhysLength() / getPhysDiffusivity();
   };
 
   // from adsorptionUnitConverter
@@ -807,6 +812,12 @@ protected:
 
   // lattice units, discretization parameters
   OptionalValue<T> _latticeThermalRelaxationTime; // -
+
+  // ADE lattice units
+  OptionalValue<T> _physDiffusivity;
+  OptionalValue<T> _conversionDiffusivity;
+  OptionalValue<T> _latticeAdeRelaxationTime;
+
 };
 
 
@@ -877,10 +888,9 @@ public:
     static_cast<UnitConverterBase<T>&>(*this) = static_cast<const UnitConverterBase<T>&>(rhs);
   }
 
-  virtual void print() const;
+  virtual void print(std::ostream& fout) const;
 
-  void print(std::ostream& fout) const;
-
+  void print() const;
   virtual void write(std::string const& fileName = "unitConverter") const;
 
 };
