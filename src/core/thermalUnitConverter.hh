@@ -59,13 +59,13 @@ void ThermalUnitConverter<T, DESCRIPTOR, ThermalLattice>::print() const
   clout << "Phys. Delta X(m):                           physDeltaX=                     " << this->getPhysDeltaX() << std::endl;
   clout << "Phys. Delta T(s):                           physDeltaT=                     " << this->getPhysDeltaT() << std::endl;
   clout << "Characteristical pressure(N/m^2):           charPressure=                   " << this->getCharPhysPressure() << std::endl;
-  clout << "Phys. Thermal Conductivity(W/m/K):          physThermalConductivity=        " << getThermalConductivity() << std::endl;
-  clout << "Phys. specific Heat Capacity(J/kg/K):       physSpecificHeatCapacity=       " << getPhysSpecificHeatCapacity() << std::endl;
-  clout << "Phys. Thermal Expasion Coefficent(K^-1):    physThermalExpansionCoefficent= " << getPhysThermalExpansionCoefficient() << std::endl;
-  clout << "Characteristical Phys. low Temperature(K):  charPhysLowTemperature=         " << getCharPhysLowTemperature() << std::endl;
-  clout << "Characteristical Phys. high Temperature(K): charPhysHighTemperature=        " << getCharPhysHighTemperature() << std::endl;
-  clout << "Prandtl number:                             prandtlNumber=                  " << getPrandtlNumber() << std::endl;
-  clout << "Rayleigh number:                            rayleighNumber=                 " << getRayleighNumber() << std::endl;
+  clout << "Phys. Thermal Conductivity(W/m/K):          physThermalConductivity=        " << this->getThermalConductivity() << std::endl;
+  clout << "Phys. specific Heat Capacity(J/kg/K):       physSpecificHeatCapacity=       " << this->getPhysSpecificHeatCapacity() << std::endl;
+  clout << "Phys. Thermal Expasion Coefficent(K^-1):    physThermalExpansionCoefficent= " << this->getPhysThermalExpansionCoefficient() << std::endl;
+  clout << "Characteristical Phys. low Temperature(K):  charPhysLowTemperature=         " << this->getCharPhysLowTemperature() << std::endl;
+  clout << "Characteristical Phys. high Temperature(K): charPhysHighTemperature=        " << this->getCharPhysHighTemperature() << std::endl;
+  clout << "Prandtl number:                             prandtlNumber=                  " << this->getPrandtlNumber() << std::endl;
+  clout << "Rayleigh number:                            rayleighNumber=                 " << this->getRayleighNumber() << std::endl;
 
 
   clout << "-------------------------------------------------------------" << std::endl;
@@ -83,11 +83,11 @@ void ThermalUnitConverter<T, DESCRIPTOR, ThermalLattice>::print() const
   clout << "-------------------------------------------------------------" << std::endl;
 
   clout << "----------------- ThermalConversion factors:-----------------" << std::endl;
-  clout << "Temperature(K):                             temperature=                    " << getConversionFactorTemperature() << std::endl;
-  clout << "Thermal Diffusity(m^2/s):                   physThermalDiffusity=           " << getConversionFactorThermalDiffusivity() << std::endl;
-  clout << "specific Heat Capacity(J/kg):               physSpecificHeatCapacity=       " << getConversionFactorSpecificHeatCapacity() << std::endl;
-  clout << "Thermal Coductivity(W/m/K):                 physThermalConductivity=        " << getConversionFactorThermalConductivity() <<  std::endl;
-  clout << "HeatFlux(W):                                physHeatFlux=                   " << getConversionFactorHeatFlux() << std::endl;
+  clout << "Temperature(K):                             temperature=                    " << this->getConversionFactorTemperature() << std::endl;
+  clout << "Thermal Diffusity(m^2/s):                   physThermalDiffusity=           " << this->getConversionFactorThermalDiffusivity() << std::endl;
+  clout << "specific Heat Capacity(J/kg):               physSpecificHeatCapacity=       " << this->getConversionFactorSpecificHeatCapacity() << std::endl;
+  clout << "Thermal Coductivity(W/m/K):                 physThermalConductivity=        " << this->getConversionFactorThermalConductivity() <<  std::endl;
+  clout << "HeatFlux(W):                                physHeatFlux=                   " << this->getConversionFactorHeatFlux() << std::endl;
 
   clout << "-------------------------------------------------------------" << std::endl;
 

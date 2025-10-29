@@ -437,102 +437,139 @@ public:
 
   // from thermalUnitConverter
   /// return thermal relaxation time in lattice units
-  virtual T getLatticeThermalRelaxationTime(  ) const {
-    throw std::logic_error("Undefined");
+  T getLatticeThermalRelaxationTime(  ) const
+  {
+    return _latticeThermalRelaxationTime;
   };
   /// return thermal relaxation frequency in lattice units
-  virtual T getLatticeThermalRelaxationFrequency() const {
-    throw std::logic_error("Undefined");
+  T getLatticeThermalRelaxationFrequency(  ) const
+  {
+    return 1.0 / _latticeThermalRelaxationTime;
   };
+
   /// return characteristic low temperature in physical units
-  virtual T getCharPhysLowTemperature(  ) const {
-    throw std::logic_error("Undefined");
+  T getCharPhysLowTemperature(  ) const
+  {
+    return _charPhysLowTemperature;
   };
   /// return characteristic high temperature in physical units
-  virtual T getCharPhysHighTemperature(  ) const {
-    throw std::logic_error("Undefined");
+  T getCharPhysHighTemperature(  ) const
+  {
+    return _charPhysHighTemperature;
   };
   /// return characteristic temperature difference in physical units
-  virtual T getCharPhysTemperatureDifference() const {
-    throw std::logic_error("Undefined");
+  T getCharPhysTemperatureDifference(  ) const
+  {
+    return _charPhysTemperatureDifference;
   };
   /// return thermal expansion coefficient in physical units
-  virtual T getPhysThermalExpansionCoefficient() const {
-    throw std::logic_error("Undefined");
+  T getPhysThermalExpansionCoefficient(  ) const
+  {
+    return _physThermalExpansionCoefficient;
   };
   /// return thermal diffusivity in physical units
-  virtual T getPhysThermalDiffusivity(  ) const {
-    throw std::logic_error("Undefined");
+  T getPhysThermalDiffusivity(  ) const
+  {
+    return _physThermalDiffusivity;
   };
   /// return specific heat capacity in physical units
-  virtual T getPhysSpecificHeatCapacity(  ) const {
-    throw std::logic_error("Undefined");
+  T getPhysSpecificHeatCapacity(  ) const
+  {
+    return _physSpecificHeatCapacity;
   };
   /// return thermal conductivity in physical units
-  virtual T getThermalConductivity(  ) const {
-    throw std::logic_error("Undefined");
+  T getThermalConductivity(  ) const
+  {
+    return _physThermalConductivity;
   };
+
   /// conversion from lattice to physical temperature
-  virtual T getPhysTemperature( T latticeTemperature ) const {
-    throw std::logic_error("Undefined");
+  T getPhysTemperature( T latticeTemperature ) const
+  {
+    return _conversionTemperature * (latticeTemperature - 0.5) + _charPhysLowTemperature;
   };
   /// conversion from physical to lattice temperature
-  virtual T getLatticeTemperature( T physTemperature ) const {
-    throw std::logic_error("Undefined");
+  T getLatticeTemperature( T physTemperature ) const
+  {
+    return (physTemperature - _charPhysLowTemperature) / _conversionTemperature + 0.5;
   };
+  /// access (read-only) to private member variable
+  T getConversionFactorTemperature() const
+  {
+    return _conversionTemperature;
+  };
+
   /// conversion from lattice to physical thermal diffusivity
-  virtual T getPhysThermalDiffusivity( T latticeThermalDiffusivity ) const {
-    throw std::logic_error("Undefined");
+  T getPhysThermalDiffusivity( T latticeThermalDiffusivity ) const
+  {
+    return _conversionThermalDiffusivity * latticeThermalDiffusivity;
   };
   /// conversion from physical to lattice thermal diffusivity
-  virtual T getLatticeThermalDiffusivity( T physThermalDiffusivity ) const {
-    throw std::logic_error("Undefined");
+  T getLatticeThermalDiffusivity( T physThermalDiffusivity ) const
+  {
+    return physThermalDiffusivity / _conversionThermalDiffusivity;
   };
   /// access (read-only) to private member variable
-  virtual T getConversionFactorThermalDiffusivity() const {
-    throw std::logic_error("Undefined");
+  T getConversionFactorThermalDiffusivity() const
+  {
+    return _conversionThermalDiffusivity;
   };
+
+
   /// conversion from lattice to physical specific heat capacity
-  virtual T getPhysSpecificHeatCapacity( T latticeSpecificHeatCapacity ) const {
-    throw std::logic_error("Undefined");
+  T getPhysSpecificHeatCapacity( T latticeSpecificHeatCapacity ) const
+  {
+    return _conversionSpecificHeatCapacity * latticeSpecificHeatCapacity;
   };
   /// conversion from physical to lattice specific heat capacity
-  virtual T getLatticeSpecificHeatCapacity( T physSpecificHeatCapacity ) const {
-    throw std::logic_error("Undefined");
+  T getLatticeSpecificHeatCapacity( T physSpecificHeatCapacity ) const
+  {
+    return physSpecificHeatCapacity / _conversionSpecificHeatCapacity;
   };
   /// access (read-only) to private member variable
-  virtual T getConversionFactorSpecificHeatCapacity() const {
-    throw std::logic_error("Undefined");
+  T getConversionFactorSpecificHeatCapacity() const
+  {
+    return _conversionSpecificHeatCapacity;
   };
+
   /// conversion from lattice to physical thermal  conductivity
-  virtual T getPhysThermalConductivity( T latticeThermalConductivity ) const {
-    throw std::logic_error("Undefined");
+  T getPhysThermalConductivity( T latticeThermalConductivity ) const
+  {
+    return _conversionThermalConductivity * latticeThermalConductivity;
   };
   /// conversion from physical to lattice thermal  conductivity
-  virtual T getLatticeThermalConductivity( T physThermalConductivity ) const {
-    throw std::logic_error("Undefined");
+  T getLatticeThermalConductivity( T physThermalConductivity ) const
+  {
+    return physThermalConductivity / _conversionThermalConductivity;
   };
   /// access (read-only) to private member variable
-  virtual T getConversionFactorThermalConductivity() const {
-    throw std::logic_error("Undefined");
+  T getConversionFactorThermalConductivity() const
+  {
+    return _conversionThermalConductivity;
   };
+
   /// conversion from lattice to physical heat flux
-  virtual T getPhysHeatFlux( T latticeHeatFlux ) const {
-    throw std::logic_error("Undefined");
+  T getPhysHeatFlux( T latticeHeatFlux ) const
+  {
+    return _conversionHeatFlux * latticeHeatFlux;
   };
   /// conversion from physical to lattice heat flux
-  virtual T getLatticeHeatFlux( T physHeatFlux ) const {
-    throw std::logic_error("Undefined");
+  T getLatticeHeatFlux( T physHeatFlux ) const
+  {
+    return physHeatFlux / _conversionHeatFlux;
   };
   /// access (read-only) to private member variable
-  virtual T getConversionFactorHeatFlux() const {
-    throw std::logic_error("Undefined");
+  T getConversionFactorHeatFlux() const
+  {
+    return _conversionHeatFlux;
   };
-  virtual T getPrandtlNumber() const {
-    throw std::logic_error("Undefined");
+  T getPrandtlNumber() const
+  {
+    return this->_physViscosity/_physThermalDiffusivity;
   };
-  virtual T getRayleighNumber() const {
-    throw std::logic_error("Undefined");
+  T getRayleighNumber() const
+  {
+    return 9.81 * _physThermalExpansionCoefficient/this->_physViscosity/_physThermalDiffusivity * (_charPhysHighTemperature - _charPhysLowTemperature) * util::pow(this->_charPhysLength,3);
   };
 
   // from multiPhaseUnitConverter
@@ -574,10 +611,6 @@ public:
   };
   /// access (read-only) to private member variable
   virtual T getConversionFactorGasConstant() const  {
-    throw std::logic_error("Undefined");
-  };
-  /// access (read-only) to private member variable
-  virtual T getConversionFactorTemperature() const  {
     throw std::logic_error("Undefined");
   };
   /// access (read-only) to private member variable
@@ -625,7 +658,6 @@ public:
   virtual T getPowerLawIndex(  ) const {
     throw std::logic_error("Undefined");
   };
-
 
 
   // from adeUnitConverter
@@ -743,27 +775,46 @@ public:
 
 protected:
   // conversion factors
-  const T _conversionLength;      // m
-  const T _conversionTime;        // s
-  const T _conversionVelocity;    // m / s
-  const T _conversionDensity;     // kg / m^3
-  const T _conversionMass;        // kg
-  const T _conversionViscosity;   // m^2 / s
-  const T _conversionForce;       // kg m / s^2
-  const T _conversionTorque;      // kg m^2 / s^2
-  const T _conversionPressure;    // kg / m s^2
+  T _conversionLength;      // m
+  T _conversionTime;        // s
+  T _conversionVelocity;    // m / s
+  T _conversionDensity;     // kg / m^3
+  T _conversionMass;        // kg
+  T _conversionViscosity;   // m^2 / s
+  T _conversionForce;       // kg m / s^2
+  T _conversionTorque;      // kg m^2 / s^2
+  T _conversionPressure;    // kg / m s^2
 
   // physical units, e.g characteristic or reference values
-  const T _charPhysLength;        // m
-  const T _charPhysVelocity;      // m / s
-  const T _physViscosity;         // m^2 / s
-  const T _physDensity;           // kg / m^3
-  const T _charPhysPressure;      // kg / m s^2
+  T _charPhysLength;        // m
+  T _charPhysVelocity;      // m / s
+  T _physViscosity;         // m^2 / s
+  T _physDensity;           // kg / m^3
+  T _charPhysPressure;      // kg / m s^2
 
   // lattice units, discretization parameters
-  const size_t _resolution;
-  const T _latticeRelaxationTime;
-  const T _charLatticeVelocity;   //
+  size_t _resolution;
+  T _latticeRelaxationTime;
+  T _charLatticeVelocity;   //
+
+  // conversion factors
+  T _conversionTemperature; // K
+  T _conversionThermalDiffusivity; // m^2 / s
+  T _conversionSpecificHeatCapacity; // J / kg K = m^2 / s^2 K
+  T _conversionThermalConductivity; // W / m K = kg m / s^3 K
+  T _conversionHeatFlux; // W / m^2 = kg / s^3
+
+  // physical units, e.g characteristic or reference values
+  T _charPhysLowTemperature; // K
+  T _charPhysHighTemperature; // K
+  T _charPhysTemperatureDifference; // K
+  T _physThermalExpansionCoefficient; // 1 / K
+  T _physThermalDiffusivity; // m^2 / s
+  T _physSpecificHeatCapacity; // J / kg K = m^2 / s^2 K
+  T _physThermalConductivity; // W / m K = kg m / s^3 K
+
+  // lattice units, discretization parameters
+  T _latticeThermalRelaxationTime; // -
 
 private:
   mutable OstreamManager clout;
