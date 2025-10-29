@@ -100,79 +100,14 @@ struct LATTICE_VISCOSITY : public descriptors::FIELD_BASE<1> { };
 
 }
 
-
-struct UnitConverterBase {
+template <typename T>
+class UnitConverterBase {
+public:
   virtual ~UnitConverterBase() = default;
 
   virtual void print() const = 0;
   virtual void print(std::ostream& fout) const = 0;
   virtual void write(std::string const& fileName = "unitConverter") const = 0;
-};
-
-
-/** Conversion between physical and lattice units, as well as discretization.
-* Be aware of the nomenclature:
-* We distingish between physical (dimensioned) and lattice (dimensionless) values.
-* A specific conversion factor maps the two different scopes,
-* e.g. __physLength = conversionLength * latticeLength__
-*
-* For pressure and temperature we first shift the physical values by a characteristic value to asure a lattice pressure and lattice temperature between 0 and 1, e.g. __physPressure - charPhysPressure = conversionPressure * latticePressure__
-*
-*  \param latticeRelaxationTime   relaxation time, have to be greater than 0.5!
-*  - - -
-*  \param physViscosity         physical kinematic viscosity in __m^2 / s__
-*  \param physDensity           physical density in __kg / m^3__
-*  - - -
-*  \param conversionLength      conversion factor for length __m__
-*  \param conversionTime        conversion factor for time __s__
-*  \param conversionMass        conversion factor for mass __kg__
-*  - - -
-*  \param conversionVelocity    conversion velocity __m / s__
-*  \param conversionViscosity   conversion kinematic viscosity __m^2 / s__
-*  \param conversionDensity     conversion density __kg / m^3__
-*  \param conversionForce       conversion force __kg m / s^2__
-*  \param conversionPressure    conversion pressure __kg / m s^2__
-*  - - -
-*  \param resolution            number of grid points per charPhysLength
-*  - - -
-*  \param charLatticeVelocity
-*/
-template <typename T, typename DESCRIPTOR>
-class UnitConverter : public UnitConverterBase {
-public:
-  /** Documentation of constructor:
-    *  \param physDeltaX              spacing between two lattice cells in __m__
-    *  \param physDeltaT              time step in __s__
-    *  \param charPhysLength          reference/characteristic length of simulation geometry in __m__
-    *  \param charPhysVelocity        maximal or highest expected velocity during simulation in __m / s__
-    *  \param physViscosity           physical kinematic viscosity in __m^2 / s__
-    *  \param physDensity             physical density in __kg / m^3__
-    *  \param charPhysPressure        reference/characteristic physical pressure in Pa = kg / m s^2
-    */
-  UnitConverter( T physDeltaX, T physDeltaT, T charPhysLength, T charPhysVelocity,
-                           T physViscosity, T physDensity, T charPhysPressure = 0 )
-    : _conversionLength(physDeltaX),
-      _conversionTime(physDeltaT),
-      _conversionVelocity(_conversionLength / _conversionTime),
-      _conversionDensity(physDensity),
-      _conversionMass( _conversionDensity * util::pow(_conversionLength, 3) ),
-      _conversionViscosity(_conversionLength * _conversionLength / _conversionTime),
-      _conversionForce( _conversionMass * _conversionLength / (_conversionTime * _conversionTime) ),
-      _conversionTorque( _conversionMass * _conversionLength * _conversionLength / (_conversionTime * _conversionTime) ),
-      _conversionPressure( _conversionForce / util::pow(_conversionLength, 2) ),
-      _charPhysLength(charPhysLength),
-      _charPhysVelocity(charPhysVelocity),
-      _physViscosity(physViscosity),
-      _physDensity(physDensity),
-      _charPhysPressure(charPhysPressure),
-      _resolution((size_t)(_charPhysLength / _conversionLength + 0.5)),
-      _latticeRelaxationTime( (_physViscosity / _conversionViscosity * descriptors::invCs2<T,DESCRIPTOR>()) + 0.5 ),
-      _charLatticeVelocity( _charPhysVelocity / _conversionVelocity ),
-      clout(std::cout,"UnitConverter")
-  {
-  }
-
-  virtual ~UnitConverter() = default;
 
   /// return resolution
   int getResolution(  ) const
@@ -236,9 +171,9 @@ public:
     return _charPhysVelocity * _charPhysLength / _physViscosity;
   }
   /// return Mach number
-  T getMachNumber(  ) const
+  T getMachNumber() const
   {
-    return getCharLatticeVelocity() * util::sqrt(descriptors::invCs2<T,DESCRIPTOR>());
+    return getCharLatticeVelocity() * util::sqrt(_invCs2);
   }
   /// return Knudsen number
   virtual T getKnudsenNumber(  ) const
@@ -325,7 +260,7 @@ public:
   }
   T getLatticeDensityFromPhysPressure( T physPressure ) const
   {
-    return util::densityFromPressure<T,DESCRIPTOR>( getLatticePressure( physPressure ) );
+    return getLatticePressure(physPressure) * _invCs2 + 1.0;
   }
   /// access (read-only) to private member variable
   T getConversionFactorDensity() const
@@ -428,12 +363,6 @@ public:
   {
     return _conversionPressure;
   }
-  /// nice terminal output for conversion factors, characteristical and physical data
-  virtual void print() const;
-  void print(std::ostream& fout) const;
-
-  virtual void write(std::string const& fileName = "unitConverter") const;
-
 
   // from thermalUnitConverter
   /// return thermal relaxation time in lattice units
@@ -774,6 +703,8 @@ public:
   };
 
 protected:
+  T _invCs2;
+
   // conversion factors
   T _conversionLength;      // m
   T _conversionTime;        // s
@@ -815,9 +746,89 @@ protected:
 
   // lattice units, discretization parameters
   T _latticeThermalRelaxationTime; // -
+};
+
+
+/** Conversion between physical and lattice units, as well as discretization.
+* Be aware of the nomenclature:
+* We distingish between physical (dimensioned) and lattice (dimensionless) values.
+* A specific conversion factor maps the two different scopes,
+* e.g. __physLength = conversionLength * latticeLength__
+*
+* For pressure and temperature we first shift the physical values by a characteristic value to asure a lattice pressure and lattice temperature between 0 and 1, e.g. __physPressure - charPhysPressure = conversionPressure * latticePressure__
+*
+*  \param latticeRelaxationTime   relaxation time, have to be greater than 0.5!
+*  - - -
+*  \param physViscosity         physical kinematic viscosity in __m^2 / s__
+*  \param physDensity           physical density in __kg / m^3__
+*  - - -
+*  \param conversionLength      conversion factor for length __m__
+*  \param conversionTime        conversion factor for time __s__
+*  \param conversionMass        conversion factor for mass __kg__
+*  - - -
+*  \param conversionVelocity    conversion velocity __m / s__
+*  \param conversionViscosity   conversion kinematic viscosity __m^2 / s__
+*  \param conversionDensity     conversion density __kg / m^3__
+*  \param conversionForce       conversion force __kg m / s^2__
+*  \param conversionPressure    conversion pressure __kg / m s^2__
+*  - - -
+*  \param resolution            number of grid points per charPhysLength
+*  - - -
+*  \param charLatticeVelocity
+*/
+template <typename T, typename DESCRIPTOR>
+class UnitConverter : public UnitConverterBase<T> {
+public:
+  /** Documentation of constructor:
+    *  \param physDeltaX              spacing between two lattice cells in __m__
+    *  \param physDeltaT              time step in __s__
+    *  \param charPhysLength          reference/characteristic length of simulation geometry in __m__
+    *  \param charPhysVelocity        maximal or highest expected velocity during simulation in __m / s__
+    *  \param physViscosity           physical kinematic viscosity in __m^2 / s__
+    *  \param physDensity             physical density in __kg / m^3__
+    *  \param charPhysPressure        reference/characteristic physical pressure in Pa = kg / m s^2
+    */
+  UnitConverter( T physDeltaX, T physDeltaT, T charPhysLength, T charPhysVelocity,
+                           T physViscosity, T physDensity, T charPhysPressure = 0 ):
+    clout(std::cout,"UnitConverter")
+  {
+    this->_invCs2 = descriptors::invCs2<T,DESCRIPTOR>();
+    this->_conversionLength = physDeltaX;
+    this->_conversionTime = physDeltaT,
+    this->_conversionVelocity = this->_conversionLength / this->_conversionTime;
+    this->_conversionDensity = physDensity;
+    this->_conversionMass = this->_conversionDensity * util::pow(this->_conversionLength, 3);
+    this->_conversionViscosity = this->_conversionLength * this->_conversionLength / this->_conversionTime;
+    this->_conversionForce = this->_conversionMass * this->_conversionLength / (this->_conversionTime * this->_conversionTime);
+    this->_conversionTorque = this->_conversionMass * this->_conversionLength * this->_conversionLength / (this->_conversionTime * this->_conversionTime);
+    this->_conversionPressure = this->_conversionForce / util::pow(this->_conversionLength, 2);
+    this->_charPhysLength = charPhysLength;
+    this->_charPhysVelocity = charPhysVelocity;
+    this->_physViscosity = physViscosity;
+    this->_physDensity = physDensity;
+    this->_charPhysPressure = charPhysPressure;
+    this->_resolution = (std::size_t)(this->_charPhysLength / this->_conversionLength + 0.5);
+    this->_latticeRelaxationTime = (this->_physViscosity / this->_conversionViscosity * descriptors::invCs2<T,DESCRIPTOR>()) + 0.5;
+    this->_charLatticeVelocity = this->_charPhysVelocity / this->_conversionVelocity;
+  }
+
+  template <typename _DESCRIPTOR>
+  UnitConverter(const UnitConverter<T,_DESCRIPTOR>& rhs):
+    clout(std::cout,"UnitConverter")
+  {
+    static_cast<UnitConverterBase<T>&>(*this) = static_cast<const UnitConverterBase<T>&>(rhs);
+    print();
+  }
+
+  virtual void print() const;
+
+  void print(std::ostream& fout) const;
+
+  virtual void write(std::string const& fileName = "unitConverter") const;
 
 private:
   mutable OstreamManager clout;
+
 };
 
 template <typename T, typename DESCRIPTOR>

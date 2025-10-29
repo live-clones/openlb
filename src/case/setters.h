@@ -102,9 +102,11 @@ void setTemperature(SuperLattice<T,DESCRIPTOR>& sLattice,
                     AnalyticalF<DESCRIPTOR::d,T,T>& temperatureF)
 {
   const auto& converter = sLattice.getUnitConverter();
-  AnalyticCalcMultiplication<DESCRIPTOR::d,T,T> scaledDensityF(1/converter.getConversionFactorTemperature(),
-                                                               temperatureF);
-  sLattice.defineRho(std::move(domainI), scaledDensityF);
+  AnalyticCalcMinus<DESCRIPTOR::d,T,T> relativeTemperatureF(temperatureF, converter.getCharPhysLowTemperature());
+  AnalyticCalcMultiplication<DESCRIPTOR::d,T,T> scaledTemperatureF(1/converter.getConversionFactorTemperature(),
+                                                               relativeTemperatureF);
+  AnalyticCalcPlus<DESCRIPTOR::d,T,T> latticeTemperatureF(scaledTemperatureF, 0.5);
+  sLattice.defineRho(std::move(domainI), scaledTemperatureF);
 }
 
 template <typename T, typename DESCRIPTOR, typename VALUE>
