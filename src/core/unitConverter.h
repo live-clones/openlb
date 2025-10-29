@@ -149,7 +149,7 @@ public:
     *  \param physDensity             physical density in __kg / m^3__
     *  \param charPhysPressure        reference/characteristic physical pressure in Pa = kg / m s^2
     */
-  constexpr UnitConverter( T physDeltaX, T physDeltaT, T charPhysLength, T charPhysVelocity,
+  UnitConverter( T physDeltaX, T physDeltaT, T charPhysLength, T charPhysVelocity,
                            T physViscosity, T physDensity, T charPhysPressure = 0 )
     : _conversionLength(physDeltaX),
       _conversionTime(physDeltaT),
@@ -175,256 +175,256 @@ public:
   virtual ~UnitConverter() = default;
 
   /// return resolution
-  constexpr int getResolution(  ) const
+  int getResolution(  ) const
   {
     return _resolution;
   }
   /// return relaxation time in lattice units
-  constexpr T getLatticeRelaxationTime(  ) const
+  T getLatticeRelaxationTime(  ) const
   {
     return _latticeRelaxationTime;
   }
   /// return relaxation frequency in lattice units
-  constexpr T getLatticeRelaxationFrequency(  ) const
+  T getLatticeRelaxationFrequency(  ) const
   {
     return 1./_latticeRelaxationTime;
   }
   /// return relaxation frequency in lattice units computed from given physical diffusivity in __m^2 / s__
   template <typename DESCRIPTOR_>
-  constexpr T getLatticeRelaxationFrequencyFromDiffusivity( const T physDiffusivity ) const
+  T getLatticeRelaxationFrequencyFromDiffusivity( const T physDiffusivity ) const
   {
     return 1.0 / ( physDiffusivity / _conversionViscosity * descriptors::invCs2<T,DESCRIPTOR_>() + 0.5 );
   }
   /// return characteristic length in physical units
-  constexpr T getCharPhysLength(  ) const
+  T getCharPhysLength(  ) const
   {
     return _charPhysLength;
   }
   /// return characteristic velocity in physical units
-  constexpr T getCharPhysVelocity(  ) const
+  T getCharPhysVelocity(  ) const
   {
     return _charPhysVelocity;
   }
   /// return characteristic velocity in lattice units
-  constexpr T getCharLatticeVelocity(  ) const
+  T getCharLatticeVelocity(  ) const
   {
     return _charLatticeVelocity;
   }
   /// return characteristic CFL number
-  constexpr T getCharCFLnumber(  ) const
+  T getCharCFLnumber(  ) const
   {
     return _charLatticeVelocity;
   }
   /// return viscosity in physical units
-  constexpr T getPhysViscosity(  ) const
+  T getPhysViscosity(  ) const
   {
     return _physViscosity;
   }
   /// return density in physical units
-  constexpr T getPhysDensity(  ) const
+  T getPhysDensity(  ) const
   {
     return _physDensity;
   }
   /// return characteristic pressure in physical units
-  constexpr T getCharPhysPressure(  ) const
+  T getCharPhysPressure(  ) const
   {
     return _charPhysPressure;
   }
   /// return Reynolds number
-  constexpr T getReynoldsNumber(  ) const
+  T getReynoldsNumber(  ) const
   {
     return _charPhysVelocity * _charPhysLength / _physViscosity;
   }
   /// return Mach number
-  constexpr T getMachNumber(  ) const
+  T getMachNumber(  ) const
   {
     return getCharLatticeVelocity() * util::sqrt(descriptors::invCs2<T,DESCRIPTOR>());
   }
   /// return Knudsen number
-  virtual constexpr T getKnudsenNumber(  ) const
+  virtual T getKnudsenNumber(  ) const
   {
     // This calculates the lattice Knudsen number.
     // See e.g. (7.22) in "The Lattice Boltzmann Method: Principles and Practice" [kruger2017lattice].
     return getMachNumber() / getReynoldsNumber();
   }
   /// conversion from lattice to  physical length
-  constexpr T getPhysLength( int latticeLength ) const
+  T getPhysLength( int latticeLength ) const
   {
     return _conversionLength * latticeLength;
   }
   /// conversion from physical to lattice length, returns number of voxels for given physical length
-  constexpr int getLatticeLength( T physLength ) const
+  int getLatticeLength( T physLength ) const
   {
     return int( physLength / _conversionLength + 0.5 );
   }
   /// access (read-only) to private member variable
-  constexpr T getConversionFactorLength() const
+  T getConversionFactorLength() const
   {
     return _conversionLength;
   }
   /// returns grid spacing (voxel length) in __m__
-  constexpr T getPhysDeltaX() const
+  T getPhysDeltaX() const
   {
     return _conversionLength;
   }
 
   /// conversion from lattice to  physical time
-  constexpr T getPhysTime( size_t latticeTime ) const
+  T getPhysTime( size_t latticeTime ) const
   {
     return _conversionTime * latticeTime;
   }
   /// conversion from physical to lattice time
-  constexpr size_t getLatticeTime( T physTime ) const
+  size_t getLatticeTime( T physTime ) const
   {
     return size_t(physTime / _conversionTime + 0.5);
   }
   /// access (read-only) to private member variable
-  constexpr T getConversionFactorTime() const
+  T getConversionFactorTime() const
   {
     return _conversionTime;
   }
   /// returns time spacing (timestep length) in __s__
-  constexpr T getPhysDeltaT() const
+  T getPhysDeltaT() const
   {
     return _conversionTime;
   }
 
   /// conversion from lattice to  physical velocity
-  constexpr T getPhysVelocity( T latticeVelocity ) const
+  T getPhysVelocity( T latticeVelocity ) const
   {
     return _conversionVelocity * latticeVelocity;
   }
   /// conversion from physical to lattice velocity
-  constexpr T getLatticeVelocity( T physVelocity ) const
+  T getLatticeVelocity( T physVelocity ) const
   {
     return physVelocity / _conversionVelocity;
   }
   /// conversion from physical to lattice velocity
   template <unsigned D>
-  constexpr Vector<T,D> getLatticeVelocity(Vector<T,D> physU) const
+  Vector<T,D> getLatticeVelocity(Vector<T,D> physU) const
   {
     return Vector<T,D>([&](std::size_t iD) -> T {
       return this->getLatticeVelocity(physU[iD]);
     });
   }
   /// access (read-only) to private member variable
-  constexpr T getConversionFactorVelocity() const
+  T getConversionFactorVelocity() const
   {
     return _conversionVelocity;
   }
 
   /// conversion from lattice to  physical density
-  constexpr T getPhysDensity( T latticeDensity ) const
+  T getPhysDensity( T latticeDensity ) const
   {
     return _conversionDensity * latticeDensity;
   }
   /// conversion from physical to lattice density
-  constexpr T getLatticeDensity( T physDensity ) const
+  T getLatticeDensity( T physDensity ) const
   {
     return physDensity / _conversionDensity;
   }
-  constexpr T getLatticeDensityFromPhysPressure( T physPressure ) const
+  T getLatticeDensityFromPhysPressure( T physPressure ) const
   {
     return util::densityFromPressure<T,DESCRIPTOR>( getLatticePressure( physPressure ) );
   }
   /// access (read-only) to private member variable
-  constexpr T getConversionFactorDensity() const
+  T getConversionFactorDensity() const
   {
     return _conversionDensity;
   }
 
   /// conversion from lattice to  physical mass
-  constexpr T getPhysMass( T latticeMass ) const
+  T getPhysMass( T latticeMass ) const
   {
     return _conversionMass * latticeMass;
   }
   /// conversion from physical to lattice mass
-  constexpr T getLatticeMass( T physMass ) const
+  T getLatticeMass( T physMass ) const
   {
     return physMass / _conversionMass;
   }
   /// access (read-only) to private member variable
-  constexpr T getConversionFactorMass() const
+  T getConversionFactorMass() const
   {
     return _conversionMass;
   }
 
   /// conversion from lattice to  physical viscosity
-  constexpr T getPhysViscosity( T latticeViscosity ) const
+  T getPhysViscosity( T latticeViscosity ) const
   {
     return _conversionViscosity * latticeViscosity;
   }
   /// conversion from physical to lattice viscosity
-  constexpr T getLatticeViscosity(  ) const
+  T getLatticeViscosity(  ) const
   {
     return _physViscosity / _conversionViscosity;
   }
   /// access (read-only) to private member variable
-  constexpr T getConversionFactorViscosity() const
+  T getConversionFactorViscosity() const
   {
     return _conversionViscosity;
   }
 
   /// conversion from lattice to  physical force
-  constexpr T getPhysForce( T latticeForce ) const
+  T getPhysForce( T latticeForce ) const
   {
     return _conversionForce * latticeForce;
   }
   /// conversion from lattice to  physical force vector
   template <unsigned D>
-  constexpr Vector<T,D> getPhysForce(Vector<T,D> latticeForce) const
+  Vector<T,D> getPhysForce(Vector<T,D> latticeForce) const
   {
     return Vector<T,D>([&](std::size_t iD) -> T {
       return this->getPhysForce(latticeForce[iD]);
     });
   }
   /// conversion from physical to lattice force
-  constexpr T getLatticeForce( T physForce ) const
+  T getLatticeForce( T physForce ) const
   {
     return physForce / _conversionForce;
   }
   /// access (read-only) to private member variable
-  constexpr T getConversionFactorForce() const
+  T getConversionFactorForce() const
   {
     return _conversionForce;
   }
 
   /// conversion from lattice to  physical torque
-  constexpr T getPhysTorque ( T latticeTorque ) const
+  T getPhysTorque ( T latticeTorque ) const
   {
     return _conversionTorque * latticeTorque;
   }
   /// conversion from lattice to  physical force vector
   template <unsigned D>
-  constexpr Vector<T,D> getPhysTorque(Vector<T,D> latticeTorque) const
+  Vector<T,D> getPhysTorque(Vector<T,D> latticeTorque) const
   {
     return Vector<T,D>([&](std::size_t iD) -> T {
       return this->getPhysTorque(latticeTorque[iD]);
     });
   }
   /// conversion from physical to lattice torque
-  constexpr T getLatticeTorque( T physTorque ) const
+  T getLatticeTorque( T physTorque ) const
   {
     return physTorque / _conversionTorque;
   }
   /// access (read-only) to private member variable
-  constexpr T getConversionFactorTorque() const
+  T getConversionFactorTorque() const
   {
     return _conversionTorque;
   }
 
   /// conversion from lattice to  physical pressure
-  constexpr T getPhysPressure( T latticePressure ) const
+  T getPhysPressure( T latticePressure ) const
   {
     return _conversionPressure * latticePressure + _charPhysPressure;
   }
   /// conversion from physical to lattice pressure
-  constexpr T getLatticePressure( T physPressure ) const
+  T getLatticePressure( T physPressure ) const
   {
     return ( physPressure - _charPhysPressure ) / _conversionPressure;
   }
   /// access (read-only) to private member variable
-  constexpr T getConversionFactorPressure() const
+  T getConversionFactorPressure() const
   {
     return _conversionPressure;
   }
@@ -437,307 +437,307 @@ public:
 
   // from thermalUnitConverter
   /// return thermal relaxation time in lattice units
-  virtual constexpr T getLatticeThermalRelaxationTime(  ) const {
+  virtual T getLatticeThermalRelaxationTime(  ) const {
     throw std::logic_error("Undefined");
   };
   /// return thermal relaxation frequency in lattice units
-  virtual constexpr T getLatticeThermalRelaxationFrequency() const {
+  virtual T getLatticeThermalRelaxationFrequency() const {
     throw std::logic_error("Undefined");
   };
   /// return characteristic low temperature in physical units
-  virtual constexpr T getCharPhysLowTemperature(  ) const {
+  virtual T getCharPhysLowTemperature(  ) const {
     throw std::logic_error("Undefined");
   };
   /// return characteristic high temperature in physical units
-  virtual constexpr T getCharPhysHighTemperature(  ) const {
+  virtual T getCharPhysHighTemperature(  ) const {
     throw std::logic_error("Undefined");
   };
   /// return characteristic temperature difference in physical units
-  virtual constexpr T getCharPhysTemperatureDifference() const {
+  virtual T getCharPhysTemperatureDifference() const {
     throw std::logic_error("Undefined");
   };
   /// return thermal expansion coefficient in physical units
-  virtual constexpr T getPhysThermalExpansionCoefficient() const {
+  virtual T getPhysThermalExpansionCoefficient() const {
     throw std::logic_error("Undefined");
   };
   /// return thermal diffusivity in physical units
-  virtual constexpr T getPhysThermalDiffusivity(  ) const {
+  virtual T getPhysThermalDiffusivity(  ) const {
     throw std::logic_error("Undefined");
   };
   /// return specific heat capacity in physical units
-  virtual constexpr T getPhysSpecificHeatCapacity(  ) const {
+  virtual T getPhysSpecificHeatCapacity(  ) const {
     throw std::logic_error("Undefined");
   };
   /// return thermal conductivity in physical units
-  virtual constexpr T getThermalConductivity(  ) const {
+  virtual T getThermalConductivity(  ) const {
     throw std::logic_error("Undefined");
   };
   /// conversion from lattice to physical temperature
-  virtual constexpr T getPhysTemperature( T latticeTemperature ) const {
+  virtual T getPhysTemperature( T latticeTemperature ) const {
     throw std::logic_error("Undefined");
   };
   /// conversion from physical to lattice temperature
-  virtual constexpr T getLatticeTemperature( T physTemperature ) const {
+  virtual T getLatticeTemperature( T physTemperature ) const {
     throw std::logic_error("Undefined");
   };
   /// conversion from lattice to physical thermal diffusivity
-  virtual constexpr T getPhysThermalDiffusivity( T latticeThermalDiffusivity ) const {
+  virtual T getPhysThermalDiffusivity( T latticeThermalDiffusivity ) const {
     throw std::logic_error("Undefined");
   };
   /// conversion from physical to lattice thermal diffusivity
-  virtual constexpr T getLatticeThermalDiffusivity( T physThermalDiffusivity ) const {
+  virtual T getLatticeThermalDiffusivity( T physThermalDiffusivity ) const {
     throw std::logic_error("Undefined");
   };
   /// access (read-only) to private member variable
-  virtual constexpr T getConversionFactorThermalDiffusivity() const {
+  virtual T getConversionFactorThermalDiffusivity() const {
     throw std::logic_error("Undefined");
   };
   /// conversion from lattice to physical specific heat capacity
-  virtual constexpr T getPhysSpecificHeatCapacity( T latticeSpecificHeatCapacity ) const {
+  virtual T getPhysSpecificHeatCapacity( T latticeSpecificHeatCapacity ) const {
     throw std::logic_error("Undefined");
   };
   /// conversion from physical to lattice specific heat capacity
-  virtual constexpr T getLatticeSpecificHeatCapacity( T physSpecificHeatCapacity ) const {
+  virtual T getLatticeSpecificHeatCapacity( T physSpecificHeatCapacity ) const {
     throw std::logic_error("Undefined");
   };
   /// access (read-only) to private member variable
-  virtual constexpr T getConversionFactorSpecificHeatCapacity() const {
+  virtual T getConversionFactorSpecificHeatCapacity() const {
     throw std::logic_error("Undefined");
   };
   /// conversion from lattice to physical thermal  conductivity
-  virtual constexpr T getPhysThermalConductivity( T latticeThermalConductivity ) const {
+  virtual T getPhysThermalConductivity( T latticeThermalConductivity ) const {
     throw std::logic_error("Undefined");
   };
   /// conversion from physical to lattice thermal  conductivity
-  virtual constexpr T getLatticeThermalConductivity( T physThermalConductivity ) const {
+  virtual T getLatticeThermalConductivity( T physThermalConductivity ) const {
     throw std::logic_error("Undefined");
   };
   /// access (read-only) to private member variable
-  virtual constexpr T getConversionFactorThermalConductivity() const {
+  virtual T getConversionFactorThermalConductivity() const {
     throw std::logic_error("Undefined");
   };
   /// conversion from lattice to physical heat flux
-  virtual constexpr T getPhysHeatFlux( T latticeHeatFlux ) const {
+  virtual T getPhysHeatFlux( T latticeHeatFlux ) const {
     throw std::logic_error("Undefined");
   };
   /// conversion from physical to lattice heat flux
-  virtual constexpr T getLatticeHeatFlux( T physHeatFlux ) const {
+  virtual T getLatticeHeatFlux( T physHeatFlux ) const {
     throw std::logic_error("Undefined");
   };
   /// access (read-only) to private member variable
-  virtual constexpr T getConversionFactorHeatFlux() const {
+  virtual T getConversionFactorHeatFlux() const {
     throw std::logic_error("Undefined");
   };
-  virtual constexpr T getPrandtlNumber() const {
+  virtual T getPrandtlNumber() const {
     throw std::logic_error("Undefined");
   };
-  virtual constexpr T getRayleighNumber() const {
+  virtual T getRayleighNumber() const {
     throw std::logic_error("Undefined");
   };
 
   // from multiPhaseUnitConverter
   /// return characteristic temperature in physical units
-  virtual constexpr T getCharPhysTemperature() const {
+  virtual T getCharPhysTemperature() const {
     throw std::logic_error("Undefined");
   };
   /// return equation of state parameter a in physical units
-  virtual constexpr T getPhysEoSa() const {
+  virtual T getPhysEoSa() const {
     throw std::logic_error("Undefined");
   };
   /// return characteristic temperature in physical units
-  virtual constexpr T getPhysTemperature(  ) const  {
+  virtual T getPhysTemperature(  ) const  {
     throw std::logic_error("Undefined");
   };
   /// return equation of state parameter b in physical units
-  virtual constexpr T getPhysEoSb() const {
+  virtual T getPhysEoSb() const {
     throw std::logic_error("Undefined");
   };
   /// return molar mass in physical units
-  virtual constexpr T getPhysMolarMass() const {
+  virtual T getPhysMolarMass() const {
     throw std::logic_error("Undefined");
   };
   /// return surface tension in physical units
-  virtual constexpr T getPhysSurfaceTension() const {
+  virtual T getPhysSurfaceTension() const {
     throw std::logic_error("Undefined");
   };
   /// access (read-only) to private member variable
-  virtual constexpr T getConversionFactorEoSa() const {
+  virtual T getConversionFactorEoSa() const {
     throw std::logic_error("Undefined");
   };
   /// access (read-only) to private member variable
-  virtual constexpr T getConversionFactorEoSb() const {
+  virtual T getConversionFactorEoSb() const {
     throw std::logic_error("Undefined");
   };
   /// access (read-only) to private member variable
-  virtual constexpr T getConversionFactorMolarMass() const  {
+  virtual T getConversionFactorMolarMass() const  {
     throw std::logic_error("Undefined");
   };
   /// access (read-only) to private member variable
-  virtual constexpr T getConversionFactorGasConstant() const  {
+  virtual T getConversionFactorGasConstant() const  {
     throw std::logic_error("Undefined");
   };
   /// access (read-only) to private member variable
-  virtual constexpr T getConversionFactorTemperature() const  {
+  virtual T getConversionFactorTemperature() const  {
     throw std::logic_error("Undefined");
   };
   /// access (read-only) to private member variable
-  virtual constexpr T getLatticeSurfaceTension() const  {
+  virtual T getLatticeSurfaceTension() const  {
     throw std::logic_error("Undefined");
   };
 
-  virtual constexpr T getConversionFactorSurfaceTension() const {
+  virtual T getConversionFactorSurfaceTension() const {
     throw std::logic_error("Undefined");
   };
-  virtual constexpr T getConversionFactorChemicalPotential() const {
+  virtual T getConversionFactorChemicalPotential() const {
     throw std::logic_error("Undefined");
   };
-  virtual constexpr T computeRelaxationTimefromPhysViscosity( T userViscosity ) const {
+  virtual T computeRelaxationTimefromPhysViscosity( T userViscosity ) const {
     throw std::logic_error("Undefined");
   };
-  virtual constexpr T computeLatticeSurfaceTension( T userSurfaceTension ) const {
+  virtual T computeLatticeSurfaceTension( T userSurfaceTension ) const {
     throw std::logic_error("Undefined");
   };
-  virtual constexpr T computeReynolds(  T userVelocity, T userLength, T userViscosity  ) const {
+  virtual T computeReynolds(  T userVelocity, T userLength, T userViscosity  ) const {
     throw std::logic_error("Undefined");
   };
-  virtual constexpr T computeWeber( T userVelocity, T userLength, T userSurfaceTension ) const {
+  virtual T computeWeber( T userVelocity, T userLength, T userSurfaceTension ) const {
     throw std::logic_error("Undefined");
   };
 
   //from powerLawUnitConverter
   /// return consistency coefficient in physical units
-  virtual constexpr T getPhysConsistencyCoeff(  ) const {
+  virtual T getPhysConsistencyCoeff(  ) const {
     throw std::logic_error("Undefined");
   };
   /// conversion from lattice to  physical consistency coefficient
-  virtual constexpr T getPhysConsistencyCoeff( T latticeConsistencyCoeff ) const {
+  virtual T getPhysConsistencyCoeff( T latticeConsistencyCoeff ) const {
     throw std::logic_error("Undefined");
   };
   /// conversion from physical to lattice consistency coefficient
-  virtual constexpr T getLatticeConsistencyCoeff(  ) const {
+  virtual T getLatticeConsistencyCoeff(  ) const {
     throw std::logic_error("Undefined");
   };
   /// access (read-only) to private member variable
-  virtual constexpr T getConversionFactorConsistencyCoeff(  ) const {
+  virtual T getConversionFactorConsistencyCoeff(  ) const {
     throw std::logic_error("Undefined");
   };
   /// access (read-only) to private member variable
-  virtual constexpr T getPowerLawIndex(  ) const {
+  virtual T getPowerLawIndex(  ) const {
     throw std::logic_error("Undefined");
   };
 
 
 
   // from adeUnitConverter
-  virtual constexpr T getLatticeAdeRelaxationTime() const {
+  virtual T getLatticeAdeRelaxationTime() const {
     throw std::logic_error("Undefined");
   };
-  virtual constexpr T getLatticeAdeRelaxationFrequency() const {
+  virtual T getLatticeAdeRelaxationFrequency() const {
     throw std::logic_error("Undefined");
   };
-  virtual constexpr T getPhysDiffusivity() const {
+  virtual T getPhysDiffusivity() const {
     throw std::logic_error("Undefined");
   };
-  virtual constexpr T getLatticeDiffusivity() const {
+  virtual T getLatticeDiffusivity() const {
     throw std::logic_error("Undefined");
   };
-  virtual constexpr T getConversionFactorDiffusivity() const {
+  virtual T getConversionFactorDiffusivity() const {
     throw std::logic_error("Undefined");
   };
-  virtual constexpr T getPecletNumber() const {
+  virtual T getPecletNumber() const {
     throw std::logic_error("Undefined");
   };
 
   // from adsorptionUnitConverter
-  virtual constexpr T getConversionFactorParticleDensity() const {
+  virtual T getConversionFactorParticleDensity() const {
     throw std::logic_error("Undefined");
   };
-  virtual constexpr T getPhysParticleConcentration(T c) const {
+  virtual T getPhysParticleConcentration(T c) const {
     throw std::logic_error("Undefined");
   };
-  virtual constexpr T getPhysConcentration(T c) const {
+  virtual T getPhysConcentration(T c) const {
     throw std::logic_error("Undefined");
   };
-  virtual constexpr T getPhysLoading(T Cq) const {
+  virtual T getPhysLoading(T Cq) const {
     throw std::logic_error("Undefined");
   };
-  virtual constexpr T getSchmidtNumber() const {
+  virtual T getSchmidtNumber() const {
     throw std::logic_error("Undefined");
   };
-  virtual constexpr T getFourierNumber() const {
+  virtual T getFourierNumber() const {
     throw std::logic_error("Undefined");
   };
 
   // from radiativeUnitConverter
-  virtual constexpr T getPhysAbsorption() const {
+  virtual T getPhysAbsorption() const {
     throw std::logic_error("Undefined");
   };
-  virtual constexpr T getPhysScattering() const {
+  virtual T getPhysScattering() const {
     throw std::logic_error("Undefined");
   };
-  virtual constexpr T getAnisotropyFactor() const {
+  virtual T getAnisotropyFactor() const {
     throw std::logic_error("Undefined");
   };
-  virtual constexpr T getExtinction() const {
+  virtual T getExtinction() const {
     throw std::logic_error("Undefined");
   };
-  virtual constexpr T getScatteringAlbedo() const {
+  virtual T getScatteringAlbedo() const {
     throw std::logic_error("Undefined");
   };
-  virtual constexpr T getPhysDiffusion() const {
+  virtual T getPhysDiffusion() const {
     throw std::logic_error("Undefined");
   };
-  virtual constexpr T getEffectiveAttenuation() const {
+  virtual T getEffectiveAttenuation() const {
     throw std::logic_error("Undefined");
   };
-  virtual constexpr T getLatticeAbsorption() const {
+  virtual T getLatticeAbsorption() const {
     throw std::logic_error("Undefined");
   };
-  virtual constexpr T getLatticeScattering() const {
+  virtual T getLatticeScattering() const {
     throw std::logic_error("Undefined");
   };
-  virtual constexpr T getLatticeDiffusion() const {
+  virtual T getLatticeDiffusion() const {
     throw std::logic_error("Undefined");
   };
-  virtual constexpr T getRefractiveRelative() const {
+  virtual T getRefractiveRelative() const {
     throw std::logic_error("Undefined");
   };
 
   // from LinElaUnitConverter
-  virtual constexpr T getEpsilon() const {
+  virtual T getEpsilon() const {
     throw std::logic_error("Undefined");
   };
-  virtual constexpr T getCharPhysDisplacement() const {
+  virtual T getCharPhysDisplacement() const {
     throw std::logic_error("Undefined");
   };
-  virtual constexpr T getLatticeShearModulus() const {
+  virtual T getLatticeShearModulus() const {
     throw std::logic_error("Undefined");
   };
-  virtual constexpr T getPhysShearModulus() const {
+  virtual T getPhysShearModulus() const {
     throw std::logic_error("Undefined");
   };
-  virtual constexpr T getLatticeBulkModulus() const {
+  virtual T getLatticeBulkModulus() const {
     throw std::logic_error("Undefined");
   };
-  virtual constexpr T getPhysBulkModulus() const {
+  virtual T getPhysBulkModulus() const {
     throw std::logic_error("Undefined");
   };
-  virtual constexpr T getLatticeLambda() const {
+  virtual T getLatticeLambda() const {
     throw std::logic_error("Undefined");
   };
-  virtual constexpr T getPhysLambda() const {
+  virtual T getPhysLambda() const {
     throw std::logic_error("Undefined");
   };
-  virtual constexpr T getLatticeYoungsModulus() const {
+  virtual T getLatticeYoungsModulus() const {
     throw std::logic_error("Undefined");
   };
-  virtual constexpr T getPhysYoungsModulus() const {
+  virtual T getPhysYoungsModulus() const {
     throw std::logic_error("Undefined");
   };
-  virtual constexpr T getDampingFactor() const {
+  virtual T getDampingFactor() const {
     throw std::logic_error("Undefined");
   };
-  virtual constexpr T getPoissonRatio() const {
+  virtual T getPoissonRatio() const {
     throw std::logic_error("Undefined");
   };
 
@@ -793,7 +793,7 @@ UnitConverter<T, DESCRIPTOR>* createUnitConverter(XMLreader const& params);
 template <typename T, typename DESCRIPTOR>
 class UnitConverterFromResolutionAndRelaxationTime : public UnitConverter<T, DESCRIPTOR> {
 public:
-  constexpr UnitConverterFromResolutionAndRelaxationTime(
+  UnitConverterFromResolutionAndRelaxationTime(
     size_t resolution,
     T latticeRelaxationTime,
     T charPhysLength,
@@ -814,7 +814,7 @@ public:
 template <typename T, typename DESCRIPTOR>
 class UnitConverterFromResolutionAndLatticeVelocity : public UnitConverter<T, DESCRIPTOR> {
 public:
-  constexpr UnitConverterFromResolutionAndLatticeVelocity(
+  UnitConverterFromResolutionAndLatticeVelocity(
     size_t resolution,
     T charLatticeVelocity,
     T charPhysLength,
@@ -835,7 +835,7 @@ public:
 template <typename T, typename DESCRIPTOR>
 class UnitConverterFromRelaxationTimeAndLatticeVelocity : public UnitConverter<T, DESCRIPTOR> {
 public:
-  constexpr UnitConverterFromRelaxationTimeAndLatticeVelocity(
+  UnitConverterFromRelaxationTimeAndLatticeVelocity(
     T latticeRelaxationTime,
     T charLatticeVelocity,
     T charPhysLength,
