@@ -40,15 +40,9 @@
 #include "core/singleton.h"
 
 namespace olb {
-template<typename T, typename DESCRIPTOR>
-class AdsorptionConverter : public UnitConverter<T, DESCRIPTOR> {
- protected:
-  const T _physViscosity;
-  const T _conversionViscosity;
-  const T _particleConcentration;
-  mutable OstreamManager clout;
 
- public:
+template<typename T, typename DESCRIPTOR>
+struct AdsorptionConverter : public UnitConverter<T, DESCRIPTOR> {
   /** Converter for adsorption reactions primarily for ADE lattices based on concentration.
    * Renames viscosity to diffusivity and also takes fluid parameters.
    *
@@ -74,58 +68,18 @@ class AdsorptionConverter : public UnitConverter<T, DESCRIPTOR> {
                                                            charPhysLength,
                                                            charPhysVelocity,
                                                            physDiffusivity,
-                                                           charConcentration),
-                              _physViscosity(fluidPhysViscosity),
-                              _conversionViscosity(physDeltaX * physDeltaX / physDeltaT),
-                              _particleConcentration(particleConcentration),
-                              clout(std::cout, "AdsConverter") {};
+                                                           charConcentration)
+  {
+    this->_physViscosityAdsorption = fluidPhysViscosity;
+    this->_conversionViscosityAdsorption = physDeltaX * physDeltaX / physDeltaT;
+    this->_conversionViscosity = physDeltaX * physDeltaX / physDeltaT;
+    this->_particleConcentrationAdsorption = particleConcentration;
 
-  // rename properties because in ADE viscosity has the function of diffusivity
-  constexpr T getPhysDiffusivity() const override {
-    return UnitConverter<T, DESCRIPTOR>::getPhysViscosity();
+    this->_physDiffusivity = this->getPhysViscosity();
+    this->_conversionDiffusivity = this->getConversionFactorViscosity();
   }
-  constexpr T getLatticeDiffusivity() const override {
-    return UnitConverter<T, DESCRIPTOR>::getLatticeViscosity();
-  }
-  constexpr T getConversionFactorDiffusivity() const override {
-    return UnitConverter<T, DESCRIPTOR>::getConversionFactorViscosity();
-  }
-
-  constexpr T getPhysViscosity() const {
-    return _physViscosity;
-  }
-  constexpr T getConversionFactorViscosity() const {
-    return _conversionViscosity;
-  }
-  /// conversion factor to convert particle density from lattice units to kg/m^3
-  constexpr T getConversionFactorParticleDensity() const override {
-    return _particleConcentration;
-  }
-  constexpr T getPhysParticleConcentration(T c) const override {
-    return c * _particleConcentration;
-  }
-
-  constexpr T getPhysConcentration(T c) const override {
-    return c * this->getConversionFactorDensity();
-  }
-  constexpr T getPhysLoading(T Cq) const override {
-    return Cq * _particleConcentration;
-  }
-
-
-  constexpr T getReynoldsNumber() const {
-    return this->_charPhysVelocity * this->_charPhysLength / this->_physViscosity;
-  }
-  constexpr T getSchmidtNumber() const override {
-    return  this->getPhysViscosity() / this->getPhysDiffusivity();
-  }
-  constexpr T getFourierNumber() const override {
-    return this->getPhysDiffusivity()*this->getPhysDeltaT() / this->getPhysDeltaX()/ this->getPhysDeltaX();
-  }
-
 
   void print(std::ostream &clout) const override {
-    {
       clout << "----------------- UnitConverter information -----------------" << std::endl;
       clout << "-- Parameters:" << std::endl;
       clout << "Resolution:                       N=              " << this->getResolution() << std::endl;
@@ -155,15 +109,8 @@ class AdsorptionConverter : public UnitConverter<T, DESCRIPTOR> {
       clout << "Pressure factor(N/m^2):           physPressure=   " << this->getConversionFactorPressure() << std::endl;
       clout << "Particle density factor:                          " << this->getConversionFactorParticleDensity() << std::endl;
       clout << "-------------------------------------------------------------" << std::endl;
-
-    }
   }
 
-  void print() const override {
-    {
-      this->print(clout);
-    }
-  }
 };
 
 template<typename T, typename DESCRIPTOR>

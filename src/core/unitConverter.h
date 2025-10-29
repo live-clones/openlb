@@ -685,23 +685,24 @@ public:
   };
 
   // from adsorptionUnitConverter
-  virtual T getConversionFactorParticleDensity() const {
-    throw std::logic_error("Undefined");
+  /// conversion factor to convert particle density from lattice units to kg/m^3
+  T getConversionFactorParticleDensity() const {
+    return _particleConcentrationAdsorption;
+  }
+  T getPhysParticleConcentration(T c) const {
+    return c * _particleConcentrationAdsorption;
+  }
+  T getPhysConcentration(T c) const {
+    return c * this->getConversionFactorDensity();
+  }
+  T getPhysLoading(T Cq) const {
+    return Cq * _particleConcentrationAdsorption;
+  }
+  T getSchmidtNumber() const {
+    return getPhysViscosity() / getPhysDiffusivity();
   };
-  virtual T getPhysParticleConcentration(T c) const {
-    throw std::logic_error("Undefined");
-  };
-  virtual T getPhysConcentration(T c) const {
-    throw std::logic_error("Undefined");
-  };
-  virtual T getPhysLoading(T Cq) const {
-    throw std::logic_error("Undefined");
-  };
-  virtual T getSchmidtNumber() const {
-    throw std::logic_error("Undefined");
-  };
-  virtual T getFourierNumber() const {
-    throw std::logic_error("Undefined");
+  T getFourierNumber() const {
+    return getPhysDiffusivity() * getPhysDeltaT() / getPhysDeltaX() / getPhysDeltaX();
   };
 
   // from radiativeUnitConverter
@@ -844,9 +845,14 @@ protected:
   OptionalValue<T> _conversionChemicalPotential;         // J / kg = m^2 / s^2
 
   // power law conversion factors
-  OptionalValue<T> _conversionConsistencyCoeff;         // m^2 s^(n-2)
+  OptionalValue<T> _conversionConsistencyCoeff;          // m^2 s^(n-2)
   OptionalValue<T> _powerLawIndex;
-  OptionalValue<T> _physConsistencyCoeff;         // m^2 s^(n-2)
+  OptionalValue<T> _physConsistencyCoeff;                // m^2 s^(n-2)
+
+  // adsorption factors
+  OptionalValue<T> _physViscosityAdsorption;
+  OptionalValue<T> _conversionViscosityAdsorption;
+  OptionalValue<T> _particleConcentrationAdsorption;
 
 };
 
