@@ -28,18 +28,13 @@
 #ifndef PL_UNITCONVERTER_H
 #define PL_UNITCONVERTER_H
 
-
 #include <math.h>
 #include "io/ostreamManager.h"
 #include "core/util.h"
 #include "io/xmlReader.h"
 #include "unitConverter.h"
 
-
-// All OpenLB code is contained in this namespace.
 namespace olb {
-
-
 
 /** Conversion between physical and lattice units, as well as discretization specialized for power-law rheology: \f$\nu=m^{n-1}\f$, with \f$m$ being the consistency coefficient and \f$n\f$ the power-law index.
  *  The Newtonian case is recovered for \f$n=1\f$.
@@ -74,8 +69,7 @@ namespace olb {
 *  \param charLatticeVelocity
 */
 template <typename T, typename DESCRIPTOR>
-class PowerLawUnitConverter : public UnitConverter<T, DESCRIPTOR> {
-public:
+struct PowerLawUnitConverter : public UnitConverter<T, DESCRIPTOR> {
   /** Documentation of constructor:
     *  \param physDeltaX              spacing between two lattice cells in __m__
     *  \param physDeltaT              time step in __s__
@@ -86,70 +80,19 @@ public:
     *  \param physDensity             physical density in __kg / m^3__
     *  \param charPhysPressure        reference/characteristic physical pressure in Pa = kg / m s^2
     */
-  constexpr PowerLawUnitConverter( T physDeltaX, T physDeltaT, T charPhysLength,
-                                   T charPhysVelocity, T physConsistencyCoeff, T powerLawIndex,
-                                   T physDensity, T charPhysPressure = 0 )
-    : UnitConverter<T, DESCRIPTOR>( physDeltaX, physDeltaT, charPhysLength, charPhysVelocity,
-                                    physConsistencyCoeff * util::pow(charPhysVelocity / (2*charPhysLength), powerLawIndex-1),
-                                    physDensity, charPhysPressure ),
-      _conversionConsistencyCoeff(util::pow( physDeltaT,powerLawIndex-2 ) * util::pow( physDeltaX,2 ) ),
-      _powerLawIndex(powerLawIndex),
-      _physConsistencyCoeff(physConsistencyCoeff),
-      clout(std::cout,"PowerLawUnitConverter")
+  PowerLawUnitConverter(T physDeltaX, T physDeltaT, T charPhysLength,
+                        T charPhysVelocity, T physConsistencyCoeff, T powerLawIndex,
+                        T physDensity, T charPhysPressure = 0 )
+    : UnitConverter<T, DESCRIPTOR>(physDeltaX, physDeltaT, charPhysLength, charPhysVelocity,
+                                   physConsistencyCoeff * util::pow(charPhysVelocity / (2*charPhysLength), powerLawIndex-1),
+                                    physDensity, charPhysPressure )
   {
+    this->_conversionConsistencyCoeff = util::pow(physDeltaT,powerLawIndex-2 ) * util::pow(physDeltaX,2);
+    this->_powerLawIndex = powerLawIndex;
+    this->_physConsistencyCoeff = physConsistencyCoeff;
   }
 
-  /// return Reynolds number
-  constexpr T getReynoldsNumber(  ) const
-  {
-    // Calculation according to Metzner and Reed (1955): 10.1002/aic.690010409
-    return util::pow(this->_charPhysVelocity, T{2} - _powerLawIndex) * util::pow(this->_charPhysLength, _powerLawIndex)
-      / _physConsistencyCoeff;
-  }
-
-  /// return consistency coefficient in physical units
-  constexpr T getPhysConsistencyCoeff( ) const override
-  {
-    return _physConsistencyCoeff;
-  }
-  /// conversion from lattice to  physical consistency coefficient
-  constexpr T getPhysConsistencyCoeff( T latticeConsistencyCoeff ) const override
-  {
-    return _conversionConsistencyCoeff * latticeConsistencyCoeff;
-  }
-  /// conversion from physical to lattice consistency coefficient
-  constexpr T getLatticeConsistencyCoeff(  ) const override
-  {
-    return _physConsistencyCoeff / _conversionConsistencyCoeff;
-  }
-  /// access (read-only) to private member variable
-  constexpr T getConversionFactorConsistencyCoeff() const override
-  {
-    return _conversionConsistencyCoeff;
-  }
-
-  /// access (read-only) to private member variable
-  constexpr T getPowerLawIndex() const override
-  {
-    return _powerLawIndex;
-  }
-
-  /// nice terminal output for conversion factors, characteristical and physical data
-  void print() const override;
   void print(std::ostream& fout) const override;
-
-  void write(std::string const& fileName = "unitConverter") const override;
-
-protected:
-  // conversion factors
-  const T _conversionConsistencyCoeff;         // m^2 s^(n-2)
-
-  // physical units, e.g characteristic or reference values
-  const T _powerLawIndex;
-  const T _physConsistencyCoeff;         // m^2 s^(n-2)
-
-private:
-  mutable OstreamManager clout;
 };
 
 /// creator function with data given by an XML file
@@ -157,9 +100,8 @@ template <typename T, typename DESCRIPTOR>
 PowerLawUnitConverter<T, DESCRIPTOR>* createPowerLawUnitConverter(XMLreader const& params);
 
 template <typename T, typename DESCRIPTOR>
-class PowerLawUnitConverterFrom_Resolution_RelaxationTime_Reynolds_PLindex : public PowerLawUnitConverter<T, DESCRIPTOR> {
-public:
-  constexpr PowerLawUnitConverterFrom_Resolution_RelaxationTime_Reynolds_PLindex(
+struct PowerLawUnitConverterFrom_Resolution_RelaxationTime_Reynolds_PLindex : public PowerLawUnitConverter<T, DESCRIPTOR> {
+  PowerLawUnitConverterFrom_Resolution_RelaxationTime_Reynolds_PLindex(
     int resolution,
     T latticeRelaxationTime,
     T charPhysLength,
@@ -172,11 +114,9 @@ public:
                                             (latticeRelaxationTime - 0.5) / descriptors::invCs2<T,DESCRIPTOR>() * util::pow((charPhysLength/resolution),2) / ( ( charPhysLength * charPhysVelocity * util::pow( charPhysVelocity / ( 2 * charPhysLength ), 1 - powerLawIndex ) / Re ) * util::pow( charPhysVelocity / (2 * charPhysLength ), powerLawIndex - 1 ) ),
                                             charPhysLength, charPhysVelocity,
                                             charPhysLength * charPhysVelocity * util::pow( charPhysVelocity / ( 2 * charPhysLength ), 1 - powerLawIndex ) / Re, powerLawIndex, physDensity, charPhysPressure )
-  {
-  }
-
+  { }
 };
 
-}  // namespace olb
+}
 
 #endif

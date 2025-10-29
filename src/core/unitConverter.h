@@ -230,6 +230,11 @@ public:
   T getReynoldsNumber(  ) const
   {
     return _charPhysVelocity * _charPhysLength / _physViscosity;
+
+    // Power law
+    // Calculation according to Metzner and Reed (1955): 10.1002/aic.690010409
+    //return util::pow(this->_charPhysVelocity, T{2} - _powerLawIndex) * util::pow(this->_charPhysLength, _powerLawIndex)
+    // / _physConsistencyCoeff;
   }
   /// return Mach number
   T getMachNumber() const
@@ -637,26 +642,25 @@ public:
 
   //from powerLawUnitConverter
   /// return consistency coefficient in physical units
-  virtual T getPhysConsistencyCoeff(  ) const {
-    throw std::logic_error("Undefined");
-  };
+  T getPhysConsistencyCoeff( ) const {
+    return _physConsistencyCoeff;
+  }
   /// conversion from lattice to  physical consistency coefficient
-  virtual T getPhysConsistencyCoeff( T latticeConsistencyCoeff ) const {
-    throw std::logic_error("Undefined");
-  };
+  T getPhysConsistencyCoeff( T latticeConsistencyCoeff ) const {
+    return _conversionConsistencyCoeff * latticeConsistencyCoeff;
+  }
   /// conversion from physical to lattice consistency coefficient
-  virtual T getLatticeConsistencyCoeff(  ) const {
-    throw std::logic_error("Undefined");
-  };
+  T getLatticeConsistencyCoeff(  ) const {
+    return _physConsistencyCoeff / _conversionConsistencyCoeff;
+  }
   /// access (read-only) to private member variable
-  virtual T getConversionFactorConsistencyCoeff(  ) const {
-    throw std::logic_error("Undefined");
-  };
+  T getConversionFactorConsistencyCoeff() const {
+    return _conversionConsistencyCoeff;
+  }
   /// access (read-only) to private member variable
-  virtual T getPowerLawIndex(  ) const {
-    throw std::logic_error("Undefined");
-  };
-
+  T getPowerLawIndex() const {
+    return _powerLawIndex;
+  }
 
   // from adeUnitConverter
   /// return thermal relaxation time in lattice units
@@ -838,6 +842,11 @@ protected:
   OptionalValue<T> _charPhysTemperature;                 // K
   OptionalValue<T> _latticeSurfaceTension;               // -
   OptionalValue<T> _conversionChemicalPotential;         // J / kg = m^2 / s^2
+
+  // power law conversion factors
+  OptionalValue<T> _conversionConsistencyCoeff;         // m^2 s^(n-2)
+  OptionalValue<T> _powerLawIndex;
+  OptionalValue<T> _physConsistencyCoeff;         // m^2 s^(n-2)
 
 };
 
