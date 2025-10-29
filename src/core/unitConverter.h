@@ -773,7 +773,7 @@ protected:
   OptionalValue<T> _conversionEoSa;                      // kg m^5 / s^2 mol^2
   OptionalValue<T> _conversionEoSb;                      // m^3 / mol
   OptionalValue<T> _conversionMolarMass;                 // kg / mol
-  OptionalValue<T> _conversionGasConstant = 8.314462618; // J / mol K = kg m^2 / s^2 mol K
+  OptionalValue<T> _conversionGasConstant = T{8.314462618}; // J / mol K = kg m^2 / s^2 mol K
   OptionalValue<T> _conversionSurfaceTension;            // J / m^2 = kg / s^2
   OptionalValue<T> _physEoSa;                            // kg m^5 / s^2 mol^2
   OptionalValue<T> _physEoSb;                            // m^3 / mol

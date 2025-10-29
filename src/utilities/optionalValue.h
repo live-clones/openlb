@@ -90,6 +90,71 @@ public:
 
 };
 
+template <typename U, typename T>
+auto operator+(const U& lhs, const OptionalValue<T>& rhs) -> decltype(lhs + rhs.value()) {
+  return lhs + rhs.value();
+}
+
+template <typename T, typename U>
+auto operator+(const OptionalValue<T>& lhs, const U& rhs) -> decltype(lhs.value() + rhs) {
+  return lhs.value() + rhs;
+}
+
+template <typename T>
+auto operator+(const OptionalValue<T>& lhs, const OptionalValue<T>& rhs) -> decltype(lhs.value() + rhs.value()) {
+  return lhs.value() + rhs.value();
+}
+
+template <typename U, typename T>
+auto operator-(const U& lhs, const OptionalValue<T>& rhs) -> decltype(lhs - rhs.value()) {
+  return lhs - rhs.value();
+}
+
+template <typename T, typename U>
+auto operator-(const OptionalValue<T>& lhs, const U& rhs) -> decltype(lhs.value() - rhs) {
+  return lhs.value() - rhs;
+}
+
+template <typename T>
+auto operator-(const OptionalValue<T>& lhs, const OptionalValue<T>& rhs) -> decltype(lhs.value() - rhs.value()) {
+  return lhs.value() - rhs.value();
+}
+
+template <typename U, typename T>
+auto operator*(const U& lhs, const OptionalValue<T>& rhs) -> decltype(lhs * rhs.value()) {
+  return lhs * rhs.value();
+}
+
+template <typename T, typename U>
+auto operator*(const OptionalValue<T>& lhs, const U& rhs) -> decltype(lhs.value() * rhs) {
+  return lhs.value() * rhs;
+}
+
+template <typename T>
+auto operator*(const OptionalValue<T>& lhs, const OptionalValue<T>& rhs) -> decltype(lhs.value() * rhs.value()) {
+  return lhs.value() * rhs.value();
+}
+
+template <typename U, typename T>
+auto operator/(const U& lhs, const OptionalValue<T>& rhs) -> decltype(lhs / rhs.value()) {
+  return lhs / rhs.value();
+}
+
+template <typename T, typename U>
+auto operator/(const OptionalValue<T>& lhs, const U& rhs) -> decltype(lhs.value() / rhs) {
+  return lhs.value() / rhs;
+}
+
+template <typename T>
+auto operator/(const OptionalValue<T>& lhs, const OptionalValue<T>& rhs) -> decltype(lhs.value() / rhs.value()) {
+  return lhs.value() / rhs.value();
+}
+
+template <typename T>
+auto operator-(const OptionalValue<T>& rhs) -> decltype(-rhs.value()) {
+  return -rhs.value();
+}
+
 }
 
 #endif
