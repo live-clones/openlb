@@ -49,8 +49,6 @@ using namespace olb;
 using namespace olb::names;
 using namespace olb::graphics;
 using namespace olb::util;
-using namespace olb::particles;
-using namespace olb::particles::dynamics;
 
 using MyCase = Case<
 NavierStokes, Lattice<double, descriptors::PorousParticleD3Q19Descriptor>
@@ -142,7 +140,7 @@ void prepareLattice(MyCase& myCase)
 
   auto& converter = lattice.getUnitConverter();
 
-  olb::dynamics::set<PorousParticleBGKdynamics>(lattice, geometry.getMaterialIndicator({1}));
+  dynamics::set<PorousParticleBGKdynamics>(lattice, geometry.getMaterialIndicator({1}));
   boundary::set<boundary::BounceBack>(lattice, geometry, 2);
 
   lattice.setParameter<descriptors::OMEGA>(converter.getLatticeRelaxationFrequency());
@@ -176,6 +174,8 @@ void getResults(MyCase& myCase, int iT, Timer<MyCase::value_t>& timer, PARTICLES
   #ifdef PARALLEL_MODE_MPI
     using PARTICLETYPE = descriptors::ResolvedDecomposedParticle3D;
   #endif
+  using namespace olb::particles;
+
 
   using T          = MyCase::value_t;
   using DESCRIPTOR = MyCase::descriptor_t_of<NavierStokes>;
@@ -233,6 +233,8 @@ void simulate(MyCase& myCase)
 
   using T = MyCase::value_t;
   using DESCRIPTOR = MyCase::descriptor_t_of<NavierStokes>;
+  using namespace olb::particles;
+  using namespace olb::particles::dynamics;
 
   auto& params    = myCase.getParameters();
   auto& geometry  = myCase.getGeometry();
