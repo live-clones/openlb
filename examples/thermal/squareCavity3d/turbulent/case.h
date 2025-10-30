@@ -218,32 +218,32 @@ void prepareLattice(MyCase& myCase)
 
 void setInitialValues(MyCase& myCase)
 {
-    OstreamManager clout(std::cout,"setInitialValues");
-    clout << "Set initial values ..." << std::endl;
+  OstreamManager clout(std::cout,"setInitialValues");
+  clout << "Set initial values ..." << std::endl;
 
-    using T = MyCase::value_t_of<NavierStokes>;
+  using T = MyCase::value_t_of<NavierStokes>;
 
-    auto& geometry = myCase.getGeometry();
-    auto& NSElattice = myCase.getLattice(NavierStokes{});
-    auto& ADElattice = myCase.getLattice(Temperature{});
-    const auto& converter = NSElattice.getUnitConverter();
+  auto& geometry = myCase.getGeometry();
+  auto& NSElattice = myCase.getLattice(NavierStokes{});
+  auto& ADElattice = myCase.getLattice(Temperature{});
+  const auto& converter = NSElattice.getUnitConverter();
 
-    const T NSEomega = converter.getLatticeRelaxationFrequency();
-    const T ADEomega = converter.getLatticeThermalRelaxationFrequency();
-    const T Tcold = converter.getCharPhysLowTemperature();
-    const T Thot  = converter.getCharPhysHighTemperature();
-    const T Tmean = (Thot + Tcold) / 2.;
+  const T NSEomega = converter.getLatticeRelaxationFrequency();
+  const T ADEomega = converter.getLatticeThermalRelaxationFrequency();
+  const T Tcold = converter.getCharPhysLowTemperature();
+  const T Thot  = converter.getCharPhysHighTemperature();
+  const T Tmean = (Thot + Tcold) / 2.;
 
-    /// define initial conditions
-    momenta::setTemperature(ADElattice, geometry.getMaterialIndicator(1), Tmean);
-    momenta::setTemperature(ADElattice, geometry.getMaterialIndicator(2), Thot);
-    momenta::setTemperature(ADElattice, geometry.getMaterialIndicator(3), Tcold);
+  /// define initial conditions
+  momenta::setTemperature(ADElattice, geometry.getMaterialIndicator(1), Tmean);
+  momenta::setTemperature(ADElattice, geometry.getMaterialIndicator(2), Thot);
+  momenta::setTemperature(ADElattice, geometry.getMaterialIndicator(3), Tcold);
 
-    /// Make the lattice ready for simulation
-    NSElattice.initialize();
-    ADElattice.initialize();
+  /// Make the lattice ready for simulation
+  NSElattice.initialize();
+  ADElattice.initialize();
 
-    clout << "Set initial values ... OK" << std::endl;
+  clout << "Set initial values ... OK" << std::endl;
 }
 
 void setTemporalValues(MyCase& myCase,
