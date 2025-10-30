@@ -142,7 +142,7 @@ void prepareLattice(MyCase& myCase)
 
   auto& converter = lattice.getUnitConverter();
 
-  lattice.defineDynamics<PorousParticleBGKdynamics>(geometry, 1);
+  olb::dynamics::set<PorousParticleBGKdynamics>(lattice, geometry.getMaterialIndicator({1}));
   boundary::set<boundary::BounceBack>(lattice, geometry, 2);
 
   lattice.setParameter<descriptors::OMEGA>(converter.getLatticeRelaxationFrequency());
@@ -161,23 +161,11 @@ void prepareLattice(MyCase& myCase)
 void setInitialValues(MyCase& myCase)
 {
   OstreamManager clout(std::cout, "setBoundaryValues");
-  using T = MyCase::value_t;
 
   auto& geometry = myCase.getGeometry();
   auto& lattice  = myCase.getLattice(NavierStokes {});
 
-  AnalyticalConst3D<T, T> zero(0.);
-  AnalyticalConst3D<T, T> one(1.);
-  lattice.defineField<descriptors::POROSITY>(geometry.getMaterialIndicator({0, 1, 2}), one);
-
-  AnalyticalConst3D<T, T>    ux(0.);
-  AnalyticalConst3D<T, T>    uy(0.);
-  AnalyticalConst3D<T, T>    uz(0.);
-  AnalyticalConst3D<T, T>    rho(1.);
-  AnalyticalComposed3D<T, T> u(ux, uy, uz);
-
-  lattice.defineRhoU(geometry, 1, rho, u);
-  lattice.iniEquilibrium(geometry, 1, rho, u);
+  fields::set<descriptors::POROSITY>(lattice, geometry.getMaterialIndicator({0,1,2}), 1.);
 
   lattice.initialize();
 }
