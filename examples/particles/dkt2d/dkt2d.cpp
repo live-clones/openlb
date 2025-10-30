@@ -50,10 +50,6 @@
 using namespace olb;
 using namespace olb::descriptors;
 using namespace olb::graphics;
-using namespace olb::particles;
-using namespace olb::particles::access;
-using namespace olb::particles::contact;
-using namespace olb::particles::dynamics;
 using namespace olb::util;
 using namespace olb::names;
 
@@ -128,7 +124,7 @@ void prepareLattice(MyCase& myCase)
   converter.print();
   clout << "Prepare Lattice ..." << std::endl;
 
-  lattice.defineDynamics<PorousParticleBGKdynamics>(geometry, 1);
+  dynamics::set<PorousParticleBGKdynamics>(lattice, geometry.getMaterialIndicator({1}));
   boundary::set<boundary::BounceBack>(lattice, geometry, 2);
 
   lattice.setParameter<descriptors::OMEGA>(converter.getLatticeRelaxationFrequency());
@@ -140,19 +136,11 @@ void setBoundaryValues(MyCase& myCase)
 {
   OstreamManager clout(std::cout, "setBoundaryValues");
   clout << "Set Boundary Values ..." << std::endl;
-  using T = MyCase::value_t;
+
   auto& lattice = myCase.getLattice(NavierStokes{});
   auto& geometry = myCase.getGeometry();
-  AnalyticalConst2D<T, T> one(1.);
-  lattice.defineField<POROSITY>(geometry.getMaterialIndicator({1,2}), one);
 
-  AnalyticalConst2D<T, T> ux(0.);
-  AnalyticalConst2D<T, T> uy(0.);
-  AnalyticalConst2D<T, T> rho(1.);
-  AnalyticalComposed2D<T, T> u(ux, uy);
-
-  lattice.defineRhoU(geometry, 1, rho, u);
-  lattice.iniEquilibrium(geometry, 1, rho, u);
+  fields::set<POROSITY>(lattice, geometry.getMaterialIndicator({1,2}), 1);
 
   lattice.initialize();
   clout << "Set Boundary Values ... OK" << std::endl;
@@ -165,6 +153,9 @@ void getResults(MyCase& myCase, int iT,
 {
   OstreamManager clout(std::cout, "getResults");
   using T = MyCase::value_t;
+  using namespace olb::particles;
+  using namespace olb::particles::access;
+
   auto& parameters = myCase.getParameters();
   auto& lattice = myCase.getLattice(NavierStokes{});
   auto& geometry = myCase.getGeometry();
@@ -242,6 +233,10 @@ void getResults(MyCase& myCase, int iT,
 void simulate(MyCase& myCase )
 {
   using T = MyCase::value_t;
+  using namespace olb::particles;
+  using namespace olb::particles::access;
+  using namespace olb::particles::contact;
+  using namespace olb::particles::dynamics;
   auto& parameters = myCase.getParameters();
   auto& lattice = myCase.getLattice(NavierStokes{});
   auto& geometry = myCase.getGeometry();
