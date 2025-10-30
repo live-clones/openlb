@@ -151,13 +151,11 @@ void prepareLattice(MyCase& myCase){
 
   ADElattice.setUnitConverter(converter);
 
-  NSElattice.defineDynamics<ForcedBGKdynamics>(geometry.getMaterialIndicator({ 1, 2, 3 }));
-  ADElattice.defineDynamics<AdvectionDiffusionBGKdynamics>(geometry.getMaterialIndicator({ 1, 2, 3 }));
+  dynamics::set<ForcedBGKdynamics>(NSElattice, geometry.getMaterialIndicator({ 1, 2, 3 }));
+  dynamics::set<AdvectionDiffusionBGKdynamics>(ADElattice, geometry.getMaterialIndicator({ 1, 2, 3 }));
 
-  boundary::set<boundary::BounceBack>(ADElattice, geometry, 4);
-  boundary::set<boundary::BounceBack>(NSElattice, geometry, 4);
-
-  /// sets boundary
+  boundary::set<boundary::BounceBack>(ADElattice, geometry.getMaterialIndicator(4));
+  boundary::set<boundary::BounceBack>(NSElattice, geometry.getMaterialIndicator(4));
   boundary::set<boundary::AdvectionDiffusionDirichlet>(ADElattice, geometry.getMaterialIndicator({ 2, 3 }));
   boundary::set<boundary::LocalVelocity>(NSElattice, geometry.getMaterialIndicator({ 2, 3 }));
 
@@ -173,7 +171,8 @@ void prepareLattice(MyCase& myCase){
     names::Temperature{},  ADElattice
   );
   coupling.setParameter<NavierStokesAdvectionDiffusionCoupling::T0>(
-    converter.getLatticeTemperature(Tcold));
+    converter.getLatticeTemperature(Tcold)
+  );
   coupling.setParameter<NavierStokesAdvectionDiffusionCoupling::FORCE_PREFACTOR>(
     boussinesqForcePrefactor * Vector<T,2>{0.0,1.0}
   );
@@ -199,22 +198,10 @@ void setInitialValues(MyCase& myCase){
   const T Tmean         = (Thot + Tcold) / 2.;
 
   /// define initial conditions
-  AnalyticalConst2D<T,T> rho(1.);
-  AnalyticalConst2D<T,T> u0(0.0, 0.0);
-  AnalyticalConst2D<T,T> T_cold(converter.getLatticeTemperature(Tcold));
-  AnalyticalConst2D<T,T> T_hot(converter.getLatticeTemperature(Thot));
-  AnalyticalConst2D<T,T> T_mean(converter.getLatticeTemperature(Tmean));
 
-  /// for each material set Rho, U and the Equilibrium
-  NSElattice.defineRhoU(geometry.getMaterialIndicator({ 1, 2, 3 }), rho, u0);
-  NSElattice.iniEquilibrium(geometry.getMaterialIndicator({ 1, 2, 3 }), rho, u0);
-
-  ADElattice.defineRho(geometry, 1, T_mean);
-  ADElattice.iniEquilibrium(geometry, 1, T_mean, u0);
-  ADElattice.defineRho(geometry, 2, T_hot);
-  ADElattice.iniEquilibrium(geometry, 2, T_hot, u0);
-  ADElattice.defineRho(geometry, 3, T_cold);
-  ADElattice.iniEquilibrium(geometry, 3, T_cold, u0);
+  momenta::setTemperature(ADElattice, geometry.getMaterialIndicator(1), Tmean);
+  momenta::setTemperature(ADElattice, geometry.getMaterialIndicator(2), Thot);
+  momenta::setTemperature(ADElattice, geometry.getMaterialIndicator(3), Tcold);
 
   NSElattice.setParameter<descriptors::OMEGA>(NSEomega);
   ADElattice.setParameter<descriptors::OMEGA>(ADEomega);
