@@ -166,7 +166,7 @@ void prepareLattice(MyCase& myCase) {
   const T omega = lattice.getUnitConverter().getLatticeRelaxationFrequency();
 
   // Material=1,2 -->bulk dynamics
-  lattice.defineDynamics<SourcedAdvectionDiffusionBGKdynamics>(geometry.getMaterialIndicator({1, 2}));
+  dynamics::set<SourcedAdvectionDiffusionBGKdynamics>(lattice, geometry.getMaterialIndicator({1, 2}));
 
   // Material=2 -->Dirichlet boundary
   boundary::set<boundary::AdvectionDiffusionDirichlet>(lattice, geometry, 2);
@@ -185,20 +185,8 @@ void setInitialValues(MyCase& myCase) {
   using T = MyCase::value_t;
   auto& geometry = myCase.getGeometry();
   auto& lattice = myCase.getLattice(Poisson{});
-
-  AnalyticalConst3D<T,T> rhoF( 1. );
-  AnalyticalConst3D<T,T> rho0( 0 );
-  std::vector<T> velocity( 2,T() );
-  AnalyticalConst3D<T,T> uF( velocity );
-  lattice.defineField<descriptors::VELOCITY>(geometry.getMaterialIndicator({1, 2}),uF);
-
-  lattice.iniEquilibrium( geometry, 2, rhoF, uF );
-  lattice.defineRhoU( geometry, 2, rhoF, uF );
-
-  lattice.iniEquilibrium( geometry, 1, rho0, uF );
-  lattice.defineRhoU( geometry, 1, rho0, uF );
-
-  // Make the lattice ready for simulation
+  momenta::setElectricPotential(lattice, geometry.getMaterialIndicator(1), T(0));
+  momenta::setElectricPotential(lattice, geometry.getMaterialIndicator(2), T(1));
   lattice.initialize();
 }
 
