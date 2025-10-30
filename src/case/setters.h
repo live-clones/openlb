@@ -76,6 +76,22 @@ void setDensity(SuperLattice<T,DESCRIPTOR>& sLattice,
 }
 
 template <typename T, typename DESCRIPTOR>
+void setElectricPotential(SuperLattice<T,DESCRIPTOR>& sLattice,
+                          FunctorPtr<SuperIndicatorF<T,DESCRIPTOR::d>>&& domainI,
+                          AnalyticalF<DESCRIPTOR::d,T,T>& densityF)
+{
+  setDensity<T,DESCRIPTOR>(sLattice, std::move(domainI), densityF);
+}
+
+template <typename T, typename DESCRIPTOR, typename VALUE>
+void setElectricPotential(SuperLattice<T,DESCRIPTOR>& sLattice,
+                          FunctorPtr<SuperIndicatorF<T,DESCRIPTOR::d>>&& domainI,
+                          VALUE densityD)
+{
+  setDensity<T,DESCRIPTOR,VALUE>(sLattice, std::move(domainI), densityD);
+}
+
+template <typename T, typename DESCRIPTOR>
 void setVelocity(SuperLattice<T,DESCRIPTOR>& sLattice,
                  FunctorPtr<SuperIndicatorF<T,DESCRIPTOR::d>>&& domainI,
                  AnalyticalF<DESCRIPTOR::d,T,T>& velocityF)
