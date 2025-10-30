@@ -137,7 +137,7 @@ void prepareLattice(MyCase& myCase)
   clout << "Prepare Lattice ..." << std::endl;
 
   // Material=1 -->bulk dynamics
-  lattice.defineDynamics<BGKdynamics>(geometry, 1);
+  dynamics::set<BGKdynamics>(lattice, geometry, 1);
 
   // Material=2 -->bounce back
   boundary::set<boundary::BounceBack>(lattice, geometry, 2);
@@ -154,26 +154,9 @@ void prepareLattice(MyCase& myCase)
 
 void setInitialValues(MyCase& myCase)
 {
-  using T        = MyCase::value_t;
-  auto& geometry = myCase.getGeometry();
   auto& lattice  = myCase.getLattice(NavierStokes {});
-
-  OstreamManager clout(std::cout, "prepareLattice");
-
-  // Initial conditions
-  AnalyticalConst3D<T, T> rhoF(1);
-  AnalyticalConst3D<T, T> uF(T(0), T(0), T(0));
-
-  // Initialize all values of distribution functions to their local equilibrium
-  lattice.defineRhoU(geometry, 1, rhoF, uF);
-  lattice.iniEquilibrium(geometry, 1, rhoF, uF);
-
   lattice.setParameter<descriptors::OMEGA>(lattice.getUnitConverter().getLatticeRelaxationFrequency());
-
-  // Make the lattice ready for simulation
   lattice.initialize();
-
-  clout << "Prepare Lattice ... OK" << std::endl;
 }
 
 void setTemporalValues(MyCase& myCase, int iT)
@@ -183,10 +166,7 @@ void setTemporalValues(MyCase& myCase, int iT)
   auto& geometry  = myCase.getGeometry();
   auto& lattice   = myCase.getLattice(NavierStokes {});
   auto& converter = lattice.getUnitConverter();
-
   const T maxPhysT = params.get<parameters::MAX_PHYS_T>();
-
-  OstreamManager clout(std::cout, "setBoundaryValues");
 
   // No of time steps for smooth start-up
   int iTmaxStart = converter.getLatticeTime(maxPhysT * 0.4);
@@ -200,10 +180,10 @@ void setTemporalValues(MyCase& myCase, int iT)
     T   frac[1]  = {};
     StartScale(frac, iTvec);
     std::vector<T> maxVelocity(3, 0);
-    maxVelocity[0]                      = 2.25 * frac[0] * converter.getCharLatticeVelocity();
+    maxVelocity[0]                      = 2.25 * frac[0] * converter.getCharPhysVelocity();
     T                     distance2Wall = converter.getPhysDeltaX() / 2.;
     CirclePoiseuille3D<T> poiseuilleU(geometry, 3, maxVelocity[0], distance2Wall);
-    lattice.defineU(geometry, 3, poiseuilleU);
+    momenta::setVelocity(lattice, geometry.getMaterialIndicator(3), poiseuilleU);
 
     // Update velocity on GPU
     lattice.setProcessingContext<Array<momenta::FixedVelocityMomentumGeneric::VELOCITY>>(ProcessingContext::Simulation);
@@ -215,7 +195,6 @@ void getResults(MyCase& myCase, util::Timer<MyCase::value_t>& timer, std::size_t
 {
   using T          = MyCase::value_t;
   using DESCRIPTOR = MyCase::descriptor_t_of<NavierStokes>;
-  auto& params     = myCase.getParameters();
   auto& lattice    = myCase.getLattice(NavierStokes {});
   auto& converter  = lattice.getUnitConverter();
 
