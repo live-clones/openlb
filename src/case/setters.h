@@ -30,7 +30,7 @@ namespace olb {
 
 namespace fields {
 
-template <typename FIELD, typename T, typename DESCRIPTOR, typename VALUE>
+template <typename FIELD, typename T, typename DESCRIPTOR>
 void set(SuperLattice<T,DESCRIPTOR>& sLattice,
          FunctorPtr<SuperIndicatorF<T,DESCRIPTOR::d>>&& domainI,
          AnalyticalF<DESCRIPTOR::d,T,T>& fieldF)
@@ -143,6 +143,32 @@ void setTemperature(SuperLattice<T,DESCRIPTOR>& sLattice,
   setTemperature(sLattice, std::move(domainI), temperatureF);
 }
 
+template <typename T, typename DESCRIPTOR>
+void setPressure(SuperLattice<T,DESCRIPTOR>& sLattice,
+                 FunctorPtr<SuperIndicatorF<T,DESCRIPTOR::d>>&& domainI,
+                 AnalyticalF<DESCRIPTOR::d,T,T>& pressureF)
+{
+  const auto& converter = sLattice.getUnitConverter();
+  AnalyticalFfromCallableF<DESCRIPTOR::d,T,T> latticeDensityFromPhysPressureF([&](Vector<T,3> physR)
+                                                                               -> Vector<T,1> {
+    T p{};
+    pressureF(&p, physR.data());
+    return converter.getLatticeDensityFromPhysPressure(p);
+  });
+
+  sLattice.defineRho(std::move(domainI), latticeDensityFromPhysPressureF);
+}
+
+template <typename T, typename DESCRIPTOR, typename VALUE>
+void setPressure(SuperLattice<T,DESCRIPTOR>& sLattice,
+                 FunctorPtr<SuperIndicatorF<T,DESCRIPTOR::d>>&& domainI,
+                 VALUE pressureD)
+  requires std::constructible_from<FieldD<T,DESCRIPTOR,descriptors::SCALAR>, VALUE>
+{
+  AnalyticalConst<DESCRIPTOR::d,T,T> pressureF(pressureD);
+  setPressure(sLattice, std::move(domainI), pressureF);
+}
+
 }
 
 namespace dynamics {
@@ -161,6 +187,21 @@ void set(SuperLattice<T,DESCRIPTOR>& sLattice,
          FunctorPtr<SuperIndicatorF<T,DESCRIPTOR::d>>&& domainI)
 {
   set(sLattice, std::move(domainI), meta::id<DYNAMICS<T,DESCRIPTOR>>{});
+}
+
+template <typename DYNAMICS, typename T, typename DESCRIPTOR>
+void set(SuperLattice<T,DESCRIPTOR>& sLattice,
+         FunctorPtr<SuperIndicatorF<T,DESCRIPTOR::d>>&& domainI)
+{
+  set(sLattice, std::move(domainI), meta::id<DYNAMICS>{});
+}
+
+template <typename DYNAMICS, typename T, typename DESCRIPTOR>
+void set(SuperLattice<T,DESCRIPTOR>& sLattice,
+         SuperGeometry<T,DESCRIPTOR::d>& sGeometry,
+         int material)
+{
+  set(sLattice, sGeometry.getMaterialIndicator(material), meta::id<DYNAMICS>{});
 }
 
 template <template<typename...> typename DYNAMICS, typename T, typename DESCRIPTOR>
