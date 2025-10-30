@@ -117,7 +117,18 @@ void setHeatFlux(SuperLattice<T,DESCRIPTOR>& sLattice,
                  FunctorPtr<SuperIndicatorF<T,DESCRIPTOR::d>>&& domainI,
                  AnalyticalF<DESCRIPTOR::d,T,T>& heatFluxF)
 {
-  sLattice.defineU(std::move(domainI), heatFluxF);
+  const auto& converter = sLattice.getUnitConverter();
+
+  AnalyticalFfromCallableF<DESCRIPTOR::d, T, T> heatFluxL([&](Vector<T, DESCRIPTOR::d> physR) -> Vector<T, DESCRIPTOR::d> {
+    Vector<T, DESCRIPTOR::d> heatFluxToLattice;
+    heatFluxF(heatFluxToLattice.data(), physR.data());
+    T convFactor = converter.getLatticeSpecificHeatCapacity(converter.getPhysSpecificHeatCapacity()) * (converter.getLatticeThermalRelaxationTime() - 0.5) / converter.getLatticeThermalRelaxationTime();
+    return Vector<T,DESCRIPTOR::d>([&](int iD) -> T {
+      return converter.getLatticeHeatFlux(heatFluxToLattice[0]) / convFactor;
+    });
+  });
+
+  sLattice.defineU(std::move(domainI), heatFluxL);
 }
 
 template <typename T, typename DESCRIPTOR, typename VALUE>
@@ -126,16 +137,8 @@ void setHeatFlux(SuperLattice<T,DESCRIPTOR>& sLattice,
                  VALUE heatFluxD)
   requires std::constructible_from<FieldD<T,DESCRIPTOR,descriptors::VELOCITY>, VALUE>
 {
-  const auto& converter = sLattice.getUnitConverter();
-
-  Vector<T, DESCRIPTOR::d> heatFluxL;
-  for (int iDim = 0; iDim < DESCRIPTOR::d; iDim++)
-  {
-    heatFluxD[iDim] = converter.getLatticeHeatFlux(heatFluxD[iDim]) /
-                      converter.getLatticeSpecificHeatCapacity(converter.getPhysSpecificHeatCapacity())*(converter.getLatticeThermalRelaxationTime() - 0.5) / converter.getLatticeThermalRelaxationTime();
-  }
   AnalyticalConst<DESCRIPTOR::d,T,T> heatFluxF(heatFluxD);
-  setHeatFlux(sLattice, std::move(domainI), heatFluxD);
+  setHeatFlux(sLattice, std::move(domainI), heatFluxF);
 }
 
 template <typename T, typename DESCRIPTOR>
