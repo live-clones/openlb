@@ -33,6 +33,14 @@ namespace fields {
 template <typename FIELD, typename T, typename DESCRIPTOR, typename VALUE>
 void set(SuperLattice<T,DESCRIPTOR>& sLattice,
          FunctorPtr<SuperIndicatorF<T,DESCRIPTOR::d>>&& domainI,
+         AnalyticalF<DESCRIPTOR::d,T,T>& fieldF)
+{
+  sLattice.template defineField<FIELD>(std::move(domainI), fieldF);
+}
+
+template <typename FIELD, typename T, typename DESCRIPTOR, typename VALUE>
+void set(SuperLattice<T,DESCRIPTOR>& sLattice,
+         FunctorPtr<SuperIndicatorF<T,DESCRIPTOR::d>>&& domainI,
          VALUE fieldD)
   requires std::constructible_from<FieldD<T,DESCRIPTOR,FIELD>, VALUE>
 {
