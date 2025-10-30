@@ -123,7 +123,6 @@ void prepareGeometry(MyCase& myCase)
   sGeometry.checkForErrors();
   sGeometry.getStatistics().print();
   clout << "Prepare Geometry ... OK" << std::endl;
-  return;
 }
 
 /// @brief Set lattice dynamics
@@ -163,7 +162,7 @@ void prepareLattice(MyCase& myCase)
   // Material=1 -->bulk dynamics
   // Material=3 -->bulk dynamics (inflow)
   // Material=4 -->bulk dynamics (outflow)
-  sLattice.defineDynamics<BGKdynamics<T, DESCRIPTOR>>(bulkIndicator);
+  dynamics::set<BGKdynamics>(sLattice, bulkIndicator);
   // Material=2 -->bounce back
   boundary::set<boundary::BounceBack>(sLattice, sGeometry, 2);
 
@@ -176,7 +175,6 @@ void prepareLattice(MyCase& myCase)
   // boundary::set<boundary::InterpolatedPressure>(sLattice, sGeometry, 4);
 
   clout << "Prepare Lattice ... OK" << std::endl;
-  return;
 }
 
 /// Set initial condition for primal variables (velocity and density)
@@ -188,32 +186,18 @@ void setInitialValues(MyCase& myCase)
   clout << "lattice initialization ..." << std::endl;
   using T         = MyCase::value_t;
   auto& sLattice  = myCase.getLattice(NavierStokes {});
-  auto& sGeometry = myCase.getGeometry();
-
-  // Initial conditions
-  AnalyticalConst2D<T, T>    ux(0.);
-  AnalyticalConst2D<T, T>    uy(0.);
-  AnalyticalConst2D<T, T>    rho(1.);
-  AnalyticalComposed2D<T, T> u(ux, uy);
-
-  //Initialize all values of distribution functions to their local equilibrium
-  auto bulkIndicator = sGeometry.getMaterialIndicator({1, 3, 4});
-  sLattice.defineRhoU(bulkIndicator, rho, u);
-  sLattice.iniEquilibrium(bulkIndicator, rho, u);
-
   const T omega = sLattice.getUnitConverter().getLatticeRelaxationFrequency();
   sLattice.setParameter<descriptors::OMEGA>(omega);
 
   // Make the lattice ready for simulation
   sLattice.initialize();
   clout << "Initialization ... OK" << std::endl;
-  return;
 }
 
 // Generates a slowly increasing inflow for the first iTMaxStart timesteps
-void setBoundaryValues(MyCase& myCase, std::size_t iT)
+void setTemporalValues(MyCase& myCase, std::size_t iT)
 {
-  OstreamManager clout(std::cout, "setBoundaryValues");
+  OstreamManager clout(std::cout, "setTemporalValues");
   using T = MyCase::value_t;
 
   auto&   sLattice   = myCase.getLattice(NavierStokes {});
@@ -235,16 +219,15 @@ void setBoundaryValues(MyCase& myCase, std::size_t iT)
     std::size_t iTvec[1] = {iT};
     T           frac[1]  = {};
     StartScale(frac, iTvec);
-    T               maxVelocity   = converter.getCharLatticeVelocity() * (T)3.0 / (T)2.0 * frac[0];
+    T               maxVelocity   = converter.getCharPhysVelocity() * (T)3.0 / (T)2.0 * frac[0];
     T               distance2Wall = converter.getPhysDeltaX() / (T)2.0;
     Poiseuille2D<T> poiseuilleU(sGeometry, 3, maxVelocity, distance2Wall);
-    // define lattice speed on inflow
-    sLattice.defineU(sGeometry, 3, poiseuilleU);
+    // define physical speed on inflow
+    momenta::setVelocity(sLattice, sGeometry.getMaterialIndicator(3), poiseuilleU);
 
     sLattice.setProcessingContext<Array<momenta::FixedVelocityMomentumGeneric::VELOCITY>>(
         ProcessingContext::Simulation);
   }
-  return;
 }
 
 void getResults(MyCase& myCase, std::size_t iT, util::Timer<MyCase::value_t> &timer)
@@ -316,7 +299,6 @@ void getResults(MyCase& myCase, std::size_t iT, util::Timer<MyCase::value_t> &ti
     // The data can be reloaded using
     //     sLattice.load("bstep2d.checkpoint");
   }
-  return;
 }
 
 void simulate(MyCase& myCase)
@@ -335,7 +317,7 @@ void simulate(MyCase& myCase)
 
   for (std::size_t iT = 0; iT < sLattice.getUnitConverter().getLatticeTime(maxPhysT); ++iT) {
 
-    setBoundaryValues(myCase, iT);
+    setTemporalValues(myCase, iT);
 
     sLattice.collideAndStream();
 
@@ -345,7 +327,6 @@ void simulate(MyCase& myCase)
   sLattice.setProcessingContext(ProcessingContext::Evaluation);
   timer.stop();
   timer.printSummary();
-  return;
 }
 
 int main(int argc, char* argv[])
