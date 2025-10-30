@@ -128,7 +128,7 @@ void prepareLattice(MyCase& myCase)
   converter.print();
   clout << "Prepare Lattice ..." << std::endl;
 
-  lattice.defineDynamics<PorousParticleBGKdynamics>(geometry, 1);
+  olb::dynamics::set<PorousParticleBGKdynamics>(lattice, geometry.getMaterialIndicator({1}));
   boundary::set<boundary::BounceBack>(lattice, geometry, 2);
 
   lattice.setParameter<descriptors::OMEGA>(converter.getLatticeRelaxationFrequency());
@@ -140,19 +140,11 @@ void setBoundaryValues(MyCase& myCase)
 {
   OstreamManager clout(std::cout, "setBoundaryValues");
   clout << "Set Boundary Values ..." << std::endl;
-  using T = MyCase::value_t;
+
   auto& lattice = myCase.getLattice(NavierStokes{});
   auto& geometry = myCase.getGeometry();
-  AnalyticalConst2D<T, T> one(1.);
-  lattice.defineField<POROSITY>(geometry.getMaterialIndicator({1,2}), one);
 
-  AnalyticalConst2D<T, T> ux(0.);
-  AnalyticalConst2D<T, T> uy(0.);
-  AnalyticalConst2D<T, T> rho(1.);
-  AnalyticalComposed2D<T, T> u(ux, uy);
-
-  lattice.defineRhoU(geometry, 1, rho, u);
-  lattice.iniEquilibrium(geometry, 1, rho, u);
+  fields::set<POROSITY>(lattice, geometry.getMaterialIndicator({1,2}), 1);
 
   lattice.initialize();
   clout << "Set Boundary Values ... OK" << std::endl;
