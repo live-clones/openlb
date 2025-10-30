@@ -158,8 +158,8 @@ void prepareLattice(MyCase& myCase)
 
   ADElattice.setUnitConverter(converter);
 
-  NSElattice.defineDynamics<ExternalTauEffLESForcedBGKdynamics>(geometry.getMaterialIndicator({ 1, 2, 3 }));
-  ADElattice.defineDynamics<ExternalTauEffLESBGKadvectionDiffusionDynamics>(geometry.getMaterialIndicator({ 1, 2, 3 }));
+  dynamics::set<ExternalTauEffLESForcedBGKdynamics>(NSElattice, geometry.getMaterialIndicator({ 1, 2, 3 }));
+  dynamics::set<ExternalTauEffLESBGKadvectionDiffusionDynamics>(ADElattice, geometry.getMaterialIndicator({ 1, 2, 3 }));
 
   boundary::set<boundary::BounceBack>(NSElattice, geometry, 4);
   boundary::set<boundary::BounceBack>(ADElattice, geometry, 4);
@@ -171,11 +171,8 @@ void prepareLattice(MyCase& myCase)
   const T omegaNSE  =  converter.getLatticeRelaxationFrequency();
   const T omegaADE  =  converter.getLatticeThermalRelaxationFrequency();
 
-  AnalyticalConst2D<T,T> tauNSE(1. / omegaNSE);
-  AnalyticalConst2D<T,T> tauADE(1. / omegaADE);
-
-  NSElattice.defineField<descriptors::TAU_EFF>( geometry.getMaterialIndicator({ 1, 2, 3 }), tauNSE );
-  ADElattice.defineField<descriptors::TAU_EFF>( geometry.getMaterialIndicator({ 1, 2, 3 }), tauADE );
+  fields::set<descriptors::TAU_EFF>(NSElattice, geometry.getMaterialIndicator({ 1, 2, 3 }), 1. / omegaNSE);
+  fields::set<descriptors::TAU_EFF>(ADElattice, geometry.getMaterialIndicator({ 1, 2, 3 }), 1. / omegaADE);
 
   NSElattice.setParameter<descriptors::OMEGA>( omegaNSE );
   ADElattice.setParameter<descriptors::OMEGA>( omegaADE );
@@ -237,25 +234,9 @@ void setInitialValues(MyCase& myCase)
     const T Tmean = (Thot + Tcold) / 2.;
 
     /// define initial conditions
-    AnalyticalConst2D<T,T> rho(1.);
-    AnalyticalConst2D<T,T> u0(0.0, 0.0);
-    AnalyticalConst2D<T,T> T_cold(converter.getLatticeTemperature(Tcold));
-    AnalyticalConst2D<T,T> T_hot(converter.getLatticeTemperature(Thot));
-    AnalyticalConst2D<T,T> T_mean(converter.getLatticeTemperature(Tmean));
-
-    /// for each material set Rho, U and the Equilibrium
-    NSElattice.defineRhoU(geometry.getMaterialIndicator({ 1, 2, 3 }), rho, u0);
-    NSElattice.iniEquilibrium(geometry.getMaterialIndicator({ 1, 2, 3 }), rho, u0);
-
-    ADElattice.defineRho(geometry, 1, T_mean);
-    ADElattice.iniEquilibrium(geometry, 1, T_mean, u0);
-    ADElattice.defineRho(geometry, 2, T_hot);
-    ADElattice.iniEquilibrium(geometry, 2, T_hot, u0);
-    ADElattice.defineRho(geometry, 3, T_cold);
-    ADElattice.iniEquilibrium(geometry, 3, T_cold, u0);
-
-    NSElattice.setParameter<descriptors::OMEGA>(NSEomega);
-    ADElattice.setParameter<descriptors::OMEGA>(ADEomega);
+    momenta::setTemperature(ADElattice, geometry.getMaterialIndicator(1), Tmean);
+    momenta::setTemperature(ADElattice, geometry.getMaterialIndicator(2), Thot);
+    momenta::setTemperature(ADElattice, geometry.getMaterialIndicator(3), Tcold);
 
     /// Make the lattice ready for simulation
     NSElattice.initialize();
