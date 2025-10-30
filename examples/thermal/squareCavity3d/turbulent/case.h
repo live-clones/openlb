@@ -159,8 +159,8 @@ void prepareLattice(MyCase& myCase)
 
   ADElattice.setUnitConverter(converter);
 
-  NSElattice.defineDynamics<ExternalTauEffLESForcedBGKdynamics>(geometry.getMaterialIndicator({ 1, 2, 3 }));
-  ADElattice.defineDynamics<ExternalTauEffLESBGKadvectionDiffusionDynamics>(geometry.getMaterialIndicator({ 1, 2, 3 }));
+  dynamics::set<ExternalTauEffLESForcedBGKdynamics>(NSElattice, geometry.getMaterialIndicator({ 1, 2, 3 }));
+  dynamics::set<ExternalTauEffLESBGKadvectionDiffusionDynamics>(ADElattice, geometry.getMaterialIndicator({ 1, 2, 3 }));
 
   boundary::set<boundary::BounceBack>(NSElattice, geometry, 4);
   boundary::set<boundary::BounceBack>(ADElattice, geometry, 4);
@@ -172,11 +172,8 @@ void prepareLattice(MyCase& myCase)
   const T omegaNSE  =  converter.getLatticeRelaxationFrequency();
   const T omegaADE  =  converter.getLatticeThermalRelaxationFrequency();
 
-  AnalyticalConst3D<T,T> tauNSE(1. / omegaNSE);
-  AnalyticalConst3D<T,T> tauADE(1. / omegaADE);
-
-  NSElattice.defineField<descriptors::TAU_EFF>( geometry.getMaterialIndicator({ 1, 2, 3 }), tauNSE );
-  ADElattice.defineField<descriptors::TAU_EFF>( geometry.getMaterialIndicator({ 1, 2, 3 }), tauADE );
+  fields::set<descriptors::TAU_EFF>(NSElattice, geometry.getMaterialIndicator({ 1, 2, 3 }), 1. / omegaNSE);
+  fields::set<descriptors::TAU_EFF>(ADElattice, geometry.getMaterialIndicator({ 1, 2, 3 }), 1. / omegaADE);
 
   NSElattice.setParameter<descriptors::OMEGA>( omegaNSE );
   ADElattice.setParameter<descriptors::OMEGA>( omegaADE );
@@ -221,48 +218,32 @@ void prepareLattice(MyCase& myCase)
 
 void setInitialValues(MyCase& myCase)
 {
-  OstreamManager clout(std::cout,"setInitialValues");
-  clout << "Set initial values ..." << std::endl;
+    OstreamManager clout(std::cout,"setInitialValues");
+    clout << "Set initial values ..." << std::endl;
 
-  using T = MyCase::value_t_of<NavierStokes>;
+    using T = MyCase::value_t_of<NavierStokes>;
 
-  auto& geometry = myCase.getGeometry();
-  auto& NSElattice = myCase.getLattice(NavierStokes{});
-  auto& ADElattice = myCase.getLattice(Temperature{});
-  const auto& converter = NSElattice.getUnitConverter();
+    auto& geometry = myCase.getGeometry();
+    auto& NSElattice = myCase.getLattice(NavierStokes{});
+    auto& ADElattice = myCase.getLattice(Temperature{});
+    const auto& converter = NSElattice.getUnitConverter();
 
-  const T NSEomega = converter.getLatticeRelaxationFrequency();
-  const T ADEomega = converter.getLatticeThermalRelaxationFrequency();
-  const T Tcold = converter.getCharPhysLowTemperature();
-  const T Thot  = converter.getCharPhysHighTemperature();
-  const T Tmean = (Thot + Tcold) / 2.;
+    const T NSEomega = converter.getLatticeRelaxationFrequency();
+    const T ADEomega = converter.getLatticeThermalRelaxationFrequency();
+    const T Tcold = converter.getCharPhysLowTemperature();
+    const T Thot  = converter.getCharPhysHighTemperature();
+    const T Tmean = (Thot + Tcold) / 2.;
 
-  /// define initial conditions
-  AnalyticalConst3D<T,T> rho(1.);
-  AnalyticalConst3D<T,T> u0(0.0, 0.0, 0.0);
-  AnalyticalConst3D<T,T> T_cold(converter.getLatticeTemperature(Tcold));
-  AnalyticalConst3D<T,T> T_hot(converter.getLatticeTemperature(Thot));
-  AnalyticalConst3D<T,T> T_mean(converter.getLatticeTemperature(Tmean));
+    /// define initial conditions
+    momenta::setTemperature(ADElattice, geometry.getMaterialIndicator(1), Tmean);
+    momenta::setTemperature(ADElattice, geometry.getMaterialIndicator(2), Thot);
+    momenta::setTemperature(ADElattice, geometry.getMaterialIndicator(3), Tcold);
 
-  /// for each material set Rho, U and the Equilibrium
-  NSElattice.defineRhoU(geometry.getMaterialIndicator({ 1, 2, 3 }), rho, u0);
-  NSElattice.iniEquilibrium(geometry.getMaterialIndicator({ 1, 2, 3 }), rho, u0);
+    /// Make the lattice ready for simulation
+    NSElattice.initialize();
+    ADElattice.initialize();
 
-  ADElattice.defineRho(geometry, 1, T_mean);
-  ADElattice.iniEquilibrium(geometry, 1, T_mean, u0);
-  ADElattice.defineRho(geometry, 2, T_hot);
-  ADElattice.iniEquilibrium(geometry, 2, T_hot, u0);
-  ADElattice.defineRho(geometry, 3, T_cold);
-  ADElattice.iniEquilibrium(geometry, 3, T_cold, u0);
-
-  NSElattice.setParameter<descriptors::OMEGA>(NSEomega);
-  ADElattice.setParameter<descriptors::OMEGA>(ADEomega);
-
-  /// Make the lattice ready for simulation
-  NSElattice.initialize();
-  ADElattice.initialize();
-
-  clout << "Set initial values ... OK" << std::endl;
+    clout << "Set initial values ... OK" << std::endl;
 }
 
 void setTemporalValues(MyCase& myCase,
