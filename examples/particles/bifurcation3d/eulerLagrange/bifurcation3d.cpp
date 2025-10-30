@@ -43,12 +43,6 @@ using namespace olb::descriptors;
 using namespace olb::graphics;
 using namespace olb::util;
 using namespace olb::names;
-using namespace particles;
-using namespace particles::subgrid;
-using namespace particles::communication;
-using namespace particles::dynamics;
-using namespace particles::creators;
-using namespace particles::io;
 
 using MyCase = Case<
   NavierStokes, Lattice<double, descriptors::D3Q19<>>
@@ -88,8 +82,6 @@ Mesh<MyCase::value_t, MyCase::d> createMesh(MyCase::ParametersD& parameters)
   mesh.setOverlap(parameters.get<parameters::OVERLAP>());
   return mesh;
 }
-
-
 
 //Ensure that parallel mode is used
 #ifdef PARALLEL_MODE_MPI
@@ -170,7 +162,8 @@ void prepareLattice(MyCase& myCase)
   const T omega     = converter.getLatticeRelaxationFrequency();
 
   // Material=1 -->bulk dynamics
-  lattice.defineDynamics<BGKdynamics>(geometry, 1);
+  dynamics::set<BGKdynamics>(lattice, geometry, 1);
+
 
   if (parameters.get<parameters::BOUZIDI>()) {
     STLreader<T> stlReader("../bifurcation3d.stl", converter.getPhysDeltaX());
@@ -181,11 +174,11 @@ void prepareLattice(MyCase& myCase)
   }
 
   // Material=3 -->bulk dynamics (inflow)
-  lattice.defineDynamics<BGKdynamics>(geometry, 3);
+  dynamics::set<BGKdynamics>(lattice, geometry, 3);
 
   // Material=4 -->bulk dynamics (outflow)
-  lattice.defineDynamics<BGKdynamics>(geometry, 4);
-  lattice.defineDynamics<BGKdynamics>(geometry, 5);
+  dynamics::set<BGKdynamics>(lattice, geometry, 4);
+  dynamics::set<BGKdynamics>(lattice, geometry, 5);
 
   // Setting of the boundary conditions
   boundary::set<boundary::InterpolatedPressure>(lattice, geometry, 3);
@@ -202,25 +195,7 @@ void setInitialValues(MyCase& myCase)
 {
   OstreamManager clout(std::cout, "setInitialValues");
   clout << "Set Initial Values ..." << std::endl;
-  using T        = MyCase::value_t;
-  auto& geometry = myCase.getGeometry();
   auto& lattice  = myCase.getLattice(NavierStokes {});
-
-  AnalyticalConst3D<T, T> rhoF(1);
-  std::vector<T>          velocity(3, T());
-  AnalyticalConst3D<T, T> uF(velocity);
-
-  lattice.iniEquilibrium(geometry, 1, rhoF, uF);
-  lattice.iniEquilibrium(geometry, 2, rhoF, uF);
-  lattice.iniEquilibrium(geometry, 3, rhoF, uF);
-  lattice.iniEquilibrium(geometry, 4, rhoF, uF);
-  lattice.iniEquilibrium(geometry, 5, rhoF, uF);
-
-  lattice.defineRhoU(geometry, 1, rhoF, uF);
-  lattice.defineRhoU(geometry, 2, rhoF, uF);
-  lattice.defineRhoU(geometry, 3, rhoF, uF);
-  lattice.defineRhoU(geometry, 4, rhoF, uF);
-  lattice.defineRhoU(geometry, 5, rhoF, uF);
 
   lattice.initialize();
 
@@ -254,8 +229,8 @@ void setTemporalValues(MyCase& myCase, std::size_t iT)
   CirclePoiseuille3D<T> poiseuilleU5(outletCenter1[0], outletCenter1[1], outletCenter1[2], outletNormal1[0],
                                      outletNormal1[1], outletNormal1[2], parameters.get<parameters::OUTLET_RADIUS1>() * 0.95, -maxVelocity);
 
-  lattice.defineU(geometry, 4, poiseuilleU4);
-  lattice.defineU(geometry, 5, poiseuilleU5);
+  momenta::setVelocity(lattice, geometry.getMaterialIndicator(4), poiseuilleU4);
+  momenta::setVelocity(lattice, geometry.getMaterialIndicator(5), poiseuilleU5);
 }
 
 template<typename PARTICLESYSTEM>
@@ -266,6 +241,11 @@ void prepareParticles(MyCase& myCase,
 {
   OstreamManager clout(std::cout, "prepareParticles");
   clout << "Prepare Particles ..." << std::endl;
+  using namespace particles;
+  using namespace particles::subgrid;
+  using namespace particles::dynamics;
+  using namespace particles::creators;
+  using namespace particles::io;
   using T          = MyCase::value_t;
   using PARTICLETYPE = SubgridParticle3D;
   auto& parameters = myCase.getParameters();
@@ -323,6 +303,10 @@ bool getResults(MyCase& myCase, std::size_t iT, Timer<MyCase::value_t>& fluidTim
   using T          = MyCase::value_t;
   using DESCRIPTOR = MyCase::descriptor_t_of<NavierStokes>;
   using PARTICLETYPE = SubgridParticle3D;
+  using namespace particles;
+  using namespace particles::subgrid;
+  using namespace particles::dynamics;
+  using namespace particles::io;
   auto& parameters = myCase.getParameters();
   auto& geometry   = myCase.getGeometry();
   auto& lattice    = myCase.getLattice(NavierStokes {});
@@ -465,6 +449,11 @@ void simulate( MyCase& myCase )
   using T                   = MyCase::value_t;
   using DESCRIPTOR          = MyCase::descriptor_t_of<NavierStokes>;
   using PARTICLETYPE        = SubgridParticle3D;
+  using namespace particles;
+  using namespace particles::subgrid;
+  using namespace particles::communication;
+  using namespace particles::dynamics;
+
   auto& parameters          = myCase.getParameters();
   auto& geometry            = myCase.getGeometry();
   auto& lattice             = myCase.getLattice(NavierStokes {});
