@@ -50,10 +50,6 @@
 using namespace olb;
 using namespace olb::descriptors;
 using namespace olb::graphics;
-using namespace olb::particles;
-using namespace olb::particles::access;
-using namespace olb::particles::contact;
-using namespace olb::particles::dynamics;
 using namespace olb::util;
 using namespace olb::names;
 
@@ -128,7 +124,7 @@ void prepareLattice(MyCase& myCase)
   converter.print();
   clout << "Prepare Lattice ..." << std::endl;
 
-  olb::dynamics::set<PorousParticleBGKdynamics>(lattice, geometry.getMaterialIndicator({1}));
+  dynamics::set<PorousParticleBGKdynamics>(lattice, geometry.getMaterialIndicator({1}));
   boundary::set<boundary::BounceBack>(lattice, geometry, 2);
 
   lattice.setParameter<descriptors::OMEGA>(converter.getLatticeRelaxationFrequency());
@@ -157,6 +153,9 @@ void getResults(MyCase& myCase, int iT,
 {
   OstreamManager clout(std::cout, "getResults");
   using T = MyCase::value_t;
+  using namespace olb::particles;
+  using namespace olb::particles::access;
+
   auto& parameters = myCase.getParameters();
   auto& lattice = myCase.getLattice(NavierStokes{});
   auto& geometry = myCase.getGeometry();
@@ -234,6 +233,10 @@ void getResults(MyCase& myCase, int iT,
 void simulate(MyCase& myCase )
 {
   using T = MyCase::value_t;
+  using namespace olb::particles;
+  using namespace olb::particles::access;
+  using namespace olb::particles::contact;
+  using namespace olb::particles::dynamics;
   auto& parameters = myCase.getParameters();
   auto& lattice = myCase.getLattice(NavierStokes{});
   auto& geometry = myCase.getGeometry();
