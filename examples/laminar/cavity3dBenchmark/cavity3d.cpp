@@ -25,13 +25,16 @@
 
 using namespace olb;
 using namespace olb::names;
+
 // === Step 1: Declarations ===
 using MyCase = Case<NavierStokes, Lattice<float, descriptors::D3Q19<>>>;
 
 namespace olb::parameters {
+
 struct NO_EXPORT_RESULTS : public descriptors::TYPED_FIELD_BASE<bool, 1> {};
 struct CUBOIDS_PER_PROCESS : public descriptors::TYPED_FIELD_BASE<std::size_t, 1> {};
-} // namespace olb::parameters
+
+}
 
 // Undefine to test a minimal bounce back cavity
 #define LID_DRIVEN
@@ -61,9 +64,6 @@ Mesh<MyCase::value_t, MyCase::d> createMesh(MyCase::ParametersD& parameters)
 /// @note The material numbers will be used to assign physics to lattice nodes
 void prepareGeometry(MyCase& myCase)
 {
-
-  OstreamManager clout(std::cout, "prepareGeometry");
-  //clout << "Prepare Geometry ..." << std::endl;
   using T          = MyCase::value_t;
   auto& sGeometry  = myCase.getGeometry();
   auto& parameters = myCase.getParameters();
@@ -90,18 +90,12 @@ void prepareGeometry(MyCase& myCase)
 
   sGeometry.innerClean(verbose);
   sGeometry.checkForErrors(verbose);
-
-  //sGeometry.print();
-
-  //clout << "Prepare Geometry ... OK" << std::endl;
-  return;
 }
 
 /// @brief Set lattice dynamics
 /// @param myCase The Case instance which keeps the simulation data
 void prepareLattice(MyCase& myCase)
 {
-  OstreamManager clout(std::cout, "prepareLattice");
   using T          = MyCase::value_t;
   using DESCRIPTOR = MyCase::descriptor_t_of<NavierStokes>;
   auto& sGeometry  = myCase.getGeometry();
@@ -180,9 +174,6 @@ void prepareLattice(MyCase& myCase)
 /// @note Be careful: initial values have to be set using lattice units
 void setInitialValues(MyCase& myCase)
 {
-  OstreamManager clout(std::cout, "Initialization");
-  //clout << "lattice initialization ..." << std::endl;
-
   using T = MyCase::value_t;
 
   auto& sLattice = myCase.getLattice(NavierStokes {});
@@ -205,9 +196,7 @@ void setInitialValues(MyCase& myCase)
 
   sLattice.setParameter<descriptors::OMEGA>(omega);
 
-  // Make the lattice ready for simulation
   sLattice.initialize();
-  //clout << "Initialization ... OK" << std::endl;
   return;
 }
 
@@ -285,9 +274,9 @@ void simulate(MyCase& myCase)
   }
 }
 
-int main(int argc, char** argv)
-{
+int main(int argc, char** argv) {
   initialize(&argc, &argv, false, false);
+
   /// === Step 2: Set Parameters ===
   MyCase::ParametersD myCaseParameters;
   {
