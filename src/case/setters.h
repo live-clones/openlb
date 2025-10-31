@@ -124,7 +124,7 @@ void setHeatFlux(SuperLattice<T,DESCRIPTOR>& sLattice,
     heatFluxF(heatFluxToLattice.data(), physR.data());
     T convFactor = converter.getLatticeSpecificHeatCapacity(converter.getPhysSpecificHeatCapacity()) * (converter.getLatticeThermalRelaxationTime() - 0.5) / converter.getLatticeThermalRelaxationTime();
     return Vector<T,DESCRIPTOR::d>([&](int iD) -> T {
-      return converter.getLatticeHeatFlux(heatFluxToLattice[0]) / convFactor;
+      return converter.getLatticeHeatFlux(heatFluxToLattice[iD]) / convFactor;
     });
   });
 
@@ -137,7 +137,8 @@ void setHeatFlux(SuperLattice<T,DESCRIPTOR>& sLattice,
                  VALUE heatFluxD)
   requires std::constructible_from<FieldD<T,DESCRIPTOR,descriptors::VELOCITY>, VALUE>
 {
-  AnalyticalConst<DESCRIPTOR::d,T,T> heatFluxF(heatFluxD);
+  Vector<T,DESCRIPTOR::d> heatFluxV = Vector<T,DESCRIPTOR::d>(heatFluxD);
+  AnalyticalConst<DESCRIPTOR::d,T,T> heatFluxF((heatFluxV));
   setHeatFlux(sLattice, std::move(domainI), heatFluxF);
 }
 
