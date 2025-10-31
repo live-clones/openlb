@@ -44,18 +44,17 @@ using MyCase = Case<
 // effective for x in R3, only the distance to (0,0) is needed.
 // documentation e.g. Biomedical Optics, Lihong V. Wang Hsin-I Wu
 template <typename T, typename S>
-class AnalyticalVelocity2D : public AnalyticalF2D<T, S>
-{
+class AnalyticalVelocityPorousPlate2D : public AnalyticalF2D<T, S> {
 private:
   T _Re;
   T _u0;
   T _v0;
   T _ly;
 public:
-  AnalyticalVelocity2D(T Re, T u0, T v0, T ly) : AnalyticalF2D<T, S>(2),
+  AnalyticalVelocityPorousPlate2D(T Re, T u0, T v0, T ly) : AnalyticalF2D<T, S>(2),
     _Re(Re), _u0(u0), _v0(v0), _ly(ly)
   {
-    this->getName() = "AnalyticalVelocity2D";
+    this->getName() = "AnalyticalVelocityPorousPlate2D";
   };
 
   bool operator()(T output[2], const S x[2]) override
@@ -67,8 +66,7 @@ public:
 };
 
 template <typename T, typename S>
-class AnalyticalTemperature2D : public AnalyticalF2D<T, S>
-{
+class AnalyticalTemperaturePorousPlate2D : public AnalyticalF2D<T, S> {
 private:
   T _Re;
   T _Pr;
@@ -76,10 +74,10 @@ private:
   T _T0;
   T _deltaT;
 public:
-  AnalyticalTemperature2D(T Re, T Pr, T ly, T T0, T deltaT) : AnalyticalF2D<T, S>(1),
+  AnalyticalTemperaturePorousPlate2D(T Re, T Pr, T ly, T T0, T deltaT) : AnalyticalF2D<T, S>(1),
     _Re(Re), _Pr(Pr), _ly(ly), _T0(T0), _deltaT(deltaT)
   {
-    this->getName() = "AnalyticalTemperature2D";
+    this->getName() = "AnalyticalTemperaturePorousPlate2D";
   };
 
   bool operator()(T output[1], const S x[2]) override
@@ -90,7 +88,7 @@ public:
 };
 
 template <typename T, typename S>
-class AnalyticalHeatFlux2D : public AnalyticalF2D<T, S> {
+class AnalyticalHeatFluxPorousPlate2D : public AnalyticalF2D<T, S> {
 private:
   T _Re;
   T _Pr;
@@ -98,10 +96,10 @@ private:
   T _ly;
   T _lambda;
 public:
-  AnalyticalHeatFlux2D(T Re, T Pr, T deltaT, T ly,T lambda) : AnalyticalF2D<T, S>(2),
+  AnalyticalHeatFluxPorousPlate2D(T Re, T Pr, T deltaT, T ly,T lambda) : AnalyticalF2D<T, S>(2),
     _Re(Re), _Pr(Pr), _deltaT(deltaT), _ly(ly), _lambda(lambda)
   {
-    this->getName() = "AnalyticalHeatFlux2D";
+    this->getName() = "AnalyticalHeatFluxPorousPlate2D";
   };
 
   bool operator()(T output[2], const S x[2]) override
@@ -131,7 +129,7 @@ void computeError(MyCase& myCase)
   auto indicatorF = geometry.getMaterialIndicator({1, 2, 3});
 
   T u_Re = Re * converter.getPhysViscosity() / converter.getCharPhysLength();
-  AnalyticalVelocity2D<T,T> uSol(Re, converter.getCharPhysVelocity(), u_Re, converter.getCharPhysLength());
+  AnalyticalVelocityPorousPlate2D<T,T> uSol(Re, converter.getCharPhysVelocity(), u_Re, converter.getCharPhysLength());
   SuperLatticePhysVelocity2D<T,NSEDESCRIPTOR> u(NSElattice,converter);
 
   SuperAbsoluteErrorL2Norm2D<T> absVelocityErrorNormL2(u, uSol, indicatorF);
@@ -141,7 +139,7 @@ void computeError(MyCase& myCase)
   relVelocityErrorNormL2(result, input);
   clout << "; velocity-L2-error(rel)=" << result[0] << std::endl;
 
-  AnalyticalTemperature2D<T,T> tSol(Re, Pr, converter.getCharPhysLength(), converter.getCharPhysLowTemperature(), converter.getCharPhysTemperatureDifference());
+  AnalyticalTemperaturePorousPlate2D<T,T> tSol(Re, Pr, converter.getCharPhysLength(), converter.getCharPhysLowTemperature(), converter.getCharPhysTemperatureDifference());
   SuperLatticePhysTemperature2D<T,NSEDESCRIPTOR,ADEDESCRIPTOR> t(ADElattice,converter);
 
   SuperAbsoluteErrorL2Norm2D<T> absTemperatureErrorNormL2(t, tSol, indicatorF);
@@ -151,7 +149,7 @@ void computeError(MyCase& myCase)
   relTemperatureErrorNormL2(result, input);
   clout << "; temperature-L2-error(rel)=" << result[0] << std::endl;
 
-  AnalyticalHeatFlux2D<T,T> HeatFluxSol(Re, Pr, converter.getCharPhysTemperatureDifference(), converter.getCharPhysLength(), converter.getThermalConductivity());
+  AnalyticalHeatFluxPorousPlate2D<T,T> HeatFluxSol(Re, Pr, converter.getCharPhysTemperatureDifference(), converter.getCharPhysLength(), converter.getThermalConductivity());
   SuperLatticePhysHeatFlux2D<T,NSEDESCRIPTOR,ADEDESCRIPTOR> HeatFlux(ADElattice,converter);
 
   SuperAbsoluteErrorL2Norm2D<T> absHeatFluxErrorNormL2(HeatFlux, HeatFluxSol, indicatorF);
@@ -164,10 +162,8 @@ void computeError(MyCase& myCase)
 
 /// @brief Create a simulation mesh, based on user-specific geometry
 /// @return An instance of Mesh, which keeps the relevant information
-Mesh<MyCase::value_t,MyCase::d> createMesh(MyCase::ParametersD& parameters)
-{
+Mesh<MyCase::value_t,MyCase::d> createMesh(MyCase::ParametersD& parameters) {
   using T = MyCase::value_t_of<NavierStokes>;
-
   const Vector extent = parameters.get<parameters::DOMAIN_EXTENT>();
   const T physDeltaX  = parameters.get<parameters::PHYS_DELTA_X>();
   const Vector origin{0., 0.};
@@ -175,17 +171,15 @@ Mesh<MyCase::value_t,MyCase::d> createMesh(MyCase::ParametersD& parameters)
 
   Mesh<T,MyCase::d> mesh(cuboid, physDeltaX, singleton::mpi().getSize());
   mesh.setOverlap(parameters.get<parameters::OVERLAP>());
-  mesh.getCuboidDecomposition().setPeriodicity({ true, false });
+  mesh.getCuboidDecomposition().setPeriodicity({true,false});
   return mesh;
 }
 
-void prepareGeometry(MyCase& myCase)
-{
+void prepareGeometry(MyCase& myCase) {
   OstreamManager clout(std::cout, "prepareGeometry");
   clout << "Prepare Geometry ..." << std::endl;
 
   using T = MyCase::value_t_of<NavierStokes>;
-
   auto& geometry  = myCase.getGeometry();
   auto& parameters    = myCase.getParameters();
 
@@ -208,74 +202,95 @@ void prepareGeometry(MyCase& myCase)
   clout << "Prepare Geometry ... OK" << std::endl;
 }
 
-void prepareLattice(MyCase& myCase)
-{
+void prepareLattice(MyCase& myCase) {
   OstreamManager clout(std::cout,"prepareLattice");
-  clout << "Prepare Lattice ..." << std::endl;
 
   using T = MyCase::value_t_of<NavierStokes>;
+  auto& geometry      = myCase.getGeometry();
+  auto& parameters    = myCase.getParameters();
+  auto& NSElattice    = myCase.getLattice(NavierStokes{});
+  auto& ADElattice    = myCase.getLattice(Temperature{});
   using NSEDESCRIPTOR = MyCase::descriptor_t_of<NavierStokes>;
   using ADEDESCRIPTOR = MyCase::descriptor_t_of<Temperature>;
 
-  auto& geometry      = myCase.getGeometry();
-  auto& NSElattice    = myCase.getLattice(NavierStokes{});
-  auto& ADElattice    = myCase.getLattice(Temperature{});
-  auto& parameters    = myCase.getParameters();
+  const T Re                              = parameters.get<parameters::REYNOLDS>();
+  const T Pr                              = parameters.get<parameters::PRANDTL>();
+  const T Ra                              = parameters.get<parameters::RAYLEIGH>();
+  const T g                               = parameters.get<parameters::GRAVITATIONAL_ACC>();
+  const int N                             = parameters.get<parameters::RESOLUTION>();
+  const T physDeltaX                      = parameters.get<parameters::PHYS_DELTA_X>();
+  const T physCharLength                  = parameters.get<parameters::PHYS_CHAR_LENGTH>();
+  const T physCharVelocity                = parameters.get<parameters::PHYS_CHAR_VELOCITY>();
+  const T physDensity                     = parameters.get<parameters::PHYS_CHAR_DENSITY>();
+  const T Tcold                           = parameters.get<parameters::T_COLD>();
+  const T Thot                            = parameters.get<parameters::T_HOT>();
+  const T physThermalConductivity         = parameters.get<parameters::PHYS_THERMAL_CONDUCTIVITY>();
+  const T tau                             = parameters.get<parameters::LATTICE_RELAXATION_TIME>();
 
-  const T physCharLength          = parameters.get<parameters::PHYS_CHAR_LENGTH>();
-  const T physDeltaX              = parameters.get<parameters::PHYS_DELTA_X>();
-  const T physCharVelocity        = parameters.get<parameters::PHYS_CHAR_VELOCITY>();
-  const T physViscosity           = parameters.get<parameters::PHYS_CHAR_VISCOSITY>();
-  const T physDensity             = parameters.get<parameters::PHYS_CHAR_DENSITY>();
-  const T gravitationalConstant   = parameters.get<parameters::GRAVITATIONAL_ACC>();
-  const T physThermalConductivity = parameters.get<parameters::PHYS_THERMAL_CONDUCTIVITY>();
-  const T tau                     = parameters.get<parameters::LATTICE_RELAXATION_TIME>();
-  const T Ra                      = parameters.get<parameters::RAYLEIGH>();
-  const T Pr                      = parameters.get<parameters::PRANDTL>();
-  const T Tcold                   = parameters.get<parameters::T_COLD>();
-  const T Thot                    = parameters.get<parameters::T_HOT>();
-
-  const T physDeltaT = physDeltaX * physDeltaX / descriptors::invCs2<T, NSEDESCRIPTOR>() * (tau - 0.5) / physViscosity;
-  const T physThermalExpansionCoefficient = Ra * physViscosity * physViscosity / (Pr * gravitationalConstant * (Thot - Tcold) * physCharLength * physCharLength * physCharLength);
-  const T physSpecificHeatCapacity = Pr * physThermalConductivity / (physViscosity * physDensity);
+  const T dT                              = Thot - Tcold;
+  const T physViscosity                   = physCharLength * physCharVelocity / Re;
+  const T physThermalDiffusivity          = physViscosity / Pr;
+  const T physThermalExpansionCoefficient = physViscosity * physThermalDiffusivity / (g * dT * physCharLength * physCharLength * physCharLength);
+  const T physSpecificHeatCapacity        = physThermalConductivity / (physDensity * physThermalDiffusivity);
+  const T physDeltaT                      = (tau - (T) 1 / 2) / descriptors::invCs2<T,NSEDESCRIPTOR>() * physDeltaX * physDeltaX / physViscosity;
 
   NSElattice.setUnitConverter<ThermalUnitConverter<T,NSEDESCRIPTOR,ADEDESCRIPTOR>>(
-    (T) physDeltaX,
+    (T) physDeltaX, // physDeltaX
     (T) physDeltaT,
-    (T) physCharLength,
-    (T) physCharVelocity,
-    (T) physViscosity,
-    (T) physDensity,
-    (T) physThermalConductivity,
+    (T) physCharLength, // charPhysLength
+    (T) physCharVelocity, // charPhysVelocity
+    (T) physViscosity, // physViscosity
+    (T) physDensity, // physDensity
+    (T) physThermalConductivity, // physThermalConductivity
     (T) physSpecificHeatCapacity,
     (T) physThermalExpansionCoefficient,
-    (T) Tcold,
-    (T) Thot
+    (T) Tcold, // charPhysLowTemperature
+    (T) Thot // charPhysHighTemperature
   );
   const auto& converter = NSElattice.getUnitConverter();
   converter.print();
 
   ADElattice.setUnitConverter(converter);
 
-  dynamics::set<AdvectionDiffusionBGKdynamics>(ADElattice, geometry.getMaterialIndicator({ 1, 2, 3 }));
-  dynamics::set<ForcedBGKdynamics>(NSElattice, geometry.getMaterialIndicator({ 1, 2, 3 }));
-
-  /// sets boundary
-  boundary::set<boundary::LocalVelocity>(NSElattice, geometry.getMaterialIndicator({ 2, 3 }));
-
-  #ifdef AdvectionDiffusionDirichletBC
-    boundary::set<boundary::AdvectionDiffusionDirichlet>(ADElattice, geometry.getMaterialIndicator({ 2, 3 }));
-  #endif
-  #ifdef RegularizedTemperatureBC
-    boundary::set<boundary::RegularizedTemperature>(ADElattice, geometry.getMaterialIndicator({ 2, 3 }));
-  #endif
-  #ifdef RegularizedHeatFluxBC
-    boundary::set<boundary::RegularizedHeatFlux>(ADElattice, geometry, 2);
-    boundary::set<boundary::RegularizedTemperature>(ADElattice, geometry, 3);
-  #endif
-
   T ADEomega  = converter.getLatticeThermalRelaxationFrequency();
   T NSEomega  = converter.getLatticeRelaxationFrequency();
+
+  ADElattice.defineDynamics<AdvectionDiffusionBGKdynamics>(geometry, 1);
+  ADElattice.defineDynamics<AdvectionDiffusionBGKdynamics>(geometry, 2);
+  ADElattice.defineDynamics<AdvectionDiffusionBGKdynamics>(geometry, 3);
+  NSElattice.defineDynamics<ForcedBGKdynamics>(geometry, 1);
+  NSElattice.defineDynamics<ForcedBGKdynamics>(geometry, 2);
+  NSElattice.defineDynamics<ForcedBGKdynamics>(geometry, 3);
+
+  /// sets boundary
+  boundary::set<boundary::LocalVelocity>(NSElattice, geometry, 2);
+  boundary::set<boundary::LocalVelocity>(NSElattice, geometry, 3);
+
+  #ifdef AdvectionDiffusionDirichletBC
+    boundary::set<boundary::AdvectionDiffusionDirichlet>(ADElattice, geometry, 2);
+    boundary::set<boundary::AdvectionDiffusionDirichlet>(ADElattice, geometry, 3);
+  #endif
+
+  #ifdef RegularizedTemperatureBC
+    boundary::set<boundary::RegularizedTemperature>(ADElattice, geometry, 2);
+    boundary::set<boundary::RegularizedTemperature>(ADElattice, geometry, 3);
+  #endif
+  #ifdef RegularizedHeatFluxBC
+    T heatFlux[2];
+    T input[2] = {0.,1.};
+    AnalyticalHeatFluxPorousPlate2D<T,T> HeatFluxSol(Re, Pr, converter.getCharPhysTemperatureDifference(), converter.getCharPhysLength(), converter.getThermalConductivity());
+    HeatFluxSol(heatFlux, input);
+    T temp = converter.getLatticeSpecificHeatCapacity(converter.getPhysSpecificHeatCapacity())*(converter.getLatticeThermalRelaxationTime() - 0.5) / converter.getLatticeThermalRelaxationTime();
+    heatFlux[0] = converter.getLatticeHeatFlux(heatFlux[0]) / temp;
+    heatFlux[1] = converter.getLatticeHeatFlux(heatFlux[1]) / temp;
+    AnalyticalConst2D<T,T> heatFluxC(heatFlux[0], heatFlux[1]);
+    boundary::set<boundary::RegularizedHeatFlux>(ADElattice, geometry, 2);
+    ADElattice.defineU(geometry, 2, heatFluxC);
+    boundary::set<boundary::RegularizedTemperature>(ADElattice, geometry, 3);
+    ADElattice.setParameter<descriptors::OMEGA>(ADEomega);
+  #endif
+
+
   ADElattice.setParameter<descriptors::OMEGA>(ADEomega);
   NSElattice.setParameter<descriptors::OMEGA>(NSEomega);
 
@@ -288,68 +303,64 @@ void prepareLattice(MyCase& myCase)
     "Boussinesq",
     NavierStokesAdvectionDiffusionCoupling{},
     names::NavierStokes{}, NSElattice,
-    names::Temperature{},  ADElattice
-  );
+    names::Temperature{},  ADElattice);
   coupling.setParameter<NavierStokesAdvectionDiffusionCoupling::T0>(
-    converter.getLatticeTemperature(Tcold)
-  );
+    converter.getLatticeTemperature(Tcold));
   coupling.setParameter<NavierStokesAdvectionDiffusionCoupling::FORCE_PREFACTOR>(
-    boussinesqForcePrefactor * Vector<T,2>{ 0.0, 1.0 }
-  );
+    boussinesqForcePrefactor * Vector<T,2>{0.0,1.0});
 
   clout << "Prepare Lattice ... OK" << std::endl;
 }
 
-void setInitialValues(MyCase& myCase)
-{
-  OstreamManager clout(std::cout,"setInitialValues");
-  clout << "Set initial values ..." << std::endl;
-
-  using NSEDESCRIPTOR = MyCase::descriptor_t_of<NavierStokes>;
-  using             T = MyCase::value_t_of<NavierStokes>;
-
-  auto& geometry    = myCase.getGeometry();
-  auto& NSElattice  = myCase.getLattice(NavierStokes{});
-  auto& ADElattice  = myCase.getLattice(Temperature{});
-  auto& converter   = NSElattice.getUnitConverter();
-  auto& parameters  = myCase.getParameters();
+void setInitialValues(MyCase& myCase) {
+  using T = MyCase::value_t_of<NavierStokes>;
+  auto& geometry = myCase.getGeometry();
+  auto& NSElattice = myCase.getLattice(NavierStokes{});
+  auto& converter = NSElattice.getUnitConverter();
+  auto& ADElattice = myCase.getLattice(Temperature{});
 
   const T Tcold = converter.getCharPhysLowTemperature();
-  const T Thot  = converter.getCharPhysHighTemperature();
+  const T Thot = converter.getCharPhysHighTemperature();
+  /// for each material set the defineRhoU and the Equilibrium
+  std::vector<T> zero(2,T());
+  AnalyticalConst2D<T,T> u(zero);
+  AnalyticalConst2D<T,T> rho(1.);
+  AnalyticalConst2D<T,T> force(zero);
 
-  const T Re    = parameters.get<parameters::REYNOLDS>();
-  const T Pr    = parameters.get<parameters::PRANDTL>();
+  T u_Re = converter.getLatticeVelocity( converter.getCharPhysVelocity() );
 
-  Vector u_top = {
-    converter.getCharPhysVelocity(),
-    converter.getReynoldsNumber() * converter.getPhysViscosity() / converter.getCharPhysLength()
-  };
+  AnalyticalConst2D<T,T> u_top(converter.getCharLatticeVelocity(), u_Re);
+  AnalyticalConst2D<T,T> u_bot(0.0, u_Re);
 
-  Vector u_bot = {
-    0.0,
-    converter.getReynoldsNumber() * converter.getPhysViscosity() / converter.getCharPhysLength()
-  };
+  NSElattice.defineRhoU(geometry, 1, rho, u);
+  NSElattice.iniEquilibrium(geometry, 1, rho, u);
+  NSElattice.defineField<descriptors::FORCE>(geometry, 1, force);
+  NSElattice.defineRhoU(geometry, 2, rho, u_top);
+  NSElattice.iniEquilibrium(geometry, 2, rho, u_top);
+  NSElattice.defineField<descriptors::FORCE>(geometry, 2, force);
+  NSElattice.defineRhoU(geometry, 3, rho, u_bot);
+  NSElattice.iniEquilibrium(geometry, 3, rho, u_bot);
+  NSElattice.defineField<descriptors::FORCE>(geometry, 3, force);
 
-  momenta::setVelocity(NSElattice, geometry.getMaterialIndicator( 2 ), u_top);
-  momenta::setVelocity(NSElattice, geometry.getMaterialIndicator( 3 ), u_bot);
+  AnalyticalConst2D<T,T> Cold(converter.getLatticeTemperature(Tcold));
+  AnalyticalConst2D<T,T> Hot(converter.getLatticeTemperature(Thot));
 
-  momenta::setTemperature(ADElattice, geometry.getMaterialIndicator({ 1, 3 }), Tcold);
-  momenta::setTemperature(ADElattice, geometry.getMaterialIndicator({ 2 }), Thot);
+  ADElattice.defineRho(geometry, 1, Cold);
+  ADElattice.iniEquilibrium(geometry, 1, Cold, u);
+  ADElattice.defineField<descriptors::VELOCITY>(geometry, 1, u);
 
-  fields::set<descriptors::VELOCITY>(ADElattice, geometry.getMaterialIndicator( 2 ), u_top);
-  fields::set<descriptors::VELOCITY>(ADElattice, geometry.getMaterialIndicator( 2 ), u_bot);
+  ADElattice.defineField<descriptors::VELOCITY>(geometry, 2, u_top);
+  ADElattice.defineRho(geometry, 2, Hot);
+  ADElattice.iniEquilibrium(geometry, 2, Hot, u_top);
+  ADElattice.defineField<descriptors::VELOCITY>(geometry, 2, u);
 
-  T heatFlux[NSEDESCRIPTOR::d] = { 0., 0. };
-  T input[NSEDESCRIPTOR::d]    = { 0., 1. };
-  AnalyticalHeatFlux2D<T,T> HeatFluxSol(Re, Pr, converter.getCharPhysTemperatureDifference(), converter.getCharPhysLength(), converter.getThermalConductivity());
-  HeatFluxSol(heatFlux, input);
-
-  momenta::setHeatFlux(ADElattice, geometry.getMaterialIndicator(2), Vector<T, NSEDESCRIPTOR::d>(heatFlux));
+  ADElattice.defineField<descriptors::VELOCITY>(geometry, 3, u_bot);
+  ADElattice.defineRho(geometry, 3, Cold);
+  ADElattice.iniEquilibrium(geometry, 3, Cold, u_bot);
+  ADElattice.defineField<descriptors::VELOCITY>(geometry, 3, u);
 
   NSElattice.initialize();
   ADElattice.initialize();
-
-  clout << "Set initial values ... OK" << std::endl;
 }
 
 void setTemporalValues(MyCase& myCase,
@@ -368,25 +379,45 @@ void getResults(MyCase& myCase,
   using T               = MyCase::value_t_of<NavierStokes>;
   using NSEDESCRIPTOR   = MyCase::descriptor_t_of<NavierStokes>;
   using ADEDESCRIPTOR   = MyCase::descriptor_t_of<Temperature>;
-
   auto& NSElattice      = myCase.getLattice(NavierStokes{});
   auto& ADElattice      = myCase.getLattice(Temperature{});
-  const auto& converter = NSElattice.getUnitConverter();
   auto& parameters      = myCase.getParameters();
-
+  const auto& converter = NSElattice.getUnitConverter();
+  const T Re            = converter.getReynoldsNumber();
+  const T Pr            = converter.getPrandtlNumber();
+  const std::size_t N   = converter.getResolution();
+  const T Tcold = converter.getCharPhysLowTemperature();
+  const T Thot = converter.getCharPhysHighTemperature();
   const int statIter = converter.getLatticeTime(parameters.get<parameters::PHYS_STAT_ITER_T>());
   const int vtkIter = converter.getLatticeTime(parameters.get<parameters::PHYS_VTK_ITER_T>());
 
-  if (iT == 0)
-  {
-    SuperVTMwriter2D<T> vtkWriter("porousPlate2d");
+  SuperVTMwriter2D<T> vtkWriter("thermalPorousPlate2d");
+  SuperLatticePhysVelocity2D<T, NSEDESCRIPTOR> velocity(NSElattice, converter);
+  SuperLatticePhysPressure2D<T, NSEDESCRIPTOR> pressure(NSElattice, converter);
+  SuperLatticePhysTemperature2D<T, NSEDESCRIPTOR, ADEDESCRIPTOR> temperature(ADElattice, converter);
+  SuperLatticePhysHeatFlux2D<T, NSEDESCRIPTOR, ADEDESCRIPTOR> heatflux(ADElattice, converter);
+
+  T u_Re = Re * converter.getPhysViscosity() / converter.getCharPhysLength();
+  AnalyticalVelocityPorousPlate2D<T,T> uSol(Re, converter.getCharPhysVelocity(), u_Re, converter.getCharPhysLength());
+  SuperLatticeFfromAnalyticalF2D<T,NSEDESCRIPTOR> uSolLattice(uSol,NSElattice);
+  AnalyticalTemperaturePorousPlate2D<T,T> TSol(Re, Pr, converter.getCharPhysLength(), converter.getCharPhysLowTemperature(), converter.getCharPhysTemperatureDifference());
+  SuperLatticeFfromAnalyticalF2D<T,ADEDESCRIPTOR> TSolLattice(TSol,ADElattice);
+  AnalyticalHeatFluxPorousPlate2D<T,T> HeatFluxSol(Re, Pr, converter.getCharPhysTemperatureDifference(), converter.getCharPhysLength(), converter.getThermalConductivity());
+  SuperLatticeFfromAnalyticalF2D<T,ADEDESCRIPTOR> HeatFluxSolLattice(HeatFluxSol,ADElattice);
+
+  vtkWriter.addFunctor( pressure );
+  vtkWriter.addFunctor( velocity );
+  vtkWriter.addFunctor( temperature );
+  vtkWriter.addFunctor( heatflux );
+  vtkWriter.addFunctor( uSolLattice );
+  vtkWriter.addFunctor( TSolLattice );
+  vtkWriter.addFunctor( HeatFluxSolLattice );
+
+  if (iT == 0) {
     /// Writes the converter log file
-    // writeLogFile(converter,"porousPlate2d");
+    // writeLogFile(converter,"thermalPorousPlate2d");
     T tmpIn[2] = {0.,1.};
     T tmpOut[2];
-    const T Re                      = parameters.get<parameters::REYNOLDS>();
-    const T Pr                      = parameters.get<parameters::PRANDTL>();
-    AnalyticalHeatFlux2D<T,T> HeatFluxSol(Re, Pr, converter.getCharPhysTemperatureDifference(), converter.getCharPhysLength(), converter.getThermalConductivity());
     HeatFluxSol(tmpOut,tmpIn);
     clout << converter.getLatticeHeatFlux(tmpOut[0]) << " " << converter.getLatticeHeatFlux(tmpOut[1]) << std::endl;
     clout << tmpOut[0] << " " << tmpOut[1] << std::endl;
@@ -401,42 +432,11 @@ void getResults(MyCase& myCase,
   }
 
   /// Writes the VTK files
-  if (iT % vtkIter == 0 || converged)
-  {
+  if (iT % vtkIter == 0 || converged) {
+    NSElattice.getStatistics().print(iT,converter.getPhysTime(iT));
     ADElattice.setProcessingContext(ProcessingContext::Evaluation);
     NSElattice.setProcessingContext(ProcessingContext::Evaluation);
-
-    NSElattice.getStatistics().print(iT,converter.getPhysTime(iT));
-
-    const T Re            = converter.getReynoldsNumber();
-    const T Pr            = converter.getPrandtlNumber();
-    const std::size_t N   = converter.getResolution();
-    const T Tcold = converter.getCharPhysLowTemperature();
-    const T Thot = converter.getCharPhysHighTemperature();
-
     computeError(myCase);
-
-    SuperVTMwriter2D<T> vtkWriter("porousPlate2d");
-    SuperLatticePhysVelocity2D<T, NSEDESCRIPTOR> velocity(NSElattice, converter);
-    SuperLatticePhysPressure2D<T, NSEDESCRIPTOR> pressure(NSElattice, converter);
-    SuperLatticePhysTemperature2D<T, NSEDESCRIPTOR, ADEDESCRIPTOR> temperature(ADElattice, converter);
-    SuperLatticePhysHeatFlux2D<T, NSEDESCRIPTOR, ADEDESCRIPTOR> heatflux(ADElattice, converter);
-
-    T u_Re = Re * converter.getPhysViscosity() / converter.getCharPhysLength();
-    AnalyticalVelocity2D<T,T> uSol(Re, converter.getCharPhysVelocity(), u_Re, converter.getCharPhysLength());
-    SuperLatticeFfromAnalyticalF2D<T,NSEDESCRIPTOR> uSolLattice(uSol,NSElattice);
-    AnalyticalTemperature2D<T,T> TSol(Re, Pr, converter.getCharPhysLength(), converter.getCharPhysLowTemperature(), converter.getCharPhysTemperatureDifference());
-    SuperLatticeFfromAnalyticalF2D<T,ADEDESCRIPTOR> TSolLattice(TSol,ADElattice);
-    AnalyticalHeatFlux2D<T,T> HeatFluxSol(Re, Pr, converter.getCharPhysTemperatureDifference(), converter.getCharPhysLength(), converter.getThermalConductivity());
-    SuperLatticeFfromAnalyticalF2D<T,ADEDESCRIPTOR> HeatFluxSolLattice(HeatFluxSol,ADElattice);
-
-    vtkWriter.addFunctor( pressure );
-    vtkWriter.addFunctor( velocity );
-    vtkWriter.addFunctor( temperature );
-    vtkWriter.addFunctor( heatflux );
-    vtkWriter.addFunctor( uSolLattice );
-    vtkWriter.addFunctor( TSolLattice );
-    vtkWriter.addFunctor( HeatFluxSolLattice );
     vtkWriter.write(iT);
 
     ///writes Jpeg
@@ -457,7 +457,6 @@ void getResults(MyCase& myCase,
 
 void simulate(MyCase& myCase) {
   OstreamManager clout(std::cout,"simulate");
-  clout << "Starting simulation ..." << std::endl;
 
   using T = MyCase::value_t;
   auto& parameters = myCase.getParameters();
@@ -489,7 +488,6 @@ void simulate(MyCase& myCase) {
     myCase.getOperator("Boussinesq").apply();
     myCase.getLattice(Temperature{}).collideAndStream();
 
-
     /// === Step 8.3: Computation and Output of the Results ===
     getResults(myCase, timer, iT, converge.hasConverged());
     converge.takeValue(NSElattice.getStatistics().getAverageEnergy());
@@ -497,8 +495,6 @@ void simulate(MyCase& myCase) {
 
   timer.stop();
   timer.printSummary();
-
-  clout << "Simulation finished ..." << std::endl;
 }
 
 int main(int argc, char* argv[]) {
@@ -508,37 +504,28 @@ int main(int argc, char* argv[]) {
   MyCase::ParametersD myCaseParameters;
   {
     using namespace olb::parameters;
-    myCaseParameters.set<DOMAIN_EXTENT            >({1, 1});
-    myCaseParameters.set<PHYS_CHAR_LENGTH         >( 1.0 );
-    myCaseParameters.set<LATTICE_CHAR_VELOCITY    >( 0.1 );
-    myCaseParameters.set<PHYS_CHAR_VISCOSITY      >( 1e-3 );
-    myCaseParameters.set<PHYS_CHAR_DENSITY        >( 1. );
-    myCaseParameters.set<GRAVITATIONAL_ACC        >( 9.81 );
-    myCaseParameters.set<PHYS_THERMAL_CONDUCTIVITY>( 0.03 );
     myCaseParameters.set<RESOLUTION               >(20);
-    myCaseParameters.set<LATTICE_RELAXATION_TIME  >(1.);
-    myCaseParameters.set<REYNOLDS                 >(20);
+    myCaseParameters.set<REYNOLDS                 >(5);
     myCaseParameters.set<RAYLEIGH                 >(100);
     myCaseParameters.set<PRANDTL                  >(0.71);
+    myCaseParameters.set<DOMAIN_EXTENT            >({1, 1});
+    myCaseParameters.set<PHYS_CHAR_LENGTH         >( 1.0 );
+    myCaseParameters.set<PHYS_CHAR_VELOCITY       >( 1.0 );
+    myCaseParameters.set<PHYS_CHAR_DENSITY        >( 1. );
+    myCaseParameters.set<PHYS_THERMAL_CONDUCTIVITY>( 1. );
+    myCaseParameters.set<LATTICE_RELAXATION_TIME  >(1.);
+    myCaseParameters.set<LATTICE_CHAR_VELOCITY    >( 0.1 );
+    myCaseParameters.set<GRAVITATIONAL_ACC        >( 9.81 );
     myCaseParameters.set<MAX_PHYS_T               >(1e4);
     myCaseParameters.set<T_HOT                    >(274.15);
     myCaseParameters.set<T_COLD                   >(273.15);
-    myCaseParameters.set<EPSILON                  >(1e-7);
+    myCaseParameters.set<EPSILON                  >(1e-5);
     myCaseParameters.set<CONV_ITER                >(1.);
     myCaseParameters.set<PHYS_STAT_ITER_T         >(10.0);
     myCaseParameters.set<PHYS_VTK_ITER_T          >(100.);
   }
   myCaseParameters.set<parameters::PHYS_DELTA_X>([&]() -> MyCase::value_t {
     return {myCaseParameters.get<parameters::PHYS_CHAR_LENGTH>() / myCaseParameters.get<parameters::RESOLUTION>()};
-  });
-  myCaseParameters.set<parameters::PHYS_CHAR_VELOCITY>([&]() -> MyCase::value_t {
-    return {myCaseParameters.get<parameters::RAYLEIGH>()            *
-            myCaseParameters.get<parameters::PHYS_CHAR_VISCOSITY>() *
-            myCaseParameters.get<parameters::PHYS_CHAR_VISCOSITY>() /
-            myCaseParameters.get<parameters::PRANDTL>()             /
-            (myCaseParameters.get<parameters::PHYS_CHAR_DENSITY>() *
-             myCaseParameters.get<parameters::PHYS_CHAR_DENSITY>())
-    };
   });
 
   myCaseParameters.fromCLI(argc, argv);
