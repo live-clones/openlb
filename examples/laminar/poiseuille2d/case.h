@@ -259,7 +259,7 @@ void setInitialValues(MyCase& myCase){
     }
 
     const T radius = (bounceBack) ? (T(0.5) * (physLengthY - physDeltaX)) : (T(0.5) * physLengthY);
-    std::vector<T> axisPoint = {physLengthX/2., physLengthY/2.};
+    std::vector<T> axisPoint = {physLengthX/T{2}, physLengthY/T{2}};
     std::vector<T> axisDirection = {1, 0};
     Poiseuille2D<T> u(axisPoint, axisDirection, maxVelocity, radius);
 
