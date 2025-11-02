@@ -367,53 +367,33 @@ void setTemporalValues(MyCase& myCase,
 
 void getResults(MyCase& myCase,
                 util::Timer<MyCase::value_t>& timer,
-                std::size_t iT,
-                bool converged)
+                std::size_t iT)
 {
   OstreamManager clout(std::cout,"getResults");
 
   using T               = MyCase::value_t_of<NavierStokes>;
   using NSEDESCRIPTOR   = MyCase::descriptor_t_of<NavierStokes>;
   using ADEDESCRIPTOR   = MyCase::descriptor_t_of<Temperature>;
+
   auto& NSElattice      = myCase.getLattice(NavierStokes{});
   auto& ADElattice      = myCase.getLattice(Temperature{});
-  auto& parameters      = myCase.getParameters();
   const auto& converter = NSElattice.getUnitConverter();
-  const T Re            = converter.getReynoldsNumber();
-  const T Pr            = converter.getPrandtlNumber();
-  const std::size_t N   = converter.getResolution();
-  const T Tcold = converter.getCharPhysLowTemperature();
-  const T Thot = converter.getCharPhysHighTemperature();
-  const int statIter = converter.getLatticeTime(parameters.get<parameters::PHYS_STAT_ITER_T>());
-  const int vtkIter = converter.getLatticeTime(parameters.get<parameters::PHYS_VTK_ITER_T>());
+  auto& parameters      = myCase.getParameters();
 
-  SuperVTMwriter2D<T> vtkWriter("thermalPorousPlate2d");
-  SuperLatticePhysVelocity2D<T, NSEDESCRIPTOR> velocity(NSElattice, converter);
-  SuperLatticePhysPressure2D<T, NSEDESCRIPTOR> pressure(NSElattice, converter);
-  SuperLatticePhysTemperature2D<T, NSEDESCRIPTOR, ADEDESCRIPTOR> temperature(ADElattice, converter);
-  SuperLatticePhysHeatFlux2D<T, NSEDESCRIPTOR, ADEDESCRIPTOR> heatflux(ADElattice, converter);
+  const int statIter    = converter.getLatticeTime(parameters.get<parameters::PHYS_STAT_ITER_T>());
+  const int vtkIter     = converter.getLatticeTime(parameters.get<parameters::PHYS_VTK_ITER_T>());
+  const bool converged  = parameters.get<parameters::CONVERGED>();
 
-  T u_Re = Re * converter.getPhysViscosity() / converter.getCharPhysLength();
-  AnalyticalVelocity<T,T> uSol(Re, converter.getCharPhysVelocity(), u_Re, converter.getCharPhysLength());
-  SuperLatticeFfromAnalyticalF2D<T,NSEDESCRIPTOR> uSolLattice(uSol,NSElattice);
-  AnalyticalTemperature<T,T> TSol(Re, Pr, converter.getCharPhysLength(), converter.getCharPhysLowTemperature(), converter.getCharPhysTemperatureDifference());
-  SuperLatticeFfromAnalyticalF2D<T,ADEDESCRIPTOR> TSolLattice(TSol,ADElattice);
-  AnalyticalHeatFlux<T,T> HeatFluxSol(Re, Pr, converter.getCharPhysTemperatureDifference(), converter.getCharPhysLength(), converter.getThermalConductivity());
-  SuperLatticeFfromAnalyticalF2D<T,ADEDESCRIPTOR> HeatFluxSolLattice(HeatFluxSol,ADElattice);
+  if (iT == 0)
+  {
+    SuperVTMwriter2D<T> vtkWriter("porousPlate2d");
 
-  vtkWriter.addFunctor( pressure );
-  vtkWriter.addFunctor( velocity );
-  vtkWriter.addFunctor( temperature );
-  vtkWriter.addFunctor( heatflux );
-  vtkWriter.addFunctor( uSolLattice );
-  vtkWriter.addFunctor( TSolLattice );
-  vtkWriter.addFunctor( HeatFluxSolLattice );
-
-  if (iT == 0) {
-    /// Writes the converter log file
-    // writeLogFile(converter,"thermalPorousPlate2d");
     T tmpIn[2] = {0.,1.};
     T tmpOut[2];
+
+    const T Re            = converter.getReynoldsNumber();
+    const T Pr            = converter.getPrandtlNumber();
+    AnalyticalHeatFlux<T,T> HeatFluxSol(Re, Pr, converter.getCharPhysTemperatureDifference(), converter.getCharPhysLength(), converter.getThermalConductivity());
     HeatFluxSol(tmpOut,tmpIn);
     clout << converter.getLatticeHeatFlux(tmpOut[0]) << " " << converter.getLatticeHeatFlux(tmpOut[1]) << std::endl;
     clout << tmpOut[0] << " " << tmpOut[1] << std::endl;
@@ -428,50 +408,88 @@ void getResults(MyCase& myCase,
   }
 
   /// Writes the VTK files
-  if (iT % vtkIter == 0 || converged) {
-    NSElattice.getStatistics().print(iT,converter.getPhysTime(iT));
+  if (iT % vtkIter == 0 || converged)
+  {
     ADElattice.setProcessingContext(ProcessingContext::Evaluation);
     NSElattice.setProcessingContext(ProcessingContext::Evaluation);
+
     computeError(myCase);
+
+    SuperVTMwriter2D<T> vtkWriter("porousPlate2d");
+    SuperLatticePhysVelocity2D<T, NSEDESCRIPTOR> velocity(NSElattice, converter);
+    SuperLatticePhysPressure2D<T, NSEDESCRIPTOR> pressure(NSElattice, converter);
+    SuperLatticePhysTemperature2D<T, NSEDESCRIPTOR, ADEDESCRIPTOR> temperature(ADElattice, converter);
+    SuperLatticePhysHeatFlux2D<T, NSEDESCRIPTOR, ADEDESCRIPTOR> heatflux(ADElattice, converter);
+
+    const T Re            = converter.getReynoldsNumber();
+    const T Pr            = converter.getPrandtlNumber();
+    AnalyticalVelocity<T,T> uSol(Re, converter.getCharPhysVelocity(), converter.getCharPhysVelocity(), converter.getCharPhysLength());
+    SuperLatticeFfromAnalyticalF2D<T,NSEDESCRIPTOR> uSolLattice(uSol, NSElattice);
+    AnalyticalTemperature<T,T> TSol(Re, Pr, converter.getCharPhysLength(), converter.getCharPhysLowTemperature(), converter.getCharPhysTemperatureDifference());
+    SuperLatticeFfromAnalyticalF2D<T,ADEDESCRIPTOR> TSolLattice(TSol,ADElattice);
+    AnalyticalHeatFlux<T,T> HeatFluxSol(Re, Pr, converter.getCharPhysTemperatureDifference(), converter.getCharPhysLength(), converter.getThermalConductivity());
+    SuperLatticeFfromAnalyticalF2D<T,ADEDESCRIPTOR> HeatFluxSolLattice(HeatFluxSol,ADElattice);
+
+    vtkWriter.addFunctor( pressure );
+    vtkWriter.addFunctor( velocity );
+    vtkWriter.addFunctor( temperature );
+    vtkWriter.addFunctor( heatflux );
+    vtkWriter.addFunctor( uSolLattice );
+    vtkWriter.addFunctor( TSolLattice );
+    vtkWriter.addFunctor( HeatFluxSolLattice );
     vtkWriter.write(iT);
 
     ///writes Jpeg
     //SuperEuklidNorm2D<T, DESCRIPTOR> normVel(velocity);
+    const int N   = converter.getResolution();
     BlockReduction2D2D<T> planeReduction(temperature, N, BlockDataSyncMode::ReduceOnly);
     // write output of velocity as JPEG
+    const T Tcold = converter.getCharPhysLowTemperature();
+    const T Thot  = converter.getCharPhysHighTemperature();
     heatmap::plotParam<T> jpeg_Param;
     jpeg_Param.maxValue = Thot;
     jpeg_Param.minValue = Tcold;
     heatmap::write(planeReduction, iT, jpeg_Param);
   }
 
-  if (iT % statIter == 0 || converged) {
+  if (iT % statIter == 0 || converged)
+  {
+    NSElattice.getStatistics().print(iT,converter.getPhysTime(iT));
     timer.print(iT);
   }
 }
 
-void simulate(MyCase& myCase) {
+void simulate(MyCase& myCase)
+{
   OstreamManager clout(std::cout,"simulate");
+  clout << "Starting simulation ..." << std::endl;
 
-  using T = MyCase::value_t;
-  auto& parameters = myCase.getParameters();
+  using T = MyCase::value_t_of<NavierStokes>;
+
+  auto& geometry   = myCase.getGeometry();
   auto& NSElattice = myCase.getLattice(NavierStokes{});
+  auto& ADElattice = myCase.getLattice(Temperature{});
+  auto& coupling   = myCase.getOperator("Boussinesq");
   auto& converter  = NSElattice.getUnitConverter();
+  auto& parameters = myCase.getParameters();
 
-  const std::size_t iTmax = myCase.getLattice(NavierStokes{}).getUnitConverter().getLatticeTime(
+  const std::size_t iTmax = converter.getLatticeTime(
     parameters.get<parameters::MAX_PHYS_T>()
   );
-
-  util::Timer<T> timer(iTmax, myCase.getGeometry().getStatistics().getNvoxel());
-  timer.start();
 
   const T epsilon       = parameters.get<parameters::EPSILON>();
   const T convCheckTime = parameters.get<parameters::CONV_ITER>();
   util::ValueTracer<T> converge(converter.getLatticeTime(convCheckTime), epsilon);
-  for (std::size_t iT=0; iT < iTmax; ++iT) {
-    if (converge.hasConverged()) {
+
+  util::Timer<T> timer(iTmax, geometry.getStatistics().getNvoxel());
+  timer.start();
+  for (std::size_t iT=0; iT < iTmax; ++iT)
+  {
+    if (converge.hasConverged())
+    {
       clout << "Simulation converged." << std::endl;
-      getResults(myCase, timer, iT, converge.hasConverged());
+      parameters.set<parameters::CONVERGED>(true);
+      getResults(myCase, timer, iT);
       break;
     }
 
@@ -479,20 +497,23 @@ void simulate(MyCase& myCase) {
     setTemporalValues(myCase, iT);
 
     /// === Step 8.2: Collide and Stream Execution ===
-    myCase.getLattice(NavierStokes{}).collideAndStream();
-    myCase.getOperator("Boussinesq").apply();
-    myCase.getLattice(Temperature{}).collideAndStream();
+    NSElattice.collideAndStream();
+    coupling.apply();
+    ADElattice.collideAndStream();
 
     /// === Step 8.3: Computation and Output of the Results ===
-    getResults(myCase, timer, iT, converge.hasConverged());
+    getResults(myCase, timer, iT);
     converge.takeValue(NSElattice.getStatistics().getAverageEnergy());
   }
 
   timer.stop();
   timer.printSummary();
+
+  clout << "Simulation finished ..." << std::endl;
 }
 
-int main(int argc, char* argv[]) {
+int main(int argc, char* argv[])
+{
   initialize(&argc, &argv);
 
   /// === Step 2: Set Parameters ===
@@ -518,6 +539,7 @@ int main(int argc, char* argv[]) {
     myCaseParameters.set<CONV_ITER                >(   10    );
     myCaseParameters.set<PHYS_STAT_ITER_T         >(    1.0  );
     myCaseParameters.set<PHYS_VTK_ITER_T          >(  100.0  );
+    myCaseParameters.set<CONVERGED                >(  false  );
   }
   myCaseParameters.set<parameters::PHYS_DELTA_X>([&]() -> MyCase::value_t {
     return {myCaseParameters.get<parameters::PHYS_CHAR_LENGTH>() / myCaseParameters.get<parameters::RESOLUTION>()};
