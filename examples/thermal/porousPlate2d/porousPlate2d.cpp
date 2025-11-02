@@ -317,20 +317,16 @@ void setInitialValues(MyCase& myCase)
   auto& converter   = NSElattice.getUnitConverter();
   auto& parameters  = myCase.getParameters();
 
-  const T Thot = parameters.get<parameters::T_HOT>();
-  const T Tcold = parameters.get<parameters::T_COLD>();
-
+  // Physical units
   Vector u_top_phys = {converter.getCharLatticeVelocity() * converter.getConversionFactorVelocity(), converter.getCharPhysVelocity()};
   Vector u_bot_phys = {0.0, converter.getCharPhysVelocity()};
   momenta::setVelocity(NSElattice, geometry.getMaterialIndicator(2), u_top_phys);
   momenta::setVelocity(NSElattice, geometry.getMaterialIndicator(3), u_bot_phys);
 
-  momenta::setTemperature(ADElattice, geometry.getMaterialIndicator(1), Tcold);
+  const T Thot = parameters.get<parameters::T_HOT>();
+  const T Tcold = parameters.get<parameters::T_COLD>();
+  momenta::setTemperature(ADElattice, geometry.getMaterialIndicator({ 1, 3 }), Tcold);
   momenta::setTemperature(ADElattice, geometry.getMaterialIndicator(2), Thot);
-
-  AnalyticalConst2D<T,T> Cold(converter.getLatticeTemperature(Tcold));
-  ADElattice.defineRho(geometry, 3, Cold);
-  // momenta::setTemperature(ADElattice, geometry.getMaterialIndicator(3), Tcold);
 
   #ifdef RegularizedHeatFluxBC
     const T Pr = converter.getPrandtlNumber();
