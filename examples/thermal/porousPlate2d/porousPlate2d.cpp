@@ -163,8 +163,6 @@ void computeError(MyCase& myCase)
   clout << "; heatFlux-L2-error(rel)=" << result[0] << std::endl;
 }
 
-/// @brief Create a simulation mesh, based on user-specific geometry
-/// @return An instance of Mesh, which keeps the relevant information
 Mesh<MyCase::value_t,MyCase::d> createMesh(MyCase::ParametersD& parameters)
 {
   using T = MyCase::value_t_of<NavierStokes>;
@@ -263,7 +261,6 @@ void prepareLattice(MyCase& myCase)
   dynamics::set<AdvectionDiffusionBGKdynamics>(ADElattice, geometry.getMaterialIndicator({ 1, 2, 3 }));
   dynamics::set<ForcedBGKdynamics>(NSElattice, geometry.getMaterialIndicator({ 1, 2, 3 }));
 
-  /// sets boundary
   boundary::set<boundary::LocalVelocity>(NSElattice, geometry, 2);
   boundary::set<boundary::LocalVelocity>(NSElattice, geometry, 3);
 
@@ -323,7 +320,7 @@ void setInitialValues(MyCase& myCase)
   momenta::setVelocity(NSElattice, geometry.getMaterialIndicator(2), u_top_phys);
   momenta::setVelocity(NSElattice, geometry.getMaterialIndicator(3), u_bot_phys);
 
-  const T Thot = parameters.get<parameters::T_HOT>();
+  const T Thot  = parameters.get<parameters::T_HOT>();
   const T Tcold = parameters.get<parameters::T_COLD>();
   momenta::setTemperature(ADElattice, geometry.getMaterialIndicator({ 1, 3 }), Tcold);
   momenta::setTemperature(ADElattice, geometry.getMaterialIndicator(2), Thot);
@@ -338,7 +335,6 @@ void setInitialValues(MyCase& myCase)
     momenta::setHeatFlux(ADElattice, geometry.getMaterialIndicator(2), heatFlux);
   #endif
 
-  /// Make the lattice ready for simulation
   NSElattice.initialize();
   ADElattice.initialize();
 }
@@ -391,7 +387,6 @@ void getResults(MyCase& myCase,
     vtkWriter.createMasterFile();
   }
 
-  /// Writes the VTK files
   if (iT % vtkIter == 0 || converged)
   {
     ADElattice.setProcessingContext(ProcessingContext::Evaluation);
@@ -448,26 +443,26 @@ void simulate(MyCase& myCase)
   OstreamManager clout(std::cout,"simulate");
   clout << "Starting simulation ..." << std::endl;
 
-  using T = MyCase::value_t_of<NavierStokes>;
+  using T                 = MyCase::value_t_of<NavierStokes>;
 
-  auto& geometry   = myCase.getGeometry();
-  auto& NSElattice = myCase.getLattice(NavierStokes{});
-  auto& ADElattice = myCase.getLattice(Temperature{});
-  auto& coupling   = myCase.getOperator("Boussinesq");
-  auto& converter  = NSElattice.getUnitConverter();
-  auto& parameters = myCase.getParameters();
+  auto& geometry          = myCase.getGeometry();
+  auto& NSElattice        = myCase.getLattice(NavierStokes{});
+  auto& ADElattice        = myCase.getLattice(Temperature{});
+  auto& coupling          = myCase.getOperator("Boussinesq");
+  auto& converter         = NSElattice.getUnitConverter();
+  auto& parameters        = myCase.getParameters();
 
   const std::size_t iTmax = converter.getLatticeTime(
     parameters.get<parameters::MAX_PHYS_T>()
   );
 
-  const T epsilon       = parameters.get<parameters::EPSILON>();
-  const T convCheckTime = parameters.get<parameters::CONV_ITER>();
+  const T epsilon         = parameters.get<parameters::EPSILON>();
+  const T convCheckTime   = parameters.get<parameters::CONV_ITER>();
   util::ValueTracer<T> converge(converter.getLatticeTime(convCheckTime), epsilon);
 
   util::Timer<T> timer(iTmax, geometry.getStatistics().getNvoxel());
   timer.start();
-  for (std::size_t iT=0; iT < iTmax; ++iT)
+  for (std::size_t iT = 0; iT < iTmax; ++iT)
   {
     if (converge.hasConverged())
     {
@@ -477,15 +472,12 @@ void simulate(MyCase& myCase)
       break;
     }
 
-    /// === Step 8.1: Update the Boundary Values and Fields at Times ===
     setTemporalValues(myCase, iT);
 
-    /// === Step 8.2: Collide and Stream Execution ===
     NSElattice.collideAndStream();
     coupling.apply();
     ADElattice.collideAndStream();
 
-    /// === Step 8.3: Computation and Output of the Results ===
     getResults(myCase, timer, iT);
     converge.takeValue(NSElattice.getStatistics().getAverageEnergy());
   }
@@ -500,7 +492,6 @@ int main(int argc, char* argv[])
 {
   initialize(&argc, &argv);
 
-  /// === Step 2: Set Parameters ===
   MyCase::ParametersD myCaseParameters;
   {
     using namespace olb::parameters;
@@ -531,21 +522,15 @@ int main(int argc, char* argv[])
 
   myCaseParameters.fromCLI(argc, argv);
 
-  /// === Step 3: Create Mesh ===
   Mesh mesh = createMesh(myCaseParameters);
 
-  /// === Step 4: Create Case ===
   MyCase myCase(myCaseParameters, mesh);
 
-  /// === Step 5: Prepare Geometry ===
   prepareGeometry(myCase);
 
-  /// === Step 6: Prepare Lattice ===
   prepareLattice(myCase);
 
-  /// === Step 7: Definition of Initial, Boundary Values, and Fields ===
   setInitialValues(myCase);
 
-  /// === Step 8: Simulate ===
   simulate(myCase);
 }
