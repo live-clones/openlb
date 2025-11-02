@@ -514,8 +514,8 @@ int main(int argc, char* argv[]) {
     myCaseParameters.set<MAX_PHYS_T               >(10000    );
     myCaseParameters.set<T_HOT                    >(  274.15 );
     myCaseParameters.set<T_COLD                   >(  273.15 );
-    myCaseParameters.set<EPSILON                  >(    1e-7 );
-    myCaseParameters.set<CONV_ITER                >(  100    );
+    myCaseParameters.set<EPSILON                  >(    1e-5 );
+    myCaseParameters.set<CONV_ITER                >(   10    );
     myCaseParameters.set<PHYS_STAT_ITER_T         >(    1.0  );
     myCaseParameters.set<PHYS_VTK_ITER_T          >(  100.0  );
   }
