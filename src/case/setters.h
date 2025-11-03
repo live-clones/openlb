@@ -145,8 +145,8 @@ void setHeatFlux(SuperLattice<T,DESCRIPTOR>& sLattice,
                  VALUE heatFluxD)
   requires std::constructible_from<FieldD<T,DESCRIPTOR,descriptors::VELOCITY>, VALUE>
 {
-  Vector<T,DESCRIPTOR::d> heatFluxV = Vector<T,DESCRIPTOR::d>(heatFluxD);
-  AnalyticalConst<DESCRIPTOR::d,T,T> heatFluxF((heatFluxV));
+  Vector<T, DESCRIPTOR::d> heatFluxV = Vector<T, DESCRIPTOR::d>(heatFluxD);
+  AnalyticalConst<DESCRIPTOR::d,T,T> heatFluxF(heatFluxV);
   setHeatFlux(sLattice, std::move(domainI), heatFluxF);
 }
 
@@ -160,7 +160,7 @@ void setTemperature(SuperLattice<T,DESCRIPTOR>& sLattice,
   AnalyticCalcMultiplication<DESCRIPTOR::d,T,T> scaledTemperatureF(1/converter.getConversionFactorTemperature(),
                                                                relativeTemperatureF);
   AnalyticCalcPlus<DESCRIPTOR::d,T,T> latticeTemperatureF(scaledTemperatureF, 0.5);
-  sLattice.defineRho(std::move(domainI), scaledTemperatureF);
+  sLattice.defineRho(std::move(domainI), latticeTemperatureF);
 }
 
 template <typename T, typename DESCRIPTOR, typename VALUE>
