@@ -145,8 +145,8 @@ void setHeatFlux(SuperLattice<T,DESCRIPTOR>& sLattice,
                  VALUE heatFluxD)
   requires std::constructible_from<FieldD<T,DESCRIPTOR,descriptors::VELOCITY>, VALUE>
 {
-  Vector<T, DESCRIPTOR::d> heatFluxV = Vector<T, DESCRIPTOR::d>(heatFluxD);
-  AnalyticalConst<DESCRIPTOR::d,T,T> heatFluxF(heatFluxV);
+  Vector<T,DESCRIPTOR::d> heatFluxV = Vector<T,DESCRIPTOR::d>(heatFluxD);
+  AnalyticalConst<DESCRIPTOR::d,T,T> heatFluxF((heatFluxV));
   setHeatFlux(sLattice, std::move(domainI), heatFluxF);
 }
 

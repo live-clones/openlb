@@ -31,7 +31,6 @@
 
 using namespace olb;
 using namespace olb::names;
-using namespace olb::descriptors;
 
 // Anayltical solution for velocity profile
 template <typename T, typename S>
@@ -94,7 +93,8 @@ public:
 };
 
 using MyCase = Case<
-  NavierStokes, Lattice<double, descriptors::D3Q19<NORMAL,VELOCITY,descriptors::TEMPERATURE,TEMPGRADIENT>>
+  NavierStokes, Lattice<double, descriptors::D3Q19<descriptors::NORMAL,descriptors::VELOCITY,
+                                                   descriptors::TEMPERATURE,descriptors::TEMPGRADIENT>>
 >;
 
 namespace olb::parameters {
@@ -261,7 +261,7 @@ void setInitialValues(MyCase& myCase) {
   T pL0 = lattice.getUnitConverter().getLatticePressure(pM);
   AnalyticalConst3D<T,T> rho(pL0*descriptors::invCs2<T,DESCRIPTOR>()+T(1));
   AnalyticalConst3D<T,T> u0(T(0), T(0), T(0));
-  lattice.defineField<VELOCITY>(geometry.getMaterialIndicator({1,2}),u0);
+  lattice.defineField<descriptors::VELOCITY>(geometry.getMaterialIndicator({1,2}),u0);
 
   // Initialize all values of distribution functions to their local equilibrium
   lattice.defineRhoU(geometry.getMaterialIndicator({0,1,2}), rho, u0);

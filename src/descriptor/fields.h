@@ -330,11 +330,25 @@ struct UY                   : public FIELD_BASE<1,  0, 0> { };
 struct UZ                   : public FIELD_BASE<1,  0, 0> { };
 struct TEMPGRADIENT         : public FIELD_BASE<0,  1, 0> { };
 struct AVERAGE_VELOCITY     : public FIELD_BASE<0,  1, 0> { };
+struct AVERAGE_VELOCITY_X_VELOCITY : public FIELD_BASE_CUSTOM_SIZE {
+  template <typename DESCRIPTOR>
+  static constexpr unsigned size() {
+    return (DESCRIPTOR::d * (DESCRIPTOR::d+1)) / 2; // see `TensorVal` in `core/util.h`
+  }
+
+  template <typename T, typename DESCRIPTOR>
+  static constexpr auto getInitialValue() {
+    return Vector<value_type<T>, size<DESCRIPTOR>()>{};
+  }
+};
 struct MAX_VELOCITY         : public FIELD_BASE<1,  0, 0> { };
 struct AVERAGE_DENSITY      : public FIELD_BASE<1,  0, 0> { };
+struct AVERAGE_PRESSURE     : public FIELD_BASE<1,  0, 0> { };
+struct AVERAGE_SQUARE_PRESSURE     : public FIELD_BASE<1,  0, 0> { };
 struct AVERAGE_TKE          : public FIELD_BASE<0,  1, 0> { };
 struct SOURCE               : public FIELD_BASE<1,  0, 0> { };
 struct U_TAU                : public FIELD_BASE<1,  0, 0> { };
+struct AVERAGE_U_TAU        : public FIELD_BASE<1,  0, 0> { };
 struct PRESSCORR            : public FIELD_BASE<1,  0, 0> { };
 struct FORCE                : public FIELD_BASE<0,  1, 0> { };
 struct EXTERNAL_FORCE       : public FIELD_BASE<0,  1, 0> { };

@@ -34,7 +34,14 @@ struct TAG_CORE : public descriptors::TYPED_FIELD_BASE<int, 1> {};
 }
 
 namespace reduction {
-struct TAGS_U             : public descriptors::TYPED_FIELD_BASE<int, 1> {};
+template <typename TAG_FILED>
+struct checkTag {
+  template <typename CELL, typename T = typename CELL::value_t, typename DESCRIPTOR = typename CELL::descriptor_t>
+  bool operator()(CELL& cell) any_platform
+  {
+    return cell.template getField<TAG_FILED>();
+  }
+};
 
 struct ConditionTrue {
   template <typename CELL>
