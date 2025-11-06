@@ -28,8 +28,8 @@
 #include <olb.h>
 
 // Macro to switch between two approaches
-//#define BOUNDARY_CONDITION_APPROACH
-#define IN_BULK_APPROACH // IN_BULK_APPROACH only accurate for Peclet<0.1
+#define BOUNDARY_CONDITION_APPROACH
+//#define IN_BULK_APPROACH // IN_BULK_APPROACH only accurate for Peclet<0.1
 
 using namespace olb;
 using namespace olb::names;
@@ -193,23 +193,23 @@ void prepareLattice(MyCase& myCase)
 
 #ifdef BOUNDARY_CONDITION_APPROACH
   auto bulkIndicator = geometry.getMaterialIndicator({1,3,4});
-  ADlattice.defineDynamics<AdvectionDiffusionBGKdynamics>(bulkIndicator);
+  dynamics::set<AdvectionDiffusionBGKdynamics>( ADlattice, bulkIndicator );
   // reactive Robin boundary at left side MN=3
   boundary::set<boundary::Robin>(ADlattice, geometry.getMaterialIndicator({3}));
   T reactionRate = converter.getCharLatticeVelocity(); //determines speed of reaction, here equal to velocity
   AnalyticalConst3D <T,T> coefficients(reactionRate, -converter.getLatticeDiffusivity(), reactionRate * Ceq); //set robin coefficients as found in the paper
-  ADlattice.template defineField<descriptors::G>(geometry.getMaterialIndicator({3}), (coefficients)); //save coefficient in a field
+  fields::set<descriptors::G>( ADlattice, geometry.getMaterialIndicator({3}), (coefficients) ); //save coefficient in a field
 
   // ZeroGradient using RobinBoundary at right side MN=4
   boundary::set<boundary::Robin>(ADlattice, geometry.getMaterialIndicator({4}));
   AnalyticalConst3D <T,T> coefficients2(0., 1., 0.);
-  ADlattice.template defineField<descriptors::G>(geometry.getMaterialIndicator({4}), (coefficients2));
+  fields::set<descriptors::G>( ADlattice, geometry.getMaterialIndicator({4}), (coefficients2) );
 #endif
 
 
 #ifdef IN_BULK_APPROACH
   auto bulkIndicator = geometry.getMaterialIndicator({1,3,4,5});
-  ADlattice.defineDynamics<SourcedAdvectionDiffusionBGKdynamics>(bulkIndicator);
+  dynamics::set<SourcedAdvectionDiffusionBGKdynamics>( ADlattice, bulkIndicator );
   // BounceBack for MN=3
   boundary::set<boundary::BounceBack>(ADlattice, geometry.getMaterialIndicator({3}));
   // Zero Gradient at right side MN=4
@@ -218,11 +218,11 @@ void prepareLattice(MyCase& myCase)
   AnalyticalConst3D<T,T> mat1(1.);
   AnalyticalConst3D<T,T> mat0(0.);
   // necessary for Zero Gradient Boundary
-  ADlattice.template defineField<descriptors::SCALAR>(geometry.getMaterialIndicator({1,4}), mat1 );
-  ADlattice.template defineField<descriptors::SCALAR>(geometry.getMaterialIndicator({0,3,5}), mat0 );
+  fields::set<descriptors::SCALAR>( ADlattice, geometry.getMaterialIndicator({1,4}), mat1 );
+  fields::set<descriptors::SCALAR>( ADlattice, geometry.getMaterialIndicator({0,3,5}), mat0 );
   // use field GAMMA to define where reaction is allowed to happen
-  ADlattice.template defineField<descriptors::GAMMA>(geometry.getMaterialIndicator({5}), mat1 );
-  ADlattice.template defineField<descriptors::GAMMA>(geometry.getMaterialIndicator({0,1,3,4}), mat0 );
+  fields::set<descriptors::GAMMA>( ADlattice, geometry.getMaterialIndicator({5}), mat1 );
+  fields::set<descriptors::GAMMA>( ADlattice, geometry.getMaterialIndicator({0,1,3,4}), mat0 );
 #endif
 
   clout << "Prepare Lattice ... OK" << std::endl;
@@ -249,8 +249,8 @@ void setInitialValues(MyCase& myCase) {
   AnalyticalConst3D <T, T> u0(converter.getCharLatticeVelocity(), 0.0, 0.0);
   AnalyticalConst3D<T,T> rho0(0.0);
 
-  ADlattice.defineField<descriptors::VELOCITY>(bulkIndicator, u0);
-  ADlattice.defineRho(bulkIndicator, rho0);
+  fields::set<descriptors::VELOCITY>( ADlattice, bulkIndicator, u0);
+  momenta::setDensity( ADlattice, bulkIndicator, rho0);
   ADlattice.iniEquilibrium(bulkIndicator, rho0, u0);
 
   ADlattice.setParameter<descriptors::OMEGA>( omega );
