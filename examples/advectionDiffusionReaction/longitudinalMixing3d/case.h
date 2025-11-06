@@ -28,8 +28,8 @@
 #include <olb.h>
 
 // Macro to switch between two approaches
-#define BOUNDARY_CONDITION_APPROACH
-//#define IN_BULK_APPROACH // IN_BULK_APPROACH only accurate for Peclet<0.1
+//#define BOUNDARY_CONDITION_APPROACH
+#define IN_BULK_APPROACH // IN_BULK_APPROACH only accurate for Peclet<0.1
 
 using namespace olb;
 using namespace olb::names;
@@ -119,7 +119,7 @@ void prepareGeometry(MyCase& myCase) {
 
   using T = MyCase::value_t;
   auto& geometry = myCase.getGeometry();
-  auto& lattice = myCase.getLattice(AdvectionDiffusion{});
+
 
   OstreamManager clout(std::cout, "prepareGeometry");
   clout << "Prepare Geometry ..." << std::endl;
@@ -211,9 +211,9 @@ void prepareLattice(MyCase& myCase)
   auto bulkIndicator = geometry.getMaterialIndicator({1,3,4,5});
   ADlattice.defineDynamics<SourcedAdvectionDiffusionBGKdynamics>(bulkIndicator);
   // BounceBack for MN=3
-  boundary::set<boundary::BounceBack><T, TDESCRIPTOR>(ADlattice, geometry.getMaterialIndicator({3}));
+  boundary::set<boundary::BounceBack>(ADlattice, geometry.getMaterialIndicator({3}));
   // Zero Gradient at right side MN=4
-  setZeroGradientBoundary<T, TDESCRIPTOR>(ADlattice, geometry.getMaterialIndicator({4}));
+  setZeroGradientBoundary<T, DESCRIPTOR>(ADlattice, geometry.getMaterialIndicator({4}));
   // constants used in defineField
   AnalyticalConst3D<T,T> mat1(1.);
   AnalyticalConst3D<T,T> mat0(0.);
