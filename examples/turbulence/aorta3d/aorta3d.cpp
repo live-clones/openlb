@@ -153,7 +153,7 @@ void prepareLattice(MyCase& myCase)
   STLreader<T> stlReader( "aorta3d.stl", physDeltaX, 0.001,  olb::RayMode::FastRayZ, true );
 
   // material=1 --> bulk dynamics
-  lattice.defineDynamics<BulkDynamics>(geometry, 1);
+  dynamics::set<BulkDynamics>(lattice, geometry.getMaterialIndicator({1}));
 
   if ( bouzidiOn ) {
     // material=2 --> no dynamics + bouzidi zero velocity
