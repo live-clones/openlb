@@ -156,14 +156,13 @@ void setInitialValues(MyCase& myCase) {
   auto& geometry = myCase.getGeometry();
   const auto& converter = lattice.getUnitConverter();
 
-  AnalyticalConst2D<T,T> u0( converter.getCharPhysVelocity(), 0.0);
+  AnalyticalConst2D<T,T> u0( converter.getCharLatticeVelocity(), 0.0);
   AdePhysTemp1D<T> Tinit( 0.0, myCase);
 
   auto bulkIndicator = geometry.getMaterialIndicator({0,1});
 
-  momenta::setVelocity(lattice, bulkIndicator, u0 );
+  fields::set<descriptors::VELOCITY>(lattice, bulkIndicator, u0);
   momenta::setDensity(lattice, bulkIndicator, Tinit );
-  //lattice.iniEquilibrium( bulkIndicator, Tinit, u0 );
 
   lattice.setParameter<descriptors::OMEGA>( converter.getLatticeAdeRelaxationFrequency() );
 
