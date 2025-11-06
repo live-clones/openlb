@@ -61,15 +61,12 @@ public:
     const T mue = converter.getPhysDiffusivity();
     const T uMag = converter.getCharPhysVelocity();
     const T res = converter.getResolution();
-    //const T dx = converter.getPhysDeltaX();
 
     T x = input[0];
     T gf = res/(res+1.);
 
     // initial condition (pseudo 1D)
     output[0] = util::sin(M_PI*(x-uMag*t)*gf) * util::exp(-mue*util::pow(M_PI,2)*t*util::pow(gf,2));
-
-    std::cout << "AdePhysTemp1D: " << output[0] << std::endl;
 
     return true;
   };
