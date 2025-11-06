@@ -61,12 +61,15 @@ public:
     const T mue = converter.getPhysDiffusivity();
     const T uMag = converter.getCharPhysVelocity();
     const T res = converter.getResolution();
+    //const T dx = converter.getPhysDeltaX();
 
     T x = input[0];
     T gf = res/(res+1.);
 
     // initial condition (pseudo 1D)
     output[0] = util::sin(M_PI*(x-uMag*t)*gf) * util::exp(-mue*util::pow(M_PI,2)*t*util::pow(gf,2));
+
+    std::cout << "AdePhysTemp1D: " << output[0] << std::endl;
 
     return true;
   };
@@ -144,7 +147,7 @@ void prepareLattice(MyCase& myCase)
   const auto& converter = lattice.getUnitConverter();
   converter.print();
 
-  lattice.dynamics::set<AdvectionDiffusionBGKdynamics>(geometry.getMaterialIndicator({1}));
+  dynamics::set<AdvectionDiffusionBGKdynamics>(lattice,geometry.getMaterialIndicator({1}));
 }
 
 void setInitialValues(MyCase& myCase) {
@@ -153,14 +156,14 @@ void setInitialValues(MyCase& myCase) {
   auto& geometry = myCase.getGeometry();
   const auto& converter = lattice.getUnitConverter();
 
-  AnalyticalConst2D<T,T> u0( converter.getCharLatticeVelocity(), 0.0);
+  AnalyticalConst2D<T,T> u0( converter.getCharPhysVelocity(), 0.0);
   AdePhysTemp1D<T> Tinit( 0.0, myCase);
 
   auto bulkIndicator = geometry.getMaterialIndicator({0,1});
 
-  lattice.momenta::setVelocity<descriptors::VELOCITY>( bulkIndicator, u0 );
-  lattice.momenta::setDensity( bulkIndicator, Tinit );
-  lattice.iniEquilibrium( bulkIndicator, Tinit, u0 );
+  momenta::setVelocity(lattice, bulkIndicator, u0 );
+  momenta::setDensity(lattice, bulkIndicator, Tinit );
+  //lattice.iniEquilibrium( bulkIndicator, Tinit, u0 );
 
   lattice.setParameter<descriptors::OMEGA>( converter.getLatticeAdeRelaxationFrequency() );
 
