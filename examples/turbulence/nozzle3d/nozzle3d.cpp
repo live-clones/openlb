@@ -248,10 +248,10 @@ void setInitialValues(MyCase& myCase) {
   Vector<T,3> velocity{};
   AnalyticalConst3D<T,T> uF(velocity);
 
-  momenta::setDensity(lattice, geometry.getMaterialIndicator({1, 2, 3, 4}), rhoF);
-  momenta::setVelocity(lattice, geometry.getMaterialIndicator({1, 2, 3, 4}), rhoF);
-  lattice.defineRhoU(geometry.getMaterialIndicator({1, 2, 3, 4}), rhoF, uF);
-  lattice.iniEquilibrium(geometry.getMaterialIndicator({1, 2, 3, 4}), rhoF, uF);
+  auto bulkMaterialIndicator = geometry.getMaterialIndicator({1, 2, 3, 4});
+  momenta::setDensity(lattice, bulkMaterialIndicator, rhoF);
+  momenta::setVelocity(lattice, bulkMaterialIndicator, uF);
+  lattice.iniEquilibrium(bulkMaterialIndicator, rhoF, uF);
   lattice.initialize();
   geometry.updateStatistics();
 
