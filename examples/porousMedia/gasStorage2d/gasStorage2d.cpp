@@ -390,6 +390,7 @@ void setTemporalValues(MyCase& myCase, std::size_t iT)
   auto& geometry = myCase.getGeometry();
   auto& params = myCase.getParameters();
   auto& sLatticeNS = myCase.getLattice(NavierStokes{});
+  const auto& converter = sLatticeNS.getUnitConverter();
 
   const T pressureDrop = params.get<parameters::PRESSURE_DROP>();
 
@@ -405,8 +406,8 @@ void setTemporalValues(MyCase& myCase, std::size_t iT)
     T iTvec[1] = {T(iT)};
     T frac[1]  = {};
     StartScale(frac, iTvec);
+    const T imposedPressure = pressureDrop / converter.getConversionFactorPressure() * frac[0];
 
-    const T imposedPressure = pressureDrop * frac[0];
     momenta::setDensity<T, NSDESCRIPTOR>(sLatticeNS, inlet, imposedPressure);
   }
 }
