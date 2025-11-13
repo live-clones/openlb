@@ -30,7 +30,7 @@ namespace olb {
 
 namespace fields {
 
-template <typename FIELD, typename T, typename DESCRIPTOR, typename VALUE>
+template <typename FIELD, typename T, typename DESCRIPTOR>
 void set(SuperLattice<T,DESCRIPTOR>& sLattice,
          FunctorPtr<SuperIndicatorF<T,DESCRIPTOR::d>>&& domainI,
          AnalyticalF<DESCRIPTOR::d,T,T>& fieldF)
@@ -97,6 +97,22 @@ void setElectricPotential(SuperLattice<T,DESCRIPTOR>& sLattice,
                           VALUE densityD)
 {
   setDensity<T,DESCRIPTOR,VALUE>(sLattice, std::move(domainI), densityD);
+}
+
+template <typename T, typename DESCRIPTOR>
+void setConcentration(SuperLattice<T,DESCRIPTOR>& sLattice,
+                      FunctorPtr<SuperIndicatorF<T,DESCRIPTOR::d>>&& domainI,
+                      AnalyticalF<DESCRIPTOR::d,T,T>& concentrationF)
+{
+  setDensity<T,DESCRIPTOR>(sLattice, std::move(domainI), concentrationF);
+}
+
+template <typename T, typename DESCRIPTOR, typename VALUE>
+void setConcentration(SuperLattice<T,DESCRIPTOR>& sLattice,
+                      FunctorPtr<SuperIndicatorF<T,DESCRIPTOR::d>>&& domainI,
+                      VALUE concentrationD)
+{
+  setDensity<T,DESCRIPTOR,VALUE>(sLattice, std::move(domainI), concentrationD);
 }
 
 template <typename T, typename DESCRIPTOR>

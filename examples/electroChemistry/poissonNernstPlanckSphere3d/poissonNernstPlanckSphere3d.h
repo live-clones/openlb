@@ -217,9 +217,9 @@ void prepareLatticePoisson(MyCase& myCase) {
 
   const T omega = lattice.getUnitConverter().getLatticeRelaxationFrequency();
 
-  lattice.defineDynamics<SourcedAdvectionDiffusionBGKdynamics>(geometry.getMaterialIndicator({1,2}));
+  dynamics::set<SourcedAdvectionDiffusionBGKdynamics>(lattice, geometry.getMaterialIndicator({1,2}));
   boundary::set<boundary::AdvectionDiffusionDirichlet>(lattice, geometry, 2);
-  lattice.defineDynamics<EquilibriumBoundaryFirstOrder>(geometry, 3);
+  dynamics::set<EquilibriumBoundaryFirstOrder>(lattice, geometry, 3);
 
   lattice.setParameter<descriptors::OMEGA>(omega);
 
@@ -256,9 +256,9 @@ void prepareLatticeNernstPlanck(MyCase& myCase) {
 
   const T omega = lattice.getUnitConverter().getLatticeRelaxationFrequency();
 
-  lattice.template defineDynamics<AdvectionDiffusionBGKdynamics>(geometry.getMaterialIndicator({1, 2}));
+  dynamics::set<AdvectionDiffusionBGKdynamics>(lattice, geometry.getMaterialIndicator({1, 2}));
   boundary::set<boundary::AdvectionDiffusionDirichlet>(lattice, geometry, 2);
-  lattice.template defineDynamics<BounceBack>(geometry, 3);
+  dynamics::set<BounceBack>(lattice, geometry, 3);
 
   lattice.template setParameter<descriptors::OMEGA>(omega);
 
@@ -298,20 +298,8 @@ void setInitialValuesPoisson(MyCase& myCase) {
   auto& parameters = myCase.getParameters();
 
   const T psi0 = parameters.get<parameters::PSI_BC>();
-  AnalyticalConst3D<T,T> rhoF( psi0 );
-  AnalyticalConst3D<T,T> rho0( 0 );
-  std::vector<T> velocity( 3,T() );
-  AnalyticalConst3D<T,T> uF( velocity );
-  lattice.defineField<descriptors::VELOCITY>(geometry.getMaterialIndicator({1, 2, 3}),uF);
-  lattice.defineField<descriptors::SOURCE>(geometry.getMaterialIndicator({0, 1, 2}),rho0);
-
-  auto bulkIndicator = geometry.getMaterialIndicator({3});
-  lattice.iniEquilibrium( bulkIndicator, rhoF, uF );
-  lattice.defineRhoU( bulkIndicator, rhoF, uF );
-
-  auto bulkIndicator1 = geometry.getMaterialIndicator({0, 1, 2});
-  lattice.iniEquilibrium( bulkIndicator1, rho0, uF );
-  lattice.defineRhoU( bulkIndicator1, rho0, uF );
+  momenta::setElectricPotential(lattice, geometry.getMaterialIndicator(3), psi0);
+  momenta::setElectricPotential(lattice, geometry.getMaterialIndicator({1, 2}), T(0));
 
   // Make the lattice ready for simulation
   lattice.initialize();
@@ -326,34 +314,19 @@ void setInitialValuesCation(MyCase& myCase) {
   auto& lattice = myCase.getLattice(Concentration<0>{});
 
   const T C0 = parameters.get<parameters::C_0>();
-  const T CB = parameters.get<parameters::CB_CATION>();
   const T psi0 = parameters.get<parameters::PSI_BC>();
   const T Debye = parameters.get<parameters::DEBYE>();
   const T temperature = parameters.get<parameters::TEMPERATURE>();
   const T valence = parameters.get<parameters::VALENCE>();
   const T diffusion = parameters.get<parameters::DIFFUSION>();
   const T sphereRadius = parameters.get<parameters::SPHERE_RADIUS>();
-  AnalyticalConst3D<T,T> rhoF( C0 );
-  AnalyticalConst3D<T,T> rho0( 0 );
-  std::vector<T> velocity( 3,T() );
-  AnalyticalConst3D<T,T> uF( velocity );
-  lattice.defineField<descriptors::VELOCITY>(geometry.getMaterialIndicator({0, 1, 2}),uF);
-  lattice.defineField<descriptors::SOURCE>(geometry.getMaterialIndicator({0, 1, 3, 2}),uF);
+
   PotentialProfileSphere3D<T,T,DESCRIPTOR> psiSol(psi0, Debye, sphereRadius, lattice.getUnitConverter());
   ConcentrationProfileSphere3D<T,T,DESCRIPTOR> concSol(C0, valence, temperature, psiSol);
   VelocityProfileSphere3D<T,T,DESCRIPTOR> velSol(psi0, Debye, temperature, valence, diffusion, T(1), lattice.getUnitConverter());
-  lattice.defineField<descriptors::VELOCITY>(geometry, 3, velSol);
-
-  AnalyticalConst3D<T,T> rhoB( CB );
-  clout << "Concentration at boundary: " << CB << std::endl;
-
-  auto bulkIndicator = geometry.getMaterialIndicator({2});
-  lattice.iniEquilibrium( bulkIndicator, concSol, uF );
-  lattice.defineRhoU( bulkIndicator, concSol, uF );
-
-  auto bulkIndicator1 = geometry.getMaterialIndicator({0, 1, 3});
-  lattice.iniEquilibrium( bulkIndicator1, rho0, uF );
-  lattice.defineRhoU( bulkIndicator1, rho0, uF );
+  fields::set<descriptors::VELOCITY>(lattice, geometry.getMaterialIndicator(3), velSol);
+  momenta::setConcentration(lattice, geometry.getMaterialIndicator(2), static_cast<AnalyticalF<3,T,T>&>(concSol));
+  momenta::setConcentration(lattice, geometry.getMaterialIndicator({1, 3}), T(0));
 
   // Make the lattice ready for simulation
   lattice.initialize();
@@ -368,34 +341,20 @@ void setInitialValuesAnion(MyCase& myCase) {
   auto& lattice = myCase.getLattice(Concentration<1>{});
 
   const T C0 = parameters.get<parameters::C_0>();
-  const T CB = parameters.get<parameters::CB_ANION>();
   const T psi0 = parameters.get<parameters::PSI_BC>();
   const T Debye = parameters.get<parameters::DEBYE>();
   const T temperature = parameters.get<parameters::TEMPERATURE>();
   const T valence = parameters.get<parameters::VALENCE>();
   const T diffusion = parameters.get<parameters::DIFFUSION>();
   const T sphereRadius = parameters.get<parameters::SPHERE_RADIUS>();
-  AnalyticalConst3D<T,T> rhoF( C0 );
-  AnalyticalConst3D<T,T> rho0( 0 );
-  std::vector<T> velocity( 3,T() );
-  AnalyticalConst3D<T,T> uF( velocity );
-  lattice.defineField<descriptors::VELOCITY>(geometry.getMaterialIndicator({0, 1, 2}),uF);
-  lattice.defineField<descriptors::SOURCE>(geometry.getMaterialIndicator({0, 1, 3, 2}),uF);
+
   PotentialProfileSphere3D<T,T,DESCRIPTOR> psiSol(psi0, Debye, sphereRadius, lattice.getUnitConverter());
   ConcentrationProfileSphere3D<T,T,DESCRIPTOR> concSol(C0, -valence, temperature, psiSol);
   VelocityProfileSphere3D<T,T,DESCRIPTOR> velSol(psi0, Debye, temperature, valence, diffusion, T(-1), lattice.getUnitConverter());
   lattice.defineField<descriptors::VELOCITY>(geometry, 3, velSol);
-
-  AnalyticalConst3D<T,T> rhoB( CB );
-  clout << "Concentration at boundary: " << CB << std::endl;
-
-  auto bulkIndicator = geometry.getMaterialIndicator({2});
-  lattice.iniEquilibrium( bulkIndicator, concSol, uF );
-  lattice.defineRhoU( bulkIndicator, concSol, uF );
-
-  auto bulkIndicator1 = geometry.getMaterialIndicator({0, 1, 3});
-  lattice.iniEquilibrium( bulkIndicator1, rho0, uF );
-  lattice.defineRhoU( bulkIndicator1, rho0, uF );
+  fields::set<descriptors::VELOCITY>(lattice, geometry.getMaterialIndicator(3), velSol);
+  momenta::setConcentration(lattice, geometry.getMaterialIndicator(2), static_cast<AnalyticalF<3,T,T>&>(concSol));
+  momenta::setConcentration(lattice, geometry.getMaterialIndicator({1, 3}), T(0));
 
   // Make the lattice ready for simulation
   lattice.initialize();
