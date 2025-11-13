@@ -179,13 +179,13 @@ void prepareLattice(MyCase& myCase) {
   lattice.getUnitConverter().print();
 
   using BulkDynamics = BGKdynamics<T,DESCRIPTOR>::template wrap_collision<collision::SaveVelocity>;
-  lattice.defineDynamics<BulkDynamics>(geometry.getMaterialIndicator({1,3,4}));
+  dynamics::set<BulkDynamics>( lattice, geometry.getMaterialIndicator({1,3,4}));
 
   boundary::set<boundary::LocalPressure<T,DESCRIPTOR,BulkDynamics>>(lattice, geometry, 3);
   boundary::set<boundary::LocalPressure<T,DESCRIPTOR,BulkDynamics>>(lattice, geometry, 4);
 
   AnalyticalLinear2D<T,T> temp((tempRight-tempLeft)/extend[0], 0, tempLeft);
-  lattice.defineField<descriptors::TEMPERATURE>(geometry.getMaterialIndicator({0,2}), temp);
+  dynamics::set<descriptors::TEMPERATURE>( lattice, geometry.getMaterialIndicator({0,2}), temp);
 
   Vector<T,2> origin(0,0);
   origin[0] -= 10.*lattice.getUnitConverter().getPhysDeltaX();
