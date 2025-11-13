@@ -50,8 +50,10 @@ using MyCase = Case<
 
 /// @brief Create a simulation mesh, based on user-specific geometry
 /// @return An instance of Mesh, which keeps the relevant information
-Mesh<MyCase::value_t,MyCase::d> createMesh(MyCase::ParametersD& parameters) {
+Mesh<MyCase::value_t,MyCase::d> createMesh(MyCase::ParametersD& parameters)
+{
   using T = MyCase::value_t_of<Component1>;
+
   const Vector extent = parameters.get<parameters::DOMAIN_EXTENT>();
   const Vector origin = parameters.get<parameters::ORIGIN>();
   const T physDeltaX  = parameters.get<parameters::PHYS_DELTA_X>();
@@ -59,23 +61,24 @@ Mesh<MyCase::value_t,MyCase::d> createMesh(MyCase::ParametersD& parameters) {
 
   Mesh<T,MyCase::d> mesh(cuboid, physDeltaX, singleton::mpi().getSize());
   mesh.setOverlap(parameters.get<parameters::OVERLAP>());
-  mesh.getCuboidDecomposition().setPeriodicity({true, false});
+  mesh.getCuboidDecomposition().setPeriodicity({ true, false });
   return mesh;
 }
 
-void prepareGeometry(MyCase& myCase) {
+void prepareGeometry(MyCase& myCase)
+{
   OstreamManager clout( std::cout,"prepareGeometry" );
   clout << "Prepare Geometry ..." << std::endl;
 
-  using T = MyCase::value_t_of<Component1>;
+  using T             = MyCase::value_t_of<Component1>;
 
-  auto& geometry    = myCase.getGeometry();
-  auto& parameters  = myCase.getParameters();
+  auto& geometry      = myCase.getGeometry();
+  auto& parameters    = myCase.getParameters();
 
-  const Vector extend     = parameters.get<parameters::DOMAIN_EXTENT>();
-  const T dx         = parameters.get<parameters::PHYS_DELTA_X>();
-  const T nx              = extend[0];
-  const T ny              = extend[1];
+  const Vector extend = parameters.get<parameters::DOMAIN_EXTENT>();
+  const T dx          = parameters.get<parameters::PHYS_DELTA_X>();
+  const T nx          = extend[0];
+  const T ny          = extend[1];
 
   // Sets material number for fluid and boundary
   geometry.rename( 0, 1 );
@@ -102,7 +105,8 @@ void prepareGeometry(MyCase& myCase) {
   clout << "Prepare Geometry ... OK" << std::endl;
 }
 
-void prepareLattice(MyCase& myCase) {
+void prepareLattice(MyCase& myCase)
+{
   OstreamManager clout(std::cout,"prepareLattice");
   clout << "Prepare Lattice ..." << std::endl;
 
@@ -126,6 +130,7 @@ void prepareLattice(MyCase& myCase) {
   const T physCharViscosity = parameters.get<parameters::PHYS_CHAR_VISCOSITY>();
   const T physCharDensity   = parameters.get<parameters::PHYS_CHAR_DENSITY>();
   const T couplingG         = parameters.get<parameters::COUPLING_G>();
+
   latticeOne.setUnitConverter<UnitConverterFromResolutionAndRelaxationTime<T,DESCRIPTOR>>(
     N,
     tau,
@@ -140,25 +145,16 @@ void prepareLattice(MyCase& myCase) {
 
   latticeTwo.setUnitConverter(converter);
 
-  latticeOne.defineDynamics<ForcedShanChenBGKdynamics<T, DESCRIPTOR, momenta::ExternalVelocityTuple>>(geometry, 1);
-  latticeOne.defineDynamics<ForcedShanChenBGKdynamics<T, DESCRIPTOR, momenta::ExternalVelocityTuple>>(geometry, 2);
-  latticeOne.defineDynamics<ForcedShanChenBGKdynamics<T, DESCRIPTOR, momenta::ExternalVelocityTuple>>(geometry, 3);
-  latticeOne.defineDynamics<ForcedShanChenBGKdynamics<T, DESCRIPTOR, momenta::ExternalVelocityTuple>>(geometry, 4);
+  dynamics::set<ForcedShanChenBGKdynamics<T, DESCRIPTOR, momenta::ExternalVelocityTuple>>(latticeOne, geometry.getMaterialIndicator({ 1, 2, 3, 4 }));
+  dynamics::set<ForcedShanChenBGKdynamics<T, DESCRIPTOR, momenta::ExternalVelocityTuple>>(latticeTwo, geometry.getMaterialIndicator({ 1, 2, 3, 4 }));
 
-  latticeTwo.defineDynamics<ForcedShanChenBGKdynamics<T, DESCRIPTOR, momenta::ExternalVelocityTuple>>(geometry, 1);
-  latticeTwo.defineDynamics<ForcedShanChenBGKdynamics<T, DESCRIPTOR, momenta::ExternalVelocityTuple>>(geometry, 2);
-  latticeTwo.defineDynamics<ForcedShanChenBGKdynamics<T, DESCRIPTOR, momenta::ExternalVelocityTuple>>(geometry, 3);
-  latticeTwo.defineDynamics<ForcedShanChenBGKdynamics<T, DESCRIPTOR, momenta::ExternalVelocityTuple>>(geometry, 4);
+  boundary::set<boundary::BounceBack>(latticeOne, geometry.getMaterialIndicator({ 3, 4 }));
+  boundary::set<boundary::BounceBack>(latticeTwo, geometry.getMaterialIndicator({ 3, 4 }));
 
-  boundary::set<boundary::BounceBack>(latticeOne, geometry, 3);
-  boundary::set<boundary::BounceBack>(latticeOne, geometry, 4);
-  boundary::set<boundary::BounceBack>(latticeTwo, geometry, 3);
-  boundary::set<boundary::BounceBack>(latticeTwo, geometry, 4);
+  const T omega = converter.getLatticeRelaxationFrequency();
 
-  const T omega1  = converter.getLatticeRelaxationFrequency();
-  const T omega2  = converter.getLatticeRelaxationFrequency();
-  latticeOne.setParameter<descriptors::OMEGA>(omega1);
-  latticeTwo.setParameter<descriptors::OMEGA>(omega2);
+  latticeOne.setParameter<descriptors::OMEGA>(omega);
+  latticeTwo.setParameter<descriptors::OMEGA>(omega);
 
   using COUPLING = PseudopotentialForcedCoupling<
     interaction::PsiEqualsRho,
@@ -173,8 +169,8 @@ void prepareLattice(MyCase& myCase) {
   );
 
   coupling.setParameter<COUPLING::G>(couplingG);
-  coupling.setParameter<multicomponent_velocity::ShanChen::OMEGA_A>(omega1);
-  coupling.setParameter<multicomponent_velocity::ShanChen::OMEGA_B>(omega2);
+  coupling.setParameter<multicomponent_velocity::ShanChen::OMEGA_A>(omega);
+  coupling.setParameter<multicomponent_velocity::ShanChen::OMEGA_B>(omega);
 
   latticeOne.addPostProcessor<stage::PreCoupling>(meta::id<RhoStatistics>());
   latticeTwo.addPostProcessor<stage::PreCoupling>(meta::id<RhoStatistics>());
@@ -196,46 +192,45 @@ void prepareLattice(MyCase& myCase) {
   clout << "Prepare Lattice ... OK" << std::endl;
 }
 
-void setInitialValues(MyCase& myCase) {
+void setInitialValues(MyCase& myCase)
+{
   OstreamManager clout(std::cout, "setInitialValues");
   clout << "Setting initial values ..." << std::endl;
 
-  using T          = MyCase::value_t_of<Component1>;
-  using DESCRIPTOR = MyCase::descriptor_t_of<Component1>;
+  using T           = MyCase::value_t_of<Component1>;
+  using DESCRIPTOR  = MyCase::descriptor_t_of<Component1>;
 
   auto& geometry    = myCase.getGeometry();
   auto& latticeOne  = myCase.getLattice(Component1{});
   auto& latticeTwo  = myCase.getLattice(Component2{});
   auto& parameters  = myCase.getParameters();
 
-  const T noiseVal        = parameters.get<parameters::NOISE>();
-  const T zeroVal         = parameters.get<parameters::ZERO>();
-  const T force           = parameters.get<parameters::FORCE>();
-  const T ny              = parameters.get<parameters::DOMAIN_EXTENT>()[1];
+  const T noiseVal  = parameters.get<parameters::NOISE>();
+  const T zeroVal   = parameters.get<parameters::ZERO>();
+  const T force     = parameters.get<parameters::FORCE>();
+  const T ny        = parameters.get<parameters::DOMAIN_EXTENT>()[1];
 
-  AnalyticalConst2D<T,T> noise( noiseVal );
-  AnalyticalConst2D<T,T> zeroV(0., 0.);
-  AnalyticalConst2D<T,T> zero( zeroVal );
-  AnalyticalLinear2D<T,T> one( 0., -force * descriptors::invCs2<T,DESCRIPTOR>(), 0.98 + force * ny * descriptors::invCs2<T,DESCRIPTOR>() );
-  AnalyticalConst2D<T,T> onePlus( 0.98 + force * ny / 2. * descriptors::invCs2<T,DESCRIPTOR>() );
-  AnalyticalRandom2D<T,T> random;
+  AnalyticalConst2D<T,T>    noise( noiseVal );
+  AnalyticalConst2D<T,T>    zeroV(0., 0.);
+  AnalyticalConst2D<T,T>    zero( zeroVal );
+  AnalyticalLinear2D<T,T>   one( 0., -force * descriptors::invCs2<T,DESCRIPTOR>(), 0.98 + force * ny * descriptors::invCs2<T,DESCRIPTOR>() );
+  AnalyticalConst2D<T,T>    onePlus( 0.98 + force * ny / 2. * descriptors::invCs2<T,DESCRIPTOR>() );
+  AnalyticalRandom2D<T,T>   random;
   AnalyticalIdentity2D<T,T> randomOne( random * noise + one );
   AnalyticalIdentity2D<T,T> randomPlus( random * noise + onePlus );
-  AnalyticalConst2D<T,T> f( 0, -force );
+  AnalyticalConst2D<T,T>    f( 0, -force );
 
   // for each material set the defineRhou and the Equilibrium
 
-  latticeOne.defineRhoU( geometry, 1, zero, zeroV );
-  latticeOne.iniEquilibrium( geometry, 1, zero, zeroV );
-  latticeOne.defineField<descriptors::EXTERNAL_FORCE>( geometry, 1, f );
-  latticeTwo.defineRhoU( geometry, 1, randomPlus, zeroV );
-  latticeTwo.iniEquilibrium( geometry, 1, randomPlus, zeroV );
+  momenta::setDensity(latticeOne, geometry.getMaterialIndicator(1), zero);
+  momenta::setDensity(latticeOne, geometry.getMaterialIndicator(2), randomOne);
 
-  latticeOne.defineRhoU( geometry, 2, randomOne, zeroV );
-  latticeOne.iniEquilibrium( geometry, 2, randomOne, zeroV );
-  latticeOne.defineField<descriptors::EXTERNAL_FORCE>( geometry, 2, f );
-  latticeTwo.defineRhoU( geometry, 2, zero, zeroV );
-  latticeTwo.iniEquilibrium( geometry, 2, zero, zeroV );
+  momenta::setDensity(latticeTwo, geometry.getMaterialIndicator(1), randomPlus);
+  momenta::setDensity(latticeTwo, geometry.getMaterialIndicator(2), zero);
+
+
+  fields::set<descriptors::EXTERNAL_FORCE>(latticeOne, geometry.getMaterialIndicator(1), f);
+  fields::set<descriptors::EXTERNAL_FORCE>(latticeOne, geometry.getMaterialIndicator(2), f);
 
   // Make the lattice ready for simulation
   latticeOne.initialize();
@@ -256,44 +251,53 @@ void getResults(MyCase& myCase,
 {
   OstreamManager clout(std::cout,"getResults");
 
-  using T          = MyCase::value_t_of<Component1>;
-  using DESCRIPTOR = MyCase::descriptor_t_of<Component1>;
+  using T               = MyCase::value_t_of<Component1>;
+  using DESCRIPTOR      = MyCase::descriptor_t_of<Component1>;
 
-  auto& latticeOne  = myCase.getLattice(Component1{});
-  auto& latticeTwo  = myCase.getLattice(Component2{});
-  auto& parameters  = myCase.getParameters();
+  auto& latticeOne      = myCase.getLattice(Component1{});
+  auto& latticeTwo      = myCase.getLattice(Component2{});
+  const auto& converter = latticeOne.getUnitConverter();
+  auto& parameters      = myCase.getParameters();
 
-  SuperVTMwriter2D<T> vtmWriter( "rayleighTaylor2dsLatticeOne" );
+  const int vtkIter     = parameters.get<parameters::LATTICE_VTK_ITER_T>();
+  const int statIter    = parameters.get<parameters::LATTICE_STAT_ITER_T>();
 
-  const int vtkIter   = parameters.get<parameters::LATTICE_VTK_ITER_T>();
-  const int statIter  = parameters.get<parameters::LATTICE_STAT_ITER_T>();
+  if ( iT == 0 )
+  {
+    SuperVTMwriter2D<T> vtmWriter( "rayleighTaylor2dsLatticeOne" );
 
-  if ( iT == 0 ) {
-    // Writes the geometry, cuboid no. and rank no. as vti file for visualization
     SuperLatticeCuboid2D<T, DESCRIPTOR> cuboid( latticeOne );
-    SuperLatticeRank2D<T, DESCRIPTOR> rank( latticeOne );
+    SuperLatticeRank2D<T, DESCRIPTOR>   rank( latticeOne );
     vtmWriter.write( cuboid );
     vtmWriter.write( rank );
     vtmWriter.createMasterFile();
   }
 
   // Get statistics
-  if ( iT % statIter == 0 && iT > 0 ) {
-    // Timer console output
-    timer.update( iT );
-    timer.printStep();
-
-    clout << "averageRhoFluidOne="   << latticeOne.getStatistics().getAverageRho();
-    clout << "; averageRhoFluidTwo=" << latticeTwo.getStatistics().getAverageRho() << std::endl;
-  }
-
-  // Writes the VTK files
-  if ( iT % vtkIter == 0 ) {
+  if ( iT % statIter == 0 && iT > 0 )
+  {
     latticeOne.setProcessingContext(ProcessingContext::Evaluation);
     latticeTwo.setProcessingContext(ProcessingContext::Evaluation);
 
+    timer.printStep();
+
+    latticeOne.getStatistics().print(iT, converter.getPhysTime(iT));
+    latticeTwo.getStatistics().print(iT, converter.getPhysTime(iT));
+
+    latticeOne.setProcessingContext(ProcessingContext::Simulation);
+    latticeTwo.setProcessingContext(ProcessingContext::Simulation);
+  }
+
+  // Writes the VTK files
+  if ( iT % vtkIter == 0 )
+  {
+    latticeOne.setProcessingContext(ProcessingContext::Evaluation);
+    latticeTwo.setProcessingContext(ProcessingContext::Evaluation);
+
+    SuperVTMwriter2D<T> vtmWriter( "rayleighTaylor2dsLatticeOne" );
+
     SuperLatticeVelocity2D<T, DESCRIPTOR> velocity( latticeOne );
-    SuperLatticeDensity2D<T, DESCRIPTOR> density( latticeOne );
+    SuperLatticeDensity2D<T, DESCRIPTOR>  density( latticeOne );
     vtmWriter.addFunctor( velocity );
     vtmWriter.addFunctor( density );
     vtmWriter.write( iT );
@@ -301,14 +305,22 @@ void getResults(MyCase& myCase,
     BlockReduction2D2D<T> planeReduction( density, 600, BlockDataSyncMode::ReduceOnly );
     // write output as JPEG
     heatmap::write(planeReduction, iT);
+
+    latticeOne.setProcessingContext(ProcessingContext::Simulation);
+    latticeTwo.setProcessingContext(ProcessingContext::Simulation);
   }
 }
 
-void simulate(MyCase& myCase) {
+void simulate(MyCase& myCase)
+{
   OstreamManager clout(std::cout,"simulate");
   clout << "starting simulation..." << std::endl;
 
   using T = MyCase::value_t;
+
+  auto& latticeOne  = myCase.getLattice(Component1{});
+  auto& latticeTwo  = myCase.getLattice(Component2{});
+  auto& coupling    = myCase.getOperator("MultiComponent");
   auto& parameters  = myCase.getParameters();
 
   const std::size_t iTmax = parameters.get<parameters::MAX_LATTICE_T>();
@@ -316,18 +328,20 @@ void simulate(MyCase& myCase) {
   util::Timer<T> timer(iTmax, myCase.getGeometry().getStatistics().getNvoxel());
   timer.start();
 
-  for (int iT = 0; iT < iTmax; ++iT ) {
+  for (std::size_t iT = 0; iT < iTmax; ++iT )
+  {
+    timer.update( iT );
 
     setTemporalValues(myCase, iT);
 
-    myCase.getLattice(Component1{}).collideAndStream();
-    myCase.getLattice(Component2{}).collideAndStream();
+    latticeOne.collideAndStream();
+    latticeTwo.collideAndStream();
 
-    myCase.getLattice(Component1{}).executePostProcessors(stage::PreCoupling());
-    myCase.getLattice(Component2{}).executePostProcessors(stage::PreCoupling());
-    myCase.getOperator("MultiComponent").apply();
+    latticeOne.executePostProcessors(stage::PreCoupling());
+    latticeTwo.executePostProcessors(stage::PreCoupling());
+    coupling.apply();
 
-    getResults( myCase, timer, iT );
+    getResults(myCase, timer, iT);
   }
 
   timer.stop();
@@ -336,7 +350,8 @@ void simulate(MyCase& myCase) {
   clout << "simulation finished ... Goodbye!" << std::endl;
 }
 
-int main(int argc, char* argv[]) {
+int main(int argc, char* argv[])
+{
   initialize(&argc, &argv);
 
   /// === Step 2: Set Parameters ===
@@ -344,7 +359,7 @@ int main(int argc, char* argv[]) {
   {
     using namespace olb::parameters;
     myCaseParameters.set<RESOLUTION>(800);
-    myCaseParameters.set<ORIGIN>({0, 0});
+    myCaseParameters.set<ORIGIN>({ 0, 0 });
     myCaseParameters.set<PHYS_DELTA_X>(1.);
     myCaseParameters.set<MAX_LATTICE_T>(20000);
     myCaseParameters.set<RHO_1>(0.0);
