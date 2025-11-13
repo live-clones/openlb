@@ -85,7 +85,8 @@ protected:
 public:
   Tgv3D(UnitConverter<T,_DESCRIPTOR> const& converter, T frac) : AnalyticalF3D<T,T>(3)
   {
-    u0 = converter.getCharLatticeVelocity();
+    // u0 = converter.getCharLatticeVelocity();
+    u0 = converter.getCharPhysVelocity();
   };
 
   bool operator()(T output[], const T input[]) override
@@ -170,7 +171,7 @@ using BulkDynamics = SmagorinskyBGKdynamics<T,DESCRIPTOR>;
   lattice.getUnitConverter().print();
   lattice.getUnitConverter().write("tgv3d");
 
-  lattice.defineDynamics<BulkDynamics>(myCase.getGeometry(), 1);
+  dynamics::set<BulkDynamics>(lattice, myCase.getGeometry(), 1);
 
   #if !defined(RLB) && !defined(DNS) && !defined(KBC)
   lattice.setParameter<collision::LES::SMAGORINSKY>(smagoConst);
@@ -192,8 +193,8 @@ void setInitialValues(MyCase& myCase) {
 
   /// Initialize populations to equilibrium state
   auto domain = myCase.getGeometry().getMaterialIndicator(1);
-  lattice.iniEquilibrium(domain, rho, uSol);
-  lattice.defineRhoU(domain, rho, uSol);
+  momenta::setDensity(lattice, domain, rho);
+  momenta::setVelocity(lattice, domain, uSol);
 
   lattice.initialize();
 }
@@ -459,7 +460,7 @@ void simulate(MyCase& myCase) {
   for (std::size_t iT=0; iT < iTmax; ++iT) {
     lattice.setParameter<descriptors::LATTICE_TIME>(iT);
 #if defined(WALE)
-    lattice.defineField<descriptors::VELO_GRAD>(geometry, 1, *functor);
+    fields::set<descriptors::VELO_GRAD>( lattice, geometry, 1, *functor );
 #endif
 #if defined(ShearSmagorinsky)
     lattice.setParameter<descriptors::LATTICE_TIME>(iT);
