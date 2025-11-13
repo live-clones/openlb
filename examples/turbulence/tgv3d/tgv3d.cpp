@@ -450,7 +450,7 @@ void simulate(MyCase& myCase) {
   for (std::size_t iT=0; iT < iTmax; ++iT) {
     lattice.setParameter<descriptors::LATTICE_TIME>(iT);
 #if defined(WALE)
-    fields::set<VELO_GRAD>( lattice, geometry.getMaterialIndicator(1), *functor );
+    fields::set<descriptors::VELO_GRAD>( lattice, geometry.getMaterialIndicator(1), *functor );
 #endif
 #if defined(ShearSmagorinsky)
     lattice.setParameter<descriptors::LATTICE_TIME>(iT);
