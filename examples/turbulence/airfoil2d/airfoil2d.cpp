@@ -272,8 +272,6 @@ void setInitialValues(MyCase& myCase)
 
   // Initialize all values of distribution functions to their local equilibrium
   auto bulkMaterialIndicator = geometry.getMaterialIndicator({1, 2, 3, 4, 5, 6, 7});
-  momenta::setDensity(lattice, bulkMaterialIndicator, rhoF);
-  momenta::setVelocity(lattice, bulkMaterialIndicator, uF);
 
   fields::set<descriptors::VELOCITY>(lattice, bulkMaterialIndicator, uF);
   fields::set<descriptors::POROSITY>(lattice, geometry.getMaterialIndicator({1, 2, 3, 4, 6, 7}), rhoF);
