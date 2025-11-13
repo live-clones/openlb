@@ -205,7 +205,6 @@ void prepareLattice(MyCase& myCase) {
   sLattice.setParameter<collision::LES::SMAGORINSKY>(0.2);
   sLattice.setParameter<descriptors::SAMPLING_DISTANCE>(wallModelParameters.samplingCellDistance);
 
-  sLattice.defineDynamics<NoDynamics>(sGeometry, 0);
   boundary::set<boundary::BounceBack>(sLattice, sGeometry, 3);
   sLattice.setParameter<descriptors::OMEGA>(converter.getLatticeRelaxationFrequency());
 
@@ -224,25 +223,21 @@ void setInitialValues(MyCase& myCase) {
   const T length = params.get<parameters::LENGTH>();
 
   AnalyticalConst3D<T,T> rhoF(1);
-  AnalyticalConst3D<T,T> u0(0.,0.,0.);
   TaylorCouette3D<T,T> uCalc(myCase);
   auto bulkIndicator = sGeometry.getMaterialIndicator({1,2});
   sLattice.iniEquilibrium(bulkIndicator, rhoF, uCalc);
   sLattice.defineRhoU(bulkIndicator, rhoF, uCalc);
-  sLattice.defineField<descriptors::AVERAGE_VELOCITY>(sGeometry.getMaterialIndicator({0,1,2,3}), u0);
+  fields::set<descriptors::AVERAGE_VELOCITY>(sLattice, sGeometry.getMaterialIndicator({0,1,2,3}), 0);
+
+  // set everywhere 0 porosity
+  fields::set<descriptors::POROSITY>(sLattice, sGeometry.getMaterialIndicator({0,1,2,3}), 0);
 
   {
-    // set everywhere 0 porosity
-    AnalyticalConst3D<T,T> porosityF(0);
-    sLattice.defineField<descriptors::POROSITY>(sGeometry.getMaterialIndicator({0,1,2,3}), porosityF);
-  }
-  {
     // set porosity & wall-model-porosity 1 in the bulk and rotating inner cylinder
-    AnalyticalConst3D<T,T> porosityF(1);
     IndicatorCylinder3D<T> cylinderI({outerR - T{0.25}*converter.getPhysDeltaX(), outerR - T{0.25}*converter.getPhysDeltaX(), -T{5.}*converter.getPhysDeltaX()},{outerR - T{0.25}*converter.getPhysDeltaX(), outerR - T{0.25}*converter.getPhysDeltaX(), length+T{10.}*converter.getPhysDeltaX()}, outerR);
     SuperIndicatorFfromIndicatorF3D<T> cylinderIndicatorF(cylinderI, sGeometry);
-    sLattice.defineField<descriptors::POROSITY>(cylinderIndicatorF, porosityF);
-    sLattice.defineField<descriptors::WMPOROSITY>(bulkIndicator, porosityF);
+    fields::set<descriptors::POROSITY>(sLattice, cylinderIndicatorF, 1);
+    fields::set<descriptors::WMPOROSITY>(sLattice, bulkIndicator, 1);
   }
   {
     // set Y1 vectors on the outer cylinder wall
@@ -257,10 +252,6 @@ void setInitialValues(MyCase& myCase) {
 
   sLattice.initialize();
 }
-
-void setTemporalValues(MyCase& myCase,
-                       std::size_t iT)
-{ }
 
 void getResults(MyCase& myCase,
                 util::Timer<MyCase::value_t>& timer,
@@ -302,7 +293,7 @@ void getResults(MyCase& myCase,
   if (iT == iTstartAvg) {
     sLattice.setProcessingContext(ProcessingContext::Evaluation);
     SuperLatticeVelocity3D<T,DESCRIPTOR> latticeVelocity(sLattice);
-    sLattice.defineField<descriptors::AVERAGE_VELOCITY>(sGeometry.getMaterialIndicator({1,2,3,4,5,6,7}), latticeVelocity);
+    fields::set<descriptors::AVERAGE_VELOCITY>(sLattice, sGeometry.getMaterialIndicator({1,2,3,4,5,6,7}), latticeVelocity);
   }
   if (iT < iTstartAvg) {
     sLattice.setParameter<descriptors::LATTICE_TIME>(2);
@@ -382,15 +373,12 @@ void simulate(MyCase& myCase) {
   timer.start();
 
   for (std::size_t iT=0; iT < iTmax; ++iT) {
-    /// === Step 8.1: Update the Boundary Values and Fields at Times ===
-    setTemporalValues(myCase, iT);
-
-    /// === Step 8.2: Collide and Stream Execution ===
+    /// === Step 8.1: Collide and Stream Execution ===
     myCase.getLattice(NavierStokes{}).collideAndStream();
 
     sLattice.stripeOffDensityOffset(sLattice.getStatistics().getAverageRho()-(T)1);
 
-    /// === Step 8.3: Computation and Output of the Results ===
+    /// === Step 8.2: Computation and Output of the Results ===
     getResults(myCase, timer, iT);
   }
 
