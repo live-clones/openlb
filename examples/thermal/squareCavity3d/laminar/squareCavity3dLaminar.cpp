@@ -48,6 +48,8 @@ void compareToStudy(MyCase& myCase)
   const T physThermalDiffusivity  = converter.getPhysThermalDiffusivity();
   const T charL                   = converter.getCharPhysLength();
 
+  auto simValues  = parameters.get<parameters::SIM_VALUES>();
+
   ReferenceData<T> ref{};
   if (ref.hasRayleigh(Ra) && singleton::mpi().isMainProcessor()) {
     T xVelComp      = ref.getUx_max(Ra);
@@ -55,26 +57,32 @@ void compareToStudy(MyCase& myCase)
     T xCoordComp    = ref.getX_max(Ra);
     T yCoordComp    = ref.getY_max(Ra);
     T nusseltComp   = ref.getNusselt(Ra);
-    auto simValues  = parameters.get<parameters::SIM_VALUES>();
+
     clout << "Comparison against De Vahl Davis (1983):" << std::endl;
-    clout << "xVelocity in yDir="   <<  simValues[0] / physThermalDiffusivity * charL   << "; error(rel)=" << (T) util::fabs((xVelComp - simValues[0] / physThermalDiffusivity * charL) / xVelComp) << std::endl;
-    clout << "yVelocity in xDir="   <<  simValues[1] / physThermalDiffusivity * charL   << "; error(rel)=" << (T) util::fabs((yVelComp - simValues[1] / physThermalDiffusivity * charL) / yVelComp) << std::endl;
-    clout << "yMaxVel / xMaxVel="   <<  simValues[1] / simValues[0]                     << "; error(rel)=" << (T) util::fabs((yVelComp - simValues[1] / simValues[0]) / yVelComp) << std::endl;
-    clout << "yCoord of xMaxVel="   <<  simValues[2] / charL                            << "; error(rel)=" << (T) util::fabs((yCoordComp - simValues[2] / charL) / yCoordComp) << std::endl;
-    clout << "xCoord of yMaxVel="   <<  simValues[3] / charL                            << "; error(rel)=" << (T) util::fabs((xCoordComp - simValues[3] / charL) / xCoordComp) << std::endl;
-    clout << "Nusselt="             <<  simValues[4]                                    << "; error(rel)=" << (T) util::fabs((nusseltComp - simValues[4]) / nusseltComp) << std::endl;
+    clout << "xVelocity in yDir="   <<  simValues[0] / physThermalDiffusivity * charL   << "; error(rel)=" << (T) util::fabs((xVelComp - simValues[0] / physThermalDiffusivity * charL) / xVelComp)                 << std::endl;
+    clout << "yVelocity in xDir="   <<  simValues[1] / physThermalDiffusivity * charL   << "; error(rel)=" << (T) util::fabs((yVelComp - simValues[1] / physThermalDiffusivity * charL) / yVelComp)                 << std::endl;
+    clout << "yMaxVel / xMaxVel="   <<  simValues[1] / simValues[0]                     << "; error(rel)=" << (T) util::fabs((yVelComp / xVelComp) - (simValues[1] / simValues[0])) / (simValues[1] / simValues[0]) << std::endl;
+    clout << "yCoord of xMaxVel="   <<  simValues[2] / charL                            << "; error(rel)=" << (T) util::fabs((yCoordComp - simValues[2] / charL) / yCoordComp)                                      << std::endl;
+    clout << "xCoord of yMaxVel="   <<  simValues[3] / charL                            << "; error(rel)=" << (T) util::fabs((xCoordComp - simValues[3] / charL) / xCoordComp)                                      << std::endl;
+    clout << "Nusselt="             <<  simValues[4]                                    << "; error(rel)=" << (T) util::fabs((nusseltComp - simValues[4]) / nusseltComp)                                            << std::endl;
     std::fstream fs;
     fs.open("output.txt",
       std::fstream::in | std::fstream::out | std::fstream::app);
-    fs  << "xVelocity in yDir="   <<  simValues[0] / physThermalDiffusivity * charL     << "; error(rel)=" << (T) util::fabs((xVelComp - simValues[0] / physThermalDiffusivity * charL) / xVelComp) << std::endl;
-    fs  << "yVelocity in xDir="   <<  simValues[1] / physThermalDiffusivity * charL     << "; error(rel)=" << (T) util::fabs((yVelComp - simValues[1] / physThermalDiffusivity * charL) / yVelComp) << std::endl;
-    fs  << "yMaxVel / xMaxVel="   <<  simValues[1] / simValues[0]                       << "; error(rel)=" << (T) util::fabs((yVelComp - simValues[1] / simValues[0])  / yVelComp) << std::endl;
-    fs  << "yCoord of xMaxVel="   <<  simValues[2] / charL                              << "; error(rel)=" << (T) util::fabs((yCoordComp - simValues[2] / charL) / yCoordComp) << std::endl;
-    fs  << "xCoord of yMaxVel="   <<  simValues[3] / charL                              << "; error(rel)=" << (T) util::fabs((xCoordComp - simValues[3] / charL) / xCoordComp) << std::endl;
-    fs  << "Nusselt="             <<  simValues[4]                                      << "; error(rel)=" << (T) util::fabs((nusseltComp - simValues[4]) / nusseltComp) << std::endl;
+    fs    << "xVelocity in yDir="   <<  simValues[0] / physThermalDiffusivity * charL   << "; error(rel)=" << (T) util::fabs((xVelComp - simValues[0] / physThermalDiffusivity * charL) / xVelComp)                 << std::endl;
+    fs    << "yVelocity in xDir="   <<  simValues[1] / physThermalDiffusivity * charL   << "; error(rel)=" << (T) util::fabs((yVelComp - simValues[1] / physThermalDiffusivity * charL) / yVelComp)                 << std::endl;
+    fs    << "yMaxVel / xMaxVel="   <<  simValues[1] / simValues[0]                     << "; error(rel)=" << (T) util::fabs((yVelComp / xVelComp) - (simValues[1] / simValues[0])) / (simValues[1] / simValues[0]) << std::endl;
+    fs    << "yCoord of xMaxVel="   <<  simValues[2] / charL                            << "; error(rel)=" << (T) util::fabs((yCoordComp - simValues[2] / charL) / yCoordComp)                                      << std::endl;
+    fs    << "xCoord of yMaxVel="   <<  simValues[3] / charL                            << "; error(rel)=" << (T) util::fabs((xCoordComp - simValues[3] / charL) / xCoordComp)                                      << std::endl;
+    fs    << "Nusselt="             <<  simValues[4]                                    << "; error(rel)=" << (T) util::fabs((nusseltComp - simValues[4]) / nusseltComp)                                            << std::endl;
     fs.close();
   } else {
-    clout << "Comparison against De Vahl Davis (1983) not possible. Received Ra = " << Ra << "." << std::endl;
+    clout << "Comparison against De Vahl Davis (1983) not possible. Received Ra = "     << Ra << std::endl;
+    clout << "xVelocity in yDir="   <<  simValues[0] / physThermalDiffusivity * charL         << std::endl;
+    clout << "yVelocity in xDir="   <<  simValues[1] / physThermalDiffusivity * charL         << std::endl;
+    clout << "yMaxVel / xMaxVel="   <<  simValues[1] / simValues[0]                           << std::endl;
+    clout << "yCoord of xMaxVel="   <<  simValues[2] / charL                                  << std::endl;
+    clout << "xCoord of yMaxVel="   <<  simValues[3] / charL                                  << std::endl;
+    clout << "Nusselt="             <<  simValues[4]                                          << std::endl;
   }
 }
 
