@@ -179,13 +179,13 @@ void prepareLattice(MyCase& myCase) {
   lattice.getUnitConverter().print();
 
   using BulkDynamics = BGKdynamics<T,DESCRIPTOR>::template wrap_collision<collision::SaveVelocity>;
-  lattice.defineDynamics<BulkDynamics>(geometry.getMaterialIndicator({1,3,4}));
+  dynamics::set<BulkDynamics>( lattice, geometry.getMaterialIndicator({1,3,4}));
 
   boundary::set<boundary::LocalPressure<T,DESCRIPTOR,BulkDynamics>>(lattice, geometry, 3);
   boundary::set<boundary::LocalPressure<T,DESCRIPTOR,BulkDynamics>>(lattice, geometry, 4);
 
   AnalyticalLinear2D<T,T> temp((tempRight-tempLeft)/extend[0], 0, tempLeft);
-  lattice.defineField<descriptors::TEMPERATURE>(geometry.getMaterialIndicator({0,2}), temp);
+  fields::set<descriptors::TEMPERATURE>( lattice, geometry.getMaterialIndicator({0,2}), temp);
 
   Vector<T,2> origin(0,0);
   origin[0] -= 10.*lattice.getUnitConverter().getPhysDeltaX();
@@ -217,15 +217,7 @@ void setInitialValues(MyCase& myCase) {
   auto& geometry = myCase.getGeometry();
   auto& lattice = myCase.getLattice(NavierStokes{});
   const T outletPressure = parameters.get<parameters::AVERAGE_PRESSURE>()-0.5*parameters.get<parameters::PRESSURE_DIFFERENCE>();
-  T pL0 = lattice.getUnitConverter().getLatticePressure(outletPressure);
-  AnalyticalConst2D<T,T> rho(pL0*descriptors::invCs2<T,DESCRIPTOR>()+T(1));
-  AnalyticalConst2D<T,T> u0(T(0), T(0));
-  lattice.defineField<descriptors::VELOCITY>(geometry.getMaterialIndicator({0,1,2,3,4}), u0);
-
-
-  // Initialize all values of distribution functions to their local equilibrium
-  lattice.defineRhoU(geometry.getMaterialIndicator({0,1,2,3,4}), rho, u0);
-  lattice.iniEquilibrium(geometry.getMaterialIndicator({0,1,2,3,4}), rho, u0);
+  momenta::setPressure( lattice, geometry.getMaterialIndicator({0,1,2,3,4}), outletPressure);
 
   // Make the lattice ready for simulation
   lattice.initialize();
@@ -255,10 +247,8 @@ void setTemporalValues(MyCase& myCase,
     StartScale( frac,iTvec );
     const T outletPressure = parameters.get<parameters::AVERAGE_PRESSURE>()-0.5*parameters.get<parameters::PRESSURE_DIFFERENCE>();
     const T inletPressure = outletPressure + parameters.get<parameters::PRESSURE_DIFFERENCE>();
-    T pLin = lattice.getUnitConverter().getLatticePressure((inletPressure-outletPressure)*frac[0] + outletPressure);
-    AnalyticalConst2D<T,T> rho(pLin*descriptors::invCs2<T,DESCRIPTOR>()+T(1));
-
-    lattice.defineRho( geometry, 3, rho );
+    T pLin = (inletPressure-outletPressure)*frac[0] + outletPressure;
+    momenta::setPressure( lattice, geometry.getMaterialIndicator(3), pLin);
 
     lattice.setProcessingContext<Array<momenta::FixedDensity::RHO>>(
       ProcessingContext::Simulation);
