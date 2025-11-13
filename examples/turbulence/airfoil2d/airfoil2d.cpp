@@ -265,19 +265,12 @@ void setInitialValues(MyCase& myCase)
   T lengthX = params.get<parameters::DOMAIN_EXTENT>()[0];
   T lengthY = params.get<parameters::DOMAIN_EXTENT>()[1];
 
-  AnalyticalConst2D<T, T> rhoF(1);
-  AnalyticalConst2D<T, T> rho0(0);
-  std::vector<T>          velocity(2, T(0));
-  AnalyticalConst2D<T, T> uF(velocity);
-
   // Initialize all values of distribution functions to their local equilibrium
   auto bulkMaterialIndicator = geometry.getMaterialIndicator({1, 2, 3, 4, 5, 6, 7});
-  momenta::setDensity(lattice, bulkMaterialIndicator, rhoF);
-  momenta::setVelocity(lattice, bulkMaterialIndicator, uF);
 
-  fields::set<descriptors::VELOCITY>(lattice, bulkMaterialIndicator, uF);
-  fields::set<descriptors::POROSITY>(lattice, geometry.getMaterialIndicator({1, 2, 3, 4, 6, 7}), rhoF);
-  fields::set<descriptors::POROSITY>(lattice, geometry.getMaterialIndicator({5}), rho0);
+  fields::set<descriptors::VELOCITY>(lattice, bulkMaterialIndicator, std::vector<T>(2, T(0)));
+  fields::set<descriptors::POROSITY>(lattice, geometry.getMaterialIndicator({1, 2, 3, 4, 6, 7}), 1);
+  fields::set<descriptors::POROSITY>(lattice, geometry.getMaterialIndicator({5}), 0);
 
   using FringeDynamics = dynamics::Tuple<
     MyCase::value_t,
