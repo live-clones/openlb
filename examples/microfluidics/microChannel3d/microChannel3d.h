@@ -180,13 +180,13 @@ void prepareLattice(MyCase& myCase) {
   lattice.getUnitConverter().print();
 
   using BulkDynamics = BGKdynamics<T,DESCRIPTOR>::template wrap_collision<collision::SaveVelocity>;
-  lattice.defineDynamics<BulkDynamics>(geometry.getMaterialIndicator({1,3,4}));
+  dynamics::set<BulkDynamics>(lattice, geometry.getMaterialIndicator({1,3,4}));
 
   boundary::set<boundary::LocalVelocity<T,DESCRIPTOR,BulkDynamics>>(lattice, geometry, 3);
   boundary::set<boundary::LocalPressure<T,DESCRIPTOR,BulkDynamics>>(lattice, geometry, 4);
 
   AnalyticalLinear3D<T,T> temp((tempRight-tempLeft)/extend[0], 0, 0, tempLeft);
-  lattice.defineField<descriptors::TEMPERATURE>(geometry.getMaterialIndicator({0,2}), temp);
+  fields::set<descriptors::TEMPERATURE>(lattice, geometry.getMaterialIndicator({0,2}), temp);
 
   Vector<T, 3> center02(-10.*lattice.getUnitConverter().getPhysDeltaX(), extend[1]/2., extend[1]/2.);
   Vector<T, 3> center12(extend[0] + 20 * lattice.getUnitConverter().getPhysDeltaX(), extend[1]/2., extend[1]/2.);
@@ -218,15 +218,8 @@ void setInitialValues(MyCase& myCase) {
   auto& geometry = myCase.getGeometry();
   auto& lattice = myCase.getLattice(NavierStokes{});
   const T outletPressure = parameters.get<parameters::AVERAGE_PRESSURE>()-0.5*parameters.get<parameters::PRESSURE_DIFFERENCE>();
-  T pL0 = lattice.getUnitConverter().getLatticePressure(outletPressure);
-  AnalyticalConst3D<T,T> rho(pL0*descriptors::invCs2<T,DESCRIPTOR>()+T(1));
-  AnalyticalConst3D<T,T> u0(T(0), T(0), T(0));
-  lattice.defineField<descriptors::VELOCITY>(geometry.getMaterialIndicator({1,2,3,4}),u0);
-
   // Initialize all values of distribution functions to their local equilibrium
-  lattice.defineRhoU(geometry.getMaterialIndicator({0,1,2,3,4}), rho, u0);
-  lattice.iniEquilibrium(geometry.getMaterialIndicator({0,1,2,3,4}), rho, u0);
-
+  momenta::setPressure( lattice, geometry.getMaterialIndicator({0,1,2,3,4}), outletPressure);
   // Make the lattice ready for simulation
   lattice.initialize();
 }
@@ -262,13 +255,11 @@ void setTemporalValues(MyCase& myCase,
     const T creepCoeff = parameters.get<parameters::CREEPCOEFF>();
     const T tempLeft = parameters.get<parameters::TEMPERATURE_LEFT>();
     const T tempRight = parameters.get<parameters::TEMPERATURE_RIGHT>();
-    T pLin = lattice.getUnitConverter().getLatticePressure((inletPressure-outletPressure)*frac[0] + outletPressure);
-    AnalyticalConst3D<T,T> rho(pLin*descriptors::invCs2<T,DESCRIPTOR>()+T(1));
+    T pLin = (inletPressure-outletPressure)*frac[0] + outletPressure;
     VelocityKnudsenProfile3D<T,T> uSol(extend[1], extend[0], physCharDensity*physCharViscosity, inletPressure, outletPressure, slipCoeff, creepCoeff, tempLeft, tempRight);
-    AnalyticalConst3D<T,T> conv(frac[0]/lattice.getUnitConverter().getConversionFactorVelocity(), 0., 0.);
 
-    lattice.defineRho( geometry, 3, rho );
-    lattice.defineU( geometry, 3, uSol*conv );
+    momenta::setPressure( lattice, geometry.getMaterialIndicator(3), pLin );
+    momenta::setVelocity( lattice, geometry.getMaterialIndicator(3), uSol );
 
     lattice.setProcessingContext<Array<momenta::FixedDensity::RHO>>(
       ProcessingContext::Simulation);
