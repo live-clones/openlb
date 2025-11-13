@@ -325,7 +325,7 @@ void setInitialValuesCation(MyCase& myCase) {
   ConcentrationProfileSphere3D<T,T,DESCRIPTOR> concSol(C0, valence, temperature, psiSol);
   VelocityProfileSphere3D<T,T,DESCRIPTOR> velSol(psi0, Debye, temperature, valence, diffusion, T(1), lattice.getUnitConverter());
   fields::set<descriptors::VELOCITY>(lattice, geometry.getMaterialIndicator(3), velSol);
-  momenta::setConcentration(lattice, geometry.getMaterialIndicator(2), static_cast<AnalyticalF<3,T,T>&>(concSol));
+  momenta::setConcentration(lattice, geometry.getMaterialIndicator(2), concSol);
   momenta::setConcentration(lattice, geometry.getMaterialIndicator({1, 3}), T(0));
 
   // Make the lattice ready for simulation

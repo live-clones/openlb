@@ -30,10 +30,11 @@ namespace olb {
 
 namespace fields {
 
-template <typename FIELD, typename T, typename DESCRIPTOR>
+template <typename FIELD, typename T, typename DESCRIPTOR, typename FUNCTOR>
 void set(SuperLattice<T,DESCRIPTOR>& sLattice,
          FunctorPtr<SuperIndicatorF<T,DESCRIPTOR::d>>&& domainI,
-         AnalyticalF<DESCRIPTOR::d,T,T>& fieldF)
+         FUNCTOR& fieldF)
+  requires std::derived_from<FUNCTOR, AnalyticalF<DESCRIPTOR::d,T,T>>
 {
   sLattice.template defineField<FIELD>(std::move(domainI), fieldF);
 }
@@ -62,10 +63,11 @@ void setVelocity(SuperLattice<T,DESCRIPTOR>& sLattice,
 
 namespace momenta {
 
-template <typename T, typename DESCRIPTOR>
+template <typename T, typename DESCRIPTOR, typename FUNCTOR>
 void setDensity(SuperLattice<T,DESCRIPTOR>& sLattice,
                 FunctorPtr<SuperIndicatorF<T,DESCRIPTOR::d>>&& domainI,
-                AnalyticalF<DESCRIPTOR::d,T,T>& densityF)
+                FUNCTOR& densityF)
+  requires std::derived_from<FUNCTOR, AnalyticalF<DESCRIPTOR::d,T,T>>
 {
   const auto& converter = sLattice.getUnitConverter();
   AnalyticCalcMultiplication<DESCRIPTOR::d,T,T> scaledDensityF(1/converter.getConversionFactorDensity(),
@@ -83,10 +85,11 @@ void setDensity(SuperLattice<T,DESCRIPTOR>& sLattice,
   setDensity(sLattice, std::move(domainI), densityF);
 }
 
-template <typename T, typename DESCRIPTOR>
+template <typename T, typename DESCRIPTOR, typename FUNCTOR>
 void setElectricPotential(SuperLattice<T,DESCRIPTOR>& sLattice,
                           FunctorPtr<SuperIndicatorF<T,DESCRIPTOR::d>>&& domainI,
-                          AnalyticalF<DESCRIPTOR::d,T,T>& densityF)
+                          FUNCTOR& densityF)
+  requires std::derived_from<FUNCTOR, AnalyticalF<DESCRIPTOR::d,T,T>>
 {
   setDensity<T,DESCRIPTOR>(sLattice, std::move(domainI), densityF);
 }
@@ -95,14 +98,16 @@ template <typename T, typename DESCRIPTOR, typename VALUE>
 void setElectricPotential(SuperLattice<T,DESCRIPTOR>& sLattice,
                           FunctorPtr<SuperIndicatorF<T,DESCRIPTOR::d>>&& domainI,
                           VALUE densityD)
+  requires std::constructible_from<FieldD<T,DESCRIPTOR,descriptors::SCALAR>, VALUE>
 {
   setDensity<T,DESCRIPTOR,VALUE>(sLattice, std::move(domainI), densityD);
 }
 
-template <typename T, typename DESCRIPTOR>
+template <typename T, typename DESCRIPTOR, typename FUNCTOR>
 void setConcentration(SuperLattice<T,DESCRIPTOR>& sLattice,
                       FunctorPtr<SuperIndicatorF<T,DESCRIPTOR::d>>&& domainI,
-                      AnalyticalF<DESCRIPTOR::d,T,T>& concentrationF)
+                      FUNCTOR& concentrationF)
+  requires std::derived_from<FUNCTOR, AnalyticalF<DESCRIPTOR::d,T,T>>
 {
   setDensity<T,DESCRIPTOR>(sLattice, std::move(domainI), concentrationF);
 }
@@ -111,14 +116,16 @@ template <typename T, typename DESCRIPTOR, typename VALUE>
 void setConcentration(SuperLattice<T,DESCRIPTOR>& sLattice,
                       FunctorPtr<SuperIndicatorF<T,DESCRIPTOR::d>>&& domainI,
                       VALUE concentrationD)
+  requires std::constructible_from<FieldD<T,DESCRIPTOR,descriptors::SCALAR>, VALUE>
 {
   setDensity<T,DESCRIPTOR,VALUE>(sLattice, std::move(domainI), concentrationD);
 }
 
-template <typename T, typename DESCRIPTOR>
+template <typename T, typename DESCRIPTOR, typename FUNCTOR>
 void setVelocity(SuperLattice<T,DESCRIPTOR>& sLattice,
                  FunctorPtr<SuperIndicatorF<T,DESCRIPTOR::d>>&& domainI,
-                 AnalyticalF<DESCRIPTOR::d,T,T>& velocityF)
+                 FUNCTOR& velocityF)
+  requires std::derived_from<FUNCTOR, AnalyticalF<DESCRIPTOR::d,T,T>>
 {
   const auto& converter = sLattice.getUnitConverter();
   AnalyticCalcMultiplication<DESCRIPTOR::d,T,T> scaledVelocityF(1/converter.getConversionFactorVelocity(),
@@ -136,10 +143,11 @@ void setVelocity(SuperLattice<T,DESCRIPTOR>& sLattice,
   setVelocity(sLattice, std::move(domainI), velocityF);
 }
 
-template <typename T, typename DESCRIPTOR>
+template <typename T, typename DESCRIPTOR, typename FUNCTOR>
 void setTemperature(SuperLattice<T,DESCRIPTOR>& sLattice,
                     FunctorPtr<SuperIndicatorF<T,DESCRIPTOR::d>>&& domainI,
-                    AnalyticalF<DESCRIPTOR::d,T,T>& temperatureF)
+                    FUNCTOR& temperatureF)
+  requires std::derived_from<FUNCTOR, AnalyticalF<DESCRIPTOR::d,T,T>>
 {
   const auto& converter = sLattice.getUnitConverter();
   AnalyticCalcMinus<DESCRIPTOR::d,T,T> relativeTemperatureF(temperatureF, converter.getCharPhysLowTemperature());
