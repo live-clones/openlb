@@ -165,12 +165,9 @@ void prepareLattice( MyCase& myCase )
   sLattice3.setUnitConverter(converter);
 
   // define lattice Dynamics
-  sLattice1.defineDynamics<NoDynamics>(geometry, 0);
-  sLattice2.defineDynamics<NoDynamics>(geometry, 0);
-  sLattice3.defineDynamics<NoDynamics>(geometry, 0);
-  sLattice1.defineDynamics<BulkDynamics>(geometry, 1);
-  sLattice2.defineDynamics<BulkDynamics>(geometry, 1);
-  sLattice3.defineDynamics<BulkDynamics>(geometry, 1);
+  dynamics::set<BulkDynamics>(sLattice1, geometry, 1);
+  dynamics::set<BulkDynamics>(sLattice2, geometry, 1);
+  dynamics::set<BulkDynamics>(sLattice3, geometry, 1);
 
   //thermodynamic initial conditions in lattice units
   T p_L = pressure/converter.getConversionFactorPressure();
@@ -310,19 +307,15 @@ void setInitialValues(MyCase& myCase) {
   AnalyticalIdentity3D<T,T> rhoN2 ( liquidN2  + vaporN2_1  + vaporN2_2 );
   AnalyticalIdentity3D<T,T> rhoO2 ( liquidO2  + vaporO2_1  + vaporO2_2 );
 
-  sLattice1.defineRhoU( geometry, 1, rhoH2O, zeroVelocity );
-  sLattice2.defineRhoU( geometry, 1, rhoN2, zeroVelocity );
-  sLattice3.defineRhoU( geometry, 1, rhoO2, zeroVelocity );
   sLattice1.iniEquilibrium( geometry, 1, rhoH2O, zeroVelocity );
   sLattice2.iniEquilibrium( geometry, 1, rhoN2, zeroVelocity );
   sLattice3.iniEquilibrium( geometry, 1, rhoO2, zeroVelocity );
 
   g = g/(converter.getPhysDeltaX()/converter.getPhysDeltaT()/converter.getPhysDeltaT());
-  AnalyticalConst3D<T,T> f( g );
-  sLattice1.defineField<descriptors::EXTERNAL_FORCE>( geometry, 1, f );
-  sLattice2.defineField<descriptors::EXTERNAL_FORCE>( geometry, 1, f );
-  sLattice3.defineField<descriptors::EXTERNAL_FORCE>( geometry, 1, f );
-
+  fields::set<descriptors::EXTERNAL_FORCE>(sLattice1, geometry.getMaterialIndicator(1), g);
+  fields::set<descriptors::EXTERNAL_FORCE>(sLattice2, geometry.getMaterialIndicator(1), g);
+  fields::set<descriptors::EXTERNAL_FORCE>(sLattice3, geometry.getMaterialIndicator(1), g);
+  
   sLattice1.initialize();
   sLattice2.initialize();
   sLattice3.initialize();
