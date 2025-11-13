@@ -259,14 +259,7 @@ void prepareLattice(MyCase& myCase)
       (T)Thot                     // charPhysHighTemperature
   );
   auto& converter = NSlattice.getUnitConverter();
-  ADlattice.setUnitConverter(
-    (T)   converter.getPhysDeltaX(),      // deltaX
-    (T)   converter.getPhysDeltaT(),      // deltaT
-    (T)   converter.getCharPhysLength(),  // from converter
-    (T)   converter.getCharPhysVelocity(),// from converter
-    (T)   converter.getPhysViscosity(),   // from converter
-    (T)   converter.getPhysDensity()      // from converter
-  );
+  ADlattice.setUnitConverter(converter);
   converter.print();
 
   const T lattice_Hcold = cp_s * Tcold;
@@ -285,12 +278,9 @@ void prepareLattice(MyCase& myCase)
   T Tomega  = converter.getLatticeThermalRelaxationFrequency();
   T NSomega = converter.getLatticeRelaxationFrequency();
 
-  ADlattice.defineDynamics<TotalEnthalpyAdvectionDiffusionDynamics>(geometry, 1);
+  dynamics::set<ForcedPSMBGKdynamics>(NSlattice, geometry.getMaterialIndicator({1, 2, 3}));
+  dynamics::set<TotalEnthalpyAdvectionDiffusionDynamics>(ADlattice, geometry.getMaterialIndicator({1, 3}));
   boundary::set<boundary::BounceBack>(ADlattice, geometry, 2);
-  ADlattice.defineDynamics<TotalEnthalpyAdvectionDiffusionDynamics>(geometry, 3);
-  NSlattice.defineDynamics<ForcedPSMBGKdynamics>(geometry, 1);
-  NSlattice.defineDynamics<ForcedPSMBGKdynamics>(geometry, 2);
-  NSlattice.defineDynamics<ForcedPSMBGKdynamics>(geometry, 3);
 
   boundary::set<boundary::LocalVelocity>(NSlattice, geometry, 2);
   boundary::set<boundary::LocalVelocity>(NSlattice, geometry, 3);
@@ -369,18 +359,16 @@ void setInitialValues(MyCase& myCase)
   AnalyticalConst2D<T, T> u_bot(0.0, u_Re);
   T                       omega = converter.getLatticeRelaxationFrequency();
   AnalyticalConst2D<T, T> omegaField(omega);
-  NSlattice.defineField<descriptors::OMEGA>(geometry.getMaterialIndicator({1, 2, 3, 4}), omegaField);
-
-  NSlattice.defineRhoU(geometry.getMaterialIndicator({1, 2, 3}), rho, u);
-  NSlattice.iniEquilibrium(geometry.getMaterialIndicator({1, 2, 3}), rho, u);
+  fields::set<descriptors::OMEGA>(NSlattice, geometry.getMaterialIndicator({1,2,3,4}), omegaField);
 
   AnalyticalConst2D<T, T> Cold(lattice_Hcold);
   AnalyticalConst2D<T, T> Hot(lattice_Hhot);
 
-  ADlattice.defineField<descriptors::VELOCITY>(geometry.getMaterialIndicator({1, 2, 3}), u);
-  ADlattice.defineRho(geometry.getMaterialIndicator({1, 2}), Cold);
+  fields::set<descriptors::VELOCITY>(ADlattice, geometry.getMaterialIndicator({1,2,3}), u);
+
+  momenta::setTemperature(ADlattice, geometry.getMaterialIndicator({1,2}), Tcold);
+  momenta::setTemperature(ADlattice, geometry.getMaterialIndicator({3}), Thot);
   ADlattice.iniEquilibrium(geometry.getMaterialIndicator({1, 2}), Cold, u);
-  ADlattice.defineRho(geometry, 3, Hot);
   ADlattice.iniEquilibrium(geometry, 3, Hot, u);
 
   NSlattice.initialize();
