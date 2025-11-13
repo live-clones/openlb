@@ -267,11 +267,11 @@ void setInitialValues(MyCase& myCase)
   Rlattice.iniEquilibrium(geometry, 1, rho0, u0);
   Rlattice.iniEquilibrium(geometry, 2, rho0, u0);
   Rlattice.iniEquilibrium(geometry, 3, rho1, u0);
-  
-  
+
+
   momenta::setDensity(Rlattice, geometry.getMaterialIndicator({2}), rho0);
   momenta::setDensity(Rlattice, geometry.getMaterialIndicator({3}), rho1);
-  
+
 }
 
 void getResults(MyCase& myCase, util::Timer<MyCase::value_t>& timer, std::size_t iT, bool converged)

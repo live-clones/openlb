@@ -43,6 +43,7 @@
  */
 
 /// Include OpenLB library and load analytical solution
+
 #include <olb.h>
 #include "analyticalSolutionTestFlow3D.h"
 
@@ -257,7 +258,7 @@ void setTemporalValues(MyCase& myCase,
     break;
       }
       default: {
-	momenta::setVelocity(lattice, geometry.getMaterialIndicator({2}), uBoundaryPhysStartF);
+        momenta::setVelocity(lattice, geometry.getMaterialIndicator({2}), uBoundaryPhysStartF);
         lattice.template setProcessingContext<Array<momenta::FixedVelocityMomentumGeneric::VELOCITY>>(ProcessingContext::Simulation);
       }
     }

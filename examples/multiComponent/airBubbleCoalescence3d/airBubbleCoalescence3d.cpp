@@ -315,7 +315,7 @@ void setInitialValues(MyCase& myCase) {
   fields::set<descriptors::EXTERNAL_FORCE>(sLattice1, geometry.getMaterialIndicator(1), g);
   fields::set<descriptors::EXTERNAL_FORCE>(sLattice2, geometry.getMaterialIndicator(1), g);
   fields::set<descriptors::EXTERNAL_FORCE>(sLattice3, geometry.getMaterialIndicator(1), g);
-  
+
   sLattice1.initialize();
   sLattice2.initialize();
   sLattice3.initialize();

@@ -183,7 +183,7 @@ void setInitialValues(MyCase& myCase) {
   AnalyticalConst2D<T,T> T_cold(converter.getLatticeTemperature(Tcold));
   AnalyticalConst2D<T,T> T_hot(converter.getLatticeTemperature(Thot));
   AnalyticalConst2D<T,T> T_perturb(converter.getLatticeTemperature(Tperturb));
-  
+
   momenta::setTemperature(ADlattice, geometry.getMaterialIndicator({1, 3}), Tcold);
   momenta::setTemperature(ADlattice, geometry.getMaterialIndicator({2}), Thot);
   momenta::setTemperature(ADlattice, geometry.getMaterialIndicator({4}), Tperturb);

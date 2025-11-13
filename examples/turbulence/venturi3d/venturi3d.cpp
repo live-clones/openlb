@@ -41,8 +41,6 @@ using namespace olb::names;
 using namespace olb::descriptors;
 using namespace olb::graphics;
 
-
-
 // === Step 1: Declarations ===
 using MyCase = Case<
   NavierStokes, Lattice<FLOATING_POINT_TYPE, descriptors::D3Q19<>>
@@ -151,7 +149,7 @@ void setTemporalValues(MyCase& myCase,
     // Creates and sets the Poiseuille inflow profile using functors
     CirclePoiseuille3D<T> poiseuilleU( geometry, 3, frac*lattice.getUnitConverter().getCharLatticeVelocity(), T(), lattice.getUnitConverter().getPhysDeltaX() );
     momenta::setVelocity(lattice, geometry.getMaterialIndicator(3), poiseuilleU);
-    
+
     lattice.setProcessingContext<Array<momenta::FixedVelocityMomentumGeneric::VELOCITY>>(
       ProcessingContext::Simulation);
   }
