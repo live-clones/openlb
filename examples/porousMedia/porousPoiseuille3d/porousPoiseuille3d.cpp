@@ -288,7 +288,8 @@ void setInitialValues( MyCase& myCase ) {
   // Pressure for Poiseuille flow with maximum velocity of charU at K->infty
   T p0 = 4. * converter.getPhysViscosity() * converter.getCharPhysVelocity() * length / (radius * radius);
   T p0L = converter.getLatticePressure(p0);
-  AnalyticalLinear3D<T, T> rho(-p0L / length * descriptors::invCs2<T,DESCRIPTOR>(), 0, 0, p0L * descriptors::invCs2<T,DESCRIPTOR>() + 1);
+  AnalyticalLinear3D<T, T> rho( converter.getPhysDensity(-p0L / length * descriptors::invCs2<T,DESCRIPTOR>()), 0, 0,
+                                converter.getPhysDensity(p0L * descriptors::invCs2<T,DESCRIPTOR>() + 1));
 
   T dp = p0/length;
   T mu = converter.getPhysViscosity()*converter.getPhysDensity();
@@ -299,11 +300,11 @@ void setInitialValues( MyCase& myCase ) {
 
   //CirclePoiseuille3D<T> uSol( {0., radius, radius}, {1, 0, 0}, converter.getCharPhysVelocity(), radius );
   PorousPoiseuille3D<T> uSol( myCase, radius );
-  PhysicalToLatticeVelocityF3D<T,DESCRIPTOR> u(&uSol, converter);
 
   // Initialize all values of distribution functions to their local equilibrium
   for (int i: { 0,1,2,3,4 }) {
-    lattice.defineRhoU(geometry, i, rho, u);
+    momenta::setVelocity(lattice, geometry.getMaterialIndicator({i}), uSol);
+    momenta::setDensity(lattice, geometry.getMaterialIndicator({i}), rho);
   }
 
   lattice.initialize();
