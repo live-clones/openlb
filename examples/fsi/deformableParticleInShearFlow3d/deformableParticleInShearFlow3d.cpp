@@ -90,22 +90,16 @@ void prepareLattice( UnitConverter<T, DESCRIPTOR> const& converter,
   const T omega = converter.getLatticeRelaxationFrequency();
   auto bulkIndicator = superGeometry.getMaterialIndicator({1, 2, 3});
 
-  lattice.defineDynamics<ForcedBulkDynamics>(bulkIndicator);
+  dynamics::set<ForcedBulkDynamics>(lattice, bulkIndicator);
 
   boundary::set<boundary::InterpolatedVelocity>(lattice, superGeometry, 2);
   boundary::set<boundary::InterpolatedVelocity>(lattice, superGeometry, 3);
 
   lattice.setParameter<descriptors::OMEGA>(omega);
-  AnalyticalConst3D<T,T> rhoF( T( 1 ) );
-  AnalyticalConst3D<T,T> uF( T( 0 ), T( 0 ), T( 0 ) );
-
-  lattice.iniEquilibrium( bulkIndicator, rhoF, uF );
-  lattice.defineRhoU( bulkIndicator, rhoF, uF );
-
-  AnalyticalConst3D<T,T> uW( converter.getCharLatticeVelocity(), T( 0 ), T( 0 ) );
-  AnalyticalConst3D<T,T> nuW( -1. * converter.getCharLatticeVelocity(), T( 0 ), T( 0 ) );
-  lattice.defineU(superGeometry, 2, uW);
-  lattice.defineU(superGeometry, 3, nuW);
+  AnalyticalConst3D<T,T> uW( converter.getCharPhysVelocity(), T( 0 ), T( 0 ) );
+  AnalyticalConst3D<T,T> nuW( -1. * converter.getCharPhysVelocity(), T( 0 ), T( 0 ) );
+  momenta::setVelocity(lattice, superGeometry.getMaterialIndicator({2}), uW);
+  momenta::setVelocity(lattice, superGeometry.getMaterialIndicator({3}), nuW);
 
   lattice.initialize();
   clout << "Prepare Lattice ... OK" << std::endl;

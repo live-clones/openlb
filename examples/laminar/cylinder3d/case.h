@@ -152,7 +152,7 @@ void prepareLattice(MyCase& myCase)
 
   // Material=1 -->bulk dynamics
   auto bulkIndicator = geometry.getMaterialIndicator({1});
-  lattice.defineDynamics<BGKdynamics>(bulkIndicator);
+  dynamics::set<BGKdynamics>(lattice, bulkIndicator);
 
   // Material=2 -->bounce back
   boundary::set<boundary::BounceBack>(lattice, geometry, 2);
@@ -179,21 +179,7 @@ void prepareLattice(MyCase& myCase)
 }
 
 void setInitialValues(MyCase& myCase) {
-  using T = MyCase::value_t;
   auto& lattice = myCase.getLattice(NavierStokes{});
-  auto& geometry = myCase.getGeometry();
-
-  auto bulkIndicator = geometry.getMaterialIndicator({1});
-
-  AnalyticalConst3D<T,T> rhoF(1);
-  std::vector<T> velocity(3, T(0));
-  AnalyticalConst3D<T,T> uF(velocity);
-
-  // Initialize all values of distribution functions to their local equilibrium
-  lattice.defineRhoU(bulkIndicator, rhoF, uF);
-  lattice.iniEquilibrium(bulkIndicator, rhoF, uF);
-
-  // Make the lattice ready for simulation
   lattice.initialize();
 }
 
@@ -216,22 +202,14 @@ void setTemporalValues(MyCase& myCase,
   std::size_t iTupdate   = lattice.getUnitConverter().getLatticeTime(parameters.get<parameters::RAMP_UP_UPDATE>());
 
   if (iT%iTupdate == 0 && iT <= iTmaxStart) {
-    // Smooth start curve, sinus
-    // SinusStartScale<T,int> StartScale(iTmaxStart, T(1));
-
-    // Smooth start curve, polynomial
-    PolynomialStartScale<T,int> StartScale(iTmaxStart, T(1));
-
-    // Creates and sets the Poiseuille inflow profile using functors
-    int iTvec[1] = {(int) iT};
-    T frac[1] = {};
-    StartScale(frac, iTvec);
+    T frac{};
+    PolynomialStartScale<T,std::size_t>(iTmaxStart, T(1))(&frac, &iT);
     std::vector<T> maxVelocity(3, 0);
-    maxVelocity[0] = 2.25*frac[0]*lattice.getUnitConverter().getCharLatticeVelocity();
+    maxVelocity[0] = 2.25*frac*lattice.getUnitConverter().getCharPhysVelocity();
 
     T distance2Wall = physDeltaX/2.;
     RectanglePoiseuille3D<T> poiseuilleU(geometry, 3, maxVelocity, distance2Wall, distance2Wall, distance2Wall);
-    lattice.defineU(geometry, 3, poiseuilleU);
+    momenta::setVelocity(lattice, geometry.getMaterialIndicator(3), poiseuilleU);
 
     clout << "step=" << iT << "; maxVel=" << maxVelocity[0] << std::endl;
 

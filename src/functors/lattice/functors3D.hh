@@ -117,3 +117,4 @@
 #include "latticeTranCongDragForce.hh"
 #include "latticeStokesSpheroidDragForce.hh"
 #include "latticeSpheroidLiftForce.hh"
+#include "latticePhysReynoldsStresses3D.hh"

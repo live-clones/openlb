@@ -192,6 +192,8 @@ struct WallModelParameters{
   bool movingWall = false;
 
   bool averageVelocity = false;
+
+  bool turbulenceStatistics = false;
 };
 
 //======================================================================
@@ -234,6 +236,40 @@ void setTurbulentWallModelDynamics(SuperLattice<T, DESCRIPTOR>& sLattice,
           sLattice.template defineDynamics<typename ExternalRhoWMHRRdynamics<T,DESCRIPTOR>::template wrap_collision<collision::StoreAndTrackAverageVelocity>>(std::move(bulkIndicator));
         } else {
           sLattice.template defineDynamics<typename WMHRRdynamics<T,DESCRIPTOR>::template wrap_collision<collision::StoreAndTrackAverageVelocity>>(std::move(bulkIndicator));
+        }
+      }
+    }
+  }
+  else if( wallModelParameters.turbulenceStatistics ) {
+    if( wallModelParameters.bodyForce ) {
+      if( wallModelParameters.useVanDriest ) {
+        if( wallModelParameters.rhoMethod != 0 ) {
+          sLattice.template defineDynamics<typename ForcedVanDriestExternalRhoWMHRRdynamics<T,DESCRIPTOR>::template wrap_collision<collision::TrackTurbulenceStatistics>>(std::move(bulkIndicator));
+        } else {
+          sLattice.template defineDynamics<typename ForcedVanDriestWMHRRdynamics<T,DESCRIPTOR>::template wrap_collision<collision::TrackTurbulenceStatistics>>(std::move(bulkIndicator));
+        }
+      }
+      else {
+        if( wallModelParameters.rhoMethod != 0 ) {
+          sLattice.template defineDynamics<typename ForcedExternalRhoWMHRRdynamics<T,DESCRIPTOR>::template wrap_collision<collision::TrackTurbulenceStatistics>>(std::move(bulkIndicator));
+        } else {
+          sLattice.template defineDynamics<typename ForcedWMHRRdynamics<T,DESCRIPTOR>::template wrap_collision<collision::TrackTurbulenceStatistics>>(std::move(bulkIndicator));
+        }
+      }
+    }
+    else {
+      if( wallModelParameters.useVanDriest ) {
+        if( wallModelParameters.rhoMethod != 0 ) {
+          sLattice.template defineDynamics<typename VanDriestExternalRhoWMHRRdynamics<T,DESCRIPTOR>::template wrap_collision<collision::TrackTurbulenceStatistics>>(std::move(bulkIndicator));
+        } else {
+          sLattice.template defineDynamics<typename VanDriestWMHRRdynamics<T,DESCRIPTOR>::template wrap_collision<collision::TrackTurbulenceStatistics>>(std::move(bulkIndicator));
+        }
+      }
+      else {
+        if( wallModelParameters.rhoMethod != 0 ) {
+          sLattice.template defineDynamics<typename ExternalRhoWMHRRdynamics<T,DESCRIPTOR>::template wrap_collision<collision::TrackTurbulenceStatistics>>(std::move(bulkIndicator));
+        } else {
+          sLattice.template defineDynamics<typename WMHRRdynamics<T,DESCRIPTOR>::template wrap_collision<collision::TrackTurbulenceStatistics>>(std::move(bulkIndicator));
         }
       }
     }
@@ -704,17 +740,17 @@ void setTurbulentWallModel(BlockLattice<T,DESCRIPTOR>& block,
                     if( wallModelParameters.rhoMethod == 0 ) {
                       block.addPostProcessor(typeid(stage::PostStream),
                                             boundaryLatticeR,
-                                            meta::id<TurbulentWallModelFneqFDMPostProcessor<0>>{});
+                                            meta::id<TurbulentWallModelPorousFneqFDMPostProcessor<0>>{});
                     }
                     else if( wallModelParameters.rhoMethod == 1 ) {
                       block.addPostProcessor(typeid(stage::PostStream),
                                             boundaryLatticeR,
-                                            meta::id<TurbulentWallModelFneqFDMPostProcessor<1>>{});
+                                            meta::id<TurbulentWallModelPorousFneqFDMPostProcessor<1>>{});
                     }
                     else {
                       block.addPostProcessor(typeid(stage::PostStream),
                                             boundaryLatticeR,
-                                            meta::id<TurbulentWallModelFneqFDMPostProcessor<2>>{});
+                                            meta::id<TurbulentWallModelPorousFneqFDMPostProcessor<2>>{});
                     }
                   }
                   else {

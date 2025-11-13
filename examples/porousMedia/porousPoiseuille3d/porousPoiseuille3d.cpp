@@ -209,14 +209,14 @@ void prepareLattice( MyCase& myCase ) {
   // Material=1,3,4 -->bulk dynamics
   switch ( parameters.get<parameters::POROSITY_TYPE>() ) {
   case PorosityType::BGK:
-    lattice.defineDynamics<BGKdynamics>(geometry.getMaterialIndicator({1,3,4}));
+    dynamics::set<BGKdynamics>(lattice, geometry.getMaterialIndicator({1,3,4}));
     break;
   case PorosityType::SPAID_PHELAN:
-    lattice.defineDynamics<PorousBGKdynamics>(geometry.getMaterialIndicator({1,3,4}));
+    dynamics::set<PorousBGKdynamics>(lattice, geometry.getMaterialIndicator({1,3,4}));
     break;
   case PorosityType::GUO_ZHAO:
   default:
-    lattice.defineDynamics<GuoZhaoBGKdynamics>(geometry.getMaterialIndicator({1,3,4}));
+    dynamics::set<GuoZhaoBGKdynamics>(lattice, geometry.getMaterialIndicator({1,3,4}));
     break;
   }
 
@@ -238,7 +238,7 @@ void prepareLattice( MyCase& myCase ) {
       }
       AnalyticalConst3D<T,T> porosity( d );
       for (int i: { 0,1,2,3,4 }) {
-        lattice.defineField<descriptors::POROSITY>(geometry, i, porosity);
+        fields::set<descriptors::POROSITY>(lattice, geometry.getMaterialIndicator({i}), porosity);
       }
     }
       break;
@@ -248,9 +248,9 @@ void prepareLattice( MyCase& myCase ) {
       AnalyticalConst3D<T,T> Nu( converter.getLatticeViscosity() );
       AnalyticalConst3D<T,T> k( Kin / ( h*h ) );
       for (int i: {0,1,2,3,4}) {
-        lattice.defineField<descriptors::EPSILON>(geometry, i, eps);
-        lattice.defineField<descriptors::NU>(geometry, i, Nu);
-        lattice.defineField<descriptors::K>(geometry, i, k);
+        fields::set<descriptors::EPSILON>(lattice, geometry.getMaterialIndicator({i}), eps);
+        fields::set<descriptors::NU>(lattice, geometry.getMaterialIndicator({i}), Nu);
+        fields::set<descriptors::K>(lattice, geometry.getMaterialIndicator({i}), k);
       }
       break;
   }
@@ -288,7 +288,8 @@ void setInitialValues( MyCase& myCase ) {
   // Pressure for Poiseuille flow with maximum velocity of charU at K->infty
   T p0 = 4. * converter.getPhysViscosity() * converter.getCharPhysVelocity() * length / (radius * radius);
   T p0L = converter.getLatticePressure(p0);
-  AnalyticalLinear3D<T, T> rho(-p0L / length * descriptors::invCs2<T,DESCRIPTOR>(), 0, 0, p0L * descriptors::invCs2<T,DESCRIPTOR>() + 1);
+  AnalyticalLinear3D<T, T> rho( converter.getPhysDensity(-p0L / length * descriptors::invCs2<T,DESCRIPTOR>()), 0, 0,
+                                converter.getPhysDensity(p0L * descriptors::invCs2<T,DESCRIPTOR>() + 1));
 
   T dp = p0/length;
   T mu = converter.getPhysViscosity()*converter.getPhysDensity();
@@ -299,12 +300,11 @@ void setInitialValues( MyCase& myCase ) {
 
   //CirclePoiseuille3D<T> uSol( {0., radius, radius}, {1, 0, 0}, converter.getCharPhysVelocity(), radius );
   PorousPoiseuille3D<T> uSol( myCase, radius );
-  PhysicalToLatticeVelocityF3D<T,DESCRIPTOR> u(&uSol, converter);
 
   // Initialize all values of distribution functions to their local equilibrium
   for (int i: { 0,1,2,3,4 }) {
-    lattice.defineRhoU(geometry, i, rho, u);
-    lattice.iniEquilibrium(geometry, i, rho, u);
+    momenta::setVelocity(lattice, geometry.getMaterialIndicator({i}), uSol);
+    momenta::setDensity(lattice, geometry.getMaterialIndicator({i}), rho);
   }
 
   lattice.initialize();

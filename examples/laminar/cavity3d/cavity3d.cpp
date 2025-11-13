@@ -63,7 +63,6 @@ Mesh<MyCase::value_t, MyCase::d> createMesh(MyCase::ParametersD& parameters)
 /// @note The material numbers will be used to assign physics to lattice nodes
 void prepareGeometry(MyCase& myCase)
 {
-
   OstreamManager clout(std::cout, "prepareGeometry");
   clout << "Prepare Geometry ..." << std::endl;
   using T          = MyCase::value_t;
@@ -98,7 +97,6 @@ void prepareGeometry(MyCase& myCase)
   sGeometry.print();
 
   clout << "Prepare Geometry ... OK" << std::endl;
-  return;
 }
 /// @brief Set lattice dynamics
 /// @param myCase The Case instance which keeps the simulation data
@@ -109,6 +107,7 @@ void prepareLattice(MyCase& myCase)
   auto& sGeometry  = myCase.getGeometry();
   auto& sLattice   = myCase.getLattice(NavierStokes {});
   auto& parameters = myCase.getParameters();
+
   clout << "Prepare Lattice ..." << std::endl;
   {
     using namespace olb::parameters;
@@ -123,19 +122,15 @@ void prepareLattice(MyCase& myCase)
         parameters.get<PHYS_CHAR_DENSITY>()    // physDensity: physical density in __kg / m^3__
     );
   }
-  // Prints the converter log as console output
   sLattice.getUnitConverter().print();
-  // Writes the converter log in a file
-  sLattice.getUnitConverter().write("cavity3d");
 
   // Material=1 -->bulk dynamics
-  sLattice.defineDynamics<ConstRhoBGKdynamics>(sGeometry, 1);
+  dynamics::set<ConstRhoBGKdynamics>(sLattice, sGeometry.getMaterialIndicator(1));
 
   // Material=2,3 -->bulk dynamics, velocity boundary
   boundary::set<boundary::InterpolatedVelocity>(sLattice, sGeometry, 2);
   boundary::set<boundary::InterpolatedVelocity>(sLattice, sGeometry, 3);
   clout << "Prepare Lattice ... OK" << std::endl;
-  return;
 }
 
 /// Set initial condition for primal variables (velocity and density)
@@ -147,36 +142,23 @@ void setInitialValues(MyCase& myCase)
   clout << "lattice initialization ..." << std::endl;
 
   using T = MyCase::value_t;
-
   auto& sLattice = myCase.getLattice(NavierStokes {});
-
   auto& sGeometry = myCase.getGeometry();
 
-  AnalyticalConst3D<T, T> rhoF((T)1);
-  AnalyticalConst3D<T, T> uF((T)0, (T)0, (T)0);
-
-  auto bulkIndicator = sGeometry.getMaterialIndicator({1, 2, 3});
-  sLattice.iniEquilibrium(bulkIndicator, rhoF, uF);
-  sLattice.defineRhoU(bulkIndicator, rhoF, uF);
-
-  AnalyticalConst3D<T, T> uTop(sLattice.getUnitConverter().getCharLatticeVelocity(), (T)0, (T)0);
-
-  sLattice.defineU(sGeometry, 3, uTop);
+  Vector<T,3> uTop{sLattice.getUnitConverter().getCharPhysVelocity(), (T)0, (T)0};
+  momenta::setVelocity(sLattice, sGeometry.getMaterialIndicator(3), uTop);
   const T omega = sLattice.getUnitConverter().getLatticeRelaxationFrequency();
 
   sLattice.setParameter<descriptors::OMEGA>(omega);
 
-  // Make the lattice ready for simulation
   sLattice.initialize();
   clout << "Initialization ... OK" << std::endl;
-  return;
 }
 
-void setBoundaryValues(MyCase& myCase, std::size_t iT) { return; }
+void setTemporalValues(MyCase& myCase, std::size_t iT) {}
 
 void getResults(MyCase& myCase, std::size_t iT, util::Timer<MyCase::value_t>& timer, bool converged)
 {
-
   OstreamManager clout(std::cout, "getResults");
   using T                       = MyCase::value_t;
   auto&               sLattice  = myCase.getLattice(NavierStokes {});
@@ -201,14 +183,12 @@ void getResults(MyCase& myCase, std::size_t iT, util::Timer<MyCase::value_t>& ti
     vtmWriter.createMasterFile();
   }
 
-  // Get statistics
   if ((iT % converter.getLatticeTime(logT) == 0 && iT > 0) || converged) {
     timer.update(iT);
     timer.printStep(2);
     sLattice.getStatistics().print(iT, converter.getPhysTime(iT));
   }
 
-  // Writes the VTK
   if ((iT % converter.getLatticeTime(saveT) == 0 && iT > 0) || converged) {
     sLattice.setProcessingContext(ProcessingContext::Evaluation);
 
@@ -229,13 +209,11 @@ void getResults(MyCase& myCase, std::size_t iT, util::Timer<MyCase::value_t>& ti
     SuperEuklidNorm3D<T>  normVel(velocity);
     BlockReduction3D2D<T> planeReduction(normVel, origin, u, v, 600, BlockDataSyncMode::ReduceOnly);
 
-    // write a heatmap
     heatmap::plotParam<T> plotParam;
     plotParam.maxValue = (T)1.0;
     plotParam.name     = "velocity";
     heatmap::write(planeReduction, iT, plotParam);
   }
-  return;
 }
 
 /// @brief Execute simulation: set initial values and run time loop
@@ -263,7 +241,7 @@ void simulate(MyCase& myCase)
       break;
     }
 
-    setBoundaryValues(myCase, iT);
+    setTemporalValues(myCase, iT);
 
     sLattice.collideAndStream();
 

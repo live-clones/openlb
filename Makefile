@@ -117,6 +117,20 @@ CSE_GENERATEES := $(patsubst %.cse.h.template, %.cse.h, $(CSE_GENERATORS))
 cse: $(CSE_GENERATEES)
 
 ###########################################################################
+## Benchmark tests
+
+benchmark: dependencies core
+	$(MAKE) -C tests/benchmarks
+
+test%:
+	$(MAKE) -C tests/benchmarks run-$@
+
+clean-benchmark:
+	$(MAKE) -C tests/benchmarks clean
+
+CLEAN_TARGETS += clean-benchmark
+
+###########################################################################
 ## Doxygen documentation
 
 doxygen:

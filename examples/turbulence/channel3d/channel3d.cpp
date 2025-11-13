@@ -31,20 +31,32 @@
  * The example shows the usage of turbulent wall model with different parameters.
  * All WM paramertes are integrated into HLBM interface.
  * As showcase for stability improvement HRR collision is possible.
+ *
+ * The reference paper with setup and results description:
+ * Myoungkyu Lee and Robert D. Moser,
+ * Direct numerical simulation of turbulent channel flow up to Re_tau = 5200,
+ * 2015, Journal of Fluid Mechanics, vol. 774, pp. 395-415
+ *
+ * The paper can be found at http://journals.cambridge.org/article_S0022112015002682
+ * The data can be found in: https://turbulence.oden.utexas.edu/channel2015/data/
+ *
+ * The comparative plots can be generated using python script plotResults.py
+ * The referenceData of Re_tau 1000 case are stored in referenceData.csv
  */
 
 #include <olb.h>
+
+#include "superForceTermApplyInChannel3D.h"
 
 using namespace olb;
 using namespace names;
 
 // === Step 1: Declarations ===
 using MyCase = Case<
-    NavierStokes,
-    Lattice<double, descriptors::D3Q19<descriptors::FORCE, descriptors::TENSOR, descriptors::VELOCITY,
-                                       descriptors::POROSITY, descriptors::VELOCITY2, descriptors::AVERAGE_VELOCITY>>>;
+  NavierStokes, Lattice<float, descriptors::D3Q19<descriptors::FORCE>>
+>;
 
-///when using, hybrid recursive regularize collision model with CONST_HRR_HYBRID, delte the commentout.
+///when using, hybrid recursive regularize collision model with CONST_HRR_HYBRID
 //#define HRR_COLLISION
 
 namespace olb::parameters {
@@ -91,7 +103,7 @@ struct ENABLE_VANDRIEST : public descriptors::TYPED_FIELD_BASE<bool, 1> {};
 
 struct ENABLE_MOVING_WALL : public descriptors::TYPED_FIELD_BASE<bool, 1> {};
 
-struct ENABLE_AVERAGE_VELOCITY : public descriptors::TYPED_FIELD_BASE<bool, 1> {};
+struct ENABLE_TURBULENCE_STATISTICS : public descriptors::TYPED_FIELD_BASE<bool, 1> {};
 
 //  distance from cell to velocity sampling point in lattice units
 struct LATTICE_DISTANCE_SAMPLING : public descriptors::FIELD_BASE<1> {};
@@ -125,7 +137,6 @@ std::default_random_engine generator(0x1337533DAAAAAAAA);
 
 template <typename T, typename S>
 class Channel3D : public AnalyticalF3D<T, S> {
-
 protected:
   T turbulenceIntensity;
   T maxVelocity;
@@ -224,7 +235,6 @@ void prepareGeometry(MyCase& myCase)
   clout << " ; z = " << PhyMax[2] - PhyMin[2] << std::endl;
 
   clout << "Prepare Geometry ... OK" << std::endl;
-  return;
 }
 
 /// Set initial condition for primal variables (velocity and density)
@@ -251,11 +261,11 @@ void setInitialConditions(MyCase& myCase)
   sLattice.defineRhoU(sGeometry, 2, rho, uSol);
   sLattice.iniEquilibrium(sGeometry, 2, rho, uSol);
 
-  sLattice.defineField<reduction::TAGS_U>(sGeometry, 1, tag1);
-  sLattice.defineField<reduction::TAGS_U>(sGeometry.getMaterialIndicator({0, 2}), tag0);
   sLattice.defineField<descriptors::VELOCITY2>(sGeometry.getMaterialIndicator({0, 1, 2}), uSol);
   sLattice.defineField<descriptors::VELOCITY>(sGeometry.getMaterialIndicator({0, 1, 2}), u0);
   sLattice.defineField<descriptors::AVERAGE_VELOCITY>(sGeometry.getMaterialIndicator({0, 1, 2}), u0);
+  sLattice.defineField<descriptors::AVERAGE_PRESSURE>(sGeometry.getMaterialIndicator({0, 1, 2}), rho0);
+  sLattice.defineField<descriptors::AVERAGE_SQUARE_PRESSURE>(sGeometry.getMaterialIndicator({0, 1, 2}), rho0);
   sLattice.defineField<descriptors::FORCE>(sGeometry.getMaterialIndicator({0, 1, 2}), u0);
   sLattice.defineField<descriptors::POROSITY>(sGeometry.getMaterialIndicator({0, 2}), rho0);
   sLattice.defineField<descriptors::POROSITY>(sGeometry, 1, rho);
@@ -266,7 +276,6 @@ void setInitialConditions(MyCase& myCase)
   sLattice.initialize();
 
   clout << "Set initial conditions ... OK" << std::endl;
-  return;
 }
 
 /// @brief Set lattice dynamics
@@ -334,7 +343,7 @@ void prepareLattice(MyCase& myCase)
     wallModelParameters.wallFunctionProfile       = parameters.get<METHOD_WALL_FUNCTION_PROFILE>();
     wallModelParameters.latticeWallDistance       = parameters.get<LATTICE_DISTANCE_TO_WALL>();
     wallModelParameters.movingWall                = parameters.get<ENABLE_MOVING_WALL>();
-    wallModelParameters.averageVelocity           = parameters.get<ENABLE_AVERAGE_VELOCITY>();
+    wallModelParameters.turbulenceStatistics      = parameters.get<ENABLE_TURBULENCE_STATISTICS>();
   }
   /// Material=1 -->bulk dynamics
   setTurbulentWallModelDynamics(sLattice, sGeometry, 1, wallModelParameters);
@@ -352,7 +361,6 @@ void prepareLattice(MyCase& myCase)
   setTurbulentWallModel(sLattice, sGeometry, 2, wallModelParameters);
 
   clout << "Prepare Lattice ... OK" << std::endl;
-  return;
 }
 
 void getResults(MyCase& myCase, std::size_t iT, util::Timer<MyCase::value_t>& timer)
@@ -410,6 +418,8 @@ void getResults(MyCase& myCase, std::size_t iT, util::Timer<MyCase::value_t>& ti
     sLattice.scheduleBackgroundOutputVTK([&, iT](auto task) {
       SuperVTMwriter3D<T>        vtmWriter("channel3d");
       SuperLatticePhysVelocity3D velocity(sLattice, sLattice.getUnitConverter());
+      SuperLatticePhysReynoldsStress3D reynoldsStress(sLattice, sLattice.getUnitConverter());
+      SuperLatticeRMSPhysPressure3D rmsPressure(sLattice, sLattice.getUnitConverter());
       SuperLatticePhysPressure3D pressure(sLattice, sLattice.getUnitConverter());
       SuperLatticePhysField3D<T, DESCRIPTOR, descriptors::AVERAGE_VELOCITY> sAveragedVel(
           sLattice, sLattice.getUnitConverter().getConversionFactorVelocity());
@@ -422,11 +432,65 @@ void getResults(MyCase& myCase, std::size_t iT, util::Timer<MyCase::value_t>& ti
       vtmWriter.addFunctor(sAveragedVel);
       vtmWriter.addFunctor(geom);
       vtmWriter.addFunctor(wmvelocity);
+      vtmWriter.addFunctor(reynoldsStress);
+      vtmWriter.addFunctor(rmsPressure);
 
       task(vtmWriter, iT);
     });
   }
-  return;
+
+  if (iT == sLattice.getUnitConverter().getLatticeTime(maxPhysT) - 1) {
+    // Preparation
+    const T lx                         = parameters.get<parameters::DOMAIN_EXTENT>()[0];
+    const T ly                         = parameters.get<parameters::DOMAIN_EXTENT>()[1];
+    const T physDeltaX                 = parameters.get<parameters::PHYS_DELTA_X>();
+    const T latticeWallDistance        = parameters.get<parameters::LATTICE_DISTANCE_TO_WALL>();
+    sLattice.setProcessingContext(ProcessingContext::Evaluation);
+    SuperLatticePhysReynoldsStress3D<T,DESCRIPTOR> reynoldsStress(sLattice, sLattice.getUnitConverter());
+    SuperLatticeRMSPhysPressure3D<T,DESCRIPTOR> rmsPressure(sLattice, sLattice.getUnitConverter());
+    SuperLatticePhysField3D<T, DESCRIPTOR, descriptors::AVERAGE_VELOCITY> sAveragedVel(
+          sLattice, sLattice.getUnitConverter().getConversionFactorVelocity());
+    sAveragedVel.getName() = "sAveragedVel";
+    SuperLatticePhysField3D<T, DESCRIPTOR, descriptors::AVERAGE_U_TAU> sAveragedUTau(
+          sLattice, sLattice.getUnitConverter().getConversionFactorVelocity());
+    sAveragedUTau.getName() = "sAveragedUTau";
+    CSV<T> csvWriter("flowField",';', {"y+", "u_tau", "uAv+", "uu++", "uv++", "uw++", "vv++", "vw++", "ww++", "pRMS"}, ".csv");
+    int dummy[1]={ };
+    const int nZ = sGeometry.getCuboidDecomposition().getMotherCuboid().getNz();  // number of voxels in x-direction
+    auto mat = new SuperIndicatorIdentity3D<T> (sGeometry.getMaterialIndicator({1}));
+    T avUTau[sAveragedUTau.getTargetDim() + 1];
+    SuperNonZeroAverage3D<T> (sAveragedUTau, sGeometry.getMaterialIndicator({1})).operator()(avUTau, dummy);
+
+    if(avUTau[0] != T(0)){
+      for (int iZ = 2; iZ < int(nZ/2); ++iZ) {
+        const T z = sLattice.getUnitConverter().getPhysLength(iZ);
+        const Vector<T,3> center( lx/2., ly/2., z );
+        auto cube = new SuperIndicatorFfromIndicatorF3D<T>(
+          std::shared_ptr<IndicatorF3D<T>>(new IndicatorCuboid3D<T> ({lx,ly,T(0.25)*physDeltaX},{0,0,z-latticeWallDistance*physDeltaX})), sGeometry);
+        SuperIndicatorMultiplication3D<T> plane(cube, mat);
+
+        // Average concentration: use average functor
+        T avReynoldsStress[reynoldsStress.getTargetDim() + 1];
+        SuperAverage3D<T> (reynoldsStress, plane).operator()(avReynoldsStress, dummy);
+        T avRmsPres[rmsPressure.getTargetDim() + 1];
+        SuperAverage3D<T> (rmsPressure, plane).operator()(avRmsPres, dummy);
+        T avVel[sAveragedVel.getTargetDim() + 1];
+        SuperAverage3D<T> (sAveragedVel, plane).operator()(avVel, dummy);
+
+        csvWriter.writeDataFile((z-latticeWallDistance*physDeltaX)
+                                *avUTau[0]/sLattice.getUnitConverter().getPhysViscosity(),
+                               {avUTau[0],
+                                avVel[0]/avUTau[0],
+                                avReynoldsStress[0]/avUTau[0]/avUTau[0],
+                                avReynoldsStress[1]/avUTau[0]/avUTau[0],
+                                avReynoldsStress[2]/avUTau[0]/avUTau[0],
+                                avReynoldsStress[3]/avUTau[0]/avUTau[0],
+                                avReynoldsStress[4]/avUTau[0]/avUTau[0],
+                                avReynoldsStress[5]/avUTau[0]/avUTau[0],
+                                avRmsPres[0]});
+      }
+    }
+  }
 }
 
 /// @brief Execute simulation: set initial values and run time loop
@@ -436,7 +500,6 @@ void simulate(MyCase& myCase)
 
   OstreamManager clout(std::cout, "Time marching");
   using T               = MyCase::value_t;
-  using DESCRIPTOR      = MyCase::descriptor_t_of<NavierStokes>;
   auto&      sGeometry  = myCase.getGeometry();
   auto&      sLattice   = myCase.getLattice(NavierStokes {});
   auto&      parameters = myCase.getParameters();
@@ -445,29 +508,15 @@ void simulate(MyCase& myCase)
 
   const auto adaptedPhysSimulatedLength = parameters.get<parameters::PHYS_ADAPTED_CHAR_LENGTH>();
   const auto ReTau                      = parameters.get<parameters::REYNOLDS_TAU>();
-  const auto physRefL                   = parameters.get<parameters::PHYS_CHAR_LENGTH>();
   const auto lx                         = parameters.get<parameters::DOMAIN_EXTENT>()[0];
   const auto ly                         = parameters.get<parameters::DOMAIN_EXTENT>()[1];
   const auto lz                         = parameters.get<parameters::DOMAIN_EXTENT>()[2];
 
   //forcing of the channel
-  SuperLatticeFieldReductionO<T, DESCRIPTOR, descriptors::VELOCITY2, reduction::SumO,
-                              reduction::checkBulkTag<reduction::TAGS_U>>
-      sumProcessor(sLattice);
+  SuperForceTermApplyInChannel3d forcingProcessor(sLattice, sGeometry, converter, ReTau, adaptedPhysSimulatedLength, lx, ly, lz,
+                   parameters.get<parameters::LATTICE_DISTANCE_TO_WALL>());
 
-  auto& coupling = myCase.setCouplingOperator("Foring", TurbulentChannelForce<T> {}, names::NavierStokes {}, sLattice);
-
-  coupling.setParameter<TurbulentChannelForce<T>::CHAR_LATTICE_U>(converter.getCharLatticeVelocity());
-  coupling.setParameter<TurbulentChannelForce<T>::CHAR_LATTICE_L>(
-      converter.getLatticeLength(adaptedPhysSimulatedLength));
-  coupling.setParameter<TurbulentChannelForce<T>::LATTICE_UTAU>(
-      (T)converter.getLatticeVelocity(ReTau * converter.getPhysViscosity() / physRefL));
-  coupling.setParameter<TurbulentChannelForce<T>::LATTICE_CHANNEL_VOLUME>(
-      converter.getLatticeLength(lz) * converter.getLatticeLength(ly) * converter.getLatticeLength(lx));
-  coupling.setParameter<TurbulentChannelForce<T>::LATTICE_U_SUM>({converter.getCharLatticeVelocity(), 0., 0.});
-  coupling.restrictTo(sGeometry.getMaterialIndicator(1));
-
-  coupling.apply();
+  forcingProcessor.applyForing();
 
   util::Timer<T> timer(converter.getLatticeTime(maxPhysT), sGeometry.getStatistics().getNvoxel());
   clout << "starting simulation..." << std::endl;
@@ -476,15 +525,13 @@ void simulate(MyCase& myCase)
   for (size_t iT = 0; iT < converter.getLatticeTime(maxPhysT); ++iT) {
     sLattice.setParameter<descriptors::LATTICE_TIME>(iT);
     getResults(myCase, iT, timer);
-    coupling.setParameter<TurbulentChannelForce<T>::LATTICE_U_SUM>(sumProcessor.compute());
-    coupling.apply();
+    forcingProcessor.applyForing();
     sLattice.collideAndStream();
   }
   sLattice.setProcessingContext(ProcessingContext::Evaluation);
   timer.stop();
   timer.printSummary();
 
-  return;
 }
 int main(int argc, char* argv[])
 {
@@ -538,7 +585,7 @@ int main(int argc, char* argv[])
       return myCaseParameters.get<PHYS_CONVERGE_TIME>() + myCaseParameters.get<PHYS_STATISTICS_TIME>();
     });
 
-    myCaseParameters.set<DOMAIN_EXTENT_BASE>({3.0, 3.0 / 10.0, 2.0});
+    myCaseParameters.set<DOMAIN_EXTENT_BASE>({6.0, 3.0, 2.0});
 
     myCaseParameters.set<DOMAIN_EXTENT>([&]() -> Vector<T, 3> {
       T physRefL = myCaseParameters.get<PHYS_CHAR_LENGTH>();
@@ -549,22 +596,14 @@ int main(int argc, char* argv[])
 
     /// Wallfunction parameters
     myCaseParameters.set<METHOD_OF_RHO>(0);
-
-    myCaseParameters.set<METHOD_OF_FNEQ>(0);
-
+    myCaseParameters.set<METHOD_OF_FNEQ>(1);
     myCaseParameters.set<METHOD_WALL_FUNCTION_PROFILE>(1);
-
     myCaseParameters.set<ENABLE_BODY_FORCE>(true);
-
     myCaseParameters.set<ENABLE_INTERPOLATE_SAMPLE_VELOCITY>(true);
-
     myCaseParameters.set<ENABLE_VANDRIEST>(true);
-
     myCaseParameters.set<LATTICE_DISTANCE_SAMPLING>(3.5);
-
     myCaseParameters.set<ENABLE_MOVING_WALL>(false);
-
-    myCaseParameters.set<ENABLE_AVERAGE_VELOCITY>(true);
+    myCaseParameters.set<ENABLE_TURBULENCE_STATISTICS>(true);
   }
 
   myCaseParameters.fromCLI(argc, argv);
@@ -587,6 +626,7 @@ int main(int argc, char* argv[])
 
   /// === Step 3: Create Mesh ===
   Mesh mesh = createMesh(myCaseParameters);
+
   /// === Step 4: Create Case ===
   MyCase myCase(myCaseParameters, mesh);
 

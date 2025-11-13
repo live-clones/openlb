@@ -173,7 +173,7 @@ void prepareLattice(MyCase& myCase)
   converter.print();
 
   /// @li Material=1 --> bulk dynamics
-  lattice.template defineDynamics<ForcedBGKdynamics>(geometry.getMaterialIndicator({1}));
+  dynamics::set<ForcedBGKdynamics>(lattice, geometry.getMaterialIndicator({1}));
   /// @li Material=2,3 --> velocity boundary
   switch (parameters.get<parameters::BOUNDARY_TYPE>()) {
     case BoundaryType::interpolated: {
@@ -215,15 +215,11 @@ void setInitialValues(MyCase& myCase)
   const Vector<T,3> u{0.,0.,0.};
   AnalyticalConst3D<T,T> uF(u);
 
-  /// @li Initialize populations to equilibrium state
-  lattice.defineRhoU(geometry.getMaterialIndicator({1,2}), rhoF, uF);
-  lattice.iniEquilibrium(geometry.getMaterialIndicator({1,2}), rhoF, uF);
-
   /// @li Set force field
   ForceTestFlow3D<T,T,MyCase::descriptor_t> forceF(converter);
   const T latticeScaling(converter.getConversionFactorMass() / converter.getConversionFactorForce());
   AnalyticalScaled3D<T,T> scaledForceF(forceF, latticeScaling);  // conversion to lattice units
-  lattice.template defineField<descriptors::FORCE>(geometry.getMaterialIndicator({1}), scaledForceF);
+  fields::set<descriptors::FORCE>(lattice, geometry.getMaterialIndicator({1}), scaledForceF);
 
   /// @li Initialize lattice
   lattice.initialize();
@@ -253,6 +249,7 @@ void setTemporalValues(MyCase& myCase,
     /// @li Take analytical velocity solution, scale it to lattice units, set the boundary data
     VelocityTestFlow3D<T,T,MyCase::descriptor_t> velocityF(converter);
     AnalyticalScaled3D<T,T> uBoundaryStartF(velocityF, frac[0] / converter.getConversionFactorVelocity());
+    AnalyticalScaled3D<T,T> uBoundaryPhysStartF(velocityF, frac[0]);
     switch (parameters.get<parameters::BOUNDARY_TYPE>()) {
       case BoundaryType::bouzidi: {
         setBouzidiVelocity(lattice, geometry, 2, uBoundaryStartF);
@@ -260,7 +257,7 @@ void setTemporalValues(MyCase& myCase,
     break;
       }
       default: {
-        lattice.defineU(geometry, 2, uBoundaryStartF);
+	momenta::setVelocity(lattice, geometry.getMaterialIndicator({2}), uBoundaryPhysStartF);
         lattice.template setProcessingContext<Array<momenta::FixedVelocityMomentumGeneric::VELOCITY>>(ProcessingContext::Simulation);
       }
     }

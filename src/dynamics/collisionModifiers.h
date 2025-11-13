@@ -288,7 +288,91 @@ struct TrackCovarianceVelocity {
   };
 };
 
+template <typename COLLISION>
+struct TrackAveragePressure {
+  using parameters = typename COLLISION::parameters::template include<descriptors::LATTICE_TIME>;
 
+  static std::string getName() {
+    return "TrackAveragePressure<" + COLLISION::getName() + ">";
+  }
+
+  template <typename DESCRIPTOR, typename MOMENTA, typename EQUILIBRIUM>
+  struct type {
+    using MomentaF = typename MOMENTA::template type<DESCRIPTOR>;
+    using CollisionO = typename COLLISION::template type<DESCRIPTOR, MOMENTA, EQUILIBRIUM>;
+
+    static constexpr bool is_vectorizable = dynamics::is_vectorizable_v<CollisionO>;
+
+    template <concepts::Cell CELL, typename PARAMETERS, typename V=typename CELL::value_t>
+    CellStatistic<V> apply(CELL& cell, PARAMETERS& parameters) any_platform {
+      auto statistics = CollisionO().apply(cell, parameters);
+
+      V pressure = (MomentaF().computeRho(cell) - V(1)) / descriptors::invCs2<V,DESCRIPTOR>();
+      auto iT = parameters.template get<descriptors::LATTICE_TIME>();
+      V pressureAvg = cell.template getField<descriptors::AVERAGE_PRESSURE>();
+      cell.template setField<descriptors::AVERAGE_PRESSURE>((pressureAvg * (iT-1) + pressure) / iT);
+
+      return statistics;
+    }
+  };
+};
+
+template <typename COLLISION>
+struct TrackTurbulenceStatistics {
+  using parameters = typename COLLISION::parameters::template include<descriptors::LATTICE_TIME>;
+
+  static std::string getName() {
+    return "TrackTurbulenceStatistics<" + COLLISION::getName() + ">";
+  }
+
+  template <typename DESCRIPTOR, typename MOMENTA, typename EQUILIBRIUM>
+  struct type {
+    using MomentaF = typename MOMENTA::template type<DESCRIPTOR>;
+    using CollisionO = typename COLLISION::template type<DESCRIPTOR, MOMENTA, EQUILIBRIUM>;
+
+    static constexpr bool is_vectorizable = dynamics::is_vectorizable_v<CollisionO>;
+
+    template <concepts::Cell CELL, typename PARAMETERS, typename V=typename CELL::value_t>
+    CellStatistic<V> apply(CELL& cell, PARAMETERS& parameters) any_platform {
+      auto statistics = CollisionO().apply(cell, parameters);
+      // saving of average pressure
+      V pressure = (MomentaF().computeRho(cell) - V(1)) / descriptors::invCs2<V,DESCRIPTOR>();
+      auto iT = parameters.template get<descriptors::LATTICE_TIME>();
+      V pressureAvg = cell.template getField<descriptors::AVERAGE_PRESSURE>();
+      cell.template setField<descriptors::AVERAGE_PRESSURE>((pressureAvg * (iT-1) + pressure) / iT);
+
+      // saving of average square pressure for later pressure statistics <pp> = <PP> - <P><P>
+      V pressure2 = pressure*pressure;
+      V pressureAvg2 = cell.template getField<descriptors::AVERAGE_SQUARE_PRESSURE>();
+      cell.template setField<descriptors::AVERAGE_SQUARE_PRESSURE>((pressureAvg2 * (iT-1) + pressure2) / iT);
+
+      // saving average velocity
+      Vector<V,DESCRIPTOR::d> u;
+      MomentaF().computeU(cell, u);
+      cell.template setField<descriptors::VELOCITY2>(u);
+      auto uAvg = cell.template getField<descriptors::AVERAGE_VELOCITY>();
+      cell.template setField<descriptors::AVERAGE_VELOCITY>((uAvg * (iT-1) + u) / iT);
+
+      // saving <U_i U_j> for Reynolds stresses calculation <u_i u_j> = <U_i U_j> - <U_i><U_j>
+      Vector<V, util::TensorVal<DESCRIPTOR>::n> uu;
+      int iPi = 0;
+      for (int i = 0; i<DESCRIPTOR::d; i++) {
+        for (int j = i; j<DESCRIPTOR::d; j++) {
+          uu[iPi] = u[i] * u[j];
+          ++iPi;
+        }
+      }
+      auto uuAvg = cell.template getField<descriptors::AVERAGE_VELOCITY_X_VELOCITY>();
+      cell.template setField<descriptors::AVERAGE_VELOCITY_X_VELOCITY>((uuAvg * (iT-1) + uu) / iT);
+
+      V u_tau = cell.template getField<descriptors::U_TAU>();
+      V u_tauAvg = cell.template getField<descriptors::AVERAGE_U_TAU>();
+      cell.template setField<descriptors::AVERAGE_U_TAU>((u_tauAvg * (iT-1) + u_tau) / iT);
+
+      return statistics;
+    }
+  };
+};
 
 }
 }

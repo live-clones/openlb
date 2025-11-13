@@ -153,7 +153,7 @@ void prepareLattice(MyCase& myCase)
   STLreader<T> stlReader( "aorta3d.stl", physDeltaX, 0.001,  olb::RayMode::FastRayZ, true );
 
   // material=1 --> bulk dynamics
-  lattice.defineDynamics<BulkDynamics>(geometry, 1);
+  dynamics::set<BulkDynamics>(lattice, geometry.getMaterialIndicator({1}));
 
   if ( bouzidiOn ) {
     // material=2 --> no dynamics + bouzidi zero velocity
@@ -165,12 +165,12 @@ void prepareLattice(MyCase& myCase)
     // material=2 --> bounceBack dynamics
     boundary::set<boundary::BounceBack>(lattice, geometry, 2);
     // material=3 --> bulk dynamics + velocity (inflow)
-    lattice.defineDynamics<BulkDynamics>(geometry, 3);
+    dynamics::set<BulkDynamics>(lattice, geometry.getMaterialIndicator(3));
     boundary::set<boundary::InterpolatedVelocity>(lattice, geometry, 3);
   }
 
   // material=4,5 --> bulk dynamics + pressure (outflow)
-  lattice.defineDynamics<BulkDynamics>(geometry.getMaterialIndicator({4, 5}));
+  dynamics::set<BulkDynamics>(lattice, geometry.getMaterialIndicator({4, 5}));
   boundary::set<boundary::InterpolatedPressure>(lattice, geometry, 4);
   boundary::set<boundary::InterpolatedPressure>(lattice, geometry, 5);
 
@@ -183,19 +183,9 @@ void prepareLattice(MyCase& myCase)
 void setInitialValues(MyCase& myCase) {
   using T = MyCase::value_t;
 
-  auto& geometry = myCase.getGeometry();
   auto& lattice = myCase.getLattice(NavierStokes{});
 
   const T omega = lattice.getUnitConverter().getLatticeRelaxationFrequency();
-
-  // Initial conditions
-  AnalyticalConst3D<T,T> rhoF( 1 );
-  std::vector<T> velocity( 3,T() );
-  AnalyticalConst3D<T,T> uF( velocity );
-
-  // Initialize all values of distribution functions to their local equilibrium
-  lattice.defineRhoU( geometry.getMaterialIndicator({1, 3, 4, 5}),rhoF,uF );
-  lattice.iniEquilibrium( geometry.getMaterialIndicator({1, 3, 4, 5}),rhoF,uF );
 
   lattice.setParameter<descriptors::OMEGA>(omega);
   lattice.setParameter<collision::LES::SMAGORINSKY>(T(0.1));
@@ -231,7 +221,7 @@ void setBoundaryValues(MyCase& myCase, std::size_t iT)
         ProcessingContext::Simulation);
     }
     else {
-      lattice.defineU(geometry, 3, velocity);
+      momenta::setVelocity(lattice, geometry.getMaterialIndicator(3), velocity);
       lattice.setProcessingContext<Array<momenta::FixedVelocityMomentumGeneric::VELOCITY>>(
         ProcessingContext::Simulation);
     }

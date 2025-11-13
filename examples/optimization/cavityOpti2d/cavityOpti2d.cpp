@@ -142,7 +142,7 @@ void prepareLattice(MyCase& myCase)
   lattice.getUnitConverter().print();
 
   /// Material=1 --> bulk dynamics
-  lattice.defineDynamics<ConstRhoBGKdynamics>(myCase.getGeometry(), 1);
+  dynamics::set<ConstRhoBGKdynamics>(lattice, myCase.getGeometry().getMaterialIndicator({1}));
 
   /// Material=2,3 --> bulk dynamics, velocity boundary
   boundary::set<boundary::InterpolatedVelocity, ConstRhoBGKdynamics>(lattice, myCase.getGeometry(), 2);
@@ -161,17 +161,10 @@ void setInitialValues(MyCase& myCase)
 
   /// Initialize density to one everywhere
   /// Initialize velocity to be tangential at the lid and zero in the bulk and at the walls
-  AnalyticalConst2D<T,T> rho(1);
-  AnalyticalConst2D<T,T> uLid(lattice.getUnitConverter().getCharLatticeVelocity(), 0);
-  AnalyticalConst2D<T,T> uRest(0, 0);
-
-  /// Initialize populations to equilibrium state
-  auto domain = myCase.getGeometry().getMaterialIndicator({1,2,3});
-  lattice.iniEquilibrium(domain, rho, uRest);
-  lattice.defineRhoU(domain, rho, uRest);
+  AnalyticalConst2D<T,T> uLid(lattice.getUnitConverter().getCharPhysVelocity(), 0);
 
   /// Assign the non-zero velocity to the lid
-  lattice.defineU(myCase.getGeometry(), 3, uLid);
+  momenta::setVelocity(lattice, myCase.getGeometry().getMaterialIndicator({3}), uLid);
   lattice.initialize();
 }
 

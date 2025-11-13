@@ -81,7 +81,6 @@ void prepareGeometry(MyCase& myCase)
   geometry.rename( 2, 1, {1, 1, 1} );
 
   const Vector channelExtent  = parameters.get<parameters::DOMAIN_EXTENT>();
-  const Vector channelOrigin  = parameters.get<parameters::ORIGIN>();
   const Vector stepExtent     = parameters.get<parameters::PHYS_STEP_EXTENT>();
   const Vector stepOrigin     = parameters.get<parameters::PHYS_STEP_ORIGIN>();
   const T physDeltaX          = parameters.get<parameters::PHYS_DELTA_X>();
@@ -145,7 +144,7 @@ void prepareLattice(MyCase& myCase)
   // Material=1 -->bulk dynamics
   // Material=3 -->bulk dynamics (inflow)
   // Material=4 -->bulk dynamics (outflow)
-  lattice.defineDynamics<BGKdynamics<T, DESCRIPTOR>>(bulkIndicator);
+  dynamics::set<BGKdynamics>(lattice, bulkIndicator);
   // Material=2 -->bounce back
   boundary::set<boundary::BounceBack>(lattice, geometry, 2);
 
@@ -165,30 +164,10 @@ void prepareLattice(MyCase& myCase)
 /// @note Be careful: initial values have to be set using lattice units
 void setInitialValues(MyCase& myCase)
 {
-  OstreamManager clout(std::cout, "Initialization");
-  clout << "Initialize lattice ..." << std::endl;
-  using T         = MyCase::value_t;
   auto& lattice  = myCase.getLattice(NavierStokes{});
-  auto& geometry = myCase.getGeometry();
-
-  // Initial conditions
-  AnalyticalConst3D<T,T> ux( 0. );
-  AnalyticalConst3D<T,T> uy( 0. );
-  AnalyticalConst3D<T,T> uz( 0. );
-  AnalyticalConst3D<T,T> rho( 1. );
-  AnalyticalComposed3D<T,T> u( ux,uy,uz );
-
-  //Initialize all values of distribution functions to their local equilibrium
-  auto bulkIndicator = geometry.getMaterialIndicator({1, 3, 4});
-  lattice.defineRhoU(bulkIndicator, rho, u);
-  lattice.iniEquilibrium(bulkIndicator, rho, u);
-
-  const T omega = lattice.getUnitConverter().getLatticeRelaxationFrequency();
-  lattice.setParameter<descriptors::OMEGA>(omega);
-
-  // Make the lattice ready for simulation
+  lattice.setParameter<descriptors::OMEGA>(
+    lattice.getUnitConverter().getLatticeRelaxationFrequency());
   lattice.initialize();
-  clout << "Initialize lattice ... OK" << std::endl;
 }
 
 // Generates a slowly increasing inflow for the first iTMaxStart timesteps
@@ -206,30 +185,21 @@ void setTemporalValues(MyCase& myCase,
   const std::size_t iTUpdate   = converter.getLatticeTime(parameters.get<parameters::PHYS_BOUNDARY_VALUE_UPDATE_T>());
 
   if ( iT % iTUpdate == 0 && iT <= iTmaxStart ) {
-    lattice.setProcessingContext(ProcessingContext::Evaluation);
-
-    // Smooth start curve, sinus
-    // SinusStartScale<T,int> StartScale(iTmaxStart, T(1));
-
-    // Smooth start curve, polynomial
-    PolynomialStartScale<T, std::size_t> startScale( iTmaxStart, T( 1 ) );
-
-    // Creates and sets the Poiseuille inflow profile using functors
-    std::size_t iTvec[1]= {iT};
-    T frac[1]= {};
-    startScale( frac,iTvec );
-    std::vector<T> maxVelocity( 3,0 );
-    maxVelocity[0] = 2.25 * frac[0] * converter.getCharLatticeVelocity();
+    T frac{};
+    PolynomialStartScale<T,std::size_t>(iTmaxStart, T(1))(&frac, &iT);
+    std::vector<T> maxVelocity(3, 0);
+    maxVelocity[0] = 2.25 * frac * converter.getCharPhysVelocity();
 
     T distance2Wall = converter.getPhysDeltaX() / 2.;
     RectanglePoiseuille3D<T> poiseuilleU( geometry, 3, maxVelocity, distance2Wall, distance2Wall, distance2Wall );
-    lattice.defineU( geometry, 3, poiseuilleU );
+    momenta::setVelocity(lattice, geometry.getMaterialIndicator(3), poiseuilleU);
 
-    if ( iT % (10 * iTUpdate) == 0 && iT <= iTmaxStart ) {
+    if (iT % (10 * iTUpdate) == 0 && iT <= iTmaxStart) {
       clout << "step=" << iT << "; maxVel=" << maxVelocity[0] << std::endl;
     }
 
-    lattice.setProcessingContext(ProcessingContext::Simulation);
+    lattice.setProcessingContext<Array<momenta::FixedVelocityMomentumGeneric::VELOCITY>>(
+      ProcessingContext::Simulation);
   }
 }
 
@@ -241,9 +211,6 @@ void getResults(MyCase& myCase,
   using   T             = MyCase::value_t;
   using   DESCRIPTOR    = MyCase::descriptor_t;
   auto&   parameters    = myCase.getParameters();
-  const T heightChannel = parameters.get<parameters::DOMAIN_EXTENT>()[1];
-  const T heightStep    = parameters.get<parameters::PHYS_STEP_EXTENT>()[1];
-  const T heightInlet   = heightChannel - heightStep;
   auto&   lattice       = myCase.getLattice(NavierStokes{});
   auto&   converter     = lattice.getUnitConverter();
   auto&   geometry      = myCase.getGeometry();
@@ -302,7 +269,6 @@ void simulate(MyCase& myCase)
   using T           = MyCase::value_t;
   auto& parameters  = myCase.getParameters();
   auto& lattice     = myCase.getLattice(NavierStokes{});
-  const T maxPhysT  = parameters.get<parameters::MAX_PHYS_T>();
 
   const std::size_t iTmax = myCase.getLattice(NavierStokes{}).getUnitConverter().getLatticeTime(
     parameters.get<parameters::MAX_PHYS_T>()

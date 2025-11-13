@@ -21,21 +21,11 @@
  *  Software Foundation, Inc., 51 Franklin Street, Fifth Floor,
  *  Boston, MA  02110-1301, USA.
  */
-
-/*
- * TODO:
- * - Test setup with different configurations
- * - Update formatting of output as needed
- * - Use enumeration instead of preprocessor directives
- * - Improve description below
- */
-
 /*
  * This example is based on 10.1016/j.cpc.2024.109321.
  * The limestone shapes are from the online particle database PARROT
  * (https://parrot.tu-freiberg.de/).
  * The number of triangles has been reduced.
- * For the limestones, please reduce relaxation time tau to at least 0.55
  */
 
 #include "olb.h"
@@ -50,193 +40,135 @@
 using namespace olb;
 using namespace olb::descriptors;
 using namespace olb::graphics;
-using namespace olb::particles;
-using namespace olb::particles::dynamics;
-using namespace olb::particles::contact;
-using namespace olb::particles::communication;
-using namespace olb::particles::access;
 using namespace olb::util;
+using namespace olb::names;
 
-#define WriteVTK
+
 #define WithContact
 
-typedef double T;
+// === Step 1: Declarations ===
 
-typedef enum {
-    LIMESTONES,
-    CUBES,
-    SPHERES
-} ParticleType;
+using MyCase = Case<
+                NavierStokes, Lattice<double, D3Q19<POROSITY, VELOCITY_NUMERATOR, VELOCITY_DENOMINATOR,
+                                                          CONTACT_DETECTION, FORCE>>
+>;
 
-const ParticleType particleType = SPHERES;
-T  wantedParticleVolumeFraction = 0.15;
+namespace olb::parameters {
 
-// Define lattice type
-typedef D3Q19<POROSITY, VELOCITY_NUMERATOR, VELOCITY_DENOMINATOR,
-#ifdef WithContact
-              CONTACT_DETECTION,
-#endif
-              FORCE>
-    DESCRIPTOR;
+struct COEFFICIENT_OF_RESTITUTION : public descriptors::FIELD_BASE<1> { };
+struct COEFFICIENT_STATIC_FRICTION : public descriptors::FIELD_BASE<1> { };
+struct COEFFICIENT_KINETIC_FRICTION : public descriptors::FIELD_BASE<1> { };
+struct EPS : public descriptors::FIELD_BASE<1> { };
+struct PART_POISSON_RATIO : public descriptors::FIELD_BASE<1> { };
+struct PARTICLE_TYPE : public descriptors::TYPED_FIELD_BASE<int,1> { };
+struct WANTED_PARTICLE_VOLUME_FRACTION : public descriptors::FIELD_BASE<1> { };
+struct ARCHIMEDES : public descriptors::FIELD_BASE<1> { };
+struct DENSITY_RATIO : public descriptors::FIELD_BASE<1> { };
+struct STATIC_KINETIC_TRANSITION_VELOCITY : public descriptors::FIELD_BASE<1> { };
+struct CONTACT_BOX_RESOLUTION_PER_DIRECTION : public descriptors::FIELD_BASE<1> { };
+struct PARTICLE_CONTACT_MATERIAL : public descriptors::FIELD_BASE<1> { };
+struct WALL_CONTACT_MATERIAL : public descriptors::FIELD_BASE<1> { };
+struct EXTENT_TO_DIAMETER : public descriptors::FIELD_BASE<1> { };
+struct PHYS_PURGE_ITER_T : public descriptors::FIELD_BASE<1> { };
+struct PARTICLE_ENLARGEMENT_FOR_CONTACT : public descriptors::FIELD_BASE<1> { };
+struct PARTICLE_NUMBER : public descriptors::TYPED_FIELD_BASE<std::size_t,1> { };
+struct PARTICLE_VOLUME_FRACTION : public descriptors::FIELD_BASE<1> { };
+struct DYNAMIC_VISCOSITY : public descriptors::FIELD_BASE<1> { };
 
-// Define particle type
-typedef PARTICLE_DESCRIPTOR<
-    DESCRIPTOR::d, GENERAL_EXTENDABLE<DESCRIPTOR::d>,
-    MOBILITY_VERLET<DESCRIPTOR::d>, SURFACE_RESOLVED_PARALLEL<DESCRIPTOR::d>,
-    FORCING_RESOLVED<DESCRIPTOR::d>, PHYSPROPERTIES_RESOLVED<DESCRIPTOR::d>,
-#ifdef WithContact
-    MECHPROPERTIES_COLLISION<DESCRIPTOR::d>,
-    NUMERICPROPERTIES_RESOLVED_CONTACT<DESCRIPTOR::d>,
-#endif
-    PARALLELIZATION_RESOLVED>
-    PARTICLETYPE;
-
-// Define particle-particle contact type
-typedef ParticleContactArbitraryFromOverlapVolume<T, PARTICLETYPE::d, true>
-    PARTICLECONTACTTYPE;
-
-// Define particle-wall contact type
-typedef WallContactArbitraryFromOverlapVolume<T, PARTICLETYPE::d, true>
-    WALLCONTACTTYPE;
-
-constexpr T nonDimensionalTime = 200.0;
-constexpr T gravit             = 9.81;
-
-T maxPhysT;
-
-// Discretization Settings
-int         res = 9;
-constexpr T tau = 0.6;
+}
 
 
-// Time Settings
-int iTpurge;
-int iTwrite;
+Mesh<MyCase::value_t, MyCase::d> createMesh(MyCase::ParametersD& parameters)
+{
+  using T           = MyCase::value_t;
+  const T      size = parameters.get<parameters::PHYS_CHAR_LENGTH>() * parameters.get<parameters::EXTENT_TO_DIAMETER>();
+  const Vector origin {0, 0, 0};
+  IndicatorCuboid3D<T> cuboid({size, size, size}, origin);
 
-// Fluid Settings
-constexpr T fluidDensity = 1000;
-T           dynamicViscosity;
-T           kinematicViscosity;
+  const T            physDeltaX = parameters.get<parameters::PHYS_DELTA_X>();
+  Mesh<T, MyCase::d> mesh(cuboid, physDeltaX, singleton::mpi().getSize());
+  mesh.setOverlap(parameters.get<parameters::OVERLAP>());
+  return mesh;
+}
 
-// Particle Settings
-unsigned int particleNumber = 0;
-T            ArchimedesNumber(1000.);
-T            densityRatio(3.3);
-constexpr T  radius             = 1.5e-3;
-constexpr T  diameter           = 2 * radius;
-T            equivalentDiameter = diameter;
-T            particleDensity;
-T            particleVolumeFraction;
-
-// Domain Settings
-constexpr T        extentToDiameter = 15.0;
-Vector<T, 3>       extent(extentToDiameter* diameter);
-const Vector<T, 3> origin(T {0});
-
-// Characteristic Quantities
-constexpr T charPhysLength = diameter;
-
-// Contact Settings
-constexpr T coefficientOfRestitution   = 0.926;
-constexpr T coefficientKineticFriction = 0.16;
-constexpr T coefficientStaticFriction  = T {2} * coefficientKineticFriction;
-constexpr T staticKineticTransitionVelocity         = 0.001;
-constexpr T YoungsModulusParticle                   = 5.0e3;
-constexpr T PoissonRationParticle                   = 0.245;
-T           particleEnlargementForContact           = 0;
-constexpr unsigned contactBoxResolutionPerDirection = 8;
-
-
-// STLs with scaling dimensions to almost reach equivalent volume
-std::vector<std::pair<std::string, T>> limestoneStlFiles = {
-    std::make_pair("./limestone/312_reduced.stl", 2.518e-4),
-    std::make_pair("./limestone/529_reduced.stl", 2.625e-4),
-    std::make_pair("./limestone/1076_reduced.stl", 1.012e-4),
-    std::make_pair("./limestone/1270_reduced.stl", 1.214e-4),
-    std::make_pair("./limestone/1810_reduced.stl", 0.862e-4)
-  };
 
 
 #ifdef PARALLEL_MODE_MPI
-MPI_Comm
-    averageParticleVelocityComm; /// Communicator for calculation of average particle velocity
-MPI_Comm
-    numberParticleCellsComm; /// Communicator for calculation of current number of particle cells
-#endif // PARALLEL_MODE_MPI
+MPI_Comm averageParticleVelocityComm; /// Communicator for calculation of average particle velocity
+MPI_Comm numberParticleCellsComm;     /// Communicator for calculation of current number of particle cells
 
-std::string getParticleIdentifier(const std::size_t& pID)
+
+std::string getParticleIdentifier(const std::size_t& pID) { return std::to_string(pID); }
+
+template <typename PARTICLESYSTEM>
+MyCase::value_t evalAverageSettlingVelocity(MyCase& myCase, PARTICLESYSTEM& xParticleSystem)
 {
-  return std::to_string(pID);
-}
-
-T evalTerminalVelocitySingleParticleStokes()
-{
-  return (2. / 9.) * (particleDensity - fluidDensity) * gravit * radius *
-         radius / dynamicViscosity;
-};
-
-
-T evalAverageSettlingVelocity(XParticleSystem<T, PARTICLETYPE>& xParticleSystem)
-{
+  using T = MyCase::value_t;
+  using namespace olb::particles;
+  using namespace olb::particles::access;
+#ifdef WithContact
+  using PARTICLETYPE = ResolvedDecomposedParticleWithContact3D;
+#else
+  using PARTICLETYPE = ResolvedDecomposedParticle3D;
+#endif
   T averageSettlingVelocity {0};
+  auto& parameters = myCase.getParameters();
 
-  communication::forParticlesInSuperParticleSystem<
-      T, PARTICLETYPE, conditions::valid_particle_centres>(
+  communication::forParticlesInSuperParticleSystem<T, PARTICLETYPE, conditions::valid_particle_centres>(
       xParticleSystem,
-      [&](Particle<T, PARTICLETYPE>&       particle,
-          ParticleSystem<T, PARTICLETYPE>& particleSystem, int globiC) {
+      [&](Particle<T, PARTICLETYPE>& particle, ParticleSystem<T, PARTICLETYPE>& particleSystem, int globiC) {
         averageSettlingVelocity += getVelocity(particle)[2];
       });
 
-#ifdef PARALLEL_MODE_MPI
-  singleton::mpi().reduceAndBcast(averageSettlingVelocity, MPI_SUM,
-                                  singleton::mpi().bossId(),
+  singleton::mpi().reduceAndBcast(averageSettlingVelocity, MPI_SUM, singleton::mpi().bossId(),
                                   averageParticleVelocityComm);
-#endif // PARALLEL_MODE_MPI
 
-  return averageSettlingVelocity / particleNumber;
+  return averageSettlingVelocity / parameters.get<parameters::PARTICLE_NUMBER>();
 }
 
-void updateBodyForce(SuperLattice<T, DESCRIPTOR>&        sLattice,
-                     XParticleSystem<T, PARTICLETYPE>&   xParticleSystem,
-                     SuperGeometry<T, 3>&                superGeometry,
-                     UnitConverter<T, DESCRIPTOR> const& converter)
+template<typename PARTICLESYSTEM>
+void updateBodyForce(MyCase& myCase, PARTICLESYSTEM& xParticleSystem)
 {
-  SuperLatticePhysExternalPorosity3D<T, DESCRIPTOR> porosity(sLattice,
-                                                             converter);
-  SuperAverage3D<T> avPorosityF(porosity, superGeometry, 1);
-  int               input[1]{};
-  T                 fluidVolumeFraction[1];
+  using T          = MyCase::value_t;
+  using DESCRIPTOR = MyCase::descriptor_t_of<NavierStokes>;
+  auto& parameters = myCase.getParameters();
+  auto& lattice    = myCase.getLattice(NavierStokes {});
+  auto& geometry   = myCase.getGeometry();
+  auto& converter  = lattice.getUnitConverter();
+  SuperLatticePhysExternalPorosity3D<T, DESCRIPTOR> porosity(lattice, converter);
+  SuperAverage3D<T>                                 avPorosityF(porosity, geometry, 1);
+  int                                               input[1] {};
+  T                                                 fluidVolumeFraction[1];
   avPorosityF(fluidVolumeFraction, input);
-  const T volumeRatio = particleVolumeFraction / fluidVolumeFraction[0];
+  const T volumeRatio = parameters.get<parameters::PARTICLE_VOLUME_FRACTION>() / fluidVolumeFraction[0];
 
   // Apply equal to submerged weight of the particles to the fluid
   std::vector<T> balancingAcceleration(3, T(0.));
-  balancingAcceleration[2] =
-      gravit * volumeRatio * (particleDensity / fluidDensity - 1);
+  balancingAcceleration[2] = parameters.get<parameters::GRAVITATIONAL_ACC>() * volumeRatio *
+                            (parameters.get<parameters::PART_RHO>() / parameters.get<parameters::PHYS_DENSITY>() - 1);
 
-  SuperLatticePhysVelocity3D<T, DESCRIPTOR> velocity(sLattice, converter);
-  SuperAverage3D<T>                         avgVel(velocity, superGeometry, 1);
-  T                                         vel[3]{};
+  SuperLatticePhysVelocity3D<T, DESCRIPTOR> velocity(lattice, converter);
+  SuperAverage3D<T>                         avgVel(velocity, geometry, 1);
+  T                                         vel[3] {};
   avgVel(vel, input);
   // Avoid numerical drift
-  balancingAcceleration[2] -=
-      vel[2] * converter.getCharPhysVelocity() / converter.getCharPhysLength();
+  balancingAcceleration[2] -= vel[2] * converter.getCharPhysVelocity() / converter.getCharPhysLength();
 
-  const T conversionFactor = converter.getConversionFactorTime() *
-                             converter.getConversionFactorTime() /
-                             converter.getConversionFactorLength();
+  const T conversionFactor =
+      converter.getConversionFactorTime() * converter.getConversionFactorTime() / converter.getConversionFactorLength();
   balancingAcceleration[2] *= conversionFactor;
 
   AnalyticalConst3D<T, T> acc(balancingAcceleration);
-  sLattice.defineField<descriptors::FORCE>(superGeometry, 1, acc);
+  fields::set<descriptors::FORCE>(lattice, geometry.getMaterialIndicator({1}), acc);
+
 }
 
-template <typename T>
-T calculateCubeEdgeLengthFromSphereRadius()
+template<typename T>
+T calculateCubeEdgeLengthFromSphereRadius(MyCase& myCase)
 {
+  auto& parameters = myCase.getParameters();
   // Calculate the volume of the sphere
-  const T sphereVolume = (4.0 / 3.0) * M_PI * util::pow(radius, 3);
+  const T sphereVolume = (4.0 / 3.0) * M_PI * util::pow( parameters.get<parameters::PART_RADIUS>(), 3);
 
   // Calculate the edge length of the cube
   const T cubeEdgeLength = util::pow(sphereVolume, 1.0 / 3.0);
@@ -244,389 +176,297 @@ T calculateCubeEdgeLengthFromSphereRadius()
   return cubeEdgeLength;
 }
 
-// Prepare geometry
-void prepareGeometry(SuperGeometry<T, 3>&                superGeometry,
-                     UnitConverter<T, DESCRIPTOR> const& converter)
+void prepareGeometry(MyCase& myCase)
 {
   OstreamManager clout(std::cout, "prepareGeometry");
+  auto& geometry = myCase.getGeometry();
+  auto& cuboidDecomposition = geometry.getCuboidDecomposition();
   clout << "Prepare Geometry ..." << std::endl;
 
-  superGeometry.rename(0, 1);
+  cuboidDecomposition.setPeriodicity({true, true, true});
 
-  superGeometry.clean();
-  superGeometry.innerClean();
+  geometry.rename(0, 1);
 
-  superGeometry.checkForErrors();
-  superGeometry.getStatistics().print();
+  geometry.clean();
+  geometry.innerClean();
+
+  geometry.checkForErrors();
+  geometry.getStatistics().print();
 
   clout << "Prepare Geometry ... OK" << std::endl;
 }
 
-// Set up the geometry of the simulation
-void prepareLattice(SuperLattice<T, DESCRIPTOR>&        sLattice,
-                    UnitConverter<T, DESCRIPTOR> const& converter,
-                    SuperGeometry<T, 3>&                superGeometry)
+void prepareLattice(MyCase& myCase)
 {
   OstreamManager clout(std::cout, "prepareLattice");
   clout << "Prepare Lattice ..." << std::endl;
+  using T          = MyCase::value_t;
+  using DESCRIPTOR = MyCase::descriptor_t_of<NavierStokes>;
+  auto& parameters = myCase.getParameters();
+  auto& lattice    = myCase.getLattice(NavierStokes {});
+  auto& geometry   = myCase.getGeometry();
+  lattice.setUnitConverter<
+      UnitConverterFromResolutionAndRelaxationTime<T, DESCRIPTOR>>(
+        parameters.get<parameters::RESOLUTION>(),
+        parameters.get<parameters::LATTICE_RELAXATION_TIME>(),
+        parameters.get<parameters::PHYS_CHAR_LENGTH>(),
+        parameters.get<parameters::PHYS_CHAR_VELOCITY>(),
+        parameters.get<parameters::PHYS_CHAR_VISCOSITY>(),
+        parameters.get<parameters::PHYS_DENSITY>()
+  );
+  auto& converter  = lattice.getUnitConverter();
+  converter.print();
 
-  /// Material=0 -->do nothing
-  sLattice.defineDynamics<
-      PorousParticleKupershtokhForcedBGKdynamics<T, DESCRIPTOR>>(superGeometry,
-                                                                 1);
-  sLattice.defineDynamics<BounceBack>(superGeometry, 2);
+  dynamics::set<PorousParticleKupershtokhForcedBGKdynamics<T, DESCRIPTOR>>(lattice, geometry.getMaterialIndicator({1}));
 
-  sLattice.setParameter<descriptors::OMEGA>(
-      converter.getLatticeRelaxationFrequency());
+  lattice.setParameter<descriptors::OMEGA>(converter.getLatticeRelaxationFrequency());
 
   {
-    auto& communicator = sLattice.getCommunicator(stage::PostPostProcess());
-    communicator
-        .requestFields<POROSITY, VELOCITY_NUMERATOR, VELOCITY_DENOMINATOR>();
-    communicator.requestOverlap(sLattice.getOverlap());
+    auto& communicator = lattice.getCommunicator(stage::PostPostProcess());
+    communicator.requestFields<POROSITY, VELOCITY_NUMERATOR, VELOCITY_DENOMINATOR>();
+    communicator.requestOverlap(lattice.getOverlap());
     communicator.exchangeRequests();
   }
 
   clout << "Prepare Lattice ... OK" << std::endl;
 }
 
-// Set Boundary Values
-void setBoundaryValues(SuperLattice<T, DESCRIPTOR>&        sLattice,
-                       UnitConverter<T, DESCRIPTOR> const& converter, int iT,
-                       SuperGeometry<T, 3>& superGeometry)
+void setBoundaryValues(MyCase& myCase)
 {
   OstreamManager clout(std::cout, "setBoundaryValues");
+  auto&                   lattice    = myCase.getLattice(NavierStokes {});
 
-  if (iT == 0) {
-    AnalyticalConst3D<T, T> zero(0.);
-    AnalyticalConst3D<T, T> one(1.);
-    sLattice.defineField<descriptors::POROSITY>(
-        superGeometry.getMaterialIndicator(1), one);
-    // Set initial condition
-    AnalyticalConst3D<T, T>    ux(0.);
-    AnalyticalConst3D<T, T>    uy(0.);
-    AnalyticalConst3D<T, T>    uz(0.);
-    AnalyticalComposed3D<T, T> u(ux, uy, uz);
-
-    AnalyticalConst3D<T, T> rho(1.);
-
-    // Initialize all values of distribution functions to their local equilibrium
-    sLattice.defineRhoU(superGeometry, 1, rho, u);
-    sLattice.iniEquilibrium(superGeometry, 1, rho, u);
-
-    // Make the lattice ready for simulation
-    sLattice.initialize();
-  }
+  lattice.initialize();
 }
 
-void getResults(SuperLattice<T, DESCRIPTOR>&        sLattice,
-                UnitConverter<T, DESCRIPTOR> const& converter, int iT,
-                SuperGeometry<T, 3>& superGeometry, Timer<double>& timer,
-                XParticleSystem<T, PARTICLETYPE>& xParticleSystem)
+template<typename PARTICLESYSTEM>
+void getResults(MyCase& myCase, std::size_t iT, Timer<double>& timer, PARTICLESYSTEM& xParticleSystem)
 {
   OstreamManager clout(std::cout, "getResults");
+  using T          = MyCase::value_t;
+  using DESCRIPTOR = MyCase::descriptor_t_of<NavierStokes>;
+  auto& parameters = myCase.getParameters();
+  auto& lattice    = myCase.getLattice(NavierStokes {});
+  auto& converter  = lattice.getUnitConverter();
 
-  SuperLatticePhysVelocity3D<T, DESCRIPTOR> velocity(sLattice, converter);
-#ifdef WriteVTK
-  SuperVTMwriter3D<T>                       vtkWriter("sedimentation");
-  SuperLatticePhysPressure3D<T, DESCRIPTOR> pressure(sLattice, converter);
-  SuperLatticePhysExternalPorosity3D<T, DESCRIPTOR> externalPor(sLattice,
-                                                                converter);
+  std::size_t iTwrite = converter.getLatticeTime(parameters.get<parameters::PHYS_VTK_ITER_T>());
+  SuperLatticePhysVelocity3D<T, DESCRIPTOR> velocity(lattice, converter);
+  if (parameters.get<parameters::VTK_ENABLED>()) {
+    SuperVTMwriter3D<T>                               vtkWriter("sedimentation");
+    SuperLatticePhysPressure3D<T, DESCRIPTOR>         pressure(lattice, converter);
+    SuperLatticePhysExternalPorosity3D<T, DESCRIPTOR> externalPor(lattice, converter);
 
-  vtkWriter.addFunctor(pressure);
-  vtkWriter.addFunctor(velocity);
-  vtkWriter.addFunctor(externalPor);
+    vtkWriter.addFunctor(pressure);
+    vtkWriter.addFunctor(velocity);
+    vtkWriter.addFunctor(externalPor);
 
-  if (iT == 0) {
-    /// Writes the converter log file
-    SuperLatticeCuboid3D<T, DESCRIPTOR>   cuboid(sLattice);
-    SuperLatticeRank3D<T, DESCRIPTOR>     rank(sLattice);
-    vtkWriter.write(cuboid);
-    vtkWriter.write(rank);
-    vtkWriter.createMasterFile();
+    if (iT == 0) {
+      /// Writes the converter log file
+      SuperLatticeCuboid3D<T, DESCRIPTOR> cuboid(lattice);
+      SuperLatticeRank3D<T, DESCRIPTOR>   rank(lattice);
+      vtkWriter.write(cuboid);
+      vtkWriter.write(rank);
+      vtkWriter.createMasterFile();
+    }
+
+    if (iT % iTwrite == 0) {
+      vtkWriter.write(iT);
+    }
   }
 
   if (iT % iTwrite == 0) {
-    vtkWriter.write(iT);
-  }
-#endif // WriteVTK
-
-  /// Writes output on the console
-  if (iT % iTwrite == 0) {
-    // TODO: Update formatting as needed
-    clout << "Average settling velocity: "
-          << evalAverageSettlingVelocity(xParticleSystem) << " in m/s"
-          << std::endl;
+    clout << "Average settling velocity: " << evalAverageSettlingVelocity(myCase, xParticleSystem) << " in m/s" << std::endl;
 
     timer.update(iT);
     timer.printStep();
-    sLattice.getStatistics().print(iT, converter.getPhysTime(iT));
+    lattice.getStatistics().print(iT, converter.getPhysTime(iT));
   }
 }
 
-int main(int argc, char* argv[])
+void simulate(MyCase& myCase)
 {
-  /// === 1st Step: Initialization ===
-  initialize(&argc, &argv);
-  OstreamManager clout(std::cout, "main");
-  #ifdef PARALLEL_MODE_MPI //Check if MPI is available, otherwise throw error
-  std::vector<std::string> cmdInput;
+  using T                             = MyCase::value_t;
+  using DESCRIPTOR                    = MyCase::descriptor_t_of<NavierStokes>;
+  using namespace olb::particles;
+  using namespace olb::particles::dynamics;
+  using namespace olb::particles::contact;
+  using namespace olb::particles::access;
+#ifdef WithContact
+  using PARTICLETYPE = ResolvedDecomposedParticleWithContact3D;
+#else
+  using PARTICLETYPE = ResolvedDecomposedParticle3D;
+#endif
+  using PARTICLECONTACTTYPE = ParticleContactArbitraryFromOverlapVolume<T, PARTICLETYPE::d, true>;
+  using WALLCONTACTTYPE     = WallContactArbitraryFromOverlapVolume<T, PARTICLETYPE::d, true>;
+  auto&             parameters        = myCase.getParameters();
+  auto&             lattice           = myCase.getLattice(NavierStokes {});
+  auto&             geometry          = myCase.getGeometry();
+  auto&             converter         = lattice.getUnitConverter();
+  OstreamManager clout(std::cout, "simulate");
 
-  if (argc > 1) {
-    cmdInput.assign(argv + 1, argv + argc);
-    res = std::stoi(cmdInput[0]);
-  }
-  if (argc > 2) {
-    wantedParticleVolumeFraction = std::stod(cmdInput[1]);
-  }
-  if (argc > 3) {
-    densityRatio = std::stod(cmdInput[2]);
-  }
-  if (argc > 4) {
-    ArchimedesNumber = std::stod(cmdInput[3]);
-  }
+  std::vector<std::pair<std::string, MyCase::value_t>> limestoneStlFiles = {
+    std::make_pair("./limestone/312_reduced.stl", 2.518e-4), std::make_pair("./limestone/529_reduced.stl", 2.625e-4),
+    std::make_pair("./limestone/1076_reduced.stl", 1.012e-4), std::make_pair("./limestone/1270_reduced.stl", 1.214e-4),
+    std::make_pair("./limestone/1810_reduced.stl", 0.862e-4)};
 
-  const std::string positionsfilename =[]{
-    if constexpr (particleType==LIMESTONES){
+
+  std::string positionsfilename = [&parameters] {
+    if (parameters.get<parameters::PARTICLE_TYPE>() == 2) {
       return std::string("limestone/particlepositions_limestone_15_0.150021");
     }
-    else return std::string("particlepositions_sphere_1.5mm_15_0.30");
+    else
+      return std::string("particlepositions_sphere_1.5mm_15_0.30");
   }();
 
-  const T domainVolume = extent[0] * extent[1] * extent[2];
-  particleDensity      = densityRatio * fluidDensity;
-  kinematicViscosity =
-      util::sqrt(gravit * (densityRatio - 1) *
-                 util::pow(equivalentDiameter, 3) / ArchimedesNumber);
-
-  const Vector<T, 3> externalAcceleration = {
-      .0, .0, -gravit * (1. - fluidDensity / particleDensity)};
-
-  // Estimation maximal velocity using Stoke's law
-  dynamicViscosity         = kinematicViscosity * fluidDensity;
-  const T charPhysVelocity = evalTerminalVelocitySingleParticleStokes();
-  UnitConverterFromResolutionAndRelaxationTime<T, DESCRIPTOR> const converter(
-      (int)res,              // resolution
-      (T)tau,                // latticeRelaxationTime
-      (T)charPhysLength,     // charPhysLength
-      (T)charPhysVelocity,   // charPhysVelocity
-      (T)kinematicViscosity, // physViscosity
-      (T)fluidDensity        // fluidDensity
-  );
-  converter.write();
-  converter.print();
-
-
-  if (MPI_Comm_dup(MPI_COMM_WORLD, &averageParticleVelocityComm) !=
-      MPI_SUCCESS) {
+  if (MPI_Comm_dup(MPI_COMM_WORLD, &averageParticleVelocityComm) != MPI_SUCCESS) {
     throw std::runtime_error("Unable to duplicate MPI communicator");
   }
   if (MPI_Comm_dup(MPI_COMM_WORLD, &numberParticleCellsComm) != MPI_SUCCESS) {
     throw std::runtime_error("Unable to duplicate MPI communicator");
   }
 
-
-  std::size_t iT = 0;
-  maxPhysT       = nonDimensionalTime * equivalentDiameter / charPhysVelocity;
-  particleEnlargementForContact = converter.getPhysDeltaX() / T {5};
-
-  /// === 2rd Step: Prepare Geometry ===
-  /// Instantiation of a cuboidGeometry with weights
-  IndicatorCuboid3D<T> cuboid(extent, origin);
+  std::vector<SolidBoundary<T, DESCRIPTOR::d>> solidBoundaries;
+  const T                                      epsilon     = T {0.5} * converter.getConversionFactorLength();
+  const T                                      halfEpsilon = T {0.5} * epsilon;
+  const T                                      size        = parameters.get<parameters::PHYS_CHAR_LENGTH>() * parameters.get<parameters::EXTENT_TO_DIAMETER>();
+  IndicatorCuboid3D<T> cuboid({size, size, size}, {0.,0.,0.});
   constexpr auto       getPeriodicity = []() {
     return Vector<bool, 3>(true, true, true);
   };
 
-  const unsigned numberProcesses = singleton::mpi().getSize();
 
-CuboidDecomposition3D<T> cuboidGeometry(
-      cuboid, converter.getConversionFactorLength(), numberProcesses);
-
-cuboidGeometry.setPeriodicity({ true, false, false });
-
-  HeuristicLoadBalancer<T> loadBalancer(cuboidGeometry);
-  SuperGeometry<T, 3>      superGeometry(cuboidGeometry, loadBalancer, 2);
-  prepareGeometry(superGeometry, converter);
-
-  /// === 3rd Step: Prepare Lattice ===
-  SuperLattice<T, DESCRIPTOR> sLattice(converter, superGeometry);
-
-  prepareLattice(sLattice, converter, superGeometry);
-
-  std::vector<SolidBoundary<T, DESCRIPTOR::d>> solidBoundaries;
-  const T epsilon     = T {0.5} * converter.getConversionFactorLength();
-  const T halfEpsilon = T {0.5} * epsilon;
-
-  constexpr T overlapSecurityFactor = 1.0;
   T maxCircumRadius = T {0};
 
   // Create smooth indicators for limestones
-  std::vector<std::shared_ptr<STLreader<T>>> limestoneSTLreaders;
-  std::vector<std::unique_ptr<olb::SmoothIndicatorCustom3D<T, T, true>>>
-      limestoneIndicators;
-  const T latticeSpacingDiscreteParticle =
-    T {0.2} * converter.getConversionFactorLength();
+  std::vector<std::shared_ptr<STLreader<T>>>                             limestoneSTLreaders;
+  std::vector<std::unique_ptr<olb::SmoothIndicatorCustom3D<T, T, true>>> limestoneIndicators;
+  const T latticeSpacingDiscreteParticle = T {0.2} * converter.getConversionFactorLength();
 
-  if constexpr (particleType==LIMESTONES){
+  if (parameters.get<parameters::PARTICLE_TYPE>() == 2) {
     clout << "Initializing limestone ..." << std::endl;
 
     {
       unsigned i = 0;
       for (auto& STLfile : limestoneStlFiles) {
-        limestoneSTLreaders.push_back(std::make_shared<STLreader<T>>(
-            STLfile.first, converter.getConversionFactorLength(),
-            STLfile.second));
-        limestoneIndicators.push_back(
-            std::make_unique<olb::SmoothIndicatorCustom3D<T, T, true>>(
-                latticeSpacingDiscreteParticle, limestoneSTLreaders[i],
-                olb::Vector<T, 3>(T {}), epsilon, olb::Vector<T, 3>(T {})));
-        limestoneIndicators.back()->calcMofiAndMass(particleDensity);
+        limestoneSTLreaders.push_back(
+            std::make_shared<STLreader<T>>(STLfile.first, converter.getConversionFactorLength(), STLfile.second));
+        limestoneIndicators.push_back(std::make_unique<olb::SmoothIndicatorCustom3D<T, T, true>>(
+            latticeSpacingDiscreteParticle, limestoneSTLreaders[i], olb::Vector<T, 3>(T {}), epsilon,
+            olb::Vector<T, 3>(T {})));
+        limestoneIndicators.back()->calcMofiAndMass(parameters.get<parameters::PART_RHO>());
         ++i;
       }
     }
 
     clout << "Initializing limestone ... OK" << std::endl;
 
-    // Create Particle Dynamics
-    // Create ParticleSystem
-
     for (auto& STLsurface : limestoneIndicators) {
       maxCircumRadius = util::max(maxCircumRadius, STLsurface->getCircumRadius());
     }
   }
-  if constexpr (particleType==SPHERES){
-    maxCircumRadius = radius + halfEpsilon;
+  if  (parameters.get<parameters::PARTICLE_TYPE>() == 0) {
+    maxCircumRadius = parameters.get<parameters::PART_RADIUS>() + halfEpsilon;
   }
-
 
   if constexpr (access::providesContactMaterial<PARTICLETYPE>()) {
-    const T detectionDistance =
-        T {0.5} * util::sqrt(PARTICLETYPE::d) * converter.getPhysDeltaX();
-    maxCircumRadius = maxCircumRadius - halfEpsilon +
-                      util::max(halfEpsilon, detectionDistance);
+    const T detectionDistance = T {0.5} * util::sqrt(PARTICLETYPE::d) * converter.getPhysDeltaX();
+    maxCircumRadius           = maxCircumRadius - halfEpsilon + util::max(halfEpsilon, detectionDistance);
   }
-  maxCircumRadius *= overlapSecurityFactor;
 
-  // ensure parallel mode is enabled
+  SuperParticleSystem<T, PARTICLETYPE> xParticleSystem(geometry, maxCircumRadius);
+  particles::communication::checkCuboidSizes(xParticleSystem);
 
-    SuperParticleSystem<T, PARTICLETYPE> xParticleSystem(superGeometry,
-                                                       maxCircumRadius);
-    particles::communication::checkCuboidSizes(xParticleSystem);
-
-
-  // Create ParticleContact container
   ContactContainer<T, PARTICLECONTACTTYPE, WALLCONTACTTYPE> contactContainer;
-  // Container containg contact properties
+
   ContactProperties<T, 1> contactProperties;
-  contactProperties.set(
-      0, 0,
-      evalEffectiveYoungModulus(YoungsModulusParticle, YoungsModulusParticle,
-                                PoissonRationParticle, PoissonRationParticle),
-      coefficientOfRestitution, coefficientKineticFriction,
-      coefficientStaticFriction, staticKineticTransitionVelocity);
+  contactProperties.set(0, 0,
+                        evalEffectiveYoungModulus(parameters.get<parameters::YOUNGS_MODULUS>(), parameters.get<parameters::YOUNGS_MODULUS>(),
+                                                  parameters.get<parameters::PART_POISSON_RATIO>(), parameters.get<parameters::PART_POISSON_RATIO>()),
+                                                  parameters.get<parameters::COEFFICIENT_OF_RESTITUTION>(),
+                                                  parameters.get<parameters::COEFFICIENT_KINETIC_FRICTION>(),
+                                                  parameters.get<parameters::COEFFICIENT_STATIC_FRICTION>(),
+                                                  parameters.get<parameters::STATIC_KINETIC_TRANSITION_VELOCITY>());
 
   // Create and assign resolved particle dynamics
   xParticleSystem.defineDynamics<VerletParticleDynamics<T, PARTICLETYPE>>();
 
   //Create particle manager handling coupling, gravity and particle dynamics
-  ParticleManager<T, DESCRIPTOR, PARTICLETYPE> particleManager(
-      xParticleSystem, superGeometry, sLattice, converter, externalAcceleration, getPeriodicity());
+  ParticleManager<T, DESCRIPTOR, PARTICLETYPE> particleManager(xParticleSystem, geometry, lattice, converter,
+                                                               parameters.get<parameters::GRAVITY>(), getPeriodicity());
 
   // Create Communicators
 
-  const communication::ParticleCommunicator& particleCommunicator =
-      particleManager.getParticleCommunicator();
+  const communication::ParticleCommunicator& particleCommunicator = particleManager.getParticleCommunicator();
 
+  const std::function<T(const std::size_t&)> getCircumRadius = [&](const std::size_t& pID) {
+    if (parameters.get<parameters::PARTICLE_TYPE>() == 2) {
+      return limestoneIndicators[pID % limestoneStlFiles.size()]->getCircumRadius();
+    }
+    if (parameters.get<parameters::PARTICLE_TYPE>() == 0) {
+      return parameters.get<parameters::PART_RADIUS>() + T {0.5} * epsilon;
+    }
+    if (parameters.get<parameters::PARTICLE_TYPE>() == 1) {
+      return T {0.5} * (calculateCubeEdgeLengthFromSphereRadius<T>(myCase) * util::sqrt(3) + epsilon);
+    }
+    throw std::runtime_error("Invalid PARTICLE_TYPE set");
+  };
+  const std::function<T(const std::size_t&)> getParticleVolume = [&](const std::size_t& pID) {
+    if (parameters.get<parameters::PARTICLE_TYPE>() == 2) {
+      return limestoneIndicators[pID % limestoneStlFiles.size()]->getVolume();
+    }
+    if (parameters.get<parameters::PARTICLE_TYPE>() == 0) {
+      return T {4} / T {3} * M_PI * parameters.get<parameters::PART_RADIUS>() * parameters.get<parameters::PART_RADIUS>() * parameters.get<parameters::PART_RADIUS>();
+    }
+    if (parameters.get<parameters::PARTICLE_TYPE>() == 1) {
+      return util::pow(calculateCubeEdgeLengthFromSphereRadius<T>(myCase), 3);
+    }
+    throw std::runtime_error("Invalid PARTICLE_TYPE set");
+  };
 
-  const std::function<T(const std::size_t&)> getCircumRadius =
-      [&](const std::size_t& pID) {
-        if constexpr (particleType==LIMESTONES){
-          return limestoneIndicators[pID % limestoneStlFiles.size()]
-              ->getCircumRadius();
-        }
-        if constexpr (particleType==SPHERES){
-          return radius + T {0.5} * epsilon;
-        }
-        if constexpr (particleType==CUBES){
-
-          return T {0.5} *
-                (calculateCubeEdgeLengthFromSphereRadius<T>() * util::sqrt(3) +
-                  epsilon);
-        }
-
-      };
-  const std::function<T(const std::size_t&)> getParticleVolume =
-      [&](const std::size_t& pID) {
-        if constexpr (particleType==LIMESTONES){
-          return limestoneIndicators[pID % limestoneStlFiles.size()]->getVolume();
-        }
-        if constexpr (particleType==SPHERES){
-          return T {4} / T {3} * M_PI * radius * radius * radius;
-        }
-        if constexpr (particleType==CUBES){
-          return util::pow(calculateCubeEdgeLengthFromSphereRadius<T>(), 3);
-        }
-
-      };
-
-  const std::function<void(
-      const particles::creators::SpawnData<T, DESCRIPTOR::d>&,
-      const std::string&)>
+  const std::function<void(const particles::creators::SpawnData<T, DESCRIPTOR::d>&, const std::string&)>
       createParticleFromString =
-          [&](const particles::creators::SpawnData<T, DESCRIPTOR::d>& data,
-              const std::string&                                      pID) {
+          [&](const particles::creators::SpawnData<T, DESCRIPTOR::d>& data, const std::string& pID) {
             const PhysR<T, 3>  physPosition   = data.position;
             const Vector<T, 3> angleInDegrees = data.angleInDegree;
 
-          if constexpr (particleType==LIMESTONES){
-            if (particleNumber < limestoneStlFiles.size()) {
-              std::shared_ptr <STLreader<T>> limestoneIndicator =
-                  std::make_shared<STLreader<T>>(
-                      limestoneStlFiles[particleNumber].first,
-                      converter.getConversionFactorLength(),
-                      limestoneStlFiles[particleNumber].second);
-              creators::addResolvedArbitraryShape3D<T, PARTICLETYPE>(
-                  xParticleSystem,  physPosition,
-                  latticeSpacingDiscreteParticle,
-                  limestoneIndicator,
-                  epsilon, particleDensity );
+            if (parameters.get<parameters::PARTICLE_TYPE>() == 2) {
+              if (parameters.get<parameters::PARTICLE_NUMBER>() < limestoneStlFiles.size()) {
+                std::shared_ptr<STLreader<T>> limestoneIndicator = std::make_shared<STLreader<T>>(
+                    limestoneStlFiles[parameters.get<parameters::PARTICLE_NUMBER>()].first, converter.getConversionFactorLength(),
+                    limestoneStlFiles[parameters.get<parameters::PARTICLE_NUMBER>()].second);
+                creators::addResolvedArbitraryShape3D<T, PARTICLETYPE>(xParticleSystem, physPosition,
+                                                                       latticeSpacingDiscreteParticle,
+                                                                       limestoneIndicator, epsilon,
+                                                                       parameters.get<parameters::PART_RHO>());
+              }
+              else {
+                creators::addResolvedObject<T, PARTICLETYPE>(xParticleSystem, parameters.get<parameters::PARTICLE_NUMBER>() % limestoneStlFiles.size(),
+                                                             physPosition, parameters.get<parameters::PART_RHO>(), angleInDegrees);
+              }
             }
-            else {
-              creators::addResolvedObject<T, PARTICLETYPE>(
-                  xParticleSystem,
-                  particleNumber % limestoneStlFiles.size(), physPosition,
-                  particleDensity, angleInDegrees);
+            if (parameters.get<parameters::PARTICLE_TYPE>() == 0) {
+              creators::addResolvedSphere3D(xParticleSystem, physPosition, parameters.get<parameters::PART_RADIUS>(), epsilon, parameters.get<parameters::PART_RHO>());
             }
-          }
-          if constexpr (particleType==SPHERES){
-            creators::addResolvedSphere3D(xParticleSystem,
-                                          physPosition, radius, epsilon,
-                                          particleDensity);
-          }
-          if constexpr (particleType==CUBES){
-            creators::addResolvedCuboid3D(
-                xParticleSystem, physPosition,
-                Vector<T, 3>(calculateCubeEdgeLengthFromSphereRadius<T>()),
-                epsilon, particleDensity);
-          }
-            ++particleNumber;
+            if (parameters.get<parameters::PARTICLE_TYPE>() == 1) {
+              creators::addResolvedCuboid3D(xParticleSystem, physPosition,
+                                            Vector<T, 3>(calculateCubeEdgeLengthFromSphereRadius<T>(myCase)), epsilon,
+                                            parameters.get<parameters::PART_RHO>());
+            }
+            parameters.set<parameters::PARTICLE_NUMBER>(parameters.get<parameters::PARTICLE_NUMBER>() + 1);
           };
 
   if (positionsfilename != "") {
-    clout << "Spawning particles from " << positionsfilename << " ..."
-          << std::endl;
+    clout << "Spawning particles from " << positionsfilename << " ..." << std::endl;
     if (std::filesystem::exists(positionsfilename)) {
-      std::vector<particles::creators::SpawnData<T, DESCRIPTOR::d>>
-          tmpSpawnData;
-          tmpSpawnData = particles::creators::setParticles<T, 3>(
-          positionsfilename, wantedParticleVolumeFraction, cuboid, domainVolume,
-          getParticleVolume, createParticleFromString);
+      std::vector<particles::creators::SpawnData<T, DESCRIPTOR::d>> tmpSpawnData;
+      tmpSpawnData = particles::creators::setParticles<T, 3>(positionsfilename, parameters.get<parameters::WANTED_PARTICLE_VOLUME_FRACTION>(),
+                                                            cuboid, size*size*size, getParticleVolume, createParticleFromString);
 
       T tmpVolume = T {0};
       for (unsigned pID = 0; pID < tmpSpawnData.size(); ++pID) {
         tmpVolume += getParticleVolume(pID);
       }
-      particleVolumeFraction = tmpVolume / domainVolume;
+      parameters.set<parameters::PARTICLE_VOLUME_FRACTION>(tmpVolume / (size*size*size));
     }
     else {
       OLB_ASSERT(false, positionsfilename + " does not exist.");
@@ -635,49 +475,39 @@ cuboidGeometry.setPeriodicity({ true, false, false });
   else {
     OLB_ASSERT(false, "No particle positions file given.");
   }
- if constexpr (particleType==LIMESTONES){
+  if (parameters.get<parameters::PARTICLE_TYPE>() == 2) {
     limestoneIndicators.clear();
   }
 
-  clout << "Spawning particles from " << positionsfilename << " ... OK"
-        << std::endl;
+  clout << "Spawning particles from " << positionsfilename << " ... OK" << std::endl;
 
   maxCircumRadius = 0.;
-  forParticlesInSuperParticleSystem(
-      xParticleSystem,
-      [&](Particle<T, PARTICLETYPE>&       particle,
-          ParticleSystem<T, PARTICLETYPE>& particleSystem, int globiC) {
+  communication::forParticlesInSuperParticleSystem(xParticleSystem, [&](Particle<T, PARTICLETYPE>&       particle,
+                                                         ParticleSystem<T, PARTICLETYPE>& particleSystem, int globiC) {
 #ifdef WithContact
-        particle.setField<MECHPROPERTIES, MATERIAL>(0);
-        particle.setField<NUMERICPROPERTIES, ENLARGEMENT_FOR_CONTACT>(
-            particleEnlargementForContact);
+    particle.setField<MECHPROPERTIES, MATERIAL>(0);
+    particle.setField<NUMERICPROPERTIES, ENLARGEMENT_FOR_CONTACT>(
+        parameters.get<parameters::PARTICLE_ENLARGEMENT_FOR_CONTACT>());
 #endif // WithContact
 
-        const T currCircumRadius = access::getRadius(particle);
-        maxCircumRadius          = util::max(currCircumRadius, maxCircumRadius);
-      });
+    const T currCircumRadius = access::getRadius(particle);
+    maxCircumRadius          = util::max(currCircumRadius, maxCircumRadius);
+  });
 
-  singleton::mpi().reduceAndBcast(maxCircumRadius, MPI_MAX,
-                                  singleton::mpi().bossId(),
+  singleton::mpi().reduceAndBcast(maxCircumRadius, MPI_MAX, singleton::mpi().bossId(),
                                   particleCommunicator.contactTreatmentComm);
 
-  xParticleSystem.updateOffsetFromCircumRadius(overlapSecurityFactor *
-                                               maxCircumRadius);
+  xParticleSystem.updateOffsetFromCircumRadius(maxCircumRadius);
 
-  /// === 5th Step: Definition of Initial and Boundary Conditions ===
-  setBoundaryValues(sLattice, converter, 0, superGeometry);
+  setBoundaryValues(myCase);
 
-  /// === 4th Step: Main Loop with Timer ===
-  clout << "MaxIT: " << converter.getLatticeTime(maxPhysT) << std::endl;
-  iTwrite = util::max(0.02 * converter.getLatticeTime(maxPhysT), 1);
-  iTpurge = util::max(util::ceil(0.06 * converter.getLatticeTime(maxPhysT)), 1);
+  clout << "MaxIT: " << converter.getLatticeTime(parameters.get<parameters::MAX_PHYS_T>()) << std::endl;
+  std::size_t iTpurge = converter.getLatticeTime(parameters.get<parameters::PHYS_PURGE_ITER_T>());
 
-  Timer<double> timer(converter.getLatticeTime(maxPhysT),
-                      superGeometry.getStatistics().getNvoxel());
+  Timer<T> timer(converter.getLatticeTime(parameters.get<parameters::MAX_PHYS_T>()), geometry.getStatistics().getNvoxel());
   timer.start();
-  for (iT = 0; iT < converter.getLatticeTime(maxPhysT); ++iT) {
+  for (std::size_t iT = 0; iT < converter.getLatticeTime(parameters.get<parameters::MAX_PHYS_T>()); ++iT) {
 #ifndef WithContact
-    // Execute particle manager
     particleManager.execute<
         couple_lattice_to_parallel_particles<T, DESCRIPTOR, PARTICLETYPE>,
         communicate_parallel_surface_force<T, PARTICLETYPE>,
@@ -687,13 +517,13 @@ cuboidGeometry.setPeriodicity({ true, false, false });
 
     particles::dynamics::coupleResolvedParticlesToLattice<
         T, DESCRIPTOR, PARTICLETYPE, PARTICLECONTACTTYPE, WALLCONTACTTYPE>(
-        xParticleSystem, contactContainer, superGeometry, sLattice, converter,
+        xParticleSystem, contactContainer, geometry, lattice, converter,
         solidBoundaries, getPeriodicity);
 
 #else  // WithContact
     // Couple lattice to particles
     couple_lattice_to_parallel_particles<T, DESCRIPTOR, PARTICLETYPE>::execute(
-        xParticleSystem, superGeometry, sLattice, converter, getPeriodicity());
+        xParticleSystem, geometry, lattice, converter, getPeriodicity());
 
     communicate_parallel_surface_force<T, PARTICLETYPE>::execute(
         xParticleSystem, particleCommunicator);
@@ -703,9 +533,9 @@ cuboidGeometry.setPeriodicity({ true, false, false });
                                         WALLCONTACTTYPE,
                                         ContactProperties<T, 1>>(
         xParticleSystem, solidBoundaries, contactContainer, contactProperties,
-        superGeometry,
+        geometry,
         particleCommunicator.contactTreatmentComm,
-        contactBoxResolutionPerDirection, T {4. / (3 * util::sqrt(M_PI))},
+        parameters.get<parameters::CONTACT_BOX_RESOLUTION_PER_DIRECTION>(), T {4. / (3. * util::sqrt(M_PI))},
         getPeriodicity);
 
     // Apply gravity
@@ -716,7 +546,7 @@ cuboidGeometry.setPeriodicity({ true, false, false });
           [&](Particle<T, PARTICLETYPE>&       particle,
               ParticleSystem<T, PARTICLETYPE>& particleSystem, int globiC) {
             apply_gravity<T, PARTICLETYPE>::execute(xParticleSystem, particle,
-                                                    externalAcceleration,
+                                                    parameters.get<parameters::GRAVITY>(),
                                                     converter.getPhysDeltaT());
           });
 
@@ -744,7 +574,7 @@ cuboidGeometry.setPeriodicity({ true, false, false });
     // Couple particles to lattice
     particles::dynamics::coupleResolvedParticlesToLattice<
         T, DESCRIPTOR, PARTICLETYPE, PARTICLECONTACTTYPE, WALLCONTACTTYPE>(
-        xParticleSystem, contactContainer, superGeometry, sLattice, converter,
+        xParticleSystem, contactContainer, geometry, lattice, converter,
         solidBoundaries, getPeriodicity);
 
     // Communicate found contacts
@@ -756,28 +586,110 @@ cuboidGeometry.setPeriodicity({ true, false, false });
 
     if constexpr (isPeriodic(getPeriodicity())) {
       accountForPeriodicParticleBoundary(xParticleSystem, contactContainer,
-                                         superGeometry, getPeriodicity);
+                                         geometry, getPeriodicity);
     }
+
+
 #endif // WithContact
 
     if (iT % iTpurge == 0) {
       purgeInvalidParticles<T, PARTICLETYPE>(xParticleSystem);
     }
 
-    // Get Results
-    getResults(sLattice, converter, iT, superGeometry, timer, xParticleSystem);
+    getResults(myCase, iT, timer, xParticleSystem);
 
-    updateBodyForce(sLattice, xParticleSystem, superGeometry, converter);
+    updateBodyForce(myCase, xParticleSystem);
 
-    // Collide and stream
-    sLattice.collideAndStream();
+    lattice.collideAndStream();
+
+    timer.update(iT);
   }
-
-  timer.update(iT);
   timer.stop();
   timer.printSummary();
-  #else
-    throw std::runtime_error(
-      "This example is not designed to run in serial mode.");
-  #endif // PARALLEL_MODE_MPI
+}
+#endif                                // PARALLEL_MODE_MPI
+
+int main(int argc, char* argv[])
+{
+  /// === 1st Step: Initialization ===
+  initialize(&argc, &argv);
+  OstreamManager clout(std::cout, "main");
+#ifdef PARALLEL_MODE_MPI //Check if MPI is available, otherwise throw error
+  std::vector<std::string> cmdInput;
+  MyCase::ParametersD      myCaseParameters;
+  {
+    using namespace olb::parameters;
+    myCaseParameters.set<PARTICLE_NUMBER>(0);
+    myCaseParameters.set<PARTICLE_TYPE>(0); // 0: spheres, 1: cubes, 2: limestones
+    myCaseParameters.set<WANTED_PARTICLE_VOLUME_FRACTION>(0.15);
+    myCaseParameters.set<RESOLUTION>(9);
+    myCaseParameters.set<LATTICE_RELAXATION_TIME>(0.55);
+    myCaseParameters.set<ARCHIMEDES>(1000.);
+    myCaseParameters.set<GRAVITATIONAL_ACC>(9.81);
+    myCaseParameters.set<DENSITY_RATIO>(3.3);
+    myCaseParameters.set<PART_RADIUS>(0.0015);
+    myCaseParameters.set<COEFFICIENT_OF_RESTITUTION>(0.926);
+    myCaseParameters.set<COEFFICIENT_KINETIC_FRICTION>(0.16);
+    myCaseParameters.set<COEFFICIENT_STATIC_FRICTION>(0.32);
+    myCaseParameters.set<STATIC_KINETIC_TRANSITION_VELOCITY>(0.001);
+    myCaseParameters.set<YOUNGS_MODULUS>(5.0e3);
+    myCaseParameters.set<PART_POISSON_RATIO>(0.245);
+    myCaseParameters.set<CONTACT_BOX_RESOLUTION_PER_DIRECTION>(8);
+    myCaseParameters.set<EXTENT_TO_DIAMETER>(15.0);
+    myCaseParameters.set<PHYS_DENSITY>(1000);
+    myCaseParameters.set<VTK_ENABLED>(true);
+    myCaseParameters.set<PHYS_CHAR_LENGTH>([&] {
+      return myCaseParameters.get<PART_RADIUS>() * 2.0;
+    });
+    myCaseParameters.set<PART_RHO>([&] {
+      return myCaseParameters.get<DENSITY_RATIO>() * myCaseParameters.get<PHYS_DENSITY>();
+    });
+    myCaseParameters.set<PHYS_DELTA_X>([&] {
+      return myCaseParameters.get<PART_RADIUS>() * 2.0 / myCaseParameters.get<RESOLUTION>();
+    });
+    myCaseParameters.set<PHYS_CHAR_VISCOSITY>([&] {
+      return util::sqrt(myCaseParameters.get<GRAVITATIONAL_ACC>() * (myCaseParameters.get<DENSITY_RATIO>() - 1) *
+                        util::pow(myCaseParameters.get<PART_RADIUS>() * 2.0, 3) /
+                        myCaseParameters.get<ARCHIMEDES>());
+    });
+    myCaseParameters.set<GRAVITY>([&] {
+      return Vector<double, 3> {0., 0.,
+                                -myCaseParameters.get<GRAVITATIONAL_ACC>() *
+                                    (1. - myCaseParameters.get<PHYS_DENSITY>() / myCaseParameters.get<PART_RHO>())};
+    });
+    myCaseParameters.set<DYNAMIC_VISCOSITY>([&] {
+      return myCaseParameters.get<PHYS_CHAR_VISCOSITY>() * myCaseParameters.get<PHYS_DENSITY>();
+    });
+    myCaseParameters.set<PHYS_CHAR_VELOCITY>([&] {
+      return (2. / 9.) * (myCaseParameters.get<PART_RHO>() - myCaseParameters.get<PHYS_DENSITY>()) *
+             myCaseParameters.get<GRAVITATIONAL_ACC>() * myCaseParameters.get<PART_RADIUS>() *
+             myCaseParameters.get<PART_RADIUS>() / myCaseParameters.get<DYNAMIC_VISCOSITY>();
+    });
+    myCaseParameters.set<MAX_PHYS_T>([&] {
+      return 200.0 * 2. * myCaseParameters.get<PART_RADIUS>() / myCaseParameters.get<PHYS_CHAR_VELOCITY>();
+    });
+    myCaseParameters.set<PHYS_VTK_ITER_T>([&] {
+      return 0.02 * myCaseParameters.get<MAX_PHYS_T>();
+    });
+    myCaseParameters.set<PHYS_PURGE_ITER_T>([&] {
+      return 0.06 * myCaseParameters.get<MAX_PHYS_T>();
+    });
+    myCaseParameters.set<PARTICLE_ENLARGEMENT_FOR_CONTACT>([&] {
+      return myCaseParameters.get<PHYS_DELTA_X>() / 5.0;
+    });
+  }
+  myCaseParameters.fromCLI(argc, argv);
+
+  Mesh   mesh = createMesh(myCaseParameters);
+  MyCase myCase(myCaseParameters, mesh);
+
+  prepareGeometry(myCase);
+
+  prepareLattice(myCase);
+
+  simulate(myCase);
+
+#else
+  throw std::runtime_error("This example is not designed to run in serial mode.");
+#endif // PARALLEL_MODE_MPI
 }

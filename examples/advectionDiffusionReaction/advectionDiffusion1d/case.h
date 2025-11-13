@@ -144,7 +144,7 @@ void prepareLattice(MyCase& myCase)
   const auto& converter = lattice.getUnitConverter();
   converter.print();
 
-  lattice.defineDynamics<AdvectionDiffusionBGKdynamics>(geometry.getMaterialIndicator({1}));
+  dynamics::set<AdvectionDiffusionBGKdynamics>(lattice,geometry.getMaterialIndicator({1}));
 }
 
 void setInitialValues(MyCase& myCase) {
@@ -158,9 +158,8 @@ void setInitialValues(MyCase& myCase) {
 
   auto bulkIndicator = geometry.getMaterialIndicator({0,1});
 
-  lattice.defineField<descriptors::VELOCITY>( bulkIndicator, u0 );
-  lattice.defineRho( bulkIndicator, Tinit );
-  lattice.iniEquilibrium( bulkIndicator, Tinit, u0 );
+  fields::set<descriptors::VELOCITY>(lattice, bulkIndicator, u0);
+  momenta::setDensity(lattice, bulkIndicator, Tinit );
 
   lattice.setParameter<descriptors::OMEGA>( converter.getLatticeAdeRelaxationFrequency() );
 

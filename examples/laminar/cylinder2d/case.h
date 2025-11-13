@@ -156,7 +156,7 @@ void prepareLattice(MyCase& myCase)
 
   // Material=1 -->bulk dynamics
   auto bulkIndicator = geometry.getMaterialIndicator({1});
-  lattice.defineDynamics<BGKdynamics>(bulkIndicator);
+  dynamics::set<BGKdynamics>(lattice, bulkIndicator);
 
   // Material=2 -->bounce back
   boundary::set<boundary::BounceBack>(lattice, geometry, 2);
