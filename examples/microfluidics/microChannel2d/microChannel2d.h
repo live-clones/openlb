@@ -264,10 +264,8 @@ void setTemporalValues(MyCase& myCase,
     StartScale( frac,iTvec );
     const T outletPressure = parameters.get<parameters::AVERAGE_PRESSURE>()-0.5*parameters.get<parameters::PRESSURE_DIFFERENCE>();
     const T inletPressure = outletPressure + parameters.get<parameters::PRESSURE_DIFFERENCE>();
-    T pLin = lattice.getUnitConverter().getLatticePressure((inletPressure-outletPressure)*frac[0] + outletPressure);
-    AnalyticalConst2D<T,T> rho(pLin*descriptors::invCs2<T,DESCRIPTOR>()+T(1));
-
-    lattice.defineRho( geometry, 3, rho );
+    T pLin = (inletPressure-outletPressure)*frac[0] + outletPressure;
+    momenta::setPressure( lattice, geometry.getMaterialIndicator(3), pLin);
 
     lattice.setProcessingContext<Array<momenta::FixedDensity::RHO>>(
       ProcessingContext::Simulation);
