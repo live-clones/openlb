@@ -131,15 +131,10 @@ void prepareLattice(MyCase& myCase) {
 
   ADlattice.setUnitConverter(converter);
 
-  NSlattice.defineDynamics<ForcedBGKdynamics>(geometry, 1);
-  boundary::set<boundary::BounceBack>(NSlattice, geometry, 2);
-  boundary::set<boundary::BounceBack>(NSlattice, geometry, 3);
-  NSlattice.defineDynamics<ForcedBGKdynamics>(geometry, 4);
+  dynamics::set<ForcedBGKdynamics>(NSlattice, geometry.getMaterialIndicator({1,4}));
+  boundary::set<boundary::BounceBack>(NSlattice, geometry.getMaterialIndicator({2,3}));
 
-  ADlattice.defineDynamics<AdvectionDiffusionBGKdynamics>(geometry, 1);
-  ADlattice.defineDynamics<AdvectionDiffusionBGKdynamics>(geometry, 2);
-  ADlattice.defineDynamics<AdvectionDiffusionBGKdynamics>(geometry, 3);
-  ADlattice.defineDynamics<AdvectionDiffusionBGKdynamics>(geometry, 4);
+  dynamics::set<AdvectionDiffusionBGKdynamics>(ADlattice, geometry.getMaterialIndicator({1, 2, 3, 4}));
 
   boundary::set<boundary::AdvectionDiffusionDirichlet>(ADlattice, geometry, 2);
   boundary::set<boundary::AdvectionDiffusionDirichlet>(ADlattice, geometry, 3);
@@ -175,31 +170,27 @@ void setInitialValues(MyCase& myCase) {
   auto& NSlattice = myCase.getLattice(NavierStokes{});
   auto& ADlattice = myCase.getLattice(Temperature{});
 
-  const auto& converter = NSlattice.getUnitConverter();
-
   const T Tcold = params.get<parameters::T_COLD>();
   const T Thot = params.get<parameters::T_HOT>();
   const T Tperturb = 1./5. * Tcold + 4./5. * Thot; // temperature of the perturbation
 
+  /// for each material set Rho, U and the Equilibrium
+  auto indicator = geometry.getMaterialIndicator({1,2,3,4});
+  const auto& converter = NSlattice.getUnitConverter();
+
   /// define initial conditions
-  AnalyticalConst2D<T,T> rho(1.);
   AnalyticalConst2D<T,T> u0(0.0, 0.0);
   AnalyticalConst2D<T,T> T_cold(converter.getLatticeTemperature(Tcold));
   AnalyticalConst2D<T,T> T_hot(converter.getLatticeTemperature(Thot));
   AnalyticalConst2D<T,T> T_perturb(converter.getLatticeTemperature(Tperturb));
+  
+  momenta::setTemperature(ADlattice, geometry.getMaterialIndicator({1, 3}), Tcold);
+  momenta::setTemperature(ADlattice, geometry.getMaterialIndicator({2}), Thot);
+  momenta::setTemperature(ADlattice, geometry.getMaterialIndicator({4}), Tperturb);
 
-  /// for each material set Rho, U and the Equilibrium
-  auto indicator = geometry.getMaterialIndicator({1,2,3,4});
-  NSlattice.defineRhoU(indicator, rho, u0);
-  NSlattice.iniEquilibrium(indicator, rho, u0);
-
-  ADlattice.defineRho(geometry, 1, T_cold);
   ADlattice.iniEquilibrium(geometry, 1, T_cold, u0);
-  ADlattice.defineRho(geometry, 2, T_hot);
   ADlattice.iniEquilibrium(geometry, 2, T_hot, u0);
-  ADlattice.defineRho(geometry, 3, T_cold);
   ADlattice.iniEquilibrium(geometry, 3, T_cold, u0);
-  ADlattice.defineRho(geometry, 4, T_perturb);
   ADlattice.iniEquilibrium(geometry, 4, T_perturb, u0);
 
   NSlattice.initialize();
