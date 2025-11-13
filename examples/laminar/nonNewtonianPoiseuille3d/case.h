@@ -335,16 +335,16 @@ void prepareLattice(MyCase& myCase)
   switch ( parameters.get<parameters::VISCOSITY_MODEL>() ) {
     case ViscosityModel::NEWTONIAN:
     default:
-      lattice.defineDynamics<ForcedBGKdynamics<T,DESCRIPTOR>>(geometry.getMaterialIndicator({1}));
+      dynamics::set<ForcedBGKdynamics<T,DESCRIPTOR>>(lattice, geometry.getMaterialIndicator({1}));
       break;
     case ViscosityModel::POWER_LAW:
-      lattice.defineDynamics<PowerLawForcedBGKdynamics<T,DESCRIPTOR>>(geometry.getMaterialIndicator({1}));
+      dynamics::set<PowerLawForcedBGKdynamics<T,DESCRIPTOR>>(lattice, geometry.getMaterialIndicator({1}));
       break;
     case ViscosityModel::CASSON:
-      lattice.defineDynamics<CassonForcedBGKdynamics<T,DESCRIPTOR>>(geometry.getMaterialIndicator({1}));
+      dynamics::set<CassonForcedBGKdynamics<T,DESCRIPTOR>>(lattice, geometry.getMaterialIndicator({1}));
       break;
     case ViscosityModel::CARREAU_YASUDA:
-      lattice.defineDynamics<CarreauYasudaForcedBGKdynamics<T,DESCRIPTOR>>(geometry.getMaterialIndicator({1}));
+      dynamics::set<CarreauYasudaForcedBGKdynamics<T,DESCRIPTOR>>(lattice, geometry.getMaterialIndicator({1}));
       break;
   }
 
@@ -360,8 +360,8 @@ void prepareLattice(MyCase& myCase)
   forceTerm[0] = pressureDrop / physRho / conversionF_force;
 
   AnalyticalConst3D<T,T> force (forceTerm);
-  lattice.defineField<descriptors::FORCE>(geometry, 1, force);
-  lattice.defineField<descriptors::FORCE>(geometry, 2, force);
+  fields::set<descriptors::FORCE>(lattice, geometry.getMaterialIndicator({1}), force);
+  fields::set<descriptors::FORCE>(lattice, geometry.getMaterialIndicator({2}), force);
 
   clout << "Prepare Lattice ... OK" << std::endl;
 }
@@ -375,13 +375,9 @@ void setInitialValues(MyCase& myCase) {
   auto& lattice     = myCase.getLattice(NavierStokes {});
   auto& converter   = lattice.getUnitConverter();
 
-  AnalyticalConst3D<T,T> rho(1.);
-  std::unique_ptr<AnalyticalF3D<T,T>> profileU = MODEL{}.getLatticeVelocityProfile( myCase );
-
-  lattice.defineRhoU(geometry, 1, rho, *profileU);
-  lattice.iniEquilibrium(geometry, 1, rho, *profileU);
-  lattice.defineRhoU(geometry, 2, rho, *profileU);
-  lattice.iniEquilibrium(geometry, 2, rho,*profileU);
+  std::unique_ptr<AnalyticalF3D<T,T>> profileU = MODEL{}.getPhysVelocityProfile( myCase );
+  momenta::setVelocity(lattice, geometry.getMaterialIndicator({1}), *profileU);
+  momenta::setVelocity(lattice, geometry.getMaterialIndicator({2}), *profileU);
 
   lattice.setParameter<descriptors::OMEGA>(converter.getLatticeRelaxationFrequency());
   MODEL{}.setModelParameter( myCase );
