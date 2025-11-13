@@ -271,11 +271,13 @@ void setInitialValues(MyCase& myCase)
   AnalyticalConst2D<T, T> uF(velocity);
 
   // Initialize all values of distribution functions to their local equilibrium
-  lattice.defineRhoU(geometry.getMaterialIndicator({1, 2, 3, 4, 5, 6, 7}), rhoF, uF);
-  lattice.iniEquilibrium(geometry.getMaterialIndicator({1, 2, 3, 4, 5, 6, 7}), rhoF, uF);
-  lattice.defineField<descriptors::VELOCITY>(geometry.getMaterialIndicator({1, 2, 3, 4, 5, 6, 7}), uF);
-  lattice.defineField<descriptors::POROSITY>(geometry.getMaterialIndicator({1, 2, 3, 4, 6, 7}), rhoF);
-  lattice.defineField<descriptors::POROSITY>(geometry, 5, rho0);
+  auto bulkMaterialIndicator = geometry.getMaterialIndicator({1, 2, 3, 4, 5, 6, 7});
+  momenta::setDensity(lattice, bulkMaterialIndicator, rhoF);
+  momenta::setVelocity(lattice, bulkMaterialIndicator, uF);
+
+  fields::set<descriptors::VELOCITY>(lattice, bulkMaterialIndicator, uF);
+  fields::set<descriptors::POROSITY>(lattice, geometry.getMaterialIndicator({1, 2, 3, 4, 6, 7}), rhoF);
+  fields::set<descriptors::POROSITY>(lattice, geometry.getMaterialIndicator({5}), rho0);
 
   using FringeDynamics = dynamics::Tuple<
     MyCase::value_t,
@@ -298,7 +300,7 @@ void setInitialValues(MyCase& myCase)
       return 0.3 + ((physR[0] - origin[0]) / (20 * converter.getPhysDeltaX())) * (2 - 0.3);
     });
 
-    lattice.defineField<collision::LES::SMAGORINSKY>(outI, smagorinskyF);
+    fields::set<collision::LES::SMAGORINSKY>(lattice, outI, smagorinskyF);
   }
 
   const T omega = converter.getLatticeRelaxationFrequency();
