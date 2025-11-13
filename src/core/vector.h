@@ -111,7 +111,7 @@ public:
 
   /// Construct with entries given by a lambda expression
   template <typename F, typename = decltype(std::declval<F&>()(std::size_t{0}))>
-  constexpr Vector(F&& f) any_platform
+  constexpr explicit Vector(F&& f) any_platform
   {
     for (unsigned iDim=0; iDim < D; ++iDim) {
       _data[iDim] = f(iDim);
