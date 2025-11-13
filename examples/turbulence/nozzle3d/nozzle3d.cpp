@@ -195,9 +195,6 @@ void prepareLattice(MyCase& myCase) {
   const auto& converter = lattice.getUnitConverter();
   converter.print();
 
-  // Material=0 -->do nothing
-  lattice.defineDynamics<NoDynamics>(geometry, 0);
-
   // Material=1 -->bulk dynamics
   // Material=3 -->bulk dynamics (inflow)
   // Material=4 -->bulk dynamics (outflow)
@@ -250,19 +247,11 @@ void prepareLattice(MyCase& myCase) {
 }
 
 void setInitialValues(MyCase& myCase) {
-  using T = MyCase::value_t;
   auto& geometry = myCase.getGeometry();
   auto& lattice = myCase.getLattice(NavierStokes{});
 
-  AnalyticalConst3D<T,T> rhoF(1);
-  Vector<T,3> velocity{};
-  AnalyticalConst3D<T,T> uF(velocity);
-
-  lattice.defineRhoU(geometry.getMaterialIndicator({1, 2, 3, 4}), rhoF, uF);
-  lattice.iniEquilibrium(geometry.getMaterialIndicator({1, 2, 3, 4}), rhoF, uF);
   lattice.initialize();
   geometry.updateStatistics();
-
 }
 
 void setTemporalValues(

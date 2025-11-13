@@ -110,8 +110,8 @@ void prepareLattice(MyCase& myCase) {
   myCase.getLattice(NavierStokes{}).setUnitConverter(converter);
   lattice.getUnitConverter().print();
 
-// Material=1 -->bulk dynamics
-  lattice.defineDynamics<RLBdynamics>(geometry, 1);
+  // Material=1 -->bulk dynamics
+  dynamics::set<RLBdynamics>(lattice, geometry, 1);
 
   // Material=2 -->bounce back
   boundary::set<boundary::BounceBack>(lattice, geometry, 2);
@@ -150,8 +150,8 @@ void setTemporalValues(MyCase& myCase,
 
     // Creates and sets the Poiseuille inflow profile using functors
     CirclePoiseuille3D<T> poiseuilleU( geometry, 3, frac*lattice.getUnitConverter().getCharLatticeVelocity(), T(), lattice.getUnitConverter().getPhysDeltaX() );
-    lattice.defineU( geometry, 3, poiseuilleU );
-
+    momenta::setVelocity(lattice, geometry.getMaterialIndicator(3), poiseuilleU);
+    
     lattice.setProcessingContext<Array<momenta::FixedVelocityMomentumGeneric::VELOCITY>>(
       ProcessingContext::Simulation);
   }
