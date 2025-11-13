@@ -220,33 +220,26 @@ void prepareLattice( MyCase& myCase ) {
   switch ( boundaryCondition ) {
     case BoundaryCondition::eternal:
     case BoundaryCondition::periodic:
-      lattice.defineDynamics<BGKdynamics>( geometry, 1 );
+      dynamics::set<BGKdynamics>(lattice, geometry.getMaterialIndicator({1}));
       break;
     case BoundaryCondition::local:
-      lattice.defineDynamics<BGKdynamics>( geometry, 1 );
+      dynamics::set<BGKdynamics>(lattice, geometry.getMaterialIndicator({1}));
       boundary::set<boundary::InterpolatedVelocity>(lattice, geometry, 4);
       boundary::set<boundary::LocalPressure>(lattice, geometry, 5);
       boundary::set<boundary::LocalVelocity>(lattice, geometry, 6);
       break;
     case BoundaryCondition::damping:
-      lattice.defineDynamics<
-        SpongeLayerDynamics<
-          T,DESCRIPTOR,momenta::BulkTuple,equilibria::SecondOrder>
-        >( geometry, 3 );
-      lattice.defineDynamics<BGKdynamics>( geometry, 1 );
+      dynamics::set<SpongeLayerDynamics<T,DESCRIPTOR,momenta::BulkTuple,equilibria::SecondOrder>>(lattice, geometry.getMaterialIndicator({3}));
+      dynamics::set<BGKdynamics>(lattice, geometry.getMaterialIndicator({1}));
       break;
   }
   lattice.setParameter<descriptors::OMEGA>(converter.getLatticeRelaxationFrequency());
 
   // Define far field observable fields
-  AnalyticalConst3D<T,T>  uxFar(converter.getCharLatticeVelocity());
-  AnalyticalConst3D<T,T>  uyFar(0.);
-  AnalyticalConst3D<T,T>  uzFar(0.);
-  AnalyticalConst3D<T,T>  rhoFar(1.);
-  lattice.defineField<descriptors::UX>( bulkIndicator, uxFar );
-  lattice.defineField<descriptors::UY>( bulkIndicator, uyFar );
-  lattice.defineField<descriptors::UZ>( bulkIndicator, uzFar );
-  lattice.defineField<descriptors::DENSITY>( bulkIndicator, rhoFar );
+  fields::set<descriptors::UX>(lattice, bulkIndicator, converter.getCharLatticeVelocity());
+  fields::set<descriptors::UY>(lattice, bulkIndicator, 0.);
+  fields::set<descriptors::UZ>(lattice, bulkIndicator, 0.);
+  fields::set<descriptors::DENSITY>(lattice, bulkIndicator, 1.);
 
   // define and output damping layer parameter
   const T       dampingDepthPU  = parameters.get<parameters::DAMPING_DEPTH_LU>() * converter.getPhysDeltaX();
@@ -273,8 +266,8 @@ void setInitialValues(MyCase& myCase) {
   T alpha     = parameters.get<parameters::ALPHA>();
 
   // Initial velocity and density
-  AnalyticalConst3D<T,T>  u(converter.getCharLatticeVelocity(), 0., 0.);
-  AcousticPulse<3,T>      densityProfile(1., amplitude, alpha);
+  AnalyticalConst3D<T,T>  u(converter.getCharPhysVelocity(), 0., 0.);
+  AcousticPulse<3,T>      densityProfile(converter.getPhysDensity(1.), amplitude, alpha);
   size_t res  = converter.getResolution();
   T physDx    = converter.getPhysDeltaX();
   linePlot<3,T>( densityProfile, res, physDx, "pulse_diag", "density [LU]", diagonal2d);
@@ -282,8 +275,8 @@ void setInitialValues(MyCase& myCase) {
 
   /// Initialize populations to equilibrium state
   auto domain = geometry.getMaterialIndicator({1,3,4,5,6});
-  lattice.iniEquilibrium( domain, densityProfile, u);
-  lattice.defineRhoU(     domain, densityProfile, u);
+  momenta::setVelocity(lattice, domain, u);
+  momenta::setDensity(lattice, domain, densityProfile);
   lattice.initialize();
 
   clout << "setInitialValues ... OK" << std::endl;
