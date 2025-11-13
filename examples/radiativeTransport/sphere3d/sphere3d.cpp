@@ -183,10 +183,11 @@ void prepareLattice(MyCase& myCase)
   const T omega = converter.getLatticeRelaxationFrequency();
 
   //define dynamics
-  // Material=1 -->sourced advection diffusion dynamics OR poisson dynamics with sink term
+  // sourced advection diffusion dynamics OR poisson dynamics with sink term
   // when using poisson dynamics, setting the sink parameter is necessary
   // when using sourced advection diffusion dynamics, the sink term is handeled by the post processor
   auto bulkIndicator = geometry.getMaterialIndicator({1});
+  //dynamics::set<PoissonDynamics<T,DESCRIPTOR>>(Rlattice, bulkIndicator);
   dynamics::set<SourcedAdvectionDiffusionBGKdynamics<T, RDESCRIPTOR>>(Rlattice, bulkIndicator);
 
   // Material=2,3 -->first order equilibrium
@@ -235,7 +236,7 @@ void setInitialValues(MyCase& myCase)
 
   momenta::setDensity(Rlattice, geometry.getMaterialIndicator({2}), dSol);
   momenta::setDensity(Rlattice, geometry.getMaterialIndicator({3}), dSol);
-  
+
   Rlattice.initialize();
 
   clout << "Setting Initial Values and BC ... OK" << std::endl;
