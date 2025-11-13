@@ -134,7 +134,7 @@ void prepareLattice(MyCase& myCase) {
   converter.print();
 
   auto bulkIndicator = superGeometry.getMaterialIndicator({1,3,4,6});
-  sLattice.template defineDynamics<PorousBGKdynamics>(bulkIndicator);
+  dynamics::set<PorousBGKdynamics>(sLattice, bulkIndicator);
 
   boundary::set<boundary::BounceBack>(sLattice, superGeometry, 2);
   boundary::set<boundary::LocalVelocity>(sLattice, superGeometry.getMaterialIndicator({3}));
@@ -145,6 +145,7 @@ void prepareLattice(MyCase& myCase) {
 
 void setInitialValues(MyCase& myCase) {
   using T = MyCase::value_t;
+  using DESCRIPTOR = MyCase::descriptor_t;
   auto& sLattice = myCase.getLattice(NavierStokes{});
   auto& superGeometry = myCase.getGeometry();
   auto& parameters = myCase.getParameters();
@@ -152,19 +153,13 @@ void setInitialValues(MyCase& myCase) {
   const Vector extentRefObj = parameters.get<parameters::REFERENCE_OBJECT_EXTENT>();
   auto bulkIndicator = superGeometry.getMaterialIndicator({1,2,3,4,6});
 
-  AnalyticalConst3D<T,T> rhoF(1);
-  Vector<T,3> velocity;
-  AnalyticalConst3D<T,T> uF(velocity);
-
-  sLattice.defineRhoU(bulkIndicator, rhoF, uF);
-  sLattice.iniEquilibrium(bulkIndicator, rhoF, uF);
-
   AnalyticalConst3D<T,T> one(1.);
   AnalyticalConst3D<T,T> zero(0.);
 
   IndicatorCuboid3D<T> referenceObject(extentRefObj, originRefObj);
-  sLattice.template defineField<descriptors::POROSITY>(bulkIndicator, one);
-  sLattice.template defineField<descriptors::POROSITY>(superGeometry, referenceObject, zero);
+  SuperIndicatorFfromIndicatorF<T,DESCRIPTOR::d> indicatorF(referenceObject, superGeometry);
+  fields::set<descriptors::POROSITY>(sLattice, bulkIndicator, one);
+  fields::set<descriptors::POROSITY>(sLattice, indicatorF, zero);
 
   sLattice.initialize();
 }
@@ -186,8 +181,8 @@ void setTemporalValues(MyCase& myCase, std::size_t iT) {
     T frac[1] = {};
     StartScale( frac,iTvec );
 
-    AnalyticalConst3D<T,T> uF(0., frac[0] * converter.getCharLatticeVelocity(), 0.);
-    sLattice.defineU(superGeometry, 3, uF);
+    AnalyticalConst3D<T,T> uF(0., frac[0] * converter.getCharPhysVelocity(), 0.);
+    momenta::setVelocity(sLattice, superGeometry.getMaterialIndicator({3}), uF);
     sLattice.template setProcessingContext<Array<momenta::FixedVelocityMomentumGeneric::VELOCITY>>(ProcessingContext::Simulation);
   }
 }
@@ -248,7 +243,7 @@ void prepareAdjointLattice(MyOptiCase& optiCase) {
   adjointLattice.setUnitConverter(controlledLattice.getUnitConverter());
 
   // Define dual physics
-  adjointLattice.template defineDynamics<DualPorousBGKDynamics<T,MyCase::descriptor_t>>(geometry.getMaterialIndicator({1,6}));
+  dynamics::set<DualPorousBGKDynamics>(adjointLattice, geometry.getMaterialIndicator({1,6}));
   boundary::set<boundary::BounceBack>(adjointLattice, geometry.getMaterialIndicator({2,3,4}));
   adjointLattice.template setParameter<descriptors::OMEGA>(adjointLattice.getUnitConverter().getLatticeRelaxationFrequency());
 }
@@ -264,13 +259,6 @@ void setAdjointInitialValues(MyOptiCase& optiCase) {
   auto objectiveDomain = geometry.getMaterialIndicator({1,6});
 
   // Initialize dual problem
-  AnalyticalConst3D<T,T> rhoF(1);
-  Vector<T,3> velocity;
-  AnalyticalConst3D<T,T> uF(velocity);
-  adjointLattice.defineRhoU(bulkIndicator, rhoF, uF);
-  adjointLattice.iniEquilibrium(bulkIndicator, rhoF, uF);
-  adjointLattice.initialize();
-
   // Compute source term for the dual simulation
   auto objectiveDerivativeO = makeWriteFunctorO<functors::DerivativeF<ObjectiveF,descriptors::POPULATION,BulkDynamics>,
                                                 opti::DJDF>(controlledLattice);
@@ -302,7 +290,7 @@ void setInitialControl(MyOptiCase& optiCase) {
   T porosity = projection::permeabilityToPorosity(parameters.get<parameters::INITIAL_CONTROL_SCALAR>(), converter);
   std::cout << "POROSITY: " << porosity << std::endl;
   AnalyticalConst3D<T,T> controls(porosity);
-  lattice.template defineField<ControlledField>(geometry, 6, controls);
+  fields::set<ControlledField>(lattice, geometry.getMaterialIndicator({6}), controls);
   control.template setProjection<projection::Sigmoid<T>>();
   control.template set<ControlledField>(geometry, 6, lattice);
 }
