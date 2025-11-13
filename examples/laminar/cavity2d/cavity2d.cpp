@@ -92,7 +92,6 @@ void prepareGeometry(MyCase& myCase)
   sGeometry.checkForErrors();
   sGeometry.getStatistics().print();
   clout << "Prepare Geometry ... OK" << std::endl;
-  return;
 }
 
 /// @brief Set lattice dynamics
@@ -125,13 +124,12 @@ void prepareLattice(MyCase& myCase)
   sLattice.getUnitConverter().write("cavity3d");
 
   // Material=1 -->bulk dynamics
-  sLattice.defineDynamics<ConstRhoBGKdynamics>(sGeometry, 1);
+  dynamics::set<ConstRhoBGKdynamics>(sLattice, sGeometry.getMaterialIndicator(1));
 
   // Material=2,3 -->bulk dynamics, velocity boundary
   boundary::set<boundary::InterpolatedVelocity>(sLattice, sGeometry, 2);
   boundary::set<boundary::InterpolatedVelocity>(sLattice, sGeometry, 3);
   clout << "Prepare Lattice ... OK" << std::endl;
-  return;
 }
 
 /// Set initial condition for primal variables (velocity and density)
@@ -143,19 +141,11 @@ void setInitialValues(MyCase& myCase)
   clout << "lattice initialization ..." << std::endl;
 
   using T = MyCase::value_t;
-
   auto& sLattice = myCase.getLattice(NavierStokes {});
-
   auto& sGeometry = myCase.getGeometry();
 
-  AnalyticalConst2D<T, T> rhoF((T)1);
-  AnalyticalConst2D<T, T> uTop(sLattice.getUnitConverter().getCharLatticeVelocity(), 0);
-  AnalyticalConst2D<T, T> uF((T)0, (T)0);
-
-  auto bulkIndicator = sGeometry.getMaterialIndicator({1, 2, 3});
-  sLattice.iniEquilibrium(bulkIndicator, rhoF, uF);
-  sLattice.defineRhoU(bulkIndicator, rhoF, uF);
-  sLattice.defineU(sGeometry, 3, uTop);
+  AnalyticalConst2D<T, T> uTop(sLattice.getUnitConverter().getCharPhysVelocity(), 0);
+  momenta::setVelocity(sLattice, sGeometry.getMaterialIndicator(3), uTop);
 
   const T omega = sLattice.getUnitConverter().getLatticeRelaxationFrequency();
   sLattice.setParameter<descriptors::OMEGA>(omega);
@@ -163,14 +153,13 @@ void setInitialValues(MyCase& myCase)
   // Make the lattice ready for simulation
   sLattice.initialize();
   clout << "Initialization ... OK" << std::endl;
-  return;
 }
 
 /// Update boundary values at times (and external fields, if they exist)
 /// @param myCase The Case instance which keeps the simulation data
 /// @param iT The time step
 /// @note Be careful: boundary values have to be set using lattice units
-void setBoundaryValues(MyCase& myCase, std::size_t iT) { return; }
+void setTemporalValues(MyCase& myCase, std::size_t iT) {}
 
 void getResults(MyCase& myCase, std::size_t iT, util::Timer<MyCase::value_t>& timer)
 {
@@ -181,7 +170,6 @@ void getResults(MyCase& myCase, std::size_t iT, util::Timer<MyCase::value_t>& ti
   auto&       sGeometry      = myCase.getGeometry();
   auto&       parameters     = myCase.getParameters();
   auto        logT           = parameters.get<parameters::PHYS_LOG_ITER_T>();
-  auto        maxPhysT       = parameters.get<parameters::MAX_PHYS_T>();
   auto        imSave         = parameters.get<parameters::PHYS_IMAGE_ITER_T>();
   auto        vtkSave        = parameters.get<parameters::PHYS_VTK_ITER_T>();
   auto        gnuplotSave    = parameters.get<parameters::PHYS_GNUPLOT_ITER_T>();
@@ -271,7 +259,6 @@ void getResults(MyCase& myCase, std::size_t iT, util::Timer<MyCase::value_t>& ti
     clout << "absoluteErrorL2(line)=" << norm(vel_simulation - comparison) / 17.
           << "; relativeErrorL2(line)=" << norm(vel_simulation - comparison) / norm(comparison) << std::endl;
   }
-  return;
 }
 
 void simulate(MyCase& myCase)
@@ -301,7 +288,7 @@ void simulate(MyCase& myCase)
       break;
     }
 
-    setBoundaryValues(myCase, iT);
+    setTemporalValues(myCase, iT);
 
     sLattice.collideAndStream();
 
@@ -312,7 +299,6 @@ void simulate(MyCase& myCase)
   sLattice.setProcessingContext(ProcessingContext::Evaluation);
   timer.stop();
   timer.printSummary();
-  return;
 }
 
 int main(int argc, char* argv[])

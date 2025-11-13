@@ -158,20 +158,20 @@ void prepareLattice(MyCase& myCase)
   // Material=1 --> bulk dynamics
   // Material=3 --> bulk dynamics (inflow)
   auto inflowIndicator = geometry.getMaterialIndicator({1, 3});
-  NSlattice.defineDynamics<BGKdynamics>(inflowIndicator);
-  ADlattice.defineDynamics<ParticleAdvectionDiffusionBGKdynamics>(inflowIndicator);
+  dynamics::set<BGKdynamics>(NSlattice, inflowIndicator);
+  dynamics::set<ParticleAdvectionDiffusionBGKdynamics>(ADlattice, inflowIndicator);
 
   // Material=2 --> bounce-back / zero distribution dynamics
-  NSlattice.defineDynamics<BounceBack>(geometry, 2);
-  ADlattice.defineDynamics<ZeroDistributionDynamics>(geometry, 2);
+  dynamics::set<BounceBack>(NSlattice, geometry.getMaterialIndicator({2}));
+  dynamics::set<ZeroDistributionDynamics>(ADlattice, geometry.getMaterialIndicator({2}));
 
   // Material=4,5 -->bulk dynamics / do-nothing (outflow)
   auto outflowIndicator = geometry.getMaterialIndicator({4, 5});
-  NSlattice.defineDynamics<BGKdynamics>(outflowIndicator);
+  dynamics::set<BGKdynamics>(NSlattice, outflowIndicator);
 
   // Material=6 --> bounce-back / bounce-back
-  NSlattice.defineDynamics<BounceBack>(geometry, 6);
-  ADlattice.defineDynamics<BounceBack>(geometry, 6);
+  dynamics::set<BounceBack>(NSlattice, geometry, 6);
+  dynamics::set<BounceBack>(ADlattice, geometry, 6);
 
   // Setting of the boundary conditions
   boundary::set<boundary::InterpolatedPressure>(NSlattice, geometry, 3);
@@ -211,15 +211,11 @@ void setInitialValues(MyCase& myCase)
   using ADDESCRIPTOR = MyCase::descriptor_t_of<Concentration0>;
 
   // Initial conditions
-  AnalyticalConst3D<T, T> rho1(1.);
   AnalyticalConst3D<T, T> rho0(1.e-8);
   std::vector<T>          velocity(3, T());
   AnalyticalConst3D<T, T> u0(velocity);
 
   // Initialize all values of distribution functions to their local equilibrium
-  NSlattice.defineRhoU(geometry.getMaterialIndicator({1, 2, 3, 4, 5, 6}), rho1, u0);
-  NSlattice.iniEquilibrium(geometry.getMaterialIndicator({1, 2, 3, 4, 5, 6}), rho1, u0);
-  ADlattice.defineRho(geometry, 3, rho1);
   ADlattice.iniEquilibrium(geometry.getMaterialIndicator({1, 2, 4, 5, 6}), rho0, u0);
   const T omega = converter.getLatticeRelaxationFrequency();
   const T omegaAD =
@@ -270,9 +266,8 @@ void setBoundaryValues(MyCase& myCase, std::size_t iT)
     CirclePoiseuille3D<T> poiseuilleU5(outletCenter1[0], outletCenter1[1], outletCenter1[2], outletNormal1[0],
                                        outletNormal1[1], outletNormal1[2],
                                        parameters.get<parameters::OUTLET_RADIUS1>() * 0.95, -maxVelocity);
-
-    NSlattice.defineU(geometry, 4, poiseuilleU4);
-    NSlattice.defineU(geometry, 5, poiseuilleU5);
+    momenta::setVelocity(NSlattice, geometry.getMaterialIndicator({4}), poiseuilleU4);
+    momenta::setVelocity(NSlattice, geometry.getMaterialIndicator({5}), poiseuilleU5);
 
     NSlattice.setProcessingContext<Array<momenta::FixedVelocityMomentumGeneric::VELOCITY>>(
         ProcessingContext::Simulation);

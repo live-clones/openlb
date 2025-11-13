@@ -194,17 +194,17 @@ void prepareLattice( MyCase& myCase ) {
   // Material=1,3,4 -->bulk dynamics
   switch ( parameters.get<parameters::POROSITY_TYPE>() ) {
   case PorosityType::BGK:
-    lattice.defineDynamics<BGKdynamics>(geometry.getMaterialIndicator({1,3,4}));
+    dynamics::set<BGKdynamics>(lattice, geometry.getMaterialIndicator({1,3,4}));
     break;
   case PorosityType::SPAID_PHELAN:
-    lattice.defineDynamics<PorousBGKdynamics>(geometry.getMaterialIndicator({1,3,4}));
+    dynamics::set<PorousBGKdynamics>(lattice, geometry.getMaterialIndicator({1,3,4}));
     break;
   case PorosityType::GUO_ZHAO:
-    lattice.defineDynamics<GuoZhaoBGKdynamics>(geometry.getMaterialIndicator({1,3,4}));
+    dynamics::set<GuoZhaoBGKdynamics>(lattice, geometry.getMaterialIndicator({1,3,4}));
     break;
   case PorosityType::GUO_ZHAO_SMAGO:
   default:
-    lattice.defineDynamics<SmagorinskyGuoZhaoBGKdynamics>(geometry.getMaterialIndicator({1,3,4}));
+    dynamics::set<SmagorinskyGuoZhaoBGKdynamics>(lattice, geometry.getMaterialIndicator({1,3,4}));
     break;
   }
 
@@ -248,7 +248,7 @@ void prepareLattice( MyCase& myCase ) {
       for (int i: {
             0,1,2,3,4
           }) {
-        lattice.defineField<descriptors::POROSITY>(geometry, i, porosity);
+        fields::set<descriptors::POROSITY>(lattice, geometry.getMaterialIndicator(i), porosity);
       }
     }
       break;
@@ -260,9 +260,9 @@ void prepareLattice( MyCase& myCase ) {
       AnalyticalConst2D<T,T> Nu( converter.getLatticeViscosity() );
       AnalyticalConst2D<T,T> k( Kin/util::pow(converter.getPhysDeltaX(), 2.) );
       for (int i: {0,1,2,3,4}) {
-        lattice.defineField<descriptors::EPSILON>(geometry, i, eps);
-        lattice.defineField<descriptors::NU>(geometry, i, Nu);
-        lattice.defineField<descriptors::K>(geometry, i, k);
+        fields::set<descriptors::K>(lattice, geometry.getMaterialIndicator(i), k);
+        fields::set<descriptors::EPSILON>(lattice, geometry.getMaterialIndicator(i), eps);
+        fields::set<descriptors::NU>(lattice, geometry.getMaterialIndicator(i), Nu);
       }
       break;
   }
@@ -292,9 +292,9 @@ void setInitialValues( MyCase& myCase ) {
 
   T p0L = converter.getLatticePressure(p0);
 
-  AnalyticalLinear2D<T,T> rho( -p0L/lx*descriptors::invCs2<T,DESCRIPTOR>(),
+  AnalyticalLinear2D<T,T> rho( converter.getPhysDensity( - p0L/lx*descriptors::invCs2<T,DESCRIPTOR>()),
                                 0,
-                                p0L*descriptors::invCs2<T,DESCRIPTOR>()+1 );
+                               converter.getPhysDensity( p0L*descriptors::invCs2<T,DESCRIPTOR>()+1 ));
 
   T dp = p0/lx;
   T mu = converter.getPhysViscosity()*converter.getPhysDensity();
@@ -309,7 +309,8 @@ void setInitialValues( MyCase& myCase ) {
 
   // Initialize all values of distribution functions to their local equilibrium
   for ( int i: { 0,1,2,3,4 } ) {
-    lattice.defineRhoU( geometry, i, rho, u );
+    momenta::setVelocity(lattice, geometry.getMaterialIndicator({i}), uSol);
+    momenta::setDensity(lattice, geometry.getMaterialIndicator({i}), rho);
     //lattice.iniEquilibrium( geometry, i, rho, u ); // gives problems with non-standard equilibria
   }
 

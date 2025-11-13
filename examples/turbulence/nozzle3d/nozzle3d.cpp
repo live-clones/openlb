@@ -68,7 +68,7 @@ std::shared_ptr<IndicatorF3D<MyCase::value_t>> makeInletI(MyCase::ParametersD& p
 {
   using T = MyCase::value_t;
   Vector<T,3> origin(
-    params.get<parameters::PHYS_DELTA_X>(),
+    0.,
     params.get<parameters::DOMAIN_EXTENT>()[1] / 2.,
     params.get<parameters::DOMAIN_EXTENT>()[2] / 2.
   );
@@ -100,16 +100,9 @@ std::shared_ptr<IndicatorF3D<MyCase::value_t>> makeInjectionTubeI(MyCase::Parame
     new IndicatorCylinder3D<T>(
       extend,
       origin,
-      std::min(params.get<parameters::DOMAIN_EXTENT>()[1], params.get<parameters::DOMAIN_EXTENT>()[2]) / 2.
+      std::min(params.get<parameters::DOMAIN_EXTENT>()[1], params.get<parameters::DOMAIN_EXTENT>()[2]) / 2. - params.get<parameters::PHYS_DELTA_X>()
     )
   );
-}
-
-std::shared_ptr<IndicatorF3D<MyCase::value_t>> makeNozzleI(MyCase::ParametersD& params)
-{
-  auto inletCylinder = makeInletI(params);
-  auto injectionTube = makeInjectionTubeI(params);
-  return inletCylinder + injectionTube;
 }
 
 void prepareGeometry(MyCase& myCase) {
@@ -129,7 +122,7 @@ void prepareGeometry(MyCase& myCase) {
   geometry.rename(2, 1, *injectionTube);
 
   {
-    Vector<T,3> origin(T(),
+    Vector<T,3> origin(0.,
       params.get<parameters::DOMAIN_EXTENT>()[1] / 2.0,
       params.get<parameters::DOMAIN_EXTENT>()[2] / 2.0
     );
@@ -202,33 +195,33 @@ void prepareLattice(MyCase& myCase) {
 
   switch (params.get<parameters::BULK_MODEL>()) {
     case BulkModel::RLB:
-      lattice.defineDynamics<RLBdynamics>(bulkIndicator);
+      dynamics::set<RLBdynamics>(lattice, bulkIndicator);
       break;
     case BulkModel::ShearSmagorinskyBGK:
-      lattice.defineDynamics<ShearSmagorinskyBGKdynamics>(bulkIndicator);
+      dynamics::set<ShearSmagorinskyBGKdynamics>(lattice, bulkIndicator);
       lattice.setParameter<collision::LES::SMAGORINSKY>(params.get<parameters::SMAGORINSKY>());
       break;
     case BulkModel::KrauseBGK:
-      lattice.defineDynamics<KrauseBGKdynamics>(bulkIndicator);
+      dynamics::set<KrauseBGKdynamics>(lattice, bulkIndicator);
       lattice.setParameter<collision::LES::SMAGORINSKY>(params.get<parameters::SMAGORINSKY>());
     case BulkModel::ConsistentStrainSmagorinskyBGK:
-      lattice.defineDynamics<ConStrainSmagorinskyBGKdynamics>(bulkIndicator);
+      dynamics::set<ConStrainSmagorinskyBGKdynamics>(lattice, bulkIndicator);
       lattice.setParameter<collision::LES::SMAGORINSKY>(params.get<parameters::SMAGORINSKY>());
       break;
     case BulkModel::SmagorinskyBGK:
-      lattice.defineDynamics<SmagorinskyBGKdynamics>(bulkIndicator);
+      dynamics::set<SmagorinskyBGKdynamics>(lattice, bulkIndicator);
       lattice.setParameter<collision::LES::SMAGORINSKY>(params.get<parameters::SMAGORINSKY>());
       break;
     case BulkModel::LocalSmagorinskyBGK:
     default:
-      lattice.defineDynamics<LocalSmagorinskyBGKdynamics>(bulkIndicator);
+      dynamics::set<LocalSmagorinskyBGKdynamics>(lattice, bulkIndicator);
       FringeZoneSmagorinskyConstant smagorinskyFringe(converter, T{0.15});
-      lattice.defineField<collision::LES::SMAGORINSKY>(bulkIndicator, smagorinskyFringe);
+      fields::set<collision::LES::SMAGORINSKY>(lattice, bulkIndicator, smagorinskyFringe);
       break;
   }
 
   // Material=2 -->bounce back
-  lattice.defineDynamics<BounceBack>(geometry, 2);
+  dynamics::set<BounceBack>(lattice, geometry, 2);
 
   const T omega = converter.getLatticeRelaxationFrequency();
   boundary::set<boundary::LocalVelocity>(lattice, geometry, 3);
@@ -407,9 +400,9 @@ int main(int argc, char* argv[]) {
     myCaseParameters.set<INLET_CYLINDER_SIZE>({4, 1});
 
     myCaseParameters.set<RESOLUTION   >(5);
-    myCaseParameters.set<PHYS_DELTA_X >(
-      myCaseParameters.get<INLET_CYLINDER_SIZE>()[1] / myCaseParameters.get<RESOLUTION>()
-    );
+    myCaseParameters.set<PHYS_DELTA_X >([&] {
+      return myCaseParameters.get<INLET_CYLINDER_SIZE>()[1] / myCaseParameters.get<RESOLUTION>();
+    });
     myCaseParameters.set<PHYS_CHAR_VELOCITY>(1);
     myCaseParameters.set<PHYS_CHAR_VISCOSITY>(0.0002);
     myCaseParameters.set<PHYS_CHAR_DENSITY>(1);
@@ -423,9 +416,9 @@ int main(int argc, char* argv[]) {
     myCaseParameters.set<TURBULENCE_INTENSITY>(0.05);
     myCaseParameters.set<TURBULENCE_N_SEEDS>(50);
     myCaseParameters.set<TURBULENCE_N_TIME>(0.1);
-    myCaseParameters.set<TURBULENCE_SIGMA>(
-      0.1 * myCaseParameters.get<INLET_CYLINDER_SIZE>()[1]
-    );
+    myCaseParameters.set<TURBULENCE_SIGMA>([&] {
+      return 0.1 * myCaseParameters.get<INLET_CYLINDER_SIZE>()[1];
+    });
   }
   myCaseParameters.fromCLI(argc, argv);
 

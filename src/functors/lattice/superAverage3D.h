@@ -34,8 +34,8 @@ namespace olb {
 
 /// SuperAverage3D returns the average in each component of f on a indicated subset
 template <typename T, typename W = T>
-class SuperAverage3D final : public SuperF3D<T,W> {
-private:
+class SuperAverage3D : public SuperF3D<T,W> {
+protected:
   FunctorPtr<SuperF3D<T,W>>        _f;
   FunctorPtr<SuperIndicatorF3D<T>> _indicatorF;
 public:
@@ -55,6 +55,39 @@ public:
   SuperAverage3D(FunctorPtr<SuperF3D<T,W>>&& f,
                  SuperGeometry<T,3>& superGeometry,
                  const int material);
+
+  /// Global average operator
+  /**
+   * Note: While this functor exposes BlockAverage3D functors if possible, a call to
+   * this function will not use them but calculate the global average by summing all
+   * components and voxel counts.
+   * Calling BlockAverage3D in this situation would unnecessarily complicate this as
+   * we would have to weight the aggregated averages according to their share in the
+   * global average.
+   **/
+  bool operator() (W output[], const int input[]) override;
+};
+
+/// SuperAverage3D returns the average in each component of f on a indicated subset
+template <typename T, typename W = T>
+class SuperNonZeroAverage3D final : public SuperAverage3D<T,W> {
+public:
+  /// Constructor for determining the average of f on a indicated subset
+  /**
+   * \param f          functor of which the average is to be determined
+   * \param indicatorF indicator describing the subset on which to evaluate f
+   **/
+  SuperNonZeroAverage3D(FunctorPtr<SuperF3D<T,W>>&&        f,
+                        FunctorPtr<SuperIndicatorF3D<T>>&& indicatorF);
+  /// Constructor for determining the average of f on a given material
+  /**
+   * \param f             functor of which the average is to be determined
+   * \param superGeometry super geometry for constructing material indicator
+   * \param material      number of the relevant material
+   **/
+  SuperNonZeroAverage3D(FunctorPtr<SuperF3D<T,W>>&& f,
+                       SuperGeometry<T,3>& superGeometry,
+                       const int material);
 
   /// Global average operator
   /**

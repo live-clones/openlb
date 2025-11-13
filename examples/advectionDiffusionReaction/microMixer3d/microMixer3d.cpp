@@ -114,7 +114,7 @@ void prepareLattice(
 
   // dynamics for adsorptive
   auto bulkIndicatorAD = superGeometry.getMaterialIndicator({1,3,5});
-  sLatticeAD.defineDynamics<ParticleAdvectionDiffusionBGKdynamics>(bulkIndicatorAD);
+  dynamics::set<ParticleAdvectionDiffusionBGKdynamics>(sLatticeAD, bulkIndicatorAD);
 
   // boundary for adsorptive
   boundary::set<boundary::BounceBack>(sLatticeAD, superGeometry, 2);
@@ -122,21 +122,11 @@ void prepareLattice(
   boundary::set<boundary::AdvectionDiffusionDirichlet>(sLatticeAD, superGeometry, 3);
   setZeroGradientBoundary<T,ADDESCRIPTOR>(sLatticeAD, superGeometry.getMaterialIndicator({5}));
 
-  // initialisation for fluid
-  AnalyticalConst3D<T, T> rho1(1.);
-  AnalyticalConst3D<T, T> u0(0., 0., 0.);
-
-  auto initIndicator = superGeometry.getMaterialIndicator({1,2,3,4,5});
-  sLattice.defineRhoU(initIndicator, rho1, u0);
-  sLattice.iniEquilibrium(initIndicator, rho1, u0);
-
   // initialisation for adsorptive
   auto initIndicatorAD = superGeometry.getMaterialIndicator({1,2,4,5});
+  AnalyticalConst3D<T, T> u0(0.);
   AnalyticalConst3D<T, T> rhoSmall(1.e-8);
-  sLatticeAD.defineRhoU(initIndicatorAD, rhoSmall, u0);
-  sLatticeAD.defineRhoU(superGeometry, 3, rho1, u0);
   sLatticeAD.iniEquilibrium(initIndicatorAD, rhoSmall, u0);
-  sLatticeAD.iniEquilibrium(superGeometry, 3, rho1, u0);
 
   sLattice.setParameter<descriptors::OMEGA>(omega);
   sLatticeAD.setParameter<descriptors::OMEGA>(omegaAD);
@@ -159,7 +149,7 @@ void setBoundaryValues(
 
   std::vector < T > maxVelocity(3, T());
   const T distanceToBoundary = converterNS.getConversionFactorLength() / 2.;
-  const T latticeVelNS = converterNS.getLatticeVelocity(converterNS.getCharPhysVelocity());
+  const T velNS = converterNS.getCharPhysVelocity();
   const int itStartTime = converterNS.getLatticeTime(physStartTime);
 
   if (iT <= itStartTime && iT % 50 == 0) {
@@ -170,11 +160,11 @@ void setBoundaryValues(
     startScale(frac, help);
 
     // set lattice velocity on boundary
-    maxVelocity[1] = latticeVelNS * frac[0];
+    maxVelocity[1] = velNS * frac[0];
 
     RectanglePoiseuille3D<T> u5(superGeometry, 5, maxVelocity,
                                 distanceToBoundary, distanceToBoundary, distanceToBoundary);
-    sLattice.defineU(superGeometry, 5, u5);
+    momenta::setVelocity(sLattice, superGeometry.getMaterialIndicator({5}), u5);
   }
 }
 

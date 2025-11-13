@@ -114,6 +114,84 @@ bool SuperAverage3D<T,W>::operator() (W output[], const int input[])
   return true;
 }
 
+template <typename T, typename W>
+SuperNonZeroAverage3D<T,W>::SuperNonZeroAverage3D(FunctorPtr<SuperF3D<T,W>>&&       f,
+                                                   FunctorPtr<SuperIndicatorF3D<T>>&& indicatorF)
+  : SuperAverage3D<T,W>(std::move(f), std::move(indicatorF))
+{ }
+
+template <typename T, typename W>
+SuperNonZeroAverage3D<T,W>::SuperNonZeroAverage3D(FunctorPtr<SuperF3D<T,W>>&& f,
+                                                   SuperGeometry<T,3>& superGeometry,
+                                                   const int material)
+  : SuperAverage3D<T,W>(std::move(f), superGeometry.getMaterialIndicator(material))
+{ }
+
+template <typename T, typename W>
+bool SuperNonZeroAverage3D<T,W>::operator() (W output[], const int input[])
+{
+  this->_f->getSuperStructure().communicate();
+  auto& geometry = this->_f->getSuperStructure().getCuboidDecomposition();
+  LoadBalancer<T>&      load      = this->_f->getSuperStructure().getLoadBalancer();
+
+  const int targetDim = this->_f->getTargetDim();
+  const int sourceDim = this->_f->getSourceDim();
+
+  for (int i = 0; i < targetDim; ++i) {
+    output[i] = W(0);
+  }
+
+  W outputTmp[targetDim];
+  int inputTmp[sourceDim];
+  std::size_t voxels(0);
+  std::vector<util::KahanSummator<W>> summators(targetDim, util::KahanSummator<W>());
+
+  for (int iC = 0; iC < load.size(); ++iC) {
+    const Cuboid3D<T>& cuboid = geometry.get(load.glob(iC));
+    inputTmp[0] = load.glob(iC);
+    for (inputTmp[1] = 0; inputTmp[1] < cuboid.getNx(); ++inputTmp[1]) {
+      for (inputTmp[2] = 0; inputTmp[2] < cuboid.getNy(); ++inputTmp[2]) {
+        for (inputTmp[3] = 0; inputTmp[3] < cuboid.getNz(); ++inputTmp[3]) {
+          if (this->_indicatorF(inputTmp)) {
+            this->_f(outputTmp,inputTmp);
+            W normSquared = W(0);
+            for (int i = 0; i < targetDim; ++i) {
+                normSquared += outputTmp[i] * outputTmp[i];
+            }
+            if (normSquared != W(0)) {
+              for (int i = 0; i < targetDim; ++i) {
+                  summators[i].add(outputTmp[i]);
+              }
+              voxels += 1;
+            }
+          }
+        }
+      }
+    }
+  }
+
+  for (int i = 0; i < targetDim; ++i) {
+    output[i] = summators[i].getSum();
+  }
+
+#ifdef PARALLEL_MODE_MPI
+  for (int i = 0; i < targetDim; ++i) {
+    singleton::mpi().reduceAndBcast(output[i], MPI_SUM);
+  }
+  singleton::mpi().reduceAndBcast(voxels, MPI_SUM);
+#endif
+
+  output[targetDim] = voxels;
+  if(voxels != W(0)){
+    for (int i = 0; i < targetDim; ++i) {
+      output[i] /= output[targetDim];
+    }
+  }
+
+  return true;
+}
+
+
 
 }
 

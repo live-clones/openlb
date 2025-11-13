@@ -1,8 +1,9 @@
 /*  Lattice Boltzmann sample, written in C++, using the OpenLB
  *  library
  *
- *  Copyright (C) 2007, 2012 Jonas Latt, Mathias J. Krause
- *  Vojtech Cvrcek, Peter Weisbrod
+ *  Copyright (C) 2007, 2012 Jonas Latt, Mathias J. Krause,
+ *  Vojtech Cvrcek, Peter Weisbrod,
+ *  2025 Fedor Bukreev
  *  E-mail contact: info@openlb.net
  *  The most recent release of OpenLB can be downloaded at
  *  <http://www.openlb.net/>
@@ -99,20 +100,10 @@ Mesh<MyCase::value_t,MyCase::d> createMesh(MyCase::ParametersD& parameters) {
   const Vector extent{physLengthX, physLengthY};
   const Vector origin{0, 0};
   IndicatorCuboid2D<T> cuboid(extent, origin);
+  Mesh<T,MyCase::d> mesh(cuboid, physDeltaX, singleton::mpi().getSize());
 
-  #ifdef PARALLEL_MODE_MPI
-    Mesh<T,MyCase::d> mesh(cuboid, physDeltaX, singleton::mpi().getSize());
-  #else
-    Mesh<T,MyCase::d> mesh(cuboid, physDeltaX, 1);
-  #endif
-
-  switch(parameters.get<parameters::FLOW_TYPE>()){
-    case FlowType::forced:
-      parameters.set<parameters::OVERLAP>(2);
-      mesh.getCuboidDecomposition().setPeriodicity({true, false});
-      break;
-    default:
-      parameters.set<parameters::OVERLAP>(3);
+  if (parameters.get<parameters::FLOW_TYPE>() == FlowType::forced){
+    mesh.getCuboidDecomposition().setPeriodicity({true, false});
   }
   mesh.setOverlap(parameters.get<parameters::OVERLAP>());
   return mesh;
@@ -121,7 +112,6 @@ Mesh<MyCase::value_t,MyCase::d> createMesh(MyCase::ParametersD& parameters) {
 // Stores geometry information in form of material numbers
 void prepareGeometry(MyCase& myCase)
 {
-
   OstreamManager clout(std::cout,"prepareGeometry");
   clout << "Prepare Geometry ..." << std::endl;
 
@@ -136,23 +126,17 @@ void prepareGeometry(MyCase& myCase)
   const T physLengthY   = parameters.get<parameters::DOMAIN_EXTENT>()[1];
   const T physDeltaX    = parameters.get<parameters::DOMAIN_EXTENT>()[1] / parameters.get<parameters::RESOLUTION>();
 
+  if (parameters.get<parameters::FLOW_TYPE>() == FlowType::nonForced){
+    Vector<T,2> extent(0.25*physDeltaX, physLengthY);
+    Vector<T,2> origin;
+    // Set material number for inflow
+    IndicatorCuboid2D<T> inflow(extent, origin);
+    geometry.rename(2, 3, 1, inflow);
 
-  switch (parameters.get<parameters::FLOW_TYPE>()){
-    case FlowType::nonForced:
-      Vector<T,2> extent;
-      Vector<T,2> origin;
-
-      // Set material number for inflow
-      extent[1] = physLengthY;
-      extent[0] = physDeltaX / 2;
-      origin[0] -= physDeltaX / 4;
-      IndicatorCuboid2D<T> inflow(extent, origin);
-      geometry.rename(2, 3, 1, inflow);
-
-      // Set material number for outflow
-      origin[0] = physLengthX - physDeltaX / 4;
-      IndicatorCuboid2D<T> outflow(extent, origin);
-      geometry.rename(2, 4, 1, outflow);
+    // Set material number for outflow
+    origin[0] = physLengthX - physDeltaX / 4;
+    IndicatorCuboid2D<T> outflow(extent, origin);
+    geometry.rename(2, 4, 1, outflow);
   }
   // Removes all not needed boundary voxels outside the surface
   geometry.clean();
@@ -175,8 +159,6 @@ void prepareLattice(MyCase& myCase)
   auto& geometry   = myCase.getGeometry();
   auto& lattice    = myCase.getLattice(NavierStokes{});
 
-  const T physDeltaX    = parameters.get<parameters::DOMAIN_EXTENT>()[1] / parameters.get<parameters::RESOLUTION>();
-  const T physLengthX   = parameters.get<parameters::DOMAIN_EXTENT>()[0];
   const T physLengthY   = parameters.get<parameters::DOMAIN_EXTENT>()[1];
   const int resolution  = parameters.get<parameters::RESOLUTION>();
   const T latticeRelaxationTime = parameters.get<parameters::LATTICE_RELAXATION_TIME>();
@@ -197,12 +179,10 @@ void prepareLattice(MyCase& myCase)
   const UnitConverter<T,DESCRIPTOR>& converter = lattice.getUnitConverter();
   converter.print();
 
-  switch(parameters.get<parameters::FLOW_TYPE>()){
-    case FlowType::forced:
-      lattice.defineDynamics<ForcedBulkDynamics>(geometry, 1);
-      break;
-    default:
-      lattice.defineDynamics<BulkDynamics>(geometry, 1);
+  if (parameters.get<parameters::FLOW_TYPE>() == FlowType::forced){
+    dynamics::set<ForcedBulkDynamics>(lattice, geometry, 1);
+  } else {
+    dynamics::set<BulkDynamics>(lattice, geometry, 1);
   }
 
   switch(parameters.get<parameters::BOUNDARY_TYPE>()){
@@ -223,18 +203,15 @@ void prepareLattice(MyCase& myCase)
       boundary::set<boundary::InterpolatedVelocity>(lattice, geometry, 2);
   }
 
-  switch(parameters.get<parameters::FLOW_TYPE>()){
-    case FlowType::nonForced:
-      switch (parameters.get<parameters::BOUNDARY_TYPE>()){
-        case BoundaryType::local:
-          boundary::set<boundary::LocalVelocity>(lattice, geometry, 3);
-          boundary::set<boundary::LocalPressure>(lattice, geometry, 4);
-          break;
-        default:
-          boundary::set<boundary::InterpolatedVelocity>(lattice, geometry, 3);
-          boundary::set<boundary::InterpolatedPressure>(lattice, geometry, 4);
-      }
+  if (parameters.get<parameters::FLOW_TYPE>() == FlowType::nonForced){
+    if (parameters.get<parameters::BOUNDARY_TYPE>() == BoundaryType::local){
+      boundary::set<boundary::LocalVelocity>(lattice, geometry, 3);
+      boundary::set<boundary::LocalPressure>(lattice, geometry, 4);
+    } else {
+      boundary::set<boundary::InterpolatedVelocity>(lattice, geometry, 3);
+      boundary::set<boundary::InterpolatedPressure>(lattice, geometry, 4);
     }
+  }
 
   lattice.template setParameter<descriptors::OMEGA>(converter.getLatticeRelaxationFrequency());
 
@@ -255,64 +232,40 @@ void setInitialValues(MyCase& myCase){
   const T physDeltaX    = parameters.get<parameters::DOMAIN_EXTENT>()[1] / parameters.get<parameters::RESOLUTION>();
 
   // Initial conditions
-  T Lx = converter.getLatticeLength(physLengthX);
-  T Ly = converter.getLatticeLength(physLengthY);
+  T Lx = physLengthX;
+  T Ly = physLengthY;
 
-  switch(parameters.get<parameters::BOUNDARY_TYPE>()){
-    case BoundaryType::bounceBack:
-      Lx -= T(1);
-      Ly -= T(1);
+  if (parameters.get<parameters::BOUNDARY_TYPE>() == BoundaryType::bounceBack){
+    Lx -= physDeltaX;
+    Ly -= physDeltaX;
   }
+  T p0 = 8. * converter.getPhysViscosity() * converter.getCharPhysVelocity() * Lx / (Ly*Ly);
 
   std::vector<T> poiseuilleForce(2, T());
-  poiseuilleForce[0]
-  = 8.*converter.getLatticeViscosity()
-  * converter.getCharLatticeVelocity() / (Ly*Ly);
+  poiseuilleForce[0]= p0 / Lx / converter.getConversionFactorForce() * converter.getConversionFactorMass();
   AnalyticalConst2D<T,T> force(poiseuilleForce);
 
-  switch(parameters.get<parameters::FLOW_TYPE>()){
-    case FlowType::forced:
-      // Initialize force
-      lattice.defineField<FORCE>(geometry, 1, force);
-      lattice.defineField<FORCE>(geometry, 2, force);
-      break;
-    default:
-      T p0 = 8. * converter.getLatticeViscosity()
-        * converter.getCharLatticeVelocity()*Lx/(Ly*Ly);
-      AnalyticalLinear2D<T,T> rho(-p0/physLengthX*descriptors::invCs2<T,DESCRIPTOR>(), 0, p0*descriptors::invCs2<T,DESCRIPTOR>()+1);
+  if (parameters.get<parameters::FLOW_TYPE>() == FlowType::forced){
+    // Initialize force
+    fields::set<FORCE>(lattice, geometry.getMaterialIndicator({1,2}), force);
+  } else {
+    AnalyticalLinear2D<T,T> pressure(-p0/Lx, 0, p0);
 
-      const T maxVelocity = converter.getCharLatticeVelocity();
+    const T maxVelocity = converter.getCharPhysVelocity();
 
-      bool bounceBack = false;
-      switch(parameters.get<parameters::BOUNDARY_TYPE>()){
-        case BoundaryType::bounceBack:
-          bounceBack = true;
-      }
+    bool bounceBack = false;
+    if (parameters.get<parameters::BOUNDARY_TYPE>() == BoundaryType::bounceBack){
+      bounceBack = true;
+    }
 
-      const T radius = (bounceBack) ?
-        T(0.5) * (physLengthY - physDeltaX) : T(0.5) * physLengthY;
-      std::vector<T> axisPoint(2, T());
-      axisPoint[0] = physLengthX/2.;
-      axisPoint[1] = physLengthY/2.;
-      std::vector<T> axisDirection(2, T());
-      axisDirection[0] = 1;
-      axisDirection[1] = 0;
-      Poiseuille2D<T> u(axisPoint, axisDirection, maxVelocity, radius);
+    const T radius = (bounceBack) ? (T(0.5) * (physLengthY - physDeltaX)) : (T(0.5) * physLengthY);
+    std::vector<T> axisPoint = {physLengthX/T{2}, physLengthY/T{2}};
+    std::vector<T> axisDirection = {1, 0};
+    Poiseuille2D<T> u(axisPoint, axisDirection, maxVelocity, radius);
 
-      std::vector<T> zero(2, T());
-      AnalyticalConst2D<T, T> u0(zero);
-
-      // Initialize all values of distribution functions to their local equilibrium
-      lattice.defineRhoU(geometry, 0, rho, u0);
-      lattice.iniEquilibrium(geometry, 0, rho, u0);
-      lattice.defineRhoU(geometry, 1, rho, u);
-      lattice.iniEquilibrium(geometry, 1, rho, u);
-      lattice.defineRhoU(geometry, 2, rho, u);
-      lattice.iniEquilibrium(geometry, 2, rho, u);
-      lattice.defineRhoU(geometry, 3, rho, u);
-      lattice.iniEquilibrium(geometry, 3, rho, u);
-      lattice.defineRhoU(geometry, 4, rho, u);
-      lattice.iniEquilibrium(geometry, 4, rho, u);
+    // Initialize all values of distribution functions to their local equilibrium
+    momenta::setPressure(lattice, geometry.getMaterialIndicator({1,2,3,4}), pressure);
+    momenta::setVelocity(lattice, geometry.getMaterialIndicator({1,2,3,4}), u);
   }
 
   // Make the lattice ready for simulation
@@ -344,9 +297,8 @@ void errorNorms(MyCase& myCase)
   T result[2]= { };
 
   bool bounceBack = false;
-  switch(parameters.get<parameters::BOUNDARY_TYPE>()){
-    case BoundaryType::bounceBack:
-      bounceBack = true;
+  if (parameters.get<parameters::BOUNDARY_TYPE>() == BoundaryType::bounceBack){
+    bounceBack = true;
   }
 
   // velocity error
@@ -409,36 +361,35 @@ void errorNorms(MyCase& myCase)
   clout << "; strainRate-Linf-error(rel)=" << result[0] << std::endl;
 
 
-  switch(parameters.get<parameters::FLOW_TYPE>()){
-    case FlowType::nonForced:
-      // pressure error
-      int Lx = converter.getLatticeLength(physLengthX);
-      int Ly = converter.getLatticeLength(physLengthY);
-      T p0 = 8.*converter.getLatticeViscosity()*converter.getCharLatticeVelocity()*Lx/T( Ly*Ly );
-      AnalyticalLinear2D<T,T> pressureSol(-converter.getPhysPressure(p0)/physLengthX, 0, converter.getPhysPressure(p0));
-      SuperLatticePhysPressure2D<T,DESCRIPTOR> pressure(lattice, converter);
+  if (parameters.get<parameters::FLOW_TYPE>() == FlowType::nonForced){
+    // pressure error
+    int Lx = converter.getLatticeLength(physLengthX);
+    int Ly = converter.getLatticeLength(physLengthY);
+    T p0 = 8.*converter.getLatticeViscosity()*converter.getCharLatticeVelocity()*Lx/T( Ly*Ly );
+    AnalyticalLinear2D<T,T> pressureSol(-converter.getPhysPressure(p0)/physLengthX, 0, converter.getPhysPressure(p0));
+    SuperLatticePhysPressure2D<T,DESCRIPTOR> pressure(lattice, converter);
 
-      SuperAbsoluteErrorL1Norm2D<T> absPressureErrorNormL1(pressure, pressureSol, indicatorF);
-      absPressureErrorNormL1(result, tmp);
-      clout << "pressure-L1-error(abs)=" << result[0];
-      SuperRelativeErrorL1Norm2D<T> relPressureErrorNormL1(pressure, pressureSol, indicatorF);
-      relPressureErrorNormL1(result, tmp);
-      clout << "; pressure-L1-error(rel)=" << result[0] << std::endl;
+    SuperAbsoluteErrorL1Norm2D<T> absPressureErrorNormL1(pressure, pressureSol, indicatorF);
+    absPressureErrorNormL1(result, tmp);
+    clout << "pressure-L1-error(abs)=" << result[0];
+    SuperRelativeErrorL1Norm2D<T> relPressureErrorNormL1(pressure, pressureSol, indicatorF);
+    relPressureErrorNormL1(result, tmp);
+    clout << "; pressure-L1-error(rel)=" << result[0] << std::endl;
 
-      SuperAbsoluteErrorL2Norm2D<T> absPressureErrorNormL2(pressure, pressureSol, indicatorF);
-      absPressureErrorNormL2(result, tmp);
-      clout << "pressure-L2-error(abs)=" << result[0];
-      SuperRelativeErrorL2Norm2D<T> relPressureErrorNormL2(pressure, pressureSol, indicatorF);
-      relPressureErrorNormL2(result, tmp);
-      clout << "; pressure-L2-error(rel)=" << result[0] << std::endl;
+    SuperAbsoluteErrorL2Norm2D<T> absPressureErrorNormL2(pressure, pressureSol, indicatorF);
+    absPressureErrorNormL2(result, tmp);
+    clout << "pressure-L2-error(abs)=" << result[0];
+    SuperRelativeErrorL2Norm2D<T> relPressureErrorNormL2(pressure, pressureSol, indicatorF);
+    relPressureErrorNormL2(result, tmp);
+    clout << "; pressure-L2-error(rel)=" << result[0] << std::endl;
 
-      SuperAbsoluteErrorLinfNorm2D<T> absPressureErrorNormLinf(pressure, pressureSol, indicatorF);
-      absPressureErrorNormLinf(result, tmp);
-      clout << "pressure-Linf-error(abs)=" << result[0];
-      SuperRelativeErrorLinfNorm2D<T> relPressureErrorNormLinf(pressure, pressureSol, indicatorF);
-      relPressureErrorNormLinf(result, tmp);
-      clout << "; pressure-Linf-error(rel)=" << result[0] << std::endl;
-    }
+    SuperAbsoluteErrorLinfNorm2D<T> absPressureErrorNormLinf(pressure, pressureSol, indicatorF);
+    absPressureErrorNormLinf(result, tmp);
+    clout << "pressure-Linf-error(abs)=" << result[0];
+    SuperRelativeErrorLinfNorm2D<T> relPressureErrorNormLinf(pressure, pressureSol, indicatorF);
+    relPressureErrorNormLinf(result, tmp);
+    clout << "; pressure-Linf-error(rel)=" << result[0] << std::endl;
+  }
 }
 
 // Output to console and files
@@ -474,12 +425,9 @@ void getResults(MyCase& myCase,
 
   const bool lastTimeStep = (hasConverged || (iT + 1 == converter.getLatticeTime(maxPhysT)));
   bool noslipBoundary = true;
-  switch(parameters.get<parameters::BOUNDARY_TYPE>()){
-    case BoundaryType::freeSlip:
-      noslipBoundary = false;
-      break;
-    case BoundaryType::partialSlip:
-      noslipBoundary = false;
+  if (parameters.get<parameters::BOUNDARY_TYPE>() == BoundaryType::freeSlip ||
+      parameters.get<parameters::BOUNDARY_TYPE>() == BoundaryType::partialSlip){
+    noslipBoundary = false;
   }
   const int statIter = converter.getLatticeTime(parameters.get<parameters::PHYS_STAT_ITER_T>());
 
@@ -495,15 +443,13 @@ void getResults(MyCase& myCase,
 
     SuperLatticePhysPressure2D<T,DESCRIPTOR> pressure(lattice, converter);
 
-    switch(parameters.get<parameters::FLOW_TYPE>()){
-      case FlowType::nonForced:
-        vtmWriter.addFunctor(pressure);
+    if (parameters.get<parameters::FLOW_TYPE>() == FlowType::nonForced){
+      vtmWriter.addFunctor(pressure);
     }
 
     bool bounceBack = false;
-    switch(parameters.get<parameters::BOUNDARY_TYPE>()){
-      case BoundaryType::bounceBack:
-        bounceBack = true;
+    if (parameters.get<parameters::BOUNDARY_TYPE>() == BoundaryType::bounceBack){
+      bounceBack = true;
     }
 
     const T maxVelocity = parameters.get<parameters::PHYS_CHAR_VELOCITY>();
@@ -572,32 +518,30 @@ void getResults(MyCase& myCase,
   if ((noslipBoundary) && (lastTimeStep)) {
     lattice.setProcessingContext(ProcessingContext::Evaluation);
     if (parameters.get<parameters::GNUPLOT_ENABLED>()) {
-      switch(parameters.get<parameters::FLOW_TYPE>()){
-        case FlowType::nonForced:
-          gplot.setData (
+      if (parameters.get<parameters::FLOW_TYPE>() == FlowType::nonForced){
+        gplot.setData (
+        T(converter.getResolution()),
+        { velocityL1AbsError, velocityL2AbsError, velocityLinfAbsError,
+          strainRateL1AbsError, strainRateL2AbsError, strainRateLinfAbsError,
+          pressureL1AbsError, pressureL2AbsError, pressureLinfAbsError },
+        { "velocity L1 abs Error","velocity L2 abs Error",
+          "velocity Linf abs error","strain rate L1 abs error",
+          "strain rate L2 abs error", "strain rate Linf abs error",
+          "pressure L1 abs error", "pressure L2 abs error",
+          "pressure Linf abs error" },
+        "top right",
+        { 'p','p','p','p','p','p','p','p','p' } );
+      } else {
+        // same as above, but without pressure computation
+        gplot.setData (
           T(converter.getResolution()),
           { velocityL1AbsError, velocityL2AbsError, velocityLinfAbsError,
-            strainRateL1AbsError, strainRateL2AbsError, strainRateLinfAbsError,
-            pressureL1AbsError, pressureL2AbsError, pressureLinfAbsError },
+            strainRateL1AbsError, strainRateL2AbsError, strainRateLinfAbsError },
           { "velocity L1 abs Error","velocity L2 abs Error",
             "velocity Linf abs error","strain rate L1 abs error",
-            "strain rate L2 abs error", "strain rate Linf abs error",
-            "pressure L1 abs error", "pressure L2 abs error",
-            "pressure Linf abs error" },
+            "strain rate L2 abs error", "strain rate Linf abs error"},
           "top right",
-          { 'p','p','p','p','p','p','p','p','p' } );
-          break;
-        default:
-          // same as above, but without pressure computation
-          gplot.setData (
-            T(converter.getResolution()),
-            { velocityL1AbsError, velocityL2AbsError, velocityLinfAbsError,
-              strainRateL1AbsError, strainRateL2AbsError, strainRateLinfAbsError },
-            { "velocity L1 abs Error","velocity L2 abs Error",
-              "velocity Linf abs error","strain rate L1 abs error",
-              "strain rate L2 abs error", "strain rate Linf abs error"},
-            "top right",
-            { 'p','p','p','p','p', 'p' } );
+          { 'p','p','p','p','p', 'p' } );
       }
     }
     else {  // if !eoc
@@ -605,9 +549,8 @@ void getResults(MyCase& myCase,
       const T maxVelocity = converter.getPhysVelocity( converter.getCharLatticeVelocity() );
       T Ly = physLengthY / physDeltaX;
       bool bounceBack = false;
-      switch(parameters.get<parameters::BOUNDARY_TYPE>()){
-        case BoundaryType::bounceBack:
-          bounceBack = true;
+      if (parameters.get<parameters::BOUNDARY_TYPE>() == BoundaryType::bounceBack){
+        bounceBack = true;
       }
       const T radius = (bounceBack) ?
         T(0.5) * (Ly - physDeltaX) : T(0.5) * physLengthY;
