@@ -259,14 +259,6 @@ void set(SuperLattice<T,DESCRIPTOR>& sLattice,
   set(sLattice, std::move(domainI), meta::id<DYNAMICS>{});
 }
 
-template <typename DYNAMICS, typename T, typename DESCRIPTOR>
-void set(SuperLattice<T,DESCRIPTOR>& sLattice,
-         SuperGeometry<T,DESCRIPTOR::d>& sGeometry,
-         int material)
-{
-  set(sLattice, sGeometry.getMaterialIndicator(material), meta::id<DYNAMICS>{});
-}
-
 template <template<typename...> typename DYNAMICS, typename T, typename DESCRIPTOR>
 void set(SuperLattice<T,DESCRIPTOR>& sLattice,
          SuperGeometry<T,DESCRIPTOR::d>& sGeometry,
@@ -275,6 +267,16 @@ void set(SuperLattice<T,DESCRIPTOR>& sLattice,
   set(sLattice,
       sGeometry.getMaterialIndicator(material),
       meta::id<DYNAMICS<T,DESCRIPTOR>>{});
+}
+
+template <typename DYNAMICS, typename T, typename DESCRIPTOR>
+void set(SuperLattice<T,DESCRIPTOR>& sLattice,
+         SuperGeometry<T,DESCRIPTOR::d>& sGeometry,
+         int material)
+{
+  set(sLattice,
+      sGeometry.getMaterialIndicator(material),
+      meta::id<DYNAMICS>{});
 }
 
 }
