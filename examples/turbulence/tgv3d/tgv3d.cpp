@@ -62,17 +62,6 @@ using MyCase = Case<
 
 #define finiteDiff //for N<256
 
-#ifdef ShearSmagorinsky
-typedef D3Q19<AV_SHEAR> DESCRIPTOR;
-#elif defined (WALE)
-typedef D3Q19<EFFECTIVE_OMEGA,VELO_GRAD> DESCRIPTOR;
-#elif defined(KBC)
-typedef D3Q19<GAMMA> DESCRIPTOR;
-#else
-typedef D3Q19<> DESCRIPTOR;
-#endif
-
-
 bool plotDNS = true;      //available for Re=800, Re=1600, Re=3000 (maxPhysT<=10)
 
 template <typename T, typename _DESCRIPTOR>
@@ -83,9 +72,9 @@ protected:
 
 // initial solution of the TGV
 public:
-  Tgv3D(UnitConverter<T,_DESCRIPTOR> const& converter, T frac) : AnalyticalF3D<T,T>(3)
+  Tgv3D(const T initVelocity) : AnalyticalF3D<T,T>(3)
   {
-    u0 = converter.getCharLatticeVelocity();
+    u0 = initVelocity;
   };
 
   bool operator()(T output[], const T input[]) override
@@ -170,7 +159,7 @@ using BulkDynamics = SmagorinskyBGKdynamics<T,DESCRIPTOR>;
   lattice.getUnitConverter().print();
   lattice.getUnitConverter().write("tgv3d");
 
-  lattice.defineDynamics<BulkDynamics>(myCase.getGeometry(), 1);
+  dynamics::set<BulkDynamics>(lattice, myCase.getGeometry(), 1);
 
   #if !defined(RLB) && !defined(DNS) && !defined(KBC)
   lattice.setParameter<collision::LES::SMAGORINSKY>(smagoConst);
@@ -188,12 +177,12 @@ void setInitialValues(MyCase& myCase) {
 
   /// Initialize density to one everywhere
   AnalyticalConst3D<T,T> rho(1);
-  Tgv3D<T,DESCRIPTOR> uSol(lattice.getUnitConverter(), 1);
+  Tgv3D<T,DESCRIPTOR> uSol(lattice.getUnitConverter().getCharPhysVelocity());
 
   /// Initialize populations to equilibrium state
   auto domain = myCase.getGeometry().getMaterialIndicator(1);
-  lattice.iniEquilibrium(domain, rho, uSol);
-  lattice.defineRhoU(domain, rho, uSol);
+  momenta::setDensity(lattice, domain, rho);
+  momenta::setVelocity(lattice, domain, uSol);
 
   lattice.initialize();
 }
@@ -440,6 +429,7 @@ using BulkDynamics = SmagorinskyBGKdynamics<T,DESCRIPTOR>;
 
 void simulate(MyCase& myCase) {
   using T = MyCase::value_t;
+  using DESCRIPTOR = MyCase::descriptor_t;
 
   auto& lattice = myCase.getLattice(NavierStokes{});
   auto& parameters = myCase.getParameters();
@@ -451,6 +441,7 @@ void simulate(MyCase& myCase) {
   timer.start();
 
 #if defined(WALE)
+  auto& geometry = myCase.getGeometry();
   std::list<int> mat;
   mat.push_back(1);
   std::unique_ptr<SuperLatticeF3D<T, DESCRIPTOR>> functor(new SuperLatticeVelocityGradientFD3D<T, DESCRIPTOR>(geometry, lattice, mat));
@@ -459,7 +450,7 @@ void simulate(MyCase& myCase) {
   for (std::size_t iT=0; iT < iTmax; ++iT) {
     lattice.setParameter<descriptors::LATTICE_TIME>(iT);
 #if defined(WALE)
-    lattice.defineField<descriptors::VELO_GRAD>(geometry, 1, *functor);
+    fields::set<descriptors::VELO_GRAD>( lattice, geometry.getMaterialIndicator(1), *functor );
 #endif
 #if defined(ShearSmagorinsky)
     lattice.setParameter<descriptors::LATTICE_TIME>(iT);

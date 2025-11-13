@@ -38,6 +38,14 @@ void set(SuperLattice<T,DESCRIPTOR>& sLattice,
   sLattice.template defineField<FIELD>(std::move(domainI), fieldF);
 }
 
+template <typename FIELD, typename T, typename DESCRIPTOR>
+void set(SuperLattice<T,DESCRIPTOR>& sLattice,
+         FunctorPtr<SuperIndicatorF<T,DESCRIPTOR::d>>&& domainI,
+         SuperLatticeF3D<T,DESCRIPTOR>& fieldF)
+{
+  sLattice.template defineField<FIELD>(std::move(domainI), fieldF);
+}
+
 template <typename FIELD, typename T, typename DESCRIPTOR, typename VALUE>
 void set(SuperLattice<T,DESCRIPTOR>& sLattice,
          FunctorPtr<SuperIndicatorF<T,DESCRIPTOR::d>>&& domainI,
