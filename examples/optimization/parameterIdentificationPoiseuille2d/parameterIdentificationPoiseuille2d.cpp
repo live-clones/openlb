@@ -122,7 +122,7 @@ void prepareLattice(CASE& myCase)
   auto& converter = sLattice.getUnitConverter();
   const T omega = converter.getLatticeRelaxationFrequency();
 
-  sLattice.template defineDynamics<BGKdynamics<T,DESCRIPTOR>>(superGeometry, 1);
+  dynamics::set<BGKdynamics>(sLattice, superGeometry.getMaterialIndicator({1}));
   boundary::set<boundary::BounceBack>(sLattice, superGeometry, 2);
 
   boundary::set<boundary::InterpolatedVelocity>(sLattice, superGeometry, 3);
@@ -151,22 +151,20 @@ void setInitialValues(CASE& myCase) {
 
   const T Lx = converter.getLatticeLength( domain_extent[0] ) - 1;
   const T Ly = converter.getLatticeLength( domain_extent[1] ) - 1;
-  const T maxVelocity = inletPressure * Ly * Ly
+  const T maxLatticeVelocity = inletPressure * Ly * Ly
     / (8.0 * converter.getLatticeViscosity() * Lx);
+  const T maxVelocity = converter.getPhysVelocity(maxLatticeVelocity);
+
   const T radius = T(0.5) * (domain_extent[1] - converter.getPhysDeltaX());
   const std::vector<T> axisPoint { domain_extent[0]/T(2), domain_extent[1]/T(2) };
   const std::vector<T> axisDirection { 1, 0 };
   Poiseuille2D<T> u( axisPoint, axisDirection, maxVelocity, radius );
 
-  const std::vector<T> zero(2, T());
-  AnalyticalConst2D<T, T> u0(zero);
-
-  sLattice.defineRhoU(superGeometry, 0, rho, u0);
-  sLattice.iniEquilibrium(superGeometry, 0, rho, u0);
-
   const auto domain = superGeometry.getMaterialIndicator({1,2,3,4});
-  sLattice.defineRhoU( domain, rho, u );
-  sLattice.iniEquilibrium( domain, rho, u );
+  //sLattice.defineRhoU( domain, rho, u );
+  momenta::setVelocity(sLattice, domain, u);
+  momenta::setDensity(sLattice, domain, rho);
+  //sLattice.iniEquilibrium( domain, rho, u );
 
   sLattice.initialize();
 }
