@@ -62,5 +62,6 @@
 #include "setTurbulentWallModel.h"
 #include "postprocessor/rtlbmDirectedBoundaryPostProcessor3D.h"
 
+#include "regularizedHeatFlux3D.h"
 
 #include "boundary3D.hh"
