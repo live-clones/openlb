@@ -52,8 +52,8 @@ using MyCase = Case<
 
 // Choose turbulence model or collision scheme
 //#define RLB
-//#define _SMAGORINSKY
-#define WALE
+#define _SMAGORINSKY
+//#define WALE
 //#define ConsistentStrainSmagorinsky
 //#define ShearSmagorinsky
 //#define Krause
