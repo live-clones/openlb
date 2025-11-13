@@ -292,8 +292,10 @@ void getResults(MyCase& myCase,
 
   if (iT == iTstartAvg) {
     sLattice.setProcessingContext(ProcessingContext::Evaluation);
-    SuperLatticeVelocity3D<T,DESCRIPTOR> latticeVelocity(sLattice);
-    fields::set<descriptors::AVERAGE_VELOCITY>(sLattice, sGeometry.getMaterialIndicator({1,2,3,4,5,6,7}), latticeVelocity);
+    SuperLatticeVelocity3D<T,DESCRIPTOR> latticeVelocityF(sLattice);
+    fields::set<descriptors::AVERAGE_VELOCITY>(sLattice,
+                                               sGeometry.getMaterialIndicator({1,2,3,4,5,6,7}),
+                                               latticeVelocityF);
   }
   if (iT < iTstartAvg) {
     sLattice.setParameter<descriptors::LATTICE_TIME>(2);

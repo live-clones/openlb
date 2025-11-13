@@ -39,11 +39,20 @@ void set(SuperLattice<T,DESCRIPTOR>& sLattice,
   sLattice.template defineField<FIELD>(std::move(domainI), fieldF);
 }
 
+template <typename FIELD, typename T, typename DESCRIPTOR, typename FUNCTOR>
+void set(SuperLattice<T,DESCRIPTOR>& sLattice,
+         FunctorPtr<SuperIndicatorF<T,DESCRIPTOR::d>>&& domainI,
+         FUNCTOR& fieldF)
+  requires std::derived_from<FUNCTOR, SuperF<DESCRIPTOR::d,T,T>>
+{
+  sLattice.template defineField<FIELD>(std::move(domainI), fieldF);
+}
+
 template <typename FIELD, typename T, typename DESCRIPTOR, typename VALUE>
 void set(SuperLattice<T,DESCRIPTOR>& sLattice,
          FunctorPtr<SuperIndicatorF<T,DESCRIPTOR::d>>&& domainI,
          VALUE fieldD)
-  requires std::constructible_from<FieldD<T,DESCRIPTOR,FIELD>, VALUE>
+  requires std::constructible_from<AnalyticalConst<DESCRIPTOR::d,T,T>, VALUE>
 {
   AnalyticalConst<DESCRIPTOR::d,T,T> fieldF(fieldD);
   sLattice.template defineField<FIELD>(std::move(domainI), fieldF);
@@ -56,14 +65,6 @@ void setVelocity(SuperLattice<T,DESCRIPTOR>& sLattice,
   requires std::constructible_from<FieldD<T,DESCRIPTOR,FIELD>, VALUE>
 {
   AnalyticalConst<DESCRIPTOR::d,T,T> fieldF(sLattice.getUnitConverter().getLatticeVelocity(fieldD));
-  sLattice.template defineField<FIELD>(std::move(domainI), fieldF);
-}
-
-template <typename FIELD, typename T, typename DESCRIPTOR>
-void set(SuperLattice<T,DESCRIPTOR>& sLattice,
-         FunctorPtr<SuperIndicatorF<T,DESCRIPTOR::d>>&& domainI,
-         SuperLatticeF3D<T,DESCRIPTOR>& fieldF)
-{
   sLattice.template defineField<FIELD>(std::move(domainI), fieldF);
 }
 
