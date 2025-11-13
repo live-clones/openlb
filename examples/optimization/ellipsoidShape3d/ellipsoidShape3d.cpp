@@ -137,7 +137,7 @@ void prepareLattice(CASE& myCase) {
 
   // Bulk dynamics for all materials
   auto bulkIndicator = superGeometry.getMaterialIndicator({1});
-  sLattice.template defineDynamics<PorousBGKdynamics<T,DESCRIPTOR>>(bulkIndicator);
+  dynamics::set<PorousBGKdynamics>(sLattice, bulkIndicator);
 
   // boundary conditions
   boundary::set<boundary::InterpolatedVelocity>(sLattice, superGeometry, 3);
@@ -176,15 +176,7 @@ void setInitialValues(CASE& myCase) {
   std::shared_ptr<AnalyticalF3D<T,T>> ellipsoidField = one - smoothEllipsoid;
 
   // Initialize porosity
-  sLattice.template defineField<descriptors::POROSITY>( bulkIndicator, *ellipsoidField );
-
-  // Initialize rho and u
-  AnalyticalConst3D<T,T> rhoF(1);
-  Vector<T,3> u_0 {0.0, 0.0, 0.0};
-  AnalyticalConst3D<T,T> u(u_0);
-
-  sLattice.defineRhoU(bulkIndicator, rhoF, u);
-  sLattice.iniEquilibrium(bulkIndicator, rhoF, u);
+  fields::set<descriptors::POROSITY>(sLattice, bulkIndicator, *ellipsoidField);
 
   sLattice.initialize();
 }
@@ -207,9 +199,9 @@ void setBoundaryValues(CASE& myCase, int iT)
     int iTvec[1] = {iT};
     T frac[1] = {};
     startScale(frac, iTvec);
-    Vector<T,3> u_free {frac[0]*converter.getCharLatticeVelocity(), 0.0, 0.0};
+    Vector<T,3> u_free {frac[0]*converter.getCharPhysVelocity(), 0.0, 0.0};
     AnalyticalConst3D<T,T> u(u_free);
-    sLattice.defineU(superGeometry, 3, u);
+    momenta::setVelocity(sLattice, superGeometry.getMaterialIndicator({3}), u);
 
     sLattice.template setProcessingContext<Array<momenta::FixedVelocityMomentumGeneric::VELOCITY>>(
       ProcessingContext::Simulation);
