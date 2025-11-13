@@ -31,7 +31,7 @@
  *
  * To run this example, download the appropriate vti file
  *
- * curl "https://openlb.net/data/gas_storage/gasStorage2d.vti" -o storage.vti
+ * curl "https://openlb.net/data/gas_storage/gasStorage2d.vti" -o gasStorage2d.vti
  *
  * and give the file name as the VTI_INPUT parameter.
  **/
@@ -219,11 +219,8 @@ void prepareLattice( MyCase& myCase )
   sLatticeAC.setUnitConverter(converter);
 
   // define lattice Dynamics
-  sLatticeNS.defineDynamics<NoDynamics>(geometry, 0);
-  sLatticeNS.defineDynamics<NSBulkDynamics>(geometry, 1);
-
-  sLatticeAC.defineDynamics<NoDynamics>(geometry, 0);
-  sLatticeAC.defineDynamics<ACBulkDynamics>(geometry, 1);
+  dynamics::set<NSBulkDynamics>(sLatticeNS, geometry.getMaterialIndicator(1));
+  dynamics::set<ACBulkDynamics>(sLatticeAC, geometry.getMaterialIndicator(1));
 
   auto bulk   = geometry.getMaterialIndicator(1);
   auto wall   = geometry.getMaterialIndicator({2, 5});
@@ -305,6 +302,8 @@ void setInitialValues(MyCase& myCase) {
   clout << "Set initial values ..." << std::endl;
 
   using T = MyCase::value_t;
+  using NSDESCRIPTOR = MyCase::descriptor_t_of<NavierStokes>;
+  using ACDESCRIPTOR = MyCase::descriptor_t_of<Component1>;
   auto& geometry = myCase.getGeometry();
   auto& params = myCase.getParameters();
 
@@ -325,8 +324,6 @@ void setInitialValues(MyCase& myCase) {
   const T w = params.get<parameters::INTERFACE_WIDTH>();
   const T theta = params.get<parameters::THETA>();
 
-  AnalyticalConst2D<T, T> one(1.);
-  AnalyticalConst2D<T, T> two(2.);
   AnalyticalConst2D<T, T> rhov(rho_g/converter.getConversionFactorDensity());
   AnalyticalConst2D<T, T> rhol(rho_l/converter.getConversionFactorDensity());
   T tau_g = converter.computeRelaxationTimefromPhysViscosity( nu_g );
@@ -355,19 +352,21 @@ void setInitialValues(MyCase& myCase) {
   SmoothIndicatorFactoredCuboid2D<T,T> fringe( {-inletLength, extent[1]/2.},
                                                 2.*(inletLength+extent[0]+0.5*outletLength), 0,
                                                 0.25*outletLength, 0, {0,0}, 0, 1. );
-  sLatticeNS.defineField<descriptors::SCALAR>(all, fringe);
 
-  sLatticeNS.defineField<descriptors::RHO>(all, rho0);
-  sLatticeNS.defineField<descriptors::TAU_EFF>(all, tau0);
-  sLatticeAC.defineField<descriptors::OLD_PHIU>(all, u0);
-  sLatticeAC.defineField<descriptors::BOUNDARY>(wall, two);
-  sLatticeAC.defineField<descriptors::BOUNDARY>(geometry.getMaterialIndicator({1, 3, 4}), one);
-  sLatticeAC.defineField<descriptors::THETA>(geometry.getMaterialIndicator(2), angleOutside);
-  sLatticeAC.defineField<descriptors::THETA>(geometry.getMaterialIndicator(5), angleInside);
+  fields::set<descriptors::SCALAR>(sLatticeNS, all, fringe);
+  fields::set<descriptors::RHO>( sLatticeNS, all, rho0);
+  fields::set<descriptors::TAU_EFF>( sLatticeNS, all, tau0);
+  fields::set<descriptors::OLD_PHIU>( sLatticeAC, all, u0);
+  fields::set<descriptors::BOUNDARY>( sLatticeAC, wall, 2);
+  fields::set<descriptors::BOUNDARY>( sLatticeAC, geometry.getMaterialIndicator({1, 3, 4}), 1);
+  fields::set<descriptors::THETA>( sLatticeAC, geometry.getMaterialIndicator({2}), angleOutside);
+  fields::set<descriptors::THETA>( sLatticeAC, geometry.getMaterialIndicator({5}), angleInside);
 
-  sLatticeAC.defineRhoU(all, phi0, u0);
+  momenta::setDensity<T, ACDESCRIPTOR>(sLatticeAC, all, phi0);
+  momenta::setVelocity<T, ACDESCRIPTOR>(sLatticeAC, all, u0);
   sLatticeAC.iniEquilibrium(all, phi0, u0);
-  sLatticeNS.defineRhoU(all, p0, u0);
+  momenta::setDensity<T, NSDESCRIPTOR>(sLatticeNS, all, p0);
+  momenta::setVelocity<T, NSDESCRIPTOR>(sLatticeNS, all, u0);
   sLatticeNS.iniEquilibrium(all, p0, u0);
 
   sLatticeAC.executePostProcessors(stage::InitOutlet());
@@ -387,12 +386,12 @@ void setTemporalValues(MyCase& myCase, std::size_t iT)
   OstreamManager clout(std::cout, "setTemporalValues");
 
   using T = MyCase::value_t;
+  using NSDESCRIPTOR = MyCase::descriptor_t_of<NavierStokes>;
   auto& geometry = myCase.getGeometry();
   auto& params = myCase.getParameters();
-
   auto& sLatticeNS = myCase.getLattice(NavierStokes{});
-
   const auto& converter = sLatticeNS.getUnitConverter();
+
   const T pressureDrop = params.get<parameters::PRESSURE_DROP>();
 
   std::size_t iTmaxStart = 10000;
@@ -407,10 +406,9 @@ void setTemporalValues(MyCase& myCase, std::size_t iT)
     T iTvec[1] = {T(iT)};
     T frac[1]  = {};
     StartScale(frac, iTvec);
-
     const T imposedPressure = pressureDrop / converter.getConversionFactorPressure() * frac[0];
-    AnalyticalConst2D<T, T> pressure(imposedPressure);
-    sLatticeNS.defineRho(inlet, pressure);
+
+    momenta::setDensity<T, NSDESCRIPTOR>(sLatticeNS, inlet, imposedPressure);
   }
 }
 
