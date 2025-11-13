@@ -211,30 +211,13 @@ void prepareLattice(MyCase& myCase) {
 }
 
 void setInitialValues(MyCase& myCase) {
-
-  OstreamManager clout( std::cout,"setInitValues" );
-
   using T = MyCase::value_t;
   using DESCRIPTOR = MyCase::descriptor_t_of<NavierStokes>;
   auto& parameters = myCase.getParameters();
   auto& geometry = myCase.getGeometry();
   auto& lattice = myCase.getLattice(NavierStokes{});
   const T outletPressure = parameters.get<parameters::AVERAGE_PRESSURE>()-0.5*parameters.get<parameters::PRESSURE_DIFFERENCE>();
-  T pL0 = lattice.getUnitConverter().getLatticePressure(outletPressure);
-  AnalyticalConst2D<T,T> rho((pL0*descriptors::invCs2<T,DESCRIPTOR>()+T(1)) );
-
-  clout << "phys_char_densitiy" << parameters.get<parameters::PHYS_CHAR_DENSITY>() << std::endl;
-  clout << "outletPressure (phys)=" << outletPressure << std::endl;
-  clout<< "outletPressure (lattice)="<< pL0 << std::endl;
-  clout << "InitDensity (lattice)=" << pL0*descriptors::invCs2<T,DESCRIPTOR>()+T(1) << std::endl;
-  clout << "InitDensity (phys)=" << util::idealGasDensity( parameters.get<parameters::MOLAR_MASS>(), outletPressure, parameters.get<parameters::TEMPERATURE>()) << std::endl;
-
-  //AnalyticalConst2D<T,T> rho( util::idealGasDensity( parameters.get<parameters::MOLAR_MASS>(), outletPressure, parameters.get<parameters::TEMPERATURE>()) );
-  //AnalyticalConst2D<T,T> u0(T(0), T(0));
-
-  // Initialize all values of distribution functions to their local equilibrium
   momenta::setPressure( lattice, geometry.getMaterialIndicator({0,1,2,3,4}), outletPressure);
-  //lattice.iniEquilibrium(geometry.getMaterialIndicator({0,1,2,3,4}), rho, u0);
 
   // Make the lattice ready for simulation
   lattice.initialize();
