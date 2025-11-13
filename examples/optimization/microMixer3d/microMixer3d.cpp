@@ -139,7 +139,7 @@ void prepareLattice(MyCase& myCase) {
 
   auto bulkIndicator = geometry.getMaterialIndicator({1,3,4,5});
   // dynamics for fluid
-  sLattice.template defineDynamics<BGKdynamics>(bulkIndicator);
+  dynamics::set<BGKdynamics>(sLattice, bulkIndicator);
 
   // boundary conditions for fluid
   boundary::set<boundary::BounceBack>(sLattice, geometry, 2);
@@ -149,7 +149,7 @@ void prepareLattice(MyCase& myCase) {
 
   // dynamics for adsorptive
   auto bulkIndicatorAD = geometry.getMaterialIndicator({1,3,5});
-  sLatticeAD.template defineDynamics<ParticleAdvectionDiffusionBGKdynamics>(bulkIndicatorAD);
+  dynamics::set<ParticleAdvectionDiffusionBGKdynamics>(sLatticeAD, bulkIndicatorAD);
 
   // boundary conditions for adsorptive
   boundary::set<boundary::BounceBack>(sLatticeAD, geometry, 2);
@@ -180,20 +180,13 @@ void setInitialValues(MyCase& myCase) {
   auto& sLatticeAD = myCase.getLattice(Concentration0{});
 
   // initialisation for fluid
-  AnalyticalConst3D<T, T> rho1(1.);
   AnalyticalConst3D<T, T> u0(0., 0., 0.);
-
-  auto initIndicator = geometry.getMaterialIndicator({1,2,3,4,5});
-  sLattice.defineRhoU(initIndicator, rho1, u0);
-  sLattice.iniEquilibrium(initIndicator, rho1, u0);
 
   // initialisation for adsorptive
   auto initIndicatorAD = geometry.getMaterialIndicator({1,2,4,5});
   AnalyticalConst3D<T, T> rhoSmall(1.e-8);
-  sLatticeAD.defineRhoU(initIndicatorAD, rhoSmall, u0);
-  sLatticeAD.defineRhoU(geometry, 3, rho1, u0);
+  momenta::setDensity(sLatticeAD, initIndicatorAD, rhoSmall);
   sLatticeAD.iniEquilibrium(initIndicatorAD, rhoSmall, u0);
-  sLatticeAD.iniEquilibrium(geometry, 3, rho1, u0);
 
   sLattice.initialize();
   sLatticeAD.initialize();
@@ -209,7 +202,7 @@ void setTemporalValues(MyCase& myCase,
 
   std::vector<T> maxVelocity(3, T());
   const T distanceToBoundary = converter.getConversionFactorLength() / 2.;
-  const T latticeVelNS = converter.getLatticeVelocity(converter.getCharPhysVelocity());
+  const T velNS = converter.getCharPhysVelocity();
   const std::size_t itStartTime = converter.getLatticeTime(params.get<PHYS_START_T>());
 
   if (iT <= itStartTime && iT % 50 == 0) {
@@ -219,10 +212,10 @@ void setTemporalValues(MyCase& myCase,
     startScale(frac, help);
 
     // set lattice velocity on boundary
-    maxVelocity[1] = latticeVelNS * frac[0];
+    maxVelocity[1] = velNS * frac[0];
     RectanglePoiseuille3D<T> u5(geometry, 5, maxVelocity,
                                 distanceToBoundary, distanceToBoundary, distanceToBoundary);
-    sLattice.defineU(geometry, 5, u5);
+    momenta::setVelocity(sLattice, geometry.getMaterialIndicator({5}), u5);
   }
 
   const int itStartPeriodTime = converter.getLatticeTime(params.get<PHYS_START_PERIOD>());
@@ -236,8 +229,8 @@ void setTemporalValues(MyCase& myCase,
     cos(frac, help);
 
     rho = util::densityFromPressure<T,D3Q19<>>(T(-0.5) * amplitude + frac[0]);
-    AnalyticalConst3D<T,T> rhovar(rho);
-    sLattice.defineRho(geometry, 4, rhovar);
+    AnalyticalConst3D<T,T> rhovar(converter.getPhysDensity(rho));
+    momenta::setDensity(sLattice, geometry.getMaterialIndicator({4}), rhovar);
   }
 
   if (iT > itStartTime + 0.5 * itStartPeriodTime)
@@ -248,8 +241,8 @@ void setTemporalValues(MyCase& myCase,
     cosComp(frac, help);
 
     rho = util::densityFromPressure<T,D3Q19<>>(-frac[0]);
-    AnalyticalConst3D<T, T> rhovar( rho );
-    sLattice.defineRho(geometry, 4, rhovar);
+    AnalyticalConst3D<T,T> rhovar(converter.getPhysDensity(rho));
+    momenta::setDensity(sLattice, geometry.getMaterialIndicator({4}), rhovar);
   }
 }
 
