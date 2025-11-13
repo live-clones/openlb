@@ -42,7 +42,6 @@
 #include "../../laminar/poiseuille3d/case.h"
 
 void simulatePoiseuilleForEOC(MyCase::ParametersD& parameters, Gnuplot<MyCase::value_t>& gplot) {
-
   /// === Step 3: Create Mesh ===
   Mesh mesh = createMesh(parameters);
 
@@ -63,13 +62,12 @@ void simulatePoiseuilleForEOC(MyCase::ParametersD& parameters, Gnuplot<MyCase::v
 
   const FlowType      flowType        = parameters.get<parameters::FLOW_TYPE>();
   const BoundaryType  boundaryType    = parameters.get<parameters::BOUNDARY_TYPE>();
-  const bool          noslipBoundary  = ((boundaryType != FREE_SLIP) && (boundaryType != PARTIAL_SLIP));
+  const bool          noslipBoundary  = ((boundaryType != BoundaryType::FREE_SLIP) && (boundaryType != BoundaryType::PARTIAL_SLIP));
   const size_t        res             = parameters.get<parameters::RESOLUTION>();
 
-  // Gnuplot output
   if (noslipBoundary) {
-    if (flowType == NON_FORCED){
-      gplot.setData (
+    if (flowType == FlowType::NON_FORCED) {
+      gplot.setData(
         MyCase::value_t(res),
         { parameters.get<parameters::VELOCITY_L1_ABS_ERROR>(),
           parameters.get<parameters::VELOCITY_L2_ABS_ERROR>(),
@@ -124,16 +122,22 @@ int main( int argc, char* argv[] )
 
   // === 1st Step: Initialization ===
   initialize( &argc, &argv );
+
   MyCase::ParametersD myCaseParameters;
-  setGetParameters(myCaseParameters, argc, argv);
+  setDefaultParameters(myCaseParameters);
+  myCaseParameters.set<parameters::EOC_START_RESOLUTION>(21);
+  myCaseParameters.set<parameters::EOC_MAX_RESOLUTION>(52);
+  myCaseParameters.set<parameters::EOC_RESOLUTION_STEP>(10);
   myCaseParameters.set<parameters::EOC>(true);
 
   BoundaryType boundaryType = myCaseParameters.get<parameters::BOUNDARY_TYPE>();
-  bool forbiddenEOCCombination = (boundaryType == FREE_SLIP) || (boundaryType == PARTIAL_SLIP);
-  if ( forbiddenEOCCombination ) std::runtime_error("eoc computation is currently not supported for slip boundary conditions");
+  bool forbiddenEOCCombination = (boundaryType == BoundaryType::FREE_SLIP) || (boundaryType == BoundaryType::PARTIAL_SLIP);
+  if (forbiddenEOCCombination) {
+    std::runtime_error("eoc computation is currently not supported for slip boundary conditions");
+  }
 
   std::string bcName = "bc" + std::to_string(int(myCaseParameters.get<parameters::BOUNDARY_TYPE>()));
-  std::string runName = (myCaseParameters.get<parameters::FLOW_TYPE>() == FORCED) ? bcName + "_force" : bcName + "_nonForce";
+  std::string runName = (myCaseParameters.get<parameters::FLOW_TYPE>() == FlowType::FORCED) ? bcName + "_force" : bcName + "_nonForce";
   singleton::directories().setOutputDir( "./tmp/" + runName + "/" );
 
   // Initialize gnuplot
@@ -151,9 +155,7 @@ int main( int argc, char* argv[] )
   size_t maxN   = myCaseParameters.get<parameters::EOC_MAX_RESOLUTION>();
   size_t stepN  = myCaseParameters.get<parameters::EOC_RESOLUTION_STEP>();
 
-  // loop over the different simulations
   for(size_t simuN = startN; simuN < maxN; simuN += stepN){
-    /// Run the simulations
     clout << "Starting next simulation with N = " << simuN << std::endl;
     myCaseParameters.set<parameters::RESOLUTION>(simuN);
     myCaseParameters.set<parameters::PHYS_DELTA_X>(
@@ -164,6 +166,5 @@ int main( int argc, char* argv[] )
   }
 
   gplot.writePNG();
-
   return 0;
 }

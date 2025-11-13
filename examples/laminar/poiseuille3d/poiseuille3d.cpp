@@ -40,6 +40,7 @@
  */
 
 #include <olb.h>
+
 #include "case.h"
 
 using namespace olb;
@@ -50,9 +51,12 @@ int main( int argc, char* argv[] )
 
   // === 1st Step: Initialization ===
   initialize( &argc, &argv );
+
   MyCase::ParametersD myCaseParameters;
-  setGetParameters(myCaseParameters, argc, argv);
-  singleton::directories().setOutputDir( "./tmp/bc" + std::to_string(int(myCaseParameters.get<parameters::BOUNDARY_TYPE>())) + "_force" + std::to_string(int(myCaseParameters.get<parameters::FLOW_TYPE>())) + "/" );
+  setDefaultParameters(myCaseParameters);
+  myCaseParameters.fromCLI(argc, argv);
+
+  singleton::directories().setOutputDir("./tmp/bc" + std::to_string(int(myCaseParameters.get<parameters::BOUNDARY_TYPE>())) + "_force" + std::to_string(int(myCaseParameters.get<parameters::FLOW_TYPE>())) + "/" );
 
   /// === Step 3: Create Mesh ===
   Mesh mesh = createMesh(myCaseParameters);
