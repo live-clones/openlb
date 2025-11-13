@@ -161,10 +161,11 @@ void prepareLatticeMink(MyCase& myCase)
   //T intensity                  = params.get<parameters::INTENSITY>();
   clout << "latticeSink= " << latticeSink << std::endl;
 
-  Rlattice.defineDynamics<NoDynamics<T, RDESCRIPTOR>>(geometry, 0);
-  Rlattice.defineDynamics<P1Dynamics<T, RDESCRIPTOR>>(geometry, 1);
-  Rlattice.defineDynamics<EquilibriumBoundaryFirstOrder<T, RDESCRIPTOR>>(geometry, 2);
-  Rlattice.defineDynamics<EquilibriumBoundaryFirstOrder<T, RDESCRIPTOR>>(geometry, 3);
+  //refactor
+  dynamics::set<NoDynamics<T, RDESCRIPTOR>>(Rlattice, geometry, 0);
+  dynamics::set<P1Dynamics<T, RDESCRIPTOR>>(Rlattice, geometry, 1);
+  dynamics::set<EquilibriumBoundaryFirstOrder<T, RDESCRIPTOR>>(Rlattice, geometry, 2);
+  dynamics::set<EquilibriumBoundaryFirstOrder<T, RDESCRIPTOR>>(Rlattice, geometry, 3);
 
   clout << "Input intensity as: " << inletDirichlet << std::endl;
   //Activate directed BC
@@ -220,14 +221,14 @@ void prepareLatticeMcHardy(MyCase& myCase)
   T latticeAbsorption = converter.getLatticeAbsorption();
   T latticeScattering = converter.getLatticeScattering();
   T inletDirichlet    = params.get<parameters::INLET_DIRICHLET>();
-  T intensity         = params.get<parameters::INTENSITY>();
 
-  Rlattice.defineDynamics<NoDynamics<T, RDESCRIPTOR>>(geometry, 0);
+
+  dynamics::set<NoDynamics<T, RDESCRIPTOR>>(Rlattice, geometry, 0);
   // select between the mesoscopic method with or without a Runge Kutta scheme
-  Rlattice.defineDynamics<RTLBMdynamicsMcHardyRK<T, RDESCRIPTOR>>(geometry, 1);
-  // Rlattice.defineDynamics<RTLBMdynamicsMcHardy<T, RDESCRIPTOR>>( geometry, 1 );
-  Rlattice.defineDynamics<EquilibriumBoundaryFirstOrder>(geometry, 2);
-  Rlattice.defineDynamics<EquilibriumBoundaryFirstOrder>(geometry, 3);
+  dynamics::set<RTLBMdynamicsMcHardyRK<T, RDESCRIPTOR>>(Rlattice, geometry, 1);
+  // dynamics::set<RTLBMdynamicsMcHardy<T, RDESCRIPTOR>>(Rlattice, geometry, 1 );
+  dynamics::set<EquilibriumBoundaryFirstOrder>(Rlattice, geometry, 2);
+  dynamics::set<EquilibriumBoundaryFirstOrder>(Rlattice, geometry, 3);
 
   //Activate directed BC
   if (params.get<parameters::USE_DIRECTED>()) {
@@ -266,9 +267,11 @@ void setInitialValues(MyCase& myCase)
   Rlattice.iniEquilibrium(geometry, 1, rho0, u0);
   Rlattice.iniEquilibrium(geometry, 2, rho0, u0);
   Rlattice.iniEquilibrium(geometry, 3, rho1, u0);
-  Rlattice.defineRho(geometry, 2, rho0);
-  Rlattice.defineRho(geometry, 3, rho1);
-  Rlattice.initialize();
+  
+  
+  momenta::setDensity(Rlattice, geometry.getMaterialIndicator({2}), rho0);
+  momenta::setDensity(Rlattice, geometry.getMaterialIndicator({3}), rho1);
+  
 }
 
 void getResults(MyCase& myCase, util::Timer<MyCase::value_t>& timer, std::size_t iT, bool converged)
