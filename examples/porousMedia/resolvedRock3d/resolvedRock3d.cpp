@@ -177,7 +177,7 @@ void prepareLattice( MyCase& myCase ) {
 
   // Material=1 -->bulk dynamics
   auto bulkIndicator = geometry.getMaterialIndicator({1, 3, 4});
-  lattice.defineDynamics<BGKdynamics>(bulkIndicator);
+  dynamics::set<BGKdynamics>(lattice, bulkIndicator);
 
   // Material=2 -->bounce back
   boundary::set<boundary::BounceBack>(lattice, geometry, 2);
@@ -192,19 +192,7 @@ void prepareLattice( MyCase& myCase ) {
   clout << "Prepare Lattice ... OK" << std::endl;
 }
 void setInitialValues( MyCase& myCase ) {
-  using T = MyCase::value_t;
   auto& lattice   = myCase.getLattice(NavierStokes{});
-  auto& geometry  = myCase.getGeometry();
-  auto bulkIndicator = geometry.getMaterialIndicator({1, 3, 4});
-
-  // Initial conditions
-  AnalyticalConst3D<T, T> rhoF(T {1});
-  const Vector<T, 3>      velocityV {T {0}, T {0}, T {0}};
-  AnalyticalConst3D<T, T> uF(velocityV);
-
-  // Initialize all values of distribution functions to their local equilibrium
-  lattice.defineRhoU(bulkIndicator, rhoF, uF);
-  lattice.iniEquilibrium(bulkIndicator, rhoF, uF);
 
   // Make the lattice ready for simulation
   lattice.initialize();
@@ -236,10 +224,8 @@ void setTemporalValues( MyCase& myCase,
     T   frac[1]  = {};
     StartScale(frac, &iT);
     const T                 currentPressure = frac[0] * pressureDrop;
-    AnalyticalConst3D<T, T> rhoFromPressure(
-        converter.getLatticeDensityFromPhysPressure(currentPressure));
 
-    lattice.defineRho(geometry, 3, rhoFromPressure);
+    momenta::setPressure(lattice, geometry.getMaterialIndicator({3}), currentPressure);
 
     clout << "step=" << iT << "; currentPressureDifference=" << currentPressure
           << std::endl;
