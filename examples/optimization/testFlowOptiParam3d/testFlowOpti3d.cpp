@@ -101,7 +101,7 @@ void prepareLattice(MyCase& myCase)
   converter.print();
 
   /// @li Material=1 --> bulk dynamics
-  lattice.template defineDynamics<BulkDynamics>(geometry.getMaterialIndicator({1}));
+  dynamics::set<BulkDynamics>(lattice, geometry.getMaterialIndicator({1}));
   /// @li Material=2,3 --> velocity boundary
   boundary::set<boundary::LocalVelocity>(lattice, geometry.getMaterialIndicator({2}));
   /// @li Set lattice relaxation frequency
@@ -118,23 +118,13 @@ void setInitialValues(MyCase& myCase)
   auto& geometry = myCase.getGeometry();
   auto& converter = lattice.getUnitConverter();
 
-  /// @li Initialize density to one everywhere
-  /// @li Initialize velocity to be tangential at the lid and zero in the bulk and at the walls
-  AnalyticalConst3D<T,T> rhoF(1);
-  const Vector<T,3> u{0,0,0};
-  AnalyticalConst3D<T,T> uF(u);
-
-  /// @li Initialize populations to equilibrium state
-  lattice.defineRhoU(geometry.getMaterialIndicator({1,2}), rhoF, uF);
-  lattice.iniEquilibrium(geometry.getMaterialIndicator({1,2}), rhoF, uF);
-
   /// @li Set force field
   ForceTestFlow3D<T,T,MyCase::descriptor_t> forceF(converter);
   const T latticeScaling(converter.getConversionFactorMass() / converter.getConversionFactorForce());
   AnalyticalScaled3D<T,T> scaledForceF(forceF, latticeScaling);
   AnalyticalConst3D<T,T> factorF(0.01);
-  lattice.template defineField<descriptors::FORCE>(geometry.getMaterialIndicator({1}), scaledForceF);
-  lattice.template defineField<descriptors::SCALAR>(geometry.getMaterialIndicator({1}), factorF);
+  fields::set<descriptors::FORCE>(lattice, geometry.getMaterialIndicator({1}), scaledForceF);
+  fields::set<descriptors::SCALAR>(lattice, geometry.getMaterialIndicator({1}), factorF);
   lattice.initialize();
 }
 
@@ -162,8 +152,8 @@ void setTemporalValues(MyCase& myCase,
 
     /// @li Take analytical velocity solution, scale it to lattice units, set the boundary data
     VelocityTestFlow3D<T,T,MyCase::descriptor_t> velocityF(converter);
-    AnalyticalScaled3D<T,T> uBoundaryStartF(velocityF, frac[0] / converter.getConversionFactorVelocity());
-    lattice.defineU(geometry, 2, uBoundaryStartF);
+    AnalyticalScaled3D<T,T> uBoundaryStartF(velocityF, frac[0]);
+    momenta::setVelocity(lattice, geometry.getMaterialIndicator({2}), uBoundaryStartF);
     lattice.template setProcessingContext<Array<momenta::FixedVelocityMomentumGeneric::VELOCITY>>(ProcessingContext::Simulation);
   }
 }
@@ -229,7 +219,7 @@ void prepareAdjointLattice(MyOptiCase& optiCase) {
   adjointLattice.setUnitConverter(controlledLattice.getUnitConverter());
 
   // Define dual physics
-  adjointLattice.template defineDynamics<DualForcedBGKDynamics<T,MyCase::descriptor_t>>(geometry.getMaterialIndicator({1}));
+  dynamics::set<DualForcedBGKDynamics>(adjointLattice, geometry.getMaterialIndicator({1}));
   boundary::set<boundary::BounceBack>(adjointLattice, geometry.getMaterialIndicator({2}));
   adjointLattice.template setParameter<descriptors::OMEGA>(adjointLattice.getUnitConverter().getLatticeRelaxationFrequency());
 }
@@ -244,12 +234,6 @@ void setAdjointInitialValues(MyOptiCase& optiCase) {
   auto bulkIndicator = geometry.getMaterialIndicator({1});
 
   // Initialize dual problem
-  AnalyticalConst3D<T,T> rhoF(1);
-  Vector<T,3> velocity;
-  AnalyticalConst3D<T,T> uF(velocity);
-  adjointLattice.defineRhoU(bulkIndicator, rhoF, uF);
-  adjointLattice.iniEquilibrium(bulkIndicator, rhoF, uF);
-
   // This needs to be before copying the fields as otherwise the the copied fields will be overwritten
   adjointLattice.stripeOffDensityOffset(adjointLattice.getStatistics().getAverageRho() - T{1});
   adjointLattice.initialize();
@@ -281,7 +265,7 @@ void setInitialControl(MyOptiCase& optiCase) {
 
   // Intialize controlled field in superLattice
   AnalyticalConst3D<T,T> startF(3.);
-  lattice.template defineField<ControlledField>(geometry, 1, startF);
+  fields::set<ControlledField>(lattice, geometry.getMaterialIndicator({1}), startF);
   control.template setProjection<projection::Identity<T>>();
   control.template set<ControlledField>(geometry, 1, lattice);
 }
@@ -295,7 +279,7 @@ void applyControl(MyOptiCase& optiCase) {
   auto factor = optiCase.getController().get()[0];
   std::cout << "factor: " << factor << std::endl;
   AnalyticalConst3D<T,T> factorF(factor);
-  lattice.template defineField<ControlledField>(geometry, 1, factorF);
+  fields::set<ControlledField>(lattice, geometry.getMaterialIndicator({1}), factorF);
   lattice.template setProcessingContext<Array<ControlledField>>(ProcessingContext::Simulation);
 }
 
