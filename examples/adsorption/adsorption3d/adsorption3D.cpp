@@ -142,7 +142,7 @@ void prepareLatticeAD(MyCase& myCase) {
   const T omega = lattice.getUnitConverter().getLatticeRelaxationFrequency();
 
   // Material=1 --> bulk dynamics
-  lattice.template defineDynamics<SourcedAdvectionDiffusionBGKdynamics>(geometry, 1);
+  dynamics::set<SourcedAdvectionDiffusionBGKdynamics>(lattice, geometry.getMaterialIndicator(1));
 
   // Lattice initialize
   lattice.template setParameter<descriptors::OMEGA>(omega);
@@ -189,7 +189,7 @@ void prepareLatticeNS(MyCase& myCase) {
   const T omega = lattice.getUnitConverter().getLatticeRelaxationFrequency();
 
   // Material=1 --> bulk dynamics
-  lattice.defineDynamics<BGKdynamics>(geometry, 1);
+  dynamics::set<BGKdynamics>(lattice, geometry.getMaterialIndicator(1));
 
   // Lattice initialize
   lattice.setParameter<descriptors::OMEGA>(omega);
@@ -246,15 +246,7 @@ void setInitialValuesNSE(MyCase& myCase) {
   auto& geometry = myCase.getGeometry();
   auto& lattice = myCase.getLattice(NavierStokes{});
 
-  // Initial conditions
-  AnalyticalConst3D<T, T> rhoFluid(1.);
-  AnalyticalConst3D<T, T> u0(0.0, 0.0, 0.0);
-
-  auto bulkIndicator = geometry.getMaterialIndicator({0, 1});
-
-  // Initialize all values of distribution functions to their local equilibrium
-  lattice.defineRhoU(bulkIndicator, rhoFluid, u0);
-  lattice.iniEquilibrium(bulkIndicator, rhoFluid, u0);
+  momenta::setDensity( lattice, geometry.getMaterialIndicator({0, 1}), T(1.0));
 
   // Make the lattice ready for simulation
   lattice.initialize();
@@ -269,14 +261,7 @@ void setInitialValuesADE(MyCase& myCase) {
 
   // Initial conditions
   const T rho_ = parameters.get<parameters::RHO>()[ID];
-  AnalyticalConst3D<T, T> rho(rho_);
-  AnalyticalConst3D<T, T> u0(0.0, 0.0, 0.0);
-
-  auto bulkIndicator = geometry.getMaterialIndicator({0, 1});
-
-  // Initialize all values of distribution functions to their local equilibrium
-  lattice.defineRho(bulkIndicator, rho);
-  lattice.iniEquilibrium(bulkIndicator, rho, u0);
+  momenta::setDensity( lattice, geometry.getMaterialIndicator({0, 1}), rho_);
 
   // Make the lattice ready for simulation
   lattice.initialize();
