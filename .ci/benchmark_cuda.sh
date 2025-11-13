@@ -15,7 +15,7 @@ make testPoiseuille2DBGK
 pushd examples/laminar/cavity3dBenchmark
 make
 for run in {1..5}; do
-    ./cavity3d --RESOLUTION 100 --TIME_STEPS 1000 --NO_EXPORT_RESULTS 1 | tail -n 1 | tee --append raw_performance.csv
+    ./cavity3d --RESOLUTION 100 --TIME_STEPS 1000 --VTK_ENABLED 0 | tail -n 1 | tee --append raw_performance.csv
 done
 awk -F',' '{sum+=$6; ++n} END { print "average_cavity3d_performance_n100 " sum/n }' < raw_performance.csv > performance.txt
 popd
