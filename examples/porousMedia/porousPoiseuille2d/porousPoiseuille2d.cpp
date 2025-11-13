@@ -292,9 +292,9 @@ void setInitialValues( MyCase& myCase ) {
 
   T p0L = converter.getLatticePressure(p0);
 
-  AnalyticalLinear2D<T,T> rho( -p0L/lx*descriptors::invCs2<T,DESCRIPTOR>(),
+  AnalyticalLinear2D<T,T> rho( converter.getPhysDensity( - p0L/lx*descriptors::invCs2<T,DESCRIPTOR>()),
                                 0,
-                                p0L*descriptors::invCs2<T,DESCRIPTOR>()+1 );
+                               converter.getPhysDensity( p0L*descriptors::invCs2<T,DESCRIPTOR>()+1 ));
 
   T dp = p0/lx;
   T mu = converter.getPhysViscosity()*converter.getPhysDensity();
@@ -309,7 +309,8 @@ void setInitialValues( MyCase& myCase ) {
 
   // Initialize all values of distribution functions to their local equilibrium
   for ( int i: { 0,1,2,3,4 } ) {
-    lattice.defineRhoU( geometry, i, rho, u );
+    momenta::setVelocity(lattice, geometry.getMaterialIndicator({i}), uSol);
+    momenta::setDensity(lattice, geometry.getMaterialIndicator({i}), rho);
     //lattice.iniEquilibrium( geometry, i, rho, u ); // gives problems with non-standard equilibria
   }
 
