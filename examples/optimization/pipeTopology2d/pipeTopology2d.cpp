@@ -154,7 +154,7 @@ void prepareLattice(MyCase& myCase) {
 
   // define dynamics and bc
   auto bulkIndicator = superGeometry.getMaterialIndicator({1,3,4,6,7,8});
-  sLattice.template defineDynamics<DYNAMICS>(bulkIndicator);
+  dynamics::set<DYNAMICS>(sLattice, bulkIndicator);
   boundary::set<boundary::BounceBack>(sLattice, superGeometry, 2);
   boundary::set<boundary::InterpolatedVelocity>(sLattice, superGeometry, 3);
   boundary::set<boundary::InterpolatedPressure>(sLattice, superGeometry, 4);
@@ -168,23 +168,14 @@ void setInitialValues(MyCase& myCase) {
   auto& superGeometry = myCase.getGeometry();
   auto& sLattice = myCase.getLattice(NavierStokes{});
 
-  // Initial conditions
-  AnalyticalConst2D<T,T> rhoF(1);
-  AnalyticalConst2D<T,T> uF(Vector<T,2>{});
-
-  // Initialize all values of distribution functions to their local equilibrium
-  auto all = superGeometry.getMaterialIndicator({0,1,2,3,4,6,7,8});
-  sLattice.defineRhoU(all, rhoF, uF);
-  sLattice.iniEquilibrium(all, rhoF, uF);
-
   // Set porosity field
   auto bulkIndicator = superGeometry.getMaterialIndicator({1,3,4,6,7,8});
   auto solidIndicator = superGeometry.getMaterialIndicator({0,2});
   AnalyticalConst2D<T,T> zero(0.);
   AnalyticalConst2D<T,T> one(1.);
 
-  sLattice.template defineField<descriptors::POROSITY>(bulkIndicator, one);
-  sLattice.template defineField<descriptors::POROSITY>(solidIndicator, zero);
+  fields::set<descriptors::POROSITY>(sLattice, bulkIndicator, one);
+  fields::set<descriptors::POROSITY>(sLattice, solidIndicator, zero);
 
   sLattice.initialize();
 }
@@ -205,10 +196,10 @@ void setTemporalValues(MyCase& myCase, std::size_t iT) {
     PolynomialStartScale<T,T> StartScale( iTmaxStart, T( 1 ) );
     T iTvec[1] = {T( iT )}; T frac[1] = {};
     StartScale( frac,iTvec );
-    T maxVelocity = converter.getCharLatticeVelocity()*3./2.*frac[0];
+    T maxVelocity = converter.getCharPhysVelocity()*3./2.*frac[0];
     T distance2Wall = L/2.;
     Poiseuille2D<T> poiseuilleU(superGeometry, 3, maxVelocity, distance2Wall);
-    sLattice.defineU(superGeometry, 3, poiseuilleU);
+    momenta::setVelocity(sLattice, superGeometry.getMaterialIndicator({3}), poiseuilleU);
     sLattice.template setProcessingContext<Array<momenta::FixedVelocityMomentumGeneric::VELOCITY>>(
       ProcessingContext::Simulation);
   }
@@ -267,7 +258,7 @@ void setInitialControl(MyOptiCase& optiCase) {
   T porosity = projection::permeabilityToPorosity(parameters.get<parameters::INITIAL_CONTROL_SCALAR>(), converter);
   std::cout << "POROSITY: " << porosity << std::endl;
   AnalyticalConst2D<T,T> controls(porosity);
-  lattice.template defineField<ControlledField>(geometry, 6, controls);
+  fields::set<ControlledField>(lattice, geometry.getMaterialIndicator({6}), controls);
   control.template setProjection<projection::Sigmoid<T>>();
   control.template set<ControlledField>(geometry, 6, lattice);
 }
@@ -280,7 +271,7 @@ void prepareAdjointLattice(MyOptiCase& optiCase) {
   adjointLattice.setUnitConverter(controlledLattice.getUnitConverter());
 
   // Define dual dynamics
-  adjointLattice.template defineDynamics<DualPorousBGKDynamics<MyCase::value_t,MyCase::descriptor_t>>(geometry.getMaterialIndicator({1,6,7,8}));
+  dynamics::set<DualPorousBGKDynamics>(adjointLattice, geometry.getMaterialIndicator({1,6,7,8}));
   boundary::set<boundary::BounceBack>(adjointLattice, geometry.getMaterialIndicator({2,3,4}));
   adjointLattice.template setParameter<descriptors::OMEGA>(adjointLattice.getUnitConverter().getLatticeRelaxationFrequency());
 }
