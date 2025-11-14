@@ -142,8 +142,7 @@ void prepareLattice( MyCase& myCase )
   converter.print();
 
   // define lattice Dynamics
-  sLattice.defineDynamics<NoDynamics>(geometry, 0);
-  sLattice.defineDynamics<BulkDynamics>(geometry, 1);
+  dynamics::set<BulkDynamics>(sLattice, geometry, 1);
   boundary::set<boundary::BounceBack>(sLattice, geometry, 2);
 
   // global relaxation frequency (it can be initialized as one)
@@ -228,13 +227,13 @@ void setInitialValues(MyCase& myCase) {
 
   AnalyticalIdentity2D<T,T> fluidDensity( vapor + liquid + film );
 
-  auto allGeometry = geometry.getMaterialIndicator({1,2});
-  sLattice.defineRhoU( allGeometry, fluidDensity, fluidVelocity );
-  sLattice.iniEquilibrium( allGeometry, fluidDensity, fluidVelocity );
+  auto bulkIndicator = geometry.getMaterialIndicator({1,2});
+  momenta::setVelocity(sLattice, bulkIndicator, fluidVelocity);
+  momenta::setDensity(sLattice, bulkIndicator, fluidDensity);
+  sLattice.iniEquilibrium( bulkIndicator, fluidDensity, fluidVelocity );
 
   std::vector<T> fnull( 2,T() );
-  AnalyticalConst2D<T,T> fnull_( fnull );
-  sLattice.defineField<descriptors::EXTERNAL_FORCE>( geometry, 1, fnull_ );
+  fields::set<descriptors::EXTERNAL_FORCE>(sLattice, geometry.getMaterialIndicator(1), fnull);
 
   sLattice.initialize();
   sLattice.getCommunicator(stage::PreCoupling()).communicate();
