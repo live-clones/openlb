@@ -142,6 +142,7 @@ void prepareLattice( MyCase& myCase )
   converter.print();
 
   // define lattice Dynamics
+  dynamics::set<NoDynamics>(sLattice, geometry, 0);
   dynamics::set<BulkDynamics>(sLattice, geometry, 1);
   boundary::set<boundary::BounceBack>(sLattice, geometry, 2);
 
@@ -228,8 +229,7 @@ void setInitialValues(MyCase& myCase) {
   AnalyticalIdentity2D<T,T> fluidDensity( vapor + liquid + film );
 
   auto bulkIndicator = geometry.getMaterialIndicator({1,2});
-  momenta::setVelocity(sLattice, bulkIndicator, fluidVelocity);
-  momenta::setDensity(sLattice, bulkIndicator, fluidDensity);
+  sLattice.defineRhoU( bulkIndicator, fluidDensity, fluidVelocity );
   sLattice.iniEquilibrium( bulkIndicator, fluidDensity, fluidVelocity );
 
   std::vector<T> fnull( 2,T() );
