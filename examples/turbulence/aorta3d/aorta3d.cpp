@@ -361,11 +361,8 @@ void simulate(MyCase& myCase) {
 int main( int argc, char* argv[] )
 {
   // === 1st Step: Initialization ===
-  initialize( &argc, &argv );
-  singleton::directories().setOutputDir( "./tmp/" );
-  OstreamManager clout( std::cout,"main" );
-  // display messages from every single mpi process
-  //clout.setMultiOutput(true);
+  initialize(&argc, &argv);
+  OstreamManager clout(std::cout, "main");
 
   /// === Step 2: Set Parameters ===
   MyCase::ParametersD myCaseParameters;

@@ -51,11 +51,7 @@ struct PHYS_LENGTH : public descriptors::FIELD_BASE<1> { };
 }
 
 Mesh<MyCase::value_t,MyCase::d> createMesh(MyCase::ParametersD& parameters) {
-  using T = MyCase::value_t;
-  const T physDeltaX = parameters.get<parameters::PHYS_DELTA_X>();
-  auto mesh = Mesh<T,MyCase::d>::fromSTL("pipe.stl", physDeltaX, 0.001);
-  mesh.setOverlap(parameters.get<parameters::OVERLAP>());
-  return mesh;
+  return Mesh<MyCase::value_t,MyCase::d>::fromSTL(parameters);
 }
 
 // Stores data from stl file in geometry in form of material numbers
@@ -68,8 +64,6 @@ void prepareGeometry(MyCase& myCase) {
 
   auto pipeI = myCase.getMesh().getIndicator("pipe.stl");
   IndicatorLayer3D<T> extendedDomain(pipeI, physDeltaX);
-
-  auto valveI = myCase.getMesh().readSTL("valve.stl", physDeltaX, 0.001);
 
   geometry.rename(0,2, extendedDomain);
   geometry.rename(2,1, pipeI);
@@ -96,11 +90,12 @@ void prepareGeometry(MyCase& myCase) {
   geometry.rename(2,4, outflow);
 
   // Rotate the valve and set material number for it
+  STLreader<T> valveI("valve.stl", physDeltaX, 0.001);
   const auto rotationPoint = parameters.get<parameters::ROTATION_POINT>();
   const auto rotationAxis = parameters.get<parameters::ROTATION_AXIS>();
   const T angle = parameters.get<parameters::ANGLE>();
   T rotationAngle = std::numbers::pi_v<T> / T(180) *  angle;
-  IndicatorRotate<T,3> valveRot(rotationPoint, rotationAxis, rotationAngle, *valveI);
+  IndicatorRotate<T,3> valveRot(rotationPoint, rotationAxis, rotationAngle, valveI);
   geometry.rename(1,5, valveRot);
 
   // Removes all not needed boundary voxels outside the surface
@@ -275,6 +270,10 @@ int main(int argc, char* argv[]) {
   MyCase::ParametersD myCaseParameters;
   {
     using namespace olb::parameters;
+
+    myCaseParameters.set<STL_PATH>("pipe.stl");
+    myCaseParameters.set<STL_SCALING>(0.001);
+
     myCaseParameters.set<PHYS_DELTA_X       >(       0.00125);
     myCaseParameters.set<PHYS_DELTA_T       >(     0.0003125);
     myCaseParameters.set<PHYS_LENGTH        >(           0.5);
