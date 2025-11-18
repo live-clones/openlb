@@ -143,8 +143,7 @@ void prepareLattice(MyCase& myCase) {
   const auto& converter = lattice.getUnitConverter();
   converter.print();
 
-  lattice.defineDynamics<NoDynamics>(geometry, 0);
-  lattice.defineDynamics<BulkDynamics>(geometry, 1);
+  dynamics::set<BulkDynamics>(lattice, geometry, 1);
   boundary::set<boundary::BounceBack>(lattice, geometry, 2);
 
   // global relaxation frequency (it can be initialized as one)
@@ -249,12 +248,13 @@ void setInitialValues(MyCase& myCase) {
 
   AnalyticalIdentity3D<T,T> fluidDensity(vapor + liquid + film * difference);
 
-  auto allGeometry = geometry.getMaterialIndicator({1,2});
-  lattice.defineRhoU(allGeometry, fluidDensity, fluidVelocity);
-  lattice.iniEquilibrium(allGeometry, fluidDensity, fluidVelocity);
+  auto bulkIndicator = geometry.getMaterialIndicator({1,2});
+  lattice.defineRhoU(bulkIndicator, fluidDensity, fluidVelocity);
+  lattice.iniEquilibrium(bulkIndicator, fluidDensity, fluidVelocity);
 
   std::vector<T> fnull(3, T());
   AnalyticalConst3D<T,T> fnull_(fnull);
+  fields::set<descriptors::EXTERNAL_FORCE>(lattice, geometry.getMaterialIndicator(1), fnull);
   lattice.defineField<descriptors::EXTERNAL_FORCE>(geometry, 1, fnull_);
 
   lattice.initialize();
