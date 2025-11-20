@@ -37,12 +37,17 @@ using namespace olb::graphics;
 
 // === Step 1: Declarations ===
 using MyCase = Case<
-    NavierStokes,
-    Lattice<double, descriptors::D2Q9<descriptors::VELOCITY, descriptors::EXTERNAL_FORCE, descriptors::STATISTIC>>>;
+  NavierStokes,
+  Lattice<double, descriptors::D2Q9<descriptors::VELOCITY,
+                                    descriptors::EXTERNAL_FORCE,
+                                    descriptors::STATISTIC>>
+>;
 
 namespace olb::parameters {
+
 struct SHEN_OMEGA : public descriptors::FIELD_BASE<1> {};
-} // namespace olb::parameters
+
+}
 
 Mesh<MyCase::value_t, MyCase::d> createMesh(MyCase::ParametersD& params)
 {
@@ -146,10 +151,11 @@ void setInitialValues(MyCase& myCase)
   AnalyticalRandom2D<T, T>   random;
   AnalyticalIdentity2D<T, T> newRho(random * noise + oldRho);
 
-  // Initialize all values of distribution functions to their local equilibrium
   momenta::setDensity(NSElattice, geometry.getMaterialIndicator({1}), newRho);
 
   NSElattice.setParameter<descriptors::OMEGA>(omega1);
+
+  NSElattice.setProcessingContext(ProcessingContext::Simulation);
 
   clout << "Setting Initial Conditions ... OK" << std::endl;
 }
@@ -181,6 +187,7 @@ void getResults(MyCase& myCase, util::Timer<MyCase::value_t>& timer, std::size_t
 
     vtmWriter.createMasterFile();
   }
+
   // Writes the vtk files
   if (iT % vtkIter == 0) {
     NSElattice.setProcessingContext(ProcessingContext::Evaluation);
