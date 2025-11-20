@@ -129,14 +129,10 @@ void prepareLattice( MyCase& myCase )
   sLatticeCH.setUnitConverter(converter);
 
   // lattice dynamics for Navier-Stokes equation, only needed in fluid domain with id 1
-  sLatticeNS.defineDynamics<NoDynamics>(geometry, 0);
-  sLatticeNS.defineDynamics<NSBulkDynamics>(geometry, 1);
-  sLatticeNS.defineDynamics<NoDynamics>(geometry, 2);
+  dynamics::set<NSBulkDynamics>(sLatticeNS, geometry.getMaterialIndicator({1}));
 
   // lattice dynamics for Cahn-Hilliard equation, only needed in fluid domain with id 1
-  sLatticeCH.defineDynamics<NoDynamics>(geometry, 0);
-  sLatticeCH.defineDynamics<CHBulkDynamics>(geometry, 1);
-  sLatticeCH.defineDynamics<NoDynamics>(geometry, 2);
+  dynamics::set<CHBulkDynamics>(sLatticeCH, geometry.getMaterialIndicator({1}));
 
   auto bulk = geometry.getMaterialIndicator( 1 );
 
@@ -236,13 +232,13 @@ void setInitialValues(MyCase& myCase) {
   sLatticeNS.iniEquilibrium( all, pressure, zeroVelocity );
 
   // set the initial values for the fields
-  sLatticeNS.defineField<descriptors::RHO>( all, rho );                     // density
-  sLatticeNS.defineField<descriptors::TAU_EFF>( geometry, 1, tau );         // relaxation time for navier-stokes lattice
-  sLatticeCH.defineField<descriptors::SOURCE>( geometry, 1, zero );         // source term for Cahn-Hilliard lattice
-  sLatticeCH.defineField<descriptors::PHIWETTING>( geometry, 1, phi );      // fluid concentration used by wetting boundaries
-  sLatticeCH.defineField<descriptors::CHEM_POTENTIAL>( geometry, 1, zero ); // chemical potential
-  sLatticeCH.defineField<descriptors::BOUNDARY>( walls, two );              // boundary field used by wetting boundaries
-  sLatticeCH.defineField<descriptors::BOUNDARY>( bulk, zero );              // boundary field used by wetting boundaries
+  fields::set<descriptors::RHO>(sLatticeNS, all, rho);                                            // density
+  fields::set<descriptors::TAU_EFF>(sLatticeNS, geometry.getMaterialIndicator({1}), tau);         // relaxation time for navier-stokes lattice
+  fields::set<descriptors::SOURCE>(sLatticeCH, geometry.getMaterialIndicator({1}), zero);         // source term for Cahn-Hilliard lattice
+  fields::set<descriptors::PHIWETTING>(sLatticeCH, geometry.getMaterialIndicator({1}), phi);      // fluid concentration used by wetting boundaries
+  fields::set<descriptors::CHEM_POTENTIAL>(sLatticeCH, geometry.getMaterialIndicator({1}), zero); // chemical potential
+  fields::set<descriptors::BOUNDARY>(sLatticeCH, walls, two);                                     // boundary field used by wetting boundaries
+  fields::set<descriptors::BOUNDARY>(sLatticeCH, bulk, zero);                                     // boundary field used by wetting boundaries
 
   // some initial steps
   sLatticeCH.executePostProcessors(stage::PreCoupling());
