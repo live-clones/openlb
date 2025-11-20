@@ -164,8 +164,6 @@ void prepareLattice(SuperLattice<T,DESCRIPTOR>& sLattice,
   clout << "Prepare Lattice ..." << std::endl;
 
   // Material=0 -->do nothing
-  sLattice.defineDynamics<NoDynamics>(superGeometry, 0);
-
   // Material=1 -->bulk dynamics
   // Material=3 -->bulk dynamics (inflow)
   // Material=4 -->bulk dynamics (outflow)
@@ -173,33 +171,33 @@ void prepareLattice(SuperLattice<T,DESCRIPTOR>& sLattice,
 
   switch (bulkModel) {
     case BulkModel::RLB:
-      sLattice.defineDynamics<RLBdynamics>(bulkIndicator);
+      dynamics::set<RLBdynamics>(sLattice, bulkIndicator);
       break;
     case BulkModel::ShearSmagorinsky:
-      sLattice.defineDynamics<ShearSmagorinskyBGKdynamics>(bulkIndicator);
+      dynamics::set<ShearSmagorinskyBGKdynamics>(sLattice, bulkIndicator);
       sLattice.setParameter<collision::LES::SMAGORINSKY>(0.15);
       break;
     case BulkModel::Krause:
-      sLattice.defineDynamics<KrauseBGKdynamics>(bulkIndicator);
+      dynamics::set<KrauseBGKdynamics>(sLattice, bulkIndicator);
       sLattice.setParameter<collision::LES::SMAGORINSKY>(0.15);
     case BulkModel::ConsistentStrainSmagorinsky:
-      sLattice.defineDynamics<ConStrainSmagorinskyBGKdynamics>(bulkIndicator);
+      dynamics::set<ConStrainSmagorinskyBGKdynamics>(sLattice, bulkIndicator);
       sLattice.setParameter<collision::LES::SMAGORINSKY>(0.15);
       break;
     case BulkModel::Smagorinsky:
-      sLattice.defineDynamics<SmagorinskyBGKdynamics>(bulkIndicator);
+      dynamics::set<SmagorinskyBGKdynamics>(sLattice, bulkIndicator);
       sLattice.setParameter<collision::LES::SMAGORINSKY>(T(0.15));
       break;
     case BulkModel::LocalSmagorinsky:
     default:
-      sLattice.defineDynamics<LocalSmagorinskyBGKdynamics>(bulkIndicator);
+      dynamics::set<LocalSmagorinskyBGKdynamics>(sLattice, bulkIndicator);
       FringeZoneSmagorinskyConstant smagorinskyFringe(sLattice.getUnitConverter(), T{0.15});
-      sLattice.defineField<collision::LES::SMAGORINSKY>(bulkIndicator, smagorinskyFringe);
+      fields::set<collision::LES::SMAGORINSKY>(sLattice, bulkIndicator, smagorinskyFringe);
       break;
   }
 
   // Material=2 -->bounce back
-  sLattice.defineDynamics<BounceBack>(superGeometry, 2);
+  dynamics::set<BounceBack>(sLattice, superGeometry, 2);
 
   const T omega = sLattice.getUnitConverter().getLatticeRelaxationFrequency();
   boundary::set<boundary::LocalVelocity>(sLattice, superGeometry, 3);
@@ -231,9 +229,6 @@ void setBoundaryValues(SuperLattice<T,DESCRIPTOR>& sLattice,
     AnalyticalConst3D<T,T> rhoF(1);
     Vector<T,3> velocity{};
     AnalyticalConst3D<T,T> uF(velocity);
-
-    sLattice.defineRhoU(superGeometry.getMaterialIndicator({1, 2, 3, 4}), rhoF, uF);
-    sLattice.iniEquilibrium(superGeometry.getMaterialIndicator({1, 2, 3, 4}), rhoF, uF);
 
     sLattice.initialize();
 
