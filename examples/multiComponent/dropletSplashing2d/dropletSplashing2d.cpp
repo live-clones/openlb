@@ -189,7 +189,6 @@ void prepareLattice( MyCase& myCase )
 
 void setInitialValues(MyCase& myCase) {
   using T = MyCase::value_t;
-  using DESCRIPTOR = MyCase::descriptor_t;
   auto& geometry = myCase.getGeometry();
   auto& params = myCase.getParameters();
 
@@ -231,8 +230,8 @@ void setInitialValues(MyCase& myCase) {
   std::shared_ptr<AnalyticalF2D<T,T>> fluidDensity( vapor + liquid + film );
 
   auto bulkIndicator = geometry.getMaterialIndicator({1,2});
-  momenta::setVelocity<T,DESCRIPTOR,AnalyticalF2D<T,T>>(sLattice, bulkIndicator, *fluidVelocity);
-  momenta::setDensity<T,DESCRIPTOR,AnalyticalF2D<T,T>>(sLattice, bulkIndicator, *fluidDensity);
+  momenta::setVelocity(sLattice, bulkIndicator, *fluidVelocity);
+  momenta::setDensity(sLattice, bulkIndicator, *fluidDensity);
 
   std::shared_ptr<AnalyticalF2D<T,T>> latticeFluidDensity( fluidDensity * converter.getConversionFactorDensity());
   std::shared_ptr<AnalyticalF2D<T,T>> latticeFluidVelocity( fluidVelocity * converter.getConversionFactorVelocity());
