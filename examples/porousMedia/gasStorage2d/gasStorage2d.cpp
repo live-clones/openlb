@@ -530,8 +530,8 @@ int main(int argc, char* argv[])
   {
     using namespace olb::parameters;
     myCaseParameters.set<RESOLUTION     >(1000);               // resolution inlet [lattice units]
-    myCaseParameters.set<VTI_INPUT      >(std::string("gasStorage2d.vti")); // vti file name
-    myCaseParameters.set<ARRAY_NAME     >(std::string("Tiff Scalars"));     // data array name
+    myCaseParameters.set<VTI_INPUT      >("gasStorage2d.vti"); // vti file name
+    myCaseParameters.set<ARRAY_NAME     >("Tiff Scalars");     // data array name
     myCaseParameters.set<LATTICE_RELAXATION_TIME   >(0.52);    // tau liquid [lattice units]
     myCaseParameters.set<LATTICE_RELAXATION_TIME_PF>(0.8);     // tau mobility [lattice units]
     myCaseParameters.set<INLET_LENGTH_F  >(0.1);     // length of inlet region; % of total length []

@@ -24,7 +24,32 @@
 #ifndef CASE_MESH_H
 #define CASE_MESH_H
 
+#include "parametersD.h"
+#include "io/stlReader.h"
+
 namespace olb {
+
+namespace parameters {
+
+struct STL_PATH : public descriptors::TYPED_FIELD_BASE<std::string,1> { };
+struct STL_SCALING : public descriptors::FIELD_BASE<1> { };
+struct STL_RAY_MODE : public descriptors::TYPED_FIELD_BASE<RayMode,1> { };
+
+struct DECOMPOSITION_STRATEGY : public descriptors::TYPED_FIELD_BASE<std::string,1> { };
+struct MESH_PADDING : public descriptors::TYPED_FIELD_BASE<std::size_t,1> {
+  template <typename T, typename DESCRIPTOR>
+  static constexpr auto getInitialValue() {
+    return Vector<std::size_t,1>{1};
+  }
+};
+struct DECOMPOSITION_MULTIPLIER : public descriptors::TYPED_FIELD_BASE<std::size_t,1> {
+  template <typename T, typename DESCRIPTOR>
+  static constexpr auto getInitialValue() {
+    return Vector<std::size_t,1>{1};
+  }
+};
+
+}
 
 template <typename T, unsigned D>
 class Mesh {
@@ -33,7 +58,29 @@ private:
   std::unique_ptr<LoadBalancer<T>> _balancer;
   std::optional<unsigned> _overlap;
 
+  /// Arbitrary indicators related to the mesh
+  std::unordered_map<std::string, std::shared_ptr<IndicatorF<T,D>>> _indicators;
+
 public:
+  template <typename V, typename DESCRIPTOR>
+  static Mesh fromSTL(ParametersD<V,DESCRIPTOR>& params) {
+    using namespace parameters;
+    std::shared_ptr<STLreader<T>> stlI(new STLreader<T>(
+      params.template get<STL_PATH>(),
+      params.template get<PHYS_DELTA_X>(),
+      params.template get<STL_SCALING>(),
+      params.template get<STL_RAY_MODE>()));
+    IndicatorLayer3D<T> extendedDomain(*stlI,   params.template get<MESH_PADDING>()
+                                              * params.template get<PHYS_DELTA_X>());
+    Mesh mesh(extendedDomain,
+              params.template get<PHYS_DELTA_X>(),
+              singleton::mpi().getSize() * params.template get<DECOMPOSITION_MULTIPLIER>(),
+              params.template get<DECOMPOSITION_STRATEGY>());
+    mesh.addIndicator(params.template get<STL_PATH>(), stlI);
+    mesh.setOverlap(params.template get<parameters::OVERLAP>());
+    return mesh;
+  }
+
   Mesh(std::unique_ptr<CuboidDecomposition<T, D>> decomposition,
        std::unique_ptr<LoadBalancer<T>> balancer)
     : _decomposition(std::move(decomposition)),
@@ -71,6 +118,21 @@ public:
 
   T getDeltaX() const {
     return _decomposition->getDeltaX();
+  }
+
+  /// Stores indicator under name
+  void addIndicator(std::string name, std::shared_ptr<IndicatorF<T,D>> indicatorF) {
+    _indicators[name] = indicatorF;
+  }
+
+  /// Return indicator by name
+  std::shared_ptr<IndicatorF<T,D>> getIndicator(std::string name) {
+    return _indicators.at(name);
+  }
+
+  /// Return previously read STL
+  std::shared_ptr<STLreader<T>> getSTL(std::string path) {
+    return std::static_pointer_cast<STLreader<T>>(getIndicator(path));
   }
 
 };

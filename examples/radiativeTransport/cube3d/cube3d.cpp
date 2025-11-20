@@ -414,7 +414,7 @@ int main(int argc, char* argv[])
     myCaseParameters.set<INLET_DIRICHLET>(1.0);
 
     myCaseParameters.set<CASE_NUMBER>(1.);
-    myCaseParameters.set<DYNAMICS_NAME>(std::string("mink"));
+    myCaseParameters.set<DYNAMICS_NAME>("mink");
     myCaseParameters.set<USE_MINK>(true);
     myCaseParameters.set<USE_DIRECTED>(false);
 
@@ -470,8 +470,8 @@ int main(int argc, char* argv[])
 
   // Set output directory
   std::string caseName = "case" + std::to_string(case_number);
-  std::string caseExtension =
-      myCaseParameters.get<parameters::USE_MINK>() ? std::string("_mink/") : std::string("_mcHardy/");
+  std::string caseExtension = myCaseParameters.get<parameters::USE_MINK>()
+                            ? "_mink/" : "_mcHardy/";
   singleton::directories().setOutputDir("./" + std::to_string(myCaseParameters.get<parameters::RESOLUTION>()) +
                                         caseName + caseExtension);
 
