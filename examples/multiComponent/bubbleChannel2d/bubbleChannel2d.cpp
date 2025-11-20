@@ -158,10 +158,8 @@ void prepareLattice(MyCase& myCase)
   latticeAC.setUnitConverter(converter);
 
   // define lattice Dynamics
-  latticeNS.defineDynamics<NoDynamics>(geometry, 0);
-  latticeNS.defineDynamics<NSBulkDynamics>(geometry, 1);
-  latticeAC.defineDynamics<NoDynamics>(geometry, 0);
-  latticeAC.defineDynamics<ACBulkDynamics>(geometry, 1);
+  dynamics::set<NSBulkDynamics>(latticeNS, geometry, 1);
+  dynamics::set<ACBulkDynamics>(latticeAC, geometry, 1);
 
   auto& coupling = myCase.setCouplingOperator(
     "Coupling",
@@ -213,8 +211,10 @@ void setInitialValues(MyCase& myCase) {
 
   // conversion properties
   const T dx = converter.getPhysDeltaX();
+  const T dt = converter.getPhysDeltaT();
   const T C_sigma = converter.getConversionFactorSurfaceTension();
   const T C_p = C_sigma/dx;
+  std::cout << "C_p: " << C_p << std::endl;
   const T diameter_lattice = params.get<parameters::PHYS_CHAR_LENGTH>() / dx;
   const T Nx = params.get<parameters::DOMAIN_EXTENT_LATTICE>()[0];
   const T Ny = params.get<parameters::DOMAIN_EXTENT_LATTICE>()[1];
@@ -243,7 +243,9 @@ void setInitialValues(MyCase& myCase) {
   AnalyticalIdentity2D<T,T> tau0( taug + (taul-taug)*phi0 );
   std::shared_ptr<AnalyticalF2D<T,T>> bubblePressure(new LaplacePressure2D<T>( pos, dx*diameter_lattice/2., dx*w, sigma_Lattice*C_sigma/C_p ));
   std::shared_ptr<AnalyticalF2D<T,T>> halfYLPressure(new AnalyticalConst2D<T,T>( 2.*sigma_Lattice/diameter_lattice/2. ));
+  std::shared_ptr<AnalyticalF2D<T,T>> ConvertP(new AnalyticalConst2D<T,T>( C_p ));
   auto p0 = bubblePressure + halfYLPressure;
+  auto p0_phys = p0*ConvertP;
   SmoothIndicatorFactoredCuboid2D<T,T> fringe( {0., dx*Ny/2.}, dx*2.*(Nx-5.0*diameter_lattice), 0, dx*1.5*diameter_lattice, 0, {0,0}, 0, 1. );
 
   latticeNS.defineField<descriptors::RHO>( all, rho0 );
@@ -266,7 +268,7 @@ void setInitialValues(MyCase& myCase) {
   boundary::set<boundary::IncompressibleZouHePressure>(latticeNS, outlet);
   setConvectivePhaseFieldBoundary<T,ACDESCRIPTOR>(latticeAC, outlet);
 
-  const T maxVelocity = Re/Ny*((tau_l-0.5)/3.);
+  const T maxVelocity_phys = Re/Ny*((tau_l-0.5)/3.)*dx/dt;
   const T radius = T(0.5)*dx*(Ny - 2);
   std::vector<T> axisPoint( 2,T() );
   axisPoint[0] = dx*Nx/2.;
@@ -274,11 +276,14 @@ void setInitialValues(MyCase& myCase) {
   std::vector<T> axisDirection( 2,T() );
   axisDirection[0] = 1;
   axisDirection[1] = 0;
-  Poiseuille2D<T> poiseuille( axisPoint, axisDirection, maxVelocity, radius );
+  Poiseuille2D<T> poiseuille( axisPoint, axisDirection, maxVelocity_phys/dx*dt, radius );
+  Poiseuille2D<T> poiseuille_phys( axisPoint, axisDirection, maxVelocity_phys, radius );
 
-  latticeAC.defineRhoU( all, phi0, poiseuille );
-  latticeAC.iniEquilibrium( all, phi0, poiseuille );
-  latticeNS.defineRhoU( all, *p0, poiseuille );
+  momenta::setOrderParameter(latticeAC, all, phi0);
+  momenta::setVelocity(latticeAC, all, poiseuille_phys);
+  
+  momenta::setIncompressiblePressure(latticeNS, all, *p0_phys);
+  momenta::setVelocity(latticeNS, all, poiseuille_phys);
   latticeNS.iniEquilibrium( all, *p0, poiseuille );
 
   latticeAC.addPostProcessor<stage::PreCoupling>(fluid, meta::id<RhoStatistics>());
@@ -356,8 +361,6 @@ void getResults(
     latticeAC.setProcessingContext(ProcessingContext::Evaluation);
     SuperLatticePhysIncPressure2D<T, NSDESCRIPTOR> p_total( latticeNS, converter );
     p_total.getName() = "p_total";
-    SuperLatticeField2D<T, ACDESCRIPTOR, CONV_POPS> conv_pops( latticeAC );
-    SuperLatticeField2D<T, ACDESCRIPTOR, POPULATION> pops( latticeAC);
     SuperLatticeExternalScalarField2D<T, NSDESCRIPTOR, RHO> rho_L( latticeNS );
     AnalyticalConst2D<T,T> C_rho_( converter.getConversionFactorDensity() );
     SuperLatticeFfromAnalyticalF2D<T, NSDESCRIPTOR> C_rho_field(C_rho_, latticeNS);
@@ -371,8 +374,6 @@ void getResults(
     scale.getName() = "scale";
     vtmWriter.addFunctor( scale );
 
-    vtmWriter.addFunctor( conv_pops );
-    vtmWriter.addFunctor( pops );
     vtmWriter.addFunctor( p_total );
     vtmWriter.addFunctor( rho );
     vtmWriter.addFunctor( velocity );
@@ -409,7 +410,6 @@ void simulate(MyCase& myCase) {
   timer.start();
 
   for (std::size_t iT=0; iT<=maxIter; ++iT ) {
-    
     // compute velocity for convective outlet
     if ( iT%500==0 ) {
       T uMax = helperConvectiveU(myCase, beforeOutlet);
