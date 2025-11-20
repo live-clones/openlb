@@ -336,9 +336,8 @@ void prepareLattice( MyCase& myCase )
 
   T omega = converter.getLatticeRelaxationFrequency();
 
-  lattice1.defineDynamics<ForcedBGKdynamics>( geometry, 1 );
-  lattice2.defineDynamics<FreeEnergyBGKdynamics>( geometry, 1 );
-
+  dynamics::set<ForcedBGKdynamics>( lattice1, geometry.getMaterialIndicator(1) );
+  dynamics::set<FreeEnergyBGKdynamics>( lattice2, geometry.getMaterialIndicator(1) );
 
   auto cylinderIndicator1 = geometry.getMaterialIndicator(3);
   boundary::set<boundary::FreeEnergyVelocity>(lattice1, cylinderIndicator1);
