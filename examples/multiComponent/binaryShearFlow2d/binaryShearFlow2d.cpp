@@ -324,8 +324,8 @@ void prepareLattice( MyCase& myCase )
   sLattice2.setUnitConverter(converter);
 
   // define lattice Dynamics
-  sLattice1.defineDynamics<ForcedBGKdynamics>( geometry, 1 );
-  sLattice2.defineDynamics<FreeEnergyBGKdynamics>( geometry, 1 );
+  dynamics::set<ForcedBGKdynamics>(sLattice1, geometry.getMaterialIndicator({1}));
+  dynamics::set<FreeEnergyBGKdynamics>(sLattice2, geometry.getMaterialIndicator({1}));
 
   // moving walls (inlet boundary with tangetial velocity condition)
   T omega = converter.getLatticeRelaxationFrequency();
@@ -487,26 +487,19 @@ void setInitialValues( MyCase& myCase )
   AnalyticalIdentity2D<T,T> phi( one - circle - circle );
 
   // shear velocity
-  AnalyticalConst2D<T,T> uTop   ( converter.getCharLatticeVelocity(), T( 0 ) );
-  AnalyticalConst2D<T,T> uBottom( -1.*converter.getCharLatticeVelocity(), T( 0 ) );
+  AnalyticalConst2D<T,T> uTop   ( converter.getCharPhysVelocity(), T( 0 ) );
+  AnalyticalConst2D<T,T> uBottom( -1.*converter.getCharPhysVelocity(), T( 0 ) );
 
   // top
   auto topIndicator = geometry.getMaterialIndicator(3);
-  sLattice1.defineRhoU( topIndicator, rho, uTop );
-  sLattice2.defineRho( topIndicator, phi );
+  momenta::setVelocity(sLattice1, topIndicator, uTop);
 
   // bottom
   auto bottomIndicator = geometry.getMaterialIndicator(4);
-  sLattice1.defineRhoU( bottomIndicator, rho, uBottom );
-  sLattice2.defineRho( bottomIndicator, phi );
+  momenta::setVelocity(sLattice1, bottomIndicator, uBottom);
 
   // equilibrium population initialization
-  sLattice1.iniEquilibrium( geometry, 1, rho, zeroVelocity );
   sLattice2.iniEquilibrium( geometry, 1, phi, zeroVelocity );
-  sLattice1.iniEquilibrium( geometry, 3, rho, uTop );
-  sLattice2.iniEquilibrium( geometry, 3, phi, uTop );
-  sLattice1.iniEquilibrium( geometry, 4, rho, uBottom );
-  sLattice2.iniEquilibrium( geometry, 4, phi, uBottom );
 
   sLattice1.initialize();
   sLattice2.initialize();
