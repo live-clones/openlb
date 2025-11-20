@@ -215,13 +215,13 @@ void prepareLattice(MyCase& myCase) {
   lattice.getUnitConverter().print();
 
   using BulkDynamics = BGKdynamics<T,DESCRIPTOR>::template wrap_collision<collision::SaveVelocity>;
-  lattice.defineDynamics<BulkDynamics>(geometry.getMaterialIndicator({1,3,4}));
+  dynamics::set<BulkDynamics>(lattice, geometry.getMaterialIndicator({1,3,4}));
 
   boundary::set<boundary::LocalVelocity<T,DESCRIPTOR,BulkDynamics>>(lattice, geometry, 3);
   boundary::set<boundary::LocalPressure<T,DESCRIPTOR,BulkDynamics>>(lattice, geometry, 4);
 
   TemperatureProfile3D<T,T> temp(tempLeft, tempRight, 0., extend[0]);
-  lattice.defineField<descriptors::TEMPERATURE>(geometry.getMaterialIndicator({0,2}), temp);
+  fields::set<descriptors::TEMPERATURE>(lattice, geometry.getMaterialIndicator({0,2}), temp);
 
   T physDeltaX = lattice.getUnitConverter().getPhysDeltaX();
   Vector<T, 3> center0(0, extend[1]/2.-0.5 * physDeltaX, extend[1]/2.-0.5 * physDeltaX);
@@ -236,10 +236,10 @@ void prepareLattice(MyCase& myCase) {
   setBouzidiBoundary<T,DESCRIPTOR,KnudsenVelocityPostProcessor<true>>(lattice, geometry.getMaterialIndicator({2}), geometry.getMaterialIndicator({1,3,4}), *knudsenPump);
   setBouzidiKnudsenSlipVelocity<T,DESCRIPTOR,true>(lattice, geometry.getMaterialIndicator({2}), geometry.getMaterialIndicator({1,3,4}), *knudsenPump);
 
-  lattice.template setParameter<KnudsenVelocityPostProcessor<true>::SLIPCOEFF>(slipCoeff/lattice.getUnitConverter().getPhysDeltaX());
-  lattice.template setParameter<KnudsenVelocityPostProcessor<true>::CREEPCOEFF>(creepCoeff/lattice.getUnitConverter().getPhysDeltaX()/lattice.getUnitConverter().getConversionFactorVelocity());
+  lattice.setParameter<KnudsenVelocityPostProcessor<true>::SLIPCOEFF>(slipCoeff/lattice.getUnitConverter().getPhysDeltaX());
+  lattice.setParameter<KnudsenVelocityPostProcessor<true>::CREEPCOEFF>(creepCoeff/lattice.getUnitConverter().getPhysDeltaX()/lattice.getUnitConverter().getConversionFactorVelocity());
 
-  lattice.template setParameter<descriptors::OMEGA>(lattice.getUnitConverter().getLatticeRelaxationFrequency());
+  lattice.setParameter<descriptors::OMEGA>(lattice.getUnitConverter().getLatticeRelaxationFrequency());
 
   {
     auto& communicator = lattice.getCommunicator(stage::PostStream());
@@ -260,14 +260,9 @@ void setInitialValues(MyCase& myCase) {
   const T pM = parameters.get<parameters::AVERAGE_PRESSURE>();
   T pL0 = lattice.getUnitConverter().getLatticePressure(pM);
   AnalyticalConst3D<T,T> rho(pL0*descriptors::invCs2<T,DESCRIPTOR>()+T(1));
-  AnalyticalConst3D<T,T> u0(T(0), T(0), T(0));
-  lattice.defineField<descriptors::VELOCITY>(geometry.getMaterialIndicator({1,2}),u0);
 
-  // Initialize all values of distribution functions to their local equilibrium
-  lattice.defineRhoU(geometry.getMaterialIndicator({0,1,2}), rho, u0);
-  lattice.iniEquilibrium(geometry.getMaterialIndicator({0,1,2}), rho, u0);
+  momenta::setPressure(lattice, geometry.getMaterialIndicator({0,1,2}), pL0);
 
-  // Make the lattice ready for simulation
   lattice.initialize();
 }
 
