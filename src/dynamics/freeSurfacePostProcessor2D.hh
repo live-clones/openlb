@@ -239,13 +239,13 @@ void FreeSurfaceInterfaceReconstructionPostProcessor2D<T, DESCRIPTOR>::apply(CEL
   const auto mass = cell.template getField<FreeSurface::MASS>();
 
   // An interface cell is flagged as toGas if its volume fraction is below the threshold
-  if (util::less(mass, -transition * rho)) {
+  if (mass < -transition * rho) {
     setCellFlags(cell, FreeSurface::Flags::ToGas);
     return;
   }
 
   // An interface cell is flagged as toFluid if its volume fraction is above the (1.0 + threshold)
-  if (util::greater(mass, (T(1) + transition) * rho)) {
+  if (mass > (T(1) + transition) * rho) {
     setCellFlags(cell, FreeSurface::Flags::ToFluid);
     return;
   }
@@ -254,7 +254,7 @@ void FreeSurfaceInterfaceReconstructionPostProcessor2D<T, DESCRIPTOR>::apply(CEL
   // (1) If its volume fraction is below the (lonely threshold) and has interface neighbours (not isolated)
   // (2) If it has no interface neighbours (isolated) and drop_isolated_cells is set
   if (!nbrInfo.has_fluid_neighbours) {
-    if (util::less(mass, lonely_threshold * rho) && nbrInfo.interface_neighbours != std::uint8_t(0)) {
+    if (mass < lonely_threshold * rho && nbrInfo.interface_neighbours != std::uint8_t(0)) {
       setCellFlags(cell, FreeSurface::Flags::ToGas);
       return;
     }
@@ -269,7 +269,7 @@ void FreeSurfaceInterfaceReconstructionPostProcessor2D<T, DESCRIPTOR>::apply(CEL
   // (1) If its volume fraction is above the (1.0 - lonely threshold) and has interface neighbours (not isolated)
   // (2) If it has no interface neighbours (isolated) and drop_isolated_cells is set
   if (!nbrInfo.has_gas_neighbours) {
-    if (util::greater(mass, (T(1) - lonely_threshold) * rho) && nbrInfo.interface_neighbours != std::uint8_t(0)) {
+    if (mass > (T(1) - lonely_threshold) * rho && nbrInfo.interface_neighbours != std::uint8_t(0)) {
       setCellFlags(cell, FreeSurface::Flags::ToFluid);
       return;
     }
@@ -422,7 +422,7 @@ void FreeSurfaceMassExcessPostProcessor2D<T, DESCRIPTOR>::apply(CELL& cell) {
     // Calculate sum of the computed weights
     for (const auto& weight : weights) { weightsSum += weight; }
 
-    if (util::equal(weightsSum, T(0), T(1), tolerance<T>)) {
+    if (util::abs(weightsSum) < tolerance<T>) {
       // (a) If no old interface cell is available in normal direction,
       //     fall back to weighted all interface cells distribution model.
       if (!enableAllInterfaces) {
@@ -433,7 +433,7 @@ void FreeSurfaceMassExcessPostProcessor2D<T, DESCRIPTOR>::apply(CELL& cell) {
 
         // (b) If no interface cell is available in normal direction,
         //     fall back to evenly all interface cells distribution model.
-        if (util::equal(weightsSum, T(0), T(1), tolerance<T>)) {
+        if (util::abs(weightsSum) < tolerance<T>) {
           for (auto& weight : weights) { weight = T(1); }
           weightsSum = T(intefaceNbrs);
         }
@@ -491,34 +491,25 @@ void FreeSurfaceFinalizeConversionPostProcessor2D<T, DESCRIPTOR>::apply(CELL& ce
 
   const auto force_density = params.template get<FreeSurface::FORCE_DENSITY>();
 
-  // (1) Convert flagged cells to appropriate cell types according to the flags.
+  // (1) Convert flagged cells to appropriate cell types, and Update fields according to the cell types.
   if (hasCellFlags(cell, FreeSurface::Flags::ToFluid)) {
     setCellType(cell, FreeSurface::Type::Fluid);
     cell.template setField<FreeSurface::EPSILON>(T(1));
+    // Update descriptors::FORCE field according to Koerner et al., 2005.
+    if constexpr (weighted_force) { cell.template setField<descriptors::FORCE>(force_density); }
   }
   else if (hasCellFlags(cell, FreeSurface::Flags::ToGas)) {
     setCellType(cell, FreeSurface::Type::Gas);
     cell.template setField<FreeSurface::EPSILON>(T(0));
+    // Update descriptors::FORCE field according to Koerner et al., 2005.
+    if constexpr (weighted_force) { cell.template setField<descriptors::FORCE>({T(0), T(0)}); }
   }
   else if (hasCellFlags(cell, FreeSurface::Flags::NewInterface)) {
     setCellType(cell, FreeSurface::Type::Interface);
   }
 
-  // (2) Update fields according to the cell types.
-  if (isCellType(cell, FreeSurface::Type::Gas)) {
-    // Resets the population distribution functions of a gas cell.
-    // This is intended solely for visualization purposes and
-    // should have no impact on the computations.
-    if constexpr (weighted_force) { cell.template setField<descriptors::FORCE>({T(0), T(0)}); }
-    T rho_gas = T(1);
-    T u_gas[DESCRIPTOR::d] = {T(0), T(0)};
-    cell.iniEquilibrium(rho_gas, u_gas);
-  }
-  else if (isCellType(cell, FreeSurface::Type::Fluid)) {
-    // Update descriptors::FORCE field according to Koerner et al., 2005.
-    if constexpr (weighted_force) { cell.template setField<descriptors::FORCE>(force_density); }
-  }
-  else if (isCellType(cell, FreeSurface::Type::Interface)) {
+  // (2) Update fields for all interface cells according to the mass exchange.
+  if (isCellType(cell, FreeSurface::Type::Interface)) {
     // Mass excess is distributed to old and new interface cells only.
     // Gather excess mass from converted interface cells, either toFluid or toGas,
     // and adjust the mass of the current interface cells accordingly.

@@ -69,8 +69,6 @@ struct NavierStokes : public descriptors::DESCRIPTOR_TAG { };
 struct NavierCauchy : public descriptors::DESCRIPTOR_TAG { };
 struct AdvectionDiffusion : public descriptors::DESCRIPTOR_TAG { };
 struct Temperature  : public descriptors::DESCRIPTOR_TAG { };
-struct SuperLattice : public descriptors::DESCRIPTOR_TAG { };
-struct SuperLattice2 : public descriptors::DESCRIPTOR_TAG { };
 struct Points : public descriptors::DESCRIPTOR_TAG { };
 struct Radiation : public descriptors::DESCRIPTOR_TAG { };
 struct Poisson : public descriptors::DESCRIPTOR_TAG { };

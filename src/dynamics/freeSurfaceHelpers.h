@@ -39,7 +39,7 @@ struct Stage4 {};
 struct Stage5 {};
 
 template<typename T>
-constexpr T tolerance = std::is_same_v<T, float> ? T{1e-6} : T{1e-14};
+platform_constant T tolerance = std::is_same_v<T, float> ? T{1e-6} : T{1e-14};
 
 template <typename T>
 struct KahanSum {
@@ -61,17 +61,17 @@ enum class SolverType {
   completePivotingLU
   // eigen
 };
-constexpr SolverType solver = SolverType::plainLU;
+platform_constant SolverType solver = SolverType::plainLU;
 
 enum class NormalMethod {
   ParkerYoung,  // first  order
   LeastSquares  // second order (caution: not always!)
 };
-constexpr NormalMethod method = NormalMethod::ParkerYoung;
+platform_constant NormalMethod method = NormalMethod::ParkerYoung;
 
-constexpr bool precise_formulation   = true;  // Enable precise form of pressure anti bounce back BC.
-constexpr bool weighted_distribution = false; // Enable weighted mass excess distribution model.
-constexpr bool weighted_force        = false; // Enable weighted body force model, i.e., Koerner et al., 2005.
+platform_constant bool precise_formulation   = false; // Enable precise form of pressure anti bounce back BC.
+platform_constant bool weighted_distribution = false; // Enable weighted mass excess distribution model.
+platform_constant bool weighted_force        = false; // Enable weighted body force model, i.e., Koerner et al., 2005.
 
 enum class Type : std::uint8_t {
   Gas       = 0,
