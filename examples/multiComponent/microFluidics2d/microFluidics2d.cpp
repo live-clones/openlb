@@ -399,40 +399,45 @@ void setInitialValues(MyCase& myCase) {
   AnalyticalIdentity2D<T,T> phi( c1 - c2 );
   AnalyticalIdentity2D<T,T> psi( rho - c1 - c2 );
 
+  auto allIndicator = geometry.getMaterialIndicator({1, 2, 3, 4, 5, 6});
   auto inlet1Indicator = geometry.getMaterialIndicator(3);
   auto inlet2Indicator = geometry.getMaterialIndicator({4, 5});
   auto inlet3Indicator = geometry.getMaterialIndicator({6, 7});
   auto outletIndicator = geometry.getMaterialIndicator(8);
 
+  sLattice1.iniEquilibrium( allIndicator, rho, zeroVelocity );
+  sLattice2.iniEquilibrium( allIndicator, phi, zeroVelocity );
+  sLattice3.iniEquilibrium( allIndicator, psi, zeroVelocity );
+
   // inlet boundary conditions
   clout << "Inlet boundary conditions ..." << std::endl;
   Poiseuille2D<T> inlet1U( geometry, 3, 1.5*inlet1Velocity, 0. );
-  momenta::setVelocity( sLattice1, inlet1Indicator, inlet1U );
-  momenta::setDensity( sLattice2, inlet1Indicator, phi );
-  momenta::setDensity( sLattice3, inlet1Indicator, psi );
+  sLattice1.defineU( inlet1Indicator, inlet1U );
+  sLattice2.defineRho( inlet1Indicator, phi );
+  sLattice3.defineRho( inlet1Indicator, psi );
 
   Poiseuille2D<T> inlet21U( geometry, 4, 1.5*inlet2Velocity, 0. );
   Poiseuille2D<T> inlet22U( geometry, 5, 1.5*inlet2Velocity, 0. );
-  momenta::setVelocity( sLattice1, geometry.getMaterialIndicator(4), inlet21U );
-  momenta::setVelocity( sLattice1, geometry.getMaterialIndicator(5), inlet22U );
-  momenta::setDensity( sLattice2, inlet2Indicator, phi );
-  momenta::setDensity( sLattice3, inlet2Indicator, psi );
+  sLattice1.defineU( geometry, 4, inlet21U );
+  sLattice1.defineU( geometry, 5, inlet22U );
+  sLattice2.defineRho( inlet2Indicator, phi );
+  sLattice3.defineRho( inlet2Indicator, psi );
 
   Poiseuille2D<T> inlet31U( geometry, 6, 1.5*inlet3Velocity, 0. );
   Poiseuille2D<T> inlet32U( geometry, 7, 1.5*inlet3Velocity, 0. );
-  momenta::setVelocity( sLattice1, geometry.getMaterialIndicator(6), inlet31U );
-  momenta::setVelocity( sLattice1, geometry.getMaterialIndicator(7), inlet32U );
-  momenta::setDensity( sLattice2, inlet3Indicator, phi );
-  momenta::setDensity( sLattice3, inlet3Indicator, psi );
+  sLattice1.defineU( geometry, 6, inlet31U );
+  sLattice1.defineU( geometry, 7, inlet32U );
+  sLattice2.defineRho( inlet3Indicator, phi );
+  sLattice3.defineRho( inlet3Indicator, psi );
 
   // outlet initial / boundary conditions
   clout << "Outlet initial / Boundary conditions ..." << std::endl;
   AnalyticalConst2D<T,T> rhoOutlet( outletDensity );
   AnalyticalIdentity2D<T,T> phiOutlet( zero );
   AnalyticalIdentity2D<T,T> psiOutlet( rhoOutlet );
-  momenta::setDensity( sLattice1, outletIndicator, rhoOutlet );
-  momenta::setDensity( sLattice2, outletIndicator, phiOutlet );
-  momenta::setDensity( sLattice3, outletIndicator, psiOutlet );
+  sLattice1.defineRho( outletIndicator, rhoOutlet );
+  sLattice2.defineRho( outletIndicator, phiOutlet );
+  sLattice3.defineRho( outletIndicator, psiOutlet );
 
   clout << "Initialize lattices ..." << std::endl;
   sLattice1.initialize();
