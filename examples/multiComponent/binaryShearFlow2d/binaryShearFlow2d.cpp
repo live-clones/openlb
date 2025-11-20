@@ -493,20 +493,13 @@ void setInitialValues( MyCase& myCase )
   // top
   auto topIndicator = geometry.getMaterialIndicator(3);
   momenta::setVelocity(sLattice1, topIndicator, uTop);
-  momenta::setDensity(sLattice1, topIndicator, phi);
 
   // bottom
   auto bottomIndicator = geometry.getMaterialIndicator(4);
   momenta::setVelocity(sLattice1, bottomIndicator, uBottom);
-  momenta::setDensity(sLattice1, bottomIndicator, phi);
 
   // equilibrium population initialization
-  sLattice1.iniEquilibrium( geometry, 1, rho, zeroVelocity );
   sLattice2.iniEquilibrium( geometry, 1, phi, zeroVelocity );
-  sLattice1.iniEquilibrium( geometry, 3, rho, uTop );
-  sLattice2.iniEquilibrium( geometry, 3, phi, uTop );
-  sLattice1.iniEquilibrium( geometry, 4, rho, uBottom );
-  sLattice2.iniEquilibrium( geometry, 4, phi, uBottom );
 
   sLattice1.initialize();
   sLattice2.initialize();
