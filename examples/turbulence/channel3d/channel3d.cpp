@@ -149,10 +149,10 @@ public:
       : AnalyticalF3D<T, S>(3)
   {
     const auto converter = myCase.getLattice(NavierStokes {}).getUnitConverter();
-    const auto physRefL  = converter.getCharPhysLength();
-    std::cout << "physRefL: " << physRefL << std::endl;
+    const auto physRefL = myCase.getParameters().get<parameters::PHYS_CHAR_LENGTH>();
+
     turbulenceIntensity  = 0.05;
-    maxVelocity          = converter.getCharPhysVelocity() * (8.0 / 7.0); // Centerline Velocity
+    maxVelocity          = converter.getLatticeVelocity(converter.getCharPhysVelocity() * (8.0 / 7.0)); // Centerline Velocity
     obst_r               = physRefL;
     a                    = -1.;
     b                    = 1.;
