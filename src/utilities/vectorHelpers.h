@@ -135,21 +135,21 @@ T norm(const std::vector<T>& a)
 
 /// dot product, only valid in 3d
 template <typename T>
-T dotProduct3D(const Vector<T,3>& a, const Vector<T,3>& b)
+T dotProduct3D(const Vector<T,3>& a, const Vector<T,3>& b) any_platform
 {
   return a[0]*b[0] + a[1]*b[1] + a[2]*b[2];
 }
 
 /// dot product, only valid in 2d
 template <typename T>
-T dotProduct2D(const Vector<T,2>& a, const Vector<T,2>& b)
+T dotProduct2D(const Vector<T,2>& a, const Vector<T,2>& b) any_platform
 {
   return a[0]*b[0] + a[1]*b[1];
 }
 
 /// dot product
 template <typename T,unsigned D>
-T dotProduct(const Vector<T,D>& a, const Vector<T,D>& b)
+T dotProduct(const Vector<T,D>& a, const Vector<T,D>& b) any_platform
 {
   if constexpr (D==2){
     return dotProduct2D(a, b);
@@ -159,7 +159,7 @@ T dotProduct(const Vector<T,D>& a, const Vector<T,D>& b)
 }
 
 template <typename T, unsigned D>
-Vector<T,D> normalize(const Vector<T,D>& a)
+Vector<T,D> normalize(const Vector<T,D>& a) any_platform
 {
   return a / norm(a);
 }
