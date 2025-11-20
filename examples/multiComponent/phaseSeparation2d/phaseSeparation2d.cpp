@@ -102,7 +102,7 @@ void prepareLattice(MyCase& myCase)
   using BulkDynamics = ForcedShanChenBGKdynamics<T, NSEDESCRIPTOR, momenta::ExternalVelocityTuple>;
   const T omega1     = params.get<parameters::SHEN_OMEGA>();
 
-  NSElattice.defineDynamics<BulkDynamics>(geometry, 1);
+  dynamics::set<BulkDynamics>(NSElattice, geometry.getMaterialIndicator({1}));
 
   NSElattice.addPostProcessor<stage::PreCoupling>(meta::id<RhoStatistics>());
   {
@@ -142,15 +142,12 @@ void setInitialValues(MyCase& myCase)
 
   // Initial conditions
   AnalyticalConst2D<T, T>    noise(2.);
-  std::vector<T>             v(2, T());
-  AnalyticalConst2D<T, T>    zeroVelocity(v);
   AnalyticalConst2D<T, T>    oldRho(199.);
   AnalyticalRandom2D<T, T>   random;
   AnalyticalIdentity2D<T, T> newRho(random * noise + oldRho);
 
   // Initialize all values of distribution functions to their local equilibrium
-  NSElattice.defineRhoU(geometry, 1, newRho, zeroVelocity);
-  NSElattice.iniEquilibrium(geometry, 1, newRho, zeroVelocity);
+  momenta::setDensity(NSElattice, geometry.getMaterialIndicator({1}), newRho);
 
   NSElattice.setParameter<descriptors::OMEGA>(omega1);
 
@@ -215,7 +212,6 @@ void simulate(MyCase& myCase)
   auto& params   = myCase.getParameters();
 
   auto& NSElattice    = myCase.getLattice(NavierStokes {});
-  using NSEDESCRIPTOR = MyCase::descriptor_t_of<NavierStokes>;
 
   std::size_t iT      = 0;
   const T     maxIter = params.get<parameters::MAX_LATTICE_T>();
