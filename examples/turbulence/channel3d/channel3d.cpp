@@ -248,36 +248,15 @@ void setInitialConditions(MyCase& myCase)
   auto& sLattice  = myCase.getLattice(NavierStokes {});
 
   AnalyticalConst3D<T, T> rho(1.0);
-  AnalyticalConst3D<T, T> rho0(0.0);
-  T                       u0 = 0.0;
   Channel3D<T, T>         uSol(myCase, 1.0);
 
-  momenta::setDensity(sLattice, sGeometry.getMaterialIndicator(1), rho);
   momenta::setVelocity(sLattice, sGeometry.getMaterialIndicator(1), uSol);
   sLattice.iniEquilibrium(sGeometry, 1, rho, uSol);
 
-  momenta::setDensity(sLattice, sGeometry.getMaterialIndicator(2), rho);
   momenta::setVelocity(sLattice, sGeometry.getMaterialIndicator(2), uSol);
   sLattice.iniEquilibrium(sGeometry, 2, rho, uSol);
 
-  // sLattice.defineField<descriptors::VELOCITY2>(sGeometry.getMaterialIndicator({0, 1, 2}), uSol);
-  // sLattice.defineField<descriptors::VELOCITY>(sGeometry.getMaterialIndicator({0, 1, 2}), u0);
-  // sLattice.defineField<descriptors::AVERAGE_VELOCITY>(sGeometry.getMaterialIndicator({0, 1, 2}), u0);
-  // sLattice.defineField<descriptors::AVERAGE_PRESSURE>(sGeometry.getMaterialIndicator({0, 1, 2}), rho0);
-  // sLattice.defineField<descriptors::AVERAGE_SQUARE_PRESSURE>(sGeometry.getMaterialIndicator({0, 1, 2}), rho0);
-  // sLattice.defineField<descriptors::FORCE>(sGeometry.getMaterialIndicator({0, 1, 2}), u0);
-  // sLattice.defineField<descriptors::POROSITY>(sGeometry.getMaterialIndicator({0, 2}), rho0);
-  // sLattice.defineField<descriptors::POROSITY>(sGeometry, 1, rho);
-  // sLattice.setParameter<descriptors::OMEGA>(sLattice.getUnitConverter().getLatticeRelaxationFrequency());
-  // sLattice.setParameter<collision::LES::SMAGORINSKY>(T(0.12));
-
   fields::set<descriptors::VELOCITY2>(sLattice, sGeometry.getMaterialIndicator({0, 1, 2}), uSol);
-  fields::setVelocity<descriptors::VELOCITY>(sLattice, sGeometry.getMaterialIndicator({0, 1, 2}), u0);
-  fields::setVelocity<descriptors::AVERAGE_VELOCITY>(sLattice, sGeometry.getMaterialIndicator({0, 1, 2}), u0);
-  fields::set<descriptors::AVERAGE_PRESSURE>(sLattice, sGeometry.getMaterialIndicator({0, 1, 2}), 0.0);
-  fields::set<descriptors::AVERAGE_SQUARE_PRESSURE>(sLattice, sGeometry.getMaterialIndicator({0, 1, 2}), 0.0);
-  fields::set<descriptors::FORCE>(sLattice, sGeometry.getMaterialIndicator({0, 1, 2}), u0);
-  fields::set<descriptors::POROSITY>(sLattice, sGeometry.getMaterialIndicator({0, 2}), 0.0);
   fields::set<descriptors::POROSITY>(sLattice, sGeometry.getMaterialIndicator(1), 1.0);
 
   sLattice.setParameter<descriptors::OMEGA>(sLattice.getUnitConverter().getLatticeRelaxationFrequency());
