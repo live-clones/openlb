@@ -134,9 +134,7 @@ void computeMassExcessWeights(CELL& cell, const bool& enableAllInterfaces, Vecto
 
   // Compute normalized interface normal
   auto normal = computeInterfaceNormal(cell);
-  normal = util::equal(norm_squared(normal), V(0), V(1), tolerance<V>)
-         ? Vector<V, DESCRIPTOR::d>{}
-         : util::normalize(normal);
+  normal = norm_squared(normal) < tolerance<V> ? Vector<V, DESCRIPTOR::d>{} : util::normalize(normal);
 
   for (int iPop = 1; iPop < DESCRIPTOR::q; ++iPop) {
     auto direction = descriptors::c<DESCRIPTOR>(iPop);
@@ -154,11 +152,11 @@ void computeMassExcessWeights(CELL& cell, const bool& enableAllInterfaces, Vecto
 
       if (hasCellFlags(cell, FreeSurface::Flags::ToFluid)) {
         // This cell was converted from interface to fluid, so the normal vector is used as is
-        weights[iPop] = util::greater(nDotDirection, V(0)) ? nDotDirection : V(0);
+        weights[iPop] = nDotDirection > V(0) ? nDotDirection : V(0);
       }
       else if (hasCellFlags(cell, FreeSurface::Flags::ToGas)) {
         // This cell was converted from interface to gas, so the normal vector is inverted
-        weights[iPop] = util::less(nDotDirection, V(0)) ? -nDotDirection : V(0);
+        weights[iPop] = nDotDirection < V(0) ? -nDotDirection : V(0);
       }
     }
     else if (hasCellFlags(nbrCell, FreeSurface::Flags::NewInterface) && enableAllInterfaces) {
@@ -166,11 +164,11 @@ void computeMassExcessWeights(CELL& cell, const bool& enableAllInterfaces, Vecto
 
       if (hasCellFlags(cell, FreeSurface::Flags::ToFluid)) {
         // This cell was converted from interface to fluid, so the normal vector is used as is
-        weights[iPop] = util::greater(nDotDirection, V(0)) ? nDotDirection : V(0);
+        weights[iPop] = nDotDirection > V(0) ? nDotDirection : V(0);
       }
       else if (hasCellFlags(cell, FreeSurface::Flags::ToGas)) {
         // This cell was converted from interface to gas, so the normal vector is inverted
-        weights[iPop] = util::less(nDotDirection, V(0)) ? -nDotDirection : V(0);
+        weights[iPop] = nDotDirection < V(0) ? -nDotDirection : V(0);
       }
     }
     else {
@@ -195,7 +193,7 @@ V getClampedSmoothEpsilon(const CELL& cell) {
   auto kernel = [](V inv_r2, const auto& direction) -> V {
     const auto norm_2 = norm_squared(direction);
     const V tmp = V{1} - V(norm_2) * inv_r2;
-    if (util::greater(tmp, V{0})) { return tmp * tmp * tmp * tmp; }
+    if (tmp > V{0}) { return tmp * tmp * tmp * tmp; }
     return V{0};
   };
 
@@ -208,7 +206,7 @@ V getClampedSmoothEpsilon(const CELL& cell) {
   for (int iPop = 1; iPop < descriptors::q<descriptors::D3Q27<>>(); ++iPop) {
     const auto direction = descriptors::c<descriptors::D3Q27<>>(iPop);
     const V weight = kernel(inv_r2, direction);
-    if (util::greater(weight, V{0})) {
+    if (weight > V{0}) {
       const auto nbrCell = cell.neighbor(direction);
       numer += weight * nbrCell.template getField<FreeSurface::EPSILON>();
       denom += weight;
@@ -664,24 +662,24 @@ T plicCubeReduced(const T& volume, const Vector<T, 3>& n) {
   const T n12 = n1 + n2, n3V = n3 * volume;
 
   // (I) Case 5
-  if (util::lessOrEqual(n12, T(2) * n3V)) { return n3V + T(0.5) * n12; }
+  if (n12 <= T(2) * n3V) { return n3V + T(0.5) * n12; }
 
   // (II) After case 5, check n2 > 0 is true
   const T sqn1 = util::sqr(n1), n26 = T(6) * n2, v1 = sqn1 / n26;
 
   // (III) Case 2
-  if (util::lessOrEqual(v1, n3V) && util::less(n3V, v1 + T(0.5) * (n2 - n1))) {
+  if (v1 <= n3V && n3V < v1 + T(0.5) * (n2 - n1)) {
     return T(0.5) * (n1 + util::sqrt(sqn1 + T(8) * n2 * (n3V - v1)));
   }
 
   // (IV) Case 1
   const T V6 = n1 * n26 * n3V;
-  if (util::less(n3V, v1)) { return std::cbrt(V6); }
+  if (n3V < v1) { return std::cbrt(V6); }
 
   // (V) After case 2, check n1 > 0 is true
-  const T v3 = util::less(n3, n12) ? (util::sqr(n3) * (T(3) * n12 - n3) + sqn1 * (n1 - T(3) * n3) + util::sqr(n2) * (n2 - T(3) * n3)) / (n1 * n26) : T(0.5) * n12;
+  const T v3 = n3 < n12 ? (util::sqr(n3) * (T(3) * n12 - n3) + sqn1 * (n1 - T(3) * n3) + util::sqr(n2) * (n2 - T(3) * n3)) / (n1 * n26) : T(0.5) * n12;
   const T sqn12 = sqn1 + util::sqr(n2), V6cbn12 = V6 - util::cube(n1) - util::cube(n2);
-  const bool case34 = util::less(n3V, v3); // true: case (3), false: case (4)
+  const bool case34 = n3V < v3; // true: case (3), false: case (4)
   const T a = case34 ? V6cbn12 : T(0.5) * (V6cbn12 - util::cube(n3));
   const T b = case34 ? sqn12 : T(0.5) * (sqn12 + util::sqr(n3));
   const T c = case34 ? n12 : T(0.5);
@@ -719,15 +717,15 @@ T plicCubeInverse(const T& d0, const Vector<T, 3>& n) {
   const T d = T(0.5) * (n1 + n2 + n3) - util::abs(d0);
 
   T V = T(0);
-  if (util::lessOrEqual(util::min(n1 + n2, n3), d) && util::lessOrEqual(d, n3)) {
+  if (util::min(n1 + n2, n3) <= d && d <= n3) {
     // (I) Case 5
     V = (d - T(0.5) * (n1 + n2)) / n3;
   }
-  else if (util::less(d, n1)) {
+  else if (d < n1) {
     // (II) Case 1
     V = util::cube(d) / (T(6) * n1 * n2 * n3);
   }
-  else if (util::lessOrEqual(d, n2)) {
+  else if (d <= n2) {
     // (III) Case 2
     V = (T(3) * d * (d - n1) + util::sqr(n1)) / (T(6) * n2 * n3);
   }
@@ -748,7 +746,7 @@ V computeCurvaturePLIC2D(CELL& cell) {
   // tangent to the surface.
   const auto normal = computeInterfaceNormal(cell);
   Vector<V, 3> by = {normal[0], normal[1], V(0)};
-  if (util::equal(norm_squared(by), V(0), V(1), tolerance<V>)) { return V(0); }
+  if (norm_squared(by) < tolerance<V>) { return V(0); }
   by = util::normalize(by);
 
   const Vector<V, 3> rn{V(0), V(0), V(1)};
@@ -836,7 +834,7 @@ V computeCurvaturePLIC3D(CELL& cell) {
   // Setup a new coordinate system where bz is perpendicular to the surface, while bx and by are
   // tangent to the surface.
   auto bz = computeInterfaceNormal(cell);
-  if (util::equal(norm_squared(bz), V(0), V(1), tolerance<V>)) { return V(0); }
+  if (norm_squared(bz) < tolerance<V>) { return V(0); }
   bz = util::normalize(bz);
 
   // A random normalized vector that is just by random chance not collinear with bz

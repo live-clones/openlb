@@ -217,9 +217,9 @@ void prepareLattice( MyCase& myCase )
 
   // define lattice dynamics
   clout << "Prepare Lattice: Define lattice dynamics ..." << std::endl;
-  sLattice1.defineDynamics<ForcedBGKdynamics>(geometry, 1);
-  sLattice2.defineDynamics<FreeEnergyBGKdynamics>(geometry, 1);
-  sLattice3.defineDynamics<FreeEnergyBGKdynamics>(geometry, 1);
+  dynamics::set<ForcedBGKdynamics>( sLattice1, geometry.getMaterialIndicator({1}));
+  dynamics::set<FreeEnergyBGKdynamics>( sLattice2, geometry.getMaterialIndicator({1}));
+  dynamics::set<FreeEnergyBGKdynamics>( sLattice3, geometry.getMaterialIndicator({1}));
 
   // Defining walls
   auto walls = geometry.getMaterialIndicator({2});

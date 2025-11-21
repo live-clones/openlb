@@ -51,19 +51,7 @@ struct PHYS_LENGTH : public descriptors::FIELD_BASE<1> { };
 }
 
 Mesh<MyCase::value_t,MyCase::d> createMesh(MyCase::ParametersD& parameters) {
-  using T = MyCase::value_t;
-
-  const T physDeltaX = parameters.get<parameters::PHYS_DELTA_X>();
-  // Instantiation of the STLreader class
-  // file name, voxel size in meter, stl unit in meter, outer voxel no., inner voxel no.
-  // Reading the pipe STL
-  STLreader<T> pipe( "pipe.stl", physDeltaX, 0.001);
-  // Extending the pipe with 1 cell for outer boundaries
-  IndicatorLayer3D<T> extendedDomain( pipe, physDeltaX );
-
-  Mesh<T,MyCase::d> mesh(extendedDomain, physDeltaX, singleton::mpi().getSize());
-  mesh.setOverlap(parameters.get<parameters::OVERLAP>());
-  return mesh;
+  return Mesh<MyCase::value_t,MyCase::d>::fromSTL(parameters);
 }
 
 // Stores data from stl file in geometry in form of material numbers
@@ -74,12 +62,11 @@ void prepareGeometry(MyCase& myCase) {
 
   const T physDeltaX = parameters.get<parameters::PHYS_DELTA_X>();
 
-  STLreader<T> pipe( "pipe.stl", physDeltaX, 0.001);
-  IndicatorLayer3D<T> extendedDomain( pipe, physDeltaX );
-  STLreader<T> valve( "valve.stl", physDeltaX, 0.001);
+  auto pipeI = myCase.getMesh().getIndicator("pipe.stl");
+  IndicatorLayer3D<T> extendedDomain(pipeI, physDeltaX);
 
-  geometry.rename( 0,2,extendedDomain );
-  geometry.rename( 2,1,pipe );
+  geometry.rename(0,2, extendedDomain);
+  geometry.rename(2,1, pipeI);
   geometry.clean();
 
   Vector<T,3> origin = geometry.getStatistics().getMinPhysR( 2 );
@@ -99,16 +86,17 @@ void prepareGeometry(MyCase& myCase) {
   // Set material number for outflow
   origin[0] = geometry.getStatistics().getMaxPhysR( 2 )[0]-physDeltaX;
   extend[0] = 2*physDeltaX;
-  IndicatorCuboid3D<T> outflow( extend,origin );
-  geometry.rename( 2,4,outflow );
+  IndicatorCuboid3D<T> outflow(extend, origin);
+  geometry.rename(2,4, outflow);
 
   // Rotate the valve and set material number for it
+  STLreader<T> valveI("valve.stl", physDeltaX, 0.001);
   const auto rotationPoint = parameters.get<parameters::ROTATION_POINT>();
   const auto rotationAxis = parameters.get<parameters::ROTATION_AXIS>();
   const T angle = parameters.get<parameters::ANGLE>();
   T rotationAngle = std::numbers::pi_v<T> / T(180) *  angle;
-  IndicatorRotate<T,3> valveRot(rotationPoint, rotationAxis, rotationAngle, valve);
-  geometry.rename( 1,5, valveRot );
+  IndicatorRotate<T,3> valveRot(rotationPoint, rotationAxis, rotationAngle, valveI);
+  geometry.rename(1,5, valveRot);
 
   // Removes all not needed boundary voxels outside the surface
   geometry.clean();
@@ -282,6 +270,10 @@ int main(int argc, char* argv[]) {
   MyCase::ParametersD myCaseParameters;
   {
     using namespace olb::parameters;
+
+    myCaseParameters.set<STL_PATH>("pipe.stl");
+    myCaseParameters.set<STL_SCALING>(0.001);
+
     myCaseParameters.set<PHYS_DELTA_X       >(       0.00125);
     myCaseParameters.set<PHYS_DELTA_T       >(     0.0003125);
     myCaseParameters.set<PHYS_LENGTH        >(           0.5);

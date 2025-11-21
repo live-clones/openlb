@@ -257,7 +257,7 @@ Vector(T&& t, Ts&&... ts) -> Vector<std::remove_cvref_t<T>,1+sizeof...(Ts)>;
 
 template <typename T, typename IMPL, typename IMPL_>
 constexpr T crossProduct2D(
-  const ScalarVector<T,2,IMPL>& a, const ScalarVector<T,2,IMPL_>& b)
+  const ScalarVector<T,2,IMPL>& a, const ScalarVector<T,2,IMPL_>& b) any_platform
 {
   return (a[0]*b[1] - a[1]*b[0]);
 }
@@ -284,7 +284,7 @@ auto crossProduct(const ScalarVector<T,D,IMPL>& a, const ScalarVector<T,D,IMPL_>
 }
 
 template <typename T, unsigned D, typename IMPL>
-constexpr Vector<T,D> normalize(const ScalarVector<T,D,IMPL>& a, T scale = T{1})
+constexpr Vector<T,D> normalize(const ScalarVector<T,D,IMPL>& a, T scale = T{1}) any_platform
 {
   T invScale (scale / norm(a));
   return Vector<T,D>([invScale,&a](unsigned iDim) -> T {

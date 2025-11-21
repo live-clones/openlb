@@ -129,8 +129,8 @@ void prepareLattice( MyCase& myCase )
 
   sLattice2.setUnitConverter(converter);
 
-  sLattice1.defineDynamics<ForcedBGKdynamics>(geometry, 1);
-  sLattice2.defineDynamics<FreeEnergyBGKdynamics>( geometry, 1);
+  dynamics::set<ForcedBGKdynamics>(sLattice1, geometry.getMaterialIndicator({1}));
+  dynamics::set<FreeEnergyBGKdynamics>(sLattice2, geometry.getMaterialIndicator({1}));
 
   sLattice1.setParameter<descriptors::OMEGA>( sLattice1.getUnitConverter().getLatticeRelaxationFrequency() );
   sLattice2.setParameter<descriptors::OMEGA>( sLattice2.getUnitConverter().getLatticeRelaxationFrequency() );
