@@ -166,8 +166,11 @@ public:
     if (!_args) {
       _args = CLIreader(argc, argv);
     }
+    for (auto& [_, typeErasedField] : _map) {
+      tryUpdateFromCLI(typeErasedField);
+    }
     if (_args->contains("--help")) {
-      OstreamManager clout(std::cout, "Help");
+      OstreamManager clout(std::cout, "help");
       clout << std::endl;
       clout << "-- Parameters --" << std::endl;
       print(clout);
@@ -176,9 +179,6 @@ public:
       clout << "The defined values are printed at the start of the simulation." << std::endl;
       clout << std::endl;
       std::exit(0); // Terminate on help printout
-    }
-    for (auto& [_, typeErasedField] : _map) {
-      tryUpdateFromCLI(typeErasedField);
     }
   }
 };
