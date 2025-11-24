@@ -52,9 +52,7 @@ using namespace olb;
 using namespace names;
 
 // === Step 1: Declarations ===
-using MyCase = Case<
-  NavierStokes, Lattice<float, descriptors::D3Q19<descriptors::FORCE>>
->;
+using MyCase = Case<NavierStokes, Lattice<float, descriptors::D3Q19<descriptors::FORCE>>>;
 
 ///when using, hybrid recursive regularize collision model with CONST_HRR_HYBRID
 //#define HRR_COLLISION
@@ -151,12 +149,13 @@ public:
       : AnalyticalF3D<T, S>(3)
   {
     const auto converter = myCase.getLattice(NavierStokes {}).getUnitConverter();
-    const auto physRefL  = myCase.getParameters().get<parameters::PHYS_CHAR_LENGTH>();
+    const auto physRefL = myCase.getParameters().get<parameters::PHYS_CHAR_LENGTH>();
+
     turbulenceIntensity  = 0.05;
-    maxVelocity = converter.getLatticeVelocity(converter.getCharPhysVelocity() * (8.0 / 7.0)); // Centerline Velocity
-    obst_r      = physRefL;
-    a           = -1.;
-    b           = 1.;
+    maxVelocity          = converter.getLatticeVelocity(converter.getCharPhysVelocity() * (8.0 / 7.0)); // Centerline Velocity
+    obst_r               = physRefL;
+    a                    = -1.;
+    b                    = 1.;
   };
 
   bool operator()(T output[], const S input[])
@@ -249,26 +248,17 @@ void setInitialConditions(MyCase& myCase)
   auto& sLattice  = myCase.getLattice(NavierStokes {});
 
   AnalyticalConst3D<T, T> rho(1.0);
-  AnalyticalConst3D<T, T> rho0(0.0);
-  AnalyticalConst3D<T, T> u0(0.0, 0.0, 0.0);
-  AnalyticalConst3D<T, T> tag1(1);
-  AnalyticalConst3D<T, T> tag0(0);
   Channel3D<T, T>         uSol(myCase, 1.0);
 
-  sLattice.defineRhoU(sGeometry, 1, rho, uSol);
+  momenta::setVelocity(sLattice, sGeometry.getMaterialIndicator(1), uSol);
   sLattice.iniEquilibrium(sGeometry, 1, rho, uSol);
 
-  sLattice.defineRhoU(sGeometry, 2, rho, uSol);
+  momenta::setVelocity(sLattice, sGeometry.getMaterialIndicator(2), uSol);
   sLattice.iniEquilibrium(sGeometry, 2, rho, uSol);
 
-  sLattice.defineField<descriptors::VELOCITY2>(sGeometry.getMaterialIndicator({0, 1, 2}), uSol);
-  sLattice.defineField<descriptors::VELOCITY>(sGeometry.getMaterialIndicator({0, 1, 2}), u0);
-  sLattice.defineField<descriptors::AVERAGE_VELOCITY>(sGeometry.getMaterialIndicator({0, 1, 2}), u0);
-  sLattice.defineField<descriptors::AVERAGE_PRESSURE>(sGeometry.getMaterialIndicator({0, 1, 2}), rho0);
-  sLattice.defineField<descriptors::AVERAGE_SQUARE_PRESSURE>(sGeometry.getMaterialIndicator({0, 1, 2}), rho0);
-  sLattice.defineField<descriptors::FORCE>(sGeometry.getMaterialIndicator({0, 1, 2}), u0);
-  sLattice.defineField<descriptors::POROSITY>(sGeometry.getMaterialIndicator({0, 2}), rho0);
-  sLattice.defineField<descriptors::POROSITY>(sGeometry, 1, rho);
+  fields::set<descriptors::VELOCITY2>(sLattice, sGeometry.getMaterialIndicator({0, 1, 2}), uSol);
+  fields::set<descriptors::POROSITY>(sLattice, sGeometry.getMaterialIndicator(1), 1.0);
+
   sLattice.setParameter<descriptors::OMEGA>(sLattice.getUnitConverter().getLatticeRelaxationFrequency());
   sLattice.setParameter<collision::LES::SMAGORINSKY>(T(0.12));
 
@@ -347,14 +337,14 @@ void prepareLattice(MyCase& myCase)
   }
   /// Material=1 -->bulk dynamics
   setTurbulentWallModelDynamics(sLattice, sGeometry, 1, wallModelParameters);
+  dynamics::set<BounceBack>(sLattice, sGeometry, 2);
 
-  sLattice.defineDynamics<BounceBack>(sGeometry, 2);
 #ifdef HRR_COLLISION
   const T hybridConst = parameters.get<CONST_HRR_HYBRID>();
   sLattice.addPostProcessor<stage::PostStream>(sGeometry.getMaterialIndicator({1}),
                                                meta::id<FDMstrainRateTensorPostProcessor> {});
   AnalyticalConst3D<T, T> hybrid(hybridConst);
-  sLattice.defineField<collision::HYBRID>(sGeometry, 1, hybrid);
+  fields::set<collision::HYBRID>(sLattice, sGeometry.getMaterialIndicator(1), hybrid);
 #endif
 
   /// Material = 2 --> boundary node + wallfunction
@@ -401,7 +391,7 @@ void getResults(MyCase& myCase, std::size_t iT, util::Timer<MyCase::value_t>& ti
   std::size_t iTstartAvg = sLattice.getUnitConverter().getLatticeTime(physConvergeTime);
   if (iT == iTstartAvg) {
     SuperLatticeVelocity3D<T, DESCRIPTOR> latticeVelocity(sLattice);
-    sLattice.defineField<descriptors::AVERAGE_VELOCITY>(sGeometry.getMaterialIndicator({1, 2}), latticeVelocity);
+    fields::set<descriptors::AVERAGE_VELOCITY>(sLattice, sGeometry.getMaterialIndicator({1, 2}), latticeVelocity);
   }
   if (iT < iTstartAvg) {
     sLattice.setParameter<descriptors::LATTICE_TIME>(2);
@@ -416,11 +406,11 @@ void getResults(MyCase& myCase, std::size_t iT, util::Timer<MyCase::value_t>& ti
     sLattice.executePostProcessors(stage::Evaluation {});
     sLattice.setProcessingContext(ProcessingContext::Evaluation);
     sLattice.scheduleBackgroundOutputVTK([&, iT](auto task) {
-      SuperVTMwriter3D<T>        vtmWriter("channel3d");
-      SuperLatticePhysVelocity3D velocity(sLattice, sLattice.getUnitConverter());
+      SuperVTMwriter3D<T>              vtmWriter("channel3d");
+      SuperLatticePhysVelocity3D       velocity(sLattice, sLattice.getUnitConverter());
       SuperLatticePhysReynoldsStress3D reynoldsStress(sLattice, sLattice.getUnitConverter());
-      SuperLatticeRMSPhysPressure3D rmsPressure(sLattice, sLattice.getUnitConverter());
-      SuperLatticePhysPressure3D pressure(sLattice, sLattice.getUnitConverter());
+      SuperLatticeRMSPhysPressure3D    rmsPressure(sLattice, sLattice.getUnitConverter());
+      SuperLatticePhysPressure3D       pressure(sLattice, sLattice.getUnitConverter());
       SuperLatticePhysField3D<T, DESCRIPTOR, descriptors::AVERAGE_VELOCITY> sAveragedVel(
           sLattice, sLattice.getUnitConverter().getConversionFactorVelocity());
       SuperLatticePhysField3D<T, DESCRIPTOR, descriptors::WMVELOCITY> wmvelocity(
@@ -441,53 +431,51 @@ void getResults(MyCase& myCase, std::size_t iT, util::Timer<MyCase::value_t>& ti
 
   if (iT == sLattice.getUnitConverter().getLatticeTime(maxPhysT) - 1) {
     // Preparation
-    const T lx                         = parameters.get<parameters::DOMAIN_EXTENT>()[0];
-    const T ly                         = parameters.get<parameters::DOMAIN_EXTENT>()[1];
-    const T physDeltaX                 = parameters.get<parameters::PHYS_DELTA_X>();
-    const T latticeWallDistance        = parameters.get<parameters::LATTICE_DISTANCE_TO_WALL>();
+    const T lx                  = parameters.get<parameters::DOMAIN_EXTENT>()[0];
+    const T ly                  = parameters.get<parameters::DOMAIN_EXTENT>()[1];
+    const T physDeltaX          = parameters.get<parameters::PHYS_DELTA_X>();
+    const T latticeWallDistance = parameters.get<parameters::LATTICE_DISTANCE_TO_WALL>();
     sLattice.setProcessingContext(ProcessingContext::Evaluation);
-    SuperLatticePhysReynoldsStress3D<T,DESCRIPTOR> reynoldsStress(sLattice, sLattice.getUnitConverter());
-    SuperLatticeRMSPhysPressure3D<T,DESCRIPTOR> rmsPressure(sLattice, sLattice.getUnitConverter());
+    SuperLatticePhysReynoldsStress3D<T, DESCRIPTOR> reynoldsStress(sLattice, sLattice.getUnitConverter());
+    SuperLatticeRMSPhysPressure3D<T, DESCRIPTOR>    rmsPressure(sLattice, sLattice.getUnitConverter());
     SuperLatticePhysField3D<T, DESCRIPTOR, descriptors::AVERAGE_VELOCITY> sAveragedVel(
-          sLattice, sLattice.getUnitConverter().getConversionFactorVelocity());
+        sLattice, sLattice.getUnitConverter().getConversionFactorVelocity());
     sAveragedVel.getName() = "sAveragedVel";
     SuperLatticePhysField3D<T, DESCRIPTOR, descriptors::AVERAGE_U_TAU> sAveragedUTau(
-          sLattice, sLattice.getUnitConverter().getConversionFactorVelocity());
+        sLattice, sLattice.getUnitConverter().getConversionFactorVelocity());
     sAveragedUTau.getName() = "sAveragedUTau";
-    CSV<T> csvWriter("flowField",';', {"y+", "u_tau", "uAv+", "uu++", "uv++", "uw++", "vv++", "vw++", "ww++", "pRMS"}, ".csv");
-    int dummy[1]={ };
-    const int nZ = sGeometry.getCuboidDecomposition().getMotherCuboid().getNz();  // number of voxels in x-direction
-    auto mat = new SuperIndicatorIdentity3D<T> (sGeometry.getMaterialIndicator({1}));
-    T avUTau[sAveragedUTau.getTargetDim() + 1];
-    SuperNonZeroAverage3D<T> (sAveragedUTau, sGeometry.getMaterialIndicator({1})).operator()(avUTau, dummy);
+    CSV<T> csvWriter("flowField", ';', {"y+", "u_tau", "uAv+", "uu++", "uv++", "uw++", "vv++", "vw++", "ww++", "pRMS"},
+                     ".csv");
+    int    dummy[1] = {};
+    const int nZ    = sGeometry.getCuboidDecomposition().getMotherCuboid().getNz(); // number of voxels in x-direction
+    auto      mat   = new SuperIndicatorIdentity3D<T>(sGeometry.getMaterialIndicator({1}));
+    T         avUTau[sAveragedUTau.getTargetDim() + 1];
+    SuperNonZeroAverage3D<T>(sAveragedUTau, sGeometry.getMaterialIndicator({1})).operator()(avUTau, dummy);
 
-    if(avUTau[0] != T(0)){
-      for (int iZ = 2; iZ < int(nZ/2); ++iZ) {
-        const T z = sLattice.getUnitConverter().getPhysLength(iZ);
-        const Vector<T,3> center( lx/2., ly/2., z );
-        auto cube = new SuperIndicatorFfromIndicatorF3D<T>(
-          std::shared_ptr<IndicatorF3D<T>>(new IndicatorCuboid3D<T> ({lx,ly,T(0.25)*physDeltaX},{0,0,z-latticeWallDistance*physDeltaX})), sGeometry);
+    if (avUTau[0] != T(0)) {
+      for (int iZ = 2; iZ < int(nZ / 2); ++iZ) {
+        const T            z = sLattice.getUnitConverter().getPhysLength(iZ);
+        const Vector<T, 3> center(lx / 2., ly / 2., z);
+        auto               cube = new SuperIndicatorFfromIndicatorF3D<T>(
+            std::shared_ptr<IndicatorF3D<T>>(
+                new IndicatorCuboid3D<T>({lx, ly, T(0.25) * physDeltaX}, {0, 0, z - latticeWallDistance * physDeltaX})),
+            sGeometry);
         SuperIndicatorMultiplication3D<T> plane(cube, mat);
 
         // Average concentration: use average functor
         T avReynoldsStress[reynoldsStress.getTargetDim() + 1];
-        SuperAverage3D<T> (reynoldsStress, plane).operator()(avReynoldsStress, dummy);
+        SuperAverage3D<T>(reynoldsStress, plane).operator()(avReynoldsStress, dummy);
         T avRmsPres[rmsPressure.getTargetDim() + 1];
-        SuperAverage3D<T> (rmsPressure, plane).operator()(avRmsPres, dummy);
+        SuperAverage3D<T>(rmsPressure, plane).operator()(avRmsPres, dummy);
         T avVel[sAveragedVel.getTargetDim() + 1];
-        SuperAverage3D<T> (sAveragedVel, plane).operator()(avVel, dummy);
+        SuperAverage3D<T>(sAveragedVel, plane).operator()(avVel, dummy);
 
-        csvWriter.writeDataFile((z-latticeWallDistance*physDeltaX)
-                                *avUTau[0]/sLattice.getUnitConverter().getPhysViscosity(),
-                               {avUTau[0],
-                                avVel[0]/avUTau[0],
-                                avReynoldsStress[0]/avUTau[0]/avUTau[0],
-                                avReynoldsStress[1]/avUTau[0]/avUTau[0],
-                                avReynoldsStress[2]/avUTau[0]/avUTau[0],
-                                avReynoldsStress[3]/avUTau[0]/avUTau[0],
-                                avReynoldsStress[4]/avUTau[0]/avUTau[0],
-                                avReynoldsStress[5]/avUTau[0]/avUTau[0],
-                                avRmsPres[0]});
+        csvWriter.writeDataFile(
+            (z - latticeWallDistance * physDeltaX) * avUTau[0] / sLattice.getUnitConverter().getPhysViscosity(),
+            {avUTau[0], avVel[0] / avUTau[0], avReynoldsStress[0] / avUTau[0] / avUTau[0],
+             avReynoldsStress[1] / avUTau[0] / avUTau[0], avReynoldsStress[2] / avUTau[0] / avUTau[0],
+             avReynoldsStress[3] / avUTau[0] / avUTau[0], avReynoldsStress[4] / avUTau[0] / avUTau[0],
+             avReynoldsStress[5] / avUTau[0] / avUTau[0], avRmsPres[0]});
       }
     }
   }
@@ -513,8 +501,8 @@ void simulate(MyCase& myCase)
   const auto lz                         = parameters.get<parameters::DOMAIN_EXTENT>()[2];
 
   //forcing of the channel
-  SuperForceTermApplyInChannel3d forcingProcessor(sLattice, sGeometry, converter, ReTau, adaptedPhysSimulatedLength, lx, ly, lz,
-                   parameters.get<parameters::LATTICE_DISTANCE_TO_WALL>());
+  SuperForceTermApplyInChannel3d forcingProcessor(sLattice, sGeometry, converter, ReTau, adaptedPhysSimulatedLength, lx,
+                                                  ly, lz, parameters.get<parameters::LATTICE_DISTANCE_TO_WALL>());
 
   forcingProcessor.applyForing();
 
@@ -531,7 +519,6 @@ void simulate(MyCase& myCase)
   sLattice.setProcessingContext(ProcessingContext::Evaluation);
   timer.stop();
   timer.printSummary();
-
 }
 int main(int argc, char* argv[])
 {
