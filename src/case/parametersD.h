@@ -175,7 +175,7 @@ public:
       clout << "You can change any of these parameters via `./app --NAME VALUE`." << std::endl;
       clout << "The defined values are printed at the start of the simulation." << std::endl;
       clout << std::endl;
-      throw std::runtime_error("Program aborted on user choice");
+      std::exit(0); // Terminate on help printout
     }
     for (auto& [_, typeErasedField] : _map) {
       tryUpdateFromCLI(typeErasedField);
