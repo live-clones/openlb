@@ -194,13 +194,9 @@ void prepareLattice(MyCase& myCase) {
 
   auto& converter = lattice.getUnitConverter();
 
+  dynamics::set<SmagorinskyForcedBGKdynamics>(lattice, geometry.getMaterialIndicator({1}));
 
-  // Material=0 -->do nothing
-  lattice.defineDynamics<NoDynamics<T,DESCRIPTOR>>(geometry, 0);
-  // Material=1 --> dynamics
-  lattice.defineDynamics<SmagorinskyForcedBGKdynamics<T,DESCRIPTOR>>(geometry, 1);
-  // Material=2 -->no-slip boundary
-  lattice.defineDynamics<BounceBack<T,DESCRIPTOR>>(geometry, 2);
+  boundary::set<boundary::BounceBack>(lattice, geometry, 2);
   //setSlipBoundary<T,DESCRIPTOR>(lattice, geometry, 2);
 
   lattice.setParameter<descriptors::OMEGA>(converter.getLatticeRelaxationFrequency());
@@ -209,33 +205,24 @@ void prepareLattice(MyCase& myCase) {
   // prepareFallingDrop(...);
   T lattice_size = char_phys_length / resolution;
 
-  AnalyticalConst2D<T,T> zero( 0. );
-  AnalyticalConst2D<T,T> one( 1. );
-  AnalyticalConst2D<T,T> two( 2. );
-  AnalyticalConst2D<T,T> four( 4. );
   FreeSurfaceDeepFallingDrop2D<T,DESCRIPTOR> cells_analytical{ lattice_size, {0., 1., 2.}};
   FreeSurfaceDeepFallingDrop2D<T,DESCRIPTOR> mass_analytical{ lattice_size, {0., 0.5, 1.}};
 
   AnalyticalConst2D<T,T> force_zero{0., 0.};
 
-  for (int i: {0,1,2}) {
-    lattice.defineField<FreeSurface::MASS>(geometry, i, zero);
-    lattice.defineField<FreeSurface::EPSILON>(geometry, i, zero);
-    lattice.defineField<FreeSurface::CELL_TYPE>(geometry, i, zero);
-    lattice.defineField<FreeSurface::CELL_FLAGS>(geometry, i, zero);
-    lattice.defineField<descriptors::FORCE>(geometry, i, force_zero);
-  }
+  fields::set<FreeSurface::MASS>(lattice, geometry.getMaterialIndicator({0,1,2}), 0.);
+  fields::set<FreeSurface::EPSILON>(lattice, geometry.getMaterialIndicator({0,1,2}), 0.);
+  fields::set<FreeSurface::CELL_TYPE>(lattice, geometry.getMaterialIndicator({0,1,2}), 0.);
+  fields::set<FreeSurface::CELL_FLAGS>(lattice, geometry.getMaterialIndicator({0,1,2}), 0.);
+  fields::set<descriptors::FORCE>(lattice, geometry.getMaterialIndicator({0,1,2}), force_zero);
 
-  lattice.defineField<FreeSurface::CELL_TYPE>(geometry, 1, cells_analytical);
+  fields::set<FreeSurface::CELL_TYPE>(lattice, geometry.getMaterialIndicator({1}), cells_analytical);
+  fields::set<FreeSurface::MASS>(lattice, geometry.getMaterialIndicator({1}), mass_analytical);
+  fields::set<FreeSurface::EPSILON>(lattice, geometry.getMaterialIndicator({1}), mass_analytical);
 
-  lattice.defineField<FreeSurface::MASS>(geometry, 1, mass_analytical);
-  lattice.defineField<FreeSurface::EPSILON>(geometry, 1, mass_analytical);
-
-  for (int i: {0,2}) {
-    //lattice.defineField<FreeSurface::MASS>(geometry, i, one);
-    lattice.defineField<FreeSurface::EPSILON>(geometry, i, one);
-    lattice.defineField<FreeSurface::CELL_TYPE>(geometry, i, four);
-  }
+  fields::set<FreeSurface::MASS>(lattice, geometry.getMaterialIndicator({0,2}), 1.);
+  fields::set<FreeSurface::EPSILON>(lattice, geometry.getMaterialIndicator({0,2}), 1.);
+  fields::set<FreeSurface::CELL_TYPE>(lattice, geometry.getMaterialIndicator({0,2}), 4.);
 
   std::array<T,2> gravity;
   gravity[0] = parameters.get<parameters::GRAVITY>()[0];
@@ -243,7 +230,8 @@ void prepareLattice(MyCase& myCase) {
 
   T force_factor = T(1) / converter.getConversionFactorForce() * converter.getConversionFactorMass();
   AnalyticalConst2D<T,T> force_a{gravity[0] * force_factor, gravity[1] * force_factor};
-  lattice.defineField<descriptors::FORCE>(geometry.getMaterialIndicator({1}), force_a);
+
+  fields::set<descriptors::FORCE>(lattice, geometry.getMaterialIndicator({1}), force_a);
 
   // Convert kg / s^2
   // Basically it is multiplied with s^2 / kg = s^2 * m^3 / (kg * m^2 * m) = 1. / (velocity_factor^2 * density * length_factor)
