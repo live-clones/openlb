@@ -20,7 +20,6 @@
  *  Software Foundation, Inc., 51 Franklin Street, Fifth Floor,
  *  Boston, MA  02110-1301, USA.
  */
-
 #ifndef CASE_PARAMETERSD_H
 #define CASE_PARAMETERSD_H
 
@@ -28,6 +27,7 @@
 #include "parameters.h"
 
 #include <functional>
+#include <stdexcept>
 
 namespace olb {
 
@@ -42,10 +42,13 @@ private:
     void* field = nullptr;
 
     std::string name;
+
     std::function<void()> deleter;
     std::function<std::string()> value;
     std::function<void(std::string)> set;
     std::function<void()> calculate;
+
+    bool isBeingComputedRightNow = false;
 
     ~TypeErasedFieldD() {
       if (field && deleter) {
@@ -94,8 +97,15 @@ private:
       tryUpdateFromCLI(typeErasedField); // Allow CLI override of default
     }
     else if (typeErasedField.calculate) {
+      if (typeErasedField.isBeingComputedRightNow) {
+        throw std::runtime_error("Cyclic dependency detected in parameter: " + typeErasedField.name);
+      }
+      typeErasedField.isBeingComputedRightNow = true;
       typeErasedField.calculate();
-      typeErasedField.calculate = nullptr; // Ensure calculate runs only once
+      typeErasedField.isBeingComputedRightNow = false;
+
+      // Check for CLI override after calculation to ensure CLI can always override
+      tryUpdateFromCLI(typeErasedField);
     }
     return typeErasedField.field;
   }
@@ -110,10 +120,16 @@ public:
   template <concepts::Field FIELD>
   void set(FieldD<T,DESCRIPTOR,FIELD> value) {
     TypeErasedFieldD& typeErasedField = _map[typeid(FIELD)];
+
+    // If this set call is not triggered by recomputation it is a manual override
+    if (!typeErasedField.isBeingComputedRightNow) {
+      typeErasedField.calculate = nullptr;
+    }
+
     if (typeErasedField.field && typeErasedField.deleter) {
       typeErasedField.deleter();
     }
-    typeErasedField.calculate = nullptr;
+
     typeErasedField.field = new FieldD<T,DESCRIPTOR,FIELD>{value};
     setupTypeErasedField<FIELD>(typeErasedField);
   }
@@ -138,7 +154,6 @@ public:
     };
     setupTypeErasedField<FIELD>(typeErasedField);
   }
-
 
   template <concepts::Field FIELD>
   auto get() {
@@ -166,6 +181,8 @@ public:
     if (!_args) {
       _args = CLIreader(argc, argv);
     }
+    // Can only update fields already present in the map, fields relying on
+    // lazily-instantiated defaults are handled in getFieldPtr.
     for (auto& [_, typeErasedField] : _map) {
       tryUpdateFromCLI(typeErasedField);
     }
