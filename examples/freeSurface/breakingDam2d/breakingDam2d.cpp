@@ -127,21 +127,13 @@ void prepareLattice( MyCase& myCase ) {
     (T) density                  // physDensity: physical density in __kg / m^3__
   );
 
-  // Material=0 -->do nothing
-  lattice.defineDynamics<NoDynamics<T,DESCRIPTOR>>(geometry, 0);
-  // Material=1 -->bulk dynamics
-  lattice.defineDynamics<SmagorinskyForcedBGKdynamics<T,DESCRIPTOR>>( geometry, 1);
-  // Material=2 -->no-slip boundary
-  lattice.defineDynamics<BounceBack<T,DESCRIPTOR>>( geometry, 2);
+  dynamics::set<SmagorinskyForcedBGKdynamics>(lattice, geometry.getMaterialIndicator({1}));
+  boundary::set<boundary::BounceBack>(lattice, geometry, 2);
   //setSlipBoundary<T,DESCRIPTOR>(lattice, geometry, 2);
 
   lattice.setParameter<descriptors::OMEGA>(lattice.getUnitConverter().getLatticeRelaxationFrequency());
   lattice.setParameter<collision::LES::SMAGORINSKY>(T(0.2));
 
-  AnalyticalConst2D<T,T> zero( 0. );
-  AnalyticalConst2D<T,T> one( 1. );
-  AnalyticalConst2D<T,T> two( 2. );
-  AnalyticalConst2D<T,T> four( 4. );
   std::array<T,2> area;
   area[0] = parameters.get<parameters::DOMAIN_EXTENT>()[0];
   area[1] = parameters.get<parameters::DOMAIN_EXTENT>()[1];
@@ -150,23 +142,20 @@ void prepareLattice( MyCase& myCase ) {
 
   AnalyticalConst2D<T,T> force_zero{0., 0.};
 
-  for (int i: {0,1,2}) {
-    lattice.defineField<FreeSurface::MASS>(geometry, i, zero);
-    lattice.defineField<FreeSurface::EPSILON>(geometry, i, zero);
-    lattice.defineField<FreeSurface::CELL_TYPE>(geometry, i, zero);
-    lattice.defineField<FreeSurface::CELL_FLAGS>(geometry, i, zero);
-    lattice.defineField<descriptors::FORCE>(geometry, i, force_zero);
-  }
+  fields::set<FreeSurface::MASS>(lattice, geometry.getMaterialIndicator({0,1,2}), 0.);
+  fields::set<FreeSurface::EPSILON>(lattice, geometry.getMaterialIndicator({0,1,2}), 0.);
+  fields::set<FreeSurface::CELL_TYPE>(lattice, geometry.getMaterialIndicator({0,1,2}), 0.);
+  fields::set<FreeSurface::CELL_FLAGS>(lattice, geometry.getMaterialIndicator({0,1,2}), 0.);
+  fields::set<descriptors::FORCE>(lattice, geometry.getMaterialIndicator({0,1,2}), force_zero);
 
-  lattice.defineField<FreeSurface::CELL_TYPE>(geometry, 1, cells_analytical);
-  lattice.defineField<FreeSurface::MASS>(geometry, 1, mass_analytical);
-  lattice.defineField<FreeSurface::EPSILON>(geometry, 1, mass_analytical);
+  fields::set<FreeSurface::CELL_TYPE>(lattice, geometry.getMaterialIndicator({1}), cells_analytical);
+  fields::set<FreeSurface::MASS>(lattice, geometry.getMaterialIndicator({1}), mass_analytical);
+  fields::set<FreeSurface::EPSILON>(lattice, geometry.getMaterialIndicator({1}), mass_analytical);
 
-  for (int i: {0,2}) {
-    //lattice.defineField<FreeSurface::MASS>(geometry, i, one);
-    lattice.defineField<FreeSurface::EPSILON>(geometry, i, one);
-    lattice.defineField<FreeSurface::CELL_TYPE>(geometry, i, four);
-  }
+  //fields::set<FreeSurface::MASS>(lattice, geometry.getMaterialIndicator({0,2}), 1.);
+  fields::set<FreeSurface::EPSILON>(lattice, geometry.getMaterialIndicator({0,2}), 1.);
+  fields::set<FreeSurface::CELL_TYPE>(lattice, geometry.getMaterialIndicator({0,2}), 4.);
+
 
   static auto fluidIndicator = geometry.getMaterialIndicator({1});
 
@@ -176,7 +165,7 @@ void prepareLattice( MyCase& myCase ) {
 
   T force_factor = T(1) / lattice.getUnitConverter().getConversionFactorForce() * lattice.getUnitConverter().getConversionFactorMass();
   AnalyticalConst2D<T,T> force_a{gravity[0] * force_factor, gravity[1] * force_factor};
-  lattice.defineField<descriptors::FORCE>(fluidIndicator, force_a);
+  fields::set<descriptors::FORCE>(lattice, fluidIndicator, force_a);
 
   T surface_tension_coefficient_factor = std::pow(lattice.getUnitConverter().getConversionFactorTime(), 2) / (density * std::pow(lattice.getUnitConverter().getPhysDeltaX(),3));
 
@@ -206,8 +195,9 @@ void prepareLattice( MyCase& myCase ) {
 void setInitialValues( MyCase& myCase ){
   OstreamManager clout( std::cout,"setInitialValues" );
 
-  using T = MyCase::value_t;
   auto& lattice = myCase.getLattice(NavierStokes{});
+
+  using T = MyCase::value_t;
   auto& geometry = myCase.getGeometry();
 
   AnalyticalConst2D<T,T> u{0., 0.};
