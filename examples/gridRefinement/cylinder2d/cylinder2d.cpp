@@ -119,7 +119,8 @@ void prepareLattice(SuperLattice<T,DESCRIPTOR>& sLattice,
 
   // Material=1 -->bulk dynamics
   auto bulkIndicator = sGeometry.getMaterialIndicator({1});
-  sLattice.defineDynamics<BGKdynamics>(bulkIndicator);
+  //sLattice.defineDynamics<BGKdynamics>(bulkIndicator);<----------------------
+  dynamics::set<BGKdynamics>(sLattice, bulkIndicator);
 
   // Material=2 -->bounce back
   boundary::set<boundary::BounceBack>(sLattice, sGeometry, 2);
@@ -144,14 +145,17 @@ void prepareLattice(SuperLattice<T,DESCRIPTOR>& sLattice,
   boundary::set<boundary::BounceBack>(sLattice, sGeometry, 5);
   #endif
 
+
+  //Not needed as its the standard case
+
   // Initial conditions
-  AnalyticalConst2D<T,T> rhoF( 1 );
-  std::vector<T> velocity( 2,T( 0 ) );
-  AnalyticalConst2D<T,T> uF( velocity );
+  //AnalyticalConst2D<T,T> rhoF( 1 );
+  //std::vector<T> velocity( 2,T( 0 ) );
+  //AnalyticalConst2D<T,T> uF( velocity );
 
   // Initialize all values of distribution functions to their local equilibrium
-  sLattice.defineRhoU( bulkIndicator, rhoF, uF );
-  sLattice.iniEquilibrium( bulkIndicator, rhoF, uF );
+  //sLattice.defineRhoU( bulkIndicator, rhoF, uF );
+  //sLattice.iniEquilibrium( bulkIndicator, rhoF, uF );//
 
   sLattice.setParameter<descriptors::OMEGA>(omega);
 
@@ -181,11 +185,14 @@ void setBoundaryValues(SuperLattice<T,DESCRIPTOR>& sLattice,
     T iTvec[1] = {T( iT )};
     T frac[1] = {};
     StartScale( frac,iTvec );
-    T maxVelocity = converter.getCharLatticeVelocity()*3./2.*frac[0];
+    //T maxVelocity = converter.getCharLatticeVelocity()*3./2.*frac[0];
+    T maxVelocity = converter.getCharPhysVelocity()*3/2.*frac[0];
     T distance2Wall = converter.getPhysDeltaX()/2.;
     Poiseuille2D<T> poiseuilleU( sGeometry, 3, maxVelocity, distance2Wall );
 
-    sLattice.defineU( sGeometry, 3, poiseuilleU );
+    //sLattice.defineU( sGeometry, 3, poiseuilleU );
+    momenta::setVelocity(sLattice, sGeometry.getMaterialIndicator(3), poiseuilleU);
+
 
     sLattice.setProcessingContext<Array<momenta::FixedVelocityMomentumGeneric::VELOCITY>>(
       ProcessingContext::Simulation);
