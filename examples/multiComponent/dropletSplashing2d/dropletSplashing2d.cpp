@@ -142,8 +142,7 @@ void prepareLattice( MyCase& myCase )
   converter.print();
 
   // define lattice Dynamics
-  sLattice.defineDynamics<NoDynamics>(geometry, 0);
-  sLattice.defineDynamics<BulkDynamics>(geometry, 1);
+  dynamics::set<BulkDynamics>(sLattice, geometry, 1);
   boundary::set<boundary::BounceBack>(sLattice, geometry, 2);
 
   // global relaxation frequency (it can be initialized as one)
@@ -210,31 +209,36 @@ void setInitialValues(MyCase& myCase) {
   SmoothIndicatorFactoredCircle2D<T,T> dropletVelocity_y( {Lx/2., Ly/2.}, radius,
                                                            sqrt(2.)*w*converter.getConversionFactorLength(),
                                                            0, {0,0}, 0,
-                                                           -U_droplet/converter.getConversionFactorVelocity() );
+                                                           -U_droplet);
   AnalyticalIdentity2D<T,T> _dropletVelocity_y( dropletVelocity_y );
 
-  AnalyticalComposed2D<T,T> fluidVelocity(_dropletVelocity_x,_dropletVelocity_y);
+  std::shared_ptr<AnalyticalF2D<T,T>> fluidVelocity( new AnalyticalComposed2D<T,T>(_dropletVelocity_x,_dropletVelocity_y));
 
 
-  AnalyticalConst2D<T,T> vapor ( rho_vapor/sLattice.getUnitConverter().getConversionFactorDensity() );
-  SmoothIndicatorFactoredCircle2D<T,T> liquid ( {Lx/2., Ly/2.}, radius,
+  std::shared_ptr<AnalyticalF2D<T,T>> vapor ( new AnalyticalConst2D<T,T>(rho_vapor));
+  std::shared_ptr<AnalyticalF2D<T,T>> liquid( new SmoothIndicatorFactoredCircle2D<T,T>(
+                                                 {Lx/2., Ly/2.}, radius,
                                                  sqrt(2.)*w*converter.getConversionFactorLength(),
                                                  0, {0,0}, 0,
-                                                 ( rho_liquid - rho_vapor )/converter.getConversionFactorDensity() );
-  SmoothIndicatorFactoredCuboid2D<T,T> film( {Lx/2., 0.}, 2.*Lx, radius,
+                                                 ( rho_liquid - rho_vapor )));
+  std::shared_ptr<AnalyticalF2D<T,T>> film ( new SmoothIndicatorFactoredCuboid2D<T,T>(
+                                                 {Lx/2., 0.}, 2.*Lx, radius,
                                                  sqrt(2.)*w*converter.getConversionFactorLength(),
                                                  0, {0,0}, 0,
-                                                 ( rho_liquid - rho_vapor )/converter.getConversionFactorDensity() );
+                                                 ( rho_liquid - rho_vapor )));
 
-  AnalyticalIdentity2D<T,T> fluidDensity( vapor + liquid + film );
+  std::shared_ptr<AnalyticalF2D<T,T>> fluidDensity( vapor + liquid + film );
 
-  auto allGeometry = geometry.getMaterialIndicator({1,2});
-  sLattice.defineRhoU( allGeometry, fluidDensity, fluidVelocity );
-  sLattice.iniEquilibrium( allGeometry, fluidDensity, fluidVelocity );
+  auto bulkIndicator = geometry.getMaterialIndicator({1,2});
+  momenta::setVelocity(sLattice, bulkIndicator, *fluidVelocity);
+  momenta::setDensity(sLattice, bulkIndicator, *fluidDensity);
+
+  std::shared_ptr<AnalyticalF2D<T,T>> latticeFluidDensity( fluidDensity / converter.getConversionFactorDensity());
+  std::shared_ptr<AnalyticalF2D<T,T>> latticeFluidVelocity( fluidVelocity / converter.getConversionFactorVelocity());
+  sLattice.iniEquilibrium( bulkIndicator, *latticeFluidDensity, *latticeFluidVelocity );
 
   std::vector<T> fnull( 2,T() );
-  AnalyticalConst2D<T,T> fnull_( fnull );
-  sLattice.defineField<descriptors::EXTERNAL_FORCE>( geometry, 1, fnull_ );
+  fields::set<descriptors::EXTERNAL_FORCE>(sLattice, geometry.getMaterialIndicator(1), fnull);
 
   sLattice.initialize();
   sLattice.getCommunicator(stage::PreCoupling()).communicate();

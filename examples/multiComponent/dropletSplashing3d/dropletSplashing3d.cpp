@@ -143,8 +143,7 @@ void prepareLattice(MyCase& myCase) {
   const auto& converter = lattice.getUnitConverter();
   converter.print();
 
-  lattice.defineDynamics<NoDynamics>(geometry, 0);
-  lattice.defineDynamics<BulkDynamics>(geometry, 1);
+  dynamics::set<BulkDynamics>(lattice, geometry, 1);
   boundary::set<boundary::BounceBack>(lattice, geometry, 2);
 
   // global relaxation frequency (it can be initialized as one)
@@ -205,56 +204,64 @@ void setInitialValues(MyCase& myCase) {
   const T Lx = 8*radius;
   const T Ly = 8*radius;
   const T Lz = 4*radius;
-  const T thickness = params.get<parameters::INTERFACE_WIDTH>();
+  const T w = params.get<parameters::INTERFACE_WIDTH>();
   const T U_droplet = params.get<parameters::U_DROPLET>();
   const T rho_vapor = params.get<parameters::RHO_VAPOR>();
   const T rho_liquid = params.get<parameters::RHO_LIQUID>();
 
-  std::vector<T> dropletVelocity_x = {0.};
-  AnalyticalConst3D<T,T> _dropletVelocity_x(dropletVelocity_x);
+  const T physWidth = sqrt(2.) * w * converter.getConversionFactorLength();
 
-  std::vector<T> dropletVelocity_y = {0.};
-  AnalyticalConst3D<T,T> _dropletVelocity_y(dropletVelocity_y);
-
-  SmoothIndicatorFactoredCircle3D<T,T> dropletVelocity_z(
+  std::vector<T> vx = {0.};
+  std::vector<T> vy = {0.};
+  std::shared_ptr<AnalyticalF3D<T,T>> velocity_x(new AnalyticalConst3D<T,T>(vx));
+  std::shared_ptr<AnalyticalF3D<T,T>> velocity_y(new AnalyticalConst3D<T,T>(vy));
+  std::shared_ptr<AnalyticalF3D<T,T>> velocity_z(new SmoothIndicatorFactoredCircle3D<T,T>(
     {Lx/2., Ly/2., Lz/2.},
     radius,
-    sqrt(2.)*thickness*converter.getConversionFactorLength(),
-    0, {0,0, 0}, 0,
-    -U_droplet/converter.getConversionFactorVelocity()
-  );
-  AnalyticalIdentity3D<T,T> _dropletVelocity_z(dropletVelocity_z);
-
-  AnalyticalComposed3D<T,T> fluidVelocity(_dropletVelocity_x,_dropletVelocity_y,_dropletVelocity_z);
-
-  AnalyticalConst3D<T,T> vapor (rho_vapor/converter.getConversionFactorDensity());
-  SmoothIndicatorFactoredCircle3D<T,T> liquid (
-    {Lx/2., Ly/2., Lz/2.},
-    radius,
-    sqrt(2.)*thickness*converter.getConversionFactorLength(),
+    physWidth,
     0, {0,0,0}, 0,
-    (rho_liquid - rho_vapor)/converter.getConversionFactorDensity()
-  );
+    -U_droplet
+  ));
 
-  SmoothIndicatorCuboid3D<T,T> film(
+  std::shared_ptr<AnalyticalF3D<T,T>> fluidVelocity(new AnalyticalComposed3D<T,T>(
+    *velocity_x, *velocity_y, *velocity_z
+  ));
+
+  std::shared_ptr<AnalyticalF3D<T,T>> vapor(new AnalyticalConst3D<T,T>(rho_vapor));
+  std::shared_ptr<AnalyticalF3D<T,T>> liquid(new SmoothIndicatorFactoredCircle3D<T,T>(
+    {Lx/2., Ly/2., Lz/2.},
+    radius,
+    physWidth,
+    0, {0,0,0}, 0,
+    rho_liquid - rho_vapor
+  ));
+  std::shared_ptr<AnalyticalF3D<T,T>> film(new SmoothIndicatorCuboid3D<T,T>(
     2.*Lx, 2.*Ly,
     radius,
     {Lx/2., Ly/2., 0.},
-    sqrt(2.)*thickness*converter.getConversionFactorLength(),
+    physWidth,
     {0,0,0}
-  );
-  AnalyticalConst3D<T,T> difference (
-    (rho_liquid - rho_vapor) / converter.getConversionFactorDensity()
+  ));
+  std::shared_ptr<AnalyticalF3D<T,T>> fluidDensity(
+    vapor + liquid + (film * (rho_liquid - rho_vapor))
   );
 
-  AnalyticalIdentity3D<T,T> fluidDensity(vapor + liquid + film * difference);
+  std::shared_ptr<AnalyticalF3D<T,T>> latticeFluidDensity(
+    fluidDensity / converter.getConversionFactorDensity()
+  );
+  std::shared_ptr<AnalyticalF3D<T,T>> latticeFluidVelocity(
+    fluidVelocity / converter.getConversionFactorVelocity()
+  );
 
-  auto allGeometry = geometry.getMaterialIndicator({1,2});
-  lattice.defineRhoU(allGeometry, fluidDensity, fluidVelocity);
-  lattice.iniEquilibrium(allGeometry, fluidDensity, fluidVelocity);
+  auto bulkIndicator = geometry.getMaterialIndicator({1,2});
+  momenta::setVelocity(lattice, bulkIndicator, *fluidVelocity);
+  momenta::setDensity (lattice, bulkIndicator, *fluidDensity);
+
+  lattice.iniEquilibrium(bulkIndicator, *latticeFluidDensity, *latticeFluidVelocity);
 
   std::vector<T> fnull(3, T());
   AnalyticalConst3D<T,T> fnull_(fnull);
+  fields::set<descriptors::EXTERNAL_FORCE>(lattice, geometry.getMaterialIndicator(1), fnull);
   lattice.defineField<descriptors::EXTERNAL_FORCE>(geometry, 1, fnull_);
 
   lattice.initialize();
