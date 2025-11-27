@@ -233,8 +233,8 @@ void setInitialValues(MyCase& myCase) {
   momenta::setVelocity(sLattice, bulkIndicator, *fluidVelocity);
   momenta::setDensity(sLattice, bulkIndicator, *fluidDensity);
 
-  std::shared_ptr<AnalyticalF2D<T,T>> latticeFluidDensity( fluidDensity * converter.getConversionFactorDensity());
-  std::shared_ptr<AnalyticalF2D<T,T>> latticeFluidVelocity( fluidVelocity * converter.getConversionFactorVelocity());
+  std::shared_ptr<AnalyticalF2D<T,T>> latticeFluidDensity( fluidDensity / converter.getConversionFactorDensity());
+  std::shared_ptr<AnalyticalF2D<T,T>> latticeFluidVelocity( fluidVelocity / converter.getConversionFactorVelocity());
   sLattice.iniEquilibrium( bulkIndicator, *latticeFluidDensity, *latticeFluidVelocity );
 
   std::vector<T> fnull( 2,T() );
