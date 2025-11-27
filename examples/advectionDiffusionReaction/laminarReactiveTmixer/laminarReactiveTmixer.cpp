@@ -290,23 +290,14 @@ void setInitialValuesCRAD(MyCase& myCase) {
   RectanglePoiseuille3D<T> poiseuilleU1( geometry, 3, maxVelocity1, distance2Wall, distance2Wall, distance2Wall );
   RectanglePoiseuille3D<T> poiseuilleU2( geometry, 4, maxVelocity2, distance2Wall, distance2Wall, distance2Wall );
 
-  // CRADlattice.template defineField<descriptors::VELOCITY>(geometry.getMaterialIndicator({1, 2, 3, 4, 5 }), u );
-
-  // setting actual values for the boundary
-  // CRADlattice.defineRho( geometry, 3, rhoA);
-  momenta::setDensity(CRADlattice, geometry.getMaterialIndicator(3), rhos[2*ID+0]);
-  momenta::setVelocity(CRADlattice, geometry.getMaterialIndicator(3), poiseuilleU1);
-  // CRADlattice.iniEquilibrium( geometry, 3, rhoA, poiseuilleU1 );
-  // CRADlattice.defineRho( geometry, 4, rhoB);
-  momenta::setDensity(CRADlattice, geometry.getMaterialIndicator(4), rhos[2*ID+1]);
-  momenta::setVelocity(CRADlattice, geometry.getMaterialIndicator(4), poiseuilleU2);
-  // CRADlattice.iniEquilibrium( geometry, 4, rhoB, poiseuilleU2 );
-
-  // CRADlattice.template defineField<descriptors::SOURCE>(geometry.getMaterialIndicator({1, 2, 3, 4, 5 }), rho0);
-  fields::set<descriptors::SOURCE>(CRADlattice, geometry.getMaterialIndicator({1, 2, 3, 4, 5 }), rho0);
-  // CRADlattice.defineRho( geometry.getMaterialIndicator({1, 2, 5}), rho0);
   momenta::setDensity(CRADlattice, geometry.getMaterialIndicator({1, 2, 5}), rho0);
-  // CRADlattice.iniEquilibrium( geometry.getMaterialIndicator({1, 2, 5}), rho0, u );
+  momenta::setDensity(CRADlattice, geometry.getMaterialIndicator(3), rhos[2*ID+0]);
+  momenta::setDensity(CRADlattice, geometry.getMaterialIndicator(4), rhos[2*ID+1]);
+  momenta::setVelocity(CRADlattice, geometry.getMaterialIndicator(3), poiseuilleU1);
+  momenta::setVelocity(CRADlattice, geometry.getMaterialIndicator(4), poiseuilleU2);
+
+  fields::set<descriptors::SOURCE>(CRADlattice, geometry.getMaterialIndicator({1, 2, 3, 4, 5 }), rho0);
+
   CRADlattice.initialize();
 }
 
