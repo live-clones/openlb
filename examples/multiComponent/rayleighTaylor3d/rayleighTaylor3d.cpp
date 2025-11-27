@@ -235,15 +235,15 @@ void setInitialValues(MyCase& myCase) {
   //latticeOne.iniEquilibrium( geometry, 1, zero, zeroV );
   momenta::setDensity(latticeTwo, geometry.getMaterialIndicator(1), randomPlus);
   //latticeTwo.defineRhoU( geometry, 1, randomPlus, zeroV );
-  latticeTwo.iniEquilibrium( geometry, 1, randomPlus, zeroV );
+  //latticeTwo.iniEquilibrium( geometry, 1, randomPlus, zeroV );
 
   momenta::setDensity(latticeOne, geometry.getMaterialIndicator(2), randomOne);
   //latticeOne.defineRhoU( geometry, 2, randomOne, zeroV );
-  latticeOne.iniEquilibrium( geometry, 2, randomOne, zeroV );
+  //latticeOne.iniEquilibrium( geometry, 2, randomOne, zeroV );
 
   momenta::setDensity(latticeTwo, geometry.getMaterialIndicator(2), zeroVal);
   //latticeTwo.defineRhoU( geometry, 2, zero, zeroV );
-  latticeTwo.iniEquilibrium( geometry, 2, zero, zeroV );
+  //latticeTwo.iniEquilibrium( geometry, 2, zero, zeroV );
 
   // Make the lattice ready for simulation
   latticeOne.initialize();
