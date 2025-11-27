@@ -173,18 +173,15 @@ void prepareLatticeNS(MyCase& myCase) {
 
   const T omega = converter.getLatticeRelaxationFrequency();
 
-  // Material=0 -->do nothing
-  lattice.defineDynamics<NoDynamics>(geometry, 0);
-
   // Material=1 -->bulk dynamics
   // Material=3 -->bulk dynamics (inlet1 (-Y))
   // Material=4 -->bulk dynamics (inlet2 (+Y))
   // Material=5 -->bulk dynamics (outlet)
   auto bulkIndicator = geometry.getMaterialIndicator({1, 3, 4, 5});
-  lattice.defineDynamics<BGKdynamics>(bulkIndicator);
+  dynamics::set<BGKdynamics>(lattice, bulkIndicator);
 
   // Material=2 -->bounce back
-  lattice.defineDynamics<BounceBack>(geometry, 2);
+  dynamics::set<BounceBack>(lattice, geometry.getMaterialIndicator(2));
 
   //if interpolated boundary conditions are chosen
   boundary::set<boundary::InterpolatedVelocity>(lattice, geometry, 3);
@@ -194,16 +191,19 @@ void prepareLatticeNS(MyCase& myCase) {
   lattice.setParameter<descriptors::OMEGA>(omega);
 
   auto DIFFUSION = params.get<parameters::DIFFUSION>();
+
   T omegaA = converter.getLatticeRelaxationFrequencyFromDiffusivity<RADDESCRIPTOR>( DIFFUSION[0] );
   T omegaB = converter.getLatticeRelaxationFrequencyFromDiffusivity<RADDESCRIPTOR>( DIFFUSION[1] );
   T omegaC = converter.getLatticeRelaxationFrequencyFromDiffusivity<RADDESCRIPTOR>( DIFFUSION[2] );
+
   auto& coupling = myCase.setCouplingOperator(
     "LESReaction",
     LESReactionCoupling<T,3>{},
     names::NavierStokes{}, lattice,
     names::Concentration0{}, myCase.getLattice(Concentration<0>{}),
     names::Concentration1{}, myCase.getLattice(Concentration<1>{}),
-    names::Concentration2{}, myCase.getLattice(Concentration<2>{}));
+    names::Concentration2{}, myCase.getLattice(Concentration<2>{})
+  );
   coupling.setParameter<LESReactionCoupling<T,3>::LATTICE_REACTION_COEFF>(converter.getConversionFactorTime()*1.e5);
   coupling.setParameter<LESReactionCoupling<T,3>::STOCH_COEFF>({-1, -1., 1.});
   coupling.setParameter<LESReactionCoupling<T,3>::REACTION_ORDER>({1., 1., 0.});
@@ -232,14 +232,11 @@ void prepareLatticeCRAD(MyCase& myCase) {
   const auto& NSconverter = NSlattice.getUnitConverter();
   CRADlattice.setUnitConverter(NSconverter);
 
-  // buffer layer
-  CRADlattice.template defineDynamics<NoDynamics>(geometry, 0);
-
   // bulk
-  CRADlattice.template defineDynamics<SourcedLimitedAdvectionDiffusionBGKdynamics>(geometry.getMaterialIndicator({1, 3, 4}));
+  dynamics::set<SourcedLimitedAdvectionDiffusionBGKdynamics>(CRADlattice, geometry.getMaterialIndicator({1, 3, 4}));
 
   // Material=2 -->bounce back
-  CRADlattice.template defineDynamics<BounceBack>(geometry.getMaterialIndicator({2}));
+  dynamics::set<BounceBack>(CRADlattice, geometry.getMaterialIndicator(2));
 
   // Setting of the boundary conditions, inflow and outflow with Dirichlet and Neumann BCs
   boundary::set<boundary::AdvectionDiffusionDirichlet>(CRADlattice, geometry.getMaterialIndicator({3}));
@@ -249,7 +246,7 @@ void prepareLatticeCRAD(MyCase& myCase) {
   auto DIFFUSION = params.get<parameters::DIFFUSION>();
   T omega = NSconverter.getLatticeRelaxationFrequencyFromDiffusivity<RADDESCRIPTOR>( DIFFUSION[ID] );
   AnalyticalConst3D<T,T> omegaD( omega );
-  CRADlattice.template defineField<descriptors::OMEGA>(geometry.getMaterialIndicator({1, 2, 3, 4, 5 }), omegaD );
+  fields::set<descriptors::OMEGA>(CRADlattice, geometry.getMaterialIndicator({1, 2, 3, 4, 5}), omegaD);
   CRADlattice.template setParameter<descriptors::OMEGA>(omega);
 
   {
@@ -263,18 +260,9 @@ void prepareLatticeCRAD(MyCase& myCase) {
 
 void setInitialValuesNS(MyCase& myCase) {
   using T = MyCase::value_t;
-  auto& geometry = myCase.getGeometry();
 
   auto& lattice = myCase.getLattice(NavierStokes{});
 
-  AnalyticalConst3D<T,T> rho1( 1. );
-  std::vector<T> velocity( 3,T() );
-  AnalyticalConst3D<T,T> u( velocity );
-
-  //Initialize all values of distribution functions to their local equilibrium
-  auto bulkIndicator = geometry.getMaterialIndicator({1, 3, 4, 5});
-  lattice.defineRhoU( bulkIndicator, rho1, u );
-  lattice.iniEquilibrium( bulkIndicator, rho1, u );
   // Make the lattice ready for simulation
   lattice.initialize();
 }
@@ -302,18 +290,17 @@ void setInitialValuesCRAD(MyCase& myCase) {
   RectanglePoiseuille3D<T> poiseuilleU1( geometry, 3, maxVelocity1, distance2Wall, distance2Wall, distance2Wall );
   RectanglePoiseuille3D<T> poiseuilleU2( geometry, 4, maxVelocity2, distance2Wall, distance2Wall, distance2Wall );
 
-  std::vector<T> velocity( 3,T() );
-  AnalyticalConst3D<T,T> u( velocity );
-  CRADlattice.template defineField<descriptors::VELOCITY>(geometry.getMaterialIndicator({1, 2, 3, 4, 5 }), u );
+  momenta::setDensity(CRADlattice, geometry.getMaterialIndicator({1, 2, 5}), rho0);
+  momenta::setDensity(CRADlattice, geometry.getMaterialIndicator(3), rhos[2*ID+0]);
+  momenta::setDensity(CRADlattice, geometry.getMaterialIndicator(4), rhos[2*ID+1]);
+  momenta::setVelocity(CRADlattice, geometry.getMaterialIndicator(3), poiseuilleU1);
+  momenta::setVelocity(CRADlattice, geometry.getMaterialIndicator(4), poiseuilleU2);
 
-  // setting actual values for the boundary
-  CRADlattice.defineRho( geometry, 3, rhoA);
   CRADlattice.iniEquilibrium( geometry, 3, rhoA, poiseuilleU1 );
-  CRADlattice.defineRho( geometry, 4, rhoB);
   CRADlattice.iniEquilibrium( geometry, 4, rhoB, poiseuilleU2 );
-  CRADlattice.template defineField<descriptors::SOURCE>(geometry.getMaterialIndicator({1, 2, 3, 4, 5 }), rho0);
-  CRADlattice.defineRho( geometry.getMaterialIndicator({1, 2, 5}), rho0 );
-  CRADlattice.iniEquilibrium( geometry.getMaterialIndicator({1, 2, 5}), rho0, u );
+
+  fields::set<descriptors::SOURCE>(CRADlattice, geometry.getMaterialIndicator({1, 2, 3, 4, 5 }), rho0);
+
   CRADlattice.initialize();
 }
 
@@ -350,8 +337,9 @@ void setTemporalValues(MyCase& myCase,
     T distance2Wall = converter.getConversionFactorLength()/T(2);
     RectanglePoiseuille3D<T> poiseuilleU1( geometry, 3, maxVelocity1, distance2Wall, distance2Wall, distance2Wall );
     RectanglePoiseuille3D<T> poiseuilleU2( geometry, 4, maxVelocity2, distance2Wall, distance2Wall, distance2Wall );
-    lattice.defineU( geometry, 3, poiseuilleU1 );
-    lattice.defineU( geometry, 4, poiseuilleU2 );
+
+    momenta::setVelocity(lattice, geometry.getMaterialIndicator(3), poiseuilleU1);
+    momenta::setVelocity(lattice, geometry.getMaterialIndicator(4), poiseuilleU2);
 
     lattice.setProcessingContext<Array<momenta::FixedVelocityMomentumGeneric::VELOCITY>>(
       ProcessingContext::Simulation);
@@ -372,8 +360,10 @@ void getResultsNS(MyCase& myCase,
   OstreamManager clout( std::cout,"getResultsNS" );
 
   SuperVTMwriter3D<T> vtmWriterNS( "mixer_fluid" );
+  SuperGeometryF<T, DESCRIPTOR::d> materials(geometry);
   SuperLatticePhysVelocity3D<T, DESCRIPTOR> velocity( lattice, converter );
   SuperLatticePhysPressure3D<T, DESCRIPTOR> pressure( lattice, converter );
+  vtmWriterNS.addFunctor( materials );
   vtmWriterNS.addFunctor( velocity );
   vtmWriterNS.addFunctor( pressure );
 
@@ -486,6 +476,9 @@ void getResultsCRAD(MyCase& myCase,
     myCase.getLattice(Concentration<0>{}).setProcessingContext(ProcessingContext::Evaluation);
     myCase.getLattice(Concentration<1>{}).setProcessingContext(ProcessingContext::Evaluation);
     myCase.getLattice(Concentration<2>{}).setProcessingContext(ProcessingContext::Evaluation);
+
+    SuperGeometryF<T, RADDESCRIPTOR::d> materials(geometry);
+    vtmWriterCRAD.addFunctor( materials );
     vtmWriterCRAD.write( iT );
   }
 
