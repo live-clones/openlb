@@ -152,7 +152,7 @@ void prepareLattice(MyCase& myCase)
 
   const auto& converter = latticeNS.getUnitConverter();
   converter.print();
-  const T sigma_Lattice = sigma / converter.getConversionFactorSurfaceTension(); 
+  const T sigma_Lattice = sigma / converter.getConversionFactorSurfaceTension();
   clout << "Lattice Surface Tension: " << sigma_Lattice << std::endl;
 
   latticeAC.setUnitConverter(converter);
@@ -281,7 +281,7 @@ void setInitialValues(MyCase& myCase) {
 
   momenta::setOrderParameter(latticeAC, all, phi0);
   momenta::setVelocity(latticeAC, all, poiseuille_phys);
-  
+
   momenta::setIncompressiblePressure(latticeNS, all, *p0_phys);
   momenta::setVelocity(latticeNS, all, poiseuille_phys);
   latticeNS.iniEquilibrium( all, *p0, poiseuille );
@@ -301,7 +301,7 @@ void setInitialValues(MyCase& myCase) {
     communicator.requestField<STATISTIC>();
     communicator.exchangeRequests();
   }
-  
+
   latticeNS.initialize();
   latticeAC.initialize();
 
@@ -320,7 +320,7 @@ void setTemporalValues(MyCase& myCase,
 { }
 
 void getResults(
-  MyCase& myCase, 
+  MyCase& myCase,
   util::Timer<MyCase::value_t>& timer,
   std::size_t iT)
 {
@@ -333,7 +333,7 @@ void getResults(
   auto& latticeNS = myCase.getLattice(NavierStokes{});
   auto& latticeAC = myCase.getLattice(Component1{});
   const auto& converter = latticeNS.getUnitConverter();
-  
+
   const int statIter = params.get<parameters::LATTICE_STAT_ITER_T>();
   const int vtkIter = params.get<parameters::LATTICE_VTK_ITER_T>();
 
@@ -472,7 +472,7 @@ int main( int argc, char *argv[] )
       const T Nx = myCaseParameters.get<parameters::DOMAIN_EXTENT>()[0] / char_l * N;
       const T Ny = myCaseParameters.get<parameters::DOMAIN_EXTENT>()[1] / char_l * N;
       const T Re = myCaseParameters.get<parameters::REYNOLDS>();
-      const T tau_l = myCaseParameters.get<parameters::LATTICE_RELAXATION_TIME>();  
+      const T tau_l = myCaseParameters.get<parameters::LATTICE_RELAXATION_TIME>();
       const T maxIter = Nx/(Re/Ny*((tau_l-0.5)/3.))*1.1;
       return maxIter;
     });
