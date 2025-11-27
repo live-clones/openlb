@@ -296,6 +296,9 @@ void setInitialValuesCRAD(MyCase& myCase) {
   momenta::setVelocity(CRADlattice, geometry.getMaterialIndicator(3), poiseuilleU1);
   momenta::setVelocity(CRADlattice, geometry.getMaterialIndicator(4), poiseuilleU2);
 
+  CRADlattice.iniEquilibrium( geometry, 3, rhoA, poiseuilleU1 );
+  CRADlattice.iniEquilibrium( geometry, 4, rhoB, poiseuilleU2 );
+
   fields::set<descriptors::SOURCE>(CRADlattice, geometry.getMaterialIndicator({1, 2, 3, 4, 5 }), rho0);
 
   CRADlattice.initialize();
