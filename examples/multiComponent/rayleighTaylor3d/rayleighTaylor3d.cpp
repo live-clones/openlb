@@ -218,8 +218,6 @@ void setInitialValues(MyCase& myCase) {
   const T ny              = parameters.get<parameters::DOMAIN_EXTENT>()[1];
 
   AnalyticalConst3D<T,T> noise( noiseVal );
-  AnalyticalConst3D<T,T> zeroV(0., 0., 0.);
-  AnalyticalConst3D<T,T> zero( zeroVal );
   AnalyticalLinear3D<T,T> one( 0., -force * descriptors::invCs2<T,DESCRIPTOR>(), 0., 0.98 + force * ny * descriptors::invCs2<T,DESCRIPTOR>() );
   AnalyticalConst3D<T,T> onePlus( 0.98 + force * ny / 2. * descriptors::invCs2<T,DESCRIPTOR>() );
   AnalyticalRandom3D<T,T> random;
