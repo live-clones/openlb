@@ -360,8 +360,10 @@ void getResultsNS(MyCase& myCase,
   OstreamManager clout( std::cout,"getResultsNS" );
 
   SuperVTMwriter3D<T> vtmWriterNS( "mixer_fluid" );
+  SuperGeometryF<T, DESCRIPTOR::d> materials(geometry);
   SuperLatticePhysVelocity3D<T, DESCRIPTOR> velocity( lattice, converter );
   SuperLatticePhysPressure3D<T, DESCRIPTOR> pressure( lattice, converter );
+  vtmWriterNS.addFunctor( materials );
   vtmWriterNS.addFunctor( velocity );
   vtmWriterNS.addFunctor( pressure );
 
@@ -474,6 +476,9 @@ void getResultsCRAD(MyCase& myCase,
     myCase.getLattice(Concentration<0>{}).setProcessingContext(ProcessingContext::Evaluation);
     myCase.getLattice(Concentration<1>{}).setProcessingContext(ProcessingContext::Evaluation);
     myCase.getLattice(Concentration<2>{}).setProcessingContext(ProcessingContext::Evaluation);
+
+    SuperGeometryF<T, RADDESCRIPTOR::d> materials(geometry);
+    vtmWriterCRAD.addFunctor( materials );
     vtmWriterCRAD.write( iT );
   }
 
