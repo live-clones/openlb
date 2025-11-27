@@ -218,7 +218,20 @@ void prepareLattice( MyCase& myCase ) {
 /// @param myCase The Case instance which keeps the simulation data
 /// @note Be careful: initial values have to be set using lattice units
 void setInitialValues( MyCase& myCase ){
+  using T = MyCase::value_t;
+
   auto& lattice = myCase.getLattice(NavierStokes{});
+  auto& geometry = myCase.getGeometry();
+  const auto& converter = lattice.getUnitConverter();
+
+  Vector<T,3> u0 = {0., 0., 0.};
+  AnalyticalConst3D<T,T> _u0(u0);
+  T latticeRho = 1;
+  AnalyticalConst3D<T,T> _latticeRho(latticeRho);
+
+  momenta::setVelocity(lattice, geometry.getMaterialIndicator({0, 1, 2}), u0);
+  momenta::setDensity(lattice, geometry.getMaterialIndicator({0, 1, 2}), converter.getPhysDensity(latticeRho));
+  lattice.iniEquilibrium(geometry.getMaterialIndicator({0, 1, 2}), _latticeRho, _u0);
 
   // Set up free surface communicator stages
   FreeSurface::initialize(lattice);
