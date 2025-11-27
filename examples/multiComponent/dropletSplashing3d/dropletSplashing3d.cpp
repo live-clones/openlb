@@ -242,15 +242,15 @@ void setInitialValues(MyCase& myCase) {
     physWidth,
     {0,0,0}
   ));
-  std::shared_ptr<AnalyticalF3D<T,T>> fluidDensity( 
-    vapor + liquid + (film * (rho_liquid - rho_vapor)) 
+  std::shared_ptr<AnalyticalF3D<T,T>> fluidDensity(
+    vapor + liquid + (film * (rho_liquid - rho_vapor))
   );
 
-  std::shared_ptr<AnalyticalF3D<T,T>> latticeFluidDensity( 
-    fluidDensity / converter.getConversionFactorDensity() 
+  std::shared_ptr<AnalyticalF3D<T,T>> latticeFluidDensity(
+    fluidDensity / converter.getConversionFactorDensity()
   );
-  std::shared_ptr<AnalyticalF3D<T,T>> latticeFluidVelocity( 
-    fluidVelocity / converter.getConversionFactorVelocity() 
+  std::shared_ptr<AnalyticalF3D<T,T>> latticeFluidVelocity(
+    fluidVelocity / converter.getConversionFactorVelocity()
   );
 
   auto bulkIndicator = geometry.getMaterialIndicator({1,2});

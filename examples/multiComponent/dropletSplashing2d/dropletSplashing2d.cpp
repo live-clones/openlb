@@ -216,12 +216,12 @@ void setInitialValues(MyCase& myCase) {
 
 
   std::shared_ptr<AnalyticalF2D<T,T>> vapor ( new AnalyticalConst2D<T,T>(rho_vapor));
-  std::shared_ptr<AnalyticalF2D<T,T>> liquid( new SmoothIndicatorFactoredCircle2D<T,T>( 
+  std::shared_ptr<AnalyticalF2D<T,T>> liquid( new SmoothIndicatorFactoredCircle2D<T,T>(
                                                  {Lx/2., Ly/2.}, radius,
                                                  sqrt(2.)*w*converter.getConversionFactorLength(),
                                                  0, {0,0}, 0,
                                                  ( rho_liquid - rho_vapor )));
-  std::shared_ptr<AnalyticalF2D<T,T>> film ( new SmoothIndicatorFactoredCuboid2D<T,T>( 
+  std::shared_ptr<AnalyticalF2D<T,T>> film ( new SmoothIndicatorFactoredCuboid2D<T,T>(
                                                  {Lx/2., 0.}, 2.*Lx, radius,
                                                  sqrt(2.)*w*converter.getConversionFactorLength(),
                                                  0, {0,0}, 0,
