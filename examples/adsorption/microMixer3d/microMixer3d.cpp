@@ -153,12 +153,12 @@ void prepareLatticeAD(
   const auto& converter = lattice.getUnitConverter();
 
   // dynamics for ADE
-  lattice.template defineDynamics<SourcedAdvectionDiffusionBGKdynamics>(geometry.getMaterialIndicator({1, 5}));
+  dynamics::set<SourcedAdvectionDiffusionBGKdynamics>(lattice, geometry.getMaterialIndicator({1, 5}));
   boundary::set<boundary::BounceBack>(lattice, geometry, 2);
   boundary::set<boundary::BounceBack>(lattice, geometry, noInlet);
 
   // boundary for ADE
-  lattice.template defineDynamics<SourcedAdvectionDiffusionBGKdynamics>(geometry, inlet);
+  dynamics::set<SourcedAdvectionDiffusionBGKdynamics>(lattice, geometry, inlet);
   boundary::set<boundary::AdvectionDiffusionDirichlet>(lattice, geometry, inlet);
   setZeroGradientBoundary<T,ADDESCRIPTOR>(lattice, geometry, 5);
 
@@ -191,7 +191,7 @@ void prepareLattice(MyCase& myCase) {
   converter.print();
 
   // dynamics for fluid
-  NSlattice.template defineDynamics<BGKdynamics>(geometry.getMaterialIndicator({1, 3, 4, 5}));
+  dynamics::set<BGKdynamics>(NSlattice, geometry.getMaterialIndicator({1, 3, 4, 5}));
 
   // boundary conditions for fluid
   // wall
@@ -270,9 +270,9 @@ void setInitialValuesAD(
   AnalyticalConst3D<T, T> u0(0., 0., 0.);
   AnalyticalConst3D<T, T> rhoSmall(0);
 
-  lattice.defineRhoU(geometry.getMaterialIndicator({1, 2, 5}), rhoSmall, u0);
-  lattice.defineRhoU(geometry, inlet, rhoI, u0);
-  lattice.defineRhoU(geometry, noInlet, rhoSmall, u0);
+  momenta::setDensity(lattice, geometry.getMaterialIndicator({1, 2, 5}), rhoSmall);
+  momenta::setDensity(lattice, geometry.getMaterialIndicator({inlet}), rhoI);
+  momenta::setDensity(lattice, geometry.getMaterialIndicator({noInlet}), rhoSmall);
 
   lattice.iniEquilibrium(geometry.getMaterialIndicator({1, 2, 5}), rhoSmall, u0);
   lattice.iniEquilibrium(geometry, inlet, rhoI, u0);
@@ -289,9 +289,6 @@ void setInitialValues(MyCase& myCase) {
   // initialisation for fluid
   AnalyticalConst3D<T, T> rho1(1.);
   AnalyticalConst3D<T, T> u0(0., 0., 0.);
-
-  NSlattice.defineRhoU(geometry.getMaterialIndicator({1, 2, 3, 4, 5}), rho1, u0);
-  NSlattice.iniEquilibrium(geometry.getMaterialIndicator({1, 2, 3, 4, 5}), rho1, u0);
 
   NSlattice.initialize();
 
@@ -314,7 +311,7 @@ void setTemporalValues(MyCase& myCase,
 
   std::vector<T> maxVelocity(3, T());
   const T distanceToBoundary = converter.getPhysDeltaX() / T(2);
-  const T latticeVelNS = converter.getLatticeVelocity(converter.getCharPhysVelocity());
+  const T physVelNS = converter.getCharPhysVelocity();
   const size_t itStartTime = converter.getLatticeTime(params.get<parameters::PHYS_START_T>());
 
   if (iT <= itStartTime && iT % 50 == 0) {
@@ -324,12 +321,12 @@ void setTemporalValues(MyCase& myCase,
     T frac[3] = { T() };
     startScale(frac, help);
 
-    // set lattice velocity on boundary
-    maxVelocity[1] = latticeVelNS * frac[0];
+    // set velocity on boundary
+    maxVelocity[1] = physVelNS * frac[0];
 
     RectanglePoiseuille3D<T> u5(geometry, 5, maxVelocity,
                                 distanceToBoundary, distanceToBoundary, distanceToBoundary);
-    lattice.defineU(geometry, 5, u5);
+    momenta::setVelocity(lattice, geometry.getMaterialIndicator({5}), u5);
     lattice.setProcessingContext<olb::Array<momenta::FixedVelocityMomentumGeneric::VELOCITY>>(
       ProcessingContext::Simulation);
   }
