@@ -336,9 +336,8 @@ void prepareLattice( MyCase& myCase )
 
   T omega = converter.getLatticeRelaxationFrequency();
 
-  lattice1.defineDynamics<ForcedBGKdynamics>( geometry, 1 );
-  lattice2.defineDynamics<FreeEnergyBGKdynamics>( geometry, 1 );
-
+  dynamics::set<ForcedBGKdynamics>( lattice1, geometry.getMaterialIndicator(1) );
+  dynamics::set<FreeEnergyBGKdynamics>( lattice2, geometry.getMaterialIndicator(1) );
 
   auto cylinderIndicator1 = geometry.getMaterialIndicator(3);
   boundary::set<boundary::FreeEnergyVelocity>(lattice1, cylinderIndicator1);
@@ -469,44 +468,33 @@ void setInitialValues( MyCase& myCase )
   std::vector<T> v( 2,T() );
   AnalyticalConst2D<T,T> zeroVelocity( v );
 
-  AnalyticalConst2D<T,T> zero( 0. );
   AnalyticalConst2D<T,T> one ( 1. );
 
   SmoothIndicatorCircle2D<T,T> circle( {T(nx)/T(2), T(nx)/T(2)}, radius, converter.getPhysLength(alpha) );
   AnalyticalIdentity2D<T,T> rho( one );
   AnalyticalIdentity2D<T,T> phi( one - circle - circle );
 
-  RotatingMill2D<T> rotator1 ( center1, radiusCylinder, converter.getCharLatticeVelocity(), true);
-  RotatingMill2D<T> rotator2 ( center2, radiusCylinder, converter.getCharLatticeVelocity(), false);
-  RotatingMill2D<T> rotator3 ( center3, radiusCylinder, converter.getCharLatticeVelocity(), true);
-  RotatingMill2D<T> rotator4 ( center4, radiusCylinder, converter.getCharLatticeVelocity(), false);
+  RotatingMill2D<T> rotator1 ( center1, radiusCylinder, converter.getCharPhysVelocity(), true);
+  RotatingMill2D<T> rotator2 ( center2, radiusCylinder, converter.getCharPhysVelocity(), false);
+  RotatingMill2D<T> rotator3 ( center3, radiusCylinder, converter.getCharPhysVelocity(), true);
+  RotatingMill2D<T> rotator4 ( center4, radiusCylinder, converter.getCharPhysVelocity(), false);
 
   auto cylinderIndicator1 = geometry.getMaterialIndicator(3);
   auto cylinderIndicator2 = geometry.getMaterialIndicator(4);
   auto cylinderIndicator3 = geometry.getMaterialIndicator(5);
   auto cylinderIndicator4 = geometry.getMaterialIndicator(6);
 
-  lattice1.defineRhoU( cylinderIndicator1, rho, rotator1 );
-  lattice2.defineRho ( cylinderIndicator1, phi );
-  lattice1.defineRhoU( cylinderIndicator2, rho, rotator2 );
-  lattice2.defineRho ( cylinderIndicator2, phi );
-  lattice1.defineRhoU( cylinderIndicator3, rho, rotator3 );
-  lattice2.defineRho ( cylinderIndicator3, phi );
-  lattice1.defineRhoU( cylinderIndicator4, rho, rotator4 );
-  lattice2.defineRho ( cylinderIndicator4, phi );
+  momenta::setVelocity( lattice1, cylinderIndicator1, rotator1 );
+  momenta::setVelocity( lattice1, cylinderIndicator2, rotator2 );
+  momenta::setVelocity( lattice1, cylinderIndicator3, rotator3 );
+  momenta::setVelocity( lattice1, cylinderIndicator4, rotator4 );
+  momenta::setDensity ( lattice1, cylinderIndicator1, phi );
+  momenta::setDensity ( lattice1, cylinderIndicator2, phi );
+  momenta::setDensity ( lattice1, cylinderIndicator3, phi );
+  momenta::setDensity ( lattice1, cylinderIndicator4, phi );
 
   // equilibrium population initialization
-  lattice1.iniEquilibrium( geometry, 1, rho, zeroVelocity );
   lattice2.iniEquilibrium( geometry, 1, phi, zeroVelocity );
-  lattice1.iniEquilibrium( geometry, 3, rho, rotator1 );
-  lattice2.iniEquilibrium( geometry, 3, phi, rotator1 );
-  lattice1.iniEquilibrium( geometry, 4, rho, rotator2 );
-  lattice2.iniEquilibrium( geometry, 4, phi, rotator2 );
-  lattice1.iniEquilibrium( geometry, 5, rho, rotator3 );
-  lattice2.iniEquilibrium( geometry, 5, phi, rotator3 );
-  lattice1.iniEquilibrium( geometry, 6, rho, rotator4 );
-  lattice2.iniEquilibrium( geometry, 6, phi, rotator4 );
-
 
   lattice1.initialize();
   lattice2.initialize();

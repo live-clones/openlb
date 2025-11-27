@@ -36,21 +36,9 @@ using MyCase = Case<
   NavierStokes, Lattice<float, descriptors::D3Q19<>>
 >;
 
-namespace olb::parameters {
-struct CFL : public descriptors::FIELD_BASE<1> {};
-} // namespace olb::parameters
-
 Mesh<MyCase::value_t, MyCase::d> createMesh(MyCase::ParametersD& params)
 {
-  using T            = MyCase::value_t;
-  const T physDeltaX = 0.05 / params.get<parameters::RESOLUTION>();
-
-  STLreader<T>        aneurysm("aneurysm3d.stl", physDeltaX, 1);
-  IndicatorLayer3D<T> extendedDomain(aneurysm, 2. * physDeltaX);
-
-  Mesh<T, MyCase::d> mesh(extendedDomain, physDeltaX, singleton::mpi().getSize());
-  mesh.setOverlap(params.get<parameters::OVERLAP>());
-  return mesh;
+  return Mesh<MyCase::value_t,MyCase::d>::fromSTL(params);
 }
 
 void prepareGeometry(MyCase& myCase)
@@ -59,13 +47,13 @@ void prepareGeometry(MyCase& myCase)
   auto& params   = myCase.getParameters();
   auto& geometry = myCase.getGeometry();
 
-  const T physDeltaX = 0.05 / params.get<parameters::RESOLUTION>();
+  const T physDeltaX = params.get<parameters::PHYS_DELTA_X>();
 
-  STLreader<T>        aneurysm("aneurysm3d.stl", physDeltaX, 1);
-  IndicatorLayer3D<T> domain(aneurysm, 2. * physDeltaX);
+  auto aneurysmI = myCase.getMesh().getSTL(params.get<parameters::STL_PATH>());
+  IndicatorLayer3D<T> domain(*aneurysmI, params.get<parameters::MESH_PADDING>() * physDeltaX);
 
   geometry.rename(0, 2, domain);
-  geometry.rename(2, 1, aneurysm);
+  geometry.rename(2, 1, *aneurysmI);
   geometry.clean();
 
   std::vector<Vector<T, 3>> normals(5);
@@ -186,17 +174,19 @@ void setTemporalValues(MyCase& myCase, int iT)
     momenta::setVelocity(lattice, geometry.getMaterialIndicator(3), poiseuilleU);
 
     // Update velocity on GPU
-    lattice.setProcessingContext<Array<momenta::FixedVelocityMomentumGeneric::VELOCITY>>(ProcessingContext::Simulation);
+    lattice.setProcessingContext<Array<momenta::FixedVelocityMomentumGeneric::VELOCITY>>(
+      ProcessingContext::Simulation);
   }
 }
 
 void getResults(MyCase& myCase, util::Timer<MyCase::value_t>& timer, std::size_t iT,
-                STLreader<MyCase::value_t>& stlReader, VTUsurfaceWriter<MyCase::value_t>& vtuWriter)
+                VTUsurfaceWriter<MyCase::value_t>& vtuWriter)
 {
   using T          = MyCase::value_t;
   using DESCRIPTOR = MyCase::descriptor_t_of<NavierStokes>;
   auto& lattice    = myCase.getLattice(NavierStokes {});
   auto& converter  = lattice.getUnitConverter();
+  auto& params = myCase.getParameters();
 
   OstreamManager clout(std::cout, "getResults");
 
@@ -213,7 +203,9 @@ void getResults(MyCase& myCase, util::Timer<MyCase::value_t>& timer, std::size_t
   SuperLatticeStress3D    stressF(lattice);
   AnalyticalFfromSuperF3D smoothStressF(stressF);
 
-  PhysWallShearStressOnSurface3D<T, DESCRIPTOR> interpolatedWssF(converter, smoothDensityF, smoothStressF, stlReader);
+  auto aneurysmI = myCase.getMesh().getSTL(params.get<parameters::STL_PATH>());
+  PhysWallShearStressOnSurface3D<T, DESCRIPTOR> interpolatedWssF(
+    converter, smoothDensityF, smoothStressF, *aneurysmI);
   vtmWriter.addFunctor(velocity);
   vtmWriter.addFunctor(pressure);
   interpolatedWssF.getName() = "WallShearStress";
@@ -271,10 +263,10 @@ void simulate(MyCase& myCase)
 
   clout << "starting simulation..." << std::endl;
 
-  STLreader<T> aneurysm("aneurysm3d.stl", converter.getPhysDeltaX(), 1);
+  auto aneurysmI = myCase.getMesh().getSTL(params.get<parameters::STL_PATH>());
 
   VTUsurfaceWriter<T> vtuWriter("Mesh", lattice.getCuboidDecomposition(), lattice.getLoadBalancer());
-  vtuWriter.addSTL(aneurysm);
+  vtuWriter.addSTL(*aneurysmI);
 
   util::Timer<T> timer(converter.getLatticeTime(maxPhysT), geometry.getStatistics().getNvoxel());
   timer.start();
@@ -284,7 +276,7 @@ void simulate(MyCase& myCase)
 
     lattice.collideAndStream();
 
-    getResults(myCase, timer, iT, aneurysm, vtuWriter);
+    getResults(myCase, timer, iT, vtuWriter);
   }
 
   timer.stop();
@@ -300,10 +292,20 @@ int main(int argc, char* argv[])
     using namespace olb::parameters;
     using T = MyCase::value_t;
 
+    myCaseParameters.set<STL_PATH>("aneurysm3d.stl");
+    myCaseParameters.set<STL_SCALING>(1);
+    myCaseParameters.set<STL_RAY_MODE>(RayMode::Robust);
+    myCaseParameters.set<DECOMPOSITION_STRATEGY>("volume");
+    myCaseParameters.set<MESH_PADDING>(2);
+    myCaseParameters.set<DECOMPOSITION_MULTIPLIER>(4);
+
     myCaseParameters.set<RESOLUTION>(120);
     myCaseParameters.set<REYNOLDS>((T)708.);
     myCaseParameters.set<MAX_PHYS_T>((T)16.);
     myCaseParameters.set<CFL>((T)0.02);
+    myCaseParameters.set<PHYS_DELTA_X>([&]() {
+      return 0.05 / myCaseParameters.get<parameters::RESOLUTION>();
+    });
   }
   myCaseParameters.fromCLI(argc, argv);
 

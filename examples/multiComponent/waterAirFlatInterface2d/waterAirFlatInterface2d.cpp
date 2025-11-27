@@ -165,12 +165,9 @@ void prepareLattice( MyCase& myCase )
   sLattice3.setUnitConverter(converter);
 
   // define lattice Dynamics
-  sLattice1.defineDynamics<NoDynamics>(geometry, 0);
-  sLattice2.defineDynamics<NoDynamics>(geometry, 0);
-  sLattice3.defineDynamics<NoDynamics>(geometry, 0);
-  sLattice1.defineDynamics<BulkDynamics>(geometry, 1);
-  sLattice2.defineDynamics<BulkDynamics>(geometry, 1);
-  sLattice3.defineDynamics<BulkDynamics>(geometry, 1);
+  dynamics::set<BulkDynamics>(sLattice1, geometry.getMaterialIndicator({1}));
+  dynamics::set<BulkDynamics>(sLattice2, geometry.getMaterialIndicator({1}));
+  dynamics::set<BulkDynamics>(sLattice3, geometry.getMaterialIndicator({1}));
 
   //thermodynamic initial conditions in lattice units
   T p_L = pressure/converter.getConversionFactorPressure();
@@ -318,9 +315,9 @@ void setInitialValues(MyCase& myCase) {
 
   g = g/(converter.getPhysDeltaX()/converter.getPhysDeltaT()/converter.getPhysDeltaT());
   AnalyticalConst2D<T,T> f( g );
-  sLattice1.defineField<descriptors::EXTERNAL_FORCE>( geometry, 1, f );
-  sLattice2.defineField<descriptors::EXTERNAL_FORCE>( geometry, 1, f );
-  sLattice3.defineField<descriptors::EXTERNAL_FORCE>( geometry, 1, f );
+  fields::set<descriptors::EXTERNAL_FORCE>(sLattice1, geometry.getMaterialIndicator({1}), f);
+  fields::set<descriptors::EXTERNAL_FORCE>(sLattice2, geometry.getMaterialIndicator({1}), f);
+  fields::set<descriptors::EXTERNAL_FORCE>(sLattice3, geometry.getMaterialIndicator({1}), f);
 
   sLattice1.initialize();
   sLattice2.initialize();

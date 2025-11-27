@@ -44,10 +44,11 @@ using namespace olb::names;
 using MyCase = Case<NavierStokes, Lattice<FLOATING_POINT_TYPE, descriptors::D2Q9<>>>;
 
 namespace olb::parameters {
+
 struct RADIUS_CYLINDER : public descriptors::FIELD_BASE<1> {};
-struct CFL : public descriptors::FIELD_BASE<1> {};
 struct CENTER_CYLINDER : public descriptors::FIELD_BASE<0, 1> {};
-} // namespace olb::parameters
+
+}
 
 Mesh<MyCase::value_t, MyCase::d> createMesh(MyCase::ParametersD& parameters)
 {
