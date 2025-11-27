@@ -128,6 +128,18 @@ void setPressure(SuperLattice<T,DESCRIPTOR>& sLattice,
   sLattice.defineRho(std::move(domainI), latticeDensityFromPhysPressureF);
 }
 
+template <typename T, typename DESCRIPTOR, typename FUNCTOR>
+void setIncompressiblePressure(SuperLattice<T,DESCRIPTOR>& sLattice,
+                                FunctorPtr<SuperIndicatorF<T,DESCRIPTOR::d>>&& domainI,
+                                FUNCTOR& pressureF)
+  requires std::derived_from<FUNCTOR, AnalyticalF<DESCRIPTOR::d,T,T>>
+{
+  const auto& converter = sLattice.getUnitConverter();
+  AnalyticCalcMultiplication<DESCRIPTOR::d,T,T> scaledPressureF(1/converter.getConversionFactorPressure(),
+                                                               pressureF);
+  sLattice.defineRho(std::move(domainI), scaledPressureF);
+}
+
 template <typename T, typename DESCRIPTOR, typename VALUE>
 void setPressure(SuperLattice<T,DESCRIPTOR>& sLattice,
                  FunctorPtr<SuperIndicatorF<T,DESCRIPTOR::d>>&& domainI,
@@ -230,6 +242,15 @@ void setHeatFlux(SuperLattice<T,DESCRIPTOR>& sLattice,
   Vector<T,DESCRIPTOR::d> heatFluxV = Vector<T,DESCRIPTOR::d>(heatFluxD);
   AnalyticalConst<DESCRIPTOR::d,T,T> heatFluxF((heatFluxV));
   setHeatFlux(sLattice, std::move(domainI), heatFluxF);
+}
+
+template <typename T, typename DESCRIPTOR, typename FUNCTOR>
+void setOrderParameter(SuperLattice<T,DESCRIPTOR>& sLattice,
+                                FunctorPtr<SuperIndicatorF<T,DESCRIPTOR::d>>&& domainI,
+                                FUNCTOR& orderParameterF)
+  requires std::derived_from<FUNCTOR, AnalyticalF<DESCRIPTOR::d,T,T>>
+{
+  sLattice.defineRho(std::move(domainI), orderParameterF);
 }
 
 }
