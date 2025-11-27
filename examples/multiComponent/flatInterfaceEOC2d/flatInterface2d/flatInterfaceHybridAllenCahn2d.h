@@ -143,10 +143,8 @@ void prepareLattice( MyCase& myCase )
   sLatticePF.setUnitConverter(converter);
 
   // define lattice Dynamics
-  sLatticeNS.defineDynamics<NoDynamics>(geometry, 0);
-  sLatticeNS.defineDynamics<NSBulkDynamics>(geometry, 1);
-  sLatticePF.defineDynamics<NoDynamics>(geometry, 0);
-  sLatticePF.defineDynamics<PFBulkDynamics>(geometry, 1);
+  dynamics::set<NSBulkDynamics>(sLatticeNS, geometry, 1);
+  dynamics::set<PFBulkDynamics>(sLatticePF, geometry, 1);
 
   sLatticePF.addPostProcessor<stage::PreCoupling>(meta::id<RhoStatistics>());
   sLatticePF.addPostProcessor<stage::PostPostProcess>(meta::id<Helper>{});
@@ -213,13 +211,16 @@ void setInitialValues(MyCase& myCase) {
   const T w = params.get<parameters::INTERFACE_WIDTH>();
   const T C_rho = params.get<parameters::C_RHO>();
 
-  Vector<T,2> u(0., Re/extent[1]*nu_l/converter.getConversionFactorVelocity());
-  AnalyticalConst2D<T,T> zeroVelocity( u );
+  Vector<T,2> u_l(0., Re/extent[1]*nu_l/converter.getConversionFactorVelocity());
+  AnalyticalConst2D<T,T> zeroVelocity_l( u_l );
+  Vector<T,2> u_p(0., Re/extent[1]*nu_l);
+  AnalyticalConst2D<T,T> zeroVelocity_p( u_p );
 
   AnalyticalConst2D<T,T> one ( 1. );
   AnalyticalConst2D<T,T> zero ( 0. );
   T lattice_pressure = phys_pressure/converter.getConversionFactorPressure();
-  AnalyticalConst2D<T,T> pres ( lattice_pressure );
+  AnalyticalConst2D<T,T> pressure_l ( lattice_pressure );
+  AnalyticalConst2D<T,T> pressure_p ( phys_pressure );
   AnalyticalConst2D<T,T> rhov ( rho_g/C_rho );
   AnalyticalConst2D<T,T> rhol ( rho_l/C_rho );
   AnalyticalConst2D<T,T> tauv ( tau_g );
@@ -229,16 +230,20 @@ void setInitialValues(MyCase& myCase) {
   AnalyticalIdentity2D<T,T> phi( one + interfaceAC );
   AnalyticalIdentity2D<T,T> rho( rhov + (rhol-rhov)*phi );
   AnalyticalIdentity2D<T,T> tau( tauv + (taul-tauv)*phi );
-  AnalyticalIdentity2D<T,T> pressure( pres );
 
   sLatticeNS.defineField<descriptors::RHO>( geometry, 1, rho );
   sLatticeNS.defineField<descriptors::TAU_EFF>( geometry, 1, tau );
-  sLatticePF.defineField<descriptors::OLD_PHIU>( geometry, 1, zeroVelocity );
+  sLatticePF.defineField<descriptors::OLD_PHIU>( geometry, 1, zeroVelocity_l );
 
-  sLatticeNS.defineRhoU( geometry, 1, pressure, zeroVelocity );
-  sLatticeNS.iniEquilibrium( geometry, 1, pressure, zeroVelocity );
-  sLatticePF.defineRhoU( geometry, 1, phi, zeroVelocity );
-  sLatticePF.iniEquilibrium( geometry, 1, phi, zeroVelocity );
+  auto all = geometry.getMaterialIndicator({0,1});
+
+  momenta::setIncompressiblePressure(sLatticeNS, all, pressure_p);
+  momenta::setVelocity(sLatticeNS, all, zeroVelocity_p);
+  sLatticeNS.iniEquilibrium( geometry, 1, pressure_l, zeroVelocity_l );
+
+  momenta::setOrderParameter(sLatticePF, all, phi);
+  momenta::setVelocity(sLatticePF, all, zeroVelocity_p);
+  sLatticePF.iniEquilibrium( geometry, 1, phi, zeroVelocity_l );
 
   sLatticePF.executePostProcessors(stage::PreCoupling());
   signedDistanceFunction<stage::IterativePostProcess>(myCase);
