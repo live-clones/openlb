@@ -282,7 +282,9 @@ void boundaryCondition(MyCase& myCase)
   T rho_MN2 = (0.5 * rho_V) + (0.5 * rho_MN1) ;
 
   momenta::setDensity(lattice, geometry.getMaterialIndicator(2), rho_MN2);
-  fields::set<descriptors::CHEM_POTENTIAL>(lattice, geometry.getMaterialIndicator(2), mu_b);
+  fields::set<descriptors::CHEM_POTENTIAL>(
+    lattice, geometry.getMaterialIndicator(2), mu_b / lattice.getUnitConverter().getConversionFactorChemicalPotential()
+  );
 }
 
 /**
