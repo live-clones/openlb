@@ -266,25 +266,23 @@ void boundaryCondition(MyCase& myCase)
   auto& geometry = myCase.getGeometry();
   auto& parameters = myCase.getParameters();
 
+  const T rho_V = parameters.get<parameters::RHO_VAPOR_ANALYTICAL>();
+  const T mu_b = parameters.get<parameters::BOUNDARY_CHEMICAL_POTENTIAL>();
+
   // Compute density at MN1
   SuperLatticeDensity2D<T, DESCRIPTOR> _density( lattice );
   AnalyticalFfromSuperF2D<T,T> interpolRHO( _density, true, 1 );
   T dx = lattice.getUnitConverter().getConversionFactorLength();
   T pos_MN1[2] = {dx, 0.};
-  T rho_MN1;
-  interpolRHO( &rho_MN1, pos_MN1 );
+  T lattice_rho_MN1;
+  interpolRHO( &lattice_rho_MN1, pos_MN1 );
 
   // Set boundary density at MN2
-  const T rho_V = parameters.get<parameters::RHO_VAPOR_ANALYTICAL>();
-  const T mu_b = parameters.get<parameters::BOUNDARY_CHEMICAL_POTENTIAL>();
-  AnalyticalConst2D<T,T> densityV ( rho_V );
-  AnalyticalConst2D<T,T> densityMN1 ( rho_MN1 );
-  AnalyticalConst2D<T,T> half ( T(0.5) );
-  AnalyticalIdentity2D<T,T> densityMN2 ( half * densityV + half * densityMN1 );
-  AnalyticalConst2D<T,T> chemicalMN2 ( mu_b );
+  T rho_MN1 = lattice.getUnitConverter().getPhysDensity(lattice_rho_MN1);
+  T rho_MN2 = (0.5 * rho_V) + (0.5 * rho_MN1) ;
 
-  lattice.defineRho( geometry, 2, densityMN2 );
-  lattice.defineField<descriptors::CHEM_POTENTIAL>( geometry, 2, chemicalMN2 );
+  momenta::setDensity(lattice, geometry.getMaterialIndicator(2), rho_MN2);
+  fields::set<descriptors::CHEM_POTENTIAL>(lattice, geometry.getMaterialIndicator(2), mu_b);
 }
 
 /**
@@ -332,21 +330,29 @@ void computeRelaxationFrequency(MyCase& myCase)
   const T thickness = parameters.get<parameters::THICKNESS>();
   const T tau = parameters.get<parameters::LATTICE_RELAXATION_TIME>();
 
-  AnalyticalConst2D<T,T> bulk ( 1./tau );
-  SmoothIndicatorFactoredCuboid2D<T,T> left ( {0., Ly/2.}, 2.*h1-15.*thickness*dx,
-                    Lx, 1., 0, {0,0}, 0,
-                      1. - 1./tau );
-  SmoothIndicatorFactoredCuboid2D<T,T> center ( {Lx/2., Ly/2.}, h2-h1-15.*thickness*dx,
-                      Lx, 1., 0, {0,0}, 0,
-                      1. - 1./tau );
-  SmoothIndicatorFactoredCuboid2D<T,T> right ( {Lx, Ly/2.}, 2.*h1-15.*thickness*dx,
-                      Lx, 1., 0, {0,0}, 0,
-                      1. - 1./tau );
-  AnalyticalIdentity2D<T,T> _omega ( bulk + left + center + right );
+  const T bulk = 1./tau;
+  std::shared_ptr<AnalyticalF2D<T,T>> left = std::make_shared<SmoothIndicatorFactoredCuboid2D<T,T>>(
+    Vector<T,2>(0., Ly/2.), 2.*h1-15.*thickness*dx,
+    Lx, 1., 0,
+    Vector<T,2>(0, 0), 0,
+    1. - 1./tau
+  );
+  std::shared_ptr<AnalyticalF2D<T,T>> center = std::make_shared<SmoothIndicatorFactoredCuboid2D<T,T>>(
+    Vector<T,2>(Lx/2., Ly/2.), h2-h1-15.*thickness*dx,
+    Lx, 1., 0,
+    Vector<T,2>(0, 0), 0,
+    1. - 1./tau
+  );
+  std::shared_ptr<AnalyticalF2D<T,T>> right = std::make_shared<SmoothIndicatorFactoredCuboid2D<T,T>>(
+    Vector<T,2>(Lx, Ly/2.), 2.*h1-15.*thickness*dx,
+    Lx, 1., 0,
+    Vector<T,2>(0, 0), 0,
+    1. - 1./tau
+  );
+  std::shared_ptr<AnalyticalF2D<T,T>> _omega ( bulk + left + center + right );
 
   // Setting Omega field
-  lattice.defineField<descriptors::OMEGA>( geometry, 1, _omega );
-  lattice.defineField<descriptors::OMEGA>( geometry, 2, _omega );
+  fields::set<descriptors::OMEGA>(lattice, geometry.getMaterialIndicator({1, 2}), *_omega);
 }
 
 /// Compute simulation results at times
