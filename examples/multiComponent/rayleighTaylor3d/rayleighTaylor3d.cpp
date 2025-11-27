@@ -230,20 +230,9 @@ void setInitialValues(MyCase& myCase) {
   // for each material set the defineRhou and the Equilibrium
   fields::set<descriptors::EXTERNAL_FORCE>(latticeOne, geometry.getMaterialIndicator({1,2}), f);
   momenta::setDensity(latticeOne, geometry.getMaterialIndicator(1), zeroVal);
-
-  //latticeOne.defineRhoU( geometry, 1, zero, zeroV );
-  //latticeOne.iniEquilibrium( geometry, 1, zero, zeroV );
   momenta::setDensity(latticeTwo, geometry.getMaterialIndicator(1), randomPlus);
-  //latticeTwo.defineRhoU( geometry, 1, randomPlus, zeroV );
-  //latticeTwo.iniEquilibrium( geometry, 1, randomPlus, zeroV );
-
   momenta::setDensity(latticeOne, geometry.getMaterialIndicator(2), randomOne);
-  //latticeOne.defineRhoU( geometry, 2, randomOne, zeroV );
-  //latticeOne.iniEquilibrium( geometry, 2, randomOne, zeroV );
-
   momenta::setDensity(latticeTwo, geometry.getMaterialIndicator(2), zeroVal);
-  //latticeTwo.defineRhoU( geometry, 2, zero, zeroV );
-  //latticeTwo.iniEquilibrium( geometry, 2, zero, zeroV );
 
   // Make the lattice ready for simulation
   latticeOne.initialize();
