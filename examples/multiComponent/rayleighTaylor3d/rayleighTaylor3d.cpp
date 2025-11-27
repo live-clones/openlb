@@ -151,16 +151,8 @@ void prepareLattice(MyCase& myCase) {
   converter.print();
 
   latticeTwo.setUnitConverter(converter);
-
-  latticeOne.defineDynamics<ForcedShanChenBGKdynamics<T, DESCRIPTOR, momenta::ExternalVelocityTuple>>(geometry, 1);
-  latticeOne.defineDynamics<ForcedShanChenBGKdynamics<T, DESCRIPTOR, momenta::ExternalVelocityTuple>>(geometry, 2);
-  latticeOne.defineDynamics<ForcedShanChenBGKdynamics<T, DESCRIPTOR, momenta::ExternalVelocityTuple>>(geometry, 3);
-  latticeOne.defineDynamics<ForcedShanChenBGKdynamics<T, DESCRIPTOR, momenta::ExternalVelocityTuple>>(geometry, 4);
-
-  latticeTwo.defineDynamics<ForcedShanChenBGKdynamics<T, DESCRIPTOR, momenta::ExternalVelocityTuple>>(geometry, 1);
-  latticeTwo.defineDynamics<ForcedShanChenBGKdynamics<T, DESCRIPTOR, momenta::ExternalVelocityTuple>>(geometry, 2);
-  latticeTwo.defineDynamics<ForcedShanChenBGKdynamics<T, DESCRIPTOR, momenta::ExternalVelocityTuple>>(geometry, 3);
-  latticeTwo.defineDynamics<ForcedShanChenBGKdynamics<T, DESCRIPTOR, momenta::ExternalVelocityTuple>>(geometry, 4);
+  dynamics::set<ForcedShanChenBGKdynamics<T, DESCRIPTOR, momenta::ExternalVelocityTuple>>(latticeOne, geometry.getMaterialIndicator({ 1, 2, 3, 4 }));
+  dynamics::set<ForcedShanChenBGKdynamics<T, DESCRIPTOR, momenta::ExternalVelocityTuple>>(latticeTwo, geometry.getMaterialIndicator({ 1, 2, 3, 4 }));
 
   boundary::set<boundary::BounceBack>(latticeOne, geometry, 3);
   boundary::set<boundary::BounceBack>(latticeOne, geometry, 4);
@@ -226,8 +218,6 @@ void setInitialValues(MyCase& myCase) {
   const T ny              = parameters.get<parameters::DOMAIN_EXTENT>()[1];
 
   AnalyticalConst3D<T,T> noise( noiseVal );
-  AnalyticalConst3D<T,T> zeroV(0., 0., 0.);
-  AnalyticalConst3D<T,T> zero( zeroVal );
   AnalyticalLinear3D<T,T> one( 0., -force * descriptors::invCs2<T,DESCRIPTOR>(), 0., 0.98 + force * ny * descriptors::invCs2<T,DESCRIPTOR>() );
   AnalyticalConst3D<T,T> onePlus( 0.98 + force * ny / 2. * descriptors::invCs2<T,DESCRIPTOR>() );
   AnalyticalRandom3D<T,T> random;
@@ -236,18 +226,11 @@ void setInitialValues(MyCase& myCase) {
   AnalyticalConst3D<T,T> f( 0., -force, 0. );
 
   // for each material set the defineRhou and the Equilibrium
-
-  latticeOne.defineRhoU( geometry, 1, zero, zeroV );
-  latticeOne.iniEquilibrium( geometry, 1, zero, zeroV );
-  latticeOne.defineField<descriptors::EXTERNAL_FORCE>( geometry, 1, f );
-  latticeTwo.defineRhoU( geometry, 1, randomPlus, zeroV );
-  latticeTwo.iniEquilibrium( geometry, 1, randomPlus, zeroV );
-
-  latticeOne.defineRhoU( geometry, 2, randomOne, zeroV );
-  latticeOne.iniEquilibrium( geometry, 2, randomOne, zeroV );
-  latticeOne.defineField<descriptors::EXTERNAL_FORCE>( geometry, 2, f );
-  latticeTwo.defineRhoU( geometry, 2, zero, zeroV );
-  latticeTwo.iniEquilibrium( geometry, 2, zero, zeroV );
+  fields::set<descriptors::EXTERNAL_FORCE>(latticeOne, geometry.getMaterialIndicator({1,2}), f);
+  momenta::setDensity(latticeOne, geometry.getMaterialIndicator(1), zeroVal);
+  momenta::setDensity(latticeTwo, geometry.getMaterialIndicator(1), randomPlus);
+  momenta::setDensity(latticeOne, geometry.getMaterialIndicator(2), randomOne);
+  momenta::setDensity(latticeTwo, geometry.getMaterialIndicator(2), zeroVal);
 
   // Make the lattice ready for simulation
   latticeOne.initialize();
