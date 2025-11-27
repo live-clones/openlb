@@ -190,20 +190,15 @@ void prepareLattice( MyCase& myCase ) {
   clout<<"Surface: "<<surface_tension_coefficient_factor * surface_tension_coefficient <<std::endl;
   clout<<"Lattice Size: "<<converter.getPhysDeltaX()<<std::endl;
 
-  // Material=1 -->bulk dynamics
-  lattice.defineDynamics<SmagorinskyForcedBGKdynamics<T,DESCRIPTOR>>( geometry, 1 );
-  // Material=2 -->no-slip boundary
-  boundary::set<boundary::BounceBack>(lattice, geometry, 2 );
+
+  dynamics::set<SmagorinskyForcedBGKdynamics>(lattice, geometry.getMaterialIndicator({1}));
+  boundary::set<boundary::BounceBack>(lattice, geometry, 2);
   //setSlipBoundary<T,DESCRIPTOR>(lattice, geometry, 2);
 
   lattice.setParameter<descriptors::OMEGA>(converter.getLatticeRelaxationFrequency());
   lattice.setParameter<collision::LES::SMAGORINSKY>(T(0.2));
 
   // prepareRayleighInstability
-  AnalyticalConst3D<T,T> zero( 0. );
-  AnalyticalConst3D<T,T> one( 1. );
-  AnalyticalConst3D<T,T> two( 2. );
-  AnalyticalConst3D<T,T> four( 4. );
   std::array<T,3> area;
   area[0] = parameters.get<parameters::DOMAIN_EXTENT>()[0];
   area[1] = parameters.get<parameters::DOMAIN_EXTENT>()[1];
@@ -214,20 +209,22 @@ void prepareLattice( MyCase& myCase ) {
   AnalyticalConst3D<T,T> force_zero{0., 0., 0.};
 
   // Set border values
-  lattice.defineField<FreeSurface::MASS>(geometry.getMaterialIndicator({0,2}), zero);
-  lattice.defineField<FreeSurface::EPSILON>(geometry.getMaterialIndicator({0,2}), zero);
-  lattice.defineField<FreeSurface::CELL_TYPE>(geometry.getMaterialIndicator({0,2}), four);
+  fields::set<FreeSurface::MASS>(lattice, geometry.getMaterialIndicator({0,2}), 0.);
+  fields::set<FreeSurface::EPSILON>(lattice, geometry.getMaterialIndicator({0,2}), 0.);
+  fields::set<FreeSurface::CELL_TYPE>(lattice, geometry.getMaterialIndicator({0,2}), 4.);
 
   // Set simulation area values
-  lattice.defineField<FreeSurface::MASS>(geometry, 1, mass_analytical);
-  lattice.defineField<FreeSurface::EPSILON>(geometry, 1, mass_analytical);
-  lattice.defineField<FreeSurface::CELL_TYPE>(geometry, 1, cells_analytical);
+  fields::set<FreeSurface::MASS>(lattice, geometry.getMaterialIndicator({1}), mass_analytical);
+  fields::set<FreeSurface::EPSILON>(lattice, geometry.getMaterialIndicator({1}), mass_analytical);
+  fields::set<FreeSurface::CELL_TYPE>(lattice, geometry.getMaterialIndicator({1}), cells_analytical);
 
   // Define to zero
-  lattice.defineField<FreeSurface::CELL_FLAGS>(geometry.getMaterialIndicator({0,1,2}), zero);
-  lattice.defineField<descriptors::FORCE>(geometry.getMaterialIndicator({0,1,2}), force_zero);
+  fields::set<FreeSurface::CELL_FLAGS>(lattice, geometry.getMaterialIndicator({0,1,2}), 0.);
+  fields::set<descriptors::FORCE>(lattice, geometry.getMaterialIndicator({0,1,2}), force_zero);
+
+
   // Needs to be set to a calculated velocity of the current velocity
-  lattice.defineField<FreeSurface::PREVIOUS_VELOCITY>(geometry.getMaterialIndicator({0,1,2}), force_zero);
+  fields::set<FreeSurface::PREVIOUS_VELOCITY>(lattice, geometry.getMaterialIndicator({0,1,2}), force_zero);
 
   static FreeSurface3DSetup<T,DESCRIPTOR> free_surface_setup{lattice};
   free_surface_setup.addPostProcessor();
@@ -268,15 +265,7 @@ void prepareLattice( MyCase& myCase ) {
 void setInitialValues( MyCase& myCase ){
   OstreamManager clout( std::cout,"setInitialValues" );
 
-  using T = MyCase::value_t;
   auto& lattice = myCase.getLattice(NavierStokes{});
-  auto& geometry = myCase.getGeometry();
-
-  AnalyticalConst3D<T,T> u(0,0,0);
-  AnalyticalConst3D<T,T> one(1.);
-
-  lattice.defineRhoU( geometry.getMaterialIndicator({0,1,2}), one, u);
-  lattice.iniEquilibrium( geometry.getMaterialIndicator({0,1,2}), one, u);
 
   // Set up free surface communicator stages
   FreeSurface::initialize(lattice);
