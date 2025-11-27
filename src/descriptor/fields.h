@@ -467,7 +467,7 @@ struct POROSITY             : public FIELD_BASE<1,  0, 0> {
 
   template <typename T, typename DESCRIPTOR, typename FIELD>
   static constexpr auto isValid(FieldD<T,DESCRIPTOR,FIELD> value) {
-    return value >= 0 && value[0]<=1;
+    return value >= 0 && value[0] <= 1;
   }
 };
 struct WMPOROSITY             : public FIELD_BASE<1,  0, 0> {

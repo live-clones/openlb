@@ -20,7 +20,6 @@
  *  Software Foundation, Inc., 51 Franklin Street, Fifth Floor,
  *  Boston, MA  02110-1301, USA.
  */
-
 #ifndef CASE_PARAMETERSD_H
 #define CASE_PARAMETERSD_H
 
@@ -28,6 +27,7 @@
 #include "parameters.h"
 
 #include <functional>
+#include <stdexcept>
 
 namespace olb {
 
@@ -42,10 +42,13 @@ private:
     void* field = nullptr;
 
     std::string name;
+
     std::function<void()> deleter;
     std::function<std::string()> value;
     std::function<void(std::string)> set;
     std::function<void()> calculate;
+
+    bool isBeingComputedRightNow = false;
 
     ~TypeErasedFieldD() {
       if (field && deleter) {
@@ -94,8 +97,15 @@ private:
       tryUpdateFromCLI(typeErasedField); // Allow CLI override of default
     }
     else if (typeErasedField.calculate) {
+      if (typeErasedField.isBeingComputedRightNow) {
+        throw std::runtime_error("Cyclic dependency detected in parameter: " + typeErasedField.name);
+      }
+      typeErasedField.isBeingComputedRightNow = true;
       typeErasedField.calculate();
-      typeErasedField.calculate = nullptr; // Ensure calculate runs only once
+      typeErasedField.isBeingComputedRightNow = false;
+
+      // Check for CLI override after calculation to ensure CLI can always override
+      tryUpdateFromCLI(typeErasedField);
     }
     return typeErasedField.field;
   }
@@ -109,11 +119,23 @@ public:
   // Set parameter with a concrete value
   template <concepts::Field FIELD>
   void set(FieldD<T,DESCRIPTOR,FIELD> value) {
+    if (!FIELD::template isValid<T,DESCRIPTOR,FIELD>(value)) {
+      std::stringstream msg;
+      msg << "Value " << value << " for " << fields::name<FIELD>() << " is invalid" << std::endl;
+      throw std::invalid_argument(msg.str());
+    }
+
     TypeErasedFieldD& typeErasedField = _map[typeid(FIELD)];
+
+    // If this set call is not triggered by recomputation it is a manual override
+    if (!typeErasedField.isBeingComputedRightNow) {
+      typeErasedField.calculate = nullptr;
+    }
+
     if (typeErasedField.field && typeErasedField.deleter) {
       typeErasedField.deleter();
     }
-    typeErasedField.calculate = nullptr;
+
     typeErasedField.field = new FieldD<T,DESCRIPTOR,FIELD>{value};
     setupTypeErasedField<FIELD>(typeErasedField);
   }
@@ -138,7 +160,6 @@ public:
     };
     setupTypeErasedField<FIELD>(typeErasedField);
   }
-
 
   template <concepts::Field FIELD>
   auto get() {
@@ -166,8 +187,13 @@ public:
     if (!_args) {
       _args = CLIreader(argc, argv);
     }
+    // Can only update fields already present in the map, fields relying on
+    // lazily-instantiated defaults are handled in getFieldPtr.
+    for (auto& [_, typeErasedField] : _map) {
+      tryUpdateFromCLI(typeErasedField);
+    }
     if (_args->contains("--help")) {
-      OstreamManager clout(std::cout, "Help");
+      OstreamManager clout(std::cout, "help");
       clout << std::endl;
       clout << "-- Parameters --" << std::endl;
       print(clout);
@@ -175,10 +201,7 @@ public:
       clout << "You can change any of these parameters via `./app --NAME VALUE`." << std::endl;
       clout << "The defined values are printed at the start of the simulation." << std::endl;
       clout << std::endl;
-      throw std::runtime_error("Program aborted on user choice");
-    }
-    for (auto& [_, typeErasedField] : _map) {
-      tryUpdateFromCLI(typeErasedField);
+      std::exit(0); // Terminate on help printout
     }
   }
 };
