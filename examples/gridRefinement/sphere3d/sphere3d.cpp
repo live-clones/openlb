@@ -102,7 +102,6 @@ void prepareLattice(SuperLattice<T,DESCRIPTOR>& sLattice,
 
   // Material=1 -->bulk dynamics
   auto bulkIndicator = sGeometry.getMaterialIndicator({1});
-  //sLattice.defineDynamics<BGKdynamics>(bulkIndicator);
   dynamics::set<BGKdynamics>(sLattice, bulkIndicator);
 
   // Material=2 -->bounce back
@@ -111,16 +110,6 @@ void prepareLattice(SuperLattice<T,DESCRIPTOR>& sLattice,
   //if interpolated boundary conditions are chosen
   boundary::set<boundary::InterpolatedVelocity>(sLattice, sGeometry, 3);
   boundary::set<boundary::InterpolatedPressure>(sLattice, sGeometry, 4);
-
-  // Removed: Is standard
-  // Initial conditions
-  //AnalyticalConst3D<T,T> rhoF( 1 );
-  //Vector<T,3> velocityV;//all zero
-  //AnalyticalConst3D<T,T> uF(velocityV);
-
-  // Initialize all values of distribution functions to their local equilibrium
-  //sLattice.defineRhoU( bulkIndicator, rhoF, uF );
-  //sLattice.iniEquilibrium( bulkIndicator, rhoF, uF );
 
   sLattice.setParameter<descriptors::OMEGA>(omega);
 
@@ -153,7 +142,6 @@ void setBoundaryValues(SuperLattice<T, DESCRIPTOR>& sLattice,
 
     T distance2Wall = converter.getPhysDeltaX()/2.;
     RectanglePoiseuille3D<T> poiseuilleU( sGeometry, 3, maxVelocity, distance2Wall, distance2Wall, distance2Wall );
-    //sLattice.defineU( sGeometry, 3, poiseuilleU );
 	momenta::setVelocity(sLattice, sGeometry.getMaterialIndicator(3), poiseuilleU);
 
 
