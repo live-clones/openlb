@@ -52,7 +52,12 @@ struct NUSSELT      : public descriptors::FIELD_BASE<1> { };
 struct PRANDTL_TURB : public descriptors::FIELD_BASE<1> { };
 
 // Converter-related parameters
-struct RESOLUTION : public descriptors::TYPED_FIELD_BASE<int,1> { };
+struct RESOLUTION : public descriptors::TYPED_FIELD_BASE<int,1> {
+  template <typename T, typename DESCRIPTOR, typename FIELD>
+  static constexpr auto isValid(FieldD<T,DESCRIPTOR,FIELD> value) {
+    return value > 0;
+  }
+};
 struct TIME_RESOLUTION : public descriptors::TYPED_FIELD_BASE<int,1> { };
 
 struct PHYS_DELTA_X : public descriptors::FIELD_BASE<1> { };

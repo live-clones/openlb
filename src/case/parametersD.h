@@ -119,6 +119,12 @@ public:
   // Set parameter with a concrete value
   template <concepts::Field FIELD>
   void set(FieldD<T,DESCRIPTOR,FIELD> value) {
+    if (!FIELD::template isValid<T,DESCRIPTOR,FIELD>(value)) {
+      std::stringstream msg;
+      msg << "Value " << value << " for " << fields::name<FIELD>() << " is invalid" << std::endl;
+      throw std::invalid_argument(msg.str());
+    }
+
     TypeErasedFieldD& typeErasedField = _map[typeid(FIELD)];
 
     // If this set call is not triggered by recomputation it is a manual override
