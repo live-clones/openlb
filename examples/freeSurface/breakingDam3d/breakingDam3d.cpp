@@ -147,12 +147,10 @@ void prepareLattice( MyCase& myCase ) {
     (T) density                  // physDensity: physical density in __kg / m^3__
   );
 
-  // Material=0 -->do nothing
-  lattice.defineDynamics<NoDynamics<T,DESCRIPTOR>>(geometry, 0);
   // Material=1 -->bulk dynamics
-  lattice.defineDynamics<SmagorinskyForcedBGKdynamics<T,DESCRIPTOR>>(geometry, 1);
+  dynamics::set<SmagorinskyForcedBGKdynamics>(lattice, geometry, 1);
   // Material=2 -->no-slip boundary
-  lattice.defineDynamics<BounceBack<T,DESCRIPTOR>>(geometry, 2);
+  dynamics::set<BounceBack>(lattice, geometry, 2);
   //setSlipBoundary<T,DESCRIPTOR>(lattice, geometry, 2);
 
   lattice.setParameter<descriptors::OMEGA>(lattice.getUnitConverter().getLatticeRelaxationFrequency());
@@ -171,20 +169,11 @@ void prepareLattice( MyCase& myCase ) {
 
   AnalyticalConst3D<T,T> force_zero{0., 0., 0.};
 
-  for (int i: {0,1,2}) {
-    lattice.defineField<FreeSurface::MASS>(geometry, i, zero);
-    lattice.defineField<FreeSurface::EPSILON>(geometry, i, zero);
-    lattice.defineField<FreeSurface::CELL_TYPE>(geometry, i, zero);
-    lattice.defineField<FreeSurface::CELL_FLAGS>(geometry, i, zero);
-    lattice.defineField<descriptors::FORCE>(geometry, i, force_zero);
-  }
-
-  lattice.defineField<FreeSurface::CELL_TYPE>(geometry, 1, cells_analytical);
-  lattice.defineField<FreeSurface::MASS>(geometry, 1, mass_analytical);
-  lattice.defineField<FreeSurface::EPSILON>(geometry, 1, mass_analytical);
+  fields::set<FreeSurface::CELL_TYPE>(lattice, geometry.getMaterialIndicator(1), cells_analytical);
+  fields::set<FreeSurface::MASS>(lattice, geometry.getMaterialIndicator(1), mass_analytical);
+  fields::set<FreeSurface::EPSILON>(lattice, geometry.getMaterialIndicator(1), mass_analytical);
 
   for (int i: {0,2}) {
-    //lattice.defineField<FreeSurface::MASS>(geometry, i, one);
     lattice.defineField<FreeSurface::EPSILON>(geometry, i, one);
     lattice.defineField<FreeSurface::CELL_TYPE>(geometry, i, four);
   }
@@ -198,7 +187,7 @@ void prepareLattice( MyCase& myCase ) {
 
   T force_factor = T(1) / lattice.getUnitConverter().getConversionFactorForce() * lattice.getUnitConverter().getConversionFactorMass();
   AnalyticalConst3D<T,T> force_a{gravity[0] * force_factor, gravity[1] * force_factor, gravity[2] * force_factor};
-  lattice.defineField<descriptors::FORCE>(fluidIndicator, force_a);
+  fields::set<descriptors::FORCE>(lattice, fluidIndicator, force_a);
 
   T surface_tension_coefficient_factor = std::pow(lattice.getUnitConverter().getConversionFactorTime(), 2) / (density * std::pow(lattice.getUnitConverter().getPhysDeltaX(),3));
 
@@ -229,19 +218,7 @@ void prepareLattice( MyCase& myCase ) {
 /// @param myCase The Case instance which keeps the simulation data
 /// @note Be careful: initial values have to be set using lattice units
 void setInitialValues( MyCase& myCase ){
-  OstreamManager clout( std::cout,"setInitialValues" );
-
-  using T = MyCase::value_t;
   auto& lattice = myCase.getLattice(NavierStokes{});
-  auto& geometry = myCase.getGeometry();
-
-  AnalyticalConst3D<T,T> u{0., 0.};
-  AnalyticalConst3D<T,T> one(1.);
-
-  lattice.defineRhoU( geometry.getMaterialIndicator({0,1,2}), one, u );
-  for (int i: {0,1,2}) {
-    lattice.iniEquilibrium( geometry, i, one, u );
-  }
 
   // Set up free surface communicator stages
   FreeSurface::initialize(lattice);
