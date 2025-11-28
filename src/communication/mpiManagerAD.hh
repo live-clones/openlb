@@ -232,7 +232,17 @@ void MpiManager::wait(MPI_Request* request, MPI_Status* status, void* ptr, T* wr
 }
 */
 
-
+template <typename T, unsigned DIM>
+void MpiManager::allreduce(const util::ADf<T,DIM>* sendBuf, util::ADf<T,DIM>* recvBuf, int count, MPI_Op op, MPI_Comm comm)
+{
+  if (!ok) {
+    return;
+  }
+  MPI_Allreduce(static_cast<const void*>(sendBuf),
+                static_cast<void*>(recvBuf),
+                count*sizeof(util::ADf<T,DIM>)/8,
+                MPI_DOUBLE, op, comm);
+}
 
 
 }   // namespace singleton

@@ -249,11 +249,12 @@ CASE::value_t massFlowError(MyOptiCase& optiCase)
 
   SuperLatticeVelocity2D velocity(sLattice);
   SuperLatticeDensity2D density(sLattice);
+  Vector<T,2> tmp{0, 1};
   SuperPlaneIntegralFluxMass2D<T> massFlowRate(
     velocity, density, superGeometry, converter.getConversionFactorMass(),
     converter.getConversionFactorTime(), Vector<T,2>({T(0.5)*domain_extent[0],
                                                       T(0.5)*domain_extent[1]}),
-    Vector<T,2>({0, 1}), BlockDataReductionMode::Analytical
+    tmp, BlockDataReductionMode::Analytical
   );
   const int input[3] = {0};
   T mFlow[4] = {0.};

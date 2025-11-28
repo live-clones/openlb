@@ -91,6 +91,26 @@ bool PowerLaw2D<T>::operator()(T output[], const T x[])
   return true;
 }
 
+template <typename T>
+PowerLawTurbulent2D<T>::PowerLawTurbulent2D(std::vector<T> axisPoint, std::vector<T> axisDirection, T maxVelocity, T radius, T exponent, T turbulenceIntensity) : PowerLaw2D<T>(axisPoint, axisDirection, maxVelocity, radius, exponent), _turbulenceIntensity(turbulenceIntensity), _generator(_rd()), _dist(0.0, 1.0) { }
+
+template <typename T>
+PowerLawTurbulent2D<T>::PowerLawTurbulent2D(SuperGeometry<T,2>& superGeometry, int material, T maxVelocity, T distance2Wall, T exponent, T turbulenceIntensity) : PowerLaw2D<T>(superGeometry, material, maxVelocity, distance2Wall, exponent), _turbulenceIntensity(turbulenceIntensity), _generator(_rd()), _dist(0.0, 1.0) { }
+
+template <typename T>
+bool PowerLawTurbulent2D<T>::operator()(T output[], const T x[])
+{
+  T d = util::fabs(this->_axisDirection[1]*(x[0] - this->_axisPoint[0]) - this->_axisDirection[0]*(x[1] - this->_axisPoint[1]));
+  output[0] = this->_maxVelocity*this->_axisDirection[0]*(1. - util::pow(d/this->_radius,this->_exponent));
+  output[0] += _dist(_generator) * _turbulenceIntensity * output[0];
+  output[1] = this->_maxVelocity*this->_axisDirection[1]*(1. - util::pow(d/this->_radius,this->_exponent));
+  output[1] += _dist(_generator) * _turbulenceIntensity * output[1];
+  if ( 1. - util::pow(d/this->_radius,this->_exponent)  < 0.) {
+    output[0] = T();
+    output[1] = T();
+  }
+  return true;
+}
 
 template <typename T>
 Poiseuille2D<T>::Poiseuille2D(std::vector<T> axisPoint, std::vector<T> axisDirection, T maxVelocity, T radius) : PowerLaw2D<T>(axisPoint, axisDirection, maxVelocity, radius, 2)

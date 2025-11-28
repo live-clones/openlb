@@ -26,7 +26,6 @@
 #undef PLATFORM_CPU_SIMD
 
 #include <olb.h>
-#include "../helper.h"  // Will be removed once SuperLatticeFieldReductionO enables indicator support
 
 using namespace olb;
 using namespace olb::names;
@@ -231,6 +230,7 @@ void simulate(MyCase& myCase) {
   }
   timer.stop();
   timer.printSummary();
+  myCase.getLattice(NavierStokes{}).setProcessingContext(ProcessingContext::Evaluation);
 }
 
 void prepareAdjointLattice(MyOptiCase& optiCase) {
@@ -258,13 +258,20 @@ void setAdjointInitialValues(MyOptiCase& optiCase) {
   auto bulkIndicator = geometry.getMaterialIndicator({1,2,3,4,6});
   auto objectiveDomain = geometry.getMaterialIndicator({1,6});
 
+  adjointLattice.initialize();
+
   // Initialize dual problem
+  auto velocityO = makeWriteFunctorO<functors::VelocityF,descriptors::VELOCITY>(referenceLattice);
+  velocityO->restrictTo(objectiveDomain);
+  velocityO->template setParameter<descriptors::CONVERSION>(converter.getConversionFactorVelocity());
+  velocityO->apply();
+
   // Compute source term for the dual simulation
   auto objectiveDerivativeO = makeWriteFunctorO<functors::DerivativeF<ObjectiveF,descriptors::POPULATION,BulkDynamics>,
                                                 opti::DJDF>(controlledLattice);
   objectiveDerivativeO->restrictTo(objectiveDomain);
   objectiveDerivativeO->template setParameter<descriptors::CONVERSION>(converter.getConversionFactorVelocity());
-  objectiveDerivativeO->template setParameter<descriptors::NORMALIZE>(norm(referenceLattice, converter, objectiveDomain));
+  objectiveDerivativeO->template setParameter<descriptors::NORMALIZE>(computeL2Norm<descriptors::VELOCITY>(referenceLattice, objectiveDomain, converter.getPhysDeltaX()));
   objectiveDerivativeO->template setParameter<descriptors::DX>(converter.getPhysDeltaX());
   objectiveDerivativeO->apply();
 
@@ -322,11 +329,9 @@ MyCase::value_t objectiveF(MyOptiCase& optiCase) {
   // Get solution from the reference simulation for the inverse problem
   copyFields<ObjectiveF::Reference,ObjectiveF::Reference>(referenceLattice, controlledLattice);
   objectiveO->template setParameter<descriptors::CONVERSION>(converter.getConversionFactorVelocity());
-  objectiveO->template setParameter<descriptors::NORMALIZE>(norm(referenceLattice, converter, objectiveDomain));
+  objectiveO->template setParameter<descriptors::NORMALIZE>(computeL2Norm<ObjectiveF::Reference>(referenceLattice, objectiveDomain, converter.getPhysDeltaX()));
   objectiveO->apply();
-
-  controlledLattice.setProcessingContext(ProcessingContext::Evaluation);
-  return integrate<opti::J>(controlledLattice, objectiveDomain)[0];
+  return integrateField<opti::J>(controlledLattice, objectiveDomain, converter.getPhysDeltaX())[0];
 }
 
 std::vector<MyCase::value_t> derivativeF(MyOptiCase& optiCase) {

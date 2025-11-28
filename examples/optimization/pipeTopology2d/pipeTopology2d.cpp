@@ -48,7 +48,6 @@
 #undef PLATFORM_CPU_SIMD
 
 #include <olb.h>
-#include "../helper.h"
 
 using namespace olb;
 using namespace olb::names;
@@ -243,6 +242,7 @@ void simulate(MyCase& myCase) {
 
   timer.stop();
   timer.printSummary();
+  myCase.getLattice(NavierStokes{}).setProcessingContext(ProcessingContext::Evaluation);
 }
 
 void setInitialControl(MyOptiCase& optiCase) {
@@ -313,7 +313,7 @@ void applyControl(MyOptiCase& optiCase) {
   auto& lattice = controlledCase.getLattice(NavierStokes{});
 
   optiCase.getController().template setUpdatedControlsOnField<ControlledField>(lattice);
-  lattice.setProcessingContext(ProcessingContext::Simulation);
+  lattice.template setProcessingContext<Array<ControlledField>>(ProcessingContext::Simulation);
 }
 
 MyCase::value_t objectiveF(MyOptiCase& optiCase) {
@@ -340,9 +340,8 @@ MyCase::value_t objectiveF(MyOptiCase& optiCase) {
   volume_fraction->template setParameter<opti::REG_ALPHA>(1. / 0.25);
   volume_fraction->apply();
 
-  controlledLattice.setProcessingContext(ProcessingContext::Evaluation);
-  std::cout << "volume-fraction: " << integrate<opti::REGULARIZATION>(controlledLattice, objectiveDomain)[0] << std::endl;
-  return integrate<opti::J>(controlledLattice, objectiveDomain)[0];
+  std::cout << "volume-fraction: " << integrateField<opti::REGULARIZATION>(controlledLattice, objectiveDomain, converter.getPhysDeltaX())[0] << std::endl;
+  return integrateField<opti::J>(controlledLattice, objectiveDomain, converter.getPhysDeltaX())[0];
 }
 
 std::vector<MyCase::value_t> derivativeF(MyOptiCase& optiCase) {
@@ -411,7 +410,7 @@ void getOptiResults(MyOptiCase& optiCase) {
   }
 
   // Writes the VTK files
-  if (iT > 0) {
+  if (iT >= 0) {
     controlledLattice.setProcessingContext(ProcessingContext::Evaluation);
     adjointLattice.setProcessingContext(ProcessingContext::Evaluation);
     vtmWriter.write(iT);

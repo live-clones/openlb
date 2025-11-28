@@ -38,6 +38,8 @@
  * good results. The optimization runs stable already at N=36.
  */
 
+#undef PLATFORM_GPU_CUDA
+
 #include <olb.h>
 
 using namespace olb;
@@ -275,6 +277,8 @@ void getResults(MyCase& myCase,
     }
 
     if (iT % vtkSaveT == 0) {
+      sLattice.setProcessingContext(ProcessingContext::Evaluation);
+      sLatticeAD.setProcessingContext(ProcessingContext::Evaluation);
       vtmWriter.write(iT);
     }
 

@@ -269,6 +269,7 @@ MyOptiCase::value_t objectiveF(MyOptiCase& optiCase) {
   auto& controlledCase = optiCase.getCase(Controlled{});
   auto& lattice = controlledCase.getLattice(NavierStokes{});
   auto& converter = lattice.getUnitConverter();
+  lattice.setProcessingContext(ProcessingContext::Evaluation);
 
   /// @li Step D.2: Compute and return the objective value on the basis of the simulation results
   /// @li Load experimental reference data

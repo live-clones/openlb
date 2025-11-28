@@ -258,6 +258,8 @@ public:
 
   template <typename T>
   void allreduce(const T* in, T* out, int count, MPI_Op op, MPI_Comm comm = MPI_COMM_WORLD);
+  template <typename T,unsigned DIM>
+  void allreduce(const util::ADf<T,DIM>* sendBuf, util::ADf<T,DIM>* recvBuf, int count, MPI_Op op, MPI_Comm = MPI_COMM_WORLD);
 
   /// All reduction operation of a vector data
   template <typename T>

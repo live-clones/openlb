@@ -324,6 +324,7 @@ CASE::value_t computeDissipation(MyOptiCase& optiCase) {
   auto& converter = sLattice.getUnitConverter();
   auto& superGeometry = myCase.getGeometry();
   auto& parameters = myCase.getParameters();
+  sLattice.setProcessingContext(ProcessingContext::Evaluation);
   T result = 0.0;
   Vector<T,3> center = parameters.template get<parameters::ELLIPSOID_POS>();
   IndicatorCuboid3D<T> integrationDomain(1.0, 0.4, 0.4, center);

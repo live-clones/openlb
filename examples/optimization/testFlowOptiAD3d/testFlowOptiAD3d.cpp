@@ -28,7 +28,6 @@
 
 #include <olb.h>
 #include "analyticalSolutionTestFlow3D.h"
-#include "../helper.h"   // Will be removed once SuperLatticeFieldReductionO enables indicator support
 
 using namespace olb;
 using namespace olb::names;
@@ -279,7 +278,7 @@ void applyControl(const Controller<typename CASE::value_t>& controller, CASE& co
    = std::make_shared<AnalyticalScaled3D<T,T>>(forceF, latticeScaling);
   latticeForceF = latticeForceF * controlF;
   fields::set<descriptors::FORCE>(lattice, designDomain, *latticeForceF);
-  lattice.setProcessingContext(ProcessingContext::Simulation);
+  lattice.template setProcessingContext<Array<descriptors::FORCE>>(ProcessingContext::Simulation);
 }
 
 template<typename CASE>
@@ -307,12 +306,10 @@ CASE::value_t objectiveF(MyOptiCase& optiCase) {
   // Get solution from the reference simulation for the inverse problem
   copyFields<OBJECTIVE::Reference,OBJECTIVE::Reference>(referenceLattice, controlledLattice);
   objectiveO->template setParameter<descriptors::CONVERSION>(converter.getConversionFactorVelocity());
-  const T normalize = norm(referenceLattice, refConverter, refObjectiveDomain);
-  objectiveO->template setParameter<descriptors::NORMALIZE>(normalize);
+  objectiveO->template setParameter<descriptors::NORMALIZE>(computeL2Norm<OBJECTIVE::Reference>(referenceLattice, refObjectiveDomain, refConverter.getPhysDeltaX()));
   objectiveO->apply();
 
-  controlledLattice.setProcessingContext(ProcessingContext::Evaluation);
-  return integrate<opti::J>(controlledLattice, objectiveDomain)[0];
+  return integrateField<opti::J>(controlledLattice, objectiveDomain, converter.getPhysDeltaX())[0];
 }
 
 template<typename CASE>

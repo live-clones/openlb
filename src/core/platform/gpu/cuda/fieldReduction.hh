@@ -88,25 +88,25 @@ void reduceKernelInBlock(thrust::device_ptr<const T> field, T* g_odata,
   CellID                         iCell = blockIdx.x * (blockDim.x * 2) + threadIdx.x; //for 2element per 1thread
   gpu::cuda::Cell<T, DESCRIPTOR> cell(lattice, iCell);
 
-  T mySum = (iCell < size) && mask(cell) && (cell.template getField<field::reduction::TAG_CORE>() == (int)1)
-                ? field[iCell]
-                : (T)0.0;
+  T myReduce = (iCell < size) && mask(cell) && (cell.template getField<field::reduction::TAG_CORE>())
+                   ? field[iCell]
+                   : REDUCTION_OP {}.reset(thrust::raw_pointer_cast(field)[iCell]);
 
   //for 2elements per 1thread
   if (iCell + blockDim.x < size) {
     gpu::cuda::Cell<T, DESCRIPTOR> cell2(lattice, iCell + blockDim.x);
 
-    if (mask(cell2) && (cell2.template getField<field::reduction::TAG_CORE>() == (int)1)) {
-      mySum = REDUCTION_OP {}(mySum, thrust::raw_pointer_cast(field)[iCell + blockDim.x]);
+    if (mask(cell2) && (cell2.template getField<field::reduction::TAG_CORE>())) {
+      myReduce = REDUCTION_OP {}(myReduce, thrust::raw_pointer_cast(field)[iCell + blockDim.x]);
     }
   }
-  sdata[tid] = mySum;
+  sdata[tid] = myReduce;
   cg::sync(cta);
 
   // do reduction in shared mem
   for (unsigned int stride = blockDim.x / 2; stride > 0; stride >>= 1) {
     if (tid < stride) {
-      sdata[tid] = mySum = REDUCTION_OP {}(mySum, sdata[tid + stride]);
+      sdata[tid] = myReduce = REDUCTION_OP {}(myReduce, sdata[tid + stride]);
     }
 
     cg::sync(cta);
@@ -114,12 +114,12 @@ void reduceKernelInBlock(thrust::device_ptr<const T> field, T* g_odata,
 
   // write result for this block to global mem
   if (tid == 0)
-    g_odata[blockIdx.x] = mySum;
+    g_odata[blockIdx.x] = myReduce;
   return;
 }
 
 template <typename T, typename REDUCTION_OP>
-void reduceKernelInGrid(const T* partialSums, int partialCount, T* d_result) __global__
+void reduceKernelInGrid(const T* partialReduces, int partialCount, T* d_result) __global__
 {
   namespace cg           = cooperative_groups; // ref :: https://developer.nvidia.com/blog/cooperative-groups/
   cg::thread_block cta   = cg::this_thread_block();
@@ -128,17 +128,17 @@ void reduceKernelInGrid(const T* partialSums, int partialCount, T* d_result) __g
   unsigned int tid = threadIdx.x;
   unsigned int i   = threadIdx.x + blockDim.x * blockIdx.x;
 
-  T mySum = 0.0;
+  T myReduce = REDUCTION_OP {}.reset(T {});
 
   for (int idx = i; idx < partialCount; idx += blockDim.x) {
-    mySum = REDUCTION_OP {}(mySum, partialSums[idx]);
+    myReduce = REDUCTION_OP {}(myReduce, partialReduces[idx]);
   }
-  sdata[tid] = mySum;
+  sdata[tid] = myReduce;
   cg::sync(cta);
 
   for (unsigned int stride = blockDim.x / 2; stride > 0; stride >>= 1) {
     if (tid < stride) {
-      sdata[tid] = mySum = REDUCTION_OP{}(mySum, sdata[tid + stride]);
+      sdata[tid] = myReduce = REDUCTION_OP {}(myReduce, sdata[tid + stride]);
     }
     cg::sync(cta);
   }
@@ -187,7 +187,6 @@ void BlockLatticeFieldReductionO<FIELD, REDUCTION_OP, CONDITION>::type<ConcreteB
 {
   auto&       parameters = blockLattice.template getData<OperatorParameters<BlockLatticeFieldReductionO>>().parameters;
   const auto& blockField = blockLattice.template getField<FIELD>();
-
   FieldD<T, DESCRIPTOR, fields::array_of<FIELD>> elementField =
       parameters.template get<fields::array_of<FIELD>>(); //not auto. because of considering 1 dimensional field
 

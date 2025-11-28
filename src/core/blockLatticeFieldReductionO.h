@@ -29,11 +29,13 @@ namespace olb {
 namespace field::reduction {
 
 //this filed is tag for extracting the 'core' grid area(no padding area)  for the reduction, especially in GPU.
-struct TAG_CORE : public descriptors::TYPED_FIELD_BASE<int, 1> {};
+struct TAG_CORE : public descriptors::TYPED_FIELD_BASE<bool, 1> {};
+struct TAGS_INDICATOR : public descriptors::TYPED_FIELD_BASE<bool,1> {};
 
-}
+} // namespace field::reduction
 
 namespace reduction {
+
 template <typename TAG_FILED>
 struct checkTag {
   template <typename CELL, typename T = typename CELL::value_t, typename DESCRIPTOR = typename CELL::descriptor_t>
@@ -43,21 +45,21 @@ struct checkTag {
   }
 };
 
-struct ConditionTrue {
-  template <typename CELL>
-  bool operator()(CELL& cell) any_platform {
-    return true;
+struct checkTagIndicator {
+  template <typename CELL, typename T = typename CELL::value_t, typename DESCRIPTOR = typename CELL::descriptor_t>
+  bool operator()(CELL& cell) any_platform
+  {
+    return cell.template getField<field::reduction::TAGS_INDICATOR>();
   }
 };
 
-template <typename TAG_FIELD>
-  struct checkBulkTag {
-    template <typename CELL>
-    bool operator()(CELL& cell) any_platform
-    {
-      return cell.template getField<TAG_FIELD>() == (int) 1;
-    }
-  };
+struct ConditionTrue {
+  template <typename CELL>
+  bool operator()(CELL& cell) any_platform
+  {
+    return true;
+  }
+};
 
 struct SumO {
   template <typename FIELDD>
@@ -120,12 +122,12 @@ struct ResetO {
   template <typename FIELDD>
   FIELDD operator()(FIELDD lhs) any_platform
   {
-    FIELDD reset{};
+    FIELDD reset {};
     return reset;
   }
 };
 
-}
+} // namespace reduction
 
 template <typename FIELD, typename REDUCTION_OP, typename CONDITION>
 struct BlockLatticeFieldReductionO {
@@ -156,8 +158,9 @@ struct BlockLatticeFieldReductionO {
 
 template <typename FIELD, typename REDUCTION_OP, typename CONDITION>
 template <typename T, typename DESCRIPTOR, Platform PLATFORM>
-requires(isPlatformCPU(PLATFORM)) struct BlockLatticeFieldReductionO<FIELD, REDUCTION_OP, CONDITION>::type<
-    ConcreteBlockLattice<T, DESCRIPTOR, PLATFORM>> {
+requires(isPlatformCPU(PLATFORM))
+struct BlockLatticeFieldReductionO<FIELD, REDUCTION_OP,
+                                   CONDITION>::type<ConcreteBlockLattice<T, DESCRIPTOR, PLATFORM>> {
 
   void setup(ConcreteBlockLattice<T, DESCRIPTOR, PLATFORM>& blockLattice)
   {
@@ -187,7 +190,7 @@ requires(isPlatformCPU(PLATFORM)) struct BlockLatticeFieldReductionO<FIELD, REDU
     blockLattice.forSpatialLocations([&](LatticeR<DESCRIPTOR::d> latticeR) {
       const std::size_t              iCell = blockLattice.getCellId(latticeR);
       const ConstCell<T, DESCRIPTOR> cell  = blockLattice.get(iCell);
-      if (cell.template getField<field::reduction::TAG_CORE>() == (int)1) {
+      if (cell.template getField<field::reduction::TAG_CORE>()) {
         if (CONDITION {}(cell)) {
           FieldD<T, DESCRIPTOR, FIELD> blockCellField = blockField.getRow(iCell);
           for (unsigned iD = 0; iD < blockField.d; iD++) {

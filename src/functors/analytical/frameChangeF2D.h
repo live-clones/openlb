@@ -77,6 +77,21 @@ public:
 };
 
 template <typename T>
+class PowerLawTurbulent2D : public PowerLaw2D<T> {
+private:
+  T _turbulenceIntensity;
+  std::random_device _rd;
+  std::mt19937 _generator;
+  std::normal_distribution<T> _dist;
+
+public:
+  PowerLawTurbulent2D(std::vector<T> axisPoint, std::vector<T> axisDirection,  T maxVelocity, T radius, T exponent, T turbulenceIntensity = 0.05);
+  /// construct from material number, note: untested
+  PowerLawTurbulent2D(SuperGeometry<T,2>& superGeometry, int material, T maxVelocity, T distance2Wall, T exponent, T turbulenceIntensity = 0.05);
+  bool operator()(T output[], const T input[]) override;
+};
+
+template <typename T>
 class Poiseuille2D : public PowerLaw2D<T> {
 
 public:

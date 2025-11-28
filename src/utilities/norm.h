@@ -34,7 +34,7 @@ namespace util{
 
 /// Squared Euclidean norm of an array
 template<typename T>
-T euklidN2(const T x[], int dim)
+T euklidN2(const T x[], int dim) any_platform
 {
   T euklid = 0;
   for (int iDim=0; iDim<dim; iDim++) {

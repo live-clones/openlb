@@ -379,6 +379,7 @@ struct NUCL                 : public FIELD_BASE<1,  0, 0> { };
 struct MOMENTA_DENSITY      : public FIELD_BASE<1,  0, 0> { };
 struct MOMENTA_VELOCITY     : public FIELD_BASE<0,  1, 0> { };
 struct TAU                  : public FIELD_BASE<1,  0, 0> { };
+struct L2_NORM              : public FIELD_BASE<1,  0, 0> { };
 struct INTERFACE_WIDTH      : public FIELD_BASE<1,  0, 0> { };
 struct MAGIC                : public FIELD_BASE<1,  0, 0> { };
 struct G                    : public FIELD_BASE<0,  1, 0> { };

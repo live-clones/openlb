@@ -32,6 +32,32 @@ namespace olb {
 
 namespace functors {
 
+template <typename FIELD>
+struct L2F {
+  using parameters = meta::list<descriptors::DX>;
+
+  using result_t = descriptors::L2_NORM;
+
+  using fields_t = meta::list<>;
+
+  template <typename CELL, typename PARAMETERS>
+  auto compute(CELL& cell, PARAMETERS& parameters) any_platform {
+    using V = typename CELL::value_t;
+    using DESCRIPTOR = typename CELL::descriptor_t;
+    V dx = parameters.template get<descriptors::DX>();
+
+    auto value = cell.template getField<FIELD>();
+
+    FieldD<V,DESCRIPTOR,result_t> norm;
+    for (int iDim=0; iDim < value.getDim(); ++iDim) {
+      norm[0] += util::pow(value[iDim], 2);
+    }
+    norm[0] *= util::pow(dx,DESCRIPTOR::d);
+
+    return norm;
+  }
+};
+
 // Computes "j = 0.5 * (phi - phi_ref)^2 / normalize", used for inverse problems
 // FUNCTOR specifies how "phi" is computed in physical units and "phi_ref" is
 // provided via fields (could be simulation or external data).

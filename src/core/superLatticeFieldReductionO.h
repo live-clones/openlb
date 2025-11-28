@@ -1,6 +1,6 @@
 /*  This file is part of the OpenLB library
  *
- *  Copyright (C) 2025 Yuji (Sam) Shimojima, Adrian Kummerlaender
+ *  Copyright (C) 2025 Yuji (Sam) Shimojima, Adrian Kummerlaender, Shota Ito
  *  E-mail contact: info@openlb.net
  *  The most recent release of OpenLB can be downloaded at
  *  <http://www.openlb.net/>
@@ -25,7 +25,7 @@
 #define SUPER_LATTICE_FIELD_REDUCTION_O_H
 
 #include "core/superD.h"
-
+#include "optimization/primitives/functors/objectiveF.h"
 #include "blockLatticeFieldReductionO.h"
 
 namespace olb {
@@ -34,7 +34,7 @@ namespace stage::reduction {
 
 struct ReductionField {};
 
-}
+} // namespace stage::reduction
 
 template <typename T, typename DESCRIPTOR, typename FIELD, typename REDUCTION_OP,
           typename CONDITION = reduction::ConditionTrue>
@@ -69,7 +69,13 @@ private:
     }
 
     std::vector<T> globalFields(_fieldDimension, T {});
-    singleton::mpi().allreduce(localFields.data(), globalFields.data(), globalFields.size(), op, _mpiCommunicator);
+    if constexpr (!util::is_adf_v<T>) {
+      singleton::mpi().allreduce(localFields.data(), globalFields.data(), globalFields.size(), op, _mpiCommunicator);
+    }
+    else {
+      singleton::mpi().allreduce<typename T::base_t, T::dim>(localFields.data(), globalFields.data(),
+                                                             globalFields.size(), op, _mpiCommunicator);
+    }
 
     for (std::size_t iD = 0; iD < _fieldDimension; ++iD) {
       _reductedField[iD] = globalFields[iD];
@@ -80,8 +86,8 @@ private:
 
 public:
   ~SuperLatticeFieldReductionO() {};
-
-  SuperLatticeFieldReductionO(SuperLattice<T, DESCRIPTOR>& sLattice)
+  SuperLatticeFieldReductionO(SuperLattice<T, DESCRIPTOR>&                    sLattice,
+                              FunctorPtr<SuperIndicatorF<T, DESCRIPTOR::d>>&& SuperIndicator)
       : _sLattice(sLattice)
       , _superReducedFieldD(new SuperD<T, REDUCED_FIELD<DESCRIPTOR::d>>(sLattice.getLoadBalancer()))
       , _rankDoesReduction {singleton::mpi().isMainProcessor()}
@@ -92,12 +98,17 @@ public:
 
     {
       for (int iC = 0; iC < load.size(); ++iC) {
-        auto& block = _sLattice.getBlock(iC);
+        auto& block     = _sLattice.getBlock(iC);
+        auto& indicator = SuperIndicator->getBlockIndicatorF(iC);
         block.forCoreSpatialLocations([&](LatticeR<DESCRIPTOR::d> loc) {
           block.get(loc).template setField<field::reduction::TAG_CORE>(
-              (int)1); //this tag exracts core region. The main purpose is for GPU.
+              true); //this tag exracts core region. The main purpose is for GPU.
+          block.get(loc).template setField<field::reduction::TAGS_INDICATOR>(
+              indicator(loc)); //this tag exracted by analytical condition
         });
-        block.setProcessingContext(ProcessingContext::Simulation);
+        block.template getData<Array<field::reduction::TAG_CORE>>().setProcessingContext(ProcessingContext::Simulation);
+        block.template getData<Array<field::reduction::TAGS_INDICATOR>>().setProcessingContext(
+            ProcessingContext::Simulation);
       }
     }
 
@@ -134,7 +145,126 @@ public:
 
     _sLattice.getCommunicator(stage::reduction::ReductionField {}).communicate();
     _superReducedFieldD->setProcessingContext(ProcessingContext::Simulation);
-  }
+  } //end constructor
+
+  SuperLatticeFieldReductionO(SuperLattice<T, DESCRIPTOR>& sLattice, SuperGeometry<T, DESCRIPTOR::d>& sGeometry,
+                              IndicatorF<T, DESCRIPTOR::d>& indicator)
+      : _sLattice(sLattice)
+      , _superReducedFieldD(new SuperD<T, REDUCED_FIELD<DESCRIPTOR::d>>(sLattice.getLoadBalancer()))
+      , _rankDoesReduction {singleton::mpi().isMainProcessor()}
+
+  {
+    OstreamManager clout(std::cout, "SuperLatticeFieldReductionO");
+    auto&          load = _sLattice.getLoadBalancer();
+
+    {
+      for (int iC = 0; iC < load.size(); ++iC) {
+        auto& block = _sLattice.getBlock(iC);
+        block.forCoreSpatialLocations([&](LatticeR<DESCRIPTOR::d> loc) {
+          block.get(loc).template setField<field::reduction::TAG_CORE>(
+              true); //this tag exracts core region. The main purpose is for GPU.
+          auto&                    blockGeometry        = sGeometry.getBlockGeometry(iC);
+          bool                     indicator_boolean[1] = {false};
+          Vector<T, DESCRIPTOR::d> PhysR {};
+          blockGeometry.getPhysR(PhysR, loc);
+          indicator(indicator_boolean, PhysR.data()); //this tag exracted by analytical condition
+          block.get(loc).template setField<field::reduction::TAGS_INDICATOR>(indicator_boolean[0]);
+        });
+        block.template getData<Array<field::reduction::TAG_CORE>>().setProcessingContext(ProcessingContext::Simulation);
+        block.template getData<Array<field::reduction::TAGS_INDICATOR>>().setProcessingContext(
+            ProcessingContext::Simulation);
+      }
+    }
+
+    clout << "Set up operators and communication" << std::endl;
+
+    sLattice.template addPostProcessor<stage::reduction::ReductionField>(
+        meta::id<BlockLatticeFieldReductionO<FIELD, REDUCTION_OP, CONDITION>> {});
+    {
+      auto& c = _sLattice.getCommunicator(stage::reduction::ReductionField {});
+
+      c.template requestField<FIELD>();
+      c.requestOverlap(1);
+      c.exchangeRequests();
+    }
+
+#ifdef PARALLEL_MODE_MPI
+    for (int iC = 0; iC < load.size(); ++iC) {
+
+      _rankDoesReduction |= sLattice.getBlock(iC).hasPostProcessor(
+          typeid(stage::reduction::ReductionField),
+          meta::id<BlockLatticeFieldReductionO<FIELD, REDUCTION_OP, CONDITION>> {});
+    }
+    MPI_Comm_split(MPI_COMM_WORLD, _rankDoesReduction ? 0 : MPI_UNDEFINED, singleton::mpi().getRank(),
+                   &_mpiCommunicator);
+#endif
+
+    clout << "Set operator parameters" << std::endl;
+    for (int iC = 0; iC < load.size(); ++iC) {
+      auto& block         = _sLattice.getBlock(iC);
+      auto& elementsBlock = _superReducedFieldD->getBlock(iC);
+      elementsBlock.resize(1);
+      block.template setParameter<fields::array_of<FIELD>>(elementsBlock.template getField<FIELD>());
+    }
+
+    _sLattice.getCommunicator(stage::reduction::ReductionField {}).communicate();
+    _superReducedFieldD->setProcessingContext(ProcessingContext::Simulation);
+  } //end constructor
+
+  SuperLatticeFieldReductionO(SuperLattice<T, DESCRIPTOR>& sLattice)
+      : _sLattice(sLattice)
+      , _superReducedFieldD(new SuperD<T, REDUCED_FIELD<DESCRIPTOR::d>>(sLattice.getLoadBalancer()))
+      , _rankDoesReduction {singleton::mpi().isMainProcessor()}
+
+  {
+    OstreamManager clout(std::cout, "SuperLatticeFieldReductionO");
+    auto&          load = _sLattice.getLoadBalancer();
+
+    {
+      for (int iC = 0; iC < load.size(); ++iC) {
+        auto& block = _sLattice.getBlock(iC);
+        block.forCoreSpatialLocations([&](LatticeR<DESCRIPTOR::d> loc) {
+          block.get(loc).template setField<field::reduction::TAG_CORE>(
+              true); //this tag exracts core region. The main purpose is for GPU.
+        });
+        block.template getData<Array<field::reduction::TAG_CORE>>().setProcessingContext(ProcessingContext::Simulation);
+      }
+    }
+
+    clout << "Set up operators and communication" << std::endl;
+
+    sLattice.template addPostProcessor<stage::reduction::ReductionField>(
+        meta::id<BlockLatticeFieldReductionO<FIELD, REDUCTION_OP, CONDITION>> {});
+    {
+      auto& c = _sLattice.getCommunicator(stage::reduction::ReductionField {});
+
+      c.template requestField<FIELD>();
+      c.requestOverlap(1);
+      c.exchangeRequests();
+    }
+
+#ifdef PARALLEL_MODE_MPI
+    for (int iC = 0; iC < load.size(); ++iC) {
+
+      _rankDoesReduction |= sLattice.getBlock(iC).hasPostProcessor(
+          typeid(stage::reduction::ReductionField),
+          meta::id<BlockLatticeFieldReductionO<FIELD, REDUCTION_OP, CONDITION>> {});
+    }
+    MPI_Comm_split(MPI_COMM_WORLD, _rankDoesReduction ? 0 : MPI_UNDEFINED, singleton::mpi().getRank(),
+                   &_mpiCommunicator);
+#endif
+
+    clout << "Set operator parameters" << std::endl;
+    for (int iC = 0; iC < load.size(); ++iC) {
+      auto& block         = _sLattice.getBlock(iC);
+      auto& elementsBlock = _superReducedFieldD->getBlock(iC);
+      elementsBlock.resize(1);
+      block.template setParameter<fields::array_of<FIELD>>(elementsBlock.template getField<FIELD>());
+    }
+
+    _sLattice.getCommunicator(stage::reduction::ReductionField {}).communicate();
+    _superReducedFieldD->setProcessingContext(ProcessingContext::Simulation);
+  } //end constructor
 
   bool rankDoesReduction() const { return _rankDoesReduction; }
 
@@ -143,7 +273,7 @@ public:
     OstreamManager clout(std::cout, "SuperLatticeFieldReductionO");
     _sLattice.executePostProcessors(stage::reduction::ReductionField {});
     for (unsigned iD = 0; iD < _fieldDimension; iD++) {
-      _reductedField[iD] = REDUCTION_OP{}.reset(_reductedField[iD]);
+      _reductedField[iD] = REDUCTION_OP {}.reset(_reductedField[iD]);
     }
 
     for (int iC = 0; iC < _sLattice.getLoadBalancer().size(); ++iC) {
@@ -158,11 +288,33 @@ public:
     }
 
 #ifdef PARALLEL_MODE_MPI
-    _mpiGatherField(REDUCTION_OP{}.forMPI());
+    _mpiGatherField(REDUCTION_OP {}.forMPI());
 #endif
     return _reductedField;
   }
 };
+
+// Utility function for integrating fields
+template <typename FIELD, typename T, typename DESCRIPTOR>
+auto integrateField(SuperLattice<T, DESCRIPTOR>& lattice, auto& domain, T weight = 1.0)
+{
+  SuperLatticeFieldReductionO<T, DESCRIPTOR, FIELD, reduction::SumO, reduction::checkTagIndicator> reductionO(lattice,
+                                                                                                              domain);
+  return reductionO.compute() * util::pow(weight, DESCRIPTOR::d);
+}
+
+// Utility function for computing the L2 norm using a functor
+template <typename FIELD, typename T, typename DESCRIPTOR>
+auto computeL2Norm(SuperLattice<T, DESCRIPTOR>& lattice, auto& domain, T dx)
+{
+  auto L2F = makeWriteFunctorO<functors::L2F<FIELD>, descriptors::L2_NORM>(lattice);
+  L2F->restrictTo(domain);
+  L2F->template setParameter<descriptors::DX>(dx);
+  L2F->apply();
+  SuperLatticeFieldReductionO<T, DESCRIPTOR, descriptors::L2_NORM, reduction::SumO, reduction::checkTagIndicator> reductionO(
+      lattice, domain);
+  return reductionO.compute();
+}
 
 } // namespace olb
 
