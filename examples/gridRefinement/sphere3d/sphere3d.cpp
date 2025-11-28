@@ -126,24 +126,18 @@ void setBoundaryValues(SuperLattice<T, DESCRIPTOR>& sLattice,
 {
   OstreamManager clout( std::cout,"setBoundaryValues" );
 
-  // No of time steps for smooth start-up
   std::size_t iTmaxStart = converter.getLatticeTime(5.0);
   std::size_t iTupdate = 30;
 
   if (iT % iTupdate == 0 && iT <= iTmaxStart) {
-    PolynomialStartScale<T,std::size_t> StartScale( iTmaxStart, T( 1 ) );
-
-    // Creates and sets the Poiseuille inflow profile using functors
-    std::size_t iTvec[1] = {iT};
-    T frac[1] = {};
-    StartScale(frac, iTvec);
-    std::vector<T> maxVelocity( 3,0 );
-    maxVelocity[0] = 2.25*frac[0]*converter.getCharPhysVelocity();
-
-    T distance2Wall = converter.getPhysDeltaX()/2.;
-    RectanglePoiseuille3D<T> poiseuilleU( sGeometry, 3, maxVelocity, distance2Wall, distance2Wall, distance2Wall );
-	momenta::setVelocity(sLattice, sGeometry.getMaterialIndicator(3), poiseuilleU);
-
+    T frac = 0;
+    PolynomialStartScale<T,std::size_t>(iTmaxStart, 1)(&frac, &iT);
+    std::vector<T> maxVelocity(3,0);
+    maxVelocity[0] = 2.25*frac*converter.getCharPhysVelocity();
+    const T distance2Wall = converter.getPhysDeltaX()/2.;
+    RectanglePoiseuille3D<T> poiseuilleU(sGeometry, 3, maxVelocity,
+                                         distance2Wall, distance2Wall, distance2Wall);
+    momenta::setVelocity(sLattice, sGeometry.getMaterialIndicator(3), poiseuilleU);
 
     clout << "step=" << iT << "; maxVel=" << maxVelocity[0] << std::endl;
 
