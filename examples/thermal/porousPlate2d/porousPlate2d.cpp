@@ -331,14 +331,14 @@ void setInitialValues(MyCase& myCase)
   momenta::setTemperature(ADElattice, geometry.getMaterialIndicator( { 1, 3 }), Tcold);
 
   #ifdef RegularizedHeatFluxBC
-    T heatFlux[2];
+    Vector<T,2> heatFlux;
     T input[2] = {0.,1.};
 
     const T Re = parameters.get<parameters::REYNOLDS>();
     const T Pr = parameters.get<parameters::PRANDTL>();
 
     AnalyticalHeatFlux<T,T> HeatFluxSol(Re, Pr, converter.getCharPhysTemperatureDifference(), converter.getCharPhysLength(), converter.getThermalConductivity());
-    HeatFluxSol(heatFlux, input);
+    HeatFluxSol(heatFlux.data(), input);
     momenta::setHeatFlux(ADElattice, geometry.getMaterialIndicator(2), heatFlux);
   #else
     const T Thot = converter.getCharPhysHighTemperature();

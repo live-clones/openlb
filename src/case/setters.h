@@ -62,7 +62,7 @@ template <typename FIELD, typename T, typename DESCRIPTOR, typename VALUE>
 void setVelocity(SuperLattice<T,DESCRIPTOR>& sLattice,
                  FunctorPtr<SuperIndicatorF<T,DESCRIPTOR::d>>&& domainI,
                  VALUE fieldD)
-  requires std::constructible_from<FieldD<T,DESCRIPTOR,FIELD>, VALUE>
+  requires std::constructible_from<AnalyticalConst<DESCRIPTOR::d,T,T>, VALUE>
 {
   AnalyticalConst<DESCRIPTOR::d,T,T> fieldF(sLattice.getUnitConverter().getLatticeVelocity(fieldD));
   sLattice.template defineField<FIELD>(std::move(domainI), fieldF);
@@ -88,7 +88,7 @@ template <typename T, typename DESCRIPTOR, typename VALUE>
 void setDensity(SuperLattice<T,DESCRIPTOR>& sLattice,
                 FunctorPtr<SuperIndicatorF<T,DESCRIPTOR::d>>&& domainI,
                 VALUE densityD)
-  requires std::constructible_from<FieldD<T,DESCRIPTOR,descriptors::SCALAR>, VALUE>
+  requires std::constructible_from<AnalyticalConst<DESCRIPTOR::d,T,T>, VALUE>
 {
   AnalyticalConst<DESCRIPTOR::d,T,T> densityF(densityD);
   setDensity(sLattice, std::move(domainI), densityF);
@@ -107,7 +107,7 @@ template <typename T, typename DESCRIPTOR, typename VALUE>
 void setElectricPotential(SuperLattice<T,DESCRIPTOR>& sLattice,
                           FunctorPtr<SuperIndicatorF<T,DESCRIPTOR::d>>&& domainI,
                           VALUE densityD)
-  requires std::constructible_from<FieldD<T,DESCRIPTOR,descriptors::SCALAR>, VALUE>
+  requires std::constructible_from<AnalyticalConst<DESCRIPTOR::d,T,T>, VALUE>
 {
   setDensity<T,DESCRIPTOR,VALUE>(sLattice, std::move(domainI), densityD);
 }
@@ -144,7 +144,7 @@ template <typename T, typename DESCRIPTOR, typename VALUE>
 void setPressure(SuperLattice<T,DESCRIPTOR>& sLattice,
                  FunctorPtr<SuperIndicatorF<T,DESCRIPTOR::d>>&& domainI,
                  VALUE pressureD)
-  requires std::constructible_from<FieldD<T,DESCRIPTOR,descriptors::SCALAR>, VALUE>
+  requires std::constructible_from<AnalyticalConst<DESCRIPTOR::d,T,T>, VALUE>
 {
   AnalyticalConst<DESCRIPTOR::d,T,T> pressureF(pressureD);
   setPressure(sLattice, std::move(domainI), pressureF);
@@ -163,7 +163,7 @@ template <typename T, typename DESCRIPTOR, typename VALUE>
 void setConcentration(SuperLattice<T,DESCRIPTOR>& sLattice,
                       FunctorPtr<SuperIndicatorF<T,DESCRIPTOR::d>>&& domainI,
                       VALUE concentrationD)
-  requires std::constructible_from<FieldD<T,DESCRIPTOR,descriptors::SCALAR>, VALUE>
+  requires std::constructible_from<AnalyticalConst<DESCRIPTOR::d,T,T>, VALUE>
 {
   setDensity<T,DESCRIPTOR,VALUE>(sLattice, std::move(domainI), concentrationD);
 }
@@ -184,7 +184,7 @@ template <typename T, typename DESCRIPTOR, typename VALUE>
 void setVelocity(SuperLattice<T,DESCRIPTOR>& sLattice,
                  FunctorPtr<SuperIndicatorF<T,DESCRIPTOR::d>>&& domainI,
                  VALUE velocityD)
-  requires std::constructible_from<FieldD<T,DESCRIPTOR,descriptors::VELOCITY>, VALUE>
+  requires std::constructible_from<AnalyticalConst<DESCRIPTOR::d,T,T>, VALUE>
 {
   AnalyticalConst<DESCRIPTOR::d,T,T> velocityF(velocityD);
   setVelocity(sLattice, std::move(domainI), velocityF);
@@ -208,16 +208,17 @@ template <typename T, typename DESCRIPTOR, typename VALUE>
 void setTemperature(SuperLattice<T,DESCRIPTOR>& sLattice,
                     FunctorPtr<SuperIndicatorF<T,DESCRIPTOR::d>>&& domainI,
                     VALUE temperatureD)
-  requires std::constructible_from<FieldD<T,DESCRIPTOR,descriptors::SCALAR>, VALUE>
+  requires std::constructible_from<AnalyticalConst<DESCRIPTOR::d,T,T>, VALUE>
 {
   AnalyticalConst<DESCRIPTOR::d,T,T> temperatureF(temperatureD);
   setTemperature(sLattice, std::move(domainI), temperatureF);
 }
 
-template <typename T, typename DESCRIPTOR>
+template <typename T, typename DESCRIPTOR, typename FUNCTOR>
 void setHeatFlux(SuperLattice<T,DESCRIPTOR>& sLattice,
                  FunctorPtr<SuperIndicatorF<T,DESCRIPTOR::d>>&& domainI,
-                 AnalyticalF<DESCRIPTOR::d,T,T>& heatFluxF)
+                 FUNCTOR& heatFluxF)
+  requires std::derived_from<FUNCTOR, AnalyticalF<DESCRIPTOR::d,T,T>>
 {
   const auto& converter = sLattice.getUnitConverter();
 
@@ -237,7 +238,7 @@ template <typename T, typename DESCRIPTOR, typename VALUE>
 void setHeatFlux(SuperLattice<T,DESCRIPTOR>& sLattice,
                  FunctorPtr<SuperIndicatorF<T,DESCRIPTOR::d>>&& domainI,
                  VALUE heatFluxD)
-  requires std::constructible_from<FieldD<T,DESCRIPTOR,descriptors::VELOCITY>, VALUE>
+  requires std::constructible_from<AnalyticalConst<DESCRIPTOR::d,T,T>, VALUE>
 {
   Vector<T,DESCRIPTOR::d> heatFluxV = Vector<T,DESCRIPTOR::d>(heatFluxD);
   AnalyticalConst<DESCRIPTOR::d,T,T> heatFluxF((heatFluxV));
