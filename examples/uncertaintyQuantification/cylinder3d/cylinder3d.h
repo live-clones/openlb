@@ -102,7 +102,8 @@ void prepareLattice( SuperLattice<T,DESCRIPTOR>& sLattice,
 
   // Material=1 -->bulk dynamics
   auto bulkIndicator = superGeometry.getMaterialIndicator({1});
-  sLattice.defineDynamics<BGKdynamics>(bulkIndicator);
+  //sLattice.defineDynamics<BGKdynamics>(bulkIndicator);
+  dynamics::set<BGKdynamics>(sLattice, bulkIndicator);
 
   // Material=2 -->bounce back
   boundary::set<boundary::BounceBack>(sLattice, superGeometry, 2);
@@ -125,13 +126,13 @@ void prepareLattice( SuperLattice<T,DESCRIPTOR>& sLattice,
   #endif
 
   // Initial conditions
-  AnalyticalConst3D<T,T> rhoF( 1 );
-  Vector<T,3> velocityV;
-  AnalyticalConst3D<T,T> uF(velocityV);
+  //AnalyticalConst3D<T,T> rhoF( 1 );
+  //Vector<T,3> velocityV;
+  //AnalyticalConst3D<T,T> uF(velocityV);
 
   // Initialize all values of distribution functions to their local equilibrium
-  sLattice.defineRhoU( bulkIndicator, rhoF, uF );
-  sLattice.iniEquilibrium( bulkIndicator, rhoF, uF );
+  //sLattice.defineRhoU( bulkIndicator, rhoF, uF );
+  //sLattice.iniEquilibrium( bulkIndicator, rhoF, uF );
 
   sLattice.setParameter<descriptors::OMEGA>(omega);
 
@@ -164,11 +165,12 @@ void setBoundaryValues( SuperLattice<T, DESCRIPTOR>& sLattice,
     T frac[1] = {};
     StartScale( frac,iTvec );
     std::vector<T> maxVelocity( 3,0 );
-    maxVelocity[0] = 2.25*frac[0]*converter.getCharLatticeVelocity();
+    maxVelocity[0] = 2.25*frac[0]*converter.getCharPhysVelocity();
 
     T distance2Wall = converter.getPhysDeltaX()/2.;
     RectanglePoiseuille3D<T> poiseuilleU( superGeometry, 3, maxVelocity, distance2Wall, distance2Wall, distance2Wall );
-    sLattice.defineU( superGeometry, 3, poiseuilleU );
+    //sLattice.defineU( superGeometry, 3, poiseuilleU );
+    momenta::setVelocity(sLattice, superGeometry.getMaterialIndicator(3), poiseuilleU);
 
     clout << "step=" << iT << "; maxVel=" << maxVelocity[0] << std::endl;
 
