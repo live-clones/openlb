@@ -200,8 +200,8 @@ void prepareLatticePoisson(MyCase& myCase) {
 
   const T omega = lattice.getUnitConverter().getLatticeRelaxationFrequency();
 
-  lattice.defineDynamics<SourcedAdvectionDiffusionBGKdynamics>(geometry.getMaterialIndicator({1, 3}));
-  lattice.defineDynamics<EquilibriumBoundaryFirstOrder>(geometry, 2);
+  dynamics::set<SourcedAdvectionDiffusionBGKdynamics>(lattice, geometry.getMaterialIndicator({1, 3}));
+  dynamics::set<EquilibriumBoundaryFirstOrder>(lattice, geometry, 2);
   boundary::set<boundary::AdvectionDiffusionDirichlet>(lattice, geometry, 3);
 
   lattice.setParameter<descriptors::OMEGA>(omega);
@@ -241,13 +241,13 @@ void prepareLatticeNernstPlanck(MyCase& myCase) {
   lattice.getUnitConverter().print();
 
   const T omega = lattice.getUnitConverter().getLatticeRelaxationFrequency();
-  lattice.template defineDynamics<CrystalSourcedAdvectionDiffusionBGKdynamics>(geometry, 1);
-  lattice.template defineDynamics<BounceBack>(geometry, 2);
+  dynamics::set<CrystalSourcedAdvectionDiffusionBGKdynamics>(lattice, geometry, 1);
+  dynamics::set<BounceBack>(lattice, geometry, 2);
   if (ID != 2) {
-    lattice.template defineDynamics<CrystalSourcedAdvectionDiffusionBGKdynamics>(geometry, 3);
+    dynamics::set<CrystalSourcedAdvectionDiffusionBGKdynamics>(lattice, geometry, 3);
     boundary::set<boundary::AdvectionDiffusionDirichlet>(lattice, geometry, 3);
   } else {
-    lattice.template defineDynamics<ZeroDistributionDynamics>(geometry, 3);
+    dynamics::set<ZeroDistributionDynamics>(lattice, geometry, 3);
     boundary::set<boundary::ZeroDistribution>(lattice, geometry, 3);
   }
 
@@ -287,7 +287,7 @@ void prepareLatticeNSE(MyCase& myCase) {
 
   const T omega = lattice.getUnitConverter().getLatticeRelaxationFrequency();
 
-  lattice.defineDynamics<CrystalForcedBGKdynamics>(geometry.getMaterialIndicator({1,3}));
+  dynamics::set<CrystalForcedBGKdynamics>(lattice, geometry.getMaterialIndicator({1,3}));
   boundary::set<boundary::FullSlip>(lattice, geometry, 2);
   boundary::set<boundary::InterpolatedVelocity>(lattice, geometry, 3);
 
@@ -380,20 +380,8 @@ void setInitialValuesPoisson(MyCase& myCase) {
   auto& parameters = myCase.getParameters();
 
   const T psi0 = parameters.get<parameters::PSI_BC>();
-  AnalyticalConst3D<T,T> rhoF( psi0 );
-  AnalyticalConst3D<T,T> rho0( 0. );
-  std::vector<T> velocity( 3,T() );
-  AnalyticalConst3D<T,T> uF( velocity );
-  lattice.defineField<descriptors::VELOCITY>(geometry.getMaterialIndicator({1, 2, 3}),uF);
-  lattice.defineField<descriptors::SOURCE>(geometry.getMaterialIndicator({0, 1, 2, 3}),rho0);
-
-  auto bulkIndicator = geometry.getMaterialIndicator({2});
-  lattice.iniEquilibrium( bulkIndicator, rhoF, uF );
-  lattice.defineRhoU( bulkIndicator, rhoF, uF );
-
-  auto bulkIndicator1 = geometry.getMaterialIndicator({0, 1, 3});
-  lattice.iniEquilibrium( bulkIndicator1, rho0, uF );
-  lattice.defineRhoU( bulkIndicator1, rho0, uF );
+  momenta::setElectricPotential(lattice, geometry.getMaterialIndicator(2), psi0);
+  momenta::setElectricPotential(lattice, geometry.getMaterialIndicator({1, 3}), T(0));
 
   // Make the lattice ready for simulation
   lattice.initialize();
@@ -411,39 +399,28 @@ void setInitialValuesNernstPlanck(MyCase& myCase) {
                  + (ID==1)*parameters.get<parameters::CONCENTRATION_P>()
                  + (ID==2)*parameters.get<parameters::CONCENTRATION_C>();
   if( ID != 2) {
+    fields::set<descriptors::CRYSTLAYER>(lattice, geometry.getMaterialIndicator({1, 3}), T(0));
+    fields::set<descriptors::CRYSTLAYER>(lattice, geometry.getMaterialIndicator(2), T(1));
+    momenta::setConcentration(lattice, geometry.getMaterialIndicator(3), rhoOut);
+    momenta::setConcentration(lattice, geometry.getMaterialIndicator({1, 2}), T(0));
+
     AnalyticalConst3D<T,T> rhoF( rhoOut ); //C0
     AnalyticalConst3D<T,T> rho0( 0 );
-    AnalyticalConst3D<T,T> rho1( 1. );
-    std::vector<T> velocity( 3,T() );
-    AnalyticalConst3D<T,T> uF( velocity );
-    lattice.template defineField<descriptors::VELOCITY>(geometry.getMaterialIndicator({1, 3}),uF);
-    lattice.template defineField<descriptors::SOURCE>(geometry.getMaterialIndicator({0, 1, 3}),rho0);
-    lattice.template defineField<descriptors::CRYSTLAYER>(geometry.getMaterialIndicator({0, 1, 3}),rho0);
-    lattice.template defineField<descriptors::CRYSTLAYER>(geometry,2,rho1);
-
+    AnalyticalConst3D<T,T> uF( 0,0,0);
     auto bulkIndicator = geometry.getMaterialIndicator({3});
     lattice.iniEquilibrium( bulkIndicator, rhoF, uF );
-    lattice.defineRhoU( bulkIndicator, rhoF, uF );
 
-    auto bulkIndicator1 = geometry.getMaterialIndicator({0, 2, 1});
+    auto bulkIndicator1 = geometry.getMaterialIndicator({2, 1});
     lattice.iniEquilibrium( bulkIndicator1, rho0, uF );
-    lattice.defineRhoU( bulkIndicator1, rho0, uF );
   } else {
-    AnalyticalConst3D<T,T> rho0( 0 );
-    AnalyticalConst3D<T,T> rho1( 1 );
-    std::vector<T> velocity( 3,T() );
-    AnalyticalConst3D<T,T> uF( velocity );
-    lattice.template defineField<descriptors::VELOCITY>(geometry.getMaterialIndicator({1, 2, 3}),uF);
-    lattice.template defineField<descriptors::SOURCE>(geometry.getMaterialIndicator({0, 1, 2, 3}),rho0);
-    lattice.template defineField<descriptors::CRYSTLAYER>(geometry.getMaterialIndicator({0, 1, 3}),rho0);
-    lattice.template defineField<descriptors::CRYSTLAYER>(geometry,2,rho1);
-    lattice.template defineField<descriptors::NUCL>(geometry.getMaterialIndicator({0, 1, 2, 3}),rho0);
-    lattice.template defineField<descriptors::SOLUBILITY>(geometry.getMaterialIndicator({0, 1, 2, 3}),rho0);
-    lattice.template defineField<descriptors::NORMAL>(geometry.getMaterialIndicator({0, 1, 2, 3}),uF);
+    fields::set<descriptors::CRYSTLAYER>(lattice, geometry.getMaterialIndicator({1, 3}), T(0));
+    fields::set<descriptors::CRYSTLAYER>(lattice, geometry.getMaterialIndicator(2), T(1));
+    momenta::setConcentration(lattice, geometry.getMaterialIndicator({1, 2, 3}), T(0));
 
-    auto bulkIndicator1 = geometry.getMaterialIndicator({0, 1, 2, 3});
+    AnalyticalConst3D<T,T> rho0( 0 );
+    AnalyticalConst3D<T,T> uF( 0,0,0);
+    auto bulkIndicator1 = geometry.getMaterialIndicator({1, 2, 3});
     lattice.iniEquilibrium( bulkIndicator1, rho0, uF );
-    lattice.defineRhoU( bulkIndicator1, rho0, uF );
   }
 
   // Make the lattice ready for simulation
@@ -455,18 +432,8 @@ void setInitialValuesNSE(MyCase& myCase) {
   auto& geometry = myCase.getGeometry();
   auto& lattice = myCase.getLattice(NavierStokes{});
 
-  AnalyticalConst3D<T,T> rho1( 1. );
-  AnalyticalConst3D<T,T> rho0( 0. );
-  std::vector<T> velocity( 3,T() );
-  AnalyticalConst3D<T,T> uF( velocity );
-  lattice.defineField<descriptors::FORCE>(geometry.getMaterialIndicator({0, 1, 2, 3}),uF);
-  lattice.defineField<descriptors::NORMAL>(geometry.getMaterialIndicator({0, 1, 2, 3}),uF);
-  lattice.defineField<descriptors::CRYSTLAYER>(geometry.getMaterialIndicator({0, 1, 3}),rho0);
-  lattice.defineField<descriptors::CRYSTLAYER>(geometry,2,rho1);
-
-  auto bulkIndicator = geometry.getMaterialIndicator({0, 1, 2, 3});
-  lattice.iniEquilibrium( bulkIndicator, rho1, uF );
-  lattice.defineRhoU( bulkIndicator, rho1, uF );
+  fields::set<descriptors::CRYSTLAYER>(lattice, geometry.getMaterialIndicator({1, 3}), T(0));
+  fields::set<descriptors::CRYSTLAYER>(lattice, geometry.getMaterialIndicator(2), T(1));
 
   // Make the lattice ready for simulation
   lattice.initialize();
@@ -484,11 +451,9 @@ void setTemporalValues(MyCase& myCase,
   auto& latticeCa = myCase.getLattice(Concentration<2>{});
   auto& latticeNSE = myCase.getLattice(NavierStokes{});
   auto& converterNernstPlanck = latticeH.getUnitConverter();
-  auto& converterNSE = latticeNSE.getUnitConverter();
 
   const T uinflow = parameters.get<parameters::U_INFLOW>();
   T maxVelocity = converterNernstPlanck.getLatticeVelocity(uinflow);
-  T maxVelocityNSE = converterNSE.getLatticeVelocity(uinflow);
   int iTmaxStart = 2000;
 
   if (int(iT) <= iTmaxStart && int(iT)%10 == 0.) {
@@ -497,16 +462,12 @@ void setTemporalValues(MyCase& myCase,
     T frac[1] = { T() };
     nSinusStartScale(frac, iTvec);
     AnalyticalConst3D<T,T> wantedVelocity(frac[0]*maxVelocity,T(),T());
-    AnalyticalConst3D<T,T> wantedVelocityNSE(frac[0]*maxVelocityNSE,T(),T());
+    AnalyticalConst3D<T,T> wantedVelocityNSE(frac[0]*uinflow,T(),T());
 
-    latticeH.defineU(geometry, 3, wantedVelocity);
-    latticeH.defineField<VELOCITY>(geometry, 3, wantedVelocity);
-    latticePO4.defineU(geometry, 3, wantedVelocity);
-    latticePO4.defineField<VELOCITY>(geometry, 3, wantedVelocity);
-    latticeCa.defineU(geometry, 3, wantedVelocity);
-    latticeCa.defineField<VELOCITY>(geometry, 3, wantedVelocity);
-    latticeNSE.defineU(geometry, 3, wantedVelocityNSE);
-
+    fields::set<VELOCITY>(latticeH, geometry.getMaterialIndicator(3), wantedVelocity);
+    fields::set<VELOCITY>(latticePO4, geometry.getMaterialIndicator(3), wantedVelocity);
+    fields::set<VELOCITY>(latticeCa, geometry.getMaterialIndicator(3), wantedVelocity);
+    momenta::setVelocity(latticeNSE, geometry.getMaterialIndicator(3), wantedVelocityNSE);
     latticeH.setProcessingContext<Array<momenta::FixedVelocityMomentumGeneric::VELOCITY>>(ProcessingContext::Simulation);
     latticePO4.setProcessingContext<Array<momenta::FixedVelocityMomentumGeneric::VELOCITY>>(ProcessingContext::Simulation);
     latticeCa.setProcessingContext<Array<momenta::FixedVelocityMomentumGeneric::VELOCITY>>(ProcessingContext::Simulation);
