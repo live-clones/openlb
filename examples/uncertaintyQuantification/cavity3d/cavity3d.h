@@ -91,10 +91,9 @@ void setBoundaryValues( UnitConverter<T, DESCRIPTOR> const& converter,
   OstreamManager clout( std::cout,"setBoundaryValues" );
 
   if ( iT==0 ) {
-    AnalyticalConst3D<T,T> uTop( converter.getCharPhysVelocity(), T( 0 ), T( 0 ) );
-    momenta::setVelocity(lattice, superGeometry.getMaterialIndicator(3), uTop );
-
-    // Make the lattice ready for simulation
+    momenta::setVelocity(lattice,
+                         superGeometry.getMaterialIndicator(3),
+                         Vector{converter.getCharPhysVelocity(), 0, 0});
     lattice.initialize();
   }
 }
