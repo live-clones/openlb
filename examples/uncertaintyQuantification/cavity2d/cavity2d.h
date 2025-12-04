@@ -23,8 +23,7 @@
  *  Boston, MA  02110-1301, USA.
  */
 
-#include "olb2D.h"
-#include "olb2D.hh"
+#include "olb.h"
 
 
 using namespace olb;
@@ -75,7 +74,7 @@ void prepareLattice( UnitConverter<T,DESCRIPTOR> const& converter,
   const T omega = converter.getLatticeRelaxationFrequency();
 
   // Material=1 -->bulk dynamics
-  sLattice.defineDynamics<BulkDynamics>(superGeometry, 1);
+  dynamics::set<BulkDynamics>( sLattice, superGeometry.getMaterialIndicator( 1 ) );
 
   // Material=2,3 -->bulk dynamics, velocity boundary
   boundary::set<boundary::InterpolatedVelocity<T,DESCRIPTOR,BulkDynamics>>(sLattice, superGeometry, 2);
@@ -93,19 +92,11 @@ void setBoundaryValues( UnitConverter<T,DESCRIPTOR> const& converter,
 {
 
   if ( iT==0 ) {
-    // set initial values: v = [0,0]
-    AnalyticalConst2D<T,T> rhoF( 1 );
-    std::vector<T> velocity( 2,T() );
-    AnalyticalConst2D<T,T> uF( velocity );
-
     auto bulkIndicator = superGeometry.getMaterialIndicator({1, 2, 3});
-    sLattice.iniEquilibrium( bulkIndicator, rhoF, uF );
-    sLattice.defineRhoU( bulkIndicator, rhoF, uF );
 
     // set non-zero velocity for upper boundary cells
-    velocity[0] = converter.getCharLatticeVelocity();
-    AnalyticalConst2D<T,T> u( velocity );
-    sLattice.defineU( superGeometry, 3, u );
+    AnalyticalConst2D<T, T> uTop(converter.getCharPhysVelocity(), 0);
+    momenta::setVelocity(sLattice, superGeometry.getMaterialIndicator(3), uTop);
 
     // Make the lattice ready for simulation
     sLattice.initialize();
