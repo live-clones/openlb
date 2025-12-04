@@ -102,10 +102,9 @@
    std::vector<T> deltas_;  ///< Perturbation parameters
 
  public:
-   Tgv2D4U(UnitConverter<T,_DESCRIPTOR> const& converter,
-           const std::vector<T>& deltas)
+   Tgv2D4U(const std::vector<T>& deltas)
      : AnalyticalF2D<T,T>(2),
-       u0(converter.getCharLatticeVelocity()),
+       u0(T(1.0)),
        deltas_(deltas)
    {}
 
@@ -163,11 +162,8 @@
    // Relaxation frequency in lattice units
    const T omega = converter.getLatticeRelaxationFrequency();
 
-   // Material=0 -> No Dynamics
-   sLattice.defineDynamics<NoDynamics<T,DESCRIPTOR>>(superGeometry, 0);
-
    // Material=1 -> Bulk Dynamics (DNS or Smagorinsky)
-   sLattice.defineDynamics<BulkDynamics>(superGeometry, 1);
+   dynamics::set<BulkDynamics>(sLattice, superGeometry.getMaterialIndicator(1));
 
    // Set BGK relaxation parameter
    sLattice.setParameter<descriptors::OMEGA>(omega);
@@ -194,12 +190,11 @@
    AnalyticalConst2D<T,T> rhoF(1.0);
 
    // TGV velocity solution with perturbations
-   Tgv2D4U<T,DESCRIPTOR> uSol(converter, random);
+   Tgv2D4U<T,DESCRIPTOR> uSol(random);
 
    // Set initial equilibrium in the bulk (material=1)
    auto bulkIndicator = superGeometry.getMaterialIndicator({1});
-   sLattice.iniEquilibrium(bulkIndicator, rhoF, uSol);
-   sLattice.defineRhoU(bulkIndicator, rhoF, uSol);
+   momenta::setVelocity(sLattice, bulkIndicator, uSol);
 
    // Prepare the lattice for simulation
    sLattice.initialize();
@@ -359,19 +354,13 @@ void saveResults(SuperLattice<T, DESCRIPTOR>& sLattice,
    converter.print();
    converter.write("tgv2d");
 
- #ifdef PARALLEL_MODE_MPI
-   const int noOfCuboids = singleton::mpi().getSize();
- #else
-   const int noOfCuboids = 4;
- #endif
-
    // Define the 2D domain from (0,0) to (2π,2π)
    Vector<T,2> extend(2 * M_PI, 2 * M_PI);
    Vector<T,2> origin;
    IndicatorCuboid2D<T> cuboid(extend, origin);
 
    // Decompose the domain and set periodic boundaries in x, y
-   CuboidDecomposition2D<T> cuboidDecomposition(cuboid, dx, noOfCuboids);
+   CuboidDecomposition2D<T> cuboidDecomposition(cuboid, dx, singleton::mpi().getSize());
    cuboidDecomposition.setPeriodicity({true, true});
 
    // Build a super geometry with load balancing
