@@ -159,6 +159,7 @@ void prepareLattice(MyCase& myCase)
       (T)parameters.get<parameters::PHYS_CHAR_DENSITY>()   // physDensity: physical density in __kg / m^3__
   );
   auto& converter   = lattice.getUnitConverter();
+  converter.print();
   const T omega     = converter.getLatticeRelaxationFrequency();
 
   // Material=1 -->bulk dynamics
@@ -431,7 +432,7 @@ bool getResults(MyCase& myCase, std::size_t iT, Timer<MyCase::value_t>& fluidTim
     std::size_t                  noActive;
     captureStatistics(superParticleSystem, materialIndicatorOutput, noActive);
 
-    superParticleWriter.write(iT - fluidMaxT);
+    superParticleWriter.write(iT);
 
     // true as long as certain amount of active particles
     if ((noActive < 0.001 * parameters.get<parameters::NO_OF_PARTICLES>() &&
@@ -535,7 +536,11 @@ void simulate( MyCase& myCase )
                     update_particle_core_distribution<T, PARTICLETYPE>
     >();
     if (iT % iTperiod == 0) {
-      getResults(myCase, iT, fluidTimer, stlReader, superParticleSystem, particleTimer);
+      if(getResults(myCase, iT, fluidTimer, stlReader, superParticleSystem, particleTimer)) {
+        continue;
+      } else {
+        break;
+      }
     }
   }
   particleTimer.stop();
