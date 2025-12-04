@@ -94,9 +94,9 @@ void setBoundaryValues( UnitConverter<T,DESCRIPTOR> const& converter,
   if ( iT==0 ) {
     auto bulkIndicator = superGeometry.getMaterialIndicator({1, 2, 3});
 
-    // set non-zero velocity for upper boundary cells
-    AnalyticalConst2D<T, T> uTop(converter.getCharPhysVelocity(), 0);
-    momenta::setVelocity(sLattice, superGeometry.getMaterialIndicator(3), uTop);
+    momenta::setVelocity(sLattice,
+                         superGeometry.getMaterialIndicator(3),
+                         Vector{converter.getCharPhysVelocity(), 0});
 
     // Make the lattice ready for simulation
     sLattice.initialize();
