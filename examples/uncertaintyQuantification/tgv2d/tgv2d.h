@@ -360,19 +360,13 @@ void saveResults(SuperLattice<T, DESCRIPTOR>& sLattice,
    converter.print();
    converter.write("tgv2d");
 
- #ifdef PARALLEL_MODE_MPI
-   const int noOfCuboids = singleton::mpi().getSize();
- #else
-   const int noOfCuboids = 4;
- #endif
-
    // Define the 2D domain from (0,0) to (2π,2π)
    Vector<T,2> extend(2 * M_PI, 2 * M_PI);
    Vector<T,2> origin;
    IndicatorCuboid2D<T> cuboid(extend, origin);
 
    // Decompose the domain and set periodic boundaries in x, y
-   CuboidDecomposition2D<T> cuboidDecomposition(cuboid, dx, noOfCuboids);
+   CuboidDecomposition2D<T> cuboidDecomposition(cuboid, dx, singleton::mpi().getSize());
    cuboidDecomposition.setPeriodicity({true, true});
 
    // Build a super geometry with load balancing

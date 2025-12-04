@@ -131,7 +131,6 @@ int main( int argc, char* argv[] )
   // joint distribution representing a 4-dimensional parameter space.
   auto jointPerturb = joint<T>({perturb1, perturb2, perturb3, perturb4});
 
-
   // Create main folder to store results
   std::string foldPath = "uq/res_" + std::to_string(resolution) + "/";
   std::string uqFoldPath = foldPath + "uq/";
@@ -151,21 +150,6 @@ int main( int argc, char* argv[] )
 
   // Retrieve the actual sample points from the UQ object
   auto samples = uq.getSamplingPoints();
-
-  // === 4th Geometry Setup ===
-  Vector<T,2> extend(charL, charL);
-  Vector<T,2> origin;
-  IndicatorCuboid2D<T> cuboid(extend, origin);
-
-#ifdef PARALLEL_MODE_MPI
-  const int noOfCuboids = singleton::mpi().getSize();
-#else
-  const int noOfCuboids = 4;
-#endif
-
-  CuboidDecomposition2D<T> cuboidDecomposition(cuboid, dx, noOfCuboids);
-  HeuristicLoadBalancer<T> loadBalancer(cuboidDecomposition);
-  SuperGeometry<T,2> superGeometry(cuboidDecomposition, loadBalancer);
 
   clout << "Starting simulation over " << samples.size() << " samples." << std::endl;
 
@@ -191,12 +175,6 @@ int main( int argc, char* argv[] )
     Vector<T,2> origin;
     IndicatorCuboid2D<T> cuboid(extend, origin);
 
-    #ifdef PARALLEL_MODE_MPI
-      const int noOfCuboids = singleton::mpi().getSize();
-    #else
-      const int noOfCuboids = 1;
-    #endif
-
     UnitConverter<T,DESCRIPTOR> converter(
            dx,
            dt,
@@ -206,7 +184,7 @@ int main( int argc, char* argv[] )
      (T)   1.0                 // physDensity
    );
 
-    CuboidDecomposition2D<T> cuboidDecomposition(cuboid, dx, noOfCuboids);
+    CuboidDecomposition2D<T> cuboidDecomposition(cuboid, dx, singleton::mpi().getSize());
     cuboidDecomposition.setPeriodicity({true, true});
     HeuristicLoadBalancer<T> loadBalancer(cuboidDecomposition);
     SuperGeometry<T,2> superGeometry(cuboidDecomposition, loadBalancer);
