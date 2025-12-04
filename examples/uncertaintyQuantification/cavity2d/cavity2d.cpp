@@ -123,7 +123,7 @@ int main( int argc, char* argv[] )
 
   clout << "Starting simulation over " << samples.size() << " samples." << std::endl;
 
-  for(int n = 0; n < samples.size(); ++n) {
+  for (unsigned n = 0; n < samples.size(); ++n) {
     // Create subfolder for this sample
     std::string subFoldPath = uqFoldPath + std::to_string(n) + "/tmp/";
     createDirectory(subFoldPath, clout);
