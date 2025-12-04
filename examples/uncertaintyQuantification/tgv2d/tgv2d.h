@@ -102,10 +102,9 @@
    std::vector<T> deltas_;  ///< Perturbation parameters
 
  public:
-   Tgv2D4U(UnitConverter<T,_DESCRIPTOR> const& converter,
-           const std::vector<T>& deltas)
+   Tgv2D4U(const std::vector<T>& deltas)
      : AnalyticalF2D<T,T>(2),
-       u0(converter.getCharLatticeVelocity()),
+       u0(T(1.0)),
        deltas_(deltas)
    {}
 
@@ -164,10 +163,11 @@
    const T omega = converter.getLatticeRelaxationFrequency();
 
    // Material=0 -> No Dynamics
-   sLattice.defineDynamics<NoDynamics<T,DESCRIPTOR>>(superGeometry, 0);
+   //sLattice.defineDynamics<NoDynamics<T,DESCRIPTOR>>(superGeometry, 0);
 
    // Material=1 -> Bulk Dynamics (DNS or Smagorinsky)
-   sLattice.defineDynamics<BulkDynamics>(superGeometry, 1);
+   dynamics::set<BulkDynamics>(sLattice, superGeometry.getMaterialIndicator(1));
+   //sLattice.defineDynamics<BulkDynamics>(superGeometry, 1);
 
    // Set BGK relaxation parameter
    sLattice.setParameter<descriptors::OMEGA>(omega);
@@ -194,12 +194,13 @@
    AnalyticalConst2D<T,T> rhoF(1.0);
 
    // TGV velocity solution with perturbations
-   Tgv2D4U<T,DESCRIPTOR> uSol(converter, random);
+   Tgv2D4U<T,DESCRIPTOR> uSol(random);
 
    // Set initial equilibrium in the bulk (material=1)
    auto bulkIndicator = superGeometry.getMaterialIndicator({1});
-   sLattice.iniEquilibrium(bulkIndicator, rhoF, uSol);
-   sLattice.defineRhoU(bulkIndicator, rhoF, uSol);
+   momenta::setVelocity(sLattice, bulkIndicator, uSol);
+   //sLattice.iniEquilibrium(bulkIndicator, rhoF, uSol);
+   //sLattice.defineRhoU(bulkIndicator, rhoF, uSol);
 
    // Prepare the lattice for simulation
    sLattice.initialize();
