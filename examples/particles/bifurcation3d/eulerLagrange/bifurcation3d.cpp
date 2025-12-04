@@ -159,6 +159,7 @@ void prepareLattice(MyCase& myCase)
       (T)parameters.get<parameters::PHYS_CHAR_DENSITY>()   // physDensity: physical density in __kg / m^3__
   );
   auto& converter   = lattice.getUnitConverter();
+  converter.print();
   const T omega     = converter.getLatticeRelaxationFrequency();
 
   // Material=1 -->bulk dynamics
