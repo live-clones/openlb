@@ -162,12 +162,8 @@
    // Relaxation frequency in lattice units
    const T omega = converter.getLatticeRelaxationFrequency();
 
-   // Material=0 -> No Dynamics
-   //sLattice.defineDynamics<NoDynamics<T,DESCRIPTOR>>(superGeometry, 0);
-
    // Material=1 -> Bulk Dynamics (DNS or Smagorinsky)
    dynamics::set<BulkDynamics>(sLattice, superGeometry.getMaterialIndicator(1));
-   //sLattice.defineDynamics<BulkDynamics>(superGeometry, 1);
 
    // Set BGK relaxation parameter
    sLattice.setParameter<descriptors::OMEGA>(omega);
@@ -199,8 +195,6 @@
    // Set initial equilibrium in the bulk (material=1)
    auto bulkIndicator = superGeometry.getMaterialIndicator({1});
    momenta::setVelocity(sLattice, bulkIndicator, uSol);
-   //sLattice.iniEquilibrium(bulkIndicator, rhoF, uSol);
-   //sLattice.defineRhoU(bulkIndicator, rhoF, uSol);
 
    // Prepare the lattice for simulation
    sLattice.initialize();
