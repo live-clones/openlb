@@ -163,50 +163,44 @@ void prepareLattice(MyCase& myCase)
   const auto& converter = lattice.getUnitConverter();
   lattice.getUnitConverter().print();
 
-  // Material=1 -->bulk dynamics
-  #ifdef _SMAGORINSKY
-    lattice.defineDynamics<SmagorinskyPowerLawBGKdynamics>(geometry.getMaterialIndicator(1));
-  #else
-    lattice.defineDynamics<PowerLawBGKdynamics>(geometry.getMaterialIndicator(1));
-  #endif
+#ifdef _SMAGORINSKY
+  dynamics::set<SmagorinskyPowerLawBGKdynamics>(lattice, geometry.getMaterialIndicator(1));
+#else
+  dynamics::set<PowerLawBGKdynamics>(lattice, geometry.getMaterialIndicator(1));
+#endif
 
-  // Material=2 -->bounce back
   boundary::set<boundary::BounceBack>(lattice, geometry.getMaterialIndicator(2));
 
   T distance2Wall = physDeltaX/2.;
   T p0 = converter.getPhysConsistencyCoeff()*util::pow(converter.getCharPhysVelocity(), n)*util::pow((n + 1.)/n, n)*util::pow(2./(physLengthY-distance2Wall*2), n + 1.);
 
-  // Material=3 -->bulk dynamics (inflow)
   if (bcPeriodic) {
-    lattice.defineDynamics<
-      typename PowerLawBGKdynamics<T,DESCRIPTOR>::template exchange_combination_rule<
-        powerlaw::PeriodicPressureOffset<-1,0>
-      >>(geometry, 3);
+    dynamics::set(lattice,
+                  geometry.getMaterialIndicator(3),
+                  meta::id<typename PowerLawBGKdynamics<T,DESCRIPTOR>::template exchange_combination_rule<
+                    powerlaw::PeriodicPressureOffset<-1,0>
+                  >>{});
     lattice.setParameter<powerlaw::PRESSURE_OFFSET<-1,0>>(
       -converter.getLatticeDensityFromPhysPressure(p0*(physLengthX + distance2Wall*2.))+1);
   }
   else {
-    lattice.defineDynamics<PowerLawBGKdynamics>(geometry.getMaterialIndicator(3));
-    // Setting of the boundary conditions
+    dynamics::set<PowerLawBGKdynamics>(lattice, geometry.getMaterialIndicator(3));
     boundary::set<boundary::InterpolatedVelocity>(lattice, geometry, 3);
   }
 
-  // Material=4 -->bulk dynamics (outflow)
   if (bcPeriodic) {
-    lattice.defineDynamics<
-      typename PowerLawBGKdynamics<T,DESCRIPTOR>::template exchange_combination_rule<
-        powerlaw::PeriodicPressureOffset<1,0>
-      >>(geometry, 4);
+    dynamics::set(lattice,
+                  geometry.getMaterialIndicator(4),
+                  meta::id<typename PowerLawBGKdynamics<T,DESCRIPTOR>::template exchange_combination_rule<
+                    powerlaw::PeriodicPressureOffset<1,0>
+                  >>{});
     lattice.setParameter<powerlaw::PRESSURE_OFFSET<1,0>>(
       converter.getLatticeDensityFromPhysPressure(p0*(physLengthX + distance2Wall*2.))-1);
   }
   else {
-    lattice.defineDynamics<PowerLawBGKdynamics>(geometry.getMaterialIndicator(4));
-    // Setting of the boundary conditions
+    dynamics::set<PowerLawBGKdynamics>(lattice, geometry.getMaterialIndicator(4));
     boundary::set<boundary::InterpolatedPressure>(lattice, geometry, 4);
   }
-
-    clout << "Setting dynamics..." << std::endl;
 
   lattice.setParameter<descriptors::OMEGA>(converter.getLatticeRelaxationFrequency());
   lattice.setParameter<powerlaw::M>(converter.getLatticeConsistencyCoeff());
@@ -220,11 +214,9 @@ void prepareLattice(MyCase& myCase)
   lattice.setParameter<collision::LES::SMAGORINSKY>(parameters.get<parameters::SMAGORINSKY>());
 #endif
 
-  // Set the analytical solutions for pressure and velocity
-  AnalyticalConst2D<T,T> omega0(converter.getLatticeRelaxationFrequency());
-  lattice.defineField<descriptors::OMEGA>(geometry, 1, omega0);
-  lattice.defineField<descriptors::OMEGA>(geometry, 3, omega0);
-  lattice.defineField<descriptors::OMEGA>(geometry, 4, omega0);
+  fields::set<descriptors::OMEGA>(lattice,
+                                  geometry.getMaterialIndicator({1,3,4}),
+                                  converter.getLatticeRelaxationFrequency());
 
   clout << "Prepare Lattice ... OK" << std::endl;
 }
@@ -242,31 +234,28 @@ void setInitialValues(MyCase& myCase) {
   const T physLengthY   = parameters.get<parameters::DOMAIN_EXTENT>()[1];
   const T physDeltaX    = parameters.get<parameters::DOMAIN_EXTENT>()[1] / parameters.get<parameters::RESOLUTION>();
 
-  T distance2Wall = physDeltaX/2.;
-  T p0 = converter.getPhysConsistencyCoeff()*util::pow(converter.getCharPhysVelocity(), n)*util::pow((n + 1.)/n, n)*util::pow(2./(physLengthY-distance2Wall*2), n + 1.);
+  T distance2Wall = physDeltaX / 2;
+  T p0 = converter.getPhysConsistencyCoeff()
+       * util::pow(converter.getCharPhysVelocity(), n)
+       * util::pow((n + 1.)/n, n)
+       * util::pow(2./(physLengthY-distance2Wall*2), n + 1.);
 
-  // Define the analytical solutions for pressure and velocity
-  AnalyticalLinear2D<T,T> rho(converter.getLatticeDensityFromPhysPressure(-p0) - 1., 0, converter.getLatticeDensityFromPhysPressure(p0*(physLengthX + distance2Wall*2.)/2.));
-  T maxVelocity = converter.getCharLatticeVelocity();
-  PowerLaw2D<T> u(geometry, 3, maxVelocity, distance2Wall, (n + 1.)/n);
+  AnalyticalLinear2D<T,T> pressureF(-p0,
+                                    0,
+                                    p0*(physLengthX + distance2Wall*2)/2);
+  PowerLaw2D<T> velocityF(geometry, 3, converter.getCharPhysVelocity(), distance2Wall, (n + 1.)/n);
 
-  // Set the analytical solutions for pressure and velocity
-  // Initialize all values of distribution functions to their local equilibrium
+  momenta::setPressureAndVelocity(lattice,
+                                  geometry.getMaterialIndicator({1,2,3,4}),
+                                  pressureF,
+                                  velocityF);
+  equilibria::setPressureAndVelocity(lattice,
+                                     geometry.getMaterialIndicator({1,2,3,4}),
+                                     pressureF,
+                                     velocityF);
 
-  lattice.defineRhoU(geometry, 1, rho, u);
-  lattice.iniEquilibrium(geometry, 1, rho, u);
-
-  lattice.defineRhoU(geometry, 2, rho, u);
-  lattice.iniEquilibrium(geometry, 2, rho, u);
-
-  lattice.defineRhoU(geometry, 3, rho, u);
-  lattice.iniEquilibrium(geometry, 3, rho, u);
-
-  lattice.defineRhoU(geometry, 4, rho, u);
-  lattice.iniEquilibrium(geometry, 4, rho, u);
-
-  // Make the lattice ready for simulation
   lattice.initialize();
+
   clout << "Set Initial Values ... OK" << std::endl;
 }
 
