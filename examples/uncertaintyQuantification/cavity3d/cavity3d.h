@@ -73,7 +73,7 @@ void prepareLattice( UnitConverter<T, DESCRIPTOR> const& converter,
   const T omega = converter.getLatticeRelaxationFrequency();
 
   // Material=1 -->bulk dynamics
-  lattice.defineDynamics<BulkDynamics>(superGeometry, 1);
+  dynamics::set<BulkDynamics>(lattice, superGeometry.getMaterialIndicator(1));
 
   // Material=2,3 -->bulk dynamics, velocity boundary
   boundary::set<boundary::InterpolatedVelocity>(lattice, superGeometry, 2);
@@ -91,16 +91,8 @@ void setBoundaryValues( UnitConverter<T, DESCRIPTOR> const& converter,
   OstreamManager clout( std::cout,"setBoundaryValues" );
 
   if ( iT==0 ) {
-    AnalyticalConst3D<T,T> rhoF( T( 1 ) );
-    AnalyticalConst3D<T,T> uF( T( 0 ), T( 0 ), T( 0 ) );
-
-    auto bulkIndicator = superGeometry.getMaterialIndicator({1, 2, 3});
-    lattice.iniEquilibrium( bulkIndicator, rhoF, uF );
-    lattice.defineRhoU( bulkIndicator, rhoF, uF );
-
-    clout << converter.getCharLatticeVelocity() << std::endl;
-    AnalyticalConst3D<T,T> uTop( converter.getCharLatticeVelocity(), T( 0 ), T( 0 ) );
-    lattice.defineU( superGeometry,3,uTop );
+    AnalyticalConst3D<T,T> uTop( converter.getCharPhysVelocity(), T( 0 ), T( 0 ) );
+    momenta::setVelocity(lattice, superGeometry.getMaterialIndicator(3), uTop );
 
     // Make the lattice ready for simulation
     lattice.initialize();
