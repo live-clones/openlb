@@ -190,6 +190,25 @@ void setVelocity(SuperLattice<T,DESCRIPTOR>& sLattice,
   setVelocity(sLattice, std::move(domainI), velocityF);
 }
 
+template <typename T, typename DESCRIPTOR>
+void setPressureAndVelocity(SuperLattice<T,DESCRIPTOR>& sLattice,
+                            FunctorPtr<SuperIndicatorF<T,DESCRIPTOR::d>>&& domainI,
+                            AnalyticalF<DESCRIPTOR::d,T,T>& pressureF,
+                            AnalyticalF<DESCRIPTOR::d,T,T>& velocityF)
+{
+  const auto& converter = sLattice.getUnitConverter();
+  AnalyticalFfromCallableF<DESCRIPTOR::d,T,T> latticeDensityFromPhysPressureF([&](Vector<T,3> physR)
+                                                                               -> Vector<T,1> {
+    T p{};
+    pressureF(&p, physR.data());
+    return converter.getLatticeDensityFromPhysPressure(p);
+  });
+  AnalyticCalcMultiplication<DESCRIPTOR::d,T,T> scaledVelocityF(1/converter.getConversionFactorVelocity(),
+                                                                velocityF);
+
+  sLattice.defineRhoU(std::move(domainI), latticeDensityFromPhysPressureF, scaledVelocityF);
+}
+
 template <typename T, typename DESCRIPTOR, typename FUNCTOR>
 void setTemperature(SuperLattice<T,DESCRIPTOR>& sLattice,
                     FunctorPtr<SuperIndicatorF<T,DESCRIPTOR::d>>&& domainI,

@@ -44,11 +44,12 @@
 using namespace olb;
 using namespace olb::names;
 
-enum FlowType : int {
+enum class FlowType : int {
   FORCED = 0,
   NON_FORCED = 1
 };
-enum BoundaryType : int {
+
+enum class BoundaryType : int {
   BOUNCE_BACK = 0,
   LOCAL = 1,
   INTERPOLATED = 2,
@@ -59,30 +60,30 @@ enum BoundaryType : int {
 
 namespace olb::parameters {
 
-  struct FLOW_TYPE      : public descriptors::TYPED_FIELD_BASE<FlowType,1> { };
-  struct BOUNDARY_TYPE  : public descriptors::TYPED_FIELD_BASE<BoundaryType,1> { };
-  struct PARTIAL_SLIP_TUNER   : public descriptors::TYPED_FIELD_BASE<int,1> { };
-  struct EOC_START_RESOLUTION : public descriptors::TYPED_FIELD_BASE<size_t,1> { };
-  struct EOC_MAX_RESOLUTION   : public descriptors::TYPED_FIELD_BASE<size_t,1> { };
-  struct EOC_RESOLUTION_STEP  : public descriptors::TYPED_FIELD_BASE<size_t,1> { };
-  struct EOC            : public descriptors::TYPED_FIELD_BASE<bool,1> { };
+struct FLOW_TYPE      : public descriptors::TYPED_FIELD_BASE<FlowType,1> { };
+struct BOUNDARY_TYPE  : public descriptors::TYPED_FIELD_BASE<BoundaryType,1> { };
+struct PARTIAL_SLIP_TUNER   : public descriptors::TYPED_FIELD_BASE<int,1> { };
+struct EOC_START_RESOLUTION : public descriptors::TYPED_FIELD_BASE<size_t,1> { };
+struct EOC_MAX_RESOLUTION   : public descriptors::TYPED_FIELD_BASE<size_t,1> { };
+struct EOC_RESOLUTION_STEP  : public descriptors::TYPED_FIELD_BASE<size_t,1> { };
+struct EOC            : public descriptors::TYPED_FIELD_BASE<bool,1> { };
 
-  struct VELOCITY_L1_ABS_ERROR    : public descriptors::FIELD_BASE<1> { };
-  struct VELOCITY_L2_ABS_ERROR    : public descriptors::FIELD_BASE<1> { };
-  struct VELOCITY_LINF_ABS_ERROR  : public descriptors::FIELD_BASE<1> { };
-  struct STRAIN_RATE_L1_ABS_ERROR    : public descriptors::FIELD_BASE<1> { };
-  struct STRAIN_RATE_L2_ABS_ERROR    : public descriptors::FIELD_BASE<1> { };
-  struct STRAIN_RATE_LINF_ABS_ERROR  : public descriptors::FIELD_BASE<1> { };
-  struct WSS_L1_ABS_ERROR    : public descriptors::FIELD_BASE<1> { };
-  struct WSS_L2_ABS_ERROR    : public descriptors::FIELD_BASE<1> { };
-  struct WSS_LINF_ABS_ERROR  : public descriptors::FIELD_BASE<1> { };
-  struct PRESSURE_L1_ABS_ERROR    : public descriptors::FIELD_BASE<1> { };
-  struct PRESSURE_L2_ABS_ERROR    : public descriptors::FIELD_BASE<1> { };
-  struct PRESSURE_LINF_ABS_ERROR  : public descriptors::FIELD_BASE<1> { };
+struct VELOCITY_L1_ABS_ERROR    : public descriptors::FIELD_BASE<1> { };
+struct VELOCITY_L2_ABS_ERROR    : public descriptors::FIELD_BASE<1> { };
+struct VELOCITY_LINF_ABS_ERROR  : public descriptors::FIELD_BASE<1> { };
+struct STRAIN_RATE_L1_ABS_ERROR    : public descriptors::FIELD_BASE<1> { };
+struct STRAIN_RATE_L2_ABS_ERROR    : public descriptors::FIELD_BASE<1> { };
+struct STRAIN_RATE_LINF_ABS_ERROR  : public descriptors::FIELD_BASE<1> { };
+struct WSS_L1_ABS_ERROR    : public descriptors::FIELD_BASE<1> { };
+struct WSS_L2_ABS_ERROR    : public descriptors::FIELD_BASE<1> { };
+struct WSS_LINF_ABS_ERROR  : public descriptors::FIELD_BASE<1> { };
+struct PRESSURE_L1_ABS_ERROR    : public descriptors::FIELD_BASE<1> { };
+struct PRESSURE_L2_ABS_ERROR    : public descriptors::FIELD_BASE<1> { };
+struct PRESSURE_LINF_ABS_ERROR  : public descriptors::FIELD_BASE<1> { };
 
-  struct DIAMETER       : public descriptors::FIELD_BASE<1> { };  // diameter of the pipe
-  struct LENGTH         : public descriptors::FIELD_BASE<1> { };  // length of the pipe
-  struct RESIDUUM       : public descriptors::FIELD_BASE<1> { };  //residuum for the convergence check
+struct DIAMETER       : public descriptors::FIELD_BASE<1> { };  // diameter of the pipe
+struct LENGTH         : public descriptors::FIELD_BASE<1> { };  // length of the pipe
+struct RESIDUUM       : public descriptors::FIELD_BASE<1> { };  //residuum for the convergence check
 
 }
 
@@ -102,7 +103,7 @@ Mesh<MyCase::value_t, MyCase::d> createMesh(MyCase::ParametersD& parameters) {
 
   Mesh<T, MyCase::d> mesh(extendedDomain, parameters.get<parameters::PHYS_DELTA_X>(), singleton::mpi().getSize());
   mesh.setOverlap(parameters.get<parameters::OVERLAP>());
-  if (parameters.get<parameters::FLOW_TYPE>()==FORCED) {
+  if (parameters.get<parameters::FLOW_TYPE>() == FlowType::FORCED) {
     mesh.getCuboidDecomposition().setPeriodicity({true, false, false});
   }
   return mesh;
@@ -127,7 +128,7 @@ void prepareGeometry(MyCase& myCase)
 
   Vector<T, 3> center0(-dx * 0.2, radius, radius);
   Vector<T, 3> center1(length, radius, radius);
-  if (flowType == FORCED) {
+  if (flowType == FlowType::FORCED) {
     center0[0] -= 3.*dx;
     center1[0] += 3.*dx;
   }
@@ -137,7 +138,7 @@ void prepareGeometry(MyCase& myCase)
 
   geometry.rename(2, 1, pipe);
 
-  if (flowType == NON_FORCED) {
+  if (flowType == FlowType::NON_FORCED) {
     geometry.clean();
     Vector<T, 3> origin(0, radius, radius);
     Vector<T, 3> extend = origin;
@@ -197,65 +198,69 @@ void prepareLattice(MyCase& myCase)
   FlowType      flowType      = parameters.get<parameters::FLOW_TYPE>();
   BoundaryType  boundaryType  = parameters.get<parameters::BOUNDARY_TYPE>();
 
-  if (flowType == NON_FORCED) {
-    lattice.defineDynamics<BGKdynamics<T,DESCRIPTOR>>(myCase.getGeometry(), 1);
+  if (flowType == FlowType::NON_FORCED) {
+    dynamics::set<BGKdynamics>(lattice, myCase.getGeometry(), 1);
   } else {
-    lattice.defineDynamics<ForcedBGKdynamics<T,DESCRIPTOR>>(myCase.getGeometry(), 1);
+    dynamics::set<ForcedBGKdynamics>(lattice, myCase.getGeometry(), 1);
   }
 
   Vector<T, 3> center0(0, radius, radius);
   Vector<T, 3> center1(length, radius, radius);
-  if ( boundaryType == BOUZIDI ) {
+  if (boundaryType == BoundaryType::BOUZIDI) {
     center0[0] -= 0.5*physDeltaX;
     center1[0] += 0.5*physDeltaX;
-    if (flowType == FORCED) {
+    if (flowType == FlowType::FORCED) {
       center0[0] -= 3.*physDeltaX;
       center1[0] += 3.*physDeltaX;
     }
   }
   IndicatorCylinder3D<T> pipe(center0, center1, radius);
 
-  switch ( boundaryType ) {
-    case BOUNCE_BACK:
+  switch (boundaryType) {
+    case BoundaryType::BOUNCE_BACK:
       boundary::set<boundary::BounceBack>(lattice, myCase.getGeometry(), 2);
       break;
-    case FREE_SLIP:
+    case BoundaryType::FREE_SLIP:
       boundary::set<boundary::FullSlip>(lattice, myCase.getGeometry(), 2);
       break;
-    case PARTIAL_SLIP:
+    case BoundaryType::PARTIAL_SLIP:
       boundary::set<boundary::PartialSlip>(lattice, myCase.getGeometry(), 2);
       lattice.template setParameter<descriptors::TUNER>(parameters.get<parameters::PARTIAL_SLIP_TUNER>());
       break;
-    case BOUZIDI:
+    case BoundaryType::BOUZIDI:
       setBouzidiBoundary<T, DESCRIPTOR, BouzidiPostProcessor>(lattice, myCase.getGeometry(), 2, pipe);
       break;
-    case LOCAL:
+    case BoundaryType::LOCAL:
       boundary::set<boundary::LocalVelocity>(lattice, myCase.getGeometry(), 2);
       break;
-    case INTERPOLATED:
+    case BoundaryType::INTERPOLATED:
     default:
       boundary::set<boundary::InterpolatedVelocity>(lattice, myCase.getGeometry(), 2);
       break;
   }
 
-  if (flowType == NON_FORCED) {
-    switch ( boundaryType ) {
-      case BOUZIDI:
+  if (flowType == FlowType::NON_FORCED) {
+    switch (boundaryType) {
+      case BoundaryType::BOUZIDI:
         setBouzidiBoundary<T, DESCRIPTOR, BouzidiVelocityPostProcessor>(lattice, myCase.getGeometry(), 3, pipe);
         break;
-      case LOCAL:
+      case BoundaryType::LOCAL:
         boundary::set<boundary::LocalVelocity>(lattice, myCase.getGeometry(), 3);
         break;
-      case BOUNCE_BACK:
-      case INTERPOLATED:
-      case FREE_SLIP:
-      case PARTIAL_SLIP:
+      case BoundaryType::BOUNCE_BACK:
+      case BoundaryType::INTERPOLATED:
+      case BoundaryType::FREE_SLIP:
+      case BoundaryType::PARTIAL_SLIP:
       default:
         boundary::set<boundary::InterpolatedVelocity>(lattice, myCase.getGeometry(), 3);
         break;
     }
-    if (boundaryType == LOCAL)  boundary::set<boundary::LocalPressure>(lattice, myCase.getGeometry(), 4);
-    else                        boundary::set<boundary::InterpolatedPressure>(lattice, myCase.getGeometry(), 4);
+    if (boundaryType == BoundaryType::LOCAL) {
+      boundary::set<boundary::LocalPressure>(lattice, myCase.getGeometry(), 4);
+    }
+    else {
+      boundary::set<boundary::InterpolatedPressure>(lattice, myCase.getGeometry(), 4);
+    }
   }
 
   clout << "Prepare Lattice ... OK" << std::endl;
@@ -265,76 +270,56 @@ void setInitialValues(MyCase& myCase) {
   OstreamManager clout( std::cout,"setInitialValues" );
   clout << "setInitialValues ..." << std::endl;
   using T             = MyCase::value_t;
-  using DESCRIPTOR    = MyCase::descriptor_t_of<NavierStokes>;
   auto& parameters    = myCase.getParameters();
   auto& lattice       = myCase.getLattice(NavierStokes{});
+  auto& geometry      = myCase.getGeometry();
   auto& converter     = lattice.getUnitConverter();
 
   const T length      = parameters.get<parameters::LENGTH>();
   const T diameter    = parameters.get<parameters::DIAMETER>();
   const T physU       = parameters.get<parameters::PHYS_CHAR_VELOCITY>();
-  const T radius      = diameter/2.;
+  const T radius      = diameter / 2.;
 
   BoundaryType boundaryType = parameters.get<parameters::BOUNDARY_TYPE>();
   FlowType flowType   = parameters.get<parameters::FLOW_TYPE>();
 
   std::vector<T> origin = { length, radius, radius};
   std::vector<T> axis = { 1, 0, 0 };
-  CirclePoiseuille3D<T> poiseuilleU(origin, axis, lattice.getUnitConverter().getCharLatticeVelocity(), radius);
+  CirclePoiseuille3D<T> poiseuilleU(origin, axis, lattice.getUnitConverter().getCharPhysVelocity(), radius);
 
-  if (flowType == FORCED) {
-    // Initial conditions
-    T D = lattice.getUnitConverter().getLatticeLength(diameter);
+  if (flowType == FlowType::FORCED) {
+    const T D = lattice.getUnitConverter().getLatticeLength(diameter);
+    Vector<T,3> poiseuilleF = 0;
+    poiseuilleF[0] = 4*lattice.getUnitConverter().getLatticeViscosity()
+                   * lattice.getUnitConverter().getCharLatticeVelocity()
+                   / (D * D / 4);
+    fields::set<descriptors::FORCE>(lattice, myCase.getGeometry().getMaterialIndicator({1,2}), poiseuilleF);
 
-    std::vector<T> poiseuilleForce(3, T());
-    poiseuilleForce[0] = 4. * lattice.getUnitConverter().getLatticeViscosity() * lattice.getUnitConverter().getCharLatticeVelocity() / (D * D / 4. );
-    AnalyticalConst3D<T,T> force( poiseuilleForce );
-
-    // Initialize force
-    lattice.defineField<descriptors::FORCE>(myCase.getGeometry(), 1, force);
-    lattice.defineField<descriptors::FORCE>(myCase.getGeometry(), 2, force );
-
-    AnalyticalConst3D<T, T> rhoF(1);
-
-    lattice.defineRhoU(myCase.getGeometry(), 1, rhoF, poiseuilleU);
-    lattice.iniEquilibrium(myCase.getGeometry(), 1, rhoF, poiseuilleU);
-    lattice.defineRhoU(myCase.getGeometry(), 2, rhoF, poiseuilleU);
-    lattice.iniEquilibrium(myCase.getGeometry(), 2, rhoF, poiseuilleU);
+    momenta::setVelocity(lattice, myCase.getGeometry().getMaterialIndicator({1,2}), poiseuilleU);
   } else {
-    // Initial conditions
     T p0 = 4. * lattice.getUnitConverter().getPhysViscosity() * physU * length / (radius * radius);
 
-    p0 = lattice.getUnitConverter().getLatticePressure(p0);
-    AnalyticalLinear3D<T, T> rho(-p0 / length * descriptors::invCs2<T,DESCRIPTOR>(), 0, 0, p0 * descriptors::invCs2<T,DESCRIPTOR>() + 1);
+    AnalyticalLinear3D<T,T> pressureF(-p0 / length, 0, 0, p0);
 
-    std::vector<T> velocity(3, T());
-    AnalyticalConst3D<T, T> uF(velocity);
+    momenta::setPressureAndVelocity(lattice,
+                                    geometry.getMaterialIndicator({0,1,2,3}),
+                                    pressureF,
+                                    poiseuilleU);
 
-    // Initialize all values of distribution functions to their local equilibrium
-    lattice.defineRhoU(myCase.getGeometry(), 0, rho, uF);
-    lattice.iniEquilibrium(myCase.getGeometry(), 0, rho, uF);
-    lattice.defineRhoU(myCase.getGeometry(), 1, rho, poiseuilleU);
-    lattice.iniEquilibrium(myCase.getGeometry(), 1, rho, poiseuilleU);
-    lattice.defineRhoU(myCase.getGeometry(), 2, rho, poiseuilleU);
-    lattice.iniEquilibrium(myCase.getGeometry(), 2, rho, poiseuilleU);
-    lattice.defineRhoU(myCase.getGeometry(), 3, rho, poiseuilleU);
-    lattice.iniEquilibrium(myCase.getGeometry(), 3, rho, poiseuilleU);
-    if( boundaryType == BOUZIDI ) {
+
+    if (boundaryType == BoundaryType::BOUZIDI) {
       setBouzidiVelocity(lattice, myCase.getGeometry(), 3, poiseuilleU);
     }
-    lattice.defineRhoU(myCase.getGeometry(), 4, rho, poiseuilleU);
-    lattice.iniEquilibrium(myCase.getGeometry(), 4, rho, poiseuilleU);
   }
 
-  // Set relaxation time to omega in all dynamics
   lattice.setParameter<descriptors::OMEGA>(converter.getLatticeRelaxationFrequency());
-  // Make the lattice ready for simulation
+
   lattice.initialize();
 
   clout << "setInitialValues ... OK" << std::endl;
 }
 
-SuperLatticePhysWallShearStress3D<MyCase::value_t,MyCase::descriptor_t_of<NavierStokes>> WSS(MyCase& myCase)
+SuperLatticePhysWallShearStress3D<MyCase::value_t,MyCase::descriptor_t_of<NavierStokes>> createWallShearStressF(MyCase& myCase)
 {
   using T           = MyCase::value_t;
   using DESCRIPTOR  = MyCase::descriptor_t_of<NavierStokes>;
@@ -347,16 +332,16 @@ SuperLatticePhysWallShearStress3D<MyCase::value_t,MyCase::descriptor_t_of<Navier
   const T length    = parameters.get<parameters::LENGTH>();
 
   // set up size-increased indicator and instantiate wall shear stress functor (wss)
-  const T center0x = (parameters.get<parameters::FLOW_TYPE>() == FORCED) ? -converter.getPhysDeltaX() * 4.2 : -converter.getPhysDeltaX() * 0.2;
+  const T center0x = (parameters.get<parameters::FLOW_TYPE>() == FlowType::FORCED) ? -converter.getPhysDeltaX() * 4.2 : -converter.getPhysDeltaX() * 0.2;
   const Vector<T, 3> center0Extended(center0x, radius, radius);
-  const T center1x = (parameters.get<parameters::FLOW_TYPE>() == FORCED) ? length + 4.*converter.getPhysDeltaX() : length;
+  const T center1x = (parameters.get<parameters::FLOW_TYPE>() == FlowType::FORCED) ? length + 4.*converter.getPhysDeltaX() : length;
   const Vector<T, 3> center1Extended(center1x, radius, radius);
   IndicatorCylinder3D<T> pipeExtended(center0Extended, center1Extended, radius);
   IndicatorLayer3D<T> indicatorExtended (pipeExtended, 0.9*converter.getPhysDeltaX()*parameters.get<parameters::RESOLUTION>()/11.);
   return SuperLatticePhysWallShearStress3D<T,DESCRIPTOR>(lattice, geometry, 2, converter, indicatorExtended);
 }
 
-void error_calc(MyCase& myCase)
+void calculateError(MyCase& myCase)
 {
   OstreamManager clout( std::cout,"error" );
   using T = MyCase::value_t;
@@ -438,7 +423,7 @@ void error_calc(MyCase& myCase)
   // wallShearStress error
   AnalyticalConst3D<T,T> wssSol(4. * converter.getPhysViscosity() * converter.getPhysDensity() * maxVelocity / parameters.get<parameters::DIAMETER>());
   SuperLatticeFfromAnalyticalF3D<T,DESCRIPTOR> wssSolLattice (wssSol, lattice);
-  SuperLatticePhysWallShearStress3D<T,DESCRIPTOR> wss = WSS(myCase);
+  SuperLatticePhysWallShearStress3D<T,DESCRIPTOR> wss = createWallShearStressF(myCase);
 
   auto indicatorB = geometry.getMaterialIndicator(2);
 
@@ -466,7 +451,7 @@ void error_calc(MyCase& myCase)
   relWallShearStressErrorNormLinf(result, tmp);
   clout << "; wss-Linf-error(rel)=" << result[0] << std::endl;
 
-  if (flowType == NON_FORCED) {
+  if (flowType == FlowType::NON_FORCED) {
     // pressure error
     T p0 = 4. * converter.getPhysViscosity() * maxVelocity * length / (radius * radius);
     AnalyticalLinear3D<T, T> pressureSol(-p0 / length, 0, 0, p0);
@@ -504,7 +489,6 @@ void getResults(MyCase& myCase, std::size_t iT, util::Timer<MyCase::value_t>& ti
   using DESCRIPTOR = MyCase::descriptor_t_of<NavierStokes>;
 
   OstreamManager clout( std::cout,"getResults" );
-  //Initialize Gnuplot
   static Gnuplot<T> gplot("centerVelocity");
 
   auto& parameters  = myCase.getParameters();
@@ -514,11 +498,12 @@ void getResults(MyCase& myCase, std::size_t iT, util::Timer<MyCase::value_t>& ti
 
   const bool    eoc             = parameters.get<parameters::EOC>();
   const BoundaryType boundaryType = parameters.get<parameters::BOUNDARY_TYPE>();
-  const bool    noslipBoundary  = ((boundaryType != FREE_SLIP) && (boundaryType != PARTIAL_SLIP));
+  const bool    noslipBoundary  = (   (boundaryType != BoundaryType::FREE_SLIP)
+                                   && (boundaryType != BoundaryType::PARTIAL_SLIP));
 
   const size_t  statIter        = converter.getLatticeTime( parameters.get<parameters::PHYS_STAT_ITER_T>() );
   const int     vtmIter         = converter.getLatticeTime( parameters.get<parameters::PHYS_VTK_ITER_T>() );
-  bool          lastTimeStep    = ( converged || (iT + 1 == converter.getLatticeTime( parameters.get<parameters::MAX_PHYS_T>() )) );
+  bool          lastTimeStep    = (converged || (iT + 1 == converter.getLatticeTime( parameters.get<parameters::MAX_PHYS_T>() )));
 
   const T       radius          = parameters.get<parameters::DIAMETER>()/2.0;
   const T       length          = parameters.get<parameters::LENGTH>();
@@ -526,7 +511,7 @@ void getResults(MyCase& myCase, std::size_t iT, util::Timer<MyCase::value_t>& ti
   // VTK and image output only if no EOC analysis
   if (!eoc) {
     // set up size-increased indicator and instantiate wall shear stress functor (wss)
-    SuperLatticePhysWallShearStress3D<T,DESCRIPTOR> wss = WSS(myCase);
+    SuperLatticePhysWallShearStress3D<T,DESCRIPTOR> wss = createWallShearStressF(myCase);
 
     SuperVTMwriter3D<T> vtmWriter( "poiseuille3d" );
     SuperLatticePhysVelocity3D<T, DESCRIPTOR> velocity( lattice, converter );
@@ -582,7 +567,7 @@ void getResults(MyCase& myCase, std::size_t iT, util::Timer<MyCase::value_t>& ti
     // Error norms
     if (noslipBoundary) {
       if ( (!eoc) || lastTimeStep ) {
-        error_calc(myCase);
+        calculateError(myCase);
       }
     }
   }
@@ -655,40 +640,32 @@ void simulate(MyCase& myCase) {
   timer.printSummary();
 }
 
-void setGetParameters( MyCase::ParametersD& myCaseParameters, int& argc, char** argv ) {
-  {
-    using namespace olb::parameters;
-    myCaseParameters.set<RESOLUTION             >(           21 );
-    myCaseParameters.set<PHYS_CHAR_VELOCITY     >(           1. );
-    myCaseParameters.set<PHYS_CHAR_DENSITY      >(           1. );
-    myCaseParameters.set<MAX_PHYS_T             >(          20. );  // max. simulation time in s, SI unit
-    myCaseParameters.set<LENGTH                 >(           2. );  // length of the pie
-    myCaseParameters.set<DIAMETER               >(           1. );  // diameter of the pipe
-    myCaseParameters.set<REYNOLDS               >(          10. );
-    myCaseParameters.set<LATTICE_RELAXATION_TIME>(          0.8 );
-    myCaseParameters.set<RESIDUUM               >(         1e-5 );
-    myCaseParameters.set<PARTIAL_SLIP_TUNER     >(           0. );  // for partialSlip only: 0->bounceBack, 1->freeSlip
-    myCaseParameters.set<FLOW_TYPE              >(    NON_FORCED);
-    myCaseParameters.set<BOUNDARY_TYPE          >(  INTERPOLATED);
-    myCaseParameters.set<EOC                    >(        false );
-    myCaseParameters.set<OVERLAP                >([&] {
-      return (myCaseParameters.get<FLOW_TYPE>()==FORCED) ? 2 : 3;
-    });
-    myCaseParameters.set<INTERVAL_CONVERGENCE_CHECK>([&] {  // interval for the convergence check in s
-      return myCaseParameters.get<MAX_PHYS_T>()*0.0125;
-    });
-    myCaseParameters.set<PHYS_STAT_ITER_T>([&] {  // interval for the statistics output in s
-      return myCaseParameters.get<MAX_PHYS_T>()/20.;
-    });
-    myCaseParameters.set<PHYS_VTK_ITER_T>([&] {  // interval for the vtk output in s
-      return myCaseParameters.get<MAX_PHYS_T>()/20.;
-    });
-    myCaseParameters.set<PHYS_DELTA_X>([&] {
-      return myCaseParameters.get<DIAMETER>()/myCaseParameters.get<RESOLUTION>();
-    });
-    myCaseParameters.set<parameters::EOC_START_RESOLUTION>(21);
-    myCaseParameters.set<parameters::EOC_MAX_RESOLUTION>(52);
-    myCaseParameters.set<parameters::EOC_RESOLUTION_STEP>(10);
-  }
-  myCaseParameters.fromCLI(argc, argv);
+void setDefaultParameters(MyCase::ParametersD& params) {
+  using namespace olb::parameters;
+  params.set<FLOW_TYPE              >(FlowType::NON_FORCED);
+  params.set<BOUNDARY_TYPE          >(BoundaryType::INTERPOLATED);
+  params.set<RESOLUTION             >(           21 );
+  params.set<PHYS_CHAR_VELOCITY     >(           1. );
+  params.set<PHYS_CHAR_DENSITY      >(           1. );
+  params.set<MAX_PHYS_T             >(          20. );  // max. simulation time in s, SI unit
+  params.set<LENGTH                 >(           2. );  // length of the pie
+  params.set<DIAMETER               >(           1. );  // diameter of the pipe
+  params.set<REYNOLDS               >(          10. );
+  params.set<LATTICE_RELAXATION_TIME>(          0.8 );
+  params.set<RESIDUUM               >(         1e-5 );
+  params.set<PARTIAL_SLIP_TUNER     >(           0. );  // for partialSlip only: 0->bounceBack, 1->freeSlip
+  params.set<EOC                    >(        false );
+  params.set<OVERLAP                >(            3 );
+  params.set<INTERVAL_CONVERGENCE_CHECK>([&] {  // interval for the convergence check in s
+    return params.get<MAX_PHYS_T>()*0.0125;
+  });
+  params.set<PHYS_STAT_ITER_T>([&] {  // interval for the statistics output in s
+    return params.get<MAX_PHYS_T>()/20.;
+  });
+  params.set<PHYS_VTK_ITER_T>([&] {  // interval for the vtk output in s
+    return params.get<MAX_PHYS_T>()/20.;
+  });
+  params.set<PHYS_DELTA_X>([&] {
+    return params.get<DIAMETER>()/params.get<RESOLUTION>();
+  });
 }

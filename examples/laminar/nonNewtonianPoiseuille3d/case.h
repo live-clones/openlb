@@ -35,7 +35,11 @@
 
 using namespace olb;
 using namespace olb::names;
-using MyCase = Case<NavierStokes, Lattice<double, descriptors::D3Q19<descriptors::FORCE,descriptors::OMEGA>>>;
+
+using MyCase = Case<
+  NavierStokes, Lattice<double, descriptors::D3Q19<descriptors::FORCE,descriptors::OMEGA>>
+>;
+
 enum class ViscosityModel: int {
   NEWTONIAN       = 0,
   POWER_LAW       = 1,
@@ -45,24 +49,24 @@ enum class ViscosityModel: int {
 
 namespace olb::parameters {
 
-  struct DYNAMIC_VISCOSITY  : public descriptors::FIELD_BASE<1> {};
-  struct POWER_LAW_EXPONENT : public descriptors::FIELD_BASE<1> {};
-  struct K0                 : public descriptors::FIELD_BASE<1> {};
-  struct K1                 : public descriptors::FIELD_BASE<1> {};
-  struct N_CY               : public descriptors::FIELD_BASE<1> {};
-  struct MODEL_CONSTANT_A   : public descriptors::FIELD_BASE<1> {};
-  struct CHAR_TIME_CONSTANT : public descriptors::FIELD_BASE<1> {};
-  struct MU_ZERO            : public descriptors::FIELD_BASE<1> {};
-  struct MU_INF             : public descriptors::FIELD_BASE<1> {};
-  struct N_PL               : public descriptors::FIELD_BASE<1> {};
-  struct CONSISTENCY_INDEX  : public descriptors::FIELD_BASE<1> {};
-  struct PRESSURE_DROP      : public descriptors::FIELD_BASE<1> {};
-  struct LENGTH             : public descriptors::FIELD_BASE<1> {};
-  struct DIAMETER           : public descriptors::FIELD_BASE<1> {};
-  struct EOC                : public descriptors::TYPED_FIELD_BASE<bool,1> {};
-  struct VISCOSITY_MODEL    : public descriptors::TYPED_FIELD_BASE<ViscosityModel,1> {};
-  struct AXIS               : public descriptors::FIELD_BASE<0,1> {};
-  struct EOC_RESOLUTIONS    : public descriptors::TYPED_FIELD_BASE<int,4> {};
+struct DYNAMIC_VISCOSITY  : public descriptors::FIELD_BASE<1> {};
+struct POWER_LAW_EXPONENT : public descriptors::FIELD_BASE<1> {};
+struct K0                 : public descriptors::FIELD_BASE<1> {};
+struct K1                 : public descriptors::FIELD_BASE<1> {};
+struct N_CY               : public descriptors::FIELD_BASE<1> {};
+struct MODEL_CONSTANT_A   : public descriptors::FIELD_BASE<1> {};
+struct CHAR_TIME_CONSTANT : public descriptors::FIELD_BASE<1> {};
+struct MU_ZERO            : public descriptors::FIELD_BASE<1> {};
+struct MU_INF             : public descriptors::FIELD_BASE<1> {};
+struct N_PL               : public descriptors::FIELD_BASE<1> {};
+struct CONSISTENCY_INDEX  : public descriptors::FIELD_BASE<1> {};
+struct PRESSURE_DROP      : public descriptors::FIELD_BASE<1> {};
+struct LENGTH             : public descriptors::FIELD_BASE<1> {};
+struct DIAMETER           : public descriptors::FIELD_BASE<1> {};
+struct EOC                : public descriptors::TYPED_FIELD_BASE<bool,1> {};
+struct VISCOSITY_MODEL    : public descriptors::TYPED_FIELD_BASE<ViscosityModel,1> {};
+struct AXIS               : public descriptors::FIELD_BASE<0,1> {};
+struct EOC_RESOLUTIONS    : public descriptors::TYPED_FIELD_BASE<int,4> {};
 
 } // namespace olb::parameters
 
