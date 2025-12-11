@@ -31,6 +31,7 @@ namespace olb::parameters {
   struct T_PERTURB  : public descriptors::FIELD_BASE<1> { };
 }
 
+// === Step 1: Declarations ===
 using MyCase = Case<
   names::NavierStokes, Lattice<double, descriptors::D2Q9<descriptors::FORCE>>,
   names::Temperature,  Lattice<double, descriptors::D2Q5<descriptors::VELOCITY>>
@@ -152,21 +153,6 @@ void prepareLattice(MyCase& myCase) {
   NSElattice.setParameter<descriptors::OMEGA>(converter.getLatticeRelaxationFrequency());
   ADElattice.setParameter<descriptors::OMEGA>(converter.getLatticeThermalRelaxationFrequency());
 
-  const T boussinesqForcePrefactor = g / converter.getConversionFactorVelocity()
-                                   * converter.getConversionFactorTime()
-                                   * converter.getCharPhysTemperatureDifference()
-                                   * converter.getPhysThermalExpansionCoefficient();
-
-  auto& coupling = myCase.setCouplingOperator(
-    "Boussinesq",
-    NavierStokesAdvectionDiffusionCoupling{},
-    names::NavierStokes{}, NSElattice,
-    names::Temperature{},  ADElattice);
-  coupling.setParameter<NavierStokesAdvectionDiffusionCoupling::T0>(
-    converter.getLatticeTemperature(Tcold));
-  coupling.setParameter<NavierStokesAdvectionDiffusionCoupling::FORCE_PREFACTOR>(
-    boussinesqForcePrefactor * Vector<T,2>{0.0,1.0});
-
   clout << "Prepare Lattice ... OK" << std::endl;
 }
 
@@ -278,8 +264,6 @@ void simulate(MyCase& myCase) {
 
     NSElattice.collideAndStream();
     ADElattice.collideAndStream();
-
-    myCase.getOperator("Boussinesq").apply();
 
     getResults(myCase, timer, iT);
   }
