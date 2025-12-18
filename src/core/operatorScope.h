@@ -37,6 +37,8 @@ enum struct OperatorScope {
   PerBlock,
   /// Per-cell application with parameters, i.e. OPERATOR::apply is passed a CELL concept implementation and parameters
   PerCellWithParameters,
+  /// Per-block application with parameters, i.e. OPERATOR::apply is passed a ConcreteBlockLattice and parameters
+  PerBlockWithParameters,
 };
 
 /// Returns human-readable name of scope

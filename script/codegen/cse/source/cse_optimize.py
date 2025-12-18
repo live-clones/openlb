@@ -43,6 +43,7 @@ def optimize_dynamics(inputFile):
     params_symbols = results['params_symbols']
 
     # Retrieve dynamics tuple information
+    collisionO = collisionO.replace("olb::", "")
     collisionO = collisionO.replace("Expr", "T")
     collisionO = re.sub(r'(descriptors::D\dQ\d{1,2})<.*?>', r'\1<FIELDS...>', collisionO)
 
@@ -130,6 +131,7 @@ def optimize_operator(inputFile):
     # Symbols
     params_symbols = results['params_symbols']
 
+    operatorO = operatorO.replace("olb::", "")
     operatorO = operatorO.replace("Expr", "T")
     operatorO = re.sub(r'(descriptors::D\dQ\d{1,2})<.*?>', r'\1<FIELDS...>', operatorO)
     descriptor = re.sub(r'(descriptors::D\dQ\d{1,2})<.*?>', r'\1<FIELDS...>', descriptor)

@@ -183,7 +183,7 @@ struct MovingPorosity {
     using CollisionO   = typename COLLISION::template type<DESCRIPTOR,MOMENTA,EQUILIBRIUM>;
 
     template <typename CELL, typename PARAMETERS, typename V=typename CELL::value_t>
-    CellStatistic<V> apply(CELL& cell, PARAMETERS& parameters) any_platform {
+    CellStatistic<V> any_platform apply(CELL& cell, PARAMETERS& parameters) {
       Vector<V,DESCRIPTOR::d> u{};
       MomentaF().computeU(cell, u);
 
@@ -616,7 +616,7 @@ struct ForcedPSMBGKdynamics final : public dynamics::CustomCollision<T,DESCRIPTO
   }
 
   template <typename CELL, typename PARAMETERS, typename V=typename CELL::value_t>
-  CellStatistic<V> collide(CELL& cell, PARAMETERS& parameters) any_platform
+  CellStatistic<V> any_platform collide(CELL& cell, PARAMETERS& parameters)
   {
     V omega = parameters.template get<descriptors::OMEGA>();
     V rho, u[DESCRIPTOR::d], uSqr;

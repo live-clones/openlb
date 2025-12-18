@@ -1,7 +1,7 @@
 /*  Lattice Boltzmann sample, written in C++, using the OpenLB
  *  library
  *
- *  Copyright (C) 2025 Philipp Spelten
+ *  Copyright (C) 2025 Philipp Spelten, Sylvain Franiatte
  *  E-mail contact: info@openlb.net
  *  The most recent release of OpenLB can be downloaded at
  *  <http://www.openlb.net/>
@@ -33,60 +33,45 @@
 
 namespace olb {
 
-template <unsigned ndim, typename T, typename DESCRIPTOR>
+template <unsigned ndim, typename T, unsigned N>
 class DampingTerm : public AnalyticalF<ndim, T, T> {
 protected:
-  Vector<T, ndim> x_0, Lx;
-  int             A = 4;
-  int             n = 4;
-  T               _bdPU;
-  T               _ds;
+  T _A = 4;         // amplitude factor
+  T _n = 4;         // order of polynomial
+  size_t _direction[N];  // outside boundary position in direction
+  T _xBoundary[N];  // outside boundary position in direction
+  T _bdPU;          // boundary depth in PU
 
 public:
-  DampingTerm(T boundaryDepthPU, Vector<T, ndim> domain_lengths, T dampingStrength = 1.)
-      : AnalyticalF<ndim, T, T>(1)
+  DampingTerm(  size_t direction[N],  // directions in which boundaries are pointed
+                T xBoundary[N],       // outer positions along directions
+                T boundaryDepthPU     // depth of damping layer
+              ) : AnalyticalF<ndim, T, T>(1)
       , _bdPU(boundaryDepthPU)
-      , _ds(dampingStrength)
   {
-    for (size_t d = 0; d < ndim; d++) {
-      Lx[d]  = domain_lengths[d] / 2; // Lx is usually half the domain
-      x_0[d] = Lx[d] - _bdPU;         // subtract boundary depth from domain length
-      // x_0[d] /= Lx[d];  // normalize x_0 (Lx is still needed in operator() to normalize x; Lx will be replaced by 1)
+    for ( size_t nBoundary = 0; nBoundary < N; ++nBoundary ) {
+      _xBoundary[nBoundary] = xBoundary[nBoundary];
+      _direction[nBoundary] = direction[nBoundary];
     }
   };
 
   bool operator()(T output[], const T input[]) override
   {
-    // normalize x to [0,1]
-    Vector<T, ndim> x, distance_from_border;
-    bool            is_boundary = false;
-    for (size_t d = 0; d < ndim; d++) {
-      x[d] = (std::abs(input[d]) - x_0[d]) / _bdPU; // x_0 becomes 0
-      x[d] = std::max(x[d], T(0)); // if x[d]<0, ignore for X; if x[d]>1, set to one to avoid negative values of sigma
-      if (x[d] > 0) {
-        is_boundary = true;
+    T x=1;
+    for ( size_t nBoundary = 0; nBoundary < N; ++nBoundary ) {
+      // normalize x to [0,1]
+      T xi = std::abs(input[_direction[nBoundary]] - _xBoundary[nBoundary]) / _bdPU;
+      if ( x < 1 ) {
+        x = std::min( x, xi );
       }
-      distance_from_border[d] = Lx[d] - std::abs(input[d]);
     }
-    if (!is_boundary) {
-      output[0] = 0;
+    if ( x < 1 ) {
+      output[0] = -_A * (((std::pow(x-1, _n)) * (-x) * (_n + 1) * (_n + 2)) / std::pow(-_bdPU, _n + 2));
+      // normalize sigma to [0,1]
+      output[0] /= 9.8304 / std::pow(_bdPU, _n + 2); // calculated as max of function (at X=0.8) for A=n=4
       return true;
     }
-
-    T X = 0.;
-    for (size_t d = 0; d < ndim; d++) {
-      if (distance_from_border[d] ==
-          *std::min_element(std::begin(distance_from_border), std::end(distance_from_border))) {
-        X = x[d];
-      }
-    }
-    T sigma;
-    sigma = A * (((std::pow(X, n)) * (1 - X) * (n + 1) * (n + 2)) / std::pow(_bdPU, n + 2)); // x_0 left out
-    sigma /= 9.8304 / std::pow(_bdPU, 6); // calculated as max of function (at X=0.8) for A=n=4
-    sigma = std::max(sigma, T(0));
-    sigma = std::min(sigma, T(1)); // hard set 0<sigma<1
-    sigma *= _ds;
-    output[0] = sigma;
+    output[0] = 0;
     return true;
   };
 };

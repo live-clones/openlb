@@ -282,6 +282,10 @@ public:
     #ifdef PLATFORM_GPU_CUDA
     gpu::cuda::device::synchronize();
     #endif
+
+    #ifdef PLATFORM_GPU_HIP
+    gpu::hip::device::synchronize();
+    #endif
   }
 
 };

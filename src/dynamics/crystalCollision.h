@@ -67,9 +67,9 @@ namespace collision {
         int mirrorDirection0;
         int mirrorDirection1;
         int mirrorDirection2;
-        int NX = normal[0];
-        int NY = normal[1];
-        int NZ = normal[2];
+        int NX(normal[0]);
+        int NY(normal[1]);
+        int NZ(normal[2]);
         int mult = 0;
         if((NX*NX + NY*NY + NZ*NZ) != 0){
           mult = 2 / (NX*NX + NY*NY + NZ*NZ);

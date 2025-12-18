@@ -45,7 +45,7 @@
 namespace olb {
 
 template<typename T, typename S, bool> class SmoothIndicatorSphere3D;
-template<typename T,  typename DESCRIPTOR> class RadiativeUnitConverter;
+template<typename T,  typename DESCRIPTOR> struct RadiativeUnitConverter;
 
 ////////////////////////////////////////////////////////////////////////////////
 ////////implementation of several 1d,2d,3d functors (analyticalFXD)/////////////

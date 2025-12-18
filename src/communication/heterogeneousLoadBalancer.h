@@ -90,7 +90,12 @@ public:
                               std::min_element(localAssignedVolume.begin(),
                                                localAssignedVolume.end()));
         rankBuffer[iCuboid] = jRank;
+#ifdef PLATFORM_GPU_CUDA
         platformBuffer[iCuboid] = static_cast<std::uint8_t>(Platform::GPU_CUDA);
+#endif
+#ifdef PLATFORM_GPU_HIP
+        platformBuffer[iCuboid] = static_cast<std::uint8_t>(Platform::GPU_HIP);
+#endif
         locBuffer[iCuboid]  = nLoc[jRank]++;
         localAssignedVolume[jRank] += cuboids[iCuboid].getLatticeVolume();
         globalAssignedVolume += cuboids[iCuboid].getLatticeVolume();
@@ -105,12 +110,22 @@ public:
         cGeometry.getNeighbourhood(jCuboid, neighbours, 1);
         std::vector<int> neighboursInRank(nRank, 0);
         int nGpuNeighbors = 0;
+#if defined(PLATFORM_GPU_CUDA) || defined(PLATFORM_GPU_HIP)
         for (int neighborC : neighbours) {
+#ifdef PLATFORM_GPU_CUDA
           if (platformBuffer[neighborC] == static_cast<std::uint8_t>(Platform::GPU_CUDA)) {
             neighboursInRank[rankBuffer[neighborC]] += 1;
             nGpuNeighbors += 1;
           }
+#endif
+#ifdef PLATFORM_GPU_HIP
+          if (platformBuffer[neighborC] == static_cast<std::uint8_t>(Platform::GPU_HIP)) {
+            neighboursInRank[rankBuffer[neighborC]] += 1;
+            nGpuNeighbors += 1;
+          }
+#endif
         }
+#endif
         if (nGpuNeighbors > 0) {
           preferredRank[jCuboid] = std::distance(neighboursInRank.begin(), std::max_element(neighboursInRank.begin(),
                                                                                             neighboursInRank.end()));
@@ -234,7 +249,7 @@ public:
                 return lhs.getLatticeVolume() > rhs.getLatticeVolume();
               });
 
-    #if defined(PARALLEL_MODE_MPI) || defined(PLATFORM_GPU_CUDA)
+    #if defined(PARALLEL_MODE_MPI) || defined(PLATFORM_GPU_CUDA) || defined(PLATFORM_GPU_HIP)
     int localPreferredPlatform = static_cast<int>(Platform::CPU_SIMD);
     #endif
     #ifdef PLATFORM_GPU_CUDA
@@ -242,6 +257,13 @@ public:
       localPreferredPlatform = static_cast<int>(Platform::GPU_CUDA);
     }
     #endif
+
+    #ifdef PLATFORM_GPU_HIP
+    if (gpu::hip::device::getCount() > 0) {
+      localPreferredPlatform = static_cast<int>(Platform::GPU_HIP);
+    }
+    #endif
+
     std::vector<int> preferredPlatform(cuboids.size(), -1);
     #ifdef PARALLEL_MODE_MPI
     singleton::mpi().gather(&localPreferredPlatform,  1,

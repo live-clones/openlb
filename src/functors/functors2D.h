@@ -28,6 +28,7 @@
 #include "genericF.h"
 #include "primitive/interpolation2d.h"
 #include "primitive/sdf.h"
+#include "primitive/getSurfaceVector.h"
 #include "analytical/functors2D.h"
 #include "lattice/functors2D.h"
 #include "particles/particleFunctors.h"

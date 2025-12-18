@@ -35,7 +35,7 @@ namespace olb {
  */
 template<typename T, typename DESCRIPTOR>
 template<typename CELL>
-void FreeSurfaceMassFlowPostProcessor3D<T, DESCRIPTOR>::apply(CELL& cell) {
+void FreeSurfaceMassFlowPostProcessor3D<T, DESCRIPTOR>::apply(CELL& cell) any_platform {
 
   using namespace olb::FreeSurface;
 
@@ -158,8 +158,7 @@ void FreeSurfaceMassFlowPostProcessor3D<T, DESCRIPTOR>::apply(CELL& cell) {
  */
 template<typename T, typename DESCRIPTOR>
 template<typename CELL, typename PARAMETERS>
-void FreeSurfaceInterfaceReconstructionPostProcessor3D<T, DESCRIPTOR>::apply(CELL& cell, PARAMETERS& params) {
-
+void FreeSurfaceInterfaceReconstructionPostProcessor3D<T, DESCRIPTOR>::apply(CELL& cell, PARAMETERS& params) any_platform {
   using namespace olb::FreeSurface;
 
   const bool drop_isolated_cells = params.template get<FreeSurface::DROP_ISOLATED_CELLS>();
@@ -286,7 +285,7 @@ void FreeSurfaceInterfaceReconstructionPostProcessor3D<T, DESCRIPTOR>::apply(CEL
  */
 template<typename T, typename DESCRIPTOR>
 template<typename CELL>
-void FreeSurfaceToFluidCellConversionPostProcessor3D<T, DESCRIPTOR>::apply(CELL& cell) {
+void FreeSurfaceToFluidCellConversionPostProcessor3D<T, DESCRIPTOR>::apply(CELL& cell) any_platform {
   using namespace olb::FreeSurface;
 
   // Convert a gas cell to interface if it is in the neighborhood of a toFluid neighbour cell
@@ -331,7 +330,7 @@ void FreeSurfaceToFluidCellConversionPostProcessor3D<T, DESCRIPTOR>::apply(CELL&
  */
 template<typename T, typename DESCRIPTOR>
 template<typename CELL>
-void FreeSurfaceToGasCellConversionPostProcessor3D<T, DESCRIPTOR>::apply(CELL& cell) {
+void FreeSurfaceToGasCellConversionPostProcessor3D<T, DESCRIPTOR>::apply(CELL& cell) any_platform {
   using namespace olb::FreeSurface;
 
   // Convert a liquid cell to interface if it is in the neighborhood of a toGas cell
@@ -347,7 +346,7 @@ void FreeSurfaceToGasCellConversionPostProcessor3D<T, DESCRIPTOR>::apply(CELL& c
  */
 template<typename T, typename DESCRIPTOR>
 template<typename CELL>
-void FreeSurfaceMassExcessPostProcessor3D<T, DESCRIPTOR>::apply(CELL& cell) {
+void FreeSurfaceMassExcessPostProcessor3D<T, DESCRIPTOR>::apply(CELL& cell) any_platform {
   using namespace olb::FreeSurface;
 
   // Note that EPSILON cannot be set in this operator because it is needed for the normal computation,
@@ -485,7 +484,7 @@ void FreeSurfaceMassExcessPostProcessor3D<T, DESCRIPTOR>::apply(CELL& cell) {
  */
 template<typename T, typename DESCRIPTOR>
 template<typename CELL, typename PARAMETERS>
-void FreeSurfaceFinalizeConversionPostProcessor3D<T, DESCRIPTOR>::apply(CELL& cell, PARAMETERS& params) {
+void FreeSurfaceFinalizeConversionPostProcessor3D<T, DESCRIPTOR>::apply(CELL& cell, PARAMETERS& params) any_platform {
 
   using namespace olb::FreeSurface;
 

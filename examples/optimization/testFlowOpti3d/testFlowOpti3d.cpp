@@ -86,10 +86,10 @@ void prepareLattice(MyCase& myCase)
   auto& parameters = myCase.getParameters();
 
   /// @li Set up a unit converter with the characteristic physical units
-  lattice.setUnitConverter<UnitConverterFromResolutionAndLatticeVelocity<MyCase::value_t,
-                                                                         MyCase::descriptor_t_of<NavierStokes>>>(
+  lattice.setUnitConverter<UnitConverterFromResolutionAndRelaxationTime<MyCase::value_t,
+                                                                        MyCase::descriptor_t_of<NavierStokes>>>(
     parameters.get<parameters::RESOLUTION>(),               // resolution
-    parameters.get<parameters::LATTICE_CHAR_VELOCITY>(),    // charLatticeVelocity
+    parameters.get<parameters::LATTICE_RELAXATION_TIME>(),  // charLatticeVelocity
     parameters.get<parameters::DOMAIN_EXTENT>()[0],         // charPhysLength: reference length of simulation geometry in [m]
     parameters.get<parameters::PHYS_CHAR_VELOCITY>(),       // charPhysVelocity: highest expected velocity during simulation in [m/s]
     parameters.get<parameters::PHYS_CHAR_VISCOSITY>(),      // physViscosity: physical kinematic viscosity in [m^2/s]
@@ -194,10 +194,8 @@ void simulate(MyCase& myCase)
     /// @li Step 8.2: Collide and Stream Execution
     myCase.getLattice(NavierStokes{}).collideAndStream();
     /// @li Stripe off density offset due to Dirichlet boundary conditions
-    if (myCase.hasName(Adjoint{})) {
-      myCase.getLattice(NavierStokes{}).stripeOffDensityOffset(
-        myCase.getLattice(NavierStokes{}).getStatistics().getAverageRho() - T{1});
-    }
+    myCase.getLattice(NavierStokes{}).stripeOffDensityOffset(
+      myCase.getLattice(NavierStokes{}).getStatistics().getAverageRho() - T{1});
     /// @li Step 8.3: Computation and Output of the Results
     getResults(myCase, timer, iT);
   }
@@ -207,7 +205,6 @@ void simulate(MyCase& myCase)
 }
 
 void prepareAdjointLattice(MyOptiCase& optiCase) {
-  using T = MyCase::value_t;
   auto& adjointLattice = optiCase.getCase(Adjoint{}).getLattice(NavierStokes{});
   auto& controlledLattice = optiCase.getCase(Controlled{}).getLattice(NavierStokes{});
   auto& geometry = optiCase.getCase(Adjoint{}).getGeometry();
@@ -216,13 +213,12 @@ void prepareAdjointLattice(MyOptiCase& optiCase) {
   adjointLattice.setUnitConverter(controlledLattice.getUnitConverter());
 
   // Define dual physics
-  adjointLattice.template defineDynamics<DualForcedBGKDynamics<T,MyCase::descriptor_t>>(geometry.getMaterialIndicator({1}));
+  dynamics::set<DualForcedBGKDynamics>(adjointLattice, geometry.getMaterialIndicator({1}));
   boundary::set<boundary::BounceBack>(adjointLattice, geometry.getMaterialIndicator({2}));
   adjointLattice.template setParameter<descriptors::OMEGA>(adjointLattice.getUnitConverter().getLatticeRelaxationFrequency());
 }
 
 void setAdjointInitialValues(MyOptiCase& optiCase) {
-  using T = MyCase::value_t;
   auto& adjointLattice = optiCase.getCase(Adjoint{}).getLattice(NavierStokes{});
   auto& controlledLattice = optiCase.getCase(Controlled{}).getLattice(NavierStokes{});
   auto& referenceLattice = optiCase.getCase(Reference{}).getLattice(NavierStokes{});
@@ -265,8 +261,7 @@ void setInitialControl(MyOptiCase& optiCase) {
   auto& control = optiCase.getController();
 
   // Intialize controlled field in superLattice
-  AnalyticalConst3D<T,T> zero(0.0);
-  lattice.template defineField<ControlledField>(geometry, 1, zero);
+  fields::set<ControlledField>(lattice, geometry.getMaterialIndicator({1}), Vector<T,3>({0, 0, 0}));
   control.template setProjection<projection::ForceFactor<T>>(lattice.getUnitConverter());
   control.template set<ControlledField>(geometry, 1, lattice);
 }
@@ -399,13 +394,13 @@ int main(int argc, char* argv[])
   MyCase::ParametersD myCaseParameters;
   {
     using namespace parameters;
-    myCaseParameters.set<DOMAIN_EXTENT        >({1.0, 1.0, 1.0});
-    myCaseParameters.set<PHYS_CHAR_VELOCITY   >(            1.0);
-    myCaseParameters.set<PHYS_CHAR_VISCOSITY  >(            0.1);
-    myCaseParameters.set<PHYS_CHAR_DENSITY    >(            1.0);
-    myCaseParameters.set<MAX_PHYS_T           >(            6.0);
-    myCaseParameters.set<RESOLUTION           >(             11);
-    myCaseParameters.set<LATTICE_CHAR_VELOCITY>(           0.07);
+    myCaseParameters.set<DOMAIN_EXTENT          >({1.0, 1.0, 1.0});
+    myCaseParameters.set<PHYS_CHAR_VELOCITY     >(            1.0);
+    myCaseParameters.set<PHYS_CHAR_VISCOSITY    >(            0.1);
+    myCaseParameters.set<PHYS_CHAR_DENSITY      >(            1.0);
+    myCaseParameters.set<MAX_PHYS_T             >(            6.0);
+    myCaseParameters.set<RESOLUTION             >(             11);
+    myCaseParameters.set<LATTICE_RELAXATION_TIME>(            0.8);
   }
 
   /// Step 3: Create Mesh
@@ -445,6 +440,6 @@ int main(int argc, char* argv[])
 
   /// Step G: Create an Optimizer
   OptimizerLBFGS<MyOptiCase::value_t,std::vector<MyOptiCase::value_t>> optimizer(
-    optiCase.getController().size(), 1.e-10, 10, 1., 20, "Wolfe", 20, 1.e-4);
+    optiCase.getController().size(), 6.e-5, 10, 1., 20, "Wolfe", 20, 1.e-4);
   optimizer.optimize(optiCase);
 }

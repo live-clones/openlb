@@ -63,7 +63,7 @@ void simulatePoiseuilleForEOC(MyCase::ParametersD& parameters, Gnuplot<MyCase::v
   const FlowType      flowType        = parameters.get<parameters::FLOW_TYPE>();
   const BoundaryType  boundaryType    = parameters.get<parameters::BOUNDARY_TYPE>();
   const bool          noslipBoundary  = ((boundaryType != BoundaryType::FREE_SLIP) && (boundaryType != BoundaryType::PARTIAL_SLIP));
-  const size_t        res             = parameters.get<parameters::RESOLUTION>();
+  const std::size_t   res             = parameters.get<parameters::RESOLUTION>();
 
   if (noslipBoundary) {
     if (flowType == FlowType::NON_FORCED) {
@@ -151,17 +151,13 @@ int main( int argc, char* argv[] )
   // set the labels for the plot
   gplot.setLabel("Resolution test", "average Error");
 
-  size_t startN = myCaseParameters.get<parameters::EOC_START_RESOLUTION>();
-  size_t maxN   = myCaseParameters.get<parameters::EOC_MAX_RESOLUTION>();
-  size_t stepN  = myCaseParameters.get<parameters::EOC_RESOLUTION_STEP>();
+  std::size_t startN = myCaseParameters.get<parameters::EOC_START_RESOLUTION>();
+  std::size_t maxN   = myCaseParameters.get<parameters::EOC_MAX_RESOLUTION>();
+  std::size_t stepN  = myCaseParameters.get<parameters::EOC_RESOLUTION_STEP>();
 
   for(size_t simuN = startN; simuN < maxN; simuN += stepN){
     clout << "Starting next simulation with N = " << simuN << std::endl;
     myCaseParameters.set<parameters::RESOLUTION>(simuN);
-    myCaseParameters.set<parameters::PHYS_DELTA_X>(
-      myCaseParameters.get<parameters::DIAMETER>()
-      / myCaseParameters.get<parameters::RESOLUTION>()
-    );
     simulatePoiseuilleForEOC(myCaseParameters, gplot);
   }
 

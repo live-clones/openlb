@@ -44,6 +44,22 @@ struct SingleLatticeO {
   void apply(CELLS& cells, PARAMETERS& parameters) any_platform {
     OPERATOR().apply(cells.template get<names::Lattice1>(), parameters);
   }
+  template <typename BLOCKS> requires (OPERATOR::scope == OperatorScope::PerBlock)
+  void setup(BLOCKS& blocks) any_platform {
+    OPERATOR().setup(blocks.template get<names::Lattice1>());
+  }
+  template <typename BLOCKS> requires (OPERATOR::scope == OperatorScope::PerBlock)
+  void apply(BLOCKS& blocks) any_platform {
+    OPERATOR().apply(blocks.template get<names::Lattice1>());
+  }
+  template <typename BLOCKS, typename PARAMETERS> requires (OPERATOR::scope == OperatorScope::PerBlockWithParameters)
+  void setup(BLOCKS& blocks, PARAMETERS& parameters) any_platform {
+    OPERATOR().setup(blocks.template get<names::Lattice1>(), parameters);
+  }
+  template <typename BLOCKS, typename PARAMETERS> requires (OPERATOR::scope == OperatorScope::PerBlockWithParameters)
+  void apply(BLOCKS& blocks, PARAMETERS& parameters) any_platform {
+    OPERATOR().apply(blocks.template get<names::Lattice1>(), parameters);
+  }
 };
 
 template <typename OPERATOR, typename T, typename DESCRIPTOR>

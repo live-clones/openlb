@@ -1,2 +1,0 @@
-name; weight; isOptimizable; isOptimized; complexity
-Dual<dynamics::Tuple<Expr, descriptors::D3Q19<>, momenta::Tuple<momenta::BulkDensity, momenta::BulkMomentum, momenta::BulkStress, momenta::DefineToNEq>, equilibria::SecondOrder, collision::BGK, forcing::PlainGuo>, Expr, descriptors::D3Q19<>  >; 6859; 1; 0; 479161

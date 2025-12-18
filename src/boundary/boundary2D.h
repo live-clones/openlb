@@ -52,5 +52,6 @@
 #include "bounceBackVelocity.h"
 #include "zouHePressure2D.h"
 #include "setTurbulentWallModel.h"
+#include "setWallDistanceField.h"
 
 #include "boundary2D.hh"

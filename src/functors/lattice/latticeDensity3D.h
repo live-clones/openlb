@@ -61,5 +61,33 @@ public:
   bool operator() (T output[], const int input[]) override;
 };
 
+template <typename T, typename DESCRIPTOR>
+class SuperLatticePressure3D final : public SuperLatticeF3D<T,DESCRIPTOR> {
+public:
+  SuperLatticePressure3D(SuperLattice<T,DESCRIPTOR>& sLattice);
+};
+
+/// functor returns pointwise density rho on local lattices
+template <typename T, typename DESCRIPTOR>
+class BlockLatticePressure3D final : public BlockLatticeF3D<T,DESCRIPTOR> {
+public:
+  BlockLatticePressure3D(BlockLattice<T,DESCRIPTOR>& blockLattice);
+  bool operator() (T output[], const int input[]) override;
+};
+
+template <typename T, typename DESCRIPTOR>
+class SuperLatticeSquarePressure3D final : public SuperLatticeF3D<T,DESCRIPTOR> {
+public:
+  SuperLatticeSquarePressure3D(SuperLattice<T,DESCRIPTOR>& sLattice);
+};
+
+/// functor returns pointwise density rho on local lattices
+template <typename T, typename DESCRIPTOR>
+class BlockLatticeSquarePressure3D final : public BlockLatticeF3D<T,DESCRIPTOR> {
+public:
+  BlockLatticeSquarePressure3D(BlockLattice<T,DESCRIPTOR>& blockLattice);
+  bool operator() (T output[], const int input[]) override;
+};
+
 }
 #endif

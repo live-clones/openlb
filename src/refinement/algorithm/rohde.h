@@ -74,12 +74,7 @@ struct FineToCoarseO {
             return 2*((iOrthant >> (DESCRIPTOR::d-1-j)) & 1) - 1;
           });
           auto fCell = fMother.child(o_i);
-          //auto fCellN = fCell.neighbor(descriptors::c<DESCRIPTOR>(iPop));
-          //if (o_i * normal >= 0) {
-            cCell[iPop] += fCell[iPop];
-          //} else {
-          //  cCell[iPop] += fCell[iPop];
-          //}
+          cCell[iPop] += fCell[iPop];
         }
         cCell[iPop] /= (unsigned{1} << DESCRIPTOR::d);
       }

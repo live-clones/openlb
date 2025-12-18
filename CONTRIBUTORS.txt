@@ -61,6 +61,11 @@ Max Gaedtke
   dynamics: thermal
   examples: thermal
 
+Michael Grinschewski
+  examples: turbulence/airfoiled
+  functors: IndicatorAirfoil2D, getSurfaceVector
+  documentation: UserGuide
+
 Simon Großmann
   example: poiseuille2dEOC
   io: csv and gnuplot interface

@@ -31,10 +31,13 @@ namespace olb {
 template <typename FIELD, typename REDUCTION_OP, typename CONDITION>
 template <typename T, typename DESCRIPTOR>
 struct BlockLatticeFieldReductionO<FIELD,REDUCTION_OP,CONDITION>::type<
-  ConcreteBlockLattice<T, DESCRIPTOR, Platform::GPU_CUDA>
+  ConcreteBlockLattice<T, DESCRIPTOR, Platform::GPU_CUDA>,
+  StaticParametersD<T,DESCRIPTOR,fields::array_of<FIELD>>
 > {
-  void setup(ConcreteBlockLattice<T,DESCRIPTOR,Platform::GPU_CUDA>& blockLattice);
-  void apply(ConcreteBlockLattice<T,DESCRIPTOR,Platform::GPU_CUDA>& blockLattice);
+  void setup(ConcreteBlockLattice<T,DESCRIPTOR,Platform::GPU_CUDA>& blockLattice,
+             StaticParametersD<T,DESCRIPTOR,fields::array_of<FIELD>>& parameters);
+  void apply(ConcreteBlockLattice<T,DESCRIPTOR,Platform::GPU_CUDA>& blockLattice,
+             StaticParametersD<T,DESCRIPTOR,fields::array_of<FIELD>>& parameters);
 };
 
 }

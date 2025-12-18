@@ -70,5 +70,41 @@ bool BlockLatticeVelocity3D<T, DESCRIPTOR>::operator()(T output[], const int inp
   return true;
 }
 
+template<typename T, typename DESCRIPTOR>
+SuperLatticeSquareVelocity3D<T, DESCRIPTOR>::SuperLatticeSquareVelocity3D(
+  SuperLattice<T, DESCRIPTOR>& sLattice)
+  : SuperLatticeF3D<T, DESCRIPTOR>(sLattice, 6)
+{
+  this->getName() = "square_velocity";
+  int maxC = this->_sLattice.getLoadBalancer().size();
+  this->_blockF.reserve(maxC);
+  for (int iC = 0; iC < maxC; iC++) {
+    this->_blockF.emplace_back(new BlockLatticeSquareVelocity3D<T, DESCRIPTOR>(this->_sLattice.getBlock(iC)));
+  }
+}
+
+template<typename T, typename DESCRIPTOR>
+BlockLatticeSquareVelocity3D<T, DESCRIPTOR>::BlockLatticeSquareVelocity3D(
+  BlockLattice<T, DESCRIPTOR>& blockLattice)
+  : BlockLatticeF3D<T, DESCRIPTOR>(blockLattice, 6)
+{
+  this->getName() = "square_velocity";
+}
+
+template<typename T, typename DESCRIPTOR>
+bool BlockLatticeSquareVelocity3D<T, DESCRIPTOR>::operator()(T output[], const int input[])
+{
+  T rho, vel[3];
+  this->_blockLattice.get(input[0], input[1], input[2]).computeRhoU(rho, vel);
+  int iPi = 0;
+  for (int i = 0; i<DESCRIPTOR::d; i++) {
+    for (int j = i; j<DESCRIPTOR::d; j++) {
+      output[iPi] = vel[i] * vel[j];
+      ++iPi;
+    }
+  }
+  return true;
+}
+
 }
 #endif

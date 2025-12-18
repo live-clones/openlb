@@ -368,7 +368,7 @@ void setTurbulentWallModel(SuperLattice<T, DESCRIPTOR>& sLattice,
                            WallModelParameters<T>& wallModelParameters,
                            IndicatorF<T,DESCRIPTOR::d>* indicatorAnalyticalBoundary = nullptr)
 {
-  int _overlap = 3;
+  int _overlap = sLattice.getOverlap();
   OstreamManager clout(std::cout, "TurbulentWallModelSetter");
 
   AnalyticalConst<DESCRIPTOR::d, T, T> one(T(1.));

@@ -127,7 +127,7 @@ public:
     }
   }
 
-  #ifndef  __CUDA_ARCH__
+  #if  !defined(__CUDA_ARCH__) && !defined(__HIP_DEVICE_COMPILE__)
   constexpr Vector(std::initializer_list<T> v)
   {
     OLB_PRECONDITION(v.size() == D);

@@ -68,3 +68,7 @@ struct ImplementationOf;
 #ifdef PLATFORM_GPU_CUDA
 #include "gpu/cuda/column.h"
 #endif
+
+#ifdef PLATFORM_GPU_HIP
+#include "gpu/hip/column.h"
+#endif

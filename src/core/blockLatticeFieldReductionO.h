@@ -30,35 +30,44 @@ namespace field::reduction {
 
 //this filed is tag for extracting the 'core' grid area(no padding area)  for the reduction, especially in GPU.
 struct TAG_CORE : public descriptors::TYPED_FIELD_BASE<bool, 1> {};
-struct TAGS_INDICATOR : public descriptors::TYPED_FIELD_BASE<bool,1> {};
+struct TAG_TRUE : public descriptors::TYPED_FIELD_BASE<bool, 1> {};
+
+template <int ID>
+struct TAGS_INDICATORS : public descriptors::TYPED_FIELD_BASE<bool, 1> {
+  static const char* getName()
+  {
+    static std::string name = "TAGS_INDICATORS_" + std::to_string(ID);
+    return name.c_str();
+  }
+};
 
 } // namespace field::reduction
 
 namespace reduction {
 
-template <typename TAG_FILED>
+template <typename TAG_FIELD>
 struct checkTag {
   template <typename CELL, typename T = typename CELL::value_t, typename DESCRIPTOR = typename CELL::descriptor_t>
   bool operator()(CELL& cell) any_platform
   {
-    return cell.template getField<TAG_FILED>();
+    return cell.template getField<TAG_FIELD>();
   }
+  static const char* getName() { return TAG_FIELD::getName(); }
+  using tag_field_t = TAG_FIELD;
 };
 
-struct checkTagIndicator {
-  template <typename CELL, typename T = typename CELL::value_t, typename DESCRIPTOR = typename CELL::descriptor_t>
-  bool operator()(CELL& cell) any_platform
-  {
-    return cell.template getField<field::reduction::TAGS_INDICATOR>();
-  }
-};
+template <int ID =0>
+using checkTagIndicator = checkTag<field::reduction::TAGS_INDICATORS<ID>>;
 
+template <typename TAG_FIELD = field::reduction::TAG_TRUE>
 struct ConditionTrue {
   template <typename CELL>
   bool operator()(CELL& cell) any_platform
   {
     return true;
   }
+  static const char* getName() { return "ConditionTrue"; }
+  using tag_field_t = TAG_FIELD;
 };
 
 struct SumO {
@@ -84,7 +93,7 @@ struct MaxO {
   template <typename FIELDD>
   FIELDD operator()(FIELDD lhs, FIELDD rhs) any_platform
   {
-    //      return maxv(lhs, rhs);
+    //    return maxv(lhs, rhs);
     return lhs > rhs ? lhs : rhs;
   }
 
@@ -103,7 +112,7 @@ struct MinO {
   template <typename FIELDD>
   FIELDD operator()(FIELDD lhs, FIELDD rhs) any_platform
   {
-    //     return minv(lhs, rhs);
+    //    return minv(lhs, rhs);
     return lhs < rhs ? lhs : rhs;
   }
 
@@ -131,48 +140,49 @@ struct ResetO {
 
 template <typename FIELD, typename REDUCTION_OP, typename CONDITION>
 struct BlockLatticeFieldReductionO {
-  static constexpr OperatorScope scope = OperatorScope::PerBlock;
+  static constexpr OperatorScope scope = OperatorScope::PerBlockWithParameters;
 
   using parameters = meta::list<fields::array_of<FIELD>>;
 
   int getPriority() const { return 2; }
 
-  template <typename BLOCK>
+  template <typename BLOCK, typename PARAMETERS>
   struct type {
-    void setup(BLOCK& blockLattice) {}
-    void apply(BLOCK& blockLattice) { throw std::runtime_error("BlockLatticeFieldReductionO not implemented"); }
+    void setup(BLOCK& blockLattice, PARAMETERS& parameters) {}
+    void apply(BLOCK& blockLattice, PARAMETERS& parameters)
+    {
+      throw std::runtime_error("BlockLatticeFieldReductionO not implemented");
+    }
   };
 
-  template <typename BLOCK>
-  void setup(BLOCK& blockLattice)
+  template <typename BLOCK, typename PARAMETERS>
+  void setup(BLOCK& blockLattice, PARAMETERS& parameters)
   {
-    type<BLOCK> {}.setup(blockLattice);
+    type<BLOCK, PARAMETERS> {}.setup(blockLattice, parameters);
   }
 
-  template <typename BLOCK>
-  void apply(BLOCK& blockLattice)
+  template <typename BLOCK, typename PARAMETERS>
+  void apply(BLOCK& blockLattice, PARAMETERS& parameters)
   {
-    type<BLOCK> {}.apply(blockLattice);
+    type<BLOCK, PARAMETERS> {}.apply(blockLattice, parameters);
   }
 };
 
 template <typename FIELD, typename REDUCTION_OP, typename CONDITION>
 template <typename T, typename DESCRIPTOR, Platform PLATFORM>
-requires(isPlatformCPU(PLATFORM))
-struct BlockLatticeFieldReductionO<FIELD, REDUCTION_OP,
-                                   CONDITION>::type<ConcreteBlockLattice<T, DESCRIPTOR, PLATFORM>> {
+requires(isPlatformCPU(PLATFORM)) struct BlockLatticeFieldReductionO<FIELD, REDUCTION_OP, CONDITION>::type<
+    ConcreteBlockLattice<T, DESCRIPTOR, PLATFORM>, StaticParametersD<T, DESCRIPTOR, fields::array_of<FIELD>>> {
 
-  void setup(ConcreteBlockLattice<T, DESCRIPTOR, PLATFORM>& blockLattice)
+  using PARAMETERS = StaticParametersD<T, DESCRIPTOR, fields::array_of<FIELD>>;
+
+  void setup(ConcreteBlockLattice<T, DESCRIPTOR, PLATFORM>& blockLattice, PARAMETERS& parameters)
   {
     blockLattice.template getData<OperatorParameters<BlockLatticeFieldReductionO>>();
   }
 
-  void apply(ConcreteBlockLattice<T, DESCRIPTOR, PLATFORM>& blockLattice)
+  void apply(ConcreteBlockLattice<T, DESCRIPTOR, PLATFORM>& blockLattice, PARAMETERS& parameters)
   {
-
     OstreamManager clout(std::cout, "Apply function in BlockLatticeFieldReductionO on CPU");
-
-    auto& parameters = blockLattice.template getData<OperatorParameters<BlockLatticeFieldReductionO>>().parameters;
 
     const auto&                                    blockField = blockLattice.template getField<FIELD>();
     FieldD<T, DESCRIPTOR, fields::array_of<FIELD>> elementField =
@@ -180,6 +190,7 @@ struct BlockLatticeFieldReductionO<FIELD, REDUCTION_OP,
 
     for (unsigned iD = 0; iD < blockField.d; iD++) {
       if (elementField[iD] == nullptr) {
+        //clout << "Error: elementField[" << iD << "] is nullptr in BlockLatticeFieldReductionO." << std::endl;
         return;
       }
       else {

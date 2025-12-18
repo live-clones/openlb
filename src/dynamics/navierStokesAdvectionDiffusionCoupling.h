@@ -617,13 +617,12 @@ template<typename V>
 struct TurbulentChannelForce {
   static constexpr OperatorScope scope = OperatorScope::PerCellWithParameters;
 
-  struct LATTICE_U_SUM : public descriptors::FIELD_BASE<0,1> { };
+  struct LATTICE_U_AVE : public descriptors::FIELD_BASE<0,1> { };
   struct CHAR_LATTICE_U : public descriptors::FIELD_BASE<1> { };
   struct CHAR_LATTICE_L : public descriptors::FIELD_BASE<1> { };
   struct LATTICE_UTAU : public descriptors::FIELD_BASE<1> { };
-  struct LATTICE_CHANNEL_VOLUME : public descriptors::FIELD_BASE<1> { };
 
-  using parameters = meta::list<LATTICE_U_SUM,CHAR_LATTICE_U,CHAR_LATTICE_L,LATTICE_UTAU,LATTICE_CHANNEL_VOLUME>;
+  using parameters = meta::list<LATTICE_U_AVE,CHAR_LATTICE_U,CHAR_LATTICE_L,LATTICE_UTAU>;
 
   template <typename CELLS, typename PARAMETERS>
   void apply(CELLS& cells, PARAMETERS& parameters) any_platform
@@ -633,9 +632,8 @@ struct TurbulentChannelForce {
     auto& cell = cells.template get<names::NavierStokes>();
     const V charlat_u = parameters.template get<CHAR_LATTICE_U>();
     const V charlat_l = parameters.template get<CHAR_LATTICE_L>();
-    auto U_SUM = parameters.template get<LATTICE_U_SUM>();
-    const V volume = parameters.template get<LATTICE_CHANNEL_VOLUME>();
-    const V uave      = U_SUM[0] / volume;// uave = <Ux> = 1/V ∫UxdV
+    auto U_AVE = parameters.template get<LATTICE_U_AVE>();
+    const V uave      = U_AVE[0];
     const V utau   = parameters.template get<LATTICE_UTAU>();
     V tmpForce[DESCRIPTOR::d]  = {};
     tmpForce[0] = (utau * utau / charlat_l + (charlat_u - uave) * charlat_u / charlat_l);

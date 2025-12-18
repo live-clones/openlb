@@ -52,12 +52,14 @@ using namespace olb;
 using namespace names;
 
 // === Step 1: Declarations ===
-using MyCase = Case<NavierStokes, Lattice<float, descriptors::D3Q19<descriptors::FORCE>>>;
-
-///when using, hybrid recursive regularize collision model with CONST_HRR_HYBRID
-//#define HRR_COLLISION
+using MyCase = Case<
+  NavierStokes, Lattice<float, descriptors::D3Q19<descriptors::FORCE, descriptors::Y1, descriptors::U_TAU>>
+>;
 
 namespace olb::parameters {
+
+struct WITH_WALL_MODEL : public descriptors::TYPED_FIELD_BASE<bool, 1> {};
+struct HRR_COLLISION : public descriptors::TYPED_FIELD_BASE<bool, 1> {};
 
 // physical simulated length adapted for lattice distance to boundary in meters
 struct PHYS_ADAPTED_CHAR_LENGTH : public descriptors::FIELD_BASE<1> {};
@@ -166,7 +168,6 @@ public:
     T                                           nRandom3 = distribution(generator);
 
     if ((util::abs(input[2] - obst_r)) < obst_r) {
-
       T u_calc = maxVelocity * util::pow(((obst_r - util::abs(input[2] - obst_r)) / obst_r), 1. / 7.);
 
       output[0] = turbulenceIntensity * nRandom1 * maxVelocity + u_calc;
@@ -246,8 +247,11 @@ void setInitialConditions(MyCase& myCase)
   using T         = MyCase::value_t;
   auto& sGeometry = myCase.getGeometry();
   auto& sLattice  = myCase.getLattice(NavierStokes {});
+  auto& parameters = myCase.getParameters();
 
   AnalyticalConst3D<T, T> rho(1.0);
+  AnalyticalConst3D<T, T> rho0(0.0);
+  AnalyticalConst3D<T, T> u0(0.0, 0.0, 0.0);
   Channel3D<T, T>         uSol(myCase, 1.0);
 
   momenta::setVelocity(sLattice, sGeometry.getMaterialIndicator(1), uSol);
@@ -256,11 +260,17 @@ void setInitialConditions(MyCase& myCase)
   momenta::setVelocity(sLattice, sGeometry.getMaterialIndicator(2), uSol);
   sLattice.iniEquilibrium(sGeometry, 2, rho, uSol);
 
-  fields::set<descriptors::VELOCITY2>(sLattice, sGeometry.getMaterialIndicator({0, 1, 2}), uSol);
-  fields::set<descriptors::POROSITY>(sLattice, sGeometry.getMaterialIndicator(1), 1.0);
-
+  sLattice.defineField<descriptors::VELOCITY2>(sGeometry.getMaterialIndicator({0, 1, 2}), uSol);
+  sLattice.defineField<descriptors::AVERAGE_VELOCITY>(sGeometry.getMaterialIndicator({0, 1, 2}), u0);
+  sLattice.defineField<descriptors::AVERAGE_PRESSURE>(sGeometry.getMaterialIndicator({0, 1, 2}), rho0);
+  sLattice.defineField<descriptors::AVERAGE_SQUARE_PRESSURE>(sGeometry.getMaterialIndicator({0, 1, 2}), rho0);
+  sLattice.defineField<descriptors::FORCE>(sGeometry.getMaterialIndicator({0, 1, 2}), u0);
+  if(parameters.get<parameters::WITH_WALL_MODEL>() || parameters.get<parameters::HRR_COLLISION>()) {
+    sLattice.defineField<descriptors::POROSITY>(sGeometry.getMaterialIndicator({0, 2}), rho0);
+    sLattice.defineField<descriptors::POROSITY>(sGeometry, 1, rho);
+  }
   sLattice.setParameter<descriptors::OMEGA>(sLattice.getUnitConverter().getLatticeRelaxationFrequency());
-  sLattice.setParameter<collision::LES::SMAGORINSKY>(T(0.12));
+  sLattice.setParameter<collision::LES::SMAGORINSKY>(T(0.2));
 
   // Make the lattice ready for simulation
   sLattice.initialize();
@@ -280,13 +290,13 @@ void prepareLattice(MyCase& myCase)
   auto& parameters = myCase.getParameters();
   using DESCRIPTOR = MyCase::descriptor_t_of<NavierStokes>;
 
-  sLattice.setUnitConverter<UnitConverterFromResolutionAndRelaxationTime<T, DESCRIPTOR>>(
-      // resolution: number of voxels per adaptedPhysSimulatedLength(channel hight not half hight)
-      parameters.get<parameters::RESOLUTION>(),
-      // relaxation time
-      parameters.get<parameters::LATTICE_RELAXATION_TIME>(),
+  sLattice.setUnitConverter<UnitConverter<T, DESCRIPTOR>>(
+      // cell size
+      parameters.get<parameters::PHYS_DELTA_X>(),
+      // time step size
+      parameters.get<parameters::PHYS_DELTA_T>(),
       // charPhysLength: reference length of simulation geometry
-      parameters.get<parameters::PHYS_ADAPTED_CHAR_LENGTH>(),
+      T(2) * parameters.get<parameters::PHYS_CHAR_LENGTH>(),
       // charPhysVelocity: characteristic mean bulk velocity in __m / s__
       parameters.get<parameters::PHYS_CHAR_VELOCITY>(),
       // charphysViscosity:characteristic physical kinematic viscosity in __m^2 / s__
@@ -321,34 +331,42 @@ void prepareLattice(MyCase& myCase)
         << std::endl;
   clout << "----------------------------------------------------------------------" << std::endl;
 
-  WallModelParameters<T> wallModelParameters;
-  {
-    using namespace olb::parameters;
-    wallModelParameters.bodyForce                 = parameters.get<ENABLE_BODY_FORCE>();
-    wallModelParameters.rhoMethod                 = parameters.get<METHOD_OF_RHO>();
-    wallModelParameters.fNeqMethod                = parameters.get<METHOD_OF_FNEQ>();
-    wallModelParameters.samplingCellDistance      = parameters.get<LATTICE_DISTANCE_SAMPLING>();
-    wallModelParameters.interpolateSampleVelocity = parameters.get<ENABLE_INTERPOLATE_SAMPLE_VELOCITY>();
-    wallModelParameters.useVanDriest              = parameters.get<ENABLE_VANDRIEST>();
-    wallModelParameters.wallFunctionProfile       = parameters.get<METHOD_WALL_FUNCTION_PROFILE>();
-    wallModelParameters.latticeWallDistance       = parameters.get<LATTICE_DISTANCE_TO_WALL>();
-    wallModelParameters.movingWall                = parameters.get<ENABLE_MOVING_WALL>();
-    wallModelParameters.turbulenceStatistics      = parameters.get<ENABLE_TURBULENCE_STATISTICS>();
+  //sLattice.defineDynamics<BounceBack>(sGeometry, 2);
+  const T              physDeltaX                 = parameters.get<parameters::PHYS_DELTA_X>();
+  const T              lx                         = parameters.get<parameters::DOMAIN_EXTENT>()[0];
+  const T              ly                         = parameters.get<parameters::DOMAIN_EXTENT>()[1];
+  Vector<T, 3>         extend(lx + T(6) * physDeltaX, ly + T(6) * physDeltaX, T(2) * physRefL);
+  Vector<T, 3>         origin(-T(3) * physDeltaX, -T(3) * physDeltaX, T(0));
+  IndicatorCuboid3D<T> channel(extend, origin);
+  setBouzidiBoundary<T,DESCRIPTOR>(sLattice, sGeometry, 2, channel);
+  if(parameters.get<parameters::WITH_WALL_MODEL>()) {
+    WallModelParameters<T> wallModelParameters;
+    {
+      using namespace olb::parameters;
+      wallModelParameters.bodyForce                 = parameters.get<ENABLE_BODY_FORCE>();
+      wallModelParameters.rhoMethod                 = parameters.get<METHOD_OF_RHO>();
+      wallModelParameters.fNeqMethod                = parameters.get<METHOD_OF_FNEQ>();
+      wallModelParameters.samplingCellDistance      = parameters.get<LATTICE_DISTANCE_SAMPLING>();
+      wallModelParameters.interpolateSampleVelocity = parameters.get<ENABLE_INTERPOLATE_SAMPLE_VELOCITY>();
+      wallModelParameters.useVanDriest              = parameters.get<ENABLE_VANDRIEST>();
+      wallModelParameters.wallFunctionProfile       = parameters.get<METHOD_WALL_FUNCTION_PROFILE>();
+      wallModelParameters.latticeWallDistance       = parameters.get<LATTICE_DISTANCE_TO_WALL>();
+      wallModelParameters.movingWall                = parameters.get<ENABLE_MOVING_WALL>();
+      wallModelParameters.turbulenceStatistics      = parameters.get<ENABLE_TURBULENCE_STATISTICS>();
+    }
+    /// Material=1 -->bulk dynamics
+    setTurbulentWallModelDynamics(sLattice, sGeometry, 1, wallModelParameters);
+    setTurbulentWallModel(sLattice, sGeometry, 2, wallModelParameters, &channel);
+  }else{
+    sLattice.defineDynamics<SmagorinskyForcedBGKdynamics<T, DESCRIPTOR>::template wrap_collision<collision::TrackTurbulenceStatistics>>(sGeometry, 1);
   }
-  /// Material=1 -->bulk dynamics
-  setTurbulentWallModelDynamics(sLattice, sGeometry, 1, wallModelParameters);
-  dynamics::set<BounceBack>(sLattice, sGeometry, 2);
-
-#ifdef HRR_COLLISION
-  const T hybridConst = parameters.get<CONST_HRR_HYBRID>();
-  sLattice.addPostProcessor<stage::PostStream>(sGeometry.getMaterialIndicator({1}),
-                                               meta::id<FDMstrainRateTensorPostProcessor> {});
-  AnalyticalConst3D<T, T> hybrid(hybridConst);
-  fields::set<collision::HYBRID>(sLattice, sGeometry.getMaterialIndicator(1), hybrid);
-#endif
-
-  /// Material = 2 --> boundary node + wallfunction
-  setTurbulentWallModel(sLattice, sGeometry, 2, wallModelParameters);
+  if(parameters.get<parameters::HRR_COLLISION>()) {
+    const T hybridConst = parameters.get<parameters::CONST_HRR_HYBRID>();
+    sLattice.addPostProcessor<stage::PostStream>(sGeometry.getMaterialIndicator({1}),
+                                                 meta::id<FDMstrainRateTensorPostProcessor> {});
+    AnalyticalConst3D<T, T> hybrid(hybridConst);
+    sLattice.defineField<collision::HYBRID>(sGeometry, 1, hybrid);
+  }
 
   clout << "Prepare Lattice ... OK" << std::endl;
 }
@@ -391,7 +409,15 @@ void getResults(MyCase& myCase, std::size_t iT, util::Timer<MyCase::value_t>& ti
   std::size_t iTstartAvg = sLattice.getUnitConverter().getLatticeTime(physConvergeTime);
   if (iT == iTstartAvg) {
     SuperLatticeVelocity3D<T, DESCRIPTOR> latticeVelocity(sLattice);
-    fields::set<descriptors::AVERAGE_VELOCITY>(sLattice, sGeometry.getMaterialIndicator({1, 2}), latticeVelocity);
+    SuperLatticePressure3D<T, DESCRIPTOR> latticePressure(sLattice);
+    SuperLatticeSquarePressure3D<T, DESCRIPTOR> latticeSquarePressure(sLattice);
+    SuperLatticeSquareVelocity3D<T, DESCRIPTOR> latticeSquareVelocity(sLattice);
+    SuperLatticeField3D<T, DESCRIPTOR, descriptors::U_TAU> uTauL(sLattice);
+    sLattice.defineField<descriptors::AVERAGE_VELOCITY>(sGeometry.getMaterialIndicator({1}), latticeVelocity);
+    sLattice.defineField<descriptors::AVERAGE_PRESSURE>(sGeometry.getMaterialIndicator({1}), latticePressure);
+    sLattice.defineField<descriptors::AVERAGE_SQUARE_PRESSURE>(sGeometry.getMaterialIndicator({1}), latticeSquarePressure);
+    sLattice.defineField<descriptors::AVERAGE_VELOCITY_X_VELOCITY>(sGeometry.getMaterialIndicator({1}), latticeSquareVelocity);
+    sLattice.defineField<descriptors::AVERAGE_U_TAU>(sGeometry.getMaterialIndicator({1}), uTauL);
   }
   if (iT < iTstartAvg) {
     sLattice.setParameter<descriptors::LATTICE_TIME>(2);
@@ -400,33 +426,57 @@ void getResults(MyCase& myCase, std::size_t iT, util::Timer<MyCase::value_t>& ti
     sLattice.setParameter<descriptors::LATTICE_TIME>(iT - iTstartAvg + 1);
   }
 
-  if (iT % sLattice.getUnitConverter().getLatticeTime(checkstatistics) == 0 ||
+  if (/*iT % sLattice.getUnitConverter().getLatticeTime(checkstatistics) == 0 ||*/
+      iT == 0 ||
       iT == sLattice.getUnitConverter().getLatticeTime(maxPhysT) - 1) {
     // Writes the vtk files
     sLattice.executePostProcessors(stage::Evaluation {});
     sLattice.setProcessingContext(ProcessingContext::Evaluation);
-    sLattice.scheduleBackgroundOutputVTK([&, iT](auto task) {
-      SuperVTMwriter3D<T>              vtmWriter("channel3d");
-      SuperLatticePhysVelocity3D       velocity(sLattice, sLattice.getUnitConverter());
-      SuperLatticePhysReynoldsStress3D reynoldsStress(sLattice, sLattice.getUnitConverter());
-      SuperLatticeRMSPhysPressure3D    rmsPressure(sLattice, sLattice.getUnitConverter());
-      SuperLatticePhysPressure3D       pressure(sLattice, sLattice.getUnitConverter());
-      SuperLatticePhysField3D<T, DESCRIPTOR, descriptors::AVERAGE_VELOCITY> sAveragedVel(
-          sLattice, sLattice.getUnitConverter().getConversionFactorVelocity());
-      SuperLatticePhysField3D<T, DESCRIPTOR, descriptors::WMVELOCITY> wmvelocity(
-          sLattice, sLattice.getUnitConverter().getConversionFactorVelocity());
-      wmvelocity.getName() = "wmvelocity";
-      SuperGeometryF<T, 3> geom(sGeometry);
-      vtmWriter.addFunctor(velocity);
-      vtmWriter.addFunctor(pressure);
-      vtmWriter.addFunctor(sAveragedVel);
-      vtmWriter.addFunctor(geom);
-      vtmWriter.addFunctor(wmvelocity);
-      vtmWriter.addFunctor(reynoldsStress);
-      vtmWriter.addFunctor(rmsPressure);
+    if(parameters.get<parameters::WITH_WALL_MODEL>()) {
+      sLattice.scheduleBackgroundOutputVTK([&, iT](auto task) {
+        SuperVTMwriter3D<T>        vtmWriter("channel3d");
+        SuperLatticePhysVelocity3D velocity(sLattice, sLattice.getUnitConverter());
+        SuperLatticeRMSPhysPressure3D rmsPressure(sLattice, sLattice.getUnitConverter());
+        SuperLatticePhysPressure3D pressure(sLattice, sLattice.getUnitConverter());
+        SuperLatticePhysField3D<T, DESCRIPTOR, descriptors::AVERAGE_VELOCITY> sAveragedVel(
+            sLattice, sLattice.getUnitConverter().getConversionFactorVelocity());
+        SuperLatticePhysField3D<T, DESCRIPTOR, descriptors::WMVELOCITY> wmvelocity(
+              sLattice, sLattice.getUnitConverter().getConversionFactorVelocity());
+        wmvelocity.getName() = "wmvelocity";
+        SuperLatticeField3D<T, DESCRIPTOR, descriptors::Y1> y1(sLattice);
+        y1.getName() = "y1";
+        SuperGeometryF<T, 3> geom(sGeometry);
+        vtmWriter.addFunctor(velocity);
+        vtmWriter.addFunctor(pressure);
+        vtmWriter.addFunctor(sAveragedVel);
+        vtmWriter.addFunctor(geom);
+        vtmWriter.addFunctor(wmvelocity);
+        vtmWriter.addFunctor(rmsPressure);
+        vtmWriter.addFunctor(y1);
 
-      task(vtmWriter, iT);
-    });
+        task(vtmWriter, iT);
+      });
+    } else {
+      sLattice.scheduleBackgroundOutputVTK([&, iT](auto task) {
+        SuperVTMwriter3D<T>        vtmWriter("channel3d");
+        SuperLatticePhysVelocity3D velocity(sLattice, sLattice.getUnitConverter());
+        SuperLatticeRMSPhysPressure3D rmsPressure(sLattice, sLattice.getUnitConverter());
+        SuperLatticePhysPressure3D pressure(sLattice, sLattice.getUnitConverter());
+        SuperLatticePhysField3D<T, DESCRIPTOR, descriptors::AVERAGE_VELOCITY> sAveragedVel(
+            sLattice, sLattice.getUnitConverter().getConversionFactorVelocity());
+        SuperLatticeField3D<T, DESCRIPTOR, descriptors::Y1> y1(sLattice);
+        y1.getName() = "y1";
+        SuperGeometryF<T, 3> geom(sGeometry);
+        vtmWriter.addFunctor(velocity);
+        vtmWriter.addFunctor(pressure);
+        vtmWriter.addFunctor(sAveragedVel);
+        vtmWriter.addFunctor(geom);
+        vtmWriter.addFunctor(rmsPressure);
+        vtmWriter.addFunctor(y1);
+
+        task(vtmWriter, iT);
+      });
+    }
   }
 
   if (iT == sLattice.getUnitConverter().getLatticeTime(maxPhysT) - 1) {
@@ -436,7 +486,6 @@ void getResults(MyCase& myCase, std::size_t iT, util::Timer<MyCase::value_t>& ti
     const T physDeltaX          = parameters.get<parameters::PHYS_DELTA_X>();
     const T latticeWallDistance = parameters.get<parameters::LATTICE_DISTANCE_TO_WALL>();
     sLattice.setProcessingContext(ProcessingContext::Evaluation);
-    SuperLatticePhysReynoldsStress3D<T, DESCRIPTOR> reynoldsStress(sLattice, sLattice.getUnitConverter());
     SuperLatticeRMSPhysPressure3D<T, DESCRIPTOR>    rmsPressure(sLattice, sLattice.getUnitConverter());
     SuperLatticePhysField3D<T, DESCRIPTOR, descriptors::AVERAGE_VELOCITY> sAveragedVel(
         sLattice, sLattice.getUnitConverter().getConversionFactorVelocity());
@@ -452,19 +501,14 @@ void getResults(MyCase& myCase, std::size_t iT, util::Timer<MyCase::value_t>& ti
     T         avUTau[sAveragedUTau.getTargetDim() + 1];
     SuperNonZeroAverage3D<T>(sAveragedUTau, sGeometry.getMaterialIndicator({1})).operator()(avUTau, dummy);
 
-    if (avUTau[0] != T(0)) {
-      for (int iZ = 2; iZ < int(nZ / 2); ++iZ) {
-        const T            z = sLattice.getUnitConverter().getPhysLength(iZ);
-        const Vector<T, 3> center(lx / 2., ly / 2., z);
-        auto               cube = new SuperIndicatorFfromIndicatorF3D<T>(
-            std::shared_ptr<IndicatorF3D<T>>(
-                new IndicatorCuboid3D<T>({lx, ly, T(0.25) * physDeltaX}, {0, 0, z - latticeWallDistance * physDeltaX})),
-            sGeometry);
+    if(avUTau[0] != T(0)){
+      for (int iZ = 1; iZ < int(nZ/2); ++iZ) {
+        const T z = sLattice.getUnitConverter().getPhysLength(iZ);
+        auto cube = new SuperIndicatorFfromIndicatorF3D<T>(
+          std::shared_ptr<IndicatorF3D<T>>(new IndicatorCuboid3D<T> ({T(0.8)*lx, T(0.8)*ly, T(0.25)*physDeltaX},{T(0.1)*lx, T(0.1)*ly, z-latticeWallDistance*physDeltaX})), sGeometry);
         SuperIndicatorMultiplication3D<T> plane(cube, mat);
 
         // Average concentration: use average functor
-        T avReynoldsStress[reynoldsStress.getTargetDim() + 1];
-        SuperAverage3D<T>(reynoldsStress, plane).operator()(avReynoldsStress, dummy);
         T avRmsPres[rmsPressure.getTargetDim() + 1];
         SuperAverage3D<T>(rmsPressure, plane).operator()(avRmsPres, dummy);
         T avVel[sAveragedVel.getTargetDim() + 1];
@@ -472,10 +516,7 @@ void getResults(MyCase& myCase, std::size_t iT, util::Timer<MyCase::value_t>& ti
 
         csvWriter.writeDataFile(
             (z - latticeWallDistance * physDeltaX) * avUTau[0] / sLattice.getUnitConverter().getPhysViscosity(),
-            {avUTau[0], avVel[0] / avUTau[0], avReynoldsStress[0] / avUTau[0] / avUTau[0],
-             avReynoldsStress[1] / avUTau[0] / avUTau[0], avReynoldsStress[2] / avUTau[0] / avUTau[0],
-             avReynoldsStress[3] / avUTau[0] / avUTau[0], avReynoldsStress[4] / avUTau[0] / avUTau[0],
-             avReynoldsStress[5] / avUTau[0] / avUTau[0], avRmsPres[0]});
+            {avUTau[0], avVel[0] / avUTau[0], avRmsPres[0]});
       }
     }
   }
@@ -493,18 +534,18 @@ void simulate(MyCase& myCase)
   auto&      parameters = myCase.getParameters();
   auto&      converter  = sLattice.getUnitConverter();
   const auto maxPhysT   = parameters.get<parameters::MAX_PHYS_T>();
-
-  const auto adaptedPhysSimulatedLength = parameters.get<parameters::PHYS_ADAPTED_CHAR_LENGTH>();
+  const auto physRefL = parameters.get<parameters::PHYS_CHAR_LENGTH>();
   const auto ReTau                      = parameters.get<parameters::REYNOLDS_TAU>();
-  const auto lx                         = parameters.get<parameters::DOMAIN_EXTENT>()[0];
-  const auto ly                         = parameters.get<parameters::DOMAIN_EXTENT>()[1];
-  const auto lz                         = parameters.get<parameters::DOMAIN_EXTENT>()[2];
+  const auto lx                         = sGeometry.getStatistics().getMaxPhysR(1)[0] -  sGeometry.getStatistics().getMinPhysR(1)[0];
+  const auto ly                         = sGeometry.getStatistics().getMaxPhysR(1)[1] -  sGeometry.getStatistics().getMinPhysR(1)[1];
+  const auto adaptedPhysSimulatedLength = parameters.get<parameters::PHYS_ADAPTED_CHAR_LENGTH>();
+
 
   //forcing of the channel
-  SuperForceTermApplyInChannel3d forcingProcessor(sLattice, sGeometry, converter, ReTau, adaptedPhysSimulatedLength, lx,
-                                                  ly, lz, parameters.get<parameters::LATTICE_DISTANCE_TO_WALL>());
+  SuperForceTermApplyInChannel3d forcingProcessor(sLattice, sGeometry, converter, ReTau, physRefL ,
+               parameters.get<parameters::LATTICE_DISTANCE_TO_WALL>(), parameters.get<parameters::WITH_WALL_MODEL>());
 
-  forcingProcessor.applyForing();
+  forcingProcessor.applyForcing();
 
   util::Timer<T> timer(converter.getLatticeTime(maxPhysT), sGeometry.getStatistics().getNvoxel());
   clout << "starting simulation..." << std::endl;
@@ -513,8 +554,9 @@ void simulate(MyCase& myCase)
   for (size_t iT = 0; iT < converter.getLatticeTime(maxPhysT); ++iT) {
     sLattice.setParameter<descriptors::LATTICE_TIME>(iT);
     getResults(myCase, iT, timer);
-    forcingProcessor.applyForing();
+    forcingProcessor.applyForcing();
     sLattice.collideAndStream();
+    sLattice.stripeOffDensityOffset(sLattice.getStatistics().getAverageRho()-(T)1);
   }
   sLattice.setProcessingContext(ProcessingContext::Evaluation);
   timer.stop();
@@ -528,6 +570,9 @@ int main(int argc, char* argv[])
   {
     using namespace olb::parameters;
     using T = MyCase::value_t;
+    using DESCRIPTOR = MyCase::descriptor_t_of<NavierStokes>;
+    myCaseParameters.set<WITH_WALL_MODEL>(false);
+    myCaseParameters.set<HRR_COLLISION>(false);
     myCaseParameters.set<RESOLUTION>(40);
     myCaseParameters.set<PHYS_CHAR_DENSITY>(1.0);
     myCaseParameters.set<LATTICE_RELAXATION_TIME>(0.50025);
@@ -546,6 +591,11 @@ int main(int argc, char* argv[])
     myCaseParameters.set<PHYS_DELTA_X>([&] {
       return myCaseParameters.get<PHYS_ADAPTED_CHAR_LENGTH>() / myCaseParameters.get<RESOLUTION>();
     });
+    myCaseParameters.set<PHYS_DELTA_T>([&] {
+      return (myCaseParameters.get<LATTICE_RELAXATION_TIME>() - T(0.5)) / myCaseParameters.get<PHYS_CHAR_VISCOSITY>()
+              / descriptors::invCs2<T,DESCRIPTOR>()
+              * myCaseParameters.get<PHYS_DELTA_X>() * myCaseParameters.get<PHYS_DELTA_X>();
+    });
     myCaseParameters.set<PHYS_CHAR_TIME>([&] {
       T ReTau      = myCaseParameters.get<REYNOLDS_TAU>();
       T physRefL   = myCaseParameters.get<PHYS_CHAR_LENGTH>();
@@ -561,7 +611,7 @@ int main(int argc, char* argv[])
       return charPhysT * multiple;
     });
 
-    myCaseParameters.set<PHYS_STATISTICS_TIME_BASE>(150);
+    myCaseParameters.set<PHYS_STATISTICS_TIME_BASE>(150.0);
     myCaseParameters.set<PHYS_STATISTICS_TIME>([&] {
       T multiple  = myCaseParameters.get<PHYS_STATISTICS_TIME_BASE>();
       T charPhysT = myCaseParameters.get<PHYS_CHAR_TIME>();
@@ -572,7 +622,7 @@ int main(int argc, char* argv[])
       return myCaseParameters.get<PHYS_CONVERGE_TIME>() + myCaseParameters.get<PHYS_STATISTICS_TIME>();
     });
 
-    myCaseParameters.set<DOMAIN_EXTENT_BASE>({6.0, 3.0, 2.0});
+    myCaseParameters.set<DOMAIN_EXTENT_BASE>({2.0, 2.0, 2.0});
 
     myCaseParameters.set<DOMAIN_EXTENT>([&]() -> Vector<T, 3> {
       T physRefL = myCaseParameters.get<PHYS_CHAR_LENGTH>();
@@ -583,12 +633,15 @@ int main(int argc, char* argv[])
 
     /// Wallfunction parameters
     myCaseParameters.set<METHOD_OF_RHO>(0);
-    myCaseParameters.set<METHOD_OF_FNEQ>(1);
-    myCaseParameters.set<METHOD_WALL_FUNCTION_PROFILE>(1);
+    myCaseParameters.set<METHOD_OF_FNEQ>(2);
+    myCaseParameters.set<METHOD_WALL_FUNCTION_PROFILE>(0);
     myCaseParameters.set<ENABLE_BODY_FORCE>(true);
-    myCaseParameters.set<ENABLE_INTERPOLATE_SAMPLE_VELOCITY>(true);
-    myCaseParameters.set<ENABLE_VANDRIEST>(true);
+    myCaseParameters.set<ENABLE_INTERPOLATE_SAMPLE_VELOCITY>(false);
+    myCaseParameters.set<ENABLE_VANDRIEST>(false);
     myCaseParameters.set<LATTICE_DISTANCE_SAMPLING>(3.5);
+    myCaseParameters.set<OVERLAP>([&] {
+      return int(myCaseParameters.get<WITH_WALL_MODEL>()*myCaseParameters.get<LATTICE_DISTANCE_SAMPLING>() + T(1));
+    });
     myCaseParameters.set<ENABLE_MOVING_WALL>(false);
     myCaseParameters.set<ENABLE_TURBULENCE_STATISTICS>(true);
   }

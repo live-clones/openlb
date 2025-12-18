@@ -159,13 +159,12 @@ void BlockLattice<T,DESCRIPTOR>::defineField(
 {
   if (!indicator.isEmpty()) {
     // Don't use FieldD here as long as AnalyticalF is fixed to T
-    std::array<T,DESCRIPTOR::template size<FIELD>()> fieldTmp;
-    Vector<T, DESCRIPTOR::d> physR;
-    getField<FIELD> ();
+    getField<FIELD>();
     this->forSpatialLocationsParallel([&](LatticeR<DESCRIPTOR::d> loc) {
       if (indicator(loc)) {
+        std::array<T,DESCRIPTOR::template size<FIELD>()> fieldTmp;
+        Vector<T, DESCRIPTOR::d> physR;
         indicator.getBlockGeometry().getPhysR(physR, loc);
-
         field(fieldTmp.data(), physR.data());
         get(loc).template setField<FIELD>(fieldTmp.data());
       }
@@ -317,7 +316,7 @@ void ConcreteBlockLattice<T,DESCRIPTOR,PLATFORM>::collide()
 template<typename T, typename DESCRIPTOR, Platform PLATFORM>
 void ConcreteBlockLattice<T,DESCRIPTOR,PLATFORM>::stream()
 {
-  if constexpr (PLATFORM == Platform::GPU_CUDA) {
+  if constexpr (PLATFORM == Platform::GPU_CUDA || PLATFORM == Platform::GPU_HIP ) {
     DESCRIPTOR::template filter<descriptors::is_propagatable_field>
               ::for_each([&](auto field) {
       auto& population = getField(field.get());
@@ -828,6 +827,15 @@ ConcreteBlockCommunicator<ConcreteBlockLattice<T,DESCRIPTOR,PLATFORM>>::Concrete
               neighborhood.getFieldsCommonWith(remoteC),
               neighborhood.getCellsInboundFrom(remoteC),   super.template getBlock<ConcreteBlockLattice<T,DESCRIPTOR,PLATFORM>>(_iC),
               neighborhood.getCellsRequestedFrom(remoteC), super.template getBlock<ConcreteBlockLattice<T,DESCRIPTOR,Platform::GPU_CUDA>>(loadBalancer.loc(remoteC))));
+            break;
+#endif
+#ifdef PLATFORM_GPU_HIP
+          case Platform::GPU_HIP:
+            // Use manual copy for local GPU-CPU communication due to better performance
+            _copyTasks.emplace_back(new HeterogeneousCopyTask<T,DESCRIPTOR,Platform::GPU_HIP,PLATFORM>(
+              neighborhood.getFieldsCommonWith(remoteC),
+              neighborhood.getCellsInboundFrom(remoteC),   super.template getBlock<ConcreteBlockLattice<T,DESCRIPTOR,PLATFORM>>(_iC),
+              neighborhood.getCellsRequestedFrom(remoteC), super.template getBlock<ConcreteBlockLattice<T,DESCRIPTOR,Platform::GPU_HIP>>(loadBalancer.loc(remoteC))));
             break;
 #endif
           default:

@@ -128,7 +128,7 @@ struct PorousParticleKupershtokh {
     }
 
     template <typename CELL, typename PARAMETERS, typename V=typename CELL::value_t>
-    CellStatistic<V> apply(CELL& cell, PARAMETERS& parameters) any_platform {
+    CellStatistic<V> any_platform apply(CELL& cell, PARAMETERS& parameters) {
       V u[DESCRIPTOR::d];
       V rho;
       MomentaF().computeRhoU(cell, rho, u);

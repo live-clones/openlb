@@ -219,7 +219,9 @@ auto makeParametersD(MAP&&... args) {
           fieldArray.getPlatform(),
           &fieldArray.asColumnVectorBase(),
           [&](auto* concreteFieldArray) {
-            if constexpr (std::remove_reference_t<decltype(*concreteFieldArray)>::platform == Platform::GPU_CUDA) {
+            if constexpr (std::remove_reference_t<decltype(*concreteFieldArray)>::platform == Platform::GPU_CUDA
+                 || std::remove_reference_t<decltype(*concreteFieldArray)>::platform == Platform::GPU_HIP
+                ) {
               FieldD<T,DESCRIPTOR,field_t> fieldPtr{};
               for (unsigned iD=0; iD < concreteFieldArray->d; ++iD) {
                 fieldPtr[iD] = concreteFieldArray->operator[](iD).deviceData();

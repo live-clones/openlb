@@ -95,25 +95,29 @@ private:
   const S _camberPos;                // Max Camber
   const S _thicknessPercentage;             // Max Camber Position
 
-  // NACA coefficients for thickness distribution formula
-  static constexpr S _coeffs[5] = {0.2969, -0.1260, -0.3516, 0.2843, -0.1015};
+  // NACA coefficients for thickness distribution formula (closed trailing edge)
+  static constexpr S _coeffs[5] = {0.2969, -0.1260, -0.3516, 0.2843, -0.1036};
   static constexpr S _exponents[5] = {0.5, 1.0, 2.0, 3.0, 4.0};
 
   // Function to compute the local thickness at a given point along the camber line
   S computeThickness(S x) const;
 
   S computeCamber(S x) const;
+  S bisectInterval(S left, S right, S x, S y) const;
+  S distanceFunction(S x_0, S y_0, S x, S y) const;
+  S distanceFunctionDerivative(S x_0, S x, S y) const;
 
   // Function to transform a point considering rotation
   void transformPoint(S& x, S& y) const;
 
 public:
   IndicatorAirfoil2D(Vector<S,2> center, S chordLength, S camber, S camberPos, S thicknessPercentage);
+  IndicatorAirfoil2D(Vector<S,2> center, S chordLength, Vector<int,1> parameters);
   Vector<S,2> const& getCenter() const;
   S const getChordLength() const;
   S const getThicknessPercentage() const;
   bool operator() (bool output[], const S input[]) override;
-  S signedDistance(const Vector<S,2>& input) override;
+  Vector<S,2> distanceFromCamber(const Vector<S,2>& input);
 };
 
 /// indicator function for a 2D circle
@@ -150,7 +154,7 @@ public:
   S const getB() const;
   S const getTheta() const;
   S const getThetaRadian() const;
-  bool const distance(S& distance, const Vector<S,2>& point, Vector<S,2>& direction, int iC=-1) const;
+  bool distance(S& distance, const Vector<S,2>& point, const Vector<S,2>& direction, int iC=-1) override;
   bool normal(Vector<S,2>& nxny, Vector<S,2> point) const;
   bool operator() (bool output[], const S input[]) override;
 };

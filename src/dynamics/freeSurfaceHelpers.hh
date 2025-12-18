@@ -39,17 +39,17 @@ void initialize(SuperLattice<T,DESCRIPTOR>& sLattice) {
 }
 
 template <typename CELL>
-bool isCellType(CELL& cell, const FreeSurface::Type& type) {
+bool any_platform isCellType(CELL& cell, const FreeSurface::Type& type){
   return cell.template getField<FreeSurface::CELL_TYPE>() == type;
 }
 
 template <typename CELL>
-void setCellType(CELL& cell, const FreeSurface::Type& type) {
+void any_platform setCellType(CELL& cell, const FreeSurface::Type& type) {
   cell.template setField<FreeSurface::CELL_TYPE>(type);
 }
 
 template <typename CELL>
-bool hasNeighbour(CELL& cell, const FreeSurface::Type& type) {
+bool any_platform hasNeighbour(CELL& cell, const FreeSurface::Type& type) {
   using DESCRIPTOR = typename CELL::descriptor_t;
 
   for (int iPop = 1; iPop < DESCRIPTOR::q; ++iPop) {
@@ -61,17 +61,17 @@ bool hasNeighbour(CELL& cell, const FreeSurface::Type& type) {
 }
 
 template <typename CELL>
-bool hasCellFlags(CELL& cell, const FreeSurface::Flags& flags) {
+bool any_platform hasCellFlags(CELL& cell, const FreeSurface::Flags& flags) {
   return static_cast<bool>(cell.template getField<FreeSurface::CELL_FLAGS>() & flags);
 }
 
 template <typename CELL>
-void setCellFlags(CELL& cell, const FreeSurface::Flags& flags) {
+void any_platform setCellFlags(CELL& cell, const FreeSurface::Flags& flags) {
   cell.template setField<FreeSurface::CELL_FLAGS>(flags);
 }
 
 template <typename CELL>
-bool hasNeighbourFlags(CELL& cell, const FreeSurface::Flags& flags) {
+bool any_platform hasNeighbourFlags(CELL& cell, const FreeSurface::Flags& flags) {
   using DESCRIPTOR = typename CELL::descriptor_t;
 
   for (int iPop = 1; iPop < DESCRIPTOR::q; ++iPop) {
@@ -83,7 +83,7 @@ bool hasNeighbourFlags(CELL& cell, const FreeSurface::Flags& flags) {
 }
 
 template <typename CELL>
-NeighbourInfo getNeighbourInfo(CELL& cell) {
+NeighbourInfo any_platform getNeighbourInfo(CELL& cell) {
   NeighbourInfo info{};
   using DESCRIPTOR = typename CELL::descriptor_t;
 
@@ -105,7 +105,7 @@ NeighbourInfo getNeighbourInfo(CELL& cell) {
 }
 
 template <typename CELL, typename V>
-bool isHealthyInterface(CELL& cell) {
+bool any_platform isHealthyInterface(CELL& cell) {
   using DESCRIPTOR = typename CELL::descriptor_t;
   bool has_fluid_neighbours = false;
   bool has_gas_neighbours = false;
@@ -128,8 +128,7 @@ bool isHealthyInterface(CELL& cell) {
 }
 
 template <typename CELL, typename V>
-void computeMassExcessWeights(CELL& cell, const bool& enableAllInterfaces, Vector<V, CELL::descriptor_t::q>& weights) {
-
+void any_platform computeMassExcessWeights(CELL& cell, const bool& enableAllInterfaces, Vector<V, CELL::descriptor_t::q>& weights) {
   using DESCRIPTOR = typename CELL::descriptor_t;
 
   // Compute normalized interface normal
@@ -179,16 +178,14 @@ void computeMassExcessWeights(CELL& cell, const bool& enableAllInterfaces, Vecto
 }
 
 template <typename CELL, typename V>
-V getClampedEpsilon(const CELL& cell) {
-
+V any_platform getClampedEpsilon(const CELL& cell) {
   V epsilon = cell.template getField<FreeSurface::EPSILON>();
   return util::max(V(0), util::min(V(1), epsilon));
 }
 
 template <typename CELL, typename V>
 requires (CELL::descriptor_t::d == 3)
-V getClampedSmoothEpsilon(const CELL& cell) {
-
+V any_platform getClampedSmoothEpsilon(const CELL& cell) {
   // Williams et al. K8 kernel, i.e., explicitly avoiding expensive std::pow method.
   auto kernel = [](V inv_r2, const auto& direction) -> V {
     const auto norm_2 = norm_squared(direction);
@@ -218,7 +215,7 @@ V getClampedSmoothEpsilon(const CELL& cell) {
 
 template <typename CELL, typename V>
 requires (CELL::descriptor_t::d == 2)
-GradientGroups2D<V> EpsilonGradientGroups(CELL& cell) {
+GradientGroups2D<V> any_platform EpsilonGradientGroups(CELL& cell) {
   // Perform optimized arithmetics for D2Q9, i.e., used to compute interface normal.
   GradientGroups2D<V> tmp;
 
@@ -243,7 +240,7 @@ GradientGroups2D<V> EpsilonGradientGroups(CELL& cell) {
 
 template <typename CELL, typename V>
 requires (CELL::descriptor_t::d == 3)
-GradientGroups3D<V> EpsilonGradientGroups(CELL& cell) {
+GradientGroups3D<V> any_platform EpsilonGradientGroups(CELL& cell) {
   // Perform optimized arithmetics for D3Q27, i.e., used to compute interface normal.
   GradientGroups3D<V> tmp;
 
@@ -291,7 +288,7 @@ GradientGroups3D<V> EpsilonGradientGroups(CELL& cell) {
 }
 
 template <typename CELL, typename V>
-Vector<V, CELL::descriptor_t::d> computeInterfaceNormal(CELL& cell) {
+Vector<V, CELL::descriptor_t::d> any_platform computeInterfaceNormal(CELL& cell) {
   if constexpr (method == NormalMethod::ParkerYoung) {
     return ParkerYoungInterfaceNormal(cell);
   }
@@ -305,7 +302,7 @@ Vector<V, CELL::descriptor_t::d> computeInterfaceNormal(CELL& cell) {
 }
 
 template <typename CELL, typename V>
-Vector<V, CELL::descriptor_t::d> ParkerYoungInterfaceNormal(CELL& cell) {
+Vector<V, CELL::descriptor_t::d> any_platform ParkerYoungInterfaceNormal(CELL& cell) {
 
   // Compute interface normal using Parker-Young approximation
   Vector<V, CELL::descriptor_t::d> normal{};
@@ -351,7 +348,7 @@ Vector<V, CELL::descriptor_t::d> ParkerYoungInterfaceNormal(CELL& cell) {
 }
 
 template <typename CELL, typename V>
-Vector<V, CELL::descriptor_t::d> LeastSquaresInterfaceNormal(CELL& cell) {
+Vector<V, CELL::descriptor_t::d> any_platform LeastSquaresInterfaceNormal(CELL& cell) {
 
   // Compute interface normal using weighted least-squares gradient
   Vector<V, CELL::descriptor_t::d> normal{};
@@ -469,7 +466,7 @@ Vector<V, CELL::descriptor_t::d> LeastSquaresInterfaceNormal(CELL& cell) {
 }
 
 template<typename T, int N>
-void plainLUSolver(std::array<T, N * N>& M, std::array<T, N>& x, std::array<T, N>& rhs, const int Nsol) {
+void any_platform plainLUSolver(std::array<T, N * N>& M, std::array<T, N>& x, std::array<T, N>& rhs, const int Nsol) {
   // Add Tikhonov Regularization to the diagonal elements of M
   for (int i = 0; i < Nsol; ++i) { M[i * N + i] += T(0); }
 
@@ -496,7 +493,7 @@ void plainLUSolver(std::array<T, N * N>& M, std::array<T, N>& x, std::array<T, N
 }
 
 template<typename T, int N>
-void rowPivotingLUSolver(std::array<T, N * N>& M, std::array<T, N>& x, std::array<T, N>& rhs, const int Nsol) {
+void any_platform rowPivotingLUSolver(std::array<T, N * N>& M, std::array<T, N>& x, std::array<T, N>& rhs, const int Nsol) {
   // Add Tikhonov Regularization to the diagonal elements of M
   for (int i = 0; i < Nsol; ++i) { M[i * N + i] += T(0); }
 
@@ -544,7 +541,7 @@ void rowPivotingLUSolver(std::array<T, N * N>& M, std::array<T, N>& x, std::arra
 }
 
 template<typename T, int N>
-void completePivotingLUSolver(std::array<T, N * N>& M, std::array<T, N>& x, std::array<T, N>& rhs, const int Nsol) {
+void any_platform completePivotingLUSolver(std::array<T, N * N>& M, std::array<T, N>& x, std::array<T, N>& rhs, const int Nsol) {
   // Add Tikhonov Regularization to the diagonal elements of M
   for (int i = 0; i < Nsol; ++i) { M[i * N + i] += T(0); }
 
@@ -657,7 +654,7 @@ void eigenSolver(std::array<T, N * N>& M, std::array<T, N>& x, std::array<T, N>&
 
 // Offset helper: optimized PLIC algorithm taken from Moritz Lehmann FluidX3D
 template<typename T>
-T plicCubeReduced(const T& volume, const Vector<T, 3>& n) {
+T any_platform plicCubeReduced(const T& volume, const Vector<T, 3>& n) {
   const T n1 = n[0], n2 = n[1], n3 = n[2];
   const T n12 = n1 + n2, n3V = n3 * volume;
 
@@ -691,7 +688,7 @@ T plicCubeReduced(const T& volume, const Vector<T, 3>& n) {
 
 // Offset computer: optimized PLIC algorithm taken from Moritz Lehmann FluidX3D
 template<typename T>
-T plicCube(const T& volume, const Vector<T, 3>& n) {
+T any_platform plicCube(const T& volume, const Vector<T, 3>& n) {
   // Unit cube-plane intersection: using volume and normal vector to compute the offset
   const T ax = util::abs(n[0]), ay = util::abs(n[1]), az = util::abs(n[2]);
 
@@ -707,7 +704,7 @@ T plicCube(const T& volume, const Vector<T, 3>& n) {
 
 // Volume computer: optimized inverse PLIC algorithm taken from Moritz Lehmann FluidX3D
 template<typename T>
-T plicCubeInverse(const T& d0, const Vector<T, 3>& n) {
+T any_platform plicCubeInverse(const T& d0, const Vector<T, 3>& n) {
   // Eliminate majority of cases due to symmetry
   const T n1 = util::min(util::min(util::abs(n[0]), util::abs(n[1])), util::abs(n[2]));
   const T n3 = util::max(util::max(util::abs(n[0]), util::abs(n[1])), util::abs(n[2]));
@@ -739,7 +736,7 @@ T plicCubeInverse(const T& d0, const Vector<T, 3>& n) {
 
 // Compute 2D interface curvature using Moritz Lehmann's FluidX3D algorithm
 template <typename CELL, typename V>
-V computeCurvaturePLIC2D(CELL& cell) {
+V any_platform computeCurvaturePLIC2D(CELL& cell) {
   using DESCRIPTOR = typename CELL::descriptor_t;
 
   // Setup a new coordinate system where bz is perpendicular to the surface, while bx and by are
@@ -828,7 +825,7 @@ V computeCurvaturePLIC2D(CELL& cell) {
 
 // Compute 3D interface curvature using Moritz Lehmann's FluidX3D algorithm
 template <typename CELL, typename V>
-V computeCurvaturePLIC3D(CELL& cell) {
+V any_platform computeCurvaturePLIC3D(CELL& cell) {
   using DESCRIPTOR = typename CELL::descriptor_t;
 
   // Setup a new coordinate system where bz is perpendicular to the surface, while bx and by are
@@ -951,7 +948,7 @@ V computeCurvaturePLIC3D(CELL& cell) {
 }
 
 template <typename CELL, typename V>
-V computeCurvature(CELL& cell) {
+V any_platform computeCurvature(CELL& cell) {
   using DESCRIPTOR = typename CELL::descriptor_t;
 
   if constexpr (DESCRIPTOR::d == 2) {

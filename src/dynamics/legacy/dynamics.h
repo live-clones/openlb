@@ -194,7 +194,7 @@ NoLatticeDynamics<T,DESCRIPTOR>::NoLatticeDynamics(T rho) :_rho(rho)
 }
 
 template<typename T, typename DESCRIPTOR>
-void NoLatticeDynamics<T,DESCRIPTOR>::computeEquilibrium(ConstCell<T,DESCRIPTOR>& cell, T rho, const T u[DESCRIPTOR::d], T fEq[DESCRIPTOR::q]) const
+void NoLatticeDynamics<T,DESCRIPTOR>::computeEquilibrium(ConstCell<T,DESCRIPTOR>& cell, T rho, const T u[DESCRIPTOR::d], T fEq[DESCRIPTOR::q]) const any_platform
 {
   return T();
 }

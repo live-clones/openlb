@@ -68,5 +68,60 @@ bool BlockLatticeDensity3D<T, DESCRIPTOR>::operator()(T output[], const int inpu
   return true;
 }
 
+template<typename T, typename DESCRIPTOR>
+SuperLatticePressure3D<T, DESCRIPTOR>::SuperLatticePressure3D(
+  SuperLattice<T, DESCRIPTOR>& sLattice) : SuperLatticeF3D<T, DESCRIPTOR>(sLattice, 1)
+{
+  this->getName() = "lattice_pressure";
+  int maxC = this->_sLattice.getLoadBalancer().size();
+  this->_blockF.reserve(maxC);
+  for (int iC = 0; iC < maxC; iC++) {
+    this->_blockF.emplace_back(new BlockLatticePressure3D<T, DESCRIPTOR>(this->_sLattice.getBlock(iC)));
+  }
+}
+
+template<typename T, typename DESCRIPTOR>
+BlockLatticePressure3D<T, DESCRIPTOR>::BlockLatticePressure3D(
+  BlockLattice<T, DESCRIPTOR>& blockLattice)
+  : BlockLatticeF3D<T, DESCRIPTOR>(blockLattice, 1)
+{
+  this->getName() = "lattice_pressure";
+}
+
+template<typename T, typename DESCRIPTOR>
+bool BlockLatticePressure3D<T, DESCRIPTOR>::operator()(T output[], const int input[])
+{
+  output[0] = (this->_blockLattice.get(input[0], input[1], input[2]).computeRho() - T(1)) / descriptors::invCs2<T,DESCRIPTOR>();
+  return true;
+}
+
+template<typename T, typename DESCRIPTOR>
+SuperLatticeSquarePressure3D<T, DESCRIPTOR>::SuperLatticeSquarePressure3D(
+  SuperLattice<T, DESCRIPTOR>& sLattice) : SuperLatticeF3D<T, DESCRIPTOR>(sLattice, 1)
+{
+  this->getName() = "lattice_square_pressure";
+  int maxC = this->_sLattice.getLoadBalancer().size();
+  this->_blockF.reserve(maxC);
+  for (int iC = 0; iC < maxC; iC++) {
+    this->_blockF.emplace_back(new BlockLatticeSquarePressure3D<T, DESCRIPTOR>(this->_sLattice.getBlock(iC)));
+  }
+}
+
+template<typename T, typename DESCRIPTOR>
+BlockLatticeSquarePressure3D<T, DESCRIPTOR>::BlockLatticeSquarePressure3D(
+  BlockLattice<T, DESCRIPTOR>& blockLattice)
+  : BlockLatticeF3D<T, DESCRIPTOR>(blockLattice, 1)
+{
+  this->getName() = "lattice_square_pressure";
+}
+
+template<typename T, typename DESCRIPTOR>
+bool BlockLatticeSquarePressure3D<T, DESCRIPTOR>::operator()(T output[], const int input[])
+{
+  output[0] = (this->_blockLattice.get(input[0], input[1], input[2]).computeRho() - T(1)) / descriptors::invCs2<T,DESCRIPTOR>();
+  output[0] *= (this->_blockLattice.get(input[0], input[1], input[2]).computeRho() - T(1)) / descriptors::invCs2<T,DESCRIPTOR>();
+  return true;
+}
+
 }
 #endif

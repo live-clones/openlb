@@ -46,7 +46,7 @@ double getRefractionFunction(const double& refractiveRelative);
 double getPartialBBCoefficient(double const& latticeDiffusionCoefficient, double const& relativeRefractiveIndex );
 
 // forward declaration
-template<typename T, typename DESCRIPTOR> class RadiativeUnitConverter;
+template<typename T, typename DESCRIPTOR> struct RadiativeUnitConverter;
 
 // wrapper for above function
 template <typename T, typename DESCRIPTOR>

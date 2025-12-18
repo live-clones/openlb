@@ -108,6 +108,8 @@ public:
   Expr& operator*=(Expr rhs);
   Expr& operator/=(Expr rhs);
 
+  explicit operator int() const;
+
   /// Writes the serialized expression tree to out
   void describe(std::stringstream& out) const;
   /// Returns the serialized expression tree

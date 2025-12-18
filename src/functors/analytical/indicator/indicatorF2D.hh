@@ -69,7 +69,77 @@ S const IndicatorAirfoil2D<S>::getThicknessPercentage() const
   return _thicknessPercentage;
 }
 
+// bisection algorithm to find the minimal distance to the camber line
+template <typename S>
+S IndicatorAirfoil2D<S>::bisectInterval(S left, S right, S x, S y) const
+{
+  // initialize middle values
+  S middle;
+  // bisect interval 25 times, seems to be enough for general purposes, gets to about 1e-8 which is close enough to 0
+  for(int index = 0; index < 25; index ++){
+    // start with whole profile
+    middle = (left + right)/2;
+    // calculate derivative of distance function
+    S y_middle = distanceFunctionDerivative(middle, x, y);
 
+    // Halve the interval based on result, return if value is 0
+    if(y_middle == 0) return middle;
+    else if(y_middle > 0) right = middle;
+    else if(y_middle < 0) left = middle;
+    else{
+      std::cout << "ERROR!" << std::endl;
+      return -1;
+    }
+  }
+  // return after for loop
+  return middle;
+}
+
+/// simple distance function of 2 points in 2D space: sqrt((y_0 - y)² - (x_0 - x)²)
+template <typename S>
+S IndicatorAirfoil2D<S>::distanceFunction(S x_0, S y_0, S x, S y) const
+{
+  return std::sqrt(pow((y_0 - y),2) + pow(x_0 - x, 2));
+}
+
+/// derivative of above function with respect to x_0 where y_0 is the value of computeCamber(x_0)
+// actual derivative would be the value below divided by the result of the distance function:
+// ((x_0 - x) + (computeCamber(x_0) - y) * (2 * _camber * (_camberPos - x_0)/(_camberPos)²))/distanceFunction(x_0, computeCamber(y_0), x, y)
+// We can omit this to save performance, since in the above algorithm the only thing we need is the sign and the distanceFunction is always positive
+template <typename S>
+S IndicatorAirfoil2D<S>::distanceFunctionDerivative(S x_0, S x, S y) const
+{
+  return (x_0 - x) + (computeCamber(x_0) - y) * (2 * _camber * (_camberPos - x_0)/pow(_camberPos, 2));
+}
+
+/// returns the distance from the camber line. For cambered airfoils this is only correct for points sufficiently close to the camber line, for operator function this is enough.
+template <typename S>
+Vector<S,2> IndicatorAirfoil2D<S>::distanceFromCamber(const Vector<S,2>& input)
+{
+  S x = input[0];
+  S y = input[1];
+  transformPoint(x,y);
+  if(std::isnan(x) || std::isnan(y)) return {100000, 0};
+  if(0 <= x && x <= _chordLength && (y ==  computeCamber(x))){
+    return 0;
+  }
+
+  // initialize result
+  S result = 0;
+
+  // x-Value of the nearest point on the curve (to be calculated now)
+  S x_0 = x;
+
+  // bisect intervals, return x Value
+  x_0 = bisectInterval(0, getChordLength(), x, y);
+
+  // return value of distance function at calulated point
+  result = distanceFunction(x_0, computeCamber(x_0), x, y);
+
+  return {result, x_0};
+}
+
+/// Return the thickness at a point x. Note that this thickness is not distributed vertically in the domain but rather along the normal relative to the camber line
 template <typename S>
 S IndicatorAirfoil2D<S>::computeThickness(S x) const
 {
@@ -84,10 +154,11 @@ S IndicatorAirfoil2D<S>::computeThickness(S x) const
   return 2 * yt;
 }
 
+/// Returns the camber (y_c) for a given point x
 template <typename S>
 S IndicatorAirfoil2D<S>::computeCamber(S x) const
 {
-  // computing Chord to later add to Operator check whether point is in Indicator
+  // computing chord to later add to operator check whether point is in indicator
   // translating to local coordinates
   x = x/_chordLength;
   S computedCamber = 0;
@@ -98,6 +169,7 @@ S IndicatorAirfoil2D<S>::computeCamber(S x) const
   return computedCamber;
 }
 
+/// transforms a point relative to the local coordinate system of the airfoil where the origin is at the beginning of the chord on the camber line
 template <typename S>
 void IndicatorAirfoil2D<S>::transformPoint(S& x, S& y) const
 {
@@ -112,30 +184,18 @@ void IndicatorAirfoil2D<S>::transformPoint(S& x, S& y) const
 template <typename S>
 bool IndicatorAirfoil2D<S>::operator()(bool output[], const S input[])
 {
-  S x = input[0];
-  S y = input[1];
-
-  // Transform the point to the airfoil's local coordinate system
-  transformPoint(x, y);
-
-  // Check if point is within the airfoil
-  // Step 1: Check if the point’s x-coordinate is within airfoil camber
-  if (x < 0 || x > _chordLength) {
-    output[0] = false;
-    return true;
+  if(_camber != 0){
+    S dist = distanceFromCamber(input)[0];
+    S x_0 = distanceFromCamber(input)[1];
+    output[0] = (dist <= computeThickness(x_0)/2);
   }
-
-  // Step 2: Check if y-coordinate is between the airfoil's upper and lower surface
-  if(y>=0) output[0] = (util::fabs(y) <= computeThickness(x)/2 + computeCamber(x));
-  else if(y<0) output[0] = (util::fabs(y) <= computeThickness(x)/2 - computeCamber(x));
+  else{
+    S x = input[0];
+    S y = input[1];
+    transformPoint(x,y);
+    output[0] = (util::fabs(y) <= computeThickness(x)/2);
+  }
   return true;
-}
-
-template <typename S>
-S IndicatorAirfoil2D<S>::signedDistance(const Vector<S,2>& input)
-{
-  S signedDistance = S{1};
-  return signedDistance;
 }
 
 template <typename S>
@@ -440,7 +500,9 @@ bool IndicatorEllipse2D<S>::operator()(bool output[], const S input[])
 }
 
 template <typename S>
-bool const IndicatorEllipse2D<S>::distance(S& distance, const Vector<S,2>& point, Vector<S,2>& direction, int iC) const
+bool IndicatorEllipse2D<S>::distance(S& distance,
+                                     const Vector<S,2>& point,
+                                     const Vector<S,2>& direction, int iC)
 {
     S a                 = _a;
     S b                 = _b;

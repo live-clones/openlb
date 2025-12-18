@@ -105,14 +105,14 @@ public:
     if (iter != _platform.end()) {
       return std::get<1>(*iter);
     } else {
-    #ifdef PLATFORM_GPU_CUDA
+    #if defined(PLATFORM_GPU_CUDA)
       return Platform::GPU_CUDA;
-    #else
-    #ifdef PLATFORM_CPU_SIMD
+    #elif defined(PLATFORM_GPU_HIP)
+      return Platform::GPU_HIP;
+    #elif defined(PLATFORM_CPU_SIMD)
       return Platform::CPU_SIMD;
     #else
       return Platform::CPU_SISD;
-    #endif
     #endif
     }
   }

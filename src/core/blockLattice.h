@@ -52,6 +52,10 @@
 #include "platform/gpu/cuda.h"
 #endif
 
+#ifdef PLATFORM_GPU_HIP
+#include "platform/gpu/hip.h"
+#endif
+
 #include "blockDynamicsMap.h"
 #include "blockPostProcessorMap.h"
 
@@ -576,12 +580,12 @@ public:
   {
     static_assert(DESCRIPTOR::template size<PARAMETER>() == DESCRIPTOR::template size<FIELD>(),
                   "PARAMETER field size must match FIELD size");
-    if constexpr (PLATFORM == Platform::GPU_CUDA) {
+    if constexpr (PLATFORM == Platform::GPU_CUDA || PLATFORM == Platform::GPU_HIP) {
       static_assert(PLATFORM == _PLATFORM, "FieldArrayD must be available on PLATFORM");
     }
     FieldD<T,DESCRIPTOR,PARAMETER> fieldArrayPointers;
     for (unsigned iD=0; iD < fieldArray.d; ++iD) {
-      if constexpr (PLATFORM == Platform::GPU_CUDA) {
+      if constexpr (PLATFORM == Platform::GPU_CUDA || PLATFORM == Platform::GPU_HIP) {
         fieldArrayPointers[iD] = fieldArray[iD].deviceData();
       } else {
         fieldArrayPointers[iD] = fieldArray[iD].data();
@@ -706,6 +710,9 @@ class ConcreteBlockLattice<Expr,DESCRIPTOR,Platform::CPU_SIMD>;
 /// Prevent attempts to introspect GPU_CUDA lattice
 template <typename DESCRIPTOR>
 class ConcreteBlockLattice<Expr,DESCRIPTOR,Platform::GPU_CUDA>;
+
+template <typename DESCRIPTOR>
+class ConcreteBlockLattice<Expr,DESCRIPTOR,Platform::GPU_HIP>;
 
 /// Wrapper for a local heterogeneous block communication request
 /**

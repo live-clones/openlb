@@ -69,6 +69,9 @@ void initialize(int *argc, char ***argv, bool multiOutput=false, bool verbose=tr
 #ifdef PLATFORM_GPU_CUDA
   clout << " GPU_CUDA";
 #endif
+#ifdef PLATFORM_GPU_HIP
+  clout << " GPU_HIP";
+#endif
   clout << std::endl;
   clout << "Parallel :";
 #if !(defined(PARALLEL_MODE_MPI) || defined(PARALLEL_MODE_OMP))
@@ -104,6 +107,9 @@ void initialize(int *argc, char ***argv, bool multiOutput=false, bool verbose=tr
   /// Verify requirements for using all enabled platforms
 #ifdef PLATFORM_GPU_CUDA
   checkPlatform<Platform::GPU_CUDA>();
+#endif
+#ifdef PLATFORM_GPU_HIP
+  checkPlatform<Platform::GPU_HIP>();
 #endif
 
   int nThreads = 1;

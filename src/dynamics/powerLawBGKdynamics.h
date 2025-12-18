@@ -85,7 +85,7 @@ struct OmegaFromCell {
   }
 
   template <typename CELL, typename PARAMETERS, typename OMEGA, typename RHO, typename PI, typename V=typename CELL::value_t>
-  static V computeOmega(CELL& cell, PARAMETERS& parameters, OMEGA& omega0, RHO& rho, PI& pi) any_platform
+  static V any_platform computeOmega(CELL& cell, PARAMETERS& parameters, OMEGA& omega0, RHO& rho, PI& pi)
   {
     using DESCRIPTOR = typename CELL::descriptor_t;
     V pre2 = V{0.5} * descriptors::invCs2<V,DESCRIPTOR>() * omega0 / rho; // strain rate tensor prefactor
@@ -129,7 +129,7 @@ struct OmegaFromCell {
     using CollisionO = typename COLLISION::template type<DESCRIPTOR, MOMENTA, EQUILIBRIUM>;
 
     template <typename CELL, typename PARAMETERS, typename V=typename CELL::value_t>
-    CellStatistic<V> apply(CELL& cell, PARAMETERS& parameters) any_platform
+    CellStatistic<V> any_platform apply(CELL& cell, PARAMETERS& parameters)
     {
       V rho, u[DESCRIPTOR::d], pi[util::TensorVal<DESCRIPTOR>::n] { };
       MomentaF().computeAllMomenta(cell, rho, u, pi);
@@ -164,7 +164,7 @@ struct PeriodicPressureOffset {
     using CollisionO = typename COLLISION::template type<DESCRIPTOR, MOMENTA, EQUILIBRIUM>;
 
     template <typename CELL, typename PARAMETERS, typename V=typename CELL::value_t>
-    CellStatistic<V> apply(CELL& cell, PARAMETERS& parameters) any_platform
+    CellStatistic<V> any_platform apply(CELL& cell, PARAMETERS& parameters)
     {
       static constexpr auto populations = util::populationsContributingToDirection<DESCRIPTOR, NORMAL...>();
 

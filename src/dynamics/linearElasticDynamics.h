@@ -51,6 +51,9 @@ struct BoolakeeLinearElasticity final : public dynamics::CustomCollision<
   template<typename M>
   using exchange_momenta = BoolakeeLinearElasticity<T,DESCRIPTOR>;
 
+  template<typename V>
+  using exchange_value_type = BoolakeeLinearElasticity<V,DESCRIPTOR>;
+
   std::type_index id() override
   {
     return typeid(BoolakeeLinearElasticity);
@@ -197,22 +200,25 @@ struct BoolakeeLinearElasticityBoundary final : public dynamics::CustomCollision
   using EquilibriumF = typename equilibria::None::template type<DESCRIPTOR, momenta::BulkTuple>;
   using parameters = meta::list<descriptors::MAGIC_SOLID,descriptors::OMEGA_SOLID>;
 
-    template<typename M>
-    using exchange_momenta = BoolakeeLinearElasticityBoundary<T,DESCRIPTOR>;
+  template<typename M>
+  using exchange_momenta = BoolakeeLinearElasticityBoundary<T,DESCRIPTOR>;
 
-    std::type_index id() override
-    {
-      return typeid(BoolakeeLinearElasticityBoundary);
-    };
+  template<typename V>
+  using exchange_value_type = BoolakeeLinearElasticityBoundary<V,DESCRIPTOR>;
 
-    AbstractParameters<T,DESCRIPTOR>& getParameters(BlockLattice<T,DESCRIPTOR>& block) override
-    {
-      return block.template getData<OperatorParameters<BoolakeeLinearElasticityBoundary>>();
-    }
+  std::type_index id() override
+  {
+    return typeid(BoolakeeLinearElasticityBoundary);
+  };
 
-    template <typename CELL, typename PARAMETERS, typename V=typename CELL::value_t>
-    CellStatistic<V> collide(CELL& cell, PARAMETERS& parameters) any_platform
-    {
+  AbstractParameters<T,DESCRIPTOR>& getParameters(BlockLattice<T,DESCRIPTOR>& block) override
+  {
+    return block.template getData<OperatorParameters<BoolakeeLinearElasticityBoundary>>();
+  }
+
+  template <typename CELL, typename PARAMETERS, typename V=typename CELL::value_t>
+  CellStatistic<V> collide(CELL& cell, PARAMETERS& parameters) any_platform
+  {
     auto allOmegas = parameters.template get<descriptors::OMEGA_SOLID>();
 
     // dx, dt, theta, mü, lambda, kappa, uChar, epsilon
@@ -321,7 +327,7 @@ struct BoolakeeLinearElasticityBoundary final : public dynamics::CustomCollision
       { 0.0,    0.0,  -0.25, -gamma/4.0,         0.0,   -0.25,  0.25,  0.25 },
       { 0.0,    0.0,   0.25, -gamma/4.0,         0.0,   -0.25, -0.25,  0.25 },
       { 0.0,    0.0,  -0.25, -gamma/4.0,         0.0,    0.25, -0.25,  0.25 },
-  };
+    };
 
     // Compute new cell value
     for (int iPop = 0; iPop < DESCRIPTOR::q; ++iPop) {
@@ -354,21 +360,21 @@ struct BoolakeeLinearElasticityBoundary final : public dynamics::CustomCollision
     cell.template setField<descriptors::SIGMA_SOLID>({sigma_xx, sigma_xy, sigma_yx, sigma_yy});
 
     return {-1, -1};
-    };
+  };
 
-    void computeEquilibrium(ConstCell<T,DESCRIPTOR>& cell,
-                                  T rho,
-                                  const T u[DESCRIPTOR::d],
-                                  T fEq[DESCRIPTOR::q]) const override
+  void computeEquilibrium(ConstCell<T,DESCRIPTOR>& cell,
+                                T rho,
+                                const T u[DESCRIPTOR::d],
+                                T fEq[DESCRIPTOR::q]) const override
   {
     EquilibriumF().compute(cell, rho, u, fEq);
   }
 
-    std::string getName() const override
-    {
-      return "BoolakeeLinearElasticityBoundary<" + MomentaF().getName() + ">";
-    };
+  std::string getName() const override
+  {
+    return "BoolakeeLinearElasticityBoundary<" + MomentaF().getName() + ">";
   };
+};
 
 } // namespace olb
 

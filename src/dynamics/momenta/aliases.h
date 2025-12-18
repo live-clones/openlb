@@ -300,6 +300,23 @@ using ForcedPSMBulkTuple = Tuple<
   DefineToNEq
 >;
 
+// tuple for characteristic boundary condition on flat walls
+template <int direction, int orientation>
+using CBCFlatMomentaTuple = Tuple<
+  CBCDensity,
+  CBCMomentum<direction,orientation>,
+  BulkStress,
+  DefineSeparately
+>;
+
+// tuple for characteristic boundary condition on edges and corners
+using CBCoutsideTuple = Tuple<
+  CBCoutsideDensity,
+  CBCoutsideMomentum,
+  BulkStress,  // like InterpolatedVelocity
+  DefineUSeparatelyTrace  // like InterpolatedVelocity
+>;
+
 }  // namespace momenta
 
 }  // namespace olb

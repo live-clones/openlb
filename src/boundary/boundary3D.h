@@ -32,6 +32,7 @@
 #include "extendedFiniteDifferenceBoundary3D.h"
 #include "offBoundaryPostProcessors3D.h"
 #include "zouHeVelocity3D.h"
+#include "characteristicBoundary.h"
 #include "localVelocity3D.h"
 #include "phaseFieldWall3D.h"
 #include "phaseFieldInletOutlet3D.h"
@@ -60,6 +61,7 @@
 #include "zouHePressure.h"
 #include "zouHePressure3D.h"
 #include "setTurbulentWallModel.h"
+#include "setWallDistanceField.h"
 #include "postprocessor/rtlbmDirectedBoundaryPostProcessor3D.h"
 
 #include "regularizedHeatFlux3D.h"

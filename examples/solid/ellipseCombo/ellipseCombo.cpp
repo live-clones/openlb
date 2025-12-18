@@ -351,7 +351,7 @@ void prepareLattice(MyCase& myCase) {
   const auto& converter = lattice.getUnitConverter();
   converter.print();
 
-  auto bulkIndicator = geometry.getMaterialIndicator({ 1 });
+  auto bulkIndicator = geometry.getMaterialIndicator(1);
 
   lattice.defineDynamics<BoolakeeLinearElasticityBoundary>( bulkIndicator );
 
@@ -512,7 +512,7 @@ void getResults(MyCase& myCase,
     T   lInfStressResult[2] = {T(), T()};
     int tmp[]               = {int()};
 
-    auto indicatorF = geometry.getMaterialIndicator({ 1 });
+    auto indicatorF = geometry.getMaterialIndicator(1);
     SuperRelativeErrorL2Norm2D<T>   relUErrorL2Norm(lattice, disp, dispSol, indicatorF);
     SuperRelativeErrorLinfNorm2D<T> relUErrorLinfNorm(lattice, disp, dispSol, indicatorF);
     SuperRelativeErrorL2Norm2D<T>   relStressErrorL2Norm( lattice, stress, stressSol, indicatorF );

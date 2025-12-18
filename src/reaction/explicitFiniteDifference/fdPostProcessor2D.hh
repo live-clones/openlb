@@ -41,7 +41,7 @@ FdBasePostProcessor2D<T,DESCRIPTOR,FIELD,SOURCE>::FdBasePostProcessor2D()
 
 template<typename T, typename DESCRIPTOR, typename FIELD, typename SOURCE>
 template <typename CELL>
-void FdBasePostProcessor2D <T,DESCRIPTOR,FIELD,SOURCE>::applySourceTerm(T* fNew, CELL& cell)
+void FdBasePostProcessor2D <T,DESCRIPTOR,FIELD,SOURCE>::applySourceTerm(T* fNew, CELL& cell) any_platform
 {
   if constexpr (! std::is_void<SOURCE>::value) {
     *fNew += cell.template getFieldPointer<SOURCE>()[0];
@@ -65,7 +65,7 @@ int FdPostProcessor2D <T,DESCRIPTOR,MODEL,PARAMS,FIELD,SOURCE>::getPriority() co
 
 template<typename T, typename DESCRIPTOR, typename MODEL, typename PARAMS, typename FIELD, typename SOURCE>
 template <typename CELL, typename PARAMETERS>
-void FdPostProcessor2D<T,DESCRIPTOR,MODEL,PARAMS,FIELD,SOURCE>::apply(CELL& cell, PARAMETERS& vars)
+void FdPostProcessor2D<T,DESCRIPTOR,MODEL,PARAMS,FIELD,SOURCE>::apply(CELL& cell, PARAMETERS& vars) any_platform
 {
   std::size_t iT = vars.template get<fd::fdParams::Timestep>();
   T f[MODEL::extent()*DESCRIPTOR::d], F[MODEL::extent()*DESCRIPTOR::d];

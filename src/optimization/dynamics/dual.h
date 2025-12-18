@@ -115,7 +115,7 @@ struct Dual final : public dynamics::CustomCollision<T,DESCRIPTOR,momenta::BulkT
   using primalDynamics = PRIMAL;
 
   template <typename NEW_T>
-  using exchange_value_type = Dual<PRIMAL,NEW_T,DESCRIPTOR>;
+  using exchange_value_type = Dual<typename PRIMAL::template exchange_value_type<NEW_T>,NEW_T,DESCRIPTOR>;
 
   template <typename M>
   using exchange_momenta = Dual<PRIMAL,T,DESCRIPTOR>;

@@ -34,6 +34,10 @@
 #include "core/platform/gpu/cuda/communicator.h"
 #endif
 
+#ifdef PLATFORM_GPU_HIP
+#include "core/platform/gpu/hip/communicator.h"
+#endif
+
 namespace olb {
 
 #ifdef PARALLEL_MODE_MPI
@@ -202,7 +206,12 @@ ConcreteBlockCommunicator<BLOCK>::ConcreteBlockCommunicator(
 {
 #ifdef PARALLEL_MODE_MPI
   neighborhood.forNeighbors([&](int remoteC) {
-    if (loadBalancer.isLocal(remoteC) && loadBalancer.platform(loadBalancer.loc(remoteC)) == Platform::GPU_CUDA) {
+    if (
+      loadBalancer.isLocal(remoteC) &&
+      (
+        loadBalancer.platform(loadBalancer.loc(remoteC)) == Platform::GPU_CUDA ||
+        loadBalancer.platform(loadBalancer.loc(remoteC)) == Platform::GPU_HIP
+      ) ) {
       if constexpr (std::is_same_v<SUPER, SuperGeometry<T,SUPER::d>>) {
         if (!neighborhood.getCellsOutboundTo(remoteC).empty()) {
           _sendTasks.emplace_back(_mpiCommunicator, tagCoordinator.get(loadBalancer.glob(_iC), remoteC),

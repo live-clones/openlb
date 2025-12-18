@@ -141,6 +141,10 @@ Expr& Expr::operator/=(Expr rhs) {
   return *this;
 }
 
+Expr::operator int() const {
+  throw std::domain_error("Expr type can not be converted to int");
+}
+
 void Expr::describe(std::stringstream& out) const {
   std::visit([&out](auto& x) {
     x.describe(out);

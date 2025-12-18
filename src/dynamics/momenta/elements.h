@@ -2046,6 +2046,143 @@ struct GuoZhaoForcedStress {
   }
 };
 
+// ============================================
+// === CBC dynamics for flat walls ===
+// ============================================
+struct CBCDensity {
+// bulk density, but setting post-processor fields when required
+
+  template <typename TYPE, typename CELL, typename RHO, typename V=typename CELL::value_t, typename DESCRIPTOR=typename CELL::descriptor_t>
+  void compute(CELL& cell, RHO& rho) any_platform
+  {
+    rho = lbm<DESCRIPTOR>::computeRho(cell);
+  }
+
+  template <typename TYPE, typename CELL, typename R>
+  void define(CELL& cell, const R& rho) any_platform
+  {
+    cell.template setField<fields::cbc::RHO_POST_PP>(rho);
+  }
+
+  template <typename TYPE, typename CELL, typename V=typename CELL::value_t>
+  void initialize(CELL& cell) any_platform
+  {
+    cell.template setField<fields::cbc::RHO_POST_PP>(V{1});
+    cell.template setField<fields::cbc::RHO_POST_PP_DT>(V{0});
+  }
+
+  template <typename TYPE, typename CELL, typename RHO>
+  void inverseShift(CELL& cell, RHO& rho) any_platform {};
+
+  static std::string getName(){
+    return "CBCDensity";
+  }
+};
+
+// similar to FixedPressureMomentum, but with cbc-specific fields
+template <int direction, int orientation>
+struct CBCMomentum {
+
+  // compute the momentum
+  template <typename TYPE, typename CELL, typename J, typename DESCRIPTOR=typename CELL::descriptor_t>
+  void compute(CELL& cell, J& j) any_platform
+  {
+    lbm<DESCRIPTOR>::computeJ(cell, j);
+  }
+
+  // compute the velocity
+  template <typename TYPE, typename CELL, typename U, typename V=typename CELL::value_t, typename DESCRIPTOR=typename CELL::descriptor_t>
+  void computeU(CELL& cell, U& u) any_platform
+  {
+    lbm<DESCRIPTOR>::computeJ(cell, u);
+    const V rho = TYPE().computeRho(cell);
+    for (int iD=0; iD < DESCRIPTOR::d; ++iD) {
+      u[iD] /= rho;
+    }
+  }
+
+  // define the velocity
+  template <typename TYPE, typename CELL, typename U, typename DESCRIPTOR=typename CELL::descriptor_t>
+  void define(CELL& cell, const U& u) any_platform
+  {
+    cell.template setField<fields::cbc::U_POST_PP>(u);
+  }
+
+  template <typename TYPE, typename CELL, typename V=typename CELL::value_t, typename DESCRIPTOR=typename CELL::descriptor_t>
+  void initialize(CELL& cell) any_platform
+  {
+    V u[DESCRIPTOR::d] { V{} };
+    cell.template setField<fields::cbc::U_POST_PP>(u);
+    cell.template setField<fields::cbc::U_POST_PP_DT>(u);
+  }
+
+  template <typename TYPE, typename CELL, typename U>
+  void inverseShift(CELL& cell, U& u) any_platform {};
+
+  static std::string getName() {
+    return "CBCMomentum";
+  }
+};
+
+// ============================================
+// === CBC dynamics for corners and edges ===
+// ============================================
+struct CBCoutsideDensity : public CBCDensity {
+  template <typename TYPE, typename CELL, typename RHO, typename V=typename CELL::value_t, typename DESCRIPTOR=typename CELL::descriptor_t>
+  void compute(CELL& cell, RHO& rho) any_platform
+  {
+    rho = lbm<DESCRIPTOR>::computeRho(cell);
+  }
+};
+
+/// The velocity is fixed and stored in the external field U.
+struct CBCoutsideMomentum {
+  // compute the momentum
+  template <typename TYPE, typename CELL, typename J, typename V=typename CELL::value_t, typename DESCRIPTOR=typename CELL::descriptor_t>
+  void compute(CELL& cell, J& j) any_platform
+  {
+    const V rho = TYPE().computeRho(cell);
+    auto uExt = cell.template getField<fields::cbc::CBC_EDGE_VELOCITY>();
+    for (int iD=0; iD < DESCRIPTOR::d; ++iD) {
+      j[iD] = uExt[iD] * rho;
+    }
+  }
+
+  // compute the velocity
+  template <typename TYPE, typename CELL, typename U, typename V=typename CELL::value_t, typename DESCRIPTOR=typename CELL::descriptor_t>
+  void computeU(CELL& cell, U& u) any_platform
+  {
+    const auto uExt = cell.template getField<fields::cbc::CBC_EDGE_VELOCITY>();
+    for (int iD=0; iD < DESCRIPTOR::d; ++iD) {
+      u[iD] = uExt[iD];
+    }
+  }
+
+  // define the velocity
+  template <typename TYPE, typename CELL, typename U>
+  void define(CELL& cell, const U& u) any_platform
+  {
+    cell.template setField<fields::cbc::U_POST_PP>(u);
+    cell.template setField<fields::cbc::CBC_EDGE_VELOCITY>(u);
+  }
+
+  template <typename TYPE, typename CELL, typename V=typename CELL::value_t, typename DESCRIPTOR=typename CELL::descriptor_t>
+  void initialize(CELL& cell) any_platform
+  {
+    V u[DESCRIPTOR::d] { V{} };
+    cell.template setField<fields::cbc::U_POST_PP>(u);
+    cell.template setField<fields::cbc::CBC_EDGE_VELOCITY>(u);
+    cell.template setField<fields::cbc::U_POST_PP_DT>(u);
+  }
+
+  template <typename TYPE, typename CELL, typename U>
+  void inverseShift(CELL& cell, U& u) any_platform {};
+
+  static std::string getName() {
+    return "CBCoutsideMomentum";
+  }
+};
+
 }  // namespace momenta
 
 }  // namespace olb

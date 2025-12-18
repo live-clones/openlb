@@ -38,12 +38,9 @@ using MyCase = Case<
 >;
 
 namespace olb::parameters {
-
 struct CHORD_LENGTH : public descriptors::FIELD_BASE<1> {};
-struct AIRFOIL_POSITION : public descriptors::FIELD_BASE<0, 1, 0> {};
-struct AIRFOIL_PARAMETERS : public descriptors::FIELD_BASE<3> {};
+struct AIRFOIL_PARAMETERS : public descriptors::TYPED_FIELD_BASE<int,3> {};
 struct ANGLE_OF_ATTACK : public descriptors::FIELD_BASE<1> {};
-
 }
 
 // Create mesh for simulation case
@@ -95,21 +92,18 @@ void prepareGeometry(MyCase& myCase)
   Vector<T, 2> origin;
 
   // Get airfoil parameters
-  Vector<T, 2>   airfoilCenter(params.get<parameters::AIRFOIL_POSITION>()[0],
-                               params.get<parameters::AIRFOIL_POSITION>()[1]);
-  Vector<int, 3> airfoilParams(params.get<parameters::AIRFOIL_PARAMETERS>()[0],
-                               params.get<parameters::AIRFOIL_PARAMETERS>()[1],
-                               params.get<parameters::AIRFOIL_PARAMETERS>()[2]);
-  T              chordLength   = params.get<parameters::CHORD_LENGTH>();
+  Vector<T, 2>   airfoilCenter = params.get<parameters::CENTER>();
+  Vector<int,3> airfoilParams = {params.get<parameters::AIRFOIL_PARAMETERS>()[0],
+                                 params.get<parameters::AIRFOIL_PARAMETERS>()[1],
+                                 params.get<parameters::AIRFOIL_PARAMETERS>()[2]};
   T              angleOfAttack = params.get<parameters::ANGLE_OF_ATTACK>();
+  T              chordLength   = params.get<parameters::CHORD_LENGTH>();
 
-  // Create airfoil geometry
-  IndicatorAirfoil2D<T> airfoilI(airfoilCenter, chordLength, airfoilParams[0] / 100., airfoilParams[1] / 10.,
-                                 airfoilParams[2] / 100.);
+  // Create airfoil indicator
+  IndicatorAirfoil2D<T> airfoilI(airfoilCenter, chordLength, airfoilParams[0]/100., airfoilParams[1]/10., airfoilParams[2]/100.);
   IndicatorRotate<T, 2> airfoil(airfoilCenter, angleOfAttack * std::numbers::pi / 90., airfoilI);
 
   geometry.rename(0, 2);
-
   geometry.rename(2, 1, {1, 1});
 
   // Set material number for inflow
@@ -211,16 +205,14 @@ void prepareLattice(MyCase& myCase)
   );
 
   // Get airfoil parameters
-  Vector<T, 2>   airfoilCenter(params.get<parameters::AIRFOIL_POSITION>()[0],
-                               params.get<parameters::AIRFOIL_POSITION>()[1]);
-  Vector<int, 3> airfoilParams(params.get<parameters::AIRFOIL_PARAMETERS>()[0],
-                               params.get<parameters::AIRFOIL_PARAMETERS>()[1],
-                               params.get<parameters::AIRFOIL_PARAMETERS>()[2]);
+  Vector<T,2> airfoilCenter = params.get<parameters::CENTER>();
+  Vector<int,3> airfoilParams = {params.get<parameters::AIRFOIL_PARAMETERS>()[0],
+                                 params.get<parameters::AIRFOIL_PARAMETERS>()[1],
+                                 params.get<parameters::AIRFOIL_PARAMETERS>()[2]};
   T              angleOfAttack = params.get<parameters::ANGLE_OF_ATTACK>();
 
   // Create airfoil indicator
-  IndicatorAirfoil2D<T> airfoilI(airfoilCenter, chordLength, airfoilParams[0] / 100., airfoilParams[1] / 10.,
-                                 airfoilParams[2] / 100.);
+  IndicatorAirfoil2D<T> airfoilI(airfoilCenter, chordLength, airfoilParams[0]/100., airfoilParams[1]/10., airfoilParams[2]/100.);
   IndicatorRotate<T, 2> airfoil(airfoilCenter, angleOfAttack * std::numbers::pi / 90., airfoilI);
 
   // Bulk material --> Wall Model Dynamics
@@ -240,7 +232,7 @@ void prepareLattice(MyCase& myCase)
     momenta::BulkTuple,
     equilibria::ThirdOrder,
     collision::ParameterFromCell<collision::LES::SMAGORINSKY,
-                                 collision::SmagorinskyEffectiveOmega<collision::RLBThirdOrder>>
+                                 collision::SmagorinskyEffectiveOmega<collision::ThirdOrderRLB>>
   >;
 
   boundary::set<T, DESCRIPTOR, boundary::InterpolatedPressure<T,DESCRIPTOR,FringeDynamics>>(
@@ -278,7 +270,7 @@ void setInitialValues(MyCase& myCase)
     momenta::BulkTuple,
     equilibria::ThirdOrder,
     collision::ParameterFromCell<collision::LES::SMAGORINSKY,
-                                 collision::SmagorinskyEffectiveOmega<collision::RLBThirdOrder>>
+                                 collision::SmagorinskyEffectiveOmega<collision::ThirdOrderRLB>>
   >;
 
   // Define fringe zone for end of simulation domain
@@ -319,16 +311,16 @@ void getResults(MyCase& myCase, util::Timer<MyCase::value_t>& timer, std::size_t
   const int vtkIter  = lattice.getUnitConverter().getLatticeTime(.3);
   const int statIter = lattice.getUnitConverter().getLatticeTime(.1);
 
-  Vector<T, 2>   airfoilCenter(params.get<parameters::AIRFOIL_POSITION>()[0],
-                               params.get<parameters::AIRFOIL_POSITION>()[1]);
-  Vector<int, 3> airfoilParams(params.get<parameters::AIRFOIL_PARAMETERS>()[0],
-                               params.get<parameters::AIRFOIL_PARAMETERS>()[1],
-                               params.get<parameters::AIRFOIL_PARAMETERS>()[2]);
-  T              chordLength   = params.get<parameters::CHORD_LENGTH>();
-  T              angleOfAttack = params.get<parameters::ANGLE_OF_ATTACK>();
+  // Create AirfoilIndicator
+  Vector<T,2> airfoilCenter = params.get<parameters::CENTER>();
+  Vector<int,3> airfoilParams = {params.get<parameters::AIRFOIL_PARAMETERS>()[0],
+                                 params.get<parameters::AIRFOIL_PARAMETERS>()[1],
+                                 params.get<parameters::AIRFOIL_PARAMETERS>()[2]};
+  T   angleOfAttack = params.get<parameters::ANGLE_OF_ATTACK>();
+  T   chordLength   = params.get<parameters::CHORD_LENGTH>();
 
-  IndicatorAirfoil2D<T> airfoilI(airfoilCenter, chordLength, airfoilParams[0] / 100., airfoilParams[1] / 10.,
-                                 airfoilParams[2] / 100.);
+  // Create airfoil indicator
+  IndicatorAirfoil2D<T> airfoilI(airfoilCenter, chordLength, airfoilParams[0]/100., airfoilParams[1]/10., airfoilParams[2]/100.);
   IndicatorRotate<T, 2> airfoil(airfoilCenter, angleOfAttack * std::numbers::pi / 90., airfoilI);
 
   if (iT == 0) {
@@ -461,12 +453,12 @@ int main(int argc, char* argv[])
     myCaseParameters.set<PHYS_CHAR_VISCOSITY>((T)1.e-5);
     myCaseParameters.set<MAX_PHYS_T>((T)16.);
     myCaseParameters.set<CHORD_LENGTH>((T)1.);
-    myCaseParameters.set<AIRFOIL_PARAMETERS>({1, 4, 10});
-    myCaseParameters.set<ANGLE_OF_ATTACK>(5.);
+    myCaseParameters.set<AIRFOIL_PARAMETERS>({2, 4, 12});
+    myCaseParameters.set<ANGLE_OF_ATTACK>(3.);
     myCaseParameters.set<DOMAIN_EXTENT>([&] {
       return Vector{6,2} * myCaseParameters.get<CHORD_LENGTH>();
     });
-    myCaseParameters.set<AIRFOIL_POSITION>([&] {
+    myCaseParameters.set<CENTER>([&] {
       auto pos = myCaseParameters.get<DOMAIN_EXTENT>();
       pos[0] /= 4;
       pos[1] /= 2;

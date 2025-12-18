@@ -29,6 +29,7 @@
 #include "groupedFieldF.h"
 #include "primitive/interpolation3d.h"
 #include "primitive/sdf.h"
+#include "primitive/getSurfaceVector.h"
 #include "analytical/functors3D.h"
 #include "lattice/functors3D.h"
 #include "particles/particleFunctors.h"

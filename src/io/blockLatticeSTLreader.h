@@ -43,14 +43,10 @@
 #include "octree.h"
 #include "core/vector.h"
 
-
 // All OpenLB code is contained in this namespace.
 namespace olb {
 
-
-
-
-template<typename T>
+template <typename T>
 class BlockLatticeSTLreader : public IndicatorF3D<T> {
 private:
   /*
@@ -82,10 +78,10 @@ private:
   void indicate3();
 
   /// Finds normal for points on the surface (do not use for points that aren't on the surface!)
-  Vector<T,3> findNormalOnSurface(const PhysR<T,3>& pt);
+  Vector<T, 3> findNormalOnSurface(const PhysR<T, 3>& pt);
 
   /// Finds surface normal
-  Vector<T,3> evalSurfaceNormal(const Vector<T,3>& origin);
+  Vector<T, 3> evalSurfaceNormal(const Vector<T, 3>& origin);
 
   /// Size of the smallest voxel
   T _voxelSize;
@@ -124,8 +120,8 @@ public:
    * \param verbose Get additional information.
    */
 
-  BlockLatticeSTLreader(CuboidDecomposition3D<T>& cbg3d, LoadBalancer<T>& hlb, const std::string fName, T voxelSize, T stlSize=1, int method=2,
-            bool verbose = false, T overlap=0., T max=0.);
+  BlockLatticeSTLreader(CuboidDecomposition3D<T>& cbg3d, LoadBalancer<T>& hlb, const std::string fName, T voxelSize,
+                        T stlSize = 1, int method = 2, bool verbose = false, T overlap = 0., T max = 0.);
   /**
    * Constructs a new BlockLatticeSTLreader from a file
    * \param fName The STL file name
@@ -136,20 +132,20 @@ public:
    *               1: slow, more stable (for untight STLs)
    * \param verbose Get additional information.
    */
-  BlockLatticeSTLreader(const std::vector<std::vector<T>> meshPoints, T voxelSize, T stlSize=1, int method=2,
-            bool verbose = false, T overlap=0., T max=0.);
+  BlockLatticeSTLreader(const std::vector<std::vector<T>> meshPoints, T voxelSize, T stlSize = 1, int method = 2,
+                        bool verbose = false, T overlap = 0., T max = 0.);
 
   ~BlockLatticeSTLreader() override;
   /// Returns whether node is inside or not.
-  bool operator() (bool output[], const T input[]) override;
+  bool operator()(bool output[], const T input[]) override;
 
   /// Computes distance to closest triangle intersection
-  bool distance(T& distance,const Vector<T,3>& origin, const Vector<T,3>& direction, int iC=-1) override;
+  bool distance(T& distance, const Vector<T, 3>& origin, const Vector<T, 3>& direction, int iC = -1) override;
 
   /// Computes signed distance to closest triangle in direction of the surface normal in local cuboid locC
-  T signedDistance(int locC, const Vector<T,3>& input);
+  T signedDistance(int locC, const Vector<T, 3>& input);
   /// Computes signed distance to closest triangle in direction of the surface normal
-  T signedDistance(const Vector<T,3>& input) override;
+  T signedDistance(const Vector<T, 3>& input) override;
 
   /*  /// Computes signed distance to closest triangle in direction of the surface normal in local cuboid locC
   T signedDistance(int locC, const Vector<T,3>& input, STLtriangle<T>& _triangle);
@@ -157,13 +153,13 @@ public:
   T signedDistance(const Vector<T,3>& input, STLtriangle<T>& _triangle);// override;*/
 
   /// Finds and returns normal of the closest surface (triangle)
-  Vector<T,3> surfaceNormal(const Vector<T,3>& pos, const T meshSize=0) override;
+  Vector<T, 3> surfaceNormal(const Vector<T, 3>& pos, const T meshSize = 0) override;
 
   /// Prints console output
   void print();
 
   /// Writes STL mesh in Si units
-  void writeSTL(std::string stlName="");
+  void writeSTL(std::string stlName = "");
 
   /// Writes Octree
   void writeOctree();
@@ -176,20 +172,13 @@ public:
   void setBoundaryInsideNodes();
 
   /// Returns tree
-  inline Octree<T>* getTree() const
-  {
-    return _tree;
-  };
-
+  inline Octree<T>* getTree() const { return _tree; };
 
   /// Returns mesh
-  inline STLmesh<T>& getMesh()
-  {
-    return _mesh;
-  };
+  inline STLmesh<T>& getMesh() { return _mesh; };
   ///Needed for the signed Distance function: Creates a list of neighbouring triangles for each triangle
   void createNeighbouringTriangleInCuboidVector();
 };
-}  // namespace olb
+} // namespace olb
 
 #endif

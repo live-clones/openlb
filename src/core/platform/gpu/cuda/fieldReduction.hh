@@ -1,6 +1,6 @@
 /*  This file is part of the OpenLB library
  *
- *  Copyright (C) 2025 Yuji (Sam) Shimojima
+ *  Copyright (C) 2025 Yuji (Sam) Shimojima, Shota Ito
  *  E-mail contact: info@openlb.net
  *  The most recent release of OpenLB can be downloaded at
  *  <http://www.openlb.net/>
@@ -87,10 +87,11 @@ void reduceKernelInBlock(thrust::device_ptr<const T> field, T* g_odata,
   unsigned int                   tid   = threadIdx.x;
   CellID                         iCell = blockIdx.x * (blockDim.x * 2) + threadIdx.x; //for 2element per 1thread
   gpu::cuda::Cell<T, DESCRIPTOR> cell(lattice, iCell);
+  T                              myReduce = REDUCTION_OP {}.reset(T {});
 
-  T myReduce = (iCell < size) && mask(cell) && (cell.template getField<field::reduction::TAG_CORE>())
-                   ? field[iCell]
-                   : REDUCTION_OP {}.reset(thrust::raw_pointer_cast(field)[iCell]);
+  myReduce = (iCell < size) && mask(cell) && (cell.template getField<field::reduction::TAG_CORE>())
+                 ? field[iCell]
+                 : REDUCTION_OP {}.reset((T) {});
 
   //for 2elements per 1thread
   if (iCell + blockDim.x < size) {
@@ -174,19 +175,26 @@ void reductionFunctionDevice(thrust::device_ptr<const T>                        
 
 template <typename FIELD, typename REDUCTION_OP, typename CONDITION>
 template <typename T, typename DESCRIPTOR>
-void BlockLatticeFieldReductionO<FIELD, REDUCTION_OP, CONDITION>::type<ConcreteBlockLattice<
-    T, DESCRIPTOR, Platform::GPU_CUDA>>::setup(ConcreteBlockLattice<T, DESCRIPTOR, Platform::GPU_CUDA>& blockLattice)
+void BlockLatticeFieldReductionO<FIELD, REDUCTION_OP,
+                                 CONDITION>::type<ConcreteBlockLattice<T, DESCRIPTOR, Platform::GPU_CUDA>,
+                                                  StaticParametersD<T, DESCRIPTOR, fields::array_of<FIELD>>>::
+    setup(ConcreteBlockLattice<T, DESCRIPTOR, Platform::GPU_CUDA>&   blockLattice,
+          StaticParametersD<T, DESCRIPTOR, fields::array_of<FIELD>>& parameters)
 {
   blockLattice.template getData<OperatorParameters<BlockLatticeFieldReductionO>>();
 }
 
 template <typename FIELD, typename REDUCTION_OP, typename CONDITION>
 template <typename T, typename DESCRIPTOR>
-void BlockLatticeFieldReductionO<FIELD, REDUCTION_OP, CONDITION>::type<ConcreteBlockLattice<
-    T, DESCRIPTOR, Platform::GPU_CUDA>>::apply(ConcreteBlockLattice<T, DESCRIPTOR, Platform::GPU_CUDA>& blockLattice)
+void BlockLatticeFieldReductionO<FIELD, REDUCTION_OP,
+                                 CONDITION>::type<ConcreteBlockLattice<T, DESCRIPTOR, Platform::GPU_CUDA>,
+                                                  StaticParametersD<T, DESCRIPTOR, fields::array_of<FIELD>>>::
+    apply(ConcreteBlockLattice<T, DESCRIPTOR, Platform::GPU_CUDA>&   blockLattice,
+          StaticParametersD<T, DESCRIPTOR, fields::array_of<FIELD>>& parameters)
 {
-  auto&       parameters = blockLattice.template getData<OperatorParameters<BlockLatticeFieldReductionO>>().parameters;
+
   const auto& blockField = blockLattice.template getField<FIELD>();
+
   FieldD<T, DESCRIPTOR, fields::array_of<FIELD>> elementField =
       parameters.template get<fields::array_of<FIELD>>(); //not auto. because of considering 1 dimensional field
 

@@ -6,430 +6,555 @@
 
 #ifndef DISABLE_CSE
 
-//AdvectionDiffusionBoundariesDynamics<Expr, descriptors::D2Q5<>, dynamics::Tuple<Expr, descriptors::D2Q5<>, momenta::Tuple<momenta::BulkDensity, momenta::BulkMomentum, momenta::NoStress, momenta::DefineToEq>, equilibria::FirstOrder, collision::AdvectionDiffusionRLB, AdvectionDiffusionExternalVelocityCollision>, momenta::Tuple<momenta::FixedDensity, momenta::FixedVelocityMomentumGeneric, momenta::ZeroStress, momenta::DefineSeparately>, 0, -1>
-#include "520ddfe15706bf9584b216a07a88cc605558a661a613e6c938153530205a188c.cse.h"
+#include "optimization/dynamics/dual.h"
 
-//AdvectionDiffusionBoundariesDynamics<Expr, descriptors::D2Q5<>, dynamics::Tuple<Expr, descriptors::D2Q5<>, momenta::Tuple<momenta::BulkDensity, momenta::BulkMomentum, momenta::NoStress, momenta::DefineToEq>, equilibria::FirstOrder, collision::AdvectionDiffusionRLB, AdvectionDiffusionExternalVelocityCollision>, momenta::Tuple<momenta::FixedDensity, momenta::FixedVelocityMomentumGeneric, momenta::ZeroStress, momenta::DefineSeparately>, 0, 1>
-#include "2d6dce7a6c4715ed8545a97f03d1134acb3c50369164860ced316eae22ba40a9.cse.h"
+//AdvectionDiffusionBoundariesDynamics<Expr, olb::descriptors::D2Q5<>, olb::dynamics::Tuple<Expr, olb::descriptors::D2Q5<>, olb::momenta::Tuple<olb::momenta::BulkDensity, olb::momenta::BulkMomentum, olb::momenta::NoStress, olb::momenta::DefineToEq>, olb::equilibria::FirstOrder, olb::collision::AdvectionDiffusionRLB, olb::AdvectionDiffusionExternalVelocityCollision>, olb::momenta::Tuple<olb::momenta::FixedDensity, olb::momenta::FixedVelocityMomentumGeneric, olb::momenta::ZeroStress, olb::momenta::DefineSeparately>, 0, -1>
+#include "e184e8b9938d2f8e0f8dbe678068808b77d3a0592302e11defabcd38128466b0.cse.h"
 
-//AdvectionDiffusionBoundariesDynamics<Expr, descriptors::D2Q5<>, dynamics::Tuple<Expr, descriptors::D2Q5<>, momenta::Tuple<momenta::BulkDensity, momenta::BulkMomentum, momenta::NoStress, momenta::DefineToEq>, equilibria::FirstOrder, collision::AdvectionDiffusionRLB, AdvectionDiffusionExternalVelocityCollision>, momenta::Tuple<momenta::FixedDensity, momenta::FixedVelocityMomentumGeneric, momenta::ZeroStress, momenta::DefineSeparately>, 1, -1>
-#include "eb4da6acb6729027ce587c1a820aba97abd2d5d6e31c014c5eb54417b88ee8a4.cse.h"
+//AdvectionDiffusionBoundariesDynamics<Expr, olb::descriptors::D2Q5<>, olb::dynamics::Tuple<Expr, olb::descriptors::D2Q5<>, olb::momenta::Tuple<olb::momenta::BulkDensity, olb::momenta::BulkMomentum, olb::momenta::NoStress, olb::momenta::DefineToEq>, olb::equilibria::FirstOrder, olb::collision::AdvectionDiffusionRLB, olb::AdvectionDiffusionExternalVelocityCollision>, olb::momenta::Tuple<olb::momenta::FixedDensity, olb::momenta::FixedVelocityMomentumGeneric, olb::momenta::ZeroStress, olb::momenta::DefineSeparately>, 0, 1>
+#include "9f6e247649af5c1d764513126cdb49dbb00804b6828e0cad8fd1e7199be3e7c1.cse.h"
 
-//AdvectionDiffusionBoundariesDynamics<Expr, descriptors::D2Q5<>, dynamics::Tuple<Expr, descriptors::D2Q5<>, momenta::Tuple<momenta::BulkDensity, momenta::BulkMomentum, momenta::NoStress, momenta::DefineToEq>, equilibria::FirstOrder, collision::AdvectionDiffusionRLB, AdvectionDiffusionExternalVelocityCollision>, momenta::Tuple<momenta::FixedDensity, momenta::FixedVelocityMomentumGeneric, momenta::ZeroStress, momenta::DefineSeparately>, 1, 1>
-#include "6d1f92ba24fe48fb39d7d364f14a33b5fdd59abb93f0ecc3d70ee4aca5cec1c9.cse.h"
+//AdvectionDiffusionBoundariesDynamics<Expr, olb::descriptors::D2Q5<>, olb::dynamics::Tuple<Expr, olb::descriptors::D2Q5<>, olb::momenta::Tuple<olb::momenta::BulkDensity, olb::momenta::BulkMomentum, olb::momenta::NoStress, olb::momenta::DefineToEq>, olb::equilibria::FirstOrder, olb::collision::AdvectionDiffusionRLB, olb::AdvectionDiffusionExternalVelocityCollision>, olb::momenta::Tuple<olb::momenta::FixedDensity, olb::momenta::FixedVelocityMomentumGeneric, olb::momenta::ZeroStress, olb::momenta::DefineSeparately>, 1, -1>
+#include "7b3c1a6b564165c6bf07a85596f124e5612ab3a5a9079e855c5cf7a496f3d619.cse.h"
 
-//AdvectionDiffusionBoundariesDynamics<Expr, descriptors::D3Q19<>, dynamics::Tuple<Expr, descriptors::D3Q19<>, momenta::Tuple<momenta::BulkDensity, momenta::BulkMomentum, momenta::NoStress, momenta::DefineToEq>, equilibria::FirstOrder, collision::AdvectionDiffusionRLB, AdvectionDiffusionExternalVelocityCollision>, momenta::Tuple<momenta::FixedDensity, momenta::FixedVelocityMomentumGeneric, momenta::ZeroStress, momenta::DefineSeparately>, 1, -1>
-#include "dd8e957652201cdd328dfa3144646632cbe846503bf2259a1e5c0dadb625e2b4.cse.h"
+//AdvectionDiffusionBoundariesDynamics<Expr, olb::descriptors::D2Q5<>, olb::dynamics::Tuple<Expr, olb::descriptors::D2Q5<>, olb::momenta::Tuple<olb::momenta::BulkDensity, olb::momenta::BulkMomentum, olb::momenta::NoStress, olb::momenta::DefineToEq>, olb::equilibria::FirstOrder, olb::collision::AdvectionDiffusionRLB, olb::AdvectionDiffusionExternalVelocityCollision>, olb::momenta::Tuple<olb::momenta::FixedDensity, olb::momenta::FixedVelocityMomentumGeneric, olb::momenta::ZeroStress, olb::momenta::DefineSeparately>, 1, 1>
+#include "5c28fe0aa19adc3f493773104e09de2ceed87e965de7bf3b8c11d868b4b1b868.cse.h"
 
-//AdvectionDiffusionBoundariesDynamics<Expr, descriptors::D3Q19<>, dynamics::Tuple<Expr, descriptors::D3Q19<>, momenta::Tuple<momenta::BulkDensity, momenta::BulkMomentum, momenta::NoStress, momenta::DefineToEq>, equilibria::FirstOrder, collision::AdvectionDiffusionRLB, AdvectionDiffusionExternalVelocityCollision>, momenta::Tuple<momenta::FixedDensity, momenta::FixedVelocityMomentumGeneric, momenta::ZeroStress, momenta::DefineSeparately>, 1, 1>
-#include "90da621e143d0be192cc959c6f69bb8aac5afb7bd10e991a4df4f519aad369b0.cse.h"
+//AdvectionDiffusionBoundariesDynamics<Expr, olb::descriptors::D3Q19<>, olb::dynamics::Tuple<Expr, olb::descriptors::D3Q19<>, olb::momenta::Tuple<olb::momenta::BulkDensity, olb::momenta::BulkMomentum, olb::momenta::NoStress, olb::momenta::DefineToEq>, olb::equilibria::FirstOrder, olb::collision::AdvectionDiffusionRLB, olb::AdvectionDiffusionExternalVelocityCollision>, olb::momenta::Tuple<olb::momenta::FixedDensity, olb::momenta::FixedVelocityMomentumGeneric, olb::momenta::ZeroStress, olb::momenta::DefineSeparately>, 0, -1>
+#include "fd0137875061f2968588fe386d6936cd1850d477196fd4547f81f71c4985875a.cse.h"
 
-//AdvectionDiffusionBoundariesDynamics<Expr, descriptors::D3Q7<>, dynamics::Tuple<Expr, descriptors::D3Q7<>, momenta::Tuple<momenta::BulkDensity, momenta::BulkMomentum, momenta::NoStress, momenta::DefineToEq>, equilibria::FirstOrder, collision::AdvectionDiffusionRLB, AdvectionDiffusionExternalVelocityCollision>, momenta::Tuple<momenta::FixedDensity, momenta::FixedVelocityMomentumGeneric, momenta::ZeroStress, momenta::DefineSeparately>, 0, -1>
-#include "9f7267a237970cd63bff1c4a33781145763d3670fc224bacc00cccc03f4dee95.cse.h"
+//AdvectionDiffusionBoundariesDynamics<Expr, olb::descriptors::D3Q19<>, olb::dynamics::Tuple<Expr, olb::descriptors::D3Q19<>, olb::momenta::Tuple<olb::momenta::BulkDensity, olb::momenta::BulkMomentum, olb::momenta::NoStress, olb::momenta::DefineToEq>, olb::equilibria::FirstOrder, olb::collision::AdvectionDiffusionRLB, olb::AdvectionDiffusionExternalVelocityCollision>, olb::momenta::Tuple<olb::momenta::FixedDensity, olb::momenta::FixedVelocityMomentumGeneric, olb::momenta::ZeroStress, olb::momenta::DefineSeparately>, 0, 1>
+#include "50ac16d468874dc1fa01c0c34830bf2fe92ba300305aee85c028ed95a60d8aa7.cse.h"
 
-//AdvectionDiffusionBoundariesDynamics<Expr, descriptors::D3Q7<>, dynamics::Tuple<Expr, descriptors::D3Q7<>, momenta::Tuple<momenta::BulkDensity, momenta::BulkMomentum, momenta::NoStress, momenta::DefineToEq>, equilibria::FirstOrder, collision::AdvectionDiffusionRLB, AdvectionDiffusionExternalVelocityCollision>, momenta::Tuple<momenta::FixedDensity, momenta::FixedVelocityMomentumGeneric, momenta::ZeroStress, momenta::DefineSeparately>, 0, 1>
-#include "38f0bd0a3084ee6b4696b560da264fd4f9528ad81e4287b9c27c6ab519e3ecb6.cse.h"
+//AdvectionDiffusionBoundariesDynamics<Expr, olb::descriptors::D3Q19<>, olb::dynamics::Tuple<Expr, olb::descriptors::D3Q19<>, olb::momenta::Tuple<olb::momenta::BulkDensity, olb::momenta::BulkMomentum, olb::momenta::NoStress, olb::momenta::DefineToEq>, olb::equilibria::FirstOrder, olb::collision::AdvectionDiffusionRLB, olb::AdvectionDiffusionExternalVelocityCollision>, olb::momenta::Tuple<olb::momenta::FixedDensity, olb::momenta::FixedVelocityMomentumGeneric, olb::momenta::ZeroStress, olb::momenta::DefineSeparately>, 1, -1>
+#include "7632e21223552fed06ff85aa94b622d25984cb20028b2445e21abcb815bae01c.cse.h"
 
-//AdvectionDiffusionBoundariesDynamics<Expr, descriptors::D3Q7<>, dynamics::Tuple<Expr, descriptors::D3Q7<>, momenta::Tuple<momenta::BulkDensity, momenta::BulkMomentum, momenta::NoStress, momenta::DefineToEq>, equilibria::FirstOrder, collision::AdvectionDiffusionRLB, AdvectionDiffusionExternalVelocityCollision>, momenta::Tuple<momenta::FixedDensity, momenta::FixedVelocityMomentumGeneric, momenta::ZeroStress, momenta::DefineSeparately>, 1, -1>
-#include "ecc6414637cf07f136191046a696af71bde5f760dd484aaa05a0d902906f53a9.cse.h"
+//AdvectionDiffusionBoundariesDynamics<Expr, olb::descriptors::D3Q19<>, olb::dynamics::Tuple<Expr, olb::descriptors::D3Q19<>, olb::momenta::Tuple<olb::momenta::BulkDensity, olb::momenta::BulkMomentum, olb::momenta::NoStress, olb::momenta::DefineToEq>, olb::equilibria::FirstOrder, olb::collision::AdvectionDiffusionRLB, olb::AdvectionDiffusionExternalVelocityCollision>, olb::momenta::Tuple<olb::momenta::FixedDensity, olb::momenta::FixedVelocityMomentumGeneric, olb::momenta::ZeroStress, olb::momenta::DefineSeparately>, 1, 1>
+#include "78989508fb26f9bc6e13026a7509703ccb7c4085018cce6eee701b622a54ce63.cse.h"
 
-//AdvectionDiffusionBoundariesDynamics<Expr, descriptors::D3Q7<>, dynamics::Tuple<Expr, descriptors::D3Q7<>, momenta::Tuple<momenta::BulkDensity, momenta::BulkMomentum, momenta::NoStress, momenta::DefineToEq>, equilibria::FirstOrder, collision::AdvectionDiffusionRLB, AdvectionDiffusionExternalVelocityCollision>, momenta::Tuple<momenta::FixedDensity, momenta::FixedVelocityMomentumGeneric, momenta::ZeroStress, momenta::DefineSeparately>, 1, 1>
-#include "7cf24b1af3bed5f916cf0be56b0d0f644ff7c82334f3b63ce0192562fb17fede.cse.h"
+//AdvectionDiffusionBoundariesDynamics<Expr, olb::descriptors::D3Q19<>, olb::dynamics::Tuple<Expr, olb::descriptors::D3Q19<>, olb::momenta::Tuple<olb::momenta::BulkDensity, olb::momenta::BulkMomentum, olb::momenta::NoStress, olb::momenta::DefineToEq>, olb::equilibria::FirstOrder, olb::collision::AdvectionDiffusionRLB, olb::AdvectionDiffusionExternalVelocityCollision>, olb::momenta::Tuple<olb::momenta::FixedDensity, olb::momenta::FixedVelocityMomentumGeneric, olb::momenta::ZeroStress, olb::momenta::DefineSeparately>, 2, -1>
+#include "41370b198bd26dbed2b711f718e66fcf683ea84f62f97f796da6364228708744.cse.h"
 
-//AdvectionDiffusionBoundariesDynamics<Expr, descriptors::D3Q7<>, dynamics::Tuple<Expr, descriptors::D3Q7<>, momenta::Tuple<momenta::BulkDensity, momenta::BulkMomentum, momenta::NoStress, momenta::DefineToEq>, equilibria::FirstOrder, collision::AdvectionDiffusionRLB, AdvectionDiffusionExternalVelocityCollision>, momenta::Tuple<momenta::FixedDensity, momenta::FixedVelocityMomentumGeneric, momenta::ZeroStress, momenta::DefineSeparately>, 2, 1>
-#include "25fac19e76d9c87c70721bc18b6033a6af0527cbb7580484bd498bed62501ca1.cse.h"
+//AdvectionDiffusionBoundariesDynamics<Expr, olb::descriptors::D3Q19<>, olb::dynamics::Tuple<Expr, olb::descriptors::D3Q19<>, olb::momenta::Tuple<olb::momenta::BulkDensity, olb::momenta::BulkMomentum, olb::momenta::NoStress, olb::momenta::DefineToEq>, olb::equilibria::FirstOrder, olb::collision::AdvectionDiffusionRLB, olb::AdvectionDiffusionExternalVelocityCollision>, olb::momenta::Tuple<olb::momenta::FixedDensity, olb::momenta::FixedVelocityMomentumGeneric, olb::momenta::ZeroStress, olb::momenta::DefineSeparately>, 2, 1>
+#include "2fd51acefcd2f520822c8e8cb291250711785c612daf22db5d50fcda1dc52e67.cse.h"
 
-//AdvectionDiffusionCornerDynamics2D<Expr, descriptors::D2Q5<>, dynamics::Tuple<Expr, descriptors::D2Q5<>, momenta::Tuple<momenta::BulkDensity, momenta::BulkMomentum, momenta::NoStress, momenta::DefineToEq>, equilibria::FirstOrder, collision::AdvectionDiffusionRLB, AdvectionDiffusionExternalVelocityCollision>, momenta::Tuple<momenta::FixedDensity, momenta::FixedVelocityMomentumGeneric, momenta::ZeroStress, momenta::DefineSeparately>, 1, -1>
-#include "acbf79f8085fae17387d31069689c667a2519ad7ffa026bd5d36ca3321e0a657.cse.h"
+//AdvectionDiffusionBoundariesDynamics<Expr, olb::descriptors::D3Q7<>, olb::dynamics::Tuple<Expr, olb::descriptors::D3Q7<>, olb::momenta::Tuple<olb::momenta::BulkDensity, olb::momenta::BulkMomentum, olb::momenta::NoStress, olb::momenta::DefineToEq>, olb::equilibria::FirstOrder, olb::collision::AdvectionDiffusionRLB, olb::AdvectionDiffusionExternalVelocityCollision>, olb::momenta::Tuple<olb::momenta::FixedDensity, olb::momenta::FixedVelocityMomentumGeneric, olb::momenta::ZeroStress, olb::momenta::DefineSeparately>, 0, -1>
+#include "9f5b8693d7a21edb68b9c2234180d132e8ca61a18b5419801ae4431de26baaa3.cse.h"
 
-//AdvectionDiffusionEdgesDynamics<Expr, descriptors::D3Q7<>, dynamics::Tuple<Expr, descriptors::D3Q7<>, momenta::Tuple<momenta::BulkDensity, momenta::BulkMomentum, momenta::NoStress, momenta::DefineToEq>, equilibria::FirstOrder, collision::AdvectionDiffusionRLB, AdvectionDiffusionExternalVelocityCollision>, momenta::Tuple<momenta::FixedDensity, momenta::FixedVelocityMomentumGeneric, momenta::ZeroStress, momenta::DefineSeparately>, 0, -1, -1>
-#include "3f3a5454d4aea3437860b037d1634587b5e1872ab259a37714a9eb694d17244e.cse.h"
+//AdvectionDiffusionBoundariesDynamics<Expr, olb::descriptors::D3Q7<>, olb::dynamics::Tuple<Expr, olb::descriptors::D3Q7<>, olb::momenta::Tuple<olb::momenta::BulkDensity, olb::momenta::BulkMomentum, olb::momenta::NoStress, olb::momenta::DefineToEq>, olb::equilibria::FirstOrder, olb::collision::AdvectionDiffusionRLB, olb::AdvectionDiffusionExternalVelocityCollision>, olb::momenta::Tuple<olb::momenta::FixedDensity, olb::momenta::FixedVelocityMomentumGeneric, olb::momenta::ZeroStress, olb::momenta::DefineSeparately>, 0, 1>
+#include "9971673e6ddd26806ae242f0c733a9b2cc4b5d4328f62d8153d178d4aa942e1d.cse.h"
 
-//AdvectionDiffusionEdgesDynamics<Expr, descriptors::D3Q7<>, dynamics::Tuple<Expr, descriptors::D3Q7<>, momenta::Tuple<momenta::BulkDensity, momenta::BulkMomentum, momenta::NoStress, momenta::DefineToEq>, equilibria::FirstOrder, collision::AdvectionDiffusionRLB, AdvectionDiffusionExternalVelocityCollision>, momenta::Tuple<momenta::FixedDensity, momenta::FixedVelocityMomentumGeneric, momenta::ZeroStress, momenta::DefineSeparately>, 0, -1, 1>
-#include "d1df57ee2c30a4534607d67a4462452e11c35f51ee00452ef9fd2195bcabb88b.cse.h"
+//AdvectionDiffusionBoundariesDynamics<Expr, olb::descriptors::D3Q7<>, olb::dynamics::Tuple<Expr, olb::descriptors::D3Q7<>, olb::momenta::Tuple<olb::momenta::BulkDensity, olb::momenta::BulkMomentum, olb::momenta::NoStress, olb::momenta::DefineToEq>, olb::equilibria::FirstOrder, olb::collision::AdvectionDiffusionRLB, olb::AdvectionDiffusionExternalVelocityCollision>, olb::momenta::Tuple<olb::momenta::FixedDensity, olb::momenta::FixedVelocityMomentumGeneric, olb::momenta::ZeroStress, olb::momenta::DefineSeparately>, 1, -1>
+#include "700c0913a1b34905791d7013456d58e8be6e4accc6d5a1d4e5c308f48be847d7.cse.h"
 
-//AdvectionDiffusionEdgesDynamics<Expr, descriptors::D3Q7<>, dynamics::Tuple<Expr, descriptors::D3Q7<>, momenta::Tuple<momenta::BulkDensity, momenta::BulkMomentum, momenta::NoStress, momenta::DefineToEq>, equilibria::FirstOrder, collision::AdvectionDiffusionRLB, AdvectionDiffusionExternalVelocityCollision>, momenta::Tuple<momenta::FixedDensity, momenta::FixedVelocityMomentumGeneric, momenta::ZeroStress, momenta::DefineSeparately>, 2, -1, -1>
-#include "f6819c97ae3cda6d9ff44a244feec63d59b1cf598228f26fcff117bd0222432a.cse.h"
+//AdvectionDiffusionBoundariesDynamics<Expr, olb::descriptors::D3Q7<>, olb::dynamics::Tuple<Expr, olb::descriptors::D3Q7<>, olb::momenta::Tuple<olb::momenta::BulkDensity, olb::momenta::BulkMomentum, olb::momenta::NoStress, olb::momenta::DefineToEq>, olb::equilibria::FirstOrder, olb::collision::AdvectionDiffusionRLB, olb::AdvectionDiffusionExternalVelocityCollision>, olb::momenta::Tuple<olb::momenta::FixedDensity, olb::momenta::FixedVelocityMomentumGeneric, olb::momenta::ZeroStress, olb::momenta::DefineSeparately>, 1, 1>
+#include "47970d32084a5645d64cc39e1028450e001e2d34c84f8eac6f946b7a694fa69a.cse.h"
 
-//AdvectionDiffusionEdgesDynamics<Expr, descriptors::D3Q7<>, dynamics::Tuple<Expr, descriptors::D3Q7<>, momenta::Tuple<momenta::BulkDensity, momenta::BulkMomentum, momenta::NoStress, momenta::DefineToEq>, equilibria::FirstOrder, collision::AdvectionDiffusionRLB, AdvectionDiffusionExternalVelocityCollision>, momenta::Tuple<momenta::FixedDensity, momenta::FixedVelocityMomentumGeneric, momenta::ZeroStress, momenta::DefineSeparately>, 2, -1, 1>
-#include "927cab32860c435e81de524fc113ad4863107c81b502928122c5af5e939c6e33.cse.h"
+//AdvectionDiffusionBoundariesDynamics<Expr, olb::descriptors::D3Q7<>, olb::dynamics::Tuple<Expr, olb::descriptors::D3Q7<>, olb::momenta::Tuple<olb::momenta::BulkDensity, olb::momenta::BulkMomentum, olb::momenta::NoStress, olb::momenta::DefineToEq>, olb::equilibria::FirstOrder, olb::collision::AdvectionDiffusionRLB, olb::AdvectionDiffusionExternalVelocityCollision>, olb::momenta::Tuple<olb::momenta::FixedDensity, olb::momenta::FixedVelocityMomentumGeneric, olb::momenta::ZeroStress, olb::momenta::DefineSeparately>, 2, 1>
+#include "f25d36638d158aeb1bfafbf0a35e60692b2ee5bb40928f91c2dde63a11846310.cse.h"
 
-//CombinedAdvectionDiffusionRLBdynamics<Expr, descriptors::D2Q5<>, dynamics::Tuple<Expr, descriptors::D2Q5<>, momenta::Tuple<momenta::BulkDensity, momenta::BulkMomentum, momenta::NoStress, momenta::DefineToEq>, equilibria::FirstOrder, collision::AdvectionDiffusionRLB, AdvectionDiffusionExternalVelocityCollision>, momenta::Tuple<momenta::FixedDensity, momenta::FixedTemperatureMomentum<0, -1>, momenta::NoStress, momenta::DefineSeparately> >
-#include "f07d42df09999e713527bf0c8dccc6c9e235f0a67af0dd5572fab540de3ec985.cse.h"
+//AdvectionDiffusionCornerDynamics2D<Expr, olb::descriptors::D2Q5<>, olb::dynamics::Tuple<Expr, olb::descriptors::D2Q5<>, olb::momenta::Tuple<olb::momenta::BulkDensity, olb::momenta::BulkMomentum, olb::momenta::NoStress, olb::momenta::DefineToEq>, olb::equilibria::FirstOrder, olb::collision::AdvectionDiffusionRLB, olb::AdvectionDiffusionExternalVelocityCollision>, olb::momenta::Tuple<olb::momenta::FixedDensity, olb::momenta::FixedVelocityMomentumGeneric, olb::momenta::ZeroStress, olb::momenta::DefineSeparately>, 1, -1>
+#include "00a31d527e9aade5ecb5ba7fd825eaab16f3b610794e95023399f26da6ac7c27.cse.h"
 
-//CombinedAdvectionDiffusionRLBdynamics<Expr, descriptors::D2Q5<>, dynamics::Tuple<Expr, descriptors::D2Q5<>, momenta::Tuple<momenta::BulkDensity, momenta::BulkMomentum, momenta::NoStress, momenta::DefineToEq>, equilibria::FirstOrder, collision::AdvectionDiffusionRLB, AdvectionDiffusionExternalVelocityCollision>, momenta::Tuple<momenta::FixedDensity, momenta::FixedTemperatureMomentum<0, 1>, momenta::NoStress, momenta::DefineSeparately> >
-#include "8c2149dada7a7265d6aaa7194b15765c0f883e2314d0fae130eba475ae7b0d06.cse.h"
+//AdvectionDiffusionCornerDynamics3D<Expr, olb::descriptors::D3Q19<>, olb::dynamics::Tuple<Expr, olb::descriptors::D3Q19<>, olb::momenta::Tuple<olb::momenta::BulkDensity, olb::momenta::BulkMomentum, olb::momenta::NoStress, olb::momenta::DefineToEq>, olb::equilibria::FirstOrder, olb::collision::AdvectionDiffusionRLB, olb::AdvectionDiffusionExternalVelocityCollision>, olb::momenta::Tuple<olb::momenta::FixedDensity, olb::momenta::FixedVelocityMomentumGeneric, olb::momenta::ZeroStress, olb::momenta::DefineSeparately>, -1, -1, -1>
+#include "27f4ea3c00a908deec2f745a4f56d183d193636467356afa100b4b4a7abfba21.cse.h"
 
-//CombinedAdvectionDiffusionRLBdynamics<Expr, descriptors::D2Q5<>, dynamics::Tuple<Expr, descriptors::D2Q5<>, momenta::Tuple<momenta::BulkDensity, momenta::BulkMomentum, momenta::NoStress, momenta::DefineToEq>, equilibria::FirstOrder, collision::AdvectionDiffusionRLB, AdvectionDiffusionExternalVelocityCollision>, momenta::Tuple<momenta::FixedDensity, momenta::FixedTemperatureMomentum<1, -1>, momenta::NoStress, momenta::DefineSeparately> >
-#include "eeb142e732be2a5b022a450a592a93cb6a52c802e60cf9f407d0ea5d8c009622.cse.h"
+//AdvectionDiffusionCornerDynamics3D<Expr, olb::descriptors::D3Q19<>, olb::dynamics::Tuple<Expr, olb::descriptors::D3Q19<>, olb::momenta::Tuple<olb::momenta::BulkDensity, olb::momenta::BulkMomentum, olb::momenta::NoStress, olb::momenta::DefineToEq>, olb::equilibria::FirstOrder, olb::collision::AdvectionDiffusionRLB, olb::AdvectionDiffusionExternalVelocityCollision>, olb::momenta::Tuple<olb::momenta::FixedDensity, olb::momenta::FixedVelocityMomentumGeneric, olb::momenta::ZeroStress, olb::momenta::DefineSeparately>, -1, -1, 1>
+#include "16dada453414b68e09e49170dc5c96390dc48cdd2fc27ee78318e6d82e179e5f.cse.h"
 
-//CombinedAdvectionDiffusionRLBdynamics<Expr, descriptors::D2Q5<>, dynamics::Tuple<Expr, descriptors::D2Q5<>, momenta::Tuple<momenta::BulkDensity, momenta::BulkMomentum, momenta::NoStress, momenta::DefineToEq>, equilibria::FirstOrder, collision::AdvectionDiffusionRLB, AdvectionDiffusionExternalVelocityCollision>, momenta::Tuple<momenta::HeatFluxBoundaryDensity<1, 1>, momenta::FixedVelocityMomentumAD, momenta::NoStress, momenta::DefineToEq> >
-#include "7cc09b5832fd629c49c04104e1c4a8c9e8c90735422af8d75355a981e9396278.cse.h"
+//AdvectionDiffusionCornerDynamics3D<Expr, olb::descriptors::D3Q19<>, olb::dynamics::Tuple<Expr, olb::descriptors::D3Q19<>, olb::momenta::Tuple<olb::momenta::BulkDensity, olb::momenta::BulkMomentum, olb::momenta::NoStress, olb::momenta::DefineToEq>, olb::equilibria::FirstOrder, olb::collision::AdvectionDiffusionRLB, olb::AdvectionDiffusionExternalVelocityCollision>, olb::momenta::Tuple<olb::momenta::FixedDensity, olb::momenta::FixedVelocityMomentumGeneric, olb::momenta::ZeroStress, olb::momenta::DefineSeparately>, -1, 1, -1>
+#include "c26da95785ac36795b629dd6e60db1fa7ee28678119b7990c06a2e9c8b256a25.cse.h"
 
-//CombinedAdvectionDiffusionRLBdynamics<Expr, descriptors::D2Q9<>, dynamics::Tuple<Expr, descriptors::D2Q9<>, momenta::Tuple<momenta::BulkDensity, momenta::BulkMomentum, momenta::NoStress, momenta::DefineToEq>, equilibria::FirstOrder, collision::AdvectionDiffusionRLB, AdvectionDiffusionExternalVelocityCollision>, momenta::Tuple<momenta::FixedDensity, momenta::FixedTemperatureMomentum<0, -1>, momenta::NoStress, momenta::DefineSeparately> >
-#include "174a64c2c88933efd6154c0efebf843fe7f069bc675a46c89dc1ff7c8ff87988.cse.h"
+//AdvectionDiffusionCornerDynamics3D<Expr, olb::descriptors::D3Q19<>, olb::dynamics::Tuple<Expr, olb::descriptors::D3Q19<>, olb::momenta::Tuple<olb::momenta::BulkDensity, olb::momenta::BulkMomentum, olb::momenta::NoStress, olb::momenta::DefineToEq>, olb::equilibria::FirstOrder, olb::collision::AdvectionDiffusionRLB, olb::AdvectionDiffusionExternalVelocityCollision>, olb::momenta::Tuple<olb::momenta::FixedDensity, olb::momenta::FixedVelocityMomentumGeneric, olb::momenta::ZeroStress, olb::momenta::DefineSeparately>, -1, 1, 1>
+#include "1ac2736c05575d67a936bd6c09b8f43c571cc977aefc94dcd0b4c59fcd20f583.cse.h"
 
-//CombinedRLBdynamics<Expr, descriptors::D2Q9<>, dynamics::Tuple<Expr, descriptors::D2Q9<>, momenta::Tuple<momenta::BulkDensity, momenta::BulkMomentum, momenta::BulkStress, momenta::DefineToNEq>, equilibria::SecondOrder, collision::RLB, dynamics::DefaultCombination>, momenta::Tuple<momenta::FixedDensity, momenta::FixedPressureMomentum<0, 1>, momenta::RegularizedBoundaryStress<0, 1>, momenta::DefineSeparately> >
-#include "cc198b8c1238615b9fc84f7580c29b2805e757af37e00024d7a3ad3d47a101bb.cse.h"
+//AdvectionDiffusionCornerDynamics3D<Expr, olb::descriptors::D3Q19<>, olb::dynamics::Tuple<Expr, olb::descriptors::D3Q19<>, olb::momenta::Tuple<olb::momenta::BulkDensity, olb::momenta::BulkMomentum, olb::momenta::NoStress, olb::momenta::DefineToEq>, olb::equilibria::FirstOrder, olb::collision::AdvectionDiffusionRLB, olb::AdvectionDiffusionExternalVelocityCollision>, olb::momenta::Tuple<olb::momenta::FixedDensity, olb::momenta::FixedVelocityMomentumGeneric, olb::momenta::ZeroStress, olb::momenta::DefineSeparately>, 1, -1, -1>
+#include "7355009287f35d391442a20d4f87919e61606b9bd5d04747716e7eb8d9709ba4.cse.h"
 
-//CombinedRLBdynamics<Expr, descriptors::D2Q9<>, dynamics::Tuple<Expr, descriptors::D2Q9<>, momenta::Tuple<momenta::BulkDensity, momenta::BulkMomentum, momenta::BulkStress, momenta::DefineToNEq>, equilibria::SecondOrder, collision::RLB, dynamics::DefaultCombination>, momenta::Tuple<momenta::VelocityBoundaryDensity<0, -1>, momenta::FixedVelocityMomentumGeneric, momenta::RegularizedBoundaryStress<0, -1>, momenta::DefineSeparately> >
-#include "28b412c3212309bda828fb523846538c1ff88ecc514b00e0844dd995ec50e49c.cse.h"
+//AdvectionDiffusionCornerDynamics3D<Expr, olb::descriptors::D3Q19<>, olb::dynamics::Tuple<Expr, olb::descriptors::D3Q19<>, olb::momenta::Tuple<olb::momenta::BulkDensity, olb::momenta::BulkMomentum, olb::momenta::NoStress, olb::momenta::DefineToEq>, olb::equilibria::FirstOrder, olb::collision::AdvectionDiffusionRLB, olb::AdvectionDiffusionExternalVelocityCollision>, olb::momenta::Tuple<olb::momenta::FixedDensity, olb::momenta::FixedVelocityMomentumGeneric, olb::momenta::ZeroStress, olb::momenta::DefineSeparately>, 1, -1, 1>
+#include "4f2dd0ca1d5939462059fea90f9a1c4c0a8d8d05bff5c23ed193812776628575.cse.h"
 
-//CombinedRLBdynamics<Expr, descriptors::D2Q9<>, dynamics::Tuple<Expr, descriptors::D2Q9<>, momenta::Tuple<momenta::BulkDensity, momenta::BulkMomentum, momenta::BulkStress, momenta::DefineToNEq>, equilibria::SecondOrder, collision::RLB, dynamics::DefaultCombination>, momenta::Tuple<momenta::VelocityBoundaryDensity<0, 1>, momenta::FixedVelocityMomentumGeneric, momenta::RegularizedBoundaryStress<0, 1>, momenta::DefineSeparately> >
-#include "60460cf82eb6fc6d4a4fd3965e945ed6c3069fcaa272b87a75c5c8501810dd0f.cse.h"
+//AdvectionDiffusionCornerDynamics3D<Expr, olb::descriptors::D3Q19<>, olb::dynamics::Tuple<Expr, olb::descriptors::D3Q19<>, olb::momenta::Tuple<olb::momenta::BulkDensity, olb::momenta::BulkMomentum, olb::momenta::NoStress, olb::momenta::DefineToEq>, olb::equilibria::FirstOrder, olb::collision::AdvectionDiffusionRLB, olb::AdvectionDiffusionExternalVelocityCollision>, olb::momenta::Tuple<olb::momenta::FixedDensity, olb::momenta::FixedVelocityMomentumGeneric, olb::momenta::ZeroStress, olb::momenta::DefineSeparately>, 1, 1, -1>
+#include "77f7884c1bcfa804fcabf9fd9c861e93fa015fa745b20f74c11ff8b398809f6d.cse.h"
 
-//CombinedRLBdynamics<Expr, descriptors::D2Q9<>, dynamics::Tuple<Expr, descriptors::D2Q9<>, momenta::Tuple<momenta::BulkDensity, momenta::BulkMomentum, momenta::BulkStress, momenta::DefineToNEq>, equilibria::SecondOrder, collision::RLB, dynamics::DefaultCombination>, momenta::Tuple<momenta::VelocityBoundaryDensity<1, -1>, momenta::FixedVelocityMomentumGeneric, momenta::RegularizedBoundaryStress<1, -1>, momenta::DefineSeparately> >
-#include "fc6172c5addbc25426b08edf2523b7114be72826a178b02dac0d59b56572db9d.cse.h"
+//AdvectionDiffusionCornerDynamics3D<Expr, olb::descriptors::D3Q19<>, olb::dynamics::Tuple<Expr, olb::descriptors::D3Q19<>, olb::momenta::Tuple<olb::momenta::BulkDensity, olb::momenta::BulkMomentum, olb::momenta::NoStress, olb::momenta::DefineToEq>, olb::equilibria::FirstOrder, olb::collision::AdvectionDiffusionRLB, olb::AdvectionDiffusionExternalVelocityCollision>, olb::momenta::Tuple<olb::momenta::FixedDensity, olb::momenta::FixedVelocityMomentumGeneric, olb::momenta::ZeroStress, olb::momenta::DefineSeparately>, 1, 1, 1>
+#include "49a3fd3df8a75529945df027ba5863dabe764ae72c45706f8b28a4820f89f9b6.cse.h"
 
-//CombinedRLBdynamics<Expr, descriptors::D2Q9<>, dynamics::Tuple<Expr, descriptors::D2Q9<>, momenta::Tuple<momenta::BulkDensity, momenta::BulkMomentum, momenta::BulkStress, momenta::DefineToNEq>, equilibria::SecondOrder, collision::RLB, dynamics::DefaultCombination>, momenta::Tuple<momenta::VelocityBoundaryDensity<1, 1>, momenta::FixedVelocityMomentumGeneric, momenta::RegularizedBoundaryStress<1, 1>, momenta::DefineSeparately> >
-#include "0b54c813f514f9b061db90c1777df1b27cf72c65fbb69409c3f07470dbbd359b.cse.h"
+//AdvectionDiffusionEdgesDynamics<Expr, olb::descriptors::D3Q19<>, olb::dynamics::Tuple<Expr, olb::descriptors::D3Q19<>, olb::momenta::Tuple<olb::momenta::BulkDensity, olb::momenta::BulkMomentum, olb::momenta::NoStress, olb::momenta::DefineToEq>, olb::equilibria::FirstOrder, olb::collision::AdvectionDiffusionRLB, olb::AdvectionDiffusionExternalVelocityCollision>, olb::momenta::Tuple<olb::momenta::FixedDensity, olb::momenta::FixedVelocityMomentumGeneric, olb::momenta::ZeroStress, olb::momenta::DefineSeparately>, 0, -1, -1>
+#include "541c7bf8f6242a400fcf17cad511c82790092046cac14f263046a02217548407.cse.h"
 
-//CombinedRLBdynamics<Expr, descriptors::D2Q9<>, dynamics::Tuple<Expr, descriptors::D2Q9<>, momenta::Tuple<momenta::BulkDensity, momenta::BulkMomentum, momenta::BulkStress, momenta::DefineToNEq>, equilibria::SecondOrder, collision::SaveVelocity<collision::BGK>, dynamics::DefaultCombination>, momenta::Tuple<momenta::FixedDensity, momenta::FixedPressureMomentum<0, -1>, momenta::RegularizedBoundaryStress<0, -1>, momenta::DefineSeparately> >
-#include "4a6a87e4bc3e90463db2df427813e42f3442ac63d629b10c1a9c7fb5e0d0b295.cse.h"
+//AdvectionDiffusionEdgesDynamics<Expr, olb::descriptors::D3Q19<>, olb::dynamics::Tuple<Expr, olb::descriptors::D3Q19<>, olb::momenta::Tuple<olb::momenta::BulkDensity, olb::momenta::BulkMomentum, olb::momenta::NoStress, olb::momenta::DefineToEq>, olb::equilibria::FirstOrder, olb::collision::AdvectionDiffusionRLB, olb::AdvectionDiffusionExternalVelocityCollision>, olb::momenta::Tuple<olb::momenta::FixedDensity, olb::momenta::FixedVelocityMomentumGeneric, olb::momenta::ZeroStress, olb::momenta::DefineSeparately>, 0, -1, 1>
+#include "095cc4d32cd47b6357ca6e201d6aed977b289064e6fdd9b63c0f20b41389772c.cse.h"
 
-//CombinedRLBdynamics<Expr, descriptors::D2Q9<>, dynamics::Tuple<Expr, descriptors::D2Q9<>, momenta::Tuple<momenta::BulkDensity, momenta::BulkMomentum, momenta::BulkStress, momenta::DefineToNEq>, equilibria::SecondOrder, collision::SaveVelocity<collision::BGK>, dynamics::DefaultCombination>, momenta::Tuple<momenta::FixedDensity, momenta::FixedPressureMomentum<0, 1>, momenta::RegularizedBoundaryStress<0, 1>, momenta::DefineSeparately> >
-#include "cfdc729ce198c902194c909a37c3ff72d279c4c93d959fa8d338e451c7530616.cse.h"
+//AdvectionDiffusionEdgesDynamics<Expr, olb::descriptors::D3Q19<>, olb::dynamics::Tuple<Expr, olb::descriptors::D3Q19<>, olb::momenta::Tuple<olb::momenta::BulkDensity, olb::momenta::BulkMomentum, olb::momenta::NoStress, olb::momenta::DefineToEq>, olb::equilibria::FirstOrder, olb::collision::AdvectionDiffusionRLB, olb::AdvectionDiffusionExternalVelocityCollision>, olb::momenta::Tuple<olb::momenta::FixedDensity, olb::momenta::FixedVelocityMomentumGeneric, olb::momenta::ZeroStress, olb::momenta::DefineSeparately>, 0, 1, -1>
+#include "42f15a134e9c45833d938662190bf8c9eb3f805504538effb9bd9ebca17338a5.cse.h"
 
-//CombinedRLBdynamics<Expr, descriptors::D3Q19<>, dynamics::Tuple<Expr, descriptors::D3Q19<>, momenta::Tuple<momenta::BulkDensity, momenta::BulkMomentum, momenta::BulkStress, momenta::DefineToNEq>, equilibria::SecondOrder, collision::BGK, dynamics::DefaultCombination>, momenta::Tuple<momenta::InnerCornerDensity3D<-1, -1, -1>, momenta::FixedVelocityMomentumGeneric, momenta::InnerCornerStress3D<-1, -1, -1>, momenta::DefineSeparately> >
-#include "80f4c1273aaec3ee8e5538854cffc9fc50c19ae990f908fb497ae4be6813de20.cse.h"
+//AdvectionDiffusionEdgesDynamics<Expr, olb::descriptors::D3Q19<>, olb::dynamics::Tuple<Expr, olb::descriptors::D3Q19<>, olb::momenta::Tuple<olb::momenta::BulkDensity, olb::momenta::BulkMomentum, olb::momenta::NoStress, olb::momenta::DefineToEq>, olb::equilibria::FirstOrder, olb::collision::AdvectionDiffusionRLB, olb::AdvectionDiffusionExternalVelocityCollision>, olb::momenta::Tuple<olb::momenta::FixedDensity, olb::momenta::FixedVelocityMomentumGeneric, olb::momenta::ZeroStress, olb::momenta::DefineSeparately>, 0, 1, 1>
+#include "4634275f2dc24233d8d51fb77c849a3736e85de079975069fa305b1f138ebec4.cse.h"
 
-//CombinedRLBdynamics<Expr, descriptors::D3Q19<>, dynamics::Tuple<Expr, descriptors::D3Q19<>, momenta::Tuple<momenta::BulkDensity, momenta::BulkMomentum, momenta::BulkStress, momenta::DefineToNEq>, equilibria::SecondOrder, collision::BGK, dynamics::DefaultCombination>, momenta::Tuple<momenta::InnerCornerDensity3D<-1, -1, 1>, momenta::FixedVelocityMomentumGeneric, momenta::InnerCornerStress3D<-1, -1, 1>, momenta::DefineSeparately> >
-#include "e62756db2fa8a021b86d9f7e1f30bd9431a7cc698d4ea10e1c9bb2b254a12c6e.cse.h"
+//AdvectionDiffusionEdgesDynamics<Expr, olb::descriptors::D3Q19<>, olb::dynamics::Tuple<Expr, olb::descriptors::D3Q19<>, olb::momenta::Tuple<olb::momenta::BulkDensity, olb::momenta::BulkMomentum, olb::momenta::NoStress, olb::momenta::DefineToEq>, olb::equilibria::FirstOrder, olb::collision::AdvectionDiffusionRLB, olb::AdvectionDiffusionExternalVelocityCollision>, olb::momenta::Tuple<olb::momenta::FixedDensity, olb::momenta::FixedVelocityMomentumGeneric, olb::momenta::ZeroStress, olb::momenta::DefineSeparately>, 1, -1, -1>
+#include "21df951e0c69ea195a61b34f92af0f936141b6ac2968263161f933032f606c35.cse.h"
 
-//CombinedRLBdynamics<Expr, descriptors::D3Q19<>, dynamics::Tuple<Expr, descriptors::D3Q19<>, momenta::Tuple<momenta::BulkDensity, momenta::BulkMomentum, momenta::BulkStress, momenta::DefineToNEq>, equilibria::SecondOrder, collision::BGK, dynamics::DefaultCombination>, momenta::Tuple<momenta::InnerCornerDensity3D<-1, 1, -1>, momenta::FixedVelocityMomentumGeneric, momenta::InnerCornerStress3D<-1, 1, -1>, momenta::DefineSeparately> >
-#include "ac8910a631856239e7c2338b4452ab33b770dd13dd74b01943eba6b3904362aa.cse.h"
+//AdvectionDiffusionEdgesDynamics<Expr, olb::descriptors::D3Q19<>, olb::dynamics::Tuple<Expr, olb::descriptors::D3Q19<>, olb::momenta::Tuple<olb::momenta::BulkDensity, olb::momenta::BulkMomentum, olb::momenta::NoStress, olb::momenta::DefineToEq>, olb::equilibria::FirstOrder, olb::collision::AdvectionDiffusionRLB, olb::AdvectionDiffusionExternalVelocityCollision>, olb::momenta::Tuple<olb::momenta::FixedDensity, olb::momenta::FixedVelocityMomentumGeneric, olb::momenta::ZeroStress, olb::momenta::DefineSeparately>, 1, -1, 1>
+#include "60c03691655ef9064a744e3cdedb11970438a7c3588e3cbb9c0eb8313567c9d7.cse.h"
 
-//CombinedRLBdynamics<Expr, descriptors::D3Q19<>, dynamics::Tuple<Expr, descriptors::D3Q19<>, momenta::Tuple<momenta::BulkDensity, momenta::BulkMomentum, momenta::BulkStress, momenta::DefineToNEq>, equilibria::SecondOrder, collision::BGK, dynamics::DefaultCombination>, momenta::Tuple<momenta::InnerCornerDensity3D<-1, 1, 1>, momenta::FixedVelocityMomentumGeneric, momenta::InnerCornerStress3D<-1, 1, 1>, momenta::DefineSeparately> >
-#include "718152dfc273cf2ae39c9f97b70ef4b2aaebb353a29520c772b4124fd73ffdd3.cse.h"
+//AdvectionDiffusionEdgesDynamics<Expr, olb::descriptors::D3Q19<>, olb::dynamics::Tuple<Expr, olb::descriptors::D3Q19<>, olb::momenta::Tuple<olb::momenta::BulkDensity, olb::momenta::BulkMomentum, olb::momenta::NoStress, olb::momenta::DefineToEq>, olb::equilibria::FirstOrder, olb::collision::AdvectionDiffusionRLB, olb::AdvectionDiffusionExternalVelocityCollision>, olb::momenta::Tuple<olb::momenta::FixedDensity, olb::momenta::FixedVelocityMomentumGeneric, olb::momenta::ZeroStress, olb::momenta::DefineSeparately>, 1, 1, -1>
+#include "b48af89ae2683bdc34105666bf9a4b6bcb634add34bb65828f8946098c66d5ab.cse.h"
 
-//CombinedRLBdynamics<Expr, descriptors::D3Q19<>, dynamics::Tuple<Expr, descriptors::D3Q19<>, momenta::Tuple<momenta::BulkDensity, momenta::BulkMomentum, momenta::BulkStress, momenta::DefineToNEq>, equilibria::SecondOrder, collision::BGK, dynamics::DefaultCombination>, momenta::Tuple<momenta::InnerCornerDensity3D<1, -1, -1>, momenta::FixedVelocityMomentumGeneric, momenta::InnerCornerStress3D<1, -1, -1>, momenta::DefineSeparately> >
-#include "bb4e39bcdf8d6e75e9b2a9a7ffac20e2b191f32d92e9a68e31b4682fa3e248f0.cse.h"
+//AdvectionDiffusionEdgesDynamics<Expr, olb::descriptors::D3Q19<>, olb::dynamics::Tuple<Expr, olb::descriptors::D3Q19<>, olb::momenta::Tuple<olb::momenta::BulkDensity, olb::momenta::BulkMomentum, olb::momenta::NoStress, olb::momenta::DefineToEq>, olb::equilibria::FirstOrder, olb::collision::AdvectionDiffusionRLB, olb::AdvectionDiffusionExternalVelocityCollision>, olb::momenta::Tuple<olb::momenta::FixedDensity, olb::momenta::FixedVelocityMomentumGeneric, olb::momenta::ZeroStress, olb::momenta::DefineSeparately>, 1, 1, 1>
+#include "1e20d5e01da7fd4bab099a25269164aa471d5b3dbb2af942dc28666cdf82042a.cse.h"
 
-//CombinedRLBdynamics<Expr, descriptors::D3Q19<>, dynamics::Tuple<Expr, descriptors::D3Q19<>, momenta::Tuple<momenta::BulkDensity, momenta::BulkMomentum, momenta::BulkStress, momenta::DefineToNEq>, equilibria::SecondOrder, collision::BGK, dynamics::DefaultCombination>, momenta::Tuple<momenta::InnerCornerDensity3D<1, -1, 1>, momenta::FixedVelocityMomentumGeneric, momenta::InnerCornerStress3D<1, -1, 1>, momenta::DefineSeparately> >
-#include "4d90449c44502b1e5e7d0adedf755eaecd19bae98d05740c1afaaea67c28e972.cse.h"
+//AdvectionDiffusionEdgesDynamics<Expr, olb::descriptors::D3Q19<>, olb::dynamics::Tuple<Expr, olb::descriptors::D3Q19<>, olb::momenta::Tuple<olb::momenta::BulkDensity, olb::momenta::BulkMomentum, olb::momenta::NoStress, olb::momenta::DefineToEq>, olb::equilibria::FirstOrder, olb::collision::AdvectionDiffusionRLB, olb::AdvectionDiffusionExternalVelocityCollision>, olb::momenta::Tuple<olb::momenta::FixedDensity, olb::momenta::FixedVelocityMomentumGeneric, olb::momenta::ZeroStress, olb::momenta::DefineSeparately>, 2, -1, -1>
+#include "d24e8b9d60f2feab5a3a10e45a5c4d0da29f70e9ebcdb00d391d714fa3c4f526.cse.h"
 
-//CombinedRLBdynamics<Expr, descriptors::D3Q19<>, dynamics::Tuple<Expr, descriptors::D3Q19<>, momenta::Tuple<momenta::BulkDensity, momenta::BulkMomentum, momenta::BulkStress, momenta::DefineToNEq>, equilibria::SecondOrder, collision::BGK, dynamics::DefaultCombination>, momenta::Tuple<momenta::InnerCornerDensity3D<1, 1, -1>, momenta::FixedVelocityMomentumGeneric, momenta::InnerCornerStress3D<1, 1, -1>, momenta::DefineSeparately> >
-#include "2ac1e05e312b38bd8ed2ece715659debac31663ca3bb152f19661f3ee6e8fd82.cse.h"
+//AdvectionDiffusionEdgesDynamics<Expr, olb::descriptors::D3Q19<>, olb::dynamics::Tuple<Expr, olb::descriptors::D3Q19<>, olb::momenta::Tuple<olb::momenta::BulkDensity, olb::momenta::BulkMomentum, olb::momenta::NoStress, olb::momenta::DefineToEq>, olb::equilibria::FirstOrder, olb::collision::AdvectionDiffusionRLB, olb::AdvectionDiffusionExternalVelocityCollision>, olb::momenta::Tuple<olb::momenta::FixedDensity, olb::momenta::FixedVelocityMomentumGeneric, olb::momenta::ZeroStress, olb::momenta::DefineSeparately>, 2, -1, 1>
+#include "a951de31abeef75e9ad6f516f3680496144dde5ead7ea1b2195efe136217dd1d.cse.h"
 
-//CombinedRLBdynamics<Expr, descriptors::D3Q19<>, dynamics::Tuple<Expr, descriptors::D3Q19<>, momenta::Tuple<momenta::BulkDensity, momenta::BulkMomentum, momenta::BulkStress, momenta::DefineToNEq>, equilibria::SecondOrder, collision::BGK, dynamics::DefaultCombination>, momenta::Tuple<momenta::InnerCornerDensity3D<1, 1, 1>, momenta::FixedVelocityMomentumGeneric, momenta::InnerCornerStress3D<1, 1, 1>, momenta::DefineSeparately> >
-#include "280f9cf1f3c6268d0a5526c6d76bd8c1e68832745306e674bac51851707c9939.cse.h"
+//AdvectionDiffusionEdgesDynamics<Expr, olb::descriptors::D3Q19<>, olb::dynamics::Tuple<Expr, olb::descriptors::D3Q19<>, olb::momenta::Tuple<olb::momenta::BulkDensity, olb::momenta::BulkMomentum, olb::momenta::NoStress, olb::momenta::DefineToEq>, olb::equilibria::FirstOrder, olb::collision::AdvectionDiffusionRLB, olb::AdvectionDiffusionExternalVelocityCollision>, olb::momenta::Tuple<olb::momenta::FixedDensity, olb::momenta::FixedVelocityMomentumGeneric, olb::momenta::ZeroStress, olb::momenta::DefineSeparately>, 2, 1, -1>
+#include "d716ce8cf663282a94121df59ec2d5d1b4f089d89c41e4d6c3b79a5479402326.cse.h"
 
-//CombinedRLBdynamics<Expr, descriptors::D3Q19<>, dynamics::Tuple<Expr, descriptors::D3Q19<>, momenta::Tuple<momenta::BulkDensity, momenta::BulkMomentum, momenta::BulkStress, momenta::DefineToNEq>, equilibria::SecondOrder, collision::BGK, dynamics::DefaultCombination>, momenta::Tuple<momenta::InnerEdgeDensity3D<0, -1, -1>, momenta::FixedVelocityMomentumGeneric, momenta::InnerEdgeStress3D<0, -1, -1>, momenta::DefineSeparately> >
-#include "3d39627203bb7941352a718ac495fd021240771c8a6eb29b439226508f43351d.cse.h"
+//AdvectionDiffusionEdgesDynamics<Expr, olb::descriptors::D3Q19<>, olb::dynamics::Tuple<Expr, olb::descriptors::D3Q19<>, olb::momenta::Tuple<olb::momenta::BulkDensity, olb::momenta::BulkMomentum, olb::momenta::NoStress, olb::momenta::DefineToEq>, olb::equilibria::FirstOrder, olb::collision::AdvectionDiffusionRLB, olb::AdvectionDiffusionExternalVelocityCollision>, olb::momenta::Tuple<olb::momenta::FixedDensity, olb::momenta::FixedVelocityMomentumGeneric, olb::momenta::ZeroStress, olb::momenta::DefineSeparately>, 2, 1, 1>
+#include "2fb9be38630212197f445ca6b117e790ec2d2077feaa60b9f67b8b86f5df8385.cse.h"
 
-//CombinedRLBdynamics<Expr, descriptors::D3Q19<>, dynamics::Tuple<Expr, descriptors::D3Q19<>, momenta::Tuple<momenta::BulkDensity, momenta::BulkMomentum, momenta::BulkStress, momenta::DefineToNEq>, equilibria::SecondOrder, collision::BGK, dynamics::DefaultCombination>, momenta::Tuple<momenta::InnerEdgeDensity3D<0, -1, 1>, momenta::FixedVelocityMomentumGeneric, momenta::InnerEdgeStress3D<0, -1, 1>, momenta::DefineSeparately> >
-#include "2d550db4ea1a7cd8c29e3b344473a47ebac04789c43052411d62d0818f5b67bc.cse.h"
+//AdvectionDiffusionEdgesDynamics<Expr, olb::descriptors::D3Q7<>, olb::dynamics::Tuple<Expr, olb::descriptors::D3Q7<>, olb::momenta::Tuple<olb::momenta::BulkDensity, olb::momenta::BulkMomentum, olb::momenta::NoStress, olb::momenta::DefineToEq>, olb::equilibria::FirstOrder, olb::collision::AdvectionDiffusionRLB, olb::AdvectionDiffusionExternalVelocityCollision>, olb::momenta::Tuple<olb::momenta::FixedDensity, olb::momenta::FixedVelocityMomentumGeneric, olb::momenta::ZeroStress, olb::momenta::DefineSeparately>, 0, -1, -1>
+#include "98d153164c08793c5bffe7a35c252aebb1b72892ae9bd89dc65182cbe84f818e.cse.h"
 
-//CombinedRLBdynamics<Expr, descriptors::D3Q19<>, dynamics::Tuple<Expr, descriptors::D3Q19<>, momenta::Tuple<momenta::BulkDensity, momenta::BulkMomentum, momenta::BulkStress, momenta::DefineToNEq>, equilibria::SecondOrder, collision::BGK, dynamics::DefaultCombination>, momenta::Tuple<momenta::InnerEdgeDensity3D<0, 1, -1>, momenta::FixedVelocityMomentumGeneric, momenta::InnerEdgeStress3D<0, 1, -1>, momenta::DefineSeparately> >
-#include "25c07c5fb9907423e065d29c2ea582c42f588c7b30cf1455744e697a51c16663.cse.h"
+//AdvectionDiffusionEdgesDynamics<Expr, olb::descriptors::D3Q7<>, olb::dynamics::Tuple<Expr, olb::descriptors::D3Q7<>, olb::momenta::Tuple<olb::momenta::BulkDensity, olb::momenta::BulkMomentum, olb::momenta::NoStress, olb::momenta::DefineToEq>, olb::equilibria::FirstOrder, olb::collision::AdvectionDiffusionRLB, olb::AdvectionDiffusionExternalVelocityCollision>, olb::momenta::Tuple<olb::momenta::FixedDensity, olb::momenta::FixedVelocityMomentumGeneric, olb::momenta::ZeroStress, olb::momenta::DefineSeparately>, 0, -1, 1>
+#include "e30728ec476aa07958d566130f0db68e34c4350b29467335084cc63472f6c948.cse.h"
 
-//CombinedRLBdynamics<Expr, descriptors::D3Q19<>, dynamics::Tuple<Expr, descriptors::D3Q19<>, momenta::Tuple<momenta::BulkDensity, momenta::BulkMomentum, momenta::BulkStress, momenta::DefineToNEq>, equilibria::SecondOrder, collision::BGK, dynamics::DefaultCombination>, momenta::Tuple<momenta::InnerEdgeDensity3D<0, 1, 1>, momenta::FixedVelocityMomentumGeneric, momenta::InnerEdgeStress3D<0, 1, 1>, momenta::DefineSeparately> >
-#include "814ec0edb00f5f28adbfe6b3864e1d344d071737022519ac6e763fe10be77473.cse.h"
+//AdvectionDiffusionEdgesDynamics<Expr, olb::descriptors::D3Q7<>, olb::dynamics::Tuple<Expr, olb::descriptors::D3Q7<>, olb::momenta::Tuple<olb::momenta::BulkDensity, olb::momenta::BulkMomentum, olb::momenta::NoStress, olb::momenta::DefineToEq>, olb::equilibria::FirstOrder, olb::collision::AdvectionDiffusionRLB, olb::AdvectionDiffusionExternalVelocityCollision>, olb::momenta::Tuple<olb::momenta::FixedDensity, olb::momenta::FixedVelocityMomentumGeneric, olb::momenta::ZeroStress, olb::momenta::DefineSeparately>, 2, -1, -1>
+#include "9a941f8c5d7938202e911ba3aafa1f93e7e7391033ce8c2463e89395f4dade84.cse.h"
 
-//CombinedRLBdynamics<Expr, descriptors::D3Q19<>, dynamics::Tuple<Expr, descriptors::D3Q19<>, momenta::Tuple<momenta::BulkDensity, momenta::BulkMomentum, momenta::BulkStress, momenta::DefineToNEq>, equilibria::SecondOrder, collision::BGK, dynamics::DefaultCombination>, momenta::Tuple<momenta::InnerEdgeDensity3D<1, -1, -1>, momenta::FixedVelocityMomentumGeneric, momenta::InnerEdgeStress3D<1, -1, -1>, momenta::DefineSeparately> >
-#include "09c43688060c957dc6b3453d5784939eece43166046c868e0638ca318d361039.cse.h"
+//AdvectionDiffusionEdgesDynamics<Expr, olb::descriptors::D3Q7<>, olb::dynamics::Tuple<Expr, olb::descriptors::D3Q7<>, olb::momenta::Tuple<olb::momenta::BulkDensity, olb::momenta::BulkMomentum, olb::momenta::NoStress, olb::momenta::DefineToEq>, olb::equilibria::FirstOrder, olb::collision::AdvectionDiffusionRLB, olb::AdvectionDiffusionExternalVelocityCollision>, olb::momenta::Tuple<olb::momenta::FixedDensity, olb::momenta::FixedVelocityMomentumGeneric, olb::momenta::ZeroStress, olb::momenta::DefineSeparately>, 2, -1, 1>
+#include "8d32a5bf8137507a70b0d7b55f4175a56089d2998a282805e2c57c77c91b99cb.cse.h"
 
-//CombinedRLBdynamics<Expr, descriptors::D3Q19<>, dynamics::Tuple<Expr, descriptors::D3Q19<>, momenta::Tuple<momenta::BulkDensity, momenta::BulkMomentum, momenta::BulkStress, momenta::DefineToNEq>, equilibria::SecondOrder, collision::BGK, dynamics::DefaultCombination>, momenta::Tuple<momenta::InnerEdgeDensity3D<1, -1, 1>, momenta::FixedVelocityMomentumGeneric, momenta::InnerEdgeStress3D<1, -1, 1>, momenta::DefineSeparately> >
-#include "f6a3a51951c995d6d304739c77b4cc7179dbb3405c82ad8d6e440af230c2e6b5.cse.h"
+//BoolakeeLinearElasticityBoundary<Expr, olb::descriptors::D2Q8<olb::descriptors::tag::MRT> >
+#include "cac577ceb23f673438f0c6f2692a5552e859b7459989f4aeeabd6ea0d339e109.cse.h"
 
-//CombinedRLBdynamics<Expr, descriptors::D3Q19<>, dynamics::Tuple<Expr, descriptors::D3Q19<>, momenta::Tuple<momenta::BulkDensity, momenta::BulkMomentum, momenta::BulkStress, momenta::DefineToNEq>, equilibria::SecondOrder, collision::BGK, dynamics::DefaultCombination>, momenta::Tuple<momenta::InnerEdgeDensity3D<1, 1, -1>, momenta::FixedVelocityMomentumGeneric, momenta::InnerEdgeStress3D<1, 1, -1>, momenta::DefineSeparately> >
-#include "8b639b66c0d33836574e9f59ed6a268da99d2ac2f8ef022637ee32207d2a6632.cse.h"
+//BoolakeeLinearElasticity<Expr, olb::descriptors::D2Q8<olb::descriptors::tag::MRT> >
+#include "940d042b275eabec20384c0964d9e17bca7c95e578bc0b1d133de8f80cfa180d.cse.h"
 
-//CombinedRLBdynamics<Expr, descriptors::D3Q19<>, dynamics::Tuple<Expr, descriptors::D3Q19<>, momenta::Tuple<momenta::BulkDensity, momenta::BulkMomentum, momenta::BulkStress, momenta::DefineToNEq>, equilibria::SecondOrder, collision::BGK, dynamics::DefaultCombination>, momenta::Tuple<momenta::InnerEdgeDensity3D<1, 1, 1>, momenta::FixedVelocityMomentumGeneric, momenta::InnerEdgeStress3D<1, 1, 1>, momenta::DefineSeparately> >
-#include "4c34ca445c2c3d2a746acd7541dc260d06af7d6c05f058d934e9212920977f0a.cse.h"
+//CombinedAdvectionDiffusionRLBdynamics<Expr, olb::descriptors::D2Q5<>, olb::dynamics::Tuple<Expr, olb::descriptors::D2Q5<>, olb::momenta::Tuple<olb::momenta::BulkDensity, olb::momenta::BulkMomentum, olb::momenta::NoStress, olb::momenta::DefineToEq>, olb::equilibria::FirstOrder, olb::collision::AdvectionDiffusionRLB, olb::AdvectionDiffusionExternalVelocityCollision>, olb::momenta::Tuple<olb::momenta::FixedDensity, olb::momenta::FixedTemperatureMomentum<0, -1>, olb::momenta::NoStress, olb::momenta::DefineSeparately> >
+#include "86f6baccd3817b99e6ecfee7f66a7bba99b179373a2df0561b0341b42c4ec369.cse.h"
 
-//CombinedRLBdynamics<Expr, descriptors::D3Q19<>, dynamics::Tuple<Expr, descriptors::D3Q19<>, momenta::Tuple<momenta::BulkDensity, momenta::BulkMomentum, momenta::BulkStress, momenta::DefineToNEq>, equilibria::SecondOrder, collision::BGK, dynamics::DefaultCombination>, momenta::Tuple<momenta::InnerEdgeDensity3D<2, -1, -1>, momenta::FixedVelocityMomentumGeneric, momenta::InnerEdgeStress3D<2, -1, -1>, momenta::DefineSeparately> >
-#include "91bd291217a3100a4ca6c9a4705ab41faa3f08834eecd18ea072ee54a9bc6efb.cse.h"
+//CombinedAdvectionDiffusionRLBdynamics<Expr, olb::descriptors::D2Q5<>, olb::dynamics::Tuple<Expr, olb::descriptors::D2Q5<>, olb::momenta::Tuple<olb::momenta::BulkDensity, olb::momenta::BulkMomentum, olb::momenta::NoStress, olb::momenta::DefineToEq>, olb::equilibria::FirstOrder, olb::collision::AdvectionDiffusionRLB, olb::AdvectionDiffusionExternalVelocityCollision>, olb::momenta::Tuple<olb::momenta::FixedDensity, olb::momenta::FixedTemperatureMomentum<0, 1>, olb::momenta::NoStress, olb::momenta::DefineSeparately> >
+#include "dabf70005d5fc4f468d5164e4cb5163d6da16aa3ffb02514327323d22da38b1e.cse.h"
 
-//CombinedRLBdynamics<Expr, descriptors::D3Q19<>, dynamics::Tuple<Expr, descriptors::D3Q19<>, momenta::Tuple<momenta::BulkDensity, momenta::BulkMomentum, momenta::BulkStress, momenta::DefineToNEq>, equilibria::SecondOrder, collision::BGK, dynamics::DefaultCombination>, momenta::Tuple<momenta::InnerEdgeDensity3D<2, -1, 1>, momenta::FixedVelocityMomentumGeneric, momenta::InnerEdgeStress3D<2, -1, 1>, momenta::DefineSeparately> >
-#include "58e476b92bbe6a6e7c47490dfdcdcba60c1e9bf75634c8ce7d746a3f6ca92f82.cse.h"
+//CombinedAdvectionDiffusionRLBdynamics<Expr, olb::descriptors::D2Q5<>, olb::dynamics::Tuple<Expr, olb::descriptors::D2Q5<>, olb::momenta::Tuple<olb::momenta::BulkDensity, olb::momenta::BulkMomentum, olb::momenta::NoStress, olb::momenta::DefineToEq>, olb::equilibria::FirstOrder, olb::collision::AdvectionDiffusionRLB, olb::AdvectionDiffusionExternalVelocityCollision>, olb::momenta::Tuple<olb::momenta::FixedDensity, olb::momenta::FixedTemperatureMomentum<1, -1>, olb::momenta::NoStress, olb::momenta::DefineSeparately> >
+#include "4f5cd299bd63c5782dff39cecaaa1e5c8e2a9fc500c653360b7af5688d28f483.cse.h"
 
-//CombinedRLBdynamics<Expr, descriptors::D3Q19<>, dynamics::Tuple<Expr, descriptors::D3Q19<>, momenta::Tuple<momenta::BulkDensity, momenta::BulkMomentum, momenta::BulkStress, momenta::DefineToNEq>, equilibria::SecondOrder, collision::BGK, dynamics::DefaultCombination>, momenta::Tuple<momenta::InnerEdgeDensity3D<2, 1, -1>, momenta::FixedVelocityMomentumGeneric, momenta::InnerEdgeStress3D<2, 1, -1>, momenta::DefineSeparately> >
-#include "710897f2e283f5e3baf2e6651edc24e6a1ead64ae6aa974c8edbdde77dee5c9b.cse.h"
+//CombinedAdvectionDiffusionRLBdynamics<Expr, olb::descriptors::D2Q5<>, olb::dynamics::Tuple<Expr, olb::descriptors::D2Q5<>, olb::momenta::Tuple<olb::momenta::BulkDensity, olb::momenta::BulkMomentum, olb::momenta::NoStress, olb::momenta::DefineToEq>, olb::equilibria::FirstOrder, olb::collision::AdvectionDiffusionRLB, olb::AdvectionDiffusionExternalVelocityCollision>, olb::momenta::Tuple<olb::momenta::HeatFluxBoundaryDensity<1, 1>, olb::momenta::FixedVelocityMomentumAD, olb::momenta::NoStress, olb::momenta::DefineToEq> >
+#include "88a55832fb159ca940a8d146c8477468eec4e9d43f2e387091473e23285c1d73.cse.h"
 
-//CombinedRLBdynamics<Expr, descriptors::D3Q19<>, dynamics::Tuple<Expr, descriptors::D3Q19<>, momenta::Tuple<momenta::BulkDensity, momenta::BulkMomentum, momenta::BulkStress, momenta::DefineToNEq>, equilibria::SecondOrder, collision::BGK, dynamics::DefaultCombination>, momenta::Tuple<momenta::InnerEdgeDensity3D<2, 1, 1>, momenta::FixedVelocityMomentumGeneric, momenta::InnerEdgeStress3D<2, 1, 1>, momenta::DefineSeparately> >
-#include "b5ab0ebc780c05301efc66425e0abaae330f94abdc268e986215975a654e08ee.cse.h"
+//CombinedAdvectionDiffusionRLBdynamics<Expr, olb::descriptors::D2Q9<>, olb::dynamics::Tuple<Expr, olb::descriptors::D2Q9<>, olb::momenta::Tuple<olb::momenta::BulkDensity, olb::momenta::BulkMomentum, olb::momenta::NoStress, olb::momenta::DefineToEq>, olb::equilibria::FirstOrder, olb::collision::AdvectionDiffusionRLB, olb::AdvectionDiffusionExternalVelocityCollision>, olb::momenta::Tuple<olb::momenta::FixedDensity, olb::momenta::FixedTemperatureMomentum<0, -1>, olb::momenta::NoStress, olb::momenta::DefineSeparately> >
+#include "3c63200bd1cc10d3e78f970c8c60783b8af3ca6b637642eb692c1f39addae344.cse.h"
 
-//CombinedRLBdynamics<Expr, descriptors::D3Q19<>, dynamics::Tuple<Expr, descriptors::D3Q19<>, momenta::Tuple<momenta::BulkDensity, momenta::BulkMomentum, momenta::BulkStress, momenta::DefineToNEq>, equilibria::SecondOrder, collision::BGK, dynamics::DefaultCombination>, momenta::Tuple<momenta::VelocityBoundaryDensity<0, -1>, momenta::FixedVelocityMomentumGeneric, momenta::RegularizedBoundaryStress<0, -1>, momenta::DefineSeparately> >
-#include "124b825f6626330ace80439724bbfe34cbf7736755bef753591c8a60d16af535.cse.h"
+//CombinedAdvectionDiffusionRLBdynamics<Expr, olb::descriptors::D3Q7<>, olb::dynamics::Tuple<Expr, olb::descriptors::D3Q7<>, olb::momenta::Tuple<olb::momenta::BulkDensity, olb::momenta::BulkMomentum, olb::momenta::NoStress, olb::momenta::DefineToEq>, olb::equilibria::FirstOrder, olb::collision::AdvectionDiffusionRLB, olb::AdvectionDiffusionExternalVelocityCollision>, olb::momenta::Tuple<olb::momenta::FixedDensity, olb::momenta::FixedTemperatureMomentum<1, -1>, olb::momenta::NoStress, olb::momenta::DefineSeparately> >
+#include "b2c30bcf779ba800e81e44a0677190002ad112d91eb3317673f6b1230a03af87.cse.h"
 
-//CombinedRLBdynamics<Expr, descriptors::D3Q19<>, dynamics::Tuple<Expr, descriptors::D3Q19<>, momenta::Tuple<momenta::BulkDensity, momenta::BulkMomentum, momenta::BulkStress, momenta::DefineToNEq>, equilibria::SecondOrder, collision::BGK, dynamics::DefaultCombination>, momenta::Tuple<momenta::VelocityBoundaryDensity<0, 1>, momenta::FixedVelocityMomentumGeneric, momenta::RegularizedBoundaryStress<0, 1>, momenta::DefineSeparately> >
-#include "7bc80f88ab175888ea439dbc9a2708eeb135a6d64bccb944834fedd5246729ea.cse.h"
+//CombinedAdvectionDiffusionRLBdynamics<Expr, olb::descriptors::D3Q7<>, olb::dynamics::Tuple<Expr, olb::descriptors::D3Q7<>, olb::momenta::Tuple<olb::momenta::BulkDensity, olb::momenta::BulkMomentum, olb::momenta::NoStress, olb::momenta::DefineToEq>, olb::equilibria::FirstOrder, olb::collision::AdvectionDiffusionRLB, olb::AdvectionDiffusionExternalVelocityCollision>, olb::momenta::Tuple<olb::momenta::HeatFluxBoundaryDensity<1, 1>, olb::momenta::FixedVelocityMomentumAD, olb::momenta::NoStress, olb::momenta::DefineToEq> >
+#include "e02f714add9bbb233f9346ef397e0417eb63934ccc561fcfb6d4cea35c79661f.cse.h"
 
-//CombinedRLBdynamics<Expr, descriptors::D3Q19<>, dynamics::Tuple<Expr, descriptors::D3Q19<>, momenta::Tuple<momenta::BulkDensity, momenta::BulkMomentum, momenta::BulkStress, momenta::DefineToNEq>, equilibria::SecondOrder, collision::BGK, dynamics::DefaultCombination>, momenta::Tuple<momenta::VelocityBoundaryDensity<1, -1>, momenta::FixedVelocityMomentumGeneric, momenta::RegularizedBoundaryStress<1, -1>, momenta::DefineSeparately> >
-#include "de0bb9c05906c5be1362c5f0cc743785a0d829b56a759ad0a9595e11261044ca.cse.h"
+//CombinedRLBdynamics<Expr, olb::descriptors::D2Q9<>, olb::dynamics::Tuple<Expr, olb::descriptors::D2Q9<>, olb::momenta::Tuple<olb::momenta::BulkDensity, olb::momenta::BulkMomentum, olb::momenta::BulkStress, olb::momenta::DefineToNEq>, olb::equilibria::SecondOrder, olb::collision::ParameterFromCell<olb::descriptors::OMEGA, olb::collision::BGK>, olb::forcing::Wagner>, olb::momenta::Tuple<olb::momenta::FixedDensity, olb::momenta::FixedPressureMomentum<0, -1>, olb::momenta::RegularizedBoundaryStress<0, -1>, olb::momenta::DefineSeparately> >
+#include "0a9acd2b853924c4f3b21a7ffe4ba4ff0c6cf0a3d4adc73d54b1cd3ff370c4e4.cse.h"
 
-//CombinedRLBdynamics<Expr, descriptors::D3Q19<>, dynamics::Tuple<Expr, descriptors::D3Q19<>, momenta::Tuple<momenta::BulkDensity, momenta::BulkMomentum, momenta::BulkStress, momenta::DefineToNEq>, equilibria::SecondOrder, collision::BGK, dynamics::DefaultCombination>, momenta::Tuple<momenta::VelocityBoundaryDensity<1, 1>, momenta::FixedVelocityMomentumGeneric, momenta::RegularizedBoundaryStress<1, 1>, momenta::DefineSeparately> >
-#include "8a17acce705841323697339345522eb66dd818a4137915d2fb46158934728f4a.cse.h"
+//CombinedRLBdynamics<Expr, olb::descriptors::D2Q9<>, olb::dynamics::Tuple<Expr, olb::descriptors::D2Q9<>, olb::momenta::Tuple<olb::momenta::BulkDensity, olb::momenta::BulkMomentum, olb::momenta::BulkStress, olb::momenta::DefineToNEq>, olb::equilibria::SecondOrder, olb::collision::ParameterFromCell<olb::descriptors::OMEGA, olb::collision::BGK>, olb::forcing::Wagner>, olb::momenta::Tuple<olb::momenta::FixedDensity, olb::momenta::FixedPressureMomentum<0, 1>, olb::momenta::RegularizedBoundaryStress<0, 1>, olb::momenta::DefineSeparately> >
+#include "530de7fea2b207436ea993c1b13ba429a850daf75c0e514f8158fe744cf9e2b7.cse.h"
 
-//CombinedRLBdynamics<Expr, descriptors::D3Q19<>, dynamics::Tuple<Expr, descriptors::D3Q19<>, momenta::Tuple<momenta::BulkDensity, momenta::BulkMomentum, momenta::BulkStress, momenta::DefineToNEq>, equilibria::SecondOrder, collision::BGK, dynamics::DefaultCombination>, momenta::Tuple<momenta::VelocityBoundaryDensity<2, -1>, momenta::FixedVelocityMomentumGeneric, momenta::RegularizedBoundaryStress<2, -1>, momenta::DefineSeparately> >
-#include "70416e8bd5d842b5a50777a4eb9391215f8805a451094b62cf188611cdf9a473.cse.h"
+//CombinedRLBdynamics<Expr, olb::descriptors::D2Q9<>, olb::dynamics::Tuple<Expr, olb::descriptors::D2Q9<>, olb::momenta::Tuple<olb::momenta::BulkDensity, olb::momenta::BulkMomentum, olb::momenta::BulkStress, olb::momenta::DefineToNEq>, olb::equilibria::SecondOrder, olb::collision::RLB, olb::dynamics::DefaultCombination>, olb::momenta::Tuple<olb::momenta::FixedDensity, olb::momenta::FixedPressureMomentum<0, 1>, olb::momenta::RegularizedBoundaryStress<0, 1>, olb::momenta::DefineSeparately> >
+#include "c01d2def3720775ad1fa3a6fc789e82d158644705f2273847366df64d14c459e.cse.h"
 
-//CombinedRLBdynamics<Expr, descriptors::D3Q19<>, dynamics::Tuple<Expr, descriptors::D3Q19<>, momenta::Tuple<momenta::BulkDensity, momenta::BulkMomentum, momenta::BulkStress, momenta::DefineToNEq>, equilibria::SecondOrder, collision::BGK, dynamics::DefaultCombination>, momenta::Tuple<momenta::VelocityBoundaryDensity<2, 1>, momenta::FixedVelocityMomentumGeneric, momenta::RegularizedBoundaryStress<2, 1>, momenta::DefineSeparately> >
-#include "6fe887699614cbe4ea0006e0b11cb1c1016e8c62bd0a1199d3a2f178384694c0.cse.h"
+//CombinedRLBdynamics<Expr, olb::descriptors::D2Q9<>, olb::dynamics::Tuple<Expr, olb::descriptors::D2Q9<>, olb::momenta::Tuple<olb::momenta::BulkDensity, olb::momenta::BulkMomentum, olb::momenta::BulkStress, olb::momenta::DefineToNEq>, olb::equilibria::SecondOrder, olb::collision::RLB, olb::dynamics::DefaultCombination>, olb::momenta::Tuple<olb::momenta::VelocityBoundaryDensity<0, -1>, olb::momenta::FixedVelocityMomentumGeneric, olb::momenta::RegularizedBoundaryStress<0, -1>, olb::momenta::DefineSeparately> >
+#include "4c91939da9820c3b6237d1f068ef668a6564c61cbc41d4104cd706879759731e.cse.h"
 
-//CombinedRLBdynamics<Expr, descriptors::D3Q19<>, dynamics::Tuple<Expr, descriptors::D3Q19<>, momenta::Tuple<momenta::BulkDensity, momenta::BulkMomentum, momenta::BulkStress, momenta::DefineToNEq>, equilibria::SecondOrder, collision::SaveVelocity<collision::BGK>, dynamics::DefaultCombination>, momenta::Tuple<momenta::FixedDensity, momenta::FixedPressureMomentum<0, 1>, momenta::RegularizedBoundaryStress<0, 1>, momenta::DefineSeparately> >
-#include "67676b09f3c2ddd8f10764fd9f4e8324b2c05ca9313982fd3ab40da568014122.cse.h"
+//CombinedRLBdynamics<Expr, olb::descriptors::D2Q9<>, olb::dynamics::Tuple<Expr, olb::descriptors::D2Q9<>, olb::momenta::Tuple<olb::momenta::BulkDensity, olb::momenta::BulkMomentum, olb::momenta::BulkStress, olb::momenta::DefineToNEq>, olb::equilibria::SecondOrder, olb::collision::RLB, olb::dynamics::DefaultCombination>, olb::momenta::Tuple<olb::momenta::VelocityBoundaryDensity<0, 1>, olb::momenta::FixedVelocityMomentumGeneric, olb::momenta::RegularizedBoundaryStress<0, 1>, olb::momenta::DefineSeparately> >
+#include "942a56f9de87754107025a4bde4925f71bdfd6212eb96965f9a339b994ab0964.cse.h"
 
-//CombinedRLBdynamics<Expr, descriptors::D3Q19<>, dynamics::Tuple<Expr, descriptors::D3Q19<>, momenta::Tuple<momenta::BulkDensity, momenta::BulkMomentum, momenta::BulkStress, momenta::DefineToNEq>, equilibria::SecondOrder, collision::SaveVelocity<collision::BGK>, dynamics::DefaultCombination>, momenta::Tuple<momenta::VelocityBoundaryDensity<0, -1>, momenta::FixedVelocityMomentumGeneric, momenta::RegularizedBoundaryStress<0, -1>, momenta::DefineSeparately> >
-#include "3cf555dfcfcfd3a60eb71b26ec7ccd105312cf993176a20245b88ca8f6f932ee.cse.h"
+//CombinedRLBdynamics<Expr, olb::descriptors::D2Q9<>, olb::dynamics::Tuple<Expr, olb::descriptors::D2Q9<>, olb::momenta::Tuple<olb::momenta::BulkDensity, olb::momenta::BulkMomentum, olb::momenta::BulkStress, olb::momenta::DefineToNEq>, olb::equilibria::SecondOrder, olb::collision::RLB, olb::dynamics::DefaultCombination>, olb::momenta::Tuple<olb::momenta::VelocityBoundaryDensity<1, -1>, olb::momenta::FixedVelocityMomentumGeneric, olb::momenta::RegularizedBoundaryStress<1, -1>, olb::momenta::DefineSeparately> >
+#include "c2647059d16653c7e1e1b1ab24b3bc04a5e37b7f481b6ac6c65de9a25ffe9649.cse.h"
 
-//dynamics::Tuple<Expr, descriptors::D2Q5<>, momenta::Tuple<momenta::BulkDensity, momenta::BulkMomentum, momenta::NoStress, momenta::DefineToEq>, equilibria::FirstOrder, collision::BGK, AdvectionDiffusionExternalVelocityCollision>
-#include "462a238371e486b6552d99628d3ac0964c4efd099dcc0129e460ce9de7078105.cse.h"
+//CombinedRLBdynamics<Expr, olb::descriptors::D2Q9<>, olb::dynamics::Tuple<Expr, olb::descriptors::D2Q9<>, olb::momenta::Tuple<olb::momenta::BulkDensity, olb::momenta::BulkMomentum, olb::momenta::BulkStress, olb::momenta::DefineToNEq>, olb::equilibria::SecondOrder, olb::collision::RLB, olb::dynamics::DefaultCombination>, olb::momenta::Tuple<olb::momenta::VelocityBoundaryDensity<1, 1>, olb::momenta::FixedVelocityMomentumGeneric, olb::momenta::RegularizedBoundaryStress<1, 1>, olb::momenta::DefineSeparately> >
+#include "3bc4d2c2a3930ff18af72d5ce01c8de66bdefd6e521604e15a17f2a1e3ecc447.cse.h"
 
-//dynamics::Tuple<Expr, descriptors::D2Q5<>, momenta::Tuple<momenta::FixedDensity, momenta::ZeroMomentum, momenta::ZeroStress, momenta::DefineSeparately>, equilibria::SecondOrder, collision::Revert, dynamics::DefaultCombination>
-#include "0d734f6856d1d0c3d10347278f4ed84cbd9e38110769f18203a55619e2cf3241.cse.h"
+//CombinedRLBdynamics<Expr, olb::descriptors::D2Q9<>, olb::dynamics::Tuple<Expr, olb::descriptors::D2Q9<>, olb::momenta::Tuple<olb::momenta::BulkDensity, olb::momenta::BulkMomentum, olb::momenta::BulkStress, olb::momenta::DefineToNEq>, olb::equilibria::SecondOrder, olb::collision::SaveVelocity<olb::collision::BGK>, olb::dynamics::DefaultCombination>, olb::momenta::Tuple<olb::momenta::FixedDensity, olb::momenta::FixedPressureMomentum<0, -1>, olb::momenta::RegularizedBoundaryStress<0, -1>, olb::momenta::DefineSeparately> >
+#include "5c448a7e819442e148b2876b3791335ff47e6cb42f377e549a8d6946a0925011.cse.h"
 
-//dynamics::Tuple<Expr, descriptors::D2Q9<>, momenta::Porous<momenta::Tuple<momenta::BulkDensity, momenta::BulkMomentum, momenta::BulkStress, momenta::DefineToNEq> >, equilibria::SecondOrder, collision::BGK, dynamics::DefaultCombination>
-#include "2bb77ad4326049922b42caa24f9ddf59ff7d73ec0cc69e6ef52c2e9c45901aee.cse.h"
+//CombinedRLBdynamics<Expr, olb::descriptors::D2Q9<>, olb::dynamics::Tuple<Expr, olb::descriptors::D2Q9<>, olb::momenta::Tuple<olb::momenta::BulkDensity, olb::momenta::BulkMomentum, olb::momenta::BulkStress, olb::momenta::DefineToNEq>, olb::equilibria::SecondOrder, olb::collision::SaveVelocity<olb::collision::BGK>, olb::dynamics::DefaultCombination>, olb::momenta::Tuple<olb::momenta::FixedDensity, olb::momenta::FixedPressureMomentum<0, 1>, olb::momenta::RegularizedBoundaryStress<0, 1>, olb::momenta::DefineSeparately> >
+#include "9a78830b35d3d85f2700fff44f00780de66aedd94bdc1c57020563a472792401.cse.h"
 
-//dynamics::Tuple<Expr, descriptors::D2Q9<>, momenta::Tuple<momenta::BulkDensity, momenta::BulkMomentum, momenta::BulkStress, momenta::DefineToNEq>, equilibria::SecondOrder, collision::BGK, dynamics::DefaultCombination>
-#include "53b33a9be364036188fa24b23bb617e8b2b7bae7a86276cb4355d9f4988ffcb9.cse.h"
+//CombinedRLBdynamics<Expr, olb::descriptors::D3Q19<>, olb::dynamics::Tuple<Expr, olb::descriptors::D3Q19<>, olb::momenta::Tuple<olb::momenta::BulkDensity, olb::momenta::BulkMomentum, olb::momenta::BulkStress, olb::momenta::DefineToNEq>, olb::equilibria::SecondOrder, olb::collision::BGK, olb::dynamics::DefaultCombination>, olb::momenta::Tuple<olb::momenta::InnerCornerDensity3D<-1, 1, -1>, olb::momenta::FixedVelocityMomentumGeneric, olb::momenta::InnerCornerStress3D<-1, 1, -1>, olb::momenta::DefineSeparately> >
+#include "409aca133489387a4f73d36c605d8577b4482befbe1ffaf81ab11a53518c3038.cse.h"
 
-//dynamics::Tuple<Expr, descriptors::D2Q9<>, momenta::Tuple<momenta::BulkDensity, momenta::BulkMomentum, momenta::BulkStress, momenta::DefineToNEq>, equilibria::SecondOrder, collision::BGK, forcing::fsi::HLBM>
-#include "6c18c57dbf6124f241e5d4d5bbda6ab781f5ce214108cb33f511ece9f8e92657.cse.h"
+//CombinedRLBdynamics<Expr, olb::descriptors::D3Q19<>, olb::dynamics::Tuple<Expr, olb::descriptors::D3Q19<>, olb::momenta::Tuple<olb::momenta::BulkDensity, olb::momenta::BulkMomentum, olb::momenta::BulkStress, olb::momenta::DefineToNEq>, olb::equilibria::SecondOrder, olb::collision::BGK, olb::dynamics::DefaultCombination>, olb::momenta::Tuple<olb::momenta::InnerCornerDensity3D<1, 1, -1>, olb::momenta::FixedVelocityMomentumGeneric, olb::momenta::InnerCornerStress3D<1, 1, -1>, olb::momenta::DefineSeparately> >
+#include "4e29255dc24a992a8b2d878a29f1f81da798e20aaf2b9c753f4da2e50ac83e97.cse.h"
 
-//dynamics::Tuple<Expr, descriptors::D2Q9<>, momenta::Tuple<momenta::BulkDensity, momenta::BulkMomentum, momenta::BulkStress, momenta::DefineToNEq>, equilibria::SecondOrder, collision::BGK, forcing::Guo<momenta::Forced> >
-#include "912dd6a4b0522ff361d3f45ed4e8e11b1b04c2ff68e3d2bdd399229ddb665436.cse.h"
+//CombinedRLBdynamics<Expr, olb::descriptors::D3Q19<>, olb::dynamics::Tuple<Expr, olb::descriptors::D3Q19<>, olb::momenta::Tuple<olb::momenta::BulkDensity, olb::momenta::BulkMomentum, olb::momenta::BulkStress, olb::momenta::DefineToNEq>, olb::equilibria::SecondOrder, olb::collision::BGK, olb::dynamics::DefaultCombination>, olb::momenta::Tuple<olb::momenta::InnerEdgeDensity3D<0, -1, -1>, olb::momenta::FixedVelocityMomentumGeneric, olb::momenta::InnerEdgeStress3D<0, -1, -1>, olb::momenta::DefineSeparately> >
+#include "d94d8993e906cd9dc2db3352b6fabbc02e4ee9ada0ae9f6adfe61862e755cbfe.cse.h"
 
-//dynamics::Tuple<Expr, descriptors::D2Q9<>, momenta::Tuple<momenta::BulkDensity, momenta::BulkMomentum, momenta::BulkStress, momenta::DefineToNEq>, equilibria::SecondOrder, collision::ConstRhoBGK, dynamics::DefaultCombination>
-#include "624cb65402c15187e66409fd86ad9d5849ee280b2bfb2a16f451c6ce8ec0d9ae.cse.h"
+//CombinedRLBdynamics<Expr, olb::descriptors::D3Q19<>, olb::dynamics::Tuple<Expr, olb::descriptors::D3Q19<>, olb::momenta::Tuple<olb::momenta::BulkDensity, olb::momenta::BulkMomentum, olb::momenta::BulkStress, olb::momenta::DefineToNEq>, olb::equilibria::SecondOrder, olb::collision::BGK, olb::dynamics::DefaultCombination>, olb::momenta::Tuple<olb::momenta::InnerEdgeDensity3D<0, -1, 1>, olb::momenta::FixedVelocityMomentumGeneric, olb::momenta::InnerEdgeStress3D<0, -1, 1>, olb::momenta::DefineSeparately> >
+#include "ff20d6365630817fcb252c2b6995ad86850d3f70efe6051d08c1c0557ca29fc1.cse.h"
 
-//dynamics::Tuple<Expr, descriptors::D2Q9<>, momenta::Tuple<momenta::BulkDensity, momenta::BulkMomentum, momenta::BulkStress, momenta::DefineToNEq>, equilibria::SecondOrder, collision::SaveVelocity<collision::BGK>, dynamics::DefaultCombination>
-#include "90e11e30211170171bb07bd966659eef755d609a83b61e4f62beb7b2c031b2e9.cse.h"
+//CombinedRLBdynamics<Expr, olb::descriptors::D3Q19<>, olb::dynamics::Tuple<Expr, olb::descriptors::D3Q19<>, olb::momenta::Tuple<olb::momenta::BulkDensity, olb::momenta::BulkMomentum, olb::momenta::BulkStress, olb::momenta::DefineToNEq>, olb::equilibria::SecondOrder, olb::collision::BGK, olb::dynamics::DefaultCombination>, olb::momenta::Tuple<olb::momenta::InnerEdgeDensity3D<0, 1, -1>, olb::momenta::FixedVelocityMomentumGeneric, olb::momenta::InnerEdgeStress3D<0, 1, -1>, olb::momenta::DefineSeparately> >
+#include "b750758cf9d0ba3ebb0ff076a724d96e57e0a21a686ef16bee4a0ddde5bd96b1.cse.h"
 
-//dynamics::Tuple<Expr, descriptors::D2Q9<>, momenta::Tuple<momenta::BulkDensity, momenta::BulkMomentum, momenta::BulkStress, momenta::DefineToNEq>, equilibria::SecondOrder, collision::SmagorinskyEffectiveOmega<collision::BGK>, forcing::Guo<momenta::ForcedWithStress> >
-#include "c3c9a47e0b09367e0f1fabbe0f7e28ca4c77e9235b1d6b687f83e765a1d4ba8a.cse.h"
+//CombinedRLBdynamics<Expr, olb::descriptors::D3Q19<>, olb::dynamics::Tuple<Expr, olb::descriptors::D3Q19<>, olb::momenta::Tuple<olb::momenta::BulkDensity, olb::momenta::BulkMomentum, olb::momenta::BulkStress, olb::momenta::DefineToNEq>, olb::equilibria::SecondOrder, olb::collision::BGK, olb::dynamics::DefaultCombination>, olb::momenta::Tuple<olb::momenta::InnerEdgeDensity3D<0, 1, 1>, olb::momenta::FixedVelocityMomentumGeneric, olb::momenta::InnerEdgeStress3D<0, 1, 1>, olb::momenta::DefineSeparately> >
+#include "7f212c6bf110bd88528ff75403838cf15705adab39a607fc4918a10879cb390c.cse.h"
 
-//dynamics::Tuple<Expr, descriptors::D2Q9<>, momenta::Tuple<momenta::BulkDensity, momenta::BulkMomentum, momenta::BulkStress, momenta::DefineToNEq>, equilibria::SecondOrder, multiphase::OmegaFromCell<collision::BGK>, forcing::Guo<momenta::Forced> >
-#include "36b99421ec6b59404604dda15e33a9f9615f67598dd40d131f498703fd2908ba.cse.h"
+//CombinedRLBdynamics<Expr, olb::descriptors::D3Q19<>, olb::dynamics::Tuple<Expr, olb::descriptors::D3Q19<>, olb::momenta::Tuple<olb::momenta::BulkDensity, olb::momenta::BulkMomentum, olb::momenta::BulkStress, olb::momenta::DefineToNEq>, olb::equilibria::SecondOrder, olb::collision::BGK, olb::dynamics::DefaultCombination>, olb::momenta::Tuple<olb::momenta::InnerEdgeDensity3D<1, -1, -1>, olb::momenta::FixedVelocityMomentumGeneric, olb::momenta::InnerEdgeStress3D<1, -1, -1>, olb::momenta::DefineSeparately> >
+#include "c4f9fab84c011d544c84488c68f231de2ff1f5ed620bc6e815d8be01949c4356.cse.h"
 
-//dynamics::Tuple<Expr, descriptors::D2Q9<>, momenta::Tuple<momenta::BulkDensity, momenta::BulkMomentum, momenta::BulkStress, momenta::DefineToNEq>, guoZhao::GuoZhaoSecondOrder, collision::BGK, guoZhao::GuoZhaoForcing<momenta::GuoZhaoForced> >
-#include "ef613e5255486d21941cb5a8ef2c0425bda39bf2134d634a0c7fc6ac8e365918.cse.h"
+//CombinedRLBdynamics<Expr, olb::descriptors::D3Q19<>, olb::dynamics::Tuple<Expr, olb::descriptors::D3Q19<>, olb::momenta::Tuple<olb::momenta::BulkDensity, olb::momenta::BulkMomentum, olb::momenta::BulkStress, olb::momenta::DefineToNEq>, olb::equilibria::SecondOrder, olb::collision::BGK, olb::dynamics::DefaultCombination>, olb::momenta::Tuple<olb::momenta::InnerEdgeDensity3D<1, -1, 1>, olb::momenta::FixedVelocityMomentumGeneric, olb::momenta::InnerEdgeStress3D<1, -1, 1>, olb::momenta::DefineSeparately> >
+#include "f70dc7d930e3ade1f3cf0baf59a9cae765dd430270b0b9756d6c196f67e62ee4.cse.h"
 
-//dynamics::Tuple<Expr, descriptors::D2Q9<>, momenta::Tuple<momenta::BulkDensity, momenta::FixedVelocityMomentumGeneric, momenta::BulkStress, momenta::DefineUSeparatelyTrace>, equilibria::SecondOrder, collision::BGK, dynamics::DefaultCombination>
-#include "19e8b8ad94da97422f496238a0e5064563e6f0cff23615df60e2b410d3eb92be.cse.h"
+//CombinedRLBdynamics<Expr, olb::descriptors::D3Q19<>, olb::dynamics::Tuple<Expr, olb::descriptors::D3Q19<>, olb::momenta::Tuple<olb::momenta::BulkDensity, olb::momenta::BulkMomentum, olb::momenta::BulkStress, olb::momenta::DefineToNEq>, olb::equilibria::SecondOrder, olb::collision::BGK, olb::dynamics::DefaultCombination>, olb::momenta::Tuple<olb::momenta::VelocityBoundaryDensity<0, -1>, olb::momenta::FixedVelocityMomentumGeneric, olb::momenta::RegularizedBoundaryStress<0, -1>, olb::momenta::DefineSeparately> >
+#include "67b85be35155288c82599b512718ead13d566afea13fca4d325c3a83bd7885fc.cse.h"
 
-//dynamics::Tuple<Expr, descriptors::D2Q9<>, momenta::Tuple<momenta::BulkDensity, momenta::FixedVelocityMomentumGeneric, momenta::BulkStress, momenta::DefineUSeparatelyTrace>, equilibria::SecondOrder, collision::ConstRhoBGK, dynamics::DefaultCombination>
-#include "7db96ae43933a8e676a84cd9caa319e696c854cc3bef49f2b1e87c3c1bd1cfff.cse.h"
+//CombinedRLBdynamics<Expr, olb::descriptors::D3Q19<>, olb::dynamics::Tuple<Expr, olb::descriptors::D3Q19<>, olb::momenta::Tuple<olb::momenta::BulkDensity, olb::momenta::BulkMomentum, olb::momenta::BulkStress, olb::momenta::DefineToNEq>, olb::equilibria::SecondOrder, olb::collision::BGK, olb::dynamics::DefaultCombination>, olb::momenta::Tuple<olb::momenta::VelocityBoundaryDensity<0, 1>, olb::momenta::FixedVelocityMomentumGeneric, olb::momenta::RegularizedBoundaryStress<0, 1>, olb::momenta::DefineSeparately> >
+#include "1b3692c696ac574f1af0ecc0c4e0f2ee0edc3eddd8023952877a2fe90f984e38.cse.h"
 
-//dynamics::Tuple<Expr, descriptors::D2Q9<>, momenta::Tuple<momenta::BulkDensity, momenta::FixedVelocityMomentum, momenta::BulkStress, momenta::DefineUSeparately>, equilibria::CahnHilliardZerothOrder, collision::BGK, forcing::WellBalancedCahnHilliard>
-#include "391dd0286b8ff36d100cd7045324028600b16f575e5c33500d9b566e7c4bdc2e.cse.h"
+//CombinedRLBdynamics<Expr, olb::descriptors::D3Q19<>, olb::dynamics::Tuple<Expr, olb::descriptors::D3Q19<>, olb::momenta::Tuple<olb::momenta::BulkDensity, olb::momenta::BulkMomentum, olb::momenta::BulkStress, olb::momenta::DefineToNEq>, olb::equilibria::SecondOrder, olb::collision::BGK, olb::dynamics::DefaultCombination>, olb::momenta::Tuple<olb::momenta::VelocityBoundaryDensity<1, -1>, olb::momenta::FixedVelocityMomentumGeneric, olb::momenta::RegularizedBoundaryStress<1, -1>, olb::momenta::DefineSeparately> >
+#include "a00aed52c979d98030307b61a842848a040845e6c968bf556a247c53fbac7a34.cse.h"
 
-//dynamics::Tuple<Expr, descriptors::D2Q9<>, momenta::Tuple<momenta::BulkDensity, momenta::FixedVelocityMomentum, momenta::BulkStress, momenta::DefineUSeparately>, equilibria::FirstOrder, collision::BGK, forcing::AllenCahn>
-#include "a69e497df9752b474fb63811774b9eddd97ffbb4e497c3359c655d0fce87fcc2.cse.h"
+//CombinedRLBdynamics<Expr, olb::descriptors::D3Q19<>, olb::dynamics::Tuple<Expr, olb::descriptors::D3Q19<>, olb::momenta::Tuple<olb::momenta::BulkDensity, olb::momenta::BulkMomentum, olb::momenta::BulkStress, olb::momenta::DefineToNEq>, olb::equilibria::SecondOrder, olb::collision::BGK, olb::dynamics::DefaultCombination>, olb::momenta::Tuple<olb::momenta::VelocityBoundaryDensity<1, 1>, olb::momenta::FixedVelocityMomentumGeneric, olb::momenta::RegularizedBoundaryStress<1, 1>, olb::momenta::DefineSeparately> >
+#include "3f315bcc931addf385d5fe2c51d9662955bdac9480173cda9f1659d4598949f3.cse.h"
 
-//dynamics::Tuple<Expr, descriptors::D2Q9<>, momenta::Tuple<momenta::BulkDensity, momenta::FixedVelocityMomentum, momenta::BulkStress, momenta::DefineUSeparately>, equilibria::SecondOrder, collision::BGK, forcing::MCGuo<momenta::Identity> >
-#include "7439aa5750a38d9cd8f53b4ad5394f9880f8bdadb0a60121b150c709c95e480f.cse.h"
+//CombinedRLBdynamics<Expr, olb::descriptors::D3Q19<>, olb::dynamics::Tuple<Expr, olb::descriptors::D3Q19<>, olb::momenta::Tuple<olb::momenta::BulkDensity, olb::momenta::BulkMomentum, olb::momenta::BulkStress, olb::momenta::DefineToNEq>, olb::equilibria::SecondOrder, olb::collision::BGK, olb::dynamics::DefaultCombination>, olb::momenta::Tuple<olb::momenta::VelocityBoundaryDensity<2, -1>, olb::momenta::FixedVelocityMomentumGeneric, olb::momenta::RegularizedBoundaryStress<2, -1>, olb::momenta::DefineSeparately> >
+#include "05a83e4a2516c50a89747e4fdec381ccb945c415a6c98c3922df9645dfd458f5.cse.h"
 
-//dynamics::Tuple<Expr, descriptors::D2Q9<>, momenta::Tuple<momenta::BulkDensity, momenta::FixedVelocityMomentum, momenta::BulkStress, momenta::DefineUSeparately>, equilibria::SecondOrder, collision::BGK, forcing::ShanChen>
-#include "3d2cb48a7812aeb8a8832f6e8ffd97cae574a565c7c090c10574d71f74c17478.cse.h"
+//CombinedRLBdynamics<Expr, olb::descriptors::D3Q19<>, olb::dynamics::Tuple<Expr, olb::descriptors::D3Q19<>, olb::momenta::Tuple<olb::momenta::BulkDensity, olb::momenta::BulkMomentum, olb::momenta::BulkStress, olb::momenta::DefineToNEq>, olb::equilibria::SecondOrder, olb::collision::BGK, olb::dynamics::DefaultCombination>, olb::momenta::Tuple<olb::momenta::VelocityBoundaryDensity<2, 1>, olb::momenta::FixedVelocityMomentumGeneric, olb::momenta::RegularizedBoundaryStress<2, 1>, olb::momenta::DefineSeparately> >
+#include "356f538d5df4741396c34cff6c08682be76ca0173f4a4b6e0863608f43b90b30.cse.h"
 
-//dynamics::Tuple<Expr, descriptors::D2Q9<>, momenta::Tuple<momenta::BulkDensity, momenta::FreeEnergyMomentum, momenta::BulkStress, momenta::DefineToNEq>, equilibria::FreeEnergy, collision::FreeEnergy, dynamics::DefaultCombination>
-#include "dd45531b28e9142de5c6b699b294dfe1b99c91c4b992d98af12c0f4777fa6924.cse.h"
+//CombinedRLBdynamics<Expr, olb::descriptors::D3Q19<>, olb::dynamics::Tuple<Expr, olb::descriptors::D3Q19<>, olb::momenta::Tuple<olb::momenta::BulkDensity, olb::momenta::BulkMomentum, olb::momenta::BulkStress, olb::momenta::DefineToNEq>, olb::equilibria::SecondOrder, olb::collision::SaveVelocity<olb::collision::BGK>, olb::dynamics::DefaultCombination>, olb::momenta::Tuple<olb::momenta::FixedDensity, olb::momenta::FixedPressureMomentum<0, 1>, olb::momenta::RegularizedBoundaryStress<0, 1>, olb::momenta::DefineSeparately> >
+#include "0eb8d4b274e4a27056ea7b71a44ce3e2233efab68f86d5c5e6e7d5008df65c4f.cse.h"
 
-//dynamics::Tuple<Expr, descriptors::D2Q9<>, momenta::Tuple<momenta::BulkDensity, momenta::MovingPorousMomentumCombination<momenta::BulkMomentum>, momenta::BulkStress, momenta::DefineToNEq>, equilibria::ThirdOrder, collision::ParameterFromCell<collision::HYBRID, collision::LocalSmagorinskyEffectiveOmega<collision::HRR> >, dynamics::DefaultCombination>
-#include "cc8d1bafc60a9d4f6a2ad430ed72822907810397c0bf1a54d4ef893f2cdc2a9d.cse.h"
+//CombinedRLBdynamics<Expr, olb::descriptors::D3Q19<>, olb::dynamics::Tuple<Expr, olb::descriptors::D3Q19<>, olb::momenta::Tuple<olb::momenta::BulkDensity, olb::momenta::BulkMomentum, olb::momenta::BulkStress, olb::momenta::DefineToNEq>, olb::equilibria::SecondOrder, olb::collision::SaveVelocity<olb::collision::BGK>, olb::dynamics::DefaultCombination>, olb::momenta::Tuple<olb::momenta::VelocityBoundaryDensity<0, -1>, olb::momenta::FixedVelocityMomentumGeneric, olb::momenta::RegularizedBoundaryStress<0, -1>, olb::momenta::DefineSeparately> >
+#include "fe6a656bb00531c1857938e60e43c73d6f7b1941a93155b76f3158acb0bde179.cse.h"
 
-//dynamics::Tuple<Expr, descriptors::D2Q9<>, momenta::Tuple<momenta::BulkDensity, momenta::ZeroMomentum, momenta::ZeroStress, momenta::DefineSeparately>, equilibria::FreeEnergy, collision::Revert, dynamics::DefaultCombination>
-#include "368d288a70daacc0ee2ff0eb6ebffff2546193802d979565d82ad58aa84f3380.cse.h"
+//dynamics::Tuple<Expr, olb::descriptors::D2Q5<>, olb::momenta::Tuple<olb::momenta::BulkDensity, olb::momenta::BulkMomentum, olb::momenta::BulkStress, olb::momenta::DefineToNEq>, olb::equilibria::FirstOrder, olb::collision::OmegaFromCellTauEff<olb::collision::BGK>, olb::AdvectionDiffusionExternalVelocityCollision>
+#include "6bf3745624fa0897e863b27320a8c9204e5604b3650c16dcf55a04ffbf354590.cse.h"
 
-//dynamics::Tuple<Expr, descriptors::D2Q9<>, momenta::Tuple<momenta::BulkDensity, momenta::ZeroMomentum, momenta::ZeroStress, momenta::DefineSeparately>, equilibria::SecondOrder, collision::Revert, dynamics::DefaultCombination>
-#include "249d899f46680717c5a9d4f6587e82a40bb9b75b980d645eb97cee66a2f60297.cse.h"
+//dynamics::Tuple<Expr, olb::descriptors::D2Q5<>, olb::momenta::Tuple<olb::momenta::BulkDensity, olb::momenta::BulkMomentum, olb::momenta::NoStress, olb::momenta::DefineToEq>, olb::equilibria::FirstOrder, olb::collision::BGK, olb::AdvectionDiffusionExternalVelocityCollision>
+#include "e1011eefd3cacce92ee9102ab286204113812b42cf69cd426cde16911ec56ee7.cse.h"
 
-//dynamics::Tuple<Expr, descriptors::D2Q9<>, momenta::Tuple<momenta::FixedDensity, momenta::FixedPressureMomentum<0, 1>, momenta::BulkStress, momenta::DefineSeparately>, equilibria::SecondOrder, collision::BGK, dynamics::DefaultCombination>
-#include "bbb7aff621faf6c6dbcab9aec00bfff173cf0711921d733925c9885a1fe8bb92.cse.h"
+//dynamics::Tuple<Expr, olb::descriptors::D2Q5<>, olb::momenta::Tuple<olb::momenta::FixedDensity, olb::momenta::ZeroMomentum, olb::momenta::ZeroStress, olb::momenta::DefineSeparately>, olb::equilibria::SecondOrder, olb::collision::Revert, olb::dynamics::DefaultCombination>
+#include "5c01c0f9cadf2756102fbab1beef052d1283bbaae16501d1265b9058ae0c61a9.cse.h"
 
-//dynamics::Tuple<Expr, descriptors::D2Q9<>, momenta::Tuple<momenta::FixedDensity, momenta::FixedPressureMomentum<1, -1>, momenta::BulkStress, momenta::DefineSeparately>, equilibria::SecondOrder, collision::BGK, dynamics::DefaultCombination>
-#include "fd5d7d685120bf2cdc2ce0237cc0bf032451ecb6207d687907a12f586197b92b.cse.h"
+//dynamics::Tuple<Expr, olb::descriptors::D2Q5<>, olb::momenta::Tuple<olb::momenta::OneDensity, olb::momenta::ZeroMomentum, olb::momenta::ZeroStress, olb::momenta::DefineSeparately>, olb::equilibria::None, olb::collision::None, olb::dynamics::DefaultCombination>
+#include "146c1d43087e561acdcffa434e2727da6a631c551f565f01a51ce0a1670895f6.cse.h"
 
-//dynamics::Tuple<Expr, descriptors::D2Q9<>, momenta::Tuple<momenta::FixedDensity, momenta::ZeroMomentum, momenta::ZeroStress, momenta::DefineSeparately>, equilibria::SecondOrder, collision::Revert, dynamics::DefaultCombination>
-#include "265ba35fcf3f9aea0c4e5a6da3050f1ceb141c044adb3b2e21cb33eee2e19d49.cse.h"
+//dynamics::Tuple<Expr, olb::descriptors::D2Q8<olb::descriptors::tag::MRT>, olb::momenta::Tuple<olb::momenta::OneDensity, olb::momenta::ZeroMomentum, olb::momenta::ZeroStress, olb::momenta::DefineSeparately>, olb::equilibria::None, olb::collision::None, olb::dynamics::DefaultCombination>
+#include "485aabeadf3209805477c04f5ec62617ec13819e6586f63a7f2949fef146ffca.cse.h"
 
-//dynamics::Tuple<Expr, descriptors::D2Q9<>, momenta::Tuple<momenta::FreeEnergyInletOutletDensity, momenta::FreeEnergyInletOutletMomentum<0, -1>, momenta::RegularizedBoundaryStress<0, -1>, momenta::DefineSeparately>, equilibria::FreeEnergy, collision::FreeEnergyInletOutlet<0, -1>, dynamics::DefaultCombination>
-#include "6a9d362e4120bb517a18aa59786fb97cdbfb4a02b9ffaf0924529de932b25ecb.cse.h"
+//dynamics::Tuple<Expr, olb::descriptors::D2Q9<>, olb::momenta::Porous<olb::momenta::Tuple<olb::momenta::BulkDensity, olb::momenta::BulkMomentum, olb::momenta::BulkStress, olb::momenta::DefineToNEq> >, olb::equilibria::SecondOrder, olb::collision::BGK, olb::dynamics::DefaultCombination>
+#include "6d8da498e7b993bfcf5e6d8e18ddaf86248d33551a03b153e3a30adde95a5886.cse.h"
 
-//dynamics::Tuple<Expr, descriptors::D2Q9<>, momenta::Tuple<momenta::FreeEnergyInletOutletDensity, momenta::FreeEnergyInletOutletMomentum<0, 1>, momenta::RegularizedBoundaryStress<0, 1>, momenta::DefineSeparately>, equilibria::FreeEnergy, collision::FreeEnergyInletOutlet<0, 1>, dynamics::DefaultCombination>
-#include "59e11552c673a9c3b93e4e1d3d17832bc66be5f22a50ce77716e36973bb21985.cse.h"
+//dynamics::Tuple<Expr, olb::descriptors::D2Q9<>, olb::momenta::Tuple<olb::momenta::BulkDensity, olb::momenta::BulkMomentum, olb::momenta::BulkStress, olb::momenta::DefineToNEq>, olb::equilibria::SecondOrder, olb::collision::BGK, olb::dynamics::DefaultCombination>
+#include "e7e99b8eab7e7b0975af5d5d5ac9cb708c577003bf8d5f96aecfecd6156a9279.cse.h"
 
-//dynamics::Tuple<Expr, descriptors::D2Q9<>, momenta::Tuple<momenta::FreeEnergyInletOutletDensity, momenta::FreeEnergyInletOutletMomentum<1, -1>, momenta::RegularizedBoundaryStress<1, -1>, momenta::DefineSeparately>, equilibria::FreeEnergy, collision::FreeEnergyInletOutlet<1, -1>, dynamics::DefaultCombination>
-#include "01b1f942e06606d68c8dff5b95b5f44000f72169bf98ae4cebbd64854dfdba2d.cse.h"
+//dynamics::Tuple<Expr, olb::descriptors::D2Q9<>, olb::momenta::Tuple<olb::momenta::BulkDensity, olb::momenta::BulkMomentum, olb::momenta::BulkStress, olb::momenta::DefineToNEq>, olb::equilibria::SecondOrder, olb::collision::BGK, olb::forcing::fsi::HLBM>
+#include "9501a26ce3404acd9a30c4a4b1045d3f265e8c295ef7fab7913cf0d58dd68bd2.cse.h"
 
-//dynamics::Tuple<Expr, descriptors::D2Q9<>, momenta::Tuple<momenta::FreeEnergyInletOutletDensity, momenta::FreeEnergyInletOutletMomentum<1, 1>, momenta::RegularizedBoundaryStress<1, 1>, momenta::DefineSeparately>, equilibria::FreeEnergy, collision::FreeEnergyInletOutlet<1, 1>, dynamics::DefaultCombination>
-#include "518be5cfd4544f11148fdc01c186238e9012ffecd34e78b49684f033a439d1eb.cse.h"
+//dynamics::Tuple<Expr, olb::descriptors::D2Q9<>, olb::momenta::Tuple<olb::momenta::BulkDensity, olb::momenta::BulkMomentum, olb::momenta::BulkStress, olb::momenta::DefineToNEq>, olb::equilibria::SecondOrder, olb::collision::BGK, olb::forcing::PlainGuo>
+#include "151f90261c280aea8b52821f28456e0b6589a5c356bb4387f2239e2497a5b876.cse.h"
 
-//dynamics::Tuple<Expr, descriptors::D2Q9<>, momenta::Tuple<momenta::VelocityBoundaryDensity<0, -1>, momenta::FixedVelocityMomentumGeneric, momenta::BulkStress, momenta::DefineSeparately>, equilibria::SecondOrder, collision::BGK, dynamics::DefaultCombination>
-#include "a42436953263028ba9159b227b0ff8137445c7f6aaa1f6b4e1657f05af50496b.cse.h"
+//dynamics::Tuple<Expr, olb::descriptors::D2Q9<>, olb::momenta::Tuple<olb::momenta::BulkDensity, olb::momenta::BulkMomentum, olb::momenta::BulkStress, olb::momenta::DefineToNEq>, olb::equilibria::SecondOrder, olb::collision::ConstRhoBGK, olb::dynamics::DefaultCombination>
+#include "70e1f7cd89c8c321ecf8612de4fa4dde6b7316a65cebf17f51141e462939f626.cse.h"
 
-//dynamics::Tuple<Expr, descriptors::D2Q9<>, momenta::Tuple<momenta::VelocityBoundaryDensity<0, 1>, momenta::FixedVelocityMomentumGeneric, momenta::BulkStress, momenta::DefineSeparately>, equilibria::SecondOrder, collision::BGK, dynamics::DefaultCombination>
-#include "9374ee757ff276ed43b7092659abdf7f3a086d2995b9dd41b521318aed71e6ca.cse.h"
+//dynamics::Tuple<Expr, olb::descriptors::D2Q9<>, olb::momenta::Tuple<olb::momenta::BulkDensity, olb::momenta::BulkMomentum, olb::momenta::BulkStress, olb::momenta::DefineToNEq>, olb::equilibria::SecondOrder, olb::collision::OmegaFromCellTauEff<olb::collision::BGK>, olb::forcing::Guo<olb::momenta::Forced> >
+#include "224e0537191ff153084a186aa053ec0ebd12728964474e8249226b82f374f6ac.cse.h"
 
-//dynamics::Tuple<Expr, descriptors::D2Q9<>, momenta::Tuple<momenta::VelocityBoundaryDensity<0, -1>, momenta::FixedVelocityMomentumGeneric, momenta::BulkStress, momenta::DefineSeparately>, equilibria::SecondOrder, collision::ConstRhoBGK, dynamics::DefaultCombination>
-#include "2433cd607e8c4f6d8029b983327664e0a5223ca4aa13edcaca4f5320ca9fe71f.cse.h"
+//dynamics::Tuple<Expr, olb::descriptors::D2Q9<>, olb::momenta::Tuple<olb::momenta::BulkDensity, olb::momenta::BulkMomentum, olb::momenta::BulkStress, olb::momenta::DefineToNEq>, olb::equilibria::SecondOrder, olb::collision::ParameterFromCell<olb::descriptors::OMEGA, olb::collision::BGK>, olb::forcing::Wagner>
+#include "d0c7d1d9bb54646c66cfa5c86f168be2d56f9d22f407811702c24396ca17b79b.cse.h"
 
-//dynamics::Tuple<Expr, descriptors::D2Q9<>, momenta::Tuple<momenta::VelocityBoundaryDensity<0, 1>, momenta::FixedVelocityMomentumGeneric, momenta::BulkStress, momenta::DefineSeparately>, equilibria::SecondOrder, collision::ConstRhoBGK, dynamics::DefaultCombination>
-#include "cada6c16a3d3f81e5777100fcd6af3c71d86275f9f1cb6dc9c7c4d9799c2febd.cse.h"
+//dynamics::Tuple<Expr, olb::descriptors::D2Q9<>, olb::momenta::Tuple<olb::momenta::BulkDensity, olb::momenta::BulkMomentum, olb::momenta::BulkStress, olb::momenta::DefineToNEq>, olb::equilibria::SecondOrder, olb::collision::SaveVelocity<olb::collision::BGK>, olb::dynamics::DefaultCombination>
+#include "ce78053e3de5e55e180be17f81470b36fba5ac63a89e6da8fef0d1f0baa4c214.cse.h"
 
-//dynamics::Tuple<Expr, descriptors::D2Q9<>, momenta::Tuple<momenta::VelocityBoundaryDensity<1, -1>, momenta::FixedVelocityMomentumGeneric, momenta::BulkStress, momenta::DefineSeparately>, equilibria::SecondOrder, collision::BGK, dynamics::DefaultCombination>
-#include "68d19ad1b5f82b07960e6817c3f674f0fb22dd4b0ddf2fe758cdd9dd313ae5dd.cse.h"
+//dynamics::Tuple<Expr, olb::descriptors::D2Q9<>, olb::momenta::Tuple<olb::momenta::BulkDensity, olb::momenta::BulkMomentum, olb::momenta::BulkStress, olb::momenta::DefineToNEq>, olb::equilibria::SecondOrder, olb::collision::SmagorinskyEffectiveOmega<olb::collision::BGK>, olb::forcing::Guo<olb::momenta::ForcedWithStress> >
+#include "8df39809664fe7189d6e73202b973ed4f50d984deb892d7aac2ca9f8a18babef.cse.h"
 
-//dynamics::Tuple<Expr, descriptors::D2Q9<>, momenta::Tuple<momenta::VelocityBoundaryDensity<1, 1>, momenta::FixedVelocityMomentumGeneric, momenta::BulkStress, momenta::DefineSeparately>, equilibria::SecondOrder, collision::BGK, dynamics::DefaultCombination>
-#include "60007cebd8088d429ade945362d86b02206f9b477fb2be033c3d3e5cc505d0a1.cse.h"
+//dynamics::Tuple<Expr, olb::descriptors::D2Q9<>, olb::momenta::Tuple<olb::momenta::BulkDensity, olb::momenta::BulkMomentum, olb::momenta::BulkStress, olb::momenta::DefineToNEq>, olb::equilibria::SecondOrder, olb::multiphase::OmegaFromCell<olb::collision::BGK>, olb::forcing::Guo<olb::momenta::Forced> >
+#include "e21bebc3ab9fc9f740c6202f1a4bde7f237386149e16a9741a85e4938e9d4d3c.cse.h"
 
-//dynamics::Tuple<Expr, descriptors::D2Q9<>, momenta::Tuple<momenta::VelocityBoundaryDensity<1, -1>, momenta::FixedVelocityMomentumGeneric, momenta::BulkStress, momenta::DefineSeparately>, equilibria::SecondOrder, collision::ConstRhoBGK, dynamics::DefaultCombination>
-#include "fa055e1352d6286ccf6dbec60bbba7f36b6435c5fb14340d0902a4e40ea05ab4.cse.h"
+//dynamics::Tuple<Expr, olb::descriptors::D2Q9<>, olb::momenta::Tuple<olb::momenta::BulkDensity, olb::momenta::BulkMomentum, olb::momenta::BulkStress, olb::momenta::DefineToNEq>, olb::equilibria::ThirdOrder, olb::collision::ParameterFromCell<olb::collision::LES::SMAGORINSKY, olb::collision::SmagorinskyEffectiveOmega<olb::collision::ThirdOrderRLB> > >
+#include "bfab2f0ac72d48abc7cb54f029921e58a0944e1d20a9f679843f80b8b70df07a.cse.h"
 
-//dynamics::Tuple<Expr, descriptors::D2Q9<>, momenta::Tuple<momenta::VelocityBoundaryDensity<1, 1>, momenta::FixedVelocityMomentumGeneric, momenta::BulkStress, momenta::DefineSeparately>, equilibria::SecondOrder, collision::ConstRhoBGK, dynamics::DefaultCombination>
-#include "7102cabef2e2bef8421178409a9b4d33e014696c6b25b27b811a60576090f785.cse.h"
+//dynamics::Tuple<Expr, olb::descriptors::D2Q9<>, olb::momenta::Tuple<olb::momenta::BulkDensity, olb::momenta::BulkMomentum, olb::momenta::BulkStress, olb::momenta::DefineToNEq>, olb::guoZhao::GuoZhaoSecondOrder, olb::collision::BGK, olb::guoZhao::GuoZhaoForcing<olb::momenta::GuoZhaoForced> >
+#include "08e852162bb780232f5be059b1927af002636da53ba6ba0dc1b77cc3dd25004f.cse.h"
 
-//dynamics::Tuple<Expr, descriptors::D3Q15<>, momenta::Tuple<momenta::BulkDensity, momenta::BulkMomentum, momenta::BulkStress, momenta::DefineToNEq>, equilibria::SecondOrder, multiphase::OmegaFromCell<collision::BGK>, forcing::Guo<momenta::Forced> >
-#include "2851f5b82b0dbc53aeaf67ca5c95523cd07fedfa41c619ce1487d008eea4eb5f.cse.h"
+//dynamics::Tuple<Expr, olb::descriptors::D2Q9<>, olb::momenta::Tuple<olb::momenta::BulkDensity, olb::momenta::FixedVelocityMomentumGeneric, olb::momenta::BulkStress, olb::momenta::DefineUSeparatelyTrace>, olb::equilibria::SecondOrder, olb::collision::BGK, olb::dynamics::DefaultCombination>
+#include "585d271e6b2d5e81bfa5ede1f621c29dea2c7d86808a0dfaf0b7a2bc4c48979a.cse.h"
 
-//dynamics::Tuple<Expr, descriptors::D3Q15<>, momenta::Tuple<momenta::FixedDensity, momenta::ZeroMomentum, momenta::ZeroStress, momenta::DefineSeparately>, equilibria::SecondOrder, collision::Revert, dynamics::DefaultCombination>
-#include "720d0cdc0eaca9c926c8c5135414c24805c2b705d646b39a0d21537971b31129.cse.h"
+//dynamics::Tuple<Expr, olb::descriptors::D2Q9<>, olb::momenta::Tuple<olb::momenta::BulkDensity, olb::momenta::FixedVelocityMomentumGeneric, olb::momenta::BulkStress, olb::momenta::DefineUSeparatelyTrace>, olb::equilibria::SecondOrder, olb::collision::ConstRhoBGK, olb::dynamics::DefaultCombination>
+#include "dacac6eda6f89f69cbe3ed73d72dd3b7c4c44e60fd8d1a692eb46172876bb98f.cse.h"
 
-//dynamics::Tuple<Expr, descriptors::D3Q19<>, momenta::Porous<momenta::Tuple<momenta::BulkDensity, momenta::BulkMomentum, momenta::BulkStress, momenta::DefineToNEq> >, equilibria::SecondOrder, collision::BGK, dynamics::DefaultCombination>
-#include "473767b0324c9ede6a752ab3a59d8b5672fb717e12c8b527e8ede47c807d5f1c.cse.h"
+//dynamics::Tuple<Expr, olb::descriptors::D2Q9<>, olb::momenta::Tuple<olb::momenta::BulkDensity, olb::momenta::FixedVelocityMomentum, olb::momenta::BulkStress, olb::momenta::DefineUSeparately>, olb::equilibria::CahnHilliardZerothOrder, olb::collision::BGK, olb::forcing::WellBalancedCahnHilliard>
+#include "27cf3ca0d011a343991e1ea29d5c7e361a8fd7dee78e5ffff0bfee2b6a1fef94.cse.h"
 
-//dynamics::Tuple<Expr, descriptors::D3Q19<>, momenta::Tuple<momenta::BulkDensity, momenta::BulkMomentum, momenta::BulkStress, momenta::DefineToNEq>, equilibria::SecondOrder, collision::BGK, dynamics::DefaultCombination>
-#include "b550090bd934e5c75c1604512d552f3147f9c291d524942812207d2ebbab8aaa.cse.h"
+//dynamics::Tuple<Expr, olb::descriptors::D2Q9<>, olb::momenta::Tuple<olb::momenta::BulkDensity, olb::momenta::FixedVelocityMomentum, olb::momenta::BulkStress, olb::momenta::DefineUSeparately>, olb::equilibria::FirstOrder, olb::collision::BGK, olb::forcing::ConservativePhaseField>
+#include "dc38a13904bc2875394f5390ce3dc53dc3ac0ac4cde1c592d2426bba66a153f3.cse.h"
 
-//dynamics::Tuple<Expr, descriptors::D3Q19<>, momenta::Tuple<momenta::BulkDensity, momenta::BulkMomentum, momenta::BulkStress, momenta::DefineToNEq>, equilibria::SecondOrder, collision::BGK, forcing::Guo<momenta::Forced> >
-#include "4f6db5c84ebb36bd5e6f1f53f4d98e6c2d18c9acaaa78c40070cf2d356d6dd48.cse.h"
+//dynamics::Tuple<Expr, olb::descriptors::D2Q9<>, olb::momenta::Tuple<olb::momenta::BulkDensity, olb::momenta::FixedVelocityMomentum, olb::momenta::BulkStress, olb::momenta::DefineUSeparately>, olb::equilibria::FirstOrder, olb::collision::None, olb::dynamics::DefaultCombination>
+#include "d6fe8617fe52fdfc2777186585d6f6ef9ae7e810072e15f65c41513f3577ceaf.cse.h"
 
-//dynamics::Tuple<Expr, descriptors::D3Q19<>, momenta::Tuple<momenta::BulkDensity, momenta::BulkMomentum, momenta::BulkStress, momenta::DefineToNEq>, equilibria::SecondOrder, collision::BGK, forcing::Kupershtokh >
-#include "42c2537fc52ff69dd4a25e9c3bda35d7d55876c88c814d684273211ef4d4d6a4.cse.h"
+//dynamics::Tuple<Expr, olb::descriptors::D2Q9<>, olb::momenta::Tuple<olb::momenta::BulkDensity, olb::momenta::FixedVelocityMomentum, olb::momenta::BulkStress, olb::momenta::DefineUSeparately>, olb::equilibria::SecondOrder, olb::collision::BGK, olb::forcing::MCGuo<olb::momenta::Identity> >
+#include "cfab4f36f20e11556673c07f607bf1b5121883a465ee60909c1e93ac4516a07c.cse.h"
 
-//dynamics::Tuple<Expr, descriptors::D3Q19<>, momenta::Tuple<momenta::BulkDensity, momenta::BulkMomentum, momenta::BulkStress, momenta::DefineToNEq>, equilibria::SecondOrder, collision::BGK, forcing::ShanChen >
-#include "8afc9bc4de45abec05d2ba5b5fb194a25ba8de6514e8503ad5157b9b3dae630e.cse.h"
+//dynamics::Tuple<Expr, olb::descriptors::D2Q9<>, olb::momenta::Tuple<olb::momenta::BulkDensity, olb::momenta::FixedVelocityMomentum, olb::momenta::BulkStress, olb::momenta::DefineUSeparately>, olb::equilibria::SecondOrder, olb::collision::BGK, olb::forcing::ShanChen>
+#include "2892c7df3f15aca04a758f8506bbc519779b686e25202de365adf978be8b3d52.cse.h"
 
-//dynamics::Tuple<Expr, descriptors::D3Q19<>, momenta::Tuple<momenta::BulkDensity, momenta::BulkMomentum, momenta::BulkStress, momenta::DefineToNEq>, equilibria::SecondOrder, collision::BGK, forcing::Wagner >
-#include "6b9ce18201b137115faaf1c1035c26687e4ada005acc8d71a216298893e13981.cse.h"
+//dynamics::Tuple<Expr, olb::descriptors::D2Q9<>, olb::momenta::Tuple<olb::momenta::BulkDensity, olb::momenta::FreeEnergyMomentum, olb::momenta::BulkStress, olb::momenta::DefineToNEq>, olb::equilibria::FreeEnergy, olb::collision::FreeEnergy, olb::dynamics::DefaultCombination>
+#include "c82e8177335df6f9ee9aba113a3744cc488dd65d1597ef72b114cbdfc87f3fdb.cse.h"
 
-//dynamics::Tuple<Expr, descriptors::D3Q19<>, momenta::Tuple<momenta::BulkDensity, momenta::BulkMomentum, momenta::BulkStress, momenta::DefineToNEq>, equilibria::SecondOrder, collision::ConstRhoBGK, dynamics::DefaultCombination>
-#include "1f84914cae7b175ffa4f093794ce77bd514eba361cd9d4cc1b0933eb07744111.cse.h"
+//dynamics::Tuple<Expr, olb::descriptors::D2Q9<>, olb::momenta::Tuple<olb::momenta::BulkDensity, olb::momenta::MovingPorousMomentumCombination<olb::momenta::BulkMomentum>, olb::momenta::BulkStress, olb::momenta::DefineToNEq>, olb::equilibria::ThirdOrder, olb::collision::ParameterFromCell<olb::collision::HYBRID, olb::collision::LocalSmagorinskyEffectiveOmega<olb::collision::HRR> >, olb::dynamics::DefaultCombination>
+#include "9efea56c9a5ef9d85e65339b47107286babf2a2d3efdf6d80695316f713b5bb7.cse.h"
 
-//dynamics::Tuple<Expr, descriptors::D3Q19<>, momenta::Tuple<momenta::BulkDensity, momenta::BulkMomentum, momenta::BulkStress, momenta::DefineToNEq>, equilibria::SecondOrder, collision::RLB, dynamics::DefaultCombination>
-#include "c887e3b719519cab56d0cb19b2822e02b025d8839107c4938bbb687ae0c33263.cse.h"
+//dynamics::Tuple<Expr, olb::descriptors::D2Q9<>, olb::momenta::Tuple<olb::momenta::BulkDensity, olb::momenta::ZeroMomentum, olb::momenta::ZeroStress, olb::momenta::DefineSeparately>, olb::equilibria::FreeEnergy, olb::collision::Revert, olb::dynamics::DefaultCombination>
+#include "aad05ef86054c2885d54d379db2ab5166ffb81dcf661bbf211c5e98f8ce51a9a.cse.h"
 
-//dynamics::Tuple<Expr, descriptors::D3Q19<>, momenta::Tuple<momenta::BulkDensity, momenta::BulkMomentum, momenta::BulkStress, momenta::DefineToNEq>, equilibria::SecondOrder, collision::SaveVelocity<collision::BGK>, dynamics::DefaultCombination>
-#include "f0a667007b146f33e280912542fc3226d87809c49bff5c28790fd0ae8076816f.cse.h"
+//dynamics::Tuple<Expr, olb::descriptors::D2Q9<>, olb::momenta::Tuple<olb::momenta::BulkDensity, olb::momenta::ZeroMomentum, olb::momenta::ZeroStress, olb::momenta::DefineSeparately>, olb::equilibria::SecondOrder, olb::collision::Revert, olb::dynamics::DefaultCombination>
+#include "88ede8cd26900e6e3c4a4f2c03c164d97e31fbd2def065566fcf3c7f4855ac75.cse.h"
 
-//dynamics::Tuple<Expr, descriptors::D3Q19<>, momenta::Tuple<momenta::BulkDensity, momenta::BulkMomentum, momenta::BulkStress, momenta::DefineToNEq>, equilibria::SecondOrder, collision::SmagorinskyEffectiveOmega<collision::BGK>, dynamics::DefaultCombination>
-#include "d7a4bdcd549cc337d3cd1c6d321821f05e2e9ffad3a5e6da62a3c3ac5a18ca60.cse.h"
+//dynamics::Tuple<Expr, olb::descriptors::D2Q9<>, olb::momenta::Tuple<olb::momenta::FixedDensity, olb::momenta::FixedPressureMomentum<0, 1>, olb::momenta::BulkStress, olb::momenta::DefineSeparately>, olb::equilibria::SecondOrder, olb::collision::BGK, olb::dynamics::DefaultCombination>
+#include "f67ea46ec5f83fee1195abdfeed16b4926bc12d7f57c3b68dc7e5e29a745ec57.cse.h"
 
-//dynamics::Tuple<Expr, descriptors::D3Q19<>, momenta::Tuple<momenta::BulkDensity, momenta::BulkMomentum, momenta::BulkStress, momenta::DefineToNEq>, equilibria::SecondOrder, collision::SmagorinskyEffectiveOmega<collision::BGK>, forcing::Guo<momenta::Forced> >
-#include "e2a67663e17aeb77d8ee25e9b4fc99004e09278b2130aeaff707ed2687216b03.cse.h"
+//dynamics::Tuple<Expr, olb::descriptors::D2Q9<>, olb::momenta::Tuple<olb::momenta::FixedDensity, olb::momenta::FixedPressureMomentum<0, 1>, olb::momenta::BulkStress, olb::momenta::DefineSeparately>, olb::equilibria::ThirdOrder, olb::collision::ParameterFromCell<olb::collision::LES::SMAGORINSKY, olb::collision::SmagorinskyEffectiveOmega<olb::collision::ThirdOrderRLB> >, olb::dynamics::DefaultCombination>
+#include "62814d126940e08972cceb9e349231087a4a4e960541bea6b341f2e937a5c7b0.cse.h"
 
-//dynamics::Tuple<Expr, descriptors::D3Q19<>, momenta::Tuple<momenta::BulkDensity, momenta::BulkMomentum, momenta::BulkStress, momenta::DefineToNEq>, equilibria::SecondOrder, collision::TRT, dynamics::DefaultCombination>
-#include "6da49f8b76c6987a6ac4dad93fdac64f2bde2a3469c318fba896740daf0d140d.cse.h"
+//dynamics::Tuple<Expr, olb::descriptors::D2Q9<>, olb::momenta::Tuple<olb::momenta::FixedDensity, olb::momenta::FixedPressureMomentum<1, -1>, olb::momenta::BulkStress, olb::momenta::DefineSeparately>, olb::equilibria::SecondOrder, olb::collision::BGK, olb::dynamics::DefaultCombination>
+#include "bd93b6d0d9f18473f432f38dc26004a4acbaae80e6eb9bed62ec4d4ab2d9c748.cse.h"
 
-//dynamics::Tuple<Expr, descriptors::D3Q19<>, momenta::Tuple<momenta::BulkDensity, momenta::BulkMomentum, momenta::BulkStress, momenta::DefineToNEq>, equilibria::ThirdOrder, collision::ParameterFromCell<collision::LES::SMAGORINSKY, collision::SmagorinskyEffectiveOmega<collision::RLBThirdOrder> > >
-#include "667de2fafdc921ffeff763349e6392d688d5db844b987a4adf709a910878cff0.cse.h"
+//dynamics::Tuple<Expr, olb::descriptors::D2Q9<>, olb::momenta::Tuple<olb::momenta::FixedDensity, olb::momenta::FixedPressureMomentum<1, 1>, olb::momenta::BulkStress, olb::momenta::DefineSeparately>, olb::equilibria::SecondOrder, olb::collision::BGK, olb::dynamics::DefaultCombination>
+#include "0bfce918746237f295012a0f685a9a5b83fe77a64c5569932dca8d985306615e.cse.h"
 
-//dynamics::Tuple<Expr, descriptors::D3Q19<>, momenta::Tuple<momenta::BulkDensity, momenta::BulkMomentum, momenta::BulkStress, momenta::DefineToNEq>, equilibria::ThirdOrder, collision::ThirdOrderRLB, dynamics::DefaultCombination>
-#include "68f3ad0448e253f64b051c86ab5a85a82860eccf85fd017d2fa363ad9c6afeb7.cse.h"
+//dynamics::Tuple<Expr, olb::descriptors::D2Q9<>, olb::momenta::Tuple<olb::momenta::FixedDensity, olb::momenta::ZeroMomentum, olb::momenta::ZeroStress, olb::momenta::DefineSeparately>, olb::equilibria::SecondOrder, olb::collision::Revert, olb::dynamics::DefaultCombination>
+#include "06c22d3ba5d63e3f37eef704899051fadf12505317e30a66257875d162b4c4c6.cse.h"
 
-//dynamics::Tuple<Expr, descriptors::D3Q19<>, momenta::Tuple<momenta::BulkDensity, momenta::BulkMomentum, momenta::NoStress, momenta::DefineToEq>, equilibria::FirstOrder, collision::BGK, AdvectionDiffusionExternalVelocityCollision>
-#include "0d432980e2a17155c17e92ef6f1ec16c74803b9ff406e2571ae4b483e2294809.cse.h"
+//dynamics::Tuple<Expr, olb::descriptors::D2Q9<>, olb::momenta::Tuple<olb::momenta::FreeEnergyInletOutletDensity, olb::momenta::FreeEnergyInletOutletMomentum<0, -1>, olb::momenta::RegularizedBoundaryStress<0, -1>, olb::momenta::DefineSeparately>, olb::equilibria::FreeEnergy, olb::collision::FreeEnergyInletOutlet<0, -1>, olb::dynamics::DefaultCombination>
+#include "d17f7c89350d867910ec2e832380dc3e3c0d6852ca8aae338ca62ebb27c11b86.cse.h"
 
-//dynamics::Tuple<Expr, descriptors::D3Q19<>, momenta::Tuple<momenta::BulkDensity, momenta::FixedVelocityMomentumGeneric, momenta::BulkStress, momenta::DefineUSeparatelyTrace>, equilibria::SecondOrder, collision::BGK, dynamics::DefaultCombination>
-#include "5ea6da6193b9bd947f021948e4523d22a2b417b625a4e919be432526d5b7c545.cse.h"
+//dynamics::Tuple<Expr, olb::descriptors::D2Q9<>, olb::momenta::Tuple<olb::momenta::FreeEnergyInletOutletDensity, olb::momenta::FreeEnergyInletOutletMomentum<0, 1>, olb::momenta::RegularizedBoundaryStress<0, 1>, olb::momenta::DefineSeparately>, olb::equilibria::FreeEnergy, olb::collision::FreeEnergyInletOutlet<0, 1>, olb::dynamics::DefaultCombination>
+#include "6b64e0395e3c5cd831577f3fe46f83a4241e6ee335ec462c386709fbe022c180.cse.h"
 
-//dynamics::Tuple<Expr, descriptors::D3Q19<>, momenta::Tuple<momenta::BulkDensity, momenta::FixedVelocityMomentumGeneric, momenta::BulkStress, momenta::DefineUSeparatelyTrace>, equilibria::SecondOrder, collision::RLB, dynamics::DefaultCombination>
-#include "2e3ccd063d9ac9b188387089ccceaec875a477d2d5e0e06c3aed3bd65365a8ed.cse.h"
+//dynamics::Tuple<Expr, olb::descriptors::D2Q9<>, olb::momenta::Tuple<olb::momenta::FreeEnergyInletOutletDensity, olb::momenta::FreeEnergyInletOutletMomentum<1, -1>, olb::momenta::RegularizedBoundaryStress<1, -1>, olb::momenta::DefineSeparately>, olb::equilibria::FreeEnergy, olb::collision::FreeEnergyInletOutlet<1, -1>, olb::dynamics::DefaultCombination>
+#include "59a8fff20aa5306fecb1c49920922561e4d74e1320b634ff2e830efcda5b4321.cse.h"
 
-//dynamics::Tuple<Expr, descriptors::D3Q19<>, momenta::Tuple<momenta::BulkDensity, momenta::FixedVelocityMomentum, momenta::BulkStress, momenta::DefineUSeparately>, equilibria::CahnHilliardZerothOrder, collision::BGK, forcing::WellBalancedCahnHilliard>
-#include "f48166e195fe23f1b9867442d39c1932514ca787a4b850d2faf6cf8274b21c07.cse.h"
+//dynamics::Tuple<Expr, olb::descriptors::D2Q9<>, olb::momenta::Tuple<olb::momenta::FreeEnergyInletOutletDensity, olb::momenta::FreeEnergyInletOutletMomentum<1, 1>, olb::momenta::RegularizedBoundaryStress<1, 1>, olb::momenta::DefineSeparately>, olb::equilibria::FreeEnergy, olb::collision::FreeEnergyInletOutlet<1, 1>, olb::dynamics::DefaultCombination>
+#include "92142f3c2e4c48f45c458581ff7bc7cdfbec3faa7a5631841278a3e4eead7af9.cse.h"
 
-//dynamics::Tuple<Expr, descriptors::D3Q19<>, momenta::Tuple<momenta::BulkDensity, momenta::FixedVelocityMomentum, momenta::BulkStress, momenta::DefineUSeparately>, equilibria::SecondOrder, collision::BGK, forcing::MCGuo<momenta::Identity> >
-#include "8981ae33b5f6da4bc4bf48729cf9f80a3ab3e11ec719c4144ddf09f12d1a543d.cse.h"
+//dynamics::Tuple<Expr, olb::descriptors::D2Q9<>, olb::momenta::Tuple<olb::momenta::OneDensity, olb::momenta::ZeroMomentum, olb::momenta::ZeroStress, olb::momenta::DefineSeparately>, olb::equilibria::None, olb::collision::None, olb::dynamics::DefaultCombination>
+#include "57e75f9adaa588ef2fee56dcf45fee1955d8b87434c931cf6d35d6c61d2817e2.cse.h"
 
-//dynamics::Tuple<Expr, descriptors::D3Q19<>, momenta::Tuple<momenta::BulkDensity, momenta::FixedVelocityMomentum, momenta::BulkStress, momenta::DefineUSeparately>, equilibria::SecondOrder, collision::BGK, forcing::ShanChen>
-#include "4f85d1b528656ebda48b4067e2ba7c88f4082b4f21208d3934dfa3503c022a9d.cse.h"
+//dynamics::Tuple<Expr, olb::descriptors::D2Q9<>, olb::momenta::Tuple<olb::momenta::VelocityBoundaryDensity<0, -1>, olb::momenta::FixedVelocityMomentumGeneric, olb::momenta::BulkStress, olb::momenta::DefineSeparately>, olb::equilibria::SecondOrder, olb::collision::BGK, olb::dynamics::DefaultCombination>
+#include "cf44238f8471ea9eff0fef39aa8df69e99c37bc8260157d9e884aa4678535c1e.cse.h"
 
-//dynamics::Tuple<Expr, descriptors::D3Q19<>, momenta::Tuple<momenta::BulkDensity, momenta::FreeEnergyMomentum, momenta::BulkStress, momenta::DefineToNEq>, equilibria::FreeEnergy, collision::FreeEnergy, dynamics::DefaultCombination>
-#include "2a4b6ec873580b698e523d94acd3bb8ea09db6d64dad625cb7935fb2eda28da2.cse.h"
+//dynamics::Tuple<Expr, olb::descriptors::D2Q9<>, olb::momenta::Tuple<olb::momenta::VelocityBoundaryDensity<0, 1>, olb::momenta::FixedVelocityMomentumGeneric, olb::momenta::BulkStress, olb::momenta::DefineSeparately>, olb::equilibria::SecondOrder, olb::collision::BGK, olb::dynamics::DefaultCombination>
+#include "833bdd99a5dd166dd1fe3c579ce9835c9fe15b20e0974e0ffbac8787f9319f40.cse.h"
 
-//dynamics::Tuple<Expr, descriptors::D3Q19<>, momenta::Tuple<momenta::BulkDensity, momenta::MovingPorousMomentumCombination<momenta::BulkMomentum>, momenta::BulkStress, momenta::DefineToNEq>, equilibria::ThirdOrder, collision::ParameterFromCell<collision::HYBRID, collision::LocalSmagorinskyEffectiveOmega<collision::HRR> >, dynamics::DefaultCombination>
-#include "75046f7dde5e92d044f6fcd9023b89cb079a30a6e03cfbd31d660c5957066597.cse.h"
+//dynamics::Tuple<Expr, olb::descriptors::D2Q9<>, olb::momenta::Tuple<olb::momenta::VelocityBoundaryDensity<0, -1>, olb::momenta::FixedVelocityMomentumGeneric, olb::momenta::BulkStress, olb::momenta::DefineSeparately>, olb::equilibria::SecondOrder, olb::collision::ConstRhoBGK, olb::dynamics::DefaultCombination>
+#include "9622e8ce2934fb9a40bb737a652aa96cae58c7e29b9df6f8f400b9dda0b5f733.cse.h"
 
-//dynamics::Tuple<Expr, descriptors::D3Q19<>, momenta::Tuple<momenta::BulkDensity, momenta::MovingPorousMomentumCombination<momenta::BulkMomentum>, momenta::BulkStress, momenta::DefineToNEq>, equilibria::ThirdOrder, collision::ParameterFromCell<collision::LES::SMAGORINSKY, collision::SmagorinskyEffectiveOmega<collision::RLBThirdOrder> > >
-#include "e0b17f9f9d150c9f1571758424ddf813a9bc139e26c420b62463819ce36da2bf.cse.h"
+//dynamics::Tuple<Expr, olb::descriptors::D2Q9<>, olb::momenta::Tuple<olb::momenta::VelocityBoundaryDensity<0, 1>, olb::momenta::FixedVelocityMomentumGeneric, olb::momenta::BulkStress, olb::momenta::DefineSeparately>, olb::equilibria::SecondOrder, olb::collision::ConstRhoBGK, olb::dynamics::DefaultCombination>
+#include "d40b23a6a6031d3b4f7aae8896faf28d05d355ce144f678cb35fbb14c8ae6980.cse.h"
 
-//dynamics::Tuple<Expr, descriptors::D3Q19<>, momenta::Tuple<momenta::BulkDensity, momenta::MovingPorousMomentumCombination<momenta::BulkMomentum>, momenta::BulkStress, momenta::DefineToNEq>, equilibria::ThirdOrder, collision::TrackAverageVelocity<collision::ParameterFromCell<collision::HYBRID, collision::LocalSmagorinskyEffectiveOmega<collision::HRR> > >, dynamics::DefaultCombination>
-#include "c1e74e09d2251ce2fe7cbe6d512ddb6cb979667d135ae2a6fe0ffcabf87b7289.cse.h"
+//dynamics::Tuple<Expr, olb::descriptors::D2Q9<>, olb::momenta::Tuple<olb::momenta::VelocityBoundaryDensity<1, -1>, olb::momenta::FixedVelocityMomentumGeneric, olb::momenta::BulkStress, olb::momenta::DefineSeparately>, olb::equilibria::SecondOrder, olb::collision::BGK, olb::dynamics::DefaultCombination>
+#include "42b18dd5d18970eab2e3dec062fdbd03f10f9be5c1c2cb14dc894d12b047b513.cse.h"
 
-//dynamics::Tuple<Expr, descriptors::D3Q19<>, momenta::Tuple<momenta::FixedDensity, momenta::FixedPressureMomentum<0, 1>, momenta::BulkStress, momenta::DefineSeparately>, equilibria::SecondOrder, collision::BGK, dynamics::DefaultCombination>
-#include "604989639edac0d37948914553a1a3a85681c349c0b936eac0e2688024a8732f.cse.h"
+//dynamics::Tuple<Expr, olb::descriptors::D2Q9<>, olb::momenta::Tuple<olb::momenta::VelocityBoundaryDensity<1, 1>, olb::momenta::FixedVelocityMomentumGeneric, olb::momenta::BulkStress, olb::momenta::DefineSeparately>, olb::equilibria::SecondOrder, olb::collision::BGK, olb::dynamics::DefaultCombination>
+#include "e58b5b36bd22f31c897f8043886d02c9ebc9e01096ca575c2e8e533db495bc60.cse.h"
 
-//dynamics::Tuple<Expr, descriptors::D3Q19<>, momenta::Tuple<momenta::FixedDensity, momenta::FixedPressureMomentum<1, -1>, momenta::BulkStress, momenta::DefineSeparately>, equilibria::SecondOrder, collision::BGK, dynamics::DefaultCombination>
-#include "3cab17e537cc84d326f7fd7f8fb6c0734f3eb8353bae0e9bfec7d28709bc7962.cse.h"
+//dynamics::Tuple<Expr, olb::descriptors::D2Q9<>, olb::momenta::Tuple<olb::momenta::VelocityBoundaryDensity<1, -1>, olb::momenta::FixedVelocityMomentumGeneric, olb::momenta::BulkStress, olb::momenta::DefineSeparately>, olb::equilibria::SecondOrder, olb::collision::ConstRhoBGK, olb::dynamics::DefaultCombination>
+#include "1b4dc5fd376d8aa81fe8aa7e9ceaa664f8c6c869b9a6eadd7eb2a364f655f387.cse.h"
 
-//dynamics::Tuple<Expr, descriptors::D3Q19<>, momenta::Tuple<momenta::FixedDensity, momenta::FixedPressureMomentum<1, 1>, momenta::BulkStress, momenta::DefineSeparately>, equilibria::SecondOrder, collision::BGK, dynamics::DefaultCombination>
-#include "aef91cbb0a6a00436ce9edaa801e1ef7b63d676aac9ba3dddf1f093462414c1a.cse.h"
+//dynamics::Tuple<Expr, olb::descriptors::D2Q9<>, olb::momenta::Tuple<olb::momenta::VelocityBoundaryDensity<1, 1>, olb::momenta::FixedVelocityMomentumGeneric, olb::momenta::BulkStress, olb::momenta::DefineSeparately>, olb::equilibria::SecondOrder, olb::collision::ConstRhoBGK, olb::dynamics::DefaultCombination>
+#include "b13507cbc8471bbd699a76920172c8b52f29d845a906d281adad89a76d025ba7.cse.h"
 
-//dynamics::Tuple<Expr, descriptors::D3Q19<>, momenta::Tuple<momenta::FixedDensity, momenta::FixedPressureMomentum<2, -1>, momenta::BulkStress, momenta::DefineSeparately>, equilibria::SecondOrder, collision::BGK, dynamics::DefaultCombination>
-#include "aaa65edb877309adcc9730caaa4849454ae0eaa009f30625b6c2dfc3cb460e6d.cse.h"
+//dynamics::Tuple<Expr, olb::descriptors::D3Q15<>, olb::momenta::Tuple<olb::momenta::BulkDensity, olb::momenta::BulkMomentum, olb::momenta::BulkStress, olb::momenta::DefineToNEq>, olb::equilibria::SecondOrder, olb::multiphase::OmegaFromCell<olb::collision::BGK>, olb::forcing::Guo<olb::momenta::Forced> >
+#include "744d53fecb7270db7297f7a0bef74af0726301deb72be7c1e7c26fc5f629d614.cse.h"
 
-//dynamics::Tuple<Expr, descriptors::D3Q19<>, momenta::Tuple<momenta::FixedDensity, momenta::FixedPressureMomentum<2, 1>, momenta::BulkStress, momenta::DefineSeparately>, equilibria::SecondOrder, collision::BGK, dynamics::DefaultCombination>
-#include "3527b2ad793d4247ffa10d96c60c6548b8f6b60401d2a4b74e03ea6d6ec1ade4.cse.h"
+//dynamics::Tuple<Expr, olb::descriptors::D3Q15<>, olb::momenta::Tuple<olb::momenta::FixedDensity, olb::momenta::ZeroMomentum, olb::momenta::ZeroStress, olb::momenta::DefineSeparately>, olb::equilibria::SecondOrder, olb::collision::Revert, olb::dynamics::DefaultCombination>
+#include "fa40221504766051e7570db22a826a79d4d526f35b5616554807808ff9e27c49.cse.h"
 
-//dynamics::Tuple<Expr, descriptors::D3Q19<>, momenta::Tuple<momenta::FixedDensity, momenta::ZeroMomentum, momenta::ZeroStress, momenta::DefineSeparately>, equilibria::SecondOrder, collision::Revert, dynamics::DefaultCombination>
-#include "5f9378d81f55ea965cb8c27b4adcea27d9319d3fcffc430ce297622ea20a7be9.cse.h"
+//dynamics::Tuple<Expr, olb::descriptors::D3Q15<>, olb::momenta::Tuple<olb::momenta::OneDensity, olb::momenta::ZeroMomentum, olb::momenta::ZeroStress, olb::momenta::DefineSeparately>, olb::equilibria::None, olb::collision::None, olb::dynamics::DefaultCombination>
+#include "5e4354abe6cb67255900ecccaaa59cad9ab6833eb90a9ab028ce4cf729abc66b.cse.h"
 
-//dynamics::Tuple<Expr, descriptors::D3Q19<>, momenta::Tuple<momenta::VelocityBoundaryDensity<0, -1>, momenta::FixedVelocityMomentumGeneric, momenta::BulkStress, momenta::DefineSeparately>, equilibria::SecondOrder, collision::BGK, dynamics::DefaultCombination>
-#include "50c23cb114a51dc52c6782d17b4ffe0326995e5b736e19ac9e6429bad6dff96e.cse.h"
+//dynamics::Tuple<Expr, olb::descriptors::D3Q19<>, olb::momenta::Porous<olb::momenta::Tuple<olb::momenta::BulkDensity, olb::momenta::BulkMomentum, olb::momenta::BulkStress, olb::momenta::DefineToNEq> >, olb::equilibria::SecondOrder, olb::collision::BGK, olb::dynamics::DefaultCombination>
+#include "3def13a5f9384ec44cc1ede3197d97869389d4c5fe8f885237c62c1157f5f7d2.cse.h"
 
-//dynamics::Tuple<Expr, descriptors::D3Q19<>, momenta::Tuple<momenta::VelocityBoundaryDensity<0, 1>, momenta::FixedVelocityMomentumGeneric, momenta::BulkStress, momenta::DefineSeparately>, equilibria::SecondOrder, collision::BGK, dynamics::DefaultCombination>
-#include "0ce2afae989393aaa9d5117100889712be5f1074a1641ecd8730768bbdc9c4a4.cse.h"
+//dynamics::Tuple<Expr, olb::descriptors::D3Q19<>, olb::momenta::Tuple<olb::momenta::BulkDensity, olb::momenta::BulkMomentum, olb::momenta::BulkStress, olb::momenta::DefineToNEq>, olb::equilibria::None, olb::collision::None, olb::dynamics::DefaultCombination>
+#include "904e8dc8466973e92f7754afdc3a8ac0157386efd48c4ff5dfb5cf6cd4fabb64.cse.h"
 
-//dynamics::Tuple<Expr, descriptors::D3Q19<>, momenta::Tuple<momenta::VelocityBoundaryDensity<1, -1>, momenta::FixedVelocityMomentumGeneric, momenta::BulkStress, momenta::DefineSeparately>, equilibria::SecondOrder, collision::BGK, dynamics::DefaultCombination>
-#include "182eded7f649df5aee83c05485b7e4139eadceda0d03bc0903033fae537f6165.cse.h"
+//dynamics::Tuple<Expr, olb::descriptors::D3Q19<>, olb::momenta::Tuple<olb::momenta::BulkDensity, olb::momenta::BulkMomentum, olb::momenta::BulkStress, olb::momenta::DefineToNEq>, olb::equilibria::SecondOrder, olb::collision::BGK, olb::dynamics::DefaultCombination>
+#include "121e3dbd91f067a7569a6095c423fb84fefb500ca04e301bc25276bc0177d6ba.cse.h"
 
-//dynamics::Tuple<Expr, descriptors::D3Q19<>, momenta::Tuple<momenta::VelocityBoundaryDensity<1, 1>, momenta::FixedVelocityMomentumGeneric, momenta::BulkStress, momenta::DefineSeparately>, equilibria::SecondOrder, collision::BGK, dynamics::DefaultCombination>
-#include "54822ae46f59a4ef9d07e7beee5532a302207a987248684c1b79b50c44bfd16a.cse.h"
+//dynamics::Tuple<Expr, olb::descriptors::D3Q19<>, olb::momenta::Tuple<olb::momenta::BulkDensity, olb::momenta::BulkMomentum, olb::momenta::BulkStress, olb::momenta::DefineToNEq>, olb::equilibria::SecondOrder, olb::collision::BGK, olb::forcing::PlainGuo>
+#include "8d52eb0af44a640e4eaf9c35a4b0c2e6120be37c2ae40f65326869afd5d404f6.cse.h"
 
-//dynamics::Tuple<Expr, descriptors::D3Q19<>, momenta::Tuple<momenta::VelocityBoundaryDensity<2, -1>, momenta::FixedVelocityMomentumGeneric, momenta::BulkStress, momenta::DefineSeparately>, equilibria::SecondOrder, collision::BGK, dynamics::DefaultCombination>
-#include "185f76420abe347ce91d0f0d7440e3dde1e2fbc97a030af24e742feafef9df61.cse.h"
+//dynamics::Tuple<Expr, olb::descriptors::D3Q19<>, olb::momenta::Tuple<olb::momenta::BulkDensity, olb::momenta::BulkMomentum, olb::momenta::BulkStress, olb::momenta::DefineToNEq>, olb::equilibria::SecondOrder, olb::collision::BGK, olb::forcing::ScaledPlainGuo>
+#include "6a7da46f33d6e6cb03e5eb6b3d0dc2bce8366ef27c728be561a03d820840dca9.cse.h"
 
-//dynamics::Tuple<Expr, descriptors::D3Q19<>, momenta::Tuple<momenta::VelocityBoundaryDensity<2, 1>, momenta::FixedVelocityMomentumGeneric, momenta::BulkStress, momenta::DefineSeparately>, equilibria::SecondOrder, collision::BGK, dynamics::DefaultCombination>
-#include "bff2d6f4f2f76637e1c0f8ddb12d1fccf046abda49483790091df153e4be55cb.cse.h"
+//dynamics::Tuple<Expr, olb::descriptors::D3Q19<>, olb::momenta::Tuple<olb::momenta::BulkDensity, olb::momenta::BulkMomentum, olb::momenta::BulkStress, olb::momenta::DefineToNEq>, olb::equilibria::SecondOrder, olb::collision::ConstRhoBGK, olb::dynamics::DefaultCombination>
+#include "10f46bc57081d94ce0114de52aa18230ec473b683b4b6951e98408bc7a342a5a.cse.h"
 
-//dynamics::Tuple<Expr, descriptors::D3Q27<>, momenta::Tuple<momenta::BulkDensity, momenta::BulkMomentum, momenta::BulkStress, momenta::DefineToNEq>, equilibria::SecondOrder, collision::ParameterFromCell<collision::LES::SMAGORINSKY, collision::SmagorinskyEffectiveOmega<collision::BGK> >, dynamics::DefaultCombination>
-#include "1581ad118ab8ce09ba521ee58fb20b77e5b14ed4ac2eeea4b8a6c11c0807ad9a.cse.h"
+//dynamics::Tuple<Expr, olb::descriptors::D3Q19<>, olb::momenta::Tuple<olb::momenta::BulkDensity, olb::momenta::BulkMomentum, olb::momenta::BulkStress, olb::momenta::DefineToNEq>, olb::equilibria::SecondOrder, olb::collision::RLB, olb::dynamics::DefaultCombination>
+#include "58aad1dacb47d4d04f9d9e18b3ed02fef27900a19983b65bc021d56d03d8b417.cse.h"
 
-//dynamics::Tuple<Expr, descriptors::D3Q27<>, momenta::Tuple<momenta::BulkDensity, momenta::BulkMomentum, momenta::BulkStress, momenta::DefineToNEq>, equilibria::SecondOrder, collision::SmagorinskyEffectiveOmega<collision::BGK>, forcing::Guo<momenta::ForcedWithStress> >
-#include "073eefdb19b5eb70922033b5fc889525be9bf342c6d9ec088d71e406fad52959.cse.h"
+//dynamics::Tuple<Expr, olb::descriptors::D3Q19<>, olb::momenta::Tuple<olb::momenta::BulkDensity, olb::momenta::BulkMomentum, olb::momenta::BulkStress, olb::momenta::DefineToNEq>, olb::equilibria::SecondOrder, olb::collision::SaveVelocity<olb::collision::BGK>, olb::dynamics::DefaultCombination>
+#include "3f4f063a67f38d5ac360893fee59c64856b74c3a632cdce64b030899d1cc5973.cse.h"
 
-//dynamics::Tuple<Expr, descriptors::D3Q27<>, momenta::Tuple<momenta::FixedDensity, momenta::ZeroMomentum, momenta::ZeroStress, momenta::DefineSeparately>, equilibria::SecondOrder, collision::Revert, dynamics::DefaultCombination>
-#include "689239523cac186c8e66f3c1a7b97db2da72241b073a7cf141749307880b3fc0.cse.h"
+//dynamics::Tuple<Expr, olb::descriptors::D3Q19<>, olb::momenta::Tuple<olb::momenta::BulkDensity, olb::momenta::BulkMomentum, olb::momenta::BulkStress, olb::momenta::DefineToNEq>, olb::equilibria::SecondOrder, olb::collision::SmagorinskyEffectiveOmega<olb::collision::BGK>, olb::dynamics::DefaultCombination>
+#include "d7746e4491d83ef83cc95acaed6624da4cd7573926c9aa6239c517f2d0ae4add.cse.h"
 
-//dynamics::Tuple<Expr, descriptors::D3Q27<>, momenta::Tuple<momenta::VelocityBoundaryDensity<2, -1>, momenta::FixedVelocityMomentumGeneric, momenta::BulkStress, momenta::DefineSeparately>, equilibria::SecondOrder, collision::BGK, dynamics::DefaultCombination>
-#include "a49663b5fb42cff3385aa16bb0bc3c569c1b1291218dfc44014129e450ca8e81.cse.h"
+//dynamics::Tuple<Expr, olb::descriptors::D3Q19<>, olb::momenta::Tuple<olb::momenta::BulkDensity, olb::momenta::BulkMomentum, olb::momenta::BulkStress, olb::momenta::DefineToNEq>, olb::equilibria::ThirdOrder, olb::collision::ParameterFromCell<olb::collision::LES::SMAGORINSKY, olb::collision::SmagorinskyEffectiveOmega<olb::collision::ThirdOrderRLB> >>
+#include "14b720ea0bc95b1d27a1197156130df0c3ea530e87b558fd3867c615c88ea5a2.cse.h"
 
-//dynamics::Tuple<Expr, descriptors::D3Q27<>, momenta::Tuple<momenta::VelocityBoundaryDensity<2, 1>, momenta::FixedVelocityMomentumGeneric, momenta::BulkStress, momenta::DefineSeparately>, equilibria::SecondOrder, collision::BGK, dynamics::DefaultCombination>
-#include "bddb5d177753e594d3b61fce9319e5efe67a8fcb21aa171269df73d4bc5e0b45.cse.h"
+//dynamics::Tuple<Expr, olb::descriptors::D3Q19<>, olb::momenta::Tuple<olb::momenta::BulkDensity, olb::momenta::BulkMomentum, olb::momenta::BulkStress, olb::momenta::DefineToNEq>, olb::equilibria::ThirdOrder, olb::collision::SmagorinskyEffectiveOmega<olb::collision::ThirdOrderRLB> >
+#include "cbc08a6d0d38ea48f517a819ec4b2dfba6250c64fb1bed7a81c464bd5d20140c.cse.h"
 
-//dynamics::Tuple<Expr, descriptors::D3Q7<>, momenta::Tuple<momenta::BulkDensity, momenta::BulkMomentum, momenta::NoStress, momenta::DefineToEq>, equilibria::FirstOrder, collision::BGK, AdvectionDiffusionExternalVelocityCollision>
-#include "c669bfeb3f0a859cef9b11826a90e245986bde23bcf929d3d6a39f42f30bd786.cse.h"
+//dynamics::Tuple<Expr, olb::descriptors::D3Q19<>, olb::momenta::Tuple<olb::momenta::BulkDensity, olb::momenta::BulkMomentum, olb::momenta::NoStress, olb::momenta::DefineToEq>, olb::equilibria::FirstOrder, olb::collision::BGK, olb::AdvectionDiffusionExternalVelocityCollision>
+#include "9f9fb6625d057b4d5b3e062c118f555cb38722f85ac9c13034a44b2500e53235.cse.h"
 
-//dynamics::Tuple<Expr, descriptors::D3Q7<>, momenta::Tuple<momenta::FixedDensity, momenta::FixedVelocityMomentumGeneric, momenta::ZeroStress, momenta::DefineSeparately>, equilibria::FirstOrder, collision::FixedEquilibrium, dynamics::DefaultCombination>
-#include "1d431eff28077987ffcd3e8783c159c1d2f8ab21ec8bde06c9c1a0721c7a673b.cse.h"
+//dynamics::Tuple<Expr, olb::descriptors::D3Q19<>, olb::momenta::Tuple<olb::momenta::BulkDensity, olb::momenta::FixedVelocityMomentumGeneric, olb::momenta::BulkStress, olb::momenta::DefineUSeparatelyTrace>, olb::equilibria::SecondOrder, olb::collision::BGK, olb::dynamics::DefaultCombination>
+#include "cca21df4328b25d073238166e0772e0493883867353b8400f25d3c8241f412c4.cse.h"
 
-//dynamics::Tuple<Expr, descriptors::D3Q7<>, momenta::Tuple<momenta::FixedDensity, momenta::ZeroMomentum, momenta::ZeroStress, momenta::DefineSeparately>, equilibria::SecondOrder, collision::Revert, dynamics::DefaultCombination>
-#include "04cfafdf9624d7606f328f72496944aef5c90cbebb4ed04479b86c86e323a06a.cse.h"
+//dynamics::Tuple<Expr, olb::descriptors::D3Q19<>, olb::momenta::Tuple<olb::momenta::BulkDensity, olb::momenta::FixedVelocityMomentumGeneric, olb::momenta::BulkStress, olb::momenta::DefineUSeparatelyTrace>, olb::equilibria::SecondOrder, olb::collision::RLB, olb::dynamics::DefaultCombination>
+#include "aadbe2aa5102601e1c1588608b6d4b9cb5da3a5ede00c6a3ba87c7f083fca3a8.cse.h"
 
-//SourcedAdvectionDiffusionBGKdynamics<Expr, descriptors::D3Q19<> >
-#include "b0802dcbfdfe2d3df2c6341680838b0109a464937e441bf537f836d339cc3dc0.cse.h"
+//dynamics::Tuple<Expr, olb::descriptors::D3Q19<>, olb::momenta::Tuple<olb::momenta::BulkDensity, olb::momenta::FixedVelocityMomentum, olb::momenta::BulkStress, olb::momenta::DefineUSeparately>, olb::equilibria::CahnHilliardZerothOrder, olb::collision::BGK, olb::forcing::WellBalancedCahnHilliard>
+#include "ac557bd72067762cb5309ff0c7eb4f10b9bafca53b47ed165a6f48cda36396b6.cse.h"
 
-//SourcedAdvectionDiffusionBGKdynamics<Expr, descriptors::D3Q7<> >
-#include "470e1c8a901b03cfb11df33b2a3e79a1db6d02b5c1c14c161b981b0f85132c49.cse.h"
+//dynamics::Tuple<Expr, olb::descriptors::D3Q19<>, olb::momenta::Tuple<olb::momenta::BulkDensity, olb::momenta::FixedVelocityMomentum, olb::momenta::BulkStress, olb::momenta::DefineUSeparately>, olb::equilibria::SecondOrder, olb::collision::BGK, olb::forcing::MCGuo<olb::momenta::Identity> >
+#include "d354fc538085ef67f534a031c5a27d77258c334db2bce6daadeee088c1c7b4d3.cse.h"
 
-//SpongeLayerDynamics<Expr, descriptors::D3Q19<>, momenta::Tuple<momenta::BulkDensity, momenta::BulkMomentum, momenta::BulkStress, momenta::DefineToNEq>, equilibria::SecondOrder>
-#include "86789783378d00a3814b44791228f66b5679d9c3d3f55b0edb29a3a5c4b4e3c5.cse.h"
+//dynamics::Tuple<Expr, olb::descriptors::D3Q19<>, olb::momenta::Tuple<olb::momenta::BulkDensity, olb::momenta::FixedVelocityMomentum, olb::momenta::BulkStress, olb::momenta::DefineUSeparately>, olb::equilibria::SecondOrder, olb::collision::BGK, olb::forcing::ShanChen>
+#include "2ce3870798787996967fcf790fdfa9bbff705d3c33e5cc736d48e8c48997f71c.cse.h"
 
-//ZeroDistributionDynamics<Expr, descriptors::D3Q7<> >
-#include "f440704100fea417d8101d68090bc6ef4e31fab26072b404a12171b82d357aee.cse.h"
+//dynamics::Tuple<Expr, olb::descriptors::D3Q19<>, olb::momenta::Tuple<olb::momenta::BulkDensity, olb::momenta::FreeEnergyMomentum, olb::momenta::BulkStress, olb::momenta::DefineToNEq>, olb::equilibria::FreeEnergy, olb::collision::FreeEnergy, olb::dynamics::DefaultCombination>
+#include "613e1ac8868f8a027586094dc68749bf4d940b8d595bcca4b333f67e416a688f.cse.h"
+
+//dynamics::Tuple<Expr, olb::descriptors::D3Q19<>, olb::momenta::Tuple<olb::momenta::BulkDensity, olb::momenta::MovingPorousMomentumCombinationNoWM<olb::momenta::BulkMomentum>, olb::momenta::BulkStress, olb::momenta::DefineToNEq>, olb::equilibria::ThirdOrder, olb::collision::SmagorinskyEffectiveOmega<olb::collision::ThirdOrderRLB> >
+#include "a83182bf610a91116517bef3c5bdebbdebe7cd1b82026f78fd29c0b85cdad6c7.cse.h"
+
+//dynamics::Tuple<Expr, olb::descriptors::D3Q19<>, olb::momenta::Tuple<olb::momenta::BulkDensity, olb::momenta::MovingPorousMomentumCombination<olb::momenta::BulkMomentum>, olb::momenta::BulkStress, olb::momenta::DefineToNEq>, olb::equilibria::ThirdOrder, olb::collision::ParameterFromCell<olb::collision::LES::SMAGORINSKY, olb::collision::SmagorinskyEffectiveOmega<olb::collision::ThirdOrderRLB> >>
+#include "41aaaadde90800d8d98bbf30c3514066759bb7d920d01558dea1b9eb1f3c2ede.cse.h"
+
+//dynamics::Tuple<Expr, olb::descriptors::D3Q19<>, olb::momenta::Tuple<olb::momenta::BulkDensity, olb::momenta::MovingPorousMomentumCombination<olb::momenta::BulkMomentum>, olb::momenta::BulkStress, olb::momenta::DefineToNEq>, olb::equilibria::ThirdOrder, olb::collision::SmagorinskyEffectiveOmega<olb::collision::ThirdOrderRLB> >
+#include "d66597229b0d9bdfdcb37aa35e39167ccb5bb5d45b4bd7a005d96985d5380d71.cse.h"
+
+//dynamics::Tuple<Expr, olb::descriptors::D3Q19<>, olb::momenta::Tuple<olb::momenta::BulkDensity, olb::momenta::MovingPorousMomentumCombination<olb::momenta::BulkMomentum>, olb::momenta::BulkStress, olb::momenta::DefineToNEq>, olb::equilibria::ThirdOrder, olb::collision::StoreAndTrackAverageVelocity<olb::collision::ParameterFromCell<olb::collision::HYBRID, olb::collision::LocalSmagorinskyEffectiveOmega<olb::collision::HRR> > >, olb::dynamics::DefaultCombination>
+#include "a479450a0122059dbd109ae496c88e3e4dd54dd5b05d0acac48101880b1f1ac4.cse.h"
+
+//dynamics::Tuple<Expr, olb::descriptors::D3Q19<>, olb::momenta::Tuple<olb::momenta::FixedDensity, olb::momenta::FixedPressureMomentum<0, 1>, olb::momenta::BulkStress, olb::momenta::DefineSeparately>, olb::equilibria::SecondOrder, olb::collision::BGK, olb::dynamics::DefaultCombination>
+#include "e4501741ad490bf10a10caba95b56f9d1d07b098f62884b2019e0d5fe2addd93.cse.h"
+
+//dynamics::Tuple<Expr, olb::descriptors::D3Q19<>, olb::momenta::Tuple<olb::momenta::FixedDensity, olb::momenta::FixedPressureMomentum<1, -1>, olb::momenta::BulkStress, olb::momenta::DefineSeparately>, olb::equilibria::SecondOrder, olb::collision::BGK, olb::dynamics::DefaultCombination>
+#include "a6887814714bfa6ea71ff26925146856a5378d00207bbee83c70ce5195a2b8fe.cse.h"
+
+//dynamics::Tuple<Expr, olb::descriptors::D3Q19<>, olb::momenta::Tuple<olb::momenta::FixedDensity, olb::momenta::FixedPressureMomentum<1, 1>, olb::momenta::BulkStress, olb::momenta::DefineSeparately>, olb::equilibria::SecondOrder, olb::collision::BGK, olb::dynamics::DefaultCombination>
+#include "93a3821d5747c394cb508fd14caad837ab4e0138f55eb052d8bfaafa614336d3.cse.h"
+
+//dynamics::Tuple<Expr, olb::descriptors::D3Q19<>, olb::momenta::Tuple<olb::momenta::FixedDensity, olb::momenta::FixedPressureMomentum<2, -1>, olb::momenta::BulkStress, olb::momenta::DefineSeparately>, olb::equilibria::SecondOrder, olb::collision::BGK, olb::dynamics::DefaultCombination>
+#include "232ad482fcd0952466a478f65ee1464a1381ad8d30f8a5a9373e84b2378e58a5.cse.h"
+
+//dynamics::Tuple<Expr, olb::descriptors::D3Q19<>, olb::momenta::Tuple<olb::momenta::FixedDensity, olb::momenta::FixedPressureMomentum<2, 1>, olb::momenta::BulkStress, olb::momenta::DefineSeparately>, olb::equilibria::SecondOrder, olb::collision::BGK, olb::dynamics::DefaultCombination>
+#include "191eae674d12b7cb591fa1e930ab1027d26d3b4a409ab030f160312e7d714cf4.cse.h"
+
+//dynamics::Tuple<Expr, olb::descriptors::D3Q19<>, olb::momenta::Tuple<olb::momenta::FixedDensity, olb::momenta::FixedVelocityMomentumGeneric, olb::momenta::ZeroStress, olb::momenta::DefineSeparately>, olb::equilibria::FirstOrder, olb::collision::FixedEquilibrium, olb::dynamics::DefaultCombination>
+#include "7d2d3feb6119e58e484b6542a315b90eed239b8e2386b38e6167f940952bcc84.cse.h"
+
+//dynamics::Tuple<Expr, olb::descriptors::D3Q19<>, olb::momenta::Tuple<olb::momenta::FixedDensity, olb::momenta::ZeroMomentum, olb::momenta::ZeroStress, olb::momenta::DefineSeparately>, olb::equilibria::SecondOrder, olb::collision::Revert, olb::dynamics::DefaultCombination>
+#include "27e77bcaf19525a912c3d84732fc7e862670e841a95e3df591c5d4fb9aa854f2.cse.h"
+
+//dynamics::Tuple<Expr, olb::descriptors::D3Q19<>, olb::momenta::Tuple<olb::momenta::OneDensity, olb::momenta::ZeroMomentum, olb::momenta::ZeroStress, olb::momenta::DefineSeparately>, olb::equilibria::None, olb::collision::None, olb::dynamics::DefaultCombination>
+#include "afeaf8f4b26234dbaafe469534531f430ee6f807fa946543fa6b95d483bcf0c1.cse.h"
+
+//dynamics::Tuple<Expr, olb::descriptors::D3Q19<>, olb::momenta::Tuple<olb::momenta::VelocityBoundaryDensity<0, -1>, olb::momenta::FixedVelocityMomentumGeneric, olb::momenta::BulkStress, olb::momenta::DefineSeparately>, olb::equilibria::SecondOrder, olb::collision::BGK, olb::dynamics::DefaultCombination>
+#include "4af70343d3dff0a688020d5986cbf5568151d280a013a58e3f87e479ea630169.cse.h"
+
+//dynamics::Tuple<Expr, olb::descriptors::D3Q19<>, olb::momenta::Tuple<olb::momenta::VelocityBoundaryDensity<0, 1>, olb::momenta::FixedVelocityMomentumGeneric, olb::momenta::BulkStress, olb::momenta::DefineSeparately>, olb::equilibria::SecondOrder, olb::collision::BGK, olb::dynamics::DefaultCombination>
+#include "0664607326d944ae42f952c476f9726fcc5410b1a820e9d974e412b0f9e69d46.cse.h"
+
+//dynamics::Tuple<Expr, olb::descriptors::D3Q19<>, olb::momenta::Tuple<olb::momenta::VelocityBoundaryDensity<1, -1>, olb::momenta::FixedVelocityMomentumGeneric, olb::momenta::BulkStress, olb::momenta::DefineSeparately>, olb::equilibria::SecondOrder, olb::collision::BGK, olb::dynamics::DefaultCombination>
+#include "de53e52c0fd0ec3f98ed4c7a24040e9bf401f89f05bf976a08519eed44c2271f.cse.h"
+
+//dynamics::Tuple<Expr, olb::descriptors::D3Q19<>, olb::momenta::Tuple<olb::momenta::VelocityBoundaryDensity<1, 1>, olb::momenta::FixedVelocityMomentumGeneric, olb::momenta::BulkStress, olb::momenta::DefineSeparately>, olb::equilibria::SecondOrder, olb::collision::BGK, olb::dynamics::DefaultCombination>
+#include "284f0b6d3195aa356f62b2cff77702ee62966edd9887ac109091b5d2f34aeffd.cse.h"
+
+//dynamics::Tuple<Expr, olb::descriptors::D3Q19<>, olb::momenta::Tuple<olb::momenta::VelocityBoundaryDensity<2, -1>, olb::momenta::FixedVelocityMomentumGeneric, olb::momenta::BulkStress, olb::momenta::DefineSeparately>, olb::equilibria::SecondOrder, olb::collision::BGK, olb::dynamics::DefaultCombination>
+#include "9afe63c16f8c806e5ac0dc7cf5f66ee51996bc08aa58d7a35b2283c993e44dba.cse.h"
+
+//dynamics::Tuple<Expr, olb::descriptors::D3Q19<>, olb::momenta::Tuple<olb::momenta::VelocityBoundaryDensity<2, 1>, olb::momenta::FixedVelocityMomentumGeneric, olb::momenta::BulkStress, olb::momenta::DefineSeparately>, olb::equilibria::SecondOrder, olb::collision::BGK, olb::dynamics::DefaultCombination>
+#include "ae650a6d6c6898293b4949671372fbada8b120f286681b1882607da00c4e6154.cse.h"
+
+//dynamics::Tuple<Expr, olb::descriptors::D3Q27<olb::descriptors::tag::RTLBM>, olb::momenta::Tuple<olb::momenta::BulkDensity, olb::momenta::P1Momentum, olb::momenta::ZeroStress, olb::momenta::DefineToNEq>, olb::equilibria::P1, olb::collision::P1, olb::dynamics::DefaultCombination>
+#include "203a2b8804d3f182903777e3c2ac709f88d31caaebce1a3ebe0e9d805b544f2a.cse.h"
+
+//dynamics::Tuple<Expr, olb::descriptors::D3Q27<olb::descriptors::tag::RTLBM>, olb::momenta::Tuple<olb::momenta::FixedDensity, olb::momenta::FixedVelocityMomentumGeneric, olb::momenta::ZeroStress, olb::momenta::DefineSeparately>, olb::equilibria::FirstOrder, olb::collision::FixedEquilibrium, olb::dynamics::DefaultCombination>
+#include "d7f0e27ff053fae46ef1a243a2e7f852bfee028aaf1f7bd6ebdbbed0bfc28164.cse.h"
+
+//dynamics::Tuple<Expr, olb::descriptors::D3Q27<olb::descriptors::tag::RTLBM>, olb::momenta::Tuple<olb::momenta::OneDensity, olb::momenta::ZeroMomentum, olb::momenta::ZeroStress, olb::momenta::DefineSeparately>, olb::equilibria::None, olb::collision::None, olb::dynamics::DefaultCombination>
+#include "1f0f7d0c4c955ef6b05522408f8cee3d70c893ff0345085d3d8d80b170f840bc.cse.h"
+
+//dynamics::Tuple<Expr, olb::descriptors::D3Q27<>, olb::momenta::Tuple<olb::momenta::BulkDensity, olb::momenta::BulkMomentum, olb::momenta::BulkStress, olb::momenta::DefineToNEq>, olb::equilibria::SecondOrder, olb::collision::ParameterFromCell<olb::collision::LES::SMAGORINSKY, olb::collision::SmagorinskyEffectiveOmega<olb::collision::BGK> >, olb::dynamics::DefaultCombination>
+#include "263f7dabdbf21f630bbe6ce0220748b028cd1f1fd73af94e65ab0cf473118168.cse.h"
+
+//dynamics::Tuple<Expr, olb::descriptors::D3Q27<>, olb::momenta::Tuple<olb::momenta::BulkDensity, olb::momenta::BulkMomentum, olb::momenta::BulkStress, olb::momenta::DefineToNEq>, olb::equilibria::SecondOrder, olb::collision::SmagorinskyEffectiveOmega<olb::collision::BGK>, olb::forcing::Guo<olb::momenta::ForcedWithStress> >
+#include "c2a15878947039c7f8b6efc9265c86cf2bce42b52c6d6f4eef0bcb220b2fb7a3.cse.h"
+
+//dynamics::Tuple<Expr, olb::descriptors::D3Q27<>, olb::momenta::Tuple<olb::momenta::FixedDensity, olb::momenta::ZeroMomentum, olb::momenta::ZeroStress, olb::momenta::DefineSeparately>, olb::equilibria::SecondOrder, olb::collision::Revert, olb::dynamics::DefaultCombination>
+#include "e329224a0cd30010bfd8480dde6fa167d27d80b0e3604a2e4a3bc4f1395a740f.cse.h"
+
+//dynamics::Tuple<Expr, olb::descriptors::D3Q7<>, olb::momenta::Tuple<olb::momenta::BulkDensity, olb::momenta::BulkMomentum, olb::momenta::BulkStress, olb::momenta::DefineToNEq>, olb::equilibria::None, olb::collision::None, olb::dynamics::DefaultCombination>
+#include "5a4b9c388dfd3a2a4d252c4b10e42dd063623725a16f09af3ad32290161044e2.cse.h"
+
+//dynamics::Tuple<Expr, olb::descriptors::D3Q7<>, olb::momenta::Tuple<olb::momenta::BulkDensity, olb::momenta::BulkMomentum, olb::momenta::NoStress, olb::momenta::DefineToEq>, olb::equilibria::FirstOrder, olb::collision::BGK, olb::AdvectionDiffusionExternalVelocityCollision>
+#include "79d74969e26969e130807c24c49ca4b2b2ddd4ed5b91ac175418a403b9949c6f.cse.h"
+
+//dynamics::Tuple<Expr, olb::descriptors::D3Q7<>, olb::momenta::Tuple<olb::momenta::FixedDensity, olb::momenta::FixedVelocityMomentumGeneric, olb::momenta::ZeroStress, olb::momenta::DefineSeparately>, olb::equilibria::FirstOrder, olb::collision::FixedEquilibrium, olb::dynamics::DefaultCombination>
+#include "7563d6c4d8790cf8b29fe74b5f55a40ab0d628ab2a0544999ad4b2f500d5ef5a.cse.h"
+
+//dynamics::Tuple<Expr, olb::descriptors::D3Q7<>, olb::momenta::Tuple<olb::momenta::FixedDensity, olb::momenta::ZeroMomentum, olb::momenta::ZeroStress, olb::momenta::DefineSeparately>, olb::equilibria::SecondOrder, olb::collision::Revert, olb::dynamics::DefaultCombination>
+#include "34fa1a23131e8fd55f9e739dfb8d43a840f8dca5ca5796e3c866d4d9613e7b2b.cse.h"
+
+//dynamics::Tuple<Expr, olb::descriptors::D3Q7<>, olb::momenta::Tuple<olb::momenta::OneDensity, olb::momenta::ZeroMomentum, olb::momenta::ZeroStress, olb::momenta::DefineSeparately>, olb::equilibria::None, olb::collision::None, olb::dynamics::DefaultCombination>
+#include "a25ae0fd576630cd0b368ae15d911278b99e455efec2f0b98226e9586dadd0ad.cse.h"
+
+//SourcedAdvectionDiffusionBGKdynamics<Expr, olb::descriptors::D3Q19<> >
+#include "86dbdc4dce1b32bcc7caa435b2eadef08f5b833973e69deb9a1b5fc07052e63c.cse.h"
+
+//SourcedAdvectionDiffusionBGKdynamics<Expr, olb::descriptors::D3Q7<> >
+#include "0910a9b55dc2a151dc1f88bb677e67988b6da3ae74a4c0c52eb5900521a6d11a.cse.h"
+
+//SpongeLayerDynamics<Expr, olb::descriptors::D3Q19<>, olb::momenta::Tuple<olb::momenta::BulkDensity, olb::momenta::BulkMomentum, olb::momenta::BulkStress, olb::momenta::DefineToNEq>, olb::equilibria::SecondOrder>
+#include "796e875803d82f93cfa076b3a20d5745e219bd02cf49fe9b6ef942828a1aae21.cse.h"
+
+//ZeroDistributionDynamics<Expr, olb::descriptors::D3Q7<> >
+#include "f18c677f067c1e73adc190f6584e0d1c4123dfec3d723f06f3a2e08bb16f7429.cse.h"
+
+//dynamics::Tuple<Expr, olb::descriptors::D3Q19<>, olb::momenta::Tuple<olb::momenta::BulkDensity, olb::momenta::BulkMomentum, olb::momenta::BulkStress, olb::momenta::DefineToNEq>, olb::equilibria::SecondOrder, olb::collision::BGK, olb::dynamics::DefaultCombination>
+#include "121e3dbd91f067a7569a6095c423fb84fefb500ca04e301bc25276bc0177d6ba.cse.h"
+
+//dynamics::Tuple<Expr, olb::descriptors::D3Q19<>, olb::momenta::Tuple<olb::momenta::CBCDensity, olb::momenta::CBCMomentum<0, -1>, olb::momenta::BulkStress, olb::momenta::DefineSeparately>, olb::equilibria::SecondOrder, olb::collision::BGK, olb::dynamics::DefaultCombination>
+#include "01bfa3b77b05e772e90a9a822a6c25a141ec252f2ec3dec9d8c527771b1bf1f6.cse.h"
+
+//dynamics::Tuple<Expr, olb::descriptors::D3Q19<>, olb::momenta::Tuple<olb::momenta::CBCDensity, olb::momenta::CBCMomentum<0, 1>, olb::momenta::BulkStress, olb::momenta::DefineSeparately>, olb::equilibria::SecondOrder, olb::collision::BGK, olb::dynamics::DefaultCombination>
+#include "e19b2f39c571494b282b0374f64021452dcd1ac638b6bb35d1a4e1f4e69e7d6b.cse.h"
+
+//dynamics::Tuple<Expr, olb::descriptors::D3Q19<>, olb::momenta::Tuple<olb::momenta::CBCDensity, olb::momenta::CBCMomentum<1, -1>, olb::momenta::BulkStress, olb::momenta::DefineSeparately>, olb::equilibria::SecondOrder, olb::collision::BGK, olb::dynamics::DefaultCombination>
+#include "b87e00f1cfc04e1f051fffb2c4ea2b15a3402ce3846f36ec55c1e205603eb331.cse.h"
+
+//dynamics::Tuple<Expr, olb::descriptors::D3Q19<>, olb::momenta::Tuple<olb::momenta::CBCDensity, olb::momenta::CBCMomentum<1, 1>, olb::momenta::BulkStress, olb::momenta::DefineSeparately>, olb::equilibria::SecondOrder, olb::collision::BGK, olb::dynamics::DefaultCombination>
+#include "3da5d271be641d9b8db5e64de0c21736807e80131e84941a07556011dcff5e6d.cse.h"
+
+//dynamics::Tuple<Expr, olb::descriptors::D3Q19<>, olb::momenta::Tuple<olb::momenta::CBCDensity, olb::momenta::CBCMomentum<2, -1>, olb::momenta::BulkStress, olb::momenta::DefineSeparately>, olb::equilibria::SecondOrder, olb::collision::BGK, olb::dynamics::DefaultCombination>
+#include "57b4c924e4a95ec34071c78833779ee3781f19c526aa89f0b46f3fdd7b7f3ceb.cse.h"
+
+//dynamics::Tuple<Expr, olb::descriptors::D3Q19<>, olb::momenta::Tuple<olb::momenta::CBCDensity, olb::momenta::CBCMomentum<2, 1>, olb::momenta::BulkStress, olb::momenta::DefineSeparately>, olb::equilibria::SecondOrder, olb::collision::BGK, olb::dynamics::DefaultCombination>
+#include "4ac8c102c64d11dd92ac3b45483ae853710b8164cdfaccfc3ab95067223de4b4.cse.h"
+
+//dynamics::Tuple<Expr, olb::descriptors::D3Q19<>, olb::momenta::Tuple<olb::momenta::CBCoutsideDensity, olb::momenta::CBCoutsideMomentum, olb::momenta::BulkStress, olb::momenta::DefineUSeparatelyTrace>, olb::equilibria::SecondOrder, olb::collision::BGK, olb::dynamics::DefaultCombination>
+#include "10f957fc76ea2af3b16f415daf5319c7dafdbb14501f6b5c3ff071464850fdcc.cse.h"
+
+//dynamics::Tuple<Expr, olb::descriptors::D3Q19<>, olb::momenta::Tuple<olb::momenta::OneDensity, olb::momenta::ZeroMomentum, olb::momenta::ZeroStress, olb::momenta::DefineSeparately>, olb::equilibria::None, olb::collision::None, olb::dynamics::DefaultCombination>
+#include "afeaf8f4b26234dbaafe469534531f430ee6f807fa946543fa6b95d483bcf0c1.cse.h"
 
 #endif

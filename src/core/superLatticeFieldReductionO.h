@@ -25,6 +25,7 @@
 #define SUPER_LATTICE_FIELD_REDUCTION_O_H
 
 #include "core/superD.h"
+#include "optimization/primitives/singleLatticeO.h"
 #include "optimization/primitives/functors/objectiveF.h"
 #include "blockLatticeFieldReductionO.h"
 
@@ -37,14 +38,19 @@ struct ReductionField {};
 } // namespace stage::reduction
 
 template <typename T, typename DESCRIPTOR, typename FIELD, typename REDUCTION_OP,
-          typename CONDITION = reduction::ConditionTrue>
+          typename CONDITION = reduction::ConditionTrue<>>
 class SuperLatticeFieldReductionO final {
 public:
   template <unsigned D>
   struct REDUCED_FIELD : public descriptors::SPATIAL_DESCRIPTOR<D, FIELD> {};
 
 private:
-  SuperLattice<T, DESCRIPTOR>&                             _sLattice;
+  using _CONDITION = CONDITION;
+  using _OPERATOR  = BlockLatticeFieldReductionO<FIELD, REDUCTION_OP, _CONDITION>;
+  SuperLattice<T, DESCRIPTOR>& _sLattice;
+  std::unique_ptr<SuperLatticeCoupling<SingleLatticeO<_OPERATOR>,
+                                       meta::map<names::Lattice1, descriptors::VALUED_DESCRIPTOR<T, DESCRIPTOR>>>>
+                                                           _operator;
   std::unique_ptr<SuperD<T, REDUCED_FIELD<DESCRIPTOR::d>>> _superReducedFieldD;
   static constexpr unsigned                                _fieldDimension = FieldD<T, DESCRIPTOR, FIELD>::d;
   FieldD<T, DESCRIPTOR, FIELD>                             _reductedField {};
@@ -59,8 +65,6 @@ private:
   }
 
 #ifdef PARALLEL_MODE_MPI
-  MPI_Comm _mpiCommunicator;
-
   void _mpiGatherField(MPI_Op op)
   {
     std::vector<T> localFields(_fieldDimension, T {});
@@ -70,11 +74,11 @@ private:
 
     std::vector<T> globalFields(_fieldDimension, T {});
     if constexpr (!util::is_adf_v<T>) {
-      singleton::mpi().allreduce(localFields.data(), globalFields.data(), globalFields.size(), op, _mpiCommunicator);
+      singleton::mpi().allreduce(localFields.data(), globalFields.data(), globalFields.size(), op, MPI_COMM_WORLD);
     }
     else {
       singleton::mpi().allreduce<typename T::base_t, T::dim>(localFields.data(), globalFields.data(),
-                                                             globalFields.size(), op, _mpiCommunicator);
+                                                             globalFields.size(), op, MPI_COMM_WORLD);
     }
 
     for (std::size_t iD = 0; iD < _fieldDimension; ++iD) {
@@ -89,13 +93,13 @@ public:
   SuperLatticeFieldReductionO(SuperLattice<T, DESCRIPTOR>&                    sLattice,
                               FunctorPtr<SuperIndicatorF<T, DESCRIPTOR::d>>&& SuperIndicator)
       : _sLattice(sLattice)
+      , _operator(makeSingleLatticeO<_OPERATOR, T, DESCRIPTOR>(sLattice))
       , _superReducedFieldD(new SuperD<T, REDUCED_FIELD<DESCRIPTOR::d>>(sLattice.getLoadBalancer()))
       , _rankDoesReduction {singleton::mpi().isMainProcessor()}
 
   {
     OstreamManager clout(std::cout, "SuperLatticeFieldReductionO");
     auto&          load = _sLattice.getLoadBalancer();
-
     {
       for (int iC = 0; iC < load.size(); ++iC) {
         auto& block     = _sLattice.getBlock(iC);
@@ -103,19 +107,17 @@ public:
         block.forCoreSpatialLocations([&](LatticeR<DESCRIPTOR::d> loc) {
           block.get(loc).template setField<field::reduction::TAG_CORE>(
               true); //this tag exracts core region. The main purpose is for GPU.
-          block.get(loc).template setField<field::reduction::TAGS_INDICATOR>(
+          block.get(loc).template setField<typename _CONDITION::tag_field_t>(
               indicator(loc)); //this tag exracted by analytical condition
         });
         block.template getData<Array<field::reduction::TAG_CORE>>().setProcessingContext(ProcessingContext::Simulation);
-        block.template getData<Array<field::reduction::TAGS_INDICATOR>>().setProcessingContext(
+        block.template getData<Array<typename _CONDITION::tag_field_t>>().setProcessingContext(
             ProcessingContext::Simulation);
       }
     }
 
-    clout << "Set up operators and communication" << std::endl;
+    //clout << "Set up operators and communication" << std::endl;
 
-    sLattice.template addPostProcessor<stage::reduction::ReductionField>(
-        meta::id<BlockLatticeFieldReductionO<FIELD, REDUCTION_OP, CONDITION>> {});
     {
       auto& c = _sLattice.getCommunicator(stage::reduction::ReductionField {});
 
@@ -124,23 +126,28 @@ public:
       c.exchangeRequests();
     }
 
-#ifdef PARALLEL_MODE_MPI
+    //clout << "Set operator parameters" << std::endl;
     for (int iC = 0; iC < load.size(); ++iC) {
-
-      _rankDoesReduction |= sLattice.getBlock(iC).hasPostProcessor(
-          typeid(stage::reduction::ReductionField),
-          meta::id<BlockLatticeFieldReductionO<FIELD, REDUCTION_OP, CONDITION>> {});
-    }
-    MPI_Comm_split(MPI_COMM_WORLD, _rankDoesReduction ? 0 : MPI_UNDEFINED, singleton::mpi().getRank(),
-                   &_mpiCommunicator);
-#endif
-
-    clout << "Set operator parameters" << std::endl;
-    for (int iC = 0; iC < load.size(); ++iC) {
-      auto& block         = _sLattice.getBlock(iC);
       auto& elementsBlock = _superReducedFieldD->getBlock(iC);
       elementsBlock.resize(1);
-      block.template setParameter<fields::array_of<FIELD>>(elementsBlock.template getField<FIELD>());
+
+      auto&    abstractFieldArray = elementsBlock.template getField<FIELD>();
+      Platform platform           = abstractFieldArray.getPlatform();
+      callUsingConcretePlatform(platform, [&](auto platform) {
+        using abstractFieldArray_t = std::remove_reference_t<decltype(abstractFieldArray)>;
+        auto& fieldArray = dynamic_cast<FieldArrayD<T, typename abstractFieldArray_t::descriptor_t, platform.value,
+                                                    typename abstractFieldArray_t::field_t>&>(abstractFieldArray);
+        FieldD<T, DESCRIPTOR, fields::array_of<FIELD>> fieldArrayPointers;
+        for (unsigned iD = 0; iD < fieldArray.d; ++iD) {
+          if constexpr (platform.value == Platform::GPU_CUDA) {
+            fieldArrayPointers[iD] = fieldArray[iD].deviceData();
+          }
+          else {
+            fieldArrayPointers[iD] = fieldArray[iD].data();
+          }
+        }
+        _operator->getBlock(iC).getParameters().template set<fields::array_of<FIELD>>(std::move(fieldArrayPointers));
+      });
     }
 
     _sLattice.getCommunicator(stage::reduction::ReductionField {}).communicate();
@@ -150,6 +157,7 @@ public:
   SuperLatticeFieldReductionO(SuperLattice<T, DESCRIPTOR>& sLattice, SuperGeometry<T, DESCRIPTOR::d>& sGeometry,
                               IndicatorF<T, DESCRIPTOR::d>& indicator)
       : _sLattice(sLattice)
+      , _operator(makeSingleLatticeO<_OPERATOR, T, DESCRIPTOR>(sLattice))
       , _superReducedFieldD(new SuperD<T, REDUCED_FIELD<DESCRIPTOR::d>>(sLattice.getLoadBalancer()))
       , _rankDoesReduction {singleton::mpi().isMainProcessor()}
 
@@ -168,18 +176,16 @@ public:
           Vector<T, DESCRIPTOR::d> PhysR {};
           blockGeometry.getPhysR(PhysR, loc);
           indicator(indicator_boolean, PhysR.data()); //this tag exracted by analytical condition
-          block.get(loc).template setField<field::reduction::TAGS_INDICATOR>(indicator_boolean[0]);
+          block.get(loc).template setField<typename _CONDITION::tag_field_t>(indicator_boolean[0]);
         });
         block.template getData<Array<field::reduction::TAG_CORE>>().setProcessingContext(ProcessingContext::Simulation);
-        block.template getData<Array<field::reduction::TAGS_INDICATOR>>().setProcessingContext(
+        block.template getData<Array<typename _CONDITION::tag_field_t>>().setProcessingContext(
             ProcessingContext::Simulation);
       }
     }
 
-    clout << "Set up operators and communication" << std::endl;
+    //clout << "Set up operators and communication" << std::endl;
 
-    sLattice.template addPostProcessor<stage::reduction::ReductionField>(
-        meta::id<BlockLatticeFieldReductionO<FIELD, REDUCTION_OP, CONDITION>> {});
     {
       auto& c = _sLattice.getCommunicator(stage::reduction::ReductionField {});
 
@@ -188,23 +194,28 @@ public:
       c.exchangeRequests();
     }
 
-#ifdef PARALLEL_MODE_MPI
+    //clout << "Set operator parameters" << std::endl;
     for (int iC = 0; iC < load.size(); ++iC) {
-
-      _rankDoesReduction |= sLattice.getBlock(iC).hasPostProcessor(
-          typeid(stage::reduction::ReductionField),
-          meta::id<BlockLatticeFieldReductionO<FIELD, REDUCTION_OP, CONDITION>> {});
-    }
-    MPI_Comm_split(MPI_COMM_WORLD, _rankDoesReduction ? 0 : MPI_UNDEFINED, singleton::mpi().getRank(),
-                   &_mpiCommunicator);
-#endif
-
-    clout << "Set operator parameters" << std::endl;
-    for (int iC = 0; iC < load.size(); ++iC) {
-      auto& block         = _sLattice.getBlock(iC);
       auto& elementsBlock = _superReducedFieldD->getBlock(iC);
       elementsBlock.resize(1);
-      block.template setParameter<fields::array_of<FIELD>>(elementsBlock.template getField<FIELD>());
+
+      auto&    abstractFieldArray = elementsBlock.template getField<FIELD>();
+      Platform platform           = abstractFieldArray.getPlatform();
+      callUsingConcretePlatform(platform, [&](auto platform) {
+        using abstractFieldArray_t = std::remove_reference_t<decltype(abstractFieldArray)>;
+        auto& fieldArray = dynamic_cast<FieldArrayD<T, typename abstractFieldArray_t::descriptor_t, platform.value,
+                                                    typename abstractFieldArray_t::field_t>&>(abstractFieldArray);
+        FieldD<T, DESCRIPTOR, fields::array_of<FIELD>> fieldArrayPointers;
+        for (unsigned iD = 0; iD < fieldArray.d; ++iD) {
+          if constexpr (platform.value == Platform::GPU_CUDA) {
+            fieldArrayPointers[iD] = fieldArray[iD].deviceData();
+          }
+          else {
+            fieldArrayPointers[iD] = fieldArray[iD].data();
+          }
+        }
+        _operator->getBlock(iC).getParameters().template set<fields::array_of<FIELD>>(std::move(fieldArrayPointers));
+      });
     }
 
     _sLattice.getCommunicator(stage::reduction::ReductionField {}).communicate();
@@ -213,6 +224,7 @@ public:
 
   SuperLatticeFieldReductionO(SuperLattice<T, DESCRIPTOR>& sLattice)
       : _sLattice(sLattice)
+      , _operator(makeSingleLatticeO<_OPERATOR, T, DESCRIPTOR>(sLattice))
       , _superReducedFieldD(new SuperD<T, REDUCED_FIELD<DESCRIPTOR::d>>(sLattice.getLoadBalancer()))
       , _rankDoesReduction {singleton::mpi().isMainProcessor()}
 
@@ -231,10 +243,8 @@ public:
       }
     }
 
-    clout << "Set up operators and communication" << std::endl;
+    //clout << "Set up operators and communication" << std::endl;
 
-    sLattice.template addPostProcessor<stage::reduction::ReductionField>(
-        meta::id<BlockLatticeFieldReductionO<FIELD, REDUCTION_OP, CONDITION>> {});
     {
       auto& c = _sLattice.getCommunicator(stage::reduction::ReductionField {});
 
@@ -243,23 +253,28 @@ public:
       c.exchangeRequests();
     }
 
-#ifdef PARALLEL_MODE_MPI
+    //clout << "Set operator parameters" << std::endl;
     for (int iC = 0; iC < load.size(); ++iC) {
-
-      _rankDoesReduction |= sLattice.getBlock(iC).hasPostProcessor(
-          typeid(stage::reduction::ReductionField),
-          meta::id<BlockLatticeFieldReductionO<FIELD, REDUCTION_OP, CONDITION>> {});
-    }
-    MPI_Comm_split(MPI_COMM_WORLD, _rankDoesReduction ? 0 : MPI_UNDEFINED, singleton::mpi().getRank(),
-                   &_mpiCommunicator);
-#endif
-
-    clout << "Set operator parameters" << std::endl;
-    for (int iC = 0; iC < load.size(); ++iC) {
-      auto& block         = _sLattice.getBlock(iC);
       auto& elementsBlock = _superReducedFieldD->getBlock(iC);
       elementsBlock.resize(1);
-      block.template setParameter<fields::array_of<FIELD>>(elementsBlock.template getField<FIELD>());
+
+      auto&    abstractFieldArray = elementsBlock.template getField<FIELD>();
+      Platform platform           = abstractFieldArray.getPlatform();
+      callUsingConcretePlatform(platform, [&](auto platform) {
+        using abstractFieldArray_t = std::remove_reference_t<decltype(abstractFieldArray)>;
+        auto& fieldArray = dynamic_cast<FieldArrayD<T, typename abstractFieldArray_t::descriptor_t, platform.value,
+                                                    typename abstractFieldArray_t::field_t>&>(abstractFieldArray);
+        FieldD<T, DESCRIPTOR, fields::array_of<FIELD>> fieldArrayPointers;
+        for (unsigned iD = 0; iD < fieldArray.d; ++iD) {
+          if constexpr (platform.value == Platform::GPU_CUDA) {
+            fieldArrayPointers[iD] = fieldArray[iD].deviceData();
+          }
+          else {
+            fieldArrayPointers[iD] = fieldArray[iD].data();
+          }
+        }
+        _operator->getBlock(iC).getParameters().template set<fields::array_of<FIELD>>(std::move(fieldArrayPointers));
+      });
     }
 
     _sLattice.getCommunicator(stage::reduction::ReductionField {}).communicate();
@@ -271,7 +286,7 @@ public:
   FieldD<T, DESCRIPTOR, FIELD> compute()
   {
     OstreamManager clout(std::cout, "SuperLatticeFieldReductionO");
-    _sLattice.executePostProcessors(stage::reduction::ReductionField {});
+    _operator->apply();
     for (unsigned iD = 0; iD < _fieldDimension; iD++) {
       _reductedField[iD] = REDUCTION_OP {}.reset(_reductedField[iD]);
     }
@@ -295,24 +310,28 @@ public:
 };
 
 // Utility function for integrating fields
-template <typename FIELD, typename T, typename DESCRIPTOR>
+template <typename FIELD, typename T, typename DESCRIPTOR, int TAGS_INDICATOR_ID = 0>
 auto integrateField(SuperLattice<T, DESCRIPTOR>& lattice, auto& domain, T weight = 1.0)
 {
-  SuperLatticeFieldReductionO<T, DESCRIPTOR, FIELD, reduction::SumO, reduction::checkTagIndicator> reductionO(lattice,
-                                                                                                              domain);
+
+  using Condition = reduction::checkTagIndicator<TAGS_INDICATOR_ID>;
+
+  SuperLatticeFieldReductionO<T, DESCRIPTOR, FIELD, reduction::SumO, Condition> reductionO(lattice, domain);
+
   return reductionO.compute() * util::pow(weight, DESCRIPTOR::d);
 }
 
 // Utility function for computing the L2 norm using a functor
-template <typename FIELD, typename T, typename DESCRIPTOR>
+template <typename FIELD, typename T, typename DESCRIPTOR, int TAGS_INDICATOR_ID = 0>
 auto computeL2Norm(SuperLattice<T, DESCRIPTOR>& lattice, auto& domain, T dx)
 {
   auto L2F = makeWriteFunctorO<functors::L2F<FIELD>, descriptors::L2_NORM>(lattice);
   L2F->restrictTo(domain);
   L2F->template setParameter<descriptors::DX>(dx);
   L2F->apply();
-  SuperLatticeFieldReductionO<T, DESCRIPTOR, descriptors::L2_NORM, reduction::SumO, reduction::checkTagIndicator> reductionO(
-      lattice, domain);
+  using Condition = reduction::checkTagIndicator<TAGS_INDICATOR_ID>;
+  SuperLatticeFieldReductionO<T, DESCRIPTOR, descriptors::L2_NORM, reduction::SumO, Condition> reductionO(lattice,
+                                                                                                          domain);
   return reductionO.compute();
 }
 

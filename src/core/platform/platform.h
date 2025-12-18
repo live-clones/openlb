@@ -36,6 +36,7 @@ enum struct Platform : std::uint8_t {
   CPU_SISD, /// Basic scalar CPU
   CPU_SIMD, /// Vector CPU (AVX2 / AVX-512 collision)
   GPU_CUDA, /// GPU using CUDA
+  GPU_HIP   /// GPU using HIP
 };
 
 /// Verifies requirements for using PLATFORM
@@ -64,7 +65,7 @@ struct PreContextSwitchTo { };
 }
 
 /// Define preprocessor macros for device-side functions, constant storage
-#ifdef __CUDACC__
+#if defined(__CUDACC__) || defined(__HIPCC__)
   #define any_platform __device__ __host__
   #ifdef __CUDA_ARCH__
     #define platform_constant constexpr __constant__
@@ -92,6 +93,10 @@ constexpr bool isPlatformCPU(Platform platform) {
 #endif
 #ifdef PLATFORM_GPU_CUDA
   case Platform::GPU_CUDA:
+    return false;
+#endif
+#ifdef PLATFORM_GPU_HIP
+  case Platform::GPU_HIP:
     return false;
 #endif
   default:

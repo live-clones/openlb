@@ -1,7 +1,8 @@
 # OpenLB - Open Source Lattice Boltzmann Code
 
-The OpenLB project is a C++ framework for the efficient implementation
-of lattice Boltzmann methods adressing a vast range of transport problems.
+OpenLB is a modern C++ framework for the efficient implementation of
+Lattice Boltzmann Methods (LBM) addressing a vast range of transport
+problems in Computational Fluid Dynamics (CFD) and beyond.
 
 ```
     ┃
@@ -14,48 +15,65 @@ of lattice Boltzmann methods adressing a vast range of transport problems.
        ┗━━━━━┛
 ```
 
+## Key Features
+
+* **Physics:** Single and multiphase flows, thermal flows, turbulence modeling (LES, WM), chemical reactive flows, resolved and subgrid-scale particulate flows, radiative transport, porous media, fluid-structure interaction… and combinations thereof!
+* **HPC:** Parallelization via MPI and OpenMP; Vectorization via AVX2/512; GPU acceleration via CUDA and HIP (ROCm); Integrated automatic code optimization pipeline for common subexpression elimination (CSE).
+* **Examples:** 130+ example cases exploring all application areas and providing solid foundations for new ones.
+* **Input/Output:** Built-in pre- and postprocessing. Integrated meshing (voxelizing) based on STL files, VTI data and constructive solid geometry (CSG) indicators. Simulation output as VTK, CSV, Gnuplot and images.
+* **Modern C++:** Utilizes the C++20 standard and template metaprogramming for flexibility and performance.
+
 ## Dependencies
 
-The only mandatory external dependency of OpenLB is GNU Make and a C++ compiler
-with C++20 support. This includes all reasonably recent versions of GCC, Clang
-and Intel ICX.
+* **Compiler:** C++20 compliant compiler (recent versions of GCC, Clang, Intel ICX).
+* **Build System:** GNU Make.
+* **Parallelization:** OpenMPI / Intel MPI
+* **GPU (Optional):** NVIDIA CUDA 12.4+; AMD ROCm
+* **Code generation (Optional):** Python 3+ with SymPy, Mako
 
-GPU support depends on Nvidia CUDA 12 or later.
+For users of the [Nix](https://nixos.org/) ecosystem, a `flake.nix` declaring various environments is included.
 
-## Installation
+## Quick Start
 
-1. Adjust the `config.mk` file to fit your local compiler environment
+### Compilation
+
+1. **Configure:** Adjust the `config.mk` file to fit your local compiler environment
    (examples for some common configurations are available in `config/`)
-2. Build the embedded dependencies using `make`
-3. Switch to any of the examples and compile it using `make`
+
+2.  **Run an Example:**
+    ```bash
+    cd examples/laminar/cavity2d
+    make
+    ./cavity2d
+    ```
+
+### Directory Structure
+
+* `src/`: Library source code.
+* `examples/`: Simulation setups categorized by physics.
+* `config/`: Make configuration templates.
+* `scripts/codegen`: Automatic code optimization.
+* `tests/benchmarks`: Automated validation cases.
 
 ## Documentation
 
-A comprehensive user guide is available in `doc/userGuide`.
-
-Papers featuring OpenLB are collected at [1].
-
-Up-to-date Doxygen documentation can be generated via `make doxygen`
-or accessed at [2].
-
-[1]: https://www.openlb.net/articles/
-[2]: https://www.openlb.net/DoxyGen/html/index.html
+A comprehensive user guide is available [online](https://www.openlb.net/user-guide/).
 
 ## Community
 
-The OpenLB forum [3] is an open discussion board for all aspects of LBM and OpenLB.
+The OpenLB [forum](https://www.openlb.net/forum/) is an open discussion board for all aspects of LBM and OpenLB.
 Feel free to post any problems, questions, suggestions or contributions.
 
-You can also reach us via mail at info@openlb.net
+There is an annual one-week [Spring School](https://www.openlb.net/spring-school-2026/)
+where you can learn about LBM and OpenLB directly from the developer team and invited
+guest lecturers.
 
-There is a yearly one-week Spring School [4] where you can learn about LBM and
-OpenLB directly from the developer team and invited guest lecturers.
+For a list of all present and past authors see `CONTRIBUTORS.txt`.
 
-A list of all present and past contributors is available at [5].
+For high-priority direct support in any matter related to OpenLB,
+the [consortium](https://www.openlb.net/consortium/) is available.
 
-[3]: https://www.openlb.net/forum/
-[4]: https://www.openlb.net/spring-school-2022/
-[5]: https://www.openlb.net/authors/
+In any case, you can also reach us via mail at info@openlb.net.
 
 ## How to cite OpenLB
 
@@ -74,16 +92,36 @@ To cite OpenLB in general instead of a specific release we suggest:
 }
 ```
 
-This article is available as open access [6].
+This article is available as [open access](https://doi.org/10.1016/j.camwa.2020.04.033).
 
-[6]: https://doi.org/10.1016/j.camwa.2020.04.033
+## How to Contribute
 
-## Code Formatting
+We welcome contributions from the community to help improve OpenLB!
 
-The basic formatting rules are described by the `.editorconfig` file [7]
-for automatic application in a wide variety of text editors and IDEs.
+### Public Contributions & Issues
 
-[7]: https://editorconfig.org/
+For bug reports, feature requests, and code contributions, please use our public repository on GitLab:
+
+Repository: [gitlab.com/openlb/release](https://gitlab.com/openlb/release)
+
+Workflow: Please submit merge requests or open tickets in the issue tracker there.
+
+### Discussion
+
+If you are unsure if a behavior is a bug or need general assistance,
+feel free to use the OpenLB Forum first.
+
+### Project Partners
+
+Please note that some of the active development by consortium members
+and project partners takes place in the internal repository:
+[gitlab.com/openlb/olb](https://gitlab.com/openlb/olb)
+
+### Code Formatting
+
+The basic formatting rules are [described](https://editorconfig.org/) by
+the `.editorconfig` file for automatic application in a wide variety of
+text editors and IDEs.
 
 ## License
 

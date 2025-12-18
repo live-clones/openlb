@@ -39,6 +39,7 @@
 */
 
 #include <olb.h>
+
 #include "../case.h"
 
 using namespace olb;

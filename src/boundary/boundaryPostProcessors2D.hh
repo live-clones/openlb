@@ -39,7 +39,7 @@ namespace olb {
 template <typename T, typename DESCRIPTOR, int direction, int orientation>
 template <concepts::DynamicCell CELL>
 void StraightFdBoundaryProcessor2D<T, DESCRIPTOR, direction,
-                                   orientation>::apply(CELL& cell)
+                                   orientation>::apply(CELL& cell) any_platform
 {
   using namespace olb::util::tensorIndices2D;
   using V = typename CELL::value_t;
@@ -78,7 +78,7 @@ void StraightFdBoundaryProcessor2D<T, DESCRIPTOR, direction,
 template <typename T, typename DESCRIPTOR, int direction, int orientation>
 template <int deriveDirection, typename CELL, typename V>
 void StraightFdBoundaryProcessor2D<T, DESCRIPTOR, direction, orientation>::
-    interpolateGradients(CELL& cell, V velDeriv[DESCRIPTOR::d]) const
+    interpolateGradients(CELL& cell, V velDeriv[DESCRIPTOR::d]) const any_platform
 {
   fd::DirectedGradients2D<V, DESCRIPTOR, direction, orientation,
                           direction ==
@@ -91,7 +91,7 @@ void StraightFdBoundaryProcessor2D<T, DESCRIPTOR, direction, orientation>::
 template <typename T, typename DESCRIPTOR, int direction, int orientation>
 template <concepts::DynamicCell CELL>
 void StraightConvectionBoundaryProcessor2D<T, DESCRIPTOR, direction,
-                                           orientation>::initialize(CELL& cell)
+                                           orientation>::initialize(CELL& cell) any_platform
 {
   constexpr auto missing =
       util::populationsContributingToVelocity<DESCRIPTOR, direction,
@@ -105,7 +105,7 @@ void StraightConvectionBoundaryProcessor2D<T, DESCRIPTOR, direction,
 template <typename T, typename DESCRIPTOR, int direction, int orientation>
 template <concepts::DynamicCell CELL>
 void StraightConvectionBoundaryProcessor2D<T, DESCRIPTOR, direction,
-                                           orientation>::apply(CELL& cell)
+                                           orientation>::apply(CELL& cell) any_platform
 {
   using V = typename CELL::value_t;
   constexpr auto missing =
@@ -278,7 +278,7 @@ SlipBoundaryProcessorGenerator2D<T, DESCRIPTOR>::clone() const
 template <typename T, typename DESCRIPTOR, int xNormal, int yNormal>
 template <concepts::DynamicCell CELL>
 void OuterVelocityCornerProcessor2D<T, DESCRIPTOR, xNormal, yNormal>::apply(
-    CELL& cell)
+    CELL& cell) any_platform
 {
   using namespace olb::util::tensorIndices2D;
   using V = typename CELL::value_t;

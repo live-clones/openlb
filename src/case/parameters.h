@@ -182,7 +182,6 @@ struct PART_RHO : public descriptors::FIELD_BASE<1> {};
 struct INITIAL_CONTROL_SCALAR : public descriptors::FIELD_BASE<1> { };
 struct REGULARIZATION_FACTOR : public descriptors::FIELD_BASE<1> { };
 
-
 struct RADIUS : public descriptors::FIELD_BASE<1> { };
 struct CENTER : public descriptors::FIELD_BASE<0,1> { };
 

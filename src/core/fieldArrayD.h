@@ -350,6 +350,14 @@ std::unique_ptr<AbstractFieldArrayD<T,DESCRIPTOR,FIELD>> makeSharedAbstractField
     return std::unique_ptr<AbstractFieldArrayD<T,DESCRIPTOR,FIELD>>(
       new FieldArrayD<T,DESCRIPTOR,Platform::CPU_SISD,FIELD>(count));
   }
+  #elif defined(PLATFORM_GPU_HIP)
+  if (loadBalancer.isLocal(Platform::GPU_HIP)) {
+    return std::unique_ptr<AbstractFieldArrayD<T,DESCRIPTOR,FIELD>>(
+      new FieldArrayD<T,DESCRIPTOR,Platform::GPU_HIP,FIELD>(count));
+  } else {
+    return std::unique_ptr<AbstractFieldArrayD<T,DESCRIPTOR,FIELD>>(
+      new FieldArrayD<T,DESCRIPTOR,Platform::CPU_SISD,FIELD>(count));
+  }
   #else
   return std::unique_ptr<AbstractFieldArrayD<T,DESCRIPTOR,FIELD>>(
     new FieldArrayD<T,DESCRIPTOR,Platform::CPU_SISD,FIELD>(count));

@@ -40,5 +40,5 @@
 #include "integral.h"
 #include "platform/cpu/integral.h"
 #include "platform/gpu/cuda/integral.h"
-
+#include "platform/gpu/hip/integral.h"
 #endif

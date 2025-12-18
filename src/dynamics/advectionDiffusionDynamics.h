@@ -723,7 +723,6 @@ struct PhaseFieldAdvectionDiffusionBGKdynamics : public dynamics::CustomCollisio
 /// This approach contains a slight error in the diffusion term.
 template<typename T, typename DESCRIPTOR, typename MOMENTA=momenta::AdvectionDiffusionBulkTuple>
 struct ParticleAdvectionDiffusionBGKdynamics final : public dynamics::CustomCollision<T,DESCRIPTOR,MOMENTA> {
-public:
   using MomentaF = typename momenta::Tuple<
     typename MOMENTA::density,
     momenta::FixedVelocityMomentum,
@@ -991,6 +990,9 @@ struct CrystalSourcedAdvectionDiffusionBGKdynamics final : public dynamics::Cust
 
   template<typename M>
   using exchange_momenta = CrystalSourcedAdvectionDiffusionBGKdynamics<T,DESCRIPTOR,M>;
+
+  template<typename V>
+  using exchange_value_type = CrystalSourcedAdvectionDiffusionBGKdynamics<V,DESCRIPTOR,MOMENTA>;
 
   std::type_index id() override {
     return typeid(CrystalSourcedAdvectionDiffusionBGKdynamics);

@@ -38,7 +38,7 @@ namespace olb {
 
 template <typename T, typename DESCRIPTOR, int direction, int orientation>
 template <concepts::DynamicCell CELL>
-void PlaneFdBoundaryProcessor3D<T,DESCRIPTOR,direction,orientation>::apply(CELL& cell)
+void PlaneFdBoundaryProcessor3D<T,DESCRIPTOR,direction,orientation>::apply(CELL& cell) any_platform
 {
   using V = typename CELL::value_t;
   using namespace olb::util::tensorIndices3D;
@@ -85,7 +85,7 @@ void PlaneFdBoundaryProcessor3D<T,DESCRIPTOR,direction,orientation>::apply(CELL&
 template <typename T, typename DESCRIPTOR, int direction, int orientation>
 template <int deriveDirection, typename CELL, typename V>
 void PlaneFdBoundaryProcessor3D<T,DESCRIPTOR,direction,orientation>::interpolateGradients(
-  CELL& cell, V velDeriv[DESCRIPTOR::d]) const
+  CELL& cell, V velDeriv[DESCRIPTOR::d]) const any_platform
 {
   fd::DirectedGradients3D<V,DESCRIPTOR,direction,orientation,deriveDirection,direction==deriveDirection>
     ::interpolateVector(velDeriv, cell);
@@ -93,7 +93,7 @@ void PlaneFdBoundaryProcessor3D<T,DESCRIPTOR,direction,orientation>::interpolate
 
 template <typename T, typename DESCRIPTOR, int direction, int orientation>
 template <concepts::DynamicCell CELL>
-void StraightConvectionBoundaryProcessor3D<T,DESCRIPTOR,direction,orientation>::initialize(CELL& cell)
+void StraightConvectionBoundaryProcessor3D<T,DESCRIPTOR,direction,orientation>::initialize(CELL& cell) any_platform
 {
   constexpr auto missing = util::populationsContributingToVelocity<DESCRIPTOR,direction,-orientation>();
   auto prevCell = cell.template getFieldPointer<PREV_CELL>();
@@ -104,7 +104,7 @@ void StraightConvectionBoundaryProcessor3D<T,DESCRIPTOR,direction,orientation>::
 
 template <typename T, typename DESCRIPTOR, int direction, int orientation>
 template <concepts::DynamicCell CELL>
-void StraightConvectionBoundaryProcessor3D<T,DESCRIPTOR,direction,orientation>::apply(CELL& cell)
+void StraightConvectionBoundaryProcessor3D<T,DESCRIPTOR,direction,orientation>::apply(CELL& cell) any_platform
 {
   using V = typename CELL::value_t;
   constexpr auto missing = util::populationsContributingToVelocity<DESCRIPTOR,direction,-orientation>();
@@ -165,7 +165,7 @@ void StraightConvectionBoundaryProcessor3D<T,DESCRIPTOR,direction,orientation>::
 
 template <typename T, typename DESCRIPTOR, int plane, int normal1, int normal2>
 template <concepts::DynamicCell CELL>
-void OuterVelocityEdgeProcessor3D<T,DESCRIPTOR,plane,normal1,normal2>::apply(CELL& cell)
+void OuterVelocityEdgeProcessor3D<T,DESCRIPTOR,plane,normal1,normal2>::apply(CELL& cell) any_platform
 {
   using V = typename CELL::value_t;
   using namespace olb::util::tensorIndices3D;
@@ -218,7 +218,7 @@ void OuterVelocityEdgeProcessor3D<T,DESCRIPTOR,plane,normal1,normal2>::apply(CEL
 template <typename T, typename DESCRIPTOR, int plane, int normal1, int normal2>
 template <typename CELL, typename V>
 V OuterVelocityEdgeProcessor3D<T,DESCRIPTOR,plane,normal1,normal2>
-  ::getNeighborRho(CELL& cell, int step1, int step2)
+  ::getNeighborRho(CELL& cell, int step1, int step2) any_platform
 {
   constexpr auto direction1 = (plane+1)%3;
   constexpr auto direction2 = (plane+2)%3;
@@ -231,7 +231,7 @@ V OuterVelocityEdgeProcessor3D<T,DESCRIPTOR,plane,normal1,normal2>
 template <typename T, typename DESCRIPTOR, int plane, int normal1, int normal2>
 template <int deriveDirection, int orientation, typename CELL, typename V>
 void OuterVelocityEdgeProcessor3D<T,DESCRIPTOR,plane,normal1,normal2>
-  ::interpolateGradients(CELL& cell, V velDeriv[DESCRIPTOR::d]) const
+  ::interpolateGradients(CELL& cell, V velDeriv[DESCRIPTOR::d]) const any_platform
 {
   fd::DirectedGradients3D<V,DESCRIPTOR,deriveDirection,orientation,deriveDirection,deriveDirection!=plane>
     ::interpolateVector(velDeriv, cell);
@@ -241,7 +241,7 @@ void OuterVelocityEdgeProcessor3D<T,DESCRIPTOR,plane,normal1,normal2>
 
 template <typename T, typename DESCRIPTOR, int xNormal, int yNormal, int zNormal>
 template <concepts::DynamicCell CELL>
-void OuterVelocityCornerProcessor3D<T,DESCRIPTOR,xNormal,yNormal,zNormal>::apply(CELL& cell)
+void OuterVelocityCornerProcessor3D<T,DESCRIPTOR,xNormal,yNormal,zNormal>::apply(CELL& cell) any_platform
 {
   using V = typename CELL::value_t;
   using namespace olb::util::tensorIndices3D;
@@ -510,7 +510,7 @@ PartialSlipBoundaryProcessorGenerator3D<T,DESCRIPTOR>::clone() const
 ////////  FreeEnergyWallProcessor3D ////////////////////////////////
 template<typename T, typename DESCRIPTOR, int NORMAL_X, int NORMAL_Y, int NORMAL_Z>
 template <concepts::DynamicCell CELL, typename PARAMETERS>
-void FreeEnergyWallProcessor3D<T,DESCRIPTOR,NORMAL_X,NORMAL_Y,NORMAL_Z>::apply(CELL& cell, PARAMETERS& vars) {
+void FreeEnergyWallProcessor3D<T,DESCRIPTOR,NORMAL_X,NORMAL_Y,NORMAL_Z>::apply(CELL& cell, PARAMETERS& vars) any_platform {
 
   T addend = cell.template getField<descriptors::ADDEND>();
 
@@ -532,7 +532,7 @@ void FreeEnergyWallProcessor3D<T,DESCRIPTOR,NORMAL_X,NORMAL_Y,NORMAL_Z>::apply(C
 ////////  FreeEnergyChemPotBoundaryProcessor3D ////////////////////////////////
 template<typename T, typename DESCRIPTOR, int NORMAL_X, int NORMAL_Y, int NORMAL_Z>
 template <concepts::DynamicCell CELL>
-void FreeEnergyChemPotBoundaryProcessor3DA<T,DESCRIPTOR,NORMAL_X,NORMAL_Y,NORMAL_Z>::apply(CELL& cell) {
+void FreeEnergyChemPotBoundaryProcessor3DA<T,DESCRIPTOR,NORMAL_X,NORMAL_Y,NORMAL_Z>::apply(CELL& cell) any_platform {
 
   cell.template setField<descriptors::CHEM_POTENTIAL>(
     cell.neighbor({-NORMAL_X,-NORMAL_Y,-NORMAL_Z}).template getField<descriptors::CHEM_POTENTIAL>());
@@ -546,7 +546,7 @@ void FreeEnergyChemPotBoundaryProcessor3DA<T,DESCRIPTOR,NORMAL_X,NORMAL_Y,NORMAL
 
 template<typename T, typename DESCRIPTOR, int NORMAL_X, int NORMAL_Y, int NORMAL_Z>
 template <concepts::DynamicCell CELL>
-void FreeEnergyChemPotBoundaryProcessor3DB<T,DESCRIPTOR,NORMAL_X,NORMAL_Y,NORMAL_Z>::apply(CELL& cell) {
+void FreeEnergyChemPotBoundaryProcessor3DB<T,DESCRIPTOR,NORMAL_X,NORMAL_Y,NORMAL_Z>::apply(CELL& cell) any_platform {
 
   cell.template setField<descriptors::CHEM_POTENTIAL>(
     cell.neighbor({-NORMAL_X,-NORMAL_Y,-NORMAL_Z}).template getField<descriptors::CHEM_POTENTIAL>());
@@ -556,7 +556,7 @@ void FreeEnergyChemPotBoundaryProcessor3DB<T,DESCRIPTOR,NORMAL_X,NORMAL_Y,NORMAL
 ////////  FreeEnergyConvectiveProcessor3D ////////////////////////////////
 template<typename T, typename DESCRIPTOR, int NORMAL_X, int NORMAL_Y, int NORMAL_Z>
 template <concepts::DynamicCell CELL>
-void FreeEnergyConvectiveProcessor3D<T,DESCRIPTOR,NORMAL_X,NORMAL_Y,NORMAL_Z>::apply(CELL& cell) {
+void FreeEnergyConvectiveProcessor3D<T,DESCRIPTOR,NORMAL_X,NORMAL_Y,NORMAL_Z>::apply(CELL& cell) any_platform {
 
   T rho, rho0, rho1, u[3];
 

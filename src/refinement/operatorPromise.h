@@ -60,6 +60,12 @@ public:
           context.template asConcrete<Platform::GPU_CUDA>());
         break;
 #endif
+#ifdef PLATFORM_GPU_HIP
+      case Platform::GPU_HIP:
+        ConcreteBlockRefinementO<T,DESCRIPTOR,Platform::GPU_HIP,OPERATOR>().apply(
+          context.template asConcrete<Platform::GPU_HIP>());
+        break;
+#endif
       default:
         throw std::runtime_error("Refinement executor not implemented for PLATFORM");
       }

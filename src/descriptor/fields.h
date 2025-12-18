@@ -564,6 +564,18 @@ struct BOUNDARY_COORDS_Y        : public FIELD_BASE<0,  0, 1> { };
 struct SOLID_WEIGHTS            : public FIELD_BASE<0,  0, 1> { };
 // End of Solid
 
+namespace cbc {
+  struct CBC_K1           : public FIELD_BASE<1, 0, 0> { };
+  struct CBC_K2           : public FIELD_BASE<1, 0, 0> { };
+  struct CBC_L            : public FIELD_BASE<1, 0, 0> { };
+  struct CBC_MA           : public FIELD_BASE<1, 0, 0> { };
+  struct CBC_SIGMA        : public FIELD_BASE<1, 0, 0> { };
+  struct FLOW_DIRECTION   : public FIELD_BASE<1, 0, 0> { };
+  struct FLOW_ORIENTATION : public FIELD_BASE<1, 0, 0> { };
+  struct RHO_INFTY        : public FIELD_BASE<1, 0, 0> { };
+  struct U_INFTY          : public FIELD_BASE<0, 1, 0> { };
+}
+
 //@}
 
 //@}
@@ -575,6 +587,15 @@ namespace fields {
 struct PHYS_R : public descriptors::FIELD_BASE<0,1> { };
 struct BLOCK_LOWER : public descriptors::FIELD_BASE<0,1> { };
 struct BLOCK_UPPER : public descriptors::FIELD_BASE<0,1> { };
+
+namespace cbc {
+  struct IS_CBC           : public descriptors::FIELD_BASE<1> { };
+  struct RHO_POST_PP      : public descriptors::FIELD_BASE<1> { };
+  struct RHO_POST_PP_DT   : public descriptors::FIELD_BASE<1> { };
+  struct U_POST_PP        : public descriptors::FIELD_BASE<0, 1> { };
+  struct U_POST_PP_DT     : public descriptors::FIELD_BASE<0, 1> { };
+  struct CBC_EDGE_VELOCITY: public descriptors::FIELD_BASE<0, 1> { };
+}
 
 namespace membrane {
 

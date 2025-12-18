@@ -11,9 +11,13 @@ authors:
     orcid: 'https://orcid.org/0000-0003-4392-0045'
   - given-names: Tim
     family-names: Bingert
+  - given-names: Simon
+    family-names: Bock
   - given-names: Fedor
     family-names: Bukreev
     orcid: 'https://orcid.org/0009-0007-5615-8869'
+  - given-names: Daniel
+    family-names: Castroviejo
   - given-names: Luiz Eduardo
     family-names: Czelusniak
     orcid: 'https://orcid.org/0000-0001-8488-5720'
@@ -21,32 +25,46 @@ authors:
     family-names: Dapelo
   - given-names: Christoph
     family-names: Gaul
-  - given-names: Nicolas
-    family-names: Hafen
+  - given-names: Marcio
+    family-names: Dorn
+  - given-names: Leonardo
+    family-names: Dorneles
+  - given-names: Johannes
+    family-names: Grafen
+  - given-names: Michael
+    family-names: Grinschewski
   - given-names: Shota
     family-names: Ito
   - given-names: Julius
     family-names: Jeßberger
     orcid: 'https://orcid.org/0000-0002-7910-1175'
+  - given-names: Florian
+    family-names: Kaiser
   - given-names: Danial
     family-names: Khazaeipoul
   - given-names: Timm
     family-names: Krüger
+  - given-names: Arsh
+    family-names: Kumbhat
   - given-names: Halim
     family-names: Kusumaatmaja
     orcid: 'https://orcid.org/0000-0002-3392-9479'
-  - given-names: Jan
-    name-particle: E
-    family-names: Marquardt
-    orcid: 'https://orcid.org/0000-0002-7666-3439'
+  - given-names: Andreas
+    family-names: Nettekoven
   - given-names: Alice
     family-names: Raeli
+  - given-names: Tikhon
+    family-names: Riazantsev
   - given-names: Michael
     family-names: Rennick
     orcid: 'https://orcid.org/0000-0002-7184-971X'
+  - given-names: Gagan
+    family-names: Prakash
   - given-names: František
     family-names: Prinz
     orcid: 'https://orcid.org/0000-0003-1506-5213'
+  - given-names: Liam
+    family-names: Sauterleute
   - given-names: Maximilian
     family-names: Schecher
   - given-names: Andreas
@@ -56,17 +74,10 @@ authors:
   - given-names: Stephan
     family-names: Simonis
     orcid: 'https://orcid.org/0000-0001-8555-4245'
-  - given-names: Pascal
-    family-names: Sitter
   - given-names: Philipp
     family-names: Spelten
   - given-names: Alexandre
-    family-names: Taques
-  - given-names: Dennis
-    family-names: Teutscher
-    orcid: 'https://orcid.org/0009-0003-3286-994X'
-  - given-names: Mingliang
-    family-names: Zhong
+    family-names: Tacques
   - given-names: Mathias
     name-particle: J
     family-names: Krause
@@ -74,8 +85,8 @@ authors:
     orcid: 'https://orcid.org/0000-0003-1026-6462'
 identifiers:
   - type: doi
-    value: 10.5281/zenodo.15270117
-    description: OpenLB Release 1.8
+    value: 10.5281/zenodo.17899765
+    description: OpenLB Release 1.9
   - type: doi
     value: 10.1016/j.camwa.2020.04.033
     description: OpenLB Overview Paper
@@ -100,5 +111,5 @@ keywords:
   - Process Engineering
   - Optimization
 license: GPL-2.0
-version: '1.8'
-date-released: '2025-04-24'
+version: '1.9.0'
+date-released: '2025-12-18'

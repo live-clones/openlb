@@ -37,7 +37,7 @@ namespace olb {
 //===================================================================================
 //================= DampingDynamics =========
 //===================================================================================
-template<typename T, typename DESCRIPTOR, typename MOMENTA, typename EQUILIBRIUM>
+template<typename T, typename DESCRIPTOR, typename MOMENTA=momenta::BulkTuple, typename EQUILIBRIUM=equilibria::SecondOrder>
 struct SpongeLayerDynamics : public dynamics::CustomCollision<T,DESCRIPTOR,MOMENTA> {
   using parameters = typename meta::list<descriptors::OMEGA>;
   using MomentaF = typename MOMENTA::template type<DESCRIPTOR>;
@@ -62,11 +62,7 @@ struct SpongeLayerDynamics : public dynamics::CustomCollision<T,DESCRIPTOR,MOMEN
     V fEq[DESCRIPTOR::q] { };
     const auto statistic = EquilibriumF().compute(cell, parameters, fEq);
     const V rhoRef = cell.template getField<descriptors::DENSITY>();
-    const V uxRef = cell.template getField<descriptors::UX>();
-    const V uyRef = cell.template getField<descriptors::UY>();
-    const V uzRef = cell.template getField<descriptors::UZ>();
-    const V uRef[3] = {uxRef, uyRef, uzRef};
-
+    const auto uRef = cell.template getField<descriptors::VELOCITY>();
     const V omega = parameters.template get<descriptors::OMEGA>();
     const V sigma = cell.template getField<descriptors::DAMPING>();
 

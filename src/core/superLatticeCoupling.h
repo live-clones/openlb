@@ -226,6 +226,98 @@ public:
 
 };
 
+template <typename COUPLER, typename COUPLEES, Platform PLATFORM>
+class ConcreteBlockCouplingO<COUPLEES,PLATFORM,COUPLER,OperatorScope::PerBlock>
+  final : public AbstractCouplingO<COUPLEES> {
+private:
+  template <typename VALUED_DESCRIPTOR>
+  using ptr_to_lattice = ConcreteBlockLattice<typename VALUED_DESCRIPTOR::value_t,
+                                              typename VALUED_DESCRIPTOR::descriptor_t,
+                                              PLATFORM>*;
+
+  utilities::TypeIndexedTuple<typename COUPLEES::template map_values<
+    ptr_to_lattice
+  >> _lattices;
+
+  typename AbstractCouplingO<COUPLEES>::ParametersD _parameters;
+
+public:
+  template <typename LATTICES>
+  ConcreteBlockCouplingO(LATTICES&& lattices):
+    _lattices{lattices}
+  { }
+
+  std::type_index id() const override {
+    return typeid(COUPLER);
+  }
+
+  typename AbstractCouplingO<COUPLEES>::AbstractParameters& getParameters() override {
+    return _parameters;
+  }
+
+  void set(CellID iCell, bool state) override
+  {
+    throw std::runtime_error("Block-scoped coupling cannot be restricted by an indicator.");
+  }
+
+  void apply() override
+  {
+    auto blocks = _lattices.exchange_values([&](auto name) -> auto& {
+      return *_lattices.get(name);
+    });
+    COUPLER().setup(blocks);
+    COUPLER().apply(blocks);
+  }
+
+};
+
+template <typename COUPLER, typename COUPLEES, Platform PLATFORM>
+class ConcreteBlockCouplingO<COUPLEES,PLATFORM,COUPLER,OperatorScope::PerBlockWithParameters>
+  final : public AbstractCouplingO<COUPLEES> {
+private:
+  template <typename VALUED_DESCRIPTOR>
+  using ptr_to_lattice = ConcreteBlockLattice<typename VALUED_DESCRIPTOR::value_t,
+                                              typename VALUED_DESCRIPTOR::descriptor_t,
+                                              PLATFORM>*;
+
+  utilities::TypeIndexedTuple<typename COUPLEES::template map_values<
+    ptr_to_lattice
+  >> _lattices;
+
+  typename COUPLER::parameters::template decompose_into<
+    AbstractCouplingO<COUPLEES>::ParametersD::template include_fields
+  > _parameters;
+
+public:
+  template <typename LATTICES>
+  ConcreteBlockCouplingO(LATTICES&& lattices):
+    _lattices{lattices}
+  { }
+
+  std::type_index id() const override {
+    return typeid(COUPLER);
+  }
+
+  typename AbstractCouplingO<COUPLEES>::AbstractParameters& getParameters() override {
+    return _parameters;
+  }
+
+  void set(CellID iCell, bool state) override
+  {
+    throw std::runtime_error("Block-scoped coupling cannot be restricted by an indicator.");
+  }
+
+  void apply() override
+  {
+    auto blocks = _lattices.exchange_values([&](auto name) -> auto& {
+      return *_lattices.get(name);
+    });
+    COUPLER().setup(blocks, _parameters);
+    COUPLER().apply(blocks, _parameters);
+  }
+
+};
+
 /// Coupling operator COUPLER on named COUPLEES
 template <typename COUPLER, typename COUPLEES>
 class SuperLatticeCoupling : public ApplicableO {

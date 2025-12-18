@@ -26,14 +26,10 @@
 namespace olb {
 namespace descriptors {
 namespace channel {
-struct LATTICE_VOXCELSIZE : public descriptors::FIELD_BASE<1> {};
-struct LATTICE_SURFACESIZE : public descriptors::FIELD_BASE<1> {};
-struct CELL_LATTICEU_dVolume : public descriptors::FIELD_BASE<0, 1, 0> {};
-struct CELL_UTAU_dSurface : public descriptors::FIELD_BASE<0, 1, 0> {};
+struct LATTICE_VOXELSIZE : public descriptors::FIELD_BASE<1> {};
+struct LATTICE_U_DV : public descriptors::FIELD_BASE<0, 1, 0> {};
 struct TAGS_BULK : public TYPED_FIELD_BASE<bool, 1> {};
 struct TAGS_BCBULK : public TYPED_FIELD_BASE<bool, 1> {};
-struct LATTICE_TAU_W : public descriptors::FIELD_BASE<0, 1, 0> {};
-struct LATTICE_U_TAU : public FIELD_BASE<0, 1, 0> {};
 
 } // namespace channel
 } // namespace descriptors
@@ -50,16 +46,15 @@ struct CellSpatialCalculationVelocityField {
   template <typename CELL>
   void apply(CELL& cell) any_platform
   {
-    using DESCRIPTOR                   = typename CELL::descriptor_t;
-    using V                            = typename CELL::value_t;
-    V                        dV        = cell.template getField<descriptors::channel::LATTICE_VOXCELSIZE>();
-    Vector<V, DESCRIPTOR::d> lattice_u = {};
-    cell.computeU(lattice_u.data());
+    using DESCRIPTOR = typename CELL::descriptor_t;
+    using V = typename CELL::value_t;
+    V dV = cell.template getField<descriptors::channel::LATTICE_VOXELSIZE>();
+    auto lattice_u = cell.template getField<descriptors::VELOCITY2>();
     /*
       UdV
     */
     Vector<V, DESCRIPTOR::d> lattice_u_dV = lattice_u * dV;
-    cell.template setField<descriptors::channel::CELL_LATTICEU_dVolume>(lattice_u_dV);
+    cell.template setField<descriptors::channel::LATTICE_U_DV>(lattice_u_dV);
   }
 };
 
@@ -77,25 +72,15 @@ struct CellSpatialCalculationFrictionVelocityField {
     auto y1     = cell.template getField<descriptors::Y1>();
     V    y1Norm = util::norm<DESCRIPTOR::d>(y1);
     if (y1Norm != (V)0) {
-      Vector<V, DESCRIPTOR::d> lattice_u = {};
-
-      cell.computeU(lattice_u.data());
+      auto lattice_u = cell.template getField<descriptors::VELOCITY2>();
       Vector<V, 3> normal(y1[0] / y1Norm, y1[1] / y1Norm, y1[2] / y1Norm);
       auto u_t = lattice_u - (lattice_u[0] * normal[0] + lattice_u[1] * normal[1] + lattice_u[2] * normal[2]) * normal;
-      auto tangent                   = u_t / util::norm<DESCRIPTOR::d>(u_t);
-      const V                  omega = params.template get<descriptors::OMEGA>();
-      const V                  nu    = ((V)1.0 / omega - (V)0.5) / descriptors::invCs2<V, DESCRIPTOR>();
-      V                        u_1t = lattice_u[0] * tangent[0] + lattice_u[1] * tangent[1] + lattice_u[2] * tangent[2];
-      Vector<V, DESCRIPTOR::d> u_tau = {};
-      V                        rho   = cell.computeRho();
-      u_tau[0]                       = util::sqrt((nu * (u_1t - (V)0.0) / y1Norm) / rho);
-      V dS                           = cell.template getField<descriptors::channel::LATTICE_SURFACESIZE>();
-      /*
-         UTAUdS
-      */
-      Vector<V, DESCRIPTOR::d> u_tau_dS = u_tau * dS;
-      cell.template setField<descriptors::channel::CELL_UTAU_dSurface>(u_tau_dS); // for reduce to calaculate forcing
-      cell.template setField<descriptors::channel::LATTICE_U_TAU>(u_tau);
+      auto tangent = u_t / util::norm<DESCRIPTOR::d>(u_t);
+      const V omega = params.template get<descriptors::OMEGA>();
+      const V nu = ((V)1.0 / omega - (V)0.5) / descriptors::invCs2<V, DESCRIPTOR>();
+      V u_1t = lattice_u[0] * tangent[0] + lattice_u[1] * tangent[1] + lattice_u[2] * tangent[2];
+      V u_tau = util::sqrt((nu * (u_1t - (V)0.0) / y1Norm));
+      cell.template setField<descriptors::U_TAU>(u_tau);
     }
   }
 };
@@ -109,55 +94,47 @@ private:
   SuperLattice<T, DESCRIPTOR>&                             _sLattice;
   SuperLatticeCoupling<TurbulentChannelForce<T>, _COUPLEE> _coupling;
 
-  SuperLatticeFieldReductionO<T, DESCRIPTOR, descriptors::channel::CELL_LATTICEU_dVolume, reduction::SumO,
+  SuperLatticeFieldReductionO<T, DESCRIPTOR, descriptors::channel::LATTICE_U_DV, reduction::SumO,
                               reduction::checkTag<descriptors::channel::TAGS_BULK>>
       _sumUdV;
 
-  SuperLatticeFieldReductionO<T, DESCRIPTOR, descriptors::channel::CELL_UTAU_dSurface, reduction::SumO,
+  SuperLatticeFieldReductionO<T, DESCRIPTOR, descriptors::U_TAU, reduction::SumO,
                               reduction::checkTag<descriptors::channel::TAGS_BCBULK>>
       _sumUTAUdS;
 
   const T _ReTau;
   const T _charLength;
-  const T _lengthX;
-  const T _lengthY;
-  const T _lengthZ;
-
-  const int _lattice_channel_surfacearea;
+  const T _lattice_channel_volumearea;
+  const T _lattice_channel_surfacearea;
+  const T _lattice_charL;
+  const bool _wallModel;
 
 public:
-  FieldD<T, DESCRIPTOR, descriptors::channel::CELL_LATTICEU_dVolume> getVelocityIntegral()
+  FieldD<T, DESCRIPTOR, descriptors::channel::LATTICE_U_DV> getVelocityIntegral()
   {
     /* ∫UdV */
     _sLattice.executePostProcessors(stage::integral::IntegralVelocity {});
     return _sumUdV.compute();
   }
 
-  FieldD<T, DESCRIPTOR, descriptors::channel::CELL_LATTICEU_dVolume> getFrictionVelocityIntegral()
+  FieldD<T, DESCRIPTOR, descriptors::U_TAU> getFrictionVelocityIntegral()
   {
     /* ∫UTAUdS */
     _sLattice.executePostProcessors(stage::integral::IntegralFrictionVelocity {});
     return _sumUTAUdS.compute();
   }
 
-  void applyForing(FieldD<T, DESCRIPTOR, descriptors::channel::CELL_UTAU_dSurface> utauDs)
+  void applyForcing()
   {
     /*
-      utauDs = ∫UTAUdS
-      utau_ave = 1/S∫UTAUdS
-    */
-    const auto utau_ave = utauDs / _lattice_channel_surfacearea;
-    _coupling.template setParameter<typename TurbulentChannelForce<T>::LATTICE_UTAU>(utau_ave[0]);
-    _coupling.apply();
-    return;
-  }
-
-  void applyForing()
-  {
-    /*
-     In the coupling, 1/V ∫UdV will be calculated
+     1/S ∫UTAUdS
+     1/V ∫UdV
    */
-    _coupling.template setParameter<typename TurbulentChannelForce<T>::LATTICE_U_SUM>(getVelocityIntegral());
+    _coupling.template setParameter<typename TurbulentChannelForce<T>::LATTICE_UTAU>(getFrictionVelocityIntegral() /
+                                                                               T(2) / _lattice_channel_surfacearea);
+    _coupling.template setParameter<typename TurbulentChannelForce<T>::LATTICE_U_AVE>(getVelocityIntegral() /
+                                                                                      _lattice_channel_volumearea);
+
     _coupling.apply();
     return;
   }
@@ -172,17 +149,16 @@ public:
  * @param sGeometry            SuperGeometry.
  * @param converter            UnitConverter.
  * @param ReTau                Friction Reynolds number.
- * @param charLength           Calaculated characteristic physical.
- * @param lengthX              Domain physical length in the X (streamwise) direction.
- * @param lengthY              Domain physical length in the Y (spanwise) direction.
- * @param lengthZ              Domain physical length in the Z (wall-normal) direction.
- * @param latticeWallDistance  Distance from the wall in lattice units (default: 0.5).
+ * @param charLength           Characteristic physical length.
+ * @param lengthX              Domain physical length between the end bulk cell and the beginning bulk cell in the X
+ * @param latticeWallDistance  Distance from the wall in lattice units.
+ * @param wallModel            With our without wall model (true/false).
  * @param boudaryMaterials     Material numbers identifying boundary regions (default: {2}).
  * @param bulkMaterials        Material numbers identifying bulk (fluid) regions (default: {1}).
  */
   SuperForceTermApplyInChannel3d(SuperLattice<T, DESCRIPTOR>& sLattice, SuperGeometry<T, 3>& sGeometry,
                                  UnitConverter<T, DESCRIPTOR> const& converter, const T ReTau, const T charLength,
-                                 const T lengthX, const T lengthY, const T lengthZ, const T latticeWallDistance = 0.5,
+                                 const T latticeWallDistance, const bool wallModel,
                                  std::vector<int> boudaryMaterials = std::vector<int>(1, 2),
                                  std::vector<int> bulkMaterials    = std::vector<int>(1, 1))
       : _sLattice(sLattice)
@@ -191,33 +167,51 @@ public:
       , _sumUTAUdS(sLattice)
       , _ReTau(ReTau)
       , _charLength(charLength)
-      , _lengthX(lengthX)
-      , _lengthY(lengthY)
-      , _lengthZ(lengthZ)
-      , _lattice_channel_surfacearea(converter.getLatticeLength(lengthX) * converter.getLatticeLength(lengthY))
+      , _wallModel(wallModel)
+      , _lattice_channel_volumearea([&]() -> T {
+              Vector<T, 3> PhyMax = sGeometry.getStatistics().getMaxPhysR(1);
+              Vector<T, 3> PhyMin = sGeometry.getStatistics().getMinPhysR(1);
+              auto PhysDelta = PhyMax - PhyMin;
+              const auto nx = converter.getLatticeLength(PhysDelta[0]) + T(1);
+              const auto ny = converter.getLatticeLength(PhysDelta[1]) + T(1);
+              const auto nz = converter.getLatticeLength(PhysDelta[2]) + T(2)*latticeWallDistance;
+              return nx * ny * nz;
+            }())
+      , _lattice_channel_surfacearea([&]() -> T {
+              Vector<T, 3> PhyMax = sGeometry.getStatistics().getMaxPhysR(1);
+              Vector<T, 3> PhyMin = sGeometry.getStatistics().getMinPhysR(1);
+              auto PhysDelta = PhyMax - PhyMin;
+              const auto nx = converter.getLatticeLength(PhysDelta[0]) + T(1);
+              const auto ny = converter.getLatticeLength(PhysDelta[1]) + T(1);
+              return nx * ny;
+            }())
+      , _lattice_charL([&]() -> T {
+              Vector<T, 3> PhyMax = sGeometry.getStatistics().getMaxPhysR(1);
+              Vector<T, 3> PhyMin = sGeometry.getStatistics().getMinPhysR(1);
+              auto PhysDelta = PhyMax - PhyMin;
+              const auto nz = (T)0.5 * (converter.getLatticeLength(PhysDelta[2]) + T(2)*latticeWallDistance);
+              return nz;
+            }())
   {
     OstreamManager clout(std::cout, "SuperForceTermApplyInChannel3d");
     auto           bulkCopy = bulkMaterials;
-    {
-      clout << "set up the paramerters in the coupling between foucing calculation and LBM" << std::endl;
 
+    {
       _coupling.template setParameter<typename TurbulentChannelForce<T>::CHAR_LATTICE_U>(
           converter.getCharLatticeVelocity());
-      _coupling.template setParameter<typename TurbulentChannelForce<T>::CHAR_LATTICE_L>(
-          converter.getLatticeLength(_charLength));
+      _coupling.template setParameter<typename TurbulentChannelForce<T>::CHAR_LATTICE_L>(_lattice_charL);
       _coupling.template setParameter<typename TurbulentChannelForce<T>::LATTICE_UTAU>(
-          converter.getLatticeVelocity(_ReTau * converter.getPhysViscosity() / ((T)0.5 * _lengthZ)));
-      _coupling.template setParameter<typename TurbulentChannelForce<T>::LATTICE_CHANNEL_VOLUME>(
-          converter.getLatticeLength(_lengthX) * converter.getLatticeLength(_lengthY) *
-          converter.getLatticeLength(_lengthZ));
-      _coupling.template setParameter<typename TurbulentChannelForce<T>::LATTICE_U_SUM>(
+          converter.getLatticeVelocity(_ReTau * converter.getPhysViscosity() / _charLength));
+      _coupling.template setParameter<typename TurbulentChannelForce<T>::LATTICE_U_AVE>(
           Vector<T, DESCRIPTOR::d> {converter.getCharLatticeVelocity(), (T)0, (T)0});
       _coupling.restrictTo(sGeometry.getMaterialIndicator(std::move(bulkMaterials)));
+      clout << "Lattice characteristic length: " << _lattice_charL << std::endl;
+      clout << "lattice Channel Surface Area: " << _lattice_channel_surfacearea << std::endl;
+      clout << "lattice Volume: " << _lattice_channel_volumearea << std::endl;
     }
     {
       clout << "Set up the integral field and post processor" << std::endl;
 
-      T                                               dx = converter.getPhysDeltaX(); // pyhsical length
       FunctorPtr<SuperIndicatorF<T, DESCRIPTOR::d>>&& superboundaryIndicator =
           FunctorPtr<SuperIndicatorF<T, DESCRIPTOR::d>>(sGeometry.getMaterialIndicator(std::move(boudaryMaterials)));
       FunctorPtr<SuperIndicatorF<T, DESCRIPTOR::d>>&& superbulkIndicator =
@@ -233,22 +227,19 @@ public:
         BlockIndicatorF<T, DESCRIPTOR::d>& bulkIndicator     = superbulkIndicator->getBlockIndicatorF(iC);
         BlockIndicatorF<T, DESCRIPTOR::d>& outsideIndicator  = outsideI->getBlockIndicatorF(iC);
         const auto& blockGeometry = superbulkIndicator->getBlockIndicatorF(iC).getBlockGeometry();
-        const T     deltaR        = blockGeometry.getDeltaR(); // pyhsical voxels length
         block.forSpatialLocations([&](LatticeR<DESCRIPTOR::d> loc) {
-          T    voxcelSize = 0.0; // lattice length
           auto cell       = sLattice.getBlock(iC).get(loc);
           if (bulkIndicator(loc)) {
-            voxcelSize = (deltaR * deltaR * deltaR) / (dx * dx * dx);
+            T voxelSize = T(1);
             block.addPostProcessor(typeid(stage::integral::IntegralVelocity), loc,
                                    meta::id<CellSpatialCalculationVelocityField> {});
             cell.template setField<descriptors::channel::TAGS_BULK>(true);
+            cell.template setField<descriptors::channel::LATTICE_VOXELSIZE>(voxelSize);
           }
-          cell.template setField<descriptors::channel::LATTICE_VOXCELSIZE>(voxcelSize);
         });
         //set voxel size for boundary cells
         block.forSpatialLocations([&](LatticeR<DESCRIPTOR::d> loc) {
           if (boundaryIndicator(loc)) {
-            T voxcelSize = 0.0; // lattice length
             for (int iPop = 1; iPop < DESCRIPTOR::q; ++iPop) {
               LatticeR<DESCRIPTOR::d> boundaryBulkLatticeR(loc + descriptors::c<DESCRIPTOR>(iPop));
               if (blockGeometry.isInside(boundaryBulkLatticeR)) {
@@ -261,14 +252,15 @@ public:
                   const auto [normalType, normal] = computeBoundaryTypeAndNormal(bulkIndicator, outsideIndicator, loc);
                   T normalNorm                    = util::norm<DESCRIPTOR::d>(normal);
                   if (normalNorm != T(0)) {
-                    T y1          = latticeWallDistance * deltaR;
-                    voxcelSize    = (deltaR * deltaR * util::abs(y1)) / (dx * dx * dx);
-                    T sarfaceSize = (deltaR * deltaR) / (dx * dx);
-                    cellBC.template setField<descriptors::channel::LATTICE_VOXCELSIZE>(voxcelSize);
-                    cellBC.template setField<descriptors::channel::LATTICE_SURFACESIZE>(sarfaceSize);
+                    T y1 = latticeWallDistance;
+                    T voxelSize = T(0.5)+ util::abs(y1);
+                    cellBC.template setField<descriptors::Y1>(-y1*normal);
+                    cellBC.template setField<descriptors::channel::LATTICE_VOXELSIZE>(voxelSize);
                     cellBC.template setField<descriptors::channel::TAGS_BCBULK>(true);
-                    block.addPostProcessor(typeid(stage::integral::IntegralFrictionVelocity), boundaryBulkLatticeR,
+                    if(!_wallModel) {
+                      block.addPostProcessor(typeid(stage::integral::IntegralFrictionVelocity), boundaryBulkLatticeR,
                                            meta::id<CellSpatialCalculationFrictionVelocityField> {});
+                    }
                   }
                 }
               }

@@ -61,5 +61,19 @@ public:
   bool operator() (T output[], const int input[]) override;
 };
 
+template <typename T, typename DESCRIPTOR>
+class SuperLatticeSquareVelocity3D final : public SuperLatticeF3D<T,DESCRIPTOR> {
+public:
+  SuperLatticeSquareVelocity3D(SuperLattice<T,DESCRIPTOR>& sLattice);
+};
+
+/// functor returns pointwise velocity on local lattice
+template <typename T, typename DESCRIPTOR>
+class BlockLatticeSquareVelocity3D final : public BlockLatticeF3D<T,DESCRIPTOR> {
+public:
+  BlockLatticeSquareVelocity3D(BlockLattice<T,DESCRIPTOR>& blockLattice);
+  bool operator() (T output[], const int input[]) override;
+};
+
 }
 #endif

@@ -131,6 +131,18 @@ SuperLattice<T,DESCRIPTOR>::SuperLattice(CuboidDecomposition<T,DESCRIPTOR::d>& d
       }
     }
     #endif
+
+    #ifdef PLATFORM_GPU_HIP
+    if (load.platform(iC) == Platform::GPU_HIP) {
+      if (gpu::hip::device::getCount() == 0) {
+        throw std::runtime_error("Load balancer requested GPU processing for cuboid "
+                               + std::to_string(load.glob(iC))
+                               + " but no HIP device was found on rank "
+                               + std::to_string(singleton::mpi().getRank()));
+
+      }
+    }
+    #endif
     _block.emplace_back(constructUsingConcretePlatform<ConcretizableBlockLattice<T,DESCRIPTOR>>(
       load.platform(iC), cuboid.getExtent(), this->getOverlap()));
   }
@@ -791,6 +803,10 @@ void SuperLattice<T,DESCRIPTOR>::executePostProcessors(STAGE stage)
   gpu::cuda::device::synchronize();
   #endif
 
+  #ifdef PLATFORM_GPU_HIP
+  gpu::hip::device::synchronize();
+  #endif
+
   getCommunicator(stage).communicate();
 
   auto& load = this->_loadBalancer;
@@ -913,6 +929,9 @@ void SuperLattice<T,DESCRIPTOR>::scheduleBackgroundOutput(F&& f)
   }
   for (int iC=0; iC < load.size(); ++iC) {
     if (load.platform(iC) == Platform::GPU_CUDA) {
+      scheduleBackgroundTask<stage::PreContextSwitchTo<ProcessingContext::Evaluation>>(std::bind(f, iC));
+    }
+    if (load.platform(iC) == Platform::GPU_HIP) {
       scheduleBackgroundTask<stage::PreContextSwitchTo<ProcessingContext::Evaluation>>(std::bind(f, iC));
     }
   }

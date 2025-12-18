@@ -33,7 +33,12 @@ namespace parameters {
 
 struct STL_PATH : public descriptors::TYPED_FIELD_BASE<std::string,1> { };
 struct STL_SCALING : public descriptors::FIELD_BASE<1> { };
-struct STL_RAY_MODE : public descriptors::TYPED_FIELD_BASE<RayMode,1> { };
+struct STL_RAY_MODE : public descriptors::TYPED_FIELD_BASE<RayMode,1> {
+  template <typename T, typename DESCRIPTOR>
+  static constexpr auto getInitialValue() {
+    return Vector<RayMode,1>{RayMode::Robust};
+  }
+};
 
 struct DECOMPOSITION_STRATEGY : public descriptors::TYPED_FIELD_BASE<std::string,1> { };
 struct MESH_PADDING : public descriptors::TYPED_FIELD_BASE<std::size_t,1> {

@@ -302,12 +302,12 @@ public:
   template <typename PARAMETER, Platform _PLATFORM, typename FIELD>
   void setParameter(FieldArrayD<T,DESCRIPTOR,_PLATFORM,FIELD>& fieldArray)
   {
-    if constexpr (PLATFORM == Platform::GPU_CUDA) {
+    if constexpr (PLATFORM == Platform::GPU_CUDA || PLATFORM == Platform::GPU_HIP) {
       static_assert(PLATFORM == _PLATFORM, "FieldArrayD must be available on PLATFORM");
     }
     FieldD<T,DESCRIPTOR,PARAMETER> fieldArrayPointers;
     for (unsigned iD=0; iD < fieldArray.d; ++iD) {
-      if constexpr (PLATFORM == Platform::GPU_CUDA) {
+      if constexpr (PLATFORM == Platform::GPU_CUDA || PLATFORM == Platform::GPU_HIP) {
         fieldArrayPointers[iD] = fieldArray[iD].deviceData();
       } else {
         fieldArrayPointers[iD] = fieldArray[iD].data();
@@ -362,6 +362,14 @@ std::unique_ptr<BlockD<T,DESCRIPTOR>> makeSharedBlockD(
   if (loadBalancer.isLocal(Platform::GPU_CUDA)) {
     return std::unique_ptr<BlockD<T,DESCRIPTOR>>(
       new ConcreteBlockD<T,DESCRIPTOR,Platform::GPU_CUDA>(std::forward<ARGS&&>(args)...));
+  } else {
+    return std::unique_ptr<BlockD<T,DESCRIPTOR>>(
+      new ConcreteBlockD<T,DESCRIPTOR,Platform::CPU_SISD>(std::forward<ARGS&&>(args)...));
+  }
+  #elif defined(PLATFORM_GPU_HIP)
+  if (loadBalancer.isLocal(Platform::GPU_HIP)) {
+    return std::unique_ptr<BlockD<T,DESCRIPTOR>>(
+      new ConcreteBlockD<T,DESCRIPTOR,Platform::GPU_HIP>(std::forward<ARGS&&>(args)...));
   } else {
     return std::unique_ptr<BlockD<T,DESCRIPTOR>>(
       new ConcreteBlockD<T,DESCRIPTOR,Platform::CPU_SISD>(std::forward<ARGS&&>(args)...));

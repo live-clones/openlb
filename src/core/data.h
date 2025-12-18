@@ -547,9 +547,16 @@ std::unique_ptr<Data<T,DESCRIPTOR>> makeSharedData(
     return std::unique_ptr<Data<T,DESCRIPTOR>>(
       new ConcreteData<T,DESCRIPTOR,Platform::CPU_SISD>(std::forward<ARGS&&>(args)...));
   }
+  #elif defined(PLATFORM_GPU_HIP)
+  if (loadBalancer.isLocal(Platform::GPU_HIP)) {
+    return std::unique_ptr<Data<T,DESCRIPTOR>>(
+      new ConcreteData<T,DESCRIPTOR,Platform::GPU_HIP>(std::forward<ARGS&&>(args)...));
+  } else {
+    return std::unique_ptr<Data<T,DESCRIPTOR>>(
+      new ConcreteData<T,DESCRIPTOR,Platform::CPU_SISD>(std::forward<ARGS&&>(args)...));
+  }
   #else
-  return std::unique_ptr<Data<T,DESCRIPTOR>>(
-    new ConcreteData<T,DESCRIPTOR,Platform::CPU_SISD>(std::forward<ARGS&&>(args)...));
+  return std::unique_ptr<Data<T,DESCRIPTOR>>(new ConcreteData<T,DESCRIPTOR,Platform::CPU_SISD>(std::forward<ARGS&&>(args)...));
   #endif
 }
 

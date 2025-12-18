@@ -36,12 +36,6 @@ x_reference_col = 'y+'
 # Format: (computed_col, reference_col, plot_title, y_label, filename_suffix)
 plot_mappings = [
     ('uAv+', 'u+', 'Mean Velocity Profile', '$u^+$', 'u_plus'),
-    ('uu++', "u'u'", "Reynolds Stress Component", "$u'u'$", 'uu'),
-    ('vv++', "v'v'", "Reynolds Stress Component", "$v'v'$", 'vv'),
-    ('ww++', "w'w'", "Reynolds Stress Component", "$w'w'$", 'ww'),
-    ('uv++', "u'v'", "Reynolds Stress Component", "$u'v'$", 'uv'),
-    ('uw++', "u'w'", "Reynolds Stress Component", "$u'w'$", 'uw'),
-    ('vw++', "v'w'", "Reynolds Stress Component", "$v'w'$", 'vw')
 ]
 # ---------------------
 

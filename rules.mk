@@ -116,6 +116,45 @@ ifneq ($(filter GPU_CUDA,$(PLATFORMS)),)
 	endif
 endif
 
+#  HIP compiling
+ifneq ($(filter GPU_HIP,$(PLATFORMS)),)
+
+	HIP_PLATFORM := $(strip $(HIP_PLATFORM))
+	
+	ifndef HIP_CXXFLAGS
+		HIP_CXXFLAGS := -O3 -std=c++20
+	endif
+
+	ifeq ($(HIP_PLATFORM),nvidia)
+		CUDA_ARCH ?= 75
+		CUDA_ARCH := $(strip $(CUDA_ARCH))
+
+		HIP_CXXFLAGS += --generate-code=arch=compute_$(CUDA_ARCH),code=[compute_$(CUDA_ARCH),sm_$(CUDA_ARCH)]
+		HIP_CXXFLAGS += --extended-lambda --expt-relaxed-constexpr
+		HIP_CXXFLAGS += -rdc=true
+		HIP_CXXFLAGS += -Xcudafe "--diag_suppress=implicit_return_from_non_void_function --display_error_number --diag_suppress=20014 --diag_suppress=20011"
+		HIP_CXXFLAGS += -I$(ROCM_PATH)/include -I$(ROCM_PATH)/hip/include
+
+		HIP_LDFLAGS  += -lcuda -lcudadevrt -lcudart --generate-code=arch=compute_$(CUDA_ARCH),code=[compute_$(CUDA_ARCH),sm_$(CUDA_ARCH)]
+
+		ifndef HIP_CXX
+			HIP_CXXFLAGS += --forward-unknown-to-host-compiler -x cu 
+		endif
+
+	else # amd
+		HIP_ARCH	 ?= native
+		HIP_ARCH     := $(strip $(HIP_ARCH))	
+		HIP_CXXFLAGS += --offload-arch=$(HIP_ARCH)
+		HIP_CXXFLAGS += -Wno-vla-cxx-extension -Wno-deprecated-non-prototype
+	endif
+
+
+	ifndef HIP_CXX
+		CXXFLAGS += $(HIP_CXXFLAGS)
+		LDFLAGS  += $(HIP_LDFLAGS)
+	endif
+endif
+
 PLATFORM_FLAGS := $(foreach platform,$(PLATFORMS),-DPLATFORM_$(platform))
 FEATURE_FLAGS := $(foreach feature,$(FILTERED_FEATURES),-DFEATURE_$(feature))
 

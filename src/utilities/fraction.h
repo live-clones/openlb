@@ -25,6 +25,15 @@
 #define UTILITIES_FRACTION_H
 
 #include <stdexcept>
+// #include <cassert>
+
+#if defined(__HIP_DEVICE_COMPILE__)
+#include <hip/hip_runtime.h>
+#endif
+
+#if defined(__CUDA_ARCH__) || defined(__HIP_DEVICE_COMPILE__)
+#include <cassert>
+#endif
 
 namespace olb {
 
@@ -40,9 +49,14 @@ public:
   constexpr Fraction(int num, int denum):
     _numerator(num), _denominator(denum)
   {
+    #if defined(__HIP_DEVICE_COMPILE__) || defined(__CUDA_ARCH__)
+    // On the DEVICE
+    assert(_denominator != 0);
+    #else
     if (_denominator == 0) {
-      throw std::invalid_argument("denominator must not be zero");
+        throw std::invalid_argument("denominator must not be zero");
     }
+    #endif
   }
 
   constexpr Fraction(int parts[2]):
@@ -63,7 +77,13 @@ public:
   template <typename T>
   constexpr T inverseAs() const
   {
-    return _numerator != 0 ? T(_denominator) / T(_numerator) : throw std::invalid_argument("inverse of zero is undefined");
+    #if defined(__HIP_DEVICE_COMPILE__) || defined(__CUDA_ARCH__)
+    // On the DEVICE
+      assert(_numerator != 0);
+      return T(_denominator) / T(_numerator);
+    #else
+      return _numerator != 0 ? T(_denominator) / T(_numerator) : throw std::invalid_argument("inverse of zero is undefined");
+    #endif
   }
 };
 

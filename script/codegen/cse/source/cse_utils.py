@@ -121,7 +121,7 @@ def code(expr, symbols={ }):
 def cse(block, generator):
     expand_pos_square = ReplaceOptim(
         lambda e: e.is_Pow and e.exp.is_integer and e.exp == 2,
-        lambda p: UnevaluatedExpr(Mul(p.base, p.base, evaluate = False)),
+        lambda p: UnevaluatedExpr(Mul(p.base, p.base)),
     )
     custom_opti = cse_main.basic_optimizations + [
         (expand_pos_square, expand_pos_square)

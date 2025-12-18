@@ -45,7 +45,7 @@ int FdBoundaryPostProcessor2D <T,DESCRIPTOR,MODEL,SCHEME_BOUND,PARAMS,FIELD,SOUR
 
 template<typename T, typename DESCRIPTOR, typename MODEL, typename SCHEME_BOUND, typename PARAMS, typename FIELD, typename SOURCE>
 template <typename CELL, typename PARAMETERS>
-void FdBoundaryPostProcessor2D<T,DESCRIPTOR,MODEL,SCHEME_BOUND,PARAMS,FIELD,SOURCE>::apply(CELL& cell, PARAMETERS& vars)
+void FdBoundaryPostProcessor2D<T,DESCRIPTOR,MODEL,SCHEME_BOUND,PARAMS,FIELD,SOURCE>::apply(CELL& cell, PARAMETERS& vars) any_platform
 {
   int normalX = (int)( cell.template getField<descriptors::NORMAL_X>() );
   int normalY = (int)( cell.template getField<descriptors::NORMAL_Y>() );

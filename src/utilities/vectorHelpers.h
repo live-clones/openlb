@@ -44,7 +44,7 @@ namespace util {
 
 template <class T, unsigned DIM> class ADf;
 
-template <class T, unsigned DIM> inline ADf<T,DIM> sqrt (const ADf<T,DIM>& a);
+template <class T, unsigned DIM> any_platform inline ADf<T,DIM> sqrt (const ADf<T,DIM>& a);
 
 template<typename S>
 using StdVector = std::vector<S,std::allocator<S>>;

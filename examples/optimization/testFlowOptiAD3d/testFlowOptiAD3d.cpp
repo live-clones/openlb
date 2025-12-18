@@ -106,9 +106,9 @@ void prepareLattice(CASE& myCase)
   auto& parameters = myCase.getParameters();
 
   /// @li Set up a unit converter with the characteristic physical units
-  lattice.template setUnitConverter<UnitConverterFromResolutionAndLatticeVelocity<T,DESCRIPTOR>>(
+  lattice.template setUnitConverter<UnitConverterFromResolutionAndRelaxationTime<T,DESCRIPTOR>>(
     parameters.template get<parameters::RESOLUTION>(),               // resolution
-    parameters.template get<parameters::LATTICE_CHAR_VELOCITY>(),    // charLatticeVelocity
+    parameters.template get<parameters::LATTICE_RELAXATION_TIME>(),  // relaxation time
     parameters.template get<parameters::PHYS_CHAR_LENGTH>(),         // charPhysLength: reference length of simulation geometry in [m]
     parameters.template get<parameters::PHYS_CHAR_VELOCITY>(),       // charPhysVelocity: highest expected velocity during simulation in [m/s]
     parameters.template get<parameters::PHYS_CHAR_VISCOSITY>(),      // physViscosity: physical kinematic viscosity in [m^2/s]
@@ -343,24 +343,24 @@ int main(int argc, char* argv[])
   MyCase::ParametersD myCaseParametersD;
   {
     using namespace parameters;
-    myCaseParametersD.template set<PHYS_CHAR_VELOCITY   >(        1.0);
-    myCaseParametersD.template set<PHYS_CHAR_LENGTH     >(        1.0);
-    myCaseParametersD.template set<PHYS_CHAR_VISCOSITY  >(        0.1);
-    myCaseParametersD.template set<PHYS_CHAR_DENSITY    >(        1.0);
-    myCaseParametersD.template set<MAX_PHYS_T           >(        6.0);
-    myCaseParametersD.template set<RESOLUTION           >(         11);
-    myCaseParametersD.template set<LATTICE_CHAR_VELOCITY>(       0.07);
+    myCaseParametersD.template set<PHYS_CHAR_VELOCITY     >(        1.0);
+    myCaseParametersD.template set<PHYS_CHAR_LENGTH       >(        1.0);
+    myCaseParametersD.template set<PHYS_CHAR_VISCOSITY    >(        0.1);
+    myCaseParametersD.template set<PHYS_CHAR_DENSITY      >(        1.0);
+    myCaseParametersD.template set<MAX_PHYS_T             >(        6.0);
+    myCaseParametersD.template set<RESOLUTION             >(         11);
+    myCaseParametersD.template set<LATTICE_RELAXATION_TIME>(        0.8);
   }
   MyADfCase::ParametersD myADfCaseParametersD;
   {
     using namespace parameters;
-    myADfCaseParametersD.template set<PHYS_CHAR_VELOCITY   >( ADf{1.0});
-    myADfCaseParametersD.template set<PHYS_CHAR_LENGTH     >( ADf{1.0});
-    myADfCaseParametersD.template set<PHYS_CHAR_VISCOSITY  >( ADf{0.1});
-    myADfCaseParametersD.template set<PHYS_CHAR_DENSITY    >( ADf{1.0});
-    myADfCaseParametersD.template set<MAX_PHYS_T           >( ADf{6.0});
-    myADfCaseParametersD.template set<RESOLUTION           >(       11);
-    myADfCaseParametersD.template set<LATTICE_CHAR_VELOCITY>(ADf{0.07});
+    myADfCaseParametersD.template set<PHYS_CHAR_VELOCITY     >( ADf{1.0});
+    myADfCaseParametersD.template set<PHYS_CHAR_LENGTH       >( ADf{1.0});
+    myADfCaseParametersD.template set<PHYS_CHAR_VISCOSITY    >( ADf{0.1});
+    myADfCaseParametersD.template set<PHYS_CHAR_DENSITY      >( ADf{1.0});
+    myADfCaseParametersD.template set<MAX_PHYS_T             >( ADf{6.0});
+    myADfCaseParametersD.template set<RESOLUTION             >(       11);
+    myADfCaseParametersD.template set<LATTICE_RELAXATION_TIME>(ADf{ 0.8});
   }
 
   /// @li Step 3: Create Mesh
@@ -398,7 +398,7 @@ int main(int argc, char* argv[])
 
   /// @li Step G: Create an Optimizer
   OptimizerLBFGS<MyCase::value_t,std::vector<MyCase::value_t>> optimizer(
-    optiCase.getController().size(), 1.e-10, 10, 1., 20, "Wolfe", 20, 1.e-4);
+    optiCase.getController().size(), 1.e-5, 10, 1., 20, "Wolfe", 20, 1.e-4);
 
   /// @li Step H: Optimize
   optimizer.optimize(optiCase);

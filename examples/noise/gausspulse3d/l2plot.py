@@ -1,22 +1,22 @@
 import matplotlib.pyplot as plt
 import numpy as np
-from glob import glob
 
 plt.rcParams['text.usetex'] = True
 
 fig, ax = plt.subplots(figsize=(6,3), dpi=300)
-filename = glob("tmp_eternal*/gnuplotData/data/l2_absolute.dat")[0]
+outdirSuffixes = ["eternal_scale3", "periodic", "local", "interpolated", "sponge_bd20x1", "cbcSponge", "cbc"]
+labels = ["ideal case (larger domain)", "periodic BC", "local BC", "interpolated BC",
+          "sponge layer", "cbc outlet plus sponge", "cbc BC"]
+for outdirSuffix, label in zip(outdirSuffixes, labels):
+  filename = "tmp_"+outdirSuffix+"/gnuplotData/data/l2_absolute.dat"
+  data = np.loadtxt(filename)
+  ax.plot(data[:,0], data[:,1], label=label)
+  
+filename = "../refinedGausspulse3d/tmp_coarse/gnuplotData/data/l2_absolute_fine.dat"
 data = np.loadtxt(filename)
-ax.plot(data[:,0], data[:,1], label="ideal case (larger domain)")
-filename = glob("tmp_periodic*/gnuplotData/data/l2_absolute.dat")[0]
-data = np.loadtxt(filename)
-ax.plot(data[:,0], data[:,1], label="periodic BC")
-filename = glob("tmp_local*/gnuplotData/data/l2_absolute.dat")[0]
-data = np.loadtxt(filename)
-ax.plot(data[:,0], data[:,1], label="local BCs")
-filename = glob("tmp_damping*/gnuplotData/data/l2_absolute.dat")[0]
-data = np.loadtxt(filename)
-ax.plot(data[:,0], data[:,1], label=f"sponge layer")
+ax.plot(data[:,0], data[:,1], label="coarse")
+
+ax.set_title("Comparing far-field boundary conditions")
 ax.set_yscale('log')
 ax.set_ylim((1e-3,1.1))
 ax.set_ylabel(r"$\frac{L_p}{L_{p0}}$", rotation=0, ha='right', fontsize=15)

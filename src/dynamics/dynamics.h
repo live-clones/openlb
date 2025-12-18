@@ -130,7 +130,7 @@ using ThirdOrderRLBdynamics = dynamics::Tuple<
   T, DESCRIPTOR,
   MOMENTA,
   equilibria::ThirdOrder,
-  collision::RLBThirdOrder
+  collision::ThirdOrderRLB
 >;
 
 template <typename T, typename DESCRIPTOR, typename MOMENTA=momenta::BulkTuple>
@@ -138,7 +138,7 @@ using ForcedThirdOrderRLBdynamics = dynamics::Tuple<
   T, DESCRIPTOR,
   MOMENTA,
   equilibria::ThirdOrder,
-  collision::RLBThirdOrder,
+  collision::ThirdOrderRLB,
   forcing::GuoThirdOrder<momenta::Forced>
 >;
 
@@ -161,7 +161,7 @@ using ThirdOrderHRLBdynamics = dynamics::Tuple<
   momenta::DefineToNEq
   >,
   equilibria::ThirdOrder,
-  collision::RLBThirdOrder
+  collision::ThirdOrderRLB
 >;
 
 template <typename T, typename DESCRIPTOR>
@@ -174,7 +174,7 @@ using ForcedThirdOrderHRLBdynamics = dynamics::Tuple<
   momenta::DefineToNEq
   >,
   equilibria::ThirdOrder,
-  collision::RLBThirdOrder,
+  collision::ThirdOrderRLB,
   forcing::GuoThirdOrder<momenta::Forced>
 >;
 
