@@ -244,7 +244,7 @@ void setBoundaryValues(MyCase& myCase, std::size_t iT)
   // No of time steps for smooth start-up
   std::size_t iTmaxStart = converter.getLatticeTime(0.8 * parameters.get<parameters::MAX_PHYS_T>());
   // Set inflow velocity
-  T maxVelocity = converter.getCharLatticeVelocity() * 3. / 4. *
+  T maxVelocity = converter.getCharPhysVelocity() * 3. / 4. *
                   util::pow(parameters.get<parameters::INLET_RADIUS>(), 2) /
                   util::pow(parameters.get<parameters::OUTLET_RADIUS0>(), 2);
   if (iT % converter.getLatticeTime(parameters.get<parameters::IT_PERIOD>()) == 0) {

@@ -220,7 +220,7 @@ void setTemporalValues(MyCase& myCase, std::size_t iT)
   int                     iTvec[1] = {int(iT)};
   T                       frac[1]  = {T(0)};
   startScale(frac, iTvec);
-  T maxVelocity = frac[0] * converter.getCharLatticeVelocity() * 3. / 4. *
+  T maxVelocity = frac[0] * converter.getCharPhysVelocity() * 3. / 4. *
                   util::pow(parameters.get<parameters::INLET_RADIUS>(), 2) /
                   util::pow(parameters.get<parameters::OUTLET_RADIUS0>(), 2);
 
