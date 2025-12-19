@@ -53,5 +53,7 @@ make -j4 \
      examples/thermal/squareCavity3d/ \
      examples/particles/bifurcation3d/eulerEuler/ \
      examples/fsi/rigidValve2d \
-     examples/gridRefinement/cylinder2d \
-     examples/gridRefinement/sphere3d
+     examples/gridRefinement/cellCentered/cylinder2d \
+     examples/gridRefinement/cellCentered/sphere3d \
+     examples/gridRefinement/vertexCentered/cylinder2d \
+     examples/gridRefinement/vertexCentered/sphere3d
