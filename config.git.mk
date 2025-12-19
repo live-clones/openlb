@@ -23,9 +23,9 @@ CXXFLAGS        := -O3 -Wall -march=native -mtune=native
 
 # OpenLB requires support for C++20
 # works in:
-#  * gcc 9 or later      (https://gcc.gnu.org/projects/cxx-status.html#cxx17)
-#  * icc 19.0 or later   (https://software.intel.com/en-us/articles/c17-features-supported-by-intel-c-compiler)
-#  * clang 7 or later  (https://clang.llvm.org/cxx_status.html#cxx17)
+#  * gcc 12 or later     (https://gcc.gnu.org/projects/cxx-status.html#cxx20)
+#  * clang 19 or later   (https://clang.llvm.org/cxx_status.html#cxx20)
+#  * icx 2024.0 or later (https://www.intel.com/content/www/us/en/developer/articles/technical/c20-features-supported-by-intel-cpp-compiler.html)
 CXXFLAGS        += -std=c++20
 
 # optional linker flags
