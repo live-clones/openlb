@@ -36,6 +36,7 @@
   */
 
 #include <olb.h>
+#include <ostream>
 
 using namespace olb;
 using namespace olb::names;
@@ -56,7 +57,7 @@ Mesh<MyCase::value_t, MyCase::d> createMesh(MyCase::ParametersD& parameters)
   using T = MyCase::value_t;
 
   // Get Domain parameters
-  const T physDeltaX  = 2 * parameters.get<parameters::RADIUS_CYLINDER>() / parameters.get<parameters::RESOLUTION>();
+  const T physDeltaX  = parameters.get<parameters::PHYS_DELTA_X>();
   const T physLengthX = parameters.get<parameters::DOMAIN_EXTENT>()[0];
   const T physLengthY = parameters.get<parameters::DOMAIN_EXTENT>()[1] + physDeltaX;
 
@@ -90,7 +91,7 @@ void prepareGeometry(MyCase& myCase)
   // Get domain parameters
   const T lengthX = parameters.get<parameters::DOMAIN_EXTENT>()[0];
   const T lengthY = parameters.get<parameters::DOMAIN_EXTENT>()[1];
-  const T L       = 0.1 / parameters.get<parameters::RESOLUTION>();
+  const T dx      = parameters.get<parameters::PHYS_DELTA_X>();
 
   // Create cylinder indicator
   IndicatorCircle2D<T> circle(center, radiusCylinder);
@@ -101,13 +102,13 @@ void prepareGeometry(MyCase& myCase)
   Vector<T, 2> extend(lengthX, lengthY);
   Vector<T, 2> origin;
   //Set material number for inflow
-  extend[0] = 2. * L;
-  origin[0] = -L;
+  extend[0] = 2. * dx;
+  origin[0] = -dx;
   IndicatorCuboid2D<T> inflow(extend, origin);
   geometry.rename(2, 3, 1, inflow);
 
   //Set material number for outflow
-  origin[0] = lengthX - L;
+  origin[0] = lengthX - dx;
   IndicatorCuboid2D<T> outflow(extend, origin);
   geometry.rename(2, 4, 1, outflow);
 
@@ -118,6 +119,8 @@ void prepareGeometry(MyCase& myCase)
   geometry.clean();
   geometry.checkForErrors();
   geometry.print();
+
+  clout << "Prepare Geometry ... OK" << std::endl;
 }
 
 /// @brief Set lattice dynamics
@@ -138,18 +141,21 @@ void prepareLattice(MyCase& myCase)
   const Vector<T, 2> center         = parameters.get<parameters::CENTER_CYLINDER>();
 
   // Get simulation parameters
-  const T L   = 0.1 / parameters.get<parameters::RESOLUTION>();
-  const T CFL = parameters.get<parameters::CFL>();
-  const T Re  = parameters.get<parameters::REYNOLDS>();
+  const T dx      = parameters.get<parameters::PHYS_DELTA_X>();
+  const T CFL     = parameters.get<parameters::CFL>();
+  const T Re      = parameters.get<parameters::REYNOLDS>();
+  const T charL   = parameters.get<parameters::PHYS_CHAR_LENGTH>();
+  const T charU   = parameters.get<parameters::PHYS_CHAR_VELOCITY>();
+  const T charRho = parameters.get<parameters::PHYS_DENSITY>();
 
   // Set up the unit converter
   lattice.setUnitConverter(
-      (T)L,                    // physDeltaX: spacing between two lattice cells in [m]
-      (T)CFL * L / 0.2,        // physDeltaT: time step in [s]
-      (T)2.0 * radiusCylinder, // charPhysLength: reference length of simulation geometry in [m]
-      (T)0.2, // charPhysVelocity: highest expected velocity during simulation in [m/s]
-      (T)0.2 * 2. * radiusCylinder / Re, // physViscosity: physical kinematic viscosity in [m^2/s]
-      (T)1.0                             // physDensity: physical density in [kg/m^3]
+    (T)dx,                              // physDeltaX:        spacing between two lattice cells in [m]
+    (T)CFL * dx / 0.2,                  // physDeltaT:        time step in [s]
+    (T)charL,            // charPhysLength:    reference length of simulation geometry in [m]
+    (T)charU,                             // charPhysVelocity:  highest expected velocity during simulation in [m/s]
+    (T)charU * charL /Re,  // physViscosity:     physical kinematic viscosity in [m^2/s]
+    (T)charRho                              // physDensity:       physical density in [kg/m^3]
   );
 
   // Print unit converter info
@@ -170,6 +176,8 @@ void prepareLattice(MyCase& myCase)
 
   // Material=5 -->bouzidi
   setBouzidiBoundary(lattice, geometry, 5, circle);
+
+  clout << "Prepare Lattice ... OK" << std::endl;
 }
 
 /// Set initial condition for primal variables (velocity and density)
@@ -178,31 +186,24 @@ void prepareLattice(MyCase& myCase)
 void setInitialValues(MyCase& myCase)
 {
   OstreamManager clout(std::cout, "prepareLattice");
+  clout << "Set Initial Values ..." << std::endl;
 
   // Get data from case
-  using T        = MyCase::value_t;
-  auto& geometry = myCase.getGeometry();
   auto& lattice  = myCase.getLattice(NavierStokes {});
 
-  // Initial conditions
-  AnalyticalConst2D<T, T> rhoF(1);
-  AnalyticalConst2D<T, T> uF(0, 0);
-
-  // Initialize all values of distribution functions to their local equilibrium
-  lattice.defineRhoU(geometry, 1, rhoF, uF);
-  lattice.iniEquilibrium(geometry, 1, rhoF, uF);
   lattice.setParameter<descriptors::OMEGA>(lattice.getUnitConverter().getLatticeRelaxationFrequency());
 
   // Initialize Lattice for simulation
   lattice.initialize();
-  clout << "Prepare Lattice OK" << std::endl;
+  clout << "Set Initial Values ... OK" << std::endl;
 }
 
 /// Update boundary values at times (and external fields, if they exist)
 /// @param myCase The Case instance which keeps the simulation data
 /// @param iT The time step
 /// @note Be careful: boundary values have to be set using lattice units
-void setTemporalValues(MyCase& myCase, std::size_t iT)
+void setTemporalValues(MyCase& myCase,
+                       std::size_t iT)
 {
   using T          = MyCase::value_t;
   auto& parameters = myCase.getParameters();
@@ -212,7 +213,7 @@ void setTemporalValues(MyCase& myCase, std::size_t iT)
 
   // Get global parameters
   const T maxPhysT = parameters.get<parameters::MAX_PHYS_T>();
-  const T L        = 0.1 / parameters.get<parameters::RESOLUTION>();
+  const T dx       = parameters.get<parameters::PHYS_DELTA_X>();
 
   // Number of time steps for smooth start-up
   const std::size_t iTmaxStart = converter.getLatticeTime(maxPhysT * 0.4);
@@ -225,10 +226,11 @@ void setTemporalValues(MyCase& myCase, std::size_t iT)
     T iTvec[1] = {T(iT)};
     T frac[1]  = {};
     StartScale(frac, iTvec);
-    T               maxVelocity   = converter.getCharLatticeVelocity() * 3. / 2. * frac[0];
-    T               distance2Wall = L / 2.;
+    T               maxVelocity   = converter.getCharPhysVelocity() * 3. / 2. * frac[0];
+    T               distance2Wall = dx / 2.;
     Poiseuille2D<T> poiseuilleU(geometry, 3, maxVelocity, distance2Wall);
-    lattice.defineU(geometry, 3, poiseuilleU);
+    momenta::setVelocity(lattice, geometry.getMaterialIndicator(3), poiseuilleU);
+    // lattice.defineU(geometry, 3, poiseuilleU);
     // Update velocity on GPU
     lattice.setProcessingContext<Array<momenta::FixedVelocityMomentumGeneric::VELOCITY>>(ProcessingContext::Simulation);
   }
@@ -238,7 +240,9 @@ void setTemporalValues(MyCase& myCase, std::size_t iT)
 /// @param myCase The Case instance which keeps the simulation data
 /// @param timer The timer
 /// @param iT The time step
-void getResults(MyCase& myCase, util::Timer<MyCase::value_t>& timer, std::size_t iT)
+void getResults(MyCase& myCase,
+                util::Timer<MyCase::value_t>& timer,
+                std::size_t iT)
 {
   OstreamManager clout(std::cout, "getResults");
 
@@ -348,16 +352,24 @@ int main(int argc, char* argv[])
   {
     using namespace olb::parameters;
     using T = MyCase::value_t;
-    myCaseParameters.set<RESOLUTION>(10);
-    myCaseParameters.set<REYNOLDS>((T)20.);
-    myCaseParameters.set<MAX_PHYS_T>((T)16.);
-    myCaseParameters.set<RADIUS_CYLINDER>((T)0.05);
-    myCaseParameters.set<CFL>((T)0.05);
+    myCaseParameters.set<RESOLUTION         >( 10    );
+    myCaseParameters.set<REYNOLDS           >( 20.   );
+    myCaseParameters.set<MAX_PHYS_T         >( 16.   );
+    myCaseParameters.set<RADIUS_CYLINDER    >(  0.05 );
+    myCaseParameters.set<PHYS_CHAR_VELOCITY >(  0.2  );
+    myCaseParameters.set<PHYS_DENSITY       >(  1.0  );
+    myCaseParameters.set<CFL                >(  0.05 );
+    myCaseParameters.set<PHYS_CHAR_LENGTH   >([&] {
+      return 2.0 * myCaseParameters.get<RADIUS_CYLINDER>();
+    });
     myCaseParameters.set<CENTER_CYLINDER>([&] {
       return Vector {(T)0.2, (T)0.2 + ((T)0.1 / myCaseParameters.get<RESOLUTION>()) / (T)2.};
     });
-    myCaseParameters.set<DOMAIN_EXTENT>([&] {
+    myCaseParameters.set<DOMAIN_EXTENT  >([&] {
       return Vector {(T)2.2, (T).41 + (T)0.1 / myCaseParameters.get<RESOLUTION>()};
+    });
+    myCaseParameters.set<PHYS_DELTA_X   >([&] {
+      return myCaseParameters.get<RADIUS_CYLINDER>() / myCaseParameters.get<RESOLUTION>();
     });
   }
   myCaseParameters.fromCLI(argc, argv);
