@@ -141,21 +141,21 @@ void prepareLattice(MyCase& myCase)
   const Vector<T, 2> center         = parameters.get<parameters::CENTER_CYLINDER>();
 
   // Get simulation parameters
-  const T dx      = parameters.get<parameters::PHYS_DELTA_X>();
-  const T CFL     = parameters.get<parameters::CFL>();
-  const T Re      = parameters.get<parameters::REYNOLDS>();
-  const T charL   = parameters.get<parameters::PHYS_CHAR_LENGTH>();
-  const T charU   = parameters.get<parameters::PHYS_CHAR_VELOCITY>();
-  const T charRho = parameters.get<parameters::PHYS_DENSITY>();
+  const T dx            = parameters.get<parameters::PHYS_DELTA_X>();
+  const T CFL           = parameters.get<parameters::CFL>();
+  const T charL         = parameters.get<parameters::PHYS_CHAR_LENGTH>();
+  const T charU         = parameters.get<parameters::PHYS_CHAR_VELOCITY>();
+  const T physViscosity = parameters.get<parameters::PHYS_CHAR_VISCOSITY>();
+  const T charRho       = parameters.get<parameters::PHYS_DENSITY>();
 
   // Set up the unit converter
   lattice.setUnitConverter(
-    (T)dx,                // physDeltaX:        spacing between two lattice cells in [m]
-    (T)CFL * dx / 0.2,    // physDeltaT:        time step in [s]
-    (T)charL,             // charPhysLength:    reference length of simulation geometry in [m]
-    (T)charU,             // charPhysVelocity:  highest expected velocity during simulation in [m/s]
-    (T)charU * charL /Re, // physViscosity:     physical kinematic viscosity in [m^2/s]
-    (T)charRho            // physDensity:       physical density in [kg/m^3]
+    (T) dx,                 // physDeltaX:        spacing between two lattice cells in [m]
+    (T) CFL * dx / charU,   // physDeltaT:        time step in [s]
+    (T) charL,              // charPhysLength:    reference length of simulation geometry in [m]
+    (T) charU,              // charPhysVelocity:  highest expected velocity during simulation in [m/s]
+    (T) physViscosity,      // physViscosity:     physical kinematic viscosity in [m^2/s]
+    (T) charRho             // physDensity:       physical density in [kg/m^3]
   );
 
   // Print unit converter info
@@ -352,11 +352,11 @@ int main(int argc, char* argv[])
     using namespace olb::parameters;
     using T = MyCase::value_t;
     myCaseParameters.set<RESOLUTION         >( 10    );
-    myCaseParameters.set<REYNOLDS           >( 20.   );
-    myCaseParameters.set<MAX_PHYS_T         >( 16.   );
-    myCaseParameters.set<RADIUS_CYLINDER    >(  0.05 );
-    myCaseParameters.set<PHYS_CHAR_VELOCITY >(  0.2  );
-    myCaseParameters.set<PHYS_DENSITY       >(  1.0  );
+    myCaseParameters.set<MAX_PHYS_T         >( 16.    );
+    myCaseParameters.set<RADIUS_CYLINDER    >(  0.05  );
+    myCaseParameters.set<PHYS_CHAR_VELOCITY >(  0.2   );
+    myCaseParameters.set<PHYS_DENSITY       >(  1.0   );
+    myCaseParameters.set<PHYS_CHAR_VISCOSITY>(  0.001 );
     myCaseParameters.set<CFL                >(  0.05 );
     myCaseParameters.set<PHYS_CHAR_LENGTH   >([&] {
       return 2.0 * myCaseParameters.get<RADIUS_CYLINDER>();
