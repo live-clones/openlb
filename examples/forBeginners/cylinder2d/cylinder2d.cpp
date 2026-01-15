@@ -150,12 +150,12 @@ void prepareLattice(MyCase& myCase)
 
   // Set up the unit converter
   lattice.setUnitConverter(
-    (T)dx,                              // physDeltaX:        spacing between two lattice cells in [m]
-    (T)CFL * dx / 0.2,                  // physDeltaT:        time step in [s]
-    (T)charL,            // charPhysLength:    reference length of simulation geometry in [m]
-    (T)charU,                             // charPhysVelocity:  highest expected velocity during simulation in [m/s]
-    (T)charU * charL /Re,  // physViscosity:     physical kinematic viscosity in [m^2/s]
-    (T)charRho                              // physDensity:       physical density in [kg/m^3]
+    (T)dx,                // physDeltaX:        spacing between two lattice cells in [m]
+    (T)CFL * dx / 0.2,    // physDeltaT:        time step in [s]
+    (T)charL,             // charPhysLength:    reference length of simulation geometry in [m]
+    (T)charU,             // charPhysVelocity:  highest expected velocity during simulation in [m/s]
+    (T)charU * charL /Re, // physViscosity:     physical kinematic viscosity in [m^2/s]
+    (T)charRho            // physDensity:       physical density in [kg/m^3]
   );
 
   // Print unit converter info
@@ -230,7 +230,6 @@ void setTemporalValues(MyCase& myCase,
     T               distance2Wall = dx / 2.;
     Poiseuille2D<T> poiseuilleU(geometry, 3, maxVelocity, distance2Wall);
     momenta::setVelocity(lattice, geometry.getMaterialIndicator(3), poiseuilleU);
-    // lattice.defineU(geometry, 3, poiseuilleU);
     // Update velocity on GPU
     lattice.setProcessingContext<Array<momenta::FixedVelocityMomentumGeneric::VELOCITY>>(ProcessingContext::Simulation);
   }
