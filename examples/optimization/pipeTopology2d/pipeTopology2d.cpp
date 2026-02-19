@@ -25,23 +25,11 @@
  * In this example, the pipebend optimization benchmark case is implemented,
  * cf. e.g. https://doi.org/10.1016/j.buildenv.2024.112508.
  * For given in- and outlets at the left and at the bottom side of a cavity,
- * the (curved) shape of a pipe has to be found, s.t. either the overall
- * pressure drop or the overall dissipation is minimized.
- *
- * We use adjoint optimization for this. Hence, we implement
- * - a solver class, which implements a (primal or dual) simulation
- * - parameter structures, which keep simulation- and otimization-related parameters
- * - two objective classes, which implement the objective computation (one for
- *   dissipation minimization, one for pressure drop minimization)
+ * the (curved) shape of a pipe has to be found, s.t. either the overall dissipation is minimized.
  *
  * Since, for low Reynolds numbers, leaving the complete design domain open leads to
  * a low dissipation, we penalize the volume of the pipe in order to prevent this.
  * So, we can establish a geometrically meaningful geometry.
- *
- * The values of simulation- and optimization-related parameters are set in the
- * corresponding file parameters.xml. Feel free to change the Reynolds number and
- * see how the optimal pipe shape changes. This may of course necessitate adjustments
- * of e.g. the resolution.
  */
 
 // Disable SIMD for ADf
@@ -53,18 +41,24 @@ using namespace olb;
 using namespace olb::names;
 using namespace olb::opti;
 
+// Define the structure of the case
 using MyCase = Case<
   NavierStokes, Lattice<double,descriptors::PorousD2Q9Descriptor>
 >;
+
+// Define the optimization problem to specify the optimality system
+using PipeTopology = StationaryOptimalitySystem<
+  functors::AddF<functors::AddF<functors::DissipationF,functors::PorousDissipationF>,  // Objective functional: Dissipation +
+                 functors::TikhonovRegularizationF<descriptors::POROSITY>>,            //                       Volume penalization
+  PorousBGKdynamics<MyCase::value_t,MyCase::descriptor_t>,                             // Primal dynamics
+  descriptors::POROSITY                                                                // Controlled field
+>;
+
 using MyOptiCase = OptiCaseAdjoint<
   Controlled, MyCase,
-  Adjoint, MyCase
+  Adjoint, MyCase,
+  Optimality, PipeTopology
 >;
-using DYNAMICS = PorousBGKdynamics<MyCase::value_t,MyCase::descriptor_t>;
-using ControlledField = descriptors::POROSITY;
-using ObjectiveF = functors::AddF<functors::AddF<functors::DissipationF,
-                                                 functors::PorousDissipationF>,
-                                  functors::TikhonovRegularizationF<ControlledField>>;
 
 auto createMesh(MyCase::ParametersD& parameters) {
   using T = MyCase::value_t;
@@ -153,7 +147,7 @@ void prepareLattice(MyCase& myCase) {
 
   // define dynamics and bc
   auto bulkIndicator = superGeometry.getMaterialIndicator({1,3,4,6,7,8});
-  dynamics::set<DYNAMICS>(sLattice, bulkIndicator);
+  dynamics::set<PipeTopology::dynamics_t>(sLattice, bulkIndicator);
   boundary::set<boundary::BounceBack>(sLattice, superGeometry, 2);
   boundary::set<boundary::InterpolatedVelocity>(sLattice, superGeometry, 3);
   boundary::set<boundary::InterpolatedPressure>(sLattice, superGeometry, 4);
@@ -255,12 +249,12 @@ void setInitialControl(MyOptiCase& optiCase) {
   auto& parameters = controlledCase.getParameters();
 
   // Intialize controlled field in superLattice
+  OstreamManager clout(std::cout, "setInitialControl");
   T porosity = projection::permeabilityToPorosity(parameters.get<parameters::INITIAL_CONTROL_SCALAR>(), converter);
-  std::cout << "POROSITY: " << porosity << std::endl;
-  AnalyticalConst2D<T,T> controls(porosity);
-  fields::set<ControlledField>(lattice, geometry.getMaterialIndicator({6}), controls);
+  clout << "Initial value of the controlled porosity: " << porosity << std::endl;
+  fields::set<PipeTopology::controls_t>(lattice, geometry.getMaterialIndicator({6}), porosity);
   control.template setProjection<projection::Sigmoid<T>>();
-  control.template set<ControlledField>(geometry, 6, lattice);
+  control.template set<PipeTopology::controls_t>(geometry, 6, lattice);
 }
 
 void prepareAdjointLattice(MyOptiCase& optiCase) {
@@ -271,118 +265,66 @@ void prepareAdjointLattice(MyOptiCase& optiCase) {
   adjointLattice.setUnitConverter(controlledLattice.getUnitConverter());
 
   // Define dual dynamics
-  dynamics::set<DualPorousBGKDynamics>(adjointLattice, geometry.getMaterialIndicator({1,6,7,8}));
+  dynamics::set<olb::Dual<PipeTopology::dynamics_t>>(adjointLattice, geometry.getMaterialIndicator({1,6,7,8}));
   boundary::set<boundary::BounceBack>(adjointLattice, geometry.getMaterialIndicator({2,3,4}));
   adjointLattice.template setParameter<descriptors::OMEGA>(adjointLattice.getUnitConverter().getLatticeRelaxationFrequency());
+  adjointLattice.revertStreaming();
 }
 
 void setAdjointInitialValues(MyOptiCase& optiCase) {
   auto& adjointCase = optiCase.getCase(Adjoint{});
   auto& adjointLattice = adjointCase.getLattice(NavierStokes{});
   auto& controlledLattice = optiCase.getCase(Controlled{}).getLattice(NavierStokes{});
-  auto& converter = adjointLattice.getUnitConverter();
-  // Dissipation (6) or pressure drop (7,8)
   auto objectiveDomain = optiCase.getCase(Adjoint{}).getGeometry().getMaterialIndicator({6});
-  //auto objectiveDomain = optiCase.getCase(Adjoint{}).getGeometry().getMaterialIndicator({7,8});
+  auto& optimalitySystem = optiCase.get(Optimality{});
 
   setInitialValues(adjointCase);
-
-  auto objectiveDerivativeO = makeWriteFunctorO<functors::DerivativeF<ObjectiveF, descriptors::POPULATION,DYNAMICS>,
-                                                opti::DJDF>(controlledLattice);
-  objectiveDerivativeO->restrictTo(objectiveDomain);
-  objectiveDerivativeO->template setParameter<descriptors::OMEGA>(converter.getLatticeRelaxationFrequency());
-  objectiveDerivativeO->template setParameter<descriptors::DT>(converter.getPhysDeltaT());
-  objectiveDerivativeO->template setParameter<descriptors::PHYS_VISCOSITY>(converter.getPhysViscosity());
-  objectiveDerivativeO->template setParameter<descriptors::VISCOSITY>(converter.getLatticeViscosity());
-  objectiveDerivativeO->template setParameter<descriptors::CONVERSION_VELOCITY>(converter.getConversionFactorVelocity());
-  objectiveDerivativeO->template setParameter<descriptors::DX>(converter.getPhysDeltaX());
-  objectiveDerivativeO->apply();
-
-  // Write primal population in dedicated fields
-  writeFunctorTo<functors::PopulationF,opti::F>(controlledLattice,
-                                                optiCase.getCase(Controlled{}).getGeometry().getMaterialIndicator({6,7,8}));
-
-  // Provide fields required by the dual collision operator
-  copyFields<ControlledField,ControlledField>(controlledLattice, adjointLattice);
-  copyFields<opti::F,opti::F>(controlledLattice, adjointLattice);
-  copyFields<opti::DJDF,opti::DJDF>(controlledLattice, adjointLattice);
+  optimalitySystem.initializeAdjointProblem(adjointLattice, controlledLattice, objectiveDomain);
 }
 
 void applyControl(MyOptiCase& optiCase) {
   auto& controlledCase = optiCase.getCase(Controlled{});
   auto& lattice = controlledCase.getLattice(NavierStokes{});
 
-  optiCase.getController().template setUpdatedControlsOnField<ControlledField>(lattice);
-  lattice.template setProcessingContext<Array<ControlledField>>(ProcessingContext::Simulation);
+  optiCase.getController().template setUpdatedControlsOnField<PipeTopology::controls_t>(lattice);
+  lattice.template setProcessingContext<Array<PipeTopology::controls_t>>(ProcessingContext::Simulation);
 }
 
-MyCase::value_t objectiveF(MyOptiCase& optiCase) {
+MyCase::value_t computeObjective(MyOptiCase& optiCase) {
   auto& controlledLattice = optiCase.getCase(Controlled{}).getLattice(NavierStokes{});
   auto& converter = controlledLattice.getUnitConverter();
-  // Dissipation (6) or pressure drop (7,8)
   auto objectiveDomain = optiCase.getCase(Controlled{}).getGeometry().getMaterialIndicator({6});
-  //auto objectiveDomain = optiCase.getCase(Controlled{}).getGeometry().getMaterialIndicator({7,8});
   auto& parameters = optiCase.getCase(Controlled{}).getParameters();
+  auto& optimalitySystem = optiCase.get(Optimality{});
 
-  auto objectiveO = makeWriteFunctorO<ObjectiveF, opti::J>(controlledLattice);
-  objectiveO->restrictTo(objectiveDomain);
-  objectiveO->template setParameter<descriptors::OMEGA>(converter.getLatticeRelaxationFrequency());
-  objectiveO->template setParameter<descriptors::DT>(converter.getPhysDeltaT());
-  objectiveO->template setParameter<descriptors::PHYS_VISCOSITY>(converter.getPhysViscosity());
-  objectiveO->template setParameter<descriptors::DX>(converter.getPhysDeltaX());
-  objectiveO->template setParameter<descriptors::VISCOSITY>(converter.getLatticeViscosity());
-  objectiveO->template setParameter<descriptors::CONVERSION_VELOCITY>(converter.getConversionFactorVelocity());
-  objectiveO->template setParameter<opti::REG_ALPHA>(parameters.get<parameters::REGULARIZATION_FACTOR>());
-  objectiveO->apply();
+  optimalitySystem.setObjectiveParameters(controlledLattice,
+                                          parameters::OMEGA{}, converter.getLatticeRelaxationFrequency(),
+                                          parameters::DT{}   , converter.getPhysDeltaT(),
+                                          parameters::PHYS_CHAR_VISCOSITY{}, converter.getPhysViscosity(),
+                                          parameters::DX{}, converter.getPhysDeltaX(),
+                                          parameters::LATTICE_VISCOSITY{}, converter.getLatticeViscosity(),
+                                          parameters::CONVERSION_VELOCITY{}, converter.getConversionFactorVelocity(),
+                                          parameters::REG_ALPHA{}, parameters.get<parameters::REGULARIZATION_FACTOR>());
 
-  auto volume_fraction = makeWriteFunctorO<functors::TikhonovRegularizationF<ControlledField>, opti::REGULARIZATION>(controlledLattice);
-  volume_fraction->restrictTo(objectiveDomain);
-  volume_fraction->template setParameter<opti::REG_ALPHA>(1. / 0.25);
-  volume_fraction->apply();
-
-  std::cout << "volume-fraction: " << integrateField<opti::REGULARIZATION>(controlledLattice, objectiveDomain, converter.getPhysDeltaX())[0] << std::endl;
-  return integrateField<opti::J>(controlledLattice, objectiveDomain, converter.getPhysDeltaX())[0];
+  return optimalitySystem.evaluateObjectiveF(controlledLattice, objectiveDomain);
 }
 
-std::vector<MyCase::value_t> derivativeF(MyOptiCase& optiCase) {
+std::vector<MyCase::value_t> computeDerivative(MyOptiCase& optiCase) {
   auto& adjointLattice = optiCase.getCase(Adjoint{}).getLattice(NavierStokes{});
   auto& controlledLattice = optiCase.getCase(Controlled{}).getLattice(NavierStokes{});
   auto& converter = controlledLattice.getUnitConverter();
   auto objectiveDomain = optiCase.getCase(Controlled{}).getGeometry().getMaterialIndicator({6});
-  auto& parameters = optiCase.getCase(Adjoint{}).getParameters();
+  auto& optimalitySystem = optiCase.get(Optimality{});
 
-  // Evaluate optimality condition
-  auto optimalityO = makeWriteFunctorO<functors::OptimalityF<DYNAMICS,ControlledField>,
-                                       opti::SENSITIVITY<ControlledField>>(adjointLattice);
-  optiCase.getController().template setUpdatedProjectionDerivativesOnField<opti::DPROJECTIONDALPHA<ControlledField>>(adjointLattice);
-  adjointLattice.template setProcessingContext<Array<opti::DPROJECTIONDALPHA<ControlledField>>>(ProcessingContext::Simulation);
-  // Compute jacobian of collision operator regarding control variable
-  auto dCDalphaO = makeWriteFunctorO<functors::DerivativeF<functors::CollisionF<DYNAMICS>,ControlledField,DYNAMICS>,
-                                     opti::DCDALPHA<ControlledField>>(controlledLattice);
-  dCDalphaO->template setParameter<descriptors::OMEGA>(converter.getLatticeRelaxationFrequency());
-  dCDalphaO->template setParameter<descriptors::DX>(1.0);
-  dCDalphaO->apply();
-  // Compute objective derivative regarding controlls
-  auto objectiveDerivativeO = makeWriteFunctorO<functors::DerivativeF<ObjectiveF,ControlledField,DYNAMICS>,
-                                                opti::DJDALPHA<ControlledField>>(controlledLattice);
-  objectiveDerivativeO->restrictTo(objectiveDomain);
-  objectiveDerivativeO->template setParameter<descriptors::OMEGA>(converter.getLatticeRelaxationFrequency());
-  objectiveDerivativeO->template setParameter<descriptors::PHYS_VISCOSITY>(converter.getPhysViscosity());
-  objectiveDerivativeO->template setParameter<descriptors::VISCOSITY>(converter.getLatticeViscosity());
-  objectiveDerivativeO->template setParameter<descriptors::CONVERSION_VELOCITY>(converter.getConversionFactorVelocity());
-  objectiveDerivativeO->template setParameter<descriptors::DX>(converter.getPhysDeltaX());
-  objectiveDerivativeO->template setParameter<descriptors::DT>(converter.getPhysDeltaT());
-  objectiveDerivativeO->template setParameter<opti::REG_ALPHA>(parameters.get<parameters::REGULARIZATION_FACTOR>());
-  objectiveDerivativeO->apply();
-  // Jacobian is computed on primal lattice as jacobian is evaluated for primal populations
-  copyFields<opti::DCDALPHA<ControlledField>,opti::DCDALPHA<ControlledField>>(controlledLattice, adjointLattice);
-  copyFields<opti::DJDALPHA<ControlledField>,opti::DJDALPHA<ControlledField>>(controlledLattice, adjointLattice);
-  optimalityO->template setParameter<descriptors::OMEGA>(converter.getLatticeRelaxationFrequency());
-  optimalityO->apply();
+  optiCase.getController().template setUpdatedProjectionDerivativesOnField<opti::DPROJECTIONDALPHA<PipeTopology::controls_t>>(adjointLattice);
+  adjointLattice.template setProcessingContext<Array<opti::DPROJECTIONDALPHA<PipeTopology::controls_t>>>(ProcessingContext::Simulation);
+
+  // Set parameters which are required in the Primal collision
+  optimalitySystem.setPrimalCollisionParameters(controlledLattice,
+                                                descriptors::OMEGA{}, converter.getLatticeRelaxationFrequency());
 
   // Return serial vector containing total derivatives of objective regarding controls
-  adjointLattice.setProcessingContext(ProcessingContext::Evaluation);
-  return getSerializedFromField<opti::SENSITIVITY<ControlledField>>(adjointLattice, optiCase.getController().getDesignDomain<MyCase::descriptor_t>());
+  return optimalitySystem.evaluateOptimalityCondition(adjointLattice, controlledLattice, objectiveDomain);
 }
 
 void getOptiResults(MyOptiCase& optiCase) {
@@ -391,6 +333,7 @@ void getOptiResults(MyOptiCase& optiCase) {
   auto& controlledLattice = optiCase.getCase(Controlled{}).getLattice(NavierStokes{});
   auto& adjointLattice = optiCase.getCase(Adjoint{}).getLattice(NavierStokes{});
   auto& converter = controlledLattice.getUnitConverter();
+  auto objectiveDomain = optiCase.getCase(Controlled{}).getGeometry().getMaterialIndicator({6});
   std::size_t iT = optiCase.getOptimizationStep();
 
   SuperVTMwriter2D<T> vtmWriter("pipeTopology2d");
@@ -415,9 +358,18 @@ void getOptiResults(MyOptiCase& optiCase) {
     adjointLattice.setProcessingContext(ProcessingContext::Evaluation);
     vtmWriter.write(iT);
   }
+
+  // Print current volume-fraction
+  OstreamManager clout(std::cout, "getOptiResult");
+  auto volume_fraction = makeWriteFunctorO<functors::TikhonovRegularizationF<PipeTopology::controls_t>, opti::REGULARIZATION>(controlledLattice);
+  volume_fraction->restrictTo(objectiveDomain);
+  volume_fraction->template setParameter<parameters::REG_ALPHA>(1. / 0.25);
+  volume_fraction->apply();
+  clout << "Current volume-fraction: " << integrateField<opti::REGULARIZATION>(controlledLattice, objectiveDomain, converter.getPhysDeltaX())[0] << std::endl;
+
 }
 
-MyCase::value_t computeObjective(MyOptiCase& optiCase) {
+MyCase::value_t solvePrimalAndComputeObjective(MyOptiCase& optiCase) {
   auto& controlledCase = optiCase.getCase(Controlled{});
   // Reset prior simulation lattice
   controlledCase.resetLattices();
@@ -433,10 +385,10 @@ MyCase::value_t computeObjective(MyOptiCase& optiCase) {
   simulate(controlledCase);
 
   // Compute Objective value from simulation results
-  return objectiveF(optiCase);
+  return computeObjective(optiCase);
 }
 
-std::vector<MyCase::value_t> computeDerivative(MyOptiCase& optiCase) {
+std::vector<MyCase::value_t> solveAdjointAndComputeDerivative(MyOptiCase& optiCase) {
   auto& adjointCase = optiCase.getCase(Adjoint{});
   // Reset prior simulation lattice
   adjointCase.resetLattices();
@@ -452,7 +404,7 @@ std::vector<MyCase::value_t> computeDerivative(MyOptiCase& optiCase) {
   getOptiResults(optiCase);
 
   // Compute Derivative value from simulation results
-  return derivativeF(optiCase);
+  return computeDerivative(optiCase);
 }
 
 int main(int argc, char **argv) {
@@ -472,6 +424,7 @@ int main(int argc, char **argv) {
     myCaseParametersD.set<INITIAL_CONTROL_SCALAR      >(1.5e-5);
     myCaseParametersD.set<REGULARIZATION_FACTOR       >( 0.003);
   }
+  myCaseParametersD.fromCLI(argc, argv);
 
   Mesh mesh = createMesh(myCaseParametersD);
   MyCase myCase(myCaseParametersD, mesh);
@@ -485,9 +438,12 @@ int main(int argc, char **argv) {
   optiCase.setCase<Controlled>(myCase);
   optiCase.setCase<Adjoint>(adjointCase);
 
+  PipeTopology optimalitySystem;
+  optiCase.set<Optimality>(optimalitySystem);
+
   setInitialControl(optiCase);
-  optiCase.setObjective(computeObjective);
-  optiCase.setDerivative(computeDerivative);
+  optiCase.setObjective(solvePrimalAndComputeObjective);
+  optiCase.setDerivative(solveAdjointAndComputeDerivative);
 
   OptimizerLBFGS<MyCase::value_t,std::vector<MyCase::value_t>> optimizer(
     optiCase.getController().size(), 1.e-10, 25

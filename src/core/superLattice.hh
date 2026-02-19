@@ -796,6 +796,15 @@ void SuperLattice<T,DESCRIPTOR>::AndStream()
 }
 
 template<typename T, typename DESCRIPTOR>
+void SuperLattice<T,DESCRIPTOR>::revertStreaming() {
+  auto& load = this->_loadBalancer;
+
+  for (int iC = 0; iC < load.size(); ++iC) {
+    _block[iC]->revertStreaming();
+  }
+}
+
+template<typename T, typename DESCRIPTOR>
 template<typename STAGE>
 void SuperLattice<T,DESCRIPTOR>::executePostProcessors(STAGE stage)
 {

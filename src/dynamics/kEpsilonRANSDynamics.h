@@ -1,6 +1,6 @@
 /*  This file is part of the OpenLB library
  *
- *  Copyright (C) 2025 Fedor Bukreev, Liam Sauterleute
+ *  Copyright (C) 2025 Liam Sauterleute, Fedor Bukreev
  *  E-mail contact: info@openlb.net
  *  The most recent release of OpenLB can be downloaded at
  *  <http://www.openlb.net/>
@@ -29,21 +29,26 @@
 namespace olb {
 
 
-/// Coupling between Navier-Stokes and k-epsilon lattices
+/// Coupling between Navier-Stokes and k-epsilon lattices for standard and RNG k-epsilon
+/// https://www.cfd-online.com/Wiki/RNG_k-epsilon_model
 template<typename T>
-struct RANSKE {
+struct URANSKE{
   static constexpr OperatorScope scope = OperatorScope::PerCellWithParameters;
 
+  struct USE_RNG_MODEL : public descriptors::TYPED_FIELD_BASE<int,1> { };
   struct VISC : public descriptors::FIELD_BASE<1> { };
-  struct RNG : public descriptors::FIELD_BASE<1> { };
+  struct D_T : public descriptors::FIELD_BASE<1> { };
+  struct D_X : public descriptors::FIELD_BASE<1> { };
 
-  using parameters = meta::list<VISC, RNG>;
+  using parameters = meta::list<USE_RNG_MODEL,VISC,D_T,D_X>;
 
   template <typename CELLS, typename PARAMETERS>
   void apply(CELLS& cells, PARAMETERS& parameters) any_platform
    {
     using DESCRIPTOR = typename CELLS::template value_t<names::NavierStokes>::descriptor_t;
     using DESCRIPTOR_KE = typename CELLS::template value_t<names::TurbKineticEnergy>::descriptor_t;
+
+    auto cellNS = cells.template get<names::NavierStokes>();
 
     /// Velocity coupling
     auto u = cells.template get<names::TurbKineticEnergy>().template getField<descriptors::VELOCITY>();
@@ -59,111 +64,125 @@ struct RANSKE {
     T invSigmaE = 0.76923;
     T eta0 = 4.38;
     T beta = 0.012;
+    T kappa = 0.4187;
     T kinVisc = parameters.template get<VISC>();
-    T inv2dx = 1./(2.);
+    T dT = parameters.template get<D_T>();
+    T dX = parameters.template get<D_X>();
     T k = cells.template get<names::TurbKineticEnergy>().computeRho();
     T epsilon = cells.template get<names::DissipationRate>().computeRho();
-    T rng = parameters.template get<RNG>();
+    T porosity = cellNS.template getField<descriptors::POROSITY>();
+    T convVisc = dX*dX/dT;
+    T convK = dX*dX/dT/dT;
+    T convVel = dX/dT;
+    T zero = 0.;
+    bool is_num = true;
 
-    if(epsilon != 0 && k != 0) {
-      T turbVisc = Cmu*k*k/epsilon;
-      T diffK = turbVisc*invSigmaK;
-      T diffE = turbVisc*invSigmaE;
-      if(rng != 0){
-        diffK += kinVisc;
-        diffE += kinVisc;
+
+    T turbVisc = Cmu*k*k/epsilon;
+    if(std::isnan(turbVisc) || std::isinf(turbVisc)) turbVisc = 0;
+    T tau_turb_K = (kinVisc + turbVisc*invSigmaK)/convVisc * descriptors::invCs2<T,DESCRIPTOR_KE>() + 0.5;
+    T tau_turb_E = (kinVisc + turbVisc*invSigmaE)/convVisc * descriptors::invCs2<T,DESCRIPTOR_KE>() + 0.5;
+    T tau_turb_RANS = (kinVisc + turbVisc)/convVisc * descriptors::invCs2<T,DESCRIPTOR>() + 0.5;
+    T tau_mod = (kinVisc + turbVisc)/convVisc * descriptors::invCs2<T,DESCRIPTOR_KE>() + 0.5;
+    auto& cellNSE = cells.template get<names::NavierStokes>();
+    T piNeqNormSqr= lbm<DESCRIPTOR>::computePiNeqNormSqr(cellNSE);
+    T termS = util::sqrt(2.*piNeqNormSqr) * 1./(2.*tau_mod)*descriptors::invCs2<T,DESCRIPTOR_KE>();
+    //cells.template get<names::DissipationRate>().template setField<descriptors::SCALAR>(termS/dT);
+    T turbKinEnergyProduction = turbVisc/convVisc*termS*termS;
+    T eta = termS/dT * k / epsilon;
+
+    const int useRNGModel = parameters.template get<USE_RNG_MODEL>();
+    if(useRNGModel) C2 += Cmu*eta*eta*eta*(1. - eta/eta0)/(1. + beta*eta*eta*eta);
+
+    /// Source Terms
+    T sourceK = turbKinEnergyProduction*convK - epsilon*dT;
+    T sourceE = C1*epsilon/k*turbKinEnergyProduction*convK - C2*epsilon*epsilon/k*dT;
+
+    if(std::isnan(k) || std::isinf(k)) {is_num = false; k = T(1e-10); cells.template get<names::TurbKineticEnergy>().defineRho(k);}
+    if(std::isnan(epsilon) || std::isinf(epsilon)) {is_num = false; epsilon = T(1e-10); cells.template get<names::DissipationRate>().defineRho(epsilon);}
+    if(std::isnan(sourceK) || std::isinf(sourceK)) sourceK = 0;
+    if(std::isnan(sourceE) || std::isinf(sourceE)) sourceE = 0;
+
+    if(-sourceK < k && -sourceE < epsilon){
+      if( (Cmu * (k+sourceK) * (k+sourceK) / (epsilon+sourceE))/convVisc < 2.0 && is_num && k >= 0 && epsilon >= 0 && turbVisc >= 0 && porosity == T(1)){
+        cells.template get<names::TurbKineticEnergy>().template setField<descriptors::SOURCE>(sourceK);
+        cells.template get<names::DissipationRate>().template setField<descriptors::SOURCE>(sourceE);
+
+        /// Modification of the relaxation times
+        cells.template get<names::NavierStokes>().template setField<descriptors::OMEGA>(T{1} / (tau_turb_RANS));
+        cells.template get<names::TurbKineticEnergy>().template setField<descriptors::OMEGA>(T{1} / (tau_turb_K));
+        cells.template get<names::DissipationRate>().template setField<descriptors::OMEGA>(T{1} / (tau_turb_E));
+        //cells.template get<names::TurbKineticEnergy>().template setField<descriptors::SCALAR>(T(0));
+      }else{
+        cells.template get<names::TurbKineticEnergy>().template setField<descriptors::SOURCE>(T{0});
+        cells.template get<names::DissipationRate>().template setField<descriptors::SOURCE>(T{0});
+        cells.template get<names::NavierStokes>().template setField<descriptors::OMEGA>(T{1} / ((kinVisc/convVisc + 2.)* descriptors::invCs2<T,DESCRIPTOR>() + 0.5));
+        cells.template get<names::TurbKineticEnergy>().template setField<descriptors::OMEGA>(T{1} / ((kinVisc/convVisc + 2.)* descriptors::invCs2<T,DESCRIPTOR_KE>() + 0.5));
+        cells.template get<names::DissipationRate>().template setField<descriptors::OMEGA>(T{1} / ((kinVisc/convVisc + 2.)* descriptors::invCs2<T,DESCRIPTOR_KE>() + 0.5));
+        //cells.template get<names::TurbKineticEnergy>().template setField<descriptors::SCALAR>(T(2000));
       }
-      T tau_turb_K = diffK * descriptors::invCs2<T,DESCRIPTOR_KE>() + 0.5;
-      T tau_turb_E = diffE * descriptors::invCs2<T,DESCRIPTOR_KE>() + 0.5;
-
-      /// Finite Difference for Derivatives
-      auto& cellK = cells.template get<names::TurbKineticEnergy>();
-      auto& cellE = cells.template get<names::DissipationRate>();
-
-      auto u_pXp = cellK.neighbor({1,0,0}).template getField<descriptors::VELOCITY>();
-      auto u_pXm = cellK.neighbor({-1,0,0}).template getField<descriptors::VELOCITY>();
-      auto u_pYp = cellK.neighbor({0,1,0}).template getField<descriptors::VELOCITY>();
-      auto u_pYm = cellK.neighbor({0,-1,0}).template getField<descriptors::VELOCITY>();
-      auto u_pZp = cellK.neighbor({0,0,1}).template getField<descriptors::VELOCITY>();
-      auto u_pZm = cellK.neighbor({0,0,-1}).template getField<descriptors::VELOCITY>();
-
-      T kXp = cellK.neighbor({1,0,0}).template getField<descriptors::K>();
-      T kXm = cellK.neighbor({-1,0,0}).template getField<descriptors::K>();
-      T kYp = cellK.neighbor({0,1,0}).template getField<descriptors::K>();
-      T kYm = cellK.neighbor({0,-1,0}).template getField<descriptors::K>();
-      T kZp = cellK.neighbor({0,0,1}).template getField<descriptors::K>();
-      T kZm = cellK.neighbor({0,0,-1}).template getField<descriptors::K>();
-
-      T eXp = cellE.neighbor({1,0,0}).template getField<descriptors::EPSILON>();
-      T eXm = cellE.neighbor({-1,0,0}).template getField<descriptors::EPSILON>();
-      T eYp = cellE.neighbor({0,1,0}).template getField<descriptors::EPSILON>();
-      T eYm = cellE.neighbor({0,-1,0}).template getField<descriptors::EPSILON>();
-      T eZp = cellE.neighbor({0,0,1}).template getField<descriptors::EPSILON>();
-      T eZm = cellE.neighbor({0,0,-1}).template getField<descriptors::EPSILON>();
-
-      T dxK = 0.5*(kXp - kXm);
-      T dyK = 0.5*(kYp - kYm);
-      T dzK = 0.5*(kZp - kZm);
-
-      T dxE = 0.5*(eXp - eXm);
-      T dyE = 0.5*(eYp - eYm);
-      T dzE = 0.5*(eZp - eZm);
-
-      T dxTurbVisc = 0.5*Cmu*(kXp*kXp/eXp - kXm*kXm/eXm);
-      T dyTurbVisc = 0.5*Cmu*(kYp*kYp/eYp - kYm*kYm/eYm);
-      T dzTurbVisc = 0.5*Cmu*(kZp*kZp/eZp - kZm*kZm/eZm);
-
-      // Velocity Derivatives
-      T UxDx = (u_pXp[0] - u_pXm[0])*inv2dx;
-      T UxDy = (u_pYp[0] - u_pYm[0])*inv2dx;
-      T UxDz = (u_pZp[0] - u_pZm[0])*inv2dx;
-      T UyDx = (u_pXp[1] - u_pXm[1])*inv2dx;
-      T UyDy = (u_pYp[1] - u_pYm[1])*inv2dx;
-      T UyDz = (u_pZp[1] - u_pZm[1])*inv2dx;
-      T UzDx = (u_pXp[2] - u_pXm[2])*inv2dx;
-      T UzDy = (u_pYp[2] - u_pYm[2])*inv2dx;
-      T UzDz = (u_pZp[2] - u_pZm[2])*inv2dx;
-
-      T turbKinEnergyProduction = turbVisc*( (UxDx+UxDx)*UxDx + (UxDy+UyDx)*UxDy + (UxDz+UzDx)*UxDz
-                                           + (UyDx+UxDy)*UyDx + (UyDy+UyDy)*UyDy + (UyDz+UzDy)*UyDz
-                                           + (UzDx+UxDz)*UzDx + (UzDy+UyDz)*UzDy + (UzDz+UzDz)*UzDz
-                                           - 2./3. * (UxDx + UyDy + UzDz) * (UxDx + UyDy + UzDz) );
-
-      /// Modification of C2 for RNG model
-      if(rng != 0){
-        std::vector<T> meanStrain(6, T());
-        meanStrain[0] = UxDx;
-        meanStrain[1] = 0.5*( UxDy + UyDx );
-        meanStrain[2] = 0.5*( UxDz + UzDx );
-        meanStrain[3] = UyDy;
-        meanStrain[4] = 0.5*( UyDz + UzDy );
-        meanStrain[5] = UzDz;
-
-        T meanStrainNormSqr = meanStrain[0]*meanStrain[0] + 2.0*meanStrain[1]*meanStrain[1] + 2.0*meanStrain[2]*meanStrain[2]
-                          + meanStrain[3]*meanStrain[3] + 2.0*meanStrain[4]*meanStrain[4] + meanStrain[5]*meanStrain[5];
-        T weightedMeanStrainNorm = util::sqrt(2.0*meanStrainNormSqr);
-        T eta = weightedMeanStrainNorm * k / epsilon;
-        T C2add = Cmu*eta*eta*eta*(1. - eta/eta0)/(1. + beta*eta*eta*eta);
-        C2 += C2add;
-      }
-
-      /// Source Terms
-      T sourceK = turbKinEnergyProduction - epsilon - 2./3.*k*(UxDx + UyDy + UzDz) + (dxK*dxTurbVisc*invSigmaK + dyK*dyTurbVisc*invSigmaK + dzK*dzTurbVisc*invSigmaK);
-      T sourceE = C1*epsilon/k*turbKinEnergyProduction - C2*epsilon*epsilon/k + (dxE*dxTurbVisc*invSigmaE + dyE*dyTurbVisc*invSigmaE + dzE*dzTurbVisc*invSigmaE);
-      cells.template get<names::TurbKineticEnergy>().template setField<descriptors::SOURCE>(sourceK);
-      cells.template get<names::DissipationRate>().template setField<descriptors::SOURCE>(sourceE);
-
-      T tau_turb_RANS = (turbVisc + kinVisc) * descriptors::invCs2<T,DESCRIPTOR>() + 0.5;
-
-      /// Modification of the relaxation times
-      cells.template get<names::NavierStokes>().template setField<descriptors::OMEGA>(T{1} / (tau_turb_RANS));
-      cells.template get<names::TurbKineticEnergy>().template setField<descriptors::OMEGA>(T{1} / (tau_turb_K));
-      cells.template get<names::DissipationRate>().template setField<descriptors::OMEGA>(T{1} / (tau_turb_E));
+    }else{
+      cells.template get<names::TurbKineticEnergy>().template setField<descriptors::SOURCE>(T{0});
+      cells.template get<names::DissipationRate>().template setField<descriptors::SOURCE>(T{0});
+      cells.template get<names::TurbKineticEnergy>().defineRho(zero);
+      cells.template get<names::DissipationRate>().defineRho(zero);
+      cells.template get<names::NavierStokes>().template setField<descriptors::OMEGA>(T{1} / (kinVisc/convVisc * descriptors::invCs2<T,DESCRIPTOR>() + 0.5));
+      cells.template get<names::TurbKineticEnergy>().template setField<descriptors::OMEGA>(T{1} / (kinVisc/convVisc * descriptors::invCs2<T,DESCRIPTOR_KE>() + 0.5));
+      cells.template get<names::DissipationRate>().template setField<descriptors::OMEGA>(T{1} / (kinVisc/convVisc * descriptors::invCs2<T,DESCRIPTOR_KE>() + 0.5));
+      //cells.template get<names::TurbKineticEnergy>().template setField<descriptors::SCALAR>(T(3000));
     }
+
+    if(porosity >= 0.01 && porosity <= 0.99){
+      cells.template get<names::DissipationRate>().template setField<descriptors::SOURCE>(T{0});
+      if( k < T(0)) k = T(1.e-10);
+      T epsWall = util::pow(Cmu,3./4.)*util::pow(k,3./2.)/kappa/(dX);
+      cells.template get<names::DissipationRate>().defineRho(epsWall);
+      cells.template get<names::DissipationRate>().template setField<descriptors::OMEGA>(T{1} / (kinVisc/convVisc * descriptors::invCs2<T,DESCRIPTOR_KE>() + 0.5)); //turbVisc -> 0 in wandnähe
   }
 
+
+// https://www.afs.enea.it/project/neptunius/docs/fluent/html/th/node99.htm
+// Wall BC for k and eps
+
+    Vector<int,3> normal(0.,0.,0.);
+    bool wall = true;
+    Vector<T,3> wallVel(0.,0.,0.);
+    int NBcount = 0;
+    if(porosity >= T(1)){
+      for(int iPop = 1; iPop < descriptors::D3Q7<>::q; iPop++) {
+        T porosityNB = cellNS.neighbor(descriptors::c<descriptors::D3Q7<>>(iPop)).template getField<descriptors::POROSITY>();
+        if(porosityNB <= T(0.5)) {
+          normal = normal - descriptors::c<descriptors::D3Q7<>>(iPop);
+          auto velNB = cells.template get<names::TurbKineticEnergy>().template getField<descriptors::VELOCITY>();
+          cells.template get<names::NavierStokes>().computeU(velNB.data());
+          wallVel = wallVel + velNB;
+          NBcount++;
+        }
+        // if(porosityNB == T(0.5)) wall = false;
+      }
+      if(util::norm<DESCRIPTOR::d>(normal) != T(0) && wall) {
+        cells.template get<names::DissipationRate>().template setField<descriptors::SOURCE>(T{0});
+        if( k < T(0)) k = T(1.e-10);
+        T epsWall = util::pow(Cmu,3./4.)*util::pow(k,3./2.)/kappa/(dX);
+        cells.template get<names::DissipationRate>().defineRho(epsWall);
+        cells.template get<names::DissipationRate>().template setField<descriptors::OMEGA>(T{1} / (kinVisc/convVisc * descriptors::invCs2<T,DESCRIPTOR>() + 0.5)); //turbVisc -> 0 in wandnähe
+        normal = T(1)/util::norm<DESCRIPTOR::d>(normal) * normal;
+        u = u*convVel;
+        wallVel = wallVel/NBcount;
+        wallVel = wallVel*convVel;
+        auto uTang = u - (u*normal)*normal;
+        auto wallVelTang = wallVel - (wallVel*normal)*normal;
+        //cells.template get<names::TurbKineticEnergy>().template setField<descriptors::SCALAR>(util::norm<DESCRIPTOR::d>(wallVelTang)); //set flag to check if only wall cells are effected
+
+        T tauW = kinVisc*util::norm<DESCRIPTOR::d>(wallVelTang - uTang)/(dX);
+        T turbKinEnergyProductionBC = tauW*tauW/kappa/(dX)/util::sqrt(k);
+        cells.template get<names::TurbKineticEnergy>().template setField<descriptors::SOURCE>(turbKinEnergyProductionBC*dT - epsWall*dT);
+      }
+    }
+   }
 };
 
 }
+
 
 #endif

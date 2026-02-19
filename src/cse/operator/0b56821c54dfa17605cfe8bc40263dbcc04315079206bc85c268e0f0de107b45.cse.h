@@ -1,6 +1,6 @@
 /*  This file is part of the OpenLB library
  *
- *  Copyright (C) 2021-24 Adrian Kummerlaender, Shota Ito
+ *  Copyright (C) Adrian Kummerlaender, Shota Ito
  *  E-mail contact: info@openlb.net
  *  The most recent release of OpenLB can be downloaded at
  *  <http://www.openlb.net/>
@@ -82,3 +82,5 @@ cell[8] = v_P0[8] + x22;
 }
 
 }
+
+// Generation Info: commit=2a9f114ed32e2878e1a64a356eda56d13e508f7d

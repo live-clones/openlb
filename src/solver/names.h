@@ -53,6 +53,8 @@ struct Derivatives : public CASE_TAG {
   const std::string name{"Derivative"};
 };
 
+struct Optimality { };
+
 struct A { };
 struct B { };
 struct C { };

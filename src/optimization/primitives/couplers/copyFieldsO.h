@@ -47,7 +47,10 @@ struct CopyFieldsO {
     auto& cell_from = cells.template get<names::Lattice1>();
     auto& cell_to = cells.template get<names::Lattice2>();
 
-    FieldD<V,DESCRIPTOR,TO> content = cell_from.template getField<FROM>();
+    FieldD<V,DESCRIPTOR,TO> content {};
+    for (int iDim=0; iDim < content.getDim(); ++iDim) {
+      content[iDim] = cell_from.template getFieldComponent<FROM>(iDim);
+    }
     cell_to.template setField<TO>(content);
   }
 };

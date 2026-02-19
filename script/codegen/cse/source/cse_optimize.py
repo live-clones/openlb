@@ -23,10 +23,10 @@
 from sympy import *
 from sympy.codegen.ast import CodeBlock, Assignment
 from sympy.utilities.iterables import numbered_symbols
-from source.cse_utils import SymbolGenerator, CodeBlockPrinter, code, cse
+from cse_utils import SymbolGenerator, CodeBlockPrinter, code, cse
 import re
 
-def optimize_dynamics(inputFile):
+def optimize_dynamics(inputFile, deterministic=False):
     # Load expression tree from ouput file
     with open(inputFile, "r") as file:
         load_expressions = file.read()
@@ -49,7 +49,11 @@ def optimize_dynamics(inputFile):
 
     # Combine all assignments
     assignments = cell_assignments
+    if deterministic:
+        assignments.sort(key=lambda x: str(x.lhs))
     optional_symbols = params_symbols
+    if deterministic:
+        optional_symbols = sorted(optional_symbols, key=lambda x: str(x))
 
     # Current limitations of sympy assignments
     generator = iter(SymbolGenerator('x'))
@@ -73,7 +77,7 @@ def optimize_dynamics(inputFile):
     block = block.subs(optional_substitutions)
 
     # Perform cse
-    block = cse(block, generator)
+    block = cse(block, generator, deterministic=deterministic)
 
     # These are required due to current CSE limititations
     substitutions = [ ]
@@ -96,7 +100,14 @@ def optimize_dynamics(inputFile):
 
     # Detect which optional assignments are required to close the symbolic collision
     optional = [ ]
-    for symbol in block.free_symbols:
+    free_syms = block.free_symbols
+    if deterministic:
+        def natural_sort_key(s):
+            return [int(text) if text.isdigit() else text.lower()
+                    for text in re.split('([0-9]+)', str(s))]
+        free_syms = sorted(free_syms, key=natural_sort_key)
+
+    for symbol in free_syms:
         if symbol in { assgn.lhs for assgn in optional_assignments }:
             for assgn in optional_assignments:
                 if assgn.lhs is symbol:

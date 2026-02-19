@@ -2,6 +2,7 @@
 #define PRIMITIVES_H
 
 #include "singleLatticeO.h"
+#include "case/parameters.h"
 
 #include "functors/latticeF.h"
 #include "functors/physF.h"
@@ -15,6 +16,7 @@
 #include "operators/writeFunctorO.h"
 
 #include "couplers/copyFieldsO.h"
-#include "couplers/optimalityConditionO.h"
+
+#include "concepts.h"
 
 #endif

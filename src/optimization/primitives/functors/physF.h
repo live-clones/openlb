@@ -25,28 +25,26 @@
 #ifndef PHYS_F_H
 #define PHYS_F_H
 
-#include "../concept.h"
-
 namespace olb {
 
 namespace functors {
 
 /// Computes the physical velocity
 struct VelocityF {
-  using parameters = meta::list<descriptors::CONVERSION>;
 
+  using parameters_t = meta::list<parameters::CONVERSION_VELOCITY>;
   using result_t = descriptors::VELOCITY;
-  using fields_t = meta::list<descriptors::VELOCITY>;
+  using fields_t = meta::list<>;
 
   template <typename CELL, typename PARAMETERS>
   auto compute(CELL& cell, PARAMETERS& parameters) any_platform {
     using V = typename CELL::value_t;
     using DESCRIPTOR = typename CELL::descriptor_t;
-    V conversion = parameters.template get<descriptors::CONVERSION>();
+    V conversion = parameters.template get<parameters::CONVERSION_VELOCITY>();
     V u[DESCRIPTOR::d]{0};
     cell.computeU(u);
 
-    FieldD<V,DESCRIPTOR,descriptors::VELOCITY> physU{};
+    FieldD<V,DESCRIPTOR,VelocityF::result_t> physU{};
     for (auto iDim=0; iDim<DESCRIPTOR::d; ++iDim) {
       physU[iDim] = u[iDim] * conversion;
     }
@@ -55,9 +53,10 @@ struct VelocityF {
 };
 
 struct DissipationF {
-  using parameters = meta::list<descriptors::OMEGA,
-                                descriptors::DT,
-                                descriptors::PHYS_VISCOSITY>;
+
+  using parameters_t = meta::list<parameters::OMEGA,
+                                  parameters::DT,
+                                  parameters::PHYS_CHAR_VISCOSITY>;
 
   using result_t = descriptors::DISSIPATION;
   using fields_t = meta::list<>;
@@ -66,9 +65,9 @@ struct DissipationF {
   auto compute(CELL& cell, PARAMETERS& parameters) any_platform {
     using V = typename CELL::value_t;
     using DESCRIPTOR = typename CELL::descriptor_t;
-    const V omega = parameters.template get<descriptors::OMEGA>();
-    const V dt = parameters.template get<descriptors::DT>();
-    const V physViscosity = parameters.template get<descriptors::PHYS_VISCOSITY>();
+    const V omega = parameters.template get<parameters::OMEGA>();
+    const V dt = parameters.template get<parameters::DT>();
+    const V physViscosity = parameters.template get<parameters::PHYS_CHAR_VISCOSITY>();
 
     V rho = 0; V u[DESCRIPTOR::d]{0}; V pi[util::TensorVal<DESCRIPTOR>::n]{0};
     cell.computeAllMomenta(rho, u, pi);
@@ -87,12 +86,11 @@ struct DissipationF {
 };
 
 struct PorousDissipationF {
-  using parameters = meta::list<descriptors::OMEGA,
-                                descriptors::DX,
-                                descriptors::VISCOSITY,
-                                descriptors::CONVERSION_VELOCITY,
-                                descriptors::PHYS_VISCOSITY>;
-
+  using parameters_t = meta::list<parameters::OMEGA,
+                                  parameters::DX,
+                                  parameters::LATTICE_VISCOSITY,
+                                  parameters::CONVERSION_VELOCITY,
+                                  parameters::PHYS_CHAR_VISCOSITY>;
   using result_t = descriptors::POROUS_DISSIPATION;
   using fields_t = meta::list<descriptors::POROSITY>;
 
@@ -101,11 +99,11 @@ struct PorousDissipationF {
     using V = typename CELL::value_t;
     using DESCRIPTOR = typename CELL::descriptor_t;
     const V porosity = cell.template getField<descriptors::POROSITY>();
-    const V omega = parameters.template get<descriptors::OMEGA>();
-    const V dx = parameters.template get<descriptors::DX>();
-    const V viscosity = parameters.template get<descriptors::VISCOSITY>();
-    const V physViscosity = parameters.template get<descriptors::PHYS_VISCOSITY>();
-    const V conversionVelocity = parameters.template get<descriptors::CONVERSION_VELOCITY>();
+    const V omega = parameters.template get<parameters::OMEGA>();
+    const V dx = parameters.template get<parameters::DX>();
+    const V viscosity = parameters.template get<parameters::LATTICE_VISCOSITY>();
+    const V physViscosity = parameters.template get<parameters::PHYS_CHAR_VISCOSITY>();
+    const V conversionVelocity = parameters.template get<parameters::CONVERSION_VELOCITY>();
 
     V u[DESCRIPTOR::d]{0};
     cell.computeU(u);

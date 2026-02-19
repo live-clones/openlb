@@ -22,6 +22,9 @@
 */
 
 #include "olbInit.h"
+#include <exception>
+#include <iostream>
+#include <cstdlib>
 
 namespace olb {
 
@@ -33,6 +36,37 @@ ThreadPool& pool()
   return instance;
 }
 
+}
+
+void terminateHandler() {
+  int rank = singleton::mpi().getRank();
+
+  std::cerr << "[core] (Rank " << rank << "): Terminating..." << std::endl;
+  try {
+    std::exception_ptr p = std::current_exception();
+    if (p) {
+      std::rethrow_exception(p);
+    } else {
+      std::cerr << "Called without active exception." << std::endl;
+    }
+  } catch (const std::exception& e) {
+    std::cerr << "Uncaught exception: " << e.what() << std::endl;
+  } catch (...) {
+    std::cerr << "Unknown uncaught exception." << std::endl;
+  }
+
+  std::cerr << R"(
+This is an unexpected error.
+If you believe this is a bug in OpenLB, please open an issue at:
+  https://gitlab.com/openlb/public
+
+Other support channels:
+  - User Forum:       https://www.openlb.net/forum
+  - Spring School:    https://www.openlb.net/spring-school
+  - Consortium:       https://www.openlb.net/consortium
+)" << std::endl;
+
+  std::abort();
 }
 
 }

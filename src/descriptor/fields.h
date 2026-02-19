@@ -647,22 +647,32 @@ struct SCALAR_FIELD_DERIVED_BY_CONTROLS : public descriptors::FIELD_BASE_CUSTOM_
   static constexpr unsigned size() {
     return DESCRIPTOR::template size<CONTROLS>();
   }
-
-  template <typename T, typename DESCRIPTOR>
-  static constexpr auto getInitialValue() {
-    return Vector<value_type<T>, size<DESCRIPTOR>()>{};
-  }
 };
 
 /// Derivative of control projection regarding control variable
 template <typename CONTROLS>
-struct DPROJECTIONDALPHA : public opti::SCALAR_FIELD_DERIVED_BY_CONTROLS<CONTROLS> { };
+struct DPROJECTIONDALPHA : public opti::SCALAR_FIELD_DERIVED_BY_CONTROLS<CONTROLS> {
+  template <typename T, typename DESCRIPTOR>
+  static constexpr auto getInitialValue() {
+    return Vector<T,SCALAR_FIELD_DERIVED_BY_CONTROLS<CONTROLS>::template size<DESCRIPTOR>()>{1.};
+  }
+};
 /// Total derivative of the objective functional regarding controls
 template <typename CONTROLS>
-struct SENSITIVITY : public opti::SCALAR_FIELD_DERIVED_BY_CONTROLS<CONTROLS> { };
+struct SENSITIVITY : public opti::SCALAR_FIELD_DERIVED_BY_CONTROLS<CONTROLS> {
+  template <typename T, typename DESCRIPTOR>
+  static constexpr auto getInitialValue() {
+    return Vector<T,SCALAR_FIELD_DERIVED_BY_CONTROLS<CONTROLS>::template size<DESCRIPTOR>()>{0.};
+  }
+};
 /// Objective functional derivative regarding optimization controls
 template <typename CONTROLS>
-struct DJDALPHA : public opti::SCALAR_FIELD_DERIVED_BY_CONTROLS<CONTROLS> { };
+struct DJDALPHA : public opti::SCALAR_FIELD_DERIVED_BY_CONTROLS<CONTROLS> {
+  template <typename T, typename DESCRIPTOR>
+  static constexpr auto getInitialValue() {
+    return Vector<T,SCALAR_FIELD_DERIVED_BY_CONTROLS<CONTROLS>::template size<DESCRIPTOR>()>{0.};
+  }
+};
 /// Collision operator derivative regarding optimization controls
 template <typename CONTROLS>
 struct DCDALPHA : public descriptors::FIELD_MATRIX<descriptors::POPULATION,CONTROLS> {

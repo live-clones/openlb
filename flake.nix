@@ -458,17 +458,6 @@
             mako
             sympy
           ]))
-          (pkgs.writeShellScriptBin "generate-code" ''
-            pushd script/codegen/cse
-            make clean
-            make TYPE=dynamics prepare_extraction
-            make TYPE=dynamics extraction
-            make TYPE=dynamics optimize_cse
-            make TYPE=operator prepare_extraction
-            make TYPE=operator extraction
-            make TYPE=operator optimize_cse
-            popd
-          '')
         ];
         shellHook = ''
           export CXX=g++
@@ -480,7 +469,7 @@
 
           export PLATFORMS="CPU_SISD"
 
-          export FEATURES="INSPECT_DYNAMICS EXPORT_CODE_GENERATION_TARGETS"
+          export FEATURES="INSPECT_DYNAMICS"
         '';
       };
     };

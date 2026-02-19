@@ -40,7 +40,7 @@ using namespace olb::names;
 
 using MyCase = Case<
   NavierStokes, Lattice<double, D2Q9<RHO,NABLARHO,FORCE,EXTERNAL_FORCE,TAU_EFF,STATISTIC,SCALAR>>,
-  Component1,  Lattice<double, D2Q9<CONV_POPS,FORCE,SOURCE,VELOCITY,OLD_PHIU,STATISTIC,THETA>>
+  Component1,  Lattice<double, D2Q9<CONV_POPS,FORCE,SOURCE,VELOCITY,OLD_PHIU,STATISTIC>>
 >;
 
 using NSBulkDynamics = MultiPhaseIncompressibleTRTdynamics<MyCase::value_t,MyCase::descriptor_t>;
@@ -214,7 +214,6 @@ void setInitialValues(MyCase& myCase) {
   const T dt = converter.getPhysDeltaT();
   const T C_sigma = converter.getConversionFactorSurfaceTension();
   const T C_p = C_sigma/dx;
-  std::cout << "C_p: " << C_p << std::endl;
   const T diameter_lattice = params.get<parameters::PHYS_CHAR_LENGTH>() / dx;
   const T Nx = params.get<parameters::DOMAIN_EXTENT_LATTICE>()[0];
   const T Ny = params.get<parameters::DOMAIN_EXTENT_LATTICE>()[1];
@@ -227,7 +226,6 @@ void setInitialValues(MyCase& myCase) {
   AnalyticalConst2D<T,T> rhol ( rho_l/C_rho );
   AnalyticalConst2D<T,T> taug ( tau_g );
   AnalyticalConst2D<T,T> taul ( tau_l );
-  AnalyticalConst2D<T,T> theta0 ( theta );
   AnalyticalConst2D<T,T> u0( 0,0 );
 
   auto bulk = geometry.getMaterialIndicator(1);
@@ -253,14 +251,13 @@ void setInitialValues(MyCase& myCase) {
   latticeNS.defineField<descriptors::SCALAR>( all, fringe );
   latticeNS.defineField<descriptors::SCALAR>( wall, two );
   latticeAC.defineField<descriptors::OLD_PHIU>( all, u0 );
-  latticeAC.defineField<descriptors::THETA>( wall, theta0 );
 
   // walls
   std::vector<T> origin = {-2.*dx, dx*0.5};
   std::vector<T> extend = {dx*(Nx+4), dx*(Ny-2)};
   IndicatorCuboid2D<T> wallLocation( extend, origin );
   setBouzidiBoundary(latticeNS, geometry, 2, wallLocation);
-  setBouzidiPhaseField(latticeAC, geometry, 2, wallLocation);
+  setBouzidiPhaseField<IsoPhaseFieldCurvedWall2D>(latticeAC, geometry, 2, wallLocation);
 
   // inlet and outlet
   boundary::set<boundary::IncompressibleZouHeVelocity>(latticeNS, inlet);
@@ -292,6 +289,7 @@ void setInitialValues(MyCase& myCase) {
   latticeNS.setParameter<descriptors::OMEGA>( 1./tau_l );
   latticeAC.setParameter<descriptors::OMEGA>( 1./tau_mobil );
   latticeAC.setParameter<descriptors::INTERFACE_WIDTH>( w );
+  latticeAC.setParameter<descriptors::THETA>( theta );
   latticeAC.setParameter<descriptors::EPSILON>( 1.5*w );
   latticeNS.setParameter<collision::TRT::MAGIC>( (tau_l-T(0.5))*(1.6-0.5) );
 
@@ -361,16 +359,13 @@ void getResults(
     latticeAC.setProcessingContext(ProcessingContext::Evaluation);
     SuperLatticePhysIncPressure2D<T, NSDESCRIPTOR> p_total( latticeNS, converter );
     p_total.getName() = "p_total";
-    SuperLatticeExternalScalarField2D<T, NSDESCRIPTOR, RHO> rho_L( latticeNS );
-    AnalyticalConst2D<T,T> C_rho_( converter.getConversionFactorDensity() );
-    SuperLatticeFfromAnalyticalF2D<T, NSDESCRIPTOR> C_rho_field(C_rho_, latticeNS);
-    SuperIdentity2D<T,T> rho( C_rho_field*rho_L );
+    SuperLatticePhysField2D<T, NSDESCRIPTOR, RHO> rho(latticeNS, converter.getConversionFactorDensity());
     rho.getName() = "rho";
     SuperLatticePhysVelocity2D<T, NSDESCRIPTOR> velocity( latticeNS, converter );
     velocity.getName() = "u";
     SuperLatticeField2D<T, ACDESCRIPTOR, STATISTIC> phi( latticeAC );
     phi.getName() = "phi";
-    SuperLatticeExternalScalarField2D<T, NSDESCRIPTOR, SCALAR> scale( latticeNS );
+    SuperLatticeField2D<T, NSDESCRIPTOR, SCALAR> scale( latticeNS );
     scale.getName() = "scale";
     vtmWriter.addFunctor( scale );
 

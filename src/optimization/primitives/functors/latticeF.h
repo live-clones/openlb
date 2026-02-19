@@ -25,15 +25,13 @@
 #ifndef LATTICE_F_H
 #define LATTICE_F_H
 
-#include "../concept.h"
-
 namespace olb {
 
 namespace functors {
 
 /// Computes the shifted populations
 struct PopulationF {
-  using parameters = meta::list<>;
+  using parameters_t = meta::list<>;
 
   using result_t = descriptors::POPULATION;
   using fields_t = meta::list<descriptors::POPULATION>;
@@ -53,7 +51,7 @@ struct PopulationF {
 
 /// Computes the porosity
 struct PorosityF {
-  using parameters = meta::list<>;
+  using parameters_t = meta::list<>;
 
   using result_t = descriptors::POROSITY;
   using fields_t = meta::list<descriptors::POROSITY>;

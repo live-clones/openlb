@@ -7,7 +7,7 @@
 #include <geometry/geometry2D.hh>
 #include <io/io2D.hh>
 #include <solver/solver.hh>
-#include <optimization/opti2D.hh>
+#include <optimization/opti.hh>
 #include <utilities/utilities2D.hh>
 #include <particles/particles.hh>
 #include <uq/uq.hh>

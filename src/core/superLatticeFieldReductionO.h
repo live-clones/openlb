@@ -311,12 +311,13 @@ public:
 
 // Utility function for integrating fields
 template <typename FIELD, typename T, typename DESCRIPTOR, int TAGS_INDICATOR_ID = 0>
-auto integrateField(SuperLattice<T, DESCRIPTOR>& lattice, auto& domain, T weight = 1.0)
+auto integrateField(SuperLattice<T, DESCRIPTOR>& lattice, auto&& domain, T weight = 1.0)
 {
 
   using Condition = reduction::checkTagIndicator<TAGS_INDICATOR_ID>;
 
-  SuperLatticeFieldReductionO<T, DESCRIPTOR, FIELD, reduction::SumO, Condition> reductionO(lattice, domain);
+  SuperLatticeFieldReductionO<T, DESCRIPTOR, FIELD, reduction::SumO, Condition> reductionO(lattice,
+                                                                                           std::forward<decltype(domain)>(domain));
 
   return reductionO.compute() * util::pow(weight, DESCRIPTOR::d);
 }
@@ -327,7 +328,7 @@ auto computeL2Norm(SuperLattice<T, DESCRIPTOR>& lattice, auto& domain, T dx)
 {
   auto L2F = makeWriteFunctorO<functors::L2F<FIELD>, descriptors::L2_NORM>(lattice);
   L2F->restrictTo(domain);
-  L2F->template setParameter<descriptors::DX>(dx);
+  L2F->template setParameter<parameters::DX>(dx);
   L2F->apply();
   using Condition = reduction::checkTagIndicator<TAGS_INDICATOR_ID>;
   SuperLatticeFieldReductionO<T, DESCRIPTOR, descriptors::L2_NORM, reduction::SumO, Condition> reductionO(lattice,

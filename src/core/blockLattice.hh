@@ -321,7 +321,8 @@ void ConcreteBlockLattice<T,DESCRIPTOR,PLATFORM>::stream()
               ::for_each([&](auto field) {
       auto& population = getField(field.get());
       for (unsigned iPop=0; iPop < DESCRIPTOR::q; ++iPop) {
-        population[iPop].rotate(this->getNeighborDistance(descriptors::c<DESCRIPTOR>(iPop)));
+        population[iPop].rotate(this->getNeighborDistance((!_revertedStreaming) ? (descriptors::c<DESCRIPTOR>(iPop)) :
+                                                                                  (descriptors::c<DESCRIPTOR>(descriptors::opposite<DESCRIPTOR>(iPop))) ));
       }
       // Required for resolving populations in (gather,scatter)_any_fields kernel
       getDataRegistry().refreshDeviceFieldArray(population);
@@ -331,7 +332,8 @@ void ConcreteBlockLattice<T,DESCRIPTOR,PLATFORM>::stream()
               ::for_each([&](auto field) {
       auto& population = getField(field.get());
       for (unsigned iPop=0; iPop < DESCRIPTOR::q; ++iPop) {
-        population[iPop].rotate(this->getNeighborDistance(descriptors::c<DESCRIPTOR>(iPop)));
+        population[iPop].rotate(this->getNeighborDistance((!_revertedStreaming) ? (descriptors::c<DESCRIPTOR>(iPop)) :
+                                                                                  (descriptors::c<DESCRIPTOR>(descriptors::opposite<DESCRIPTOR>(iPop))) ));
       }
     });
   }

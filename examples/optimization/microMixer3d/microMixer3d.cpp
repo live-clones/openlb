@@ -46,7 +46,6 @@ using namespace olb;
 using namespace olb::descriptors;
 using namespace olb::names;
 using namespace olb::opti;
-using namespace olb::parameters;
 
 using MyCase = Case<
   NavierStokes,   Lattice<double,D3Q19<>>,
@@ -68,7 +67,7 @@ struct DIFFERENCE_PERIOD : public descriptors::FIELD_BASE<1> { };
 Mesh<MyCase::value_t,MyCase::d> createMesh(MyCase::ParametersD& params) {
   using T = MyCase::value_t;
   const int nC = util::max(16, 4 * singleton::mpi().getSize());
-  const T dx = params.get<DX>();
+  const T dx = params.get<parameters::DX>();
   STLreader<T> stlReader("microMixer3d.stl", dx, T{1});
   IndicatorLayer3D<T> extendedDomain(stlReader, dx);
   Mesh<T,MyCase::d> mesh(extendedDomain, dx, nC);
@@ -80,7 +79,7 @@ void prepareGeometry(MyCase& myCase) {
   using T = MyCase::value_t;
   auto& geometry = myCase.getGeometry();
   auto& params = myCase.getParameters();
-  const T dx = params.get<DX>();
+  const T dx = params.get<parameters::DX>();
 
   STLreader<T> stlReader("microMixer3d.stl", dx, T{1.});
   geometry.rename(0, 2, stlReader);
@@ -163,7 +162,7 @@ void prepareLattice(MyCase& myCase) {
   sLattice.template setParameter<descriptors::OMEGA>(converter.getLatticeRelaxationFrequency());
   sLatticeAD.template setParameter<descriptors::OMEGA>(
     converter.getLatticeRelaxationFrequencyFromDiffusivity<D3Q7<VELOCITY>>(
-      params.get<DIFFUSION>()));
+      params.get<parameters::DIFFUSION>()));
 
   // define lattice coupling operator
   auto& coupling = myCase.setCouplingOperator(
@@ -205,7 +204,7 @@ void setTemporalValues(MyCase& myCase,
   std::vector<T> maxVelocity(3, T());
   const T distanceToBoundary = converter.getConversionFactorLength() / 2.;
   const T velNS = converter.getCharPhysVelocity();
-  const std::size_t itStartTime = converter.getLatticeTime(params.get<PHYS_START_T>());
+  const std::size_t itStartTime = converter.getLatticeTime(params.get<parameters::PHYS_START_T>());
 
   if (iT <= itStartTime && iT % 50 == 0) {
     SinusStartScale<T,int> startScale(itStartTime, T(1));
@@ -220,12 +219,12 @@ void setTemporalValues(MyCase& myCase,
     momenta::setVelocity(sLattice, geometry.getMaterialIndicator({5}), u5);
   }
 
-  const int itStartPeriodTime = converter.getLatticeTime(params.get<PHYS_START_PERIOD>());
-  const T amplitude = params.get<AMPLITUDE_PHYS_PRESSURE>() / converter.getConversionFactorPressure();
+  const int itStartPeriodTime = converter.getLatticeTime(params.get<parameters::PHYS_START_PERIOD>());
+  const T amplitude = params.get<parameters::AMPLITUDE_PHYS_PRESSURE>() / converter.getConversionFactorPressure();
 
   T rho = 1.;
   if ((iT <= itStartTime + 0.5 * itStartPeriodTime) && (iT > itStartTime)) {
-    Cosinus<T,T> cos(params.get<PHYS_START_PERIOD>(), T(0.5) * amplitude);
+    Cosinus<T,T> cos(params.get<parameters::PHYS_START_PERIOD>(), T(0.5) * amplitude);
     T help[1] = {converter.getPhysTime(iT - itStartTime)};
     T frac[1] = {T()};
     cos(frac, help);
@@ -237,7 +236,7 @@ void setTemporalValues(MyCase& myCase,
 
   if (iT > itStartTime + 0.5 * itStartPeriodTime)
   {
-    CosinusComposite<T,T> cosComp(params.get<PHYS_PERIOD>(), amplitude, params.get<DIFFERENCE_PERIOD>());
+    CosinusComposite<T,T> cosComp(params.get<parameters::PHYS_PERIOD>(), amplitude, params.get<parameters::DIFFERENCE_PERIOD>());
     T help[1] = { converter.getPhysTime(iT - itStartTime - 0.5 * itStartPeriodTime) };
     T frac[1] = { T() };
     cosComp(frac, help);
@@ -291,8 +290,8 @@ void getResults(MyCase& myCase,
 
   const T time = converter.getPhysTime(iT);
   const T dt = converter.getPhysDeltaT();
-  const T physMaxTime = params.get<MAX_PHYS_T>();
-  const T physPeriod = params.get<PHYS_PERIOD>();
+  const T physMaxTime = params.get<parameters::MAX_PHYS_T>();
+  const T physPeriod = params.get<parameters::PHYS_PERIOD>();
 
   if (iT == 0) {
     density.reset(physMaxTime - T(2) * physPeriod, physMaxTime - physPeriod, dt);
@@ -331,7 +330,7 @@ void simulate(MyCase& myCase,
   auto& params = myCase.getParameters();
 
   const std::size_t iTmax = myCase.getLattice(NavierStokes{}).getUnitConverter().getLatticeTime(
-    params.get<MAX_PHYS_T>());
+    params.get<parameters::MAX_PHYS_T>());
   util::Timer<T> timer(iTmax, myCase.getGeometry().getStatistics().getNvoxel());
   timer.start();
 
@@ -359,9 +358,9 @@ void setInitialControl(MyOptiCase& optiCase) {
 void applyControl(MyOptiCase& optiCase) {
   auto& control = optiCase.getController();
   auto& params = optiCase.getCase(Controlled{}).getParameters();
-  params.set<PHYS_PERIOD>(control[0]);
-  params.set<AMPLITUDE_PHYS_PRESSURE>(control[1]);
-  params.set<DIFFERENCE_PERIOD>(control[2]);
+  params.set<parameters::PHYS_PERIOD>(control[0]);
+  params.set<parameters::AMPLITUDE_PHYS_PRESSURE>(control[1]);
+  params.set<parameters::DIFFERENCE_PERIOD>(control[2]);
 
   OstreamManager clout(std::cout, "applyControl");
   clout << "Control: period length = " << std::setprecision (12) << control[0]
@@ -428,7 +427,7 @@ int main(int argc, char* argv[])
     myCaseParameters.set<PHYS_CHAR_DENSITY  >(1000);
     myCaseParameters.set<DIFFUSION          >(1.e-7);  // 1.e-9
     myCaseParameters.set<RESOLUTION         >(7);    // resolution of the hydraulic diameter  // 36
-    myCaseParameters.set<DX>([&](){
+    myCaseParameters.set<parameters::DX>([&](){
       return myCaseParameters.get<PHYS_CHAR_LENGTH>()
            / myCaseParameters.get<RESOLUTION>();
     });

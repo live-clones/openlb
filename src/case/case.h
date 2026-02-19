@@ -185,6 +185,19 @@ public:
 template <typename... MAP>
 using Case = ConcreteCase<meta::map<MAP...>>;
 
+template <typename T>
+struct is_case {
+  static constexpr bool value = false;
+};
+
+template <typename... MAP>
+struct is_case<ConcreteCase<MAP...>> {
+  static constexpr bool value = true;
+};
+
+template <typename T>
+static constexpr bool is_case_v = is_case<T>::value;
+
 }
 
 #endif

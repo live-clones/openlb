@@ -9,7 +9,7 @@
 #include <geometry/geometry2D.h>
 #include <io/io2D.h>
 #include <solver/solver.h>
-#include <optimization/opti2D.h>
+#include <optimization/opti.h>
 #include <utilities/utilities2D.h>
 #include <particles/particles.h>
 #include <fsi/fsi.h>

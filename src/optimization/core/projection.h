@@ -83,7 +83,7 @@ struct ForceFactor : public Base<T> {
 
   template <typename DESCRIPTOR>
   ForceFactor(const UnitConverter<T,DESCRIPTOR>& converter)
-   : scale {converter.getConversionFactorMass() / converter.getConversionFactorForce()}
+   : scale {T(1.0) / converter.getConversionFactorForce()}
   { }
 
   T project(T x) const override { return scale * x; }

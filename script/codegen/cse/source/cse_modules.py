@@ -65,10 +65,8 @@ def extractOperatorExpressions(operator_with_descriptor_type, template, input_f,
     subprocess.call("make EXAMPLE="+executable+";", shell=True, cwd=output_p)
     subprocess.call("./"+executable, shell=True, cwd=output_p)
 
-def executeCSE(expressions, template, result):
+def executeCSE(expressions, template, result, deterministic=False):
     # Generate cse-optimized C++ code from tree and fill template
     template_cse = Template(filename=template)
     with open(result, 'w') as f:
-        f.write(template_cse.render(filename=expressions))
-
-
+        f.write(template_cse.render(filename=expressions, deterministic=deterministic))

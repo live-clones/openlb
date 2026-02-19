@@ -32,7 +32,7 @@ namespace functors {
 /// Execute a collision for given dynamics for a cell
 template <typename DYNAMICS>
 struct CollisionF {
-  using parameters = typename DYNAMICS::parameters;
+  using parameters_t = typename DYNAMICS::parameters;
   using result_t = typename descriptors::POPULATION;
   // Currently, no static knowlegde of accessed field by dynamics is supported which requires to write fields manually in the descriptor
   // if DerivaitveF is used with CollisionF as in optimization examples

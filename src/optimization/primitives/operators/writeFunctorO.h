@@ -26,7 +26,6 @@
 #define WRITE_FUNCTOR_O_H
 
 #include <core/operator.h>
-#include "../concept.h"
 #include "../singleLatticeO.h"
 
 namespace olb {
@@ -34,10 +33,10 @@ namespace olb {
 namespace operators {
 
 /// Operator which evaluate a functor and write its results into the passed field
-template <typename FUNCTOR, typename TO>
+template <concepts::PrimitiveFunctor FUNCTOR, typename TO>
 struct WriteFunctorO {
   static constexpr OperatorScope scope = OperatorScope::PerCellWithParameters;
-  using parameters = FUNCTOR::parameters;
+  using parameters = FUNCTOR::parameters_t;
 
   int getPriority() const {
    return 0;
@@ -66,18 +65,8 @@ void writeFunctorTo(SuperLattice<T,DESCRIPTOR>& lattice) {
 
 template <typename FUNCTOR, typename TO, typename T, typename DESCRIPTOR>
 void writeFunctorTo(SuperLattice<T,DESCRIPTOR>& lattice,
-                           FunctorPtr<SuperIndicatorF<T,DESCRIPTOR::d>>&& indicator) {
+                    FunctorPtr<SuperIndicatorF<T,DESCRIPTOR::d>>&& indicator) {
   auto superLatticeO = makeSingleLatticeO<operators::WriteFunctorO<FUNCTOR,TO>>(lattice);
-  superLatticeO->restrictTo(std::forward<FunctorPtr<SuperIndicatorF<T,DESCRIPTOR::d>>>(indicator));
-  superLatticeO->apply();
-}
-
-template <typename FUNCTOR, typename TO, typename T, typename DESCRIPTOR>
-void writePhysFunctorTo(SuperLattice<T,DESCRIPTOR>& lattice,
-                               FunctorPtr<SuperIndicatorF<T,DESCRIPTOR::d>>&& indicator,
-                               T conversionFactor = 1.0) {
-  auto superLatticeO = makeSingleLatticeO<operators::WriteFunctorO<FUNCTOR,TO>>(lattice);
-  superLatticeO->template setParameter<descriptors::CONVERSION>(conversionFactor);
   superLatticeO->restrictTo(std::forward<FunctorPtr<SuperIndicatorF<T,DESCRIPTOR::d>>>(indicator));
   superLatticeO->apply();
 }

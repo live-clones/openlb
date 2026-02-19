@@ -59,7 +59,7 @@ struct B          : public descriptors::FIELD_BASE<N_COMPONENTS> { };
 struct M          : public descriptors::FIELD_BASE<N_COMPONENTS> { };
 struct T_C        : public descriptors::FIELD_BASE<N_COMPONENTS> { };
 struct P_C        : public descriptors::FIELD_BASE<N_COMPONENTS> { };
-struct OMEGA      : public descriptors::FIELD_BASE<N_COMPONENTS> { };
+struct OMEGA_PER_COMPONENT : public descriptors::FIELD_BASE<N_COMPONENTS> { };
 struct DEVI       : public descriptors::FIELD_BASE<N_COMPONENTS> { };
 
 struct RHO0_L      : public descriptors::FIELD_BASE<N_COMPONENTS> { };
@@ -134,7 +134,7 @@ void prepareLattice( MyCase& myCase )
   const Vector<T,N_COMPONENTS> M = params.get<parameters::M>();
   const Vector<T,N_COMPONENTS> T_c = params.get<parameters::T_C>();
   const Vector<T,N_COMPONENTS> p_c = params.get<parameters::P_C>();
-  const Vector<T,N_COMPONENTS> omega = params.get<parameters::OMEGA>();
+  const Vector<T,N_COMPONENTS> omega = params.get<parameters::OMEGA_PER_COMPONENT>();
   const Vector<T,N_COMPONENTS> devi = params.get<parameters::DEVI>();
 
   Vector<T,N_COMPONENTS> rho0L(0.,0.,0.);
@@ -511,7 +511,7 @@ int main( int argc, char *argv[] )
     myCaseParameters.set<M    >({0.01802, 0.02801, 0.03200});
     myCaseParameters.set<T_C  >({647.3, 126.2, 155.0});
     myCaseParameters.set<P_C  >({22089000, 3400000, 5040000});
-    myCaseParameters.set<parameters::OMEGA>({0.34, 0.0377, 0.025});
+    myCaseParameters.set<OMEGA_PER_COMPONENT>({0.34, 0.0377, 0.025});
     myCaseParameters.set<DEVI >({0.867805648, 0.432399567, 0.41302780});
     //H2OH2O, H2ON2, H2OO2, N2H2O, N2N2, N2O2, O2H2O, O2N2, O2O2
     myCaseParameters.set<ALPHA>(

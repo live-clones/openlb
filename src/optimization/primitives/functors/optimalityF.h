@@ -34,8 +34,8 @@ namespace functors {
 /// the DerivativeF functor.
 template <typename PRIMAL_DYNAMICS, typename CONTROLS>
 struct OptimalityF {
-  using parameters = typename PRIMAL_DYNAMICS::parameters;
 
+  using parameters_t = meta::list<>;
   using result_t = opti::SENSITIVITY<CONTROLS>;
 
   template <typename CELL, typename PARAMETERS>

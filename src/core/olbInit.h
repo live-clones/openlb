@@ -53,6 +53,9 @@ ThreadPool& pool();
 
 }
 
+/// Global exception handler
+void terminateHandler();
+
 }
 
 #endif

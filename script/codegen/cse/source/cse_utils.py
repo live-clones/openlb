@@ -118,7 +118,7 @@ class CodeBlockPrinter(C11CodePrinter):
 def code(expr, symbols={ }):
     return CodeBlockPrinter(symbols).doprint(expr)
 
-def cse(block, generator):
+def cse(block, generator, deterministic=False):
     expand_pos_square = ReplaceOptim(
         lambda e: e.is_Pow and e.exp.is_integer and e.exp == 2,
         lambda p: UnevaluatedExpr(Mul(p.base, p.base)),
@@ -126,5 +126,6 @@ def cse(block, generator):
     custom_opti = cse_main.basic_optimizations + [
         (expand_pos_square, expand_pos_square)
     ]
-    return block.cse(symbols=generator, optimizations=custom_opti, order='none')
 
+    order = 'canonical' if deterministic else 'none'
+    return block.cse(symbols=generator, optimizations=custom_opti, order=order)

@@ -181,6 +181,19 @@ struct PART_RHO : public descriptors::FIELD_BASE<1> {};
 // Optimization
 struct INITIAL_CONTROL_SCALAR : public descriptors::FIELD_BASE<1> { };
 struct REGULARIZATION_FACTOR : public descriptors::FIELD_BASE<1> { };
+struct MAX_OPTI_ITER : public descriptors::FIELD_BASE<1> { };
+struct MAX_STEP_CONTROL_ITER : public descriptors::FIELD_BASE<1> { };
+struct OPTI_CONVERGENCE_TOLERANCE : public descriptors::FIELD_BASE<1> { };
+
+// Primitives
+struct FACTOR : public descriptors::FIELD_BASE<1> { };
+struct OMEGA : public descriptors::FIELD_BASE<1> { };
+struct DT : public descriptors::FIELD_BASE<1> { };
+struct DX : public descriptors::FIELD_BASE<1> { };
+struct LATTICE_VISCOSITY : public descriptors::FIELD_BASE<1> { };
+struct CONVERSION_VELOCITY : public descriptors::FIELD_BASE<1> { };
+struct REG_ALPHA : public descriptors::FIELD_BASE<1> { };
+struct NORMALIZE : public descriptors::FIELD_BASE<1> { };
 
 struct RADIUS : public descriptors::FIELD_BASE<1> { };
 struct CENTER : public descriptors::FIELD_BASE<0,1> { };

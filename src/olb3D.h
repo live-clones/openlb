@@ -10,8 +10,8 @@
 #include <functors/functors3D.h>
 #include <geometry/geometry3D.h>
 #include <io/io3D.h>
-#include <optimization/opti3D.h>
 #include <solver/solver.h>
+#include <optimization/opti.h>
 #include <utilities/utilities3D.h>
 #include <particles/particles.h>
 #include <fsi/ibm/membrane/mem3D.h>

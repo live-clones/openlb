@@ -34,6 +34,8 @@ namespace olb {
  **/
 void initialize(int *argc, char ***argv, bool multiOutput=false, bool verbose=true)
 {
+  std::set_terminate(terminateHandler);
+
 #ifdef PARALLEL_MODE_MPI
   bool mpiInitialized = false;
   if (singleton::mpi().init(argc, argv)) {

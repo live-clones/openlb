@@ -219,6 +219,7 @@ void prepareAdjointLattice(MyOptiCase& optiCase) {
   dynamics::set<DualForcedBGKDynamics>(adjointLattice, geometry.getMaterialIndicator({1}));
   boundary::set<boundary::BounceBack>(adjointLattice, geometry.getMaterialIndicator({2}));
   adjointLattice.template setParameter<descriptors::OMEGA>(adjointLattice.getUnitConverter().getLatticeRelaxationFrequency());
+  adjointLattice.revertStreaming();
 }
 
 void setAdjointInitialValues(MyOptiCase& optiCase) {
@@ -236,15 +237,15 @@ void setAdjointInitialValues(MyOptiCase& optiCase) {
   // Compute source term for the dual simulation
   auto velocityO = makeWriteFunctorO<functors::VelocityF,descriptors::VELOCITY>(referenceLattice);
   velocityO->restrictTo(bulkIndicator);
-  velocityO->template setParameter<descriptors::CONVERSION>(converter.getConversionFactorVelocity());
+  velocityO->template setParameter<parameters::CONVERSION_VELOCITY>(converter.getConversionFactorVelocity());
   velocityO->apply();
 
   auto objectiveDerivativeO = makeWriteFunctorO<functors::DerivativeF<ObjectiveF,descriptors::POPULATION,BulkDynamics>,
                                                 opti::DJDF>(controlledLattice);
   objectiveDerivativeO->restrictTo(bulkIndicator);
-  objectiveDerivativeO->template setParameter<descriptors::CONVERSION>(converter.getConversionFactorVelocity());
-  objectiveDerivativeO->template setParameter<descriptors::NORMALIZE>(computeL2Norm<descriptors::VELOCITY>(referenceLattice, bulkIndicator, converter.getPhysDeltaX()));
-  objectiveDerivativeO->template setParameter<descriptors::DX>(converter.getPhysDeltaX());
+  objectiveDerivativeO->template setParameter<parameters::CONVERSION_VELOCITY>(converter.getConversionFactorVelocity());
+  objectiveDerivativeO->template setParameter<parameters::NORMALIZE>(computeL2Norm<descriptors::VELOCITY>(referenceLattice, bulkIndicator, converter.getPhysDeltaX()));
+  objectiveDerivativeO->template setParameter<parameters::FACTOR>(util::pow(converter.getPhysDeltaX(), 3));
   objectiveDerivativeO->apply();
 
   // Write primal population in dedicated fields
@@ -290,14 +291,15 @@ MyCase::value_t objectiveF(MyOptiCase& optiCase) {
   objectiveO->restrictTo(objectiveDomain);
 
   // Write velocity field in the reference case
-  writePhysFunctorTo<functors::VelocityF,ObjectiveF::Reference>(referenceLattice,
-                                                                objectiveDomain,
-                                                                converter.getConversionFactorVelocity());
+  auto velocityO = makeWriteFunctorO<functors::VelocityF,ObjectiveF::Reference>(referenceLattice);
+  velocityO->template setParameter<parameters::CONVERSION_VELOCITY>(converter.getConversionFactorVelocity());
+  velocityO->restrictTo(objectiveDomain);
+  velocityO->apply();
 
   // Get solution from the reference simulation for the inverse problem
   copyFields<ObjectiveF::Reference,ObjectiveF::Reference>(referenceLattice, controlledLattice);
-  objectiveO->template setParameter<descriptors::CONVERSION>(converter.getConversionFactorVelocity());
-  objectiveO->template setParameter<descriptors::NORMALIZE>(computeL2Norm<ObjectiveF::Reference>(referenceLattice, objectiveDomain, converter.getPhysDeltaX()));
+  objectiveO->template setParameter<parameters::CONVERSION_VELOCITY>(converter.getConversionFactorVelocity());
+  objectiveO->template setParameter<parameters::NORMALIZE>(computeL2Norm<ObjectiveF::Reference>(referenceLattice, objectiveDomain, converter.getPhysDeltaX()));
   objectiveO->apply();
 
   return integrateField<opti::J>(controlledLattice, objectiveDomain, converter.getPhysDeltaX())[0];
@@ -317,11 +319,10 @@ std::vector<MyCase::value_t> derivativeF(MyOptiCase& optiCase) {
   auto dCDalphaO = makeWriteFunctorO<functors::DerivativeF<functors::CollisionF<BulkDynamics>,ControlledField,BulkDynamics>,
                                      opti::DCDALPHA<ControlledField>>(controlledLattice);
   dCDalphaO->template setParameter<descriptors::OMEGA>(converter.getLatticeRelaxationFrequency());
-  dCDalphaO->template setParameter<descriptors::DX>(1.0);
+  dCDalphaO->template setParameter<parameters::FACTOR>(1.0);
   dCDalphaO->apply();
   // Jacobian is computed on primal lattice as jacobian is evaluated for primal populations
   copyFields<opti::DCDALPHA<ControlledField>,opti::DCDALPHA<ControlledField>>(controlledLattice, adjointLattice);
-  optimalityO->template setParameter<descriptors::OMEGA>(converter.getLatticeRelaxationFrequency());
   optimalityO->apply();
 
   // Return serial vector containing total derivatives of objective regarding controls
@@ -413,6 +414,7 @@ int main(int argc, char* argv[])
     myCaseParameters.set<RESOLUTION             >(             11);
     myCaseParameters.set<LATTICE_RELAXATION_TIME>(            0.8);
   }
+  myCaseParameters.fromCLI(argc, argv);
 
   /// Step 3: Create Mesh
   Mesh mesh = createMesh(myCaseParameters);

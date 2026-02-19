@@ -898,8 +898,18 @@ void setBouzidiTemperatureJump(BlockLattice<T,DESCRIPTOR>& block,
   });
 }
 
+// struct Type {
+
+//   template <typename A>
+//   struct NestedType {}
+// };
+
+// setBouzi<Type>
+
+// promiseForNoermal<Tpye::NestedType>
+
 /// Set Bouzidi boundary with contact angle for phase field models on indicated cells of sLattice
-template<typename T, typename DESCRIPTOR, typename OPERATOR = BouzidiPostProcessor>
+template<typename CONTACT_ANGLE_MODEL, typename T, typename DESCRIPTOR, typename OPERATOR = BouzidiPostProcessor>
 void setBouzidiPhaseField(SuperLattice<T, DESCRIPTOR>& sLattice,
                         FunctorPtr<SuperIndicatorF<T,DESCRIPTOR::d>>&& boundaryIndicator,
                         FunctorPtr<SuperIndicatorF<T,DESCRIPTOR::d>>&& bulkIndicator,
@@ -909,7 +919,7 @@ void setBouzidiPhaseField(SuperLattice<T, DESCRIPTOR>& sLattice,
   OstreamManager clout(std::cout, "BouzidiPhaseFieldSetter");
   auto& load = sLattice.getLoadBalancer();
   for (int iC=0; iC < load.size(); ++iC) {
-    setBouzidiPhaseField<T,DESCRIPTOR,OPERATOR>(sLattice.getBlock(iC),
+    setBouzidiPhaseField<CONTACT_ANGLE_MODEL,T,DESCRIPTOR,OPERATOR>(sLattice.getBlock(iC),
                           (bulkIndicator->getBlockIndicatorF(iC)).getBlockGeometry(),
                           boundaryIndicator->getBlockIndicatorF(iC),
                           bulkIndicator->getBlockIndicatorF(iC),
@@ -927,7 +937,7 @@ void setBouzidiPhaseField(SuperLattice<T, DESCRIPTOR>& sLattice,
 
 
 /// Set Bouzidi boundary on material cells of sLattice
-template<typename T, typename DESCRIPTOR, typename OPERATOR = BouzidiPostProcessor>
+template<typename CONTACT_ANGLE_MODEL, typename T, typename DESCRIPTOR, typename OPERATOR = BouzidiPostProcessor>
 void setBouzidiPhaseField(SuperLattice<T, DESCRIPTOR>& sLattice,
                         SuperGeometry<T,DESCRIPTOR::d>& superGeometry,
                         int materialOfSolidObstacle,
@@ -935,7 +945,7 @@ void setBouzidiPhaseField(SuperLattice<T, DESCRIPTOR>& sLattice,
                         std::vector<int> bulkMaterials = std::vector<int>(1,1))
 {
   //Getting the indicators by material numbers and calling the superLattice method via the indicators:
-  setBouzidiPhaseField<T,DESCRIPTOR,OPERATOR>(sLattice,
+  setBouzidiPhaseField<CONTACT_ANGLE_MODEL,T,DESCRIPTOR,OPERATOR>(sLattice,
                       FunctorPtr<SuperIndicatorF<T,DESCRIPTOR::d>>(superGeometry.getMaterialIndicator(materialOfSolidObstacle)),
                       FunctorPtr<SuperIndicatorF<T,DESCRIPTOR::d>>(superGeometry.getMaterialIndicator(std::move(bulkMaterials))),
                       indicatorAnalyticalBoundary);
@@ -943,7 +953,7 @@ void setBouzidiPhaseField(SuperLattice<T, DESCRIPTOR>& sLattice,
 
 
 /// Set Bouzidi boundary on indicated cells of block lattice
-template<typename T, typename DESCRIPTOR, typename OPERATOR = BouzidiPostProcessor>
+template<typename CONTACT_ANGLE_MODEL, typename T, typename DESCRIPTOR, typename OPERATOR = BouzidiPostProcessor>
 void setBouzidiPhaseField(BlockLattice<T,DESCRIPTOR>& block,
                         BlockGeometry<T,DESCRIPTOR::d>& blockGeometry,
                         BlockIndicatorF<T,DESCRIPTOR::d>& boundaryIndicator,
@@ -979,11 +989,11 @@ void setBouzidiPhaseField(BlockLattice<T,DESCRIPTOR>& block,
         if constexpr ( DESCRIPTOR::d == 2 ) {
           block.addPostProcessor(
             typeid(stage::PreCoupling), solidLatticeR,
-            boundaryhelper::promisePostProcessorForNormal<T,DESCRIPTOR,IsoPhaseFieldCurvedWallProcessor2D>(Vector<int,2>(discreteNormal.data() + 1)));
+            boundaryhelper::promisePostProcessorForNormal<T,DESCRIPTOR,CONTACT_ANGLE_MODEL::template Processor>(Vector<int,2>(discreteNormal.data() + 1)));
         } else if constexpr ( DESCRIPTOR::d == 3 ) {
           block.addPostProcessor(
             typeid(stage::PreCoupling), solidLatticeR,
-            boundaryhelper::promisePostProcessorForNormal<T,DESCRIPTOR,IsoPhaseFieldCurvedWallProcessor3D>(Vector<int,3>(discreteNormal.data() + 1)));
+            boundaryhelper::promisePostProcessorForNormal<T,DESCRIPTOR,CONTACT_ANGLE_MODEL::template Processor>(Vector<int,3>(discreteNormal.data() + 1)));
         }
       }
 

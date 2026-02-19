@@ -25,8 +25,6 @@
 #ifndef REGULARIZATION_F_H
 #define REGULARIZATION_F_H
 
-#include "../concept.h"
-
 namespace olb {
 
 namespace functors {
@@ -34,8 +32,7 @@ namespace functors {
 /// Computes the physical velocity
 template <typename CONTROLS>
 struct TikhonovRegularizationF {
-  using parameters = meta::list<opti::REG_ALPHA>;
-
+  using parameters_t = meta::list<parameters::REG_ALPHA>;
   using result_t = opti::REGULARIZATION;
   using fields_t = meta::list<CONTROLS>;
 
@@ -43,7 +40,7 @@ struct TikhonovRegularizationF {
   auto compute(CELL& cell, PARAMETERS& parameters) any_platform {
     using V = typename CELL::value_t;
     using DESCRIPTOR = typename CELL::descriptor_t;
-    const V regAlpha = parameters.template get<opti::REG_ALPHA>();
+    const V regAlpha = parameters.template get<parameters::REG_ALPHA>();
 
     Vector controls = cell.template getField<CONTROLS>();
     FieldD<V,DESCRIPTOR,result_t> regularization{};

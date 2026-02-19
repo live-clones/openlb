@@ -25,17 +25,15 @@
 #ifndef MATH_F_H
 #define MATH_F_H
 
-#include "../concept.h"
-
 namespace olb {
 
 namespace functors {
 
 /// Computes the physical velocity
-template <typename FUNCTOR_1, typename FUNCTOR_2>
+template <concepts::DifferentiableFunctor FUNCTOR_1, concepts::PrimitiveFunctor FUNCTOR_2>
 struct AddF {
-  using parameters = meta::merge<typename FUNCTOR_1::parameters,
-                                 typename FUNCTOR_2::parameters>;
+  using parameters_t = meta::merge<typename FUNCTOR_1::parameters_t,
+                                 typename FUNCTOR_2::parameters_t>;
 
   using result_t = FUNCTOR_1::result_t;
   using fields_t = meta::merge<typename FUNCTOR_1::fields_t,
@@ -52,9 +50,9 @@ struct AddF {
   }
 };
 
-template <typename FUNCTOR, unsigned EXPONENT>
+template <concepts::DifferentiableFunctor FUNCTOR, unsigned EXPONENT>
 struct PowF {
-  using parameters = typename FUNCTOR::parameters;
+  using parameters_t = typename FUNCTOR::parameters_t;
 
   using result_t = FUNCTOR::result_t;
   using fields_t = FUNCTOR::fields_t;

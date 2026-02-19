@@ -883,174 +883,222 @@ struct GeometricPhaseFieldCurvedWallProcessor {
   }
 };
 
-template<typename T, typename DESCRIPTOR, int xNormal, int yNormal>
-struct IsoPhaseFieldCurvedWallProcessor2D {
-  static constexpr OperatorScope scope = OperatorScope::PerCellWithParameters;
-  using parameters = meta::list<descriptors::INTERFACE_WIDTH>;
+struct IsoPhaseFieldCurvedWall2D{
 
-  int getPriority() const {
-    return 1;
-  }
+  template<typename T, typename DESCRIPTOR, int xNormal, int yNormal>
+  struct Processor {
+    static constexpr OperatorScope scope = OperatorScope::PerCellWithParameters;
+    using parameters = meta::list<descriptors::INTERFACE_WIDTH, descriptors::THETA>;
 
-  template <typename CELL, typename PARAMETERS>
-  void apply(CELL& cell, PARAMETERS& parameters) any_platform
-  {
-    auto phi_s = cell.template getField<descriptors::STATISTIC>();
-    auto phi_b = cell.neighbor({-xNormal,-yNormal}).template getFieldComponent<descriptors::STATISTIC>(0);
-    if (phi_b >= T(0.995)) {
-      phi_s[0] = 1.;
+    int getPriority() const {
+      return 1;
     }
-    else if (phi_b <= T(0.005)) {
-      phi_s[0] = 0.;
+
+    template <typename CELL, typename PARAMETERS>
+    void apply(CELL& cell, PARAMETERS& parameters) any_platform
+    {
+      auto phi_s = cell.template getField<descriptors::STATISTIC>();
+      auto phi_b = cell.neighbor({-xNormal,-yNormal}).template getFieldComponent<descriptors::STATISTIC>(0);
+      if (phi_b >= T(0.995)) {
+        phi_s[0] = 1.;
+      }
+      else if (phi_b <= T(0.005)) {
+        phi_s[0] = 0.;
+      }
+      else {
+        auto theta = parameters.template get<descriptors::THETA>();
+        auto w = parameters.template get<descriptors::INTERFACE_WIDTH>();
+        T z_z0 = w/2.*util::atanh(2.*phi_b-1.);
+        T cx = util::cos(-theta)*xNormal-util::sin(-theta)*yNormal;
+        T cy = util::sin(-theta)*xNormal+util::cos(-theta)*yNormal;
+        Vector<T,DESCRIPTOR::d> c{cx,cy};
+        Vector<T,DESCRIPTOR::d> n{T(xNormal),T(yNormal)};
+        c = util::normalize(c);
+        T d = c[0]*n[0]+c[1]*n[1];
+        phi_s[0] = 0.5*(1+util::tanh(2.*(z_z0+d)/w));
+      }
+      cell.template setField<descriptors::STATISTIC>(phi_s);
     }
-    else {
-      auto theta = cell.template getField<descriptors::THETA>();
-      auto w = parameters.template get<descriptors::INTERFACE_WIDTH>();
-      T z_z0 = w/2.*util::atanh(2.*phi_b-1.);
-      T cx = util::cos(-theta)*xNormal-util::sin(-theta)*yNormal;
-      T cy = util::sin(-theta)*xNormal+util::cos(-theta)*yNormal;
-      Vector<T,DESCRIPTOR::d> c{cx,cy};
-      Vector<T,DESCRIPTOR::d> n{T(xNormal),T(yNormal)};
-      c = util::normalize(c);
-      T d = c[0]*n[0]+c[1]*n[1];
-      phi_s[0] = 0.5*(1+util::tanh(2.*(z_z0+d)/w));
-    }
-    cell.template setField<descriptors::STATISTIC>(phi_s);
-  }
+  };
 };
 
-template<typename T, typename DESCRIPTOR, int xNormal, int yNormal, int zNormal>
-struct IsoPhaseFieldCurvedWallProcessor3D {
-  static constexpr OperatorScope scope = OperatorScope::PerCellWithParameters;
-  using parameters = meta::list<descriptors::INTERFACE_WIDTH, descriptors::THETA>;
+struct IsoPhaseFieldCurvedWallLocalTheta2D{
 
-  int getPriority() const {
-    return 1;
-  }
+  template<typename T, typename DESCRIPTOR, int xNormal, int yNormal>
+  struct Processor {
+    static constexpr OperatorScope scope = OperatorScope::PerCellWithParameters;
+    using parameters = meta::list<descriptors::INTERFACE_WIDTH>;
 
-  template <typename CELL, typename PARAMETERS>
-  void apply(CELL& cell, PARAMETERS& parameters) any_platform
-  {
-    auto phi_s = cell.template getField<descriptors::STATISTIC>();
-    auto cell_b = cell.neighbor({-xNormal,-yNormal,-zNormal});
-    auto phi_b = cell_b.template getFieldComponent<descriptors::STATISTIC>(0);
-    auto theta = parameters.template get<descriptors::THETA>();
-    if (phi_b >= T(0.995) || theta == T(0)) {
-      phi_s[0] = T(1);
+    int getPriority() const {
+      return 1;
     }
-    else if (phi_b <= T(0.005)) {
-      phi_s[0] = T(0);
-    }
-    else {
-      auto old_phiU = cell_b.template getField<descriptors::OLD_PHIU>();
-      auto u = cell_b.template getField<descriptors::VELOCITY>();
-      Vector<T,DESCRIPTOR::d> gradPhiFactored{};
-      for (int iPop=0; iPop < DESCRIPTOR::q; ++iPop) {
-        gradPhiFactored += descriptors::c<DESCRIPTOR>(iPop)*cell[iPop];
+
+    template <typename CELL, typename PARAMETERS>
+    void apply(CELL& cell, PARAMETERS& parameters) any_platform
+    {
+      auto phi_s = cell.template getField<descriptors::STATISTIC>();
+      auto phi_b = cell.neighbor({-xNormal,-yNormal}).template getFieldComponent<descriptors::STATISTIC>(0);
+      if (phi_b >= T(0.995)) {
+        phi_s[0] = 1.;
       }
-      gradPhiFactored = gradPhiFactored - 0.5*(phi_b*u + old_phiU);
-
-      auto w = parameters.template get<descriptors::INTERFACE_WIDTH>();
-      T z_z0 = w/2.*util::atanh(2.*phi_b-1.);
-
-      Vector<T,DESCRIPTOR::d> n{T(xNormal),T(yNormal),T(zNormal)};
-      Vector<T,DESCRIPTOR::d> r{};
-      r = crossProduct3D(n, gradPhiFactored);
-      r = util::normalize(r);
-
-      // Compute rotation matrix (Rodrigues' formula)
-      T c = util::cos(-theta);
-      T s = util::sin(-theta);
-      T v = 1 - c;
-
-      Matrix<T, 3, 3> R{};
-      R[0][0] = c + r[0]*r[0]*v;
-      R[0][1] = r[0]*r[1]*v - r[2]*s;
-      R[0][2] = r[0]*r[2]*v + r[1]*s;
-      R[1][0] = r[1]*r[0]*v + r[2]*s;
-      R[1][1] = c + r[1]*r[1]*v;
-      R[1][2] = r[1]*r[2]*v - r[0]*s;
-      R[2][0] = r[2]*r[0]*v - r[1]*s;
-      R[2][1] = r[2]*r[1]*v + r[0]*s;
-      R[2][2] = c + r[2]*r[2]*v;
-
-      // Rotate gradient vector
-      Vector<T, DESCRIPTOR::d> cVec = R * n;
-
-      cVec = util::normalize(cVec);
-      // T d = util::scalarProduct(cVec,n);
-      T d = cVec * n;
-      phi_s[0] = T(0.5)*(T(1)+util::tanh(T(2)*(z_z0+d)/w));
+      else if (phi_b <= T(0.005)) {
+        phi_s[0] = 0.;
+      }
+      else {
+        auto theta = cell.template getField<descriptors::THETA>();
+        auto w = parameters.template get<descriptors::INTERFACE_WIDTH>();
+        T z_z0 = w/2.*util::atanh(2.*phi_b-1.);
+        T cx = util::cos(-theta)*xNormal-util::sin(-theta)*yNormal;
+        T cy = util::sin(-theta)*xNormal+util::cos(-theta)*yNormal;
+        Vector<T,DESCRIPTOR::d> c{cx,cy};
+        Vector<T,DESCRIPTOR::d> n{T(xNormal),T(yNormal)};
+        c = util::normalize(c);
+        T d = c[0]*n[0]+c[1]*n[1];
+        phi_s[0] = 0.5*(1+util::tanh(2.*(z_z0+d)/w));
+      }
+      cell.template setField<descriptors::STATISTIC>(phi_s);
     }
-    cell.template setField<descriptors::STATISTIC>(phi_s);
-  }
+  };
 };
 
-template<typename T, typename DESCRIPTOR, int xNormal, int yNormal, int zNormal>
-struct IsoPhaseFieldCurvedWallLocalThetaProcessor3D {
-  static constexpr OperatorScope scope = OperatorScope::PerCellWithParameters;
-  using parameters = meta::list<descriptors::INTERFACE_WIDTH>;
+struct IsoPhaseFieldCurvedWall3D{
 
-  int getPriority() const {
-    return 1;
-  }
+  template<typename T, typename DESCRIPTOR, int xNormal, int yNormal, int zNormal>
+  struct Processor {
+    static constexpr OperatorScope scope = OperatorScope::PerCellWithParameters;
+    using parameters = meta::list<descriptors::INTERFACE_WIDTH, descriptors::THETA>;
 
-  template <typename CELL, typename PARAMETERS>
-  void apply(CELL& cell, PARAMETERS& parameters) any_platform
-  {
-    auto phi_s = cell.template getField<descriptors::STATISTIC>();
-    auto cell_b = cell.neighbor({-xNormal,-yNormal,-zNormal});
-    auto phi_b = cell_b.template getFieldComponent<descriptors::STATISTIC>(0);
-    if (phi_b >= T(0.995)) {
-      phi_s[0] = T(1);
+    int getPriority() const {
+      return 1;
     }
-    else if (phi_b <= T(0.005)) {
-      phi_s[0] = T(0);
-    }
-    else {
-      auto old_phiU = cell_b.template getField<descriptors::OLD_PHIU>();
-      auto u = cell_b.template getField<descriptors::VELOCITY>();
-      Vector<T,DESCRIPTOR::d> gradPhiFactored{};
-      for (int iPop=0; iPop < DESCRIPTOR::q; ++iPop) {
-        gradPhiFactored += descriptors::c<DESCRIPTOR>(iPop)*cell[iPop];
-      }
-      gradPhiFactored = gradPhiFactored - 0.5*(phi_b*u + old_phiU);
 
+    template <typename CELL, typename PARAMETERS>
+    void apply(CELL& cell, PARAMETERS& parameters) any_platform
+    {
+      auto phi_s = cell.template getField<descriptors::STATISTIC>();
+      auto cell_b = cell.neighbor({-xNormal,-yNormal,-zNormal});
+      auto phi_b = cell_b.template getFieldComponent<descriptors::STATISTIC>(0);
       auto theta = parameters.template get<descriptors::THETA>();
-      auto w = parameters.template get<descriptors::INTERFACE_WIDTH>();
-      T z_z0 = w/2.*util::atanh(2.*phi_b-1.);
+      if (phi_b >= T(0.995) || theta == T(0)) {
+        phi_s[0] = T(1);
+      }
+      else if (phi_b <= T(0.005)) {
+        phi_s[0] = T(0);
+      }
+      else {
+        auto old_phiU = cell_b.template getField<descriptors::OLD_PHIU>();
+        auto u = cell_b.template getField<descriptors::VELOCITY>();
+        Vector<T,DESCRIPTOR::d> gradPhiFactored{};
+        for (int iPop=0; iPop < DESCRIPTOR::q; ++iPop) {
+          gradPhiFactored += descriptors::c<DESCRIPTOR>(iPop)*cell[iPop];
+        }
+        gradPhiFactored = gradPhiFactored - 0.5*(phi_b*u + old_phiU);
 
-      Vector<T,DESCRIPTOR::d> n{T(xNormal),T(yNormal),T(zNormal)};
-      Vector<T,DESCRIPTOR::d> r{};
-      r = crossProduct3D(n, gradPhiFactored);
-      r = util::normalize(r);
+        auto w = parameters.template get<descriptors::INTERFACE_WIDTH>();
+        T z_z0 = w/2.*util::atanh(2.*phi_b-1.);
 
-      // Compute rotation matrix (Rodrigues' formula)
-      T c = util::cos(-theta);
-      T s = util::sin(-theta);
-      T v = 1 - c;
+        Vector<T,DESCRIPTOR::d> n{T(xNormal),T(yNormal),T(zNormal)};
+        Vector<T,DESCRIPTOR::d> r{};
+        r = crossProduct3D(n, gradPhiFactored);
+        r = util::normalize(r);
 
-      Matrix<T, 3, 3> R{};
-      R[0][0] = c + r[0]*r[0]*v;
-      R[0][1] = r[0]*r[1]*v - r[2]*s;
-      R[0][2] = r[0]*r[2]*v + r[1]*s;
-      R[1][0] = r[1]*r[0]*v + r[2]*s;
-      R[1][1] = c + r[1]*r[1]*v;
-      R[1][2] = r[1]*r[2]*v - r[0]*s;
-      R[2][0] = r[2]*r[0]*v - r[1]*s;
-      R[2][1] = r[2]*r[1]*v + r[0]*s;
-      R[2][2] = c + r[2]*r[2]*v;
+        // Compute rotation matrix (Rodrigues' formula)
+        T c = util::cos(-theta);
+        T s = util::sin(-theta);
+        T v = 1 - c;
 
-      // Rotate gradient vector
-      Vector<T, DESCRIPTOR::d> cVec = R * n;
+        Matrix<T, 3, 3> R{};
+        R[0][0] = c + r[0]*r[0]*v;
+        R[0][1] = r[0]*r[1]*v - r[2]*s;
+        R[0][2] = r[0]*r[2]*v + r[1]*s;
+        R[1][0] = r[1]*r[0]*v + r[2]*s;
+        R[1][1] = c + r[1]*r[1]*v;
+        R[1][2] = r[1]*r[2]*v - r[0]*s;
+        R[2][0] = r[2]*r[0]*v - r[1]*s;
+        R[2][1] = r[2]*r[1]*v + r[0]*s;
+        R[2][2] = c + r[2]*r[2]*v;
 
-      cVec = util::normalize(cVec);
-      // T d = util::scalarProduct(cVec,n);
-      T d = cVec * n;
-      phi_s[0] = T(0.5)*(T(1)+util::tanh(T(2)*(z_z0+d)/w));
+        // Rotate gradient vector
+        Vector<T, DESCRIPTOR::d> cVec = R * n;
+
+        cVec = util::normalize(cVec);
+        // T d = util::scalarProduct(cVec,n);
+        T d = cVec * n;
+        phi_s[0] = T(0.5)*(T(1)+util::tanh(T(2)*(z_z0+d)/w));
+      }
+      cell.template setField<descriptors::STATISTIC>(phi_s);
     }
-    cell.template setField<descriptors::STATISTIC>(phi_s);
-  }
+  };
+};
+
+struct IsoPhaseFieldCurvedWallLocalTheta3D{
+
+  template<typename T, typename DESCRIPTOR, int xNormal, int yNormal, int zNormal>
+  struct Processor {
+    static constexpr OperatorScope scope = OperatorScope::PerCellWithParameters;
+    using parameters = meta::list<descriptors::INTERFACE_WIDTH>;
+
+    int getPriority() const {
+      return 1;
+    }
+
+    template <typename CELL, typename PARAMETERS>
+    void apply(CELL& cell, PARAMETERS& parameters) any_platform
+    {
+      auto phi_s = cell.template getField<descriptors::STATISTIC>();
+      auto cell_b = cell.neighbor({-xNormal,-yNormal,-zNormal});
+      auto phi_b = cell_b.template getFieldComponent<descriptors::STATISTIC>(0);
+      if (phi_b >= T(0.995)) {
+        phi_s[0] = T(1);
+      }
+      else if (phi_b <= T(0.005)) {
+        phi_s[0] = T(0);
+      }
+      else {
+        auto old_phiU = cell_b.template getField<descriptors::OLD_PHIU>();
+        auto u = cell_b.template getField<descriptors::VELOCITY>();
+        Vector<T,DESCRIPTOR::d> gradPhiFactored{};
+        for (int iPop=0; iPop < DESCRIPTOR::q; ++iPop) {
+          gradPhiFactored += descriptors::c<DESCRIPTOR>(iPop)*cell[iPop];
+        }
+        gradPhiFactored = gradPhiFactored - 0.5*(phi_b*u + old_phiU);
+
+        auto theta = cell.template getField<descriptors::THETA>();
+        auto w = parameters.template get<descriptors::INTERFACE_WIDTH>();
+        T z_z0 = w/2.*util::atanh(2.*phi_b-1.);
+
+        Vector<T,DESCRIPTOR::d> n{T(xNormal),T(yNormal),T(zNormal)};
+        Vector<T,DESCRIPTOR::d> r{};
+        r = crossProduct3D(n, gradPhiFactored);
+        r = util::normalize(r);
+
+        // Compute rotation matrix (Rodrigues' formula)
+        T c = util::cos(-theta);
+        T s = util::sin(-theta);
+        T v = 1 - c;
+
+        Matrix<T, 3, 3> R{};
+        R[0][0] = c + r[0]*r[0]*v;
+        R[0][1] = r[0]*r[1]*v - r[2]*s;
+        R[0][2] = r[0]*r[2]*v + r[1]*s;
+        R[1][0] = r[1]*r[0]*v + r[2]*s;
+        R[1][1] = c + r[1]*r[1]*v;
+        R[1][2] = r[1]*r[2]*v - r[0]*s;
+        R[2][0] = r[2]*r[0]*v - r[1]*s;
+        R[2][1] = r[2]*r[1]*v + r[0]*s;
+        R[2][2] = c + r[2]*r[2]*v;
+
+        // Rotate gradient vector
+        Vector<T, DESCRIPTOR::d> cVec = R * n;
+
+        cVec = util::normalize(cVec);
+        // T d = util::scalarProduct(cVec,n);
+        T d = cVec * n;
+        phi_s[0] = T(0.5)*(T(1)+util::tanh(T(2)*(z_z0+d)/w));
+      }
+      cell.template setField<descriptors::STATISTIC>(phi_s);
+    }
+  };
 };
 
 struct LinearTauViscosity {

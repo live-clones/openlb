@@ -396,6 +396,8 @@ public:
 
   void collide();
   void AndStream();
+  // Revert streaming direction for adjoint simulations
+  void revertStreaming();
 
   /// Subtract constant offset from the density
   void stripeOffDensityOffset(T offset);

@@ -27,12 +27,17 @@
 #define OPTI_CASE_H
 
 #include "derivatives.h"
+#include "case/case.h"
 
 namespace olb {
 
 namespace opti {
 
 template <typename T> class Controller;
+template <concepts::DifferentiableFunctor OBJECTIVE,
+          typename PRIMAL_DYNAMICS,
+          typename CONTROLLED_FIELD,
+          typename T, typename DESCRIPTOR> class OptimalitySystem;
 
 /// Abstract base class for optimization tasks
 // provides function evaluation and gradient computation
@@ -41,8 +46,7 @@ struct AbstractOptiCase {
   AbstractOptiCase() = default;
 
   virtual T computeObjective(const std::vector<T>& control, unsigned optiStep=0) = 0;
-  virtual void computeDerivatives(
-    const std::vector<T>& control, std::vector<T>& derivatives, unsigned optiStep=0) = 0;
+  virtual std::vector<T> computeDerivatives(const std::vector<T>& control, unsigned optiStep=0) = 0;
   virtual std::vector<T>& getControlVector() = 0;
 };
 
@@ -67,19 +71,20 @@ public:
   // Get value type and descriptor type from the controlled case
   using value_t = ValueTypeFromControlledCase<MAP>;
   using objective_t = std::function<value_t(const std::vector<value_t>&)>;
-  using derivative_t = std::function<void(const std::vector<value_t>&, std::vector<value_t>&)>;
+  using derivative_t = std::function<std::vector<value_t>(const std::vector<value_t>&)>;
 
-  template <typename CASE>
-  using ptr_to_case = CASE*;
+  template <typename COMPONENT>
+  using ptr_to_component = COMPONENT*;
 
   template <typename NAME>
+  requires (is_case_v<typename MAP::template value<NAME>>)
   using case_t = MAP::template value<NAME>;
 
 private:
-  // Cases stored via non-owning pointers accessed by NAME types
+  // Cases and other components stored via non-owning pointers accessed by NAME types
   utilities::TypeIndexedTuple<typename MAP::template map_values<
-    ptr_to_case
-  >> _cases;
+    ptr_to_component
+  >> _components;
 
   // Instace for managing control parameters
   Controller<value_t> _controller;
@@ -94,17 +99,31 @@ public:
   OptiCase() : _derivative(DERIVATIVE::getDerivativeF(*this)) { };
 
   template <typename NAME>
+  void set(typename MAP::template value<NAME>& component) {
+    _components.template set<NAME>(&component);
+  }
+
+  template <typename NAME>
+  auto& get(NAME) {
+    if (_components.template get<NAME>() == nullptr) {
+      throw std::runtime_error("Accessed component was not set.");
+    }
+    return *_components.template get<NAME>();
+  }
+
+  template <typename NAME>
   void setCase(typename MAP::template value<NAME>& caseRef) {
-    _cases.template set<NAME>(&caseRef);
+    static_assert(is_case_v<typename MAP::template value<NAME>>,
+                  "Name does not correspond to a CASE");
+    this->set<NAME>(caseRef);
     caseRef.setName(NAME{}.name);
   }
 
   template <typename NAME>
   auto& getCase(NAME) {
-    if (_cases.template get<NAME>() == nullptr) {
-      throw std::runtime_error("Accessed case was not set.");
-    }
-    return *_cases.template get<NAME>();
+    static_assert(is_case_v<typename MAP::template value<NAME>>,
+                  "Name does not correspond to a CASE");
+    return this->get(NAME{});
   }
 
   auto& getController() {
@@ -134,9 +153,9 @@ public:
   }
   // This overload is required when a free functions is passed
   void setDerivative(std::function<std::vector<value_t>(OptiCase<DERIVATIVE, MAP>&)> f) {
-    _derivative = [this, f](const std::vector<value_t>& control, std::vector<value_t>& derivatives) {
+    _derivative = [this, f](const std::vector<value_t>& control) -> std::vector<value_t> {
       _controller.set(control);
-      derivatives = f(*this);
+      return f(*this);
     };
   }
 
@@ -150,13 +169,12 @@ public:
   }
 
   // Compute derivatives, called by the optimizer
-  void computeDerivatives(const std::vector<value_t>& control,
-                                          std::vector<value_t>& derivative, unsigned optiStep=0) override {
+  std::vector<value_t> computeDerivatives(const std::vector<value_t>& control, unsigned optiStep=0) override {
     if (!_derivative) {
       throw std::runtime_error("Derivative computation is not yet defined. (Define derivative manually, e.g. for OptiCaseAdjoint)");
     }
     _optimizationStep = optiStep;
-    _derivative(control, derivative);
+    return _derivative(control);
   }
 
   // Optimization step
@@ -177,7 +195,7 @@ public:
   using adf_value_t = ValueTypeFromDerivativesCase<MAP>;
   using objective_t = std::function<value_t(const std::vector<value_t>&)>;
   using adf_objective_t = std::function<adf_value_t(const std::vector<adf_value_t>&)>;
-  using derivative_t = std::function<void(const std::vector<value_t>&, std::vector<value_t>&)>;
+  using derivative_t = std::function<std::vector<value_t>(const std::vector<value_t>&)>;
 
   template <typename CASE>
   using ptr_to_case = CASE*;
@@ -294,12 +312,12 @@ public:
   }
 
   // Compute derivatives, called by the optimizer
-  void computeDerivatives(const std::vector<value_t>& control, std::vector<value_t>& derivative, unsigned optiStep=0) override {
+  std::vector<value_t> computeDerivatives(const std::vector<value_t>& control, unsigned optiStep=0) override {
     if (!_derivative) {
       throw std::runtime_error("Derivative computation is not yet defined. (Define derivative manually, e.g. for OptiCaseAdjoint)");
     }
     _optimizationStep = optiStep;
-    _derivative(control, derivative);
+    return _derivative(control);
   }
 
   // Optimization step
@@ -335,12 +353,6 @@ using OptiCaseADfFromDim = OptiCase<
              >
   >
 >;
-
-template <template <typename> typename CASE>
-struct DifferentiableCase {
-  template <typename TYPE> requires (util::is_adf_v<TYPE>)
-  using derive_with = CASE<TYPE>;
-};
 
 // Wrapper class for analytical functions to pass to OptiCase
 template <typename T>

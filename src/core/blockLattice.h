@@ -455,7 +455,8 @@ public:
   LatticeStatistics<T>& getStatistics();
   /// Return a constant handle to the LatticeStatistics object
   LatticeStatistics<T> const& getStatistics() const;
-
+  /// Revert streaming direction for adjoint simulations
+  virtual void revertStreaming() = 0;
 };
 
 /// Implementation of BlockLattice on a concrete PLATFORM
@@ -479,7 +480,8 @@ private:
                     BlockPostProcessorMap<T,DESCRIPTOR,PLATFORM>,
                     std::less<int>>
            > _postProcessors;
-
+  /// Flag to set streaming direction
+  bool _revertedStreaming = false;
 public:
   using value_t = T;
   using descriptor_t = DESCRIPTOR;
@@ -700,8 +702,10 @@ public:
   bool* getBlock(std::size_t iBlock, std::size_t& sizeBlock, bool loadingMode) override;
   /// Reinit population structure after deserialization
   void postLoad() override;
-
-
+  /// Revert streming direction for adjoint simulations
+  void revertStreaming() override {
+    _revertedStreaming = true;
+  }
 };
 
 /// Prevent attempts to introspect CPU_SIMD lattice

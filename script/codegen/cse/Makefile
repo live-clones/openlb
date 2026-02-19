@@ -1,102 +1,23 @@
-###########################################################################
-## Makefile for OpenLB's automatic CSE workflow
-TYPE = operator
+.PHONY: gather check check-dynamics check-operators sync-dynamics-includes sync-operators-includes sync-includes
 
-# Directory containing the target files with dynamics type information
-TARGET_DIR = targets/$(TYPE)
+gather:
+	./gather_targets_from_examples.sh
 
-# List of targets to extract expressions
-EXT_TARGET_LIST = target_$(TYPE).txt
+check-dynamics:
+	./check_dynamics.sh
 
-# Define the directory containing the template for extractions
-EXT_DIR = extractions/$(TYPE)
+check-operators:
+	./check_post_processors.sh
 
-# Define the directory containing the .out files
-EXP_DIR = expressions/$(TYPE)
+check-includes:
+	./check_includes.sh
 
-# Define the directory for dumping the .cse.h files
-CSE_DIR = expressions/$(TYPE)/include
+check: check-dynamics check-operators check-includes
 
-# File for including the generated .cse.h files
-INCLUDE_HEADER := $(CSE_DIR)/generated_cse.h
+sync-dynamics-includes:
+	./sync_dynamics_includes.sh
 
-##########################################################################
-.PHONY: target_list
-target_list:
-	bash unite_targets.sh $(TARGET_DIR) target_tmp.txt $(TYPE);
-	bash format_targets_$(TYPE).sh target_tmp.txt $(EXT_TARGET_LIST) $(TYPE);
-	rm target_tmp.txt;
+sync-operators-includes:
+	./sync_post_processors_includes.sh
 
-##########################################################################
-.PHONY: decompose_targets
-decompose_targets: $(target_list)
-	mkdir -p $(CSE_DIR)/; \
-	bash decompose_targets.sh $(EXT_TARGET_LIST) $(EXT_DIR) $(INCLUDE_HEADER)
-
-EXT_TARGETS := $(wildcard $(EXT_DIR)/*.txt)
-
-EXT_OBJECTS := $(EXT_TARGETS:.txt=.out)
-
-$(EXT_DIR)/%.out: $(EXT_DIR)/%.txt
-	@mkdir -p $(EXT_DIR)/$*;
-	@if [ ! -f "$(EXP_DIR)/$*.out" ]; then \
-		content=$$(cat $<); \
-		cp $(EXT_DIR)/extract.cpp.template $(EXT_DIR)/Makefile $(EXT_DIR)/$*/.; \
-		python extraction.py "$$content" "$(EXT_DIR)/$*/extract.cpp.template" "$<" "$(EXT_DIR)/$*/" "$(EXP_DIR)/" "$(TYPE)"; \
-	else \
-		echo "Skip existing $(EXP_DIR)/$*.out."; \
-	fi
-
-.PHONY: check_targets
-check_targets: $(EXT_OBJECTS)
-	bash check_extraction.sh $(EXT_DIR) $(EXP_DIR)
-
-##########################################################################
-EXP_SOURCES := $(wildcard $(EXP_DIR)/*.out)
-
-CSE_OBJECTS := $(EXP_SOURCES:.out=.cse.h)
-
-$(EXP_DIR)/%.cse.h: $(EXP_DIR)/%.out
-	@mkdir -p $(CSE_DIR);
-	@if [ ! -f "$(CSE_DIR)/$*.cse.h" ]; then \
-		python optimize.py "$<" "$(EXP_DIR)/$(TYPE).cse.template" "$(CSE_DIR)/$*.cse.h"; \
-	else \
-		echo "Skip existing $(CSE_DIR)/$*.cse.h."; \
-	fi
-
-.PHONY: check_optimized
-check_optimized: $(CSE_OBJECTS)
-	bash check_optimized.sh $(EXP_DIR) $(CSE_DIR)
-##########################################################################
-
-prepare_extraction: target_list decompose_targets
-
-extraction: $(EXT_OBJECTS) check_targets
-
-optimize_cse: $(CSE_OBJECTS) check_optimized
-
-##########################################################################
-
-.PHONY: clean-cse
-clean-cse:
-	rm -f $(CSE_DIR)/*.cse.h $(INCLUDE_HEADER)
-
-.PHONY: clean-extraction
-clean-extraction:
-	rm -f $(EXP_DIR)/*.out $(EXT_DIR)/*.txt
-	@for dir in $(EXT_DIR)/*; do\
-		if [ -d "$$dir" ]; then \
-			rm -rf "$$dir"/; \
-		fi \
-	done
-
-.PHONY: clean-targets
-clean-targets:
-	rm -f $(EXT_TARGET_LIST)
-
-.PHONY: clean
-clean: clean-extraction
-
-.PHONY: clean-all
-clean-all: clean-cse clean-extraction clean-targets
-
+sync-includes: sync-dynamics-includes sync-operators-includes
