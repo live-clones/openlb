@@ -66,19 +66,26 @@ void checkPlatform<Platform::GPU_HIP>()
   clout.setMultiOutput(false);
 
 #ifdef PARALLEL_MODE_MPI
-#if defined(MPIX_CUDA_AWARE_SUPPORT) && MPIX_CUDA_AWARE_SUPPORT
-  if (!MPIX_Query_cuda_support()) {
-    clout << "The used MPI Library is not CUDA-aware. Multi-GPU execution will fail." << std::endl;
+#if defined(OMPI_HAVE_MPI_EXT_ROCM) && OMPI_HAVE_MPI_EXT_ROCM
+  bool is_rocm_aware = (bool) MPIX_Query_rocm_support();
+  if (!is_rocm_aware) {
+    clout << "The used MPI Library is not ROCm-aware. Multi-GPU execution will fail." << std::endl;
   }
+#elif defined(OMPI_HAVE_MPI_EXT_ROCM) && !OMPI_HAVE_MPI_EXT_ROCM
+  clout << "The used MPI Library is not HIP-aware. Multi-GPU execution will fail." << std::endl;
+#else
+  const char* mpichGpuEnv = std::getenv("MPICH_GPU_SUPPORT_ENABLED");
+  if (mpichGpuEnv != nullptr && std::string(mpichGpuEnv) == "1") {
+#ifdef OLB_DEBUG
+    clout << "MPICH GPU support is enabled via environment variable." << std::endl;
 #endif
-#if defined(MPIX_CUDA_AWARE_SUPPORT) && !MPIX_CUDA_AWARE_SUPPORT
-  clout << "The used MPI Library is not CUDA-aware. Multi-GPU execution will fail." << std::endl;
-#endif
-#if !defined(MPIX_CUDA_AWARE_SUPPORT)
-  clout << "Unable to check for CUDA-aware MPI support. Multi-GPU execution may fail." << std::endl;
+  } else {
+    clout << "Unable to verify HIP-aware MPI support. (OpenMPI extension missing, and MPICH_GPU_SUPPORT_ENABLED is not set to 1). Multi-GPU execution may fail or bottleneck." << std::endl;
+  }
 #endif
 #endif // PARALLEL_MODE_MPI
 }
+
 
 namespace gpu {
 
@@ -86,7 +93,7 @@ namespace hip {
 
 namespace kernel {
 
-/// CUDA kernel for gathering FIELD data of lattice at indices into buffer
+/// HIP kernel for gathering FIELD data of lattice at indices into buffer
 template <typename CONTEXT, typename FIELD>
 void gather_field(CONTEXT lattice,
                   const CellID* indices, std::size_t nIndices,
@@ -101,7 +108,7 @@ void gather_field(CONTEXT lattice,
   }
 }
 
-/// CUDA kernel for copying FIELD data of sourceLattice at sourceIndices into targetLattice at targetIndices
+/// HIP kernel for copying FIELD data of sourceLattice at sourceIndices into targetLattice at targetIndices
 template <typename SOURCE, typename TARGET, typename FIELD>
 void copy_field(SOURCE sourceLattice, TARGET targetLattice,
                 const CellID* sourceIndices,
@@ -118,7 +125,7 @@ void copy_field(SOURCE sourceLattice, TARGET targetLattice,
   }
 }
 
-/// CUDA kernel for gathering fields at indices into buffer
+/// HIP kernel for gathering fields at indices into buffer
 __global__ void gather_any_fields(AnyDeviceFieldArrayD* fields, std::size_t nFields,
                                   const CellID* indices, std::size_t nIndices,
                                   std::uint8_t* buffer) {
@@ -137,7 +144,7 @@ __global__ void gather_any_fields(AnyDeviceFieldArrayD* fields, std::size_t nFie
   }
 }
 
-/// CUDA kernel for copying sourceFields at sourceIndices to targetFields at targetIndices
+/// HIP kernel for copying sourceFields at sourceIndices to targetFields at targetIndices
 /**
  * source and target fields may be of different block lattices but must represent the
  * same field types in the same sequence
@@ -163,7 +170,7 @@ __global__ void copy_any_fields(AnyDeviceFieldArrayD* sourceFields,
   }
 }
 
-/// CUDA kernel for scattering FIELD data in buffer to indices in lattice
+/// HIP kernel for scattering FIELD data in buffer to indices in lattice
 template <typename CONTEXT, typename FIELD>
 void scatter_field(CONTEXT lattice,
                    const CellID* indices, std::size_t nIndices,
@@ -178,7 +185,7 @@ void scatter_field(CONTEXT lattice,
   }
 }
 
-/// CUDA kernel for scattering fields in buffer to indices in lattice
+/// HIP kernel for scattering fields in buffer to indices in lattice
 __global__ void scatter_any_fields(AnyDeviceFieldArrayD* fields, std::size_t nFields,
                                    const CellID* indices, std::size_t nIndices,
                                    std::uint8_t* buffer) {
@@ -202,7 +209,7 @@ __global__ void scatter_any_fields(AnyDeviceFieldArrayD* fields, std::size_t nFi
 /// Blocking gather of FIELD at given indices into buffer
 template <typename FIELD, typename CONTEXT>
 void gather_field(CONTEXT& lattice, const thrust::device_vector<CellID>& indices, std::uint8_t* buffer) {
-  const auto block_size = 32;
+  const auto block_size = DEFAULT_HIP_WARP_SIZE;
   const auto block_count = (indices.size() + block_size - 1) / block_size;
   kernel::gather_field<CONTEXT,FIELD><<<block_count,block_size>>>(
     lattice,
@@ -217,7 +224,7 @@ void async_gather_field(hipStream_t stream,
                         CONTEXT& lattice,
                         const thrust::device_vector<CellID>& indices,
                         std::uint8_t* buffer) {
-  const auto block_size = 32;
+  const auto block_size = DEFAULT_HIP_WARP_SIZE;
   const auto block_count = (indices.size() + block_size - 1) / block_size;
   kernel::gather_field<CONTEXT,FIELD><<<block_count,block_size,0,stream>>>(
     lattice,
@@ -233,7 +240,7 @@ void async_copy_field(hipStream_t stream,
                       TARGET& targetLattice,
                       const thrust::device_vector<CellID>& sourceIndices,
                       const thrust::device_vector<CellID>& targetIndices) {
-  const auto block_size = 32;
+  const auto block_size = DEFAULT_HIP_WARP_SIZE;
   const auto block_count = (sourceIndices.size() + block_size - 1) / block_size;
   kernel::copy_field<SOURCE,TARGET,FIELD><<<block_count,block_size,0,stream>>>(
     sourceLattice,
@@ -249,7 +256,7 @@ void async_copy_field(hipStream_t stream,
 void gather_any_fields(thrust::device_vector<AnyDeviceFieldArrayD>& fields,
                        const thrust::device_vector<CellID>& indices,
                        std::uint8_t* buffer) {
-  const auto block_size = 32;
+  const auto block_size = DEFAULT_HIP_WARP_SIZE;
   const auto block_count = (indices.size() + block_size - 1) / block_size;
   kernel::gather_any_fields<<<block_count,block_size>>>(
     fields.data().get(), fields.size(),
@@ -263,7 +270,7 @@ void async_gather_any_fields(hipStream_t stream,
                              thrust::device_vector<AnyDeviceFieldArrayD>& fields,
                              const thrust::device_vector<CellID>& indices,
                              std::uint8_t* buffer) {
-  const auto block_size = 32;
+  const auto block_size = DEFAULT_HIP_WARP_SIZE;
   const auto block_count = (indices.size() + block_size - 1) / block_size;
   kernel::gather_any_fields<<<block_count,block_size,0,stream>>>(
     fields.data().get(), fields.size(),
@@ -278,7 +285,7 @@ void async_copy_any_fields(hipStream_t stream,
                            thrust::device_vector<AnyDeviceFieldArrayD>& targetFields,
                            const thrust::device_vector<CellID>& sourceIndices,
                            const thrust::device_vector<CellID>& targetIndices) {
-  const auto block_size = 32;
+  const auto block_size = DEFAULT_HIP_WARP_SIZE;
   const auto block_count = (sourceIndices.size() + block_size - 1) / block_size;
   kernel::copy_any_fields<<<block_count,block_size,0,stream>>>(
     sourceFields.data().get(),  targetFields.data().get(),  sourceFields.size(),
@@ -289,7 +296,7 @@ void async_copy_any_fields(hipStream_t stream,
 /// Blocking scatter of FIELD data in buffer to given indices
 template <typename FIELD, typename CONTEXT>
 void scatter_field(CONTEXT& lattice, const thrust::device_vector<CellID>& indices, std::uint8_t* buffer) {
-  const auto block_size = 32;
+  const auto block_size = DEFAULT_HIP_WARP_SIZE;
   const auto block_count = (indices.size() + block_size - 1) / block_size;
   kernel::scatter_field<CONTEXT,FIELD><<<block_count,block_size>>>(
     lattice,
@@ -304,7 +311,7 @@ void async_scatter_field(hipStream_t stream,
                          CONTEXT& lattice,
                          const thrust::device_vector<CellID>& indices,
                          std::uint8_t* buffer) {
-  const auto block_size = 32;
+  const auto block_size = DEFAULT_HIP_WARP_SIZE;
   const auto block_count = (indices.size() + block_size - 1) / block_size;
   kernel::scatter_field<CONTEXT,FIELD><<<block_count,block_size,0,stream>>>(
     lattice,
@@ -317,7 +324,7 @@ void async_scatter_field(hipStream_t stream,
 void scatter_any_fields(thrust::device_vector<AnyDeviceFieldArrayD>& fields,
                         const thrust::device_vector<CellID>& indices,
                         std::uint8_t* buffer) {
-  const auto block_size = 32;
+  const auto block_size = DEFAULT_HIP_WARP_SIZE;
   const auto block_count = (indices.size() + block_size - 1) / block_size;
   kernel::scatter_any_fields<<<block_count,block_size>>>(
     fields.data().get(), fields.size(),
@@ -331,7 +338,7 @@ void async_scatter_any_fields(hipStream_t stream,
                               thrust::device_vector<AnyDeviceFieldArrayD>& fields,
                               const thrust::device_vector<CellID>& indices,
                               std::uint8_t* buffer) {
-  const auto block_size = 32;
+  const auto block_size = DEFAULT_HIP_WARP_SIZE;
   const auto block_count = (indices.size() + block_size - 1) / block_size;
   kernel::scatter_any_fields<<<block_count,block_size,0,stream>>>(
     fields.data().get(), fields.size(),
@@ -371,7 +378,7 @@ public:
     _onlyPopulationField(fields.size() == 1 && fields[0] == typeid(descriptors::POPULATION)),
     _cells(cells),
     _source(block),
-    _stream(std::make_unique<gpu::hip::device::Stream>(cudaStreamNonBlocking))
+    _stream(std::make_unique<gpu::hip::device::Stream>(hipStreamNonBlocking))
   {
     std::size_t size = 0;
     for (auto& field : fields) {
@@ -585,7 +592,7 @@ public:
 };
 
 
-/// Private implementation of heterogeneous copy task between CPU_* source and GPU_CUDA target
+/// Private implementation of heterogeneous copy task between CPU_* source and GPU_HIP target
 template <typename T, typename DESCRIPTOR, Platform SOURCE>
 class HeterogeneousCopyTaskDataForGpuTarget : public ConcreteHeterogeneousCopyTask {
 private:
@@ -637,7 +644,7 @@ public:
 
 };
 
-/// Private implementation of heterogeneous copy task between GPU_CUDA source and CPU_* target
+/// Private implementation of heterogeneous copy task between GPU_HIP source and CPU_* target
 template <typename T, typename DESCRIPTOR, Platform TARGET>
 class HeterogeneousCopyTaskDataForGpuSource : public ConcreteHeterogeneousCopyTask {
 private:
@@ -767,6 +774,7 @@ ConcreteBlockCommunicator<ConcreteBlockLattice<T,DESCRIPTOR,Platform::GPU_HIP>>:
               neighborhood.getCellsInboundFrom(remoteC),   super.template getBlock<ConcreteBlockLattice<T,DESCRIPTOR,Platform::GPU_HIP>>(_iC),
               neighborhood.getCellsRequestedFrom(remoteC), super.template getBlock<ConcreteBlockLattice<T,DESCRIPTOR,Platform::GPU_HIP>>(loadBalancer.loc(remoteC))));
             break;
+#ifdef PLATFORM_CPU_SIMD
           case Platform::CPU_SIMD:
             // Use manual copy for local GPU-CPU communication due to better performance
             _copyTasks.emplace_back(new HeterogeneousCopyTask<T,DESCRIPTOR,Platform::CPU_SIMD,Platform::GPU_HIP>(
@@ -774,6 +782,9 @@ ConcreteBlockCommunicator<ConcreteBlockLattice<T,DESCRIPTOR,Platform::GPU_HIP>>:
               neighborhood.getCellsInboundFrom(remoteC),   super.template getBlock<ConcreteBlockLattice<T,DESCRIPTOR,Platform::GPU_HIP>>(_iC),
               neighborhood.getCellsRequestedFrom(remoteC), super.template getBlock<ConcreteBlockLattice<T,DESCRIPTOR,Platform::CPU_SIMD>>(loadBalancer.loc(remoteC))));
             break;
+#endif
+
+#ifdef PLATFORM_CPU_SISD
           case Platform::CPU_SISD:
             // Use manual copy for local GPU-CPU communication due to better performance
             _copyTasks.emplace_back(new HeterogeneousCopyTask<T,DESCRIPTOR,Platform::CPU_SISD,Platform::GPU_HIP>(
@@ -781,6 +792,7 @@ ConcreteBlockCommunicator<ConcreteBlockLattice<T,DESCRIPTOR,Platform::GPU_HIP>>:
               neighborhood.getCellsInboundFrom(remoteC),   super.template getBlock<ConcreteBlockLattice<T,DESCRIPTOR,Platform::GPU_HIP>>(_iC),
               neighborhood.getCellsRequestedFrom(remoteC), super.template getBlock<ConcreteBlockLattice<T,DESCRIPTOR,Platform::CPU_SISD>>(loadBalancer.loc(remoteC))));
             break;
+#endif
           default:
             throw std::runtime_error("Invalid remote PLATFORM");
         }

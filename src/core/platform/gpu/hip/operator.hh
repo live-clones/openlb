@@ -41,10 +41,8 @@ struct CollisionSubdomainMask;
 /// Implementations of GPU specifics
 namespace gpu {
 
-/// Implementations of Nvidia CUDA specifics
+/// Implementations of ROCm HIP specifics
 namespace hip {
-
-static constexpr int DEFAULT_HIP_WARP_SIZE = 64;
 
 /// Masked application of DYNAMICS::collide for use in kernel::call_operators
 template <typename T, typename DESCRIPTOR, typename DYNAMICS>
@@ -308,10 +306,10 @@ getFusedCollisionO() {
 }
 
 
-/// CUDA kernels to apply collisions and post processors
+/// HIP kernels to apply collisions and post processors
 namespace kernel {
 
-/// CUDA kernel for applying purely local collision steps
+/// HIP kernel for applying purely local collision steps
 template <typename CONTEXT, typename... OPERATORS>
 void call_operators(CONTEXT lattice, bool* subdomain, OPERATORS... ops) __global__ {
   const CellID iCell = blockIdx.x * blockDim.x + threadIdx.x;
@@ -321,7 +319,7 @@ void call_operators(CONTEXT lattice, bool* subdomain, OPERATORS... ops) __global
   (ops(lattice, iCell) || ... );
 }
 
-/// CUDA kernel for applying purely local collision steps while tracking statistics
+/// HIP kernel for applying purely local collision steps while tracking statistics
 /**
  * Statistics data is reduced by StatisticsPostProcessor
  **/
@@ -347,7 +345,7 @@ void call_operators_with_statistics(CONTEXT lattice, bool* subdomain, OPERATORS.
   }
 }
 
-/// CUDA kernel for applying generic OPERATORS with OperatorScope::PerCell or ListedCollision
+/// HIP kernel for applying generic OPERATORS with OperatorScope::PerCell or ListedCollision
 template <typename CONTEXT, typename... OPERATORS>
 void call_list_operators(CONTEXT lattice,
                          const CellID* indices, std::size_t nIndices,
@@ -359,7 +357,7 @@ void call_list_operators(CONTEXT lattice,
   (ops(lattice, indices[iIndex]) || ... );
 }
 
-/// CUDA kernel for applying ListedCollision
+/// HIP kernel for applying ListedCollision
 /**
  * Statistics data is reduced by StatisticsPostProcessor
  **/
@@ -387,7 +385,7 @@ void call_list_operators_with_statistics(CONTEXT lattice,
   }
 }
 
-/// CUDA kernel for applying UnmaskedCoupling(WithParameters)
+/// HIP kernel for applying UnmaskedCoupling(WithParameters)
 template <typename CONTEXTS, typename... OPERATORS>
 void call_coupling_operators(CONTEXTS lattices, bool* subdomain, OPERATORS... ops) __global__ {
   const CellID iCell = blockIdx.x * blockDim.x + threadIdx.x;
@@ -398,7 +396,7 @@ void call_coupling_operators(CONTEXTS lattices, bool* subdomain, OPERATORS... op
   (ops(lattices, iCell) || ... );
 }
 
-/// CUDA kernel for applying UnmaskedCoupling(WithParameters)
+/// HIP kernel for applying UnmaskedCoupling(WithParameters)
 template <typename CONTEXTS, typename... OPERATORS>
 void call_particle_coupling_operators(CONTEXTS lattices,
                                       std::size_t nParticles,
@@ -411,7 +409,7 @@ void call_particle_coupling_operators(CONTEXTS lattices,
 }
 
 
-/// CUDA kernel for constructing on-device ConcreteDynamics
+/// HIP kernel for constructing on-device ConcreteDynamics
 template <typename T, typename DESCRIPTOR, typename DYNAMICS, typename PARAMETERS=typename DYNAMICS::ParametersD>
 void construct_dynamics(void* target, PARAMETERS* parameters) __global__ {
   new (target) ConcreteDynamics<T,DESCRIPTOR,DYNAMICS>(parameters);
