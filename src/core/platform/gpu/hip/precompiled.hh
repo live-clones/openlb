@@ -24,6 +24,14 @@
 #ifndef CORE_PLATFORM_GPU_HIP_PRECOMPILED_HH
 #define CORE_PLATFORM_GPU_HIP_PRECOMPILED_HH
 
+namespace olb{
+  namespace gpu {
+    namespace hip {
+      static constexpr int DEFAULT_HIP_WARP_SIZE = 64;
+    }
+  }
+}
+
 #include "core/platform/gpu/hip/device.hh"
 #include "core/platform/gpu/hip/column.hh"
 #include "core/platform/gpu/hip/registry.hh"
