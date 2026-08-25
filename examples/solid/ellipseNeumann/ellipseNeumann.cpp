@@ -338,7 +338,7 @@ void prepareLattice(MyCase& myCase) {
   const T kappa = params.get<parameters::KAPPA>();
   const T charLength = params.get<parameters::PHYS_CHAR_LENGTH>();
 
-  constexpr T theta = descriptors::invCs2<T, DESCRIPTOR>();
+  constexpr T theta = T(1) / descriptors::invCs2<T, DESCRIPTOR>();
 
   lattice.setUnitConverter<LinElaUnitConverter<T, DESCRIPTOR>>(
     (T) physDeltaX, // physDeltaX

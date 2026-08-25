@@ -67,7 +67,7 @@ class ForceField2D : public AnalyticalF2D<T, T> {
 
     bool operator()(T output[], const T input[]) override
     {
-      constexpr T theta = invCs2<T, DESCRIPTOR>();
+      constexpr T theta = T(1) / invCs2<T, DESCRIPTOR>();
       auto& lattice = myCase.getLattice(NavierCauchy{});
       const auto& converter = lattice.getUnitConverter();
       T dx = converter.getPhysDeltaX();
@@ -327,7 +327,7 @@ void prepareLattice(MyCase& myCase, ellipse2D& ellipseCase, const int bulkNum = 
   const T kappa = params.get<parameters::KAPPA>();
   const T charLength = params.get<parameters::PHYS_CHAR_LENGTH>();
 
-  constexpr T theta = invCs2<T, NCDESCRIPTOR>();
+  constexpr T theta = T(1) / invCs2<T, NCDESCRIPTOR>();
 
   clout << "physDeltaX=" << physDeltaX << std::endl;
   clout << "physDeltaT=" << physDeltaT << std::endl;

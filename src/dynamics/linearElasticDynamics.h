@@ -69,7 +69,7 @@ struct BoolakeeLinearElasticity final : public dynamics::CustomCollision<
   {
     auto allOmegas = parameters.template get<descriptors::OMEGA_SOLID>();
 
-    const V theta     = descriptors::invCs2<V,DESCRIPTOR>();
+    const V theta     = V(1) / descriptors::invCs2<V,DESCRIPTOR>();
 
     const V omega_11  = allOmegas[0];
     const V omega_d   = allOmegas[1];
@@ -156,11 +156,16 @@ struct BoolakeeLinearElasticity final : public dynamics::CustomCollision<
       m_bared[iPop] = (m[iPop] + bracket[iPop]) / 2.;
     }
 
+    Vector<V, DESCRIPTOR::d> disp = {
+      m_bared[0],
+      m_bared[1]
+    };
+
     cell.template setField<descriptors::BARED_MOMENT_VECTOR>(m_bared);
     cell.template setField<descriptors::MOMENT_VECTOR>(bracket);
 
     // Numerical Displacement for analysis
-    cell.template setField<descriptors::DISP_SOLID>({m_bared[0], m_bared[1]});
+    cell.template setField<descriptors::DISP_SOLID>(disp);
 
     V sigmaxx = -((m[3] + m[4]) / 2. - .25 * (omega_s * m[3] + omega_d * m[4]));
     V sigmaxy = -  m[2] * (1. - omega_11 / 2.);
@@ -169,7 +174,7 @@ struct BoolakeeLinearElasticity final : public dynamics::CustomCollision<
 
     cell.template setField<descriptors::SIGMA_SOLID>({sigmaxx, sigmaxy, sigmayx, sigmayy});
 
-    return {-1, -1};
+    return {1, util::norm<DESCRIPTOR::d>(disp)};
   };
 
   void computeEquilibrium(ConstCell<T,DESCRIPTOR>& cell,
@@ -221,18 +226,7 @@ struct BoolakeeLinearElasticityBoundary final : public dynamics::CustomCollision
   {
     auto allOmegas = parameters.template get<descriptors::OMEGA_SOLID>();
 
-    // dx, dt, theta, mü, lambda, kappa, uChar, epsilon
-    /*
-    const V dx        = magic[0];
-    const V dt        = magic[1];
-    const V mu        = magic[3];
-    const V lambda    = magic[4];
-    const V bulk      = lambda + mu;
-    const V kappa     = magic[5];
-    const V charU     = magic[6];
-    const V epsilon   = magic[7];
-    */
-    const V theta     = descriptors::invCs2<V, DESCRIPTOR>();
+    const V theta     = V(1) / descriptors::invCs2<V, DESCRIPTOR>();
 
     const V omega_11  = allOmegas[0];
     const V omega_s   = allOmegas[1];
@@ -281,9 +275,7 @@ struct BoolakeeLinearElasticityBoundary final : public dynamics::CustomCollision
     // Calculate moments
     V m[DESCRIPTOR::q] = {0., 0., 0., 0., 0., 0., 0., 0.};
     for (int iPop = 0; iPop < DESCRIPTOR::q; ++iPop) {
-      // m[iPop] = V{0.5} * f1[iPop];
       for (int jPop = 0; jPop < DESCRIPTOR::q; ++jPop) {
-        // m[iPop] += descriptors::mSolid<V,DESCRIPTOR>(iPop, jPop) * cell[jPop];
         m[iPop] += MatrixM[iPop][jPop] * cell[jPop];
       }
     }
@@ -343,13 +335,18 @@ struct BoolakeeLinearElasticityBoundary final : public dynamics::CustomCollision
       m_bared[iPop] = (m[iPop] + bracket[iPop]) / 2.;
     }
 
+    Vector<V, DESCRIPTOR::d> disp = {
+      m_bared[0], 
+      m_bared[1]
+    };
+
     auto previous_cell = cell.template getField<descriptors::CURRENT_CELL>();
     cell.template setField<descriptors::CURRENT_CELL>({cell[0], cell[1], cell[2], cell[3], cell[4], cell[5], cell[6], cell[7]});
     cell.template setField<descriptors::PREVIOUS_CELL>({previous_cell[0], previous_cell[1], previous_cell[2], previous_cell[3], previous_cell[4], previous_cell[5], previous_cell[6], previous_cell[7]});
 
     cell.template setField<descriptors::BARED_MOMENT_VECTOR>(m_bared);
     cell.template setField<descriptors::MOMENT_VECTOR>(bracket);
-    cell.template setField<descriptors::DISP_SOLID>({m_bared[0], m_bared[1]});
+    cell.template setField<descriptors::DISP_SOLID>(disp);
 
     // Compute Stress Field in lattice units
     V sigma_xx = -((m[3] + m[4]) / 2. - .25 * (omega_s * m[3] + omega_d * m[4]));
@@ -359,7 +356,7 @@ struct BoolakeeLinearElasticityBoundary final : public dynamics::CustomCollision
 
     cell.template setField<descriptors::SIGMA_SOLID>({sigma_xx, sigma_xy, sigma_yx, sigma_yy});
 
-    return {-1, -1};
+    return {1, util::norm<DESCRIPTOR::d>(disp)};
   };
 
   void computeEquilibrium(ConstCell<T,DESCRIPTOR>& cell,
