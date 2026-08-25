@@ -386,7 +386,7 @@ void prepareLattice(MyCase& myCase) {
   // dx, dt, theta, mü, lambda, kappa, uChar, epsilon
   T magic[8] = {converter.getConversionFactorLength(),
                 converter.getConversionFactorTime(),
-                descriptors::invCs2<T, DESCRIPTOR>(),
+                T(1) / descriptors::invCs2<T, DESCRIPTOR>(),
                 converter.getLatticeShearModulus(),
                 converter.getLatticeLambda(),
                 converter.getDampingFactor(),
