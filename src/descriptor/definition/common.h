@@ -65,11 +65,11 @@ platform_constant_definition int opposite<2,8>[8] = {
 template <>
 platform_constant_definition Fraction t<2,8>[8] = {
   {1, 2}, {1, 2}, {1, 2}, {1, 2},
-  {1, 4}, {1, 4}, {-1, 4}, {1, 4}
+  {1, 4}, {1, 4}, {1, 4}, {1, 4}
 };
 
 template <>
-platform_constant_definition Fraction cs2<2,8> = { 3, 1 };
+platform_constant_definition Fraction cs2<2,8> = { 1, 3 };
 
 }
 
