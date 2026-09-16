@@ -40,16 +40,16 @@ namespace cum_data {
 using utilities::Fraction;
 
 template <unsigned D, unsigned Q>
-Fraction K[Q] = {};
+platform_constant Fraction K[Q] = {};
 
 template <unsigned D, unsigned Q>
-int velocityIndices[Q][D] = {};
+platform_constant int velocityIndices[Q][D] = {};
 
 template <>
-int velocityIndices<3, 27>[27][3] = {
+platform_constant_definition int velocityIndices<3, 27>[27][3] = {
     {10,  8, 26},
-    {12, 22, 24},
     { 6,  3, 20},
+    {12, 22, 24},
     { 4,  2, 18},
     { 1,  0, 14},
     { 5, 15, 17},
@@ -80,7 +80,7 @@ int velocityIndices<3, 27>[27][3] = {
 
 // these are the constant parameters K that are computed from the weights of the respective lattice.
 template <>
-Fraction K<3, 27>[27] = {
+platform_constant_definition Fraction K<3, 27>[27] = {
     {1 },
     0,      { 1, 3},
     0,      0,      0,      { 1, 3},
