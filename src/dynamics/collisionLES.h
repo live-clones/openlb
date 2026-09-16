@@ -414,6 +414,7 @@ struct WaleEffectiveOmega {
 
   template <concepts::Cell CELL, concepts::Parameters PARAMETERS, typename V=typename CELL::value_t>
   V computeEffectiveOmega(CELL& cell, PARAMETERS& parameters) any_platform {
+    static_assert(DESCRIPTOR::d == 3, "WALE is only implemented for 3D descriptors");
     // V piNeqNormSqr { };
     // MomentaF().computePiNeqNormSqr(cell, piNeqNormSqr);
     const V omega = parameters.template get<descriptors::OMEGA>();
@@ -450,7 +451,7 @@ struct WaleEffectiveOmega {
     }
     V trace{};
     for (unsigned i = 0; i < 3; i++) {
-      trace += V{1}/V{3} * g[i][i] * g[i][i];
+      trace += V{1}/V{3} * G[i][i];
     }
     for (unsigned i = 0; i < 3; i++) {
       G[i][i] -= trace;
@@ -459,14 +460,14 @@ struct WaleEffectiveOmega {
     V G_ip{};
     for (unsigned i = 0; i < 3; i++) {
       for (unsigned j = 0; j < 3; j++) {
-        G_ip = G[i][j] * G[i][j];
+        G_ip += G[i][j] * G[i][j];
       }
     }
     // inner product of the strain rate
     V s_ip{};
     for (unsigned i = 0; i < 3; i++) {
       for (unsigned j = 0; j < 3; j++) {
-        s_ip = s[i][j] * s[i][j];
+        s_ip += s[i][j] * s[i][j];
       }
     }
     // Turbulent relaxation time
@@ -475,9 +476,7 @@ struct WaleEffectiveOmega {
     //   tauTurb = 0;
     // }
     // Physical turbulent viscosity must be equal or higher that zero
-    if (tauTurb < 0) {
-      tauTurb = 0;
-    }
+    tauTurb = util::max(V{0}, tauTurb);
     /// Molecular relaxation time
     V tauMol = V{1} / omega;
     /// Effective relaxation time
