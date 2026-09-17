@@ -314,7 +314,9 @@ struct ConStrainSmagorinskyEffectiveOmega {
     V cs2 = V{1} / descriptors::invCs2<V,DESCRIPTOR>();
     V tauMol = V{1} / omega;
     //Strain Tensor
-    V Phi = (-0.5*(-rho*tauMol*cs2+util::sqrt(rho*rho*tauMol*tauMol*cs2*cs2+V{2}*(smagorinsky*smagorinsky)*rho*piNeqNorm))/(smagorinsky*smagorinsky*rho*piNeqNorm));
+    // Rationalized form of (-a + sqrt(a^2 + 2 C^2 rho |Pi|)) / (-2 C^2 rho |Pi|) with a = rho tauMol cs2,
+    // well-defined for vanishing non-equilibrium stress (previously 0/0)
+    V Phi = V{-1} / (rho*tauMol*cs2+util::sqrt(rho*rho*tauMol*tauMol*cs2*cs2+V{2}*(smagorinsky*smagorinsky)*rho*piNeqNorm));
     for (int n=0; n < util::TensorVal<DESCRIPTOR>::n; ++n) {
       S[n] = Phi*pi[n];
     }
@@ -360,7 +362,9 @@ struct ConSmagorinskyEffectiveOmega {
     V tauMol = V{1} / omega;
     V cs2 = V{1} / descriptors::invCs2<V,DESCRIPTOR>();
     V piNeqNorm = util::sqrt(2*piNeqNormSqr);
-    V Phi = (-0.5*(-rho*tauMol*cs2+util::sqrt(rho*rho*tauMol*tauMol*cs2*cs2+V{2}*(smagorinsky*smagorinsky)*rho*piNeqNorm))/(smagorinsky*smagorinsky*rho*piNeqNorm));
+    // Rationalized form of (-a + sqrt(a^2 + 2 C^2 rho |Pi|)) / (-2 C^2 rho |Pi|) with a = rho tauMol cs2,
+    // well-defined for vanishing non-equilibrium stress (previously 0/0)
+    V Phi = V{-1} / (rho*tauMol*cs2+util::sqrt(rho*rho*tauMol*tauMol*cs2*cs2+V{2}*(smagorinsky*smagorinsky)*rho*piNeqNorm));
     for (int n=0; n < util::TensorVal<DESCRIPTOR>::n; ++n) {
       S[n] = Phi*pi[n];
     }
@@ -575,7 +579,7 @@ struct IncompressibleSmagorinskyEffectiveOmega {
                 "COLLISION must be parametrized using relaxation frequency OMEGA");
 
   static std::string getName() {
-    return "SmagorinskyEffectiveOmega<" + COLLISION::getName() + ">";
+    return "IncompressibleSmagorinskyEffectiveOmega<" + COLLISION::getName() + ">";
   }
 
   template <typename DESCRIPTOR, typename MOMENTA, typename EQUILIBRIUM>

@@ -637,8 +637,6 @@ struct TurbulentChannelForce {
     const V utau   = parameters.template get<LATTICE_UTAU>();
     V tmpForce[DESCRIPTOR::d]  = {};
     tmpForce[0] = (utau * utau / charlat_l + (charlat_u - uave) * charlat_u / charlat_l);
-    tmpForce[1] = (V) 0.0;
-    tmpForce[2] = (V) 0.0;
     cell.template setField<descriptors::FORCE>(tmpForce);
   }
 };

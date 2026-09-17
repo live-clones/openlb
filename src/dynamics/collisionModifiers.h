@@ -236,7 +236,7 @@ struct TrackAverageTKE {
       cell.template setField<descriptors::AVERAGE_VELOCITY>((uAvg * (iT-1) + u) / iT);
       auto uDiff = u - uAvg;
       auto TKE = cell.template getField<descriptors::AVERAGE_TKE>();
-      auto TKE_new = 0.5*(uDiff[0]*uDiff[0]+uDiff[1]*uDiff[1]+uDiff[2]*uDiff[2]);
+      auto TKE_new = 0.5*util::normSqr<V,DESCRIPTOR::d>(uDiff);
       cell.template setField<descriptors::AVERAGE_TKE>((TKE * (iT-1) + TKE_new) / iT);
       return statistics;
     }
