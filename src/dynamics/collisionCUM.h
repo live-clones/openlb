@@ -111,9 +111,9 @@ struct cum {
     // compute central moments from the populations and save them in `moments`
     V moments[DESCRIPTOR::q];
     computeMomenta(moments, cell, u);
-    auto [mbbb, mabb, mbab, mbba, maab, macb, maba, mabc, mbaa, mbac, maaa,
-          maac, maca, macc, mcbb, mbcb, mbbc, mccb, mcab, mcbc, mcba, mbcc,
-          mbca, mccc, mcca, mcac, mcaa] = moments;
+    auto& [mbbb, mabb, mbab, mbba, maab, macb, maba, mabc, mbaa, mbac, maaa,
+           maac, maca, macc, mcbb, mbcb, mbbc, mccb, mcab, mcbc, mcba, mbcc,
+           mbca, mccc, mcca, mcac, mcaa] = moments;
 
     const V omega2 =
         1; // If modified, constants A and B must be modified too!!!
@@ -278,7 +278,7 @@ struct cum {
          (4 * (mbab * mbab * maca + mabb * mabb * mcaa + mbba * mbba * maac) +
           2 * (mcaa * maca * maac) + 16 * mbba * mbab * mabb) *
              inverse_rho * inverse_rho -
-         1. / 9 * (macc + mcac + mcca) * inverse_rho -
+         1. / 3 * (macc + mcac + mcca) * inverse_rho -
          1. / 9 * (mcaa + maca + maac) * inverse_rho +
          (2 * (mbab * mbab + mabb * mabb + mbba * mbba) +
           (maac * maca + maac * mcaa + maca * mcaa) +
@@ -309,13 +309,12 @@ namespace collision {
 
   template <typename DESCRIPTOR, typename MOMENTA, typename EQUILIBRIUM>
   struct type {
-
-    static_assert(DESCRIPTOR::d==3 && DESCRIPTOR::q == 27, "Cumulant Dynamics only implemented in D3Q27");
     using MomentaF = typename MOMENTA::template type<DESCRIPTOR>;
     using EquilibriumF = typename EQUILIBRIUM::template type<DESCRIPTOR,MOMENTA>;
 
     template <typename CELL, typename PARAMETERS, typename V=typename CELL::value_t>
     CellStatistic<V> apply(CELL& cell, PARAMETERS& parameters) any_platform {
+      static_assert(DESCRIPTOR::d==3 && DESCRIPTOR::q == 27, "Cumulant Dynamics only implemented in D3Q27");
       const V omega = parameters.template get<descriptors::OMEGA>();
       V rho, u[DESCRIPTOR::d];
       MomentaF().computeRhoU(cell, rho, u);
