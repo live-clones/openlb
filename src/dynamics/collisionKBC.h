@@ -41,15 +41,13 @@ struct KBC {
 
   template <typename DESCRIPTOR, typename MOMENTA, typename EQUILIBRIUM>
   struct type {
-
-    // not using a D3Q19 lattice is a compiler error, because currently this struct implements KBC only for D3Q19
-    static_assert(DESCRIPTOR::d == 3 && DESCRIPTOR::q == 19, "KBC only implemented for D3Q19");
-
     using EquilibriumF = typename EQUILIBRIUM::template type<DESCRIPTOR,MOMENTA>;
     using MomentaF = typename MOMENTA::template type<DESCRIPTOR>;
 
     template <typename CELL, typename PARAMETERS, typename V=typename CELL::value_t>
     CellStatistic<V> apply(CELL& cell, PARAMETERS& parameters) any_platform {
+      // not using a D3Q19 lattice is a compiler error, because currently this struct implements KBC only for D3Q19
+      static_assert(DESCRIPTOR::d == 3 && DESCRIPTOR::q == 19, "KBC only implemented for D3Q19");
 
       V fEq[DESCRIPTOR::q] { };
       const auto statistic = EquilibriumF().compute(cell, parameters, fEq);

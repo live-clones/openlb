@@ -91,7 +91,7 @@ using ExternalTauEffLESForcedBGKdynamics = dynamics::Tuple<
   forcing::Guo<momenta::Forced>
 >;
 
-/// Shear Smarorinsky BGK collision step
+/// Shear Smagorinsky BGK collision step
 /**
  * Shown good results for wall-bounded flows
  * Leveque et al.: Shear-Improved Smagorinsky Model for Large-Eddy Simulation
@@ -106,7 +106,7 @@ using ShearSmagorinskyBGKdynamics = dynamics::Tuple<
   collision::ShearSmagorinskyEffectiveOmega<collision::BGK>
 >;
 
-/// Shear Smarorinsky BGK collision step with Guo forcing
+/// Shear Smagorinsky BGK collision step with Guo forcing
 template<typename T, typename DESCRIPTOR, typename MOMENTA=momenta::BulkTuple>
 using ShearSmagorinskyForcedBGKdynamics = dynamics::Tuple<
   T, DESCRIPTOR,
