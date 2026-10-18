@@ -35,6 +35,8 @@ Cuboid<T,D>& Cuboid<T,D>::operator=(const Cuboid<T,D>& rhs) {
   _extent = rhs._extent;
   _delta = rhs._delta;
   _weight = rhs._weight;
+  _preCalculatedProcess = rhs._preCalculatedProcess;
+  _coarsePart = rhs._coarsePart;
   return *this;
 }
 
@@ -101,13 +103,25 @@ void Cuboid<T,D>::refine(int factor) {
 
 template <typename T, unsigned D>
 void Cuboid<T,D>::refineCellCentered(int factor) {
-  if (factor < 1) {
-    throw std::invalid_argument("refinement factor must be >= 1");
+  if (factor != 2) {
+    throw std::invalid_argument("refinement factor must be == 2, is " + std::to_string(factor));
   } else {
     _delta /= factor;
     _extent *= factor;
     _weight *= util::pow(factor,D);
     _origin -= _delta / 2;
+  }
+}
+
+template <typename T, unsigned D>
+void Cuboid<T,D>::coarsenCellCentered(int factor) {
+  if (factor != 2) {
+    throw std::invalid_argument("coarsening factor must be == 2, is " + std::to_string(factor));
+  } else {
+    _origin += _delta / 2;
+    _weight /= util::pow(factor,D);
+    _extent /= factor;
+    _delta  *= factor;
   }
 }
 
@@ -137,7 +151,7 @@ void Cuboid<T,D>::print() const
 template <typename T, unsigned D>
 bool Cuboid<T,D>::operator==(const Cuboid<T,D>& rhs) const
 {
-  return    util::nearZero(_origin - rhs._origin)
+  return    util::nearZero(util::norm<D>(_origin - rhs._origin))
          && _extent == rhs._extent
          && _weight == rhs._weight;
 }
@@ -159,11 +173,11 @@ bool Cuboid<T,D>::intersects(Vector<T,D> min, Vector<T,D> max, int overlap) cons
 }
 
 template <typename T, unsigned D>
-bool Cuboid<T,D>::intersects(const Cuboid<T,D>& cuboid) const
+bool Cuboid<T,D>::intersects(const Cuboid<T,D>& cuboid, int overlap) const
 {
   return intersects(cuboid.getOrigin(),
                     cuboid.getOrigin() + cuboid.getDeltaR()*(cuboid.getExtent()-1),
-                    0);
+                    overlap);
 }
 
 template <typename T, unsigned D>
@@ -552,31 +566,44 @@ void Cuboid<T,D>::resize(Vector<int,D> offset, Vector<int,D> extent) {
 }
 
 template <typename T, unsigned D>
-void Cuboid<T,D>::divideFractional(int iD, std::vector<T> fractions, std::vector<Cuboid<T,D>>& childrenC) const
+void Cuboid<T,D>::divideFractional(int iD,
+                                   std::vector<T> fractions,
+                                   std::vector<Cuboid<T,D>>& childrenC) const
 {
+  const int totalLength = _extent[iD];
+
   auto delta = Vector<T,D>([&](int i) -> T {
     return i == iD ? _delta : 0;
   });
-  auto base = Vector<int,D>([&](int i) -> T {
+
+  auto base = Vector<int,D>([&](int i) -> int {
     return i == iD ? 1 : 0;
   });
 
   std::vector<int> fractionWidths;
-  int totalWidth = 0;
-  for (T f : fractions) {
-    fractionWidths.emplace_back(f * (getExtent()*base));
-    totalWidth += fractionWidths.back();
+  fractionWidths.reserve(fractions.size());
+
+  T currentPosFloat = 0.0;
+  int currentPosInt = 0;
+
+  for (std::size_t i = 0; i < fractions.size(); ++i) {
+    if (i == fractions.size() - 1) {
+      fractionWidths.push_back(totalLength - currentPosInt);
+    } else {
+      currentPosFloat += fractions[i] * totalLength;
+      int nextPosInt = std::round(currentPosFloat);
+      fractionWidths.push_back(nextPosInt - currentPosInt);
+      currentPosInt = nextPosInt;
+    }
   }
-  fractionWidths.back() += getExtent()*base - totalWidth;
 
   auto origin = getOrigin();
-  auto extent = Vector<int,D>([&](int i) -> T {
+  auto extent = Vector<int,D>([&](int i) -> int {
     return i == iD ? 0 : getExtent()[i];
   });
 
   for (int width : fractionWidths) {
-    Cuboid<T,D> child(origin, _delta, extent + (width)*base);
-    child.print();
+    Cuboid<T,D> child(origin, _delta, extent + width*base);
     origin += width*delta;
     childrenC.push_back(child);
   }
@@ -584,19 +611,59 @@ void Cuboid<T,D>::divideFractional(int iD, std::vector<T> fractions, std::vector
 
 template <typename T, unsigned D>
 void Cuboid<T,D>::writeAsXML(std::ostream& ss) const {
-  ss << " extent=\"";
-  for (int i = 0; i<3; i++) {
-    ss << getExtent()[i] << " ";
+  ss << "extent=\"";
+  for (int i = 0; i < D; i++) {
+    ss << getExtent()[i] << (i == D - 1 ? "" : " ");
   }
 
   ss << "\" origin=\"";
-  for (int i = 0; i<3; i++) {
-    ss << getOrigin()[i] << " ";
+  for (int i = 0; i < D; i++) {
+    ss << getOrigin()[i] << (i == D - 1 ? "" : " ");
   }
 
   ss << "\" deltaR=\"" << getDeltaR();
-  ss << "\" weight=\"" << getWeight();
+  ss << "\" weight=\"" << getWeight() << "\"";
+  ss << " isCoarseBorder=\"" << _coarsePart << "\"";
+  if (_preCalculatedProcess.has_value()) {
+    ss << " process=\"" << *_preCalculatedProcess << "\"";
+  }
 }
+
+template <typename T, unsigned D>
+void Cuboid<T,D>::setPreCalculatedProcess(int process)
+{
+  _preCalculatedProcess = process;
+}
+
+template <typename T, unsigned D>
+std::optional<int> Cuboid<T,D>::getPreCalculatedProcess() const
+{
+  return _preCalculatedProcess;
+}
+
+template <typename T, unsigned D>
+bool Cuboid<T,D>::isCoarseBorder() const
+{
+  return _coarsePart;
+}
+
+template <typename T, unsigned D>
+void Cuboid<T,D>::setCoarseBorder(bool coarsePart)
+{
+  _coarsePart = coarsePart;
+}
+
+template <typename T, unsigned D>
+void Cuboid<T,D>::printP()
+{
+
+  if (_preCalculatedProcess.has_value()) {
+    std::cout << *_preCalculatedProcess << '\n';
+  } else {
+    std::cout << "No pre-calculated process\n";
+  }
+}
+
 
 }
 

@@ -27,6 +27,9 @@
 
 #include "device.h"
 
+#include "core/concepts.h"
+#include "utilities/performanceProfiler.h"
+
 #include <stdexcept>
 
 #include <cuda.h>
@@ -63,6 +66,7 @@ void check(CUresult result) {
 
 void synchronize() {
   if (getCount() > 0) {
+    OLB_PROFILE("GPU_CUDA:Dev:Sync");
     cudaDeviceSynchronize();
     check();
   }
@@ -76,11 +80,13 @@ int get() {
 }
 
 void copyToHost(void* src, void* dst, std::size_t count) {
+  OLB_PROFILE("GPU_CUDA:Mem:DtoH");
   cudaMemcpy(dst, src, count, cudaMemcpyDeviceToHost);
   check();
 }
 
 void copyToDevice(void* src, void* dst, std::size_t count) {
+  OLB_PROFILE("GPU_CUDA:Mem:HtoD");
   cudaMemcpy(dst, src, count, cudaMemcpyHostToDevice);
   check();
 }
@@ -101,6 +107,14 @@ std::size_t getDevicePageSize() {
   prop.location.id = device::get();
   check(cuMemGetAllocationGranularity(&granularity, &prop, CU_MEM_ALLOC_GRANULARITY_MINIMUM));
   return granularity;
+}
+
+std::size_t getDeviceMemorySize() {
+  std::size_t freeBytes = 0;
+  std::size_t totalBytes = 0;
+  cudaMemGetInfo(&freeBytes, &totalBytes);
+  check();
+  return totalBytes;
 }
 
 
@@ -128,6 +142,11 @@ Stream::Stream(unsigned int flags) {
   check();
 }
 
+Stream::Stream(unsigned int flags, int priority) {
+  cudaStreamCreateWithPriority(&_stream, flags, priority);
+  check();
+}
+
 Stream::~Stream() {
   cudaStreamDestroy(_stream);
   check();
@@ -146,11 +165,89 @@ void asyncCopyToDevice(Stream& stream, void* src, void* dst, std::size_t count) 
   cudaMemcpyAsync(dst, src, count, cudaMemcpyHostToDevice, stream.get());
 }
 
+template <>
+Stream& getStream<streams::OuterCollision>() {
+  int leastPriority = 0, greatestPriority = 0;
+  cudaDeviceGetStreamPriorityRange(&leastPriority, &greatestPriority);
+  static Stream stream(cudaStreamNonBlocking, greatestPriority);
+  return stream;
+}
+
+template <>
+Stream& getStream<streams::InnerCollision>() {
+  int leastPriority = 0, greatestPriority = 0;
+  cudaDeviceGetStreamPriorityRange(&leastPriority, &greatestPriority);
+  static Stream stream(cudaStreamNonBlocking, leastPriority);
+  return stream;
+}
+
+template <>
+Stream& getStream<streams::PostProcessor>() {
+  int leastPriority = 0, greatestPriority = 0;
+  cudaDeviceGetStreamPriorityRange(&leastPriority, &greatestPriority);
+  static Stream stream(cudaStreamNonBlocking, greatestPriority);
+  return stream;
+}
+
+void synchronizeOuterCollision() {
+  OLB_PROFILE("GPU_CUDA:Dev:SyncOuter");
+  getStream<streams::OuterCollision>().synchronize();
+}
+
+void synchronizeInnerCollision() {
+  OLB_PROFILE("GPU_CUDA:Dev:SyncInner");
+  getStream<streams::InnerCollision>().synchronize();
+}
+
+void synchronizePostProcessor() {
+  OLB_PROFILE("GPU_CUDA:Dev:SyncPP");
+  getStream<streams::PostProcessor>().synchronize();
 }
 
 }
 
 }
+
+}
+
+Event<Platform::GPU_CUDA>::Event() {
+  cudaEventCreateWithFlags(&_event, cudaEventDisableTiming);
+  gpu::cuda::device::check();
+}
+
+Event<Platform::GPU_CUDA>::~Event() {
+  cudaEventDestroy(_event);
+  gpu::cuda::device::check();
+}
+
+void Event<Platform::GPU_CUDA>::record(gpu::cuda::device::Stream& stream) {
+  record(stream.get());
+}
+
+void Event<Platform::GPU_CUDA>::barrierOn(gpu::cuda::device::Stream& stream) const {
+  barrierOn(stream.get());
+}
+
+void Event<Platform::GPU_CUDA>::record(cudaStream_t stream) {
+  cudaEventRecord(_event, stream);
+  gpu::cuda::device::check();
+}
+
+void Event<Platform::GPU_CUDA>::barrierOn(cudaStream_t stream) const {
+  cudaStreamWaitEvent(stream, _event, 0);
+  gpu::cuda::device::check();
+}
+
+void Event<Platform::GPU_CUDA>::wait() const {
+  cudaEventSynchronize(_event);
+  gpu::cuda::device::check();
+}
+
+static_assert(concepts::Completable<Event<Platform::GPU_CUDA>>,
+              "Event<GPU_CUDA> must model a completion token");
+static_assert(concepts::DeviceOrderable<Event<Platform::GPU_CUDA>,
+                                        gpu::cuda::device::Stream>,
+              "Event<GPU_CUDA> must order device work w.r.t. streams");
 
 }
 

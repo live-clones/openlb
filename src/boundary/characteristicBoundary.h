@@ -1,6 +1,7 @@
 /*  This file is part of the OpenLB library
  *
  *  Copyright (C) 2025 Philipp Spelten
+ *                2026 Adrian Kummerlaender
  *  E-mail contact: info@openlb.net
  *  The most recent release of OpenLB can be downloaded at
  *  <http://www.openlb.net/>
@@ -31,6 +32,36 @@
 namespace olb {
 
 namespace boundary {
+
+/// Transverse stencil for a flat CBC cell from whether the plus/minus neighbours are CBC cells.
+inline CBCStencil cbcAxisStencil(bool plusCBC, bool minusCBC) {
+  return (plusCBC && minusCBC) ? CBCStencil::Central
+       : minusCBC              ? CBCStencil::Forward
+       : plusCBC               ? CBCStencil::Backward
+       :                         CBCStencil::None;
+}
+
+/// Flat CBC derivative PP with the transverse stencils bound, leaving direction/orientation open.
+template <CBCStencil US, CBCStencil FS>
+struct CBCFlatStencil {
+  template <typename T, typename DESCRIPTOR, int direction, int orientation>
+  using type = CBCPostProcessorPreCollideFlat3D<T,DESCRIPTOR,direction,orientation,US,FS>;
+};
+
+/// Dispatch the flat CBC derivative PP: transverse stencils switched here, direction/orientation
+/// via the standard helper.
+template <typename T, typename DESCRIPTOR, int K = 0>
+PostProcessorPromise<T,DESCRIPTOR> promiseCBCFlat(DiscreteNormal<DESCRIPTOR> n, CBCStencil us, CBCStencil fs) {
+  if constexpr (K < 16) {
+    if (static_cast<int>(us) == K/4 && static_cast<int>(fs) == K%4) {
+      return boundaryhelper::promisePostProcessorForDirectionOrientation<
+               T,DESCRIPTOR,
+               CBCFlatStencil<static_cast<CBCStencil>(K/4),static_cast<CBCStencil>(K%4)>::template type>(n);
+    }
+    return promiseCBCFlat<T,DESCRIPTOR,K+1>(n, us, fs);
+  }
+  throw std::runtime_error("Invalid CBC transverse stencil");
+}
 
 /** Boundary condition details:
  *
@@ -100,12 +131,12 @@ struct Characteristic {
   }
 
   std::optional<PostProcessorPromise<T,DESCRIPTOR>> getPostProcessorPreCollide(DiscreteNormalType type,
-                                                                    DiscreteNormal<DESCRIPTOR> n) {
+                                                                    DiscreteNormal<DESCRIPTOR> n,
+                                                                    CBCStencil upDownStencil = CBCStencil::Central,
+                                                                    CBCStencil frontBackStencil = CBCStencil::Central) {
     switch (type) {
     case DiscreteNormalType::Flat:
-      return boundaryhelper::promisePostProcessorForDirectionOrientation<
-              T,DESCRIPTOR,CBCPostProcessorPreCollideFlat3D
-          >(n);
+      return promiseCBCFlat<T,DESCRIPTOR>(n, upDownStencil, frontBackStencil);
     case DiscreteNormalType::ExternalEdge:
       return boundaryhelper::promisePostProcessorForNormalSpecial<T,DESCRIPTOR,CBCPostProcessorPreCollideEdge3D>(n);
     case DiscreteNormalType::ExternalCorner:
@@ -139,15 +170,29 @@ void setCBC(BlockLattice<T,DESCRIPTOR>& block,
         block.defineDynamics( latticeR,
                               std::move(*dynamics));
       }
-      if (auto opPreCollide = BC().getPostProcessorPreCollide(normalType, normal)) {
-        block.addPostProcessor(typeid(stage::PreCollide),
-                                latticeR,
-                                std::move(*opPreCollide));
-      }
       if (auto opPostStream = BC().getPostProcessorPostStream(normalType, normal)) {
         block.addPostProcessor(typeid(stage::PostStream),
                                 latticeR,
                                 std::move(*opPostStream));
+      }
+      CBCStencil upDownStencil = CBCStencil::Central, frontBackStencil = CBCStencil::Central;
+      if (normalType == DiscreteNormalType::Flat) {
+        const int direction = (normal[0] != 0) ? 0 : (normal[1] != 0) ? 1 : 2;
+        const int upDown    = (direction + 1) % 3;
+        const int frontBack = (direction + 2) % 3;
+        auto neighbourIsCBC = [&](int axis, int step) {
+          LatticeR<DESCRIPTOR::d> nb = latticeR;
+          nb[axis] += step;
+          return boundaryI(nb);
+        };
+        upDownStencil    = cbcAxisStencil(neighbourIsCBC(upDown,    +1), neighbourIsCBC(upDown,    -1));
+        frontBackStencil = cbcAxisStencil(neighbourIsCBC(frontBack, +1), neighbourIsCBC(frontBack, -1));
+      }
+      if (auto opDerivative = BC().getPostProcessorPreCollide(normalType, normal,
+                                                              upDownStencil, frontBackStencil)) {
+        block.addPostProcessor(typeid(stage::PostStream),
+                                latticeR,
+                                std::move(*opDerivative));
       }
     }
   });
@@ -172,18 +217,12 @@ void setCBC(SuperLattice<T,DESCRIPTOR>& lattice,
     std::forward<decltype(boundaryI)>(boundaryI),
     BC().getNeighborhoodRadius());
 
-  // populations are absolutely required! Otherwise immediate issue at overlap in streaming direction
-  auto& communicator = lattice.getCommunicator(stage::PreCollide());
+  auto& communicator = lattice.getCommunicator(stage::PostStream());
   communicator.template requestField<descriptors::POPULATION>();
+  communicator.template requestField<fields::cbc::RHO_POST_PP>();
+  communicator.template requestField<fields::cbc::U_POST_PP>();
   communicator.requestOverlap(BC().getNeighborhoodRadius(), neighborIndicator);
   communicator.exchangeRequests();
-
-  // post pp values are required for correct post stream correction
-  auto& communicator2 = lattice.getCommunicator(stage::PostStream());
-  communicator2.template requestField<fields::cbc::RHO_POST_PP>();
-  communicator2.template requestField<fields::cbc::U_POST_PP>();
-  communicator2.requestOverlap(BC().getNeighborhoodRadius(), neighborIndicator);
-  communicator2.exchangeRequests();
 }
 
 } // namespace boundary

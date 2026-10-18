@@ -26,6 +26,8 @@
 
 #include "registry.h"
 
+#include <functional>
+
 namespace olb {
 
 namespace gpu {
@@ -39,11 +41,13 @@ namespace hip {
 template <typename CONTEXT, typename TYPE>
 __constant__ std::size_t field_type_index;
 
-/// Host-side version of gpu::cuda::AnyDeviceFieldArrayD
+/// Host-side version of gpu::hip::AnyDeviceFieldArrayD
 struct FieldArrayPointer {
   gpu::hip::device::unique_ptr<void*> data;
   const unsigned column_count;
   const unsigned element_size;
+  const unsigned tile;
+  const unsigned accessor_stride;
 };
 
 }
@@ -53,13 +57,27 @@ struct FieldArrayPointer {
 template <typename T, typename DESCRIPTOR>
 struct FieldTypeRegistry<T,DESCRIPTOR,Platform::GPU_HIP>::Data {
   Data():
-    indexOnHost(2, nullptr)
+    indexOnHost(2, nullptr),
+    dynamicsTableHost(1, nullptr),
+    dynamicsTableModified(true)
   { }
 
   std::map<std::type_index,gpu::hip::FieldArrayPointer> fieldArrayPointers;
+  /// Fields whose rotated device pointers must be refreshed each step
+  /// (populated by the communicator for any-fields exchanges)
+  std::set<std::type_index> perStepRefresh;
+  /// Typed refreshers rebuilding each sparse field's stored device accessor after a sync
+  std::vector<std::function<void()>> sparseRefreshers;
 
   std::vector<void**>                   indexOnHost;
   gpu::hip::device::unique_ptr<void**> indexOnDevice;
+
+  /// Distinct dynamics type -> stable non-zero dispatch-table index
+  std::map<std::type_index,std::uint16_t> dynamicsIndex;
+  /// Host mirror of the per-block dynamics dispatch table (index 0 == nullptr)
+  std::vector<void*>                      dynamicsTableHost;
+  gpu::hip::device::unique_ptr<void*>     dynamicsTableDevice;
+  bool                                    dynamicsTableModified;
 
 };
 
@@ -101,24 +119,51 @@ void FieldTypeRegistry<T,DESCRIPTOR,Platform::GPU_HIP>::track(
   using ConcreteFieldType = typename FIELD_TYPE::template type<T,DESCRIPTOR,Platform::GPU_HIP>;
   if constexpr (std::is_base_of_v<ColumnVectorBase, ConcreteFieldType>) {
     using field_t = typename ConcreteFieldType::field_t;
+    constexpr unsigned dim = DESCRIPTOR::template size<field_t>();
     auto& fieldArray = *fieldType->template as<FIELD_TYPE>();
 
-    std::array<void*,DESCRIPTOR::template size<field_t>()> componentPointers;
-    for (unsigned iD=0; iD < componentPointers.size(); ++iD) {
-      componentPointers[iD] = fieldArray[iD].deviceData();
+    if constexpr (detail::isSparseColumnBacked<T,DESCRIPTOR,Platform::GPU_HIP,field_t>()) {
+      // A sparse field stores its tile-directory/payload accessor per dimension. The device pointers
+      // change on each sync, so it is refreshed afterwards (setProcessingContext -> refreshSparseAccessors)
+      using Accessor = typename ConcreteFieldType::column_type::Accessor;
+      std::array<Accessor,dim> accessors;
+      for (unsigned iD=0; iD < dim; ++iD) {
+        accessors[iD] = fieldArray[iD].getDeviceAccessor();
+      }
+      auto accessorsOnDevice = gpu::hip::device::malloc<Accessor>(dim);
+      gpu::hip::device::copyToDevice(accessors.data(), accessorsOnDevice, dim*sizeof(Accessor));
+      _data->indexOnHost[index] = reinterpret_cast<void**>(accessorsOnDevice);
+      _data->fieldArrayPointers.emplace(typeid(field_t), gpu::hip::FieldArrayPointer{
+        gpu::hip::device::unique_ptr<void*>(reinterpret_cast<void**>(accessorsOnDevice)),
+        dim,
+        sizeof(precision_scalar_t<typename field_t::template value_type<T>, precisionOf<DESCRIPTOR,field_t>()>),
+        Accessor::tile_size,
+        sizeof(Accessor)
+      });
+      _data->perStepRefresh.insert(typeid(field_t));
+      _data->sparseRefreshers.push_back([this, &fieldArray]() {
+        this->template refreshDeviceFieldArray<field_t>(fieldArray);
+      });
     }
-
-    auto componentPointersOnDevice = gpu::hip::device::malloc<void*>(DESCRIPTOR::template size<field_t>());
-    gpu::hip::device::copyToDevice(componentPointers.data(),
-                                    componentPointersOnDevice,
-                                    componentPointers.size()*sizeof(void*));
-
-    _data->indexOnHost[index] = componentPointersOnDevice;
-    _data->fieldArrayPointers.emplace(typeid(field_t), gpu::hip::FieldArrayPointer{
-      gpu::hip::device::unique_ptr<void*>(componentPointersOnDevice),
-      componentPointers.size(),
-      sizeof(typename field_t::template value_type<T>)
-    });
+    else {
+      // A dense field stores raw device pointers, layout-identical to its DeviceColumnAccessor
+      std::array<void*,dim> componentPointers;
+      for (unsigned iD=0; iD < dim; ++iD) {
+        componentPointers[iD] = fieldArray[iD].deviceData();
+      }
+      auto componentPointersOnDevice = gpu::hip::device::malloc<void*>(dim);
+      gpu::hip::device::copyToDevice(componentPointers.data(),
+                                      componentPointersOnDevice,
+                                      dim*sizeof(void*));
+      _data->indexOnHost[index] = componentPointersOnDevice;
+      _data->fieldArrayPointers.emplace(typeid(field_t), gpu::hip::FieldArrayPointer{
+        gpu::hip::device::unique_ptr<void*>(componentPointersOnDevice),
+        dim,
+        sizeof(precision_scalar_t<typename field_t::template value_type<T>, precisionOf<DESCRIPTOR,field_t>()>),
+        0,
+        0
+      });
+    }
   }
 
   _modified = true;
@@ -137,19 +182,89 @@ void*** FieldTypeRegistry<T,DESCRIPTOR,Platform::GPU_HIP>::deviceData()
   return _data->indexOnDevice.get();
 }
 
+template<typename T, typename DESCRIPTOR>
+std::uint16_t FieldTypeRegistry<T,DESCRIPTOR,Platform::GPU_HIP>::registerDynamics(
+  std::type_index type, void* deviceDynamics)
+{
+  auto it = _data->dynamicsIndex.find(type);
+  if (it != _data->dynamicsIndex.end()) {
+    return it->second;
+  }
+  std::uint16_t index = _data->dynamicsTableHost.size();
+  _data->dynamicsTableHost.push_back(deviceDynamics);
+  _data->dynamicsIndex.emplace(type, index);
+  _data->dynamicsTableModified = true;
+  return index;
+}
+
+template<typename T, typename DESCRIPTOR>
+gpu::hip::Dynamics<T,DESCRIPTOR>**
+FieldTypeRegistry<T,DESCRIPTOR,Platform::GPU_HIP>::dynamicsTable()
+{
+  if (_data->dynamicsTableModified) {
+    _data->dynamicsTableDevice = gpu::hip::device::malloc<void*>(_data->dynamicsTableHost.size());
+    gpu::hip::device::copyToDevice(_data->dynamicsTableHost.data(),
+                                    _data->dynamicsTableDevice.get(),
+                                    _data->dynamicsTableHost.size()*sizeof(void*));
+    _data->dynamicsTableModified = false;
+  }
+  return reinterpret_cast<gpu::hip::Dynamics<T,DESCRIPTOR>**>(_data->dynamicsTableDevice.get());
+}
+
 template <typename T, typename DESCRIPTOR>
 template <typename FIELD>
 void FieldTypeRegistry<T,DESCRIPTOR,Platform::GPU_HIP>::refreshDeviceFieldArray(
   FieldArrayD<T,DESCRIPTOR,Platform::GPU_HIP,FIELD>& fieldArray)
 {
-  std::array<void*,DESCRIPTOR::template size<FIELD>()> componentPointers;
-  for (unsigned iD=0; iD < componentPointers.size(); ++iD) {
-    componentPointers[iD] = fieldArray[iD].deviceData();
+  // Skip the (synchronous) pointer upload unless a consumer reads the registry
+  // pointers per step. The typed collision / specialized single-field halo use
+  // fresh accessors and never read them, so the common propagation path never
+  // pays this refresh.
+  if (_data->perStepRefresh.find(typeid(FIELD)) == _data->perStepRefresh.end()) {
+    return;
   }
+  constexpr unsigned dim = DESCRIPTOR::template size<FIELD>();
   auto& ptr = _data->fieldArrayPointers.at(typeid(FIELD));
-  gpu::hip::device::copyToDevice(componentPointers.data(),
-                                  ptr.data.get(),
-                                  componentPointers.size()*sizeof(void*));
+  if constexpr (detail::isSparseColumnBacked<T,DESCRIPTOR,Platform::GPU_HIP,FIELD>()) {
+    // Re-capture the sparse tile directory/payload pointers into the stored accessor
+    using Accessor = typename FieldArrayD<T,DESCRIPTOR,Platform::GPU_HIP,FIELD>::column_type::Accessor;
+    std::array<Accessor,dim> accessors;
+    for (unsigned iD=0; iD < dim; ++iD) {
+      accessors[iD] = fieldArray[iD].getDeviceAccessor();
+    }
+    gpu::hip::device::copyToDevice(accessors.data(),
+                                    reinterpret_cast<Accessor*>(ptr.data.get()),
+                                    dim*sizeof(Accessor));
+  }
+  else {
+    std::array<void*,dim> componentPointers;
+    for (unsigned iD=0; iD < dim; ++iD) {
+      componentPointers[iD] = fieldArray[iD].deviceData();
+    }
+    gpu::hip::device::copyToDevice(componentPointers.data(),
+                                    ptr.data.get(),
+                                    dim*sizeof(void*));
+  }
+}
+
+template <typename T, typename DESCRIPTOR>
+void FieldTypeRegistry<T,DESCRIPTOR,Platform::GPU_HIP>::refreshSparseAccessors()
+{
+  for (auto& refresh : _data->sparseRefreshers) {
+    refresh();
+  }
+}
+
+template <typename T, typename DESCRIPTOR>
+void FieldTypeRegistry<T,DESCRIPTOR,Platform::GPU_HIP>::requestPerStepRefresh(std::type_index field)
+{
+  _data->perStepRefresh.insert(field);
+}
+
+template <typename T, typename DESCRIPTOR>
+bool FieldTypeRegistry<T,DESCRIPTOR,Platform::GPU_HIP>::needsPerStepRefresh(std::type_index field) const
+{
+  return _data->perStepRefresh.find(field) != _data->perStepRefresh.end();
 }
 
 template <typename T, typename DESCRIPTOR>
@@ -161,7 +276,9 @@ FieldTypeRegistry<T,DESCRIPTOR,Platform::GPU_HIP>::deviceFieldArray(
   return gpu::hip::AnyDeviceFieldArrayD{
     ptr.data.get(),
     ptr.column_count,
-    ptr.element_size
+    ptr.element_size,
+    ptr.tile,
+    ptr.accessor_stride
   };
 }
 

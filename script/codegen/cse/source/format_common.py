@@ -23,68 +23,18 @@
 import sys
 import re
 
-def format_string(s):
+def format_string(s, INTROSPECTION=True):
     s = s.replace(" ", "")
-    s = s.replace("double", "Expr")
-    s = s.replace("float", "Expr")
+    if INTROSPECTION:
+        s = s.replace("double", "Expr")
+        s = s.replace("float", "Expr")
     s = s.replace("olb::", "")
-
-    # Process descriptors::NAME<...>
-    # We want to find patterns like descriptors::Something<A,B,C> and filter the args.
-    output = []
-    i = 0
-    n = len(s)
-
-    while i < n:
-        match = re.match(r'descriptors::(\w+)<', s[i:])
-        if match:
-            # We found a descriptor start
-            prefix = match.group(0) # e.g. descriptors::D2Q9<
-            output.append(prefix)
-            i += len(prefix)
-
-            # Now we are inside <...>. We need to capture until balanced >
-            # and split by comma at top level.
-            # Then filter and sort.
-            args = []
-            current_arg = []
-            balance = 1
-            while i < n and balance > 0:
-                char = s[i]
-                if char == '<':
-                    balance += 1
-                    current_arg.append(char)
-                elif char == '>':
-                    balance -= 1
-                    if balance == 0:
-                        # End of descriptor
-                        if current_arg:
-                            args.append("".join(current_arg))
-                        break
-                    current_arg.append(char)
-                elif char == ',' and balance == 1:
-                    args.append("".join(current_arg))
-                    current_arg = []
-                else:
-                    current_arg.append(char)
-                i += 1
-
-            # Filter and sort args
-            # Keep if contains "tag::" as this impacts static branching in some cases
-            filtered_args = [arg for arg in args if "tag::" in arg]
-            filtered_args.sort()
-
-            output.append(",".join(filtered_args))
-            output.append(">")
-            i += 1 # Skip the closing >
-
-        else:
-            output.append(s[i])
-            i += 1
-
-    return "".join(output)
+    return "".join(s)
 
 if __name__ == "__main__":
-    if len(sys.argv) > 1:
+    if len(sys.argv) > 2: # if pass a second argument disable introspection (double/float is not replaced by Expr)
+        input_str = sys.argv[1]
+        print(format_string(input_str, INTROSPECTION=False))
+    elif len(sys.argv) > 1:
         input_str = sys.argv[1]
         print(format_string(input_str))

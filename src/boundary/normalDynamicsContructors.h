@@ -176,6 +176,23 @@ struct MixinDynamicsExchangeDirectionOrientationMomenta {
   }
 };
 
+template <
+  typename T, typename DESCRIPTOR,
+  typename MIXIN,
+  template <int,int> typename MOMENTA,
+  template <typename,typename,typename,int,int> typename POST_PROCESSOR
+>
+struct MixinDynamicsExchangeDirectionOrientationMomentaPostProcessor {
+  template <typename T_, typename DESCRIPTOR_, int direction, int orientation>
+  using ConcretePostProcessor = POST_PROCESSOR<T_,DESCRIPTOR_,
+    typename MIXIN::template exchange_momenta<MOMENTA<direction,orientation>>, direction, orientation>;
+
+  template <unsigned D>
+  static PostProcessorPromise<T,DESCRIPTOR> construct(Vector<int,D> n) {
+    return promisePostProcessorForDirectionOrientation<T,DESCRIPTOR,ConcretePostProcessor>(n);
+  }
+};
+
 }
 
 }

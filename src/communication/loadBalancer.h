@@ -34,6 +34,7 @@
 #include "core/serializer.h"
 #include "io/xmlReader.h"
 #include "core/platform/platform.h"
+#include "core/collisionExecutionPolicy.h"
 
 namespace olb {
 
@@ -70,6 +71,8 @@ protected:
   std::map<int,Platform> _platform;
   /// defines if global cuboid number has state doOutput
   std::map<int,bool> _doOutput;
+  /// maps global cuboid number to its collision execution policy
+  std::map<int,CollisionExecutionPolicy> _collisionPolicy;
 
 public:
   /// Default empty constructor
@@ -105,7 +108,9 @@ public:
     if (iter != _platform.end()) {
       return std::get<1>(*iter);
     } else {
-    #if defined(PLATFORM_GPU_CUDA)
+    #if   defined(PLATFORM_GPU_SYCL)
+      return Platform::GPU_SYCL;
+    #elif defined(PLATFORM_GPU_CUDA)
       return Platform::GPU_CUDA;
     #elif defined(PLATFORM_GPU_HIP)
       return Platform::GPU_HIP;
@@ -119,6 +124,53 @@ public:
 
   virtual void setPlatform(int loc, Platform platform) {
     _platform[glob(loc)] = platform;
+  }
+
+  /// \return collision execution policy for local cuboid (default: all-Auto)
+  virtual CollisionExecutionPolicy collisionPolicy(int loc) const {
+    auto iter = _collisionPolicy.find(glob(loc));
+    if (iter != _collisionPolicy.end()) {
+      return std::get<1>(*iter);
+    }
+    return CollisionExecutionPolicy{};
+  }
+
+  virtual void setCollisionPolicy(int loc, CollisionExecutionPolicy policy) {
+    _collisionPolicy[glob(loc)] = policy;
+  }
+
+  /// Resolve CollisionOverlap::Auto for local cuboid `loc`
+  /**
+   * Auto splits iff the cuboid has a halo neighbor (within `overlap`) owned by
+   * a rank on a different physical node — the only case where the exchange
+   * frees the GPU for the concurrent inner collision. Single-node runs (one GPU
+   * or several over NVLink) therefore never split, recovering the fused
+   * single-collision throughput. Explicit Split / Fused are returned as set.
+   **/
+  template <unsigned D>
+  bool splitsCollision(int loc, const CuboidDecomposition<T,D>& decomposition, int overlap = 1) const {
+    switch (collisionPolicy(loc).overlap) {
+    case CollisionOverlap::Split: return true;
+    case CollisionOverlap::Fused: return false;
+    default: break; // Auto
+    }
+#ifdef PARALLEL_MODE_MPI
+    const int nNodes = singleton::mpi().getNodes();
+    if (nNodes <= 1) {
+      return false;
+    }
+    const int ranksPerNode = singleton::mpi().getSize() / nNodes;
+    if (ranksPerNode <= 0) {
+      return false;
+    }
+    const int myNode = singleton::mpi().getRank() / ranksPerNode;
+    for (int neighbor : decomposition.getNeighborhood(glob(loc), overlap)) {
+      if (rank(neighbor) / ranksPerNode != myNode) {
+        return true;
+      }
+    }
+#endif
+    return false;
   }
 
   virtual bool doOutput(int glob) const {
@@ -141,6 +193,14 @@ public:
   std::size_t getSerializableSize() const override;
   /// Return a pointer to the memory of the current block and its size for the serializable interface
   bool* getBlock(std::size_t iBlock, std::size_t& sizeBlock, bool loadingMode) override;
+
+  virtual const std::map<int,int>& clocs() const {
+    throw std::runtime_error("Not a refined load balancer");
+  }
+
+  virtual std::optional<int> cloc(int fineLoc) const {
+    throw std::runtime_error("Not a refined load balancer");
+  }
 
   void print(bool multiOutput = false) const;
 

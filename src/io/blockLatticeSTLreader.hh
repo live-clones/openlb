@@ -129,12 +129,8 @@ BlockLatticeSTLreader<T>::BlockLatticeSTLreader(CuboidDecomposition3D<T>& cbg3d,
     auto& cuboid = _cuboidDecomposition.get(globC);
     for (STLtriangle<T>& triangle : _mesh.getTriangles()) {
       Vector<T, 3> center = triangle.getCenter();
-      /* <<<<<<< HEAD
-    if (cuboid.intersects(center[0], center[1], center[2], 3))
-======= */
       //TODO!!! For the signed distance function to work correctly, the overlapp (6) in checkInters must be higher than the real overlapp to capture all neighbouring triangles in the overlap correctly
       if (cuboid.isInside(center, 6))
-
       {
         _trianglesInCuboidList[iC].push_back(triangle);
       }

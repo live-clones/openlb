@@ -408,7 +408,6 @@ int main(int argc, char* argv[]) {
     myCaseParameters.set<parameters::RHO  >({1,1,0});
     myCaseParameters.set<MAX_PHYS_T   >(15);    // time for fluid simulation
   }
-  myCaseParameters.fromCLI(argc, argv);
 
   /// === Step 3: Create Mesh ===
   Mesh mesh = createMesh(myCaseParameters);

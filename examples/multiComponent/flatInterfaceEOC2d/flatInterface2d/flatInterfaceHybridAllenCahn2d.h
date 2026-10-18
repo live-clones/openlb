@@ -304,10 +304,10 @@ void getResults( MyCase& myCase,
     SuperLatticeDensity2D<T, PFDESCRIPTOR> phi( sLatticePF );
     phi.getName() = "phi";
     // result of signed distance function
-    SuperLatticeExternalScalarField2D<T, PFDESCRIPTOR, PSI> psi( sLatticePF );
+    SuperLatticeField2D<T, PFDESCRIPTOR, PSI> psi( sLatticePF );
     psi.getName() = "psi";
     vtkWriter.addFunctor( psi );
-    SuperLatticeExternalScalarField2D<T, NSDESCRIPTOR, RHO> rho_L( sLatticeNS );
+    SuperLatticeField2D<T, NSDESCRIPTOR, RHO> rho_L( sLatticeNS );
     AnalyticalConst2D<T,T> ConversionDensity_( converter.getConversionFactorDensity() );
     SuperLatticeFfromAnalyticalF2D<T, NSDESCRIPTOR> ConversionDensity(ConversionDensity_, sLatticeNS);
     SuperIdentity2D<T,T> rho( rho_L * ConversionDensity );
@@ -352,8 +352,8 @@ T helper( MyCase& myCase )
   sLatticeAC.executePostProcessors(stage::PostPostProcess());
   int in[2];
   T out[1];
-  SuperLatticeExternalScalarField2D<T, PFDESCRIPTOR, TOP> top( sLatticeAC );
-  SuperLatticeExternalScalarField2D<T, PFDESCRIPTOR, BOTTOM> bottom( sLatticeAC );
+  SuperLatticeField2D<T, PFDESCRIPTOR, TOP> top( sLatticeAC );
+  SuperLatticeField2D<T, PFDESCRIPTOR, BOTTOM> bottom( sLatticeAC );
   SuperAverage2D<T> top_total_(top, geometry, 1);
   SuperAverage2D<T> bottom_total_(bottom, geometry, 1);
   top_total_(out, in);

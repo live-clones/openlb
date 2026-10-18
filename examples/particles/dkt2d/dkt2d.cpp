@@ -112,7 +112,8 @@ void prepareLattice(MyCase& myCase)
   auto& geometry = myCase.getGeometry();
   auto& parameters = myCase.getParameters();
   using T = MyCase::value_t;
-  lattice.setUnitConverter(
+  using DESCRIPTOR = MyCase::descriptor_t;
+  lattice.setUnitConverter<UnitConverter<T,DESCRIPTOR>>(
     ( T )   parameters.get<parameters::PHYS_DELTA_X>(),
     ( T )   parameters.get<parameters::PHYS_DELTA_T>(),
     ( T )   parameters.get<parameters::PHYS_CHAR_LENGTH>(),
@@ -223,7 +224,7 @@ void getResults(MyCase& myCase, int iT,
     lattice.getStatistics().print(iT, converter.getPhysTime(iT));
     for (std::size_t iP=0; iP<particleSystem.size(); ++iP) {
       auto particle = particleSystem.get(iP);
-      io::printResolvedParticleInfo(particle);
+      particles::io::printResolvedParticleInfo(particle);
     }
   }
 
@@ -373,12 +374,11 @@ int main(int argc, char* argv[])
     myCaseParameters.set<VTK_ENABLED                 >(true);
     myCaseParameters.set<GNUPLOT_ENABLED             >(true);
     myCaseParameters.set<GRAVITATIONAL_ACC           >(-9.81);
-    myCaseParameters.set<GRAVITY>([&] {
-      return Vector<double, 2>{0., myCaseParameters.get<GRAVITATIONAL_ACC>()*
-       (1.-myCaseParameters.get<PHYS_CHAR_DENSITY>() / myCaseParameters.get<PART_RHO>())};
+    myCaseParameters.set<GRAVITY>([](MyCase::ParametersD& p) {
+      return Vector<double, 2>{0., p.get<GRAVITATIONAL_ACC>()*
+       (1.-p.get<PHYS_CHAR_DENSITY>() / p.get<PART_RHO>())};
     });
   }
-  myCaseParameters.fromCLI(argc, argv);
 
   Mesh mesh = createMesh(myCaseParameters);
   MyCase myCase(myCaseParameters, mesh);

@@ -150,7 +150,7 @@ public:
 struct DynamicDispatchCollision {
   template <typename T, typename DESCRIPTOR>
   bool operator()(DeviceContext<T,DESCRIPTOR>& lattice, CellID iCell) __device__ {
-    if (auto* collisionO = lattice.template getField<DYNAMICS<T,DESCRIPTOR>>()[0][iCell]) {
+    if (auto* collisionO = lattice.getDynamicsTable()[lattice.template getField<DYNAMICS<T,DESCRIPTOR>>()[0][iCell]]) {
       collisionO->collide(lattice, iCell);
       return true;
     }
@@ -159,7 +159,7 @@ struct DynamicDispatchCollision {
 
   template <typename T, typename DESCRIPTOR>
   bool operator()(DeviceContext<T,DESCRIPTOR>& lattice, CellID iCell, CellStatistic<T>& statistic) __device__ {
-    if (auto* collisionO = lattice.template getField<DYNAMICS<T,DESCRIPTOR>>()[0][iCell]) {
+    if (auto* collisionO = lattice.getDynamicsTable()[lattice.template getField<DYNAMICS<T,DESCRIPTOR>>()[0][iCell]]) {
       statistic = collisionO->collide(lattice, iCell);
       return true;
     }

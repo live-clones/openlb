@@ -110,6 +110,10 @@ private:
   std::size_t xlogn=0;
   std::size_t ylogn=0;
 
+
+  // Output stream for terminal messages
+  OstreamManager _clout;
+
   /// the creation of the datafile and writing of the data in the CSV format datafile
   /// is now done by the CSV Writer. The functions setData call the CSV Writer writeDataFile function
   CSV<T> csvWriter;

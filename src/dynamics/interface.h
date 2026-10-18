@@ -1,6 +1,7 @@
 /*  This file is part of the OpenLB library
  *
- *  Copyright (C) 2021 Adrian Kummerlaender
+ *  Copyright (C) 2021 Adrian Kummerlaender,
+ *                2026 Shota Ito
  *  E-mail contact: info@openlb.net
  *  The most recent release of OpenLB can be downloaded at
  *  <http://www.openlb.net/>
@@ -27,6 +28,7 @@
 #include "lbm.h"
 
 #include "core/concepts.h"
+#include "utilities/vectorHelpers.h"
 
 #include "momenta/interface.h"
 #include "momenta/aliases.h"
@@ -249,6 +251,13 @@ concept IntrospectableDynamics = requires {
   typename DYNAMICS::template exchange_value_type<Expr>;
 };
 
+// This concepts ensures the availability of accessed fields by
+// DYNAMICS which is necessary for cell-wise automatic differentiation.
+template <typename DYNAMICS>
+concept DifferentiableDynamics = requires () {
+  requires ProvidesFieldsList<DYNAMICS>;
+};
+
 }
 
 namespace dynamics {
@@ -293,6 +302,18 @@ struct is_vectorizable<
 template <typename DYNAMICS>
 static constexpr bool is_vectorizable_v = is_vectorizable<DYNAMICS>::value;
 
+template <concepts::LatticeDescriptor DESCRIPTOR,
+          typename MOMENTA,
+          concepts::EquilibriumElement EQUILIBRIUM,
+          concepts::CollisionElement COLLISION,
+          concepts::CombinationRule COMBINATION_RULE>
+using DynamicsFieldsProvider = FieldsProvider<DefaultCombination::template combined_momenta<DESCRIPTOR,MOMENTA>,
+                                              DefaultCombination::template combined_equilibrium<DESCRIPTOR,MOMENTA,EQUILIBRIUM>,
+                                              DefaultCombination::template combined_collision<DESCRIPTOR,MOMENTA,EQUILIBRIUM,COLLISION>,
+                                              typename COMBINATION_RULE::template combined_momenta<DESCRIPTOR,MOMENTA>,
+                                              typename COMBINATION_RULE::template combined_equilibrium<DESCRIPTOR,MOMENTA,EQUILIBRIUM>,
+                                              typename COMBINATION_RULE::template combined_collision<DESCRIPTOR,MOMENTA,EQUILIBRIUM,COLLISION>>;
+
 /// Dynamics constructed as a tuple of momenta, equilibrium and collision
 /**
  * Optionally also a combination rule thereof (e.g. a forcing scheme)
@@ -305,7 +326,8 @@ template <
   concepts::CollisionElement   COLLISION,
   concepts::CombinationRule    COMBINATION_RULE = DefaultCombination
 >
-struct Tuple final : public Dynamics<T,DESCRIPTOR> {
+struct Tuple final : public Dynamics<T,DESCRIPTOR>,
+                     public DynamicsFieldsProvider<DESCRIPTOR,MOMENTA,EQUILIBRIUM,COLLISION,COMBINATION_RULE> {
   using MomentaF     = typename COMBINATION_RULE::template combined_momenta<DESCRIPTOR,MOMENTA>;
   using EquilibriumF = typename COMBINATION_RULE::template combined_equilibrium<DESCRIPTOR,MOMENTA,EQUILIBRIUM>;
   using CollisionO   = typename COMBINATION_RULE::template combined_collision<DESCRIPTOR,MOMENTA,EQUILIBRIUM,COLLISION>;
@@ -317,6 +339,13 @@ struct Tuple final : public Dynamics<T,DESCRIPTOR> {
   template <typename NEW_T>
   using exchange_value_type = Tuple<
     NEW_T, DESCRIPTOR,
+    MOMENTA, EQUILIBRIUM, COLLISION,
+    COMBINATION_RULE
+  >;
+
+  template <typename NEW_DESCRIPTOR>
+  using exchange_descriptor = Tuple<
+    T, NEW_DESCRIPTOR,
     MOMENTA, EQUILIBRIUM, COLLISION,
     COMBINATION_RULE
   >;
@@ -423,7 +452,8 @@ struct Tuple final : public Dynamics<T,DESCRIPTOR> {
 };
 
 template <typename T, typename DESCRIPTOR, typename MOMENTA>
-struct CustomCollision : public Dynamics<T,DESCRIPTOR> {
+struct CustomCollision : public Dynamics<T,DESCRIPTOR>,
+                         public FieldsProvider<typename MOMENTA::template type<DESCRIPTOR>> {
   using value_t = T;
   using descriptor_t = DESCRIPTOR;
 

@@ -28,98 +28,257 @@
 #define LATTICE_STATISTICS_H
 
 #include <vector>
+#include <string>
+#include <memory>
+#include <limits>
+#include <concepts>
+#include <map>
+#include <typeindex>
+#include <functional>
 #include "io/ostreamManager.h"
+#include "io/gnuplotWriter.h"
 
 namespace olb {
 
+template<typename T, typename DESCRIPTOR> class SuperLattice;
+template<typename T, typename DESCRIPTOR> class LatticeStatistics;
+
 /////////////////// Statistics Postprocessing ////////////////////////////
 
-namespace statistics {
+namespace concepts {
 
-struct AVERAGE_RHO : public descriptors::FIELD_BASE<1> { };
+/// A parameter whose value is sourced from lattice statistics via compute(stats)
+template <typename FIELD, typename T, typename DESCRIPTOR>
+concept StatisticsField = requires (const LatticeStatistics<T,DESCRIPTOR>& stats) {
+  { FIELD::compute(stats) } -> std::convertible_to<T>;
+};
 
 }
 
+namespace statistics {
+
+/// Lattice-wide average density, consumed by ConstRhoBGK
+struct AVERAGE_RHO : public descriptors::FIELD_BASE<1> {
+  template <typename T, typename DESCRIPTOR>
+  static T compute(const LatticeStatistics<T,DESCRIPTOR>& stats) {
+    return stats.getAverageRho();
+  }
+};
+
+/// Lattice-wide average kinetic energy
+struct AVERAGE_ENERGY : public descriptors::FIELD_BASE<1> {
+  template <typename T, typename DESCRIPTOR>
+  static T compute(const LatticeStatistics<T,DESCRIPTOR>& stats) {
+    return stats.getAverageEnergy();
+  }
+};
+
+/// Maximum lattice velocity, reported as maxCFL
+struct MAX_U : public descriptors::FIELD_BASE<1> {
+  template <typename T, typename DESCRIPTOR>
+  static T compute(const LatticeStatistics<T,DESCRIPTOR>& stats) {
+    return stats.getMaxU();
+  }
+};
+
+/// Parameters sourced live from lattice statistics at every collide
+using live_parameters = meta::list<AVERAGE_RHO>;
+
+}
+
+/// Min/max/mean of one scalar or vector quantity over a lattice
+/**
+ * One value per component. Populated by the built-in collision-time reduction
+ * (rho, u) and by the registered-field reductions.
+ **/
 template<typename T>
+struct StatisticEntry {
+  std::string    name;
+  unsigned       components = 1;
+  std::vector<T> min;
+  std::vector<T> max;
+  std::vector<T> mean;
+};
+
+/// Collects statistics (min/max/mean of rho, u and registered fields) of a lattice
+/**
+ * rho and the velocity magnitude u are built-in and reduced at collision time.
+ * Arbitrary descriptor fields are added via registerField<FIELD>() and reduced
+ * at statistics time (see SuperLattice::collectStatistics). The scalar getters
+ * getAverageRho / getAverageEnergy / getMaxU / getNumCells expose the built-in
+ * aggregates, and print() emits the avgEnergy / maxCFL Gnuplot output.
+ *
+ * \ingroup core
+ **/
+template<typename T, typename DESCRIPTOR>
 class LatticeStatistics {
 public:
-  enum { avRho=0, avEnergy=1 } AverageT;
-  enum { maxU=0 } MaxT;
-
+  /// Per-block partial reduction of the built-in quantities (rho, u)
+  /**
+   * Kept an aggregate (no user constructors) so the OpenMP reduction initializer
+   * `omp_priv={}` seeds each thread with the min/max identities below. avRho /
+   * avEnergy are running sums (averaged in reset); maxU keeps max(uSqr) (turned
+   * into max|u| in reset). minRho / maxRho / minUSqr / sumU add the remaining
+   * pieces for min/max/mean of rho and |u|. The Expr guard mirrors the original
+   * maxU handling for the CSE expression value type.
+   **/
   struct Aggregatable {
     std::size_t nCells = 0;
-    T avRho { };
+    T avRho    { };
     T avEnergy { };
-    T maxU { };
+    T maxU     { };
+    T minRho  = std::numeric_limits<T>::max();
+    T maxRho  = std::numeric_limits<T>::lowest();
+    T minUSqr = std::numeric_limits<T>::max();
+    T sumU     { };
 
     void increment(T rho, T uSqr) {
       nCells   += 1;
       avRho    += rho;
       avEnergy += uSqr;
       if constexpr (!std::is_same_v<Expr,T>) {
-        maxU = std::max(uSqr, maxU);
+        maxU    = std::max(uSqr, maxU);
+        minRho  = std::min(rho, minRho);
+        maxRho  = std::max(rho, maxRho);
+        minUSqr = std::min(uSqr, minUSqr);
+        sumU   += util::sqrt(uSqr);
       }
     }
 
     Aggregatable& operator+=(const Aggregatable& rhs) {
-      nCells += rhs.nCells;
-      avRho += rhs.avRho;
+      nCells   += rhs.nCells;
+      avRho    += rhs.avRho;
       avEnergy += rhs.avEnergy;
-      maxU = std::max(maxU, rhs.maxU);
+      if constexpr (!std::is_same_v<Expr,T>) {
+        maxU    = std::max(maxU, rhs.maxU);
+        minRho  = std::min(minRho, rhs.minRho);
+        maxRho  = std::max(maxRho, rhs.maxRho);
+        minUSqr = std::min(minUSqr, rhs.minUSqr);
+        sumU   += rhs.sumU;
+      }
       return *this;
     }
+  };
+
+  /// Raw per-block/instance reduction of one registered field (count + per-component min/max/sum)
+  struct FieldResult {
+    unsigned       components = 0;
+    std::size_t    count      = 0;
+    std::vector<T> min;
+    std::vector<T> max;
+    std::vector<T> sum;
+  };
+
+  /// A field registered for reduction: its identity, name and the operator installer
+  struct RegisteredField {
+    std::type_index id;
+    std::string     name;
+    unsigned        components;
+    std::function<void(SuperLattice<T,DESCRIPTOR>&)> addOperator;
   };
 
 public:
   LatticeStatistics();
   ~LatticeStatistics() = default;
+
+  /// Finalized built-in results, exchanged during super<->block aggregation
+  struct Result {
+    T avRho    { };
+    T avEnergy { };
+    T maxU     { };
+    T minRho   { };
+    T maxRho   { };
+    T minU     { };
+    T meanU    { };
+    std::size_t nCells = 0;
+  };
+
+  /// Finalize the partial accumulators into results for this interval
   void reset();
-  void reset(T average_rho_, T average_energy_, T maxU_, std::size_t numCells_);
+  /// Read the finalized built-in results
+  Result getResult() const;
+  /// Set finalized built-in results directly (super aggregation and broadcast)
+  void setResult(const Result& result);
+  void initialize();
 
-  int subscribeAverage();
-  int subscribeSum();
-  int subscribeMin();
-  int subscribeMax();
-
+  /// Accumulate one cell into the built-in (rho, u) partials
   void incrementStats(T rho, T uSqr);
+  /// Accumulate a per-block partial into the running built-in totals
   void incrementStats(Aggregatable& aggregatable);
-  void gatherAverage(int whichAverage, T value);
-  void gatherSum(int whichSum, T value);
-  void gatherMin(int whichMin, T value);
-  void gatherMax(int whichMax, T value);
+  /// Increment cell count only
   void incrementStats();
-  T getAverageRho() const;
-  T getAverageEnergy() const;
-  T getMaxU() const;
-  std::size_t getNumCells() const;
 
-  T getAverage(int whichAverage) const;
-  T getSum(int whichSum) const;
-  T getMin(int whichMin) const;
-  T getMax(int whichMax) const;
+  /// Register descriptor FIELD for on-device min/max/mean reduction at statistics time
+  /** Defined in statisticsFieldReducer.h; installs a FieldStatisticO<FIELD> post-processor. **/
+  template<typename FIELD>
+  void registerField(std::string name = "");
+  /// Registered fields (identity/name/installer), driven by SuperLattice
+  const std::vector<RegisteredField>& getRegisteredFields() const { return _registered; }
+  std::size_t getFieldCount() const { return _registered.size(); }
+  /// Store a field's raw reduction result (called by FieldStatisticO on each block)
+  template<typename FIELD>
+  void setFieldResult(const FieldResult& result) { _fieldResults[typeid(FIELD)] = result; }
+  /// Raw per-field results by field type (written by the reduction operator)
+  std::map<std::type_index,FieldResult>& fieldResults() { return _fieldResults; }
+  const std::map<std::type_index,FieldResult>& fieldResults() const { return _fieldResults; }
 
-  std::vector<T>& getAverageVect();
-  std::vector<T>& getSumVect();
-  std::vector<T>& getMinVect();
-  std::vector<T>& getMaxVect();
+  /// Finalized built-in scalar aggregates
+  T getAverageRho() const    { return _avRho; }
+  T getAverageEnergy() const { return _avEnergy; }
+  T getMaxU() const          { return _maxU; }
+  std::size_t getNumCells() const { return _numCells; }
+
+  /// Unified min/max/mean access by quantity name ("rho", "u", or a field name)
+  T getMin(const std::string& name, unsigned iComponent=0) const;
+  T getMax(const std::string& name, unsigned iComponent=0) const;
+  T getMean(const std::string& name, unsigned iComponent=0) const;
+  /// All quantities (rho, u, registered) as unified entries for print/CSV
+  std::vector<StatisticEntry<T>> getEntries() const;
 
   void incrementTime();
   void resetTime(size_t value=0);
   std::size_t getTime() const;
-  void print(int iterationStep, T physicalTime=-1) const;
-  void initialize();
+
+  /// Stable identity used to name CSV / plot output when no explicit name is given
+  void setName(const std::string& name) { _name = name; }
+  const std::string& getName() const { return _name; }
+
+  /// Single-line console output with compact registered-field tokens and the avgEnergy/maxCFL Gnuplot plots
+  void print(int iterationStep, T physicalTime=-1, const std::string& postfix = "");
+  void printWithoutPlot(int iterationStep, T physicalTime=-1) const;
+  /// Formatted min/max/mean table over all quantities
+  void printSummary(int iterationStep, T physicalTime=-1) const;
+  /// Append the current statistics row to ./tmp/statisticsData/<name>_statistics.csv
+  void writeCSV(int iterationStep, T physicalTime=-1, const std::string& name="") const;
 
 private:
-  mutable OstreamManager clout;
-  // variables for internal computations
-  std::vector<T> tmpAv, tmpSum, tmpMin, tmpMax;
-  std::size_t tmpNumCells;
-  // variables containing the public result
-  std::vector<T> averageVect, sumVect, minVect, maxVect;
-  std::size_t numCells;
-  std::size_t latticeTime;
-  bool firstCall;
+  const RegisteredField* findRegistered(const std::string& name) const;
+  StatisticEntry<T> entryFor(const RegisteredField& rf) const;
 
+  mutable OstreamManager clout;
+
+  Aggregatable _partial;
+
+  T _avRho    { };
+  T _avEnergy { };
+  T _maxU     { };
+  T _minRho   { };
+  T _maxRho   { };
+  T _minU     { };
+  T _meanU    { };
+  std::size_t _numCells    = 0;
+  std::size_t _latticeTime = 0;
+  bool _firstCall = true;
+
+  std::vector<RegisteredField> _registered;
+  std::map<std::type_index,FieldResult> _fieldResults;
+
+  static std::size_t _instanceCounter;
+  std::size_t _id;
+  std::string _name;
+
+  std::unique_ptr<Gnuplot<T>> gplotAvgEnergy;
+  std::unique_ptr<Gnuplot<T>> gplotMaxCFL;
 };
 
 }  // namespace olb

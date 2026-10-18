@@ -46,6 +46,18 @@ struct SMAGORINSKY : public descriptors::FIELD_BASE<1,0,0> {
   }
 };
 
+struct SMAGORINSKY_F : public descriptors::FIELD_BASE<1,0,0> {
+  template <typename T, typename DESCRIPTOR>
+  static constexpr auto getInitialValue() {
+    return FieldD<T,DESCRIPTOR,SMAGORINSKY>(0.5);
+  }
+
+  template <typename T, typename DESCRIPTOR,typename FIELD>
+  static constexpr auto isValid(FieldD<T,DESCRIPTOR,FIELD> value) {
+    return value >= 0;
+  }
+};
+
 
 }
 
@@ -101,16 +113,16 @@ struct IncompressibleSmagorinskyEffectiveOmega {
     V u[DESCRIPTOR::d] {};
     const V omega = parameters.template get<descriptors::OMEGA>();
     const V rho = cell.template getField<descriptors::RHO>();
+    const V scale = cell.template getField<descriptors::SCALAR>();
     const auto partialRho = cell.template getField<descriptors::NABLARHO>();
     MomentaF().computeU(cell, u);
     MomentaF().computeStress(cell, pi);
-    // const V omega = V{1} / cell.template getField<descriptors::TAU_EFF>();
 
     int iPi = 0;
     for (int iAlpha=0; iAlpha < DESCRIPTOR::d; ++iAlpha) {
       for (int iBeta=iAlpha; iBeta < DESCRIPTOR::d; ++iBeta) {
         forceTensor[iPi] = V{0.5} /descriptors::invCs2<V,DESCRIPTOR>() * (partialRho[iAlpha]*u[iBeta] + u[iAlpha]*partialRho[iBeta]);
-        if (iAlpha == iBeta) forceTensor[iPi] += V{0.5} /descriptors::invCs2<V,DESCRIPTOR>() * partialRho[iAlpha]*u[iAlpha];
+        forceTensor[iPi] += V{0.5} /descriptors::invCs2<V,DESCRIPTOR>() * partialRho[iAlpha]*u[iAlpha] * (iAlpha == iBeta);
         ++iPi;
       }
     }
@@ -123,7 +135,9 @@ struct IncompressibleSmagorinskyEffectiveOmega {
       piNeqNormSqr += pi[2]*pi[2] + pi[3]*pi[3] + 2.*pi[4]*pi[4] +pi[5]*pi[5];
     }
 
-    const V smagorinsky = parameters.template get<collision::LES::SMAGORINSKY>();
+    V smagorinsky = parameters.template get<collision::LES::SMAGORINSKY>();
+    V smagorinsky_f = parameters.template get<collision::LES::SMAGORINSKY_F>();
+    smagorinsky = smagorinsky*scale + (V(1)-scale)*smagorinsky_f;
     V piNeqNorm = util::sqrt(piNeqNormSqr);
     V preFactor = smagorinsky*smagorinsky
                 * descriptors::invCs2<V,DESCRIPTOR>()*descriptors::invCs2<V,DESCRIPTOR>()
@@ -134,6 +148,7 @@ struct IncompressibleSmagorinskyEffectiveOmega {
     V tauTurb = V{0.5} * (util::sqrt(tauMol*tauMol + preFactor / rho * piNeqNorm) - tauMol);
     /// Effective realaxation time
     V tauEff = tauMol + tauTurb;
+    cell.template setField<descriptors::TAU>(tauEff);
     return V{1} / tauEff;
   }
 
@@ -226,23 +241,22 @@ struct LocalVanDriestSmagorinskyEffectiveOmega {
     MomentaF().computePiNeqNormSqr(cell, piNeqNormSqr);
     const V rho = MomentaF().computeRho(cell);
     const V omega = parameters.template get<descriptors::OMEGA>();
-    V tauEff {};
     V nuT = cell.template getField<descriptors::VISCOSITY>();
-    if ( nuT != V(0) ) {
-      tauEff = nuT*descriptors::invCs2<V,DESCRIPTOR>() + V(0.5);
-    } else {
-      const V smagorinsky = parameters.template get<collision::LES::SMAGORINSKY>();
-      V piNeqNorm = util::sqrt(piNeqNormSqr);
-      V preFactor = smagorinsky*smagorinsky
-                  * descriptors::invCs2<V,DESCRIPTOR>()*descriptors::invCs2<V,DESCRIPTOR>()
-                  * 2 * util::sqrt(2);
-      /// Molecular realaxation time
-      V tauMol = V{1} / omega;
-      /// Turbulent realaxation time
-      V tauTurb = V{0.5} * (util::sqrt(tauMol*tauMol + preFactor / rho * piNeqNorm) - tauMol);
-      /// Effective realaxation time
-      tauEff = tauMol + tauTurb;
-    }
+    V tauEff_nuT = nuT*descriptors::invCs2<V,DESCRIPTOR>() + V(0.5);
+    const V smagorinsky = parameters.template get<collision::LES::SMAGORINSKY>();
+    V piNeqNorm = util::sqrt(piNeqNormSqr);
+    V preFactor = smagorinsky*smagorinsky
+                * descriptors::invCs2<V,DESCRIPTOR>()*descriptors::invCs2<V,DESCRIPTOR>()
+                * 2 * util::sqrt(2);
+    /// Molecular realaxation time
+    V tauMol = V{1} / omega;
+    /// Turbulent realaxation time
+    V tauTurb = V{0.5} * (util::sqrt(tauMol*tauMol + preFactor / rho * piNeqNorm) - tauMol);
+    /// Effective realaxation time
+    V tauEff_smag = tauMol + tauTurb;
+    const V epsilon = V{1e-30};
+    const V mask = nuT / (nuT + epsilon);
+    V tauEff = mask * tauEff_nuT + (V{1} - mask) * tauEff_smag;
     cell.template setField<descriptors::OMEGA>(V{1} / tauEff);
     return  V{1} / tauEff;
   }
@@ -568,14 +582,14 @@ struct SmagorinskyEffectiveOmega {
 template <typename COLLISION>
 struct IncompressibleSmagorinskyEffectiveOmega {
   using parameters = typename COLLISION::parameters::template include<
-    descriptors::OMEGA, LES::SMAGORINSKY
+    descriptors::OMEGA, LES::SMAGORINSKY, LES::SMAGORINSKY_F
   >;
 
   static_assert(COLLISION::parameters::template contains<descriptors::OMEGA>(),
                 "COLLISION must be parametrized using relaxation frequency OMEGA");
 
   static std::string getName() {
-    return "SmagorinskyEffectiveOmega<" + COLLISION::getName() + ">";
+    return "IncompressibleSmagorinskyEffectiveOmega<" + COLLISION::getName() + ">";
   }
 
   template <typename DESCRIPTOR, typename MOMENTA, typename EQUILIBRIUM>

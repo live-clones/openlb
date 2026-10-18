@@ -73,6 +73,7 @@ private:
   const S _yLength;
   const S _theta;
 public:
+  using IndicatorF2D<S>::distance;
   /// constructs an cuboid with x axis dimension 0 to extend[0], ...
   IndicatorCuboid2D(Vector<S,2> extend, Vector<S,2> origin, S theta=0);
   /// constructs an cuboid with x axis dimension -xlength/2 to xlength/2
@@ -83,6 +84,8 @@ public:
   S const getxLength() const;
   S const getyLength() const;
   S signedDistance(const Vector<S,2>& input) override;
+  bool distance(S& distance, const Vector<S,2>& origin, const Vector<S,2>& direction,  int iC=-1) override;
+  bool normal(Vector<S,2>& normal, const Vector<S,2>& origin, const Vector<S,2>& direction, int iC=-1) override;
 };
 
 /// indicator function for a 2D NACA airfoil
@@ -94,10 +97,13 @@ private:
   const S _camber;   // Thickness as percentage of chord length
   const S _camberPos;                // Max Camber
   const S _thicknessPercentage;             // Max Camber Position
+  S _angleOfAttack = 0.0;
 
-  // NACA coefficients for thickness distribution formula (closed trailing edge)
-  static constexpr S _coeffs[5] = {0.2969, -0.1260, -0.3516, 0.2843, -0.1036};
+  // NACA coefficients for thickness distribution formula
+  static constexpr S _coeffs[5] = {0.2969, -0.1260, -0.3516, 0.2843, -0.1015};
   static constexpr S _exponents[5] = {0.5, 1.0, 2.0, 3.0, 4.0};
+  static constexpr S _grad_coeffs[5] = {0.14845, -0.1260, -0.7032, 0.8529, -0.4060};
+  static constexpr S _grad_exponents[5] = {-0.5, 0.0, 1.0, 2.0, 3.0};
 
   // Function to compute the local thickness at a given point along the camber line
   S computeThickness(S x) const;
@@ -106,19 +112,79 @@ private:
   S bisectInterval(S left, S right, S x, S y) const;
   S distanceFunction(S x_0, S y_0, S x, S y) const;
   S distanceFunctionDerivative(S x_0, S x, S y) const;
+  Vector<S,2> distanceFromCamber(const Vector<S,2>& input) const;
 
   // Function to transform a point considering rotation
   void transformPoint(S& x, S& y) const;
 
 public:
   IndicatorAirfoil2D(Vector<S,2> center, S chordLength, S camber, S camberPos, S thicknessPercentage);
-  IndicatorAirfoil2D(Vector<S,2> center, S chordLength, Vector<int,1> parameters);
+  IndicatorAirfoil2D(Vector<S,2> center, S chordLength, S camber, S camberPos, S thicknessPercentage, S angleOfAttack);
   Vector<S,2> const& getCenter() const;
   S const getChordLength() const;
   S const getThicknessPercentage() const;
   bool operator() (bool output[], const S input[]) override;
-  Vector<S,2> distanceFromCamber(const Vector<S,2>& input);
 };
+
+/// indicator function for a 2D parametrized airfoil
+template <typename S>
+class IndicatorParametricAirfoil2D : public IndicatorF2D<S> {
+private:
+  const Vector<S,2> _center;            // Center point of the airfoil
+  const Vector<S,2> _aerodynamicCenter; // Aerodynamic center of the airfoil (typically at quarter-chord)
+  const S _chordLength;                 // Length from leading to trailing edge
+
+  std::vector<S> _upperSurfaceCoeffs;
+  std::vector<S> _lowerSurfaceCoeffs;
+
+  std::size_t _upperDegree;
+  std::size_t _lowerDegree;
+
+  S _angleOfAttack = 0.0;
+  S _maxCamber = 0.0;
+  S _locMaxCamber = 0.4;
+
+  //Kulfan CST Parametrization
+  S shapeFunction(const std::vector<S>& coeffs, S x) const;
+  S shapeFunctionDerivative(const std::vector<S>& coeffs, S x) const;
+
+  S classFunction(S x, S N1 = 0.5, S N2 = 1.0) const;
+  S classFunctionDerivative(S x, S N1 = 0.5, S N2 = 1.0) const;
+
+  S camberLine(S x) const;
+  S camberSlope(S x) const;
+  S camberAngle(S x) const;
+
+  // Function to transform a point considering rotation
+  void transformPoint(S& x, S& y) const;
+
+public:
+  IndicatorParametricAirfoil2D(Vector<S,2> center, S chordLength,
+                               const std::vector<S>& upperCoeffs,
+                               const std::vector<S>& lowerCoeffs,
+                               S angleOfAttack = 0.0,
+                               S maxCamber = 0.0,
+                               S locMaxCamber = 0.4);
+  Vector<S,2> const& getCenter() const;
+  Vector<S,2> const& getAerodynamicCenter() const;
+  S const getChordLength() const;
+
+  std::size_t getUpperPolynomialDegree();
+  std::size_t getLowerPolynomialDegree();
+
+  bool normal(Vector<S,2>& normal, const Vector<S,2>& origin, const Vector<S,2>& direction, int iC=-1) override;
+  bool operator() (bool output[], const S input[]) override;
+  S signedDistance(const Vector<S,2>& input) override;
+
+  // Compute maximum thickness analytically given upper surface coefficients
+  S computeMaxThickness(const std::vector<S>& upperCoeffs) const;
+
+  // Normalize coefficients to achieve target thickness
+  void normalizeCoefficientsToThickness(std::vector<S>& upperCoeffs,
+                                        std::vector<S>& lowerCoeffs,
+                                        S targetThickness) const;
+};
+
 
 /// indicator function for a 2D circle
 template <typename S>
@@ -154,8 +220,8 @@ public:
   S const getB() const;
   S const getTheta() const;
   S const getThetaRadian() const;
-  bool distance(S& distance, const Vector<S,2>& point, const Vector<S,2>& direction, int iC=-1) override;
-  bool normal(Vector<S,2>& nxny, Vector<S,2> point) const;
+  bool distance(S& distance, const Vector<S,2>& origin, const Vector<S,2>& direction, int iC=-1) override;
+  bool normal(Vector<S,2>& normal, const Vector<S,2>& origin, const Vector<S,2>& direction, int iC=-1) override;
   bool operator() (bool output[], const S input[]) override;
 };
 

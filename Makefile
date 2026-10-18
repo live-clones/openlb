@@ -10,8 +10,8 @@ all: default
 ###########################################################################
 ## Default build configuration
 
-# Use environment if in Nix shell, otherwise use config.mk
-ifndef IN_NIX_SHELL
+# Use environment if in an OpenLB Nix shell, otherwise use config.mk
+ifndef IN_OLB_NIX_SHELL
 ifeq ($(wildcard config.mk),)
 config.mk: config.git.mk
 	@echo Copying default config
@@ -19,10 +19,10 @@ config.mk: config.git.mk
 
 DEFAULT_TARGETS += config.mk
 endif
-endif
 
 # Include config.mk environment (optional)
 -include config.mk
+endif
 
 include rules.mk
 
@@ -51,7 +51,8 @@ CORE_CPP_FILES := \
 	src/communication/ompManager.cpp \
 	src/core/olbInit.cpp \
 	src/core/expr.cpp \
-	src/io/ostreamManager.cpp
+	src/io/ostreamManager.cpp \
+	src/utilities/log/log.cpp
 
 CORE_OBJ_FILES := $(CORE_CPP_FILES:.cpp=.o)
 
@@ -117,6 +118,20 @@ CSE_GENERATEES := $(patsubst %.cse.h.template, %.cse.h, $(CSE_GENERATORS))
 cse: $(CSE_GENERATEES)
 
 ###########################################################################
+## Unit tests
+
+check: dependencies core
+	$(MAKE) -C tests/unit
+
+clean-check:
+	$(MAKE) -C tests/unit clean
+
+run-%:
+	$(MAKE) -C tests/unit $@
+
+CLEAN_TARGETS += clean-check
+
+###########################################################################
 ## Benchmark tests
 
 benchmark: dependencies core
@@ -131,10 +146,49 @@ clean-benchmark:
 CLEAN_TARGETS += clean-benchmark
 
 ###########################################################################
+## User guide documentation
+
+userguide:
+	$(MAKE) -C doc
+
+###########################################################################
 ## Doxygen documentation
 
+# The doxygen-awesome stylesheet is optional and supplied by the nix doxygen
+# environment, so a plain checkout still builds the docs without it. The version
+# always comes from VERSION rather than being repeated in the Doxyfile.
+DOXYGEN_AWESOME_CSS ?=
+
 doxygen:
-	doxygen doc/DoxygenConfig
+	@mkdir -p build/doxygen
+	@{ cat Doxyfile; \
+	   echo "PROJECT_NUMBER = $(OLB_RELEASE)"; \
+	   if [ -f doc/_doxygen_header.html ]; then \
+	     echo "HTML_HEADER = doc/_doxygen_header.html"; \
+	   fi; \
+	   if [ -n "$(DOXYGEN_AWESOME_CSS)" ]; then \
+	     echo "HTML_COLORSTYLE = LIGHT"; \
+	     echo "HTML_EXTRA_STYLESHEET = $(DOXYGEN_AWESOME_CSS)/doxygen-awesome.css $(DOXYGEN_AWESOME_CSS)/doxygen-awesome-sidebar-only.css doc/doxygen-quarto.css"; \
+	   fi; \
+	 } | doxygen -
+
+# The whole documentation set: the guide, then the API reference carrying the
+# guide's navbar, which only exists once the guide has been rendered.
+docs:
+	$(MAKE) userguide
+	python3 doc/doxygen_header.py
+	$(MAKE) doxygen
+
+###########################################################################
+## Install git hooks
+
+ifeq ($(shell test -d .git -a -d hooks; echo $$?),0)
+.git/hooks:
+	@echo Installing git hooks
+	ln -rs hooks .git/hooks
+
+DEFAULT_TARGETS += .git/hooks
+endif
 
 ###########################################################################
 ## Cleaning

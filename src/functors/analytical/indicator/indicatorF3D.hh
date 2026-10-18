@@ -37,16 +37,11 @@
 namespace olb {
 
 template <typename S>
-IndicatorTranslate3D<S>::IndicatorTranslate3D(std::array<S,3> translate, IndicatorF3D<S>& indicator)
-  : _translate(translate), _indicator(indicator), _myMin(indicator.getMin()), _myMax(indicator.getMax())
+IndicatorTranslate3D<S>::IndicatorTranslate3D(Vector<S,3> translate, FunctorPtr<IndicatorF3D<S>>&& indicator)
+  : _translate(translate), _indicator(std::move(indicator))
 {
-  this->_myMin[0] += this->_translate[0];
-  this->_myMin[1] += this->_translate[1];
-  this->_myMin[2] += this->_translate[2];
-
-  this->_myMax[0] += this->_translate[0];
-  this->_myMax[1] += this->_translate[1];
-  this->_myMax[2] += this->_translate[2];
+  this->_myMin = _indicator->getMin() + _translate;
+  this->_myMax = _indicator->getMax() + _translate;
 }
 
 template< typename S>
@@ -58,27 +53,13 @@ bool IndicatorTranslate3D<S>::operator() (bool output[], const S input[] )
     input[2] - _translate[2]
   };
 
-  _indicator.operator()(output, inputTranslated);
-  return output[0];
+  return _indicator->operator()(output, inputTranslated);
 }
 
 template <typename S>
 S IndicatorTranslate3D<S>::signedDistance( const Vector<S,3>& input )
 {
-  Vector<S,3> translate = sdf::translate(input, {_translate[0], _translate[1], _translate[2]});
-  return _indicator.signedDistance(translate);
-}
-
-template <typename S>
-Vector<S,3>& IndicatorTranslate3D<S>::getMin()
-{
-  return _myMin;
-}
-
-template <typename S>
-Vector<S,3>& IndicatorTranslate3D<S>::getMax()
-{
-  return _myMax;
+  return _indicator->signedDistance(input - _translate);
 }
 
 template <typename S>
@@ -771,28 +752,11 @@ S IndicatorCuboid3D<S>::signedDistance( const Vector<S,3>& input )
 template <typename S>
 Vector<S,3> IndicatorCuboid3D<S>::getSample(const std::function<S()>& randomness) const
 {
-  // Select random point on center axis
-  std::vector<S> v = {_xLength, _yLength, _zLength};
-  auto min = std::min_element(v.begin(), v.end());
-  int index = std::distance(v.begin(), min);
-  Vector<S,3> axis{0, 0, 0};
-  axis[index] = v[index];
-  auto origin = _center;
-  origin[0] -= v[0]/S{2};
-  origin[1] -= v[1]/S{2};
-  origin[2] -= v[2]/S{2};
-  auto axisPoint = origin + axis * randomness();
-  // Compute cut at point on center axis
-  auto hyperplane = Hyperplane3D<S>().originAt(axisPoint)
-                                     .normalTo(axis);
-  std::vector<S> coord;
-  for(int i = 0; i<3; i++) {
-    if(i != index) {
-      S var = v[i] * randomness();
-      coord.emplace_back(var);
-    }
-  }
-  return hyperplane.project({coord[0],coord[1]});
+  Vector<S,3> randomPoint{};
+  randomPoint[0] = (_center[0] - _xLength/S{2}) + _xLength * randomness();
+  randomPoint[1] = (_center[1] - _yLength/S{2}) + _yLength * randomness();
+  randomPoint[2] = (_center[2] - _zLength/S{2}) + _zLength * randomness();
+  return randomPoint;
 }
 
 

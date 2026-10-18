@@ -36,7 +36,7 @@ namespace util{
 template<typename T>
 T euklidN2(const T x[], int dim) any_platform
 {
-  T euklid = 0;
+  T euklid = T{0};
   for (int iDim=0; iDim<dim; iDim++) {
     euklid += x[iDim]*x[iDim];
   }
@@ -47,7 +47,7 @@ T euklidN2(const T x[], int dim) any_platform
 template<typename T>
 T euklidDistance2(const T x[], const T y[], int dim)
 {
-  T euklid = 0;
+  T euklid = T{0};
   for (int iDim=0; iDim<dim; iDim++) {
     euklid += (x[iDim]-y[iDim])*(x[iDim]-y[iDim]);
   }
@@ -60,6 +60,12 @@ template<typename T>
 T euklidN(const T x[], int dim)
 {
   return olb::util::sqrt(euklidN2(x,dim));
+}
+
+template<typename T>
+T euklidNWithWeight(const T x[], int dim, const T weight)
+{
+  return olb::util::sqrt(euklidN2(x,dim) * weight);
 }
 
 /// Euclidean distance between two arrays

@@ -125,7 +125,7 @@ void prepareLattice(MyCase& myCase)
   const T physCharDensity = parameters.get<parameters::PHYS_CHAR_DENSITY>();
   const bool bouzidiOn = parameters.get<parameters::BOUZIDI_ENABLED>();
 
-  myCase.getLattice(NavierStokes{}).setUnitConverter(
+  myCase.getLattice(NavierStokes{}).setUnitConverter<UnitConverter<T,DESCRIPTOR>>(
     physDeltaX,        // physDeltaX: spacing between two lattice cells in [m]
     physDeltaT,        // physDeltaT: time step in [s]
     physLength,        // charPhysLength: reference length of simulation geometry in [m]
@@ -382,12 +382,11 @@ int main( int argc, char* argv[] )
     myCaseParameters.set<PHYS_CHAR_DENSITY  >(1055);
     myCaseParameters.set<MAX_PHYS_T         >(2.); // max. simulation time in s, SI unit
     myCaseParameters.set<BOUZIDI_ENABLED    >(true);
-    myCaseParameters.set<PHYS_DELTA_X>([&] {
-      return myCaseParameters.get<parameters::PHYS_CHAR_LENGTH>()
-           / myCaseParameters.get<parameters::RESOLUTION>();
+    myCaseParameters.set<PHYS_DELTA_X>([](MyCase::ParametersD& p) {
+      return p.get<parameters::PHYS_CHAR_LENGTH>()
+           / p.get<parameters::RESOLUTION>();
     });
   }
-  myCaseParameters.fromCLI(argc, argv);
 
   Mesh mesh = createMesh(myCaseParameters);
 

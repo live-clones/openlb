@@ -94,6 +94,15 @@ void Optimizer<S,C>::optimize()
   // Evaluate objective function
   evaluateObjective(_control, _value);
 
+  // Print info
+  if (_verboseOn) {
+    print(_it);
+  }
+  if (_gplotAnalysis.size() > 0) {
+    setGnuplotData();
+  }
+
+
   // Optimization step (update of _control, _value, _derivatives and _it)
   do {
     if (_it >= _maxIt) {
@@ -204,13 +213,13 @@ void Optimizer<S,C>::setGnuplotData()
   std::vector<char> plotTypes;
 
   for(unsigned i = 0; i < _gplotAnalysis.size(); i++){
-    if(_gplotAnalysis[i] == value){
+    if(_gplotAnalysis[i] == objective){
       yValues.push_back(_value);
-      labels.push_back("value");
+      labels.push_back("objective");
       plotTypes.push_back('p');
     } else if(_gplotAnalysis[i] == control){
         // get all entries of control
-      for(unsigned j = 0; j< _control.size(); j++){
+      for(int j = 0; j < _dimCtrl; j++){
         yValues.push_back(_control[j]);
         labels.push_back("control[" + std::to_string(j) + "]");
         plotTypes.push_back('p');
@@ -223,12 +232,21 @@ void Optimizer<S,C>::setGnuplotData()
         plotTypes.push_back('p');
       }
     } else if(_gplotAnalysis[i] == error){
-      yValues.push_back(util::euklidDistance(_control, _referenceControl));
+      yValues.push_back(util::euklidDistance(_control.data(), _referenceControl.data(), _dimCtrl));
       labels.push_back("control_error");
+      plotTypes.push_back('p');
+    } else if(_gplotAnalysis[i] == rel_error){
+      yValues.push_back(util::euklidDistance(_control.data(), _referenceControl.data(), _dimCtrl) / util::euklidN(_referenceControl.data(), _dimCtrl));
+      labels.push_back("relative_control_error");
       plotTypes.push_back('p');
     } else if(_gplotAnalysis[i] == norm_derivative){
       yValues.push_back(util::euklidN(&_derivative[0], _dimCtrl));
       labels.push_back("derivative_norm");
+      plotTypes.push_back('p');
+    }
+    else if(_gplotAnalysis[i] == weighted_norm_derivative){
+      yValues.push_back(util::euklidNWithWeight(&_derivative[0], _dimCtrl, _dx));
+      labels.push_back("weighted_derivative_norm");
       plotTypes.push_back('p');
     }
   }
@@ -245,14 +263,16 @@ void getGnuplotTagsFromString(std::string gplotAnalysisString,
        std::back_inserter(gplotAnalysisStringVector));
 
   for(unsigned i = 0; i < gplotAnalysisStringVector.size(); i++){
-    if(gplotAnalysisStringVector[i] == "VALUE"){
-      gplotAnalysis.push_back(OptimizerLogType::value);
+    if(gplotAnalysisStringVector[i] == "OBJECTIVE"){
+      gplotAnalysis.push_back(OptimizerLogType::objective);
     } else if(gplotAnalysisStringVector[i] == "CONTROL"){
       gplotAnalysis.push_back(OptimizerLogType::control);
     } else if(gplotAnalysisStringVector[i] == "DERIVATIVE"){
       gplotAnalysis.push_back(OptimizerLogType::derivative);
     } else if(gplotAnalysisStringVector[i] == "ERROR"){
       gplotAnalysis.push_back(OptimizerLogType::error);
+    } else if(gplotAnalysisStringVector[i] == "REL_ERROR"){
+      gplotAnalysis.push_back(OptimizerLogType::rel_error);
     } else if(gplotAnalysisStringVector[i] == "NORM_DERIVATIVE"){
       gplotAnalysis.push_back(OptimizerLogType::norm_derivative);
     }

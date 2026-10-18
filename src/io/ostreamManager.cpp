@@ -27,31 +27,36 @@
 #include "communication/mpiManager.h"
 #include "communication/ompManager.h"
 
+#include "utilities/performanceProfiler.h"
+#include "utilities/log/log.h"
+
+#include <ctime>
+
 namespace olb {
 
 bool OMBuf::multiOutput = 0;
 
 OMBuf::OMBuf()
-  : output(nullptr), text("")
+  : output(nullptr), text(""), showTimestamps(false)
 { }
 
 OMBuf::~OMBuf()
 { }
 
 OMBuf::OMBuf(const OMBuf& rhs)
-  : output(rhs.output), text(rhs.text)
+  : output(rhs.output), text(rhs.text), showTimestamps(rhs.showTimestamps)
 { }
 
 OMBuf& OMBuf::operator=(const OMBuf& rhs)
 {
   output = rhs.output;
   text = rhs.text;
-
+  showTimestamps = rhs.showTimestamps;
   return *this;
 }
 
 OMBuf::OMBuf(std::ostream& str, std::string classname)
-  : output(&str), text(classname)
+  : output(&str), text(classname), showTimestamps(true)
 { }
 
 void OMBuf::setMultiOutput(bool b)
@@ -59,30 +64,45 @@ void OMBuf::setMultiOutput(bool b)
   (*this).multiOutput = b;
 }
 
+void OMBuf::setTimestamps(bool b)
+{
+  showTimestamps = b;
+}
+
 int OMBuf::sync()
 {
+  // Per-instance opt-out (showTimestamps) AND the global OLB_LOG_TIMESTAMPS switch,
+  // so logging and OstreamManager output stay consistent. Default: off.
+  std::string ts = "";
+  if (showTimestamps && logging::timestamps()) {
+    std::time_t t = std::time(nullptr);
+    std::ostringstream oss;
+    oss << std::put_time(std::localtime(&t), ":%Y-%m-%d %H:%M:%S");
+    ts = oss.str();
+  }
+
 #ifdef PARALLEL_MODE_MPI
   #ifdef PARALLEL_MODE_OMP
     if (multiOutput==true) {
-      *output << "["
+      *output <<  "["
               << text << ":" << singleton::mpi().getRank()
                       << ":" << singleton::omp().getRank()
-              << "] " << str();
+              << ts << "] " << str();
     }
-    else {    // multiOutput==false
+    else {
       if (singleton::mpi().getRank() == 0 && singleton::omp().getRank() == 0) {
-        *output << "[" << text << "] " << str();
+        *output << "[" << text << ts << "] " << str();
       }
     }
   #else
     if (multiOutput==true) {
       *output << "["
               << text << ":" << singleton::mpi().getRank()
-              << "] " << str();
+              << ts << "] " << str();
     }
-    else {    // multiOutput==false
+    else {
       if (singleton::mpi().getRank()==0) {
-        *output << "[" << text << "] " << str();
+        *output << "[" << text << ts << "] " << str();
       }
     }
   #endif
@@ -90,22 +110,20 @@ int OMBuf::sync()
   if (multiOutput==true) {
     *output << "["
             << text << ":" << singleton::omp().getRank()
-            << "] " << str();
+            << ts << "] " << str();
   }
-  else {    // multiOutput==false
+  else {
     if (singleton::omp().getRank()==0) {
-      *output << "[" << text << "] " << str();
+      *output << "[" << text << ts << "] " << str();
     }
   }
 #else
-  *output << "[" << text << "] " << str();
+  *output << "[" << text << ts << "] " << str();
 #endif
   str("");
   output->flush();
   return 0;
 }
-
-// class OstreamManager /////////////////////////////////
 
 OstreamManager::OstreamManager(std::string classname)
   : std::ostream(&buffer), buffer(std::cout, classname)
@@ -128,6 +146,11 @@ OstreamManager& OstreamManager::operator=(const OstreamManager& rhs)
 void OstreamManager::setMultiOutput(bool b)
 {
   buffer.setMultiOutput(b);
+}
+
+void OstreamManager::setTimestamps(bool b)
+{
+  buffer.setTimestamps(b);
 }
 
 }

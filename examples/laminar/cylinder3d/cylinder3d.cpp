@@ -62,7 +62,6 @@ int main(int argc, char* argv[])
     myCaseParameters.set<VTK_ENABLED>(true);
     myCaseParameters.set<GNUPLOT_ENABLED>(true);
   }
-  myCaseParameters.fromCLI(argc, argv);
 
   /// === Step 3: Create Mesh ===
   Mesh mesh = createMesh(myCaseParameters);

@@ -66,6 +66,32 @@ bool CircularInterface2D<T>::operator()(T output[], const T x[])
 
 
 template <typename T>
+PlanarInterface2D<T>::PlanarInterface2D(Vector<T,2> center, Vector<T,2> direction, T interfaceWidth, T factor) : AnalyticalF2D<T,T>(1)
+{
+  this->getName() = "PlanarInterface2D";
+  for (int i = 0; i < 2; ++i) {
+    _center[i] = center[i];
+    _direction[i] = direction[i];
+  }
+  _interfaceWidth = interfaceWidth;
+  _factor = factor;
+}
+
+template <typename T>
+bool PlanarInterface2D<T>::operator()(T output[], const T input[])
+{
+  Vector<T,2> in{input[0]-_center[0],
+                 input[1]-_center[1]};
+  Vector<T,2> n = util::normalize(_direction);
+  T d = util::abs(in * n);
+  T d_int = util::norm<2>(_direction);
+
+  output[0] = T(_factor*(1.-tanh(2.*(d-d_int)/_interfaceWidth))/2.);
+  return true;
+}
+
+
+template <typename T>
 LaplacePressure2D<T>::LaplacePressure2D(std::vector<T> center, T radius, T interfaceWidth, T surfaceTension) : AnalyticalF2D<T,T>(1)
 {
   this->getName() = "LaplacePressure2D";

@@ -1,6 +1,7 @@
 /*  This file is part of the OpenLB library
  *
  *  Copyright (C) 2006 Jonas Latt, 2021 Julius Jessberger, Adrian Kummerlaender
+ *                2026 Shota Ito
  *  E-mail contact: info@openlb.net
  *  The most recent release of OpenLB can be downloaded at
  *  <http://www.openlb.net/>
@@ -38,6 +39,7 @@
 #include <type_traits>
 #include <functional>
 
+#include "utilities/vectorHelpers.h"
 #include "elements.h"
 
 namespace olb {
@@ -92,7 +94,7 @@ template <
   typename STRESS,
   typename DefinitionRule
 >
-struct ConcreteTuple {
+struct ConcreteTuple : public FieldsProvider<DENSITY,MOMENTUM,STRESS> {
   using descriptor = DESCRIPTOR;
   using type = ConcreteTuple;
   using density = DENSITY;

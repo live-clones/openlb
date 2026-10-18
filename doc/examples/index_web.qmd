@@ -1,0 +1,16 @@
+---
+title: "Examples"
+# The overview below is a raw HTML table exported from a spreadsheet, which
+# carries its own widths and cell styles. Quarto's table post-processing would
+# drop its <colgroup> and restyle it as a Bootstrap table, so it is turned off
+# for this page.
+html-table-processing: none
+---
+
+A tabular overview of the examples. The table is generated from the exported
+spreadsheet by `example_table.sh`; see that script before editing it by hand.
+It is wider than the text column, so it scrolls sideways.
+
+::: {.column-screen-inset}
+{{< include _table_google.qmd >}}
+:::

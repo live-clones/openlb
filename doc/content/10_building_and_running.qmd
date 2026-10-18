@@ -1,0 +1,50 @@
+---
+title: Building and Running OpenLB
+number-sections: true
+toc: true
+---
+
+## Install Dependencies
+
+### MacOS 
+
+1. Install homebrew package manager (also possible to use any other package manager for Mac)
+```{.bash}
+curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh
+```
+
+for Intel: 
+```{.bash}  
+echo 'eval "$(/opt/homebrew/bin/brew shellenv)"' >> ~/.zprofile
+eval "$(/opt/homebrew/bin/brew shellenv)"
+```
+for Apple Silicon (M1,M2,M3 ...): 
+```{.bash}  
+echo 'eval "$(/usr/local/bin/brew shellenv)"' >> ~/.zprofile
+eval "$(/usr/local/bin/brew shellenv)"
+```
+
+2. Use brew to install gcc (if desired) and gnumake, open-mpi (TODO: maybe also tinyxml and zlib ?)
+```{.bash}
+brew install gcc make open-mpi
+```
+
+3. Check installation of g++ and version
+```{.bash}
+which g++-15
+g++-15 -v
+```
+
+4. Check mpi implementation
+```{.bash}
+mpicxx -v
+```
+Output should be TODO:
+
+6. Set environment variables
+```{.bash}
+export OMPI_CXX=${which g++-15}
+export OMPI_CC=${which gcc-15}
+```
+
+5. Use config.mk file in the directory OLB_ROOT/configs

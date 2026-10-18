@@ -188,6 +188,7 @@ void prepareLattice(MyCase& myCase)
 }
 
 void setInitialValues(MyCase& myCase) {
+  using NSDESCRIPTOR = MyCase::descriptor_t_of<NavierStokes>;
   using ACDESCRIPTOR = MyCase::descriptor_t_of<Component1>;
   using T = MyCase::value_t;
   auto& geometry = myCase.getGeometry();
@@ -260,9 +261,9 @@ void setInitialValues(MyCase& myCase) {
   setBouzidiPhaseField<IsoPhaseFieldCurvedWall2D>(latticeAC, geometry, 2, wallLocation);
 
   // inlet and outlet
-  boundary::set<boundary::IncompressibleZouHeVelocity>(latticeNS, inlet);
+  boundary::set<boundary::IncompressibleZouHeVelocity<T,NSDESCRIPTOR,NSBulkDynamics,momenta::IncRegularizedVelocityBoundaryTuple>>(latticeNS, inlet);
   boundary::set<boundary::RegularizedTemperature>(latticeAC, inlet);
-  boundary::set<boundary::IncompressibleZouHePressure>(latticeNS, outlet);
+  boundary::set<boundary::IncompressibleZouHePressure<T,NSDESCRIPTOR,NSBulkDynamics,momenta::IncRegularizedPressureBoundaryTuple>>(latticeNS, outlet);
   setConvectivePhaseFieldBoundary<T,ACDESCRIPTOR>(latticeAC, outlet);
 
   const T maxVelocity_phys = Re/Ny*((tau_l-0.5)/3.)*dx/dt;
@@ -331,7 +332,6 @@ void getResults(
   auto& latticeNS = myCase.getLattice(NavierStokes{});
   auto& latticeAC = myCase.getLattice(Component1{});
   const auto& converter = latticeNS.getUnitConverter();
-
   const int statIter = params.get<parameters::LATTICE_STAT_ITER_T>();
   const int vtkIter = params.get<parameters::LATTICE_VTK_ITER_T>();
 
@@ -349,8 +349,8 @@ void getResults(
     // Timer console output
     timer.update( iT );
     timer.printStep();
-    latticeNS.getStatistics().print( iT, converter.getPhysTime(iT) );
-    latticeAC.getStatistics().print( iT, converter.getPhysTime(iT) );
+    latticeNS.getStatistics().print( iT, converter.getPhysTime(iT), "NSlattice" );
+    latticeAC.getStatistics().print( iT, converter.getPhysTime(iT), "AClattice" );
   }
 
   // Writes the VTK files
@@ -461,25 +461,24 @@ int main( int argc, char *argv[] )
   }
   {
     using T = MyCase::value_t;
-    myCaseParameters.set<parameters::MAX_LATTICE_T>([&]{
-      const T char_l = myCaseParameters.get<parameters::PHYS_CHAR_LENGTH>();
-      const T N = myCaseParameters.get<parameters::RESOLUTION>();
-      const T Nx = myCaseParameters.get<parameters::DOMAIN_EXTENT>()[0] / char_l * N;
-      const T Ny = myCaseParameters.get<parameters::DOMAIN_EXTENT>()[1] / char_l * N;
-      const T Re = myCaseParameters.get<parameters::REYNOLDS>();
-      const T tau_l = myCaseParameters.get<parameters::LATTICE_RELAXATION_TIME>();
+    myCaseParameters.set<parameters::MAX_LATTICE_T>([](MyCase::ParametersD& p){
+      const T char_l = p.get<parameters::PHYS_CHAR_LENGTH>();
+      const T N = p.get<parameters::RESOLUTION>();
+      const T Nx = p.get<parameters::DOMAIN_EXTENT>()[0] / char_l * N;
+      const T Ny = p.get<parameters::DOMAIN_EXTENT>()[1] / char_l * N;
+      const T Re = p.get<parameters::REYNOLDS>();
+      const T tau_l = p.get<parameters::LATTICE_RELAXATION_TIME>();
       const T maxIter = Nx/(Re/Ny*((tau_l-0.5)/3.))*1.1;
       return maxIter;
     });
-    myCaseParameters.set<parameters::DOMAIN_EXTENT_LATTICE>([&]{
-      const T char_l = myCaseParameters.get<parameters::PHYS_CHAR_LENGTH>();
-      const T N = myCaseParameters.get<parameters::RESOLUTION>();
-      const T Nx = myCaseParameters.get<parameters::DOMAIN_EXTENT>()[0] / char_l * N;
-      const T Ny = myCaseParameters.get<parameters::DOMAIN_EXTENT>()[1] / char_l * N;
+    myCaseParameters.set<parameters::DOMAIN_EXTENT_LATTICE>([](MyCase::ParametersD& p){
+      const T char_l = p.get<parameters::PHYS_CHAR_LENGTH>();
+      const T N = p.get<parameters::RESOLUTION>();
+      const T Nx = p.get<parameters::DOMAIN_EXTENT>()[0] / char_l * N;
+      const T Ny = p.get<parameters::DOMAIN_EXTENT>()[1] / char_l * N;
       return Vector<T,2> {Nx, Ny};
     });
   }
-  myCaseParameters.fromCLI(argc, argv);
 
   /// === Step 3: Create Mesh ===
   Mesh mesh = createMesh(myCaseParameters);

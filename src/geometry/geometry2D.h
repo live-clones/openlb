@@ -28,11 +28,11 @@
 
 #include "discreteNormals.h"
 #include "blockGeometry.h"
-#include "blockGeometryStatistics2D.h"
+#include "blockGeometryStatistics.h"
 #include "cuboid.h"
 #include "cuboid.h"
 #include "cuboidDecomposition.h"
 #include "superGeometry.h"
-#include "superGeometryStatistics2D.h"
+#include "superGeometryStatistics.h"
 
 #endif

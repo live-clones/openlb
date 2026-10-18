@@ -405,16 +405,15 @@ int main(int argc, char* argv[])
     myCaseParameters.set<SCATTERING>(1.5);
 
     myCaseParameters.set<LATTICE_RELAXATION_TIME>(1.0);
-    myCaseParameters.set<MU_EFF>([&] {
-      return util::sqrt(3 * myCaseParameters.get<ABSORPTION>() *
-                        (myCaseParameters.get<ABSORPTION>() + myCaseParameters.get<SCATTERING>()));
+    myCaseParameters.set<MU_EFF>([](MyCase::ParametersD& p) {
+      return util::sqrt(3 * p.get<ABSORPTION>() *
+                        (p.get<ABSORPTION>() + p.get<SCATTERING>()));
     });
 
-    myCaseParameters.set<PHYS_DELTA_X>([&] {
-      return myCaseParameters.get<DOMAIN_L>() / myCaseParameters.get<RESOLUTION>();
+    myCaseParameters.set<PHYS_DELTA_X>([](MyCase::ParametersD& p) {
+      return p.get<DOMAIN_L>() / p.get<RESOLUTION>();
     });
   }
-  myCaseParameters.fromCLI(argc, argv);
 
   /// === Step 3: Create Mesh ===
   Mesh mesh = createMesh(myCaseParameters);

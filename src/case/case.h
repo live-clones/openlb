@@ -24,6 +24,7 @@
 #ifndef CASE_CASE_H
 #define CASE_CASE_H
 
+#include "utilities/log/channels.h"
 #include "mesh.h"
 #include "parametersD.h"
 
@@ -33,24 +34,46 @@
 #include "utilities/typeIndexedContainers.h"
 
 #include "setters.h"
+#include "reporter.h"
+#include "statisticsReporter.h"
+#include "timerReporter.h"
+#include "refinement/vtkReporter.h"
+
+#include "refinement/mesh.h"
+#include "refinement/geometry.h"
+#include "refinement/lattice.h"
 
 namespace olb {
 
 template <typename MAP>
 class ConcreteCase {
 public:
+  /// Named components of this case
+  using map_t = MAP;
+
   // Select first descriptor as reference for value type and dimension (for now)
-  using reference_component_t = MAP::values_t::template get<0>;
+  using reference_component_t = typename MAP::values_t::template get<0>;
 
   // Expose reference value type to use in apps with single lattice
-  using value_t = reference_component_t::value_t;
+  using value_t = typename reference_component_t::value_t;
   // Expose reference descriptor type to use in apps with single lattice
-  using descriptor_t = reference_component_t::descriptor_t;
+  using descriptor_t = typename reference_component_t::descriptor_t;
 
   template <typename VALUE_TYPE>
   using exchange_value_t = ConcreteCase<typename MAP::template map_values<
     meta::exchange_value_type<VALUE_TYPE>::template type
   >>;
+
+  // Check first lattice to determine (un)refined state
+  static constexpr bool is_refined = is_refined_lattice<reference_component_t>::value;
+
+  using mesh_t = std::conditional_t<is_refined,
+                                    RefinedMesh<value_t, reference_component_t::descriptor_t::d>,
+                                    Mesh<value_t, reference_component_t::descriptor_t::d>>;
+
+  using geometry_t = std::conditional_t<is_refined,
+                                        RefinedGeometry<value_t, reference_component_t::descriptor_t::d>,
+                                       SuperGeometry<value_t, reference_component_t::descriptor_t::d>>;
 
   using ParametersD = olb::ParametersD<typename reference_component_t::value_t,
                                        typename reference_component_t::descriptor_t>;
@@ -60,12 +83,10 @@ private:
   ParametersD& _parameters;
 
   /// Reference to mesh (shared between multiple cases)
-  Mesh<typename reference_component_t::value_t,
-       reference_component_t::descriptor_t::d>& _mesh;
+  mesh_t& _mesh;
 
   /// Case-specific geometry
-  std::unique_ptr<SuperGeometry<typename reference_component_t::value_t,
-                                reference_component_t::descriptor_t::d>> _geometry;
+  std::unique_ptr<geometry_t> _geometry;
 
   /// Case-specific named components (e.g. lattices, ...)
   utilities::TypeIndexedTuple<typename MAP::template map_values<meta::unique_ptr_to>> _components;
@@ -73,61 +94,57 @@ private:
   /// Arbitrary case-specific operators
   std::unordered_map<std::string, std::unique_ptr<ApplicableO>> _operators;
 
-  std::string _name{"ConcreteCase"};
+  /// Built-in reporters, keyed by name
+  std::unordered_map<std::string, std::unique_ptr<Reporter>> _reporters;
+
+  std::string _name{"Case"};
 
 public:
   static constexpr unsigned d = reference_component_t::descriptor_t::d;
 
   template <typename NAME>
-  using value_t_of = MAP::template value<NAME>::value_t;
+  using value_t_of = typename MAP::template value<NAME>::value_t;
   template <typename NAME>
-  using descriptor_t_of = MAP::template value<NAME>::descriptor_t;
+  using descriptor_t_of = typename MAP::template value<NAME>::descriptor_t;
 
-  /// (Re)construct all named components and reset operators
-  void constructComponentsFromMesh() {
-    /// Necessary due to impending invalidation
-    _operators.clear();
-    MAP::keys_t::for_each([&](auto name) {
-      using COMPONENT = MAP::template value<typename decltype(name)::type>;
-      _components.set(name, std::make_unique<COMPONENT>(_mesh));
-    });
+  /// (Re)construct all named components (stamping each with its case name) and reset operators
+  void constructComponentsFromMesh();
+
+  ConcreteCase(ParametersD& parameters, mesh_t& mesh);
+
+  /// Print the component-to-lattice map
+  void print(OstreamManager clout={std::cout, "Case"});
+
+  /// Drive the registered reporters
+  void report(std::size_t iT);
+  /// Drive one end-of-run report per reporter
+  void finalize(std::size_t iT);
+
+  /// Register REPORTER under name; its parameters live in the like-named subgroup
+  template <typename REPORTER, typename... ARGS>
+  auto& setReporter(std::string name, ARGS&&... args) {
+    using concrete_t = ConcreteReporter<ConcreteCase<MAP>, REPORTER>;
+    auto ptr = std::make_unique<concrete_t>(*this, name, std::forward<ARGS>(args)...);
+    auto& concrete = *ptr;
+    _reporters[name] = std::move(ptr);
+    return concrete;
   }
 
-  ConcreteCase(ParametersD& parameters,
-               Mesh<typename reference_component_t::value_t,d>& mesh)
-    : _parameters{parameters}
-    , _mesh{mesh}
-    , _geometry{new SuperGeometry<typename reference_component_t::value_t,
-                                  reference_component_t::descriptor_t::d>(
-          mesh.getCuboidDecomposition()
-        , mesh.getLoadBalancer()
-        , mesh.getOverlap())}
-    , _components{}
-  {
-    OstreamManager clout(std::cout, "Case");
-    constructComponentsFromMesh();
-    clout << std::endl;
-    clout << "-- OpenLB Case Components --" << std::endl;
-    print(clout);
-    clout << std::endl;
-    clout << "-- Parameters --" << std::endl;
-    _parameters.print(clout);
-    clout << std::endl;
-  };
-
-  void print(OstreamManager clout={std::cout, "Case"}) const {
-    std::size_t nCharName = 0;
-    MAP::keys_t::for_each([&](auto name) {
-      using NAME = typename decltype(name)::type;
-      nCharName = std::max(nCharName, fields::name<NAME>().length());
-    });
-    MAP::keys_t::for_each([&](auto name) {
-      using NAME = typename decltype(name)::type;
-      using COMPONENT = MAP::template value<NAME>;
-      clout << fields::name<NAME>() << std::string(nCharName - fields::name<NAME>().length(), ' ')
-            << " = " << fields::name<COMPONENT>() << std::endl;
-    });
+  Reporter& getReporter(std::string name) {
+    return *_reporters.at(name);
   }
+
+  /// Returns whether a reporter is registered under name
+  bool hasReporter(std::string name) const {
+    return _reporters.find(name) != _reporters.end();
+  }
+
+  /// Unregister the reporter under name; returns whether one was removed
+  bool removeReporter(std::string name) {
+    return _reporters.erase(name) > 0;
+  }
+
+public:
 
   ParametersD& getParameters() {
     return _parameters;
@@ -152,8 +169,13 @@ public:
   auto& getLattice(NAME name) {
     using T = value_t_of<NAME>;
     using DESCRIPTOR = descriptor_t_of<NAME>;
-    // Ensure that component with NAME is actually a lattice
-    return static_cast<Lattice<T,DESCRIPTOR>&>(get(name));
+    using COMPONENT = typename MAP::template value<NAME>;
+    if constexpr (is_refined_lattice<COMPONENT>::value) {
+      return static_cast<RefinedLattice<T, DESCRIPTOR>&>(get(name));
+    }
+    else {
+      return static_cast<Lattice<T, DESCRIPTOR>&>(get(name));
+    }
   }
 
   ApplicableO& getOperator(std::string name) {
@@ -166,6 +188,10 @@ public:
     auto& concrete = *ptr;
     _operators[name].reset(ptr.release());
     return concrete;
+  }
+
+  void resetGeometry() {
+    _geometry.reset(new geometry_t(_mesh));
   }
 
   void resetLattices() {

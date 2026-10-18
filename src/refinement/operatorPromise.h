@@ -34,7 +34,7 @@ class BlockRefinementOperatorPromise {
 private:
   std::function<void(BlockRefinementContextD<T,DESCRIPTOR>&)> _executor;
   std::function<std::set<FieldTypePromise<T,refinement::DATA_DESCRIPTOR<DESCRIPTOR>>>()> _requiredData;
-  bool _requiresContextNeigborAccess;
+  bool _requiresContextNeighborAccess;
   std::type_index _operatorId;
 
 public:
@@ -60,14 +60,13 @@ public:
           context.template asConcrete<Platform::GPU_CUDA>());
         break;
 #endif
-#ifdef PLATFORM_GPU_HIP
-      case Platform::GPU_HIP:
-        ConcreteBlockRefinementO<T,DESCRIPTOR,Platform::GPU_HIP,OPERATOR>().apply(
-          context.template asConcrete<Platform::GPU_HIP>());
-        break;
-#endif
       default:
-        throw std::runtime_error("Refinement executor not implemented for PLATFORM");
+        // Refinement operators are only implemented for CPU (SISD/SIMD) and
+        // GPU CUDA. HIP and SYCL are not yet supported: throw cleanly here
+        // rather than dispatching to a non-existent per-platform executor
+        // (which would fail to compile for those platforms).
+        throw std::runtime_error("Refinement executor not implemented for this platform "
+                                 "(supported: CPU SISD/SIMD, GPU CUDA; unsupported: GPU HIP, GPU SYCL)");
       }
     }),
     _requiredData([]() -> std::set<FieldTypePromise<T,refinement::DATA_DESCRIPTOR<DESCRIPTOR>>> {
@@ -77,7 +76,7 @@ public:
       });
       return fields;
     }),
-    _requiresContextNeigborAccess{
+    _requiresContextNeighborAccess{
       OPERATOR::data::template contains<fields::refinement::CONTEXT_NEIGHBORS>()
     },
     _operatorId{typeid(OPERATOR)}
@@ -88,7 +87,7 @@ public:
   }
 
   bool requiresContextNeighborAccess() const {
-    return _requiresContextNeigborAccess;
+    return _requiresContextNeighborAccess;
   }
 
   std::type_index id() const {

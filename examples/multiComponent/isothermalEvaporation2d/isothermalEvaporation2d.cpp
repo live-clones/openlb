@@ -417,7 +417,7 @@ void getResults(MyCase& myCase, int iT, util::Timer<MyCase::value_t>& timer)
     SuperIdentity2D<T,T> _force_phs( force_lat * _C_F );
     _force_phs.getName() = "physical force";
 
-    SuperLatticeExternalScalarField2D<T, DESCRIPTOR, CHEM_POTENTIAL> chemical_lat( lattice );
+    SuperLatticeField2D<T, DESCRIPTOR, CHEM_POTENTIAL> chemical_lat( lattice );
     SuperIdentity2D<T,T> _chemical_lat( chemical_lat );
     _chemical_lat.getName() = "lattice chemical potential";
 
@@ -426,7 +426,7 @@ void getResults(MyCase& myCase, int iT, util::Timer<MyCase::value_t>& timer)
     SuperIdentity2D<T,T> _chemical_phs( chemical_lat * _C_MU );
     _chemical_phs.getName() = "physical chemical potential";
 
-    SuperLatticeExternalScalarField2D<T, DESCRIPTOR, OMEGA> omega( lattice );
+    SuperLatticeField2D<T, DESCRIPTOR, OMEGA> omega( lattice );
     SuperIdentity2D<T,T> _omega( omega );
     _omega.getName() = "omega";
 
@@ -576,7 +576,6 @@ int main( int argc, char *argv[] )
     myCaseParameters.set<LATTICE_VTK_ITER_T>(100);
     myCaseParameters.set<LATTICE_STAT_ITER_T>(100);
   }
-  myCaseParameters.fromCLI(argc, argv);
 
   /// === Step 3: Create Mesh ===
   Mesh mesh = createMesh(myCaseParameters);

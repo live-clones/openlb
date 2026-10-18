@@ -48,8 +48,7 @@
 #include <string>
 
 #include "geometry/cuboidDecomposition.h"
-#include "geometry/superGeometryStatistics2D.h"
-#include "geometry/superGeometryStatistics3D.h"
+#include "geometry/superGeometryStatistics.h"
 #include "geometry/blockGeometry.h"
 #include "communication/superStructure.h"
 #include "communication/loadBalancer.h"
@@ -63,6 +62,8 @@
 
 // All OpenLB code is contained in this namespace.
 namespace olb {
+
+template<typename T, unsigned D> class Mesh;
 
 template<typename T, unsigned D>
 class SuperGeometry : public SuperStructure<T,D>
@@ -86,6 +87,8 @@ private:
   /// Writes out current geometry to VTK if _writeIncrementalVtkEnabled is true
   void writeIncrementalVTK();
 
+  bool _disableStatsAndComm = false;
+
 public:
   constexpr static unsigned d = D;
 
@@ -94,6 +97,8 @@ public:
   SuperGeometry(CuboidDecomposition<T,D>& cuboidDecomposition,
                 LoadBalancer<T>& loadBalancer,
                 int overlap = 3);
+
+  SuperGeometry(Mesh<T,D>& mesh);
 
   /// Read only access to the material numbers, error handling: returns 0 if data is not available
   int get(LatticeR<D+1> latticeR) const;
@@ -148,8 +153,8 @@ public:
   /// check for errors (searches for all outer voxels (=0) with an inner voxel (=1) as a direct neighbour)
   bool checkForErrors(bool verbose=true);
 
-  /// reset all cell materials inside of a domain to 0
-  void reset(IndicatorF<T,D>& domain);
+  /// reset all cell materials inside of a domain to toM
+  void reset(IndicatorF<T,D>& domain, int toM=0);
 
   /// replace one material with another
   void rename(int fromM, int toM);
@@ -163,7 +168,9 @@ public:
   void rename(int fromBcMat, int toBcMat, int fluidMat, IndicatorF<T,D>& condition);
   /// renames all boundary voxels of material fromBcMat to toBcMat if two neighbour voxel in the direction of the discrete normal are fluid voxel with material fluidM in the region where the indicator function is fulfilled
   void rename(int fromBcMat, int toBcMat, int fluidMat, FunctorPtr<IndicatorF<T,D>>&& condition);
-
+  void rename(int fromBcMat, int toBcMat, int fluidMat, FunctorPtr<IndicatorF<T,D>>&& condition, Vector<int,D> testDirection);
+  /// Replaces fromM with toM if fromM neigbors neighborM
+  void renameNeighborsOf(int fromM, int toM, int neighborM);
 
   /// Prints some information about the super geometry
   void print();
@@ -198,10 +205,14 @@ public:
 
   void communicate() override
   {
-    if (_communicationNeeded) {
+    if (_communicationNeeded && !_disableStatsAndComm) {
       _communicator->communicate();
       _communicationNeeded = false;
     }
+  }
+
+  void disableStatisticsAndCommunication() {
+    _disableStatsAndComm = true;
   }
 
   /// Number of data blocks for the serializable interface

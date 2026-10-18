@@ -70,16 +70,53 @@ CuboidDecomposition<T,D>::CuboidDecomposition(IndicatorF<T,D>& indicatorF, T vox
 
 template <typename T, unsigned D>
 CuboidDecomposition<T,D>::CuboidDecomposition(IndicatorF<T,D>& indicatorF, T voxelSize, int nC, std::string minimizeBy)
-  : _motherCuboid(indicatorF.getMin(), voxelSize, (indicatorF.getMax() - indicatorF.getMin()) / voxelSize + 1.5)
+  : _motherCuboid(indicatorF.getMin(),
+                  voxelSize,
+                  (indicatorF.getMax() - indicatorF.getMin()) / voxelSize + 1.5)
   , _cuboids{_motherCuboid}
   , _periodicityOn{}
 {
-  if ( minimizeBy == "volume" ) {
+         if (minimizeBy == "splitOnly") {
+    split(0, nC);
+  } else if (minimizeBy == "volume") {
     minimizeByVolume(*this, indicatorF, nC);
   }
-  else if ( minimizeBy == "weight" ) {
+  else if (minimizeBy == "weight") {
     minimizeByWeight(*this, indicatorF, nC);
   }
+}
+
+template <typename T, unsigned D>
+CuboidDecomposition<T,D>::CuboidDecomposition(std::vector<Cuboid<T,D>> cuboids, T voxelSize)
+  :_cuboids(std::move(cuboids))
+  , _periodicityOn{}
+{
+  if (_cuboids.empty()) {
+    if constexpr (D==2) {
+      _motherCuboid = Cuboid<T,D>({0,0}, voxelSize,{0,0});
+    }
+    else {
+      _motherCuboid = Cuboid<T,D>({0,0,0}, voxelSize,{0,0,0});
+
+    }
+    return;
+  }
+  Vector<T,D> max = _cuboids[0].getOrigin();
+  Vector<T,D> min = _cuboids[0].getOrigin();
+  for (Cuboid<T,D>& cuboid: _cuboids) {
+    Vector<T,D> curMin = cuboid.getOrigin();
+    Vector<T,D> curMax =  voxelSize * cuboid.getExtent() + cuboid.getOrigin();
+
+    for (int i = 0; i < D; i ++) {
+      if (curMax[i] > max[i]) {
+        max[i] = curMax[i];
+      }
+      if (curMin[i] < min[i]) {
+        min[i] = curMin[i];
+      }
+    }
+  }
+  _motherCuboid = Cuboid<T,D>(min, voxelSize, (max - min) / voxelSize + 1.5);
 }
 
 template <typename T, unsigned D>
@@ -99,8 +136,65 @@ std::optional<int> CuboidDecomposition<T,D>::getC(Vector<T,D> physR, int padding
 }
 
 template <typename T, unsigned D>
+std::optional<int> CuboidDecomposition<T,D>::getC(Vector<T,D> physR,
+                                                  int padding,
+                                                  const std::vector<int>& candidates) const {
+  for (int iC : candidates) {
+    if (get(iC).isInside(physR, padding)) {
+      return iC;
+    }
+  }
+  return std::nullopt;
+}
+
+template <typename T, unsigned D>
+std::optional<int> CuboidDecomposition<T,D>::getC(Vector<T,D> physR,
+                                                  int padding,
+                                                  const std::vector<int>& candidates,
+                                                  int* lastC) const {
+  if (lastC && *lastC != -1) {
+    if (get(*lastC).isInside(physR, padding)) {
+      return *lastC;
+    }
+  }
+
+  for (int iC : candidates) {
+    if (get(iC).isInside(physR, padding)) {
+      if (lastC) {
+        *lastC = iC;
+      }
+      return iC;
+    }
+  }
+  return std::nullopt;
+}
+
+template <typename T, unsigned D>
 std::optional<LatticeR<D+1>> CuboidDecomposition<T,D>::getLatticeR(Vector<T,D> physR) const {
   if (auto iC = getC(physR, 0)) {
+    const auto& c = get(*iC);
+    return LatticeR<D>{util::floor((physR - c.getOrigin()) / c.getDeltaR() + 0.5)}.withPrefix(*iC);
+  }
+  return std::nullopt;
+}
+
+template <typename T, unsigned D>
+std::optional<LatticeR<D+1>> CuboidDecomposition<T,D>::getSurroundingLatticeR(Vector<T,D> physR,
+                                                                              int sourceC,
+                                                                              int* lastC) const {
+  // Use the neighbor cache when it has been built; otherwise fall back to a full
+  // search (correct, just slower) so the decomposition is usable even before
+  // buildNeighborCache has run.
+  auto iC = (sourceC >= 0 && sourceC < static_cast<int>(_neighborCache.size()))
+            ? getC(physR, 0, _neighborCache[sourceC], lastC)
+            : getC(physR, 0);
+  // The neighbor cache excludes the cuboid itself (see getNeighborhood), so a
+  // periodic overlap that wraps onto the source cuboid (e.g. single-cuboid
+  // periodicity) is not found via the cache. Fall back to the full search.
+  if (!iC) {
+    iC = getC(physR, 0);
+  }
+  if (iC) {
     const auto& c = get(*iC);
     return LatticeR<D>{util::floor((physR - c.getOrigin()) / c.getDeltaR() + 0.5)}.withPrefix(*iC);
   }
@@ -123,8 +217,52 @@ T CuboidDecomposition<T,D>::getDeltaR() const {
 
 template <typename T, unsigned D>
 bool CuboidDecomposition<T,D>::isInside(Vector<T,D> physR) const {
-  for (unsigned i = 0; i < _cuboids.size(); i++) {
-    if (_cuboids[i].isInside(physR, 1)) {
+  Vector<T,D> wrappedPhysR = physR;
+  const Vector<T,D> mOrigin = _motherCuboid.getOrigin();
+  const T deltaR = _motherCuboid.getDeltaR();
+
+  for (unsigned iD = 0; iD < D; ++iD) {
+    if (_periodicityOn[iD]) {
+      const T length = deltaR * _motherCuboid.getExtent()[iD];
+      wrappedPhysR[iD] = std::remainder(physR[iD] - mOrigin[iD] + length, length);
+      // Floating point correction for remainder near zero
+      if (wrappedPhysR[iD] * wrappedPhysR[iD] < 1e-6 * deltaR * deltaR) {
+        wrappedPhysR[iD] = T{};
+      }
+      if (wrappedPhysR[iD] < 0) {
+        wrappedPhysR[iD] += length;
+      }
+      wrappedPhysR[iD] += mOrigin[iD];
+    }
+  }
+
+  for (const auto& cuboid : _cuboids) {
+    if (cuboid.isInside(wrappedPhysR, 1)) {
+      return true;
+    }
+  }
+  return false;
+}
+
+template <typename T, unsigned D>
+bool CuboidDecomposition<T,D>::isInsideCached(Vector<T,D> physR, int& lastC) const {
+  if (lastC >= 0 && lastC < size()) {
+    if (get(lastC).isInside(physR, 1)) {
+      return true;
+    }
+    if (!_neighborCache.empty()) {
+      for (int iN : _neighborCache[lastC]) {
+        if (get(iN).isInside(physR, 1)) {
+          lastC = iN;
+          return true;
+        }
+      }
+    }
+  }
+
+  for (int i = 0; i < size(); ++i) {
+    if (get(i).isInside(physR, 1)) {
+      lastC = i;
       return true;
     }
   }
@@ -518,6 +656,16 @@ std::size_t CuboidDecomposition<T,D>::getMaxLatticeVolume() const
 }
 
 template <typename T, unsigned D>
+std::size_t CuboidDecomposition<T,D>::getLatticeVolume() const
+{
+  std::size_t sumNodes = 0;
+  for (unsigned i = 0; i < _cuboids.size(); i++) {
+    sumNodes += _cuboids[i].getLatticeVolume();
+  }
+  return sumNodes;
+}
+
+template <typename T, unsigned D>
 std::size_t CuboidDecomposition<T,D>::getNumNodes() const
 {
   std::size_t numNodes = 0;
@@ -592,6 +740,46 @@ void CuboidDecomposition<T,D>::remove(IndicatorF<T,D>& indicatorF)
   }
   for (int iC = _cuboids.size() - 1; iC >= 0; iC--) {
     if (allZero[iC]) {
+      remove(iC);
+    }
+  }
+}
+
+template <typename T, unsigned D>
+void CuboidDecomposition<T,D>::removeContaining(IndicatorF<T,D>& indicatorF)
+{
+  std::vector<bool> allZero{};
+  LatticeR<D+1> latticeR{};
+  for (int iC = 0; iC < size(); iC++) {
+    latticeR[0] = iC;
+    allZero.push_back(true);
+    for (int iX = 0; iX < _cuboids[iC].getNx(); iX++) {
+      latticeR[1] = iX;
+      for (int iY = 0; iY < _cuboids[iC].getNy(); iY++) {
+        latticeR[2] = iY;
+        if constexpr (D == 3) {
+          for (int iZ = 0; iZ < _cuboids[iC].getNz(); iZ++) {
+            latticeR[3] = iZ;
+            auto physR = getPhysR(latticeR);
+            bool inside[1];
+            indicatorF(inside, physR.data());
+            if (inside[0]) {
+              allZero[iC] = 0;
+            }
+          }
+        } else {
+          auto physR = getPhysR(latticeR);
+          bool inside[1];
+          indicatorF(inside, physR.data());
+          if (inside[0]) {
+            allZero[iC] = 0;
+          }
+        }
+      }
+    }
+  }
+  for (int iC = _cuboids.size() - 1; iC >= 0; iC--) {
+    if (!allZero[iC]) {
       remove(iC);
     }
   }
@@ -699,6 +887,15 @@ void CuboidDecomposition<T,D>::shrink(IndicatorF<T,D>& indicatorF)
   for (int iC = size() - 1; iC >= 0; iC--) {
     shrink(iC, indicatorF);
   }
+  updateMotherCuboid();
+}
+
+template <typename T, unsigned D>
+void CuboidDecomposition<T,D>::updateMotherCuboid()
+{
+  if (_cuboids.empty()) {
+    return;
+  }
   // shrink mother cuboid
   Vector<T,D> minPhysR = getMinPhysR();
   Vector<T,D> maxPhysR = getMaxPhysR();
@@ -736,6 +933,12 @@ void CuboidDecomposition<T,D>::refineCellCentered(int factor)
   for (auto& cuboid : _cuboids) {
     cuboid.refineCellCentered(factor);
   }
+}
+
+template <typename T, unsigned D>
+void CuboidDecomposition<T,D>::refineCellCentered(int iC, int factor)
+{
+  _cuboids[iC].refineCellCentered(factor);
 }
 
 template <typename T, unsigned D>
@@ -937,6 +1140,63 @@ void CuboidDecomposition<T,D>::splitFractional(int iC, int iD, std::vector<T> fr
 }
 
 template <typename T, unsigned D>
+std::vector<int> CuboidDecomposition<T,D>::createNestedBox(
+  int baseC,
+  const Vector<T,D>& relOrigin,
+  const Vector<T,D>& relSize)
+{
+  std::vector<int> neighborIndices;
+  int currentInner = baseC;
+
+  for (int iD = 0; iD < D; ++iD) {
+    std::vector<T> fractions;
+    std::size_t innerFractionIndex = 0;
+
+    if (relOrigin[iD] > std::numeric_limits<T>::epsilon()) {
+      fractions.emplace_back(relOrigin[iD]);
+      innerFractionIndex = 1;
+    }
+    fractions.emplace_back(relSize[iD]);
+    T remainder = 1.0 - relOrigin[iD] - relSize[iD];
+    if (remainder > std::numeric_limits<T>::epsilon()) {
+      fractions.emplace_back(remainder);
+    }
+
+    if (fractions.size() <= 1) {
+      continue;
+    }
+
+    std::size_t nBefore = _cuboids.size();
+    splitFractional(currentInner, iD, fractions);
+
+    for (int& idx : neighborIndices) {
+      if (idx > currentInner) {
+        idx--;
+      }
+    }
+
+    int newStartIndex = static_cast<int>(nBefore) - 1;
+    int nextInner = -1;
+    for (std::size_t j = 0; j < fractions.size(); ++j) {
+      int newIdx = newStartIndex + static_cast<int>(j);
+      if (j == innerFractionIndex) {
+        nextInner = newIdx;
+      } else {
+        neighborIndices.emplace_back(newIdx);
+      }
+    }
+    currentInner = nextInner;
+  }
+
+  std::vector<int> allCreatedIndices;
+  allCreatedIndices.emplace_back(currentInner);
+  allCreatedIndices.insert(allCreatedIndices.end(),
+                           neighborIndices.begin(),
+                           neighborIndices.end());
+  return allCreatedIndices;
+}
+
+template <typename T, unsigned D>
 void CuboidDecomposition<T,D>::setWeights(IndicatorF<T,D>& indicatorF) requires (D == 3)
 {
   #ifdef PARALLEL_MODE_OMP
@@ -971,16 +1231,17 @@ template <typename T, unsigned D>
 void CuboidDecomposition<T,D>::print() const
 {
   OstreamManager clout(std::cout, "CuboidDecomposition");
-  clout << "-- Cuboid Structure Statistics --" << std::endl;
-  clout << " Number of Cuboids: " << "\t" << size() << std::endl;
-  clout << " Delta       : " << "\t" << "\t" << getDeltaR() << std::endl;
-  clout << " Ratio  (min): " << "\t" << "\t" << getMinRatio() << std::endl;
-  clout << "        (max): " << "\t" << "\t" << getMaxRatio() << std::endl;
-  clout << " Nodes  (min): " << "\t" << "\t" << getMinLatticeVolume() << std::endl;
-  clout << "        (max): " << "\t" << "\t" << getMaxLatticeVolume() << std::endl;
-  clout << " Weight (min): " << "\t" << "\t" << getMinLatticeWeight() << std::endl;
-  clout << "        (max): " << "\t" << "\t" << getMaxLatticeWeight() << std::endl;
-  clout << "---------------------------------" << std::endl;
+  auto range = [](auto lo, auto hi) {
+    return io::text::toCell(lo) + " / " + io::text::toCell(hi);
+  };
+  clout << io::text::section("Cuboid Structure") << std::endl;
+  io::text::KeyValueList()
+    .item("cuboids", size())
+    .item("delta", getDeltaR())
+    .item("ratio (min/max)", range(getMinRatio(), getMaxRatio()))
+    .item("nodes (min/max)", range(getMinLatticeVolume(), getMaxLatticeVolume()))
+    .item("weight (min/max)", range(getMinLatticeWeight(), getMaxLatticeWeight()))
+    .render(clout);
 }
 
 template <typename T, unsigned D>
@@ -1053,31 +1314,52 @@ void CuboidDecomposition<T,D>::writeToFile(std::string fileName, LoadBalancer<T>
 }
 
 template<typename T, unsigned D>
-std::unique_ptr<CuboidDecomposition<T,D>> createCuboidDecomposition(std::string fileName)
+std::unique_ptr<CuboidDecomposition<T,D>> createCuboidDecomposition(const XMLreader& reader)
 {
-  OstreamManager clout("saveCuboidDecomposition");
-  XMLreader reader(fileName);
+  std::vector<T> origin = getDataFromTag<T>(reader, "origin", D);
+  std::vector<int> extent = getDataFromTag<int>(reader, "extent", D);
+  T deltaR = getDataFromTag<T>(reader, "deltaR", 1)[0];
+  std::size_t weight = getDataFromTag<size_t>(reader, "weight", 1)[0];
 
-  std::vector<T> origin = getDataFromTag<T>(reader["CuboidDecomposition"], "origin", 3);
-  std::vector<int> extent = getDataFromTag<int>(reader["CuboidDecomposition"], "extent", 3);
-  T deltaR = getDataFromTag<T>(reader["CuboidDecomposition"], "deltaR", 1)[0];
-  std::size_t weight = getDataFromTag<size_t>(reader["CuboidDecomposition"], "weight", 1)[0];
-
-  auto cGeo = std::make_unique<CuboidDecomposition<T,D>>(origin, deltaR, extent);
+  auto cGeo = std::make_unique<CuboidDecomposition<T,D>>(Vector<T,D>(origin.data()), deltaR, Vector<int,D>(extent.data()));
   cGeo->getMotherCuboid().setWeight(weight);
   cGeo->cuboids().clear();
 
-  for ( XMLreader* cub: reader["CuboidDecomposition"] ) {
-    origin = getDataFromTag<T>(*cub, "origin", 3);
-    extent = getDataFromTag<int>(*cub, "extent", 3);
+  if (reader.getAttribute("periodicity") != "Attribute not found.") {
+    std::stringstream ss(reader.getAttribute("periodicity"));
+    Vector<bool,D> periodicity{};
+    for (unsigned iD = 0; iD < D; ++iD) { int b = 0; ss >> b; periodicity[iD] = (b != 0); }
+    cGeo->setPeriodicity(periodicity);
+  }
+
+  for ( const XMLreader* cub: reader ) {
+    if (std::string(cub->getName()) != "Cuboid") continue;
+    origin = getDataFromTag<T>(*cub, "origin", D);
+    extent = getDataFromTag<int>(*cub, "extent", D);
     deltaR = getDataFromTag<T>(*cub, "deltaR", 1)[0];
     weight = getDataFromTag<int>(*cub, "weight", 1)[0];
 
-    cGeo->cuboids().emplace_back(Cuboid<T,D>(origin, deltaR, extent));
-    cGeo->get(cGeo->size() - 1).setWeight(weight);
+    Cuboid<T,D> cuboid(Vector<T,D>(origin.data()), deltaR, Vector<int,D>(extent.data()));
+    cuboid.setWeight(weight);
+
+    if (cub->getAttribute("process") != "Attribute not found.") {
+      cuboid.setPreCalculatedProcess(std::stoi(cub->getAttribute("process")));
+    }
+    if (cub->getAttribute("isCoarseBorder") != "Attribute not found.") {
+      cuboid.setCoarseBorder(std::stoi(cub->getAttribute("isCoarseBorder")));
+    }
+
+    cGeo->cuboids().emplace_back(cuboid);
   }
 
   return cGeo;
+}
+
+template<typename T, unsigned D>
+std::unique_ptr<CuboidDecomposition<T,D>> createCuboidDecomposition(std::string fileName)
+{
+  XMLreader reader(fileName);
+  return createCuboidDecomposition<T,D>(reader["CuboidDecomposition"]);
 }
 
 }

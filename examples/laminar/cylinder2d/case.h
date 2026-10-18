@@ -40,7 +40,6 @@
 #include <olb.h>
 
 using namespace olb;
-using namespace olb::descriptors;
 using namespace olb::graphics;
 using namespace olb::names;
 
@@ -131,27 +130,12 @@ void prepareLattice(MyCase& myCase)
   clout << "Prepare Lattice ..." << std::endl;
 
   using T = MyCase::value_t;
-  using DESCRIPTOR = MyCase::descriptor_t;
   auto& parameters = myCase.getParameters();
   auto& lattice    = myCase.getLattice(NavierStokes{});
   auto& geometry   = myCase.getGeometry();
 
-  const int resolution          = parameters.get<parameters::RESOLUTION>();
-  const T physDeltaX            = 2.*parameters.get<parameters::RADIUS_CYLINDER>()/resolution;
-  const T latticeRelaxationTime = parameters.get<parameters::LATTICE_RELAXATION_TIME>();
-  const T diameterCylinder      = 2.*parameters.get<parameters::RADIUS_CYLINDER>();
-  const T charPhysVelocity      = parameters.get<parameters::PHYS_CHAR_VELOCITY>();
-  const T Re                    = parameters.get<parameters::REYNOLDS>();
-  const T physDensity           = parameters.get<parameters::PHYS_CHAR_DENSITY>();
-  myCase.getLattice(NavierStokes{})
-        .setUnitConverter<UnitConverterFromResolutionAndRelaxationTime<T,DESCRIPTOR>>(
-    resolution,                           // resolution: number of voxels per charPhysL
-    latticeRelaxationTime,                // latticeRelaxationTime: relaxation time, have to be greater than 0.5!
-    diameterCylinder,                     // charPhysLength: reference length of simulation geometry
-    charPhysVelocity,                     // charPhysVelocity: maximal/highest expected velocity during simulation in __m / s__
-    charPhysVelocity*diameterCylinder/Re, // physViscosity: physical kinematic viscosity in __m^2 / s__
-    physDensity                           // physDensity: physical density in __kg / m^3__
-  );
+  const T physDeltaX            = parameters.get<parameters::PHYS_CHAR_LENGTH>() / parameters.get<parameters::RESOLUTION>();
+  lattice.setUnitConverter(parameters);
   lattice.getUnitConverter().print();
 
   // Material=1 -->bulk dynamics

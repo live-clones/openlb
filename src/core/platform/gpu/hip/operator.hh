@@ -1,28 +1,7 @@
-/*  This file is part of the OpenLB library
- *
- *  Copyright (C) 2022, 2025 Adrian Kummerlaender, Leonardo Dorneles
- *  E-mail contact: info@openlb.net
- *  The most recent release of OpenLB can be downloaded at
- *  <http://www.openlb.net/>
- *
- *  This program is free software; you can redistribute it and/or
- *  modify it under the terms of the GNU General Public License
- *  as published by the Free Software Foundation; either version 2
- *  of the License, or (at your option) any later version.
- *
- *  This program is distributed in the hope that it will be useful,
- *  but WITHOUT ANY WARRANTY; without even the implied warranty of
- *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- *  GNU General Public License for more details.
- *
- *  You should have received a copy of the GNU General Public
- *  License along with this program; if not, write to the Free
- *  Software Foundation, Inc., 51 Franklin Street, Fifth Floor,
- *  Boston, MA  02110-1301, USA.
-*/
 
 #ifndef GPU_HIP_OPERATOR_HH
 #define GPU_HIP_OPERATOR_HH
+
 
 #include "operator.h"
 
@@ -32,6 +11,8 @@
 #include "core/introspection.h"
 
 #include "solver/names.h"
+
+#include "utilities/performanceProfiler.h"
 
 namespace olb {
 
@@ -243,9 +224,11 @@ public:
     using DESCRIPTOR = typename CONTEXT::template value_t<names::Points>::descriptor_t;
     const auto originR = _parameters.template get<fields::BLOCK_LOWER>();
     const auto deltaX = _parameters.template get<fields::converter::PHYS_DELTA_X>();
-    const Vector<V*,DESCRIPTOR::d> physRs(lattices.get(meta::id<names::Points>{})
-                                                  .template getField<fields::PHYS_R>());
-    const PhysR<V,DESCRIPTOR::d> physR{physRs, iParticle};
+    const auto physRs = lattices.get(meta::id<names::Points>{})
+                                .template getField<fields::PHYS_R>();
+    const PhysR<V,DESCRIPTOR::d> physR([&](unsigned iD) {
+      return physRs[iD][iParticle];
+    });
     const LatticeR<DESCRIPTOR::d> latticeR = util::floor((physR - originR) / deltaX + V{0.5});
     auto cells = lattices.exchange_values([&](auto name) -> auto {
       if constexpr (std::is_same_v<typename decltype(name)::type, names::Points>) {
@@ -311,7 +294,8 @@ namespace kernel {
 
 /// HIP kernel for applying purely local collision steps
 template <typename CONTEXT, typename... OPERATORS>
-void call_operators(CONTEXT lattice, bool* subdomain, OPERATORS... ops) __global__ {
+__global__ __launch_bounds__(DEFAULT_HIP_WARP_SIZE, DEFAULT_LANE_SIZE)
+void call_operators(CONTEXT lattice, bool* subdomain, OPERATORS... ops){
   const CellID iCell = blockIdx.x * blockDim.x + threadIdx.x;
   if (!(iCell < lattice.getNcells()) || !subdomain[iCell]) {
     return;
@@ -324,13 +308,14 @@ void call_operators(CONTEXT lattice, bool* subdomain, OPERATORS... ops) __global
  * Statistics data is reduced by StatisticsPostProcessor
  **/
 template <typename CONTEXT, typename... OPERATORS>
-void call_operators_with_statistics(CONTEXT lattice, bool* subdomain, OPERATORS... ops) __global__ {
+__global__ __launch_bounds__(DEFAULT_HIP_WARP_SIZE, DEFAULT_LANE_SIZE)
+void call_operators_with_statistics(CONTEXT lattice, bool* subdomain, OPERATORS... ops)  {
   const CellID iCell = blockIdx.x * blockDim.x + threadIdx.x;
   if (!(iCell < lattice.getNcells()) || !subdomain[iCell]) {
     return;
   }
-  typename CONTEXT::value_t** statistic = lattice.template getField<descriptors::STATISTIC>();
-  int* statisticGenerated = lattice.template getField<descriptors::STATISTIC_GENERATED>()[0];
+  auto statistic = lattice.template getField<descriptors::STATISTIC>();
+  auto statisticGenerated = lattice.template getField<descriptors::STATISTIC_GENERATED>()[0];
   CellStatistic<typename CONTEXT::value_t> cellStatistic{-1, -1};
   if ((ops(lattice, iCell, cellStatistic) || ... )) {
     if (cellStatistic) {
@@ -347,9 +332,10 @@ void call_operators_with_statistics(CONTEXT lattice, bool* subdomain, OPERATORS.
 
 /// HIP kernel for applying generic OPERATORS with OperatorScope::PerCell or ListedCollision
 template <typename CONTEXT, typename... OPERATORS>
+__global__ __launch_bounds__(DEFAULT_HIP_WARP_SIZE, DEFAULT_LANE_SIZE)
 void call_list_operators(CONTEXT lattice,
                          const CellID* indices, std::size_t nIndices,
-                         OPERATORS... ops) __global__ {
+                         OPERATORS... ops) {
   const std::size_t iIndex = blockIdx.x * blockDim.x + threadIdx.x;
   if (!(iIndex < nIndices)) {
     return;
@@ -362,15 +348,16 @@ void call_list_operators(CONTEXT lattice,
  * Statistics data is reduced by StatisticsPostProcessor
  **/
 template <typename CONTEXT, typename... OPERATORS>
+__global__ __launch_bounds__(DEFAULT_HIP_WARP_SIZE, DEFAULT_LANE_SIZE)
 void call_list_operators_with_statistics(CONTEXT lattice,
                                          const CellID* indices, std::size_t nIndices,
-                                         OPERATORS... ops) __global__ {
+                                         OPERATORS... ops) {
   const std::size_t iIndex = blockIdx.x * blockDim.x + threadIdx.x;
   if (!(iIndex < nIndices)) {
     return;
   }
-  typename CONTEXT::value_t** statistic = lattice.template getField<descriptors::STATISTIC>();
-  int* statisticGenerated = lattice.template getField<descriptors::STATISTIC_GENERATED>()[0];
+  auto statistic = lattice.template getField<descriptors::STATISTIC>();
+  auto statisticGenerated = lattice.template getField<descriptors::STATISTIC_GENERATED>()[0];
   CellStatistic<typename CONTEXT::value_t> cellStatistic{-1, -1};
   if ((ops(lattice, indices[iIndex], cellStatistic) || ... )) {
     if (cellStatistic) {
@@ -423,6 +410,7 @@ void construct_dynamics(void* target, PARAMETERS* parameters) __global__ {
  **/
 template <typename CONTEXT, typename... ARGS>
 void call_operators(CONTEXT& lattice, bool* subdomain, ARGS&&... args) {
+  OLB_PROFILE_T("GPU_HIP:Knl:Submit", ARGS..., CONTEXT);
   const auto block_size = DEFAULT_HIP_WARP_SIZE;
   const auto block_count = (lattice.getNcells() + block_size - 1) / block_size;
   kernel::call_operators<CONTEXT,ARGS...><<<block_count,block_size>>>(
@@ -446,6 +434,7 @@ void async_call_operators(hipStream_t stream, CONTEXT& lattice, bool* subdomain,
  **/
 template <typename CONTEXT, typename... ARGS>
 void call_operators_with_statistics(CONTEXT& lattice, bool* subdomain, ARGS&&... args) {
+  OLB_PROFILE_T("GPU_HIP:Knl:Stats:Submit", ARGS..., CONTEXT);
   const auto block_size = DEFAULT_HIP_WARP_SIZE;
   const auto block_count = (lattice.getNcells() + block_size - 1) / block_size;
   kernel::call_operators_with_statistics<CONTEXT,ARGS...><<<block_count,block_size>>>(
@@ -471,6 +460,7 @@ template <typename CONTEXT, typename... ARGS>
 void call_list_operators(CONTEXT& lattice,
                          const gpu::hip::Column<CellID>& cells,
                          ARGS&&... args) {
+  OLB_PROFILE_T("GPU_HIP:KnlList:Submit", ARGS..., CONTEXT);
   const auto block_size = DEFAULT_HIP_WARP_SIZE;
   const auto block_count = (cells.size() + block_size - 1) / block_size;
   kernel::call_list_operators<CONTEXT,ARGS...><<<block_count, block_size>>>(
@@ -495,6 +485,21 @@ void async_call_list_operators(hipStream_t stream,
   device::check();
 }
 
+
+template <typename CONTEXT, typename... ARGS>
+void call_list_operators_with_statistics(CONTEXT& lattice,
+                                         const gpu::hip::Column<CellID>& cells,
+                                         ARGS&&... args) {
+  OLB_PROFILE_T("GPU_HIP:KnlList:Stats:Submit", ARGS..., CONTEXT);
+  const auto block_size = DEFAULT_HIP_WARP_SIZE;
+  const auto block_count = (cells.size() + block_size - 1) / block_size;
+  kernel::call_list_operators_with_statistics<<<block_count, block_size>>>(
+    lattice,
+    cells.deviceData(), cells.size(),
+    std::forward<decltype(args)>(args)...);
+  device::check();
+}
+
 /// Apply ListedCollision with statistics (async version)
 template <typename CONTEXT, typename... ARGS>
 void async_call_list_operators_with_statistics(hipStream_t stream,
@@ -513,6 +518,7 @@ void async_call_list_operators_with_statistics(hipStream_t stream,
 /// Apply coupling on subdomain
 template <typename CONTEXT, typename... ARGS>
 void call_coupling_operators(CONTEXT& lattices, bool* subdomain, ARGS&&... args) {
+  OLB_PROFILE_T("GPU_HIP:Coupler:Sync", ARGS..., CONTEXT);
   const auto nCells = lattices.template get<0>().getNcells();
   const auto block_size = DEFAULT_HIP_WARP_SIZE;
   const auto block_count = (nCells + block_size - 1) / block_size;
@@ -524,6 +530,7 @@ void call_coupling_operators(CONTEXT& lattices, bool* subdomain, ARGS&&... args)
 /// Apply coupling on particles and lattices
 template <typename CONTEXT, typename... ARGS>
 void call_particle_coupling_operators(CONTEXT& lattices, ARGS&&... args) {
+  OLB_PROFILE_T("GPU_HIP:Coupler:Particle:Sync", ARGS..., CONTEXT);
   const auto nParticles = lattices.get(meta::id<names::Points>{}).getNcells();
   const auto block_size = DEFAULT_HIP_WARP_SIZE;
   const auto block_count = (nParticles + block_size - 1) / block_size;
@@ -541,16 +548,17 @@ ConcreteBlockCollisionO<T,DESCRIPTOR,Platform::GPU_HIP,DYNAMICS>::ConcreteBlockC
   _dynamics(new DYNAMICS()),
   _parameters(nullptr),
   _mask(nullptr),
-  _cells(0),
-  _modified(true),
-  _stream(hipStreamDefault)
-{ }
+  _index(0),
+  _outerCells(0),
+  _innerCells(0),
+  _modified(true){}
 
 template <typename T, typename DESCRIPTOR, typename DYNAMICS>
 void ConcreteBlockCollisionO<T,DESCRIPTOR,Platform::GPU_HIP,DYNAMICS>::applyDominant(
   ConcreteBlockLattice<T,DESCRIPTOR,Platform::GPU_HIP>& block,
   ConcreteBlockMask<T,Platform::GPU_HIP>&               subdomain)
 {
+  OLB_PROFILE_T("GPU_HIP:Coll:Apply", DYNAMICS, DESCRIPTOR);
   using namespace gpu::hip;
   DeviceContext<T,DESCRIPTOR> lattice(block);
   if (block.statisticsEnabled()) {
@@ -573,52 +581,88 @@ void ConcreteBlockCollisionO<T,DESCRIPTOR,Platform::GPU_HIP,DYNAMICS>::applyIndi
   ConcreteBlockLattice<T,DESCRIPTOR,Platform::GPU_HIP>& block,
   ConcreteBlockMask<T,Platform::GPU_HIP>&               subdomain)
 {
-  using namespace gpu::hip;
+using namespace gpu::hip;
   DeviceContext<T,DESCRIPTOR> lattice(block);
-  // Primitive heuristic for preferring mask-based to list-based dispatch
-  if (_mask->weight() > 0.5*subdomain.weight()) {
-    if (block.statisticsEnabled()) {
-      async_call_operators_with_statistics(
-        _stream.get(),
-        lattice,
-        subdomain.deviceData(),
-        MaskedCollision<T,DESCRIPTOR,DYNAMICS>{_parameters->parameters, _mask->deviceData()});
-    } else {
-      async_call_operators(
-        _stream.get(),
-        lattice,
-        subdomain.deviceData(),
-        MaskedCollision<T,DESCRIPTOR,DYNAMICS>{_parameters->parameters, _mask->deviceData()});
-    }
 
-  // Use list of cell indices
-  } else {
-    // Update cell list from mask
-    if (_modified) {
-      _cells.clear();
-      for (CellID iCell=0; iCell  < block.getNcells(); ++iCell) {
-        if (_mask->operator[](iCell)) {
-          _cells.push_back(iCell);
+  // Order collision after the preceding stages' post processors (boundary
+  // populations, possibly mid-block e.g. Bouzidi) and after legacy
+  // default-stream work (couplings, custom tasks). Neither is ordered
+  // against the named non-blocking collision streams implicitly.
+  block.postProcessorsDone().barrierOn(device::getStream<streams::OuterCollision>());
+  block.postProcessorsDone().barrierOn(device::getStream<streams::InnerCollision>());
+  _legacyTail.record(0);
+  _legacyTail.barrierOn(device::getStream<streams::OuterCollision>());
+  _legacyTail.barrierOn(device::getStream<streams::InnerCollision>());
+
+  // Split the domain into Boundary (_outerCells) and Bulk (_innerCells)
+  if (_modified) {
+    _outerCells.clear();
+    _innerCells.clear();
+    for (CellID iCell=0; iCell < block.getNcells(); ++iCell) {
+      if (_mask->operator[](iCell)) {
+        if (block.isPaddingCore(iCell, 1)) {
+          _outerCells.push_back(iCell);
+        } else {
+          _innerCells.push_back(iCell);
         }
       }
-      _cells.setProcessingContext(ProcessingContext::Simulation);
-      _modified = false;
     }
+    _outerCells.setProcessingContext(ProcessingContext::Simulation);
+    _innerCells.setProcessingContext(ProcessingContext::Simulation);
+    _modified = false;
+  }
 
-    if (block.statisticsEnabled()) {
+  if (block.statisticsEnabled()) {
+    if (_outerCells.size() > 0) {
+      OLB_PROFILE_T("GPU_HIP:Coll:OuterStats", DYNAMICS, DESCRIPTOR);
       async_call_list_operators_with_statistics(
-        _stream.get(),
+         gpu::hip::device::getStream<gpu::hip::streams::OuterCollision>().get(),
         lattice,
-        _cells,
+        _outerCells,
         ListedCollision<T,DESCRIPTOR,DYNAMICS>{_parameters->parameters});
-    } else {
+
+      block.outerCollisionDone().record(
+        gpu::hip::device::getStream<gpu::hip::streams::OuterCollision>());
+    }
+    if (_innerCells.size() > 0) {
+      if (_outerCells.size() > 0) {
+        block.outerCollisionDone().barrierOn(
+          gpu::hip::device::getStream<gpu::hip::streams::InnerCollision>());
+      }
+      OLB_PROFILE_T("GPU_HIP:Coll:InnerStats", DYNAMICS, DESCRIPTOR);
+      async_call_list_operators_with_statistics(
+         gpu::hip::device::getStream<gpu::hip::streams::InnerCollision>().get(),
+        lattice,
+        _innerCells,
+        ListedCollision<T,DESCRIPTOR,DYNAMICS>{_parameters->parameters});
+    }
+  } else {
+    if (_outerCells.size() > 0) {
+      OLB_PROFILE_T("GPU_HIP:Coll:Outer", DYNAMICS, DESCRIPTOR);
       async_call_list_operators(
-        _stream.get(),
+        gpu::hip::device::getStream<gpu::hip::streams::OuterCollision>().get(),
         lattice,
-        _cells,
+        _outerCells,
         ListedCollision<T,DESCRIPTOR,DYNAMICS>{_parameters->parameters});
+
+      block.outerCollisionDone().record(
+        gpu::hip::device::getStream<gpu::hip::streams::OuterCollision>());
+    }
+    if (_innerCells.size() > 0) {
+      if (_outerCells.size() > 0) {
+        block.outerCollisionDone().barrierOn(
+          gpu::hip::device::getStream<gpu::hip::streams::InnerCollision>());
+      }
+      OLB_PROFILE_T("GPU_HIP:Coll:Inner", DYNAMICS, DESCRIPTOR);
+      async_call_list_operators(
+        gpu::hip::device::getStream<gpu::hip::streams::InnerCollision>().get(),
+        lattice,
+        _innerCells,
+        ListedCollision<T,DESCRIPTOR,DYNAMICS>{_parameters->parameters});
+
     }
   }
+
 }
 
 template <typename T, typename DESCRIPTOR, typename DYNAMICS>
@@ -637,7 +681,10 @@ void ConcreteBlockCollisionO<T,DESCRIPTOR,Platform::GPU_HIP,DYNAMICS>::setup(
       _parameters->deviceData());
     gpu::hip::device::check();
 
-    // Fetch pointer to on-device dynamic-dispatch field
+    // Register this dynamics in the per-block dispatch table and cache its index
+    _index = block.getDataRegistry().registerDynamics(typeid(DYNAMICS), _deviceDynamics.get());
+
+    // Fetch pointer to on-device per-cell dispatch index field
     _dynamicsOfCells = block.template getField<gpu::hip::DYNAMICS<T,DESCRIPTOR>>()[0].data();
   }
 }
@@ -645,8 +692,7 @@ void ConcreteBlockCollisionO<T,DESCRIPTOR,Platform::GPU_HIP,DYNAMICS>::setup(
 template <typename T, typename DESCRIPTOR, concepts::CellOperator OPERATOR>
 ConcreteBlockO<T,DESCRIPTOR,Platform::GPU_HIP,OPERATOR,OperatorScope::PerCell>::ConcreteBlockO():
   _cells(0),
-  _modified{false},
-  _stream{hipStreamDefault}
+  _modified{false}
 { }
 
 template <typename T, typename DESCRIPTOR, concepts::CellOperator OPERATOR>
@@ -655,23 +701,28 @@ void ConcreteBlockO<T,DESCRIPTOR,Platform::GPU_HIP,OPERATOR,OperatorScope::PerCe
 {
   if (_cells.size() > 0) {
     if (_modified) {
+      OLB_PROFILE_T("GPU_HIP:Post:Deduplicate", OPERATOR, DESCRIPTOR);
       _cells.deduplicate();
       _cells.setProcessingContext(ProcessingContext::Simulation);
       _modified = false;
     }
+    OLB_PROFILE_T("GPU_HIP:Post:Apply", OPERATOR, DESCRIPTOR);
     gpu::hip::DeviceBlockLattice<T,DESCRIPTOR> lattice(block);
-    gpu::hip::async_call_list_operators(_stream.get(),
+    block.outerCollisionDone().barrierOn(
+      gpu::hip::device::getStream<gpu::hip::streams::PostProcessor>());
+    gpu::hip::async_call_list_operators(gpu::hip::device::getStream<gpu::hip::streams::PostProcessor>().get(),
                                          lattice,
                                          _cells,
                                          gpu::hip::ListedPostProcessor<OPERATOR>{});
+    block.postProcessorsDone().record(
+      gpu::hip::device::getStream<gpu::hip::streams::PostProcessor>());
   }
 }
 
 template <typename T, typename DESCRIPTOR, concepts::CellOperator OPERATOR>
 ConcreteBlockO<T,DESCRIPTOR,Platform::GPU_HIP,OPERATOR,OperatorScope::PerCellWithParameters>::ConcreteBlockO():
   _cells(0),
-  _modified{false},
-  _stream{hipStreamDefault}
+  _modified{false}
 { }
 
 template <typename T, typename DESCRIPTOR, concepts::CellOperator OPERATOR>
@@ -680,16 +731,22 @@ void ConcreteBlockO<T,DESCRIPTOR,Platform::GPU_HIP,OPERATOR,OperatorScope::PerCe
 {
   if (_cells.size() > 0) {
     if (_modified) {
+      OLB_PROFILE_T("GPU_HIP:Post:Deduplicate", OPERATOR, DESCRIPTOR);
       _cells.deduplicate();
       _cells.setProcessingContext(ProcessingContext::Simulation);
       _modified = false;
     }
+    OLB_PROFILE_T("GPU_HIP:Post:Apply", OPERATOR, DESCRIPTOR);
     using namespace gpu::hip;
     DeviceBlockLattice<T,DESCRIPTOR> lattice(block);
-    async_call_list_operators(_stream.get(),
+    block.outerCollisionDone().barrierOn(
+      gpu::hip::device::getStream<gpu::hip::streams::PostProcessor>());
+    async_call_list_operators(gpu::hip::device::getStream<gpu::hip::streams::PostProcessor>().get(),
                               lattice,
                               _cells,
                               ListedPostProcessorWithParameters<T,DESCRIPTOR,OPERATOR>{_parameters->parameters});
+    block.postProcessorsDone().record(
+      gpu::hip::device::getStream<gpu::hip::streams::PostProcessor>());
   }
 }
 
@@ -845,3 +902,4 @@ void ConcreteBlockPointCouplingO<COUPLEES,Platform::GPU_HIP,COUPLER,OperatorScop
 }
 
 #endif
+

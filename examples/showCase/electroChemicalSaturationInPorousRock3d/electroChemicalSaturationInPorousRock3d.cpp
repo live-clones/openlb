@@ -733,11 +733,11 @@ int main(int argc, char* argv[]) {
     myCaseParameters.set<PHYS_CHAR_DENSITY>(1000.);
     ///TUNABLE
     myCaseParameters.set<C0>(1); // mol/m³ in DFG between 0.1 and 3.0
-    myCaseParameters.set<CONCENTRATION_H>([&] {
-      return 6.*myCaseParameters.get<C_0>();
+    myCaseParameters.set<CONCENTRATION_H>([](MyCase::ParametersD& p) {
+      return 6.*p.get<C_0>();
     });
-    myCaseParameters.set<CONCENTRATION_P>([&] {
-      return 1.*myCaseParameters.get<C_0>();
+    myCaseParameters.set<CONCENTRATION_P>([](MyCase::ParametersD& p) {
+      return 1.*p.get<C_0>();
     });
     myCaseParameters.set<CONCENTRATION_C>(0.);
     myCaseParameters.set<parameters::TEMPERATURE>(298.15);
@@ -756,8 +756,8 @@ int main(int argc, char* argv[]) {
     //geometrical params
     ///TUNABLE
     myCaseParameters.set<KNUDSEN>(0.09);
-    myCaseParameters.set<DELTAX>([&] {
-      return myCaseParameters.get<MFP>() / myCaseParameters.get<KNUDSEN>();
+    myCaseParameters.set<DELTAX>([](MyCase::ParametersD& p) {
+      return p.get<MFP>() / p.get<KNUDSEN>();
     });
     myCaseParameters.set<BOUNDARY_DISTANCE>(10);
     myCaseParameters.set<parameters::SCALING>(2.5e-9*0.5);
@@ -775,7 +775,6 @@ int main(int argc, char* argv[]) {
     myCaseParameters.set<NSE_PHYS_CHAR_VELOCITY>(0.5);
     myCaseParameters.set<NAME>(std::string("stone.vti"));
   }
-  myCaseParameters.fromCLI(argc, argv);
 
   /// === Step 3: Create Mesh ===
   Mesh mesh = createMesh(myCaseParameters);

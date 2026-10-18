@@ -65,6 +65,8 @@ declare -a TASKS_CONFIG
 declare -a TASKS_OLD_HASH
 declare -a TASKS_NEW_HASH
 declare -a TASKS_ACTION # SKIP, REGEN
+declare -a TASKS_TARGET # Generic, StoredMoments
+declare -a TASKS_SUFFIX # "" or ".sm"
 
 count=0
 
@@ -72,7 +74,11 @@ count=0
 echo "Analyzing existing files..."
 while read -r filename; do
     filepath="$DYNAMICS_DIR/$filename"
-    current_hash=${filename%.cse.h}
+    # Determine the CodegenTarget from the filename suffix (.sm => StoredMoments)
+    case "$filename" in
+      *.sm.cse.h) target="StoredMoments"; suffix=".sm"; current_hash=${filename%.sm.cse.h} ;;
+      *.cse.h)    target="Generic";       suffix="";    current_hash=${filename%.cse.h} ;;
+    esac
 
     if [ -f "$filepath" ]; then
         # Check generation info
@@ -99,6 +105,8 @@ while read -r filename; do
             TASKS_OLD_HASH[$count]="$current_hash"
             TASKS_NEW_HASH[$count]="$new_hash"
             TASKS_ACTION[$count]="REGEN"
+            TASKS_TARGET[$count]="$target"
+            TASKS_SUFFIX[$count]="$suffix"
 
             if [ "$current_hash" != "$new_hash" ]; then
                 echo "  $filename: Hash mismatch -> $new_hash. Will regenerate and rename."
@@ -128,14 +136,15 @@ run_task() {
     local idx=$1
     local config="${TASKS_CONFIG[$idx]}"
     local old_hash="${TASKS_OLD_HASH[$idx]}"
+    local target="${TASKS_TARGET[$idx]}"
 
     # Set memory limit if configured
     if [ -n "$MAX_MEMORY" ]; then
         ulimit -v "$MAX_MEMORY"
     fi
 
-    # Run optimization without updating header
-    if "$SCRIPT_DIR/optimize_dynamics.sh" --install --skip-header-update "$config" > /dev/null 2>&1; then
+    # --deterministic so the committed references are reproducible.
+    if "$SCRIPT_DIR/optimize_dynamics.sh" --deterministic --install --skip-header-update --target "$target" "$config" > /dev/null 2>&1; then
         echo "$idx:SUCCESS" > "$JOB_DIR/$idx.status"
     else
         echo "$idx:FAILURE" > "$JOB_DIR/$idx.status"
@@ -172,10 +181,11 @@ for ((i=0; i<count; i++)); do
         if [[ "$status" == *":SUCCESS" ]]; then
             old_hash="${TASKS_OLD_HASH[$i]}"
             new_hash="${TASKS_NEW_HASH[$i]}"
+            suffix="${TASKS_SUFFIX[$i]}"
 
             if [ "$old_hash" != "$new_hash" ]; then
-                old_file="$DYNAMICS_DIR/$old_hash.cse.h"
-                new_file="$DYNAMICS_DIR/$new_hash.cse.h"
+                old_file="$DYNAMICS_DIR/$old_hash$suffix.cse.h"
+                new_file="$DYNAMICS_DIR/$new_hash$suffix.cse.h"
 
                 # Cleanup old file
                 if [ -f "$old_file" ]; then
@@ -183,11 +193,11 @@ for ((i=0; i<count; i++)); do
                 fi
 
                 # Update header: replace old include with new include
-                echo "  Updating header: $old_hash -> $new_hash"
-                escaped_old=$(echo "$old_hash.cse.h" | sed 's/\./\\./g')
-                sed -i "s/$escaped_old/$new_hash.cse.h/" "$HEADER_FILE"
+                echo "  Updating header: $old_hash$suffix -> $new_hash$suffix"
+                escaped_old=$(echo "$old_hash$suffix.cse.h" | sed 's/\./\\./g')
+                sed -i "s/$escaped_old/$new_hash$suffix.cse.h/" "$HEADER_FILE"
             else
-                echo "  Updated $old_hash.cse.h"
+                echo "  Updated $old_hash$suffix.cse.h"
             fi
         else
             echo "  Failed to regenerate: ${TASKS_OLD_HASH[$i]}" >&2

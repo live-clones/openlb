@@ -303,7 +303,6 @@ int main(int argc, char* argv[]) {
       1./5. * myCaseParameters.get<T_COLD>() + 4./5. * myCaseParameters.get<T_HOT>()
     );
   }
-  myCaseParameters.fromCLI(argc, argv);
 
   Mesh mesh = createMesh(myCaseParameters);
 

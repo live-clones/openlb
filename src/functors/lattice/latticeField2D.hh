@@ -31,7 +31,7 @@ namespace olb {
 
 template<typename T, typename DESCRIPTOR, typename FIELD>
 SuperLatticeField2D<T,DESCRIPTOR,FIELD>::SuperLatticeField2D(
-  SuperLattice<T,DESCRIPTOR>& sLattice)
+  SuperLattice<T,DESCRIPTOR>& sLattice, std::string name)
   : SuperLatticeF2D<T,DESCRIPTOR>(sLattice, DESCRIPTOR::template size<FIELD>())
 {
   this->getName() = fields::name<FIELD>();
@@ -43,7 +43,7 @@ SuperLatticeField2D<T,DESCRIPTOR,FIELD>::SuperLatticeField2D(
 
 template<typename T, typename DESCRIPTOR, typename FIELD>
 BlockLatticeField2D<T,DESCRIPTOR,FIELD>::BlockLatticeField2D(
-  BlockLattice<T,DESCRIPTOR>& blockLattice)
+  BlockLattice<T,DESCRIPTOR>& blockLattice, std::string name)
   : BlockLatticeF2D<T, DESCRIPTOR>(blockLattice, DESCRIPTOR::template size<FIELD>())
 {
   this->getName() = fields::name<FIELD>();
@@ -53,7 +53,14 @@ template<typename T, typename DESCRIPTOR, typename FIELD>
 bool BlockLatticeField2D<T,DESCRIPTOR,FIELD>::operator()(
   T output[], const int input[])
 {
-  this->_blockLattice.get(input).template computeField<FIELD>(output);
+  auto fieldD = this->_blockLattice.get(input).template getField<FIELD>();
+  if constexpr (DESCRIPTOR::template size<FIELD>() == 1) {
+    output[0] = static_cast<T>(fieldD);
+  } else {
+    for (unsigned iD=0; iD < DESCRIPTOR::template size<FIELD>(); ++iD) {
+      output[iD] = static_cast<T>(fieldD[iD]);
+    }
+  }
   return true;
 }
 

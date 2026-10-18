@@ -2,7 +2,7 @@
 #
 # This script generates CSE optimized code for a specific dynamics class.
 #
-# Usage: ./optimize_dynamics.sh [--deterministic] [--install] [--skip-header-update] "dynamics::Tuple<...>"
+# Usage: ./optimize_dynamics.sh [--deterministic] [--install] [--skip-header-update] [--keep-tmp] "dynamics::Tuple<...>"
 #
 # The script outputs the generated header content to stdout, unless --install is specified.
 
@@ -15,7 +15,9 @@ OLB_ROOT="$( cd "$SCRIPT_DIR/../../.." >/dev/null 2>&1 && pwd )"
 DETERMINISTIC_FLAG=""
 INSTALL_FLAG=0
 SKIP_HEADER_UPDATE=0
+KEEP_TMP_FLAG=0
 DYNAMICS_RAW=""
+TARGET="Generic"
 
 while [[ $# -gt 0 ]]; do
   case $1 in
@@ -31,12 +33,28 @@ while [[ $# -gt 0 ]]; do
       SKIP_HEADER_UPDATE=1
       shift
       ;;
+    --keep-tmp)
+      KEEP_TMP_FLAG=1
+      shift
+      ;;
+    --target)
+      TARGET="$2"
+      shift 2
+      ;;
     *)
       DYNAMICS_RAW="$1"
       shift
       ;;
   esac
 done
+
+# CodegenTarget controls which collision body is generated (Generic, StoredMoments).
+# StoredMoments variants are installed with a .sm suffix and the hash is unchanged.
+case "$TARGET" in
+  Generic)       TARGET_SUFFIX="" ;;
+  StoredMoments) TARGET_SUFFIX=".sm" ;;
+  *) echo "Error: unknown --target '$TARGET' (expected Generic or StoredMoments)." >&2; exit 1 ;;
+esac
 
 if [ -z "$DYNAMICS_RAW" ]; then
     echo "Usage: $0 [--deterministic] [--install] [--skip-header-update] \"dynamics::Tuple<...>\"" >&2
@@ -59,7 +77,11 @@ WORK_DIR=$(mktemp -d -t cse_optimize_dynamics.XXXXXX)
 
 # Cleanup function
 cleanup() {
-    rm -rf "$WORK_DIR"
+    if [ "$KEEP_TMP_FLAG" -eq 0 ]; then
+        rm -rf "$WORK_DIR"
+    else
+        echo "Keepting tmp directory: $WORK_DIR"
+    fi
 }
 trap cleanup EXIT
 
@@ -80,7 +102,8 @@ python3 "$SCRIPT_DIR/source/extraction.py" \
     "$WORK_DIR/$DYNAMICS_HASH.txt" \
     "$WORK_DIR/" \
     "$WORK_DIR/" \
-    "dynamics" >&2
+    "dynamics" \
+    --codegen_target "$TARGET" >&2
 
 if [ ! -f "$WORK_DIR/$DYNAMICS_HASH.out" ]; then
     echo "Error: Extraction failed, .out file not found." >&2
@@ -93,7 +116,8 @@ python3 "$SCRIPT_DIR/source/optimize.py" \
     "$WORK_DIR/$DYNAMICS_HASH.out" \
     "$SCRIPT_DIR/source/templates/dynamics/dynamics.cse.template" \
     "$WORK_DIR/$DYNAMICS_HASH.cse.h" \
-    $DETERMINISTIC_FLAG >&2
+    $DETERMINISTIC_FLAG \
+    --codegen_target "$TARGET" >&2
 
 if [ ! -f "$WORK_DIR/$DYNAMICS_HASH.cse.h" ]; then
     echo "Error: Optimization failed, .cse.h file not found." >&2
@@ -110,7 +134,8 @@ fi
 # Output or Install
 if [ "$INSTALL_FLAG" -eq 1 ]; then
     TARGET_DIR="$OLB_ROOT/src/cse/dynamics"
-    TARGET_FILE="$TARGET_DIR/$DYNAMICS_HASH.cse.h"
+    INSTALL_NAME="${DYNAMICS_HASH}${TARGET_SUFFIX}"
+    TARGET_FILE="$TARGET_DIR/$INSTALL_NAME.cse.h"
     HEADER_FILE="$TARGET_DIR/generated_cse.h"
 
     # Ensure target directory exists
@@ -121,16 +146,7 @@ if [ "$INSTALL_FLAG" -eq 1 ]; then
     echo "Installed generated code to $TARGET_FILE" >&2
 
     if [ "$SKIP_HEADER_UPDATE" -eq 0 ]; then
-        # Check if header includes this file
-        if ! grep -q "$DYNAMICS_HASH.cse.h" "$HEADER_FILE"; then
-            echo "Adding include to $HEADER_FILE" >&2
-            # Append nicely formatted include
-            echo "" >> "$HEADER_FILE"
-            echo "//$DYNAMICS_FORMATTED" >> "$HEADER_FILE"
-            echo "#include \"$DYNAMICS_HASH.cse.h\"" >> "$HEADER_FILE"
-        else
-            echo "Header already includes $DYNAMICS_HASH.cse.h" >&2
-        fi
+        python3 "$SCRIPT_DIR/source/update_cse_includes.py" dynamics "$OLB_ROOT" >&2
     fi
 else
     cat "$WORK_DIR/$DYNAMICS_HASH.cse.h"

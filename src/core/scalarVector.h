@@ -175,7 +175,10 @@ inline constexpr bool lex_greater_eq (const ScalarVector<T,D,IMPL>& lhs, const S
 }
 
 /// Print vector entries to ostream in a human-readable fashion
+/// Constrained on T being streamable so that the overload drops out of
+/// requires-expressions for non-printable element types such as Expr
 template<typename T, unsigned D, typename IMPL>
+requires (!std::is_enum_v<T>) && requires (std::ostream& os, const T& value) { os << value; }
 std::ostream& operator << (std::ostream& os, const ScalarVector<T,D,IMPL>& o)
 {
   if (D > 1) {

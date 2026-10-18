@@ -25,7 +25,9 @@
 #define CSE_EXTRACTION_H
 
 #include <type_traits>
+#include <cstdlib>
 #include "core/expr.h"
+#include "core/platform/platform.h"
 #include "cse/symbolGenerator.h"
 #include "cse/exprDynamics.h"
 
@@ -33,8 +35,14 @@ namespace olb {
 
 namespace cse {
 
-/// Extract expression tree of the collision operator for DYNAMICS
-template <typename DYNAMICS>
+/// Extract expression tree of the collision operator for DYNAMICS and TARGET
+/**
+ * For CodegenTarget::StoredMoments the extracted body additionally writes the
+ * post-collision density/velocity into fields::moments::RHO/U (mirroring the
+ * platform-gated moments storage on SYCL/HIP); the registered specialization key
+ * remains the plain DYNAMICS.
+ **/
+template <typename DYNAMICS, CodegenTarget TARGET = CodegenTarget::Generic>
 std::stringstream extractExpressionTree() {
   std::stringstream tree;
   using T = Expr;
@@ -114,14 +122,67 @@ std::stringstream extractExpressionTree() {
     }
   }
 
+  // For StoredMoments, additionally store the post-collision density/velocity into
+  // the moments fields (Tuple is final, so we capture them here rather than via a
+  // wrapper dynamics).
+  if constexpr (TARGET == CodegenTarget::StoredMoments) {
+    T rho{};
+    T u[DESCRIPTOR::d] { };
+    typename DYNAMICS::MomentaF().computeRhoU(cell, rho, u);
+    updatedFields.emplace_back("olb::fields::moments::RHO", std::vector<T>{rho});
+    updatedFields.emplace_back("olb::fields::moments::U", std::vector<T>(u, u + DESCRIPTOR::d));
+  }
+
   tree << "# Dynamics info: \n";
   tree << "collisionO = \"" << fields::name<DYNAMICS>() << "\"\n";
+
+  Expr::DagContext ctx;
+  Expr rho = cell.template getFieldComponent<descriptors::STATISTIC>(0);
+  Expr uSqr = cell.template getFieldComponent<descriptors::STATISTIC>(1);
+  for (int iPop=0; iPop < DESCRIPTOR::q; ++iPop) {
+    ctx.scan(cell[iPop]);
+  }
+  ctx.scan(rho);
+  ctx.scan(uSqr);
+  for (std::size_t i=0; i < updatedFields.size(); ++i) {
+    for (std::size_t iD=0; iD < updatedFields[i].second.size(); ++iD) {
+      ctx.scan(updatedFields[i].second[iD]);
+    }
+  }
+
+  // OLB_CSE_LEGACY_SERIALIZE=1 falls back to the fully expanded describe() output.
+  const char* legacyEnv = std::getenv("OLB_CSE_LEGACY_SERIALIZE");
+  const bool legacy = legacyEnv != nullptr && legacyEnv[0] != '\0';
+  auto refExpr = [&](const Expr& e) {
+    return legacy ? e.describe() : ctx.ref(e);
+  };
+
+  std::vector<std::string> cellRhs;
+  for (int iPop=0; iPop < DESCRIPTOR::q; ++iPop) {
+    cellRhs.push_back(refExpr(cell[iPop]));
+  }
+  std::string rhoRhs = refExpr(rho);
+  std::string uSqrRhs = refExpr(uSqr);
+  std::vector<std::pair<std::string,std::string>> fieldRhs;
+  for (std::size_t i=0; i < updatedFields.size(); ++i) {
+    for (std::size_t iD=0; iD < updatedFields[i].second.size(); ++iD) {
+      fieldRhs.emplace_back("cell.template getFieldPointer<" + updatedFields[i].first + ">()[" + std::to_string(iD) + "]",
+                            refExpr(updatedFields[i].second[iD]));
+    }
+  }
+
+  tree << "# Shared subexpressions extracted during Expr construction\n";
+  tree << "cse_subexpressions = [\n";
+  for (const auto& binding : ctx.bindings()) {
+    tree << "  " << binding << ",\n";
+  }
+  tree << "]\n";
 
   // Retrieve expressions for the post-collision populations
   tree << "# Expressions of the post-collision populations\n";
   tree << "cell_assignments = [\n";
   for (int iPop=0; iPop < DESCRIPTOR::q; ++iPop) {
-    tree << "  " << assignment(symbol("cell["+std::to_string(iPop)+"]"),cell[iPop].describe()) << ",\n";
+    tree << "  " << assignment(symbol("cell["+std::to_string(iPop)+"]"), cellRhs[iPop]) << ",\n";
   }
   tree << "]\n";
 
@@ -136,18 +197,15 @@ std::stringstream extractExpressionTree() {
   // Retrieve expressions for the cell statistics
   tree << "# Expressions of the return values\n";
   tree << "return_assignments = [\n";
-  tree << "  " << assignment(symbol("rho"),cell.template getFieldComponent<descriptors::STATISTIC>(0).describe()) << ",\n";
-  tree << "  " << assignment(symbol("uSqr"),cell.template getFieldComponent<descriptors::STATISTIC>(1).describe()) << ",\n";
+  tree << "  " << assignment(symbol("rho"), rhoRhs) << ",\n";
+  tree << "  " << assignment(symbol("uSqr"), uSqrRhs) << ",\n";
   tree << "]\n";
 
   // Retrieve updated field expressions
   tree << "# Expressions of the updated fields\n";
   tree << "fields_assignments = [\n";
-  for (std::size_t i=0; i < updatedFields.size(); ++i) {
-    for (std::size_t iD=0; iD < updatedFields[i].second.size(); ++iD) {
-      tree << "  " << assignment(symbol("cell.template getFieldPointer<" + updatedFields[i].first + ">()[" + std::to_string(iD) + "]"),
-                                 updatedFields[i].second[iD].describe()) << ",\n";
-    }
+  for (const auto& [lhs, rhs] : fieldRhs) {
+    tree << "  " << assignment(symbol(lhs), rhs) << ",\n";
   }
   tree << "]\n";
   return tree;
@@ -254,7 +312,7 @@ std::stringstream extractExpressionTree() {
     });
   }
   // Set placeholder for omega maunally as this is often done in the app
-  T exprOmega = T(symbol("cell.getDynamics().getOmegaOrFallback(std::numeric_limits<V>::signaling_NaN())"));
+  T exprOmega = T(symbol("cell.getOmegaOrFallback(std::numeric_limits<V>::signaling_NaN())"));
   exprLattice.template setParameter<descriptors::OMEGA>(exprOmega);
   params.push_back(exprOmega);
 
@@ -284,6 +342,36 @@ std::stringstream extractExpressionTree() {
     }
   }
 
+  // OLB_CSE_LEGACY_SERIALIZE=1 falls back to the fully expanded describe() output.
+  const char* legacyEnv = std::getenv("OLB_CSE_LEGACY_SERIALIZE");
+  const bool legacy = legacyEnv != nullptr && legacyEnv[0] != '\0';
+  Expr::DagContext ctx;
+  if (!legacy) {
+    for (int iPop=0; iPop < DESCRIPTOR::q; ++iPop) {
+      ctx.scan(cell[iPop]);
+    }
+    for (std::size_t i=0; i < updatedFields.size(); ++i) {
+      for (std::size_t iD=0; iD < updatedFields[i].second.size(); ++iD) {
+        ctx.scan(updatedFields[i].second[iD]);
+      }
+    }
+  }
+  auto refExpr = [&](const Expr& e) {
+    return legacy ? e.describe() : ctx.ref(e);
+  };
+
+  std::vector<std::string> cellRhs;
+  for (int iPop=0; iPop < DESCRIPTOR::q; ++iPop) {
+    cellRhs.push_back(refExpr(cell[iPop]));
+  }
+  std::vector<std::pair<std::string,std::string>> fieldRhs;
+  for (std::size_t i=0; i < updatedFields.size(); ++i) {
+    for (std::size_t iD=0; iD < updatedFields[i].second.size(); ++iD) {
+      fieldRhs.emplace_back("cell.template getFieldPointer<" + updatedFields[i].first + ">()[" + std::to_string(iD) + "]",
+                            refExpr(updatedFields[i].second[iD]));
+    }
+  }
+
   tree << "# Operator info: \n";
   tree << "operatorO = \"" << fields::name<OPERATOR>() << "\"\n";
   tree << "# Desriptor info: \n";
@@ -292,11 +380,18 @@ std::stringstream extractExpressionTree() {
   tree << "isOperatorWithParameter = " << ((OPERATOR::scope == OperatorScope::PerCellWithParameters) ?
                                                "true" : "false") << "\n";
 
+  tree << "# Shared subexpressions extracted during Expr construction\n";
+  tree << "cse_subexpressions = [\n";
+  for (const auto& binding : ctx.bindings()) {
+    tree << "  " << binding << ",\n";
+  }
+  tree << "]\n";
+
   // Retrieve expressions for the post-collision populations
   tree << "# Expressions of the post-collision populations\n";
   tree << "cell_assignments = [\n";
   for (int iPop=0; iPop < DESCRIPTOR::q; ++iPop) {
-    tree << "  " << assignment(symbol("cell["+std::to_string(iPop)+"]"),cell[iPop].describe()) << ",\n";
+    tree << "  " << assignment(symbol("cell["+std::to_string(iPop)+"]"), cellRhs[iPop]) << ",\n";
   }
   tree << "]\n";
 
@@ -311,11 +406,8 @@ std::stringstream extractExpressionTree() {
   // Retrieve updated field expressions
   tree << "# Expressions of the updated fields\n";
   tree << "fields_assignments = [\n";
-  for (std::size_t i=0; i < updatedFields.size(); ++i) {
-    for (std::size_t iD=0; iD < updatedFields[i].second.size(); ++iD) {
-      tree << "  " << assignment(symbol("cell.template getFieldPointer<" + updatedFields[i].first + ">()[" + std::to_string(iD) + "]"),
-                                 updatedFields[i].second[iD].describe()) << ",\n";
-    }
+  for (const auto& [lhs, rhs] : fieldRhs) {
+    tree << "  " << assignment(symbol(lhs), rhs) << ",\n";
   }
   tree << "]\n";
 

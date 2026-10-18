@@ -61,15 +61,7 @@ using PostProcessorGenerator = std::conditional_t<
 >;
 
 
-template <typename T> class SuperGeometryStatistics2D;
-template <typename T> class SuperGeometryStatistics3D;
-
-template <typename T, unsigned DIM>
-using SuperGeometryStatistics = std::conditional_t<
-                     DIM == 2,
-                     SuperGeometryStatistics2D<T>,
-                     SuperGeometryStatistics3D<T>
-                     >;
+template<typename T, unsigned D> class SuperGeometryStatistics;
 
 template<typename T, typename OUT_T, typename W> class SuperVTMwriter2D;
 template<typename T, typename OUT_T, typename W> class SuperVTMwriter3D;
@@ -160,15 +152,7 @@ using LatticeCouplingGenerator = std::conditional_t<
   LatticeCouplingGenerator3D<T,DESCRIPTOR>
 >;
 
-template <typename T> class BlockGeometryStatistics2D;
-template <typename T> class BlockGeometryStatistics3D;
-
-template <typename T, unsigned D>
-using BlockGeometryStatistics = std::conditional_t<
-  D == 2,
-  BlockGeometryStatistics2D<T>,
-  BlockGeometryStatistics3D<T>
->;
+template<typename T, unsigned D> class BlockGeometryStatistics;
 
 template <typename T> class BlockF2D;
 template <typename T> class BlockF3D;

@@ -1,6 +1,7 @@
 /*  This file is part of the OpenLB library
  *
- *  Copyright (C) 2022 Adrian Kummerlaender
+ *  Copyright (C) 2022 Adrian Kummerlaender,
+ *                2026 Shota Ito
  *  E-mail contact: info@openlb.net
  *  The most recent release of OpenLB can be downloaded at
  *  <http://www.openlb.net/>
@@ -28,6 +29,8 @@
 
 #include <concepts>
 #include <type_traits>
+
+#include "platform/platform.h"
 
 #include "baseType.h"
 #include "vector.h"
@@ -151,7 +154,7 @@ concept Cell = requires(CELL cell) {
   requires LatticeDescriptor<typename CELL::descriptor_t>;
   // Access to associated fields (using guaranteed POPULATION field as placeholder)
   // get by-value
-  { cell.template getField<descriptors::POPULATION>() } -> std::same_as<
+  { cell.template getField<descriptors::POPULATION>() } -> std::convertible_to<
     FieldD<typename CELL::value_t,typename CELL::descriptor_t,descriptors::POPULATION>
   >;
   // set by-value
@@ -257,17 +260,18 @@ concept DynamicCell = requires(CELL cell, typename CELL::value_t value) {
   // Computation of moments
   { cell.computeRho() } -> std::convertible_to<typename CELL::value_t>;
   cell.computeU(&value);
-  cell.computeJ(&value);
   cell.computeRhoU(value, &value);
-  cell.computeStress(&value);
-  cell.computeAllMomenta(value,&value,&value);
+
+  //cell.computeJ(&value);
+  //cell.computeStress(&value);
+  //cell.computeAllMomenta(value,&value,&value);
 
   // Definition of moments
-  cell.defineRho(value);
-  cell.defineU(&value);
-  cell.defineRhoU(value,&value);
-  cell.defineAllMomenta(value,&value,&value);
-  cell.inverseShiftRhoU(value,&value);
+  //cell.defineRho(value);
+  //cell.defineU(&value);
+  //cell.defineRhoU(value,&value);
+  //cell.defineAllMomenta(value,&value,&value);
+  //cell.inverseShiftRhoU(value,&value);
 
 };
 
@@ -296,13 +300,90 @@ concept BlockOperator = requires(OPERATOR op) {
   // Todo: Operator provides apply method template
 };
 
+/// Distributed source of point samples consumable by sample writers
+template <typename SOURCE>
+concept PointSampleSource = requires(const SOURCE source, std::size_t iLocal) {
+  { source.getLocalSize() }        -> std::convertible_to<std::size_t>;
+  { source.getGlobalSize() }       -> std::convertible_to<std::size_t>;
+  { source.getGlobalIndex(iLocal) } -> std::convertible_to<std::size_t>;
+  { std::decay_t<SOURCE>::d } -> std::convertible_to<unsigned>;
+  source.getPhysR(iLocal);
+};
+
 /// Non-nullptr F returning T
 template <typename F, typename T>
 concept CallableReturning = !std::same_as<std::decay_t<F>, std::nullptr_t>
                          &&  std::invocable<F>
                          &&  std::convertible_to<std::invoke_result_t<F>, T>;
 
-}
+/// Completion token for asynchronously dispatched work
+/**
+ * Modeled by e.g. std::future, ::sycl::event and the platform-specific
+ * Event classes: completion tokens of background ThreadPool tasks and of
+ * asynchronous device work share a common host-side waiting vocabulary.
+ *
+ * wait() blocks the calling thread until the associated work completed.
+ * Waiting on never-recorded or already-completed work returns immediately.
+ **/
+template <typename EVENT>
+concept Completable = requires(EVENT event) {
+  event.wait();
+};
+
+/// Completion token able to order downstream device work without host blocking
+/**
+ * record(lane) captures completion of all work previously dispatched to
+ * the given execution lane while barrierOn(lane) orders all subsequently
+ * dispatched work on the lane after the most recent record, entirely
+ * device-side, the host never blocks.
+ *
+ * A LANE identifies an ordered device work queue: a device::Stream on
+ * GPU_CUDA / GPU_HIP resp. a queue tag such as queues::OuterCollision
+ * on GPU_SYCL.
+ **/
+template <typename EVENT, typename LANE>
+concept DeviceOrderable = Completable<EVENT> && requires(EVENT event, LANE& lane) {
+  event.record(lane);
+  event.barrierOn(lane);
+};
+
+template <typename T>
+concept ProvidesFieldsList = requires {
+  typename T::fields;
+};
+
+} // namespace concepts
+
+/// Exposes if provided the fields list of tuple components
+template <typename COMPONENT, typename = void>
+struct fields_of_component {
+  using type = meta::list<>;
+};
+template <typename COMPONENT>
+struct fields_of_component<COMPONENT, std::void_t<typename COMPONENT::fields>> {
+  using type = typename COMPONENT::fields;
+};
+/// Helper
+template <typename COMPONENT>
+using fields_of_component_t = typename fields_of_component<COMPONENT>::type;
+
+
+/// Interface for the dynamics tuple to provide a field list
+/// if any of the tuple components provide a field list
+template <bool PROVIDED, typename... COMPONENTS >
+struct FieldsProviderImpl { };
+
+template <typename... COMPONENTS>
+struct FieldsProviderImpl<true, COMPONENTS...> {
+  using fields = meta::merge_many<fields_of_component_t<COMPONENTS>...>::type;
+};
+
+/// Helper to check if any of the COMPONENTS has a field list (meta::list)
+template <typename... COMPONENTS>
+inline constexpr bool has_fields_v = (concepts::ProvidesFieldsList<COMPONENTS> || ...);
+
+template <typename... COMPONENTS>
+using FieldsProvider = FieldsProviderImpl<has_fields_v<COMPONENTS...>,COMPONENTS...>;
 
 }
 

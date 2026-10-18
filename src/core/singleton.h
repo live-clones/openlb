@@ -39,6 +39,10 @@
 
 namespace olb {
 
+namespace logging {
+void flushTraceOnExit();
+}
+
 namespace singleton {
 
 class Directories {
@@ -55,6 +59,8 @@ public:
     setVtkOutDir(outputDir + "vtkData/");
     setGnuplotOutDir(outputDir + "gnuplotData/");
     setIntrospectionOutDir(outputDir + "introspectionData/");
+    setProfilingOutDir(outputDir + "profilingData/");
+    setStatisticsOutDir(outputDir + "statisticsData/");
   }
   void setLogOutDir(std::string logOutDir_)
   {
@@ -84,6 +90,16 @@ public:
     createDirectory(introspectionOutDir_);
     introspectionOutDir = introspectionOutDir_;
   }
+  void setProfilingOutDir(std::string profilingOutDir_)
+  {
+    createDirectory(profilingOutDir_);
+    profilingOutDir = profilingOutDir_;
+  }
+  void setStatisticsOutDir(std::string statisticsOutDir_)
+  {
+    createDirectory(statisticsOutDir_);
+    statisticsOutDir = statisticsOutDir_;
+  }
   void makeCustomDir(std::string customDir)
   {
     createDirectory(customDir);
@@ -112,6 +128,14 @@ public:
   {
     return introspectionOutDir;
   }
+  std::string getProfilingOutDir() const
+  {
+    return profilingOutDir;
+  }
+  std::string getStatisticsOutDir() const
+  {
+    return statisticsOutDir;
+  }
 private:
   Directories() : clout(std::cout,"Directories")
   {
@@ -121,6 +145,8 @@ private:
     setVtkOutDir("./tmp/vtkData/");
     setGnuplotOutDir("./tmp/gnuplotData/");
     setIntrospectionOutDir("./tmp/introspectionData/");
+    setProfilingOutDir("./tmp/profilingData/");
+    setStatisticsOutDir("./tmp/statisticsData/");
   }
   ~Directories() { }
 
@@ -155,6 +181,8 @@ private:
   std::string vtkOutDir;
   std::string gnuplotOutDir;
   std::string introspectionOutDir;
+  std::string profilingOutDir;
+  std::string statisticsOutDir;
 
   friend Directories& directories();
 };
@@ -176,6 +204,8 @@ inline void checkValue(T input)
 
 inline void exit(int exitcode)
 {
+  // MPI_Abort/std::exit skip atexit; flush the trace first.
+  logging::flushTraceOnExit();
 #ifdef PARALLEL_MODE_MPI
   MPI_Abort(MPI_COMM_WORLD, exitcode);
 #else

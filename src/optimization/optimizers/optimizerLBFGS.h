@@ -36,6 +36,11 @@
 // All OpenLB code is contained in this namespace.
 namespace olb {
 
+namespace parameters::LBFGS {
+  struct HISTORY_SIZE : public fields::SCALAR<20> { };
+  struct INITIAL_HESSIAN_SCALING : public fields::TYPED_SCALAR<double,1e-4> { };
+}
+
 /// All optimization code is contained in this namespace.
 namespace opti {
 
@@ -81,7 +86,7 @@ public:
     bool withUpperBound=false, S upperBound=S(),
     bool withLowerBound=false, S lowerBound=S(), bool vectorBounds=false,
     S controlEps=S(std::numeric_limits<double>::epsilon() ), bool failOnMaxIter = true,
-    std::vector<OptimizerLogType> gplotAnalysis = {})
+    std::vector<OptimizerLogType> gplotAnalysis = {OptimizerLogType::objective})
     : OptimizerLineSearch<S,C>(
       dimCtrl, eps, maxIt, /*lambda*/ 1., maxStepAttempts, stepCondition, verboseOn,
       fname, logFileName, withUpperBound, upperBound,
@@ -119,6 +124,37 @@ public:
       //_yStore[i][iDim] = S(0);
       //};
     }
+  };
+
+  OptimizerLBFGS(int dimCtrl,
+                 OptimizerParametersD<S>& optimizerParameters,
+                 std::vector<OptimizerLogType> gplotAnalysis = {OptimizerLogType::objective}
+                )
+    : OptimizerLBFGS<S, C>(
+        dimCtrl,
+        optimizerParameters.template get<parameters::optimizer::EPS>(),
+        optimizerParameters.template get<parameters::optimizer::MAX_OPTIMIZATION_STEPS>(),
+        optimizerParameters.template get<parameters::linesearch::INITIAL_STEP_SIZE>(),
+        optimizerParameters.template get<parameters::linesearch::MAX_STEP_ATTEMPTS>(),
+        optimizerParameters.template get<parameters::linesearch::STEP_CONDITION>(),
+        optimizerParameters.template get<parameters::LBFGS::HISTORY_SIZE>(),
+        optimizerParameters.template get<parameters::LBFGS::INITIAL_HESSIAN_SCALING>(),
+        optimizerParameters.template get<parameters::optimizer::VERBOSE>(),
+        optimizerParameters.template get<parameters::optimizer::FILE_NAME>(),
+        optimizerParameters.template get<parameters::optimizer::LOG_FILE_NAME>(),
+        optimizerParameters.template get<parameters::optimizer::WITH_UPPER_BOUND>(),
+        optimizerParameters.template get<parameters::optimizer::UPPER_BOUND>(),
+        optimizerParameters.template get<parameters::optimizer::WITH_LOWER_BOUND>(),
+        optimizerParameters.template get<parameters::optimizer::LOWER_BOUND>(),
+        optimizerParameters.template get<parameters::optimizer::VECTOR_BOUNDS>(),
+        optimizerParameters.template get<parameters::optimizer::CONTROL_EPS>(),
+        optimizerParameters.template get<parameters::optimizer::FAIL_ON_MAX_ITER>(),
+        gplotAnalysis)
+  {
+    OstreamManager clout(std::cout, "OptimizerLBFGS");
+    clout << io::text::section("Optimizer parameters") << std::endl;
+    optimizerParameters.print(clout);
+    clout << std::endl;
   };
 
   ~OptimizerLBFGS()

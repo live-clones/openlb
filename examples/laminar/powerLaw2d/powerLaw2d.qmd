@@ -1,0 +1,4 @@
+### powerLaw2d
+
+This example describes a steady non-Newtonian flow in a channel.
+At the inlet, a Poiseuille profile is imposed on the velocity, whereas the outlet implements a Dirichlet pressure condition set by $p = 0$.

@@ -55,7 +55,6 @@ int main(int argc, char *argv[])
     myCaseParameters.set<PULSE_DIFF_BOUND>(1e-1);
     myCaseParameters.set<MAX_RESOLUTION>(myCaseParameters.get<RESOLUTION>());
   }
-  myCaseParameters.fromCLI(argc, argv);
 
   Mesh mesh = createMesh(myCaseParameters);
 

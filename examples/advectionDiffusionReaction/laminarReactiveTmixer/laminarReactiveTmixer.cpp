@@ -604,7 +604,6 @@ int main(int argc, char* argv[]) {
     myCaseParameters.set<PLOT_OVER_LINE       >(true);
     myCaseParameters.set<START_TIME           >(0.02*25*(1600e-6 + 800e-6/2)/1.4);
   }
-  myCaseParameters.fromCLI(argc, argv);
 
   /// === Step 3: Create Mesh ===
   Mesh mesh = createMesh(myCaseParameters);

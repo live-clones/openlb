@@ -53,14 +53,19 @@ private:
   ConcreteParametersD<T,DESCRIPTOR,Platform::GPU_HIP,typename DYNAMICS::parameters>* _parameters;
   ConcreteBlockMask<T,Platform::GPU_HIP>* _mask;
 
-  gpu::hip::Dynamics<T,DESCRIPTOR>** _dynamicsOfCells;
+  std::uint16_t* _dynamicsOfCells;
+  /// Stable non-zero dispatch-table index of this collision's device dynamics
+  std::uint16_t _index;
 
   gpu::hip::device::unique_ptr<gpu::hip::Dynamics<T,DESCRIPTOR>> _deviceDynamics;
 
-  gpu::hip::Column<CellID> _cells;
-  bool _modified;
+  gpu::hip::Column<CellID> _outerCells;
+  gpu::hip::Column<CellID> _innerCells;
 
-  gpu::hip::device::Stream _stream;
+  /// Tail of legacy default-stream work preceding this collision dispatch
+  Event<Platform::GPU_HIP> _legacyTail;
+
+  bool _modified;
 
   /// Apply DYNAMICS using its mask and fall back to dynamic dispatch for others
   void applyDominant(ConcreteBlockLattice<T,DESCRIPTOR,Platform::GPU_HIP>& block,
@@ -71,7 +76,6 @@ private:
 
 public:
   ConcreteBlockCollisionO();
-
   std::type_index id() const override
   {
     return typeid(DYNAMICS);
@@ -91,7 +95,7 @@ public:
       }
     }
     if (state) {
-      _dynamicsOfCells[iCell] = _deviceDynamics.get();
+      _dynamicsOfCells[iCell] = _index;
     }
     _modified = true;
   }
@@ -111,14 +115,14 @@ public:
              ConcreteBlockMask<T,Platform::GPU_HIP>&               subdomain,
              CollisionDispatchStrategy                              strategy) override
   {
-    switch (strategy) {
-    case CollisionDispatchStrategy::Dominant:
-      return applyDominant(block, subdomain);
-    case CollisionDispatchStrategy::Individual:
+    //switch (strategy) {
+    //case CollisionDispatchStrategy::Dominant:
+    //  return applyDominant(block, subdomain);
+    //case CollisionDispatchStrategy::Individual:
       return applyIndividual(block, subdomain);
-    default:
-      throw std::runtime_error("Invalid collision dispatch strategy");
-    }
+    //default:
+      //throw std::runtime_error("Invalid collision dispatch strategy");
+    //}
   }
 
 };
@@ -132,7 +136,7 @@ private:
   gpu::hip::Column<CellID> _cells;
   bool _modified;
 
-  gpu::hip::device::Stream _stream;
+  //gpu::hip::device::Stream _stream;
 
 public:
   ConcreteBlockO();
@@ -162,6 +166,15 @@ public:
 
   void apply(ConcreteBlockLattice<T,DESCRIPTOR,Platform::GPU_HIP>& block) override;
 
+  olb::AbstractParameters<T,DESCRIPTOR>& getParameters(ConcreteBlockLattice<T,DESCRIPTOR,Platform::GPU_HIP>& block) override {
+    if constexpr (requires { typename OPERATOR::parameters; }) {
+      return block.template getData<OperatorParameters<OPERATOR>>().asAbstract();
+    } else {
+      static StaticParametersD<T,DESCRIPTOR> none;
+      return none;
+    }
+  }
+
 };
 
 
@@ -173,7 +186,7 @@ private:
   gpu::hip::Column<CellID> _cells;
   bool _modified;
 
-  gpu::hip::device::Stream _stream;
+  //gpu::hip::device::Stream _stream;
 
   ConcreteParametersD<T,DESCRIPTOR,Platform::GPU_HIP,typename OPERATOR::parameters>* _parameters;
 
@@ -205,6 +218,15 @@ public:
   }
 
   void apply(ConcreteBlockLattice<T,DESCRIPTOR,Platform::GPU_HIP>& block) override;
+
+  olb::AbstractParameters<T,DESCRIPTOR>& getParameters(ConcreteBlockLattice<T,DESCRIPTOR,Platform::GPU_HIP>& block) override {
+    if constexpr (requires { typename OPERATOR::parameters; }) {
+      return block.template getData<OperatorParameters<OPERATOR>>().asAbstract();
+    } else {
+      static StaticParametersD<T,DESCRIPTOR> none;
+      return none;
+    }
+  }
 
 };
 
@@ -240,6 +262,15 @@ public:
   void apply(ConcreteBlockLattice<T,DESCRIPTOR,Platform::GPU_HIP>& block) override
   {
     OPERATOR().apply(block);
+  }
+
+  olb::AbstractParameters<T,DESCRIPTOR>& getParameters(ConcreteBlockLattice<T,DESCRIPTOR,Platform::GPU_HIP>& block) override {
+    if constexpr (requires { typename OPERATOR::parameters; }) {
+      return block.template getData<OperatorParameters<OPERATOR>>().asAbstract();
+    } else {
+      static StaticParametersD<T,DESCRIPTOR> none;
+      return none;
+    }
   }
 
 };

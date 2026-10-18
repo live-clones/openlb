@@ -27,7 +27,13 @@
 #include "statistics.h"
 
 #include <thrust/reduce.h>
+#include <thrust/transform_reduce.h>
+#include <thrust/iterator/zip_iterator.h>
+#include <thrust/iterator/counting_iterator.h>
+#include <thrust/tuple.h>
 #include <thrust/execution_policy.h>
+
+#include "core/fieldStatisticO.h"
 
 namespace olb {
 
@@ -72,6 +78,46 @@ struct maximum_and_plus {
   }
 };
 
+/// Masked accumulator for the fused rho/u statistics reduction
+template <typename T>
+struct StatAccum {
+  std::size_t count;
+  T rhoSum, rhoMin, rhoMax;
+  T uSqrSum, uSqrMin, uSum, uSqrMax;
+};
+
+/// Maps a (generated, rho, uSqr) cell tuple to a masked StatAccum
+template <typename T>
+struct statTransform {
+  template <typename Tuple>
+  __device__ StatAccum<T> operator()(const Tuple& t) const {
+    if (thrust::get<0>(t) != 0) {
+      const T rho  = thrust::get<1>(t);
+      const T uSqr = thrust::get<2>(t);
+      return StatAccum<T>{1, rho, rho, rho, uSqr, uSqr, util::sqrt(uSqr), uSqr};
+    }
+    return StatAccum<T>{0, T{}, std::numeric_limits<T>::max(), std::numeric_limits<T>::lowest(),
+                        T{}, std::numeric_limits<T>::max(), T{}, std::numeric_limits<T>::lowest()};
+  }
+};
+
+/// Combines two StatAccum (sum counts and sums, min/max the extremes)
+template <typename T>
+struct statCombine {
+  __device__ StatAccum<T> operator()(const StatAccum<T>& a, const StatAccum<T>& b) const {
+    return StatAccum<T>{
+      a.count + b.count,
+      a.rhoSum + b.rhoSum,
+      a.rhoMin < b.rhoMin ? a.rhoMin : b.rhoMin,
+      a.rhoMax > b.rhoMax ? a.rhoMax : b.rhoMax,
+      a.uSqrSum + b.uSqrSum,
+      a.uSqrMin < b.uSqrMin ? a.uSqrMin : b.uSqrMin,
+      a.uSum + b.uSum,
+      a.uSqrMax > b.uSqrMax ? a.uSqrMax : b.uSqrMax
+    };
+  }
+};
+
 }
 
 }
@@ -84,34 +130,116 @@ void StatisticsPostProcessor::type<ConcreteBlockLattice<T,DESCRIPTOR,Platform::G
     return;
   }
 
-  /// Todo: Reimplement these four separate reductions as single kernel
-  auto& statisticGenerated = blockLattice.template getField<descriptors::STATISTIC_GENERATED>();
-  auto& statistic = blockLattice.template getField<descriptors::STATISTIC>();
-  std::size_t nCells = thrust::reduce(thrust::device,
-                                      statisticGenerated[0].deviceData(),
-                                      statisticGenerated[0].deviceData() + blockLattice.getNcells(),
-                                      T{0},
-                                      thrust::plus<T>());
-  T rhoSum = thrust::reduce(thrust::device,
-                            statistic[0].deviceData(),
-                            statistic[0].deviceData() + blockLattice.getNcells(),
-                            T{0},
-                            thrust::plus<T>());
-  auto [maxU, uSqrSum]  = thrust::reduce(thrust::device,
-                                         statistic[1].deviceData(),
-                                         statistic[1].deviceData() + blockLattice.getNcells(),
-                                         gpu::cuda::pair{std::numeric_limits<T>::min(), T{0}},
-                                         gpu::cuda::maximum_and_plus<T>());
+  OLB_PROFILE_T("GPU_CUDA:Stats:Reduce", DESCRIPTOR);
 
-  typename LatticeStatistics<T>::Aggregatable statistics{
-    .nCells = nCells,
-    .avRho = rhoSum,
-    .avEnergy = uSqrSum,
-    .maxU = maxU
+  // Single fused reduction of rho and u (min/max/mean), masked by the
+  // per-cell STATISTIC_GENERATED flag so disabled cells do not skew min/max.
+  auto& statisticGenerated = blockLattice.template getField<descriptors::STATISTIC_GENERATED>();
+  auto& statistic          = blockLattice.template getField<descriptors::STATISTIC>();
+  const std::size_t n = blockLattice.getNcells();
+
+  auto first = thrust::make_zip_iterator(thrust::make_tuple(
+    statisticGenerated[0].deviceData(), statistic[0].deviceData(), statistic[1].deviceData()));
+
+  using Accum = gpu::cuda::StatAccum<T>;
+  const Accum init{0, T{}, std::numeric_limits<T>::max(), std::numeric_limits<T>::lowest(),
+                   T{}, std::numeric_limits<T>::max(), T{}, std::numeric_limits<T>::lowest()};
+  const Accum r = thrust::transform_reduce(thrust::device, first, first + n,
+                                           gpu::cuda::statTransform<T>{}, init,
+                                           gpu::cuda::statCombine<T>{});
+
+  typename LatticeStatistics<T,DESCRIPTOR>::Aggregatable statistics{
+    .nCells   = r.count,
+    .avRho    = r.rhoSum,
+    .avEnergy = r.uSqrSum,
+    .maxU     = r.uSqrMax,
+    .minRho   = r.rhoMin,
+    .maxRho   = r.rhoMax,
+    .minUSqr  = r.uSqrMin,
+    .sumU     = r.uSum
   };
   blockLattice.getStatistics().incrementStats(statistics);
 
   blockLattice.getStatistics().reset();
+}
+
+
+namespace gpu {
+namespace cuda {
+
+/// Accumulator for a registered field reduction (single component)
+template <typename T>
+struct FieldStatAccum {
+  T count, min, max, sum;
+};
+
+/// Maps a cell index to its masked (core-only) FieldStatAccum
+template <typename T, unsigned D>
+struct fieldStatTransform {
+  BlockStructureD<D> structure;
+  const T*           values;
+  __device__ FieldStatAccum<T> operator()(std::size_t iCell) const {
+    if (structure.isInsideCore(structure.getLatticeR(iCell))) {
+      const T v = values[iCell];
+      return FieldStatAccum<T>{T(1), v, v, v};
+    }
+    return FieldStatAccum<T>{T(0), std::numeric_limits<T>::max(),
+                             std::numeric_limits<T>::lowest(), T(0)};
+  }
+};
+
+template <typename T>
+struct fieldStatCombine {
+  __device__ FieldStatAccum<T> operator()(const FieldStatAccum<T>& a, const FieldStatAccum<T>& b) const {
+    return FieldStatAccum<T>{
+      a.count + b.count,
+      a.min < b.min ? a.min : b.min,
+      a.max > b.max ? a.max : b.max,
+      a.sum + b.sum
+    };
+  }
+};
+
+}
+}
+
+/// Device reduction of a registered FIELD over the core cells (masked by isCore)
+template <typename FIELD>
+template <typename T, typename DESCRIPTOR>
+void FieldStatisticO<FIELD>::type<ConcreteBlockLattice<T,DESCRIPTOR,Platform::GPU_CUDA>>::apply(
+  ConcreteBlockLattice<T,DESCRIPTOR,Platform::GPU_CUDA>& block)
+{
+    if (!block.statisticsEnabled()) {
+      return;
+    }
+    const unsigned    d = DESCRIPTOR::template size<FIELD>();
+    const std::size_t n = block.getNcells();
+    auto& field = block.template getField<FIELD>();
+    const BlockStructureD<DESCRIPTOR::d> structure = block;
+
+    typename LatticeStatistics<T,DESCRIPTOR>::FieldResult r;
+    r.components = d;
+    r.min.resize(d);
+    r.max.resize(d);
+    r.sum.resize(d);
+    r.count = 0;
+
+    using Accum = gpu::cuda::FieldStatAccum<T>;
+    const Accum init{T(0), std::numeric_limits<T>::max(), std::numeric_limits<T>::lowest(), T(0)};
+    auto index = thrust::make_counting_iterator<std::size_t>(0);
+    for (unsigned iD = 0; iD < d; ++iD) {
+      const Accum res = thrust::transform_reduce(thrust::device, index, index + n,
+        gpu::cuda::fieldStatTransform<T,DESCRIPTOR::d>{structure, field[iD].deviceData()},
+        init, gpu::cuda::fieldStatCombine<T>{});
+      r.min[iD] = res.min;
+      r.max[iD] = res.max;
+      r.sum[iD] = res.sum;
+      if (iD == 0) {
+        r.count = static_cast<std::size_t>(res.count);
+      }
+    }
+
+    block.getStatistics().template setFieldResult<FIELD>(r);
 }
 
 

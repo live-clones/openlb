@@ -44,6 +44,9 @@
 #include <openvdb/openvdb.h>
 #endif
 
+#ifdef FEATURE_ADIOS2
+#include <adios2.h>
+#endif
 
 namespace olb {
 

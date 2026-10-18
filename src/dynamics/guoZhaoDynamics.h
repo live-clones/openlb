@@ -172,6 +172,58 @@ struct GuoZhaoForcing {
   using combined_parameters = typename COLLISION::parameters;
 };
 
+template <template <typename> typename Forced = momenta::Forced>
+struct TrackedGuoZhaoForcing {
+  static std::string getName() {
+    return "TrackedGuoEpsilonForcing";
+  }
+
+  template <typename DESCRIPTOR, typename MOMENTA>
+  using combined_momenta = typename Forced<MOMENTA>::template type<DESCRIPTOR>;
+
+  template <typename DESCRIPTOR, typename MOMENTA, typename EQUILIBRIUM>
+  using combined_equilibrium = typename EQUILIBRIUM::template type<DESCRIPTOR,Forced<MOMENTA>>;
+
+  template <typename DESCRIPTOR, typename MOMENTA, typename EQUILIBRIUM, typename COLLISION>
+  struct combined_collision {
+    using MomentaF   = typename Forced<MOMENTA>::template type<DESCRIPTOR>;
+    using CollisionO = typename COLLISION::template type<DESCRIPTOR,Forced<MOMENTA>,EQUILIBRIUM>;
+
+    static_assert(COLLISION::parameters::template contains<descriptors::OMEGA>(),
+                  "COLLISION must be parametrized using relaxation frequency OMEGA");
+
+    template <typename CELL, typename PARAMETERS, typename V=typename CELL::value_t>
+    CellStatistic<V> apply(CELL& cell, PARAMETERS& parameters) any_platform {
+      V rho, u[DESCRIPTOR::d];
+      MomentaF().computeRhoU(cell, rho, u);
+      CollisionO().apply(cell, parameters);
+      const V omega = parameters.template get<descriptors::OMEGA>();
+      const V epsilon  = cell.template getField<descriptors::EPSILON>();
+      const V k        = cell.template getField<descriptors::K>();
+      const V nu       = cell.template getField<descriptors::NU>();
+      auto force       = cell.template getField<descriptors::FORCE>();
+      auto bodyF       = cell.template getField<descriptors::BODY_FORCE>();
+      guoZhao_lbm<DESCRIPTOR>::updateExternalForce(cell, u,epsilon, k, nu, force, bodyF);
+      guoZhao_lbm<DESCRIPTOR>::addExternalForce(cell, rho, u, omega, epsilon, k, nu, force);
+
+      // average-velocity tracking
+      Vector<V,DESCRIPTOR::d> uExt;
+      V rhoExt = 0;
+      MomentaF().computeRhoU(cell, rhoExt, uExt);
+      std::size_t iT = parameters.template get<descriptors::LATTICE_TIME>();
+      auto uAvg = cell.template getField<descriptors::AVERAGE_VELOCITY>();
+      auto rhoAvg = cell.template getField<descriptors::AVERAGE_DENSITY>();
+      cell.template setField<descriptors::AVERAGE_VELOCITY>((uAvg * (iT-1) + uExt) / iT);
+      cell.template setField<descriptors::AVERAGE_DENSITY>((rhoAvg * (iT-1) + rhoExt) / iT);
+
+      return {rho, util::normSqr<V,DESCRIPTOR::d>(u)};
+    };
+  };
+
+  template <typename DESCRIPTOR, typename MOMENTA, typename EQUILIBRIUM, typename COLLISION>
+  using combined_parameters = typename COLLISION::parameters::template include<descriptors::LATTICE_TIME>;
+};
+
 }
 
 template <typename T, typename DESCRIPTOR, typename MOMENTA=momenta::BulkTuple>

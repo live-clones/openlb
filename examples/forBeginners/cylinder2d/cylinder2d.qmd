@@ -1,0 +1,4 @@
+### cylinder2d
+
+This app is the simplified version of $\texttt{laminar/cylinder2d}$. It contains the bare minimum code to execute the cylinder benchmark case with OpenLB. This example is suited to grasp the basic structure of OpenLB example cases.
+This case is also used for the tutorial exercises at the OpenLB spring school.

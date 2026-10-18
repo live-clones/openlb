@@ -272,7 +272,7 @@ void prepareLattice( MyCase& myCase ) {
   const T spongeDepthPU     = parameters.get<parameters::SPONGE_DEPTH_LU>() * physDeltaX;
 
   // Set up a unit converter with the characteristic physical units
-  lattice.setUnitConverter(
+  lattice.setUnitConverter<UnitConverter<T,DESCRIPTOR>>(
     physDeltaX,         // physDeltaX: spacing between two lattice cells in [m]
     physDeltaT,         // physDeltaT: time step in [s]
     physCharLength,     // charPhysLength: reference length of simulation geometry in [m]
@@ -343,9 +343,6 @@ void prepareLattice( MyCase& myCase ) {
                                                         converter.getLatticeVelocity(uInfty[2]) } );
     lattice.setParameter<descriptors::cbc::FLOW_DIRECTION>( 0 );
     lattice.setParameter<descriptors::cbc::FLOW_ORIENTATION>( 1 );
-    auto cbcIndicator = geometry.getMaterialIndicator({4,6});
-    AnalyticalConst<3, T, T> isCBCField( T(1) );
-    lattice.defineField<fields::cbc::IS_CBC>( cbcIndicator, isCBCField );
   }
 
   if ( farFieldType == SPONGE || farFieldType == CBC_SPONGE ) {
@@ -591,16 +588,15 @@ void setGetParameters( MyCase::ParametersD& myCaseParameters, int& argc, char** 
   myCaseParameters.set<PHYS_CHAR_VISCOSITY>(      0.001 );
   myCaseParameters.set<PHYS_CHAR_DENSITY  >(        1.0 );
   myCaseParameters.set<RESOLUTION         >( defaultRes );
-  myCaseParameters.set<PHYS_DELTA_T>([&] {
-    return myCaseParameters.get<LATT_CHAR_VELOCITY>() / myCaseParameters.get<PHYS_CHAR_VELOCITY>() * myCaseParameters.get<PHYS_DELTA_X>();
+  myCaseParameters.set<PHYS_DELTA_T>([](MyCase::ParametersD& p) {
+    return p.get<LATT_CHAR_VELOCITY>() / p.get<PHYS_CHAR_VELOCITY>() * p.get<PHYS_DELTA_X>();
   } );
-  myCaseParameters.set<PHYS_CHAR_LENGTH>([&] {
-    return myCaseParameters.get<CORE_EXTENT>()[0];
+  myCaseParameters.set<PHYS_CHAR_LENGTH>([](MyCase::ParametersD& p) {
+    return p.get<CORE_EXTENT>()[0];
   });
-  myCaseParameters.set<PHYS_DELTA_X>([&] {
-    return myCaseParameters.get<PHYS_CHAR_LENGTH>() / myCaseParameters.get<RESOLUTION>();
+  myCaseParameters.set<PHYS_DELTA_X>([](MyCase::ParametersD& p) {
+    return p.get<PHYS_CHAR_LENGTH>() / p.get<RESOLUTION>();
   });
-  myCaseParameters.fromCLI(argc, argv);
 }
 
 void setOutDir( MyCase::ParametersD& myCaseParameters ) {

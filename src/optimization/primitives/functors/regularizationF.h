@@ -52,6 +52,25 @@ struct TikhonovRegularizationF {
   }
 };
 
+struct VolumePenaltyF {
+  using parameters_t = meta::list<parameters::REG_ALPHA, parameters::TARGET_VOLUME>;
+  using result_t = opti::REGULARIZATION;
+  using fields_t = meta::list<descriptors::POROSITY>;
+
+  template <typename CELL, typename PARAMETERS>
+  auto compute(CELL& cell, PARAMETERS& parameters) any_platform {
+    using V = typename CELL::value_t;
+    using DESCRIPTOR = typename CELL::descriptor_t;
+    const V regAlpha = parameters.template get<parameters::REG_ALPHA>();
+    const V targetVolume = parameters.template get<parameters::TARGET_VOLUME>();
+
+    const V porosity = cell.template getField<descriptors::POROSITY>();
+    FieldD<V,DESCRIPTOR,result_t> regularization{};
+    regularization = regAlpha*util::pow(porosity - targetVolume, 2);
+    return regularization;
+  }
+};
+
 }
 
 }

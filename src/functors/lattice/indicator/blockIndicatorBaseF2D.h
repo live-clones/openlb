@@ -64,7 +64,7 @@ public:
   /**
    * May return false even if the indicated domain subset is in fact empty.
    * Primarily implemented to minimize block accesses if an empty domain can
-   * be inferred by e.g. BlockGeometryStatistics2D data.
+   * be inferred by e.g. BlockGeometryStatistics data.
    *
    * i.e. only override this method if the domain can be checked for emptyness
    *      in an efficient fashion.

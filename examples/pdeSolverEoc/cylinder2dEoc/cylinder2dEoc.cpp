@@ -76,7 +76,6 @@ int main(int argc, char* argv[])
     myCaseParameters.set<NUM_SIMULATIONS>(4);
     myCaseParameters.set<RESOLUTION_STEP>(10);
   }
-  myCaseParameters.fromCLI(argc, argv);
 
   MyCase::value_t _drag[myCaseParameters.get<parameters::NUM_SIMULATIONS>()];
 

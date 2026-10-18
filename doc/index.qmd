@@ -1,0 +1,29 @@
+---
+pagetitle: "OpenLB User Guide"
+---
+
+::: {.content-visible when-profile="website"}
+
+# OpenLB User Guide
+## Associated with Release 1.9 of the Code
+
+<!-- ![Flo's Balken](../fig/beam.gif){width=80% fig-cap-location="bottom"} -->
+![](./fig/airbusBlenderPreview2-with-logo.png){width=80% fig-cap-location="bottom" .lightbox}
+
+<!--
+Copyright \copyright{} 2006-2008 Jonas Latt
+
+Copyright \copyright{} 2008-2025 Mathias J. Krause
+-->
+
+[info@openlb.net](mailto:info@openlb.net){.external target="_blank"}
+
+Permission is granted to copy, distribute and/or modify this document
+under the terms of the GNU Free Documentation License, Version 1.2
+or any later version published by the Free Software Foundation;
+with no Invariant Sections, no Front-Cover Texts, and no Back-Cover
+Texts.  A copy of the license is included in the Section entitled "GNU
+Free Documentation License" (Section~\ref{sec:license}).
+:::
+
+# {.unnumbered .unlisted}

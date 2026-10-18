@@ -30,6 +30,9 @@
 
 #include "loadBalancer.h"
 
+#include "utilities/performanceProfiler.h"
+#include "utilities/log/log.h"
+
 namespace olb {
 
 template <typename T, typename DESCRIPTOR, Platform PLATFORM>
@@ -186,11 +189,10 @@ private:
 
   const RefinedLoadBalancer<T,DESCRIPTOR::d>& _balancer;
 
-  std::vector<std::unique_ptr<BlockRefinementContextD<T,DESCRIPTOR>>> _context;
+  std::map<int, std::unique_ptr<BlockRefinementContextD<T,DESCRIPTOR>>> _context;
 
   template <Platform PLATFORM>
-  auto constructConcreteBlockContext(int fineC) {
-    const int coarseC = _balancer.cloc(fineC);
+  auto constructConcreteBlockContext(int fineC, int coarseC) {
     return std::make_unique<ConcreteBlockRefinementContextD<T,DESCRIPTOR,PLATFORM>>(
         _cLattice.getBlock(coarseC).template asConcrete<PLATFORM>()
       , _fLattice.getBlock(fineC).template asConcrete<PLATFORM>()
@@ -211,12 +213,17 @@ public:
   , _fLattice(fLattice)
   , _balancer(dynamic_cast<const RefinedLoadBalancer<T,DESCRIPTOR::d>&>(balancer))
   {
-    for (int iC = 0; iC < _balancer.size(); ++iC) {
+    OLB_SCOPE(logging::Setup, "setup refinement coupler");
+    for (auto [iC, coarseC] : _balancer.clocs()) {
       callUsingConcretePlatform(_balancer.platform(iC),
                                 [&](auto platform) {
-        _context.emplace_back(constructConcreteBlockContext<platform.value>(iC));
+        _context.emplace(iC, constructConcreteBlockContext<platform.value>(iC, coarseC));
       });
     }
+  }
+
+  bool isAtFrontier(int iC) const {
+    return _balancer.cloc(iC);
   }
 
   BlockRefinementContextD<T,DESCRIPTOR>& getBlock(int iC) {
@@ -225,6 +232,7 @@ public:
 
   /// Apply coupling operation on all blocks
   void apply(BlockRefinementOperatorPromise<T,DESCRIPTOR>&& promise) {
+    OLB_PROFILE("Refinement:Coupler:Apply");
     {
       auto iter = _cCommunicator.find(promise.id());
       if (iter != _cCommunicator.end()) {
@@ -239,16 +247,25 @@ public:
     }
 
     #ifdef PARALLEL_MODE_OMP
-    #pragma omp taskloop
+    #pragma omp parallel
+    #pragma omp single
     #endif
-    for (int iC = 0; iC < _balancer.size(); ++iC) {
-      _context[iC]->apply(std::forward<BlockRefinementOperatorPromise<T,DESCRIPTOR>&&>(promise));
+    for (auto& [iC, context] : _context) {
+      auto* contextPtr = context.get();
+      #ifdef PARALLEL_MODE_OMP
+      #pragma omp task firstprivate(contextPtr) shared(promise)
+      #endif
+      contextPtr->apply(std::forward<BlockRefinementOperatorPromise<T,DESCRIPTOR>&&>(promise));
     }
+
+    #ifdef PLATFORM_GPU_CUDA
+    gpu::cuda::device::synchronize();
+    #endif
   }
 
   void setProcessingContext(ProcessingContext context) {
-    for (int iC = 0; iC < _balancer.size(); ++iC) {
-      _context[iC]->setProcessingContext(context);
+    for (auto& [iC, block] : _context) {
+      block->setProcessingContext(context);
     }
   }
 

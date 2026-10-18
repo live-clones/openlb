@@ -147,7 +147,7 @@ public:
   }
 
   /// Get 1D cell ID
-  CellID getCellId(LatticeR<D> latticeR) const
+  CellID getCellId(LatticeR<D> latticeR) const any_platform
   {
     OLB_PRECONDITION(isInside(latticeR));
     return (latticeR+_padding) * _projection;
@@ -155,12 +155,12 @@ public:
 
   template <typename... L>
   std::enable_if_t<sizeof...(L) == D, CellID>
-  getCellId(L... latticeR) const
+  getCellId(L... latticeR) const any_platform
   {
     return LatticeR<D>{latticeR+_padding...} * _projection;
   }
 
-  LatticeR<D> getLatticeR(CellID iCell) const
+  LatticeR<D> getLatticeR(CellID iCell) const any_platform
   {
     if constexpr (D == 3) {
       const std::int32_t iX = iCell / _projection[0];
@@ -182,13 +182,13 @@ public:
   }
 
   /// Return whether location is valid
-  bool isInside(LatticeR<D> latticeR) const
+  bool isInside(LatticeR<D> latticeR) const any_platform
   {
     return latticeR >= -_padding && latticeR < _core + _padding;
   };
 
   /// Return whether location is inside core
-  bool isInsideCore(LatticeR<D> latticeR) const
+  bool isInsideCore(LatticeR<D> latticeR) const any_platform
   {
     return latticeR >= 0 && latticeR < _core;
   };
@@ -211,6 +211,16 @@ public:
   {
     return isPadding(getLatticeR(iCell));
   };
+
+  bool isPaddingCore(LatticeR<D> latticeR, int padding) const
+  {
+    return !(latticeR >= padding && latticeR < _core - padding);
+  }
+
+  bool isPaddingCore(CellID iCell, int padding) const
+  {
+    return isPaddingCore(getLatticeR(iCell), padding);
+  }
 
   template <typename... L>
   std::enable_if_t<sizeof...(L) == D, bool>
@@ -371,6 +381,56 @@ public:
       }
     }
   };
+
+  template <typename F>
+  void forPaddingLocations(int width, F f) const
+  {
+    using loc = typename LatticeR<D>::value_t;
+    const loc w = std::min(width, _padding);
+    if (w <= 0) return;
+
+    for (loc iX = -w; iX < _core[0] + w; ++iX) {
+      const bool inX = (iX >= 0 && iX < _core[0]);
+      if constexpr (D > 1) {
+        for (loc iY = -w; iY < _core[1] + w; ++iY) {
+          const bool inXY = inX && (iY >= 0 && iY < _core[1]);
+          if constexpr (D == 3) {
+            for (loc iZ = -w; iZ < _core[2] + w; ++iZ) {
+              if (inXY && iZ >= 0 && iZ < _core[2]) {
+                iZ = _core[2] - 1;
+                continue;
+              }
+              if constexpr (std::is_invocable_v<F, LatticeR<D>>) {
+                f({iX, iY, iZ});
+              } else {
+                f(iX, iY, iZ);
+              }
+            }
+          } else {
+            if (inX && iY >= 0 && iY < _core[1]) {
+              iY = _core[1] - 1;
+              continue;
+            }
+            if constexpr (std::is_invocable_v<F, LatticeR<D>>) {
+              f({iX, iY});
+            } else {
+              f(iX, iY);
+            }
+          }
+        }
+      } else {
+        if (inX) {
+          iX = _core[0] - 1;
+          continue;
+        }
+        if constexpr (std::is_invocable_v<F, LatticeR<D>>) {
+          f({iX});
+        } else {
+          f(iX);
+        }
+      }
+    }
+  }
 
   template <typename F>
   void forCellIndices(F f) const

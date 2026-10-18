@@ -34,6 +34,7 @@ struct CELL_ID_COARSE : public descriptors::TYPED_FIELD_BASE<CellID,1> { };
 struct CELL_ID_FINE : public descriptors::TYPED_FIELD_BASE<CellID,1> { };
 
 struct NORMAL : public descriptors::TYPED_FIELD_BASE<int,0,1> { };
+struct NORMAL_TYPE : public descriptors::TYPED_FIELD_BASE<DiscreteNormalType,1> { };
 
 struct PREV_RHO  : public descriptors::FIELD_BASE<1> { };
 struct PREV_U    : public descriptors::FIELD_BASE<0,1> { };

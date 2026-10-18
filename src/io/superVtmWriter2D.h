@@ -51,6 +51,9 @@ template<typename T, typename OUT_T=float, typename W=T>
 class SuperVTMwriter2D {
 public:
   SuperVTMwriter2D( std::string name, int overlap = 1, bool binary = true );
+  /// Construct writer for CuboidDecomposition3D debugging
+  SuperVTMwriter2D( CuboidDecomposition<T,2>& cGeometry,
+                    const std::string& name, int overlap = 1, bool binary=true);
   ///  writes functors stored in pointerVec
   ///  every thread writes a vti file with data from his cuboids
   ///  the vti files are linked in a pvd file
@@ -64,6 +67,12 @@ public:
   ///  have to be called before calling write(int iT=0), since it creates
   //   the master pvd file, where all vti are linked!
   void createMasterFile();
+  ///  writes the vti file for cuboid iC at timestep iT
+  void writeGlobalVTI(int iT, int iC);
+  void processIdArray(
+    const std::string& fullName,
+    int processId,
+    const Vector<int,2>& extent1);
   ///  put functor to _pointerVec
   ///  to simplify writing process of several functors
   void addFunctor(SuperF2D<T,W>& f);
@@ -106,6 +115,7 @@ private:
   ///  performes </PointData> and </Piece>
   void closePiece(const std::string& fullNamePiece);
 private:
+  CuboidDecomposition<T,2>* _cGeometry = nullptr;
   mutable OstreamManager clout;
   ///  default is false, call createMasterFile() and it will be true
   bool _createFile;

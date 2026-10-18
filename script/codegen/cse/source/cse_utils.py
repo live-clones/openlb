@@ -93,8 +93,8 @@ class CodeBlockPrinter(C11CodePrinter):
                 elif "computeJ" in call or "computeU" in call:
                     decl = Assignment(expr.lhs,Symbol("DECLARE:V "+expr.lhs.name+" [DESCRIPTOR::d]"))
                     return f"{self.doprint(decl)}; {call}({expr.lhs})"
-                elif "computeStress" in call:
-                    decl = Assignment(expr.lhs,Symbol("DECLARE:V "+expr.lhs.name+" [util::TensorVal<CELL::descriptor_t>::n]"))
+                elif "computeAllMomenta" in call:
+                    decl = Assignment(expr.lhs,Symbol("DECLARE:V "+expr.lhs.name+" [util::TensorVal<DESCRIPTOR>::n]"))
                     args = expr.rhs.args + (expr.lhs,)
                     return f"{self.doprint(decl)}; {call}{args}"
                 elif "computeEquilibrium" in call:

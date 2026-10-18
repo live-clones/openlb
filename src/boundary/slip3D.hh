@@ -21,10 +21,6 @@
  *  Boston, MA  02110-1301, USA.
 */
 
-//This file contains the Slip Boundary
-//This is an onLattice boundary
-//This is a new version of the Boundary, which only contains free floating functions
-
 #ifndef SLIP_HH
 #define SLIP_HH
 
@@ -36,26 +32,15 @@ namespace boundary {
 
 template <int NX, int NY, int NZ>
 struct FullSlipO3D {
-  static constexpr OperatorScope scope = OperatorScope::PerCell;
-
-  int getPriority() const {
-    return -1;
-  }
-
-  template <typename CELL, typename V = typename CELL::value_t>
-  void apply(CELL& x_b) any_platform {
-    using DESCRIPTOR = typename CELL::descriptor_t;
-    int reflectionPop[DESCRIPTOR::q];
-    int mirrorDirection0;
-    int mirrorDirection1;
-    int mirrorDirection2;
+  template <typename DESCRIPTOR>
+  static constexpr std::array<int,DESCRIPTOR::q> computeReflectionMapping() {
+    std::array<int, DESCRIPTOR::q> mapping{};
     int mult = 2 / (NX*NX + NY*NY + NZ*NZ);
-    reflectionPop[0] =0;
     for (int iPop = 1; iPop < DESCRIPTOR::q; iPop++) {
-      reflectionPop[iPop] = 0;
       // iPop are the directions which pointing into the fluid, discreteNormal is pointing outwarts
       int scalarProduct = descriptors::c<DESCRIPTOR>(iPop,0)*NX + descriptors::c<DESCRIPTOR>(iPop,1)*NY + descriptors::c<DESCRIPTOR>(iPop,2)*NZ;
-      if ( scalarProduct < 0) {
+      if (scalarProduct < 0) {
+        int mirrorDirection0, mirrorDirection1, mirrorDirection2;
         // bounce back for the case discreteNormalX = discreteNormalY = discreteNormalZ = 1, that is mult=0
         if (mult == 0) {
           mirrorDirection0 = -descriptors::c<DESCRIPTOR>(iPop,0);
@@ -73,20 +58,31 @@ struct FullSlipO3D {
           if (descriptors::c<DESCRIPTOR>(i,0)==mirrorDirection0
               && descriptors::c<DESCRIPTOR>(i,1)==mirrorDirection1
               && descriptors::c<DESCRIPTOR>(i,2)==mirrorDirection2) {
-            reflectionPop[iPop] = i;
+            mapping[iPop] = i;
             break;
           }
         }
       }
     }
+    return mapping;
+  }
+
+  static constexpr OperatorScope scope = OperatorScope::PerCell;
+
+  int getPriority() const {
+    return -1;
+  }
+
+  template <typename CELL, typename V = typename CELL::value_t>
+  void apply(CELL& x_b) any_platform {
+    using DESCRIPTOR = typename CELL::descriptor_t;
+    static constexpr auto mapping = computeReflectionMapping<DESCRIPTOR>();
     for (int iPop = 1; iPop < DESCRIPTOR::q ; ++iPop) {
-      if (reflectionPop[iPop]!=0) {
-        //do reflection
-        x_b[iPop] = x_b[reflectionPop[iPop]];
+      if (mapping[iPop] != 0) {
+        x_b[iPop] = x_b[mapping[iPop]];
       }
     }
   }
-
 };
 
 }

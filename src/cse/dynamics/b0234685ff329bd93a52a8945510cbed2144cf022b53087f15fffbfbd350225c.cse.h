@@ -35,41 +35,47 @@ namespace olb {
 namespace dynamics {
 
 template <typename T, typename... FIELDS>
-struct CSE<AdvectionDiffusionBoundariesDynamics<T, descriptors::D3Q7<FIELDS...>, dynamics::Tuple<T, descriptors::D3Q7<FIELDS...>, momenta::Tuple<momenta::BulkDensity, momenta::BulkMomentum, momenta::NoStress, momenta::DefineToEq>, equilibria::FirstOrder, collision::AdvectionDiffusionRLB, AdvectionDiffusionExternalVelocityCollision>, momenta::Tuple<momenta::FixedDensity, momenta::FixedVelocityMomentumGeneric, momenta::ZeroStress, momenta::DefineSeparately>, 1, 1>> {
+struct CSE<AdvectionDiffusionBoundariesDynamics<T, descriptors::D3Q7<FIELDS...>, dynamics::Tuple<T, descriptors::D3Q7<FIELDS...>, momenta::Tuple<momenta::BulkDensity, momenta::BulkMomentum, momenta::NoStress, momenta::DefineToEq>, equilibria::FirstOrder, collision::AdvectionDiffusionRLB, AdvectionDiffusionExternalVelocityCollision>, momenta::Tuple<momenta::FixedDensity, momenta::FixedVelocityMomentumGeneric, momenta::ZeroStress, momenta::DefineSeparately>, 1, 1>, olb::CodegenTarget::Generic> {
 template <concepts::Cell CELL, concepts::Parameters PARAMETERS, concepts::BaseType V=typename CELL::value_t>
 CellStatistic<V> collide(CELL& cell, PARAMETERS& parameters) any_platform {
-auto x7 = cell.template getFieldComponent<olb::descriptors::VELOCITY>(0);
-auto x8 = cell.template getFieldComponent<olb::descriptors::VELOCITY>(1);
-auto x9 = cell.template getFieldComponent<olb::descriptors::VELOCITY>(2);
-auto x10 = cell.template getFieldComponent<olb::momenta::FixedDensity::RHO>(0);
-auto x14 = parameters.template get<descriptors::OMEGA>();
-auto x11 = x14 + V{-1};
-auto x12 = V{0.5}*cell[1];
-auto x13 = V{0.5}*cell[4];
-auto x15 = V{4}*x7;
-auto x16 = x15 + V{1};
-auto x17 = V{0.0625}*x10;
-auto x18 = x15 + V{-1};
-auto x19 = x11*(x12 - x13 + x16*x17 + x17*x18);
-auto x20 = V{0.125}*x10;
-auto x21 = V{4}*x8;
-auto x22 = x21 + V{-1};
-auto x23 = V{0.5}*cell[3];
-auto x24 = V{0.5}*cell[6];
-auto x25 = x21 + V{1};
-auto x26 = V{0.5}*cell[0] + V{1}*cell[5] - V{0.5}*x10 + x12 + x13 - x17*x25 + x23 + x24 + V{0.5};
-auto x27 = V{4}*x9;
-auto x28 = x27 + V{1};
-auto x29 = x27 + V{-1};
-auto x30 = x11*(x17*x28 + x17*x29 + x23 - x24);
-cell[0] = V{0.25}*x10 + V{-0.25};
-cell[1] = -x18*x20 - x19 + V{-0.125};
-cell[2] = x11*(-x17*x22 + x26) - x20*x22 + V{-0.125};
-cell[3] = -x20*x29 - x30 + V{-0.125};
-cell[4] = x16*x20 + x19 + V{-0.125};
-cell[5] = V{0.125}*x10*x25 - x11*(-x17*x22 + x26) + V{-0.125};
-cell[6] = x20*x28 + x30 + V{-0.125};
-return { x10, ((x7)*(x7)) + ((x8)*(x8)) + ((x9)*(x9)) };
+auto x22 = cell.template getFieldComponent<olb::descriptors::VELOCITY>(0);
+auto x23 = cell.template getFieldComponent<olb::descriptors::VELOCITY>(1);
+auto x24 = cell.template getFieldComponent<olb::descriptors::VELOCITY>(2);
+auto x25 = cell.template getFieldComponent<olb::momenta::FixedDensity::RHO>(0);
+auto x29 = parameters.template get<descriptors::OMEGA>();
+auto x28 = V{1}*cell[1];
+auto x31 = V{1}*cell[3];
+auto x0 = V{0.25};
+auto x1 = V{4};
+auto x26 = x1*x22;
+auto x30 = x1*x23;
+auto x32 = x1*x24;
+auto x2 = V{0.125};
+auto x3 = x2*x25;
+auto x27 = V{1}*x3;
+auto x4 = -x2 - x27*(x26 + V{-1});
+auto x5 = V{1} - x29;
+auto x6 = x1*x2;
+auto x33 = x5*x6;
+auto x7 = -x2 + x3*(x26 + V{1});
+auto x8 = cell[4] - x28 + V{1}*x4 - x7;
+auto x34 = x33*x8;
+auto x9 = -x2 - x27*(x30 + V{-1});
+auto x10 = -x2 + x3*(x30 + V{1});
+auto x11 = V{1}*cell[0] + V{1}*cell[4] + V{2}*cell[5] + V{1}*cell[6] - x10 - V{1}*x25 + x28 + x31 + V{1}*x9 + V{1};
+auto x35 = x11*x33;
+auto x12 = -x2 - x27*(x32 + V{-1});
+auto x13 = -x2 + x3*(x32 + V{1});
+auto x14 = cell[6] + V{1}*x12 - x13 - x31;
+auto x36 = x14*x33;
+cell[0] = x0*(x25 + V{-1});
+cell[1] = -V{1}*x34 + x4;
+cell[2] = -V{1}*x35 + x9;
+cell[3] = x12 - V{1}*x36;
+cell[4] = x34 + x7;
+cell[5] = x10 + x35;
+cell[6] = x13 + x36;
+return { x25, ((x22)*(x22)) + ((x23)*(x23)) + ((x24)*(x24)) };
 }
 };
 
@@ -77,4 +83,4 @@ return { x10, ((x7)*(x7)) + ((x8)*(x8)) + ((x9)*(x9)) };
 
 }
 
-// Generation Info: commit=2a9f114ed32e2878e1a64a356eda56d13e508f7d
+// Generation Info: commit=e62fb513c7fed8d9804dfb87eb8d98b331948423

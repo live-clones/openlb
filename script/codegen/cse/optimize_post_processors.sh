@@ -119,6 +119,13 @@ if git rev-parse --git-dir > /dev/null 2>&1; then
     echo "// Generation Info: commit=$COMMIT_HASH" >> "$WORK_DIR/$OPERATOR_HASH.cse.h"
 fi
 
+# Remove the DESCRIPTOR line when DESCRIPTOR occurs exactly once.
+DESCRIPTOR_COUNT=$(grep -ow 'DESCRIPTOR' "$WORK_DIR/$OPERATOR_HASH.cse.h" | wc -l)
+
+if [ "$DESCRIPTOR_COUNT" -eq 1 ]; then
+    sed -i '/\<DESCRIPTOR\>/d' "$WORK_DIR/$OPERATOR_HASH.cse.h"
+fi
+
 # Output or Install
 if [ "$INSTALL_FLAG" -eq 1 ]; then
     TARGET_DIR="$OLB_ROOT/src/cse/operator"
@@ -132,16 +139,15 @@ if [ "$INSTALL_FLAG" -eq 1 ]; then
     cp "$WORK_DIR/$OPERATOR_HASH.cse.h" "$TARGET_FILE"
     echo "Installed generated code to $TARGET_FILE" >&2
 
+    # Remove the DESCRIPTOR line when DESCRIPTOR occurs exactly once.
+    DESCRIPTOR_COUNT_TARGET=$(grep -ow 'DESCRIPTOR' "$TARGET_FILE" | wc -l)
+
+    if [ "$DESCRIPTOR_COUNT_TARGET" -eq 1 ]; then
+        sed -i '/\<DESCRIPTOR\>/d' "$TARGET_FILE"
+    fi
+
     if [ "$SKIP_HEADER_UPDATE" -eq 0 ]; then
-        # Check if header includes this file
-        if ! grep -q "$OPERATOR_HASH.cse.h" "$HEADER_FILE"; then
-            echo "Adding include to $HEADER_FILE" >&2
-            echo "" >> "$HEADER_FILE"
-            echo "//$OPERATOR_FORMATTED" >> "$HEADER_FILE"
-            echo "#include \"$OPERATOR_HASH.cse.h\"" >> "$HEADER_FILE"
-        else
-            echo "Header already includes $OPERATOR_HASH.cse.h" >&2
-        fi
+        python3 "$SCRIPT_DIR/source/update_cse_includes.py" operator "$OLB_ROOT" >&2
     fi
 else
     cat "$WORK_DIR/$OPERATOR_HASH.cse.h"

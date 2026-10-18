@@ -26,10 +26,11 @@
 #define REFINEMENT_PLATFORM_GPU_CUDA_OPERATOR_HH
 
 #include "operator.h"
-
 #include "refinement/context.h"
 #include "refinement/vertexCentered.h"
 #include "refinement/cellCentered.h"
+
+#include "utilities/performanceProfiler.h"
 
 namespace olb {
 
@@ -39,13 +40,13 @@ namespace kernel {
 
 template <typename COARSE, typename FINE, typename CONTEXT, typename PARAMETERS, typename OPERATOR>
 requires (OPERATOR::scope == refinement::OperatorScope::PerCoarseCell)
-void call_refinement_coupling_operator(COARSE cLattice,
-                                       FINE fLattice,
-                                       CONTEXT data,
-                                       PARAMETERS parameters,
-                                       std::size_t n) __global__ {
+__global__ void call_refinement_coupling_operator(COARSE cLattice,
+                                                  FINE fLattice,
+                                                  CONTEXT data,
+                                                  PARAMETERS parameters,
+                                                  std::size_t n) {
   const CellID i = blockIdx.x * blockDim.x + threadIdx.x;
-  if (!(i < n)) {
+  if (i >= n) {
     return;
   }
 
@@ -62,29 +63,26 @@ void call_refinement_coupling_operator(COARSE cLattice,
 
 template <typename COARSE, typename FINE, typename CONTEXT, typename PARAMETERS, typename OPERATOR>
 requires (OPERATOR::scope == refinement::OperatorScope::PerFineCell)
-void call_refinement_coupling_operator(COARSE cLattice,
-                                       FINE fLattice,
-                                       CONTEXT data,
-                                       PARAMETERS parameters,
-                                       std::size_t n) __global__ {
+__global__ void call_refinement_coupling_operator(COARSE cLattice,
+                                                  FINE fLattice,
+                                                  CONTEXT data,
+                                                  PARAMETERS parameters,
+                                                  std::size_t n) {
   const CellID i = blockIdx.x * blockDim.x + threadIdx.x;
-  if (!(i < n)) {
+  if (i >= n) {
     return;
   }
 
   auto cellIdCoarse = data.template getField<fields::refinement::CELL_ID_COARSE>();
   auto cellIdFine = data.template getField<fields::refinement::CELL_ID_FINE>();
 
+  Cell fCell{fLattice, cellIdFine[0][i]};
+  refinement::VertexCenteredCoarseCell cCell{Cell{cLattice, cellIdCoarse[0][i]},
+                                             fLattice.getLatticeR(cellIdFine[0][i])};
   if constexpr (OPERATOR::data::template contains<fields::refinement::CONTEXT_NEIGHBORS>()) {
-    Cell fCell{fLattice, cellIdFine[0][i]};
-    refinement::VertexCenteredCoarseCell cCell{Cell{cLattice, cellIdCoarse[0][i]},
-                                               fLattice.getLatticeR(cellIdFine[0][i])};
     refinement::ContextDataWithNeighbors cData{DataOnlyCell{data, i}};
     OPERATOR().apply(cCell, fCell, cData, parameters);
   } else {
-    Cell fCell{fLattice, cellIdFine[0][i]};
-    refinement::VertexCenteredCoarseCell cCell{Cell{cLattice, cellIdCoarse[0][i]},
-                                               fLattice.getLatticeR(cellIdFine[0][i])};
     refinement::ContextData cData{DataOnlyCell{data, i}};
     OPERATOR().apply(cCell, fCell, cData, parameters);
   }
@@ -92,13 +90,13 @@ void call_refinement_coupling_operator(COARSE cLattice,
 
 template <typename COARSE, typename FINE, typename CONTEXT, typename PARAMETERS, typename OPERATOR>
 requires (OPERATOR::scope == refinement::OperatorScope::PerCellCenteredCoarseCell)
-void call_refinement_coupling_operator(COARSE cLattice,
-                                       FINE fLattice,
-                                       CONTEXT data,
-                                       PARAMETERS parameters,
-                                       std::size_t n) __global__ {
+__global__ void call_refinement_coupling_operator(COARSE cLattice,
+                                                  FINE fLattice,
+                                                  CONTEXT data,
+                                                  PARAMETERS parameters,
+                                                  std::size_t n) {
   const CellID i = blockIdx.x * blockDim.x + threadIdx.x;
-  if (!(i < n)) {
+  if (i >= n) {
     return;
   }
 
@@ -130,10 +128,12 @@ void call_refinement_coupling_operator(COARSE& cLattice, FINE& fLattice,
 
 }
 
+
 template <typename T, typename DESCRIPTOR, typename OPERATOR>
-void ConcreteBlockRefinementO<T,DESCRIPTOR,Platform::GPU_CUDA,OPERATOR>::apply(
+void ConcreteBlockRefinementO<T,DESCRIPTOR,Platform::GPU_CUDA, OPERATOR>::apply(
   ConcreteBlockRefinementContextD<T,DESCRIPTOR,Platform::GPU_CUDA>& context)
 {
+  OLB_PROFILE_T("GPU_CUDA:Refine:Apply", OPERATOR, DESCRIPTOR);
   auto& cLattice = context.getCoarseLattice();
   auto& fLattice = context.getFineLattice();
   auto& data = context.getConcreteData();

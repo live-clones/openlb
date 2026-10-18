@@ -27,6 +27,8 @@
 #include "timer.h"
 #include "communication/mpiManager.h"
 #include "communication/ompManager.h"
+#include "utilities/performanceProfiler.h"
+#include "io/textTable.h"
 
 namespace olb {
 
@@ -36,32 +38,22 @@ template<typename T>
 Timer<T>::Timer(int maxTimeSteps, size_t numFluidCells, unsigned int printModeSummary)
   : clout(std::cout,"Timer"),
     deltaTS(0), curTS(0), maxTS(maxTimeSteps),
-    numFC(numFluidCells), rtRemMs(1) // avoids some stupid numbers in first call of printStep() (not for T=double)
-
-{
-  tp = nullptr;
-  this->_printModeSummary = printModeSummary;
-}
-
-template<typename T>
-T Timer<T>::timevalDiffTimeMs(timeval end, timeval start)
-{
-  const T msDiff ( 1000*(end.tv_sec - start.tv_sec)
-                  +(end.tv_usec-start.tv_usec)/1000 );
-  return util::max<T>(msDiff, 1.0);
-}
+    numFC(numFluidCells), rtRemMs(1),
+    _printModeSummary(printModeSummary)
+{}
 
 template<typename T>
 T Timer<T>::getMLUPs()
 {
-  T mlups = (numFC * deltaTS) / (timevalDiffTimeMs(msTimeCur, msTimeLast)*1000);
-  return mlups;
+  double seconds = std::chrono::duration<double>(wallTimeCur - wallTimeLast).count();
+  double updates = static_cast<double>(numFC) * static_cast<double>(deltaTS);
+  return static_cast<T>(updates / (seconds * 1e6));
 }
 
 template<typename T>
 T Timer<T>::getMLUPps()
 {
-  T mlupps = getMLUPs()/singleton::mpi().getSize();
+  T mlupps = getMLUPs() / singleton::mpi().getSize();
 #ifdef PARALLEL_MODE_OMP
   mlupps /= singleton::omp().getSize();
 #endif
@@ -71,87 +63,110 @@ T Timer<T>::getMLUPps()
 template<typename T>
 T Timer<T>::getTotalMLUPs()
 {
-  T tmlups = (numFC * curTS) / double(timevalDiffTimeMs(msTimeEnd, msTimeStart)*1000);
-  return tmlups;
+  double seconds = std::chrono::duration<double>(wallTimeEnd - wallTimeStart).count();
+  double updates = static_cast<double>(numFC) * static_cast<double>(curTS);
+  return static_cast<T>(updates / (seconds * 1e6));
 }
 
 template<typename T>
 T Timer<T>::getTotalMLUPps()
 {
-  T tmlupps = getTotalMLUPs()/singleton::mpi().getSize();
+  T tmlupps = getTotalMLUPs() / singleton::mpi().getSize();
 #ifdef PARALLEL_MODE_OMP
   tmlupps /= singleton::omp().getSize();
 #endif
   return tmlupps;
 }
 
-
 template<typename T>
 void Timer<T>::start()
 {
-  sTimeStart = time(tp);          // time in s
-  gettimeofday(&msTimeStart, nullptr);  // time in ms
-  gettimeofday(&msTimeCur, nullptr);    // time in ms, here only necessary for MLUP-calculations
-  cpuTimeStart = clock();         //cpu-time
+  wallTimeStart = Clock::now();
+  wallTimeCur = wallTimeStart;
+  wallTimeLast = wallTimeStart;
+  cpuTimeStart = std::clock();
 }
 
 template<typename T>
-void Timer<T>::update(int currentTimeStep)    // Is int sufficient? Is it possible/desirable to have non-integer time steps?
+void Timer<T>::update(int currentTimeStep)
 {
+  OLB_PROFILE_EVENT("Host:Timer:Update");
+  cpuTimeCur = std::clock();
+  wallTimeLast = wallTimeCur;
+  wallTimeCur = Clock::now();
 
-  cpuTimeCur = clock();           // CPU-time
-  sTimeCur   = time(tp);          // time in s
-  msTimeLast = msTimeCur;
-  gettimeofday(&msTimeCur, nullptr);    // time in ms
+  deltaTS = currentTimeStep - curTS;
+  curTS   = currentTimeStep;
 
-  // calculate and update missing time-values
-  deltaTS = currentTimeStep - curTS;      // this makes multiple calls
-  curTS   = currentTimeStep;              // of update() critical
+  double wallSecs = std::chrono::duration<double>(wallTimeCur - wallTimeStart).count();
+  double wallMs = std::chrono::duration<double, std::milli>(wallTimeCur - wallTimeStart).count();
+  double cpuSecs = static_cast<double>(cpuTimeCur - cpuTimeStart) / CLOCKS_PER_SEC;
 
-  rtPas   = difftime(sTimeCur,sTimeStart);                // here calculation is based on s-time
-  rtTot   = rtPas*maxTS/util::max<int>(curTS, 1);
-  rtRem   = rtTot-rtPas;
+  rtPas   = static_cast<T>(wallSecs);
+  rtTot   = static_cast<T>(wallSecs * maxTS / util::max<int>(curTS, 1));
+  rtRem   = rtTot - rtPas;
 
-  rtPasMs = timevalDiffTimeMs(msTimeCur, msTimeStart);    // here with ms-time as timeval-value
-  rtTotMs = rtPasMs*maxTS/util::max<int>(curTS, 1);
-  rtRemMs = rtTotMs-rtPasMs;
+  rtPasMs = static_cast<T>(wallMs);
+  rtTotMs = static_cast<T>(wallMs * maxTS / util::max<int>(curTS, 1));
+  rtRemMs = rtTotMs - rtPasMs;
 
-  ctPas   = (cpuTimeCur-cpuTimeStart)/CLOCKS_PER_SEC;     // and here the same for CPU-time
-  ctTot   = ctPas*maxTS/util::max<int>(curTS, 1);
-  ctRem   = ctTot-ctPas;
-
+  ctPas   = cpuSecs;
+  ctTot   = ctPas * maxTS / util::max<int>(curTS, 1);
+  ctRem   = ctTot - ctPas;
 }
 
 template<typename T>
 void Timer<T>::stop()
 {
-  cpuTimeEnd = clock();           // cpu-time
-  sTimeEnd = time(tp);            // time in s
-  gettimeofday(&msTimeEnd, nullptr);    // time in ms
+  cpuTimeEnd = std::clock();
+  wallTimeEnd = Clock::now();
+}
+
+template<typename T>
+void Timer<T>::reset()
+{
+  deltaTS = 0;
+  curTS = 0;
+  rtRemMs = 1;
+
+  ltPas = 0;
+  ltRem = 0;
+  ltTot = 0;
+
+  ctPas = 0.0;
+  ctRem = 0.0;
+  ctTot = 0.0;
+
+  rtPas = T{};
+  rtRem = T{};
+  rtTot = T{};
+
+  rtPasMs = T{};
+  rtTotMs = T{};
 }
 
 template<typename T>
 double Timer<T>::getTotalCpuTime()
 {
-  return (cpuTimeEnd-cpuTimeStart)/CLOCKS_PER_SEC;
+  return static_cast<double>(cpuTimeEnd - cpuTimeStart) / CLOCKS_PER_SEC;
 }
 
 template<typename T>
 T Timer<T>::getTotalRealTime()
 {
-  return difftime(sTimeEnd,sTimeStart);
+  return static_cast<T>(std::chrono::duration<double>(wallTimeEnd - wallTimeStart).count());
 }
 
 template<typename T>
 T Timer<T>::getTotalRealTimeMs()
 {
-  return timevalDiffTimeMs(msTimeEnd, msTimeStart);
+  return static_cast<T>(std::chrono::duration<double, std::milli>(wallTimeEnd - wallTimeStart).count());
 }
 
 template<typename T>
 void Timer<T>::print(std::size_t currentTimeStep, int printMode)
 {
-  if (currentTimeStep!=curTS) {
+  if (currentTimeStep != curTS) {
     update(currentTimeStep);
   }
   printStep(printMode);
@@ -167,33 +182,32 @@ template<typename T>
 void Timer<T>::printStep(OstreamManager& fout, int printMode)
 {
   switch (printMode) {
-  case 0: //single-line layout, usable for data extraction as csv
-    fout
-        << "step=" << curTS << "; "
-        //      << "stepMax=" << maxTS << "; "
-        << "percent=" << 100.0*curTS/maxTS << "; "
-        << "passedTime=" << (double)rtPasMs/1000 << "; "
-        //      << "totalTime=" << (double)rtTotMs/1000 << "; "
-        << "remTime=" << rtRemMs/1000 << "; "
-        << "MLUPs=" << getMLUPs()
-        << std::endl;
+  case 0:
+    io::text::StatusLine()
+      .field("step", curTS)
+      .field("percent", 100.0 * curTS / maxTS)
+      .field("passedTime", static_cast<double>(rtPasMs) / 1000.0)
+      .field("remTime", static_cast<double>(rtRemMs) / 1000.0)
+      .field("MLUPs", getMLUPs())
+      .render(fout);
     break;
 
-  case 1: //single-line layout (not conform with output-rules)
+  case 1:
     fout
         << "latticeTS: "
-        << curTS << "/" << maxTS << " (" << 100*curTS/maxTS << "%); "
+        << curTS << "/" << maxTS << " (" << 100 * curTS / maxTS << "%); "
         << "pas/totTime: "
-        << std::setprecision(2) << std::fixed << (double)rtPasMs/1000 << "/"
-        << std::setprecision(1) << std::fixed << (double)rtTotMs/1000 << "s; "
+        << std::setprecision(2) << std::fixed << static_cast<double>(rtPasMs) / 1000.0 << "/"
+        << std::setprecision(1) << std::fixed << static_cast<double>(rtTotMs) / 1000.0 << "s; "
         << "remTime: "
-        << std::setw(2) << (int)((double)rtRemMs/1000)/60 << "m " << std::setfill('0') << std::setw(4) << (double)((int)((double)rtRemMs/100)%600)/10 << "s; "
+        << std::setw(2) << static_cast<int>(static_cast<double>(rtRemMs) / 1000.0) / 60 << "m "
+        << std::setfill('0') << std::setw(4) << static_cast<double>(static_cast<int>(static_cast<double>(rtRemMs) / 100.0) % 600) / 10.0 << "s; "
         << std::setfill(' ')
         << "MLUPs: " << getMLUPs()
         << std::endl;
     break;
 
-  case 2: //pretty double line layout in colums, but non-conform
+  case 2:
     fout
         << std::setw(21) << std::left << "Lattice-Timesteps"
         << std::setw(17) << std::left << "| CPU time/estim"
@@ -201,22 +215,22 @@ void Timer<T>::printStep(OstreamManager& fout, int printMode)
         << std::setw(6)  << std::left << "| ETA"
         << std::setw(6)  << std::left << "| MLUPs"
         << std::endl << std::right
-        << std::setw(6) << std::setprecision(2) << std::fixed << curTS << "/" << std::setw(6) << maxTS << " (" << std::setw(3) << 100*curTS/maxTS << "%) |"
+        << std::setw(6) << std::setprecision(2) << std::fixed << curTS << "/" << std::setw(6) << maxTS << " (" << std::setw(3) << 100 * curTS / maxTS << "%) |"
         << std::setw(7) << ctPas << "/" << std::setw(7) << ctTot << " |"
-        << std::setw(8) << (double)rtPasMs/1000 << "/" << std::setw(7) << (double)rtTotMs/1000 << " |"
-        << std::setw(4) << (int)rtRemMs/1000+1 << " |"
+        << std::setw(8) << static_cast<double>(rtPasMs) / 1000.0 << "/" << std::setw(7) << static_cast<double>(rtTotMs) / 1000.0 << " |"
+        << std::setw(4) << static_cast<int>(rtRemMs) / 1000 + 1 << " |"
         << std::setw(6) << getMLUPs()
         << std::endl;
     break;
 
-  case 3: //performance output only
+  case 3:
     fout
         << "step " << curTS << "; "
         << "MLUPs=" << std::setw(8) << getMLUPs() << ", MLUPps=" << std::setw(8) << getMLUPps() << std::endl;
     break;
 
   default:
-    fout << "Error in function printStep in class_timer.h: printMode="<<printMode<<" not found" << std::endl << std::flush;
+    fout << "Error in function printStep in class_timer.h: printMode=" << printMode << " not found" << std::endl << std::flush;
   }
 }
 
@@ -231,7 +245,7 @@ void Timer<T>::printSummary(OstreamManager& fout)
 {
   fout << std::endl;
   fout << "----------------Summary:Timer----------------" << std::endl;
-  fout << "measured time (rt) : " << (int)getTotalRealTimeMs()/1000 << "." << (int)getTotalRealTimeMs()-(int)getTotalRealTimeMs()/1000*1000 << "s" << std::endl;
+  fout << "measured time (rt) : " << static_cast<int>(getTotalRealTimeMs()) / 1000 << "." << static_cast<int>(getTotalRealTimeMs()) - static_cast<int>(getTotalRealTimeMs()) / 1000 * 1000 << "s" << std::endl;
   fout << "measured time (cpu): " << std::setprecision(3) << std::fixed << getTotalCpuTime() << "s" << std::endl;
   if (numFC > 0 && curTS > 0) {
     fout << "average MLUPs :       " << getTotalMLUPs()  << std::endl;
@@ -249,24 +263,19 @@ void Timer<T>::printShortSummary()
 template<typename T>
 void Timer<T>::printShortSummary(OstreamManager& fout)
 {
-  fout << "realTime=" << (int)getTotalRealTimeMs()/1000 << "." << (int)getTotalRealTimeMs()-(int)getTotalRealTimeMs()/1000*1000
+  fout << "realTime=" << static_cast<int>(getTotalRealTimeMs()) / 1000 << "." << static_cast<int>(getTotalRealTimeMs()) - static_cast<int>(getTotalRealTimeMs()) / 1000 * 1000
        << "; cpuTime=" <<  std::setprecision(3) << std::fixed << getTotalCpuTime() << std::endl;
 }
-
-
-// Factory function /////////////////////////////////
 
 template<typename T, typename DESCRIPTOR>
 Timer<T>* createTimer(XMLreader& param, const UnitConverter<T,DESCRIPTOR>& converter, size_t numLatticePoints)
 {
   OstreamManager clout(std::cout,"createTimer");
 
-  // initialize parameters with some default values
   T physMaxT = T();
   T physStartT = T();
   int printModeSummary = 0;
 
-  // fetch xml Data and error handling
   if ( ! param["Application"]["PhysParameters"]["PhysMaxTime"].read(physMaxT) ) {
     if ( ! param["Application"]["PhysParam"]["MaxTime"].read(physStartT) ) {
       clout << "PhysMaxTime not found" << std::endl;
@@ -275,18 +284,11 @@ Timer<T>* createTimer(XMLreader& param, const UnitConverter<T,DESCRIPTOR>& conve
       clout << "Application::PhysParam::MaxTime needs to be renamed to Application::PhysParameters::PhysMaxTime" << std::endl;
     }
   }
-  // read the variable for the mode of printSummary
+
   param.readOrWarn<int>("Output","Timer","PrintModeSummary", printModeSummary,true,false,false);
 
-//  if ( ! param["Application"]["PhysParam"]["MaxStartTime"].read(physStartT) ) {
-//    clout << "PhysStartTime not found" << std::endl;
-//  }
-
-  // variable processing according to the constructor
   int maxT = converter.getLatticeTime(physMaxT) + converter.getLatticeTime(physStartT);
 
-  //return some default values that produce reasonable output (e.g.
-  // zero); in best case there should be no output at all (TODO)
   return new Timer<T>(maxT, numLatticePoints, printModeSummary);
 }
 

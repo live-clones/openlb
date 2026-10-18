@@ -150,7 +150,8 @@ any_platform inline constexpr ADf<T,DIM>::ADf(ADf&& a):ADf<T,DIM>(a._v, a._d)
 template <class T, unsigned DIM>
 any_platform inline constexpr void ADf<T,DIM>::checkDataType()
 {
-  static_assert(std::is_floating_point<BaseType<T>>::value,
+  static_assert((std::is_floating_point<BaseType<T>>::value ||
+                 std::is_same_v<BaseType<T>,Expr>),
                 "Use floating point types (float, double or long double). Do not use integer types.");
 }
 

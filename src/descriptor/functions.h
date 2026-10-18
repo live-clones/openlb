@@ -92,6 +92,17 @@ constexpr Vector<int,D> c(unsigned iPop) any_platform
 }
 
 template <unsigned D, unsigned Q>
+constexpr unsigned direction(Vector<int,D> dir) any_platform
+{
+  for (unsigned iPop=0; iPop < Q; ++iPop) {
+    if(c<D,Q>(iPop) == dir) {
+      return iPop;
+    }
+  }
+  return -1;
+}
+
+template <unsigned D, unsigned Q>
 constexpr int opposite(unsigned iPop) any_platform
 {
   return data::opposite<D,Q>[iPop];
@@ -161,6 +172,12 @@ constexpr Vector<int,DESCRIPTOR::d> c(unsigned iPop) any_platform
 }
 
 template <typename DESCRIPTOR>
+constexpr unsigned direction(Vector<int,DESCRIPTOR::d> dir) any_platform
+{
+  return direction<DESCRIPTOR::d, DESCRIPTOR::q>(dir);
+}
+
+template <typename DESCRIPTOR>
 constexpr int opposite(unsigned iPop) any_platform
 {
   return opposite<DESCRIPTOR::d, DESCRIPTOR::q>(iPop);
@@ -204,3 +221,4 @@ constexpr auto filter_population_indices(PREDICATE predicate) any_platform {
 }
 
 #endif
+

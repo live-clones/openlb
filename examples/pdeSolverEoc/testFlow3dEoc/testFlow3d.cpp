@@ -77,7 +77,6 @@ int main(int argc, char* argv[])
     myCaseParametersD.set<GEOMETRY_TYPE               >( GeometryType::sphere);
     myCaseParametersD.set<BOUNDARY_TYPE               >(BoundaryType::bouzidi);
   }
-  myCaseParametersD.fromCLI(argc, argv);
 
   T _errorVelL1[myCaseParametersD.get<parameters::NUM_SIMULATIONS>()];
   T _errorVelL2[myCaseParametersD.get<parameters::NUM_SIMULATIONS>()];

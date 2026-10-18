@@ -27,15 +27,25 @@
 #include <string>
 #include <sstream>
 #include <memory>
-#include <variant>
-#include <functional>
+#include <array>
+#include <vector>
+#include <cstdint>
+#include <unordered_map>
+#include <unordered_set>
 #include <numeric>
 
 #include "core/meta.h"
 
 namespace olb {
 
-/// Basic value-substitute enabling extraction of expression trees for code generation
+/// Extraction of expression trees for code generation
+/**
+ * Expr is hash-consed: structurally identical subexpressions are interned into a
+ * single shared, immutable node, so the in-memory representation is a DAG.
+ * Addition and multiplication canonically order their operands, so commutatively
+ * equal subexpressions (a+b == b+a) share the same node. This means CSE is largely
+ * performed during construction.
+ */
 class Expr : public ExprBase {
 public:
   enum struct Op : std::size_t {
@@ -46,51 +56,32 @@ public:
 private:
   static std::array<std::size_t, static_cast<std::size_t>(Op::End)> _stats;
 
-  struct Symbol {
-    std::string name;
+  /// Immutable, interned expression node; children point at other interned nodes.
+  struct Node {
+    enum struct Kind : std::uint8_t { Constant, Symbol, Binary, Unary };
 
-    void describe(std::stringstream& out) const;
-    std::size_t size() const;
+    Kind kind;
+    Op op = Op::End;                  // Binary / Unary
+    double value = 0.0;               // Constant
+    std::string name;                 // Symbol
+    std::shared_ptr<const Node> lhs;  // Binary lhs / Unary argument
+    std::shared_ptr<const Node> rhs;  // Binary rhs
+    std::size_t id = 0;               // monotonic creation id (deterministic ordering)
   };
 
-  struct Constant {
-  private:
-    double value;
+  using Ref = std::shared_ptr<const Node>;
 
-  public:
-    Constant();
-    Constant(double x);
+  Ref _node;
 
-    void describe(std::stringstream& out) const;
-    std::size_t size() const;
-  };
+  explicit Expr(Ref node);
 
-  class Binary {
-  private:
-    std::shared_ptr<Expr> _lhs;
-    Op op;
-    std::shared_ptr<Expr> _rhs;
+  static Ref internConstant(double value);
+  static Ref internSymbol(const std::string& name);
+  static Ref internBinary(Op op, Ref lhs, Ref rhs);
+  static Ref internUnary(Op op, Ref arg);
 
-  public:
-    Binary(Expr lhs, Op op, Expr rhs);
-
-    void describe(std::stringstream& out) const;
-    std::size_t size() const;
-  };
-
-  class Unary {
-  private:
-    Op op;
-    std::shared_ptr<Expr> _arg;
-
-  public:
-    Unary(Op op, Expr arg);
-
-    void describe(std::stringstream& out) const;
-    std::size_t size() const;
-  };
-
-  std::variant<Constant,Symbol,Binary,Unary> _payload;
+  static void describeNode(const Node& node, std::stringstream& out);
+  static std::size_t nodeSize(const Node& node);
 
 public:
   Expr();
@@ -109,6 +100,7 @@ public:
   Expr& operator/=(Expr rhs);
 
   explicit operator int() const;
+  explicit operator long unsigned int() const;
 
   /// Writes the serialized expression tree to out
   void describe(std::stringstream& out) const;
@@ -140,6 +132,45 @@ public:
   static std::size_t count(Op op) {
     return _stats[static_cast<std::size_t>(op)];
   }
+
+  bool isZero() const {
+    return _node->kind == Node::Kind::Constant && _node->value == 0.0;
+  }
+
+  bool isOne() const {
+    return _node->kind == Node::Kind::Constant && _node->value == 1.0;
+  }
+
+  /// Shared-subexpression serializer for the hash-consed DAG.
+  /**
+   * Usage: scan() every root expression, then ref() each root to obtain its
+   * serialized right-hand side. Subexpressions referenced more than once are
+   * emitted exactly once as `t<k>` bindings (retrievable via bindings()) and
+   * referenced by symbol. Single-use subexpressions are inlined.
+   */
+  class DagContext {
+  private:
+    std::unordered_set<const Node*> _seen;
+    std::unordered_map<const Node*, std::size_t> _indegree;
+    std::unordered_map<const Node*, std::string> _emitted;
+    std::vector<std::string> _bindings;
+    std::size_t _counter = 0;
+
+    void countEdges(const Node* node);
+    static std::string buildRhs(const Node* node,
+                                const std::string& lhs, const std::string& rhs);
+    std::string emit(const Node* node);
+
+  public:
+    /// Record a root so shared subexpressions below it can be detected
+    void scan(const Expr& expr);
+    /// Serialize expr, emitting shared subexpressions as bindings; returns its rhs
+    std::string ref(const Expr& expr);
+    /// Bindings (`Assignment(...)` strings) collected so far, in dependency order
+    const std::vector<std::string>& bindings() const {
+      return _bindings;
+    }
+  };
 
 };
 

@@ -35,35 +35,38 @@ namespace olb {
 namespace dynamics {
 
 template <typename T, typename... FIELDS>
-struct CSE<dynamics::Tuple<T, descriptors::D3Q7<FIELDS...>, momenta::Tuple<momenta::BulkDensity, momenta::BulkMomentum, momenta::NoStress, momenta::DefineToEq>, equilibria::FirstOrder, collision::BGK, AdvectionDiffusionExternalVelocityCollision>> {
+struct CSE<dynamics::Tuple<T, descriptors::D3Q7<FIELDS...>, momenta::Tuple<momenta::BulkDensity, momenta::BulkMomentum, momenta::NoStress, momenta::DefineToEq>, equilibria::FirstOrder, collision::BGK, AdvectionDiffusionExternalVelocityCollision>, olb::CodegenTarget::Generic> {
 template <concepts::Cell CELL, concepts::Parameters PARAMETERS, concepts::BaseType V=typename CELL::value_t>
 CellStatistic<V> collide(CELL& cell, PARAMETERS& parameters) any_platform {
-auto x7 = cell.template getFieldComponent<olb::descriptors::VELOCITY>(0);
-auto x9 = cell.template getFieldComponent<olb::descriptors::VELOCITY>(2);
-auto x8 = cell.template getFieldComponent<olb::descriptors::VELOCITY>(1);
-auto x10 = parameters.template get<descriptors::OMEGA>();
-auto x11 = x10 + V{-1};
-auto x12 = cell[0] + cell[1] + cell[2] + cell[3] + cell[4] + cell[5] + cell[6];
-auto x13 = V{4}*x7;
-auto x14 = x12 + V{1};
-auto x15 = V{0.125}*x10;
-auto x16 = V{4}*x8;
-auto x17 = V{4}*x9;
-auto x0 = -cell[0]*x11 + V{0.25}*x10*x12;
-auto x1 = -cell[1]*x11 - x15*(x14*(x13 + V{-1}) + V{1});
-auto x2 = -cell[2]*x11 - x15*(x14*(x16 + V{-1}) + V{1});
-auto x3 = -cell[3]*x11 - x15*(x14*(x17 + V{-1}) + V{1});
-auto x4 = -cell[4]*x11 + V{0.125}*x10*(x14*(x13 + V{1}) + V{-1});
-auto x5 = -cell[5]*x11 + V{0.125}*x10*(x14*(x16 + V{1}) + V{-1});
-auto x6 = -cell[6]*x11 + V{0.125}*x10*(x14*(x17 + V{1}) + V{-1});
-cell[0] = x0;
-cell[1] = x1;
-cell[2] = x2;
-cell[3] = x3;
-cell[4] = x4;
-cell[5] = x5;
-cell[6] = x6;
-return { x12 + V{1}, ((x7)*(x7)) + ((x8)*(x8)) + ((x9)*(x9)) };
+auto x13 = cell.template getFieldComponent<olb::descriptors::VELOCITY>(0);
+auto x14 = cell.template getFieldComponent<olb::descriptors::VELOCITY>(1);
+auto x15 = cell.template getFieldComponent<olb::descriptors::VELOCITY>(2);
+auto x16 = parameters.template get<descriptors::OMEGA>();
+auto x0 = V{1} - x16;
+auto x1 = V{0.25};
+auto x2 = cell[0] + cell[1] + cell[2] + cell[3] + cell[4] + cell[5] + cell[6] + V{1};
+auto x3 = V{4};
+auto x17 = x13*x3;
+auto x19 = x14*x3;
+auto x20 = x15*x3;
+auto x4 = V{0.125};
+auto x5 = x2*x4;
+auto x18 = V{1}*x5;
+auto x6 = cell[0]*x0 + x1*x16*(x2 + V{-1});
+auto x7 = cell[1]*x0 - x16*(x18*(x17 + V{-1}) + x4);
+auto x8 = cell[2]*x0 - x16*(x18*(x19 + V{-1}) + x4);
+auto x9 = cell[3]*x0 - x16*(x18*(x20 + V{-1}) + x4);
+auto x10 = cell[4]*x0 - x16*(x4 - x5*(x17 + V{1}));
+auto x11 = cell[5]*x0 - x16*(x4 - x5*(x19 + V{1}));
+auto x12 = cell[6]*x0 - x16*(x4 - x5*(x20 + V{1}));
+cell[0] = x6;
+cell[1] = x7;
+cell[2] = x8;
+cell[3] = x9;
+cell[4] = x10;
+cell[5] = x11;
+cell[6] = x12;
+return { x2, ((x13)*(x13)) + ((x14)*(x14)) + ((x15)*(x15)) };
 }
 };
 
@@ -71,4 +74,4 @@ return { x12 + V{1}, ((x7)*(x7)) + ((x8)*(x8)) + ((x9)*(x9)) };
 
 }
 
-// Generation Info: commit=2a9f114ed32e2878e1a64a356eda56d13e508f7d
+// Generation Info: commit=e62fb513c7fed8d9804dfb87eb8d98b331948423

@@ -60,7 +60,6 @@
 #include "superDiscretizationF3D.hh"
 #include "latticeDerivatives3D.hh"
 #include "latticeExternal3D.hh"
-#include "latticeExternalScalarField3D.hh"
 #include "latticeIndicatorSmoothIndicatorIntersection3D.hh"
 #include "latticeTauFromBoundaryDistance3D.hh"
 #include "latticePhysPoreSizeDistribution3D.hh"

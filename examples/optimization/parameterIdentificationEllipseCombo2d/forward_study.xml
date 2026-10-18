@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Param>
+  <Parameters>
+    <FORWARD_ONLY>1</FORWARD_ONLY>
+    <FIXED_TIME_STEP>1</FIXED_TIME_STEP>
+    <MAX_PHYS_T>90</MAX_PHYS_T>
+    <CONVERGENCE_PRECISION>0</CONVERGENCE_PRECISION>
+    <IT_LOG_PSEUDO_TIME>100000000</IT_LOG_PSEUDO_TIME>
+  </Parameters>
+</Param>

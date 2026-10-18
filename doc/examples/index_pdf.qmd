@@ -1,0 +1,34 @@
+---
+format: 
+  pdf:
+    include-in-header:
+      text: |
+        \usepackage{pdfpages}
+        \usepackage{hyperref}
+---
+
+# Examples
+
+```{=latex}
+\clearpage
+\newcounter{savepage}        % Create a temporary counter
+\setcounter{savepage}{\value{page}} % Save the current page number
+\pagenumbering{gobble} % Turns off page numbering
+\pdfpagewidth=420mm    % Set PDF media width to A3
+\pdfpageheight=297mm   % Set PDF media height to A3
+
+\includepdf[
+    pages=-, 
+    fitpaper=true, 
+    pagecommand={\thispagestyle{empty}} % Ensures no headers/footers/page numbers
+]{examples/OLB_Examples.pdf}
+
+\clearpage
+\pagenumbering{arabic} % Restores page numbering for the following sections
+\setcounter{page}{\value{savepage}} % Restores the saved number
+\stepcounter{page}           % Increment by 1 so it continues correctly
+\pdfpagewidth=210mm    % Restores A4 width
+\pdfpageheight=297mm   % Restores A4 height
+```
+
+{{< include _includes.qmd >}}

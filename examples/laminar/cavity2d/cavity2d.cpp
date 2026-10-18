@@ -329,8 +329,8 @@ int main(int argc, char* argv[])
     myCaseParameters.set<MAX_PHYS_T>(config["Application"]["PhysParameters"]["PhysMaxTime"].get<T>());
     myCaseParameters.set<CONV_ITER>(config["Application"]["ConvergenceCheck"]["Interval"].get<T>());
     myCaseParameters.set<RESIDUUM>(config["Application"]["ConvergenceCheck"]["Residuum"].get<T>());
-    myCaseParameters.set<PHYS_DELTA_X>([&] {
-      return myCaseParameters.get<PHYS_CHAR_LENGTH>() / myCaseParameters.get<RESOLUTION>();
+    myCaseParameters.set<PHYS_DELTA_X>([](MyCase::ParametersD& p) {
+      return p.get<PHYS_CHAR_LENGTH>() / p.get<RESOLUTION>();
     });
     myCaseParameters.set<PHYS_VTK_ITER_T>(config["Output"]["VisualizationVTK"]["SaveTime"].get<T>());
     myCaseParameters.set<PHYS_LOG_ITER_T>(config["Output"]["Log"]["SaveTime"].get<T>());
@@ -339,7 +339,6 @@ int main(int argc, char* argv[])
     myCaseParameters.set<TIMER_PRINT_MODE>(config["Output"]["Timer"]["PrintMode"].get<int>());
   }
 
-  myCaseParameters.fromCLI(argc, argv);
   /// === Step 3: Create Mesh ===
   Mesh mesh = createMesh(myCaseParameters);
   /// === Step 4: Create Case ===

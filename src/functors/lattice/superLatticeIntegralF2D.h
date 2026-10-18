@@ -65,6 +65,7 @@ private:
   SuperGeometryFaces2D<T>                       _facesF;
   SuperLatticePhysBoundaryForce2D<T,DESCRIPTOR> _pBoundForceF;
   SuperSum2D<T,T>                               _sumF;
+  T _referenceLength = 0.0;
 
   const T _factor;
 public:
@@ -74,6 +75,14 @@ public:
   SuperLatticePhysDrag2D(SuperLattice<T,DESCRIPTOR>& sLattice,
                          SuperGeometry<T,2>& superGeometry, const int material,
                          const UnitConverter<T,DESCRIPTOR>& converter);
+  SuperLatticePhysDrag2D(SuperLattice<T,DESCRIPTOR>&      sLattice,
+                         FunctorPtr<SuperIndicatorF2D<T>>&& indicatorF,
+                         const UnitConverter<T,DESCRIPTOR>& converter,
+                         T referenceLength);
+  SuperLatticePhysDrag2D(SuperLattice<T,DESCRIPTOR>& sLattice,
+                         SuperGeometry<T,2>& superGeometry, const int material,
+                         const UnitConverter<T,DESCRIPTOR>& converter,
+                         T referenceLength);
 
   bool operator() (T output[], const int input[]) override;
 };

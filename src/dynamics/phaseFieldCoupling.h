@@ -26,6 +26,7 @@
 
 #include "core/operator.h"
 #include "utilities/matrix.h"
+#include <stdio.h>
 
 namespace olb {
 
@@ -33,6 +34,67 @@ namespace stage {
   struct ChemPotCalc { };
   struct InitOutlet { };
   struct PhiLimiter { };
+}
+
+namespace phasefield {
+
+template <typename... PARAMETERS, typename T, typename DESCRIPTOR, typename FUNCTOR, typename... VALUES>
+void setFringeLattice(SuperLattice<T,DESCRIPTOR>& sLattice,
+                      FunctorPtr<SuperIndicatorF<T,DESCRIPTOR::d>>&& domainF,
+                      FunctorPtr<SuperIndicatorF<T,DESCRIPTOR::d>>&& domainW,
+                      FunctorPtr<SuperIndicatorF<T,DESCRIPTOR::d>>&& domainZ,
+                      FUNCTOR& fringe, VALUES&&... fringeProps)
+  requires std::derived_from<FUNCTOR, AnalyticalF<DESCRIPTOR::d,T,T>>
+{
+  AnalyticalConst<DESCRIPTOR::d,T,T> two ( T(2) );
+  AnalyticalConst<DESCRIPTOR::d,T,T> zero ( T(0) );
+  sLattice.template defineField<descriptors::SCALAR>( std::move(domainF), fringe );
+  sLattice.template defineField<descriptors::SCALAR>( std::move(domainW), two );
+  sLattice.template defineField<descriptors::SCALAR>( std::move(domainZ), zero );
+  (sLattice.template setParameter<PARAMETERS>( fringeProps ), ...);
+}
+
+template <typename... PARAMETERS, typename COUPLING, typename... VALUES>
+void setFringeCoupling(COUPLING& coupling, VALUES&&... fringeProps)
+{
+  (coupling.template setParameter<PARAMETERS>( fringeProps ), ...);
+}
+
+template <typename PHASEFIELD, typename MIXTURE_RULES,
+          typename T, typename DESCRIPTOR, typename ACDESCRIPTOR,
+          typename COUPLING, typename SIGMA, typename W, typename THETA,
+          typename TAUG, typename TAUL, typename RHOG, typename RHOL>
+void init(SuperLattice<T,DESCRIPTOR>& sLatticeNS, SuperLattice<T,ACDESCRIPTOR>& sLatticeAC,
+          COUPLING& coupling, FunctorPtr<SuperIndicatorF<T,DESCRIPTOR::d>>&& domainF,
+          FunctorPtr<SuperIndicatorF<T,DESCRIPTOR::d>>&& domainW,
+          FunctorPtr<SuperIndicatorF<T,DESCRIPTOR::d>>&& domainZ,
+          SIGMA sigma, W w, THETA theta, TAUG tau_g, TAUL tau_l, RHOG rho_g, RHOL rho_l)
+{
+  AnalyticalConst<DESCRIPTOR::d,T,T> two ( T(2) );
+  AnalyticalConst<DESCRIPTOR::d,T,T> one ( T(1) );
+  AnalyticalConst<DESCRIPTOR::d,T,T> zero ( T(0) );
+  sLatticeNS.template defineField<descriptors::SCALAR>( std::move(domainF), one );
+  sLatticeNS.template defineField<descriptors::SCALAR>( std::move(domainW), two );
+  sLatticeNS.template defineField<descriptors::SCALAR>( std::move(domainZ), zero );
+  sLatticeAC.template defineField<descriptors::SCALAR>( std::move(domainF), one );
+  sLatticeAC.template defineField<descriptors::SCALAR>( std::move(domainW), two );
+  sLatticeAC.template defineField<descriptors::SCALAR>( std::move(domainZ), zero );
+
+  coupling.template setParameter<typename PHASEFIELD::GAMMA>( T(-22.5) );
+  coupling.template setParameter<typename PHASEFIELD::SIGMA>( sigma );
+  coupling.template setParameter<typename PHASEFIELD::W>( w );
+  coupling.template setParameter<typename PHASEFIELD::SIGMA_F>( sigma );
+  coupling.template setParameter<typename PHASEFIELD::W_F>( w );
+  coupling.template setParameter<typename PHASEFIELD::TAU_F>( T(1) );
+  coupling.template setParameter<typename MIXTURE_RULES::TAUS>( {tau_g, tau_l} );
+  coupling.template setParameter<typename MIXTURE_RULES::RHOS>( {rho_g, rho_l} );
+
+  sLatticeAC.template setParameter<descriptors::INTERFACE_WIDTH>( w );
+  sLatticeAC.template setParameter<descriptors::THETA>( theta );
+  sLatticeAC.template setParameter<descriptors::INTERFACE_WIDTH_F>( w );
+  sLatticeAC.template setParameter<descriptors::THETA_F>( theta );
+}
+
 }
 
 // =========================================================================//
@@ -572,15 +634,21 @@ struct LiangPostProcessor {
   }
 };
 
+template <typename MIXTURE_PROPERTIES>
 struct CorrectedLiangPostProcessor {
   static constexpr OperatorScope scope = OperatorScope::PerCellWithParameters;
-  struct SIGMA       : public descriptors::FIELD_BASE<1> { };
-  struct W           : public descriptors::FIELD_BASE<1> { };
-  struct TAUS        : public descriptors::FIELD_BASE<2> { };
-  struct RHOS        : public descriptors::FIELD_BASE<2> { };
-  struct GRAVITY     : public descriptors::FIELD_BASE<0,1> { };
-  using parameters = meta::list<SIGMA,W,TAUS,RHOS,GRAVITY>;
-
+  struct SIGMA      : public descriptors::FIELD_BASE<1> { };
+  struct W          : public descriptors::FIELD_BASE<1> { };
+  struct GRAVITY    : public descriptors::FIELD_BASE<0,1> { };
+  struct BODY_FORCE : public descriptors::FIELD_BASE<0,1> { };
+  struct GAMMA      : public descriptors::FIELD_BASE<1> { };
+  struct SIGMA_F    : public descriptors::FIELD_BASE<1> { };
+  struct W_F        : public descriptors::FIELD_BASE<1> { };
+  struct TAU_F      : public descriptors::FIELD_BASE<1> { };
+  using parameters = typename meta::merge<
+      typename MIXTURE_PROPERTIES::parameters,
+      meta::list<SIGMA,W,GRAVITY,BODY_FORCE,GAMMA,SIGMA_F,W_F,TAU_F>
+    >;
   int getPriority() const {
     return 0;
   }
@@ -605,14 +673,13 @@ struct CorrectedLiangPostProcessor {
     }
 
     auto scale = cellNS.template getField<descriptors::SCALAR>();
-    auto sigma = parameters.template get<SIGMA>()*scale;
-    auto w = parameters.template get<W>();
-    auto rho_v = parameters.template get<RHOS>()[0];
-    auto rho_l = parameters.template get<RHOS>()[1];
-    V rho = rho_v + (rho_l-rho_v)*phi;
-    auto tau_v = parameters.template get<TAUS>()[0];
-    auto tau_l = parameters.template get<TAUS>()[1];
-    V tau = (tau_v + (tau_l-tau_v)*phi)*scale + (1-scale)*((tau_l-0.5)*125+0.5);
+    auto elacs = V(1)-scale;
+    auto sigma = parameters.template get<SIGMA>()*scale + elacs*parameters.template get<SIGMA_F>();
+    auto w = parameters.template get<W>()*scale + elacs*parameters.template get<W_F>();
+    auto rho_v = parameters.template get<typename MIXTURE_PROPERTIES::RHOS>()[0];
+    auto rho_l = parameters.template get<typename MIXTURE_PROPERTIES::RHOS>()[1];
+    V rho = MIXTURE_PROPERTIES().computeRho(phi, parameters);
+    V tau = MIXTURE_PROPERTIES().computeTau(phi, parameters)*(scale + elacs* parameters.template get<TAU_F>());
 
     // Computation and storage of forces
     Vector<V,DESCRIPTOR::d> surfaceTensionForce{};
@@ -622,11 +689,12 @@ struct CorrectedLiangPostProcessor {
     V mu = 4*beta*phi*(phi-1.)*(phi-0.5)-k*laplacePhi;
     surfaceTensionForce += mu*gradPhi;
     auto externalForce = parameters.template get<GRAVITY>()*rho;
+    auto bodyForce = parameters.template get<BODY_FORCE>();
     cellNS.template setField<descriptors::NABLARHO>((rho_l-rho_v)*gradPhi);
     cellNS.template setField<descriptors::LAPLACERHO>((rho_l-rho_v)*laplacePhi);
     cellNS.template setField<descriptors::TAU_EFF>(tau);
     cellNS.template setField<descriptors::RHO>(rho);
-    cellNS.template setField<descriptors::FORCE>((externalForce+surfaceTensionForce)/(rho+(rho_l-rho_v)*laplacePhi/4.));
+    cellNS.template setField<descriptors::FORCE>((bodyForce+externalForce+surfaceTensionForce)/(rho+(rho_l-rho_v)*laplacePhi/V(4)));
     cellNS.computeU(u);
 
     Vector<V,DESCRIPTOR::d> forceAC{};
@@ -643,7 +711,8 @@ struct CorrectedLiangPostProcessor {
     V Y1 = util::min(util::max(V(0),util::min(V(1),(phi-V(0.8))/V(1e-4))),util::max(V(0),util::min(V(1),(V(1)-phi)/V(1e-4))));
     V Y2 = util::min(util::max(V(0),util::min(V(1),phi/V(1e-4))),util::max(V(0),util::min(V(1),(V(0.2)-phi)/V(1e-4))));
     V laplacePhiNorm = laplacePhi/util::abs(laplacePhi+V(1e-7));
-    V lambda_res = -22.5*util::norm<DESCRIPTOR::d>(gradPhi)/w*((V(1)+laplacePhiNorm)*Y1 + (V(1)-laplacePhiNorm)*Y2);
+    auto gamma = parameters.template get<GAMMA>(); // -22.5 , -10
+    V lambda_res = gamma*util::norm<DESCRIPTOR::d>(gradPhi)/w*((V(1)+laplacePhiNorm)*Y1 + (V(1)-laplacePhiNorm)*Y2);
 
     forceAC += (phiU - old_phiU) + (lambda+lambda_res)*n/descriptors::invCs2<V,DESCRIPTOR>();
     cellAC.template setField<descriptors::FORCE>(forceAC);
@@ -888,7 +957,8 @@ struct IsoPhaseFieldCurvedWall2D{
   template<typename T, typename DESCRIPTOR, int xNormal, int yNormal>
   struct Processor {
     static constexpr OperatorScope scope = OperatorScope::PerCellWithParameters;
-    using parameters = meta::list<descriptors::INTERFACE_WIDTH, descriptors::THETA>;
+    using parameters = meta::list<descriptors::INTERFACE_WIDTH, descriptors::INTERFACE_WIDTH_F,
+                                  descriptors::THETA, descriptors::THETA_F>;
 
     int getPriority() const {
       return 1;
@@ -898,7 +968,11 @@ struct IsoPhaseFieldCurvedWall2D{
     void apply(CELL& cell, PARAMETERS& parameters) any_platform
     {
       auto phi_s = cell.template getField<descriptors::STATISTIC>();
+      auto cell_b = cell.neighbor({-xNormal,-yNormal});
       auto phi_b = cell.neighbor({-xNormal,-yNormal}).template getFieldComponent<descriptors::STATISTIC>(0);
+      auto scale = cell_b.template getFieldComponent<descriptors::SCALAR>(0);
+      auto elacs = T(1)-scale;
+      auto theta = parameters.template get<descriptors::THETA>()*scale + elacs*parameters.template get<descriptors::THETA_F>();
       if (phi_b >= T(0.995)) {
         phi_s[0] = 1.;
       }
@@ -906,15 +980,14 @@ struct IsoPhaseFieldCurvedWall2D{
         phi_s[0] = 0.;
       }
       else {
-        auto theta = parameters.template get<descriptors::THETA>();
-        auto w = parameters.template get<descriptors::INTERFACE_WIDTH>();
+        auto w = parameters.template get<descriptors::INTERFACE_WIDTH>()*scale + elacs*parameters.template get<descriptors::INTERFACE_WIDTH_F>();
         T z_z0 = w/2.*util::atanh(2.*phi_b-1.);
         T cx = util::cos(-theta)*xNormal-util::sin(-theta)*yNormal;
         T cy = util::sin(-theta)*xNormal+util::cos(-theta)*yNormal;
         Vector<T,DESCRIPTOR::d> c{cx,cy};
         Vector<T,DESCRIPTOR::d> n{T(xNormal),T(yNormal)};
-        c = util::normalize(c);
-        T d = c[0]*n[0]+c[1]*n[1];
+        Vector<T,DESCRIPTOR::d> c_unity = normalizeWithEpsilon(c,T(1),T(1e-6));
+        T d = c_unity[0]*n[0]+c_unity[1]*n[1];
         phi_s[0] = 0.5*(1+util::tanh(2.*(z_z0+d)/w));
       }
       cell.template setField<descriptors::STATISTIC>(phi_s);
@@ -927,7 +1000,8 @@ struct IsoPhaseFieldCurvedWallLocalTheta2D{
   template<typename T, typename DESCRIPTOR, int xNormal, int yNormal>
   struct Processor {
     static constexpr OperatorScope scope = OperatorScope::PerCellWithParameters;
-    using parameters = meta::list<descriptors::INTERFACE_WIDTH>;
+    using parameters = meta::list<descriptors::INTERFACE_WIDTH, descriptors::INTERFACE_WIDTH_F,
+                                  descriptors::THETA_F>;
 
     int getPriority() const {
       return 1;
@@ -937,7 +1011,11 @@ struct IsoPhaseFieldCurvedWallLocalTheta2D{
     void apply(CELL& cell, PARAMETERS& parameters) any_platform
     {
       auto phi_s = cell.template getField<descriptors::STATISTIC>();
+      auto cell_b = cell.neighbor({-xNormal,-yNormal});
       auto phi_b = cell.neighbor({-xNormal,-yNormal}).template getFieldComponent<descriptors::STATISTIC>(0);
+      auto scale = cell_b.template getFieldComponent<descriptors::SCALAR>(0);
+      auto elacs = T(1)-scale;
+      auto theta = cell.template getField<descriptors::THETA>()*scale + elacs*parameters.template get<descriptors::THETA_F>();
       if (phi_b >= T(0.995)) {
         phi_s[0] = 1.;
       }
@@ -945,15 +1023,14 @@ struct IsoPhaseFieldCurvedWallLocalTheta2D{
         phi_s[0] = 0.;
       }
       else {
-        auto theta = cell.template getField<descriptors::THETA>();
-        auto w = parameters.template get<descriptors::INTERFACE_WIDTH>();
+        auto w = parameters.template get<descriptors::INTERFACE_WIDTH>()*scale + elacs*parameters.template get<descriptors::INTERFACE_WIDTH_F>();
         T z_z0 = w/2.*util::atanh(2.*phi_b-1.);
         T cx = util::cos(-theta)*xNormal-util::sin(-theta)*yNormal;
         T cy = util::sin(-theta)*xNormal+util::cos(-theta)*yNormal;
         Vector<T,DESCRIPTOR::d> c{cx,cy};
         Vector<T,DESCRIPTOR::d> n{T(xNormal),T(yNormal)};
-        c = util::normalize(c);
-        T d = c[0]*n[0]+c[1]*n[1];
+        Vector<T,DESCRIPTOR::d> c_unity = normalizeWithEpsilon(c,T(1),T(1e-6));
+        T d = c_unity[0]*n[0]+c_unity[1]*n[1];
         phi_s[0] = 0.5*(1+util::tanh(2.*(z_z0+d)/w));
       }
       cell.template setField<descriptors::STATISTIC>(phi_s);
@@ -966,7 +1043,8 @@ struct IsoPhaseFieldCurvedWall3D{
   template<typename T, typename DESCRIPTOR, int xNormal, int yNormal, int zNormal>
   struct Processor {
     static constexpr OperatorScope scope = OperatorScope::PerCellWithParameters;
-    using parameters = meta::list<descriptors::INTERFACE_WIDTH, descriptors::THETA>;
+    using parameters = meta::list<descriptors::INTERFACE_WIDTH, descriptors::INTERFACE_WIDTH_F,
+                                  descriptors::THETA, descriptors::THETA_F>;
 
     int getPriority() const {
       return 1;
@@ -978,7 +1056,9 @@ struct IsoPhaseFieldCurvedWall3D{
       auto phi_s = cell.template getField<descriptors::STATISTIC>();
       auto cell_b = cell.neighbor({-xNormal,-yNormal,-zNormal});
       auto phi_b = cell_b.template getFieldComponent<descriptors::STATISTIC>(0);
-      auto theta = parameters.template get<descriptors::THETA>();
+      auto scale = cell_b.template getFieldComponent<descriptors::SCALAR>(0);
+      auto elacs = T(1)-scale;
+      auto theta = parameters.template get<descriptors::THETA>()*scale + elacs*parameters.template get<descriptors::THETA_F>();
       if (phi_b >= T(0.995) || theta == T(0)) {
         phi_s[0] = T(1);
       }
@@ -986,21 +1066,28 @@ struct IsoPhaseFieldCurvedWall3D{
         phi_s[0] = T(0);
       }
       else {
-        auto old_phiU = cell_b.template getField<descriptors::OLD_PHIU>();
-        auto u = cell_b.template getField<descriptors::VELOCITY>();
-        Vector<T,DESCRIPTOR::d> gradPhiFactored{};
+        Vector<T,3> gradPhiFactored{};
         for (int iPop=0; iPop < DESCRIPTOR::q; ++iPop) {
-          gradPhiFactored += descriptors::c<DESCRIPTOR>(iPop)*cell[iPop];
+          T phi_i = cell_b.neighbor(descriptors::c<DESCRIPTOR>(iPop)).template getFieldComponent<descriptors::STATISTIC>(0);
+          if (cell_b.neighbor(descriptors::c<DESCRIPTOR>(iPop)).template getField<descriptors::SCALAR>() >= 1.9) {
+            phi_i = phi_s[0];
+          }
+          T tcs2 = descriptors::t<T,DESCRIPTOR>(iPop) * descriptors::invCs2<T,DESCRIPTOR>();
+          gradPhiFactored += phi_i * descriptors::c<DESCRIPTOR>(iPop) * tcs2;
         }
-        gradPhiFactored = gradPhiFactored - 0.5*(phi_b*u + old_phiU);
 
-        auto w = parameters.template get<descriptors::INTERFACE_WIDTH>();
+        auto w = parameters.template get<descriptors::INTERFACE_WIDTH>()*scale + elacs*parameters.template get<descriptors::INTERFACE_WIDTH_F>();
         T z_z0 = w/2.*util::atanh(2.*phi_b-1.);
 
-        Vector<T,DESCRIPTOR::d> n{T(xNormal),T(yNormal),T(zNormal)};
-        Vector<T,DESCRIPTOR::d> r{};
-        r = crossProduct3D(n, gradPhiFactored);
-        r = util::normalize(r);
+        T xn = T(xNormal);
+        T yn = T(yNormal);
+        T zn = T(zNormal);
+        Vector<T,3> r{
+          yn*gradPhiFactored[2] - zn*gradPhiFactored[1],
+          zn*gradPhiFactored[0] - xn*gradPhiFactored[2],
+          xn*gradPhiFactored[1] - yn*gradPhiFactored[0]
+        };
+        Vector<T,3> rot_unity = normalizeWithEpsilon(r,T(1),T(1e-6));
 
         // Compute rotation matrix (Rodrigues' formula)
         T c = util::cos(-theta);
@@ -1008,22 +1095,25 @@ struct IsoPhaseFieldCurvedWall3D{
         T v = 1 - c;
 
         Matrix<T, 3, 3> R{};
-        R[0][0] = c + r[0]*r[0]*v;
-        R[0][1] = r[0]*r[1]*v - r[2]*s;
-        R[0][2] = r[0]*r[2]*v + r[1]*s;
-        R[1][0] = r[1]*r[0]*v + r[2]*s;
-        R[1][1] = c + r[1]*r[1]*v;
-        R[1][2] = r[1]*r[2]*v - r[0]*s;
-        R[2][0] = r[2]*r[0]*v - r[1]*s;
-        R[2][1] = r[2]*r[1]*v + r[0]*s;
-        R[2][2] = c + r[2]*r[2]*v;
+        R[0][0] = c + rot_unity[0]*rot_unity[0]*v;
+        R[0][1] = rot_unity[0]*rot_unity[1]*v - rot_unity[2]*s;
+        R[0][2] = rot_unity[0]*rot_unity[2]*v + rot_unity[1]*s;
+        R[1][0] = rot_unity[1]*rot_unity[0]*v + rot_unity[2]*s;
+        R[1][1] = c + rot_unity[1]*rot_unity[1]*v;
+        R[1][2] = rot_unity[1]*rot_unity[2]*v - rot_unity[0]*s;
+        R[2][0] = rot_unity[2]*rot_unity[0]*v - rot_unity[1]*s;
+        R[2][1] = rot_unity[2]*rot_unity[1]*v + rot_unity[0]*s;
+        R[2][2] = c + rot_unity[2]*rot_unity[2]*v;
 
         // Rotate gradient vector
-        Vector<T, DESCRIPTOR::d> cVec = R * n;
+        Vector<T, 3> cVec{
+            R[0][0]*xn + R[0][1]*yn + R[0][2]*zn,
+            R[1][0]*xn + R[1][1]*yn + R[1][2]*zn,
+            R[2][0]*xn + R[2][1]*yn + R[2][2]*zn
+        };// = R * n;
 
-        cVec = util::normalize(cVec);
-        // T d = util::scalarProduct(cVec,n);
-        T d = cVec * n;
+        Vector<T,3> rot_grad = normalizeWithEpsilon(cVec,T(1),T(1e-6));
+        T d = rot_grad[0] * xn + rot_grad[1] * yn + rot_grad[2] * zn;
         phi_s[0] = T(0.5)*(T(1)+util::tanh(T(2)*(z_z0+d)/w));
       }
       cell.template setField<descriptors::STATISTIC>(phi_s);
@@ -1036,7 +1126,8 @@ struct IsoPhaseFieldCurvedWallLocalTheta3D{
   template<typename T, typename DESCRIPTOR, int xNormal, int yNormal, int zNormal>
   struct Processor {
     static constexpr OperatorScope scope = OperatorScope::PerCellWithParameters;
-    using parameters = meta::list<descriptors::INTERFACE_WIDTH>;
+    using parameters = meta::list<descriptors::INTERFACE_WIDTH, descriptors::INTERFACE_WIDTH_F,
+                                  descriptors::THETA_F>;
 
     int getPriority() const {
       return 1;
@@ -1055,22 +1146,31 @@ struct IsoPhaseFieldCurvedWallLocalTheta3D{
         phi_s[0] = T(0);
       }
       else {
-        auto old_phiU = cell_b.template getField<descriptors::OLD_PHIU>();
-        auto u = cell_b.template getField<descriptors::VELOCITY>();
-        Vector<T,DESCRIPTOR::d> gradPhiFactored{};
+        Vector<T,3> gradPhiFactored{};
         for (int iPop=0; iPop < DESCRIPTOR::q; ++iPop) {
-          gradPhiFactored += descriptors::c<DESCRIPTOR>(iPop)*cell[iPop];
+          T phi_i = cell_b.neighbor(descriptors::c<DESCRIPTOR>(iPop)).template getFieldComponent<descriptors::STATISTIC>(0);
+          if (cell_b.neighbor(descriptors::c<DESCRIPTOR>(iPop)).template getField<descriptors::SCALAR>() >= 1.9) {
+            phi_i = phi_s[0];
+          }
+          T tcs2 = descriptors::t<T,DESCRIPTOR>(iPop) * descriptors::invCs2<T,DESCRIPTOR>();
+          gradPhiFactored += phi_i * descriptors::c<DESCRIPTOR>(iPop) * tcs2;
         }
-        gradPhiFactored = gradPhiFactored - 0.5*(phi_b*u + old_phiU);
 
-        auto theta = cell.template getField<descriptors::THETA>();
-        auto w = parameters.template get<descriptors::INTERFACE_WIDTH>();
+        auto scale = cell_b.template getFieldComponent<descriptors::SCALAR>(0);
+        auto elacs = T(1)-scale;
+        auto theta = cell.template getField<descriptors::THETA>()*scale + elacs*parameters.template get<descriptors::THETA_F>();
+        auto w = parameters.template get<descriptors::INTERFACE_WIDTH>()*scale + elacs*parameters.template get<descriptors::INTERFACE_WIDTH_F>();
         T z_z0 = w/2.*util::atanh(2.*phi_b-1.);
 
-        Vector<T,DESCRIPTOR::d> n{T(xNormal),T(yNormal),T(zNormal)};
-        Vector<T,DESCRIPTOR::d> r{};
-        r = crossProduct3D(n, gradPhiFactored);
-        r = util::normalize(r);
+        T xn = T(xNormal);
+        T yn = T(yNormal);
+        T zn = T(zNormal);
+        Vector<T,3> r{
+          yn*gradPhiFactored[2] - zn*gradPhiFactored[1],
+          zn*gradPhiFactored[0] - xn*gradPhiFactored[2],
+          xn*gradPhiFactored[1] - yn*gradPhiFactored[0]
+        };
+        Vector<T,3> rot_unity = normalizeWithEpsilon(r,T(1),T(1e-6));
 
         // Compute rotation matrix (Rodrigues' formula)
         T c = util::cos(-theta);
@@ -1078,22 +1178,25 @@ struct IsoPhaseFieldCurvedWallLocalTheta3D{
         T v = 1 - c;
 
         Matrix<T, 3, 3> R{};
-        R[0][0] = c + r[0]*r[0]*v;
-        R[0][1] = r[0]*r[1]*v - r[2]*s;
-        R[0][2] = r[0]*r[2]*v + r[1]*s;
-        R[1][0] = r[1]*r[0]*v + r[2]*s;
-        R[1][1] = c + r[1]*r[1]*v;
-        R[1][2] = r[1]*r[2]*v - r[0]*s;
-        R[2][0] = r[2]*r[0]*v - r[1]*s;
-        R[2][1] = r[2]*r[1]*v + r[0]*s;
-        R[2][2] = c + r[2]*r[2]*v;
+        R[0][0] = c + rot_unity[0]*rot_unity[0]*v;
+        R[0][1] = rot_unity[0]*rot_unity[1]*v - rot_unity[2]*s;
+        R[0][2] = rot_unity[0]*rot_unity[2]*v + rot_unity[1]*s;
+        R[1][0] = rot_unity[1]*rot_unity[0]*v + rot_unity[2]*s;
+        R[1][1] = c + rot_unity[1]*rot_unity[1]*v;
+        R[1][2] = rot_unity[1]*rot_unity[2]*v - rot_unity[0]*s;
+        R[2][0] = rot_unity[2]*rot_unity[0]*v - rot_unity[1]*s;
+        R[2][1] = rot_unity[2]*rot_unity[1]*v + rot_unity[0]*s;
+        R[2][2] = c + rot_unity[2]*rot_unity[2]*v;
 
         // Rotate gradient vector
-        Vector<T, DESCRIPTOR::d> cVec = R * n;
+        Vector<T, 3> cVec{
+            R[0][0]*xn + R[0][1]*yn + R[0][2]*zn,
+            R[1][0]*xn + R[1][1]*yn + R[1][2]*zn,
+            R[2][0]*xn + R[2][1]*yn + R[2][2]*zn
+        };// = R * n;
 
-        cVec = util::normalize(cVec);
-        // T d = util::scalarProduct(cVec,n);
-        T d = cVec * n;
+        Vector<T,3> rot_grad = normalizeWithEpsilon(cVec,T(1),T(1e-6));
+        T d = rot_grad[0] * xn + rot_grad[1] * yn + rot_grad[2] * zn;
         phi_s[0] = T(0.5)*(T(1)+util::tanh(T(2)*(z_z0+d)/w));
       }
       cell.template setField<descriptors::STATISTIC>(phi_s);
@@ -1219,6 +1322,39 @@ struct InverseDynamicViscosity {
   };
 };
 
+template <typename DESCRIPTOR>
+struct SharpDynamicViscosity {
+  struct TAUS        : public descriptors::FIELD_BASE<2> { };
+  struct RHOS        : public descriptors::FIELD_BASE<2> { };
+  using parameters = meta::list<TAUS,RHOS>;
+
+  template <typename V, typename PARAMETERS>
+  V computeRho( V phi, PARAMETERS& parameters ) any_platform {
+    auto rho_g = parameters.template get<RHOS>()[0];
+    auto rho_l = parameters.template get<RHOS>()[1];
+    return rho_g + (rho_l-rho_g)*phi;
+  };
+
+  template <typename V, typename PARAMETERS>
+  V computeTau( V phi, PARAMETERS& parameters ) any_platform {
+    auto tau_g = parameters.template get<TAUS>()[0];
+    auto tau_l = parameters.template get<TAUS>()[1];
+    auto rho_g = parameters.template get<RHOS>()[0];
+    auto rho_l = parameters.template get<RHOS>()[1];
+    V rho = computeRho(phi, parameters);
+    V mu_g = rho_g*(tau_g-0.5)/descriptors::invCs2<V,DESCRIPTOR>();
+    V mu_l = rho_l*(tau_l-0.5)/descriptors::invCs2<V,DESCRIPTOR>();
+
+    if (phi <= 0.5){
+      V mu = mu_g;
+      return mu/rho * descriptors::invCs2<V,DESCRIPTOR>() + 0.5;
+    } else {
+      V mu = mu_l;
+      return mu/rho * descriptors::invCs2<V,DESCRIPTOR>() + 0.5;
+    }
+  };
+};
+
 template<int xNormal, int yNormal>
 struct SetOutletCells2D {
   static constexpr OperatorScope scope = OperatorScope::PerCell;
@@ -1239,6 +1375,27 @@ struct SetOutletCells2D {
       outlet_cell[iPop] = equilibrium<DESCRIPTOR>::firstOrder(iPop, phi, u);
     }
     cell.template setField<descriptors::CONV_POPS>(outlet_cell);
+    auto phiGhost = cell.neighbor({xNormal,yNormal}).template getField<descriptors::STATISTIC>();
+    phiGhost[0] = phi;
+    cell.neighbor({xNormal,yNormal}).template setField<descriptors::STATISTIC>(phiGhost);
+  }
+};
+
+template<int xNormal, int yNormal>
+struct SetOutletGhosts2D {
+  static constexpr OperatorScope scope = OperatorScope::PerCell;
+
+  int getPriority() const {
+    return 0;
+  }
+
+  template <typename CELL>
+  void apply(CELL& cell) any_platform
+  {
+    using T = typename CELL::value_t;
+    using DESCRIPTOR = typename CELL::descriptor_t;
+    T phi, u[DESCRIPTOR::d];
+    cell.computeRhoU(phi, u);
     auto phiGhost = cell.neighbor({xNormal,yNormal}).template getField<descriptors::STATISTIC>();
     phiGhost[0] = phi;
     cell.neighbor({xNormal,yNormal}).template setField<descriptors::STATISTIC>(phiGhost);

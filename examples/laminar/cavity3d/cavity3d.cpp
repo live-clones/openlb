@@ -272,11 +272,10 @@ int main(int argc, char** argv)
     myCaseParameters.set<MAX_PHYS_T>(100);
     myCaseParameters.set<TIME_INTERVAL>(1.0);
     myCaseParameters.set<RESIDUUM>(1.0e-3);
-    myCaseParameters.set<PHYS_DELTA_X>([&] {
-      return myCaseParameters.get<PHYS_CHAR_LENGTH>() / myCaseParameters.get<RESOLUTION>();
+    myCaseParameters.set<PHYS_DELTA_X>([](MyCase::ParametersD& p) {
+      return p.get<PHYS_CHAR_LENGTH>() / p.get<RESOLUTION>();
     });
   }
-  myCaseParameters.fromCLI(argc, argv);
 
   /// === Step 3: Create Mesh ===
   Mesh mesh = createMesh(myCaseParameters);

@@ -32,6 +32,8 @@ namespace stage {
 struct PreCollide      { };
 /// Communication after collision
 struct PostCollide     { };
+/// Communication before propagation
+struct PreStream      { };
 /// Communication after propagation
 struct PostStream      { };
 /// Communication after applying the post processors
@@ -48,8 +50,13 @@ struct Full            { };
 /// Coupling post processors
 struct Coupling { };
 
+/// Statistics integration
+struct Statistics { };
+
 /// Collision stage
 struct Collide { };
+
+struct Sampling { };
 
 /// Result evaluation (for custom tasks only needed for results export)
 struct Evaluation { };

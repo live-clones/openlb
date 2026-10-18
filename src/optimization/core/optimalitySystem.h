@@ -37,15 +37,16 @@ namespace opti {
 /// - make sure to copy required fields accross primal and adjoint lattices
 /// Note: the adjoint dynamics from discreteAdjointDynamics.h are assumed to be used
 template <concepts::DifferentiableFunctor OBJECTIVE,
-          typename PRIMAL_DYNAMICS,
-          typename CONTROLLED_FIELD,
-          typename T=PRIMAL_DYNAMICS::value_t,
-          typename DESCRIPTOR=PRIMAL_DYNAMICS::descriptor_t
+          concepts::DifferentiableDynamics PRIMAL_DYNAMICS,
+          concepts::Field CONTROLLED_FIELD,
+          template <concepts::DifferentiableFunctor,
+                    concepts::Field,
+                    concepts::DifferentiableDynamics> typename DERIVATIVE_F = functors::DerivativeF
 >
-class StationaryOptimalitySystem {
+class SteadyOptimalitySystem {
 public:
-  using value_t = T;
-  using descriptor_t = DESCRIPTOR;
+  using value_t = PRIMAL_DYNAMICS::value_t;
+  using descriptor_t = PRIMAL_DYNAMICS::descriptor_t;
   using objective_t = OBJECTIVE;
   using dynamics_t = PRIMAL_DYNAMICS;
   using controls_t = CONTROLLED_FIELD;
@@ -54,10 +55,13 @@ private:
   template <typename FUNCTOR, typename FIELD>
   using WriteFunctorIntoFieldO = SuperLatticeCoupling<SingleLatticeO<operators::WriteFunctorO<FUNCTOR,FIELD>>,
                                                       meta::map<names::Lattice1,
-                                                      descriptors::VALUED_DESCRIPTOR<T,DESCRIPTOR>>>;
+                                                      descriptors::VALUED_DESCRIPTOR<value_t,descriptor_t>>>;
+
+  template <typename FUNCTOR, typename RESPECT_TO>
+  using derivative_t = DERIVATIVE_F<FUNCTOR, RESPECT_TO, PRIMAL_DYNAMICS>;
 
   template <typename RESPECT_TO>
-  using djd_t = functors::DerivativeF<OBJECTIVE,RESPECT_TO,PRIMAL_DYNAMICS>;
+  using djd_t = derivative_t<OBJECTIVE,RESPECT_TO>;
 
   // Operator which execute the objective functor and write in opti::J
   std::unique_ptr<WriteFunctorIntoFieldO<OBJECTIVE,opti::J>> j;
@@ -66,17 +70,19 @@ private:
   // Derivative of the objective regarding the controls and write in opti::DJDALPA
   std::unique_ptr<WriteFunctorIntoFieldO<djd_t<CONTROLLED_FIELD>,opti::DJDALPHA<CONTROLLED_FIELD>>> djdalpha;
   // Derivative of the primal dynamics regarding the controls and write in opti::DCDALPHA
-  std::unique_ptr<WriteFunctorIntoFieldO<functors::DerivativeF<functors::CollisionF<PRIMAL_DYNAMICS>,
-                                                               CONTROLLED_FIELD,
-                                                               PRIMAL_DYNAMICS>,
+  std::unique_ptr<WriteFunctorIntoFieldO<derivative_t<functors::CollisionF<PRIMAL_DYNAMICS>,
+                                                      CONTROLLED_FIELD>,
                                          opti::DCDALPHA<CONTROLLED_FIELD>>> dcdalpha;
+
+  static_assert(descriptor_t::template size<typename OBJECTIVE::result_t>() == 1,
+                "Objective function needs to have a scalar output");
 
 public:
   template <typename... ARGS>
-  void setObjectiveParameters(SuperLattice<T,DESCRIPTOR>& lattice,
+  void setObjectiveParameters(SuperLattice<value_t,descriptor_t>& lattice,
                               ARGS&&... args) {
     j = makeWriteFunctorO<OBJECTIVE,opti::J>(lattice);
-    auto objectiveParameters = makeParametersD<T,DESCRIPTOR>(std::forward<ARGS&&>(args)...);
+    auto objectiveParameters = makeParametersD<value_t,descriptor_t>(std::forward<ARGS&&>(args)...);
     using passed = typename meta::map<ARGS...>::keys_t;
     using required = typename OBJECTIVE::parameters_t;
     passed::for_each([&](auto id) {
@@ -88,8 +94,8 @@ public:
   }
 
   // Execute cell-scoped objective operator and integrate the result
-  T evaluateObjectiveF(SuperLattice<T,DESCRIPTOR>& lattice,
-                       FunctorPtr<SuperIndicatorF<T,DESCRIPTOR::d>>&& indicator) {
+  value_t evaluateObjectiveF(SuperLattice<value_t,descriptor_t>& lattice,
+                       FunctorPtr<SuperIndicatorF<value_t,descriptor_t::d>>&& indicator) {
     j->restrictTo(std::forward<decltype(indicator)>(indicator));
     j->apply();
     return integrateField<opti::J>(lattice,
@@ -98,8 +104,8 @@ public:
   }
 
   // Compute derivatives required for the adjoint source term
-  void differentiateObjectiveFByPopulations(SuperLattice<T,DESCRIPTOR>& lattice,
-                                            FunctorPtr<SuperIndicatorF<T,DESCRIPTOR::d>>&& indicator) {
+  void differentiateObjectiveFByPopulations(SuperLattice<value_t,descriptor_t>& lattice,
+                                            FunctorPtr<SuperIndicatorF<value_t,descriptor_t::d>>&& indicator) {
     djdf = makeWriteFunctorO<djd_t<descriptors::POPULATION>,opti::DJDF>(lattice);
     using parameters_t = typename OBJECTIVE::parameters_t;
     parameters_t::for_each([&](auto id){
@@ -107,14 +113,14 @@ public:
       djdf->template setParameter<field_t>(j->template getParameter<field_t>());
     });
     // DerivativeF only computes in the cell-scope; the objective is mostly a weighted sum over all cells, which is why this is required
-    djdf->template setParameter<parameters::FACTOR>(util::pow(lattice.getUnitConverter().getPhysDeltaX(), DESCRIPTOR::d));
+    djdf->template setParameter<parameters::FACTOR>(util::pow(lattice.getUnitConverter().getPhysDeltaX(), descriptor_t::d));
     djdf->restrictTo(std::forward<decltype(indicator)>(indicator));
     djdf->apply();
   }
 
   // Compiute derivatives required for the optimality condition
-  void differentiateObjectiveFByControls(SuperLattice<T,DESCRIPTOR>& lattice,
-                                         FunctorPtr<SuperIndicatorF<T,DESCRIPTOR::d>>&& indicator) {
+  void differentiateObjectiveFByControls(SuperLattice<value_t,descriptor_t>& lattice,
+                                         FunctorPtr<SuperIndicatorF<value_t,descriptor_t::d>>&& indicator) {
     djdalpha = makeWriteFunctorO<djd_t<CONTROLLED_FIELD>,opti::DJDALPHA<CONTROLLED_FIELD>>(lattice);
     using parameters_t = typename OBJECTIVE::parameters_t;
     parameters_t::for_each([&](auto id){
@@ -122,39 +128,38 @@ public:
       djdalpha->template setParameter<field_t>(j->template getParameter<field_t>());
     });
     // DerivativeF only computes in the cell-scope; the objective is mostly a weighted sum over all cells, which is why this is required
-    djdalpha->template setParameter<parameters::FACTOR>(util::pow(lattice.getUnitConverter().getPhysDeltaX(), DESCRIPTOR::d));
+    djdalpha->template setParameter<parameters::FACTOR>(util::pow(lattice.getUnitConverter().getPhysDeltaX(), descriptor_t::d));
     djdalpha->restrictTo(std::forward<decltype(indicator)>(indicator));
     djdalpha->apply();
   }
 
   // This is required as currently it is not possible to retreive parameters from solely the dynamics type
   template <typename... ARGS>
-  void setPrimalCollisionParameters(SuperLattice<T,DESCRIPTOR>& lattice,
+  void setPrimalCollisionParameters(SuperLattice<value_t,descriptor_t>& lattice,
                                     ARGS&&... args) {
-    using dcdalpha_t = functors::DerivativeF<functors::CollisionF<PRIMAL_DYNAMICS>,
-                                             CONTROLLED_FIELD,
-                                             PRIMAL_DYNAMICS>;
+    using dcdalpha_t = derivative_t<functors::CollisionF<PRIMAL_DYNAMICS>,
+                                    CONTROLLED_FIELD>;
     dcdalpha = makeWriteFunctorO<dcdalpha_t,opti::DCDALPHA<CONTROLLED_FIELD>>(lattice);
-    auto dynamicsParameters = makeParametersD<T,DESCRIPTOR>(std::forward<ARGS&&>(args)...);
+    auto dynamicsParameters = makeParametersD<value_t,descriptor_t>(std::forward<ARGS&&>(args)...);
     using passed = typename meta::map<ARGS...>::keys_t;
     passed::for_each([&](auto id) {
       using field_t = typename decltype(id)::type;
       dcdalpha->template setParameter<field_t>(dynamicsParameters.template get<field_t>());
     });
     // Here no normalization is required as the collision is no integral operation
-    dcdalpha->template setParameter<parameters::FACTOR>(1.0);
+    dcdalpha->template setParameter<olb::parameters::FACTOR>(1.0);
   };
 
   // Compiute derivatives required for the optimality condition
-  void differentiateCollisionFByControls(FunctorPtr<SuperIndicatorF<T,DESCRIPTOR::d>>&& indicator) {
+  void differentiateCollisionFByControls(FunctorPtr<SuperIndicatorF<value_t,descriptor_t::d>>&& indicator) {
     dcdalpha->restrictTo(std::forward<decltype(indicator)>(indicator));
     dcdalpha->apply();
   };
 
   // NOTE: this function assumes that discrete adjoint collision is used
-  void initializeAdjointProblem(SuperLattice<T,DESCRIPTOR>& adjointLattice,
-                                SuperLattice<T,DESCRIPTOR>& controlledLattice,
-                                FunctorPtr<SuperIndicatorF<T,DESCRIPTOR::d>>&& indicator) {
+  void initializeAdjointProblem(SuperLattice<value_t,descriptor_t>& adjointLattice,
+                                SuperLattice<value_t,descriptor_t>& controlledLattice,
+                                FunctorPtr<SuperIndicatorF<value_t,descriptor_t::d>>&& indicator) {
     this->differentiateObjectiveFByPopulations(controlledLattice, std::forward<decltype(indicator)>(indicator));
     copyFields<CONTROLLED_FIELD,CONTROLLED_FIELD>(controlledLattice, adjointLattice);
     // Make sure that the adjoint collision requires shifted-populations (f - descriptors::t)
@@ -163,9 +168,9 @@ public:
   }
 
   // Computes total derivatives of the objectives regarding the control parameters
-  std::vector<T> evaluateOptimalityCondition(SuperLattice<T,DESCRIPTOR>& adjointLattice,
-                                             SuperLattice<T,DESCRIPTOR>& controlledLattice,
-                                             FunctorPtr<SuperIndicatorF<T,DESCRIPTOR::d>>&& indicator) {
+  std::vector<value_t> evaluateOptimalityCondition(SuperLattice<value_t,descriptor_t>& adjointLattice,
+                                                   SuperLattice<value_t,descriptor_t>& controlledLattice,
+                                                   FunctorPtr<SuperIndicatorF<value_t,descriptor_t::d>>&& indicator) {
     // Compute objective derivative regarding controlls
     this->differentiateObjectiveFByControls(controlledLattice, std::forward<decltype(indicator)>(indicator));
     this->differentiateCollisionFByControls(std::forward<decltype(indicator)>(indicator));
@@ -183,6 +188,18 @@ public:
                                                                        std::forward<decltype(indicator)>(indicator));
   }
 };
+
+
+/// Required if the objective functor reqires neighbor access
+template <concepts::DifferentiableFunctor OBJECTIVE,
+          concepts::DifferentiableDynamics PRIMAL_DYNAMICS,
+          concepts::Field CONTROLLED_FIELD>
+using SteadyOptimalitySystemWithNonLocalObjective = SteadyOptimalitySystem<
+  OBJECTIVE,
+  PRIMAL_DYNAMICS,
+  CONTROLLED_FIELD,
+  functors::NonLocalDerivativeF
+>;
 
 }
 

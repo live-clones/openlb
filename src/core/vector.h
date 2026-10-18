@@ -34,10 +34,13 @@
 #include <type_traits>
 #include <array>
 #include <optional>
+#include <initializer_list>
+#include <algorithm>
 
 #include "scalarVector.h"
 #include "utilities/omath.h"
 #include "utilities/oalgorithm.h"
+#include "utilities/aDiff.h"
 
 #include "olbDebug.h"
 
@@ -131,7 +134,11 @@ public:
   constexpr Vector(std::initializer_list<T> v)
   {
     OLB_PRECONDITION(v.size() == D);
-    std::copy(v.begin(), v.end(), _data.begin());
+    auto it = v.begin();
+    for (unsigned i=0; i<D; ++i) {
+      _data[i] = *it;
+      ++it;
+    }
   }
   #endif
 
@@ -306,7 +313,7 @@ constexpr Vector<T,D> abs(const ScalarVector<T,D,IMPL>& a)
 {
   using namespace util;
   return Vector<T,D>([&a](unsigned iDim) -> T {
-    return abs(a[iDim]);
+    return util::abs(a[iDim]);
   });
 }
 
@@ -410,6 +417,21 @@ constexpr auto operator* (
   return scalarProduct;
 }
 
+  /// Matrix-Vector Multiplication
+  /// Multiplies a Vector of Vectors (Matrix) by a 1D Vector
+  template <typename T, typename U, unsigned ROWS, unsigned COLS>
+  constexpr auto operator*(const Vector<Vector<T, COLS>, ROWS>& matrix,
+                           const Vector<U, COLS>& vec)
+  {
+    Vector<decltype(T{} * U{}), ROWS> result;
+
+    for (unsigned i = 0; i < ROWS; ++i) {
+      result[i] = matrix[i] * vec;
+    }
+
+    return result;
+  }
+
 template <typename T, unsigned D, typename U, typename IMPL>
 constexpr meta::enable_if_arithmetic_t<U, Vector<T,D>>
 operator/ (const ScalarVector<T,D,IMPL>& a, U b) any_platform
@@ -499,6 +521,18 @@ template <typename T, unsigned D>
 std::optional<Vector<T,D>> Vector<T,D>::fromString(const std::string& input) {
   static_assert(D > 0, "Vector parsing from string requires D > 0.");
   Vector<T,D> o;
+  // A scalar bool accepts true/false, on/off and 1/0 (plain `is >> bool` rejects the
+  // word forms, the historical --FLAG value gotcha)
+  if constexpr (D == 1 && std::is_same_v<T, bool>) {
+    std::stringstream bs(input);
+    std::string token, rest;
+    if (!(bs >> token) || (bs >> rest)) {
+      return std::nullopt;
+    }
+    if (token == "true"  || token == "1" || token == "on")  { o[0] = true;  return o; }
+    if (token == "false" || token == "0" || token == "off") { o[0] = false; return o; }
+    return std::nullopt;
+  }
   std::stringstream is(input);
   if constexpr (D > 1) {
     char c = 0;

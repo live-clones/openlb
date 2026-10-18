@@ -32,6 +32,7 @@ namespace olb {
 template <typename T, typename DESCRIPTOR, typename COUPLER>
 struct ConcreteBlockRefinementO<T,DESCRIPTOR,Platform::GPU_CUDA,COUPLER> {
   void apply(ConcreteBlockRefinementContextD<T,DESCRIPTOR,Platform::GPU_CUDA>& data);
+
 };
 
 }

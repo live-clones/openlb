@@ -33,6 +33,7 @@
 
 #include "dynamics/dynamics.h"
 
+#include "utilities/performanceProfiler.h"
 #include "core/latticeStatistics.h"
 
 namespace olb {
@@ -252,7 +253,7 @@ public:
     _parameters{parameters} {
   }
 
-  CellStatistic<T> collide(cpu::Cell<T,DESCRIPTOR,Platform::CPU_SIMD>& cell) override {
+  CellStatistic<T> collide(cpu::DataOnlyCell<T,DESCRIPTOR,Platform::CPU_SIMD>& cell) override {
     return DYNAMICS().collide(cell, *_parameters);
   }
 
@@ -335,10 +336,10 @@ private:
 
   /// Helper for dispatching collision on non-DYNAMICS cells
   void applyOther(ConcreteBlockLattice<T,DESCRIPTOR,Platform::CPU_SIMD>& block,
-                  typename LatticeStatistics<T>::Aggregatable&           statistics,
+                  typename LatticeStatistics<T,DESCRIPTOR>::Aggregatable&           statistics,
                   std::size_t                                            iCell)
   {
-    cpu::Cell<T,DESCRIPTOR,Platform::CPU_SIMD> cell(block, iCell);
+    cpu::DataOnlyCell<T,DESCRIPTOR,Platform::CPU_SIMD> cell(block, iCell);
     if (auto cellStatistic = _dynamicsOfCells[iCell]->collide(cell)) {
       statistics.increment(cellStatistic.rho, cellStatistic.uSqr);
     }
@@ -349,7 +350,7 @@ private:
              ConcreteBlockMask<T,Platform::CPU_SIMD>&               subdomain,
              ConcreteBlockMask<T,Platform::CPU_SIMD>&               mask,
              ParametersOfOperatorD<T,DESCRIPTOR,DYNAMICS>&          parameters,
-             typename LatticeStatistics<T>::Aggregatable&           statistics,
+             typename LatticeStatistics<T,DESCRIPTOR>::Aggregatable&           statistics,
              std::size_t                                            iCell)
   {
     if constexpr (dynamics::is_vectorizable_v<DYNAMICS>) {
@@ -429,14 +430,15 @@ public:
              ConcreteBlockMask<T,Platform::CPU_SIMD>&               subdomain,
              CollisionDispatchStrategy                              strategy) override
   {
+    OLB_PROFILE_T("CPU_SIMD:Coll:Apply", DYNAMICS, DESCRIPTOR);
     if (strategy != CollisionDispatchStrategy::Dominant) {
       throw std::runtime_error("Platform::CPU_SIMD currently only support CollisionDispatchStrategy::Dominant");
     }
 
     auto& mask = *_mask;
-    typename LatticeStatistics<T>::Aggregatable statistics{};
+    typename LatticeStatistics<T,DESCRIPTOR>::Aggregatable statistics{};
     #ifdef PARALLEL_MODE_OMP
-    #pragma omp declare reduction(+ : typename LatticeStatistics<T>::Aggregatable : omp_out += omp_in) initializer (omp_priv={})
+    #pragma omp declare reduction(+ : typename LatticeStatistics<T,DESCRIPTOR>::Aggregatable : omp_out += omp_in) initializer (omp_priv={})
     #endif
 
     if constexpr (dynamics::is_vectorizable_v<DYNAMICS>) {
@@ -455,7 +457,7 @@ public:
       #endif
       for (std::size_t iCell=0; iCell < block.getNcells(); ++iCell) {
         if (mask[iCell]) {
-          cpu::Cell<T,DESCRIPTOR,Platform::CPU_SIMD> cell(block, iCell);
+          cpu::DataOnlyCell<T,DESCRIPTOR,Platform::CPU_SIMD> cell(block, iCell);
           if (auto cellStatistic = DYNAMICS().collide(cell, *_parameters)) {
             statistics.increment(cellStatistic.rho, cellStatistic.uSqr);
           }
@@ -505,6 +507,7 @@ public:
 
   void apply(ConcreteBlockLattice<T,DESCRIPTOR,Platform::CPU_SIMD>& block) override
   {
+    OLB_PROFILE_T("CPU_SIMD:Post:Apply", OPERATOR, DESCRIPTOR);
     if (_modified) {
       std::sort(_cells.begin(), _cells.end());
       _cells.erase(std::unique(_cells.begin(), _cells.end()), _cells.end());
@@ -519,6 +522,15 @@ public:
         cell.setCellId(iCell);
         OPERATOR().apply(cell);
       }
+    }
+  }
+
+  olb::AbstractParameters<T,DESCRIPTOR>& getParameters(ConcreteBlockLattice<T,DESCRIPTOR,Platform::CPU_SIMD>& block) override {
+    if constexpr (requires { typename OPERATOR::parameters; }) {
+      return block.template getData<OperatorParameters<OPERATOR>>().asAbstract();
+    } else {
+      static StaticParametersD<T,DESCRIPTOR> none;
+      return none;
     }
   }
 
@@ -562,6 +574,7 @@ public:
 
   void apply(ConcreteBlockLattice<T,DESCRIPTOR,Platform::CPU_SIMD>& block) override
   {
+    OLB_PROFILE_T("CPU_SIMD:Post:Apply", OPERATOR, DESCRIPTOR);
     if (_modified) {
       std::sort(_cells.begin(), _cells.end());
       _cells.erase(std::unique(_cells.begin(), _cells.end()), _cells.end());
@@ -576,6 +589,15 @@ public:
         cell.setCellId(iCell);
         OPERATOR().apply(cell, *_parameters);
       }
+    }
+  }
+
+  olb::AbstractParameters<T,DESCRIPTOR>& getParameters(ConcreteBlockLattice<T,DESCRIPTOR,Platform::CPU_SIMD>& block) override {
+    if constexpr (requires { typename OPERATOR::parameters; }) {
+      return block.template getData<OperatorParameters<OPERATOR>>().asAbstract();
+    } else {
+      static StaticParametersD<T,DESCRIPTOR> none;
+      return none;
     }
   }
 
@@ -613,6 +635,15 @@ public:
   void apply(ConcreteBlockLattice<T,DESCRIPTOR,Platform::CPU_SIMD>& block) override
   {
     OPERATOR().apply(block);
+  }
+
+  olb::AbstractParameters<T,DESCRIPTOR>& getParameters(ConcreteBlockLattice<T,DESCRIPTOR,Platform::CPU_SIMD>& block) override {
+    if constexpr (requires { typename OPERATOR::parameters; }) {
+      return block.template getData<OperatorParameters<OPERATOR>>().asAbstract();
+    } else {
+      static StaticParametersD<T,DESCRIPTOR> none;
+      return none;
+    }
   }
 
 };

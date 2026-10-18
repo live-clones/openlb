@@ -50,6 +50,36 @@ struct CollisionF {
       copyCell.template setField<FIELD>(FieldD<V,DESCRIPTOR,FIELD>(cell.template getField<FIELD>()));
     });
 
+    DYNAMICS().collide(copyCell, parameters);
+    return copyCell.template getField<descriptors::POPULATION>();
+  }
+};
+
+template <typename DYNAMICS>
+struct CollisionUsingAveragePopulationF {
+  using parameters_t = typename DYNAMICS::parameters;
+  using result_t = typename descriptors::POPULATION;
+  // Currently, no static knowlegde of accessed field by dynamics is supported which requires to write fields manually in the descriptor
+  // if DerivaitveF is used with CollisionF as in optimization examples
+  using fields_t = meta::list<descriptors::AVERAGE_POPULATION>;
+
+  template <typename CELL, typename PARAMETERS>
+  auto compute(CELL& cell, PARAMETERS& parameters) any_platform {
+    using V = typename CELL::value_t;
+    using DESCRIPTOR = typename CELL::descriptor_t;
+
+    // Instantiate copy of passed cell
+    CellD<V,DESCRIPTOR> copyCell;
+    DESCRIPTOR::fields_t::for_each([&](auto id) {
+      using FIELD = typename decltype(id)::type;
+      copyCell.template setField<FIELD>(FieldD<V,DESCRIPTOR,FIELD>(cell.template getField<FIELD>()));
+    });
+
+    // Use averaged populations instead of instantaneous populations
+    for (int iPop = 0; iPop < DESCRIPTOR::q; ++iPop) {
+      copyCell[iPop] = V(cell.template getFieldComponent<descriptors::AVERAGE_POPULATION>(iPop));
+    }
+
     // Apply dynamics collision on copy cell
     typename DYNAMICS::CollisionO{}.apply(copyCell, parameters);
     return copyCell.template getField<descriptors::POPULATION>();

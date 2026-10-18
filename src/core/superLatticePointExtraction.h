@@ -29,6 +29,9 @@
 
 #include <tuple>
 #include <map>
+#include <vector>
+#include <memory>
+#include <functional>
 
 namespace olb {
 
@@ -45,46 +48,81 @@ struct PointExtractionO {
     auto cell = cells.template get<names::Lattice1>();
     auto samplingR = point.template getField<fields::PHYS_R>();
     auto result = FUNCTOR().compute(cell, samplingR, parameters);
-    point.template setField<typename FUNCTOR::result_field>(result);
+    point.template setField<descriptors::packed_field_t<typename FUNCTOR::result_t>>(result);
   }
 };
 
-/// Convenience class for extracting data associated to set of arbitrary physical points
+/// Distributed extraction of a functor's result at a set of physical points
 template <typename T, typename DESCRIPTOR, typename FUNCTOR>
 class SuperLatticePointExtraction final {
+public:
+  static constexpr unsigned d = DESCRIPTOR::d;
+
+  using PointConsumerF    = std::function<void(const Vector<T,DESCRIPTOR::d>&)>;
+  using IndexedConsumerF  = std::function<void(std::size_t,const Vector<T,DESCRIPTOR::d>&)>;
+  using PointGeneratorF   = std::function<void(PointConsumerF)>;
+  using IndexedGeneratorF = std::function<void(IndexedConsumerF)>;
+
 private:
+  using POINT_DESCRIPTOR = descriptors::SPATIAL_DESCRIPTOR<
+    DESCRIPTOR::d,
+    fields::PHYS_R,
+    descriptors::packed_field_t<typename FUNCTOR::result_t>
+  >;
+
   SuperLattice<T,DESCRIPTOR>& _sLattice;
 
   std::vector<std::tuple<int,std::size_t,Vector<T,DESCRIPTOR::d>>> _rankLocalPoints;
   std::map<int,int> _rankLocalPointsSize;
 
-  SuperD<T,descriptors::D3<fields::PHYS_R,typename FUNCTOR::result_field>> _sampleD;
+  SuperD<T,POINT_DESCRIPTOR> _sampleD;
   SuperLatticePointCoupling<
     PointExtractionO<FUNCTOR>,
     meta::map<names::Lattice1, descriptors::VALUED_DESCRIPTOR<T,DESCRIPTOR>,
-              names::Points, descriptors::VALUED_DESCRIPTOR<T,descriptors::D3<fields::PHYS_R,typename FUNCTOR::result_field>>>
+              names::Points, descriptors::VALUED_DESCRIPTOR<T,POINT_DESCRIPTOR>>
   > _couplingO;
 
-  FieldArrayD<T,DESCRIPTOR,Platform::CPU_SISD,fields::PHYS_R>                 _extractionPointD;
-  FieldArrayD<T,DESCRIPTOR,Platform::CPU_SISD,typename FUNCTOR::result_field> _extractionResultD;
+  std::size_t _globalSize = 0;
+  std::vector<std::size_t> _globalIndices;
+  std::unique_ptr<FieldArrayD<T,DESCRIPTOR,Platform::CPU_SISD,fields::PHYS_R>> _localPointD;
+  std::unique_ptr<FieldArrayD<T,DESCRIPTOR,Platform::CPU_SISD,descriptors::packed_field_t<typename FUNCTOR::result_t>>> _localResultD;
 
-  void updateExtractionResultD(
-    FieldArrayD<T,DESCRIPTOR,Platform::CPU_SISD,typename FUNCTOR::result_field>&);
+  void updateExtractionResultD();
+  void build(const IndexedGeneratorF& generator);
 
 public:
-  SuperLatticePointExtraction(SuperLattice<T,DESCRIPTOR>& sLattice,
-                              const std::vector<Vector<T,DESCRIPTOR::d>>& points);
+  /// Generator yields points; the global index is the yield order
+  SuperLatticePointExtraction(
+    SuperLattice<T,DESCRIPTOR>& sLattice,
+    const PointGeneratorF& pointGenerator);
 
-  std::size_t getSize() const {
-    return _extractionPointD.getSize();
+  /// Generator yields (global index, point); the caller owns the indexing
+  SuperLatticePointExtraction(
+    SuperLattice<T,DESCRIPTOR>& sLattice,
+    const IndexedGeneratorF& pointGenerator);
+
+  SuperLatticePointExtraction(
+    SuperLattice<T,DESCRIPTOR>& sLattice,
+    const std::vector<Vector<T,DESCRIPTOR::d>>& points);
+
+  std::size_t getLocalSize() const {
+    return _localPointD ? _localPointD->getSize() : 0;
   }
 
-  Vector<T,DESCRIPTOR::d> getPhysR(std::size_t iExtracted) const {
-    return _extractionPointD.getField(iExtracted);
+  std::size_t getGlobalSize() const {
+    return _globalSize;
   }
 
-  auto getValue(std::size_t iExtracted) const {
-    return _extractionResultD.getField(iExtracted);
+  std::size_t getGlobalIndex(std::size_t iLocal) const {
+    return _globalIndices[iLocal];
+  }
+
+  Vector<T,DESCRIPTOR::d> getPhysR(std::size_t iLocal) const {
+    return _localPointD->getField(iLocal);
+  }
+
+  auto getValue(std::size_t iLocal) const {
+    return _localResultD->getField(iLocal);
   }
 
   template <typename FIELD>
@@ -93,7 +131,6 @@ public:
   }
 
   void update();
-
 };
 
 }

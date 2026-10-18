@@ -56,7 +56,7 @@ T RTLBMdynamicsMcHardy<T, DESCRIPTOR, MOMENTA>::computeEquilibrium( int iPop, T 
 
 
 template<typename T, typename DESCRIPTOR, typename MOMENTA>
-CellStatistic<T> RTLBMdynamicsMcHardy<T, DESCRIPTOR, MOMENTA>::collide( Cell<T,DESCRIPTOR>& cell, LatticeStatistics<T>& statistics )
+CellStatistic<T> RTLBMdynamicsMcHardy<T, DESCRIPTOR, MOMENTA>::collide( Cell<T,DESCRIPTOR>& cell, LatticeStatistics<T,DESCRIPTOR>& statistics )
 {
   std::array<double, DESCRIPTOR::q> feq = {};
   for ( int iPop = 0; iPop < DESCRIPTOR::q; ++iPop ) {
@@ -126,7 +126,7 @@ std::array<T,DESCRIPTOR::q> RTLBMdynamicsMcHardyRK<T,DESCRIPTOR,MOMENTA>::doColl
 }
 
 template<typename T, typename DESCRIPTOR, typename MOMENTA>
-CellStatistic<T> RTLBMdynamicsMcHardyRK<T, DESCRIPTOR, MOMENTA>::collide( Cell<T,DESCRIPTOR>& cell, LatticeStatistics<T>& statistics )
+CellStatistic<T> RTLBMdynamicsMcHardyRK<T, DESCRIPTOR, MOMENTA>::collide( Cell<T,DESCRIPTOR>& cell, LatticeStatistics<T,DESCRIPTOR>& statistics )
 {
   std::array<T,DESCRIPTOR::q> feq;
   std::array<T,DESCRIPTOR::q> f_pre_collision;

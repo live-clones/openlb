@@ -47,8 +47,6 @@ void StraightFdBoundaryProcessor2D<T, DESCRIPTOR, direction,
   V dx_u[DESCRIPTOR::d], dy_u[DESCRIPTOR::d];
   V rho, u[DESCRIPTOR::d];
 
-  auto& dynamics = cell.getDynamics();
-
   cell.computeRhoU(rho, u);
 
   interpolateGradients<0>(cell, dx_u);
@@ -58,8 +56,7 @@ void StraightFdBoundaryProcessor2D<T, DESCRIPTOR, direction,
   V dy_ux = dy_u[0];
   V dx_uy = dx_u[1];
   V dy_uy = dy_u[1];
-  V omega =
-      dynamics.getOmegaOrFallback(std::numeric_limits<V>::signaling_NaN());
+  V omega = cell.getOmegaOrFallback(std::numeric_limits<V>::signaling_NaN());
   V sToPi = -rho / descriptors::invCs2<V, DESCRIPTOR>() / omega;
   V pi[util::TensorVal<DESCRIPTOR>::n];
   pi[xx] = (V)2 * dx_ux * sToPi;
@@ -69,7 +66,7 @@ void StraightFdBoundaryProcessor2D<T, DESCRIPTOR, direction,
   // Computation of the particle distribution functions
   // according to the regularized formula
   V fEq[DESCRIPTOR::q] { };
-  dynamics.computeEquilibrium(cell, rho, u, fEq);
+  cell.computeEquilibrium(rho, u, fEq);
   for (int iPop = 0; iPop < DESCRIPTOR::q; ++iPop) {
     cell[iPop] = fEq[iPop] + equilibrium<DESCRIPTOR>::template fromPiToFneq<V>(iPop, pi);
   }
@@ -78,6 +75,55 @@ void StraightFdBoundaryProcessor2D<T, DESCRIPTOR, direction,
 template <typename T, typename DESCRIPTOR, int direction, int orientation>
 template <int deriveDirection, typename CELL, typename V>
 void StraightFdBoundaryProcessor2D<T, DESCRIPTOR, direction, orientation>::
+    interpolateGradients(CELL& cell, V velDeriv[DESCRIPTOR::d]) const any_platform
+{
+  fd::DirectedGradients2D<V, DESCRIPTOR, direction, orientation,
+                          direction ==
+                              deriveDirection>::interpolateVector(velDeriv,
+                                                                  cell);
+}
+
+/////////  StraightFdBoundaryProcessorOnDynamics2D ////////////////////////////
+
+template <typename T, typename DESCRIPTOR, typename DYNAMICS, int direction, int orientation>
+template <concepts::DynamicCell CELL, concepts::Parameters PARAMETERS>
+void StraightFdBoundaryProcessorOnDynamics2D<T, DESCRIPTOR, DYNAMICS, direction,
+                                             orientation>::apply(CELL& cell, PARAMETERS& parameters) any_platform
+{
+  using namespace olb::util::tensorIndices2D;
+  using V = typename CELL::value_t;
+
+  V dx_u[DESCRIPTOR::d], dy_u[DESCRIPTOR::d];
+  V rho, u[DESCRIPTOR::d];
+
+  typename DYNAMICS::MomentaF().computeRhoU(cell, rho, u);
+
+  interpolateGradients<0>(cell, dx_u);
+  interpolateGradients<1>(cell, dy_u);
+
+  V dx_ux = dx_u[0];
+  V dy_ux = dy_u[0];
+  V dx_uy = dx_u[1];
+  V dy_uy = dy_u[1];
+  V omega = parameters.template get<descriptors::OMEGA>();
+  V sToPi = -rho / descriptors::invCs2<V, DESCRIPTOR>() / omega;
+  V pi[util::TensorVal<DESCRIPTOR>::n];
+  pi[xx] = (V)2 * dx_ux * sToPi;
+  pi[yy] = (V)2 * dy_uy * sToPi;
+  pi[xy] = (dx_uy + dy_ux) * sToPi;
+
+  // Computation of the particle distribution functions
+  // according to the regularized formula
+  V fEq[DESCRIPTOR::q] { };
+  typename DYNAMICS::EquilibriumF().compute(cell, rho, u, fEq);
+  for (int iPop = 0; iPop < DESCRIPTOR::q; ++iPop) {
+    cell[iPop] = fEq[iPop] + equilibrium<DESCRIPTOR>::template fromPiToFneq<V>(iPop, pi);
+  }
+}
+
+template <typename T, typename DESCRIPTOR, typename DYNAMICS, int direction, int orientation>
+template <int deriveDirection, typename CELL, typename V>
+void StraightFdBoundaryProcessorOnDynamics2D<T, DESCRIPTOR, DYNAMICS, direction, orientation>::
     interpolateGradients(CELL& cell, V velDeriv[DESCRIPTOR::d]) const any_platform
 {
   fd::DirectedGradients2D<V, DESCRIPTOR, direction, orientation,
@@ -301,9 +347,7 @@ void OuterVelocityCornerProcessor2D<T, DESCRIPTOR, xNormal, yNormal>::apply(
   V dx_uy = dx_u[1];
   V dy_uy = dy_u[1];
 
-  auto& dynamics = cell.getDynamics();
-  V     omega =
-      dynamics.getOmegaOrFallback(std::numeric_limits<V>::signaling_NaN());
+  V     omega = cell.getOmegaOrFallback(std::numeric_limits<V>::signaling_NaN());
 
   V sToPi = -rho / descriptors::invCs2<V, DESCRIPTOR>() / omega;
   V pi[util::TensorVal<DESCRIPTOR>::n];
@@ -316,9 +360,125 @@ void OuterVelocityCornerProcessor2D<T, DESCRIPTOR, xNormal, yNormal>::apply(
   V u[DESCRIPTOR::d];
   cell.computeU(u);
   V fEq[DESCRIPTOR::q] { };
-  dynamics.computeEquilibrium(cell, rho, u, fEq);
+  cell.computeEquilibrium(rho, u, fEq);
   for (int iPop = 0; iPop < DESCRIPTOR::q; ++iPop) {
     cell[iPop] = fEq[iPop] + equilibrium<DESCRIPTOR>::template fromPiToFneq<V>(iPop, pi);
+  }
+}
+
+/////////// OuterVelocityCornerProcessorOnDynamics2D //////////////////////////
+
+template <typename T, typename DESCRIPTOR, typename DYNAMICS, int xNormal, int yNormal>
+template <concepts::DynamicCell CELL, concepts::Parameters PARAMETERS>
+void OuterVelocityCornerProcessorOnDynamics2D<T, DESCRIPTOR, DYNAMICS, xNormal, yNormal>::apply(
+    CELL& cell, PARAMETERS& parameters) any_platform
+{
+  using namespace olb::util::tensorIndices2D;
+  using V = typename CELL::value_t;
+
+  V rho10 = cell.neighbor({-1 * xNormal, -0 * yNormal}).computeRho();
+  V rho01 = cell.neighbor({-0 * xNormal, -1 * yNormal}).computeRho();
+
+  V rho20 = cell.neighbor({-2 * xNormal, -0 * yNormal}).computeRho();
+  V rho02 = cell.neighbor({-0 * xNormal, -2 * yNormal}).computeRho();
+
+  V rho = (V)2 / (V)3 * (rho01 + rho10) - (V)1 / (V)6 * (rho02 + rho20);
+
+  V dx_u[DESCRIPTOR::d], dy_u[DESCRIPTOR::d];
+  fd::DirectedGradients2D<V, DESCRIPTOR, 0, xNormal, true>::interpolateVector(
+      dx_u, cell);
+  fd::DirectedGradients2D<V, DESCRIPTOR, 1, yNormal, true>::interpolateVector(
+      dy_u, cell);
+  V dx_ux = dx_u[0];
+  V dy_ux = dy_u[0];
+  V dx_uy = dx_u[1];
+  V dy_uy = dy_u[1];
+
+  V omega = parameters.template get<descriptors::OMEGA>();
+
+  V sToPi = -rho / descriptors::invCs2<V, DESCRIPTOR>() / omega;
+  V pi[util::TensorVal<DESCRIPTOR>::n];
+  pi[xx] = (V)2 * dx_ux * sToPi;
+  pi[yy] = (V)2 * dy_uy * sToPi;
+  pi[xy] = (dx_uy + dy_ux) * sToPi;
+
+  // Computation of the particle distribution functions
+  // according to the regularized formula
+  V u[DESCRIPTOR::d];
+  typename DYNAMICS::MomentaF().computeU(cell, u);
+  V fEq[DESCRIPTOR::q] { };
+  typename DYNAMICS::EquilibriumF().compute(cell, rho, u, fEq);
+  for (int iPop = 0; iPop < DESCRIPTOR::q; ++iPop) {
+    cell[iPop] = fEq[iPop] + equilibrium<DESCRIPTOR>::template fromPiToFneq<V>(iPop, pi);
+  }
+}
+
+/////////// IncOuterVelocityCornerProcessor2D /////////////////////////////////////
+
+template <typename T, typename DESCRIPTOR, int xNormal, int yNormal>
+template <concepts::DynamicCell CELL>
+void IncOuterVelocityCornerProcessor2D<T, DESCRIPTOR, xNormal, yNormal>::apply(
+    CELL& cell) any_platform
+{
+  using namespace olb::util::tensorIndices2D;
+  using V = typename CELL::value_t;
+
+  V p10 = cell.neighbor({-1 * xNormal, -0 * yNormal}).computeRho();
+  V p01 = cell.neighbor({-0 * xNormal, -1 * yNormal}).computeRho();
+
+  V p20 = cell.neighbor({-2 * xNormal, -0 * yNormal}).computeRho();
+  V p02 = cell.neighbor({-0 * xNormal, -2 * yNormal}).computeRho();
+
+  V p = (V)2 / (V)3 * (p01 + p10) - (V)1 / (V)6 * (p02 + p20);
+  auto force = cell.template getField<descriptors::FORCE>();
+  auto rho = cell.template getField<descriptors::RHO>();
+  auto gradRho = cell.template getField<descriptors::NABLARHO>();
+  auto laplaceRho = cell.template getField<descriptors::LAPLACERHO>();
+  V tau = cell.template getField<descriptors::TAU_EFF>();
+
+  V dx_u[DESCRIPTOR::d], dy_u[DESCRIPTOR::d];
+  fd::DirectedGradients2D<V, DESCRIPTOR, 0, xNormal, true>::interpolateVector(
+      dx_u, cell);
+  fd::DirectedGradients2D<V, DESCRIPTOR, 1, yNormal, true>::interpolateVector(
+      dy_u, cell);
+  V dx_ux = dx_u[0];
+  V dy_ux = dy_u[0];
+  V dx_uy = dx_u[1];
+  V dy_uy = dy_u[1];
+
+  V sToPi = -rho / descriptors::invCs2<V, DESCRIPTOR>() * tau;
+  V pi[util::TensorVal<DESCRIPTOR>::n];
+  pi[xx] = (V)2 * dx_ux * sToPi;
+  pi[yy] = (V)2 * dy_uy * sToPi;
+  pi[xy] = (dx_uy + dy_ux) * sToPi;
+
+  // Computation of the particle distribution functions
+  // according to the regularized formula
+  V u[DESCRIPTOR::d];
+  cell.computeU(u);
+  V fEq[DESCRIPTOR::q] { };
+  cell.getDynamics().computeEquilibrium(cell, p, u, fEq);
+
+  V u_gradRho = 0;
+  for (int iD=0; iD < DESCRIPTOR::d; iD++) {
+    u_gradRho += u[iD]*gradRho[iD];
+  }
+  for (int iAlpha=0; iAlpha < DESCRIPTOR::d; ++iAlpha) {
+    for (int iBeta=iAlpha; iBeta < DESCRIPTOR::d; ++iBeta) {
+      pi[ static_cast<int>( iAlpha * (DESCRIPTOR::d - ( iAlpha - 1 ) * 0.5) ) ] += V{0.5}/descriptors::invCs2<V,DESCRIPTOR>()*u_gradRho*(iAlpha == iBeta);
+    }
+  }
+
+  for (int iPop=0; iPop < DESCRIPTOR::q; ++iPop) {
+    cell[iPop] = fEq[iPop];
+    V c_F = 0;
+    for (int iD=0; iD < DESCRIPTOR::d; iD++) {
+      c_F += descriptors::c<DESCRIPTOR>(iPop,iD)*force[iD]*(rho + laplaceRho/4.);
+    }
+    V fNeq = equilibrium<DESCRIPTOR>::template fromPiToFneq<V>(iPop, pi) -
+              descriptors::t<V,DESCRIPTOR>(iPop) * V{0.5} * (u_gradRho +
+              descriptors::invCs2<V,DESCRIPTOR>()*c_F);
+    cell[iPop] += fNeq;
   }
 }
 

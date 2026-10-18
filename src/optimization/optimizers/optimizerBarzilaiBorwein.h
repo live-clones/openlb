@@ -92,6 +92,34 @@ public:
 
   };
 
+  OptimizerBarzilaiBorwein(int dimCtrl,
+                           OptimizerParametersD<S>& optimizerParameters,
+                           std::vector<OptimizerLogType> gplotAnalysis = {OptimizerLogType::objective}
+                          ) :
+    OptimizerBarzilaiBorwein(
+      dimCtrl,
+      optimizerParameters.template get<parameters::optimizer::EPS>(),
+      optimizerParameters.template get<parameters::optimizer::MAX_OPTIMIZATION_STEPS>(),
+      optimizerParameters.template get<parameters::linesearch::INITIAL_STEP_SIZE>(),
+      optimizerParameters.template get<parameters::linesearch::MAX_STEP_ATTEMPTS>(),
+      optimizerParameters.template get<parameters::linesearch::STEP_CONDITION>(),
+      optimizerParameters.template get<parameters::optimizer::VERBOSE>(),
+      optimizerParameters.template get<parameters::optimizer::FILE_NAME>(),
+      optimizerParameters.template get<parameters::optimizer::LOG_FILE_NAME>(),
+      optimizerParameters.template get<parameters::optimizer::WITH_UPPER_BOUND>(),
+      optimizerParameters.template get<parameters::optimizer::UPPER_BOUND>(),
+      optimizerParameters.template get<parameters::optimizer::WITH_LOWER_BOUND>(),
+      optimizerParameters.template get<parameters::optimizer::LOWER_BOUND>(),
+      optimizerParameters.template get<parameters::optimizer::VECTOR_BOUNDS>(),
+      optimizerParameters.template get<parameters::optimizer::CONTROL_EPS>(),
+      gplotAnalysis)
+  {
+    OstreamManager clout(std::cout, "OptimizerBarzilaiBorwein");
+    clout << io::text::section("Optimizer parameters") << std::endl;
+    optimizerParameters.print(clout);
+    clout << std::endl;
+  }
+
   void checkDerivativeZero()
   {
     S normDir = util::euklidN(this->_direction.data(), this->_dimCtrl);

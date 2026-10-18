@@ -189,13 +189,16 @@ struct ReferenceLatticeWithWallModelPorosityF : public ReferenceLatticePorosityF
       const Vector<int,DESCRIPTOR::d> discreteR = round((rotatedPhysR - shiftedLowerR) / refDeltaX[iElement]);
 
       const Vector<V*,DESCRIPTOR::d> y1s{refLattice, iElement};
-
-      Vector<V,DESCRIPTOR::d> y1{y1s, projection * discreteR};
-      for (int iPop=1; iPop < descriptors::q<DESCRIPTOR>(); ++iPop) {
-        y1 += Vector<V,DESCRIPTOR::d>{y1s, projection * (discreteR + descriptors::c<DESCRIPTOR>(iPop))};
+      Vector<V,DESCRIPTOR::d> y1{};
+      unsigned nonZero = 0;
+      for (int iPop=0; iPop < descriptors::q<DESCRIPTOR>(); ++iPop) {
+        auto y1N = Vector<V,DESCRIPTOR::d>{y1s, projection * (discreteR + descriptors::c<DESCRIPTOR>(iPop))};
+        y1      += y1N;
+        nonZero += util::norm<DESCRIPTOR::d>(y1N) != V(0);
       }
-      y1 /= descriptors::q<DESCRIPTOR>();
-
+      if (nonZero > 0) {
+        y1 /= nonZero;
+      }
       return util::matrixVectorProduct(inverseRotation, y1);
     } else {
       return Vector<V,DESCRIPTOR::d>{};
@@ -293,42 +296,30 @@ struct ArbitrarilyRotateableReferenceLatticeWithWallModelPorosityF {
   }
 
   template <typename PARAMETERS, typename PHYS_R>
-  auto computeU(PARAMETERS& params,
-                PHYS_R& physR,
-                unsigned iElement) any_platform {
+  auto computeU(PARAMETERS& params, PHYS_R& physR, unsigned iElement) any_platform {
     using V = typename PARAMETERS::value_t;
     using DESCRIPTOR = typename PARAMETERS::descriptor_t;
 
     const auto pivots = params.template get<fields::array_of<fields::fsi::ELEMENT_PIVOT>>();
-    const auto rotations = params.template get<fields::array_of<fields::fsi::ELEMENT_ROTATION_MATRIX>>();
-
     const auto translationUs = params.template get<fields::array_of<fields::fsi::ELEMENT_U_TRANSLATION>>();
     const auto rotationUs = params.template get<fields::array_of<fields::fsi::ELEMENT_U_ROTATION>>();
 
     const Vector<V,DESCRIPTOR::d> elementPivotR{pivots, iElement};
-    const FieldD<V,DESCRIPTOR,fields::fsi::ELEMENT_ROTATION_MATRIX> elementRotation{rotations, iElement};
-
     const Vector<V,DESCRIPTOR::d> shiftedPhysR = physR - elementPivotR;
-    const auto rotatedPhysR = util::matrixVectorProduct(util::inverseRotation(elementRotation),
-                                                        shiftedPhysR);
 
     Vector<V,DESCRIPTOR::d> u{translationUs, iElement};
     if constexpr (DESCRIPTOR::d == 2) {
-      u[0] -= rotationUs[iElement] * rotatedPhysR[1];
-      u[1] += rotationUs[iElement] * rotatedPhysR[0];
+      u[0] -= rotationUs[iElement] * shiftedPhysR[1];
+      u[1] += rotationUs[iElement] * shiftedPhysR[0];
     } else {
-      u += crossProduct3D(Vector<V,DESCRIPTOR::d>{rotationUs, iElement},
-                          rotatedPhysR);
+      u += crossProduct3D(Vector<V,DESCRIPTOR::d>{rotationUs, iElement}, shiftedPhysR);
     }
 
-    return util::matrixVectorProduct(elementRotation, u)
-         * params.template get<fields::converter::PHYS_VELOCITY>();
+    return u * params.template get<fields::converter::PHYS_VELOCITY>();
   }
 
   template <typename PARAMETERS, typename PHYS_R>
-  auto computeY1(PARAMETERS& params,
-                 PHYS_R& physR,
-                 unsigned iElement) any_platform {
+  auto computeY1(PARAMETERS& params, PHYS_R& physR, unsigned iElement) any_platform {
     using V = typename PARAMETERS::value_t;
     using DESCRIPTOR = typename PARAMETERS::descriptor_t;
 
@@ -343,12 +334,9 @@ struct ArbitrarilyRotateableReferenceLatticeWithWallModelPorosityF {
     const FieldD<V,DESCRIPTOR,fields::fsi::ELEMENT_ROTATION_MATRIX> elementRotation{rotations, iElement};
 
     const Vector<V,DESCRIPTOR::d> shiftedPhysR = physR - elementPivotR;
-    const auto rotatedPhysR = util::matrixVectorProduct(util::inverseRotation(elementRotation),
-                                                        shiftedPhysR);
+    const auto rotatedPhysR = util::matrixVectorProduct(util::inverseRotation(elementRotation), shiftedPhysR);
     const Vector<V,DESCRIPTOR::d> shiftedLowerR = elementLowerR - elementPivotR;
     const Vector<V,DESCRIPTOR::d> shiftedUpperR = elementUpperR - elementPivotR;
-
-    const auto inverseRotation = elementRotation;
 
     const auto physDeltaX = params.template get<fields::converter::PHYS_DELTA_X>();
 
@@ -358,17 +346,21 @@ struct ArbitrarilyRotateableReferenceLatticeWithWallModelPorosityF {
       const auto refLattice = params.template get<fields::array_of<fields::fsi::ELEMENT_REFERENCE_Y1>>();
 
       const Vector<std::size_t,DESCRIPTOR::d> projection{refProjection, iElement};
-      const Vector<int,DESCRIPTOR::d> discreteR = round((rotatedPhysR - shiftedLowerR) / refDeltaX[iElement]);
+      const Vector<int,DESCRIPTOR::d> discreteR = round((rotatedPhysR - shiftedLowerR)
+                                                       / refDeltaX[iElement]);
 
       const Vector<V*,DESCRIPTOR::d> y1s{refLattice, iElement};
-
-      Vector<V,DESCRIPTOR::d> y1{y1s, projection * discreteR};
-      for (int iPop=1; iPop < descriptors::q<DESCRIPTOR>(); ++iPop) {
-        y1 += Vector<V,DESCRIPTOR::d>{y1s, projection * (discreteR + descriptors::c<DESCRIPTOR>(iPop))};
+      Vector<V,DESCRIPTOR::d> y1{};
+      unsigned nonZero = 0;
+      for (int iPop=0; iPop < descriptors::q<DESCRIPTOR>(); ++iPop) {
+        auto y1N = Vector<V,DESCRIPTOR::d>{y1s, projection * (discreteR + descriptors::c<DESCRIPTOR>(iPop))};
+        y1      += y1N;
+        nonZero += util::norm<DESCRIPTOR::d>(y1N) != V(0);
       }
-      y1 /= descriptors::q<DESCRIPTOR>();
-
-      return util::matrixVectorProduct(inverseRotation, y1);
+      if (nonZero > 0) {
+        y1 /= nonZero;
+      }
+      return util::matrixVectorProduct(elementRotation, y1);
     } else {
       return Vector<V,DESCRIPTOR::d>{};
     }

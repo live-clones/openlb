@@ -50,8 +50,7 @@ ConcreteBlockD<T,DESCRIPTOR,PLATFORM>::ConcreteBlockD(Vector<int,DESCRIPTOR::d> 
     auto& fieldArray = _data.template get<Array<field>>();
     _descriptorFields.template set<field>(&fieldArray);
     _communicatables[typeid(field)] = std::unique_ptr<Communicatable>(new ConcreteCommunicatable<
-      ColumnVector<typename ImplementationOf<typename field::template column_type<T>,PLATFORM>::type,
-                   DESCRIPTOR::template size<field>()>
+      typename std::decay_t<decltype(fieldArray)>::base_type
     >(fieldArray));
   });
 }
@@ -96,8 +95,7 @@ auto& ConcreteBlockD<T,DESCRIPTOR,PLATFORM>::getData()
         _data.template setSerialization<FIELD_TYPE>(true);
       }
       _communicatables[typeid(field_t)] = std::unique_ptr<Communicatable>(new ConcreteCommunicatable<
-        ColumnVector<typename ImplementationOf<typename field_t::template column_type<T>,PLATFORM>::type,
-                   DESCRIPTOR::template size<field_t>()>
+        typename concrete_data_t::base_type
       >(data));
     }
     return data;

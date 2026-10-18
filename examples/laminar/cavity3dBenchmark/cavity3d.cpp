@@ -26,15 +26,22 @@
 // Undefine to test a minimal bounce back cavity
 #define LID_DRIVEN
 //// Use bounce back (velocity) boundaries instead of local velocity
-//#define LID_DRIVEN_BOUNCE_BACK
-//// Use single fused collision kernel instead of individual dispatch on GPUs
-//#define GPU_USE_FUSED_COLLISION
+#define LID_DRIVEN_BOUNCE_BACK
 
 using namespace olb;
 using namespace olb::names;
 
 // === Step 1: Declarations ===
-using MyCase = Case<NavierStokes, Lattice<float, descriptors::D3Q19<>>>;
+// Build with FEATURES=FP16 to store POPULATION in f16; compute stays float.
+#ifdef FEATURE_FP16
+using MyCase = Case<NavierStokes,
+                    Lattice<float, descriptors::D3Q19<descriptors::VELOCITY,
+                              descriptors::tag::store_precision<descriptors::POPULATION,
+                                                                FieldPrecision::F16>>>>;
+#else
+using MyCase = Case<NavierStokes,
+                    Lattice<float, descriptors::D3Q19<descriptors::VELOCITY>>>;
+#endif
 
 namespace olb::parameters {
 
@@ -50,12 +57,26 @@ Mesh<MyCase::value_t, MyCase::d> createMesh(MyCase::ParametersD& parameters) {
   Vector<T, 3> extend(length + 0.5 * physDeltaX);
   IndicatorCuboid3D<T> cuboid(extend, origin);
 
-  Mesh<T, MyCase::d> mesh(cuboid, physDeltaX, singleton::mpi().getSize());
+  OstreamManager clout(std::cout, "debug");
+  clout << "Meshing…" << std::endl;;
+
+  Mesh<T,MyCase::d> mesh(cuboid,
+                         physDeltaX,
+                           parameters.get<parameters::CUBOIDS_PER_PROCESS>()
+                         * singleton::mpi().getSize(),
+                         "splitOnly");
   mesh.setOverlap(parameters.get<parameters::OVERLAP>());
+  mesh.getCuboidDecomposition().buildNeighborCache(parameters.get<parameters::OVERLAP>());
+
+  clout << "Done." << std::endl;;
+
   return mesh;
 }
 
 void prepareGeometry(MyCase& myCase) {
+  OstreamManager clout(std::cout, "debug");
+  clout << "Prepare geometry…" << std::endl;
+
   using T          = MyCase::value_t;
   auto& sGeometry  = myCase.getGeometry();
   auto& parameters = myCase.getParameters();
@@ -77,14 +98,17 @@ void prepareGeometry(MyCase& myCase) {
 
   sGeometry.rename(2, 3, 1, lid);
 
-  const bool verbose = false;
-  sGeometry.clean(verbose);
+  //sGeometry.clean(true);
+  //sGeometry.innerClean(true);
+  //sGeometry.checkForErrors(true);
 
-  sGeometry.innerClean(verbose);
-  sGeometry.checkForErrors(verbose);
+  clout << "Done." << std::endl;;
 }
 
 void prepareLattice(MyCase& myCase) {
+  OstreamManager clout(std::cout, "debug");
+  clout << "Prepare lattice…" << std::endl;;
+
   using T          = MyCase::value_t;
   using DESCRIPTOR = MyCase::descriptor_t_of<NavierStokes>;
   auto& sGeometry  = myCase.getGeometry();
@@ -121,40 +145,13 @@ void prepareLattice(MyCase& myCase) {
   boundary::set<boundary::BounceBack>(sLattice, sGeometry, 3);
 #endif
 
-  // Alternative GPU-specific performance tuning option
-#if defined(PLATFORM_GPU_CUDA) && defined(GPU_USE_FUSED_COLLISION)
-#ifdef LID_DRIVEN_BOUNCE_BACK
-  // Enable non-virtual dispatching of common collision operators (optional, improves performance)
-  sLattice.forBlocksOnPlatform<Platform::GPU_CUDA>([](auto& block) {
-    block.setCollisionO(gpu::cuda::getFusedCollisionO<T, DESCRIPTOR,
-                                                      BGKdynamics<T, DESCRIPTOR>,
-                                                      BounceBack<T, DESCRIPTOR>,
-                                                      BounceBackVelocity<T, DESCRIPTOR>>());
-  });
-
-#else // Local velocity boundaries
-  sLattice.forBlocksOnPlatform<Platform::GPU_CUDA>([](auto& block) {
-    block.setCollisionO(
-        gpu::cuda::getFusedCollisionO<T, DESCRIPTOR,
-                                      BGKdynamics<T, DESCRIPTOR>,
-                                      CombinedRLBdynamics<T, DESCRIPTOR, BGKdynamics<T, DESCRIPTOR>,
-                                                          momenta::RegularizedVelocityBoundaryTuple<0, -1>>,
-                                      CombinedRLBdynamics<T, DESCRIPTOR, BGKdynamics<T, DESCRIPTOR>,
-                                                          momenta::RegularizedVelocityBoundaryTuple<0, 1>>,
-                                      CombinedRLBdynamics<T, DESCRIPTOR, BGKdynamics<T, DESCRIPTOR>,
-                                                          momenta::RegularizedVelocityBoundaryTuple<1, -1>>,
-                                      CombinedRLBdynamics<T, DESCRIPTOR, BGKdynamics<T, DESCRIPTOR>,
-                                                          momenta::RegularizedVelocityBoundaryTuple<1, 1>>,
-                                      CombinedRLBdynamics<T, DESCRIPTOR, BGKdynamics<T, DESCRIPTOR>,
-                                                          momenta::RegularizedVelocityBoundaryTuple<2, -1>>,
-                                      CombinedRLBdynamics<T, DESCRIPTOR, BGKdynamics<T, DESCRIPTOR>,
-                                                          momenta::RegularizedVelocityBoundaryTuple<2, 1>>>());
-  });
-#endif
-#endif // PLATFORM_GPU_CUDA
+  clout << "Done." << std::endl;;
 }
 
 void setInitialValues(MyCase& myCase) {
+  OstreamManager clout(std::cout, "debug");
+  clout << "Set initial values…" << std::endl;
+
   auto& sLattice = myCase.getLattice(NavierStokes {});
   auto& sGeometry = myCase.getGeometry();
 
@@ -167,11 +164,15 @@ void setInitialValues(MyCase& myCase) {
     sLattice.getUnitConverter().getLatticeRelaxationFrequency());
 
   sLattice.initialize();
+
+  clout << "Done." << std::endl;;
 }
 
 void getResults(MyCase& myCase) {
-  using T        = MyCase::value_t;
-  auto& sLattice = myCase.getLattice(NavierStokes {});
+  using T          = MyCase::value_t;
+  using DESCRIPTOR = MyCase::descriptor_t_of<NavierStokes>;
+
+  auto& sLattice = myCase.getLattice(NavierStokes{});
 
   SuperVTMwriter3D<T> vtmWriter("cavity3d");
   const auto&         converter = sLattice.getUnitConverter();
@@ -179,16 +180,22 @@ void getResults(MyCase& myCase) {
   SuperLatticeCuboid3D       cuboidF(sLattice);
   SuperLatticeRank3D         rankF(sLattice);
   SuperLatticePhysVelocity3D velocityF(sLattice, converter);
+  SuperLatticePhysField3D<T,DESCRIPTOR,fields::moments::U> velocityFieldF(sLattice, converter.getConversionFactorVelocity());
+  velocityFieldF.getName() = "moments::U";
   SuperLatticePhysPressure3D pressureF(sLattice, converter);
 
   vtmWriter.write(cuboidF);
   vtmWriter.write(rankF);
   vtmWriter.write(velocityF);
+  vtmWriter.write(velocityFieldF);
   vtmWriter.write(pressureF);
 }
 
 void simulate(MyCase& myCase) {
-  using T          = MyCase::value_t;
+  OstreamManager clout(std::cout, "debug");
+
+  clout << "Simulating…" << std::endl;
+
   auto& sLattice   = myCase.getLattice(NavierStokes {});
   auto& parameters = myCase.getParameters();
 
@@ -197,45 +204,25 @@ void simulate(MyCase& myCase) {
     getResults(myCase);
   }
 
-  for (std::size_t iT = 0; iT < 10; ++iT) {
+
+  myCase.setReporter<reporter::Timer>("timer", /*writeCsv=*/true);
+
+  const std::size_t maxT = parameters.get<parameters::TIME_STEPS>();
+  for (std::size_t iT = 0; iT < maxT; ++iT) {
     sLattice.collideAndStream();
+    myCase.report(iT);
   }
-
-#ifdef PLATFORM_GPU_CUDA
-  gpu::cuda::device::synchronize();
-#endif
-
-  util::Timer<T> timer(parameters.get<parameters::TIME_STEPS>(),
-                       myCase.getGeometry().getStatistics().getNvoxel());
-  timer.start();
-
-  for (std::size_t iT=0; iT < parameters.get<parameters::TIME_STEPS>(); ++iT) {
-    sLattice.collideAndStream();
-  }
-
-#ifdef PLATFORM_GPU_CUDA
-  gpu::cuda::device::synchronize();
-#endif
-
-  timer.stop();
-  timer.update(parameters.get<parameters::TIME_STEPS>());
-
-  sLattice.setProcessingContext(ProcessingContext::Evaluation);
-
-  if (singleton::mpi().isMainProcessor()) {
-    std::cout << parameters.get<parameters::RESOLUTION>() << ", " << parameters.get<parameters::TIME_STEPS>() << ", "
-              << parameters.get<parameters::CUBOIDS_PER_PROCESS>() << ", " << singleton::mpi().getSize() << ", "
-#ifdef PARALLEL_MODE_OMP
-              << singleton::omp().getSize() << ", "
-#else
-              << 1 << ", "
-#endif
-              << timer.getTotalMLUPs() << std::endl;
-  }
+  myCase.finalize(maxT);
 
   if (parameters.get<parameters::VTK_ENABLED>()) {
+    sLattice.setProcessingContext(ProcessingContext::Evaluation);
     getResults(myCase);
   }
+
+  clout << "Done." << std::endl;
+
+  singleton::mpi().barrier();
+  singleton::exit(0);
 }
 
 int main(int argc, char** argv) {
@@ -246,18 +233,14 @@ int main(int argc, char** argv) {
   {
     using namespace olb::parameters;
     myCaseParameters.set<RESOLUTION>(100);
-    myCaseParameters.set<TIME_STEPS>(100);
+    myCaseParameters.set<TIME_STEPS>(1000);
+    myCaseParameters["reporter"]["timer"].set<LATTICE_ITER_T>(100);
     myCaseParameters.set<PHYS_CHAR_LENGTH>(1.0);
-    myCaseParameters.set<VTK_ENABLED>(true);
+    myCaseParameters.set<VTK_ENABLED>(false);
     myCaseParameters.set<CUBOIDS_PER_PROCESS>(1);
-    myCaseParameters.set<PHYS_DELTA_X>([&] {
-      return myCaseParameters.get<PHYS_CHAR_LENGTH>() / myCaseParameters.get<RESOLUTION>();
+    myCaseParameters.set<PHYS_DELTA_X>([](MyCase::ParametersD& p) {
+      return p.get<PHYS_CHAR_LENGTH>() / p.get<RESOLUTION>();
     });
-  }
-  myCaseParameters.fromCLI(argc, argv);
-
-  if (myCaseParameters.get<parameters::VTK_ENABLED>()) {
-    singleton::directories().setOutputDir("./tmp/");
   }
 
   /// === Step 3: Create Mesh ===

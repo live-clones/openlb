@@ -50,10 +50,8 @@ struct INLET_PRESSURE : public descriptors::FIELD_BASE<1> { };
 using MyCase = Case<
   NavierStokes, Lattice<double, descriptors::D2Q9<>>
 >;
-using MyADfCase = Case<
-  NavierStokes, Lattice<util::ADf<double,1>, descriptors::D2Q9<>>
->;
-//using MyOptiCase = OptiCaseFDQ<
+using MyADfCase = MyCase::exchange_value_t<util::ADf<double,1>>;
+
 using MyOptiCase = OptiCaseADf<
   Controlled, MyCase,
   Derivatives, MyADfCase
@@ -169,8 +167,8 @@ void setInitialValues(CASE& myCase) {
   sLattice.initialize();
 }
 
-template<typename CASE>
-void getResults(CASE& myCase, std::size_t iT, util::Timer<typename CASE::value_t>& timer, bool hasConverged) {
+template<typename CASE, typename TIMER>
+void getResults(CASE& myCase, TIMER& timer, std::size_t iT, bool hasConverged) {
   using T = CASE::value_t;
   auto& sLattice = myCase.getLattice(NavierStokes{});
   auto& converter = sLattice.getUnitConverter();
@@ -210,7 +208,7 @@ void simulate(CASE& myCase) {
   for (std::size_t iT=0 ; iT < converter.getLatticeTime(maxPhysT); ++iT ) {
     if ( converge.hasConverged() ) {
       std::cout << "Simulation converged." << std::endl;
-      getResults(myCase, iT, timer, converge.hasConverged());
+      getResults(myCase, timer, iT, converge.hasConverged());
       break;
     }
     sLattice.collideAndStream();
@@ -220,26 +218,23 @@ void simulate(CASE& myCase) {
   timer.printSummary();
 }
 
-template <typename CASE>
 void setInitialControls(MyOptiCase& optiCase) {
-  using T = CASE::value_t;
+  using T = MyCase::value_t;
   std::vector<T> control({optiCase.getCase(Controlled{}).getParameters().template get<parameters::INLET_PRESSURE>()});
   optiCase.getController().set(control);
 }
 
-template <typename CASE>
-void applyControls(MyOptiCase& optiCase) {
-  using T = CASE::value_t;
-  std::vector<T> control = optiCase.getController<T>().get();
-  optiCase.getCaseByType<T>().getParameters().template set<parameters::INLET_PRESSURE>(control[0]);
+template <typename CASE, typename CONTROLLER>
+void applyControls(CASE& myCase, CONTROLLER& controller) {
+  auto control = controller.get();
+  myCase.getParameters().template set<parameters::INLET_PRESSURE>(control[0]);
 }
 
 /// Compute squared error between simulated and wanted mass flow rate
 template <typename CASE>
-CASE::value_t massFlowError(MyOptiCase& optiCase)
+CASE::value_t massFlowError(CASE& myCase)
 {
   using T = CASE::value_t;
-  auto& myCase = optiCase.getCaseByType<T>();
   auto& sLattice = myCase.getLattice(NavierStokes{});
   auto& superGeometry = myCase.getGeometry();
   auto& converter = sLattice.getUnitConverter();
@@ -265,23 +260,25 @@ CASE::value_t massFlowError(MyOptiCase& optiCase)
   return 0.5 * (res - wantedRes) * (res - wantedRes);
 }
 
-template <typename CASE>
-CASE::value_t computeObjective(MyOptiCase& optiCase) {
-  auto& myCase = optiCase.getCaseByType<typename CASE::value_t>();
+template <typename NAME>
+auto computeObjective(MyOptiCase& optiCase, NAME) {
+  using T = MyOptiCase::case_t<NAME>::value_t;
+  auto& myCase = optiCase.getCase(NAME{});
+  auto& controller = optiCase.getController<T>();
+
   myCase.resetLattices();
-  applyControls<CASE>(optiCase);
+  applyControls(myCase, controller);
   prepareGeometry(myCase);
   prepareLattice(myCase);
   setInitialValues(myCase);
   simulate(myCase);
-  return massFlowError<CASE>(optiCase);
+  return massFlowError(myCase);
 }
 
 int main( int argc, char* argv[] )
 {
   // === 1st Step: Initialization ===
   initialize( &argc, &argv );
-  using ADf = util::ADf<double,1>;
 
   // === Step 2: Set Parameters ===
   MyCase::ParametersD myCaseParametersD;
@@ -295,17 +292,7 @@ int main( int argc, char* argv[] )
     myCaseParametersD.set<REFERENCE_INLET_PRESSURE>(  0.000659);
     myCaseParametersD.set<INLET_PRESSURE          >(    0.0001);
   }
-  MyADfCase::ParametersD myADfCaseParametersD;
-  {
-    using namespace parameters;
-    myADfCaseParametersD.set<RESOLUTION              >(                50);
-    myADfCaseParametersD.set<DOMAIN_EXTENT           >({ADf(2.), ADf(1.)});
-    myADfCaseParametersD.set<REYNOLDS                >(          ADf(10.));
-    myADfCaseParametersD.set<MAX_PHYS_T              >(         ADf( 30.));
-    myADfCaseParametersD.set<WANTED_MASS_FLOW        >(   ADf(0.00026159));
-    myADfCaseParametersD.set<REFERENCE_INLET_PRESSURE>(     ADf(0.000659));
-    myADfCaseParametersD.set<INLET_PRESSURE          >(       ADf(0.0001));
-  }
+  auto myADfCaseParametersD = myCaseParametersD.copyAs<MyADfCase::value_t>();
 
   // === Step 3: Create Mesh ===
   auto mesh = createMesh(myCaseParametersD);
@@ -323,14 +310,28 @@ int main( int argc, char* argv[] )
   optiCase.setCase<Derivatives>(myADfCase);
 
   // Define initial values for the control
-  setInitialControls<MyCase>(optiCase);
+  setInitialControls(optiCase);
 
   // Define objective computation routine
-  optiCase.setObjective(computeObjective<MyCase>, computeObjective<MyADfCase>);
+  optiCase.setObjective([](auto& optiCase, auto name) {
+    return computeObjective(optiCase, name);
+  });
+
+  OptimizerParametersD<MyCase::value_t> optiParameters;
+  {
+    using namespace parameters;
+    optiParameters.set<optimizer::EPS>(1.e-7);
+    optiParameters.set<optimizer::MAX_OPTIMIZATION_STEPS>(20);
+    optiParameters.set<linesearch::MAX_STEP_ATTEMPTS>(10);
+    optiParameters.set<optimizer::LOG_FILE_NAME>("log");
+    optiParameters.set<optimizer::WITH_UPPER_BOUND>(true);
+    optiParameters.set<optimizer::UPPER_BOUND>(0.01);
+    optiParameters.set<optimizer::WITH_LOWER_BOUND>(true);
+    optiParameters.set<optimizer::CONTROL_EPS>(0.);
+  }
 
   OptimizerLBFGS<MyCase::value_t,std::vector<MyCase::value_t>> optimizer(
-    1, 1.e-7, 20, 1., 10, "StrongWolfe", 20, 1.e-4, true, "", "log",
-    true, 0.01, true, 0., false, 0., true,
-    {OptimizerLogType::value, OptimizerLogType::control, OptimizerLogType::derivative});
+    1, optiParameters,
+    {OptimizerLogType::objective, OptimizerLogType::control, OptimizerLogType::derivative});
   optimizer.optimize(optiCase);
 }

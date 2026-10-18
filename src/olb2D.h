@@ -15,3 +15,4 @@
 #include <fsi/fsi.h>
 #include <refinement/refinement.h>
 #include <uq/uq.h>
+#include <structuralmechanics/structuralmechanics.h>

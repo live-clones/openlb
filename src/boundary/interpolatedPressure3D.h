@@ -49,28 +49,13 @@ std::optional<DynamicsPromise<T,DESCRIPTOR>> getDynamics(DiscreteNormalType type
                                                          DiscreteNormal<DESCRIPTOR> n) {
   switch (type) {
   case DiscreteNormalType::Flat:
-    if (n[0] != 0 && n[0] == -1) {
-      return meta::id<typename MixinDynamics::template exchange_momenta<momenta::BasicDirichletPressureBoundaryTuple<0,-1>>>{};
-    }
-    else if (n[0] != 0 && n[0] == 1) {
-      return meta::id<typename MixinDynamics::template exchange_momenta<momenta::BasicDirichletPressureBoundaryTuple<0,1>>>{};
-    }
-    else if (n[1] != 0 && n[1] == -1) {
-      return meta::id<typename MixinDynamics::template exchange_momenta<momenta::BasicDirichletPressureBoundaryTuple<1,-1>>>{};
-    }
-    else if (n[1] != 0 && n[1] == 1) {
-      return meta::id<typename MixinDynamics::template exchange_momenta<momenta::BasicDirichletPressureBoundaryTuple<1,1>>>{};
-    }
-    else if (n[2] != 0 && n[2] == -1) {
-      return meta::id<typename MixinDynamics::template exchange_momenta<momenta::BasicDirichletPressureBoundaryTuple<2,-1>>>{};
-    }
-    else if (n[2] != 0 && n[2] == 1) {
-      return meta::id<typename MixinDynamics::template exchange_momenta<momenta::BasicDirichletPressureBoundaryTuple<2,1>>>{};
-    }
-    else {
-      return std::nullopt;
-    }
-
+    if (n[0] == -1) return meta::id<typename MixinDynamics::template exchange_momenta<momenta::BasicDirichletPressureBoundaryTuple<0,-1>>>{};
+    if (n[0] == 1)  return meta::id<typename MixinDynamics::template exchange_momenta<momenta::BasicDirichletPressureBoundaryTuple<0,1>>>{};
+    if (n[1] == -1) return meta::id<typename MixinDynamics::template exchange_momenta<momenta::BasicDirichletPressureBoundaryTuple<1,-1>>>{};
+    if (n[1] == 1)  return meta::id<typename MixinDynamics::template exchange_momenta<momenta::BasicDirichletPressureBoundaryTuple<1,1>>>{};
+    if (n[2] == -1) return meta::id<typename MixinDynamics::template exchange_momenta<momenta::BasicDirichletPressureBoundaryTuple<2,-1>>>{};
+    if (n[2] == 1)  return meta::id<typename MixinDynamics::template exchange_momenta<momenta::BasicDirichletPressureBoundaryTuple<2,1>>>{};
+    return std::nullopt;
   default:
     return std::nullopt;
   }
@@ -80,9 +65,9 @@ std::optional<PostProcessorPromise<T,DESCRIPTOR>> getPostProcessor(DiscreteNorma
                                                                    DiscreteNormal<DESCRIPTOR> n) {
   switch (type) {
   case DiscreteNormalType::Flat:
-    return boundaryhelper::promisePostProcessorForDirectionOrientation<T,DESCRIPTOR,PlaneFdBoundaryProcessor3D
-          >(n);
-
+    return boundaryhelper::MixinDynamicsExchangeDirectionOrientationMomentaPostProcessor<T,DESCRIPTOR,
+          MixinDynamics,momenta::BasicDirichletPressureBoundaryTuple,PlaneFdBoundaryProcessorOnDynamics3D
+          >::construct(n);
   default:
     return std::nullopt;
   }

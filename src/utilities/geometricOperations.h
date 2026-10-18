@@ -110,14 +110,38 @@ Vector<T, utilities::dimensions::convert<D>::matrix> calculateRotationMatrix(
 }
 
 template <typename T>
+Vector<T, 9> calculateRodriguesRotationMatrix(const Vector<T, 3>& axis, T angle) any_platform
+{
+  Vector<T, 9> rotationMatrix;
+  T const c = util::cos(angle);
+  T const s = util::sin(angle);
+  T const t = T{1} - c;
+  Vector<T, 3> const n = normalize(axis);
+
+  rotationMatrix[0] = t * n[0] * n[0] + c;
+  rotationMatrix[1] = t * n[0] * n[1] - n[2] * s;
+  rotationMatrix[2] = t * n[0] * n[2] + n[1] * s;
+
+  rotationMatrix[3] = t * n[0] * n[1] + n[2] * s;
+  rotationMatrix[4] = t * n[1] * n[1] + c;
+  rotationMatrix[5] = t * n[1] * n[2] - n[0] * s;
+
+  rotationMatrix[6] = t * n[0] * n[2] - n[1] * s;
+  rotationMatrix[7] = t * n[1] * n[2] + n[0] * s;
+  rotationMatrix[8] = t * n[2] * n[2] + c;
+
+  return rotationMatrix;
+}
+
+template <typename T>
 Vector<T,4> inverseRotation(const Vector<T,4>& m) any_platform {
-  return Vector{m[0], m[2],
+  return Vector<T, 4>{m[0], m[2],
                 m[1], m[3]};
 }
 
 template <typename T>
 Vector<T,9> inverseRotation(const Vector<T,9>& m) any_platform {
-  return Vector{m[0], m[3], m[6],
+  return Vector<T, 9>{m[0], m[3], m[6],
                 m[1], m[4], m[7],
                 m[2], m[5], m[8]};
 }

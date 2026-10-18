@@ -1,0 +1,201 @@
+/* --- Global Variables --- */
+:root {
+  --primary-color: #2c3e50;
+  --sidebar-highlight: #0f3165;
+  --accent-color: #3498db;
+  --text-color: #333333;
+  --bg-color: #ffffff;
+  --max-content-width: 100%; 
+}
+
+/* --- 1. Layout & Grid Setup --- */
+
+/* Force main container to full viewport width */
+.quarto-container-fluid, .quarto-container {
+  max-width: var(--max-content-width) !important;
+  padding-left: 2vw;
+  padding-right: 2vw;
+}
+
+@media (min-width: 992px) {
+  #quarto-content.page-columns {
+    display: grid !important;
+    gap: 30px;
+    /* Locks columns: 200px | Flexible Center | 200px */
+    /* minmax(0,...) rather than 1fr: a bare 1fr track keeps an implicit
+       min-width:auto, so one wide table or figure pushes the centre column
+       past the viewport and scrolls the whole page sideways. */
+    grid-template-columns: 200px minmax(0, 1fr) 200px !important;
+    --quarto-body-columns: 1 !important;
+    --quarto-footer-offset: 0 !important;
+  }
+
+  main.content {
+    grid-column: 2 !important; 
+    display: block !important;
+    max-width: 100% !important;
+    width: 100% !important;
+  }
+
+  #quarto-margin-sidebar {
+    grid-column: 3 !important;
+    display: block !important;
+    width: 200px !important;
+    min-height: 1px;
+  }
+
+  #quarto-sidebar {
+    grid-column: 1 !important;
+    display: block !important;
+    width: 200px !important;
+  }
+}
+
+/* Sidebars fixed width behavior -- DESKTOP ONLY, to match the grid above.
+   Below 992px Quarto collapses both sidebars to display:none, so this rule had
+   no measured effect there either way; it is gated for consistency rather than
+   to fix a symptom. */
+@media (min-width: 992px) {
+  #quarto-sidebar, #quarto-margin-sidebar {
+    width: 200px !important;
+    min-width: 200px !important;
+    max-width: 200px !important;
+    overflow-x: hidden;
+    word-wrap: break-word;
+  }
+}
+
+/* --- 2. Top Navigation Bar (Dark Theme) --- */
+
+.navbar, 
+.navbar-header,
+#quarto-header .navbar {
+  background-color: var(--sidebar-highlight) !important;
+}
+
+/* Text and links in navbar must be white for contrast */
+.navbar-title, 
+.navbar-brand,
+.navbar .nav-link,
+#quarto-header .nav-link {
+  color: #ffffff !important;
+}
+
+.navbar-nav .nav-link:hover {
+  color: var(--accent-color) !important;
+}
+
+.navbar-toggler-icon {
+  filter: invert(1);
+}
+
+/* --- 3. Sidebar Visibility (White Background / Dark Text) --- */
+
+/* --- 3. Sidebar Visibility (White Background / Dark Text) --- */
+
+/* Force sidebar text to be visible */
+#quarto-sidebar .sidebar-link,
+#quarto-sidebar .sidebar-item-text,
+#quarto-sidebar .sidebar-item-toggle,
+#quarto-margin-sidebar .nav-link,
+#quarto-margin-sidebar .sidebar-nav[role=doc-toc] ul li a {
+  color: var(--text-color) !important;
+  background-color: transparent !important;
+  opacity: 0.8;
+}
+
+/* Active & Hover States for BOTH Sidebars */
+.sidebar-item-text.active,
+.sidebar-link.active,
+.sidebar-item-text:hover,
+.sidebar-link:hover,
+.sidebar-item-toggle:hover,      /* Specifically for the left-side arrow/toggles */
+#quarto-margin-sidebar .nav-link:hover,
+.toc-active {
+  color: var(--sidebar-highlight) !important;
+  opacity: 1 !important;
+  font-weight: bold;
+}
+
+/* Fix for the little arrow icons in the left sidebar on hover */
+.sidebar-item-toggle:hover i, 
+.sidebar-item-toggle:hover .bi {
+  color: var(--sidebar-highlight) !important;
+}
+
+/* TOC active indicator line */
+.toc-active {
+  border-left-color: var(--sidebar-highlight) !important;
+}
+
+/* Sidebar headers/headlines */
+.sidebar-section-active,
+.sidebar-navigation-headline,
+.sidebar-title {
+  color: var(--primary-color) !important;
+}
+
+/* --- 4. Typography & General Elements --- */
+
+body {
+  color: var(--text-color);
+  background-color: var(--bg-color);
+  line-height: 1.6;
+}
+
+h1, h2, h3, h4 {
+  color: var(--primary-color);
+  border-bottom: none;
+}
+
+a {
+  color: var(--accent-color);
+  text-decoration: none;
+}
+
+a:hover {
+  text-decoration: underline;
+}
+
+.texttt {
+  font-family: "Latin Modern Mono", "Computer Modern Mono", monospace;
+  background-color: #f8f9fa;
+  padding: 2px 4px;
+  border-radius: 4px;
+}
+
+/* --- Contributor list (contributors.qmd) --- */
+
+.contributors dt {
+  font-size: 1.2rem;
+  font-weight: 700;
+  color: var(--primary-color);
+  margin-top: 1.1rem;
+}
+
+.contributors dd {
+  margin-left: 1.5rem;
+  margin-bottom: 0;
+}
+
+/* --- 5. Footer --- */
+
+.nav-footer {
+  border-top: 1px solid #eeeeee;
+  background-color: #f8f9fa;
+  padding: 20px 0;
+}
+/* --- Mobile: keep wide content inside the column --- */
+
+/* Quarto wraps a display equation in an inline <span class="math display">, and
+   an inline box cannot scroll, so a long equation overflows. On a phone the
+   layout viewport then grows to fit it and everything pinned to the viewport --
+   the fixed navbar above all -- is stretched with it, leaving the whole page
+   scrolled sideways. Making the wrapper a block lets the equation scroll inside
+   its own box instead. */
+.math.display {
+  display: block;
+  max-width: 100%;
+  overflow-x: auto;
+  overflow-y: hidden;
+}

@@ -1,0 +1,9 @@
+### aorta3d
+
+In this example, the fluid flow through a bifurcation is simulated.
+The geometry is obtained from a mesh in STL format.
+With Bouzidi boundary conditions, the curved boundary is adequately mapped and initialized entirely automatically.
+A Smagorinsky LES BGK model is used for the dynamics to stabilize the turbulent flow simulation for low resolutions.
+The output is the flux computed at the inflow and outflow regions.
+This example writes the stress on the aorta wall and the velocity field in the bifurcation region to a file.
+The results have been validated through comparison with other results obtained with FEM and FVM.

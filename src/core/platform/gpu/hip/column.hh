@@ -34,14 +34,32 @@
 #include <thrust/host_vector.h>
 #include <thrust/device_vector.h>
 #include <thrust/execution_policy.h>
+#include <thrust/iterator/transform_iterator.h>
 
 #include <cstring>
 
+
+
+
 namespace olb {
+
+struct WrapIndex {
+  std::size_t shift;
+  std::size_t count;
+
+  __host__ __device__
+  std::size_t operator()(const CellID& idx) const {
+    std::size_t i = static_cast<std::size_t>(idx) + shift;
+    i -= (i >= count) * count;
+    return i;
+  }
+};
+
 
 namespace gpu {
 
 namespace hip {
+
 
 template<typename T>
 struct Column<T>::Data {
@@ -214,18 +232,44 @@ bool* Column<T>::getBlock(std::size_t iBlock, std::size_t& sizeBlock, bool loadi
 }
 
 
+// Branching ring: a single plain device allocation, two-pointer wrap on access.
 template<typename T>
-struct CyclicColumn<T>::Data {
-  const std::size_t size;
-
+struct CyclicColumnData<T,gpu::CyclicStrategy::Branching> {
   std::unique_ptr<T[]> host;
+  const std::size_t size;
+  hipDeviceptr_t ptr;
+
+  CyclicColumnData(std::size_t count):
+    host(new T[count] { }),
+    size(count * sizeof(T)),
+    ptr(0)  // hipDeviceptr_t is an integer on NVIDIA, so 0 not nullptr
+  {
+    HIP_CHECK(hipMalloc(reinterpret_cast<void**>(&ptr), size));
+    // hipDeviceptr_t is void* on AMD but an integer (CUdeviceptr) on the NVIDIA
+    // platform, so cast explicitly for the void* hipMemset parameter.
+    HIP_CHECK(hipMemset(reinterpret_cast<void*>(ptr), 0, size));
+  }
+
+  ~CyclicColumnData() {
+    HIP_CHECK(hipFree(reinterpret_cast<void*>(ptr)));
+  }
+
+  static std::size_t alignedCount(std::size_t count) { return count; }
+  T* base() const { return reinterpret_cast<T*>(ptr); }
+};
+
+// Virtual-memory ring: a double-mapped address range, branch-free on access.
+template<typename T>
+struct CyclicColumnData<T,gpu::CyclicStrategy::VirtualMemory> {
+  std::unique_ptr<T[]> host;
+  const std::size_t size;
 
   hipMemGenericAllocationHandle_t handle;
   hipMemAllocationProp prop{};
   hipMemAccessDesc access{};
   hipDeviceptr_t ptr;
 
-  Data(std::size_t count):
+  CyclicColumnData(std::size_t count):
     host(new T[count] { }),
     size(count * sizeof(T))
   {
@@ -237,13 +281,11 @@ struct CyclicColumn<T>::Data {
     HIP_CHECK(hipMemAddressReserve(&ptr, 2 * size, 0, 0, 0));
 
     HIP_CHECK(hipMemCreate(&handle, size, &prop, 0));
-    HIP_CHECK(hipMemMap(ptr,        size, 0, handle, 0));
-    // treat ptr as pointer of bytes
-#if defined(__HIP_PLATFORM_NVIDIA__)
-    HIP_CHECK(hipMemMap(ptr + size, size, 0, handle, 0));
-#else
-    HIP_CHECK(hipMemMap((char*)ptr + size, size, 0, handle, 0));
-#endif
+    HIP_CHECK(hipMemMap(ptr, size, 0, handle, 0));
+    // hipDeviceptr_t is void* on AMD but an integer (CUdeviceptr) on NVIDIA; round-trip
+    // through a byte pointer so the byte offset is portable across both platforms.
+    HIP_CHECK(hipMemMap(reinterpret_cast<hipDeviceptr_t>(reinterpret_cast<std::uint8_t*>(ptr) + size),
+                        size, 0, handle, 0));
 
     access.location.type = hipMemLocationTypeDevice;
     access.location.id = device;
@@ -251,22 +293,25 @@ struct CyclicColumn<T>::Data {
     HIP_CHECK(hipMemSetAccess(ptr, 2 * size, &access, 1));
   }
 
-  ~Data() {
+  ~CyclicColumnData() {
     HIP_CHECK(hipMemUnmap(ptr, 2 * size));
     HIP_CHECK(hipMemRelease(handle));
     HIP_CHECK(hipMemAddressFree(ptr, 2 * size));
   }
 
+  static std::size_t alignedCount(std::size_t count) { return device::getPageAlignedCount<T>(count); }
+  T* base() const { return reinterpret_cast<T*>(ptr); }
 };
 
 template<typename T>
 CyclicColumn<T>::CyclicColumn(std::size_t count):
-  _count(device::getPageAlignedCount<T>(count)),
+  _count(Data::alignedCount(count)),
   _size(_count * sizeof(T)),
   _data(new Data(_count)),
   _shift(0)
 {
-  _deviceBase = reinterpret_cast<T*>(_data->ptr);
+  _hostData = _data->host.get();
+  _deviceBase = _data->base();
   _devicePopulation = _deviceBase;
 }
 
@@ -277,13 +322,41 @@ CyclicColumn<T>::~CyclicColumn()
 template<typename T>
 const T& CyclicColumn<T>::operator[](std::size_t i) const
 {
-  return _data->host[i];
+  return const_cast<CyclicColumn<T>*>(this)->getHostAccessor()[i];
 }
 
 template<typename T>
 T& CyclicColumn<T>::operator[](std::size_t i)
 {
-  return _data->host[i];
+  return getHostAccessor()[i];
+}
+
+template<typename T>
+typename CyclicColumn<T>::Accessor CyclicColumn<T>::getHostAccessor()
+{
+  if constexpr (cyclicStrategy == gpu::CyclicStrategy::Branching) {
+    return Accessor{
+      .start0 = _data->host.get() + _shift,
+      .start1 = _data->host.get() - (_count - _shift),
+      .remainder = static_cast<std::ptrdiff_t>(_count - _shift - 1)
+    };
+  } else {
+    return Accessor{ .ptr = _data->host.get() };
+  }
+}
+
+template<typename T>
+typename CyclicColumn<T>::Accessor CyclicColumn<T>::getDeviceAccessor()
+{
+  if constexpr (cyclicStrategy == gpu::CyclicStrategy::Branching) {
+    return Accessor{
+      .start0 = deviceData() + _shift,
+      .start1 = deviceData() - (_count - _shift),
+      .remainder = static_cast<std::ptrdiff_t>(_count - _shift - 1)
+    };
+  } else {
+    return Accessor{ .ptr = _devicePopulation };
+  }
 }
 
 template<typename T>
@@ -291,10 +364,10 @@ void CyclicColumn<T>::setProcessingContext(ProcessingContext context)
 {
   switch (context) {
   case ProcessingContext::Evaluation:
-    device::copyToHost(_devicePopulation, _data->host.get(), _size);
+    device::copyToHost(deviceData(), _data->host.get(), _size);
     return;
   case ProcessingContext::Simulation:
-    device::copyToDevice(_data->host.get(), _devicePopulation, _size);
+    device::copyToDevice(_data->host.get(), deviceData(), _size);
     return;
   }
 }
@@ -354,7 +427,6 @@ std::size_t ConcreteCommunicatable<gpu::hip::Column<T>>::deserialize(ConstSpan<C
   return indices.size() * sizeof(T);
 }
 
-
 template <typename T>
 std::size_t ConcreteCommunicatable<gpu::hip::CyclicColumn<T>>::serialize(
   ConstSpan<CellID> indices,
@@ -383,5 +455,7 @@ std::size_t ConcreteCommunicatable<gpu::hip::CyclicColumn<T>>::deserialize(
 
 
 }
+
+#include "sparseColumn.hh"
 
 #endif

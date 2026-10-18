@@ -43,10 +43,10 @@ template <typename T>
 void genericHeatMapInterface(const HyperplaneLattice3D<T>& hyperPlane, BlockF2D<T>& blockData, int iT,
                              const std::vector<T>& valueArea, const plotParam<T>& plot)
 {
-
+  OstreamManager clout(std::cout, "HeatMapWriter");
 
   if ( blockData.getTargetDim() != 1 ) {
-    std::cout << "HeatMap Error: Functor targetDim is not 1. " << std::endl;
+    clout << "HeatMap Error: Functor targetDim is not 1. " << std::endl;
     exit(-1);
   }
   else {
@@ -275,18 +275,24 @@ void writeHeatMapPlotFile(detailParam<T>& param, const std::vector<T>& valueArea
 template< typename T >
 void executeGnuplot(detailParam<T>& param)
 {
+  OstreamManager clout(std::cout, "HeatMapWriter");
   if (! gnuplotInstalled()) {
-    std::cout << "We could not find a gnuplot distribution at your system." << std::endl;
-    std::cout << "We still write the data files s.t. you can plot the data yourself." << std::endl;
+    // Prints warning only once
+    static bool warningPrinted = false;
+    if (!warningPrinted) {
+      warningPrinted = true;
+      clout << "Warning: We could not find a gnuplot distribution at your system." << std::endl;
+      clout << "We still write the data files s.t. you can plot the data yourself." << std::endl;
+    }
     return;
   }
 #ifndef WIN32
   if (!system(nullptr)) {
     exit (EXIT_FAILURE);
   }
-  const std::string command = "gnuplot "+ param.plotFilePath +" > /dev/null &";
+  const std::string command = "gnuplot "+ param.plotFilePath +" > /dev/null 2>&1 &";
   if ( system(command.c_str()) ) {
-    std::cout << "Error at GnuplotWriter" << std::endl;
+    clout << "Error at HeatMapWriter" << std::endl;
   }
   return;
 #endif

@@ -4,7 +4,7 @@ include ../default.mk
 BENCH_OBJ_DIR := build/obj
 BENCH_DEP_DIR := build/dep
 
-BENCH_CPP_FILES := $(shell find . -name '*.cpp')
+BENCH_CPP_FILES := $(shell find . -maxdepth 1 -name '*.cpp')
 BENCH_TARGETS := $(patsubst %.cpp, %, $(BENCH_CPP_FILES))
 
 BENCHS := $(notdir $(basename $(BENCH_TARGETS)))
@@ -45,7 +45,7 @@ endef
 
 define linkBenchmark
 $(1) : $(BENCH_OBJ_DIR)/$(1).o $(BENCH_DEP_DIR)/$(1).d
-	$(CXX) $$< $(LDFLAGS) -lgtest_main -lgtest -o $(1)
+	$(CXX) $$< $(LDFLAGS) -o $(1)
 
 clean-$(1):
 	@rm -f $(1) &> /dev/null || true

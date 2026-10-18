@@ -232,8 +232,8 @@ void prepareLattice( MyCase& myCase )
   boundary::set<boundary::BounceBackIncompressible>(sLatticeNS, wall);
   boundary::set<boundary::PhaseFieldCurvedWall>(sLatticeAC, wall);
   boundary::set<boundary::RegularizedTemperature>(sLatticeAC, inlet);
-  boundary::set<boundary::IncompressibleZouHePressure>(sLatticeNS, inlet);
-  boundary::set<boundary::IncompressibleZouHePressure>(sLatticeNS, outlet);
+  boundary::set<boundary::IncompressibleZouHePressure<T,NSDESCRIPTOR,NSBulkDynamics,momenta::IncRegularizedPressureBoundaryTuple>>(sLatticeNS, inlet);
+  boundary::set<boundary::IncompressibleZouHePressure<T,NSDESCRIPTOR,NSBulkDynamics,momenta::IncRegularizedPressureBoundaryTuple>>(sLatticeNS, outlet);
   setConvectivePhaseFieldBoundary<T,ACDESCRIPTOR>(sLatticeAC, outlet);
 
   sLatticeAC.addPostProcessor<stage::InitOutlet>(outlet, meta::id<SetOutletCells2D<1, 0>>());
@@ -449,7 +449,7 @@ void getResults( MyCase& myCase,
     SuperLatticeDensity2D<T, NSDESCRIPTOR> p_total(sLatticeNS);
     p_total.getName() = "p_total";
 
-    SuperLatticeExternalScalarField2D<T, NSDESCRIPTOR, RHO> rho_L(sLatticeNS);
+    SuperLatticeField2D<T, NSDESCRIPTOR, RHO> rho_L(sLatticeNS);
     AnalyticalConst2D<T,T> ConversionDensity_(converter.getConversionFactorDensity());
     SuperLatticeFfromAnalyticalF2D<T, NSDESCRIPTOR> ConversionDensity(ConversionDensity_, sLatticeNS);
     SuperIdentity2D<T,T> rho(rho_L * ConversionDensity);
@@ -458,7 +458,7 @@ void getResults( MyCase& myCase,
     SuperLatticeVelocity2D<T, NSDESCRIPTOR> velocity(sLatticeNS);
     velocity.getName() = "u";
 
-    SuperLatticeExternalScalarField2D<T, ACDESCRIPTOR, BOUNDARY> boundary(sLatticeAC);
+    SuperLatticeField2D<T, ACDESCRIPTOR, BOUNDARY> boundary(sLatticeAC);
     boundary.getName() = "boundary";
 
     vtkWriter.addFunctor(p_total);
@@ -550,28 +550,27 @@ int main(int argc, char* argv[])
     myCaseParameters.set<parameters::INTERFACE_WIDTH>(6.); // resolution inlet [lattice units]
 
     myCaseParameters.set<SCALE>(0.0000004); // scale down of vti to physical size []
-    myCaseParameters.set<DOMAIN_EXTENT>([&] {
-      std::string vtiFile = myCaseParameters.get<VTI_INPUT>();
-      std::string arrayName = myCaseParameters.get<ARRAY_NAME>();
+    myCaseParameters.set<DOMAIN_EXTENT>([](MyCase::ParametersD& p) {
+      std::string vtiFile = p.get<VTI_INPUT>();
+      std::string arrayName = p.get<ARRAY_NAME>();
       BlockVTIreader2D<T,T> vtiReader( vtiFile, arrayName );
 
-      T deltaRsample = myCaseParameters.get<SCALE>();
+      T deltaRsample = p.get<SCALE>();
       auto cuboidSample = vtiReader.getCuboid();
 
       Vector<int, 2> extentSample     = cuboidSample.getExtent();
       Vector<T, 2> extentSamplePhys = {deltaRsample * T(extentSample[0]), deltaRsample * T(extentSample[1])};
       return extentSamplePhys;
     });
-    myCaseParameters.set<INLET_LENGTH>([&] {
-      Vector extent = myCaseParameters.get<DOMAIN_EXTENT>();
-      return extent[0]*myCaseParameters.get<INLET_LENGTH_F>();
+    myCaseParameters.set<INLET_LENGTH>([](MyCase::ParametersD& p) {
+      Vector extent = p.get<DOMAIN_EXTENT>();
+      return extent[0]*p.get<INLET_LENGTH_F>();
     });
-    myCaseParameters.set<OUTLET_LENGTH>([&] {
-      Vector extent = myCaseParameters.get<DOMAIN_EXTENT>();
-      return extent[0]*myCaseParameters.get<OUTLET_LENGTH_F>();
+    myCaseParameters.set<OUTLET_LENGTH>([](MyCase::ParametersD& p) {
+      Vector extent = p.get<DOMAIN_EXTENT>();
+      return extent[0]*p.get<OUTLET_LENGTH_F>();
     });
   }
-  myCaseParameters.fromCLI(argc, argv);
 
   /// === Step 3: Create Mesh ===
   Mesh mesh = createMesh(myCaseParameters);

@@ -51,17 +51,19 @@ namespace olb {
 
 
 template<typename T, typename OUT_T, typename W>
-SuperVTMwriter3D<T,OUT_T,W>::SuperVTMwriter3D( const std::string& name, int overlap, bool binary, bool compress)
-  : clout( std::cout,"SuperVTMwriter3D" ), _createFile(false), _name(name), _overlap(overlap), _binary(binary), _compress(compress)
+SuperVTMwriter3D<T,OUT_T,W>::SuperVTMwriter3D( const std::string& name, int overlap, bool binary, bool compress, VtkDataMode mode)
+  : clout( std::cout,"SuperVTMwriter3D" ), _createFile(false), _name(name), _overlap(overlap), _binary(binary), _compress(compress), _dataMode(mode)
 {
   static_assert(std::is_same_v<OUT_T, float> || std::is_same_v<OUT_T, double>,
               "OUT_T must be either float or double");
+
+  _headerType = (sizeof(std::size_t) == 8) ? "\"UInt64\"" : "\"UInt32\"";
 }
 
 template<typename T, typename OUT_T, typename W>
 SuperVTMwriter3D<T,OUT_T,W>::SuperVTMwriter3D( CuboidDecomposition<T,3>& cGeometry,
-                                         const std::string& name, int overlap, bool binary, bool compress)
-  : SuperVTMwriter3D(name, overlap, binary, compress)
+                                         const std::string& name, int overlap, bool binary, bool compress, VtkDataMode mode)
+  : SuperVTMwriter3D(name, overlap, binary, compress, mode)
 {
   _cGeometry = &cGeometry;
 }
@@ -107,7 +109,10 @@ void SuperVTMwriter3D<T,OUT_T,W>::writePVD(int iT)
   // since till now, there is only one origin
   const auto it_begin = _pointerVec.cbegin();
   const auto& cGeometry = _cGeometry ? *_cGeometry : (**it_begin).getSuperStructure().getCuboidDecomposition();
-  LoadBalancer<T>& load = (**it_begin).getSuperStructure().getLoadBalancer();
+  LoadBalancer<T>* load = nullptr;
+  if (it_begin != _pointerVec.end()) {
+    load = &(**it_begin).getSuperStructure().getLoadBalancer();
+  }
 
   // PVD, owns all
   if (singleton::mpi().isMainProcessor()) {
@@ -119,7 +124,7 @@ void SuperVTMwriter3D<T,OUT_T,W>::writePVD(int iT)
                               + "data/" + createFileName(_name, iT) + ".vtm";
     preambleVTM(pathVTM);
     for (int iC = 0; iC < cGeometry.size(); iC++) {
-      if (load.doOutput(iC)) {
+      if (!load || load->doOutput(iC)) {
         dataVTM(iC, pathVTM, createFileName(_name, iT, iC) + ".vti" );
       }
     }
@@ -132,7 +137,7 @@ void SuperVTMwriter3D<T,OUT_T,W>::writeGlobalVTI(int iT, int iC)
 {
   const auto it_begin = _pointerVec.cbegin();
   const auto& cGeometry = _cGeometry ? *_cGeometry : (**it_begin).getSuperStructure().getCuboidDecomposition();
-  const T delta = cGeometry.getMotherCuboid().getDeltaR();
+  const T delta = cGeometry.get(iC).getDeltaR();
 
   // get piece/whole extent
   const Vector<int,3> extent0(-_overlap,-_overlap,-_overlap);
@@ -144,8 +149,20 @@ void SuperVTMwriter3D<T,OUT_T,W>::writeGlobalVTI(int iT, int iC)
   // get dimension/extent for each cuboid
   const int originLatticeR[4] = {iC,0,0,0};
   auto originPhysR = cGeometry.getPhysR(originLatticeR);
+  Vector<T,3> vtiOrigin = originPhysR;
+  Vector<int,3> vtiExtent1 = extent1 + _overlap;
 
-  preambleVTI(fullNameVTI, extent0, (extent1+_overlap-1), originPhysR.data(), delta);
+  if (_dataMode == VtkDataMode::PointData) {
+    vtiExtent1[0] -= 1;
+    vtiExtent1[1] -= 1;
+    vtiExtent1[2] -= 1;
+  } else {
+    vtiOrigin[0] -= 0.5 * delta;
+    vtiOrigin[1] -= 0.5 * delta;
+    vtiOrigin[2] -= 0.5 * delta;
+  }
+
+  preambleVTI(fullNameVTI, extent0, vtiExtent1, vtiOrigin.data(), delta);
   for (auto it : _pointerVec) {
     dataArray(fullNameVTI, *it, iC, extent1);
   }
@@ -171,8 +188,20 @@ void SuperVTMwriter3D<T,OUT_T,W>::writeVTI(int iT, int iCloc)
   // get dimension/extent for each cuboid
   const int originLatticeR[4] = {load.glob(iCloc),0,0,0};
   auto originPhysR = cGeometry.getPhysR(originLatticeR);
+  Vector<T,3> vtiOrigin = originPhysR;
+  Vector<int,3> vtiExtent1 = extent1 + _overlap;
 
-  preambleVTI(fullNameVTI, extent0, (extent1+_overlap-1), originPhysR.data(), delta);
+  if (_dataMode == VtkDataMode::PointData) {
+    vtiExtent1[0] -= 1;
+    vtiExtent1[1] -= 1;
+    vtiExtent1[2] -= 1;
+  } else {
+    vtiOrigin[0] -= 0.5 * delta;
+    vtiOrigin[1] -= 0.5 * delta;
+    vtiOrigin[2] -= 0.5 * delta;
+  }
+
+  preambleVTI(fullNameVTI, extent0, vtiExtent1, vtiOrigin.data(), delta);
   for (auto it : _pointerVec) {
     dataArray(fullNameVTI, *it, load.glob(iCloc), extent1);
   }
@@ -198,8 +227,20 @@ void SuperVTMwriter3D<T,OUT_T,W>::writeVTI(int iT, int iCloc, int iGlob)
   // get dimension/extent for each cuboid
   const int originLatticeR[4] = {load.glob(iCloc),0,0,0};
   auto originPhysR = cGeometry.getPhysR(originLatticeR);
+  Vector<T,3> vtiOrigin = originPhysR;
+  Vector<int,3> vtiExtent1 = extent1 + _overlap;
 
-  preambleVTI(fullNameVTI, extent0, (extent1+_overlap-1), originPhysR.data(), delta);
+  if (_dataMode == VtkDataMode::PointData) {
+    vtiExtent1[0] -= 1;
+    vtiExtent1[1] -= 1;
+    vtiExtent1[2] -= 1;
+  } else {
+    vtiOrigin[0] -= 0.5 * delta;
+    vtiOrigin[1] -= 0.5 * delta;
+    vtiOrigin[2] -= 0.5 * delta;
+  }
+
+  preambleVTI(fullNameVTI, extent0, vtiExtent1, vtiOrigin.data(), delta);
   for (auto it : _pointerVec) {
     dataArray(fullNameVTI, *it, load.glob(iCloc), extent1);
   }
@@ -248,8 +289,20 @@ void SuperVTMwriter3D<T,OUT_T,W>::write(SuperF3D<T,W>& f, int iT)
     // get dimension/extent for each cuboid
     const int originLatticeR[4] = {load.glob(iCloc),0,0,0};
     auto originPhysR = cGeometry.getPhysR(originLatticeR);
+    Vector<T,3> vtiOrigin = originPhysR;
+    Vector<int,3> vtiExtent1 = extent1 + _overlap;
 
-    preambleVTI(fullNameVTI, extent0, (extent1+_overlap-1.), originPhysR.data(), delta);
+    if (_dataMode == VtkDataMode::PointData) {
+      vtiExtent1[0] -= 1;
+      vtiExtent1[1] -= 1;
+      vtiExtent1[2] -= 1;
+    } else {
+      vtiOrigin[0] -= 0.5 * delta;
+      vtiOrigin[1] -= 0.5 * delta;
+      vtiOrigin[2] -= 0.5 * delta;
+    }
+
+    preambleVTI(fullNameVTI, extent0, vtiExtent1, vtiOrigin.data(), delta);
 
     dataArray(fullNameVTI, f, load.glob(iCloc), extent1);
     closePiece(fullNameVTI);
@@ -322,6 +375,10 @@ void SuperVTMwriter3D<T,OUT_T,W>::preambleVTI (const std::string& fullName,
   }
   fout << "<?xml version=\"1.0\"?>\n";
   fout << "<VTKFile type=\"ImageData\" version=\"0.1\" ";
+  if (_compress || _binary) {
+    fout << "header_type=" << _headerType << " ";
+  }
+
   if (_compress) {
     fout << "byte_order=\"LittleEndian\" compressor=\"vtkZLibDataCompressor\">\n";
   }
@@ -338,7 +395,7 @@ void SuperVTMwriter3D<T,OUT_T,W>::preambleVTI (const std::string& fullName,
        << extent0[0] <<" "<< extent1[0] <<" "
        << extent0[1] <<" "<< extent1[1] <<" "
        << extent0[2] <<" "<< extent1[2] <<"\">\n";
-  fout << "<PointData>\n";
+  fout << (_dataMode == VtkDataMode::CellData ? "<CellData>\n" : "<PointData>\n");
   fout.close();
 }
 
@@ -475,10 +532,10 @@ void SuperVTMwriter3D<T,OUT_T,W>::dataArray(const std::string& fullName,
     evaluated[iDim] = W();
   }
 
-  size_t numberOfFloats = f.getTargetDim() * (extent1[0]+2*_overlap) * (extent1[1]+2*_overlap) * (extent1[2]+2*_overlap);
-  uint32_t binarySize = static_cast<uint32_t>( numberOfFloats*sizeof(float) );
+  std::size_t numberOfFloats = f.getTargetDim() * (extent1[0]+2*_overlap) * (extent1[1]+2*_overlap) * (extent1[2]+2*_overlap);
+  std::size_t binarySize = static_cast<std::size_t>( numberOfFloats*sizeof(OUT_T) );
 
-  std::unique_ptr<float[]> streamFloat(new float[numberOfFloats]);    // stack may be too small
+  std::unique_ptr<OUT_T[]> streamFloat(new OUT_T[numberOfFloats]);    // stack may be too small
   int itter = 0;
   // fill buffer with functor data
   for (i[3] = -_overlap; i[3] < extent1[2]+_overlap; ++i[3]) {
@@ -486,7 +543,7 @@ void SuperVTMwriter3D<T,OUT_T,W>::dataArray(const std::string& fullName,
       for (i[1] = -_overlap; i[1] < extent1[0]+_overlap; ++i[1]) {
         f(evaluated,i);
         for (int iDim = 0; iDim < f.getTargetDim(); ++iDim) {
-          streamFloat[itter] = float( evaluated[iDim] );
+          streamFloat[itter] = OUT_T( evaluated[iDim] );
           ++itter;
         }
       }
@@ -504,8 +561,8 @@ void SuperVTMwriter3D<T,OUT_T,W>::dataArray(const std::string& fullName,
     compress2( comprData.get(), &sizeCompr, charData, binarySize, -1);
 
     // encode prefix to base64 documented in  http://www.earthmodels.org/software/vtk-and-paraview/vtk-file-formats
-    Base64Encoder<uint32_t> prefixEncoder(fout, 4);
-    uint32_t prefix[4] = {1,binarySize,binarySize,static_cast<uint32_t>(sizeCompr)};
+    Base64Encoder<std::size_t> prefixEncoder(fout, 4);
+    std::size_t prefix[4] = {1,binarySize,binarySize,static_cast<std::size_t>(sizeCompr)};
     prefixEncoder.encode(prefix, 4);
 
     // encode compressed data to base64
@@ -514,14 +571,15 @@ void SuperVTMwriter3D<T,OUT_T,W>::dataArray(const std::string& fullName,
   }
   else if (_binary) {
     // encode prefix to base64 documented in  http://www.earthmodels.org/software/vtk-and-paraview/vtk-file-formats
-    Base64Encoder<uint32_t> prefixEncoder(fout, 1);
+    Base64Encoder<std::size_t> prefixEncoder(fout, 1);
     prefixEncoder.encode(&binarySize, 1);
     //  write numbers from functor
-    Base64Encoder<float> dataEncoder(fout, numberOfFloats);
+    Base64Encoder<OUT_T> dataEncoder(fout, numberOfFloats);
     dataEncoder.encode(streamFloat.get(),numberOfFloats);
   }
   else {
-    for ( size_t iOut = 0; iOut < numberOfFloats; ++iOut ) {
+    fout << std::setprecision(std::numeric_limits<OUT_T>::max_digits10);
+    for ( std::size_t iOut = 0; iOut < numberOfFloats; ++iOut ) {
       fout << streamFloat[iOut] << " ";
     }
   }
@@ -542,7 +600,7 @@ void SuperVTMwriter3D<T,OUT_T,W>::closePiece(const std::string& fullNamePiece)
   if (!fout) {
     clout << "Error: could not open " << fullNamePiece << std::endl;
   }
-  fout << "</PointData>\n";
+  fout << (_dataMode == VtkDataMode::CellData ? "</CellData>\n" : "</PointData>\n");
   fout << "</Piece>\n";
   fout.close();
 }

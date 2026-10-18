@@ -250,7 +250,7 @@ void setBoundaryValues(SuperLattice<T,DESCRIPTOR>& sLattice,
     scale(&frac, &iT);
 
     vortex.setVelocityProfile(sLattice.getUnitConverter().getConversionFactorVelocity() * frac * uSol);
-    sLattice.template setProcessingContext<Array<U_PROFILE>>(ProcessingContext::Simulation);
+    vortex.setConvectionU(sLattice.getUnitConverter().getCharPhysVelocity() * frac);
     vortex.apply(iT);
   } else {
     vortex.apply(iT);
@@ -362,7 +362,9 @@ int main(int argc, char* argv[])
   prepareLattice(sLattice, superGeometry, bulkModel);
 
   // === Setup turbulent inlet condition ===
-  Vector<T,3> originI(1./resolution, 5.5+1./resolution, 5.5+1./resolution);
+  // Seeding volume depth (along the inflow axis) must contain an eddy (~2 sigma)
+  // so that downstream-advected vortices are not clipped at the inlet.
+  Vector<T,3> originI(2.*converter.getCharPhysLength()*0.1, 5.5+1./resolution, 5.5+1./resolution);
   Vector<T,3> extendI(0., 5.5+1./resolution, 5.5+1./resolution);
   Vector<T,3> inflowAxis{1, 0, 0};
   IndicatorCylinder3D<T> cylinderIN(extendI, originI, 1.);
@@ -372,8 +374,9 @@ int main(int argc, char* argv[])
     converter,
     sLattice,
     50,                                // nSeeds
-    0.1,                               // nTime (s)
-    converter.getCharPhysLength()*0.1, // sigma
+    0.,                                // uConvection (ramped in setBoundaryValues)
+    converter.getCharPhysLength()*0.1, // sigmaConst (fixed)
+    converter.getCharPhysLength(),     // lChar
     inflowAxis);
 
   // === 4th Step: Main Loop with Timer ===

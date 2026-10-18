@@ -47,7 +47,7 @@ public:
 
   // Collide
   virtual CellStatistic<T> collide(Cell<T,DESCRIPTOR>& cell,
-                       LatticeStatistics<T>& statistics_);
+                       LatticeStatistics<T,DESCRIPTOR>& statistics_);
 
   /// Set local relaxation parameter of the dynamics
   virtual void setOmega(T omega_);

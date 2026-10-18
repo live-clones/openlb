@@ -190,6 +190,7 @@ void prepareLattice(MyCase& myCase) {
   );
 
   auto& converter = lattice.getUnitConverter();
+  converter.print();
 
   // Material=1 -->bulk dynamics
   dynamics::set<SmagorinskyForcedBGKdynamics>(lattice, geometry.getMaterialIndicator({1}));
@@ -340,9 +341,9 @@ void getResults(MyCase& myCase, int iT, util::Timer<MyCase::value_t>& timer)
     SuperLatticePhysVelocity2D<T, DESCRIPTOR> velocity( lattice, converter );
     SuperLatticePhysPressure2D<T, DESCRIPTOR> pressure( lattice, converter );
     SuperLatticePhysField2D<T, DESCRIPTOR, descriptors::FORCE> force(lattice, converter.getConversionFactorForce());
-    SuperLatticeExternalScalarField2D<T, DESCRIPTOR, FreeSurface::EPSILON> epsilon( lattice );
-    SuperLatticeExternalScalarField2D<T, DESCRIPTOR, FreeSurface::CELL_TYPE> cells( lattice );
-    SuperLatticeExternalScalarField2D<T, DESCRIPTOR, FreeSurface::MASS> mass( lattice );
+    SuperLatticeField2D<T, DESCRIPTOR, FreeSurface::EPSILON> epsilon( lattice );
+    SuperLatticeField2D<T, DESCRIPTOR, FreeSurface::CELL_TYPE> cells( lattice );
+    SuperLatticeField2D<T, DESCRIPTOR, FreeSurface::MASS> mass( lattice );
     epsilon.getName() = "epsilon";
     cells.getName() = "cell_type";
     mass.getName() = "mass";
@@ -420,7 +421,6 @@ int main(int argc, char **argv)
     myCaseParameters.set<FreeSurface::TRANSITION>(1e-3);
     myCaseParameters.set<FreeSurface::LONELY_THRESHOLD>(1.0);
   }
-  myCaseParameters.fromCLI(argc, argv);
 
   /// === Step 3: Create Mesh ===
   Mesh mesh = createMesh(myCaseParameters);

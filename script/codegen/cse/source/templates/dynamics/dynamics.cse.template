@@ -35,7 +35,7 @@ namespace olb {
 
 namespace dynamics {
 
-${optimize_dynamics(filename, deterministic=deterministic)}
+${optimize_dynamics(filename, deterministic=deterministic, target=target)}
 
 }
 

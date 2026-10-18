@@ -305,11 +305,11 @@ int main(int argc, char* argv[])
     myCaseParameters.set<RESOLUTION>(20);
     myCaseParameters.set<TIME_RESOLUTION>(25);
     myCaseParameters.set<PHYS_CHAR_LENGTH>(1.);
-    myCaseParameters.set<PHYS_DELTA_X>([&]{return
-      myCaseParameters.get<PHYS_CHAR_LENGTH>() / myCaseParameters.get<RESOLUTION>();
+    myCaseParameters.set<PHYS_DELTA_X>([](MyCase::ParametersD& p){return
+      p.get<PHYS_CHAR_LENGTH>() / p.get<RESOLUTION>();
     });
-    myCaseParameters.set<PHYS_DELTA_T>([&]{return
-      myCaseParameters.get<PHYS_DELTA_X>() / myCaseParameters.get<TIME_RESOLUTION>();
+    myCaseParameters.set<PHYS_DELTA_T>([](MyCase::ParametersD& p){return
+      p.get<PHYS_DELTA_X>() / p.get<TIME_RESOLUTION>();
     });
     myCaseParameters.set<MAX_PHYS_T>(40.0);
     myCaseParameters.set<PHYS_CHAR_VELOCITY>(1.0);
@@ -318,8 +318,8 @@ int main(int argc, char* argv[])
     myCaseParameters.set<LATTICE_RELAXATION_TIME>(0.518);
 
     // Startup
-    myCaseParameters.set<PHYS_START_T>([&]{return
-      0.2 * myCaseParameters.get<MAX_PHYS_T>();
+    myCaseParameters.set<PHYS_START_T>([](MyCase::ParametersD& p){return
+      0.2 * p.get<MAX_PHYS_T>();
     });
     myCaseParameters.set<PHYS_BOUNDARY_VALUE_UPDATE_T>(0.01);
 
@@ -333,7 +333,6 @@ int main(int argc, char* argv[])
     myCaseParameters.set<PHYS_STAT_ITER_T>(0.2);
     myCaseParameters.set<PHYS_VTK_ITER_T>(0.2);
   }
-  myCaseParameters.fromCLI(argc, argv);
 
   /// === Step 3: Create Mesh ===
   Mesh mesh = createMesh(myCaseParameters);

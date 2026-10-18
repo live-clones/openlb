@@ -586,7 +586,6 @@ int main( int argc, char *argv[] ) {
     myCaseParameters.set<H2              >(0.);          // Contact angle 90 degrees   [lattice units]
     myCaseParameters.set<H3              >(0.);          // Contact angle 90 degrees   [lattice units]
   }
-  myCaseParameters.fromCLI(argc, argv);
 
   /// === Step 3: Create Mesh ===
   Mesh mesh = createMesh(myCaseParameters);

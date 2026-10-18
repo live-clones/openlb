@@ -26,6 +26,7 @@
 
 #include "parametersD.h"
 #include "io/stlReader.h"
+#include "io/textTable.h"
 
 namespace olb {
 
@@ -122,7 +123,7 @@ public:
   }
 
   T getDeltaX() const {
-    return _decomposition->getDeltaX();
+    return _decomposition->getDeltaR();
   }
 
   /// Stores indicator under name
@@ -133,6 +134,46 @@ public:
   /// Return indicator by name
   std::shared_ptr<IndicatorF<T,D>> getIndicator(std::string name) {
     return _indicators.at(name);
+  }
+
+  void print(OstreamManager clout = {std::cout, "Mesh"})
+  {
+    auto& mesh = *this;
+    auto& decomp = mesh.getCuboidDecomposition();
+    auto& balancer = mesh.getLoadBalancer();
+
+    std::vector<std::size_t> cellsPerRank(singleton::mpi().getSize(), 0);
+    std::vector<std::size_t> weightsPerRank(singleton::mpi().getSize(), 0);
+    for (std::size_t iLoc=0; iLoc < static_cast<std::size_t>(balancer.size()); ++iLoc) {
+      cellsPerRank[singleton::mpi().getRank()] += decomp.get(balancer.glob(iLoc)).getLatticeVolume();
+      weightsPerRank[singleton::mpi().getRank()] += decomp.get(balancer.glob(iLoc)).getWeight();
+    }
+#ifdef PARALLEL_MODE_MPI
+    singleton::mpi().allReduceVect(cellsPerRank, MPI_SUM);
+    singleton::mpi().allReduceVect(weightsPerRank, MPI_SUM);
+#endif
+
+    std::size_t maxWeights = 0;
+    std::size_t totalCells = 0;
+    double totalWeights = 0;
+    for (std::size_t iRank = 0; iRank < weightsPerRank.size(); ++iRank) {
+      maxWeights = std::max(maxWeights, weightsPerRank[iRank]);
+      totalCells += cellsPerRank[iRank];
+      totalWeights += (double)weightsPerRank[iRank];
+    }
+    T imbalance = (totalWeights > 0) ? (T)(maxWeights / (totalWeights / singleton::mpi().getSize())) : T{1};
+
+    io::text::Table table({
+      {"Level",      io::text::Table::Align::Right},
+      {"Resolution", io::text::Table::Align::Right},
+      {"Cells",      io::text::Table::Align::Right},
+      {"Cuboids",    io::text::Table::Align::Right},
+      {"Imbalance",  io::text::Table::Align::Right},
+    });
+    table.row(0, io::text::sci((double)decomp.getDeltaR(), 4),
+              io::text::shortCount(totalCells), decomp.size(),
+              io::text::fixed((double)imbalance, 2));
+    table.render(clout);
   }
 
   /// Return previously read STL

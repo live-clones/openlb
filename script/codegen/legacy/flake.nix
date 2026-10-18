@@ -83,7 +83,7 @@
           (pkgs.writeScriptBin "make-cse-in-codegen-env" ''
             #!/usr/bin/env bash
             source ${self.packages.${system}.env-generate-code-venv}/bin/activate
-            IN_NIX_SHELL=1 make cse
+            IN_OLB_NIX_SHELL=1 make cse
           '')
         ];
         runScript = "make-cse-in-codegen-env";

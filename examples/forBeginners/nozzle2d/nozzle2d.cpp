@@ -179,7 +179,7 @@ void setTemporalValues(MyCase& myCase, std::size_t iT)
   }
 }
 
-void getResults(MyCase& myCase, util::Timer<MyCase::value_t>& timer, std::size_t iT)
+void getResults(MyCase& myCase, std::size_t iT)
 {
 
   using T          = MyCase::value_t;
@@ -190,20 +190,10 @@ void getResults(MyCase& myCase, util::Timer<MyCase::value_t>& timer, std::size_t
   OstreamManager clout(std::cout, "getResults");
 
   const int vtkIter  = lattice.getUnitConverter().getLatticeTime(params.get<parameters::PHYS_VTK_ITER_T>());
-  const int statIter = lattice.getUnitConverter().getLatticeTime(params.get<parameters::PHYS_STAT_ITER_T>());
 
   if (iT == 0) {
     SuperVTMwriter2D<T> vtmWriter("nozzle2d");
     vtmWriter.createMasterFile();
-  }
-
-  if (iT % statIter == 0) {
-    // Timer console output
-    timer.update(iT);
-    timer.printStep();
-
-    // Lattice statistics console output
-    lattice.getStatistics().print(iT, lattice.getUnitConverter().getPhysTime(iT));
   }
 
   if (iT % vtkIter == 0) {
@@ -214,6 +204,8 @@ void getResults(MyCase& myCase, util::Timer<MyCase::value_t>& timer, std::size_t
     vtmWriter.addFunctor(pressure);
     vtmWriter.write(iT);
   }
+
+  myCase.report(iT);
 }
 
 void simulate(MyCase& myCase)
@@ -224,8 +216,6 @@ void simulate(MyCase& myCase)
   const T physMaxT  = params.get<parameters::MAX_PHYS_T>();
 
   const std::size_t iTmax = myCase.getLattice(NavierStokes {}).getUnitConverter().getLatticeTime(physMaxT);
-  util::Timer<T>    timer(iTmax, myCase.getGeometry().getStatistics().getNvoxel());
-  timer.start();
 
   for (std::size_t iT = 0; iT < iTmax; ++iT) {
     // === Update Inlet Values ===
@@ -235,11 +225,10 @@ void simulate(MyCase& myCase)
     lattice.collideAndStream();
 
     // === Computation and Output of the Results ===
-    getResults(myCase, timer, iT);
+    getResults(myCase, iT);
   }
 
-  timer.stop();
-  timer.printSummary();
+  myCase.finalize(iTmax);
 }
 
 int main(int argc, char* argv[])
@@ -261,10 +250,10 @@ int main(int argc, char* argv[])
     myCaseParameters.set<INLET_HEIGHT>((T)0.2);
     myCaseParameters.set<START_FACTOR>((T)0.1);
     myCaseParameters.set<UPDATE_NUMBER>(1);
-    myCaseParameters.set<PHYS_STAT_ITER_T>(1.0);
+    myCaseParameters["reporter"]["statistics"].set<PHYS_ITER_T>(1.0);
+    myCaseParameters["reporter"]["timer"].set<PHYS_ITER_T>(1.0);
     myCaseParameters.set<PHYS_VTK_ITER_T>(1.0);
   }
-  myCaseParameters.fromCLI(argc, argv);
 
   /// === Step 3: Create Mesh ===
   Mesh mesh = createMesh(myCaseParameters);

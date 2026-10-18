@@ -1,0 +1,27 @@
+<!-- ---
+title: "Cavity 2D"
+author: "Shota Ito"
+--- -->
+### Cavity 2D
+
+This is the example description
+
+::: callout-note
+This is a note
+:::
+
+::: callout-tip
+This is a tip
+:::
+
+::: callout-important
+This is important
+:::
+
+::: callout-caution
+$\omega < 2$
+:::
+
+::: callout-warning
+Warning
+:::

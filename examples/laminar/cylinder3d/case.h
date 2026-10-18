@@ -268,13 +268,13 @@ void getResults(MyCase& myCase,
 
       {
         SuperEuklidNorm3D<T> normVel(velocity);
-        BlockReduction3D2D<T> planeReduction(normVel, Vector<T,3>({0, 0, 1}));
+        BlockReduction3D2D<T> planeReduction(normVel, Vector<T,3>{0, 0, 1});
         // write output as JPEG
         heatmap::write(planeReduction, iT);
       }
 
       {
-        BlockReduction3D2D<T> planeReduction(discretization, Vector<T,3>({0, 0, 1}));
+        BlockReduction3D2D<T> planeReduction(discretization, Vector<T,3>{0, 0, 1});
         heatmap::plotParam<T> jpeg_scale;
         jpeg_scale.colour = "blackbody";
         jpeg_scale.name = "quality";

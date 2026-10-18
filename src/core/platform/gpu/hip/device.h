@@ -26,6 +26,8 @@
 
 #include <hip/hip_runtime_api.h>
 
+#include "core/platform/event.h"
+
 #define HIP_CHECK(expression)                  \
 {                                              \
     const hipError_t status = expression;      \
@@ -46,6 +48,15 @@ namespace olb {
 namespace gpu {
 
 namespace hip {
+
+namespace streams {
+
+struct OuterCollision { };
+struct InnerCollision { };
+struct PostProcessor {};
+
+}
+
 
 /// Basic wrappers of common CUDA functions
 namespace device {
@@ -73,6 +84,8 @@ T* malloc(std::size_t size);
 
 /// Returns device memory page size
 std::size_t getDevicePageSize();
+/// Returns total device global memory in bytes
+std::size_t getDeviceMemorySize();
 /// Returns `count` rounded up to be a multiple of `getDevicePageSize`
 template <typename T>
 std::size_t getPageAlignedCount(std::size_t count)
@@ -138,6 +151,7 @@ private:
 
 public:
   Stream(unsigned int flags);
+  Stream(unsigned int flags, int priority);
   ~Stream();
 
   hipStream_t& get() {
@@ -153,11 +167,44 @@ void asyncCopyToHost(Stream& stream, void* src, void* dst, std::size_t count);
 /// Copy data from host to device (async)
 void asyncCopyToDevice(Stream& stream, void* src, void* dst, std::size_t count);
 
-}
+template <typename QUEUE>
+Stream& getStream();
 
 }
 
 }
+
+}
+
+/// Completion token for work dispatched to GPU_HIP streams
+template <>
+class Event<Platform::GPU_HIP> {
+private:
+  hipEvent_t _event;
+
+public:
+  Event();
+  Event(const Event&) = delete;
+  Event& operator=(const Event&) = delete;
+  ~Event();
+
+  /// Capture completion of all work so far dispatched to stream
+  void record(gpu::hip::device::Stream& stream);
+  /// Order all work subsequently dispatched to stream after the last record
+  void barrierOn(gpu::hip::device::Stream& stream) const;
+  /// Host-blocking join of the last recorded work
+  void wait() const;
+
+  /// Native-handle variants for streams not wrapped in device::Stream
+  /**
+   * Recording on hipStreamLegacy captures completion of all work
+   * previously dispatched to any blocking stream (legacy NULL-stream
+   * synchronization semantics).
+   **/
+  void record(hipStream_t stream);
+  void barrierOn(hipStream_t stream) const;
+
+};
 
 }
 

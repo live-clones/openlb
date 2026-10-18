@@ -53,7 +53,7 @@ struct InitializePorosityO {
   template <concepts::Cell CELL, concepts::Parameters PARAMETERS>
   void apply(CELL& cell, PARAMETERS& parameters) any_platform
   {
-    const auto physR = cell.template getField<descriptors::LOCATION>();
+    const auto physR = cell.template getField<fields::PHYS_R>();
     const auto nElements = parameters.template get<fields::fsi::ELEMENTS_COUNT>();
     if (cell.template getField<descriptors::POROSITY>() == 1) {
       for (std::size_t iElement=0; iElement < nElements; ++iElement) {
@@ -101,7 +101,7 @@ struct UpdatePorosityO {
     const int tag = cell.template getField<fields::fsi::ELEMENT_TAG>();
     if (tag > 0) {
       const int iElement = tag - 1;
-      const auto physR = cell.template getField<descriptors::LOCATION>();
+      const auto physR = cell.template getField<fields::PHYS_R>();
 
       const auto newTag      = PorosityF().tag(parameters, physR, iElement);
       const auto newPorosity = PorosityF().compute(parameters, physR, iElement);
@@ -123,6 +123,7 @@ struct UpdatePorosityO {
     }
   }
 };
+
 
 /// Operator for calculating per-cell momentum exchange torque in a HLBM context
 struct CollectPorousBoundaryTorqueO {
@@ -157,7 +158,7 @@ struct CollectPorousBoundaryTorqueO {
         const auto c = descriptors::c<DESCRIPTOR>(iPop);
         auto neighbor = cell.neighbor(c);
 
-        const bool isNeighborFluid      = neighbor.template getField<descriptors::POROSITY>() == 1;
+        const bool isNeighborFluid = neighbor.template getField<descriptors::POROSITY>() == 1;
 
         const V pop1 = neighbor[iPop];
         const V pop2 = cell[descriptors::opposite<DESCRIPTOR>(iPop)];
@@ -166,7 +167,7 @@ struct CollectPorousBoundaryTorqueO {
         isAtSurface |= isNeighborFluid;
       }
 
-      auto physR = cell.template getField<descriptors::LOCATION>();
+      auto physR = cell.template getField<fields::PHYS_R>();
       auto pivots = parameters.template get<fields::array_of<fields::fsi::ELEMENT_PIVOT>>();
       const Vector<V,DESCRIPTOR::d> pivot{pivots, static_cast<std::size_t>(tag-1)};
       torque = crossProduct((physR - pivot) * parameters.template get<fields::converter::PHYS_LENGTH>(),
@@ -174,13 +175,6 @@ struct CollectPorousBoundaryTorqueO {
 
       if (isAtSurface) {
         cell.template setField<fields::fsi::REDUCED_ELEMENT_TAG>(tag);
-        for (int iPop=1; iPop < DESCRIPTOR::q; ++iPop) {
-          const auto c = descriptors::c<DESCRIPTOR>(iPop);
-          auto neighbor = cell.neighbor(c);
-          if (neighbor.template getField<fields::fsi::ELEMENT_TAG>() == 0) {
-            neighbor.template setField<fields::fsi::ELEMENT_TAG>(tag);
-          }
-        }
       } else {
         torque = 0;
       }
@@ -234,7 +228,7 @@ struct CollectPorousBoundaryForceAndTorqueO {
         isAtSurface |= isNeighborFluid;
       }
 
-      auto physR = cell.template getField<descriptors::LOCATION>();
+      auto physR = cell.template getField<fields::PHYS_R>();
       auto pivots = parameters.template get<fields::array_of<fields::fsi::ELEMENT_PIVOT>>();
       const Vector<V,DESCRIPTOR::d> pivot{pivots, static_cast<std::size_t>(tag-1)};
       torque = crossProduct((physR - pivot) * parameters.template get<fields::converter::PHYS_LENGTH>(),

@@ -39,8 +39,8 @@ struct CSE<CombinedRLBdynamics<T, descriptors::D2Q9<FIELDS...>, dynamics::Tuple<
 template <concepts::Cell CELL, concepts::Parameters PARAMETERS, concepts::BaseType V=typename CELL::value_t>
 CellStatistic<V> collide(CELL& cell, PARAMETERS& parameters) any_platform {
 auto x10 = cell.template getFieldComponent<olb::momenta::FixedVelocityMomentumGeneric::VELOCITY>(1);
-auto x11 = parameters.template get<descriptors::OMEGA>();
 auto x9 = cell.template getFieldComponent<olb::momenta::FixedVelocityMomentumGeneric::VELOCITY>(0);
+auto x11 = parameters.template get<descriptors::OMEGA>();
 auto x12 = x11 + V{-1};
 auto x13 = V{1} / (x9 + V{1});
 auto x14 = cell[0] + cell[4] + V{2}*cell[5] + V{2}*cell[6] + V{2}*cell[7] + cell[8] + V{1};
@@ -143,4 +143,4 @@ return { V{1}*x13*x84, x18 + x19 };
 
 }
 
-// Generation Info: commit=2a9f114ed32e2878e1a64a356eda56d13e508f7d
+// Generation Info: commit=dedfcf8ee2d0fa6903db6f80111ed262a9148a4a

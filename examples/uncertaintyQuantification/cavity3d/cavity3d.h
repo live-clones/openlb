@@ -29,7 +29,7 @@ using namespace olb::uq;
 using namespace olb::descriptors;
 using namespace olb::graphics;
 
-using T = FLOATING_POINT_TYPE;
+using T = double;
 using DESCRIPTOR = D3Q19<>;
 using BulkDynamics = ConstRhoBGKdynamics<T,DESCRIPTOR>;
 

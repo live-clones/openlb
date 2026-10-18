@@ -464,7 +464,6 @@ int main(int argc, char* argv[]) {
     myCaseParameters.set<PHYS_START_T >(0.6);  // time to start fluid pulsation
     myCaseParameters.set<STL_SIZE     >(10);
   }
-  myCaseParameters.fromCLI(argc, argv);
 
   /// === Step 3: Create Mesh ===
   Mesh mesh = createMesh(myCaseParameters);

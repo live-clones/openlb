@@ -124,6 +124,13 @@ public:
     MOMENTA
   >;
 
+  template <typename NEW_DESCRIPTOR>
+  using exchange_descriptor = CombinedAdvectionDiffusionRLBdynamics<
+    T, NEW_DESCRIPTOR,
+    typename DYNAMICS::template exchange_descriptor<NEW_DESCRIPTOR>,
+    MOMENTA
+  >;
+
   template <typename M>
   using exchange_momenta = CombinedAdvectionDiffusionRLBdynamics<T,DESCRIPTOR,DYNAMICS,M>;
 
@@ -222,6 +229,12 @@ struct SourcedAdvectionDiffusionBGKdynamics final : public dynamics::CustomColli
     MOMENTA
   >;
 
+  template <typename NEW_DESCRIPTOR>
+  using exchange_descriptor = SourcedAdvectionDiffusionBGKdynamics<
+    T, NEW_DESCRIPTOR,
+    MOMENTA
+  >;
+
   template<typename M>
   using exchange_momenta = SourcedAdvectionDiffusionBGKdynamics<T,DESCRIPTOR,M>;
 
@@ -290,6 +303,9 @@ struct SourcedLimitedAdvectionDiffusionBGKdynamics final : public dynamics::Cust
   template <typename NEW_T>
   using exchange_value_type = SourcedLimitedAdvectionDiffusionBGKdynamics<NEW_T,DESCRIPTOR,MOMENTA>;
 
+  template <typename NEW_DESCRIPTOR>
+  using exchange_descriptor = SourcedLimitedAdvectionDiffusionBGKdynamics<T,NEW_DESCRIPTOR,MOMENTA>;
+
   template<typename M>
   using exchange_momenta = SourcedLimitedAdvectionDiffusionBGKdynamics<T,DESCRIPTOR,M>;
 
@@ -353,6 +369,9 @@ struct TotalEnthalpyAdvectionDiffusionBGKdynamics final : public dynamics::Custo
 
   template <typename NEW_T>
   using exchange_value_type = TotalEnthalpyAdvectionDiffusionBGKdynamics<NEW_T,DESCRIPTOR,MOMENTA>;
+
+  template <typename NEW_DESCRIPTOR>
+  using exchange_descriptor = TotalEnthalpyAdvectionDiffusionBGKdynamics<T,NEW_DESCRIPTOR,MOMENTA>;
 
   template<typename M>
   using exchange_momenta = TotalEnthalpyAdvectionDiffusionBGKdynamics<T,DESCRIPTOR,M>;
@@ -495,6 +514,9 @@ struct TotalEnthalpyAdvectionDiffusionTRTdynamics final : public dynamics::Custo
 
   template <typename NEW_T>
   using exchange_value_type = TotalEnthalpyAdvectionDiffusionTRTdynamics<NEW_T,DESCRIPTOR,MOMENTA>;
+
+  template <typename NEW_DESCRIPTOR>
+  using exchange_descriptor = TotalEnthalpyAdvectionDiffusionTRTdynamics<T,NEW_DESCRIPTOR,MOMENTA>;
 
   template<typename M>
   using exchange_momenta = TotalEnthalpyAdvectionDiffusionTRTdynamics<T,DESCRIPTOR,M>;
@@ -668,6 +690,9 @@ struct PhaseFieldAdvectionDiffusionBGKdynamics : public dynamics::CustomCollisio
   template <typename NEW_T>
   using exchange_value_type = PhaseFieldAdvectionDiffusionBGKdynamics<NEW_T,DESCRIPTOR,MOMENTA>;
 
+  template <typename NEW_DESCRIPTOR>
+  using exchange_descriptor = PhaseFieldAdvectionDiffusionBGKdynamics<T,NEW_DESCRIPTOR,MOMENTA>;
+
   template<typename M>
   using exchange_momenta = PhaseFieldAdvectionDiffusionBGKdynamics<T,DESCRIPTOR,M>;
 
@@ -736,6 +761,9 @@ struct ParticleAdvectionDiffusionBGKdynamics final : public dynamics::CustomColl
   template <typename NEW_T>
   using exchange_value_type = ParticleAdvectionDiffusionBGKdynamics<NEW_T,DESCRIPTOR,MOMENTA>;
 
+  template <typename NEW_DESCRIPTOR>
+  using exchange_descriptor = ParticleAdvectionDiffusionBGKdynamics<T,NEW_DESCRIPTOR,MOMENTA>;
+
   template <typename M>
   using exchange_momenta = ParticleAdvectionDiffusionBGKdynamics<T,DESCRIPTOR,M>;
 
@@ -782,6 +810,9 @@ struct RTLBMdynamicsMcHardy final : public dynamics::CustomCollision<T,DESCRIPTO
 
   template <typename NEW_T>
   using exchange_value_type = RTLBMdynamicsMcHardy<NEW_T,DESCRIPTOR,MOMENTA>;
+
+  template <typename NEW_DESCRIPTOR>
+  using exchange_descriptor = RTLBMdynamicsMcHardy<T,NEW_DESCRIPTOR,MOMENTA>;
 
   template<typename M>
   using exchange_momenta = RTLBMdynamicsMcHardy<T,DESCRIPTOR,M>;
@@ -844,6 +875,9 @@ struct RTLBMdynamicsMcHardyRK final : public dynamics::CustomCollision<T,DESCRIP
 
   template <typename NEW_T>
   using exchange_value_type = RTLBMdynamicsMcHardyRK<NEW_T,DESCRIPTOR,MOMENTA>;
+
+  template <typename NEW_DESCRIPTOR>
+  using exchange_descriptor = RTLBMdynamicsMcHardyRK<T,NEW_DESCRIPTOR,MOMENTA>;
 
   template<typename M>
   using exchange_momenta = RTLBMdynamicsMcHardyRK<T,DESCRIPTOR,M>;
@@ -993,6 +1027,9 @@ struct CrystalSourcedAdvectionDiffusionBGKdynamics final : public dynamics::Cust
 
   template<typename V>
   using exchange_value_type = CrystalSourcedAdvectionDiffusionBGKdynamics<V,DESCRIPTOR,MOMENTA>;
+
+  template<typename NEW_DESCRIPTOR>
+  using exchange_descriptor = CrystalSourcedAdvectionDiffusionBGKdynamics<T,NEW_DESCRIPTOR,MOMENTA>;
 
   std::type_index id() override {
     return typeid(CrystalSourcedAdvectionDiffusionBGKdynamics);

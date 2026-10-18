@@ -584,11 +584,11 @@ int main(int argc, char* argv[])
     myCaseParameters.set<BOUZIDI>(1);
     myCaseParameters.set<PHYS_CHAR_VISCOSITY>(1.5e-5);
     myCaseParameters.set<PHYS_CHAR_DENSITY>(1.225);
-    myCaseParameters.set<STOKES>([&] {
-              return  myCaseParameters.get<PART_RHO>() * myCaseParameters.get<PART_RADIUS>()
-                    * myCaseParameters.get<PART_RADIUS>() * myCaseParameters.get<REYNOLDS>()
-                    / (18. *myCaseParameters.get<INLET_RADIUS>() * myCaseParameters.get<PHYS_CHAR_DENSITY>()
-                    * myCaseParameters.get<INLET_RADIUS>() );
+    myCaseParameters.set<STOKES>([](MyCase::ParametersD& p) {
+              return  p.get<PART_RHO>() * p.get<PART_RADIUS>()
+                    * p.get<PART_RADIUS>() * p.get<REYNOLDS>()
+                    / (18. *p.get<INLET_RADIUS>() * p.get<PHYS_CHAR_DENSITY>()
+                    * p.get<INLET_RADIUS>() );
                 });
     myCaseParameters.set<FLUID_EXISTS> (1);
     myCaseParameters.set<FIBER_LENGTH>(0.000500);
@@ -596,7 +596,6 @@ int main(int argc, char* argv[])
 
 
   }
-  myCaseParameters.fromCLI(argc, argv);
   /// === Step 3: Create Mesh ===
   Mesh mesh = createMesh(myCaseParameters);
 

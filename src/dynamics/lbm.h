@@ -62,6 +62,7 @@ struct equilibrium {
                - descriptors::invCs2<V,DESCRIPTOR>() * V{0.5} * uSqr)
            - descriptors::t<V,DESCRIPTOR>(iPop);
   }
+
   /// Computation of equilibrium distribution, second order in u
   template <typename RHO, typename U, typename V=RHO>
   static V secondOrder(int iPop, const RHO& rho, const U& u) any_platform
@@ -85,7 +86,7 @@ struct equilibrium {
 
     //Hermite polynomes  https://doi.org/10.1017/S0022112005008153
     V hermite2XX = descriptors::c<DESCRIPTOR>(iPop,0)*descriptors::c<DESCRIPTOR>(iPop,0) - V{1}/descriptors::invCs2<V,DESCRIPTOR>();
-    V hermite2XY = descriptors::c<DESCRIPTOR>(iPop,0)*descriptors::c<DESCRIPTOR>(iPop,1);
+    V hermite2XY = descriptors::c<DESCRIPTOR>(iPop,0)*descriptors::c<DESCRIPTOR>(iPop,1) * V{1};
     V hermite2YY = descriptors::c<DESCRIPTOR>(iPop,1)*descriptors::c<DESCRIPTOR>(iPop,1) - V{1}/descriptors::invCs2<V,DESCRIPTOR>();
 
     V hermite3XXY = hermite2XX * descriptors::c<DESCRIPTOR>(iPop,1);
@@ -99,8 +100,8 @@ struct equilibrium {
       V aEqThrdYYZ = u[1] * u[1] * u[2];
       V aEqThrdYZZ = u[1] * u[2] * u[2];
 
-      V hermite2YZ = descriptors::c<DESCRIPTOR>(iPop,1)*descriptors::c<DESCRIPTOR>(iPop,2);
-      V hermite2XZ = descriptors::c<DESCRIPTOR>(iPop,0)*descriptors::c<DESCRIPTOR>(iPop,2);
+      V hermite2YZ = descriptors::c<DESCRIPTOR>(iPop,1)*descriptors::c<DESCRIPTOR>(iPop,2) * V{1};
+      V hermite2XZ = descriptors::c<DESCRIPTOR>(iPop,0)*descriptors::c<DESCRIPTOR>(iPop,2) * V{1};
 
       V hermite3XXZ = hermite2XX * descriptors::c<DESCRIPTOR>(iPop,2);
       V hermite3XZZ = hermite2XZ * descriptors::c<DESCRIPTOR>(iPop,2) - descriptors::c<DESCRIPTOR>(iPop,0)/descriptors::invCs2<V,DESCRIPTOR>();
@@ -190,23 +191,42 @@ struct equilibrium {
   static V cmpincompressible(int iPop, const RHO& rho, const LAPLACERHO& laplaceRho, const U& u, const USQR& uSqr, const PRESSURE& pressure) any_platform
   {
     V c_u{};
-    if (iPop == 0) {
-      return descriptors::invCs2<V,DESCRIPTOR>() * pressure * (descriptors::t<V,DESCRIPTOR>(iPop)-V{1})
-             - rho*descriptors::t<V,DESCRIPTOR>(iPop)*uSqr*descriptors::invCs2<V,DESCRIPTOR>()*V{0.5};
+    unsigned iPopZero = static_cast<unsigned>(!(iPop != 0));
+    // if (iPop == 0) {
+    //   return descriptors::invCs2<V,DESCRIPTOR>() * pressure * (descriptors::t<V,DESCRIPTOR>(iPop)-V{1})
+    //          - rho*descriptors::t<V,DESCRIPTOR>(iPop)*uSqr*descriptors::invCs2<V,DESCRIPTOR>()*V{0.5};
+    // }
+    // else {
+    for (int iD=0; iD < DESCRIPTOR::d; ++iD) {
+      c_u += descriptors::c<DESCRIPTOR>(iPop,iD)*u[iD];
     }
-    else {
-      for (int iD=0; iD < DESCRIPTOR::d; ++iD) {
-        c_u += descriptors::c<DESCRIPTOR>(iPop,iD)*u[iD];
-      }
-      return descriptors::t<V,DESCRIPTOR>(iPop)*descriptors::invCs2<V,DESCRIPTOR>()
-             * ( pressure + laplaceRho/V{4}*c_u + rho*(c_u + descriptors::invCs2<V,DESCRIPTOR>()*V{0.5}*c_u*c_u - uSqr*V{0.5}) );
-    }
+    V correction = -V{1} * descriptors::invCs2<V,DESCRIPTOR>() * pressure * V(static_cast<int>(iPopZero));
+    return descriptors::t<V,DESCRIPTOR>(iPop)*descriptors::invCs2<V,DESCRIPTOR>()
+            * ( pressure + laplaceRho/V{4}*c_u + rho*(c_u + descriptors::invCs2<V,DESCRIPTOR>()*V{0.5}*c_u*c_u - uSqr*V{0.5}) ) + correction;
+    // }
   }
   template <typename RHO, typename LAPLACERHO, typename U, typename PRESSURE, typename V=PRESSURE>
   static V cmpincompressible(int iPop, const RHO& rho, const LAPLACERHO& laplaceRho, const U& u, const PRESSURE& pressure) any_platform
   {
     const V uSqr = util::normSqr<U,DESCRIPTOR::d>(u);
     return cmpincompressible(iPop, rho, laplaceRho, u, uSqr, pressure);
+  }
+
+  template <typename RHO, typename LAPLACERHO, typename U, typename USQR, typename PRESSURE, typename V=PRESSURE>
+  static V cmpcontiincompressible(int iPop, const RHO& rho, const LAPLACERHO& laplaceRho, const U& u, const USQR& uSqr, const PRESSURE& pressure) any_platform
+  {
+    V c_u{};
+    for (int iD=0; iD < DESCRIPTOR::d; ++iD) {
+      c_u += descriptors::c<DESCRIPTOR>(iPop,iD)*u[iD];
+    }
+    return descriptors::t<V,DESCRIPTOR>(iPop)*descriptors::invCs2<V,DESCRIPTOR>()
+            * ( pressure + laplaceRho/V{4}*c_u + rho*(c_u + descriptors::invCs2<V,DESCRIPTOR>()*V{0.5}*c_u*c_u - uSqr*V{0.5}) );
+  }
+  template <typename RHO, typename LAPLACERHO, typename U, typename PRESSURE, typename V=PRESSURE>
+  static V cmpcontiincompressible(int iPop, const RHO& rho, const LAPLACERHO& laplaceRho, const U& u, const PRESSURE& pressure) any_platform
+  {
+    const V uSqr = util::normSqr<U,DESCRIPTOR::d>(u);
+    return cmpcontiincompressible(iPop, rho, laplaceRho, u, uSqr, pressure);
   }
 
   /// compute off-equilibrium part of the populations from gradient of the flux
@@ -254,7 +274,7 @@ struct equilibrium {
     // the elements under the diagonal by symmetry
     for (int iAlpha=0; iAlpha < L::d; ++iAlpha) {
       for (int iBeta=iAlpha; iBeta < L::d; ++iBeta) {
-        V toAdd = descriptors::c<L>(iPop,iAlpha)*descriptors::c<L>(iPop,iBeta);
+        V toAdd = descriptors::c<L>(iPop,iAlpha)*descriptors::c<L>(iPop,iBeta) * V{1};
         if (iAlpha == iBeta) {
           toAdd -= V{1}/descriptors::invCs2<V,L>();
         }

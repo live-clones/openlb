@@ -581,54 +581,54 @@ int main(int argc, char* argv[])
     myCaseParameters.set<PHYS_CHAR_VELOCITY>(1.0);
     myCaseParameters.set<PHYS_CHAR_LENGTH>(1.0);
     myCaseParameters.set<LATTICE_DISTANCE_TO_WALL>(0.5);
-    myCaseParameters.set<PHYS_ADAPTED_CHAR_LENGTH>([&] {
-      T   latticeWallDistance = myCaseParameters.get<LATTICE_DISTANCE_TO_WALL>();
-      int N                   = myCaseParameters.get<RESOLUTION>();
-      T   physRefL            = myCaseParameters.get<PHYS_CHAR_LENGTH>();
+    myCaseParameters.set<PHYS_ADAPTED_CHAR_LENGTH>([](MyCase::ParametersD& p) {
+      T   latticeWallDistance = p.get<LATTICE_DISTANCE_TO_WALL>();
+      int N                   = p.get<RESOLUTION>();
+      T   physRefL            = p.get<PHYS_CHAR_LENGTH>();
       return 2.0 * physRefL / (1.0 - 2.0 / N * (1.0 - latticeWallDistance));
     });
 
-    myCaseParameters.set<PHYS_DELTA_X>([&] {
-      return myCaseParameters.get<PHYS_ADAPTED_CHAR_LENGTH>() / myCaseParameters.get<RESOLUTION>();
+    myCaseParameters.set<PHYS_DELTA_X>([](MyCase::ParametersD& p) {
+      return p.get<PHYS_ADAPTED_CHAR_LENGTH>() / p.get<RESOLUTION>();
     });
-    myCaseParameters.set<PHYS_DELTA_T>([&] {
-      return (myCaseParameters.get<LATTICE_RELAXATION_TIME>() - T(0.5)) / myCaseParameters.get<PHYS_CHAR_VISCOSITY>()
+    myCaseParameters.set<PHYS_DELTA_T>([](MyCase::ParametersD& p) {
+      return (p.get<LATTICE_RELAXATION_TIME>() - T(0.5)) / p.get<PHYS_CHAR_VISCOSITY>()
               / descriptors::invCs2<T,DESCRIPTOR>()
-              * myCaseParameters.get<PHYS_DELTA_X>() * myCaseParameters.get<PHYS_DELTA_X>();
+              * p.get<PHYS_DELTA_X>() * p.get<PHYS_DELTA_X>();
     });
-    myCaseParameters.set<PHYS_CHAR_TIME>([&] {
-      T ReTau      = myCaseParameters.get<REYNOLDS_TAU>();
-      T physRefL   = myCaseParameters.get<PHYS_CHAR_LENGTH>();
-      T charPhysNu = myCaseParameters.get<PHYS_CHAR_VISCOSITY>();
+    myCaseParameters.set<PHYS_CHAR_TIME>([](MyCase::ParametersD& p) {
+      T ReTau      = p.get<REYNOLDS_TAU>();
+      T physRefL   = p.get<PHYS_CHAR_LENGTH>();
+      T charPhysNu = p.get<PHYS_CHAR_VISCOSITY>();
       return physRefL / (ReTau * charPhysNu / physRefL);
     });
 
     myCaseParameters.set<PHYS_CONVERGE_TIME_BASE>(40.0);
 
-    myCaseParameters.set<PHYS_CONVERGE_TIME>([&] {
-      T multiple  = myCaseParameters.get<PHYS_CONVERGE_TIME_BASE>();
-      T charPhysT = myCaseParameters.get<PHYS_CHAR_TIME>();
+    myCaseParameters.set<PHYS_CONVERGE_TIME>([](MyCase::ParametersD& p) {
+      T multiple  = p.get<PHYS_CONVERGE_TIME_BASE>();
+      T charPhysT = p.get<PHYS_CHAR_TIME>();
       return charPhysT * multiple;
     });
 
     myCaseParameters.set<PHYS_STATISTICS_TIME_BASE>(150.0);
-    myCaseParameters.set<PHYS_STATISTICS_TIME>([&] {
-      T multiple  = myCaseParameters.get<PHYS_STATISTICS_TIME_BASE>();
-      T charPhysT = myCaseParameters.get<PHYS_CHAR_TIME>();
+    myCaseParameters.set<PHYS_STATISTICS_TIME>([](MyCase::ParametersD& p) {
+      T multiple  = p.get<PHYS_STATISTICS_TIME_BASE>();
+      T charPhysT = p.get<PHYS_CHAR_TIME>();
       return charPhysT * multiple;
     });
 
-    myCaseParameters.set<MAX_PHYS_T>([&] {
-      return myCaseParameters.get<PHYS_CONVERGE_TIME>() + myCaseParameters.get<PHYS_STATISTICS_TIME>();
+    myCaseParameters.set<MAX_PHYS_T>([](MyCase::ParametersD& p) {
+      return p.get<PHYS_CONVERGE_TIME>() + p.get<PHYS_STATISTICS_TIME>();
     });
 
     myCaseParameters.set<DOMAIN_EXTENT_BASE>({2.0, 2.0, 2.0});
 
-    myCaseParameters.set<DOMAIN_EXTENT>([&]() -> Vector<T, 3> {
-      T physRefL = myCaseParameters.get<PHYS_CHAR_LENGTH>();
-      return {myCaseParameters.get<DOMAIN_EXTENT_BASE>()[0] * std::numbers::pi_v<T> * physRefL,
-              myCaseParameters.get<DOMAIN_EXTENT_BASE>()[1] * std::numbers::pi_v<T> * physRefL,
-              myCaseParameters.get<DOMAIN_EXTENT_BASE>()[2] * physRefL};
+    myCaseParameters.set<DOMAIN_EXTENT>([](MyCase::ParametersD& p) -> Vector<T, 3> {
+      T physRefL = p.get<PHYS_CHAR_LENGTH>();
+      return {p.get<DOMAIN_EXTENT_BASE>()[0] * std::numbers::pi_v<T> * physRefL,
+              p.get<DOMAIN_EXTENT_BASE>()[1] * std::numbers::pi_v<T> * physRefL,
+              p.get<DOMAIN_EXTENT_BASE>()[2] * physRefL};
     });
 
     /// Wallfunction parameters
@@ -639,14 +639,13 @@ int main(int argc, char* argv[])
     myCaseParameters.set<ENABLE_INTERPOLATE_SAMPLE_VELOCITY>(false);
     myCaseParameters.set<ENABLE_VANDRIEST>(false);
     myCaseParameters.set<LATTICE_DISTANCE_SAMPLING>(3.5);
-    myCaseParameters.set<OVERLAP>([&] {
-      return int(myCaseParameters.get<WITH_WALL_MODEL>()*myCaseParameters.get<LATTICE_DISTANCE_SAMPLING>() + T(1));
+    myCaseParameters.set<OVERLAP>([](MyCase::ParametersD& p) {
+      return int(p.get<WITH_WALL_MODEL>()*p.get<LATTICE_DISTANCE_SAMPLING>() + T(1));
     });
     myCaseParameters.set<ENABLE_MOVING_WALL>(false);
     myCaseParameters.set<ENABLE_TURBULENCE_STATISTICS>(true);
   }
 
-  myCaseParameters.fromCLI(argc, argv);
   {
     using namespace olb::parameters;
     if (!(myCaseParameters.get<METHOD_OF_RHO>() >= 0 && myCaseParameters.get<METHOD_OF_RHO>() <= 2)) {

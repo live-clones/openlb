@@ -58,6 +58,12 @@ struct BlockO : public AbstractBlockO {
 
   /// Get number of cells covered by operator (optional)
   virtual std::size_t weight() const = 0;
+
+  /// Return abstract parameters of the operator (an empty set if it carries none)
+  virtual olb::AbstractParameters<T,DESCRIPTOR>& getParameters(ConcreteBlockLattice<T,DESCRIPTOR,PLATFORM>& block) {
+    static StaticParametersD<T,DESCRIPTOR> none;
+    return none;
+  }
 };
 
 /// Block application of concrete OPERATOR called using SCOPE on PLATFORM

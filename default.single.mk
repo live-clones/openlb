@@ -35,7 +35,7 @@ JS_FILES := $(CPP_FILES:.cpp=.js)
 INCLUDE_FLAGS := -I$(subst $(EMPTY) $(EMPTY), -I,$(INCLUDE_DIRS))
 
 %.d: $(CPP_FILES)
-	@$(CXX) $(CXXFLAGS) $(INCLUDE_FLAGS) $< -MM -MT $(@:.d=.o) >$@
+	@$(CXX) $(CXXFLAGS) $(DEPFLAGS) $(INCLUDE_FLAGS) $< -MM -MT $(@:.d=.o) >$@
 
 %.o: %.cpp
 	$(CXX) $(CXXFLAGS) $(INCLUDE_FLAGS) -c -o $@ $<

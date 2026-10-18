@@ -29,6 +29,8 @@
 #include <cstdint>
 #include <type_traits>
 
+#include "core/half.h"
+
 namespace olb {
 
 namespace cpu {
@@ -311,6 +313,10 @@ public:
   Pack(const float* ptr):
     Pack(_mm256_loadu_ps(ptr)) { }
 
+  /// f16 storage load: 8 halves (128 bit) -> 8 floats (256 bit) via hardware F16C
+  Pack(const ::olb::half* ptr):
+    Pack(_mm256_cvtph_ps(_mm_loadu_si128(reinterpret_cast<const __m128i*>(ptr)))) { }
+
   Pack(const float* ptr, const index_t* idx):
     Pack(_mm256_i32gather_ps(ptr, _mm256_loadu_si256(reinterpret_cast<const __m256i*>(idx)), sizeof(float))) { }
 
@@ -432,15 +438,26 @@ template <typename T>
 void maskstore(T* target, Mask<T> mask, Pack<T> value);
 
 template <>
-void maskstore<double>(double* target, Mask<double> mask, Pack<double> value)
+inline void maskstore<double>(double* target, Mask<double> mask, Pack<double> value)
 {
   _mm256_maskstore_pd(target, mask, value);
 }
 
 template <>
-void maskstore<float>(float* target, Mask<float> mask, Pack<float> value)
+inline void maskstore<float>(float* target, Mask<float> mask, Pack<float> value)
 {
   _mm256_maskstore_ps(target, mask, value);
+}
+
+/// f16 store overload: 8 floats -> 8 halves (F16C), lane-masked. AVX2 has no masked
+/// 16-bit store, so blend the converted halves against the existing ones per byte.
+inline void maskstore(::olb::half* target, Mask<float> mask, Pack<float> value)
+{
+  __m128i h   = _mm256_cvtps_ph(value, _MM_FROUND_TO_NEAREST_INT);
+  __m128i cur = _mm_loadu_si128(reinterpret_cast<const __m128i*>(target));
+  __m256i m32 = mask;  // 8x 32-bit lane mask
+  __m128i m16 = _mm_packs_epi32(_mm256_castsi256_si128(m32), _mm256_extracti128_si256(m32,1));
+  _mm_storeu_si128(reinterpret_cast<__m128i*>(target), _mm_blendv_epi8(cur, h, m16));
 }
 
 
@@ -448,15 +465,22 @@ template <typename T>
 void store(T* target, Pack<T> value);
 
 template <>
-void store<double>(double* target, Pack<double> value)
+inline void store<double>(double* target, Pack<double> value)
 {
   _mm256_storeu_pd(target, value);
 }
 
 template <>
-void store<float>(float* target, Pack<float> value)
+inline void store<float>(float* target, Pack<float> value)
 {
   _mm256_storeu_ps(target, value);
+}
+
+/// f16 store overload: 8 floats -> 8 halves (F16C), unmasked
+inline void store(::olb::half* target, Pack<float> value)
+{
+  _mm_storeu_si128(reinterpret_cast<__m128i*>(target),
+                   _mm256_cvtps_ph(value, _MM_FROUND_TO_NEAREST_INT));
 }
 
 
@@ -464,7 +488,7 @@ template <typename T>
 void store(T* target, Pack<T> value, const typename Pack<T>::index_t* indices);
 
 template <>
-void store<double>(double* target, Pack<double> value, const Pack<double>::index_t* indices)
+inline void store<double>(double* target, Pack<double> value, const Pack<double>::index_t* indices)
 {
 #ifdef __AVX512F__
   _mm256_i32scatter_pd(target, _mm_loadu_si128(reinterpret_cast<const __m128i*>(indices)), value, sizeof(double));
@@ -477,7 +501,7 @@ void store<double>(double* target, Pack<double> value, const Pack<double>::index
 }
 
 template <>
-void store<float>(float* target, Pack<float> value, const Pack<float>::index_t* indices)
+inline void store<float>(float* target, Pack<float> value, const Pack<float>::index_t* indices)
 {
 #ifdef __AVX512F__
   _mm256_i32scatter_ps(target, _mm256_loadu_si256(reinterpret_cast<const __m256i*>(indices)), value, sizeof(float));

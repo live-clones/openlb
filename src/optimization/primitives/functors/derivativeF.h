@@ -35,7 +35,9 @@ namespace functors {
 /// Generic functor to compute the jacobian for any evaluated functor in respect to
 /// the variables stored in the field RESPECT_TO. Dynamics type is required to
 /// provide a cell with full cell interface, e.g., to compute the derivative of a collision.
-template <concepts::DifferentiableFunctor FUNCTOR, typename RESPECT_TO, typename DYNAMICS>
+template <concepts::DifferentiableFunctor FUNCTOR,
+          concepts::Field RESPECT_TO,
+          concepts::DifferentiableDynamics DYNAMICS>
 struct DerivativeF {
 
   using parameters_t = typename FUNCTOR::parameters_t::template include<parameters::FACTOR>;
@@ -46,7 +48,9 @@ struct DerivativeF {
     using V = typename CELL::value_t;
 
     /// Collecting all accessed fields in order to include them all for correct derivative computation
-    using COMBINED_FIELDS = meta::merge<typename CELL::descriptor_t::fields_t, typename FUNCTOR::fields_t>;
+    using COMBINED_FIELDS = meta::merge_many<typename CELL::descriptor_t::fields_t,
+                                             typename FUNCTOR::fields_t,
+                                             typename DYNAMICS::fields>::type;
     using DESCRIPTOR = typename COMBINED_FIELDS::template decompose_into<CELL::descriptor_t::template extend_by_fields>;
 
     /// Forward AD type for derivative computation
@@ -75,6 +79,146 @@ struct DerivativeF {
         view[row][col] = (y[row]).d(col);
         view[row][col] *= factor; // scaling due to cell-wise contribution
       }
+    }
+
+    return jacobian;
+  }
+};
+
+/// Computes the derivative of a non-local functor using forward AD
+template <concepts::DifferentiableFunctor FUNCTOR,
+          concepts::Field RESPECT_TO,
+          concepts::DifferentiableDynamics DYNAMICS>
+struct NonLocalDerivativeF {
+  using parameters_t = typename FUNCTOR::parameters_t::template include<parameters::FACTOR>;
+
+  using result_t = descriptors::FIELD_MATRIX<typename FUNCTOR::result_t, RESPECT_TO>;
+
+  template <typename CELL, typename PARAMETERS>
+  auto compute(CELL& cell, PARAMETERS& parameters) any_platform {
+    using V = typename CELL::value_t;
+    using COMBINED_FIELDS = meta::merge_many<typename CELL::descriptor_t::fields_t,
+                                             typename FUNCTOR::fields_t,
+                                             typename DYNAMICS::fields>::type;
+    using DESCRIPTOR = typename COMBINED_FIELDS::template decompose_into<CELL::descriptor_t::template extend_by_fields>;
+    FieldD<V,DESCRIPTOR,typename NonLocalDerivativeF::result_t> jacobian {};
+
+    for (unsigned iPop=0; iPop < DESCRIPTOR::q; ++iPop) {
+      auto neighbor = cell.neighbor(descriptors::c<DESCRIPTOR>(iPop));
+      computeContribution(jacobian, neighbor, parameters, iPop);
+    }
+
+    return jacobian;
+  }
+
+  /// Compute the derivative contribution on the target cell for the passed cell.
+  /// NeighborDir tracks the direction of the current cell from the target cell.
+  template <typename CELL, typename PARAMETERS>
+  void computeContribution(auto& jacobian, CELL& cell, PARAMETERS& parameters, unsigned neighborDir) any_platform {
+    using V = typename CELL::value_t;
+
+    /// Collecting all accessed fields in order to include them all for correct derivative computation
+    using COMBINED_FIELDS = meta::merge_many<typename CELL::descriptor_t::fields_t,
+                                             typename FUNCTOR::fields_t,
+                                             typename DYNAMICS::fields>::type;
+    using DESCRIPTOR = typename COMBINED_FIELDS::template decompose_into<CELL::descriptor_t::template extend_by_fields>;
+
+    /// Forward AD type for derivative computation
+    using ADf = typename util::ADf<V,DESCRIPTOR::template size<RESPECT_TO>()>;
+    using ADf_DYNAMICS = typename DYNAMICS::template exchange_value_type<ADf>;
+    const V factor = parameters.template get<parameters::FACTOR>();
+
+    /// Full cell providing complete cell interface including direct neighbor access instantiated with forward AD type
+    FullCellWithDirectNeighborsD<ADf,DESCRIPTOR,ADf_DYNAMICS> adfCell;
+    auto adfParams = parameters.template copyAs<ADf>();
+    DESCRIPTOR::fields_t::for_each([&](auto id) {
+      using FIELD = typename decltype(id)::type;
+      for (unsigned iPop=0; iPop < DESCRIPTOR::q; ++iPop) {
+        auto& adfSingleCell = adfCell.neighbor(descriptors::c<DESCRIPTOR>(iPop));
+        auto singleCell = cell.neighbor(descriptors::c<DESCRIPTOR>(iPop));
+        adfSingleCell.template setField<FIELD>(FieldD<ADf,DESCRIPTOR,FIELD>(singleCell.template getField<FIELD>()));
+      }
+    });
+
+    /// Seeding of the populations for the target cell
+    for (std::size_t iDim=0; iDim<DESCRIPTOR::template size<RESPECT_TO>(); ++iDim) {
+      adfCell.neighbor(descriptors::c<DESCRIPTOR>(descriptors::opposite<DESCRIPTOR>(neighborDir))).template getFieldComponent<RESPECT_TO>(iDim).setDiffVariable(iDim);
+    }
+
+    /// Provide matrix-native view on the serial FieldD
+    auto view = NonLocalDerivativeF::result_t::template getMatrixView<V,DESCRIPTOR>(jacobian);
+
+    /// Execute functor for current cell and get their contributions on the target cell
+    FieldD<ADf,DESCRIPTOR,typename FUNCTOR::result_t> y = FUNCTOR{}.compute(adfCell, adfParams);
+    for (unsigned row=0; row<view.rows; ++row) {
+      for (unsigned col=0; col<view.cols; ++col) {
+        view[row][col] += (y[row]).d(col) * factor;
+      }
+    }
+  }
+};
+
+template <concepts::DifferentiableFunctor FUNCTOR,
+          concepts::Field RESPECT_TO,
+          concepts::DifferentiableDynamics DYNAMICS>
+struct ReverseDerivativeF {
+
+  using parameters_t = typename FUNCTOR::parameters_t::template include<parameters::FACTOR>;
+  using result_t = descriptors::FIELD_MATRIX<typename FUNCTOR::result_t, RESPECT_TO>;
+
+  template <typename CELL, typename PARAMETERS>
+  auto compute(CELL& cell, PARAMETERS& parameters) any_platform {
+    using V = typename CELL::value_t;
+
+    /// Collecting all accessed fields in order to include them all for correct derivative computation
+    using COMBINED_FIELDS = meta::merge_many<typename CELL::descriptor_t::fields_t,
+                                             typename FUNCTOR::fields_t,
+                                             typename DYNAMICS::fields>::type;
+    using DESCRIPTOR = typename COMBINED_FIELDS::template decompose_into<CELL::descriptor_t::template extend_by_fields>;
+
+    /// Check if output dimension of FUNCTOR is scalar
+    static_assert(FUNCTOR::result_t::template size<DESCRIPTOR>() == 1,
+                  "ReverseDerivativeF: this functor is designed for scalar output functors only.");
+
+    /// Reverse AD type for derivative computation
+    using Tape = util::ADtape::Tape<V>;
+    using ActiveType = util::ADtape::ActiveType<Tape>;
+    auto& tape = ActiveType::getTape();
+    using ADr_DYNAMICS = typename DYNAMICS::template exchange_value_type<ActiveType>;
+    const V factor = parameters.template get<parameters::FACTOR>();
+
+    /// Full cell providing complete cell interface instantiated with reverse AD type
+    FullCellD<ActiveType,DESCRIPTOR,ADr_DYNAMICS> adrCell;
+    auto adrParams = parameters.template copyAs<ActiveType>();
+    DESCRIPTOR::fields_t::for_each([&](auto id) {
+      using FIELD = typename decltype(id)::type;
+      adrCell.template setField<FIELD>(FieldD<ActiveType,DESCRIPTOR,FIELD>(cell.template getField<FIELD>()));
+    });
+
+    /// Register input variables for the reverse AD algorithm
+    constexpr std::size_t dDim = RESPECT_TO::template size<DESCRIPTOR>();
+    int idFstar[dDim];
+    for (unsigned iDim=0; iDim < dDim; ++iDim) {
+      tape.registerInput(adrCell.template getFieldComponent<RESPECT_TO>(iDim));
+      idFstar[iDim] = adrCell.template getFieldComponent<RESPECT_TO>(iDim).getIdentifier();
+    }
+
+    /// Forward evaluation
+    FieldD<ActiveType,DESCRIPTOR,typename FUNCTOR::result_t> y = FUNCTOR{}.compute(adrCell, adrParams);
+
+    /// Seeding of reverse AD algorithm
+    tape.registerOutput(y[0]);
+    y[0].gradient() = V{1.0};
+
+    /// Backwards propagation of the gradients
+    tape.evaluate();
+
+    FieldD<V,DESCRIPTOR,typename ReverseDerivativeF::result_t> jacobian;
+    /// Provide matrix-native view on the serial FieldD
+    auto view = ReverseDerivativeF::result_t::template getMatrixView<V,DESCRIPTOR>(jacobian);
+    for (unsigned col=0; col<view.cols; ++col) {
+      view[0][col] = tape.gradient(idFstar[col]);
+      view[0][col] *= factor; // scaling due to cell-wise contribution
     }
 
     return jacobian;

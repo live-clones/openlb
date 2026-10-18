@@ -42,20 +42,17 @@ int main(int argc, char* argv[])
     myCaseParametersD.template set<LATTICE_RELAXATION_TIME>(        0.8);
     myCaseParametersD.template set<OBJECTIVE_TYPE>(ObjectiveType::velocity);
   }
-  myCaseParametersD.fromCLI(argc, argv);
-  MyADfCase::ParametersD myADfCaseParametersD;
+  auto myADfCaseParametersD = myCaseParametersD.copyAs<MyADfCase::value_t>();
+
+  OptimizerParametersD<MyCase::value_t> optiParameters;
   {
     using namespace parameters;
-    myADfCaseParametersD.template set<PHYS_CHAR_VELOCITY     >( ADf{1.0});
-    myADfCaseParametersD.template set<PHYS_CHAR_LENGTH       >( ADf{1.0});
-    myADfCaseParametersD.template set<PHYS_CHAR_VISCOSITY    >( ADf{0.1});
-    myADfCaseParametersD.template set<PHYS_CHAR_DENSITY      >( ADf{1.0});
-    myADfCaseParametersD.template set<MAX_PHYS_T             >( ADf{6.0});
-    myADfCaseParametersD.template set<RESOLUTION             >(       11);
-    myADfCaseParametersD.template set<LATTICE_RELAXATION_TIME>( ADf{0.8});
-    myADfCaseParametersD.template set<OBJECTIVE_TYPE>(ObjectiveType::velocity);
+    optiParameters.set<optimizer::EPS>(1e-5);
+    optiParameters.set<optimizer::MAX_OPTIMIZATION_STEPS>(10);
+    optiParameters.set<linesearch::MAX_STEP_ATTEMPTS>(20);
+    optiParameters.set<linesearch::STEP_CONDITION>("Wolfe");
+    optiParameters.set<optimizer::VERBOSE>(true);
   }
-  myADfCaseParametersD.fromCLI(argc, argv);
 
   /// @li Step 3: Create Mesh
   Mesh mesh = createMesh(myCaseParametersD);
@@ -88,11 +85,13 @@ int main(int argc, char* argv[])
   setInitialControl(optiCase);
 
   /// @li Step E: Define objective routine
-  optiCase.setObjective(computeObjective<MyCase>, computeObjective<MyADfCase>);
+  optiCase.setObjective([](auto& optiCase, auto name) {
+    return computeObjective(optiCase, name);
+  });
 
   /// @li Step G: Create an Optimizer
   OptimizerLBFGS<MyCase::value_t,std::vector<MyCase::value_t>> optimizer(
-    optiCase.getController().size(), 1.e-5, 10, 1., 20, "Wolfe", 20, 1.e-4);
+    optiCase.getController().size(), optiParameters);
 
   /// @li Step H: Optimize
   optimizer.optimize(optiCase);

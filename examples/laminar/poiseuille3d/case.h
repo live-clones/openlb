@@ -549,7 +549,7 @@ void getResults(MyCase& myCase, std::size_t iT, util::Timer<MyCase::value_t>& ti
       vtmWriter.write( iT );
 
       SuperEuklidNorm3D<T> normVel( velocity );
-      BlockReduction3D2D<T> planeReduction( normVel, Vector<T,3>({0,0,1}), 600, BlockDataSyncMode::ReduceOnly );
+      BlockReduction3D2D<T> planeReduction( normVel, Vector<T,3>{0,0,1}, 600, BlockDataSyncMode::ReduceOnly );
       // write output as JPEG
       heatmap::write(planeReduction, iT);
     }
@@ -562,7 +562,7 @@ void getResults(MyCase& myCase, std::size_t iT, util::Timer<MyCase::value_t>& ti
     timer.printStep();
 
     // Lattice statistics console output
-    lattice.getStatistics().print( iT,converter.getPhysTime( iT ) );
+    lattice.getStatistics().printWithoutPlot( iT,converter.getPhysTime( iT ) );
 
     // Error norms
     if (noslipBoundary) {
@@ -656,16 +656,16 @@ void setDefaultParameters(MyCase::ParametersD& params) {
   params.set<PARTIAL_SLIP_TUNER     >(           0. );  // for partialSlip only: 0->bounceBack, 1->freeSlip
   params.set<EOC                    >(        false );
   params.set<OVERLAP                >(            3 );
-  params.set<INTERVAL_CONVERGENCE_CHECK>([&] {  // interval for the convergence check in s
-    return params.get<MAX_PHYS_T>()*0.0125;
+  params.set<INTERVAL_CONVERGENCE_CHECK>([](MyCase::ParametersD& p) {  // interval for the convergence check in s
+    return p.get<MAX_PHYS_T>()*0.0125;
   });
-  params.set<PHYS_STAT_ITER_T>([&] {  // interval for the statistics output in s
-    return params.get<MAX_PHYS_T>()/20.;
+  params.set<PHYS_STAT_ITER_T>([](MyCase::ParametersD& p) {  // interval for the statistics output in s
+    return p.get<MAX_PHYS_T>()/20.;
   });
-  params.set<PHYS_VTK_ITER_T>([&] {  // interval for the vtk output in s
-    return params.get<MAX_PHYS_T>()/20.;
+  params.set<PHYS_VTK_ITER_T>([](MyCase::ParametersD& p) {  // interval for the vtk output in s
+    return p.get<MAX_PHYS_T>()/20.;
   });
-  params.set<PHYS_DELTA_X>([&] {
-    return params.get<DIAMETER>()/params.get<RESOLUTION>();
+  params.set<PHYS_DELTA_X>([](MyCase::ParametersD& p) {
+    return p.get<DIAMETER>()/p.get<RESOLUTION>();
   });
 }

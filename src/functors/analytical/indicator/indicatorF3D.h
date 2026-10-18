@@ -59,16 +59,12 @@ template<typename S> class IndicatorCylinder3D;
 template <typename S>
 class IndicatorTranslate3D : public IndicatorF3D<S> {
 private:
-  std::array<S,3> _translate;
-  IndicatorF3D<S>& _indicator;
-  Vector<S,3> _myMin;
-  Vector<S,3> _myMax;
+  Vector<S,3> _translate;
+  FunctorPtr<IndicatorF3D<S>> _indicator;
 public:
-  IndicatorTranslate3D(std::array<S,3> translate, IndicatorF3D<S>& indicator);
+  IndicatorTranslate3D(Vector<S,3> translate, FunctorPtr<IndicatorF3D<S>>&& indicator);
   bool operator() (bool output[], const S input[]) override;
   S signedDistance(const Vector<S,3>& input) override;
-  Vector<S,3>& getMin() override;
-  Vector<S,3>& getMax() override;
 };
 
 /// indicator function for a 3D circle

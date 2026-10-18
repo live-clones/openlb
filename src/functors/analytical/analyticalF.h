@@ -116,7 +116,7 @@ public:
 
   template<typename V, typename U>
   auto copyAs() const {
-    return exchange_type<V,U>(util::copyAs<V,T,util::StdVector>(_c));
+    return exchange_type<V,U>(util::copyAs<V,T>(_c));
   }
 };
 
@@ -276,7 +276,7 @@ protected:
  * If g: T* -> U*, then g is applied to the complete vector. The user is
  * responsible for ensuring that the dimensions of f and g fit together.
  *
- * \example: Apply cosine to linearly transformed values:
+ * \par Example: Apply cosine to linearly transformed values:
  * AnalyticalLinear1D<double,double> f(1.1, 1.5);
  * AnalyticalConcatenation conc(f, std::cos);
  */

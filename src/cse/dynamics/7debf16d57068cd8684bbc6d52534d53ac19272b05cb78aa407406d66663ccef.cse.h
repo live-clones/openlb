@@ -35,61 +35,69 @@ namespace olb {
 namespace dynamics {
 
 template <typename T, typename... FIELDS>
-struct CSE<CombinedAdvectionDiffusionRLBdynamics<T, descriptors::D3Q7<FIELDS...>, dynamics::Tuple<T, descriptors::D3Q7<FIELDS...>, momenta::Tuple<momenta::BulkDensity, momenta::BulkMomentum, momenta::NoStress, momenta::DefineToEq>, equilibria::FirstOrder, collision::AdvectionDiffusionRLB, AdvectionDiffusionExternalVelocityCollision>, momenta::Tuple<momenta::HeatFluxBoundaryDensity<1, 1>, momenta::FixedVelocityMomentumAD, momenta::NoStress, momenta::DefineToEq> >> {
+struct CSE<CombinedAdvectionDiffusionRLBdynamics<T, descriptors::D3Q7<FIELDS...>, dynamics::Tuple<T, descriptors::D3Q7<FIELDS...>, momenta::Tuple<momenta::BulkDensity, momenta::BulkMomentum, momenta::NoStress, momenta::DefineToEq>, equilibria::FirstOrder, collision::AdvectionDiffusionRLB, AdvectionDiffusionExternalVelocityCollision>, momenta::Tuple<momenta::HeatFluxBoundaryDensity<1, 1>, momenta::FixedVelocityMomentumAD, momenta::NoStress, momenta::DefineToEq> >, olb::CodegenTarget::Generic> {
 template <concepts::Cell CELL, concepts::Parameters PARAMETERS, concepts::BaseType V=typename CELL::value_t>
 CellStatistic<V> collide(CELL& cell, PARAMETERS& parameters) any_platform {
-auto x10 = cell.template getFieldComponent<olb::momenta::FixedVelocityMomentumAD::VELOCITY>(0);
-auto x9 = cell.template getFieldComponent<olb::descriptors::VELOCITY>(2);
-auto x11 = cell.template getFieldComponent<olb::momenta::FixedVelocityMomentumAD::VELOCITY>(1);
-auto x8 = cell.template getFieldComponent<olb::descriptors::VELOCITY>(1);
-auto x12 = cell.template getFieldComponent<olb::momenta::FixedVelocityMomentumAD::VELOCITY>(2);
-auto x13 = parameters.template get<descriptors::OMEGA>();
-auto x7 = cell.template getFieldComponent<olb::descriptors::VELOCITY>(0);
-auto x14 = V{1} / (x8 + V{1});
-auto x15 = V{0.0625}*x14;
-auto x16 = V{4}*x7;
-auto x17 = x16 + V{1};
-auto x18 = cell[0] + cell[1] + cell[3] + cell[4] + V{2}*cell[5] + cell[6] - x11 + V{1};
-auto x19 = -x18;
-auto x20 = V{0.03125}*x14*x19;
-auto x21 = V{4}*x8;
-auto x22 = x21 + V{1};
-auto x23 = V{4}*x9;
-auto x24 = x23 + V{1};
-auto x25 = x16 + V{-1};
-auto x26 = x21 + V{-1};
-auto x27 = x23 + V{-1};
-auto x28 = x13 + V{-1};
-auto x29 = x15*x18;
-auto x30 = -x25;
-auto x31 = V{0.015625}*x18;
-auto x32 = -x26;
-auto x33 = -x27;
-auto x34 = V{0.03125}*cell[0] + V{0.03125}*cell[1] + V{0.03125}*cell[3] + V{0.03125}*cell[4] + V{0.0625}*cell[5] + V{0.03125}*cell[6] - V{0.03125}*x11 + V{0.03125};
-auto x35 = V{0.5}*x14*(x17*x31 + x22*x31 + x24*x31 + x30*x31 + x31*x32 + x31*x33 + x34);
-auto x36 = V{0.015625}*x19;
-auto x37 = -x17*x36 - x22*x36 - x24*x36 + x25*x36 + x26*x36 + x27*x36 + x34;
-auto x38 = x14*x37;
-auto x39 = x25*x38;
-auto x40 = x26*x38;
-auto x41 = x27*x38;
-auto x42 = x15*x19;
-auto x43 = V{0.125}*x19;
-auto x0 = -x11*x15 + V{0.03125}*x14*x19*x25 + V{0.03125}*x14*x19*x26 + V{0.03125}*x14*x19*x27 + x14*(V{0.0625}*cell[0] + V{0.0625}*cell[1] + V{0.0625}*cell[3] + V{0.0625}*cell[4] + V{0.125}*cell[5] + V{0.0625}*cell[6] + V{0.0625}) - x17*x20 - x20*x22 - x20*x24 + V{-0.25};
-auto x1 = x28*(V{0.5}*x10 + x17*x29 - x17*x35 - x29*x30 + x30*x35) - x39 + V{-0.125};
-auto x2 = x28*(V{0.5}*x11 + x22*x29 - x22*x35 - x29*x32 + x32*x35) - x40 + V{-0.125};
-auto x3 = x28*(V{0.5}*x12 + x24*x29 - x24*x35 - x29*x33 + x33*x35) - x41 + V{-0.125};
-auto x4 = x14*x17*x37 - x28*(V{0.5}*x10 - x15*x19*x25 - V{0.5}*x17*x38 - x17*x42 - V{0.5}*x39) + V{-0.125};
-auto x5 = x14*x22*x37 - x28*(V{0.5}*x11 - V{0.5}*x22*x38 - x22*x42 - x26*x42 - V{0.5}*x40) + V{-0.125};
-auto x6 = x14*x24*x37 - x28*(V{0.5}*x12 - V{0.5}*x24*x38 - x24*x42 - x27*x42 - V{0.5}*x41) + V{-0.125};
-cell[0] = x0;
-cell[1] = x1;
-cell[2] = x2;
-cell[3] = x3;
-cell[4] = x4;
-cell[5] = x5;
-cell[6] = x6;
-return { x14*(V{0.25}*cell[0] + V{0.25}*cell[1] + V{0.25}*cell[3] + V{0.25}*cell[4] + V{0.5}*cell[5] + V{0.25}*cell[6] - V{0.25}*x11 - x17*x43 - x22*x43 - x24*x43 + x25*x43 + x26*x43 + x27*x43 + V{0.25}), ((x7)*(x7)) + ((x8)*(x8)) + ((x9)*(x9)) };
+auto x44 = cell.template getFieldComponent<olb::descriptors::VELOCITY>(0);
+auto x45 = cell.template getFieldComponent<olb::descriptors::VELOCITY>(1);
+auto x46 = cell.template getFieldComponent<olb::descriptors::VELOCITY>(2);
+auto x47 = cell.template getFieldComponent<olb::momenta::FixedVelocityMomentumAD::VELOCITY>(0);
+auto x48 = cell.template getFieldComponent<olb::momenta::FixedVelocityMomentumAD::VELOCITY>(1);
+auto x49 = cell.template getFieldComponent<olb::momenta::FixedVelocityMomentumAD::VELOCITY>(2);
+auto x50 = parameters.template get<descriptors::OMEGA>();
+auto x0 = V{0.25};
+auto x1 = V{0.125};
+auto x52 = -x1;
+auto x2 = x45 + V{1};
+auto x3 = (cell[0] + cell[1] + cell[3] + cell[4] + V{2}*cell[5] + cell[6] - x48 + V{1})/x2;
+auto x4 = x1*x3;
+auto x5 = V{4};
+auto x51 = x46*x5;
+auto x54 = x45*x5;
+auto x56 = x44*x5;
+auto x6 = x51 + V{1};
+auto x7 = x1*x5;
+auto x9 = x49;
+auto x53 = x7*x9;
+auto x10 = x4*x6 + x52 + x53;
+auto x11 = x54 + V{1};
+auto x13 = x48;
+auto x55 = x13*x7;
+auto x14 = x11*x4 + x52 + x55;
+auto x15 = x56 + V{1};
+auto x17 = x47;
+auto x57 = x17*x7;
+auto x18 = x15*x4 + x52 + x57;
+auto x19 = V{1} - V{1}*x51;
+auto x20 = -x1 + x19*x4 - V{1}*x53;
+auto x21 = V{1} - V{1}*x54;
+auto x22 = -x1 + x21*x4 - V{1}*x55;
+auto x23 = V{1} - V{1}*x56;
+auto x24 = -x1 + x23*x4 - V{1}*x57;
+auto x25 = x0*x3 - x0 + x10 + x14 + x18 + x20 + x22 + x24 + V{1};
+auto x26 = x1*x25;
+auto x27 = -x1 + x23*x26;
+auto x28 = V{1} - x50;
+auto x58 = x28*x7;
+auto x29 = -x1 + x15*x26;
+auto x30 = x18 - V{1}*x24 + V{1}*x27 - x29;
+auto x59 = x30*x58;
+auto x31 = -x1 + x21*x26;
+auto x32 = -x1 + x11*x26;
+auto x33 = x14 - V{1}*x22 + V{1}*x31 - x32;
+auto x60 = x33*x58;
+auto x34 = -x1 + x19*x26;
+auto x35 = -x1 + x26*x6;
+auto x36 = x10 - V{1}*x20 + V{1}*x34 - x35;
+auto x61 = x36*x58;
+cell[0] = x0*(x25 + V{-1});
+cell[1] = x27 - V{1}*x59;
+cell[2] = x31 - V{1}*x60;
+cell[3] = x34 - V{1}*x61;
+cell[4] = x29 + x59;
+cell[5] = x32 + x60;
+cell[6] = x35 + x61;
+return { x25, ((x44)*(x44)) + ((x45)*(x45)) + ((x46)*(x46)) };
 }
 };
 
@@ -97,4 +105,4 @@ return { x14*(V{0.25}*cell[0] + V{0.25}*cell[1] + V{0.25}*cell[3] + V{0.25}*cell
 
 }
 
-// Generation Info: commit=2a9f114ed32e2878e1a64a356eda56d13e508f7d
+// Generation Info: commit=e62fb513c7fed8d9804dfb87eb8d98b331948423

@@ -12,8 +12,7 @@
 .tmpfile
 config.mk
 *.out
-doc/olb-ug-*/olb-ug.pdf
-doc/doxygen/
+*.rej
 tags
 cscope.files
 create_cscope_files
@@ -60,3 +59,21 @@ __pycache__
 .ccls-cache/
 .idea/
 build/
+tmp/
+
+*.jsonl
+
+# direnv local state
+.direnv/
+.envrc
+
+# profiling / ADIOS run outputs
+*.bp/
+*.olbtrace
+
+# meshing test artifacts
+script/meshing/tests/test_outputs/
+
+*iteration_log.txt
+*.p
+*.matrix

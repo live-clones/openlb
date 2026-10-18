@@ -19,7 +19,9 @@
 */
 
 #include "mpiManager.h"
+#include "utilities/performanceProfiler.h"
 
+#include <random>
 #include <unistd.h>
 
 namespace olb {
@@ -50,23 +52,53 @@ bool MpiManager::init(int *argc, char ***argv)
   int ok0{};
   MPI_Initialized(&ok0);
   if (ok0 == MPI_SUCCESS) {
-    int ok1 = MPI_Init(argc, argv);
-    int ok2 = MPI_Comm_rank(MPI_COMM_WORLD, &taskId);
-    int ok3 = MPI_Comm_size(MPI_COMM_WORLD, &numTasks);
+    int ok1 = MPI_Init_thread(argc, argv, MPI_THREAD_MULTIPLE, &_providedThreadLevel);
+    if (_providedThreadLevel < MPI_THREAD_MULTIPLE) {
+      std::cerr << "Error: MPI_THREAD_MULTIPLE is required." << std::endl;
+      MPI_Abort(MPI_COMM_WORLD, 1);
+    }
+    int ok2 = MPI_Comm_rank(MPI_COMM_WORLD, &_globalRank);
+    int ok3 = MPI_Comm_size(MPI_COMM_WORLD, &_globalRanks);
     int ok4 = MPI_Comm_set_errhandler(MPI_COMM_WORLD, MPI_ERRORS_ARE_FATAL);
     ok = (ok1 == MPI_SUCCESS && ok2 == MPI_SUCCESS && ok3 == MPI_SUCCESS && ok4 == MPI_SUCCESS);
+  }
+  if (ok) {
+    // Split communicator to find nodes sharing the same physical motherboard
+    MPI_Comm_split_type(MPI_COMM_WORLD, MPI_COMM_TYPE_SHARED, getRank(), MPI_INFO_NULL, &_intraNodeComm);
+    MPI_Comm_rank(_intraNodeComm, &_localRank);
+    MPI_Comm_size(_intraNodeComm, &_localRanksPerNode);
+
+    if (_localRanksPerNode == 1) {
+             if (const char* palsLocal = std::getenv("PALS_LOCAL_RANKID")) {
+        _localRank = std::atoi(palsLocal);
+      } else if (const char* pmiLocal = std::getenv("PMI_LOCAL_RANK")) {
+        _localRank = std::atoi(pmiLocal);
+      }
+             if (const char* palsSize = std::getenv("PALS_NODE_ALIASES")) {
+        _localRanksPerNode = 12;
+      } else if (const char* pmiSize = std::getenv("PMI_LOCAL_SIZE")) {
+        _localRanksPerNode = std::atoi(pmiSize);
+      } else {
+        _localRanksPerNode = 12;
+      }
+    }
+
+    _globalNodes = _globalRanks / _localRanksPerNode;
+    if (_globalNodes == 0) {
+      _globalNodes = 1;
+    }
   }
   return ok;
 }
 
 int MpiManager::getSize() const
 {
-  return numTasks;
+  return _globalRanks;
 }
 
 int MpiManager::getRank() const
 {
-  return taskId;
+  return _globalRank;
 }
 
 int MpiManager::bossId() const
@@ -92,11 +124,52 @@ void MpiManager::barrier(MPI_Comm comm)
   if (!ok) {
     return;
   }
+  OLB_PROFILE("MPI:Comm:Barrier");
   MPI_Barrier(comm);
+}
+
+int MpiManager::getNodes() const
+{
+  return _globalNodes;
+}
+
+int MpiManager::getNodeLocalRank() const
+{
+  return _localRank;
+}
+
+void MpiManager::injectEntropy()
+{
+  OLB_PROFILE("MPI:Comm:InjectEntropy");
+  static std::array<double, 32> delayTable;
+  static bool initialized = false;
+  static std::size_t phaseCounter = 0;
+
+  if (!initialized) {
+    double maxWindow = std::min(getNodes() * 0.5e-6, 250e-6);
+    double nodeInternalDelay = getNodeLocalRank() * 1e-7;
+
+    std::mt19937 gen(getRank());
+    std::uniform_real_distribution<double> distrib(0.0, maxWindow);
+
+    for (size_t i = 0; i < 32; ++i) {
+      delayTable[i] = nodeInternalDelay + distrib(gen);
+    }
+    initialized = true;
+  }
+
+  double delay = delayTable[phaseCounter & 31];
+  phaseCounter++;
+
+  if (delay > 0.0) {
+    double start = MPI_Wtime();
+    while (MPI_Wtime() - start < delay) { }
+  }
 }
 
 void MpiManager::synchronizeIO(unsigned tDelay, MPI_Comm comm)
 {
+  OLB_PROFILE("MPI:Comm:SyncIO");
   usleep(tDelay);
   barrier(comm);
 }
@@ -107,6 +180,7 @@ void MpiManager::send<bool>(bool *buf, int count, int dest, int tag, MPI_Comm co
   if (!ok) {
     return;
   }
+  OLB_PROFILE("MPI:Comm:Send");
   MPI_Send(static_cast<void*>(buf), count, MPI_BYTE, dest, tag, comm);
 }
 
@@ -116,6 +190,7 @@ void MpiManager::send<char>(char *buf, int count, int dest, int tag, MPI_Comm co
   if (!ok) {
     return;
   }
+  OLB_PROFILE("MPI:Comm:Send");
   MPI_Send(static_cast<void*>(buf), count, MPI_CHAR, dest, tag, comm);
 }
 
@@ -125,6 +200,7 @@ void MpiManager::send<std::uint8_t>(std::uint8_t *buf, int count, int dest, int 
   if (!ok) {
     return;
   }
+  OLB_PROFILE("MPI:Comm:Send");
   MPI_Send(static_cast<void*>(buf), count, MPI_BYTE, dest, tag, comm);
 }
 
@@ -134,6 +210,7 @@ void MpiManager::send<int>(int *buf, int count, int dest, int tag, MPI_Comm comm
   if (!ok) {
     return;
   }
+  OLB_PROFILE("MPI:Comm:Send");
   MPI_Send(static_cast<void*>(buf), count, MPI_INT, dest, tag, comm);
 }
 
@@ -143,6 +220,7 @@ void MpiManager::send<float>(float *buf, int count, int dest, int tag, MPI_Comm 
   if (!ok) {
     return;
   }
+  OLB_PROFILE("MPI:Comm:Send");
   MPI_Send(static_cast<void*>(buf), count, MPI_FLOAT, dest, tag, comm);
 }
 
@@ -152,7 +230,17 @@ void MpiManager::send<double>(double *buf, int count, int dest, int tag, MPI_Com
   if (!ok) {
     return;
   }
+  OLB_PROFILE("MPI:Comm:Send");
   MPI_Send(static_cast<void*>(buf), count, MPI_DOUBLE, dest, tag, comm);
+}
+
+template <>
+void MpiManager::send<std::size_t>(std::size_t *buf, int count, int dest, int tag, MPI_Comm comm)
+{
+  if (!ok) {
+    return;
+  }
+  MPI_Send(static_cast<void*>(buf), count, MPI_UNSIGNED_LONG, dest, tag, comm);
 }
 
 template <>
@@ -332,6 +420,7 @@ void MpiManager::ibSend<double>
 
 std::size_t MpiManager::probeReceiveSize(int source, MPI_Datatype type, int tag, MPI_Comm comm)
 {
+  OLB_PROFILE("MPI:Comm:Probe");
   MPI_Status status;
   if (MPI_Probe(source, tag, comm, &status) == MPI_SUCCESS) {
     int requestSize;
@@ -363,6 +452,7 @@ void MpiManager::receive<bool>(bool *buf, int count, int source, int tag, MPI_Co
   if (!ok) {
     return;
   }
+  OLB_PROFILE("MPI:Comm:Recv");
   MPI_Status status;
   MPI_Recv(static_cast<void*>(buf), count, MPI_BYTE, source, tag, comm, &status);
 }
@@ -374,6 +464,7 @@ void MpiManager::receive<char>(char *buf, int count, int source, int tag, MPI_Co
   if (!ok) {
     return;
   }
+  OLB_PROFILE("MPI:Comm:Recv");
   MPI_Status status;
   MPI_Recv(static_cast<void*>(buf), count, MPI_CHAR, source, tag, comm, &status);
 }
@@ -384,6 +475,7 @@ void MpiManager::receive<std::uint8_t>(std::uint8_t *buf, int count, int source,
   if (!ok) {
     return;
   }
+  OLB_PROFILE("MPI:Comm:Recv");
   MPI_Status status;
   MPI_Recv(static_cast<std::uint8_t*>(buf), count, MPI_BYTE, source, tag, comm, &status);
 }
@@ -394,6 +486,7 @@ void MpiManager::receive<int>(int *buf, int count, int source, int tag, MPI_Comm
   if (!ok) {
     return;
   }
+  OLB_PROFILE("MPI:Comm:Recv");
   MPI_Status status;
   MPI_Recv(static_cast<void*>(buf), count, MPI_INT, source, tag, comm, &status);
 }
@@ -404,6 +497,7 @@ void MpiManager::receive<std::size_t>(std::size_t *buf, int count, int source, i
   if (!ok) {
     return;
   }
+  OLB_PROFILE("MPI:Comm:Recv");
   MPI_Status status;
   MPI_Recv(static_cast<void*>(buf), count, MPI_UNSIGNED_LONG, source, tag, comm, &status);
 }
@@ -414,6 +508,7 @@ void MpiManager::receive<std::uint32_t>(std::uint32_t *buf, int count, int sourc
   if (!ok) {
     return;
   }
+  OLB_PROFILE("MPI:Comm:Recv");
   MPI_Status status;
   MPI_Recv(static_cast<void*>(buf), count, MPI_UNSIGNED, source, tag, comm, &status);
 }
@@ -424,6 +519,7 @@ void MpiManager::receive<float>(float *buf, int count, int source, int tag, MPI_
   if (!ok) {
     return;
   }
+  OLB_PROFILE("MPI:Comm:Recv");
   MPI_Status status;
   MPI_Recv(static_cast<void*>(buf), count, MPI_FLOAT, source, tag, comm, &status);
 }
@@ -434,6 +530,7 @@ void MpiManager::receive<double>(double *buf, int count, int source, int tag, MP
   if (!ok) {
     return;
   }
+  OLB_PROFILE("MPI:Comm:Recv");
   MPI_Status status;
   MPI_Recv(static_cast<void*>(buf), count, MPI_DOUBLE, source, tag, comm, &status);
 }
@@ -444,6 +541,7 @@ void MpiManager::receive<long double>(long double *buf, int count, int source, i
   if (!ok) {
     return;
   }
+  OLB_PROFILE("MPI:Comm:Recv");
   MPI_Status status;
   MPI_Recv(static_cast<void*>(buf), count, MPI_LONG_DOUBLE, source, tag, comm, &status);
 }
@@ -454,6 +552,7 @@ void MpiManager::sendToMaster<bool>(bool* sendBuf, int sendCount, bool iAmRoot, 
   if (!ok) {
     return;
   }
+  OLB_PROFILE("MPI:Comm:SendToMaster");
   if (iAmRoot && !isMainProcessor()) {
     send(sendBuf, sendCount, 0);
   }
@@ -468,6 +567,7 @@ void MpiManager::sendToMaster<char>(char* sendBuf, int sendCount, bool iAmRoot, 
   if (!ok) {
     return;
   }
+  OLB_PROFILE("MPI:Comm:SendToMaster");
   if (iAmRoot && !isMainProcessor()) {
     send(sendBuf, sendCount, 0);
   }
@@ -482,6 +582,7 @@ void MpiManager::sendToMaster<int>(int* sendBuf, int sendCount, bool iAmRoot, MP
   if (!ok) {
     return;
   }
+  OLB_PROFILE("MPI:Comm:SendToMaster");
   if (iAmRoot && !isMainProcessor()) {
     send(sendBuf, sendCount, 0);
   }
@@ -496,6 +597,7 @@ void MpiManager::sendToMaster<float>(float* sendBuf, int sendCount, bool iAmRoot
   if (!ok) {
     return;
   }
+  OLB_PROFILE("MPI:Comm:SendToMaster");
   if (iAmRoot && !isMainProcessor()) {
     send(sendBuf, sendCount, 0);
   }
@@ -510,6 +612,7 @@ void MpiManager::sendToMaster<double>(double* sendBuf, int sendCount, bool iAmRo
   if (!ok) {
     return;
   }
+  OLB_PROFILE("MPI:Comm:SendToMaster");
   if (iAmRoot && !isMainProcessor()) {
     send(sendBuf, sendCount, 0);
   }
@@ -583,12 +686,22 @@ void MpiManager::iRecv<double>(double *buf, int count, int source, MPI_Request* 
 }
 
 template <>
+void MpiManager::iRecv<std::size_t>
+(std::size_t *buf, int count, int source, MPI_Request* request, int tag, MPI_Comm comm)
+{
+  if (ok) {
+    MPI_Irecv(static_cast<void*>(buf), count, MPI_UNSIGNED_LONG, source, tag, comm, request);
+  }
+}
+
+template <>
 void MpiManager::sendRecv<bool>
 (bool *sendBuf, bool *recvBuf, int count, int dest, int source, int tag, MPI_Comm comm)
 {
   if (!ok) {
     return;
   }
+  OLB_PROFILE("MPI:Comm:SendRecv");
   MPI_Status status;
   MPI_Sendrecv(static_cast<void*>(sendBuf),
                count,
@@ -605,6 +718,7 @@ void MpiManager::sendRecv<char>
   if (!ok) {
     return;
   }
+  OLB_PROFILE("MPI:Comm:SendRecv");
   MPI_Status status;
   MPI_Sendrecv(static_cast<void*>(sendBuf),
                count,
@@ -621,6 +735,7 @@ void MpiManager::sendRecv<int>
   if (!ok) {
     return;
   }
+  OLB_PROFILE("MPI:Comm:SendRecv");
   MPI_Status status;
   MPI_Sendrecv(static_cast<void*>(sendBuf),
                count,
@@ -637,6 +752,7 @@ void MpiManager::sendRecv<float>
   if (!ok) {
     return;
   }
+  OLB_PROFILE("MPI:Comm:SendRecv");
   MPI_Status status;
   MPI_Sendrecv(static_cast<void*>(sendBuf),
                count,
@@ -653,6 +769,7 @@ void MpiManager::sendRecv<long>
   if (!ok) {
     return;
   }
+  OLB_PROFILE("MPI:Comm:SendRecv");
   MPI_Status status;
   MPI_Sendrecv(static_cast<void*>(sendBuf),
                count,
@@ -669,6 +786,7 @@ void MpiManager::sendRecv<double>
   if (!ok) {
     return;
   }
+  OLB_PROFILE("MPI:Comm:SendRecv");
   MPI_Status status;
   MPI_Sendrecv(static_cast<void*>(sendBuf),
                count,
@@ -685,6 +803,7 @@ void MpiManager::sendRecv<long double>
   if (!ok) {
     return;
   }
+  OLB_PROFILE("MPI:Comm:SendRecv");
   MPI_Status status;
   MPI_Sendrecv(static_cast<void*>(sendBuf),
                count,
@@ -701,6 +820,7 @@ void MpiManager::scatterv<bool>(bool* sendBuf, int* sendCounts, int* displs,
   if (!ok) {
     return;
   }
+  OLB_PROFILE("MPI:Comm:Scatterv");
   MPI_Scatterv(static_cast<void*>(sendBuf),
                sendCounts, displs, MPI_BYTE,
                static_cast<void*>(recvBuf),
@@ -714,6 +834,7 @@ void MpiManager::scatterv<char>(char* sendBuf, int* sendCounts, int* displs,
   if (!ok) {
     return;
   }
+  OLB_PROFILE("MPI:Comm:Scatterv");
   MPI_Scatterv(static_cast<void*>(sendBuf),
                sendCounts, displs, MPI_CHAR,
                static_cast<void*>(recvBuf),
@@ -727,6 +848,7 @@ void MpiManager::scatterv<int>(int *sendBuf, int* sendCounts, int* displs,
   if (!ok) {
     return;
   }
+  OLB_PROFILE("MPI:Comm:Scatterv");
   MPI_Scatterv(static_cast<void*>(sendBuf),
                sendCounts, displs, MPI_INT,
                static_cast<void*>(recvBuf),
@@ -740,6 +862,7 @@ void MpiManager::scatterv<float>(float *sendBuf, int* sendCounts, int* displs,
   if (!ok) {
     return;
   }
+  OLB_PROFILE("MPI:Comm:Scatterv");
   MPI_Scatterv(static_cast<void*>(sendBuf),
                sendCounts, displs, MPI_FLOAT,
                static_cast<void*>(recvBuf),
@@ -753,6 +876,7 @@ void MpiManager::scatterv<double>(double *sendBuf, int* sendCounts, int* displs,
   if (!ok) {
     return;
   }
+  OLB_PROFILE("MPI:Comm:Scatterv");
   MPI_Scatterv(static_cast<void*>(sendBuf),
                sendCounts, displs, MPI_DOUBLE,
                static_cast<void*>(recvBuf),
@@ -767,6 +891,7 @@ void MpiManager::gather<int>(int* sendBuf, int sendCount,
   if (!ok) {
     return;
   }
+  OLB_PROFILE("MPI:Comm:Gather");
   MPI_Gather(static_cast<void*>(sendBuf), sendCount, MPI_INT,
              static_cast<void*>(recvBuf), recvCount, MPI_INT,
              root, comm);
@@ -780,6 +905,7 @@ void MpiManager::allGather<bool>(bool* sendBuf, int sendCount,
   if (!ok) {
     return;
   }
+  OLB_PROFILE("MPI:Comm:Allgather");
   MPI_Allgather(static_cast<void*>(sendBuf), sendCount, MPI_BYTE,
                 static_cast<void*>(recvBuf), recvCount, MPI_BYTE,
                 comm);
@@ -793,6 +919,7 @@ void MpiManager::allGather<char>(char* sendBuf, int sendCount,
   if (!ok) {
     return;
   }
+  OLB_PROFILE("MPI:Comm:Allgather");
   MPI_Allgather(static_cast<void*>(sendBuf), sendCount, MPI_CHAR,
                 static_cast<void*>(recvBuf), recvCount, MPI_CHAR,
                 comm);
@@ -806,6 +933,7 @@ void MpiManager::allGather<int>(int* sendBuf, int sendCount,
   if (!ok) {
     return;
   }
+  OLB_PROFILE("MPI:Comm:Allgather");
   MPI_Allgather(static_cast<void*>(sendBuf), sendCount, MPI_INT,
                 static_cast<void*>(recvBuf), recvCount, MPI_INT,
                 comm);
@@ -819,6 +947,7 @@ void MpiManager::allGather<float>(float* sendBuf, int sendCount,
   if (!ok) {
     return;
   }
+  OLB_PROFILE("MPI:Comm:Allgather");
   MPI_Allgather(static_cast<void*>(sendBuf), sendCount, MPI_FLOAT,
                 static_cast<void*>(recvBuf), recvCount, MPI_FLOAT,
                 comm);
@@ -832,6 +961,7 @@ void MpiManager::allGather<double>(double* sendBuf, int sendCount,
   if (!ok) {
     return;
   }
+  OLB_PROFILE("MPI:Comm:Allgather");
   MPI_Allgather(static_cast<void*>(sendBuf), sendCount, MPI_DOUBLE,
                 static_cast<void*>(recvBuf), recvCount, MPI_DOUBLE,
                 comm);
@@ -845,6 +975,7 @@ void MpiManager::allGather<std::size_t>(std::size_t* sendBuf, int sendCount,
   if (!ok) {
     return;
   }
+  OLB_PROFILE("MPI:Comm:Allgather");
   MPI_Allgather(static_cast<void*>(sendBuf), sendCount, MPI_UNSIGNED_LONG,
                 static_cast<void*>(recvBuf), recvCount, MPI_UNSIGNED_LONG,
                 comm);
@@ -859,6 +990,7 @@ void MpiManager::allGather<std::uint32_t>(std::uint32_t* sendBuf, int sendCount,
   if (!ok) {
     return;
   }
+  OLB_PROFILE("MPI:Comm:Allgather");
   MPI_Allgather(static_cast<void*>(sendBuf), sendCount, MPI_UINT32_T,
                 static_cast<void*>(recvBuf), recvCount, MPI_UINT32_T,
                 comm);
@@ -872,6 +1004,7 @@ void MpiManager::allGather<std::uint64_t>(std::uint64_t* sendBuf, int sendCount,
   if (!ok) {
     return;
   }
+  OLB_PROFILE("MPI:Comm:Allgather");
   MPI_Allgather(static_cast<void*>(sendBuf), sendCount, MPI_UINT64_T,
                 static_cast<void*>(recvBuf), recvCount, MPI_UINT64_T,
                 comm);
@@ -886,6 +1019,7 @@ void MpiManager::gatherv<bool>(bool* sendBuf, int sendCount,
   if (!ok) {
     return;
   }
+  OLB_PROFILE("MPI:Comm:Gatherv");
   MPI_Gatherv(static_cast<void*>(sendBuf), sendCount, MPI_BYTE,
               static_cast<void*>(recvBuf), recvCounts, displs, MPI_BYTE,
               root, comm);
@@ -899,6 +1033,7 @@ void MpiManager::gatherv<char>(char* sendBuf, int sendCount,
   if (!ok) {
     return;
   }
+  OLB_PROFILE("MPI:Comm:Gatherv");
   MPI_Gatherv(static_cast<void*>(sendBuf), sendCount, MPI_CHAR,
               static_cast<void*>(recvBuf), recvCounts, displs, MPI_CHAR,
               root, comm);
@@ -912,6 +1047,7 @@ void MpiManager::gatherv<int>(int* sendBuf, int sendCount,
   if (!ok) {
     return;
   }
+  OLB_PROFILE("MPI:Comm:Gatherv");
   MPI_Gatherv(static_cast<void*>(sendBuf), sendCount, MPI_INT,
               static_cast<void*>(recvBuf), recvCounts, displs, MPI_INT,
               root, comm);
@@ -925,6 +1061,7 @@ void MpiManager::gatherv<float>(float* sendBuf, int sendCount,
   if (!ok) {
     return;
   }
+  OLB_PROFILE("MPI:Comm:Gatherv");
   MPI_Gatherv(static_cast<void*>(sendBuf), sendCount, MPI_FLOAT,
               static_cast<void*>(recvBuf), recvCounts, displs, MPI_FLOAT,
               root, comm);
@@ -938,6 +1075,7 @@ void MpiManager::gatherv<double>(double* sendBuf, int sendCount,
   if (!ok) {
     return;
   }
+  OLB_PROFILE("MPI:Comm:Gatherv");
   MPI_Gatherv(static_cast<void*>(sendBuf), sendCount, MPI_DOUBLE,
               static_cast<void*>(recvBuf), recvCounts, displs, MPI_DOUBLE,
               root, comm);
@@ -951,6 +1089,7 @@ void MpiManager::gatherv<std::size_t>(std::size_t* sendBuf, int sendCount,
   if (!ok) {
     return;
   }
+  OLB_PROFILE("MPI:Comm:Gatherv");
   MPI_Gatherv(static_cast<void*>(sendBuf), sendCount, MPI_UNSIGNED_LONG,
               static_cast<void*>(recvBuf), recvCounts, displs, MPI_UNSIGNED_LONG,
               root, comm);
@@ -964,6 +1103,7 @@ void MpiManager::allGatherv<bool>(bool* sendBuf, int sendCount,
   if (!ok) {
     return;
   }
+  OLB_PROFILE("MPI:Comm:Allgatherv");
   MPI_Allgatherv(static_cast<void*>(sendBuf), sendCount, MPI_BYTE,
                  static_cast<void*>(recvBuf), recvCounts, displs,
                  MPI_BYTE, comm);
@@ -977,6 +1117,7 @@ void MpiManager::allGatherv<char>(char* sendBuf, int sendCount,
   if (!ok) {
     return;
   }
+  OLB_PROFILE("MPI:Comm:Allgatherv");
   MPI_Allgatherv(static_cast<void*>(sendBuf), sendCount, MPI_CHAR,
                  static_cast<void*>(recvBuf), recvCounts, displs,
                  MPI_CHAR, comm);
@@ -990,6 +1131,7 @@ void MpiManager::allGatherv<int>(int* sendBuf, int sendCount,
   if (!ok) {
     return;
   }
+  OLB_PROFILE("MPI:Comm:Allgatherv");
   MPI_Allgatherv(static_cast<void*>(sendBuf), sendCount, MPI_INT,
                  static_cast<void*>(recvBuf), recvCounts, displs,
                  MPI_INT, comm);
@@ -1003,6 +1145,7 @@ void MpiManager::allGatherv<float>(float* sendBuf, int sendCount,
   if (!ok) {
     return;
   }
+  OLB_PROFILE("MPI:Comm:Allgatherv");
   MPI_Allgatherv(static_cast<void*>(sendBuf), sendCount, MPI_FLOAT,
                  static_cast<void*>(recvBuf), recvCounts, displs,
                  MPI_FLOAT, comm);
@@ -1016,6 +1159,7 @@ void MpiManager::allGatherv<double>(double* sendBuf, int sendCount,
   if (!ok) {
     return;
   }
+  OLB_PROFILE("MPI:Comm:Allgatherv");
   MPI_Allgatherv(static_cast<void*>(sendBuf), sendCount, MPI_DOUBLE,
                  static_cast<void*>(recvBuf), recvCounts, displs,
                  MPI_DOUBLE, comm);
@@ -1029,6 +1173,7 @@ void MpiManager::allGatherv<std::size_t>(std::size_t* sendBuf, int sendCount,
   if (!ok) {
     return;
   }
+  OLB_PROFILE("MPI:Comm:Allgatherv");
   MPI_Allgatherv(static_cast<void*>(sendBuf), sendCount, MPI_UNSIGNED_LONG,
                  static_cast<void*>(recvBuf), recvCounts, displs,
                  MPI_UNSIGNED_LONG, comm);
@@ -1043,6 +1188,7 @@ void MpiManager::allGatherv<std::uint32_t>(std::uint32_t* sendBuf, int sendCount
   if (!ok) {
     return;
   }
+  OLB_PROFILE("MPI:Comm:Allgatherv");
   MPI_Allgatherv(static_cast<void*>(sendBuf), sendCount, MPI_UINT32_T,
                  static_cast<void*>(recvBuf), recvCounts, displs,
                  MPI_UINT32_T, comm);
@@ -1056,6 +1202,7 @@ void MpiManager::allGatherv<std::uint64_t>(std::uint64_t* sendBuf, int sendCount
   if (!ok) {
     return;
   }
+  OLB_PROFILE("MPI:Comm:Allgatherv");
   MPI_Allgatherv(static_cast<void*>(sendBuf), sendCount, MPI_UINT64_T,
                  static_cast<void*>(recvBuf), recvCounts, displs,
                  MPI_UINT64_T, comm);
@@ -1068,6 +1215,7 @@ void MpiManager::bCast<bool>(bool* sendBuf, int sendCount, int root, MPI_Comm co
   if (!ok) {
     return;
   }
+  OLB_PROFILE("MPI:Comm:Bcast");
   MPI_Bcast(static_cast<void*>(sendBuf),
             sendCount, MPI_BYTE, root, comm);
 }
@@ -1078,6 +1226,7 @@ void MpiManager::bCast<char>(char* sendBuf, int sendCount, int root, MPI_Comm co
   if (!ok) {
     return;
   }
+  OLB_PROFILE("MPI:Comm:Bcast");
   MPI_Bcast(static_cast<void*>(sendBuf),
             sendCount, MPI_CHAR, root, comm);
 }
@@ -1088,6 +1237,7 @@ void MpiManager::bCast<unsigned char>(unsigned char* sendBuf, int sendCount, int
   if (!ok) {
     return;
   }
+  OLB_PROFILE("MPI:Comm:Bcast");
   MPI_Bcast(static_cast<void*>(sendBuf),
             sendCount, MPI_UNSIGNED_CHAR, root, comm);
 }
@@ -1098,6 +1248,7 @@ void MpiManager::bCast<int>(int* sendBuf, int sendCount, int root, MPI_Comm comm
   if (!ok) {
     return;
   }
+  OLB_PROFILE("MPI:Comm:Bcast");
   MPI_Bcast(static_cast<void*>(sendBuf),
             sendCount, MPI_INT, root, comm);
 }
@@ -1108,6 +1259,7 @@ void MpiManager::bCast<unsigned long>(unsigned long* sendBuf, int sendCount, int
   if (!ok) {
     return;
   }
+  OLB_PROFILE("MPI:Comm:Bcast");
   MPI_Bcast(static_cast<void*>(sendBuf),
             sendCount, MPI_UNSIGNED_LONG, root, comm);
 }
@@ -1118,6 +1270,7 @@ void MpiManager::bCast<float>(float* sendBuf, int sendCount, int root, MPI_Comm 
   if (!ok) {
     return;
   }
+  OLB_PROFILE("MPI:Comm:Bcast");
   MPI_Bcast(static_cast<void*>(sendBuf),
             sendCount, MPI_FLOAT, root, comm);
 }
@@ -1128,6 +1281,7 @@ void MpiManager::bCast<double>(double* sendBuf, int sendCount, int root, MPI_Com
   if (!ok) {
     return;
   }
+  OLB_PROFILE("MPI:Comm:Bcast");
   MPI_Bcast(static_cast<void*>(sendBuf),
             sendCount, MPI_DOUBLE, root, comm);
 }
@@ -1139,6 +1293,7 @@ void MpiManager::bCast<std::string>(std::string* sendBuf, int sendCount, int roo
   if (!ok) {
     return;
   }
+  OLB_PROFILE("MPI:Comm:Bcast:String");
   int length = (int) sendBuf->size();
   MPI_Bcast(static_cast<void*>(&length), 1, MPI_INT, root, comm);
   char* buffer = new char[length+1];
@@ -1158,6 +1313,7 @@ void MpiManager::bCast<bool>(bool& sendVal, int root, MPI_Comm comm)
   if (!ok) {
     return;
   }
+  OLB_PROFILE("MPI:Comm:Bcast");
   MPI_Bcast(&sendVal, 1, MPI_BYTE, root, comm);
 }
 template <>
@@ -1166,6 +1322,7 @@ void MpiManager::bCast<char>(char& sendVal, int root, MPI_Comm comm)
   if (!ok) {
     return;
   }
+  OLB_PROFILE("MPI:Comm:Bcast");
   MPI_Bcast(&sendVal, 1, MPI_CHAR, root, comm);
 }
 
@@ -1175,6 +1332,7 @@ void MpiManager::bCast<unsigned char>(unsigned char& sendVal, int root, MPI_Comm
   if (!ok) {
     return;
   }
+  OLB_PROFILE("MPI:Comm:Bcast");
   MPI_Bcast(&sendVal, 1, MPI_UNSIGNED_CHAR, root, comm);
 }
 
@@ -1184,6 +1342,7 @@ void MpiManager::bCast<int>(int& sendVal, int root, MPI_Comm comm)
   if (!ok) {
     return;
   }
+  OLB_PROFILE("MPI:Comm:Bcast");
   MPI_Bcast(&sendVal, 1, MPI_INT, root, comm);
 }
 
@@ -1193,6 +1352,7 @@ void MpiManager::bCast<unsigned long>(unsigned long& sendVal, int root, MPI_Comm
   if (!ok) {
     return;
   }
+  OLB_PROFILE("MPI:Comm:Bcast");
   MPI_Bcast(&sendVal, 1, MPI_UNSIGNED_LONG, root, comm);
 }
 
@@ -1202,6 +1362,7 @@ void MpiManager::bCast<float>(float& sendVal, int root, MPI_Comm comm)
   if (!ok) {
     return;
   }
+  OLB_PROFILE("MPI:Comm:Bcast");
   MPI_Bcast(&sendVal, 1, MPI_FLOAT, root, comm);
 }
 
@@ -1211,6 +1372,7 @@ void MpiManager::bCast<double>(double& sendVal, int root, MPI_Comm comm)
   if (!ok) {
     return;
   }
+  OLB_PROFILE("MPI:Comm:Bcast");
   MPI_Bcast(&sendVal, 1, MPI_DOUBLE, root, comm);
 }
 
@@ -1220,6 +1382,7 @@ void MpiManager::bCastThroughMaster<bool>(bool* sendBuf, int sendCount, bool iAm
   if (!ok) {
     return;
   }
+  OLB_PROFILE("MPI:Comm:BcastThroughMaster");
   if (iAmRoot && !isMainProcessor()) {
     send(sendBuf, sendCount, 0);
   }
@@ -1235,6 +1398,7 @@ void MpiManager::bCastThroughMaster<char>(char* sendBuf, int sendCount, bool iAm
   if (!ok) {
     return;
   }
+  OLB_PROFILE("MPI:Comm:BcastThroughMaster");
   if (iAmRoot && !isMainProcessor()) {
     send(sendBuf, sendCount, 0);
   }
@@ -1250,6 +1414,7 @@ void MpiManager::bCastThroughMaster<int>(int* sendBuf, int sendCount, bool iAmRo
   if (!ok) {
     return;
   }
+  OLB_PROFILE("MPI:Comm:BcastThroughMaster");
   if (iAmRoot && !isMainProcessor()) {
     send(sendBuf, sendCount, 0);
   }
@@ -1265,6 +1430,7 @@ void MpiManager::bCastThroughMaster<float>(float* sendBuf, int sendCount, bool i
   if (!ok) {
     return;
   }
+  OLB_PROFILE("MPI:Comm:BcastThroughMaster");
   if (iAmRoot && !isMainProcessor()) {
     send(sendBuf, sendCount, 0);
   }
@@ -1280,6 +1446,7 @@ void MpiManager::bCastThroughMaster<double>(double* sendBuf, int sendCount, bool
   if (!ok) {
     return;
   }
+  OLB_PROFILE("MPI:Comm:BcastThroughMaster");
   if (iAmRoot && !isMainProcessor()) {
     send(sendBuf, sendCount, 0);
   }
@@ -1295,6 +1462,7 @@ void MpiManager::reduce<bool>(bool& sendVal, bool& recvVal,  MPI_Op op, int root
   if (!ok) {
     return;
   }
+  OLB_PROFILE("MPI:Comm:Reduce");
   MPI_Reduce(static_cast<void*>(&sendVal),
              static_cast<void*>(&recvVal), 1, MPI_BYTE, op, root, comm);
 }
@@ -1305,6 +1473,7 @@ void MpiManager::reduce<char>(char& sendVal, char& recvVal,  MPI_Op op, int root
   if (!ok) {
     return;
   }
+  OLB_PROFILE("MPI:Comm:Reduce");
   MPI_Reduce(static_cast<void*>(&sendVal),
              static_cast<void*>(&recvVal), 1, MPI_CHAR, op, root, comm);
 }
@@ -1315,6 +1484,7 @@ void MpiManager::reduce<int>(int& sendVal, int& recvVal,  MPI_Op op, int root, M
   if (!ok) {
     return;
   }
+  OLB_PROFILE("MPI:Comm:Reduce");
   MPI_Reduce(static_cast<void*>(&sendVal),
              static_cast<void*>(&recvVal), 1, MPI_INT, op, root, comm);
 }
@@ -1325,6 +1495,7 @@ void MpiManager::reduce<float>(float& sendVal, float& recvVal,  MPI_Op op, int r
   if (!ok) {
     return;
   }
+  OLB_PROFILE("MPI:Comm:Reduce");
   MPI_Reduce(static_cast<void*>(&sendVal),
              static_cast<void*>(&recvVal), 1, MPI_FLOAT, op, root, comm);
 }
@@ -1335,6 +1506,7 @@ void MpiManager::reduce<float>(float* sendVal, float* recvVal, int count, MPI_Op
   if (!ok) {
     return;
   }
+  OLB_PROFILE("MPI:Comm:Reduce");
   MPI_Reduce(sendVal, recvVal, count, MPI_FLOAT, op, root, comm);
 }
 
@@ -1344,6 +1516,7 @@ void MpiManager::reduce<double>(double* sendVal, double* recvVal, int count, MPI
   if (!ok) {
     return;
   }
+  OLB_PROFILE("MPI:Comm:Reduce");
   MPI_Reduce(sendVal, recvVal, count, MPI_DOUBLE, op, root, comm);
 }
 
@@ -1353,6 +1526,7 @@ void MpiManager::reduce<double>(double& sendVal, double& recvVal,  MPI_Op op, in
   if (!ok) {
     return;
   }
+  OLB_PROFILE("MPI:Comm:Reduce");
   MPI_Reduce(static_cast<void*>(&sendVal),
              static_cast<void*>(&recvVal), 1, MPI_DOUBLE, op, root, comm);
 }
@@ -1363,6 +1537,7 @@ void MpiManager::reduce<std::size_t>(std::size_t& sendVal, std::size_t& recvVal,
   if (!ok) {
     return;
   }
+  OLB_PROFILE("MPI:Comm:Reduce");
   MPI_Reduce(static_cast<void*>(&sendVal),
              static_cast<void*>(&recvVal), 1, MPI_UNSIGNED_LONG, op, root, comm);
 }
@@ -1374,6 +1549,7 @@ void MpiManager::reduceVect<char>(std::vector<char>& sendVal, std::vector<char>&
   if (!ok) {
     return;
   }
+  OLB_PROFILE("MPI:Comm:Reduce");
   MPI_Reduce(static_cast<void*>(&(sendVal[0])),
              static_cast<void*>(&(recvVal[0])),
              sendVal.size(), MPI_CHAR, op, root, comm);
@@ -1386,6 +1562,7 @@ void MpiManager::reduceVect<int>(std::vector<int>& sendVal, std::vector<int>& re
   if (!ok) {
     return;
   }
+  OLB_PROFILE("MPI:Comm:Reduce");
   MPI_Reduce(static_cast<void*>(&(sendVal[0])),
              static_cast<void*>(&(recvVal[0])),
              sendVal.size(), MPI_INT, op, root, comm);
@@ -1398,6 +1575,7 @@ void MpiManager::reduceVect<float>(std::vector<float>& sendVal, std::vector<floa
   if (!ok) {
     return;
   }
+  OLB_PROFILE("MPI:Comm:Reduce");
   MPI_Reduce(static_cast<void*>(&(sendVal[0])),
              static_cast<void*>(&(recvVal[0])),
              sendVal.size(), MPI_FLOAT, op, root, comm);
@@ -1410,6 +1588,7 @@ void MpiManager::reduceVect<double>(std::vector<double>& sendVal, std::vector<do
   if (!ok) {
     return;
   }
+  OLB_PROFILE("MPI:Comm:Reduce");
   MPI_Reduce(static_cast<void*>(&(sendVal[0])),
              static_cast<void*>(&(recvVal[0])),
              sendVal.size(), MPI_DOUBLE, op, root, comm);
@@ -1421,6 +1600,7 @@ void MpiManager::reduceAndBcast<bool>(bool& reductVal, MPI_Op op, int root, MPI_
   if (!ok) {
     return;
   }
+  OLB_PROFILE("MPI:Comm:ReduceBcast");
   char recvVal;
   MPI_Reduce(static_cast<void*>(&reductVal), static_cast<void*>(&recvVal), 1, MPI_BYTE, op, root, comm);
   reductVal = recvVal;
@@ -1434,6 +1614,7 @@ void MpiManager::reduceAndBcast<char>(char& reductVal, MPI_Op op, int root, MPI_
   if (!ok) {
     return;
   }
+  OLB_PROFILE("MPI:Comm:ReduceBcast");
   char recvVal;
   MPI_Reduce(&reductVal, &recvVal, 1, MPI_CHAR, op, root, comm);
   reductVal = recvVal;
@@ -1447,6 +1628,7 @@ void MpiManager::reduceAndBcast<int>(int& reductVal, MPI_Op op, int root, MPI_Co
   if (!ok) {
     return;
   }
+  OLB_PROFILE("MPI:Comm:ReduceBcast");
   int recvVal;
   MPI_Reduce(&reductVal, &recvVal, 1, MPI_INT, op, root, comm);
   reductVal = recvVal;
@@ -1460,6 +1642,7 @@ void MpiManager::reduceAndBcast<float>(float& reductVal, MPI_Op op, int root, MP
   if (!ok) {
     return;
   }
+  OLB_PROFILE("MPI:Comm:ReduceBcast");
   float recvVal;
   MPI_Reduce(&reductVal, &recvVal, 1, MPI_FLOAT, op, root, comm);
   reductVal = recvVal;
@@ -1472,6 +1655,7 @@ void MpiManager::reduceAndBcast<double>(double& reductVal, MPI_Op op, int root, 
   if (!ok) {
     return;
   }
+  OLB_PROFILE("MPI:Comm:ReduceBcast");
   double recvVal;
   MPI_Reduce(&reductVal, &recvVal, 1, MPI_DOUBLE, op, root, comm);
   reductVal = recvVal;
@@ -1485,6 +1669,7 @@ void MpiManager::reduceAndBcast<long double>(long double& reductVal, MPI_Op op, 
   if (!ok) {
     return;
   }
+  OLB_PROFILE("MPI:Comm:ReduceBcast");
   long double recvVal;
   MPI_Reduce(&reductVal, &recvVal, 1, MPI_LONG_DOUBLE, op, root, comm);
   reductVal = recvVal;
@@ -1498,6 +1683,7 @@ void MpiManager::reduceAndBcast<long>(long& reductVal, MPI_Op op, int root, MPI_
   if (!ok) {
     return;
   }
+  OLB_PROFILE("MPI:Comm:ReduceBcast");
   long recvVal;
   MPI_Reduce(&reductVal, &recvVal, 1, MPI_LONG, op, root, comm);
   reductVal = recvVal;
@@ -1511,6 +1697,7 @@ void MpiManager::reduceAndBcast<unsigned long>(unsigned long& reductVal, MPI_Op 
   if (!ok) {
     return;
   }
+  OLB_PROFILE("MPI:Comm:ReduceBcast");
   unsigned long recvVal;
   MPI_Reduce(&reductVal, &recvVal, 1, MPI_UNSIGNED_LONG, op, root, comm);
   reductVal = recvVal;
@@ -1524,6 +1711,7 @@ void MpiManager::allreduce<float>(const float* in, float* out, int count, MPI_Op
   if (!ok) {
     return;
   }
+  OLB_PROFILE("MPI:Comm:Allreduce");
   MPI_Allreduce(in, out, count, MPI_FLOAT, op, comm);
 }
 
@@ -1533,6 +1721,7 @@ void MpiManager::allreduce<double>(const double* in, double* out, int count, MPI
   if (!ok) {
     return;
   }
+  OLB_PROFILE("MPI:Comm:Allreduce");
   MPI_Allreduce(in, out, count, MPI_DOUBLE, op, comm);
 }
 
@@ -1542,6 +1731,7 @@ void MpiManager::allreduce<unsigned>(const unsigned* in, unsigned* out, int coun
   if (!ok) {
     return;
   }
+  OLB_PROFILE("MPI:Comm:Allreduce");
   MPI_Allreduce(in, out, count, MPI_UNSIGNED, op, comm);
 }
 
@@ -1551,6 +1741,7 @@ void MpiManager::allreduce<int>(const int* in, int* out, int count, MPI_Op op, M
   if (!ok) {
     return;
   }
+  OLB_PROFILE("MPI:Comm:Allreduce");
   MPI_Allreduce(in, out, count, MPI_INT, op, comm);
 }
 
@@ -1560,6 +1751,7 @@ void MpiManager::allReduce<bool>(bool& reductVal, MPI_Op op, MPI_Comm comm)
   if (!ok) {
     return;
   }
+  OLB_PROFILE("MPI:Comm:Allreduce");
   bool recvVal;
   MPI_Allreduce(static_cast<void*>(&reductVal), static_cast<void*>(&recvVal), 1, MPI_BYTE, op, comm);
   reductVal = recvVal;
@@ -1571,6 +1763,7 @@ void MpiManager::allReduce<char>(char& reductVal, MPI_Op op, MPI_Comm comm)
   if (!ok) {
     return;
   }
+  OLB_PROFILE("MPI:Comm:Allreduce");
   char recvVal;
   MPI_Allreduce(static_cast<void*>(&reductVal), static_cast<void*>(&recvVal), 1, MPI_CHAR, op, comm);
   reductVal = recvVal;
@@ -1582,6 +1775,7 @@ void MpiManager::allReduce<int>(int& reductVal, MPI_Op op, MPI_Comm comm)
   if (!ok) {
     return;
   }
+  OLB_PROFILE("MPI:Comm:Allreduce");
   int recvVal;
   MPI_Allreduce(static_cast<void*>(&reductVal), static_cast<void*>(&recvVal), 1, MPI_INT, op, comm);
   reductVal = recvVal;
@@ -1593,6 +1787,7 @@ void MpiManager::allReduce<float>(float& reductVal, MPI_Op op, MPI_Comm comm)
   if (!ok) {
     return;
   }
+  OLB_PROFILE("MPI:Comm:Allreduce");
   float recvVal;
   MPI_Allreduce(static_cast<void*>(&reductVal), static_cast<void*>(&recvVal), 1, MPI_FLOAT, op, comm);
   reductVal = recvVal;
@@ -1604,6 +1799,7 @@ void MpiManager::allReduce<double>(double& reductVal, MPI_Op op, MPI_Comm comm)
   if (!ok) {
     return;
   }
+  OLB_PROFILE("MPI:Comm:Allreduce");
   double recvVal;
   MPI_Allreduce(static_cast<void*>(&reductVal), static_cast<void*>(&recvVal), 1, MPI_DOUBLE, op, comm);
   reductVal = recvVal;
@@ -1615,6 +1811,7 @@ void MpiManager::allReduce<long double>(long double& reductVal, MPI_Op op, MPI_C
   if (!ok) {
     return;
   }
+  OLB_PROFILE("MPI:Comm:Allreduce");
   long double recvVal;
   MPI_Allreduce(static_cast<void*>(&reductVal), static_cast<void*>(&recvVal), 1, MPI_LONG_DOUBLE, op, comm);
   reductVal = recvVal;
@@ -1626,6 +1823,7 @@ void MpiManager::allReduce<std::size_t>(std::size_t& reductVal, MPI_Op op, MPI_C
   if (!ok) {
     return;
   }
+  OLB_PROFILE("MPI:Comm:Allreduce");
   std::size_t recvVal;
   MPI_Allreduce(static_cast<void*>(&reductVal), static_cast<void*>(&recvVal), 1, MPI_UNSIGNED_LONG, op, comm);
   reductVal = recvVal;
@@ -1638,6 +1836,7 @@ void MpiManager::allReduce<std::uint32_t>(std::uint32_t& reductVal, MPI_Op op, M
   if (!ok) {
     return;
   }
+  OLB_PROFILE("MPI:Comm:Allreduce");
   std::uint32_t recvVal;
   MPI_Allreduce(static_cast<void*>(&reductVal), static_cast<void*>(&recvVal), 1, MPI_UNSIGNED, op, comm);
   reductVal = recvVal;
@@ -1649,6 +1848,7 @@ void MpiManager::allReduce<std::uint64_t>(std::uint64_t& reductVal, MPI_Op op, M
   if (!ok) {
     return;
   }
+  OLB_PROFILE("MPI:Comm:Allreduce");
   std::uint64_t recvVal;
   MPI_Allreduce(static_cast<void*>(&reductVal), static_cast<void*>(&recvVal), 1, MPI_UNSIGNED_LONG, op, comm);
   reductVal = recvVal;
@@ -1661,6 +1861,7 @@ void MpiManager::allReduceVect<char>(std::vector<char>& reductVal, MPI_Op op, MP
   if (!ok) {
     return;
   }
+  OLB_PROFILE("MPI:Comm:AllreduceVect");
   MPI_Allreduce(MPI_IN_PLACE, static_cast<void*>(reductVal.data()), static_cast<int>(reductVal.size()), MPI_CHAR, op, comm);
 }
 
@@ -1670,6 +1871,7 @@ void MpiManager::allReduceVect<int>(std::vector<int>& reductVal, MPI_Op op, MPI_
   if (!ok) {
     return;
   }
+  OLB_PROFILE("MPI:Comm:AllreduceVect");
   MPI_Allreduce(MPI_IN_PLACE, static_cast<void*>(reductVal.data()), static_cast<int>(reductVal.size()), MPI_INT, op, comm);
 }
 
@@ -1679,6 +1881,7 @@ void MpiManager::allReduceVect<float>(std::vector<float>& reductVal, MPI_Op op, 
   if (!ok) {
     return;
   }
+  OLB_PROFILE("MPI:Comm:AllreduceVect");
   MPI_Allreduce(MPI_IN_PLACE, static_cast<void*>(reductVal.data()), static_cast<int>(reductVal.size()), MPI_FLOAT, op, comm);
 }
 
@@ -1688,6 +1891,7 @@ void MpiManager::allReduceVect<double>(std::vector<double>& reductVal, MPI_Op op
   if (!ok) {
     return;
   }
+  OLB_PROFILE("MPI:Comm:AllreduceVect");
   MPI_Allreduce(MPI_IN_PLACE, static_cast<void*>(reductVal.data()), static_cast<int>(reductVal.size()), MPI_DOUBLE, op, comm);
 }
 
@@ -1697,6 +1901,7 @@ void MpiManager::allReduceVect<long double>(std::vector<long double>& reductVal,
   if (!ok) {
     return;
   }
+  OLB_PROFILE("MPI:Comm:AllreduceVect");
   MPI_Allreduce(MPI_IN_PLACE, static_cast<void*>(reductVal.data()), static_cast<int>(reductVal.size()), MPI_LONG_DOUBLE, op, comm);
 }
 
@@ -1706,6 +1911,7 @@ void MpiManager::allReduceVect<std::size_t>(std::vector<std::size_t>& reductVal,
   if (!ok) {
     return;
   }
+  OLB_PROFILE("MPI:Comm:AllreduceVect");
   MPI_Allreduce(MPI_IN_PLACE, static_cast<void*>(reductVal.data()), static_cast<int>(reductVal.size()), MPI_UNSIGNED_LONG, op, comm);
 }
 
@@ -1716,6 +1922,7 @@ void MpiManager::allReduceVect<std::uint32_t>(std::vector<std::uint32_t>& reduct
   if (!ok) {
     return;
   }
+  OLB_PROFILE("MPI:Comm:AllreduceVect");
   MPI_Allreduce(MPI_IN_PLACE, static_cast<void*>(reductVal.data()), static_cast<int>(reductVal.size()), MPI_UNSIGNED, op, comm);
 }
 #else
@@ -1725,6 +1932,7 @@ void MpiManager::allReduceVect<std::uint64_t>(std::vector<std::uint64_t>& reduct
   if (!ok) {
     return;
   }
+  OLB_PROFILE("MPI:Comm:AllreduceVect");
   MPI_Allreduce(MPI_IN_PLACE, static_cast<void*>(reductVal.data()), static_cast<int>(reductVal.size()), MPI_UNSIGNED_LONG, op, comm);
 }
 #endif
@@ -1734,6 +1942,7 @@ void MpiManager::wait(MPI_Request* request, MPI_Status* status)
   if (!ok) {
     return;
   }
+  OLB_PROFILE("MPI:Comm:Wait");
   MPI_Wait(request, status);
 }
 
@@ -1742,6 +1951,7 @@ void MpiManager::waitAll(MpiNonBlockingHelper& mpiNbHelper)
   if (!ok || mpiNbHelper.get_size() == 0) {
     return;
   }
+  OLB_PROFILE("MPI:Comm:WaitAll");
   MPI_Waitall(mpiNbHelper.get_size(), mpiNbHelper.get_mpiRequest(), mpiNbHelper.get_mpiStatus());
 }
 
@@ -1794,6 +2004,7 @@ void MpiNonBlockingHelper::start(int i)
 
 void MpiNonBlockingHelper::wait(int i)
 {
+  OLB_PROFILE("MPI:Comm:Wait");
   MPI_Wait(get_mpiRequest(i), get_mpiStatus(i));
 }
 

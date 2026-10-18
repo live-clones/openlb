@@ -59,6 +59,7 @@ any_platform constexpr T min(T a, meta::id_t<T> b) {
 #else
   return std::min(a, b);
 #endif
+
 }
 
 template <typename T>
@@ -67,6 +68,28 @@ inline constexpr T min( std::initializer_list<T> ilist ) {
 }
 
 Expr min(Expr a, Expr b);
+
+template <typename T>
+any_platform constexpr T fmin(T a, meta::id_t<T> b) {
+#if defined(__CUDA_ARCH__) || defined(__HIP_DEVICE_COMPILE__)
+  return ::fmin(a, b);
+#elif defined(__SYCL_DEVICE_ONLY__)
+  return ::fmin(a, b);
+#else
+  return std::fmin(a, b);
+#endif
+}
+
+template <typename T>
+any_platform constexpr T fmax(T a, meta::id_t<T> b) {
+#if defined(__CUDA_ARCH__) || defined(__HIP_DEVICE_COMPILE__)
+  return ::fmax(a, b);
+#elif defined(__SYCL_DEVICE_ONLY__)
+  return ::fmax(a, b);
+#else
+  return std::fmax(a, b);
+#endif
+}
 
 } // namespace util
 

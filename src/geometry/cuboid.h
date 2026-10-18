@@ -37,14 +37,25 @@ namespace olb {
 template <typename T, unsigned D>
 class Cuboid final {
 private:
-  /// Global position of the lower left corner in SI meters
+  /// Physical position (SI metres) of the first cell (0,0,0), i.e. getPhysR(0).
+  /// CONVENTION: cells are centre-addressed. Cell i is CENTRED at _origin + i*_delta and
+  /// owns [_origin + (i-0.5)*_delta, _origin + (i+0.5)*_delta) (see getLatticeR). Despite the
+  /// historical "lower left corner" name, _origin is a cell CENTRE: it is the min-corner the
+  /// cuboid was built from, but the first cell straddles it by half a cell. Never hand-offset
+  /// a position by +/-0.5*_delta -- always go through getPhysR / getLatticeR.
   Vector<T,D> _origin;
-  /// Extent in number of nodes
+  /// Extent in number of cells
   Vector<int,D> _extent;
-  /// Spacing of nodes in SI meters
+  /// Spacing between cell centres in SI meters
   T _delta;
   /// Weight for load balancing purposes
   std::size_t _weight;
+
+  std::optional<int> _referenceCuboid;
+
+  std::optional<int> _preCalculatedProcess;
+
+  bool _coarsePart = false;
 
   // Don't want to use concept here as it would have to be repeated for all method implementations
   static_assert(D == 2 || D == 3, "Only 2D/3D supported");
@@ -56,11 +67,23 @@ public:
     _extent(extent),
     _delta(delta),
     _weight(getLatticeVolume()) { }
+  Cuboid(Vector<T,D> origin, T delta, Vector<int,D> extent, std::optional<int> preCalculatedProcess, bool coarsePart = false):
+  _origin(origin),
+  _extent(extent),
+  _delta(delta),
+  _weight(getLatticeVolume()),
+  _preCalculatedProcess(preCalculatedProcess),
+  _coarsePart(coarsePart)
+  {
+  }
   Cuboid(const Cuboid& rhs):
     _origin(rhs._origin),
     _extent(rhs._extent),
     _delta(rhs._delta),
-    _weight(rhs._weight) { }
+    _weight(rhs._weight),
+    _referenceCuboid(rhs._referenceCuboid),
+    _preCalculatedProcess(rhs._preCalculatedProcess),
+    _coarsePart(rhs._coarsePart) { }
   Cuboid(IndicatorF<T,D>& indicatorF, T delta):
     _origin(indicatorF.getMin()),
     _extent((indicatorF.getMax() - indicatorF.getMin()) / delta + 1.5),
@@ -70,7 +93,7 @@ public:
   Cuboid& operator=(const Cuboid& rhs);
   bool operator==(const Cuboid& rhs) const;
 
-  /// Returns lower left corner coordinates
+  /// Returns the physical position of the first cell centre, getPhysR(0) (see _origin).
   Vector<T,D> getOrigin() const { return _origin; }
   /// Returns spacing of cuboid nodes
   T getDeltaR() const { return _delta; }
@@ -87,20 +110,35 @@ public:
   std::size_t getWeight() const { return _weight; }
   void setWeight(std::size_t weight) { _weight = weight; }
 
+  /// Cell <-> physical conversion (centre convention, see _origin).
+  /// getPhysR is the single source of truth for a cell's position: sample or place
+  /// anything at a cell by round-tripping through here, never by hand-adding 0.5*delta.
+  /// Cell latticeR is centred at _origin + latticeR*_delta.
   Vector<T,D> getPhysR(LatticeR<D> latticeR) const {
     return _origin + latticeR*_delta;
   }
 
+  /// Nearest cell to physR (round-to-nearest): cell i owns [origin+(i-0.5)delta, origin+(i+0.5)delta).
+  /// This is the inverse of getPhysR and the one to use for cell-centred lookups.
   LatticeR<D> getLatticeR(Vector<T,D> physR) const {
     return util::floor((physR - _origin) / _delta + 0.5);
   }
 
+  /// Lower-corner variant (floor, NOT round): cell i covers [origin+i*delta, origin+(i+1)*delta).
+  /// Differs from getLatticeR by half a cell -- use only where corner semantics are intended.
   LatticeR<D> getFloorLatticeR(Vector<T,D> physR) const {
     return util::floor((physR - _origin) / _delta);
   }
 
   /// Returns closest latticeR within eps of physR if it exists
   std::optional<LatticeR<D>> getCloseLatticeR(Vector<T,D> physR, T eps=1e-5) const;
+
+  std::optional<int> getReferenceCuboid() const {
+    return _referenceCuboid;
+  }
+  void setReferenceCuboid(int iC) {
+    _referenceCuboid = iC;
+  }
 
   /// Returns the number of Nodes in the volume
   std::size_t getLatticeVolume() const;
@@ -119,7 +157,7 @@ public:
   /// Checks whether there is an intersection with the cuboid extended by a layer of size overlap*delta
   bool intersects(Vector<T,D> globMin, Vector<T,D> globMax, int overlap = 0) const;
   /// Returns true iff self intersects cuboid
-  bool intersects(const Cuboid<T,D>& cuboid) const;
+  bool intersects(const Cuboid<T,D>& cuboid, int overlap=0) const;
 
   /// Divides the cuboid in p*q*r cuboids of equal volume and add them to the given vector
   void divide(Vector<int,D> division, std::vector<Cuboid<T,D>>& childrenC) const requires (D == 3);
@@ -138,12 +176,21 @@ public:
 
   void refine(int factor);
   void refineCellCentered(int factor);
+  void coarsenCellCentered(int factor);
 
   void write(std::ostream& cout) const;
   void print() const;
 
   void writeAsXML(std::ostream&) const;
 
+  std::optional<int> getPreCalculatedProcess() const;
+
+  void setPreCalculatedProcess(int process);
+
+  bool isCoarseBorder() const;
+  void setCoarseBorder(bool coarsePart);
+
+  void printP();
 };
 
 template <typename T>

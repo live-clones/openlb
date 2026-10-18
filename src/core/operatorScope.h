@@ -42,7 +42,7 @@ enum struct OperatorScope {
 };
 
 /// Returns human-readable name of scope
-std::string getName(OperatorScope scope) {
+inline std::string getName(OperatorScope scope) {
   switch (scope) {
   case OperatorScope::PerCell:
     return "PerCell";

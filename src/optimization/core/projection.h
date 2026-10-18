@@ -68,11 +68,62 @@ struct Sigmoid : public Base<T> {
 };
 
 template <typename T>
+struct PermeabilityToPorosity: public Base<T> {
+
+  const T gridTerm;
+
+  template <typename DESCRIPTOR>
+  PermeabilityToPorosity(const UnitConverter<T,DESCRIPTOR>& converter)
+   : gridTerm{ converter.getPhysDeltaX() *
+               converter.getPhysDeltaX() *
+               converter.getLatticeViscosity() *
+               converter.getLatticeRelaxationTime() }
+  { }
+
+  T project(T x) const override { return 1. - (gridTerm / x); }
+  T derivative(T x) const override { return gridTerm / (x*x); }
+  T inverse(T x) const override { return gridTerm / (1. - x); }
+};
+
+template <typename T>
+struct SigmoidWithGridTerm: public Base<T> {
+
+  const T gridTerm;
+
+  template <typename DESCRIPTOR>
+  SigmoidWithGridTerm(const UnitConverter<T,DESCRIPTOR>& converter)
+   : gridTerm{ converter.getPhysDeltaX() *
+               converter.getPhysDeltaX() *
+               converter.getLatticeViscosity() *
+               converter.getLatticeRelaxationTime() }
+  { }
+
+  T project(T x) const override { return util::exp(x) / ( util::exp(x) + gridTerm ); }
+  T derivative(T x) const override { return util::exp(x) / util::pow( util::exp(x) + gridTerm, 2 ); }
+  T inverse(T x) const override { return -util::log((T(1) - x) / (gridTerm*x)); }
+};
+
+
+template <typename T>
 struct SigmoidD : public Base<T> {
 
   T project(T x) const override { return util::exp(x) / util::pow( util::exp(x) + T(1), 2 ); }
   T derivative(T x) const override { return 0; }
   T inverse(T x) const override { return 0; }
+};
+
+template <typename T>
+struct ConversionFactor : public Base<T> {
+
+  const T scale;
+
+  ConversionFactor(const T factor)
+   : scale {factor}
+  { }
+
+  T project(T x) const override { return scale * x; }
+  T derivative(T x) const override { return scale; }
+  T inverse(T x) const override { return x / scale; }
 };
 
 /// Convert force to lattice units

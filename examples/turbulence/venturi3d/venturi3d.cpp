@@ -105,7 +105,7 @@ void prepareLattice(MyCase& myCase) {
   XMLreader config(fName);
 
   UnitConverter<T, DESCRIPTOR>* converter = createUnitConverter<T, DESCRIPTOR>(config);
-  myCase.getLattice(NavierStokes{}).setUnitConverter(converter);
+  myCase.getLattice(NavierStokes{}).setUnitConverter(*converter);
   lattice.getUnitConverter().print();
 
   // Material=1 -->bulk dynamics
@@ -250,7 +250,6 @@ int main( int argc, char* argv[] )
     using namespace olb::parameters;
     myCaseParameters.set<MAX_PHYS_T>(200.);
   }
-  myCaseParameters.fromCLI(argc, argv);
 
   /// === Step 3: Create Mesh ===
   Mesh mesh = createMesh(myCaseParameters);

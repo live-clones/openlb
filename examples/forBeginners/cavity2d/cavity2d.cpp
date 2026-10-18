@@ -73,6 +73,7 @@ void prepareGeometry(MyCase& myCase) {
 /// @param myCase The Case instance which keeps the simulation data
 void prepareLattice(MyCase& myCase) {
   using T = MyCase::value_t;
+  using DESCRIPTOR = MyCase::descriptor_t;
   auto& parameters = myCase.getParameters();
   auto& lattice = myCase.getLattice(NavierStokes{});
 
@@ -84,7 +85,7 @@ void prepareLattice(MyCase& myCase) {
   const T physCharDensity = parameters.get<parameters::PHYS_CHAR_DENSITY>();
 
   // Set up a unit converter with the characteristic physical units
-  myCase.getLattice(NavierStokes{}).setUnitConverter(
+  myCase.getLattice(NavierStokes{}).setUnitConverter<UnitConverter<T,DESCRIPTOR>>(
     physDeltaX,        // physDeltaX: spacing between two lattice cells in [m]
     physDeltaT,        // physDeltaT: time step in [s]
     physLength,        // charPhysLength: reference length of simulation geometry in [m]
@@ -140,18 +141,14 @@ void setTemporalValues(MyCase& myCase,
 /// Compute simulation results at times
 /// @param myCase The Case instance which keeps the simulation data
 /// @param iT The time step
-void getResults(MyCase& myCase,
-                util::Timer<MyCase::value_t>& timer,
-                std::size_t iT)
+void getResults(MyCase& myCase, std::size_t iT)
 {
-  /// Write vtk plots every 0.3 seconds (of phys. simulation time)
   using T = MyCase::value_t;
   auto& parameters = myCase.getParameters();
   auto& lattice = myCase.getLattice(NavierStokes{});
   auto& converter = lattice.getUnitConverter();
 
   const T physMaxT = parameters.get<parameters::MAX_PHYS_T>();
-  const std::size_t iTlog = converter.getLatticeTime(physMaxT/20.);
   const std::size_t iTvtk = converter.getLatticeTime(physMaxT/100.);
 
   SuperVTMwriter2D<T> vtmWriter("cavity2d");
@@ -164,17 +161,12 @@ void getResults(MyCase& myCase,
     vtmWriter.createMasterFile();
   }
 
-  // Writes the VTK files
   if (iT%iTvtk == 0 && iT > 0) {
     lattice.setProcessingContext(ProcessingContext::Evaluation);
     vtmWriter.write(iT);
   }
 
-  /// Print some (numerical and computational) statistics
-  if (iT%iTlog == 0) {
-    lattice.getStatistics().print(iT, converter.getPhysTime(iT));
-    timer.print(iT);
-  }
+  myCase.report(iT);
 }
 
 
@@ -186,8 +178,6 @@ void simulate(MyCase& myCase) {
   const T physMaxT = parameters.get<parameters::MAX_PHYS_T>();
 
   const std::size_t iTmax = myCase.getLattice(NavierStokes{}).getUnitConverter().getLatticeTime(physMaxT);
-  util::Timer<T> timer(iTmax, myCase.getGeometry().getStatistics().getNvoxel());
-  timer.start();
 
   for (std::size_t iT=0; iT < iTmax; ++iT) {
     /// === Step 8.1: Update the Boundary Values and Fields at Times ===
@@ -197,11 +187,10 @@ void simulate(MyCase& myCase) {
     myCase.getLattice(NavierStokes{}).collideAndStream();
 
     /// === Step 8.3: Computation and Output of the Results ===
-    getResults(myCase, timer, iT);
+    getResults(myCase, iT);
   }
 
-  timer.stop();
-  timer.printSummary();
+  myCase.finalize(iTmax);
 }
 
 /// Setup and run a simulation
@@ -219,8 +208,9 @@ int main(int argc, char* argv[]) {
     myCaseParameters.set<PHYS_CHAR_DENSITY  >(       1.0);
     myCaseParameters.set<DOMAIN_EXTENT      >({1.0, 1.0});
     myCaseParameters.set<MAX_PHYS_T         >(       30.);
+    myCaseParameters["reporter"]["statistics"].set<PHYS_ITER_T>(1.5);
+    myCaseParameters["reporter"]["timer"].set<PHYS_ITER_T>(1.5);
   }
-  myCaseParameters.fromCLI(argc, argv);
 
   /// === Step 3: Create Mesh ===
   Mesh mesh = createMesh(myCaseParameters);

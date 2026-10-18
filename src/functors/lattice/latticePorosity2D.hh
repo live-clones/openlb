@@ -73,8 +73,7 @@ BlockLatticePorosity2D<T,DESCRIPTOR>::BlockLatticePorosity2D
 template <typename T, typename DESCRIPTOR>
 bool BlockLatticePorosity2D<T,DESCRIPTOR>::operator()(T output[], const int input[])
 {
-  this->_blockLattice.get(input[0], input[1]).template computeField<descriptors::POROSITY>(
-    output);
+  output[0] = this->_blockLattice.get(input[0], input[1]).template getField<descriptors::POROSITY>();
   return true;
 }
 

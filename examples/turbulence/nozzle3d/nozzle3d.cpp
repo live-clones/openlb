@@ -32,7 +32,7 @@ using namespace olb::names;
 
 // === Step 1: Declarations ===
 using MyCase = Case<
-  NavierStokes, Lattice<double, descriptors::D3Q27<>>
+  NavierStokes, Lattice<float, descriptors::D3Q27<>>
 >;
 
 enum class BulkModel : int {
@@ -274,7 +274,7 @@ void setTemporalValues(
     scale(&frac, &iT);
 
     vortex.setVelocityProfile(converter.getConversionFactorVelocity() * frac * uSol);
-    lattice.template setProcessingContext<Array<U_PROFILE>>(ProcessingContext::Simulation);
+    vortex.setConvectionU(converter.getCharPhysVelocity() * frac);
     vortex.apply(iT);
   } else {
     vortex.apply(iT);
@@ -282,7 +282,6 @@ void setTemporalValues(
 }
 
 void getResults(MyCase& myCase,
-                util::Timer<MyCase::value_t>& timer,
                 std::size_t iT)
 {
   using T = MyCase::value_t;
@@ -302,10 +301,7 @@ void getResults(MyCase& myCase,
     vtkWriter.createMasterFile();
   }
 
-  if (iT % converter.getLatticeTime(params.get<parameters::PHYS_STAT_ITER_T>()) == 0) {
-    timer.update(iT);
-    timer.printStep();
-    lattice.getStatistics().print(iT, converter.getPhysTime(iT));
+  if (iT % converter.getLatticeTime(params["reporter"]["statistics"].get<parameters::PHYS_ITER_T>()) == 0) {
     if (std::isnan(lattice.getStatistics().getAverageRho())) {
       std::exit(-1);
     }
@@ -323,6 +319,8 @@ void getResults(MyCase& myCase,
       task(vtkWriter, iT);
     });
   }
+
+  myCase.report(iT);
 }
 
 void simulate(
@@ -337,8 +335,10 @@ void simulate(
   const auto& converter = lattice.getUnitConverter();
 
   /// === Vortex Method Setup (Turbulent inlet condition)
+  // Seeding volume depth (along the inflow axis) must contain an eddy (~2 sigma)
+  // so that downstream-advected vortices are not clipped at the inlet.
   Vector<T,3> originI(
-    params.get<parameters::PHYS_DELTA_X>(),
+    2.0 * params.get<parameters::TURBULENCE_SIGMA>(),
     params.get<parameters::DOMAIN_EXTENT>()[1] / 2.0 + params.get<parameters::PHYS_DELTA_X>(),
     params.get<parameters::DOMAIN_EXTENT>()[2] / 2.0 + params.get<parameters::PHYS_DELTA_X>()
   );
@@ -355,8 +355,9 @@ void simulate(
     converter,
     lattice,
     params.get<parameters::TURBULENCE_N_SEEDS>(),
-    params.get<parameters::TURBULENCE_N_TIME>(),
-    params.get<parameters::TURBULENCE_SIGMA>(),
+    0.,                                             // uConvection: ramped to max inflow velocity in setBoundaryValues
+    params.get<parameters::TURBULENCE_SIGMA>(),     // sigmaConst: fixed vortex core size
+    converter.getCharPhysLength(),                  // lChar (mixing-length cap; unused while sigma fixed)
     inflowAxis
   );
 
@@ -369,9 +370,6 @@ void simulate(
     params.get<parameters::MAX_PHYS_T>()
   );
 
-  util::Timer<T> timer(iTmax, myCase.getGeometry().getStatistics().getNvoxel());
-  timer.start();
-
   for (std::size_t iT=0; iT < iTmax; ++iT) {
     /// === Step 8.1: Update the Boundary Values and Fields at Times ===
     setTemporalValues(myCase, iT, vortex);
@@ -380,11 +378,10 @@ void simulate(
     myCase.getLattice(NavierStokes{}).collideAndStream();
 
     /// === Step 8.3: Computation and Output of the Results ===
-    getResults(myCase, timer, iT);
+    getResults(myCase, iT);
   }
 
-  timer.stop();
-  timer.printSummary();
+  myCase.finalize(iTmax);
 }
 
 int main(int argc, char* argv[]) {
@@ -400,8 +397,8 @@ int main(int argc, char* argv[]) {
     myCaseParameters.set<INLET_CYLINDER_SIZE>({4, 1});
 
     myCaseParameters.set<RESOLUTION   >(5);
-    myCaseParameters.set<PHYS_DELTA_X >([&] {
-      return myCaseParameters.get<INLET_CYLINDER_SIZE>()[1] / myCaseParameters.get<RESOLUTION>();
+    myCaseParameters.set<PHYS_DELTA_X >([](MyCase::ParametersD& p) {
+      return p.get<INLET_CYLINDER_SIZE>()[1] / p.get<RESOLUTION>();
     });
     myCaseParameters.set<PHYS_CHAR_VELOCITY>(1);
     myCaseParameters.set<PHYS_CHAR_VISCOSITY>(0.0002);
@@ -410,17 +407,16 @@ int main(int argc, char* argv[]) {
     myCaseParameters.set<SMAGORINSKY>(0.15);
     myCaseParameters.set<MAX_PHYS_T   >(150);
 
-    myCaseParameters.set<PHYS_STAT_ITER_T>(0.1);
+    myCaseParameters["reporter"]["statistics"].set<PHYS_ITER_T>(0.1);
+    myCaseParameters["reporter"]["timer"].set<PHYS_ITER_T>(0.1);
     myCaseParameters.set<PHYS_VTK_ITER_T>(1.0);
 
     myCaseParameters.set<TURBULENCE_INTENSITY>(0.05);
     myCaseParameters.set<TURBULENCE_N_SEEDS>(50);
-    myCaseParameters.set<TURBULENCE_N_TIME>(0.1);
-    myCaseParameters.set<TURBULENCE_SIGMA>([&] {
-      return 0.1 * myCaseParameters.get<INLET_CYLINDER_SIZE>()[1];
+    myCaseParameters.set<TURBULENCE_SIGMA>([](MyCase::ParametersD& p) {
+      return 0.1 * p.get<INLET_CYLINDER_SIZE>()[1];
     });
   }
-  myCaseParameters.fromCLI(argc, argv);
 
   /// === Step 3: Create Mesh ===
   Mesh mesh = createMesh(myCaseParameters);

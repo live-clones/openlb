@@ -27,11 +27,21 @@
 
 #include <cuda_runtime_api.h>
 
+#include "core/platform/event.h"
+
 namespace olb {
 
 namespace gpu {
 
 namespace cuda {
+
+namespace streams {
+
+struct OuterCollision { };
+struct InnerCollision { };
+struct PostProcessor { };
+
+}
 
 /// Basic wrappers of common CUDA functions
 namespace device {
@@ -59,6 +69,8 @@ T* malloc(std::size_t size);
 
 /// Returns device memory page size
 std::size_t getDevicePageSize();
+/// Returns total device global memory in bytes
+std::size_t getDeviceMemorySize();
 /// Returns `count` rounded up to be a multiple of `getDevicePageSize`
 template <typename T>
 std::size_t getPageAlignedCount(std::size_t count)
@@ -124,6 +136,7 @@ private:
 
 public:
   Stream(unsigned int flags);
+  Stream(unsigned int flags, int priority);
   ~Stream();
 
   cudaStream_t& get() {
@@ -139,11 +152,49 @@ void asyncCopyToHost(Stream& stream, void* src, void* dst, std::size_t count);
 /// Copy data from host to device (async)
 void asyncCopyToDevice(Stream& stream, void* src, void* dst, std::size_t count);
 
-}
+/// Returns the shared stream identified by the streams:: tag QUEUE
+template <typename QUEUE>
+Stream& getStream();
+
+void synchronizeOuterCollision();
+void synchronizeInnerCollision();
+void synchronizePostProcessor();
 
 }
 
 }
+
+}
+
+/// Completion token for work dispatched to GPU_CUDA streams
+template <>
+class Event<Platform::GPU_CUDA> {
+private:
+  cudaEvent_t _event;
+
+public:
+  Event();
+  Event(const Event&) = delete;
+  Event& operator=(const Event&) = delete;
+  ~Event();
+
+  /// Capture completion of all work so far dispatched to stream
+  void record(gpu::cuda::device::Stream& stream);
+  /// Order all work subsequently dispatched to stream after the last record
+  void barrierOn(gpu::cuda::device::Stream& stream) const;
+  /// Host-blocking join of the last recorded work
+  void wait() const;
+
+  /// Native-handle variants for streams not wrapped in device::Stream
+  /**
+   * Recording on cudaStreamLegacy captures completion of all work
+   * previously dispatched to any blocking stream (legacy NULL-stream
+   * synchronization semantics).
+   **/
+  void record(cudaStream_t stream);
+  void barrierOn(cudaStream_t stream) const;
+
+};
 
 }
 

@@ -92,10 +92,18 @@ def reconstruct_comment(args_str, dynamic_type):
 
     return s
 
-def write_generated_cse(filepath, entries, dynamic_type):
-    # entries: filename -> comment
-    # Sort by comment string
+# StoredMoments variants are gathered under a guard covering every platform that
+# may select the StoredMoments codegen target (see codegenTargetFor in platform.h):
+# SYCL always, HIP always available, CUDA and CPU when their store feature is set.
+STORED_MOMENTS_MARKER = "// CodegenTarget::StoredMoments variants (rho/u stored as fields)"
+STORED_MOMENTS_GUARD = "#if defined(PLATFORM_GPU_SYCL) || defined(PLATFORM_GPU_HIP) || (defined(PLATFORM_GPU_CUDA) && defined(FEATURE_CUDA_STORED_MOMENTS)) || (defined(PLATFORM_CPU_SIMD) && defined(FEATURE_CPU_SIMD_STORED_MOMENTS)) || (defined(PLATFORM_CPU_SISD) && defined(FEATURE_CPU_SISD_STORED_MOMENTS))"
+
+def is_stored_moments(filename):
+    return filename.endswith(".sm.cse.h")
+
+def write_generated_cse(filepath, entries, stored_moments, dynamic_type):
     sorted_entries = sorted(entries.items(), key=lambda x: x[1])
+    sorted_sm = sorted(stored_moments)
 
     with open(filepath, 'w') as f:
         f.write("/*  ========================================================\n")
@@ -108,6 +116,13 @@ def write_generated_cse(filepath, entries, dynamic_type):
         for filename, comment in sorted_entries:
             f.write(f"//{comment}\n")
             f.write(f'#include "{filename}"\n\n')
+
+        if sorted_sm:
+            f.write(f"\n{STORED_MOMENTS_MARKER}\n")
+            f.write(f"{STORED_MOMENTS_GUARD}\n")
+            for filename in sorted_sm:
+                f.write(f'#include "{filename}"\n')
+            f.write("#endif\n")
 
         f.write("#endif\n")
 
@@ -126,9 +141,14 @@ if __name__ == "__main__":
 
     cse_files = get_cse_files(base_dir)
 
+    stored_moments = []
     for cse_file in cse_files:
         filename = os.path.basename(cse_file)
         if filename == "generated_cse.h":
+            continue
+
+        if is_stored_moments(filename):
+            stored_moments.append(filename)
             continue
 
         if filename not in entries:
@@ -148,8 +168,9 @@ if __name__ == "__main__":
                 print(f"Warning: Could not extract template args from {filename}")
                 entries[filename] = "Unknown dynamics/operator"
 
-    # Remove entries that no longer exist on disk
+    # Remove generic entries that no longer exist on disk
     existing_filenames = set(os.path.basename(f) for f in cse_files)
-    entries = {k: v for k, v in entries.items() if k in existing_filenames}
+    entries = {k: v for k, v in entries.items()
+               if k in existing_filenames and not is_stored_moments(k)}
 
-    write_generated_cse(generated_file, entries, dynamic_type)
+    write_generated_cse(generated_file, entries, stored_moments, dynamic_type)

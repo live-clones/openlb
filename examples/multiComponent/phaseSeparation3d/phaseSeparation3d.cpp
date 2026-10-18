@@ -255,7 +255,6 @@ int main(int argc, char* argv[])
 
     myCaseParameters.set<SHEN_OMEGA>(1);
   }
-  myCaseParameters.fromCLI(argc, argv);
 
   /// === Step 3: Create Mesh ===
   Mesh mesh = createMesh(myCaseParameters);

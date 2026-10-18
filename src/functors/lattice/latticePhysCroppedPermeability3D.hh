@@ -66,8 +66,7 @@ bool BlockLatticePhysCroppedPermeability3D<T, DESCRIPTOR>::operator()(T output[]
 {
   T value;
   // get porosity
-  this->_blockLattice.get(input[0], input[1], input[2]).template computeField<descriptors::POROSITY>(
-    &value);
+  value = this->_blockLattice.get(input[0], input[1], input[2]).template getField<descriptors::POROSITY>();
   // convert to physPermeability
 //  output[0] = _converter.physPermeability(value); // TODO converter MG
   // \todo Why do we need this???

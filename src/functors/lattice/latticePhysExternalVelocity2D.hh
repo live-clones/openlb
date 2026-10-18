@@ -70,7 +70,10 @@ BlockLatticePhysExternalVelocity2D<T,DESCRIPTOR>::BlockLatticePhysExternalVeloci
 template <typename T, typename DESCRIPTOR>
 bool BlockLatticePhysExternalVelocity2D<T,DESCRIPTOR>::operator() (T output[], const int input[])
 {
-  this->_blockLattice.get(input).template computeField<descriptors::VELOCITY>(output);
+  const auto velocity = this->_blockLattice.get(input).template getField<descriptors::VELOCITY>();
+  for (unsigned iD=0; iD < DESCRIPTOR::d; ++iD) {
+    output[iD] = velocity[iD];
+  }
   output[0] = this->_converter.getPhysVelocity(output[0]);
   output[1] = this->_converter.getPhysVelocity(output[1]);
   return true;

@@ -57,7 +57,6 @@ int main(int argc, char *argv[]) {
     myCaseParameters.set<NON_SMOOTH_ENABLED>(true);
     myCaseParameters.set<MAX_RESOLUTION>(myCaseParameters.get<RESOLUTION>());
   }
-  myCaseParameters.fromCLI(argc, argv);
 
   Mesh mesh = createMesh(myCaseParameters);
 

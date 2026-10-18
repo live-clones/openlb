@@ -550,12 +550,12 @@ int main(int argc, char* argv[])
     myCaseParameters.set<STARTING_VALUE>(1.e-5);
     myCaseParameters.set<ITERATIONS>(100);
     myCaseParameters.set<MAX_ERROR>(2e-7);
-    myCaseParameters.set<K>([&]() -> T {
+    myCaseParameters.set<K>([](MyCase::ParametersD& p) -> T {
       int       i             = 0;
-      T       x             = myCaseParameters.get<STARTING_VALUE>();
-      int     maxIterations = myCaseParameters.get<ITERATIONS>();
-      const T maxError      = myCaseParameters.get<MAX_ERROR>();
-      const T Ste           = myCaseParameters.get<STEFAN>();
+      T       x             = p.get<STARTING_VALUE>();
+      int     maxIterations = p.get<ITERATIONS>();
+      const T maxError      = p.get<MAX_ERROR>();
+      const T Ste           = p.get<STEFAN>();
       T       frac;
       do {
         frac = (Ste / util::exp(x * x) / std::erf(x) - x * util::sqrt(M_PI)) /
@@ -566,11 +566,10 @@ int main(int argc, char* argv[])
       } while (i < maxIterations && util::abs(frac) > maxError);
       return x;
     });
-    myCaseParameters.set<MAX_PHYS_T>([&] {
-      return util::pow(0.25 / 2.0 / myCaseParameters.get<K>(), 2) * myCaseParameters.get<DENSITY>() * myCaseParameters.get<CP_L>() / myCaseParameters.get<LAMBDA>();
+    myCaseParameters.set<MAX_PHYS_T>([](MyCase::ParametersD& p) {
+      return util::pow(0.25 / 2.0 / p.get<K>(), 2) * p.get<DENSITY>() * p.get<CP_L>() / p.get<LAMBDA>();
     });
   }
-  myCaseParameters.fromCLI(argc, argv);
 
   myCaseParameters.set<parameters::SUM_ERROR_MELT>(0);
   myCaseParameters.set<parameters::SUM_ERROR_TEMP>(0);

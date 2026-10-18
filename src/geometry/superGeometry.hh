@@ -37,6 +37,7 @@
 #include "geometry/cuboid.h"
 #include "geometry/cuboidDecomposition.h"
 #include "geometry/superGeometry.h"
+#include "case/mesh.h"
 
 #include "communication/superStructure.h"
 #include "communication/loadBalancer.h"
@@ -54,6 +55,13 @@ namespace olb {
 
 
 template<typename T, unsigned D>
+SuperGeometry<T,D>::SuperGeometry(Mesh<T,D>& mesh)
+  : SuperGeometry(mesh.getCuboidDecomposition(),
+                  mesh.getLoadBalancer(),
+                  mesh.getOverlap())
+{ }
+
+template<typename T, unsigned D>
 SuperGeometry<T,D>::SuperGeometry(CuboidDecomposition<T,D>& cuboidDecomposition,
                                   LoadBalancer<T>& loadBalancer,
                                   int overlap):
@@ -63,7 +71,7 @@ SuperGeometry<T,D>::SuperGeometry(CuboidDecomposition<T,D>& cuboidDecomposition,
   _statistics(this),
   _clout(std::cout, ("SuperGeometry" + std::to_string(D) + "D")),
   _iConstructionT{0},
-  _writeIncrementalVtkEnabled{true}
+  _writeIncrementalVtkEnabled{false}
 {
   for (int iCloc=0; iCloc < this->getLoadBalancer().size(); iCloc++) {
     int iCglob = this->getLoadBalancer().glob(iCloc);
@@ -79,7 +87,7 @@ SuperGeometry<T,D>::SuperGeometry(CuboidDecomposition<T,D>& cuboidDecomposition,
   _communicationNeeded = true;
   updateStatistics(false);
 
-  //writeIncrementalVTK();
+  writeIncrementalVTK();
 }
 
 template<typename T, unsigned D>
@@ -163,7 +171,7 @@ const BLOCK& SuperGeometry<T,D>::getBlock(int locIC) const
 template<typename T, unsigned D>
 SuperGeometryStatistics<T,D>& SuperGeometry<T,D>::getStatistics()
 {
-  if (this->_communicationNeeded) {
+  if (this->_communicationNeeded && !_disableStatsAndComm) {
     this->communicate();
     getStatisticsStatus()=true;
   }
@@ -191,13 +199,15 @@ bool const& SuperGeometry<T,D>::getStatisticsStatus() const
 template<typename T, unsigned D>
 void SuperGeometry<T,D>::updateStatistics(bool verbose)
 {
-  if (this->_communicationNeeded) {
-    this->communicate();
-    getStatisticsStatus()=true;
-  }
-  _statistics.update(verbose);
-  for (unsigned iC=0; iC<_block.size(); iC++) {
-    _block[iC]->getStatistics().update(verbose);
+  if (!_disableStatsAndComm) {
+    if (this->_communicationNeeded) {
+      this->communicate();
+      getStatisticsStatus()=true;
+    }
+    _statistics.update(verbose);
+    for (unsigned iC=0; iC<_block.size(); iC++) {
+      _block[iC]->getStatistics().update(verbose);
+    }
   }
 }
 
@@ -309,11 +319,11 @@ bool SuperGeometry<T,D>::checkForErrors(bool verbose)
 }
 
 template<typename T, unsigned D>
-void SuperGeometry<T,D>::reset(IndicatorF<T,D>& domain)
+void SuperGeometry<T,D>::reset(IndicatorF<T,D>& domain, int toM)
 {
   this->communicate();
   for (unsigned iC = 0; iC < _block.size(); ++iC) {
-    _block[iC]->reset(domain);
+    _block[iC]->reset(domain, toM);
   }
   _statistics.getStatisticsStatus() = true;
   this->_communicationNeeded = true;
@@ -388,6 +398,7 @@ void SuperGeometry<T,D>::rename(int fromM, int toM, int testM, Vector<int,D> tes
   }
 }
 
+
 template<typename T, unsigned D>
 void SuperGeometry<T,D>::rename(int fromBcMat, int toBcMat, int fluidMat,
                                 IndicatorF<T,D>& condition)
@@ -430,6 +441,32 @@ void SuperGeometry<T,D>::rename(int fromBcMat, int toBcMat, int fluidMat,
   }
 }
 
+template<typename T, unsigned D>
+void SuperGeometry<T,D>::rename(int fromBcMat, int toBcMat, int fluidMat,
+                                FunctorPtr<IndicatorF<T,D>>&& condition,
+                                Vector<int,D> testDirection)
+{
+  _communicator->communicate();
+  rename(fromBcMat, toBcMat, *condition);
+  for (unsigned iC=0; iC<_block.size(); iC++) {
+    _block[iC]->rename(fromBcMat,toBcMat,fluidMat,*condition,testDirection);
+  }
+  _statistics.getStatisticsStatus() = true;
+  this->_communicationNeeded = true;
+  writeIncrementalVTK();
+}
+
+template<typename T, unsigned D>
+void SuperGeometry<T,D>::renameNeighborsOf(int fromM, int toM, int neighborM)
+{
+  _communicator->communicate();
+  for (unsigned iC=0; iC<_block.size(); iC++) {
+    _block[iC]->renameNeighborsOf(fromM, toM, neighborM);
+  }
+  _statistics.getStatisticsStatus() = true;
+  this->_communicationNeeded = true;
+  writeIncrementalVTK();
+}
 
 template<typename T, unsigned D>
 void SuperGeometry<T,D>::print()

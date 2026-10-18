@@ -21,10 +21,6 @@
  *  Boston, MA  02110-1301, USA.
 */
 
-//This file contains the Slip Boundary
-//This is an onLattice boundary
-//This is a new version of the Boundary, which only contains free floating functions
-
 #ifndef SLIP_3D_H
 #define SLIP_3D_H
 
@@ -44,14 +40,24 @@ struct FullSlip<T,DESCRIPTOR> {
 using value_t = T;
 using descriptor_t = DESCRIPTOR;
 
+template <int... NORMAL>
+using dynamics_t = dynamics::Tuple<
+  T, DESCRIPTOR,
+  momenta::BulkTuple,
+  equilibria::SecondOrder,
+  collision::SpectralRevert<NORMAL...>
+>;
+
+
 CellDistance getNeighborhoodRadius() {
-  return 1;
+  return 0;
 }
 
 std::optional<DynamicsPromise<T,DESCRIPTOR>> getDynamics(DiscreteNormalType type,
                                                          DiscreteNormal<DESCRIPTOR> n) {
   if (n != 0) {
-    return std::nullopt;
+    return boundaryhelper::promiseForNormal<DynamicsPromise<T,DESCRIPTOR>,
+                                            dynamics_t>(n);
   } else {
     return meta::id<olb::BounceBack<T,DESCRIPTOR>>();
   }
@@ -59,9 +65,6 @@ std::optional<DynamicsPromise<T,DESCRIPTOR>> getDynamics(DiscreteNormalType type
 
 std::optional<PostProcessorPromise<T,DESCRIPTOR>> getPostProcessor(DiscreteNormalType type,
                                                                    DiscreteNormal<DESCRIPTOR> n) {
-  if (n != 0) {
-    return boundaryhelper::promisePostProcessorForNormal<T,DESCRIPTOR,FullSlipO3D>(n);
-  }
   return std::nullopt;
 }
 

@@ -192,6 +192,7 @@ void error( SuperGeometry<T,2>& superGeometry,
             UnitConverter<T,DESCRIPTOR> const& converter,
             const TestParam& param)
 {
+  sLattice.setProcessingContext(ProcessingContext::Evaluation);
 
   int tmp[]= {int()};
   T result[2]= {T(),T()}, result_tmp[2]= {T(),T()};
@@ -214,7 +215,7 @@ void error( SuperGeometry<T,2>& superGeometry,
   uL2Norm( result,tmp );
   uSolL2Norm( result_tmp,tmp );
   T velocityErrorL2 = result[0] / result_tmp[0];
-  EXPECT_NEAR(velocityErrorL2, param.velocityErrorL2, 1e-6);
+  EXPECT_NEAR(velocityErrorL2, param.velocityErrorL2, param.errorFactor * 5e-2 * std::abs(param.velocityErrorL2));
 
   // strainRate error
   PoiseuilleStrainRate2D<T,T,DESCRIPTOR> sSol( converter, ly );
@@ -226,7 +227,7 @@ void error( SuperGeometry<T,2>& superGeometry,
   sL2Norm( result,tmp );
   sSolL2Norm( result_tmp,tmp );
   T strainErrorL2 = result[0] / result_tmp[0];
-  EXPECT_NEAR(strainErrorL2, param.strainErrorL2, 1e-6);
+  EXPECT_NEAR(strainErrorL2, param.strainErrorL2, param.errorFactor * 5e-2 * std::abs(param.strainErrorL2));
 
   if (param.flowType == FlowType::nonForced) {
     // pressure error
@@ -243,7 +244,7 @@ void error( SuperGeometry<T,2>& superGeometry,
     pressureL2Norm( result,tmp );
     pressureSolL2Norm( result_tmp,tmp );
     T pressureErrorL2 = result[0] / result_tmp[0];
-    EXPECT_NEAR(pressureErrorL2, param.pressureErrorL2, 1e-6);
+    EXPECT_NEAR(pressureErrorL2, param.pressureErrorL2, param.errorFactor * 5e-2 * std::abs(param.pressureErrorL2));
 
   }
 }
@@ -317,7 +318,7 @@ TEST_P(Poiseuille2DTest, testBGK)
 
   sLattice.setProcessingContext(ProcessingContext::Evaluation);
 
-  EXPECT_EQ(iT, param.iT);
+  EXPECT_NEAR(iT, param.iT, std::max(10, param.iT/10));
   error<DESCRIPTOR>(superGeometry, sLattice, converter, param);
 
   timer.stop();

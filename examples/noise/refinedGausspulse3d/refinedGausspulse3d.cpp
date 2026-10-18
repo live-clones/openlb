@@ -180,7 +180,7 @@ void simulateRefined( MyCase& myCase ) {
       coupler->apply(meta::id<refinement::rohde::CoarseToFineO>{});
       latticeL1.collideAndStream();
       latticeL1.collideAndStream();
-    latticeL0.AndStream();
+    latticeL0.stream();
     coupler->apply(meta::id<refinement::rohde::FineToCoarseO>{});
 
     /// === Print some (numerical and computational) statistics ===

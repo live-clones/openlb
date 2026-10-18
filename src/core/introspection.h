@@ -361,7 +361,9 @@ template <typename DYNAMICS>
 [[gnu::noinline]]
 std::optional<std::size_t> getMemoryBandwidthOfCollision() {
   using T = Expr;
-  using DESCRIPTOR = DYNAMICS::descriptor_t;
+  using DESCRIPTOR = DYNAMICS::descriptor_t::no_stored_fields;
+
+  using STRIPPED_DYNAMICS = typename DYNAMICS::template exchange_descriptor<DESCRIPTOR>;
 
   try {
     Vector<int,DESCRIPTOR::d> size(1);
@@ -369,7 +371,7 @@ std::optional<std::size_t> getMemoryBandwidthOfCollision() {
     exprLattice.setIntrospectability(false);
     exprLattice.setStatisticsEnabled(false);
 
-    exprLattice.setDynamics(0, meta::id<typename DYNAMICS::template exchange_value_type<T>>{});
+    exprLattice.setDynamics(0, meta::id<typename STRIPPED_DYNAMICS::template exchange_value_type<T>>{});
 
     std::size_t bandwidth = 0;
 
@@ -381,7 +383,7 @@ std::optional<std::size_t> getMemoryBandwidthOfCollision() {
     // Assume that all populations are read
     bandwidth += DESCRIPTOR::q;
 
-    auto accessedFields = getFieldsAccessedByCollision<typename DYNAMICS::value_t,DESCRIPTOR,DYNAMICS>();
+    auto accessedFields = getFieldsAccessedByCollision<typename STRIPPED_DYNAMICS::value_t, DESCRIPTOR, STRIPPED_DYNAMICS>();
 
     // Initialize expressions for the accessed fields
     for (auto field : accessedFields) {

@@ -77,6 +77,9 @@ V velocityBMP(CELL& cell, const U& u) any_platform
   constexpr auto normalIndices = util::populationsContributingToVelocity<DESCRIPTOR,direction,orientation>();
 
   auto rho = cell.template getField<descriptors::RHO>();
+  auto gradRho = cell.template getField<descriptors::NABLARHO>();
+  //auto laplaceRho = cell.template getField<descriptors::LAPLACERHO>();
+  auto force = cell.template getField<descriptors::FORCE>();
 
   V pOnWall{};
   for (auto e : onWallIndices) {
@@ -89,8 +92,46 @@ V velocityBMP(CELL& cell, const U& u) any_platform
     pNormal += cell[e];
   }
 
-  return ((V{2}*pNormal+pOnWall-rho*orientation*u[direction])/descriptors::invCs2<V,DESCRIPTOR>()
-        -0.5*rho*descriptors::t<V,DESCRIPTOR>(0)*u[direction]*u[direction]) / (V{1}-descriptors::t<V,DESCRIPTOR>(0));
+  V uGradRho{};
+  for (unsigned iD=0; iD < DESCRIPTOR::d; ++iD) {
+    uGradRho += u[iD] * gradRho[iD];
+  }
+
+  V uSqr = util::normSqr<V,DESCRIPTOR::d>(u);
+
+  V pops = V{2}*pNormal+pOnWall;
+  return ((pops+0.5*uGradRho-rho*orientation*(u[direction]-0.5*force[direction]))/descriptors::invCs2<V,DESCRIPTOR>()
+        -0.5*rho*descriptors::t<V,DESCRIPTOR>(0)*uSqr) / (V{1}-descriptors::t<V,DESCRIPTOR>(0));
+}
+
+template<int direction, int orientation, typename CELL, typename U, typename V=typename CELL::value_t, typename DESCRIPTOR=typename CELL::descriptor_t>
+V velocityCCBMP(CELL& cell, const U& u) any_platform
+{
+  constexpr auto onWallIndices = util::populationsContributingToVelocity<DESCRIPTOR,direction,0>();
+  constexpr auto normalIndices = util::populationsContributingToVelocity<DESCRIPTOR,direction,orientation>();
+
+  auto rho = cell.template getField<descriptors::RHO>();
+  auto gradRho = cell.template getField<descriptors::NABLARHO>();
+  auto laplaceRho = cell.template getField<descriptors::LAPLACERHO>();
+  auto force = cell.template getField<descriptors::FORCE>();
+
+  V pOnWall{};
+  for (auto e : onWallIndices) {
+    pOnWall += cell[e];
+  }
+
+  V pNormal{};
+  for (auto e : normalIndices) {
+    pNormal += cell[e];
+  }
+
+  V uGradRho{};
+  for (unsigned iD=0; iD < DESCRIPTOR::d; ++iD) {
+    uGradRho += u[iD] * gradRho[iD];
+  }
+
+  V pops = V{2}*pNormal+pOnWall;
+  return (pops+0.5*uGradRho-(rho+laplaceRho/V{4})*orientation*(u[direction]-0.5*force[direction]))/descriptors::invCs2<V,DESCRIPTOR>();
 }
 
 template<int direction, int orientation, typename CELL, typename U, typename FLUX, typename V=typename CELL::value_t, typename DESCRIPTOR=typename CELL::descriptor_t>
@@ -103,7 +144,6 @@ V heatFluxBMRho(CELL& cell, const U& u, FLUX& flux) any_platform
 
 
 // ---------------------- DENSITY STRUCTURES ----------------------------------
-
 struct ZeroDensity {
   template <typename TYPE, typename CELL, typename RHO, typename DESCRIPTOR=typename CELL::descriptor_t>
   void compute(CELL& cell, RHO& rho) any_platform
@@ -168,6 +208,29 @@ struct BulkDensity {
   }
 };
 
+struct WMBulkDensity {
+  template <typename TYPE, typename CELL, typename RHO, typename DESCRIPTOR=typename CELL::descriptor_t, typename V=typename CELL::value_t>
+  void compute(CELL& cell, RHO& rho) any_platform
+  {
+    V wmpor = cell.template getField<descriptors::WMPOROSITY>();
+    V dens = cell.template getField<descriptors::DENSITY>();
+    rho = wmpor*lbm<DESCRIPTOR>::computeRho(cell) + (V(1) - wmpor)*dens;
+  }
+
+  template <typename TYPE, typename CELL, typename RHO>
+  void define(CELL& cell, const RHO& rho) any_platform {};
+
+  template <typename TYPE, typename CELL>
+  void initialize(CELL& cell) any_platform {};
+
+  template <typename TYPE, typename CELL, typename RHO>
+  void inverseShift(CELL& cell, RHO& rho) any_platform {};
+
+  static std::string getName(){
+    return "WMBulkDensity";
+  }
+};
+
 template<typename DENSITY>
 struct CrystalDensity {
   template <typename TYPE, typename CELL, typename RHO, typename V=typename CELL::value_t>
@@ -201,7 +264,7 @@ struct CrystalDensity {
   }
 };
 
-/// Computation of hydrodynamic pressure as zeroth moment of the population.
+/// Computation of pressure without accumulation term as zeroth moment of the population.
 template<typename MOMENTUM>
 struct BulkPressure {
   template <typename TYPE, typename CELL, typename PRESSURE, typename DESCRIPTOR=typename CELL::descriptor_t, typename V=typename CELL::value_t>
@@ -221,7 +284,41 @@ struct BulkPressure {
     }
     V uSqr = util::normSqr<V,DESCRIPTOR::d>(u);
     const V s0 = -descriptors::t<V,DESCRIPTOR>(0) * descriptors::invCs2<V,DESCRIPTOR>()/V{2} * uSqr;
-    p = 1/ descriptors::invCs2<V,DESCRIPTOR>() / (1-descriptors::t<V,DESCRIPTOR>(0)) * (sum + 0.5*uGradRho + rho*s0);
+    p = V{1}/ descriptors::invCs2<V,DESCRIPTOR>() / (1-descriptors::t<V,DESCRIPTOR>(0)) * (sum + 0.5*uGradRho + rho*s0);
+  }
+
+  template <typename TYPE, typename CELL, typename RHO>
+  void define(CELL& cell, const RHO& rho) any_platform {};
+
+  template <typename TYPE, typename CELL>
+  void initialize(CELL& cell) any_platform {};
+
+  template <typename TYPE, typename CELL, typename RHO>
+  void inverseShift(CELL& cell, RHO& rho) any_platform {};
+
+  static std::string getName(){
+    return "BulkPressure";
+  }
+};
+
+/// Computation of pressure with accumulation term as zeroth moment of the population.
+template<typename MOMENTUM>
+struct BulkPressureConti {
+  template <typename TYPE, typename CELL, typename PRESSURE, typename DESCRIPTOR=typename CELL::descriptor_t, typename V=typename CELL::value_t>
+  void compute(CELL& cell, PRESSURE& p) any_platform
+  {
+    V sum = 0;
+    for (int iPop=0; iPop < DESCRIPTOR::q; ++iPop) {
+      sum += cell[iPop];
+    }
+    auto gradRho = cell.template getField<descriptors::NABLARHO>();
+    Vector<V,DESCRIPTOR::d> u{};
+    V uGradRho = 0;
+    MOMENTUM().template computeU<TYPE>(cell, u);
+    for (unsigned iD=0; iD < DESCRIPTOR::d; ++iD) {
+      uGradRho += u[iD] * gradRho[iD];
+    }
+    p = V{1}/ descriptors::invCs2<V,DESCRIPTOR>() * (sum + 0.5*uGradRho);
   }
 
   template <typename TYPE, typename CELL, typename RHO>
@@ -269,6 +366,8 @@ struct SourcedDensity {
 /// The density is fixed and stored in the external field RHO.
 struct FixedDensity {
   struct RHO : public descriptors::FIELD_BASE<1, 0, 0> { };
+
+  using fields = meta::list<RHO>;
 
   template <typename TYPE, typename CELL, typename R>
   void compute(CELL& cell, R& rho) any_platform
@@ -400,6 +499,31 @@ struct VelocityBoundaryPressure {
 
   static std::string getName(){
     return "VelocityBoundaryPressure<" + std::to_string(direction) + "," + std::to_string(orientation) + ">";
+  }
+};
+
+/// Pressure computation for fixed velocity boundary with pressure accumulation term
+template <int direction, int orientation>
+struct ContiVelocityBoundaryPressure {
+  template <typename TYPE, typename CELL, typename P, typename V=typename CELL::value_t, typename DESCRIPTOR=typename CELL::descriptor_t>
+  void compute(CELL& cell, P& p) any_platform
+  {
+    V u[DESCRIPTOR::d];
+    TYPE().computeU(cell, u);
+    p = velocityCCBMP<direction,orientation>(cell, u);
+  }
+
+  template <typename TYPE, typename CELL, typename P>
+  void define(CELL& cell, const P& p) any_platform {};
+
+  template <typename TYPE, typename CELL>
+  void initialize(CELL& cell) any_platform {};
+
+  template <typename TYPE, typename CELL, typename P>
+  void inverseShift(CELL& cell, P& p) any_platform {};
+
+  static std::string getName(){
+    return "ContiCorrectedVelocityBoundaryPressure<" + std::to_string(direction) + "," + std::to_string(orientation) + ">";
   }
 };
 
@@ -576,11 +700,7 @@ struct CorrectedIncompressibleBulkMomentum {
     auto rho = cell.template getField<descriptors::RHO>();
     auto laplace_rho = cell.template getField<descriptors::LAPLACERHO>();
     for (int iD=0; iD < DESCRIPTOR::d; ++iD) {
-      u[iD] /= (rho + laplace_rho/4.);
-      // TODO do this check relatively / in a more controlled manner
-      // if (util::fabs(u[iD]) < 1e-15) {
-      //   u[iD] = 0;
-      // }
+      u[iD] /= (rho + laplace_rho/V{4});
     }
   }
 
@@ -602,6 +722,8 @@ struct CorrectedIncompressibleBulkMomentum {
 /// The velocity is fixed and stored in the external field U.
 struct FixedVelocityMomentumGeneric {
   struct VELOCITY : public descriptors::FIELD_BASE<0, 1, 0> { };
+
+  using fields = meta::list<VELOCITY>;
 
   // compute the momentum
   template <typename TYPE, typename CELL, typename J, typename V=typename CELL::value_t, typename DESCRIPTOR=typename CELL::descriptor_t>
@@ -652,6 +774,8 @@ struct FixedVelocityMomentumGeneric {
 template <int direction, int orientation>
 struct FixedPressureMomentum {
   struct VELOCITY : public descriptors::FIELD_BASE<0, 1, 0> { };
+
+  using fields = meta::list<VELOCITY>;
 
   // compute the momentum
   template <typename TYPE, typename CELL, typename J, typename V=typename CELL::value_t, typename DESCRIPTOR=typename CELL::descriptor_t>
@@ -735,11 +859,11 @@ struct PressureBoundaryMomentum {
   template <typename TYPE, typename CELL, typename U, typename V=typename CELL::value_t, typename DESCRIPTOR=typename CELL::descriptor_t>
   void computeU(CELL& cell, U& u) any_platform
   {
-    auto values = cell.template getField<VELOCITY>();
-    for (int iD=0; iD<DESCRIPTOR::d; ++iD) {
-      u[iD] = values[iD];
-    }
+    auto j = cell.template getField<descriptors::MOMENTUM>();
     auto rho = cell.template getField<descriptors::RHO>();
+    for (int iD=0; iD<DESCRIPTOR::d; ++iD) {
+      u[iD] = j[iD]/rho;
+    }
     auto gradRho = cell.template getField<descriptors::NABLARHO>();
     auto force = cell.template getField<descriptors::FORCE>();
     const V p = TYPE().computeRho(cell);
@@ -761,14 +885,16 @@ struct PressureBoundaryMomentum {
     V w0 = descriptors::t<V,DESCRIPTOR>(0);
     V cs2 = 1./descriptors::invCs2<V,DESCRIPTOR>();
     V pops = V{2}*popNormal+popOnWall;
-    V term = cs2*(V{2}*rho-gradRho[direction])/(V{2}*rho*w0);
+    V pterm = cs2*(V{2}*rho-gradRho[direction]*orientation)/(V{2}*rho*w0*orientation);
     V otherU = 0;
     for (int iDim = 1; iDim < DESCRIPTOR::d; ++iDim) {
-      u[(direction+iDim)%DESCRIPTOR::d] = 0.5/rho*force[(direction+iDim)%DESCRIPTOR::d];
       otherU += cs2*0.5*u[(direction+iDim)%DESCRIPTOR::d]*gradRho[(direction+iDim)%DESCRIPTOR::d]
                 -0.5*w0*rho*u[(direction+iDim)%DESCRIPTOR::d]*u[(direction+iDim)%DESCRIPTOR::d];
     }
-    u[direction] = orientation*(-term + util::sqrt(term*term + V{2}/rho/w0*(cs2*(pops+0.5*force[direction])-(V{1}-w0)*p+otherU)));
+    V qterm = V{2}/rho/w0*(cs2*(pops+0.5*force[direction]*rho/orientation)-(V{1}-w0)*p+otherU);
+    V radicand = pterm*pterm + qterm;
+    u[direction] = -pterm + util::sqrt(util::max(radicand, V{0.0f}));
+    u[direction] = util::min(util::max(u[direction], V{-0.1f}), V{0.1f});
   }
 
   // define the velocity
@@ -790,6 +916,83 @@ struct PressureBoundaryMomentum {
 
   static std::string getName() {
     return "PressureBoundaryMomentum";
+  }
+};
+
+/** The velocity is stored in the external field U, except for the component
+ * "direction", which is computed by means of the population and the pressure.
+ * This is for incompressible multi-phase models.
+ */
+template <int direction, int orientation>
+struct ContiPressureBoundaryMomentum {
+  struct VELOCITY : public descriptors::FIELD_BASE<0, 1, 0> { };
+
+  // compute the momentum
+  template <typename TYPE, typename CELL, typename J, typename V=typename CELL::value_t, typename DESCRIPTOR=typename CELL::descriptor_t>
+  void compute(CELL& cell, J& j) any_platform
+  {
+    computeU<TYPE>(cell, j);
+    auto rho = cell.template getField<descriptors::RHO>();
+    for (int iD=0; iD<DESCRIPTOR::d; ++iD) {
+      j[iD] *= rho;
+    }
+  }
+
+  // compute the velocity
+  template <typename TYPE, typename CELL, typename U, typename V=typename CELL::value_t, typename DESCRIPTOR=typename CELL::descriptor_t>
+  void computeU(CELL& cell, U& u) any_platform
+  {
+    auto j = cell.template getField<descriptors::MOMENTUM>();
+    auto rho = cell.template getField<descriptors::RHO>();
+    for (int iD=0; iD<DESCRIPTOR::d; ++iD) {
+      u[iD] = j[iD]/rho;
+    }
+    auto gradRho = cell.template getField<descriptors::NABLARHO>();
+    auto laplaceRho = cell.template getField<descriptors::LAPLACERHO>();
+    auto force = cell.template getField<descriptors::FORCE>();
+    const V p = TYPE().computeRho(cell);
+
+    constexpr auto onWallIndices = util::populationsContributingToVelocity<DESCRIPTOR,direction,0>();
+    constexpr auto normalIndices = util::populationsContributingToVelocity<DESCRIPTOR,direction,orientation>();
+
+    V popOnWall = V{};
+    for (auto e : onWallIndices) {
+      popOnWall += cell[e];
+    }
+
+    V popNormal = V{};
+    for (auto e : normalIndices) {
+      popNormal += cell[e];
+    }
+
+    V cs2 = 1./descriptors::invCs2<V,DESCRIPTOR>();
+    V pops = V{2}*popNormal+popOnWall;
+    V uGradRhoOther = 0;
+    for (int iDim = 1; iDim < DESCRIPTOR::d; ++iDim) {
+      uGradRhoOther += u[(direction+iDim)%DESCRIPTOR::d]*gradRho[(direction+iDim)%DESCRIPTOR::d];
+    }
+    u[direction] = orientation * (0.5*uGradRhoOther + pops - 0.5*force[direction]*(rho+laplaceRho/V{4}) - p/cs2)/(rho + laplaceRho/V{4} + 0.5*gradRho[direction]);
+  }
+
+  // define the velocity
+  template <typename TYPE, typename CELL, typename U>
+  void define(CELL& cell, const U& u) any_platform
+  {
+    cell.template setField<VELOCITY>(u);
+  }
+
+  template <typename TYPE, typename CELL, typename V=typename CELL::value_t, typename DESCRIPTOR=typename CELL::descriptor_t>
+  void initialize(CELL& cell) any_platform
+  {
+    V u[DESCRIPTOR::d] { V{} };
+    cell.template setField<VELOCITY>(u);
+  }
+
+  template <typename TYPE, typename CELL, typename U>
+  void inverseShift(CELL& cell, U& u) any_platform {};
+
+  static std::string getName() {
+    return "ContiPressureBoundaryMomentum";
   }
 };
 
@@ -901,6 +1104,69 @@ struct FixedTemperatureMomentum {
 
   static std::string getName() {
     return "FixedTemperatureMomentum";
+  }
+};
+
+
+/**
+ * This computes the first order moment of conservative phase field populations, while not knowing missing boundary populations.
+ */
+template <int direction, int orientation>
+struct FixedPhiMomentum {
+  // compute non-equilibrium first order moment
+  template <typename TYPE, typename CELL, typename J, typename V=typename CELL::value_t, typename DESCRIPTOR=typename CELL::descriptor_t>
+  void compute(CELL& cell, J& j) any_platform
+  {
+    constexpr auto onWallIndices = util::populationsContributingToVelocity<DESCRIPTOR,direction,0>();
+    constexpr auto normalIndices = util::populationsContributingToVelocity<DESCRIPTOR,direction,orientation>();
+
+    const V phi = TYPE().computeRho(cell);
+    const auto uNS = cell.template getField<descriptors::VELOCITY>();
+
+    V jNeqOnWall[DESCRIPTOR::d]{};
+    for (unsigned fIndex=0; fIndex<onWallIndices.size(); ++fIndex) {
+      for (int iD=0; iD<DESCRIPTOR::d; ++iD) {
+        jNeqOnWall[iD] += (cell[onWallIndices[fIndex]]
+                            - equilibrium<DESCRIPTOR>::firstOrder(onWallIndices[fIndex],phi,uNS.data()))
+                            * descriptors::c<DESCRIPTOR>(onWallIndices[fIndex],iD);
+      }
+    }
+
+    V jNeqNormal[DESCRIPTOR::d]{};
+    for (unsigned fIndex=0; fIndex<normalIndices.size(); ++fIndex) {
+      for (int iD=0; iD<DESCRIPTOR::d; ++iD) {
+        jNeqNormal[iD] += (cell[normalIndices[fIndex]]
+                            - equilibrium<DESCRIPTOR>::firstOrder(normalIndices[fIndex],phi,uNS.data()))
+                            * descriptors::c<DESCRIPTOR>(normalIndices[fIndex],iD);
+      }
+    }
+
+    for (int iD=0; iD<DESCRIPTOR::d; ++iD) {
+      j[iD] = jNeqOnWall[iD] + V(2) * jNeqNormal[iD];
+    }
+  }
+
+  template <typename TYPE, typename CELL, typename U, typename V=typename CELL::value_t, typename DESCRIPTOR=typename CELL::descriptor_t>
+  void computeU(CELL& cell, U& u) any_platform
+  {
+    const auto uNS = cell.template getFieldPointer<descriptors::VELOCITY>();
+    for (int iD=0; iD<DESCRIPTOR::d; ++iD) {
+      u[iD] = uNS[iD];
+    }
+  }
+
+  // define the conduction
+  template <typename TYPE, typename CELL, typename U>
+  void define(CELL& cell, const U& u) any_platform {};
+
+  template <typename TYPE, typename CELL>
+  void initialize(CELL& cell) any_platform {};
+
+  template <typename TYPE, typename CELL, typename U>
+  void inverseShift(CELL& cell, U& u) any_platform {};
+
+  static std::string getName() {
+    return "FixedPhiMomentum";
   }
 };
 
@@ -1539,7 +1805,8 @@ struct MovingPorousMomentumCombinationNoWM {
   template <typename TYPE, typename CELL, typename U, typename DESCRIPTOR=typename CELL::descriptor_t>
   void define(CELL& cell, const U& u) any_platform
   {
-    MOMENTUM().template define<TYPE>(cell, u);
+    cell.template setField<descriptors::VELOCITY>(u);
+    //MOMENTUM().template define<TYPE>(cell, u);
   }
 
   template <typename TYPE, typename CELL>
@@ -1591,6 +1858,8 @@ struct ZeroMomentum {
 
 template<typename MOMENTUM>
 struct ForcedMomentum {
+  using fields = meta::list<descriptors::FORCE>;
+
   template <typename TYPE, typename CELL, typename J, typename V=typename CELL::value_t, typename DESCRIPTOR=typename CELL::descriptor_t>
   void compute(CELL& cell, J& j) any_platform
   {
@@ -1697,6 +1966,8 @@ struct GuoZhaoForcedMomentum {
 
 template<typename MOMENTUM>
 struct PorousMomentum {
+  using fields = meta::list<descriptors::POROSITY>;
+
   template <typename TYPE, typename CELL, typename J, typename V=typename CELL::value_t, typename DESCRIPTOR=typename CELL::descriptor_t>
   void compute(CELL& cell, J& j) any_platform
   {
@@ -1767,9 +2038,9 @@ struct IncompressibleBulkStress {
         }
         // stripe off equilibrium contribution
         pi[iPi] -= rho*u[iAlpha]*u[iBeta];
-        if (iAlpha==iBeta) {
-          pi[iPi] -= p;
-        }
+        //if (iAlpha==iBeta) {
+        pi[iPi] -= p * (iAlpha==iBeta);
+        //}
         ++iPi;
       }
     }
@@ -2065,11 +2336,7 @@ struct CBCDensity {
   }
 
   template <typename TYPE, typename CELL, typename V=typename CELL::value_t>
-  void initialize(CELL& cell) any_platform
-  {
-    cell.template setField<fields::cbc::RHO_POST_PP>(V{1});
-    cell.template setField<fields::cbc::RHO_POST_PP_DT>(V{0});
-  }
+  void initialize(CELL& cell) any_platform {}
 
   template <typename TYPE, typename CELL, typename RHO>
   void inverseShift(CELL& cell, RHO& rho) any_platform {};
@@ -2109,12 +2376,7 @@ struct CBCMomentum {
   }
 
   template <typename TYPE, typename CELL, typename V=typename CELL::value_t, typename DESCRIPTOR=typename CELL::descriptor_t>
-  void initialize(CELL& cell) any_platform
-  {
-    V u[DESCRIPTOR::d] { V{} };
-    cell.template setField<fields::cbc::U_POST_PP>(u);
-    cell.template setField<fields::cbc::U_POST_PP_DT>(u);
-  }
+  void initialize(CELL& cell) any_platform {}
 
   template <typename TYPE, typename CELL, typename U>
   void inverseShift(CELL& cell, U& u) any_platform {};

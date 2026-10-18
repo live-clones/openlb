@@ -300,23 +300,29 @@ public:
   std::size_t serialize(ConstSpan<CellID> indices,
                         std::uint8_t* buffer) const
   {
-    if (meta::is_aligned<T>(buffer)) {
-      T* target = reinterpret_cast<T*>(buffer);
-      const typename cpu::simd::Pack<T>::index_t* offsets = indices.data();
+    // Reduced-precision storage (e.g. half) has no SIMD Pack; it serializes as raw
+    // bytes -- comm transfers the stored representation, so no conversion is needed.
+    if constexpr (std::is_floating_point_v<T>) {
+      if (meta::is_aligned<T>(buffer)) {
+        T* target = reinterpret_cast<T*>(buffer);
+        const typename cpu::simd::Pack<T>::index_t* offsets = indices.data();
 
-      for (std::size_t i=0;
-           i < (indices.size() / cpu::simd::Pack<T>::size) * cpu::simd::Pack<T>::size;
-           i       += cpu::simd::Pack<T>::size,
-           target  += cpu::simd::Pack<T>::size,
-           offsets += cpu::simd::Pack<T>::size) {
-        cpu::simd::store(target, {&_column[0], offsets});
+        for (std::size_t i=0;
+             i < (indices.size() / cpu::simd::Pack<T>::size) * cpu::simd::Pack<T>::size;
+             i       += cpu::simd::Pack<T>::size,
+             target  += cpu::simd::Pack<T>::size,
+             offsets += cpu::simd::Pack<T>::size) {
+          cpu::simd::store(target, {&_column[0], offsets});
+        }
+        for (std::size_t i=(indices.size() / cpu::simd::Pack<T>::size) * cpu::simd::Pack<T>::size;
+             i < indices.size();
+             ++i) {
+          *(target++) = _column[indices[i]];
+        }
+        return indices.size() * sizeof(T);
       }
-      for (std::size_t i=(indices.size() / cpu::simd::Pack<T>::size) * cpu::simd::Pack<T>::size;
-           i < indices.size();
-           ++i) {
-        *(target++) = _column[indices[i]];
-      }
-    } else {
+    }
+    {
       std::uint8_t* target = buffer;
       for (CellID index : indices) {
         std::memcpy(target, reinterpret_cast<const void*>(&_column[index]), sizeof(T));
@@ -330,23 +336,27 @@ public:
   std::size_t deserialize(ConstSpan<CellID> indices,
                           const std::uint8_t* buffer)
   {
-    if (meta::is_aligned<T>(buffer)) {
-      const T* source = reinterpret_cast<const T*>(buffer);
-      const typename cpu::simd::Pack<T>::index_t* offsets = indices.data();
+    if constexpr (std::is_floating_point_v<T>) {
+      if (meta::is_aligned<T>(buffer)) {
+        const T* source = reinterpret_cast<const T*>(buffer);
+        const typename cpu::simd::Pack<T>::index_t* offsets = indices.data();
 
-      for (std::size_t i=0;
-           i < (indices.size() / cpu::simd::Pack<T>::size) * cpu::simd::Pack<T>::size;
-           i       += cpu::simd::Pack<T>::size,
-           source  += cpu::simd::Pack<T>::size,
-           offsets += cpu::simd::Pack<T>::size) {
-        cpu::simd::store(&_column[0], cpu::simd::Pack<T>{source}, offsets);
+        for (std::size_t i=0;
+             i < (indices.size() / cpu::simd::Pack<T>::size) * cpu::simd::Pack<T>::size;
+             i       += cpu::simd::Pack<T>::size,
+             source  += cpu::simd::Pack<T>::size,
+             offsets += cpu::simd::Pack<T>::size) {
+          cpu::simd::store(&_column[0], cpu::simd::Pack<T>{source}, offsets);
+        }
+        for (std::size_t i=(indices.size() / cpu::simd::Pack<T>::size) * cpu::simd::Pack<T>::size;
+             i < indices.size();
+             ++i) {
+          _column[indices[i]] = *(source++);
+        }
+        return indices.size() * sizeof(T);
       }
-      for (std::size_t i=(indices.size() / cpu::simd::Pack<T>::size) * cpu::simd::Pack<T>::size;
-           i < indices.size();
-           ++i) {
-        _column[indices[i]] = *(source++);
-      }
-    } else {
+    }
+    {
       const std::uint8_t* source = buffer;
       for (CellID index : indices) {
         std::memcpy(reinterpret_cast<void*>(&_column[index]), source, sizeof(T));

@@ -26,17 +26,11 @@
 
 #include "io/cliReader.h"
 #include "core/meta.h"
+#include "core/parameters.h"
 
 namespace olb {
 
 namespace parameters {
-
-struct OVERLAP : public descriptors::TYPED_FIELD_BASE<unsigned,1> {
-  template <typename T, typename DESCRIPTOR>
-  static constexpr auto getInitialValue() {
-    return Vector<value_type<T>,1>{3};
-  }
-};
 
 // Characteristic numbers
 struct REYNOLDS    : public descriptors::FIELD_BASE<1> { };
@@ -50,6 +44,7 @@ struct KNUDSEN     : public descriptors::FIELD_BASE<1> { };
 struct STOKES       : public descriptors::FIELD_BASE<1> { };
 struct NUSSELT      : public descriptors::FIELD_BASE<1> { };
 struct PRANDTL_TURB : public descriptors::FIELD_BASE<1> { };
+struct MACH        : public descriptors::FIELD_BASE<1> { };
 
 // Converter-related parameters
 struct RESOLUTION : public descriptors::TYPED_FIELD_BASE<int,1> {
@@ -69,6 +64,8 @@ struct PHYS_CHAR_VISCOSITY : public descriptors::FIELD_BASE<1> { };
 struct PHYS_CHAR_DENSITY : public descriptors::FIELD_BASE<1> { };
 struct PHYS_CHAR_PRESSURE : public descriptors::FIELD_BASE<1> { };
 struct PHYS_CHAR_TEMPERATURE : public descriptors::FIELD_BASE<1> { };
+struct PHYS_CHAR_HIGH_TEMPERATURE : public descriptors::FIELD_BASE<1> { };
+struct PHYS_CHAR_LOW_TEMPERATURE : public descriptors::FIELD_BASE<1> { };
 struct PHYS_THERMAL_CONDUCTIVITY : public descriptors::FIELD_BASE<1> { };
 struct PHYS_HEAT_CAPACITY : public descriptors::FIELD_BASE<1> { };
 struct PHYS_THERMAL_DIFFUSIVITY : public descriptors::FIELD_BASE<1> { };
@@ -80,6 +77,7 @@ struct VOLUME : public descriptors::FIELD_BASE<1> { };
 
 struct LATTICE_CHAR_VELOCITY : public descriptors::FIELD_BASE<1> { };
 struct LATTICE_RELAXATION_TIME : public descriptors::FIELD_BASE<1> { };
+struct LATTICE_RELAXATION_FREQUENCY : public descriptors::FIELD_BASE<1> { };
 
 struct CFL : public descriptors::FIELD_BASE<1> {};
 
@@ -102,12 +100,6 @@ struct PHYS_DENSITY : public descriptors::FIELD_BASE<1> { };
 struct PHYS_KINEMATIC_VISCOSITY : public descriptors::FIELD_BASE<1> { };
 struct PHYS_DIFFUSIVITY : public descriptors::FIELD_BASE<1> { };
 
-// Solids (NCE)
-struct YOUNGS_MODULUS : public descriptors::FIELD_BASE<1> { };
-struct POISSON_RATIO : public descriptors::FIELD_BASE<1> { };
-struct PHYS_CHAR_DISPLACEMENT : public descriptors::FIELD_BASE<1> { };
-struct OMEGA_SOLID : public descriptors::FIELD_BASE<0,0,1> { };
-
 // Multicomponent
 struct NU_VAPOR        : public descriptors::FIELD_BASE<1> { };
 struct NU_LIQUID       : public descriptors::FIELD_BASE<1> { };
@@ -122,10 +114,6 @@ struct NOISE            : public descriptors::FIELD_BASE<1> { };
 struct FORCE            : public descriptors::FIELD_BASE<1> { };
 struct ZERO             : public descriptors::FIELD_BASE<1> { };
 
-// Solids pseudo-time
-struct IT_LOG_PSEUDO_TIME : public descriptors::TYPED_FIELD_BASE<int,1> { };
-struct IT_VTK_PSEUDO_TIME : public descriptors::TYPED_FIELD_BASE<int,1> { };
-
 struct VTK_ENABLED     : public descriptors::TYPED_FIELD_BASE<bool,1> { };
 struct GNUPLOT_ENABLED : public descriptors::TYPED_FIELD_BASE<bool,1> { };
 
@@ -137,15 +125,21 @@ struct PHYS_START_T : public descriptors::FIELD_BASE<1> { };
 struct PHYS_SAVE_ITER : public descriptors::FIELD_BASE<1> { };
 struct PHYS_VTK_ITER_T : public descriptors::FIELD_BASE<1> { };
 struct PHYS_STAT_ITER_T       : public descriptors::FIELD_BASE<1> { };
+struct PHYS_TIMER_ITER_T      : public descriptors::FIELD_BASE<1> { };
 struct PHYS_START_PERIOD : public descriptors::FIELD_BASE<1> { };
 
 struct LATTICE_STAT_ITER_T    : public descriptors::TYPED_FIELD_BASE<int,1> { };
 struct LATTICE_VTK_ITER_T     : public descriptors::TYPED_FIELD_BASE<int,1> { };
+struct LATTICE_TIMER_ITER_T   : public descriptors::TYPED_FIELD_BASE<int,1> { };
+
+struct PHYS_ITER_T    : public fields::SCALAR<0.0> { };
+struct LATTICE_ITER_T : public fields::TYPED_SCALAR<int> { };
 
 struct CONVERGED : public descriptors::TYPED_FIELD_BASE<bool,1> { };
 struct CONVERGENCE_PRECISION : public descriptors::FIELD_BASE<1> { };
 struct EPSILON : public descriptors::FIELD_BASE<1> { };
 struct CONV_ITER : public descriptors::FIELD_BASE<1> { };
+struct NUM_CONV_VALUES : public descriptors::FIELD_BASE<1> { };
 struct INTERVAL_CONVERGENCE_CHECK : public descriptors::FIELD_BASE<1> { };
 
 struct GRAVITY : public descriptors::FIELD_BASE<0,1> { };
@@ -170,10 +164,40 @@ struct BOUNDARY_CHEMICAL_POTENTIAL : public descriptors::FIELD_BASE<1> { };
 struct ABSORPTION : public descriptors::FIELD_BASE<1> {};
 struct SCATTERING : public descriptors::FIELD_BASE<1> {};
 struct MU_EFF : public descriptors::FIELD_BASE<1> {};
-struct ANINOSOTROPY_FACTOR : public descriptors::FIELD_BASE<1> {};
+struct ANISOTROPY_FACTOR : public descriptors::FIELD_BASE<1> {};
 struct MCVALUE : public descriptors::FIELD_BASE<1> {};
 struct TOTAL_ENERGY : public descriptors::FIELD_BASE<1> {};
 struct INTENSITY : public descriptors::FIELD_BASE<1> {};
+
+// Multiphase parameters
+struct PHYS_EOS_A : public descriptors::FIELD_BASE<1> {};
+struct PHYS_EOS_B : public descriptors::FIELD_BASE<1> {};
+struct PHYS_MOLAR_MASS : public descriptors::FIELD_BASE<1> {};
+struct LATTICE_EOS_A : public descriptors::FIELD_BASE<1> {};
+
+// Power law parameters
+struct PHYS_CONSISTENCY_COEFF : public descriptors::FIELD_BASE<1> {};
+struct POWER_LAW_INDEX : public descriptors::FIELD_BASE<1> {};
+
+// Radiative parameters
+struct PHYS_ABSORPTION : public descriptors::FIELD_BASE<1> {};
+struct PHYS_SCATTERING : public descriptors::FIELD_BASE<1> {};
+struct REFRACTIVE_RELATIVE : public descriptors::FIELD_BASE<1> {};
+
+// ---- Structural Mechanics parameters ----
+//      General
+struct YOUNGS_MODULUS         : public descriptors::FIELD_BASE<1> { };
+struct POISSON_RATIO          : public descriptors::FIELD_BASE<1> { };
+struct PHYS_CHAR_DISPLACEMENT : public descriptors::FIELD_BASE<1> { };
+struct SOLID_CASE             : public descriptors::TYPED_FIELD_BASE<std::string, 1> {};
+
+//      Quasistationary MRT
+struct OMEGA_SOLID            : public descriptors::FIELD_BASE<0,0,1> { };
+struct DAMPING_FACTOR         : public descriptors::FIELD_BASE<1> {};
+struct IT_LOG_PSEUDO_TIME     : public descriptors::TYPED_FIELD_BASE<int,1> { };
+struct IT_VTK_PSEUDO_TIME     : public descriptors::TYPED_FIELD_BASE<int,1> { };
+
+//      Vector LBM
 
 struct PART_RADIUS : public descriptors::FIELD_BASE<1> {};
 struct PART_RHO : public descriptors::FIELD_BASE<1> {};
@@ -184,6 +208,19 @@ struct REGULARIZATION_FACTOR : public descriptors::FIELD_BASE<1> { };
 struct MAX_OPTI_ITER : public descriptors::FIELD_BASE<1> { };
 struct MAX_STEP_CONTROL_ITER : public descriptors::FIELD_BASE<1> { };
 struct OPTI_CONVERGENCE_TOLERANCE : public descriptors::FIELD_BASE<1> { };
+struct TARGET_VOLUME : public descriptors::FIELD_BASE<1> { };
+struct FDQ_STENCIL_WIDTH : public descriptors::FIELD_BASE<1> {
+  template <typename T, typename DESCRIPTOR>
+  static constexpr auto getInitialValue() {
+    return Vector<value_type<T>,DESCRIPTOR::template size<FDQ_STENCIL_WIDTH>()>(T(1e-8));
+  }
+};
+struct CDQ_STENCIL_WIDTH : public descriptors::FIELD_BASE<1> {
+  template <typename T, typename DESCRIPTOR>
+  static constexpr auto getInitialValue() {
+    return Vector<value_type<T>,DESCRIPTOR::template size<FDQ_STENCIL_WIDTH>()>(T(5e-6));
+  }
+};
 
 // Primitives
 struct FACTOR : public descriptors::FIELD_BASE<1> { };
@@ -192,28 +229,26 @@ struct DT : public descriptors::FIELD_BASE<1> { };
 struct DX : public descriptors::FIELD_BASE<1> { };
 struct LATTICE_VISCOSITY : public descriptors::FIELD_BASE<1> { };
 struct CONVERSION_VELOCITY : public descriptors::FIELD_BASE<1> { };
+struct CONVERSION_PRESSURE : public descriptors::FIELD_BASE<1> { };
 struct REG_ALPHA : public descriptors::FIELD_BASE<1> { };
 struct NORMALIZE : public descriptors::FIELD_BASE<1> { };
+struct BOUNDARY_FACES : public descriptors::FIELD_BASE<0,  1, 0> { };
+struct CONVERSION_FORCE : public descriptors::FIELD_BASE<1> { };
+struct CONVERSION_DRAG : public descriptors::FIELD_BASE<1> { };
+struct LATTICE_TIME : public descriptors::TYPED_FIELD_BASE<std::size_t,1> {
+  template <typename T, typename DESCRIPTOR,typename FIELD>
+  static constexpr auto isValid(FieldD<T,DESCRIPTOR,FIELD> value) {
+    return value >= 0;
+  }
+};
+struct LATTICE_TIME_T : public descriptors::FIELD_BASE<1> { };
+struct LATTICE_REFERENCE_VELOCITY : public descriptors::FIELD_BASE<1> { };
+struct LATTICE_REFERENCE_PRESSURE : public descriptors::FIELD_BASE<1> { };
+struct SMAGORINSKY_CONSTANT          : public descriptors::FIELD_BASE<1> { };
 
 struct RADIUS : public descriptors::FIELD_BASE<1> { };
 struct CENTER : public descriptors::FIELD_BASE<0,1> { };
-
-
-/// Returns name of PARAMETER for human consumption
-template <typename PARAMETER>
-std::string name() {
-  auto raw = meta::nice_name<PARAMETER>();
-  if (raw.starts_with("olb::")) {
-    raw = std::string_view(raw.cbegin() + 5,
-                           raw.cend());
-  }
-  if (raw.starts_with("parameters::")) {
-    raw = std::string_view(raw.cbegin() + 12,
-                           raw.cend());
-  }
-  return std::string(raw);
-}
-
+struct CONVERSION_DISPLACEMENT : public descriptors::FIELD_BASE<1> { };
 }
 
 }

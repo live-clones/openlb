@@ -30,10 +30,14 @@
 #include "definition/mrt.h"
 #include "definition/rtlbm.h"
 #include "definition/cum.h"
+#include "definition/vector.h"
 
 namespace olb {
 
 namespace descriptors {
+
+template <typename... FIELDS>
+using D1 = SPATIAL_DESCRIPTOR<1,FIELDS...>;
 
 template <typename... FIELDS>
 using D2 = SPATIAL_DESCRIPTOR<2,FIELDS...>;
@@ -74,6 +78,7 @@ using ShanChenDynGForcedD2Q9Descriptor              = D2Q9<VELOCITY,FORCE,EXTERN
 using DynSmagorinskyD2Q9Descriptor                  = D2Q9<SMAGO_CONST>;
 using PorousD2Q9Descriptor                          = D2Q9<POROSITY>;
 using ExtendedPorousD2Q9Descriptor                  = D2Q9<POROSITY,LOCAL_DRAG>;
+using PorousMaterialD2Q9Descriptor                  = D2Q9<POROSITY,MATERIAL>;
 using PorousParticleD2Q9Descriptor                  = D2Q9<POROSITY,VELOCITY_NUMERATOR,VELOCITY_DENOMINATOR>;
 using PorousParticleWithContactD2Q9Descriptor       = D2Q9<POROSITY,VELOCITY_NUMERATOR,VELOCITY_DENOMINATOR,CONTACT_DETECTION>;
 using PSMD2Q9Descriptor                             = D2Q9<POROSITY,VELOCITY_SOLID>;

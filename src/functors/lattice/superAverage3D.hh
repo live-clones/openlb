@@ -196,3 +196,4 @@ bool SuperNonZeroAverage3D<T,W>::operator() (W output[], const int input[])
 }
 
 #endif
+

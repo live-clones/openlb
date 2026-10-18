@@ -59,7 +59,6 @@ int main(int argc, char *argv[])
     myCaseParameters.set<PECLET>(40./3.);
     myCaseParameters.set<PULSE_DIFF_BOUND>(1e-3);
   }
-  myCaseParameters.fromCLI(argc, argv);
 
   const MyCase::value_t N0 = myCaseParameters.get<parameters::RESOLUTION>();
   const MyCase::value_t statIter0 = myCaseParameters.get<parameters::OUTPUT_INTERVAL>();

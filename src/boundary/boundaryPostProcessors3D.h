@@ -30,6 +30,7 @@
 #include "core/postProcessing.h"
 
 #include "core/operator.h"
+#include "boundaryMomentsDemand.h"
 
 namespace olb {
 
@@ -41,14 +42,20 @@ namespace olb {
 template<typename T, typename DESCRIPTOR, int direction, int orientation>
 class PlaneFdBoundaryProcessor3D {
 public:
-  static constexpr OperatorScope scope = OperatorScope::PerCell;
+  static constexpr OperatorScope scope = OperatorScope::PerCellWithParameters;
 
   int getPriority() const {
     return 0;
   }
 
-  template <concepts::DynamicCell CELL>
-  void apply(CELL& cell) any_platform;
+  using parameters = meta::list<descriptors::OMEGA>;
+
+  static std::vector<MomentsDemand<DESCRIPTOR::d>> getMomentsDemand() {
+    return planeFdMomentsDemand<DESCRIPTOR,direction,orientation>();
+  }
+
+  template <concepts::DynamicCell CELL, concepts::Parameters PARAMETERS>
+  void apply(CELL& cell, PARAMETERS& parameters) any_platform;
 
 private:
   template <int deriveDirection, typename CELL, typename V=CELL::value_t>
@@ -56,6 +63,29 @@ private:
 
 };
 
+template<typename T, typename DESCRIPTOR, typename DYNAMICS, int direction, int orientation>
+class PlaneFdBoundaryProcessorOnDynamics3D {
+public:
+  static constexpr OperatorScope scope = OperatorScope::PerCellWithParameters;
+
+  int getPriority() const {
+    return 0;
+  }
+
+  using parameters = meta::list<descriptors::OMEGA>;
+
+  static std::vector<MomentsDemand<DESCRIPTOR::d>> getMomentsDemand() {
+    return planeFdMomentsDemand<DESCRIPTOR,direction,orientation>();
+  }
+
+  template <concepts::DynamicCell CELL, concepts::Parameters PARAMETERS>
+  void apply(CELL& cell, PARAMETERS& parameters) any_platform;
+
+private:
+  template <int deriveDirection, typename CELL, typename V=CELL::value_t>
+  void interpolateGradients(CELL& cell, V velDeriv[DESCRIPTOR::d]) const any_platform;
+
+};
 
 template <typename T, typename DESCRIPTOR, int direction, int orientation>
 class StraightConvectionBoundaryProcessor3D {
@@ -93,6 +123,10 @@ public:
     return 0;
   }
 
+  static std::vector<MomentsDemand<DESCRIPTOR::d>> getMomentsDemand() {
+    return outerVelocityEdgeMomentsDemand<DESCRIPTOR,plane,normal1,normal2>();
+  }
+
   template <concepts::DynamicCell CELL>
   void apply(CELL& cell) any_platform;
 
@@ -115,8 +149,62 @@ struct OuterVelocityCornerProcessor3D {
     return 1;
   }
 
+  static std::vector<MomentsDemand<DESCRIPTOR::d>> getMomentsDemand() {
+    return outerVelocityCornerMomentsDemand<DESCRIPTOR::d>({xNormal,yNormal,zNormal});
+  }
+
   template <concepts::DynamicCell CELL>
   void apply(CELL& cell) any_platform;
+};
+
+/// Typed variant of OuterVelocityEdgeProcessor3D: obtains the center cell's
+/// momenta/equilibrium from the statically known DYNAMICS and omega from the
+/// operator parameters, so no device-side dynamics dispatch is required (GPU_SYCL).
+template <typename T, typename DESCRIPTOR, typename DYNAMICS, int plane, int normal1, int normal2>
+class OuterVelocityEdgeProcessorOnDynamics3D {
+public:
+  static constexpr OperatorScope scope = OperatorScope::PerCellWithParameters;
+
+  int getPriority() const {
+    return 0;
+  }
+
+  using parameters = meta::list<descriptors::OMEGA>;
+
+  static std::vector<MomentsDemand<DESCRIPTOR::d>> getMomentsDemand() {
+    return outerVelocityEdgeMomentsDemand<DESCRIPTOR,plane,normal1,normal2>();
+  }
+
+  template <concepts::DynamicCell CELL, concepts::Parameters PARAMETERS>
+  void apply(CELL& cell, PARAMETERS& parameters) any_platform;
+
+private:
+  template <typename CELL, typename V=CELL::value_t>
+  V getNeighborRho(CELL& cell, int step1, int step2) any_platform;
+
+  template <int deriveDirection, int orientation, typename CELL, typename V=CELL::value_t>
+  void interpolateGradients(CELL& cell, V velDeriv[DESCRIPTOR::d]) const any_platform;
+
+};
+
+/// Typed variant of OuterVelocityCornerProcessor3D (see OuterVelocityEdgeProcessorOnDynamics3D).
+template<typename T, typename DESCRIPTOR, typename DYNAMICS,
+         int xNormal, int yNormal, int zNormal>
+struct OuterVelocityCornerProcessorOnDynamics3D {
+  static constexpr OperatorScope scope = OperatorScope::PerCellWithParameters;
+
+  int getPriority() const {
+    return 1;
+  }
+
+  static std::vector<MomentsDemand<DESCRIPTOR::d>> getMomentsDemand() {
+    return outerVelocityCornerMomentsDemand<DESCRIPTOR::d>({xNormal,yNormal,zNormal});
+  }
+
+  using parameters = meta::list<descriptors::OMEGA>;
+
+  template <concepts::DynamicCell CELL, concepts::Parameters PARAMETERS>
+  void apply(CELL& cell, PARAMETERS& parameters) any_platform;
 };
 
 /**
@@ -598,15 +686,30 @@ struct FlatNeumannPhaseFieldPostProcessorA3D {
   template <typename CELL>
   void apply(CELL& cell) any_platform{
 
-    // std::cout << "A PP" << std::endl;
-    Vector<int,DESCRIPTOR::d> normal{-xNormal, -yNormal, -zNormal};
-    auto cell1 = cell.neighbor(normal);
-
-    for (int iPop=0; iPop < DESCRIPTOR::q; ++iPop) {
-      cell[iPop] = cell1[iPop];
-    }
+    Vector<int,3> normal{xNormal, yNormal, zNormal};
+    Vector<int,3> oppositeNormal{-xNormal, -yNormal, -zNormal};
     auto phi = cell.template getField<descriptors::STATISTIC>();
-    phi[0] = cell.computeRho();
+    Vector<T,3> uVec = cell.template getField<descriptors::VELOCITY>();
+    T dotProduct{};
+    for (int iD=0; iD<DESCRIPTOR::d; ++iD) {
+      dotProduct += uVec[iD]*normal[iD];
+    }
+
+    if ( dotProduct > 0 ) {
+      auto cell1 = cell.neighbor(oppositeNormal);
+      for (int iPop=0; iPop < DESCRIPTOR::q; ++iPop) {
+        cell[iPop] = cell1[iPop];
+      }
+      phi[0] = cell.computeRho();
+    } else {
+      phi[0] = cell.neighbor(normal).template getField<descriptors::STATISTIC>()[0];
+      for (int iPop=0; iPop < DESCRIPTOR::q; ++iPop) {
+        cell[iPop] = equilibrium<DESCRIPTOR>::firstOrder(iPop, phi[0], uVec);
+      }
+    }
+
+    if (phi[0] > 1.0001) phi[0] = T{1};
+    if (phi[0] < -0.0001) phi[0] = T{0};
     cell.template setField<descriptors::STATISTIC>(phi);
   }
 
@@ -627,15 +730,112 @@ struct FlatNeumannPhaseFieldPostProcessorB3D {
   template <typename CELL>
   void apply(CELL& cell) any_platform{
 
-    // std::cout << "B PP" << std::endl;
     Vector<int,DESCRIPTOR::d> normal{xNormal, yNormal, zNormal};
 
     auto phi = cell.template getField<descriptors::STATISTIC>();
     auto phiGhost = cell.neighbor(normal).template getField<descriptors::STATISTIC>();
     phiGhost[0] = phi[0];
-    if (phiGhost[0] > 1.0001) phiGhost[0] = 1;
-    if (phiGhost[0] < -0.0001) phiGhost[0] = 0;
+    if (phiGhost[0] > 1.0001) phiGhost[0] = T{1};
+    if (phiGhost[0] < -0.0001) phiGhost[0] = T{0};
     cell.neighbor(normal).template setField<descriptors::STATISTIC>(phiGhost);
+
+    for (int iPop=1; iPop < DESCRIPTOR::q; ++iPop) {
+      T dotProduct{};
+      for (int iD=0; iD<DESCRIPTOR::d; ++iD) {
+        dotProduct += descriptors::c<DESCRIPTOR>(iPop)[iD]*normal[iD];
+      }
+      if ( dotProduct == 0 &&
+      (cell.neighbor(descriptors::c<DESCRIPTOR>(iPop)).template getField<descriptors::SCALAR>() >= 1.9 ||
+       cell.neighbor(descriptors::c<DESCRIPTOR>(iPop)).template getField<descriptors::SCALAR>() <= 1e-6))
+      {
+        cell.neighbor(normal+descriptors::c<DESCRIPTOR>(iPop)).template setField<descriptors::STATISTIC>(phiGhost);
+      }
+    }
+  }
+
+};
+
+/**
+* Setting the ghost node phi statistic equal to the phi of the fluid node for a phase field solving LBE.
+*/
+template<typename T, typename DESCRIPTOR, int xNormal,int yNormal, int zNormal>
+struct PhaseFieldGhostProcessor3D {
+  static constexpr OperatorScope scope = OperatorScope::PerCell;
+
+  int getPriority() const {
+    return 1;
+  }
+
+  template <typename CELL>
+  void apply(CELL& cell) any_platform{
+    Vector<int,DESCRIPTOR::d> normal{xNormal, yNormal, zNormal};
+
+    auto phi = cell.template getField<descriptors::STATISTIC>();
+    auto phiGhost = cell.neighbor(normal).template getField<descriptors::STATISTIC>();
+    phiGhost[0] = phi[0];
+    cell.neighbor(normal).template setField<descriptors::STATISTIC>(phiGhost);
+
+    for (int iPop=1; iPop < DESCRIPTOR::q; ++iPop) {
+      T dotProduct{};
+      for (int iD=0; iD<DESCRIPTOR::d; ++iD) {
+        dotProduct += descriptors::c<DESCRIPTOR>(iPop)[iD]*normal[iD];
+      }
+      if ( dotProduct == 0 &&
+      (cell.neighbor(descriptors::c<DESCRIPTOR>(iPop)).template getField<descriptors::SCALAR>() >= 1.9 ||
+       cell.neighbor(descriptors::c<DESCRIPTOR>(iPop)).template getField<descriptors::SCALAR>() <= 1e-6))
+      {
+        cell.neighbor(normal+descriptors::c<DESCRIPTOR>(iPop)).template setField<descriptors::STATISTIC>(phiGhost);
+      }
+    }
+  }
+
+};
+
+/**
+* Extrapolating momentum normal to the boundary from one node inside the fluid.
+*/
+template<typename T, typename DESCRIPTOR, int direction, int orientation>
+struct MomentumExtrapolatePostProcessor3D {
+  static constexpr OperatorScope scope = OperatorScope::PerCell;
+
+  int getPriority() const {
+    return 0;
+  }
+
+  template <typename CELL>
+  void apply(CELL& cell) any_platform{
+
+    auto rho = cell.template getField<descriptors::RHO>();
+    auto j = cell.template getField<descriptors::MOMENTUM>();
+
+    Vector<int,DESCRIPTOR::d> insideNormal{0,0,0};
+    insideNormal[direction] = -orientation;
+    Vector<int,DESCRIPTOR::d> normal{0,0,0};
+    normal[direction] = orientation;
+    T u[DESCRIPTOR::d] {};
+    cell.computeU(u);
+    Vector<T,3> uVec{};
+    T dotProduct{};
+    for (int iD=0; iD<DESCRIPTOR::d; ++iD) {
+      uVec[iD] = u[iD];
+      dotProduct += uVec[iD]*normal[iD];
+    }
+
+    if ( dotProduct > 0 ) {
+      auto cell1 = cell.neighbor(insideNormal);
+      T u1[DESCRIPTOR::d];
+      cell1.computeU(u1);
+      for (int iDim = 0; iDim < DESCRIPTOR::d; ++iDim) {
+        j[iDim] = rho*u1[iDim];
+      }
+    } else {
+      for (int iDim = 0; iDim < DESCRIPTOR::d; ++iDim) {
+        j[iDim] = T(0.);
+      }
+      j[direction] = rho*uVec[direction];
+    }
+
+    cell.template setField<descriptors::MOMENTUM>(j);
   }
 
 };

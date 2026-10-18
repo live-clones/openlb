@@ -33,3 +33,5 @@
 #include "analytical/functors3D.h"
 #include "lattice/functors3D.h"
 #include "particles/particleFunctors.h"
+#include "primitive/constant.h"
+#include "primitive/volumeSamplers.h"

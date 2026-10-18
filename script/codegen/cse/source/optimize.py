@@ -29,8 +29,9 @@ parser.add_argument('inputfile', help='filename containing expressions')
 parser.add_argument('cse_template', help='filename of mako template to execute cse')
 parser.add_argument('outputfile',   help='path and filename of output file')
 parser.add_argument('--deterministic', action='store_true', help='enforce deterministic output')
+parser.add_argument('--codegen_target', type=str, help='CSE codegen target (Generic, StoredMoments)', default="Generic")
 args = parser.parse_args()
 
 # Generate cse-optimized C++ code from tree and fill template
 print('Generate from ' + args.inputfile)
-executeCSE(args.inputfile, args.cse_template, args.outputfile, args.deterministic)
+executeCSE(args.inputfile, args.cse_template, args.outputfile, args.deterministic, target=args.codegen_target)

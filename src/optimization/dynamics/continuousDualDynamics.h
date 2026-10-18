@@ -207,6 +207,7 @@ struct DualForcedBGK {
   };
 };
 
+
 }
 
 template<typename T, typename DESCRIPTOR, typename MOMENTA=momenta::BulkTuple>
@@ -225,7 +226,5 @@ using DualForcedBGKDynamics = dynamics::Tuple<
   collision::DualForcedBGK
 >;
 
-
 } // namespace olb
-
 #endif

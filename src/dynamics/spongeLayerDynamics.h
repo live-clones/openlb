@@ -46,6 +46,9 @@ struct SpongeLayerDynamics : public dynamics::CustomCollision<T,DESCRIPTOR,MOMEN
   template <typename NEW_T>
   using exchange_value_type = SpongeLayerDynamics<NEW_T,DESCRIPTOR,MOMENTA,EQUILIBRIUM>;
 
+  template <typename NEW_DESCRIPTOR>
+  using exchange_descriptor = SpongeLayerDynamics<T,NEW_DESCRIPTOR,MOMENTA,EQUILIBRIUM>;
+
   template <typename M>
   using exchange_momenta = SpongeLayerDynamics<T,DESCRIPTOR,M,EQUILIBRIUM>;
 

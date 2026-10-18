@@ -26,6 +26,9 @@
 
 #include "blockCommunicator.h"
 
+#include "communication/overlapBufferLayout.h"
+#include "communication/directionalOverlap.h"
+
 #include "mpiRequest.h"
 #include "communicatable.h"
 #include "superCommunicationTagCoordinator.h"
@@ -48,7 +51,8 @@ class ConcreteBlockCommunicator<BLOCK>::SendTask {
 private:
   const std::vector<CellID>& _cells;
 
-  MultiConcreteCommunicatable<BLOCK> _source;
+  /// Dense or (for negotiated per-cell masks) masked multi-field serializer
+  std::unique_ptr<Communicatable> _source;
 
   std::unique_ptr<std::uint8_t[]> _buffer;
   MpiSendRequest _request;
@@ -57,17 +61,18 @@ public:
   SendTask(MPI_Comm comm, int tag, int rank,
            const std::vector<std::type_index>& fields,
            const std::vector<CellID>& cells,
+           const overlap::FieldMasks& masks,
            BLOCK& block):
     _cells(cells),
-    _source(block, fields),
-    _buffer(new std::uint8_t[_source.size(_cells)] { }),
-    _request(_buffer.get(), _source.size(_cells),
+    _source(overlap::makeMaskedMultiCommunicatable(block, fields, masks)),
+    _buffer(new std::uint8_t[_source->size(_cells)] { }),
+    _request(_buffer.get(), _source->size(_cells),
              rank, tag, comm)
   { }
 
   void send()
   {
-    _source.serialize(_cells, _buffer.get());
+    _source->serialize(_cells, _buffer.get());
     _request.start();
   }
 
@@ -85,7 +90,8 @@ private:
   const int _rank;
   const std::vector<CellID>& _cells;
 
-  MultiConcreteCommunicatable<BLOCK> _target;
+  /// Dense or (for negotiated per-cell masks) masked multi-field serializer
+  std::unique_ptr<Communicatable> _target;
 
   std::unique_ptr<std::uint8_t[]> _buffer;
   MpiRecvRequest _request;
@@ -119,13 +125,14 @@ public:
   RecvTask(MPI_Comm comm, int tag, int rank,
            const std::vector<std::type_index>& fields,
            const std::vector<CellID>& cells,
+           const overlap::FieldMasks& masks,
            BLOCK& block):
     _tag(tag),
     _rank(rank),
     _cells(cells),
-    _target(block, fields),
-    _buffer(new std::uint8_t[_target.size(_cells)] { }),
-    _request(_buffer.get(), _target.size(_cells),
+    _target(overlap::makeMaskedMultiCommunicatable(block, fields, masks)),
+    _buffer(new std::uint8_t[_target->size(_cells)] { }),
+    _request(_buffer.get(), _target->size(_cells),
              _rank, _tag, comm)
   { }
 
@@ -147,7 +154,7 @@ public:
 
   void unpack()
   {
-    _target.deserialize(_cells, _buffer.get());
+    _target->deserialize(_cells, _buffer.get());
   }
 };
 
@@ -159,8 +166,9 @@ private:
   const std::vector<CellID>& _targetCells;
   const std::vector<CellID>& _sourceCells;
 
-  MultiConcreteCommunicatable<BLOCK> _target;
-  MultiConcreteCommunicatable<BLOCK> _source;
+  /// Dense or (for negotiated per-cell masks) masked multi-field serializers
+  std::unique_ptr<Communicatable> _target;
+  std::unique_ptr<Communicatable> _source;
 
   std::unique_ptr<std::uint8_t[]> _buffer;
 
@@ -168,12 +176,13 @@ public:
   CopyTask(
     const std::vector<std::type_index>& fields,
     const std::vector<CellID>& targetCells, BLOCK& target,
-    const std::vector<CellID>& sourceCells, BLOCK& source):
+    const std::vector<CellID>& sourceCells, BLOCK& source,
+    const overlap::FieldMasks& masks = {}):
     _targetCells(targetCells),
     _sourceCells(sourceCells),
-    _target(target, fields),
-    _source(source, fields),
-    _buffer(new std::uint8_t[_source.size(_sourceCells)] { })
+    _target(overlap::makeMaskedMultiCommunicatable(target, fields, masks)),
+    _source(overlap::makeMaskedMultiCommunicatable(source, fields, masks)),
+    _buffer(new std::uint8_t[_source->size(_sourceCells)] { })
   {
     OLB_ASSERT(_sourceCells.size() == _targetCells.size(),
                "Source cell count must match target cell count");
@@ -181,8 +190,8 @@ public:
 
   void copy()
   {
-    _source.serialize(_sourceCells, _buffer.get());
-    _target.deserialize(_targetCells, _buffer.get());
+    _source->serialize(_sourceCells, _buffer.get());
+    _target->deserialize(_targetCells, _buffer.get());
   };
 };
 
@@ -210,7 +219,8 @@ ConcreteBlockCommunicator<BLOCK>::ConcreteBlockCommunicator(
       loadBalancer.isLocal(remoteC) &&
       (
         loadBalancer.platform(loadBalancer.loc(remoteC)) == Platform::GPU_CUDA ||
-        loadBalancer.platform(loadBalancer.loc(remoteC)) == Platform::GPU_HIP
+        loadBalancer.platform(loadBalancer.loc(remoteC)) == Platform::GPU_HIP  ||
+        loadBalancer.platform(loadBalancer.loc(remoteC)) == Platform::GPU_SYCL
       ) ) {
       if constexpr (std::is_same_v<SUPER, SuperGeometry<T,SUPER::d>>) {
         if (!neighborhood.getCellsOutboundTo(remoteC).empty()) {
@@ -218,6 +228,7 @@ ConcreteBlockCommunicator<BLOCK>::ConcreteBlockCommunicator(
                                   loadBalancer.rank(remoteC),
                                   neighborhood.getFieldsCommonWith(remoteC),
                                   neighborhood.getCellsOutboundTo(remoteC),
+                                  neighborhood.getMasksOutboundTo(remoteC),
                                   super.template getBlock<BLOCK>(_iC));
         }
       }
@@ -226,6 +237,7 @@ ConcreteBlockCommunicator<BLOCK>::ConcreteBlockCommunicator(
                                 loadBalancer.rank(remoteC),
                                 neighborhood.getFieldsCommonWith(remoteC),
                                 neighborhood.getCellsInboundFrom(remoteC),
+                                neighborhood.getMasksInboundFrom(remoteC),
                                 super.template getBlock<BLOCK>(_iC));
       }
     } else {
@@ -234,6 +246,7 @@ ConcreteBlockCommunicator<BLOCK>::ConcreteBlockCommunicator(
                                 loadBalancer.rank(remoteC),
                                 neighborhood.getFieldsCommonWith(remoteC),
                                 neighborhood.getCellsOutboundTo(remoteC),
+                                neighborhood.getMasksOutboundTo(remoteC),
                                 super.template getBlock<BLOCK>(_iC));
       }
       if (!neighborhood.getCellsInboundFrom(remoteC).empty()) {
@@ -241,6 +254,7 @@ ConcreteBlockCommunicator<BLOCK>::ConcreteBlockCommunicator(
                                 loadBalancer.rank(remoteC),
                                 neighborhood.getFieldsCommonWith(remoteC),
                                 neighborhood.getCellsInboundFrom(remoteC),
+                                neighborhood.getMasksInboundFrom(remoteC),
                                 super.template getBlock<BLOCK>(_iC));
       }
     }
@@ -251,7 +265,8 @@ ConcreteBlockCommunicator<BLOCK>::ConcreteBlockCommunicator(
     if (!neighborhood.getCellsInboundFrom(localC).empty()) {
       _copyTasks.emplace_back(neighborhood.getFieldsCommonWith(localC),
                               neighborhood.getCellsInboundFrom(localC),   super.template getBlock<BLOCK>(_iC),
-                              neighborhood.getCellsRequestedFrom(localC), super.template getBlock<BLOCK>(loadBalancer.loc(localC)));
+                              neighborhood.getCellsRequestedFrom(localC), super.template getBlock<BLOCK>(loadBalancer.loc(localC)),
+                              neighborhood.getMasksInboundFrom(localC));
     }
   });
 #endif

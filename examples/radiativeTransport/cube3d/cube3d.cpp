@@ -128,7 +128,7 @@ void attachUnitConverter(MyCase& myCase)
   Rlattice.setUnitConverter<RadiativeUnitConverter<T, RDESCRIPTOR>>(
       params.get<parameters::RESOLUTION>(), params.get<parameters::LATTICE_RELAXATION_TIME>(),
       params.get<parameters::ABSORPTION>(), params.get<parameters::SCATTERING>(),
-      params.get<parameters::ANINOSOTROPY_FACTOR>());
+      params.get<parameters::ANISOTROPY_FACTOR>());
 
   const auto& converter = Rlattice.getUnitConverter();
   clout << "omega = " << converter.getLatticeRelaxationTime() << std::endl;
@@ -204,7 +204,7 @@ void prepareLatticeMcHardy(MyCase& myCase)
   converter.write();
 
   T latticeRelaxationFrequency = converter.getLatticeRelaxationFrequency();
-  T anisotropyFactor           = params.get<parameters::ANINOSOTROPY_FACTOR>();
+  T anisotropyFactor           = params.get<parameters::ANISOTROPY_FACTOR>();
 
   int const                       q = descriptors::q<RDESCRIPTOR>() - 1;
   std::array<std::array<T, q>, q> phi;
@@ -421,11 +421,10 @@ int main(int argc, char* argv[])
     myCaseParameters.set<BOUNDARY_SHIFT>(0.);
 
     //Copmuted Values
-    myCaseParameters.set<PHYS_DELTA_X>([&] {
-      return myCaseParameters.get<DOMAIN_L>() / myCaseParameters.get<RESOLUTION>();
+    myCaseParameters.set<PHYS_DELTA_X>([](MyCase::ParametersD& p) {
+      return p.get<DOMAIN_L>() / p.get<RESOLUTION>();
     });
   }
-  myCaseParameters.fromCLI(argc, argv);
 
   //Check if given case number is valid
   int case_number = myCaseParameters.get<parameters::CASE_NUMBER>();

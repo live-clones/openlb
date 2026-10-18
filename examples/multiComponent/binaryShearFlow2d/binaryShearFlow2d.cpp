@@ -513,7 +513,6 @@ void setTemporalValues(MyCase& myCase,
 { }
 
 void getResults(MyCase& myCase,
-                util::Timer<MyCase::value_t>& timer,
                 std::size_t iT)
 {
   OstreamManager clout( std::cout,"getResults" );
@@ -526,9 +525,7 @@ void getResults(MyCase& myCase,
   auto& params = myCase.getParameters();
   auto& converter = myCase.getLattice(NavierStokes{}).getUnitConverter();
 
-  const T physStatIterT = params.get<parameters::PHYS_STAT_ITER_T>();
   const T physVtkIterT = params.get<parameters::PHYS_VTK_ITER_T>();
-  const int statIter = converter.getLatticeTime(physStatIterT);
   const int vtkIter = converter.getLatticeTime(physVtkIterT);
 
   SuperVTMwriter2D<T> vtmWriter( "binaryShearFlow2d" );
@@ -540,15 +537,6 @@ void getResults(MyCase& myCase,
     vtmWriter.write( cuboid );
     vtmWriter.write( rank );
     vtmWriter.createMasterFile();
-  }
-
-  // Get statistics
-  if ( iT%statIter==0 ) {
-    // Timer console output
-    timer.update( iT );
-    timer.printStep();
-    sLattice1.getStatistics().print( iT, converter.getPhysTime(iT) );
-    sLattice2.getStatistics().print( iT, converter.getPhysTime(iT) );
   }
 
   // Writes the VTK files
@@ -582,6 +570,8 @@ void getResults(MyCase& myCase,
     vtmWriter.addFunctor( velocityMittel );
     vtmWriter.write( iT );
   }
+
+  myCase.report(iT);
 }
 
 void simulate(MyCase& myCase) {
@@ -589,7 +579,6 @@ void simulate(MyCase& myCase) {
 
   using T = MyCase::value_t;
 
-  auto& geometry = myCase.getGeometry();
   auto& converter = myCase.getLattice(NavierStokes{}).getUnitConverter();
   auto& params = myCase.getParameters();
   auto& sLattice1 = myCase.getLattice(NavierStokes{});
@@ -609,8 +598,6 @@ void simulate(MyCase& myCase) {
   int iT = 0;
   clout << "starting simulation..." << std::endl;
   util::ValueTracer<T> converge( converter.getLatticeTime( physInterval ), residuum );
-  util::Timer<T> timer( maxIter, geometry.getStatistics().getNvoxel() );
-  timer.start();
 
   T old_deformation = 0;
   T deformation = 0;
@@ -629,14 +616,14 @@ void simulate(MyCase& myCase) {
     // Convergence check
     if ( converge.hasConverged() && util::abs(deformation - old_deformation) < defResiduum ) {
       clout << "Simulation converged." << std::endl;
-      getResults( myCase, timer, iT );
+      getResults( myCase, iT );
       break;
     }
     sLattice1.setProcessingContext(ProcessingContext::Simulation);
     sLattice2.setProcessingContext(ProcessingContext::Simulation);
 
     // Computation and output of the results
-    getResults( myCase, timer, iT );
+    getResults( myCase, iT );
 
     // Collide and stream execution
     sLattice1.collideAndStream();
@@ -657,10 +644,7 @@ void simulate(MyCase& myCase) {
   converge.takeValue( sLattice2.getStatistics().getAverageRho(), true );
   }
 
-  timer.stop();
-  timer.printSummary();
-
-
+  myCase.finalize(maxIter);
 }
 int main( int argc, char *argv[] )
 {
@@ -687,23 +671,28 @@ int main( int argc, char *argv[] )
     myCaseParameters.set<H1                     >(0.);    // Contact angle 90 degrees   [lattice units]
     myCaseParameters.set<H2                     >(0.);    // Contact angle 90 degrees   [lattice units]
     myCaseParameters.set<DEFORMATION_CONVERGENCE_PRECISION>(0.0015);  // deformation residuum criterion
-    myCaseParameters.set<parameters::SHEAR_RATE>([&] {
-      return myCaseParameters.get<CONT_VISC>() * myCaseParameters.get<DROPLET_REYNOLDS>() / util::pow(myCaseParameters.get<parameters::RADIUS>(), 2);
+    myCaseParameters.set<parameters::SHEAR_RATE>([](MyCase::ParametersD& p) {
+      return p.get<CONT_VISC>() * p.get<DROPLET_REYNOLDS>() / util::pow(p.get<parameters::RADIUS>(), 2);
     }); // [pu] physical shear rate [1/s]
-    myCaseParameters.set<parameters::MAX_PHYS_T>([&] {
-      return myCaseParameters.get<MAX_NORM_T>() / myCaseParameters.get<SHEAR_RATE>();
+    myCaseParameters.set<parameters::MAX_PHYS_T>([](MyCase::ParametersD& p) {
+      return p.get<MAX_NORM_T>() / p.get<SHEAR_RATE>();
     });
-    myCaseParameters.set<parameters::PHYS_VTK_ITER_T>([&] {
-      return myCaseParameters.get<NORM_VTK_ITER_T>() / myCaseParameters.get<SHEAR_RATE>();
+    myCaseParameters.set<parameters::PHYS_VTK_ITER_T>([](MyCase::ParametersD& p) {
+      return p.get<NORM_VTK_ITER_T>() / p.get<SHEAR_RATE>();
     });
-    myCaseParameters.set<parameters::PHYS_STAT_ITER_T>([&] {
-      return myCaseParameters.get<NORM_STAT_ITER_T>() / myCaseParameters.get<SHEAR_RATE>();
+    myCaseParameters.set<parameters::PHYS_STAT_ITER_T>([](MyCase::ParametersD& p) {
+      return p.get<NORM_STAT_ITER_T>() / p.get<SHEAR_RATE>();
     });
-    myCaseParameters.set<parameters::DOMAIN_EXTENT>([&]() -> Vector<MyCase::value_t, 2>{
-      return {20 * myCaseParameters.get<parameters::RADIUS>(), 4 * myCaseParameters.get<parameters::RADIUS>()};
+    myCaseParameters["reporter"]["statistics"].set<parameters::PHYS_ITER_T>([](MyCase::ParametersD& p) {
+      return p.root().get<NORM_STAT_ITER_T>() / p.root().get<SHEAR_RATE>();
+    });
+    myCaseParameters["reporter"]["timer"].set<parameters::PHYS_ITER_T>([](MyCase::ParametersD& p) {
+      return p.root().get<NORM_STAT_ITER_T>() / p.root().get<SHEAR_RATE>();
+    });
+    myCaseParameters.set<parameters::DOMAIN_EXTENT>([](MyCase::ParametersD& p) -> Vector<MyCase::value_t, 2>{
+      return {20 * p.get<parameters::RADIUS>(), 4 * p.get<parameters::RADIUS>()};
     });
   }
-  myCaseParameters.fromCLI(argc, argv);
 
   /// === Step 3: Create Mesh ===
   Mesh mesh = createMesh(myCaseParameters);

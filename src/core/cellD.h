@@ -26,7 +26,7 @@
 
 #include <type_traits>
 
-#include "fieldArrayD.hh"
+#include "fieldParametersD.h"
 
 namespace olb {
 
@@ -172,6 +172,23 @@ public:
     typename DYNAMICS::MomentaF().inverseShiftRhoU(*this, rho, u);
   }
 
+};
+
+/// Grid of full cells to provide neighborhood access
+template <typename T, typename DESCRIPTOR, typename DYNAMICS>
+class FullCellWithDirectNeighborsD : public FullCellD<T,DESCRIPTOR,DYNAMICS> {
+private:
+  Vector<FullCellD<T,DESCRIPTOR,DYNAMICS>, DESCRIPTOR::q-1> _neighborsD;
+public:
+  FullCellWithDirectNeighborsD() any_platform : FullCellD<T,DESCRIPTOR,DYNAMICS>()
+  { }
+
+  FullCellD<T,DESCRIPTOR,DYNAMICS>& neighbor(Vector<int,DESCRIPTOR::d> c) any_platform {
+    if (c == Vector<int,DESCRIPTOR::d>{}) {
+      return *this;
+    }
+    return _neighborsD[descriptors::direction<DESCRIPTOR>(c) - 1];
+  }
 };
 
 }

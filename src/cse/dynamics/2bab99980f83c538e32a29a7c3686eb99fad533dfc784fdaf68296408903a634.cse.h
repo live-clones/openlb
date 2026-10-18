@@ -35,39 +35,39 @@ namespace olb {
 namespace dynamics {
 
 template <typename T, typename... FIELDS>
-struct CSE<dynamics::Tuple<T, descriptors::D3Q15<FIELDS...>, momenta::Tuple<momenta::FixedDensity, momenta::ZeroMomentum, momenta::ZeroStress, momenta::DefineSeparately>, equilibria::SecondOrder, collision::Revert, dynamics::DefaultCombination>> {
+struct CSE<dynamics::Tuple<T, descriptors::D3Q15<FIELDS...>, momenta::Tuple<momenta::FixedDensity, momenta::ZeroMomentum, momenta::ZeroStress, momenta::DefineSeparately>, equilibria::SecondOrder, collision::Revert, dynamics::DefaultCombination>, olb::CodegenTarget::Generic> {
 template <concepts::Cell CELL, concepts::Parameters PARAMETERS, concepts::BaseType V=typename CELL::value_t>
 CellStatistic<V> collide(CELL& cell, PARAMETERS& parameters) any_platform {
 auto x0 = cell[0];
-auto x1 = cell[8];
-auto x2 = cell[9];
-auto x3 = cell[10];
-auto x4 = cell[11];
-auto x5 = cell[12];
-auto x6 = cell[13];
-auto x7 = cell[14];
-auto x8 = cell[1];
-auto x9 = cell[2];
-auto x10 = cell[3];
-auto x11 = cell[4];
-auto x12 = cell[5];
-auto x13 = cell[6];
-auto x14 = cell[7];
+auto x1 = cell[3];
+auto x2 = cell[4];
+auto x3 = cell[5];
+auto x4 = cell[6];
+auto x5 = cell[7];
+auto x6 = cell[8];
+auto x7 = cell[9];
+auto x8 = cell[10];
+auto x9 = cell[11];
+auto x10 = cell[12];
+auto x11 = cell[13];
+auto x12 = cell[14];
+auto x13 = cell[1];
+auto x14 = cell[2];
 cell[0] = x0;
-cell[1] = x1;
-cell[2] = x2;
-cell[3] = x3;
-cell[4] = x4;
-cell[5] = x5;
-cell[6] = x6;
-cell[7] = x7;
-cell[8] = x8;
-cell[9] = x9;
-cell[10] = x10;
-cell[11] = x11;
-cell[12] = x12;
-cell[13] = x13;
-cell[14] = x14;
+cell[10] = x1;
+cell[11] = x2;
+cell[12] = x3;
+cell[13] = x4;
+cell[14] = x5;
+cell[1] = x6;
+cell[2] = x7;
+cell[3] = x8;
+cell[4] = x9;
+cell[5] = x10;
+cell[6] = x11;
+cell[7] = x12;
+cell[8] = x13;
+cell[9] = x14;
 return { V{-1}, V{-1} };
 }
 };
@@ -76,4 +76,4 @@ return { V{-1}, V{-1} };
 
 }
 
-// Generation Info: commit=2a9f114ed32e2878e1a64a356eda56d13e508f7d
+// Generation Info: commit=e62fb513c7fed8d9804dfb87eb8d98b331948423

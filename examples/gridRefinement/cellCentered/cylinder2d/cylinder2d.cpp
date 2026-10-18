@@ -22,200 +22,258 @@
  */
 
 #include <olb.h>
+#include <refinement/octree.h>
 
 using namespace olb;
-using namespace olb::descriptors;
+using namespace olb::names;
 
-using T = FLOATING_POINT_TYPE;
-using DESCRIPTOR = D2Q9<>;
+using MyCase = Case<
+  NavierStokes, RefinedLattice<FLOATING_POINT_TYPE, descriptors::D2Q9<>>
+>;
 
-struct GeometryParameters {
-  T L;
-  T lengthX;
-  T lengthY;
-  T centerCylinderX;
-  T centerCylinderY;
-  T radiusCylinder;
+namespace olb::parameters {
 
-  GeometryParameters(int N) {
-    L = 0.1 / N;
-    lengthX = 2.2;
-    lengthY = 0.41 + L;
-    centerCylinderX = 0.2;
-    centerCylinderY = 0.2 + L / 2.0;
-    radiusCylinder = 0.05;
-  }
-};
+struct RADIUS_CYLINDER : public descriptors::FIELD_BASE<1> {};
 
+struct MAX_REFINEMENT : public descriptors::TYPED_FIELD_BASE<int,1> {};
+struct REFINEMENT_BLOCK_SIZE : public descriptors::TYPED_FIELD_BASE<int,1> {};
 
-void prepareGeometry(const UnitConverter<T,DESCRIPTOR>& converter,
-                     SuperGeometry<T,2>& sGeometry,
-                     std::shared_ptr<IndicatorF2D<T>> circle,
-                     GeometryParameters geomParams)
+}
+
+RefinedMesh<MyCase::value_t, MyCase::d> createMesh(MyCase::ParametersD& params)
 {
-  OstreamManager clout( std::cout,"prepareGeometry" );
+  using T                     = MyCase::value_t;
+  T L = 0.1 / params.get<parameters::RESOLUTION>();
+  Vector<T, 2>         extent(2.2, 0.41 + L);
+  std::vector<T>       origin(2, T());
+  IndicatorCuboid2D<T> cuboid(extent, origin);
+
+  const T            physDeltaX = L;
+
+  const int maxRef = params.get<parameters::MAX_REFINEMENT>();
+  const int refBlockSize = params.get<parameters::REFINEMENT_BLOCK_SIZE>();
+
+  Vector<T, 2>   center(0.2, 0.2 + L / 2.0);
+  T              radius = params.get<parameters::RADIUS_CYLINDER>();
+
+  IndicatorCircle2D<T> circle(center, radius);
+  IndicatorLayer2D<T> paddedCircle(circle, physDeltaX);
+  IndicatorCuboid2D<T> refineCuboidI({1.0, 0.25}, {0.08,0.08});
+
+  OctreeRefinedMeshBlueprint<T,2> blueprint(cuboid, physDeltaX, refBlockSize, maxRef);
+  blueprint.refine(refineCuboidI, 1, 0);
+  blueprint.refine(paddedCircle, 2, 2);
+
+  blueprint.balance();
+  blueprint.markBorders();
+  blueprint.reduceWeights(circle);
+  blueprint.loadBalance(singleton::mpi().getSize());
+  blueprint.coarse();
+
+  return RefinedMesh(blueprint);
+}
+
+auto makeConverter(MyCase::ParametersD& params)
+{
+  using T          = MyCase::value_t;
+  using DESCRIPTOR = MyCase::descriptor_t_of<NavierStokes>;
+  const int resolution = params.get<parameters::RESOLUTION>();
+  const T   Re         = params.get<parameters::REYNOLDS>();
+  const T   radius     = params.get<parameters::RADIUS_CYLINDER>();
+  return UnitConverterFromResolutionAndRelaxationTime<T,DESCRIPTOR>(
+    resolution,             // resolution: number of voxels per charPhysL
+    (T) 0.51,               // latticeRelaxationTime
+    (T) 2.0*radius,         // charPhysLength
+    (T) 0.2,                // charPhysVelocity
+    (T) 0.2*2.*radius/Re,   // physViscosity
+    (T) 1.0                 // physDensity
+  );
+}
+
+void prepareGeometry(MyCase& myCase, SuperGeometry<MyCase::value_t, 2>& sGeometry)
+{
+  using T        = MyCase::value_t;
+  auto& params   = myCase.getParameters();
+
+  OstreamManager clout(std::cout, "prepareGeometry");
   clout << "Prepare Geometry ..." << std::endl;
 
-  Vector<T,2> extend(geomParams.lengthX, geomParams.lengthY);
-  Vector<T,2> origin;
+  T L = 0.1 / params.get<parameters::RESOLUTION>();
+  Vector<T, 2> extend(2.2, 0.41 + L);
+  Vector<T, 2> origin;
 
-  sGeometry.rename(0,2);
+  IndicatorCuboid2D<T> domain(extend, origin);
+  sGeometry.rename(0,2,domain);
   sGeometry.rename(2,1,{1,1});
 
+  Vector<T,2> innerExtent(extend);
+  Vector<T,2> innerOrigin(origin);
+  innerOrigin += L*2;
+  innerExtent -= L*4;
+  IndicatorCuboid2D<T> innerCuboid(innerExtent, innerOrigin);
+  sGeometry.rename(2,1, innerCuboid);
+
   // Set material number for inflow
-  extend[0] = 2.*geomParams.L;
-  origin[0] = -geomParams.L;
+  extend[0] = 2.*L;
+  origin[0] = -L;
   IndicatorCuboid2D<T> inflow( extend, origin );
   sGeometry.rename( 2,3,1,inflow );
 
   // Set material number for outflow
-  origin[0] = geomParams.lengthX - geomParams.L;
+  origin[0] = 2.2 - L;
   IndicatorCuboid2D<T> outflow( extend, origin );
   sGeometry.rename( 2,4,1,outflow );
+
   // Set material number for cylinder
+  Vector<T, 2> center(0.2, 0.2 + L / 2.0);
+  T radius = params.get<parameters::RADIUS_CYLINDER>();
+  IndicatorCircle2D<T> circle(center, radius);
+
   sGeometry.rename( 1,5, circle );
 
-  // Removes all not needed boundary voxels outside the surface
   sGeometry.clean();
   sGeometry.checkForErrors();
 
-  sGeometry.print();
+  sGeometry.getStatistics().print();
 
   clout << "Prepare Geometry ... OK" << std::endl;
 }
 
-void prepareGeometryFine(const UnitConverter<T,DESCRIPTOR>& converter,
-                         SuperGeometry<T,2>& sGeometry,
-                         std::shared_ptr<IndicatorF2D<T>> circle,
-                         GeometryParameters geomParams)
+void prepareLattice(MyCase& myCase,
+                    SuperGeometry<MyCase::value_t, 2>& sGeometry,
+                    SuperLattice<MyCase::value_t,MyCase::descriptor_t_of<names::NavierStokes>>& sLattice)
 {
-  OstreamManager clout( std::cout,"prepareGeometry" );
-  clout << "Prepare Geometry ..." << std::endl;
+  using T          = MyCase::value_t;
+  using DESCRIPTOR = MyCase::descriptor_t_of<names::NavierStokes>;
+  auto& params     = myCase.getParameters();
 
-  Vector<T,2> extend(geomParams.lengthX, geomParams.lengthY);
-  Vector<T,2> origin;
-
-  sGeometry.rename(0,1);
-  sGeometry.rename(1,5, circle);
-
-  sGeometry.clean();
-  sGeometry.checkForErrors();
-
-  sGeometry.print();
-
-  clout << "Prepare Geometry ... OK" << std::endl;
-}
-
-// Set up the geometry of the simulation
-void prepareLattice(SuperLattice<T,DESCRIPTOR>& sLattice,
-                    const UnitConverter<T,DESCRIPTOR>& converter,
-                    SuperGeometry<T,2>& sGeometry,
-                    std::shared_ptr<IndicatorF2D<T>> circle)
-{
   OstreamManager clout( std::cout,"prepareLattice" );
   clout << "Prepare Lattice ..." << std::endl;
 
-  const T omega = converter.getLatticeRelaxationFrequency();
+  const T omega = sLattice.getUnitConverter().getLatticeRelaxationFrequency();
 
   // Material=1 -->bulk dynamics
   auto bulkIndicator = sGeometry.getMaterialIndicator({1});
   dynamics::set<BGKdynamics>(sLattice, bulkIndicator);
 
-
   // Material=2 -->bounce back
   boundary::set<boundary::BounceBack>(sLattice, sGeometry, 2);
 
-  // Setting of the boundary conditions
-  // if boundary conditions are chosen to be local
-  //boundary::set<boundary::LocalVelocity>(sLattice, sGeometry, 3);
-  //boundary::set<boundary::LocalPressure>(sLattice, sGeometry, 4);
-
-  //if boundary conditions are chosen to be interpolatedy, 3);
   boundary::set<boundary::InterpolatedVelocity>(sLattice, sGeometry, 3);
   boundary::set<boundary::InterpolatedPressure>(sLattice, sGeometry, 4);
 
-  // if boundary conditions are chosen to be Zou He type
-  //boundary::set<boundary::ZouHeVelocity>(sLattice, sGeometry, 3);
-  //boundary::set<boundary::ZouHePressure>(sLattice, sGeometry, 4);
+  T L = 0.1 / params.get<parameters::RESOLUTION>();
+  Vector<T, 2> center(0.2, 0.2 + L / 2.0);
+  T radius = params.get<parameters::RADIUS_CYLINDER>();
+  IndicatorCircle2D<T> circle(center, radius);
 
   // Material=5 -->bouzidi / bounce back
   #ifdef BOUZIDI
-  setBouzidiBoundary(sLattice, sGeometry, 5, *circle);
+  setBouzidiBoundary(sLattice, sGeometry, 5, circle);
   #else
   boundary::set<boundary::BounceBack>(sLattice, sGeometry, 5);
   #endif
 
   sLattice.setParameter<descriptors::OMEGA>(omega);
 
-  // Make the lattice ready for simulation
-  sLattice.initialize();
-
   clout << "Prepare Lattice ... OK" << std::endl;
 }
 
-// Generates a slowly increasing inflow for the first iTMaxStart timesteps
-void setBoundaryValues(SuperLattice<T,DESCRIPTOR>& sLattice,
-                       const UnitConverter<T,DESCRIPTOR>& converter,
-                       std::size_t iT,
-                       SuperGeometry<T,2>& sGeometry)
+void setInitialValues(MyCase& myCase, SuperGeometry<MyCase::value_t, 2>& sGeometry, SuperLattice<MyCase::value_t,MyCase::descriptor_t_of<names::NavierStokes>>& sLattice)
 {
+  sLattice.initialize();
+}
 
-  OstreamManager clout( std::cout,"setBoundaryValues" );
+void getResults(MyCase& myCase, std::size_t iT)
+{
+  using T          = MyCase::value_t;
+  using DESCRIPTOR = MyCase::descriptor_t_of<names::NavierStokes>;
+  auto& refinedLattice = myCase.getLattice(names::NavierStokes{});
 
-  // No of time steps for smooth start-up
-  std::size_t iTmaxStart = converter.getLatticeTime(6.4);
-  std::size_t iTupdate = 5; //5;
+  const T physVtkInterval = myCase.getParameters()["reporter"]["vtk"].template get<parameters::PHYS_ITER_T>();
+  const int vtkIter = refinedLattice.getLevel(0).getUnitConverter().getLatticeTime(physVtkInterval);
+  if (vtkIter <= 0) {
+    return;
+  }
 
-  if (iT % iTupdate == 0 && iT<= iTmaxStart) {
-    PolynomialStartScale<T,T> StartScale( iTmaxStart, T( 1 ) );
+  if (iT == 0) {
+    for (std::size_t iLevel = 0; iLevel < refinedLattice.getLevelCount(); iLevel++) {
+      auto name = "level" + std::to_string(iLevel);
+      SuperVTMwriter2D<T> vtmWriter(name, 1);
+      if (iLevel == 0) {
+        SuperLatticeRank2D rank( refinedLattice.getLevel(0) );
+        vtmWriter.write(rank);
+      }
+      SuperGeometryF<T,DESCRIPTOR::d> geometryF(myCase.getGeometry().getLevel(iLevel));
+      geometryF.getName() = name + "_geometry";
+      vtmWriter.write(geometryF);
+      SuperLatticeCuboid2D<T,DESCRIPTOR> cuboidF(refinedLattice.getLevel(iLevel));
+      cuboidF.getName() = name + "_cuboid";
+      vtmWriter.write(cuboidF);
+      vtmWriter.createMasterFile();
+    }
+  }
 
-    // Creates and sets the Poiseuille inflow profile using functors
-    T iTvec[1] = {T( iT )};
-    T frac[1] = {};
-    StartScale( frac,iTvec );
-    T maxVelocity = converter.getCharPhysVelocity()*frac[0]*3./2.;
-    T distance2Wall = converter.getPhysDeltaX()/2.;
-    Poiseuille2D<T> poiseuilleU( sGeometry, 3, maxVelocity, distance2Wall );
+  if (iT % vtkIter == 0) {
+    for (std::size_t iLevel = 0; iLevel < refinedLattice.getLevelCount(); iLevel++) {
+      auto& sLattice = refinedLattice.getLevel(iLevel);
+      auto& converter = sLattice.getUnitConverter();
+      sLattice.setProcessingContext(ProcessingContext::Evaluation);
 
-    momenta::setVelocity(sLattice, sGeometry.getMaterialIndicator(3), poiseuilleU);
-
-    sLattice.setProcessingContext<Array<momenta::FixedVelocityMomentumGeneric::VELOCITY>>(
-      ProcessingContext::Simulation);
+      auto name = "level" + std::to_string(iLevel);
+      SuperVTMwriter2D<T> vtmWriter(name);
+      SuperLatticePhysVelocity2D velocityF(sLattice, converter);
+      SuperLatticePhysPressure2D pressureF(sLattice, converter);
+      SuperLatticeRefinementMetricKnudsen2D qualityF(sLattice, converter);
+      vtmWriter.addFunctor(qualityF);
+      vtmWriter.addFunctor(velocityF);
+      vtmWriter.addFunctor(pressureF);
+      vtmWriter.write(iT);
+    }
   }
 }
 
-void writeResults(SuperLattice<T, DESCRIPTOR>& sLattice,
-                  const UnitConverter<T,DESCRIPTOR>& converter,
-                  std::size_t iT,
-                  SuperGeometry<T,2>& sGeometry,
-                  std::string name)
+void simulate(MyCase& myCase)
 {
-  OstreamManager clout(std::cout, name);
+  using T           = MyCase::value_t;
+  auto&   params    = myCase.getParameters();
+  auto&   refinedLattice = myCase.getLattice(names::NavierStokes{});
+  auto&   refinedGeometry = myCase.getGeometry();
 
-  if (iT == 0) {
-    SuperVTMwriter2D<T> vtmWriter(name, 1);
-    if (name == "level0") {
-      SuperLatticeRank2D rank( sLattice );
-      vtmWriter.write(rank);
+  auto&   converter0 = refinedLattice.getLevel(0).getUnitConverter();
+  const T physMaxT  = params.get<parameters::MAX_PHYS_T>();
+
+  const std::size_t iTmax      = converter0.getLatticeTime(physMaxT);
+  const std::size_t iTmaxStart = converter0.getLatticeTime(6.4);
+  const std::size_t iTupdate   = 5;
+
+  auto preStepHook = [&](unsigned iLevel, std::size_t iT) {
+    if (iLevel == 0 && iT % iTupdate == 0 && iT <= iTmaxStart) {
+      auto& sLattice = refinedLattice.getLevel(0);
+      auto& sGeometry = refinedGeometry.getLevel(0);
+
+      PolynomialStartScale<T,T> StartScale( iTmaxStart, T( 1 ) );
+      T iTvec[1] = {T( iT )};
+      T frac[1] = {};
+      StartScale( frac,iTvec );
+      T maxVelocity = converter0.getCharPhysVelocity()*frac[0]*3./2.;
+      T distance2Wall = converter0.getPhysDeltaX()/2.;
+      Poiseuille2D<T> poiseuilleU( sGeometry, 3, maxVelocity, distance2Wall );
+
+      momenta::setVelocity(sLattice, sGeometry.getMaterialIndicator(3), poiseuilleU);
+
+      sLattice.template setProcessingContext<Array<momenta::FixedVelocityMomentumGeneric::VELOCITY>>(
+        ProcessingContext::Simulation);
     }
-    SuperGeometryF<T,DESCRIPTOR::d> geometryF(sGeometry);
-    geometryF.getName() = name + "_geometry";
-    vtmWriter.write(geometryF);
-    SuperLatticeCuboid2D<T,DESCRIPTOR> cuboidF(sLattice);
-    cuboidF.getName() = name + "_cuboid";
-    vtmWriter.write(cuboidF);
-    vtmWriter.createMasterFile();
+  };
+
+  for (std::size_t iT = 0; iT < iTmax; ++iT) {
+    refinement::rohde::executeStep(refinedLattice, 0, iT, preStepHook);
+    getResults(myCase, iT);
+    myCase.report(iT);
   }
 
-  sLattice.setProcessingContext(ProcessingContext::Evaluation);
-  SuperVTMwriter2D<T> vtmWriter(name);
-  SuperLatticePhysVelocity2D velocityF(sLattice, converter);
-  SuperLatticePhysPressure2D pressureF(sLattice, converter);
-  SuperLatticeRefinementMetricKnudsen2D qualityF(sLattice, converter);
-  vtmWriter.addFunctor(qualityF);
-  vtmWriter.addFunctor(velocityF);
-  vtmWriter.addFunctor(pressureF);
-  vtmWriter.write(iT);
+  myCase.finalize(iTmax);
 }
 
 int main(int argc, char* argv[])
@@ -223,165 +281,43 @@ int main(int argc, char* argv[])
   initialize(&argc, &argv);
   OstreamManager clout(std::cout, "main");
 
-  CLIreader args(argc, argv);
-  const int N = args.getValueOrFallback<int>("--resolution", 11);
-  const int Re = args.getValueOrFallback<int>("--reynolds", 100);
-  const int maxPhysT = args.getValueOrFallback<int>("--maxPhysT", 16);
-
-  GeometryParameters geomParams(N);
-
-  const UnitConverterFromResolutionAndRelaxationTime<T,DESCRIPTOR> converterLevel0(
-    int {N},                                   // resolution: number of voxels per charPhysL
-    (T)   0.51,                                // latticeRelaxationTime: relaxation time, have to be greater than 0.5!
-    (T)   2.0*geomParams.radiusCylinder,       // charPhysLength: reference length of simulation geometry
-    (T)   0.2,                                 // charPhysVelocity: maximal/highest expected velocity during simulation in __m / s__
-    (T)   0.2*2.*geomParams.radiusCylinder/Re, // physViscosity: physical kinematic viscosity in __m^2 / s__
-    (T)   1.0                                  // physDensity: physical density in __kg / m^3__
-  );
-  converterLevel0.print();
-
-  Vector<T,2> extend( geomParams.lengthX, geomParams.lengthY );
-  Vector<T,2> origin;
-  IndicatorCuboid2D<T> cuboid(extend, origin);
-
-  CuboidDecomposition2D<T> cuboidDecompositionLevel0(cuboid, geomParams.L);
-  cuboidDecompositionLevel0.splitFractional(0, 0, {0.025,0.5,0.475});
-  cuboidDecompositionLevel0.splitFractional(1, 1, {0.15,0.7,0.15});
-  cuboidDecompositionLevel0.splitFractional(3, 0, {0.05,0.5,0.45});
-  cuboidDecompositionLevel0.splitFractional(5, 1, {0.15,0.7,0.15});
-
-  Vector<T,2> center(geomParams.centerCylinderX, geomParams.centerCylinderY);
-  std::shared_ptr<IndicatorF2D<T>> circle = std::make_shared<IndicatorCircle2D<T>>(center, geomParams.radiusCylinder);
-
-  auto cuboidDecompositionLevel1 = cuboidDecompositionLevel0;
-  IndicatorCuboid2D<T> refineCuboidI({1.0, 0.25}, {0.08,0.08});
-  cuboidDecompositionLevel1.remove(refineCuboidI);
-  cuboidDecompositionLevel1.refine(2);
-  cuboidDecompositionLevel1.print();
-
-  auto cuboidDecompositionLevel2 = cuboidDecompositionLevel1;
-  cuboidDecompositionLevel2.remove(*circle);
-  cuboidDecompositionLevel2.refine(2);
-  cuboidDecompositionLevel2.print();
-
-  // Adjust weights for balancing
-  for (int iC=0; iC < cuboidDecompositionLevel0.size(); ++iC) {
-    auto& cuboid = cuboidDecompositionLevel0.get(iC);
-    cuboid.setWeight(cuboid.getLatticeVolume());
-
-    auto origin = cuboidDecompositionLevel0.get(iC).getOrigin();
-
-    for (int jC=0; jC < cuboidDecompositionLevel1.size(); ++jC) {
-      if (cuboidDecompositionLevel1.get(jC).getOrigin() == origin) {
-        cuboid.setWeight(cuboid.getWeight() + 2*cuboidDecompositionLevel1.get(jC).getLatticeVolume());
-      }
-    }
-    for (int jC=0; jC < cuboidDecompositionLevel2.size(); ++jC) {
-      if (cuboidDecompositionLevel2.get(jC).getOrigin() == origin) {
-        cuboid.setWeight(cuboid.getWeight() + 4*cuboidDecompositionLevel2.get(jC).getLatticeVolume());
-      }
-    }
+  MyCase::ParametersD myCaseParameters;
+  {
+    using namespace olb::parameters;
+    myCaseParameters.set<RESOLUTION>(11);
+    myCaseParameters.set<REYNOLDS>(100);
+    myCaseParameters.set<MAX_PHYS_T>(16);
+    myCaseParameters.set<RADIUS_CYLINDER>(0.05);
+    myCaseParameters.set<MAX_REFINEMENT>(2);
+    myCaseParameters.set<REFINEMENT_BLOCK_SIZE>(8);
+    myCaseParameters["reporter"]["statistics"].set<PHYS_ITER_T>(0.1);
+    myCaseParameters["reporter"]["timer"].set<PHYS_ITER_T>(0.1);
+    myCaseParameters["reporter"]["vtk"].set<PHYS_ITER_T>(1.0);
   }
 
-  HeuristicLoadBalancer<T> loadBalancerLevel0(cuboidDecompositionLevel0);
-  SuperGeometry<T,2> sGeometryLevel0(cuboidDecompositionLevel0, loadBalancerLevel0);
-  prepareGeometry(converterLevel0, sGeometryLevel0, circle, geomParams);
-  SuperLattice<T,DESCRIPTOR> sLatticeLevel0(converterLevel0,
-                                            cuboidDecompositionLevel0,
-                                            loadBalancerLevel0,
-                                            3);
-  prepareLattice(sLatticeLevel0, converterLevel0, sGeometryLevel0, circle);
+  RefinedMesh<MyCase::value_t, MyCase::d> mesh = createMesh(myCaseParameters);
 
-  RefinedLoadBalancer<T,2> loadBalancerLevel1(cuboidDecompositionLevel0,
-                                              loadBalancerLevel0,
-                                              cuboidDecompositionLevel1);
-  auto converterLevel1 = convectivelyRefineUnitConverter(converterLevel0, 2);
-  converterLevel1.print();
-  SuperGeometry<T,2> sGeometryLevel1(cuboidDecompositionLevel1, loadBalancerLevel1);
-  prepareGeometryFine(converterLevel1, sGeometryLevel1, circle, geomParams);
-  SuperLattice<T,DESCRIPTOR> sLatticeLevel1(converterLevel1,
-                                            cuboidDecompositionLevel1,
-                                            loadBalancerLevel1,
-                                            3);
-  prepareLattice(sLatticeLevel1, converterLevel1, sGeometryLevel1, circle);
+  MyCase myCase(myCaseParameters, mesh);
 
-  auto refinementLevel1 = refinement::rohde::makeCoupler(
-    sLatticeLevel0, sGeometryLevel0,
-    sLatticeLevel1, sGeometryLevel1,
-    sGeometryLevel1.getMaterialIndicator(1));
+  auto& refinedLattice = myCase.getLattice(names::NavierStokes{});
+  auto& refinedGeometry = myCase.getGeometry();
 
-  RefinedLoadBalancer<T,2> loadBalancerLevel2(cuboidDecompositionLevel1,
-                                              loadBalancerLevel1,
-                                              cuboidDecompositionLevel2);
-  auto converterLevel2 = convectivelyRefineUnitConverter(converterLevel1, 2);
-  converterLevel2.print();
-  SuperGeometry<T,2> sGeometryLevel2(cuboidDecompositionLevel2, loadBalancerLevel2);
-  prepareGeometryFine(converterLevel2, sGeometryLevel2, circle, geomParams);
-  SuperLattice<T,DESCRIPTOR> sLatticeLevel2(converterLevel2,
-                                            cuboidDecompositionLevel2,
-                                            loadBalancerLevel2,
-                                            3);
-  prepareLattice(sLatticeLevel2, converterLevel2, sGeometryLevel2, circle);
+  auto converter = makeConverter(myCaseParameters);
+  refinedLattice.setUnitConverter(converter);
 
-
-  auto refinementLevel2 = refinement::rohde::makeCoupler(
-    sLatticeLevel1, sGeometryLevel1,
-    sLatticeLevel2, sGeometryLevel2,
-    sGeometryLevel2.getMaterialIndicator(1));
-
-
-  sLatticeLevel0.setProcessingContext(ProcessingContext::Simulation);
-  sLatticeLevel1.setProcessingContext(ProcessingContext::Simulation);
-  sLatticeLevel2.setProcessingContext(ProcessingContext::Simulation);
-
-  clout << "starting simulation..." << std::endl;
-  util::Timer<T> timer(converterLevel0.getLatticeTime(maxPhysT),
-                           sGeometryLevel0.getStatistics().getNvoxel()
-                       + 2*sGeometryLevel1.getStatistics().getNvoxel()
-                       + 4*sGeometryLevel2.getStatistics().getNvoxel());
-  timer.start();
-
-  for (std::size_t iT = 0; iT < converterLevel0.getLatticeTime(maxPhysT); ++iT) {
-    if (iT % converterLevel0.getLatticeTime(1.0) == 0) {
-      writeResults(sLatticeLevel0, converterLevel0, iT, sGeometryLevel0, "level0");
-      writeResults(sLatticeLevel1, converterLevel1, iT, sGeometryLevel1, "level1");
-      writeResults(sLatticeLevel2, converterLevel2, iT, sGeometryLevel2, "level2");
-    }
-
-    setBoundaryValues(sLatticeLevel0, converterLevel0, iT, sGeometryLevel0);
-    sLatticeLevel0.collide();
-
-    refinementLevel1->apply(meta::id<refinement::rohde::CoarseToFineO>{});
-
-    for (int subiT1 = 0; subiT1 < 2; ++subiT1) {
-      sLatticeLevel1.collide();
-
-      refinementLevel2->apply(meta::id<refinement::rohde::CoarseToFineO>{});
-
-      for (int subiT2 = 0; subiT2 < 2; ++subiT2) {
-
-        sLatticeLevel2.collideAndStream();
-
-      }
-
-      sLatticeLevel1.AndStream();
-
-      refinementLevel2->apply(meta::id<refinement::rohde::FineToCoarseO>{});
-    }
-
-    sLatticeLevel0.AndStream();
-
-    refinementLevel1->apply(meta::id<refinement::rohde::FineToCoarseO>{});
-
-    if (iT % converterLevel0.getLatticeTime(0.1) == 0) {
-      timer.update(iT);
-      timer.printStep();
-      sLatticeLevel0.getStatistics().print(iT, converterLevel0.getPhysTime(iT));
-    }
+  for (std::size_t iLevel = 0; iLevel < refinedLattice.getLevelCount(); iLevel++) {
+    prepareGeometry(myCase, refinedGeometry.getLevel(iLevel));
   }
 
-  singleton::pool().wait();
+  for (std::size_t iLevel = 0; iLevel < refinedLattice.getLevelCount(); iLevel++) {
+    prepareLattice(myCase, refinedGeometry.getLevel(iLevel), refinedLattice.getLevel(iLevel));
+  }
 
-  timer.stop();
-  timer.printSummary();
+  for (std::size_t iLevel = 0; iLevel < refinedLattice.getLevelCount(); iLevel++) {
+    setInitialValues(myCase, refinedGeometry.getLevel(iLevel), refinedLattice.getLevel(iLevel));
+  }
+
+  refinedLattice.initialize(refinedGeometry);
+
+  simulate(myCase);
 }

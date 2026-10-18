@@ -33,7 +33,7 @@ using namespace olb::uq;
 using namespace olb::descriptors;
 using namespace olb::graphics;
 
-using T = FLOATING_POINT_TYPE;
+using T = double;
 using DESCRIPTOR = D2Q9<>;
 
 #define BOUZIDI
@@ -257,11 +257,7 @@ T simulateCylinder( int N, T u0, bool exportResults )
   IndicatorCuboid2D<T> cuboid( extend, origin );
 
   // Instantiation of a cuboidGeometry with weights
-  #ifdef PARALLEL_MODE_MPI
-    const int noOfCuboids = singleton::mpi().getSize();
-  #else
-    const int noOfCuboids = 7;
-  #endif
+  const int noOfCuboids = singleton::mpi().getSize();
 
   CuboidDecomposition2D<T> cuboidDecomposition( cuboid, geomParams.L, noOfCuboids );
 

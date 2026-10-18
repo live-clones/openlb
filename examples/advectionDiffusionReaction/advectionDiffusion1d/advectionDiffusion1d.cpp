@@ -60,7 +60,6 @@ int main(int argc, char *argv[])
     myCaseParameters.set<PECLET>(40./3.);
     myCaseParameters.set<PULSE_DIFF_BOUND>(1e-3);
   }
-  myCaseParameters.fromCLI(argc, argv);
 
   Mesh mesh = createMesh(myCaseParameters);
 

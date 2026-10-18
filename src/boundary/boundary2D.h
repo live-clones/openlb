@@ -45,8 +45,6 @@
 #include "helper.h"
 #include "interpolatedConvection2D.h"
 #include "setBouzidiBoundary.h"
-#include "setBoolakeeDirichletBoundary.h"
-#include "setBoolakeeNeumannBoundary.h"
 #include "advectionDiffusionDirichlet2D.h"
 #include "bounceBack.h"
 #include "bounceBackVelocity.h"

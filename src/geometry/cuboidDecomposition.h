@@ -34,6 +34,7 @@
 #include "geometry/cuboid.h"
 
 #include "io/ostreamManager.h"
+#include "io/textTable.h"
 #include "io/xmlReader.h"
 
 #include "cuboid.h"
@@ -61,6 +62,8 @@ private:
   /// Periodicity flag
   Vector<bool,D> _periodicityOn;
 
+  std::vector<std::vector<int>> _neighborCache;
+
 public:
   /// Constructs cuboid decomposition of cuboid with origin and extent
   CuboidDecomposition(Vector<T,D> origin, T deltaR, Vector<int,D> extent, int nC=1);
@@ -71,16 +74,33 @@ public:
   /// Constructs a cuboid decomposition with uniform spacing of voxelSize which consists of nC cuboids
   /// shrunken using the minimizeBy strategy.
   CuboidDecomposition(IndicatorF<T,D>& indicatorF, T voxelSize, int nC, std::string minimizeBy);
+  /// Constructs a cuboid decomposition from a vector of cuboids. Mother cuboid will be the bounding box of all cuboids
+  CuboidDecomposition(std::vector<Cuboid<T,D>> cuboids, T deltaR);
 
   /// Returns number of cuboids in decomposition
   int size() const;
 
+  void buildNeighborCache(int overlap) {
+    _neighborCache.resize(size());
+    for (int iC = 0; iC < size(); ++iC) {
+      const std::set<int> neighbors = getNeighborhood(iC, overlap);
+      _neighborCache[iC].assign(neighbors.begin(), neighbors.end());
+    }
+  }
+
   /// Returns ID of cuboid containing physR within padding
   std::optional<int> getC(Vector<T,D> physR, int padding = 0) const;
-  /// Returns physical position of lattice position
+  std::optional<int> getC(Vector<T,D> physR, int padding, const std::vector<int>& candidates) const;
+  std::optional<int> getC(Vector<T,D> physR, int padding, const std::vector<int>& candidates, int* lastC) const;
+
+  /// Returns the physical position (cell CENTRE) of a lattice position.
+  /// Centre convention (see Cuboid): cell is centred at its getPhysR; go through this and
+  /// getLatticeR for all cell<->physical mapping, never by hand-offsetting half a cell.
   Vector<T,D> getPhysR(LatticeR<D+1> latticeR) const;
   /// Returns lattice position for given physical position if it exists
   std::optional<LatticeR<D+1>> getLatticeR(Vector<T,D> physR) const;
+  std::optional<LatticeR<D+1>> getSurroundingLatticeR(Vector<T,D> physR, int sourceC, int* lastC) const;
+
   /// Returns floor lattice position for given physical position if it exists
   std::optional<LatticeR<D+1>> getFloorLatticeR(Vector<T,D> physR) const;
 
@@ -89,6 +109,8 @@ public:
 
   /// Returns true iff physR is covered by the decomposition
   bool isInside(Vector<T,D> physR) const;
+  /// Returns true iff physR is covered by the decomposition (using cache)
+  bool isInsideCached(Vector<T,D> physR, int& lastC) const;
 
   /// Read access to a single cuboid
   const Cuboid<T,D>& get(int iC) const;
@@ -122,10 +144,16 @@ public:
   /// Splits cuboid iC along dimension iD into cuboids of fractions
   void splitFractional(int iC, int iD, std::vector<T> fractions);
 
+  std::vector<int> createNestedBox(int iC,
+                                   const Vector<T,D>& relOrigin,
+                                   const Vector<T,D>& relSize);
+
   /// Removes the cuboid iC
   void remove(int iC);
   /// Removes all cuboids where indicatorF = 0
   void remove(IndicatorF<T,D>& indicatorF);
+  /// Removes all cuboids where indicatorF = 1
+  void removeContaining(IndicatorF<T,D>& indicatorF);
   /// Removes all cuboids where weight = 0
   void removeByWeight();
 
@@ -134,12 +162,15 @@ public:
   /// Shrink all cuboids so that no empty planes are left
   void shrink(IndicatorF<T,D>& indicatorF);
 
+  void updateMotherCuboid();
+
   /// Refines mesh by splitting each cell into factor^3 cells
   void refine(int factor);
   /// Tries to refine mesh to given deltaR
   bool tryRefineTo(T deltaR);
 
   void refineCellCentered(int factor);
+  void refineCellCentered(int iC, int factor);
 
   /// Prints cuboid geometry details
   void print() const;
@@ -170,6 +201,8 @@ public:
   std::size_t getMinLatticeVolume() const;
   /// Returns the maximum number of nodes in the structure
   std::size_t getMaxLatticeVolume() const;
+  /// Returns the total number of nodes in the structure
+  std::size_t getLatticeVolume() const;
 
   /// Returns the minimum number of nodes in the structure inside the indicator
   std::size_t getMinLatticeWeight() const;
@@ -184,6 +217,10 @@ template <typename T>
 using CuboidDecomposition2D = CuboidDecomposition<T,2>;
 template <typename T>
 using CuboidDecomposition3D = CuboidDecomposition<T,3>;
+
+/// Load CuboidDecomposition from XML node
+template<typename T, unsigned D>
+std::unique_ptr<CuboidDecomposition<T,D>> createCuboidDecomposition(const XMLreader& reader);
 
 /// Load CuboidDecomposition from XML File
 template<typename T, unsigned D>

@@ -28,6 +28,8 @@
  * DOI: 10.1016/j.jfluidstructs.2004.04.007. 2004.
  **/
 
+#define DISABLE_CSE
+
 #include <olb.h>
 
 using namespace olb;
@@ -39,7 +41,10 @@ using MyCase = Case<
     descriptors::POROSITY,
     descriptors::VELOCITY,
     fields::fsi::ELEMENT_TAG,
-    fields::fsi::ELEMENT_TORQUE
+    fields::fsi::ELEMENT_TORQUE,
+
+    fields::moments::RHO,
+    fields::moments::U
   >>
 >;
 
@@ -97,6 +102,7 @@ Mesh<MyCase::value_t,MyCase::d> createMesh(MyCase::ParametersD& params) {
 
   Mesh<T,MyCase::d> mesh(*paddedDomainI, deltaX, singleton::mpi().getSize());
   mesh.setOverlap(params.get<parameters::OVERLAP>());
+  mesh.getCuboidDecomposition().buildNeighborCache(params.get<parameters::OVERLAP>());
   return mesh;
 }
 
@@ -191,6 +197,8 @@ void prepareLattice(MyCase& myCase) {
 
   sLattice.setParameter<descriptors::OMEGA>(converter.getLatticeRelaxationFrequency());
 
+  sLattice.writeSummary();
+
   clout << "Prepare Lattice ... OK" << std::endl;
 }
 
@@ -202,6 +210,10 @@ void setInitialValues(MyCase& myCase) {
 
   fields::set<descriptors::POROSITY>(sLattice, sGeometry.getMaterialIndicator({1,2}), 1);
   fields::set<descriptors::POROSITY>(sLattice, sGeometry.getMaterialIndicator({0,3}), 0);
+
+  // Track min/max/mean of the HLBM fields at statistics time
+  sLattice.getStatistics().template registerField<descriptors::POROSITY>("POROSITY");
+  sLattice.getStatistics().template registerField<descriptors::VELOCITY>("VELOCITY");
 
   sLattice.initialize();
 }
@@ -247,7 +259,6 @@ void setTemporalValues(MyCase& myCase,
 }
 
 void getResults(MyCase& myCase,
-                util::Timer<MyCase::value_t>& timer,
                 std::size_t iT)
 {
   OstreamManager clout(std::cout, "getResults");
@@ -261,7 +272,6 @@ void getResults(MyCase& myCase,
   const auto& converter = sLattice.getUnitConverter();
 
   const int vtkIter  = converter.getLatticeTime(0.10);
-  const int statIter = converter.getLatticeTime(0.01);
 
   const bool vtkEnabled = params.get<parameters::VTK_ENABLED>();
 
@@ -273,15 +283,6 @@ void getResults(MyCase& myCase,
     {
       SuperVTMwriter2D<T> vtmWriter("structure");
       vtmWriter.createMasterFile();
-    }
-  }
-
-  if (iT % statIter == 0) {
-    timer.update(iT);
-    timer.printStep();
-    sLattice.getStatistics().print(iT, converter.getPhysTime(iT));
-    if (std::isnan(sLattice.getStatistics().getAverageRho())) {
-      throw std::runtime_error("Simulation diverged.");
     }
   }
 
@@ -366,9 +367,6 @@ void simulate(MyCase& myCase) {
   const std::size_t iTmax = converter.getLatticeTime(
     params.get<parameters::MAX_PHYS_T>());
 
-  util::Timer<T> timer(iTmax, sGeometry.getStatistics().getNvoxel());
-  timer.start();
-
   for (std::size_t iT=0; iT < iTmax; ++iT) {
     /// === Step 8.1: Update the Boundary Values and Fields at Times ===
     setTemporalValues(myCase, iT);
@@ -377,7 +375,8 @@ void simulate(MyCase& myCase) {
     myCase.getLattice(NavierStokes{}).collideAndStream();
 
     /// === Step 8.3: Computation and Output of the Results ===
-    getResults(myCase, timer, iT);
+    getResults(myCase, iT);
+    myCase.report(iT);
 
     fsiReductionO.apply();
 
@@ -411,8 +410,8 @@ void simulate(MyCase& myCase) {
 
   sLattice.setProcessingContext(ProcessingContext::Evaluation);
 
-  timer.stop();
-  timer.printSummary();
+  // Final full statistics report
+  myCase.finalize(iTmax);
 }
 
 int main(int argc, char* argv[]) {
@@ -427,11 +426,12 @@ int main(int argc, char* argv[]) {
     myCaseParameters.set<CHANNEL_L  >(6*myCaseParameters.get<CHANNEL_H>());
     myCaseParameters.set<T_P        >(2.45);
     myCaseParameters.set<U_AMP      >(0.11);
+    myCaseParameters["reporter"]["statistics"].set<PHYS_ITER_T>(0.01);
+    myCaseParameters["reporter"]["timer"].set<PHYS_ITER_T>(0.01);
     myCaseParameters.set<U_REF      >(0.04);
     myCaseParameters.set<MAX_PHYS_T >(myCaseParameters.get<T_P>() * 10);
     myCaseParameters.set<VTK_ENABLED>(true);
   }
-  myCaseParameters.fromCLI(argc, argv);
 
   /// === Step 3: Create Mesh ===
   Mesh mesh = createMesh(myCaseParameters);

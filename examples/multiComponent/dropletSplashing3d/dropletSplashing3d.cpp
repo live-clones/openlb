@@ -437,7 +437,6 @@ int main(int argc, char* argv[])
     myCaseParameters.set<LATTICE_STAT_ITER_T>(10);     // statistics iterations [lattice units]
     myCaseParameters.set<LATTICE_VTK_ITER_T >(10);     // vtk iterations density [lattice units]
   }
-  myCaseParameters.fromCLI(argc, argv);
 
   /// === Step 3: Create Mesh ===
   Mesh mesh = createMesh(myCaseParameters);

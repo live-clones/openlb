@@ -55,6 +55,8 @@ struct Derivatives : public CASE_TAG {
 
 struct Optimality { };
 
+struct Objective { };
+
 struct A { };
 struct B { };
 struct C { };

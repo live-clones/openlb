@@ -414,8 +414,16 @@ int main(int argc, char* argv[])
     myCaseParameters.set<RESOLUTION             >(             11);
     myCaseParameters.set<LATTICE_RELAXATION_TIME>(            0.8);
   }
-  myCaseParameters.fromCLI(argc, argv);
 
+  OptimizerParametersD<MyCase::value_t> optiParameters;
+  {
+    using namespace parameters;
+    optiParameters.set<optimizer::EPS>(1e-10);
+    optiParameters.set<optimizer::MAX_OPTIMIZATION_STEPS>(10);
+    optiParameters.set<linesearch::MAX_STEP_ATTEMPTS>(20);
+    optiParameters.set<linesearch::STEP_CONDITION>("Wolfe");
+    optiParameters.set<optimizer::VERBOSE>(true);
+  }
   /// Step 3: Create Mesh
   Mesh mesh = createMesh(myCaseParameters);
 
@@ -452,7 +460,6 @@ int main(int argc, char* argv[])
   optiCase.setDerivative(computeDerivative);
 
   /// Step G: Create an Optimizer
-  OptimizerLBFGS<MyOptiCase::value_t,std::vector<MyOptiCase::value_t>> optimizer(
-    1, 1.e-10, 10, 1., 20, "Wolfe", 20, 1.e-4);
+  OptimizerLBFGS<MyOptiCase::value_t,std::vector<MyOptiCase::value_t>> optimizer(1, optiParameters);
   optimizer.optimize(optiCase);
 }

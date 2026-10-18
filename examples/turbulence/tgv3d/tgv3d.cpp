@@ -484,7 +484,6 @@ int main(int argc, char* argv[])
     myCaseParameters.set<REYNOLDS   >(                                                  800);
     myCaseParameters.set<SMAGORINSKY>(                                                  0.1);
   }
-  myCaseParameters.fromCLI(argc, argv);
 
 
   Mesh mesh = createMesh(myCaseParameters);

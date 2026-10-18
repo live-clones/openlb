@@ -54,7 +54,7 @@ public:
   /// Compute equilibrium distribution function
   T computeEquilibrium( int iPop, T rho, const T u[DESCRIPTOR::d], T uSqr ) const override;
   /// Collision step
-  CellStatistic<T> collide( Cell<T,DESCRIPTOR>& cell, LatticeStatistics<T>& statistics ) override;
+  CellStatistic<T> collide( Cell<T,DESCRIPTOR>& cell, LatticeStatistics<T,DESCRIPTOR>& statistics ) override;
   /// Get local relaxation parameter of the dynamics
   T getOmega() const;
   /// Set local relaxation parameter of the dynamics
@@ -80,7 +80,7 @@ public:
   /// Compute equilibrium distribution function
   T computeEquilibrium( int iPop, T rho, const T u[DESCRIPTOR::d], T uSqr ) const override;
   /// Collision step
-  CellStatistic<T> collide( Cell<T,DESCRIPTOR>& cell, LatticeStatistics<T>& statistics ) override;
+  CellStatistic<T> collide( Cell<T,DESCRIPTOR>& cell, LatticeStatistics<T,DESCRIPTOR>& statistics ) override;
   /// Get local relaxation parameter of the dynamics
   T getOmega() const;
   /// Set local relaxation parameter of the dynamics

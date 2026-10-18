@@ -216,12 +216,12 @@ void getResults(MyCase& myCase, int iT, Timer<MyCase::value_t>& timer, PARTICLES
       communication::forParticlesInSuperParticleSystem<T, PARTICLETYPE, conditions::valid_particle_centres>(
           xParticleSystem,
           [&](Particle<T, PARTICLETYPE>& particle, ParticleSystem<T, PARTICLETYPE>& particleSystem, int globiC) {
-            io::printResolvedParticleInfo(particle);
+            particles::io::printResolvedParticleInfo(particle);
           });
     #else
     for (std::size_t iP = 0; iP < xParticleSystem.size(); ++iP) {
       auto particle = xParticleSystem.get(iP);
-      io::printResolvedParticleInfo(particle);
+      particles::io::printResolvedParticleInfo(particle);
     }
     #endif
   }
@@ -332,19 +332,18 @@ int main(int argc, char* argv[])
     myCaseParameters.set<CUBE_2_VELOCITY>({0., 0., 0.});
     myCaseParameters.set<PHYS_CHAR_LENGTH>(myCaseParameters.get<DOMAIN_EXTENT>()[0]);
     myCaseParameters.set<PHYS_CHAR_VELOCITY>(0.15);
-    myCaseParameters.set<EXTERNAL_ACCELERATION>([&]() -> Vector<T,3>{
-      return {.0,.0, -T(9.81) * (T(1) - myCaseParameters.get<PHYS_DENSITY>() / myCaseParameters.get<CUBE_DENSITY>())};
+    myCaseParameters.set<EXTERNAL_ACCELERATION>([](MyCase::ParametersD& p) -> Vector<T,3>{
+      return {.0,.0, -T(9.81) * (T(1) - p.get<PHYS_DENSITY>() / p.get<CUBE_DENSITY>())};
     });
-    myCaseParameters.set<CUBE_1_POSITION>([&]() -> Vector<T,3>{
-      return {myCaseParameters.get<DOMAIN_EXTENT>()[0] * (T).5, myCaseParameters.get<DOMAIN_EXTENT>()[1] * (T).5,
-              myCaseParameters.get<DOMAIN_EXTENT>()[2] * (T).9};
+    myCaseParameters.set<CUBE_1_POSITION>([](MyCase::ParametersD& p) -> Vector<T,3>{
+      return {p.get<DOMAIN_EXTENT>()[0] * (T).5, p.get<DOMAIN_EXTENT>()[1] * (T).5,
+              p.get<DOMAIN_EXTENT>()[2] * (T).9};
     });
-    myCaseParameters.set<CUBE_2_POSITION>([&]() -> Vector<T,3>{
-      return {myCaseParameters.get<DOMAIN_EXTENT>()[0] * (T).5, myCaseParameters.get<DOMAIN_EXTENT>()[1] * (T).51,
-              myCaseParameters.get<DOMAIN_EXTENT>()[2] * (T).7};
+    myCaseParameters.set<CUBE_2_POSITION>([](MyCase::ParametersD& p) -> Vector<T,3>{
+      return {p.get<DOMAIN_EXTENT>()[0] * (T).5, p.get<DOMAIN_EXTENT>()[1] * (T).51,
+              p.get<DOMAIN_EXTENT>()[2] * (T).7};
     });
   }
-  myCaseParameters.fromCLI(argc, argv);
 
   Mesh mesh = createMesh(myCaseParameters);
 

@@ -35,11 +35,13 @@
 #include "cell.hh"
 
 #include "latticeStatistics.hh"
+#include "statisticsFieldReducer.h"
 #include "postProcessing.hh"
 #include "serializer.hh"
 
 #include "unitConverter.hh"
 #include "thermalUnitConverter.hh"
+#include "structuralMechanicsUnitConverter.hh"
 #include "multiPhaseUnitConverter.hh"
 #include "powerLawUnitConverter.hh"
 

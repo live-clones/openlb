@@ -309,6 +309,44 @@ RESULT promiseForNormal(Vector<int,2> n)
   }
 }
 
+// DYNAMICS-threading analog of promiseForNormal; the dynamics is inserted as the
+// third template argument of the per-normal TYPE so typed OnDynamics boundary
+// processors can be constructed for a runtime normal.
+template <
+  typename RESULT, typename T, typename DESCRIPTOR, typename DYNAMICS,
+  template <typename,typename,typename,int,int> typename TYPE
+>
+RESULT promiseForDynamicsNormal(Vector<int,2> n)
+{
+  if (n == Vector<int,2> {1, 1}) {
+    return meta::id<TYPE<T,DESCRIPTOR,DYNAMICS,1,1>>();
+  }
+  else if (n == Vector<int,2> {1, -1}) {
+    return meta::id<TYPE<T,DESCRIPTOR,DYNAMICS,1,-1>>();
+  }
+  else if (n == Vector<int,2> {-1, 1}) {
+    return meta::id<TYPE<T,DESCRIPTOR,DYNAMICS,-1,1>>();
+  }
+  else if (n == Vector<int,2> {-1, -1}) {
+    return meta::id<TYPE<T,DESCRIPTOR,DYNAMICS,-1,-1>>();
+  }
+  else if (n == Vector<int,2> {-1, 0}) {
+    return meta::id<TYPE<T,DESCRIPTOR,DYNAMICS,-1,0>>();
+  }
+  else if (n == Vector<int,2> {1, 0}) {
+    return meta::id<TYPE<T,DESCRIPTOR,DYNAMICS,1,0>>();
+  }
+  else if (n == Vector<int,2> {0, -1}) {
+    return meta::id<TYPE<T,DESCRIPTOR,DYNAMICS,0,-1>>();
+  }
+  else if (n == Vector<int,2> {0, 1}) {
+    return meta::id<TYPE<T,DESCRIPTOR,DYNAMICS,0,1>>();
+  }
+  else {
+    throw std::runtime_error("Invalid normal");
+  }
+}
+
 //constructs TYPE derived from PostProcessorGenerator2D with two normals as template args
 template <
   typename T, typename DESCRIPTOR,
@@ -336,6 +374,15 @@ template <
 PostProcessorPromise<T,DESCRIPTOR> promisePostProcessorForNormal(Vector<int,2> n)
 {
   return promiseForNormal<PostProcessorPromise<T,DESCRIPTOR>,T,DESCRIPTOR,TYPE>(n);
+}
+
+template <
+  typename T, typename DESCRIPTOR, typename DYNAMICS,
+  template<typename,typename,typename,int,int> typename TYPE
+>
+PostProcessorPromise<T,DESCRIPTOR> promisePostProcessorForDynamicsNormal(Vector<int,2> n)
+{
+  return promiseForDynamicsNormal<PostProcessorPromise<T,DESCRIPTOR>,T,DESCRIPTOR,DYNAMICS,TYPE>(n);
 }
 
 //instantiates TYPE, derived from RESULT with values form descreteNormal Vector n
@@ -388,6 +435,31 @@ PROMISE promiseForDirectionOrientation(Vector<int,2> n)
   }
 }
 
+// DYNAMICS-threading analog of promiseForDirectionOrientation.
+template <
+  typename PROMISE,
+  typename T, typename DESCRIPTOR, typename DYNAMICS,
+  template <typename,typename,typename,int,int> typename TYPE
+>
+PROMISE promiseForDynamicsDirectionOrientation(Vector<int,2> n)
+{
+  if (n[0] == 1) {
+    return meta::id<TYPE<T,DESCRIPTOR,DYNAMICS,0,1>>();
+  }
+  else if (n[0] == -1) {
+    return meta::id<TYPE<T,DESCRIPTOR,DYNAMICS,0,-1>>();
+  }
+  else if (n[1] == 1) {
+    return meta::id<TYPE<T,DESCRIPTOR,DYNAMICS,1,1>>();
+  }
+  else if (n[1] == -1) {
+    return meta::id<TYPE<T,DESCRIPTOR,DYNAMICS,1,-1>>();
+  }
+  else {
+    throw std::runtime_error("Invalid normal");
+  }
+}
+
 //constructs TYPE derived from PostProcessorGenerator2D with template args direction and orientation
 template <
   typename T, typename DESCRIPTOR,
@@ -406,6 +478,15 @@ template <
 PostProcessorPromise<T,DESCRIPTOR> promisePostProcessorForDirectionOrientation(Vector<int,2> n)
 {
   return promiseForDirectionOrientation<PostProcessorPromise<T,DESCRIPTOR>,T,DESCRIPTOR,TYPE>(n);
+}
+
+template <
+  typename T, typename DESCRIPTOR, typename DYNAMICS,
+  template <typename,typename,typename,int,int> typename TYPE
+>
+PostProcessorPromise<T,DESCRIPTOR> promisePostProcessorForDynamicsDirectionOrientation(Vector<int,2> n)
+{
+  return promiseForDynamicsDirectionOrientation<PostProcessorPromise<T,DESCRIPTOR>,T,DESCRIPTOR,DYNAMICS,TYPE>(n);
 }
 
 }

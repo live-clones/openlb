@@ -34,10 +34,11 @@ namespace derivatives {
 /// @brief   Logic to compute objective derivatives by manual definition
 // Derivative needs to be passed via a callable (e.g. currently for adjoint optimization)
 struct Manual {
-  // Define how to compute the derivative using the OptiCase instance
-  template <typename OPTICASE, typename T=OPTICASE::value_t, typename F=OPTICASE::derivative_t>
-  static F getDerivativeF(OPTICASE& optiCase) {
-    return [&optiCase](const std::vector<T>& controls) -> std::vector<T> {
+  using parameters_t = meta::list<>;
+
+  template <typename OBJECTIVE, typename DERIVATIVE, typename T=OBJECTIVE::result_type>
+  static DERIVATIVE getDerivativeF(OBJECTIVE& objective) {
+    return [&](const std::vector<T>& controls) -> std::vector<T> {
       throw std::logic_error("Logic for derivative");
     };
   }
@@ -45,19 +46,23 @@ struct Manual {
 
 /// @brief   Logic to compute objective derivatives using forward difference quotients
 struct FDQ {
-  // Define how to compute the derivative using the OptiCase instance
-  template <typename OPTICASE, typename T=OPTICASE::value_t, typename F=OPTICASE::derivative_t>
-  static F getDerivativeF(OPTICASE& optiCase) {
-    return [&optiCase](const std::vector<T>& controls) -> std::vector<T> {
-      std::vector<T> derivatives;
-      derivatives.reserve(controls.size());
-      const T objective = optiCase.computeObjective(controls);
+  using parameters_t = meta::list<parameters::FDQ_STENCIL_WIDTH>;
+
+  template <typename OBJECTIVE, typename DERIVATIVE, typename PARAMETERS, typename T=OBJECTIVE::result_type>
+  static DERIVATIVE getDerivativeF(OBJECTIVE& objective, PARAMETERS& parameters) {
+    // return a lambda function defining the FDQ logic
+    return [&](const std::vector<T>& controls) -> std::vector<T> {
+      const T stencilWidth = parameters.template get<parameters::FDQ_STENCIL_WIDTH>();
+      std::vector<T> derivatives(controls.size());
+
+      std::vector<T> shiftedControl = controls;
+      const T result = objective(controls);
       for (std::size_t d=0; d < controls.size(); ++d) {
-        std::vector<T> shiftedControl(controls);
-        shiftedControl[d] += T(1e-8);
-        const T shiftedObjective = optiCase.computeObjective(shiftedControl);
+        shiftedControl[d] += stencilWidth;
+        const T shiftedResult = objective(shiftedControl);
         // FDQ stencil
-        derivatives[d] = (shiftedObjective - objective) / T(1e-8);
+        derivatives[d] = (shiftedResult - result) / stencilWidth;
+        shiftedControl[d] = controls[d];
       }
       return derivatives;
     };
@@ -66,20 +71,24 @@ struct FDQ {
 
 /// @brief   Logic to compute objective derivatives using central difference quotients
 struct CDQ {
-  // Define how to compute the derivative using the OptiCase instance
-  template <typename OPTICASE, typename T=OPTICASE::value_t, typename F=OPTICASE::derivative_t>
-  static F getDerivativeF(OPTICASE& optiCase) {
-    return [&optiCase](const std::vector<T>& controls) -> std::vector<T> {
-      std::vector<T> derivatives;
-      derivatives.reserve(controls.size());
+  using parameters_t = meta::list<parameters::CDQ_STENCIL_WIDTH>;
+
+  template <typename OBJECTIVE, typename DERIVATIVE, typename PARAMETERS, typename T=OBJECTIVE::result_type>
+  // return a lambda function defining the CDQ logic
+  static DERIVATIVE getDerivativeF(OBJECTIVE& objective, PARAMETERS& parameters) {
+    return [&](const std::vector<T>& controls) -> std::vector<T> {
+      const T stencilWidth = parameters.template get<parameters::CDQ_STENCIL_WIDTH>();
+      std::vector<T> derivatives(controls.size());
+
+      std::vector<T> shiftedControl = controls;
       for (std::size_t d=0; d<controls.size(); ++d) {
-        std::vector<T> shiftedControl(controls);
-        shiftedControl[d] += T(5e-6);
-        const T shiftedObjective_plus = optiCase.computeObjective(shiftedControl);
-        shiftedControl[d] = controls[d] - T(5e-6);
-        const T shiftedObjective_minus = optiCase.computeObjective(shiftedControl);
+        shiftedControl[d] += stencilWidth;
+        const T shiftedObjective_plus = objective(shiftedControl);
+        shiftedControl[d] = controls[d] - stencilWidth;
+        const T shiftedObjective_minus = objective(shiftedControl);
         // CDQ stencil
-        derivatives[d] = T(0.5) * (shiftedObjective_plus - shiftedObjective_minus) / T(5e-6);
+        derivatives[d] = T(0.5) * (shiftedObjective_plus - shiftedObjective_minus) / stencilWidth;
+        shiftedControl[d] = controls[d];
       }
       return derivatives;
     };
@@ -88,14 +97,16 @@ struct CDQ {
 
 /// @brief   Logic to compute objective derivatives by automatic differentiation forward mode
 struct ADf {
+  using parameters_t = meta::list<>;
+
   // Define how to compute the derivative using the OptiCase instance
-  template <typename OPTICASE, typename T=OPTICASE::value_t, typename F=OPTICASE::derivative_t>
-  static F getDerivativeF(OPTICASE& optiCase) {
-    return [&optiCase](const std::vector<T>& controls) -> std::vector<T> {
-      using U = typename OPTICASE::template case_t<names::Derivatives>::reference_component_t::value_t;
+  template <typename OBJECTIVE, typename DERIVATIVE, typename T>
+  static DERIVATIVE getDerivativeF(OBJECTIVE& objective) {
+    return [&](const std::vector<T>& controls) -> std::vector<T> {
+      using U = typename OBJECTIVE::result_type;
       std::vector<U> tmp = util::copyAs<U>(controls);
       util::iniDiagonal(tmp);
-      U derivative = optiCase.template computeObjective<U>(tmp);
+      U derivative = objective(tmp);
       return util::extractDerivatives(derivative);
     };
   }

@@ -1,6 +1,7 @@
 /*  This file is part of the OpenLB library
  *
  *  Copyright (C) 2025 Philipp Spelten
+ *                2026 Adrian Kummerlaender
  *  E-mail contact: info@openlb.net
  *  The most recent release of OpenLB can be downloaded at
  *  <http://www.openlb.net/>
@@ -35,7 +36,12 @@ namespace olb {
 
 namespace boundary {
 
-template<typename DESCRIPTOR, int direction, int orientation, concepts::DynamicCell CELL, concepts::Parameters PARAMETERS, typename RHO, typename U>
+// Per-axis transverse difference stencil, set by the setter from the CBC region geometry.
+enum class CBCStencil { Central, Forward, Backward, None };
+
+template<typename DESCRIPTOR, int direction, int orientation,
+         CBCStencil upDownStencil = CBCStencil::Central, CBCStencil frontBackStencil = CBCStencil::Central,
+         concepts::DynamicCell CELL, concepts::Parameters PARAMETERS, typename RHO, typename U>
 requires(DESCRIPTOR::d == 3)
 static void CharacteristicBoundaryLogicPreCollide(CELL& cell, PARAMETERS& parameters, RHO& rhoDt, U& uDt) any_platform {
   // ### SECOND PART ###
@@ -100,20 +106,15 @@ static void CharacteristicBoundaryLogicPreCollide(CELL& cell, PARAMETERS& parame
   CELL cellDown       = cell.neighbor(normalDown);
   CELL cellDownDown   = cell.neighbor(normalDown).neighbor(normalDown);
   CELL cellUpUp       = cell.neighbor(normalUp).neighbor(normalUp);
-  const bool upCBC    = cellUp.template     getField<fields::cbc::IS_CBC>() == V(1);
-  const bool downCBC  = cellDown.template   getField<fields::cbc::IS_CBC>() == V(1);
-
-  // === GET POST-COLLISION FIELDS ===
-  // === CALCULATE PRESSURE AND VELOCITY GRADIENT ===
-  if ( upCBC && downCBC ) {
+  // === TRANSVERSE GRADIENT (upDown axis; stencil fixed at compile time) ===
+  if constexpr ( upDownStencil == CBCStencil::Central ) {
     cellUp.computeRhoU(   rhoUp,   uUp);
     cellDown.computeRhoU( rhoDown, uDown);
-    // === CENTRAL DIFFERENCES ===
     pDy = cs2 * (rhoUp - rhoDown) / dy;
     for ( size_t dim=0; dim<DESCRIPTOR::d; dim++ ) {
       uDy[dim] = ( uUp[dim] - uDown[dim] ) / dy;
     }
-  } else if ( downCBC ) {
+  } else if constexpr ( upDownStencil == CBCStencil::Forward ) {
     cellDown.computeRhoU( rhoDown, uDown);
     cellDownDown.computeRhoU( rhoDownDown,  uDownDown);
     // === 2nd ORDER FORWARD DIFFERENCES ===
@@ -121,7 +122,7 @@ static void CharacteristicBoundaryLogicPreCollide(CELL& cell, PARAMETERS& parame
     for ( size_t dim=0; dim<DESCRIPTOR::d; dim++ ) {
       uDy[dim] = ( V(3)*uLocal[dim] - V(4)*uDown[dim] + uDownDown[dim] ) / dy;
     }
-  } else if ( upCBC ) {
+  } else if constexpr ( upDownStencil == CBCStencil::Backward ) {
     cellUp.computeRhoU(   rhoUp,   uUp);
     cellUpUp.computeRhoU( rhoUpUp,  uUpUp);
     // === 2nd ORDER BACKWARD DIFFERENCES === (/-2)
@@ -130,6 +131,7 @@ static void CharacteristicBoundaryLogicPreCollide(CELL& cell, PARAMETERS& parame
       uDy[dim] = ( V(3)*uLocal[dim] - V(4)*uUp[dim] + uUpUp[dim] ) / V(-2);
     }
   }
+  // None: pDy and uDy remain zero
 
   // === GET 3D NEIGHBORS ===
   V rhoFront{}, rhoFrontFront{}, rhoBack{}, rhoBackBack{},
@@ -140,21 +142,16 @@ static void CharacteristicBoundaryLogicPreCollide(CELL& cell, PARAMETERS& parame
   CELL cellBack       = cell.neighbor(normalBack);
   CELL cellBackBack   = cell.neighbor(normalBack).neighbor(normalBack);
   CELL cellFrontFront = cell.neighbor(normalFront).neighbor(normalFront);
-  const bool frontCBC = cellFront.template  getField<fields::cbc::IS_CBC>() == V(1);
-  const bool backCBC  = cellBack.template   getField<fields::cbc::IS_CBC>() == V(1);
-
-  // === GET POST-COLLISION FIELDS ===
+  // === TRANSVERSE GRADIENT (frontBack axis; stencil fixed at compile time) ===
   // TODO: use fd::centralGradient() and fd::boundaryGradient()
-  // === CALCULATE PRESSURE AND VELOCITY GRADIENT ===
-  if ( frontCBC && backCBC ) {
+  if constexpr ( frontBackStencil == CBCStencil::Central ) {
     cellFront.computeRhoU(  rhoFront, uFront);
     cellBack.computeRhoU(   rhoBack,  uBack);
-    // === CENTRAL DIFFERENCES ===
     pDz = cs2 * (rhoFront - rhoBack) / dz;
     for ( size_t dim=0; dim<DESCRIPTOR::d; dim++ ) {
       uDz[dim] = ( uFront[dim] - uBack[dim] ) / dz;
     }
-  } else if ( backCBC ) {
+  } else if constexpr ( frontBackStencil == CBCStencil::Forward ) {
     cellBack.computeRhoU(     rhoBack,      uBack);
     cellBackBack.computeRhoU( rhoBackBack,  uBackBack);
     // === 2nd ORDER FORWARD DIFFERENCES ===
@@ -162,7 +159,7 @@ static void CharacteristicBoundaryLogicPreCollide(CELL& cell, PARAMETERS& parame
     for ( size_t dim=0; dim<DESCRIPTOR::d; dim++ ) {
       uDz[dim] = ( V(3)*uLocal[dim] - V(4)*uBack[dim] + uBackBack[dim] ) / dz;
     }
-  } else if ( frontCBC ) {
+  } else if constexpr ( frontBackStencil == CBCStencil::Backward ) {
     cellFront.computeRhoU(      rhoFront,       uFront);
     cellFrontFront.computeRhoU( rhoFrontFront,  uFrontFront);
     // === 2nd ORDER BACKWARD DIFFERENCES (backwards by dividing by -2) ===
@@ -171,6 +168,7 @@ static void CharacteristicBoundaryLogicPreCollide(CELL& cell, PARAMETERS& parame
       uDz[dim] = ( V(3)*uLocal[dim] - V(4)*uFront[dim] + uFrontFront[dim] ) / V(-2);
     }
   }
+  // None: pDz and uDz remain zero
 
   // === TRANSVERSAL WAVES ===
   T1 = - (uLocal[upDown] * pDy  + uLocal[frontBack] * pDz
@@ -190,16 +188,20 @@ static void CharacteristicBoundaryLogicPreCollide(CELL& cell, PARAMETERS& parame
     && parameters.template get<descriptors::cbc::FLOW_ORIENTATION>() == -orientation ) {
     // === INFLOW CONDITION ===
     L1 = K1* ( ( cs2*rhoInfty - rhoInfty*cs*uInfty[direction] ) - (cs2*rhoLocal - rhoLocal*cs*uLocal[direction]) ) + T1;
-    L3 = T3 + K1*(uInfty[upDown]    - uLocal[upDown]);
-    L4 = T4 + K1*(uInfty[frontBack] - uLocal[frontBack]);
+    // L3/L4 relax toward uInfty (matching L5's sign).
+    L3 = T3 + K1*(uLocal[upDown]    - uInfty[upDown]);
+    L4 = T4 + K1*(uLocal[frontBack] - uInfty[frontBack]);
     L5 = T5;
   } else {
     // === OUTFLOW CONDITION ===
-    // Wissoq: "CBC-2D relaxed"
-    L1 = K1*cs2* (rhoLocal-rhoInfty) - K2* (T1-T1exact) + T1;
-    L3 = uLocal[direction] * uDx[upDown];
-    L4 = uLocal[direction] * uDx[frontBack];
-    L5 = ( uLocal[direction] + cs ) * ( pDx + rhoLocal*cs*uDx[direction] );
+    const V Tin  = ( orientation > 0 ) ? T1 : T5;
+    const V Lrel = K1*cs2* (rhoLocal-rhoInfty) - K2* (Tin-T1exact) + Tin;
+    const V Lout = ( V(orientation)*uLocal[direction] + cs )
+                 * ( pDx + rhoLocal*cs*V(orientation)*uDx[direction] );
+    if constexpr ( orientation > 0 ) { L1 = Lrel; L5 = Lout; }
+    else                             { L1 = Lout; L5 = Lrel; }
+    L3 = V(orientation) * uLocal[direction] * uDx[upDown];
+    L4 = V(orientation) * uLocal[direction] * uDx[frontBack];
   }
 
   // === EXPECTED TIME DERIVATIVES ===
@@ -209,7 +211,8 @@ static void CharacteristicBoundaryLogicPreCollide(CELL& cell, PARAMETERS& parame
   uDt[frontBack]  = T4-L4;
 }
 
-template<typename T, typename DESCRIPTOR, int direction, int orientation>
+template<typename T, typename DESCRIPTOR, int direction, int orientation,
+         CBCStencil upDownStencil = CBCStencil::Central, CBCStencil frontBackStencil = CBCStencil::Central>
 class CBCPostProcessorPreCollideFlat3D {
 public:
   static constexpr OperatorScope scope = OperatorScope::PerCellWithParameters;
@@ -219,8 +222,9 @@ public:
                                 descriptors::cbc::FLOW_DIRECTION, descriptors::cbc::FLOW_ORIENTATION,
                                 descriptors::cbc::RHO_INFTY, descriptors::cbc::U_INFTY>;
 
+  // In stage::PostStream after the reconstruction PPs (priority 0/1/2).
   int getPriority() const {
-    return 0;
+    return 10;
   }
 
   template <concepts::DynamicCell CELL, concepts::Parameters PARAMETERS>
@@ -230,7 +234,7 @@ public:
     V rhoLocal, uLocal[DESCRIPTOR::d], rhoDt, uDt[DESCRIPTOR::d](0), rhoNew, uNew[DESCRIPTOR::d](0);
     cell.computeRhoU(rhoLocal, uLocal);
 
-    CharacteristicBoundaryLogicPreCollide<DESCRIPTOR, direction, orientation, CELL, PARAMETERS>(cell, parameters, rhoDt, uDt);
+    CharacteristicBoundaryLogicPreCollide<DESCRIPTOR, direction, orientation, upDownStencil, frontBackStencil>(cell, parameters, rhoDt, uDt);
 
     // === PRESCRIBED VALUES AT x,t+dt ===
     V prevRhoDt   = cell.template getField<fields::cbc::RHO_POST_PP_DT>();
@@ -260,7 +264,7 @@ public:
                                 descriptors::cbc::RHO_INFTY, descriptors::cbc::U_INFTY>;
 
   int getPriority() const {
-    return 0;
+    return 11;
   }
 
   template <concepts::DynamicCell CELL, concepts::Parameters PARAMETERS>
@@ -276,8 +280,8 @@ public:
     // Calculate updates for all three directions
     V rhoDt_1, rhoDt_2;
     V uDt_1[DESCRIPTOR::d], uDt_2[DESCRIPTOR::d];
-    CharacteristicBoundaryLogicPreCollide<DESCRIPTOR, direction1, normal1, CELL, PARAMETERS>(cell, parameters, rhoDt_1, uDt_1);
-    CharacteristicBoundaryLogicPreCollide<DESCRIPTOR, direction2, normal2, CELL, PARAMETERS>(cell, parameters, rhoDt_2, uDt_2);
+    CharacteristicBoundaryLogicPreCollide<DESCRIPTOR, direction1, normal1>(cell, parameters, rhoDt_1, uDt_1);
+    CharacteristicBoundaryLogicPreCollide<DESCRIPTOR, direction2, normal2>(cell, parameters, rhoDt_2, uDt_2);
 
     // Average the results
     V rhoDt_avg = (rhoDt_1 + rhoDt_2) / V(2);
@@ -313,7 +317,7 @@ public:
                                 descriptors::cbc::RHO_INFTY, descriptors::cbc::U_INFTY>;
 
   int getPriority() const {
-    return 0;
+    return 12;
   }
 
   template <concepts::DynamicCell CELL, concepts::Parameters PARAMETERS>
@@ -325,9 +329,9 @@ public:
     // Calculate updates for all three directions
     V rhoDt_X, rhoDt_Y, rhoDt_Z;
     V uDt_X[DESCRIPTOR::d], uDt_Y[DESCRIPTOR::d], uDt_Z[DESCRIPTOR::d];
-    CharacteristicBoundaryLogicPreCollide<DESCRIPTOR, 0, xNormal, CELL, PARAMETERS>(cell, parameters, rhoDt_X, uDt_X);
-    CharacteristicBoundaryLogicPreCollide<DESCRIPTOR, 1, yNormal, CELL, PARAMETERS>(cell, parameters, rhoDt_Y, uDt_Y);
-    CharacteristicBoundaryLogicPreCollide<DESCRIPTOR, 2, zNormal, CELL, PARAMETERS>(cell, parameters, rhoDt_Z, uDt_Z);
+    CharacteristicBoundaryLogicPreCollide<DESCRIPTOR, 0, xNormal>(cell, parameters, rhoDt_X, uDt_X);
+    CharacteristicBoundaryLogicPreCollide<DESCRIPTOR, 1, yNormal>(cell, parameters, rhoDt_Y, uDt_Y);
+    CharacteristicBoundaryLogicPreCollide<DESCRIPTOR, 2, zNormal>(cell, parameters, rhoDt_Z, uDt_Z);
 
     // Average the results
     V rhoDt_avg = (rhoDt_X + rhoDt_Y + rhoDt_Z) / V(3);

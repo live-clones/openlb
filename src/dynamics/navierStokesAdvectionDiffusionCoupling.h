@@ -101,8 +101,6 @@ struct TotalEnthalpyPhaseChangeCoupling {
   }
 };
 
-
-
 /// Coupling between a Navier-Stokes and an Advection-Diffusion lattice
 struct NavierStokesAdvectionDiffusionCoupling {
   static constexpr OperatorScope scope = OperatorScope::PerCellWithParameters;
@@ -135,6 +133,7 @@ struct NavierStokesAdvectionDiffusionCoupling {
     cellADE.template setField<descriptors::VELOCITY>(u);
   }
 };
+
 
 /// Velocity coupling between Navier-Stokes and an Advection-Diffusion lattice
 struct NavierStokesAdvectionDiffusionVelocityCoupling {
@@ -223,7 +222,6 @@ struct SmagorinskyBoussinesqCoupling {
 
 
 /// Reaction coupling for three species homogeneous bulk reaction
-template<typename T>
 struct ReactionCoupling {
   static constexpr OperatorScope scope = OperatorScope::PerCellWithParameters;
   struct LATTICE_REACTION_COEFF : public descriptors::FIELD_BASE<1> { };
@@ -235,19 +233,20 @@ struct ReactionCoupling {
   template<typename CELLS, typename PARAMETERS>
   void apply(CELLS& cells, PARAMETERS& parameters) any_platform
   {
+    using V = typename CELLS::template value_t<names::Concentration0>::value_t;
     auto stochCoeff = parameters.template get<STOCH_COEFF>();
     auto reactionOrder = parameters.template get<REACTION_ORDER>();
-    T source = parameters.template get<LATTICE_REACTION_COEFF>();
+    V source = parameters.template get<LATTICE_REACTION_COEFF>();
     {
-      T conc = cells.template get<names::Concentration0>().computeRho();
+      V conc = cells.template get<names::Concentration0>().computeRho();
       source *= util::pow(conc, reactionOrder[0]);
     }
     {
-      T conc = cells.template get<names::Concentration1>().computeRho();
+      V conc = cells.template get<names::Concentration1>().computeRho();
       source *= util::pow(conc, reactionOrder[1]);
     }
     {
-      T conc = cells.template get<names::Concentration2>().computeRho();
+      V conc = cells.template get<names::Concentration2>().computeRho();
       source *= util::pow(conc, reactionOrder[2]);
     }
     {

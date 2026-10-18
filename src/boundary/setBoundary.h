@@ -112,9 +112,9 @@ void set(SuperLattice<T,DESCRIPTOR>& sLattice,
                          fluidI->getBlockIndicatorF(iCloc),
                          outsideI->getBlockIndicatorF(iCloc));
   }
-  addPoints2CommBC(sLattice,
-                   std::forward<decltype(boundaryI)>(boundaryI),
-                   BC().getNeighborhoodRadius());
+  //addPoints2CommBC(sLattice,
+  //                 std::forward<decltype(boundaryI)>(boundaryI),
+  //                 BC().getNeighborhoodRadius());
 }
 
 template <concepts::BaseType T, concepts::LatticeDescriptor DESCRIPTOR, concepts::BoundaryCondition BC>

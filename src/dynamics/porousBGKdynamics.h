@@ -606,6 +606,8 @@ struct ForcedPSMBGKdynamics final : public dynamics::CustomCollision<T,DESCRIPTO
 
   template <typename NEW_T>
   using exchange_value_type = ForcedPSMBGKdynamics<NEW_T,DESCRIPTOR>;
+  template <typename NEW_DESCRIPTOR>
+  using exchange_descriptor = ForcedPSMBGKdynamics<T,NEW_DESCRIPTOR>;
 
   std::type_index id() override {
     return typeid(ForcedPSMBGKdynamics);

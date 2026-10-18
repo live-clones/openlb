@@ -34,6 +34,7 @@
 
 #include <memory>
 #include <tuple>
+#include <typeindex>
 
 namespace olb {
 
@@ -41,15 +42,76 @@ namespace olb {
 template<typename T, typename DESCRIPTOR, Platform PLATFORM, typename FIELD>
 class FieldArrayD;
 
+/// Snapshot of a field array's storage layout for memory introspection
+struct FieldStorageInfo {
+  /// Scalar value type of the field, e.g. "double"
+  std::string_view  valueType;
+  /// Components stored per cell
+  unsigned          components;
+  /// Bytes per component (sizeof of the value type)
+  std::size_t       componentBytes;
+  /// Allocated cell count, including the overlap halo
+  std::size_t       allocatedCells;
+  /// Dense or Sparse
+  FieldStorage      storage;
+  /// Materialised tiles per component (0 when dense)
+  std::size_t       allocatedTiles;
+  /// Cells per tile (0 when dense)
+  unsigned          tileCapacity;
+  /// Tile layout (1x1x1 when dense)
+  sparse::TileShape tileShape;
+  /// Directory slots per component, the int32 tile to payload map length (0 when dense)
+  std::size_t       directorySlots;
+};
+
+namespace detail {
+
+/// Swap the element type inside an AbstractColumn/AbstractCyclicColumn declarator,
+/// preserving the column KIND (dense vs cyclic). This is how the precision axis
+/// composes with the layout axis: re-type the element without touching the kind.
+template <typename ABSTRACT, typename E> struct rebind_element;
+template <typename E0, typename E> struct rebind_element<AbstractColumn<E0>,E>       { using type = AbstractColumn<E>; };
+template <typename E0, typename E> struct rebind_element<AbstractCyclicColumn<E0>,E> { using type = AbstractCyclicColumn<E>; };
+template <typename ABSTRACT, typename E> using rebind_element_t = typename rebind_element<ABSTRACT,E>::type;
+
+/// The scalar FIELD is stored as in DESCRIPTOR: its declared value type re-typed by
+/// the field's storage precision. Inherit / non-floating elements pass through, so
+/// an untagged field keeps value_type<T> and the whole thing is an identity.
+template <typename T, typename DESCRIPTOR, typename FIELD>
+using field_scalar_t = precision_scalar_t<typename FIELD::template value_type<T>,
+                                          precisionOf<DESCRIPTOR,FIELD>()>;
+
+/// FIELD's abstract column declarator with precision applied (AbstractColumn<E> or
+/// AbstractCyclicColumn<E> at the stored scalar). The virtual host-side interface is
+/// typed on this so an f16 field exposes an AbstractCyclicColumn<half>, not <T>.
+template <typename T, typename DESCRIPTOR, typename FIELD>
+using field_abstract_column_t = rebind_element_t<typename FIELD::template column_type<T>,
+                                                 field_scalar_t<T,DESCRIPTOR,FIELD>>;
+
+}
+
+/// The scalar POPULATION is stored as: the lattice T, or a reduced precision when
+/// POPULATION is tagged with store_precision. Used by the host-side cell/pointer path.
+template <typename T, typename DESCRIPTOR>
+using population_scalar_t = detail::field_scalar_t<T,DESCRIPTOR,descriptors::POPULATION>;
+
 /// Base to identify whether a type is some kind of AbstractFieldArrayD without caring about the specifics
-struct AbstractFieldArrayBase { };
+struct AbstractFieldArrayBase {
+  virtual ~AbstractFieldArrayBase() = default;
+  /// Storage layout snapshot for introspection, overridden by FieldArrayD
+  virtual FieldStorageInfo getStorageInfo() const { return {}; }
+  /// type_index of the stored FIELD, for matching against communication requests
+  virtual std::type_index getFieldTypeIndex() const { return typeid(void); }
+  /// Distinct tiles the given cells map into, 0 for a dense field (halo accounting)
+  virtual std::size_t countTilesFor(const std::vector<CellID>& cells) const { return 0; }
+};
 
 /// Platform-agnostic interface to concrete host-side field arrays
 template<typename T, typename DESCRIPTOR, typename FIELD>
 class AbstractFieldArrayD : public AbstractFieldArrayBase {
 private:
-  virtual const typename FIELD::template column_type<T>& getAbstractColumn(unsigned iDim) const = 0;
-  virtual       typename FIELD::template column_type<T>& getAbstractColumn(unsigned iDim)       = 0;
+  virtual const detail::field_abstract_column_t<T,DESCRIPTOR,FIELD>& getAbstractColumn(unsigned iDim) const = 0;
+  virtual       detail::field_abstract_column_t<T,DESCRIPTOR,FIELD>& getAbstractColumn(unsigned iDim)       = 0;
 
 public:
   class const_ptr;
@@ -84,6 +146,23 @@ public:
   virtual void setProcessingContext(ProcessingContext context) = 0;
   /// Resize to size newCount
   virtual void resize(std::size_t newCount) = 0;
+  /// Ensure per-cell storage for cell i exists (no-op for dense, materialises a tile for sparse)
+  virtual void allocateRow(std::size_t i) { }
+  /// Select runtime storage mode of a sparse-capable field (no-op for a dense field)
+  virtual void setStorageMode(FieldStorage mode) { }
+  virtual FieldStorage getStorageMode() const { return FieldStorage::Dense; }
+  /// Set the runtime tile shape of a sparse-capable field from the block's padded
+  /// projection and size (no-op for a dense field)
+  virtual void setTileShape(sparse::TileShape shape, std::size_t p0, std::size_t p1,
+                            unsigned sx, unsigned sy, unsigned sz, unsigned pad = 0) { }
+  /// Number of materialised tiles per component (0 for a dense field or dense-mode sparse field)
+  virtual std::size_t getAllocatedTiles() const { return 0; }
+  /// Runtime tile capacity (cells per tile) of a sparse-capable field (0 for a dense field)
+  virtual unsigned getTileCapacity() const { return 0; }
+  /// Runtime tile shape of a sparse-capable field (1x1x1 for a dense field)
+  virtual sparse::TileShape getTileShape() const { return {1,1,1}; }
+  /// Directory length (one int32 slot per grid tile) of a sparse-capable field (0 for a dense field)
+  virtual std::size_t getDirectorySlots() const { return 0; }
 
   const auto& operator[](unsigned iDim) const
   {
@@ -225,19 +304,59 @@ public:
 };
 
 
+namespace detail {
+
+/// The dense/cyclic (non-sparse) column for FIELD with precision applied: the field's
+/// own column kind, element re-typed to field_scalar_t.
+template <typename T, typename DESCRIPTOR, Platform PLATFORM, typename FIELD>
+using field_dense_column_t = typename ImplementationOf<
+  rebind_element_t<typename FIELD::template column_type<T>, field_scalar_t<T,DESCRIPTOR,FIELD>>,
+  PLATFORM>::type;
+
+/// Column implementation for FIELD on PLATFORM: tile-backed when the field opts into
+/// sparse storage and the platform provides a sparse column, dense/cyclic otherwise;
+/// in either case the element is field_scalar_t (layout x precision composed).
+template<typename T, typename DESCRIPTOR, Platform PLATFORM, typename FIELD>
+using field_column_t = std::conditional_t<
+  storageOf<DESCRIPTOR,FIELD>() == FieldStorage::Sparse && platformHasSparseColumn(PLATFORM),
+  typename SparseImplementationOf<field_scalar_t<T,DESCRIPTOR,FIELD>,PLATFORM,tileCapacityOf<FIELD>()>::type,
+  field_dense_column_t<T,DESCRIPTOR,PLATFORM,FIELD>
+>;
+
+/// Whether FIELD's FieldArrayD is backed by sparse columns on PLATFORM
+template<typename T, typename DESCRIPTOR, Platform PLATFORM, typename FIELD>
+constexpr bool isSparseColumnBacked() {
+  return !std::is_same_v<
+    field_column_t<T,DESCRIPTOR,PLATFORM,FIELD>,
+    field_dense_column_t<T,DESCRIPTOR,PLATFORM,FIELD>>;
+}
+
+}
+
 /// SoA storage for instances of a single FIELD
 template<typename T, typename DESCRIPTOR, Platform PLATFORM, typename FIELD>
-class FieldArrayD final : public ColumnVector<typename ImplementationOf<typename FIELD::template column_type<T>,PLATFORM>::type,
+class FieldArrayD final : public ColumnVector<detail::field_column_t<T,DESCRIPTOR,PLATFORM,FIELD>,
                                               DESCRIPTOR::template size<FIELD>()>
                         , public AbstractFieldArrayD<T,DESCRIPTOR,FIELD>
 {
+  static_assert(!(descriptors::is_propagatable_field<FIELD>::value
+                  && storageOf<DESCRIPTOR,FIELD>() == FieldStorage::Sparse),
+                "A propagatable field (e.g. POPULATION) cannot use sparse storage: "
+                "streaming requires a cyclic column, not tile-backed storage.");
+  static_assert(std::is_same_v<detail::field_scalar_t<T,DESCRIPTOR,FIELD>,
+                               typename FIELD::template value_type<T>>
+                || PLATFORM == Platform::CPU_SISD
+                || PLATFORM == Platform::CPU_SIMD
+                || PLATFORM == Platform::GPU_CUDA,
+                "store_precision (reduced/altered storage precision) is currently "
+                "implemented only on CPU_SISD, CPU_SIMD, and GPU_CUDA.");
 private:
-  const typename FIELD::template column_type<T>& getAbstractColumn(unsigned iDim) const override
+  const detail::field_abstract_column_t<T,DESCRIPTOR,FIELD>& getAbstractColumn(unsigned iDim) const override
   {
     return this->operator[](iDim);
   }
 
-  typename FIELD::template column_type<T>& getAbstractColumn(unsigned iDim) override
+  detail::field_abstract_column_t<T,DESCRIPTOR,FIELD>& getAbstractColumn(unsigned iDim) override
   {
     return this->operator[](iDim);
   }
@@ -245,19 +364,28 @@ private:
 public:
   using field_t = FIELD;
   using value_type = typename FIELD::template value_type<T>;
-  using column_type = typename ImplementationOf<typename FIELD::template column_type<T>,PLATFORM>::type;
+  using column_type = detail::field_column_t<T,DESCRIPTOR,PLATFORM,FIELD>;
 
   constexpr static Platform platform = PLATFORM;
 
-  using ColumnVector<column_type,DESCRIPTOR::template size<FIELD>()>::operator[];
+  using base_type = ColumnVector<detail::field_column_t<T,DESCRIPTOR,PLATFORM,FIELD>,
+                                 DESCRIPTOR::template size<FIELD>()>;
+
+  using base_type::operator[];
 
   FieldArrayD(std::size_t count):
-    ColumnVector<column_type,
-                 DESCRIPTOR::template size<FIELD>()>(count)
+    base_type(count)
   {
     const auto initial = FIELD::template getInitialValue<T,DESCRIPTOR>();
-    for (std::size_t i=0; i < count; ++i) {
-      this->setRow(i, initial);
+    if constexpr (detail::isSparseColumnBacked<T,DESCRIPTOR,PLATFORM,FIELD>()) {
+      // Set the per-cell default without materialising any tile
+      for (unsigned iDim=0; iDim < DESCRIPTOR::template size<FIELD>(); ++iDim) {
+        this->operator[](iDim).setDefaultValue(initial[iDim]);
+      }
+    } else {
+      for (std::size_t i=0; i < count; ++i) {
+        this->setRow(i, initial);
+      }
     }
   }
 
@@ -283,16 +411,109 @@ public:
     }
   }
 
+  void allocateRow(std::size_t i) override {
+    if constexpr (detail::isSparseColumnBacked<T,DESCRIPTOR,PLATFORM,FIELD>()) {
+      for (unsigned iDim=0; iDim < DESCRIPTOR::template size<FIELD>(); ++iDim) {
+        this->operator[](iDim).ensureAllocated(i);
+      }
+    }
+  }
+
+  void setStorageMode(FieldStorage mode) override {
+    if constexpr (detail::isSparseColumnBacked<T,DESCRIPTOR,PLATFORM,FIELD>()) {
+      for (unsigned iDim=0; iDim < DESCRIPTOR::template size<FIELD>(); ++iDim) {
+        this->operator[](iDim).setStorageMode(mode);
+      }
+    }
+  }
+
+  FieldStorage getStorageMode() const override {
+    if constexpr (detail::isSparseColumnBacked<T,DESCRIPTOR,PLATFORM,FIELD>()) {
+      return this->operator[](0).getStorageMode();
+    } else {
+      return FieldStorage::Dense;
+    }
+  }
+
+  void setTileShape(sparse::TileShape shape, std::size_t p0, std::size_t p1,
+                    unsigned sx, unsigned sy, unsigned sz, unsigned pad = 0) override {
+    if constexpr (detail::isSparseColumnBacked<T,DESCRIPTOR,PLATFORM,FIELD>()) {
+      for (unsigned iDim=0; iDim < DESCRIPTOR::template size<FIELD>(); ++iDim) {
+        this->operator[](iDim).setTileShape(shape, p0, p1, sx, sy, sz, pad);
+      }
+    }
+  }
+
+  std::size_t getAllocatedTiles() const override {
+    if constexpr (detail::isSparseColumnBacked<T,DESCRIPTOR,PLATFORM,FIELD>()) {
+      return this->operator[](0).getAllocatedTiles();
+    } else {
+      return 0;
+    }
+  }
+
+  unsigned getTileCapacity() const override {
+    if constexpr (detail::isSparseColumnBacked<T,DESCRIPTOR,PLATFORM,FIELD>()) {
+      return this->operator[](0).getTileCapacity();
+    } else {
+      return 0;
+    }
+  }
+
+  sparse::TileShape getTileShape() const override {
+    if constexpr (detail::isSparseColumnBacked<T,DESCRIPTOR,PLATFORM,FIELD>()) {
+      return this->operator[](0).getTileShape();
+    } else {
+      return {1,1,1};
+    }
+  }
+
+  std::size_t getDirectorySlots() const override {
+    if constexpr (detail::isSparseColumnBacked<T,DESCRIPTOR,PLATFORM,FIELD>()) {
+      return this->operator[](0).getDirectorySlots();
+    } else {
+      return 0;
+    }
+  }
+
+  std::type_index getFieldTypeIndex() const override {
+    return typeid(FIELD);
+  }
+
+  std::size_t countTilesFor(const std::vector<CellID>& cells) const override {
+    if constexpr (detail::isSparseColumnBacked<T,DESCRIPTOR,PLATFORM,FIELD>()) {
+      return this->operator[](0).countTilesFor(cells);
+    } else {
+      return 0;
+    }
+  }
+
+  FieldStorageInfo getStorageInfo() const override {
+    return FieldStorageInfo{
+      meta::nice_name<value_type>(),
+      DESCRIPTOR::template size<FIELD>(),
+      sizeof(value_type),
+      this->getSize(),
+      getStorageMode(),
+      getAllocatedTiles(),
+      getTileCapacity(),
+      getTileShape(),
+      getDirectorySlots()
+    };
+  }
+
   void resize(std::size_t newCount) override {
     const std::size_t oldCount = this->_count;
     for (unsigned iDim=0; iDim < DESCRIPTOR::template size<FIELD>(); ++iDim) {
       operator[](iDim).resize(newCount);
     }
     this->_count = newCount;
-    if (oldCount < newCount) {
-      const auto initial = FIELD::template getInitialValue<T,DESCRIPTOR>();
-      for (std::size_t i=oldCount; i < newCount; ++i) {
-        this->setRow(i, initial);
+    if constexpr (!detail::isSparseColumnBacked<T,DESCRIPTOR,PLATFORM,FIELD>()) {
+      if (oldCount < newCount) {
+        const auto initial = FIELD::template getInitialValue<T,DESCRIPTOR>();
+        for (std::size_t i=oldCount; i < newCount; ++i) {
+          this->setRow(i, initial);
+        }
       }
     }
   }
@@ -354,6 +575,14 @@ std::unique_ptr<AbstractFieldArrayD<T,DESCRIPTOR,FIELD>> makeSharedAbstractField
   if (loadBalancer.isLocal(Platform::GPU_HIP)) {
     return std::unique_ptr<AbstractFieldArrayD<T,DESCRIPTOR,FIELD>>(
       new FieldArrayD<T,DESCRIPTOR,Platform::GPU_HIP,FIELD>(count));
+  } else {
+    return std::unique_ptr<AbstractFieldArrayD<T,DESCRIPTOR,FIELD>>(
+      new FieldArrayD<T,DESCRIPTOR,Platform::CPU_SISD,FIELD>(count));
+  }
+  #elif defined(PLATFORM_GPU_SYCL)
+  if (loadBalancer.isLocal(Platform::GPU_SYCL)) {
+    return std::unique_ptr<AbstractFieldArrayD<T,DESCRIPTOR,FIELD>>(
+      new FieldArrayD<T,DESCRIPTOR,Platform::GPU_SYCL,FIELD>(count));
   } else {
     return std::unique_ptr<AbstractFieldArrayD<T,DESCRIPTOR,FIELD>>(
       new FieldArrayD<T,DESCRIPTOR,Platform::CPU_SISD,FIELD>(count));

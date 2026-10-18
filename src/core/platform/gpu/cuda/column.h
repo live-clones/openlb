@@ -26,10 +26,16 @@
 #define GPU_CUDA_COLUMN_H
 
 #include <memory>
+#include <cstdint>
+#include <cstddef>
+#include <unordered_map>
+#include <stdexcept>
 
 #include "core/platform/platform.h"
 #include "core/serializer.h"
 #include "communication/communicatable.h"
+
+#include "core/platform/gpu/cyclicAccessor.h"
 
 namespace olb {
 
@@ -42,6 +48,14 @@ namespace device {
 struct Stream;
 
 }
+
+/// Device-side view of a dense Column: a plain contiguous pointer with the accessor interface
+template<typename T>
+struct DeviceColumnAccessor {
+  T* data;
+  any_platform T get(std::size_t i) const { return data[i]; }
+  any_platform T& operator[](std::size_t i) const { return data[i]; }
+};
 
 /// Plain column for CUDA GPU targets
 template<typename T>
@@ -72,6 +86,9 @@ public:
   const T* deviceData() const;
   T* deviceData();
 
+  using Accessor = DeviceColumnAccessor<T>;
+  Accessor getDeviceAccessor() { return Accessor{deviceData()}; }
+
   /// Reset size to zero
   void clear();
   void resize(std::size_t newCount);
@@ -92,21 +109,31 @@ public:
 };
 
 
-/// Virtual memory based cyclic column for usage in ColumnVector
+/// Backend storage for CyclicColumn, specialized per cyclic strategy (see column.hh)
+template<typename T, gpu::CyclicStrategy STRATEGY>
+struct CyclicColumnData;
+
+/// Cyclic column for usage in ColumnVector (propagatable population storage)
 /**
- * Column type used for propagatable population storage using
- * the virtual memory PS pattern.
+ * The addressing strategy (virtual-memory ring vs. branching two-pointer) is
+ * picked by gpu::cyclicStrategyFor and threaded through as a constexpr, so the
+ * strategy-specific storage and accessors are selected by the type system and
+ * `if constexpr` rather than the preprocessor.
  **/
 template<typename T>
 class CyclicColumn final : public AbstractCyclicColumn<T>
                          , public Serializable {
 private:
+  static constexpr gpu::CyclicStrategy cyclicStrategy =
+    gpu::cyclicStrategyFor(Platform::GPU_CUDA);
+  using Data = CyclicColumnData<T,cyclicStrategy>;
+
   const std::ptrdiff_t _count;
   const std::size_t    _size;
 
-  struct Data;
   std::unique_ptr<Data> _data;
 
+  T* _hostData;
   T* _deviceBase;
   T* _devicePopulation;
 
@@ -114,6 +141,7 @@ private:
 
 public:
   using value_t = T;
+  using Accessor = gpu::CyclicAccessor<T,cyclicStrategy>;
 
   CyclicColumn(std::size_t count);
   ~CyclicColumn();
@@ -123,12 +151,46 @@ public:
 
   const T* deviceData() const
   {
-    return _devicePopulation;
+    if constexpr (cyclicStrategy == gpu::CyclicStrategy::Branching) {
+      return _deviceBase;
+    } else {
+      return _devicePopulation;
+    }
   }
 
   T* deviceData()
   {
-    return _devicePopulation;
+    if constexpr (cyclicStrategy == gpu::CyclicStrategy::Branching) {
+      return _deviceBase;
+    } else {
+      return _devicePopulation;
+    }
+  }
+
+  Accessor getDeviceAccessor()
+  {
+    if constexpr (cyclicStrategy == gpu::CyclicStrategy::Branching) {
+      return Accessor{
+        .start0    = _deviceBase + _shift,
+        .start1    = _deviceBase - (_count - _shift),
+        .remainder = static_cast<std::ptrdiff_t>(_count - _shift - 1)
+      };
+    } else {
+      return Accessor{ .ptr = _devicePopulation };
+    }
+  }
+
+  Accessor getHostAccessor()
+  {
+    if constexpr (cyclicStrategy == gpu::CyclicStrategy::Branching) {
+      return Accessor{
+        .start0    = _hostData + _shift,
+        .start1    = _hostData - (_count - _shift),
+        .remainder = static_cast<std::ptrdiff_t>(_count - _shift - 1)
+      };
+    } else {
+      return Accessor{ .ptr = _hostData };
+    }
   }
 
   std::size_t size() const override
@@ -247,5 +309,7 @@ public:
 };
 
 }
+
+#include "sparseColumn.h"
 
 #endif

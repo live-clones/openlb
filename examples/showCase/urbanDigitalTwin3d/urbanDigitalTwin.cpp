@@ -887,7 +887,7 @@ void getResults(SuperLattice<T, DESCRIPTOR>& sLattice, SuperLattice<T, ADDESCRIP
     sLatticeAD.scheduleBackgroundOutputVTK([&, iT](auto task) {
       SuperVTMwriter3D<T>                                                              vtmWriterADE("cityAD");
       SuperLatticeDensity3D<T, ADDESCRIPTOR>                                           concentration(sLatticeAD);
-      SuperLatticeExternalScalarField3D<T, ADDESCRIPTOR, descriptors::AVERAGE_DENSITY> avgD(sLatticeAD);
+      SuperLatticeField3D<T, ADDESCRIPTOR, descriptors::AVERAGE_DENSITY> avgD(sLatticeAD);
       avgD.getName() = "average(Density)";
       vtmWriterADE.addFunctor(avgD);
       vtmWriterADE.addFunctor(concentration);

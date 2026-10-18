@@ -43,6 +43,7 @@ using descriptor_t = DESCRIPTOR;
 CellDistance getNeighborhoodRadius() {
   return 0;
 }
+
 std::optional<DynamicsPromise<T,DESCRIPTOR>> getDynamics(DiscreteNormalType type,
                                                          DiscreteNormal<DESCRIPTOR> n) {
 

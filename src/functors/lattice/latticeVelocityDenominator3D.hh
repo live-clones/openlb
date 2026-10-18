@@ -70,7 +70,7 @@ BlockLatticeVelocityDenominator3D<T,DESCRIPTOR>::BlockLatticeVelocityDenominator
 template <typename T, typename DESCRIPTOR>
 bool BlockLatticeVelocityDenominator3D<T,DESCRIPTOR>::operator() (T output[], const int input[])
 {
-  this->_blockLattice.get(input).template computeField<descriptors::VELOCITY_DENOMINATOR>(output);
+  output[0] = this->_blockLattice.get(input).template getField<descriptors::VELOCITY_DENOMINATOR>();
   return true;
 }
 

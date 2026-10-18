@@ -132,6 +132,7 @@ void prepareLattice(MyCase& myCase)
 
   // Get data from case
   using T          = MyCase::value_t;
+  using DESCRIPTOR = MyCase::descriptor_t;
   auto& parameters = myCase.getParameters();
   auto& geometry   = myCase.getGeometry();
   auto& lattice    = myCase.getLattice(NavierStokes {});
@@ -149,7 +150,7 @@ void prepareLattice(MyCase& myCase)
   const T charRho       = parameters.get<parameters::PHYS_DENSITY>();
 
   // Set up the unit converter
-  lattice.setUnitConverter(
+  lattice.setUnitConverter<UnitConverter<T,DESCRIPTOR>>(
     (T) dx,                 // physDeltaX:        spacing between two lattice cells in [m]
     (T) CFL * dx / charU,   // physDeltaT:        time step in [s]
     (T) charL,              // charPhysLength:    reference length of simulation geometry in [m]
@@ -237,10 +238,8 @@ void setTemporalValues(MyCase& myCase,
 
 /// Gets results and writes them to file
 /// @param myCase The Case instance which keeps the simulation data
-/// @param timer The timer
 /// @param iT The time step
 void getResults(MyCase& myCase,
-                util::Timer<MyCase::value_t>& timer,
                 std::size_t iT)
 {
   OstreamManager clout(std::cout, "getResults");
@@ -285,10 +284,6 @@ void getResults(MyCase& myCase,
   if (iT % statIter == 0) {
     // Send values from GPU to CPU for evaluation
     lattice.setProcessingContext(ProcessingContext::Evaluation);
-    // Timer console output
-    timer.update(iT);
-    timer.printStep();
-    lattice.getStatistics().print(iT, converter.getPhysTime(iT));
     // Pressure drop
     AnalyticalFfromSuperF2D<T> intpolatePressure(pressure, true);
     T point1[2] = {};
@@ -305,6 +300,8 @@ void getResults(MyCase& myCase,
     T pressureDrop = p1 - p2;
     clout << "; pressureDrop=" << pressureDrop << std::endl;
   }
+
+  myCase.report(iT);
 }
 
 /// Executes the simulation
@@ -314,18 +311,13 @@ void simulate(MyCase& myCase)
   // Get data from case
   using T          = MyCase::value_t;
   auto& parameters = myCase.getParameters();
-  auto& geometry   = myCase.getGeometry();
   auto& lattice    = myCase.getLattice(NavierStokes {});
   auto& converter  = lattice.getUnitConverter();
 
-  // Get max simulation time for timer
+  // Get max simulation time
   const T maxPhysT = parameters.get<parameters::MAX_PHYS_T>();
 
-  // Create timer
-  std::size_t    iTmax = converter.getLatticeTime(maxPhysT);
-  util::Timer<T> timer(iTmax, geometry.getStatistics().getNvoxel());
-
-  timer.start();
+  std::size_t iTmax = converter.getLatticeTime(maxPhysT);
 
   for (std::size_t iT = 0; iT < iTmax; ++iT) {
     // === 5th Step: Definition of Initial and Boundary Conditions ===
@@ -333,11 +325,10 @@ void simulate(MyCase& myCase)
     // === 6th Step: Collide and Stream Execution ===
     lattice.collideAndStream();
     // === 7th Step: Computation and Output of the Results ===
-    getResults(myCase, timer, iT);
+    getResults(myCase, iT);
   }
 
-  timer.stop();
-  timer.printSummary();
+  myCase.finalize(iTmax);
 }
 
 int main(int argc, char* argv[])
@@ -358,20 +349,21 @@ int main(int argc, char* argv[])
     myCaseParameters.set<PHYS_DENSITY       >(  1.0   );
     myCaseParameters.set<PHYS_CHAR_VISCOSITY>(  0.001 );
     myCaseParameters.set<CFL                >(  0.05 );
-    myCaseParameters.set<PHYS_CHAR_LENGTH   >([&] {
-      return 2.0 * myCaseParameters.get<RADIUS_CYLINDER>();
+    myCaseParameters["reporter"]["statistics"].set<PHYS_ITER_T>(0.8);
+    myCaseParameters["reporter"]["timer"].set<PHYS_ITER_T>(0.8);
+    myCaseParameters.set<PHYS_CHAR_LENGTH   >([](MyCase::ParametersD& p) {
+      return 2.0 * p.get<RADIUS_CYLINDER>();
     });
-    myCaseParameters.set<CENTER_CYLINDER>([&] {
-      return Vector {(T)0.2, (T)0.2 + ((T)0.1 / myCaseParameters.get<RESOLUTION>()) / (T)2.};
+    myCaseParameters.set<CENTER_CYLINDER>([](MyCase::ParametersD& p) {
+      return Vector {(T)0.2, (T)0.2 + ((T)0.1 / p.get<RESOLUTION>()) / (T)2.};
     });
-    myCaseParameters.set<DOMAIN_EXTENT  >([&] {
-      return Vector {(T)2.2, (T).41 + (T)0.1 / myCaseParameters.get<RESOLUTION>()};
+    myCaseParameters.set<DOMAIN_EXTENT  >([](MyCase::ParametersD& p) {
+      return Vector {(T)2.2, (T).41 + (T)0.1 / p.get<RESOLUTION>()};
     });
-    myCaseParameters.set<PHYS_DELTA_X   >([&] {
-      return myCaseParameters.get<RADIUS_CYLINDER>() / myCaseParameters.get<RESOLUTION>();
+    myCaseParameters.set<PHYS_DELTA_X   >([](MyCase::ParametersD& p) {
+      return p.get<RADIUS_CYLINDER>() / p.get<RESOLUTION>();
     });
   }
-  myCaseParameters.fromCLI(argc, argv);
 
   /// === Step 3: Create Mesh ===
   Mesh mesh = createMesh(myCaseParameters);

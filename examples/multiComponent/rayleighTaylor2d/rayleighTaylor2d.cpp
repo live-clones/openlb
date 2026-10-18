@@ -375,15 +375,14 @@ int main(int argc, char* argv[])
     myCaseParameters.set<LATTICE_VTK_ITER_T>(100);
     myCaseParameters.set<LATTICE_STAT_ITER_T>(100);
   }
-  myCaseParameters.set<parameters::DOMAIN_EXTENT>([&]() -> Vector<MyCase::value_t, 2> {
-    return {static_cast<MyCase::value_t>(myCaseParameters.get<parameters::RESOLUTION>()),
-            static_cast<MyCase::value_t>(myCaseParameters.get<parameters::RESOLUTION>() / 2)};
+  myCaseParameters.set<parameters::DOMAIN_EXTENT>([](MyCase::ParametersD& p) -> Vector<MyCase::value_t, 2> {
+    return {static_cast<MyCase::value_t>(p.get<parameters::RESOLUTION>()),
+            static_cast<MyCase::value_t>(p.get<parameters::RESOLUTION>() / 2)};
   });
-  myCaseParameters.set<parameters::FORCE>([&]() -> MyCase::value_t {
-    return 30. / (  myCaseParameters.get<parameters::DOMAIN_EXTENT>()[1]
-                  * myCaseParameters.get<parameters::DOMAIN_EXTENT>()[1]);
+  myCaseParameters.set<parameters::FORCE>([](MyCase::ParametersD& p) -> MyCase::value_t {
+    return 30. / (  p.get<parameters::DOMAIN_EXTENT>()[1]
+                  * p.get<parameters::DOMAIN_EXTENT>()[1]);
   });
-  myCaseParameters.fromCLI(argc, argv);
 
   /// === Step 3: Create Mesh ===
   Mesh mesh = createMesh(myCaseParameters);

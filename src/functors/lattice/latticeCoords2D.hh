@@ -67,7 +67,10 @@ BlockLatticeCoords2D<T,DESCRIPTOR>::BlockLatticeCoords2D
 template <typename T, typename DESCRIPTOR>
 bool BlockLatticeCoords2D<T,DESCRIPTOR>::operator() (T output[], const int input[])
 {
-  _iGeometry.getPhysR(output, input);
+  Vector<T,DESCRIPTOR::d> output_vec = _iGeometry.getPhysR(input);
+  for (int iD=0; iD<DESCRIPTOR::d; ++iD) {
+    output[iD] = output_vec[iD];
+  }
   return true;
 }
 

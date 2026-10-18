@@ -41,6 +41,7 @@
 #include "interpolatedPressure3D.h"
 #include "setZeroGradientBoundary3D.h"
 #include "zeroDistribution.h"
+#include "zeroPopulation.h"
 #include "setBouzidiBoundary.h"
 #include "bounceBack.h"
 #include "bounceBackVelocity.h"

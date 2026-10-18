@@ -33,7 +33,7 @@ using namespace olb::uq;
 using namespace olb::descriptors;
 using namespace olb::graphics;
 
-using T = FLOATING_POINT_TYPE;
+using T = double;
 using DESCRIPTOR = D3Q19<>;
 
 #define BOUZIDI
@@ -272,12 +272,8 @@ double simulateCylinder( int N, T u0, bool exportResults )
   STLreader<T> stlReader( "../../laminar/cylinder3d/cylinder3d.stl", converter.getPhysDeltaX(), 0.001);
   IndicatorLayer3D<T> extendedDomain( stlReader, converter.getPhysDeltaX() );
 
-  // Instantiation of a cuboidDecomposition with weights
-#ifdef PARALLEL_MODE_MPI
   const int noOfCuboids = singleton::mpi().getSize();
-#else
-  const int noOfCuboids = 7;
-#endif
+
   CuboidDecomposition3D<T> cuboidDecomposition( extendedDomain, converter.getPhysDeltaX(), noOfCuboids );
 
   // Instantiation of a loadBalancer

@@ -638,47 +638,46 @@ int main(int argc, char* argv[])
     myCaseParameters.set<EXTENT_TO_DIAMETER>(15.0);
     myCaseParameters.set<PHYS_DENSITY>(1000);
     myCaseParameters.set<VTK_ENABLED>(true);
-    myCaseParameters.set<PHYS_CHAR_LENGTH>([&] {
-      return myCaseParameters.get<PART_RADIUS>() * 2.0;
+    myCaseParameters.set<PHYS_CHAR_LENGTH>([](MyCase::ParametersD& p) {
+      return p.get<PART_RADIUS>() * 2.0;
     });
-    myCaseParameters.set<PART_RHO>([&] {
-      return myCaseParameters.get<DENSITY_RATIO>() * myCaseParameters.get<PHYS_DENSITY>();
+    myCaseParameters.set<PART_RHO>([](MyCase::ParametersD& p) {
+      return p.get<DENSITY_RATIO>() * p.get<PHYS_DENSITY>();
     });
-    myCaseParameters.set<PHYS_DELTA_X>([&] {
-      return myCaseParameters.get<PART_RADIUS>() * 2.0 / myCaseParameters.get<RESOLUTION>();
+    myCaseParameters.set<PHYS_DELTA_X>([](MyCase::ParametersD& p) {
+      return p.get<PART_RADIUS>() * 2.0 / p.get<RESOLUTION>();
     });
-    myCaseParameters.set<PHYS_CHAR_VISCOSITY>([&] {
-      return util::sqrt(myCaseParameters.get<GRAVITATIONAL_ACC>() * (myCaseParameters.get<DENSITY_RATIO>() - 1) *
-                        util::pow(myCaseParameters.get<PART_RADIUS>() * 2.0, 3) /
-                        myCaseParameters.get<ARCHIMEDES>());
+    myCaseParameters.set<PHYS_CHAR_VISCOSITY>([](MyCase::ParametersD& p) {
+      return util::sqrt(p.get<GRAVITATIONAL_ACC>() * (p.get<DENSITY_RATIO>() - 1) *
+                        util::pow(p.get<PART_RADIUS>() * 2.0, 3) /
+                        p.get<ARCHIMEDES>());
     });
-    myCaseParameters.set<GRAVITY>([&] {
+    myCaseParameters.set<GRAVITY>([](MyCase::ParametersD& p) {
       return Vector<double, 3> {0., 0.,
-                                -myCaseParameters.get<GRAVITATIONAL_ACC>() *
-                                    (1. - myCaseParameters.get<PHYS_DENSITY>() / myCaseParameters.get<PART_RHO>())};
+                                -p.get<GRAVITATIONAL_ACC>() *
+                                    (1. - p.get<PHYS_DENSITY>() / p.get<PART_RHO>())};
     });
-    myCaseParameters.set<DYNAMIC_VISCOSITY>([&] {
-      return myCaseParameters.get<PHYS_CHAR_VISCOSITY>() * myCaseParameters.get<PHYS_DENSITY>();
+    myCaseParameters.set<DYNAMIC_VISCOSITY>([](MyCase::ParametersD& p) {
+      return p.get<PHYS_CHAR_VISCOSITY>() * p.get<PHYS_DENSITY>();
     });
-    myCaseParameters.set<PHYS_CHAR_VELOCITY>([&] {
-      return (2. / 9.) * (myCaseParameters.get<PART_RHO>() - myCaseParameters.get<PHYS_DENSITY>()) *
-             myCaseParameters.get<GRAVITATIONAL_ACC>() * myCaseParameters.get<PART_RADIUS>() *
-             myCaseParameters.get<PART_RADIUS>() / myCaseParameters.get<DYNAMIC_VISCOSITY>();
+    myCaseParameters.set<PHYS_CHAR_VELOCITY>([](MyCase::ParametersD& p) {
+      return (2. / 9.) * (p.get<PART_RHO>() - p.get<PHYS_DENSITY>()) *
+             p.get<GRAVITATIONAL_ACC>() * p.get<PART_RADIUS>() *
+             p.get<PART_RADIUS>() / p.get<DYNAMIC_VISCOSITY>();
     });
-    myCaseParameters.set<MAX_PHYS_T>([&] {
-      return 200.0 * 2. * myCaseParameters.get<PART_RADIUS>() / myCaseParameters.get<PHYS_CHAR_VELOCITY>();
+    myCaseParameters.set<MAX_PHYS_T>([](MyCase::ParametersD& p) {
+      return 200.0 * 2. * p.get<PART_RADIUS>() / p.get<PHYS_CHAR_VELOCITY>();
     });
-    myCaseParameters.set<PHYS_VTK_ITER_T>([&] {
-      return 0.02 * myCaseParameters.get<MAX_PHYS_T>();
+    myCaseParameters.set<PHYS_VTK_ITER_T>([](MyCase::ParametersD& p) {
+      return 0.02 * p.get<MAX_PHYS_T>();
     });
-    myCaseParameters.set<PHYS_PURGE_ITER_T>([&] {
-      return 0.06 * myCaseParameters.get<MAX_PHYS_T>();
+    myCaseParameters.set<PHYS_PURGE_ITER_T>([](MyCase::ParametersD& p) {
+      return 0.06 * p.get<MAX_PHYS_T>();
     });
-    myCaseParameters.set<PARTICLE_ENLARGEMENT_FOR_CONTACT>([&] {
-      return myCaseParameters.get<PHYS_DELTA_X>() / 5.0;
+    myCaseParameters.set<PARTICLE_ENLARGEMENT_FOR_CONTACT>([](MyCase::ParametersD& p) {
+      return p.get<PHYS_DELTA_X>() / 5.0;
     });
   }
-  myCaseParameters.fromCLI(argc, argv);
 
   Mesh   mesh = createMesh(myCaseParameters);
   MyCase myCase(myCaseParameters, mesh);

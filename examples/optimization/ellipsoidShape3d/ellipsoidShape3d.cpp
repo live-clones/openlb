@@ -208,7 +208,6 @@ void setBoundaryValues(CASE& myCase, int iT)
   }
 }
 
-// Computes and visualizes Lattice fields, computes dissipation
 template<typename CASE>
 void getResults(CASE& myCase,
                 int iT,
@@ -216,12 +215,36 @@ void getResults(CASE& myCase,
 {
   OstreamManager clout(std::cout,"getResults");
   using T = CASE::value_t;
-  using DESCRIPTOR = CASE::descriptor_t;
   auto& sLattice = myCase.getLattice(NavierStokes{});
   auto& converter = sLattice.getUnitConverter();
   auto& parameters = myCase.getParameters();
 
-  SuperVTMwriter3D<T> vtmWriter("ellipsoid3dOpti");
+  const T maxPhysT = parameters.template get<parameters::MAX_PHYS_T>();
+  const int statIter = converter.getLatticeTime( maxPhysT / 10 );
+
+  // Writes output on the console
+  if ( iT%statIter == 0 ) {
+    sLattice.setProcessingContext(ProcessingContext::Evaluation);
+
+    // Timer console output
+    timer.update( iT );
+    timer.printStep();
+
+    // Lattice statistics console output
+    sLattice.getStatistics().print(iT, converter.getPhysTime( iT ));
+  }
+}
+
+template<typename CASE>
+void getOptiResults(CASE& myCase,
+                    int iT)
+{
+  using T = CASE::value_t;
+  using DESCRIPTOR = CASE::descriptor_t;
+  auto& sLattice = myCase.getLattice(NavierStokes{});
+  auto& converter = sLattice.getUnitConverter();
+
+  SuperVTMwriter3D<T> vtmWriter("ellipsoidOpti3d");
   SuperLatticePhysVelocity3D velocity(sLattice, converter);
   SuperLatticePhysPressure3D pressure(sLattice, converter);
   SuperLatticePorosity3D porosity(sLattice);
@@ -245,32 +268,13 @@ void getResults(CASE& myCase,
   vtmWriter.addFunctor( viscous_dissipation );
   vtmWriter.addFunctor( porous_dissipation );
 
-  const T maxPhysT = parameters.template get<parameters::MAX_PHYS_T>();
-  const int vtkIter  = converter.getLatticeTime( maxPhysT / 20 );
-  const int statIter = converter.getLatticeTime( maxPhysT / 10 );
-
   if ( iT==0 ) {
     vtmWriter.createMasterFile();
   }
 
-  // Writes output on the console
-  if ( iT%statIter == 0 ) {
-    sLattice.setProcessingContext(ProcessingContext::Evaluation);
-
-    // Timer console output
-    timer.update( iT );
-    timer.printStep();
-
-    // Lattice statistics console output
-    sLattice.getStatistics().print(iT, converter.getPhysTime( iT ));
-  }
-
   // Writes the vtk files, currently only for last simulation
-  if ( iT%vtkIter == 0 ) {
-    vtmWriter.write(iT);
-  }
+  vtmWriter.write(iT);
 }
-
 
 template <typename CASE>
 void simulate(CASE& myCase) {
@@ -306,20 +310,19 @@ void setInitialControls(MyOptiCase& optiCase) {
   optiCase.getController().set({controls[0], controls[1]});
 }
 
-template <typename CASE>
-void applyControls(MyOptiCase& optiCase) {
- using T = CASE::value_t;
- std::vector<T> controls = optiCase.getController<T>().get();
- optiCase.getCaseByType<T>().getParameters().template set<parameters::CONTROLS>({controls[0], controls[1]});
- std::cout << "Controls: " << optiCase.getCaseByType<T>().getParameters().template get<parameters::CONTROLS>() << std::endl;
+template <typename CASE, typename CONTROLLER>
+void applyControls(CASE& myCase, CONTROLLER& controller) {
+  OstreamManager clout(std::cout, "applyControls");
+  auto controls = controller.get();
+  myCase.getParameters().template set<parameters::CONTROLS>({controls[0], controls[1]});
+  clout << "Controls: " << myCase.getParameters().template get<parameters::CONTROLS>() << std::endl;
 }
 
 template<typename CASE>
-CASE::value_t computeDissipation(MyOptiCase& optiCase) {
+CASE::value_t computeDissipation(CASE& myCase) {
   OstreamManager clout(std::cout, "dissipationF");
   using T = CASE::value_t;
   using DESCRIPTOR = CASE::descriptor_t;
-  auto& myCase = optiCase.getCaseByType<T>();
   auto& sLattice = myCase.getLattice(NavierStokes{});
   auto& converter = sLattice.getUnitConverter();
   auto& superGeometry = myCase.getGeometry();
@@ -357,23 +360,22 @@ CASE::value_t computeDissipation(MyOptiCase& optiCase) {
   return result*result;
 }
 
-template <typename CASE>
-CASE::value_t computeObjective(MyOptiCase& optiCase) {
-  using T = CASE::value_t;
-  auto& myCase = optiCase.getCaseByType<T>();
+template <typename NAME>
+auto computeObjective(MyOptiCase& optiCase, NAME) {
+  using T = MyOptiCase::case_t<NAME>::value_t;
+  auto& myCase = optiCase.getCase(NAME{});
   myCase.resetLattices();
-  applyControls<CASE>(optiCase);
+  applyControls(myCase, optiCase.getController<T>());
   prepareGeometry(myCase);
   prepareLattice(myCase);
   setInitialValues(myCase);
   simulate(myCase);
-  return computeDissipation<CASE>(optiCase);
+  getOptiResults(myCase, optiCase.getOptimizationStep());
+  return computeDissipation(myCase);
 }
 
 int main( int argc, char* argv[] ) {
   initialize( &argc, &argv );
-  OstreamManager clout( std::cout,"simulateEllipsoid" );
-  using ADf = util::ADf<double,2>;
   MyCase::ParametersD myCaseParametersD;
   {
     using namespace parameters;
@@ -381,53 +383,45 @@ int main( int argc, char* argv[] ) {
     myCaseParametersD.template set<RESOLUTION                  >(             20);
     myCaseParametersD.template set<LATTICE_RELAXATION_TIME     >(           0.55);
     myCaseParametersD.template set<PHYS_CHAR_VISCOSITY         >(          0.001);
-    myCaseParametersD.template set<REYNOLDS                    >(             50);
+    myCaseParametersD.template set<REYNOLDS                    >(            50.);
     myCaseParametersD.template set<MAX_PHYS_T                  >(            50.);
     myCaseParametersD.template set<PHYS_START_T                >(            30.);
     myCaseParametersD.template set<PHYS_BOUNDARY_VALUE_UPDATE_T>(           0.01);
-    myCaseParametersD.template set<PHYS_CHAR_VELOCITY          >([&] {
-      return myCaseParametersD.template get<PHYS_CHAR_VISCOSITY>() *
-             myCaseParametersD.template get<REYNOLDS>() /
-         myCaseParametersD.template get<DOMAIN_EXTENT>()[1];
+    myCaseParametersD.template set<PHYS_CHAR_VELOCITY          >([](MyCase::ParametersD& p) {
+      return p.get<PHYS_CHAR_VISCOSITY>() *
+             p.get<REYNOLDS>() /
+         p.get<DOMAIN_EXTENT>()[1];
     });
     myCaseParametersD.template set<PHYS_CHAR_DENSITY           >(            1.0);
     myCaseParametersD.template set<CONTROLS                    >(   {0.08, 0.08});
     myCaseParametersD.template set<ELLIPSOID_VOLUME            >(          0.001);
-    myCaseParametersD.template set<SMOOTH_LAYER_THICKNESS      >(              5);
-    myCaseParametersD.template set<ELLIPSOID_POS               >([&] {
+    myCaseParametersD.template set<SMOOTH_LAYER_THICKNESS      >(             5.);
+    myCaseParametersD.template set<ELLIPSOID_POS               >([](MyCase::ParametersD& p) {
       return FieldD<MyCase::value_t,MyCase::descriptor_t,ELLIPSOID_POS>{
         0.5,
-        myCaseParametersD.template get<DOMAIN_EXTENT>()[1] / 2.0,
-    myCaseParametersD.template get<DOMAIN_EXTENT>()[2] / 2.0};
+        p.get<DOMAIN_EXTENT>()[1] / 2.0,
+    p.get<DOMAIN_EXTENT>()[2] / 2.0};
     });
   }
-  MyADfCase::ParametersD myADfCaseParametersD;
+  auto myADfCaseParametersD = myCaseParametersD.copyAs<MyADfCase::value_t>();
+
+  OptimizerParametersD<MyCase::value_t> optiParameters;
   {
     using namespace parameters;
-    myADfCaseParametersD.template set<DOMAIN_EXTENT               >({ADf{1.2}, ADf{0.4}, ADf{0.4}});
-    myADfCaseParametersD.template set<RESOLUTION                  >(                            20);
-    myADfCaseParametersD.template set<LATTICE_RELAXATION_TIME     >(                     ADf{0.55});
-    myADfCaseParametersD.template set<PHYS_CHAR_VISCOSITY         >(                    ADf{0.001});
-    myADfCaseParametersD.template set<REYNOLDS                    >(                       ADf{50});
-    myADfCaseParametersD.template set<MAX_PHYS_T                  >(                      ADf{50.});
-    myADfCaseParametersD.template set<PHYS_START_T                >(                      ADf{30.});
-    myADfCaseParametersD.template set<PHYS_BOUNDARY_VALUE_UPDATE_T>(                     ADf{0.01});
-    myADfCaseParametersD.template set<PHYS_CHAR_VELOCITY          >([&] {
-      return ADf{myADfCaseParametersD.template get<PHYS_CHAR_VISCOSITY>() *
-                 myADfCaseParametersD.template get<REYNOLDS>() /
-             myADfCaseParametersD.template get<DOMAIN_EXTENT>()[1]};
-    });
-    myADfCaseParametersD.template set<PHYS_CHAR_DENSITY           >(                      ADf{1.0});
-    myADfCaseParametersD.template set<CONTROLS                    >(        {ADf{0.08}, ADf{0.08}});
-    myADfCaseParametersD.template set<ELLIPSOID_VOLUME            >(                    ADf{0.001});
-    myADfCaseParametersD.template set<SMOOTH_LAYER_THICKNESS      >(                        ADf{5});
-    myADfCaseParametersD.template set<ELLIPSOID_POS               >([&] {
-      return FieldD<MyADfCase::value_t,MyADfCase::descriptor_t,ELLIPSOID_POS>{
-        ADf{0.5},
-        ADf{myADfCaseParametersD.template get<DOMAIN_EXTENT>()[1] / 2.0},
-    ADf{myADfCaseParametersD.template get<DOMAIN_EXTENT>()[2] / 2.0}};
-    });
+    optiParameters.set<optimizer::EPS>(1e-16);
+    optiParameters.set<optimizer::MAX_OPTIMIZATION_STEPS>(10);
+    optiParameters.set<linesearch::INITIAL_STEP_SIZE>(0.01);
+    optiParameters.set<linesearch::MAX_STEP_ATTEMPTS>(10);
+    optiParameters.set<linesearch::STEP_CONDITION>("StrongWolfe");
+    optiParameters.set<optimizer::VERBOSE>(true);
+    optiParameters.set<optimizer::LOG_FILE_NAME>("log");
+    optiParameters.set<optimizer::WITH_UPPER_BOUND>(true);
+    optiParameters.set<optimizer::UPPER_BOUND>(0.19);
+    optiParameters.set<optimizer::WITH_LOWER_BOUND>(true);
+    optiParameters.set<optimizer::LOWER_BOUND>(0.01);
+    optiParameters.set<optimizer::CONTROL_EPS>(0.);
   }
+
   auto mesh = createMesh(myCaseParametersD);
   auto ADfmesh = createMesh(myADfCaseParametersD);
   MyCase myCase(myCaseParametersD, mesh);
@@ -437,11 +431,14 @@ int main( int argc, char* argv[] ) {
   optiCase.setCase<Controlled>(myCase);
   optiCase.setCase<Derivatives>(myADfCase);
   setInitialControls<MyCase>(optiCase);
-  optiCase.setObjective(computeObjective<MyCase>,
-                        computeObjective<MyADfCase>);
+
+  optiCase.setObjective([](auto& optiCase, auto name) {
+    return computeObjective(optiCase, name);
+  });
+
   OptimizerLBFGS<MyCase::value_t,std::vector<MyCase::value_t>> optimizer(
-    2, 1.e-16, 10, .01, 10, "StrongWolfe", 20, 1.e-4, true, "", "log",
-    true, 0.19, true, 0.01, false, 0., true,
-    {OptimizerLogType::value, OptimizerLogType::control, OptimizerLogType::derivative});
+    2, optiParameters,
+    {OptimizerLogType::objective, OptimizerLogType::control, OptimizerLogType::derivative}
+  );
   optimizer.optimize(optiCase);
 }

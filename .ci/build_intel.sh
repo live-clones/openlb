@@ -1,17 +1,21 @@
-#!/bin/bash
+#!/usr/bin/env bash
 
-NCORES=${SLURM_CPUS_ON_NODE:-4}
+# Intel oneAPI C++ (icpx) compile coverage in the stock public hpckit image
+# (intel/oneapi-hpckit). Non-MPI CPU build, no SYCL offload.
 
-module purge
-module load compiler/intel/2024.0_llvm
-icpx -v
+set -euo pipefail
 
-cp config/cpu_horeka_intel.mk config.mk
+if ! command -v icpx >/dev/null 2>&1 && [ -f /opt/intel/oneapi/setvars.sh ]; then
+    # shellcheck disable=SC1091
+    source /opt/intel/oneapi/setvars.sh >/dev/null 2>&1
+fi
 
-# Removal of possible leftovers since we use the shell executor and I don't trust the gitlab-runner's cleanup
+icpx --version | head -1
+
+NCORES=${NCORES:-4}
+
+cp config/cpu_intel_ci.mk config.mk
 make clean-all
 
-echo "Running make with $NCORES cores."
-
-make -j$NCORES && \
-make -j$NCORES samples FEATURES=CIPIPELINE
+make -j"$NCORES"
+make -j"$NCORES" samples FEATURES=CIPIPELINE

@@ -22,6 +22,7 @@
 */
 
 #include "olbInit.h"
+#include "utilities/performanceProfiler.h"
 #include <exception>
 #include <iostream>
 #include <cstdlib>
@@ -33,6 +34,12 @@ namespace singleton {
 ThreadPool& pool()
 {
   static ThreadPool instance;
+  return instance;
+}
+
+logging::Recorder& profiling()
+{
+  static logging::Recorder instance;
   return instance;
 }
 

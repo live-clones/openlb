@@ -28,8 +28,11 @@
 #include "utilities/typeMap.h"
 
 #include "core/concepts.h"
+#include "core/meta.h"
 
 #include <stdexcept>
+#include <ostream>
+#include <type_traits>
 
 namespace olb {
 
@@ -127,7 +130,14 @@ struct AbstractParameters {
     }
   };
 
+  /// Print each parameter FIELD and its host-side value; pointer fields as shape only
+  virtual void describe(std::ostream& out) const { }
+
 };
+
+/// Print each FIELD of a parameter set and its host-side value (pointer fields as shape only)
+template <concepts::BaseType T, concepts::Descriptor DESCRIPTOR, typename PARAMETERS_D>
+void describeParameters(const PARAMETERS_D& parameters, std::ostream& out);
 
 /// Set of FIELD-valued parameters
 template <concepts::BaseType T, concepts::Descriptor DESCRIPTOR, concepts::Field... FIELDS>
@@ -187,11 +197,24 @@ struct StaticParametersD final : public AbstractParameters<T,DESCRIPTOR>
     return static_cast<ParameterD<T,DESCRIPTOR,FIELD>*>(this)->write(value);
   };
 
+  template <concepts::Field FIELD>
+  auto getOrFallback(const typename ParameterD<T,DESCRIPTOR,FIELD>::data_t& fallback) const any_platform {
+    if constexpr (fields_t::template contains<FIELD>()) {
+      return this->template get<FIELD>();
+    } else {
+      return fallback;
+    }
+  }
+
   template <typename F>
   void forEach(F f) any_platform {
     fields_t::for_each([f,this](auto id) {
       f(get<typeof(id).type>());
     });
+  }
+
+  void describe(std::ostream& out) const override {
+    describeParameters<T,DESCRIPTOR>(*this, out);
   }
 
 };
@@ -219,8 +242,10 @@ auto makeParametersD(MAP&&... args) {
           fieldArray.getPlatform(),
           &fieldArray.asColumnVectorBase(),
           [&](auto* concreteFieldArray) {
-            if constexpr (std::remove_reference_t<decltype(*concreteFieldArray)>::platform == Platform::GPU_CUDA
-                 || std::remove_reference_t<decltype(*concreteFieldArray)>::platform == Platform::GPU_HIP
+            const Platform platform = std::remove_reference_t<decltype(*concreteFieldArray)>::platform;
+            if constexpr (   platform == Platform::GPU_CUDA
+                          || platform == Platform::GPU_HIP
+                          || platform == Platform::GPU_SYCL
                 ) {
               FieldD<T,DESCRIPTOR,field_t> fieldPtr{};
               for (unsigned iD=0; iD < concreteFieldArray->d; ++iD) {
@@ -278,6 +303,45 @@ struct CellFieldForDescriptorHelper {
 template <concepts::BaseType T, concepts::Descriptor DESCRIPTOR>
 using CellFieldsForDescriptorD = typename CellFieldForDescriptorHelper<T,DESCRIPTOR>::type;
 
+
+/// Print each FIELD of a parameter set and its host-side value (pointer fields as shape only)
+template <concepts::BaseType T, concepts::Descriptor DESCRIPTOR, typename PARAMETERS_D>
+void describeParameters(const PARAMETERS_D& parameters, std::ostream& out) {
+  PARAMETERS_D::fields_t::for_each([&](auto id) {
+    using FIELD = typename decltype(id)::type;
+    out << "   " << fields::name<FIELD>() << " = ";
+    if constexpr (std::is_pointer_v<typename FIELD::template value_type<T>>) {
+      out << "<device ptr>[" << DESCRIPTOR::template size<FIELD>() << "]";
+    } else {
+      const auto& value = parameters.template get<FIELD>();
+      // De-vectorize SIMD Packs to a scalar lane so a Pack is never streamed
+      if constexpr (requires { out << value[0][0]; } && !requires { out << value[0]; }) {
+        constexpr unsigned n = DESCRIPTOR::template size<FIELD>();
+        out << "[";
+        for (unsigned iD = 0; iD < n; ++iD) {
+          out << value[iD][0];
+          if (iD + 1 < n) out << " ";
+        }
+        out << "]";
+      } else if constexpr (util::is_adf_v<T> || util::is_adr_v<T>) {
+        if constexpr (requires { out << value.v(); }) {
+          out << value.v();
+        } else if constexpr (requires { out << value.value(); }) {
+          out << value.value();
+        } else {
+          out << "<non-printable>";
+        }
+      } else if constexpr (requires { out << value; }) {
+        out << value;
+      } else if constexpr (requires { out << value[0]; }) {
+        out << value[0];
+      } else {
+        out << "<non-printable>";
+      }
+    }
+    out << '\n';
+  });
+}
 
 /// Abstract base of ConcreteParametersD
 /**

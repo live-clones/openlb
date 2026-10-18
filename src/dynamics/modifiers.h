@@ -57,6 +57,9 @@ struct ParameterFromCell final : public CustomCollision<
   template <typename NEW_T>
   using exchange_value_type = ParameterFromCell<PARAMETER,typename DYNAMICS::template exchange_value_type<NEW_T>>;
 
+  template <typename NEW_DESCRIPTOR>
+  using exchange_descriptor = ParameterFromCell<PARAMETER,typename DYNAMICS::template exchange_descriptor<NEW_DESCRIPTOR>>;
+
   template<typename M>
   using exchange_momenta = ParameterFromCell<PARAMETER,typename DYNAMICS::template exchange_momenta<M>>;
 
@@ -102,6 +105,9 @@ struct StoreStatisticInField final : public CustomCollision<
 
   template <typename NEW_T>
   using exchange_value_type = StoreStatisticInField<typename DYNAMICS::template exchange_value_type<NEW_T>>;
+
+  template <typename NEW_DESCRIPTOR>
+  using exchange_descriptor = StoreStatisticInField<typename DYNAMICS::template exchange_descriptor<NEW_DESCRIPTOR>>;
 
   template<typename M>
   using exchange_momenta = StoreStatisticInField<typename DYNAMICS::template exchange_momenta<M>>;

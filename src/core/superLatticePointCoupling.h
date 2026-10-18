@@ -165,7 +165,6 @@ public:
       constexpr unsigned idx = COUPLEES::keys_t::template index<name_t>();
       _lattices.template set<name_t>(std::get<2*idx+1>(map));
     });
-
     auto& load = _lattices.template get<0>()->getLoadBalancer();
     auto& cGeometry = _lattices.template get<0>()->getCuboidDecomposition();
 
@@ -207,6 +206,15 @@ public:
   /// Set coupling parameter FIELD
   template <typename FIELD>
   void setParameter(typename AbstractCouplingO<COUPLEES>::template FieldD<FIELD>&& field)
+  {
+    auto& load = _lattices.template get<0>()->getLoadBalancer();
+    for (int iC = 0; iC < load.size(); ++iC) {
+      _block[iC]->getParameters().template set<FIELD>(std::forward<decltype(field)>(field));
+    }
+  }
+
+  template <typename FIELD>
+  void setParameter(const typename AbstractCouplingO<COUPLEES>::template FieldD<FIELD>& field)
   {
     auto& load = _lattices.template get<0>()->getLoadBalancer();
     for (int iC = 0; iC < load.size(); ++iC) {

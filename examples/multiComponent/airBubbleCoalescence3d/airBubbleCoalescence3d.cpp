@@ -392,7 +392,7 @@ void getResults( MyCase& myCase,
     SuperIdentity3D<T,T> velocity( C_u*velocityL );
     velocity.getName() = "velocity";
 
-    SuperLatticeExternalScalarField3D<T, DESCRIPTOR, SCALAR> bulkPressureL( sLattice1 );
+    SuperLatticeField3D<T, DESCRIPTOR, SCALAR> bulkPressureL( sLattice1 );
     SuperIdentity3D<T,T> bulkPressure( C_p*bulkPressureL );
     bulkPressure.getName() = "bulkPressure";
 
@@ -501,7 +501,6 @@ int main( int argc, char *argv[] )
     myCaseParameters.set<RHO0_V >({0., 0., 0.});
     myCaseParameters.set<VLE    >({0., 0., 0., 0., 0., 0., 0., 0.});
   }
-  myCaseParameters.fromCLI(argc, argv);
 
   /// === Step 3: Create Mesh ===
   Mesh mesh = createMesh(myCaseParameters);

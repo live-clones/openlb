@@ -6,7 +6,7 @@
 # `script/balancing/examples/balance_nozzle.py` notebook.
 #
 # Case must be built with CPU_SIMD and GPU_CUDA in hybrid mode,
-# mixed config recommended. See `env-heterogeneity` in `flake.nix`.
+# mixed config recommended. See `heterogeneity` in `flake.nix`.
 #
 # This is experimental. Only use if you have HPC experience.
 # When in doubt ignore this file and use homogeneous MPI-only

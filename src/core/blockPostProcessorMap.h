@@ -31,8 +31,14 @@
 #include "postProcessing.h"
 #include "cse/wrapper.h"
 #include "introspection.h"
+#include "momentsDemand.h"
 
 namespace olb {
+
+/// Ordered: Provision precedes Consume at equal priority.
+enum class SubPhase { Provision, Consume };
+
+using PostProcessorPriority = std::pair<int,SubPhase>;
 
 template <typename T, typename DESCRIPTOR, typename OPERATOR>
 struct ConcretizableBlockO {
@@ -65,13 +71,14 @@ protected:
   const OperatorScope _scope;
   const std::string _name;
 
-  std::function<AbstractBlockO*(Platform)> _constructor;
+  meta::function<AbstractBlockO*(Platform)> _constructor;
   /// Returns the set of all accessed fields
-  std::function<std::set<FieldTypePromise<T,DESCRIPTOR>>()> _accessedFields;
+  meta::function<std::set<FieldTypePromise<T,DESCRIPTOR>>()> _accessedFields;
+  meta::function<std::vector<MomentsDemand<DESCRIPTOR::d>>()> _momentsDemand;
 
   const bool _isOptimizationAvailable;
-  std::function<std::optional<std::size_t>()> _inspectArithmeticOperationCount;
-  std::function<std::optional<bool>()> _inspectOptimizability;
+  meta::function<std::optional<std::size_t>()> _inspectArithmeticOperationCount;
+  meta::function<std::optional<bool>()> _inspectOptimizability;
 
 public:
   template <typename OPERATOR>
@@ -93,6 +100,9 @@ public:
       } else {
         throw std::domain_error("Can not introspect the introspection");
       }
+    }),
+    _momentsDemand([]() -> std::vector<MomentsDemand<DESCRIPTOR::d>> {
+      return getMomentsDemandOf<DESCRIPTOR::d,OPERATOR>();
     }),
     _isOptimizationAvailable{operators::is_cse_optimized<OPERATOR,DESCRIPTOR>::value},
     _inspectArithmeticOperationCount([]() -> std::optional<std::size_t> {
@@ -141,6 +151,10 @@ public:
 
   std::set<FieldTypePromise<T,DESCRIPTOR>> accessedFields() const {
     return _accessedFields();
+  }
+
+  std::vector<MomentsDemand<DESCRIPTOR::d>> momentsDemand() const {
+    return _momentsDemand();
   }
 
   bool hasOptimizedVersion() const {
@@ -229,6 +243,18 @@ public:
     resolve(std::forward<decltype(promise)>(promise));
   }
 
+  /// Remove post processor from map, returns whether one was removed
+  bool remove(const PostProcessorPromise<T,DESCRIPTOR>& promise)
+  {
+    return _map.erase(promise.id()) > 0;
+  }
+
+  /// Returns true if map holds no post processors
+  bool empty() const
+  {
+    return _map.empty();
+  }
+
   /// Returns true if map contains post processor
   bool contains(PostProcessorPromise<T,DESCRIPTOR>&& promise) const
   {
@@ -246,6 +272,23 @@ public:
       return op->weight();
     } else {
       return 0;
+    }
+  }
+
+  /// Returns abstract parameters of an already-resolved post processor, or nullptr
+  /**
+   * Doesn't allocate, intended for introspection
+   **/
+  olb::AbstractParameters<T,DESCRIPTOR>& getParameters(
+    const PostProcessorPromise<T,DESCRIPTOR>& promise,
+    ConcreteBlockLattice<T,DESCRIPTOR,PLATFORM>& block) const {
+    auto iter = _map.find(promise.id());
+    if (iter != _map.end()) {
+      const auto& [_, op] = std::get<1>(*iter);
+      return op->getParameters(block);
+    } else {
+      static StaticParametersD<T,DESCRIPTOR> none;
+      return none;
     }
   }
 
@@ -274,18 +317,15 @@ public:
    **/
   void apply()
   {
+    // Post processors are dispatched asynchronously per block (on GPU: into
+    // separate streams) so that blocks run concurrently. The device-wide join
+    // is performed once per stage at the start of
+    // SuperLattice::executePostProcessors, not per block here. Synchronizing
+    // per block would serialize the whole device and defeat the concurrency.
     for (auto& [_, value] : _map) {
       auto& [promise, postProcessor] = value;
       postProcessor->apply(_lattice);
     }
-
-    #ifdef PLATFORM_GPU_CUDA
-    gpu::cuda::device::synchronize();
-    #endif
-
-    #ifdef PLATFORM_GPU_HIP
-    gpu::hip::device::synchronize();
-    #endif
   }
 
 };

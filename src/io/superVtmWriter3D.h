@@ -47,14 +47,19 @@ namespace olb {
  * This file links cuboids ('vti') and represents the entire data of a single timestep.
  *
  */
+enum class VtkDataMode {
+  PointData,
+  CellData
+};
+
 template<typename T, typename OUT_T=float, typename W=T>
 class SuperVTMwriter3D {
 public:
   /// Construct writer for functor output
-  SuperVTMwriter3D( const std::string& name, int overlap = 1, bool binary=true, bool compress=true );
+  SuperVTMwriter3D( const std::string& name, int overlap = 1, bool binary=true, bool compress=true, VtkDataMode mode = VtkDataMode::PointData );
   /// Construct writer for CuboidDecomposition3D debugging
   SuperVTMwriter3D( CuboidDecomposition<T,3>& cGeometry,
-                    const std::string& name, int overlap = 1, bool binary=true, bool compress=true );
+                    const std::string& name, int overlap = 1, bool binary=true, bool compress=true, VtkDataMode mode = VtkDataMode::PointData );
   ///  writes functors stored in pointerVec
   ///  every process writes a vti file with data for each of its cuboids
   ///  the vti files are linked in a pvd file
@@ -67,7 +72,10 @@ public:
   void writeVTI(int iT, int iCloc);
   ///  writes the vti file for cuboid iCloc and global name iGlob at timestep iT
   void writeVTI(int iT, int iCloc, int iGlob);
-
+  void processIdArray(
+      const std::string& fullName,
+      int processId,
+      const Vector<int,3>& extent1);
   ///  writes functor instantaneously, same vti-pvd file structure as above
   void write(SuperF3D<T,W>& f, int iT=0);
   void write(std::shared_ptr<SuperF3D<T,W>> ptr_f, int iT=0);
@@ -130,6 +138,10 @@ private:
   bool _binary;
   ///  writing data zLib compressed
   bool _compress;
+  ///  UInt64 header for 64-bit machine / UInt32 for 32-bit machine
+  std::string _headerType;
+  ///  point data or cell data mode
+  VtkDataMode _dataMode;
 
 };
 

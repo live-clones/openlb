@@ -1,7 +1,7 @@
 /*  Lattice Boltzmann sample, written in C++, using the OpenLB
  *  library
  *
- *  Copyright (C) 2022 Florian Raichle
+ *  Copyright (C) 2026 Florian Raichle, Shota Ito
  *  E-mail contact: info@openlb.net
  *  The most recent release of OpenLB can be downloaded at
  *  <http://www.openlb.net/>
@@ -104,6 +104,34 @@ struct AdsorptionFullCoupling3D {
     cellLoading.template setField<descriptors::SOURCE>(reactionRates[1]);
     cellSolute.template setField<descriptors::SOURCE>(-reactionRates[0]);
 
+   }
+};
+
+/// Coupling for adsorption reaction in a batch reactor without fluid flow
+template <typename ADSORPTION_REACTION>
+struct AdsorptionBatchCoupling3D {
+  using reaction_t = ADSORPTION_REACTION;
+  static constexpr OperatorScope scope = OperatorScope::PerCellWithParameters;
+
+  using parameters = typename ADSORPTION_REACTION::parameters;
+
+  template <typename CELLS, typename PARAMETERS>
+  void apply(CELLS& cells, PARAMETERS& parameters) any_platform
+  {
+    using V = typename CELLS::template value_t<names::Concentration0>::value_t;
+
+    auto& cellParticle = cells.template get<names::Concentration0>();
+    auto& cellSolute = cells.template get<names::Concentration1>();
+    auto& cellLoading = cells.template get<names::Concentration2>();
+
+    //computation of the adsorption source terms for solute and load lattices
+    V soluteConcentration = cellSolute.computeRho();
+    V particleConcentration = cellParticle.computeRho();
+    V particleLoading = cellLoading.computeRho();
+
+    Vector<V, 2> reactionRates = ADSORPTION_REACTION().getReactionRate(soluteConcentration, particleLoading, particleConcentration, parameters);
+    cellLoading.template setField<descriptors::SOURCE>(reactionRates[1]);
+    cellSolute.template setField<descriptors::SOURCE>(-reactionRates[0]);
    }
 };
 

@@ -63,9 +63,10 @@ PowerLaw2D<T>::PowerLaw2D(SuperGeometry<T,2>& superGeometry, int material, T max
   this->getName() = "PowerLaw2D";
   _axisPoint.resize(2);
   _axisDirection.resize(2);
-  _axisPoint = superGeometry.getStatistics().getCenterPhysR(material);
-  std::vector<int> discreteNormal = superGeometry.getStatistics().computeDiscreteNormal(material);
+  auto axisPoint = superGeometry.getStatistics().getCenterPhysR(material);
+  auto discreteNormal = superGeometry.getStatistics().computeDiscreteNormal(material);
   for (int i = 0; i < 2; ++i) {
+    _axisPoint[i] = axisPoint[i];
     _axisDirection[i] = discreteNormal[i];
   }
 

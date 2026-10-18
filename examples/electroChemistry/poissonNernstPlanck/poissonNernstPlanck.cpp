@@ -44,26 +44,26 @@ int main(int argc, char* argv[]) {
     myCaseParameters.set<DIELECTRIC_CONST>(6.95e-10);
     myCaseParameters.set<C_0>(0.01);
     myCaseParameters.set<PSI_BC>(-0.02);
-    myCaseParameters.set<DEBYE>([&] {
-      return util::debyeLength<T>(myCaseParameters.get<DIELECTRIC_CONST>(),
-                                  myCaseParameters.get<VALENCE>(),
-                                  myCaseParameters.get<parameters::TEMPERATURE>(),
-                                  myCaseParameters.get<C_0>());
+    myCaseParameters.set<DEBYE>([](MyCase::ParametersD& p) {
+      return util::debyeLength<T>(p.get<DIELECTRIC_CONST>(),
+                                  p.get<VALENCE>(),
+                                  p.get<parameters::TEMPERATURE>(),
+                                  p.get<C_0>());
     });
-    myCaseParameters.set<DOMAIN_EXTENT>([&] {
-      return Vector<T,3>(13./4.*myCaseParameters.get<DEBYE>(), 13.*myCaseParameters.get<DEBYE>(),0.);
+    myCaseParameters.set<DOMAIN_EXTENT>([](MyCase::ParametersD& p) {
+      return Vector<T,3>(13./4.*p.get<DEBYE>(), 13.*p.get<DEBYE>(),0.);
     });
-    myCaseParameters.set<CB_CATION>([&] {
-      return myCaseParameters.get<C_0>()*util::exp(
-             -physConstants::elementaryCharge<T>()*myCaseParameters.get<VALENCE>()
-             *myCaseParameters.get<PSI_BC>()/physConstants::boltzmannConstant<T>()
-             /myCaseParameters.get<parameters::TEMPERATURE>());
+    myCaseParameters.set<CB_CATION>([](MyCase::ParametersD& p) {
+      return p.get<C_0>()*util::exp(
+             -physConstants::elementaryCharge<T>()*p.get<VALENCE>()
+             *p.get<PSI_BC>()/physConstants::boltzmannConstant<T>()
+             /p.get<parameters::TEMPERATURE>());
     });
-    myCaseParameters.set<CB_ANION>([&] {
-      return myCaseParameters.get<C_0>()*util::exp(
-             physConstants::elementaryCharge<T>()*myCaseParameters.get<VALENCE>()
-             *myCaseParameters.get<PSI_BC>()/physConstants::boltzmannConstant<T>()
-             /myCaseParameters.get<parameters::TEMPERATURE>());
+    myCaseParameters.set<CB_ANION>([](MyCase::ParametersD& p) {
+      return p.get<C_0>()*util::exp(
+             physConstants::elementaryCharge<T>()*p.get<VALENCE>()
+             *p.get<PSI_BC>()/physConstants::boltzmannConstant<T>()
+             /p.get<parameters::TEMPERATURE>());
     });
     myCaseParameters.set<ERROR_NORMS_PSI>({0.,0.,0.});
     myCaseParameters.set<ERROR_NORMS_CATION>({0.,0.,0.});
@@ -73,7 +73,6 @@ int main(int argc, char* argv[]) {
     myCaseParameters.set<POISSON_LOOP_PER_TOTAL_TIME_STEP>(5);
     myCaseParameters.set<parameters::INTERVAL>(0.001);
   }
-  myCaseParameters.fromCLI(argc, argv);
 
   /// === Step 3: Create Mesh ===
   Mesh mesh = createMesh(myCaseParameters);

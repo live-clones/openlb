@@ -187,6 +187,11 @@ public:
   {
     return _maxDist2;
   }
+  /// Rigidly rotate every triangle about `pivot` around unit `axis` by `angle` (radians),
+  /// refreshing each triangle's normal/ray precompute and the mesh bounding box.
+  void rotate(T angle, const Vector<T,3>& axis, const Vector<T,3>& pivot);
+  /// Recompute _min/_max from the current triangles (e.g. after moving points).
+  void recomputeBoundingBox();
   /// Prints console output
   void print(bool full = false);
   /// Writes STL mesh in Si units
@@ -302,6 +307,9 @@ Vector<T,3> evalSurfaceNormalForPseudoNormal(const Vector<T,3>& origin, Vector<T
   T _stlSize;
   /// Overlap increases Octree radius by _overlap
   T _overlap;
+  /// Ray-indication method and requested tree size, kept so the tree can be rebuilt (see buildTree)
+  RayMode _method;
+  T _treeMax;
   /// Pointer to tree
   Octree<T>* _tree;
   /// The filename
@@ -312,6 +320,10 @@ Vector<T,3> evalSurfaceNormalForPseudoNormal(const Vector<T,3>& origin, Vector<T
   bool _verbose;
   /// The OstreamManager
   mutable OstreamManager clout;
+
+  /// Build (or rebuild) the octree and voxel indication from the current mesh (shared by the
+  /// constructors and rotate()). Frees any existing tree first.
+  void buildTree();
 
 public:
   /**
@@ -376,27 +388,46 @@ public:
   }
 
   std::pair<Vector<T,3>,T> getY1(Vector<T,3> physR) {
-    bool inside{};
-    if (operator()(&inside, physR.data())) {
-      if (!inside) {
-        auto normal = getSurfaceNormal(physR);
-        return {normal, _voxelSize};
-        if (normal != 0) {
-          T d{};
-          if (distance(d, physR, -1*normal)) {
-            return {normal, util::min(_voxelSize, util::abs(d))};
-          } else {
-            return {normal, _voxelSize};
-          }
-        } else {
-          return {0, 0};
+    std::vector<unsigned int> nearbyTriangles;
+
+    // 1. Unconditionally grab all nearby triangles from the 27-leaf neighborhood
+    for (int iPop = 0; iPop < descriptors::D3Q27<>::q; ++iPop) {
+      auto c_i = descriptors::c<descriptors::D3Q27<>>(iPop);
+      Vector<T,3> pt = physR + c_i * _voxelSize;
+      if (auto tree = _tree->find(pt)) {
+        for (auto iTri : tree->getTriangles()) {
+          nearbyTriangles.push_back(iTri);
         }
-      } else {
-        return {0, 0};
       }
-    } else {
-      return {0, 0};
     }
+
+    // 2. Find exact distance to the closest triangle
+    if (!nearbyTriangles.empty()) {
+      std::sort(nearbyTriangles.begin(), nearbyTriangles.end());
+      nearbyTriangles.erase(std::unique(nearbyTriangles.begin(), nearbyTriangles.end()), nearbyTriangles.end());
+
+      T minDist = std::numeric_limits<T>::max();
+      Vector<T,3> bestNormal{0, 0, 0};
+
+      for (unsigned int iTriangle : nearbyTriangles) {
+        auto& triangle = _mesh.getTri(iTriangle);
+        Vector<T,3> closeR = triangle.closestPointTo(physR);
+        T dist = norm(closeR - physR); // Absolute distance, works even if slightly inside
+
+        if (dist < minDist) {
+          minDist = dist;
+          bestNormal = triangle.getNormal();
+        }
+      }
+
+      // Clamp distance:
+      // Min: 1.01e-3 to clear U_TAU evaluation cutoff in WM
+      // Max: 2.0 = sqrt(3) with some leeway
+      T boundedDistance = util::max(T(1.01e-3) * _voxelSize, util::min(T(2.0) * _voxelSize, minDist));
+      return {bestNormal, boundedDistance};
+    }
+
+    return {0, 0};
   }
 
   T distanceToClosestSurfacePoint(Vector<T,3> physR) {
@@ -486,6 +517,10 @@ public:
   {
     return _mesh;
   };
+
+  /// Rigidly rotate the geometry about `pivot` around unit `axis` by `angle` (radians) and
+  /// rebuild the octree/voxelization. Pivot is in SI units (e.g. 0.5*(getMesh().getMin()+getMax())).
+  void rotate(T angle, const Vector<T,3>& axis, const Vector<T,3>& pivot);
 
 };
 

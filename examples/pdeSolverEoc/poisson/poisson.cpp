@@ -357,7 +357,6 @@ int main(int argc, char* argv[]) {
     myCaseParameters.set<HAS_CONVERGED>(false);
     myCaseParameters.set<ERROR_NORMS>({0.,0.,0.});
   }
-  myCaseParameters.fromCLI(argc, argv);
 
   gplot.setLabel("Resolution test", "average Error");
 

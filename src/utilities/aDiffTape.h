@@ -26,6 +26,7 @@
 
 #include <cstdint>
 #include <vector>
+#include "utilities/aDiff.h"
 
 namespace olb {
 
@@ -34,7 +35,7 @@ namespace util {
 namespace ADtape {
 
 template<typename T_Tape>
-struct ActiveType {
+struct ActiveType : public AD {
   using Tape = T_Tape;
   using Real = typename Tape::Real;
   using Gradient = Real;
@@ -145,7 +146,7 @@ using std::atan2;
 using std::hypot;
 using std::max;
 using std::min;
-using std::pow;
+using olb::util::pow;
 
 BINARY_OPERATOR(operator+, val1 + val2, 1.0, 1.0)
 BINARY_OPERATOR(operator-, val1 - val2, 1.0, -1.0)
@@ -367,6 +368,26 @@ inline auto sqrt(const util::ADtape::ActiveType<TAPE>& a)
 {
   return util::ADtape::sqrt(a);
 }
+
+template <class U, class TAPE>
+  requires (std::is_integral_v<U> || std::is_floating_point_v<U>)
+inline auto pow(const util::ADtape::ActiveType<TAPE>& a, const U& b)
+{
+  return util::ADtape::pow(a, b);
+}
+
+template <typename T>
+struct is_adr {
+  static constexpr bool value = false;
+};
+
+template <typename T>
+struct is_adr<ADtape::ActiveType<ADtape::Tape<T>>> {
+  static constexpr bool value = true;
+};
+
+template <typename T>
+inline constexpr bool is_adr_v = is_adr<T>::value;
 
 }
 

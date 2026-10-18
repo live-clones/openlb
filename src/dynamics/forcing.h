@@ -312,7 +312,7 @@ struct CorrectedLiang {
         }
         forceTerm *= descriptors::t<V,DESCRIPTOR>(iPop)*descriptors::invCs2<V,DESCRIPTOR>();
         forceTerm *= V{1} - omega * V{0.5};
-        cell[iPop] += forceTerm;
+        cell[iPop] += forceTerm; //* mdot/rho;
       }
       return {rho, util::normSqr<V,DESCRIPTOR::d>(u)};
     };
@@ -427,6 +427,49 @@ struct ConservativePhaseField {
 
   template <typename DESCRIPTOR, typename MOMENTA, typename EQUILIBRIUM, typename COLLISION>
   using combined_parameters = typename COLLISION::parameters;
+};
+
+struct ConservativePhaseFieldMassTransfer {
+  static std::string getName() {
+    return "ConservativePhaseFieldMassTransferForcing";
+  }
+
+  template <typename DESCRIPTOR, typename MOMENTA>
+  using combined_momenta = typename MOMENTA::template type<DESCRIPTOR>;
+
+  template <typename DESCRIPTOR, typename MOMENTA, typename EQUILIBRIUM>
+  using combined_equilibrium = typename EQUILIBRIUM::template type<DESCRIPTOR,MOMENTA>;
+
+  template <typename DESCRIPTOR, typename MOMENTA, typename EQUILIBRIUM, typename COLLISION>
+  struct combined_collision {
+    using MomentaF   = typename MOMENTA::template type<DESCRIPTOR>;
+    using CollisionO = typename COLLISION::template type<DESCRIPTOR,MOMENTA,EQUILIBRIUM>;
+
+    static_assert(COLLISION::parameters::template contains<descriptors::OMEGA>(),
+                  "COLLISION must be parametrized using relaxation frequency OMEGA");
+
+    template <typename CELL, typename PARAMETERS, typename V=typename CELL::value_t>
+    CellStatistic<V> apply(CELL& cell, PARAMETERS& parameters) any_platform {
+      V phi = MomentaF().computeRho(cell);
+      CollisionO().apply(cell, parameters);
+      const V omega = parameters.template get<descriptors::OMEGA>();
+      const auto force = cell.template getField<descriptors::FORCE>();
+      const auto u = cell.template getField<descriptors::VELOCITY>();
+      lbm<DESCRIPTOR>::addAllenCahnForce(cell, omega, force); // Allen-Cahn force term, Eq. (17): F_i^h
+      // |∇φ| is precomputed by GradPhiStatistics into STATISTIC[1] before each collision
+      // S = -ṁ*/ρ₁, Eq. (12); ṁ* = coeff * |∇φ|, Eq. (5)
+      const V source = -parameters.template get<descriptors::MDOT0_COEFF>()
+                     * cell.template getFieldComponent<descriptors::STATISTIC>(1);
+      cell.template setField<descriptors::MDOT0>(source);
+      for (int iPop=0; iPop < DESCRIPTOR::q; ++iPop) {
+        cell[iPop] += descriptors::t<V,DESCRIPTOR>(iPop) * source; // simplified Eq. (20): F_i^{h,P} ≈ ω_i * S
+      }
+      return {phi, util::normSqr<V,DESCRIPTOR::d>(u)};
+    };
+  };
+
+  template <typename DESCRIPTOR, typename MOMENTA, typename EQUILIBRIUM, typename COLLISION>
+  using combined_parameters = typename COLLISION::parameters::template push<descriptors::MDOT0_COEFF>;
 };
 
 struct AllenCahn {

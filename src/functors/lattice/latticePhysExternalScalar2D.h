@@ -59,7 +59,7 @@ class BlockLatticePhysExternalScalar2D final : public BlockLatticeF2D<T,DESCRIPT
 public:
   BlockLatticePhysExternalScalar2D(BlockLattice<T,DESCRIPTOR>& blockLattice,
                                    T convFactorToPhysUnits,
-                                   std::string name="physExtScalarField");
+                                   std::string name);
   bool operator() (T output[], const int input[]) override;
 private:
   const T _convFactorToPhysUnits;

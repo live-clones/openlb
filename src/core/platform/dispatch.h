@@ -63,6 +63,10 @@ inline auto callUsingConcretePlatform(Platform platform, typename CONCRETIZABLE:
     case Platform::GPU_HIP:
       return f(static_cast<typename CONCRETIZABLE::template type<Platform::GPU_HIP>*>(ptr));
 #endif
+#ifdef PLATFORM_GPU_SYCL
+    case Platform::GPU_SYCL:
+      return f(static_cast<typename CONCRETIZABLE::template type<Platform::GPU_SYCL>*>(ptr));
+#endif
     default:
       throw std::invalid_argument("Invalid PLATFORM");
     }
@@ -107,6 +111,11 @@ inline void callUsingConcretePlatform(Platform platform, F f)
     f(meta::value<Platform::GPU_HIP>{});
     break;
 #endif
+#ifdef PLATFORM_GPU_SYCL
+  case Platform::GPU_SYCL:
+    f(meta::value<Platform::GPU_SYCL>{});
+    break;
+#endif
   default:
     throw std::invalid_argument("Invalid PLATFORM");
   }
@@ -137,6 +146,10 @@ typename CONCRETIZABLE::base_t* constructUsingConcretePlatform(Platform platform
 #ifdef PLATFORM_GPU_HIP
     case Platform::GPU_HIP:
       return new typename CONCRETIZABLE::template type<Platform::GPU_HIP>(std::forward<decltype(args)>(args)...);
+#endif
+#ifdef PLATFORM_GPU_SYCL
+    case Platform::GPU_SYCL:
+      return new typename CONCRETIZABLE::template type<Platform::GPU_SYCL>(std::forward<decltype(args)>(args)...);
 #endif
     default:
       throw std::invalid_argument("Invalid PLATFORM");

@@ -33,9 +33,11 @@
 #include "optimization/optimizers/optimizerLineSearch.h"
 #include "optimization/optimizers/optimizerLBFGS.h"
 #include "optimization/optimizers/optimizerSteepestDecent.h"
+#include "optimization/optimizers/optimizerNLopt.h"
 
 #include "optimization/dynamics/discreteDualDynamics.h"
 #include "optimization/dynamics/continuousDualDynamics.h"
+#include "optimization/dynamics/adjointBoussinesqCoupling.h"
 
 #include "optimization/primitives/primitives.h"
 #include "optimization/core/optimalitySystem.h"

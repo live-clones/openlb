@@ -34,18 +34,19 @@ DEP_FILES := $(CPP_FILES:.cpp=.d)
 INCLUDE_FLAGS := -I$(subst $(EMPTY) $(EMPTY), -I,$(INCLUDE_DIRS))
 
 %.d: $(CPP_FILES)
-	@$(CXX) $(CXXFLAGS) $(INCLUDE_FLAGS) $< -MM -MT $(@:.d=.o) >$@
+	@$(CXX) $(CXXFLAGS) $(DEPFLAGS) $(INCLUDE_FLAGS) $< -MM -MT $(@:.d=.o) >$@
 
 %.o: %.cpp
 	$(CXX) $(CXXFLAGS) $(INCLUDE_FLAGS) -c -o $@ $<
 
 build/missing.txt: $(OBJ_FILES)
 	mkdir -p build
-	$(CXX) $^ $(LDFLAGS) -lolbcore 2>&1 | grep -oP ".*undefined reference to \`\K[^']+\)" | sort | uniq > $@
+	$(CXX) $^ $(LDFLAGS) -lolbcore 2>&1 | c++filt --no-recurse-limit | grep -oP "undefined reference to \`\K[^']+\)" | sort | uniq > $@
 
 EXPLICIT_METHOD_INSTANTIATION := \
 	FieldTypeRegistry \
 	StatisticsPostProcessor \
+	FieldStatisticO \
 	IntegratePorousElementFieldsO \
 	BlockLatticeFieldReduction \
 	checkPlatform \
@@ -79,12 +80,20 @@ EXPLICIT_CLASS_INSTANTIATION_LINKER := \
 	ConcreteParametersD \
 	unique_ptr \
 	StatisticsPostProcessor \
+	FieldStatisticO \
 	IntegratePorousElementFieldsO \
-	BlockLatticeFieldReduction
+	BlockLatticeFieldReduction \
+	Event
 
-OLB_MIXED_MODE_INCLUDE := \#include <olb.h>\n
+CPP_HASH := \#
+OLB_MIXED_MODE_INCLUDE := ${CPP_HASH}include <olb.h>\n
 ifdef OLB_MIXED_MODE_INCLUDE_CPP
-	OLB_MIXED_MODE_INCLUDE := $(CPP_FILES:%=\n#include "../%"\n)
+	OLB_MIXED_MODE_INCLUDE := $(CPP_FILES:%=\n${CPP_HASH}include "../%"\n)
+endif
+
+ifeq ($(OLB_MIXED_MODE_INCLUDE_LOCAL_HEADERS), ON)
+	LOCAL_HEADER_FILES := $(wildcard *.h)
+	OLB_MIXED_MODE_INCLUDE += $(LOCAL_HEADER_FILES:%=\n${CPP_HASH}include "../%"\n)
 endif
 
 build/olbcuda.cu: build/missing.txt
@@ -97,6 +106,7 @@ build/olbcuda.cu: build/missing.txt
 	cat build/missing.txt \
 	| grep '$(subst $() $(),\|,$(EXPLICIT_METHOD_INSTANTIATION))' \
 	| grep -wv '.*~.*\|FieldTypeRegistry()' \
+	| grep -v 'FieldTypeRegistry<.*(olb::Platform)[0-9]>::[[:alnum:]_]\+(' \
 	| sed -e 's/.*/template void &;/' -e 's/void void/void/' -e 's/void std::function/std::function/' >> $@
 # | xargs -0 -n1 | grep . \
 # - filtering for a set of known and automatically instantiable classes
@@ -113,12 +123,12 @@ build/olbcuda.cu: build/missing.txt
 	| sed -e 's/>::~\?[[:alnum:]]\+\[\?\]\?(.*)/>/' -e 's/.*/template class &;/' -e 's/class void/class/' \
 	| sort | uniq >> $@
 	cat build/missing.txt \
-  | sed -n 's/\(olb::ConcreteBlockCouplingO.*ConcreteBlockCouplingO.*\)/\1/p' \
-	| sed 's/.*/template &;/' \
+	| sed -n 's/\(olb::ConcreteBlockCouplingO.*ConcreteBlockCouplingO.*\)/\1/p' \
+	| sed -e 's/>::ConcreteBlockCouplingO<.*>(/>::ConcreteBlockCouplingO(/' -e 's/.*/template &;/' \
 	| sort | uniq >> $@
 # Handle FieldTypeRegistry
 	cat build/missing.txt \
-  | sed -n 's/\(olb::FieldTypeRegistry<.*(olb::Platform)[0-9]>\)::.*/\1/p' \
+	| sed -n 's/\(olb::FieldTypeRegistry<.*(olb::Platform)[0-9]>\)::.*/\1/p' \
 	| sed -e 's/.*/template class &;/' -e 's/class void/class/' \
 	| sort | uniq >> $@
 
@@ -130,6 +140,8 @@ ifneq ($(strip $(GIT_VERSION)),)
 else
 	CUDA_CXXFLAGS += -DOLB_VERSION=\"$(OLB_RELEASE)\"
 endif
+
+CUDA_CXXFLAGS += $(filter -DFEATURE_%,$(CXXFLAGS))
 
 %.o: %.cu
 	$(CUDA_CXX) $(CUDA_CXXFLAGS) $(INCLUDE_FLAGS) $(PARALLEL_FLAGS) -DPLATFORM_CPU_SISD -DPLATFORM_GPU_CUDA -Xcompiler -fPIC -c -o $@ $<

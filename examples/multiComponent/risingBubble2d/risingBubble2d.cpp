@@ -41,8 +41,8 @@ using MyCase = Case<
 
 using NSBulkDynamics = CorrectedMultiPhaseIncompressibleRLBdynamics<MyCase::value_t,MyCase::descriptor_t_of<NavierStokes>>;
 using PFBulkDynamics = ConservativePhaseFieldBGKdynamics<MyCase::value_t,MyCase::descriptor_t_of<Component1>>;
-
-using Coupling = CorrectedLiangPostProcessor;
+using MixtureRules = LinearTauViscosity;
+using Coupling = CorrectedLiangPostProcessor<MixtureRules>;
 
 namespace olb::parameters {
 
@@ -75,7 +75,6 @@ void prepareGeometry(MyCase& myCase)
   OstreamManager clout( std::cout,"prepareGeometry" );
   clout << "Prepare Geometry ..." << std::endl;
 
-  using T = MyCase::value_t;
   auto& geometry = myCase.getGeometry();
 
   geometry.rename( 0,2 );
@@ -133,8 +132,6 @@ void prepareLattice(MyCase& myCase)
   // conversion properties
   const T dx = converter.getPhysDeltaX();
   const T C_density = converter.getConversionFactorDensity();
-  const T lat_rho_l = rho_l / C_density;
-  const T lat_rho_g = rho_g / C_density;
   clout << "Lattice Surface Tension: " << sigma_lattice << " should be smaller than 0.1!" << std::endl;
 
   // define lattice Dynamics
@@ -150,7 +147,10 @@ void prepareLattice(MyCase& myCase)
   setBouzidiBoundary(latticeNS, geometry, 2, wallLocation);
   setBouzidiPhaseField<IsoPhaseFieldCurvedWall2D>(latticePF, geometry, 2, wallLocation);
 
+  auto zero = geometry.getMaterialIndicator(0);
   auto bulk = geometry.getMaterialIndicator(1);
+  auto wall = geometry.getMaterialIndicator(2);
+  auto all = geometry.getMaterialIndicator({0,1,2});
   latticePF.addPostProcessor<stage::PreCoupling>(bulk, meta::id<PhiStatistics>());
 
   auto& coupling = myCase.setCouplingOperator(
@@ -161,16 +161,20 @@ void prepareLattice(MyCase& myCase)
   );
   coupling.restrictTo(geometry.getMaterialIndicator(1));
 
-  coupling.setParameter<Coupling::SIGMA>(sigma_lattice);
-  coupling.setParameter<Coupling::W>(w);
-  coupling.setParameter<Coupling::TAUS>({tau_g,tau_l});
-  coupling.setParameter<Coupling::RHOS>({lat_rho_g, lat_rho_l});
-  coupling.setParameter<Coupling::GRAVITY>({0,-g});
+  phasefield::init<Coupling,MixtureRules>(
+    latticeNS, latticePF,    // both lattices
+    coupling, all,           // phase field coupling, all material numbers
+    wall, zero,              // wall and zero material numbers
+    sigma_lattice, w, theta, // phase field lattice parameters
+    tau_g, tau_l,            // relaxation times for mixture rule
+    rho_g/C_rho, rho_l/C_rho // lattice densities for mixture rule
+  );
+
+  coupling.setParameter<Coupling::GRAVITY>({T(0),-g});
+  coupling.setParameter<Coupling::BODY_FORCE>({T(0),T(0)});
 
   latticeNS.setParameter<descriptors::OMEGA>( 1./tau_l );
   latticePF.setParameter<descriptors::OMEGA>( 1./tau_mobil );
-  latticePF.setParameter<descriptors::INTERFACE_WIDTH>( w );
-  latticePF.setParameter<descriptors::THETA>( theta );
 
   {
     auto& communicator = latticePF.getCommunicator(stage::PreCoupling());
@@ -359,8 +363,8 @@ int main( int argc, char *argv[] )
     using T = MyCase::value_t;
     myCaseParameters.set<PHYS_CHAR_LENGTH>(40e-6);          // bubble radius [phys units]
     myCaseParameters.set<RESOLUTION      >(40);             // bubble radius [lattice units]
-    myCaseParameters.set<DOMAIN_EXTENT   >([&]{
-      return Vector<T,2> {4 * myCaseParameters.get<PHYS_CHAR_LENGTH>(), 8 * myCaseParameters.get<PHYS_CHAR_LENGTH>()};
+    myCaseParameters.set<DOMAIN_EXTENT   >([](MyCase::ParametersD& p){
+      return Vector<T,2> {4 * p.get<PHYS_CHAR_LENGTH>(), 8 * p.get<PHYS_CHAR_LENGTH>()};
     });
     myCaseParameters.set<C_RHO           >(100.);           // conversion factor density [physical units]
     myCaseParameters.set<PF_LATTICE_RELAXATION_TIME>(0.8 ); // lattice relaxation time for interface mobility [lattice units]
@@ -370,23 +374,23 @@ int main( int argc, char *argv[] )
     myCaseParameters.set<REYNOLDS        >(35);             // Reynolds number of rising bubble
     myCaseParameters.set<BOND            >(10);            // Bond number of rising bubble
     myCaseParameters.set<RISING_VELOCITY >(0.02);           // Bubble rising velocity [lattice units]
-    myCaseParameters.set<G_CONST         >([&] {
-      return myCaseParameters.get<RISING_VELOCITY>() * myCaseParameters.get<RISING_VELOCITY>() /
-             myCaseParameters.get<RESOLUTION>();
+    myCaseParameters.set<G_CONST         >([](MyCase::ParametersD& p) {
+      return p.get<RISING_VELOCITY>() * p.get<RISING_VELOCITY>() /
+             p.get<RESOLUTION>();
     });                                                     // gravity [lattice units]
-    myCaseParameters.set<LATTICE_RELAXATION_TIME>([&] {
-      return 3.*(myCaseParameters.get<RISING_VELOCITY>() * myCaseParameters.get<RESOLUTION>() / myCaseParameters.get<REYNOLDS>())
+    myCaseParameters.set<LATTICE_RELAXATION_TIME>([](MyCase::ParametersD& p) {
+      return 3.*(p.get<RISING_VELOCITY>() * p.get<RESOLUTION>() / p.get<REYNOLDS>())
              + 0.5;
     });                                                     // lattice relaxation time H2O liquid [lattice units]
-    myCaseParameters.set<TAU_VAPOR       >([&] {
-      return 10.*(myCaseParameters.get<LATTICE_RELAXATION_TIME>() - 0.5) + 0.5;
+    myCaseParameters.set<TAU_VAPOR       >([](MyCase::ParametersD& p) {
+      return 10.*(p.get<LATTICE_RELAXATION_TIME>() - 0.5) + 0.5;
     });                                                     // lattice relaxation time air gas [lattice units]
-    myCaseParameters.set<parameters::SURFACE_TENSION >([&]{
-      const T rho_l = myCaseParameters.get<RHO_LIQUID>();
-      const T C_rho = myCaseParameters.get<C_RHO>();
-      const T g = myCaseParameters.get<G_CONST>();
-      const T lat_diameter = myCaseParameters.get<RESOLUTION>();
-      const T Bo = myCaseParameters.get<BOND>();
+    myCaseParameters.set<parameters::SURFACE_TENSION >([](MyCase::ParametersD& p){
+      const T rho_l = p.get<RHO_LIQUID>();
+      const T C_rho = p.get<C_RHO>();
+      const T g = p.get<G_CONST>();
+      const T lat_diameter = p.get<RESOLUTION>();
+      const T Bo = p.get<BOND>();
       return rho_l/C_rho*g*lat_diameter*lat_diameter/Bo;
     });                                                     // surface tension from Bond number [lattice units]
     myCaseParameters.set<parameters::THETA          >(M_PI*90./180.);  // contact angle (<90 is wetting) [radians]
@@ -395,7 +399,6 @@ int main( int argc, char *argv[] )
     myCaseParameters.set<PHYS_VTK_ITER_T    >(0.0012/30.);  // vtk output interval [physical units]
     myCaseParameters.set<PHYS_STAT_ITER_T   >(0.0012/30.);  // statistics output interval [physical units]
   }
-  myCaseParameters.fromCLI(argc, argv);
 
   /// === Step 3: Create Mesh ===
   Mesh mesh = createMesh(myCaseParameters);

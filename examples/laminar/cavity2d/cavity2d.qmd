@@ -1,0 +1,6 @@
+### cavity2d
+
+This example illustrates a flow in a cuboid, lid-driven cavity.
+The 2D version also shows how to use the XML parameter files and has an example description file for OpenGPI.
+This example is available in two different versions for sequential and parallel use.
+The `cavity2dSolver` version illustrates the use of the solver class concept together with the XML parameter interface.

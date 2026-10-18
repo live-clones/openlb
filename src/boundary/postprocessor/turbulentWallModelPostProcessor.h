@@ -127,7 +127,7 @@ namespace olb {
   V newtonSpalding(Funcf f, Funcd d, Par_f & argsf, Par_d & argsd, int optArg, V convergeCrit, int iter) any_platform{
     V x = argsf[optArg];
     V x_old = argsf[optArg];
-    for(int i = 0; i<iter; i++){
+    for (int i = 0; i<iter; i++) {
       argsf[optArg] = x;
       argsd[0] = x;
       x -= f(argsf)/d(argsd);
@@ -136,8 +136,7 @@ namespace olb {
       if(util::abs(f(argsf)) < convergeCrit ){
         break;
       }
-      if(util::isnan(x)){
-         //printf("x is NAN!!,Applied x=x_old, iter i x_old=%d,%lf,%d\n",i,x_old,optArg);
+      if (util::isnan(x)) {
          x = x_old;
          break;
       }
@@ -260,7 +259,7 @@ struct TurbulentWallModelPostProcessor {
             //// NewtonApprox. u_tau
             Vector<V,7> params_u2 = {u_tau, util::abs(u_2), y2Norm, nu, u_plus, y2Norm/nu*u_tau, 2.};  // Vector for spalding wall function
             Vector<V,5> params_d2 = {u_tau, util::abs(u_2), y2Norm, nu, 2.};  // Vector for spalding derivative
-            u_tau = newtonSpalding( [](Vector<V,7> par1) { return spaldingWallFunction<V>(par1); }, [](Vector<V,5> par2) { return spaldingDerivative<V>(par2); }, params_u2, params_d2, 0, V{0.0001},20);
+            u_tau = newtonSpalding( [](Vector<V,7> par1) { return spaldingWallFunction<V>(par1); }, [](Vector<V,5> par2) { return spaldingDerivative<V>(par2); }, params_u2, params_d2, 0, V{0.0001}, 20);
           }
           cell.template setField<descriptors::U_TAU>(u_tau);
 
@@ -288,23 +287,20 @@ struct TurbulentWallModelPostProcessor {
         }
         V u_1 = u_plusF*u_tau;
         // Exchange the computed tangential boundary velocity through the modelled one
-        if(util::norm<DESCRIPTOR::d>(u_t) != 0. && u_1 > 0.){
+        if (util::norm<DESCRIPTOR::d>(u_t) != 0. && u_1 > 0.){
+          //auto ub_prev = cell.template getField<descriptors::WMVELOCITY>();
           auto ub = u_1*tangent;
           if constexpr (movingWall) {
-            ub = ub + uWall;
-            auto ub_prev = cell.template getField<descriptors::WMVELOCITY>();
-            ub = V{0.9}*ub_prev + V{0.1}*ub;
+            ub += uWall;
           }
+          //ub = V{0.}*ub_prev + V{1.}*ub;
           if constexpr (bodyForce) {
             auto force = cell.template getField<descriptors::FORCE>();
-            V u_b[DESCRIPTOR::d] { };
             for ( int iD = 0; iD < DESCRIPTOR::d; iD++ ) {
-              u_b[iD] = ub[iD];//-V(0.5)*force[iD]*tangent[iD];
+              ub[iD] = ub[iD]-V(0.5)*force[iD]*tangent[iD];
             }
-            cell.template setField<descriptors::WMVELOCITY>(u_b);
-          } else {
-            cell.template setField<descriptors::WMVELOCITY>(ub);
           }
+          cell.template setField<descriptors::WMVELOCITY>(ub);
         }
       } else {
         cell.template setField<descriptors::WMVELOCITY>(0);
@@ -397,7 +393,7 @@ struct TurbulentWallModelPostProcessor {
 // PostProcessor for fNeq from finite difference method (FDM) stress tensor for wall modelling at porous domains
 //======================================================================
 
-template<int rhoMethod>
+template<int rhoMethod, bool bodyForce = true>
 struct TurbulentWallModelPorousFneqFDMPostProcessor {
   static constexpr OperatorScope scope = OperatorScope::PerCell;
 
@@ -457,45 +453,53 @@ struct TurbulentWallModelPorousFneqFDMPostProcessor {
           V uxDx = 0, uyDx = 0, uxDy = 0, uyDy = 0;
           //----------- FDM in X-direction --------------------------------------------------//
           if (y1[0] > V(0) || cell.neighbor({-1,0}).template getField<descriptors::POROSITY>() == V(0)) {
-            V uXp[DESCRIPTOR::d] {};
-            cell.neighbor({1,0}).computeU(uXp);
+            //V uXp[DESCRIPTOR::d] {};
+            //cell.neighbor({1,0}).computeU(uXp);
+            auto uXp = cell.neighbor({1,0}).template getField<descriptors::WMVELOCITY>();
             uxDx = uXp[0] - u[0];
             uyDx = uXp[1] - u[1];
           }
           else if (y1[0] < V(0) || cell.neighbor({1,0}).template getField<descriptors::POROSITY>() == V(0)) {
-            V uXm[DESCRIPTOR::d] {};
-            cell.neighbor({-1,0}).computeU(uXm);
+            //V uXm[DESCRIPTOR::d] {};
+            //cell.neighbor({-1,0}).computeU(uXm);
+            auto uXm = cell.neighbor({-1,0}).template getField<descriptors::WMVELOCITY>();
             uxDx = u[0] - uXm[0];
             uyDx = u[1] - uXm[1];
           }
           if (util::abs(y1[0]) < V(1.e-8) &&
               cell.neighbor({-1,0}).template getField<descriptors::POROSITY>() != V(0) &&
               cell.neighbor({1,0}).template getField<descriptors::POROSITY>() != V(0)) {
-            V uXp[DESCRIPTOR::d], uXm[DESCRIPTOR::d] {};
+            /*V uXp[DESCRIPTOR::d], uXm[DESCRIPTOR::d] {};
             cell.neighbor({1,0}).computeU(uXp);
-            cell.neighbor({-1,0}).computeU(uXm);
+            cell.neighbor({-1,0}).computeU(uXm);*/
+            auto uXp = cell.neighbor({1,0}).template getField<descriptors::WMVELOCITY>();
+            auto uXm = cell.neighbor({-1,0}).template getField<descriptors::WMVELOCITY>();
             uxDx = V(0.5)*(uXp[0] - uXm[0]);
             uyDx = V(0.5)*(uXp[1] - uXm[1]);
           }
           //----------- FDM in Y-direction --------------------------------------------------//
           if (y1[1] > V(0) || cell.neighbor({0,-1}).template getField<descriptors::POROSITY>() == V(0)) {
-            V uYp[DESCRIPTOR::d] {};
-            cell.neighbor({0,1}).computeU(uYp);
+            //V uYp[DESCRIPTOR::d] {};
+            //cell.neighbor({0,1}).computeU(uYp);
+            auto uYp = cell.neighbor({0,1}).template getField<descriptors::WMVELOCITY>();
             uxDy = uYp[0] - u[0];
             uyDy = uYp[1] - u[1];
           }
           else if (y1[1] < V(0) || cell.neighbor({0,1}).template getField<descriptors::POROSITY>() == V(0)) {
-            V uYm[DESCRIPTOR::d] {};
-            cell.neighbor({0,-1}).computeU(uYm);
+            //V uYm[DESCRIPTOR::d] {};
+            //cell.neighbor({0,-1}).computeU(uYm);
+            auto uYm = cell.neighbor({0,-1}).template getField<descriptors::WMVELOCITY>();
             uxDy = u[0] - uYm[0];
             uyDy = u[1] - uYm[1];
           }
           if (util::abs(y1[1]) < V(1.e-8) &&
               cell.neighbor({0,-1}).template getField<descriptors::POROSITY>() != V(0) &&
               cell.neighbor({0,1}).template getField<descriptors::POROSITY>() != V(0)) {
-            V uYp[DESCRIPTOR::d], uYm[DESCRIPTOR::d] {};
+            /*V uYp[DESCRIPTOR::d], uYm[DESCRIPTOR::d] {};
             cell.neighbor({0,1}).computeU(uYp);
-            cell.neighbor({0,-1}).computeU(uYm);
+            cell.neighbor({0,-1}).computeU(uYm);*/
+            auto uYp = cell.neighbor({0,1}).template getField<descriptors::WMVELOCITY>();
+            auto uYm = cell.neighbor({0,-1}).template getField<descriptors::WMVELOCITY>();
             uxDy = V(0.5)*(uYp[0] - uYm[0]);
             uyDy = V(0.5)*(uYp[1] - uYm[1]);
           }
@@ -511,15 +515,25 @@ struct TurbulentWallModelPorousFneqFDMPostProcessor {
           V uxDx = 0, uyDx = 0, uzDx = 0, uxDy = 0, uyDy = 0, uzDy = 0, uxDz = 0, uyDz = 0, uzDz = 0;
           //----------- FDM in X-direction --------------------------------------------------//
           if (y1[0] > V(0) || cell.neighbor({-1,0,0}).template getField<descriptors::POROSITY>() == V(0)) {
-            V uXp[DESCRIPTOR::d] {};
-            cell.neighbor({1,0,0}).computeU(uXp);
+            //V uXp[DESCRIPTOR::d] {};
+            //cell.neighbor({1,0,0}).computeU(uXp);
+            auto uXp= cell.neighbor({1,0,0}).template getField<descriptors::WMVELOCITY>();
+            V uXpNorm = util::norm<DESCRIPTOR::d>(uXp);
+            if(uXpNorm == V(0)) {
+              cell.neighbor({1,0,0}).computeU(uXp.data());
+            }
             uxDx = uXp[0] - u[0];
             uyDx = uXp[1] - u[1];
             uzDx = uXp[2] - u[2];
           }
           else if (y1[0] < V(0) || cell.neighbor({1,0,0}).template getField<descriptors::POROSITY>() == V(0)) {
-            V uXm[DESCRIPTOR::d] {};
-            cell.neighbor({-1,0,0}).computeU(uXm);
+            //V uXm[DESCRIPTOR::d] {};
+            //cell.neighbor({-1,0,0}).computeU(uXm);
+            auto uXm= cell.neighbor({-1,0,0}).template getField<descriptors::WMVELOCITY>();
+            V uXmNorm = util::norm<DESCRIPTOR::d>(uXm);
+            if(uXmNorm == V(0)) {
+              cell.neighbor({-1,0,0}).computeU(uXm.data());
+            }
             uxDx = u[0] - uXm[0];
             uyDx = u[1] - uXm[1];
             uzDx = u[2] - uXm[2];
@@ -527,24 +541,44 @@ struct TurbulentWallModelPorousFneqFDMPostProcessor {
           if (util::abs(y1[0]) < V(1.e-8) &&
               cell.neighbor({-1,0,0}).template getField<descriptors::POROSITY>() != V(0) &&
               cell.neighbor({1,0,0}).template getField<descriptors::POROSITY>() != V(0)) {
-            V uXp[DESCRIPTOR::d], uXm[DESCRIPTOR::d] {};
+            /*V uXp[DESCRIPTOR::d], uXm[DESCRIPTOR::d] {};
             cell.neighbor({1,0,0}).computeU(uXp);
-            cell.neighbor({-1,0,0}).computeU(uXm);
+            cell.neighbor({-1,0,0}).computeU(uXm);*/
+            auto uXp= cell.neighbor({1,0,0}).template getField<descriptors::WMVELOCITY>();
+            auto uXm= cell.neighbor({-1,0,0}).template getField<descriptors::WMVELOCITY>();
+            V uXpNorm = util::norm<DESCRIPTOR::d>(uXp);
+            if(uXpNorm == V(0)) {
+              cell.neighbor({1,0,0}).computeU(uXp.data());
+            }
+            V uXmNorm = util::norm<DESCRIPTOR::d>(uXm);
+            if(uXmNorm == V(0)) {
+              cell.neighbor({-1,0,0}).computeU(uXm.data());
+            }
             uxDx = V(0.5)*(uXp[0] - uXm[0]);
             uyDx = V(0.5)*(uXp[1] - uXm[1]);
             uzDx = V(0.5)*(uXp[2] - uXm[2]);
           }
           //----------- FDM in Y-direction --------------------------------------------------//
           if (y1[1] > V(0) || cell.neighbor({0,-1,0}).template getField<descriptors::POROSITY>() == V(0)) {
-            V uYp[DESCRIPTOR::d] {};
-            cell.neighbor({0,1,0}).computeU(uYp);
+            //V uYp[DESCRIPTOR::d] {};
+            //cell.neighbor({0,1,0}).computeU(uYp);
+            auto uYp= cell.neighbor({0,1,0}).template getField<descriptors::WMVELOCITY>();
+            V uYpNorm = util::norm<DESCRIPTOR::d>(uYp);
+            if(uYpNorm == V(0)) {
+              cell.neighbor({0,1,0}).computeU(uYp.data());
+            }
             uxDy = uYp[0] - u[0];
             uyDy = uYp[1] - u[1];
             uzDy = uYp[2] - u[2];
           }
           else if (y1[1] < V(0) || cell.neighbor({0,1,0}).template getField<descriptors::POROSITY>() == V(0)) {
-            V uYm[DESCRIPTOR::d] {};
-            cell.neighbor({0,-1,0}).computeU(uYm);
+            //V uYm[DESCRIPTOR::d] {};
+            //cell.neighbor({0,-1,0}).computeU(uYm);
+            auto uYm= cell.neighbor({0,-1,0}).template getField<descriptors::WMVELOCITY>();
+            V uYmNorm = util::norm<DESCRIPTOR::d>(uYm);
+            if(uYmNorm == V(0)) {
+              cell.neighbor({0,-1,0}).computeU(uYm.data());
+            }
             uxDy = u[0] - uYm[0];
             uyDy = u[1] - uYm[1];
             uzDy = u[2] - uYm[2];
@@ -552,24 +586,44 @@ struct TurbulentWallModelPorousFneqFDMPostProcessor {
           if (util::abs(y1[1]) < V(1.e-8) &&
               cell.neighbor({0,-1,0}).template getField<descriptors::POROSITY>() != V(0) &&
               cell.neighbor({0,1,0}).template getField<descriptors::POROSITY>() != V(0)) {
-            V uYp[DESCRIPTOR::d], uYm[DESCRIPTOR::d] {};
+            /*V uYp[DESCRIPTOR::d], uYm[DESCRIPTOR::d] {};
             cell.neighbor({0,1,0}).computeU(uYp);
-            cell.neighbor({0,-1,0}).computeU(uYm);
+            cell.neighbor({0,-1,0}).computeU(uYm);*/
+            auto uYp= cell.neighbor({0,1,0}).template getField<descriptors::WMVELOCITY>();
+            auto uYm= cell.neighbor({0,-1,0}).template getField<descriptors::WMVELOCITY>();
+            V uYpNorm = util::norm<DESCRIPTOR::d>(uYp);
+            if(uYpNorm == V(0)) {
+              cell.neighbor({0,1,0}).computeU(uYp.data());
+            }
+            V uYmNorm = util::norm<DESCRIPTOR::d>(uYm);
+            if(uYmNorm == V(0)) {
+              cell.neighbor({0,-1,0}).computeU(uYm.data());
+            }
             uxDy = V(0.5)*(uYp[0] - uYm[0]);
             uyDy = V(0.5)*(uYp[1] - uYm[1]);
             uzDy = V(0.5)*(uYp[2] - uYm[2]);
           }
           //----------- FDM in Z-direction --------------------------------------------------//
           if (y1[2] > V(0) || cell.neighbor({0,0,-1}).template getField<descriptors::POROSITY>() == V(0)) {
-            V uZp[DESCRIPTOR::d] {};
-            cell.neighbor({0,0,1}).computeU(uZp);
+            //V uZp[DESCRIPTOR::d] {};
+            //cell.neighbor({0,0,1}).computeU(uZp);
+            auto uZp= cell.neighbor({0,0,1}).template getField<descriptors::WMVELOCITY>();
+            V uZpNorm = util::norm<DESCRIPTOR::d>(uZp);
+            if(uZpNorm == V(0)) {
+              cell.neighbor({0,0,1}).computeU(uZp.data());
+            }
             uxDz = uZp[0] - u[0];
             uyDz = uZp[1] - u[1];
             uzDz = uZp[2] - u[2];
           }
           else if (y1[2] < V(0) || cell.neighbor({0,0,1}).template getField<descriptors::POROSITY>() == V(0)) {
-            V uZm[DESCRIPTOR::d] {};
-            cell.neighbor({0,0,-1}).computeU(uZm);
+            //V uZm[DESCRIPTOR::d] {};
+            //cell.neighbor({0,0,-1}).computeU(uZm);
+            auto uZm= cell.neighbor({0,0,-1}).template getField<descriptors::WMVELOCITY>();
+            V uZmNorm = util::norm<DESCRIPTOR::d>(uZm);
+            if(uZmNorm == V(0)) {
+              cell.neighbor({0,0,-1}).computeU(uZm.data());
+            }
             uxDz = u[0] - uZm[0];
             uyDz = u[1] - uZm[1];
             uzDz = u[2] - uZm[2];
@@ -577,9 +631,19 @@ struct TurbulentWallModelPorousFneqFDMPostProcessor {
           if (util::abs(y1[2]) < V(1.e-8) &&
               cell.neighbor({0,0,-1}).template getField<descriptors::POROSITY>() != V(0) &&
               cell.neighbor({0,0,1}).template getField<descriptors::POROSITY>() != V(0)) {
-            V uZp[DESCRIPTOR::d], uZm[DESCRIPTOR::d] {};
+            /*V uZp[DESCRIPTOR::d], uZm[DESCRIPTOR::d] {};
             cell.neighbor({0,0,1}).computeU(uZp);
-            cell.neighbor({0,0,-1}).computeU(uZm);
+            cell.neighbor({0,0,-1}).computeU(uZm);*/
+            auto uZp= cell.neighbor({0,0,1}).template getField<descriptors::WMVELOCITY>();
+            auto uZm= cell.neighbor({0,0,-1}).template getField<descriptors::WMVELOCITY>();
+            V uZpNorm = util::norm<DESCRIPTOR::d>(uZp);
+            if(uZpNorm == V(0)) {
+              cell.neighbor({0,0,1}).computeU(uZp.data());
+            }
+            V uZmNorm = util::norm<DESCRIPTOR::d>(uZm);
+            if(uZmNorm == V(0)) {
+              cell.neighbor({0,0,-1}).computeU(uZm.data());
+            }
             uxDz = V(0.5)*(uZp[0] - uZm[0]);
             uyDz = V(0.5)*(uZp[1] - uZm[1]);
             uzDz = V(0.5)*(uZp[2] - uZm[2]);
@@ -604,7 +668,7 @@ struct TurbulentWallModelPorousFneqFDMPostProcessor {
         }
 
         if constexpr ( rhoMethod == 1) {
-          Vector<V,DESCRIPTOR::d> normal;
+          /*Vector<V,DESCRIPTOR::d> normal;
           for ( int iD = 0; iD < DESCRIPTOR::d; iD++ ) {
             normal[iD] = y1[iD] / y1Norm;
           }
@@ -612,9 +676,30 @@ struct TurbulentWallModelPorousFneqFDMPostProcessor {
           for ( int iD = 0; iD < DESCRIPTOR::d; iD++ ) {
             roundedNormal[iD] = int(util::round(normal[iD]));
           }
-          V extRho = cell.neighbor(roundedNormal).computeRho();
+          V extRho = cell.neighbor(roundedNormal).computeRho();*/
+          V extRho { };
+          interpolateDensity(cell, V{2}/y1Norm*y1, &extRho);
           cell.template setField<descriptors::DENSITY>(extRho);
           cell.template setField<collision::HYBRID_RHO>(V(0));
+
+          /*V k = 0;
+          V extRho = 0;
+          for(int iPop = 0; iPop < DESCRIPTOR::q; iPop++) {
+            V wmPorosityN = cell.neighbor(descriptors::c<DESCRIPTOR>(iPop)).template getField<descriptors::WMPOROSITY>();
+            V porosityN = cell.neighbor(descriptors::c<DESCRIPTOR>(iPop)).template getField<descriptors::POROSITY>();
+            if (wmPorosityN == V(1) && porosityN == V(1)) {
+              V rhoN = cell.neighbor(descriptors::c<DESCRIPTOR>(iPop)).computeRho();
+              V rhoNN = cell.neighbor(2*descriptors::c<DESCRIPTOR>(iPop)).computeRho();
+              extRho += V(0.5)*(rhoN + rhoNN);// - (rhoNN - rhoN);
+              k++;
+            }
+          }
+          V wmpor = cell.template getField<descriptors::WMPOROSITY>();
+          if (k != 0 && wmpor == V(0)) {
+            extRho /= k;
+            cell.template setField<descriptors::DENSITY>(extRho);
+            cell.template setField<collision::HYBRID_RHO>(V(0));
+          }*/
         }
         else if constexpr ( rhoMethod == 2) {
           cell.template setField<descriptors::DENSITY>(V(1.));
@@ -622,7 +707,9 @@ struct TurbulentWallModelPorousFneqFDMPostProcessor {
         }
       }
     } else {
-      cell.template setField<descriptors::FORCE>(0);
+      if constexpr (bodyForce) {
+        cell.template setField<descriptors::FORCE>(0);
+      }
       cell.template setField<descriptors::WMPOROSITY>(V(1));
       cell.template setField<collision::HYBRID>(V(1));
       if constexpr ( rhoMethod == 1) {

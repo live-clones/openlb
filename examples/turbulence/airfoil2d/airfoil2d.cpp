@@ -455,17 +455,16 @@ int main(int argc, char* argv[])
     myCaseParameters.set<CHORD_LENGTH>((T)1.);
     myCaseParameters.set<AIRFOIL_PARAMETERS>({2, 4, 12});
     myCaseParameters.set<ANGLE_OF_ATTACK>(3.);
-    myCaseParameters.set<DOMAIN_EXTENT>([&] {
-      return Vector{6,2} * myCaseParameters.get<CHORD_LENGTH>();
+    myCaseParameters.set<DOMAIN_EXTENT>([](MyCase::ParametersD& p) {
+      return Vector{6,2} * p.get<CHORD_LENGTH>();
     });
-    myCaseParameters.set<CENTER>([&] {
-      auto pos = myCaseParameters.get<DOMAIN_EXTENT>();
+    myCaseParameters.set<CENTER>([](MyCase::ParametersD& p) {
+      auto pos = p.get<DOMAIN_EXTENT>();
       pos[0] /= 4;
       pos[1] /= 2;
       return pos;
     });
   }
-  myCaseParameters.fromCLI(argc, argv);
 
   /// === Step 3: Create Mesh ===
   Mesh mesh = createMesh(myCaseParameters);

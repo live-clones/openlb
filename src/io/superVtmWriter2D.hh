@@ -52,6 +52,13 @@ SuperVTMwriter2D<T,OUT_T,W>::SuperVTMwriter2D( std::string name, int overlap, bo
   static_assert(std::is_same_v<OUT_T, float> || std::is_same_v<OUT_T, double>,
               "OUT_T must be either float or double");
 }
+template<typename T, typename OUT_T, typename W>
+SuperVTMwriter2D<T,OUT_T,W>::SuperVTMwriter2D( CuboidDecomposition<T,2>& cGeometry,
+                                         const std::string& name, int overlap, bool binary)
+  : SuperVTMwriter2D(name, overlap, binary)
+{
+  _cGeometry = &cGeometry;
+}
 
 template<typename T, typename OUT_T, typename W>
 void SuperVTMwriter2D<T,OUT_T,W>::extremes( int nMinOut[], int nMaxOut[],
@@ -188,7 +195,39 @@ void SuperVTMwriter2D<T,OUT_T,W>::write(int iT)
 #endif
 
   //  !!!!!!!!!!! check whether _pointerVec is empty
-  if ( _pointerVec.empty() ) {
+  if (_cGeometry) {
+    // Write globally if cuboid geometry is provided
+      // to get first element _pointerVec
+      // problem if functors with different SuperStructure are stored
+      // since till now, there is only one origin
+      const auto it_begin = _pointerVec.cbegin();
+      const auto& cGeometry = _cGeometry ? *_cGeometry : (**it_begin).getSuperStructure().getCuboidDecomposition();
+      LoadBalancer<T>* load = nullptr;
+      if (it_begin != _pointerVec.end()) {
+        load = &(**it_begin).getSuperStructure().getLoadBalancer();
+      }
+
+      // PVD, owns all
+      if (singleton::mpi().isMainProcessor()) {
+        const std::string pathPVD = singleton::directories().getVtkOutDir()
+                                  + createFileName(_name) + ".pvd";
+        dataPVDmaster(iT, pathPVD, "data/" + createFileName(_name, iT) + ".vtm");
+
+        const std::string pathVTM = singleton::directories().getVtkOutDir()
+                                  + "data/" + createFileName(_name, iT) + ".vtm";
+        preambleVTM(pathVTM);
+        for (int iC = 0; iC < cGeometry.size(); iC++) {
+          if (!load || load->doOutput(iC)) {
+            dataVTM(iC, pathVTM, createFileName(_name, iT, iC) + ".vti" );
+          }
+        }
+        closeVTM(pathVTM);
+    }
+    for (int iC = 0; iC < _cGeometry->size(); ++iC) {
+      writeGlobalVTI(iT, iC);
+    }
+  }
+  else if ( _pointerVec.empty() ) {
     clout << "Error: Did you add a Functor ?";
   }
   else {
@@ -371,6 +410,58 @@ template<typename T, typename OUT_T, typename W>
 void SuperVTMwriter2D<T,OUT_T,W>::write(std::shared_ptr<SuperF2D<T,W>> ptr_f, int iT)
 {
   write(*ptr_f, iT);
+}
+
+template<typename T, typename OUT_T, typename W>
+void SuperVTMwriter2D<T,OUT_T,W>::writeGlobalVTI(int iT, int iC)
+{
+  const auto it_begin = _pointerVec.cbegin();
+  const auto& cGeometry = _cGeometry ? *_cGeometry : (**it_begin).getSuperStructure().getCuboidDecomposition();
+  const T delta = cGeometry.get(iC).getDeltaR();
+
+  // get piece/whole extent
+  const Vector<int,2> extent0(-_overlap,-_overlap);
+  const Vector<int,2> extent1(cGeometry.get(iC).getExtent());
+
+  const std::string fullNameVTI = singleton::directories().getVtkOutDir() + "data/"
+                                + createFileName(_name, iT, iC) + ".vti";
+  // get dimension/extent for each cuboid
+  const int originLatticeR[3] = {iC,0,0};
+  auto originPhysR = cGeometry.getPhysR(originLatticeR);
+
+  preambleVTI(fullNameVTI, extent0[0], extent0[1], (extent1[0]+_overlap-1),(extent1[1]+_overlap-1) , originPhysR.data()[0], originPhysR.data()[1], delta);
+  int pid =  cGeometry.get(iC).getPreCalculatedProcess().has_value() ? cGeometry.get(iC).getPreCalculatedProcess().value(): -1;
+
+  processIdArray(fullNameVTI, pid, extent1);
+  closePiece(fullNameVTI);
+  closeVTI(fullNameVTI);
+}
+
+template<typename T, typename OUT_T, typename W>
+void SuperVTMwriter2D<T,OUT_T,W>::processIdArray(
+    const std::string& fullName,
+    int processId,
+    const Vector<int,2>& extent1)
+{
+  std::ofstream fout(fullName, std::ios::out | std::ios::app);
+  if (!fout) {
+    clout << "Error: could not open " << fullName << std::endl;
+  }
+
+  // Match existing PointData layout
+  fout << "<DataArray type=\"Int32\" Name=\"processId\" NumberOfComponents=\"1\" format=\"ascii\">\n";
+
+  const int nx = extent1[0] + 2*_overlap;
+  const int ny = extent1[1] + 2*_overlap;
+
+  const int nPoints = nx * ny;
+
+  for (int i = 0; i < nPoints; ++i) {
+    fout << processId << " ";
+  }
+
+  fout << "\n</DataArray>\n";
+  fout.close();
 }
 
 template<typename T, typename OUT_T, typename W>

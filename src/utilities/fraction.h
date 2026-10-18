@@ -49,9 +49,9 @@ public:
   constexpr Fraction(int num, int denum):
     _numerator(num), _denominator(denum)
   {
-    #if defined(__HIP_DEVICE_COMPILE__) || defined(__CUDA_ARCH__)
+    #if defined(__HIP_DEVICE_COMPILE__) || defined(__CUDA_ARCH__) || defined(__SYCL_DEVICE_ONLY__)
     // On the DEVICE
-    assert(_denominator != 0);
+    // assert(_denominator != 0);
     #else
     if (_denominator == 0) {
         throw std::invalid_argument("denominator must not be zero");
@@ -77,9 +77,9 @@ public:
   template <typename T>
   constexpr T inverseAs() const
   {
-    #if defined(__HIP_DEVICE_COMPILE__) || defined(__CUDA_ARCH__)
+    #if defined(__HIP_DEVICE_COMPILE__) || defined(__CUDA_ARCH__) || defined(__SYCL_DEVICE_ONLY__)
     // On the DEVICE
-      assert(_numerator != 0);
+      // assert(_numerator != 0);
       return T(_denominator) / T(_numerator);
     #else
       return _numerator != 0 ? T(_denominator) / T(_numerator) : throw std::invalid_argument("inverse of zero is undefined");

@@ -90,7 +90,7 @@ struct AdsorptionReaction {
     // Enable external mass transfer
     coupling.template setParameter<AdsorptionReaction::CONV_DENS>(converter.getConversionFactorDensity());
     coupling.template setParameter<AdsorptionReaction::CONV_PARC_DENS>(converter.getConversionFactorParticleDensity());
-    coupling.template setParameter<AdsorptionReaction::EXT_MASS>(k_f[0] > 0.);
+    coupling.template setParameter<AdsorptionReaction::EXT_MASS>(V{k_f[0] > 0. ? 1.0 : 0.0});
   }
 
   /**

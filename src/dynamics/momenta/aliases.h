@@ -72,6 +72,15 @@ using CorrectedIncBulkTuple = Tuple<
   DefineToNEq
 >;
 
+/// Corrected Incompressible computation of momenta from the populations in the bulk
+template<typename MOMENTUM>
+using CorrectedContiIncBulkTuple = Tuple<
+  BulkPressureConti<MOMENTUM>,
+  CorrectedIncompressibleBulkMomentum,
+  IncompressibleBulkStress,
+  DefineToNEq
+>;
+
 /// The Velocity is stored in descriptors::VELOCITY (and computed e.g. in a
 /// postprocessor)
 using ExternalVelocityTuple = Tuple<
@@ -117,6 +126,14 @@ using RegularizedTemperatureBoundaryTuple = Tuple<
   DefineSeparately
 >;
 
+template <int direction, int orientation>
+using RegularizedPhaseFieldBoundaryTuple = Tuple<
+  FixedDensity,
+  FixedPhiMomentum<direction,orientation>,
+  NoStress,
+  DefineSeparately
+>;
+
 /** Momenta collection for advection diffusion boundary with fixed heat flux
  * rho describes the temperature, while j describes the (heat) transport
  * (= conduction + convective transport) and u is the conduction/ flux.
@@ -158,11 +175,38 @@ using RegularizedPressureBoundaryTuple = Tuple<
   DefineSeparately
 >;
 
+/// Regularized incompressible velocity boundary node
+template <int direction, int orientation>
+using IncRegularizedVelocityBoundaryTuple = Tuple<
+  VelocityBoundaryPressure<direction,orientation>,
+  FixedVelocityMomentumGeneric,
+  IncRegularizedBoundaryStress<direction,orientation>,
+  DefineSeparately
+>;
+
 /// Regularized incompressible pressure boundary node
 template <int direction, int orientation>
 using IncRegularizedPressureBoundaryTuple = Tuple<
   FixedDensity,
   PressureBoundaryMomentum<direction,orientation>,
+  IncRegularizedBoundaryStress<direction,orientation>,
+  DefineSeparately
+>;
+
+/// Regularized incompressible pressure with accumulation velocity boundary node
+template <int direction, int orientation>
+using ContiIncRegularizedVelocityBoundaryTuple = Tuple<
+  ContiVelocityBoundaryPressure<direction,orientation>,
+  FixedVelocityMomentumGeneric,
+  IncRegularizedBoundaryStress<direction,orientation>,
+  DefineSeparately
+>;
+
+/// Regularized incompressible pressure with accumulation pressure boundary node
+template <int direction, int orientation>
+using ContiIncRegularizedPressureBoundaryTuple = Tuple<
+  FixedDensity,
+  ContiPressureBoundaryMomentum<direction,orientation>,
   IncRegularizedBoundaryStress<direction,orientation>,
   DefineSeparately
 >;
@@ -183,7 +227,7 @@ template <int direction, int orientation>
 using IncDirichletVelocityBoundaryTuple = Tuple<
   VelocityBoundaryPressure<direction,orientation>,
   FixedVelocityMomentumGeneric,
-  BulkStress,
+  IncompressibleBulkStress,
   DefineSeparately
 >;
 
@@ -203,7 +247,7 @@ template <int direction, int orientation>
 using IncDirichletPressureBoundaryTuple = Tuple<
   FixedDensity,
   PressureBoundaryMomentum<direction,orientation>,
-  BulkStress,
+  IncompressibleBulkStress,
   DefineSeparately
 >;
 
@@ -216,6 +260,13 @@ using FixedVelocityBoundaryTuple = Tuple<
   BulkDensity,
   FixedVelocityMomentumGeneric,
   BulkStress,
+  DefineUSeparatelyTrace
+>;
+
+using IncFixedVelocityBoundaryTuple = Tuple<
+  BulkPressure<FixedVelocityMomentumGeneric>,
+  FixedVelocityMomentumGeneric,
+  IncompressibleBulkStress,
   DefineUSeparatelyTrace
 >;
 

@@ -110,7 +110,7 @@ ADf<S,n>* iniAD(const S* source) {
 /// copy values and initialize derivatives
 template<unsigned n, typename S, template<typename> typename C>
 C<ADf<S,n>> iniAD(const C<S>& source) {
-  auto result = copyAs<ADf<S,n>,S,C> (source);
+  auto result = copyAs<ADf<S,n>,S> (source);
   util::iniDiagonal (result);
   return result;
 }

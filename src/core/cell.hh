@@ -28,6 +28,7 @@
 #ifndef CELL_HH
 #define CELL_HH
 
+#include "core/platform/convertingRef.h"
 #include <algorithm>
 
 #include "cell.h"
@@ -44,7 +45,7 @@ ConstCell<T,DESCRIPTOR>::ConstCell(const BlockLattice<T,DESCRIPTOR>& block,
                                    std::size_t iCell):
   _iCell(iCell),
   _block(const_cast<BlockLattice<T,DESCRIPTOR>&>(block)),
-  _populations{_block.getPopulationPointers(iCell)}
+  _populations{loadPopulations(iCell)}
 { }
 
 template <concepts::BaseType T, concepts::LatticeDescriptor DESCRIPTOR>
@@ -65,7 +66,8 @@ auto ConstCell<T,DESCRIPTOR>::getFieldPointer(FIELD) const
 {
   static_assert(descriptors::is_data_field<FIELD>::value,
                 "FIELD must be structured data field");
-  return _block.template getField<FIELD>().getPointer(_iCell);
+  // Const field access returns a read-only pointer so a sparse field is not materialised on read
+  return std::as_const(_block).template getField<FIELD>().getPointer(_iCell);
 }
 
 template <concepts::BaseType T, concepts::LatticeDescriptor DESCRIPTOR>
@@ -83,7 +85,8 @@ auto ConstCell<T,DESCRIPTOR>::getFieldComponent(unsigned iD) const
 {
   static_assert(descriptors::is_data_field<FIELD>::value,
                 "FIELD must be structured data field");
-  return _block.template getField<FIELD>()[iD][_iCell];
+  // Read through the const field interface so a sparse field is not materialised on read
+  return std::as_const(_block).template getField<FIELD>()[iD][_iCell];
 }
 
 template <concepts::BaseType T, concepts::LatticeDescriptor DESCRIPTOR>
@@ -107,13 +110,13 @@ ConstCell<T,DESCRIPTOR> Cell<T,DESCRIPTOR>::neighbor(Vector<int,DESCRIPTOR::d> c
 template <concepts::BaseType T, concepts::LatticeDescriptor DESCRIPTOR>
 T ConstCell<T,DESCRIPTOR>::operator[](unsigned iPop) const
 {
-  return *_populations[iPop];
+  return static_cast<T>(*_populations[iPop]);
 }
 
 template <concepts::BaseType T, concepts::LatticeDescriptor DESCRIPTOR>
-T& Cell<T,DESCRIPTOR>::operator[](unsigned iPop)
+decltype(auto) Cell<T,DESCRIPTOR>::operator[](unsigned iPop)
 {
-  return *this->_populations[iPop];
+  return makeConvertingRef<T>(*this->_populations[iPop]);
 }
 
 template <concepts::BaseType T, concepts::LatticeDescriptor DESCRIPTOR>
@@ -180,16 +183,6 @@ template<concepts::BaseType T, concepts::LatticeDescriptor DESCRIPTOR>
 Dynamics<T,DESCRIPTOR>* Cell<T,DESCRIPTOR>::getDynamics()
 {
   return this->_block.getDynamics(this->_iCell);
-}
-
-template <concepts::BaseType T, concepts::LatticeDescriptor DESCRIPTOR>
-template <typename FIELD>
-void ConstCell<T,DESCRIPTOR>::computeField(T* data) const
-{
-  auto field = getFieldPointer<FIELD>();
-  for (long unsigned int i=0; i < DESCRIPTOR::template size<FIELD>(); ++i) {
-    data[i] = field[i];
-  }
 }
 
 template<concepts::BaseType T, concepts::LatticeDescriptor DESCRIPTOR>

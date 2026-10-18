@@ -193,10 +193,8 @@ void setTemporalValues(CASE& myCase,
 /// Step 8.3: Compute simulation results at times
 /// @param myCase The Case instance which keeps the simulation data
 /// @param iT The time step
-template<typename CASE>
-void getResults(CASE& myCase,
-                util::Timer<typename CASE::value_t>& timer,
-                std::size_t iT)
+template<typename CASE, typename TIMER>
+void getResults(CASE& myCase, TIMER& timer, std::size_t iT)
 {
   using T = CASE::value_t;
   auto& lattice = myCase.getLattice(NavierStokes{});
@@ -268,8 +266,8 @@ void setInitialControl(MyOptiCase& optiCase) {
   optiCase.getController().set({0, 0, 0});
 }
 
-template<typename CASE>
-void applyControl(const Controller<typename CASE::value_t>& controller, CASE& controlledCase) {
+template<typename CASE, typename CONTROLLER>
+void applyControl(CASE& controlledCase, CONTROLLER& controller) {
   using T = CASE::value_t;
   using DESCRIPTOR = CASE::descriptor_t;
   auto& lattice = controlledCase.getLattice(NavierStokes{});
@@ -289,13 +287,11 @@ void applyControl(const Controller<typename CASE::value_t>& controller, CASE& co
   lattice.template setProcessingContext<Array<descriptors::FORCE>>(ProcessingContext::Simulation);
 }
 
-template<typename CASE>
-CASE::value_t velocityObjectiveF(MyOptiCase& optiCase) {
-  // decide whether we solve for value or derivatives
-  using T = CASE::value_t;
+template<typename NAME>
+auto velocityObjectiveF(MyOptiCase& optiCase) {
   using OBJECTIVE = functors::L2DistanceF<functors::VelocityF>;
 
-  auto& controlledCase = optiCase.getCaseByType<T>();
+  auto& controlledCase = optiCase.getCase(NAME{});
   auto& controlledLattice = controlledCase.getLattice(NavierStokes{});
   auto& converter = controlledLattice.getUnitConverter();
   auto objectiveDomain = controlledCase.getGeometry().getMaterialIndicator({1});
@@ -323,50 +319,50 @@ CASE::value_t velocityObjectiveF(MyOptiCase& optiCase) {
   return integrateField<opti::J>(controlledLattice, objectiveDomain, converter.getPhysDeltaX())[0];
 }
 
-template<typename CASE>
-CASE::value_t dissipationObjectiveF(MyOptiCase& optiCase) {
-    using T                 = CASE::value_t;
-    using OBJECTIVE         = functors::L2DistanceF<functors::DissipationF>;
+template<typename NAME>
+auto dissipationObjectiveF(MyOptiCase& optiCase) {
+  using OBJECTIVE         = functors::L2DistanceF<functors::DissipationF>;
 
-    auto& controlledCase    = optiCase.getCaseByType<T>();
-    auto& controlledLattice = controlledCase.getLattice(NavierStokes {});
-    auto& converter         = controlledLattice.getUnitConverter();
-    auto  objectiveDomain   = controlledCase.getGeometry().getMaterialIndicator({1});
+  auto& controlledCase    = optiCase.getCase(NAME{});
+  auto& controlledLattice = controlledCase.getLattice(NavierStokes {});
+  auto& converter         = controlledLattice.getUnitConverter();
+  auto  objectiveDomain   = controlledCase.getGeometry().getMaterialIndicator({1});
 
-    auto& referenceLattice   = optiCase.getCase(Reference {}).getLattice(NavierStokes {});
-    auto& refConverter       = referenceLattice.getUnitConverter();
-    auto  refObjectiveDomain = optiCase.getCase(Reference {}).getGeometry().getMaterialIndicator({1});
+  auto& referenceLattice   = optiCase.getCase(Reference {}).getLattice(NavierStokes {});
+  auto& refConverter       = referenceLattice.getUnitConverter();
+  auto  refObjectiveDomain = optiCase.getCase(Reference {}).getGeometry().getMaterialIndicator({1});
 
-    // Evaluate functor for objective computation
-    auto objectiveO = makeWriteFunctorO<OBJECTIVE, opti::J>(controlledLattice);
-    objectiveO->restrictTo(objectiveDomain);
-    objectiveO->template setParameter<parameters::OMEGA>(converter.getLatticeRelaxationFrequency());
-    objectiveO->template setParameter<parameters::DT>(converter.getPhysDeltaT());
-    objectiveO->template setParameter<parameters::PHYS_CHAR_VISCOSITY>(converter.getPhysViscosity());
+  // Evaluate functor for objective computation
+  auto objectiveO = makeWriteFunctorO<OBJECTIVE, opti::J>(controlledLattice);
+  objectiveO->restrictTo(objectiveDomain);
+  objectiveO->template setParameter<parameters::OMEGA>(converter.getLatticeRelaxationFrequency());
+  objectiveO->template setParameter<parameters::DT>(converter.getPhysDeltaT());
+  objectiveO->template setParameter<parameters::PHYS_CHAR_VISCOSITY>(converter.getPhysViscosity());
 
-    // Compute the reference field for dissipation in the reference case
-    auto refDissipation = makeWriteFunctorO<functors::DissipationF, OBJECTIVE::Reference>(referenceLattice);
-    refDissipation->restrictTo(refObjectiveDomain);
-    refDissipation->template setParameter<parameters::OMEGA>(refConverter.getLatticeRelaxationFrequency());
-    refDissipation->template setParameter<parameters::DT>(refConverter.getPhysDeltaT());
-    refDissipation->template setParameter<parameters::PHYS_CHAR_VISCOSITY>(refConverter.getPhysViscosity());
-    refDissipation->apply();
+  // Compute the reference field for dissipation in the reference case
+  auto refDissipation = makeWriteFunctorO<functors::DissipationF, OBJECTIVE::Reference>(referenceLattice);
+  refDissipation->restrictTo(refObjectiveDomain);
+  refDissipation->template setParameter<parameters::OMEGA>(refConverter.getLatticeRelaxationFrequency());
+  refDissipation->template setParameter<parameters::DT>(refConverter.getPhysDeltaT());
+  refDissipation->template setParameter<parameters::PHYS_CHAR_VISCOSITY>(refConverter.getPhysViscosity());
+  refDissipation->apply();
 
-    // Get solution from the reference simulation for the inverse problem
-    copyFields<OBJECTIVE::Reference, OBJECTIVE::Reference>(referenceLattice, controlledLattice);
-    // Basically just dissipation per cell squared
-    objectiveO->template setParameter<parameters::NORMALIZE>(
-        computeL2Norm<OBJECTIVE::Reference>(referenceLattice, refObjectiveDomain, refConverter.getPhysDeltaX()));
-    objectiveO->apply();
+  // Get solution from the reference simulation for the inverse problem
+  copyFields<OBJECTIVE::Reference, OBJECTIVE::Reference>(referenceLattice, controlledLattice);
+  // Basically just dissipation per cell squared
+  objectiveO->template setParameter<parameters::NORMALIZE>(
+      computeL2Norm<OBJECTIVE::Reference>(referenceLattice, refObjectiveDomain, refConverter.getPhysDeltaX()));
+  objectiveO->apply();
 
-    return integrateField<opti::J>(controlledLattice, objectiveDomain, converter.getPhysDeltaX())[0];
+  return integrateField<opti::J>(controlledLattice, objectiveDomain, converter.getPhysDeltaX())[0];
 };
 
-template<typename CASE>
-CASE::value_t computeObjective(MyOptiCase& optiCase) {
+template<typename NAME>
+auto computeObjective(MyOptiCase& optiCase, NAME) {
+  using CASE = MyOptiCase::case_t<NAME>;
   using T = CASE::value_t;
   // decide whether we solve for value or derivatives
-  auto& controlledCase = optiCase.getCaseByType<T>();
+  auto& controlledCase = optiCase.getCase(NAME{});
   auto& parameters = controlledCase.getParameters();
   // Reset prior simulation lattice
   controlledCase.resetLattices();
@@ -376,7 +372,7 @@ CASE::value_t computeObjective(MyOptiCase& optiCase) {
   setInitialValues(controlledCase);
 
   // Set updated controls in the simulation
-  applyControl(optiCase.getController<T>(), controlledCase);
+  applyControl(controlledCase, optiCase.getController<T>());
 
   // Execute simulation
   simulate(controlledCase);
@@ -384,10 +380,10 @@ CASE::value_t computeObjective(MyOptiCase& optiCase) {
   auto objectiveF = std::function<typename CASE::value_t(MyOptiCase&)> {};
   switch (parameters.template get<parameters::OBJECTIVE_TYPE>()) {
     case ObjectiveType::velocity:
-      objectiveF = velocityObjectiveF<CASE>;
+      objectiveF = velocityObjectiveF<NAME>;
       break;
     case ObjectiveType::dissipation:
-      objectiveF = dissipationObjectiveF<CASE>;
+      objectiveF = dissipationObjectiveF<NAME>;
       break;
     default:
       throw std::runtime_error("Unknown objective type");

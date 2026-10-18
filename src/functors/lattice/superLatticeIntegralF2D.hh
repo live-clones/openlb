@@ -73,18 +73,65 @@ SuperLatticePhysDrag2D<T, DESCRIPTOR>::SuperLatticePhysDrag2D(
 { }
 
 template<typename T, typename DESCRIPTOR>
+SuperLatticePhysDrag2D<T, DESCRIPTOR>::SuperLatticePhysDrag2D(
+  SuperLattice<T, DESCRIPTOR>&     sLattice,
+  FunctorPtr<SuperIndicatorF2D<T>>&& indicatorF,
+  const UnitConverter<T,DESCRIPTOR>& converter,
+  T referenceLength)
+  : SuperLatticePhysF2D<T, DESCRIPTOR>(sLattice, converter, 2),
+    _indicatorF(std::move(indicatorF)),
+    _facesF(*_indicatorF, converter),
+    _pBoundForceF(sLattice, *_indicatorF, converter),
+    _sumF(_pBoundForceF, *_indicatorF),
+    _referenceLength(referenceLength),
+    _factor(2./( converter.getPhysDensity()*converter.getCharPhysVelocity()*converter.getCharPhysVelocity()*converter.getPhysDeltaX() ))
+{
+  this->getName() = "physDrag";
+
+  for (int iC = 0; iC < this->getSuperStructure().getLoadBalancer().size(); ++iC) {
+    this->_blockF.emplace_back(
+      new BlockLatticePhysDrag2D<T,DESCRIPTOR>(
+        sLattice.getBlock(iC),
+        indicatorF->getBlockIndicatorF(iC),
+        converter)
+    );
+  }
+}
+
+template<typename T, typename DESCRIPTOR>
+SuperLatticePhysDrag2D<T, DESCRIPTOR>::SuperLatticePhysDrag2D(
+  SuperLattice<T, DESCRIPTOR>& sLattice,
+  SuperGeometry<T,2>& superGeometry, const int material,
+  const UnitConverter<T,DESCRIPTOR>& converter,
+  T referenceLength)
+  : SuperLatticePhysDrag2D(sLattice,
+                           superGeometry.getMaterialIndicator(material),
+                           converter,
+                           referenceLength)
+{ }
+
+template<typename T, typename DESCRIPTOR>
 bool SuperLatticePhysDrag2D<T, DESCRIPTOR>::operator()(T output[], const int input[])
 {
-  T faces[5] = { };
   T sum[3]   = { };
   _sumF(sum, input);
-  _facesF(faces, input);
 
-  output[0] = _factor * sum[0] / faces[0];
-  output[1] = _factor * sum[1] / faces[1];
+  output[0] = _factor * sum[0];
+  output[1] = _factor * sum[1];
+
+  if (_referenceLength == 0.0) {
+    T faces[5] = { };
+    _facesF(faces, input);
+    output[0] /= faces[0];
+    output[1] /= faces[1];
+  } else {
+    output[0] /= _referenceLength;
+    output[1] /= _referenceLength;
+  }
 
   return true;
 }
+
 
 template<typename T, typename DESCRIPTOR>
 SuperLatticePhysCorrDrag2D<T, DESCRIPTOR>::SuperLatticePhysCorrDrag2D(

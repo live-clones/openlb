@@ -80,7 +80,6 @@ int main( int argc, char *argv[] )
     myCaseParameters.set<parameters::INTERFACE_WIDTH>(w);     // interface width [lattice units]
     myCaseParameters.set<C_RHO             >(1000.);          // conversion factor density [physical units]
   }
-  myCaseParameters.fromCLI(argc, argv);
 
   /// === Step 3: Create Mesh ===
   Mesh mesh = createMesh(myCaseParameters);

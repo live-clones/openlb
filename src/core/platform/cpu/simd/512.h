@@ -29,6 +29,8 @@
 #include <cstdint>
 #include <type_traits>
 
+#include "core/half.h"
+
 namespace olb {
 
 namespace cpu {
@@ -274,6 +276,10 @@ public:
   Pack(const float* ptr):
     Pack(_mm512_loadu_ps(ptr)) { }
 
+  /// f16 storage load: 16 halves (256 bit) -> 16 floats (512 bit) via hardware F16C
+  Pack(const ::olb::half* ptr):
+    Pack(_mm512_cvtph_ps(_mm256_loadu_si256(reinterpret_cast<const __m256i*>(ptr)))) { }
+
   Pack(const float* ptr, const index_t* idx):
     Pack(_mm512_i32gather_ps(_mm512_loadu_si512(reinterpret_cast<const __m512i*>(idx)), ptr, sizeof(float))) { }
 
@@ -404,15 +410,21 @@ template <typename T>
 void maskstore(T* target, Mask<T> mask, Pack<T> value);
 
 template <>
-void maskstore<double>(double* target, Mask<double> mask, Pack<double> value)
+inline void maskstore<double>(double* target, Mask<double> mask, Pack<double> value)
 {
   _mm512_mask_storeu_pd(target, mask, value);
 }
 
 template <>
-void maskstore<float>(float* target, Mask<float> mask, Pack<float> value)
+inline void maskstore<float>(float* target, Mask<float> mask, Pack<float> value)
 {
   _mm512_mask_storeu_ps(target, mask, value);
+}
+
+/// f16 store overload: 16 floats -> 16 halves (F16C), lane-masked (AVX-512BW)
+inline void maskstore(::olb::half* target, Mask<float> mask, Pack<float> value)
+{
+  _mm256_mask_storeu_epi16(target, mask, _mm512_cvtps_ph(value, _MM_FROUND_TO_NEAREST_INT));
 }
 
 
@@ -420,15 +432,22 @@ template <typename T>
 void store(T* target, Pack<T> value);
 
 template <>
-void store<double>(double* target, Pack<double> value)
+inline void store<double>(double* target, Pack<double> value)
 {
   _mm512_storeu_pd(target, value);
 }
 
 template <>
-void store<float>(float* target, Pack<float> value)
+inline void store<float>(float* target, Pack<float> value)
 {
   _mm512_storeu_ps(target, value);
+}
+
+/// f16 store overload: 16 floats -> 16 halves (F16C), unmasked
+inline void store(::olb::half* target, Pack<float> value)
+{
+  _mm256_storeu_si256(reinterpret_cast<__m256i*>(target),
+                      _mm512_cvtps_ph(value, _MM_FROUND_TO_NEAREST_INT));
 }
 
 
@@ -436,14 +455,14 @@ template <typename T>
 void store(T* target, Pack<T> value, const typename Pack<T>::index_t* indices);
 
 template <>
-void store<double>(double* target, Pack<double> value, const Pack<double>::index_t* indices)
+inline void store<double>(double* target, Pack<double> value, const Pack<double>::index_t* indices)
 {
   _mm512_i32scatter_pd(target, _mm256_loadu_si256(reinterpret_cast<const __m256i*>(indices)), value, sizeof(double));
 }
 
 
 template <>
-void store<float>(float* target, Pack<float> value, const Pack<float>::index_t* indices)
+inline void store<float>(float* target, Pack<float> value, const Pack<float>::index_t* indices)
 {
   _mm512_i32scatter_ps(target, _mm512_loadu_si512(reinterpret_cast<const __m512i*>(indices)), value, sizeof(float));
 }

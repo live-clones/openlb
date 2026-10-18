@@ -328,18 +328,17 @@ int main(int argc, char* argv[]) {
     myCaseParameters.set<RESIDUUM                   >(    1e-10);
     myCaseParameters.set<DIFFUSIVITY                >(  0.07407);
 
-    myCaseParameters.set<PHYS_DELTA_X>([&] {
-      return myCaseParameters.get<HEIGHT>()/myCaseParameters.get<RESOLUTION>();
+    myCaseParameters.set<PHYS_DELTA_X>([](MyCase::ParametersD& p) {
+      return p.get<HEIGHT>()/p.get<RESOLUTION>();
     });
-    myCaseParameters.set<DOMAIN_EXTENT>([&] {
-      return Vector{myCaseParameters.get<RESOLUTION>()*myCaseParameters.get<PHYS_DELTA_X>()*10, myCaseParameters.get<PHYS_DELTA_X>(), myCaseParameters.get<HEIGHT>()};
+    myCaseParameters.set<DOMAIN_EXTENT>([](MyCase::ParametersD& p) {
+      return Vector{p.get<RESOLUTION>()*p.get<PHYS_DELTA_X>()*10, p.get<PHYS_DELTA_X>(), p.get<HEIGHT>()};
     });
-    myCaseParameters.set<INTERVAL_CONVERGENCE_CHECK>([&] {
-      return myCaseParameters.get<MAX_PHYS_T>()*0.001;
+    myCaseParameters.set<INTERVAL_CONVERGENCE_CHECK>([](MyCase::ParametersD& p) {
+      return p.get<MAX_PHYS_T>()*0.001;
     });
 
   }
-  myCaseParameters.fromCLI(argc, argv);
 
   /// === Step 3: Create Mesh ===
   Mesh mesh = createMesh(myCaseParameters);

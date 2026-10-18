@@ -36,7 +36,7 @@ namespace olb {
 /// Constructor with name of outputFiles
 /// boolean true for real-time plotting //WARNING: experimental!
 template< typename T >
-CSV<T>::CSV(std::string name, char separator, std::vector<std::string> columnTags, std::string format)
+CSV<T>::CSV(std::string name, char separator, std::vector<std::string> columnTags, std::string format, bool append)
   : _name(name),
     _dataFile(singleton::directories().getGnuplotOutDir()+"data/"+_name+format),
     _dir(singleton::directories().getGnuplotOutDir()),
@@ -45,26 +45,39 @@ CSV<T>::CSV(std::string name, char separator, std::vector<std::string> columnTag
     _format(format)
 {
   if (singleton::mpi().getRank() == _rank) {
-    std::ofstream fout;
+    bool writeHeader = false;
 
-    ///add (new) data file
-    fout.open(_dataFile.c_str(), std::ios::trunc);
-    if(columnTags.size()>0)
-    {
+    if (append) {
+      // If appending, check if the file exists and is not empty
+      std::ifstream fin(_dataFile.c_str());
+      if (!fin.good() || fin.peek() == std::ifstream::traits_type::eof()) {
+        writeHeader = true; // File doesn't exist or is empty, needs header
+      }
+    } else {
+      writeHeader = true;
+      // If not appending, truncate the file to clear old contents
+      std::ofstream fout(_dataFile.c_str(), std::ios::trunc);
+      fout.close();
+    }
+
+    // Write column tags only if required and provided
+    if (writeHeader && columnTags.size() > 0) {
       setColumnTags(columnTags);
     }
-    fout.close();
   }
 }
 
 template< typename T >
-CSV<T>::CSV(std::string name, std::vector<std::string> columnTags) : CSV(name, ' ', columnTags){}
+CSV<T>::CSV(std::string name, std::vector<std::string> columnTags, bool append)
+  : CSV(name, ' ', columnTags, ".dat", append) {}
 
 template< typename T >
-CSV<T>::CSV(std::string name) : CSV(name, ' ', std::vector<std::string> {}){}
+CSV<T>::CSV(std::string name, bool append)
+  : CSV(name, ' ', std::vector<std::string>{}, ".dat", append) {}
 
 template< typename T >
-CSV<T>::CSV(std::string name, char separator) : CSV(name, separator, std::vector<std::string> {}){}
+CSV<T>::CSV(std::string name, char separator, bool append)
+  : CSV(name, separator, std::vector<std::string>{}, ".dat", append) {}
 
 /// writes the data file for one double and a vector of doubles with a specific filename
 template< typename T >

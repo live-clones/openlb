@@ -28,6 +28,7 @@
 #include <memory>
 #include <array>
 #include <stdexcept>
+#include <unordered_map>
 
 #include "core/platform/platform.h"
 #include "core/serializer.h"
@@ -245,6 +246,8 @@ template <typename T>
 using CyclicColumn = cpu::sisd::CyclicColumn<T>;
 
 }
+
+#include "sparseColumn.h"
 
 #endif
 

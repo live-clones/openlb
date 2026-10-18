@@ -34,6 +34,9 @@
 #include "io/xmlReader.h"
 #include "descriptor/fields.h"
 #include "utilities/optionalValue.h"
+#include "core/operator.h"
+#include "core/concepts.h"
+#include "case/parametersD.h"
 
 // known design issues
 //    1. How can we prevent abuse of constructur by mixing up parameters?
@@ -44,6 +47,13 @@
 
 
 namespace olb {
+
+enum class SolidCase {
+  planeStress,
+  planeStrain,
+  continua,
+  standard
+};
 
 namespace fields {
 
@@ -85,7 +95,6 @@ struct PHYS_PRESSURE : public descriptors::FIELD_BASE<1> {
     return value >= 0;
   }
 };
-
 struct LATTICE_TIME : public descriptors::FIELD_BASE<1> {
   template <typename T, typename DESCRIPTOR,typename FIELD>
   static constexpr auto isValid(FieldD<T,DESCRIPTOR,FIELD> value) {
@@ -678,48 +687,209 @@ public:
     return _refractiveRelative;
   };
 
-  // from LinElaUnitConverter
-  T getCharPhysDisplacement( ) const {
+  // From Structural Mechanics
+
+  // --- Base Solid Unit Converter ---- //
+  T getCharPhysDisplacement() const {
     return _charPhysDisplacement;
-  }
-  T getLatticeShearModulus( ) const {
-    return _shearModulus;
   };
-  T getPhysShearModulus( ) const {
-    return _shearModulus * (_conversionLength * _conversionLength * _dampingFactor) / _conversionTime;
+
+  T getConversionFactorDisplacement() const {
+    return _conversionDisplacement;
   };
-  T getLatticeBulkModulus( ) const {
-    return _bulkModulus;
+
+  T getConversionFactorTraction() const {
+    return _conversionTraction;
   };
-  T getPhysBulkModulus( ) const {
-    return _bulkModulus * (_conversionLength * _conversionLength * _dampingFactor) / _conversionTime;
-  };
-  T getLatticeLambda( ) const {
-    return _lambda;
-  };
-  T getPhysLambda( ) const {
-    return _lambda * (_conversionLength * _conversionLength * _dampingFactor) / _conversionTime;
-  };
-  T getLatticeYoungsModulus() const {
-    return _youngsModulus;
-  };
-  T getEpsilon() const {
-    return _epsilon;
-  };
+
   T getCharPhysTime() const {
     return _charPhysTime;
   };
+
   T getPhysYoungsModulus() const {
-    return _youngsModulus * (_conversionLength * _conversionLength * _dampingFactor) / _conversionTime;
+    return _youngsModulus;
   };
-  T getDampingFactor() const {
+
+  T getQuasistationarySolidDampingFactor() const {
     return _dampingFactor;
   };
+
   T getPoissonRatio() const {
     return _poissonRatio;
   };
 
+  T getLatticeDisplacement( T physDisplacement ) const {
+    return physDisplacement / _conversionDisplacement;
+  };
+
+  template < unsigned D >
+  Vector<T, D> getLatticeDisplacement( Vector<T, D> physDisplacement ) const {
+    return physDisplacement / _conversionDisplacement;
+  };
+
+  T getPhysDisplacement( T latticeDisplacement ) const {
+    return latticeDisplacement * _conversionDisplacement;
+  };
+
+  template < unsigned D >
+  Vector<T, D> getPhysDisplacement( Vector<T, D> latticeDisplacement ) const {
+    return latticeDisplacement * _conversionDisplacement;
+  };
+
+  T getLatticeSolidStress( T physStress ) const {
+    return physStress / _conversionSolidStress;
+  };
+
+  T getPhysSolidStress( T latticeStress ) const {
+    return latticeStress * _conversionSolidStress;
+  };
+
+  T getConversionFactorSolidStress( ) const {
+    return _conversionSolidStress;
+  };
+
+  T getLatticeSolidForce( T physForce ) const {
+    return physForce / _conversionSolidForce;
+  };
+
+  template < unsigned D >
+  Vector<T, D> getLatticeSolidForce( Vector<T, D> physForce ) const {
+    return physForce / _conversionSolidForce;
+  };
+
+  T getPhysSolidForce( T latticeForce ) const {
+    return latticeForce * _conversionSolidForce;
+  };
+
+  template < unsigned D >
+  Vector<T, D> getPhysSolidForce( Vector<T, D> latticeForce ) const {
+    return latticeForce * _conversionSolidForce;
+  };
+
+  T getConversionFactorSolidForce() const {
+    return _conversionSolidForce;
+  };
+
+  T getLatticeTraction( T physTraction ) const {
+    return physTraction / _conversionTraction;
+  };
+
+  template < unsigned D >
+  Vector<T, D> getLatticeTraction( Vector<T, D> physTraction ) const {
+    return physTraction / _conversionTraction;
+  };
+
+  T getPhysTraction( T latticeTraction ) const {
+    return latticeTraction * _conversionTraction;
+  };
+
+  template < unsigned D >
+  Vector<T, D> getPhysTraction( Vector<T, D> latticeTraction ) const {
+    return latticeTraction * _conversionTraction;
+  };
+
+  T getBulkModulus(  ) const {
+    return _bulkModulus;
+  };
+
+  T getLameMu(  ) const {
+    return _lameMu;
+  };
+
+  T getLameLambda(  ) const {
+    return _lameLambda;
+  };
+
+  T getLatticeLameMu( ) const {
+    return _lameMu / _conversionLame;
+  };
+
+  T getLatticeLameLambda(  ) const {
+    return _lameLambda / _conversionLame;
+  };
+
+  T getLatticeBulkModulus(  ) const {
+    return _bulkModulus / _conversionLame;
+  };
+
+  T getConversionFactorLame(  ) const {
+    return _conversionLame;
+  };
+
+  T getLatticeYoungsModulus(  ) const {
+    return _youngsModulus / _conversionLame;
+  };
+
+  std::string getSolidCase(  ) const {
+    if (! _solidCase.hasValue()) {
+        throw std::runtime_error("Solid case was not set in the unit converter!");
+    }
+    switch (_solidCase) {
+      case SolidCase::planeStrain:
+        return "planeStrain";
+      case SolidCase::planeStress:
+        return "planeStress";
+      case SolidCase::continua:
+        return "continua";
+      case SolidCase::standard:
+        return "standard";
+    }
+    return std::string{};
+  };
+  // --- End of: Base Solid Unit Converter ---- //
+
+
+  // ---- Quasistationary Boolakee ---- //
+  T getDampingFactor(  ) const {
+    return _dampingFactor;
+  };
+
+  std::string quasistationaryIsStable() const {
+    const T E_lattice = getLatticeYoungsModulus();
+    return ((E_lattice > T(0.3) && E_lattice < T(1)) ? "true" : "false");
+  }
+  // ---- End of: Quasistationary Boolakee ---- //
+
+
+  // ---- Elastodynamics Boolakee ---- //
+  T getLatticeSpeed(  ) const {
+    return _latticeSpeed;
+  };
+
+  T getCMu(  ) const {
+    return _cMu;
+  }
+
+  T getCK(  ) const {
+    return _cK;
+  }
+
+  T getLatticeCMu(  ) const {
+    return _cMu / _conversionVelocity;
+  }
+
+  T getLatticeCK(  ) const {
+    return _cK / _conversionVelocity;
+  }
+
+  template< typename DESCRIPTOR >
+  std::string elastodynamicsIsStable() const {
+    const T latticeCK   = getLatticeCK();
+    const T latticeCMu  = getLatticeCMu();
+    return (descriptors::invCs2<T, DESCRIPTOR>() * util::sqrt(latticeCK * latticeCK + latticeCMu * latticeCMu) < this->_latticeSpeed ? "true" : "false");
+  }
+
+  template< typename DESCRIPTOR >
+  T elastodynamicsGetStability() const {
+    const T latticeCK = getLatticeCK();
+    const T latticeCMu = getLatticeCMu();
+    return descriptors::invCs2<T,DESCRIPTOR>() * util::sqrt(latticeCK * latticeCK + latticeCMu * latticeCMu) / this->_latticeSpeed;
+  }
+  // ---- End of: Elastodynamics Boolakee ---- //
+
+
 protected:
+
   OptionalValue<T> _invCs2;
 
   // conversion factors
@@ -808,49 +978,278 @@ protected:
   OptionalValue<T> _latticeScattering;
   OptionalValue<T> _latticeDiffusion;
 
-  // linear elasticity factors
+  // Structural mechanics factors
+  OptionalValue<T> _youngsModulus;
+  OptionalValue<T> _poissonRatio;
+  OptionalValue<T> _lameMu;
+  OptionalValue<T> _lameLambda;
+  OptionalValue<T> _bulkModulus;
+
+  OptionalValue<T> _cMu;
+  OptionalValue<T> _cK;
+
   OptionalValue<T> _charPhysTime;
   OptionalValue<T> _charPhysDisplacement;
   OptionalValue<T> _epsilon;
-  OptionalValue<T> _youngsModulus;
-  OptionalValue<T> _bulkModulus;
-  OptionalValue<T> _shearModulus;
-  OptionalValue<T> _lambda;
-  OptionalValue<T> _poissonRatio;
+  OptionalValue<T> _conversionLame;
   OptionalValue<T> _dampingFactor;
+  OptionalValue<T> _conversionDisplacement;
+  OptionalValue<T> _conversionTraction;
+  OptionalValue<T> _conversionSolidForce;
+  OptionalValue<T> _conversionSolidStress;
 
+  OptionalValue<T> _latticeSpeed;
+  OptionalValue<SolidCase> _solidCase;
 };
 
-
-/** Conversion between physical and lattice units, as well as discretization.
-* Be aware of the nomenclature:
-* We distingish between physical (dimensioned) and lattice (dimensionless) values.
-* A specific conversion factor maps the two different scopes,
-* e.g. __physLength = conversionLength * latticeLength__
-*
-* For pressure and temperature we first shift the physical values by a characteristic value to asure a lattice pressure and lattice temperature between 0 and 1, e.g. __physPressure - charPhysPressure = conversionPressure * latticePressure__
-*
-*  \param latticeRelaxationTime   relaxation time, have to be greater than 0.5!
-*  - - -
-*  \param physViscosity         physical kinematic viscosity in __m^2 / s__
-*  \param physDensity           physical density in __kg / m^3__
-*  - - -
-*  \param conversionLength      conversion factor for length __m__
-*  \param conversionTime        conversion factor for time __s__
-*  \param conversionMass        conversion factor for mass __kg__
-*  - - -
-*  \param conversionVelocity    conversion velocity __m / s__
-*  \param conversionViscosity   conversion kinematic viscosity __m^2 / s__
-*  \param conversionDensity     conversion density __kg / m^3__
-*  \param conversionForce       conversion force __kg m / s^2__
-*  \param conversionPressure    conversion pressure __kg / m s^2__
-*  - - -
-*  \param resolution            number of grid points per charPhysLength
-*  - - -
-*  \param charLatticeVelocity
-*/
 template <typename T, typename DESCRIPTOR>
 struct UnitConverter : public UnitConverterBase<T> {
+private:
+// Checks to see if parameters include input variables needed for conversion of thermal values
+template <typename _T, typename _DESCRIPTOR>
+bool thermalConversionInputsProvided(const ParametersD<_T, _DESCRIPTOR>& params) const {
+ return params.template provides<parameters::PHYS_THERMAL_CONDUCTIVITY>() &&
+        params.template provides<parameters::PHYS_HEAT_CAPACITY>() &&
+        params.template provides<parameters::PHYS_THERMAL_EXPANSION>() &&
+        params.template provides<parameters::PHYS_CHAR_HIGH_TEMPERATURE>() &&
+        params.template provides<parameters::PHYS_CHAR_LOW_TEMPERATURE>();
+}
+
+template <typename _T, typename _DESCRIPTOR>
+void setThermalConversionFactors(const ParametersD<_T, _DESCRIPTOR>& params) {
+ const T physThermalConductivity = params.template get<parameters::PHYS_THERMAL_CONDUCTIVITY>();
+ const T physSpecificHeatCapacity = params.template get<parameters::PHYS_HEAT_CAPACITY>();
+ const T physThermalExpansionCoefficient = params.template get<parameters::PHYS_THERMAL_EXPANSION>();
+ const T charPhysHighTemperature = params.template get<parameters::PHYS_CHAR_HIGH_TEMPERATURE>();
+ const T charPhysLowTemperature = params.template get<parameters::PHYS_CHAR_LOW_TEMPERATURE>();
+
+ this->_conversionTemperature = charPhysHighTemperature - charPhysLowTemperature;
+ this->_conversionThermalDiffusivity = this->_conversionViscosity;
+ this->_conversionSpecificHeatCapacity = this->_conversionVelocity * this->_conversionVelocity / this->_conversionTemperature;
+ this->_conversionThermalConductivity = this->_conversionForce / this->_conversionTime / this->_conversionTemperature;
+ this->_conversionHeatFlux = this->_conversionMass / util::pow(this->_conversionTime.value(), 3);
+ this->_charPhysLowTemperature = charPhysLowTemperature;
+ this->_charPhysHighTemperature = charPhysHighTemperature;
+ this->_charPhysTemperatureDifference = charPhysHighTemperature - charPhysLowTemperature;
+ this->_physThermalExpansionCoefficient = physThermalExpansionCoefficient;
+ this->_physThermalDiffusivity = physThermalConductivity / (this->_physDensity * physSpecificHeatCapacity);
+ this->_physSpecificHeatCapacity = physSpecificHeatCapacity;
+ this->_physThermalConductivity = physThermalConductivity;
+ this->_latticeThermalRelaxationTime = (this->_physThermalDiffusivity / this->_conversionThermalDiffusivity * descriptors::invCs2<T,DESCRIPTOR>()) + 0.5;
+}
+
+// Checks to see if parameters include input variables needed for conversion of ADE values
+template <typename _T, typename _DESCRIPTOR>
+bool adeConversionInputsProvided(const ParametersD<_T, _DESCRIPTOR>& params) const {
+ return params.template provides<parameters::PHYS_DIFFUSIVITY>();
+}
+
+template <typename _T, typename _DESCRIPTOR>
+void setAdeConversionFactors(const ParametersD<_T, _DESCRIPTOR>& params) {
+ const T physDiffusivity = params.template get<parameters::PHYS_DIFFUSIVITY>();
+
+ this->_physDiffusivity = physDiffusivity;
+ this->_conversionDiffusivity = this->_conversionLength * this->_conversionLength / this->_conversionTime;
+ this->_latticeAdeRelaxationTime = (physDiffusivity / this->_conversionDiffusivity * descriptors::invCs2<T,DESCRIPTOR>()) + 0.5;
+}
+
+// Checks to see if parameters include input variables needed for conversion of multiphase values
+template <typename _T, typename _DESCRIPTOR>
+bool multiphaseConversionInputsProvided(const ParametersD<_T, _DESCRIPTOR>& params) const {
+ return params.template provides<parameters::PHYS_EOS_A>() &&
+        params.template provides<parameters::PHYS_EOS_B>() &&
+        params.template provides<parameters::PHYS_MOLAR_MASS>() &&
+        params.template provides<parameters::SURFACE_TENSION>() &&
+        params.template provides<parameters::PHYS_CHAR_TEMPERATURE>();
+}
+
+template <typename _T, typename _DESCRIPTOR>
+void setMultiphaseConversionFactors(const ParametersD<_T, _DESCRIPTOR>& params) {
+ const T physEoSa = params.template get<parameters::PHYS_EOS_A>();
+ const T physEoSb = params.template get<parameters::PHYS_EOS_B>();
+ const T physMolarMass = params.template get<parameters::PHYS_MOLAR_MASS>();
+ const T physSurfaceTension = params.template get<parameters::SURFACE_TENSION>();
+ const T charPhysTemperature = params.template get<parameters::PHYS_CHAR_TEMPERATURE>();
+ const T latticeEoSa = params.template getOrFallback<parameters::LATTICE_EOS_A>(T{1.0});
+
+ this->_conversionEoSa = physEoSa / latticeEoSa;
+ this->_conversionEoSb = physEoSb * T{10.5};
+ this->_conversionMolarMass = physMolarMass;
+ this->_conversionSurfaceTension = this->_conversionLength * this->_conversionEoSa * util::pow(this->_conversionEoSb.value(), -2);
+ this->_conversionTemperature = this->_conversionEoSa / this->_conversionEoSb / this->_conversionGasConstant;
+ this->_conversionChemicalPotential = this->_conversionVelocity * this->_conversionVelocity;
+ this->_physEoSav = physEoSa;
+ this->_physEoSbv = physEoSb;
+ this->_physMolarMass = physMolarMass;
+ this->_physSurfaceTension = physSurfaceTension;
+ this->_charPhysTemperature = charPhysTemperature;
+ this->_latticeSurfaceTension = physSurfaceTension / this->_conversionSurfaceTension;
+}
+
+// Checks to see if parameters include input variables needed for conversion of power law values
+template <typename _T, typename _DESCRIPTOR>
+bool powerLawConversionInputsProvided(const ParametersD<_T, _DESCRIPTOR>& params) const {
+ return params.template provides<parameters::PHYS_CONSISTENCY_COEFF>() &&
+        params.template provides<parameters::POWER_LAW_INDEX>();
+}
+
+template <typename _T, typename _DESCRIPTOR>
+void setPowerLawConversionFactors(const ParametersD<_T, _DESCRIPTOR>& params) {
+ const T physConsistencyCoeff = params.template get<parameters::PHYS_CONSISTENCY_COEFF>();
+ const T powerLawIndex = params.template get<parameters::POWER_LAW_INDEX>();
+
+ this->_conversionConsistencyCoeff = util::pow(this->_conversionTime.value(), powerLawIndex - 2) * util::pow(this->_conversionLength.value(), 2);
+ this->_powerLawIndex = powerLawIndex;
+ this->_physConsistencyCoeff = physConsistencyCoeff;
+}
+
+// Checks to see if parameters include input variables needed for conversion of radiative values
+template <typename _T, typename _DESCRIPTOR>
+bool radiativeConversionInputsProvided(const ParametersD<_T, _DESCRIPTOR>& params) const {
+ return params.template provides<parameters::PHYS_ABSORPTION>() &&
+        params.template provides<parameters::PHYS_SCATTERING>();
+}
+
+template <typename _T, typename _DESCRIPTOR>
+void setRadiativeConversionFactors(const ParametersD<_T, _DESCRIPTOR>& params) {
+ const T physAbsorption = params.template get<parameters::PHYS_ABSORPTION>();
+ const T physScattering = params.template get<parameters::PHYS_SCATTERING>();
+ const T anisotropyFactor = params.template getOrFallback<parameters::ANISOTROPY_FACTOR>(T{0});
+ const T refractiveRelative = params.template getOrFallback<parameters::REFRACTIVE_RELATIVE>(T{1});
+
+ this->_physAbsorption = physAbsorption;
+ this->_physScattering = physScattering;
+ this->_anisotropyFactor = anisotropyFactor;
+ this->_extinction = physAbsorption + physScattering;
+ this->_scatteringAlbedo = physScattering / (physAbsorption + physScattering);
+ this->_physDiffusion = T{1.0} / (T{3.0} * (physAbsorption + physScattering));
+ this->_effectiveAttenuation = util::sqrt(T{3.0} * physAbsorption * (physAbsorption + physScattering));
+ this->_refractiveRelative = refractiveRelative;
+ this->_latticeAbsorption = physAbsorption * this->_conversionLength;
+ this->_latticeScattering = physScattering * this->_conversionLength;
+ this->_latticeDiffusion = this->_physDiffusion / this->_conversionLength;
+}
+
+// ---------------------------------------------------------------------------
+// Common linear-elastic material parameters (StructuralMechanicsUnitConverter)
+// ---------------------------------------------------------------------------
+
+template <typename _T, typename _DESCRIPTOR>
+bool linearElasticConversionInputsProvided(const ParametersD<_T, _DESCRIPTOR>& params) const {
+  return params.template provides<parameters::YOUNGS_MODULUS>()         &&
+         params.template provides<parameters::POISSON_RATIO>()          &&
+         params.template provides<parameters::PHYS_CHAR_TIME>()         &&
+         params.template provides<parameters::PHYS_CHAR_DISPLACEMENT>() &&
+         params.template provides<parameters::SOLID_CASE>();
+}
+
+SolidCase solidCaseFromString(const std::string& name)
+{
+  if (name == "planeStrain") { return SolidCase::planeStrain; }
+  if (name == "planeStress") { return SolidCase::planeStress; }
+  if (name == "continua")    { return SolidCase::continua;    }
+  if (name == "standard")    { return SolidCase::standard;    }
+  throw std::runtime_error("Unknown solid case: " + name);
+}
+
+template <typename _T, typename _DESCRIPTOR>
+void setLinearElasticConversionFactors(const ParametersD<_T, _DESCRIPTOR>& params) {
+  const T         youngsModulus       = params.template get<parameters::YOUNGS_MODULUS>();
+  const T         poissonRatio        = params.template get<parameters::POISSON_RATIO>();
+  const T         charPhysDisplacement= params.template get<parameters::PHYS_CHAR_DISPLACEMENT>();
+  const SolidCase   solidCase         = solidCaseFromString(params.template get<parameters::SOLID_CASE>());
+
+  // physical material state
+  this->_youngsModulus        = youngsModulus;
+  this->_poissonRatio         = poissonRatio;
+  this->_solidCase            = solidCase;
+  this->_charPhysDisplacement = charPhysDisplacement;
+
+  // Lamé parameters per solid case (same convention as the gradient converter)
+  switch (solidCase) {
+    case SolidCase::planeStress:
+      this->_lameLambda = youngsModulus * poissonRatio / (T{1.0} - poissonRatio * poissonRatio);
+      break;
+    case SolidCase::planeStrain:
+    case SolidCase::standard:
+      this->_lameLambda = youngsModulus * poissonRatio
+                    / ((T{1.0} + poissonRatio) * (T{1.0} - T{2.0} * poissonRatio));
+      break;
+    case SolidCase::continua:
+      this->_lameLambda = youngsModulus * poissonRatio
+                    / ((T{1.0} + poissonRatio) * (T{1.0} - poissonRatio));
+      break;
+  }
+  this->_lameMu           = youngsModulus / (T{2.0} * (T{1.0} + poissonRatio));
+  this->_bulkModulus  = this->_lameLambda + T{2.0} / T(_DESCRIPTOR::d) * this->_lameMu;
+
+}
+
+// ---------------------------------------------------------------------------
+// Vector-based elastodynamics LBM (Boolakee et al., 2025)
+// ---------------------------------------------------------------------------
+
+template <typename _T, typename _DESCRIPTOR>
+bool elastodynamicsVectorLBMConversionInputsProvided(const ParametersD<_T, _DESCRIPTOR>& params) const {
+  return linearElasticConversionInputsProvided(params) &&
+         params.template provides<parameters::PHYS_CHAR_VELOCITY>() &&
+         params.template provides<parameters::PHYS_CHAR_TIME>();
+}
+
+template <typename _T, typename _DESCRIPTOR>
+void setElastodynamicsVectorLBMConversionFactors(const ParametersD<_T, _DESCRIPTOR>& params) {
+  setLinearElasticConversionFactors(params);
+
+  const T dx  = this->_conversionLength;
+  const T dt  = this->_conversionTime;
+  const T rho = this->_physDensity;
+
+  // in the vector formulation the characteristic displacement slot carries the velocity
+  this->_charPhysVelocity       = params.template get<parameters::PHYS_CHAR_VELOCITY>();
+  this->_charPhysTime           = params.template get<parameters::PHYS_CHAR_TIME>();
+  this->_charPhysDisplacement   = this->_charPhysVelocity;
+
+  this->_latticeSpeed           =  dx / dt;
+  this->_conversionVelocity     =  dx / dt;
+  this->_conversionDisplacement =  dx / dt;
+  this->_conversionSolidStress  = -dx / dt * rho;
+  this->_conversionSolidForce   =  dx / dt * rho / dt;
+  this->_conversionTraction     =  dx * dx * rho / (dt * dt);
+  this->_conversionLame         =  dx * dx * rho / (dt * dt);
+
+  this->_cMu                    = util::sqrt(this->_lameMu / rho);
+  this->_cK                     = util::sqrt(this->_bulkModulus  / rho);
+}
+
+// ---------------------------------------------------------------------------
+// Quasistationary MRT LBM (Boolakee et al., 2023)
+// ---------------------------------------------------------------------------
+
+template <typename _T, typename _DESCRIPTOR>
+bool stationaryMRTConversionInputsProvided(const ParametersD<_T, _DESCRIPTOR>& params) const {
+  return linearElasticConversionInputsProvided(params) &&
+         params.template provides<parameters::DAMPING_FACTOR>();
+}
+
+template <typename _T, typename _DESCRIPTOR>
+void setStationaryMRTConversionFactors(const ParametersD<_T, _DESCRIPTOR>& params) {
+  setLinearElasticConversionFactors(params);
+
+  const T dx            = this->_conversionLength;
+  const T dt            = this->_conversionTime;
+  const T dampingFactor = params.template get<parameters::DAMPING_FACTOR>();
+
+  this->_conversionDisplacement = dx;
+  this->_conversionSolidStress  = dampingFactor * dx * dx / dt;
+  this->_conversionSolidForce   = dampingFactor * dx / dt;
+  this->_conversionTraction     = dampingFactor * dx * dx / dt;
+  this->_conversionLame         = dampingFactor * dx * dx / dt;
+  this->_dampingFactor          = dampingFactor;
+  this->_epsilon = this->_conversionLength / this->_charPhysLength;
+}
+
+public:
+
   /** Documentation of constructor:
     *  \param physDeltaX              spacing between two lattice cells in __m__
     *  \param physDeltaT              time step in __s__
@@ -883,9 +1282,305 @@ struct UnitConverter : public UnitConverterBase<T> {
     this->_charLatticeVelocity = this->_charPhysVelocity / this->_conversionVelocity;
   }
 
-  template <typename _DESCRIPTOR>
+  template <concepts::LatticeDescriptor _DESCRIPTOR>
   UnitConverter(const UnitConverter<T,_DESCRIPTOR>& rhs) {
     static_cast<UnitConverterBase<T>&>(*this) = static_cast<const UnitConverterBase<T>&>(rhs);
+  }
+
+  /** Unified constructor accepting named parameters via ParametersD.
+    * Automatically determines initialization strategy based on provided parameters.
+    *
+    * Required physical characteristic parameters:
+    *   - PHYS_CHAR_LENGTH
+    *   - PHYS_CHAR_VELOCITY
+    *   - PHYS_VISCOSITY
+    *   - PHYS_DENSITY
+    *
+    * Discretization parameters (at least 2 required):
+    *   - PHYS_DELTA_X
+    *   - PHYS_DELTA_T
+    *   - RESOLUTION
+    *   - LATTICE_RELAXATION_TIME
+    *   - LATTICE_CHAR_VELOCITY
+    *
+    * Optional:
+    *   - PHYS_CHAR_PRESSURE (default: 0)
+    *   - Thermal, Multiphase, ADE, PowerLaw, Radiative  unit converter parameters
+    *
+    * Computed values are written back to the ParametersD object.
+    */
+  template <typename _T, typename _DESCRIPTOR>
+  UnitConverter(const ParametersD<_T, _DESCRIPTOR>& params) {
+    // Validate required physical characteristic parameters are explicitly provided
+    if (!params.template provides<parameters::PHYS_CHAR_LENGTH>()) {
+      throw std::invalid_argument("UnitConverter: Required parameter PHYS_CHAR_LENGTH not provided");
+    }
+    if (!params.template provides<parameters::PHYS_CHAR_VELOCITY>()) {
+      throw std::invalid_argument("UnitConverter: Required parameter PHYS_CHAR_VELOCITY not provided");
+    }
+    if (!params.template provides<parameters::PHYS_CHAR_VISCOSITY>()) {
+      throw std::invalid_argument("UnitConverter: Required parameter PHYS_CHAR_VISCOSITY not provided");
+    }
+    if (!params.template provides<parameters::PHYS_CHAR_DENSITY>()) {
+      throw std::invalid_argument("UnitConverter: Required parameter PHYS_CHAR_DENSITY not provided");
+    }
+
+    // Extract required physical characteristic parameters
+    T charPhysLength = params.template get<parameters::PHYS_CHAR_LENGTH>();
+    T charPhysVelocity = params.template get<parameters::PHYS_CHAR_VELOCITY>();
+    T physViscosity = params.template get<parameters::PHYS_CHAR_VISCOSITY>();
+    T physDensity = params.template get<parameters::PHYS_CHAR_DENSITY>();
+    // PHYS_CHAR_PRESSURE defaults to 0 if not provided
+    T charPhysPressure = params.template getOrFallback<parameters::PHYS_CHAR_PRESSURE>(T{0});
+
+    // Initialize invCs2 first
+    this->_invCs2 = descriptors::invCs2<T,DESCRIPTOR>();
+
+    // Store physical parameters
+    this->_charPhysLength = charPhysLength;
+    this->_charPhysVelocity = charPhysVelocity;
+    this->_physViscosity = physViscosity;
+    this->_physDensity = physDensity;
+    this->_charPhysPressure = charPhysPressure;
+
+    // Determine which discretization parameters are explicitly provided
+    bool hasPhysDeltaX = params.template provides<parameters::PHYS_DELTA_X>();
+    bool hasPhysDeltaT = params.template provides<parameters::PHYS_DELTA_T>();
+    bool hasResolution = params.template provides<parameters::RESOLUTION>();
+    bool hasTau = params.template provides<parameters::LATTICE_RELAXATION_TIME>();
+    bool hasLatticeU = params.template provides<parameters::LATTICE_CHAR_VELOCITY>();
+
+    // Count provided discretization parameters
+    int discretizationCount = (hasPhysDeltaX ? 1 : 0) + (hasPhysDeltaT ? 1 : 0) +
+                              (hasResolution ? 1 : 0) + (hasTau ? 1 : 0) + (hasLatticeU ? 1 : 0);
+
+    if (discretizationCount < 2) {
+      throw std::invalid_argument("UnitConverter: At least 2 discretization parameters required, got " + std::to_string(discretizationCount));
+    }
+
+    // Compute discretization parameters based on provided combination
+    T physDeltaX{}, physDeltaT{}, latticeRelaxationTime{}, charLatticeVelocity{};
+
+    // Case A: PHYS_DELTA_X + PHYS_DELTA_T (direct initialization)
+    if (hasPhysDeltaX && hasPhysDeltaT) {
+      physDeltaX = params.template getOrFallback<parameters::PHYS_DELTA_X>(T{});
+      physDeltaT = params.template getOrFallback<parameters::PHYS_DELTA_T>(T{});
+
+      if (hasTau) {
+        latticeRelaxationTime = params.template getOrFallback<parameters::LATTICE_RELAXATION_TIME>(T{});
+        // Validate consistency
+        T expectedDeltaT = (latticeRelaxationTime - 0.5) / descriptors::invCs2<T,DESCRIPTOR>() * physDeltaX * physDeltaX / physViscosity;
+        if (std::abs(expectedDeltaT - physDeltaT) > std::max(T{1e-10}, T{1e-6} * physDeltaT)) {
+          throw std::runtime_error("UnitConverter: Conflicting PHYS_DELTA_T and LATTICE_RELAXATION_TIME");
+        }
+      } else {
+        // Compute tau from physDeltaX and physDeltaT
+        latticeRelaxationTime = physViscosity / (physDeltaX * physDeltaX) * descriptors::invCs2<T,DESCRIPTOR>() * physDeltaT + 0.5;
+      }
+
+      if (hasLatticeU) {
+        charLatticeVelocity = params.template getOrFallback<parameters::LATTICE_CHAR_VELOCITY>(T{});
+        // Validate consistency
+        T expectedDeltaT = charLatticeVelocity / charPhysVelocity * physDeltaX;
+        if (std::abs(expectedDeltaT - physDeltaT) > std::max(T{1e-10}, T{1e-6} * physDeltaT)) {
+          throw std::runtime_error("UnitConverter: Conflicting PHYS_DELTA_T and LATTICE_CHAR_VELOCITY");
+        }
+      } else {
+        // Compute lattice velocity from physDeltaX and physDeltaT
+        charLatticeVelocity = charPhysVelocity / physDeltaX * physDeltaT;
+      }
+    }
+    // Case B: PHYS_DELTA_X + RESOLUTION
+    else if (hasPhysDeltaX && hasResolution) {
+      physDeltaX = params.template getOrFallback<parameters::PHYS_DELTA_X>(T{});
+      int resolution = params.template getOrFallback<parameters::RESOLUTION>(int{});
+
+      // Validate consistency
+      T expectedDeltaX = charPhysLength / resolution;
+      if (std::abs(expectedDeltaX - physDeltaX) > std::max(T{1e-10}, T{1e-6} * physDeltaX)) {
+        throw std::runtime_error("UnitConverter: Conflicting PHYS_DELTA_X and RESOLUTION");
+      }
+
+      if (hasTau) {
+        latticeRelaxationTime = params.template getOrFallback<parameters::LATTICE_RELAXATION_TIME>(T{});
+        physDeltaT = (latticeRelaxationTime - 0.5) / descriptors::invCs2<T,DESCRIPTOR>() * physDeltaX * physDeltaX / physViscosity;
+      } else if (hasLatticeU) {
+        charLatticeVelocity = params.template getOrFallback<parameters::LATTICE_CHAR_VELOCITY>(T{});
+        physDeltaT = charLatticeVelocity / charPhysVelocity * physDeltaX;
+        // Also compute tau
+        latticeRelaxationTime = physViscosity / (physDeltaX * physDeltaX) * descriptors::invCs2<T,DESCRIPTOR>() * physDeltaT + 0.5;
+      } else {
+        throw std::invalid_argument("UnitConverter: PHYS_DELTA_X + RESOLUTION requires LATTICE_RELAXATION_TIME or LATTICE_CHAR_VELOCITY");
+      }
+    }
+    // Case C: PHYS_DELTA_X + LATTICE_RELAXATION_TIME
+    else if (hasPhysDeltaX && hasTau) {
+      physDeltaX = params.template getOrFallback<parameters::PHYS_DELTA_X>(T{});
+      latticeRelaxationTime = params.template getOrFallback<parameters::LATTICE_RELAXATION_TIME>(T{});
+
+      physDeltaT = (latticeRelaxationTime - 0.5) / descriptors::invCs2<T,DESCRIPTOR>() * physDeltaX * physDeltaX / physViscosity;
+
+      if (hasLatticeU) {
+        charLatticeVelocity = params.template getOrFallback<parameters::LATTICE_CHAR_VELOCITY>(T{});
+        // Validate consistency
+        T expectedDeltaT = charLatticeVelocity / charPhysVelocity * physDeltaX;
+        if (std::abs(expectedDeltaT - physDeltaT) > std::max(T{1e-10}, T{1e-6} * physDeltaT)) {
+          throw std::runtime_error("UnitConverter: Conflicting LATTICE_RELAXATION_TIME and LATTICE_CHAR_VELOCITY");
+        }
+      } else {
+        charLatticeVelocity = charPhysVelocity / physDeltaX * physDeltaT;
+      }
+    }
+    // Case D: PHYS_DELTA_X + LATTICE_CHAR_VELOCITY
+    else if (hasPhysDeltaX && hasLatticeU) {
+      physDeltaX = params.template getOrFallback<parameters::PHYS_DELTA_X>(T{});
+      charLatticeVelocity = params.template getOrFallback<parameters::LATTICE_CHAR_VELOCITY>(T{});
+
+      physDeltaT = charLatticeVelocity / charPhysVelocity * physDeltaX;
+
+      latticeRelaxationTime = physViscosity / (physDeltaX * physDeltaX) * descriptors::invCs2<T,DESCRIPTOR>() * physDeltaT + 0.5;
+    }
+    // Case E: RESOLUTION + LATTICE_RELAXATION_TIME
+    else if (hasResolution && hasTau) {
+      int resolution = params.template getOrFallback<parameters::RESOLUTION>(int{});
+      latticeRelaxationTime = params.template getOrFallback<parameters::LATTICE_RELAXATION_TIME>(T{});
+
+      physDeltaX = charPhysLength / resolution;
+
+      physDeltaT = (latticeRelaxationTime - 0.5) / descriptors::invCs2<T,DESCRIPTOR>() * physDeltaX * physDeltaX / physViscosity;
+
+      charLatticeVelocity = charPhysVelocity / physDeltaX * physDeltaT;
+    }
+    // Case F: RESOLUTION + LATTICE_CHAR_VELOCITY
+    else if (hasResolution && hasLatticeU) {
+      int resolution = params.template getOrFallback<parameters::RESOLUTION>(int{});
+      charLatticeVelocity = params.template getOrFallback<parameters::LATTICE_CHAR_VELOCITY>(T{});
+
+      physDeltaX = charPhysLength / resolution;
+
+      physDeltaT = charLatticeVelocity / charPhysVelocity * physDeltaX;
+
+      latticeRelaxationTime = physViscosity / (physDeltaX * physDeltaX) * descriptors::invCs2<T,DESCRIPTOR>() * physDeltaT + 0.5;
+    }
+    // Case G: LATTICE_RELAXATION_TIME + LATTICE_CHAR_VELOCITY
+    else if (hasTau && hasLatticeU) {
+      latticeRelaxationTime = params.template getOrFallback<parameters::LATTICE_RELAXATION_TIME>(T{});
+      charLatticeVelocity = params.template getOrFallback<parameters::LATTICE_CHAR_VELOCITY>(T{});
+
+      physDeltaX = physViscosity * charLatticeVelocity / charPhysVelocity * descriptors::invCs2<T,DESCRIPTOR>() / (latticeRelaxationTime - 0.5);
+
+      physDeltaT = charLatticeVelocity / charPhysVelocity * physDeltaX;
+    }
+    // Case H: PHYS_DELTA_T + RESOLUTION (less common but valid)
+    else if (hasPhysDeltaT && hasResolution) {
+      int resolution = params.template getOrFallback<parameters::RESOLUTION>(int{});
+      physDeltaT = params.template getOrFallback<parameters::PHYS_DELTA_T>(T{});
+
+      physDeltaX = charPhysLength / resolution;
+
+      if (hasTau) {
+        latticeRelaxationTime = params.template getOrFallback<parameters::LATTICE_RELAXATION_TIME>(T{});
+        // Validate
+        T expectedDeltaT = (latticeRelaxationTime - 0.5) / descriptors::invCs2<T,DESCRIPTOR>() * physDeltaX * physDeltaX / physViscosity;
+        if (std::abs(expectedDeltaT - physDeltaT) > std::max(T{1e-10}, T{1e-6} * physDeltaT)) {
+          throw std::runtime_error("UnitConverter: Conflicting PHYS_DELTA_T and LATTICE_RELAXATION_TIME");
+        }
+      } else {
+        latticeRelaxationTime = physViscosity / (physDeltaX * physDeltaX) * descriptors::invCs2<T,DESCRIPTOR>() * physDeltaT + 0.5;
+      }
+
+      charLatticeVelocity = charPhysVelocity / physDeltaX * physDeltaT;
+    }
+    // Case I: PHYS_DELTA_T + LATTICE_RELAXATION_TIME
+    else if (hasPhysDeltaT && hasTau) {
+      physDeltaT = params.template getOrFallback<parameters::PHYS_DELTA_T>(T{});
+      latticeRelaxationTime = params.template getOrFallback<parameters::LATTICE_RELAXATION_TIME>(T{});
+
+      // Solve for physDeltaX from tau formula: tau = nu / dx^2 * invCs2 * dt + 0.5
+      // => dx^2 = nu * invCs2 * dt / (tau - 0.5)
+      physDeltaX = std::sqrt(physViscosity * descriptors::invCs2<T,DESCRIPTOR>() * physDeltaT / (latticeRelaxationTime - 0.5));
+
+      if (hasLatticeU) {
+        charLatticeVelocity = params.template getOrFallback<parameters::LATTICE_CHAR_VELOCITY>(T{});
+        // Validate
+        T expectedDeltaT = charLatticeVelocity / charPhysVelocity * physDeltaX;
+        if (std::abs(expectedDeltaT - physDeltaT) > std::max(T{1e-10}, T{1e-6} * physDeltaT)) {
+          throw std::runtime_error("UnitConverter: Conflicting PHYS_DELTA_T and LATTICE_CHAR_VELOCITY");
+        }
+      } else {
+        charLatticeVelocity = charPhysVelocity / physDeltaX * physDeltaT;
+      }
+    }
+    // Case J: PHYS_DELTA_T + LATTICE_CHAR_VELOCITY
+    else if (hasPhysDeltaT && hasLatticeU) {
+      physDeltaT = params.template getOrFallback<parameters::PHYS_DELTA_T>(T{});
+      charLatticeVelocity = params.template getOrFallback<parameters::LATTICE_CHAR_VELOCITY>(T{});
+
+      physDeltaX = charPhysVelocity / charLatticeVelocity * physDeltaT;
+
+      latticeRelaxationTime = physViscosity / (physDeltaX * physDeltaX) * descriptors::invCs2<T,DESCRIPTOR>() * physDeltaT + 0.5;
+    }
+    else {
+      throw std::invalid_argument("UnitConverter: Unsupported combination of discretization parameters");
+    }
+
+    // Initialize all conversion factors using computed values
+    this->_conversionLength = physDeltaX;
+    this->_conversionTime = physDeltaT;
+    this->_conversionVelocity = this->_conversionLength / this->_conversionTime;
+    this->_conversionDensity = physDensity;
+    this->_conversionMass = this->_conversionDensity * util::pow(this->_conversionLength.value(), 3);
+    this->_conversionViscosity = this->_conversionLength * this->_conversionLength / this->_conversionTime;
+    this->_conversionForce = this->_conversionMass * this->_conversionLength / (this->_conversionTime * this->_conversionTime);
+    this->_conversionTorque = this->_conversionMass * this->_conversionLength * this->_conversionLength / (this->_conversionTime * this->_conversionTime);
+    this->_conversionPressure = this->_conversionForce / util::pow(this->_conversionLength.value(), 2);
+    this->_resolution = (std::size_t)(this->_charPhysLength / this->_conversionLength + 0.5);
+    this->_latticeRelaxationTime = latticeRelaxationTime;
+    this->_conversionSurfaceTension = this->_conversionDensity * this->_conversionViscosity * this->_conversionViscosity / this->_conversionLength;
+    this->_conversionChemicalPotential = this->_conversionVelocity * this->_conversionVelocity;
+    this->_charLatticeVelocity = charLatticeVelocity;
+
+    // Initialize optional parameters required by specific converters
+    if (thermalConversionInputsProvided(params)) {
+      setThermalConversionFactors(params);
+    }
+    if (adeConversionInputsProvided(params)) {
+      setAdeConversionFactors(params);
+    }
+    if (multiphaseConversionInputsProvided(params)) {
+      setMultiphaseConversionFactors(params);
+    }
+    if (powerLawConversionInputsProvided(params)) {
+      setPowerLawConversionFactors(params);
+    }
+    if (radiativeConversionInputsProvided(params)) {
+      setRadiativeConversionFactors(params);
+    }
+    if (linearElasticConversionInputsProvided(params)) {
+      const bool isElastodynamicsVectorLBM = elastodynamicsVectorLBMConversionInputsProvided(params);
+      const bool isStationaryMRT           = stationaryMRTConversionInputsProvided(params);
+
+      if (isElastodynamicsVectorLBM && isStationaryMRT) {
+        throw std::runtime_error(
+          "Ambiguous structural mechanics parameters: both the elastodynamics vector LBM "
+          "(PHYS_CHAR_VELOCITY) and the quasistationary MRT LBM (DAMPING_FACTOR) inputs were "
+          "provided. These schemes are mutually exclusive - add only the parameters belonging "
+          "to the scheme you intend to use.");
+      }
+
+      if (isElastodynamicsVectorLBM) {
+        setElastodynamicsVectorLBMConversionFactors(params);
+      }
+      else if (isStationaryMRT) {
+        setStationaryMRTConversionFactors(params);
+      }
+      else {
+        throw std::runtime_error(
+          "Could not figure out which Structural Mechanics scheme to use based on the provided parameters. "
+          "Therefore, no Unit Converter could be set. "
+          "Please provide parameters tailored for the intended LBM scheme.");
+      }
+    }
   }
 
   virtual void print(std::ostream& fout) const;
@@ -986,5 +1681,5 @@ std::unique_ptr<UnitConverter<T,DESCRIPTOR>> createUnitConverter(ARGS&&... args)
 
 #include "thermalUnitConverter.h"
 #include "multiPhaseUnitConverter.h"
-
+#include "structuralMechanicsUnitConverter.h"
 #endif

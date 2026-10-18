@@ -12,10 +12,16 @@
 #include "functors/collisionF.h"
 #include "functors/regularizationF.h"
 #include "functors/optimalityF.h"
+#include "functors/qualityF.h"
+
+#include "functors/functorParameters.h"
 
 #include "operators/writeFunctorO.h"
+#include "operators/trackAverageFunctorO.h"
+#include "operators/smoothInflowO.h"
 
 #include "couplers/copyFieldsO.h"
+#include "couplers/qualityO.h"
 
 #include "concepts.h"
 

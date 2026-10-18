@@ -70,11 +70,18 @@ def process_file(filepath, mode):
             content = f.read()
 
         if mode == 'dynamics':
-            # struct CSE< ... >
+            # struct CSE< DYNAMICS, olb::CodegenTarget::TARGET >  (TARGET optional for legacy files)
             pattern = r'struct\s+CSE\s*<'
             body = find_template_content(content, pattern)
             if body:
-                print(clean_string(body))
+                parts = split_top_level_comma(body)
+                if parts:
+                    # 2-argument form: strip the trailing CodegenTarget argument
+                    dynamics, _target = parts
+                    print(clean_string(dynamics))
+                else:
+                    # legacy single-argument form
+                    print(clean_string(body))
                 return 0
         elif mode == 'operator':
             # struct CSE_O< ... >

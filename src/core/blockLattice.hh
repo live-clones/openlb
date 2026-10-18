@@ -28,12 +28,27 @@
 
 #include "blockLattice.h"
 
+#include "geometry/cuboid.h"
+#include "communication/directionalOverlap.h"
 #include "introspection.h"
+#include "utilities/performanceProfiler.h"
 
 #include <iterator>
+#include <sstream>
 
 namespace olb {
 
+
+template<concepts::BaseType T, concepts::LatticeDescriptor DESCRIPTOR>
+BlockLattice<T,DESCRIPTOR>::BlockLattice(const Cuboid<T,DESCRIPTOR::d>& cuboid, int padding, Platform platform)
+  : BlockStructure<DESCRIPTOR>(cuboid.getExtent(), padding),
+    _platform(platform),
+    _statisticsEnabled{true},
+    _statistics{nullptr},
+    _introspectable{true},
+    _physOrigin(cuboid.getOrigin()),
+    _physDeltaR(cuboid.getDeltaR())
+{ }
 
 template<concepts::BaseType T, concepts::LatticeDescriptor DESCRIPTOR>
 BlockLattice<T,DESCRIPTOR>::BlockLattice(Vector<int,DESCRIPTOR::d> size, int padding, Platform platform)
@@ -41,7 +56,9 @@ BlockLattice<T,DESCRIPTOR>::BlockLattice(Vector<int,DESCRIPTOR::d> size, int pad
     _platform(platform),
     _statisticsEnabled{true},
     _statistics{nullptr},
-    _introspectable{true}
+    _introspectable{true},
+    _physOrigin{},
+    _physDeltaR{1}
 { }
 
 template<concepts::BaseType T, concepts::LatticeDescriptor DESCRIPTOR>
@@ -55,14 +72,18 @@ BlockLattice<T,DESCRIPTOR>::~BlockLattice()
 template<concepts::BaseType T, concepts::LatticeDescriptor DESCRIPTOR>
 void BlockLattice<T,DESCRIPTOR>::initialize()
 {
-  addPostProcessor(typeid(stage::PostStream),
+  addPostProcessor(typeid(stage::Statistics),
                    meta::id<StatisticsPostProcessor>());
 
+  resolveMomentsDemands();
+
   // TODO: Move to StatisticsPostProcessor::setup
-  _statistics = new LatticeStatistics<T>;
+  _statistics = new LatticeStatistics<T,DESCRIPTOR>;
   _statistics->initialize();
 
   setProcessingContext(ProcessingContext::Simulation);
+
+  postProcess<stage::Statistics>();
   postProcess();
 }
 
@@ -204,11 +225,11 @@ void BlockLattice<T,DESCRIPTOR>::iniEquilibrium(BlockIndicatorF<T,DESCRIPTOR::d>
                                                 AnalyticalF<DESCRIPTOR::d,T,T>& u)
 {
   if (!indicator.isEmpty()) {
-    T uTmp[DESCRIPTOR::d] = { };
-    T rhoTmp = T();
-    Vector<T,DESCRIPTOR::d> physR;
-    this->forSpatialLocations([&](LatticeR<DESCRIPTOR::d> loc) {
+    this->forSpatialLocationsParallel([&](LatticeR<DESCRIPTOR::d> loc) {
       if (indicator(loc)) {
+        T uTmp[DESCRIPTOR::d] = { };
+        T rhoTmp = T();
+        Vector<T,DESCRIPTOR::d> physR;
         indicator.getBlockGeometry().getPhysR(physR, loc);
         u(uTmp, physR.data());
         rho(&rhoTmp, physR.data());
@@ -224,11 +245,11 @@ void BlockLattice<T,DESCRIPTOR>::iniEquilibrium(BlockIndicatorF<T,DESCRIPTOR::d>
                                                 BlockF<T,DESCRIPTOR::d>& u)
 {
   if (!indicator.isEmpty()) {
-    T physR[DESCRIPTOR::d] = { };
-    T uTmp[DESCRIPTOR::d] = { };
-    T rhoTmp = T();
-    this->forSpatialLocations([&](LatticeR<DESCRIPTOR::d> loc) {
+    this->forSpatialLocationsParallel([&](LatticeR<DESCRIPTOR::d> loc) {
       if (indicator(loc)) {
+        T physR[DESCRIPTOR::d] = { };
+        T uTmp[DESCRIPTOR::d] = { };
+        T rhoTmp = T();
         indicator.getBlockGeometry().getPhysR(physR, loc);
         u(uTmp, loc.data());
         rho(&rhoTmp, physR);
@@ -302,21 +323,24 @@ void BlockLattice<T,DESCRIPTOR>::defineDynamics(BlockIndicatorF<T,DESCRIPTOR::d>
 template<typename T, typename DESCRIPTOR, Platform PLATFORM>
 void ConcreteBlockLattice<T,DESCRIPTOR,PLATFORM>::collide()
 {
-  if (_customCollisionO) {
-    _customCollisionO->operator()(*this);
-  } else {
-    if constexpr (isPlatformCPU(PLATFORM)) {
-      _dynamicsMap.collide(CollisionDispatchStrategy::Dominant);
+  // GPU platforms (SYCL/HIP/CUDA) always use Individual dispatch and no custom
+  // collision operator, exactly as before. Only the CPU path is restored to the
+  // dominant-fused dispatch (and custom collision operator) used on master.
+  if constexpr (isPlatformCPU(PLATFORM)) {
+    if (_customCollisionO) {
+      _customCollisionO->operator()(*this);
     } else {
-      _dynamicsMap.collide(CollisionDispatchStrategy::Individual);
+      _dynamicsMap.collide(CollisionDispatchStrategy::Dominant);
     }
+  } else {
+    _dynamicsMap.collide(CollisionDispatchStrategy::Individual);
   }
 }
 
 template<typename T, typename DESCRIPTOR, Platform PLATFORM>
 void ConcreteBlockLattice<T,DESCRIPTOR,PLATFORM>::stream()
 {
-  if constexpr (PLATFORM == Platform::GPU_CUDA || PLATFORM == Platform::GPU_HIP ) {
+  if constexpr (PLATFORM == Platform::GPU_CUDA || PLATFORM == Platform::GPU_HIP || PLATFORM == Platform::GPU_SYCL) {
     DESCRIPTOR::template filter<descriptors::is_propagatable_field>
               ::for_each([&](auto field) {
       auto& population = getField(field.get());
@@ -379,17 +403,28 @@ void BlockLattice<T,DESCRIPTOR>::stripeOffDensityOffset(T offset)
 }
 
 template<concepts::BaseType T, concepts::LatticeDescriptor DESCRIPTOR>
-LatticeStatistics<T>& BlockLattice<T,DESCRIPTOR>::getStatistics()
+LatticeStatistics<T,DESCRIPTOR>& BlockLattice<T,DESCRIPTOR>::getStatistics()
 {
   return *_statistics;
 }
 
 template<concepts::BaseType T, concepts::LatticeDescriptor DESCRIPTOR>
-const LatticeStatistics<T>& BlockLattice<T,DESCRIPTOR>::getStatistics() const
+const LatticeStatistics<T,DESCRIPTOR>& BlockLattice<T,DESCRIPTOR>::getStatistics() const
 {
   return *_statistics;
 }
 
+
+template<typename T, typename DESCRIPTOR, Platform PLATFORM>
+ConcreteBlockLattice<T,DESCRIPTOR,PLATFORM>::ConcreteBlockLattice(const Cuboid<T,DESCRIPTOR::d>& cuboid,
+                                                                  int padding)
+  : BlockLattice<T,DESCRIPTOR>(cuboid, padding, PLATFORM),
+    _data(),
+    _descriptorFields(),
+    _dynamicsMap(*this)
+{
+  allocateFields();
+}
 
 template<typename T, typename DESCRIPTOR, Platform PLATFORM>
 ConcreteBlockLattice<T,DESCRIPTOR,PLATFORM>::ConcreteBlockLattice(Vector<int,DESCRIPTOR::d> size,
@@ -399,16 +434,24 @@ ConcreteBlockLattice<T,DESCRIPTOR,PLATFORM>::ConcreteBlockLattice(Vector<int,DES
     _descriptorFields(),
     _dynamicsMap(*this)
 {
+  allocateFields();
+}
+
+template<typename T, typename DESCRIPTOR, Platform PLATFORM>
+void ConcreteBlockLattice<T,DESCRIPTOR,PLATFORM>::allocateFields()
+{
   DESCRIPTOR::fields_t::for_each([&](auto id) {
     using field = typename decltype(id)::type;
     using field_type = Array<field>;
     auto& fieldArray = _data.template allocate<field_type>(this->getNcells());
     _descriptorFields.template set<field>(&fieldArray);
     _communicatables[typeid(field)] = std::unique_ptr<Communicatable>(new ConcreteCommunicatable<
-      ColumnVector<typename ImplementationOf<typename field::template column_type<T>,PLATFORM>::type,
-                 DESCRIPTOR::template size<field>()>
+      typename std::decay_t<decltype(fieldArray)>::base_type
     >(fieldArray));
-    _data.template setSerialization<field_type>(true);
+    // Sparse fields opt out of serialization (per-cell operator[] comm only)
+    if constexpr (!detail::isSparseColumnBacked<T,DESCRIPTOR,PLATFORM,field>()) {
+      _data.template setSerialization<field_type>(true);
+    }
   });
 
   for (CellID iCell=0; iCell < this->getNcells(); ++iCell) {
@@ -449,8 +492,7 @@ auto& ConcreteBlockLattice<T,DESCRIPTOR,PLATFORM>::getData()
         _data.template setSerialization<FIELD_TYPE>(true);
       }
       _communicatables[typeid(field_t)] = std::unique_ptr<Communicatable>(new ConcreteCommunicatable<
-        ColumnVector<typename ImplementationOf<typename field_t::template column_type<T>,PLATFORM>::type,
-                   DESCRIPTOR::template size<field_t>()>
+        typename concrete_data_t::base_type
       >(data));
     }
     return data;
@@ -493,6 +535,8 @@ void ConcreteBlockLattice<T,DESCRIPTOR,PLATFORM>::postProcess(std::type_index st
 template<typename T, typename DESCRIPTOR, Platform PLATFORM>
 void ConcreteBlockLattice<T,DESCRIPTOR,PLATFORM>::writeDescription(std::ostream& clout) const
 {
+  // Read-only diagnostic: getParameters lazily reads block data, hence the const_cast
+  auto* self = const_cast<ConcreteBlockLattice<T,DESCRIPTOR,PLATFORM>*>(this);
   const auto dynamics = _dynamicsMap.getAll();
   for (const auto& promise : dynamics) {
     auto simplifiedName = introspection::getSimplifiedDynamicsName(promise.name());
@@ -521,6 +565,13 @@ void ConcreteBlockLattice<T,DESCRIPTOR,PLATFORM>::writeDescription(std::ostream&
     if (auto count = promise.getMemoryBandwidth()) {
     clout << " bandwidth[byte]:  " << *count << std::endl;
     }
+    if (Dynamics<T,DESCRIPTOR>* dyn = self->_dynamicsMap.get(DynamicsPromise<T,DESCRIPTOR>(promise))) {
+      std::ostringstream pbuf;
+      dyn->getParameters(*self).describe(pbuf);
+      if (!pbuf.str().empty()) {
+        clout << " parameters:" << std::endl << pbuf.str();
+      }
+    }
     clout << "----------------------" << std::endl;
   }
 
@@ -538,12 +589,24 @@ void ConcreteBlockLattice<T,DESCRIPTOR,PLATFORM>::writeDescription(std::ostream&
         clout << " scope:       " << getName(promise.scope()) << std::endl;
         clout << " weight:      " << postProcessorsOfPriority.getWeight(promise) << std::endl;
         clout << " isOptimized: " << promise.hasOptimizedVersion() << std::endl;
+        std::ostringstream pbuf;
+        postProcessorsOfPriority.getParameters(promise, *self).describe(pbuf);
+        if (!pbuf.str().empty()) {
+          clout << " parameters:" << std::endl << pbuf.str();
+        }
         clout << "---------------------------" << std::endl;
       }
     }
 
     clout << "-------------------" << std::endl;
   }
+
+  const auto extent = this->getExtent();
+  std::size_t coreCells = 1;
+  for (unsigned iD=0; iD < DESCRIPTOR::d; ++iD) {
+    coreCells *= std::size_t(extent[iD]);
+  }
+  _data.describeFieldStorage(clout, coreCells);
 }
 
 template<typename T, typename DESCRIPTOR, Platform PLATFORM>
@@ -608,6 +671,32 @@ void ConcreteBlockLattice<T,DESCRIPTOR,PLATFORM>::writeOperatorAsCSV(std::ostrea
 }
 
 template<typename T, typename DESCRIPTOR, Platform PLATFORM>
+void ConcreteBlockLattice<T,DESCRIPTOR,PLATFORM>::writeFieldsAsCSV(std::ostream& clout) const
+{
+  const auto extent = this->getExtent();
+  std::size_t coreCells = 1;
+  for (unsigned iD=0; iD < DESCRIPTOR::d; ++iD) {
+    coreCells *= std::size_t(extent[iD]);
+  }
+  _data.writeFieldStorageCSV(clout, coreCells);
+}
+
+template<typename T, typename DESCRIPTOR, Platform PLATFORM>
+long ConcreteBlockLattice<T,DESCRIPTOR,PLATFORM>::countHaloTilesForField(
+  std::type_index field, const std::vector<CellID>& cells) const
+{
+  long result = -1;
+  _data.forEach([&](const auto& any) {
+    const auto casted = any.template tryAs<AbstractFieldArrayBase>();
+    if (casted && (*casted)->getFieldTypeIndex() == field
+        && (*casted)->getStorageInfo().storage == FieldStorage::Sparse) {
+      result = static_cast<long>((*casted)->countTilesFor(cells));
+    }
+  });
+  return result;
+}
+
+template<typename T, typename DESCRIPTOR, Platform PLATFORM>
 std::size_t ConcreteBlockLattice<T,DESCRIPTOR,PLATFORM>::getNblock() const
 {
   return _data.getNblock();
@@ -633,10 +722,13 @@ bool* ConcreteBlockLattice<T,DESCRIPTOR,PLATFORM>::getBlock(std::size_t iBlock, 
 template<typename T, typename DESCRIPTOR, Platform PLATFORM>
 void ConcreteBlockLattice<T,DESCRIPTOR,PLATFORM>::postLoad()
 {
-  auto& population = getField<descriptors::POPULATION>();
-  for (unsigned iPop=0; iPop < DESCRIPTOR::q; ++iPop) {
-    population[iPop].postLoad();
-  }
+  DESCRIPTOR::template filter<descriptors::is_propagatable_field>
+            ::for_each([&](auto field) {
+    auto& population = getField(field.get());
+    for (unsigned iPop=0; iPop < DESCRIPTOR::q; ++iPop) {
+      population[iPop].postLoad();
+    }
+  });
 }
 
 
@@ -648,7 +740,7 @@ class ConcreteBlockCommunicator<ConcreteBlockLattice<T,DESCRIPTOR,PLATFORM>>::Se
 private:
   const std::vector<CellID>& _cells;
 
-  MultiConcreteCommunicatable<ConcreteBlockLattice<T,DESCRIPTOR,PLATFORM>> _source;
+  std::unique_ptr<Communicatable> _source;
 
   std::unique_ptr<std::uint8_t[]> _buffer;
   MpiSendRequest _request;
@@ -657,22 +749,25 @@ public:
   SendTask(MPI_Comm comm, int tag, int rank,
            const std::vector<std::type_index>& fields,
            const std::vector<CellID>& cells,
+           const overlap::FieldMasks& masks,
            ConcreteBlockLattice<T,DESCRIPTOR,PLATFORM>& block):
     _cells(cells),
-    _source(block, fields),
-    _buffer(new std::uint8_t[_source.size(_cells)] { }),
-    _request(_buffer.get(), _source.size(_cells),
+    _source(overlap::makeMaskedMultiCommunicatable(block, fields, masks)),
+    _buffer(new std::uint8_t[_source->size(_cells)] { }),
+    _request(_buffer.get(), _source->size(_cells),
              rank, tag, comm)
   { }
 
   void send()
   {
-    _source.serialize(_cells, _buffer.get());
+    OLB_PROFILE_DYNAMIC_T(std::string(getName(PLATFORM)) + ":Comm:SendTask:send", DESCRIPTOR);
+    _source->serialize(_cells, _buffer.get());
     _request.start();
   }
 
   void wait()
   {
+    OLB_PROFILE_DYNAMIC_T(std::string(getName(PLATFORM)) + ":Comm:SendTask:wait", DESCRIPTOR);
     _request.wait();
   }
 };
@@ -685,7 +780,7 @@ private:
   const int _rank;
   const std::vector<CellID>& _cells;
 
-  MultiConcreteCommunicatable<ConcreteBlockLattice<T,DESCRIPTOR,PLATFORM>> _target;
+  std::unique_ptr<Communicatable> _target;
 
   std::unique_ptr<std::uint8_t[]> _buffer;
   MpiRecvRequest _request;
@@ -719,13 +814,14 @@ public:
   RecvTask(MPI_Comm comm, int tag, int rank,
            const std::vector<std::type_index>& fields,
            const std::vector<CellID>& cells,
+           const overlap::FieldMasks& masks,
            ConcreteBlockLattice<T,DESCRIPTOR,PLATFORM>& block):
     _tag(tag),
     _rank(rank),
     _cells(cells),
-    _target(block, fields),
-    _buffer(new std::uint8_t[_target.size(_cells)] { }),
-    _request(_buffer.get(), _target.size(_cells),
+    _target(overlap::makeMaskedMultiCommunicatable(block, fields, masks)),
+    _buffer(new std::uint8_t[_target->size(_cells)] { }),
+    _request(_buffer.get(), _target->size(_cells),
              _rank, _tag, comm)
   { }
 
@@ -737,6 +833,7 @@ public:
 
   void receive()
   {
+    OLB_PROFILE_DYNAMIC_T(std::string(getName(PLATFORM)) + ":Comm:RecvTask:receive", DESCRIPTOR);
     _request.start();
   };
 
@@ -747,7 +844,8 @@ public:
 
   void unpack()
   {
-    _target.deserialize(_cells, _buffer.get());
+    OLB_PROFILE_DYNAMIC_T(std::string(getName(PLATFORM)) + ":Comm:RecvTask:unpack", DESCRIPTOR);
+    _target->deserialize(_cells, _buffer.get());
   }
 };
 
@@ -770,8 +868,8 @@ private:
   const std::vector<CellID>& _targetCells;
   const std::vector<CellID>& _sourceCells;
 
-  MultiConcreteCommunicatable<ConcreteBlockLattice<T,DESCRIPTOR,PLATFORM>> _target;
-  MultiConcreteCommunicatable<ConcreteBlockLattice<T,DESCRIPTOR,PLATFORM>> _source;
+  std::unique_ptr<Communicatable> _target;
+  std::unique_ptr<Communicatable> _source;
 
   std::unique_ptr<std::uint8_t[]> _buffer;
 
@@ -779,12 +877,13 @@ public:
   HomogeneousCopyTask(
     const std::vector<std::type_index>& fields,
     const std::vector<CellID>& targetCells, ConcreteBlockLattice<T,DESCRIPTOR,PLATFORM>& target,
-    const std::vector<CellID>& sourceCells, ConcreteBlockLattice<T,DESCRIPTOR,PLATFORM>& source):
+    const std::vector<CellID>& sourceCells, ConcreteBlockLattice<T,DESCRIPTOR,PLATFORM>& source,
+    const overlap::FieldMasks& masks = {}):
     _targetCells(targetCells),
     _sourceCells(sourceCells),
-    _target(target, fields),
-    _source(source, fields),
-    _buffer(new std::uint8_t[_source.size(_sourceCells)] { })
+    _target(overlap::makeMaskedMultiCommunicatable(target, fields, masks)),
+    _source(overlap::makeMaskedMultiCommunicatable(source, fields, masks)),
+    _buffer(new std::uint8_t[_source->size(_sourceCells)] { })
   {
     OLB_ASSERT(_sourceCells.size() == _targetCells.size(),
                "Source cell count must match target cell count");
@@ -792,8 +891,9 @@ public:
 
   void copy() override
   {
-    _source.serialize(_sourceCells, _buffer.get());
-    _target.deserialize(_targetCells, _buffer.get());
+    OLB_PROFILE_DYNAMIC_T(std::string(getName(PLATFORM)) + ":Comm:CopyTask:copy", DESCRIPTOR);
+    _source->serialize(_sourceCells, _buffer.get());
+    _target->deserialize(_targetCells, _buffer.get());
   };
 
   void wait() override { }
@@ -828,7 +928,8 @@ ConcreteBlockCommunicator<ConcreteBlockLattice<T,DESCRIPTOR,PLATFORM>>::Concrete
             _copyTasks.emplace_back(new HeterogeneousCopyTask<T,DESCRIPTOR,Platform::GPU_CUDA,PLATFORM>(
               neighborhood.getFieldsCommonWith(remoteC),
               neighborhood.getCellsInboundFrom(remoteC),   super.template getBlock<ConcreteBlockLattice<T,DESCRIPTOR,PLATFORM>>(_iC),
-              neighborhood.getCellsRequestedFrom(remoteC), super.template getBlock<ConcreteBlockLattice<T,DESCRIPTOR,Platform::GPU_CUDA>>(loadBalancer.loc(remoteC))));
+              neighborhood.getCellsRequestedFrom(remoteC), super.template getBlock<ConcreteBlockLattice<T,DESCRIPTOR,Platform::GPU_CUDA>>(loadBalancer.loc(remoteC)),
+              neighborhood.getMasksInboundFrom(remoteC)));
             break;
 #endif
 #ifdef PLATFORM_GPU_HIP
@@ -837,7 +938,18 @@ ConcreteBlockCommunicator<ConcreteBlockLattice<T,DESCRIPTOR,PLATFORM>>::Concrete
             _copyTasks.emplace_back(new HeterogeneousCopyTask<T,DESCRIPTOR,Platform::GPU_HIP,PLATFORM>(
               neighborhood.getFieldsCommonWith(remoteC),
               neighborhood.getCellsInboundFrom(remoteC),   super.template getBlock<ConcreteBlockLattice<T,DESCRIPTOR,PLATFORM>>(_iC),
-              neighborhood.getCellsRequestedFrom(remoteC), super.template getBlock<ConcreteBlockLattice<T,DESCRIPTOR,Platform::GPU_HIP>>(loadBalancer.loc(remoteC))));
+              neighborhood.getCellsRequestedFrom(remoteC), super.template getBlock<ConcreteBlockLattice<T,DESCRIPTOR,Platform::GPU_HIP>>(loadBalancer.loc(remoteC)),
+              neighborhood.getMasksInboundFrom(remoteC)));
+            break;
+#endif
+#ifdef PLATFORM_GPU_SYCL
+          case Platform::GPU_SYCL:
+            // Use manual copy for local GPU-CPU communication due to better performance
+            _copyTasks.emplace_back(new HeterogeneousCopyTask<T,DESCRIPTOR,Platform::GPU_SYCL,PLATFORM>(
+              neighborhood.getFieldsCommonWith(remoteC),
+              neighborhood.getCellsInboundFrom(remoteC),   super.template getBlock<ConcreteBlockLattice<T,DESCRIPTOR,PLATFORM>>(_iC),
+              neighborhood.getCellsRequestedFrom(remoteC), super.template getBlock<ConcreteBlockLattice<T,DESCRIPTOR,Platform::GPU_SYCL>>(loadBalancer.loc(remoteC)),
+              neighborhood.getMasksInboundFrom(remoteC)));
             break;
 #endif
           default:
@@ -845,7 +957,8 @@ ConcreteBlockCommunicator<ConcreteBlockLattice<T,DESCRIPTOR,PLATFORM>>::Concrete
             _copyTasks.emplace_back(new HomogeneousCopyTask(
               neighborhood.getFieldsCommonWith(remoteC),
               neighborhood.getCellsInboundFrom(remoteC),   super.template getBlock<ConcreteBlockLattice<T,DESCRIPTOR,PLATFORM>>(_iC),
-              neighborhood.getCellsRequestedFrom(remoteC), super.template getBlock<ConcreteBlockLattice<T,DESCRIPTOR,PLATFORM>>(loadBalancer.loc(remoteC))));
+              neighborhood.getCellsRequestedFrom(remoteC), super.template getBlock<ConcreteBlockLattice<T,DESCRIPTOR,PLATFORM>>(loadBalancer.loc(remoteC)),
+              neighborhood.getMasksInboundFrom(remoteC)));
             break;
         }
       }
@@ -856,6 +969,7 @@ ConcreteBlockCommunicator<ConcreteBlockLattice<T,DESCRIPTOR,PLATFORM>>::Concrete
           loadBalancer.rank(remoteC),
           neighborhood.getFieldsCommonWith(remoteC),
           neighborhood.getCellsOutboundTo(remoteC),
+          neighborhood.getMasksOutboundTo(remoteC),
           super.template getBlock<ConcreteBlockLattice<T,DESCRIPTOR,PLATFORM>>(_iC)));
       }
       if (!neighborhood.getCellsInboundFrom(remoteC).empty()) {
@@ -864,6 +978,7 @@ ConcreteBlockCommunicator<ConcreteBlockLattice<T,DESCRIPTOR,PLATFORM>>::Concrete
           loadBalancer.rank(remoteC),
           neighborhood.getFieldsCommonWith(remoteC),
           neighborhood.getCellsInboundFrom(remoteC),
+          neighborhood.getMasksInboundFrom(remoteC),
           super.template getBlock<ConcreteBlockLattice<T,DESCRIPTOR,PLATFORM>>(_iC)));
       }
     }
@@ -872,10 +987,42 @@ ConcreteBlockCommunicator<ConcreteBlockLattice<T,DESCRIPTOR,PLATFORM>>::Concrete
 #else // not using PARALLEL_MODE_MPI
   neighborhood.forNeighbors([&](int localC) {
     if (!neighborhood.getCellsInboundFrom(localC).empty()) {
-      _copyTasks.emplace_back(new HomogeneousCopyTask(
-        neighborhood.getFieldsCommonWith(localC),
-        neighborhood.getCellsInboundFrom(localC),   super.template getBlock<ConcreteBlockLattice<T,DESCRIPTOR,PLATFORM>>(_iC),
-        neighborhood.getCellsRequestedFrom(localC), super.template getBlock<ConcreteBlockLattice<T,DESCRIPTOR,PLATFORM>>(loadBalancer.loc(localC))));
+      switch (loadBalancer.platform(loadBalancer.loc(localC))) {
+#ifdef PLATFORM_GPU_CUDA
+        case Platform::GPU_CUDA:
+          _copyTasks.emplace_back(new HeterogeneousCopyTask<T,DESCRIPTOR,Platform::GPU_CUDA,PLATFORM>(
+            neighborhood.getFieldsCommonWith(localC),
+            neighborhood.getCellsInboundFrom(localC),   super.template getBlock<ConcreteBlockLattice<T,DESCRIPTOR,PLATFORM>>(_iC),
+            neighborhood.getCellsRequestedFrom(localC), super.template getBlock<ConcreteBlockLattice<T,DESCRIPTOR,Platform::GPU_CUDA>>(loadBalancer.loc(localC)),
+            neighborhood.getMasksInboundFrom(localC)));
+          break;
+#endif
+#ifdef PLATFORM_GPU_HIP
+        case Platform::GPU_HIP:
+          _copyTasks.emplace_back(new HeterogeneousCopyTask<T,DESCRIPTOR,Platform::GPU_HIP,PLATFORM>(
+            neighborhood.getFieldsCommonWith(localC),
+            neighborhood.getCellsInboundFrom(localC),   super.template getBlock<ConcreteBlockLattice<T,DESCRIPTOR,PLATFORM>>(_iC),
+            neighborhood.getCellsRequestedFrom(localC), super.template getBlock<ConcreteBlockLattice<T,DESCRIPTOR,Platform::GPU_HIP>>(loadBalancer.loc(localC)),
+            neighborhood.getMasksInboundFrom(localC)));
+          break;
+#endif
+#ifdef PLATFORM_GPU_SYCL
+        case Platform::GPU_SYCL:
+          _copyTasks.emplace_back(new HeterogeneousCopyTask<T,DESCRIPTOR,Platform::GPU_SYCL,PLATFORM>(
+            neighborhood.getFieldsCommonWith(localC),
+            neighborhood.getCellsInboundFrom(localC),   super.template getBlock<ConcreteBlockLattice<T,DESCRIPTOR,PLATFORM>>(_iC),
+            neighborhood.getCellsRequestedFrom(localC), super.template getBlock<ConcreteBlockLattice<T,DESCRIPTOR,Platform::GPU_SYCL>>(loadBalancer.loc(localC)),
+            neighborhood.getMasksInboundFrom(localC)));
+          break;
+#endif
+        default:
+          _copyTasks.emplace_back(new HomogeneousCopyTask(
+            neighborhood.getFieldsCommonWith(localC),
+            neighborhood.getCellsInboundFrom(localC),   super.template getBlock<ConcreteBlockLattice<T,DESCRIPTOR,PLATFORM>>(_iC),
+            neighborhood.getCellsRequestedFrom(localC), super.template getBlock<ConcreteBlockLattice<T,DESCRIPTOR,PLATFORM>>(loadBalancer.loc(localC)),
+            neighborhood.getMasksInboundFrom(localC)));
+          break;
+      }
     }
   });
 #endif
@@ -890,6 +1037,7 @@ ConcreteBlockCommunicator<ConcreteBlockLattice<T,DESCRIPTOR,PLATFORM>>::~Concret
 template <typename T, typename DESCRIPTOR, Platform PLATFORM>
 void ConcreteBlockCommunicator<ConcreteBlockLattice<T,DESCRIPTOR,PLATFORM>>::receive()
 {
+  OLB_PROFILE_DYNAMIC_T(std::string(getName(PLATFORM)) + ":Comm:receive", DESCRIPTOR);
   for (auto& task : _recvTasks) {
     task->receive();
   }
@@ -898,6 +1046,7 @@ void ConcreteBlockCommunicator<ConcreteBlockLattice<T,DESCRIPTOR,PLATFORM>>::rec
 template <typename T, typename DESCRIPTOR, Platform PLATFORM>
 void ConcreteBlockCommunicator<ConcreteBlockLattice<T,DESCRIPTOR,PLATFORM>>::send()
 {
+  OLB_PROFILE_DYNAMIC_T(std::string(getName(PLATFORM)) + ":Comm:send", DESCRIPTOR);
   for (auto& task : _sendTasks) {
     task->send();
   }
@@ -909,6 +1058,7 @@ void ConcreteBlockCommunicator<ConcreteBlockLattice<T,DESCRIPTOR,PLATFORM>>::sen
 template <typename T, typename DESCRIPTOR, Platform PLATFORM>
 void ConcreteBlockCommunicator<ConcreteBlockLattice<T,DESCRIPTOR,PLATFORM>>::unpack()
 {
+  OLB_PROFILE_DYNAMIC_T(std::string(getName(PLATFORM)) + ":Comm:unpack", DESCRIPTOR);
   std::set<typename RecvTask::ref> pending(_recvTasks.begin(), _recvTasks.end());
   while (!pending.empty()) {
     auto task_iterator = pending.begin();
@@ -928,6 +1078,7 @@ void ConcreteBlockCommunicator<ConcreteBlockLattice<T,DESCRIPTOR,PLATFORM>>::unp
 template <typename T, typename DESCRIPTOR, Platform PLATFORM>
 void ConcreteBlockCommunicator<ConcreteBlockLattice<T,DESCRIPTOR,PLATFORM>>::wait()
 {
+  OLB_PROFILE_DYNAMIC_T(std::string(getName(PLATFORM)) + ":Comm:wait", DESCRIPTOR);
   for (auto& task : _copyTasks) {
     task->wait();
   }
@@ -941,8 +1092,14 @@ void ConcreteBlockCommunicator<ConcreteBlockLattice<T,DESCRIPTOR,PLATFORM>>::wai
 template <typename T, typename DESCRIPTOR, Platform PLATFORM>
 void ConcreteBlockCommunicator<ConcreteBlockLattice<T,DESCRIPTOR,PLATFORM>>::copy()
 {
+  OLB_PROFILE_DYNAMIC_T(std::string(getName(PLATFORM)) + ":Comm:copy", DESCRIPTOR);
   for (auto& task : _copyTasks) {
     task->copy();
+  }
+  // Heterogeneous copies land device<->host data (and the CPU-side
+  // deserialize) only in wait(). Homogeneous copies just synchronize.
+  for (auto& task : _copyTasks) {
+    task->wait();
   }
 }
 

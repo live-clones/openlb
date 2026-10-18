@@ -214,18 +214,42 @@ bool* Column<T>::getBlock(std::size_t iBlock, std::size_t& sizeBlock, bool loadi
 }
 
 
+// Branching ring: a single plain device allocation, two-pointer wrap on access.
 template<typename T>
-struct CyclicColumn<T>::Data {
-  const std::size_t size;
-
+struct CyclicColumnData<T,gpu::CyclicStrategy::Branching> {
   std::unique_ptr<T[]> host;
+  const std::size_t size;
+  T* ptr;
+
+  CyclicColumnData(std::size_t count):
+    host(new T[count] { }),
+    size(count * sizeof(T)),
+    ptr(device::malloc<T>(count))
+  {
+    cudaMemset(ptr, 0, size);
+    device::check();  // runtime-API errors surface via cudaGetLastError(), not a CUresult
+  }
+
+  ~CyclicColumnData() {
+    cudaFree(ptr);
+  }
+
+  static std::size_t alignedCount(std::size_t count) { return count; }
+  T* base() const { return ptr; }
+};
+
+// Virtual-memory ring: a double-mapped address range, branch-free on access.
+template<typename T>
+struct CyclicColumnData<T,gpu::CyclicStrategy::VirtualMemory> {
+  std::unique_ptr<T[]> host;
+  const std::size_t size;
 
   CUmemGenericAllocationHandle handle;
   CUmemAllocationProp prop{};
   CUmemAccessDesc access{};
   CUdeviceptr ptr;
 
-  Data(std::size_t count):
+  CyclicColumnData(std::size_t count):
     host(new T[count] { }),
     size(count * sizeof(T))
   {
@@ -247,22 +271,25 @@ struct CyclicColumn<T>::Data {
     device::check(cuMemSetAccess(ptr, 2 * size, &access, 1));
   }
 
-  ~Data() {
+  ~CyclicColumnData() {
     device::check(cuMemUnmap(ptr, 2 * size));
     device::check(cuMemRelease(handle));
     device::check(cuMemAddressFree(ptr, 2 * size));
   }
 
+  static std::size_t alignedCount(std::size_t count) { return device::getPageAlignedCount<T>(count); }
+  T* base() const { return reinterpret_cast<T*>(ptr); }
 };
 
 template<typename T>
 CyclicColumn<T>::CyclicColumn(std::size_t count):
-  _count(device::getPageAlignedCount<T>(count)),
+  _count(Data::alignedCount(count)),
   _size(_count * sizeof(T)),
   _data(new Data(_count)),
   _shift(0)
 {
-  _deviceBase = reinterpret_cast<T*>(_data->ptr);
+  _hostData = _data->host.get();
+  _deviceBase = _data->base();
   _devicePopulation = _deviceBase;
 }
 
@@ -273,13 +300,13 @@ CyclicColumn<T>::~CyclicColumn()
 template<typename T>
 const T& CyclicColumn<T>::operator[](std::size_t i) const
 {
-  return _data->host[i];
+  return const_cast<CyclicColumn<T>*>(this)->getHostAccessor()[i];
 }
 
 template<typename T>
 T& CyclicColumn<T>::operator[](std::size_t i)
 {
-  return _data->host[i];
+  return getHostAccessor()[i];
 }
 
 template<typename T>
@@ -287,10 +314,10 @@ void CyclicColumn<T>::setProcessingContext(ProcessingContext context)
 {
   switch (context) {
   case ProcessingContext::Evaluation:
-    device::copyToHost(_devicePopulation, _data->host.get(), _size);
+    device::copyToHost(deviceData(), _data->host.get(), _size);
     return;
   case ProcessingContext::Simulation:
-    device::copyToDevice(_data->host.get(), _devicePopulation, _size);
+    device::copyToDevice(_data->host.get(), deviceData(), _size);
     return;
   }
 }
@@ -379,5 +406,7 @@ std::size_t ConcreteCommunicatable<gpu::cuda::CyclicColumn<T>>::deserialize(
 
 
 }
+
+#include "sparseColumn.hh"
 
 #endif

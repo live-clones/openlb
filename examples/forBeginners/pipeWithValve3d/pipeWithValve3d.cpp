@@ -107,6 +107,7 @@ void prepareGeometry(MyCase& myCase) {
 // Set up the lattice of the simulation
 void prepareLattice(MyCase& myCase) {
   using T = MyCase::value_t;
+  using DESCRIPTOR = MyCase::descriptor_t;
   auto& parameters = myCase.getParameters();
   auto& geometry = myCase.getGeometry();
   auto& lattice = myCase.getLattice(NavierStokes{});
@@ -119,7 +120,7 @@ void prepareLattice(MyCase& myCase) {
   const T physCharDensity = parameters.get<parameters::PHYS_CHAR_DENSITY>();
 
   // Set up a unit converter with the characteristic physical units
-  myCase.getLattice(NavierStokes{}).setUnitConverter(
+  myCase.getLattice(NavierStokes{}).setUnitConverter<UnitConverter<T,DESCRIPTOR>>(
     physDeltaX,        // physDeltaX: spacing between two lattice cells in [m]
     physDeltaT,        // physDeltaT: time step in [s]
     physLength,        // charPhysLength: reference length of simulation geometry in [m]
@@ -289,7 +290,6 @@ int main(int argc, char* argv[]) {
     myCaseParameters.set<VTK_TIME           >(           0.3);
     myCaseParameters.set<STAT_TIME          >(           0.1);
   }
-  myCaseParameters.fromCLI(argc, argv);
 
   /// === Step 3: Create Mesh ===
   Mesh mesh = createMesh(myCaseParameters);

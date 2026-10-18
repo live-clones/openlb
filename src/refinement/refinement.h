@@ -32,11 +32,23 @@
 #include "loadBalancer.h"
 #include "superLatticeRefinement.h"
 #include "indicator.h"
+#include "decomposition.h"
+#include "simpleLoadBalancer.h"
+
+#include "lattice.h"
 
 #include "platform/cpu/operator.h"
 #include "platform/gpu/cuda/operator.h"
 
 #include "algorithm/lagrava.h"
 #include "algorithm/rohde.h"
+
+#include "vtmWriter.h"
+
+#include "pointExtraction.h"
+#include "sampling.h"
+
+#include "amrWriter.h"
+#include "amrWriter.hh"
 
 #endif

@@ -46,13 +46,18 @@ concept ConcreteFieldsContainer = requires (CONTAINER& container) {
 }
 
 /// Return pointers to on-device data for FIELD on lattice
+/// Device accessor type of FIELD's column (dense pointer wrapper or sparse tile view)
+template <typename T, typename DESCRIPTOR, typename FIELD>
+using DeviceAccessorFor = typename detail::field_column_t<T,DESCRIPTOR,Platform::GPU_HIP,FIELD>::Accessor;
+
 template <concepts::ConcreteFieldsContainer CONTAINER, typename FIELD>
 static auto getDeviceFieldPointer(CONTAINER& lattice) {
   using T = typename CONTAINER::value_t;
   using DESCRIPTOR = typename CONTAINER::descriptor_t;
   auto& fieldArray = lattice.template getField<FIELD>();
-  return Vector<typename FIELD::template value_type<T>*,DESCRIPTOR::template size<FIELD>()>([&](unsigned iD) {
-    return fieldArray[iD].deviceData();
+  // Every column (dense or sparse) exposes the same accessor interface
+  return Vector<DeviceAccessorFor<T,DESCRIPTOR,FIELD>,DESCRIPTOR::template size<FIELD>()>([&](unsigned iD) {
+    return fieldArray[iD].getDeviceAccessor();
   });
 }
 
@@ -73,11 +78,18 @@ private:
   decltype(getDeviceFieldPointers(typename DESCRIPTOR::fields_t(),
                                   std::declval<ConcreteBlockD<T,DESCRIPTOR,Platform::GPU_HIP>&>()))
   _staticFieldsD;
+
+  std::size_t _popCapacity;
+
   /// Pointer to type-erased field data
   /**
-   * Maintained by FieldTypeRegistry<T,DESCRIPTOR,Platform::GPU_CUDA>
+   * Maintained by FieldTypeRegistry<T,DESCRIPTOR,Platform::GPU_HIP>
    **/
   void*** _customFieldsD;
+  /// Per-block dynamics dispatch table (index 0 == nullptr)
+  Dynamics<T,DESCRIPTOR>** _dynamicsTable;
+
+  Vector<typename CyclicColumn<T>::Accessor,DESCRIPTOR::q> _populations;
 
 public:
   using value_t = T;
@@ -87,30 +99,51 @@ public:
   DeviceContext(CONTAINER& lattice) __host__:
     _nCells(lattice.getNcells()),
     _staticFieldsD(getDeviceFieldPointers(typename DESCRIPTOR::fields_t(), lattice)),
-    _customFieldsD(lattice.getDataRegistry().deviceData())
+    _customFieldsD(lattice.getDataRegistry().deviceData()),
+    _dynamicsTable(lattice.getDataRegistry().dynamicsTable()),
+    _populations([&lattice](unsigned iPop) -> typename CyclicColumn<T>::Accessor {
+      return lattice.template getField<descriptors::POPULATION>()[iPop].getDeviceAccessor();
+    })
   {
     static_assert(std::is_same_v<typename CONTAINER::value_t, T>,
                   "CONTAINER must share value_t");
     static_assert(std::is_same_v<typename CONTAINER::descriptor_t, DESCRIPTOR>,
                   "CONTAINER must share descriptor_t");
+
   }
 
   DeviceContext(ConcreteBlockD<T,DESCRIPTOR,Platform::GPU_HIP>& lattice) __host__:
     _nCells(lattice.getNcells()),
     _staticFieldsD(getDeviceFieldPointers(typename DESCRIPTOR::fields_t(), lattice)),
-    _customFieldsD(lattice.getDataRegistry().deviceData())
+    _customFieldsD(lattice.getDataRegistry().deviceData()),
+    _dynamicsTable(lattice.getDataRegistry().dynamicsTable()),
+    _populations([&lattice](unsigned iPop) -> typename CyclicColumn<T>::Accessor {
+      return lattice.template getField<descriptors::POPULATION>()[iPop].getDeviceAccessor();
+    })
   { }
+
+  std::size_t getPopCapacity() const __host__ __device__ { return _popCapacity; }
+
+  typename CyclicColumn<T>::Accessor getPopulation(unsigned iPop) const __host__ __device__ {
+    return _populations[iPop];
+  }
 
   std::size_t getNcells() const any_platform {
     return _nCells;
   }
 
+  /// Per-block dynamics dispatch table; getDynamicsTable()[index] yields the Dynamics* (nullptr at 0)
+  Dynamics<T,DESCRIPTOR>** getDynamicsTable() const __device__ {
+    return _dynamicsTable;
+  }
+
   template <typename FIELD>
-  typename FIELD::template value_type<T>** getField() __device__ {
+  auto getField() __device__ {
+    // Both paths yield a per-dimension array of the field's device accessor (dense or sparse)
     if constexpr (DESCRIPTOR::template provides<FIELD>()) {
       return std::get<(DESCRIPTOR::fields_t::template index<FIELD>())>(_staticFieldsD).data();
     } else {
-      return reinterpret_cast<typename FIELD::template value_type<T>**>(
+      return reinterpret_cast<DeviceAccessorFor<T,DESCRIPTOR,FIELD>*>(
         _customFieldsD[field_type_index<FieldTypeRegistry<T,DESCRIPTOR,Platform::GPU_HIP>, Array<FIELD>>]);
     }
   }
@@ -143,12 +176,12 @@ public:
 
   const typename FIELD::template value_type<T>* getComponentPointer(unsigned iDim) const __device__
   {
-    return _data.template getField<FIELD>()[iDim] + _index;
+    return &(_data.template getField<FIELD>()[iDim][_index]);
   }
 
   typename FIELD::template value_type<T>* getComponentPointer(unsigned iDim) __device__
   {
-    return _data.template getField<FIELD>()[iDim] + _index;
+    return &(_data.template getField<FIELD>()[iDim][_index]);
   }
 
   template <typename U, typename IMPL>
@@ -188,26 +221,35 @@ public:
 
   template <typename FIELD>
   typename FIELD::template value_type<T> getFieldComponent(unsigned iD) __host__ __device__ {
-    return _data.template getField<FIELD>()[iD][_iCell];
+    return _data.template getField<FIELD>()[iD].get(_iCell);
   }
 
   value_t& operator[](unsigned int iPop) __host__ __device__ {
-    return _data.template getField<descriptors::POPULATION>()[iPop][_iCell];
+    return _data.getPopulation(iPop)[_iCell];
   }
 
   const value_t& operator[](unsigned int iPop) const __host__ __device__ {
-    return _data.template getField<descriptors::POPULATION>()[iPop][_iCell];
+    return _data.getPopulation(iPop)[_iCell];
   }
 
   template <typename FIELD>
   auto getField() const __host__ __device__ {
-    auto fieldArray = _data.template getField<FIELD>();
-    if constexpr (descriptor_t::template size<FIELD>() == 1) {
-      return fieldArray[0][_iCell];
-    } else {
-      return FieldD<value_t,descriptor_t,FIELD>([&](unsigned iD) {
-        return fieldArray[iD][_iCell];
+    if constexpr (std::is_same_v<FIELD, descriptors::POPULATION>
+                  && cyclicStrategyFor(Platform::GPU_HIP) != CyclicStrategy::VirtualMemory) {
+      // Only the VMM ring bakes the shift into the raw field pointer. On a
+      // Branching ring read populations through the cyclic accessor instead.
+      return FieldD<value_t,descriptor_t,FIELD>([&](unsigned iPop) {
+        return _data.getPopulation(iPop)[_iCell];
       });
+    } else {
+      auto fieldArray = _data.template getField<FIELD>();
+      if constexpr (descriptor_t::template size<FIELD>() == 1) {
+        return fieldArray[0].get(_iCell);
+      } else {
+        return FieldD<value_t,descriptor_t,FIELD>([&](unsigned iD) {
+          return fieldArray[iD].get(_iCell);
+        });
+      }
     }
   }
 
@@ -219,7 +261,7 @@ public:
   template <typename FIELD>
   auto getFieldComponent(unsigned iD) const __host__ __device__ {
     auto fieldArray = _data.template getField<FIELD>();
-    return fieldArray[iD][_iCell];
+    return fieldArray[iD].get(_iCell);
   }
 
   template <typename FIELD>
@@ -254,12 +296,16 @@ private:
   LatticeR<DESCRIPTOR::d> _core;
   LatticeR<DESCRIPTOR::d> _projection;
   int _padding;
+  Vector<T,DESCRIPTOR::d> _origin;
+  T _deltaR;
 
 public:
   DeviceBlockLattice(ConcreteBlockLattice<T,DESCRIPTOR,Platform::GPU_HIP>& lattice) __host__:
     DeviceContext<T,DESCRIPTOR>(lattice),
     _core(lattice.getExtent()),
-    _padding{lattice.getPadding()}
+    _padding{lattice.getPadding()},
+    _origin(lattice.getOrigin()),
+    _deltaR(lattice.getDeltaR())
   {
     auto size = lattice.getExtent() + 2*_padding;
     if constexpr (DESCRIPTOR::d == 3) {
@@ -298,6 +344,10 @@ public:
       return LatticeR<DESCRIPTOR::d>{iX - _padding, iY - _padding};
     }
   };
+
+  Vector<T,DESCRIPTOR::d> getPhysR(CellID iCell) const __device__ {
+    return _origin + getLatticeR(iCell)*_deltaR;
+  }
 
   bool isInside(LatticeR<DESCRIPTOR::d> loc) const __device__ {
     return loc >= -_padding && loc < _core + _padding;
@@ -338,7 +388,7 @@ public:
   }
 
   Dynamics<T,DESCRIPTOR>& getDynamics() __device__ {
-    return *this->template getField<DYNAMICS<T,DESCRIPTOR>>();
+    return *this->_data.getDynamicsTable()[this->template getField<DYNAMICS<T,DESCRIPTOR>>()];
   }
 
   std::size_t getCellId() const __device__ {
@@ -353,29 +403,80 @@ public:
     this->_iCell = getBlock().getCellId(latticeR);
   }
 
+  LatticeR<DESCRIPTOR::d> getLatticeR() const __device__ {
+    return getBlock().getLatticeR(this->_iCell);
+  }
+
+  Vector<T,DESCRIPTOR::d> getPhysR() const __device__ {
+    return getBlock().getPhysR(this->_iCell);
+  }
+
   bool isPadding() const __device__ {
     return getBlock().isPadding(this->_iCell);
   }
 
   T computeRho() __device__ {
-    return getDynamics().computeRho(*this);
+    if constexpr (codegenTargetFor(Platform::GPU_HIP) == CodegenTarget::StoredMoments) {
+      return this->template getField<fields::moments::RHO>();
+    } else {
+      return getDynamics().computeRho(*this);
+    }
   }
+
   void computeU(T* u) __device__ {
-    getDynamics().computeU(*this, u);
+    if constexpr (codegenTargetFor(Platform::GPU_HIP) == CodegenTarget::StoredMoments) {
+      auto uD = this->template getField<fields::moments::U>();
+      for (unsigned iD=0; iD < DESCRIPTOR::d; ++iD) {
+        u[iD] = uD[iD];
+      }
+    } else {
+      getDynamics().computeU(*this, u);
+    }
   }
-  void computeJ(T* j) __device__ {
-    getDynamics().computeJ(*this, j);
-  }
+
   void computeRhoU(T& rho, T* u) __device__ {
-    getDynamics().computeRhoU(*this, rho, u);
+    rho = computeRho();
+    computeU(u);
   }
+
+   void computeEquilibrium(T& rho, T* u, T* fEq) __device__ {
+    typename ThirdOrderRLBdynamics<T,DESCRIPTOR>::EquilibriumF().compute(*this, rho, u, fEq);
+  }
+  T getOmegaOrFallback(T fallback) __device__ {
+    return getDynamics().getOmegaOrFallback(fallback);
+  };
+
+  void computeJ(T* j) __device__ {
+    if constexpr (codegenTargetFor(Platform::GPU_HIP) == CodegenTarget::StoredMoments) {
+      auto jD = this->template getField<fields::moments::J>();
+      for (unsigned iD=0; iD < DESCRIPTOR::d; ++iD) {
+        j[iD] = jD[iD];
+      }
+    } else {
+      getDynamics().computeJ(*this, j);
+    }
+  }
+
   void computeStress(T* pi) __device__ {
-    T rho, u[DESCRIPTOR::d] { };
-    getDynamics().computeRhoU(*this, rho, u);
-    getDynamics().computeStress(*this, rho, u, pi);
+    if constexpr (codegenTargetFor(Platform::GPU_HIP) == CodegenTarget::StoredMoments) {
+      auto piD = this->template getField<fields::moments::PI>();
+      for (unsigned iPi=0; iPi < fields::moments::PI::template size<DESCRIPTOR>(); ++iPi) {
+        pi[iPi] = piD[iPi];
+      }
+    } else {
+      T rho, u[DESCRIPTOR::d] { };
+      getDynamics().computeRhoU(*this, rho, u);
+      getDynamics().computeStress(*this, rho, u, pi);
+    }
   }
   void computeAllMomenta(T& rho, T* u, T* pi) __device__ {
-    getDynamics().computeAllMomenta(*this, rho, u, pi);
+    if constexpr (codegenTargetFor(Platform::GPU_HIP) == CodegenTarget::StoredMoments) {
+      rho = computeRho();
+      computeU(u);
+      computeStress(pi);
+    } else {
+      getDynamics().computeAllMomenta(*this, rho, u, pi);
+    }
   }
 
   void defineRho(T& rho) __device__ {

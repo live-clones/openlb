@@ -35,10 +35,11 @@ class CSV {
 public:
 
   /// Constructor with name for output file
-  CSV(std::string name, char separator, std::vector<std::string> columnTags, std::string format=".dat");
-  explicit CSV(std::string name = "unnamed");
-  CSV(std::string name, char separator);
-  CSV(std::string name, std::vector<std::string> columnTags);
+  CSV(std::string name, char separator, std::vector<std::string> columnTags, std::string format=".dat", bool append = false);
+
+  explicit CSV(std::string name = "unnamed", bool append = false);
+  CSV(std::string name, char separator, bool append = false);
+  CSV(std::string name, std::vector<std::string> columnTags, bool append = false);
 
   /// former datFileOut functions
   /// these functions create a datafile in the csv format

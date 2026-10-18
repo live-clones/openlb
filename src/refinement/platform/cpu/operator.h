@@ -31,12 +31,15 @@
 #include "refinement/vertexCentered.h"
 #include "refinement/cellCentered.h"
 
+#include "utilities/performanceProfiler.h"
+
 namespace olb {
 
 template <typename T, typename DESCRIPTOR, Platform PLATFORM, typename OPERATOR>
 requires (isPlatformCPU(PLATFORM) && OPERATOR::scope == refinement::OperatorScope::PerCoarseCell)
 struct ConcreteBlockRefinementO<T,DESCRIPTOR,PLATFORM,OPERATOR> {
   void apply(ConcreteBlockRefinementContextD<T,DESCRIPTOR,PLATFORM>& data) {
+    OLB_PROFILE_T("CPU:Refine:Apply", OPERATOR, DESCRIPTOR);
     const auto& cellIdCoarse = data.getConcreteData().template getField<fields::refinement::CELL_ID_COARSE>();
     const auto& cellIdFine = data.getConcreteData().template getField<fields::refinement::CELL_ID_FINE>();
     auto parameters = data.getConcreteData().template getData<OperatorParameters<OPERATOR>>().parameters;
@@ -59,6 +62,7 @@ template <typename T, typename DESCRIPTOR, Platform PLATFORM, typename OPERATOR>
 requires (isPlatformCPU(PLATFORM) && OPERATOR::scope == refinement::OperatorScope::PerFineCell)
 struct ConcreteBlockRefinementO<T,DESCRIPTOR,PLATFORM,OPERATOR> {
   void apply(ConcreteBlockRefinementContextD<T,DESCRIPTOR,PLATFORM>& data) {
+    OLB_PROFILE_T("CPU:Refine:Apply", OPERATOR, DESCRIPTOR);
     const auto& cellIdCoarse = data.getConcreteData().template getField<fields::refinement::CELL_ID_COARSE>();
     const auto& cellIdFine = data.getConcreteData().template getField<fields::refinement::CELL_ID_FINE>();
     auto parameters = data.getConcreteData().template getData<OperatorParameters<OPERATOR>>().parameters;
@@ -93,6 +97,7 @@ template <typename T, typename DESCRIPTOR, Platform PLATFORM, typename OPERATOR>
 requires (isPlatformCPU(PLATFORM) && OPERATOR::scope == refinement::OperatorScope::PerCellCenteredCoarseCell)
 struct ConcreteBlockRefinementO<T,DESCRIPTOR,PLATFORM,OPERATOR> {
   void apply(ConcreteBlockRefinementContextD<T,DESCRIPTOR,PLATFORM>& data) {
+    OLB_PROFILE_T("CPU:Refine:Apply", OPERATOR, DESCRIPTOR);
     const auto& cellIdCoarse = data.getConcreteData().template getField<fields::refinement::CELL_ID_COARSE>();
     const auto& cellIdFine = data.getConcreteData().template getField<fields::refinement::CELL_ID_FINE>();
     auto parameters = data.getConcreteData().template getData<OperatorParameters<OPERATOR>>().parameters;

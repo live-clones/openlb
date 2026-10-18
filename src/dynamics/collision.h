@@ -193,9 +193,9 @@ struct CIRLB {
       }
       for (int iAlpha=0; iAlpha < DESCRIPTOR::d; ++iAlpha) {
         for (int iBeta=iAlpha; iBeta < DESCRIPTOR::d; ++iBeta) {
-          if (iAlpha == iBeta) {
-            pi[ static_cast<int>( iAlpha * (DESCRIPTOR::d - ( iAlpha - 1 ) * 0.5) ) ] += V{0.5}/descriptors::invCs2<V,DESCRIPTOR>()*u_gradRho;
-          }
+          //if (iAlpha == iBeta) {
+          pi[ static_cast<int>( iAlpha * (DESCRIPTOR::d - ( iAlpha - 1 ) * 0.5) ) ] += V{0.5}/descriptors::invCs2<V,DESCRIPTOR>()*u_gradRho*(iAlpha == iBeta);
+          //}
         }
       }
       for (int iPop=0; iPop < DESCRIPTOR::q; ++iPop) {
@@ -483,6 +483,45 @@ struct Revert {
   };
 };
 
+template <int NX, int NY, int NZ>
+struct SpectralRevert {
+  using parameters = meta::list<>;
+
+  static std::string getName() {
+    std::stringstream s;
+    s << "SpectralRevert<" << NX << "," << NY << "," << NZ << ">";
+    return s.str();
+  }
+
+  template <typename DESCRIPTOR, typename MOMENTA, typename EQUILIBRIUM>
+  struct type {
+    template <concepts::MinimalCell CELL, typename PARAMETERS, typename V=typename CELL::value_t>
+    CellStatistic<V> apply(CELL& cell, PARAMETERS& parameters) any_platform {
+      auto fOld = cell.template getField<descriptors::POPULATION>();
+      constexpr int normSq = NX*NX + NY*NY + NZ*NZ;
+      for (int iPop=1; iPop < DESCRIPTOR::q; ++iPop) {
+        int dot = descriptors::c<DESCRIPTOR>(iPop,0)*NX +
+                  descriptors::c<DESCRIPTOR>(iPop,1)*NY +
+                  descriptors::c<DESCRIPTOR>(iPop,2)*NZ;
+        int rX = descriptors::c<DESCRIPTOR>(iPop,0) - (2 * dot * NX) / normSq;
+        int rY = descriptors::c<DESCRIPTOR>(iPop,1) - (2 * dot * NY) / normSq;
+        int rZ = descriptors::c<DESCRIPTOR>(iPop,2) - (2 * dot * NZ) / normSq;
+        int jPop = 0;
+        for (int k = 0; k < DESCRIPTOR::q; ++k) {
+          if (descriptors::c<DESCRIPTOR>(k,0) == rX &&
+              descriptors::c<DESCRIPTOR>(k,1) == rY &&
+              descriptors::c<DESCRIPTOR>(k,2) == rZ) {
+            jPop = k;
+            break;
+          }
+        }
+        cell[iPop] = fOld[jPop];
+      }
+      return {V{-1}, V{-1}};
+    };
+  };
+};
+
 /// Nguyen-Ladd Velocity Correction using momenta-defined velocity
 /**
  * Use in conjunction with e.g. momenta::ExternalVelocityTuple
@@ -532,7 +571,11 @@ struct PartialBounceBack {
     template <concepts::MinimalCell CELL, typename PARAMETERS, typename V=typename CELL::value_t>
     CellStatistic<V> apply(CELL& cell, PARAMETERS& parameters) any_platform {
       for (int iPop=1; iPop <= DESCRIPTOR::q/2; ++iPop) {
-        std::swap(cell[iPop], cell[iPop+DESCRIPTOR::q/2]);
+        // manual swap through V: works for a plain reference and for the storage
+        // proxy returned when POPULATION uses a reduced storage precision
+        const V tmp = cell[iPop];
+        cell[iPop] = static_cast<V>(cell[iPop+DESCRIPTOR::q/2]);
+        cell[iPop+DESCRIPTOR::q/2] = tmp;
       }
       const V rf = parameters.template get<RF>();
       for (int iPop=1; iPop < DESCRIPTOR::q; ++iPop) {
@@ -680,10 +723,10 @@ struct ThirdOrderRLB {
         for(int iPop = 0; iPop<DESCRIPTOR::q; iPop++) {
           //Hermite polynomes  https://doi.org/10.1017/S0022112005008153
           V hermite2XX = descriptors::c<DESCRIPTOR>(iPop,0)*descriptors::c<DESCRIPTOR>(iPop,0) - V{1}/descriptors::invCs2<V,DESCRIPTOR>();
-          V hermite2XY = descriptors::c<DESCRIPTOR>(iPop,0)*descriptors::c<DESCRIPTOR>(iPop,1);
+          V hermite2XY = descriptors::c<DESCRIPTOR>(iPop,0)*descriptors::c<DESCRIPTOR>(iPop,1) * V{1};
           V hermite2YY = descriptors::c<DESCRIPTOR>(iPop,1)*descriptors::c<DESCRIPTOR>(iPop,1) - V{1}/descriptors::invCs2<V,DESCRIPTOR>();
-          V hermite2XZ = descriptors::c<DESCRIPTOR>(iPop,0)*descriptors::c<DESCRIPTOR>(iPop,2);
-          V hermite2YZ = descriptors::c<DESCRIPTOR>(iPop,1)*descriptors::c<DESCRIPTOR>(iPop,2);
+          V hermite2XZ = descriptors::c<DESCRIPTOR>(iPop,0)*descriptors::c<DESCRIPTOR>(iPop,2) * V{1};
+          V hermite2YZ = descriptors::c<DESCRIPTOR>(iPop,1)*descriptors::c<DESCRIPTOR>(iPop,2) * V{1};
           V hermite2ZZ = descriptors::c<DESCRIPTOR>(iPop,2)*descriptors::c<DESCRIPTOR>(iPop,2) - V{1}/descriptors::invCs2<V,DESCRIPTOR>();
 
           V hermite3XXY = hermite2XX * descriptors::c<DESCRIPTOR>(iPop,1);

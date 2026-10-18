@@ -303,6 +303,35 @@ RESULT promiseForDirectionOrientation(Vector<int,3> n)
   }
 }
 
+template <
+  typename RESULT, typename T, typename DESCRIPTOR, typename DYNAMICS,
+  template <typename,typename,typename,int,int> typename TYPE
+>
+RESULT promiseForDynamicsDirectionOrientation(Vector<int,3> n)
+{
+  if (n == Vector<int,3> {-1, 0, 0}) {
+    return meta::id<TYPE<T,DESCRIPTOR,DYNAMICS,0,-1>>();
+  }
+  else if (n == Vector<int,3> {1, 0, 0}) {
+    return meta::id<TYPE<T,DESCRIPTOR,DYNAMICS,0,1>>();
+  }
+  else if (n == Vector<int,3> {0, -1, 0}) {
+    return meta::id<TYPE<T,DESCRIPTOR,DYNAMICS,1,-1>>();
+  }
+  else if (n == Vector<int,3> {0, 1, 0}) {
+    return meta::id<TYPE<T,DESCRIPTOR,DYNAMICS,1,1>>();
+  }
+  else if (n == Vector<int,3> {0, 0, -1}) {
+    return meta::id<TYPE<T,DESCRIPTOR,DYNAMICS,2,-1>>();
+  }
+  else if (n == Vector<int,3> {0, 0, 1}) {
+    return meta::id<TYPE<T,DESCRIPTOR,DYNAMICS,2,1>>();
+  }
+  else {
+    throw std::runtime_error("Could not set Boundary.");
+  }
+}
+
 //Instantiates TYPE derived from RESULT with values from descreteNormal Vector n
 //RESULT can be either Dynamics or PostProcessorGenerator3D
 template <
@@ -626,6 +655,91 @@ PROMISE promiseForNormalSpecial(Vector<int,3> n)
   }
 }
 
+// DYNAMICS-threading analogs of promiseForNormal / promiseForNormalSpecial; the
+// dynamics is inserted as the third template argument of the per-normal TYPE so
+// typed OnDynamics boundary processors can be constructed for a runtime normal.
+template <
+  typename RESULT, typename T, typename DESCRIPTOR, typename DYNAMICS,
+  template <typename,typename,typename,int,int,int> typename TYPE
+>
+RESULT promiseForDynamicsNormal(Vector<int,3> n)
+{
+  if (n == Vector<int,3> {1, 1, 1}) {
+    return meta::id<TYPE<T,DESCRIPTOR,DYNAMICS,1,1,1>>();
+  }
+  else if (n == Vector<int,3> {1, -1, 1}) {
+    return meta::id<TYPE<T,DESCRIPTOR,DYNAMICS,1,-1,1>>();
+  }
+  else if (n == Vector<int,3> {1, 1, -1}) {
+    return meta::id<TYPE<T,DESCRIPTOR,DYNAMICS,1,1,-1>>();
+  }
+  else if (n == Vector<int,3> {1, -1, -1}) {
+    return meta::id<TYPE<T,DESCRIPTOR,DYNAMICS,1,-1,-1>>();
+  }
+  else if (n == Vector<int,3> {-1, 1, 1}) {
+    return meta::id<TYPE<T,DESCRIPTOR,DYNAMICS,-1,1,1>>();
+  }
+  else if (n == Vector<int,3> {-1, -1, 1}) {
+    return meta::id<TYPE<T,DESCRIPTOR,DYNAMICS,-1,-1,1>>();
+  }
+  else if (n == Vector<int,3> {-1, 1, -1}) {
+    return meta::id<TYPE<T,DESCRIPTOR,DYNAMICS,-1,1,-1>>();
+  }
+  else if (n == Vector<int,3> {-1, -1, -1}) {
+    return meta::id<TYPE<T,DESCRIPTOR,DYNAMICS,-1,-1,-1>>();
+  }
+  else {
+    throw std::domain_error("Invalid normal");
+  }
+}
+
+template <
+  typename RESULT, typename T, typename DESCRIPTOR, typename DYNAMICS,
+  template <typename,typename,typename,int,int,int> typename TYPE
+>
+RESULT promiseForDynamicsNormalSpecial(Vector<int,3> n)
+{
+  if (n == Vector<int,3> {0, 1, 1}) {
+    return meta::id<TYPE<T,DESCRIPTOR,DYNAMICS,0,1,1>>();
+  }
+  else if (n == Vector<int,3> {0, -1, 1}) {
+    return meta::id<TYPE<T,DESCRIPTOR,DYNAMICS,0,-1,1>>();
+  }
+  else if (n == Vector<int,3> {0, 1, -1}) {
+    return meta::id<TYPE<T,DESCRIPTOR,DYNAMICS,0,1,-1>>();
+  }
+  else if (n == Vector<int,3> {0, -1, -1}) {
+    return meta::id<TYPE<T,DESCRIPTOR,DYNAMICS,0,-1,-1>>();
+  }
+  else if (n == Vector<int,3> {1, 0, 1}) {
+    return meta::id<TYPE<T,DESCRIPTOR,DYNAMICS,1,1,1>>();
+  }
+  else if (n == Vector<int,3> {-1, 0, -1}) {
+    return meta::id<TYPE<T,DESCRIPTOR,DYNAMICS,1,-1,-1>>();
+  }
+  else if (n == Vector<int,3> {-1, 0, 1}) {
+    return meta::id<TYPE<T,DESCRIPTOR,DYNAMICS,1,1,-1>>();
+  }
+  else if (n == Vector<int,3> {1, 0, -1}) {
+    return meta::id<TYPE<T,DESCRIPTOR,DYNAMICS,1,-1,1>>();
+  }
+  else if (n == Vector<int,3> {1, 1, 0}) {
+    return meta::id<TYPE<T,DESCRIPTOR,DYNAMICS,2,1,1>>();
+  }
+  else if (n == Vector<int,3> {-1, 1, 0}) {
+    return meta::id<TYPE<T,DESCRIPTOR,DYNAMICS,2,-1,1>>();
+  }
+  else if (n == Vector<int,3> {1, -1, 0}) {
+    return meta::id<TYPE<T,DESCRIPTOR,DYNAMICS,2,1,-1>>();
+  }
+  else if (n == Vector<int,3> {-1, -1, 0}) {
+    return meta::id<TYPE<T,DESCRIPTOR,DYNAMICS,2,-1,-1>>();
+  }
+  else {
+    throw std::domain_error("Invalid normal");
+  }
+}
+
 template <
   typename T, typename DESCRIPTOR,
   template<typename,typename,int,int> typename TYPE
@@ -633,6 +747,16 @@ template <
 PostProcessorPromise<T,DESCRIPTOR> promisePostProcessorForDirectionOrientation(Vector<int,3> n)
 {
   return promiseForDirectionOrientation<PostProcessorPromise<T,DESCRIPTOR>,T,DESCRIPTOR,TYPE>(n);
+}
+
+template <
+  typename T, typename DESCRIPTOR,
+  typename DYNAMICS,
+  template<typename,typename,typename,int,int> typename TYPE
+>
+PostProcessorPromise<T,DESCRIPTOR> promisePostProcessorForDynamicsDirectionOrientation(Vector<int,3> n)
+{
+  return promiseForDynamicsDirectionOrientation<PostProcessorPromise<T,DESCRIPTOR>,T,DESCRIPTOR,DYNAMICS,TYPE>(n);
 }
 
 //constructs TYPE derived from PostProcessorGenerator3D with three normals as template args
@@ -682,6 +806,24 @@ template <
 PostProcessorPromise<T,DESCRIPTOR> promisePostProcessorForNormalSpecial(Vector<int,3> n)
 {
   return promiseForNormalSpecial<PostProcessorPromise<T,DESCRIPTOR>,T,DESCRIPTOR,TYPE>(n);
+}
+
+template <
+  typename T, typename DESCRIPTOR, typename DYNAMICS,
+  template<typename,typename,typename,int,int,int> typename TYPE
+>
+PostProcessorPromise<T,DESCRIPTOR> promisePostProcessorForDynamicsNormal(Vector<int,3> n)
+{
+  return promiseForDynamicsNormal<PostProcessorPromise<T,DESCRIPTOR>,T,DESCRIPTOR,DYNAMICS,TYPE>(n);
+}
+
+template <
+  typename T, typename DESCRIPTOR, typename DYNAMICS,
+  template<typename,typename,typename,int,int,int> typename TYPE
+>
+PostProcessorPromise<T,DESCRIPTOR> promisePostProcessorForDynamicsNormalSpecial(Vector<int,3> n)
+{
+  return promiseForDynamicsNormalSpecial<PostProcessorPromise<T,DESCRIPTOR>,T,DESCRIPTOR,DYNAMICS,TYPE>(n);
 }
 
 }//namespace boundaryhelper

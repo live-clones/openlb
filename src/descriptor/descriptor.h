@@ -27,6 +27,7 @@
 #include "base.h"
 #include "fields.h"
 #include "functions.h"
+#include "cellPhysR.h"
 #include "tag.h"
 
 #include "aliases.h"

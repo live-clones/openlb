@@ -427,12 +427,11 @@ int main(int argc, char* argv[])
     myCaseParameters.set<PHYS_CHAR_DENSITY  >(1000);
     myCaseParameters.set<DIFFUSION          >(1.e-7);  // 1.e-9
     myCaseParameters.set<RESOLUTION         >(7);    // resolution of the hydraulic diameter  // 36
-    myCaseParameters.set<parameters::DX>([&](){
-      return myCaseParameters.get<PHYS_CHAR_LENGTH>()
-           / myCaseParameters.get<RESOLUTION>();
+    myCaseParameters.set<parameters::DX>([](MyCase::ParametersD& p){
+      return p.get<PHYS_CHAR_LENGTH>()
+           / p.get<RESOLUTION>();
     });
   }
-  myCaseParameters.fromCLI(argc, argv);
 
   Mesh mesh = createMesh(myCaseParameters);
 
@@ -450,10 +449,25 @@ int main(int argc, char* argv[])
 
   optiCase.setObjective(computeObjective);
 
+  OptimizerParametersD<T> optiParameters;
+  {
+    using namespace parameters;
+    optiParameters.set<optimizer::EPS>(1.e-7);
+    optiParameters.set<optimizer::MAX_OPTIMIZATION_STEPS>(2);
+    optiParameters.set<linesearch::INITIAL_STEP_SIZE>(0.5);
+    optiParameters.set<linesearch::MAX_STEP_ATTEMPTS>(10);
+    optiParameters.set<LBFGS::INITIAL_HESSIAN_SCALING>(1.e-6);
+    optiParameters.set<optimizer::LOG_FILE_NAME>("log");
+    optiParameters.set<optimizer::WITH_UPPER_BOUND>(true);
+    optiParameters.set<optimizer::UPPER_BOUND>(2.0);
+    optiParameters.set<optimizer::WITH_LOWER_BOUND>(true);
+    optiParameters.set<optimizer::LOWER_BOUND>(0.1);
+    optiParameters.set<optimizer::CONTROL_EPS>(0.);
+  }
+
   OptimizerLBFGS<T,std::vector<T>> optimizer(
-    optiCase.getController().size(), 1.e-7, 2, 0.5, 10, "StrongWolfe", 20, 1.e-6, true, "", "log",
-    true, 2.0, true, 0.1, false, 0., true,
-    {OptimizerLogType::value, OptimizerLogType::control, OptimizerLogType::derivative});
+    optiCase.getController().size(), optiParameters,
+    {OptimizerLogType::objective, OptimizerLogType::control, OptimizerLogType::derivative});
 
   optimizer.optimize(optiCase);
 }

@@ -536,7 +536,6 @@ int main( int argc, char* argv[] )
     OLB_ASSERT( myCaseParameters.get<RESOLUTION>()    >= 1, "Fluid domain is too small" );
     OLB_ASSERT( myCaseParameters.get<PERMEABILITY>()  >= 0, "Permeability must be non-negative" );
   }
-  myCaseParameters.fromCLI(argc, argv);
   if ( myCaseParameters.get<parameters::PHYS_DELTA_X>() == 0 ) {
     myCaseParameters.set<parameters::PHYS_DELTA_X>( 1. / myCaseParameters.get<parameters::RESOLUTION>() );
   } else {

@@ -51,6 +51,14 @@ struct AdvectionDiffusionBoundariesDynamics final : public dynamics::CustomColli
     direction, orientation
   >;
 
+  template <typename NEW_DESCRIPTOR>
+  using exchange_descriptor = AdvectionDiffusionBoundariesDynamics<
+    T, NEW_DESCRIPTOR,
+    typename DYNAMICS::template exchange_descriptor<NEW_DESCRIPTOR>,
+    MOMENTA,
+    direction, orientation
+  >;
+
   template <typename M>
   using exchange_momenta = AdvectionDiffusionBoundariesDynamics<T,DESCRIPTOR,DYNAMICS,M,direction,orientation>;
 
@@ -137,6 +145,14 @@ public:
     plane, normal1, normal2
   >;
 
+  template <typename NEW_DESCRIPTOR>
+  using exchange_descriptor = AdvectionDiffusionEdgesDynamics<
+    T, NEW_DESCRIPTOR,
+    typename DYNAMICS::template exchange_descriptor<NEW_DESCRIPTOR>,
+    MOMENTA,
+    plane, normal1, normal2
+  >;
+
   template <typename M>
   using exchange_momenta = AdvectionDiffusionEdgesDynamics<T,DESCRIPTOR,DYNAMICS,M,plane,normal1,normal2>;
 
@@ -203,6 +219,14 @@ struct AdvectionDiffusionCornerDynamics2D final : public dynamics::CustomCollisi
   using exchange_value_type = AdvectionDiffusionCornerDynamics2D<
     NEW_T, DESCRIPTOR,
     typename DYNAMICS::template exchange_value_type<NEW_T>,
+    MOMENTA,
+    xNormal, yNormal
+  >;
+
+  template <typename NEW_DESCRIPTOR>
+  using exchange_descriptor = AdvectionDiffusionCornerDynamics2D<
+    T, NEW_DESCRIPTOR,
+    typename DYNAMICS::template exchange_descriptor<NEW_DESCRIPTOR>,
     MOMENTA,
     xNormal, yNormal
   >;
@@ -274,6 +298,14 @@ struct AdvectionDiffusionCornerDynamics3D final : public dynamics::CustomCollisi
   using exchange_value_type = AdvectionDiffusionCornerDynamics3D<
     NEW_T, DESCRIPTOR,
     typename DYNAMICS::template exchange_value_type<NEW_T>,
+    MOMENTA,
+    xNormal, yNormal, zNormal
+  >;
+
+  template <typename NEW_DESCRIPTOR>
+  using exchange_descriptor = AdvectionDiffusionCornerDynamics3D<
+    T, NEW_DESCRIPTOR,
+    typename DYNAMICS::template exchange_descriptor<NEW_DESCRIPTOR>,
     MOMENTA,
     xNormal, yNormal, zNormal
   >;

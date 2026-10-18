@@ -28,6 +28,8 @@
 #include "superCommunicationTagCoordinator.hh"
 #include "blockCommunicationNeighborhood.hh"
 
+#include "utilities/log/channels.h"
+
 #include <algorithm>
 #include <stdexcept>
 
@@ -45,6 +47,7 @@ SuperCommunicator<T,SUPER>::SuperCommunicator(
 #endif
 {
 #ifdef PARALLEL_MODE_MPI
+  OLB_LOG(logging::Setup, Debug, "duplicating MPI communicators");
   if (MPI_Comm_dup(MPI_COMM_WORLD, &_neighborhoodComm) != MPI_SUCCESS) {
     throw std::runtime_error("Unable to duplicate MPI communicator");
   }
@@ -56,6 +59,7 @@ SuperCommunicator<T,SUPER>::SuperCommunicator(
   auto& cuboidDecomposition = _super.getCuboidDecomposition();
   auto& load = _super.getLoadBalancer();
 
+  OLB_SCOPE(logging::Setup, "construct block neighborhoods");
   for (int iC = 0; iC < load.size(); ++iC) {
     _blockNeighborhoods.emplace_back(
       std::make_unique<BlockCommunicationNeighborhood<T,SUPER::d>>( cuboidDecomposition
@@ -82,28 +86,44 @@ void SuperCommunicator<T,SUPER>::exchangeRequests()
 {
   auto& load = _super.getLoadBalancer();
 
-  for (int iC = 0; iC < load.size(); ++iC) {
-    _blockNeighborhoods[iC]->maintain();
+  {
+    OLB_SCOPE(logging::Setup, "maintain block neighborhoods");
+    for (int iC = 0; iC < load.size(); ++iC) {
+      _blockNeighborhoods[iC]->maintain();
+    }
   }
-
-  for (int iC = 0; iC < load.size(); ++iC) {
-    for (std::type_index field : _fieldsRequested) {
-      _blockNeighborhoods[iC]->setFieldAvailability(
-        field, _super.getBlock(iC).hasCommunicatable(field));
+  {
+    OLB_SCOPE(logging::Setup, "set field availability");
+    for (int iC = 0; iC < load.size(); ++iC) {
+      for (std::type_index field : _fieldsRequested) {
+        _blockNeighborhoods[iC]->setFieldAvailability(
+          field, _super.getBlock(iC).hasCommunicatable(field));
+      }
     }
   }
 
 #ifdef PARALLEL_MODE_MPI
-  _tagCoordinator.template coordinate<SUPER::d>(_blockNeighborhoods);
-
-  for (int iC = 0; iC < load.size(); ++iC) {
-    _blockNeighborhoods[iC]->send(_tagCoordinator);
+  {
+    OLB_SCOPE(logging::Setup, "coordinate tags");
+    _tagCoordinator.template coordinate<SUPER::d>(_blockNeighborhoods);
   }
-  for (int iC = 0; iC < load.size(); ++iC) {
-    _blockNeighborhoods[iC]->receive(_tagCoordinator);
+  {
+    OLB_SCOPE(logging::Setup, "exchangeRequests: send");
+    for (int iC = 0; iC < load.size(); ++iC) {
+      _blockNeighborhoods[iC]->send(_tagCoordinator);
+    }
   }
-  for (int iC = 0; iC < load.size(); ++iC) {
-    _blockNeighborhoods[iC]->wait();
+  {
+    OLB_SCOPE(logging::Setup, "exchangeRequests: receive");
+    for (int iC = 0; iC < load.size(); ++iC) {
+      _blockNeighborhoods[iC]->receive(_tagCoordinator);
+    }
+  }
+  {
+    OLB_SCOPE(logging::Setup, "exchangeRequests: wait");
+    for (int iC = 0; iC < load.size(); ++iC) {
+      _blockNeighborhoods[iC]->wait();
+    }
   }
 
 #else // not using PARALLEL_MODE_MPI
@@ -116,29 +136,35 @@ void SuperCommunicator<T,SUPER>::exchangeRequests()
 
   _blockCommunicators.clear();
   _blockCommunicators.resize(load.size());
-  for (int iC = 0; iC < load.size(); ++iC) {
-    auto* block = &_super.getBlock(iC);
-    _blockCommunicators[iC] = callUsingConcretePlatform<typename SUPER::block_t>(
-      block->getPlatform(),
-      block,
-      [&](auto* concreteBlock) -> std::unique_ptr<BlockCommunicator> {
-        return std::make_unique<ConcreteBlockCommunicator<std::remove_reference_t<decltype(*concreteBlock)>>>(
-          _super,
-          load,
+  {
+    OLB_SCOPE(logging::Setup, "setup block communicators");
+    for (int iC = 0; iC < load.size(); ++iC) {
+      auto* block = &_super.getBlock(iC);
+      _blockCommunicators[iC] = callUsingConcretePlatform<typename SUPER::block_t>(
+        block->getPlatform(),
+        block,
+        [&](auto* concreteBlock) -> std::unique_ptr<BlockCommunicator> {
+          return std::make_unique<ConcreteBlockCommunicator<std::remove_reference_t<decltype(*concreteBlock)>>>(
+            _super,
+            load,
 #ifdef PARALLEL_MODE_MPI
-          _tagCoordinator,
-          _communicatorComm,
+            _tagCoordinator,
+            _communicatorComm,
 #endif
-          iC,
-          *_blockNeighborhoods[iC]);
-      });
+            iC,
+            *_blockNeighborhoods[iC]);
+        });
+    }
   }
 
 #ifdef PARALLEL_MODE_MPI
-  for (int iC = 0; iC < load.size(); ++iC) {
-    _blockNeighborhoods[iC]->forNeighbors([&](int remoteC) {
-      _remoteCuboidNeighborhood.emplace(remoteC);
-    });
+  {
+    OLB_SCOPE(logging::Setup, "block neighborhood emplace");
+    for (int iC = 0; iC < load.size(); ++iC) {
+      _blockNeighborhoods[iC]->forNeighbors([&](int remoteC) {
+        _remoteCuboidNeighborhood.emplace(remoteC);
+      });
+    }
   }
 #endif
 
@@ -187,7 +213,7 @@ void SuperCommunicator<T,SUPER>::clearRequestedCells()
 }
 
 template <typename T, typename SUPER>
-void SuperCommunicator<T,SUPER>::communicate()
+void SuperCommunicator<T,SUPER>::prepareCommunicate()
 {
   if (!_enabled) {
     return;
@@ -196,11 +222,31 @@ void SuperCommunicator<T,SUPER>::communicate()
     throw std::logic_error("Requests must be re-exchanged after any changes");
   }
 
-  auto& load = _super.getLoadBalancer();
 #ifdef PARALLEL_MODE_MPI
+  auto& load = _super.getLoadBalancer();
   for (int iC = 0; iC < load.size(); ++iC) {
     _blockCommunicators[iC]->receive();
   }
+#endif
+}
+
+template <typename T, typename SUPER>
+void SuperCommunicator<T,SUPER>::continueCommunicate()
+{
+  if (!_enabled) {
+    return;
+  }
+
+  auto& load = _super.getLoadBalancer();
+
+#ifdef PARALLEL_MODE_MPI
+#if defined(OLB_PARALLEL_MODE_MPI_INJECT_ENTROPY) && defined(PLATFORM_GPU_SYCL)
+  #pragma message("OLB_PARALLEL_MODE_MPI_INJECT_ENTROPY is ACTIVE")
+  // This may seem weird but it actually mitigates
+  // interconnect switch overloads in some cases.
+  singleton::mpi().injectEntropy();
+#endif
+
   for (int iC = 0; iC < load.size(); ++iC) {
     _blockCommunicators[iC]->send();
   }
@@ -215,6 +261,13 @@ void SuperCommunicator<T,SUPER>::communicate()
     _blockCommunicators[iC]->copy();
   }
 #endif
+}
+
+template <typename T, typename SUPER>
+void SuperCommunicator<T,SUPER>::communicate()
+{
+  prepareCommunicate();
+  continueCommunicate();
 }
 
 template <typename T, typename SUPER>

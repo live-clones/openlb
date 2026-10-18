@@ -25,6 +25,7 @@
 #define GPU_CUDA_STATISTICS_H
 
 #include "core/postProcessing.h"
+#include "core/fieldStatisticO.h"
 
 namespace olb {
 
@@ -40,6 +41,13 @@ void setup(ConcreteBlockLattice<T,DESCRIPTOR,Platform::GPU_CUDA>& blockLattice)
 
 void apply(ConcreteBlockLattice<T,DESCRIPTOR,Platform::GPU_CUDA>& blockLattice);
 
+};
+
+template <typename FIELD>
+template <typename T, typename DESCRIPTOR>
+struct FieldStatisticO<FIELD>::type<ConcreteBlockLattice<T,DESCRIPTOR,Platform::GPU_CUDA>> {
+  void setup(ConcreteBlockLattice<T,DESCRIPTOR,Platform::GPU_CUDA>&) { }
+  void apply(ConcreteBlockLattice<T,DESCRIPTOR,Platform::GPU_CUDA>& block);
 };
 
 }

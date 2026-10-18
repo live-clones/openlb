@@ -27,7 +27,7 @@
 #ifndef SET_BOUZIDI_ZERO_VELOCITY_BOUNDARY_2D_H
 #define SET_BOUZIDI_ZERO_VELOCITY_BOUNDARY_2D_H
 
-#include "geometry/blockGeometryStatistics2D.h"
+#include "geometry/blockGeometryStatistics.h"
 #include "core/superLattice2D.h"
 #include "io/ostreamManager.h"
 #include "geometry/superGeometry.h"

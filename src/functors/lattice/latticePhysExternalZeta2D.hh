@@ -72,7 +72,10 @@ BlockLatticePhysExternalZeta2D<T,DESCRIPTOR>::BlockLatticePhysExternalZeta2D(
 template <typename T, typename DESCRIPTOR>
 bool BlockLatticePhysExternalZeta2D<T,DESCRIPTOR>::operator() (T output[], const int input[])
 {
-  this->_blockLattice.get(input).template computeField<descriptors::ZETA>(output);
+  const auto zeta = this->_blockLattice.get(input).template getField<descriptors::ZETA>();
+  for (unsigned iD=0; iD < DESCRIPTOR::template size<descriptors::ZETA>(); ++iD) {
+    output[iD] = zeta[iD];
+  }
   return true;
 }
 

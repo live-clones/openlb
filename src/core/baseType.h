@@ -24,33 +24,23 @@
 #ifndef BASETYPE_H
 #define BASETYPE_H
 
+#include "core/expr.h"
+
 namespace olb {
 
 namespace util {
 
 template <typename T>
+using void_t = void;
+
+template <typename T, typename = void>
 struct BaseTypeHelper {
+  using type = T;
+};
+
+template <typename T>
+struct BaseTypeHelper<T,void_t<typename T::base_t>> {
   using type = typename T::base_t;
-};
-
-template <>
-struct BaseTypeHelper<long double> {
-  using type = long double;
-};
-
-template <>
-struct BaseTypeHelper<double> {
-  using type = double;
-};
-
-template <>
-struct BaseTypeHelper<float> {
-  using type = float;
-};
-
-template <>
-struct BaseTypeHelper<int> {
-  using type = int;
 };
 
 } // namespace util

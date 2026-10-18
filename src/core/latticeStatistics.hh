@@ -25,321 +25,336 @@
 #define LATTICE_STATISTICS_HH
 
 #include "latticeStatistics.h"
+#include "io/textTable.h"
 #include "utilities/omath.h"
-#include <numeric>
 #include <limits>
+#include <iomanip>
+#include <sstream>
+#include <fstream>
+#include <filesystem>
 #include "util.h"
 
 namespace olb {
 
 ////////////////////// Class LatticeStatistics /////////////////
 
-template<typename T>
-LatticeStatistics<T>::LatticeStatistics() : clout(std::cout,"LatticeStatistics")
+template<typename T, typename DESCRIPTOR>
+std::size_t LatticeStatistics<T,DESCRIPTOR>::_instanceCounter = 0;
+
+template<typename T, typename DESCRIPTOR>
+LatticeStatistics<T,DESCRIPTOR>::LatticeStatistics()
+  : clout(std::cout,"LatticeStatistics")
+  , _id(_instanceCounter++)
 {
   initialize();
 }
 
-template<typename T>
-void LatticeStatistics<T>::reset()
+template<typename T, typename DESCRIPTOR>
+void LatticeStatistics<T,DESCRIPTOR>::initialize()
 {
-  // avoid division by zero
-  if (tmpNumCells == 0) {
-    for (unsigned iVect=0; iVect<averageVect.size(); ++iVect) {
-      averageVect[iVect] = T();
-    }
-    for (unsigned iVect=0; iVect<sumVect.size(); ++iVect) {
-      sumVect[iVect] = T();
-    }
-    for (unsigned iVect=0; iVect<minVect.size(); ++iVect) {
-      minVect[iVect] = T();
-    }
-    for (unsigned iVect=0; iVect<maxVect.size(); ++iVect) {
-      maxVect[iVect] = T();
-    }
-    numCells = 0;
-    firstCall = false;
-  }
-  else {
-    // The average density is actually used in the "ConstRhoBgk" model.
-    // Depending on the simulation setup, it is possible that it has
-    // a nonsensical value before the simulation is started. For this
-    // and similar cases, averages are initialized to 1.
-    if (firstCall) {
-      for (unsigned iVect=0; iVect<averageVect.size(); ++iVect) {
-        averageVect[iVect] = (T)1;
-      }
-      firstCall = false;
-    }
-    else {
-      for (unsigned iVect=0; iVect<averageVect.size(); ++iVect) {
-        averageVect[iVect] = tmpAv[iVect] / (T)tmpNumCells;
-      }
-    }
-    for (unsigned iVect=0; iVect<sumVect.size(); ++iVect) {
-      sumVect[iVect] = tmpSum[iVect];
-    }
-    for (unsigned iVect=0; iVect<minVect.size(); ++iVect) {
-      minVect[iVect] = tmpMin[iVect];
-    }
-    for (unsigned iVect=0; iVect<maxVect.size(); ++iVect) {
-      maxVect[iVect] = tmpMax[iVect];
-    }
-    averageVect[avEnergy] *= (T)0.5; // energy is 0.5 *uSqr
-    maxVect[maxU]         = util::sqrt(maxVect[maxU]); // u is util::sqrt(uSqr)
-    numCells              = tmpNumCells;
-  }
-
-  for (unsigned iVect=0; iVect<averageVect.size(); ++iVect) {
-    tmpAv[iVect]    = T();
-  }
-  for (unsigned iVect=0; iVect<sumVect.size(); ++iVect) {
-    tmpSum[iVect]   = T();
-  }
-  for (unsigned iVect=0; iVect<minVect.size(); ++iVect) {
-    tmpMin[iVect]   = std::numeric_limits<T>::max();
-  }
-  for (unsigned iVect=0; iVect<maxVect.size(); ++iVect) {
-    tmpMax[iVect]   = std::numeric_limits<T>::min();
-  }
-
-  tmpNumCells     = 0;
-}
-
-template<typename T>
-void LatticeStatistics<T>::reset (
-  T average_rho_, T average_energy_, T maxU_, std::size_t numCells_ )
-{
-  averageVect[avRho]    = average_rho_;
-  averageVect[avEnergy] = average_energy_;
-  maxVect[maxU]         = maxU_;
-  numCells              = numCells_;
-
-  tmpAv[avRho]    = T();
-  tmpAv[avEnergy] = T();
-  tmpMax[maxU]    = T();
-  tmpNumCells     = 0;
-}
-
-template<typename T>
-void LatticeStatistics<T>::initialize()
-{
-  tmpAv.resize(2);
-  averageVect.resize(2);
-  tmpMax.resize(1);
-  maxVect.resize(1);
-
-  tmpAv[avRho]    = T();
-  tmpAv[avEnergy] = T();
-  tmpMax[maxU]    = T();
-  tmpNumCells     = 0;
-
-  averageVect[avRho]    = (T)1;
-  averageVect[avEnergy] = T();
-  maxVect[maxU]         = T();
-
-  firstCall = true;
-
+  _partial   = Aggregatable{};
+  _avRho     = T(1);
+  _avEnergy  = T();
+  _maxU      = T();
+  _minRho    = T(1);
+  _maxRho    = T(1);
+  _minU      = T();
+  _meanU     = T();
+  _numCells  = 0;
+  _firstCall = true;
   resetTime();
 }
 
-template<typename T>
-int LatticeStatistics<T>::subscribeAverage()
+template<typename T, typename DESCRIPTOR>
+void LatticeStatistics<T,DESCRIPTOR>::reset()
 {
-  int newSize = tmpAv.size()+1;
-  tmpAv.resize(newSize);
-  averageVect.resize(newSize);
-  return newSize-1;
-}
-
-template<typename T>
-int LatticeStatistics<T>::subscribeSum()
-{
-  int newSize = tmpSum.size()+1;
-  tmpSum.resize(newSize);
-  sumVect.resize(newSize);
-  return newSize-1;
-}
-
-template<typename T>
-int LatticeStatistics<T>::subscribeMin()
-{
-  int newSize = tmpMin.size()+1;
-  tmpMin.resize(newSize);
-  minVect.resize(newSize);
-  return newSize-1;
-}
-
-template<typename T>
-int LatticeStatistics<T>::subscribeMax()
-{
-  int newSize = tmpMax.size()+1;
-  tmpMax.resize(newSize);
-  maxVect.resize(newSize);
-  return newSize-1;
-}
-
-template<typename T>
-void LatticeStatistics<T>::incrementStats(T rho, T uSqr)
-{
-  tmpAv[avRho]    += rho;
-  tmpAv[avEnergy] += uSqr;
-  if (uSqr > tmpMax[maxU]) {
-    tmpMax[maxU] = uSqr;
+  const auto& a = _partial;
+  if (a.nCells == 0) {
+    _avRho = _avEnergy = _maxU = _minRho = _maxRho = _minU = _meanU = T();
+    _numCells  = 0;
+    _firstCall = false;
   }
-  ++tmpNumCells;
-}
-
-template<typename T>
-void LatticeStatistics<T>::incrementStats(Aggregatable& aggregatable)
-{
-  tmpNumCells += aggregatable.nCells;
-  tmpAv[avRho] += aggregatable.avRho;
-  tmpAv[avEnergy] += aggregatable.avEnergy;
-  tmpMax[maxU] = std::max(aggregatable.maxU, tmpMax[maxU]);
-}
-
-template<typename T>
-void LatticeStatistics<T>::gatherAverage(int whichAverage, T value)
-{
-  OLB_PRECONDITION( whichAverage < (int) tmpAv.size() );
-  tmpAv[whichAverage] += value;
-}
-
-template<typename T>
-void LatticeStatistics<T>::gatherSum(int whichSum, T value)
-{
-  OLB_PRECONDITION( whichSum < (int) tmpSum.size() );
-  tmpSum[whichSum] += value;
-}
-
-template<typename T>
-void LatticeStatistics<T>::gatherMin(int whichMin, T value)
-{
-  OLB_PRECONDITION( whichMin < (int) tmpMin.size() );
-  if (value < tmpMin[whichMin]) {
-    tmpMin[whichMin] = value;
+  else {
+    // The average density is used by the "ConstRhoBGK" model. Before the
+    // simulation starts it may hold a nonsensical value, so averages are
+    // initialized to 1 on the first call.
+    if (_firstCall) {
+      _avRho    = T(1);
+      _avEnergy = T(1);
+      _firstCall = false;
+    }
+    else {
+      _avRho    = a.avRho    / T(a.nCells);
+      _avEnergy = a.avEnergy / T(a.nCells);
+    }
+    _avEnergy *= T(0.5);                  // energy is 0.5*uSqr
+    _maxU   = util::sqrt(a.maxU);         // u is sqrt(uSqr)
+    _minRho = a.minRho;
+    _maxRho = a.maxRho;
+    _minU   = util::sqrt(a.minUSqr);
+    _meanU  = a.sumU / T(a.nCells);
+    _numCells = a.nCells;
   }
+  _partial = Aggregatable{};
 }
 
-template<typename T>
-void LatticeStatistics<T>::gatherMax(int whichMax, T value)
+template<typename T, typename DESCRIPTOR>
+typename LatticeStatistics<T,DESCRIPTOR>::Result
+LatticeStatistics<T,DESCRIPTOR>::getResult() const
 {
-  OLB_PRECONDITION( whichMax < (int) tmpMax.size() );
-  if (value > tmpMax[whichMax]) {
-    tmpMax[whichMax] = value;
+  return Result{_avRho, _avEnergy, _maxU, _minRho, _maxRho, _minU, _meanU, _numCells};
+}
+
+template<typename T, typename DESCRIPTOR>
+void LatticeStatistics<T,DESCRIPTOR>::setResult(const Result& r)
+{
+  _avRho    = r.avRho;
+  _avEnergy = r.avEnergy;
+  _maxU     = r.maxU;
+  _minRho   = r.minRho;
+  _maxRho   = r.maxRho;
+  _minU     = r.minU;
+  _meanU    = r.meanU;
+  _numCells = r.nCells;
+  _partial  = Aggregatable{};
+}
+
+template<typename T, typename DESCRIPTOR>
+void LatticeStatistics<T,DESCRIPTOR>::incrementStats(T rho, T uSqr)
+{
+  _partial.increment(rho, uSqr);
+}
+
+template<typename T, typename DESCRIPTOR>
+void LatticeStatistics<T,DESCRIPTOR>::incrementStats(Aggregatable& aggregatable)
+{
+  _partial += aggregatable;
+}
+
+template<typename T, typename DESCRIPTOR>
+void LatticeStatistics<T,DESCRIPTOR>::incrementStats()
+{
+  _partial.nCells += 1;
+}
+
+template<typename T, typename DESCRIPTOR>
+const typename LatticeStatistics<T,DESCRIPTOR>::RegisteredField*
+LatticeStatistics<T,DESCRIPTOR>::findRegistered(const std::string& name) const
+{
+  for (const auto& rf : _registered) {
+    if (rf.name == name) {
+      return &rf;
+    }
   }
+  return nullptr;
 }
 
-template<typename T>
-void LatticeStatistics<T>::incrementStats()
+template<typename T, typename DESCRIPTOR>
+StatisticEntry<T>
+LatticeStatistics<T,DESCRIPTOR>::entryFor(const RegisteredField& rf) const
 {
-  ++tmpNumCells;
+  StatisticEntry<T> e;
+  e.name       = rf.name;
+  e.components = rf.components;
+  e.min.assign(rf.components, T());
+  e.max.assign(rf.components, T());
+  e.mean.assign(rf.components, T());
+  const auto it = _fieldResults.find(rf.id);
+  if (it != _fieldResults.end() && it->second.count > 0) {
+    const auto& r    = it->second;
+    const T     norm = T(1) / T(r.count);
+    for (unsigned c = 0; c < rf.components; ++c) {
+      if (c < r.min.size()) e.min[c]  = r.min[c];
+      if (c < r.max.size()) e.max[c]  = r.max[c];
+      if (c < r.sum.size()) e.mean[c] = r.sum[c] * norm;
+    }
+  }
+  return e;
 }
 
-template<typename T>
-T LatticeStatistics<T>::getAverageRho() const
+template<typename T, typename DESCRIPTOR>
+T LatticeStatistics<T,DESCRIPTOR>::getMin(const std::string& name, unsigned iComponent) const
 {
-  return averageVect[avRho];
+  if (name == "rho") return _minRho;
+  if (name == "u")   return _minU;
+  if (const auto* rf = findRegistered(name)) {
+    const auto e = entryFor(*rf);
+    if (iComponent < e.min.size()) return e.min[iComponent];
+  }
+  return T();
 }
 
-template<typename T>
-T LatticeStatistics<T>::getAverageEnergy() const
+template<typename T, typename DESCRIPTOR>
+T LatticeStatistics<T,DESCRIPTOR>::getMax(const std::string& name, unsigned iComponent) const
 {
-  return averageVect[avEnergy];
+  if (name == "rho") return _maxRho;
+  if (name == "u")   return _maxU;
+  if (const auto* rf = findRegistered(name)) {
+    const auto e = entryFor(*rf);
+    if (iComponent < e.max.size()) return e.max[iComponent];
+  }
+  return T();
 }
 
-template<typename T>
-T LatticeStatistics<T>::getMaxU() const
+template<typename T, typename DESCRIPTOR>
+T LatticeStatistics<T,DESCRIPTOR>::getMean(const std::string& name, unsigned iComponent) const
 {
-  return maxVect[maxU];
+  if (name == "rho") return _avRho;
+  if (name == "u")   return _meanU;
+  if (const auto* rf = findRegistered(name)) {
+    const auto e = entryFor(*rf);
+    if (iComponent < e.mean.size()) return e.mean[iComponent];
+  }
+  return T();
 }
 
-template<typename T>
-std::size_t LatticeStatistics<T>::getNumCells() const
+template<typename T, typename DESCRIPTOR>
+std::vector<StatisticEntry<T>> LatticeStatistics<T,DESCRIPTOR>::getEntries() const
 {
-  return numCells;
+  std::vector<StatisticEntry<T>> entries;
+  entries.push_back(StatisticEntry<T>{"rho", 1, {_minRho}, {_maxRho}, {_avRho}});
+  entries.push_back(StatisticEntry<T>{"u",   1, {_minU},   {_maxU},   {_meanU}});
+  entries.push_back(StatisticEntry<T>{"energy", 1,
+    {T{0.5}*_minU*_minU}, {T{0.5}*_maxU*_maxU}, {_avEnergy}});
+  for (const auto& rf : _registered) {
+    entries.push_back(entryFor(rf));
+  }
+  return entries;
 }
 
-template<typename T>
-T LatticeStatistics<T>::getAverage(int whichAverage) const
+template<typename T, typename DESCRIPTOR>
+void LatticeStatistics<T,DESCRIPTOR>::incrementTime()
 {
-  OLB_PRECONDITION( whichAverage < (int) tmpAv.size() );
-  return averageVect[whichAverage];
+  ++_latticeTime;
 }
 
-template<typename T>
-T LatticeStatistics<T>::getSum(int whichSum) const
+template<typename T, typename DESCRIPTOR>
+void LatticeStatistics<T,DESCRIPTOR>::resetTime(size_t value)
 {
-  OLB_PRECONDITION( whichSum < (int) tmpSum.size() );
-  return sumVect[whichSum];
+  _latticeTime = value;
 }
 
-template<typename T>
-T LatticeStatistics<T>::getMin(int whichMin) const
+template<typename T, typename DESCRIPTOR>
+size_t LatticeStatistics<T,DESCRIPTOR>::getTime() const
 {
-  OLB_PRECONDITION( whichMin < (int) tmpMin.size() );
-  return minVect[whichMin];
+  return _latticeTime;
 }
 
-template<typename T>
-T LatticeStatistics<T>::getMax(int whichMax) const
+template<typename T, typename DESCRIPTOR>
+void LatticeStatistics<T,DESCRIPTOR>::printWithoutPlot(int iterationStep, T physicalTime) const
 {
-  OLB_PRECONDITION( whichMax < (int) tmpMax.size() );
-  return maxVect[whichMax];
-}
-
-template<typename T>
-std::vector<T>& LatticeStatistics<T>::getAverageVect()
-{
-  return averageVect;
-}
-
-template<typename T>
-std::vector<T>& LatticeStatistics<T>::getSumVect()
-{
-  return sumVect;
-}
-
-template<typename T>
-std::vector<T>& LatticeStatistics<T>::getMinVect()
-{
-  return minVect;
-}
-
-template<typename T>
-std::vector<T>& LatticeStatistics<T>::getMaxVect()
-{
-  return maxVect;
-}
-
-template<typename T>
-void LatticeStatistics<T>::incrementTime()
-{
-  ++latticeTime;
-}
-
-template<typename T>
-void LatticeStatistics<T>::resetTime(size_t value)
-{
-  latticeTime=value;
-}
-
-template<typename T>
-size_t LatticeStatistics<T>::getTime() const
-{
-  return latticeTime;
-}
-
-template<typename T>
-void LatticeStatistics<T>::print(int iterationStep, T physicalTime) const
-{
+  std::stringstream extra;
+  for (const auto& rf : _registered) {
+    const auto e = entryFor(rf);
+    extra << "; " << e.name << "=[";
+    for (unsigned iC = 0; iC < e.components; ++iC) {
+      if (iC > 0) extra << ", ";
+      extra << e.min[iC] << "/" << e.max[iC] << "/" << e.mean[iC];
+    }
+    extra << "]";
+  }
   clout << "step="      << iterationStep      << "; "
         << "physT="     << physicalTime       << "; "
         << "maxCFL="    << getMaxU()          << "; "
         << "avgEnergy=" << getAverageEnergy() << "; "
         << "avgRho="    << getAverageRho()
+        << extra.str()
         << std::endl;
+}
+
+template<typename T, typename DESCRIPTOR>
+void LatticeStatistics<T,DESCRIPTOR>::print(int iterationStep, T physicalTime, const std::string& postfix)
+{
+  const std::string fallback = _name.empty() ? std::to_string(_id) : _name;
+  std::string plotPostfix = postfix.empty() ? fallback : postfix;
+  if (!gplotAvgEnergy) {
+    gplotAvgEnergy = std::make_unique<Gnuplot<T>>("avgEnergy_" + plotPostfix, false);
+    gplotMaxCFL = std::make_unique<Gnuplot<T>>("maxCFL_" + plotPostfix, false);
+  }
+
+  printWithoutPlot(iterationStep, physicalTime);
+
+  // Gnuplot output (avgEnergy / maxCFL PNGs)
+  gplotAvgEnergy->setData(physicalTime, getAverageEnergy(), "avgEnergy", "bottom right", 'l');
+  gplotMaxCFL->setData(physicalTime, getMaxU(), "maxCFL", "bottom right", 'l');
+  gplotAvgEnergy->writePNG(-1, -1, "avgEnergy_" + plotPostfix);
+  gplotMaxCFL->writePNG(-1, -1, "maxCFL_" + plotPostfix);
+}
+
+template<typename T, typename DESCRIPTOR>
+void LatticeStatistics<T,DESCRIPTOR>::printSummary(int iterationStep, T physicalTime) const
+{
+  const auto entries = getEntries();
+  std::size_t width = 5;
+  for (const auto& e : entries) {
+    for (unsigned iC = 0; iC < e.components; ++iC) {
+      std::size_t w = e.name.size() + (e.components > 1 ? 3 : 0);
+      width = std::max(width, w);
+    }
+  }
+  auto rule = [&](){
+    std::stringstream s;
+    s << std::string(width+2, '-') << "+" << std::string(11,'-') << "+"
+      << std::string(11,'-') << "+" << std::string(11,'-');
+    clout << s.str() << std::endl;
+  };
+  clout << "step " << iterationStep << ", physT " << physicalTime << " s" << std::endl;
+  clout << " " << std::setw(width) << std::left << "field" << std::right
+        << " | " << std::setw(9) << "min"
+        << " | " << std::setw(9) << "max"
+        << " | " << std::setw(9) << "mean" << std::endl;
+  rule();
+  for (const auto& e : entries) {
+    for (unsigned iC = 0; iC < e.components; ++iC) {
+      std::string label = e.name;
+      if (e.components > 1) label += "[" + std::to_string(iC) + "]";
+      clout << " " << std::setw(width) << std::left << label << std::right
+            << std::scientific << std::setprecision(3)
+            << " | " << std::setw(9) << e.min[iC]
+            << " | " << std::setw(9) << e.max[iC]
+            << " | " << std::setw(9) << e.mean[iC] << std::endl;
+    }
+  }
+  rule();
+}
+
+template<typename T, typename DESCRIPTOR>
+void LatticeStatistics<T,DESCRIPTOR>::writeCSV(int iterationStep, T physicalTime, const std::string& name) const
+{
+  if (!singleton::mpi().isMainProcessor()) {
+    return;
+  }
+  const auto entries = getEntries();
+  const std::string dir = singleton::directories().getStatisticsOutDir();
+  std::error_code ec;
+  std::filesystem::create_directories(dir, ec);
+  const std::string fallback = _name.empty() ? ("lattice" + std::to_string(_id)) : _name;
+  const std::string base = io::text::filenameSafe(name.empty() ? fallback : name);
+  const std::string file = dir + base + "_statistics.csv";
+
+  const bool exists = std::filesystem::exists(file);
+  std::ofstream out(file, std::ios::app);
+  if (!out) {
+    return;
+  }
+  if (!exists) {
+    out << "iT,physT";
+    for (const auto& e : entries) {
+      for (unsigned iC = 0; iC < e.components; ++iC) {
+        std::string label = e.name;
+        if (e.components > 1) label += std::to_string(iC);
+        out << "," << label << "_min," << label << "_max," << label << "_mean";
+      }
+    }
+    out << "\n";
+  }
+  out << std::scientific << std::setprecision(8) << iterationStep << "," << physicalTime;
+  for (const auto& e : entries) {
+    for (unsigned iC = 0; iC < e.components; ++iC) {
+      out << "," << e.min[iC] << "," << e.max[iC] << "," << e.mean[iC];
+    }
+  }
+  out << "\n";
 }
 
 }  // namespace olb

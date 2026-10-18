@@ -28,6 +28,7 @@ namespace olb{
   namespace gpu {
     namespace hip {
       static constexpr int DEFAULT_HIP_WARP_SIZE = 64;
+      static constexpr int DEFAULT_LANE_SIZE = 1;
     }
   }
 }
@@ -40,6 +41,7 @@ namespace olb{
 #include "core/platform/gpu/hip/dynamics.hh"
 #include "core/platform/gpu/hip/statistics.hh"
 #include "core/platform/gpu/hip/communicator.hh"
+#include "core/platform/gpu/hip/fieldReduction.hh"
 
 #include "fsi/platform/gpu/hip/integral.hh"
 

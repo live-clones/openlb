@@ -31,6 +31,7 @@
 
 #include <fstream>
 #include "io/ostreamManager.h"
+#include "io/textTable.h"
 #include "core/unitConverter.h"
 #include "core/singleton.h"
 #include "utilities/omath.h"
@@ -50,14 +51,14 @@ template<typename T, typename DESCRIPTOR> struct RadiativeUnitConverter;
 
 // wrapper for above function
 template <typename T, typename DESCRIPTOR>
-double getPartialBBCoefficient(RadiativeUnitConverter<T,DESCRIPTOR> const& converter)
+double getPartialBBCoefficient(UnitConverter<T,DESCRIPTOR> const& converter)
 {
   return getPartialBBCoefficient( converter.getLatticeDiffusion(), converter.getRefractiveRelative() );
 };
 
 // wrapper for above function
 template <typename T, typename DESCRIPTOR>
-double getRefractionFunction(RadiativeUnitConverter<T,DESCRIPTOR> const& converter)
+double getRefractionFunction(UnitConverter<T,DESCRIPTOR> const& converter)
 {
   return getRefractionFunction(converter.getRefractiveRelative());
 };
@@ -95,35 +96,41 @@ struct RadiativeUnitConverter : public UnitConverterFromResolutionAndRelaxationT
 template <typename T, class DESCRIPTOR>
 void RadiativeUnitConverter<T, DESCRIPTOR>::print(std::ostream& clout) const
 {
-  clout << "----------------- UnitConverter information -----------------" << std::endl;
-  clout << "-- Parameters:" << std::endl;
-  clout << "Resolution:                       N=              " << this->getResolution() << std::endl;
-  clout << "Lattice relaxation frequency:     omega=          " << this->getLatticeRelaxationFrequency() << std::endl;
-  clout << "Lattice relaxation time:          tau=            " << this->getLatticeRelaxationTime() << std::endl;
-  clout << "Characteristical length(m):       charL=          " << this->getCharPhysLength() << std::endl;
-  clout << "Phys. density(kg/m^d):            charRho=        " << this->getPhysDensity() << std::endl;
-  clout << "Phys. absorption(1/m):            mu_a=           " << this->getPhysAbsorption() << std::endl;
-  clout << "Phys. scattering(1/m):            mu_s=           " << this->getPhysScattering() << std::endl;
-  clout << "Extinction(1/m):                  mu_t=           " << this->getExtinction() << std::endl;
-  clout << "Effective attenuation(1/m):       mu_eff=         " << this->getEffectiveAttenuation() << std::endl;
-  clout << "Phys. diffusion(m):               D=              " << this->getPhysDiffusion() << std::endl;
-  clout << "Single scattering albedo:         albedo=         " << this->getScatteringAlbedo() << std::endl;
-  clout << "Anisotropy factor:                g=              " << this->getAnisotropyFactor() << std::endl;
+  using Align = io::text::Table::Align;
+  clout << io::text::section("Radiative Unit Converter") << std::endl;
+  io::text::Table parameters({{"Parameter"}, {"Symbol"}, {"Value", Align::Right}});
+  parameters.row("Resolution",                  "N",       this->getResolution());
+  parameters.row("Lattice relaxation frequency","omega",   this->getLatticeRelaxationFrequency());
+  parameters.row("Lattice relaxation time",     "tau",     this->getLatticeRelaxationTime());
+  parameters.row("Char. length [m]",            "charL",   this->getCharPhysLength());
+  parameters.row("Density [kg/m^d]",            "charRho", this->getPhysDensity());
+  parameters.row("Phys. absorption [1/m]",      "mu_a",    this->getPhysAbsorption());
+  parameters.row("Phys. scattering [1/m]",      "mu_s",    this->getPhysScattering());
+  parameters.row("Extinction [1/m]",            "mu_t",    this->getExtinction());
+  parameters.row("Effective attenuation [1/m]", "mu_eff",  this->getEffectiveAttenuation());
+  parameters.row("Phys. diffusion [m]",         "D",       this->getPhysDiffusion());
+  parameters.row("Single scattering albedo",    "albedo",  this->getScatteringAlbedo());
+  parameters.row("Anisotropy factor",           "g",       this->getAnisotropyFactor());
+  parameters.render(clout);
 
   clout << std::endl;
-  clout << "Lattice diffusion:                D^*=            " << this->getLatticeDiffusion() << std::endl;
-  clout << "Lattice absorption:               absorption=     " << this->getLatticeAbsorption() << std::endl;
-  clout << "Lattice scattering:               scattering=     " << this->getLatticeScattering() << std::endl;
-  clout << "Lattice sink:                     sink=           " << 3./8.*this->getLatticeAbsorption()*(this->getLatticeScattering()+this->getLatticeAbsorption()) << std::endl;
-  clout << "C_R: " << getRefractionFunction(this->getRefractiveRelative()) << std::endl;
-  clout << "r_F: " << getPartialBBCoefficient(this->getLatticeDiffusion(),this->getRefractiveRelative()) << std::endl;
+  clout << io::text::section("Lattice Quantities") << std::endl;
+  io::text::Table lattice({{"Parameter"}, {"Symbol"}, {"Value", Align::Right}});
+  lattice.row("Lattice diffusion",  "D^*",        this->getLatticeDiffusion());
+  lattice.row("Lattice absorption", "absorption", this->getLatticeAbsorption());
+  lattice.row("Lattice scattering", "scattering", this->getLatticeScattering());
+  lattice.row("Lattice sink",       "sink",       3./8.*this->getLatticeAbsorption()*(this->getLatticeScattering()+this->getLatticeAbsorption()));
+  lattice.row("Refraction function","C_R",        getRefractionFunction(this->getRefractiveRelative()));
+  lattice.row("Partial BB coeff.",  "r_F",        getPartialBBCoefficient(this->getLatticeDiffusion(),this->getRefractiveRelative()));
+  lattice.render(clout);
 
   clout << std::endl;
-  clout << "-- Conversion factors:" << std::endl;
-  clout << "Voxel length(m):                  physDeltaX=     " << this->getConversionFactorLength() << std::endl;
-  clout << "Time step(s):                     physDeltaT=     " << this->getConversionFactorTime() << std::endl;
-  clout << "Density factor(kg/m^3):           physDensity=    " << this->getConversionFactorDensity() <<  std::endl;
-  clout << "-------------------------------------------------------------" << std::endl;
+  clout << io::text::section("Conversion Factors") << std::endl;
+  io::text::Table factors({{"Factor"}, {"Symbol"}, {"Value", Align::Right}});
+  factors.row("Voxel length [m]", "physDeltaX",  this->getConversionFactorLength());
+  factors.row("Time step [s]",    "physDeltaT",  this->getConversionFactorTime());
+  factors.row("Density [kg/m^3]", "physDensity", this->getConversionFactorDensity());
+  factors.render(clout);
 }
 
 /// Documentation of implemented functions found in 5.2.2 Biomedical Optics, Principles and Imaging; Wang 2007

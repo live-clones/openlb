@@ -538,11 +538,10 @@ int main(int argc, char* argv[])
     myCaseParameters.set<PHYS_STAT_ITER_T         >(   10.0  );
     myCaseParameters.set<PHYS_VTK_ITER_T          >(  100.0  );
   }
-  myCaseParameters.set<parameters::PHYS_DELTA_X>([&]() -> MyCase::value_t {
-    return {myCaseParameters.get<parameters::PHYS_CHAR_LENGTH>() / myCaseParameters.get<parameters::RESOLUTION>()};
+  myCaseParameters.set<parameters::PHYS_DELTA_X>([](MyCase::ParametersD& p) -> MyCase::value_t {
+    return {p.get<parameters::PHYS_CHAR_LENGTH>() / p.get<parameters::RESOLUTION>()};
   });
 
-  myCaseParameters.fromCLI(argc, argv);
 
   /// === Step 3: Create Mesh ===
   Mesh mesh = createMesh(myCaseParameters);

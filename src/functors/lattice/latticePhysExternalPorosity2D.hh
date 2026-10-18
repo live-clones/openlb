@@ -70,7 +70,7 @@ BlockLatticePhysExternalPorosity2D<T,DESCRIPTOR>::BlockLatticePhysExternalPorosi
 template <typename T, typename DESCRIPTOR>
 bool BlockLatticePhysExternalPorosity2D<T,DESCRIPTOR>::operator() (T output[], const int input[])
 {
-  this->_blockLattice.get(input).template computeField<descriptors::POROSITY>(output);
+  output[0] = this->_blockLattice.get(input).template getField<descriptors::POROSITY>();
   return true;
 }
 

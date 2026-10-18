@@ -39,7 +39,7 @@ using namespace olb;
 int main() {
   std::ofstream file(std::string("${output}"));
   if (file.is_open()) {
-    file << cse::extractExpressionTree<${dynamics}>().str() << std::endl;
+    file << cse::extractExpressionTree<${dynamics}, olb::CodegenTarget::${target}>().str() << std::endl;
     file.close();
   }
   return 0;

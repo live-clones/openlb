@@ -81,10 +81,10 @@ public:
       block.forCoreSpatialLocations([&](LatticeR<DESCRIPTOR::d> loc) {
         auto latticeR = loc.withPrefix(load.glob(iC));
         auto physR = _sLattice.getCuboidDecomposition().getPhysR(latticeR);
-        block.get(loc).template setField<descriptors::LOCATION>(physR);
+        block.get(loc).template setField<fields::PHYS_R>(physR);
       });
     }
-    _sLattice.template setProcessingContext<Array<descriptors::LOCATION>>(ProcessingContext::Simulation);
+    _sLattice.template setProcessingContext<Array<fields::PHYS_R>>(ProcessingContext::Simulation);
 
     _exposeElementTypeParametersO[typeid(SuperPorousElementEmbeddingO)] = [this](std::size_t nElements){
       descriptors::fsi::ELEMENTS<DESCRIPTOR::d>::fields_t::for_each([this,nElements](auto field) {

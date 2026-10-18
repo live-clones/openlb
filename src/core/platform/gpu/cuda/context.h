@@ -24,6 +24,7 @@
 #ifndef GPU_CUDA_CONTEXT_H
 #define GPU_CUDA_CONTEXT_H
 
+#include "core/platform/convertingRef.h"
 #include "device.h"
 
 namespace olb {

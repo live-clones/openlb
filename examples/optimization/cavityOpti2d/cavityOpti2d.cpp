@@ -120,6 +120,7 @@ void prepareGeometry(MyCase& myCase) {
 void prepareLattice(MyCase& myCase)
 {
   using T = MyCase::value_t;
+  using DESCRIPTOR = MyCase::descriptor_t;
   auto& parameters = myCase.getParameters();
   auto& lattice = myCase.getLattice(NavierStokes{});
 
@@ -131,7 +132,7 @@ void prepareLattice(MyCase& myCase)
   const T physCharDensity = parameters.get<parameters::PHYS_CHAR_DENSITY>();
 
   /// Set up a unit converter with the characteristic physical units
-  lattice.setUnitConverter(
+  lattice.setUnitConverter<UnitConverter<T,DESCRIPTOR>>(
     physDeltaX,        // physDeltaX: spacing between two lattice cells in [m]
     physDeltaT,        // physDeltaT: time step in [s]
     physLength,        // charPhysLength: reference length of simulation geometry in [m]
@@ -335,7 +336,16 @@ int main(int argc, char* argv[])
     myCaseParameters.set<DOMAIN_EXTENT      >({1.0, 1.0});
     myCaseParameters.set<MAX_PHYS_T         >(       30.);
   }
-  myCaseParameters.fromCLI(argc, argv);
+
+  OptimizerParametersD<MyCase::value_t> optiParameters;
+  {
+    using namespace parameters;
+    optiParameters.set<optimizer::EPS>(1e-7);
+    optiParameters.set<optimizer::MAX_OPTIMIZATION_STEPS>(20);
+    optiParameters.set<linesearch::MAX_STEP_ATTEMPTS>(10);
+    optiParameters.set<linesearch::STEP_CONDITION>("StrongWolfe");
+    optiParameters.set<optimizer::VERBOSE>(true);
+  }
 
   // Step 3: Create Mesh
   Mesh mesh = createMesh(myCaseParameters);
@@ -355,10 +365,9 @@ int main(int argc, char* argv[])
   optiCase.setObjective(computeObjective);
 
   /// @li Step E: Create an Optimizer
-  OptimizerLBFGS<double,std::vector<double>> optimizer(
-    optiCase.getController().size(), 1.e-7, 20, 1., 10, "StrongWolfe", 20, 1.e-4, true, "", "log",
-    false, 0.01, false, 0., false, 0., true,
-    {OptimizerLogType::value, OptimizerLogType::control, OptimizerLogType::derivative});
+  OptimizerLBFGS<MyCase::value_t,std::vector<MyCase::value_t>> optimizer(
+    optiCase.getController().size(), optiParameters,
+    {OptimizerLogType::objective, OptimizerLogType::control, OptimizerLogType::derivative});
 
   /// @li Step F: Optimize
   optimizer.optimize(optiCase);

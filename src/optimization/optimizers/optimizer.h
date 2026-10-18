@@ -34,15 +34,34 @@
 #include "io/gnuplotWriter.h"
 #include "io/xmlReader.h"
 #include "core/singleton.h"
+#include "case/parameters.h"
 
 namespace olb {
+
+namespace parameters::optimizer {
+  struct EPS                    : public olb::fields::TYPED_SCALAR<double,1e-10> { };
+  struct FILE_NAME              : public olb::fields::STRING<"control.dat"> { };
+  struct MAX_OPTIMIZATION_STEPS : public olb::fields::SCALAR<100> { };
+  struct VERBOSE                : public olb::fields::TYPED_SCALAR<bool, true> { };
+  struct LOG_FILE_NAME          : public olb::fields::STRING<"optiLog"> { };
+  struct WITH_UPPER_BOUND       : public olb::fields::TYPED_SCALAR<bool, false> { };
+  struct UPPER_BOUND            : public olb::fields::SCALAR<0.> { };
+  struct WITH_LOWER_BOUND       : public olb::fields::TYPED_SCALAR<bool, false> { };
+  struct LOWER_BOUND            : public olb::fields::SCALAR<0.> { };
+  struct VECTOR_BOUNDS          : public olb::fields::TYPED_SCALAR<bool, false> { };
+  struct CONTROL_EPS            : public olb::fields::SCALAR<std::numeric_limits<double>::epsilon()> { };
+  struct FAIL_ON_MAX_ITER       : public olb::fields::TYPED_SCALAR<bool, true> { };
+}
 
 /// \namespace opti Optimization Code.
 namespace opti {
 
 template<typename> struct AbstractOptiCase;
 
-enum OptimizerLogType {control, derivative, value, error, norm_derivative};
+enum OptimizerLogType {control, derivative, objective, error, rel_error, norm_derivative, weighted_norm_derivative};
+
+template <typename T>
+using OptimizerParametersD = ParametersD<T, descriptors::SPATIAL_DESCRIPTOR<0>>;
 
 /// Interface for the use of various optimization algorithms.
 /**
@@ -97,6 +116,7 @@ protected:
 
   /// control vector to compare with (for numerical evaluation)
   C                                   _referenceControl;
+  S                                   _dx{1.0};
 
 public:
   Gnuplot<S>                          gplot;
@@ -112,7 +132,31 @@ public:
         bool vectorBounds=false,
         S controlEps=S(std::numeric_limits<double>::epsilon() ),
         bool failOnMaxIter = true,
-        std::vector<OptimizerLogType> gplotAnalysis = {});
+        std::vector<OptimizerLogType> gplotAnalysis = {OptimizerLogType::objective});
+
+  Optimizer(int dimCtrl, OptimizerParametersD<S>& optimizerParameters,
+    std::vector<OptimizerLogType> gplotAnalysis = {OptimizerLogType::objective}) :
+    Optimizer(
+      dimCtrl,
+      optimizerParameters.template get<parameters::optimizer::EPS>(),
+      optimizerParameters.template get<parameters::optimizer::MAX_OPTIMIZATION_STEPS>(),
+      optimizerParameters.template get<parameters::optimizer::VERBOSE>(),
+      optimizerParameters.template get<parameters::optimizer::FILE_NAME>(),
+      optimizerParameters.template get<parameters::optimizer::LOG_FILE_NAME>(),
+      optimizerParameters.template get<parameters::optimizer::WITH_UPPER_BOUND>(),
+      optimizerParameters.template get<parameters::optimizer::UPPER_BOUND>(),
+      optimizerParameters.template get<parameters::optimizer::WITH_LOWER_BOUND>(),
+      optimizerParameters.template get<parameters::optimizer::LOWER_BOUND>(),
+      optimizerParameters.template get<parameters::optimizer::VECTOR_BOUNDS>(),
+      optimizerParameters.template get<parameters::optimizer::CONTROL_EPS>(),
+      optimizerParameters.template get<parameters::optimizer::FAIL_ON_MAX_ITER>(),
+      gplotAnalysis)
+  {
+    OstreamManager clout(std::cout, "Optimizer");
+    clout << io::text::section("Optimizer parameters") << std::endl;
+    optimizerParameters.print(clout);
+    clout << std::endl;
+  };
 
   virtual ~Optimizer() { };
 
@@ -168,6 +212,11 @@ public:
     return _it;
   }
 
+  /// Enable logging regarding various parameters
+  void addLogging(std::vector<OptimizerLogType> types) {
+    _gplotAnalysis.insert(_gplotAnalysis.end(), types.begin(), types.end());
+  };
+
   /// Writes the current control variables linewise into file fname
   void writeControlToFile(const std::string fname="control.dat");
 
@@ -187,6 +236,10 @@ public:
   /// set the reference value for the control vector (exact solution)
   void setReferenceControl(C result) {
     _referenceControl = result;
+  }
+
+  void setMeshSpacing(S meshSpacing) {
+    _dx = meshSpacing;
   }
 };
 

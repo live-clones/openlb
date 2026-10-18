@@ -106,36 +106,16 @@ void prepareLattice(MyCase& myCase) {
   using NSDESCRIPTOR  = MyCase::descriptor_t_of<NavierStokes>;
   using TDESCRIPTOR   = MyCase::descriptor_t_of<Temperature>;
 
-  const T physDeltaX              = params.get<parameters::PHYS_DELTA_X>();
-  const T physDeltaT              = params.get<parameters::PHYS_DELTA_T>();
-  const T charL                   = params.get<parameters::PHYS_CHAR_LENGTH>();
-  const T charPhysU               = params.get<parameters::PHYS_CHAR_VELOCITY>();
-  const T physViscosity           = params.get<parameters::PHYS_CHAR_VISCOSITY>();
-  const T physThermalConductivity = params.get<parameters::PHYS_THERMAL_CONDUCTIVITY>();
-  const T physHeatCapacity        = params.get<parameters::PHYS_HEAT_CAPACITY>();
-  const T physThermalExpansion    = params.get<parameters::PHYS_THERMAL_EXPANSION>();
-  const T physDensity             = params.get<parameters::PHYS_DENSITY>();
-  const T Tcold                   = params.get<parameters::T_COLD>();
-  const T Thot                    = params.get<parameters::T_HOT>();
+  const T Tcold = params.get<parameters::PHYS_CHAR_LOW_TEMPERATURE>();
 
-  NSlattice.setUnitConverter<ThermalUnitConverter<T,NSDESCRIPTOR,TDESCRIPTOR>>(
-    (T) physDeltaX,
-    (T) physDeltaT,
-    (T) charL,
-    (T) charPhysU,
-    (T) physViscosity,
-    (T) physDensity,
-    (T) physThermalConductivity,
-    (T) physHeatCapacity,
-    (T) physThermalExpansion,
-    (T) Tcold,
-    (T) Thot
-  );
+  NSlattice.setUnitConverter(params);
+  ADlattice.setUnitConverter(params);
 
-  const auto& converter = NSlattice.getUnitConverter();
-  converter.print();
+  const auto& NSconverter = NSlattice.getUnitConverter();
+  NSconverter.print();
 
-  ADlattice.setUnitConverter(converter);
+  const auto& ADconverter = ADlattice.getUnitConverter();
+  ADconverter.print();
 
   dynamics::set<ForcedBGKdynamics>(NSlattice, geometry.getMaterialIndicator({1,4}));
   boundary::set<boundary::BounceBack>(NSlattice, geometry.getMaterialIndicator({2,3}));
@@ -145,15 +125,15 @@ void prepareLattice(MyCase& myCase) {
   boundary::set<boundary::AdvectionDiffusionDirichlet>(ADlattice, geometry, 2);
   boundary::set<boundary::AdvectionDiffusionDirichlet>(ADlattice, geometry, 3);
 
-  NSlattice.setParameter<descriptors::OMEGA>(converter.getLatticeRelaxationFrequency());
-  ADlattice.setParameter<descriptors::OMEGA>(converter.getLatticeThermalRelaxationFrequency());
+  NSlattice.setParameter<descriptors::OMEGA>(NSlattice.getUnitConverter().getLatticeRelaxationFrequency());
+  ADlattice.setParameter<descriptors::OMEGA>(ADlattice.getUnitConverter().getLatticeThermalRelaxationFrequency());
 
   clout << "Setup NSE-ADE coupling" << std::endl;
 
-  const T boussinesqForcePrefactor = 9.81 / converter.getConversionFactorVelocity()
-                                   * converter.getConversionFactorTime()
-                                   * converter.getCharPhysTemperatureDifference()
-                                   * converter.getPhysThermalExpansionCoefficient();
+  const T boussinesqForcePrefactor = 9.81 / ADconverter.getConversionFactorVelocity()
+                                   * ADconverter.getConversionFactorTime()
+                                   * ADconverter.getCharPhysTemperatureDifference()
+                                   * ADconverter.getPhysThermalExpansionCoefficient();
 
   auto& coupling = myCase.setCouplingOperator(
     "Boussinesq",
@@ -161,7 +141,7 @@ void prepareLattice(MyCase& myCase) {
     names::NavierStokes{}, NSlattice,
     names::Temperature{},  ADlattice);
   coupling.setParameter<NavierStokesAdvectionDiffusionCoupling::T0>(
-    converter.getLatticeTemperature(Tcold));
+    ADconverter.getLatticeTemperature(Tcold));
   coupling.setParameter<NavierStokesAdvectionDiffusionCoupling::FORCE_PREFACTOR>(
     boussinesqForcePrefactor * Vector<T,2>{0.0,1.0});
 
@@ -176,26 +156,26 @@ void setInitialValues(MyCase& myCase) {
   auto& NSlattice = myCase.getLattice(NavierStokes{});
   auto& ADlattice = myCase.getLattice(Temperature{});
 
-  const T Tcold     = params.get<parameters::T_COLD>();
-  const T Thot      = params.get<parameters::T_HOT>();
+  const T Tcold     = params.get<parameters::PHYS_CHAR_LOW_TEMPERATURE>();
+  const T Thot      = params.get<parameters::PHYS_CHAR_HIGH_TEMPERATURE>();
   const T Tperturb  = params.get<parameters::T_PERTURB>();
 
   auto indicator = geometry.getMaterialIndicator({1,2,3,4});
-  const auto& converter = NSlattice.getUnitConverter();
+  const auto& converter = ADlattice.getUnitConverter();
 
   /// define initial conditions
   AnalyticalConst2D<T,T> u0(0.0, 0.0);
-  AnalyticalConst2D<T,T> T_cold(converter.getLatticeTemperature(Tcold));
-  AnalyticalConst2D<T,T> T_hot(converter.getLatticeTemperature(Thot));
+  AnalyticalConst2D<T,T> PHYS_CHAR_LOW_TEMPERATURE(converter.getLatticeTemperature(Tcold));
+  AnalyticalConst2D<T,T> PHYS_CHAR_HIGH_TEMPERATURE(converter.getLatticeTemperature(Thot));
   AnalyticalConst2D<T,T> T_perturb(converter.getLatticeTemperature(Tperturb));
 
   momenta::setTemperature(ADlattice, geometry.getMaterialIndicator({1, 3}), Tcold);
   momenta::setTemperature(ADlattice, geometry.getMaterialIndicator({2}), Thot);
   momenta::setTemperature(ADlattice, geometry.getMaterialIndicator({4}), Tperturb);
 
-  ADlattice.iniEquilibrium(geometry, 1, T_cold, u0);
-  ADlattice.iniEquilibrium(geometry, 2, T_hot, u0);
-  ADlattice.iniEquilibrium(geometry, 3, T_cold, u0);
+  ADlattice.iniEquilibrium(geometry, 1, PHYS_CHAR_LOW_TEMPERATURE, u0);
+  ADlattice.iniEquilibrium(geometry, 2, PHYS_CHAR_HIGH_TEMPERATURE, u0);
+  ADlattice.iniEquilibrium(geometry, 3, PHYS_CHAR_LOW_TEMPERATURE, u0);
   ADlattice.iniEquilibrium(geometry, 4, T_perturb, u0);
 
   NSlattice.initialize();
@@ -207,19 +187,18 @@ void setTemporalValues(MyCase& myCase,
 { }
 
 void getResults(MyCase& myCase,
-                util::Timer<MyCase::value_t>& timer,
                 std::size_t iT)
 {
   using T = MyCase::value_t;
   auto& NSlattice = myCase.getLattice(NavierStokes{});
   auto& ADlattice = myCase.getLattice(Temperature{});
-  const auto& converter = NSlattice.getUnitConverter();
+  const auto& NSconverter = NSlattice.getUnitConverter();
+  const auto& ADconverter = ADlattice.getUnitConverter();
   auto& params    = myCase.getParameters();
 
   SuperVTMwriter2D<T> vtkWriter("rayleighBenard2d");
 
-  const int statIter = converter.getLatticeTime(params.get<parameters::PHYS_STAT_ITER_T>());
-  const int saveIter = converter.getLatticeTime(params.get<parameters::PHYS_VTK_ITER_T>());
+  const int saveIter = NSconverter.getLatticeTime(params.get<parameters::PHYS_VTK_ITER_T>());
 
   if (iT == 0) {
     SuperLatticeCuboid2D cuboid(NSlattice);
@@ -229,19 +208,13 @@ void getResults(MyCase& myCase,
     vtkWriter.createMasterFile();
   }
 
-  if (iT % statIter == 0) {
-    timer.update(iT);
-    timer.printStep();
-    NSlattice.getStatistics().print(iT, converter.getPhysTime(iT));
-  }
-
   if (iT % saveIter == 0) {
     NSlattice.setProcessingContext(ProcessingContext::Evaluation);
     ADlattice.setProcessingContext(ProcessingContext::Evaluation);
 
-    SuperLatticePhysVelocity2D velocity(NSlattice, converter);
+    SuperLatticePhysVelocity2D velocity(NSlattice, NSconverter);
     vtkWriter.addFunctor(velocity);
-    SuperLatticePhysPressure2D pressure(NSlattice, converter);
+    SuperLatticePhysPressure2D pressure(NSlattice, NSconverter);
     vtkWriter.addFunctor(pressure);
 
     using V = MyCase::value_t_of<NavierStokes>;
@@ -249,22 +222,20 @@ void getResults(MyCase& myCase,
     using TDESCRIPTOR = MyCase::descriptor_t_of<Temperature>;
     SuperLatticePhysTemperature2D temperature(
       ADlattice,
-      static_cast<const ThermalUnitConverter<V,NSDESCRIPTOR,TDESCRIPTOR>&>(converter));
+      ADconverter);
     vtkWriter.addFunctor(temperature);
 
     vtkWriter.write(iT);
   }
+
+  myCase.report(iT);
 }
 
 void simulate(MyCase& myCase) {
-  using T = MyCase::value_t;
   auto& parameters = myCase.getParameters();
 
   const std::size_t iTmax = myCase.getLattice(NavierStokes{}).getUnitConverter().getLatticeTime(
     parameters.get<parameters::MAX_PHYS_T>());
-
-  util::Timer<T> timer(iTmax, myCase.getGeometry().getStatistics().getNvoxel());
-  timer.start();
 
   for (std::size_t iT=0; iT < iTmax; ++iT) {
     /// === Step 8.1: Update the Boundary Values and Fields at Times ===
@@ -277,11 +248,10 @@ void simulate(MyCase& myCase) {
     myCase.getOperator("Boussinesq").apply();
 
     /// === Step 8.3: Computation and Output of the Results ===
-    getResults(myCase, timer, iT);
+    getResults(myCase, iT);
   }
 
-  timer.stop();
-  timer.printSummary();
+  myCase.finalize(iTmax);
 }
 
 int main(int argc, char* argv[]) {
@@ -298,13 +268,13 @@ int main(int argc, char* argv[]) {
     myCaseParameters.set<MAX_PHYS_T               >(1000);
     myCaseParameters.set<PHYS_CHAR_LENGTH         >(0.1);
     myCaseParameters.set<PHYS_CHAR_VISCOSITY      >(1e-5);
-    myCaseParameters.set<PHYS_DENSITY             >(1.);
+    myCaseParameters.set<PHYS_CHAR_DENSITY        >(1.);
     myCaseParameters.set<PHYS_THERMAL_CONDUCTIVITY>(0.03);
     myCaseParameters.set<LATTICE_CHAR_VELOCITY    >(0.1);
-    myCaseParameters.set<T_HOT                    >(274.15);
-    myCaseParameters.set<T_COLD                   >(273.15);
+    myCaseParameters.set<PHYS_CHAR_HIGH_TEMPERATURE>(274.15);
+    myCaseParameters.set<PHYS_CHAR_LOW_TEMPERATURE>(273.15);
     myCaseParameters.set<T_PERTURB                >(
-      1. / 5. * myCaseParameters.get<T_COLD>() + 4./5. * myCaseParameters.get<T_HOT>()
+      1. / 5. * myCaseParameters.get<PHYS_CHAR_LOW_TEMPERATURE>() + 4./5. * myCaseParameters.get<PHYS_CHAR_HIGH_TEMPERATURE>()
     );
     myCaseParameters.set<PHYS_DELTA_X             >(
       myCaseParameters.get<PHYS_CHAR_LENGTH>() / myCaseParameters.get<RESOLUTION>()
@@ -317,16 +287,16 @@ int main(int argc, char* argv[]) {
     );
     myCaseParameters.set<PHYS_HEAT_CAPACITY       >(
       myCaseParameters.get<PRANDTL>() * myCaseParameters.get<PHYS_THERMAL_CONDUCTIVITY>() /
-      (myCaseParameters.get<PHYS_CHAR_VISCOSITY>() * myCaseParameters.get<PHYS_DENSITY>())
+      (myCaseParameters.get<PHYS_CHAR_VISCOSITY>() * myCaseParameters.get<PHYS_CHAR_DENSITY>())
     );
     myCaseParameters.set<PHYS_THERMAL_EXPANSION   >(
       myCaseParameters.get<RAYLEIGH>() * util::pow(myCaseParameters.get<PHYS_CHAR_VISCOSITY>(), 2) /
-      (myCaseParameters.get<PRANDTL>() * 9.81 * (myCaseParameters.get<T_HOT>() - myCaseParameters.get<T_COLD>()) * util::pow(myCaseParameters.get<PHYS_CHAR_LENGTH>(), 3))
+      (myCaseParameters.get<PRANDTL>() * 9.81 * (myCaseParameters.get<PHYS_CHAR_HIGH_TEMPERATURE>() - myCaseParameters.get<PHYS_CHAR_LOW_TEMPERATURE>()) * util::pow(myCaseParameters.get<PHYS_CHAR_LENGTH>(), 3))
     );
-    myCaseParameters.set<PHYS_STAT_ITER_T         >(10.0);
     myCaseParameters.set<PHYS_VTK_ITER_T          >(10.0);
+    myCaseParameters["reporter"]["statistics"].set<PHYS_ITER_T>(10.0);
+    myCaseParameters["reporter"]["timer"].set<PHYS_ITER_T>(10.0);
   }
-  myCaseParameters.fromCLI(argc, argv);
 
   /// === Step 3: Create Mesh ===
   Mesh mesh = createMesh(myCaseParameters);

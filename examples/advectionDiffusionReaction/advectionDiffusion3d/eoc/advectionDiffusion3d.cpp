@@ -58,7 +58,6 @@ int main(int argc, char *argv[]) {
     myCaseParameters.set<NON_SMOOTH_ENABLED>(true);
     myCaseParameters.set<MAX_RESOLUTION>(myCaseParameters.get<RESOLUTION>());
   }
-  myCaseParameters.fromCLI(argc, argv);
 
   const MyCase::value_t N0 = myCaseParameters.get<parameters::RESOLUTION>();
   const MyCase::value_t statIter0 = myCaseParameters.get<parameters::OUTPUT_INTERVAL>();

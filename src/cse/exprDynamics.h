@@ -172,7 +172,7 @@ struct ExprStress {
     std::string collected_arguments_as_symbols = cse::symbol(rho_name) + "," +
                                                  cse::symbol(u_name);
 
-    std::string body = prefix + ".computeStress";
+    std::string body = prefix + ".computeAllMomenta";
     std::string call = cse::assignment(cse::symbol(name),
                                        cse::function(cse::symbol(body),collected_arguments_as_symbols));
     std::string elem;
@@ -220,7 +220,9 @@ struct ExprEquilibrium {
       std::string collected_arguments_as_symbols;
       std::string pre_decl;
 
-      collected_arguments_as_symbols += cse::symbol(prefix) + ",";
+      // Cell-level computeEquilibrium(rho, u, fEq) takes no leading cell argument,
+      // unlike getDynamics().computeEquilibrium(cell, ...); emit the portable form
+      // so the generated operator body compiles on SYCL (no device getDynamics()).
       if (scalar->contains_symbol(cse::strip_symbol(rho.describe()))) {
         collected_arguments_as_symbols += cse::symbol(*(scalar->find_symbol(cse::strip_symbol(rho.describe())))) + ",";
       } else {
@@ -246,7 +248,7 @@ struct ExprEquilibrium {
         collected_arguments_as_symbols += cse::symbol(new_name);
       }
 
-      std::string body = prefix + ".getDynamics().computeEquilibrium";
+      std::string body = prefix + ".computeEquilibrium";
       std::string call = cse::assignment(cse::symbol(name),
                                          cse::function(cse::symbol(body),collected_arguments_as_symbols));
 

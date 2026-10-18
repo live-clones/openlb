@@ -36,7 +36,6 @@
 #include "cellIndexListD.h"
 #include "fieldArrayD.hh"
 #include "fieldParametersD.h"
-#include "superFieldArrayD.h"
 
 #include "data.h"
 
@@ -49,10 +48,13 @@
 #include "superLatticeCoupling.h"
 #include "superLatticePointCoupling.h"
 #include "superLatticeFieldReductionO.h"
+#include "sampledData.h"
 #include "superLatticePointExtraction.h"
 
 #include "cell.h"
 #include "cell.hh"
+
+#include "vectorCell.h"
 
 #include "latticeStatistics.h"
 #include "postProcessing.h"
@@ -65,7 +67,6 @@
 #include "fractionalUnitConverter.h"
 #include "adeUnitConverter.h"
 #include "adsorptionConverter.h"
-#include "linElaUnitConverter.h"
 
 #include "genericVector.h"
 #include "scalarVector.h"

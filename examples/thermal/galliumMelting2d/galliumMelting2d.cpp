@@ -392,7 +392,6 @@ int main(int argc, char* argv[])
     myCaseParameters.set<CP_S>((T)1.0);
     myCaseParameters.set<CP_L>((T)1.0);
   }
-  myCaseParameters.fromCLI(argc, argv);
 
   Mesh mesh = createMesh(myCaseParameters);
 

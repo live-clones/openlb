@@ -1,7 +1,7 @@
 #!/usr/bin/env nix
-#!nix --extra-experimental-features nix-command --extra-experimental-features flakes develop ../.#env-gcc-openmpi-cuda --command bash
+#!nix --extra-experimental-features nix-command --extra-experimental-features flakes develop ../.#gcc-mpi-cuda --command bash
 
-rm -f config.mk
+set -euo pipefail
 
 export CUDA_ARCH=86
 

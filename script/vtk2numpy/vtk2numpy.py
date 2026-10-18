@@ -158,7 +158,7 @@ class VTK2Numpy:
             return item if item.shape[0]==3 else np.array((0, *item))
 
         def get_shape():
-            return np.array(( get_max() - get_min() ) / get_spacing_and_check_uniqueness() + 1).astype(int)
+            return np.round(np.array(( get_max() - get_min() ) / get_spacing_and_check_uniqueness() + 1)).astype(int)
 
         def get_base_points():
             base_points = {}

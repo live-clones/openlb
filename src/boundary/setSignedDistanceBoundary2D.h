@@ -30,7 +30,7 @@
 #include "io/ostreamManager.h"
 #include "utilities/functorPtr.h"
 #include "geometry/superGeometry.h"
-#include "geometry/blockGeometryStatistics2D.h"
+#include "geometry/blockGeometryStatistics.h"
 #include "geometry/blockGeometry.h"
 #include "core/superLattice2D.h"
 #include "functors/lattice/indicator/superIndicatorF2D.h"

@@ -289,7 +289,7 @@ public:
     _vector{vector} { }
 
   /// Get serialized size for data at locations `indices`
-  std::size_t size(ConstSpan<CellID> indices) const
+  std::size_t size(ConstSpan<CellID> indices) const override
   {
     std::size_t size = 0;
     for (unsigned iD=0; iD < D; ++iD) {
@@ -300,7 +300,7 @@ public:
 
   /// Serialize data at locations `indices` to `buffer`
   std::size_t serialize(ConstSpan<CellID> indices,
-                        std::uint8_t* buffer) const
+                        std::uint8_t* buffer) const override
   {
     std::size_t size = ConcreteCommunicatable<COLUMN>(_vector[0]).size(indices);
     std::uint8_t* curr = buffer;
@@ -315,7 +315,7 @@ public:
 
   /// Deserialize data at locations `indices` to `buffer`
   std::size_t deserialize(ConstSpan<CellID> indices,
-                          const std::uint8_t* buffer)
+                          const std::uint8_t* buffer) override
   {
     std::size_t size = ConcreteCommunicatable<COLUMN>(_vector[0]).size(indices);
     const std::uint8_t* curr = buffer;
@@ -326,6 +326,38 @@ public:
       ConcreteCommunicatable<COLUMN>(_vector[iD]).deserialize(indices, curr + iD*size);
     }
     return D * size;
+  }
+
+  void ensureAllocated(ConstSpan<CellID> indices) override
+  {
+    if constexpr (requires (COLUMN& c) { c.ensureAllocated(std::size_t{}); }) {
+      for (unsigned iD=0; iD < D; ++iD) {
+        for (CellID index : indices) {
+          _vector[iD].ensureAllocated(index);
+        }
+      }
+    }
+  }
+
+  std::size_t serializeMasked(ConstSpan<CellID> indices,
+                              const overlap::MaskGroupLayout& layout,
+                              std::uint8_t* buffer) const override
+  {
+    return overlap::serializeMasked(_vector, indices, layout, buffer);
+  }
+
+  std::size_t deserializeMasked(ConstSpan<CellID> indices,
+                                const overlap::MaskGroupLayout& layout,
+                                ConstSpan<std::uint64_t> masks,
+                                const std::uint8_t* buffer) override
+  {
+    const std::size_t size = overlap::deserializeMasked(_vector, indices, layout, buffer);
+#ifdef FEATURE_DIRECTIONAL_CANARY
+    if (overlap::canaryEnabled()) {
+      util::writeDirectionalCanary(_vector, D, indices, masks);
+    }
+#endif
+    return size;
   }
 
 };

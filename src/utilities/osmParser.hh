@@ -581,7 +581,7 @@ void OSMParser<T>::createGeometry(olb::SuperGeometry<T, 3>& superGeometry,TYPE t
           points.push_back({node.lat, node.lon, height, -1.});
         }
         IndicatorPolygon3D<T> polygon(points);
-        IndicatorTranslate3D<T> transPolygon({0,0,-1},polygon);
+        IndicatorTranslate3D<T> transPolygon({0,0,-1}, FunctorPtr<IndicatorF3D<T>>(polygon));
         superGeometry.rename(matF, matTo, transPolygon);
         superGeometry.rename(5, matTo, transPolygon);
       }
@@ -626,7 +626,7 @@ void OSMParser<T>::createGeometry(olb::SuperGeometry<T, 3>& superGeometry,TYPE t
           fullPolygon.insert(fullPolygon.end(), rightSide.rbegin(), rightSide.rend());
 
           IndicatorPolygon3D<T> polygon(fullPolygon);
-          IndicatorTranslate3D<T> transPolygon({0,0,-1*physDeltaX},polygon);
+          IndicatorTranslate3D<T> transPolygon({0,0,-1*physDeltaX}, FunctorPtr<IndicatorF3D<T>>(polygon));
           //superGeometry.rename(matF, matTo,1, transPolygon);
           superGeometry.rename(matF, matTo, transPolygon);
         }

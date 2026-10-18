@@ -24,7 +24,10 @@
 #ifndef CSE_WRAPPER_H
 #define CSE_WRAPPER_H
 
+#include <type_traits>
+
 #include "dynamics/interface.h"
+#include "core/platform/platform.h"
 
 namespace olb {
 
@@ -35,9 +38,10 @@ struct not_cse_optimized_tag { };
 
 /// To be specialized for automatically generated CSE-optimized DYNAMICS::collide
 /**
- * Falls back to unoptimized collision by default
+ * Specialized per CodegenTarget by the automatically generated code in
+ * src/cse/dynamics. Falls back to unoptimized collision by default.
  **/
-template <typename DYNAMICS>
+template <typename DYNAMICS, CodegenTarget TARGET = CodegenTarget::Generic>
 struct CSE : public not_cse_optimized_tag {
   template <concepts::Cell CELL, concepts::Parameters PARAMETERS, concepts::BaseType V=typename CELL::value_t>
   CellStatistic<V> collide(CELL& cell, PARAMETERS& parameters) any_platform {
@@ -45,21 +49,21 @@ struct CSE : public not_cse_optimized_tag {
   };
 };
 
-/// Exposes whether a auto-generated CSE specialization is available
-template <typename DYNAMICS>
+/// Exposes whether a auto-generated CSE specialization is available for TARGET
+template <typename DYNAMICS, CodegenTarget TARGET = CodegenTarget::Generic>
 using is_cse_optimized = std::integral_constant<
   bool,
-  !std::is_base_of_v<not_cse_optimized_tag, CSE<DYNAMICS>>
+  !std::is_base_of_v<not_cse_optimized_tag, CSE<DYNAMICS, TARGET>>
 >;
 
-/// Evaluates to true iff a auto-generated CSE specialization is available
-template <typename DYNAMICS>
-constexpr static bool is_cse_optimized_v = is_cse_optimized<DYNAMICS>::value;
+/// Evaluates to true iff a auto-generated CSE specialization is available for TARGET
+template <typename DYNAMICS, CodegenTarget TARGET = CodegenTarget::Generic>
+constexpr static bool is_cse_optimized_v = is_cse_optimized<DYNAMICS, TARGET>::value;
 
 }
 
 /// Wrapper for auto-generated CSE-optimized DYNAMICS
-template <concepts::IntrospectableDynamics DYNAMICS>
+template <concepts::IntrospectableDynamics DYNAMICS, CodegenTarget TARGET = CodegenTarget::Generic>
 class CSE : public Dynamics<typename DYNAMICS::value_t,
                             typename DYNAMICS::descriptor_t> {
 private:
@@ -76,13 +80,13 @@ public:
   using parameters = typename DYNAMICS::parameters;
 
   template <typename NEW_T>
-  using exchange_value_type = CSE<typename DYNAMICS::template exchange_value_type<NEW_T>>;
+  using exchange_value_type = CSE<typename DYNAMICS::template exchange_value_type<NEW_T>, TARGET>;
 
   template <typename NEW_MOMENTA>
-  using exchange_momenta = CSE<typename DYNAMICS::template exchange_momenta<NEW_MOMENTA>>;
+  using exchange_momenta = CSE<typename DYNAMICS::template exchange_momenta<NEW_MOMENTA>, TARGET>;
 
   constexpr static bool is_vectorizable = dynamics::is_vectorizable_v<DYNAMICS>;
-  constexpr static bool is_optimized    = dynamics::is_cse_optimized_v<DYNAMICS>;
+  constexpr static bool is_optimized    = dynamics::is_cse_optimized_v<DYNAMICS, TARGET>;
 
   std::type_index id() override {
     return typeid(CSE);
@@ -94,7 +98,7 @@ public:
 
   template <concepts::Cell CELL, concepts::Parameters PARAMETERS, concepts::BaseType V=typename CELL::value_t>
   CellStatistic<V> collide(CELL& cell, PARAMETERS& parameters) any_platform {
-    return dynamics::CSE<DYNAMICS>().collide(cell, parameters);
+    return dynamics::CSE<DYNAMICS, TARGET>().collide(cell, parameters);
   };
 
   /// Return true iff FIELD is a parameter
@@ -151,6 +155,40 @@ public:
     DYNAMICS().inverseShiftRhoU(cell, rho, u);
   }
 };
+
+/// Selects the collision implementation for DYNAMICS appropriate to PLATFORM
+/**
+ * Resolves, in priority order, to the CSE specialization for PLATFORM's CodegenTarget
+ * (codegenTargetFor), then the Generic CSE specialization, then unoptimized DYNAMICS.
+ * Total over all dynamics: non-introspectable dynamics (and all dynamics under
+ * FEATURE_DISABLE_AUTOMATIC_DYNAMICS_CSE) resolve to DYNAMICS, so callers need no
+ * introspectability guard. `if constexpr` does not instantiate untaken branches, so
+ * olb::CSE<DYNAMICS> is never named for a non-introspectable type and only the selected
+ * implementation is compiled per (DYNAMICS, PLATFORM).
+ **/
+template <typename DYNAMICS, Platform PLATFORM>
+constexpr auto select_cse_for_platform() {
+  constexpr bool automaticCse =
+#ifdef FEATURE_DISABLE_AUTOMATIC_DYNAMICS_CSE
+    false;
+#else
+    true;
+#endif
+  if constexpr (automaticCse && concepts::IntrospectableDynamics<DYNAMICS>) {
+    if constexpr (dynamics::is_cse_optimized_v<DYNAMICS, codegenTargetFor(PLATFORM)>) {
+      return meta::id<CSE<DYNAMICS, codegenTargetFor(PLATFORM)>>{};
+    } else if constexpr (dynamics::is_cse_optimized_v<DYNAMICS, CodegenTarget::Generic>) {
+      return meta::id<CSE<DYNAMICS, CodegenTarget::Generic>>{};
+    } else {
+      return meta::id<DYNAMICS>{};
+    }
+  } else {
+    return meta::id<DYNAMICS>{};
+  }
+}
+
+template <typename DYNAMICS, Platform PLATFORM>
+using cse_for_platform_t = typename decltype(select_cse_for_platform<DYNAMICS,PLATFORM>())::type;
 
 
 namespace operators {
@@ -220,6 +258,8 @@ template <typename OPERATOR, typename DESCRIPTOR>
 requires (OPERATOR::scope == OperatorScope::PerCellWithParameters)
 struct CSE_O<OPERATOR,DESCRIPTOR> {
   static constexpr OperatorScope scope = OperatorScope::PerCellWithParameters;
+
+  using parameters = typename OPERATOR::parameters;
 
   int getPriority() const {
     return OPERATOR().getPriority();

@@ -66,6 +66,54 @@ struct PowF {
   }
 };
 
+template <typename FUNCTOR, unsigned COMPONENT>
+struct ComponentF {
+  using parameters_t = typename FUNCTOR::parameters_t;
+
+  using result_t = descriptors::SCALAR;
+  using fields_t = FUNCTOR::fields_t;
+
+  template <typename CELL, typename PARAMETERS>
+  auto compute(CELL& cell, PARAMETERS& parameters) any_platform {
+    using V = typename CELL::value_t;
+    using DESCRIPTOR = typename CELL::descriptor_t;
+    FieldD<V,DESCRIPTOR,typename FUNCTOR::result_t> results = FUNCTOR{}.compute(cell, parameters);
+    return results[COMPONENT];
+  }
+};
+
+template <typename FIELD>
+struct ScaleFieldF {
+  using parameters_t = meta::list<parameters::FACTOR>;
+
+  using result_t = FIELD;
+  using fields_t = meta::list<FIELD>;
+
+  template <typename CELL, typename PARAMETERS>
+  auto compute(CELL& cell, PARAMETERS& parameters) any_platform {
+    using V = typename CELL::value_t;
+    V factor = parameters.template get<parameters::FACTOR>();
+    auto field = cell.template getField<FIELD>();
+    return field*factor;
+  }
+};
+
+template <typename FUNCTOR, typename AVERAGED_FIELD>
+struct TrackAverageFunctorF {
+  using parameters_t = meta::merge<typename FUNCTOR::parameters_t, meta::list<parameters::LATTICE_TIME>>;
+  using result_t = AVERAGED_FIELD;
+  using fields_t = meta::list<AVERAGED_FIELD>;
+
+  template <typename CELL, typename PARAMETERS>
+  auto compute(CELL& cell, PARAMETERS& parameters) any_platform {
+    using V = typename CELL::value_t;
+    V iT = parameters.template get<parameters::LATTICE_TIME>();
+    auto result = FUNCTOR{}.compute(cell, parameters);
+    auto avgField = cell.template getField<AVERAGED_FIELD>();
+    return (avgField * (iT-1) + result) / iT;
+  }
+};
+
 }
 
 }

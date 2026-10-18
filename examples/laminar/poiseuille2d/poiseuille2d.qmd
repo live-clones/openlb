@@ -1,0 +1,8 @@
+### poiseuille2d
+
+For basic tests of boundary conditions, a comparison with analytical solutions is the easiest and most accurate approach.
+One of the fundamental applications of fluid dynamics is that of laminar flow of a Newtonian fluid in a circular pipe.
+This is known as Poiseuille flow.
+The analytical solution is easily found and is therefore a common benchmark case.
+It is also one of the first examples in most fluid dynamics textbooks for the application of the principles of fluid dynamics.
+The extension of the Poiseuille flow in a round pipe from 2D to 3D is trivial; consequently, it is also an ideal test case for curved boundaries in 3D as well.

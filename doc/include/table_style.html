@@ -1,0 +1,47 @@
+<style>
+    .table-wrap { overflow-x: auto; }
+    table.matrix {
+        border-collapse: collapse;
+        width: max-content; /* keeps all columns visible; scroll horizontally */
+        min-width: 1200px;
+        table-layout: fixed;
+        font-size: 12px;
+    }
+    table.matrix tr.thick-top > td,
+    table.matrix tr.thick-top > th {
+    border-top: 3px solid #000 !important;
+    }
+    table.matrix tr.thick-bottom > td,
+    table.matrix tr.thick-bottom > th {
+    border-bottom: 3px solid #000 !important;
+    }
+
+    table.matrix th, table.matrix td {
+        border: 1px solid #000;
+        padding: 4px 6px;
+        vertical-align: middle;
+        text-align: center;
+        white-space: nowrap;
+    }
+    table.matrix th {
+        font-weight: 600;
+    }
+    .left { text-align: left; white-space: normal; }
+    .folder { font-weight: 600; white-space: normal; }
+
+    .bg-darkgray {
+        background-color: #f0f0f0 !important;
+        color: #000 !important;
+    }
+
+    .bg-lightgray {
+        background-color: #fafafa !important;
+    }
+
+    .bg-royalblue { background-color: #4169e1 !important; color: #fff !important; }
+    .bg-royalbluedark { background-color: #191970 !important; color: #fff !important; }
+    .bg-green { background-color: #00a000 !important; color: #fff !important; }
+
+    /* mimic “footnotesize” a bit */
+    .footnotesize { font-size: 11px; }
+</style>

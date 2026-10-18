@@ -44,6 +44,11 @@ namespace descriptors {
 template <typename... FIELDS>
 struct D2Q8 : public LATTICE_DESCRIPTOR<2,8,POPULATION,FIELDS...> {
   D2Q8() = delete;
+
+  template <typename... NEW_FIELDS>
+  using extend_by_fields = D2Q8<FIELDS..., NEW_FIELDS...>;
+
+  using no_stored_fields = D2Q8<>;
 };
 
 namespace data {
@@ -69,7 +74,7 @@ platform_constant_definition Fraction t<2,8>[8] = {
 };
 
 template <>
-platform_constant_definition Fraction cs2<2,8> = { 1, 3 };
+platform_constant_definition Fraction cs2<2,8> = { 1, 3};
 
 }
 
@@ -80,6 +85,8 @@ struct D2Q9 : public LATTICE_DESCRIPTOR<2,9,POPULATION,FIELDS...> {
 
   template <typename... NEW_FIELDS>
   using extend_by_fields = D2Q9<FIELDS..., NEW_FIELDS...>;
+
+  using no_stored_fields = D2Q9<>;
 };
 
 namespace data {
@@ -110,6 +117,39 @@ platform_constant_definition Fraction cs2<2,9> = {1, 3};
 
 }
 
+template <typename... FIELDS>
+struct D2Q4 : public LATTICE_DESCRIPTOR<2,4,POPULATION,FIELDS...> {
+  D2Q4() = delete;
+
+  template <typename... NEW_FIELDS>
+  using extend_by_fields = D2Q4<FIELDS..., NEW_FIELDS...>;
+};
+
+namespace data {
+
+template <>
+platform_constant_definition int vicinity<2,4> = 1;
+
+template <>
+platform_constant_definition int c<2,4>[4][2] = {
+  {1, 0}, {0, 1}, {-1, 0}, {0,-1}
+};
+
+template <>
+platform_constant_definition int opposite<2,4>[4] = {
+  2, 3, 0, 1
+};
+
+template <>
+platform_constant_definition Fraction t<2,4>[4] = {
+  {1, 4}, {1, 4}, {1, 4}, {1, 4}
+};
+
+template <>
+platform_constant_definition Fraction cs2<2,4> = {1, 2};
+
+}
+
 
 /// D2Q5 lattice
 template <typename... FIELDS>
@@ -118,6 +158,8 @@ struct D2Q5 : public LATTICE_DESCRIPTOR<2,5,POPULATION,FIELDS...> {
 
   template <typename... NEW_FIELDS>
   using extend_by_fields = D2Q5<FIELDS..., NEW_FIELDS...>;
+
+  using no_stored_fields = D2Q5<>;
 };
 
 namespace data {
@@ -156,6 +198,8 @@ struct D3Q19 : public LATTICE_DESCRIPTOR<3,19,POPULATION,FIELDS...> {
 
   template <typename... NEW_FIELDS>
   using extend_by_fields = D3Q19<FIELDS..., NEW_FIELDS...>;
+
+  using no_stored_fields = D3Q19<>;
 };
 
 namespace data {
@@ -207,6 +251,8 @@ struct D3Q7 : public LATTICE_DESCRIPTOR<3,7,POPULATION,FIELDS...> {
 
   template <typename... NEW_FIELDS>
   using extend_by_fields = D3Q7<FIELDS..., NEW_FIELDS...>;
+
+  using no_stored_fields = D3Q7<>;
 };
 
 namespace data {
@@ -248,7 +294,9 @@ struct D3Q13 : public LATTICE_DESCRIPTOR<3,13,POPULATION,FIELDS...> {
   D3Q13() = delete;
 
   template <typename... NEW_FIELDS>
-  using extend_by_fields = D3Q19<FIELDS..., NEW_FIELDS...>;
+  using extend_by_fields = D3Q13<FIELDS..., NEW_FIELDS...>;
+
+  using no_stored_fields = D3Q13<>;
 };
 
 namespace data {
@@ -302,6 +350,8 @@ struct D3Q15 : public LATTICE_DESCRIPTOR<3,15,POPULATION,FIELDS...> {
 
   template <typename... NEW_FIELDS>
   using extend_by_fields = D3Q15<FIELDS..., NEW_FIELDS...>;
+
+  using no_stored_fields = D3Q15<>;
 };
 
 namespace data {
@@ -349,6 +399,8 @@ struct D3Q27 : public LATTICE_DESCRIPTOR<3,27,POPULATION,FIELDS...> {
 
   template <typename... NEW_FIELDS>
   using extend_by_fields = D3Q27<FIELDS..., NEW_FIELDS...>;
+
+  using no_stored_fields = D3Q27<>;
 };
 
 namespace data {

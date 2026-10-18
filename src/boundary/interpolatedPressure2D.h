@@ -62,7 +62,9 @@ std::optional<PostProcessorPromise<T,DESCRIPTOR>> getPostProcessor(DiscreteNorma
                                                                    DiscreteNormal<DESCRIPTOR> n) {
   switch (type) {
   case DiscreteNormalType::Flat:
-    return boundaryhelper::promisePostProcessorForDirectionOrientation<T,DESCRIPTOR,StraightFdBoundaryProcessor2D>(n);
+    return boundaryhelper::MixinDynamicsExchangeDirectionOrientationMomentaPostProcessor<T,DESCRIPTOR,
+          MixinDynamics,momenta::BasicDirichletPressureBoundaryTuple,StraightFdBoundaryProcessorOnDynamics2D
+          >::construct(n);
 
   default:
     return std::nullopt;

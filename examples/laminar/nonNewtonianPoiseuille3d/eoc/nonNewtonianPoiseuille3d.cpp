@@ -89,7 +89,6 @@ int main(int argc, char* argv[])
   MyCase::ParametersD myCaseParameters;
   using T = MyCase::value_t;
   setGetParameters( myCaseParameters, argc, argv );
-  myCaseParameters.fromCLI(argc, argv);
 
   std::vector<Vector<T,3>> errors;
   switch ( myCaseParameters.get<parameters::VISCOSITY_MODEL>() ) {

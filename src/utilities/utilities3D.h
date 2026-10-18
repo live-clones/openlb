@@ -38,6 +38,7 @@
 #include "functorDsl3D.h"
 #include "hyperplane3D.h"
 #include "hyperplaneLattice3D.h"
+#include "samplingGenerators.h"
 #include "anisoDiscr.h"
 #include "omath.h"
 #include "oalgorithm.h"

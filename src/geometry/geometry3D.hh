@@ -28,10 +28,10 @@
 
 #include "discreteNormals.hh"
 #include "blockGeometry.hh"
-#include "blockGeometryStatistics3D.hh"
+#include "blockGeometryStatistics.hh"
 #include "cuboid.hh"
 #include "cuboidDecomposition.hh"
 #include "superGeometry.hh"
-#include "superGeometryStatistics3D.hh"
+#include "superGeometryStatistics.hh"
 
 #endif

@@ -27,7 +27,27 @@
 
 #include "platform.h"
 
+#include <cstdint>
+#include <cstddef>
+
 namespace olb {
+
+/// Storage class of a field: dense per-cell columns or sparse tile-backed.
+/// A sparse-capable field's column can switch between these at runtime.
+enum class FieldStorage {
+  Dense,
+  Sparse,
+};
+
+/// Storage precision of a field, orthogonal to FieldStorage. Inherit keeps the
+/// lattice's compute type T; F16/F32/F64 store the field in that precision while
+/// all cell arithmetic still happens in T (conversion at the cell boundary).
+enum class FieldPrecision {
+  Inherit,
+  F16,
+  F32,
+  F64,
+};
 
 /// Abstract declarator of Column-like storage
 template <typename T>
@@ -57,6 +77,8 @@ struct ImplementationOf;
 
 }
 
+#include "sparseTiles.h"
+
 #endif
 
 #include "cpu/sisd/column.h"
@@ -71,4 +93,8 @@ struct ImplementationOf;
 
 #ifdef PLATFORM_GPU_HIP
 #include "gpu/hip/column.h"
+#endif
+
+#ifdef PLATFORM_GPU_SYCL
+#include "gpu/sycl/column.h"
 #endif

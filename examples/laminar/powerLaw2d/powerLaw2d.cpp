@@ -502,7 +502,6 @@ int main( int argc, char* argv[] )
     myCaseParameters.set<CONVERGED>(false);
 
   }
-  myCaseParameters.fromCLI(argc, argv);
 
   /// === Step 3: Create Mesh ===
   Mesh mesh = createMesh(myCaseParameters);

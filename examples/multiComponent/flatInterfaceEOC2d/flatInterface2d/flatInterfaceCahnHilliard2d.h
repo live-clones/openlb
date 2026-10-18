@@ -270,7 +270,7 @@ void getResults( MyCase& myCase,
     p_hydro.getName() = "p_hydro";
     SuperLatticeDensity2D<T, PFDESCRIPTOR> phi( sLatticePF );
     phi.getName() = "phi";
-    SuperLatticeExternalScalarField2D<T, NSDESCRIPTOR, RHO> rho_L( sLatticeNS );
+    SuperLatticeField2D<T, NSDESCRIPTOR, RHO> rho_L( sLatticeNS );
     AnalyticalConst2D<T,T> ConversionDensity_( converter.getConversionFactorDensity() );
     SuperLatticeFfromAnalyticalF2D<T, NSDESCRIPTOR> ConversionDensity(ConversionDensity_, sLatticeNS);
     SuperIdentity2D<T,T> rho( rho_L * ConversionDensity );

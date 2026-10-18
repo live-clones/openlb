@@ -47,7 +47,7 @@ using MyCase = Case<
 >;
 
 // Define the optimization problem to specify the optimality system
-using PipeTopology = StationaryOptimalitySystem<
+using PipeTopology = SteadyOptimalitySystem<
   functors::AddF<functors::AddF<functors::DissipationF,functors::PorousDissipationF>,  // Objective functional: Dissipation +
                  functors::TikhonovRegularizationF<descriptors::POROSITY>>,            //                       Volume penalization
   PorousBGKdynamics<MyCase::value_t,MyCase::descriptor_t>,                             // Primal dynamics
@@ -424,7 +424,6 @@ int main(int argc, char **argv) {
     myCaseParametersD.set<INITIAL_CONTROL_SCALAR      >(1.5e-5);
     myCaseParametersD.set<REGULARIZATION_FACTOR       >( 0.003);
   }
-  myCaseParametersD.fromCLI(argc, argv);
 
   Mesh mesh = createMesh(myCaseParametersD);
   MyCase myCase(myCaseParametersD, mesh);
@@ -445,8 +444,15 @@ int main(int argc, char **argv) {
   optiCase.setObjective(solvePrimalAndComputeObjective);
   optiCase.setDerivative(solveAdjointAndComputeDerivative);
 
+  OptimizerParametersD<MyCase::value_t> optiParameters;
+  {
+    using namespace parameters;
+    optiParameters.set<optimizer::MAX_OPTIMIZATION_STEPS>(25);
+    optiParameters.set<linesearch::MAX_STEP_ATTEMPTS>(20);
+    optiParameters.set<linesearch::STEP_CONDITION>("Wolfe");
+  }
+
   OptimizerLBFGS<MyCase::value_t,std::vector<MyCase::value_t>> optimizer(
-    optiCase.getController().size(), 1.e-10, 25
-    , 1., 20, "Wolfe", 20, 1.e-4);
+    optiCase.getController().size(), optiParameters);
   optimizer.optimize(optiCase);
 }

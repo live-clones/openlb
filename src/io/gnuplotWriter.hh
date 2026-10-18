@@ -44,14 +44,20 @@ Gnuplot<T>::Gnuplot(std::string name, bool liveplot, std::string preCommand, Axi
     _preCommand(preCommand),
     _axisType(axisType),
     _regressionType(regressionType),
+    _clout(std::cout, "GnuplotWriter"),
     csvWriter(name)
 {
 #ifndef WIN32
   _gnuplotInstalled = (! system("which gnuplot >/dev/null 2>/dev/null"));
 #endif
   if ((! _gnuplotInstalled) && (singleton::mpi().getRank() == _rank )) {
-    std::cout << "We could not find a gnuplot distribution at your system." << std::endl;
-    std::cout << "We still write the data files s.t. you can plot the data yourself." << std::endl;
+    // Prints warning only once
+    static bool warningPrinted = false;
+    if (!warningPrinted) {
+      warningPrinted = true;
+      _clout << "Warning: We could not find a gnuplot distribution at your system." << std::endl;
+      _clout << "We still write the data files s.t. you can plot the data yourself." << std::endl;
+    }
   }
 }
 
@@ -236,7 +242,7 @@ void Gnuplot<T>::writePlotFile(std::string type, std::string plotName)
       plotFile = singleton::directories().getGnuplotOutDir()+"data/plotPNG"+plotName+".p";
     }
     else {
-      std::cout << "WARNING: invalid Gnuplot type={'', 'plot'; 'pdf', 'png'}" << std::endl;
+      _clout << "WARNING: invalid Gnuplot type={'', 'plot'; 'pdf', 'png'}" << std::endl;
       exit(-1);
     }
 
@@ -382,7 +388,7 @@ template< typename T > void Gnuplot<T>::setYrange(T ymin, T ymax) { _ymin = std:
 template< typename T > void Gnuplot<T>::setLogScale(size_t dim, size_t n) {
     if      ( dim == 1 ) { xlog=true; xlogn=n; }
     else if ( dim == 2 ) { ylog=true; ylogn=n; }
-    else                 std::cout << "Error at setLogScale" << std::endl;
+    else                 _clout << "Error at setLogScale" << std::endl;
 }
 
   void setLogScale(size_t dim);
@@ -399,9 +405,9 @@ void Gnuplot<T>::startGnuplot(std::string plotFile, std::string plotName)
     if (!system(nullptr)) {
       exit (EXIT_FAILURE);
     }
-    const std::string command = "gnuplot -persistent "+_dir+"data/"+plotFile+plotName+".p > /dev/null &";
+    const std::string command = "gnuplot -persistent "+_dir+"data/"+plotFile+plotName+".p > /dev/null 2>&1 &";
     if ( system(command.c_str()) ) {
-      std::cout << "Error at GnuplotWriter" << std::endl;
+      _clout << "Error at GnuplotWriter" << std::endl;
     }
   }
   return;

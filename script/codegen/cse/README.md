@@ -11,7 +11,7 @@ collision steps and non-local post-processors.
 - GCC
 - Make
 
-(When using Nix Flake, instantiate the environment via `nix develop .#env-code-generation`)
+(When using Nix Flake, instantiate the environment via `nix develop .#codegen`)
 
 ## Usage
 

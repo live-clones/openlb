@@ -127,7 +127,7 @@ run_task() {
         ulimit -v "$MAX_MEMORY"
     fi
 
-    if "$SCRIPT_DIR/optimize_post_processors.sh" --install --skip-header-update "$op" "$desc" > /dev/null 2>&1; then
+    if "$SCRIPT_DIR/optimize_post_processors.sh" --deterministic --install --skip-header-update "$op" "$desc" > /dev/null 2>&1; then
         echo "$idx:SUCCESS" > "$JOB_DIR/$idx.status"
     else
         echo "$idx:FAILURE" > "$JOB_DIR/$idx.status"

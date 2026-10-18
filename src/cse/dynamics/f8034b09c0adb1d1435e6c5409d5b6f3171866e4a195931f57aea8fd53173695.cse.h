@@ -35,62 +35,57 @@ namespace olb {
 namespace dynamics {
 
 template <typename T, typename... FIELDS>
-struct CSE<dynamics::Tuple<T, descriptors::D2Q9<FIELDS...>, momenta::Tuple<momenta::BulkDensity, momenta::FixedVelocityMomentum, momenta::BulkStress, momenta::DefineUSeparately>, equilibria::SecondOrder, collision::BGK, forcing::ShanChen>> {
+struct CSE<dynamics::Tuple<T, descriptors::D2Q9<FIELDS...>, momenta::Tuple<momenta::BulkDensity, momenta::FixedVelocityMomentum, momenta::BulkStress, momenta::DefineUSeparately>, equilibria::SecondOrder, collision::BGK, forcing::ShanChen>, olb::CodegenTarget::Generic> {
 template <concepts::Cell CELL, concepts::Parameters PARAMETERS, concepts::BaseType V=typename CELL::value_t>
 CellStatistic<V> collide(CELL& cell, PARAMETERS& parameters) any_platform {
-auto x10 = cell.template getFieldComponent<olb::descriptors::FORCE>(1);
-auto x13 = parameters.template get<descriptors::OMEGA>();
-auto x12 = cell.template getFieldComponent<olb::descriptors::VELOCITY>(1);
-auto x9 = cell.template getFieldComponent<olb::descriptors::FORCE>(0);
-auto x11 = cell.template getFieldComponent<olb::descriptors::VELOCITY>(0);
-auto x14 = x13 + V{-1};
-auto x15 = cell[0] + cell[1] + cell[2] + cell[3] + cell[4] + cell[5] + cell[6] + cell[7] + cell[8];
-auto x16 = x15 + V{1};
-auto x17 = V{1} / (x13);
-auto x18 = x17*x9;
-auto x19 = x11 + x18;
-auto x20 = ((x19)*(x19));
-auto x21 = V{1.5}*x20;
-auto x22 = x10*x17;
-auto x23 = x12 + x22;
-auto x24 = ((x23)*(x23));
-auto x25 = V{1.5}*x24;
-auto x26 = x25 + V{-1};
-auto x27 = x21 + x26;
-auto x28 = V{0.0277777777777778}*x13;
-auto x29 = -x11 - x18 + x23;
-auto x30 = V{1} - x25;
-auto x31 = V{3}*x12 + V{3}*x22;
-auto x32 = -x21 + x31;
-auto x33 = V{3}*x11;
-auto x34 = V{3}*x18;
-auto x35 = -x33 - x34;
-auto x36 = V{0.111111111111111}*x13;
-auto x37 = V{3}*x20;
-auto x38 = x33 + x34;
-auto x39 = V{4.5}*((x19 + x23)*(x19 + x23));
-auto x40 = x27 + x31;
-auto x41 = V{3}*x24;
-auto x42 = x30 + x38;
-auto x0 = -cell[0]*x14 - V{0.444444444444444}*x13*(x16*x27 + V{1});
-auto x1 = -cell[1]*x14 + x28*(x16*(x30 + x32 + x35 + V{4.5}*((x29)*(x29))) + V{-1});
-auto x2 = -cell[2]*x14 - x36*(x16*(x26 - x37 + x38) + V{1});
-auto x3 = -cell[3]*x14 - x28*(x16*(x38 - x39 + x40) + V{1});
-auto x4 = -cell[4]*x14 - x36*(x16*(x21 + x31 - x41 + V{-1}) + V{1});
-auto x5 = -(cell[5]*x14 + x28*(x16*(x35 + x40 - V{4.5}*((x29)*(x29))) + V{1}));
-auto x6 = -cell[6]*x14 + x36*(x16*(x37 + x42) + V{-1});
-auto x7 = -cell[7]*x14 + x28*(x16*(x32 + x39 + x42) + V{-1});
-auto x8 = -cell[8]*x14 + x36*(x16*(x32 + x41 + V{1}) + V{-1});
-cell[0] = x0;
-cell[1] = x1;
-cell[2] = x2;
-cell[3] = x3;
-cell[4] = x4;
-cell[5] = x5;
-cell[6] = x6;
-cell[7] = x7;
-cell[8] = x8;
-return { x15 + V{1}, ((V{0.5}*x10 + x12)*(V{0.5}*x10 + x12)) + ((x11 + V{0.5}*x9)*(x11 + V{0.5}*x9)) };
+auto x29 = cell.template getFieldComponent<olb::descriptors::FORCE>(0);
+auto x30 = cell.template getFieldComponent<olb::descriptors::FORCE>(1);
+auto x31 = cell.template getFieldComponent<olb::descriptors::VELOCITY>(0);
+auto x32 = cell.template getFieldComponent<olb::descriptors::VELOCITY>(1);
+auto x33 = parameters.template get<descriptors::OMEGA>();
+auto x34 = V{1} / (x33);
+auto x0 = V{1} - x33;
+auto x1 = V{3};
+auto x2 = x29*x34 + x31;
+auto x35 = ((x2)*(x2));
+auto x3 = x30*x34 + x32;
+auto x36 = ((x3)*(x3));
+auto x4 = V{0.5}*x1*(x35 + x36);
+auto x37 = V{1} - x4;
+auto x5 = V{0.444444444444444};
+auto x6 = cell[0] + cell[1] + cell[2] + cell[3] + cell[4] + cell[5] + cell[6] + cell[7] + cell[8] + V{1};
+auto x7 = -V{1}*x2;
+auto x8 = x3 + x7;
+auto x9 = V{0.5}*((x1)*(x1));
+auto x10 = V{0.0277777777777778};
+auto x11 = x10*x6;
+auto x12 = V{0.111111111111111};
+auto x13 = x12*x6;
+auto x14 = -V{1}*x3;
+auto x15 = x14 + x7;
+auto x16 = x14 + x2;
+auto x17 = x2 + x3;
+auto x18 = V{0.5}*x29 + x31;
+auto x19 = V{0.5}*x30 + x32;
+auto x20 = cell[0]*x0 - x33*x5*(x6*(x4 + V{-1}) + V{1});
+auto x21 = cell[1]*x0 - x33*(x10 - x11*(x1*x8 + x37 + x9*((x8)*(x8))));
+auto x22 = cell[2]*x0 - x33*(x12 - x13*(x1*x7 + x37 + x9*((x7)*(x7))));
+auto x23 = cell[3]*x0 - x33*(x10 - x11*(x1*x15 + x37 + x9*((x15)*(x15))));
+auto x24 = cell[4]*x0 - x33*(x12 - x13*(x1*x14 + x37 + x9*((x14)*(x14))));
+auto x25 = cell[5]*x0 - x33*(x10 - x11*(x1*x16 + x37 + x9*((x16)*(x16))));
+auto x26 = cell[6]*x0 - x33*(x12 - x13*(x1*x2 + x35*x9 + x37));
+auto x27 = cell[7]*x0 - x33*(x10 - x11*(x1*x17 + x37 + x9*((x17)*(x17))));
+auto x28 = cell[8]*x0 - x33*(x12 - x13*(x1*x3 + x36*x9 + x37));
+cell[0] = x20;
+cell[1] = x21;
+cell[2] = x22;
+cell[3] = x23;
+cell[4] = x24;
+cell[5] = x25;
+cell[6] = x26;
+cell[7] = x27;
+cell[8] = x28;
+return { x6, ((x18)*(x18)) + ((x19)*(x19)) };
 }
 };
 
@@ -98,4 +93,4 @@ return { x15 + V{1}, ((V{0.5}*x10 + x12)*(V{0.5}*x10 + x12)) + ((x11 + V{0.5}*x9
 
 }
 
-// Generation Info: commit=2a9f114ed32e2878e1a64a356eda56d13e508f7d
+// Generation Info: commit=e62fb513c7fed8d9804dfb87eb8d98b331948423

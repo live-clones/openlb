@@ -21,7 +21,6 @@
  *  Boston, MA  02110-1301, USA.
 */
 
-
 #ifndef OSTREAM_MANAGER_H
 #define OSTREAM_MANAGER_H
 
@@ -38,6 +37,7 @@ private:
   std::ostream* output;
   std::string text;
   static bool multiOutput;
+  bool showTimestamps;
 
 public:
   OMBuf();
@@ -47,6 +47,7 @@ public:
   void swap(OMBuf& rhs);
   OMBuf(std::ostream& str, std::string classname);
   void setMultiOutput(bool b);
+  void setTimestamps(bool b);
   /// sync the stream with the output:
   /** 1) first Output "[text] ", then the buffer,<br>
     * 2) reset the buffer<br>
@@ -81,27 +82,20 @@ Please note, that the control character <b>\\n</b> - in contrast to std::endl - 
 */
 class OstreamManager : public std::ostream {
 private:
-  // OstreamManager clout should use it's own special buffer
-  /// special, overloaded buffer
   OMBuf buffer;
 
 public:
-  // standard constructor (should be unnecessary due to absence of classname-text)
-  // OstreamManager();
   /// constructor that uses std::cout by default
   OstreamManager(std::string classname);
-  /// constructor for default usage
   OstreamManager(std::ostream& str, std::string classname);
-  // Copy construction
   OstreamManager(const OstreamManager& rhs);
-  // Copy assignment
   OstreamManager& operator=(const OstreamManager& rhs);
-  // Destructor
   ~OstreamManager() override { };
   /// enable message output for all MPI processes, disabled by default
   void setMultiOutput(bool b);
+  void setTimestamps(bool b);
 };
 
-} // namespace olb
+}
 
 #endif

@@ -341,9 +341,9 @@ void getResults(MyCase& myCase, int iT, util::Timer<MyCase::value_t>& timer)
     SuperVTMwriter2D<T> vtmWriter( "deepFallingDrop2d" );
     SuperLatticePhysVelocity2D<T, DESCRIPTOR> velocity( lattice, converter );
     SuperLatticePhysPressure2D<T, DESCRIPTOR> pressure( lattice, converter );
-    SuperLatticeExternalScalarField2D<T, DESCRIPTOR, FreeSurface::EPSILON> epsilon( lattice );
-    SuperLatticeExternalScalarField2D<T, DESCRIPTOR, FreeSurface::CELL_TYPE> cells( lattice );
-    SuperLatticeExternalScalarField2D<T, DESCRIPTOR, FreeSurface::MASS> mass( lattice );
+    SuperLatticeField2D<T, DESCRIPTOR, FreeSurface::EPSILON> epsilon( lattice );
+    SuperLatticeField2D<T, DESCRIPTOR, FreeSurface::CELL_TYPE> cells( lattice );
+    SuperLatticeField2D<T, DESCRIPTOR, FreeSurface::MASS> mass( lattice );
     epsilon.getName() = "epsilon";
     cells.getName() = "cell_type";
     mass.getName() = "mass";
@@ -420,7 +420,6 @@ int main(int argc, char **argv)
     myCaseParameters.set<FreeSurface::TRANSITION>(1e-3);
     myCaseParameters.set<FreeSurface::LONELY_THRESHOLD>(1.0);
   }
-  myCaseParameters.fromCLI(argc, argv);
 
   /// === Step 3: Create Mesh ===
   Mesh mesh = createMesh(myCaseParameters);

@@ -57,6 +57,20 @@ public:
   bool operator()(T output[], const T input[]) override;
 };
 
+/// planar hyperbolic tangent between values 0 and factor with an interface normal in direction
+template <typename T>
+class PlanarInterface2D : public AnalyticalF2D<T,T> {
+private:
+  Vector<T,2> _center;
+  Vector<T,2> _direction;
+  T _interfaceWidth;
+  T _factor;
+
+public:
+  PlanarInterface2D(Vector<T,2> center, Vector<T,2> direction, T interfaceWidth, T factor = 1.);
+  bool operator() (T output[], const T input[]) override;
+};
+
 // smooth Young-Laplace pressure over interface
 template <typename T>
 class LaplacePressure2D : public AnalyticalF2D<T,T> {

@@ -124,7 +124,6 @@ int main(int argc, char* argv[]){
     myCaseParameters.set<PHYS_STAT_ITER_T           >(1);
     myCaseParameters.set<STATISTICS_ENSEMBLES       >(20);
   }
-  myCaseParameters.fromCLI(argc, argv);
 
   const int N                = myCaseParameters.get<parameters::RESOLUTION               >();
   const std::size_t Ra       = myCaseParameters.get<parameters::RAYLEIGH                 >();
@@ -141,9 +140,9 @@ int main(int argc, char* argv[]){
                                         (T) 1 / 3);  // length of the square
   myCaseParameters.set<parameters::PHYS_CHAR_LENGTH>(lx);
   myCaseParameters.set<parameters::PHYS_DELTA_X>(lx / N);
-  myCaseParameters.set<parameters::DOMAIN_EXTENT>([&]() -> Vector<T, MyCase::d> {
+  myCaseParameters.set<parameters::DOMAIN_EXTENT>([](MyCase::ParametersD& p) -> Vector<T, MyCase::d> {
     return {
-      lx, lx
+      p.get<parameters::PHYS_CHAR_LENGTH>(), p.get<parameters::PHYS_CHAR_LENGTH>()
     };
   });
 

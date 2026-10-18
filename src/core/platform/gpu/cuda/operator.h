@@ -53,14 +53,27 @@ private:
   ConcreteParametersD<T,DESCRIPTOR,Platform::GPU_CUDA,typename DYNAMICS::parameters>* _parameters;
   ConcreteBlockMask<T,Platform::GPU_CUDA>* _mask;
 
-  gpu::cuda::Dynamics<T,DESCRIPTOR>** _dynamicsOfCells;
+  std::uint16_t* _dynamicsOfCells;
+  /// Stable non-zero dispatch-table index of this collision's device dynamics
+  std::uint16_t _index;
 
   gpu::cuda::device::unique_ptr<gpu::cuda::Dynamics<T,DESCRIPTOR>> _deviceDynamics;
 
-  gpu::cuda::Column<CellID> _cells;
+  /// Boundary-ring cells dispatched list-based on the OuterCollision stream
+  /// (only populated when the resolved policy splits the collision)
+  gpu::cuda::Column<CellID> _outerCells;
+  /// Cell list for list-based dispatch: the inner bulk when split, else the
+  /// whole sub-domain. Populated only when the resolved bulk dispatch is List.
+  gpu::cuda::Column<CellID> _listCells;
+  /// Bulk-cell bitmask for mask-based dispatch of the (dominant) bulk, keeping
+  /// the coalesced, indirection-free addressing of the fused code path.
+  /// Populated only when the resolved bulk dispatch is Mask and the collision
+  /// is split (fused+mask uses the sub-domain mask directly).
+  std::unique_ptr<ConcreteBlockMask<T,Platform::GPU_CUDA>> _innerMask;
   bool _modified;
 
-  gpu::cuda::device::Stream _stream;
+  /// Tail of legacy default-stream work preceding this collision dispatch
+  Event<Platform::GPU_CUDA> _legacyTail;
 
   /// Apply DYNAMICS using its mask and fall back to dynamic dispatch for others
   void applyDominant(ConcreteBlockLattice<T,DESCRIPTOR,Platform::GPU_CUDA>& block,
@@ -91,7 +104,7 @@ public:
       }
     }
     if (state) {
-      _dynamicsOfCells[iCell] = _deviceDynamics.get();
+      _dynamicsOfCells[iCell] = _index;
     }
     _modified = true;
   }
@@ -132,8 +145,6 @@ private:
   gpu::cuda::Column<CellID> _cells;
   bool _modified;
 
-  gpu::cuda::device::Stream _stream;
-
 public:
   ConcreteBlockO();
 
@@ -162,6 +173,15 @@ public:
 
   void apply(ConcreteBlockLattice<T,DESCRIPTOR,Platform::GPU_CUDA>& block) override;
 
+  olb::AbstractParameters<T,DESCRIPTOR>& getParameters(ConcreteBlockLattice<T,DESCRIPTOR,Platform::GPU_CUDA>& block) override {
+    if constexpr (requires { typename OPERATOR::parameters; }) {
+      return block.template getData<OperatorParameters<OPERATOR>>().asAbstract();
+    } else {
+      static StaticParametersD<T,DESCRIPTOR> none;
+      return none;
+    }
+  }
+
 };
 
 
@@ -172,8 +192,6 @@ class ConcreteBlockO<T,DESCRIPTOR,Platform::GPU_CUDA,OPERATOR,OperatorScope::Per
 private:
   gpu::cuda::Column<CellID> _cells;
   bool _modified;
-
-  gpu::cuda::device::Stream _stream;
 
   ConcreteParametersD<T,DESCRIPTOR,Platform::GPU_CUDA,typename OPERATOR::parameters>* _parameters;
 
@@ -205,6 +223,15 @@ public:
   }
 
   void apply(ConcreteBlockLattice<T,DESCRIPTOR,Platform::GPU_CUDA>& block) override;
+
+  olb::AbstractParameters<T,DESCRIPTOR>& getParameters(ConcreteBlockLattice<T,DESCRIPTOR,Platform::GPU_CUDA>& block) override {
+    if constexpr (requires { typename OPERATOR::parameters; }) {
+      return block.template getData<OperatorParameters<OPERATOR>>().asAbstract();
+    } else {
+      static StaticParametersD<T,DESCRIPTOR> none;
+      return none;
+    }
+  }
 
 };
 
@@ -242,6 +269,15 @@ public:
     OPERATOR().apply(block);
   }
 
+  olb::AbstractParameters<T,DESCRIPTOR>& getParameters(ConcreteBlockLattice<T,DESCRIPTOR,Platform::GPU_CUDA>& block) override {
+    if constexpr (requires { typename OPERATOR::parameters; }) {
+      return block.template getData<OperatorParameters<OPERATOR>>().asAbstract();
+    } else {
+      static StaticParametersD<T,DESCRIPTOR> none;
+      return none;
+    }
+  }
+
 };
 
 
@@ -263,6 +299,7 @@ private:
 
   std::unique_ptr<ConcreteBlockMask<typename COUPLEES::values_t::template get<0>::value_t,
                                     Platform::GPU_CUDA>> _mask;
+  bool _maskUpdated = false;
 
 public:
   template <typename LATTICES>
@@ -302,6 +339,7 @@ private:
 
   std::unique_ptr<ConcreteBlockMask<typename COUPLEES::values_t::template get<0>::value_t,
                                     Platform::GPU_CUDA>> _mask;
+  bool _maskUpdated = false;
 
 public:
   template <typename LATTICES>

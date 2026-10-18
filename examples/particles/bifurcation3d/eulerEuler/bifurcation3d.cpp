@@ -466,7 +466,6 @@ int main(int argc, char* argv[])
     myCaseParameters.set<OUTLET_NORMAL0>({0.505126, -0.04177, 0.862034});
     myCaseParameters.set<OUTLET_NORMAL1>({-0.483331, -0.0102764, 0.875377});
   }
-  myCaseParameters.fromCLI(argc, argv);
 
   /// === Step 3: Create Mesh ===
   Mesh mesh = createMesh(myCaseParameters);

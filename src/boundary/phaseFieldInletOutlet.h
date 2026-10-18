@@ -31,21 +31,32 @@ namespace boundary {
 template <
   concepts::BaseType T,
   concepts::LatticeDescriptor DESCRIPTOR,
-  typename MixinDynamics = MultiPhaseIncompressibleBGKdynamics<T,DESCRIPTOR>
+  typename MixinDynamics = MultiPhaseIncompressibleBGKdynamics<T,DESCRIPTOR>,
+  template<int,int> typename BoundaryMomenta = momenta::IncRegularizedVelocityBoundaryTuple
 >
 struct IncompressibleZouHeVelocity;
 
 template <
   concepts::BaseType T,
   concepts::LatticeDescriptor DESCRIPTOR,
-  typename MixinDynamics = MultiPhaseIncompressibleBGKdynamics<T,DESCRIPTOR>
+  typename MixinDynamics = MultiPhaseIncompressibleBGKdynamics<T,DESCRIPTOR>,
+  template<int,int> typename BoundaryMomenta = momenta::IncRegularizedPressureBoundaryTuple
 >
 struct IncompressibleZouHePressure;
 
 template <
   concepts::BaseType T,
   concepts::LatticeDescriptor DESCRIPTOR,
-  typename MixinDynamics = MultiPhaseIncompressibleTRTdynamics<T,DESCRIPTOR>
+  typename MixinDynamics = MultiPhaseIncompressibleRLBdynamics<T,DESCRIPTOR>,
+  template<int,int> typename BoundaryMomenta = momenta::IncRegularizedVelocityBoundaryTuple
+>
+struct IncompressibleLocalVelocity;
+
+template <
+  concepts::BaseType T,
+  concepts::LatticeDescriptor DESCRIPTOR,
+  typename MixinDynamics = MultiPhaseIncompressibleRLBdynamics<T,DESCRIPTOR>,
+  template<int,int> typename BoundaryMomenta = momenta::IncRegularizedPressureBoundaryTuple
 >
 struct IncompressibleLocalPressure;
 
@@ -59,9 +70,9 @@ struct IncompressibleConvective;
 template <
   concepts::BaseType T,
   concepts::LatticeDescriptor DESCRIPTOR,
-  typename MixinDynamics = ConservativePhaseFieldBGKdynamics<T,DESCRIPTOR>
+  typename MixinDynamics = ConservativePhaseFieldRLBdynamics<T,DESCRIPTOR>
 >
-struct PhaseFieldInlet;
+struct RegularizedPhaseFieldDirichlet;
 
 template <
   concepts::BaseType T,

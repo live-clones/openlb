@@ -32,7 +32,7 @@ using namespace olb::names;
 using namespace olb::opti;
 
 using MyCase = Case<
-  NavierStokes, Lattice<double, descriptors::DualPorousD3Q19Descriptor>
+  NavierStokes, Lattice<double, descriptors::D3Q19<>>
 >;
 using MyOptiCase = OptiCaseAdjoint<
   Controlled, MyCase,
@@ -45,13 +45,21 @@ using BulkDynamics = PorousBGKdynamics<MyCase::value_t,
 using ObjectiveF = functors::L2DistanceF<functors::VelocityF>;
 using ControlledField = descriptors::POROSITY;
 
+// Switch between different combination of boundary conditions in primal/adjoint simulation
+enum class BoundaryType : int {
+  PRIMAL_LOCAL_ADJOINT_BOUNCE_BACK = 0,
+  PRIMAL_LOCAL_ADJOINT_ZERO = 1,
+  PRIMAL_LOCAL_ADJOINT_LOCAL = 2, // adjoint pressure BC leads to infinite increase in sensitivity
+  PRIMAL_ZOUHE_ADJOINT_ZOUHE = 3  // same here
+};
+
 namespace olb::parameters{
 
 struct DESIGN_DOMAIN_EXTENT : public descriptors::FIELD_BASE<0,1>{ };
 struct DESIGN_DOMAIN_ORIGIN : public descriptors::FIELD_BASE<0,1>{ };
 struct REFERENCE_OBJECT_EXTENT : public descriptors::FIELD_BASE<0,1>{ };
 struct REFERENCE_OBJECT_ORIGIN : public descriptors::FIELD_BASE<0,1>{ };
-
+struct BOUNDARY_TYPE : public descriptors::TYPED_FIELD_BASE<BoundaryType,1>{ };
 
 }
 
@@ -136,9 +144,18 @@ void prepareLattice(MyCase& myCase) {
   dynamics::set<PorousBGKdynamics>(sLattice, bulkIndicator);
 
   boundary::set<boundary::BounceBack>(sLattice, superGeometry, 2);
-  boundary::set<boundary::LocalVelocity>(sLattice, superGeometry.getMaterialIndicator({3}));
-  boundary::set<boundary::LocalPressure>(sLattice, superGeometry.getMaterialIndicator({4}));
-
+  switch (parameters.get<parameters::BOUNDARY_TYPE>()) {
+    case BoundaryType::PRIMAL_ZOUHE_ADJOINT_ZOUHE: {
+      boundary::set<boundary::ZouHeVelocity>(sLattice, superGeometry.getMaterialIndicator({3}));
+      boundary::set<boundary::ZouHePressure>(sLattice, superGeometry.getMaterialIndicator({4}));
+      break;
+    }
+    default: {
+      boundary::set<boundary::LocalVelocity>(sLattice, superGeometry.getMaterialIndicator({3}));
+      boundary::set<boundary::LocalPressure>(sLattice, superGeometry.getMaterialIndicator({4}));
+      break;
+    }
+  }
   sLattice.setParameter<descriptors::OMEGA>(converter.getLatticeRelaxationFrequency());
 }
 
@@ -234,16 +251,40 @@ void simulate(MyCase& myCase) {
 }
 
 void prepareAdjointLattice(MyOptiCase& optiCase) {
+  using T = MyCase::value_t;
+  using DESCRIPTOR = MyCase::descriptor_t;
   auto& adjointLattice = optiCase.getCase(Adjoint{}).getLattice(NavierStokes{});
   auto& controlledLattice = optiCase.getCase(Controlled{}).getLattice(NavierStokes{});
   auto& geometry = optiCase.getCase(Adjoint{}).getGeometry();
+  auto& parameters = optiCase.getCase(Adjoint{}).getParameters();
 
   // Set adjoint unit converter as the controlled case
   adjointLattice.setUnitConverter(controlledLattice.getUnitConverter());
 
   // Define dual physics
-  dynamics::set<DualPorousBGKDynamics>(adjointLattice, geometry.getMaterialIndicator({1,6}));
-  boundary::set<boundary::BounceBack>(adjointLattice, geometry.getMaterialIndicator({2,3,4}));
+  dynamics::set<olb::Dual<BulkDynamics>>(adjointLattice, geometry.getMaterialIndicator({1,6}));
+  boundary::set<boundary::BounceBack>(adjointLattice, geometry.getMaterialIndicator({2}));
+
+  switch (parameters.get<parameters::BOUNDARY_TYPE>()) {
+    case BoundaryType::PRIMAL_LOCAL_ADJOINT_BOUNCE_BACK: {
+      boundary::set<boundary::BounceBack>(adjointLattice, geometry.getMaterialIndicator({3,4}));
+      break;
+    }
+    case BoundaryType::PRIMAL_LOCAL_ADJOINT_ZERO: {
+      boundary::set<boundary::ZeroPopulation>(adjointLattice, geometry.getMaterialIndicator({3,4}));
+      break;
+    }
+    case BoundaryType::PRIMAL_LOCAL_ADJOINT_LOCAL: {
+      dynamics::set<DualLocalVelocityBoundary<T,DESCRIPTOR,1,-1>>(adjointLattice, geometry.getMaterialIndicator({3}));
+      dynamics::set<DualLocalPressureBoundary<T,DESCRIPTOR,1,1>>(adjointLattice, geometry.getMaterialIndicator({4}));
+      break;
+    }
+    case BoundaryType::PRIMAL_ZOUHE_ADJOINT_ZOUHE: {
+      dynamics::set<DualZouHeVelocityBoundary<T,DESCRIPTOR,1,-1>>(adjointLattice, geometry.getMaterialIndicator({3}));
+      dynamics::set<DualZouHePressureBoundary<T,DESCRIPTOR,1,1>>(adjointLattice, geometry.getMaterialIndicator({4}));
+      break;
+    }
+  }
   adjointLattice.template setParameter<descriptors::OMEGA>(adjointLattice.getUnitConverter().getLatticeRelaxationFrequency());
 
   adjointLattice.revertStreaming();
@@ -444,8 +485,17 @@ int main(int argc, char* argv[])
     myCaseParameters.set<REFERENCE_OBJECT_EXTENT     >({0.2, 0.2, 0.2});
     myCaseParameters.set<REFERENCE_OBJECT_ORIGIN     >({0.4, 0.4, 0.4});
     myCaseParameters.set<INITIAL_CONTROL_SCALAR      >(         1.e-2);
+    myCaseParameters.set<BOUNDARY_TYPE               >(BoundaryType::PRIMAL_LOCAL_ADJOINT_BOUNCE_BACK);
   }
-  myCaseParameters.fromCLI(argc, argv);
+
+  OptimizerParametersD<MyCase::value_t> optiParameters;
+  {
+    using namespace parameters;
+    optiParameters.set<optimizer::EPS>(5e-6);
+    optiParameters.set<optimizer::MAX_OPTIMIZATION_STEPS>(10);
+    optiParameters.set<linesearch::MAX_STEP_ATTEMPTS>(20);
+    optiParameters.set<linesearch::STEP_CONDITION>("Wolfe");
+  }
 
   /// Step 3: Create Mesh
   Mesh mesh = createMesh(myCaseParameters);
@@ -483,6 +533,7 @@ int main(int argc, char* argv[])
   optiCase.setDerivative(computeDerivative);
 
   OptimizerLBFGS<MyCase::value_t,std::vector<MyCase::value_t>> optimizer(
-    optiCase.getController().size(), 5.e-6, 10, 1., 20, "Wolfe", 20, 1.e-4);
+    optiCase.getController().size(), optiParameters
+  );
   optimizer.optimize(optiCase);
 }

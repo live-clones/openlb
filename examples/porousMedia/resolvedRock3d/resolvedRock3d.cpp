@@ -398,7 +398,6 @@ int main(int argc, char* argv[])
     myCaseParameters.set<SCALING_FACTOR             >(       1. );
     myCaseParameters.set<TIME_SCALING_FACTOR        >(       4. );
   }
-  myCaseParameters.fromCLI(argc, argv);
 
   std::string vtiFile = "rock.vti";
   std::string arrayName = "scalars";

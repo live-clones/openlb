@@ -31,11 +31,14 @@ parser.add_argument('input', help='path and filename to .txt file containing tar
 parser.add_argument('cpp_output', help='path where the .cpp files are created')
 parser.add_argument('out_output', help='path where the .out files are created')
 parser.add_argument('type', help='dynamics or operator')
+parser.add_argument('--disable_cse', action='store_true', help='disable automatic cse optimization')
+parser.add_argument('--precision', type=str, help='set float precision', default="float")
+parser.add_argument('--codegen_target', type=str, help='CSE codegen target (Generic, StoredMoments)', default="Generic")
 args = parser.parse_args()
 
 # Create .cpp files to extract expression tree
 if args.type == 'dynamics':
-    extractDynamicsExpressions(args.target, args.template, args.input, args.cpp_output, args.out_output)
+    extractDynamicsExpressions(args.target, args.template, args.input, args.cpp_output, args.out_output, disable_cse=args.disable_cse, precision=args.precision, target=args.codegen_target)
 elif args.type == 'operator':
     extractOperatorExpressions(args.target, args.template, args.input, args.cpp_output, args.out_output)
 else:

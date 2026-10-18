@@ -87,16 +87,15 @@ int main( int argc, char* argv[] )
     myCaseParameters.set<GNUPLOT_ENABLED>(false);
     myCaseParameters.set<COMPUTE_ERROR>(true);
 
-    myCaseParameters.set<PHYS_VTK_ITER_T>([&] {
-      return myCaseParameters.get<MAX_PHYS_T>()/20.;
+    myCaseParameters.set<PHYS_VTK_ITER_T>([](MyCase::ParametersD& p) {
+      return p.get<MAX_PHYS_T>()/20.;
     });
 
-    myCaseParameters.set<PHYS_STAT_ITER_T>([&] {
-      return myCaseParameters.get<MAX_PHYS_T>()/20.;
+    myCaseParameters.set<PHYS_STAT_ITER_T>([](MyCase::ParametersD& p) {
+      return p.get<MAX_PHYS_T>()/20.;
     });
 
   }
-  myCaseParameters.fromCLI(argc, argv);
 
   switch(myCaseParameters.get<parameters::BOUNDARY_TYPE>()){
     case BoundaryType::freeSlip:

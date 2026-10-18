@@ -339,6 +339,12 @@ void setTurbulentWallModelDynamics(SuperLattice<T, DESCRIPTOR>& sLattice,
   {
     auto& communicator = sLattice.getCommunicator(stage::PostStream());
     communicator.template requestField<descriptors::POPULATION>();
+    communicator.template requestField<descriptors::WMVELOCITY>();
+    communicator.template requestField<descriptors::WMPOROSITY>();
+    communicator.template requestField<descriptors::Y1>();
+    if (wallModelParameters.rhoMethod != 0) {
+      communicator.template requestField<descriptors::DENSITY>();
+    }
     communicator.requestOverlap(sLattice.getOverlap(), *bulkIndicator);
     communicator.exchangeRequests();
   }
@@ -738,19 +744,40 @@ void setTurbulentWallModel(BlockLattice<T,DESCRIPTOR>& block,
                   }
                   else if( wallModelParameters.fNeqMethod == 1 ) {
                     if( wallModelParameters.rhoMethod == 0 ) {
-                      block.addPostProcessor(typeid(stage::PostStream),
-                                            boundaryLatticeR,
-                                            meta::id<TurbulentWallModelPorousFneqFDMPostProcessor<0>>{});
+                      if( wallModelParameters.bodyForce ) {
+                        block.addPostProcessor(typeid(stage::PostStream),
+                                              boundaryLatticeR,
+                                              meta::id<TurbulentWallModelPorousFneqFDMPostProcessor<0,true>>{});
+                      }
+                      else {
+                        block.addPostProcessor(typeid(stage::PostStream),
+                                              boundaryLatticeR,
+                                              meta::id<TurbulentWallModelPorousFneqFDMPostProcessor<0,false>>{});
+                      }
                     }
                     else if( wallModelParameters.rhoMethod == 1 ) {
-                      block.addPostProcessor(typeid(stage::PostStream),
-                                            boundaryLatticeR,
-                                            meta::id<TurbulentWallModelPorousFneqFDMPostProcessor<1>>{});
+                      if( wallModelParameters.bodyForce ) {
+                        block.addPostProcessor(typeid(stage::PostStream),
+                                              boundaryLatticeR,
+                                              meta::id<TurbulentWallModelPorousFneqFDMPostProcessor<1,true>>{});
+                      }
+                      else {
+                        block.addPostProcessor(typeid(stage::PostStream),
+                                              boundaryLatticeR,
+                                              meta::id<TurbulentWallModelPorousFneqFDMPostProcessor<1,false>>{});
+                      }
                     }
                     else {
-                      block.addPostProcessor(typeid(stage::PostStream),
-                                            boundaryLatticeR,
-                                            meta::id<TurbulentWallModelPorousFneqFDMPostProcessor<2>>{});
+                      if( wallModelParameters.bodyForce ) {
+                        block.addPostProcessor(typeid(stage::PostStream),
+                                              boundaryLatticeR,
+                                              meta::id<TurbulentWallModelPorousFneqFDMPostProcessor<2,true>>{});
+                      }
+                      else {
+                        block.addPostProcessor(typeid(stage::PostStream),
+                                              boundaryLatticeR,
+                                              meta::id<TurbulentWallModelPorousFneqFDMPostProcessor<2,false>>{});
+                      }
                     }
                   }
                   else {
@@ -786,7 +813,7 @@ void setWallDistance(SuperLattice<T, DESCRIPTOR>& sLattice,
                      FunctorPtr<SuperIndicatorF<T,DESCRIPTOR::d>>&& bulkIndicator,
                      IndicatorF<T,DESCRIPTOR::d>* indicatorAnalyticalBoundary)
 {
-  int _overlap = 3;
+  int _overlap = sLattice.getOverlap();
   OstreamManager clout(std::cout, "WallDistanceSetter");
 
   auto& load = sLattice.getLoadBalancer();
@@ -830,41 +857,43 @@ void setWallDistance(BlockLattice<T,DESCRIPTOR>& block,
   // Defining boundary distance y1 and distance to exchange location y2 in wall normal direction for every boundary cell
   const T deltaR = blockGeometry.getDeltaR();
   // for each solid cell:
-  block.forSpatialLocations([&](LatticeR<DESCRIPTOR::d> solidLatticeR) {
-    // Check if cell is solid cell
-    if (boundaryIndicator(solidLatticeR)) {
-      for (int iPop=1; iPop < DESCRIPTOR::q; ++iPop) {
-        Vector<T,DESCRIPTOR::d> boundaryLatticeR(solidLatticeR + descriptors::c<DESCRIPTOR>(iPop));
-        if (blockGeometry.getNeighborhoodRadius(boundaryLatticeR) >= 1) {
-          if (blockGeometry.isInside(boundaryLatticeR)) {
-            Vector<T,DESCRIPTOR::d> boundaryPhysR{ };
-            blockGeometry.getPhysR(boundaryPhysR,boundaryLatticeR);
-            // check if neighbor is fluid cell
-            if (bulkIndicator(boundaryLatticeR)) {
-              if (indicatorAnalyticalBoundary) {
-                // Calculate surface normal
-                Vector<T,DESCRIPTOR::d> normal = indicatorAnalyticalBoundary->surfaceNormal(boundaryPhysR, deltaR);
-                T y1 = 0.;
-                // Calculate boundary distance y1 in surface normal direction
-                indicatorAnalyticalBoundary->distance(y1, boundaryPhysR, normal, blockGeometry.getIcGlob());
-                if(y1 == T(0)) {
-                  for ( int iD = 0; iD < DESCRIPTOR::d; iD++ ) {
-                    normal[iD] *= T(-1);
-                  }
+  for (int k=1; k < 3; k++) {
+    block.forSpatialLocations([&](LatticeR<DESCRIPTOR::d> solidLatticeR) {
+      // Check if cell is solid cell
+      if (boundaryIndicator(solidLatticeR)) {
+        for (int iPop=1; iPop < DESCRIPTOR::q; ++iPop) {
+          Vector<T,DESCRIPTOR::d> boundaryLatticeR(solidLatticeR + k*descriptors::c<DESCRIPTOR>(iPop));
+          if (blockGeometry.getNeighborhoodRadius(boundaryLatticeR) >= 1) {
+            if (blockGeometry.isInside(boundaryLatticeR)) {
+              Vector<T,DESCRIPTOR::d> boundaryPhysR{ };
+              blockGeometry.getPhysR(boundaryPhysR,boundaryLatticeR);
+              // check if neighbor is fluid cell
+              if (bulkIndicator(boundaryLatticeR)) {
+                if (indicatorAnalyticalBoundary) {
+                  // Calculate surface normal
+                  Vector<T,DESCRIPTOR::d> normal = indicatorAnalyticalBoundary->surfaceNormal(boundaryPhysR, deltaR);
+                  T y1 = 0.;
+                  // Calculate boundary distance y1 in surface normal direction
                   indicatorAnalyticalBoundary->distance(y1, boundaryPhysR, normal, blockGeometry.getIcGlob());
+                  if(y1 == T(0)) {
+                    for ( int iD = 0; iD < DESCRIPTOR::d; iD++ ) {
+                      normal[iD] *= T(-1);
+                    }
+                    indicatorAnalyticalBoundary->distance(y1, boundaryPhysR, normal, blockGeometry.getIcGlob());
+                  }
+                  y1 /= deltaR; // y1 in lattice units
+                  if ( util::abs(y1) > T(k) ) {
+                    y1 = util::sign(y1) * T(k);
+                  }
+                  block.get(boundaryLatticeR).template setField<descriptors::Y1>(-y1*normal);
                 }
-                y1 /= deltaR; // y1 in lattice units
-                if(y1 > T(1)) {
-                  y1 = T(1);
-                }
-                block.get(boundaryLatticeR).template setField<descriptors::Y1>(-y1*normal);
               }
             }
           }
         }
       }
-    }
-  });
+    });
+  }
 }
 
 }

@@ -109,9 +109,13 @@ std::optional<PostProcessorPromise<T,DESCRIPTOR>> getPostProcessor(DiscreteNorma
                                                                    DiscreteNormal<DESCRIPTOR> n) {
   switch (type) {
   case DiscreteNormalType::ExternalCorner:
-    return boundaryhelper::promisePostProcessorForNormal<T,DESCRIPTOR,OuterVelocityCornerProcessor3D>(n);
+    return boundaryhelper::promisePostProcessorForDynamicsNormal<T,DESCRIPTOR,
+      typename MixinDynamics::template exchange_momenta<momenta::FixedVelocityBoundaryTuple>,
+      OuterVelocityCornerProcessorOnDynamics3D>(n);
   case DiscreteNormalType::ExternalEdge:
-    return boundaryhelper::promisePostProcessorForNormalSpecial<T,DESCRIPTOR,OuterVelocityEdgeProcessor3D>(n);
+    return boundaryhelper::promisePostProcessorForDynamicsNormalSpecial<T,DESCRIPTOR,
+      typename MixinDynamics::template exchange_momenta<momenta::FixedVelocityBoundaryTuple>,
+      OuterVelocityEdgeProcessorOnDynamics3D>(n);
   default:
     return std::nullopt;
   }

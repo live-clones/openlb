@@ -39,9 +39,9 @@
 #include "cylinder3d.h"
 
 // Comment out or enable one of the following if needed:
-// #define MonteCarloSampling
+#define MonteCarloSampling
 // #define quasiMonteCarloSampling
-#define stochasticCollocationMethod
+// #define stochasticCollocationMethod
 
 /**
  * @brief UQ (Uncertainty Quantification) parameter setup:
@@ -151,7 +151,7 @@ int main( int argc, char* argv[] )
 
 #ifdef MonteCarloSampling
   // Monte Carlo sampling
-  int nq = 10; // number of samples
+  int nq = 2; // number of samples
   UncertaintyQuantification<T> uq(UQMethod::MonteCarlo);
   unsigned int seed = 123456; // fixed seed for reproducibility
   uq.initializeMonteCarlo(nq, dist, seed);
@@ -176,11 +176,8 @@ int main( int argc, char* argv[] )
   IndicatorLayer3D<T> extendedDomain( stlReader, dx );
 
   // Instantiation of a cuboidDecomposition with weights
-#ifdef PARALLEL_MODE_MPI
   const int noOfCuboids = singleton::mpi().getSize();
-#else
-  const int noOfCuboids = 7;
-#endif
+
   CuboidDecomposition3D<T> cuboidDecomposition( extendedDomain, dx, noOfCuboids );
 
   // Instantiation of a loadBalancer
@@ -256,11 +253,8 @@ int main( int argc, char* argv[] )
     IndicatorLayer3D<T> extendedDomain( stlReader, dx );
 
     // Instantiation of a cuboidDecomposition with weights
-  #ifdef PARALLEL_MODE_MPI
+
     const int noOfCuboids = singleton::mpi().getSize();
-  #else
-    const int noOfCuboids = 7;
-  #endif
 
   UnitConverterFromResolutionAndRelaxationTime<T, DESCRIPTOR> const converter(
     int {resolution},              // resolution: number of voxels per charPhysL

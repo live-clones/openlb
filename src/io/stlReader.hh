@@ -28,7 +28,6 @@
 #ifndef STL_READER_HH
 #define STL_READER_HH
 
-
 #include <iostream>
 #include <sstream>
 #include <fstream>
@@ -49,7 +48,6 @@
 #include <vtkXMLUnstructuredGridWriter.h>
 #endif
 
-// All OpenLB code is contained in this namespace.
 namespace olb {
 
 template<typename T>
@@ -841,6 +839,40 @@ bool STLmesh<T>::testRayIntersect(const std::set<unsigned int>& tris, const Vect
 }
 
 
+template<typename T>
+void STLmesh<T>::recomputeBoundingBox()
+{
+  if (_triangles.empty()) {
+    return;
+  }
+  _min = _triangles[0].point[0];
+  _max = _triangles[0].point[0];
+  for (auto& tri : _triangles) {
+    for (auto& p : tri.point) {
+      for (int i = 0; i < 3; ++i) {
+        _min[i] = util::min(_min[i], p[i]);
+        _max[i] = util::max(_max[i], p[i]);
+      }
+    }
+  }
+}
+
+template<typename T>
+void STLmesh<T>::rotate(T angle, const Vector<T,3>& axis, const Vector<T,3>& pivot)
+{
+  const Vector<T,3> a = normalize(axis);
+  const T c = util::cos(angle);
+  const T s = util::sin(angle);
+  for (auto& tri : _triangles) {
+    for (auto& p : tri.point) {
+      const Vector<T,3> r = p - pivot;                       // Rodrigues' rotation about the axis
+      p = pivot + r*c + crossProduct(a, r)*s + a*(a*r)*(T{1}-c);
+    }
+    tri.init();  // refresh normal + ray precompute from the rotated points (edge lengths preserved)
+  }
+  recomputeBoundingBox();
+}
+
 /*
  * STLReader functions
  */
@@ -850,6 +882,9 @@ STLreader<T>::STLreader(const std::string fName, T voxelSize, T stlSize,
   : _voxelSize(voxelSize),
     _stlSize(stlSize),
     _overlap(overlap),
+    _method(method),
+    _treeMax(max),
+    _tree(nullptr),
     _fName(fName),
     _mesh(fName, stlSize),
     _verbose(verbose),
@@ -861,7 +896,23 @@ STLreader<T>::STLreader(const std::string fName, T voxelSize, T stlSize,
     clout << "Voxelizing ..." << std::endl;
   }
 
+  buildTree();
+
+  if (_verbose) {
+    print();
+  }
+  if (_verbose) {
+    clout << "Voxelizing ... OK" << std::endl;
+  }
+}
+
+template<typename T>
+void STLreader<T>::buildTree()
+{
+  delete _tree;  // nullptr on first call, the old tree on a rebuild (e.g. rotate)
+
   Vector<T,3> extension = _mesh.getMax() - _mesh.getMin();
+  T max = _treeMax;
   if ( util::nearZero(max) ) {
     max = util::max(extension[0], util::max(extension[1], extension[2])) + _voxelSize;
   }
@@ -896,7 +947,7 @@ STLreader<T>::STLreader(const std::string fName, T voxelSize, T stlSize,
   }
 
   /// Indicate nodes of the tree. (Inside/Outside)
-  switch (method) {
+  switch (_method) {
   case RayMode::Robust:
     indicate1();
     break;
@@ -913,13 +964,13 @@ STLreader<T>::STLreader(const std::string fName, T voxelSize, T stlSize,
     indicate2();
     break;
   }
+}
 
-  if (_verbose) {
-    print();
-  }
-  if (_verbose) {
-    clout << "Voxelizing ... OK" << std::endl;
-  }
+template<typename T>
+void STLreader<T>::rotate(T angle, const Vector<T,3>& axis, const Vector<T,3>& pivot)
+{
+  _mesh.rotate(angle, axis, pivot);
+  buildTree();
 }
 
 /*
@@ -931,6 +982,9 @@ STLreader<T>::STLreader(const std::vector<std::vector<T>> meshPoints, T voxelSiz
   : _voxelSize(voxelSize),
     _stlSize(stlSize),
     _overlap(overlap),
+    _method(method),
+    _treeMax(max),
+    _tree(nullptr),
     _fName("meshPoints.stl"),
     _mesh(meshPoints, stlSize),
     _verbose(verbose),
@@ -942,72 +996,7 @@ STLreader<T>::STLreader(const std::vector<std::vector<T>> meshPoints, T voxelSiz
     clout << "Voxelizing ..." << std::endl;
   }
 
-  Vector<T,3> extension = _mesh.getMax() - _mesh.getMin();
-  if ( util::nearZero(max) ) {
-    max = util::max(extension[0], util::max(extension[1], extension[2])) + _voxelSize;
-  }
-  int j = 0;
-  for (; _voxelSize * util::pow(2, j) < max; j++)
-    ;
-  Vector<T,3> center;
-  T radius = _voxelSize * util::pow(2, j - 1);
-
-  /// Find center of tree and move by _voxelSize/4.
-  for (unsigned i = 0; i < 3; i++) {
-    center[i] = (_mesh.getMin()[i] + _mesh.getMax()[i]) / 2. - _voxelSize / 4.;
-  }
-
-  /// Create tree
-
-  _tree = new Octree<T>(center, radius, &_mesh, j, _overlap);
-
-  /// Compute _myMin, _myMax such that they are the smallest (greatest) Voxel inside the STL.
-  for (int i = 0; i < 3; i++) {
-    this->_myMin[i] = center[i] + _voxelSize / 2.;
-    this->_myMax[i] = center[i] - _voxelSize / 2.;
-  }
-  for (int i = 0; i < 3; i++) {
-    while (this->_myMin[i] > _mesh.getMin()[i]) {
-      this->_myMin[i] -= _voxelSize;
-    }
-    while (this->_myMax[i] < _mesh.getMax()[i]) {
-      this->_myMax[i] += _voxelSize;
-    }
-    this->_myMax[i] -= _voxelSize;
-    this->_myMin[i] += _voxelSize;
-  }
-  //automaticly choose the method with minimum extension in its direction
-
-  /*if(extension[0] == std::min_element(extension.begin(), extension.end())){
-    method = 4;
-  }
-  else if(extension[1] == std::min_element(extension.begin(), extension.end())){
-    method = 5;
-  }
-  else if(extension[2] == std::min_element(extension.begin(), extension.end())){
-    method = 0;
-  }
-  */
-
-
-  // Indicate nodes of the tree. (Inside/Outside)
- switch (method) {
-  case RayMode::Robust:
-    indicate1();
-    break;
-  case RayMode::DoubleRay:
-    indicate3();
-    break;
-  case RayMode::FastRayX:
-    indicate2_Xray();
-    break;
-  case RayMode::FastRayY:
-    indicate2_Yray();
-    break;
-  default:
-    indicate2();
-    break;
-  }
+  buildTree();
 
   setNormalsOutside();
 
@@ -1363,7 +1352,9 @@ bool STLreader<T>::operator() (bool output[], const T input[])
   output[0] = false;
   if (isInsideRootTree(input)) {
     std::vector<T> tmp(input, input + 3);
-    output[0] = _tree->find(tmp)->getInside();
+    if (auto* node = _tree->find(tmp)) {
+      output[0] = node->getInside();
+    }
   }
   return true;
 }
@@ -1495,18 +1486,19 @@ bool STLreader<T>::distance(T& distance, const Vector<T,3>& origin,
          && (util::fabs(pt[1] - center[1]) < extends[1])
          && (util::fabs(pt[2] - center[2]) < extends[2])) {
     node = _tree->find(pt);
-    if (node->closestIntersection(Vector<T,3>(origin), dir, q, a)) {
+    if (node && node->closestIntersection(Vector<T,3>(origin), dir, q, a)) {
       Vector<T,3> vek(q - Vector<T,3>(origin));
       distance = norm(vek);
       return true;
     }
     else {
-      Octree<T>* tmpNode = _tree->find(pt);
-      if (tmpNode) {
-        tmpNode->intersectRayNode(pt, dir, s);
+      if (node) {
+        node->intersectRayNode(pt, dir, s);
         for (int i = 0; i < 3; i++) {
           pt[i] = s[i] + step * dir[i];
         }
+      } else {
+        break;
       }
     }
   }

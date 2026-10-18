@@ -40,7 +40,7 @@
 namespace olb {
 
 template<typename T> struct CellStatistic;
-template<typename T> class LatticeStatistics;
+template<typename T, typename DESCRIPTOR> class LatticeStatistics;
 template<typename T, typename DESCRIPTOR> struct Dynamics;
 template<typename T, typename DESCRIPTOR> class BlockLattice;
 template<typename T, typename DESCRIPTOR> class Cell;
@@ -72,7 +72,20 @@ protected:
    * Validity of neighborhood accesses via these pointers not
    * guaranteed (e.g. consider CPU_SIMD vs. CPU_SISD)
    **/
-  Vector<T*,DESCRIPTOR::q> _populations;
+  Vector<population_scalar_t<T,DESCRIPTOR>*,DESCRIPTOR::q> _populations;
+
+  /// Cache this cell's population pointers. Inherit precision reuses the block's raw
+  /// T* fast path; a reduced-precision POPULATION sources its stored (e.g. half)
+  /// pointers via the field array, so storage precision never enters getPopulationPointers.
+  Vector<population_scalar_t<T,DESCRIPTOR>*,DESCRIPTOR::q> loadPopulations(std::size_t iCell) {
+    if constexpr (precisionOf<DESCRIPTOR,descriptors::POPULATION>() == FieldPrecision::Inherit) {
+      return _block.getPopulationPointers(iCell);
+    } else {
+      return Vector<population_scalar_t<T,DESCRIPTOR>*,DESCRIPTOR::q>([&](unsigned iPop) {
+        return &_block.template getField<descriptors::POPULATION>()[iPop][iCell];
+      });
+    }
+  }
 
 public:
   using value_t = T;
@@ -91,7 +104,7 @@ public:
   void setCellId(std::size_t iCell)
   {
     _iCell = iCell;
-    _populations = _block.getPopulationPointers(iCell);
+    _populations = loadPopulations(iCell);
   }
 
   const Dynamics<T,DESCRIPTOR>* getDynamics() const;
@@ -123,9 +136,6 @@ public:
   template <typename FIELD>
   auto getField(FIELD field = FIELD()) const;
 
-  /// Copy FIELD content to given memory location
-  template <typename FIELD>
-  void computeField(T* data) const;
   /// Compute particle density on the cell
   T computeRho() const;
   /// Compute fluid velocity on the cell
@@ -155,6 +165,7 @@ requires (!concepts::LatticeDescriptor<DESCRIPTOR>)
 class Cell<T,DESCRIPTOR> { };
 
 /// Highest-level interface to Cell data
+/// \ingroup core
 template<concepts::BaseType T, concepts::LatticeDescriptor DESCRIPTOR>
 class Cell<T,DESCRIPTOR> : public ConstCell<T,DESCRIPTOR> {
 public:
@@ -173,7 +184,7 @@ public:
   /**
    * \param iPop index of the accessed distribution function
    **/
-  T& operator[](unsigned iPop);
+  decltype(auto) operator[](unsigned iPop);
 
   /// Return field accessor
   template <typename FIELD>

@@ -41,4 +41,5 @@
 #include "platform/cpu/integral.h"
 #include "platform/gpu/cuda/integral.h"
 #include "platform/gpu/hip/integral.h"
+#include "platform/gpu/sycl/integral.h"
 #endif

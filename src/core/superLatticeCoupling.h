@@ -395,6 +395,15 @@ public:
     }
   }
 
+  template <typename FIELD>
+  void setParameter(const typename AbstractCouplingO<COUPLEES>::template FieldD<FIELD>& field)
+  {
+    auto& load = _lattices.template get<0>()->getLoadBalancer();
+    for (int iC = 0; iC < load.size(); ++iC) {
+      _block[iC]->getParameters().template set<FIELD>(std::forward<decltype(field)>(field));
+    }
+  }
+
   /// Get coupling parameter FIELD for block 0
   template <typename FIELD>
   auto getParameter() const -> typename AbstractCouplingO<COUPLEES>::template FieldD<FIELD>

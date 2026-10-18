@@ -313,7 +313,7 @@ std::unique_ptr<SuperLatticeRefinement<T,DESCRIPTOR>> makeCoarseToFineCoupler(
             coarseToFine->getBlock(iC).addVertexCentered(fineLatticeR);
             // Coarse populations need to be up to date for FullTimeCoarseToFineO
             auto coarseLatticeR = (fineLatticeR / 2).withPrefix(
-              loadBalancerFine.cloc(iC));
+              loadBalancerFine.cloc(iC).value());
             coarseToFineCommunicatorCoarse.requestCell(coarseLatticeR);
           }
         }
@@ -366,7 +366,7 @@ std::unique_ptr<SuperLatticeRefinement<T,DESCRIPTOR>> makeFineToCoarseCoupler(
   auto fineToCoarse = std::make_unique<SuperLatticeRefinement<T,DESCRIPTOR>>(
     sLatticeCoarse, sLatticeFine, loadBalancerFine);
   for (int iC = 0; iC < loadBalancerFine.size(); ++iC) {
-    auto& cBlock = sLatticeCoarse.getBlock(loadBalancerFine.cloc(iC));
+    auto& cBlock = sLatticeCoarse.getBlock(loadBalancerFine.cloc(iC).value());
     cBlock.forCoreSpatialLocations([&](LatticeR<DESCRIPTOR::d> coarseLatticeR) {
       if (   f2cFrontierI.getBlockIndicatorF(iC)(2*coarseLatticeR)
           && fineBulkI->getBlockIndicatorF(iC)(2*coarseLatticeR)) {

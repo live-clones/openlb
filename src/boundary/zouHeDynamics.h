@@ -65,8 +65,15 @@ public:
   template <typename NEW_T>
   using exchange_value_type = ZouHeDynamics<
     NEW_T, DESCRIPTOR,
-    DYNAMICS, MOMENTA,
-    direction, orientation
+    typename DYNAMICS::template exchange_value_type<NEW_T>,
+    MOMENTA, direction, orientation
+  >;
+
+  template <typename NEW_DESCRIPTOR>
+  using exchange_descriptor = ZouHeDynamics<
+    T, NEW_DESCRIPTOR,
+    typename DYNAMICS::template exchange_descriptor<NEW_DESCRIPTOR>,
+    MOMENTA, direction, orientation
   >;
 
   std::type_index id() override {
@@ -167,6 +174,12 @@ public:
   template <typename NEW_T>
   using exchange_value_type = IncZouHeDynamics<NEW_T,DESCRIPTOR,
     typename DYNAMICS::template exchange_value_type<NEW_T>,
+    MOMENTA,direction,orientation
+  >;
+
+  template <typename NEW_DESCRIPTOR>
+  using exchange_descriptor = IncZouHeDynamics<T, NEW_DESCRIPTOR,
+    typename DYNAMICS::template exchange_descriptor<NEW_DESCRIPTOR>,
     MOMENTA,direction,orientation
   >;
 

@@ -1,0 +1,51 @@
+### bifurcation3d
+
+The `bifurcation3d` example simulates particulate flow through an exemplary bifurcation of the human bronchial system.
+The geometry is a splitting pipe, with one inflow and two outflows.
+The fluid is transporting micrometer-scale particles, and the escape and capture rate is computed.
+There exist two implementations of the problem.
+The first one is an Euler--Euler ansatz, meaning that the fluid phase as well as the particle phase are modelled as continua.
+The second is an Euler--Lagrange ansatz, where the particles are modelled as discrete objects.
+
+#### eulerEuler
+
+In this example, the particles are viewed as a continuum and described by an advection--diffusion equation.
+This is done similar to the thermal examples, where the temperature is the considered quantity.
+For particles, however, inertia has to be taken into account.
+This is achieved by applying the Stokes drag force to the velocity field.
+Since for these computations, also the velocity of the previous time step is required, the new descriptor `D3Q7<VELOCITY,VELOCITY2>` has to be used, that is capable of saving two velocity fields.
+For parallel execution, the communication stages may be configured as follows:
+
+```{.cpp}
+auto& communicator = sLatticeAD.getCommunicator(stage::PostCoupling());
+communicator.requestField<descriptors::VELOCITY>();
+communicator.requestField<descriptors::VELOCITY2>();
+communicator.requestOverlap(sLatticeAD.getOverlap());
+communicator.exchangeRequests();
+```
+
+Furthermore the new dynamics object `ParticleAdvectionDiffusionBGKdynamics` is required to access the saved velocity fields correctly and use them in an efficient way.
+For information on the coupling of the lattices, see the section on the advection--diffusion equation for particle flow problems.
+In this example only the Stokes drag is applied by
+
+```{.cpp}
+advDiffDragForce3D<T, NSDESCRIPTOR> dragForce( converter,radius,partRho );
+```
+
+For the simulation of particles as a continuum, also new boundary conditions are required.
+Here `setZeroDistributionBoundary` represents a unidirectional outflow condition, that removes particle concentrations that cross a boundary.
+For the usual outflow at the bottom of the bifurcation a new `AdvectionDiffusionConvectionBoundary` for advection--diffusion lattices can be applied, that approximates a Neumann boundary condition; for further reference see [@trunk:16].
+Since non-local computations (gradient is required) are performed on the external field, also a Neumann boundary condition is required that is here implemented as `boundary::ExternalField`.
+
+#### eulerLagrange
+
+The main task of this example is to show the usage of one-way coupled Lagrangian particles with $\OpenLB$.
+This example is used to show the application of the legacy particle framework, which is described in detail in the particles chapter.
+
+#### nonSphericals
+
+This example extends the `bifurcation3d` example and implements computation of motion of dilute non-spherical subgrid particles, namely, cylinders and fibres.
+A robust method is used to compute the transport and deposition of subgrid fibres that are approximated as spheroids using the Euler--Lagrange Euler--Rotation method under formulations of creeping flow conditions (see, e.g., [@tian_transport_2012]).
+The Euler rotational equations in the moving reference frame for every particle are solved at every time step, and the fibre orientation is updated.
+In addition, an orientation-dependent wall boundary condition for particle deposition is also implemented.
+For comparison, equivalent diameter methods (Haider--Levenspiel [@haider_drag_1989] and Tran--Cong [@tran-cong_drag_2004]) may also be used; see `latticeHaiderLevenspielDragForce` or `latticeTranCongDragForce` in the developer guide.

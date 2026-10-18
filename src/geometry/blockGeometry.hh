@@ -307,15 +307,22 @@ int BlockGeometry<T,D>::innerClean(int fromM, bool verbose)
 }
 
 template<typename T, unsigned D>
-void BlockGeometry<T,D>::reset(IndicatorF<T,D>& domain)
+void BlockGeometry<T,D>::reset(int toM)
 {
-  this->forCoreSpatialLocations([&](LatticeR<D> latticeR) {
-    T physR[D] { };
+  this->forSpatialLocations([&](LatticeR<D> latticeR) {
+    set(latticeR, toM);
+  });
+}
+
+template<typename T, unsigned D>
+void BlockGeometry<T,D>::reset(IndicatorF<T,D>& domain, int toM)
+{
+  this->forSpatialLocations([&](LatticeR<D> latticeR) {
+    auto physR = getPhysR(latticeR);
     bool output{};
-    getPhysR(physR, latticeR);
-    domain(&output, physR);
-    if (output) {
-      set(latticeR, 0);
+    domain(&output, physR.data());
+    if (output && get(latticeR) != 0) {
+      set(latticeR, toM);
     }
   });
 }
@@ -432,6 +439,7 @@ void BlockGeometry<T, D>::rename(int fromM, int toM, IndicatorF<T, D>& condition
     }
   });
 }
+
 template<typename T, unsigned D>
 void BlockGeometry<T,D>::rename(int fromM, int toM, LatticeR<D> offset)
 {
@@ -462,6 +470,7 @@ void BlockGeometry<T,D>::rename(int fromM, int toM, LatticeR<D> offset)
       }
     }
   });
+
   rename(1245,toM);
 }
 
@@ -559,6 +568,22 @@ void BlockGeometry<T,D>::rename(int fromM, int toM, int fluidM,
               getMaterial({latticeR[0]-testDirection[0],latticeR[1]-testDirection[1]})!=0 ) {
             set(latticeR, fromM);
           }
+        }
+      }
+    }
+  });
+}
+
+template<typename T, unsigned D>
+void BlockGeometry<T,D>::renameNeighborsOf(int fromM, int toM, int neighborM)
+{
+  using DESCRIPTOR = std::conditional_t<D==2,descriptors::D2Q9<>,descriptors::D3Q27<>>;
+  this->forCoreSpatialLocations([&](LatticeR<D> latticeR) {
+    if (get(latticeR) == fromM) {
+      for (int iPop = 1; iPop < DESCRIPTOR::q; iPop++) {
+        if (getMaterial(latticeR + descriptors::c<DESCRIPTOR>(iPop)) == neighborM) {
+          set(latticeR, toM);
+          break;
         }
       }
     }

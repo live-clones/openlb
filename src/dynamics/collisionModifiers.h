@@ -26,6 +26,7 @@
 
 #include "lbm.h"
 #include "descriptor/fields.h"
+#include "optimization/primitives/concepts.h"
 
 namespace olb {
 
@@ -62,9 +63,7 @@ using OmegaFromCell = ParameterFromCell<descriptors::OMEGA, COLLISION>;
 /// Override COLLISION parameter OMEGA with inverse of cell field TAU_EFF
 template <typename COLLISION>
 struct OmegaFromCellTauEff {
-  using parameters = typename COLLISION::parameters::template include<
-    descriptors::OMEGA
-  >;
+using parameters = typename COLLISION::parameters::template include<descriptors::OMEGA>;
 
   static std::string getName() {
     return "OmegaFromCellTauEff<" + COLLISION::getName() + ">";
@@ -80,6 +79,36 @@ struct OmegaFromCellTauEff {
     CellStatistic<V> apply(CELL& cell, PARAMETERS& parameters) any_platform {
       parameters.template set<descriptors::OMEGA>(
         V{1} / cell.template getField<descriptors::TAU_EFF>());
+      return CollisionO().apply(cell, parameters);
+    }
+  };
+};
+
+/// Override COLLISION parameter OMEGA with averaged (frozen) turbulent omega and omega
+template <typename COLLISION>
+struct FrozenOmegaFromCell {
+  using parameters = typename COLLISION::parameters;
+
+  static std::string getName() {
+    return "FrozenOmegaFromCell<" + COLLISION::getName() + ">";
+  }
+
+  template <typename DESCRIPTOR, typename MOMENTA, typename EQUILIBRIUM>
+  struct type {
+    using CollisionO = typename COLLISION::template type<DESCRIPTOR, MOMENTA, EQUILIBRIUM>;
+
+    using fields = meta::list<
+      descriptors::OMEGA,
+      descriptors::AVERAGE_TURBULENT_TAU
+    >;
+
+    static constexpr bool is_vectorizable = dynamics::is_vectorizable_v<CollisionO>;
+
+    template <concepts::Cell CELL, typename PARAMETERS, typename V=typename CELL::value_t>
+    CellStatistic<V> apply(CELL& cell, PARAMETERS& parameters) any_platform {
+      auto tau = V{1} / cell.template getField<descriptors::OMEGA>();
+      auto tauTurbulent = cell.template getField<descriptors::AVERAGE_TURBULENT_TAU>();
+      parameters.template set<descriptors::OMEGA>(V{1} / (tau + tauTurbulent));
       return CollisionO().apply(cell, parameters);
     }
   };
@@ -111,6 +140,37 @@ struct TrackAverageVelocity {
       auto iT = parameters.template get<descriptors::LATTICE_TIME>();
       auto uAvg = cell.template getField<descriptors::AVERAGE_VELOCITY>();
       cell.template setField<descriptors::AVERAGE_VELOCITY>((uAvg * (iT-1) + u) / iT);
+
+      return statistics;
+    }
+  };
+};
+
+/// Track time-averaged populations of COLLISION into cell field AVERAGE_POPULATION
+template <typename COLLISION>
+struct TrackAveragePopulation {
+  using parameters = typename COLLISION::parameters::template include<descriptors::LATTICE_TIME_T>;
+
+  static std::string getName() {
+    return "TrackAveragePopulation<" + COLLISION::getName() + ">";
+  }
+
+  template <typename DESCRIPTOR, typename MOMENTA, typename EQUILIBRIUM>
+  struct type {
+    using MomentaF = typename MOMENTA::template type<DESCRIPTOR>;
+    using CollisionO = typename COLLISION::template type<DESCRIPTOR, MOMENTA, EQUILIBRIUM>;
+
+    static constexpr bool is_vectorizable = dynamics::is_vectorizable_v<CollisionO>;
+
+    template <concepts::Cell CELL, typename PARAMETERS, typename V=typename CELL::value_t>
+    CellStatistic<V> apply(CELL& cell, PARAMETERS& parameters) any_platform {
+      auto statistics = CollisionO().apply(cell, parameters);
+
+      Vector<V,DESCRIPTOR::q> pop = cell.template getField<descriptors::POPULATION>();
+
+      auto iT = parameters.template get<descriptors::LATTICE_TIME_T>();
+      auto popAvg = cell.template getField<descriptors::AVERAGE_POPULATION>();
+      cell.template setField<descriptors::AVERAGE_POPULATION>((popAvg * (iT-1) + pop) / iT);
 
       return statistics;
     }
@@ -178,6 +238,7 @@ struct TrackAverageDensity {
     }
   };
 };
+
 
 /// Save velocity of COLLISION into cell field VELOCITY
 template <typename COLLISION>

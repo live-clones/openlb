@@ -1,0 +1,5 @@
+### bstep2d
+
+This example implements the fluid flow over a backward-facing step.
+Furthermore, it is shown how checkpointing is used to regularly save the state of the simulation.
+The 2D geometry corresponds to Armaly *et al.* [@armaly:83].

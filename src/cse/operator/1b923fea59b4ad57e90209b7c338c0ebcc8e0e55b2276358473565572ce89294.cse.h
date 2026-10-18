@@ -40,43 +40,55 @@ template <concepts::Cell CELL>
 void apply(CELL& cell) any_platform {
 using V = typename CELL::value_t;
 using DESCRIPTOR = typename CELL::descriptor_t;
-auto x9 = cell.getDynamics().getOmegaOrFallback(std::numeric_limits<V>::signaling_NaN());
+auto x28 = cell.getOmegaOrFallback(std::numeric_limits<V>::signaling_NaN());
 V v_S0 = cell.neighbor({-1,0}).computeRho();
 V v_S1 = cell.neighbor({0,-1}).computeRho();
 V v_S2 = cell.neighbor({-2,0}).computeRho();
 V v_S3 = cell.neighbor({0,-2}).computeRho();
-auto x11 = (V{0.222222222222222}*v_S0 + V{0.222222222222222}*v_S1 - V{0.0555555555555556}*v_S2 - V{0.0555555555555556}*v_S3)/x9;
-auto x12 = V{0.666666666666667}*x11;
-auto x15 = V{0.0833333333333333}*x11;
-auto x19 = V{0.166666666666667}*x11;
-auto x20 = V{0.333333333333333}*x11;
+auto x29 = V{0.666666666666667}*v_S0 + V{0.666666666666667}*v_S1 - V{0.166666666666667}*v_S2 - V{0.166666666666667}*v_S3;
 V v_V0 [DESCRIPTOR::d]; cell.computeU(v_V0);
 V v_V1 [DESCRIPTOR::d]; cell.neighbor({-1,0}).computeU(v_V1);
 V v_V2 [DESCRIPTOR::d]; cell.neighbor({-2,0}).computeU(v_V2);
-auto x10 = V{3}*v_V0[0] - V{4}*v_V1[0] + V{1}*v_V2[0];
-auto x16 = x10*x15;
 V v_V3 [DESCRIPTOR::d]; cell.computeU(v_V3);
 V v_V4 [DESCRIPTOR::d]; cell.neighbor({0,-1}).computeU(v_V4);
 V v_V5 [DESCRIPTOR::d]; cell.neighbor({0,-2}).computeU(v_V5);
-auto x14 = V{0.25}*x11*(V{1.5}*v_V0[1] - V{2}*v_V1[1] + V{0.5}*v_V2[1] + V{1.5}*v_V3[0] - V{2}*v_V4[0] + V{0.5}*v_V5[0]);
-auto x13 = V{3}*v_V3[1] - V{4}*v_V4[1] + V{1}*v_V5[1];
-auto x17 = x13*x15;
-auto x18 = x14 - x16 - x17;
-auto x21 = -x10*x20 + x13*x19;
-auto x22 = x14 + x16 + x17;
-auto x23 = x10*x19 - x13*x20;
 V v_V6 [DESCRIPTOR::d]; cell.computeU(v_V6);
-V v_S4 = 0.666666666666667*v_S0 + 0.666666666666667*v_S1 - 0.166666666666667*v_S2 - 0.166666666666667*v_S3;
-V v_P0 [DESCRIPTOR::q]; cell.getDynamics().computeEquilibrium(cell, v_S4, v_V6, v_P0);
-cell[0] = v_P0[0] + x10*x12 + x12*x13;
-cell[1] = v_P0[1] + x18;
-cell[2] = v_P0[2] + x21;
-cell[3] = v_P0[3] - x22;
-cell[4] = v_P0[4] + x23;
-cell[5] = v_P0[5] + x18;
-cell[6] = v_P0[6] + x21;
-cell[7] = v_P0[7] - x22;
-cell[8] = v_P0[8] + x23;
+V v_S4 = x29;
+V v_P0 [DESCRIPTOR::q]; cell.computeEquilibrium(v_S4, v_V6, v_P0);
+auto x0 = V{3};
+auto x30 = V{1} / (x0);
+auto x32 = ((x0)*(x0));
+auto x1 = V{1}*x30;
+auto x2 = -x1;
+auto x3 = -x29*x30/x28;
+auto x4 = V{-3};
+auto x31 = V{1}*x4;
+auto x33 = V{0.5}*x4;
+auto x5 = -x3*(v_V0[0]*x31 + V{4}*v_V1[0] - V{1}*v_V2[0]);
+auto x6 = x2*x5;
+auto x7 = -x3*(v_V3[1]*x31 + V{4}*v_V4[1] - V{1}*v_V5[1]);
+auto x8 = x2*x7;
+auto x9 = V{0.0138888888888889}*x32;
+auto x10 = V{1} - x1;
+auto x11 = x10*x5;
+auto x12 = -x3*(v_V0[1]*x33 + V{2}*v_V1[1] - V{0.5}*v_V2[1] + v_V3[0]*x33 + V{2}*v_V4[0] - V{0.5}*v_V5[0]);
+auto x34 = V{2}*x12;
+auto x13 = x10*x7;
+auto x35 = x11 + x13;
+auto x14 = x9*(-x34 + x35);
+auto x15 = V{0.0555555555555556}*x32;
+auto x16 = x15*(x11 + x8);
+auto x17 = x9*(x34 + x35);
+auto x18 = x15*(x13 + x6);
+cell[0] = v_P0[0] + x32*(V{0.222222222222222}*x6 + V{0.222222222222222}*x8);
+cell[1] = v_P0[1] + x14;
+cell[2] = v_P0[2] + x16;
+cell[3] = v_P0[3] + x17;
+cell[4] = v_P0[4] + x18;
+cell[5] = v_P0[5] + x14;
+cell[6] = v_P0[6] + x16;
+cell[7] = v_P0[7] + x17;
+cell[8] = v_P0[8] + x18;
 }
 };
 
@@ -84,4 +96,4 @@ cell[8] = v_P0[8] + x23;
 
 }
 
-// Generation Info: commit=2a9f114ed32e2878e1a64a356eda56d13e508f7d
+// Generation Info: commit=e62fb513c7fed8d9804dfb87eb8d98b331948423

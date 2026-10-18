@@ -51,6 +51,22 @@ IndicatorAirfoil2D<S>::IndicatorAirfoil2D(Vector<S,2> center, S chordLength, S c
   this->_myMax = {_center[0] + _chordLength/S(2), _center[1] + maxThickness/S(2) + computeCamber(_camberPos)};
 }
 
+// indicator function for a 2D NACA airfoil with angle of attack
+template <typename S>
+IndicatorAirfoil2D<S>::IndicatorAirfoil2D(Vector<S,2> center, S chordLength, S camber, S camberPos, S thicknessPercentage, S angleOfAttack)
+  : _center(center),
+    _chordLength(chordLength),
+    _camber(camber),
+    _camberPos(camberPos),
+    _thicknessPercentage(thicknessPercentage),
+    _angleOfAttack(angleOfAttack)
+{
+  // Set bounding box
+  S maxThickness = _chordLength * _thicknessPercentage;
+  this->_myMin = {_center[0] - _chordLength/S(2), _center[1] - maxThickness/S(2) - computeCamber(_camberPos)};
+  this->_myMax = {_center[0] + _chordLength/S(2), _center[1] + maxThickness/S(2) + computeCamber(_camberPos)};
+}
+
 template <typename S>
 Vector<S,2> const& IndicatorAirfoil2D<S>::getCenter() const
 {
@@ -114,7 +130,7 @@ S IndicatorAirfoil2D<S>::distanceFunctionDerivative(S x_0, S x, S y) const
 
 /// returns the distance from the camber line. For cambered airfoils this is only correct for points sufficiently close to the camber line, for operator function this is enough.
 template <typename S>
-Vector<S,2> IndicatorAirfoil2D<S>::distanceFromCamber(const Vector<S,2>& input)
+Vector<S,2> IndicatorAirfoil2D<S>::distanceFromCamber(const Vector<S,2>& input) const
 {
   S x = input[0];
   S y = input[1];
@@ -211,6 +227,309 @@ IndicatorAirfoil2D<S>* createIndicatorAirfoil2D(XMLreader const& params, bool ve
   return new IndicatorAirfoil2D<S>(center, chordLength, thicknessPercentage);
 }
 
+template <typename S>
+IndicatorParametricAirfoil2D<S>::IndicatorParametricAirfoil2D(Vector<S,2> center, S chordLength, const std::vector<S>& upperCoeffs,
+                                                              const std::vector<S>& lowerCoeffs, S angleOfAttack, S maxCamber, S locMaxCamber)
+  : _center(center),
+    _aerodynamicCenter(center[0] - chordLength/S(4), center[1]),
+    _chordLength(chordLength),
+    _upperSurfaceCoeffs(upperCoeffs),
+    _lowerSurfaceCoeffs(lowerCoeffs),
+    _upperDegree(upperCoeffs.size() ? upperCoeffs.size() - 1 : 0),
+    _lowerDegree(lowerCoeffs.size() ? lowerCoeffs.size() - 1 : 0),
+    _angleOfAttack(angleOfAttack),
+    _maxCamber(maxCamber),
+    _locMaxCamber(locMaxCamber)
+{
+  // Error check 1: empty coefficient vectors
+  if (_upperSurfaceCoeffs.empty() || _lowerSurfaceCoeffs.empty()) {
+    throw std::invalid_argument("Coefficient vectors must not be empty.");
+  }
+
+  // Error check 2: Leading edge check; only for symmetric airfoils, for cambered airfoils the leading edge can be different
+  if (_maxCamber == 0) {
+    if (upperCoeffs[0] != -lowerCoeffs[0]) {
+      throw std::runtime_error("Incorrect leading edge parameters for symmetric airfoil.");
+    }
+  }
+
+  // Error check 3: Upper parameters should be greater than lower parameters
+  for (std::size_t i = 0; i < upperCoeffs.size(); ++i) {
+    if (upperCoeffs[i] < lowerCoeffs[i]) {
+      throw std::runtime_error("Upper surface coefficients are larger than lower surface coefficients!");
+    }
+  }
+
+  // Error check 4: Trailing edge angle boattail check
+  if (util::atan(upperCoeffs.back()) < util::atan(lowerCoeffs.back())){
+    throw std::runtime_error("Incorrect trailing edge parameters.");
+  }
+
+  // Error check 5: location of maximum camber should be reached at the airfoil
+  if (_locMaxCamber < S(0) || _locMaxCamber > S(1)) {
+    throw std::runtime_error("Incorrect location of maximum camber.");
+  }
+
+  // Defining the minimum and maximum
+  const int N = 1000;
+  S minY, maxY;
+
+  for (int i = 0; i <= N; ++i) {
+    S x =  static_cast<S>(i) / static_cast<S>(N);
+    S yc = camberLine(x);
+
+    // Simple approach:
+    // https://en.wikipedia.org/wiki/NACA_airfoil one sees that the following is not correct
+    // thickness must be applied othogonal on camberline (-> this result in error of naca as thickness profil but is neglected at this point)
+    S yUpper = yc + classFunction(x)*shapeFunction(_upperSurfaceCoeffs, x);
+    S yLower = yc + classFunction(x)*shapeFunction(_lowerSurfaceCoeffs, x);
+
+    if (i == 0){
+      minY = yLower;
+      maxY = yUpper;
+    }
+    if (yUpper > maxY) maxY = yUpper;
+    if (yLower < minY) minY = yLower;
+  }
+
+  // Set bounding box
+  this->_myMin = {_center[0] - _chordLength/S(2), _center[1] + minY};
+  this->_myMax = {_center[0] + _chordLength/S(2), _center[1] + maxY};
+}
+
+template <typename S>
+Vector<S,2> const& IndicatorParametricAirfoil2D<S>::getCenter() const
+{
+  return _center;
+}
+
+template <typename S>
+Vector<S,2> const& IndicatorParametricAirfoil2D<S>::getAerodynamicCenter() const
+{
+  return _aerodynamicCenter;
+}
+
+template <typename S>
+S IndicatorParametricAirfoil2D<S>::classFunction(S x, S N1, S N2) const
+{
+  return util::pow(x, N1) * util::pow(1 - x, N2);
+}
+
+template <typename S>
+S IndicatorParametricAirfoil2D<S>::classFunctionDerivative(S x, S N1, S N2) const
+{
+  return N1*util::pow(x, N1-1)*util::pow(1-x, N2) - N2*util::pow(x, N1)*util::pow(1-x, N2-1);
+}
+
+template <typename S>
+S IndicatorParametricAirfoil2D<S>::shapeFunction(const std::vector<S>& coeffs, S x) const {
+  std::size_t n = coeffs.size();
+  if (n == 0) return S(0);
+  S y = S(0);
+  S binom = S(1);
+
+  // Weighted linear combination of Bernstein polynomials.
+  for (std::size_t i = 0; i<n; i++) {
+    // S binom = 1./ (n * std::beta(n-i, i+1));
+    y += coeffs[i] * binom * util::pow(1-x, n-1-i) * util::pow(x, i);
+    if (i < n - 1) {
+      binom = binom * S(n - 1 - i) / S(i + 1);
+    }
+  }
+  return y;
+}
+
+template <typename S>
+S IndicatorParametricAirfoil2D<S>::shapeFunctionDerivative(const std::vector<S>& coeffs, S x) const {
+  std::size_t n = coeffs.size();
+  if (n == 0) return S(0);
+  S dy_dx = S(0);
+  S binom = S(1);
+
+  // Weighted linear combination of Bernstein polynomial derivatives.
+  for (std::size_t i = 0; i<n; i++) {
+    // S binom = 1./ (n * std::beta(n-i, i+1));
+    dy_dx += coeffs[i] * binom * (i*util::pow(1-x, n-1-i)*util::pow(x, i-1) - (n-1-i)*util::pow(1-x, n-2-i)*util::pow(x, i));
+    if (i < n - 1) {
+      binom = binom * S(n - 1 - i) / S(i + 1);
+    }
+  }
+  return dy_dx;
+}
+
+template <typename S>
+S IndicatorParametricAirfoil2D<S>::camberLine(S x) const
+{
+  const S m = _maxCamber;
+  const S p = _locMaxCamber;
+
+  if (m == S(0)) {
+    return S(0);
+  }
+
+  if (x < p) {
+    return m/(p*p) * (2*p*x - x*x);
+  }
+  else {
+    return m/((1-p)*(1-p)) * ((1-2*p) + 2*p*x - x*x);
+  }
+}
+
+template <typename S>
+S IndicatorParametricAirfoil2D<S>::camberSlope(S x) const
+{
+  const S m = _maxCamber;
+  const S p = _locMaxCamber;
+
+  if (m == S(0)) {
+    return S(0);
+  }
+
+  if (x < p) {
+    return 2*m/(p*p) * (p - x);
+  }
+  else {
+    return 2*m/((1-p)*(1-p)) * (p - x);
+  }
+}
+
+template <typename S>
+S IndicatorParametricAirfoil2D<S>::camberAngle(S x) const
+{
+  return util::atan(camberSlope(x));
+}
+
+
+template <typename S>
+void IndicatorParametricAirfoil2D<S>::transformPoint(S& x, S& y) const
+{
+    // Adjust the coordinates relative to the center of the airfoil.
+    x -= _aerodynamicCenter[0];
+    y -= _aerodynamicCenter[1];
+    // Translating the point back relative to the leading edge
+    x += _chordLength/S(4);
+}
+
+// returns true if point is inside the airfoil
+template <typename S>
+bool IndicatorParametricAirfoil2D<S>::operator()(bool output[], const S input[])
+{
+  S x = input[0];
+  S y = input[1];
+
+  // Transform the point to the airfoil's local coordinate system
+  transformPoint(x, y);
+
+  // Check if point is within the airfoil
+  // Step 1: Check if the point’s x-coordinate is within airfoil camber
+  if (x < 0 || x > _chordLength) {
+    output[0] = false;
+    return true;
+  }
+
+  // Step 2: Check if y-coordinate is between the airfoil's upper and lower surface
+  output[0] = (y <= camberLine(x/_chordLength)+classFunction(x/_chordLength)*shapeFunction(_upperSurfaceCoeffs, x/_chordLength) &&
+               y >= camberLine(x/_chordLength)+classFunction(x/_chordLength)*shapeFunction(_lowerSurfaceCoeffs, x/_chordLength));
+  return true;
+}
+
+template <typename S>
+bool IndicatorParametricAirfoil2D<S>::normal(Vector<S,2>& normal, const Vector<S,2>& origin, const Vector<S,2>& direction, int iC){
+    S x = origin[0];
+    S y = origin[1];
+
+    // Transform the point to the airfoil's local coordinate system
+    if (_angleOfAttack == 0.0){
+      transformPoint(x, y);
+    } else {
+      x -= _aerodynamicCenter[0];
+      y -= _aerodynamicCenter[1];
+
+      S cos_theta = util::cos(_angleOfAttack);
+      S sin_theta = util::sin(_angleOfAttack);
+
+      S x_rot =  x * cos_theta - y * sin_theta;
+      S y_rot =  x * sin_theta + y * cos_theta;
+
+      x = x_rot + _chordLength/S(4);
+      y = y_rot;
+    }
+
+    S yUpper = camberLine(x/_chordLength)+classFunction(x/_chordLength)*shapeFunction(_upperSurfaceCoeffs, x/_chordLength);
+    S yLower = camberLine(x/_chordLength)+classFunction(x/_chordLength)*shapeFunction(_lowerSurfaceCoeffs, x/_chordLength);
+
+    S yCamber = 0.5*(yUpper + yLower);
+
+    S dy_dx = 0.;
+    if (y <= yCamber){
+      dy_dx = classFunctionDerivative(x/_chordLength)*shapeFunction(_lowerSurfaceCoeffs, x/_chordLength) +
+              classFunction(x/_chordLength)*shapeFunctionDerivative(_lowerSurfaceCoeffs, x/_chordLength);
+      normal[0] = dy_dx;
+      normal[1] = -1.0;
+    } else {
+      dy_dx = classFunctionDerivative(x/_chordLength)*shapeFunction(_upperSurfaceCoeffs, x/_chordLength) +
+              classFunction(x/_chordLength)*shapeFunctionDerivative(_upperSurfaceCoeffs, x/_chordLength);
+      normal[0] = -dy_dx;
+      normal[1] = 1.0;
+    }
+
+  return true;
+}
+
+template <typename S>
+S IndicatorParametricAirfoil2D<S>::signedDistance(const Vector<S,2>& input)
+{
+  S signedDistance = S{1};
+  return signedDistance;
+}
+
+// Compute maximum thickness analytically given upper surface coefficients
+template <typename S>
+S IndicatorParametricAirfoil2D<S>::computeMaxThickness(const std::vector<S>& upperCoeffs) const
+{
+  // Sample the profile at many points along chord to find maximum thickness
+  // thickness(x) = 2 * classFunction(x) * shapeFunction(upperCoeffs, x)
+  const int Ns = 500; // Number of sampling points
+  S maxThickness = S(0);
+
+  for (int i = 0; i <= Ns; ++i) {
+    S x_norm = static_cast<S>(i) / static_cast<S>(Ns); // Normalized chord position [0, 1]
+    S thickness = 2.0 * classFunction(x_norm) * shapeFunction(upperCoeffs, x_norm);
+    if (thickness > maxThickness) {
+      maxThickness = thickness;
+    }
+  }
+
+  return maxThickness * _chordLength; // Scale by chord length
+}
+
+// Normalize coefficients to achieve target thickness
+template <typename S>
+void IndicatorParametricAirfoil2D<S>::normalizeCoefficientsToThickness(
+    std::vector<S>& upperCoeffs,
+    std::vector<S>& lowerCoeffs,
+    S targetThickness) const
+{
+  // Compute current maximum thickness
+  S currentThickness = computeMaxThickness(upperCoeffs);
+
+  // Avoid division by zero
+  if (currentThickness < std::numeric_limits<S>::epsilon()) {
+    return;
+  }
+
+  // Calculate scaling factor
+  S scaleFactor = targetThickness / currentThickness;
+
+  // Scale both upper and lower coefficients uniformly
+  for (std::size_t i = 0; i < upperCoeffs.size(); ++i) {
+    upperCoeffs[i] *= scaleFactor;
+  }
+  for (std::size_t i = 0; i < lowerCoeffs.size(); ++i) {
+    lowerCoeffs[i] *= scaleFactor;
+  }
+}
+
 // Warning : the cuboid is only defined parallel to the plans x=0 and y=0 !!!
 // For other cuboids, please use the parallelepiped version
 template <typename S>
@@ -302,6 +621,109 @@ S IndicatorCuboid2D<S>::signedDistance( const Vector<S,2>& input )
   return sdf::box(prot, Vector<S,2>(S(.5)*_xLength, S(.5)*_yLength));
 }
 
+template <typename S>
+bool IndicatorCuboid2D<S>::distance(S& distance, const Vector<S,2>& origin, const Vector<S,2>& direction,  int iC)
+
+{
+  S left   = _center[0] - S(0.5) * _xLength;
+  S right  = _center[0] + S(0.5) * _xLength;
+  S bottom = _center[1] - S(0.5) * _yLength;
+  S top    = _center[1] + S(0.5) * _yLength;
+
+  S i = direction[0];
+  S j = direction[1];
+
+  S aMin, ai = S(10.), aj = S(10.);
+
+  if (i > 0) {
+    ai = right - origin[0];
+  }
+  else if (i < 0) {
+    ai = origin[0] - left;
+  }
+  if (j > 0) {
+    aj = top - origin[1];
+  }
+  else if (j < 0) {
+    aj = origin[1] - bottom;
+  }
+
+  aMin = util::min(ai, aj);
+
+  // absolute distance in direction of c
+  distance = aMin * util::norm<2>(direction);
+
+  if (util::isnan(distance)) {
+    distance = -1;
+    return false;
+  }
+  else {
+    return true;
+  }
+}
+
+template <typename S>
+bool IndicatorCuboid2D<S>::normal(Vector<S,2>& normal, const Vector<S,2>& origin, const Vector<S,2>& direction, int iC)
+{
+  constexpr S epsilon = S(1e-4);
+  S x = origin[0];
+  S y = origin[1];
+  S cx = _center[0];
+  S cy = _center[1];
+
+  S left   = cx - S(0.5) * _xLength;
+  S right  = cx + S(0.5) * _xLength;
+  S bottom = cy - S(0.5) * _yLength;
+  S top    = cy + S(0.5) * _yLength;
+
+  bool onLeft   = util::abs(x - left)   < epsilon;
+  bool onRight  = util::abs(x - right)  < epsilon;
+  bool onBottom = util::abs(y - bottom) < epsilon;
+  bool onTop    = util::abs(y - top)    < epsilon;
+
+  bool hasNormal = false;
+  if (onRight && onTop)
+  {
+    normal = {S(1) / util::sqrt(S(2)), S(1) / util::sqrt(S(2))};
+    hasNormal = true;
+  }
+  else if (onRight && onBottom)
+  {
+    normal = {S(1) / util::sqrt(S(2)), S(-1) / util::sqrt(S(2))};
+    hasNormal = true;
+  }
+  else if (onLeft && onTop)
+  {
+    normal = {S(-1) / util::sqrt(S(2)), S(1) / util::sqrt(S(2))};
+    hasNormal = true;
+  }
+  else if (onLeft && onBottom)
+  {
+    normal = {S(-1) / util::sqrt(S(2)), S(-1) / util::sqrt(S(2))};
+    hasNormal = true;
+  }
+  else if (onRight)
+  {
+    normal = {S(1), S(0)};
+    hasNormal = true;
+  }
+  else if (onLeft)
+  {
+    normal = {S(-1), S(0)};
+    hasNormal = true;
+  }
+  else if (onTop)
+  {
+    normal = {S(0), S(1)};
+    hasNormal = true;
+  }
+  else if (onBottom)
+  {
+    normal = {S(0), S(-1)};
+    hasNormal = true;
+  }
+  return hasNormal;
+}
 
 // creator function
 template <typename S>
@@ -367,27 +789,27 @@ bool IndicatorCircle2D<S>::distance(S& distance, const Vector<S,2>& origin, cons
   // norm of direction
   a = util::sqrt(a);
 
-  S b = 2.*((origin[0] - _center[0])*direction[0] +
+  S b = S(2.)*((origin[0] - _center[0])*direction[0] +
             (origin[1] - _center[1])*direction[1])/a;
   S c = -_radius2 + (origin[0] - _center[0])*(origin[0] - _center[0])
         + (origin[1] - _center[1])*(origin[1] - _center[1]);
 
   // discriminant
-  S d = b*b - 4.*c;
+  S d = b*b - S(4.)*c;
   if (d < 0) {
     return false;
   }
 
-  S x1 = (- b + util::sqrt(d)) *0.5;
-  S x2 = (- b - util::sqrt(d)) *0.5;
+  S x1 = (- b + util::sqrt(d)) * S(0.5);
+  S x2 = (- b - util::sqrt(d)) * S(0.5);
 
   // case if origin is inside the sphere
-  if ((x1<0.) || (x2<0.)) {
-    if (x1>0.) {
+  if ((x1<S(0.)) || (x2<S(0.))) {
+    if (x1>S(0.)) {
       distance = x1;
       return true;
     }
-    if (x2>0.) {
+    if (x2>S(0.)) {
       distance = x2;
       return true;
     }
@@ -448,10 +870,10 @@ IndicatorEllipse2D<S>::IndicatorEllipse2D(Vector<S,2> center, S a, S b, S theta)
      _a(a),
      _b(b),
      _theta(theta),
-     _thetaRadian(theta * M_PI / 180.)
+     _thetaRadian(theta * M_PI / S(180.))
 {
-  this->_myMin = {_center[0] - 1.1*_a * util::cos(_thetaRadian), _center[1] - 1.1*_b * util::cos(_thetaRadian)};
-  this->_myMax = {_center[0] + 1.1*_a * util::cos(_thetaRadian), _center[1] + 1.1*_b * util::cos(_thetaRadian)};
+  this->_myMin = {_center[0] - S(1.1) * _a * util::cos(_thetaRadian), _center[1] - S(1.1) * _b * util::cos(_thetaRadian)};
+  this->_myMax = {_center[0] + S(1.1) * _a * util::cos(_thetaRadian), _center[1] + S(1.1) * _b * util::cos(_thetaRadian)};
 }
 
 template <typename S>
@@ -500,9 +922,7 @@ bool IndicatorEllipse2D<S>::operator()(bool output[], const S input[])
 }
 
 template <typename S>
-bool IndicatorEllipse2D<S>::distance(S& distance,
-                                     const Vector<S,2>& point,
-                                     const Vector<S,2>& direction, int iC)
+bool IndicatorEllipse2D<S>::distance(S& distance, const Vector<S,2>& origin, const Vector<S,2>& direction, int iC)
 {
     S a                 = _a;
     S b                 = _b;
@@ -510,52 +930,51 @@ bool IndicatorEllipse2D<S>::distance(S& distance,
     S theta             = _thetaRadian;
     S i = direction[0];
     S j = direction[1];
-    S A, B, C;
     S t[2] = { };
     S dist[2] = { };
 
-    S dx = point[0] - center[0];
-    S dy = point[1] - center[1];
+    S dx = origin[0] - center[0];
+    S dy = origin[1] - center[1];
 
-    A = (i * cos(theta) + j * sin(theta)) * (i * cos(theta) + j * sin(theta)) * b * b + (-i * sin(theta) + j * cos(theta)) * (-i * sin(theta) + j * cos(theta)) * a * a;
-    B = 2 * (dx * cos(theta) + dy * sin(theta)) * (i * cos(theta) + j * sin(theta)) * b * b
-      + 2 * (-dx * sin(theta) + dy * cos(theta)) * (-i * sin(theta) + j * cos(theta)) * a * a;
-    C = (dx * cos(theta) + dy * sin(theta)) * (dx * cos(theta) + dy * sin(theta)) * b * b
-      + (-dx * sin(theta) + dy * cos(theta)) * (-dx * sin(theta) + dy * cos(theta)) * a * a - a * a * b * b;
+    S A = (i * util::cos(theta) + j * util::sin(theta)) * (i * util::cos(theta) + j * util::sin(theta)) * b * b + (-i * util::sin(theta) + j * util::cos(theta)) * (-i * util::sin(theta) + j * util::cos(theta)) * a * a;
+    S B = S(2) * (dx * util::cos(theta) + dy * util::sin(theta)) * (i * util::cos(theta) + j * util::sin(theta)) * b * b
+      + S(2) * (-dx * util::sin(theta) + dy * util::cos(theta)) * (-i * util::sin(theta) + j * util::cos(theta)) * a * a;
+    S C = (dx * util::cos(theta) + dy * util::sin(theta)) * (dx * util::cos(theta) + dy * util::sin(theta)) * b * b
+      + (-dx * util::sin(theta) + dy * util::cos(theta)) * (-dx * util::sin(theta) + dy * util::cos(theta)) * a * a - a * a * b * b;
 
-    t[0] = (-B + sqrt(B * B - 4 * A * C)) / (2 * A);
-    t[1] = (-B - sqrt(B * B - 4 * A * C)) / (2 * A);
+    t[0] = (-B + util::sqrt(B * B - S(4) * A * C)) / (S(2) * A);
+    t[1] = (-B - util::sqrt(B * B - S(4) * A * C)) / (S(2) * A);
 
-    dist[0] = t[0] * sqrt(i * i + j * j);
-    dist[1] = t[1] * sqrt(i * i + j * j);
+    dist[0] = t[0] * util::sqrt(i * i + j * j);
+    dist[1] = t[1] * util::sqrt(i * i + j * j);
 
-    if (std::isnan(dist[0]) || std::isnan(dist[1])) {
-      distance = -1;
+    if (util::isnan(dist[0]) || util::isnan(dist[1])) {
+      distance = S(-1);
       return false;
     }
     else {
-      distance = std::min(std::abs(dist[0]), std::abs(dist[1]));
+      distance = util::min(util::abs(dist[0]), util::abs(dist[1]));
       return true;
     }
 }
 
 template <typename S>
-bool IndicatorEllipse2D<S>::normal(Vector<S,2>& nxny, Vector<S,2> point) const
+bool IndicatorEllipse2D<S>::normal(Vector<S,2>& normal, const Vector<S,2>& origin, const Vector<S,2>& direction, int iC)
 {
-  S x = point[0] - _center[0];
-  S y = point[1] - _center[1];
+  S x = origin[0] - _center[0];
+  S y = origin[1] - _center[1];
 
-  S nx = (2 * (x * cos(_thetaRadian) + y * sin(_thetaRadian)) * cos(_thetaRadian)) / (_a * _a) + (2 * (x * sin(_thetaRadian) - y * cos(_thetaRadian)) * sin(_thetaRadian)) / (_b * _b);
-  S ny = (2 * (x * cos(_thetaRadian) + y * sin(_thetaRadian)) * sin(_thetaRadian)) / (_a * _a) - (2 * (x * sin(_thetaRadian) - y * cos(_thetaRadian)) * cos(_thetaRadian)) / (_b * _b);
+  S nx = (S(2) * (x * util::cos(_thetaRadian) + y * util::sin(_thetaRadian)) * util::cos(_thetaRadian)) / (_a * _a) + (S(2) * (x * util::sin(_thetaRadian) - y * util::cos(_thetaRadian)) * util::sin(_thetaRadian)) / (_b * _b);
+  S ny = (S(2) * (x * util::cos(_thetaRadian) + y * util::sin(_thetaRadian)) * util::sin(_thetaRadian)) / (_a * _a) - (S(2) * (x * util::sin(_thetaRadian) - y * util::cos(_thetaRadian)) * util::cos(_thetaRadian)) / (_b * _b);
 
-  S length = std::sqrt(nx * nx + ny * ny);
+  S length = util::sqrt(nx * nx + ny * ny);
 
-  if (! std::isnan(nx) && ! std::isnan(ny)) {
-    nxny = {nx / length, ny / length};
+  if (! util::isnan(nx) && ! util::isnan(ny)) {
+    normal = {nx / length, ny / length};
     return true;
   }
   else {
-    nxny = {0., 0.};
+    normal = {S(0.), S(0.)};
     return false;
   }
 }

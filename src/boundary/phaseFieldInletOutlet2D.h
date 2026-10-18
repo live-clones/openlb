@@ -91,11 +91,68 @@ void setConvectivePhaseFieldBoundary(BlockLattice<T,DESCRIPTOR>& block, BlockInd
   });
 }
 
+///Initialising the setNeumannPhaseFieldBoundary function on the superLattice domain in 2d
+template<typename T, typename DESCRIPTOR>
+void setNeumannPhaseFieldBoundary(SuperLattice<T, DESCRIPTOR>& sLattice, SuperGeometry<T,2>& superGeometry, int material)
+{
+  setNeumannPhaseFieldBoundary<T,DESCRIPTOR>(sLattice, superGeometry.getMaterialIndicator(material));
+}
+
+///Initialising the setNeumannPhaseFieldBoundary function on the superLattice domain
+template<typename T, typename DESCRIPTOR>
+void setNeumannPhaseFieldBoundary(SuperLattice<T, DESCRIPTOR>& sLattice, FunctorPtr<SuperIndicatorF2D<T>>&& indicator)
+{
+  OstreamManager clout(std::cout, "setNeumannPhaseFieldBoundary");
+
+  for (int iCloc = 0; iCloc < sLattice.getLoadBalancer().size(); iCloc++) {
+    setNeumannPhaseFieldBoundary<T,DESCRIPTOR>(sLattice.getBlock(iCloc), indicator->getBlockIndicatorF(iCloc));
+  }
+  /// Adds needed Cells to the Communicator _commBC in SuperLattice
+  int _overlap = 1;
+  {
+    auto& communicator = sLattice.getCommunicator(stage::PostCollide());
+    communicator.template requestField<descriptors::POPULATION>();
+
+    SuperIndicatorBoundaryNeighbor<T,DESCRIPTOR::d> neighborIndicator(std::forward<decltype(indicator)>(indicator), _overlap);
+    communicator.requestOverlap(_overlap, neighborIndicator);
+    communicator.exchangeRequests();
+  }
+}
+
+/// Set setNeumannPhaseFieldBoundary for any indicated cells inside the block domain
+template<typename T, typename DESCRIPTOR>
+void setNeumannPhaseFieldBoundary(BlockLattice<T,DESCRIPTOR>& block, BlockIndicatorF2D<T>& indicator)
+{
+  using namespace boundaryhelper;
+  const auto& blockGeometryStructure = indicator.getBlockGeometry();
+  const int margin = 1;
+  std::vector<int> discreteNormal(3,0);
+  blockGeometryStructure.forSpatialLocations([&](auto iX, auto iY) {
+    if (blockGeometryStructure.getNeighborhoodRadius({iX, iY}) >= margin && indicator(iX, iY)) {
+      discreteNormal = blockGeometryStructure.getStatistics().getType(iX, iY);
+      if ((abs(discreteNormal[1]) + abs(discreteNormal[2])) == 1) {
+        block.addPostProcessor(
+          typeid(stage::PostCollide), {iX,iY},
+          promisePostProcessorForNormal<T,DESCRIPTOR,FlatNeumannPhaseFieldPostProcessorA2D>(
+            Vector<int,2>(discreteNormal.data() + 1)));
+        block.addPostProcessor(
+          typeid(stage::PostStream), {iX,iY},
+          promisePostProcessorForNormal<T,DESCRIPTOR,FlatNeumannPhaseFieldPostProcessorB2D>(
+            Vector<int,2>(discreteNormal.data() + 1)));
+        block.template defineDynamics<NoCollideDynamicsExternalVelocity>({iX, iY});
+      } else {
+        throw std::runtime_error("No valid discrete normal found. This BC is not suited for curved walls.");
+      }
+    }
+  });
+}
+
 namespace boundary {
 
-template <concepts::BaseType T, concepts::LatticeDescriptor DESCRIPTOR, typename MixinDynamics>
+template <concepts::BaseType T, concepts::LatticeDescriptor DESCRIPTOR,
+          typename MixinDynamics, template<int,int> typename BoundaryMomenta>
 requires (DESCRIPTOR::d == 2)
-struct IncompressibleZouHeVelocity<T,DESCRIPTOR,MixinDynamics> {
+struct IncompressibleZouHeVelocity<T,DESCRIPTOR,MixinDynamics,BoundaryMomenta> {
 
 using value_t = T;
 using descriptor_t = DESCRIPTOR;
@@ -109,11 +166,12 @@ std::optional<DynamicsPromise<T,DESCRIPTOR>> getDynamics(DiscreteNormalType type
   switch (type) {
   case DiscreteNormalType::Flat:
     return boundaryhelper::DirectionOrientationMixinDynamicsForDirectionOrientationMomenta<T,DESCRIPTOR,
-      IncZouHeDynamics,MixinDynamics,momenta::IncDirichletVelocityBoundaryTuple
+      IncZouHeDynamics,MixinDynamics,BoundaryMomenta
     >::construct(n);
 
   case DiscreteNormalType::ExternalCorner:
-    return meta::id<typename MixinDynamics::template exchange_momenta<momenta::FixedVelocityBoundaryTuple>>{};
+    //return meta::id<typename MixinDynamics::template exchange_momenta<momenta::IncFixedVelocityBoundaryTuple>>{};
+    return meta::id<CombinedEquilibriumDynamics<T,DESCRIPTOR,MixinDynamics,momenta::EquilibriumBoundaryTuple>>();
 
   case DiscreteNormalType::InternalCorner:
     return boundaryhelper::PlainMixinDynamicsForNormalMomenta<T,DESCRIPTOR,
@@ -129,7 +187,7 @@ std::optional<PostProcessorPromise<T,DESCRIPTOR>> getPostProcessor(DiscreteNorma
                                                                    DiscreteNormal<DESCRIPTOR> n) {
   switch (type) {
   case DiscreteNormalType::ExternalCorner:
-    return boundaryhelper::promisePostProcessorForNormal<T,DESCRIPTOR,OuterVelocityCornerProcessor2D>(n);
+    return boundaryhelper::promisePostProcessorForNormal<T,DESCRIPTOR,IncOuterVelocityCornerProcessor2D>(n);
 
   default:
     return std::nullopt;
@@ -138,9 +196,10 @@ std::optional<PostProcessorPromise<T,DESCRIPTOR>> getPostProcessor(DiscreteNorma
 
 };
 
-template <concepts::BaseType T, concepts::LatticeDescriptor DESCRIPTOR, typename MixinDynamics>
+template <concepts::BaseType T, concepts::LatticeDescriptor DESCRIPTOR,
+          typename MixinDynamics, template<int,int> typename BoundaryMomenta>
 requires (DESCRIPTOR::d == 2)
-struct IncompressibleZouHePressure<T,DESCRIPTOR,MixinDynamics> {
+struct IncompressibleZouHePressure<T,DESCRIPTOR,MixinDynamics,BoundaryMomenta> {
 
 using value_t = T;
 using descriptor_t = DESCRIPTOR;
@@ -154,7 +213,7 @@ std::optional<DynamicsPromise<T,DESCRIPTOR>> getDynamics(DiscreteNormalType type
   switch (type) {
   case DiscreteNormalType::Flat:
     return boundaryhelper::DirectionOrientationMixinDynamicsForDirectionOrientationMomenta<T,DESCRIPTOR,
-      IncZouHeDynamics,MixinDynamics,momenta::IncDirichletPressureBoundaryTuple
+      IncZouHeDynamics,MixinDynamics,BoundaryMomenta
     >::construct(n);
 
   case DiscreteNormalType::ExternalCorner:
@@ -182,9 +241,10 @@ std::optional<PostProcessorPromise<T,DESCRIPTOR>> getPostProcessor(DiscreteNorma
 
 };
 
-template <concepts::BaseType T, concepts::LatticeDescriptor DESCRIPTOR, typename MixinDynamics>
+template <concepts::BaseType T, concepts::LatticeDescriptor DESCRIPTOR,
+          typename MixinDynamics, template<int,int> typename BoundaryMomenta>
 requires (DESCRIPTOR::d == 2)
-struct PhaseFieldInlet<T,DESCRIPTOR,MixinDynamics> {
+struct IncompressibleLocalVelocity<T,DESCRIPTOR,MixinDynamics,BoundaryMomenta> {
 
 using value_t = T;
 using descriptor_t = DESCRIPTOR;
@@ -197,12 +257,13 @@ std::optional<DynamicsPromise<T,DESCRIPTOR>> getDynamics(DiscreteNormalType type
                                                          DiscreteNormal<DESCRIPTOR> n) {
   switch (type) {
   case DiscreteNormalType::Flat:
-    return boundaryhelper::DirectionOrientationMixinDynamicsForPlainMomenta<T,DESCRIPTOR,
-          PhaseFieldInletDynamics,MixinDynamics,momenta::EquilibriumBoundaryTuple
-        >::construct(n);
+    return boundaryhelper::PlainMixinDynamicsForDirectionOrientationMomenta<T,DESCRIPTOR,
+      CombinedIRLBdynamics,MixinDynamics,BoundaryMomenta
+    >::construct(n);
 
   case DiscreteNormalType::ExternalCorner:
-    return meta::id<typename MixinDynamics::template exchange_momenta<momenta::FixedVelocityBoundaryTuple>>{};
+    //return meta::id<typename MixinDynamics::template exchange_momenta<momenta::IncFixedVelocityBoundaryTuple>>{};
+    return meta::id<CombinedEquilibriumDynamics<T,DESCRIPTOR,MixinDynamics,momenta::EquilibriumBoundaryTuple>>();
 
   case DiscreteNormalType::InternalCorner:
     return boundaryhelper::PlainMixinDynamicsForNormalMomenta<T,DESCRIPTOR,
@@ -210,6 +271,7 @@ std::optional<DynamicsPromise<T,DESCRIPTOR>> getDynamics(DiscreteNormalType type
     >::construct(n);
 
   default:
+    throw std::runtime_error("No valid discrete normal found. This BC is not suited for curved walls.");
     return std::nullopt;
   }
 }
@@ -218,7 +280,7 @@ std::optional<PostProcessorPromise<T,DESCRIPTOR>> getPostProcessor(DiscreteNorma
                                                                    DiscreteNormal<DESCRIPTOR> n) {
   switch (type) {
   case DiscreteNormalType::ExternalCorner:
-    return boundaryhelper::promisePostProcessorForNormal<T,DESCRIPTOR,OuterVelocityCornerProcessor2D>(n);
+    return boundaryhelper::promisePostProcessorForNormal<T,DESCRIPTOR,IncOuterVelocityCornerProcessor2D>(n);
 
   default:
     return std::nullopt;
@@ -227,6 +289,80 @@ std::optional<PostProcessorPromise<T,DESCRIPTOR>> getPostProcessor(DiscreteNorma
 
 };
 
+template <concepts::BaseType T, concepts::LatticeDescriptor DESCRIPTOR,
+          typename MixinDynamics, template<int,int> typename BoundaryMomenta>
+requires (DESCRIPTOR::d == 2)
+struct IncompressibleLocalPressure<T,DESCRIPTOR,MixinDynamics,BoundaryMomenta> {
+
+using value_t = T;
+using descriptor_t = DESCRIPTOR;
+
+CellDistance getNeighborhoodRadius() {
+  return 1;
+}
+
+std::optional<DynamicsPromise<T,DESCRIPTOR>> getDynamics(DiscreteNormalType type,
+                                                         DiscreteNormal<DESCRIPTOR> n) {
+  switch (type) {
+  case DiscreteNormalType::Flat:
+    return boundaryhelper::PlainMixinDynamicsForDirectionOrientationMomenta<T,DESCRIPTOR,
+      CombinedIRLBdynamics,MixinDynamics,BoundaryMomenta
+    >::construct(n);
+
+  default:
+    throw std::runtime_error("No valid discrete normal found. This BC is not suited for curved walls.");
+    return std::nullopt;
+  }
+}
+
+std::optional<PostProcessorPromise<T,DESCRIPTOR>> getPostProcessor(DiscreteNormalType type,
+                                                                   DiscreteNormal<DESCRIPTOR> n) {
+  return std::nullopt;
+}
+
+};
+
+template <concepts::BaseType T, concepts::LatticeDescriptor DESCRIPTOR, typename MixinDynamics>
+requires (DESCRIPTOR::d == 2)
+struct RegularizedPhaseFieldDirichlet<T,DESCRIPTOR,MixinDynamics> {
+
+using value_t = T;
+using descriptor_t = DESCRIPTOR;
+
+CellDistance getNeighborhoodRadius() {
+  return 1;
+}
+
+std::optional<DynamicsPromise<T,DESCRIPTOR>> getDynamics(DiscreteNormalType type,
+                                                         DiscreteNormal<DESCRIPTOR> n) {
+  switch (type) {
+  case DiscreteNormalType::Flat:
+    return boundaryhelper::PlainMixinDynamicsForDirectionOrientationMomenta<
+    T,DESCRIPTOR,
+    CombinedPhaseFieldRLBdynamics,
+    MixinDynamics,
+    momenta::RegularizedPhaseFieldBoundaryTuple
+      >::construct(n);
+
+  case DiscreteNormalType::ExternalCorner:
+    return boundaryhelper::NormalMixinDynamicsForPlainMomenta<T,DESCRIPTOR,
+    AdvectionDiffusionCornerDynamics2D,MixinDynamics,momenta::EquilibriumBoundaryTuple
+      >::construct(n);
+
+  case DiscreteNormalType::InternalCorner:
+    return std::nullopt;
+
+  default:
+    return std::nullopt;
+  }
+}
+
+std::optional<PostProcessorPromise<T,DESCRIPTOR>> getPostProcessor(DiscreteNormalType type,
+                                                                   DiscreteNormal<DESCRIPTOR> n) {
+  return boundaryhelper::promisePostProcessorForNormal<T,DESCRIPTOR,PhaseFieldGhostProcessor2D>(n);
+}
+
+};
 
 // needs to be reworked when there are flexible stages for new bc style
 template <concepts::BaseType T, concepts::LatticeDescriptor DESCRIPTOR, typename MixinDynamics>

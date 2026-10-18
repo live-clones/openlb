@@ -1,7 +1,9 @@
 ###########################################################################
 ## conditional settings
 
-OLB_RELEASE := 1.8r1
+# Single source of truth for the release version; read relative to this file so
+# that the example makefiles, which include it via $(OLB_ROOT), also find it.
+OLB_RELEASE := $(shell cat $(dir $(lastword $(MAKEFILE_LIST)))VERSION)
 
 GIT_VERSION := $(shell if command -v git >/dev/null 2>&1 && git rev-parse --is-inside-work-tree >/dev/null 2>&1; then git describe --always --tags --dirty; fi)
 ifneq ($(strip $(GIT_VERSION)),)
@@ -72,7 +74,7 @@ ifneq ($(filter VTK,$(FEATURES)),)
 	ifdef VTK_VERSION
 		VTK_VERSION := -$(VTK_VERSION)
 	endif
-	LDFLAGS += $(if $(filter $(FEATURES), VTK),-lvtkIOLegacy$(VTK_VERSION) -lvtkCommonCore$(VTK_VERSION) -lvtkCommonExecutionModel$(VTK_VERSION) -lvtkCommonDataModel$(VTK_VERSION) -lvtkIOCore$(VTK_VERSION) -lvtkIOXML$(VTK_VERSION) -lvtksys$(VTK_VERSION) -lvtkFiltersCore$(VTK_VERSION) -lvtkImagingCore$(VTK_VERSION) -lvtkIOParallelXML$(VTK_VERSION))
+	LDFLAGS += $(if $(filter $(FEATURES), VTK),-lvtkIOLegacy$(VTK_VERSION) -lvtkCommonCore$(VTK_VERSION) -lvtkCommonExecutionModel$(VTK_VERSION) -lvtkCommonDataModel$(VTK_VERSION) -lvtkIOCore$(VTK_VERSION) -lvtkIOXML$(VTK_VERSION) -lvtksys$(VTK_VERSION) -lvtkFiltersCore$(VTK_VERSION) -lvtkImagingCore$(VTK_VERSION))
 endif
 
 ifneq ($(filter PRECICE,$(FEATURES)),)
@@ -92,10 +94,11 @@ ifneq ($(filter GPU_CUDA,$(PLATFORMS)),)
 ## | Ada Lovelace      | 89         |
 ## | Hopper            | 90         |
 ## | Blackwell         | 100        |
-	CUDA_ARCH ?= 75
+	CUDA_ARCH ?= 80
 	# Remove spaces from user-defined CUDA_ARCH (otherwise the `--generate-code` flag is messed up)
 	CUDA_ARCH := $(strip $(CUDA_ARCH))
 
+	# Unconditional so mixed mode (which links via $(CUDA_LDFLAGS)) gets them too.
 	CUDA_LDFLAGS += -lcuda -lcudadevrt -lcudart
 
 	ifndef CUDA_CXXFLAGS
@@ -112,7 +115,7 @@ ifneq ($(filter GPU_CUDA,$(PLATFORMS)),)
 	ifndef CUDA_CXX
 		CXXFLAGS += --forward-unknown-to-host-compiler -x cu
 		CXXFLAGS += $(CUDA_CXXFLAGS)
-		LDFLAGS += $(CUDA_LDFLAGS)
+		LDFLAGS += $(CUDA_LDFLAGS) --generate-code=arch=compute_$(CUDA_ARCH),code=[compute_$(CUDA_ARCH),sm_$(CUDA_ARCH)]
 	endif
 endif
 
@@ -135,7 +138,11 @@ ifneq ($(filter GPU_HIP,$(PLATFORMS)),)
 		HIP_CXXFLAGS += -Xcudafe "--diag_suppress=implicit_return_from_non_void_function --display_error_number --diag_suppress=20014 --diag_suppress=20011"
 		HIP_CXXFLAGS += -I$(ROCM_PATH)/include -I$(ROCM_PATH)/hip/include
 
-		HIP_LDFLAGS  += -lcuda -lcudadevrt -lcudart --generate-code=arch=compute_$(CUDA_ARCH),code=[compute_$(CUDA_ARCH),sm_$(CUDA_ARCH)]
+		# $(CUDA_LDFLAGS) carries -L/run/opengl-driver/lib (the real CUDA driver,
+		# not the nixpkgs stub) so -lcuda resolves against it. Listed explicitly
+		# here because the unconditional add above is gated on GPU_CUDA, which a
+		# HIP-on-CUDA build does not set.
+		HIP_LDFLAGS  += $(CUDA_LDFLAGS) -lcuda -lcudadevrt -lcudart --generate-code=arch=compute_$(CUDA_ARCH),code=[compute_$(CUDA_ARCH),sm_$(CUDA_ARCH)]
 
 		ifndef HIP_CXX
 			HIP_CXXFLAGS += --forward-unknown-to-host-compiler -x cu 
@@ -143,9 +150,13 @@ ifneq ($(filter GPU_HIP,$(PLATFORMS)),)
 
 	else # amd
 		HIP_ARCH	 ?= native
-		HIP_ARCH     := $(strip $(HIP_ARCH))	
+		HIP_ARCH     := $(strip $(HIP_ARCH))
 		HIP_CXXFLAGS += --offload-arch=$(HIP_ARCH)
 		HIP_CXXFLAGS += -Wno-vla-cxx-extension -Wno-deprecated-non-prototype
+		# hipcc -MM with device offloading emits a binary fatbin instead of text
+		# dependencies; restrict dependency generation to the host pass (header
+		# dependencies are identical for the host and device compilation passes).
+		DEPFLAGS += --offload-host-only
 	endif
 
 

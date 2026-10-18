@@ -73,7 +73,7 @@ auto thrust_tuple_cat(ARGS&&... args) {
 
 template <typename T, unsigned D>
 auto make_thrust_tuple_of(Vector<T,D>& f) {
-  return gpu::hip::make_thrust_tuple_f<f.d>([&](unsigned iDim) {
+  return gpu::hip::make_thrust_tuple_f<D>([&](unsigned iDim) {
     return f[iDim];
   });
 }
@@ -85,7 +85,7 @@ auto make_thrust_tuple_of(T& f) {
 
 template <typename VECTOR>
 auto make_thrust_tuple_of_device_data(VECTOR& f) {
-  return gpu::hip::make_thrust_tuple_f<f.d>([&](unsigned iDim) {
+  return gpu::hip::make_thrust_tuple_f<std::decay_t<VECTOR>::d>([&](unsigned iDim) {
     return f[iDim].deviceData();
   });
 }
@@ -110,6 +110,62 @@ struct sum_of_thrust_tuple {
   }
 };
 
+template <typename T, typename OUT_PTRS, typename... FIELDS>
+__global__ void zero_elements_kernel(int* out_tags, OUT_PTRS out_ptrs, std::size_t nElements) {
+  std::size_t idx = blockIdx.x * blockDim.x + threadIdx.x;
+  if (idx >= nElements) return;
+
+  out_tags[idx] = 0;
+
+  auto zero_field = [&]<std::size_t I>() {
+    auto out_f_ptrs = thrust::get<I>(out_ptrs);
+    auto zero_dim = [&]<std::size_t D>() {
+      thrust::get<D>(out_f_ptrs)[idx] = T{};
+    };
+    constexpr std::size_t out_f_ptrs_size = thrust::tuple_size<decltype(out_f_ptrs)>::value;
+    [&]<std::size_t... Ds>(std::index_sequence<Ds...>) {
+      (zero_dim.template operator()<Ds>(), ...);
+    }(std::make_index_sequence<out_f_ptrs_size>{});
+  };
+
+  [&]<std::size_t... Is>(std::index_sequence<Is...>) {
+    (zero_field.template operator()<Is>(), ...);
+  }(std::make_index_sequence<sizeof...(FIELDS)>{});
+}
+
+template <typename T, typename IN_PTRS, typename OUT_PTRS, typename... FIELDS>
+__global__ void apply_elements_kernel(int* t_data, int* out_tags, IN_PTRS in_ptrs, OUT_PTRS out_ptrs, std::size_t nCells) {
+  std::size_t idx = blockIdx.x * blockDim.x + threadIdx.x;
+  if (idx >= nCells) return;
+
+  int tag = t_data[idx];
+  if (tag > 0) {
+    int out_idx = tag - 1;
+    out_tags[out_idx] = tag;
+
+    auto apply_field = [&]<std::size_t I>() {
+      auto in_f_ptrs = thrust::get<I>(in_ptrs);
+      auto out_f_ptrs = thrust::get<I>(out_ptrs);
+
+      auto apply_dim = [&]<std::size_t D>() {
+        atomicAdd(&(thrust::get<D>(out_f_ptrs)[out_idx]), thrust::get<D>(in_f_ptrs)[idx]);
+      };
+
+      constexpr std::size_t in_f_ptrs_size = thrust::tuple_size<decltype(in_f_ptrs)>::value;
+      [&]<std::size_t... Ds>(std::index_sequence<Ds...>) {
+        (apply_dim.template operator()<Ds>(), ...);
+      }(std::make_index_sequence<in_f_ptrs_size>{});
+    };
+
+    [&]<std::size_t... Is>(std::index_sequence<Is...>) {
+      (apply_field.template operator()<Is>(), ...);
+    }(std::make_index_sequence<sizeof...(FIELDS)>{});
+
+    t_data[idx] = 0;
+  }
+}
+
+
 }
 
 }
@@ -125,8 +181,52 @@ void IntegratePorousElementFieldsO<FIELDS...>::type<ConcreteBlockLattice<T,DESCR
 template <typename... FIELDS>
 template <typename T, typename DESCRIPTOR>
 void IntegratePorousElementFieldsO<FIELDS...>::type<ConcreteBlockLattice<T,DESCRIPTOR,Platform::GPU_HIP>>::apply(
-  ConcreteBlockLattice<T,DESCRIPTOR,Platform::GPU_HIP>& blockLattice)
-{
+  ConcreteBlockLattice<T,DESCRIPTOR,Platform::GPU_HIP>& blockLattice){
+  // Reduction runs on the default stream; wait for the collection that fed us.
+  gpu::hip::device::synchronizePostProcessor();
+// Two reduction strategies sum the per-cell porous-element fields by element tag:
+//  - default: sort_by_key + reduce_by_key
+//  - FEATURE_FSI_ATOMIC_REDUCTION: faster atomicAdd scatter
+// Neither is bit-reproducible on GPU (unstable sort, order-dependent float sums).
+// See config.git.mk.
+#ifdef FEATURE_FSI_ATOMIC_REDUCTION
+  const std::size_t nCells = blockLattice.getNcells();
+
+  auto t_data = blockLattice.template getField<fields::fsi::REDUCED_ELEMENT_TAG>()[0].deviceData();
+
+  auto& parameters = blockLattice.template getData<OperatorParameters<IntegratePorousElementFieldsO<FIELDS...>>>().parameters;
+  auto out_tags = parameters.template get<fields::array_of<fields::fsi::REDUCED_ELEMENT_TAG>>();
+  std::size_t nElements = parameters.template get<fields::fsi::REDUCED_ELEMENTS_COUNT>();
+
+  auto in_ptrs = thrust::make_tuple(
+    gpu::hip::make_thrust_tuple_of_device_data(blockLattice.template getField<FIELDS>())...
+  );
+
+  auto out_ptrs = thrust::make_tuple(
+    gpu::hip::make_thrust_tuple_of(parameters.template get<fields::array_of<FIELDS>>())...
+  );
+
+  constexpr int blockSize = 256;
+
+  if (nElements > 0){
+    int numBlocksZero = (nElements + blockSize - 1)/blockSize;
+
+    (gpu::hip::zero_elements_kernel<T, decltype(out_ptrs), FIELDS...>)<<<dim3(numBlocksZero), dim3(blockSize)>>>(
+      out_tags, out_ptrs, nElements
+    );
+  }
+
+  HIP_CHECK(hipDeviceSynchronize());
+
+  if (nCells > 0) {
+      int numBlocksApply = (nCells + blockSize - 1) / blockSize;
+          (gpu::hip::apply_elements_kernel<T, decltype(in_ptrs), decltype(out_ptrs), FIELDS...>)<<<dim3(numBlocksApply), dim3(blockSize)>>>(
+          t_data, out_tags, in_ptrs, out_ptrs, nCells
+      );
+  }
+
+  HIP_CHECK(hipDeviceSynchronize());
+#else
   auto& tag = blockLattice.template getField<fields::fsi::REDUCED_ELEMENT_TAG>();
 
   auto begin = thrust::make_zip_iterator(gpu::hip::thrust_tuple_cat(
@@ -181,6 +281,7 @@ void IntegratePorousElementFieldsO<FIELDS...>::type<ConcreteBlockLattice<T,DESCR
                  tag[0].deviceData() + nActiveCells,
                  0);
   }
+#endif
 }
 
 }

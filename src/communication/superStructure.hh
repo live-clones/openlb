@@ -39,6 +39,9 @@ SuperStructure<T,D>::SuperStructure(CuboidDecomposition<T,D>& cuboidDecompositio
     _overlap(overlap),
     clout(std::cout, "SuperStructure" + std::to_string(D) + "D")
 {
+  // Ensure the cuboid neighbor cache is populated for halo/communication setup.
+  // This automates what cases previously had to do via buildNeighborCache().
+  _cuboidDecomposition.buildNeighborCache(_overlap);
 }
 
 template<typename T, unsigned D>

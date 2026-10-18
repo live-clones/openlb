@@ -300,7 +300,7 @@ T getResults( MyCase& myCase,
     SuperLatticeField2D<T, CHDESCRIPTOR, STATISTIC> phi( sLatticeCH );
     phi.getName() = "phi";
 
-    SuperLatticeExternalScalarField2D<T, NSDESCRIPTOR, RHO> rho_L( sLatticeNS );
+    SuperLatticeField2D<T, NSDESCRIPTOR, RHO> rho_L( sLatticeNS );
     AnalyticalConst2D<T,T> ConversionDensity_( converter.getConversionFactorDensity() );
     SuperLatticeFfromAnalyticalF2D<T, NSDESCRIPTOR> ConversionDensity(ConversionDensity_, sLatticeNS);
     SuperIdentity2D<T,T> rho ( rho_L * ConversionDensity );
@@ -471,7 +471,6 @@ int main( int argc, char *argv[] )
     myCaseParameters.set<parameters::INTERFACE_WIDTH>(4.);// interface thickness [lattice units]
     myCaseParameters.set<parameters::THETA >(100.);       // contact angle in degrees [deg]
   }
-  myCaseParameters.fromCLI(argc, argv);
 
   /// === Step 3: Create Mesh ===
   Mesh mesh = createMesh(myCaseParameters);

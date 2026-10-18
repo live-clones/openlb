@@ -34,6 +34,7 @@
 
 #include "io/ostreamManager.h"
 #include "io/fileName.h"
+#include "io/textTable.h"
 
 #include "core/util.h"
 #include "core/unitConverter.h"
@@ -80,35 +81,38 @@ struct AdsorptionConverter : public UnitConverter<T, DESCRIPTOR> {
   }
 
   void print(std::ostream &clout) const override {
-      clout << "----------------- UnitConverter information -----------------" << std::endl;
-      clout << "-- Parameters:" << std::endl;
-      clout << "Resolution:                       N=              " << this->getResolution() << std::endl;
-      clout << "Lattice velocity:                 latticeU=       " << this->getCharLatticeVelocity() << std::endl;
-      clout << "Lattice relaxation frequency:     omega=          " << this->getLatticeRelaxationFrequency() << std::endl;
-      clout << "Lattice relaxation time:          tau=            " << this->getLatticeRelaxationTime() << std::endl;
-      clout << "Characteristic length(m):         charL=          " << this->getCharPhysLength() << std::endl;
-      clout << "Characteristic speed(m/s):        charU=          " << this->getCharPhysVelocity() << std::endl;
-      clout << "Phys. concentration(kg/m^d):      charC=          " << this->getPhysDensity() << std::endl;
-      clout << "Phys. diffusivity (m^2/s):        Diffusivity=    " << this->getPhysDiffusivity() << std::endl;
-      clout << "Phys. viscosity (m^2/s):          Viscosity=      " << this->getPhysViscosity() << std::endl;
-      clout << "Schmidt Number:                   Sc=             " << this->getSchmidtNumber() << std::endl;
-      clout << "Reynolds number:                  reynoldsNumber= " << this->getReynoldsNumber() << std::endl;
-      clout << "Mach number:                      machNumber=     " << this->getMachNumber() << std::endl;
-      clout << "Fourier number:                   fourierNumber=  " << this->getFourierNumber() << std::endl;
-      clout << std::endl;
+      using Align = io::text::Table::Align;
+      clout << io::text::section("Adsorption Unit Converter") << std::endl;
+      io::text::Table parameters({{"Parameter"}, {"Symbol"}, {"Value", Align::Right}});
+      parameters.row("Resolution",                  "N",              this->getResolution());
+      parameters.row("Lattice velocity",            "latticeU",       this->getCharLatticeVelocity());
+      parameters.row("Lattice relaxation frequency","omega",          this->getLatticeRelaxationFrequency());
+      parameters.row("Lattice relaxation time",     "tau",            this->getLatticeRelaxationTime());
+      parameters.row("Char. length [m]",            "charL",          this->getCharPhysLength());
+      parameters.row("Char. speed [m/s]",           "charU",          this->getCharPhysVelocity());
+      parameters.row("Concentration [kg/m^d]",      "charC",          this->getPhysDensity());
+      parameters.row("Diffusivity [m^2/s]",         "Diffusivity",    this->getPhysDiffusivity());
+      parameters.row("Viscosity [m^2/s]",           "Viscosity",      this->getPhysViscosity());
+      parameters.row("Schmidt number",              "Sc",             this->getSchmidtNumber());
+      parameters.row("Reynolds number",             "reynoldsNumber", this->getReynoldsNumber());
+      parameters.row("Mach number",                 "machNumber",     this->getMachNumber());
+      parameters.row("Fourier number",              "fourierNumber",  this->getFourierNumber());
+      parameters.render(clout);
 
-      clout << "-- Conversion factors:" << std::endl;
-      clout << "Voxel length(m):                  physDeltaX=     " << this->getConversionFactorLength() << std::endl;
-      clout << "Time step(s):                     physDeltaT=     " << this->getConversionFactorTime() << std::endl;
-      clout << "Velocity factor(m/s):             physVelocity=   " << this->getConversionFactorVelocity() << std::endl;
-      clout << "Density factor(kg/m^3):           physDensity=    " << this->getConversionFactorDensity() << std::endl;
-      clout << "Mass factor(kg):                  physMass=       " << this->getConversionFactorMass() << std::endl;
-      clout << "Viscosity factor(m^2/s):          physViscosity=  " << this->getConversionFactorViscosity() << std::endl;
-      clout << "Diffusivity factor(m^2/s):        physDiffusivity=" << this->getConversionFactorDiffusivity() << std::endl;
-      clout << "Force factor(N):                  physForce=      " << this->getConversionFactorForce() << std::endl;
-      clout << "Pressure factor(N/m^2):           physPressure=   " << this->getConversionFactorPressure() << std::endl;
-      clout << "Particle density factor:                          " << this->getConversionFactorParticleDensity() << std::endl;
-      clout << "-------------------------------------------------------------" << std::endl;
+      clout << std::endl;
+      clout << io::text::section("Conversion Factors") << std::endl;
+      io::text::Table factors({{"Factor"}, {"Symbol"}, {"Value", Align::Right}});
+      factors.row("Voxel length [m]",       "physDeltaX",      this->getConversionFactorLength());
+      factors.row("Time step [s]",          "physDeltaT",      this->getConversionFactorTime());
+      factors.row("Velocity [m/s]",         "physVelocity",    this->getConversionFactorVelocity());
+      factors.row("Density [kg/m^3]",       "physDensity",     this->getConversionFactorDensity());
+      factors.row("Mass [kg]",              "physMass",        this->getConversionFactorMass());
+      factors.row("Viscosity [m^2/s]",      "physViscosity",   this->getConversionFactorViscosity());
+      factors.row("Diffusivity [m^2/s]",    "physDiffusivity", this->getConversionFactorDiffusivity());
+      factors.row("Force [N]",              "physForce",       this->getConversionFactorForce());
+      factors.row("Pressure [N/m^2]",       "physPressure",    this->getConversionFactorPressure());
+      factors.row("Particle density factor","",                this->getConversionFactorParticleDensity());
+      factors.render(clout);
   }
 
   using UnitConverter<T,DESCRIPTOR>::print;

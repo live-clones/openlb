@@ -43,6 +43,7 @@ namespace olb {
 
 
 /// Super class maintaining block lattices for a cuboid decomposition
+/// \ingroup core
 template <typename T, typename DESCRIPTOR>
 class SuperLattice final : public SuperStructure<T,DESCRIPTOR::d>
                          , public BufferSerializable {
@@ -60,17 +61,29 @@ private:
   /// Map of custom background stages and any associated one-off tasks
   std::map<std::type_index,std::vector<std::future<void>>> _backgroundTasks;
 
+  /// Component name assigned by the owning Case
+  std::string _name;
   /// Statistics of the super structure
-  LatticeStatistics<T> _statistics;
+  LatticeStatistics<T,DESCRIPTOR> _statistics;
   /// Specifies if statistics are to be calculated
   /**
    * Enabled by default, needed for e.g. ConstRhoBGK dynamics.
    **/
   bool _statisticsEnabled;
+  /// Specifies if statistics need to be computed
+  bool _statisticsUpdateNeeded = false;
+  /// Whether registered-field reduction operators have been installed
+  bool _statisticsFieldsInstalled = false;
+  /// Whether any block's dynamics consumes a live-statistics parameter (globally reduced)
+  bool _consumesLiveStatistics = false;
   /// Aggregate global statistics
   void collectStatistics();
+
   /// False iff initialize was not yet called
   bool _initialized = false;
+
+  /// True iff the streaming exchange is selector-restricted (directional)
+  bool _directionalStreaming = false;
 
 public:
   constexpr static unsigned d = DESCRIPTOR::d;
@@ -115,7 +128,7 @@ public:
   { }
 
   SuperLattice(const SuperLattice&) = delete;
-  ~SuperLattice() = default;
+  ~SuperLattice();
 
   /// Return BlockLattice with local index locC
   BlockLattice<T,DESCRIPTOR>& getBlock(int locC) {
@@ -145,9 +158,12 @@ public:
 
   /// Set processing context of block lattices
   /**
-   * Used to sync data between device and host
+   * Used to sync data between device and host. When switching to Evaluation the
+   * overlap is communicated beforehand; pass communicate=false to only perform
+   * the device-to-host sync without triggering the Full-stage exchange (e.g. in
+   * tests that deliberately shape a selective halo).
    **/
-  void setProcessingContext(ProcessingContext context);
+  void setProcessingContext(ProcessingContext context, bool communicate=true);
   /// Set processing context of FIELD_TYPE in block lattices
   /**
    * Used to sync data between device and host
@@ -161,8 +177,10 @@ public:
   /// Perform full overlap communication if needed
   void communicate() override;
 
-  LatticeStatistics<T>& getStatistics();
-  const LatticeStatistics<T>& getStatistics() const;
+  LatticeStatistics<T,DESCRIPTOR>& getStatistics();
+  const LatticeStatistics<T,DESCRIPTOR>& getStatistics() const;
+  /// Whether any block's dynamics consumes a live-statistics parameter
+  bool consumesLiveStatistics() const { return _consumesLiveStatistics; }
   /// Switch Statistics on (default on)
   void setStatisticsOn();
   /// Switch Statistics off (default on)
@@ -171,6 +189,16 @@ public:
    **/
   void setStatisticsOff();
 
+  /// Set the component name; forwarded internally to the lattice statistics identity
+  void setName(const std::string& name) {
+    _name = name;
+    _statistics.setName(name);
+  }
+  /// Component name assigned by the owning Case (empty if unnamed)
+  const std::string& getName() const {
+    return _name;
+  }
+
   const UnitConverter<T,DESCRIPTOR>& getUnitConverter() const {
     if (!_converter) {
       throw std::runtime_error("Unit converter not defined");
@@ -178,15 +206,23 @@ public:
     return *_converter;
   }
   /// Replaces internal unit converter by copying the given converter
-  template <typename _DESCRIPTOR>
+  template <typename _T, typename _DESCRIPTOR>
+  void setUnitConverter(const ParametersD<_T, _DESCRIPTOR>& params) {
+    _converter.reset(new UnitConverter<T,DESCRIPTOR>(params));
+  }
+
+  template <concepts::LatticeDescriptor _DESCRIPTOR>
   void setUnitConverter(const UnitConverter<T,_DESCRIPTOR>& converter) {
     _converter.reset(new UnitConverter<T,DESCRIPTOR>(converter));
   }
-  /// Replaces internal unit converter by taking ownership of the given converter
-  void setUnitConverter(UnitConverter<T,DESCRIPTOR>* converter) {
-    _converter.reset(converter);
+
+  template <typename CONVERTER, typename... ARGS>
+    requires (std::is_same_v<CONVERTER, UnitConverter<T,DESCRIPTOR>>)
+    void setUnitConverter(ARGS&&... args) {
+      _converter.reset(new CONVERTER(std::forward<ARGS>(args)...));
   }
-  /// Constructs the internal unit converter in place for given arguments
+
+    /// Constructs the internal unit converter in place for given arguments
   template <typename CONVERTER, typename ARG1, typename ARG2, typename... ARGS>
   void setUnitConverter(ARG1&& arg1, ARG2&& arg2, ARGS&&... args) {
     _converter.reset(new CONVERTER(
@@ -196,6 +232,9 @@ public:
   }
   /// Constructs the internal unit converter in place for given arguments
   template <typename HEAD, typename... TAIL>
+    requires (sizeof...(TAIL) > 0
+              || !(   std::is_same_v<std::decay_t<HEAD>, UnitConverter<T,DESCRIPTOR>>
+                   || concepts::AnyParametersD<HEAD>))
   void setUnitConverter(HEAD&& head, TAIL&&... tail) {
     setUnitConverter<UnitConverter<T,DESCRIPTOR>>(
       std::forward<HEAD&&>(head),
@@ -324,6 +363,49 @@ public:
                    IndicatorF<T,DESCRIPTOR::d>& indicator,
                    FunctorPtr<SuperF<DESCRIPTOR::d,T,T>>&& field);
 
+  /// Allocate FIELD storage on the indicated domain without writing values
+  /**
+   * A sparse field materialises storage for exactly the indicated cells. A dense field
+   * allocates its whole-lattice array (the region is immaterial). Use this instead of a
+   * default-valued defineField when the intent is only to reserve where a field lives.
+   **/
+  template <typename FIELD>
+  void allocateField(FunctorPtr<SuperIndicatorF<T,DESCRIPTOR::d>>&& indicator);
+  /// Allocate FIELD storage on cells of a particular material number
+  template <typename FIELD>
+  void allocateField(SuperGeometry<T,DESCRIPTOR::d>& sGeometry, int material);
+  /// Ensure a dense FIELD's whole-lattice array exists on every block (sparse fields rejected:
+  /// they reserve no tiles here, so use defineField over the write region instead)
+  template <typename FIELD>
+  void allocateField();
+
+  /// Select the runtime storage mode of a sparse-capable FIELD across all blocks.
+  /**
+   * FieldStorage::Sparse keeps tile-backed storage (materialise per region via allocateField).
+   * FieldStorage::Dense switches to a flat per-cell buffer equivalent to a dense field. No-op for
+   * a field that is not sparse-capable. Call during setup, before values are written.
+   **/
+  template <typename FIELD>
+  void setFieldStorage(FieldStorage mode);
+  /// Geometry-adaptive variant: store FIELD densely when the indicated region covers more than
+  /// denseThreshold of the lattice, else keep it sparse and materialise exactly that region.
+  template <typename FIELD>
+  void setFieldStorage(FunctorPtr<SuperIndicatorF<T,DESCRIPTOR::d>>&& region,
+                       double denseThreshold = 0.5);
+
+  /// Set the runtime tile shape of a sparse-capable FIELD across all blocks.
+  /**
+   * A sparse column groups cells into fixed-capacity tiles. The shape (tx,ty,tz with
+   * tx*ty*tz == the tile capacity, power-of-two extents) controls how a 3D region maps
+   * onto tiles and the tile grid is aligned to the core origin so surface tiles pack
+   * tightly. The runtime capacity (tx*ty*tz) is bounded by FIELD's compile-time tile
+   * capacity (default 64). `capacity`, if given, must equal the shape product and only
+   * serves as an explicit cross-check. The default 1x1x64 is bit-identical to plain linear
+   * storage. No-op for a field that is not sparse-capable. Call during setup, before writes.
+   **/
+  template <typename FIELD>
+  void setTileShape(sparse::TileShape shape, unsigned capacity = 0);
+
   /// Update PARAMETER in all dynamics and post processors
   /**
    * e.g. SuperLattice::setParameter<OMEGA>(0.6) sets the parameter
@@ -395,9 +477,15 @@ public:
   void collideAndStream();
 
   void collide();
-  void AndStream();
+  void stream();
   // Revert streaming direction for adjoint simulations
   void revertStreaming();
+  /// Fall back to the dense streaming exchange
+  /**
+   * For lattices whose padding populations are consumed beyond forward
+   * propagation (reverted streaming, refinement couplings).
+   **/
+  void requireDenseStreamingExchange();
 
   /// Subtract constant offset from the density
   void stripeOffDensityOffset(T offset);
@@ -409,6 +497,13 @@ public:
   /// Add a non-local post-processing step
   template <typename STAGE=stage::PostStream>
   void addPostProcessor(PostProcessorPromise<T,DESCRIPTOR>&& promise);
+  /// Remove a non-local post-processing step, returns whether one was removed
+  /**
+   * Only safe at a device sync point. Issue on all ranks for a globally
+   * consistent removal, mirroring how addPostProcessor is distributed.
+   **/
+  template <typename STAGE=stage::PostStream>
+  bool removePostProcessor(PostProcessorPromise<T,DESCRIPTOR>&& promise);
 
   /// Executes post processors for STAGE
   /**

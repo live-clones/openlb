@@ -62,5 +62,23 @@ public:
   bool operator() (T output[], const int input[]) override;
 };
 
+template <typename T, typename DESCRIPTOR, typename FIELD, typename CONDITION>
+class SuperLatticeFieldConditioned3D final : public SuperLatticeF3D<T,DESCRIPTOR> {
+public:
+    // Added T value here to match implementation
+    SuperLatticeFieldConditioned3D(SuperLattice<T,DESCRIPTOR>& sLattice, T value);
+    T _value;
+};
+
+// --- BlockLattice Class ---
+template <typename T, typename DESCRIPTOR, typename FIELD, typename CONDITION>
+class BlockLatticeFieldConditioned3D final : public BlockLatticeF3D<T,DESCRIPTOR> {
+public:
+    // Added T value here to match implementation
+    BlockLatticeFieldConditioned3D(BlockLattice<T,DESCRIPTOR>& blockLattice, T value);
+    T _value;
+    bool operator() (T output[], const int input[]) override;
+};
+
 }
 #endif

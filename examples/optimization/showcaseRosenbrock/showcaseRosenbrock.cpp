@@ -86,16 +86,16 @@ std::function<T (const std::vector<T>&)> rosenbrock
 // For simple examples, we can just write down the analytical formula for the
 // derivative
 template<typename T>
-void rosenbrockDerivAnalytical(const std::vector<T>& control,
-  std::vector<T>& derivatives)
+std::vector<T> rosenbrockDerivAnalytical(const std::vector<T>& control)
 {
-  assert((control.size() == derivatives.size()));
+  std::vector<T> derivatives(control.size());
   for (std::size_t i = 0; i < control.size(); i += 2) {
     T c1 = (control[i + 1] - control[i] * control[i]);
     T c2 = 1.0 - control[i];
     derivatives[i + 1] =  2.0 * b * c1;
     derivatives[i]     = -4.0 * b * c1 * control[i] - 2.0 * c2;
   }
+  return derivatives;
 }
 
 /* We can then instantiate the OptiCaseAnalytical, which takes the objective
@@ -130,44 +130,17 @@ OptiCaseAnalytical<U,derivatives::ADf> ocAD;
  * We select and call an optimization algorithm
  */
 
-void optimizationRosenbrock(){
-  // set parameters for optimization algorithms (mamimal number of steps etc.)
-  int dimCtrl = 4;
-  int maxIt = 1000;
-  T lambda = 1.;
-  int l = 20;
-  T startCoefH (1e-4);
-  T eps (1.e-7);
-  int maxStepAttempts = 50;
-
-  T controlEps (0);
-  bool vectorBounds = false;
-  bool verboseOn = true;
-  std::string fname = "";
-  std::string logFileName = "log";
-  bool withUpperBound = false;
-  T upperBound = T();
-  bool withLowerBound = false;
-  T lowerBound = T();
+void optimizationRosenbrock(OptimizerParametersD<T>& optiParameters){
 
   /* Select optimization algorithm. Steepest descent is the slowest but most
    * stable, LBFGS and Barzilai-Borwein are considerably faster
    */
+  OptimizerSteepestDescent<T,C> optimizerSD(N, optiParameters);
+  OptimizerLBFGS<T,C> optimizerLBFGS(N, optiParameters);
+  OptimizerBarzilaiBorwein<T,C> optimizerBB(N, optiParameters);
 
-  OptimizerSteepestDescent<T,C> optimizerSD(
-    dimCtrl, eps, maxIt, lambda, maxStepAttempts, "Wolfe",
-    verboseOn, fname, logFileName, withUpperBound, upperBound, withLowerBound,
-    lowerBound, vectorBounds, controlEps, {OptimizerLogType::control});
-  OptimizerLBFGS<T,C> optimizerLBFGS(
-    dimCtrl, eps, maxIt, lambda, maxStepAttempts, "StrongWolfe", l, startCoefH,
-    verboseOn, fname, logFileName, withUpperBound, upperBound, withLowerBound,
-    lowerBound, vectorBounds, controlEps, true, {OptimizerLogType::control});
-  OptimizerBarzilaiBorwein<T,C> optimizerBB(
-    dimCtrl, eps, maxIt, lambda, maxStepAttempts, "Wolfe",
-    verboseOn, fname, logFileName, withUpperBound, upperBound, withLowerBound,
-    lowerBound, vectorBounds, controlEps,
-    {OptimizerLogType::value, OptimizerLogType::control});
   // The last argument tells which data shall be written and plotted by gnuplot
+  optimizerLBFGS.addLogging({OptimizerLogType::control, OptimizerLogType::derivative});
 
   // Set objective functional and derivative
   ocAnalytical.setObjective(rosenbrock<T>);
@@ -175,7 +148,7 @@ void optimizationRosenbrock(){
   ocCentralDQ.setObjective(rosenbrock<T>);
   ocAD.setObjective(rosenbrock<T>, rosenbrock<U>);
 
-  //ocAnalytical.setDerivative(rosenbrockDerivAnalytical<T>);
+  ocAnalytical.setDerivative(rosenbrockDerivAnalytical<T>);
 
   // Define start value for minimum search
   ocAnalytical.getController().set({3.0, 0.0, 2.0, 0.0});
@@ -184,10 +157,10 @@ void optimizationRosenbrock(){
   ocAD.getController().set({3.0, 0.0, 2.0, 0.0});
 
   // Execute optimization
-  //optimizerLBFGS.optimize(ocAnalytical);
+  optimizerLBFGS.optimize(ocAnalytical);
   //optimizerLBFGS.optimize(ocForwardDQ);
   //optimizerLBFGS.optimize(ocCentralDQ);
-  optimizerLBFGS.optimize(ocAD);
+  //optimizerLBFGS.optimize(ocAD);
 
   // The result (minimizer) can now be accessed at optimizerLBFGS.getControl().
   // The selected data for output and their plot can be seen in files
@@ -198,11 +171,11 @@ void optimizationRosenbrock(){
   // so e.g. convergence criteria might be adjusted.
 
   // Evaluation: compare result with exact solution
-  const std::vector<T> exactSolution(dimCtrl, 1);  // exact minimum (1,1,1,...)
+  const std::vector<T> exactSolution(N, 1);  // exact minimum (1,1,1,...)
   const T errorSolution = util::euklidDistance(
-    optimizerLBFGS.getControl().data(), exactSolution.data(), dimCtrl);
+    optimizerLBFGS.getControl().data(), exactSolution.data(), N);
   const T normDerivative = util::euklidN(
-    optimizerLBFGS.getDerivative().data(), dimCtrl);
+    optimizerLBFGS.getDerivative().data(), N);
 
   // objective value at numerical solution shall be near zero
   assert (optimizerLBFGS.getObjective() < 1.0e-16);
@@ -218,7 +191,18 @@ int main(int argc, char *argv[])
 {
   initialize(&argc, &argv);
 
-  optimizationRosenbrock();
+  // set parameters for optimization algorithms (mamimal number of steps etc.)
+  OptimizerParametersD<T> optiParameters;
+  {
+    using namespace parameters;
+    optiParameters.set<optimizer::EPS>(1.e-7);
+    optiParameters.set<optimizer::MAX_OPTIMIZATION_STEPS>(1000);
+    optiParameters.set<linesearch::MAX_STEP_ATTEMPTS>(50);
+    optiParameters.set<linesearch::STEP_CONDITION>("Wolfe");
+    optiParameters.set<optimizer::VERBOSE>(true);
+  }
+
+  optimizationRosenbrock(optiParameters);
 
   return 0;
 }

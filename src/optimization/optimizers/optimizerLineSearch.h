@@ -35,6 +35,12 @@
 // All OpenLB code is contained in this namespace.
 namespace olb {
 
+namespace parameters::linesearch {
+  struct INITIAL_STEP_SIZE : public fields::TYPED_SCALAR<double,1> { };
+  struct MAX_STEP_ATTEMPTS : public fields::SCALAR<100> { };
+  struct STEP_CONDITION : public fields::STRING<"StrongWolfe"> { };
+}
+
 /// All optimization code is contained in this namespace.
 namespace opti {
 
@@ -125,6 +131,35 @@ public:
       exit(1);
     }
 
+  };
+
+  OptimizerLineSearch(int dimCtrl,
+                      OptimizerParametersD<S>& optimizerParameters,
+                      std::vector<OptimizerLogType> gplotAnalysis = {OptimizerLogType::objective}
+                    ) :
+    OptimizerLineSearch(
+      dimCtrl,
+      optimizerParameters.template get<parameters::optimizer::EPS>(),
+      optimizerParameters.template get<parameters::optimizer::MAX_OPTIMIZATION_STEPS>(),
+      optimizerParameters.template get<parameters::linesearch::INITIAL_STEP_SIZE>(),
+      optimizerParameters.template get<parameters::linesearch::MAX_STEP_ATTEMPTS>(),
+      optimizerParameters.template get<parameters::linesearch::STEP_CONDITION>(),
+      optimizerParameters.template get<parameters::optimizer::VERBOSE>(),
+      optimizerParameters.template get<parameters::optimizer::FILE_NAME>(),
+      optimizerParameters.template get<parameters::optimizer::LOG_FILE_NAME>(),
+      optimizerParameters.template get<parameters::optimizer::WITH_UPPER_BOUND>(),
+      optimizerParameters.template get<parameters::optimizer::UPPER_BOUND>(),
+      optimizerParameters.template get<parameters::optimizer::WITH_LOWER_BOUND>(),
+      optimizerParameters.template get<parameters::optimizer::LOWER_BOUND>(),
+      optimizerParameters.template get<parameters::optimizer::VECTOR_BOUNDS>(),
+      optimizerParameters.template get<parameters::optimizer::CONTROL_EPS>(),
+      optimizerParameters.template get<parameters::optimizer::FAIL_ON_MAX_ITER>(),
+      gplotAnalysis)
+  {
+    OstreamManager clout(std::cout, "OptimizerLineSearch");
+    clout << io::text::section("Optimizer parameters") << std::endl;
+    optimizerParameters.print(clout);
+    clout << std::endl;
   };
 
   virtual ~OptimizerLineSearch() { };
@@ -367,6 +402,7 @@ public:
 
       if (this->_verboseOn) {
         clout << "[Step " << this->_it << "][Ref " << refinementStep << "] <<<<<<<<<< lambda=" << newLambda << " <<<<<<<<<<" << std::endl;
+        this->print(this->_it);
       }
 
       if (this->_withUpperBound||this->_withLowerBound) {

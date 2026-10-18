@@ -102,7 +102,7 @@ StochasticSGSdynamics<T,DESCRIPTOR,MOMENTA>::StochasticSGSdynamics (
 template<typename T, typename DESCRIPTOR, typename MOMENTA>
 CellStatistic<T> StochasticSGSdynamics<T,DESCRIPTOR,MOMENTA>::collide(
   Cell<T,DESCRIPTOR>& cell,
-  LatticeStatistics<T>& statistics )
+  LatticeStatistics<T,DESCRIPTOR>& statistics )
 {
   T rho, u[DESCRIPTOR::d], pi[util::TensorVal<DESCRIPTOR >::n];
 

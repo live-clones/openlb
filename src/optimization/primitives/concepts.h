@@ -59,16 +59,6 @@ concept DifferentiableFunctor = requires() {
   requires FieldList<typename FUNCTOR::fields_t>;
 };
 
-//template <typename DYNAMICS>
-//concept DifferentiableDynamics = requires () {
-  // TODO: This requires refactoring of all dynamics
-  // but is requires to omit the necessiry to put all
-  // accessed fields in the DESCRIPTOR when one uses
-  // adjoint optimization in OpenLB.
-
-  // requires FieldList<typename DYNAMICS::fields>;
-//};
-
 }
 
 }

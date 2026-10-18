@@ -28,17 +28,132 @@
 #include <type_traits>
 #include <stdexcept>
 #include <optional>
+#include <cstdint>
 #include "core/meta.h"
 #include "core/vector.h"
 #include "utilities/aliases.h"
 
 #include "core/platform/column.h"
+#include "core/half.h"
 #include "core/matrixView.h"
+#include "tag.h"
 
 namespace olb {
 
 /// Forward declaration of Expr type used for code generation
 class Expr;
+
+// FieldStorage lives at the column layer (core/platform/column.h)
+
+namespace descriptors {
+namespace tag {
+
+/// Per-field marker base so a store_layout override is findable by first_with_base
+template <typename FIELD>
+struct store_layout_base : public DESCRIPTOR_TAG { };
+
+/// Descriptor tag overriding FIELD's storage class for this descriptor only.
+/// The storage class is required and explicit: store_layout<F, FieldStorage::Sparse>.
+template <typename FIELD, FieldStorage STORAGE>
+struct store_layout : public store_layout_base<FIELD> {
+  using field_t = FIELD;
+  static constexpr FieldStorage storage = STORAGE;
+};
+
+/// Per-field marker base so a store_precision override is findable by first_with_base
+template <typename FIELD>
+struct store_precision_base : public DESCRIPTOR_TAG { };
+
+/// Descriptor tag overriding FIELD's storage precision for this descriptor only,
+/// orthogonal to store_layout: store_precision<F, FieldPrecision::F16>.
+template <typename FIELD, FieldPrecision PRECISION>
+struct store_precision : public store_precision_base<FIELD> {
+  using field_t = FIELD;
+  static constexpr FieldPrecision precision = PRECISION;
+};
+
+}
+}
+
+/// Storage class a FIELD self-declares, defaulting to dense columns
+template <typename FIELD>
+constexpr FieldStorage storageOf() {
+  if constexpr (requires { { FIELD::storage } -> std::convertible_to<FieldStorage>; }) {
+    return FIELD::storage;
+  } else {
+    return FieldStorage::Dense;
+  }
+}
+
+/// Storage class of FIELD within DESCRIPTOR: a store_layout override wins, else the
+/// field's own self-declared hint, else dense.
+template <typename DESCRIPTOR, typename FIELD>
+constexpr FieldStorage storageOf() {
+  if constexpr (requires { typename DESCRIPTOR::all_t; }) {
+    using override_t = typename DESCRIPTOR::all_t::template first_with_base<descriptors::tag::store_layout_base<FIELD>>;
+    if constexpr (!std::is_void_v<override_t>) {
+      return override_t::storage;
+    } else {
+      return storageOf<FIELD>();
+    }
+  } else {
+    return storageOf<FIELD>();
+  }
+}
+
+/// Storage precision a FIELD self-declares, defaulting to Inherit (the lattice T)
+template <typename FIELD>
+constexpr FieldPrecision precisionOf() {
+  if constexpr (requires { { FIELD::precision } -> std::convertible_to<FieldPrecision>; }) {
+    return FIELD::precision;
+  } else {
+    return FieldPrecision::Inherit;
+  }
+}
+
+/// Storage precision of FIELD within DESCRIPTOR: a store_precision override wins,
+/// else the field's own self-declared hint, else Inherit.
+template <typename DESCRIPTOR, typename FIELD>
+constexpr FieldPrecision precisionOf() {
+  if constexpr (requires { typename DESCRIPTOR::all_t; }) {
+    using override_t = typename DESCRIPTOR::all_t::template first_with_base<descriptors::tag::store_precision_base<FIELD>>;
+    if constexpr (!std::is_void_v<override_t>) {
+      return override_t::precision;
+    } else {
+      return precisionOf<FIELD>();
+    }
+  } else {
+    return precisionOf<FIELD>();
+  }
+}
+
+/// The storage scalar a floating field element resolves to under a precision.
+/// Guarded so non-floating elements (int material, size_t ids, Expr codegen,
+/// ADf adjoint) and Inherit pass through unchanged -- precision only ever
+/// re-types genuine floats, keeping the axis orthogonal to compute and codegen.
+template <typename E, FieldPrecision P>
+using precision_scalar_t =
+  std::conditional_t<!std::is_floating_point_v<E> || P == FieldPrecision::Inherit, E,
+    std::conditional_t<P == FieldPrecision::F16, half,
+    std::conditional_t<P == FieldPrecision::F32, float,
+                       double>>>;
+
+/// Whether FIELD opts into sparse (tile-backed) storage
+template <typename FIELD>
+constexpr bool isSparseField() {
+  return storageOf<FIELD>() == FieldStorage::Sparse;
+}
+
+/// Compile-time tile capacity a sparse FIELD self-declares (power of two), defaulting to 64.
+/// This is the fixed per-tile cell count of the field's SparseColumn.
+template <typename FIELD>
+constexpr unsigned tileCapacityOf() {
+  if constexpr (requires { { FIELD::tile_capacity } -> std::convertible_to<unsigned>; }) {
+    return FIELD::tile_capacity;
+  } else {
+    return 64;
+  }
+}
 
 namespace descriptors {
 
@@ -92,7 +207,6 @@ struct FIELD_BASE {
   }
 };
 
-struct SCALAR_FIELD     : public FIELD_BASE<1> { };
 struct SPATIAL_FIELD    : public FIELD_BASE<0,1> { };
 struct POPULATION_FIELD : public FIELD_BASE<0,0,1> { };
 
@@ -107,6 +221,32 @@ struct FIELD_BASE_CUSTOM_SIZE {
     return true;
   }
 };
+
+/// Single field concatenating several fields (component-wise, in order).
+template <typename... FIELDS>
+struct PACKED : public FIELD_BASE_CUSTOM_SIZE {
+  template <typename DESCRIPTOR>
+  static constexpr std::size_t size() {
+    return (FIELDS::template size<DESCRIPTOR>() + ... + std::size_t{0});
+  }
+  template <typename T, typename DESCRIPTOR>
+  static constexpr auto getInitialValue() {
+    return Vector<value_type<T>, size<DESCRIPTOR>()>{};
+  }
+  template <typename T, typename DESCRIPTOR, typename FIELD>
+  static constexpr auto isValid(FieldD<T,DESCRIPTOR,FIELD> value) {
+    return true;
+  }
+};
+
+/// Storage field for a functor result_t: a bare field, or PACKED<...> for a meta::list of fields.
+template <typename R> struct packed_field { using type = R; };
+template <typename... FIELDS> struct packed_field<meta::list<FIELDS...>> { using type = PACKED<FIELDS...>; };
+template <typename R> using packed_field_t = typename packed_field<R>::type;
+
+/// result_t normalized to a field list (a bare field becomes a one-element list).
+template <typename R>
+using field_list_of = std::conditional_t<std::is_base_of_v<meta::list_base, R>, R, meta::list<R>>;
 
 struct NEIGHBOR_FIELD : public FIELD_BASE_CUSTOM_SIZE {
   template <typename DESCRIPTOR>
@@ -285,7 +425,6 @@ struct ROTATION_FIELD_BASE : public FIELD_BASE_CUSTOM_SIZE {
       return DESCRIPTOR::d;
     }
   }
-
   template <typename T, typename DESCRIPTOR>
   static constexpr auto getInitialValue() {
     return Vector<value_type<T>, size<DESCRIPTOR>()>{};
@@ -312,10 +451,14 @@ struct LATTICE_TIME : public TYPED_FIELD_BASE<std::size_t,1> {
   }
 };
 
+struct LATTICE_TIME_T : public FIELD_BASE<1> { };
+
 struct POPULATION : public PROPAGATABLE_FIELD_BASE { };
 
-struct STATISTIC_GENERATED : public TYPED_FIELD_BASE<int,1> { };
+struct STATISTIC_GENERATED : public TYPED_FIELD_BASE<std::uint8_t,1> { };
 struct STATISTIC           : public FIELD_BASE<2> { };
+struct MDOT0               : public FIELD_BASE<1,  0, 0> { };
+struct MDOT0_COEFF         : public FIELD_BASE<1,  0, 0> { };
 
 // Field types need to be distinct (i.e. not aliases)
 // (Field size parametrized: Cs + Ds*D + Qs*Q)  Cs Ds Qs
@@ -324,7 +467,9 @@ struct WMVELOCITY           : public FIELD_BASE<0,  1, 0> { };
 struct WALL_VELOCITY        : public FIELD_BASE<0,  1, 0> { };
 struct EXTERNAL_VELOCITY    : public FIELD_BASE<0,  1, 0> { };
 struct VELOCITY2            : public FIELD_BASE<0,  1, 0> { };
+struct MOMENTUM             : public FIELD_BASE<0,  1, 0> { };
 struct DAMPING              : public FIELD_BASE<1,  0, 0> { };
+struct WALL_SHEAR_STRESS    : public FIELD_BASE<1,  1, 0> { };
 struct UX                   : public FIELD_BASE<1,  0, 0> { };
 struct UY                   : public FIELD_BASE<1,  0, 0> { };
 struct UZ                   : public FIELD_BASE<1,  0, 0> { };
@@ -341,14 +486,21 @@ struct AVERAGE_VELOCITY_X_VELOCITY : public FIELD_BASE_CUSTOM_SIZE {
     return Vector<value_type<T>, size<DESCRIPTOR>()>{};
   }
 };
+struct AVERAGE_POPULATION   : public FIELD_BASE<0,  0, 1> { };
+struct AVERAGE_DRAG         : public FIELD_BASE<1,  0, 0> { };
+struct AVERAGE_FAR_DRAG     : public FIELD_BASE<1,  0, 0> { };
+struct AVERAGE_TURBULENT_TAU : public FIELD_BASE<1,  0, 0> { };
+struct GEOMETRY_FACES       : public FIELD_BASE<0,  1, 0>{ };
 struct MAX_VELOCITY         : public FIELD_BASE<1,  0, 0> { };
 struct AVERAGE_DENSITY      : public FIELD_BASE<1,  0, 0> { };
 struct AVERAGE_PRESSURE     : public FIELD_BASE<1,  0, 0> { };
+struct PRESSURE_LEVEL       : public FIELD_BASE<1,  0, 0> { };
 struct AVERAGE_SQUARE_PRESSURE     : public FIELD_BASE<1,  0, 0> { };
 struct AVERAGE_TKE          : public FIELD_BASE<0,  1, 0> { };
 struct SOURCE               : public FIELD_BASE<1,  0, 0> { };
 struct U_TAU                : public FIELD_BASE<1,  0, 0> { };
 struct AVERAGE_U_TAU        : public FIELD_BASE<1,  0, 0> { };
+struct WSS                  : public FIELD_BASE<1,  0, 0> { };
 struct PRESSCORR            : public FIELD_BASE<1,  0, 0> { };
 struct FORCE                : public FIELD_BASE<0,  1, 0> { };
 struct EXTERNAL_FORCE       : public FIELD_BASE<0,  1, 0> { };
@@ -379,12 +531,20 @@ struct NUCL                 : public FIELD_BASE<1,  0, 0> { };
 struct MOMENTA_DENSITY      : public FIELD_BASE<1,  0, 0> { };
 struct MOMENTA_VELOCITY     : public FIELD_BASE<0,  1, 0> { };
 struct TAU                  : public FIELD_BASE<1,  0, 0> { };
+struct KNUDSEN_METRIC       : public FIELD_BASE<1,  0, 0> { };
+struct KNUDSEN_METRIC_PER_POPULATION : public FIELD_BASE<0,  0, 1> { };
+struct QUALITY_OF_INTEREST  : public FIELD_BASE<1,  0, 0> { };
 struct L2_NORM              : public FIELD_BASE<1,  0, 0> { };
 struct INTERFACE_WIDTH      : public FIELD_BASE<1,  0, 0> { };
+struct INTERFACE_WIDTH_F    : public FIELD_BASE<1,  0, 0> { };
 struct MAGIC                : public FIELD_BASE<1,  0, 0> { };
 struct G                    : public FIELD_BASE<0,  1, 0> { };
 struct EPSILON              : public FIELD_BASE<1,  0, 0> { };
 struct BODY_FORCE           : public FIELD_BASE<0,  1, 0> { };
+struct BOUNDARY_FORCE       : public FIELD_BASE<0,  1, 0> { };
+struct DRAG_FORCE           : public FIELD_BASE<0,  1, 0> { };
+struct DRAG_FORCE_COMPONENT : public FIELD_BASE<1,  0, 0> { };
+struct DRAG                 : public FIELD_BASE<1,  0, 0> { };
 struct K                    : public FIELD_BASE<1,  0, 0> { };
 struct NU                   : public FIELD_BASE<1,  0, 0> { };
 struct VELOCITY_NUMERATOR   : public FIELD_BASE<0,  1, 0> { };
@@ -413,6 +573,7 @@ struct NEIGHBOR             : public FIELD_BASE<1,  0, 0>{
 };
 struct CONVERSION           : public FIELD_BASE<1,  0, 0> { };
 struct CONVERSION_VELOCITY  : public FIELD_BASE<1,  0, 0> { };
+struct CONVERSION_PRESSURE  : public FIELD_BASE<1,  0, 0> { };
 struct NORMALIZE            : public FIELD_BASE<1,  0, 0> { };
 struct DX                   : public FIELD_BASE<1,  0, 0> { };
 struct DT                   : public FIELD_BASE<1,  0, 0> { };
@@ -447,6 +608,7 @@ struct TEMPERATURE          : public FIELD_BASE<1,  0, 0> { };
 struct SIGMA                : public FIELD_BASE<1,  0, 0> { };
 struct PSI                  : public FIELD_BASE<1,  0, 0> { };
 struct THETA                : public FIELD_BASE<1,  0, 0> { };
+struct THETA_F              : public FIELD_BASE<1,  0, 0> { };
 struct NORMGRADPSI          : public FIELD_BASE<1,  0, 0> { };
 struct PSI0                 : public FIELD_BASE<1,  0, 0> { };
 struct INTERPHASE_NORMAL    : public FIELD_BASE<0,  1, 0> { };
@@ -537,33 +699,6 @@ constexpr unsigned getIndexInFieldList()
   return 1 + getIndexInFieldList<WANTED_FIELD,FIELDS...>();
 }
 
-// Solid
-struct PRECOLLIDE_MOMENT_VECTOR : public FIELD_BASE<0,  0, 1> { };
-struct MOMENT_VECTOR            : public FIELD_BASE<0,  0, 1> { };
-struct BARED_MOMENT_VECTOR      : public FIELD_BASE<0,  0, 1> { };
-struct DISP_SOLID               : public FIELD_BASE<0,  1, 0> { };
-struct SIGMA_SOLID              : public FIELD_BASE<0,  2, 0> { };
-struct MAGIC_SOLID              : public FIELD_BASE<8,  0, 0> { };
-struct OMEGA_SOLID              : public FIELD_BASE<6,  0, 0> { };
-struct DIRICHLET_SOLID_U        : public FIELD_BASE<0,  1, 0> { };
-struct SOLID_DISTANCE_FIELD     : public FIELD_BASE<0,  0, 1> { };
-struct MIN_DIST_SOLID           : public FIELD_BASE<0,  0, 1> { };
-struct SOLID_LINK_NEEDED        : public FIELD_BASE<0,  0, 1> { };
-struct NEUMANN_SOLID_STRESS     : public FIELD_BASE<0,  2, 0> { };
-struct NEUMANN_SOLID_C          : public FIELD_BASE<3,  0, 0> { };
-struct NEUMANN_SOLID_NORMAL_X   : public FIELD_BASE<0,  0, 1> { };
-struct NEUMANN_SOLID_NORMAL_Y   : public FIELD_BASE<0,  0, 1> { };
-struct NEUMANN_SOLID_NORMAL     : public FIELD_BASE<0,  1, 0> { };
-struct UCHAR_SOLID              : public FIELD_BASE<1,  0, 0> { };
-struct OMEGA_MATRIX_SOLID       : public FIELD_BASE<0,  0, 8> { };
-struct PREVIOUS_CELL            : public FIELD_BASE<0,  0, 1> { };
-struct CURRENT_CELL             : public FIELD_BASE<0,  0, 1> { };
-struct CELL_COORDS              : public FIELD_BASE<0,  1, 0> { };
-struct BOUNDARY_COORDS_X        : public FIELD_BASE<0,  0, 1> { };
-struct BOUNDARY_COORDS_Y        : public FIELD_BASE<0,  0, 1> { };
-struct SOLID_WEIGHTS            : public FIELD_BASE<0,  0, 1> { };
-// End of Solid
-
 namespace cbc {
   struct CBC_K1           : public FIELD_BASE<1, 0, 0> { };
   struct CBC_K2           : public FIELD_BASE<1, 0, 0> { };
@@ -580,17 +715,102 @@ namespace cbc {
 
 //@}
 
+struct CELL_COORDS        : public FIELD_BASE<0,  1, 0> { };
+
+// Structural Mechanics
+struct DISPLACEMENT       : public descriptors::FIELD_BASE<0,  1, 0> { };
+struct STRESS             : public descriptors::FIELD_BASE_CUSTOM_SIZE {
+  template <typename DESCRIPTOR>
+  static constexpr unsigned size()
+  {
+    return DESCRIPTOR::d * DESCRIPTOR::d;
+  }
+
+  template <typename V, typename DESCRIPTOR>
+  static constexpr auto getInitialValue()
+  {
+    return Vector<value_type<V>, size<DESCRIPTOR>()>{};
+  }
+};
+
+struct TRACTION             : public FIELD_BASE<0,  1, 0> { };
+
 } // descriptors
 
 namespace fields {
+
+template <auto... DEFAULT_VALUE>
+struct SCALAR;
+
+template <typename TYPE, auto... DEFAULT_VALUE>
+struct TYPED_SCALAR;
+
+/// SCALAR FIELD without a default value
+template <>
+struct SCALAR<> : public descriptors::FIELD_BASE<1> { };
+
+/// SCALAR FIELD for DEFAULT_VALUE as integral type
+template <auto DEFAULT_VALUE> requires std::integral<decltype(DEFAULT_VALUE)>
+struct SCALAR<DEFAULT_VALUE> : public descriptors::TYPED_FIELD_BASE<decltype(DEFAULT_VALUE), 1> {
+
+  using TYPE = decltype(DEFAULT_VALUE);
+
+  template <typename T, typename DESCRIPTOR>
+  static constexpr auto getInitialValue() {
+    return Vector<typename descriptors::TYPED_FIELD_BASE<TYPE, 1>::template value_type<TYPE>, 1>{ DEFAULT_VALUE };
+  }
+};
+
+/// SCALAR FIELD for DEFAULT_VALUE as floating point type -> deduces the type from the descriptor defined case type
+template <auto DEFAULT_VALUE> requires std::floating_point<decltype(DEFAULT_VALUE)>
+struct SCALAR<DEFAULT_VALUE> : public descriptors::FIELD_BASE<1> {
+
+  using TYPE = decltype(DEFAULT_VALUE);
+
+  template <typename T, typename DESCRIPTOR>
+  static constexpr auto getInitialValue() {
+    return Vector<descriptors::FIELD_BASE<1>::value_type<T>, 1>{ static_cast<T>(DEFAULT_VALUE) };
+  }
+};
+
+/// TYPED_SCALAR field just taking a type
+template <typename TYPE>
+struct TYPED_SCALAR<TYPE> : public descriptors::TYPED_FIELD_BASE<TYPE, 1> {
+  using descriptors::TYPED_FIELD_BASE<TYPE, 1>::getInitialValue;
+};
+
+/// TYPED_SCALAR field taking a type and a default value
+template <typename TYPE, auto DEFAULT_VALUE>
+struct TYPED_SCALAR<TYPE, DEFAULT_VALUE> : public descriptors::TYPED_FIELD_BASE<TYPE, 1> {
+  template <typename T, typename DESCRIPTOR>
+  static constexpr auto getInitialValue() {
+    return Vector<typename descriptors::TYPED_FIELD_BASE<TYPE, 1>::template value_type<T>, 1>{ static_cast<TYPE>(DEFAULT_VALUE) };
+  }
+};
+
+/// Field type for std::strings as default values
+template <meta::FixedString DefaultString>
+struct STRING : public descriptors::TYPED_FIELD_BASE<std::string, 1> {
+  template <typename T, typename DESCRIPTOR>
+  static constexpr auto getInitialValue() {
+    using StringType = typename descriptors::TYPED_FIELD_BASE<std::string, 1>::template value_type<T>;
+    return Vector<StringType, 1>{ StringType(DefaultString.value) };
+  }
+};
+
 
 struct PHYS_R : public descriptors::FIELD_BASE<0,1> { };
 struct BLOCK_LOWER : public descriptors::FIELD_BASE<0,1> { };
 struct BLOCK_UPPER : public descriptors::FIELD_BASE<0,1> { };
 
 namespace cbc {
-  struct IS_CBC           : public descriptors::FIELD_BASE<1> { };
-  struct RHO_POST_PP      : public descriptors::FIELD_BASE<1> { };
+  struct RHO_POST_PP      : public descriptors::FIELD_BASE<1> {
+    // Seed the reference density (first reconstruction runs before any derivative PP).
+    template <typename T, typename DESCRIPTOR>
+    static constexpr auto getInitialValue() {
+      return olb::Vector<T,1>{T{1}};
+    }
+  };
   struct RHO_POST_PP_DT   : public descriptors::FIELD_BASE<1> { };
   struct U_POST_PP        : public descriptors::FIELD_BASE<0, 1> { };
   struct U_POST_PP_DT     : public descriptors::FIELD_BASE<0, 1> { };
@@ -609,7 +829,16 @@ struct STENCIL_WIDTH : public descriptors::FIELD_BASE<1> { };
 
 namespace moments {
 
-struct U : public descriptors::FIELD_BASE<0,1> { };
+// defaults to reference density so unwritten cells avoid a 1/rho divergence
+struct RHO : public descriptors::FIELD_BASE<1,0> {
+  template <typename T, typename DESCRIPTOR>
+  static constexpr auto getInitialValue() {
+    return Vector<value_type<T>, DESCRIPTOR::template size<RHO>()>(T(1.));
+  }
+};
+struct U   : public descriptors::FIELD_BASE<0,1> { };
+struct PI  : public descriptors::TENSOR { };
+struct J   : public descriptors::FIELD_BASE<0,1> { };
 
 }
 
@@ -632,14 +861,30 @@ namespace opti {
 
 /// Objective functional results, always scalar
 struct J                    : public descriptors::FIELD_BASE<1, 0, 0> { };
+struct AVERAGE_J           : public descriptors::FIELD_BASE<1, 0, 0> { };
 /// Stores populations of the primal problems for adjoint simulations
 struct F                    : public descriptors::FIELD_BASE<0, 0, 1> { };
-/// Derivative of Objective functional regarding populations
+/// Stores populations of the primal problems
+struct G                    : public descriptors::FIELD_BASE<0, 0, 1> { };
+/// Derivative of Objective functional regarding population g
+struct DJDG                 : public descriptors::FIELD_BASE<0, 0, 1> { };
+/// Derivative of Objective functional regarding population f
 struct DJDF                 : public descriptors::FIELD_BASE<0, 0, 1> { };
+struct AVERAGE_DJDF        : public descriptors::FIELD_BASE<0, 0, 1> { };
+struct DJDF_TMP             : public descriptors::FIELD_BASE<0, 0, 1> { };
 /// Regularization of objective functionals
 struct REGULARIZATION       : public descriptors::FIELD_BASE<1, 0, 0> { };
 /// Factor to balance regularization and objective
 struct REG_ALPHA            : public descriptors::FIELD_BASE<1, 0, 0> { };
+/// Stores DC_nse wrt f times adjoint NSE population
+struct DCnseDFxphi          : public descriptors::FIELD_BASE<0, 0, 1> { };
+/// Stores DC_ade wrt f times adjoint ADE population
+struct DCadeDFxlambda       : public descriptors::FIELD_BASE<0, 0, 1> { };
+/// Stores DC_nse wrt g times adjoint NSE population
+struct DCnseDGxphi          : public descriptors::FIELD_BASE<0, 0, 1> { };
+/// Stores DC_ade wrt g times adjoint ADE population
+struct DCadeDGxlambda       : public descriptors::FIELD_BASE<0, 0, 1> { };
+
 
 template <typename CONTROLS>
 struct SCALAR_FIELD_DERIVED_BY_CONTROLS : public descriptors::FIELD_BASE_CUSTOM_SIZE {
@@ -654,7 +899,7 @@ template <typename CONTROLS>
 struct DPROJECTIONDALPHA : public opti::SCALAR_FIELD_DERIVED_BY_CONTROLS<CONTROLS> {
   template <typename T, typename DESCRIPTOR>
   static constexpr auto getInitialValue() {
-    return Vector<T,SCALAR_FIELD_DERIVED_BY_CONTROLS<CONTROLS>::template size<DESCRIPTOR>()>{1.};
+    return Vector<T,SCALAR_FIELD_DERIVED_BY_CONTROLS<CONTROLS>::template size<DESCRIPTOR>()>(T(1.));
   }
 };
 /// Total derivative of the objective functional regarding controls
@@ -662,17 +907,24 @@ template <typename CONTROLS>
 struct SENSITIVITY : public opti::SCALAR_FIELD_DERIVED_BY_CONTROLS<CONTROLS> {
   template <typename T, typename DESCRIPTOR>
   static constexpr auto getInitialValue() {
-    return Vector<T,SCALAR_FIELD_DERIVED_BY_CONTROLS<CONTROLS>::template size<DESCRIPTOR>()>{0.};
+    return Vector<T,SCALAR_FIELD_DERIVED_BY_CONTROLS<CONTROLS>::template size<DESCRIPTOR>()>{};
   }
 };
+template <typename CONTROLS>
+struct AVERAGE_SENSITIVITY : public SENSITIVITY<CONTROLS>{};
+
 /// Objective functional derivative regarding optimization controls
 template <typename CONTROLS>
 struct DJDALPHA : public opti::SCALAR_FIELD_DERIVED_BY_CONTROLS<CONTROLS> {
   template <typename T, typename DESCRIPTOR>
   static constexpr auto getInitialValue() {
-    return Vector<T,SCALAR_FIELD_DERIVED_BY_CONTROLS<CONTROLS>::template size<DESCRIPTOR>()>{0.};
+    return Vector<T,SCALAR_FIELD_DERIVED_BY_CONTROLS<CONTROLS>::template size<DESCRIPTOR>()>{};
   }
 };
+
+template <typename CONTROLS>
+struct AVERAGE_DJDALPHA : public DJDALPHA<CONTROLS>{};
+
 /// Collision operator derivative regarding optimization controls
 template <typename CONTROLS>
 struct DCDALPHA : public descriptors::FIELD_MATRIX<descriptors::POPULATION,CONTROLS> {
@@ -689,6 +941,26 @@ struct DCDALPHA : public descriptors::FIELD_MATRIX<descriptors::POPULATION,CONTR
   }
 };
 
+template <typename CONTROLS>
+struct REFERENCE_CONROLS : public descriptors::FIELD_BASE_CUSTOM_SIZE {
+  template <typename DESCRIPTOR>
+  static constexpr unsigned size() {
+    return DESCRIPTOR::template size<CONTROLS>();
+  }
+
+  template <typename T, typename DESCRIPTOR>
+  static constexpr auto getInitialValue() {
+    return Vector<T,REFERENCE_CONROLS::template size<DESCRIPTOR>()>{};
+  }
+};
+
+/// Component-wise scaling of a vector-valued variable, initialized to one
+struct CONTROL_VECTOR : public descriptors::FIELD_BASE<0, 1, 0> {
+  template <typename T, typename DESCRIPTOR>
+  static constexpr auto getInitialValue() {
+    return Vector<T,DESCRIPTOR::template size<CONTROL_VECTOR>()>(T(1));
+  }
+};
 }
 
 } // olb

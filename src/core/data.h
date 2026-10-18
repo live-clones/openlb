@@ -31,6 +31,7 @@
 #include "utilities/typeIndexedContainers.h"
 
 #include <optional>
+#include <iosfwd>
 
 namespace olb {
 
@@ -107,6 +108,7 @@ private:
 
   std::function<void(Cell<Expr,DESCRIPTOR>&, std::vector<Expr>&)> _setPlaceholderExpr;
   std::function<std::vector<Expr>(Cell<Expr,DESCRIPTOR>&)> _getPlaceholderExpr;
+  std::function<bool()> _checkIfFieldIsAnArray;
 
 public:
   template <typename FIELD_TYPE>
@@ -155,6 +157,9 @@ public:
         }
       }
       return expressions;
+    }),
+    _checkIfFieldIsAnArray([]() {
+      return fields::isArray<FIELD_TYPE>();
     })
   {
     if constexpr (fields::isArray<FIELD_TYPE>()) {
@@ -190,6 +195,9 @@ public:
     return name() < rhs.name();
   }
 
+  bool checkIfFieldIsAnArray() {
+    return _checkIfFieldIsAnArray();
+  }
 };
 
 /// Container for arbitrary data instances
@@ -242,6 +250,15 @@ public:
   std::optional<TYPE*> tryAs() {
     if (TYPE* ptr = dynamic_cast<TYPE*>(_data.get())) {
       return std::optional<TYPE*>(ptr);
+    } else {
+      return std::nullopt;
+    }
+  }
+
+  template<typename TYPE>
+  std::optional<const TYPE*> tryAs() const {
+    if (const TYPE* ptr = dynamic_cast<const TYPE*>(_data.get())) {
+      return std::optional<const TYPE*>(ptr);
     } else {
       return std::nullopt;
     }
@@ -484,6 +501,26 @@ public:
     }
   }
 
+  /// Call f for each managed AnyFieldType (read only)
+  template <typename F>
+  void forEach(F f) const {
+    for (const auto& [_, field] : _map) {
+      f(*field);
+    }
+  }
+
+  /// Write a semicolon separated field storage manifest for memory introspection
+  /**
+   * One row per field array holding the value type, component count, dense byte
+   * baseline and, for a sparse field, the chosen tile layout, materialised cell
+   * count and resulting device bytes. coreCells is the block core cell count and
+   * drives the sparse fill ratio. Absent quantities are reported as -1.
+   **/
+  void writeFieldStorageCSV(std::ostream& out, std::size_t coreCells) const;
+
+  /// Human-readable field storage summary, one line per field plus a block total
+  void describeFieldStorage(std::ostream& out, std::size_t coreCells) const;
+
   /// Call f for each managed AnyFieldType of TYPE
   /**
    * Used to e.g. iterate over all field arrays
@@ -551,6 +588,14 @@ std::unique_ptr<Data<T,DESCRIPTOR>> makeSharedData(
   if (loadBalancer.isLocal(Platform::GPU_HIP)) {
     return std::unique_ptr<Data<T,DESCRIPTOR>>(
       new ConcreteData<T,DESCRIPTOR,Platform::GPU_HIP>(std::forward<ARGS&&>(args)...));
+  } else {
+    return std::unique_ptr<Data<T,DESCRIPTOR>>(
+      new ConcreteData<T,DESCRIPTOR,Platform::CPU_SISD>(std::forward<ARGS&&>(args)...));
+  }
+  #elif defined(PLATFORM_GPU_SYCL)
+  if (loadBalancer.isLocal(Platform::GPU_SYCL)) {
+    return std::unique_ptr<Data<T,DESCRIPTOR>>(
+      new ConcreteData<T,DESCRIPTOR,Platform::GPU_SYCL>(std::forward<ARGS&&>(args)...));
   } else {
     return std::unique_ptr<Data<T,DESCRIPTOR>>(
       new ConcreteData<T,DESCRIPTOR,Platform::CPU_SISD>(std::forward<ARGS&&>(args)...));

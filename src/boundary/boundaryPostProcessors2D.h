@@ -30,6 +30,7 @@
 #include "core/postProcessing.h"
 
 #include "core/operator.h"
+#include "boundaryMomentsDemand.h"
 
 namespace olb {
 
@@ -45,8 +46,36 @@ public:
 
   int getPriority() const { return 0; }
 
+  static std::vector<MomentsDemand<DESCRIPTOR::d>> getMomentsDemand() {
+    return planeFdMomentsDemand<DESCRIPTOR,direction,orientation>();
+  }
+
   template <concepts::DynamicCell CELL>
   void apply(CELL& cell) any_platform;
+
+private:
+  template <int deriveDirection, typename CELL, typename V=CELL::value_t>
+  void interpolateGradients(CELL& blockLattice, V velDeriv[DESCRIPTOR::d]) const any_platform;
+};
+
+/// Typed variant of StraightFdBoundaryProcessor2D: obtains the center cell's
+/// momenta/equilibrium from the statically known DYNAMICS and omega from the
+/// operator parameters, so no device-side dynamics dispatch is required (GPU_SYCL).
+template <typename T, typename DESCRIPTOR, typename DYNAMICS, int direction, int orientation>
+class StraightFdBoundaryProcessorOnDynamics2D {
+public:
+  static constexpr OperatorScope scope = OperatorScope::PerCellWithParameters;
+
+  using parameters = meta::list<descriptors::OMEGA>;
+
+  int getPriority() const { return 0; }
+
+  static std::vector<MomentsDemand<DESCRIPTOR::d>> getMomentsDemand() {
+    return planeFdMomentsDemand<DESCRIPTOR,direction,orientation>();
+  }
+
+  template <concepts::DynamicCell CELL, concepts::Parameters PARAMETERS>
+  void apply(CELL& cell, PARAMETERS& parameters) any_platform;
 
 private:
   template <int deriveDirection, typename CELL, typename V=CELL::value_t>
@@ -351,6 +380,49 @@ public:
     return 1;
   }
 
+  static std::vector<MomentsDemand<DESCRIPTOR::d>> getMomentsDemand() {
+    return outerVelocityCornerMomentsDemand<DESCRIPTOR::d>({xNormal,yNormal});
+  }
+
+  template <concepts::DynamicCell CELL>
+  void apply(CELL& cell) any_platform;
+};
+
+/// Typed variant of OuterVelocityCornerProcessor2D: obtains the center cell's
+/// momenta/equilibrium from the statically known DYNAMICS and omega from the
+/// operator parameters, so no device-side dynamics dispatch is required (GPU_SYCL).
+template <typename T, typename DESCRIPTOR, typename DYNAMICS, int xNormal, int yNormal>
+class OuterVelocityCornerProcessorOnDynamics2D {
+public:
+  static constexpr OperatorScope scope = OperatorScope::PerCellWithParameters;
+
+  using parameters = meta::list<descriptors::OMEGA>;
+
+  int getPriority() const {
+    return 1;
+  }
+
+  static std::vector<MomentsDemand<DESCRIPTOR::d>> getMomentsDemand() {
+    return outerVelocityCornerMomentsDemand<DESCRIPTOR::d>({xNormal,yNormal});
+  }
+
+  template <concepts::DynamicCell CELL, concepts::Parameters PARAMETERS>
+  void apply(CELL& cell, PARAMETERS& parameters) any_platform;
+};
+
+template <typename T, typename DESCRIPTOR, int xNormal, int yNormal>
+class IncOuterVelocityCornerProcessor2D {
+public:
+  static constexpr OperatorScope scope = OperatorScope::PerCell;
+
+  int getPriority() const {
+    return 1;
+  }
+
+  static std::vector<MomentsDemand<DESCRIPTOR::d>> getMomentsDemand() {
+    return outerVelocityCornerMomentsDemand<DESCRIPTOR::d>({xNormal,yNormal});
+  }
+
   template <concepts::DynamicCell CELL>
   void apply(CELL& cell) any_platform;
 };
@@ -433,6 +505,126 @@ struct FlatConvectivePhaseFieldPostProcessorB2D {
 };
 
 /**
+* This class computes the Neumann boundary condition for
+* the populations of a phase field solving LBE.
+*/
+template<typename T, typename DESCRIPTOR, int xNormal,int yNormal>
+struct FlatNeumannPhaseFieldPostProcessorA2D {
+  static constexpr OperatorScope scope = OperatorScope::PerCell;
+
+  int getPriority() const {
+    return 0;
+  }
+
+  template <typename CELL>
+  void apply(CELL& cell) any_platform{
+
+    Vector<int,2> normal{xNormal, yNormal};
+    Vector<int,2> oppositeNormal{-xNormal, -yNormal};
+    auto phi = cell.template getField<descriptors::STATISTIC>();
+    Vector<T,2> uVec = cell.template getField<descriptors::VELOCITY>();
+    T dotProduct{};
+    for (int iD=0; iD<DESCRIPTOR::d; ++iD) {
+      dotProduct += uVec[iD]*normal[iD];
+    }
+
+    if ( dotProduct > 0 ) {
+      auto cell1 = cell.neighbor(oppositeNormal);
+      for (int iPop=0; iPop < DESCRIPTOR::q; ++iPop) {
+        cell[iPop] = cell1[iPop];
+      }
+      phi[0] = cell.computeRho();
+    } else {
+      phi[0] = cell.neighbor(normal).template getField<descriptors::STATISTIC>()[0];
+      for (int iPop=0; iPop < DESCRIPTOR::q; ++iPop) {
+        cell[iPop] = equilibrium<DESCRIPTOR>::firstOrder(iPop, phi[0], uVec);
+      }
+    }
+
+    if (phi[0] > 1.0001) phi[0] = T{1};
+    if (phi[0] < -0.0001) phi[0] = T{0};
+    cell.template setField<descriptors::STATISTIC>(phi);
+  }
+
+};
+
+/**
+* This class computes the Neumann boundary condition for
+* phi at ghost nodes for a phase field solving LBE.
+*/
+template<typename T, typename DESCRIPTOR, int xNormal,int yNormal>
+struct FlatNeumannPhaseFieldPostProcessorB2D {
+  static constexpr OperatorScope scope = OperatorScope::PerCell;
+
+  int getPriority() const {
+    return 0;
+  }
+
+  template <typename CELL>
+  void apply(CELL& cell) any_platform{
+
+    Vector<int,DESCRIPTOR::d> normal{xNormal, yNormal};
+
+    auto phi = cell.template getField<descriptors::STATISTIC>();
+    auto phiGhost = cell.neighbor(normal).template getField<descriptors::STATISTIC>();
+    phiGhost[0] = phi[0];
+    if (phiGhost[0] > 1.0001) phiGhost[0] = T{1};
+    if (phiGhost[0] < -0.0001) phiGhost[0] = T{0};
+    cell.neighbor(normal).template setField<descriptors::STATISTIC>(phiGhost);
+
+    for (int iPop=1; iPop < DESCRIPTOR::q; ++iPop) {
+      T dotProduct{};
+      for (int iD=0; iD<DESCRIPTOR::d; ++iD) {
+        dotProduct += descriptors::c<DESCRIPTOR>(iPop)[iD]*normal[iD];
+      }
+      if ( dotProduct == 0 &&
+      (cell.neighbor(descriptors::c<DESCRIPTOR>(iPop)).template getField<descriptors::SCALAR>() >= 1.9 ||
+       cell.neighbor(descriptors::c<DESCRIPTOR>(iPop)).template getField<descriptors::SCALAR>() <= 1e-6))
+      {
+        cell.neighbor(normal+descriptors::c<DESCRIPTOR>(iPop)).template setField<descriptors::STATISTIC>(phiGhost);
+      }
+    }
+  }
+
+};
+
+/**
+* Setting the ghost node phi statistic equal to the phi of the fluid node for a phase field solving LBE.
+*/
+template<typename T, typename DESCRIPTOR, int xNormal,int yNormal>
+struct PhaseFieldGhostProcessor2D {
+  static constexpr OperatorScope scope = OperatorScope::PerCell;
+
+  int getPriority() const {
+    return 1;
+  }
+
+  template <typename CELL>
+  void apply(CELL& cell) any_platform{
+    Vector<int,DESCRIPTOR::d> normal{xNormal, yNormal};
+
+    auto phi = cell.template getField<descriptors::STATISTIC>();
+    auto phiGhost = cell.neighbor(normal).template getField<descriptors::STATISTIC>();
+    phiGhost[0] = phi[0];
+    cell.neighbor(normal).template setField<descriptors::STATISTIC>(phiGhost);
+
+    for (int iPop=1; iPop < DESCRIPTOR::q; ++iPop) {
+      T dotProduct{};
+      for (int iD=0; iD<DESCRIPTOR::d; ++iD) {
+        dotProduct += descriptors::c<DESCRIPTOR>(iPop)[iD]*normal[iD];
+      }
+      if ( dotProduct == 0 &&
+      (cell.neighbor(descriptors::c<DESCRIPTOR>(iPop)).template getField<descriptors::SCALAR>() >= 1.9 ||
+       cell.neighbor(descriptors::c<DESCRIPTOR>(iPop)).template getField<descriptors::SCALAR>() <= 1e-6))
+      {
+        cell.neighbor(normal+descriptors::c<DESCRIPTOR>(iPop)).template setField<descriptors::STATISTIC>(phiGhost);
+      }
+    }
+  }
+
+};
+
+/**
 * This class overcomes overwriting populations from streaming
 * for convective boundary conditions.
 */
@@ -450,6 +642,55 @@ struct ConvectivePostProcessor2D {
     for (int iPop=0; iPop < DESCRIPTOR::q; ++iPop) {
       cell[iPop] = outlet_cell[iPop];
     }
+  }
+
+};
+
+/**
+* Extrapolating momentum normal to the boundary from one node inside the fluid.
+*/
+template<typename T, typename DESCRIPTOR, int direction, int orientation>
+struct MomentumExtrapolatePostProcessor2D {
+  static constexpr OperatorScope scope = OperatorScope::PerCell;
+
+  int getPriority() const {
+    return 0;
+  }
+
+  template <typename CELL>
+  void apply(CELL& cell) any_platform{
+
+    auto rho = cell.template getField<descriptors::RHO>();
+    auto j = cell.template getField<descriptors::MOMENTUM>();
+
+    Vector<int,DESCRIPTOR::d> insideNormal{0,0};
+    insideNormal[direction] = -orientation;
+    Vector<int,DESCRIPTOR::d> normal{0,0};
+    normal[direction] = orientation;
+    T u[DESCRIPTOR::d] {};
+    cell.computeU(u);
+    Vector<T,2> uVec{};
+    T dotProduct{};
+    for (int iD=0; iD<DESCRIPTOR::d; ++iD) {
+      uVec[iD] = u[iD];
+      dotProduct += uVec[iD]*normal[iD];
+    }
+
+    if ( dotProduct > 0 ) {
+      auto cell1 = cell.neighbor(insideNormal);
+      T u1[DESCRIPTOR::d];
+      cell1.computeU(u1);
+      for (int iDim = 0; iDim < DESCRIPTOR::d; ++iDim) {
+        j[iDim] = rho*u1[iDim];
+      }
+    } else {
+      for (int iDim = 0; iDim < DESCRIPTOR::d; ++iDim) {
+        j[iDim] = T(0.);
+      }
+      j[direction] = rho*uVec[direction];
+    }
+
+    cell.template setField<descriptors::MOMENTUM>(j);
   }
 
 };

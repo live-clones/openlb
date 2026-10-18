@@ -54,7 +54,6 @@ int main( int argc, char* argv[] )
 
   MyCase::ParametersD myCaseParameters;
   setDefaultParameters(myCaseParameters);
-  myCaseParameters.fromCLI(argc, argv);
 
   singleton::directories().setOutputDir("./tmp/bc" + std::to_string(int(myCaseParameters.get<parameters::BOUNDARY_TYPE>())) + "_force" + std::to_string(int(myCaseParameters.get<parameters::FLOW_TYPE>())) + "/" );
 

@@ -66,5 +66,46 @@ bool BlockLatticeField3D<T,DESCRIPTOR,FIELD>::operator()(T output[], const int i
   return true;
 }
 
+template<typename T, typename DESCRIPTOR, typename FIELD, typename CONDITION>
+SuperLatticeFieldConditioned3D<T,DESCRIPTOR,FIELD,CONDITION>::SuperLatticeFieldConditioned3D(
+  SuperLattice<T, DESCRIPTOR>& sLattice, T value)
+  : SuperLatticeF3D<T, DESCRIPTOR>(sLattice, DESCRIPTOR::template size<FIELD>()), _value(value)
+{
+  this->getName() = fields::name<FIELD>();
+  int maxC = this->_sLattice.getLoadBalancer().size();
+  this->_blockF.reserve(maxC);
+  for (int iC = 0; iC < maxC; ++iC) {
+    this->_blockF.emplace_back(
+      new BlockLatticeFieldConditioned3D<T,DESCRIPTOR,FIELD,CONDITION>(this->_sLattice.getBlock(iC), _value));
+  }
+}
+
+template<typename T, typename DESCRIPTOR, typename FIELD, typename CONDITION>
+BlockLatticeFieldConditioned3D<T,DESCRIPTOR,FIELD,CONDITION>::BlockLatticeFieldConditioned3D(
+  BlockLattice<T, DESCRIPTOR>& blockLattice, T value)
+  : BlockLatticeF3D<T, DESCRIPTOR>(blockLattice, DESCRIPTOR::template size<FIELD>()), _value(value)
+{
+  this->getName() = fields::name<FIELD>();
+}
+
+template<typename T, typename DESCRIPTOR, typename FIELD, typename CONDITION>
+bool BlockLatticeFieldConditioned3D<T,DESCRIPTOR,FIELD,CONDITION>::operator()(T output[], const int input[])
+{
+  auto fieldD = this->_blockLattice.get(input).template getField<FIELD>();
+  T cond = this->_blockLattice.get(input).template getField<CONDITION>();
+  if(cond == _value){
+    if constexpr (DESCRIPTOR::template size<FIELD>() == 1) {
+      output[0] = static_cast<T>(fieldD);
+    } else {
+      for (unsigned iD=0; iD < DESCRIPTOR::template size<FIELD>(); ++iD) {
+        output[iD] = static_cast<T>(fieldD[iD]);
+      }
+    }
+  }else{
+    output[0] = T(0);
+  }
+  return true;
+}
+
 }
 #endif

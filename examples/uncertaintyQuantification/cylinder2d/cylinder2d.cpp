@@ -39,9 +39,9 @@
 #include <iomanip>
 
 // Comment out or enable one of the following if needed:
-// #define MonteCarloSampling
+#define MonteCarloSampling
 // #define quasiMonteCarloSampling
-#define stochasticCollocationMethod
+// #define stochasticCollocationMethod
 
 /**
  * @brief UQ (Uncertainty Quantification) parameter setup:
@@ -147,7 +147,7 @@ int main(int argc, char* argv[]) {
 
 #ifdef MonteCarloSampling
   // Monte Carlo sampling
-  int nq = 100; // number of samples
+  int nq = 2; // number of samples
   UncertaintyQuantification<T> uq(UQMethod::MonteCarlo);
   unsigned int seed = 123456; // fixed seed for reproducibility
   uq.initializeMonteCarlo(nq, dist, seed);
@@ -173,11 +173,7 @@ int main(int argc, char* argv[]) {
   Vector<T,2> origin(0.0, 0.0);
   IndicatorCuboid2D<T> cuboid(extend, origin);
 
-#ifdef PARALLEL_MODE_MPI
   const int noOfCuboids = singleton::mpi().getSize();
-#else
-  const int noOfCuboids = 4;
-#endif
 
   CuboidDecomposition2D<T> cuboidDecomposition(cuboid, dx, noOfCuboids);
   HeuristicLoadBalancer<T> loadBalancer(cuboidDecomposition);
@@ -245,16 +241,13 @@ int main(int argc, char* argv[]) {
    // Optionally compute mean and std fields and write VTI output
    // (only if 'exportResults' is set to true)
   if (exportResults) {
-      GeometryParameters geomParams(resolution);
-      Vector<T,2> extend(geomParams.lengthX, geomParams.lengthY);
-      Vector<T,2> origin(0.0, 0.0);
-      IndicatorCuboid2D<T> cuboid(extend, origin);
+    GeometryParameters geomParams(resolution);
+    Vector<T,2> extend(geomParams.lengthX, geomParams.lengthY);
+    Vector<T,2> origin(0.0, 0.0);
+    IndicatorCuboid2D<T> cuboid(extend, origin);
 
-    #ifdef PARALLEL_MODE_MPI
-      const int noOfCuboids = singleton::mpi().getSize();
-    #else
-      const int noOfCuboids = 1;
-    #endif
+    const int noOfCuboids = singleton::mpi().getSize();
+
     UnitConverterFromResolutionAndRelaxationTime<T, DESCRIPTOR> const converter(
       int   {resolution},                        // resolution: number of voxels per charPhysL
       (T)   0.56,                     // latticeRelaxationTime: relaxation time, have to be greater than 0.5!

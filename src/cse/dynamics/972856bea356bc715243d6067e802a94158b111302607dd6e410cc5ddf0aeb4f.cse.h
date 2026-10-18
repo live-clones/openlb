@@ -35,16 +35,17 @@ namespace olb {
 namespace dynamics {
 
 template <typename T, typename... FIELDS>
-struct CSE<ZeroDistributionDynamics<T, descriptors::D3Q7<FIELDS...> >> {
+struct CSE<ZeroDistributionDynamics<T, descriptors::D3Q7<FIELDS...> >, olb::CodegenTarget::Generic> {
 template <concepts::Cell CELL, concepts::Parameters PARAMETERS, concepts::BaseType V=typename CELL::value_t>
 CellStatistic<V> collide(CELL& cell, PARAMETERS& parameters) any_platform {
+auto x0 = V{-0.125};
 cell[0] = V{-0.25};
-cell[1] = V{-0.125};
-cell[2] = V{-0.125};
-cell[3] = V{-0.125};
-cell[4] = V{-0.125};
-cell[5] = V{-0.125};
-cell[6] = V{-0.125};
+cell[1] = x0;
+cell[2] = x0;
+cell[3] = x0;
+cell[4] = x0;
+cell[5] = x0;
+cell[6] = x0;
 return { V{-1}, V{-1} };
 }
 };
@@ -53,4 +54,4 @@ return { V{-1}, V{-1} };
 
 }
 
-// Generation Info: commit=2a9f114ed32e2878e1a64a356eda56d13e508f7d
+// Generation Info: commit=e62fb513c7fed8d9804dfb87eb8d98b331948423

@@ -46,7 +46,7 @@ template <unsigned D, unsigned Q>
 int velocityIndices[Q][D] = {};
 
 template <>
-int velocityIndices<3, 27>[27][3] = {
+inline int velocityIndices<3, 27>[27][3] = {
     {10,  8, 26},
     {12, 22, 24},
     { 6,  3, 20},
@@ -80,7 +80,7 @@ int velocityIndices<3, 27>[27][3] = {
 
 // these are the constant parameters K that are computed from the weights of the respective lattice.
 template <>
-Fraction K<3, 27>[27] = {
+inline Fraction K<3, 27>[27] = {
     {1 },
     0,      { 1, 3},
     0,      0,      0,      { 1, 3},

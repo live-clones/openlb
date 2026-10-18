@@ -112,6 +112,15 @@ T norm2(const T* a, unsigned size)
   return v;
 }
 
+template <typename T>
+T sumElements(const std::vector<T>& a) {
+  T sum = 0.;
+  for (auto e : a) {
+    sum += e;
+  }
+  return sum;
+}
+
 /// l2 norm to the power of 2 of a vector of arbitrary length
 template <typename T>
 T norm2(const std::vector<T>& a)

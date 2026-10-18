@@ -24,7 +24,10 @@
 #ifndef CORE_PLATFORM_CPU_CELL_H
 #define CORE_PLATFORM_CPU_CELL_H
 
+#include <utility>
+
 #include "dynamics/lbm.h"
+#include "core/platform/convertingRef.h"
 
 namespace olb {
 
@@ -37,12 +40,15 @@ namespace cpu {
 template <typename T, typename DESCRIPTOR, Platform PLATFORM>
 class Cell;
 
+template <typename T, typename DESCRIPTOR, Platform PLATFORM>
+class DataOnlyCell;
+
 /// Virtual interface for dynamically-dispatched dynamics access on CPU targets
 template <typename T, typename DESCRIPTOR, Platform PLATFORM>
 struct Dynamics {
   virtual ~Dynamics() { }
 
-  virtual CellStatistic<T> collide(Cell<T,DESCRIPTOR,PLATFORM>& cell) = 0;
+  virtual CellStatistic<T> collide(DataOnlyCell<T,DESCRIPTOR,PLATFORM>& cell) = 0;
 
   virtual T    computeRho      (Cell<T,DESCRIPTOR,PLATFORM>& cell              ) = 0;
   virtual void computeU        (Cell<T,DESCRIPTOR,PLATFORM>& cell,         T* u) = 0;
@@ -103,6 +109,14 @@ public:
     return _iCell;
   }
 
+  LatticeR<DESCRIPTOR::d> getLatticeR() const {
+    return _lattice->getLatticeR(_iCell);
+  }
+
+  bool isCore() const {
+    return _lattice->isInsideCore(_lattice->getLatticeR(_iCell));
+  }
+
   void setCellId(CellID iCell) {
     _iCell = iCell;
   }
@@ -123,8 +137,15 @@ public:
   }
 
   template <typename FIELD>
-  auto& getFieldComponent(unsigned iD) {
-    return _lattice->template getField<FIELD>()[iD][_iCell];
+  decltype(auto) getFieldComponent(unsigned iD) {
+    if constexpr (detail::isSparseColumnBacked<T,DESCRIPTOR,PLATFORM,FIELD>()) {
+      // Ensure the container exists (sparse allocation creates no tiles), then read
+      // through the const column so a plain read never materialises a tile
+      auto& field = _lattice->template getField<FIELD>();
+      return std::as_const(field)[iD][_iCell];
+    } else {
+      return (_lattice->template getField<FIELD>()[iD][_iCell]);
+    }
   }
 
   template <typename FIELD>
@@ -137,6 +158,69 @@ public:
 /// CPU specific field mirroring BlockDynamicsMap
 template <typename T, typename DESCRIPTOR, Platform PLATFORM>
 struct DYNAMICS : public descriptors::TYPED_FIELD_BASE<Dynamics<T,DESCRIPTOR,PLATFORM>*,1> { };
+
+/// Restricted cell exposing only populations and associated fields
+template <typename T, typename DESCRIPTOR, Platform PLATFORM>
+class DataOnlyCell {
+private:
+  ConcreteBlockLattice<T,DESCRIPTOR,PLATFORM>* _lattice;
+  CellID _iCell;
+
+public:
+  using value_t = T;
+  using descriptor_t = DESCRIPTOR;
+
+  DataOnlyCell():
+    _lattice(nullptr),
+    _iCell(0) { }
+
+  DataOnlyCell(ConcreteBlockLattice<T,DESCRIPTOR,PLATFORM>& lattice, std::size_t iCell=0):
+    _lattice(&lattice),
+    _iCell(iCell) { }
+
+  CellID getCellId() const {
+    return _iCell;
+  }
+
+  void setCellId(CellID iCell) {
+    _iCell = iCell;
+  }
+
+  decltype(auto) operator[](unsigned iPop) {
+    return makeConvertingRef<T>(_lattice->template getField<descriptors::POPULATION>()[iPop][_iCell]);
+  }
+
+  template <typename FIELD>
+  auto getField() const {
+    return _lattice->template getField<FIELD>().getRow(_iCell);
+  }
+
+  template <typename FIELD>
+  void setField(const FieldD<T,DESCRIPTOR,FIELD>& v) {
+    return _lattice->template getField<FIELD>().setRow(_iCell, v);
+  }
+
+  template <typename FIELD>
+  auto getFieldPointer() {
+    return _lattice->template getField<FIELD>().getRowPointer(_iCell);
+  }
+
+  template <typename FIELD>
+  decltype(auto) getFieldComponent(unsigned iD) {
+    if constexpr (detail::isSparseColumnBacked<T,DESCRIPTOR,PLATFORM,FIELD>()) {
+      auto& field = _lattice->template getField<FIELD>();
+      return std::as_const(field)[iD][_iCell];
+    } else {
+      return (_lattice->template getField<FIELD>()[iD][_iCell]);
+    }
+  }
+
+  template <typename FIELD>
+  void setFieldComponent(unsigned iD, typename FIELD::template value_type<T> value) {
+    _lattice->template getField<FIELD>()[iD][_iCell] = value;
+  }
+
+};
 
 /// Cell concept for concrete block lattices on CPU platforms
 /**
@@ -172,12 +256,24 @@ public:
     _iCell = _lattice->getCellId(latticeR);
   }
 
+  LatticeR<DESCRIPTOR::d> getLatticeR() const {
+    return _lattice->getLatticeR(_iCell);
+  }
+
+  Vector<T,DESCRIPTOR::d> getPhysR() const {
+    return _lattice->getPhysR(_iCell);
+  }
+
+  bool isCore() const {
+    return _lattice->isInsideCore(_lattice->getLatticeR(_iCell));
+  }
+
   bool isPadding() const {
     return _lattice->isPadding(_iCell);
   }
 
-  T& operator[](unsigned iPop) {
-    return _lattice->template getField<descriptors::POPULATION>()[iPop][_iCell];
+  decltype(auto) operator[](unsigned iPop) {
+    return makeConvertingRef<T>(_lattice->template getField<descriptors::POPULATION>()[iPop][_iCell]);
   }
 
   template <typename FIELD>
@@ -196,8 +292,15 @@ public:
   }
 
   template <typename FIELD>
-  auto& getFieldComponent(unsigned iD) {
-    return _lattice->template getField<FIELD>()[iD][_iCell];
+  decltype(auto) getFieldComponent(unsigned iD) {
+    if constexpr (detail::isSparseColumnBacked<T,DESCRIPTOR,PLATFORM,FIELD>()) {
+      // Ensure the container exists (sparse allocation creates no tiles), then read
+      // through the const column so a plain read never materialises a tile
+      auto& field = _lattice->template getField<FIELD>();
+      return std::as_const(field)[iD][_iCell];
+    } else {
+      return (_lattice->template getField<FIELD>()[iD][_iCell]);
+    }
   }
 
   template <typename FIELD>
@@ -214,24 +317,57 @@ public:
   }
 
   T computeRho() {
-    return getDynamics().computeRho(*this);
+    if constexpr (codegenTargetFor(PLATFORM) == CodegenTarget::StoredMoments) {
+      return getFieldComponent<fields::moments::RHO>(0);
+    } else {
+      return getDynamics().computeRho(*this);
+    }
   }
   void computeU(T* u) {
-    getDynamics().computeU(*this, u);
+    if constexpr (codegenTargetFor(PLATFORM) == CodegenTarget::StoredMoments) {
+      for (unsigned iD=0; iD < DESCRIPTOR::d; ++iD) {
+        u[iD] = getFieldComponent<fields::moments::U>(iD);
+      }
+    } else {
+      getDynamics().computeU(*this, u);
+    }
   }
   void computeJ(T* j) {
-    getDynamics().computeJ(*this, j);
+    if constexpr (codegenTargetFor(PLATFORM) == CodegenTarget::StoredMoments) {
+      for (unsigned iD=0; iD < DESCRIPTOR::d; ++iD) {
+        j[iD] = getFieldComponent<fields::moments::J>(iD);
+      }
+    } else {
+      getDynamics().computeJ(*this, j);
+    }
   }
   void computeRhoU(T& rho, T* u) {
-    getDynamics().computeRhoU(*this, rho, u);
+    if constexpr (codegenTargetFor(PLATFORM) == CodegenTarget::StoredMoments) {
+      rho = computeRho();
+      computeU(u);
+    } else {
+      getDynamics().computeRhoU(*this, rho, u);
+    }
   }
   void computeStress(T* pi) {
-    T rho, u[DESCRIPTOR::d] { };
-    getDynamics().computeRhoU(*this, rho, u);
-    getDynamics().computeStress(*this, rho, u, pi);
+    if constexpr (codegenTargetFor(PLATFORM) == CodegenTarget::StoredMoments) {
+      for (unsigned iPi=0; iPi < fields::moments::PI::template size<DESCRIPTOR>(); ++iPi) {
+        pi[iPi] = getFieldComponent<fields::moments::PI>(iPi);
+      }
+    } else {
+      T rho, u[DESCRIPTOR::d] { };
+      getDynamics().computeRhoU(*this, rho, u);
+      getDynamics().computeStress(*this, rho, u, pi);
+    }
   }
   void computeAllMomenta(T& rho, T* u, T* pi) {
-    getDynamics().computeAllMomenta(*this, rho, u, pi);
+    if constexpr (codegenTargetFor(PLATFORM) == CodegenTarget::StoredMoments) {
+      rho = computeRho();
+      computeU(u);
+      computeStress(pi);
+    } else {
+      getDynamics().computeAllMomenta(*this, rho, u, pi);
+    }
   }
 
   void defineRho(T& rho) {
@@ -262,6 +398,14 @@ public:
     getDynamics().inverseShiftRhoU(*this, rho, u);
   }
 
+  T getOmegaOrFallback(T fallback) {
+    return getDynamics().getOmegaOrFallback(fallback);
+  }
+
+  void computeEquilibrium(T rho, T* u, T* fEq) {
+    getDynamics().computeEquilibrium(*this, rho, u, fEq);
+  }
+
 };
 
 template <typename T, typename DESCRIPTOR, Platform PLATFORM>
@@ -286,12 +430,20 @@ public:
     return _iCell;
   }
 
+  LatticeR<DESCRIPTOR::d> getLatticeR() const {
+    return _lattice->getLatticeR(_iCell);
+  }
+
+  bool isCore() const {
+    return _lattice->isInsideCore(_lattice->getLatticeR(_iCell));
+  }
+
   void setCellId(CellID iCell) {
     _iCell = iCell;
   }
 
-  T& operator[](unsigned iPop) {
-    return _lattice->template getField<descriptors::POPULATION>()[iPop][_iCell];
+  decltype(auto) operator[](unsigned iPop) {
+    return makeConvertingRef<T>(_lattice->template getField<descriptors::POPULATION>()[iPop][_iCell]);
   }
 
   template <typename FIELD>
@@ -310,8 +462,15 @@ public:
   }
 
   template <typename FIELD>
-  auto& getFieldComponent(unsigned iD) {
-    return _lattice->template getField<FIELD>()[iD][_iCell];
+  decltype(auto) getFieldComponent(unsigned iD) {
+    if constexpr (detail::isSparseColumnBacked<T,DESCRIPTOR,PLATFORM,FIELD>()) {
+      // Ensure the container exists (sparse allocation creates no tiles), then read
+      // through the const column so a plain read never materialises a tile
+      auto& field = _lattice->template getField<FIELD>();
+      return std::as_const(field)[iD][_iCell];
+    } else {
+      return (_lattice->template getField<FIELD>()[iD][_iCell]);
+    }
   }
 
   Cell<T,DESCRIPTOR,PLATFORM> neighbor(LatticeR<DESCRIPTOR::d> offset) {

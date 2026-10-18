@@ -37,7 +37,20 @@
 
 #include "introspection.h"
 
+#include "blockPostProcessorMap.h"
+#include "momentsProvider.h"
+
 namespace olb {
+
+/// Whether DYNAMICS consumes any parameter sourced live from lattice statistics
+template <typename DYNAMICS>
+constexpr bool dynamicsConsumesLiveStatistics() {
+  if constexpr (requires { typename DYNAMICS::parameters; }) {
+    return DYNAMICS::parameters::template intersects<statistics::live_parameters>();
+  } else {
+    return false;
+  }
+}
 
 template<typename T, typename DESCRIPTOR> struct AbstractCollisionO;
 template<typename T, typename DESCRIPTOR, Platform PLATFORM> struct BlockCollisionO;
@@ -45,6 +58,13 @@ template<typename T, typename DESCRIPTOR, Platform PLATFORM> class ConcreteBlock
 template<typename T,                      Platform PLATFORM> class ConcreteBlockMask;
 template<typename T, typename DESCRIPTOR, Platform PLATFORM, typename DYNAMICS> class ConcreteBlockCollisionO;
 
+/// Concretizer resolving, per concrete PLATFORM, to the platform-appropriate
+/// collision implementation for DYNAMICS
+/**
+ * cse_for_platform_t selects the CSE specialization matching codegenTargetFor(PLATFORM)
+ * (e.g. StoredMoments on SYCL/HIP), falling back to the Generic CSE, then to plain
+ * DYNAMICS (also for non-introspectable dynamics and disabled CSE).
+ **/
 template <typename T, typename DESCRIPTOR, typename DYNAMICS>
 struct ConcretizableBlockCollisionO {
 
@@ -53,7 +73,7 @@ using value_t = T;
 using base_t = AbstractCollisionO<T,DESCRIPTOR>;
 
 template <Platform PLATFORM>
-using type = ConcreteBlockCollisionO<T,DESCRIPTOR,PLATFORM,DYNAMICS>;
+using type = ConcreteBlockCollisionO<T,DESCRIPTOR,PLATFORM,cse_for_platform_t<DYNAMICS,PLATFORM>>;
 
 };
 
@@ -74,19 +94,22 @@ class DynamicsPromise {
 protected:
   const std::type_index _id;
 
-  std::function<Dynamics<T,DESCRIPTOR>*()>                   _makeDynamics;
-  std::function<AbstractCollisionO<T,DESCRIPTOR>*(Platform)> _makeOperator;
+  meta::function<Dynamics<T,DESCRIPTOR>*()>                   _makeDynamics;
+  meta::function<AbstractCollisionO<T,DESCRIPTOR>*(Platform)> _makeOperator;
 
   const std::string _name;
 
-  /// Returns the set of all accessed fields
-  std::function<std::set<FieldTypePromise<T,DESCRIPTOR>>()> _accessedFields;
+  /// Returns the set of all accessed fields for the collision body run on a platform
+  meta::function<std::set<FieldTypePromise<T,DESCRIPTOR>>(Platform)> _accessedFields;
+
+  meta::function<PostProcessorPromise<T,DESCRIPTOR>(MomentSet)> _makeMomentsProvider;
 
   const bool _isOptimizationAvailable;
-  std::function<std::optional<std::size_t>()> _inspectArithmeticOperationCount;
-  std::function<std::optional<std::size_t>()> _inspectMemoryBandwidth;
-  std::function<std::optional<bool>()> _inspectOptimizability;
-  std::function<std::optional<std::size_t>()> _inspectComplexity;
+  const bool _consumesLiveStatistics;
+  meta::function<std::optional<std::size_t>()> _inspectArithmeticOperationCount;
+  meta::function<std::optional<std::size_t>()> _inspectMemoryBandwidth;
+  meta::function<std::optional<bool>()> _inspectOptimizability;
+  meta::function<std::optional<std::size_t>()> _inspectComplexity;
 
 public:
   template <typename DYNAMICS>
@@ -96,21 +119,22 @@ public:
       return new DYNAMICS();
     }),
     _makeOperator([](Platform platform) -> AbstractCollisionO<T,DESCRIPTOR>* {
-      if constexpr (concepts::IntrospectableDynamics<DYNAMICS>) {
-        if constexpr (dynamics::is_cse_optimized<DYNAMICS>::value) {
-         return constructUsingConcretePlatform<ConcretizableBlockCollisionO<T,DESCRIPTOR,CSE<DYNAMICS>>>(platform);
-        } else {
-          return constructUsingConcretePlatform<ConcretizableBlockCollisionO<T,DESCRIPTOR,DYNAMICS>>(platform);
-        }
-      } else {
-        return constructUsingConcretePlatform<ConcretizableBlockCollisionO<T,DESCRIPTOR,DYNAMICS>>(platform);
-      }
+      return constructUsingConcretePlatform<ConcretizableBlockCollisionO<T,DESCRIPTOR,DYNAMICS>>(platform);
     }),
     _name{fields::name<DYNAMICS>()},
-    _accessedFields([]() -> std::set<FieldTypePromise<T,DESCRIPTOR>> {
+    _accessedFields([](Platform platform) -> std::set<FieldTypePromise<T,DESCRIPTOR>> {
       if constexpr (!std::is_same_v<T,Expr>) {
         if constexpr (std::is_same_v<NoDynamics<T,DESCRIPTOR>, DYNAMICS>) {
           return {};
+        } else if constexpr (concepts::IntrospectableDynamics<DYNAMICS>) {
+          // Introspect the CSE body that will actually run on this platform so that
+          // e.g. StoredMoments fields are only allocated where they are written.
+          std::set<FieldTypePromise<T,DESCRIPTOR>> accessed;
+          callUsingConcretePlatform(platform, [&](auto p) {
+            accessed = introspection::getFieldsAccessedByDynamics<
+              T,DESCRIPTOR,cse_for_platform_t<DYNAMICS,p.value>>();
+          });
+          return accessed;
         } else {
           return introspection::getFieldsAccessedByDynamics<T,DESCRIPTOR,DYNAMICS>();
         }
@@ -118,7 +142,37 @@ public:
         throw std::domain_error("Can not introspect the introspection");
       }
     }),
+    // RefreshMomentsO writes into stored moment fields, which only exist on StoredMoments
+    // platforms. On Generic-only builds the provider is never consumed (its call site in
+    // blockLattice is codegenTargetFor(PLATFORM)==StoredMoments gated), so skip instantiating
+    // the five RefreshMomentsO variants entirely -- that is the bulk of the per-dynamics cost.
+    _makeMomentsProvider([](MomentSet set) -> PostProcessorPromise<T,DESCRIPTOR> {
+      if constexpr (anyEnabledPlatformUsesStoredMoments()) {
+        switch (set) {
+        case MomentSet::U:
+          return PostProcessorPromise<T,DESCRIPTOR>(
+            meta::id<RefreshMomentsO<DYNAMICS, moment_write_set_t<MomentSet::U>>>{});
+        case MomentSet::RhoU:
+          return PostProcessorPromise<T,DESCRIPTOR>(
+            meta::id<RefreshMomentsO<DYNAMICS, moment_write_set_t<MomentSet::RhoU>>>{});
+        case MomentSet::RhoUPi:
+          return PostProcessorPromise<T,DESCRIPTOR>(
+            meta::id<RefreshMomentsO<DYNAMICS, moment_write_set_t<MomentSet::RhoUPi>>>{});
+        case MomentSet::RhoUJ:
+          return PostProcessorPromise<T,DESCRIPTOR>(
+            meta::id<RefreshMomentsO<DYNAMICS, moment_write_set_t<MomentSet::RhoUJ>>>{});
+        case MomentSet::RhoUPiJ:
+          return PostProcessorPromise<T,DESCRIPTOR>(
+            meta::id<RefreshMomentsO<DYNAMICS, moment_write_set_t<MomentSet::RhoUPiJ>>>{});
+        default:
+          throw std::domain_error("Unsupported MomentSet");
+        }
+      } else {
+        throw std::logic_error("moments provider requested without a StoredMoments platform");
+      }
+    }),
     _isOptimizationAvailable{dynamics::is_cse_optimized<DYNAMICS>::value},
+    _consumesLiveStatistics{dynamicsConsumesLiveStatistics<DYNAMICS>()},
     _inspectArithmeticOperationCount([]() -> std::optional<std::size_t> {
 #ifdef FEATURE_INSPECT_DYNAMICS
       if constexpr (!std::is_same_v<T,Expr>) {
@@ -184,9 +238,18 @@ public:
     return _name;
   }
 
-  /// Returns set of accessed fields
-  std::set<FieldTypePromise<T,DESCRIPTOR>> accessedFields() const {
-    return _accessedFields();
+  /// Whether the promised dynamics consumes any live-statistics parameter
+  bool consumesLiveStatistics() const {
+    return _consumesLiveStatistics;
+  }
+
+  /// Returns set of accessed fields for the collision body run on platform
+  std::set<FieldTypePromise<T,DESCRIPTOR>> accessedFields(Platform platform) const {
+    return _accessedFields(platform);
+  }
+
+  PostProcessorPromise<T,DESCRIPTOR> makeMomentsProvider(MomentSet set) const {
+    return _makeMomentsProvider(set);
   }
 
   /// Returns true if a CSE version is available
@@ -289,7 +352,7 @@ private:
       auto& [_, op] = iter->second;
       op->setup(_lattice);
       if (_lattice.isIntrospectable()) {
-        auto accessedFields = promise.accessedFields();
+        auto accessedFields = promise.accessedFields(PLATFORM);
         for (FieldTypePromise<T,DESCRIPTOR> field : accessedFields) {
           field.ensureAvailabilityIn(_lattice);
         }
@@ -332,6 +395,18 @@ public:
   Dynamics<T,DESCRIPTOR>* get(std::size_t iCell)
   {
     return _dynamicsOfCells[iCell];
+  }
+
+  /// Returns the DynamicsPromise for the dynamics assigned to iCell.
+  const DynamicsPromise<T,DESCRIPTOR>& promiseFor(std::size_t iCell)
+  {
+    const Dynamics<T,DESCRIPTOR>* dynamics = _dynamicsOfCells[iCell];
+    for (auto& [id, value] : _map) {
+      if (std::get<1>(value)->getDynamics() == dynamics) {
+        return std::get<0>(value);
+      }
+    }
+    throw std::runtime_error("No dynamics promise for cell");
   }
 
   /// Assigns promised dynamics to cell index and updates block masks

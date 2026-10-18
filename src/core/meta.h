@@ -106,14 +106,41 @@ std::string name() {
 template <typename FIELD>
 constexpr std::string_view nice_name() {
 #ifndef USING_LEGACY_CODEGEN
+#if defined(__NVCOMPILER)
+  // nvc++ source_location::function_name() lacks template arguments
+  const std::string_view raw = __PRETTY_FUNCTION__;
+#else
   const std::string_view raw = std::source_location::current().function_name();
-  return std::string_view(raw.cbegin() + raw.find_first_of('=')+2,
-                          raw.cbegin() + std::min(raw.find_first_of(']'),
-                                                  raw.find_first_of(';')));
+#endif
+  const std::size_t start = raw.find_first_of('=');
+
+  if (start == std::string_view::npos) {
+    return raw;
+  }
+
+  const std::size_t end = std::min(raw.find_first_of(']'), raw.find_first_of(';'));
+  const std::size_t actual_end = (end == std::string_view::npos) ? raw.size() : end;
+
+  return raw.substr(start + 2, actual_end - start - 2);
 #else
   return std::string_view();
 #endif
 }
+
+/// Fixed string type to handle std::strings as template parameters
+template <std::size_t N>
+struct FixedString {
+  char value[N];
+
+  constexpr FixedString(const char (&str)[N]) {
+    for (std::size_t i = 0; i < N; ++i) {
+      value[i] = str[i];
+    }
+  }
+};
+
+template <std::size_t N>
+FixedString(const char (&)[N]) -> FixedString<N>;
 
 /// Checks whether T can be used as a scalar arithmetic type
 /**
@@ -371,11 +398,30 @@ struct list : public list_base {
     return olb::meta::contains<TYPE,TYPES...>();
   }
 
+  /// Returns true iff this list and OTHER share at least one type
+  template <typename OTHER>
+  static constexpr bool intersects() {
+    return (OTHER::template contains<TYPES>() || ... || false);
+  }
+
 };
 
 /// Merge elements of LIST_A and LIST_B into new list
 template <typename LIST_A, typename LIST_B>
 using merge = typename LIST_A::template decompose_into<LIST_B::template include>;
+
+template <typename LIST, typename... LISTS>
+struct merge_many {
+  using type = LIST;
+};
+
+template <typename LIST1, typename LIST2, typename... LISTS>
+struct merge_many<LIST1, LIST2, LISTS...> {
+  using type = typename merge_many<
+    merge<LIST1, LIST2>,
+    LISTS...
+  >::type;
+};
 
 /// Apply F to each element of meta::list listed in INDICES
 template <typename TYPES, typename F, std::size_t... INDICES>
@@ -640,6 +686,36 @@ struct derived_type_in_nested {
 
 
 // *INDENT-ON*
+
+/// std::function for captureless callables: holds only a function pointer
+template <typename Signature>
+class function;
+
+template <typename R, typename... ARGS>
+class function<R(ARGS...)> {
+private:
+  R (*_fn)(ARGS...) = nullptr;
+
+public:
+  constexpr function() noexcept = default;
+  constexpr function(std::nullptr_t) noexcept { }
+
+  template <typename F>
+  requires std::is_convertible_v<F, R(*)(ARGS...)>
+  constexpr function(F f) noexcept: _fn(static_cast<R(*)(ARGS...)>(f)) { }
+
+  constexpr R operator()(ARGS... args) const {
+    return _fn(std::forward<ARGS>(args)...);
+  }
+
+  constexpr explicit operator bool() const noexcept {
+    return _fn != nullptr;
+  }
+
+  constexpr bool operator==(std::nullptr_t) const noexcept {
+    return _fn == nullptr;
+  }
+};
 
 }
 

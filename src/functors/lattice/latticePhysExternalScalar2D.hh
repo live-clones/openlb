@@ -52,7 +52,7 @@ SuperLatticePhysExternalScalar2D<T,DESCRIPTOR,FIELD>::SuperLatticePhysExternalSc
   for (int iC = 0; iC < maxC; iC++) {
     this->_blockF.emplace_back(
       new BlockLatticePhysExternalScalar2D<T, DESCRIPTOR, FIELD>(
-        this->_sLattice.getBlock(iC), convFactorToPhysUnits)
+        this->_sLattice.getBlock(iC), convFactorToPhysUnits, name)
     );
   }
 }

@@ -206,7 +206,6 @@ void setTemporalValues(MyCase& myCase,
 { }
 
 void getResults(MyCase& myCase,
-                util::Timer<MyCase::value_t>& timer,
                 std::size_t iT)
 
 {
@@ -235,18 +234,7 @@ void getResults(MyCase& myCase,
     vtkWriter.createMasterFile();
   }
 
-  const int statIter = converter.getLatticeTime(parameters.get<parameters::PHYS_STAT_ITER_T>());
   const int vtkIter  = converter.getLatticeTime(parameters.get<parameters::PHYS_VTK_ITER_T>());
-
-  if (iT%statIter == 0 || converged) {
-    /// Timer console output
-    timer.update(iT);
-    timer.printStep();
-
-    /// Lattice statistics console output
-    NSlattice.getStatistics().print(iT,converter.getPhysTime(iT));
-    ADlattice.getStatistics().print(iT,converter.getPhysTime(iT));
-  }
 
   /// Writes the VTK files and prints statistics
   if (iT%vtkIter == 0 || converged) {
@@ -272,6 +260,7 @@ void getResults(MyCase& myCase,
     gifWriter.write(planeReduction, Tcold-T(0.1), Thot+T(0.1), iT, "temperature");
   }
 
+  myCase.report(iT);
 }
 
 void simulate(MyCase& myCase) {
@@ -282,9 +271,6 @@ void simulate(MyCase& myCase) {
   const std::size_t iTmax = myCase.getLattice(NavierStokes{}).getUnitConverter().getLatticeTime(
     parameters.get<parameters::MAX_PHYS_T>());
 
-  util::Timer<T> timer(iTmax, myCase.getGeometry().getStatistics().getNvoxel());
-  timer.start();
-
   util::ValueTracer<T> converge(myCase.getLattice(NavierStokes{}).getUnitConverter().getLatticeTime(50.),
                                 parameters.get<parameters::CONVERGENCE_PRECISION>());
 
@@ -292,7 +278,7 @@ void simulate(MyCase& myCase) {
 
     if (converge.hasConverged()){
       parameters.set<parameters::CONVERGED>(true);
-      getResults(myCase, timer, iT);
+      getResults(myCase, iT);
       clout << "Converged after " << iT << " iterations." << std::endl;
       break;
     }
@@ -307,15 +293,14 @@ void simulate(MyCase& myCase) {
     myCase.getOperator("Boussinesq").apply();
 
     /// === Step 8.3: Computation and Output of the Results ===
-    getResults(myCase, timer, iT);
+    getResults(myCase, iT);
     converge.takeValue(myCase.getLattice(Temperature{}).getStatistics().getAverageEnergy(), true);
   }
 
   myCase.getLattice(NavierStokes{}).setProcessingContext(ProcessingContext::Evaluation);
   myCase.getLattice(Temperature{}).setProcessingContext(ProcessingContext::Evaluation);
 
-  timer.stop();
-  timer.printSummary();
+  myCase.finalize(iTmax);
 }
 
 int main(int argc, char *argv[])
@@ -340,22 +325,22 @@ int main(int argc, char *argv[])
     myCaseParameters.set<PHYS_CHAR_VISCOSITY>(1e-5);
     myCaseParameters.set<PHYS_THERMAL_CONDUCTIVITY>(0.03);
 
-    myCaseParameters.set<T_PERTURBATION>([&] {
-      return myCaseParameters.get<T_COLD>()/5. + 4./5.*myCaseParameters.get<T_HOT>();
+    myCaseParameters.set<T_PERTURBATION>([](MyCase::ParametersD& p) {
+      return p.get<T_COLD>()/5. + 4./5.*p.get<T_HOT>();
     });
 
-    myCaseParameters.set<PHYS_CP>([&] {
-      return myCaseParameters.get<PRANDTL>() * myCaseParameters.get<PHYS_THERMAL_CONDUCTIVITY>()
-              / (myCaseParameters.get<PHYS_CHAR_VISCOSITY>()/myCaseParameters.get<PHYS_CHAR_DENSITY>());
+    myCaseParameters.set<PHYS_CP>([](MyCase::ParametersD& p) {
+      return p.get<PRANDTL>() * p.get<PHYS_THERMAL_CONDUCTIVITY>()
+              / (p.get<PHYS_CHAR_VISCOSITY>()/p.get<PHYS_CHAR_DENSITY>());
     });
 
     myCaseParameters.set<CONVERGENCE_PRECISION>(1e-5);
     myCaseParameters.set<CONVERGED>(false);
 
     myCaseParameters.set<PHYS_VTK_ITER_T>(1.0);
-    myCaseParameters.set<PHYS_STAT_ITER_T>(0.1);
+    myCaseParameters["reporter"]["statistics"].set<PHYS_ITER_T>(0.1);
+    myCaseParameters["reporter"]["timer"].set<PHYS_ITER_T>(0.1);
   }
-  myCaseParameters.fromCLI(argc, argv);
 
   /// === Step 3: Create Mesh ===
   Mesh mesh = createMesh(myCaseParameters);

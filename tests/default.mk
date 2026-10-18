@@ -1,5 +1,7 @@
+ifndef IN_OLB_NIX_SHELL
 # Include config.mk environment (optional)
 -include $(OLB_ROOT)/config.mk
+endif
 
 include $(OLB_ROOT)/rules.mk
 
@@ -17,4 +19,4 @@ endif
 CXXFLAGS += -I$(subst $(EMPTY) $(EMPTY), -I,$(INCLUDE_DIRS))
 CXXFLAGS += -DGTEST_HAS_PTHREAD=0
 
-LDFLAGS += -L$(OLB_ROOT)/build/lib -lolbcore
+LDFLAGS := -L$(OLB_ROOT)/build/lib -lolbcore -lgtest_main $(LDFLAGS)

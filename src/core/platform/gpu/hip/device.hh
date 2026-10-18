@@ -26,6 +26,9 @@
 
 #include "device.h"
 
+#include "core/concepts.h"
+#include "utilities/performanceProfiler.h"
+
 #include <stdexcept>
 
 namespace olb {
@@ -51,6 +54,7 @@ void check() {
 
 void synchronize() {
   if (getCount() > 0) {
+    OLB_PROFILE("GPU_HIP:Dev:Sync");
     HIP_CHECK(hipDeviceSynchronize());
   }
 }
@@ -62,10 +66,12 @@ int get() {
 }
 
 void copyToHost(void* src, void* dst, std::size_t count) {
+  OLB_PROFILE("GPU_HIP:Mem:DtoH");
   HIP_CHECK(hipMemcpy(dst, src, count, hipMemcpyDeviceToHost));
 }
 
 void copyToDevice(void* src, void* dst, std::size_t count) {
+  OLB_PROFILE("GPU_HIP:Mem:HtoD");
   HIP_CHECK(hipMemcpy(dst, src, count, hipMemcpyHostToDevice));
 }
 
@@ -84,6 +90,13 @@ std::size_t getDevicePageSize() {
   prop.location.id = device::get();
   HIP_CHECK(hipMemGetAllocationGranularity(&granularity, &prop, hipMemAllocationGranularityMinimum));
   return granularity;
+}
+
+std::size_t getDeviceMemorySize() {
+  std::size_t freeBytes = 0;
+  std::size_t totalBytes = 0;
+  HIP_CHECK(hipMemGetInfo(&freeBytes, &totalBytes));
+  return totalBytes;
 }
 
 
@@ -108,6 +121,10 @@ Stream::Stream(unsigned int flags) {
   HIP_CHECK(hipStreamCreateWithFlags(&_stream, flags));
 }
 
+Stream::Stream(unsigned int flags, int priority) {
+  HIP_CHECK(hipStreamCreateWithPriority(&_stream, flags, priority));
+}
+
 Stream::~Stream() {
   HIP_CHECK(hipStreamDestroy(_stream));
 
@@ -125,11 +142,86 @@ void asyncCopyToDevice(Stream& stream, void* src, void* dst, std::size_t count) 
   HIP_CHECK(hipMemcpyAsync(dst, src, count, hipMemcpyHostToDevice, stream.get()));
 }
 
+template <>
+inline Stream& getStream<streams::OuterCollision>() {
+  int leastPriority = 0, greatestPriority = 0;
+  HIP_CHECK(hipDeviceGetStreamPriorityRange(&leastPriority, &greatestPriority));
+
+  //int mediumPriority = (greatestPriority+leastPriority)/2;
+  static Stream stream(hipStreamNonBlocking, greatestPriority);
+  return stream;
 }
+
+template <>
+inline Stream& getStream<streams::InnerCollision>() {
+  int leastPriority = 0, greatestPriority = 0;
+  HIP_CHECK(hipDeviceGetStreamPriorityRange(&leastPriority, &greatestPriority));
+  static Stream stream(hipStreamNonBlocking, leastPriority);
+  return stream;
+}
+
+template <>
+inline Stream& getStream<streams::PostProcessor>() {
+  int leastPriority = 0, greatestPriority = 0;
+  HIP_CHECK(hipDeviceGetStreamPriorityRange(&leastPriority, &greatestPriority));
+  static Stream stream(hipStreamNonBlocking, greatestPriority);
+  return stream;
+}
+
+
+
+inline void synchronizeInnerCollision(){
+  HIP_CHECK(hipStreamSynchronize(gpu::hip::device::getStream<streams::InnerCollision>().get()));
+}
+
+inline void synchronizeOuterCollision(){
+  HIP_CHECK(hipStreamSynchronize(gpu::hip::device::getStream<streams::OuterCollision>().get()));
+}
+
+inline void synchronizePostProcessor(){
+   HIP_CHECK(hipStreamSynchronize(gpu::hip::device::getStream<streams::PostProcessor>().get()));
+}
+
+
+} // device
 
 }
 
 }
+
+Event<Platform::GPU_HIP>::Event() {
+  HIP_CHECK(hipEventCreateWithFlags(&_event, hipEventDisableTiming));
+}
+
+Event<Platform::GPU_HIP>::~Event() {
+  HIP_CHECK(hipEventDestroy(_event));
+}
+
+void Event<Platform::GPU_HIP>::record(gpu::hip::device::Stream& stream) {
+  record(stream.get());
+}
+
+void Event<Platform::GPU_HIP>::barrierOn(gpu::hip::device::Stream& stream) const {
+  barrierOn(stream.get());
+}
+
+void Event<Platform::GPU_HIP>::record(hipStream_t stream) {
+  HIP_CHECK(hipEventRecord(_event, stream));
+}
+
+void Event<Platform::GPU_HIP>::barrierOn(hipStream_t stream) const {
+  HIP_CHECK(hipStreamWaitEvent(stream, _event, 0));
+}
+
+void Event<Platform::GPU_HIP>::wait() const {
+  HIP_CHECK(hipEventSynchronize(_event));
+}
+
+static_assert(concepts::Completable<Event<Platform::GPU_HIP>>,
+              "Event<GPU_HIP> must model a completion token");
+static_assert(concepts::DeviceOrderable<Event<Platform::GPU_HIP>,
+                                        gpu::hip::device::Stream>,
+              "Event<GPU_HIP> must order device work w.r.t. streams");
 
 }
 

@@ -118,6 +118,37 @@ struct LATTICE_DESCRIPTOR : public LATTICE_DESCRIPTOR_BASE
 
 };
 
+/// Base descriptor of a D-dimensional lattice with Q*N directions and a list of additional fields
+template <unsigned D, unsigned Q, unsigned N, typename... FIELDS>
+struct VECTOR_LATTICE_DESCRIPTOR : public LATTICE_DESCRIPTOR_BASE
+                                 , public FIELD_TUPLE<FIELDS...> {
+  /// Number of dimensions
+  static constexpr int d = D;
+  /// Number of components per velocity
+  static constexpr int n = N;
+  /// Number of velocities
+  static constexpr int q = Q*N;
+
+  using all_t = meta::list<FIELDS...>;
+  using fields_t = meta::filter_t<is_data_field, FIELDS...>;
+  using tags_t   = meta::filter_t<is_tag_field, FIELDS...>;
+
+  /// Returns size of given FIELD
+  template <typename FIELD>
+  static constexpr std::size_t size() {
+    return FIELD::template size<VECTOR_LATTICE_DESCRIPTOR>();
+  }
+
+  /// Tag that describes the category of the descriptor
+  /**
+   * e.g. tag::RTLBM for RTLBM descriptors or tag::DEFAULT if no category tag-field is found.
+   *
+   * This is needed to enable tag-dispatching of descriptor function overloads.
+   **/
+  using category_tag = typename tags_t::template first_with_base_or_fallback<tag::CATEGORY, tag::DEFAULT>;
+
+};
+
 /// Pair of base value and descriptor type
 template <typename T, typename DESCRIPTOR>
 struct VALUED_DESCRIPTOR {

@@ -26,6 +26,8 @@
 
 #include "fieldReduction.h"
 
+#include "utilities/performanceProfiler.h"
+
 #include <cooperative_groups.h>
 #include <cooperative_groups/reduce.h>
 
@@ -192,6 +194,7 @@ void BlockLatticeFieldReductionO<FIELD, REDUCTION_OP,
     apply(ConcreteBlockLattice<T, DESCRIPTOR, Platform::GPU_CUDA>&   blockLattice,
           StaticParametersD<T, DESCRIPTOR, fields::array_of<FIELD>>& parameters)
 {
+  OLB_PROFILE_T("GPU_CUDA:FieldRed:Sync", DESCRIPTOR);
 
   const auto& blockField = blockLattice.template getField<FIELD>();
 

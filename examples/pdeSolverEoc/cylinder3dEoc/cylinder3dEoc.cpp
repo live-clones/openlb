@@ -84,7 +84,6 @@ int main( int argc, char* argv[] )
     myCaseParameters.set<VTK_ENABLED>(false);
     myCaseParameters.set<GNUPLOT_ENABLED>(false);
   }
-  myCaseParameters.fromCLI(argc, argv);
 
   T _drag[myCaseParameters.get<parameters::NUM_SIMULATIONS>()];
 

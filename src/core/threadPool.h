@@ -34,9 +34,13 @@
 #include <vector>
 
 #include "core/olbDebug.h"
+#include "core/concepts.h"
 #include "io/ostreamManager.h"
 
 namespace olb {
+
+static_assert(concepts::Completable<std::future<void>>,
+              "std::future must model the OpenLB-wide completion token concept");
 
 /// Pool of threads for CPU-based background processing
 /**
@@ -65,10 +69,13 @@ public:
 
   void wait() {}
 
-  template <typename T>
-  void waitFor(std::vector<std::future<T>>& futures) {
-    for (auto& future : futures) {
-      future.wait();
+  void waitUntilBelow(std::size_t) {}
+
+  template <typename CONTAINER>
+  requires concepts::Completable<typename CONTAINER::value_type>
+  void waitFor(CONTAINER& events) {
+    for (auto& event : events) {
+      event.wait();
     }
   }
 };
@@ -200,12 +207,33 @@ public:
     _waiting = false;
   }
 
-  /// Blocks until all tasks producing the given futures are completed
-  template <typename T>
-  void waitFor(std::vector<std::future<T>>& futures)
+  /// Block until fewer than cap tasks are pending (backpressure for producers)
+  void waitUntilBelow(std::size_t cap)
   {
-    for (auto& future : futures) {
-      future.wait();
+    OLB_PRECONDITION(_initialized);
+    if (_taskCount < cap) {
+      return;
+    }
+    _waiting = true;
+    std::unique_lock lock(_mutex);
+    _done.wait(lock, [&]() {
+      return _taskCount < cap;
+    });
+    _waiting = false;
+  }
+
+  /// Blocks until all completion tokens in the given container are done
+  /**
+   * Accepts any container of concepts::Completable. Futures of pool
+   * tasks and device-side Event completion tokens share this waiting
+   * vocabulary.
+   **/
+  template <typename CONTAINER>
+  requires concepts::Completable<typename CONTAINER::value_type>
+  void waitFor(CONTAINER& events)
+  {
+    for (auto& event : events) {
+      event.wait();
     }
   }
 

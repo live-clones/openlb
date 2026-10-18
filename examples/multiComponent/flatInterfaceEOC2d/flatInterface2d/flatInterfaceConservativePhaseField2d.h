@@ -36,12 +36,13 @@ using namespace olb::names;
 // === Step 1: Declarations ===
 using MyCase = Case<
   NavierStokes, Lattice<double, D2Q9<RHO,NABLARHO,FORCE,EXTERNAL_FORCE,TAU_EFF,SCALAR>>,
-  Component1,  Lattice<double, D2Q9<FORCE,VELOCITY,OLD_PHIU,STATISTIC>>
+  Component1,  Lattice<double, D2Q9<FORCE,VELOCITY,OLD_PHIU,STATISTIC,SCALAR>>
 >;
 
-using NSBulkDynamics = MultiPhaseIncompressibleBGKdynamics<MyCase::value_t,MyCase::descriptor_t>;
+using NSBulkDynamics = CorrectedMultiPhaseIncompressibleBGKdynamics<MyCase::value_t,MyCase::descriptor_t>;
 using PFBulkDynamics = ConservativePhaseFieldBGKdynamics<MyCase::value_t,MyCase::descriptor_t_of<Component1>>;
-using Coupling = LiangPostProcessor;
+using MixtureRules = LinearTauViscosity;
+using Coupling = CorrectedLiangPostProcessor<MixtureRules>;
 
 namespace olb::parameters {
 
@@ -103,6 +104,7 @@ void prepareLattice( MyCase& myCase )
   const T sigma = params.get<parameters::SURFACE_TENSION>();
   const T w = params.get<parameters::INTERFACE_WIDTH>();
   const T C_rho = params.get<parameters::C_RHO>();
+  const T theta = M_PI*45./180.;
 
   sLatticeNS.setUnitConverter<UnitConverterFromResolutionAndRelaxationTime<T,NSDESCRIPTOR>>(
     int   {N},               // resolution
@@ -131,11 +133,22 @@ void prepareLattice( MyCase& myCase )
     names::NavierStokes{}, sLatticeNS,
     names::Component1{}, sLatticePF
   );
-  coupling.setParameter<Coupling::TAUS>({tau_g,tau_l});
-  coupling.setParameter<Coupling::SIGMA>(sigma);
-  coupling.setParameter<Coupling::W>(w);
-  coupling.setParameter<Coupling::RHOS>({rho_g/C_rho ,rho_l/C_rho});
-  coupling.setParameter<Coupling::SWITCH>(1.);
+
+  auto zero = geometry.getMaterialIndicator(0);
+  auto all  = geometry.getMaterialIndicator(1);
+  auto wall = geometry.getMaterialIndicator(2);
+
+  phasefield::init<Coupling,MixtureRules>(
+    sLatticeNS, sLatticePF,  // both lattices
+    coupling, all,           // phase field coupling, all material numbers
+    wall, zero,              // wall and zero material numbers
+    sigma, w, theta,         // phase field lattice parameters
+    tau_g, tau_l,            // relaxation times for mixture rule
+    rho_g/C_rho, rho_l/C_rho // lattice densities for mixture rule
+  );
+  coupling.setParameter<Coupling::GAMMA>( T(0) );
+  coupling.setParameter<Coupling::GRAVITY>({T(0),T(0)});
+  coupling.setParameter<Coupling::BODY_FORCE>({T(0),T(0)});
 
   sLatticeNS.setParameter<descriptors::OMEGA>( 1./tau_l );
   sLatticePF.setParameter<descriptors::OMEGA>( 1./tau_mobil );
@@ -143,8 +156,9 @@ void prepareLattice( MyCase& myCase )
 
   {
     auto& communicator = sLatticePF.getCommunicator(stage::PreCoupling());
-    communicator.requestOverlap(1);
+    communicator.requestOverlap(2);
     communicator.template requestField<STATISTIC>();
+    communicator.template requestField<SCALAR>();
     communicator.exchangeRequests();
   }
 
@@ -152,6 +166,8 @@ void prepareLattice( MyCase& myCase )
 }
 
 void setInitialValues(MyCase& myCase) {
+  OstreamManager clout( std::cout,"setInitialValues" );
+  clout << "Set Initial values with conservative phase field model ..." << std::endl;
   using T = MyCase::value_t;
   auto& geometry = myCase.getGeometry();
   auto& params = myCase.getParameters();
@@ -209,12 +225,19 @@ void setInitialValues(MyCase& myCase) {
 
   momenta::setOrderParameter(sLatticePF, all, phi);
   momenta::setVelocity(sLatticePF, all, zeroVelocity_p);
-  sLatticePF.iniEquilibrium( geometry, 1, phi, zeroVelocity_l );
 
-  sLatticePF.executePostProcessors(stage::PreCoupling());
   sLatticeNS.initialize();
   sLatticePF.initialize();
+
+  sLatticeNS.iniEquilibrium( geometry, 1, pressure_l, zeroVelocity_l );
+  sLatticePF.iniEquilibrium( geometry, 1, phi, zeroVelocity_l );
+
+  sLatticeNS.setProcessingContext(ProcessingContext::Simulation);
+  sLatticePF.setProcessingContext(ProcessingContext::Simulation);
+
+  sLatticePF.executePostProcessors(stage::PreCoupling());
   sLatticePF.getCommunicator(stage::PreCoupling()).communicate();
+  clout << "Set Initial Velues ... OK" << std::endl;
 }
 
 void setTemporalValues(MyCase& myCase,
@@ -235,8 +258,8 @@ void getResults( MyCase& myCase,
 
   const auto& converter = sLatticeNS.getUnitConverter();
 
-  const int statIter = 20000;
-  const int saveIter = 20000;
+  const std::size_t statIter = converter.getLatticeTime(2.5e-4);
+  const std::size_t saveIter = converter.getLatticeTime(2.5e-4);
 
   Vector extent = params.get<parameters::DOMAIN_EXTENT>();
   const int N = params.get<parameters::RESOLUTION>();
@@ -264,11 +287,13 @@ void getResults( MyCase& myCase,
 
   // Writes the VTK files
   if ( iT%saveIter==0 ) {
+    sLatticeNS.setProcessingContext(ProcessingContext::Evaluation);
+    sLatticePF.setProcessingContext(ProcessingContext::Evaluation);
     SuperLatticePhysIncPressure2D<T, NSDESCRIPTOR> p_hydro( sLatticeNS, converter );
     p_hydro.getName() = "p_hydro";
     SuperLatticeDensity2D<T, PFDESCRIPTOR> phi( sLatticePF );
     phi.getName() = "phi";
-    SuperLatticeExternalScalarField2D<T, NSDESCRIPTOR, RHO> rho_L( sLatticeNS );
+    SuperLatticeField2D<T, NSDESCRIPTOR, RHO> rho_L( sLatticeNS );
     AnalyticalConst2D<T,T> ConversionDensity_( converter.getConversionFactorDensity() );
     SuperLatticeFfromAnalyticalF2D<T, NSDESCRIPTOR> ConversionDensity(ConversionDensity_, sLatticeNS);
     SuperIdentity2D<T,T> rho( rho_L * ConversionDensity );
@@ -311,12 +336,21 @@ void simulate(MyCase& myCase, bool Cahn_const) {
   auto& sLatticeNS = myCase.getLattice(NavierStokes{});
   auto& sLatticePF = myCase.getLattice(Component1{});
 
-  const std::size_t iTmax = 100000000;
+  const auto& converter = sLatticeNS.getUnitConverter();
+
+  const T physCheckInterval = 2.5e-4;                                 // [s]
+  const std::size_t checkIter = converter.getLatticeTime(physCheckInterval);
+  const std::size_t iTmax     = converter.getLatticeTime(2e-2);
+
+  const T tol           = 1e-5;
+  const T latticeUFloor = 1e-8;   // below this, u is just round-off
+  const int hitsNeeded  = 3;
+  int hits = 0;
+
+  T orderParameterL1RelError_old = 1.;
 
   util::Timer<T> timer(iTmax, myCase.getGeometry().getStatistics().getNvoxel());
   timer.start();
-
-  T orderParameterL1RelError_old = 1.;
 
   myCase.getOperator("Coupling").apply();
   for ( std::size_t iT=0; iT<=iTmax; ++iT ) {
@@ -336,12 +370,21 @@ void simulate(MyCase& myCase, bool Cahn_const) {
     if ( std::isnan( sLatticeNS.getStatistics().getAverageEnergy() ) ) {
       break;
     }
-    if(iT % (20000) == 0) {
+    if (iT % checkIter == 0) {
+      sLatticeNS.setProcessingContext(ProcessingContext::Evaluation);
+      sLatticePF.setProcessingContext(ProcessingContext::Evaluation);
       errorFlatInterface(myCase, Cahn_const);
-      clout << "Error: " << abs(orderParameterL1RelError - orderParameterL1RelError_old)/abs(orderParameterL1RelError) << std::endl;
-      if(abs(orderParameterL1RelError - orderParameterL1RelError_old)/abs(orderParameterL1RelError) < 1e-5){
-        clout << "Converged at: " << abs(orderParameterL1RelError - orderParameterL1RelError_old)/abs(orderParameterL1RelError) << std::endl;
-        break;
+
+      if (iT > 0) {
+        const T dPhi = util::abs(orderParameterL1RelError - orderParameterL1RelError_old)
+                     / util::abs(orderParameterL1RelError);
+        const T uLat = velocityLinfAbsError / converter.getConversionFactorVelocity();
+
+        if (dPhi < tol && uLat < latticeUFloor) { ++hits; } else { hits = 0; }
+        if (hits >= hitsNeeded) {
+          clout << "Converged at physT=" << converter.getPhysTime(iT) << std::endl;
+          break;
+        }
       }
       orderParameterL1RelError_old = orderParameterL1RelError;
     }

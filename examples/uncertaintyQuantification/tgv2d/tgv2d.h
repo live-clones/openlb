@@ -35,7 +35,7 @@
  using namespace olb::descriptors;
  using namespace olb::graphics;
 
- using T = FLOATING_POINT_TYPE;
+ using T = double;
  using DESCRIPTOR = D2Q9<>;
 
  // Choose DNS or SMAGORINSKY LES model (uncomment as needed)

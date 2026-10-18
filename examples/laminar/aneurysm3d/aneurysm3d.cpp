@@ -102,6 +102,7 @@ void prepareGeometry(MyCase& myCase)
 void prepareLattice(MyCase& myCase)
 {
   using T        = MyCase::value_t;
+  using DESCRIPTOR = MyCase::descriptor_t;
   auto& params   = myCase.getParameters();
   auto& geometry = myCase.getGeometry();
   auto& lattice  = myCase.getLattice(NavierStokes {});
@@ -110,7 +111,7 @@ void prepareLattice(MyCase& myCase)
   const T CFL = params.get<parameters::CFL>();
   const T Re  = params.get<parameters::REYNOLDS>();
 
-  lattice.setUnitConverter(
+  lattice.setUnitConverter<UnitConverter<T,DESCRIPTOR>>(
       (T)L,               // physDeltaX: spacing between two lattice cells in [m]
       (T)CFL * L / 0.2,   // physDeltaT: time step in [s]
       (T)0.007,           // charPhysLength: reference length of simulation geometry in [m]
@@ -303,11 +304,10 @@ int main(int argc, char* argv[])
     myCaseParameters.set<REYNOLDS>((T)708.);
     myCaseParameters.set<MAX_PHYS_T>((T)16.);
     myCaseParameters.set<CFL>((T)0.02);
-    myCaseParameters.set<PHYS_DELTA_X>([&]() {
-      return 0.05 / myCaseParameters.get<parameters::RESOLUTION>();
+    myCaseParameters.set<PHYS_DELTA_X>([](MyCase::ParametersD& p) {
+      return 0.05 / p.get<parameters::RESOLUTION>();
     });
   }
-  myCaseParameters.fromCLI(argc, argv);
 
   Mesh mesh = createMesh(myCaseParameters);
 

@@ -139,7 +139,9 @@ public:
                                                     typename abstractFieldArray_t::field_t>&>(abstractFieldArray);
         FieldD<T, DESCRIPTOR, fields::array_of<FIELD>> fieldArrayPointers;
         for (unsigned iD = 0; iD < fieldArray.d; ++iD) {
-          if constexpr (platform.value == Platform::GPU_CUDA) {
+          if constexpr ((platform.value == Platform::GPU_CUDA)
+                     || (platform.value == Platform::GPU_HIP)
+                     ) {
             fieldArrayPointers[iD] = fieldArray[iD].deviceData();
           }
           else {
@@ -207,7 +209,8 @@ public:
                                                     typename abstractFieldArray_t::field_t>&>(abstractFieldArray);
         FieldD<T, DESCRIPTOR, fields::array_of<FIELD>> fieldArrayPointers;
         for (unsigned iD = 0; iD < fieldArray.d; ++iD) {
-          if constexpr (platform.value == Platform::GPU_CUDA) {
+          if constexpr ((platform.value == Platform::GPU_CUDA)
+                     || (platform.value == Platform::GPU_HIP)){
             fieldArrayPointers[iD] = fieldArray[iD].deviceData();
           }
           else {
@@ -266,7 +269,7 @@ public:
                                                     typename abstractFieldArray_t::field_t>&>(abstractFieldArray);
         FieldD<T, DESCRIPTOR, fields::array_of<FIELD>> fieldArrayPointers;
         for (unsigned iD = 0; iD < fieldArray.d; ++iD) {
-          if constexpr (platform.value == Platform::GPU_CUDA) {
+          if constexpr ((platform.value == Platform::GPU_CUDA) || (platform.value == Platform::GPU_HIP)) {
             fieldArrayPointers[iD] = fieldArray[iD].deviceData();
           }
           else {

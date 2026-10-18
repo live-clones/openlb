@@ -457,9 +457,9 @@ void postprocess(MyCase& myCase, const std::size_t& iT, util::Timer<MyCase::valu
     SuperLatticePhysVelocity3D<T, DESCRIPTOR> velocity(lattice, converter);
     SuperLatticePhysPressure3D<T, DESCRIPTOR> pressure(lattice, converter);
     SuperLatticeDensity3D<T, DESCRIPTOR> density(lattice);
-    SuperLatticeExternalScalarField3D<T, DESCRIPTOR, FreeSurface::CELL_TYPE> types(lattice);
-    SuperLatticeExternalScalarField3D<T, DESCRIPTOR, FreeSurface::EPSILON> epsilon(lattice);
-    SuperLatticeExternalScalarField3D<T, DESCRIPTOR, FreeSurface::MASS> mass(lattice);
+    SuperLatticeField3D<T, DESCRIPTOR, FreeSurface::CELL_TYPE> types(lattice);
+    SuperLatticeField3D<T, DESCRIPTOR, FreeSurface::EPSILON> epsilon(lattice);
+    SuperLatticeField3D<T, DESCRIPTOR, FreeSurface::MASS> mass(lattice);
 
     vtmWriter.addFunctor(velocity, "Velocity");
     vtmWriter.addFunctor(pressure, "Pressure");
@@ -575,7 +575,6 @@ int main(int argc, char* argv[])
     myCaseParameters.set<FreeSurface::TRANSITION>(0.01);
     myCaseParameters.set<FreeSurface::LONELY_THRESHOLD>(0.1);
   }
-  myCaseParameters.fromCLI(argc, argv);
 
   /// === Step 3: Create Mesh ===
   Mesh mesh = createMesh(myCaseParameters);

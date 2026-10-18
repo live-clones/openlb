@@ -32,6 +32,9 @@
 
 #include <vector>
 #include <memory>
+
+#include <mutex>
+#include <thread>
 #endif
 
 #include <string>
@@ -56,6 +59,7 @@ private:
   std::unique_ptr<MPI_Request[]> _mpiRequest;
   /// vector of MPI_Status
   std::unique_ptr<MPI_Status[]> _mpiStatus;
+
 public:
   MpiNonBlockingHelper();
   ~MpiNonBlockingHelper() = default;
@@ -102,11 +106,18 @@ public:
   /// Returns universal MPI-time in seconds
   double getTime() const;
 
+  /// Returns the node count
+  int getNodes() const;
+  /// Returns the rank in node
+  int getNodeLocalRank() const;
+
   /// Synchronizes the processes
   void barrier(MPI_Comm comm = MPI_COMM_WORLD);
 
   /// Synchronizes the processes and wait to ensure correct cout order
   void synchronizeIO(unsigned tDelay = 100, MPI_Comm comm = MPI_COMM_WORLD);
+
+  void injectEntropy();
 
   /// Sends data at *buf, blocking
   template <typename T>
@@ -258,12 +269,14 @@ public:
 
   template <typename T>
   void allreduce(const T* in, T* out, int count, MPI_Op op, MPI_Comm comm = MPI_COMM_WORLD);
-  template <typename T,unsigned DIM>
-  void allreduce(const util::ADf<T,DIM>* sendBuf, util::ADf<T,DIM>* recvBuf, int count, MPI_Op op, MPI_Comm = MPI_COMM_WORLD);
 
   /// All reduction operation of a vector data
   template <typename T>
   void allReduce(T& reductVal, MPI_Op op, MPI_Comm comm = MPI_COMM_WORLD);
+
+  template <typename T,unsigned DIM>
+  void allreduce(const util::ADf<T,DIM>* sendBuf, util::ADf<T,DIM>* recvBuf, int count, MPI_Op op, MPI_Comm = MPI_COMM_WORLD);
+
 
   /// Element-per-element all-reduction of a vector of data (in-place)
   template <typename T>
@@ -279,11 +292,20 @@ private:
   MpiManager();
   ~MpiManager();
 
-private:
-  int numTasks, taskId;
   bool ok;
 
+  int _globalRanks;
+  int _globalRank;
+
+  MPI_Comm _intraNodeComm;
+  int _localRank;
+  int _localRanksPerNode;
+  int _globalNodes;
+
+  int _providedThreadLevel;
+
   friend MpiManager& mpi();
+
 };
 
 #else

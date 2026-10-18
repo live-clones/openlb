@@ -187,7 +187,7 @@ struct TypeIndexedTuple {
   tuple_t tuple;
 
   TypeIndexedTuple() any_platform = default;
-  TypeIndexedTuple(TypeIndexedTuple&) any_platform = default;
+  TypeIndexedTuple(const TypeIndexedTuple&) any_platform = default;
   TypeIndexedTuple(TypeIndexedTuple&& rhs) any_platform = default;
 
   template <typename... KEYS>

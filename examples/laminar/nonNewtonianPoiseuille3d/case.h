@@ -526,47 +526,47 @@ void setGetParameters( MyCase::ParametersD& myCaseParameters, int& argc, char** 
   myCaseParameters.set<RESOLUTION>(31);
   myCaseParameters.set<EOC_RESOLUTIONS>({41, 61, 81, 101});
   myCaseParameters.set<DOMAIN_EXTENT>({3e-3,1e-3,1e-3});
-  myCaseParameters.set<LENGTH>([&] {
-    return myCaseParameters.get<DOMAIN_EXTENT>()[0];
+  myCaseParameters.set<LENGTH>([](MyCase::ParametersD& p) {
+    return p.get<DOMAIN_EXTENT>()[0];
   });
-  myCaseParameters.set<DIAMETER>([&] {
-    return myCaseParameters.get<DOMAIN_EXTENT>()[1];
+  myCaseParameters.set<DIAMETER>([](MyCase::ParametersD& p) {
+    return p.get<DOMAIN_EXTENT>()[1];
   });
-  myCaseParameters.set<RADIUS>([&] {
-    return myCaseParameters.get<DIAMETER>() / 2.;
+  myCaseParameters.set<RADIUS>([](MyCase::ParametersD& p) {
+    return p.get<DIAMETER>() / 2.;
   });
-  myCaseParameters.set<PHYS_CHAR_LENGTH>([&] {
-    return myCaseParameters.get<DIAMETER>();
+  myCaseParameters.set<PHYS_CHAR_LENGTH>([](MyCase::ParametersD& p) {
+    return p.get<DIAMETER>();
   });
-  myCaseParameters.set<PHYS_DELTA_X>([&] {
-    return myCaseParameters.get<PHYS_CHAR_LENGTH>() / myCaseParameters.get<RESOLUTION>();
+  myCaseParameters.set<PHYS_DELTA_X>([](MyCase::ParametersD& p) {
+    return p.get<PHYS_CHAR_LENGTH>() / p.get<RESOLUTION>();
   });
   myCaseParameters.set<LATTICE_RELAXATION_TIME>(0.64265);
   myCaseParameters.set<PHYS_CHAR_DENSITY>(1060);
   myCaseParameters.set<MAX_PHYS_T>(.3);
   myCaseParameters.set<AXIS>({1.,0.,0.});
-  myCaseParameters.set<ORIGIN>([&] {
-    T l = myCaseParameters.get<LENGTH>();
-    T r = myCaseParameters.get<RADIUS>();
+  myCaseParameters.set<ORIGIN>([](MyCase::ParametersD& p) {
+    T l = p.get<LENGTH>();
+    T r = p.get<RADIUS>();
     return Vector(l,r,r);
   });
   myCaseParameters.set<REYNOLDS>(100);
   myCaseParameters.set<DYNAMIC_VISCOSITY>(0.0040755);
-  myCaseParameters.set<PHYS_CHAR_VISCOSITY>([&] {
-    return myCaseParameters.get<DYNAMIC_VISCOSITY>() / myCaseParameters.get<PHYS_CHAR_DENSITY>();
+  myCaseParameters.set<PHYS_CHAR_VISCOSITY>([](MyCase::ParametersD& p) {
+    return p.get<DYNAMIC_VISCOSITY>() / p.get<PHYS_CHAR_DENSITY>();
   });
-  myCaseParameters.set<PRESSURE_DROP>([&] {
-    return (16.*util::pow(myCaseParameters.get<DYNAMIC_VISCOSITY>(),2.)*myCaseParameters.get<REYNOLDS>())/
-      (myCaseParameters.get<PHYS_CHAR_DENSITY>()*util::pow(myCaseParameters.get<DOMAIN_EXTENT>()[1],3.));
+  myCaseParameters.set<PRESSURE_DROP>([](MyCase::ParametersD& p) {
+    return (16.*util::pow(p.get<DYNAMIC_VISCOSITY>(),2.)*p.get<REYNOLDS>())/
+      (p.get<PHYS_CHAR_DENSITY>()*util::pow(p.get<DOMAIN_EXTENT>()[1],3.));
   });
 
   // PowerLaw model parameter
   myCaseParameters.set<POWER_LAW_EXPONENT>(0.65);
-  myCaseParameters.set<CONSISTENCY_INDEX>([&] {
-    T dynamicViscosity  = myCaseParameters.get<DYNAMIC_VISCOSITY>();
-    T n                 = myCaseParameters.get<POWER_LAW_EXPONENT>();
-    T pressureDrop      = myCaseParameters.get<PRESSURE_DROP>();
-    T radius            = myCaseParameters.get<RADIUS>();
+  myCaseParameters.set<CONSISTENCY_INDEX>([](MyCase::ParametersD& p) {
+    T dynamicViscosity  = p.get<DYNAMIC_VISCOSITY>();
+    T n                 = p.get<POWER_LAW_EXPONENT>();
+    T pressureDrop      = p.get<PRESSURE_DROP>();
+    T radius            = p.get<RADIUS>();
     return  util::pow(dynamicViscosity,n)
             * util::pow((radius*pressureDrop/8.)
                         * util::pow(n/(n+1),n)
@@ -575,21 +575,20 @@ void setGetParameters( MyCase::ParametersD& myCaseParameters, int& argc, char** 
 
   // Casson model parameter
   myCaseParameters.set<K0>(0.07);  // k0 constant (Pa)^0.5, k0^2 corresponds to yield stress
-  myCaseParameters.set<K1>([&] {
-    return  util::sqrt(myCaseParameters.get<DYNAMIC_VISCOSITY>());
+  myCaseParameters.set<K1>([](MyCase::ParametersD& p) {
+    return  util::sqrt(p.get<DYNAMIC_VISCOSITY>());
   });  // k1 constant (Pa*s)^0.5, k1^2 corresponds to Casson viscosity
 
   // CarreauYasuda model parameter
   myCaseParameters.set<N_CY>(0.9);  // CY fluid index
   myCaseParameters.set<MODEL_CONSTANT_A>(1.5);  // model constant
   myCaseParameters.set<CHAR_TIME_CONSTANT>(3.313);  // characteristic time constant lambda (s)
-  myCaseParameters.set<MU_ZERO>([&] {
-    return myCaseParameters.get<DYNAMIC_VISCOSITY>()*1.45;
+  myCaseParameters.set<MU_ZERO>([](MyCase::ParametersD& p) {
+    return p.get<DYNAMIC_VISCOSITY>()*1.45;
   });  // zero viscosity (Pa*s)
-  myCaseParameters.set<MU_INF>([&] {
-    return myCaseParameters.get<DYNAMIC_VISCOSITY>()/10.;
+  myCaseParameters.set<MU_INF>([](MyCase::ParametersD& p) {
+    return p.get<DYNAMIC_VISCOSITY>()/10.;
   });  // infinity viscosity (Pa*s)
   myCaseParameters.set<N_PL>(0.708);  // PL fluid index
 
-  myCaseParameters.fromCLI(argc, argv);
 }

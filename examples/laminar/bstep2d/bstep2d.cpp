@@ -344,11 +344,10 @@ int main(int argc, char* argv[])
     myCaseParameters.set<PHYS_CHAR_VISCOSITY>(1.0 / 19230.76923);
     myCaseParameters.set<PHYS_CHAR_DENSITY>(1.0);
     myCaseParameters.set<DOMAIN_EXTENT>({0.7, 0.0101});
-    myCaseParameters.set<PHYS_CHAR_LENGTH>([&]{return 2.0 *
-          (myCaseParameters.get<DOMAIN_EXTENT>()[1] - myCaseParameters.get<PHYS_HEIGHT_OF_STEP>());});
+    myCaseParameters.set<PHYS_CHAR_LENGTH>([](MyCase::ParametersD& p){return 2.0 *
+          (p.get<DOMAIN_EXTENT>()[1] - p.get<PHYS_HEIGHT_OF_STEP>());});
     myCaseParameters.set<MAX_PHYS_T>(2.0);
   }
-  myCaseParameters.fromCLI(argc, argv);
 
   /// === Step 3: Create Mesh ===
   Mesh mesh = createMesh(myCaseParameters);

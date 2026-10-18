@@ -56,7 +56,6 @@ int main(int argc, char *argv[]) {
     myCaseParameters.set<C_EQ>(50.);
     myCaseParameters.set<PHYS_DENSITY>(1.);
   }
-  myCaseParameters.fromCLI(argc, argv);
 
   Mesh mesh = createMesh(myCaseParameters);
 

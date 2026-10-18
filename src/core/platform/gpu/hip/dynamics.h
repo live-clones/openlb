@@ -24,6 +24,8 @@
 #ifndef GPU_HIP_DYNAMICS_H
 #define GPU_HIP_DYNAMICS_H
 
+#include <cstdint>
+
 namespace olb {
 
 namespace gpu {
@@ -34,9 +36,9 @@ namespace hip {
 template <typename T, typename DESCRIPTOR>
 struct Dynamics;
 
-/// On-device field mirroring BlockDynamicsMap
+/// On-device per-cell index into the per-block dynamics dispatch table (0 == nullptr)
 template <typename T, typename DESCRIPTOR>
-struct DYNAMICS : public descriptors::TYPED_FIELD_BASE<Dynamics<T,DESCRIPTOR>*,1> { };
+struct DYNAMICS : public descriptors::TYPED_FIELD_BASE<std::uint16_t,1> { };
 
 }
 

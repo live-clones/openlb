@@ -62,6 +62,14 @@ using NoDynamics = dynamics::Tuple<
   collision::None
 >;
 
+template <typename T, typename DESCRIPTOR>
+using NoDynamicsWithBulkMomenta = dynamics::Tuple<
+  T, DESCRIPTOR,
+  momenta::BulkTuple,
+  equilibria::None,
+  collision::None
+>;
+
 /// Dynamics for "dead cells" doing nothing. Variant with density=0
 template <typename T, typename DESCRIPTOR>
 using NoDynamicsWithZero = dynamics::Tuple<
@@ -79,6 +87,19 @@ using NoDynamicsWithFixedDensity = dynamics::Tuple<
   momenta::Tuple<
     momenta::FixedDensity,
     momenta::ZeroMomentum,
+    momenta::ZeroStress,
+    momenta::DefineSeparately
+  >,
+  equilibria::None,
+  collision::None
+>;
+
+template <typename T, typename DESCRIPTOR>
+using NoDynamicsWithFixedDensityAndVelocity = dynamics::Tuple<
+  T, DESCRIPTOR,
+  momenta::Tuple<
+    momenta::FixedDensity,
+    momenta::FixedVelocityMomentum,
     momenta::ZeroStress,
     momenta::DefineSeparately
   >,
@@ -369,7 +390,7 @@ using MultiPhaseIncompressibleSmagorinskyTRTdynamics = dynamics::Tuple<
   momenta::IncBulkTuple<momenta::ForcedMomentum<momenta::IncompressibleBulkMomentum>>,
   equilibria::MPIncompressible,
   collision::OmegaFromCellTauEff<collision::IncompressibleSmagorinskyEffectiveOmega<collision::TRT>>,
-  forcing::LiangTRT<momenta::ForcedWithIncompressibleStress>
+  forcing::LiangTRT<momenta::Forced>
 >;
 
 template <typename T, typename DESCRIPTOR>
@@ -425,12 +446,48 @@ using CorrectedMultiPhaseIncompressibleSmagorinskyRLBdynamics = dynamics::Tuple<
   forcing::CorrectedLiang<momenta::Forced>
 >;
 
+template <typename T, typename DESCRIPTOR>
+using CorrectedMultiPhaseIncompressibleBGKdynamics = dynamics::Tuple<
+  T, DESCRIPTOR,
+  momenta::CorrectedIncBulkTuple<momenta::ForcedMomentum<momenta::CorrectedIncompressibleBulkMomentum>>,
+  equilibria::CorrectedMPIncompressible,
+  collision::OmegaFromCellTauEff<collision::BGK>,
+  forcing::CorrectedLiang<momenta::Forced>
+>;
+
+template <typename T, typename DESCRIPTOR>
+using CorrectedMultiPhaseContiIncompressibleSmagorinskyRLBdynamics = dynamics::Tuple<
+  T, DESCRIPTOR,
+  momenta::CorrectedContiIncBulkTuple<momenta::ForcedMomentum<momenta::CorrectedIncompressibleBulkMomentum>>,
+  equilibria::CorrectedMPContiIncompressible,
+  collision::OmegaFromCellTauEff<collision::IncompressibleSmagorinskyEffectiveOmega<collision::CIRLB>>,
+  forcing::CorrectedLiang<momenta::Forced>
+>;
+
 template <typename T, typename DESCRIPTOR, typename MOMENTA=momenta::ExternalVelocityTuple>
 using ConservativePhaseFieldBGKdynamics = dynamics::Tuple<
   T, DESCRIPTOR,
   MOMENTA,
   equilibria::FirstOrder,
   collision::BGK,
+  forcing::ConservativePhaseField
+>;
+
+template <typename T, typename DESCRIPTOR, typename MOMENTA=momenta::ExternalVelocityTuple>
+using ConservativePhaseFieldMassTransferBGKdynamics = dynamics::Tuple<
+  T, DESCRIPTOR,
+  MOMENTA,
+  equilibria::FirstOrder,
+  collision::BGK,
+  forcing::ConservativePhaseFieldMassTransfer
+>;
+
+template <typename T, typename DESCRIPTOR, typename MOMENTA=momenta::ExternalVelocityTuple>
+using ConservativePhaseFieldRLBdynamics = dynamics::Tuple<
+  T, DESCRIPTOR,
+  MOMENTA,
+  equilibria::FirstOrder,
+  collision::AdvectionDiffusionRLB,
   forcing::ConservativePhaseField
 >;
 
@@ -488,6 +545,13 @@ public:
   using exchange_value_type = CombinedRLBdynamics<
     NEW_T, DESCRIPTOR,
     typename DYNAMICS::template exchange_value_type<NEW_T>,
+    MOMENTA
+  >;
+
+  template <typename NEW_DESCRIPTOR>
+  using exchange_descriptor = CombinedRLBdynamics<
+    T, NEW_DESCRIPTOR,
+    typename DYNAMICS::template exchange_descriptor<NEW_DESCRIPTOR>,
     MOMENTA
   >;
 
@@ -692,6 +756,9 @@ struct ZeroDistributionDynamics final : public dynamics::CustomCollision<
   template <typename NEW_T>
   using exchange_value_type = ZeroDistributionDynamics<NEW_T,DESCRIPTOR>;
 
+  template <typename NEW_DESCRIPTOR>
+  using exchange_descriptor = ZeroDistributionDynamics<T,NEW_DESCRIPTOR>;
+
   template <typename M>
   using exchange_momenta = ZeroDistributionDynamics<T,DESCRIPTOR>;
 
@@ -703,7 +770,7 @@ struct ZeroDistributionDynamics final : public dynamics::CustomCollision<
     return block.template getData<OperatorParameters<ZeroDistributionDynamics>>();
   }
 
-  template <typename CELL, typename PARAMETERS, typename V=typename CELL::value_t>
+  template <concepts::Cell CELL, typename PARAMETERS, typename V=typename CELL::value_t>
   CellStatistic<V> collide(CELL& cell, PARAMETERS& parameters) any_platform {
     for (int iPop=0; iPop < DESCRIPTOR::q; ++iPop) {
       cell[iPop] = -descriptors::t<T,DESCRIPTOR>(iPop);
@@ -770,6 +837,9 @@ struct ForcedVANSBGKdynamics final : public dynamics::CustomCollision<T,DESCRIPT
   template <typename NEW_T>
   using exchange_value_type = ForcedVANSBGKdynamics<NEW_T,DESCRIPTOR,MOMENTA>;
 
+  template <typename NEW_DESCRIPTOR>
+  using exchange_descriptor = ForcedVANSBGKdynamics<T,NEW_DESCRIPTOR,MOMENTA>;
+
   std::type_index id() override {
     return typeid(ForcedVANSBGKdynamics);
   }
@@ -797,7 +867,7 @@ struct ForcedVANSBGKdynamics final : public dynamics::CustomCollision<T,DESCRIPT
     }
   }
 
-  template <typename CELL, typename PARAMETERS, typename V=typename CELL::value_t>
+  template <concepts::Cell CELL, typename PARAMETERS, typename V=typename CELL::value_t>
   CellStatistic<V> collide(CELL& cell, PARAMETERS& parameters) {
     V rho, u[DESCRIPTOR::d];
     V porosity = cell.template getField<descriptors::POROSITY>();

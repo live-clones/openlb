@@ -31,6 +31,9 @@
 
 #include "core/cell.h"
 #include "core/stages.h"
+#include "core/concepts.h"
+#include "core/platform/event.h"
+#include "core/collisionExecutionPolicy.h"
 
 #include "postProcessing.h"
 #include "latticeStatistics.h"
@@ -56,6 +59,10 @@
 #include "platform/gpu/hip.h"
 #endif
 
+#ifdef PLATFORM_GPU_SYCL
+#include "platform/gpu/sycl.h"
+#endif
+
 #include "blockDynamicsMap.h"
 #include "blockPostProcessorMap.h"
 
@@ -64,6 +71,7 @@
 #include <memory>
 #include <vector>
 #include <map>
+#include <tuple>
 #include <functional>
 
 namespace olb {
@@ -72,6 +80,7 @@ namespace olb {
 template<typename T, typename DESCRIPTOR> class SuperLattice;
 template<typename T, typename DESCRIPTOR> struct Dynamics;
 template<typename T, typename DESCRIPTOR, Platform PLATFORM> class ConcreteBlockLattice;
+template<typename T, unsigned D> class Cuboid;
 
 /// Curried ConcreteBlockLattice template for use in callUsingConcretePlatform
 template<typename T, typename DESCRIPTOR>
@@ -94,6 +103,7 @@ requires (!concepts::LatticeDescriptor<DESCRIPTOR>)
 class BlockLattice<T,DESCRIPTOR> { };
 
 /// Platform-abstracted block lattice for external access and inter-block interaction
+/// \ingroup core
 template<concepts::BaseType T, concepts::LatticeDescriptor DESCRIPTOR>
 class BlockLattice<T,DESCRIPTOR> : public BlockStructure<DESCRIPTOR>
                                  , public Serializable {
@@ -103,7 +113,10 @@ protected:
 
   /// True if statistics are gathered during collide
   bool _statisticsEnabled;
-  LatticeStatistics<T>* _statistics;
+  LatticeStatistics<T,DESCRIPTOR>* _statistics;
+
+  /// True if any defined dynamics consumes a live-statistics parameter
+  bool _consumesLiveStatistics = false;
 
   /// True for lattice that can be introspected
   /**
@@ -111,7 +124,14 @@ protected:
    **/
   bool _introspectable;
 
+  /// Collision execution policy (resolved by SuperLattice from the LoadBalancer)
+  CollisionExecutionPolicy _collisionPolicy{};
+
+  const Vector<T,DESCRIPTOR::d> _physOrigin;
+  const T                       _physDeltaR;
+
 public:
+  BlockLattice(const Cuboid<T,DESCRIPTOR::d>& cuboid, int padding, Platform platform);
   BlockLattice(Vector<int,DESCRIPTOR::d> size, int padding, Platform platform);
   virtual ~BlockLattice();
 
@@ -136,6 +156,16 @@ public:
   /// Return platform used to process lattice
   Platform getPlatform() const {
     return _platform;
+  }
+
+  Vector<T,DESCRIPTOR::d> getOrigin() const {
+    return _physOrigin;
+  }
+  T getDeltaR() const {
+    return _physDeltaR;
+  }
+  Vector<T,DESCRIPTOR::d> getPhysR(CellID iCell) const {
+    return _physOrigin + this->getLatticeR(iCell)*_physDeltaR;
   }
 
   template <Platform PLATFORM>
@@ -236,11 +266,26 @@ public:
   /// Initialize the lattice cells to become ready for simulation
   void initialize();
 
+  virtual void resolveMomentsDemands() { }
+
   bool statisticsEnabled() const {
     return _statisticsEnabled;
   }
   void setStatisticsEnabled(bool state) {
     _statisticsEnabled = state;
+  }
+
+  /// Whether any defined dynamics consumes a live-statistics parameter
+  bool consumesLiveStatistics() const {
+    return _consumesLiveStatistics;
+  }
+
+  /// Collision execution policy for this block (overlap axis already resolved)
+  CollisionExecutionPolicy getCollisionPolicy() const {
+    return _collisionPolicy;
+  }
+  void setCollisionPolicy(CollisionExecutionPolicy policy) {
+    _collisionPolicy = policy;
   }
 
   bool isIntrospectable() const {
@@ -328,6 +373,9 @@ public:
   /// Returns true if stage contains post processor
   virtual bool hasPostProcessor(std::type_index stage,
                                 PostProcessorPromise<T,DESCRIPTOR>&& promise) = 0;
+  /// Remove post processor from stage, returns whether one was removed
+  virtual bool removePostProcessor(std::type_index stage,
+                                   PostProcessorPromise<T,DESCRIPTOR>&& promise) = 0;
   /// Schedule post processor for application to latticeR in stage
   virtual void addPostProcessor(std::type_index stage,
                                 LatticeR<DESCRIPTOR::d> latticeR,
@@ -352,6 +400,10 @@ public:
    * Used as input for automatic code generation
    **/
   virtual void writeOperatorAsCSV(std::ostream&) const = 0;
+  /// Prints CSV-structured field storage manifest for memory introspection
+  virtual void writeFieldsAsCSV(std::ostream&) const = 0;
+  /// Distinct tiles the given cells map into for a sparse field, -1 if the field is dense or absent
+  virtual long countHaloTilesForField(std::type_index field, const std::vector<CellID>& cells) const = 0;
 
   /// Execute post processors of stage
   virtual void postProcess(std::type_index stage = typeid(stage::PostStream)) = 0;
@@ -452,9 +504,9 @@ public:
   void stripeOffDensityOffset(T offset);
 
   /// Return a handle to the LatticeStatistics object
-  LatticeStatistics<T>& getStatistics();
+  LatticeStatistics<T,DESCRIPTOR>& getStatistics();
   /// Return a constant handle to the LatticeStatistics object
-  LatticeStatistics<T> const& getStatistics() const;
+  LatticeStatistics<T,DESCRIPTOR> const& getStatistics() const;
   /// Revert streaming direction for adjoint simulations
   virtual void revertStreaming() = 0;
 };
@@ -463,6 +515,20 @@ public:
 template<typename T, typename DESCRIPTOR, Platform PLATFORM=Platform::CPU_SISD>
 class ConcreteBlockLattice final : public BlockLattice<T,DESCRIPTOR> {
 private:
+  /// Completion of the most recent outer (overlap) collision dispatch
+  /**
+   * Recorded by collision operators that split outer / inner bulk work
+   * on asynchronously executing platforms. Consumers of outer collision
+   * results (halo communication, post processors) order against it.
+   **/
+  Event<PLATFORM> _outerCollisionDone;
+  /// Completion of the most recent cell-wise post processor dispatch
+  /**
+   * Recorded after each PerCell(WithParameters) dispatch on asynchronously
+   * executing platforms. Halo communication of post-processed data (e.g.
+   * boundary populations) orders against it.
+   **/
+  Event<PLATFORM> _postProcessorsDone;
   /// Field data
   ConcreteData<T,DESCRIPTOR,PLATFORM> _data;
   /// Index of DESCRIPTOR-declared field arrays
@@ -476,15 +542,29 @@ private:
   std::optional<std::function<void(ConcreteBlockLattice&)>> _customCollisionO;
   /// Map of post processor stages
   std::map<std::type_index,
-           std::map<int,
-                    BlockPostProcessorMap<T,DESCRIPTOR,PLATFORM>,
-                    std::less<int>>
+           std::map<PostProcessorPriority,
+                    BlockPostProcessorMap<T,DESCRIPTOR,PLATFORM>>
            > _postProcessors;
+  struct RecordedMomentsDemand {
+    CellID cell;
+    std::type_index consumer;
+    std::type_index stage;
+    int priority;
+    MomentsDemand<DESCRIPTOR::d> demand;
+  };
+  std::vector<RecordedMomentsDemand> _momentsDemands;
   /// Flag to set streaming direction
   bool _revertedStreaming = false;
+
+  /// Allocate descriptor field arrays and seed NoDynamics; shared by both constructors
+  void allocateFields();
 public:
   using value_t = T;
   using descriptor_t = DESCRIPTOR;
+  /// Stored population scalar (half under store_precision, else T) -- lets the
+  /// masked halo layout size its segment at storage precision without pulling
+  /// fieldArrayD into communicatable.h.
+  using stored_population_t = population_scalar_t<T,DESCRIPTOR>;
 
 #ifdef PLATFORM_CPU_SIMD
   static_assert(PLATFORM != Platform::CPU_SIMD || std::is_same_v<T,double> || std::is_same_v<T,float>,
@@ -496,10 +576,20 @@ public:
   static_assert(DESCRIPTOR::template provides<descriptors::POPULATION>(),
                 "Lattice DESCRIPTOR must provide POPULATION field");
 
+  static_assert(concepts::Completable<Event<PLATFORM>>,
+                "Event<PLATFORM> must model a completion token");
+
+  ConcreteBlockLattice(const Cuboid<T,DESCRIPTOR::d>& cuboid, int padding=0);
   ConcreteBlockLattice(Vector<int,DESCRIPTOR::d> size, int padding=0);
 
   void setProcessingContext(ProcessingContext context) override {
     _data.setProcessingContext(context);
+    if constexpr (platformHasSparseColumn(PLATFORM) && !isPlatformCPU(PLATFORM)) {
+      // Re-capture sparse fields' device tile pointers, which the sync just (re)allocated
+      if (context == ProcessingContext::Simulation) {
+        getDataRegistry().refreshSparseAccessors();
+      }
+    }
   }
 
   ConcreteData<T,DESCRIPTOR,PLATFORM>& getData() {
@@ -524,7 +614,6 @@ public:
   Communicatable& getCommunicatable(std::type_index field) override {
     return *_communicatables.at(field).get();
   }
-
   /// Apply collision step of non-overlap interior
   void collide() override;
   /// Perform propagation step on the whole block
@@ -538,6 +627,21 @@ public:
    **/
   void stream() override;
 
+  /// Completion token of the last outer (overlap) collision dispatch
+  Event<PLATFORM>& outerCollisionDone() {
+    return _outerCollisionDone;
+  }
+  const Event<PLATFORM>& outerCollisionDone() const {
+    return _outerCollisionDone;
+  }
+
+  /// Completion token of the last cell-wise post processor dispatch
+  Event<PLATFORM>& postProcessorsDone() {
+    return _postProcessorsDone;
+  }
+  const Event<PLATFORM>& postProcessorsDone() const {
+    return _postProcessorsDone;
+  }
   /// Replace default collision logic of BlockDynamicsMap
   /**
    * May be used to inject domain knowledge for improving performance
@@ -560,6 +664,7 @@ public:
 
   void setDynamics(CellID iCell, DynamicsPromise<T,DESCRIPTOR>&& promise) override
   {
+    this->_consumesLiveStatistics |= promise.consumesLiveStatistics();
     _dynamicsMap.set(iCell, std::forward<decltype(promise)>(promise));
     auto cell = this->get(iCell);
     getDynamics(iCell)->initialize(cell);
@@ -582,12 +687,12 @@ public:
   {
     static_assert(DESCRIPTOR::template size<PARAMETER>() == DESCRIPTOR::template size<FIELD>(),
                   "PARAMETER field size must match FIELD size");
-    if constexpr (PLATFORM == Platform::GPU_CUDA || PLATFORM == Platform::GPU_HIP) {
+    if constexpr (PLATFORM == Platform::GPU_CUDA || PLATFORM == Platform::GPU_HIP || PLATFORM == Platform::GPU_SYCL) {
       static_assert(PLATFORM == _PLATFORM, "FieldArrayD must be available on PLATFORM");
     }
     FieldD<T,DESCRIPTOR,PARAMETER> fieldArrayPointers;
     for (unsigned iD=0; iD < fieldArray.d; ++iD) {
-      if constexpr (PLATFORM == Platform::GPU_CUDA || PLATFORM == Platform::GPU_HIP) {
+      if constexpr (PLATFORM == Platform::GPU_CUDA || PLATFORM == Platform::GPU_HIP || PLATFORM == Platform::GPU_SYCL) {
         fieldArrayPointers[iD] = fieldArray[iD].deviceData();
       } else {
         fieldArrayPointers[iD] = fieldArray[iD].data();
@@ -623,16 +728,27 @@ public:
   bool hasPostProcessor(std::type_index stage,
                         PostProcessorPromise<T,DESCRIPTOR>&& promise) override
   {
-    auto [postProcessorsOfPriority, _] = _postProcessors[stage].try_emplace(promise.priority(), this);
-    return std::get<1>(*postProcessorsOfPriority).contains(
-      std::forward<decltype(promise)>(promise));
+    auto stageIter = _postProcessors.find(stage);
+    if (stageIter == _postProcessors.end()) {
+      return false;
+    }
+    auto priorityIter = stageIter->second.find({promise.priority(), SubPhase::Consume});
+    if (priorityIter == stageIter->second.end()) {
+      return false;
+    }
+    return priorityIter->second.contains(std::forward<decltype(promise)>(promise));
   }
 
   void addPostProcessor(std::type_index stage,
                         LatticeR<DESCRIPTOR::d> latticeR,
                         PostProcessorPromise<T,DESCRIPTOR>&& promise) override
   {
-    auto [postProcessorsOfPriority, _] = _postProcessors[stage].try_emplace(promise.priority(), this);
+    if constexpr (codegenTargetFor(PLATFORM) == CodegenTarget::StoredMoments) {
+      for (const MomentsDemand<DESCRIPTOR::d>& demand : promise.momentsDemand()) {
+        _momentsDemands.push_back({this->getCellId(latticeR), promise.id(), stage, promise.priority(), demand});
+      }
+    }
+    auto [postProcessorsOfPriority, _] = _postProcessors[stage].try_emplace({promise.priority(), SubPhase::Consume}, this);
     std::get<1>(*postProcessorsOfPriority).add(this->getCellId(latticeR),
                                                std::forward<decltype(promise)>(promise));
   }
@@ -643,7 +759,7 @@ public:
   {
     if (promise.scope() == OperatorScope::PerBlock) {
       if (!indicator.isEmpty()) {
-        auto [postProcessorsOfPriority, _] = _postProcessors[stage].try_emplace(promise.priority(), this);
+        auto [postProcessorsOfPriority, _] = _postProcessors[stage].try_emplace({promise.priority(), SubPhase::Consume}, this);
         std::get<1>(*postProcessorsOfPriority).add(std::forward<decltype(promise)>(promise));
       }
     } else {
@@ -659,12 +775,102 @@ public:
                         PostProcessorPromise<T,DESCRIPTOR>&& promise) override
   {
     if (promise.scope() == OperatorScope::PerBlock) {
-      auto [postProcessorsOfPriority, _] = _postProcessors[stage].try_emplace(promise.priority(), this);
+      auto [postProcessorsOfPriority, _] = _postProcessors[stage].try_emplace({promise.priority(), SubPhase::Consume}, this);
       std::get<1>(*postProcessorsOfPriority).add(std::forward<decltype(promise)>(promise));
     } else {
       this->forCoreSpatialLocations([&](LatticeR<DESCRIPTOR::d> loc) {
         addPostProcessor(stage, loc, std::forward<decltype(promise)>(promise));
       });
+    }
+  }
+
+  /// Remove post processor from stage, returns whether one was removed
+  /**
+   * Only safe at a device sync point. Frees the operator's cell coverage (host
+   * vector or device Column) so its kernel is no longer launched. Under the
+   * StoredMoments target the matching moments demands are purged and the
+   * Provision sub-phase is re-resolved from what remains.
+   **/
+  bool removePostProcessor(std::type_index stage,
+                           PostProcessorPromise<T,DESCRIPTOR>&& promise) override
+  {
+    auto stageIter = _postProcessors.find(stage);
+    if (stageIter == _postProcessors.end()) {
+      return false;
+    }
+    auto& priorityMap = stageIter->second;
+    auto priorityIter = priorityMap.find({promise.priority(), SubPhase::Consume});
+    if (priorityIter == priorityMap.end()) {
+      return false;
+    }
+    if (!priorityIter->second.remove(promise)) {
+      return false;
+    }
+    if (priorityIter->second.empty()) {
+      priorityMap.erase(priorityIter);
+    }
+    if (priorityMap.empty()) {
+      _postProcessors.erase(stageIter);
+    }
+    if constexpr (codegenTargetFor(PLATFORM) == CodegenTarget::StoredMoments) {
+      std::erase_if(_momentsDemands, [&](const RecordedMomentsDemand& record) {
+        return record.stage == stage && record.consumer == promise.id();
+      });
+      resolveMomentsDemands();
+    }
+    return true;
+  }
+
+  const std::vector<RecordedMomentsDemand>& getMomentsDemands() const {
+    return _momentsDemands;
+  }
+
+  void addPostProcessorAt(std::type_index stage, PostProcessorPriority key,
+                          LatticeR<DESCRIPTOR::d> latticeR,
+                          PostProcessorPromise<T,DESCRIPTOR>&& promise)
+  {
+    auto [postProcessorsOfPriority, _] = _postProcessors[stage].try_emplace(key, this);
+    std::get<1>(*postProcessorsOfPriority).add(this->getCellId(latticeR),
+                                               std::forward<decltype(promise)>(promise));
+  }
+
+  void resolveMomentsDemands() override {
+    if constexpr (codegenTargetFor(PLATFORM) == CodegenTarget::StoredMoments) {
+      // Providers own the Provision sub-phase exclusively. Drop them so a re-resolve
+      // rebuilds from the current demands. Only safe at a device sync point.
+      for (auto& [stage, priorityMap] : _postProcessors) {
+        std::erase_if(priorityMap, [](const auto& entry) {
+          return entry.first.second == SubPhase::Provision;
+        });
+      }
+      std::map<std::tuple<std::type_index,PostProcessorPriority,CellID>,MomentSet> demanded;
+      for (const RecordedMomentsDemand& record : _momentsDemands) {
+        if (record.demand.freshness == Freshness::AsStored) {
+          continue;
+        }
+        const LatticeR<DESCRIPTOR::d> consumerR = this->getLatticeR(record.cell);
+        const PostProcessorPriority key{record.priority, SubPhase::Provision};
+        for (const auto& offset : record.demand.stencil) {
+          const LatticeR<DESCRIPTOR::d> readR = consumerR + offset;
+          if (!this->isInside(readR)) {
+            continue;
+          }
+          const CellID readCell = this->getCellId(readR);
+          if (_dynamicsMap.get(readCell) == nullptr) {
+            continue;
+          }
+          auto [iter, inserted] = demanded.try_emplace(std::make_tuple(record.stage, key, readCell),
+                                                       record.demand.moments);
+          if (!inserted) {
+            iter->second = iter->second | record.demand.moments;
+          }
+        }
+      }
+      for (const auto& [entry, moments] : demanded) {
+        const auto& [stage, key, readCell] = entry;
+        addPostProcessorAt(stage, key, this->getLatticeR(readCell),
+                           _dynamicsMap.promiseFor(readCell).makeMomentsProvider(moments));
+      }
     }
   }
 
@@ -676,10 +882,22 @@ public:
    * Performance optimization for access via virtual Cell
    **/
   Vector<T*,DESCRIPTOR::q> getPopulationPointers(CellID iCell) override {
-    auto& pops = getField<descriptors::POPULATION>();
-    return Vector<T*,DESCRIPTOR::q>([&](unsigned iPop) -> T* {
-      return &pops[iPop][iCell];
-    });
+    // Only compute-precision (Inherit) populations expose raw T* here; a reduced-precision
+    // POPULATION is reached through Cell's converting path (Cell::loadPopulations) instead,
+    // keeping this abstract-interface pointer path free of the storage-precision detail.
+    if constexpr (precisionOf<DESCRIPTOR,descriptors::POPULATION>() == FieldPrecision::Inherit) {
+      auto& populations = getField<descriptors::POPULATION>();
+      if constexpr (PLATFORM == Platform::GPU_SYCL) {
+        return Vector<T*,DESCRIPTOR::q>([&](unsigned iPop) -> T* {
+          return &populations[iPop].getHostAccessor()[iCell];
+        });
+      }
+      return Vector<T*,DESCRIPTOR::q>([&](unsigned iPop) -> T* {
+        return &populations[iPop][iCell];
+      });
+    } else {
+      return Vector<T*,DESCRIPTOR::q>{};  // unused: precision cells bypass this path
+    }
   }
 
   /// Return reference to Data's FieldTypeRegistry
@@ -693,6 +911,8 @@ public:
   void writeDescription(std::ostream& clout) const override;
   void writeDynamicsAsCSV(std::ostream& clout) const override;
   void writeOperatorAsCSV(std::ostream& clout) const override;
+  void writeFieldsAsCSV(std::ostream& clout) const override;
+  long countHaloTilesForField(std::type_index field, const std::vector<CellID>& cells) const override;
 
   /// Number of data blocks for the serializable interface
   std::size_t getNblock() const override;
@@ -763,7 +983,6 @@ public:
 #else
   void copy() override;
 #endif
-
 private:
   class HomogeneousCopyTask;
 

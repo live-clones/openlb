@@ -44,13 +44,13 @@ struct SuperIndicatorDomainFrontierDistanceF : public SuperIndicatorF<T,DESCRIPT
     for (int iC = 0; iC < load.size(); ++iC) {
       this->_blockF.emplace_back(
         new BlockIndicatorFfromCallableF<T,DESCRIPTOR::d>(sGeometry.getBlock(iC),
-                                                          [&,iC,distance](LatticeR<DESCRIPTOR::d> latticeR) -> bool {
+                                                          [&,iC,distance,lastC=load.glob(iC)](LatticeR<DESCRIPTOR::d> latticeR) mutable -> bool {
           const auto& block = sGeometry.getBlock(iC);
           const T deltaX = cDecomposition.getMotherCuboid().getDeltaR();
           if (block.getNeighborhoodRadius(latticeR) < 1) {
             return false;
           }
-          auto physR = cDecomposition.get(load.glob(iC)).getPhysR(latticeR);
+          auto physR = cDecomposition.getPhysR(latticeR.withPrefix(load.glob(iC)));
           const T outsideTestDistance = 1 + distance + 0.75;
           const T  insideTestDistance = 1 + distance;
           bool outsideTestOnce = false;
@@ -59,11 +59,11 @@ struct SuperIndicatorDomainFrontierDistanceF : public SuperIndicatorF<T,DESCRIPT
             const auto c_i = fields::refinement::CONTEXT_NEIGHBORS::c<DESCRIPTOR>(iDir);
 
             if (c_i >= 0) {
-              outsideTestOnce  |= !(cDecomposition.isInside(physR + c_i * (outsideTestDistance+1) * deltaX) );
-              insideTestAlways &=  (cDecomposition.isInside(physR + c_i * (insideTestDistance +1) * deltaX) );
+              outsideTestOnce  |= !(cDecomposition.isInsideCached(physR + c_i * (outsideTestDistance+1) * deltaX, lastC) );
+              insideTestAlways &=  (cDecomposition.isInsideCached(physR + c_i * (insideTestDistance +1) * deltaX, lastC) );
             } else {
-              outsideTestOnce  |= !(cDecomposition.isInside(physR + c_i * outsideTestDistance * deltaX) );
-              insideTestAlways &=  (cDecomposition.isInside(physR + c_i *  insideTestDistance * deltaX) );
+              outsideTestOnce  |= !(cDecomposition.isInsideCached(physR + c_i * outsideTestDistance * deltaX, lastC) );
+              insideTestAlways &=  (cDecomposition.isInsideCached(physR + c_i *  insideTestDistance * deltaX, lastC) );
             }
           }
           return outsideTestOnce && insideTestAlways;

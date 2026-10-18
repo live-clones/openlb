@@ -40,13 +40,13 @@ namespace olb {
 template <typename T, typename DESCRIPTOR, typename FIELD>
 class SuperLatticeField2D final : public SuperLatticeF2D<T,DESCRIPTOR> {
 public:
-  SuperLatticeField2D(SuperLattice<T,DESCRIPTOR>& sLattice);
+  SuperLatticeField2D(SuperLattice<T,DESCRIPTOR>& sLattice, std::string name="extField");
 };
 
 template <typename T, typename DESCRIPTOR, typename FIELD>
 class BlockLatticeField2D final : public BlockLatticeF2D<T,DESCRIPTOR> {
 public:
-  BlockLatticeField2D(BlockLattice<T,DESCRIPTOR>& blockLattice);
+  BlockLatticeField2D(BlockLattice<T,DESCRIPTOR>& blockLattice, std::string name="extField");
   bool operator() (T output[], const int input[]);
 };
 

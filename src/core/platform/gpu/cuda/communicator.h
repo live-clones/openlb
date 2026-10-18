@@ -28,6 +28,8 @@
 #include <set>
 #include <typeindex>
 
+#include "communication/overlapBufferLayout.h"
+
 namespace olb {
 
 template <typename T, typename DESCRIPTOR>
@@ -61,7 +63,8 @@ public:
   HeterogeneousCopyTask(
     const std::vector<std::type_index>& fields,
     const std::vector<CellID>& targetCells, ConcreteBlockLattice<T,DESCRIPTOR,Platform::GPU_CUDA>& target,
-    const std::vector<CellID>& sourceCells, ConcreteBlockLattice<T,DESCRIPTOR,SOURCE>&             source);
+    const std::vector<CellID>& sourceCells, ConcreteBlockLattice<T,DESCRIPTOR,SOURCE>&             source,
+    const overlap::FieldMasks& masks = {});
   ~HeterogeneousCopyTask() {
     wait();
   }
@@ -82,7 +85,8 @@ public:
   HeterogeneousCopyTask(
     const std::vector<std::type_index>& fields,
     const std::vector<CellID>& targetCells, ConcreteBlockLattice<T,DESCRIPTOR,TARGET>&             target,
-    const std::vector<CellID>& sourceCells, ConcreteBlockLattice<T,DESCRIPTOR,Platform::GPU_CUDA>& source);
+    const std::vector<CellID>& sourceCells, ConcreteBlockLattice<T,DESCRIPTOR,Platform::GPU_CUDA>& source,
+    const overlap::FieldMasks& masks = {});
   ~HeterogeneousCopyTask() {
     wait();
   }

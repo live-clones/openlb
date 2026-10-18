@@ -182,7 +182,7 @@ void setBoundaryValues(SuperLattice<T, DESCRIPTOR>& sLattice,
     auto poiseuilleU = std::shared_ptr<AnalyticalF3D<T,T>>(new CirclePowerLaw3D<T>(superGeometry, 3, maxVelocity, 2, T())); //2 ist power-law coeff. vortex methode s. ansys
 
     vortex.setVelocityProfile(poiseuilleU);
-    sLattice.template setProcessingContext<Array<U_PROFILE>>(ProcessingContext::Simulation);
+    vortex.setConvectionU(maxVelocity);
     vortex.apply(iT);
   }else{
     vortex.apply(iT);
@@ -289,8 +289,10 @@ int main(int argc, char* argv[])
 
   const T dx = converter.getPhysDeltaX();
   Vector<T,3> inflowAxis{0, 0, -1};
+  // Seeding volume depth (along the inflow axis) must contain an eddy (~2 sigma)
+  // so that downstream-advected vortices are not clipped at the inlet.
   Vector<T,3> inletI(0., 0., stlReader.getMax()[2]);
-  Vector<T,3> inletO(0., 0., stlReader.getMax()[2]+2.*dx);
+  Vector<T,3> inletO(0., 0., stlReader.getMax()[2]+2.*(0.108*0.1));
   IndicatorCylinder3D<T> inflow( inletI, inletO, 0.035 );
 
   VortexMethodTurbulentVelocityBoundary<T,DESCRIPTOR> vortex(
@@ -298,9 +300,10 @@ int main(int argc, char* argv[])
     inflow,
     converter,
     sLattice,
-    200,       // nSeeds
-    0.0005,    // nTime (s)
-    0.108*0.1, // sigma
+    200,                           // nSeeds
+    0.,                            // uConvection (ramped in setBoundaryValues)
+    0.108*0.1,                     // sigmaConst (fixed)
+    converter.getCharPhysLength(), // lChar
     inflowAxis);
 
   SuperPorousElementEmbeddingO fsiEmbeddingO(sLattice);

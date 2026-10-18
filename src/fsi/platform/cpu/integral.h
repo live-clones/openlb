@@ -64,7 +64,13 @@ void apply(ConcreteBlockLattice<T,DESCRIPTOR,PLATFORM>& blockLattice) {
   for (std::size_t iReduced=0; iReduced < tags.size(); ++iReduced) {
     reducedElementTag[iReduced] = tags[iReduced];
     const auto& fields = data[tags[iReduced]];
-    auto set = [&]<typename FIELD>(meta::id<FIELD>, const FieldD<T,DESCRIPTOR,FIELD>& value) {
+    // Deduce FIELD from the meta::id tag only (and fetch the value inside): nvcc
+    // fails to deduce a template lambda whose parameter list also mentions
+    // FieldD<T,DESCRIPTOR,FIELD>, whereas clang/gcc accept it.
+    auto set = [&]<typename FIELD>(meta::id<FIELD>) {
+      // Keep the value as a FieldD so value[i] indexes uniformly, including the
+      // size-1 case where get<FIELD>() would otherwise yield a bare scalar.
+      const FieldD<T,DESCRIPTOR,FIELD> value = fields.template get<FIELD>();
       auto reduced = parameters.template get<fields::array_of<FIELD>>();
       if constexpr (DESCRIPTOR::template size<FIELD>() == 1) {
         reduced[iReduced] = value[0];
@@ -74,7 +80,7 @@ void apply(ConcreteBlockLattice<T,DESCRIPTOR,PLATFORM>& blockLattice) {
         }
       }
     };
-    ((set(meta::id<FIELDS>{}, fields.template get<FIELDS>())), ...);
+    ((set(meta::id<FIELDS>{})), ...);
   }
 
   parameters.template set<fields::fsi::REDUCED_ELEMENTS_COUNT>(tags.size());

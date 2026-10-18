@@ -33,7 +33,7 @@
 
 #include "core/blockStructure.h"
 #include "core/fieldArrayD.hh"
-#include "geometry/blockGeometryStatistics2D.h"
+#include "geometry/blockGeometryStatistics.h"
 #include "geometry/cuboid.h"
 #include "communication/communicatable.h"
 #include "descriptor/descriptor.h"
@@ -52,7 +52,7 @@ namespace olb {
  * with different boundaries (like for inflow/output regions).
  */
 template <typename T, unsigned D>
-class BlockGeometry final : public BlockStructureD<D>
+class BlockGeometry final : public olb::BlockStructureD<D>
                           , public Serializable {
 private:
   /// Material number storage
@@ -107,32 +107,32 @@ public:
   get(L... latticeR) const {
     return _data[0][this->getCellId(latticeR...)];
   }
-  int get(LatticeR<D> latticeR) const;
+  int get(Vector<int,D> latticeR) const;
   int get(const int latticeR[D]) const;
   int get(std::size_t iCell) const;
 
   /// returns the (iX,iY) entry in the 2D scalar field
-  int getMaterial(LatticeR<D> latticeR) const;
+  int getMaterial(Vector<int,D> latticeR) const;
   int getMaterial(const int latticeR[D]) const;
 
   template <typename... L>
   std::enable_if_t<sizeof...(L) == D, int>
   getMaterial(L... latticeR) const {
-    return this->getMaterial(LatticeR<D>{latticeR...});
+    return this->getMaterial(Vector<int,D>{latticeR...});
   }
 
   /// Write access to a material number
-  void set(LatticeR<D> latticeR, int material);
+  void set(Vector<int,D> latticeR, int material);
   void set(const int latticeR[D], int material);
   void set(std::size_t iCell, int material);
 
-  Vector<T,D> getPhysR(LatticeR<D> latticeR) const {
+  Vector<T,D> getPhysR(Vector<int,D> latticeR) const {
     Vector<T,D> physR;
     getPhysR(physR, latticeR);
     return physR;
   }
   /// Transforms lattice to physical coordinates (wrapped from cuboid geometry)
-  void getPhysR(Vector<T,D>& physR, LatticeR<D> latticeR) const;
+  void getPhysR(Vector<T,D>& physR, Vector<int,D> latticeR) const;
 
   Cuboid<T,D>& getCuboid(){
     return _cuboid;
@@ -144,7 +144,7 @@ public:
   template <typename... L>
   std::enable_if_t<sizeof...(L) == D, void>
   get(T physR[D],L... latticeR) const {
-    return this->getPhysR(physR[D],LatticeR<D>{latticeR...});
+    return this->getPhysR(physR[D],Vector<int,D>{latticeR...});
   }
 
   /// Changes all cell materials which are not in bulkMaterials to 0 if
@@ -157,8 +157,10 @@ public:
   /// Changes all cells with material fromM to 1 if there is a non robust constiallation
   int innerClean(int fromM, bool verbose=true);
 
-  /// Resets all cell materials inside of a domain to 0
-  void reset(IndicatorF<T,D>& domain);
+  /// Resets all cell materials to toM
+  void reset(int toM=0);
+  /// Resets all cell materials inside of a domain to toM
+  void reset(IndicatorF<T,D>& domain, int toM=0);
 
   /// Returns the coordinates (iX,iY) of a voxel with a given material number (material) if there exists an neighbourhood of size (offsetX,offsetY) only with voxels of the  given material number
   bool find(int material, std::vector<unsigned> offset, std::vector<int> var);
@@ -173,19 +175,21 @@ public:
   /// Replaces all material numbers (fromM) to another (toM) if an indicator functor condition is fulfilled
   void rename(int fromM, int toM, IndicatorF<T,D>& condition);
   /// Replaces all material numbers (fromM) to another (toM) if all materials in the neighbourhood (iX-offsetX,..,iX,..,ix+offsetX), .. are of the original material number (fromM)
-  void rename(int fromM, int toM, LatticeR<D> offset);
+  void rename(int fromM, int toM, Vector<int,D> offset);
   /// Replaces all material numbers (fromM) to another (toM) if all materials in the neighbourhood (iX+1,iX+2,..,ix+testDirection[0]), .. are of another material number (testM)
   void rename(int fromM, int toM, int testM, std::vector<int> testDirection);
   /// Replaces all material numbers (fromM) to another (toM) if all materials in the neighbourhood (iX+discreteNormal[0],iX+2*discreteNormal[0]), .. are of another material number (testM) and if an indicator functor condition is fulfilled
   void rename(int fromM, int toM, int fluidM, IndicatorF<T,D>& condition, Vector<int,D> discreteNormal);
   /// Replaces all material numbers (fromM) to another (toM) if all materials in the neighbourhood (iX+discreteNormal[0],iX+2*discreteNormal[0]), .. are of another material number (fluidM) and if an indicator functor condition is fulfilled, the discreteNormal is computed from all fromM which fulfill the indicator functor condition
   void rename(int fromM, int toM, int fluidM, IndicatorF<T,D>& condition);
+  /// Replaces fromM with toM if fromM neigbors neighborM
+  void renameNeighborsOf(int fromM, int toM, int neighborM);
 
   /// Copy a layer of material numbers inside an indicator in a discrete normal direction
   void copyMaterialLayer(IndicatorF3D<T>& condition, int discreteNormal[D], int numberOfLayers);
 
   /// Replaces all material numbers (fromM) to another (toM) using a seed point and max. directions indicated by offsetX,Y != 0
-  void regionGrowing(int fromM, int toM, LatticeR<D> seed, std::vector<int> offset, std::map<std::vector<int>, int >* tmp=nullptr);
+  void regionGrowing(int fromM, int toM, Vector<int,D> seed, std::vector<int> offset, std::map<std::vector<int>, int >* tmp=nullptr);
 
   /// Prints a chosen part of the block geometry
   void printLayer(std::vector<int> min, std::vector<int> max, bool linenumber = false);

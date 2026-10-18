@@ -42,7 +42,7 @@
 
 namespace olb {
 
-/// spherical hyperbolic tangent between values 0 and factor
+/// planar hyperbolic tangent between values 0 and factor with an interface normal in direction
 template <typename T>
 class PlanarInterface3D : public AnalyticalF3D<T,T> {
 private:
@@ -50,6 +50,7 @@ private:
   Vector<T,3> _direction;
   T _interfaceWidth;
   T _factor;
+
 public:
   PlanarInterface3D(Vector<T,3> center, Vector<T,3> direction, T interfaceWidth, T factor = 1.);
   bool operator() (T output[], const T input[]) override;

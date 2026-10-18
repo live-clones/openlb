@@ -26,6 +26,7 @@
 #define MULTIPHASEUNITCONVERTER_HH
 
 #include "multiPhaseUnitConverter.h"
+#include "io/textTable.h"
 
 // All OpenLB code is contained in this namespace.
 namespace olb {
@@ -33,72 +34,80 @@ namespace olb {
 template <typename T, typename DESCRIPTOR>
 void MultiPhaseUnitConverter<T, DESCRIPTOR>::print(std::ostream& clout) const
 {
-  clout << "----------------- MultiPhaseUnitConverter information ------------------" << std::endl;
-  clout << "-- Parameters:" << std::endl;
-  clout << "Resolution:                                 N=                              " << this->getResolution() << std::endl;
-  clout << "Lattice velocity:                           latticeU=                       " << this->getCharLatticeVelocity() << std::endl;
-  clout << "Lattice relaxation frequency:               omega=                          " << this->getLatticeRelaxationFrequency() << std::endl;
-  clout << "Lattice relaxation time:                    tau=                            " << this->getLatticeRelaxationTime() << std::endl;
-  clout << "Characteristical length(m):                 charL=                          " << this->getCharPhysLength() << std::endl;
-  clout << "Characteristical speed(m/s):                charU=                          " << this->getCharPhysVelocity() << std::endl;
-  clout << "Phys. kinematic viscosity(m^2/s):           charNu=                         " << this->getPhysViscosity() << std::endl;
-  clout << "Characteristical pressure(N/m^2):           charPressure=                   " << this->getCharPhysPressure() << std::endl;
-  clout << "Reynolds number:                            reynoldsNumber=                 " << this->getReynoldsNumber() << std::endl;
-  clout << "Phys. Delta X(m):                           physDeltaX=                     " << this->getPhysDeltaX() << std::endl;
-  clout << "Phys. Delta T(s):                           physDeltaT=                     " << this->getPhysDeltaT() << std::endl;
-  clout << "Phys. Surface Tension(J/m^2):               physSurfaceTension=             " << this->getPhysSurfaceTension() << std::endl;
-  clout << "Characteristical Phys. Temperature(K):      charPhysTemperature=            " << this->getCharPhysTemperature() << std::endl;
+  using Align = io::text::Table::Align;
+  clout << io::text::section("Multi-Phase Unit Converter") << std::endl;
+  io::text::Table parameters({{"Parameter"}, {"Symbol"}, {"Value", Align::Right}});
+  parameters.row("Resolution",                  "N",                  this->getResolution());
+  parameters.row("Lattice velocity",            "latticeU",           this->getCharLatticeVelocity());
+  parameters.row("Lattice relaxation frequency","omega",              this->getLatticeRelaxationFrequency());
+  parameters.row("Lattice relaxation time",     "tau",                this->getLatticeRelaxationTime());
+  parameters.row("Char. length [m]",            "charL",              this->getCharPhysLength());
+  parameters.row("Char. speed [m/s]",           "charU",              this->getCharPhysVelocity());
+  parameters.row("Kinematic viscosity [m^2/s]", "charNu",             this->getPhysViscosity());
+  parameters.row("Char. pressure [N/m^2]",      "charPressure",       this->getCharPhysPressure());
+  parameters.row("Reynolds number",             "reynoldsNumber",     this->getReynoldsNumber());
+  parameters.row("Phys. Delta X [m]",           "physDeltaX",         this->getPhysDeltaX());
+  parameters.row("Phys. Delta T [s]",           "physDeltaT",         this->getPhysDeltaT());
+  parameters.row("Surface tension [J/m^2]",     "physSurfaceTension", this->getPhysSurfaceTension());
+  parameters.row("Char. temperature [K]",       "charPhysTemperature",this->getCharPhysTemperature());
+  parameters.render(clout);
 
-  clout << "----------------- Conversion factors:-----------------------------------" << std::endl;
-  clout << "Voxel length(m):                            physDeltaX=                     " << this->getConversionFactorLength() << std::endl;
-  clout << "Time step(s):                               physDeltaT=                     " << this->getConversionFactorTime() << std::endl;
-  clout << "Velocity factor(m/s):                       physVelocity=                   " << this->getConversionFactorVelocity() << std::endl;
-  clout << "Density factor(kg/m^3):                     physDensity=                    " << this->getConversionFactorDensity() <<  std::endl;
-  clout << "Mass factor(kg):                            physMass=                       " << this->getConversionFactorMass() << std::endl;
-  clout << "Viscosity factor(m^2/s):                    physViscosity=                  " << this->getConversionFactorViscosity() << std::endl;
-  clout << "Force factor(N):                            physForce=                      " << this->getConversionFactorForce() << std::endl;
-  clout << "Pressure factor(N/m^2):                     physPressure=                   " << this->getConversionFactorPressure() << std::endl;
-  clout << "Equation of state a(Jm^3/mol^2):            physEoSa=                       " << this->getConversionFactorEoSa() << std::endl;
-  clout << "Equation of state b(m^3/mol):               physEoSb=                       " << this->getConversionFactorEoSb() << std::endl;
-  clout << "Molar mass(kg/mol):                         physMolarMass=                  " << this->getConversionFactorMolarMass() <<  std::endl;
-  clout << "Surface tension(J/m^2):                     physSurfaceTension=             " << this->getConversionFactorSurfaceTension() << std::endl;
-  clout << "Temperature(K):                             physTemperature=                " << this->getConversionFactorTemperature() << std::endl;
-
-  clout << "------------------------------------------------------------------------" << std::endl;
-
+  clout << std::endl;
+  clout << io::text::section("Conversion Factors") << std::endl;
+  io::text::Table factors({{"Factor"}, {"Symbol"}, {"Value", Align::Right}});
+  factors.row("Voxel length [m]",              "physDeltaX",         this->getConversionFactorLength());
+  factors.row("Time step [s]",                 "physDeltaT",         this->getConversionFactorTime());
+  factors.row("Velocity [m/s]",                "physVelocity",       this->getConversionFactorVelocity());
+  factors.row("Density [kg/m^3]",              "physDensity",        this->getConversionFactorDensity());
+  factors.row("Mass [kg]",                     "physMass",           this->getConversionFactorMass());
+  factors.row("Viscosity [m^2/s]",             "physViscosity",      this->getConversionFactorViscosity());
+  factors.row("Force [N]",                     "physForce",          this->getConversionFactorForce());
+  factors.row("Pressure [N/m^2]",              "physPressure",       this->getConversionFactorPressure());
+  factors.row("Equation of state a [Jm^3/mol^2]","physEoSa",         this->getConversionFactorEoSa());
+  factors.row("Equation of state b [m^3/mol]", "physEoSb",           this->getConversionFactorEoSb());
+  factors.row("Molar mass [kg/mol]",           "physMolarMass",      this->getConversionFactorMolarMass());
+  factors.row("Surface tension [J/m^2]",       "physSurfaceTension", this->getConversionFactorSurfaceTension());
+  factors.row("Temperature [K]",               "physTemperature",    this->getConversionFactorTemperature());
+  factors.render(clout);
 }
 
 template <typename T, typename DESCRIPTOR>
 void MultiPhaseUnitConverterFromRelaxationTime<T, DESCRIPTOR>::print(std::ostream& clout) const
 {
-  clout << "----------------- MultiPhaseUnitConverter information ------------------" << std::endl;
-  clout << "--------------------- Parameters in lattice units: ---------------------" << std::endl;
-  clout << "Resolution:                                 N=                              " << this->getResolution() << std::endl;
-  clout << "Lattice velocity:                           latticeU=                       " << this->getCharLatticeVelocity() << std::endl;
-  clout << "Lattice relaxation frequency:               omega=                          " << this->getLatticeRelaxationFrequency() << std::endl;
-  clout << "Lattice relaxation time:                    tau=                            " << this->getLatticeRelaxationTime() << std::endl;
-  clout << "--------------------- Parameters in physical units: --------------------" << std::endl;
-  clout << "Characteristical length(m):                 charL=                          " << this->getCharPhysLength() << std::endl;
-  clout << "Characteristical speed(m/s):                charU=                          " << this->getCharPhysVelocity() << std::endl;
-  clout << "Phys. kinematic viscosity(m^2/s):           charNu=                         " << this->getPhysViscosity() << std::endl;
-  clout << "Characteristical pressure(N/m^2):           charPressure=                   " << this->getCharPhysPressure() << std::endl;
-  clout << "Reynolds number:                            reynoldsNumber=                 " << this->getReynoldsNumber() << std::endl;
-  clout << "Phys. Delta X(m):                           physDeltaX=                     " << this->getPhysDeltaX() << std::endl;
-  clout << "Phys. Delta T(s):                           physDeltaT=                     " << this->getPhysDeltaT() << std::endl;
+  using Align = io::text::Table::Align;
+  clout << io::text::section("Parameters in Lattice Units") << std::endl;
+  io::text::Table latticeParameters({{"Parameter"}, {"Symbol"}, {"Value", Align::Right}});
+  latticeParameters.row("Resolution",                  "N",        this->getResolution());
+  latticeParameters.row("Lattice velocity",            "latticeU", this->getCharLatticeVelocity());
+  latticeParameters.row("Lattice relaxation frequency","omega",    this->getLatticeRelaxationFrequency());
+  latticeParameters.row("Lattice relaxation time",     "tau",      this->getLatticeRelaxationTime());
+  latticeParameters.render(clout);
 
-  clout << "----------------- Conversion factors:-----------------------------------" << std::endl;
-  clout << "Voxel length(m):                            physDeltaX=                     " << this->getConversionFactorLength() << std::endl;
-  clout << "Time step(s):                               physDeltaT=                     " << this->getConversionFactorTime() << std::endl;
-  clout << "Velocity factor(m/s):                       physVelocity=                   " << this->getConversionFactorVelocity() << std::endl;
-  clout << "Density factor(kg/m^3):                     physDensity=                    " << this->getConversionFactorDensity() <<  std::endl;
-  clout << "Mass factor(kg):                            physMass=                       " << this->getConversionFactorMass() << std::endl;
-  clout << "Viscosity factor(m^2/s):                    physViscosity=                  " << this->getConversionFactorViscosity() << std::endl;
-  clout << "Force factor(N):                            physForce=                      " << this->getConversionFactorForce() << std::endl;
-  clout << "Pressure factor(N/m^2):                     physPressure=                   " << this->getConversionFactorPressure() << std::endl;
-  clout << "Surface tension factor(J/m^2):              physSurfaceTension=             " << this->getConversionFactorSurfaceTension() << std::endl;
+  clout << std::endl;
+  clout << io::text::section("Parameters in Physical Units") << std::endl;
+  io::text::Table physParameters({{"Parameter"}, {"Symbol"}, {"Value", Align::Right}});
+  physParameters.row("Char. length [m]",            "charL",          this->getCharPhysLength());
+  physParameters.row("Char. speed [m/s]",           "charU",          this->getCharPhysVelocity());
+  physParameters.row("Kinematic viscosity [m^2/s]", "charNu",         this->getPhysViscosity());
+  physParameters.row("Char. pressure [N/m^2]",      "charPressure",   this->getCharPhysPressure());
+  physParameters.row("Reynolds number",             "reynoldsNumber", this->getReynoldsNumber());
+  physParameters.row("Phys. Delta X [m]",           "physDeltaX",     this->getPhysDeltaX());
+  physParameters.row("Phys. Delta T [s]",           "physDeltaT",     this->getPhysDeltaT());
+  physParameters.render(clout);
 
-  clout << "------------------------------------------------------------------------" << std::endl;
-
+  clout << std::endl;
+  clout << io::text::section("Conversion Factors") << std::endl;
+  io::text::Table factors({{"Factor"}, {"Symbol"}, {"Value", Align::Right}});
+  factors.row("Voxel length [m]",        "physDeltaX",         this->getConversionFactorLength());
+  factors.row("Time step [s]",           "physDeltaT",         this->getConversionFactorTime());
+  factors.row("Velocity [m/s]",          "physVelocity",       this->getConversionFactorVelocity());
+  factors.row("Density [kg/m^3]",        "physDensity",        this->getConversionFactorDensity());
+  factors.row("Mass [kg]",               "physMass",           this->getConversionFactorMass());
+  factors.row("Viscosity [m^2/s]",       "physViscosity",      this->getConversionFactorViscosity());
+  factors.row("Force [N]",               "physForce",          this->getConversionFactorForce());
+  factors.row("Pressure [N/m^2]",        "physPressure",       this->getConversionFactorPressure());
+  factors.row("Surface tension [J/m^2]", "physSurfaceTension", this->getConversionFactorSurfaceTension());
+  factors.render(clout);
 }
 
 }

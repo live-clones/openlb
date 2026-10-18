@@ -22,11 +22,42 @@
 
 from sympy import *
 from sympy.codegen.ast import CodeBlock, Assignment
+from sympy.core.function import UndefinedFunction
 from sympy.utilities.iterables import numbered_symbols
 from cse_utils import SymbolGenerator, CodeBlockPrinter, code, cse
 import re
 
-def optimize_dynamics(inputFile, deterministic=False):
+_TEMP_NAME = re.compile(r'x\d+\Z')
+
+def is_removable(assignment):
+    # Only generated arithmetic temporaries (x0, x1, ...) may be dropped. cell[i]
+    # and field-pointer writes are Symbols too but keep their structural names, and
+    # computeRho/computeU/... calls may read or mutate the cell.
+    has_call = any(isinstance(a.func, UndefinedFunction)
+                   for a in assignment.rhs.atoms(Function))
+    return bool(_TEMP_NAME.match(str(assignment.lhs))) and not has_call
+
+def eliminate_dead_assignments(assignments, seed_live):
+    # cse() never prunes its input, so shared subexpressions the final algebra does
+    # not reference survive as dead temps. Mark outputs live, then keep only the
+    # temporaries reachable from them. Names are preserved; dead lines just vanish.
+    live = set(seed_live)
+    for assignment in assignments:
+        if not is_removable(assignment):
+            live |= assignment.rhs.free_symbols
+    keep = set()
+    changed = True
+    while changed:
+        changed = False
+        for assignment in assignments:
+            if is_removable(assignment) and assignment.lhs in live and assignment.lhs not in keep:
+                keep.add(assignment.lhs)
+                live |= assignment.rhs.free_symbols
+                changed = True
+    kept = [a for a in assignments if not is_removable(a) or a.lhs in keep]
+    return kept, live
+
+def optimize_dynamics(inputFile, deterministic=False, target="Generic"):
     # Load expression tree from ouput file
     with open(inputFile, "r") as file:
         load_expressions = file.read()
@@ -41,11 +72,29 @@ def optimize_dynamics(inputFile, deterministic=False):
     fields_assignments = results['fields_assignments']
     # Symbols
     params_symbols = results['params_symbols']
+    shared_subexpressions = results.get('cse_subexpressions', [ ])
 
     # Retrieve dynamics tuple information
     collisionO = collisionO.replace("olb::", "")
     collisionO = collisionO.replace("Expr", "T")
     collisionO = re.sub(r'(descriptors::D\dQ\d{1,2})<.*?>', r'\1<FIELDS...>', collisionO)
+
+    # Current limitations of sympy assignments
+    generator = iter(SymbolGenerator('x'))
+
+    # Rename the shared subexpressions onto the x-generator (so they are declared
+    # auto) and rewrite later references; bindings arrive in dependency order.
+    shared_assignments = [ ]
+    shared_rename = { }
+    for assignment in shared_subexpressions:
+        alias = next(generator)
+        shared_assignments.append(Assignment(alias, assignment.rhs.xreplace(shared_rename)))
+        shared_rename[assignment.lhs] = alias
+
+    if shared_rename:
+        cell_assignments   = [Assignment(a.lhs, a.rhs.xreplace(shared_rename)) for a in cell_assignments]
+        fields_assignments = [Assignment(a.lhs, a.rhs.xreplace(shared_rename)) for a in fields_assignments]
+        return_assignments = [Assignment(a.lhs, a.rhs.xreplace(shared_rename)) for a in return_assignments]
 
     # Combine all assignments
     assignments = cell_assignments
@@ -55,8 +104,6 @@ def optimize_dynamics(inputFile, deterministic=False):
     if deterministic:
         optional_symbols = sorted(optional_symbols, key=lambda x: str(x))
 
-    # Current limitations of sympy assignments
-    generator = iter(SymbolGenerator('x'))
     cell_backsubstitutions = [ ]
     sub_assignments = [ ]
     for assignment in assignments:
@@ -73,7 +120,7 @@ def optimize_dynamics(inputFile, deterministic=False):
         optional_substitutions.append((symbol, alias))
 
     # Create code block to perform cse
-    block = CodeBlock(*sub_assignments,*fields_assignments,*return_assignments)
+    block = CodeBlock(*shared_assignments, *sub_assignments, *fields_assignments, *return_assignments)
     block = block.subs(optional_substitutions)
 
     # Perform cse
@@ -113,13 +160,21 @@ def optimize_dynamics(inputFile, deterministic=False):
                 if assgn.lhs is symbol:
                     optional.append(assgn)
 
+    # Drop shared subexpressions the final collision never references (dead temps).
+    body = list(block.args[:-2])
+    seed_live = set(block.args[-2].rhs.free_symbols) | set(block.args[-1].rhs.free_symbols)
+    for assignment in post_collision:
+        seed_live |= assignment.rhs.free_symbols
+    body, live = eliminate_dead_assignments(body, seed_live)
+    optional = [assignment for assignment in optional if assignment.lhs in live]
+
     # return cse optimized expression
     return '\n'.join([
         "template <typename T, typename... FIELDS>",
-        f"""struct CSE<{ collisionO }> {{""",
+        f"""struct CSE<{ collisionO }, olb::CodegenTarget::{ target }> {{""",
         "template <concepts::Cell CELL, concepts::Parameters PARAMETERS, concepts::BaseType V=typename CELL::value_t>",
         "CellStatistic<V> collide(CELL& cell, PARAMETERS& parameters) any_platform {",
-        code(CodeBlock(*optional, *block.args[:-2], *post_collision), symbols=generator.symbols),
+        code(CodeBlock(*optional, *body, *post_collision), symbols=generator.symbols),
         "return { %s, %s };" % (code(block.args[-2].rhs), code(block.args[-1].rhs)),
         "}\n};"
     ])
@@ -141,18 +196,34 @@ def optimize_operator(inputFile):
     function_calls = results['function_calls']
     # Symbols
     params_symbols = results['params_symbols']
+    shared_subexpressions = results.get('cse_subexpressions', [ ])
 
     operatorO = operatorO.replace("olb::", "")
+    operatorDependsOnT = "Expr" in operatorO
     operatorO = operatorO.replace("Expr", "T")
     operatorO = re.sub(r'(descriptors::D\dQ\d{1,2})<.*?>', r'\1<FIELDS...>', operatorO)
     descriptor = re.sub(r'(descriptors::D\dQ\d{1,2})<.*?>', r'\1<FIELDS...>', descriptor)
+
+    # Current limitations of sympy assignments
+    generator = iter(SymbolGenerator('x'))
+
+    # Rename the shared subexpressions onto the x-generator; they reference symbols
+    # from function_calls, so they are placed after them in the code block below.
+    shared_assignments = [ ]
+    shared_rename = { }
+    for assignment in shared_subexpressions:
+        alias = next(generator)
+        shared_assignments.append(Assignment(alias, assignment.rhs.xreplace(shared_rename)))
+        shared_rename[assignment.lhs] = alias
+
+    if shared_rename:
+        cell_assignments   = [Assignment(a.lhs, a.rhs.xreplace(shared_rename)) for a in cell_assignments]
+        fields_assignments = [Assignment(a.lhs, a.rhs.xreplace(shared_rename)) for a in fields_assignments]
 
     # Combine all assignments
     assignments = cell_assignments
     optional_symbols = params_symbols
 
-    # Current limitations of sympy assignments
-    generator = iter(SymbolGenerator('x'))
     cell_backsubstitutions = [ ]
     sub_assignments = [ ]
     for assignment in assignments:
@@ -169,7 +240,7 @@ def optimize_operator(inputFile):
         optional_substitutions.append((symbol, alias))
 
     # Create code block to perform cse
-    block = CodeBlock(*function_calls,*sub_assignments,*fields_assignments)
+    block = CodeBlock(*function_calls, *shared_assignments, *sub_assignments, *fields_assignments)
     block = block.subs(optional_substitutions)
 
     # Perform cse
@@ -211,7 +282,13 @@ def optimize_operator(inputFile):
         else:
             args.append(assignment)
 
-    block = CodeBlock(*args)
+    # Drop shared subexpressions the final apply never references (dead temps).
+    seed_live = set()
+    for assignment in post_apply:
+        seed_live |= assignment.rhs.free_symbols
+    kept, live = eliminate_dead_assignments(args, seed_live)
+    block = CodeBlock(*kept)
+    optional = [assignment for assignment in optional if assignment.lhs in live]
 
     # return cse optimized expression
     header = [ ]
@@ -226,8 +303,11 @@ def optimize_operator(inputFile):
             "void apply(CELL& cell) any_platform {"
         ])
 
+    template_header = "template <typename... FIELDS>"
+    if operatorDependsOnT:
+        template_header = "template <typename T, typename... FIELDS>"
     return '\n'.join([
-        "template <typename T, typename... FIELDS>",
+        template_header,
         f"""struct CSE_O<{ operatorO },{ descriptor }> {{""",
         header,
         "using V = typename CELL::value_t;",

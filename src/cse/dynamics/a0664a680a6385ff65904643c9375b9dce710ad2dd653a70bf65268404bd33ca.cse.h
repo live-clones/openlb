@@ -35,24 +35,29 @@ namespace olb {
 namespace dynamics {
 
 template <typename T, typename... FIELDS>
-struct CSE<dynamics::Tuple<T, descriptors::D3Q7<FIELDS...>, momenta::Tuple<momenta::FixedDensity, momenta::FixedVelocityMomentumGeneric, momenta::ZeroStress, momenta::DefineSeparately>, equilibria::FirstOrder, collision::FixedEquilibrium, dynamics::DefaultCombination>> {
+struct CSE<dynamics::Tuple<T, descriptors::D3Q7<FIELDS...>, momenta::Tuple<momenta::FixedDensity, momenta::FixedVelocityMomentumGeneric, momenta::ZeroStress, momenta::DefineSeparately>, equilibria::FirstOrder, collision::FixedEquilibrium, dynamics::DefaultCombination>, olb::CodegenTarget::Generic> {
 template <concepts::Cell CELL, concepts::Parameters PARAMETERS, concepts::BaseType V=typename CELL::value_t>
 CellStatistic<V> collide(CELL& cell, PARAMETERS& parameters) any_platform {
-auto x8 = cell.template getFieldComponent<olb::momenta::FixedVelocityMomentumGeneric::VELOCITY>(0);
-auto x9 = cell.template getFieldComponent<olb::momenta::FixedVelocityMomentumGeneric::VELOCITY>(1);
-auto x10 = cell.template getFieldComponent<olb::momenta::FixedVelocityMomentumGeneric::VELOCITY>(2);
-auto x7 = cell.template getFieldComponent<olb::momenta::FixedDensity::RHO>(0);
-auto x11 = V{4}*x8;
-auto x12 = V{4}*x9;
-auto x13 = V{4}*x10;
-cell[0] = V{0.25}*x7 + V{-0.25};
-cell[1] = -V{0.125}*x7*(x11 + V{-1}) + V{-0.125};
-cell[2] = -V{0.125}*x7*(x12 + V{-1}) + V{-0.125};
-cell[3] = -V{0.125}*x7*(x13 + V{-1}) + V{-0.125};
-cell[4] = V{0.125}*x7*(x11 + V{1}) + V{-0.125};
-cell[5] = V{0.125}*x7*(x12 + V{1}) + V{-0.125};
-cell[6] = V{0.125}*x7*(x13 + V{1}) + V{-0.125};
-return { x7, ((x10)*(x10)) + ((x8)*(x8)) + ((x9)*(x9)) };
+auto x11 = cell.template getFieldComponent<olb::momenta::FixedDensity::RHO>(0);
+auto x12 = cell.template getFieldComponent<olb::momenta::FixedVelocityMomentumGeneric::VELOCITY>(0);
+auto x13 = cell.template getFieldComponent<olb::momenta::FixedVelocityMomentumGeneric::VELOCITY>(1);
+auto x14 = cell.template getFieldComponent<olb::momenta::FixedVelocityMomentumGeneric::VELOCITY>(2);
+auto x0 = V{0.25};
+auto x1 = V{4};
+auto x15 = x1*x12;
+auto x17 = x1*x13;
+auto x18 = x1*x14;
+auto x2 = V{0.125};
+auto x3 = x11*x2;
+auto x16 = V{1}*x3;
+cell[0] = x0*(x11 + V{-1});
+cell[1] = -x16*(x15 + V{-1}) - x2;
+cell[2] = -x16*(x17 + V{-1}) - x2;
+cell[3] = -x16*(x18 + V{-1}) - x2;
+cell[4] = -x2 + x3*(x15 + V{1});
+cell[5] = -x2 + x3*(x17 + V{1});
+cell[6] = -x2 + x3*(x18 + V{1});
+return { x11, ((x12)*(x12)) + ((x13)*(x13)) + ((x14)*(x14)) };
 }
 };
 
@@ -60,4 +65,4 @@ return { x7, ((x10)*(x10)) + ((x8)*(x8)) + ((x9)*(x9)) };
 
 }
 
-// Generation Info: commit=2a9f114ed32e2878e1a64a356eda56d13e508f7d
+// Generation Info: commit=e62fb513c7fed8d9804dfb87eb8d98b331948423

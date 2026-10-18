@@ -29,6 +29,8 @@
 #include "context.hh"
 #include "dynamics.hh"
 
+#include "utilities/performanceProfiler.h"
+
 #include "core/introspection.h"
 
 #include "solver/names.h"
@@ -243,9 +245,11 @@ public:
     using DESCRIPTOR = typename CONTEXT::template value_t<names::Points>::descriptor_t;
     const auto originR = _parameters.template get<fields::BLOCK_LOWER>();
     const auto deltaX = _parameters.template get<fields::converter::PHYS_DELTA_X>();
-    const Vector<V*,DESCRIPTOR::d> physRs(lattices.get(meta::id<names::Points>{})
-                                                  .template getField<fields::PHYS_R>());
-    const PhysR<V,DESCRIPTOR::d> physR{physRs, iParticle};
+    const auto physRs = lattices.get(meta::id<names::Points>{})
+                                .template getField<fields::PHYS_R>();
+    const PhysR<V,DESCRIPTOR::d> physR([&](unsigned iD) {
+      return physRs[iD][iParticle];
+    });
     const LatticeR<DESCRIPTOR::d> latticeR = util::floor((physR - originR) / deltaX + V{0.5});
     auto cells = lattices.exchange_values([&](auto name) -> auto {
       if constexpr (std::is_same_v<typename decltype(name)::type, names::Points>) {
@@ -329,8 +333,8 @@ void call_operators_with_statistics(CONTEXT lattice, bool* subdomain, OPERATORS.
   if (!(iCell < lattice.getNcells()) || !subdomain[iCell]) {
     return;
   }
-  typename CONTEXT::value_t** statistic = lattice.template getField<descriptors::STATISTIC>();
-  int* statisticGenerated = lattice.template getField<descriptors::STATISTIC_GENERATED>()[0];
+  auto statistic = lattice.template getField<descriptors::STATISTIC>();
+  auto statisticGenerated = lattice.template getField<descriptors::STATISTIC_GENERATED>()[0];
   CellStatistic<typename CONTEXT::value_t> cellStatistic{-1, -1};
   if ((ops(lattice, iCell, cellStatistic) || ... )) {
     if (cellStatistic) {
@@ -369,8 +373,8 @@ void call_list_operators_with_statistics(CONTEXT lattice,
   if (!(iIndex < nIndices)) {
     return;
   }
-  typename CONTEXT::value_t** statistic = lattice.template getField<descriptors::STATISTIC>();
-  int* statisticGenerated = lattice.template getField<descriptors::STATISTIC_GENERATED>()[0];
+  auto statistic = lattice.template getField<descriptors::STATISTIC>();
+  auto statisticGenerated = lattice.template getField<descriptors::STATISTIC_GENERATED>()[0];
   CellStatistic<typename CONTEXT::value_t> cellStatistic{-1, -1};
   if ((ops(lattice, indices[iIndex], cellStatistic) || ... )) {
     if (cellStatistic) {
@@ -423,6 +427,7 @@ void construct_dynamics(void* target, PARAMETERS* parameters) __global__ {
  **/
 template <typename CONTEXT, typename... ARGS>
 void call_operators(CONTEXT& lattice, bool* subdomain, ARGS&&... args) {
+  OLB_PROFILE_T("GPU_CUDA:Knl:Sync", ARGS..., CONTEXT);
   const auto block_size = 32;
   const auto block_count = (lattice.getNcells() + block_size - 1) / block_size;
   kernel::call_operators<CONTEXT,ARGS...><<<block_count,block_size>>>(
@@ -433,6 +438,7 @@ void call_operators(CONTEXT& lattice, bool* subdomain, ARGS&&... args) {
 /// Apply masked collision operators to lattice (async)
 template <typename CONTEXT, typename... ARGS>
 void async_call_operators(cudaStream_t stream, CONTEXT& lattice, bool* subdomain, ARGS&&... args) {
+  OLB_PROFILE_T("GPU_CUDA:Knl:Submit", ARGS..., CONTEXT);
   const auto block_size = 32;
   const auto block_count = (lattice.getNcells() + block_size - 1) / block_size;
   kernel::call_operators<CONTEXT,ARGS...><<<block_count,block_size,0,stream>>>(
@@ -446,6 +452,7 @@ void async_call_operators(cudaStream_t stream, CONTEXT& lattice, bool* subdomain
  **/
 template <typename CONTEXT, typename... ARGS>
 void call_operators_with_statistics(CONTEXT& lattice, bool* subdomain, ARGS&&... args) {
+  OLB_PROFILE_T("GPU_CUDA:Knl:Stats:Sync", ARGS..., CONTEXT);
   const auto block_size = 32;
   const auto block_count = (lattice.getNcells() + block_size - 1) / block_size;
   kernel::call_operators_with_statistics<CONTEXT,ARGS...><<<block_count,block_size>>>(
@@ -456,6 +463,7 @@ void call_operators_with_statistics(CONTEXT& lattice, bool* subdomain, ARGS&&...
 /// Apply masked collision operators to lattice while tracking statistics (async)
 template <typename CONTEXT, typename... ARGS>
 void async_call_operators_with_statistics(cudaStream_t stream, CONTEXT& lattice, bool* subdomain, ARGS&&... args) {
+  OLB_PROFILE_T("GPU_CUDA:Knl:Stats:Submit", ARGS..., CONTEXT);
   const auto block_size = 32;
   const auto block_count = (lattice.getNcells() + block_size - 1) / block_size;
   kernel::call_operators_with_statistics<CONTEXT,ARGS...><<<block_count,block_size,0,stream>>>(
@@ -471,6 +479,7 @@ template <typename CONTEXT, typename... ARGS>
 void call_list_operators(CONTEXT& lattice,
                          const gpu::cuda::Column<CellID>& cells,
                          ARGS&&... args) {
+  OLB_PROFILE_T("GPU_CUDA:KnlList:Sync", ARGS..., CONTEXT);
   const auto block_size = 32;
   const auto block_count = (cells.size() + block_size - 1) / block_size;
   kernel::call_list_operators<CONTEXT,ARGS...><<<block_count, block_size>>>(
@@ -486,6 +495,7 @@ void async_call_list_operators(cudaStream_t stream,
                                CONTEXT& lattice,
                                const gpu::cuda::Column<CellID>& cells,
                                ARGS&&... args) {
+  OLB_PROFILE_T("GPU_CUDA:KnlList:Submit", ARGS..., CONTEXT);
   const auto block_size = 32;
   const auto block_count = (cells.size() + block_size - 1) / block_size;
   kernel::call_list_operators<<<block_count,block_size,0,stream>>>(
@@ -501,6 +511,7 @@ void async_call_list_operators_with_statistics(cudaStream_t stream,
                                                CONTEXT& lattice,
                                                const gpu::cuda::Column<CellID>& cells,
                                                ARGS&&... args) {
+  OLB_PROFILE_T("GPU_CUDA:KnlList:Stats:Submit", ARGS..., CONTEXT);
   const auto block_size = 32;
   const auto block_count = (cells.size() + block_size - 1) / block_size;
   kernel::call_list_operators_with_statistics<<<block_count,block_size,0,stream>>>(
@@ -513,6 +524,7 @@ void async_call_list_operators_with_statistics(cudaStream_t stream,
 /// Apply coupling on subdomain
 template <typename CONTEXT, typename... ARGS>
 void call_coupling_operators(CONTEXT& lattices, bool* subdomain, ARGS&&... args) {
+  OLB_PROFILE_T("GPU_CUDA:Coupler:Sync", ARGS..., CONTEXT);
   const auto nCells = lattices.template get<0>().getNcells();
   const auto block_size = 32;
   const auto block_count = (nCells + block_size - 1) / block_size;
@@ -524,6 +536,7 @@ void call_coupling_operators(CONTEXT& lattices, bool* subdomain, ARGS&&... args)
 /// Apply coupling on particles and lattices
 template <typename CONTEXT, typename... ARGS>
 void call_particle_coupling_operators(CONTEXT& lattices, ARGS&&... args) {
+  OLB_PROFILE_T("GPU_CUDA:Coupler:Particle:Sync", ARGS..., CONTEXT);
   const auto nParticles = lattices.get(meta::id<names::Points>{}).getNcells();
   const auto block_size = 32;
   const auto block_count = (nParticles + block_size - 1) / block_size;
@@ -541,9 +554,11 @@ ConcreteBlockCollisionO<T,DESCRIPTOR,Platform::GPU_CUDA,DYNAMICS>::ConcreteBlock
   _dynamics(new DYNAMICS()),
   _parameters(nullptr),
   _mask(nullptr),
-  _cells(0),
-  _modified(true),
-  _stream(cudaStreamDefault)
+  _index(0),
+  _outerCells(0),
+  _listCells(0),
+  _innerMask(nullptr),
+  _modified(true)
 { }
 
 template <typename T, typename DESCRIPTOR, typename DYNAMICS>
@@ -573,50 +588,132 @@ void ConcreteBlockCollisionO<T,DESCRIPTOR,Platform::GPU_CUDA,DYNAMICS>::applyInd
   ConcreteBlockLattice<T,DESCRIPTOR,Platform::GPU_CUDA>& block,
   ConcreteBlockMask<T,Platform::GPU_CUDA>&               subdomain)
 {
+  OLB_PROFILE_T("GPU_CUDA:Coll:Apply", DYNAMICS, DESCRIPTOR);
   using namespace gpu::cuda;
   DeviceContext<T,DESCRIPTOR> lattice(block);
-  // Primitive heuristic for preferring mask-based to list-based dispatch
-  if (_mask->weight() > 0.5*subdomain.weight()) {
-    if (block.statisticsEnabled()) {
-      async_call_operators_with_statistics(
-        _stream.get(),
-        lattice,
-        subdomain.deviceData(),
-        MaskedCollision<T,DESCRIPTOR,DYNAMICS>{_parameters->parameters, _mask->deviceData()});
-    } else {
-      async_call_operators(
-        _stream.get(),
-        lattice,
-        subdomain.deviceData(),
-        MaskedCollision<T,DESCRIPTOR,DYNAMICS>{_parameters->parameters, _mask->deviceData()});
-    }
 
-  // Use list of cell indices
-  } else {
-    // Update cell list from mask
-    if (_modified) {
-      _cells.clear();
-      for (CellID iCell=0; iCell  < block.getNcells(); ++iCell) {
-        if (_mask->operator[](iCell)) {
-          _cells.push_back(iCell);
+  // Resolve the collision execution policy for this block. The overlap axis was
+  // resolved from topology in SuperLattice::initialize. The bulk dispatch axis
+  // resolves here. Auto picks mask-based when this operator covers most of the
+  // sub-domain (dominant, coalesced) and list-based otherwise (sparse).
+  const auto policy = block.getCollisionPolicy();
+  const bool split = (policy.overlap == CollisionOverlap::Split);
+  CollisionDispatch bulkDispatch = policy.bulk;
+  if (bulkDispatch == CollisionDispatch::Auto) {
+    bulkDispatch = (_mask->weight() > 0.5 * subdomain.weight())
+                   ? CollisionDispatch::Mask : CollisionDispatch::List;
+  }
+  const bool bulkMask = (bulkDispatch == CollisionDispatch::Mask);
+
+  // Order collision after the preceding stages' post processors (boundary
+  // populations, possibly mid-block e.g. Bouzidi) and after legacy
+  // default-stream work (couplings, custom tasks). Neither is ordered
+  // against the named non-blocking collision streams implicitly.
+  block.postProcessorsDone().barrierOn(device::getStream<streams::OuterCollision>());
+  block.postProcessorsDone().barrierOn(device::getStream<streams::InnerCollision>());
+  _legacyTail.record(cudaStreamLegacy);
+  _legacyTail.barrierOn(device::getStream<streams::OuterCollision>());
+  _legacyTail.barrierOn(device::getStream<streams::InnerCollision>());
+
+  // Rebuild the cell structures matching the resolved (split, dispatch) policy:
+  // the boundary ring (_outerCells, always list) when split, the inner bulk as
+  // a bitmask (_innerMask) for mask dispatch, else a cell list (_listCells,
+  // holding the inner bulk when split or the whole sub-domain when fused).
+  if (_modified) {
+    _outerCells.clear();
+    _listCells.clear();
+    if (split && bulkMask) {
+      _innerMask = std::make_unique<ConcreteBlockMask<T,Platform::GPU_CUDA>>(block.getNcells());
+    } else {
+      _innerMask.reset();
+    }
+    for (CellID iCell=0; iCell < block.getNcells(); ++iCell) {
+      if (_mask->operator[](iCell)) {
+        if (split && block.isPaddingCore(iCell, 1)) {
+          _outerCells.push_back(iCell);
+        } else if (split && bulkMask) {
+          _innerMask->set(iCell, true);
+        } else if (!bulkMask) {
+          _listCells.push_back(iCell);
+        }
+        // fused + mask: iterated via the sub-domain mask directly, no list/mask
+      }
+    }
+    _outerCells.setProcessingContext(ProcessingContext::Simulation);
+    _listCells.setProcessingContext(ProcessingContext::Simulation);
+    if (_innerMask) {
+      _innerMask->setProcessingContext(ProcessingContext::Simulation);
+    }
+    _modified = false;
+  }
+
+  const bool stats = block.statisticsEnabled();
+  auto& outerStream = device::getStream<streams::OuterCollision>();
+  auto& innerStream = device::getStream<streams::InnerCollision>();
+
+  if (!split) {
+    // Fused: one collision over the whole sub-domain on the OuterCollision
+    // stream. Recording outerCollisionDone there makes the halo gather (which
+    // waits on it) wait for the whole collision. The no-overlap ordering that
+    // is optimal when the comm is on-GPU (single-GPU / intra-node).
+    OLB_PROFILE_T("GPU_CUDA:Coll:Fused", DYNAMICS, DESCRIPTOR);
+    if (bulkMask) {
+      if (stats) {
+        async_call_operators_with_statistics(outerStream.get(), lattice, subdomain.deviceData(),
+          MaskedCollision<T,DESCRIPTOR,DYNAMICS>{_parameters->parameters, _mask->deviceData()});
+      } else {
+        async_call_operators(outerStream.get(), lattice, subdomain.deviceData(),
+          MaskedCollision<T,DESCRIPTOR,DYNAMICS>{_parameters->parameters, _mask->deviceData()});
+      }
+    } else if (_listCells.size() > 0) {
+      if (stats) {
+        async_call_list_operators_with_statistics(outerStream.get(), lattice, _listCells,
+          ListedCollision<T,DESCRIPTOR,DYNAMICS>{_parameters->parameters});
+      } else {
+        async_call_list_operators(outerStream.get(), lattice, _listCells,
+          ListedCollision<T,DESCRIPTOR,DYNAMICS>{_parameters->parameters});
+      }
+    }
+    block.outerCollisionDone().record(outerStream);
+    return;
+  }
+
+  // Split: boundary ring on the OuterCollision stream (recording
+  // outerCollisionDone for the halo gather), inner bulk on the InnerCollision
+  // stream. No barrier between them. Collision is cell-local and the sets are
+  // disjoint, so the bulk runs concurrently with the ring and the gather.
+  if (_outerCells.size() > 0) {
+    OLB_PROFILE_T("GPU_CUDA:Coll:Outer", DYNAMICS, DESCRIPTOR);
+    if (stats) {
+      async_call_list_operators_with_statistics(outerStream.get(), lattice, _outerCells,
+        ListedCollision<T,DESCRIPTOR,DYNAMICS>{_parameters->parameters});
+    } else {
+      async_call_list_operators(outerStream.get(), lattice, _outerCells,
+        ListedCollision<T,DESCRIPTOR,DYNAMICS>{_parameters->parameters});
+    }
+    block.outerCollisionDone().record(outerStream);
+  }
+
+  {
+    OLB_PROFILE_T("GPU_CUDA:Coll:Inner", DYNAMICS, DESCRIPTOR);
+    if (bulkMask) {
+      if (_innerMask->weight() > 0) {
+        if (stats) {
+          async_call_operators_with_statistics(innerStream.get(), lattice, _innerMask->deviceData(),
+            MaskedCollision<T,DESCRIPTOR,DYNAMICS>{_parameters->parameters, _innerMask->deviceData()});
+        } else {
+          async_call_operators(innerStream.get(), lattice, _innerMask->deviceData(),
+            MaskedCollision<T,DESCRIPTOR,DYNAMICS>{_parameters->parameters, _innerMask->deviceData()});
         }
       }
-      _cells.setProcessingContext(ProcessingContext::Simulation);
-      _modified = false;
-    }
-
-    if (block.statisticsEnabled()) {
-      async_call_list_operators_with_statistics(
-        _stream.get(),
-        lattice,
-        _cells,
-        ListedCollision<T,DESCRIPTOR,DYNAMICS>{_parameters->parameters});
-    } else {
-      async_call_list_operators(
-        _stream.get(),
-        lattice,
-        _cells,
-        ListedCollision<T,DESCRIPTOR,DYNAMICS>{_parameters->parameters});
+    } else if (_listCells.size() > 0) {
+      if (stats) {
+        async_call_list_operators_with_statistics(innerStream.get(), lattice, _listCells,
+          ListedCollision<T,DESCRIPTOR,DYNAMICS>{_parameters->parameters});
+      } else {
+        async_call_list_operators(innerStream.get(), lattice, _listCells,
+          ListedCollision<T,DESCRIPTOR,DYNAMICS>{_parameters->parameters});
+      }
     }
   }
 }
@@ -637,7 +734,10 @@ void ConcreteBlockCollisionO<T,DESCRIPTOR,Platform::GPU_CUDA,DYNAMICS>::setup(
       _parameters->deviceData());
     gpu::cuda::device::check();
 
-    // Fetch pointer to on-device dynamic-dispatch field
+    // Register this dynamics in the per-block dispatch table and cache its index
+    _index = block.getDataRegistry().registerDynamics(typeid(DYNAMICS), _deviceDynamics.get());
+
+    // Fetch pointer to on-device per-cell dispatch index field
     _dynamicsOfCells = block.template getField<gpu::cuda::DYNAMICS<T,DESCRIPTOR>>()[0].data();
   }
 }
@@ -645,8 +745,7 @@ void ConcreteBlockCollisionO<T,DESCRIPTOR,Platform::GPU_CUDA,DYNAMICS>::setup(
 template <typename T, typename DESCRIPTOR, concepts::CellOperator OPERATOR>
 ConcreteBlockO<T,DESCRIPTOR,Platform::GPU_CUDA,OPERATOR,OperatorScope::PerCell>::ConcreteBlockO():
   _cells(0),
-  _modified{false},
-  _stream{cudaStreamDefault}
+  _modified{false}
 { }
 
 template <typename T, typename DESCRIPTOR, concepts::CellOperator OPERATOR>
@@ -655,23 +754,28 @@ void ConcreteBlockO<T,DESCRIPTOR,Platform::GPU_CUDA,OPERATOR,OperatorScope::PerC
 {
   if (_cells.size() > 0) {
     if (_modified) {
+      OLB_PROFILE_T("GPU_CUDA:Post:Deduplicate", OPERATOR, DESCRIPTOR);
       _cells.deduplicate();
       _cells.setProcessingContext(ProcessingContext::Simulation);
       _modified = false;
     }
+    OLB_PROFILE_T("GPU_CUDA:Post:Apply", OPERATOR, DESCRIPTOR);
     gpu::cuda::DeviceBlockLattice<T,DESCRIPTOR> lattice(block);
-    gpu::cuda::async_call_list_operators(_stream.get(),
+    block.outerCollisionDone().barrierOn(
+      gpu::cuda::device::getStream<gpu::cuda::streams::PostProcessor>());
+    gpu::cuda::async_call_list_operators(gpu::cuda::device::getStream<gpu::cuda::streams::PostProcessor>().get(),
                                          lattice,
                                          _cells,
                                          gpu::cuda::ListedPostProcessor<OPERATOR>{});
+    block.postProcessorsDone().record(
+      gpu::cuda::device::getStream<gpu::cuda::streams::PostProcessor>());
   }
 }
 
 template <typename T, typename DESCRIPTOR, concepts::CellOperator OPERATOR>
 ConcreteBlockO<T,DESCRIPTOR,Platform::GPU_CUDA,OPERATOR,OperatorScope::PerCellWithParameters>::ConcreteBlockO():
   _cells(0),
-  _modified{false},
-  _stream{cudaStreamDefault}
+  _modified{false}
 { }
 
 template <typename T, typename DESCRIPTOR, concepts::CellOperator OPERATOR>
@@ -680,16 +784,22 @@ void ConcreteBlockO<T,DESCRIPTOR,Platform::GPU_CUDA,OPERATOR,OperatorScope::PerC
 {
   if (_cells.size() > 0) {
     if (_modified) {
+      OLB_PROFILE_T("GPU_CUDA:Post:Deduplicate", OPERATOR, DESCRIPTOR);
       _cells.deduplicate();
       _cells.setProcessingContext(ProcessingContext::Simulation);
       _modified = false;
     }
+    OLB_PROFILE_T("GPU_CUDA:Post:Apply", OPERATOR, DESCRIPTOR);
     using namespace gpu::cuda;
     DeviceBlockLattice<T,DESCRIPTOR> lattice(block);
-    async_call_list_operators(_stream.get(),
+    block.outerCollisionDone().barrierOn(
+      device::getStream<streams::PostProcessor>());
+    async_call_list_operators(device::getStream<streams::PostProcessor>().get(),
                               lattice,
                               _cells,
                               ListedPostProcessorWithParameters<T,DESCRIPTOR,OPERATOR>{_parameters->parameters});
+    block.postProcessorsDone().record(
+      device::getStream<streams::PostProcessor>());
   }
 }
 
@@ -733,6 +843,7 @@ void ConcreteBlockCouplingO<COUPLEES,Platform::GPU_CUDA,COUPLER,OperatorScope::P
     );
   }
   _mask->set(iCell, state);
+  _maskUpdated = true;
 }
 
 template <typename COUPLER, typename COUPLEES>
@@ -742,7 +853,10 @@ void ConcreteBlockCouplingO<COUPLEES,Platform::GPU_CUDA,COUPLER,OperatorScope::P
     return gpu::cuda::DeviceBlockLattice{*_lattices.get(name)};
   });
   if (_mask) {
-    _mask->setProcessingContext(ProcessingContext::Simulation);
+    if (_maskUpdated) {
+      _mask->setProcessingContext(ProcessingContext::Simulation);
+      _maskUpdated = false;
+    }
     gpu::cuda::call_coupling_operators(
       deviceLattice, _mask->deviceData(),
       gpu::cuda::UnmaskedCoupling<COUPLER>{});
@@ -793,6 +907,7 @@ void ConcreteBlockCouplingO<COUPLEES,Platform::GPU_CUDA,COUPLER,OperatorScope::P
     );
   }
   _mask->set(iCell, state);
+  _maskUpdated = true;
 }
 
 template <typename COUPLER, typename COUPLEES>
@@ -802,7 +917,10 @@ void ConcreteBlockCouplingO<COUPLEES,Platform::GPU_CUDA,COUPLER,OperatorScope::P
     return gpu::cuda::DeviceBlockLattice{*_lattices.get(name)};
   });
   if (_mask) {
-    _mask->setProcessingContext(ProcessingContext::Simulation);
+    if (_maskUpdated) {
+      _mask->setProcessingContext(ProcessingContext::Simulation);
+      _maskUpdated = false;
+    }
     gpu::cuda::call_coupling_operators(
       deviceLattice, _mask->deviceData(),
       gpu::cuda::UnmaskedCouplingWithParameters<COUPLER,COUPLEES>{_parameters});
