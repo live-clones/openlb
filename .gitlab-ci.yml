@@ -20,20 +20,20 @@ variables:
   # Bump the trailing counter whenever .ci/docker/nix-ci.Dockerfile changes.
   NIX_IMAGE: $CI_REGISTRY_IMAGE/nix-ci:2.33.4-1
 
+# The public branch stages the next release, so it is a mainline like master.
 .default:
   rules:
-    - if: $CI_COMMIT_BRANCH != $CI_DEFAULT_BRANCH && $CI_PIPELINE_SOURCE != "merge_request_event"
-      when: manual
-    - if: $CI_COMMIT_BRANCH != $CI_DEFAULT_BRANCH && $CI_PIPELINE_SOURCE == "merge_request_event"
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH || $CI_COMMIT_BRANCH == "public"
       when: always
-    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
       when: always
+    - when: manual
 
 .dependents:
   rules:
-    - if: $CI_COMMIT_BRANCH != $CI_DEFAULT_BRANCH && $CI_PIPELINE_SOURCE == "merge_request_event"
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH || $CI_COMMIT_BRANCH == "public"
       when: always
-    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
       when: always
 
 # Inputs live in trees that releases never ship; the public branch mirrors one.
@@ -48,7 +48,7 @@ variables:
 # Created on the same pipelines as .dependents, but started by hand and never blocking.
 .optional:
   rules:
-    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH || $CI_PIPELINE_SOURCE == "merge_request_event"
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH || $CI_COMMIT_BRANCH == "public" || $CI_PIPELINE_SOURCE == "merge_request_event"
       when: manual
       allow_failure: true
 
@@ -401,10 +401,10 @@ test_cse_post_processors:
 meshing_tests:
   extends: .nix_check
   rules:
-    - if: $CI_COMMIT_BRANCH != $CI_DEFAULT_BRANCH && $CI_PIPELINE_SOURCE == "merge_request_event"
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH || $CI_COMMIT_BRANCH == "public"
       exists: [ script/meshing/tests/** ]
       when: always
-    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
       exists: [ script/meshing/tests/** ]
       when: always
   script:
