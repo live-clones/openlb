@@ -36,10 +36,12 @@ variables:
     - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
       when: always
 
-# Inputs live in trees that releases never ship, so these only run in openlb/olb.
+# Inputs live in trees that releases never ship; the public branch mirrors one.
 .development_only:
   rules:
     - if: $CI_PROJECT_PATH != "openlb/olb"
+      when: never
+    - if: $CI_COMMIT_BRANCH == "public"
       when: never
     - !reference [.default, rules]
 
@@ -303,6 +305,8 @@ build_voreen_frontend:
     - ./.ci/build_voreen_frontend.sh
   rules:
     - if: $CI_PROJECT_PATH != "openlb/olb"
+      when: never
+    - if: $CI_COMMIT_BRANCH == "public"
       when: never
     - when: manual
       allow_failure: true
@@ -714,11 +718,7 @@ package_release:
     - job: build_image_nix
       optional: true
   rules:
-    - if: $CI_PROJECT_PATH != "openlb/olb"
-      when: never
-    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH || $CI_PIPELINE_SOURCE == "merge_request_event"
-      when: always
-    - when: manual
+    - !reference [.development_only, rules]
   script:
     - nix develop .#gcc --command .ci/package_release.sh
   artifacts:
@@ -733,11 +733,7 @@ summarize_difference_to_public:
   dependencies: [ "package_release" ]
   needs: [ "package_release" ]
   rules:
-    - if: $CI_PROJECT_PATH != "openlb/olb"
-      when: never
-    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH || $CI_PIPELINE_SOURCE == "merge_request_event"
-      when: always
-    - when: manual
+    - !reference [.development_only, rules]
   script:
     - ./.ci/summarize_difference_to_public.sh
   artifacts:
@@ -753,6 +749,8 @@ summarize_difference_to_public:
   stage: test_release
   rules:
     - if: $CI_PROJECT_PATH != "openlb/olb"
+      when: never
+    - if: $CI_COMMIT_BRANCH == "public"
       when: never
     - !reference [.optional, rules]
   needs: [ "package_release" ]
