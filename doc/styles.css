@@ -199,3 +199,106 @@ a:hover {
   overflow-x: auto;
   overflow-y: hidden;
 }
+
+.logo-slider {
+  overflow: hidden;
+  white-space: nowrap;
+  position: relative;
+  width: 100%;
+  background: #f8f9fa;
+  padding: 20px 0;
+}
+
+.logo-slide-track {
+  display: inline-flex;
+  gap: 5px;
+  animation: scroll 25s linear infinite;
+}
+
+.logo-slide-track img {
+  height: 120px;
+  width: auto;
+  object-fit: contain;
+}
+
+@keyframes scroll {
+  0% { transform: translateX(0); }
+  100% { transform: translateX(-50%); }
+}
+
+/* Buttons */
+.card-link {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  /*padding: 1.5rem;*/
+  background: #ffffff;
+  border-radius: 20px;
+  border: 1px solid #e5e5e5;
+  text-decoration: none !important;
+  color: inherit !important;
+  box-shadow: 0 2px 5px rgba(0,0,0,0.05);
+  transition: transform 0.2s, box-shadow 0.2s;
+  min-height: 69px; /* Gibt der Kachel eine schöne Grundhöhe */
+  max-height: 72px;
+}
+
+.card-link:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 8px 15px rgba(0,0,0,0.1);
+}
+
+/* Image in Button */
+.card-link img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-fit: contain !important;
+  margin-bottom: 0rem; 
+  overflow: hidden;
+  border-radius: inherit;
+  isolation: isolate;
+  transform: translateZ(0); 
+}
+/* Distance between buttons */
+.quarto-layout-cell {
+  margin-right: 3px !important;
+  margin-bottom: 3px !important;  
+}
+
+/* Showcase*/
+.showcase-row-btn {
+  border-radius: 12px !important;
+  background-color: #ffffff !important;
+  border-color: #e5e5e5 !important;
+  transition: transform 0.2s ease-in-out, box-shadow 0.2s ease-in-out !important;
+}
+
+.showcase-row-btn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 15px rgba(0, 0, 0, 0.08) !important;
+  background-color: #fcfcfc !important;
+  border-color: #d0d0d0 !important;
+}
+
+/* Standard state */
+.card-link .img-hover {
+  display: none !important;
+}
+
+.card-link .img-normal {
+  display: block !important;
+  margin: 0 auto !important;
+}
+
+/* Hovered state */
+.card-link:hover .img-normal {
+  display: none !important;
+}
+
+.card-link:hover .img-hover {
+  display: block !important;
+  margin: 0 auto !important;
+}
