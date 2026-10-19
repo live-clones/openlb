@@ -23,6 +23,22 @@
 # Keeping the intermediate directories is what tells the two periodicPlate
 # examples of structuralmechanics apart.
 #
+# Figures belong next to the example as well, in its docs/ directory. That
+# directory is mirrored as a symlink at the path it has in the source tree,
+#
+#   examples/forBeginners/cavity2d/docs
+#     -> doc/examples/forBeginners/cavity2d/docs
+#
+# so a page refers to its figures by a project absolute path such as
+# /examples/forBeginners/cavity2d/docs/fig/cavity2dDomain.svg.
+#
+# Figures belonging to an example sit in a docs/ directory next to its page,
+# for instance examples/forBeginners/cavity2d/docs/fig/. That directory is
+# mirrored as a symlink at the same place below doc/, so a page refers to its
+# figures by their path in the source tree, relative to the project root:
+#
+#   ![...](/examples/forBeginners/cavity2d/docs/fig/cavity2dDomain.svg)
+#
 # Both artefacts are generated, which is why they are listed in .gitignore --
 # the symlinks never have to be committed. The script is registered as a
 # pre-render script in _quarto.yml and _quarto-book.yml, so a plain
@@ -59,6 +75,8 @@ category_docs() {
 # linger, and clear out the directories that held them. Real files (figures,
 # hand written pages) are left untouched, and so are the category directories.
 find "$examples_dir" -type l -name '*.qmd' -delete
+find "$examples_dir" -type l -name docs -delete
+find "$examples_dir" -type l -name docs -delete
 find "$examples_dir" -mindepth 2 -type d -empty -delete
 
 tmp_includes="$(mktemp)"
@@ -125,6 +143,32 @@ for category_path in "$src_dir"/*/; do
       mkdir -p "$(dirname "$link")"
       ln -sfn "$up/examples/$category/$doc" "$link"
       linked=$((linked + 1))
+    fi
+
+    # The figures of the example, mirrored one level further down, into the
+    # directory named after the example itself.
+    example="$(dirname "$doc")"
+    if [ -d "$category_path$example/docs" ]; then
+      figures="$examples_dir/$category/$example/docs"
+      if [ -e "$figures" ] && [ ! -L "$figures" ]; then
+        echo "link_examples: keeping existing directory $figures" >&2
+      else
+        mkdir -p "$(dirname "$figures")"
+        ln -sfn "../$up/examples/$category/$example/docs" "$figures"
+      fi
+    fi
+
+    # The figures of the example, if it has any. The link sits one directory
+    # deeper than the page, in a directory named after the example.
+    docs_src="$category_path$(dirname "$doc")/docs"
+    if [ -d "$docs_src" ]; then
+      docs_link="$examples_dir/$category/$(dirname "$doc")/docs"
+      if [ -e "$docs_link" ] && [ ! -L "$docs_link" ]; then
+        echo "link_examples: keeping existing directory $docs_link" >&2
+      else
+        mkdir -p "$(dirname "$docs_link")"
+        ln -sfn "../$up/examples/$category/$(dirname "$doc")/docs" "$docs_link"
+      fi
     fi
 
     echo "{{< include $rel >}}" >>"$tmp_includes"
