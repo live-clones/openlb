@@ -102,7 +102,17 @@ for category_path in "$src_dir"/*/; do
   fi
 
   mkdir -p "$examples_dir/$category"
-  echo "## $category" >>"$tmp_includes"
+  # The labels give the overview table in the PDF (example_table.py) fixed
+  # targets for its \ref's: excat:<category> for the category and
+  # ex:<path> for every example, see below.
+  {
+    echo "## $category"
+    echo
+    echo '```{=latex}'
+    echo "\\label{excat:$category}"
+    echo '```'
+    echo
+  } >>"$tmp_includes"
 
   # A category may carry a hand written introduction, which is placed directly
   # below its heading. These live in doc/ and are committed as usual.
@@ -171,7 +181,45 @@ for category_path in "$src_dir"/*/; do
       fi
     fi
 
-    echo "{{< include $rel >}}" >>"$tmp_includes"
+    # The figures of the example, mirrored one level further down, into the
+    # directory named after the example itself.
+    example="$(dirname "$doc")"
+    if [ -d "$category_path$example/docs" ]; then
+      figures="$examples_dir/$category/$example/docs"
+      if [ -e "$figures" ] && [ ! -L "$figures" ]; then
+        echo "link_examples: keeping existing directory $figures" >&2
+      else
+        mkdir -p "$(dirname "$figures")"
+        ln -sfn "../$up/examples/$category/$example/docs" "$figures"
+      fi
+    fi
+
+    # The figures of the example, if it has any. The link sits one directory
+    # deeper than the page, in a directory named after the example.
+    docs_src="$category_path$(dirname "$doc")/docs"
+    if [ -d "$docs_src" ]; then
+      docs_link="$examples_dir/$category/$(dirname "$doc")/docs"
+      if [ -e "$docs_link" ] && [ ! -L "$docs_link" ]; then
+        echo "link_examples: keeping existing directory $docs_link" >&2
+      else
+        mkdir -p "$(dirname "$docs_link")"
+        ln -sfn "../$up/examples/$category/$(dirname "$doc")/docs" "$docs_link"
+      fi
+    fi
+
+    # The example's heading comes from the included file, so its label cannot
+    # be written here. The div hands it to include/example_labels.lua, which
+    # puts it right after that heading. Quarto's own heading ids are no use as
+    # targets: they are derived from the heading text, and several examples
+    # share a name.
+    {
+      echo "::: {.olb-example label=\"ex:${rel%.qmd}\"}"
+      echo
+      echo "{{< include $rel >}}"
+      echo
+      echo ":::"
+      echo
+    } >>"$tmp_includes"
     echo "                - examples/$rel" >>"$tmp_sidebar"
   done
 

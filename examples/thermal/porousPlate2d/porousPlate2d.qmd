@@ -1,3 +1,7 @@
+---
+features: [thermal, benchmark, primitives]
+---
+
 ### porousPlate2d
 
 The porous plate problem is implemented as described in [@guo2002coupled] and [@peng2003simplified].

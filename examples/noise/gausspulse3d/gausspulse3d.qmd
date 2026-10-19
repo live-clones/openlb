@@ -1,3 +1,7 @@
+---
+features: [benchmark, primitives]
+---
+
 ### gausspulse3d
 
 This example initializes a Gaussian pressure distribution, defined in `acousticPulse.h`, in a moving medium.

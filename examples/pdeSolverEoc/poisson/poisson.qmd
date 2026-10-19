@@ -1,3 +1,7 @@
+---
+features: [benchmark, primitives]
+---
+
 ### poisson
 
 The mathematical description of this example is given in [@bukreev2024electro1].

@@ -1,3 +1,7 @@
+---
+features: [benchmark, primitives]
+---
+
 ### poissonNernstPlanck
 
 The Poisson equation (*PE*) for the validation test, which is taken from [@CHAI20082050], is defined as

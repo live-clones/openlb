@@ -1,3 +1,7 @@
+---
+features: [particles, transient, benchmark, showcase, primitives]
+---
+
 ### settlingCube3d
 
 The case examines the settling of a cubical silica particle under gravity in a surrounding fluid.

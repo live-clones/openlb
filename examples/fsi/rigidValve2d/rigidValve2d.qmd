@@ -1,3 +1,7 @@
+---
+features: [transient, benchmark, primitives]
+---
+
 ### rigidValve2d
 
 This example implements the model for predicting the dynamic response of a mechanical heart valve as described by Stijnen *et al.* [@stijnen2004].

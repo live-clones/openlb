@@ -1,3 +1,7 @@
+---
+features: [multiComponent, transient, benchmark, showcase, primitives]
+---
+
 ### binaryShearFlow2d
 
 A circular domain of one fluid phase is immersed in a rectangle filled with another fluid phase.

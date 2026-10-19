@@ -1,3 +1,7 @@
+---
+features: [benchmark, primitives]
+---
+
 ### cavity2dSolver
 
 This example illustrates a flow in a cuboid, lid-driven cavity.

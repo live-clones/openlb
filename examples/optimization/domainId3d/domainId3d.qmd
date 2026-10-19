@@ -1,3 +1,7 @@
+---
+features: [porousMedia, benchmark, showcase, primitives]
+---
+
 ### domainId3d
 
 In this example, a domain identification problem is solved: a cubic obstacle in the middle of a cubic fluid flow domain has to be identified given only the surrounding fluid flow, cf. [@klemens:20].

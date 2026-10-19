@@ -1,3 +1,7 @@
+---
+features: [transient, benchmark, primitives]
+---
+
 ### advectionDiffusion1d
 
 The `advectionDiffusion1d` example showcases second-order mesh convergence of LBM for scalar linear one-dimensional advection--diffusion equations [@simonis:20] of the form

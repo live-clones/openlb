@@ -1,3 +1,7 @@
+---
+features: [benchmark, primitives]
+---
+
 ### electroosmosis
 
 The mathematical and physical description of this application is given in [@bukreev2024electro1].

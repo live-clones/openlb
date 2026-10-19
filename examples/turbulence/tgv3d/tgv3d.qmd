@@ -1,3 +1,7 @@
+---
+features: [turbulent, transient, benchmark, primitives]
+---
+
 ### tgv3d
 
 The Taylor--Green vortex (TGV) is one of the simplest configurations to investigate the generation of small-scale structures and the resulting turbulence.

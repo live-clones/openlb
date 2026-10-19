@@ -1,3 +1,8 @@
+---
+features: [transient, benchmark, primitives]
+recommended-for-beginners: [primitives]
+---
+
 ### cylinder2d
 
 This example examines a steady flow past a cylinder placed in a channel.

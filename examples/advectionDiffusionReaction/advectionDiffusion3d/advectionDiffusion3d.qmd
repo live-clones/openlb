@@ -1,3 +1,7 @@
+---
+features: [transient, benchmark, primitives]
+---
+
 ### advectionDiffusion3d
 
 The example `advectionDiffusion3d` acts as a mesh-convergence test for a numerical solution to the initial value problem

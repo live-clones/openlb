@@ -1,3 +1,7 @@
+---
+features: [multiComponent, transient, showcase, primitives]
+---
+
 ### microFluidics2d
 
 This example shows a microfluidic channel creating droplets of two fluid components.

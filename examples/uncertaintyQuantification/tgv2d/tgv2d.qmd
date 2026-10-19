@@ -1,3 +1,7 @@
+---
+features: [turbulent, transient, benchmark, primitives]
+---
+
 ### tgv2d
 
 The `tgv2d` example demonstrates UQ for a two-dimensional Taylor--Green vortex problem with an uncertain initial velocity field.

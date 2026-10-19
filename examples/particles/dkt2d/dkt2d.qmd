@@ -1,3 +1,7 @@
+---
+features: [particles, transient, benchmark, showcase, primitives]
+---
+
 ### dkt2d
 
 $\OpenLB$ provides an alternative approach to conventional resolved particle simulation methods, referred to as the homogenised lattice Boltzmann method (HLBM).

@@ -1,3 +1,7 @@
+---
+features: [transient, benchmark, primitives, checkpointing]
+---
+
 ### bstep3d
 
 This example implements the fluid flow over a backward-facing step.

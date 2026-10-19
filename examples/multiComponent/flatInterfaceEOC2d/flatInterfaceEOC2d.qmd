@@ -1,3 +1,7 @@
+---
+features: [multiComponent, multiPhase, benchmark, primitives]
+---
+
 ### flatInterfaceEOC2d
 
 In this example, a flat interface test is performed for several multiphase models such as the incompressible Allen--Cahn or the well-balanced Cahn--Hilliard.

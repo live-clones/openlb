@@ -1,3 +1,7 @@
+---
+features: [turbulent, transient, showcase, primitives]
+---
+
 ### nozzle3d
 
 On the one hand, this example describes building a cylindrical 3D geometry in $\OpenLB$; on the other hand, it examines turbulent flow in a nozzle injection tube using different turbulence models and Reynolds numbers.

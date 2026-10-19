@@ -1,3 +1,7 @@
+---
+features: [benchmark, primitives]
+---
+
 ### poiseuille3d
 
 For basic tests of boundary conditions, a comparison with analytical solutions is the easiest and most accurate approach.

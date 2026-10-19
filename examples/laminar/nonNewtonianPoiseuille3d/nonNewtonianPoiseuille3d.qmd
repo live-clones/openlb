@@ -1,3 +1,7 @@
+---
+features: [benchmark, primitives]
+---
+
 ### nonNewtonianPoiseuille3d
 
 This example case is based on the forced Poiseuille flow case where several non-Newtonian viscosity models, such as Power-Law, Casson, and Carreau--Yasuda, can be applied.

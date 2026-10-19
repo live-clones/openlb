@@ -1,3 +1,7 @@
+---
+features: [turbulent, transient, showcase, stl, primitives]
+---
+
 ### centrifugalPump3d
 
 This example simulates the three-dimensional flow dynamics inside a centrifugal pump.

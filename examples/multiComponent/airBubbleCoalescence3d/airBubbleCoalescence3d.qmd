@@ -1,3 +1,7 @@
+---
+features: [multiComponent, multiPhase, transient, primitives]
+---
+
 ### airBubbleCoalescence3d
 
 Two bubbles of air in quiescent water are initialized close to each other so that they start to coalesce from the first time step under standard conditions.

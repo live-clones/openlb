@@ -1,3 +1,7 @@
+---
+features: [turbulent, transient, benchmark, showcase, primitives]
+---
+
 ### channel3d
 
 This example examines a wall-bounded flow at high Reynolds numbers.

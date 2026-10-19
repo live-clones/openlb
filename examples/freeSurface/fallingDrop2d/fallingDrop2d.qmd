@@ -1,3 +1,7 @@
+---
+features: [multiComponent, multiPhase, transient, primitives]
+---
+
 ### fallingDrop2d
 
 This example type simulates a drop falling into a pool of the same liquid.

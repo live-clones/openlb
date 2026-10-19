@@ -1,3 +1,7 @@
+---
+features: [multiComponent, multiPhase, transient, primitives]
+---
+
 ### RayleighInstability3d
 
 This example covers Plateau-Rayleigh instabilities. 

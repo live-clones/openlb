@@ -1,3 +1,7 @@
+---
+features: [particles, transient, benchmark, stl, primitives]
+---
+
 ### deformableParticleInShearFlow3d
 
 This example case contains the benchmark validation case for a 3D deformable particle submerged in a shear flow (cf. [@kruger:2011]).

@@ -1,3 +1,7 @@
+---
+features: [particles, transient, showcase, stl, primitives]
+---
+
 ### bifurcation3d
 
 The `bifurcation3d` example simulates particulate flow through an exemplary bifurcation of the human bronchial system.

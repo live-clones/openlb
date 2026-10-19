@@ -1,3 +1,8 @@
+---
+features: [transient, benchmark, stl, primitives]
+recommended-for-beginners: [stl]
+---
+
 ### pipeWithValve3d
 
 This example shows how to use STL files for the channel geometry and for an obstacle in it. It describes the flow in a pipe with a valve under a predefined angle. The pipe geometry is included via `STLreader<T> pipe( "pipe.stl", converter.getPhysDeltaX(), 0.001)` and the valve geometry via `STLreader<T> valve( "valve.stl", converter.getPhysDeltaX(), 0.001)`. Both geometries were created in FreeCAD and exported in STL format with mm units. The case is discretized with a D3Q19 lattice and `BGKdynamics`. On the inlet and outlet planes of the pipe, the `boundary::set<boundary::InterpolatedVelocity>(sLattice, superGeometry, 3)` and `boundary::set<boundary::InterpolatedPressure>(sLattice, superGeometry, 4)` boundaries are set. On the walls of the pipe and of the valve `BounceBack` dynamics are used as no-slip boundary conditions. For the definition of inlet and outlet material numbers, the maximal and minimal coordinates of the pipe STL surrounding cells are used:
