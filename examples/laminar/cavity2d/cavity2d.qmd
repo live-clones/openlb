@@ -27,7 +27,7 @@ The boundary $\partial \Omega = \Gamma_D \cup \Gamma_{\mathrm{no\text{-}slip}}$ 
     \vel &= \mathbf{0} \quad \text{on} \quad \Gamma_{\mathrm{no\text{-}slip}} \times \I.
 \end{align}
 The fluid is initially at rest, $\vel = \mathbf{0}$ in $\Omega$ at $t = 0$.
-In `prepareGeometry()`, $\Gamma_{\mathrm{no\text{-}slip}}$ gets the material number 2 and $\Gamma_D$ the material number 3; the two top corners belong to the lid.
+In `prepareGeometry()`, $\Gamma_{\mathrm{no\text{-}slip}}$ gets the material number 2 and $\Gamma_D$ the material number 3; the two top corners are wall cells at rest, because `rename(2, 3, 1, lid)` only keeps the lid cells that have fluid cells below them.
 
 #### Domain
 
@@ -41,7 +41,16 @@ With $\nu = 10^{-3}\,\mathrm{m^2/s}$ this gives a Reynolds number of $Re = u_\te
 In this example, the domain is discretized with a uniform grid of $N^2$ cells with the lattice spacing $\Delta x = L / N$, where $N = 128$ is set by `Resolution` in `cavity2d.xml`.
 
 The LBM collision operator is the BGK operator with a single relaxation time ([Collision Operators](/content/02_core.qmd#collision-operators)), used as `ConstRhoBGKdynamics`, together with the D2Q9 velocity set ([Lattice Structures](/content/01_introduction.qmd#sec-lattice-structures)).
-All four walls, including the moving lid, are velocity boundaries of the type `InterpolatedVelocity` ([Define Boundary Method](/content/06_initial_boundary.qmd#sec-defineBoundaryMethod)).
+All four walls, including the moving lid, are velocity boundaries of the type `InterpolatedVelocity` ([Define Boundary Method](/content/06_initial_boundary.qmd#sec-defineBoundaryMethod)). The corresponding lattice is defined inside the case definition in 'cavity2d.cpp' as in @lst-cavity2d-case.
+
+::: {#lst-cavity2d-case}
+```{.cpp}
+using MyCase = Case<
+  NavierStokes, Lattice<double, descriptors::D2Q9<>>
+>;
+```
+Case definition for the `cavity2d` example.
+:::
 
 The parameters for the simulation are read from `cavity2d.xml` and given in @tbl-cavity2d-params.
 The unit converter `UnitConverterFromResolutionAndRelaxationTime` derives the time step size from the resolution and the lattice relaxation time $\tau = 0.5384$.
@@ -63,15 +72,6 @@ The unit converter `UnitConverterFromResolutionAndRelaxationTime` derives the ti
 | `VisualizationGnuplot/SaveTime` | | $5\,\mathrm{s}$ | interval of the comparison with Ghia et al. |
 
 : Parameters of `cavity2d`, read from `cavity2d.xml` in `main()`. The first seven elements are found below `Param/Application`, the others below `Param/Output`. {#tbl-cavity2d-params}
-
-::: {#lst-cavity2d-descriptor}
-```{.cpp}
-using MyCase = Case<
-  NavierStokes, Lattice<double, descriptors::D2Q9<>>
->;
-```
-Descriptor definition for the `cavity2d` example.
-:::
 
 #### Validation
 
