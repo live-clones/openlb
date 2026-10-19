@@ -1,3 +1,7 @@
+---
+features: [transient, benchmark, primitives]
+---
+
 ### laminarReactiveTmixer
 
 ![Product concentration distribution in a reactive T-micromixer.](/examples/advectionDiffusionReaction/fig/Tmixer.png){#fig-t-mixer width="60%"}

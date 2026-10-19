@@ -1,3 +1,7 @@
+---
+features: [multiPhase, transient, benchmark, primitives]
+---
+
 ### dropletSplashing2d
 
 A droplet is initially placed at the center of the domain, surrounded by vapor.

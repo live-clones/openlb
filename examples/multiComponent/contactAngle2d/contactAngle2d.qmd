@@ -1,3 +1,7 @@
+---
+features: [multiComponent, benchmark, primitives]
+---
+
 ### contactAngle2d
 
 In this example, a semi-spherical droplet of fluid is initialized within a different fluid at a solid boundary.

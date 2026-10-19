@@ -1,3 +1,7 @@
+---
+features: [multiPhase, transient, benchmark, primitives]
+---
+
 ### isothermalEvaporation2d
 
 A flat interface evaporates due to a lower pressure assigned to the boundary.

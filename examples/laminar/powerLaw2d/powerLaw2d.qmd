@@ -1,3 +1,7 @@
+---
+features: [benchmark, primitives]
+---
+
 ### powerLaw2d
 
 This example describes a steady non-Newtonian flow in a channel.

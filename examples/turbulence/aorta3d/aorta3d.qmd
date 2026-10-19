@@ -1,3 +1,7 @@
+---
+features: [turbulent, transient, showcase, stl, primitives]
+---
+
 ### aorta3d
 
 In this example, the fluid flow through a bifurcation is simulated.

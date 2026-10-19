@@ -1,5 +1,4 @@
-#!/usr/bin/env nix-shell
-#!nix-shell -p nodePackages.diff2html-cli curl bash git -i bash
+#!/usr/bin/env bash
 
 set -eo pipefail
 

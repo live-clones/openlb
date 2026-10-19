@@ -1,3 +1,7 @@
+---
+features: [turbulent, thermal, transient, benchmark, primitives]
+---
+
 ### squareCavity2d
 
 A common application for the validation of thermal models is the numerical simulation of the natural convection in a square cavity.

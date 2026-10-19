@@ -1,3 +1,7 @@
+---
+features: [multiPhase, transient, primitives]
+---
+
 ### phaseSeparation2d
 
 In this example, the simulation is initialized with a given density plus small, random variation over the domain.

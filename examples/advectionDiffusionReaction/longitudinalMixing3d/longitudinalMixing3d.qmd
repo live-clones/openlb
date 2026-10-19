@@ -1,3 +1,7 @@
+---
+features: [thermal, transient, benchmark, primitives]
+---
+
 ### longitudinalMixing3d
 
 This example models a transient longitudinal mixing process, which is used to validate the implemented robin-type boundary condition.

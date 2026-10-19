@@ -1,3 +1,7 @@
+---
+features: [showcase, primitives]
+---
+
 ### showcaseADf
 
 This app gives an introduction to the usage of forward automatic differentiation in order to compute derivatives of any numerical quantities in $\OpenLB$.

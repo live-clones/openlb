@@ -1,3 +1,7 @@
+---
+features: [transient, benchmark, primitives]
+---
+
 ### cylinder2d
 
 This example applies UQ to the flow past a circular cylinder.

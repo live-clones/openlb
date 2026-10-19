@@ -7,7 +7,7 @@ project:
   type: website
   pre-render:
     - ./link_examples.sh
-    - ./example_table.sh
+    - ./example_table.py
     - ./ug_pdf_download.sh
   # Copies the user guide PDF into the rendered site once it exists.
   post-render: ./ug_pdf_download.sh

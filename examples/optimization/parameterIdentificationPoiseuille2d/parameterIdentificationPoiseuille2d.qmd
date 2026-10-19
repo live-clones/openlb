@@ -1,3 +1,7 @@
+---
+features: [showcase, primitives]
+---
+
 ### parameterIdentificationPoiseuille2d
 
 This is a simple showcase for a two-dimensional fluid flow optimization / parameter identification problem.

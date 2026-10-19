@@ -84,7 +84,17 @@ for category_path in "$src_dir"/*/; do
   fi
 
   mkdir -p "$examples_dir/$category"
-  echo "## $category" >>"$tmp_includes"
+  # The labels give the overview table in the PDF (example_table.py) fixed
+  # targets for its \ref's: excat:<category> for the category and
+  # ex:<path> for every example, see below.
+  {
+    echo "## $category"
+    echo
+    echo '```{=latex}'
+    echo "\\label{excat:$category}"
+    echo '```'
+    echo
+  } >>"$tmp_includes"
 
   # A category may carry a hand written introduction, which is placed directly
   # below its heading. These live in doc/ and are committed as usual.
@@ -127,7 +137,19 @@ for category_path in "$src_dir"/*/; do
       linked=$((linked + 1))
     fi
 
-    echo "{{< include $rel >}}" >>"$tmp_includes"
+    # The example's heading comes from the included file, so its label cannot
+    # be written here. The div hands it to include/example_labels.lua, which
+    # puts it right after that heading. Quarto's own heading ids are no use as
+    # targets: they are derived from the heading text, and several examples
+    # share a name.
+    {
+      echo "::: {.olb-example label=\"ex:${rel%.qmd}\"}"
+      echo
+      echo "{{< include $rel >}}"
+      echo
+      echo ":::"
+      echo
+    } >>"$tmp_includes"
     echo "                - examples/$rel" >>"$tmp_sidebar"
   done
 

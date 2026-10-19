@@ -463,18 +463,26 @@
           custom-texlive
           pdf2svg
           librsvg
-          # example_table.sh
-          perl
           # the API reference is published next to the guide
           doxygen
           doxygen-awesome-css
-          # doxygen_header.py
+          # doxygen_header.py, example_table.py
           python3
         ];
 
         shellHook = ''
           export DOXYGEN_AWESOME_CSS=${pkgs.doxygen-awesome-css}/share/doxygen-awesome-css
         '';
+      };
+
+      release-summary = pkgs.mkShell {
+        name = "openlb-release-summary";
+        buildInputs = with pkgs; [
+          diff2html-cli
+          curl
+          git
+          gnutar
+        ];
       };
     };
 

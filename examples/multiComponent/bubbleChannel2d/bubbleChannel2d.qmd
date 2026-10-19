@@ -1,3 +1,7 @@
+---
+features: [multiComponent, multiPhase, transient, showcase, primitives]
+---
+
 ### bubbleChannel2d
 
 This example shows an advecting bubble of air in a channel of water.

@@ -1,3 +1,7 @@
+---
+features: [benchmark, showcase, primitives]
+---
+
 ### testFlowOpti3d
 
 This app is built on top of the test flow case with an analytical solution and solves parameter identification problems with an optimization approach [@krause:10b].

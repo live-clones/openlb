@@ -35,7 +35,7 @@ all: pdf website
 # as its pre-render step.
 prepare:
 	./link_examples.sh
-	./example_table.sh
+	./example_table.py
 
 # doc/ug_pdf/<name>.pdf
 pdf: prepare
@@ -47,5 +47,5 @@ website: prepare
 
 clean:
 	rm -rf ug ug_pdf .quarto
-	rm -f include/pdf_download.html examples/_includes.qmd examples/_table_google.qmd
+	rm -f include/pdf_download.html examples/_includes.qmd examples/_table.qmd examples/_table_pdf.qmd
 	find examples -type l -name '*.qmd' -delete

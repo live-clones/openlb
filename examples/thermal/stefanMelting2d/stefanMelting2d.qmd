@@ -1,3 +1,7 @@
+---
+features: [thermal, multiPhase, transient, benchmark, primitives]
+---
+
 ### stefanMelting2d
 
 The solution for the melting problem (solid-liquid phase change) is computed using the LBM from Huang and Wu [@huangwu:2015].

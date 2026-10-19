@@ -1,3 +1,7 @@
+---
+features: [thermal, benchmark, primitives]
+---
+
 ### microChannel3d
 
 This example is the three-dimensional analogy of `microChannel2d` in a round pipe.

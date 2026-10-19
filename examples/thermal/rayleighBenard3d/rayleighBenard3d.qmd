@@ -1,3 +1,7 @@
+---
+features: [turbulent, thermal, transient, benchmark, showcase, primitives]
+---
+
 ### rayleighBenard3d
 
 The Rayleigh--Bénard convection is a typical case of natural convection, where the lower boundary is heated and a regular pattern of convection cells is developed.

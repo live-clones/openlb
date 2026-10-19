@@ -735,7 +735,7 @@ summarize_difference_to_public:
   rules:
     - !reference [.development_only, rules]
   script:
-    - ./.ci/summarize_difference_to_public.sh
+    - nix develop .#release-summary --command ./.ci/summarize_difference_to_public.sh
   artifacts:
     expose_as: "Difference to public repository"
     paths:

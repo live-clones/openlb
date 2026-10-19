@@ -1,3 +1,7 @@
+---
+features: [benchmark, primitives]
+---
+
 ### cavity2d
 
 In this setup, the lid-driven velocity is treated as a random variable, uniformly distributed over the interval $\mathcal{U}[0.9, 1.1]$, representing $\pm 10\%$ uncertainty around the nominal value.

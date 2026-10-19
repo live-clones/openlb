@@ -14,6 +14,7 @@ Read it there — GitLab renders only a fixed set of markdown extensions, so the
 | `index.qmd`, `about.qmd`, `cite.qmd`, … | Landing and standalone pages |
 | `content/` | The user guide chapters |
 | `examples/` | One page per example, plus the generated index |
+| `examples/example.qmd` | Template and guide for writing the page of a new example |
 | `_quarto.yml` | Website profile (the default) |
 | `_quarto-book.yml` | PDF book profile |
 | `fig/`, `include/`, `styles.css` | Assets, header partials, theme overrides |
@@ -57,12 +58,28 @@ hand or committed:
   as a symlink — the pages themselves live next to their code under
   `examples/<category>/` — and writes the `examples/_includes.qmd` list and the
   generated section of the sidebar in `_quarto.yml`.
-- `example_table.sh` builds the overview table on the Examples page from the
-  exported spreadsheet in `_sheet/`.
+- `example_table.py` builds the overview table of the examples, as HTML for
+  the Examples page and as LaTeX for the A3 pages at the start of the examples
+  chapter of the PDF, from the example list written by `link_examples.sh` and
+  the front matter of each example's `.qmd`, which lists the features it
+  covers:
+
+      ---
+      features: [transient, benchmark, primitives]
+      recommended-for-beginners: [primitives]
+      ---
+
+  The feature keys and column headings are defined at the top of the script.
+  An example without `features` is shown with `?` in every column.
+
+  In the PDF, the table refers to the sections of the categories and links to
+  those of the examples through the labels `excat:<category>` and
+  `ex:<path>`. `link_examples.sh` writes them into the include list, and
+  `include/example_labels.lua` places each example's label after its heading.
 - `ug_pdf_download.sh` copies the finished PDF into the site and writes the
   navbar download button.
 
-Both shell scripts also run as Quarto pre-render steps, so a plain `quarto
+These scripts also run as Quarto pre-render steps, so a plain `quarto
 render` regenerates them too.
 
 The `_extensions/` directory vendors the `quarto-pseudocode` extension, which

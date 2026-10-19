@@ -1,3 +1,7 @@
+---
+features: [benchmark, primitives]
+---
+
 ### cavity3dBenchmark
 
 <!-- TODO: describe this example. -->

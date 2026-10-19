@@ -1,3 +1,7 @@
+---
+features: [thermal, benchmark, primitives]
+---
+
 ### microChannel2d
 
 This is a two-dimensional example of a channel with predefined pressures and temperatures at both ends where a rarefied gas flow is developing according to the chosen Knudsen number and considering the Knudsen slip and thermal creep effects

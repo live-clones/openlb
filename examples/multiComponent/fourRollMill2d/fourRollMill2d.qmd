@@ -1,3 +1,7 @@
+---
+features: [multiComponent, transient, benchmark, showcase, primitives]
+---
+
 ### fourRollMill2d
 
 Here, a spherical domain filled with one fluid phase is immersed in a square filled with another phase of equal density and viscosity.

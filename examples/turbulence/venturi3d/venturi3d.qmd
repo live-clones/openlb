@@ -1,3 +1,8 @@
+---
+features: [turbulent, transient, showcase, primitives]
+recommended-for-beginners: [primitives]
+---
+
 ### venturi3d
 
 This example examines a steady flow in a Venturi tube.

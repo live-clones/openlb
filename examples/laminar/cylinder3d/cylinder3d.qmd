@@ -1,3 +1,7 @@
+---
+features: [transient, benchmark, stl, primitives]
+---
+
 ### cylinder3d
 
 This example examines a steady flow past a cylinder placed in a channel.

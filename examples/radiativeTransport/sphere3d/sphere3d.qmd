@@ -1,3 +1,7 @@
+---
+features: [benchmark, showcase, primitives]
+---
+
 ### sphere3d
 
 This example utilizes a D3Q7 stencil to validate the macroscopic radiative transfer lattice Boltzmann method (RTLBM) to approximate the Helmholtz equation.

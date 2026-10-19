@@ -1,3 +1,7 @@
+---
+features: [porousMedia, benchmark, primitives]
+---
+
 ### porousPoiseuille3d
 
 These examples simulate Poiseuille flows through porous media.

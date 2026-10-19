@@ -1,3 +1,8 @@
+---
+features: [turbulent, transient, benchmark, showcase, primitives]
+recommended-for-beginners: [primitives]
+---
+
 ### airfoil2d
 
 In this example, the flow past a 2D airfoil is simulated.

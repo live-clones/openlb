@@ -1,3 +1,7 @@
+---
+features: [thermal, transient, benchmark, primitives]
+---
+
 ### convectedPlate3d
 
 This example implements a convection and diffusion driven transport of a species from a plate where the convective flow is a uniform plug flow streaming over the plate surface.

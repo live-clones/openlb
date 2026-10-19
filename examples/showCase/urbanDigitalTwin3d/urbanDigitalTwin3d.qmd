@@ -1,3 +1,7 @@
+---
+features: [turbulent, porousMedia, transient, showcase, stl, primitives]
+---
+
 ### urbanDigitalTwin3d
 
 This example uses HLBM to simulate a city or similar as porous media.

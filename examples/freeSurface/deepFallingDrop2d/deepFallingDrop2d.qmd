@@ -1,3 +1,7 @@
+---
+features: [multiComponent, multiPhase, transient, primitives]
+---
+
 ### deepFallingDrop2d
 
 A variation of the `fallingDrop2d` example type with a deeper pool of liquid that a drop will fall into.

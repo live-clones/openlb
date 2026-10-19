@@ -1,3 +1,7 @@
+---
+features: [multiComponent, benchmark, primitives]
+---
+
 ### youngLaplace2d
 
 In this example, the two-component free energy model is used in its simplest configuration to perform a Young--Laplace pressure test.

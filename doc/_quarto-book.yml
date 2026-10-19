@@ -1,6 +1,8 @@
 project:
   type: book 
-  pre-render: ./link_examples.sh
+  pre-render:
+    - ./link_examples.sh
+    - ./example_table.py
   output-dir: ug_pdf
 
 book:
@@ -88,6 +90,7 @@ latex-max-runs: 5
 
 filters:
   - pseudocode
+  - include/example_labels.lua
 
 pseudocode:
   caption-prefix: "Algorithm"

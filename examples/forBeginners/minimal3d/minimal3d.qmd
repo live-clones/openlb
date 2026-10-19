@@ -1,3 +1,7 @@
+---
+features: []
+---
+
 ### minimal3d
 
 This app is for educational purposes with minimal lines of code to set up a simulation case with OpenLB.

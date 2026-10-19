@@ -1,3 +1,7 @@
+---
+features: [transient, benchmark, primitives]
+---
+
 ### advectionDiffusion2d
 
 The example `advectionDiffusion2d` acts as a mesh-convergence test for a solution to the scalar linear *two-dimensional* advection--diffusion equation

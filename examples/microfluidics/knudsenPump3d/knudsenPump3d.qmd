@@ -1,3 +1,7 @@
+---
+features: [thermal, transient, benchmark, showcase, primitives]
+---
+
 ### knudsenPump3d
 
 This example is a standard showcase for the thermal creep effect at higher Knudsen numbers and rarefied ideal gases.

@@ -1,3 +1,7 @@
+---
+features: [multiComponent, multiPhase, particles, showcase, stl, primitives]
+---
+
 ### microMixer3d
 
 This example portrays the adsorption in a static mixing reactor using an Euler--Euler approach.

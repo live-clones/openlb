@@ -1,3 +1,7 @@
+---
+features: [porousMedia, transient, showcase, stl, primitives]
+---
+
 ### resolvedRock3d
 
 This example illustrates the consideration of resolved porous media.
