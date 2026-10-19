@@ -93,4 +93,4 @@ struct PNPCoupling {
 
 The convergence order of the system is displayed in @fig-poissonnernstplanck-convergence.
 
-![EOC study for PNPE simulations (`poissonNernstPlanck`).](/examples/electroChemistry/fig/poissonnernstplanck_convergence.png){#fig-poissonnernstplanck-convergence width="60%"}
+![EOC study for PNPE simulations (`poissonNernstPlanck`).](/examples/electroChemistry/poissonNernstPlanck/doc/fig/poissonnernstplanck_convergence.png){#fig-poissonnernstplanck-convergence width="60%"}

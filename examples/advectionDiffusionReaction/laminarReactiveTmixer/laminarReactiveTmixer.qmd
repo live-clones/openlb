@@ -4,7 +4,7 @@ features: [transient, benchmark, primitives]
 
 ### laminarReactiveTmixer
 
-![Product concentration distribution in a reactive T-micromixer.](/examples/advectionDiffusionReaction/fig/Tmixer.png){#fig-t-mixer width="60%"}
+![Product concentration distribution in a reactive T-micromixer.](/examples/advectionDiffusionReaction/laminarReactiveTmixer/doc/fig/Tmixer.png){#fig-t-mixer width="60%"}
 
 The geometry and physical setup with discretization parameters of the micromixer are described in [@bukreevMixer].
 Here, four lattices are considered:

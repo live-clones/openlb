@@ -56,11 +56,11 @@ IndicatorIdentity3D<T> venturi(cyl1 + cyl2 + cyl3 + cyl4 + co1 + co2 + co3);
 
 @fig-venturi3d-geometry-2 visualizes the defined point positions and @fig-venturi3d-geometry-1 shows the computational geometry.
 
-![Schematic diagram visualizing the defined point positions for `venturi3d`.](/examples/turbulence/fig/venturi3d_geometry_2.png){#fig-venturi3d-geometry-2 width="70%"}
+![Schematic diagram visualizing the defined point positions for `venturi3d`.](/examples/turbulence/venturi3d/doc/fig/venturi3d_geometry_2.png){#fig-venturi3d-geometry-2 width="70%"}
 
-![Built geometry as used in simulation of example `venturi3d`.](/examples/turbulence/fig/venturi3d_geometry_1.png){#fig-venturi3d-geometry-1 width="70%"}
+![Built geometry as used in simulation of example `venturi3d`.](/examples/turbulence/venturi3d/doc/fig/venturi3d_geometry_1.png){#fig-venturi3d-geometry-1 width="70%"}
 
 At the main inlet, a Poiseuille profile is imposed as a Dirichlet velocity boundary condition, whereas at the outlet and the minor inlet, a Dirichlet pressure condition is set by $p=0$ (i.e. $\rho=1$).
 @fig-venturi3d-simulation-1 visualizes the computed velocity magnitude in the Venturi tube geometry.
 
-![Simulation of the example `venturi3d` after $200$ simulated time steps.](/examples/turbulence/fig/venturi3d_simulation_1.png){#fig-venturi3d-simulation-1 width="70%"}
+![Simulation of the example `venturi3d` after $200$ simulated time steps.](/examples/turbulence/venturi3d/doc/fig/venturi3d_simulation_1.png){#fig-venturi3d-simulation-1 width="70%"}

@@ -12,25 +12,21 @@
 # doc/examples/ as a symlink and writes the include list used by the PDF
 # build.
 #
-# A mirrored page keeps its place in the category subtree, minus the example
-# directory itself, whose name the file already carries:
+# A mirrored page keeps its place in the source tree, so every example gets a
+# directory of its own below doc/examples/, which holds the page and, if the
+# example has figures, its doc/ directory:
 #
 #   examples/laminar/cavity2d/cavity2d.qmd
-#     -> doc/examples/laminar/cavity2d.qmd
+#     -> doc/examples/laminar/cavity2d/cavity2d.qmd
+#   examples/laminar/cavity2d/doc
+#     -> doc/examples/laminar/cavity2d/doc
 #   examples/structuralmechanics/linearElasticity/quasistationary/periodicPlate/periodicPlate.qmd
-#     -> doc/examples/structuralmechanics/linearElasticity/quasistationary/periodicPlate.qmd
+#     -> doc/examples/structuralmechanics/linearElasticity/quasistationary/periodicPlate/periodicPlate.qmd
 #
 # Keeping the intermediate directories is what tells the two periodicPlate
-# examples of structuralmechanics apart.
-#
-# Figures belong next to the example as well, in its docs/ directory. That
-# directory is mirrored as a symlink at the path it has in the source tree,
-#
-#   examples/laminar/cavity2d/docs
-#     -> doc/examples/laminar/cavity2d/docs
-#
-# so a page refers to its figures by a project absolute path such as
-# /examples/laminar/cavity2d/docs/fig/cavity2dDomain.svg.
+# examples of structuralmechanics apart. A page refers to its figures by a
+# project absolute path such as
+# /examples/laminar/cavity2d/doc/fig/cavity2dDomain.svg.
 #
 # Both artefacts are generated, which is why they are listed in .gitignore --
 # the symlinks never have to be committed. The script is registered as a
@@ -68,7 +64,7 @@ category_docs() {
 # linger, and clear out the directories that held them. Real files (figures,
 # hand written pages) are left untouched, and so are the category directories.
 find "$examples_dir" -type l -name '*.qmd' -delete
-find "$examples_dir" -type l -name docs -delete
+find "$examples_dir" -type l -name doc -delete
 find "$examples_dir" -mindepth 2 -type d -empty -delete
 
 tmp_includes="$(mktemp)"
@@ -116,24 +112,22 @@ for category_path in "$src_dir"/*/; do
   echo "              contents:" >>"$tmp_sidebar"
 
   for doc in "${docs[@]}"; do
-    # The directories between the category and the example itself, "." when the
-    # example sits directly in the category, as most of them do.
-    mid="$(dirname "$(dirname "$doc")")"
+    # The page is mirrored at the place it has in the source tree, into a
+    # directory of its own named after the example, where the example's doc/
+    # directory goes as well.
+    example="$(dirname "$doc")"
+    rel="$category/$doc"
 
     # The layout is fixed, so the relative target can be spelled out rather than
     # derived with realpath --relative-to, which is GNU-only. A link has to climb
-    # out of doc/examples/, out of the category directory and out of
-    # whatever part of the subtree it was mirrored into.
+    # out of doc/examples/, out of the category directory and out of every
+    # directory between the category and the example, the example's own
+    # directory included.
     up="../../.."
-    if [ "$mid" = "." ]; then
-      rel="$category/$(basename "$doc")"
-    else
-      rel="$category/$mid/$(basename "$doc")"
-      IFS=/ read -r -a parts <<<"$mid"
-      for _ in "${parts[@]}"; do
-        up="../$up"
-      done
-    fi
+    IFS=/ read -r -a parts <<<"$example"
+    for _ in "${parts[@]}"; do
+      up="../$up"
+    done
 
     link="$examples_dir/$rel"
 
@@ -147,16 +141,14 @@ for category_path in "$src_dir"/*/; do
       linked=$((linked + 1))
     fi
 
-    # The figures of the example, mirrored one level further down, into the
-    # directory named after the example itself.
-    example="$(dirname "$doc")"
-    if [ -d "$category_path$example/docs" ]; then
-      figures="$examples_dir/$category/$example/docs"
+    # The figures of the example, if it has any, next to its page.
+    if [ -d "$category_path$example/doc" ]; then
+      figures="$examples_dir/$category/$example/doc"
       if [ -e "$figures" ] && [ ! -L "$figures" ]; then
         echo "link_examples: keeping existing directory $figures" >&2
       else
         mkdir -p "$(dirname "$figures")"
-        ln -sfn "../$up/examples/$category/$example/docs" "$figures"
+        ln -sfn "$up/examples/$category/$example/doc" "$figures"
       fi
     fi
 

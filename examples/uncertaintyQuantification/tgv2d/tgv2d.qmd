@@ -43,9 +43,9 @@ Postprocessing can be performed via $\OpenLB$'s built-in functions to compute an
 
 ::: {#fig-uqTgv layout-ncol=2}
 
-![Mean $\bar{|\mathbf{u}|}$.](/examples/uncertaintyQuantification/fig/uqTgvMean.png){#fig-uqTgvMean}
+![Mean $\bar{|\mathbf{u}|}$.](/examples/uncertaintyQuantification/tgv2d/doc/fig/uqTgvMean.png){#fig-uqTgvMean}
 
-![Standard deviation $\sigma(|\mathbf{u}|)$.](/examples/uncertaintyQuantification/fig/uqTgvStd.png){#fig-uqTgvStd}
+![Standard deviation $\sigma(|\mathbf{u}|)$.](/examples/uncertaintyQuantification/tgv2d/doc/fig/uqTgvStd.png){#fig-uqTgvStd}
 
 Mean and standard deviation of the velocity magnitude, computed using the Monte Carlo method with 20 samples.
 

@@ -25,7 +25,7 @@
 # list belong in the repository.
 /examples/_includes.qmd
 /examples/*/**/*.qmd
-/examples/*/**/docs
+/examples/*/**/doc
 
 # The pseudocode extension is vendored, so its assets must survive the *.js and
 # *.css rules above.

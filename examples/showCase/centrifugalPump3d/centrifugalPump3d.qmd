@@ -11,4 +11,4 @@ A complex geometry consisting of a pump casing and a rotor is initialized, and a
 The rotating rotor is embedded as a porous element, and its torque is evaluated over time.
 This simulation enables virtual testing of pump performance metrics like flow rates and pressure rise under specified operational parameters (e.g., 1450 rpm), offering insights into internal flow phenomena in rotating machinery.
 
-![Centrifugal pump.](/examples/showCase/fig/pumpe.png){#fig-pump width="60%"}
+![Centrifugal pump.](/examples/showCase/centrifugalPump3d/doc/fig/pumpe.png){#fig-pump width="60%"}

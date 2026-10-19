@@ -10,4 +10,4 @@ The theoretical maximum velocity is calculated as in [@guo2002lattice, Equation 
 
 For a schematic simulation setup, see @fig-porousPoiseuille2dCAD.
 
-![Geometry used in the example `porousPoiseuille2d` with boundary patches and velocity profile.](/examples/porousMedia/fig/porousPoiseuille2d.png){#fig-porousPoiseuille2dCAD width="80%"}
+![Geometry used in the example `porousPoiseuille2d` with boundary patches and velocity profile.](/examples/porousMedia/porousPoiseuille2d/doc/fig/porousPoiseuille2d.png){#fig-porousPoiseuille2dCAD width="80%"}

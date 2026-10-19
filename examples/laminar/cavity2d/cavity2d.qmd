@@ -35,7 +35,7 @@ The fluid fills a square cavity of side length $L = 1\,\mathrm{m}$ (@fig-cavity2
 The lid at the top moves with $u_\text{lid} = 1\,\mathrm{m/s}$ in $x$-direction, while the remaining three walls are at rest.
 With $\nu = 10^{-3}\,\mathrm{m^2/s}$ this gives a Reynolds number of $Re = u_\text{lid} L / \nu = 1000$.
 
-![Domain and boundary conditions of `cavity2d`, with the material numbers (MN) assigned in `prepareGeometry()`.](/examples/laminar/cavity2d/docs/fig/cavity2dDomain.svg){width="60%" #fig-cavity2d-domain .lightbox}
+![Domain and boundary conditions of `cavity2d`, with the material numbers (MN) assigned in `prepareGeometry()`.](/examples/laminar/cavity2d/doc/fig/cavity2dDomain.svg){width="60%" #fig-cavity2d-domain .lightbox}
 
 #### Discretization \& Descriptor
 In this example, the domain is discretized with a uniform grid of $N^2$ cells with the lattice spacing $\Delta x = L / N$, where $N = 128$ is set by `Resolution` in `cavity2d.xml`.
@@ -78,11 +78,11 @@ Descriptor definition for the `cavity2d` example.
 The velocity and the pressure are written in physical units every second (@fig-example-cavity).
 
 ::: {.content-visible when-format="html"}
-![Magnitude of the physical velocity of `cavity2d` from $t = 1\,\mathrm{s}$ until convergence at $t = 28.9\,\mathrm{s}$, visualized in ParaView. The vortex starts in the upper right corner below the lid and moves towards the center of the cavity.](/examples/laminar/cavity2d/docs/fig/cavity2d_velocity.gif){width="100%" #fig-example-cavity .lightbox}
+![Magnitude of the physical velocity of `cavity2d` from $t = 1\,\mathrm{s}$ until convergence at $t = 28.9\,\mathrm{s}$, visualized in ParaView. The vortex starts in the upper right corner below the lid and moves towards the center of the cavity.](/examples/laminar/cavity2d/doc/fig/cavity2d_velocity.gif){width="100%" #fig-example-cavity .lightbox}
 :::
 
 ::: {.content-visible when-format="pdf"}
-![Magnitude of the physical velocity of `cavity2d` at convergence, $t = 28.9\,\mathrm{s}$, visualized in ParaView.](/examples/laminar/cavity2d/docs/fig/cavity2d_velocity_converged.png){width="100%" #fig-example-cavity .lightbox}
+![Magnitude of the physical velocity of `cavity2d` at convergence, $t = 28.9\,\mathrm{s}$, visualized in ParaView.](/examples/laminar/cavity2d/doc/fig/cavity2d_velocity_converged.png){width="100%" #fig-example-cavity .lightbox}
 :::
 
 The example is validated against the benchmark solution of @GHIA1982387 for $Re = 1000$.
@@ -93,17 +93,17 @@ The example prints this error to the console as `relativeErrorL2(line)`.
 
 ::: {.image-slider}
 ::: {#fig-cavity2d-ghia layout-ncol="3"}
-![$t = 5\,\mathrm{s}$](/examples/laminar/cavity2d/docs/fig/ghia/centerVelocityX_iT6400.svg)
+![$t = 5\,\mathrm{s}$](/examples/laminar/cavity2d/doc/fig/ghia/centerVelocityX_iT6400.svg)
 
-![$t = 10\,\mathrm{s}$](/examples/laminar/cavity2d/docs/fig/ghia/centerVelocityX_iT12800.svg)
+![$t = 10\,\mathrm{s}$](/examples/laminar/cavity2d/doc/fig/ghia/centerVelocityX_iT12800.svg)
 
-![$t = 15\,\mathrm{s}$](/examples/laminar/cavity2d/docs/fig/ghia/centerVelocityX_iT19200.svg)
+![$t = 15\,\mathrm{s}$](/examples/laminar/cavity2d/doc/fig/ghia/centerVelocityX_iT19200.svg)
 
-![$t = 20\,\mathrm{s}$](/examples/laminar/cavity2d/docs/fig/ghia/centerVelocityX_iT25600.svg)
+![$t = 20\,\mathrm{s}$](/examples/laminar/cavity2d/doc/fig/ghia/centerVelocityX_iT25600.svg)
 
-![$t = 25\,\mathrm{s}$](/examples/laminar/cavity2d/docs/fig/ghia/centerVelocityX_iT32000.svg)
+![$t = 25\,\mathrm{s}$](/examples/laminar/cavity2d/doc/fig/ghia/centerVelocityX_iT32000.svg)
 
-![$t = 28.9\,\mathrm{s}$, converged](/examples/laminar/cavity2d/docs/fig/ghia/centerVelocityX_iT37004.svg)
+![$t = 28.9\,\mathrm{s}$, converged](/examples/laminar/cavity2d/doc/fig/ghia/centerVelocityX_iT37004.svg)
 
 Horizontal velocity $u_x$ on the vertical centreline $x = L/2$ of `cavity2d`, compared with @GHIA1982387 at $Re = 1000$.
 :::

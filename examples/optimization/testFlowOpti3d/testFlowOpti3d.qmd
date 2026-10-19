@@ -30,9 +30,9 @@ The results of example runs with AD and adjoint LBM are shown in @fig-tf-opti-eo
 
 ::: {#fig-tf-opti-eoc layout-ncol=2}
 
-![Automatic differentiation.](/examples/optimization/fig/tf_ad.png){#fig-tf-ad}
+![Automatic differentiation.](/examples/optimization/testFlowOpti3d/doc/fig/tf_ad.png){#fig-tf-ad}
 
-![Adjoint LBM.](/examples/optimization/fig/tf_adjoint.png){#fig-tf-adjoint}
+![Adjoint LBM.](/examples/optimization/testFlowOpti3d/doc/fig/tf_adjoint.png){#fig-tf-adjoint}
 
 Decrease of the objective for increasing optimization steps for different resolutions. The trends differ since the number of control variables is fixed in the AD case while it increases with the resolution in the adjoint optimization case.
 
