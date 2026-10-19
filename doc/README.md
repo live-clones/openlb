@@ -54,10 +54,12 @@ intend. The makefile targets above work the same way.
 Several parts of the tree are produced at render time and must not be edited by
 hand or committed:
 
-- `link_examples.sh` mirrors each example's documentation into `doc/examples/`
-  as a symlink — the pages themselves live next to their code under
-  `examples/<category>/` — and writes the `examples/_includes.qmd` list and the
-  generated section of the sidebar in `_quarto.yml`.
+- `link_examples.sh` mirrors each example's documentation into a directory of
+  its own below `doc/examples/`, as symlinks to the page and, if the example has
+  one, to its `doc/` directory of figures — the pages themselves live next to
+  their code under `examples/<category>/` — and writes the
+  `examples/_includes.qmd` list and the generated section of the sidebar in
+  `_quarto.yml`.
 - `example_table.py` builds the overview table of the examples, as HTML for
   the Examples page and as LaTeX for the A3 pages at the start of the examples
   chapter of the PDF, from the example list written by `link_examples.sh` and
