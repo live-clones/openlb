@@ -63,7 +63,10 @@ book:
 
 format:
   pdf:
-    include-in-header: include/latex_includes.tex
+    include-in-header:
+      - include/latex_includes.tex
+      # Math macros shared with the website; needs the packages loaded above.
+      - include/macros.tex
     template-partials:
       #- include/title.tex
       - include/before-body.tex
