@@ -333,6 +333,8 @@ format:
     # navbar, and is empty when no PDF has been built.
     include-after-body:
       - include/pdf_download.html
+      # Turns figures wrapped in a div of class image-slider into a slider.
+      - include/image_slider.html
     other-links:
       - text: Examples Overview
         href: examples/index_web.html
