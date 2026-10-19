@@ -87,7 +87,7 @@ The velocity and the pressure are written in physical units every second (@fig-e
 
 The example is validated against the benchmark solution of @GHIA1982387 for $Re = 1000$.
 Every $5\,\mathrm{s}$, `getResults()` interpolates the horizontal velocity $u_x$ on the vertical centreline $x = L/2$ at the 17 heights listed in Table I of @GHIA1982387 and writes it together with the reference values to `tmp/gnuplotData/`.
-The simulation stops as soon as the steady state is reached. This state is identified via the relative standard deviation of the average energy over the last $1\,\mathrm{s}$ falls below $10^{-3}$, which happens at $t \approx 28.9\,\mathrm{s}$ ($iT = 37004$).
+The simulation stops as soon as the steady state is reached. This state is identified via the relative standard deviation of the average energy over the last $1\,\mathrm{s}$. When it falls below $10^{-3}$, which happens at $t \approx 28.9\,\mathrm{s}$ ($iT = 37004$), the simulation is considered converged.
 @fig-cavity2d-ghia shows how the profile approaches the reference: the relative $L^2$ error over the 17 points drops from $43\,\%$ at $t = 5\,\mathrm{s}$ to $3.5\,\%$ at convergence.
 The example prints this error to the console as `relativeErrorL2(line)`.
 
