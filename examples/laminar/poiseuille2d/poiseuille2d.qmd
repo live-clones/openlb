@@ -84,8 +84,9 @@ The unit converter `UnitConverterFromResolutionAndRelaxationTime` derives the ti
 | `CONVERGENCE_PRECISION` | | $10^{-9}$ | bound for the relative standard deviation of the average energy |
 | `CONV_ITER` | | $0.25\,\mathrm{s}$ | time window of the convergence check |
 | `VTK_ENABLED` | | `true` | write VTK output and heat maps |
-| `GNUPLOT_ENABLED` | | `true` | write the gnuplot data at the last time step |
+| `GNUPLOT_ENABLED` | | `true` | plot the velocity profile at the last time step, with `EOC` the errors over the resolution |
 | `COMPUTE_ERROR` | | `true` | compute the error norms at every statistics output |
+| `EOC` | | `false` | convergence study over $N = 30, 50, 70, 100$ instead of a single run |
 | `PHYS_VTK_ITER_T` | | $T/20 = 1.5\,\mathrm{s}$ | interval of the VTK output |
 | `PHYS_STAT_ITER_T` | | $T/20 = 1.5\,\mathrm{s}$ | interval of the console statistics and the error norms |
 
@@ -109,13 +110,21 @@ Halving the lattice spacing reduces all three errors by a factor of about four, 
 
 : Relative $L^2$ errors of `poiseuille2d` at the end of the simulation. {#tbl-poiseuille2d-errors}
 
+With `--EOC 1`, `main()` runs the simulation for the resolutions $N = 30$, $50$, $70$ and $100$ one after the other, without VTK output.
+At the end of each run, `getResults()` adds the absolute errors to `tmp/gnuplotData/error.png`, which plots them over the resolution on logarithmic axes together with a linear fit (@fig-poiseuille2d-error).
+The fitted slopes are about $-2$ for the velocity and for the $L^1$ and $L^2$ errors of the strain rate and the pressure, which confirms the second order convergence.
+The $L^\infty$ errors of the strain rate and the pressure converge more slowly, with the slopes $-1.2$ and $-1.7$.
+At $N = 25$ and $N = 40$, the mean density grows during the run and the pressure error does not converge, which is why the study uses other resolutions.
+
+![Absolute $L^1$, $L^2$ and $L^\infty$ errors of the velocity, the strain rate and the pressure of `poiseuille2d` over the resolution $N$, with linear fits on logarithmic axes, written by the example with `--EOC 1`. The legend gives the slopes of the fits.](/examples/laminar/poiseuille2d/doc/fig/error/error.png){width="80%" #fig-poiseuille2d-error .lightbox}
+
 #### Files
 
 ```
 poiseuille2d/
-├── poiseuille2d.cpp   main(): parameters, then mesh, geometry, lattice, initial values and time loop
+├── poiseuille2d.cpp   main(): parameters, one run or the convergence study; run(): mesh, geometry, lattice, initial values and time loop
 ├── case.h             Case type, flow and boundary variants, error norms and output
 └── Makefile
 ```
 
-The results are written to `tmp/` in the directory the example is run from: `vtkData/poiseuille2d.pvd` opens all time steps in ParaView, `imageData/` holds the velocity heat maps and `gnuplotData/` the data of the last time step. The heat maps and plots are drawn with gnuplot; without it, only the data in `gnuplotData/data/` is written.
+The results are written to `tmp/` in the directory the example is run from: `vtkData/poiseuille2d.pvd` opens all time steps in ParaView, `imageData/` holds the velocity heat maps and `gnuplotData/` the velocity profile of the last time step, or with `EOC` the error plot. The heat maps and plots are drawn with gnuplot; without it, only the data in `gnuplotData/data/` is written.
