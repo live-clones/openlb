@@ -44,9 +44,10 @@ using MyCase = Case<NavierStokes,
 ```
 Case definition for the `cavity3dBenchmark` example, without the `FP16` feature.
 :::
+
 The unit converter `UnitConverterFromResolutionAndLatticeVelocity` uses the lattice velocity $0.01$, so the time step size is $\Delta t = 0.01\, \Delta x / u_\text{lid}$.
 Lattice statistics are switched off, as they cost time in every step.
-The parameters are given in @tbl-cavity3dBenchmark-params. the physical values are fixed in `prepareLattice()`.
+The parameters are given in @tbl-cavity3dBenchmark-params. The physical values are fixed in `prepareLattice()`.
 
 | Parameter | Symbol | Value | Description |
 |---|---|---|---|
@@ -58,7 +59,7 @@ The parameters are given in @tbl-cavity3dBenchmark-params. the physical values a
 | `CUBOIDS_PER_PROCESS` | | $1$ | number of cuboids per process |
 | `PHYS_DELTA_X` | $\Delta x$ | $L / N$ | lattice spacing, derived from the resolution |
 
-: Parameters of `cavity3dBenchmark`, as set in `main()`.
+: Parameters of `cavity3dBenchmark`, as set in `main()`. {#tbl-cavity3dBenchmark-params}
 
 
 #### Results
