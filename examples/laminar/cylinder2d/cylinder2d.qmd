@@ -3,15 +3,13 @@ features: [transient, benchmark, primitives]
 recommended-for-beginners: [primitives]
 ---
 
-### cylinder2d
+### cylinder2d {#sec-example-laminar-cylinder2d}
 
 This example examines a steady flow past a cylinder placed in a channel.
 The cylinder is offset somewhat from the center of the flow to make the steady-state symmetrical flow unstable.
 At the inlet, a Poiseuille profile is imposed on the velocity, whereas the outlet implements a Dirichlet pressure condition set by $p = 0$, inspired by [@turek:96].
 For high resolution, low `latticeU`, and enough time to converge, the results for pressure drop, drag, and lift lie within the estimated intervals for the exact results.
 An unsteady flow with Kármán vortex street can be created by changing the Reynolds number to $Re=100$.
-The 3D version also shows the usage of the STL-reader.
-The model was created using the open source CAD tool FreeCAD [@freecad-web].
 
 #### Governing equations
 
@@ -44,7 +42,6 @@ The cylinder with the diameter $D = 0.1\,\mathrm{m}$ sits at $(0.2\,\mathrm{m}, 
 With the mean inflow velocity $U = 0.2\,\mathrm{m/s}$ and $\nu = 10^{-3}\,\mathrm{m^2/s}$, the Reynolds number is $Re = U D / \nu = 20$, and the flow becomes steady.
 
 `prepareGeometry()` assigns the material numbers (MN) shown in @fig-cylinder2d-domain.
-The mesh is one cell higher than $H$: the walls lie half a cell outside the outermost fluid nodes, so they enclose exactly the height $H$, and the centre of the cylinder is shifted up by $\Delta x / 2$ accordingly.
 
 ![Domain and boundary conditions of `cylinder2d`, with the material numbers (MN) assigned in `prepareGeometry()`.](/examples/laminar/cylinder2d/doc/fig/cylinder2dDomain.svg){width="100%" #fig-cylinder2d-domain .lightbox}
 
@@ -59,9 +56,19 @@ The boundaries are treated as follows ([Define Boundary Method](/content/06_init
 - the outlet (MN 4) with `InterpolatedPressure`,
 - the cylinder (MN 5) with the Bouzidi boundary, `setBouzidiBoundary()`, which takes the exact position of the curved surface between the lattice nodes into account. Without the `BOUZIDI` define in `case.h`, the cylinder falls back to `BounceBack`.
 
+The corresponding lattice is defined inside the case definition in `case.h` as in @lst-cylinder2d-case.
+
+::: {#lst-cylinder2d-case}
+```{.cpp}
+using MyCase = Case<
+  NavierStokes, Lattice<FLOATING_POINT_TYPE, descriptors::D2Q9<>>
+>;
+```
+Case definition for the `cylinder2d` example.
+:::
+
 The parameters for the simulation are set in `main()` and given in @tbl-cylinder2d-params.
-The unit converter is built from them and derives the time step size from the resolution and the lattice relaxation time $\tau = 0.56$.
-With $\tau = \nu \Delta t / (c_s^2 \Delta x^2) + 1/2$ and the lattice speed of sound $c_s = 1/\sqrt{3}$, this gives $\Delta x = 0.01\,\mathrm{m}$, $\Delta t = 2 \cdot 10^{-3}\,\mathrm{s}$, a lattice velocity of $U \Delta t / \Delta x = 0.04$ and a lattice Mach number of $0.04 / c_s \approx 0.07$.
+The unit converter is built from them and derives the time step size from the resolution and the lattice relaxation time.
 
 | Parameter | Symbol | Value | Description |
 |---|---|---|---|
@@ -82,15 +89,6 @@ With $\tau = \nu \Delta t / (c_s^2 \Delta x^2) + 1/2$ and the lattice speed of s
 | `RAMP_UP_END_FRACTION` | | $0.4$ | fraction of $T$ after which the inflow is fully developed |
 
 : Parameters of `cylinder2d`, as set in `main()`. Each of them can be overridden on the command line, e.g. `./cylinder2d --RESOLUTION 20`. {#tbl-cylinder2d-params}
-
-::: {#lst-cylinder2d-descriptor}
-```{.cpp}
-using MyCase = Case<
-  NavierStokes, Lattice<FLOATING_POINT_TYPE, descriptors::D2Q9<>>
->;
-```
-Descriptor definition for the `cylinder2d` example.
-:::
 
 #### Validation
 
