@@ -82,7 +82,7 @@ The OpenLB project provides a C++ package for the implementation of lattice Bolt
 
 [![](pictures/Download.jpeg){.img-normal fig-alt="Logo 1" height="30px"}
  ![](pictures/demo2.gif){.img-hover fig-alt="Logo 1" height="30px"}
- ](https://openlb.gitlab.io/release/ug_pdf/OpenLB-User-Guide.pdf){.card-link}
+ ](/ug_pdf/OpenLB-User-Guide.pdf){.card-link}
 
 :::
 
