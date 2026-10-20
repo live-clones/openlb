@@ -263,8 +263,8 @@ int main(int argc, char** argv)
   MyCase::ParametersD myCaseParameters;
   {
     using namespace olb::parameters;
-    myCaseParameters.set<RESOLUTION>(64);
-    myCaseParameters.set<LATTICE_RELAXATION_TIME>(0.5192);
+    myCaseParameters.set<RESOLUTION>(30);
+    myCaseParameters.set<LATTICE_RELAXATION_TIME>(0.509);
     myCaseParameters.set<PHYS_CHAR_LENGTH>(1.0);
     myCaseParameters.set<PHYS_CHAR_VELOCITY>(1.0);
     myCaseParameters.set<PHYS_CHAR_VISCOSITY>(0.001);
