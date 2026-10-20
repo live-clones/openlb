@@ -35,7 +35,7 @@ In `prepareGeometry()`, $\Gamma_{\mathrm{no\text{-}slip}}$ gets the material num
 ![Domain and boundary conditions of `cavity3d`, with the material numbers (MN) assigned in `prepareGeometry()`.](/examples/laminar/cavity3d/doc/fig/cavity3dDomain.svg){width="60%" #fig-cavity3d-domain .lightbox}
 
 #### Discretization \& Descriptor
-In this example, the domain is discretized with a uniform grid of $N^3$ cells with the lattice spacing $\Delta x = L / N$, where the default is $N = 30$.
+In this example, the domain is discretized with a uniform grid of $N^3$ cells with the lattice spacing $\Delta x = L / N$, where the default is $N = 64$.
 
 The LBM collision operator is the BGK operator with a single relaxation time ([Collision Operators](/content/02_core.qmd#collision-operators)), used as `ConstRhoBGKdynamics`, together with the D3Q19 velocity set ([Lattice Structures](/content/01_introduction.qmd#sec-lattice-structures)).
 All six walls, including the moving lid, are velocity boundaries of the type `InterpolatedVelocity` ([Define Boundary Method](/content/06_initial_boundary.qmd#sec-defineBoundaryMethod)).
@@ -52,13 +52,13 @@ The unit converter `UnitConverterFromResolutionAndRelaxationTime` derives the ti
 
 | Parameter | Symbol | Value | Description |
 |---|---|---|---|
-| `RESOLUTION` | $N$ | $30$ | cells per side length $L$ |
-| `LATTICE_RELAXATION_TIME` | $\tau$ | $0.509$ | lattice relaxation time |
+| `RESOLUTION` | $N$ | $64$ | cells per side length $L$ |
+| `LATTICE_RELAXATION_TIME` | $\tau$ | $0.5192$ | lattice relaxation time |
 | `PHYS_CHAR_LENGTH` | $L$ | $1\,\mathrm{m}$ | side length of the cavity |
 | `PHYS_CHAR_VELOCITY` | $u_\text{lid}$ | $1\,\mathrm{m/s}$ | velocity of the lid |
 | `PHYS_CHAR_VISCOSITY` | $\nu$ | $10^{-3}\,\mathrm{m^2/s}$ | kinematic viscosity |
 | `PHYS_CHAR_DENSITY` | $\rho$ | $1\,\mathrm{kg/m^3}$ | density |
-| `MAX_PHYS_T` | $T$ | $100\,\mathrm{s}$ | upper limit of the simulated time, $30\,000$ time steps |
+| `MAX_PHYS_T` | $T$ | $100\,\mathrm{s}$ | upper limit of the simulated time, $64\,000$ time steps |
 | `TIME_INTERVAL` | | $1\,\mathrm{s}$ | time window of the convergence check |
 | `RESIDUUM` | | $10^{-3}$ | bound for the relative standard deviation of the average energy |
 | `PHYS_DELTA_X` | $\Delta x$ | $L / N$ | lattice spacing, derived from the resolution |
@@ -98,17 +98,17 @@ The primary vortex forms in the upper right corner, where the lid pushes the flu
 
 ::: {.image-slider}
 ::: {#fig-cavity3d-heatmap layout-ncol="3"}
-![$t = 1\,\mathrm{s}$](/examples/laminar/cavity3d/doc/fig/heatmap/velocity_iT0000300.jpeg)
+![$t = 1\,\mathrm{s}$](/examples/laminar/cavity3d/doc/fig/heatmap/velocity_iT0000640.jpeg)
 
-![$t = 3\,\mathrm{s}$](/examples/laminar/cavity3d/doc/fig/heatmap/velocity_iT0000900.jpeg)
+![$t = 3\,\mathrm{s}$](/examples/laminar/cavity3d/doc/fig/heatmap/velocity_iT0001920.jpeg)
 
-![$t = 5\,\mathrm{s}$](/examples/laminar/cavity3d/doc/fig/heatmap/velocity_iT0001500.jpeg)
+![$t = 5\,\mathrm{s}$](/examples/laminar/cavity3d/doc/fig/heatmap/velocity_iT0003200.jpeg)
 
-![$t = 10\,\mathrm{s}$](/examples/laminar/cavity3d/doc/fig/heatmap/velocity_iT0003000.jpeg)
+![$t = 10\,\mathrm{s}$](/examples/laminar/cavity3d/doc/fig/heatmap/velocity_iT0006400.jpeg)
 
-![$t = 15\,\mathrm{s}$](/examples/laminar/cavity3d/doc/fig/heatmap/velocity_iT0004500.jpeg)
+![$t = 15\,\mathrm{s}$](/examples/laminar/cavity3d/doc/fig/heatmap/velocity_iT0009600.jpeg)
 
-![$t = 17.6\,\mathrm{s}$, converged](/examples/laminar/cavity3d/doc/fig/heatmap/velocity_iT0005269.jpeg)
+![$t = 15.8\,\mathrm{s}$, converged](/examples/laminar/cavity3d/doc/fig/heatmap/velocity_iT0010118.jpeg)
 
 Heat maps of the velocity magnitude $|\vel|$ in m/s of `cavity3d` in the mid-plane $z = L/2$, written by `heatmap::write()` from the `BlockReduction3D2D` of `SuperEuklidNorm3D`. The colour range is fixed to $[0, u_\text{lid}] = [0, 1]\,\mathrm{m/s}$ via `plotParam.maxValue`, so that the heat maps of different time steps are comparable.
 :::
