@@ -30,7 +30,12 @@ and the vessel wall $\Gamma_{\mathrm{no\text{-}slip}}$ (MN 2),
     \vel &= \mathbf{0} \quad \text{on} \quad \Gamma_{\mathrm{no\text{-}slip}} \times \I.
 \end{align}
 The inflow profile $u_\text{in}$ is a Poiseuille profile across the inlet with the peak velocity $0.45\,\mathrm{m/s}$, directed into the vessel along its normal $\mathbf{n}$.
-`setTemporalValues()` raises it from rest with a polynomial ramp during the first $40\,\%$ of the simulated time, updated every $30$ time steps.
+`CirclePoiseuille3D` takes the centre, the radius and the normal of the profile from the inlet cells (MN 3). These cells form a layer normal to a lattice axis, so $\mathbf{n}$ is the $y$-direction, the lattice direction closest to the axis of the inlet vessel.
+`setTemporalValues()` raises the profile from rest with the polynomial ramp
+$$
+    s(t) = \tau^3 \left( 10 - 15 \tau + 6 \tau^2 \right), \qquad \tau = \min\left( \frac{t}{0.4\, T}, 1 \right),
+$$
+during the first $40\,\%$ of the simulated time $T$, updated every $30$ time steps.
 The fluid is initially at rest.
 
 #### Domain
@@ -39,10 +44,11 @@ The geometry is read from `aneurysm3d.stl`, given in metres, and spans about $62
 `Mesh::fromSTL()` builds the mesh around the STL surface from the parameters of @tbl-aneurysm3d-params, with a padding of two cells and a decomposition by volume.
 `prepareGeometry()` marks the cells inside the surface as fluid (MN 1) and a layer around it as wall (MN 2), and renames the wall cells in thin cylinders at the five openings to MN 3 and MN 4.
 
-![Geometry of `aneurysm3d`, the surface of `aneurysm3d.stl`: the vessels with the aneurysm at the branching in the middle.](/examples/laminar/aneurysm3d/doc/fig/aneurysm3dGeometry.png){width="70%" #fig-aneurysm3d-geometry .lightbox}
+![Geometry of `aneurysm3d`, the surface of `aneurysm3d.stl` seen along the $y$-axis: the vessels with the aneurysm at the branching in the middle. The spheres mark the centres of the circles that `prepareGeometry()` uses to find the inlet (blue) and the four outlets (green).](/examples/laminar/aneurysm3d/doc/fig/aneurysm3dGeometry.png){width="70%" #fig-aneurysm3d-geometry .lightbox}
 
 #### Discretization \& Descriptor
 In this example, the domain is discretized with a uniform grid with the lattice spacing $\Delta x = 0.05\,\mathrm{m} / N$, where the default $N = 120$ gives $\Delta x = 0.42\,\mathrm{mm}$ and about $38\,000$ fluid cells.
+The mesh around the STL surface has $1.3$ million cells, of which only about $3\,\%$ are fluid, and is split into $4$ cuboids on a single process.
 
 The LBM collision operator is the BGK operator with a single relaxation time ([Collision Operators](/content/02_core.qmd#collision-operators)), used as `BGKdynamics`, together with the D3Q19 velocity set ([Lattice Structures](/content/01_introduction.qmd#sec-lattice-structures)). The lattice uses single precision.
 The vessel wall (MN 2) is treated with `BounceBack`, the inlet (MN 3) with `InterpolatedVelocity` and the outlets (MN 4) with `InterpolatedPressure` ([Define Boundary Method](/content/06_initial_boundary.qmd#sec-defineBoundaryMethod)).
@@ -82,6 +88,70 @@ The Reynolds number that the converter reports with respect to the characteristi
 Every $0.4\,\mathrm{s}$ of simulated time, `getResults()` prints the lattice statistics and writes two kinds of output.
 The velocity and the pressure on the lattice go to `tmp/vtkData/aneurysm.pvd`. This output is scheduled with `scheduleBackgroundOutputVTK()` and written while the simulation continues.
 On the STL surface, a `VTUsurfaceWriter` writes the wall shear stress, interpolated from the stress and the density of the fluid cells next to the wall, together with the velocity and the pressure, to `tmp/vtkData/Mesh.pvd`, where the load on the aneurysm wall can be inspected in ParaView.
+For each vertex of the surface, `PhysWallShearStressOnSurface3D` interpolates the non-equilibrium stress $\boldsymbol{\Pi}^{(1)}$ and the lattice density $\rho_\text{lat}$ half a lattice spacing into the fluid, against the outward surface normal $\mathbf{n}_w$.
+From these, it obtains the viscous stress tensor in physical units,
+$$
+    \boldsymbol{\sigma} = - \frac{\omega\, \rho\, \nu}{c_s^2\, \Delta t} \, \frac{\boldsymbol{\Pi}^{(1)}}{\rho_\text{lat}},
+$$
+with the relaxation frequency $\omega$ and the physical density $\rho = 1080\,\mathrm{kg/m^3}$, and returns the tangential part of the traction,
+$$
+    \boldsymbol{\tau}_w = \boldsymbol{\sigma} \mathbf{n}_w - \left( \mathbf{n}_w \cdot \boldsymbol{\sigma} \mathbf{n}_w \right) \mathbf{n}_w .
+$$
+
+The results below are from a run with the default parameters on a single GPU, an NVIDIA GeForce GTX 1070 Ti, where the $384\,000$ time steps took $7.4\,\mathrm{min}$ at $52$ MLUPs.
+
+@fig-aneurysm3d-umax shows the maximum velocity in the vessels, `maxCFL` of the lattice statistics times the velocity conversion factor $\Delta x / \Delta t = 10\,\mathrm{m/s}$.
+It follows the ramp-up of the inflow, reaches $0.754\,\mathrm{m/s}$ at its end, $t = 6.4\,\mathrm{s}$, and does not change any more afterwards, so the flow is steady for the remaining $9.6\,\mathrm{s}$ of the simulation.
+The maximum is $1.7$ times the peak velocity of the inflow. It lies in the narrow neck below the aneurysm, through which most of the flow leaves the sac towards the right branches (@fig-aneurysm3d-streamlines).
+
+![Maximum velocity magnitude of `aneurysm3d` over time with $N = 120$, compared with the peak velocity of the prescribed inflow profile.](/examples/laminar/aneurysm3d/doc/fig/velocity/umax.svg){width="80%" #fig-aneurysm3d-umax .lightbox}
+
+@fig-aneurysm3d-streamlines shows streamlines of the steady flow, started on a disc of $600$ points just inside the inlet.
+The flow from the inlet passes the first branching and enters the aneurysm from the left.
+Part of it circulates in a slow vortex that fills the sac, and the top right branch is fed from the top of the sac.
+The rest leaves through the neck at the bottom of the sac, where it accelerates to the maximum velocity, into the right and the bottom branch.
+
+::: {#fig-aneurysm3d-streamlines layout-ncol="2"}
+![All vessels](/examples/laminar/aneurysm3d/doc/fig/velocity/streamlines_iT0374400.png){.lightbox}
+
+![Close-up of the aneurysm](/examples/laminar/aneurysm3d/doc/fig/velocity/streamlines_aneurysm_iT0374400.png){.lightbox}
+
+Streamlines of `aneurysm3d` from the inlet at $t = 15.6\,\mathrm{s}$, coloured by the velocity magnitude $|\vel|$, visualized in ParaView. The colour range is limited to $[0, 0.5]\,\mathrm{m/s}$, which $99.9\,\%$ of the fluid nodes fall into.
+:::
+
+@fig-aneurysm3d-wss shows the magnitude of the wall shear stress on the STL surface, the output in `Mesh.pvd`, while the inflow is ramped up and in the steady state.
+With the growing inflow, the wall shear stress rises in all vessels, most in the narrow top left branch, which carries more than half of the flow, and at the neck below the aneurysm.
+On the sac itself, it stays low: in the steady state, it is mostly below $0.2\,\mathrm{Pa}$ there, with a median of $0.05\,\mathrm{Pa}$, whereas the median over the whole surface is $1.6\,\mathrm{Pa}$ and $99\,\%$ of the surface lie below $7.6\,\mathrm{Pa}$.
+Such regions of low wall shear stress in the slow vortex of the sac are what the wall shear stress output of this example is meant to reveal.
+
+::: {.image-slider}
+::: {#fig-aneurysm3d-wss layout-ncol="3"}
+![$t = 1.6\,\mathrm{s}$](/examples/laminar/aneurysm3d/doc/fig/wss/wss_iT0038400.png)
+
+![$t = 3.2\,\mathrm{s}$](/examples/laminar/aneurysm3d/doc/fig/wss/wss_iT0076800.png)
+
+![$t = 4.8\,\mathrm{s}$](/examples/laminar/aneurysm3d/doc/fig/wss/wss_iT0115200.png)
+
+![$t = 6.4\,\mathrm{s}$, end of the ramp-up](/examples/laminar/aneurysm3d/doc/fig/wss/wss_iT0153600.png)
+
+![$t = 15.6\,\mathrm{s}$, last output](/examples/laminar/aneurysm3d/doc/fig/wss/wss_iT0374400.png)
+
+Magnitude of the wall shear stress $|\boldsymbol{\tau}_w|$ in Pa on the surface of `aneurysm3d`, written by the `VTUsurfaceWriter` and visualized in ParaView. The colour range is fixed to $[0, 8]\,\mathrm{Pa}$ for all time steps, so that they are comparable.
+:::
+:::
+
+There is no reference solution for this geometry, but the conservation of mass can be checked.
+@fig-aneurysm3d-flowrate shows the volume flow rates through planes four cells inside the five openings, perpendicular to the normals used in `prepareGeometry()`, integrated in ParaView from the VTK output.
+In the steady state, $2.43\,\mathrm{ml/s}$ enter through the inlet, a mean velocity of $0.16\,\mathrm{m/s}$ over the inlet circle of radius $2.2\,\mathrm{mm}$.
+The top left outlet takes $55\,\%$ of the outflow, the right one $34\,\%$, and the top right and the bottom one $5.6\,\%$ and $5.5\,\%$, whose curves coincide in the figure.
+The flow divides in nearly the same proportions during the whole ramp-up.
+
+The sum of the outflow rates exceeds the inflow rate by $2.3\,\%$.
+This is no loss of mass but the weak compressibility of the LBM: the density follows the pressure, $\rho = \rho_0 \left( 1 + p / (\rho_0 c_s^2) \right)$ with $\rho_0 c_s^2 = 36\,000\,\mathrm{Pa}$, and the pressure drop from the inlet to the outlets lowers it by about $2\,\%$.
+With the flow rates weighted by this density, the mass flow rates of the inlet and the outlets agree within $0.3\,\%$.
+The data of the figure is in `doc/fig/flowrate/data/flowrate.dat`.
+
+![Volume flow rates of `aneurysm3d` through the inlet and the four outlets over time with $N = 120$. The curves of the top right and the bottom outlet coincide.](/examples/laminar/aneurysm3d/doc/fig/flowrate/flowrate.svg){width="80%" #fig-aneurysm3d-flowrate .lightbox}
 
 #### Files
 
