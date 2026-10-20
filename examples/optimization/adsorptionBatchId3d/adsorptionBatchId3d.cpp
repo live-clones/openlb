@@ -223,8 +223,8 @@ void getResults(CASE& myCase, TIMER& timer, std::size_t iT)
   vtmWriter.addFunctor(solute);
   vtmWriter.addFunctor(analytical);
 
-  const std::size_t vtkIter = converter.getLatticeTime(parameters.template get<parameters::MAX_PHYS_T>() / 100);
-  const std::size_t statIter = converter.getLatticeTime(parameters.template get<parameters::MAX_PHYS_T>() / 5);
+  const std::size_t vtkIter = converter.getLatticeTime(parameters.template get<parameters::PHYS_MAX_T>() / 100);
+  const std::size_t statIter = converter.getLatticeTime(parameters.template get<parameters::PHYS_MAX_T>() / 5);
 
   if (iT == 0) {
     // write the geometry
@@ -262,10 +262,10 @@ void simulate(CASE& myCase){
   auto& converter = ParticleLattice.getUnitConverter();
   auto& superGeometry = myCase.getGeometry();
 
-  util::Timer<T> timer(converter.getLatticeTime(parameters.template get<parameters::MAX_PHYS_T>()), superGeometry.getStatistics().getNvoxel());
+  util::Timer<T> timer(converter.getLatticeTime(parameters.template get<parameters::PHYS_MAX_T>()), superGeometry.getStatistics().getNvoxel());
   timer.start();
 
-  for (std::size_t iT = 0; iT < converter.getLatticeTime(parameters.template get<parameters::MAX_PHYS_T>()); ++iT) {
+  for (std::size_t iT = 0; iT < converter.getLatticeTime(parameters.template get<parameters::PHYS_MAX_T>()); ++iT) {
     myCase.getOperator("AdsorptionReaction").apply();
     ParticleLattice.collideAndStream();
     LoadingLattice.collideAndStream();
@@ -336,7 +336,7 @@ int main(int argc, char* argv[]) {
                     p.get<BATCH_REACTOR_LENGTH>(),
                     p.get<BATCH_REACTOR_LENGTH>()};
     });
-    myCaseParameters.set<MAX_PHYS_T                    >(      15.);
+    myCaseParameters.set<PHYS_MAX_T                    >(      15.);
     // Used for the analytical solution, computed once here based on
     // reference parameters for D_s and r_p.
     myCaseParameters.set<SURFACE_TRANSFER_CONSTANT>([](MyCase::ParametersD& p) {

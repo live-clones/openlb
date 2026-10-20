@@ -204,7 +204,7 @@ void setTemporalValues(MyCase& myCase, std::size_t iT)
   auto&   converter  = sLattice.getUnitConverter();
   auto&   sGeometry  = myCase.getGeometry();
   auto&   parameters = myCase.getParameters();
-  const T maxPhysT   = parameters.get<parameters::MAX_PHYS_T>();
+  const T maxPhysT   = parameters.get<parameters::PHYS_MAX_T>();
 
   // time for smooth start-up
   std::size_t iTmaxStart = converter.getLatticeTime(maxPhysT * 0.2);
@@ -309,7 +309,7 @@ void simulate(MyCase& myCase)
   using T = MyCase::value_t;
   auto&          parameters = myCase.getParameters();
   auto&          sLattice   = myCase.getLattice(NavierStokes {});
-  const T        maxPhysT   = parameters.get<parameters::MAX_PHYS_T>();
+  const T        maxPhysT   = parameters.get<parameters::PHYS_MAX_T>();
   util::Timer<T> timer(sLattice.getUnitConverter().getLatticeTime(maxPhysT),
                        myCase.getGeometry().getStatistics().getNvoxel());
   clout << "starting simulation..." << std::endl;
@@ -346,7 +346,7 @@ int main(int argc, char* argv[])
     myCaseParameters.set<DOMAIN_EXTENT>({0.7, 0.0101});
     myCaseParameters.set<PHYS_CHAR_LENGTH>([](MyCase::ParametersD& p){return 2.0 *
           (p.get<DOMAIN_EXTENT>()[1] - p.get<PHYS_HEIGHT_OF_STEP>());});
-    myCaseParameters.set<MAX_PHYS_T>(2.0);
+    myCaseParameters.set<PHYS_MAX_T>(2.0);
   }
 
   /// === Step 3: Create Mesh ===

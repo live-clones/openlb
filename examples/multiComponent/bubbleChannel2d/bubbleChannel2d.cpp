@@ -388,7 +388,7 @@ void simulate(MyCase& myCase) {
   const auto& converter = latticeNS.getUnitConverter();
   auto& params = myCase.getParameters();
 
-  const std::size_t maxIter = params.get<parameters::MAX_LATTICE_T>();
+  const std::size_t maxIter = params.get<parameters::LATTICE_MAX_T>();
 
   const T dx = converter.getPhysDeltaX();
   const T Nx = params.get<parameters::DOMAIN_EXTENT_LATTICE>()[0];
@@ -461,7 +461,7 @@ int main( int argc, char *argv[] )
   }
   {
     using T = MyCase::value_t;
-    myCaseParameters.set<parameters::MAX_LATTICE_T>([](MyCase::ParametersD& p){
+    myCaseParameters.set<parameters::LATTICE_MAX_T>([](MyCase::ParametersD& p){
       const T char_l = p.get<parameters::PHYS_CHAR_LENGTH>();
       const T N = p.get<parameters::RESOLUTION>();
       const T Nx = p.get<parameters::DOMAIN_EXTENT>()[0] / char_l * N;

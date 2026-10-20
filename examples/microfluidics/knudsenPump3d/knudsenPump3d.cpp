@@ -321,7 +321,7 @@ void getResults(MyCase& myCase,
   auto& parameters = myCase.getParameters();
   auto& geometry = myCase.getGeometry();
   auto& lattice = myCase.getLattice(NavierStokes{});
-  const T maxPhysT = parameters.get<parameters::MAX_PHYS_T>();
+  const T maxPhysT = parameters.get<parameters::PHYS_MAX_T>();
   bool hasConverged = parameters.get<parameters::HAS_CONVERGED>();
   const bool lastTimeStep = ( hasConverged || (iT + 1 == lattice.getUnitConverter().getLatticeTime( maxPhysT )) );
   const int statIter = lattice.getUnitConverter().getLatticeTime( maxPhysT/50. );
@@ -386,7 +386,7 @@ void simulate(MyCase& myCase) {
   OstreamManager clout( std::cout,"simulate" );
   using T = MyCase::value_t;
   auto& parameters = myCase.getParameters();
-  const T maxPhysT = parameters.get<parameters::MAX_PHYS_T>();
+  const T maxPhysT = parameters.get<parameters::PHYS_MAX_T>();
   const T physInterval = parameters.get<parameters::PHYS_INTERVAL>();
   const T residuum = parameters.get<parameters::RESIDUUM>();
 
@@ -431,9 +431,9 @@ int main(int argc, char* argv[]) {
     myCaseParameters.set<RESOLUTION>(41);
     myCaseParameters.set<OVERLAP>(5);
     myCaseParameters.set<RELAXATION_TIME>(0.9);
-    myCaseParameters.set<MAX_PHYS_T>(2.e-6);
+    myCaseParameters.set<PHYS_MAX_T>(2.e-6);
     myCaseParameters.set<START_TIME>([](MyCase::ParametersD& p) {
-      return 0.05*p.get<parameters::MAX_PHYS_T>();
+      return 0.05*p.get<parameters::PHYS_MAX_T>();
     });
     myCaseParameters.set<KINETIC_DIAMETER>(364e-12); //kinetic diamter of nitrogen [m]
     myCaseParameters.set<AVERAGE_PRESSURE>(1000);

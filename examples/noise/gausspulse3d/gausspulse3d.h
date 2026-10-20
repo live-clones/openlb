@@ -519,8 +519,8 @@ void simulate(MyCase& myCase) {
   auto&         geometry    = myCase.getGeometry();
   auto&         lattice     = myCase.getLattice(names::NavierStokes{});
   auto&         converter   = lattice.getUnitConverter();
-  size_t        iTmaxT      = converter.getLatticeTime(parameters.get<parameters::MAX_PHYS_T>());
-  size_t        iTmax       = parameters.get<parameters::MAX_LATTICE_T>()+1;
+  size_t        iTmaxT      = converter.getLatticeTime(parameters.get<parameters::PHYS_MAX_T>());
+  size_t        iTmax       = parameters.get<parameters::LATTICE_MAX_T>()+1;
   iTmax = ( iTmax > 0 ) ? std::min(iTmax, iTmaxT) : iTmaxT;
   const size_t  iTlog       = std::min(parameters.get<parameters::IT_GRAPHICAL_OUTPUT>(), parameters.get<parameters::IT_LOG>());
 
@@ -581,9 +581,9 @@ void setGetParameters( MyCase::ParametersD& myCaseParameters, int& argc, char** 
   myCaseParameters.set<IT_GRAPHICAL_OUTPUT>(         25 );
   myCaseParameters.set<IT_LOG             >(         25 );
   myCaseParameters.set<IT_TABLE           >(          5 );
-  myCaseParameters.set<MAX_LATTICE_T             >(        150 );
+  myCaseParameters.set<LATTICE_MAX_T             >(        150 );
   // STANDARD PARAMETERS
-  myCaseParameters.set<MAX_PHYS_T         >(         .5 );
+  myCaseParameters.set<PHYS_MAX_T         >(         .5 );
   myCaseParameters.set<PHYS_CHAR_VELOCITY >(        1.0 );
   myCaseParameters.set<PHYS_CHAR_VISCOSITY>(      0.001 );
   myCaseParameters.set<PHYS_CHAR_DENSITY  >(        1.0 );

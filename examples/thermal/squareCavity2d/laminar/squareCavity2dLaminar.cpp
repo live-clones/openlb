@@ -96,7 +96,7 @@ int main(int argc, char* argv[])
   MyCase::ParametersD myCaseParameters;
   {
     using namespace olb::parameters;
-    myCaseParameters.set<MAX_PHYS_T                 >(1e4);
+    myCaseParameters.set<PHYS_MAX_T                 >(1e4);
     myCaseParameters.set<RESOLUTION                 >(64);
     myCaseParameters.set<GRAVITATIONAL_ACC          >(9.81);
     myCaseParameters.set<PHYS_CHAR_VELOCITY         >(1);

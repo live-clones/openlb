@@ -324,7 +324,7 @@ void getResults(MyCase& myCase,
   auto& parameters = myCase.getParameters();
   auto& geometry = myCase.getGeometry();
   auto& lattice = myCase.getLattice(NavierStokes{});
-  const T maxPhysT = parameters.get<parameters::MAX_PHYS_T>();
+  const T maxPhysT = parameters.get<parameters::PHYS_MAX_T>();
   bool hasConverged = parameters.get<parameters::HAS_CONVERGED>();
   const bool lastTimeStep = ( hasConverged || (iT + 1 == lattice.getUnitConverter().getLatticeTime( maxPhysT )) );
   const int statIter = lattice.getUnitConverter().getLatticeTime( maxPhysT/100. );
@@ -391,7 +391,7 @@ void simulate(MyCase& myCase) {
   OstreamManager clout( std::cout,"simulate" );
   using T = MyCase::value_t;
   auto& parameters = myCase.getParameters();
-  const T maxPhysT = parameters.get<parameters::MAX_PHYS_T>();
+  const T maxPhysT = parameters.get<parameters::PHYS_MAX_T>();
   const T physInterval = parameters.get<parameters::PHYS_INTERVAL>();
   const T residuum = parameters.get<parameters::RESIDUUM>();
 

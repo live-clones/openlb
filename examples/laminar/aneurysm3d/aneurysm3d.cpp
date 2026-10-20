@@ -155,7 +155,7 @@ void setTemporalValues(MyCase& myCase, int iT)
   auto& geometry  = myCase.getGeometry();
   auto& lattice   = myCase.getLattice(NavierStokes {});
   auto& converter = lattice.getUnitConverter();
-  const T maxPhysT = params.get<parameters::MAX_PHYS_T>();
+  const T maxPhysT = params.get<parameters::PHYS_MAX_T>();
 
   // No of time steps for smooth start-up
   int iTmaxStart = converter.getLatticeTime(maxPhysT * 0.4);
@@ -258,7 +258,7 @@ void simulate(MyCase& myCase)
   auto& lattice   = myCase.getLattice(NavierStokes {});
   auto& converter = lattice.getUnitConverter();
 
-  const T maxPhysT = params.get<parameters::MAX_PHYS_T>();
+  const T maxPhysT = params.get<parameters::PHYS_MAX_T>();
 
   OstreamManager clout(std::cout, "getResults");
 
@@ -302,7 +302,7 @@ int main(int argc, char* argv[])
 
     myCaseParameters.set<RESOLUTION>(120);
     myCaseParameters.set<REYNOLDS>((T)708.);
-    myCaseParameters.set<MAX_PHYS_T>((T)16.);
+    myCaseParameters.set<PHYS_MAX_T>((T)16.);
     myCaseParameters.set<CFL>((T)0.02);
     myCaseParameters.set<PHYS_DELTA_X>([](MyCase::ParametersD& p) {
       return 0.05 / p.get<parameters::RESOLUTION>();

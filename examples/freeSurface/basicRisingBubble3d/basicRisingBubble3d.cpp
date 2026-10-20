@@ -420,7 +420,7 @@ void postprocess(MyCase& myCase, const std::size_t& iT, util::Timer<MyCase::valu
 
   SuperVTMwriter3D<T> vtmWriter("basicRisingBubble3d");
   static CSV<T> csvWriter("basicRisingBubble3d", ',', {"Time", "X", "Y", "Z", "RiseVelocity"});
-  T maxPhysTime = parameters.get<parameters::MAX_PHYS_T>();
+  T maxPhysTime = parameters.get<parameters::PHYS_MAX_T>();
   const bool lastTimeStep = (iT + 1 == converter.getLatticeTime(maxPhysTime));
 
   const T vtkSaveTime = parameters.get<parameters::PHYS_VTK_ITER_T>();
@@ -520,7 +520,7 @@ void simulate( MyCase& myCase ){
   auto& parameters = myCase.getParameters();
 
   // Prepare the main time loop using Timer and convergence check
-  T maxPhysTime = parameters.get<parameters::MAX_PHYS_T>();
+  T maxPhysTime = parameters.get<parameters::PHYS_MAX_T>();
   util::Timer<T> timer(converter.getLatticeTime(maxPhysTime), geometry.getStatistics().getNvoxel());
   timer.start();
 
@@ -562,7 +562,7 @@ int main(int argc, char* argv[])
     myCaseParameters.set<PHYS_CHAR_VELOCITY>(0.3533088193);
     myCaseParameters.set<PHYS_CHAR_VISCOSITY>(0.0000980996);
     myCaseParameters.set<PHYS_CHAR_DENSITY>(1095.0);
-    myCaseParameters.set<MAX_PHYS_T>(1.0);
+    myCaseParameters.set<PHYS_MAX_T>(1.0);
     myCaseParameters.set<GRAVITY>({0., 0., -9.81});
     myCaseParameters.set<LATTICE_RELAXATION_TIME>(.501);
 

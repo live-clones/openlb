@@ -454,7 +454,7 @@ void simulate(MyCase& myCase)
   auto& parameters = myCase.getParameters();
 
   const std::size_t iTmax = myCase.getLattice(NavierStokes{}).getUnitConverter().getLatticeTime(
-    parameters.get<parameters::MAX_PHYS_T>()
+    parameters.get<parameters::PHYS_MAX_T>()
   );
 
   const T epsilon       = parameters.get<parameters::EPSILON>();
@@ -506,7 +506,7 @@ int main(int argc, char* argv[])
     myCaseParameters.set<LATTICE_RELAXATION_TIME  >(     1.0   );
     myCaseParameters.set<LATTICE_CHAR_VELOCITY    >(     0.1   );
     myCaseParameters.set<GRAVITATIONAL_ACC        >(     9.81  );
-    myCaseParameters.set<MAX_PHYS_T               >( 10000     );
+    myCaseParameters.set<PHYS_MAX_T               >( 10000     );
     myCaseParameters.set<T_HOT                    >(   274.15  );
     myCaseParameters.set<T_COLD                   >(   273.15  );
     myCaseParameters.set<EPSILON                  >(     1e-5  );

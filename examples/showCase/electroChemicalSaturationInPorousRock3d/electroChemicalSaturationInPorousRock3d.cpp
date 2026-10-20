@@ -493,7 +493,7 @@ void getResults(MyCase& myCase,
   auto& latticeNSE = myCase.getLattice(NavierStokes{});
   auto& converter = latticeH.getUnitConverter();
   auto& converterNSE = latticeNSE.getUnitConverter();
-  const T maxPhysT = parameters.get<parameters::MAX_PHYS_T>();
+  const T maxPhysT = parameters.get<parameters::PHYS_MAX_T>();
   const int vtkIter = parameters.get<parameters::VTK_ITER>();
   const int statIter = parameters.get<parameters::STAT_ITER>();
 
@@ -661,7 +661,7 @@ void simulate(MyCase& myCase) {
   using T = MyCase::value_t;
   auto& parameters = myCase.getParameters();
   const std::size_t iTmax = myCase.getLattice(Concentration<0>{}).getUnitConverter().getLatticeTime(
-    parameters.get<parameters::MAX_PHYS_T>());
+    parameters.get<parameters::PHYS_MAX_T>());
 
   util::Timer<T> timer( iTmax, myCase.getGeometry().getStatistics().getNvoxel() );
   util::ValueTracer<T> converge( 1000, 1.e-9 );
@@ -764,7 +764,7 @@ int main(int argc, char* argv[]) {
     myCaseParameters.set<SIMULATION_CUT>(0.45);
 
     //simulation params
-    myCaseParameters.set<MAX_PHYS_T>(2.1e-4);
+    myCaseParameters.set<PHYS_MAX_T>(2.1e-4);
     myCaseParameters.set<VTK_ITER>(10000);
     myCaseParameters.set<STAT_ITER>(1000);
     myCaseParameters.set<POISSON_RELAXATION_TIME>(1);

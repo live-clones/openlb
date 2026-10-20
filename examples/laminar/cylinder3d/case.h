@@ -194,7 +194,7 @@ void setTemporalValues(MyCase& myCase,
   auto& lattice    = myCase.getLattice(NavierStokes{});
   auto& geometry   = myCase.getGeometry();
 
-  const T maxPhysT   = parameters.get<parameters::MAX_PHYS_T>();
+  const T maxPhysT   = parameters.get<parameters::PHYS_MAX_T>();
   const T physDeltaX = 2.*parameters.get<parameters::RADIUS_CYLINDER>()/parameters.get<parameters::RESOLUTION>();
 
   // No of time steps for smooth start-up
@@ -244,7 +244,7 @@ void getResults(MyCase& myCase,
 
   const std::size_t vtkIter  = converter.getLatticeTime(parameters.get<parameters::PHYS_VTK_ITER_T>());
   const std::size_t statIter = converter.getLatticeTime(parameters.get<parameters::PHYS_STAT_ITER_T>());
-  const T maxPhysT           = parameters.get<parameters::MAX_PHYS_T>();
+  const T maxPhysT           = parameters.get<parameters::PHYS_MAX_T>();
 
   if (parameters.get<parameters::VTK_ENABLED>()) {
     SuperVTMwriter3D<T> vtmWriter("cylinder3d");
@@ -349,7 +349,7 @@ void simulate(MyCase& myCase){
   OstreamManager clout(std::cout, "simulate");
   using T = MyCase::value_t;
   auto& parameters        = myCase.getParameters();
-  const T physMaxT        = parameters.get<parameters::MAX_PHYS_T>();
+  const T physMaxT        = parameters.get<parameters::PHYS_MAX_T>();
   const std::size_t iTmax = myCase.getLattice(NavierStokes{}).getUnitConverter().getLatticeTime(physMaxT);
 
   clout << "starting simulation..." << std::endl;

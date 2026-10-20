@@ -154,8 +154,8 @@ void simulateRefined( MyCase& myCase ) {
   // === Initialize pressure L2 norm plot
 
   // === Timer setup ===
-  size_t iTmaxT = converterL0.getLatticeTime(parameters.get<parameters::MAX_PHYS_T>());
-  size_t iTmax  = parameters.get<parameters::MAX_LATTICE_T>();
+  size_t iTmaxT = converterL0.getLatticeTime(parameters.get<parameters::PHYS_MAX_T>());
+  size_t iTmax  = parameters.get<parameters::LATTICE_MAX_T>();
   iTmax = ( iTmax > 0 ) ? std::min(iTmax+1, iTmaxT) : iTmaxT;
   util::Timer<T> timer(iTmax, geometryL0.getStatistics().getNvoxel()
                               + 2*geometryL1.getStatistics().getNvoxel());
@@ -219,7 +219,7 @@ int main(int argc, char* argv[])
   myCaseParameters.set<parameters::FAR_FIELD_TYPE>( COARSE );
   myCaseParameters.set<parameters::RESOLUTION>( int(myCaseParameters.get<parameters::RESOLUTION>() / 2. ) );
   myCaseParameters.set<parameters::IT_GRAPHICAL_OUTPUT>( int(myCaseParameters.get<parameters::IT_GRAPHICAL_OUTPUT>() / 2. ) + 1 );
-  myCaseParameters.set<parameters::MAX_LATTICE_T>( myCaseParameters.get<parameters::MAX_LATTICE_T>() / 2 );
+  myCaseParameters.set<parameters::LATTICE_MAX_T>( myCaseParameters.get<parameters::LATTICE_MAX_T>() / 2 );
 
   // === Step 2b: set output directory depending on input values ===
   setOutDir(myCaseParameters);

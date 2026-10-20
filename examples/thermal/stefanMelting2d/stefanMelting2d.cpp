@@ -566,7 +566,7 @@ int main(int argc, char* argv[])
       } while (i < maxIterations && util::abs(frac) > maxError);
       return x;
     });
-    myCaseParameters.set<MAX_PHYS_T>([](MyCase::ParametersD& p) {
+    myCaseParameters.set<PHYS_MAX_T>([](MyCase::ParametersD& p) {
       return util::pow(0.25 / 2.0 / p.get<K>(), 2) * p.get<DENSITY>() * p.get<CP_L>() / p.get<LAMBDA>();
     });
   }

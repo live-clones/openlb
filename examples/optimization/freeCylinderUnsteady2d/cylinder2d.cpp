@@ -243,7 +243,7 @@ void setTemporalValues(CASE& myCase,
   auto& lattice    = myCase.getLattice(NavierStokes{});
   auto& geometry   = myCase.getGeometry();
 
-  const T maxPhysT   = parameters.template get<parameters::MAX_PHYS_T>();
+  const T maxPhysT   = parameters.template get<parameters::PHYS_MAX_T>();
 
   if (myCase.hasName(Controlled{}) || myCase.hasName(Derivatives{})) {
     std::size_t iTmaxStart = lattice.getUnitConverter().getLatticeTime(
@@ -306,7 +306,7 @@ void getResults(CASE& myCase,
 
   const UnitConverter<T,DESCRIPTOR>& converter = lattice.getUnitConverter();
   const std::size_t statIter = converter.getLatticeTime(parameters.template get<parameters::PHYS_STAT_ITER_T>());
-  const std::size_t iTstartAvg = converter.getLatticeTime(parameters.template get<parameters::MAX_PHYS_T>() *
+  const std::size_t iTstartAvg = converter.getLatticeTime(parameters.template get<parameters::PHYS_MAX_T>() *
                                                           parameters.template get<parameters::AVERAGING_START_FRACTION>());
   if (iT == iTstartAvg) {
     lattice.setProcessingContext(ProcessingContext::Evaluation);
@@ -509,9 +509,9 @@ void simulate(CASE& myCase){
   using T = typename CASE::value_t;
   auto& parameters = myCase.getParameters();
   auto& converter = myCase.getLattice(NavierStokes{}).getUnitConverter();
-  const T physMaxT = parameters.template get<parameters::MAX_PHYS_T>();
+  const T physMaxT = parameters.template get<parameters::PHYS_MAX_T>();
   const std::size_t iTmax = converter.getLatticeTime(physMaxT);
-  const std::size_t iTstartAvg = converter.getLatticeTime(parameters.template get<parameters::MAX_PHYS_T>() *
+  const std::size_t iTstartAvg = converter.getLatticeTime(parameters.template get<parameters::PHYS_MAX_T>() *
                                                           parameters.template get<parameters::AVERAGING_START_FRACTION>());
 
   clout << "starting simulation..." << std::endl;
@@ -878,9 +878,9 @@ void sampleAveragedDerivativesWithADf(MyADfCase& myCase) {
   T porosity = projection::permeabilityToPorosity(permeability, converter);
   fields::set<ControlledField>(lattice, geometry.getMaterialIndicator({5}), porosity);
 
-  const T physMaxT = parameters.template get<parameters::MAX_PHYS_T>();
+  const T physMaxT = parameters.template get<parameters::PHYS_MAX_T>();
   const std::size_t iTmax = converter.getLatticeTime(physMaxT);
-  const std::size_t iTstartAvg = converter.getLatticeTime(parameters.template get<parameters::MAX_PHYS_T>() *
+  const std::size_t iTstartAvg = converter.getLatticeTime(parameters.template get<parameters::PHYS_MAX_T>() *
                                                           parameters.template get<parameters::AVERAGING_START_FRACTION>());
 
   clout << "starting simulation..." << std::endl;
@@ -1017,9 +1017,9 @@ void compareAveragedGradients(MyOptiCase& optiCase) {
   T frac = myCaseParameters.template get<parameters::AVERAGING_START_FRACTION>();
 
   std::cout << "Averaging start fraction: " << std::setprecision(16) << frac << std::endl;
-  const T physMaxT = myCaseParameters.template get<parameters::MAX_PHYS_T>();
+  const T physMaxT = myCaseParameters.template get<parameters::PHYS_MAX_T>();
   const std::size_t iTmax = converter.getLatticeTime(physMaxT);
-  const std::size_t iTstartAvg = converter.getLatticeTime(myCaseParameters.template get<parameters::MAX_PHYS_T>() *
+  const std::size_t iTstartAvg = converter.getLatticeTime(myCaseParameters.template get<parameters::PHYS_MAX_T>() *
                                                           myCaseParameters.template get<parameters::AVERAGING_START_FRACTION>());
   std::cout << "Discrete averaging time steps: " << iTmax - iTstartAvg << std::endl;
 
@@ -1059,7 +1059,7 @@ int main(int argc, char* argv[])
     using namespace olb::parameters;
     myCaseParameters.set<RESOLUTION>(21);
     myCaseParameters.set<REYNOLDS >(100.);
-    myCaseParameters.set<MAX_PHYS_T>(300.);
+    myCaseParameters.set<PHYS_MAX_T>(300.);
     myCaseParameters.set<DOMAIN_EXTENT_X>(3.6);
     myCaseParameters.set<DOMAIN_EXTENT_Y>(.81);
     myCaseParameters.set<PHYS_CHAR_VELOCITY>(0.2);

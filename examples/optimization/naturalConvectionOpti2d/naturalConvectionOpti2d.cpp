@@ -286,7 +286,7 @@ void simulate(MyCase& myCase, const std::string& vtkName) {
   const auto& converter = NSElattice.getUnitConverter();
   auto& parameters = myCase.getParameters();
 
-  const std::size_t iTmax = converter.getLatticeTime(parameters.get<parameters::MAX_PHYS_T>());
+  const std::size_t iTmax = converter.getLatticeTime(parameters.get<parameters::PHYS_MAX_T>());
   const std::size_t convIter = parameters.get<parameters::CONV_ITER>();
   util::ValueTracer<T> converge(6, parameters.get<parameters::CONVERGENCE_PRECISION>());
 
@@ -592,7 +592,7 @@ int main(int argc, char* argv[])
   MyCase::ParametersD myCaseParameters;
   {
     using namespace olb::parameters;
-    myCaseParameters.set<MAX_PHYS_T                 >(1000);
+    myCaseParameters.set<PHYS_MAX_T                 >(1000);
     myCaseParameters.set<RESOLUTION                 >(64);
     myCaseParameters.set<GRAVITATIONAL_ACC          >(9.81);
     myCaseParameters.set<ORIGIN                     >({0., 0.});

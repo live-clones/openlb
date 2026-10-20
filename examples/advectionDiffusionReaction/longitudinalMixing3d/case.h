@@ -359,7 +359,7 @@ void simulate(MyCase& myCase)
 
   const T N = converter.getResolution();
   const T Ceq = parameters.get<parameters::C_EQ>();
-  const T maxPhysT = parameters.get<parameters::MAX_PHYS_T>();
+  const T maxPhysT = parameters.get<parameters::PHYS_MAX_T>();
   const T runs = parameters.get<parameters::RUNS>();
 
   OstreamManager clout(std::cout, "simulate");

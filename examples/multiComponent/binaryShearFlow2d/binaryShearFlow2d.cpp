@@ -300,7 +300,7 @@ void prepareLattice( MyCase& myCase )
   const T pecletNr = params.get<parameters::PECLET>();
   const T dropRe = params.get<parameters::DROPLET_REYNOLDS>();
   const T physInterval = params.get<parameters::PHYS_INTERVAL>();
-  const T maxPhysT = params.get<parameters::MAX_PHYS_T>();
+  const T maxPhysT = params.get<parameters::PHYS_MAX_T>();
   const T physStatIterT = params.get<parameters::PHYS_STAT_ITER_T>();
   const T physVtkIterT = params.get<parameters::PHYS_VTK_ITER_T>();
   const T residuum = params.get<parameters::CONVERGENCE_PRECISION>();
@@ -588,7 +588,7 @@ void simulate(MyCase& myCase) {
   auto& coupling3 = myCase.getOperator("Inlet_outlet");
 
   const T physInterval = params.get<parameters::PHYS_INTERVAL>();
-  const T maxPhysT = params.get<parameters::MAX_PHYS_T>();
+  const T maxPhysT = params.get<parameters::PHYS_MAX_T>();
   const T physStatIterT = params.get<parameters::PHYS_STAT_ITER_T>();
   const int maxIter = converter.getLatticeTime(maxPhysT);
   const int statIter = converter.getLatticeTime(physStatIterT);
@@ -674,7 +674,7 @@ int main( int argc, char *argv[] )
     myCaseParameters.set<parameters::SHEAR_RATE>([](MyCase::ParametersD& p) {
       return p.get<CONT_VISC>() * p.get<DROPLET_REYNOLDS>() / util::pow(p.get<parameters::RADIUS>(), 2);
     }); // [pu] physical shear rate [1/s]
-    myCaseParameters.set<parameters::MAX_PHYS_T>([](MyCase::ParametersD& p) {
+    myCaseParameters.set<parameters::PHYS_MAX_T>([](MyCase::ParametersD& p) {
       return p.get<MAX_NORM_T>() / p.get<SHEAR_RATE>();
     });
     myCaseParameters.set<parameters::PHYS_VTK_ITER_T>([](MyCase::ParametersD& p) {

@@ -445,7 +445,7 @@ void getResults(MyCase& myCase, std::size_t iT, util::Timer<MyCase::value_t>& ti
   auto&       lattice   = myCase.getLattice(NavierStokes {});
   const auto& converter = lattice.getUnitConverter();
   auto&       parameters= myCase.getParameters();
-  T           maxPhysT  = parameters.get<parameters::MAX_PHYS_T>();
+  T           maxPhysT  = parameters.get<parameters::PHYS_MAX_T>();
   const bool lastTimeStep = (iT + 1 == converter.getLatticeTime( maxPhysT ));
   const int statIter = converter.getLatticeTime( maxPhysT / 10. );
 
@@ -499,7 +499,7 @@ Vector<T,3> simulatePoiseuilleWith( MyCase& myCase)
   auto& geometry = myCase.getGeometry();
   auto& parameters = myCase.getParameters();
   auto& converter = lattice.getUnitConverter();
-  T maxPhysT = parameters.get<parameters::MAX_PHYS_T>();
+  T maxPhysT = parameters.get<parameters::PHYS_MAX_T>();
 
   // === 4th Step: Main Loop with Timer ===
   clout << "starting simulation..." << std::endl;
@@ -543,7 +543,7 @@ void setGetParameters( MyCase::ParametersD& myCaseParameters, int& argc, char** 
   });
   myCaseParameters.set<LATTICE_RELAXATION_TIME>(0.64265);
   myCaseParameters.set<PHYS_CHAR_DENSITY>(1060);
-  myCaseParameters.set<MAX_PHYS_T>(.3);
+  myCaseParameters.set<PHYS_MAX_T>(.3);
   myCaseParameters.set<AXIS>({1.,0.,0.});
   myCaseParameters.set<ORIGIN>([](MyCase::ParametersD& p) {
     T l = p.get<LENGTH>();

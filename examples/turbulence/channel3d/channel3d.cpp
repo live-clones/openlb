@@ -306,7 +306,7 @@ void prepareLattice(MyCase& myCase)
   sLattice.getUnitConverter().print();
 
   const auto physConvergeTime           = parameters.get<parameters::PHYS_CONVERGE_TIME>();
-  const auto maxPhysT                   = parameters.get<parameters::MAX_PHYS_T>();
+  const auto maxPhysT                   = parameters.get<parameters::PHYS_MAX_T>();
   const auto adaptedPhysSimulatedLength = parameters.get<parameters::PHYS_ADAPTED_CHAR_LENGTH>();
   const auto ReTau                      = parameters.get<parameters::REYNOLDS_TAU>();
   const auto physRefL                   = parameters.get<parameters::PHYS_CHAR_LENGTH>();
@@ -379,7 +379,7 @@ void getResults(MyCase& myCase, std::size_t iT, util::Timer<MyCase::value_t>& ti
   auto&      sGeometry        = myCase.getGeometry();
   auto&      sLattice         = myCase.getLattice(NavierStokes {});
   auto&      parameters       = myCase.getParameters();
-  const auto maxPhysT         = parameters.get<parameters::MAX_PHYS_T>();
+  const auto maxPhysT         = parameters.get<parameters::PHYS_MAX_T>();
   const auto ReTau            = parameters.get<parameters::REYNOLDS_TAU>();
   const auto charPhysNu       = parameters.get<parameters::PHYS_CHAR_VISCOSITY>();
   const auto physConvergeTime = parameters.get<parameters::PHYS_CONVERGE_TIME>();
@@ -533,7 +533,7 @@ void simulate(MyCase& myCase)
   auto&      sLattice   = myCase.getLattice(NavierStokes {});
   auto&      parameters = myCase.getParameters();
   auto&      converter  = sLattice.getUnitConverter();
-  const auto maxPhysT   = parameters.get<parameters::MAX_PHYS_T>();
+  const auto maxPhysT   = parameters.get<parameters::PHYS_MAX_T>();
   const auto physRefL = parameters.get<parameters::PHYS_CHAR_LENGTH>();
   const auto ReTau                      = parameters.get<parameters::REYNOLDS_TAU>();
   const auto lx                         = sGeometry.getStatistics().getMaxPhysR(1)[0] -  sGeometry.getStatistics().getMinPhysR(1)[0];
@@ -618,7 +618,7 @@ int main(int argc, char* argv[])
       return charPhysT * multiple;
     });
 
-    myCaseParameters.set<MAX_PHYS_T>([](MyCase::ParametersD& p) {
+    myCaseParameters.set<PHYS_MAX_T>([](MyCase::ParametersD& p) {
       return p.get<PHYS_CONVERGE_TIME>() + p.get<PHYS_STATISTICS_TIME>();
     });
 

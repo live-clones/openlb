@@ -395,7 +395,7 @@ void getResults(MyCase& myCase,
   auto& geometry  = myCase.getGeometry();
   auto& converter = lattice.getUnitConverter();
   auto& parameters= myCase.getParameters();
-  const T             maxPhysT      = parameters.get<parameters::MAX_PHYS_T>();
+  const T             maxPhysT      = parameters.get<parameters::PHYS_MAX_T>();
   const T             length        = parameters.get<parameters::DOMAIN_EXTENT>()[0];
   const T             diameter      = parameters.get<parameters::DOMAIN_EXTENT>()[1];
   const T             radius        = diameter / 2.;
@@ -506,7 +506,7 @@ void simulate(MyCase& myCase) {
   auto& parameters      = myCase.getParameters();
   auto& lattice         = myCase.getLattice(NavierStokes{});
   auto& converter       = lattice.getUnitConverter();
-  const T physMaxT      = parameters.get<parameters::MAX_PHYS_T>();
+  const T physMaxT      = parameters.get<parameters::PHYS_MAX_T>();
   const T physInterval  = parameters.get<parameters::CONVERGENCE_CHECK_T>();
   const T residuum      = parameters.get<parameters::CONVERGENCE_PRECISION>();
   const size_t iTmax    = lattice.getUnitConverter().getLatticeTime(physMaxT);
@@ -548,8 +548,8 @@ int main( int argc, char* argv[] )
     myCaseParameters.set<REYNOLDS                   >(       1. );
     myCaseParameters.set<PERMEABILITY               >(     1e-2 );
     myCaseParameters.set<POROSITY_TYPE              >( PorosityType::SPAID_PHELAN );
-    myCaseParameters.set<MAX_PHYS_T                 >(       20 );
-    myCaseParameters.set<CONVERGENCE_CHECK_T        >( 0.0125*myCaseParameters.get<MAX_PHYS_T>() );
+    myCaseParameters.set<PHYS_MAX_T                 >(       20 );
+    myCaseParameters.set<CONVERGENCE_CHECK_T        >( 0.0125*myCaseParameters.get<PHYS_MAX_T>() );
     myCaseParameters.set<PHYS_CHAR_VELOCITY         >(       1. );
     myCaseParameters.set<PHYS_CHAR_DENSITY          >(       1. );
     myCaseParameters.set<LATTICE_RELAXATION_TIME    >(       .8 );

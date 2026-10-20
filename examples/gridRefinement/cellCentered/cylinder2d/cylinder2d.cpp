@@ -241,7 +241,7 @@ void simulate(MyCase& myCase)
   auto&   refinedGeometry = myCase.getGeometry();
 
   auto&   converter0 = refinedLattice.getLevel(0).getUnitConverter();
-  const T physMaxT  = params.get<parameters::MAX_PHYS_T>();
+  const T physMaxT  = params.get<parameters::PHYS_MAX_T>();
 
   const std::size_t iTmax      = converter0.getLatticeTime(physMaxT);
   const std::size_t iTmaxStart = converter0.getLatticeTime(6.4);
@@ -286,7 +286,7 @@ int main(int argc, char* argv[])
     using namespace olb::parameters;
     myCaseParameters.set<RESOLUTION>(11);
     myCaseParameters.set<REYNOLDS>(100);
-    myCaseParameters.set<MAX_PHYS_T>(16);
+    myCaseParameters.set<PHYS_MAX_T>(16);
     myCaseParameters.set<RADIUS_CYLINDER>(0.05);
     myCaseParameters.set<MAX_REFINEMENT>(2);
     myCaseParameters.set<REFINEMENT_BLOCK_SIZE>(8);

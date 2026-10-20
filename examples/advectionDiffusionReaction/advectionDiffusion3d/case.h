@@ -398,7 +398,7 @@ void simulate(MyCase& myCase)
   const std::size_t N = parameters.get<parameters::RESOLUTION>();
   const std::size_t statIter = parameters.get<parameters::OUTPUT_INTERVAL>();
   const T peclet = parameters.get<parameters::PECLET>();
-  const T physTmax = parameters.get<parameters::MAX_PHYS_T>();
+  const T physTmax = parameters.get<parameters::PHYS_MAX_T>();
   const T pulseDiffBound = parameters.get<parameters::PULSE_DIFF_BOUND>();
   const bool nonsmooth = parameters.get<parameters::NON_SMOOTH_ENABLED>();
 

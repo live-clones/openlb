@@ -56,7 +56,7 @@ Temperature, Lattice<double, descriptors::D2Q5<descriptors::VELOCITY, descriptor
 namespace olb::parameters {
 struct CP_S : public descriptors::FIELD_BASE<1> {};
 struct CP_L : public descriptors::FIELD_BASE<1> {};
-struct STEPHAN : public descriptors::FIELD_BASE<1> {};
+struct STEFAN : public descriptors::FIELD_BASE<1> {};
 struct LAMBDA_S : public descriptors::FIELD_BASE<1> {};
 struct LAMBDA_L : public descriptors::FIELD_BASE<1> {};
 } // namespace olb::parameters
@@ -158,7 +158,7 @@ void prepareLattice(MyCase& myCase)
   const T Tmelt      = (302.8 - 301.3) / (311.0 - 301.3) + 0.5;
   const T Ra         = params.get<parameters::RAYLEIGH>();
   const T Pr         = params.get<parameters::PRANDTL>();
-  const T Ste        = params.get<parameters::STEPHAN>();
+  const T Ste        = params.get<parameters::STEFAN>();
   const T lambda_l   = params.get<parameters::LAMBDA_L>();
   const T lambda_s   = params.get<parameters::LAMBDA_S>();
   const T R_lambda   = lambda_s / lambda_l;
@@ -351,7 +351,7 @@ void simulate(MyCase& myCase)
   auto& ADlattice = myCase.getLattice(Temperature {});
   auto& converter = NSlattice.getUnitConverter();
 
-  const T maxPhysT = params.get<parameters::MAX_PHYS_T>();
+  const T maxPhysT = params.get<parameters::PHYS_MAX_T>();
 
   util::Timer<T> timer(converter.getLatticeTime(maxPhysT), geometry.getStatistics().getNvoxel());
   timer.start();
@@ -383,8 +383,8 @@ int main(int argc, char* argv[])
     myCaseParameters.set<LATTICE_RELAXATION_TIME>((T)0.51);
     myCaseParameters.set<RAYLEIGH>((T)2e6);
     myCaseParameters.set<PRANDTL>((T)0.0216);
-    myCaseParameters.set<STEPHAN>((T)0.039);
-    myCaseParameters.set<MAX_PHYS_T>((T)1140.);
+    myCaseParameters.set<STEFAN>((T)0.039);
+    myCaseParameters.set<PHYS_MAX_T>((T)1140.);
     myCaseParameters.set<T_COLD>((T)0.5);
     myCaseParameters.set<T_HOT>((T)1.5);
     myCaseParameters.set<LAMBDA_S>((T)33.5);

@@ -293,7 +293,7 @@ void setTemporalValues(CASE& myCase,
   auto& geometry   = myCase.getGeometry();
   auto& converter  = lattice.getUnitConverter();
 
-  const T maxPhysT   = parameters.template get<parameters::MAX_PHYS_T>();
+  const T maxPhysT   = parameters.template get<parameters::PHYS_MAX_T>();
 
   if (myCase.hasName(Controlled{})) {
     std::size_t iTmaxStart = converter.getLatticeTime(
@@ -342,7 +342,7 @@ void getResults(CASE& myCase,
 
   const UnitConverter<T,DESCRIPTOR>& converter = lattice.getUnitConverter();
   const std::size_t statIter = converter.getLatticeTime(parameters.template get<parameters::PHYS_STAT_ITER_T>());
-  const std::size_t iTstartAvg = converter.getLatticeTime(parameters.template get<parameters::MAX_PHYS_T>() *
+  const std::size_t iTstartAvg = converter.getLatticeTime(parameters.template get<parameters::PHYS_MAX_T>() *
                                                           parameters.template get<parameters::AVERAGING_START_FRACTION>());
   if (iT == iTstartAvg) {
     lattice.setProcessingContext(ProcessingContext::Evaluation);
@@ -486,9 +486,9 @@ void simulate(CASE& myCase, auto& objectiveParameters){
   using T = typename CASE::value_t;
   auto& parameters = myCase.getParameters();
   auto& converter = myCase.getLattice(NavierStokes{}).getUnitConverter();
-  const T physMaxT = parameters.template get<parameters::MAX_PHYS_T>();
+  const T physMaxT = parameters.template get<parameters::PHYS_MAX_T>();
   const std::size_t iTmax = converter.getLatticeTime(physMaxT);
-  const std::size_t iTstartAvg = converter.getLatticeTime(parameters.template get<parameters::MAX_PHYS_T>() *
+  const std::size_t iTstartAvg = converter.getLatticeTime(parameters.template get<parameters::PHYS_MAX_T>() *
                                                           parameters.template get<parameters::AVERAGING_START_FRACTION>());
 
   clout << "starting simulation..." << std::endl;
@@ -788,7 +788,7 @@ int main(int argc, char* argv[])
     using namespace olb::parameters;
     myCaseParameters.set<RESOLUTION>(21);
     myCaseParameters.set<REYNOLDS >(3900.);
-    myCaseParameters.set<MAX_PHYS_T>(800.);
+    myCaseParameters.set<PHYS_MAX_T>(800.);
     myCaseParameters.set<DOMAIN_EXTENT_X>(4.0);
     myCaseParameters.set<DOMAIN_EXTENT_Y>(1.01);
     myCaseParameters.set<DOMAIN_EXTENT_Z>(.51);

@@ -402,7 +402,7 @@ void getResults(MyCase& myCase,
   auto& converter = lattice.getUnitConverter();
   auto& parameters= myCase.getParameters();
   const BoundaryType  boundaryType  = parameters.get<parameters::BOUNDARY_TYPE>();
-  const T             maxPhysT      = parameters.get<parameters::MAX_PHYS_T>();
+  const T             maxPhysT      = parameters.get<parameters::PHYS_MAX_T>();
   const T             lx            = parameters.get<parameters::DOMAIN_EXTENT>()[0];
   const T             ly            = parameters.get<parameters::DOMAIN_EXTENT>()[1];
   bool                hasConverged  = parameters.get<parameters::CONVERGED>();
@@ -486,7 +486,7 @@ void simulate(MyCase& myCase) {
   auto& parameters      = myCase.getParameters();
   auto& lattice         = myCase.getLattice(NavierStokes{});
   auto& converter       = lattice.getUnitConverter();
-  const T physMaxT      = parameters.get<parameters::MAX_PHYS_T>();
+  const T physMaxT      = parameters.get<parameters::PHYS_MAX_T>();
   const T physInterval  = parameters.get<parameters::CONVERGENCE_CHECK_T>();
   const T residuum      = parameters.get<parameters::CONVERGENCE_CHECK_RESIDUUM>();
   const size_t iTmax    = lattice.getUnitConverter().getLatticeTime(physMaxT);
@@ -530,7 +530,7 @@ int main( int argc, char* argv[] )
     myCaseParameters.set<PERMEABILITY               >(     1e-2 );
     myCaseParameters.set<BOUNDARY_TYPE              >( BoundaryType::interpolated );
     myCaseParameters.set<POROSITY_TYPE              >( PorosityType::GUO_ZHAO );
-    myCaseParameters.set<MAX_PHYS_T                 >(       20 );
+    myCaseParameters.set<PHYS_MAX_T                 >(       20 );
     myCaseParameters.set<CONVERGED                  >(    false );
     myCaseParameters.set<EPSILON                    >(       1. );  // Porosity (Spaid and Phelan can only handle epsilon=1)
     OLB_ASSERT( myCaseParameters.get<RESOLUTION>()    >= 1, "Fluid domain is too small" );

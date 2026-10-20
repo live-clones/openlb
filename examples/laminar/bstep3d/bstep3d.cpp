@@ -271,7 +271,7 @@ void simulate(MyCase& myCase)
   auto& lattice     = myCase.getLattice(NavierStokes{});
 
   const std::size_t iTmax = myCase.getLattice(NavierStokes{}).getUnitConverter().getLatticeTime(
-    parameters.get<parameters::MAX_PHYS_T>()
+    parameters.get<parameters::PHYS_MAX_T>()
   );
 
   util::Timer<T> timer(iTmax,
@@ -311,7 +311,7 @@ int main(int argc, char* argv[])
     myCaseParameters.set<PHYS_DELTA_T>([](MyCase::ParametersD& p){return
       p.get<PHYS_DELTA_X>() / p.get<TIME_RESOLUTION>();
     });
-    myCaseParameters.set<MAX_PHYS_T>(40.0);
+    myCaseParameters.set<PHYS_MAX_T>(40.0);
     myCaseParameters.set<PHYS_CHAR_VELOCITY>(1.0);
     myCaseParameters.set<PHYS_CHAR_VISCOSITY>(1.0 / 100.);
     myCaseParameters.set<PHYS_CHAR_DENSITY>(1.0);
@@ -319,7 +319,7 @@ int main(int argc, char* argv[])
 
     // Startup
     myCaseParameters.set<PHYS_START_T>([](MyCase::ParametersD& p){return
-      0.2 * p.get<MAX_PHYS_T>();
+      0.2 * p.get<PHYS_MAX_T>();
     });
     myCaseParameters.set<PHYS_BOUNDARY_VALUE_UPDATE_T>(0.01);
 

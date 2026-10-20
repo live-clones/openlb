@@ -237,7 +237,7 @@ void getResults(MyCase& myCase,
   using DESCRIPTOR = MyCase::descriptor_t_of<Poisson>;
   auto& parameters = myCase.getParameters();
   auto& lattice = myCase.getLattice(Poisson{});
-  const T maxPhysT = parameters.get<parameters::MAX_PHYS_T>();
+  const T maxPhysT = parameters.get<parameters::PHYS_MAX_T>();
   bool hasConverged = parameters.get<parameters::HAS_CONVERGED>();
   const bool lastTimeStep = ( hasConverged || (iT + 1 == lattice.getUnitConverter().getLatticeTime( maxPhysT )) );
 
@@ -303,7 +303,7 @@ void simulate(MyCase& myCase) {
   OstreamManager clout( std::cout,"simulate" );
   using T = MyCase::value_t;
   auto& parameters = myCase.getParameters();
-  const T maxPhysT = parameters.get<parameters::MAX_PHYS_T>();
+  const T maxPhysT = parameters.get<parameters::PHYS_MAX_T>();
   const T residuum = parameters.get<parameters::RESIDUUM>();
 
   const std::size_t iTmax = myCase.getLattice(Poisson{}).getUnitConverter().getLatticeTime(maxPhysT);
@@ -352,7 +352,7 @@ int main(int argc, char* argv[]) {
     myCaseParameters.set<LATTICE_RELAXATION_TIME>(1.);
     myCaseParameters.set<DOMAIN_EXTENT>({1.,0.25,0.});
     myCaseParameters.set<CONSTK>(27.79);
-    myCaseParameters.set<MAX_PHYS_T>(10.);
+    myCaseParameters.set<PHYS_MAX_T>(10.);
     myCaseParameters.set<RESIDUUM>(1.e-9);
     myCaseParameters.set<HAS_CONVERGED>(false);
     myCaseParameters.set<ERROR_NORMS>({0.,0.,0.});

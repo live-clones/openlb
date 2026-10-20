@@ -37,7 +37,7 @@ int main(int argc, char* argv[])
     myCaseParametersD.template set<PHYS_CHAR_LENGTH       >(        1.0);
     myCaseParametersD.template set<PHYS_CHAR_VISCOSITY    >(        0.1);
     myCaseParametersD.template set<PHYS_CHAR_DENSITY      >(        1.0);
-    myCaseParametersD.template set<MAX_PHYS_T             >(        6.0);
+    myCaseParametersD.template set<PHYS_MAX_T             >(        6.0);
     myCaseParametersD.template set<RESOLUTION             >(         11);
     myCaseParametersD.template set<LATTICE_RELAXATION_TIME>(        0.8);
     myCaseParametersD.template set<OBJECTIVE_TYPE>(ObjectiveType::velocity);

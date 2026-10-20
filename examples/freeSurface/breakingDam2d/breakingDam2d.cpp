@@ -295,7 +295,7 @@ void simulate( MyCase& myCase ){
   // Main Loop with Timer
   OstreamManager clout( std::cout,"starting simulation..." );
 
-  T physTime = parameters.get<parameters::MAX_PHYS_T>();
+  T physTime = parameters.get<parameters::PHYS_MAX_T>();
   util::Timer<MyCase::value_t> timer( lattice.getUnitConverter().getLatticeTime( physTime ), geometry.getStatistics().getNvoxel() );
   timer.start();
 
@@ -322,7 +322,7 @@ int main(int argc, char **argv)
     myCaseParameters.set<PHYS_CHAR_VELOCITY>(0.1);
     myCaseParameters.set<PHYS_CHAR_VISCOSITY>(1e-4);
     myCaseParameters.set<PHYS_CHAR_DENSITY>(1e3);
-    myCaseParameters.set<MAX_PHYS_T>(30.);
+    myCaseParameters.set<PHYS_MAX_T>(30.);
     myCaseParameters.set<DOMAIN_EXTENT>({7.31, 0.42});
     myCaseParameters.set<GRAVITY>({0., -9.81});
     myCaseParameters.set<LATTICE_RELAXATION_TIME>(.501);

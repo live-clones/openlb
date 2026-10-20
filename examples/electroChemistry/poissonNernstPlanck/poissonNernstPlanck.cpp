@@ -36,7 +36,7 @@ int main(int argc, char* argv[]) {
     myCaseParameters.set<POISSON_RELAXATION_TIME>(0.9);
     myCaseParameters.set<IONS_RELAXATION_TIME>(0.9);
     myCaseParameters.set<PHYS_CHAR_VELOCITY>(0.001);
-    myCaseParameters.set<MAX_PHYS_T>(10);
+    myCaseParameters.set<PHYS_MAX_T>(10);
     myCaseParameters.set<RESIDUUM>(1.e-9);
     myCaseParameters.set<DIFFUSION>(1.e-9);
     myCaseParameters.set<VALENCE>(1);

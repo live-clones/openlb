@@ -503,7 +503,7 @@ void getResults(MyCase& myCase, std::size_t iT, util::Timer<MyCase::value_t>& ti
 
   const size_t  statIter        = converter.getLatticeTime( parameters.get<parameters::PHYS_STAT_ITER_T>() );
   const int     vtmIter         = converter.getLatticeTime( parameters.get<parameters::PHYS_VTK_ITER_T>() );
-  bool          lastTimeStep    = (converged || (iT + 1 == converter.getLatticeTime( parameters.get<parameters::MAX_PHYS_T>() )));
+  bool          lastTimeStep    = (converged || (iT + 1 == converter.getLatticeTime( parameters.get<parameters::PHYS_MAX_T>() )));
 
   const T       radius          = parameters.get<parameters::DIAMETER>()/2.0;
   const T       length          = parameters.get<parameters::LENGTH>();
@@ -609,7 +609,7 @@ void simulate(MyCase& myCase) {
   auto& geometry    = myCase.getGeometry();
   auto& converter   = lattice.getUnitConverter();
 
-  const size_t  iTmax   = converter.getLatticeTime( parameters.get<parameters::MAX_PHYS_T>() );
+  const size_t  iTmax   = converter.getLatticeTime( parameters.get<parameters::PHYS_MAX_T>() );
   const size_t  iTcheck = converter.getLatticeTime( parameters.get<parameters::INTERVAL_CONVERGENCE_CHECK>() );
   const T       epsilon = parameters.get<parameters::RESIDUUM>();
 
@@ -647,7 +647,7 @@ void setDefaultParameters(MyCase::ParametersD& params) {
   params.set<RESOLUTION             >(           21 );
   params.set<PHYS_CHAR_VELOCITY     >(           1. );
   params.set<PHYS_CHAR_DENSITY      >(           1. );
-  params.set<MAX_PHYS_T             >(          20. );  // max. simulation time in s, SI unit
+  params.set<PHYS_MAX_T             >(          20. );  // max. simulation time in s, SI unit
   params.set<LENGTH                 >(           2. );  // length of the pie
   params.set<DIAMETER               >(           1. );  // diameter of the pipe
   params.set<REYNOLDS               >(          10. );
@@ -657,13 +657,13 @@ void setDefaultParameters(MyCase::ParametersD& params) {
   params.set<EOC                    >(        false );
   params.set<OVERLAP                >(            3 );
   params.set<INTERVAL_CONVERGENCE_CHECK>([](MyCase::ParametersD& p) {  // interval for the convergence check in s
-    return p.get<MAX_PHYS_T>()*0.0125;
+    return p.get<PHYS_MAX_T>()*0.0125;
   });
   params.set<PHYS_STAT_ITER_T>([](MyCase::ParametersD& p) {  // interval for the statistics output in s
-    return p.get<MAX_PHYS_T>()/20.;
+    return p.get<PHYS_MAX_T>()/20.;
   });
   params.set<PHYS_VTK_ITER_T>([](MyCase::ParametersD& p) {  // interval for the vtk output in s
-    return p.get<MAX_PHYS_T>()/20.;
+    return p.get<PHYS_MAX_T>()/20.;
   });
   params.set<PHYS_DELTA_X>([](MyCase::ParametersD& p) {
     return p.get<DIAMETER>()/p.get<RESOLUTION>();

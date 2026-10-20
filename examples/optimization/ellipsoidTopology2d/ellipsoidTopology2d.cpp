@@ -189,7 +189,7 @@ void setTemporalValues(MyCase& myCase, std::size_t iT) {
   auto& sLattice = myCase.getLattice(NavierStokes{});
   auto& converter = sLattice.getUnitConverter();
   auto& parameters = myCase.getParameters();
-  const T physStartUpT = parameters.get<parameters::MAX_PHYS_T>() / 4;
+  const T physStartUpT = parameters.get<parameters::PHYS_MAX_T>() / 4;
   const T physBoundaryValueUpdateT = parameters.get<parameters::PHYS_BOUNDARY_VALUE_UPDATE_T>();
 
   std::size_t iTmaxStart = converter.getLatticeTime(physStartUpT);
@@ -211,7 +211,7 @@ void getResults(MyCase& myCase, util::Timer<MyCase::value_t>& timer, std::size_t
   auto& sLattice = myCase.getLattice(NavierStokes{});
   auto& converter = sLattice.getUnitConverter();
   auto& parameters = myCase.getParameters();
-  const T physMaxT = parameters.get<parameters::MAX_PHYS_T>();
+  const T physMaxT = parameters.get<parameters::PHYS_MAX_T>();
 
   const std::size_t iTlog = converter.getLatticeTime(physMaxT/5.);
 
@@ -228,7 +228,7 @@ void simulate(MyCase& myCase) {
   auto& converter = sLattice.getUnitConverter();
   auto& parameters = myCase.getParameters();
 
-  const std::size_t iTmax = converter.getLatticeTime(parameters.get<parameters::MAX_PHYS_T>());
+  const std::size_t iTmax = converter.getLatticeTime(parameters.get<parameters::PHYS_MAX_T>());
   util::Timer<T> timer(iTmax, superGeometry.getStatistics().getNvoxel());
   timer.start();
 
@@ -486,7 +486,7 @@ int main(int argc, char **argv) {
              p.get<PHYS_CHAR_LENGTH>();
     });
     myCaseParametersD.set<PHYS_CHAR_DENSITY           >(   1.0);
-    myCaseParametersD.set<MAX_PHYS_T                  >(   30.);
+    myCaseParametersD.set<PHYS_MAX_T                  >(   30.);
     myCaseParametersD.set<PHYS_BOUNDARY_VALUE_UPDATE_T>(   0.1);
     myCaseParametersD.set<INITIAL_CONTROL_SCALAR      >(  5e-4);
     myCaseParametersD.set<REGULARIZATION_FACTOR       >(   0.2);

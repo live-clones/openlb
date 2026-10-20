@@ -242,7 +242,7 @@ void simulate(MyCase& myCase)
   auto& converter = lattice.getUnitConverter();
 
   const Vector externalAcceleration  = params.get<parameters::EXTERNAL_ACCELERATION>();
-  const T maxPhysT              = params.get<parameters::MAX_PHYS_T>();
+  const T maxPhysT              = params.get<parameters::PHYS_MAX_T>();
   const Vector cube1Center      = params.get<parameters::CUBE_1_POSITION>();
   const Vector cube2Center      = params.get<parameters::CUBE_2_POSITION>();
   const T      cube1EdgeLength  = params.get<parameters::CUBE_1_EDGE_LENGTH>();
@@ -317,7 +317,7 @@ int main(int argc, char* argv[])
     using T = MyCase::value_t;
     myCaseParameters.set<RESOLUTION>(30);
     myCaseParameters.set<LATTICE_CHAR_VELOCITY>(0.01);
-    myCaseParameters.set<MAX_PHYS_T>(0.5);
+    myCaseParameters.set<PHYS_MAX_T>(0.5);
     myCaseParameters.set<PHYS_VTK_ITER_T>(0.02);
     myCaseParameters.set<VTK_ENABLED>(true);
     myCaseParameters.set<DOMAIN_EXTENT>({0.01, 0.01, 0.05});

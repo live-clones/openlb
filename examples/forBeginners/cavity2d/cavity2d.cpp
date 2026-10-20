@@ -148,7 +148,7 @@ void getResults(MyCase& myCase, std::size_t iT)
   auto& lattice = myCase.getLattice(NavierStokes{});
   auto& converter = lattice.getUnitConverter();
 
-  const T physMaxT = parameters.get<parameters::MAX_PHYS_T>();
+  const T physMaxT = parameters.get<parameters::PHYS_MAX_T>();
   const std::size_t iTvtk = converter.getLatticeTime(physMaxT/100.);
 
   SuperVTMwriter2D<T> vtmWriter("cavity2d");
@@ -175,7 +175,7 @@ void getResults(MyCase& myCase, std::size_t iT)
 void simulate(MyCase& myCase) {
   using T = MyCase::value_t;
   auto& parameters = myCase.getParameters();
-  const T physMaxT = parameters.get<parameters::MAX_PHYS_T>();
+  const T physMaxT = parameters.get<parameters::PHYS_MAX_T>();
 
   const std::size_t iTmax = myCase.getLattice(NavierStokes{}).getUnitConverter().getLatticeTime(physMaxT);
 
@@ -207,7 +207,7 @@ int main(int argc, char* argv[]) {
     myCaseParameters.set<PHYS_CHAR_VISCOSITY>(     0.001);
     myCaseParameters.set<PHYS_CHAR_DENSITY  >(       1.0);
     myCaseParameters.set<DOMAIN_EXTENT      >({1.0, 1.0});
-    myCaseParameters.set<MAX_PHYS_T         >(       30.);
+    myCaseParameters.set<PHYS_MAX_T         >(       30.);
     myCaseParameters["reporter"]["statistics"].set<PHYS_ITER_T>(1.5);
     myCaseParameters["reporter"]["timer"].set<PHYS_ITER_T>(1.5);
   }

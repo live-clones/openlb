@@ -51,7 +51,7 @@ int main(int argc, char *argv[]) {
     myCaseParameters.set<PHYS_CHAR_LENGTH>(2.);
     myCaseParameters.set<PHYS_CHAR_DENSITY>(1.);
     myCaseParameters.set<PHYS_CHAR_VELOCITY>(2.5);
-    myCaseParameters.set<MAX_PHYS_T>(1.52);
+    myCaseParameters.set<PHYS_MAX_T>(1.52);
     myCaseParameters.set<PECLET>(100.); // Peclet number (Pe = u*L/mue)
     myCaseParameters.set<PULSE_DIFF_BOUND>(1e-1);
     myCaseParameters.set<NON_SMOOTH_ENABLED>(true);

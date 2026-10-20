@@ -290,7 +290,7 @@ void getResults(MyCase& myCase,
 
   const T time = converter.getPhysTime(iT);
   const T dt = converter.getPhysDeltaT();
-  const T physMaxTime = params.get<parameters::MAX_PHYS_T>();
+  const T physMaxTime = params.get<parameters::PHYS_MAX_T>();
   const T physPeriod = params.get<parameters::PHYS_PERIOD>();
 
   if (iT == 0) {
@@ -330,7 +330,7 @@ void simulate(MyCase& myCase,
   auto& params = myCase.getParameters();
 
   const std::size_t iTmax = myCase.getLattice(NavierStokes{}).getUnitConverter().getLatticeTime(
-    params.get<parameters::MAX_PHYS_T>());
+    params.get<parameters::PHYS_MAX_T>());
   util::Timer<T> timer(iTmax, myCase.getGeometry().getStatistics().getNvoxel());
   timer.start();
 
@@ -421,7 +421,7 @@ int main(int argc, char* argv[])
     myCaseParameters.set<PHYS_CHAR_VELOCITY >(0.0332);
     myCaseParameters.set<PHYS_CHAR_VISCOSITY>(1.e-6);
     myCaseParameters.set<PHYS_CHAR_LENGTH   >(0.00133);
-    myCaseParameters.set<MAX_PHYS_T         >(5.);   // time for fluid simulation
+    myCaseParameters.set<PHYS_MAX_T         >(5.);   // time for fluid simulation
     myCaseParameters.set<PHYS_START_T       >(0.6);  // time to start fluid pulsation
     myCaseParameters.set<PHYS_START_PERIOD  >(0.4);  // time to start fluid pulsation
     myCaseParameters.set<PHYS_CHAR_DENSITY  >(1000);

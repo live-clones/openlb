@@ -275,7 +275,7 @@ void prepareLattice( MyCase& myCase )
   const T cahnNr = params.get<parameters::CAHN>();
   const T pecletNr = params.get<parameters::PECLET>();
   const T dropRe = params.get<parameters::DROPLET_REYNOLDS>();
-  const T maxPhysT = params.get<parameters::MAX_PHYS_T>();
+  const T maxPhysT = params.get<parameters::PHYS_MAX_T>();
   const T physStatIterT = params["reporter"]["statistics"].get<parameters::PHYS_ITER_T>();
   const T physVtkIterT = params.get<parameters::PHYS_VTK_ITER_T>();
 
@@ -583,7 +583,7 @@ void simulate(MyCase& myCase) {
   const int N = params.get<parameters::RESOLUTION>();
   const T radius = params.get<parameters::RADIUS>();
   const T physInterval = params.get<parameters::PHYS_INTERVAL>();
-  const T maxPhysT = params.get<parameters::MAX_PHYS_T>();
+  const T maxPhysT = params.get<parameters::PHYS_MAX_T>();
   const T physStatIterT = params["reporter"]["statistics"].get<parameters::PHYS_ITER_T>();
   const int maxIter = converter.getLatticeTime(maxPhysT);
   const int statIter = converter.getLatticeTime(physStatIterT);
@@ -679,7 +679,7 @@ int main( int argc, char *argv[] )
     myCaseParameters.set<CAPILLARY              >(0.42);      // capillary number for droplet breakup
     myCaseParameters.set<CAHN                   >(0.114);     // Cahn Number = xi / radius;
     myCaseParameters.set<PECLET                 >(0.43);      // Peclet Number = strainRate * radius * xi / (M A)
-    myCaseParameters.set<MAX_PHYS_T             >(160.);
+    myCaseParameters.set<PHYS_MAX_T             >(160.);
     myCaseParameters.set<PHYS_VTK_ITER_T        >(1.);
     myCaseParameters["reporter"]["statistics"].set<PHYS_ITER_T>(1.);
     myCaseParameters["timer"     ].set<PHYS_TIMER_ITER_T>(1.);

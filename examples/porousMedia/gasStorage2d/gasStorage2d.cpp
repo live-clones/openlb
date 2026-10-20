@@ -480,7 +480,7 @@ void simulate(MyCase& myCase)
   auto& sLatticeAC = myCase.getLattice(Component1{});
 
   const std::size_t iTmax = myCase.getLattice(NavierStokes{}).getUnitConverter().getLatticeTime(
-    parameters.get<parameters::MAX_PHYS_T>());
+    parameters.get<parameters::PHYS_MAX_T>());
 
   util::Timer<T> timer(iTmax, myCase.getGeometry().getStatistics().getNvoxel());
   timer.start();
@@ -544,7 +544,7 @@ int main(int argc, char* argv[])
     myCaseParameters.set<SURFACE_TENSION>(0.072);   // surface tension [physical units]
     myCaseParameters.set<C_RHO          >(500.);    // conversion factor density [physical units]
     myCaseParameters.set<parameters::THETA>(M_PI*40./180.); // contact angle [radians]
-    myCaseParameters.set<MAX_PHYS_T     >(0.012);   // max simulation time [physical units]
+    myCaseParameters.set<PHYS_MAX_T     >(0.012);   // max simulation time [physical units]
     myCaseParameters.set<PHYS_VTK_ITER_T >(0.012/4000.);   // write simulation output [physical units]
     myCaseParameters.set<PHYS_STAT_ITER_T>(0.012/4000.);   // simulation statistics time [physical units]
     myCaseParameters.set<parameters::INTERFACE_WIDTH>(6.); // resolution inlet [lattice units]

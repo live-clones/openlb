@@ -365,7 +365,7 @@ void simulate(MyCase& myCase) {
   OstreamManager clresult(std::cout, "result");
 
   const std::size_t iTmax = converter.getLatticeTime(
-    params.get<parameters::MAX_PHYS_T>());
+    params.get<parameters::PHYS_MAX_T>());
 
   for (std::size_t iT=0; iT < iTmax; ++iT) {
     /// === Step 8.1: Update the Boundary Values and Fields at Times ===
@@ -429,7 +429,7 @@ int main(int argc, char* argv[]) {
     myCaseParameters["reporter"]["statistics"].set<PHYS_ITER_T>(0.01);
     myCaseParameters["reporter"]["timer"].set<PHYS_ITER_T>(0.01);
     myCaseParameters.set<U_REF      >(0.04);
-    myCaseParameters.set<MAX_PHYS_T >(myCaseParameters.get<T_P>() * 10);
+    myCaseParameters.set<PHYS_MAX_T >(myCaseParameters.get<T_P>() * 10);
     myCaseParameters.set<VTK_ENABLED>(true);
   }
 

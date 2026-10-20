@@ -387,7 +387,7 @@ void getResults(
 void simulate(MyCase& myCase) {
   using T = MyCase::value_t;
   auto& params = myCase.getParameters();
-  const std::size_t iTmax = params.get<parameters::MAX_LATTICE_T>();
+  const std::size_t iTmax = params.get<parameters::LATTICE_MAX_T>();
   auto& lattice = myCase.getLattice(NavierStokes{});
 
   util::Timer<T> timer(iTmax, myCase.getGeometry().getStatistics().getNvoxel());
@@ -433,7 +433,7 @@ int main(int argc, char* argv[])
     myCaseParameters.set<SURFACE_TENSION>(7.58e-3);// surface tension for water-air [N.m-1]
   // Lattice parameters
     myCaseParameters.set<parameters::INTERFACE_WIDTH>(1.);// interface thickness in grid nodes; physThickness = delta_x * thickness
-    myCaseParameters.set<MAX_LATTICE_T      >(1000);   // max iterations [lattice units]
+    myCaseParameters.set<LATTICE_MAX_T      >(1000);   // max iterations [lattice units]
     myCaseParameters.set<LATTICE_STAT_ITER_T>(10);     // statistics iterations [lattice units]
     myCaseParameters.set<LATTICE_VTK_ITER_T >(10);     // vtk iterations density [lattice units]
   }

@@ -418,7 +418,7 @@ void getResults(MyCase& myCase,
   auto& latticePoisson = myCase.getLattice(Poisson{});
   auto& latticeCation = myCase.getLattice(Concentration<0>{});
   auto& latticeAnion = myCase.getLattice(Concentration<1>{});
-  const T maxPhysT = parameters.get<parameters::MAX_PHYS_T>();
+  const T maxPhysT = parameters.get<parameters::PHYS_MAX_T>();
   bool hasConverged = parameters.get<parameters::HAS_CONVERGED>();
   const bool lastTimeStep = ( hasConverged || (iT + 1 == latticeCation.getUnitConverter().getLatticeTime( maxPhysT )) );
   const Vector extend = parameters.get<parameters::DOMAIN_EXTENT>();
@@ -528,7 +528,7 @@ void simulatePoisson(MyCase& myCase) {
   auto& parameters = myCase.getParameters();
   auto& geometry = myCase.getGeometry();
   auto& lattice = myCase.getLattice(Poisson{});
-  const T maxPhysT = parameters.get<parameters::MAX_PHYS_T>();
+  const T maxPhysT = parameters.get<parameters::PHYS_MAX_T>();
   const T residuum = parameters.get<parameters::RESIDUUM>();
   const bool poissonLoop = parameters.get<parameters::POISSON_LOOP>();
 
@@ -555,7 +555,7 @@ void simulate(MyCase& myCase) {
   const int poissonLoopPerTotalSteps = parameters.get<parameters::POISSON_LOOP_PER_TOTAL_TIME_STEP>();
 
   const std::size_t iTmax = myCase.getLattice(Concentration<0>{}).getUnitConverter().getLatticeTime(
-    parameters.get<parameters::MAX_PHYS_T>());
+    parameters.get<parameters::PHYS_MAX_T>());
 
   util::Timer<T> timer(iTmax, myCase.getGeometry().getStatistics().getNvoxel());
   const T residuum = parameters.get<parameters::RESIDUUM>();

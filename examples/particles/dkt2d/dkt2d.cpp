@@ -246,7 +246,7 @@ void simulate(MyCase& myCase )
   using PARTICLETYPE = ResolvedCircleWithContact2D;
   using PARTICLECONTACTTYPE = ParticleContactArbitraryFromOverlapVolume<T, DESCRIPTOR::d, true>;
   using WALLCONTACTTYPE = WallContactArbitraryFromOverlapVolume<T, DESCRIPTOR::d, true>;
-  Timer<T> timer(converter.getLatticeTime(parameters.get<parameters::MAX_PHYS_T>()), geometry.getStatistics().getNvoxel());
+  Timer<T> timer(converter.getLatticeTime(parameters.get<parameters::PHYS_MAX_T>()), geometry.getStatistics().getNvoxel());
   timer.start();
   OstreamManager clout(std::cout, "simulate");
 
@@ -301,8 +301,8 @@ void simulate(MyCase& myCase )
     communicator.exchangeRequests();
   }
 
-  clout << "MaxIT: " << converter.getLatticeTime( parameters.get<parameters::MAX_PHYS_T>() ) << std::endl;
-  for (std::size_t iT = 0; iT < converter.getLatticeTime( parameters.get<parameters::MAX_PHYS_T>() ) + 10; ++iT) {
+  clout << "MaxIT: " << converter.getLatticeTime( parameters.get<parameters::PHYS_MAX_T>() ) << std::endl;
+  for (std::size_t iT = 0; iT < converter.getLatticeTime( parameters.get<parameters::PHYS_MAX_T>() ) + 10; ++iT) {
 
     particleManager.execute<
       couple_lattice_to_particles<T,DESCRIPTOR,PARTICLETYPE>,
@@ -349,7 +349,7 @@ int main(int argc, char* argv[])
   {
     using namespace olb::parameters;
     myCaseParameters.set<EPS                         >(0.5);
-    myCaseParameters.set<MAX_PHYS_T                  >(6.);
+    myCaseParameters.set<PHYS_MAX_T                  >(6.);
     myCaseParameters.set<LENGTH_X                    >(0.02);
     myCaseParameters.set<LENGTH_Y                    >(0.08);
     myCaseParameters.set<CENTER_1                    >({0.01, 0.068});

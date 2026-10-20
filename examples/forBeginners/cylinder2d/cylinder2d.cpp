@@ -213,7 +213,7 @@ void setTemporalValues(MyCase& myCase,
   auto& converter  = lattice.getUnitConverter();
 
   // Get global parameters
-  const T maxPhysT = parameters.get<parameters::MAX_PHYS_T>();
+  const T maxPhysT = parameters.get<parameters::PHYS_MAX_T>();
   const T dx       = parameters.get<parameters::PHYS_DELTA_X>();
 
   // Number of time steps for smooth start-up
@@ -315,7 +315,7 @@ void simulate(MyCase& myCase)
   auto& converter  = lattice.getUnitConverter();
 
   // Get max simulation time
-  const T maxPhysT = parameters.get<parameters::MAX_PHYS_T>();
+  const T maxPhysT = parameters.get<parameters::PHYS_MAX_T>();
 
   std::size_t iTmax = converter.getLatticeTime(maxPhysT);
 
@@ -343,7 +343,7 @@ int main(int argc, char* argv[])
     using namespace olb::parameters;
     using T = MyCase::value_t;
     myCaseParameters.set<RESOLUTION         >( 10    );
-    myCaseParameters.set<MAX_PHYS_T         >( 16.    );
+    myCaseParameters.set<PHYS_MAX_T         >( 16.    );
     myCaseParameters.set<RADIUS_CYLINDER    >(  0.05  );
     myCaseParameters.set<PHYS_CHAR_VELOCITY >(  0.2   );
     myCaseParameters.set<PHYS_DENSITY       >(  1.0   );

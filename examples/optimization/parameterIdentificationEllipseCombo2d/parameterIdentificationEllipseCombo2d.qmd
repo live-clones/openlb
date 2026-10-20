@@ -146,7 +146,7 @@ belongs to a study while the command line varies the rest.
 |---|---|
 | `FORWARD_ONLY 1` | solve the primal problem once at the target modulus $E^* = 0.1$ and write the error CSVs instead of optimizing |
 | `FIXED_TIME_STEP 1` | pin $\Delta t$ to the value belonging to the target modulus instead of letting it follow the control |
-| `MAX_PHYS_T 90` | with $\Delta x = 1.5/N_x$, a fixed budget of $40 N_x^2$ steps |
+| `PHYS_MAX_T 90` | with $\Delta x = 1.5/N_x$, a fixed budget of $40 N_x^2$ steps |
 | `CONVERGENCE_PRECISION 0` | disables the steady-state stopping rule, so every resolution runs the same budget |
 | `IT_LOG_PSEUDO_TIME 100000000` | silences the per-step log |
 
@@ -175,12 +175,12 @@ here, not a vector, because the control is the single modulus.
 | `PHYS_CHAR_LENGTH` | double | `1.0` | characteristic length $L$ of the ellipse parameters |
 | `PHYS_DELTA_X` | double | derived | $\Delta x =$ `DOMAIN_EXTENT[0] / RESOLUTION` |
 | `ORIGIN` | double[2] | derived | lower-left corner, set to $(\Delta x, \Delta x)$ so the boundary does not land on the lattice edge |
-| `MAX_LATTICE_T` | size_t | derived | step cap, computed once as `MAX_PHYS_T`$/\Delta x^2$ |
+| `LATTICE_MAX_T` | size_t | derived | step cap, computed once as `PHYS_MAX_T`$/\Delta x^2$ |
 | `PHYS_CHAR_DISPLACEMENT` | double | derived | displacement scale of the converter, set to $\Delta x$ |
 
 $\Delta t$ is deliberately absent from this list: it depends on the control and is
 set in `prepareLattice`. The iteration budget must not move with it, which is why
-`MAX_LATTICE_T` is derived once from $\Delta x^2$ rather than from $\Delta t$.
+`LATTICE_MAX_T` is derived once from $\Delta x^2$ rather than from $\Delta t$.
 
 ##### Material and control target
 
@@ -201,7 +201,7 @@ loads as well as the answer.
 
 | Parameter | Type | Default | Meaning |
 |---|---|---|---|
-| `MAX_PHYS_T` | double | `60` | pseudo-time budget; converted once into `MAX_LATTICE_T`. The benchmark's forward study uses `90`, giving $40 N_x^2$ steps |
+| `PHYS_MAX_T` | double | `60` | pseudo-time budget; converted once into `LATTICE_MAX_T`. The benchmark's forward study uses `90`, giving $40 N_x^2$ steps |
 | `CONVERGENCE_PRECISION` | double | `1e-7` | relative tolerance of the steady-state check; `0` disables the check and runs the full budget. The benchmark study uses `1e-6` |
 | `CONV_ITER` | double | `10` | window length of the `ValueTracer` that watches the monitored value |
 | `CONV_VALUE` | double | `1` | slot the case writes the monitored value into; not a user knob |

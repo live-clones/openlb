@@ -246,7 +246,7 @@ void setTemporalValues(CASE& myCase,
   auto& lattice    = myCase.getLattice(NavierStokes{});
   auto& geometry   = myCase.getGeometry();
 
-  const T maxPhysT   = parameters.template get<parameters::MAX_PHYS_T>();
+  const T maxPhysT   = parameters.template get<parameters::PHYS_MAX_T>();
 
   if (myCase.hasName(Controlled{})) {
     std::size_t iTmaxStart = lattice.getUnitConverter().getLatticeTime(
@@ -362,7 +362,7 @@ void simulate(CASE& myCase){
   OstreamManager clout(std::cout, "simulate");
   using T = typename CASE::value_t;
   auto& parameters = myCase.getParameters();
-  const T physMaxT = parameters.template get<parameters::MAX_PHYS_T>();
+  const T physMaxT = parameters.template get<parameters::PHYS_MAX_T>();
   const std::size_t iTmax = myCase.getLattice(NavierStokes{}).getUnitConverter().getLatticeTime(physMaxT);
 
   clout << "starting simulation..." << std::endl;
@@ -820,7 +820,7 @@ int main(int argc, char* argv[])
     using namespace olb::parameters;
     myCaseParameters.set<RESOLUTION>(41);
     myCaseParameters.set<REYNOLDS >(20.);
-    myCaseParameters.set<MAX_PHYS_T>(32.);
+    myCaseParameters.set<PHYS_MAX_T>(32.);
     myCaseParameters.set<DOMAIN_EXTENT_X>(3.6);
     myCaseParameters.set<DOMAIN_EXTENT_Y>(.81);
     myCaseParameters.set<PHYS_CHAR_VELOCITY>(0.2);

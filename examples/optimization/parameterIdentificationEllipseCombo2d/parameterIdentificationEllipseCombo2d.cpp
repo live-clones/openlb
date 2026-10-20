@@ -49,7 +49,7 @@ int main(int argc, char* argv[])
     myCaseParameters.set<PHYS_DENSITY         >(  1.0             );
     myCaseParameters.set<POISSON_RATIO        >(  0.7             );
     myCaseParameters.set<DAMPING_FACTOR       >(  1.0             );
-    myCaseParameters.set<MAX_PHYS_T           >(  60              );
+    myCaseParameters.set<PHYS_MAX_T           >(  60              );
     myCaseParameters.set<IT_LOG_PSEUDO_TIME   >(  100             );
     myCaseParameters.set<IT_VTK_PSEUDO_TIME   >(  1000            );
     myCaseParameters.set<CONVERGENCE_PRECISION>(  1e-7            );
@@ -68,8 +68,8 @@ int main(int argc, char* argv[])
   myCaseParameters.set<parameters::PHYS_DELTA_X>(
     myCaseParameters.get<parameters::DOMAIN_EXTENT>()[0] /
     myCaseParameters.get<parameters::RESOLUTION>());
-  myCaseParameters.set<parameters::MAX_LATTICE_T>(static_cast<std::size_t>(
-    myCaseParameters.get<parameters::MAX_PHYS_T>() /
+  myCaseParameters.set<parameters::LATTICE_MAX_T>(static_cast<std::size_t>(
+    myCaseParameters.get<parameters::PHYS_MAX_T>() /
     (myCaseParameters.get<parameters::PHYS_DELTA_X>() *
      myCaseParameters.get<parameters::PHYS_DELTA_X>()) + 0.5));
   myCaseParameters.set<parameters::ORIGIN>(

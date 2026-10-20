@@ -285,7 +285,7 @@ void getResults(MyCase& myCase,
   SuperVTMwriter3D<T> vtmWriter("adsorption3D");
 
   const int N = parameters.get<parameters::RESOLUTION>();
-  const T maxPhysT = parameters.get<parameters::MAX_PHYS_T>();
+  const T maxPhysT = parameters.get<parameters::PHYS_MAX_T>();
   const int vtkIter = latticeCAD.getUnitConverter().getLatticeTime(maxPhysT/T(100))+1;
 
   const T particleRadius = parameters.get<parameters::PARTICLE_RADIUS>();
@@ -361,7 +361,7 @@ void simulate(MyCase& myCase) {
   auto& parameters = myCase.getParameters();
 
   const std::size_t iTmax = myCase.getLattice(Concentration<0>{}).getUnitConverter().getLatticeTime(
-    parameters.get<parameters::MAX_PHYS_T>());
+    parameters.get<parameters::PHYS_MAX_T>());
 
   util::Timer<T> timer(iTmax, myCase.getGeometry().getStatistics().getNvoxel());
   timer.start();
@@ -406,7 +406,7 @@ int main(int argc, char* argv[]) {
     myCaseParameters.set<D_S  >(5.e-11);
     myCaseParameters.set<PHYS_CHAR_VISCOSITY>(0.00011764705882352942);
     myCaseParameters.set<parameters::RHO  >({1,1,0});
-    myCaseParameters.set<MAX_PHYS_T   >(15);    // time for fluid simulation
+    myCaseParameters.set<PHYS_MAX_T   >(15);    // time for fluid simulation
   }
 
   /// === Step 3: Create Mesh ===

@@ -164,7 +164,7 @@ void setTemporalValues(MyCase& myCase, std::size_t iT)
   const auto& converter = lattice.getUnitConverter();
 
   const T startUpFactor = params.get<parameters::START_FACTOR>();
-  const T maxStartTPhys = params.get<parameters::MAX_PHYS_T>() * startUpFactor;
+  const T maxStartTPhys = params.get<parameters::PHYS_MAX_T>() * startUpFactor;
   const auto maxStartT  = converter.getLatticeTime(maxStartTPhys);
   const auto iTupdate   = params.get<parameters::UPDATE_NUMBER>();
 
@@ -213,7 +213,7 @@ void simulate(MyCase& myCase)
   using T           = MyCase::value_t;
   auto&   params    = myCase.getParameters();
   auto&   lattice   = myCase.getLattice(NavierStokes {});
-  const T physMaxT  = params.get<parameters::MAX_PHYS_T>();
+  const T physMaxT  = params.get<parameters::PHYS_MAX_T>();
 
   const std::size_t iTmax = myCase.getLattice(NavierStokes {}).getUnitConverter().getLatticeTime(physMaxT);
 
@@ -245,7 +245,7 @@ int main(int argc, char* argv[])
     myCaseParameters.set<LATTICE_CHAR_VELOCITY>(0.05);
     myCaseParameters.set<PHYS_CHAR_VISCOSITY>((T)1.e-5);
     myCaseParameters.set<PHYS_CHAR_DENSITY>((T)1.);
-    myCaseParameters.set<MAX_PHYS_T>((T)500.);
+    myCaseParameters.set<PHYS_MAX_T>((T)500.);
     myCaseParameters.set<DOMAIN_EXTENT>(Vector<T,2> {6, 2});
     myCaseParameters.set<INLET_HEIGHT>((T)0.2);
     myCaseParameters.set<START_FACTOR>((T)0.1);

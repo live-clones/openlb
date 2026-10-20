@@ -322,7 +322,7 @@ void simulate(MyCase& myCase) {
   auto& latticePF = myCase.getLattice(Component1{});
   auto& params = myCase.getParameters();
 
-  const T physMaxT = params.get<parameters::MAX_PHYS_T>();
+  const T physMaxT = params.get<parameters::PHYS_MAX_T>();
   const std::size_t iTmax = latticeNS.getUnitConverter().getLatticeTime(physMaxT);
   util::Timer<T> timer(iTmax, myCase.getGeometry().getStatistics().getNvoxel());
 
@@ -395,7 +395,7 @@ int main( int argc, char *argv[] )
     });                                                     // surface tension from Bond number [lattice units]
     myCaseParameters.set<parameters::THETA          >(M_PI*90./180.);  // contact angle (<90 is wetting) [radians]
     myCaseParameters.set<parameters::INTERFACE_WIDTH>(5.);  // interface width [lattice units]
-    myCaseParameters.set<MAX_PHYS_T         >(0.0012);      // max physical time [physical units]
+    myCaseParameters.set<PHYS_MAX_T         >(0.0012);      // max physical time [physical units]
     myCaseParameters.set<PHYS_VTK_ITER_T    >(0.0012/30.);  // vtk output interval [physical units]
     myCaseParameters.set<PHYS_STAT_ITER_T   >(0.0012/30.);  // statistics output interval [physical units]
   }

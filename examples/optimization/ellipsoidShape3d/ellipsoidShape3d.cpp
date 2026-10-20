@@ -219,7 +219,7 @@ void getResults(CASE& myCase,
   auto& converter = sLattice.getUnitConverter();
   auto& parameters = myCase.getParameters();
 
-  const T maxPhysT = parameters.template get<parameters::MAX_PHYS_T>();
+  const T maxPhysT = parameters.template get<parameters::PHYS_MAX_T>();
   const int statIter = converter.getLatticeTime( maxPhysT / 10 );
 
   // Writes output on the console
@@ -285,7 +285,7 @@ void simulate(CASE& myCase) {
   auto& parameters = myCase.getParameters();
 
   // === 4th Step: Main Loop with Timer ===
-  const T maxPhysT = parameters.template get<parameters::MAX_PHYS_T>();
+  const T maxPhysT = parameters.template get<parameters::PHYS_MAX_T>();
   util::Timer<T> timer( converter.getLatticeTime( maxPhysT ), superGeometry.getStatistics().getNvoxel() );
   auto maxiT = converter.getLatticeTime( maxPhysT );
   timer.start();
@@ -384,7 +384,7 @@ int main( int argc, char* argv[] ) {
     myCaseParametersD.template set<LATTICE_RELAXATION_TIME     >(           0.55);
     myCaseParametersD.template set<PHYS_CHAR_VISCOSITY         >(          0.001);
     myCaseParametersD.template set<REYNOLDS                    >(            50.);
-    myCaseParametersD.template set<MAX_PHYS_T                  >(            50.);
+    myCaseParametersD.template set<PHYS_MAX_T                  >(            50.);
     myCaseParametersD.template set<PHYS_START_T                >(            30.);
     myCaseParametersD.template set<PHYS_BOUNDARY_VALUE_UPDATE_T>(           0.01);
     myCaseParametersD.template set<PHYS_CHAR_VELOCITY          >([](MyCase::ParametersD& p) {

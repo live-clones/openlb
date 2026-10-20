@@ -243,8 +243,8 @@ void getResults(MyCase& myCase,
   vtmWriter.addFunctor(velocity);
   vtmWriter.addFunctor(analyticalC);
 
-  const std::size_t vtkIter = adLattice.getUnitConverter().getLatticeTime(parameters.get<parameters::MAX_PHYS_T>() / 100);
-  const std::size_t statIter = adLattice.getUnitConverter().getLatticeTime(parameters.get<parameters::MAX_PHYS_T>() / 100);
+  const std::size_t vtkIter = adLattice.getUnitConverter().getLatticeTime(parameters.get<parameters::PHYS_MAX_T>() / 100);
+  const std::size_t statIter = adLattice.getUnitConverter().getLatticeTime(parameters.get<parameters::PHYS_MAX_T>() / 100);
 
   if (iT == 0) {
     // write the geometry
@@ -284,14 +284,14 @@ void simulate(MyCase& myCase){
   auto& adLattice = myCase.getLattice(NavierStokes{});
   auto& superGeometry = myCase.getGeometry();
 
-  util::Timer<T> timer(adLattice.getUnitConverter().getLatticeTime(parameters.get<parameters::MAX_PHYS_T>()), superGeometry.getStatistics().getNvoxel());
+  util::Timer<T> timer(adLattice.getUnitConverter().getLatticeTime(parameters.get<parameters::PHYS_MAX_T>()), superGeometry.getStatistics().getNvoxel());
 
   // Convergence check
   util::ValueTracer<T> converge(adLattice.getUnitConverter().getLatticeTime(parameters.get<parameters::INTERVAL_CONVERGENCE_CHECK>()), parameters.get<parameters::RESIDUUM>());
   timer.start();
   T relError{};
 
-  for (std::size_t iT = 0; iT < adLattice.getUnitConverter().getLatticeTime(parameters.get<parameters::MAX_PHYS_T>()); ++iT) {
+  for (std::size_t iT = 0; iT < adLattice.getUnitConverter().getLatticeTime(parameters.get<parameters::PHYS_MAX_T>()); ++iT) {
 
     // === Collide and stream ===
     adLattice.collideAndStream();
@@ -324,7 +324,7 @@ int main(int argc, char* argv[]) {
     myCaseParameters.set<BULK_VELOCITY              >(     0.05);
     myCaseParameters.set<PHYS_CHAR_DENSITY          >(      1.0);
     myCaseParameters.set<PECLET                     >(  108.005);
-    myCaseParameters.set<MAX_PHYS_T                 >( 100000.0);
+    myCaseParameters.set<PHYS_MAX_T                 >( 100000.0);
     myCaseParameters.set<RESIDUUM                   >(    1e-10);
     myCaseParameters.set<DIFFUSIVITY                >(  0.07407);
 
@@ -335,7 +335,7 @@ int main(int argc, char* argv[]) {
       return Vector{p.get<RESOLUTION>()*p.get<PHYS_DELTA_X>()*10, p.get<PHYS_DELTA_X>(), p.get<HEIGHT>()};
     });
     myCaseParameters.set<INTERVAL_CONVERGENCE_CHECK>([](MyCase::ParametersD& p) {
-      return p.get<MAX_PHYS_T>()*0.001;
+      return p.get<PHYS_MAX_T>()*0.001;
     });
 
   }

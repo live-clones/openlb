@@ -328,7 +328,7 @@ void simulate(MyCase& myCase)
 
   const auto& converter = Rlattice.getUnitConverter();
 
-  util::Timer<double> timer(converter.getLatticeTime(params.get<parameters::MAX_PHYS_T>()),
+  util::Timer<double> timer(converter.getLatticeTime(params.get<parameters::PHYS_MAX_T>()),
                             geometry.getStatistics().getNvoxel());
   timer.start();
 
@@ -409,7 +409,7 @@ int main(int argc, char* argv[])
     myCaseParameters.set<RESOLUTION>(50);
     myCaseParameters.set<DOMAIN_L>(1.);
     myCaseParameters.set<LATTICE_RELAXATION_TIME>(1.0);
-    myCaseParameters.set<MAX_PHYS_T>(12);
+    myCaseParameters.set<PHYS_MAX_T>(12);
     myCaseParameters.set<PHYS_SAVE_ITER>(2.0);
     myCaseParameters.set<INLET_DIRICHLET>(1.0);
 

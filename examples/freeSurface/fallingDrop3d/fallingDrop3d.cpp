@@ -334,7 +334,7 @@ void getResults(MyCase& myCase, int iT, util::Timer<MyCase::value_t>& timer)
   auto& lattice = myCase.getLattice(NavierStokes{});
   auto& converter = lattice.getUnitConverter();
   auto& parameters = myCase.getParameters();
-  const T physTime = parameters.get<parameters::MAX_PHYS_T>();
+  const T physTime = parameters.get<parameters::PHYS_MAX_T>();
   OstreamManager clout(std::cout, "getResults");
 
     SuperVTMwriter3D<T> vtmWriter("fallingDrop3d");
@@ -396,7 +396,7 @@ void simulate( MyCase& myCase ){
   // Main Loop with Timer
   OstreamManager clout( std::cout,"starting simulation..." );
 
-  T physTime = parameters.get<parameters::MAX_PHYS_T>();
+  T physTime = parameters.get<parameters::PHYS_MAX_T>();
     util::Timer<T> timer(converter.getLatticeTime(physTime), geometry.getStatistics().getNvoxel());
     timer.start();
     setInitialValues(myCase);
@@ -422,7 +422,7 @@ int main(int argc, char** argv)
     using namespace olb::parameters;
     myCaseParameters.set<PHYS_CHAR_VISCOSITY>(1e-4); //viscosity
     myCaseParameters.set<PHYS_CHAR_DENSITY>(1e3); //density
-    myCaseParameters.set<MAX_PHYS_T>(0.01); //physTime
+    myCaseParameters.set<PHYS_MAX_T>(0.01); //physTime
     myCaseParameters.set<LATTICE_RELAXATION_TIME>(.516); //latticeRelaxationTime
     myCaseParameters.set<RESOLUTION>(100); // resolution: number of voxels per charPhysL
     myCaseParameters.set<DOMAIN_EXTENT>({0.03, 0.03, 0.025}); //formerly area

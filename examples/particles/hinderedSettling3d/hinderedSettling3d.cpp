@@ -501,12 +501,12 @@ void simulate(MyCase& myCase)
 
   setBoundaryValues(myCase);
 
-  clout << "MaxIT: " << converter.getLatticeTime(parameters.get<parameters::MAX_PHYS_T>()) << std::endl;
+  clout << "MaxIT: " << converter.getLatticeTime(parameters.get<parameters::PHYS_MAX_T>()) << std::endl;
   std::size_t iTpurge = converter.getLatticeTime(parameters.get<parameters::PHYS_PURGE_ITER_T>());
 
-  Timer<T> timer(converter.getLatticeTime(parameters.get<parameters::MAX_PHYS_T>()), geometry.getStatistics().getNvoxel());
+  Timer<T> timer(converter.getLatticeTime(parameters.get<parameters::PHYS_MAX_T>()), geometry.getStatistics().getNvoxel());
   timer.start();
-  for (std::size_t iT = 0; iT < converter.getLatticeTime(parameters.get<parameters::MAX_PHYS_T>()); ++iT) {
+  for (std::size_t iT = 0; iT < converter.getLatticeTime(parameters.get<parameters::PHYS_MAX_T>()); ++iT) {
 #ifndef WithContact
     particleManager.execute<
         couple_lattice_to_parallel_particles<T, DESCRIPTOR, PARTICLETYPE>,
@@ -665,14 +665,14 @@ int main(int argc, char* argv[])
              p.get<GRAVITATIONAL_ACC>() * p.get<PART_RADIUS>() *
              p.get<PART_RADIUS>() / p.get<DYNAMIC_VISCOSITY>();
     });
-    myCaseParameters.set<MAX_PHYS_T>([](MyCase::ParametersD& p) {
+    myCaseParameters.set<PHYS_MAX_T>([](MyCase::ParametersD& p) {
       return 200.0 * 2. * p.get<PART_RADIUS>() / p.get<PHYS_CHAR_VELOCITY>();
     });
     myCaseParameters.set<PHYS_VTK_ITER_T>([](MyCase::ParametersD& p) {
-      return 0.02 * p.get<MAX_PHYS_T>();
+      return 0.02 * p.get<PHYS_MAX_T>();
     });
     myCaseParameters.set<PHYS_PURGE_ITER_T>([](MyCase::ParametersD& p) {
-      return 0.06 * p.get<MAX_PHYS_T>();
+      return 0.06 * p.get<PHYS_MAX_T>();
     });
     myCaseParameters.set<PARTICLE_ENLARGEMENT_FOR_CONTACT>([](MyCase::ParametersD& p) {
       return p.get<PHYS_DELTA_X>() / 5.0;

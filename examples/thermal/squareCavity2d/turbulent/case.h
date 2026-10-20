@@ -469,7 +469,7 @@ void simulate(MyCase& myCase)
   const auto& converter         = NSElattice.getUnitConverter();
   auto& parameters              = myCase.getParameters();
 
-  const std::size_t iTmax       = converter.getLatticeTime(parameters.get<parameters::MAX_PHYS_T>());
+  const std::size_t iTmax       = converter.getLatticeTime(parameters.get<parameters::PHYS_MAX_T>());
 
   const int convIter = parameters.get<parameters::CONV_ITER>();
   util::ValueTracer<T> converge(6, parameters.get<parameters::CONVERGENCE_PRECISION>());

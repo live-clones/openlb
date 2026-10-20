@@ -224,7 +224,7 @@ void simulate(MyCase& myCase)
   using T           = MyCase::value_t;
   auto& sLattice    = myCase.getLattice(NavierStokes {});
   auto& parameters  = myCase.getParameters();
-  auto  maxLatticeT = sLattice.getUnitConverter().getLatticeTime(parameters.get<parameters::MAX_PHYS_T>());
+  auto  maxLatticeT = sLattice.getUnitConverter().getLatticeTime(parameters.get<parameters::PHYS_MAX_T>());
 
   util::ValueTracer<T> converge(sLattice.getUnitConverter().getLatticeTime(parameters.get<parameters::TIME_INTERVAL>()),
                                 parameters.get<parameters::RESIDUUM>());
@@ -269,7 +269,7 @@ int main(int argc, char** argv)
     myCaseParameters.set<PHYS_CHAR_VELOCITY>(1.0);
     myCaseParameters.set<PHYS_CHAR_VISCOSITY>(0.001);
     myCaseParameters.set<PHYS_CHAR_DENSITY>(1.0);
-    myCaseParameters.set<MAX_PHYS_T>(100);
+    myCaseParameters.set<PHYS_MAX_T>(100);
     myCaseParameters.set<TIME_INTERVAL>(1.0);
     myCaseParameters.set<RESIDUUM>(1.0e-3);
     myCaseParameters.set<PHYS_DELTA_X>([](MyCase::ParametersD& p) {

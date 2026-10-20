@@ -269,7 +269,7 @@ void simulate(MyCase& myCase) {
   auto& parameters = myCase.getParameters();
 
   const std::size_t iTmax = myCase.getLattice(NavierStokes{}).getUnitConverter().getLatticeTime(
-    parameters.get<parameters::MAX_PHYS_T>());
+    parameters.get<parameters::PHYS_MAX_T>());
 
   util::ValueTracer<T> converge(myCase.getLattice(NavierStokes{}).getUnitConverter().getLatticeTime(50.),
                                 parameters.get<parameters::CONVERGENCE_PRECISION>());
@@ -317,7 +317,7 @@ int main(int argc, char *argv[])
     myCaseParameters.set<RESOLUTION>(40);
     myCaseParameters.set<RAYLEIGH>(1e6);
     myCaseParameters.set<PRANDTL>(0.71);
-    myCaseParameters.set<MAX_PHYS_T>(20.);
+    myCaseParameters.set<PHYS_MAX_T>(20.);
     myCaseParameters.set<T_HOT>(274.15);
     myCaseParameters.set<T_COLD>(273.15);
     myCaseParameters.set<PHYS_CHAR_LENGTH>(0.1);

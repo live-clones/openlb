@@ -72,7 +72,7 @@ int main( int argc, char* argv[] )
     myCaseParameters.set<NUM_SIMULATIONS>(4);
 
     myCaseParameters.set<REYNOLDS >(20.);
-    myCaseParameters.set<MAX_PHYS_T>(16.);
+    myCaseParameters.set<PHYS_MAX_T>(16.);
     myCaseParameters.set<PHYS_CHAR_VELOCITY>(0.2);
     myCaseParameters.set<LATTICE_RELAXATION_TIME>(0.53);
     myCaseParameters.set<PHYS_CHAR_DENSITY>(1.0);

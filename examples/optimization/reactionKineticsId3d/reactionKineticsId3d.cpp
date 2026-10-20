@@ -281,8 +281,8 @@ void getResults(CASE& myCase, TIMER& timer, CONVERGE& converge, std::size_t iT)
   vtmWriter.addFunctor(productionC);
   vtmWriter.addFunctor(velocity);
 
-  const std::size_t vtkIter = converter.getLatticeTime(parameters.template get<parameters::MAX_PHYS_T>() / 100);
-  const std::size_t statIter = converter.getLatticeTime(parameters.template get<parameters::MAX_PHYS_T>() / 100);
+  const std::size_t vtkIter = converter.getLatticeTime(parameters.template get<parameters::PHYS_MAX_T>() / 100);
+  const std::size_t statIter = converter.getLatticeTime(parameters.template get<parameters::PHYS_MAX_T>() / 100);
 
   if (iT == 0) {
     // write the geometry
@@ -320,14 +320,14 @@ void simulate(CASE& myCase){
   auto& converter = ALattice.getUnitConverter();
   auto& superGeometry = myCase.getGeometry();
 
-  util::Timer<T> timer(converter.getLatticeTime(parameters.template get<parameters::MAX_PHYS_T>()), superGeometry.getStatistics().getNvoxel());
+  util::Timer<T> timer(converter.getLatticeTime(parameters.template get<parameters::PHYS_MAX_T>()), superGeometry.getStatistics().getNvoxel());
 
   // Convergence check
   util::ValueTracer<T> converge(converter.getLatticeTime(parameters.template get<parameters::INTERVAL_CONVERGENCE_CHECK>()), parameters.template get<parameters::RESIDUUM>());
   timer.start();
 
   const std::size_t reactionUpdateT = converter.getLatticeTime(parameters.template get<parameters::REACTION_UPDATE_T>());
-  for (std::size_t iT = 0; iT < converter.getLatticeTime(parameters.template get<parameters::MAX_PHYS_T>()); ++iT) {
+  for (std::size_t iT = 0; iT < converter.getLatticeTime(parameters.template get<parameters::PHYS_MAX_T>()); ++iT) {
 
     // Reaction coupling A + B -> C
     if (iT%reactionUpdateT == 0) {
@@ -416,7 +416,7 @@ int main(int argc, char* argv[]) {
     myCaseParameters.set<BULK_VELOCITY           >(     0.05);
     myCaseParameters.set<PHYS_CHAR_DENSITY       >(      1.0);
     myCaseParameters.set<PECLET                  >(  108.005);
-    myCaseParameters.set<MAX_PHYS_T              >( 100000.0);
+    myCaseParameters.set<PHYS_MAX_T              >( 100000.0);
     myCaseParameters.set<RESIDUUM                >(    1e-10);
     myCaseParameters.set<DIFFUSIVITY             >(  0.07407);
     myCaseParameters.set<PHYS_DELTA_X>([](MyCase::ParametersD& p) {
@@ -426,7 +426,7 @@ int main(int argc, char* argv[]) {
       return Vector{p.get<RESOLUTION>()*p.get<PHYS_DELTA_X>()*10, p.get<PHYS_DELTA_X>(), p.get<HEIGHT>()};
     });
     myCaseParameters.set<INTERVAL_CONVERGENCE_CHECK>([](MyCase::ParametersD& p) {
-      return p.get<MAX_PHYS_T>()*0.001;
+      return p.get<PHYS_MAX_T>()*0.001;
     });
     myCaseParameters.set<REACTION_CONSTANT    >(      1.1e-6);
     myCaseParameters.set<STOICHIOMETRY        >({-1.,-1.,1.});

@@ -367,7 +367,7 @@ void simulate(
   vortex.setIntensityProfile(intensity);
 
   const std::size_t iTmax = myCase.getLattice(NavierStokes{}).getUnitConverter().getLatticeTime(
-    params.get<parameters::MAX_PHYS_T>()
+    params.get<parameters::PHYS_MAX_T>()
   );
 
   for (std::size_t iT=0; iT < iTmax; ++iT) {
@@ -405,7 +405,7 @@ int main(int argc, char* argv[]) {
     myCaseParameters.set<PHYS_CHAR_DENSITY>(1);
     myCaseParameters.set<LATTICE_RELAXATION_TIME>(0.500018);
     myCaseParameters.set<SMAGORINSKY>(0.15);
-    myCaseParameters.set<MAX_PHYS_T   >(150);
+    myCaseParameters.set<PHYS_MAX_T   >(150);
 
     myCaseParameters["reporter"]["statistics"].set<PHYS_ITER_T>(0.1);
     myCaseParameters["reporter"]["timer"].set<PHYS_ITER_T>(0.1);

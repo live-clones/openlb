@@ -345,7 +345,7 @@ void getResults(CASE& myCase, util::Timer<typename CASE::value_t>& timer, std::s
   const auto& converter = lattice.getUnitConverter();
 
   const std::size_t iTlog     = parameters.template get<parameters::IT_LOG_PSEUDO_TIME>();
-  const std::size_t iTMax     = parameters.template get<parameters::MAX_LATTICE_T>();
+  const std::size_t iTMax     = parameters.template get<parameters::LATTICE_MAX_T>();
   const std::size_t convIter  = parameters.template get<parameters::CONV_ITER>();
   const bool        converged = parameters.template get<parameters::CONVERGED>();
 
@@ -536,7 +536,7 @@ void simulate(CASE& myCase)
 
   parameters.template set<parameters::CONVERGED>(false);
 
-  const std::size_t maxIt  = parameters.template get<parameters::MAX_LATTICE_T>();
+  const std::size_t maxIt  = parameters.template get<parameters::LATTICE_MAX_T>();
   const std::size_t convIt = parameters.template get<parameters::CONV_ITER>();
 
   util::ValueTracer<T> converge(convIt, parameters.template get<parameters::CONVERGENCE_PRECISION>());

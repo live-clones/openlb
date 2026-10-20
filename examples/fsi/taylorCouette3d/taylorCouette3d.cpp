@@ -369,7 +369,7 @@ void simulate(MyCase& myCase) {
   fsiEmbeddingO.initialize();
 
   const std::size_t iTmax = converter.getLatticeTime(
-    params.get<parameters::MAX_PHYS_T>());
+    params.get<parameters::PHYS_MAX_T>());
 
   util::Timer<T> timer(iTmax, sGeometry.getStatistics().getNvoxel());
   timer.start();
@@ -420,7 +420,7 @@ int main(int argc, char* argv[]) {
     myCaseParameters.set<PHYS_CHAR_VELOCITY>([](MyCase::ParametersD& p) {
       return p.get<ROTATE_OMEGA>() * p.get<INNER_R>();
     });
-    myCaseParameters.set<MAX_PHYS_T>([](MyCase::ParametersD& p) {
+    myCaseParameters.set<PHYS_MAX_T>([](MyCase::ParametersD& p) {
       const auto gapW = p.get<OUTER_R>() - p.get<INNER_R>();
       return 1000 * gapW / p.get<PHYS_CHAR_VELOCITY>();
     });

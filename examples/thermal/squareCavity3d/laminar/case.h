@@ -439,7 +439,7 @@ void simulate(MyCase& myCase)
   auto& parameters      = myCase.getParameters();
   const auto& converter = NSElattice.getUnitConverter();
 
-  const std::size_t iTmax = converter.getLatticeTime(parameters.get<parameters::MAX_PHYS_T>());
+  const std::size_t iTmax = converter.getLatticeTime(parameters.get<parameters::PHYS_MAX_T>());
 
   util::Timer<T> timer(iTmax, myCase.getGeometry().getStatistics().getNvoxel());
 

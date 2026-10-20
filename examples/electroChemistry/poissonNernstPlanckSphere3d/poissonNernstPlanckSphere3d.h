@@ -459,7 +459,7 @@ void getResults(MyCase& myCase,
   auto& latticePoisson = myCase.getLattice(Poisson{});
   auto& latticeCation = myCase.getLattice(Concentration<0>{});
   auto& latticeAnion = myCase.getLattice(Concentration<1>{});
-  const T maxPhysT = parameters.get<parameters::MAX_PHYS_T>();
+  const T maxPhysT = parameters.get<parameters::PHYS_MAX_T>();
   bool hasConverged = parameters.get<parameters::HAS_CONVERGED>();
   const bool lastTimeStep = ( hasConverged || (iT + 1 == latticeCation.getUnitConverter().getLatticeTime( maxPhysT )) );
 
@@ -548,7 +548,7 @@ void simulate(MyCase& myCase) {
   auto& parameters = myCase.getParameters();
 
   const std::size_t iTmax = myCase.getLattice(Concentration<0>{}).getUnitConverter().getLatticeTime(
-    parameters.get<parameters::MAX_PHYS_T>());
+    parameters.get<parameters::PHYS_MAX_T>());
 
   util::Timer<T> timer(iTmax, myCase.getGeometry().getStatistics().getNvoxel());
   const T residuum = parameters.get<parameters::RESIDUUM>();

@@ -235,7 +235,7 @@ void simulate(MyCase& myCase) {
   auto& parameters = myCase.getParameters();
 
   const std::size_t iTmax = myCase.getLattice(NavierStokes{}).getUnitConverter().getLatticeTime(
-    parameters.get<parameters::MAX_PHYS_T>());
+    parameters.get<parameters::PHYS_MAX_T>());
 
   for (std::size_t iT=0; iT < iTmax; ++iT) {
     /// === Step 8.1: Update the Boundary Values and Fields at Times ===
@@ -265,7 +265,7 @@ int main(int argc, char* argv[]) {
     myCaseParameters.set<RESOLUTION               >(10);
     myCaseParameters.set<RAYLEIGH                 >(1e4);
     myCaseParameters.set<PRANDTL                  >(0.71);
-    myCaseParameters.set<MAX_PHYS_T               >(1000);
+    myCaseParameters.set<PHYS_MAX_T               >(1000);
     myCaseParameters.set<PHYS_CHAR_LENGTH         >(0.1);
     myCaseParameters.set<PHYS_CHAR_VISCOSITY      >(1e-5);
     myCaseParameters.set<PHYS_CHAR_DENSITY        >(1.);

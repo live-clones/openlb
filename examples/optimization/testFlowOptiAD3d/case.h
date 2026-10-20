@@ -170,7 +170,7 @@ void setTemporalValues(CASE& myCase,
   auto& lattice = myCase.getLattice(NavierStokes{});
   auto& geometry = myCase.getGeometry();
   auto& converter = lattice.getUnitConverter();
-  const T physStartT = myCase.getParameters().template get<parameters::MAX_PHYS_T>() * (2.0 / 3.0);
+  const T physStartT = myCase.getParameters().template get<parameters::PHYS_MAX_T>() * (2.0 / 3.0);
 
   const std::size_t itStart = converter.getLatticeTime(physStartT);
   if (iT <= itStart) {
@@ -199,7 +199,7 @@ void getResults(CASE& myCase, TIMER& timer, std::size_t iT)
   using T = CASE::value_t;
   auto& lattice = myCase.getLattice(NavierStokes{});
   auto& converter = lattice.getUnitConverter();
-  const T physMaxT = myCase.getParameters().template get<parameters::MAX_PHYS_T>();
+  const T physMaxT = myCase.getParameters().template get<parameters::PHYS_MAX_T>();
 
   /// @li Write vtk plots from time to time
   const std::size_t iTvtk = converter.getLatticeTime(physMaxT/5);
@@ -235,7 +235,7 @@ template<typename CASE>
 void simulate(CASE& myCase)
 {
   using T = CASE::value_t;
-  const T physMaxT = myCase.getParameters().template get<parameters::MAX_PHYS_T>();
+  const T physMaxT = myCase.getParameters().template get<parameters::PHYS_MAX_T>();
   const std::size_t iTmax = myCase.getLattice(NavierStokes{}).getUnitConverter().getLatticeTime(physMaxT);
   util::Timer<T> timer(iTmax, myCase.getGeometry().getStatistics().getNvoxel());
   timer.start();

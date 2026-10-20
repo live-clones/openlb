@@ -52,7 +52,7 @@ int main(int argc, char *argv[]) {
     myCaseParameters.set<PHYS_DIFFUSIVITY>(0.01);
     myCaseParameters.set<PHYS_CHAR_LENGTH>(1.);
     myCaseParameters.set<LATTICE_RELAXATION_TIME>(0.53);
-    myCaseParameters.set<MAX_PHYS_T>(1.01);
+    myCaseParameters.set<PHYS_MAX_T>(1.01);
     myCaseParameters.set<C_EQ>(50.);
     myCaseParameters.set<PHYS_DENSITY>(1.);
   }

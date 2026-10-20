@@ -55,7 +55,7 @@ int main(int argc, char* argv[])
     myCaseParametersD.set<PHYS_CHAR_VELOCITY          >(                  1.0);
     myCaseParametersD.set<PHYS_CHAR_VISCOSITY         >(                 0.01);
     myCaseParametersD.set<PHYS_CHAR_DENSITY           >(                    1);
-    myCaseParametersD.set<MAX_PHYS_T                  >(                 50.0);
+    myCaseParametersD.set<PHYS_MAX_T                  >(                 50.0);
     myCaseParametersD.set<PHYS_BOUNDARY_VALUE_UPDATE_T>(                0.001);
     myCaseParametersD.set<RESOLUTION                  >(                   11);
     myCaseParametersD.set<LATTICE_CHAR_VELOCITY       >(                 0.07);

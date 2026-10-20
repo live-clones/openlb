@@ -242,7 +242,7 @@ void setBoundaryValues(MyCase& myCase, std::size_t iT)
   const auto& converter  = NSlattice.getUnitConverter();
 
   // No of time steps for smooth start-up
-  std::size_t iTmaxStart = converter.getLatticeTime(0.8 * parameters.get<parameters::MAX_PHYS_T>());
+  std::size_t iTmaxStart = converter.getLatticeTime(0.8 * parameters.get<parameters::PHYS_MAX_T>());
   // Set inflow velocity
   T maxVelocity = converter.getCharPhysVelocity() * 3. / 4. *
                   util::pow(parameters.get<parameters::INLET_RADIUS>(), 2) /
@@ -311,7 +311,7 @@ void getResults(MyCase& myCase, std::size_t iT, util::Timer<MyCase::value_t>& ti
 
     // Print some output of the chosen simulation setup
     clout << "N=" << parameters.get<parameters::RESOLUTION>()
-          << "; maxTimeSteps=" << parameters.get<parameters::MAX_PHYS_T>()
+          << "; maxTimeSteps=" << parameters.get<parameters::PHYS_MAX_T>()
           << "; noOfCuboid=" << geometry.getCuboidDecomposition().size()
           << "; Re=" << parameters.get<parameters::REYNOLDS>() << "; St="
           << (2. * parameters.get<parameters::PART_RHO>() * parameters.get<parameters::PART_RADIUS>() *
@@ -419,11 +419,11 @@ void simulate(MyCase& myCase)
       parameters.get<parameters::PART_RHO>(), parameters.get<parameters::PART_RADIUS>(), coupling, converter);
 
   // ===Step 9: Main Loop with Timer ===
-  util::Timer<T> timer(converter.getLatticeTime(parameters.get<parameters::MAX_PHYS_T>()),
+  util::Timer<T> timer(converter.getLatticeTime(parameters.get<parameters::PHYS_MAX_T>()),
                        geometry.getStatistics().getNvoxel());
   timer.start();
 
-  for (std::size_t iT = 0; iT <= converter.getLatticeTime(parameters.get<parameters::MAX_PHYS_T>()); ++iT) {
+  for (std::size_t iT = 0; iT <= converter.getLatticeTime(parameters.get<parameters::PHYS_MAX_T>()); ++iT) {
     ADlattice.setParameter<descriptors::LATTICE_TIME>(iT);
     coupling.setParameter<AdvectionDiffusionParticleCoupling3D<ade_forces::AdvDiffDragForce3D>::LATTICE_TIME>(iT);
     getResults(myCase, iT, timer);
@@ -455,7 +455,7 @@ int main(int argc, char* argv[])
     myCaseParameters.set<DIFFUSION>(1e-6);     // diffusion coefficient for advection-diffusion equation
     myCaseParameters.set<PART_RADIUS>(1.5e-4); // particles radius
     myCaseParameters.set<PART_RHO>(998.2);     // particles density
-    myCaseParameters.set<MAX_PHYS_T>(10);      // max. simulation time in s, SI unit
+    myCaseParameters.set<PHYS_MAX_T>(10);      // max. simulation time in s, SI unit
     myCaseParameters.set<INLET_CENTER>({0., 0., 0.0786395});
     myCaseParameters.set<OUTLET_CENTER0>({-0.0235929682287551, -0.000052820468762797, -0.021445708949909});
     myCaseParameters.set<OUTLET_CENTER1>({0.0233643529416147, 0.00000212439067050152, -0.0211994104877918});

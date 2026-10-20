@@ -252,7 +252,7 @@ void simulate(MyCase& myCase) {
   auto& parameters = myCase.getParameters();
 
   const std::size_t iTmax = converter.getLatticeTime(
-    parameters.get<parameters::MAX_PHYS_T>()
+    parameters.get<parameters::PHYS_MAX_T>()
   );
 
   util::Timer<T> timer(iTmax, geometry.getStatistics().getNvoxel());
@@ -279,7 +279,7 @@ int main(int argc, char* argv[]) {
   {
     using namespace olb::parameters;
     myCaseParameters.set<RESOLUTION               >(10    );
-    myCaseParameters.set<MAX_PHYS_T               >(1000  );
+    myCaseParameters.set<PHYS_MAX_T               >(1000  );
     myCaseParameters.set<DOMAIN_EXTENT            >({2, 1});
     myCaseParameters.set<PHYS_VTK_ITER_T          >(1.0   );
     myCaseParameters.set<PHYS_STAT_ITER_T         >(0.1);

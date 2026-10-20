@@ -233,7 +233,7 @@ void setTemporalValues(MyCase& myCase,
   auto& geometry = myCase.getGeometry();
   auto& converter = lattice.getUnitConverter();
   auto& parameters = myCase.getParameters();
-  const T physStartT = parameters.get<parameters::MAX_PHYS_T>() * (1.0 / 3.0);
+  const T physStartT = parameters.get<parameters::PHYS_MAX_T>() * (1.0 / 3.0);
   const T physBoundaryValueUpdateT = parameters.get<parameters::PHYS_BOUNDARY_VALUE_UPDATE_T>();
 
   const std::size_t itStart = converter.getLatticeTime(physStartT);
@@ -382,7 +382,7 @@ void getResults(MyCase& myCase,
   using T = MyCase::value_t;
   auto& lattice = myCase.getLattice(NavierStokes{});
   auto& converter = lattice.getUnitConverter();
-  const T physMaxT = myCase.getParameters().get<parameters::MAX_PHYS_T>();
+  const T physMaxT = myCase.getParameters().get<parameters::PHYS_MAX_T>();
   const std::size_t iTvtk = converter.getLatticeTime(physMaxT/1);
   const std::size_t iTlog = converter.getLatticeTime(physMaxT/10);
 
@@ -416,7 +416,7 @@ void getResults(MyCase& myCase,
 void simulate(MyCase& myCase)
 {
   using T = MyCase::value_t;
-  const T physMaxT = myCase.getParameters().get<parameters::MAX_PHYS_T>();
+  const T physMaxT = myCase.getParameters().get<parameters::PHYS_MAX_T>();
   auto& sLattice = myCase.getLattice(NavierStokes{});
   auto& converter = sLattice.getUnitConverter();
   const std::size_t iTmax = converter.getLatticeTime(physMaxT);

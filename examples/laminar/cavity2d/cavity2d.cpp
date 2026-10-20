@@ -268,7 +268,7 @@ void simulate(MyCase& myCase)
 
   auto& sLattice   = myCase.getLattice(NavierStokes {});
   auto& parameters = myCase.getParameters();
-  auto  maxPhysT   = parameters.get<parameters::MAX_PHYS_T>();
+  auto  maxPhysT   = parameters.get<parameters::PHYS_MAX_T>();
 
   auto maxLatticeT = sLattice.getUnitConverter().getLatticeTime(maxPhysT);
 
@@ -326,7 +326,7 @@ int main(int argc, char* argv[])
     myCaseParameters.set<PHYS_CHAR_VELOCITY>(config["Application"]["PhysParameters"]["CharPhysVelocity"].get<T>());
     myCaseParameters.set<PHYS_CHAR_VISCOSITY>(config["Application"]["PhysParameters"]["PhysViscosity"].get<T>());
     myCaseParameters.set<PHYS_CHAR_DENSITY>(config["Application"]["PhysParameters"]["PhysDensity"].get<T>());
-    myCaseParameters.set<MAX_PHYS_T>(config["Application"]["PhysParameters"]["PhysMaxTime"].get<T>());
+    myCaseParameters.set<PHYS_MAX_T>(config["Application"]["PhysParameters"]["PhysMaxTime"].get<T>());
     myCaseParameters.set<CONV_ITER>(config["Application"]["ConvergenceCheck"]["Interval"].get<T>());
     myCaseParameters.set<RESIDUUM>(config["Application"]["ConvergenceCheck"]["Residuum"].get<T>());
     myCaseParameters.set<PHYS_DELTA_X>([](MyCase::ParametersD& p) {

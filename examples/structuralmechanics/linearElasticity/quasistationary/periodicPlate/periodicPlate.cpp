@@ -204,7 +204,7 @@ void getResults(MyCase& myCase,
   auto& converter   = lattice.getUnitConverter();
   auto& parameters  = myCase.getParameters();
 
-  const std::size_t iTMax     = converter.getLatticeTime(parameters.get<parameters::MAX_PHYS_T>());
+  const std::size_t iTMax     = converter.getLatticeTime(parameters.get<parameters::PHYS_MAX_T>());
   const std::size_t iTlog     = parameters.get<parameters::IT_LOG_PSEUDO_TIME                 >();
   const std::size_t iTvtk     = parameters.get<parameters::IT_VTK_PSEUDO_TIME                 >();
   const std::size_t convIter  = parameters.get<parameters::CONV_ITER                          >();
@@ -350,7 +350,7 @@ void simulate(MyCase& myCase) {
   auto& lattice             = myCase.getLattice(names::NavierCauchy{});
   auto& parameters          = myCase.getParameters();
 
-  const T physMaxT          = parameters.get<parameters::MAX_PHYS_T>();
+  const T physMaxT          = parameters.get<parameters::PHYS_MAX_T>();
   const std::size_t convIt  = parameters.get<parameters::CONV_ITER>();
   const std::size_t iTmax   = lattice.getUnitConverter().getLatticeTime(physMaxT);
 
@@ -414,7 +414,7 @@ int main(int argc, char* argv[]) {
     myCaseParameters.set<PHYS_CHAR_LENGTH         >(    1.0         );
     myCaseParameters.set<DOMAIN_EXTENT            >(  { 1.0, 1.0 }  );
     myCaseParameters.set<ORIGIN                   >(  { 0.0, 0.0 }  );
-    myCaseParameters.set<MAX_PHYS_T               >( 1000           );
+    myCaseParameters.set<PHYS_MAX_T               >( 1000           );
     myCaseParameters.set<IT_LOG_PSEUDO_TIME       >( 1000           );
     myCaseParameters.set<IT_VTK_PSEUDO_TIME       >( 1000           );
     myCaseParameters.set<CONV_ITER                >(   10           );

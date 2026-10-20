@@ -42,7 +42,7 @@ int main(int argc, char* argv[]) {
     myCaseParameters.set<POISSON_PHYS_CHAR_VELOCITY>(0.001);
     myCaseParameters.set<PHYS_CHAR_VISCOSITY>(1.e-6);
     myCaseParameters.set<PHYS_CHAR_DENSITY>(1000.);
-    myCaseParameters.set<MAX_PHYS_T>(10);
+    myCaseParameters.set<PHYS_MAX_T>(10);
     myCaseParameters.set<RESIDUUM>(1.e-9);
     myCaseParameters.set<DIFFUSION>(1.e-8);
     myCaseParameters.set<VALENCE>(1);

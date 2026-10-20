@@ -218,7 +218,7 @@ void simulate(MyCase& myCase)
   auto& NSElattice    = myCase.getLattice(NavierStokes {});
 
   std::size_t iT      = 0;
-  const T     maxIter = params.get<parameters::MAX_LATTICE_T>();
+  const T     maxIter = params.get<parameters::LATTICE_MAX_T>();
 
   clout << "starting simulation..." << std::endl;
   util::Timer<T> timer(maxIter, geometry.getStatistics().getNvoxel());
@@ -242,7 +242,7 @@ int main(int argc, char* argv[])
   MyCase::ParametersD myCaseParameters;
   {
     using namespace olb::parameters;
-    myCaseParameters.set<MAX_LATTICE_T>(2000);
+    myCaseParameters.set<LATTICE_MAX_T>(2000);
     myCaseParameters.set<LATTICE_STAT_ITER_T>(20);
     myCaseParameters.set<LATTICE_VTK_ITER_T>(20);
 

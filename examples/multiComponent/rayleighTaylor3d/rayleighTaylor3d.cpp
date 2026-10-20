@@ -262,7 +262,7 @@ void getResults(MyCase& myCase,
 
   const int vtkIter   = parameters.get<parameters::LATTICE_VTK_ITER_T>();
   const int statIter  = parameters.get<parameters::LATTICE_STAT_ITER_T>();
-  const int maxIter   = parameters.get<parameters::MAX_LATTICE_T>();
+  const int maxIter   = parameters.get<parameters::LATTICE_MAX_T>();
 
   if ( iT == 0 ) {
     // Writes the geometry, cuboid no. and rank no. as vti file for visualization
@@ -313,7 +313,7 @@ void simulate(MyCase& myCase) {
   using T = MyCase::value_t;
   auto& parameters  = myCase.getParameters();
 
-  const std::size_t iTmax = parameters.get<parameters::MAX_LATTICE_T>();
+  const std::size_t iTmax = parameters.get<parameters::LATTICE_MAX_T>();
 
   util::Timer<T> timer(iTmax, myCase.getGeometry().getStatistics().getNvoxel());
   timer.start();
@@ -349,7 +349,7 @@ int main(int argc, char* argv[]) {
     myCaseParameters.set<RESOLUTION>(200);
     myCaseParameters.set<ORIGIN>({0, 0, 0});
     myCaseParameters.set<PHYS_DELTA_X>((T) 1.);
-    myCaseParameters.set<MAX_LATTICE_T>(10000);
+    myCaseParameters.set<LATTICE_MAX_T>(10000);
     myCaseParameters.set<RHO_1>((T) 0.0);
     myCaseParameters.set<RHO_2>((T) 1.0);
     myCaseParameters.set<LATTICE_RELAXATION_TIME>((T) 1.);

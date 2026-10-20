@@ -349,7 +349,7 @@ void getResults(
   auto& conc2lattice = myCase.getLattice(Concentration2{});
   const auto& converter = NSlattice.getUnitConverter();
 
-  const int itTotalTime = NSlattice.getUnitConverter().getLatticeTime(params.get<parameters::MAX_PHYS_T>());
+  const int itTotalTime = NSlattice.getUnitConverter().getLatticeTime(params.get<parameters::PHYS_MAX_T>());
   const int iTperiodConsole = itTotalTime / 10;   // Console output
   const int iTperiodVTK = itTotalTime / 10;   // Writes the vtk files
 
@@ -411,7 +411,7 @@ void simulate(MyCase& myCase) {
 
   /// === Step 7.2: Main Loop with Timer ===
   const std::size_t iTmax = myCase.getLattice(NavierStokes{}).getUnitConverter().getLatticeTime(
-    parameters.get<parameters::MAX_PHYS_T>());
+    parameters.get<parameters::PHYS_MAX_T>());
 
   util::Timer<T> timer(iTmax, myCase.getGeometry().getStatistics().getNvoxel());
   timer.start();
@@ -460,7 +460,7 @@ int main(int argc, char* argv[]) {
     myCaseParameters.set<C_0  >(1);
     myCaseParameters.set<D_S  >(5.e-11);
 
-    myCaseParameters.set<MAX_PHYS_T   >(5);    // time for fluid simulation
+    myCaseParameters.set<PHYS_MAX_T   >(5);    // time for fluid simulation
     myCaseParameters.set<PHYS_START_T >(0.6);  // time to start fluid pulsation
     myCaseParameters.set<STL_SIZE     >(10);
   }

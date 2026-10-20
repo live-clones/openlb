@@ -56,9 +56,9 @@ int main(int argc, char* argv[]) {
     myCaseParameters.set<B_COEFF>(-1);
     myCaseParameters.set<ACCOMODATION_COEFF>(1);
     myCaseParameters.set<RELAXATION_TIME>(1.13);
-    myCaseParameters.set<MAX_PHYS_T>(2.e-6);
+    myCaseParameters.set<PHYS_MAX_T>(2.e-6);
     myCaseParameters.set<START_TIME>([](MyCase::ParametersD& p) {
-      return 0.05*p.get<parameters::MAX_PHYS_T>();
+      return 0.05*p.get<parameters::PHYS_MAX_T>();
     });
     myCaseParameters.set<KINETIC_DIAMETER>(364e-12); //kinetic diamter of nitrogen [m]
     myCaseParameters.set<AVERAGE_PRESSURE>(1000);

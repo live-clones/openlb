@@ -242,7 +242,7 @@ void getResults(MyCase& myCase,
 void simulate(MyCase& myCase) {
   using T = MyCase::value_t;
   auto& parameters = myCase.getParameters();
-  const T maxPhysT = parameters.get<parameters::MAX_PHYS_T>();
+  const T maxPhysT = parameters.get<parameters::PHYS_MAX_T>();
 
   const std::size_t iTmax = myCase.getLattice(NavierStokes{}).getUnitConverter().getLatticeTime(maxPhysT);
   util::Timer<T> timer(iTmax, myCase.getGeometry().getStatistics().getNvoxel());
@@ -281,7 +281,7 @@ int main(int argc, char* argv[]) {
     myCaseParameters.set<PHYS_CHAR_VELOCITY >(           0.2);
     myCaseParameters.set<PHYS_CHAR_VISCOSITY>(        0.0005);
     myCaseParameters.set<PHYS_CHAR_DENSITY  >(        1000.0);
-    myCaseParameters.set<MAX_PHYS_T         >(           16.);
+    myCaseParameters.set<PHYS_MAX_T         >(           16.);
     myCaseParameters.set<ROTATION_POINT     >({0.15, 0., 0.});
     myCaseParameters.set<ROTATION_AXIS      >(  {0., 0., 1.});
     myCaseParameters.set<ANGLE              >(           75.);
