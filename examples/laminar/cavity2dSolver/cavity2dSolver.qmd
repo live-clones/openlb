@@ -2,7 +2,7 @@
 features: [benchmark, primitives]
 ---
 
-### cavity2dSolver
+### cavity2dSolver {#sec-example-laminar-cavity2dSolver}
 
 This example solves the same lid-driven cavity as [[`laminar/cavity2d`](/examples/laminar/cavity2d/cavity2d.qmd)]{.content-visible when-format="html"}[`laminar/cavity2d` (@sec-example-laminar-cavity2d)]{.content-visible when-format="pdf"}: the governing equations, the boundary conditions, the domain, the discretization and the comparison with @GHIA1982387 are described there.
 This page only describes how `cavity2dSolver` differs from it: the simulation is implemented with the solver class concept, a class derived from `LbSolver`, together with the XML parameter interface.
@@ -28,4 +28,4 @@ cavity2dSolver/
 └── Makefile
 ```
 
-The results are written to `tmp/` (`Output/OutputDir`) in the directory the example is run from: `vtkData/cavity2d.pvd` opens all time steps in ParaView, `imageData/` holds the velocity heat maps and `gnuplotData/` the comparisons with Ghia et al. The heat maps and plots are drawn with gnuplot; without it, only the data in `gnuplotData/data/` is written.
+The results are written to `tmp/` in the directory the example is run from: `vtkData/cavity2d.pvd` opens all time steps in ParaView, `imageData/` holds the velocity heat maps and `gnuplotData/` the comparisons with Ghia et al. The heat maps and plots are drawn with gnuplot; without it, only the data in `gnuplotData/data/` is written.

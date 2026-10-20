@@ -8,7 +8,7 @@ recommended-for-beginners: [benchmark, primitives]
 This example illustrates a flow in a cuboid, lid-driven cavity.
 The 2D version also shows how to use the XML parameter files and has an example description file for OpenGPI.
 This example is available in two different versions for sequential and parallel use.
-The `cavity2dSolver` version illustrates the use of the solver class concept together with the XML parameter interface.
+The [[`laminar/cavity2dSolver`](/examples/laminar/cavity2dSolver/cavity2dSolver.qmd)]{.content-visible when-format="html"}[`laminar/cavity2dSolver` (@sec-example-laminar-cavity2dSolver)]{.content-visible when-format="pdf"} version illustrates the use of the solver class concept together with the XML parameter interface.
 
 
 #### Governing equations
@@ -27,7 +27,7 @@ The boundary $\partial \Omega = \Gamma_D \cup \Gamma_{\mathrm{no\text{-}slip}}$ 
     \vel &= \mathbf{0} \quad \text{on} \quad \Gamma_{\mathrm{no\text{-}slip}} \times \I.
 \end{align}
 The fluid is initially at rest, $\vel = \mathbf{0}$ in $\Omega$ at $t = 0$.
-In `prepareGeometry()`, $\Gamma_{\mathrm{no\text{-}slip}}$ gets the material number 2 and $\Gamma_D$ the material number 3; the two top corners are wall cells at rest, because `rename(2, 3, 1, lid)` only keeps the lid cells that have fluid cells below them.
+In `prepareGeometry()`, $\Gamma_{\mathrm{no\text{-}slip}}$ gets the material number 2 and $\Gamma_D$ the material number 3.
 
 #### Domain
 
@@ -53,7 +53,7 @@ Case definition for the `cavity2d` example.
 :::
 
 The parameters for the simulation are read from `cavity2d.xml` and given in @tbl-cavity2d-params.
-The unit converter `UnitConverterFromResolutionAndRelaxationTime` derives the time step size from the resolution and the lattice relaxation time $\tau = 0.5384$.
+The unit converter `UnitConverterFromResolutionAndRelaxationTime` derives the time step size from the resolution and the lattice relaxation time.
 
 | XML element | Symbol | Value | Description |
 |---|---|---|---|
@@ -119,4 +119,4 @@ cavity2d/
 └── Makefile
 ```
 
-The results are written to `tmp/` (`Output/OutputDir`) in the directory the example is run from: `vtkData/cavity2dvtk.pvd` opens all time steps in ParaView, `imageData/` holds the velocity heat maps and `gnuplotData/` the comparisons with Ghia et al. as plots and data.
+The results are written to `tmp/` in the directory the example is run from. `vtkData/cavity2dvtk.pvd` opens all time steps in ParaView, `imageData/` holds the velocity heat maps and `gnuplotData/` the comparisons with Ghia et al. as plots and data.
