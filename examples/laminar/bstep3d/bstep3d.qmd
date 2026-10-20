@@ -2,11 +2,10 @@
 features: [transient, benchmark, primitives, checkpointing]
 ---
 
-### bstep3d
+### bstep3d {#sec-example-laminar-bstep3d}
 
 This example implements the fluid flow over a backward-facing step in three dimensions.
-Unlike in `bstep2d`, whose geometry corresponds to Armaly *et al.* [@armaly:83], the channel here is twice as high behind the step as before it, and the step spans the whole width of the channel.
-The header comment of `bstep3d.cpp` mentions checkpointing, but the example contains no code for it; `bstep2d` shows where it would go.
+Unlike in [[`laminar/bstep2d`](/examples/laminar/bstep2d/bstep2d.qmd)]{.content-visible when-format="html"}[`laminar/bstep2d` (@sec-example-laminar-bstep2d)]{.content-visible when-format="pdf"}, whose geometry corresponds to Armaly *et al.* [@armaly:83], the channel here is twice as high behind the step as before it, and the step spans the whole width of the channel.
 
 #### Governing equations
 
@@ -30,7 +29,7 @@ The fluid is initially at rest.
 
 #### Domain
 
-The channel is $L = 18\,\mathrm{m}$ long, $H = 1.5\,\mathrm{m}$ high and $W = 1.5\,\mathrm{m}$ wide; the step at its lower left is $5\,\mathrm{m}$ long, $S = 0.75\,\mathrm{m}$ high and as wide as the channel, so the inlet above it has the height $h = 0.75\,\mathrm{m}$ and the expansion ratio is $H/h = 2$ (@fig-bstep3d-domain).
+The channel is $L = 18\,\mathrm{m}$ long, $H = 1.5\,\mathrm{m}$ high and $W = 1.5\,\mathrm{m}$ wide. The step at its lower left is $5\,\mathrm{m}$ long, $S = 0.75\,\mathrm{m}$ high and as wide as the channel, so the inlet above it has the height $h = 0.75\,\mathrm{m}$ and the expansion ratio is $H/h = 2$ (@fig-bstep3d-domain).
 With the characteristic length $1\,\mathrm{m}$, $U = 1\,\mathrm{m/s}$ and $\nu = 0.01\,\mathrm{m^2/s}$, the Reynolds number is $Re = 100$.
 
 `prepareGeometry()` marks the channel as fluid (MN 1) with walls (MN 2) around it, turns the cells of the step into wall cells, and marks the wall cells at $x = 0$ that border the fluid as inlet (MN 3) and those at $x = L$ as outlet (MN 4).
@@ -41,11 +40,24 @@ With the characteristic length $1\,\mathrm{m}$, $U = 1\,\mathrm{m/s}$ and $\nu =
 In this example, the domain is discretized with a uniform grid with the lattice spacing $\Delta x = 1\,\mathrm{m} / N$, where $N = 20$, which gives about $258\,000$ fluid cells.
 The time step size is set directly as $\Delta t = \Delta x / 25 = 0.002\,\mathrm{s}$ (`TIME_RESOLUTION`).
 
-The LBM collision operator is the BGK operator with a single relaxation time ([Collision Operators](/content/02_core.qmd#collision-operators)), used as `BGKdynamics` on the fluid, inlet and outlet cells (MN 1, 3 and 4), together with the D3Q19 velocity set ([Lattice Structures](/content/01_introduction.qmd#sec-lattice-structures)); the lattice uses single precision.
+The LBM collision operator is the BGK operator with a single relaxation time ([Collision Operators](/content/02_core.qmd#collision-operators)), used as `BGKdynamics` on the fluid, inlet and outlet cells (MN 1, 3 and 4), together with the D3Q19 velocity set ([Lattice Structures](/content/01_introduction.qmd#sec-lattice-structures)). The lattice uses single precision.
 The walls (MN 2) are treated with `BounceBack`, the inlet (MN 3) with `LocalVelocity` and the outlet (MN 4) with `LocalPressure` ([Define Boundary Method](/content/06_initial_boundary.qmd#sec-defineBoundaryMethod)).
 
-The unit converter is built from $\Delta x$ and $\Delta t$, which gives the lattice velocity $U \Delta t / \Delta x = 0.04$, the lattice Mach number $0.07$ and the lattice relaxation time $\tau = 3 \nu \Delta t / \Delta x^2 + 1/2 = 0.524$.
-The parameter `LATTICE_RELAXATION_TIME` $= 0.518$ that `main()` also sets is not used by the converter.
+The corresponding lattice is defined inside the case definition in `bstep3d.cpp` as in @lst-bstep3d-case.
+
+::: {#lst-bstep3d-case}
+```{.cpp}
+using MyCase = Case<
+  NavierStokes,
+  Lattice<float,
+          descriptors::D3Q19<>
+  >
+>;
+```
+Case definition for the `bstep3d` example.
+:::
+
+The unit converter is built from $\Delta x$ and $\Delta t$.
 The parameters are given in @tbl-bstep3d-params.
 
 | Parameter | Symbol | Value | Description |
@@ -71,32 +83,11 @@ The parameters are given in @tbl-bstep3d-params.
 
 : Parameters of `bstep3d`, as set in `main()`. {#tbl-bstep3d-params}
 
-::: {#lst-bstep3d-descriptor}
-```{.cpp}
-using MyCase = Case<
-  NavierStokes,
-  Lattice<float,
-          descriptors::D3Q19<>
-  >
->;
-```
-Descriptor definition for the `bstep3d` example.
-:::
-
 #### Results
 
 Every $0.2\,\mathrm{s}$, `getResults()` prints the lattice statistics and writes the velocity and the pressure to the VTK output, and a heat map of the velocity magnitude in the plane $z = W/2$, scaled to $\tfrac{3}{2} U$.
 @fig-bstep3d-velocity shows the velocity magnitude in this plane at the end of the simulation: the jet from the inlet separates at the edge of the step, a recirculation zone forms behind it at the lower wall, and the flow spreads over the whole height further downstream.
-The example does not compare its results with reference data.
 
 ![Magnitude of the physical velocity of `bstep3d` in the plane $z = W/2$ at $t = 39.8\,\mathrm{s}$, visualized in ParaView.](/examples/laminar/bstep3d/doc/fig/bstep3d_velocity.png){width="100%" #fig-bstep3d-velocity .lightbox}
-
-#### Files
-
-```
-bstep3d/
-├── bstep3d.cpp   main(): parameters; mesh, geometry, lattice, ramp-up of the inflow, time loop and output
-└── Makefile
-```
 
 The results are written to `tmp/` in the directory the example is run from: `vtkData/bstep3d.pvd` opens all time steps in ParaView and `imageData/` holds the velocity heat maps, which are drawn with gnuplot if it is installed.

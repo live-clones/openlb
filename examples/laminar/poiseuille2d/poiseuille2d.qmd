@@ -2,7 +2,7 @@
 features: [benchmark, primitives]
 ---
 
-### poiseuille2d
+### poiseuille2d {#sec-example-laminar-poiseuille2d}
 
 For basic tests of boundary conditions, a comparison with analytical solutions is the easiest and most accurate approach.
 One of the fundamental applications of fluid dynamics is that of laminar flow of a Newtonian fluid in a circular pipe.
@@ -55,9 +55,19 @@ The example is meant for comparing boundary conditions and flow setups, which ar
 - `FLOW_TYPE` chooses between `nonForced` (default), the setup described above, and `forced`, where the channel is periodic in $x$ and a constant body force $F = p_0 / L$ drives the flow instead of the inlet and outlet. The forced setup uses `ForcedBGKdynamics`.
 - Compiling with `ENABLE_MRT` defined replaces the BGK operator by the multiple relaxation time operator, `MRTdynamics` and `ForcedMRTdynamics`.
 
+The corresponding lattice is defined inside the case definition in `case.h` as in @lst-poiseuille2d-case.
+
+::: {#lst-poiseuille2d-case}
+```{.cpp}
+using MyCase = Case<
+  NavierStokes, Lattice<FLOATING_POINT_TYPE, descriptors::D2Q9<FORCE>>
+>;
+```
+Case definition for the `poiseuille2d` example. The `FORCE` field holds the body force of the forced setup.
+:::
+
 The parameters for the simulation are set in `main()` and given in @tbl-poiseuille2d-params.
-The unit converter `UnitConverterFromResolutionAndRelaxationTime` derives the time step size from the resolution and the lattice relaxation time $\tau = 0.8$.
-With $\tau = \nu \Delta t / (c_s^2 \Delta x^2) + 1/2$ and the lattice speed of sound $c_s = 1/\sqrt{3}$, this gives $\Delta x = 0.02\,\mathrm{m}$, $\Delta t = 4 \cdot 10^{-4}\,\mathrm{s}$, a lattice velocity of $u_\text{max} \Delta t / \Delta x = 0.02$ and a lattice Mach number of $0.02 / c_s \approx 0.03$.
+The unit converter `UnitConverterFromResolutionAndRelaxationTime` derives the time step size from the resolution and the lattice relaxation time.
 
 | Parameter | Symbol | Value | Description |
 |---|---|---|---|
@@ -80,15 +90,6 @@ With $\tau = \nu \Delta t / (c_s^2 \Delta x^2) + 1/2$ and the lattice speed of s
 | `PHYS_STAT_ITER_T` | | $T/20 = 1.5\,\mathrm{s}$ | interval of the console statistics and the error norms |
 
 : Parameters of `poiseuille2d`, as set in `main()`. {#tbl-poiseuille2d-params}
-
-::: {#lst-poiseuille2d-descriptor}
-```{.cpp}
-using MyCase = Case<
-  NavierStokes, Lattice<FLOATING_POINT_TYPE, descriptors::D2Q9<FORCE>>
->;
-```
-Descriptor definition for the `poiseuille2d` example. The `FORCE` field holds the body force of the forced setup.
-:::
 
 #### Validation
 

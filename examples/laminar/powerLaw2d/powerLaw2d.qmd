@@ -2,11 +2,11 @@
 features: [benchmark, primitives]
 ---
 
-### powerLaw2d
+### powerLaw2d {#sec-example-laminar-powerLaw2d}
 
 This example describes a steady non-Newtonian flow in a channel.
-The fluid follows a power law, so its viscosity depends on the shear rate; with the default power-law index $n = 0.5$ it is shear thinning, and the velocity profile is flatter than the parabola of a Newtonian fluid.
-By default the channel is periodic and driven by a pressure offset; alternatively, a power-law profile is imposed on the velocity at the inlet, whereas the outlet implements a Dirichlet pressure condition.
+The fluid follows a power law, so its viscosity depends on the shear rate. With the default power-law index $n = 0.5$ it is shear thinning, and the velocity profile is flatter than the parabola of a Newtonian fluid.
+By default the channel is periodic and driven by a pressure offset. Alternatively, a power-law profile is imposed on the velocity at the inlet, whereas the outlet implements a Dirichlet pressure condition.
 The parameters are read from the XML file `input.xml`.
 
 #### Governing equations
@@ -20,7 +20,7 @@ with the strain rate tensor $\mathbf{S} = \tfrac{1}{2} (\nabla \vel + \nabla \ve
 $$
     \nu(\dot\gamma) = K \dot\gamma^{\,n - 1},
 $$
-where $K$ is the consistency coefficient and $n$ the power-law index; $n = 1$ recovers a Newtonian fluid.
+where $K$ is the consistency coefficient and $n$ the power-law index. The index $n = 1$ recovers a Newtonian fluid.
 In a channel of height $H$, the steady solution is
 $$
     u_x(y) = u_\text{max} \left( 1 - \left| \frac{2 y}{H} - 1 \right|^{(n + 1)/n} \right),
@@ -50,12 +50,23 @@ The maximum velocity is $u_\text{max} = 0.1\,\mathrm{m/s}$, and the Reynolds num
 In this example, the domain is discretized with a uniform grid with the lattice spacing $\Delta x = H / N$, where $N = 40$ cells resolve the height of the channel.
 
 The collision operator is a BGK operator whose relaxation time follows the local shear rate ([Collision Operators](/content/02_core.qmd#collision-operators)), together with the D2Q9 velocity set ([Lattice Structures](/content/01_introduction.qmd#sec-lattice-structures)).
-In the bulk (MN 1), `SmagorinskyPowerLawBGKdynamics` adds a Smagorinsky eddy viscosity with the constant $0.15$ to the power-law viscosity; without the `_SMAGORINSKY` define at the top of `powerLaw2d.cpp`, `PowerLawBGKdynamics` is used instead.
+In the bulk (MN 1), `SmagorinskyPowerLawBGKdynamics` adds a Smagorinsky eddy viscosity with the constant $0.15$ to the power-law viscosity. Without the `_SMAGORINSKY` define at the top of `powerLaw2d.cpp`, `PowerLawBGKdynamics` is used instead.
 The viscosity is limited to $[\nu_\text{min}, \nu_\text{max}]$, which keeps the relaxation time in a stable range where the shear rate vanishes or becomes large.
 The descriptor stores the local relaxation frequency `OMEGA` in every cell.
 The walls (MN 2) are treated with `BounceBack` ([Define Boundary Method](/content/06_initial_boundary.qmd#sec-defineBoundaryMethod)).
 
-The unit converter `PowerLawUnitConverterFrom_Resolution_RelaxationTime_Reynolds_PLindex` derives the time step size $\Delta t = 6.25 \cdot 10^{-3}\,\mathrm{s}$ from the resolution, the lattice relaxation time $\tau = 0.8$, the Reynolds number and the power-law index, which gives a lattice velocity of $u_\text{max} \Delta t / \Delta x = 0.025$ and a lattice Mach number of $0.025 / c_s \approx 0.04$.
+The corresponding lattice is defined inside the case definition in `powerLaw2d.cpp` as in @lst-powerLaw2d-case.
+
+::: {#lst-powerLaw2d-case}
+```{.cpp}
+using MyCase = Case<
+  NavierStokes, Lattice<FLOATING_POINT_TYPE, descriptors::D2Q9<OMEGA>>
+>;
+```
+Case definition for the `powerLaw2d` example.
+:::
+
+The unit converter `PowerLawUnitConverterFrom_Resolution_RelaxationTime_Reynolds_PLindex` derives the time step size from the resolution, the lattice relaxation time, the Reynolds number and the power-law index.
 The parameters are given in @tbl-powerLaw2d-params.
 
 | Parameter | Symbol | Value | Description |
@@ -78,15 +89,6 @@ The parameters are given in @tbl-powerLaw2d-params.
 
 : Parameters of `powerLaw2d`. The first nine are read from `input.xml` (below `Param`), the others are set in `main()`. {#tbl-powerLaw2d-params}
 
-::: {#lst-powerLaw2d-descriptor}
-```{.cpp}
-using MyCase = Case<
-  NavierStokes, Lattice<FLOATING_POINT_TYPE, descriptors::D2Q9<OMEGA>>
->;
-```
-Descriptor definition for the `powerLaw2d` example.
-:::
-
 #### Validation
 
 The simulation stops as soon as the relative standard deviation of the average energy over the last $0.5\,\mathrm{s}$ falls below $10^{-6}$, which happens after $4\,575$ time steps at $t = 28.6\,\mathrm{s}$.
@@ -98,7 +100,7 @@ After the time loop, the example writes the velocity profile at $x = 0.9 L$ toge
 
 ![Velocity profile of `powerLaw2d` at $x = 0.9 L$ at convergence, compared with the analytical power-law profile for $n = 0.5$ and with the Newtonian profile.](/examples/laminar/powerLaw2d/doc/fig/profile/profile.svg){width="60%" #fig-powerLaw2d-profile .lightbox}
 
-The script `run.sh` runs the example with the parameters of `input-model.xml`, $n = 0.2$, for the three maximum velocities $u_\text{max} = 0.1$, $1$ and $10\,\mathrm{m/s}$ at the same Reynolds number, and collects the three velocity plots; as the comment in `input-model.xml` notes, the profile scaled with $u_\text{max}$ does not change with the velocity.
+The script `run.sh` runs the example with the parameters of `input-model.xml`, $n = 0.2$, for the three maximum velocities $u_\text{max} = 0.1$, $1$ and $10\,\mathrm{m/s}$ at the same Reynolds number, and collects the three velocity plots. As the comment in `input-model.xml` notes, the profile scaled with $u_\text{max}$ does not change with the velocity.
 
 #### Files
 

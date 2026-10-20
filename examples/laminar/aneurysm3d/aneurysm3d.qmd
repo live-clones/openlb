@@ -2,7 +2,7 @@
 features: [transient, stl]
 ---
 
-### aneurysm3d
+### aneurysm3d {#sec-example-laminar-aneurysm3d}
 
 This example simulates the blood flow through a cerebral artery with an aneurysm, a sac-like bulge of the vessel wall.
 The geometry of the vessels is read from an STL file, and besides the flow field, the example writes the wall shear stress on the vessel surface, which is a quantity of interest for the assessment of aneurysms.
@@ -31,7 +31,6 @@ and the vessel wall $\Gamma_{\mathrm{no\text{-}slip}}$ (MN 2),
 \end{align}
 The inflow profile $u_\text{in}$ is a Poiseuille profile across the inlet with the peak velocity $0.45\,\mathrm{m/s}$, directed into the vessel along its normal $\mathbf{n}$.
 `setTemporalValues()` raises it from rest with a polynomial ramp during the first $40\,\%$ of the simulated time, updated every $30$ time steps.
-In the code, two of the four pressure openings are called inlets (`inletCircle`, `inletCircle2`), but they get the same pressure condition as the outlets.
 The fluid is initially at rest.
 
 #### Domain
@@ -45,13 +44,22 @@ The geometry is read from `aneurysm3d.stl`, given in metres, and spans about $62
 #### Discretization \& Descriptor
 In this example, the domain is discretized with a uniform grid with the lattice spacing $\Delta x = 0.05\,\mathrm{m} / N$, where the default $N = 120$ gives $\Delta x = 0.42\,\mathrm{mm}$ and about $38\,000$ fluid cells.
 
-The LBM collision operator is the BGK operator with a single relaxation time ([Collision Operators](/content/02_core.qmd#collision-operators)), used as `BGKdynamics`, together with the D3Q19 velocity set ([Lattice Structures](/content/01_introduction.qmd#sec-lattice-structures)); the lattice uses single precision.
+The LBM collision operator is the BGK operator with a single relaxation time ([Collision Operators](/content/02_core.qmd#collision-operators)), used as `BGKdynamics`, together with the D3Q19 velocity set ([Lattice Structures](/content/01_introduction.qmd#sec-lattice-structures)). The lattice uses single precision.
 The vessel wall (MN 2) is treated with `BounceBack`, the inlet (MN 3) with `InterpolatedVelocity` and the outlets (MN 4) with `InterpolatedPressure` ([Define Boundary Method](/content/06_initial_boundary.qmd#sec-defineBoundaryMethod)).
 
+The corresponding lattice is defined inside the case definition in `aneurysm3d.cpp` as in @lst-aneurysm3d-case.
+
+::: {#lst-aneurysm3d-case}
+```{.cpp}
+using MyCase = Case<
+  NavierStokes, Lattice<float, descriptors::D3Q19<>>
+>;
+```
+Case definition for the `aneurysm3d` example.
+:::
+
 `prepareLattice()` sets up the unit converter directly from the lattice spacing and the time step size $\Delta t = \mathrm{CFL}\, \Delta x / U$, with the characteristic velocity $U = 0.2\,\mathrm{m/s}$, the characteristic length $0.007\,\mathrm{m}$, the density $1080\,\mathrm{kg/m^3}$ and the viscosity $\nu = U \cdot 0.05\,\mathrm{m} / Re = 1.41 \cdot 10^{-5}\,\mathrm{m^2/s}$ with $Re$ = `REYNOLDS`.
-This gives $\Delta t = 4.17 \cdot 10^{-5}\,\mathrm{s}$, the lattice velocity $0.02$, the lattice Mach number $0.035$ and the lattice relaxation time $\tau = 0.510$.
 The Reynolds number that the converter reports with respect to the characteristic length is $Re = U \cdot 0.007\,\mathrm{m} / \nu \approx 99$, whereas the parameter `REYNOLDS`, $708$, refers to the length $0.05\,\mathrm{m}$ used for the viscosity.
-The default simulated time of $16\,\mathrm{s}$ takes $384\,000$ time steps.
 
 | Parameter | Symbol | Value | Description |
 |---|---|---|---|
@@ -69,21 +77,11 @@ The default simulated time of $16\,\mathrm{s}$ takes $384\,000$ time steps.
 
 : Parameters of `aneurysm3d`, as set in `main()`. {#tbl-aneurysm3d-params}
 
-::: {#lst-aneurysm3d-descriptor}
-```{.cpp}
-using MyCase = Case<
-  NavierStokes, Lattice<float, descriptors::D3Q19<>>
->;
-```
-Descriptor definition for the `aneurysm3d` example.
-:::
-
 #### Results
 
 Every $0.4\,\mathrm{s}$ of simulated time, `getResults()` prints the lattice statistics and writes two kinds of output.
-The velocity and the pressure on the lattice go to `tmp/vtkData/aneurysm.pvd`; this output is scheduled with `scheduleBackgroundOutputVTK()` and written while the simulation continues.
+The velocity and the pressure on the lattice go to `tmp/vtkData/aneurysm.pvd`. This output is scheduled with `scheduleBackgroundOutputVTK()` and written while the simulation continues.
 On the STL surface, a `VTUsurfaceWriter` writes the wall shear stress, interpolated from the stress and the density of the fluid cells next to the wall, together with the velocity and the pressure, to `tmp/vtkData/Mesh.pvd`, where the load on the aneurysm wall can be inspected in ParaView.
-The example does not compare its results with reference data, and it was not run for this page.
 
 #### Files
 
