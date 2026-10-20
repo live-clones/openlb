@@ -36,12 +36,7 @@ using MyCase = Case<
 >;
 
 namespace olb::parameters {
-
-  struct RUNS : public descriptors::FIELD_BASE<1> {};
-  struct OUTPUT_INTERVAL : public descriptors::FIELD_BASE<1> {};
   struct PULSE_DIFF_BOUND : public descriptors::FIELD_BASE<1> {};
-
-  struct AVG_L2_ERROR : public descriptors::FIELD_BASE<1> {};
 }
 
 template <typename T>
@@ -293,14 +288,14 @@ void simulate(MyCase& myCase)
   auto& parameters = myCase.getParameters();
   const auto& converter = lattice.getUnitConverter();
 
-  const T statIter = parameters.get<parameters::OUTPUT_INTERVAL>();
+  const T statIter = parameters.get<parameters::INTERVAL_OUTPUT>();
   const std::size_t N = std::size_t(parameters.get<parameters::RESOLUTION>());
 
   OstreamManager clout(std::cout,"simulate");
   clout << "Executing the simulation with N=" << std::to_string(N) << std::endl;
 
   // switch outdirectory only if there are multiple simulation runs
-  if (parameters.get<parameters::RUNS>() > 1) {
+  if (parameters.get<parameters::NUMBER_OF_RUNS>() > 1) {
     singleton::directories().setOutputDir("./tmp/N" + std::to_string(N) + "/");
     /// file clean-up
     CSV<T> csvWriterErr("averageL2RelError");
@@ -325,7 +320,7 @@ void simulate(MyCase& myCase)
   }
 
   simulationAverage /= timeCount;
-  parameters.set<parameters::AVG_L2_ERROR>(simulationAverage);
+  parameters.set<parameters::L2_ERROR>(simulationAverage);
 
   clout << "Simulation Average Relative L2 Error: " << simulationAverage << std::endl;
 

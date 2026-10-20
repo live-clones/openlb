@@ -51,12 +51,7 @@ namespace olb::parameters {
 struct LX_INLET  : public descriptors::FIELD_BASE<1> { };
 struct LY_OUTLET : public descriptors::FIELD_BASE<1> { };
 struct PLOT_OVER_LINE : public TYPED_FIELD_BASE<bool,1> { };
-struct MAX_PHYS_TIME : public descriptors::FIELD_BASE<1> { };
-struct MAX_PHYS_TIME_AD : public descriptors::FIELD_BASE<1> { };
-struct START_TIME : public descriptors::FIELD_BASE<1> { };
-struct DIFFUSION : public descriptors::FIELD_BASE<3> { };
 struct CONCENTRATION : public descriptors::FIELD_BASE<6> { };
-struct PHYS_MAX_VELOCITY : public descriptors::FIELD_BASE<1> { };
 
 }
 
@@ -190,7 +185,7 @@ void prepareLatticeNS(MyCase& myCase) {
 
   lattice.setParameter<descriptors::OMEGA>(omega);
 
-  auto DIFFUSION = params.get<parameters::DIFFUSION>();
+  auto DIFFUSION = params.get<parameters::DIFFUSION_COMPONENTS>();
 
   T omegaA = converter.getLatticeRelaxationFrequencyFromDiffusivity<RADDESCRIPTOR>( DIFFUSION[0] );
   T omegaB = converter.getLatticeRelaxationFrequencyFromDiffusivity<RADDESCRIPTOR>( DIFFUSION[1] );
@@ -243,7 +238,7 @@ void prepareLatticeCRAD(MyCase& myCase) {
   boundary::set<boundary::AdvectionDiffusionDirichlet>(CRADlattice, geometry.getMaterialIndicator({4}));
   setZeroGradientBoundary<T, RADDESCRIPTOR>(CRADlattice, geometry.getMaterialIndicator({5}));
 
-  auto DIFFUSION = params.get<parameters::DIFFUSION>();
+  auto DIFFUSION = params.get<parameters::DIFFUSION_COMPONENTS>();
   T omega = NSconverter.getLatticeRelaxationFrequencyFromDiffusivity<RADDESCRIPTOR>( DIFFUSION[ID] );
   AnalyticalConst3D<T,T> omegaD( omega );
   fields::set<descriptors::OMEGA>(CRADlattice, geometry.getMaterialIndicator({1, 2, 3, 4, 5}), omegaD);
@@ -316,7 +311,7 @@ void setTemporalValues(MyCase& myCase,
   const auto& converter = lattice.getUnitConverter();
 
   // No of time steps for smooth start-up
-  const T startTime = params.get<parameters::START_TIME>();
+  const T startTime = params.get<parameters::PHYS_START_T>();
   const int iTmaxStart = converter.getLatticeTime( startTime );
   const T physMaxVelocity = params.get<parameters::PHYS_MAX_VELOCITY>();
 
@@ -367,7 +362,7 @@ void getResultsNS(MyCase& myCase,
   vtmWriterNS.addFunctor( velocity );
   vtmWriterNS.addFunctor( pressure );
 
-  const T maxPhysT = params.get<parameters::MAX_PHYS_TIME>();
+  const T maxPhysT = params.get<parameters::PHYS_MAX_T>();
   const int  vtkIter  = converter.getLatticeTime( maxPhysT/10 );
   const int  statIter = converter.getLatticeTime( maxPhysT/100 );
 
@@ -462,8 +457,8 @@ void getResultsCRAD(MyCase& myCase,
     vtmWriterCRAD.addFunctor(*diffs[i]);
   }
 
-  const T maxPhysT = params.get<parameters::MAX_PHYS_TIME>();
-  const T maxPhysTAD = params.get<parameters::MAX_PHYS_TIME_AD>();
+  const T maxPhysT = params.get<parameters::PHYS_MAX_T>();
+  const T maxPhysTAD = params.get<parameters::PHYS_MAX_T_AD>();
   const int  vtkIter  = converter.getLatticeTime( maxPhysTAD/10 );
   const int  statIter = converter.getLatticeTime( maxPhysTAD/100 );
 
@@ -528,8 +523,8 @@ void simulate(MyCase& myCase) {
   using T = MyCase::value_t;
   auto& params = myCase.getParameters();
   const auto& converter = myCase.getLattice(NavierStokes{}).getUnitConverter();
-  const T maxPhysT = params.get<parameters::MAX_PHYS_TIME>();
-  const T maxPhysTAD = params.get<parameters::MAX_PHYS_TIME_AD>();
+  const T maxPhysT = params.get<parameters::PHYS_MAX_T>();
+  const T maxPhysTAD = params.get<parameters::PHYS_MAX_T_AD>();
   const std::size_t iTmax = converter.getLatticeTime(maxPhysT);
   const int  statIterNS = converter.getLatticeTime( maxPhysT/100 );
   const int  statIterAD = converter.getLatticeTime( maxPhysTAD/100 );
@@ -590,8 +585,8 @@ int main(int argc, char* argv[]) {
     using namespace olb::parameters;
     myCaseParameters.set<DOMAIN_EXTENT        >({1600e-6,800e-6,100e-6});
     myCaseParameters.set<RESOLUTION           >(40);
-    myCaseParameters.set<MAX_PHYS_TIME        >(25*(1600e-6 + 800e-6/2)/1.4);
-    myCaseParameters.set<MAX_PHYS_TIME_AD     >(0.01);
+    myCaseParameters.set<PHYS_MAX_T        >(25*(1600e-6 + 800e-6/2)/1.4);
+    myCaseParameters.set<PHYS_MAX_T_AD     >(0.01);
     myCaseParameters.set<PHYS_CHAR_VELOCITY   >(1.4);
     myCaseParameters.set<PHYS_MAX_VELOCITY    >(1.4*2.1);
     myCaseParameters.set<LATTICE_CHAR_VELOCITY>(0.05);
@@ -599,10 +594,10 @@ int main(int argc, char* argv[]) {
     myCaseParameters.set<PHYS_CHAR_VISCOSITY  >(1.002e-6);
     myCaseParameters.set<LX_INLET             >(100.e-6);
     myCaseParameters.set<LY_OUTLET            >(200.e-6);
-    myCaseParameters.set<DIFFUSION            >({1.6e-9,2.e-10,2.e-10});
+    myCaseParameters.set<DIFFUSION_COMPONENTS            >({1.6e-9,2.e-10,2.e-10});
     myCaseParameters.set<CONCENTRATION        >({1., 1.e-8,1.e-8,0.001,1.e-8,1.e-8});
     myCaseParameters.set<PLOT_OVER_LINE       >(true);
-    myCaseParameters.set<START_TIME           >(0.02*25*(1600e-6 + 800e-6/2)/1.4);
+    myCaseParameters.set<PHYS_START_T           >(0.02*25*(1600e-6 + 800e-6/2)/1.4);
   }
 
   /// === Step 3: Create Mesh ===

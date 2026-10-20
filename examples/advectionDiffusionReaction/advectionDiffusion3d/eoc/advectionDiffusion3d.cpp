@@ -46,9 +46,9 @@ int main(int argc, char *argv[]) {
   MyCase::ParametersD myCaseParameters;
   {
     using namespace olb::parameters;
-    myCaseParameters.set<RUNS>(4);
+    myCaseParameters.set<NUMBER_OF_RUNS>(4);
     myCaseParameters.set<RESOLUTION>(21);
-    myCaseParameters.set<OUTPUT_INTERVAL>(20);
+    myCaseParameters.set<INTERVAL_OUTPUT>(20);
     myCaseParameters.set<PHYS_CHAR_LENGTH>(2.);
     myCaseParameters.set<PHYS_CHAR_DENSITY>(1.);
     myCaseParameters.set<PHYS_CHAR_VELOCITY>(2.5);
@@ -56,27 +56,27 @@ int main(int argc, char *argv[]) {
     myCaseParameters.set<PECLET>(100.); // Peclet number (Pe = u*L/mue)
     myCaseParameters.set<PULSE_DIFF_BOUND>(1e-1);
     myCaseParameters.set<NON_SMOOTH_ENABLED>(true);
-    myCaseParameters.set<MAX_RESOLUTION>(myCaseParameters.get<RESOLUTION>());
+    myCaseParameters.set<RESOLUTION_MAX>(myCaseParameters.get<RESOLUTION>());
   }
 
   const MyCase::value_t N0 = myCaseParameters.get<parameters::RESOLUTION>();
-  const MyCase::value_t statIter0 = myCaseParameters.get<parameters::OUTPUT_INTERVAL>();
+  const MyCase::value_t statIter0 = myCaseParameters.get<parameters::INTERVAL_OUTPUT>();
   const MyCase::value_t physVel0 = myCaseParameters.get<parameters::PHYS_CHAR_VELOCITY>();
   const MyCase::value_t physLength0 = myCaseParameters.get<parameters::PHYS_CHAR_LENGTH>();
   const std::size_t peclet(myCaseParameters.get<parameters::PECLET>());
 
-  myCaseParameters.set<parameters::MAX_RESOLUTION>(
-    util::pow(2, myCaseParameters.get<parameters::RUNS>()-1) * myCaseParameters.get<parameters::RESOLUTION>()
+  myCaseParameters.set<parameters::RESOLUTION_MAX>(
+    util::pow(2, myCaseParameters.get<parameters::NUMBER_OF_RUNS>()-1) * myCaseParameters.get<parameters::RESOLUTION>()
   );
 
   singleton::directories().setOutputDir("./tmp/p_" + std::to_string((int) peclet) + "/");
   CSV<MyCase::value_t> csvWriter("averageSimL2RelErr");
 
-  for (std::size_t i = 0; i < myCaseParameters.get<parameters::RUNS>(); ++i) {
+  for (std::size_t i = 0; i < myCaseParameters.get<parameters::NUMBER_OF_RUNS>(); ++i) {
 
     //Adjust Resolution and output interval
     myCaseParameters.set<parameters::RESOLUTION>(util::pow(2,i) * N0);
-    myCaseParameters.set<parameters::OUTPUT_INTERVAL>(util::pow(4,i) * statIter0);
+    myCaseParameters.set<parameters::INTERVAL_OUTPUT>(util::pow(4,i) * statIter0);
 
     clout << "<------- Simulate with -------> " << std::endl;
     clout << "Resolution: " << util::pow(2,i)*N0 << std::endl;
@@ -97,7 +97,7 @@ int main(int argc, char *argv[]) {
 
     singleton::directories().setOutputDir("./tmp/p_" + std::to_string((int) peclet) + "/");
     csvWriter.writeDataFile(myCaseParameters.get<parameters::RESOLUTION>(),
-                            myCaseParameters.get<parameters::AVG_L2_ERROR>(),
+                            myCaseParameters.get<parameters::L2_ERROR>(),
                             "averageSimL2RelErr");
   }
 }

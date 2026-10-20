@@ -39,14 +39,8 @@ using MyCase = Case<
 #define allNorms
 
 namespace olb::parameters {
-
-  struct RUNS : public descriptors::FIELD_BASE<1> {};
-  struct OUTPUT_INTERVAL : public descriptors::FIELD_BASE<1> {};
   struct PULSE_DIFF_BOUND : public descriptors::FIELD_BASE<1> {};
-  struct MAX_RESOLUTION : public descriptors::FIELD_BASE<1> {};
   struct NON_SMOOTH_ENABLED : public descriptors::TYPED_FIELD_BASE<bool,1> {};
-
-  struct AVG_L2_ERROR : public descriptors::FIELD_BASE<1> {};
 }
 
 template <typename T>
@@ -394,9 +388,9 @@ void simulate(MyCase& myCase)
   auto& geometry = myCase.getGeometry();
   auto& parameters = myCase.getParameters();
   const auto& converter = lattice.getUnitConverter();
-  const std::size_t runs = parameters.get<parameters::RUNS>();
+  const std::size_t runs = parameters.get<parameters::NUMBER_OF_RUNS>();
   const std::size_t N = parameters.get<parameters::RESOLUTION>();
-  const std::size_t statIter = parameters.get<parameters::OUTPUT_INTERVAL>();
+  const std::size_t statIter = parameters.get<parameters::INTERVAL_OUTPUT>();
   const T peclet = parameters.get<parameters::PECLET>();
   const T physTmax = parameters.get<parameters::PHYS_MAX_T>();
   const T pulseDiffBound = parameters.get<parameters::PULSE_DIFF_BOUND>();
@@ -434,7 +428,7 @@ void simulate(MyCase& myCase)
   }
 
   simulationAverage /= timeCount;
-  parameters.set<parameters::AVG_L2_ERROR>(simulationAverage);
+  parameters.set<parameters::L2_ERROR>(simulationAverage);
 
   clout << "Simulation Average Relative L2 Error: " << simulationAverage << std::endl;
 

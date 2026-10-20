@@ -48,6 +48,8 @@ struct KNUDSEN      : public descriptors::FIELD_BASE<1> { };
 struct STOKES       : public descriptors::FIELD_BASE<1> { };
 struct NUSSELT      : public descriptors::FIELD_BASE<1> { };
 struct PRANDTL_TURB : public descriptors::FIELD_BASE<1> { };
+struct ARCHIMEDES   : public descriptors::FIELD_BASE<1> { };
+struct STEFAN       : public descriptors::FIELD_BASE<1> { };
 struct MACH         : public descriptors::FIELD_BASE<1> { };
 
 // Converter-related parameters
@@ -87,20 +89,29 @@ struct TIME_STEPS: public descriptors::TYPED_FIELD_BASE<std::size_t,1> { };
 
 //Geometry
 struct DOMAIN_EXTENT : public descriptors::FIELD_BASE<0,1> { };
+struct DOMAIN_ORIGIN : public descriptors::FIELD_BASE<0,1> { };
 struct ORIGIN : public descriptors::FIELD_BASE<0,1> { };
 struct DOMAIN_L : public descriptors::FIELD_BASE<1> { };
 struct RADIUS : public descriptors::FIELD_BASE<1> { };
 struct CENTER : public descriptors::FIELD_BASE<0,1> { };
+struct ANGLE : public descriptors::FIELD_BASE<1> { };
 
 //BC/IC/Constraint Flow
+struct BULK_VELOCITY     : public descriptors::FIELD_BASE<1> { };
+struct PHYS_MAX_VELOCITY : public descriptors::FIELD_BASE<1> { };
 struct ANGULAR_VELOCITY  : public descriptors::FIELD_BASE<1> { };
 struct PRESSURE          : public descriptors::FIELD_BASE<1> { };
 struct REFERNCE_PRESSURE : public descriptors::FIELD_BASE<1> { };
+struct AVERAGE_PRESSURE  : public descriptors::FIELD_BASE<1> { };
+struct PRESSURE_DROP     : public descriptors::FIELD_BASE<1> { };
+struct SHEAR_RATE        : public descriptors::FIELD_BASE<1> { };
+struct STRAIN_RATE       : public descriptors::FIELD_BASE<1> { };
 
 struct COEFFICIENT_OF_DRAG : public descriptors::FIELD_BASE<1> { };
 struct COEFFICIENT_OF_LIFT : public descriptors::FIELD_BASE<1> { };
 
 //BC/IC/Constraints Heat
+struct TEMPERATURE : public descriptors::FIELD_BASE<1> { };
 struct T_HOT  : public descriptors::FIELD_BASE<1> { };
 struct T_COLD : public descriptors::FIELD_BASE<1> { };
 struct T_MEAN   : public descriptors::FIELD_BASE<1> { };
@@ -177,6 +188,8 @@ struct PHYS_MAX_T : public descriptors::FIELD_BASE<1> { };
 struct PHYS_SAVE_ITER : public descriptors::FIELD_BASE<1> { };
 struct PHYS_VTK_ITER_T : public descriptors::FIELD_BASE<1> { };
 struct PHYS_STAT_ITER_T       : public descriptors::FIELD_BASE<1> { };
+struct PHYS_IMAGE_ITER_T : public descriptors::FIELD_BASE<1> { };
+struct PHYS_GNUPLOT_ITER_T : public descriptors::FIELD_BASE<1> { };
 struct PHYS_START_PERIOD : public descriptors::FIELD_BASE<1> { };
 struct PHYS_TIMER_ITER_T : public descriptors::FIELD_BASE<1>{};
 struct PHYS_ITER_T : public descriptors::FIELD_BASE<1>{};
@@ -197,6 +210,7 @@ struct MAX_LATTICE_T : public descriptors::TYPED_FIELD_BASE<std::size_t,1> { };
 struct RAMP_UP_T : public descriptors::FIELD_BASE<1> { };
 struct RAMP_UP_STEP : public descriptors::FIELD_BASE<1> { };
 
+struct STL_SIZE : public descriptors::FIELD_BASE<1> { };
 struct TIME_OUTPUT_START : public descriptors::FIELD_BASE<1> { };
 struct INTERVAL_OUTPUT : public descriptors::FIELD_BASE<1> { };
 struct INTERVAL_ERROR : public descriptors::FIELD_BASE<1> { };
@@ -209,15 +223,20 @@ struct OUTPUT_DIRECTORY : public descriptors::TYPED_FIELD_BASE<std::string, 1> {
 struct CONVERGED : public descriptors::TYPED_FIELD_BASE<bool,1> { };
 struct CONVERGENCE_PRECISION : public descriptors::FIELD_BASE<1> { };
 struct EPSILON : public descriptors::FIELD_BASE<1> { };
+struct RESIDUUM : public descriptors::FIELD_BASE<1> { };
 struct CONV_ITER : public descriptors::FIELD_BASE<1> { };
 struct NUM_CONV_VALUES : public descriptors::FIELD_BASE<1> { };
 struct INTERVAL_CONVERGENCE_CHECK : public descriptors::FIELD_BASE<1> { };
 struct NUMBER_OF_RUNS : public descriptors::TYPED_FIELD_BASE<int, 1> { };
 struct RESOLUTION_START : public descriptors::TYPED_FIELD_BASE<int, 1> { };
 struct RESOLUTION_END : public descriptors::TYPED_FIELD_BASE<int, 1> { };
+struct RESOLUTION_STEP : public descriptors::TYPED_FIELD_BASE<int, 1> { };
 struct RESOLUTION_MAX : public descriptors::TYPED_FIELD_BASE<int, 1> { };
 
 // Statistics
+struct L1_ERROR : public descriptors::FIELD_BASE<1> { };
+struct L2_ERROR : public descriptors::FIELD_BASE<1> { };
+struct LINF_ERROR : public descriptors::FIELD_BASE<1> { };
 struct ERROR : public descriptors::FIELD_BASE<1> { };
 
 // Gravity
@@ -244,8 +263,18 @@ struct INTENSITY : public descriptors::FIELD_BASE<1> {};
 struct PART_RADIUS : public descriptors::FIELD_BASE<1> {};
 struct PART_RHO : public descriptors::FIELD_BASE<1> {};
 
+// Concentration/component vector parameters
+struct PHYS_DENSITY_COMPONENTS : public descriptors::FIELD_BASE<3> { };
+struct DIFFUSION_COMPONENTS : public descriptors::FIELD_BASE<3> { };
+
 // Electricity
+struct DIFFUSION : public descriptors::FIELD_BASE<1> { };
+struct VALENCE : public descriptors::FIELD_BASE<1> { };
 struct DIELECTRIC_CONSTANT : public descriptors::FIELD_BASE<1> { };
+struct DEBYE : public descriptors::FIELD_BASE<1> { };
+
+// Species-specific time parameters (laminarReactiveTmixer)
+struct PHYS_MAX_T_AD : public descriptors::FIELD_BASE<1> { };
 
 // Optimization
 struct INITIAL_CONTROL_SCALAR : public descriptors::FIELD_BASE<1> { };

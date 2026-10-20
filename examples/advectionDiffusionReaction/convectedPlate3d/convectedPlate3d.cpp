@@ -32,12 +32,7 @@ using namespace olb::descriptors;
 using namespace olb::names;
 
 namespace olb::parameters {
-
-struct HEIGHT : public descriptors::FIELD_BASE<1> { };
-struct BULK_VELOCITY : public descriptors::FIELD_BASE<1> { };
-struct RESIDUUM : public descriptors::FIELD_BASE<1> { };
-struct DIFFUSIVITY : public descriptors::FIELD_BASE<1> { };
-
+  struct HEIGHT : public descriptors::FIELD_BASE<1> { };
 }
 
 using MyCase = Case<NavierStokes, Lattice<double, D3Q7<VELOCITY,OMEGA>>>;
@@ -128,8 +123,8 @@ void prepareLattice(MyCase& myCase){
     (T)   parameters.get<parameters::PHYS_DELTA_X>(),                                                                               // physDeltaX
     (T)   util::pow(parameters.get<parameters::HEIGHT>() / parameters.get<parameters::RESOLUTION>(), 2),                            // physDeltaY
     (T)   parameters.get<parameters::HEIGHT>(),                                                                                     // charPhysLength: reference length of simulation geometry
-    (T)   parameters.get<parameters::PECLET>() * parameters.get<parameters::DIFFUSIVITY>() / parameters.get<parameters::HEIGHT>(),  // charPhysVelocity: maximal/highest expected velocity during simulation in __m / s__
-    (T)   parameters.get<parameters::DIFFUSIVITY>(),                                                                                // physDiffusiviy
+    (T)   parameters.get<parameters::PECLET>() * parameters.get<parameters::PHYS_DIFFUSIVITY>() / parameters.get<parameters::HEIGHT>(),  // charPhysVelocity: maximal/highest expected velocity during simulation in __m / s__
+    (T)   parameters.get<parameters::PHYS_DIFFUSIVITY>(),                                                                                // physDiffusiviy
     (T)   parameters.get<parameters::PHYS_CHAR_DENSITY>()                                                                           // physDensity: physical density in __kg / m^3__
   );
 
@@ -326,7 +321,7 @@ int main(int argc, char* argv[]) {
     myCaseParameters.set<PECLET                     >(  108.005);
     myCaseParameters.set<PHYS_MAX_T                 >( 100000.0);
     myCaseParameters.set<RESIDUUM                   >(    1e-10);
-    myCaseParameters.set<DIFFUSIVITY                >(  0.07407);
+    myCaseParameters.set<PHYS_DIFFUSIVITY                >(  0.07407);
 
     myCaseParameters.set<PHYS_DELTA_X>([](MyCase::ParametersD& p) {
       return p.get<HEIGHT>()/p.get<RESOLUTION>();

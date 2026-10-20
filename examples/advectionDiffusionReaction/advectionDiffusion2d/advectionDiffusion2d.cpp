@@ -47,13 +47,13 @@ int main(int argc, char *argv[])
   {
     using namespace olb::parameters;
     myCaseParameters.set<RESOLUTION>(50);
-    myCaseParameters.set<OUTPUT_INTERVAL>(50);
+    myCaseParameters.set<INTERVAL_OUTPUT>(50);
     myCaseParameters.set<PHYS_CHAR_LENGTH>(2.);
     myCaseParameters.set<PHYS_CHAR_DENSITY>(1.);
     myCaseParameters.set<PHYS_DIFFUSIVITY>(0.05);
     myCaseParameters.set<PECLET>(100.); // Peclet number (Pe = u*L/mue)
     myCaseParameters.set<PULSE_DIFF_BOUND>(1e-1);
-    myCaseParameters.set<MAX_RESOLUTION>(myCaseParameters.get<RESOLUTION>());
+    myCaseParameters.set<RESOLUTION_MAX>(myCaseParameters.get<RESOLUTION>());
   }
 
   Mesh mesh = createMesh(myCaseParameters);
