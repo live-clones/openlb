@@ -98,8 +98,6 @@ $$
     \boldsymbol{\tau}_w = \boldsymbol{\sigma} \mathbf{n}_w - \left( \mathbf{n}_w \cdot \boldsymbol{\sigma} \mathbf{n}_w \right) \mathbf{n}_w .
 $$
 
-The results below are from a run with the default parameters on a single GPU, an NVIDIA GeForce GTX 1070 Ti, where the $384\,000$ time steps took $7.4\,\mathrm{min}$ at $52$ MLUPs.
-
 @fig-aneurysm3d-umax shows the maximum velocity in the vessels, `maxCFL` of the lattice statistics times the velocity conversion factor $\Delta x / \Delta t = 10\,\mathrm{m/s}$.
 It follows the ramp-up of the inflow, reaches $0.754\,\mathrm{m/s}$ at its end, $t = 6.4\,\mathrm{s}$, and does not change any more afterwards, so the flow is steady for the remaining $9.6\,\mathrm{s}$ of the simulation.
 The maximum is $1.7$ times the peak velocity of the inflow. It lies in the narrow neck below the aneurysm, through which most of the flow leaves the sac towards the right branches (@fig-aneurysm3d-streamlines).
@@ -139,19 +137,6 @@ Such regions of low wall shear stress in the slow vortex of the sac are what the
 Magnitude of the wall shear stress $|\boldsymbol{\tau}_w|$ in Pa on the surface of `aneurysm3d`, written by the `VTUsurfaceWriter` and visualized in ParaView. The colour range is fixed to $[0, 8]\,\mathrm{Pa}$ for all time steps, so that they are comparable.
 :::
 :::
-
-There is no reference solution for this geometry, but the conservation of mass can be checked.
-@fig-aneurysm3d-flowrate shows the volume flow rates through planes four cells inside the five openings, perpendicular to the normals used in `prepareGeometry()`, integrated in ParaView from the VTK output.
-In the steady state, $2.43\,\mathrm{ml/s}$ enter through the inlet, a mean velocity of $0.16\,\mathrm{m/s}$ over the inlet circle of radius $2.2\,\mathrm{mm}$.
-The top left outlet takes $55\,\%$ of the outflow, the right one $34\,\%$, and the top right and the bottom one $5.6\,\%$ and $5.5\,\%$, whose curves coincide in the figure.
-The flow divides in nearly the same proportions during the whole ramp-up.
-
-The sum of the outflow rates exceeds the inflow rate by $2.3\,\%$.
-This is no loss of mass but the weak compressibility of the LBM: the density follows the pressure, $\rho = \rho_0 \left( 1 + p / (\rho_0 c_s^2) \right)$ with $\rho_0 c_s^2 = 36\,000\,\mathrm{Pa}$, and the pressure drop from the inlet to the outlets lowers it by about $2\,\%$.
-With the flow rates weighted by this density, the mass flow rates of the inlet and the outlets agree within $0.3\,\%$.
-The data of the figure is in `doc/fig/flowrate/data/flowrate.dat`.
-
-![Volume flow rates of `aneurysm3d` through the inlet and the four outlets over time with $N = 120$. The curves of the top right and the bottom outlet coincide.](/examples/laminar/aneurysm3d/doc/fig/flowrate/flowrate.svg){width="80%" #fig-aneurysm3d-flowrate .lightbox}
 
 #### Files
 
