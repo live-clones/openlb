@@ -254,6 +254,10 @@ František Prinz
 
 :   **functors**: particle drag and lift force models (Schiller-Naumann, Haider-Levenspiel, Tran-Cong, Stokes spheroid, spheroid lift), **examples**: bifurcation3d eulerLagrange
 
+Alice Raeli
+
+:   **examples**: gasStorage2d
+
 Florian Raichle
 
 :   **reaction**: adsorption models and isotherms, **core**: adsorption unit converter, **examples**: adsorption3d, microMixer3d
@@ -317,6 +321,10 @@ Bernd Stahl
 Nando Suntoyo
 
 :   **dynamics**: advection-diffusion, power-law, non-Newtonian and porous BGK dynamics, **boundaries**: advection-diffusion boundaries, Robin boundary post processor
+
+Alexandre Tacques
+
+:   **general**: code development
 
 Dennis Teutscher
 
