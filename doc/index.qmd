@@ -28,24 +28,20 @@ pagetitle: "OpenLB User Guide"
     </div>
 ```
 
-:::{.columns}
-:::{.column width="50%" .mb-3}
+::: {layout-ncol=2}
 
-
+::: {}
 ## OpenLB User Guide
 The OpenLB project provides a C++ package for the implementation of lattice Boltzmann methods that addresses a vast range of multi-physics transport problems, e.g. in computational fluid dynamics. The source code is publicly available and constructed in a well readable, modular and platform-transparent way. This enables for a fast implementation of both academic and advanced engineering applications. It is also easily extensible to include new physical models.
-
 :::
-:::{.column width="50%" .mb-3}
+
 ```{=html}
 <div class="card border-0 shadow-sm p-4 bg-white" style="border-radius: 20px; max-width: 800px; margin: 0 auto;">
   
-  <!-- 1. Der YouTube Playlist Player (responsiv im 16:9 Format) -->
   <div class="ratio ratio-16x9 mb-3" style="border-radius: 15px; overflow: hidden;">
     <iframe width="560" height="315" src="https://www.youtube.com/embed/videoseries?si=G0dNMpalEsons2Qk&amp;list=PLdH-CeuRChDw" title="YouTube video player" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" referrerpolicy="strict-origin-when-cross-origin" allowfullscreen></iframe>
   </div>
 
-  <!-- 2. Button zum YouTube-Kanal darunter -->
   <div class="text-center mt-3">
     <a href="https://www.youtube.com/@openlb" 
        target="_blank" 
@@ -56,9 +52,8 @@ The OpenLB project provides a C++ package for the implementation of lattice Bolt
 
 </div>
 ```
-:::
-:::
 
+:::
 
 <!-- navigation grid -->
 
