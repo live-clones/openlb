@@ -93,7 +93,7 @@ int main(int argc, char* argv[]) {
   gplot.setLabel("Resolution test", "average Error");
 
   for(int simuN =  myCaseParameters.get<parameters::RESOLUTION_START>();
-      simuN <=  myCaseParameters.get<parameters::END_RESOLUTION>();
+      simuN <=  myCaseParameters.get<parameters::RESOLUTION_END>();
       simuN += 25) {
     myCaseParameters.set<parameters::RESOLUTION>(simuN);
 

@@ -64,7 +64,6 @@ using MyCase = Case<
 namespace olb::parameters {
 
 struct PARTICLE_RADIUS : public descriptors::FIELD_BASE<1> { };
-struct PHYS_DENSITY_COMPONENTS : public descriptors::FIELD_BASE<3> { };
 struct PARTICLE_DENSITY : public descriptors::FIELD_BASE<1> { };
 struct ISO_CONST_A : public descriptors::FIELD_BASE<1> { };
 struct ISO_CONST_B : public descriptors::FIELD_BASE<1> { };
