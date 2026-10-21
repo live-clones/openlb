@@ -10,11 +10,11 @@ With Bouzidi boundary conditions, the curved boundary is adequately mapped and i
 A Smagorinsky LES BGK model is used for the dynamics to stabilize the turbulent flow simulation for low resolutions.
 The output is the flux computed at the inflow and outflow regions.
 This example writes the stress on the aorta wall and the velocity field in the bifurcation region to a file.
-According to the comment in `aorta3d.cpp`, the results have been validated through comparison with other results obtained with FEM and FVM. The source code does not name the publication of this comparison. Validation studies of LBM simulations in the aorta by the authors of the example are found in [@henn:12; @mirzaee:16].
+Validation studies of LBM simulations in the aorta by the authors of the example are found in [@henn:12; @mirzaee:16].
 
 #### Governing equations
 
-The domain $\Omega \times \I$, the inside of the vessels times $\R_{\geq 0}$, is considered with the following governing equations with the velocity field $\vel \in \R^3$ and the pressure $p \in \R$ for the incompressible flow of a Newtonian fluid with kinematic viscosity $\nu \in \R_{> 0}$ and constant density $\rho \in \R_{> 0}$,
+The domain $\Omega \times \I$, the inside of the vessels, is considered with the following governing equations with the velocity field $\vel \in \R^3$ and the pressure $p \in \R$ for the incompressible flow of a Newtonian fluid with kinematic viscosity $\nu \in \R_{> 0}$ and constant density $\rho \in \R_{> 0}$,
 \begin{align}
     \nabla \cdot \vel &= 0 \quad \text{in} \quad \Omega \times \I, \\
     \partial_t \vel + (\vel \cdot \nabla) \vel &= -\frac{1}{\rho} \nabla p + \nabla \cdot \left( 2 (\nu + \nu_t) \mathbf{S} \right) \quad \text{in} \quad \Omega \times \I,
@@ -45,34 +45,17 @@ The pressure at both outlets is $p = 0$, a reference value, and the fluid is ini
 The geometry is read from `aorta3d.stl`, given in millimetres and scaled by $0.001$, and spans $43.7 \times 160 \times 28.1\,\mathrm{mm}$ (@fig-aorta3d-geometry).
 The aorta runs downwards along the $-y$-direction from the inlet at $y = 250\,\mathrm{mm}$ to the bifurcation at about $y = 115\,\mathrm{mm}$, where it splits into the two iliac arteries, which end at $y = 90\,\mathrm{mm}$ with the radii $5.5\,\mathrm{mm}$ (`outflow0`) and $5.8\,\mathrm{mm}$ (`outflow1`).
 `Mesh::fromSTL()` builds the mesh around the STL surface from the parameters of @tbl-aorta3d-params.
-`prepareGeometry()` marks a layer of one cell around the STL surface as wall (MN 2) and the cells inside the surface as fluid (MN 1).
-At the inlet and the two outlets, it renames the wall cells in thin cylinders of height $2 \Delta x$ around circles, given by their centre, normal and radius, to MN 3, MN 4 and MN 5 (@lst-aorta3d-geometry).
-`clean()` and `innerClean()` remove the wall cells that have no fluid neighbour.
 
-::: {#lst-aorta3d-geometry}
-```{.cpp}
-// Set material number for inflow
-IndicatorCircle3D<T> inflow(  0.218125,0.249987,0.0234818, 0., 1.,0., 0.0112342 );
-IndicatorCylinder3D<T> layerInflow( inflow, 2.* dx);
-geometry.rename( 2,3,1,layerInflow );
-```
-Marking of the inlet in `prepareGeometry()`: the wall cells (MN 2) in the cylinder `layerInflow` that have a fluid neighbour (MN 1) become inlet cells (MN 3). The outlets are marked in the same way.
-:::
 
 ![Geometry of `aorta3d`, the surface of `aorta3d.stl` seen along the $z$-axis: the lower abdominal aorta and its bifurcation into the iliac arteries. The spheres mark the centres and the radii of the circles that `prepareGeometry()` uses to find the inlet (blue) and the two outlets (green).](/examples/turbulence/aorta3d/doc/fig/aorta3dGeometry.png){width="100%" #fig-aorta3d-geometry .lightbox}
 
 #### Discretization \& Descriptor
 In this example, the domain is discretized with a uniform grid with the lattice spacing $\Delta x = L / N$, where $N = 40$ cells resolve the inlet diameter $L$, which gives $\Delta x = 0.56\,\mathrm{mm}$ and $171\,000$ fluid cells.
 The mesh around the STL surface has $605\,000$ cells and is split into $3$ cuboids on a single process.
-The time step size $\Delta t = L / (N_t N)$ with the time resolution $N_t = 20$ is $2.81 \cdot 10^{-5}\,\mathrm{s}$, so the lattice velocity of the peak inflow is $U \Delta t / \Delta x = 1 / N_t = 0.0225$, and the simulated $2\,\mathrm{s}$ take $71\,238$ time steps.
+The time step size is $2.81 \cdot 10^{-5}\,\mathrm{s}$.
 
-The LBM collision operator is the BGK operator with the Smagorinsky LES model, used as `SmagorinskyBGKdynamics` ([Collision Operators](/content/02_core.qmd#collision-operators)), together with the D3Q19 velocity set ([Lattice Structures](/content/01_introduction.qmd#sec-lattice-structures)). The lattice uses double precision.
-The molecular relaxation time is $\tau = 0.50076$, so close to $1/2$ that the plain BGK operator would be unstable at this resolution.
-In each cell, the Smagorinsky model adds a turbulent relaxation time computed from the norm of the non-equilibrium stress tensor $\boldsymbol{\Pi}^{(1)}$,
-$$
-    \tau_\text{eff} = \frac{1}{2} \left( \tau + \sqrt{\tau^2 + \frac{2 \sqrt{2}\, C_S^2}{c_s^4\, \rho_\text{lat}} \left| \boldsymbol{\Pi}^{(1)} \right|} \right),
-$$
-which raises the viscosity where the velocity gradients are large and so stabilizes the simulation.
+The LBM collision operator is the BGK operator with the Smagorinsky LES model, used as `SmagorinskyBGKdynamics` ([Collision Operators](/content/02_core.qmd#collision-operators)), together with the D3Q19 velocity set ([Lattice Structures](/content/01_introduction.qmd#sec-lattice-structures)).
+
 
 The wall (MN 2) and the inlet (MN 3) are treated with the Bouzidi boundary [@bouzidi:01], `setBouzidiBoundary()`, which takes the exact position of the STL surface between the lattice nodes into account ([Define Boundary Method](/content/06_initial_boundary.qmd#sec-defineBoundaryMethod)). At the inlet, `BouzidiVelocityPostProcessor` imposes the inflow profile, evaluated by `setBouzidiVelocity()` at the points where the lattice links cross the surface. `setBouzidiVelocity()` expects the velocity in lattice units, the other velocity setters, such as `momenta::setVelocity()`, in physical units.
 With `BOUZIDI_ENABLED` set to `false`, the wall is treated with `BounceBack` and the inlet with `InterpolatedVelocity` instead.
@@ -112,9 +95,6 @@ Case definition for the `aorta3d` example.
 
 #### Results
 
-The results below come from a run of the default configuration on a single GPU (NVIDIA GeForce GTX 1070 Ti), which took $6\,\mathrm{min}$.
-Every $0.1\,\mathrm{s}$ of simulated time, `getResults()` writes two kinds of output.
-The velocity and the pressure on the lattice go to `tmp/vtkData/aorta3d.pvd`. This output is scheduled with `scheduleBackgroundOutputVTK()` and written while the simulation continues.
 On the STL surface, a `SuperVtuSurfaceWriter` writes the wall shear stress `interpolatedWss` to `tmp/vtkData/surface.pvd` ([Write Data on Surfaces](/content/07_input_output.qmd#sec-surfaceWriter)).
 At the same interval, it prints the lattice statistics and, on circles $2 \Delta x$ inside the inlet and the two outlets, the volumetric flow rate in ml/s with `SuperPlaneIntegralFluxVelocity3D` and the pressure force and the mean pressure in mmHg with `SuperPlaneIntegralFluxPressure3D`. With the Bouzidi boundary, it also prints the maximum of the dimensionless wall distance $y^+$ of the fluid cells next to the wall, computed by `SuperLatticeYplus3D`.
 If the maximum lattice velocity exceeds $0.3$, the simulation stops.
@@ -175,6 +155,3 @@ aorta3d/
 ├── aorta3d.stl   surface of the aorta and the iliac arteries, in millimetres
 └── Makefile
 ```
-
-`aorta3d.cpp` reads the geometry from `aorta3d.stl`, a path relative to the directory the example is run from, which therefore has to be the example's own directory.
-The results are written to `tmp/` there: `vtkData/aorta3d.pvd` holds the flow field and `vtkData/surface.pvd` the surface with the wall shear stress. The flow rates, the mean pressures and $y^+$ are only printed to the console.
