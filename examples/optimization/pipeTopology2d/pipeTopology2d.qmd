@@ -11,4 +11,4 @@ Since, for low Reynolds numbers, leaving the complete design domain open leads t
 This way, a geometrically meaningful geometry can be established.
 @fig-pipeBendOpti shows thresholded pipe topologies regarding the lattice porosity corresponding to fluid cells where the adaptation of the geometry over the optimization steps is visualized.
 
-![Pipe topology optimized regarding the energy dissipation inside the pipe. Starting from the left, the development of the geometry over the optimization steps is shown.](/examples/optimization/fig/pipeBendOpti.png){#fig-pipeBendOpti width="100%"}
+![Pipe topology optimized regarding the energy dissipation inside the pipe. Starting from the left, the development of the geometry over the optimization steps is shown.](/examples/optimization/pipeTopology2d/doc/fig/pipeBendOpti.png){#fig-pipeBendOpti width="100%"}

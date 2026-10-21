@@ -13,4 +13,4 @@ This example also serves as a showcase for stability improvement by hybrid recur
 The example includes the usage of the turbulent wall model with different tunable parameters.
 All parameters of the wall model are integrated into the HLBM interface.
 
-![Streamwise velocity ($x$-direction) in adapted geometry of the `channel3d` example.](/examples/turbulence/fig/channel3d_velocity.png){#fig-channel3d width="100%"}
+![Streamwise velocity ($x$-direction) in adapted geometry of the `channel3d` example.](/examples/turbulence/channel3d/doc/fig/channel3d_velocity.png){#fig-channel3d width="100%"}

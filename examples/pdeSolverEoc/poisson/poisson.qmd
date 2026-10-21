@@ -40,4 +40,4 @@ The `VELOCITY` field is set to 0.
 The simulation runs until convergence of the average $\psi$ value in the calculation domain with a convergence criterion of $10^{-9}$.
 The convergence order is shown in @fig-poisson-convergence.
 
-![EOC study for Poisson simulations (`poisson`).](/examples/pdeSolverEoc/fig/poisson_convergence.png){#fig-poisson-convergence width="60%"}
+![EOC study for Poisson simulations (`poisson`).](/examples/pdeSolverEoc/poisson/doc/fig/poisson_convergence.png){#fig-poisson-convergence width="60%"}

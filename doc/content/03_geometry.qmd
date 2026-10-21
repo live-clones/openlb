@@ -151,7 +151,7 @@ The general procedure is mostly similar to the following description.
 Firstly, a 2D sketch is created on a selected plane (e.g. the $xy$-plane) using different bi-dimensional shapes.
 In the next step, the sketch is extruded in the third dimension.
 Several such 3D objects can be combined using operations like union, cut, intersection, rotation, trace, etc. to obtain the target geometry.
-Creating a square and a circle for the [`cylinder3d`](../examples/forBeginners/cylinder2d.qmd) example in @fig-freecad-cylinder3d is an easy task.
+Creating a square and a circle for the [`cylinder3d`](../examples/forBeginners/cylinder2d/cylinder2d.qmd) example in @fig-freecad-cylinder3d is an easy task.
 Also, complex geometries such as that of a filter or a porous media can be set up easily with $\OpenLB$'s indicator approach.
 
 ![The geometry of the `cylinder3d` example opened in FreeCAD.](../fig/freecad_cylinder3d.png){#fig-freecad-cylinder3d width=60% .lightbox}

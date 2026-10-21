@@ -12,9 +12,9 @@ This initial sine wave can be seen in the setup step: Red cells are full, blue c
 
 ::: {#fig-test layout-ncol=2}
     
-![freeSurfaceRayleigh ](/examples/freeSurface/fig/freeSurfaceRayleigh.png){#fig-fsrayleigh width="90%"}
+![freeSurfaceRayleigh ](/examples/freeSurface/rayleighInstability3d/doc/fig/freeSurfaceRayleigh.png){#fig-fsrayleigh width="90%"}
 
-![face ](/examples/freeSurface//fig/face.png){#fig-face width="90%"}
+![face ](/examples/freeSurface/rayleighInstability3d/doc/fig/face.png){#fig-face width="90%"}
 
 Test two figures
 

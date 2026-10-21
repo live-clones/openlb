@@ -51,12 +51,12 @@ $$
 
 The results of the EOC tests are plotted in @fig-eocPoiseuille3d-interpol, @fig-eocPoiseuille3d-bouzidi, @fig-eocPoiseuille3d-bounceback, @fig-eocPoiseuille3d-inout-bouzidi and @fig-eocPoiseuille3d-pressure.
 
-![EOC study for periodic pipe flow simulations with *forcing* and *interpolated* boundary walls. The absolute and relative error of the velocity and the strain-rate (SR) are plotted.](/examples/pdeSolverEoc/fig/eoc_poiseuille3d_interpolated.png){#fig-eocPoiseuille3d-interpol width="100%"}
+![EOC study for periodic pipe flow simulations with *forcing* and *interpolated* boundary walls. The absolute and relative error of the velocity and the strain-rate (SR) are plotted.](/examples/pdeSolverEoc/poiseuille3dEoc/doc/fig/eoc_poiseuille3d_interpolated.png){#fig-eocPoiseuille3d-interpol width="100%"}
 
-![EOC study for periodic pipe flow simulations with *forcing* and *bouzidi* boundary walls. The absolute and relative error of the velocity and the strain-rate (SR) are plotted.](/examples/pdeSolverEoc/fig/eoc_poiseuille3d_bouzidi.png){#fig-eocPoiseuille3d-bouzidi width="100%"}
+![EOC study for periodic pipe flow simulations with *forcing* and *bouzidi* boundary walls. The absolute and relative error of the velocity and the strain-rate (SR) are plotted.](/examples/pdeSolverEoc/poiseuille3dEoc/doc/fig/eoc_poiseuille3d_bouzidi.png){#fig-eocPoiseuille3d-bouzidi width="100%"}
 
-![EOC study for periodic pipe flow simulations with *forcing* and *bounce-back* boundary walls. The absolute and relative error of the velocity and the strain-rate (SR) are plotted.](/examples/pdeSolverEoc/fig/eoc_poiseuille3d_bounceback.png){#fig-eocPoiseuille3d-bounceback width="100%"}
+![EOC study for periodic pipe flow simulations with *forcing* and *bounce-back* boundary walls. The absolute and relative error of the velocity and the strain-rate (SR) are plotted.](/examples/pdeSolverEoc/poiseuille3dEoc/doc/fig/eoc_poiseuille3d_bounceback.png){#fig-eocPoiseuille3d-bounceback width="100%"}
 
-![EOC study for pipe flow simulations with *velocity inlet*, *pressure outlet* and *bouzidi* boundary walls. The absolute and relative error of the velocity and the strain-rate (SR) are plotted.](/examples/pdeSolverEoc/fig/eoc_poiseuille3d_inout_bouzidi.png){#fig-eocPoiseuille3d-inout-bouzidi width="100%"}
+![EOC study for pipe flow simulations with *velocity inlet*, *pressure outlet* and *bouzidi* boundary walls. The absolute and relative error of the velocity and the strain-rate (SR) are plotted.](/examples/pdeSolverEoc/poiseuille3dEoc/doc/fig/eoc_poiseuille3d_inout_bouzidi.png){#fig-eocPoiseuille3d-inout-bouzidi width="100%"}
 
-![EOC study for pipe flow simulations with *velocity inlet*, *pressure outlet* and *bouzidi* boundary walls. The absolute and relative error of the pressure are plotted.](/examples/pdeSolverEoc/fig/eoc_poiseuille3d_pressure.png){#fig-eocPoiseuille3d-pressure width="100%"}
+![EOC study for pipe flow simulations with *velocity inlet*, *pressure outlet* and *bouzidi* boundary walls. The absolute and relative error of the pressure are plotted.](/examples/pdeSolverEoc/poiseuille3dEoc/doc/fig/eoc_poiseuille3d_pressure.png){#fig-eocPoiseuille3d-pressure width="100%"}

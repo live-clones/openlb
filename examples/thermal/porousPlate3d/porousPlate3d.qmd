@@ -9,7 +9,7 @@ To test the coupled model's accuracy and to determine its EOC, a numerical simul
 The porous plate problem describes a channel flow, where the upper cool plate moves with a constant velocity, and through the bottom warm plate a constant normal flow is injected and withdrawn at the same rate from the upper plate.
 At the left and right hand sides of the domain a periodic boundary condition is applied and constant velocity and temperature boundary conditions are applied to the top and bottom plates according to @fig-porousplateprob-3d.
 
-![Schematic representation of the porous plate's simulation setup including the boundary conditions.](/examples/thermal/fig/porousPlateSetup.png){#fig-porousplateprob-3d width="60%"}
+![Schematic representation of the porous plate's simulation setup including the boundary conditions.](/examples/thermal/porousPlate2d/doc/fig/porousPlateSetup.png){#fig-porousplateprob-3d width="60%"}
 
 An analytical solution for the given steady-state problem is provided for the velocity and temperature distributions by
 

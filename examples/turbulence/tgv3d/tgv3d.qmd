@@ -6,7 +6,7 @@ features: [turbulent, transient, benchmark, primitives]
 
 The Taylor--Green vortex (TGV) is one of the simplest configurations to investigate the generation of small-scale structures and the resulting turbulence.
 
-![Isosurface of vorticity for the Taylor--Green vortex at $t=12\,\mathrm{s}$ [@krause:21].](/examples/turbulence/fig/tgv3d_vorticity.png){#fig-tgv3d-vorticity width="70%"}
+![Isosurface of vorticity for the Taylor--Green vortex at $t=12\,\mathrm{s}$ [@krause:21].](/examples/turbulence/tgv3d/doc/fig/tgv3d_vorticity.png){#fig-tgv3d-vorticity width="70%"}
 
 The cubic domain $\Omega = \left(2\pi\right)^3$ with periodic boundaries and the single mode initialization contribute to the model's simplicity.
 In consequence, the TGV is a common benchmark case for direct numerical simulation (DNS) as well as large eddy simulation (LES).

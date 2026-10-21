@@ -59,9 +59,9 @@ Simulation results -- such as the mean and standard deviation of the velocity --
 
 ::: {#fig-uqCavity-2d layout-ncol=2}
 
-![Mean $\bar{|\mathbf{u}|}$.](/examples/uncertaintyQuantification/fig/uqCavityMean.png){#fig-uqCavityMean-2d}
+![Mean $\bar{|\mathbf{u}|}$.](/examples/uncertaintyQuantification/cavity2d/doc/fig/uqCavityMean.png){#fig-uqCavityMean-2d}
 
-![Standard deviation $\sigma(|\mathbf{u}|)$.](/examples/uncertaintyQuantification/fig/uqCavityStd.png){#fig-uqCavityStd-2d}
+![Standard deviation $\sigma(|\mathbf{u}|)$.](/examples/uncertaintyQuantification/cavity2d/doc/fig/uqCavityStd.png){#fig-uqCavityStd-2d}
 
 Mean and standard deviation of the velocity magnitude, computed using the stochastic collocation method with a second-order polynomial expansion and five quadrature points.
 

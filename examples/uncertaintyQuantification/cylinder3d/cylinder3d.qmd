@@ -21,9 +21,9 @@ Simulation results can be postprocessed and visualized to analyze the sensitivit
 
 ::: {#fig-uqCylinder-3d layout-ncol=2}
 
-![Mean $\bar{|\mathbf{u}|}$.](/examples/uncertaintyQuantification/fig/uqCylinderMean.png){#fig-uqCylinderMean-3d}
+![Mean $\bar{|\mathbf{u}|}$.](/examples/uncertaintyQuantification/cylinder2d/doc/fig/uqCylinderMean.png){#fig-uqCylinderMean-3d}
 
-![Standard deviation $\sigma(|\mathbf{u}|)$.](/examples/uncertaintyQuantification/fig/uqCylinderStd.png){#fig-uqCylinderStd-3d}
+![Standard deviation $\sigma(|\mathbf{u}|)$.](/examples/uncertaintyQuantification/cylinder2d/doc/fig/uqCylinderStd.png){#fig-uqCylinderStd-3d}
 
 Mean and standard deviation of the velocity magnitude, computed using the stochastic collocation method with a second-order polynomial expansion and five quadrature points.
 

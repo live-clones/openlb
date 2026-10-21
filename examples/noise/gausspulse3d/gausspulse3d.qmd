@@ -38,7 +38,7 @@ $$
 $$
 see [@xuAnalysisAbsorbingLayers2013, Sec. 2.3]. In this case $A=1$. This boundary condition reduces reflections to around 2--5%.
 
-![Comparison of the pressure norm $L_p$ for the different boundary conditions applied to the moving Gaussian pulse benchmark.](/examples/noise/fig/l2ComparisonPlot.png){#fig-gausspulseL2 width="80%"}
+![Comparison of the pressure norm $L_p$ for the different boundary conditions applied to the moving Gaussian pulse benchmark.](/examples/noise/gausspulse3d/doc/fig/l2ComparisonPlot.png){#fig-gausspulseL2 width="80%"}
 
 To apply the benchmark and compare the results, the following bash commands should be executed:
 
