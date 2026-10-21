@@ -397,8 +397,8 @@ int main(int argc, char* argv[]) {
     myCaseParameters.set<INLET_CYLINDER_SIZE>({4, 1});
 
     myCaseParameters.set<RESOLUTION   >(5);
-    myCaseParameters.set<PHYS_DELTA_X >([&] {
-      return myCaseParameters.get<INLET_CYLINDER_SIZE>()[1] / myCaseParameters.get<RESOLUTION>();
+    myCaseParameters.set<PHYS_DELTA_X >([] (MyCase::ParametersD& p) {
+      return p.get<INLET_CYLINDER_SIZE>()[1] / p.get<RESOLUTION>();
     });
     myCaseParameters.set<PHYS_CHAR_VELOCITY>(1);
     myCaseParameters.set<PHYS_CHAR_VISCOSITY>(0.0002);

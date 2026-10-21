@@ -141,6 +141,7 @@ int main(int argc, char* argv[])
   myCaseParameters.set<parameters::PHYS_CHAR_LENGTH>(lx);
   myCaseParameters.set<parameters::PHYS_DELTA_X>(lx / N);
   myCaseParameters.set<parameters::DOMAIN_EXTENT>([] (MyCase::ParametersD& p) -> Vector<MyCase::value_t_of<NavierStokes>, MyCase::d>  {
+    T lx = p.get<parameters::PHYS_CHAR_LENGTH>();
     return {
       lx, lx, p.get<parameters::PHYS_DELTA_X>() * p.get<parameters::N_CELLS_Z>()
     };

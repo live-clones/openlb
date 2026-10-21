@@ -128,7 +128,7 @@ void attachUnitConverter(MyCase& myCase)
   Rlattice.setUnitConverter<RadiativeUnitConverter<T, RDESCRIPTOR>>(
       params.get<parameters::RESOLUTION>(), params.get<parameters::LATTICE_RELAXATION_TIME>(),
       params.get<parameters::ABSORPTION>(), params.get<parameters::SCATTERING>(),
-      params.get<parameters::ANINOSOTROPY_FACTOR>());
+      params.get<parameters::ANISOTROPY_FACTOR>());
 
   const auto& converter = Rlattice.getUnitConverter();
   clout << "omega = " << converter.getLatticeRelaxationTime() << std::endl;
@@ -204,7 +204,7 @@ void prepareLatticeMcHardy(MyCase& myCase)
   converter.write();
 
   T latticeRelaxationFrequency = converter.getLatticeRelaxationFrequency();
-  T anisotropyFactor           = params.get<parameters::ANINOSOTROPY_FACTOR>();
+  T anisotropyFactor           = params.get<parameters::ANISOTROPY_FACTOR>();
 
   int const                       q = descriptors::q<RDESCRIPTOR>() - 1;
   std::array<std::array<T, q>, q> phi;
