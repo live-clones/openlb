@@ -100,7 +100,7 @@ int main(int argc, char* argv[]) {
   gplot.setLabel("Resolution test", "average Error");
 
   for(int simuN =  myCaseParameters.get<parameters::RESOLUTION_START>();
-      simuN <=  myCaseParameters.get<parameters::END_RESOLUTION>();
+      simuN <=  myCaseParameters.get<parameters::RESOLUTION_END>();
       simuN = simuN*2 - 1) {
     myCaseParameters.set<parameters::RESOLUTION>(simuN);
     /// === Step 3: Create Mesh ===

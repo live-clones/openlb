@@ -578,7 +578,7 @@ void simulate(MyCase& myCase) {
 
   const int N = params.get<parameters::RESOLUTION>();
   const T radius = params.get<parameters::RADIUS>();
-  const T physInterval = params.get<parameters::PHYS_INTERVAL>();
+  const T physInterval = params.get<parameters::PHYS_INTERVAL_T>();
   const T maxPhysT = params.get<parameters::PHYS_MAX_T>();
   const T physStatIterT = params["reporter"]["statistics"].get<parameters::PHYS_ITER_T>();
   const int maxIter = converter.getLatticeTime(maxPhysT);
@@ -679,7 +679,7 @@ int main( int argc, char *argv[] )
     myCaseParameters.set<PHYS_VTK_ITER_T        >(1.);
     myCaseParameters["reporter"]["statistics"].set<PHYS_ITER_T>(1.);
     myCaseParameters["timer"     ].set<PHYS_TIMER_ITER_T>(1.);
-    myCaseParameters.set<PHYS_INTERVAL          >(1.);        // interval for the convergence check in s
+    myCaseParameters.set<PHYS_INTERVAL_T          >(1.);        // interval for the convergence check in s
     myCaseParameters.set<CONVERGENCE_PRECISION  >(7e-5);      // residuum for the convergence check
     myCaseParameters.set<H1                     >(0.);        // Contact angle 90 degrees   [lattice units]
     myCaseParameters.set<H2                     >(0.);        // Contact angle 90 degrees   [lattice units]

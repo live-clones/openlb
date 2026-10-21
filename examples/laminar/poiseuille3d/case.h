@@ -653,15 +653,15 @@ void setDefaultParameters(MyCase::ParametersD& params) {
   params.set<EOC                    >(        false );
   params.set<OVERLAP                >(            3 );
   params.set<INTERVAL_CONVERGENCE_CHECK>([] (MyCase::ParametersD& p) {  // interval for the convergence check in s
-    return params.get<PHYS_MAX_T>()*0.0125;
+    return p.get<PHYS_MAX_T>()*0.0125;
   });
   params.set<PHYS_STAT_ITER_T>([] (MyCase::ParametersD& p) {  // interval for the statistics output in s
-    return params.get<PHYS_MAX_T>()/20.;
+    return p.get<PHYS_MAX_T>()/20.;
   });
   params.set<PHYS_VTK_ITER_T>([] (MyCase::ParametersD& p) {  // interval for the vtk output in s
-    return params.get<PHYS_MAX_T>()/20.;
+    return p.get<PHYS_MAX_T>()/20.;
   });
   params.set<PHYS_DELTA_X>([] (MyCase::ParametersD& p) {
-    return params.get<DIAMETER>()/params.get<RESOLUTION>();
+    return p.get<DIAMETER>()/p.get<RESOLUTION>();
   });
 }
