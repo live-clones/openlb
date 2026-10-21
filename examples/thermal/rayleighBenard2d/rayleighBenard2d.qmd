@@ -11,7 +11,7 @@ A version of this example with less code, for beginners, is [[`forBeginners/rayl
 
 #### Governing equations
 
-The domain $\Omega \times \I = [0, 2] \times [0, 1] \times \R_{\geq 0}$ in metres is considered with the incompressible Navier--Stokes equations in the Boussinesq approximation for the velocity field $\vel \in \R^2$, the pressure $p \in \R$ and the temperature $T \in \R$, with the kinematic viscosity $\nu$, the density $\rho$, the thermal diffusivity $\kappa$, the thermal expansion coefficient $\beta$ and the gravitational acceleration $g = 9.81\,\mathrm{m/s^2}$ in the $-y$-direction,
+The domain $\Omega \times \I = [0, 2] \times [0, 1] \times \R_{\geq 0}$ is considered with the incompressible Navier--Stokes equations in the Boussinesq approximation for the velocity field $\vel \in \R^2$, the pressure $p \in \R$ and the temperature $T \in \R$, with the kinematic viscosity $\nu$, the density $\rho$, the thermal diffusivity $\kappa$, the thermal expansion coefficient $\beta$ and the gravitational acceleration $g = 9.81\,\mathrm{m/s^2}$ in the $-y$-direction,
 \begin{align}
     \nabla \cdot \vel &= 0 \quad \text{in} \quad \Omega \times \I, \\
     \partial_t \vel + (\vel \cdot \nabla) \vel &= -\frac{1}{\rho} \nabla p + \nu \Delta \vel + g \beta (T - T_\text{cold})\, \mathbf{e}_y \quad \text{in} \quad \Omega \times \I, \\
@@ -42,7 +42,7 @@ The domain has the aspect ratio $\Gamma = L_x / H = 2$, which enhances the appea
 
 #### Discretization \& Descriptor
 In this example, the domain is discretized with a uniform grid with the lattice spacing $\Delta x = L / N$, where the characteristic length $L = 0.1\,\mathrm{m}$ is resolved with $N = 10$ cells. The height $H = 1\,\mathrm{m}$ of the domain therefore has $100$ cells, and the mesh has $201 \times 101 = 20\,301$ cells in one cuboid.
-The characteristic velocity is the velocity $U = (\nu / L) \sqrt{Ra / Pr} = 0.0119\,\mathrm{m/s}$, and its lattice velocity $0.1$ sets the time step size $\Delta t = 0.1\, \Delta x / U = 0.0843\,\mathrm{s}$, so the simulated $1000\,\mathrm{s}$ take $11\,868$ time steps.
+The characteristic velocity is the velocity $U = (\nu / L) \sqrt{Ra / Pr} = 0.0119\,\mathrm{m/s}$.
 
 The parameters in `main()` set the Rayleigh number $Ra = 10^4$ and $Pr = 0.71$ with respect to the characteristic length $L = 0.1\,\mathrm{m}$: `PHYS_THERMAL_EXPANSION` is computed as $\beta = Ra\, \nu^2 / (Pr\, g\, (T_\text{hot} - T_\text{cold}) L^3)$.
 The plates, however, are $H = 10 L$ apart, so the Rayleigh number of the convection between them is
@@ -114,9 +114,6 @@ Coupling of the fluid and the temperature lattice in `prepareLattice()`.
 
 #### Validation
 
-The results below come from runs on a single GPU (NVIDIA GeForce GTX 1070 Ti). The default run takes $5\,\mathrm{s}$.
-Every $10\,\mathrm{s}$, `getResults()` writes the velocity, the pressure and the temperature to `tmp/vtkData/rayleighBenard2d.pvd`, and `myCase.report()` prints the statistics of both lattices.
-
 @fig-rayleighBenard2d-temperature shows how the convection starts.
 Heat diffuses from the bottom plate into the cold fluid, and after about $100\,\mathrm{s}$ the warm layer becomes unstable at the perturbation: a plume rises in the middle of the domain, flanked by two smaller ones, and drives two counter-rotating rolls, which fill the domain.
 At $t = 1000\,\mathrm{s}$, the end of the default simulation, the rolls are fully developed, but the fluid between them is still colder than the mean of the two plate temperatures.
@@ -136,26 +133,3 @@ At $t = 1000\,\mathrm{s}$, the end of the default simulation, the rolls are full
 Temperature of `rayleighBenard2d` with streamlines, visualized in ParaView. The colour range is fixed to $[T_\text{cold}, T_\text{hot}]$.
 :::
 :::
-
-To follow the convection to a statistically steady state, the example was run up to $t = 10\,000\,\mathrm{s}$ with `--MAX_PHYS_T 10000 --PHYS_VTK_ITER_T 50`, once with the default resolution and once with `--RESOLUTION 20`.
-In the developed state (last image of @fig-rayleighBenard2d-temperature), a hot plume rises in the middle and cold plumes sink at $x = 0$ and $x = 2\,\mathrm{m}$, which are the same position because of the periodicity, between the two rolls. The maximum velocity is $0.025\,\mathrm{m/s}$.
-@fig-rayleighBenard2d-nusselt shows the Nusselt number at the two plates, computed in ParaView from the temperature difference between the plate and the first row of fluid cells,
-$$
-    Nu = \frac{H}{T_\text{hot} - T_\text{cold}} \left\langle \left| \frac{\partial T}{\partial y} \right| \right\rangle_x .
-$$
-While the bulk heats up, more heat enters through the bottom plate than leaves through the top plate. The difference decreases only slowly, since the mean temperature of the fluid approaches the mean of the plate temperatures on the time scale of conduction: at $t = 10\,000\,\mathrm{s}$, it is still $0.04\,\mathrm{K}$ below.
-Averaged over $5000\,\mathrm{s} \le t \le 10\,000\,\mathrm{s}$, $Nu$ is $14.3$ at the bottom and $13.6$ at the top plate with $N = 10$, and $15.7$ and $15.0$ with $N = 20$.
-For comparison, the direct numerical simulations of 2D Rayleigh--Bénard convection at $Pr = 1$ by Johnston and Doering [@johnston:09] fit $Nu \approx 0.138\, Ra^{0.285}$, which gives $Nu = 13.7$ for $Ra = 10^7$.
-The thermal boundary layers have a thickness of about $H / (2 Nu) \approx 0.03\,\mathrm{m}$, which is only $3$ cells with the default resolution, so $N = 20$ is needed for a resolution study.
-
-![Nusselt number of `rayleighBenard2d` at the bottom and the top plate over time for two resolutions, from runs with `--MAX_PHYS_T 10000`, compared with the correlation of @johnston:09.](/examples/thermal/rayleighBenard2d/doc/fig/nusselt/nusselt.svg){width="80%" #fig-rayleighBenard2d-nusselt .lightbox}
-
-#### Files
-
-```
-rayleighBenard2d/
-├── rayleighBenard2d.cpp   main(): parameters; mesh, geometry, lattices, Boussinesq coupling, initial values, time loop and output
-└── Makefile
-```
-
-The results are written to `tmp/` in the directory the example is run from: `vtkData/rayleighBenard2d.pvd` opens all time steps in ParaView.
