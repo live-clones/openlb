@@ -14,7 +14,7 @@ The example shows how to build a geometry from indicator functors and how to set
 
 #### Governing equations
 
-The domain $\Omega \times \I$, the inside of the Venturi tube and the injection tube times $\R_{\geq 0}$, is considered with the following governing equations with the velocity field $\vel \in \R^3$ and the pressure $p \in \R$ for the incompressible flow of a Newtonian fluid with kinematic viscosity $\nu \in \R_{> 0}$ and constant density $\rho \in \R_{> 0}$,
+The domain $\Omega \times \I$ is considered with the following governing equations with the velocity field $\vel \in \R^3$ and the pressure $p \in \R$ for the incompressible flow of a Newtonian fluid with kinematic viscosity $\nu \in \R_{> 0}$ and constant density $\rho \in \R_{> 0}$,
 \begin{align}
     \nabla \cdot \vel &= 0 \quad \text{in} \quad \Omega \times \I, \\
     \partial_t \vel + (\vel \cdot \nabla) \vel &= -\frac{1}{\rho} \nabla p + \nu \Delta \vel \quad \text{in} \quad \Omega \times \I.
@@ -75,29 +75,8 @@ The injection tube `cyl4` of radius $4$ branches off the throat at $x = 115$ and
 
 ![Built geometry as used in simulation of example `venturi3d`.](/examples/turbulence/venturi3d/doc/fig/venturi3d_geometry_1.png){#fig-venturi3d-geometry-1 width="70%"}
 
-`prepareGeometry()` marks the cells of the mesh inside the union as wall (MN 2) and renames all of them that are not on the outer boundary of the union to fluid (MN 1), with `rename(2, 1, {1, 1, 1})`.
-It then renames the wall cells in the cylinders `Inflow`, `Outflow0` and `Outflow1` that have a fluid neighbour to MN 3, MN 4 and MN 5, as shown in @lst-venturi3d-materials.
-`clean()` and `innerClean()` remove the wall cells that have no fluid neighbour.
-
-::: {#lst-venturi3d-materials}
-```{.cpp}
-geometry.rename( 0,2, venturi );
-geometry.rename( 2,1,{1,1,1} );
-geometry.rename( 2,3,1, inflow );
-geometry.rename( 2,4,1, outflow0 );
-geometry.rename( 2,5,1, outflow1 );
-```
-Assignment of the material numbers in `prepareGeometry()`.
-:::
-
 #### Discretization \& Descriptor
 In this example, the domain is discretized with a uniform grid. `createMesh()` builds the mesh around the union with the spacing $1/N$ in the coordinates of `venturi3d.xml`, where the default resolution $N = 1$ resolves the throat diameter with $20$ cells. This gives $135\,000$ fluid cells in a mesh of $484\,000$ cells, with one cuboid per process.
-
-The unit converter is created from the section `Application` of `venturi3d.xml` with `createUnitConverter()`. It takes the lattice spacing $\Delta x = L / N = 0.1\,\mathrm{m}$ from the characteristic length $L = 0.1\,\mathrm{m}$ and the time step size $\Delta t = 0.01\,\mathrm{s}$ from the characteristic lattice velocity $0.2$ and the characteristic velocity $2\,\mathrm{m/s}$.
-The velocity, the pressure and the time in the output are therefore in SI units with $\Delta x = 0.1\,\mathrm{m}$, whereas the positions, also in the VTK files and on the axes of the heat maps, are in the coordinates of `venturi3d.xml`, in which one cell has the length $1$.
-In the units of the converter, the main tube has the diameter $4\,\mathrm{m}$ and the throat $D = 2\,\mathrm{m}$.
-With the viscosity $\nu = 10^{-3}\,\mathrm{m^2/s}$, the relaxation time is $\tau = 0.503$.
-The Reynolds number that the converter reports, $Re = 200$, refers to the characteristic length $L$, a single cell. With the mean velocity in the throat, $0.32\,\mathrm{m/s}$ in the steady state, and $D$, the Reynolds number of the flow is $645$.
 
 The LBM collision operator is the regularized BGK operator [@latt-regularized:06], used as `RLBdynamics` ([Collision Operators](/content/02_core.qmd#collision-operators)), together with the D3Q19 velocity set ([Lattice Structures](/content/01_introduction.qmd#sec-lattice-structures)). Compared with the BGK operator, it is more stable for relaxation times close to $1/2$ [@nathen:17]. The lattice uses the floating point type of the build configuration, `FLOATING_POINT_TYPE`.
 The walls (MN 2) are treated with `BounceBack`, the inlet (MN 3) with `InterpolatedVelocity` and the outlet and the opening of the injection tube (MN 4, MN 5) with `InterpolatedPressure` ([Define Boundary Method](/content/06_initial_boundary.qmd#sec-defineBoundaryMethod)).
@@ -129,8 +108,7 @@ The parameters are given in @tbl-venturi3d-params.
 
 #### Validation
 
-The results below come from a run on a single GPU (NVIDIA GeForce GTX 1070 Ti) in single precision, which took $2\,\mathrm{min}$.
-Every second of simulated time, `getResults()` prints the lattice statistics and writes the velocity and the pressure to `tmp/vtkData/venturi3d.pvd`, together with two heat maps of the velocity magnitude in the plane $z = 50$ through the axis of the tube (@fig-venturi3d-heatmap).
+`getResults()` prints the lattice statistics and writes the velocity and the pressure to `tmp/vtkData/venturi3d.pvd`, together with two heat maps of the velocity magnitude in the plane $z = 50$ through the axis of the tube (@fig-venturi3d-heatmap).
 `SuperEuklidNorm3D` computes the magnitude of the velocity and `BlockReduction3D2D` samples it on the plane with the normal $(0, 0, 1)$ through the centre of the mesh. `heatmap::write()` writes the whole plane with the default settings and, with the parameters `heatmap::plotParam`, a second heat map named `outflow` with five contour levels and the colour map `blackbody`, zoomed to the region behind the throat ([Heatmap](/content/07_input_output.qmd#heatmap)).
 
 ::: {#fig-venturi3d-heatmap layout-ncol="1"}
@@ -140,11 +118,6 @@ Every second of simulated time, `getResults()` prints the lattice statistics and
 
 Heat maps of the velocity magnitude in m/s of `venturi3d` in the plane $z = 50$ at $t = 199\,\mathrm{s}$, as written by `getResults()`. The axes show the coordinates of `venturi3d.xml`, which the labels give in m.
 :::
-
-@fig-venturi3d-umax shows the maximum velocity over time, `maxCFL` of the lattice statistics times the velocity conversion factor $\Delta x / \Delta t = 10\,\mathrm{m/s}$.
-It follows the ramp-up of the inflow and reaches $0.634\,\mathrm{m/s}$ in the throat at its end, $t = 160\,\mathrm{s}$, after which the flow is steady.
-
-![Maximum velocity magnitude of `venturi3d` over time, compared with the peak velocity of the prescribed inflow profile.](/examples/turbulence/venturi3d/doc/fig/velocity/umax.svg){width="80%" #fig-venturi3d-umax .lightbox}
 
 @fig-venturi3d-velocity shows the steady flow.
 The fluid accelerates in the cone `co1` and leaves the throat as a jet, which does not follow the widening walls of the diffuser `co2` but keeps its diameter up to the outlet, surrounded by slow fluid.
@@ -159,11 +132,6 @@ Since the jet does not slow down in the diffuser, the static pressure is not rec
 
 ![Static, dynamic and total pressure of `venturi3d` on the axis $y = z = 50$ of the tube at $t = 199\,\mathrm{s}$, with the axial velocity $u_x$, evaluated in ParaView. The grey region marks the throat.](/examples/turbulence/venturi3d/doc/fig/pressure/centreline.svg){width="80%" #fig-venturi3d-centreline .lightbox}
 
-Integrated over cross sections of the tube in ParaView, the volumetric flow rate is $1.012\,\mathrm{m^3/s}$ at the inlet, close to the flow rate $\pi R^2 u_\text{max} / 2 = 1.018\,\mathrm{m^3/s}$ of the prescribed profile.
-Through the injection tube, $0.0024\,\mathrm{m^3/s}$, $0.23\,\%$ of the main flow, are sucked into the main tube.
-Between the inlet and the throat, the volumetric flow rate grows by $0.55\,\%$, because the lattice Boltzmann method is weakly compressible: the density decreases with the pressure, by $\Delta p / (c_s^2 \rho\, (\Delta x / \Delta t)^2) = 0.55\,\%$, so the mass flow rate is conserved.
-
-Raising the peak inflow velocity to the characteristic velocity of $2\,\mathrm{m/s}$, for instance by removing the scaling factor $\Delta x$ in `setTemporalValues()`, makes the simulation diverge at this resolution, at $t \approx 65\,\mathrm{s}$ during the ramp-up with a maximum lattice velocity of $0.17$.
 
 #### Files
 
@@ -173,6 +141,3 @@ venturi3d/
 ├── venturi3d.xml   geometry of the Venturi tube and parameters of the unit converter
 └── Makefile
 ```
-
-`venturi3d.cpp` reads `venturi3d.xml` from the directory the example is run from, which therefore has to be the example's own directory.
-The results are written to `tmp/` there: `vtkData/venturi3d.pvd` opens all time steps in ParaView and `imageData/` holds the heat maps. The heat maps are drawn with gnuplot; without it, only the data in `imageData/data/` is written.
