@@ -48,7 +48,7 @@ website:
       - icon: gitlab
         href: https://gitlab.com/openlb/release
       - icon: linkedin
-        href: https://www.linkedin.com/company/lbrg/  
+        href: https://www.linkedin.com/groups/4356445/  
     left:
       - href: index.qmd
         text: Home
