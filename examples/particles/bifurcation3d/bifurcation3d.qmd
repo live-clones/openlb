@@ -192,7 +192,7 @@ The particle type is `SubgridParticle3DparallelEulerRotation`, and the forces ar
 `prepareParticles()` places $100$ fibres of the length $500\,\mathrm{\mu m}$ (`FIBER_LENGTH`) and the diameter $100\,\mathrm{\mu m}$ (`FIBER_DIAMETER`) at rest at random positions on a disc of radius $R_\text{in} / 2$ at $z = 74\,\mathrm{mm}$, with `std::rand()` seeded by the time, so the result differs from run to run.
 `PARTICLE_DYNAMICS_SETUP` selects the particle dynamics: $0$ for `VerletParticleDynamics` without wall capture, $1$ (default) for `VerletParticleDynamicsMaterialAwareWallCapture`, $2$ for `EulerParticleDynamicsMaterialAwareWallCapture` and $3$ for `AnalyticalParticleDynamicsTranslationOnlyMaterialAwareWallCapture`. The comment in `main()` gives other numbers for the last two.
 The fluid is simulated for only $1\,\mathrm{s}$, of which $0.8\,\mathrm{s}$ are the ramp-up, so the flow is not yet steady when the particles are released: the flow rate through the inlet, $12.4\,\mathrm{ml/s}$, still exceeds that through the outlets, $8.9\,\mathrm{ml/s}$.
-In this flow, $20\,\%$ of the fibres are deposited and $80\,\%$ escape (@fig-bifurcation3d-el-fractions); all of them have left the flow after $7.7\,\mathrm{s}$, but the particle loop continues up to `PARTICLE_MAX_PHYS_T`.
+In this flow, $20\,\%$ of the fibres are deposited and $80\,\%$ escape; all of them have left the flow after $7.7\,\mathrm{s}$, but the particle loop continues up to `PARTICLE_MAX_PHYS_T`.
 
 #### Files
 

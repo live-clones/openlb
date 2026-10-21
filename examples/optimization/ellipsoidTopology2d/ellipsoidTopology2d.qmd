@@ -81,8 +81,8 @@ It consists of the following key components.
 
 The gradient of the original objective gradient $\frac{\mathrm{d} \mathcal{J}}{\mathrm{d} d_i}$ is 
 computed using the AHLBM. But pointwise sensitivities computed on a regular lattice are prone to numerical instabilities that manifest as
-checkerboard density patterns \citep{sigmund1998numerical}. To regularize the problem, we apply the porosity-weighted sensitivity
-filter of Sigmund and Bruns and Tortorelli \citep{sigmund200199line, bruns2001topology}.
+checkerboard density patterns [@sigmund1998numerical]. To regularize the problem, we apply the porosity-weighted sensitivity
+filter of Sigmund and Bruns and Tortorelli [@sigmund200199line; @bruns2001topology].
 
 $$
 \widehat{\frac{\mathrm{d} \mathcal{J}}{\mathrm{d} d_i}} =
@@ -97,7 +97,7 @@ $$
 
 ---
 
-Following the classical OC method of Bendsøe and Sigmund \citep{bendsoe2003topology}, the Karush-Kuhn-Tucker (KKT) 
+Following the classical OC method of Bendsøe and Sigmund [@bendsoe2003topology], the Karush-Kuhn-Tucker (KKT) 
 stationarity condition for the
 volume constraint requires, at an optimum:
 
@@ -121,7 +121,7 @@ $$
 
 Update scheme subsequently clipped to $(0, 1]$. Here $\eta \in (0,1]$ is a damping exponent 
 (commonly $\eta = 1/2$) and $m$ is a move limit bounding the per-iteration change in $d$, 
-both standard stabilization devices in the OC \citep{sigmund200199line,andreassen201188line}. The $\lambda$ can be determined using the bisection
+both standard stabilization devices in the OC [@sigmund200199line; @andreassen201188line]. The $\lambda$ can be determined using the bisection
 method:
 
 $$
@@ -130,7 +130,7 @@ $$
 
 The resulting average porosity is monotonically decreasing in $\lambda$, the constraint
 $\overline{d}(\lambda) = \bar{d}_{\text{target}}$ admits a unique
-solution that is found by bisection \citep{sigmund200199line, andreassen201188line}. Because $\lambda$ can span several
+solution that is found by bisection [@sigmund200199line; @andreassen201188line]. Because $\lambda$ can span several
 orders of magnitude, the bisection is performed on a logarithmic
 scale using the geometric mean $\lambda_{\text{mid}} =
 \sqrt{\lambda_{\text{lo}}\lambda_{\text{hi}}}$ rather than the
@@ -157,4 +157,6 @@ arithmetic mean.
 
 ##### Simulation result
 
+::: {.content-visible when-format="html"}
 ![The optimization result](/examples/optimization/ellipsoidTopology2d/doc/fig/ellipsoid.gif){#gif-ellipsoid width="80%"}
+:::
