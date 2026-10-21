@@ -44,11 +44,12 @@ website:
   navbar:
     title: false
     logo: "fig/openlb_full.png"
+    logo-href: https://openlb.net
     tools:
       - icon: gitlab
         href: https://gitlab.com/openlb/release
       - icon: linkedin
-        href: https://www.linkedin.com/company/lbrg/  
+        href: https://www.linkedin.com/groups/4356445/  
     left:
       - href: index.qmd
         text: Home
@@ -292,9 +293,8 @@ website:
   page-footer:
     background: light
     border: true
-    left: 
-      - text: "Spring School ad"
-      - href: https://www.openlb.net/spring-school-2027/
+    center: 
+      - text: 'Permission is granted to copy, distribute and/or modify this document under the terms of the GNU Free Documentation License, Version 1.2 or any later version published by the Free Software Foundation; with no Invariant Sections, no Front-Cover Texts, and no Back-Cover Texts.  A copy of the license is included in the <a href="license.html">License Section</a>.'
     #right:
     #  - text: "Copyright © 2006-2008 Jonas Latt <br> Copyright © 2008-2025 Mathias J. Krause"
 

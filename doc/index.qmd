@@ -7,45 +7,41 @@ pagetitle: "OpenLB User Guide"
     <div class="logo-slider">
       <div class="logo-slide-track">
         <!-- 1st set -->
-        <img src="pictures/falcon-slider.jpg" alt="picture 1">
-        <img src="pictures/image001.png" alt="picture 2">
-        <img src="pictures/mpv-shot0001-scaled.jpg" alt="picture 3">
-        <img src="pictures/staticMixer3d-neu-scaled.jpg" alt="picture 4">
-        <img src="pictures/windParkPreviewNoWM.png" alt="picture 5">
+        <img src="pictures/airplane.jpg" alt="picture 1">
+        <img src="pictures/city.png" alt="picture 2">
+        <img src="pictures/shot.jpg" alt="picture 3">
+        <img src="pictures/staticMixer3d.jpg" alt="picture 4">
+        <img src="pictures/windPark.png" alt="picture 5">
         <!-- 2nd set -->
-         <img src="pictures/falcon-slider.jpg" alt="picture 1">
-        <img src="pictures/image001.png" alt="picture 2">
-        <img src="pictures/mpv-shot0001-scaled.jpg" alt="picture 3">
-        <img src="pictures/staticMixer3d-neu-scaled.jpg" alt="picture 4">
-        <img src="pictures/windParkPreviewNoWM.png" alt="picture 5">
+        <img src="pictures/airplane.jpg" alt="picture 1">
+        <img src="pictures/city.png" alt="picture 2">
+        <img src="pictures/shot.jpg" alt="picture 3">
+        <img src="pictures/staticMixer3d.jpg" alt="picture 4">
+        <img src="pictures/windPark.png" alt="picture 5">
         <!-- 3nd set -->
-         <img src="pictures/falcon-slider.jpg" alt="picture 1">
-        <img src="pictures/image001.png" alt="picture 2">
-        <img src="pictures/mpv-shot0001-scaled.jpg" alt="picture 3">
-        <img src="pictures/staticMixer3d-neu-scaled.jpg" alt="picture 4">
-        <img src="pictures/windParkPreviewNoWM.png" alt="picture 5">
+        <img src="pictures/airplane.jpg" alt="picture 1">
+        <img src="pictures/city.png" alt="picture 2">
+        <img src="pictures/shot.jpg" alt="picture 3">
+        <img src="pictures/staticMixer3d.jpg" alt="picture 4">
+        <img src="pictures/windPark.png" alt="picture 5">
       </div>
     </div>
 ```
 
-:::{.columns}
-:::{.column width="50%" .mb-3}
+::: {layout-ncol=2}
 
-
+::: {}
 ## OpenLB User Guide
 The OpenLB project provides a C++ package for the implementation of lattice Boltzmann methods that addresses a vast range of multi-physics transport problems, e.g. in computational fluid dynamics. The source code is publicly available and constructed in a well readable, modular and platform-transparent way. This enables for a fast implementation of both academic and advanced engineering applications. It is also easily extensible to include new physical models.
-
 :::
-:::{.column width="50%" .mb-3}
+
 ```{=html}
 <div class="card border-0 shadow-sm p-4 bg-white" style="border-radius: 20px; max-width: 800px; margin: 0 auto;">
   
-  <!-- 1. Der YouTube Playlist Player (responsiv im 16:9 Format) -->
   <div class="ratio ratio-16x9 mb-3" style="border-radius: 15px; overflow: hidden;">
     <iframe width="560" height="315" src="https://www.youtube.com/embed/videoseries?si=G0dNMpalEsons2Qk&amp;list=PLdH-CeuRChDw" title="YouTube video player" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" referrerpolicy="strict-origin-when-cross-origin" allowfullscreen></iframe>
   </div>
 
-  <!-- 2. Button zum YouTube-Kanal darunter -->
   <div class="text-center mt-3">
     <a href="https://www.youtube.com/@openlb" 
        target="_blank" 
@@ -56,9 +52,8 @@ The OpenLB project provides a C++ package for the implementation of lattice Bolt
 
 </div>
 ```
-:::
-:::
 
+:::
 
 <!-- navigation grid -->
 
@@ -66,14 +61,14 @@ The OpenLB project provides a C++ package for the implementation of lattice Bolt
 
 [
   ![](pictures/gettingstarted.jpeg){.img-normal height="30px"}
-  ![](pictures/demo.gif){.img-hover height="30px"}
+  ![](pictures/gitclone.gif){.img-hover height="30px"}
 ](/content/10_building_and_running.html){.card-link}
 
 [![](pictures/stepbystep.jpeg){fig-alt="Logo 1" height="30px"} ](content/11_step_by_step.html){.card-link}
 
 
 [![](pictures/basicexamples.jpeg){.img-normal fig-alt="Logo 2" height="30px"}
- ![](pictures/animation.gif){.img-hover fig-alt="Logo 2" height="30px"}
+ ![](pictures/cylinder2d.gif){.img-hover fig-alt="Logo 2" height="30px"}
 ](/examples/forBeginners/forBeginners.html){.card-link}
 
 [![](pictures/mail.jpeg){fig-alt="Logo 1" height="30px"} ](mailto:info@openlb.net){.card-link}
@@ -81,8 +76,8 @@ The OpenLB project provides a C++ package for the implementation of lattice Bolt
 [![](pictures/GitLab.jpeg){fig-alt="Logo 1" height="30px"} ](https://gitlab.com/openlb/release){.card-link}
 
 [![](pictures/Download.jpeg){.img-normal fig-alt="Logo 1" height="30px"}
- ![](pictures/demo2.gif){.img-hover fig-alt="Logo 1" height="30px"}
- ](https://openlb.gitlab.io/release/ug_pdf/OpenLB-User-Guide.pdf){.card-link}
+ ![](pictures/wget-terminal.gif){.img-hover fig-alt="Logo 1" height="30px"}
+ ](/ug_pdf/OpenLB-User-Guide.pdf){.card-link}
 
 :::
 
@@ -90,8 +85,7 @@ The OpenLB project provides a C++ package for the implementation of lattice Bolt
 :::{.columns}
 
 :::{.column width="55%"}
-<!-- LINKE SEITE: Das große Showcase-Bild -->
-![](pictures/springschool.png){.img-fluid style="border-radius: 15px; box-shadow: 0 4px 15px rgba(0,0,0,0.1); width: 100%; height: 100%; object-fit: cover;"}
+[![](pictures/springschool.png){.img-fluid style="border-radius: 15px; box-shadow: 0 4px 15px rgba(0,0,0,0.1); width: 100%; height: 100%; object-fit: cover;"}](https://www.openlb.net/spring-school-2027/)
 :::
 
 :::{.column width="5%"}
@@ -99,7 +93,6 @@ The OpenLB project provides a C++ package for the implementation of lattice Bolt
 :::
 
 :::{.column width="40%"}
-<!-- RECHTE SEITE: Buttons als Zeilen untereinander -->
 <div class="d-grid gap-3">
   
   <a href="https://www.openlb.net/spring-school-registration/" class="btn btn-light border p-3 text-start shadow-sm showcase-row-btn">
@@ -116,13 +109,6 @@ The OpenLB project provides a C++ package for the implementation of lattice Bolt
 :::
 
 :::
-
-Permission is granted to copy, distribute and/or modify this document
-under the terms of the GNU Free Documentation License, Version 1.2
-or any later version published by the Free Software Foundation;
-with no Invariant Sections, no Front-Cover Texts, and no Back-Cover
-Texts.  A copy of the license is included in the Section entitled "GNU
-Free Documentation License" (Section~\ref{sec:license}).
 :::
 
 # {.unnumbered .unlisted}

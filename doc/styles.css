@@ -294,11 +294,13 @@ a:hover {
 }
 
 /* Hovered state */
-.card-link:hover .img-normal {
-  display: none !important;
-}
+@media (hover: hover) {
+  .card-link:hover .img-normal {
+    display: none !important;
+  }
 
-.card-link:hover .img-hover {
-  display: block !important;
-  margin: 0 auto !important;
+  .card-link:hover .img-hover {
+    display: block !important;
+    margin: 0 auto !important;
+  }
 }
