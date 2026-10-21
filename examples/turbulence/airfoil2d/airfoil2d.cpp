@@ -455,10 +455,10 @@ int main(int argc, char* argv[])
     myCaseParameters.set<CHORD_LENGTH>((T)1.);
     myCaseParameters.set<AIRFOIL_PARAMETERS>({2, 4, 12});
     myCaseParameters.set<ANGLE_OF_ATTACK>(3.);
-    myCaseParameters.set<DOMAIN_EXTENT>([](MyCase::ParametersD& p) {
+    myCaseParameters.set<DOMAIN_EXTENT>([] (MyCase::ParametersD& p) {
       return Vector{6,2} * p.get<CHORD_LENGTH>();
     });
-    myCaseParameters.set<CENTER>([](MyCase::ParametersD& p) {
+    myCaseParameters.set<CENTER>([] (MyCase::ParametersD& p) {
       auto pos = p.get<DOMAIN_EXTENT>();
       pos[0] /= 4;
       pos[1] /= 2;

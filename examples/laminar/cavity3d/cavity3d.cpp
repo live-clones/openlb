@@ -35,12 +35,6 @@ using namespace olb::names;
 // === Step 1: Declarations ===
 using MyCase = Case<NavierStokes, Lattice<double, descriptors::D3Q19<>>>;
 
-namespace olb::parameters {
-
-struct RESIDUUM : public descriptors::FIELD_BASE<1> {};      // Residuum for convergence check
-struct TIME_INTERVAL : public descriptors::FIELD_BASE<1> {}; // Time intervall in seconds for convergence check
-
-} // namespace olb::parameters
 
 /// @brief Create a simulation mesh, based on user-specific geometry
 /// @return An instance of Mesh, which keeps the relevant information
@@ -226,7 +220,7 @@ void simulate(MyCase& myCase)
   auto& parameters  = myCase.getParameters();
   auto  maxLatticeT = sLattice.getUnitConverter().getLatticeTime(parameters.get<parameters::PHYS_MAX_T>());
 
-  util::ValueTracer<T> converge(sLattice.getUnitConverter().getLatticeTime(parameters.get<parameters::TIME_INTERVAL>()),
+  util::ValueTracer<T> converge(sLattice.getUnitConverter().getLatticeTime(parameters.get<parameters::PHYS_INTERVAL_T>()),
                                 parameters.get<parameters::RESIDUUM>());
 
   util::Timer<T> timer(maxLatticeT, util::pow<int>(sLattice.getUnitConverter().getResolution(), 3));
@@ -270,9 +264,9 @@ int main(int argc, char** argv)
     myCaseParameters.set<PHYS_CHAR_VISCOSITY>(0.001);
     myCaseParameters.set<PHYS_CHAR_DENSITY>(1.0);
     myCaseParameters.set<PHYS_MAX_T>(100);
-    myCaseParameters.set<TIME_INTERVAL>(1.0);
+    myCaseParameters.set<PHYS_INTERVAL_T>(1.0);
     myCaseParameters.set<RESIDUUM>(1.0e-3);
-    myCaseParameters.set<PHYS_DELTA_X>([](MyCase::ParametersD& p) {
+    myCaseParameters.set<PHYS_DELTA_X>([] (MyCase::ParametersD& p) {
       return p.get<PHYS_CHAR_LENGTH>() / p.get<RESOLUTION>();
     });
   }

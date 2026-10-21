@@ -47,7 +47,6 @@ using COUPLING     = PseudopotentialForcedPostProcessor<interaction::Polinomial>
 namespace olb::parameters {
 
 struct U_DROPLET       : public descriptors::FIELD_BASE<1> { }; // droplet velocity [m.s-1]
-struct RELAXATION_TIME : public descriptors::FIELD_BASE<1> { }; // lattice relaxation time
 struct MAX_ITER        : public descriptors::FIELD_BASE<1> { }; // amount of time steps to complete simulation
 struct VTK_ITER        : public descriptors::FIELD_BASE<1> { }; // amount of time steps to save vtk files
 struct STAT_ITER       : public descriptors::FIELD_BASE<1> { }; // amount of time steps to display simulation parameters
@@ -121,7 +120,7 @@ void prepareLattice(MyCase& myCase) {
 
   // TODO for now, to be combined with unit converter refactor
   const int Nx = params.get<parameters::RESOLUTION>();
-  const T tau = params.get<parameters::RELAXATION_TIME>();
+  const T tau = params.get<parameters::LATTICE_RELAXATION_TIME>();
   const T radius = params.get<parameters::RADIUS>();
   const T Lx = 8*radius;
   const T nu_vapor = params.get<parameters::NU_VAPOR>();
@@ -421,7 +420,7 @@ int main(int argc, char* argv[])
   {
     using namespace olb::parameters;
     myCaseParameters.set<RESOLUTION        >(200);      // Nx [lattice units]
-    myCaseParameters.set<RELAXATION_TIME   >(0.6);    // relaxation time [lattice units]
+    myCaseParameters.set<LATTICE_RELAXATION_TIME   >(0.6);    // relaxation time [lattice units]
     myCaseParameters.set<parameters::RADIUS>(2.5e-6);     // radius of liquid phase [m]
     myCaseParameters.set<U_DROPLET         >(10.);       // droplet velocity [m.s-1]
   // Properties of R134 vapor and liquid

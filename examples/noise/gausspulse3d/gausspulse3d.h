@@ -60,9 +60,7 @@ double defaultAlpha = log(2.) / (1. / 20. * 1. / 20.);
 namespace olb::parameters {
   // struct COLLISION_TYPE       : public descriptors::TYPED_FIELD_BASE<CollisionType,1> { };
   // DOMAIN
-  struct LATT_CHAR_VELOCITY   : public descriptors::FIELD_BASE<1> { };    // characteristic lattice velocity ("Mach number")
   struct CORE_EXTENT          : public descriptors::FIELD_BASE<0,1> { };  // fluid domain size [m]
-  struct DOMAIN_ORIGIN        : public descriptors::FIELD_BASE<0,1> { };
   // PULSE
   struct PULSE_AMPLITUDE      : public descriptors::FIELD_BASE<1> { };    // pressure amplitude of Gaussian pulse
   struct PULSE_PHYS_VELOCITY  : public descriptors::FIELD_BASE<0,1> { };    // background velocity of Gaussian pulse
@@ -74,13 +72,10 @@ namespace olb::parameters {
   struct SPONGE_STRENGTH      : public descriptors::FIELD_BASE<1> { };               // maximum sponge strength of sponge layer
   struct CBC_SIGMA            : public descriptors::FIELD_BASE<1> { };               // factor for K1 in CBC
   // TIMING AND OUTPUTS
-  struct IT_TABLE             : public descriptors::TYPED_FIELD_BASE<size_t,1> { };  // tabular outputs every IT_TABLE iterations (for line plot)
-  struct IT_GRAPHICAL_OUTPUT  : public descriptors::TYPED_FIELD_BASE<size_t,1> { };  // graphical outputs every IT_GRAPHICAL iterations
-  struct IT_LOG               : public descriptors::TYPED_FIELD_BASE<size_t,1> { };  // timer outputs every IT_LOG iterations
+  struct INTERVAL_TABLE             : public descriptors::TYPED_FIELD_BASE<size_t,1> { };  // tabular outputs every INTERVAL_TABLE iterations (for line plot)
   struct DO_GRAPHICAL_OUTPUT  : public descriptors::TYPED_FIELD_BASE<bool,1> { };  // set to do images
   struct DO_L2_PLOT           : public descriptors::TYPED_FIELD_BASE<bool,1> { };  // set to do l2 plot
   struct WAIT_DEBUG           : public descriptors::TYPED_FIELD_BASE<bool,1> { };  // set to wait for gbd
-  struct OUTDIR               : public descriptors::TYPED_FIELD_BASE<std::string,1> { };  // set the output directory
   struct OUTDIR_SUFFIX        : public descriptors::TYPED_FIELD_BASE<std::string,1> { };  // set a custom suffix for the output directory
 }
 
@@ -433,10 +428,10 @@ void setPlotData( MyCase& myCase,
   auto& parameters  = myCase.getParameters();
   auto& converter   = lattice.getUnitConverter();
 
-  const size_t iTout  = parameters.get<parameters::IT_TABLE>();
+  const size_t iTout  = parameters.get<parameters::INTERVAL_TABLE>();
   const size_t  iTlog       = std::min(
-    parameters.get<parameters::IT_GRAPHICAL_OUTPUT>(),
-    parameters.get<parameters::IT_LOG>());
+    parameters.get<parameters::INTERVAL_VTK>(),
+    parameters.get<parameters::INTERVAL_STAT>());
   const Vector extent = parameters.get<parameters::CORE_EXTENT>();
   const Vector origin = -0.5*extent;
 
@@ -463,7 +458,7 @@ void getGraphicalResults( MyCase& myCase,
   const T           amplitude   = parameters.get<parameters::PULSE_AMPLITUDE>();
   const std::string suffix      = parameters.get<parameters::OUTDIR_SUFFIX>();
   const std::string name        = "gausspulse3d" + suffix;
-  const size_t      iTgraph     = parameters.get<parameters::IT_GRAPHICAL_OUTPUT>();
+  const size_t      iTgraph     = parameters.get<parameters::INTERVAL_VTK>();
 
   SuperVTMwriter3D<T> vtmWriter(name);
   if (iT == 0) {
@@ -522,7 +517,7 @@ void simulate(MyCase& myCase) {
   size_t        iTmaxT      = converter.getLatticeTime(parameters.get<parameters::PHYS_MAX_T>());
   size_t        iTmax       = parameters.get<parameters::LATTICE_MAX_T>()+1;
   iTmax = ( iTmax > 0 ) ? std::min(iTmax, iTmaxT) : iTmaxT;
-  const size_t  iTlog       = std::min(parameters.get<parameters::IT_GRAPHICAL_OUTPUT>(), parameters.get<parameters::IT_LOG>());
+  const size_t  iTlog       = std::min(parameters.get<parameters::INTERVAL_VTK>(), parameters.get<parameters::INTERVAL_STAT>());
 
   // === Initialize pressure L2 norm plot
   const Vector extent = parameters.get<parameters::CORE_EXTENT>();
@@ -562,7 +557,7 @@ void setGetParameters( MyCase::ParametersD& myCaseParameters, int& argc, char** 
 
   using namespace olb::parameters;
   // DOMAIN
-  myCaseParameters.set<LATT_CHAR_VELOCITY >(  defaultMa );
+  myCaseParameters.set<LATTICE_CHAR_VELOCITY >(  defaultMa );
   myCaseParameters.set<CORE_EXTENT        >( {defaultL,defaultL,defaultL} );
   // PULSE
   myCaseParameters.set<PULSE_AMPLITUDE    >( defaultAmp );
@@ -578,9 +573,9 @@ void setGetParameters( MyCase::ParametersD& myCaseParameters, int& argc, char** 
   myCaseParameters.set<DO_GRAPHICAL_OUTPUT>(      false );
   myCaseParameters.set<DO_L2_PLOT         >(       true );
   myCaseParameters.set<WAIT_DEBUG         >(      false );
-  myCaseParameters.set<IT_GRAPHICAL_OUTPUT>(         25 );
-  myCaseParameters.set<IT_LOG             >(         25 );
-  myCaseParameters.set<IT_TABLE           >(          5 );
+  myCaseParameters.set<INTERVAL_VTK>(         25 );
+  myCaseParameters.set<INTERVAL_STAT             >(         25 );
+  myCaseParameters.set<INTERVAL_TABLE           >(          5 );
   myCaseParameters.set<LATTICE_MAX_T             >(        150 );
   // STANDARD PARAMETERS
   myCaseParameters.set<PHYS_MAX_T         >(         .5 );
@@ -589,7 +584,7 @@ void setGetParameters( MyCase::ParametersD& myCaseParameters, int& argc, char** 
   myCaseParameters.set<PHYS_CHAR_DENSITY  >(        1.0 );
   myCaseParameters.set<RESOLUTION         >( defaultRes );
   myCaseParameters.set<PHYS_DELTA_T>([](MyCase::ParametersD& p) {
-    return p.get<LATT_CHAR_VELOCITY>() / p.get<PHYS_CHAR_VELOCITY>() * p.get<PHYS_DELTA_X>();
+    return p.get<LATTICE_CHAR_VELOCITY>() / p.get<PHYS_CHAR_VELOCITY>() * p.get<PHYS_DELTA_X>();
   } );
   myCaseParameters.set<PHYS_CHAR_LENGTH>([](MyCase::ParametersD& p) {
     return p.get<CORE_EXTENT>()[0];
@@ -610,9 +605,9 @@ void setOutDir( MyCase::ParametersD& myCaseParameters ) {
   size_t        spongeDepthLU   = myCaseParameters.get<parameters::SPONGE_DEPTH_LU>();
   T             spongeStrength  = myCaseParameters.get<parameters::SPONGE_STRENGTH>();
   T             cbcSigma        = myCaseParameters.get<parameters::CBC_SIGMA>();
-  T             Ma              = myCaseParameters.get<parameters::LATT_CHAR_VELOCITY>();
+  T             Ma              = myCaseParameters.get<parameters::LATTICE_CHAR_VELOCITY>();
   Vector        uInfty          = myCaseParameters.get<parameters::PULSE_PHYS_VELOCITY>();
-  std::string   outDir          = myCaseParameters.get<parameters::OUTDIR>();
+  std::string   outDir          = myCaseParameters.get<parameters::OUTPUT_DIRECTORY>();
   std::string   suffix          = myCaseParameters.get<parameters::OUTDIR_SUFFIX>();
 
   std::stringstream outDirMod, caseSuffix;

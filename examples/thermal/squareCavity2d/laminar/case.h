@@ -38,7 +38,7 @@ using namespace olb::graphics;
 using namespace olb::names;
 
 namespace olb::parameters {
-  struct SIM_VALUES  : public descriptors::FIELD_BASE<5> { };
+  struct OUTPUT_VALUE_WRAPPER  : public descriptors::FIELD_BASE<5> { };
 }
 
 // === Step 1: Declarations ===
@@ -58,7 +58,7 @@ Mesh<MyCase::value_t, MyCase::d> createMesh(MyCase::ParametersD& parameters)
   const Vector domainExtend = parameters.get<parameters::DOMAIN_EXTENT>();
   const Vector extend = {domainExtend[0] + dx, domainExtend[1] + dx};
 
-  const Vector domainOrigin = parameters.get<parameters::ORIGIN>();
+  const Vector domainOrigin = parameters.get<parameters::DOMAIN_ORIGIN>();
   const Vector origin = {domainOrigin[0] - (T) dx / 2, domainOrigin[1] - (T) dx / 2};
   IndicatorCuboid2D<T> cuboid(extend, origin);
 
@@ -80,7 +80,7 @@ void prepareGeometry(MyCase& myCase){
 
   const T dx                = parameters.get<parameters::PHYS_DELTA_X>();
   const Vector extend       = parameters.get<parameters::DOMAIN_EXTENT>();
-  const Vector origin       = parameters.get<parameters::ORIGIN>();
+  const Vector origin       = parameters.get<parameters::DOMAIN_ORIGIN>();
 
   geometry.rename(0, 4, {1, 1});
 
@@ -411,7 +411,7 @@ void getResults(MyCase& myCase,
       }
     }
 
-    parameters.set<parameters::SIM_VALUES>(
+    parameters.set<parameters::OUTPUT_VALUE_WRAPPER>(
       {
         outputVelX[0],
         outputVelY[0],

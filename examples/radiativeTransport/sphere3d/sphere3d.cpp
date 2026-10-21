@@ -405,12 +405,12 @@ int main(int argc, char* argv[])
     myCaseParameters.set<SCATTERING>(1.5);
 
     myCaseParameters.set<LATTICE_RELAXATION_TIME>(1.0);
-    myCaseParameters.set<MU_EFF>([](MyCase::ParametersD& p) {
+    myCaseParameters.set<MU_EFF>([] (MyCase::ParametersD& p) {
       return util::sqrt(3 * p.get<ABSORPTION>() *
                         (p.get<ABSORPTION>() + p.get<SCATTERING>()));
     });
 
-    myCaseParameters.set<PHYS_DELTA_X>([](MyCase::ParametersD& p) {
+    myCaseParameters.set<PHYS_DELTA_X>([] (MyCase::ParametersD& p) {
       return p.get<DOMAIN_L>() / p.get<RESOLUTION>();
     });
   }

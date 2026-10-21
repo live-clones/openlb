@@ -63,9 +63,6 @@ namespace olb::parameters {
 struct FLOW_TYPE      : public descriptors::TYPED_FIELD_BASE<FlowType,1> { };
 struct BOUNDARY_TYPE  : public descriptors::TYPED_FIELD_BASE<BoundaryType,1> { };
 struct PARTIAL_SLIP_TUNER   : public descriptors::TYPED_FIELD_BASE<int,1> { };
-struct EOC_START_RESOLUTION : public descriptors::TYPED_FIELD_BASE<size_t,1> { };
-struct EOC_MAX_RESOLUTION   : public descriptors::TYPED_FIELD_BASE<size_t,1> { };
-struct EOC_RESOLUTION_STEP  : public descriptors::TYPED_FIELD_BASE<size_t,1> { };
 struct EOC            : public descriptors::TYPED_FIELD_BASE<bool,1> { };
 
 struct VELOCITY_L1_ABS_ERROR    : public descriptors::FIELD_BASE<1> { };
@@ -83,7 +80,6 @@ struct PRESSURE_LINF_ABS_ERROR  : public descriptors::FIELD_BASE<1> { };
 
 struct DIAMETER       : public descriptors::FIELD_BASE<1> { };  // diameter of the pipe
 struct LENGTH         : public descriptors::FIELD_BASE<1> { };  // length of the pipe
-struct RESIDUUM       : public descriptors::FIELD_BASE<1> { };  //residuum for the convergence check
 
 }
 
@@ -656,16 +652,16 @@ void setDefaultParameters(MyCase::ParametersD& params) {
   params.set<PARTIAL_SLIP_TUNER     >(           0. );  // for partialSlip only: 0->bounceBack, 1->freeSlip
   params.set<EOC                    >(        false );
   params.set<OVERLAP                >(            3 );
-  params.set<INTERVAL_CONVERGENCE_CHECK>([](MyCase::ParametersD& p) {  // interval for the convergence check in s
-    return p.get<PHYS_MAX_T>()*0.0125;
+  params.set<INTERVAL_CONVERGENCE_CHECK>([] (MyCase::ParametersD& p) {  // interval for the convergence check in s
+    return params.get<PHYS_MAX_T>()*0.0125;
   });
-  params.set<PHYS_STAT_ITER_T>([](MyCase::ParametersD& p) {  // interval for the statistics output in s
-    return p.get<PHYS_MAX_T>()/20.;
+  params.set<PHYS_STAT_ITER_T>([] (MyCase::ParametersD& p) {  // interval for the statistics output in s
+    return params.get<PHYS_MAX_T>()/20.;
   });
-  params.set<PHYS_VTK_ITER_T>([](MyCase::ParametersD& p) {  // interval for the vtk output in s
-    return p.get<PHYS_MAX_T>()/20.;
+  params.set<PHYS_VTK_ITER_T>([] (MyCase::ParametersD& p) {  // interval for the vtk output in s
+    return params.get<PHYS_MAX_T>()/20.;
   });
-  params.set<PHYS_DELTA_X>([](MyCase::ParametersD& p) {
-    return p.get<DIAMETER>()/p.get<RESOLUTION>();
+  params.set<PHYS_DELTA_X>([] (MyCase::ParametersD& p) {
+    return params.get<DIAMETER>()/params.get<RESOLUTION>();
   });
 }

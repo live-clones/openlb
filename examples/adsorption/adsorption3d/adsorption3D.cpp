@@ -64,10 +64,8 @@ using MyCase = Case<
 namespace olb::parameters {
 
 struct PARTICLE_RADIUS : public descriptors::FIELD_BASE<1> { };
-struct RHO : public descriptors::FIELD_BASE<3> { };
+struct PHYS_DENSITY_COMPONENTS : public descriptors::FIELD_BASE<3> { };
 struct PARTICLE_DENSITY : public descriptors::FIELD_BASE<1> { };
-struct SCHMIDT_NUMBER : public descriptors::FIELD_BASE<1> { };
-struct REYNOLDS_NUMBER : public descriptors::FIELD_BASE<1> { };
 struct ISO_CONST_A : public descriptors::FIELD_BASE<1> { };
 struct ISO_CONST_B : public descriptors::FIELD_BASE<1> { };
 struct K_F : public descriptors::FIELD_BASE<1> { };
@@ -119,8 +117,8 @@ void prepareLatticeAD(MyCase& myCase) {
   auto& lattice = myCase.getLattice(Concentration<ID>{});
 
   Vector extend = parameters.get<parameters::DOMAIN_EXTENT>();
-  const T Sc = parameters.get<parameters::SCHMIDT_NUMBER>();
-  const T Re = parameters.get<parameters::REYNOLDS_NUMBER>();
+  const T Sc = parameters.get<parameters::SCHMIDT>();
+  const T Re = parameters.get<parameters::REYNOLDS>();
   const T tau_ads = parameters.get<parameters::LATTICE_RELAXATION_TIME>();
   const T partRho = parameters.get<parameters::PARTICLE_DENSITY>();
   const int N = parameters.get<parameters::RESOLUTION>();
@@ -173,7 +171,7 @@ void prepareLatticeNS(MyCase& myCase) {
   Vector extend = parameters.get<parameters::DOMAIN_EXTENT>();
   const T physDeltaX = extend[0]/parameters.get<parameters::RESOLUTION>();
   const T fluidViscosity = parameters.get<parameters::PHYS_CHAR_VISCOSITY>();
-  const T Re = parameters.get<parameters::REYNOLDS_NUMBER>();
+  const T Re = parameters.get<parameters::REYNOLDS>();
 
   // Set up a unit converter with the characteristic physical units
   lattice.setUnitConverter<UnitConverter<T,DESCRIPTOR>>(
@@ -260,7 +258,7 @@ void setInitialValuesADE(MyCase& myCase) {
   auto& parameters = myCase.getParameters();
 
   // Initial conditions
-  const T rho_ = parameters.get<parameters::RHO>()[ID];
+  const T rho_ = parameters.get<parameters::PHYS_DENSITY_COMPONENTS>()[ID];
   momenta::setDensity( lattice, geometry.getMaterialIndicator({0, 1}), rho_);
 
   // Make the lattice ready for simulation
@@ -289,7 +287,7 @@ void getResults(MyCase& myCase,
   const int vtkIter = latticeCAD.getUnitConverter().getLatticeTime(maxPhysT/T(100))+1;
 
   const T particleRadius = parameters.get<parameters::PARTICLE_RADIUS>();
-  const T Re = parameters.get<parameters::REYNOLDS_NUMBER>();
+  const T Re = parameters.get<parameters::REYNOLDS>();
   const T partRho = parameters.get<parameters::PARTICLE_DENSITY>();
 
   if (iT == 0) {
@@ -393,8 +391,8 @@ int main(int argc, char* argv[]) {
   {
     using namespace olb::parameters;
     myCaseParameters.set<RESOLUTION   >(21);       // resolution of the hydraulic diameter // 20
-    myCaseParameters.set<REYNOLDS_NUMBER     >(17);
-    myCaseParameters.set<SCHMIDT_NUMBER      >(1.5);
+    myCaseParameters.set<REYNOLDS     >(17);
+    myCaseParameters.set<SCHMIDT      >(1.5);
     myCaseParameters.set<LATTICE_RELAXATION_TIME>(0.6952380952380952);
     myCaseParameters.set<PARTICLE_RADIUS       >(1.5e-04);
     myCaseParameters.set<PARTICLE_DENSITY      >(0.940);
@@ -405,7 +403,7 @@ int main(int argc, char* argv[]) {
     myCaseParameters.set<C_0  >(1);
     myCaseParameters.set<D_S  >(5.e-11);
     myCaseParameters.set<PHYS_CHAR_VISCOSITY>(0.00011764705882352942);
-    myCaseParameters.set<parameters::RHO  >({1,1,0});
+    myCaseParameters.set<parameters::PHYS_DENSITY_COMPONENTS  >({1,1,0});
     myCaseParameters.set<PHYS_MAX_T   >(15);    // time for fluid simulation
   }
 

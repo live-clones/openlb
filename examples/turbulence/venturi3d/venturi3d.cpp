@@ -105,7 +105,7 @@ void prepareLattice(MyCase& myCase) {
   XMLreader config(fName);
 
   UnitConverter<T, DESCRIPTOR>* converter = createUnitConverter<T, DESCRIPTOR>(config);
-  myCase.getLattice(NavierStokes{}).setUnitConverter(*converter);
+  myCase.getLattice(NavierStokes{}).setUnitConverter(converter);
   lattice.getUnitConverter().print();
 
   // Material=1 -->bulk dynamics

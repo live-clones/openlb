@@ -59,7 +59,6 @@ struct ARRAY_NAME : public descriptors::TYPED_FIELD_BASE<std::string,1> { };
 struct LATTICE_RELAXATION_TIME_PF : public descriptors::FIELD_BASE<1> { };
 struct INLET_LENGTH_F : public descriptors::FIELD_BASE<1> { };
 struct OUTLET_LENGTH_F : public descriptors::FIELD_BASE<1> { };
-struct PRESSURE_DROP : public descriptors::FIELD_BASE<1> { };
 struct SCALE : public descriptors::FIELD_BASE<1> { };
 struct INLET_LENGTH : public descriptors::FIELD_BASE<1> { };
 struct OUTLET_LENGTH : public descriptors::FIELD_BASE<1> { };
@@ -550,7 +549,7 @@ int main(int argc, char* argv[])
     myCaseParameters.set<parameters::INTERFACE_WIDTH>(6.); // resolution inlet [lattice units]
 
     myCaseParameters.set<SCALE>(0.0000004); // scale down of vti to physical size []
-    myCaseParameters.set<DOMAIN_EXTENT>([](MyCase::ParametersD& p) {
+    myCaseParameters.set<DOMAIN_EXTENT>([] (MyCase::ParametersD& p) {
       std::string vtiFile = p.get<VTI_INPUT>();
       std::string arrayName = p.get<ARRAY_NAME>();
       BlockVTIreader2D<T,T> vtiReader( vtiFile, arrayName );
@@ -562,11 +561,11 @@ int main(int argc, char* argv[])
       Vector<T, 2> extentSamplePhys = {deltaRsample * T(extentSample[0]), deltaRsample * T(extentSample[1])};
       return extentSamplePhys;
     });
-    myCaseParameters.set<INLET_LENGTH>([](MyCase::ParametersD& p) {
+    myCaseParameters.set<INLET_LENGTH>([] (MyCase::ParametersD& p) {
       Vector extent = p.get<DOMAIN_EXTENT>();
       return extent[0]*p.get<INLET_LENGTH_F>();
     });
-    myCaseParameters.set<OUTLET_LENGTH>([](MyCase::ParametersD& p) {
+    myCaseParameters.set<OUTLET_LENGTH>([] (MyCase::ParametersD& p) {
       Vector extent = p.get<DOMAIN_EXTENT>();
       return extent[0]*p.get<OUTLET_LENGTH_F>();
     });

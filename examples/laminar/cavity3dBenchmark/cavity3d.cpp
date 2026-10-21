@@ -238,7 +238,7 @@ int main(int argc, char** argv) {
     myCaseParameters.set<PHYS_CHAR_LENGTH>(1.0);
     myCaseParameters.set<VTK_ENABLED>(false);
     myCaseParameters.set<CUBOIDS_PER_PROCESS>(1);
-    myCaseParameters.set<PHYS_DELTA_X>([](MyCase::ParametersD& p) {
+    myCaseParameters.set<PHYS_DELTA_X>([] (MyCase::ParametersD& p) {
       return p.get<PHYS_CHAR_LENGTH>() / p.get<RESOLUTION>();
     });
   }

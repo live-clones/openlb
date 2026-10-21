@@ -73,11 +73,11 @@ int main( int argc, char* argv[] )
     myCaseParameters.set<GNUPLOT_ENABLED>(true);
     myCaseParameters.set<COMPUTE_ERROR>(true);
 
-    myCaseParameters.set<PHYS_VTK_ITER_T>([](MyCase::ParametersD& p) {
+    myCaseParameters.set<PHYS_VTK_ITER_T>([] (MyCase::ParametersD& p) {
       return p.get<PHYS_MAX_T>()/20.;
     });
 
-    myCaseParameters.set<PHYS_STAT_ITER_T>([](MyCase::ParametersD& p) {
+    myCaseParameters.set<PHYS_STAT_ITER_T>([] (MyCase::ParametersD& p) {
       return p.get<PHYS_MAX_T>()/20.;
     });
 

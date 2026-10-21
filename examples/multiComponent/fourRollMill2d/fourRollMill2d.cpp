@@ -53,14 +53,10 @@ using MyCase = Case<
 
 namespace olb::parameters {
 
-struct STRAIN_RATE : public descriptors::FIELD_BASE<1> { };
 struct CONT_VISC  : public descriptors::FIELD_BASE<1> { };
 struct DROPLET_REYNOLDS : public descriptors::FIELD_BASE<1> { };
-struct PHYS_INTERVAL : public descriptors::FIELD_BASE<1> { };
 struct CAPILLARY : public descriptors::FIELD_BASE<1> { };
 struct CAHN  : public descriptors::FIELD_BASE<1> { };
-struct DEFORMATION_RESIDUUM  : public descriptors::FIELD_BASE<1> { };
-struct DEFORMATION_CONVERGENCE_PRECISION  : public descriptors::FIELD_BASE<1> { };
 struct H1  : public descriptors::FIELD_BASE<1> { };
 struct H2  : public descriptors::FIELD_BASE<1> { };
 }
@@ -588,7 +584,7 @@ void simulate(MyCase& myCase) {
   const int maxIter = converter.getLatticeTime(maxPhysT);
   const int statIter = converter.getLatticeTime(physStatIterT);
   const T residuum = params.get<parameters::CONVERGENCE_PRECISION>();
-  const T defResiduum = params.get<parameters::DEFORMATION_RESIDUUM>();
+  const T defResiduum = params.get<parameters::RESIDUUM>();
 
   int iT = 0;
   clout << "starting simulation..." << std::endl;
@@ -687,8 +683,8 @@ int main( int argc, char *argv[] )
     myCaseParameters.set<CONVERGENCE_PRECISION  >(7e-5);      // residuum for the convergence check
     myCaseParameters.set<H1                     >(0.);        // Contact angle 90 degrees   [lattice units]
     myCaseParameters.set<H2                     >(0.);        // Contact angle 90 degrees   [lattice units]
-    myCaseParameters.set<DEFORMATION_CONVERGENCE_PRECISION>(0.001);  // deformation residuum criterion
-    myCaseParameters.set<parameters::STRAIN_RATE>([](MyCase::ParametersD& p) {
+    myCaseParameters.set<CONVERGENCE_PRECISION>(0.001);  // deformation residuum criterion
+    myCaseParameters.set<parameters::STRAIN_RATE>([] (MyCase::ParametersD& p) {
       return p.get<CONT_VISC>() * p.get<DROPLET_REYNOLDS>() * 0.35 / util::pow(p.get<parameters::RADIUS>(), 2);
     }); // [pu] physical strain rate [1/s]
   }

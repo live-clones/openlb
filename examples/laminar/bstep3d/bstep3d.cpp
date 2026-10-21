@@ -56,7 +56,7 @@ Mesh<MyCase::value_t, MyCase::d> createMesh(MyCase::ParametersD& parameters)
 
   // setup channel
   const Vector extendChannel = parameters.get<parameters::DOMAIN_EXTENT>();
-  const Vector originChannel = parameters.get<parameters::ORIGIN>();
+  const Vector originChannel = parameters.get<parameters::DOMAIN_ORIGIN>();
   IndicatorCuboid3D<T> channel(extendChannel, originChannel);
 
   const T physDeltaX = parameters.get<parameters::PHYS_DELTA_X>();
@@ -305,10 +305,10 @@ int main(int argc, char* argv[])
     myCaseParameters.set<RESOLUTION>(20);
     myCaseParameters.set<TIME_RESOLUTION>(25);
     myCaseParameters.set<PHYS_CHAR_LENGTH>(1.);
-    myCaseParameters.set<PHYS_DELTA_X>([](MyCase::ParametersD& p){return
+    myCaseParameters.set<PHYS_DELTA_X>([] (MyCase::ParametersD& p) {return
       p.get<PHYS_CHAR_LENGTH>() / p.get<RESOLUTION>();
     });
-    myCaseParameters.set<PHYS_DELTA_T>([](MyCase::ParametersD& p){return
+    myCaseParameters.set<PHYS_DELTA_T>([] (MyCase::ParametersD& p) {return
       p.get<PHYS_DELTA_X>() / p.get<TIME_RESOLUTION>();
     });
     myCaseParameters.set<PHYS_MAX_T>(40.0);
@@ -318,14 +318,14 @@ int main(int argc, char* argv[])
     myCaseParameters.set<LATTICE_RELAXATION_TIME>(0.518);
 
     // Startup
-    myCaseParameters.set<PHYS_START_T>([](MyCase::ParametersD& p){return
+    myCaseParameters.set<PHYS_START_T>([] (MyCase::ParametersD& p) {return
       0.2 * p.get<PHYS_MAX_T>();
     });
     myCaseParameters.set<PHYS_BOUNDARY_VALUE_UPDATE_T>(0.01);
 
     // Domain
     myCaseParameters.set<DOMAIN_EXTENT>({18.0, 1.5, 1.5});
-    myCaseParameters.set<ORIGIN>({0., 0., 0.});
+    myCaseParameters.set<DOMAIN_ORIGIN>({0., 0., 0.});
     myCaseParameters.set<PHYS_STEP_EXTENT>({5.0, 0.75, 1.5});
     myCaseParameters.set<PHYS_STEP_ORIGIN>({0., 0., 0.});
 

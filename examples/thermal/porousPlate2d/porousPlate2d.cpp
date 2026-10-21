@@ -172,7 +172,7 @@ Mesh<MyCase::value_t,MyCase::d> createMesh(MyCase::ParametersD& parameters)
 
   const Vector extent = parameters.get<parameters::DOMAIN_EXTENT>();
   const T physDeltaX  = parameters.get<parameters::PHYS_DELTA_X>();
-  const Vector origin = parameters.get<parameters::ORIGIN>();
+  const Vector origin = parameters.get<parameters::DOMAIN_ORIGIN>();
   IndicatorCuboid2D<T> cuboid(extent, origin);
 
   Mesh<T,MyCase::d> mesh(cuboid, physDeltaX, singleton::mpi().getSize());
@@ -195,7 +195,7 @@ void prepareGeometry(MyCase& myCase)
   geometry.rename(2, 1, { 0, 1 });
 
   const Vector extent = parameters.get<parameters::DOMAIN_EXTENT>();
-  const Vector origin = parameters.get<parameters::ORIGIN>();
+  const Vector origin = parameters.get<parameters::DOMAIN_ORIGIN>();
   const Vector bottomExtent{extent[0], 0.};
   IndicatorCuboid2D<T> bottom(bottomExtent, origin);
 
@@ -522,7 +522,7 @@ int main(int argc, char* argv[])
     myCaseParameters.set<RAYLEIGH                 >(  100    );
     myCaseParameters.set<PRANDTL                  >(    0.71 );
     myCaseParameters.set<DOMAIN_EXTENT            >( {1, 1}  );
-    myCaseParameters.set<ORIGIN                   >( {0, 0}  );
+    myCaseParameters.set<DOMAIN_ORIGIN            >( {0, 0}  );
     myCaseParameters.set<PHYS_CHAR_LENGTH         >(    1.0  );
     myCaseParameters.set<PHYS_CHAR_VELOCITY       >(    1.0  );
     myCaseParameters.set<PHYS_CHAR_DENSITY        >(    1.0  );
@@ -538,7 +538,7 @@ int main(int argc, char* argv[])
     myCaseParameters.set<PHYS_STAT_ITER_T         >(   10.0  );
     myCaseParameters.set<PHYS_VTK_ITER_T          >(  100.0  );
   }
-  myCaseParameters.set<parameters::PHYS_DELTA_X>([](MyCase::ParametersD& p) -> MyCase::value_t {
+  myCaseParameters.set<parameters::PHYS_DELTA_X>([] (MyCase::ParametersD& p) -> MyCase::value_t  {
     return {p.get<parameters::PHYS_CHAR_LENGTH>() / p.get<parameters::RESOLUTION>()};
   });
 

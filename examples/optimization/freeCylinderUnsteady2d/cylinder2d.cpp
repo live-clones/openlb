@@ -65,7 +65,6 @@ struct DOMAIN_EXTENT_Y               : public descriptors::FIELD_BASE<1> { };
 struct CENTER_CYLINDER_X             : public descriptors::FIELD_BASE<1> { };
 struct CENTER_CYLINDER_Y             : public descriptors::FIELD_BASE<1> { };
 struct AVERAGING_START_FRACTION      : public descriptors::FIELD_BASE<1> { };
-struct RAMP_UP_UPDATE                : public descriptors::FIELD_BASE<1> { };
 struct RAMP_UP_END_FRACTION          : public descriptors::FIELD_BASE<1> { };
 struct ADJOINT_RAMP_UP_UPDATE        : public descriptors::FIELD_BASE<1> { };
 struct ADJOINT_RAMP_UP_END_FRACTION  : public descriptors::FIELD_BASE<1> { };
@@ -249,7 +248,7 @@ void setTemporalValues(CASE& myCase,
     std::size_t iTmaxStart = lattice.getUnitConverter().getLatticeTime(
       maxPhysT*parameters.template get<parameters::RAMP_UP_END_FRACTION>());
     std::size_t iTupdate   = lattice.getUnitConverter().getLatticeTime(
-      parameters.template get<parameters::RAMP_UP_UPDATE>());
+      parameters.template get<parameters::RAMP_UP_T>());
     if (iT % iTupdate == 0 && iT <= iTmaxStart) {
       T frac{};
       PolynomialStartScale<T,std::size_t>(iTmaxStart, T(1))(&frac, &iT);
@@ -1071,7 +1070,7 @@ int main(int argc, char* argv[])
     myCaseParameters.set<PHYS_VTK_ITER_T>(10);
     myCaseParameters.set<PHYS_STAT_ITER_T>(2.5);
     myCaseParameters.set<AVERAGING_START_FRACTION>(0.8);
-    myCaseParameters.set<RAMP_UP_UPDATE>(0.01);
+    myCaseParameters.set<RAMP_UP_T>(0.01);
     myCaseParameters.set<RAMP_UP_END_FRACTION>(0.4);
     myCaseParameters.set<ADJOINT_RAMP_UP_UPDATE>(0.01);
     myCaseParameters.set<ADJOINT_RAMP_UP_END_FRACTION>(0.5);

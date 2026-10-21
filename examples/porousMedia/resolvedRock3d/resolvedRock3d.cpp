@@ -46,7 +46,6 @@ using namespace olb::names;
 namespace olb::parameters {
 
 struct CONVERGENCE_CHECK_T  : public descriptors::FIELD_BASE<1> { };
-struct PRESSURE_DROP        : public descriptors::FIELD_BASE<1> { };
 struct SCALING_FACTOR       : public descriptors::FIELD_BASE<1> { };
 struct TIME_SCALING_FACTOR  : public descriptors::FIELD_BASE<1> { };
 

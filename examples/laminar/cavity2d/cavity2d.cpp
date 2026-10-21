@@ -39,10 +39,6 @@ using namespace olb::names;
 using MyCase = Case<NavierStokes, Lattice<double, descriptors::D2Q9<>>>;
 namespace olb::parameters {
 
-struct RESIDUUM : public descriptors::FIELD_BASE<1> {};                    // Residuum for convergence check
-struct PHYS_LOG_ITER_T : public descriptors::FIELD_BASE<1> {};             // physical time interval for loging
-struct PHYS_IMAGE_ITER_T : public descriptors::FIELD_BASE<1> {};           // physical time interval for saving images
-struct PHYS_GNUPLOT_ITER_T : public descriptors::FIELD_BASE<1> {};         // physical time interval for saving gnuplot
 struct TIMER_PRINT_MODE : public descriptors::TYPED_FIELD_BASE<int, 1> {}; // Timer print mode
 
 } // namespace olb::parameters
@@ -169,7 +165,7 @@ void getResults(MyCase& myCase, std::size_t iT, util::Timer<MyCase::value_t>& ti
   const auto& converter      = sLattice.getUnitConverter();
   auto&       sGeometry      = myCase.getGeometry();
   auto&       parameters     = myCase.getParameters();
-  auto        logT           = parameters.get<parameters::PHYS_LOG_ITER_T>();
+  auto        logT           = parameters.get<parameters::PHYS_STAT_ITER_T>();
   auto        imSave         = parameters.get<parameters::PHYS_IMAGE_ITER_T>();
   auto        vtkSave        = parameters.get<parameters::PHYS_VTK_ITER_T>();
   auto        gnuplotSave    = parameters.get<parameters::PHYS_GNUPLOT_ITER_T>();
@@ -329,11 +325,11 @@ int main(int argc, char* argv[])
     myCaseParameters.set<PHYS_MAX_T>(config["Application"]["PhysParameters"]["PhysMaxTime"].get<T>());
     myCaseParameters.set<CONV_ITER>(config["Application"]["ConvergenceCheck"]["Interval"].get<T>());
     myCaseParameters.set<RESIDUUM>(config["Application"]["ConvergenceCheck"]["Residuum"].get<T>());
-    myCaseParameters.set<PHYS_DELTA_X>([](MyCase::ParametersD& p) {
+    myCaseParameters.set<PHYS_DELTA_X>([] (MyCase::ParametersD& p) {
       return p.get<PHYS_CHAR_LENGTH>() / p.get<RESOLUTION>();
     });
     myCaseParameters.set<PHYS_VTK_ITER_T>(config["Output"]["VisualizationVTK"]["SaveTime"].get<T>());
-    myCaseParameters.set<PHYS_LOG_ITER_T>(config["Output"]["Log"]["SaveTime"].get<T>());
+    myCaseParameters.set<PHYS_STAT_ITER_T>(config["Output"]["Log"]["SaveTime"].get<T>());
     myCaseParameters.set<PHYS_IMAGE_ITER_T>(config["Output"]["VisualizationImages"]["SaveTime"].get<T>());
     myCaseParameters.set<PHYS_GNUPLOT_ITER_T>(config["Output"]["VisualizationGnuplot"]["SaveTime"].get<T>());
     myCaseParameters.set<TIMER_PRINT_MODE>(config["Output"]["Timer"]["PrintMode"].get<int>());

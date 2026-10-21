@@ -38,47 +38,47 @@ int main(int argc, char* argv[]) {
     myCaseParameters.set<B_COEFF>(-1);
     myCaseParameters.set<ACCOMODATION_COEFF>(1);
     myCaseParameters.set<RESOLUTION>(21);
-    myCaseParameters.set<RELAXATION_TIME>(1.13);
+    myCaseParameters.set<LATTICE_RELAXATION_TIME>(1.13);
     myCaseParameters.set<PHYS_MAX_T>(2.e-6);
-    myCaseParameters.set<START_TIME>([](MyCase::ParametersD& p) {
+    myCaseParameters.set<PHYS_START_T>([] (MyCase::ParametersD& p) {
       return 0.05*p.get<parameters::PHYS_MAX_T>();
     });
     myCaseParameters.set<KINETIC_DIAMETER>(364e-12); //kinetic diamter of nitrogen [m]
     myCaseParameters.set<AVERAGE_PRESSURE>(1000);
-    myCaseParameters.set<PRESSURE_DIFFERENCE>(0.5);
+    myCaseParameters.set<PRESSURE_DROP>(0.5);
     myCaseParameters.set<MOLAR_MASS>(28.96e-3);
     myCaseParameters.set<R_SPECIFIC>(296.8);
     myCaseParameters.set<parameters::TEMPERATURE>(300.);
     myCaseParameters.set<parameters::TEMPERATURE_LEFT>(298.);
     myCaseParameters.set<parameters::TEMPERATURE_RIGHT>(302.);
-    myCaseParameters.set<PHYS_CHAR_DENSITY>([](MyCase::ParametersD& p) {
+    myCaseParameters.set<PHYS_CHAR_DENSITY>([] (MyCase::ParametersD& p) {
       return util::idealGasDensity( p.get<MOLAR_MASS>(), p.get<AVERAGE_PRESSURE>(), p.get<parameters::TEMPERATURE>());
     });
-    myCaseParameters.set<PHYS_CHAR_VISCOSITY>([](MyCase::ParametersD& p) {
+    myCaseParameters.set<PHYS_CHAR_VISCOSITY>([] (MyCase::ParametersD& p) {
       return util::gasDynamicViscosity( p.get<MOLAR_MASS>(), p.get<AVERAGE_PRESSURE>(), p.get<parameters::TEMPERATURE>(), p.get<KINETIC_DIAMETER>())/p.get<PHYS_CHAR_DENSITY>();
     });
-    myCaseParameters.set<MFP>([](MyCase::ParametersD& p) {
+    myCaseParameters.set<MFP>([] (MyCase::ParametersD& p) {
       return util::meanFreePath(p.get<MOLAR_MASS>(), p.get<AVERAGE_PRESSURE>(), p.get<parameters::TEMPERATURE>(), p.get<PHYS_CHAR_VISCOSITY>()*p.get<PHYS_CHAR_DENSITY>());
     });
-    myCaseParameters.set<DOMAIN_EXTENT>([](MyCase::ParametersD& p) {
+    myCaseParameters.set<DOMAIN_EXTENT>([] (MyCase::ParametersD& p) {
       return Vector{10.*p.get<MFP>()/p.get<KNUDSEN>(), p.get<MFP>()/p.get<KNUDSEN>()};
     });
-    myCaseParameters.set<SLIPCOEFF>([](MyCase::ParametersD& p) {
+    myCaseParameters.set<SLIPCOEFF>([] (MyCase::ParametersD& p) {
       return (2. - p.get<ACCOMODATION_COEFF>())/p.get<ACCOMODATION_COEFF>()/(1. - p.get<B_COEFF>()*p.get<KNUDSEN>())*p.get<MFP>();
     });
-    myCaseParameters.set<CREEPCOEFF>([](MyCase::ParametersD& p) {
+    myCaseParameters.set<CREEPCOEFF>([] (MyCase::ParametersD& p) {
       return 3./4.*p.get<PHYS_CHAR_VISCOSITY>()*p.get<PHYS_CHAR_DENSITY>()*p.get<R_SPECIFIC>()/p.get<AVERAGE_PRESSURE>();
     });
-    myCaseParameters.set<PHYS_CHAR_VELOCITY>([](MyCase::ParametersD& p) {
+    myCaseParameters.set<PHYS_CHAR_VELOCITY>([] (MyCase::ParametersD& p) {
       return p.get<DOMAIN_EXTENT>()[1]*p.get<DOMAIN_EXTENT>()[1]/2./p.get<PHYS_CHAR_VISCOSITY>()/p.get<PHYS_CHAR_DENSITY>()
-      * (-p.get<PRESSURE_DIFFERENCE>())/p.get<DOMAIN_EXTENT>()[0]
+      * (-p.get<PRESSURE_DROP>())/p.get<DOMAIN_EXTENT>()[0]
       * (0.25 - 0.5 - p.get<SLIPCOEFF>()/p.get<DOMAIN_EXTENT>()[1])
       + p.get<CREEPCOEFF>()*(p.get<parameters::TEMPERATURE_RIGHT>()
       - p.get<parameters::TEMPERATURE_LEFT>())/p.get<DOMAIN_EXTENT>()[0];
     });
-    myCaseParameters.set<PHYS_INTERVAL>(2.e-6/50.);
+    myCaseParameters.set<PHYS_INTERVAL_T>(2.e-6/50.);
     myCaseParameters.set<RESIDUUM>(1e-6);
-    myCaseParameters.set<HAS_CONVERGED>(false);
+    myCaseParameters.set<CONVERGED>(false);
     myCaseParameters.set<ERROR_NORMS>({0,0,0,0,0,0});
   }
 

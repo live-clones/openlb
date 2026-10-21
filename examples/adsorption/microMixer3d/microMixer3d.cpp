@@ -46,9 +46,6 @@ using MyCase = Case<
 
 namespace olb::parameters {
 
-struct WIDTH : public descriptors::FIELD_BASE<1> { };
-struct STL_SIZE : public descriptors::FIELD_BASE<1> { };
-
 struct PARTICLE_RADIUS : public descriptors::FIELD_BASE<1> { };
 struct PARTICLE_CONCENTRATION : public descriptors::FIELD_BASE<1> { };
 struct PARTICLE_DENSITY : public descriptors::FIELD_BASE<1> { };
@@ -59,14 +56,12 @@ struct K_F : public descriptors::FIELD_BASE<1> { };
 struct C_0 : public descriptors::FIELD_BASE<1> { };
 struct D_S : public descriptors::FIELD_BASE<1> { };
 
-struct TAU : public descriptors::FIELD_BASE<1> { };
-
 }
 
 /// === Step 3: Create Mesh ===
 Mesh<MyCase::value_t,MyCase::d> createMesh(MyCase::ParametersD& params) {
   using T = MyCase::value_t;
-  const T dx = params.get<parameters::WIDTH>() / params.get<parameters::RESOLUTION>();
+  const T dx = params.get<parameters::DOMAIN_L>() / params.get<parameters::RESOLUTION>();
   const int noOfCuboids = util::max(16, 4 * singleton::mpi().getSize());
 
   STLreader<T> stlReader("microMixer3d_small.stl",
@@ -90,7 +85,7 @@ void prepareGeometry(MyCase& myCase) {
   auto& geometry = myCase.getGeometry();
   auto& params = myCase.getParameters();
 
-  const T dx = params.get<parameters::WIDTH>() / params.get<parameters::RESOLUTION>();
+  const T dx = params.get<parameters::DOMAIN_L>() / params.get<parameters::RESOLUTION>();
   STLreader<T> stlReader("microMixer3d_small.stl",
                          dx, params.get<parameters::STL_SIZE>());
   geometry.rename(0, 2, stlReader);
@@ -139,11 +134,11 @@ void prepareLatticeAD(
   auto& geometry = myCase.getGeometry();
   auto& params = myCase.getParameters();
 
-  const T viscosity = params.get<parameters::PHYS_CHAR_VELOCITY>() * params.get<parameters::WIDTH>() / params.get<parameters::REYNOLDS>();
+  const T viscosity = params.get<parameters::PHYS_CHAR_VELOCITY>() * params.get<parameters::DOMAIN_L>() / params.get<parameters::REYNOLDS>();
   lattice.template setUnitConverter<AdsorptionConverter<T, ADDESCRIPTOR>>(
-      (T)   params.get<parameters::WIDTH>()/params.get<parameters::RESOLUTION>(),  //physDeltaX
+      (T)   params.get<parameters::DOMAIN_L>()/params.get<parameters::RESOLUTION>(),  //physDeltaX
       (T)   myCase.getLattice(NavierStokes{}).getUnitConverter().getPhysDeltaT(),         //physDeltaT
-      (T)   params.get<parameters::WIDTH>(),     //charPhysLength
+      (T)   params.get<parameters::DOMAIN_L>(),     //charPhysLength
       (T)   params.get<parameters::PHYS_CHAR_VELOCITY>(),    //charPhysVelocity
       (T)   viscosity / params.get<parameters::SCHMIDT>(),
       (T)   1.,
@@ -178,11 +173,11 @@ void prepareLattice(MyCase& myCase) {
   auto& NSlattice = myCase.getLattice(NavierStokes{});
   using NSDESCRIPTOR = MyCase::descriptor_t_of<NavierStokes>;
 
-  const T viscosity = params.get<parameters::PHYS_CHAR_VELOCITY>() * params.get<parameters::WIDTH>() / params.get<parameters::REYNOLDS>();
+  const T viscosity = params.get<parameters::PHYS_CHAR_VELOCITY>() * params.get<parameters::DOMAIN_L>() / params.get<parameters::REYNOLDS>();
   NSlattice.template setUnitConverter<UnitConverterFromResolutionAndRelaxationTime<T, NSDESCRIPTOR>> (
       (T) params.get<parameters::RESOLUTION>(),  // resolution: number of voxels per charPhysL
-      (T) params.get<parameters::TAU>(),         // latticeRelaxationTime: relaxation time, have to be greater than 0.5!
-      (T) params.get<parameters::WIDTH>(),       // charPhysLength: reference channelLength of simulation geometry
+      (T) params.get<parameters::LATTICE_RELAXATION_TIME>(),         // latticeRelaxationTime: relaxation time, have to be greater than 0.5!
+      (T) params.get<parameters::DOMAIN_L>(),       // charPhysLength: reference channelLength of simulation geometry
       (T) params.get<parameters::PHYS_CHAR_VELOCITY>(),      // charPhysVelocity: maximal/highest expected velocity during simulation in __m / s__
       (T) viscosity,                             // physViscosity: physical kinematic viscosity in __m^2 / s__
       (T) 1000                                   // physDensity: physical density in __kg / m^3__
@@ -445,11 +440,11 @@ int main(int argc, char* argv[]) {
   {
     using namespace olb::parameters;
     myCaseParameters.set<PHYS_CHAR_VELOCITY>(0.2);
-    myCaseParameters.set<WIDTH        >(0.0133);  // hydraulic diameter = 4 * surface / perimeter
+    myCaseParameters.set<DOMAIN_L        >(0.0133);  // hydraulic diameter = 4 * surface / perimeter
     myCaseParameters.set<RESOLUTION   >(20);       // resolution of the hydraulic diameter // 20
     myCaseParameters.set<REYNOLDS     >(50);
     myCaseParameters.set<SCHMIDT      >(100);
-    myCaseParameters.set<TAU          >(0.6125);
+    myCaseParameters.set<LATTICE_RELAXATION_TIME          >(0.6125);
     myCaseParameters.set<PARTICLE_RADIUS       >(5.e-5);
     myCaseParameters.set<PARTICLE_CONCENTRATION>(5);
     myCaseParameters.set<PARTICLE_DENSITY      >(1700);

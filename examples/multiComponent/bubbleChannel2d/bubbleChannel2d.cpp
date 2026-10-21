@@ -461,7 +461,7 @@ int main( int argc, char *argv[] )
   }
   {
     using T = MyCase::value_t;
-    myCaseParameters.set<parameters::LATTICE_MAX_T>([](MyCase::ParametersD& p){
+    myCaseParameters.set<parameters::LATTICE_MAX_T>([] (MyCase::ParametersD& p) {
       const T char_l = p.get<parameters::PHYS_CHAR_LENGTH>();
       const T N = p.get<parameters::RESOLUTION>();
       const T Nx = p.get<parameters::DOMAIN_EXTENT>()[0] / char_l * N;
@@ -471,7 +471,7 @@ int main( int argc, char *argv[] )
       const T maxIter = Nx/(Re/Ny*((tau_l-0.5)/3.))*1.1;
       return maxIter;
     });
-    myCaseParameters.set<parameters::DOMAIN_EXTENT_LATTICE>([](MyCase::ParametersD& p){
+    myCaseParameters.set<parameters::DOMAIN_EXTENT_LATTICE>([] (MyCase::ParametersD& p) {
       const T char_l = p.get<parameters::PHYS_CHAR_LENGTH>();
       const T N = p.get<parameters::RESOLUTION>();
       const T Nx = p.get<parameters::DOMAIN_EXTENT>()[0] / char_l * N;

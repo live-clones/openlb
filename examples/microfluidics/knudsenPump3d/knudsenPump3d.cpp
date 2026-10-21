@@ -102,21 +102,13 @@ namespace olb::parameters {
 // Microfluidics
 struct B_COEFF : public descriptors::FIELD_BASE<1> { };
 struct ACCOMODATION_COEFF : public descriptors::FIELD_BASE<1> { };
-struct RELAXATION_TIME : public descriptors::FIELD_BASE<1> { };
-struct START_TIME : public descriptors::FIELD_BASE<1> { };
 struct KINETIC_DIAMETER : public descriptors::FIELD_BASE<1> { };
-struct AVERAGE_PRESSURE : public descriptors::FIELD_BASE<1> { };
-struct PRESSURE_DIFFERENCE : public descriptors::FIELD_BASE<1> { };
 struct MOLAR_MASS : public descriptors::FIELD_BASE<1> { };
 struct R_SPECIFIC : public descriptors::FIELD_BASE<1> { };
-struct TEMPERATURE : public descriptors::FIELD_BASE<1> { };
 struct TEMPERATURE_LEFT : public descriptors::FIELD_BASE<1> { };
 struct TEMPERATURE_RIGHT : public descriptors::FIELD_BASE<1> { };
 struct SLIPCOEFF : public descriptors::FIELD_BASE<1> { };
 struct CREEPCOEFF : public descriptors::FIELD_BASE<1> { };
-struct HAS_CONVERGED : public descriptors::TYPED_FIELD_BASE<bool,1> { };
-struct PHYS_INTERVAL : public descriptors::FIELD_BASE<1> { };
-struct RESIDUUM : public descriptors::FIELD_BASE<1> { };
 struct MFP : public descriptors::FIELD_BASE<1> { };
 struct ERROR_NORMS : public descriptors::FIELD_BASE<3> { };
 
@@ -191,14 +183,14 @@ void prepareLattice(MyCase& myCase) {
   auto& lattice = myCase.getLattice(NavierStokes{});
 
   const int N = parameters.get<parameters::RESOLUTION>();
-  const T relaxationTime = parameters.get<parameters::RELAXATION_TIME>();
+  const T relaxationTime = parameters.get<parameters::LATTICE_RELAXATION_TIME>();
   Vector extend = parameters.get<parameters::DOMAIN_EXTENT>();
   const T physCharVelocity = parameters.get<parameters::PHYS_CHAR_VELOCITY>();
   const T physCharViscosity = parameters.get<parameters::PHYS_CHAR_VISCOSITY>();
   const T physCharDensity = parameters.get<parameters::PHYS_CHAR_DENSITY>();
   const T tempLeft = parameters.get<parameters::TEMPERATURE_LEFT>();
   const T tempRight = parameters.get<parameters::TEMPERATURE_RIGHT>();
-  const T outletPressure = parameters.get<parameters::AVERAGE_PRESSURE>()-0.5*parameters.get<parameters::PRESSURE_DIFFERENCE>();
+  const T outletPressure = parameters.get<parameters::AVERAGE_PRESSURE>()-0.5*parameters.get<parameters::PRESSURE_DROP>();
   const T slipCoeff = parameters.get<parameters::SLIPCOEFF>();
   const T creepCoeff = parameters.get<parameters::CREEPCOEFF>();
 
@@ -322,7 +314,7 @@ void getResults(MyCase& myCase,
   auto& geometry = myCase.getGeometry();
   auto& lattice = myCase.getLattice(NavierStokes{});
   const T maxPhysT = parameters.get<parameters::PHYS_MAX_T>();
-  bool hasConverged = parameters.get<parameters::HAS_CONVERGED>();
+  bool hasConverged = parameters.get<parameters::CONVERGED>();
   const bool lastTimeStep = ( hasConverged || (iT + 1 == lattice.getUnitConverter().getLatticeTime( maxPhysT )) );
   const int statIter = lattice.getUnitConverter().getLatticeTime( maxPhysT/50. );
 
@@ -387,7 +379,7 @@ void simulate(MyCase& myCase) {
   using T = MyCase::value_t;
   auto& parameters = myCase.getParameters();
   const T maxPhysT = parameters.get<parameters::PHYS_MAX_T>();
-  const T physInterval = parameters.get<parameters::PHYS_INTERVAL>();
+  const T physInterval = parameters.get<parameters::PHYS_INTERVAL_T>();
   const T residuum = parameters.get<parameters::RESIDUUM>();
 
   const std::size_t iTmax = myCase.getLattice(NavierStokes{}).getUnitConverter().getLatticeTime(maxPhysT);
@@ -396,11 +388,11 @@ void simulate(MyCase& myCase) {
   util::ValueTracer<T> converge( myCase.getLattice(NavierStokes{}).getUnitConverter().getLatticeTime( physInterval ), residuum );
   timer.start();
 
-  parameters.set<parameters::HAS_CONVERGED>(false);
+  parameters.set<parameters::CONVERGED>(false);
   for (std::size_t iT=0; iT < iTmax; ++iT) {
     if ( converge.hasConverged() ) {
       clout << "Simulation converged." << std::endl;
-      parameters.set<parameters::HAS_CONVERGED>(true);
+      parameters.set<parameters::CONVERGED>(true);
       getResults(myCase, timer, iT);
 
       break;
@@ -430,47 +422,47 @@ int main(int argc, char* argv[]) {
     myCaseParameters.set<ACCOMODATION_COEFF>(1);
     myCaseParameters.set<RESOLUTION>(41);
     myCaseParameters.set<OVERLAP>(5);
-    myCaseParameters.set<RELAXATION_TIME>(0.9);
+    myCaseParameters.set<LATTICE_RELAXATION_TIME>(0.9);
     myCaseParameters.set<PHYS_MAX_T>(2.e-6);
-    myCaseParameters.set<START_TIME>([](MyCase::ParametersD& p) {
+    myCaseParameters.set<PHYS_START_T>([] (MyCase::ParametersD& p) {
       return 0.05*p.get<parameters::PHYS_MAX_T>();
     });
     myCaseParameters.set<KINETIC_DIAMETER>(364e-12); //kinetic diamter of nitrogen [m]
     myCaseParameters.set<AVERAGE_PRESSURE>(1000);
-    myCaseParameters.set<PRESSURE_DIFFERENCE>(0.5);
+    myCaseParameters.set<PRESSURE_DROP>(0.5);
     myCaseParameters.set<MOLAR_MASS>(28.96e-3);
     myCaseParameters.set<R_SPECIFIC>(296.8);
     myCaseParameters.set<parameters::TEMPERATURE>(300.);
     myCaseParameters.set<parameters::TEMPERATURE_LEFT>(298.);
     myCaseParameters.set<parameters::TEMPERATURE_RIGHT>(302.);
-    myCaseParameters.set<PHYS_CHAR_DENSITY>([](MyCase::ParametersD& p) {
+    myCaseParameters.set<PHYS_CHAR_DENSITY>([] (MyCase::ParametersD& p) {
       return util::idealGasDensity( p.get<MOLAR_MASS>(), p.get<AVERAGE_PRESSURE>(), p.get<parameters::TEMPERATURE>());
     });
-    myCaseParameters.set<PHYS_CHAR_VISCOSITY>([](MyCase::ParametersD& p) {
+    myCaseParameters.set<PHYS_CHAR_VISCOSITY>([] (MyCase::ParametersD& p) {
       return util::gasDynamicViscosity( p.get<MOLAR_MASS>(), p.get<AVERAGE_PRESSURE>(), p.get<parameters::TEMPERATURE>(), p.get<KINETIC_DIAMETER>())/p.get<PHYS_CHAR_DENSITY>();
     });
-    myCaseParameters.set<MFP>([](MyCase::ParametersD& p) {
+    myCaseParameters.set<MFP>([] (MyCase::ParametersD& p) {
       return util::meanFreePath(p.get<MOLAR_MASS>(), p.get<AVERAGE_PRESSURE>(), p.get<parameters::TEMPERATURE>(), p.get<PHYS_CHAR_VISCOSITY>()*p.get<PHYS_CHAR_DENSITY>());
     });
-    myCaseParameters.set<DOMAIN_EXTENT>([](MyCase::ParametersD& p) {
+    myCaseParameters.set<DOMAIN_EXTENT>([] (MyCase::ParametersD& p) {
       return Vector{4.*p.get<MFP>()/p.get<KNUDSEN>(), p.get<MFP>()/p.get<KNUDSEN>(), p.get<MFP>()/p.get<KNUDSEN>()};
     });
-    myCaseParameters.set<SLIPCOEFF>([](MyCase::ParametersD& p) {
+    myCaseParameters.set<SLIPCOEFF>([] (MyCase::ParametersD& p) {
       return (2. - p.get<ACCOMODATION_COEFF>())/p.get<ACCOMODATION_COEFF>()/(1. - p.get<B_COEFF>()*p.get<KNUDSEN>())*p.get<MFP>();
     });
-    myCaseParameters.set<CREEPCOEFF>([](MyCase::ParametersD& p) {
+    myCaseParameters.set<CREEPCOEFF>([] (MyCase::ParametersD& p) {
       return 3./4.*p.get<PHYS_CHAR_VISCOSITY>()*p.get<PHYS_CHAR_DENSITY>()*p.get<R_SPECIFIC>()/p.get<AVERAGE_PRESSURE>();
     });
-    myCaseParameters.set<PHYS_CHAR_VELOCITY>([](MyCase::ParametersD& p) {
+    myCaseParameters.set<PHYS_CHAR_VELOCITY>([] (MyCase::ParametersD& p) {
       return p.get<DOMAIN_EXTENT>()[1]*p.get<DOMAIN_EXTENT>()[1]/2./p.get<PHYS_CHAR_VISCOSITY>()/p.get<PHYS_CHAR_DENSITY>()
-      * (-p.get<PRESSURE_DIFFERENCE>())/p.get<DOMAIN_EXTENT>()[0]
+      * (-p.get<PRESSURE_DROP>())/p.get<DOMAIN_EXTENT>()[0]
       * (0.25 - 0.5 - p.get<SLIPCOEFF>()/p.get<DOMAIN_EXTENT>()[1])
       + p.get<CREEPCOEFF>()*(p.get<parameters::TEMPERATURE_RIGHT>()
       - p.get<parameters::TEMPERATURE_LEFT>())/p.get<DOMAIN_EXTENT>()[0];
     });
-    myCaseParameters.set<PHYS_INTERVAL>(2.e-6/50.);
+    myCaseParameters.set<PHYS_INTERVAL_T>(2.e-6/50.);
     myCaseParameters.set<RESIDUUM>(1e-6);
-    myCaseParameters.set<HAS_CONVERGED>(false);
+    myCaseParameters.set<CONVERGED>(false);
     myCaseParameters.set<ERROR_NORMS>({0,0,0});
   }
 

@@ -83,7 +83,6 @@ struct DOMAIN_EXTENT_Z                    : public descriptors::FIELD_BASE<1> { 
 struct CENTER_CYLINDER_X                  : public descriptors::FIELD_BASE<1> { };
 struct CENTER_CYLINDER_Y                  : public descriptors::FIELD_BASE<1> { };
 struct AVERAGING_START_FRACTION           : public descriptors::FIELD_BASE<1> { };
-struct RAMP_UP_UPDATE                     : public descriptors::FIELD_BASE<1> { };
 struct RAMP_UP_END_FRACTION               : public descriptors::FIELD_BASE<1> { };
 struct ADJOINT_RAMP_UP_UPDATE             : public descriptors::FIELD_BASE<1> { };
 struct ADJOINT_RAMP_UP_END_FRACTION       : public descriptors::FIELD_BASE<1> { };
@@ -299,7 +298,7 @@ void setTemporalValues(CASE& myCase,
     std::size_t iTmaxStart = converter.getLatticeTime(
       maxPhysT*parameters.template get<parameters::RAMP_UP_END_FRACTION>());
     std::size_t iTupdate   = converter.getLatticeTime(
-      parameters.template get<parameters::RAMP_UP_UPDATE>());
+      parameters.template get<parameters::RAMP_UP_T>());
     if (iT % iTupdate == 0 && iT <= iTmaxStart) {
       using Coupling_t = SuperLatticeCoupling<SingleLatticeO<operators::SmoothConstInflowO>,
                                               meta::map<names::Lattice1,
@@ -803,7 +802,7 @@ int main(int argc, char* argv[])
     myCaseParameters.set<ADJOINT_PHYS_VTK_ITER_T>(100.);
     myCaseParameters.set<PHYS_STAT_ITER_T>(1.5);
     myCaseParameters.set<AVERAGING_START_FRACTION>(0.1);
-    myCaseParameters.set<RAMP_UP_UPDATE>(0.01);
+    myCaseParameters.set<RAMP_UP_T>(0.01);
     myCaseParameters.set<RAMP_UP_END_FRACTION>(0.075);
     myCaseParameters.set<ADJOINT_RAMP_UP_UPDATE>(0.01);
     myCaseParameters.set<ADJOINT_RAMP_UP_END_FRACTION>(0.8);

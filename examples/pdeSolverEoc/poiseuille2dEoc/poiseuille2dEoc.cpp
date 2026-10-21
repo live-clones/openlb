@@ -52,8 +52,6 @@ static Gnuplot<T> gplot(
 
 namespace olb::parameters {
 
-struct START_RESOLUTION : public descriptors::TYPED_FIELD_BASE<int,1> { };
-struct NUM_SIMULATIONS : public descriptors::TYPED_FIELD_BASE<int,1> { };
 
 }
 
@@ -67,8 +65,8 @@ int main( int argc, char* argv[] )
     MyCase::ParametersD myCaseParameters;
   {
     using namespace olb::parameters;
-    myCaseParameters.set<START_RESOLUTION>(50);
-    myCaseParameters.set<NUM_SIMULATIONS>(4);
+    myCaseParameters.set<RESOLUTION_START>(50);
+    myCaseParameters.set<NUMBER_OF_RUNS>(4);
     myCaseParameters.set<DOMAIN_EXTENT>({2., 1.});
     myCaseParameters.set<PHYS_CHAR_VELOCITY>(1.0);
     myCaseParameters.set<REYNOLDS>(10);
@@ -87,11 +85,11 @@ int main( int argc, char* argv[] )
     myCaseParameters.set<GNUPLOT_ENABLED>(false);
     myCaseParameters.set<COMPUTE_ERROR>(true);
 
-    myCaseParameters.set<PHYS_VTK_ITER_T>([](MyCase::ParametersD& p) {
+    myCaseParameters.set<PHYS_VTK_ITER_T>([] (MyCase::ParametersD& p) {
       return p.get<PHYS_MAX_T>()/20.;
     });
 
-    myCaseParameters.set<PHYS_STAT_ITER_T>([](MyCase::ParametersD& p) {
+    myCaseParameters.set<PHYS_STAT_ITER_T>([] (MyCase::ParametersD& p) {
       return p.get<PHYS_MAX_T>()/20.;
     });
 
@@ -111,9 +109,9 @@ int main( int argc, char* argv[] )
   gplot.setLabel("Resolution test", "average Error");
 
   // loop over the different simulations
-  for(int i = 0; i < myCaseParameters.get<parameters::NUM_SIMULATIONS>(); i++){
+  for(int i = 0; i < myCaseParameters.get<parameters::NUMBER_OF_RUNS>(); i++){
 
-    myCaseParameters.set<parameters::RESOLUTION>(myCaseParameters.get<parameters::START_RESOLUTION>() + i*10);
+    myCaseParameters.set<parameters::RESOLUTION>(myCaseParameters.get<parameters::RESOLUTION_START>() + i*10);
 
     myCaseParameters.set<parameters::CONVERGED>(false);
     /// Run the simulations

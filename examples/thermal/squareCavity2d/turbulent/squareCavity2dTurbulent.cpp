@@ -47,7 +47,7 @@ void compareToStudy(MyCase& myCase)
   const T physThermalDiffusivity  = converter.getPhysThermalDiffusivity();
   const T charL                   = converter.getCharPhysLength();
 
-  auto simValues  = parameters.get<parameters::SIM_VALUES>();
+  auto simValues  = parameters.get<parameters::OUTPUT_VALUE_WRAPPER>();
 
   ReferenceData<T> ref{};
   if (ref.hasRayleigh(Ra) && singleton::mpi().isMainProcessor()) {

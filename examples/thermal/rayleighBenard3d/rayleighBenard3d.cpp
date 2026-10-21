@@ -325,11 +325,11 @@ int main(int argc, char *argv[])
     myCaseParameters.set<PHYS_CHAR_VISCOSITY>(1e-5);
     myCaseParameters.set<PHYS_THERMAL_CONDUCTIVITY>(0.03);
 
-    myCaseParameters.set<T_PERTURBATION>([](MyCase::ParametersD& p) {
+    myCaseParameters.set<T_PERTURBATION>([] (MyCase::ParametersD& p) {
       return p.get<T_COLD>()/5. + 4./5.*p.get<T_HOT>();
     });
 
-    myCaseParameters.set<PHYS_CP>([](MyCase::ParametersD& p) {
+    myCaseParameters.set<PHYS_CP>([] (MyCase::ParametersD& p) {
       return p.get<PRANDTL>() * p.get<PHYS_THERMAL_CONDUCTIVITY>()
               / (p.get<PHYS_CHAR_VISCOSITY>()/p.get<PHYS_CHAR_DENSITY>());
     });

@@ -41,10 +41,7 @@ using MyCase = Case<
 namespace olb::parameters {
 
 struct RADIUS_CYLINDER            : public descriptors::FIELD_BASE<1> { };
-struct RAMP_UP_UPDATE             : public descriptors::FIELD_BASE<1> { };
 struct RAMP_UP_END_FRACTION       : public descriptors::FIELD_BASE<1> { };
-
-struct DRAG : public descriptors::FIELD_BASE<1> { };
 
 }
 
@@ -199,7 +196,7 @@ void setTemporalValues(MyCase& myCase,
 
   // No of time steps for smooth start-up
   std::size_t iTmaxStart = lattice.getUnitConverter().getLatticeTime(maxPhysT*parameters.get<parameters::RAMP_UP_END_FRACTION>());
-  std::size_t iTupdate   = lattice.getUnitConverter().getLatticeTime(parameters.get<parameters::RAMP_UP_UPDATE>());
+  std::size_t iTupdate   = lattice.getUnitConverter().getLatticeTime(parameters.get<parameters::RAMP_UP_T>());
 
   if (iT%iTupdate == 0 && iT <= iTmaxStart) {
     T frac{};
@@ -324,7 +321,7 @@ void getResults(MyCase& myCase,
     drag(dragA, input1);
     clout << "; drag=" << dragA[0] << "; lift=" << dragA[1] << std::endl;
 
-    myCase.getParameters().set<parameters::DRAG>(dragA[0]);
+    myCase.getParameters().set<parameters::COEFFICIENT_OF_DRAG>(dragA[0]);
 
     //int input[4] = {};
     //SuperMax3D<T> yPlusMaxF(yPlus, geometry, 1);

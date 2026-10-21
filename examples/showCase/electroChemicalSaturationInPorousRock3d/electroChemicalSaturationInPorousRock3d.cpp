@@ -62,8 +62,6 @@ struct DIFFUSION_H : public descriptors::FIELD_BASE<1> { };
 struct VALENCEC : public descriptors::FIELD_BASE<1> { };
 struct VALENCEP : public descriptors::FIELD_BASE<1> { };
 struct VALENCEH : public descriptors::FIELD_BASE<1> { };
-struct TEMPERATURE : public descriptors::FIELD_BASE<1> { };
-struct DIELECTRIC_CONST : public descriptors::FIELD_BASE<1> { };
 struct C_0 : public descriptors::FIELD_BASE<1> { };
 struct PSI_BC : public descriptors::FIELD_BASE<1> { };
 struct U_INFLOW : public descriptors::FIELD_BASE<1> { };
@@ -84,13 +82,10 @@ struct B_ACTIVITY : public descriptors::FIELD_BASE<1> { };
 struct ADIST_ACTIVITY : public descriptors::FIELD_BASE<1> { };
 struct A_NUCL : public descriptors::FIELD_BASE<1> { };
 struct MOLECVOL : public descriptors::FIELD_BASE<1> { };
-struct DELTAX : public descriptors::FIELD_BASE<1> { };
 struct BOUNDARY_DISTANCE : public descriptors::FIELD_BASE<1> { };
 struct SCALING : public descriptors::FIELD_BASE<1> { };
 struct SIMULATION_CUT : public descriptors::FIELD_BASE<1> { };
-struct VTK_ITER : descriptors::TYPED_FIELD_BASE<int,1> { };
-struct STAT_ITER : descriptors::TYPED_FIELD_BASE<int,1> { };
-struct NAME : descriptors::TYPED_FIELD_BASE<std::string,1> { };
+struct INPUT_VTI : descriptors::TYPED_FIELD_BASE<std::string,1> { };
 
 }
 
@@ -122,9 +117,9 @@ generateIndicatorFromVTI(const std::string vtiFile, const std::string arrayName,
 
 Mesh<MyCase::value_t,MyCase::d> createMesh(MyCase::ParametersD& parameters) {
   using T = MyCase::value_t;
-  const T L = parameters.get<parameters::DELTAX>();
+  const T L = parameters.get<parameters::PHYS_DELTA_X>();
   const T simulationCut = parameters.get<parameters::SIMULATION_CUT>();
-  const std::string name = parameters.get<parameters::NAME>();
+  const std::string name = parameters.get<parameters::INPUT_VTI>();
   const int boundaryDistance = parameters.get<parameters::BOUNDARY_DISTANCE>();
   std::shared_ptr<IndicatorBlockData3D<T>> rock =
       generateIndicatorFromVTI(name, "Tiff Scalars", parameters);
@@ -145,9 +140,9 @@ void prepareGeometry(MyCase& myCase) {
   using T = MyCase::value_t;
   auto& parameters = myCase.getParameters();
   auto& geometry = myCase.getGeometry();
-  const T L = parameters.get<parameters::DELTAX>();
+  const T L = parameters.get<parameters::PHYS_DELTA_X>();
   const T simulationCut = parameters.get<parameters::SIMULATION_CUT>();
-  const std::string name = parameters.get<parameters::NAME>();
+  const std::string name = parameters.get<parameters::INPUT_VTI>();
   std::shared_ptr<IndicatorBlockData3D<T>> rock =
       generateIndicatorFromVTI(name, "Tiff Scalars", parameters);
 
@@ -184,7 +179,7 @@ void prepareLatticePoisson(MyCase& myCase) {
   const Vector extent = parameters.get<parameters::DOMAIN_EXTENT>();
   const T relaxationTimePoisson = parameters.get<parameters::POISSON_RELAXATION_TIME>();
   const T charPhysVelocityPoisson = parameters.get<parameters::POISSON_PHYS_CHAR_VELOCITY>();
-  const T dX = parameters.get<parameters::DELTAX>();
+  const T dX = parameters.get<parameters::PHYS_DELTA_X>();
   const T simulationCut = parameters.get<parameters::SIMULATION_CUT>();
 
   // Set up a unit converter with the characteristic physical units
@@ -223,7 +218,7 @@ void prepareLatticeNernstPlanck(MyCase& myCase) {
   const Vector extent = parameters.get<parameters::DOMAIN_EXTENT>();
   const T relaxationTimeNPE = parameters.get<parameters::IONS_RELAXATION_TIME>();
   const T charPhysVelocityNPE = parameters.get<parameters::IONS_PHYS_CHAR_VELOCITY>();
-  const T dX = parameters.get<parameters::DELTAX>();
+  const T dX = parameters.get<parameters::PHYS_DELTA_X>();
   const T simulationCut = parameters.get<parameters::SIMULATION_CUT>();
   const T diffusion = (ID==0)*parameters.get<parameters::DIFFUSION_H>()
                     + (ID==1)*parameters.get<parameters::DIFFUSION_P>()
@@ -267,7 +262,7 @@ void prepareLatticeNSE(MyCase& myCase) {
   auto& lattice = myCase.getLattice(NavierStokes{});
 
   const Vector extent = parameters.get<parameters::DOMAIN_EXTENT>();
-  const T dX = parameters.get<parameters::DELTAX>();
+  const T dX = parameters.get<parameters::PHYS_DELTA_X>();
   const T simulationCut = parameters.get<parameters::SIMULATION_CUT>();
   const T relaxationTimeNSE = parameters.get<parameters::NSE_RELAXATION_TIME>();
   const T charPhysVelocityNSE = parameters.get<parameters::NSE_PHYS_CHAR_VELOCITY>();
@@ -311,7 +306,7 @@ void prepareLatticeCoupling(MyCase& myCase) {
   const T valenceH = parameters.get<parameters::VALENCEH>();
   const T valencePO4 = parameters.get<parameters::VALENCEP>();
   const T valenceCa = parameters.get<parameters::VALENCEC>();
-  const T dielectricC = parameters.get<parameters::DIELECTRIC_CONST>();
+  const T dielectricC = parameters.get<parameters::DIELECTRIC_CONSTANT>();
   const T diffH = parameters.get<parameters::DIFFUSION_H>();
   const T diffPO4 = parameters.get<parameters::DIFFUSION_P>();
   const T diffCa = parameters.get<parameters::DIFFUSION_C>();
@@ -494,8 +489,8 @@ void getResults(MyCase& myCase,
   auto& converter = latticeH.getUnitConverter();
   auto& converterNSE = latticeNSE.getUnitConverter();
   const T maxPhysT = parameters.get<parameters::PHYS_MAX_T>();
-  const int vtkIter = parameters.get<parameters::VTK_ITER>();
-  const int statIter = parameters.get<parameters::STAT_ITER>();
+  const int vtkIter = parameters.get<parameters::PHYS_VTK_ITER_T>();
+  const int statIter = parameters.get<parameters::PHYS_STAT_ITER_T>();
 
   static Gnuplot<double> csvWriter("solubility");
 
@@ -704,7 +699,7 @@ int main(int argc, char* argv[]) {
     using namespace olb::parameters;
     //electric params
     ///constants
-    myCaseParameters.set<DIELECTRIC_CONST>(6.95e-10); //  C/V/m
+    myCaseParameters.set<DIELECTRIC_CONSTANT>(6.95e-10); //  C/V/m
     myCaseParameters.set<VALENCEH>(1.);
     myCaseParameters.set<VALENCEP>(-3.);
     myCaseParameters.set<VALENCEC>(2.);
@@ -733,10 +728,10 @@ int main(int argc, char* argv[]) {
     myCaseParameters.set<PHYS_CHAR_DENSITY>(1000.);
     ///TUNABLE
     myCaseParameters.set<C0>(1); // mol/m³ in DFG between 0.1 and 3.0
-    myCaseParameters.set<CONCENTRATION_H>([](MyCase::ParametersD& p) {
+    myCaseParameters.set<CONCENTRATION_H>([] (MyCase::ParametersD& p) {
       return 6.*p.get<C_0>();
     });
-    myCaseParameters.set<CONCENTRATION_P>([](MyCase::ParametersD& p) {
+    myCaseParameters.set<CONCENTRATION_P>([] (MyCase::ParametersD& p) {
       return 1.*p.get<C_0>();
     });
     myCaseParameters.set<CONCENTRATION_C>(0.);
@@ -756,7 +751,7 @@ int main(int argc, char* argv[]) {
     //geometrical params
     ///TUNABLE
     myCaseParameters.set<KNUDSEN>(0.09);
-    myCaseParameters.set<DELTAX>([](MyCase::ParametersD& p) {
+    myCaseParameters.set<PHYS_DELTA_X>([] (MyCase::ParametersD& p) {
       return p.get<MFP>() / p.get<KNUDSEN>();
     });
     myCaseParameters.set<BOUNDARY_DISTANCE>(10);
@@ -765,15 +760,15 @@ int main(int argc, char* argv[]) {
 
     //simulation params
     myCaseParameters.set<PHYS_MAX_T>(2.1e-4);
-    myCaseParameters.set<VTK_ITER>(10000);
-    myCaseParameters.set<STAT_ITER>(1000);
+    myCaseParameters.set<PHYS_VTK_ITER_T>(10000);
+    myCaseParameters.set<PHYS_STAT_ITER_T>(1000);
     myCaseParameters.set<POISSON_RELAXATION_TIME>(1);
     myCaseParameters.set<POISSON_PHYS_CHAR_VELOCITY>(0.001);
     myCaseParameters.set<IONS_RELAXATION_TIME>(0.56);
     myCaseParameters.set<IONS_PHYS_CHAR_VELOCITY>(0.5);
     myCaseParameters.set<NSE_RELAXATION_TIME>(0.9);
     myCaseParameters.set<NSE_PHYS_CHAR_VELOCITY>(0.5);
-    myCaseParameters.set<NAME>(std::string("stone.vti"));
+    myCaseParameters.set<INPUT_VTI>(std::string("stone.vti"));
   }
 
   /// === Step 3: Create Mesh ===

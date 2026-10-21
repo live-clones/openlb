@@ -39,7 +39,6 @@ namespace olb::parameters {
 
 struct INLET_HEIGHT : public descriptors::FIELD_BASE<1> {};
 struct START_FACTOR : public descriptors::FIELD_BASE<1> {};
-struct UPDATE_NUMBER: public descriptors::TYPED_FIELD_BASE<size_t, 1> {};
 
 }
 
@@ -166,7 +165,7 @@ void setTemporalValues(MyCase& myCase, std::size_t iT)
   const T startUpFactor = params.get<parameters::START_FACTOR>();
   const T maxStartTPhys = params.get<parameters::PHYS_MAX_T>() * startUpFactor;
   const auto maxStartT  = converter.getLatticeTime(maxStartTPhys);
-  const auto iTupdate   = params.get<parameters::UPDATE_NUMBER>();
+  const size_t iTupdate   = (size_t) params.get<parameters::LATTICE_INTERVAL_T>();
 
   if (iT%iTupdate == 0 && iT <= maxStartT) {
     PolynomialStartScale<T,std::size_t> scale(maxStartT, 1);
@@ -249,7 +248,7 @@ int main(int argc, char* argv[])
     myCaseParameters.set<DOMAIN_EXTENT>(Vector<T,2> {6, 2});
     myCaseParameters.set<INLET_HEIGHT>((T)0.2);
     myCaseParameters.set<START_FACTOR>((T)0.1);
-    myCaseParameters.set<UPDATE_NUMBER>(1);
+    myCaseParameters.set<LATTICE_INTERVAL_T>(1);
     myCaseParameters["reporter"]["statistics"].set<PHYS_ITER_T>(1.0);
     myCaseParameters["reporter"]["timer"].set<PHYS_ITER_T>(1.0);
     myCaseParameters.set<PHYS_VTK_ITER_T>(1.0);

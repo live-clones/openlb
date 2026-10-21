@@ -51,6 +51,8 @@ namespace olb::parameters {
 struct LX_INLET  : public descriptors::FIELD_BASE<1> { };
 struct LY_OUTLET : public descriptors::FIELD_BASE<1> { };
 struct PLOT_OVER_LINE : public TYPED_FIELD_BASE<bool,1> { };
+struct PHYS_MAX_T_AD : public descriptors::FIELD_BASE<1> { };
+struct DIFFUSION_COMPONENTS : public descriptors::FIELD_BASE<3> { };
 struct CONCENTRATION : public descriptors::FIELD_BASE<6> { };
 
 }

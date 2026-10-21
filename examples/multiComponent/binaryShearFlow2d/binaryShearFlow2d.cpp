@@ -60,14 +60,11 @@ namespace olb::parameters {
 struct NORM_VTK_ITER_T       : public descriptors::FIELD_BASE<1> { };
 struct NORM_STAT_ITER_T       : public descriptors::FIELD_BASE<1> { };
 struct MAX_NORM_T : public descriptors::FIELD_BASE<1> { };
-struct SHEAR_RATE : public descriptors::FIELD_BASE<1> { };
 struct CONT_VISC  : public descriptors::FIELD_BASE<1> { };
 struct DROPLET_REYNOLDS : public descriptors::FIELD_BASE<1> { };
 struct PHYS_INTERVAL : public descriptors::FIELD_BASE<1> { };
 struct CAPILLARY : public descriptors::FIELD_BASE<1> { };
 struct CAHN  : public descriptors::FIELD_BASE<1> { };
-struct DEFORMATION_RESIDUUM  : public descriptors::FIELD_BASE<1> { };
-struct DEFORMATION_CONVERGENCE_PRECISION  : public descriptors::FIELD_BASE<1> { };
 struct H1  : public descriptors::FIELD_BASE<1> { };
 struct H2  : public descriptors::FIELD_BASE<1> { };
 }
@@ -593,7 +590,7 @@ void simulate(MyCase& myCase) {
   const int maxIter = converter.getLatticeTime(maxPhysT);
   const int statIter = converter.getLatticeTime(physStatIterT);
   const T residuum = params.get<parameters::CONVERGENCE_PRECISION>();
-  const T defResiduum = params.get<parameters::DEFORMATION_RESIDUUM>();
+  const T defResiduum = params.get<parameters::RESIDUUM>();
 
   int iT = 0;
   clout << "starting simulation..." << std::endl;
@@ -670,26 +667,26 @@ int main( int argc, char *argv[] )
     myCaseParameters.set<CONVERGENCE_PRECISION  >(1e-5);  // residuum for the convergence check
     myCaseParameters.set<H1                     >(0.);    // Contact angle 90 degrees   [lattice units]
     myCaseParameters.set<H2                     >(0.);    // Contact angle 90 degrees   [lattice units]
-    myCaseParameters.set<DEFORMATION_CONVERGENCE_PRECISION>(0.0015);  // deformation residuum criterion
-    myCaseParameters.set<parameters::SHEAR_RATE>([](MyCase::ParametersD& p) {
+    myCaseParameters.set<CONVERGENCE_PRECISION>(0.0015);  // deformation residuum criterion
+    myCaseParameters.set<parameters::SHEAR_RATE>([] (MyCase::ParametersD& p) {
       return p.get<CONT_VISC>() * p.get<DROPLET_REYNOLDS>() / util::pow(p.get<parameters::RADIUS>(), 2);
     }); // [pu] physical shear rate [1/s]
-    myCaseParameters.set<parameters::PHYS_MAX_T>([](MyCase::ParametersD& p) {
+    myCaseParameters.set<parameters::PHYS_MAX_T>([] (MyCase::ParametersD& p) {
       return p.get<MAX_NORM_T>() / p.get<SHEAR_RATE>();
     });
-    myCaseParameters.set<parameters::PHYS_VTK_ITER_T>([](MyCase::ParametersD& p) {
+    myCaseParameters.set<parameters::PHYS_VTK_ITER_T>([] (MyCase::ParametersD& p) {
       return p.get<NORM_VTK_ITER_T>() / p.get<SHEAR_RATE>();
     });
-    myCaseParameters.set<parameters::PHYS_STAT_ITER_T>([](MyCase::ParametersD& p) {
+    myCaseParameters.set<parameters::PHYS_STAT_ITER_T>([] (MyCase::ParametersD& p) {
       return p.get<NORM_STAT_ITER_T>() / p.get<SHEAR_RATE>();
     });
-    myCaseParameters["reporter"]["statistics"].set<parameters::PHYS_ITER_T>([](MyCase::ParametersD& p) {
+    myCaseParameters["reporter"]["statistics"].set<parameters::PHYS_ITER_T>([] (MyCase::ParametersD& p) {
       return p.root().get<NORM_STAT_ITER_T>() / p.root().get<SHEAR_RATE>();
     });
-    myCaseParameters["reporter"]["timer"].set<parameters::PHYS_ITER_T>([](MyCase::ParametersD& p) {
+    myCaseParameters["reporter"]["timer"].set<parameters::PHYS_ITER_T>([] (MyCase::ParametersD& p) {
       return p.root().get<NORM_STAT_ITER_T>() / p.root().get<SHEAR_RATE>();
     });
-    myCaseParameters.set<parameters::DOMAIN_EXTENT>([](MyCase::ParametersD& p) -> Vector<MyCase::value_t, 2>{
+    myCaseParameters.set<parameters::DOMAIN_EXTENT>([] (MyCase::ParametersD& p) -> Vector<MyCase::value_t, 2> {
       return {20 * p.get<parameters::RADIUS>(), 4 * p.get<parameters::RADIUS>()};
     });
   }

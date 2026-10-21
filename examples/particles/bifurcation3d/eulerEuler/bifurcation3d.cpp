@@ -49,8 +49,6 @@ using MyCase = Case<
 // === Step 1: Declarations ===
 namespace olb::parameters {
 
-struct DIFFUSION : public descriptors::FIELD_BASE<1> {};
-struct IT_PERIOD : public descriptors::FIELD_BASE<1> {};
 struct INLET_RADIUS : public descriptors::FIELD_BASE<1> {};
 struct INLET_CENTER : public descriptors::FIELD_BASE<0, 1> {};
 struct INLET_NORMAL : public descriptors::FIELD_BASE<0, 1> {};
@@ -247,7 +245,7 @@ void setBoundaryValues(MyCase& myCase, std::size_t iT)
   T maxVelocity = converter.getCharPhysVelocity() * 3. / 4. *
                   util::pow(parameters.get<parameters::INLET_RADIUS>(), 2) /
                   util::pow(parameters.get<parameters::OUTLET_RADIUS0>(), 2);
-  if (iT % converter.getLatticeTime(parameters.get<parameters::IT_PERIOD>()) == 0) {
+  if (iT % converter.getLatticeTime(parameters.get<parameters::INTERVAL_OUTPUT>()) == 0) {
     if (iT <= iTmaxStart) {
       SinusStartScale<T, std::size_t> startScale(iTmaxStart, T(1));
       std::size_t                     iTvec[1] = {iT};
@@ -320,7 +318,7 @@ void getResults(MyCase& myCase, std::size_t iT, util::Timer<MyCase::value_t>& ti
           << std::endl;
   }
 
-  if (iT % converter.getLatticeTime(parameters.get<parameters::IT_PERIOD>()) == 0) {
+  if (iT % converter.getLatticeTime(parameters.get<parameters::INTERVAL_OUTPUT>()) == 0) {
     NSlattice.setProcessingContext(ProcessingContext::Evaluation);
     ADlattice.setProcessingContext(ProcessingContext::Evaluation);
 
@@ -451,7 +449,7 @@ int main(int argc, char* argv[])
     using namespace olb::parameters;
     myCaseParameters.set<REYNOLDS>(50);
     myCaseParameters.set<RESOLUTION>(19);
-    myCaseParameters.set<IT_PERIOD>(0.1419);   // time interval in s after which boundary conditions are updated
+    myCaseParameters.set<INTERVAL_OUTPUT>(0.1419);   // time interval in s after which boundary conditions are updated
     myCaseParameters.set<DIFFUSION>(1e-6);     // diffusion coefficient for advection-diffusion equation
     myCaseParameters.set<PART_RADIUS>(1.5e-4); // particles radius
     myCaseParameters.set<PART_RHO>(998.2);     // particles density

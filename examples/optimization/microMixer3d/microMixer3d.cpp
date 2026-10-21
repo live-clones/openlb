@@ -55,9 +55,6 @@ using MyOptiCase = OptiCaseFDQ<Controlled, MyCase>;
 
 namespace olb::parameters {
 
-struct DIFFUSION : public descriptors::FIELD_BASE<1> { };
-struct LATTICE_U : public descriptors::FIELD_BASE<1> { };
-
 // control variables
 struct PHYS_PERIOD  : public descriptors::FIELD_BASE<1> { };
 struct AMPLITUDE_PHYS_PRESSURE : public descriptors::FIELD_BASE<1> { };
@@ -121,7 +118,7 @@ void prepareLattice(MyCase& myCase) {
 
   sLattice.setUnitConverter<UnitConverterFromResolutionAndLatticeVelocity<T,D3Q19<>>>(
     (int)   params.get<parameters::RESOLUTION>(),        //resolution
-    ( T )   params.get<parameters::LATTICE_U>(),         //charLatticeVelocity
+    ( T )   params.get<parameters::LATTICE_CHAR_VELOCITY>(),         //charLatticeVelocity
     ( T )   params.get<parameters::PHYS_CHAR_LENGTH>(),  //charPhysLength
     ( T )   params.get<parameters::PHYS_CHAR_VELOCITY>(),  //charPhysVelocity
     ( T )   params.get<parameters::PHYS_CHAR_VISCOSITY>(), //physViscosity
@@ -129,7 +126,7 @@ void prepareLattice(MyCase& myCase) {
   );
   sLatticeAD.setUnitConverter<UnitConverterFromResolutionAndLatticeVelocity<T,D3Q7<VELOCITY>>>(
     (int)   params.get<parameters::RESOLUTION>(),        //resolution
-    ( T )   params.get<parameters::LATTICE_U>(),         //charLatticeVelocity
+    ( T )   params.get<parameters::LATTICE_CHAR_VELOCITY>(),         //charLatticeVelocity
     ( T )   params.get<parameters::PHYS_CHAR_LENGTH>(),  //charPhysLength
     ( T )   params.get<parameters::PHYS_CHAR_VELOCITY>(),  //charPhysVelocity
     ( T )   params.get<parameters::PHYS_CHAR_VISCOSITY>(), //physViscosity
@@ -417,7 +414,7 @@ int main(int argc, char* argv[])
   MyCase::ParametersD myCaseParameters;
   {
     using namespace olb::parameters;
-    myCaseParameters.set<LATTICE_U          >(0.1);
+    myCaseParameters.set<LATTICE_CHAR_VELOCITY          >(0.1);
     myCaseParameters.set<PHYS_CHAR_VELOCITY >(0.0332);
     myCaseParameters.set<PHYS_CHAR_VISCOSITY>(1.e-6);
     myCaseParameters.set<PHYS_CHAR_LENGTH   >(0.00133);

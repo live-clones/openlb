@@ -51,8 +51,6 @@ namespace olb::parameters {
 struct POROSITY_TYPE  : public descriptors::TYPED_FIELD_BASE<PorosityType,1> { };
 struct PERMEABILITY   : public descriptors::FIELD_BASE<1> { };
 struct INITIAL_PRESSURE_L : public descriptors::FIELD_BASE<1> { };
-struct PRESSURE_GRADIENT  : public descriptors::FIELD_BASE<1> { };
-struct VISCOSITY       : public descriptors::FIELD_BASE<1> { };
 struct CONVERGENCE_CHECK_T        : public descriptors::FIELD_BASE<1> { };
 
 }
@@ -115,8 +113,8 @@ public:
   {
     auto& parameters = myCase.getParameters();
     Kin       = parameters.get<parameters::PERMEABILITY>();
-    dp        = parameters.get<parameters::PRESSURE_GRADIENT>();
-    mu        = parameters.get<parameters::VISCOSITY>();
+    dp        = parameters.get<parameters::PRESSURE_DROP>();
+    mu        = parameters.get<parameters::PHYS_KINEMATIC_VISCOSITY>();
     epsilon   = parameters.get<parameters::EPSILON>();
   }
   bool operator()(T output[], const T x[]) override
@@ -295,8 +293,8 @@ void setInitialValues( MyCase& myCase ) {
   T mu = converter.getPhysViscosity()*converter.getPhysDensity();
 
   parameters.set<parameters::INITIAL_PRESSURE_L >(  p0L );
-  parameters.set<parameters::PRESSURE_GRADIENT  >(   dp );
-  parameters.set<parameters::VISCOSITY          >(   mu );
+  parameters.set<parameters::PRESSURE_DROP  >(   dp );
+  parameters.set<parameters::PHYS_KINEMATIC_VISCOSITY          >(   mu );
 
   //CirclePoiseuille3D<T> uSol( {0., radius, radius}, {1, 0, 0}, converter.getCharPhysVelocity(), radius );
   PorousPoiseuille3D<T> uSol( myCase, radius );

@@ -51,13 +51,6 @@ static Gnuplot<T> gplot(
   Gnuplot<T>::LOGLOG,
   Gnuplot<T>::LINREG);
 
-namespace olb::parameters {
-
-struct START_RESOLUTION : public descriptors::TYPED_FIELD_BASE<int,1> { };
-struct NUM_SIMULATIONS : public descriptors::TYPED_FIELD_BASE<int,1> { };
-
-}
-
 int main( int argc, char* argv[] )
 {
   // === 1st Step: Initialization ===
@@ -68,8 +61,8 @@ int main( int argc, char* argv[] )
   MyCase::ParametersD myCaseParameters;
   {
     using namespace olb::parameters;
-    myCaseParameters.set<START_RESOLUTION>(10);
-    myCaseParameters.set<NUM_SIMULATIONS>(4);
+    myCaseParameters.set<RESOLUTION_START>(10);
+    myCaseParameters.set<NUMBER_OF_RUNS>(4);
 
     myCaseParameters.set<REYNOLDS >(20.);
     myCaseParameters.set<PHYS_MAX_T>(16.);
@@ -79,21 +72,21 @@ int main( int argc, char* argv[] )
     myCaseParameters.set<RADIUS_CYLINDER>(0.05);
     myCaseParameters.set<PHYS_VTK_ITER_T>(0.3);
     myCaseParameters.set<PHYS_STAT_ITER_T>(0.1);
-    myCaseParameters.set<RAMP_UP_UPDATE>(0.03);
+    myCaseParameters.set<RAMP_UP_T>(0.03);
     myCaseParameters.set<RAMP_UP_END_FRACTION>(0.4);
     myCaseParameters.set<VTK_ENABLED>(false);
     myCaseParameters.set<GNUPLOT_ENABLED>(false);
   }
 
-  T _drag[myCaseParameters.get<parameters::NUM_SIMULATIONS>()];
+  T _drag[myCaseParameters.get<parameters::NUMBER_OF_RUNS>()];
 
   // set the labels for the plot
   gplot.setLabel("Resolution test", "average Error");
 
   // loop over the different simulations
-  for(int i = 0; i < myCaseParameters.get<parameters::NUM_SIMULATIONS>(); ++i){
+  for(int i = 0; i < myCaseParameters.get<parameters::NUMBER_OF_RUNS>(); ++i){
     myCaseParameters.set<parameters::RESOLUTION>(
-      myCaseParameters.get<parameters::START_RESOLUTION>() + i*10);
+      myCaseParameters.get<parameters::RESOLUTION_START>() + i*10);
 
     /// === Step 3: Create Mesh ===
     Mesh mesh = createMesh(myCaseParameters);
@@ -113,13 +106,13 @@ int main( int argc, char* argv[] )
     /// === Step 8: Simulate ===
     simulate(myCase);
 
-    _drag[i] = myCaseParameters.get<parameters::DRAG>();
+    _drag[i] = myCaseParameters.get<parameters::COEFFICIENT_OF_DRAG>();
   }
 
-  for(int i = 0; i < myCaseParameters.get<parameters::NUM_SIMULATIONS>(); ++i){
-    int N = myCaseParameters.get<parameters::START_RESOLUTION>() + 10 * i;
-    T error = util::abs(_drag[i] - _drag[myCaseParameters.get<parameters::NUM_SIMULATIONS>()-1])
-            / _drag[myCaseParameters.get<parameters::NUM_SIMULATIONS>()-1];
+  for(int i = 0; i < myCaseParameters.get<parameters::NUMBER_OF_RUNS>(); ++i){
+    int N = myCaseParameters.get<parameters::RESOLUTION_START>() + 10 * i;
+    T error = util::abs(_drag[i] - _drag[myCaseParameters.get<parameters::NUMBER_OF_RUNS>()-1])
+            / _drag[myCaseParameters.get<parameters::NUMBER_OF_RUNS>()-1];
     gplot.setData(T(N), {error}, {"dragL1AbsError"}, "top right", {'p'});
   }
 

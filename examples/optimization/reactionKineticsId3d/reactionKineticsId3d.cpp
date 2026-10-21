@@ -36,9 +36,6 @@ using namespace olb::opti;
 namespace olb::parameters {
 
 struct HEIGHT            : public descriptors::FIELD_BASE<1> { };
-struct BULK_VELOCITY     : public descriptors::FIELD_BASE<1> { };
-struct RESIDUUM          : public descriptors::FIELD_BASE<1> { };
-struct DIFFUSIVITY       : public descriptors::FIELD_BASE<1> { };
 
 struct REACTION_CONSTANT : public descriptors::FIELD_BASE<1> { };
 struct STOICHIOMETRY     : public descriptors::FIELD_BASE<3> { };
@@ -152,8 +149,8 @@ void prepareLattice(CASE& myCase){
     (T)   parameters.template get<parameters::PHYS_DELTA_X>(),                                                                               // physDeltaX
     (T)   util::pow(parameters.template get<parameters::HEIGHT>() / parameters.template get<parameters::RESOLUTION>(), 2),                            // physDeltaY
     (T)   parameters.template get<parameters::HEIGHT>(),                                                                                     // charPhysLength: reference length of simulation geometry
-    (T)   parameters.template get<parameters::PECLET>() * parameters.template get<parameters::DIFFUSIVITY>() / parameters.template get<parameters::HEIGHT>(),  // charPhysVelocity: maximal/highest expected velocity during simulation in __m / s__
-    (T)   parameters.template get<parameters::DIFFUSIVITY>(),                                                                                // physDiffusiviy
+    (T)   parameters.template get<parameters::PECLET>() * parameters.template get<parameters::PHYS_DIFFUSIVITY>() / parameters.template get<parameters::HEIGHT>(),  // charPhysVelocity: maximal/highest expected velocity during simulation in __m / s__
+    (T)   parameters.template get<parameters::PHYS_DIFFUSIVITY>(),                                                                                // physDiffusiviy
     (T)   parameters.template get<parameters::PHYS_CHAR_DENSITY>()                                                                           // physDensity: physical density in __kg / m^3__
   );
   ALattice.getUnitConverter().print();
@@ -418,7 +415,7 @@ int main(int argc, char* argv[]) {
     myCaseParameters.set<PECLET                  >(  108.005);
     myCaseParameters.set<PHYS_MAX_T              >( 100000.0);
     myCaseParameters.set<RESIDUUM                >(    1e-10);
-    myCaseParameters.set<DIFFUSIVITY             >(  0.07407);
+    myCaseParameters.set<PHYS_DIFFUSIVITY        >(  0.07407);
     myCaseParameters.set<PHYS_DELTA_X>([](MyCase::ParametersD& p) {
       return p.get<HEIGHT>()/p.get<RESOLUTION>();
     });

@@ -127,22 +127,15 @@ struct NSE_RELAXATION_TIME : public descriptors::FIELD_BASE<1> { };
 struct NPE_PHYS_CHAR_VELOCITY : public descriptors::FIELD_BASE<1> { };
 struct POISSON_PHYS_CHAR_VELOCITY : public descriptors::FIELD_BASE<1> { };
 struct NSE_PHYS_CHAR_VELOCITY : public descriptors::FIELD_BASE<1> { };
-struct RESIDUUM : public descriptors::FIELD_BASE<1> { };
-struct DIFFUSION : public descriptors::FIELD_BASE<1> { };
-struct VALENCE : public descriptors::FIELD_BASE<1> { };
 struct E_FIELD : public descriptors::FIELD_BASE<1> { };
-struct TEMPERATURE : public descriptors::FIELD_BASE<1> { };
-struct DIELECTRIC_CONST : public descriptors::FIELD_BASE<1> { };
 struct C_0 : public descriptors::FIELD_BASE<1> { };
 struct PSI_BC : public descriptors::FIELD_BASE<1> { };
-struct DEBYE : public descriptors::FIELD_BASE<1> { };
 struct CB_CATION : public descriptors::FIELD_BASE<1> { };
 struct CB_ANION : public descriptors::FIELD_BASE<1> { };
 struct ERROR_NORMS_PSI : public descriptors::FIELD_BASE<3> { };
 struct ERROR_NORMS_CATION : public descriptors::FIELD_BASE<3> { };
 struct ERROR_NORMS_ANION : public descriptors::FIELD_BASE<3> { };
 struct ERROR_NORMS_NSE : public descriptors::FIELD_BASE<3> { };
-struct HAS_CONVERGED : public descriptors::TYPED_FIELD_BASE<bool,1> { };
 
 }
 
@@ -331,7 +324,7 @@ void prepareLatticeCoupling(MyCase& myCase) {
   const T diffusion = parameters.get<parameters::DIFFUSION>();
   const T valence = parameters.get<parameters::VALENCE>();
   const T temperature = parameters.get<parameters::TEMPERATURE>();
-  const T dielectricC = parameters.get<parameters::DIELECTRIC_CONST>();
+  const T dielectricC = parameters.get<parameters::DIELECTRIC_CONSTANT>();
   const T eField = parameters.get<parameters::E_FIELD>();
   const T density = parameters.get<parameters::PHYS_CHAR_DENSITY>();
 
@@ -431,7 +424,7 @@ void evaluateError(MyCase& myCase) {
   const T C0 = parameters.get<parameters::C_0>();
   const T Debye = parameters.get<parameters::DEBYE>();
   const T temperature = parameters.get<parameters::TEMPERATURE>();
-  const T dielectricC = parameters.get<parameters::DIELECTRIC_CONST>();
+  const T dielectricC = parameters.get<parameters::DIELECTRIC_CONSTANT>();
   const T eField = parameters.get<parameters::E_FIELD>();
   const T viscosity = parameters.get<parameters::PHYS_CHAR_VISCOSITY>();
   const T density = parameters.get<parameters::PHYS_CHAR_DENSITY>();
@@ -533,7 +526,7 @@ void getResults(MyCase& myCase,
   auto& latticeAnion = myCase.getLattice(Concentration<1>{});
   auto& latticeNSE = myCase.getLattice(NavierStokes{});
   const T maxPhysT = parameters.get<parameters::PHYS_MAX_T>();
-  bool hasConverged = parameters.get<parameters::HAS_CONVERGED>();
+  bool hasConverged = parameters.get<parameters::CONVERGED>();
   const bool lastTimeStep = ( hasConverged || (iT + 1 == latticeCation.getUnitConverter().getLatticeTime( maxPhysT )) );
   const Vector extend = parameters.get<parameters::DOMAIN_EXTENT>();
   const T valence = parameters.get<parameters::VALENCE>();
@@ -541,7 +534,7 @@ void getResults(MyCase& myCase,
   const T C0 = parameters.get<parameters::C_0>();
   const T Debye = parameters.get<parameters::DEBYE>();
   const T temperature = parameters.get<parameters::TEMPERATURE>();
-  const T dielectricC = parameters.get<parameters::DIELECTRIC_CONST>();
+  const T dielectricC = parameters.get<parameters::DIELECTRIC_CONSTANT>();
   const T eField = parameters.get<parameters::E_FIELD>();
   const T viscosity = parameters.get<parameters::PHYS_CHAR_VISCOSITY>();
   const T density = parameters.get<parameters::PHYS_CHAR_DENSITY>();
@@ -634,11 +627,11 @@ void simulate(MyCase& myCase) {
   util::ValueTracer<T> converge( 500, residuum );
   timer.start();
 
-  parameters.set<parameters::HAS_CONVERGED>(false);
+  parameters.set<parameters::CONVERGED>(false);
   for (std::size_t iT=0; iT < iTmax; ++iT) {
     if ( converge.hasConverged() ) {
       clout << "Simulation converged." << std::endl;
-      parameters.set<parameters::HAS_CONVERGED>(true);
+      parameters.set<parameters::CONVERGED>(true);
       getResults(myCase, timer, iT);
 
       break;

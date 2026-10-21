@@ -43,12 +43,6 @@
 static Gnuplot<MyCase::value_t> gplot("drag_eoc", false, "set terminal png size 720, 720 font 'Arial,10'",
                                       Gnuplot<MyCase::value_t>::LOGLOG, Gnuplot<MyCase::value_t>::LINREG);
 
-namespace olb::parameters {
-struct START_RESOLUTION : public descriptors::TYPED_FIELD_BASE<int, 1> {};
-struct NUM_SIMULATIONS : public descriptors::TYPED_FIELD_BASE<int, 1> {};
-struct RESOLUTION_STEP : public descriptors::FIELD_BASE<1> {};
-} // namespace olb::parameters
-
 int main(int argc, char* argv[])
 {
   initialize(&argc, &argv);
@@ -69,21 +63,21 @@ int main(int argc, char* argv[])
     myCaseParameters.set<CENTER_CYLINDER>({0.2, 0.2});
     myCaseParameters.set<PHYS_VTK_ITER_T>(0.3);
     myCaseParameters.set<PHYS_STAT_ITER_T>(0.1);
-    myCaseParameters.set<RAMP_UP_UPDATE>(0.01);
+    myCaseParameters.set<RAMP_UP_T>(0.01);
     myCaseParameters.set<RAMP_UP_END_FRACTION>(0.4);
 
-    myCaseParameters.set<START_RESOLUTION>(10);
-    myCaseParameters.set<NUM_SIMULATIONS>(4);
+    myCaseParameters.set<RESOLUTION_START>(10);
+    myCaseParameters.set<NUMBER_OF_RUNS>(4);
     myCaseParameters.set<RESOLUTION_STEP>(10);
   }
 
-  MyCase::value_t _drag[myCaseParameters.get<parameters::NUM_SIMULATIONS>()];
+  MyCase::value_t _drag[myCaseParameters.get<parameters::NUMBER_OF_RUNS>()];
 
   gplot.setLabel("Resolution [-]", "Average Error [-]");
 
   //Run Sims
-  for (std::size_t i = 0; i < myCaseParameters.get<parameters::NUM_SIMULATIONS>(); ++i) {
-    myCaseParameters.set<parameters::RESOLUTION>(myCaseParameters.get<parameters::START_RESOLUTION>() +
+  for (std::size_t i = 0; i < myCaseParameters.get<parameters::NUMBER_OF_RUNS>(); ++i) {
+    myCaseParameters.set<parameters::RESOLUTION>(myCaseParameters.get<parameters::RESOLUTION_START>() +
                                                  (MyCase::value_t)i *
                                                      myCaseParameters.get<parameters::RESOLUTION_STEP>());
 
@@ -105,13 +99,13 @@ int main(int argc, char* argv[])
     /// === Step 8: Simulate ===
     simulate(myCase);
 
-    _drag[i] = myCaseParameters.get<parameters::DRAG>();
+    _drag[i] = myCaseParameters.get<parameters::COEFFICIENT_OF_DRAG>();
   }
 
-  for (std::size_t i = 0; i < myCaseParameters.get<parameters::NUM_SIMULATIONS>(); ++i) {
-    int cur_resolution = myCaseParameters.get<parameters::START_RESOLUTION>() +
+  for (std::size_t i = 0; i < myCaseParameters.get<parameters::NUMBER_OF_RUNS>(); ++i) {
+    int cur_resolution = myCaseParameters.get<parameters::RESOLUTION_START>() +
                          (MyCase::value_t)i * myCaseParameters.get<parameters::RESOLUTION_STEP>();
-    int last_i = myCaseParameters.get<parameters::NUM_SIMULATIONS>() - 1;
+    int last_i = myCaseParameters.get<parameters::NUMBER_OF_RUNS>() - 1;
 
     MyCase::value_t error = util::abs(_drag[i] - _drag[last_i]) / _drag[last_i];
 

@@ -363,8 +363,8 @@ int main( int argc, char *argv[] )
     using T = MyCase::value_t;
     myCaseParameters.set<PHYS_CHAR_LENGTH>(40e-6);          // bubble radius [phys units]
     myCaseParameters.set<RESOLUTION      >(40);             // bubble radius [lattice units]
-    myCaseParameters.set<DOMAIN_EXTENT   >([](MyCase::ParametersD& p){
-      return Vector<T,2> {4 * p.get<PHYS_CHAR_LENGTH>(), 8 * p.get<PHYS_CHAR_LENGTH>()};
+    myCaseParameters.set<DOMAIN_EXTENT   >([&]{
+      return Vector<T,2> {4 * myCaseParameters.get<PHYS_CHAR_LENGTH>(), 8 * myCaseParameters.get<PHYS_CHAR_LENGTH>()};
     });
     myCaseParameters.set<C_RHO           >(100.);           // conversion factor density [physical units]
     myCaseParameters.set<PF_LATTICE_RELAXATION_TIME>(0.8 ); // lattice relaxation time for interface mobility [lattice units]
@@ -372,25 +372,25 @@ int main( int argc, char *argv[] )
     myCaseParameters.set<RHO_VAPOR       >(1);              // physDensity gas/vapor [physical units]
     myCaseParameters.set<RHO_LIQUID      >(1000);          // physDensity liquid [physical units]
     myCaseParameters.set<REYNOLDS        >(35);             // Reynolds number of rising bubble
-    myCaseParameters.set<BOND            >(10);            // Bond number of rising bubble
+    myCaseParameters.set<BOND            >(100);            // Bond number of rising bubble
     myCaseParameters.set<RISING_VELOCITY >(0.02);           // Bubble rising velocity [lattice units]
-    myCaseParameters.set<G_CONST         >([](MyCase::ParametersD& p) {
-      return p.get<RISING_VELOCITY>() * p.get<RISING_VELOCITY>() /
-             p.get<RESOLUTION>();
+    myCaseParameters.set<G_CONST         >([&] {
+      return myCaseParameters.get<RISING_VELOCITY>() * myCaseParameters.get<RISING_VELOCITY>() /
+             myCaseParameters.get<RESOLUTION>();
     });                                                     // gravity [lattice units]
-    myCaseParameters.set<LATTICE_RELAXATION_TIME>([](MyCase::ParametersD& p) {
+    myCaseParameters.set<LATTICE_RELAXATION_TIME>([] (MyCase::ParametersD& p) {
       return 3.*(p.get<RISING_VELOCITY>() * p.get<RESOLUTION>() / p.get<REYNOLDS>())
              + 0.5;
     });                                                     // lattice relaxation time H2O liquid [lattice units]
-    myCaseParameters.set<TAU_VAPOR       >([](MyCase::ParametersD& p) {
-      return 10.*(p.get<LATTICE_RELAXATION_TIME>() - 0.5) + 0.5;
+    myCaseParameters.set<TAU_VAPOR       >([&] {
+      return 10.*(myCaseParameters.get<LATTICE_RELAXATION_TIME>() - 0.5) + 0.5;
     });                                                     // lattice relaxation time air gas [lattice units]
-    myCaseParameters.set<parameters::SURFACE_TENSION >([](MyCase::ParametersD& p){
-      const T rho_l = p.get<RHO_LIQUID>();
-      const T C_rho = p.get<C_RHO>();
-      const T g = p.get<G_CONST>();
-      const T lat_diameter = p.get<RESOLUTION>();
-      const T Bo = p.get<BOND>();
+    myCaseParameters.set<parameters::SURFACE_TENSION >([&]{
+      const T rho_l = myCaseParameters.get<RHO_LIQUID>();
+      const T C_rho = myCaseParameters.get<C_RHO>();
+      const T g = myCaseParameters.get<G_CONST>();
+      const T lat_diameter = myCaseParameters.get<RESOLUTION>();
+      const T Bo = myCaseParameters.get<BOND>();
       return rho_l/C_rho*g*lat_diameter*lat_diameter/Bo;
     });                                                     // surface tension from Bond number [lattice units]
     myCaseParameters.set<parameters::THETA          >(M_PI*90./180.);  // contact angle (<90 is wetting) [radians]

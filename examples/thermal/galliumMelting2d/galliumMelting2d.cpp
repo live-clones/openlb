@@ -56,7 +56,6 @@ Temperature, Lattice<double, descriptors::D2Q5<descriptors::VELOCITY, descriptor
 namespace olb::parameters {
 struct CP_S : public descriptors::FIELD_BASE<1> {};
 struct CP_L : public descriptors::FIELD_BASE<1> {};
-struct STEFAN : public descriptors::FIELD_BASE<1> {};
 struct LAMBDA_S : public descriptors::FIELD_BASE<1> {};
 struct LAMBDA_L : public descriptors::FIELD_BASE<1> {};
 } // namespace olb::parameters

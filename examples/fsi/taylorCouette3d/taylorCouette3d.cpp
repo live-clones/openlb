@@ -48,7 +48,6 @@ namespace olb::parameters {
 struct ETA : public descriptors::FIELD_BASE<1> { };
 struct INNER_R : public descriptors::FIELD_BASE<1> { };
 struct OUTER_R : public descriptors::FIELD_BASE<1> { };
-struct LENGTH : public descriptors::FIELD_BASE<1> { };
 struct SIGMA : public  descriptors::FIELD_BASE<1> { };
 struct ROTATE_OMEGA : public  descriptors::FIELD_BASE<1> { };
 struct PHYS_AVERAGING_START_T : public  descriptors::FIELD_BASE<1> { };
@@ -120,7 +119,7 @@ std::shared_ptr<IndicatorF3D<MyCase::value_t>> createDomainI(MyCase::ParametersD
   using T = MyCase::value_t;
 
   const T outerR = params.get<parameters::OUTER_R>();
-  const T length = params.get<parameters::LENGTH>();
+  const T length = params.get<parameters::DOMAIN_L>();
 
   std::shared_ptr<IndicatorF3D<T>> boxI(new IndicatorCuboid3D<T>({2*outerR,2*outerR,length},{0,0,0}));
   return boxI;
@@ -220,7 +219,7 @@ void setInitialValues(MyCase& myCase) {
   const auto& converter  = sLattice.getUnitConverter();
 
   const T outerR = params.get<parameters::OUTER_R>();
-  const T length = params.get<parameters::LENGTH>();
+  const T length = params.get<parameters::DOMAIN_L>();
 
   AnalyticalConst3D<T,T> rhoF(1);
   TaylorCouette3D<T,T> uCalc(myCase);
@@ -340,7 +339,7 @@ void simulate(MyCase& myCase) {
 
   const T innerR = params.get<parameters::INNER_R>();
   const T outerR = params.get<parameters::OUTER_R>();
-  const T length = params.get<parameters::LENGTH>();
+  const T length = params.get<parameters::DOMAIN_L>();
   const T omega = params.get<parameters::ROTATE_OMEGA>();
   Vector center{outerR - T{0.25}*converter.getPhysDeltaX(),
                 outerR - T{0.25}*converter.getPhysDeltaX(),
@@ -404,27 +403,27 @@ int main(int argc, char* argv[]) {
     myCaseParameters.set<PHYS_CHAR_VISCOSITY>(1e-5);
     myCaseParameters.set<TURBULENCE_INTENSITY>(0.05);
 
-    myCaseParameters.set<OUTER_R>([](MyCase::ParametersD& p) {
+    myCaseParameters.set<OUTER_R>([] (MyCase::ParametersD& p) {
       return p.get<INNER_R>() / p.get<ETA>();
     });
-    myCaseParameters.set<LENGTH>([](MyCase::ParametersD& p) {
+    myCaseParameters.set<DOMAIN_L>([] (MyCase::ParametersD& p) {
       const auto gapW = p.get<OUTER_R>() - p.get<INNER_R>();
       return 2 * std::numbers::pi * gapW / 3;
     });
-    myCaseParameters.set<ROTATE_OMEGA>([](MyCase::ParametersD& p) {
+    myCaseParameters.set<ROTATE_OMEGA>([] (MyCase::ParametersD& p) {
       const auto innerR = p.get<INNER_R>();
       const auto outerR = p.get<OUTER_R>();
       const auto sigma = util::pow((innerR + outerR)/2./util::sqrt(innerR*outerR), 4);
       return util::sqrt(p.get<TAYLOR>()*util::pow(p.get<PHYS_CHAR_VISCOSITY>(), 2)/(0.25*sigma*util::pow(outerR-innerR, 3)));
     });
-    myCaseParameters.set<PHYS_CHAR_VELOCITY>([](MyCase::ParametersD& p) {
+    myCaseParameters.set<PHYS_CHAR_VELOCITY>([] (MyCase::ParametersD& p) {
       return p.get<ROTATE_OMEGA>() * p.get<INNER_R>();
     });
-    myCaseParameters.set<PHYS_MAX_T>([](MyCase::ParametersD& p) {
+    myCaseParameters.set<PHYS_MAX_T>([] (MyCase::ParametersD& p) {
       const auto gapW = p.get<OUTER_R>() - p.get<INNER_R>();
       return 1000 * gapW / p.get<PHYS_CHAR_VELOCITY>();
     });
-    myCaseParameters.set<PHYS_AVERAGING_START_T>([](MyCase::ParametersD& p) {
+    myCaseParameters.set<PHYS_AVERAGING_START_T>([] (MyCase::ParametersD& p) {
       const auto gapW = p.get<OUTER_R>() - p.get<INNER_R>();
       return 200 * gapW / p.get<PHYS_CHAR_VELOCITY>();
     });

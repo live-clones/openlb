@@ -91,10 +91,6 @@ struct ComputeSourceTerm {
 
 namespace olb::parameters {
 
-struct START_RESOLUTION : public descriptors::TYPED_FIELD_BASE<int,1> { };
-struct END_RESOLUTION : public descriptors::TYPED_FIELD_BASE<int,1> { };
-struct HAS_CONVERGED : public descriptors::TYPED_FIELD_BASE<bool,1> { };
-struct RESIDUUM : public descriptors::FIELD_BASE<1> { };
 struct CONSTK : public descriptors::FIELD_BASE<1> { };
 struct ERROR_NORMS : public descriptors::FIELD_BASE<3> { };
 
@@ -238,7 +234,7 @@ void getResults(MyCase& myCase,
   auto& parameters = myCase.getParameters();
   auto& lattice = myCase.getLattice(Poisson{});
   const T maxPhysT = parameters.get<parameters::PHYS_MAX_T>();
-  bool hasConverged = parameters.get<parameters::HAS_CONVERGED>();
+  bool hasConverged = parameters.get<parameters::CONVERGED>();
   const bool lastTimeStep = ( hasConverged || (iT + 1 == lattice.getUnitConverter().getLatticeTime( maxPhysT )) );
 
   const int vtkIter  = lattice.getUnitConverter().getLatticeTime( .1 );
@@ -312,11 +308,11 @@ void simulate(MyCase& myCase) {
   util::ValueTracer<T> converge( 100, residuum );
   timer.start();
 
-  parameters.set<parameters::HAS_CONVERGED>(false);
+  parameters.set<parameters::CONVERGED>(false);
   for (std::size_t iT=0; iT < iTmax; ++iT) {
     if ( converge.hasConverged() ) {
       clout << "Simulation converged." << std::endl;
-      parameters.set<parameters::HAS_CONVERGED>(true);
+      parameters.set<parameters::CONVERGED>(true);
       getResults(myCase, timer, iT);
 
       break;
@@ -347,21 +343,21 @@ int main(int argc, char* argv[]) {
   MyCase::ParametersD myCaseParameters;
   {
     using namespace olb::parameters;
-    myCaseParameters.set<START_RESOLUTION>(20);
-    myCaseParameters.set<END_RESOLUTION>(80);
+    myCaseParameters.set<RESOLUTION_START>(20);
+    myCaseParameters.set<RESOLUTION_END>(80);
     myCaseParameters.set<LATTICE_RELAXATION_TIME>(1.);
     myCaseParameters.set<DOMAIN_EXTENT>({1.,0.25,0.});
     myCaseParameters.set<CONSTK>(27.79);
     myCaseParameters.set<PHYS_MAX_T>(10.);
     myCaseParameters.set<RESIDUUM>(1.e-9);
-    myCaseParameters.set<HAS_CONVERGED>(false);
+    myCaseParameters.set<CONVERGED>(false);
     myCaseParameters.set<ERROR_NORMS>({0.,0.,0.});
   }
 
   gplot.setLabel("Resolution test", "average Error");
 
-  for(int simuN =  myCaseParameters.get<parameters::START_RESOLUTION>();
-      simuN <=  myCaseParameters.get<parameters::END_RESOLUTION>();
+  for(int simuN =  myCaseParameters.get<parameters::RESOLUTION_START>();
+      simuN <=  myCaseParameters.get<parameters::RESOLUTION_END>();
       simuN *=2) {
     myCaseParameters.set<parameters::RESOLUTION>(simuN);
     /// === Step 3: Create Mesh ===

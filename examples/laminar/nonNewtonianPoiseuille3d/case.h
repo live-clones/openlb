@@ -60,8 +60,6 @@ struct MU_ZERO            : public descriptors::FIELD_BASE<1> {};
 struct MU_INF             : public descriptors::FIELD_BASE<1> {};
 struct N_PL               : public descriptors::FIELD_BASE<1> {};
 struct CONSISTENCY_INDEX  : public descriptors::FIELD_BASE<1> {};
-struct PRESSURE_DROP      : public descriptors::FIELD_BASE<1> {};
-struct LENGTH             : public descriptors::FIELD_BASE<1> {};
 struct DIAMETER           : public descriptors::FIELD_BASE<1> {};
 struct EOC                : public descriptors::TYPED_FIELD_BASE<bool,1> {};
 struct VISCOSITY_MODEL    : public descriptors::TYPED_FIELD_BASE<ViscosityModel,1> {};
@@ -74,7 +72,7 @@ Mesh<MyCase::value_t, MyCase::d> createMesh(MyCase::ParametersD& parameters)
 {
   using T             = MyCase::value_t;
   const T physDeltaX  = parameters.get<parameters::PHYS_DELTA_X>();
-  const T length      = parameters.get<parameters::LENGTH>();
+  const T length      = parameters.get<parameters::DOMAIN_L>();
   const T radius      = parameters.get<parameters::RADIUS>();
 
   Vector<T, 3> center0(T(0), radius, radius);
@@ -287,7 +285,7 @@ void prepareGeometry(MyCase& myCase)
   auto&   geometry    = myCase.getGeometry();
   auto&   parameters  = myCase.getParameters();
   const T physDeltaX  = parameters.get<parameters::PHYS_DELTA_X>();
-  const T length      = parameters.get<parameters::LENGTH>();
+  const T length      = parameters.get<parameters::DOMAIN_L>();
   const T radius      = parameters.get<parameters::RADIUS>();
 
   Vector<T, 3> center0(-physDeltaX * 0.2, radius, radius);
@@ -315,7 +313,7 @@ void prepareLattice(MyCase& myCase)
   auto& geometry    = myCase.getGeometry();
   auto& lattice     = myCase.getLattice(NavierStokes {});
   auto& parameters  = myCase.getParameters();
-  const T length    = parameters.get<parameters::LENGTH>();
+  const T length    = parameters.get<parameters::DOMAIN_L>();
   const T radius    = parameters.get<parameters::RADIUS>();
   const T physRho   = parameters.get<parameters::PHYS_CHAR_DENSITY>();
   const T pressureDrop = parameters.get<parameters::PRESSURE_DROP>();
@@ -526,43 +524,43 @@ void setGetParameters( MyCase::ParametersD& myCaseParameters, int& argc, char** 
   myCaseParameters.set<RESOLUTION>(31);
   myCaseParameters.set<EOC_RESOLUTIONS>({41, 61, 81, 101});
   myCaseParameters.set<DOMAIN_EXTENT>({3e-3,1e-3,1e-3});
-  myCaseParameters.set<LENGTH>([](MyCase::ParametersD& p) {
+  myCaseParameters.set<DOMAIN_L>([] (MyCase::ParametersD& p) {
     return p.get<DOMAIN_EXTENT>()[0];
   });
-  myCaseParameters.set<DIAMETER>([](MyCase::ParametersD& p) {
+  myCaseParameters.set<DIAMETER>([] (MyCase::ParametersD& p) {
     return p.get<DOMAIN_EXTENT>()[1];
   });
-  myCaseParameters.set<RADIUS>([](MyCase::ParametersD& p) {
+  myCaseParameters.set<RADIUS>([] (MyCase::ParametersD& p) {
     return p.get<DIAMETER>() / 2.;
   });
-  myCaseParameters.set<PHYS_CHAR_LENGTH>([](MyCase::ParametersD& p) {
+  myCaseParameters.set<PHYS_CHAR_LENGTH>([] (MyCase::ParametersD& p) {
     return p.get<DIAMETER>();
   });
-  myCaseParameters.set<PHYS_DELTA_X>([](MyCase::ParametersD& p) {
+  myCaseParameters.set<PHYS_DELTA_X>([] (MyCase::ParametersD& p) {
     return p.get<PHYS_CHAR_LENGTH>() / p.get<RESOLUTION>();
   });
   myCaseParameters.set<LATTICE_RELAXATION_TIME>(0.64265);
   myCaseParameters.set<PHYS_CHAR_DENSITY>(1060);
   myCaseParameters.set<PHYS_MAX_T>(.3);
   myCaseParameters.set<AXIS>({1.,0.,0.});
-  myCaseParameters.set<ORIGIN>([](MyCase::ParametersD& p) {
-    T l = p.get<LENGTH>();
+  myCaseParameters.set<ORIGIN>([] (MyCase::ParametersD& p) {
+    T l = p.get<DOMAIN_L>();
     T r = p.get<RADIUS>();
     return Vector(l,r,r);
   });
   myCaseParameters.set<REYNOLDS>(100);
   myCaseParameters.set<DYNAMIC_VISCOSITY>(0.0040755);
-  myCaseParameters.set<PHYS_CHAR_VISCOSITY>([](MyCase::ParametersD& p) {
+  myCaseParameters.set<PHYS_CHAR_VISCOSITY>([] (MyCase::ParametersD& p) {
     return p.get<DYNAMIC_VISCOSITY>() / p.get<PHYS_CHAR_DENSITY>();
   });
-  myCaseParameters.set<PRESSURE_DROP>([](MyCase::ParametersD& p) {
+  myCaseParameters.set<PRESSURE_DROP>([] (MyCase::ParametersD& p) {
     return (16.*util::pow(p.get<DYNAMIC_VISCOSITY>(),2.)*p.get<REYNOLDS>())/
       (p.get<PHYS_CHAR_DENSITY>()*util::pow(p.get<DOMAIN_EXTENT>()[1],3.));
   });
 
   // PowerLaw model parameter
   myCaseParameters.set<POWER_LAW_EXPONENT>(0.65);
-  myCaseParameters.set<CONSISTENCY_INDEX>([](MyCase::ParametersD& p) {
+  myCaseParameters.set<CONSISTENCY_INDEX>([] (MyCase::ParametersD& p) {
     T dynamicViscosity  = p.get<DYNAMIC_VISCOSITY>();
     T n                 = p.get<POWER_LAW_EXPONENT>();
     T pressureDrop      = p.get<PRESSURE_DROP>();
@@ -575,7 +573,7 @@ void setGetParameters( MyCase::ParametersD& myCaseParameters, int& argc, char** 
 
   // Casson model parameter
   myCaseParameters.set<K0>(0.07);  // k0 constant (Pa)^0.5, k0^2 corresponds to yield stress
-  myCaseParameters.set<K1>([](MyCase::ParametersD& p) {
+  myCaseParameters.set<K1>([] (MyCase::ParametersD& p) {
     return  util::sqrt(p.get<DYNAMIC_VISCOSITY>());
   });  // k1 constant (Pa*s)^0.5, k1^2 corresponds to Casson viscosity
 
@@ -583,10 +581,10 @@ void setGetParameters( MyCase::ParametersD& myCaseParameters, int& argc, char** 
   myCaseParameters.set<N_CY>(0.9);  // CY fluid index
   myCaseParameters.set<MODEL_CONSTANT_A>(1.5);  // model constant
   myCaseParameters.set<CHAR_TIME_CONSTANT>(3.313);  // characteristic time constant lambda (s)
-  myCaseParameters.set<MU_ZERO>([](MyCase::ParametersD& p) {
+  myCaseParameters.set<MU_ZERO>([] (MyCase::ParametersD& p) {
     return p.get<DYNAMIC_VISCOSITY>()*1.45;
   });  // zero viscosity (Pa*s)
-  myCaseParameters.set<MU_INF>([](MyCase::ParametersD& p) {
+  myCaseParameters.set<MU_INF>([] (MyCase::ParametersD& p) {
     return p.get<DYNAMIC_VISCOSITY>()/10.;
   });  // infinity viscosity (Pa*s)
   myCaseParameters.set<N_PL>(0.708);  // PL fluid index

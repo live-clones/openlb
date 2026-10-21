@@ -60,7 +60,7 @@ using MyCase = Case<
 Mesh<MyCase::value_t,MyCase::d> createMesh(MyCase::ParametersD& parameters) {
   using T = MyCase::value_t_of<Component1>;
   const Vector extent = parameters.get<parameters::DOMAIN_EXTENT>();
-  const Vector origin = parameters.get<parameters::ORIGIN>();
+  const Vector origin = parameters.get<parameters::DOMAIN_ORIGIN>();
   const T physDeltaX  = parameters.get<parameters::PHYS_DELTA_X>();
   IndicatorCuboid3D<T> cuboid(extent, origin);
 
@@ -347,7 +347,7 @@ int main(int argc, char* argv[]) {
     using namespace olb::parameters;
     using T = MyCase::value_t;
     myCaseParameters.set<RESOLUTION>(200);
-    myCaseParameters.set<ORIGIN>({0, 0, 0});
+    myCaseParameters.set<DOMAIN_ORIGIN>({0, 0, 0});
     myCaseParameters.set<PHYS_DELTA_X>((T) 1.);
     myCaseParameters.set<LATTICE_MAX_T>(10000);
     myCaseParameters.set<RHO_1>((T) 0.0);
@@ -362,14 +362,14 @@ int main(int argc, char* argv[]) {
     myCaseParameters.set<NOISE>((T) 4.e-2);
     myCaseParameters.set<LATTICE_VTK_ITER_T>((T) 500);
     myCaseParameters.set<LATTICE_STAT_ITER_T>((T) 100);
-    myCaseParameters.set<parameters::DOMAIN_EXTENT>([](MyCase::ParametersD& p) -> Vector<MyCase::value_t, 3> {
+    myCaseParameters.set<parameters::DOMAIN_EXTENT>([] (MyCase::ParametersD& p) -> Vector<MyCase::value_t, 3>  {
       return{
         (T) p.get<parameters::RESOLUTION>(),
         (T) p.get<parameters::RESOLUTION>() / (T)2.,
         (T) p.get<parameters::RESOLUTION>()
       };
     });
-    myCaseParameters.set<parameters::FORCE>([](MyCase::ParametersD& p) -> MyCase::value_t {
+    myCaseParameters.set<parameters::FORCE>([] (MyCase::ParametersD& p) -> MyCase::value_t  {
       return 7.0 / (p.get<parameters::DOMAIN_EXTENT>()[1] * p.get<parameters::DOMAIN_EXTENT>()[1]);
     });
   }

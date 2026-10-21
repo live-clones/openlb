@@ -57,7 +57,7 @@ int main(int argc, char* argv[])
     myCaseParameters.set<RADIUS_CYLINDER>(0.05);
     myCaseParameters.set<PHYS_VTK_ITER_T>(0.3);
     myCaseParameters.set<PHYS_STAT_ITER_T>(0.1);
-    myCaseParameters.set<RAMP_UP_UPDATE>(0.03);
+    myCaseParameters.set<RAMP_UP_T>(0.03);
     myCaseParameters.set<RAMP_UP_END_FRACTION>(0.4);
     myCaseParameters.set<VTK_ENABLED>(true);
     myCaseParameters.set<GNUPLOT_ENABLED>(true);
