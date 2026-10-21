@@ -44,6 +44,7 @@ website:
   navbar:
     title: false
     logo: "fig/openlb_full.png"
+    logo-href: https://openlb.net
     tools:
       - icon: gitlab
         href: https://gitlab.com/openlb/release
