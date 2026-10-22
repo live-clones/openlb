@@ -89,7 +89,7 @@ private:
   /// Total steps for progress: MAX_PHYS_T if set, else the step-count TIME_STEPS
   template <typename CASE>
   static std::size_t maxSteps(CASE& myCase) {
-    const double maxPhysT = myCase.getParameters().template get<olb::parameters::MAX_PHYS_T>();
+    const double maxPhysT = myCase.getParameters().template get<olb::parameters::PHYS_MAX_T>();
     if (maxPhysT > 0) {
       return referenceLattice(myCase).getUnitConverter().getLatticeTime(maxPhysT);
     }

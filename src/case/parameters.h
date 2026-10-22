@@ -204,8 +204,8 @@ struct LATTICE_TIMER_ITER_T : public descriptors::TYPED_FIELD_BASE<int,1> {};
 struct LATTICE_ITER_T : public descriptors::TYPED_FIELD_BASE<int,1>{};
 
 // Deprecated aliases, replaced by PHYS_MAX_T / LATTICE_MAX_T
-struct MAX_PHYS_T : public descriptors::FIELD_BASE<1> { };
-struct MAX_LATTICE_T : public descriptors::TYPED_FIELD_BASE<std::size_t,1> { };
+//struct MAX_PHYS_T : public descriptors::FIELD_BASE<1> { };
+//struct MAX_LATTICE_T : public descriptors::TYPED_FIELD_BASE<std::size_t,1> { };
 
 struct RAMP_UP_T : public descriptors::FIELD_BASE<1> { };
 struct RAMP_UP_STEP : public descriptors::FIELD_BASE<1> { };
