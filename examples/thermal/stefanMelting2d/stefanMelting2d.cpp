@@ -54,9 +54,6 @@ Temperature, Lattice<double, descriptors::D2Q5<descriptors::VELOCITY, descriptor
 namespace olb::parameters {
 struct CP_S : public descriptors::FIELD_BASE<1> {};
 struct CP_L : public descriptors::FIELD_BASE<1> {};
-struct STEFAN : public descriptors::FIELD_BASE<1> {};
-struct LAMBDA : public descriptors::FIELD_BASE<1> {};
-struct DENSITY : public descriptors::FIELD_BASE<1> {};
 struct NUM_ERROR_SAMPLES : public descriptors::FIELD_BASE<1> {};
 struct K : public descriptors::FIELD_BASE<1> {};
 struct ITERATIONS : public descriptors::FIELD_BASE<1> {};
@@ -101,8 +98,8 @@ void getError(MyCase& myCase, int iT)
   const T cp_l       = params.get<parameters::CP_L>();
   const T Thot       = params.get<parameters::T_HOT>();
   const T Tcold      = params.get<parameters::T_COLD>();
-  const T lambda     = params.get<parameters::LAMBDA>();
-  const T density    = params.get<parameters::DENSITY>();
+  const T lambda     = params.get<parameters::PHYS_LAMBDA>();
+  const T density    = params.get<parameters::PHYS_DENSITY>();
   const T k          = params.get<parameters::K>();
   const T cp_ref     = 2.0 * cp_s * cp_l / (cp_s + cp_l);
   const T physDeltaX = lx / N;
@@ -236,8 +233,8 @@ void prepareLattice(MyCase& myCase)
   const T Thot       = params.get<parameters::T_HOT>();
   const T Tcold      = params.get<parameters::T_COLD>();
   const T Ste        = params.get<parameters::STEFAN>();
-  const T lambda     = params.get<parameters::LAMBDA>();
-  const T density    = params.get<parameters::DENSITY>();
+  const T lambda     = params.get<parameters::PHYS_LAMBDA>();
+  const T density    = params.get<parameters::PHYS_DENSITY>();
   const T k          = params.get<parameters::K>();
   const T cp_ref     = 2.0 * cp_s * cp_l / (cp_s + cp_l);
   const T L          = cp_l * (Thot - Tcold) / Ste;
@@ -392,8 +389,8 @@ void getResults(MyCase& myCase, util::Timer<MyCase::value_t>& timer, int iT)
 
   const T   Thot              = params.get<parameters::T_HOT>();
   const T   Tcold             = params.get<parameters::T_COLD>();
-  const T   lambda            = params.get<parameters::LAMBDA>();
-  const T   density           = params.get<parameters::DENSITY>();
+  const T   lambda            = params.get<parameters::PHYS_LAMBDA>();
+  const T   density           = params.get<parameters::PHYS_DENSITY>();
   const T   cp_l              = params.get<parameters::CP_L>();
   const T   cp_s              = params.get<parameters::CP_S>();
   const T   tau               = params.get<parameters::LATTICE_RELAXATION_TIME>();
@@ -490,8 +487,8 @@ void simulate(MyCase& myCase)
   auto& ADlattice = myCase.getLattice(Temperature {});
   auto& converter = NSlattice.getUnitConverter();
 
-  const T lambda   = params.get<parameters::LAMBDA>();
-  const T density  = params.get<parameters::DENSITY>();
+  const T lambda   = params.get<parameters::PHYS_LAMBDA>();
+  const T density  = params.get<parameters::PHYS_DENSITY>();
   const T cp_l     = params.get<parameters::CP_L>();
   const T k        = params.get<parameters::K>();
   const T maxPhysT = util::pow(0.25 / 2.0 / k, 2) * density * cp_l / lambda;
@@ -542,15 +539,15 @@ int main(int argc, char* argv[])
     myCaseParameters.set<STEFAN>(0.01);
     myCaseParameters.set<T_COLD>(0.5);
     myCaseParameters.set<T_HOT>(1.5);
-    myCaseParameters.set<LAMBDA>(1. / 6.);
+    myCaseParameters.set<PHYS_LAMBDA>(1. / 6.);
     myCaseParameters.set<CP_S>(1.0);
     myCaseParameters.set<CP_L>(1.0);
-    myCaseParameters.set<DENSITY>(1.0);
+    myCaseParameters.set<PHYS_DENSITY>(1.0);
     myCaseParameters.set<NUM_ERROR_SAMPLES>((int)25);
     myCaseParameters.set<STARTING_VALUE>(1.e-5);
     myCaseParameters.set<ITERATIONS>(100);
     myCaseParameters.set<MAX_ERROR>(2e-7);
-    myCaseParameters.set<K>([](MyCase::ParametersD& p) -> T {
+    myCaseParameters.set<K>([] (MyCase::ParametersD& p) -> T  {
       int       i             = 0;
       T       x             = p.get<STARTING_VALUE>();
       int     maxIterations = p.get<ITERATIONS>();
@@ -566,8 +563,8 @@ int main(int argc, char* argv[])
       } while (i < maxIterations && util::abs(frac) > maxError);
       return x;
     });
-    myCaseParameters.set<MAX_PHYS_T>([](MyCase::ParametersD& p) {
-      return util::pow(0.25 / 2.0 / p.get<K>(), 2) * p.get<DENSITY>() * p.get<CP_L>() / p.get<LAMBDA>();
+    myCaseParameters.set<PHYS_MAX_T>([] (MyCase::ParametersD& p) {
+      return util::pow(0.25 / 2.0 / p.get<K>(), 2) * p.get<PHYS_DENSITY>() * p.get<CP_L>() / p.get<PHYS_LAMBDA>();
     });
   }
 

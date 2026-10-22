@@ -125,9 +125,9 @@ int main( int argc, char* argv[] )
 
   MyCase::ParametersD myCaseParameters;
   setDefaultParameters(myCaseParameters);
-  myCaseParameters.set<parameters::EOC_START_RESOLUTION>(21);
-  myCaseParameters.set<parameters::EOC_MAX_RESOLUTION>(52);
-  myCaseParameters.set<parameters::EOC_RESOLUTION_STEP>(10);
+  myCaseParameters.set<parameters::RESOLUTION_START>(21);
+  myCaseParameters.set<parameters::RESOLUTION_MAX>(52);
+  myCaseParameters.set<parameters::RESOLUTION_STEP>(10);
   myCaseParameters.set<parameters::EOC>(true);
 
   BoundaryType boundaryType = myCaseParameters.get<parameters::BOUNDARY_TYPE>();
@@ -151,9 +151,9 @@ int main( int argc, char* argv[] )
   // set the labels for the plot
   gplot.setLabel("Resolution test", "average Error");
 
-  std::size_t startN = myCaseParameters.get<parameters::EOC_START_RESOLUTION>();
-  std::size_t maxN   = myCaseParameters.get<parameters::EOC_MAX_RESOLUTION>();
-  std::size_t stepN  = myCaseParameters.get<parameters::EOC_RESOLUTION_STEP>();
+  std::size_t startN = myCaseParameters.get<parameters::RESOLUTION_START>();
+  std::size_t maxN   = myCaseParameters.get<parameters::RESOLUTION_MAX>();
+  std::size_t stepN  = myCaseParameters.get<parameters::RESOLUTION_STEP>();
 
   for(size_t simuN = startN; simuN < maxN; simuN += stepN){
     clout << "Starting next simulation with N = " << simuN << std::endl;

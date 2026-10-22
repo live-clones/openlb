@@ -357,7 +357,7 @@ void simulate(MyCase& myCase)
   auto&       Rlattice  = myCase.getLattice(Radiation {});
   const auto& converter = Rlattice.getUnitConverter();
 
-  const auto maxPhysT = params.get<parameters::MAX_PHYS_T>();
+  const auto maxPhysT = params.get<parameters::PHYS_MAX_T>();
   const auto saveIter = converter.getLatticeTime(params.get<parameters::WRITE_SEC>() / 32.);
 
   util::Timer<T> timer(converter.getLatticeTime(maxPhysT), geometry.getStatistics().getNvoxel());
@@ -399,18 +399,18 @@ int main(int argc, char* argv[])
     using namespace olb::parameters;
     myCaseParameters.set<WRITE_SEC>(1.0);
     myCaseParameters.set<RESOLUTION>(40);
-    myCaseParameters.set<MAX_PHYS_T>(100);
+    myCaseParameters.set<PHYS_MAX_T>(100);
     myCaseParameters.set<DOMAIN_L>(1.0);
     myCaseParameters.set<ABSORPTION>(0.5);
     myCaseParameters.set<SCATTERING>(1.5);
 
     myCaseParameters.set<LATTICE_RELAXATION_TIME>(1.0);
-    myCaseParameters.set<MU_EFF>([](MyCase::ParametersD& p) {
+    myCaseParameters.set<MU_EFF>([] (MyCase::ParametersD& p) {
       return util::sqrt(3 * p.get<ABSORPTION>() *
                         (p.get<ABSORPTION>() + p.get<SCATTERING>()));
     });
 
-    myCaseParameters.set<PHYS_DELTA_X>([](MyCase::ParametersD& p) {
+    myCaseParameters.set<PHYS_DELTA_X>([] (MyCase::ParametersD& p) {
       return p.get<DOMAIN_L>() / p.get<RESOLUTION>();
     });
   }

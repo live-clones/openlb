@@ -69,8 +69,6 @@ struct CENTER_2 : public descriptors::FIELD_BASE<0,1> { };
 struct CONTACT_BOX_RESOLUTION_PER_DIRECTION : public descriptors::FIELD_BASE<1> { };
 struct PARTICLE_CONTACT_MATERIAL : public descriptors::FIELD_BASE<1> { };
 struct WALL_CONTACT_MATERIAL : public descriptors::FIELD_BASE<1> { };
-struct LENGTH_X : public descriptors::FIELD_BASE<1> { };
-struct LENGTH_Y : public descriptors::FIELD_BASE<1> { };
 struct EPS : public descriptors::FIELD_BASE<1> { };
 struct PART_POISSON_RATIO : public descriptors::FIELD_BASE<1> { };
 
@@ -78,7 +76,7 @@ struct PART_POISSON_RATIO : public descriptors::FIELD_BASE<1> { };
 
 Mesh<MyCase::value_t,MyCase::d> createMesh(MyCase::ParametersD& parameters) {
   using T = MyCase::value_t;
-  const Vector extent = {parameters.get<parameters::LENGTH_X>(), parameters.get<parameters::LENGTH_Y>()};
+  const Vector extent = parameters.get<parameters::DOMAIN_EXTENT>();
   const Vector origin{0, 0};
   IndicatorCuboid2D<T> cuboid(extent, origin);
 
@@ -246,7 +244,7 @@ void simulate(MyCase& myCase )
   using PARTICLETYPE = ResolvedCircleWithContact2D;
   using PARTICLECONTACTTYPE = ParticleContactArbitraryFromOverlapVolume<T, DESCRIPTOR::d, true>;
   using WALLCONTACTTYPE = WallContactArbitraryFromOverlapVolume<T, DESCRIPTOR::d, true>;
-  Timer<T> timer(converter.getLatticeTime(parameters.get<parameters::MAX_PHYS_T>()), geometry.getStatistics().getNvoxel());
+  Timer<T> timer(converter.getLatticeTime(parameters.get<parameters::PHYS_MAX_T>()), geometry.getStatistics().getNvoxel());
   timer.start();
   OstreamManager clout(std::cout, "simulate");
 
@@ -258,7 +256,7 @@ void simulate(MyCase& myCase )
   particleSystem.defineDynamics<VerletParticleDynamics<T,PARTICLETYPE>>();
 
   std::vector<SolidBoundary<T, DESCRIPTOR::d>> solidBoundaries;
-  const Vector extent = {parameters.get<parameters::LENGTH_X>(), parameters.get<parameters::LENGTH_Y>()};
+  const Vector extent = parameters.get<parameters::DOMAIN_EXTENT>();
   IndicatorCuboid2D<T> cuboid(extent, {0, 0});
 
   solidBoundaries.push_back(  SolidBoundary<T, DESCRIPTOR::d>(
@@ -301,8 +299,8 @@ void simulate(MyCase& myCase )
     communicator.exchangeRequests();
   }
 
-  clout << "MaxIT: " << converter.getLatticeTime( parameters.get<parameters::MAX_PHYS_T>() ) << std::endl;
-  for (std::size_t iT = 0; iT < converter.getLatticeTime( parameters.get<parameters::MAX_PHYS_T>() ) + 10; ++iT) {
+  clout << "MaxIT: " << converter.getLatticeTime( parameters.get<parameters::PHYS_MAX_T>() ) << std::endl;
+  for (std::size_t iT = 0; iT < converter.getLatticeTime( parameters.get<parameters::PHYS_MAX_T>() ) + 10; ++iT) {
 
     particleManager.execute<
       couple_lattice_to_particles<T,DESCRIPTOR,PARTICLETYPE>,
@@ -349,9 +347,8 @@ int main(int argc, char* argv[])
   {
     using namespace olb::parameters;
     myCaseParameters.set<EPS                         >(0.5);
-    myCaseParameters.set<MAX_PHYS_T                  >(6.);
-    myCaseParameters.set<LENGTH_X                    >(0.02);
-    myCaseParameters.set<LENGTH_Y                    >(0.08);
+    myCaseParameters.set<PHYS_MAX_T                  >(6.);
+    myCaseParameters.set<DOMAIN_EXTENT               >({0.02, 0.08});
     myCaseParameters.set<CENTER_1                    >({0.01, 0.068});
     myCaseParameters.set<CENTER_2                    >({0.00999, 0.072});
     myCaseParameters.set<PART_RHO                    >(1010.);

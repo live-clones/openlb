@@ -323,7 +323,7 @@ void getResults(MyCase& myCase,
   auto& converter   = lattice.getUnitConverter();
   auto& parameters  = myCase.getParameters();
 
-  const std::size_t iTMax     = converter.getLatticeTime(parameters.get<parameters::MAX_PHYS_T      >());
+  const std::size_t iTMax     = converter.getLatticeTime(parameters.get<parameters::PHYS_MAX_T      >());
   const std::size_t iTlog     = converter.getLatticeTime(parameters.get<parameters::PHYS_STAT_ITER_T>());
   const std::size_t iTvtk     = converter.getLatticeTime(parameters.get<parameters::PHYS_VTK_ITER_T >());
   const bool        writeVTK  = parameters.get<parameters::VTK_ENABLED                              >();
@@ -466,7 +466,7 @@ void simulate(MyCase& myCase) {
   auto& lattice             = myCase.getLattice(names::NavierCauchy{});
   auto& parameters          = myCase.getParameters();
 
-  const T physMaxT          = parameters.get<parameters::MAX_PHYS_T>();
+  const T physMaxT          = parameters.get<parameters::PHYS_MAX_T>();
   const std::size_t iTmax   = lattice.getUnitConverter().getLatticeTime(physMaxT);
 
   util::Timer<T> timer(iTmax, geometry.getStatistics().getNvoxel());
@@ -511,7 +511,7 @@ int main(int argc, char* argv[]) {
     myCaseParameters.set<LATTICE_RELAXATION_FREQUENCY >(    2.0         );
     myCaseParameters.set<DOMAIN_EXTENT                >(  { 1.0, 1.0 }  );
     myCaseParameters.set<ORIGIN                       >(  { 0.0, 0.0 }  );
-    myCaseParameters.set<MAX_PHYS_T                   >(    1.95        );
+    myCaseParameters.set<PHYS_MAX_T                   >(    1.95        );
     myCaseParameters.set<PHYS_STAT_ITER_T             >(    0.1         );
     myCaseParameters.set<PHYS_VTK_ITER_T              >(    0.1         );
     myCaseParameters.set<SCALING_FACTOR_DT            >(    0.4         );

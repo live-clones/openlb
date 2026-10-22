@@ -41,12 +41,6 @@ namespace olb::parameters {
 
 struct ROTATION_POINT  : public descriptors::FIELD_BASE<0,1> { };
 struct ROTATION_AXIS : public descriptors::FIELD_BASE<0,1> { };
-struct ANGLE : public descriptors::FIELD_BASE<1> { };
-struct START_TIME : public descriptors::FIELD_BASE<1> { };
-struct UPDATE_TIME : public descriptors::FIELD_BASE<1> { };
-struct VTK_TIME : public descriptors::FIELD_BASE<1> { };
-struct STAT_TIME : public descriptors::FIELD_BASE<1> { };
-struct PHYS_LENGTH : public descriptors::FIELD_BASE<1> { };
 
 }
 
@@ -114,7 +108,7 @@ void prepareLattice(MyCase& myCase) {
 
   const T physDeltaX = parameters.get<parameters::PHYS_DELTA_X>();
   const T physDeltaT = parameters.get<parameters::PHYS_DELTA_T>();
-  const T physLength = parameters.get<parameters::PHYS_LENGTH>();
+  const T physLength = parameters.get<parameters::PHYS_CHAR_LENGTH>();
   const T physCharVelocity = parameters.get<parameters::PHYS_CHAR_VELOCITY>();
   const T physCharViscosity = parameters.get<parameters::PHYS_CHAR_VISCOSITY>();
   const T physCharDensity = parameters.get<parameters::PHYS_CHAR_DENSITY>();
@@ -174,8 +168,8 @@ void setTemporalValues(MyCase& myCase,
   auto& converter = lattice.getUnitConverter();
 
   // No of time steps for smooth start-up
-  const T startTime = parameters.get<parameters::START_TIME>();
-  const T updateTime = parameters.get<parameters::UPDATE_TIME>();
+  const T startTime = parameters.get<parameters::PHYS_START_T>();
+  const T updateTime = parameters.get<parameters::PHYS_UPDATE_T>();
   int iTmaxStart = converter.getLatticeTime( startTime );
   int iTupdate = converter.getLatticeTime( updateTime );
 
@@ -209,8 +203,8 @@ void getResults(MyCase& myCase,
   auto& lattice = myCase.getLattice(NavierStokes{});
   auto& converter = lattice.getUnitConverter();
 
-  const T physVtkIter = parameters.get<parameters::VTK_TIME>();
-  const T physStatIter = parameters.get<parameters::STAT_TIME>();
+  const T physVtkIter = parameters.get<parameters::PHYS_VTK_ITER_T>();
+  const T physStatIter = parameters.get<parameters::PHYS_STAT_ITER_T>();
 
   const std::size_t vtkIter  = converter.getLatticeTime( physVtkIter );
   const std::size_t statIter = converter.getLatticeTime( physStatIter );
@@ -242,7 +236,7 @@ void getResults(MyCase& myCase,
 void simulate(MyCase& myCase) {
   using T = MyCase::value_t;
   auto& parameters = myCase.getParameters();
-  const T maxPhysT = parameters.get<parameters::MAX_PHYS_T>();
+  const T maxPhysT = parameters.get<parameters::PHYS_MAX_T>();
 
   const std::size_t iTmax = myCase.getLattice(NavierStokes{}).getUnitConverter().getLatticeTime(maxPhysT);
   util::Timer<T> timer(iTmax, myCase.getGeometry().getStatistics().getNvoxel());
@@ -277,18 +271,18 @@ int main(int argc, char* argv[]) {
 
     myCaseParameters.set<PHYS_DELTA_X       >(       0.00125);
     myCaseParameters.set<PHYS_DELTA_T       >(     0.0003125);
-    myCaseParameters.set<PHYS_LENGTH        >(           0.5);
+    myCaseParameters.set<PHYS_CHAR_LENGTH   >(           0.5);
     myCaseParameters.set<PHYS_CHAR_VELOCITY >(           0.2);
     myCaseParameters.set<PHYS_CHAR_VISCOSITY>(        0.0005);
     myCaseParameters.set<PHYS_CHAR_DENSITY  >(        1000.0);
-    myCaseParameters.set<MAX_PHYS_T         >(           16.);
+    myCaseParameters.set<PHYS_MAX_T         >(           16.);
     myCaseParameters.set<ROTATION_POINT     >({0.15, 0., 0.});
     myCaseParameters.set<ROTATION_AXIS      >(  {0., 0., 1.});
     myCaseParameters.set<ANGLE              >(           75.);
-    myCaseParameters.set<START_TIME         >(           6.4);
-    myCaseParameters.set<UPDATE_TIME        >(      0.009375);
-    myCaseParameters.set<VTK_TIME           >(           0.3);
-    myCaseParameters.set<STAT_TIME          >(           0.1);
+    myCaseParameters.set<PHYS_START_T       >(           6.4);
+    myCaseParameters.set<PHYS_UPDATE_T      >(      0.009375);
+    myCaseParameters.set<PHYS_VTK_ITER_T    >(           0.3);
+    myCaseParameters.set<PHYS_STAT_ITER_T   >(           0.1);
   }
 
   /// === Step 3: Create Mesh ===

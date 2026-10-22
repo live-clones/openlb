@@ -50,9 +50,6 @@ using MyCase = Case<
 
 namespace olb::parameters {
 
-struct CHANNEL_H : public descriptors::FIELD_BASE<1> { };
-struct CHANNEL_L : public descriptors::FIELD_BASE<1> { };
-
 struct T_P : public descriptors::FIELD_BASE<1> { };
 struct U_AMP : public descriptors::FIELD_BASE<1> { };
 struct U_REF : public descriptors::FIELD_BASE<1> { };
@@ -62,8 +59,8 @@ struct U_REF : public descriptors::FIELD_BASE<1> { };
 std::shared_ptr<IndicatorF2D<MyCase::value_t>> createDomainI(MyCase::ParametersD& params) {
   using T = MyCase::value_t;
 
-  const T channelH = params.get<parameters::CHANNEL_H>();
-  const T channelL = params.get<parameters::CHANNEL_L>();
+  const T channelH = params.get<parameters::DOMAIN_EXTENT>()[0];
+  const T channelL = params.get<parameters::DOMAIN_EXTENT>()[1];
 
   const T cavityR  = channelH;
   const T cavityX  = channelH+cavityR;
@@ -82,7 +79,7 @@ std::shared_ptr<IndicatorF2D<MyCase::value_t>> createDomainI(MyCase::ParametersD
 std::shared_ptr<IndicatorF2D<MyCase::value_t>> createFsiRegionI(MyCase::ParametersD& params) {
   using T = MyCase::value_t;
 
-  const T channelH = params.get<parameters::CHANNEL_H>();
+  const T channelH = params.get<parameters::DOMAIN_EXTENT>()[0];
 
   const T cavityR  = channelH;
 
@@ -94,7 +91,7 @@ std::shared_ptr<IndicatorF2D<MyCase::value_t>> createFsiRegionI(MyCase::Paramete
 Mesh<MyCase::value_t,MyCase::d> createMesh(MyCase::ParametersD& params) {
   using T = MyCase::value_t;
 
-  const T deltaX = params.get<parameters::CHANNEL_H>() / params.get<parameters::RESOLUTION>();
+  const T deltaX = params.get<parameters::DOMAIN_EXTENT>()[0] / params.get<parameters::RESOLUTION>();
 
   auto domainI = createDomainI(params);
   std::shared_ptr<IndicatorF2D<T>> paddedDomainI(
@@ -123,9 +120,9 @@ void prepareGeometry(MyCase& myCase) {
   sGeometry.rename(3, 1, domainI);
   sGeometry.rename(1, 2, fsiRegionI);
 
-  const T deltaX = params.get<parameters::CHANNEL_H>() / params.get<parameters::RESOLUTION>();
-  const T channelH = params.get<parameters::CHANNEL_H>();
-  const T channelL = params.get<parameters::CHANNEL_L>();
+  const T deltaX = params.get<parameters::DOMAIN_EXTENT>()[0] / params.get<parameters::RESOLUTION>();
+  const T channelH = params.get<parameters::DOMAIN_EXTENT>()[0];
+  const T channelL = params.get<parameters::DOMAIN_EXTENT>()[1];
 
   {
     Vector<T,2> extend(channelL, channelH);
@@ -164,7 +161,7 @@ void prepareLattice(MyCase& myCase) {
 
   auto& sLattice = myCase.getLattice(NavierStokes());
 
-  const T channelH = params.get<parameters::CHANNEL_H>();
+  const T channelH = params.get<parameters::DOMAIN_EXTENT>()[0];
   const T deltaX = channelH / params.get<parameters::RESOLUTION>();
   const T deltaT = 9.6e-5 * (T{40}/params.get<parameters::RESOLUTION>());
 
@@ -324,7 +321,7 @@ void simulate(MyCase& myCase) {
   SuperPorousElementEmbeddingO fsiEmbeddingO(sLattice);
   fsiEmbeddingO.registerElementType<CuboidPorosityF>(sGeometry.getMaterialIndicator(2));
 
-  const T channelH = params.get<parameters::CHANNEL_H>();
+  const T channelH = params.get<parameters::DOMAIN_EXTENT>()[0];
   const T valveL = 1.07*channelH;
   const T valveMomentaOfInertia = 1100*util::pow(valveL,3)*(0.001)/3;
   const T T_p = params.get<parameters::T_P>();
@@ -365,7 +362,7 @@ void simulate(MyCase& myCase) {
   OstreamManager clresult(std::cout, "result");
 
   const std::size_t iTmax = converter.getLatticeTime(
-    params.get<parameters::MAX_PHYS_T>());
+    params.get<parameters::PHYS_MAX_T>());
 
   for (std::size_t iT=0; iT < iTmax; ++iT) {
     /// === Step 8.1: Update the Boundary Values and Fields at Times ===
@@ -421,15 +418,18 @@ int main(int argc, char* argv[]) {
   MyCase::ParametersD myCaseParameters;
   {
     using namespace olb::parameters;
+    using T = MyCase::value_t;
     myCaseParameters.set<RESOLUTION >(40);
-    myCaseParameters.set<CHANNEL_H  >(0.02);
-    myCaseParameters.set<CHANNEL_L  >(6*myCaseParameters.get<CHANNEL_H>());
+    myCaseParameters.set<DOMAIN_L>(0.02);
+    myCaseParameters.set<DOMAIN_EXTENT>([](MyCase::ParametersD& p) {
+      return Vector { p.get<DOMAIN_L>(), p.get<DOMAIN_L>()*T{6.0} };
+    });
     myCaseParameters.set<T_P        >(2.45);
     myCaseParameters.set<U_AMP      >(0.11);
     myCaseParameters["reporter"]["statistics"].set<PHYS_ITER_T>(0.01);
     myCaseParameters["reporter"]["timer"].set<PHYS_ITER_T>(0.01);
     myCaseParameters.set<U_REF      >(0.04);
-    myCaseParameters.set<MAX_PHYS_T >(myCaseParameters.get<T_P>() * 10);
+    myCaseParameters.set<PHYS_MAX_T >(myCaseParameters.get<T_P>() * 10);
     myCaseParameters.set<VTK_ENABLED>(true);
   }
 

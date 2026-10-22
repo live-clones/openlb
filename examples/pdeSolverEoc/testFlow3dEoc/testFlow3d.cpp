@@ -35,13 +35,6 @@ static Gnuplot<T> gplot(
   Gnuplot<T>::LOGLOG,
   Gnuplot<T>::LINREG);
 
-namespace olb::parameters {
-
-struct START_RESOLUTION : public descriptors::TYPED_FIELD_BASE<int,1> { };
-struct NUM_SIMULATIONS : public descriptors::TYPED_FIELD_BASE<int,1> { };
-
-}
-
 int main(int argc, char* argv[])
 {
   /// @li Step 2: Set Parameters
@@ -49,13 +42,13 @@ int main(int argc, char* argv[])
   MyCase::ParametersD myCaseParametersD;
   {
     using namespace parameters;
-    myCaseParametersD.set<START_RESOLUTION            >(                   11);
-    myCaseParametersD.set<NUM_SIMULATIONS             >(                    3);
+    myCaseParametersD.set<RESOLUTION_START            >(                   11);
+    myCaseParametersD.set<NUMBER_OF_RUNS              >(                    3);
     myCaseParametersD.set<DOMAIN_EXTENT               >(      {1.0, 1.0, 1.0});
     myCaseParametersD.set<PHYS_CHAR_VELOCITY          >(                  1.0);
     myCaseParametersD.set<PHYS_CHAR_VISCOSITY         >(                 0.01);
     myCaseParametersD.set<PHYS_CHAR_DENSITY           >(                    1);
-    myCaseParametersD.set<MAX_PHYS_T                  >(                 50.0);
+    myCaseParametersD.set<PHYS_MAX_T                  >(                 50.0);
     myCaseParametersD.set<PHYS_BOUNDARY_VALUE_UPDATE_T>(                0.001);
     myCaseParametersD.set<RESOLUTION                  >(                   11);
     myCaseParametersD.set<LATTICE_CHAR_VELOCITY       >(                 0.07);
@@ -78,25 +71,25 @@ int main(int argc, char* argv[])
     myCaseParametersD.set<BOUNDARY_TYPE               >(BoundaryType::bouzidi);
   }
 
-  T _errorVelL1[myCaseParametersD.get<parameters::NUM_SIMULATIONS>()];
-  T _errorVelL2[myCaseParametersD.get<parameters::NUM_SIMULATIONS>()];
-  T _errorVelLInf[myCaseParametersD.get<parameters::NUM_SIMULATIONS>()];
-  T _errorPreL1[myCaseParametersD.get<parameters::NUM_SIMULATIONS>()];
-  T _errorPreL2[myCaseParametersD.get<parameters::NUM_SIMULATIONS>()];
-  T _errorPreLInf[myCaseParametersD.get<parameters::NUM_SIMULATIONS>()];
-  T _errorStrL1[myCaseParametersD.get<parameters::NUM_SIMULATIONS>()];
-  T _errorStrL2[myCaseParametersD.get<parameters::NUM_SIMULATIONS>()];
-  T _errorStrLInf[myCaseParametersD.get<parameters::NUM_SIMULATIONS>()];
-  T _errorDisL1[myCaseParametersD.get<parameters::NUM_SIMULATIONS>()];
-  T _errorDisL2[myCaseParametersD.get<parameters::NUM_SIMULATIONS>()];
-  T _errorDisLInf[myCaseParametersD.get<parameters::NUM_SIMULATIONS>()];
-  T _errorStressL1[myCaseParametersD.get<parameters::NUM_SIMULATIONS>()];
-  T _errorStressL2[myCaseParametersD.get<parameters::NUM_SIMULATIONS>()];
-  T _errorStressLInf[myCaseParametersD.get<parameters::NUM_SIMULATIONS>()];
+  T _errorVelL1[myCaseParametersD.get<parameters::NUMBER_OF_RUNS>()];
+  T _errorVelL2[myCaseParametersD.get<parameters::NUMBER_OF_RUNS>()];
+  T _errorVelLInf[myCaseParametersD.get<parameters::NUMBER_OF_RUNS>()];
+  T _errorPreL1[myCaseParametersD.get<parameters::NUMBER_OF_RUNS>()];
+  T _errorPreL2[myCaseParametersD.get<parameters::NUMBER_OF_RUNS>()];
+  T _errorPreLInf[myCaseParametersD.get<parameters::NUMBER_OF_RUNS>()];
+  T _errorStrL1[myCaseParametersD.get<parameters::NUMBER_OF_RUNS>()];
+  T _errorStrL2[myCaseParametersD.get<parameters::NUMBER_OF_RUNS>()];
+  T _errorStrLInf[myCaseParametersD.get<parameters::NUMBER_OF_RUNS>()];
+  T _errorDisL1[myCaseParametersD.get<parameters::NUMBER_OF_RUNS>()];
+  T _errorDisL2[myCaseParametersD.get<parameters::NUMBER_OF_RUNS>()];
+  T _errorDisLInf[myCaseParametersD.get<parameters::NUMBER_OF_RUNS>()];
+  T _errorStressL1[myCaseParametersD.get<parameters::NUMBER_OF_RUNS>()];
+  T _errorStressL2[myCaseParametersD.get<parameters::NUMBER_OF_RUNS>()];
+  T _errorStressLInf[myCaseParametersD.get<parameters::NUMBER_OF_RUNS>()];
 
-  for(int i = 0; i < myCaseParametersD.get<parameters::NUM_SIMULATIONS>(); ++i) {
+  for(int i = 0; i < myCaseParametersD.get<parameters::NUMBER_OF_RUNS>(); ++i) {
     myCaseParametersD.set<parameters::RESOLUTION>(
-      myCaseParametersD.get<parameters::START_RESOLUTION>() + i*10);
+      myCaseParametersD.get<parameters::RESOLUTION_START>() + i*10);
     myCaseParametersD.set<parameters::LATTICE_CHAR_VELOCITY>(
       myCaseParametersD.get<parameters::DOMAIN_EXTENT>()[0] /
       myCaseParametersD.get<parameters::RESOLUTION>());
@@ -137,8 +130,8 @@ int main(int argc, char* argv[])
     _errorStressLInf[i] = myCaseParametersD.get<parameters::ERROR_STRESS_LINF>();
   }
 
-  for(int i = 0; i < myCaseParametersD.get<parameters::NUM_SIMULATIONS>(); ++i){
-    int N = myCaseParametersD.get<parameters::START_RESOLUTION>() + 10 * i;
+  for(int i = 0; i < myCaseParametersD.get<parameters::NUMBER_OF_RUNS>(); ++i){
+    int N = myCaseParametersD.get<parameters::RESOLUTION_START>() + 10 * i;
     gplot.setData(T(N),
                  {_errorVelL1[i], _errorVelL2[i], _errorVelLInf[i],
                   _errorPreL1[i], _errorPreL2[i], _errorPreLInf[i],

@@ -62,7 +62,6 @@ struct EPS : public descriptors::FIELD_BASE<1> { };
 struct PART_POISSON_RATIO : public descriptors::FIELD_BASE<1> { };
 struct PARTICLE_TYPE : public descriptors::TYPED_FIELD_BASE<int,1> { };
 struct WANTED_PARTICLE_VOLUME_FRACTION : public descriptors::FIELD_BASE<1> { };
-struct ARCHIMEDES : public descriptors::FIELD_BASE<1> { };
 struct DENSITY_RATIO : public descriptors::FIELD_BASE<1> { };
 struct STATIC_KINETIC_TRANSITION_VELOCITY : public descriptors::FIELD_BASE<1> { };
 struct CONTACT_BOX_RESOLUTION_PER_DIRECTION : public descriptors::FIELD_BASE<1> { };
@@ -73,7 +72,6 @@ struct PHYS_PURGE_ITER_T : public descriptors::FIELD_BASE<1> { };
 struct PARTICLE_ENLARGEMENT_FOR_CONTACT : public descriptors::FIELD_BASE<1> { };
 struct PARTICLE_NUMBER : public descriptors::TYPED_FIELD_BASE<std::size_t,1> { };
 struct PARTICLE_VOLUME_FRACTION : public descriptors::FIELD_BASE<1> { };
-struct DYNAMIC_VISCOSITY : public descriptors::FIELD_BASE<1> { };
 
 }
 
@@ -501,12 +499,12 @@ void simulate(MyCase& myCase)
 
   setBoundaryValues(myCase);
 
-  clout << "MaxIT: " << converter.getLatticeTime(parameters.get<parameters::MAX_PHYS_T>()) << std::endl;
+  clout << "MaxIT: " << converter.getLatticeTime(parameters.get<parameters::PHYS_MAX_T>()) << std::endl;
   std::size_t iTpurge = converter.getLatticeTime(parameters.get<parameters::PHYS_PURGE_ITER_T>());
 
-  Timer<T> timer(converter.getLatticeTime(parameters.get<parameters::MAX_PHYS_T>()), geometry.getStatistics().getNvoxel());
+  Timer<T> timer(converter.getLatticeTime(parameters.get<parameters::PHYS_MAX_T>()), geometry.getStatistics().getNvoxel());
   timer.start();
-  for (std::size_t iT = 0; iT < converter.getLatticeTime(parameters.get<parameters::MAX_PHYS_T>()); ++iT) {
+  for (std::size_t iT = 0; iT < converter.getLatticeTime(parameters.get<parameters::PHYS_MAX_T>()); ++iT) {
 #ifndef WithContact
     particleManager.execute<
         couple_lattice_to_parallel_particles<T, DESCRIPTOR, PARTICLETYPE>,
@@ -638,43 +636,43 @@ int main(int argc, char* argv[])
     myCaseParameters.set<EXTENT_TO_DIAMETER>(15.0);
     myCaseParameters.set<PHYS_DENSITY>(1000);
     myCaseParameters.set<VTK_ENABLED>(true);
-    myCaseParameters.set<PHYS_CHAR_LENGTH>([](MyCase::ParametersD& p) {
+    myCaseParameters.set<PHYS_CHAR_LENGTH>([] (MyCase::ParametersD& p) {
       return p.get<PART_RADIUS>() * 2.0;
     });
-    myCaseParameters.set<PART_RHO>([](MyCase::ParametersD& p) {
+    myCaseParameters.set<PART_RHO>([] (MyCase::ParametersD& p) {
       return p.get<DENSITY_RATIO>() * p.get<PHYS_DENSITY>();
     });
-    myCaseParameters.set<PHYS_DELTA_X>([](MyCase::ParametersD& p) {
+    myCaseParameters.set<PHYS_DELTA_X>([] (MyCase::ParametersD& p) {
       return p.get<PART_RADIUS>() * 2.0 / p.get<RESOLUTION>();
     });
-    myCaseParameters.set<PHYS_CHAR_VISCOSITY>([](MyCase::ParametersD& p) {
+    myCaseParameters.set<PHYS_CHAR_VISCOSITY>([] (MyCase::ParametersD& p) {
       return util::sqrt(p.get<GRAVITATIONAL_ACC>() * (p.get<DENSITY_RATIO>() - 1) *
                         util::pow(p.get<PART_RADIUS>() * 2.0, 3) /
                         p.get<ARCHIMEDES>());
     });
-    myCaseParameters.set<GRAVITY>([](MyCase::ParametersD& p) {
+    myCaseParameters.set<GRAVITY>([] (MyCase::ParametersD& p) {
       return Vector<double, 3> {0., 0.,
                                 -p.get<GRAVITATIONAL_ACC>() *
                                     (1. - p.get<PHYS_DENSITY>() / p.get<PART_RHO>())};
     });
-    myCaseParameters.set<DYNAMIC_VISCOSITY>([](MyCase::ParametersD& p) {
+    myCaseParameters.set<PHYS_DYNAMIC_VISCOSITY>([] (MyCase::ParametersD& p) {
       return p.get<PHYS_CHAR_VISCOSITY>() * p.get<PHYS_DENSITY>();
     });
-    myCaseParameters.set<PHYS_CHAR_VELOCITY>([](MyCase::ParametersD& p) {
+    myCaseParameters.set<PHYS_CHAR_VELOCITY>([] (MyCase::ParametersD& p) {
       return (2. / 9.) * (p.get<PART_RHO>() - p.get<PHYS_DENSITY>()) *
              p.get<GRAVITATIONAL_ACC>() * p.get<PART_RADIUS>() *
-             p.get<PART_RADIUS>() / p.get<DYNAMIC_VISCOSITY>();
+             p.get<PART_RADIUS>() / p.get<PHYS_DYNAMIC_VISCOSITY>();
     });
-    myCaseParameters.set<MAX_PHYS_T>([](MyCase::ParametersD& p) {
+    myCaseParameters.set<PHYS_MAX_T>([] (MyCase::ParametersD& p) {
       return 200.0 * 2. * p.get<PART_RADIUS>() / p.get<PHYS_CHAR_VELOCITY>();
     });
-    myCaseParameters.set<PHYS_VTK_ITER_T>([](MyCase::ParametersD& p) {
-      return 0.02 * p.get<MAX_PHYS_T>();
+    myCaseParameters.set<PHYS_VTK_ITER_T>([] (MyCase::ParametersD& p) {
+      return 0.02 * p.get<PHYS_MAX_T>();
     });
-    myCaseParameters.set<PHYS_PURGE_ITER_T>([](MyCase::ParametersD& p) {
-      return 0.06 * p.get<MAX_PHYS_T>();
+    myCaseParameters.set<PHYS_PURGE_ITER_T>([] (MyCase::ParametersD& p) {
+      return 0.06 * p.get<PHYS_MAX_T>();
     });
-    myCaseParameters.set<PARTICLE_ENLARGEMENT_FOR_CONTACT>([](MyCase::ParametersD& p) {
+    myCaseParameters.set<PARTICLE_ENLARGEMENT_FOR_CONTACT>([] (MyCase::ParametersD& p) {
       return p.get<PHYS_DELTA_X>() / 5.0;
     });
   }

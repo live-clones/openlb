@@ -187,7 +187,7 @@ void simulate(MyCase& myCase)
   auto&   mesh      = myCase.getMesh();
 
   auto&   converter0 = refinedLattice.getLevel(0).getUnitConverter();
-  const T physMaxT  = params.get<parameters::MAX_PHYS_T>();
+  const T physMaxT  = params.get<parameters::PHYS_MAX_T>();
 
   const std::size_t iTmax      = converter0.getLatticeTime(physMaxT);
   const std::size_t iTmaxStart = converter0.getLatticeTime(1.0);
@@ -271,7 +271,7 @@ int main(int argc, char* argv[])
     myCaseParameters.set<PHYS_CHAR_LENGTH>(0.2);
     myCaseParameters.set<RESOLUTION>(16);
     myCaseParameters.set<REYNOLDS>(100);
-    myCaseParameters.set<MAX_PHYS_T>(16);
+    myCaseParameters.set<PHYS_MAX_T>(16);
     myCaseParameters.set<RADIUS_SPHERE>(0.1);
     myCaseParameters.set<ORIGIN>(Vector<T, 3>{0.0, 0.0, 0.0});
     myCaseParameters.set<DOMAIN_EXTENT>(Vector<T, 3>{2.5, 0.5, 0.5});

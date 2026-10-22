@@ -59,10 +59,7 @@ struct BOUNDARY_TYPE  : public descriptors::TYPED_FIELD_BASE<BoundaryType,1> { }
 struct POROSITY_TYPE  : public descriptors::TYPED_FIELD_BASE<PorosityType,1> { };
 struct PERMEABILITY   : public descriptors::FIELD_BASE<1> { };
 struct INITIAL_PRESSURE_L : public descriptors::FIELD_BASE<1> { };
-struct PRESSURE_GRADIENT  : public descriptors::FIELD_BASE<1> { };
-struct VISCOSITY       : public descriptors::FIELD_BASE<1> { };
 struct CONVERGENCE_CHECK_T        : public descriptors::FIELD_BASE<1> { };
-struct CONVERGENCE_CHECK_RESIDUUM : public descriptors::FIELD_BASE<1> { };
 
 }
 
@@ -113,8 +110,8 @@ public:
   {
     auto& parameters = myCase.getParameters();
     Kin       = parameters.get<parameters::PERMEABILITY>();
-    dp        = parameters.get<parameters::PRESSURE_GRADIENT>();
-    mu        = parameters.get<parameters::VISCOSITY>();
+    dp        = parameters.get<parameters::PRESSURE_DROP>();
+    mu        = parameters.get<parameters::PHYS_KINEMATIC_VISCOSITY>();
     epsilon   = parameters.get<parameters::EPSILON>();
   }
 
@@ -300,8 +297,8 @@ void setInitialValues( MyCase& myCase ) {
   T mu = converter.getPhysViscosity()*converter.getPhysDensity();
 
   parameters.set<parameters::INITIAL_PRESSURE_L >(  p0L );
-  parameters.set<parameters::PRESSURE_GRADIENT  >(   dp );
-  parameters.set<parameters::VISCOSITY          >(   mu );
+  parameters.set<parameters::PRESSURE_DROP  >(   dp );
+  parameters.set<parameters::PHYS_KINEMATIC_VISCOSITY          >(   mu );
 
   const T wallOffset = ( boundaryType == BoundaryType::bounceBack ) ? 0.5 * converter.getPhysDeltaX() : T(0.);
   PorousPoiseuille2D<T> uSol( myCase, ly/2., wallOffset );
@@ -402,7 +399,7 @@ void getResults(MyCase& myCase,
   auto& converter = lattice.getUnitConverter();
   auto& parameters= myCase.getParameters();
   const BoundaryType  boundaryType  = parameters.get<parameters::BOUNDARY_TYPE>();
-  const T             maxPhysT      = parameters.get<parameters::MAX_PHYS_T>();
+  const T             maxPhysT      = parameters.get<parameters::PHYS_MAX_T>();
   const T             lx            = parameters.get<parameters::DOMAIN_EXTENT>()[0];
   const T             ly            = parameters.get<parameters::DOMAIN_EXTENT>()[1];
   bool                hasConverged  = parameters.get<parameters::CONVERGED>();
@@ -486,9 +483,9 @@ void simulate(MyCase& myCase) {
   auto& parameters      = myCase.getParameters();
   auto& lattice         = myCase.getLattice(NavierStokes{});
   auto& converter       = lattice.getUnitConverter();
-  const T physMaxT      = parameters.get<parameters::MAX_PHYS_T>();
+  const T physMaxT      = parameters.get<parameters::PHYS_MAX_T>();
   const T physInterval  = parameters.get<parameters::CONVERGENCE_CHECK_T>();
-  const T residuum      = parameters.get<parameters::CONVERGENCE_CHECK_RESIDUUM>();
+  const T residuum      = parameters.get<parameters::RESIDUUM>();
   const size_t iTmax    = lattice.getUnitConverter().getLatticeTime(physMaxT);
 
   clout << "starting simulation..." << std::endl;
@@ -523,14 +520,14 @@ int main( int argc, char* argv[] )
   {
     using namespace olb::parameters;
     myCaseParameters.set<CONVERGENCE_CHECK_T        >(      .25 );
-    myCaseParameters.set<CONVERGENCE_CHECK_RESIDUUM >(     1e-5 );
+    myCaseParameters.set<RESIDUUM >(     1e-5 );
     myCaseParameters.set<DOMAIN_EXTENT              >( {2., 1.} );
     myCaseParameters.set<RESOLUTION                 >(       50 );
     myCaseParameters.set<REYNOLDS                   >(       1. );
     myCaseParameters.set<PERMEABILITY               >(     1e-2 );
     myCaseParameters.set<BOUNDARY_TYPE              >( BoundaryType::interpolated );
     myCaseParameters.set<POROSITY_TYPE              >( PorosityType::GUO_ZHAO );
-    myCaseParameters.set<MAX_PHYS_T                 >(       20 );
+    myCaseParameters.set<PHYS_MAX_T                 >(       20 );
     myCaseParameters.set<CONVERGED                  >(    false );
     myCaseParameters.set<EPSILON                    >(       1. );  // Porosity (Spaid and Phelan can only handle epsilon=1)
     OLB_ASSERT( myCaseParameters.get<RESOLUTION>()    >= 1, "Fluid domain is too small" );

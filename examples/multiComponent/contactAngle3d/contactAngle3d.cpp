@@ -400,7 +400,7 @@ void simulate( MyCase& myCase )
   auto& sLatticeNS = myCase.getLattice(NavierStokes{});
   auto& sLatticeCH = myCase.getLattice(Component1{});
 
-  const std::size_t iTmax = params.get<parameters::MAX_LATTICE_T>();
+  const std::size_t iTmax = params.get<parameters::LATTICE_MAX_T>();
   const int saveIter = params.get<parameters::LATTICE_VTK_ITER_T>();
 
   const auto& converter = sLatticeNS.getUnitConverter();
@@ -461,7 +461,7 @@ int main( int argc, char *argv[] )
     myCaseParameters.set<LATTICE_RELAXATION_TIME>(1.);         // tau liquid [lattice units]
     myCaseParameters.set<LATTICE_RELAXATION_TIME_2>(0.52);     // tau gas [lattice units]
     myCaseParameters.set<LATTICE_RELAXATION_TIME_PF>(1.);      // tau mobility [lattice units]
-    myCaseParameters.set<MAX_LATTICE_T          >(500000);     // max iterations [lattice units]
+    myCaseParameters.set<LATTICE_MAX_T          >(500000);     // max iterations [lattice units]
     myCaseParameters.set<LATTICE_VTK_ITER_T     >(1000);       // vtk iterations [lattice units]
     myCaseParameters.set<LATTICE_STAT_ITER_T    >(1000);       // statistics iterations [lattice units]
     myCaseParameters.set<PHYS_CHAR_LENGTH>(70e-6);        // charPhysLength [physical units]

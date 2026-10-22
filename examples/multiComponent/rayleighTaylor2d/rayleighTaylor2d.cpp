@@ -55,7 +55,7 @@ Mesh<MyCase::value_t,MyCase::d> createMesh(MyCase::ParametersD& parameters)
   using T = MyCase::value_t_of<Component1>;
 
   const Vector extent = parameters.get<parameters::DOMAIN_EXTENT>();
-  const Vector origin = parameters.get<parameters::ORIGIN>();
+  const Vector origin = parameters.get<parameters::DOMAIN_ORIGIN>();
   const T physDeltaX  = parameters.get<parameters::PHYS_DELTA_X>();
   IndicatorCuboid2D<T> cuboid(extent, origin);
 
@@ -323,7 +323,7 @@ void simulate(MyCase& myCase)
   auto& coupling    = myCase.getOperator("MultiComponent");
   auto& parameters  = myCase.getParameters();
 
-  const std::size_t iTmax = parameters.get<parameters::MAX_LATTICE_T>();
+  const std::size_t iTmax = parameters.get<parameters::LATTICE_MAX_T>();
 
   util::Timer<T> timer(iTmax, myCase.getGeometry().getStatistics().getNvoxel());
   timer.start();
@@ -359,9 +359,9 @@ int main(int argc, char* argv[])
   {
     using namespace olb::parameters;
     myCaseParameters.set<RESOLUTION>(800);
-    myCaseParameters.set<ORIGIN>({ 0, 0 });
+    myCaseParameters.set<DOMAIN_ORIGIN>({ 0, 0 });
     myCaseParameters.set<PHYS_DELTA_X>(1.);
-    myCaseParameters.set<MAX_LATTICE_T>(20000);
+    myCaseParameters.set<LATTICE_MAX_T>(20000);
     myCaseParameters.set<RHO_1>(0.0);
     myCaseParameters.set<RHO_2>(1.0);
     myCaseParameters.set<LATTICE_RELAXATION_TIME>(1.);
@@ -375,11 +375,11 @@ int main(int argc, char* argv[])
     myCaseParameters.set<LATTICE_VTK_ITER_T>(100);
     myCaseParameters.set<LATTICE_STAT_ITER_T>(100);
   }
-  myCaseParameters.set<parameters::DOMAIN_EXTENT>([](MyCase::ParametersD& p) -> Vector<MyCase::value_t, 2> {
+  myCaseParameters.set<parameters::DOMAIN_EXTENT>([] (MyCase::ParametersD& p) -> Vector<MyCase::value_t, 2>  {
     return {static_cast<MyCase::value_t>(p.get<parameters::RESOLUTION>()),
             static_cast<MyCase::value_t>(p.get<parameters::RESOLUTION>() / 2)};
   });
-  myCaseParameters.set<parameters::FORCE>([](MyCase::ParametersD& p) -> MyCase::value_t {
+  myCaseParameters.set<parameters::FORCE>([] (MyCase::ParametersD& p) -> MyCase::value_t  {
     return 30. / (  p.get<parameters::DOMAIN_EXTENT>()[1]
                   * p.get<parameters::DOMAIN_EXTENT>()[1]);
   });

@@ -269,7 +269,7 @@ void simulate(MyCase& myCase) {
   auto& parameters = myCase.getParameters();
 
   const std::size_t iTmax = myCase.getLattice(NavierStokes{}).getUnitConverter().getLatticeTime(
-    parameters.get<parameters::MAX_PHYS_T>());
+    parameters.get<parameters::PHYS_MAX_T>());
 
   util::ValueTracer<T> converge(myCase.getLattice(NavierStokes{}).getUnitConverter().getLatticeTime(50.),
                                 parameters.get<parameters::CONVERGENCE_PRECISION>());
@@ -317,7 +317,7 @@ int main(int argc, char *argv[])
     myCaseParameters.set<RESOLUTION>(40);
     myCaseParameters.set<RAYLEIGH>(1e6);
     myCaseParameters.set<PRANDTL>(0.71);
-    myCaseParameters.set<MAX_PHYS_T>(20.);
+    myCaseParameters.set<PHYS_MAX_T>(20.);
     myCaseParameters.set<T_HOT>(274.15);
     myCaseParameters.set<T_COLD>(273.15);
     myCaseParameters.set<PHYS_CHAR_LENGTH>(0.1);
@@ -325,11 +325,11 @@ int main(int argc, char *argv[])
     myCaseParameters.set<PHYS_CHAR_VISCOSITY>(1e-5);
     myCaseParameters.set<PHYS_THERMAL_CONDUCTIVITY>(0.03);
 
-    myCaseParameters.set<T_PERTURBATION>([](MyCase::ParametersD& p) {
+    myCaseParameters.set<T_PERTURBATION>([] (MyCase::ParametersD& p) {
       return p.get<T_COLD>()/5. + 4./5.*p.get<T_HOT>();
     });
 
-    myCaseParameters.set<PHYS_CP>([](MyCase::ParametersD& p) {
+    myCaseParameters.set<PHYS_CP>([] (MyCase::ParametersD& p) {
       return p.get<PRANDTL>() * p.get<PHYS_THERMAL_CONDUCTIVITY>()
               / (p.get<PHYS_CHAR_VISCOSITY>()/p.get<PHYS_CHAR_DENSITY>());
     });

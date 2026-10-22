@@ -54,10 +54,7 @@ namespace olb::parameters {
 
 struct RADIUS_CYLINDER            : public descriptors::FIELD_BASE<1> { };
 struct CENTER_CYLINDER            : public descriptors::FIELD_BASE<0, 1> { };
-struct RAMP_UP_UPDATE             : public descriptors::FIELD_BASE<1> { };
 struct RAMP_UP_END_FRACTION       : public descriptors::FIELD_BASE<1> { };
-
-struct DRAG : public descriptors::FIELD_BASE<1> { };
 
 }
 
@@ -180,7 +177,7 @@ void setTemporalValues(MyCase& myCase,
   auto& lattice    = myCase.getLattice(NavierStokes{});
   auto& geometry   = myCase.getGeometry();
 
-  const T maxPhysT   = parameters.get<parameters::MAX_PHYS_T>();
+  const T maxPhysT   = parameters.get<parameters::PHYS_MAX_T>();
   const T physDeltaX = 2*parameters.get<parameters::RADIUS_CYLINDER>()
                      /   parameters.get<parameters::RESOLUTION>();
 
@@ -188,7 +185,7 @@ void setTemporalValues(MyCase& myCase,
   std::size_t iTmaxStart = lattice.getUnitConverter().getLatticeTime(
     maxPhysT*parameters.get<parameters::RAMP_UP_END_FRACTION>());
   std::size_t iTupdate   = lattice.getUnitConverter().getLatticeTime(
-    parameters.get<parameters::RAMP_UP_UPDATE>());
+    parameters.get<parameters::RAMP_UP_T>());
 
   if (iT % iTupdate == 0 && iT <= iTmaxStart) {
     T frac{};
@@ -230,7 +227,7 @@ void getResults(MyCase& myCase,
   const std::size_t vtkIter  = converter.getLatticeTime(parameters.get<parameters::PHYS_VTK_ITER_T>());
   const std::size_t statIter = converter.getLatticeTime(parameters.get<parameters::PHYS_STAT_ITER_T>());
 
-  const T maxPhysT        = parameters.get<parameters::MAX_PHYS_T>();
+  const T maxPhysT        = parameters.get<parameters::PHYS_MAX_T>();
   const T physDeltaX      = 2.*parameters.get<parameters::RADIUS_CYLINDER>()/parameters.get<parameters::RESOLUTION>();
   const T centerCylinderX = parameters.get<parameters::CENTER_CYLINDER>()[0];
   const T centerCylinderY = parameters.get<parameters::CENTER_CYLINDER>()[1] + physDeltaX/2.;
@@ -291,7 +288,7 @@ void getResults(MyCase& myCase,
     drag(_drag, input);
     clout << "; drag=" << _drag[0] << "; lift=" << _drag[1] << std::endl;
 
-    myCase.getParameters().set<parameters::DRAG>(_drag[0]);
+    myCase.getParameters().set<parameters::COEFFICIENT_OF_DRAG>(_drag[0]);
 
     // set data for gnuplot: input={xValue, yValue(s), names (optional), position of key (optional)}
     gplot.setData(converter.getPhysTime(iT), {_drag[0], 5.58}, {"drag(openLB)", "drag(schaeferTurek)"}, "bottom right", {'l','l'});
@@ -326,7 +323,7 @@ void simulate(MyCase& myCase){
   OstreamManager clout(std::cout, "simulate");
   using T = MyCase::value_t;
   auto& parameters = myCase.getParameters();
-  const T physMaxT = parameters.get<parameters::MAX_PHYS_T>();
+  const T physMaxT = parameters.get<parameters::PHYS_MAX_T>();
   const std::size_t iTmax = myCase.getLattice(NavierStokes{}).getUnitConverter().getLatticeTime(physMaxT);
 
   clout << "starting simulation..." << std::endl;

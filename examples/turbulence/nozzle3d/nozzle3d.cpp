@@ -367,7 +367,7 @@ void simulate(
   vortex.setIntensityProfile(intensity);
 
   const std::size_t iTmax = myCase.getLattice(NavierStokes{}).getUnitConverter().getLatticeTime(
-    params.get<parameters::MAX_PHYS_T>()
+    params.get<parameters::PHYS_MAX_T>()
   );
 
   for (std::size_t iT=0; iT < iTmax; ++iT) {
@@ -397,7 +397,7 @@ int main(int argc, char* argv[]) {
     myCaseParameters.set<INLET_CYLINDER_SIZE>({4, 1});
 
     myCaseParameters.set<RESOLUTION   >(5);
-    myCaseParameters.set<PHYS_DELTA_X >([](MyCase::ParametersD& p) {
+    myCaseParameters.set<PHYS_DELTA_X >([] (MyCase::ParametersD& p) {
       return p.get<INLET_CYLINDER_SIZE>()[1] / p.get<RESOLUTION>();
     });
     myCaseParameters.set<PHYS_CHAR_VELOCITY>(1);
@@ -405,7 +405,7 @@ int main(int argc, char* argv[]) {
     myCaseParameters.set<PHYS_CHAR_DENSITY>(1);
     myCaseParameters.set<LATTICE_RELAXATION_TIME>(0.500018);
     myCaseParameters.set<SMAGORINSKY>(0.15);
-    myCaseParameters.set<MAX_PHYS_T   >(150);
+    myCaseParameters.set<PHYS_MAX_T   >(150);
 
     myCaseParameters["reporter"]["statistics"].set<PHYS_ITER_T>(0.1);
     myCaseParameters["reporter"]["timer"].set<PHYS_ITER_T>(0.1);
@@ -413,7 +413,7 @@ int main(int argc, char* argv[]) {
 
     myCaseParameters.set<TURBULENCE_INTENSITY>(0.05);
     myCaseParameters.set<TURBULENCE_N_SEEDS>(50);
-    myCaseParameters.set<TURBULENCE_SIGMA>([](MyCase::ParametersD& p) {
+    myCaseParameters.set<TURBULENCE_SIGMA>([] (MyCase::ParametersD& p) {
       return 0.1 * p.get<INLET_CYLINDER_SIZE>()[1];
     });
   }

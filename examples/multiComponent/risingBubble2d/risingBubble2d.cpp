@@ -322,7 +322,7 @@ void simulate(MyCase& myCase) {
   auto& latticePF = myCase.getLattice(Component1{});
   auto& params = myCase.getParameters();
 
-  const T physMaxT = params.get<parameters::MAX_PHYS_T>();
+  const T physMaxT = params.get<parameters::PHYS_MAX_T>();
   const std::size_t iTmax = latticeNS.getUnitConverter().getLatticeTime(physMaxT);
   util::Timer<T> timer(iTmax, myCase.getGeometry().getStatistics().getNvoxel());
 
@@ -372,15 +372,13 @@ int main( int argc, char *argv[] )
     myCaseParameters.set<RHO_VAPOR       >(1);              // physDensity gas/vapor [physical units]
     myCaseParameters.set<RHO_LIQUID      >(1000);          // physDensity liquid [physical units]
     myCaseParameters.set<REYNOLDS        >(35);             // Reynolds number of rising bubble
-    myCaseParameters.set<BOND            >(10);            // Bond number of rising bubble
+    myCaseParameters.set<BOND            >(100);            // Bond number of rising bubble
     myCaseParameters.set<RISING_VELOCITY >(0.02);           // Bubble rising velocity [lattice units]
     myCaseParameters.set<G_CONST         >([](MyCase::ParametersD& p) {
-      return p.get<RISING_VELOCITY>() * p.get<RISING_VELOCITY>() /
-             p.get<RESOLUTION>();
+      return p.get<RISING_VELOCITY>() * p.get<RISING_VELOCITY>() / p.get<RESOLUTION>();
     });                                                     // gravity [lattice units]
-    myCaseParameters.set<LATTICE_RELAXATION_TIME>([](MyCase::ParametersD& p) {
-      return 3.*(p.get<RISING_VELOCITY>() * p.get<RESOLUTION>() / p.get<REYNOLDS>())
-             + 0.5;
+    myCaseParameters.set<LATTICE_RELAXATION_TIME>([] (MyCase::ParametersD& p) {
+      return 3.*(p.get<RISING_VELOCITY>() * p.get<RESOLUTION>() / p.get<REYNOLDS>()) + 0.5;
     });                                                     // lattice relaxation time H2O liquid [lattice units]
     myCaseParameters.set<TAU_VAPOR       >([](MyCase::ParametersD& p) {
       return 10.*(p.get<LATTICE_RELAXATION_TIME>() - 0.5) + 0.5;
@@ -395,7 +393,7 @@ int main( int argc, char *argv[] )
     });                                                     // surface tension from Bond number [lattice units]
     myCaseParameters.set<parameters::THETA          >(M_PI*90./180.);  // contact angle (<90 is wetting) [radians]
     myCaseParameters.set<parameters::INTERFACE_WIDTH>(5.);  // interface width [lattice units]
-    myCaseParameters.set<MAX_PHYS_T         >(0.0012);      // max physical time [physical units]
+    myCaseParameters.set<PHYS_MAX_T         >(0.0012);      // max physical time [physical units]
     myCaseParameters.set<PHYS_VTK_ITER_T    >(0.0012/30.);  // vtk output interval [physical units]
     myCaseParameters.set<PHYS_STAT_ITER_T   >(0.0012/30.);  // statistics output interval [physical units]
   }

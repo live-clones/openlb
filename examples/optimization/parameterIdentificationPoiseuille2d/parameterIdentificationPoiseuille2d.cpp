@@ -172,7 +172,7 @@ void getResults(CASE& myCase, TIMER& timer, std::size_t iT, bool hasConverged) {
   using T = CASE::value_t;
   auto& sLattice = myCase.getLattice(NavierStokes{});
   auto& converter = sLattice.getUnitConverter();
-  const T maxPhysT = myCase.getParameters().template get<parameters::MAX_PHYS_T>();
+  const T maxPhysT = myCase.getParameters().template get<parameters::PHYS_MAX_T>();
 
   SuperVTMwriter2D<T> vtmWriter( "poiseuille2d" );
   const bool lastTimeStep
@@ -199,7 +199,7 @@ void simulate(CASE& myCase) {
   auto& sLattice = myCase.getLattice(NavierStokes{});
   auto& superGeometry = myCase.getGeometry();
   auto& converter = sLattice.getUnitConverter();
-  const T maxPhysT = myCase.getParameters().template get<parameters::MAX_PHYS_T>();
+  const T maxPhysT = myCase.getParameters().template get<parameters::PHYS_MAX_T>();
 
   util::Timer<T> timer(converter.getLatticeTime(maxPhysT),
                        superGeometry.getStatistics().getNvoxel());
@@ -287,7 +287,7 @@ int main( int argc, char* argv[] )
     myCaseParametersD.set<RESOLUTION              >(        50);
     myCaseParametersD.set<DOMAIN_EXTENT           >(  {2., 1.});
     myCaseParametersD.set<REYNOLDS                >(       10.);
-    myCaseParametersD.set<MAX_PHYS_T              >(       30.);
+    myCaseParametersD.set<PHYS_MAX_T              >(       30.);
     myCaseParametersD.set<WANTED_MASS_FLOW        >(0.00026159);
     myCaseParametersD.set<REFERENCE_INLET_PRESSURE>(  0.000659);
     myCaseParametersD.set<INLET_PRESSURE          >(    0.0001);

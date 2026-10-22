@@ -482,7 +482,7 @@ void simulate(MyCase& myCase)
   // Main Loop with Timer
   OstreamManager clout(std::cout, "simulate");
   int iT = 0;
-  const size_t maxIter = parameters.get<parameters::MAX_LATTICE_T>();
+  const size_t maxIter = parameters.get<parameters::LATTICE_MAX_T>();
   const T length = parameters.get<parameters::LIQUID_PHASE_LENGTH>();
   clout << "starting simulation..." << std::endl;
   util::Timer<T> timer( maxIter, geometry.getStatistics().getNvoxel() );
@@ -572,7 +572,7 @@ int main( int argc, char *argv[] )
     myCaseParameters.set<THICKNESS>(5.); // Interface thickness in lattice units; physThickness = delta_x * thickness
 
     // Time parameters in lattice units
-    myCaseParameters.set<MAX_LATTICE_T>(30000);
+    myCaseParameters.set<LATTICE_MAX_T>(30000);
     myCaseParameters.set<LATTICE_VTK_ITER_T>(100);
     myCaseParameters.set<LATTICE_STAT_ITER_T>(100);
   }

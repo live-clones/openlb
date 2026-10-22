@@ -51,7 +51,6 @@ using MyCase = Case<
 // === Step 1: Declarations ===
 namespace olb::parameters {
 
-struct IT_PERIOD : public descriptors::FIELD_BASE<1> {};
 struct INLET_RADIUS : public descriptors::FIELD_BASE<1> {};
 struct INLET_CENTER : public descriptors::FIELD_BASE<0, 1> {};
 struct INLET_NORMAL : public descriptors::FIELD_BASE<0, 1> {};
@@ -61,6 +60,7 @@ struct OUTLET_NORMAL0 : public descriptors::FIELD_BASE<0, 1> {};
 struct OUTLET_RADIUS1 : public descriptors::FIELD_BASE<1> {};
 struct OUTLET_CENTER1 : public descriptors::FIELD_BASE<0, 1> {};
 struct OUTLET_NORMAL1 : public descriptors::FIELD_BASE<0, 1> {};
+struct FLUID_PHYS_MAX_T : public descriptors::FIELD_BASE<1> {};
 struct FLUID_MAX_PHYS_T : public descriptors::FIELD_BASE<1> {};
 struct PARTICLE_MAX_PHYS_T : public descriptors::FIELD_BASE<1> {};
 struct NO_OF_PARTICLES : public descriptors::FIELD_BASE<1> {};
@@ -483,7 +483,7 @@ void simulate( MyCase& myCase )
   fluidTimer.start();
 
   std::size_t iT         = 0;
-  std::size_t iTperiod   = converter.getLatticeTime(0.5 * parameters.get<parameters::IT_PERIOD>());
+  std::size_t iTperiod   = converter.getLatticeTime(0.5 * parameters.get<parameters::INTERVAL_OUTPUT>());
   std::size_t iTmaxStart = converter.getLatticeTime(0.8 * parameters.get<parameters::FLUID_MAX_PHYS_T>());
 
 
@@ -563,7 +563,7 @@ int main(int argc, char* argv[])
     using namespace olb::parameters;
     myCaseParameters.set<REYNOLDS>(50);
     myCaseParameters.set<RESOLUTION>(19);
-    myCaseParameters.set<IT_PERIOD>(0.2); // time interval for writeout and updating boundary values in s
+    myCaseParameters.set<INTERVAL_OUTPUT>(0.2); // time interval for writeout and updating boundary values in s
     myCaseParameters.set<PART_RADIUS>(1.5e-4);
     myCaseParameters.set<PART_RHO>(998.2);
     myCaseParameters.set<FLUID_MAX_PHYS_T>(5);     // max. simulation time in s
@@ -582,7 +582,7 @@ int main(int argc, char* argv[])
     myCaseParameters.set<BOUZIDI>(1);
     myCaseParameters.set<PHYS_CHAR_VISCOSITY>(1.5e-5);
     myCaseParameters.set<PHYS_CHAR_DENSITY>(1.225);
-    myCaseParameters.set<STOKES>([](MyCase::ParametersD& p) {
+    myCaseParameters.set<STOKES>([] (MyCase::ParametersD& p) {
               return  p.get<PART_RHO>() * p.get<PART_RADIUS>()
                     * p.get<PART_RADIUS>() * p.get<REYNOLDS>()
                     / (18. *p.get<INLET_RADIUS>() * p.get<PHYS_CHAR_DENSITY>()

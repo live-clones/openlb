@@ -47,7 +47,7 @@ void compareToStudy(MyCase& myCase)
   const T physThermalDiffusivity  = converter.getPhysThermalDiffusivity();
   const T charL                   = converter.getCharPhysLength();
 
-  auto simValues  = parameters.get<parameters::SIM_VALUES>();
+  auto simValues  = parameters.get<parameters::OUTPUT_VALUE_WRAPPER>();
 
   ReferenceData<T> ref{};
   if (ref.hasRayleigh(Ra) && singleton::mpi().isMainProcessor()) {
@@ -94,7 +94,7 @@ int main(int argc, char* argv[])
   MyCase::ParametersD myCaseParameters;
   {
     using namespace olb::parameters;
-    myCaseParameters.set<MAX_PHYS_T                 >(1e4);
+    myCaseParameters.set<PHYS_MAX_T                 >(1e4);
     myCaseParameters.set<RESOLUTION                 >(64);
     myCaseParameters.set<GRAVITATIONAL_ACC          >(9.81);
     myCaseParameters.set<PHYS_CHAR_DENSITY          >(1.19);
@@ -140,9 +140,10 @@ int main(int argc, char* argv[])
                                          (T) 1 / 3);  // length of the square
   myCaseParameters.set<parameters::PHYS_CHAR_LENGTH>(lx);
   myCaseParameters.set<parameters::PHYS_DELTA_X>(lx / N);
-  myCaseParameters.set<parameters::DOMAIN_EXTENT>([](MyCase::ParametersD& p) -> Vector<MyCase::value_t_of<NavierStokes>, MyCase::d> {
+  myCaseParameters.set<parameters::DOMAIN_EXTENT>([] (MyCase::ParametersD& p) -> Vector<MyCase::value_t_of<NavierStokes>, MyCase::d>  {
+    T lx = p.get<parameters::PHYS_CHAR_LENGTH>();
     return {
-      p.get<parameters::PHYS_CHAR_LENGTH>(), p.get<parameters::PHYS_CHAR_LENGTH>(), p.get<parameters::PHYS_DELTA_X>() * p.get<parameters::N_CELLS_Z>()
+      lx, lx, p.get<parameters::PHYS_DELTA_X>() * p.get<parameters::N_CELLS_Z>()
     };
   });
 

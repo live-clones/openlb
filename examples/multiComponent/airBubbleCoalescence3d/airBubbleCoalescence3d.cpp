@@ -428,7 +428,7 @@ void simulate( MyCase& myCase )
   auto& sLattice2 = myCase.getLattice(Component2{});
   auto& sLattice3 = myCase.getLattice(Component3{});
 
-  const std::size_t iTmax = params.get<parameters::MAX_LATTICE_T>();
+  const std::size_t iTmax = params.get<parameters::LATTICE_MAX_T>();
 
   util::Timer<T> timer(iTmax, myCase.getGeometry().getStatistics().getNvoxel());
   timer.start();
@@ -469,7 +469,7 @@ int main( int argc, char *argv[] )
     myCaseParameters.set<DOMAIN_EXTENT          >({70, 70, 70}); // domain size [lattice units]
     myCaseParameters.set<RESOLUTION             >(40);           // resolution [lattice units]
     myCaseParameters.set<LATTICE_RELAXATION_TIME>(1.);     // tau_H2O [lattice units]
-    myCaseParameters.set<MAX_LATTICE_T          >(10000);  // max iterations [lattice units]
+    myCaseParameters.set<LATTICE_MAX_T          >(10000);  // max iterations [lattice units]
     myCaseParameters.set<LATTICE_VTK_ITER_T     >(100);    // vtk iterations [lattice units]
     myCaseParameters.set<LATTICE_STAT_ITER_T    >(20);     // statistics iterations [lattice units]
     myCaseParameters.set<PHYS_CHAR_LENGTH>(1e-7);        // charPhysLength [physical units]

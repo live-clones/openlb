@@ -61,21 +61,13 @@ namespace olb::parameters {
 // Microfluidics
 struct B_COEFF : public descriptors::FIELD_BASE<1> { };
 struct ACCOMODATION_COEFF : public descriptors::FIELD_BASE<1> { };
-struct RELAXATION_TIME : public descriptors::FIELD_BASE<1> { };
-struct START_TIME : public descriptors::FIELD_BASE<1> { };
 struct KINETIC_DIAMETER : public descriptors::FIELD_BASE<1> { };
-struct AVERAGE_PRESSURE : public descriptors::FIELD_BASE<1> { };
-struct PRESSURE_DIFFERENCE : public descriptors::FIELD_BASE<1> { };
 struct MOLAR_MASS : public descriptors::FIELD_BASE<1> { };
 struct R_SPECIFIC : public descriptors::FIELD_BASE<1> { };
-struct TEMPERATURE : public descriptors::FIELD_BASE<1> { };
 struct TEMPERATURE_LEFT : public descriptors::FIELD_BASE<1> { };
 struct TEMPERATURE_RIGHT : public descriptors::FIELD_BASE<1> { };
 struct SLIPCOEFF : public descriptors::FIELD_BASE<1> { };
 struct CREEPCOEFF : public descriptors::FIELD_BASE<1> { };
-struct HAS_CONVERGED : public descriptors::TYPED_FIELD_BASE<bool,1> { };
-struct PHYS_INTERVAL : public descriptors::FIELD_BASE<1> { };
-struct RESIDUUM : public descriptors::FIELD_BASE<1> { };
 struct MFP : public descriptors::FIELD_BASE<1> { };
 struct ERROR_NORMS : public descriptors::FIELD_BASE<6> { };
 
@@ -155,14 +147,14 @@ void prepareLattice(MyCase& myCase) {
   auto& lattice = myCase.getLattice(NavierStokes{});
 
   const int N = parameters.get<parameters::RESOLUTION>();
-  const T relaxationTime = parameters.get<parameters::RELAXATION_TIME>();
+  const T relaxationTime = parameters.get<parameters::LATTICE_RELAXATION_TIME>();
   Vector extend = parameters.get<parameters::DOMAIN_EXTENT>();
   const T physCharVelocity = parameters.get<parameters::PHYS_CHAR_VELOCITY>();
   const T physCharViscosity = parameters.get<parameters::PHYS_CHAR_VISCOSITY>();
   const T physCharDensity = parameters.get<parameters::PHYS_CHAR_DENSITY>();
   const T tempLeft = parameters.get<parameters::TEMPERATURE_LEFT>();
   const T tempRight = parameters.get<parameters::TEMPERATURE_RIGHT>();
-  const T outletPressure = parameters.get<parameters::AVERAGE_PRESSURE>()-0.5*parameters.get<parameters::PRESSURE_DIFFERENCE>();
+  const T outletPressure = parameters.get<parameters::AVERAGE_PRESSURE>()-0.5*parameters.get<parameters::PRESSURE_DROP>();
   const T slipCoeff = parameters.get<parameters::SLIPCOEFF>();
   const T creepCoeff = parameters.get<parameters::CREEPCOEFF>();
 
@@ -216,7 +208,7 @@ void setInitialValues(MyCase& myCase) {
   auto& parameters = myCase.getParameters();
   auto& geometry = myCase.getGeometry();
   auto& lattice = myCase.getLattice(NavierStokes{});
-  const T outletPressure = parameters.get<parameters::AVERAGE_PRESSURE>()-0.5*parameters.get<parameters::PRESSURE_DIFFERENCE>();
+  const T outletPressure = parameters.get<parameters::AVERAGE_PRESSURE>()-0.5*parameters.get<parameters::PRESSURE_DROP>();
   momenta::setPressure( lattice, geometry.getMaterialIndicator({0,1,2,3,4}), outletPressure);
 
   // Make the lattice ready for simulation
@@ -235,7 +227,7 @@ void setTemporalValues(MyCase& myCase,
   auto& lattice = myCase.getLattice(NavierStokes{});
 
   // No of time steps for smooth start-up
-  const T startTime = parameters.get<parameters::START_TIME>();
+  const T startTime = parameters.get<parameters::PHYS_START_T>();
   int iTmaxStart = lattice.getUnitConverter().getLatticeTime( startTime );
 
   if ( int(iT)<= iTmaxStart ) {
@@ -245,8 +237,8 @@ void setTemporalValues(MyCase& myCase,
     T iTvec[1] = {T( iT )};
     T frac[1] = {};
     StartScale( frac,iTvec );
-    const T outletPressure = parameters.get<parameters::AVERAGE_PRESSURE>()-0.5*parameters.get<parameters::PRESSURE_DIFFERENCE>();
-    const T inletPressure = outletPressure + parameters.get<parameters::PRESSURE_DIFFERENCE>();
+    const T outletPressure = parameters.get<parameters::AVERAGE_PRESSURE>()-0.5*parameters.get<parameters::PRESSURE_DROP>();
+    const T inletPressure = outletPressure + parameters.get<parameters::PRESSURE_DROP>();
     T pLin = (inletPressure-outletPressure)*frac[0] + outletPressure;
     momenta::setPressure( lattice, geometry.getMaterialIndicator(3), pLin);
 
@@ -270,8 +262,8 @@ void evaluateError(MyCase& myCase) {
 
   // velocity error
   const Vector extend = parameters.get<parameters::DOMAIN_EXTENT>();
-  const T outletPressure = parameters.get<parameters::AVERAGE_PRESSURE>()-0.5*parameters.get<parameters::PRESSURE_DIFFERENCE>();
-  const T inletPressure = outletPressure + parameters.get<parameters::PRESSURE_DIFFERENCE>();
+  const T outletPressure = parameters.get<parameters::AVERAGE_PRESSURE>()-0.5*parameters.get<parameters::PRESSURE_DROP>();
+  const T inletPressure = outletPressure + parameters.get<parameters::PRESSURE_DROP>();
   const T slipCoeff = parameters.get<parameters::SLIPCOEFF>();
   const T physCharViscosity = parameters.get<parameters::PHYS_CHAR_VISCOSITY>();
   const T physCharDensity = parameters.get<parameters::PHYS_CHAR_DENSITY>();
@@ -324,8 +316,8 @@ void getResults(MyCase& myCase,
   auto& parameters = myCase.getParameters();
   auto& geometry = myCase.getGeometry();
   auto& lattice = myCase.getLattice(NavierStokes{});
-  const T maxPhysT = parameters.get<parameters::MAX_PHYS_T>();
-  bool hasConverged = parameters.get<parameters::HAS_CONVERGED>();
+  const T maxPhysT = parameters.get<parameters::PHYS_MAX_T>();
+  bool hasConverged = parameters.get<parameters::CONVERGED>();
   const bool lastTimeStep = ( hasConverged || (iT + 1 == lattice.getUnitConverter().getLatticeTime( maxPhysT )) );
   const int statIter = lattice.getUnitConverter().getLatticeTime( maxPhysT/100. );
 
@@ -351,8 +343,8 @@ void getResults(MyCase& myCase,
     vtmWriter.addFunctor( pressure );
 
     const Vector extend = parameters.get<parameters::DOMAIN_EXTENT>();
-    const T outletPressure = parameters.get<parameters::AVERAGE_PRESSURE>()-0.5*parameters.get<parameters::PRESSURE_DIFFERENCE>();
-    const T inletPressure = outletPressure + parameters.get<parameters::PRESSURE_DIFFERENCE>();
+    const T outletPressure = parameters.get<parameters::AVERAGE_PRESSURE>()-0.5*parameters.get<parameters::PRESSURE_DROP>();
+    const T inletPressure = outletPressure + parameters.get<parameters::PRESSURE_DROP>();
     const T slipCoeff = parameters.get<parameters::SLIPCOEFF>();
     const T physCharViscosity = parameters.get<parameters::PHYS_CHAR_VISCOSITY>();
     const T physCharDensity = parameters.get<parameters::PHYS_CHAR_DENSITY>();
@@ -391,8 +383,8 @@ void simulate(MyCase& myCase) {
   OstreamManager clout( std::cout,"simulate" );
   using T = MyCase::value_t;
   auto& parameters = myCase.getParameters();
-  const T maxPhysT = parameters.get<parameters::MAX_PHYS_T>();
-  const T physInterval = parameters.get<parameters::PHYS_INTERVAL>();
+  const T maxPhysT = parameters.get<parameters::PHYS_MAX_T>();
+  const T physInterval = parameters.get<parameters::PHYS_INTERVAL_T>();
   const T residuum = parameters.get<parameters::RESIDUUM>();
 
   const std::size_t iTmax = myCase.getLattice(NavierStokes{}).getUnitConverter().getLatticeTime(maxPhysT);
@@ -401,11 +393,11 @@ void simulate(MyCase& myCase) {
   util::ValueTracer<T> converge( myCase.getLattice(NavierStokes{}).getUnitConverter().getLatticeTime( physInterval ), residuum );
   timer.start();
 
-  parameters.set<parameters::HAS_CONVERGED>(false);
+  parameters.set<parameters::CONVERGED>(false);
   for (std::size_t iT=0; iT < iTmax; ++iT) {
     if ( converge.hasConverged() ) {
       clout << "Simulation converged." << std::endl;
-      parameters.set<parameters::HAS_CONVERGED>(true);
+      parameters.set<parameters::CONVERGED>(true);
       getResults(myCase, timer, iT);
 
       break;

@@ -207,7 +207,7 @@ void getResults(MyCase& myCase, std::size_t iT, util::Timer<MyCase::value_t> tim
   using T = MyCase::value_t;
   auto& sLattice = myCase.getLattice(NavierStokes{});
   auto& parameters = myCase.getParameters();
-  const T physMaxT = parameters.get<parameters::MAX_PHYS_T>();
+  const T physMaxT = parameters.get<parameters::PHYS_MAX_T>();
   auto& converter = sLattice.getUnitConverter();
   const std::size_t iTlog = converter.getLatticeTime(physMaxT/5);
 
@@ -224,7 +224,7 @@ void simulate(MyCase& myCase) {
   auto& superGeometry = myCase.getGeometry();
   auto& parameters = myCase.getParameters();
   auto& converter = sLattice.getUnitConverter();
-  const T physMaxT = parameters.get<parameters::MAX_PHYS_T>();
+  const T physMaxT = parameters.get<parameters::PHYS_MAX_T>();
 
   // === 4th Step: Main Loop with Timer ===
   const std::size_t iTmax = converter.getLatticeTime(physMaxT);
@@ -475,7 +475,7 @@ int main(int argc, char* argv[])
     myCaseParameters.set<PHYS_CHAR_VELOCITY          >(            1.0);
     myCaseParameters.set<PHYS_CHAR_VISCOSITY         >(            0.1);
     myCaseParameters.set<PHYS_CHAR_DENSITY           >(            1.0);
-    myCaseParameters.set<MAX_PHYS_T                  >(            6.0);
+    myCaseParameters.set<PHYS_MAX_T                  >(            6.0);
     myCaseParameters.set<RESOLUTION                  >(             20);
     myCaseParameters.set<LATTICE_RELAXATION_TIME     >(            0.8);
     myCaseParameters.set<PHYS_START_T                >(            1.0);

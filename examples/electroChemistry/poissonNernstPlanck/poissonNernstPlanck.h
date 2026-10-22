@@ -97,23 +97,15 @@ namespace olb::parameters {
 
 struct IONS_RELAXATION_TIME : public descriptors::FIELD_BASE<1> { };
 struct POISSON_RELAXATION_TIME : public descriptors::FIELD_BASE<1> { };
-struct RESIDUUM : public descriptors::FIELD_BASE<1> { };
-struct DIFFUSION : public descriptors::FIELD_BASE<1> { };
-struct VALENCE : public descriptors::FIELD_BASE<1> { };
-struct TEMPERATURE : public descriptors::FIELD_BASE<1> { };
-struct DIELECTRIC_CONST : public descriptors::FIELD_BASE<1> { };
 struct C_0 : public descriptors::FIELD_BASE<1> { };
 struct PSI_BC : public descriptors::FIELD_BASE<1> { };
-struct DEBYE : public descriptors::FIELD_BASE<1> { };
 struct CB_CATION : public descriptors::FIELD_BASE<1> { };
 struct CB_ANION : public descriptors::FIELD_BASE<1> { };
 struct ERROR_NORMS_PSI : public descriptors::FIELD_BASE<3> { };
 struct ERROR_NORMS_CATION : public descriptors::FIELD_BASE<3> { };
 struct ERROR_NORMS_ANION : public descriptors::FIELD_BASE<3> { };
-struct HAS_CONVERGED : public descriptors::TYPED_FIELD_BASE<bool,1> { };
 struct POISSON_LOOP : public descriptors::TYPED_FIELD_BASE<bool,1> { };
 struct POISSON_LOOP_PER_TOTAL_TIME_STEP : public descriptors::TYPED_FIELD_BASE<int,1> { };
-struct INTERVAL : public descriptors::FIELD_BASE<1> { };
 
 }
 
@@ -259,7 +251,7 @@ void prepareLatticeCoupling(MyCase& myCase) {
   const T diffusion = parameters.get<parameters::DIFFUSION>();
   const T valence = parameters.get<parameters::VALENCE>();
   const T temperature = parameters.get<parameters::TEMPERATURE>();
-  const T dielectricC = parameters.get<parameters::DIELECTRIC_CONST>();
+  const T dielectricC = parameters.get<parameters::DIELECTRIC_CONSTANT>();
   const T npVelCoeff = physConstants::elementaryCharge<T>() * valence * diffusion / physConstants::boltzmannConstant<T>() / temperature / latticeCation.getUnitConverter().getConversionFactorVelocity();
   const T sourceCoeff = 1./dielectricC * physConstants::faradayConstant<T>() * valence * latticePoisson.getUnitConverter().getConversionFactorTime();
   auto& coupling = myCase.setCouplingOperator(
@@ -418,8 +410,8 @@ void getResults(MyCase& myCase,
   auto& latticePoisson = myCase.getLattice(Poisson{});
   auto& latticeCation = myCase.getLattice(Concentration<0>{});
   auto& latticeAnion = myCase.getLattice(Concentration<1>{});
-  const T maxPhysT = parameters.get<parameters::MAX_PHYS_T>();
-  bool hasConverged = parameters.get<parameters::HAS_CONVERGED>();
+  const T maxPhysT = parameters.get<parameters::PHYS_MAX_T>();
+  bool hasConverged = parameters.get<parameters::CONVERGED>();
   const bool lastTimeStep = ( hasConverged || (iT + 1 == latticeCation.getUnitConverter().getLatticeTime( maxPhysT )) );
   const Vector extend = parameters.get<parameters::DOMAIN_EXTENT>();
   const T valence = parameters.get<parameters::VALENCE>();
@@ -427,7 +419,7 @@ void getResults(MyCase& myCase,
   const T C0 = parameters.get<parameters::C_0>();
   const T Debye = parameters.get<parameters::DEBYE>();
   const T temperature = parameters.get<parameters::TEMPERATURE>();
-  const T outputInterval = parameters.get<parameters::INTERVAL>();
+  const T outputInterval = parameters.get<parameters::INTERVAL_OUTPUT>();
 
   const int vtkIter  = latticeCation.getUnitConverter().getLatticeTime( outputInterval );
   const int statIter = latticeCation.getUnitConverter().getLatticeTime( outputInterval );
@@ -528,7 +520,7 @@ void simulatePoisson(MyCase& myCase) {
   auto& parameters = myCase.getParameters();
   auto& geometry = myCase.getGeometry();
   auto& lattice = myCase.getLattice(Poisson{});
-  const T maxPhysT = parameters.get<parameters::MAX_PHYS_T>();
+  const T maxPhysT = parameters.get<parameters::PHYS_MAX_T>();
   const T residuum = parameters.get<parameters::RESIDUUM>();
   const bool poissonLoop = parameters.get<parameters::POISSON_LOOP>();
 
@@ -555,18 +547,18 @@ void simulate(MyCase& myCase) {
   const int poissonLoopPerTotalSteps = parameters.get<parameters::POISSON_LOOP_PER_TOTAL_TIME_STEP>();
 
   const std::size_t iTmax = myCase.getLattice(Concentration<0>{}).getUnitConverter().getLatticeTime(
-    parameters.get<parameters::MAX_PHYS_T>());
+    parameters.get<parameters::PHYS_MAX_T>());
 
   util::Timer<T> timer(iTmax, myCase.getGeometry().getStatistics().getNvoxel());
   const T residuum = parameters.get<parameters::RESIDUUM>();
   util::ValueTracer<T> converge( 500, residuum );
   timer.start();
 
-  parameters.set<parameters::HAS_CONVERGED>(false);
+  parameters.set<parameters::CONVERGED>(false);
   for (std::size_t iT=0; iT < iTmax; ++iT) {
     if ( converge.hasConverged() ) {
       clout << "Simulation converged." << std::endl;
-      parameters.set<parameters::HAS_CONVERGED>(true);
+      parameters.set<parameters::CONVERGED>(true);
       getResults(myCase, timer, iT);
 
       break;

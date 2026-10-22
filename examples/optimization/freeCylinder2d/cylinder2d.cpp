@@ -89,7 +89,6 @@ struct DOMAIN_EXTENT_X            : public descriptors::FIELD_BASE<1> { };
 struct DOMAIN_EXTENT_Y            : public descriptors::FIELD_BASE<1> { };
 struct CENTER_CYLINDER_X          : public descriptors::FIELD_BASE<1> { };
 struct CENTER_CYLINDER_Y          : public descriptors::FIELD_BASE<1> { };
-struct RAMP_UP_UPDATE             : public descriptors::FIELD_BASE<1> { };
 struct RAMP_UP_END_FRACTION       : public descriptors::FIELD_BASE<1> { };
 struct ADJOINT_RAMP_UP_UPDATE             : public descriptors::FIELD_BASE<1> { };
 struct ADJOINT_RAMP_UP_END_FRACTION       : public descriptors::FIELD_BASE<1> { };
@@ -246,13 +245,13 @@ void setTemporalValues(CASE& myCase,
   auto& lattice    = myCase.getLattice(NavierStokes{});
   auto& geometry   = myCase.getGeometry();
 
-  const T maxPhysT   = parameters.template get<parameters::MAX_PHYS_T>();
+  const T maxPhysT   = parameters.template get<parameters::PHYS_MAX_T>();
 
   if (myCase.hasName(Controlled{})) {
     std::size_t iTmaxStart = lattice.getUnitConverter().getLatticeTime(
       maxPhysT*parameters.template get<parameters::RAMP_UP_END_FRACTION>());
     std::size_t iTupdate   = lattice.getUnitConverter().getLatticeTime(
-      parameters.template get<parameters::RAMP_UP_UPDATE>());
+      parameters.template get<parameters::RAMP_UP_T>());
     if (iT % iTupdate == 0 && iT <= iTmaxStart) {
       T frac{};
       PolynomialStartScale<T,std::size_t>(iTmaxStart, T(1))(&frac, &iT);
@@ -362,7 +361,7 @@ void simulate(CASE& myCase){
   OstreamManager clout(std::cout, "simulate");
   using T = typename CASE::value_t;
   auto& parameters = myCase.getParameters();
-  const T physMaxT = parameters.template get<parameters::MAX_PHYS_T>();
+  const T physMaxT = parameters.template get<parameters::PHYS_MAX_T>();
   const std::size_t iTmax = myCase.getLattice(NavierStokes{}).getUnitConverter().getLatticeTime(physMaxT);
 
   clout << "starting simulation..." << std::endl;
@@ -820,7 +819,7 @@ int main(int argc, char* argv[])
     using namespace olb::parameters;
     myCaseParameters.set<RESOLUTION>(41);
     myCaseParameters.set<REYNOLDS >(20.);
-    myCaseParameters.set<MAX_PHYS_T>(32.);
+    myCaseParameters.set<PHYS_MAX_T>(32.);
     myCaseParameters.set<DOMAIN_EXTENT_X>(3.6);
     myCaseParameters.set<DOMAIN_EXTENT_Y>(.81);
     myCaseParameters.set<PHYS_CHAR_VELOCITY>(0.2);
@@ -831,7 +830,7 @@ int main(int argc, char* argv[])
     myCaseParameters.set<CENTER_CYLINDER_Y>(0.4);
     myCaseParameters.set<PHYS_VTK_ITER_T>(0.8);
     myCaseParameters.set<PHYS_STAT_ITER_T>(0.8);
-    myCaseParameters.set<RAMP_UP_UPDATE>(0.01);
+    myCaseParameters.set<RAMP_UP_T>(0.01);
     myCaseParameters.set<RAMP_UP_END_FRACTION>(0.4);
     myCaseParameters.set<ADJOINT_RAMP_UP_UPDATE>(0.01);
     myCaseParameters.set<ADJOINT_RAMP_UP_END_FRACTION>(0.5);

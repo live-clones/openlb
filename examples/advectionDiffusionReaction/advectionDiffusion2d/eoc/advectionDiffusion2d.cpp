@@ -51,9 +51,9 @@ int main(int argc, char *argv[])
   MyCase::ParametersD myCaseParameters;
   {
     using namespace olb::parameters;
-    myCaseParameters.set<RUNS>(3);
+    myCaseParameters.set<NUMBER_OF_RUNS>(3);
     myCaseParameters.set<RESOLUTION>(50);
-    myCaseParameters.set<OUTPUT_INTERVAL>(50);
+    myCaseParameters.set<INTERVAL_OUTPUT>(50);
     myCaseParameters.set<PHYS_CHAR_LENGTH>(2.);
     myCaseParameters.set<PHYS_CHAR_DENSITY>(1.);
     myCaseParameters.set<PHYS_DIFFUSIVITY>(0.05);
@@ -62,18 +62,18 @@ int main(int argc, char *argv[])
   }
 
   const MyCase::value_t N0 = myCaseParameters.get<parameters::RESOLUTION>();
-  const MyCase::value_t statIter0 = myCaseParameters.get<parameters::OUTPUT_INTERVAL>();
-  myCaseParameters.set<parameters::MAX_RESOLUTION>(
-    util::pow(2, myCaseParameters.get<parameters::RUNS>()-1) * myCaseParameters.get<parameters::RESOLUTION>()
+  const MyCase::value_t statIter0 = myCaseParameters.get<parameters::INTERVAL_OUTPUT>();
+  myCaseParameters.set<parameters::RESOLUTION_MAX>(
+    util::pow(2, myCaseParameters.get<parameters::NUMBER_OF_RUNS>()-1) * myCaseParameters.get<parameters::RESOLUTION>()
   );
 
   CSV<MyCase::value_t> csvWriter("averageSimL2RelErr");
 
-  for (std::size_t i = 0; i < myCaseParameters.get<parameters::RUNS>(); ++i) {
+  for (std::size_t i = 0; i < myCaseParameters.get<parameters::NUMBER_OF_RUNS>(); ++i) {
 
     //Adjust Resolution and output interval
     myCaseParameters.set<parameters::RESOLUTION>(util::pow(2,i) * N0);
-    myCaseParameters.set<parameters::OUTPUT_INTERVAL>(util::pow(4,i) * statIter0);
+    myCaseParameters.set<parameters::INTERVAL_OUTPUT>(util::pow(4,i) * statIter0);
 
 
     Mesh mesh = createMesh(myCaseParameters);
@@ -91,7 +91,7 @@ int main(int argc, char *argv[])
     // this outputs into ./tmp/gnuplotData/data/averageSimL2RelErr
     singleton::directories().setOutputDir("./tmp/");
     csvWriter.writeDataFile(myCaseParameters.get<parameters::RESOLUTION>(),
-                            myCaseParameters.get<parameters::AVG_L2_ERROR>(),
+                            myCaseParameters.get<parameters::L2_ERROR>(),
                             "averageSimL2RelErr");
   }
 }

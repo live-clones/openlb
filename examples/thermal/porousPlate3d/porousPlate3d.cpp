@@ -166,7 +166,7 @@ Mesh<MyCase::value_t,MyCase::d> createMesh(MyCase::ParametersD& parameters)
 
   const Vector extent = parameters.get<parameters::DOMAIN_EXTENT>();
   const T physDeltaX  = parameters.get<parameters::PHYS_DELTA_X>();
-  const Vector origin = parameters.get<parameters::ORIGIN>();
+  const Vector origin = parameters.get<parameters::DOMAIN_ORIGIN>();
   IndicatorCuboid3D<T> cuboid(extent, origin);
 
   Mesh<T,MyCase::d> mesh(cuboid, physDeltaX, singleton::mpi().getSize());
@@ -188,7 +188,7 @@ void prepareGeometry(MyCase& myCase) {
 
   const Vector extent = parameters.get<parameters::DOMAIN_EXTENT>();
   const T physDeltaX  = parameters.get<parameters::PHYS_DELTA_X>();
-  const Vector origin = parameters.get<parameters::ORIGIN>();
+  const Vector origin = parameters.get<parameters::DOMAIN_ORIGIN>();
   const Vector bottomExtent{extent[0], physDeltaX, extent[2]};
 
   IndicatorCuboid3D<T> bottom(bottomExtent, origin);
@@ -454,7 +454,7 @@ void simulate(MyCase& myCase)
   auto& parameters = myCase.getParameters();
 
   const std::size_t iTmax = myCase.getLattice(NavierStokes{}).getUnitConverter().getLatticeTime(
-    parameters.get<parameters::MAX_PHYS_T>()
+    parameters.get<parameters::PHYS_MAX_T>()
   );
 
   const T epsilon       = parameters.get<parameters::EPSILON>();
@@ -498,7 +498,7 @@ int main(int argc, char* argv[])
     myCaseParameters.set<REYNOLDS                 >(     5     );
     myCaseParameters.set<RAYLEIGH                 >(   100     );
     myCaseParameters.set<PRANDTL                  >(     0.71  );
-    myCaseParameters.set<ORIGIN                   >( {0, 0, 0} );
+    myCaseParameters.set<DOMAIN_ORIGIN            >( {0, 0, 0} );
     myCaseParameters.set<PHYS_CHAR_LENGTH         >(     1.0   );
     myCaseParameters.set<PHYS_CHAR_VELOCITY       >(     1.0   );
     myCaseParameters.set<PHYS_CHAR_DENSITY        >(     1.0   );
@@ -506,7 +506,7 @@ int main(int argc, char* argv[])
     myCaseParameters.set<LATTICE_RELAXATION_TIME  >(     1.0   );
     myCaseParameters.set<LATTICE_CHAR_VELOCITY    >(     0.1   );
     myCaseParameters.set<GRAVITATIONAL_ACC        >(     9.81  );
-    myCaseParameters.set<MAX_PHYS_T               >( 10000     );
+    myCaseParameters.set<PHYS_MAX_T               >( 10000     );
     myCaseParameters.set<T_HOT                    >(   274.15  );
     myCaseParameters.set<T_COLD                   >(   273.15  );
     myCaseParameters.set<EPSILON                  >(     1e-5  );
@@ -514,10 +514,10 @@ int main(int argc, char* argv[])
     myCaseParameters.set<PHYS_STAT_ITER_T         >(    10.0   );
     myCaseParameters.set<PHYS_VTK_ITER_T          >(   100.0   );
   }
-  myCaseParameters.set<parameters::PHYS_DELTA_X>([](MyCase::ParametersD& p) -> MyCase::value_t {
+  myCaseParameters.set<parameters::PHYS_DELTA_X>([] (MyCase::ParametersD& p) -> MyCase::value_t  {
     return {p.get<parameters::PHYS_CHAR_LENGTH>() / p.get<parameters::RESOLUTION>()};
   });
-  myCaseParameters.set<parameters::DOMAIN_EXTENT>([](MyCase::ParametersD& p) -> Vector<MyCase::value_t, 3> {
+  myCaseParameters.set<parameters::DOMAIN_EXTENT>([] (MyCase::ParametersD& p) -> Vector<MyCase::value_t, 3>  {
     return {p.get<parameters::PHYS_CHAR_LENGTH>(),
             p.get<parameters::PHYS_CHAR_LENGTH>(),
             p.get<parameters::PHYS_DELTA_X>() * 3,

@@ -93,7 +93,7 @@ if a study needs its settings pinned. The precedence is
 `set<>()` < case file < command line.
 
 Two defaults differ from the values the benchmark uses and are therefore passed on
-the command line: `MAX_PHYS_T` is `30` in the source against $T_{max} = 100$ in the
+the command line: `PHYS_MAX_T` is `30` in the source against $T_{max} = 100$ in the
 study, and `ANALYTICAL_REFERENCE` is `false`, which compares against a simulated
 rather than the manufactured reference.
 
@@ -133,7 +133,7 @@ on the command line updates them too.
 
 | Parameter | Type | Default | Meaning |
 |---|---|---|---|
-| `MAX_PHYS_T` | double | `30` | pseudo-time budget; the step cap is `MAX_PHYS_T`$/\Delta t = $ `MAX_PHYS_T`$\cdot N_x^2$. The benchmark uses `100` |
+| `PHYS_MAX_T` | double | `30` | pseudo-time budget; the step cap is `PHYS_MAX_T`$/\Delta t = $ `PHYS_MAX_T`$\cdot N_x^2$. The benchmark uses `100` |
 | `CONVERGENCE_PRECISION` | double | `1e-7` | relative tolerance of the steady-state check; `0` disables the check and runs the full budget |
 | `CONV_ITER` | double | `10` | window length of the `ValueTracer` that watches the monitored value |
 | `CONV_VALUE` | double | `1` | slot the case writes the monitored value into (the mean squared displacement); not a user knob |
@@ -183,7 +183,7 @@ line or through a case file. The resolution study of the benchmark uses
 
 ```sh
 mpirun -np 2 ./periodicPlateOptiAD2d --RESOLUTION 20 --INITIAL_CONTROL "[-1 -1]" \
-  --ANALYTICAL_REFERENCE 1 --CONVERGENCE_PRECISION 1e-7 --MAX_PHYS_T 100 --VTK_ENABLED 0
+  --ANALYTICAL_REFERENCE 1 --CONVERGENCE_PRECISION 1e-7 --PHYS_MAX_T 100 --VTK_ENABLED 0
 ```
 
 repeated for $N_x \in \{10, 20, 40, 80\}$. The optimization history is written to

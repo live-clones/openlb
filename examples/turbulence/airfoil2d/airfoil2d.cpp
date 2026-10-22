@@ -402,7 +402,7 @@ void simulate(MyCase& myCase)
   auto&   lattice   = myCase.getLattice(NavierStokes {});
   auto&   geometry  = myCase.getGeometry();
   auto&   converter = lattice.getUnitConverter();
-  const T physMaxT  = params.get<parameters::MAX_PHYS_T>();
+  const T physMaxT  = params.get<parameters::PHYS_MAX_T>();
 
   const std::size_t iTmax = myCase.getLattice(NavierStokes {}).getUnitConverter().getLatticeTime(physMaxT);
   util::Timer<T>    timer(iTmax, myCase.getGeometry().getStatistics().getNvoxel());
@@ -451,14 +451,14 @@ int main(int argc, char* argv[])
     myCaseParameters.set<RESOLUTION>(100);
     myCaseParameters.set<REYNOLDS>(1400000);
     myCaseParameters.set<PHYS_CHAR_VISCOSITY>((T)1.e-5);
-    myCaseParameters.set<MAX_PHYS_T>((T)16.);
+    myCaseParameters.set<PHYS_MAX_T>((T)16.);
     myCaseParameters.set<CHORD_LENGTH>((T)1.);
     myCaseParameters.set<AIRFOIL_PARAMETERS>({2, 4, 12});
     myCaseParameters.set<ANGLE_OF_ATTACK>(3.);
-    myCaseParameters.set<DOMAIN_EXTENT>([](MyCase::ParametersD& p) {
+    myCaseParameters.set<DOMAIN_EXTENT>([] (MyCase::ParametersD& p) {
       return Vector{6,2} * p.get<CHORD_LENGTH>();
     });
-    myCaseParameters.set<CENTER>([](MyCase::ParametersD& p) {
+    myCaseParameters.set<CENTER>([] (MyCase::ParametersD& p) {
       auto pos = p.get<DOMAIN_EXTENT>();
       pos[0] /= 4;
       pos[1] /= 2;

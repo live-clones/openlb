@@ -36,35 +36,35 @@ int main(int argc, char* argv[]) {
     myCaseParameters.set<POISSON_RELAXATION_TIME>(0.9);
     myCaseParameters.set<IONS_RELAXATION_TIME>(0.9);
     myCaseParameters.set<PHYS_CHAR_VELOCITY>(0.001);
-    myCaseParameters.set<MAX_PHYS_T>(10);
+    myCaseParameters.set<PHYS_MAX_T>(10);
     myCaseParameters.set<RESIDUUM>(1.e-7);
     myCaseParameters.set<DIFFUSION>(1.e-9);
     myCaseParameters.set<VALENCE>(1);
     myCaseParameters.set<parameters::TEMPERATURE>(298.15);
-    myCaseParameters.set<DIELECTRIC_CONST>(6.95e-10);
+    myCaseParameters.set<DIELECTRIC_CONSTANT>(6.95e-10);
     myCaseParameters.set<C_0>(0.01);
     myCaseParameters.set<PSI_BC>(-0.02);
-    myCaseParameters.set<DEBYE>([](MyCase::ParametersD& p) {
-      return util::debyeLength<T>(p.get<DIELECTRIC_CONST>(),
+    myCaseParameters.set<DEBYE>([] (MyCase::ParametersD& p) {
+      return util::debyeLength<T>(p.get<DIELECTRIC_CONSTANT>(),
                                   p.get<VALENCE>(),
                                   p.get<parameters::TEMPERATURE>(),
                                   p.get<C_0>());
     });
-    myCaseParameters.set<SPHERE_RADIUS>([](MyCase::ParametersD& p) {
+    myCaseParameters.set<SPHERE_RADIUS>([] (MyCase::ParametersD& p) {
       return 3*p.get<DEBYE>();
     });
-    myCaseParameters.set<DOMAIN_EXTENT>([](MyCase::ParametersD& p) {
+    myCaseParameters.set<DOMAIN_EXTENT>([] (MyCase::ParametersD& p) {
       return Vector<T,3>(2*(13*p.get<DEBYE>()+p.get<SPHERE_RADIUS>()),
                          2*(13*p.get<DEBYE>()+p.get<SPHERE_RADIUS>()),
                          2*(13*p.get<DEBYE>()+p.get<SPHERE_RADIUS>()));
     });
-    myCaseParameters.set<CB_CATION>([](MyCase::ParametersD& p) {
+    myCaseParameters.set<CB_CATION>([] (MyCase::ParametersD& p) {
       return p.get<C_0>()*util::exp(
              -physConstants::elementaryCharge<T>()*p.get<VALENCE>()
              *p.get<PSI_BC>()/physConstants::boltzmannConstant<T>()
              /p.get<parameters::TEMPERATURE>());
     });
-    myCaseParameters.set<CB_ANION>([](MyCase::ParametersD& p) {
+    myCaseParameters.set<CB_ANION>([] (MyCase::ParametersD& p) {
       return p.get<C_0>()*util::exp(
              physConstants::elementaryCharge<T>()*p.get<VALENCE>()
              *p.get<PSI_BC>()/physConstants::boltzmannConstant<T>()
@@ -73,7 +73,7 @@ int main(int argc, char* argv[]) {
     myCaseParameters.set<ERROR_NORMS_PSI>({0.,0.,0.});
     myCaseParameters.set<ERROR_NORMS_CATION>({0.,0.,0.});
     myCaseParameters.set<ERROR_NORMS_ANION>({0.,0.,0.});
-    myCaseParameters.set<HAS_CONVERGED>(false);
+    myCaseParameters.set<CONVERGED>(false);
   }
 
   /// === Step 3: Create Mesh ===

@@ -261,7 +261,7 @@ void getResults(MyCase& myCase,
 
   const std::size_t iTlog     = parameters.get<parameters::IT_LOG_PSEUDO_TIME                 >();
   const std::size_t iTvtk     = parameters.get<parameters::IT_VTK_PSEUDO_TIME                 >();
-  const std::size_t iTMax     = converter.getLatticeTime(parameters.get<parameters::MAX_PHYS_T>());
+  const std::size_t iTMax     = converter.getLatticeTime(parameters.get<parameters::PHYS_MAX_T>());
   const std::size_t convIter  = parameters.get<parameters::CONV_ITER                          >();
   const bool        converged = parameters.get<parameters::CONVERGED                          >();
   const bool        writeVTK  = parameters.get<parameters::VTK_ENABLED                        >();
@@ -422,7 +422,7 @@ void simulate(MyCase& myCase) {
   const auto& converter   = lattice.getUnitConverter();
   auto& parameters        = myCase.getParameters();
 
-  const std::size_t maxIt   = converter.getLatticeTime(parameters.get<parameters::MAX_PHYS_T>());
+  const std::size_t maxIt   = converter.getLatticeTime(parameters.get<parameters::PHYS_MAX_T>());
   const std::size_t convIt  = parameters.get<parameters::CONV_ITER>();
 
   util::ValueTracer<T> converge(convIt, parameters.get<parameters::CONVERGENCE_PRECISION>());
@@ -487,7 +487,7 @@ int main(int argc, char* argv[]) {
     myCaseParameters.set<PHYS_DENSITY             >(     1.0        );
     myCaseParameters.set<POISSON_RATIO            >(     0.7        );
     myCaseParameters.set<DAMPING_FACTOR           >(     1.0        );
-    myCaseParameters.set<MAX_PHYS_T               >(  1000          );
+    myCaseParameters.set<PHYS_MAX_T               >(  1000          );
     myCaseParameters.set<IT_LOG_PSEUDO_TIME       >(  1000          );
     myCaseParameters.set<IT_VTK_PSEUDO_TIME       >( 10000          );
     myCaseParameters.set<CONVERGENCE_PRECISION    >(    1e-7        );

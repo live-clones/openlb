@@ -89,7 +89,7 @@ a `--case-file` of the same shape as the ones in `periodicPlateOpti2d` would wor
 if a study needs its settings pinned. The precedence is
 `set<>()` < case file < command line.
 
-The defaults already match the benchmark, including `MAX_PHYS_T 100`,
+The defaults already match the benchmark, including `PHYS_MAX_T 100`,
 `ANALYTICAL_REFERENCE true` and both steady-state tolerances at `1e-7`, so only
 `--RESOLUTION` has to be varied across the study.
 
@@ -129,7 +129,7 @@ on the command line updates them too.
 
 | Parameter | Type | Default | Meaning |
 |---|---|---|---|
-| `MAX_PHYS_T` | double | `100` | pseudo-time budget; the step cap is `MAX_PHYS_T`$/\Delta t = $ `MAX_PHYS_T`$\cdot N_x^2$ |
+| `PHYS_MAX_T` | double | `100` | pseudo-time budget; the step cap is `PHYS_MAX_T`$/\Delta t = $ `PHYS_MAX_T`$\cdot N_x^2$ |
 | `CONVERGENCE_PRECISION` | double | `1e-7` | relative tolerance of the primal steady-state check; `0` disables the check and runs the full budget |
 | `CONVERGENCE_PRECISION_ADJOINT` | double | `1e-7` | the same tolerance for the adjoint solve |
 | `CONV_ITER` | double | `10` | window length of the `ValueTracer` that watches the monitored value |
@@ -177,7 +177,7 @@ $T_{max} = 100$. The resolution study of the benchmark uses
 ```sh
 mpirun -np 2 ./periodicPlateOptiParam2d --RESOLUTION 20 --INITIAL_CONTROL "[-1 -1]" \
   --ANALYTICAL_REFERENCE 1 --CONVERGENCE_PRECISION 1e-7 \
-  --CONVERGENCE_PRECISION_ADJOINT 1e-7 --MAX_PHYS_T 100 --VTK_ENABLED 0
+  --CONVERGENCE_PRECISION_ADJOINT 1e-7 --PHYS_MAX_T 100 --VTK_ENABLED 0
 ```
 
 repeated for $N_x \in \{10, 20, 40, 80\}$, writing one row per optimization step to

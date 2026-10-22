@@ -55,7 +55,6 @@ NavierStokes, Lattice<double, descriptors::PorousParticleD3Q19Descriptor>
 >;
 
 namespace olb::parameters {
-struct PHYS_VISCOSITY : public descriptors::FIELD_BASE<1> {};
 struct CUBE_DENSITY : public descriptors::FIELD_BASE<1> {};
 struct CUBE_1_EDGE_LENGTH : public descriptors::FIELD_BASE<1> {};
 struct CUBE_2_EDGE_LENGTH : public descriptors::FIELD_BASE<1> {};
@@ -126,7 +125,7 @@ void prepareLattice(MyCase& myCase)
   const T   charLatticeVelocity = params.get<parameters::LATTICE_CHAR_VELOCITY>();
   const T   charPhysLength      = params.get<parameters::PHYS_CHAR_LENGTH>();
   const T   charPhysVelocity    = params.get<parameters::PHYS_CHAR_VELOCITY>();
-  const T   physViscosity       = params.get<parameters::PHYS_VISCOSITY>();
+  const T   physViscosity       = params.get<parameters::PHYS_KINEMATIC_VISCOSITY>();
   const T   physDensity         = params.get<parameters::PHYS_DENSITY>();
 
   lattice.setUnitConverter<UnitConverterFromResolutionAndLatticeVelocity<T, DESCRIPTOR>>(
@@ -242,7 +241,7 @@ void simulate(MyCase& myCase)
   auto& converter = lattice.getUnitConverter();
 
   const Vector externalAcceleration  = params.get<parameters::EXTERNAL_ACCELERATION>();
-  const T maxPhysT              = params.get<parameters::MAX_PHYS_T>();
+  const T maxPhysT              = params.get<parameters::PHYS_MAX_T>();
   const Vector cube1Center      = params.get<parameters::CUBE_1_POSITION>();
   const Vector cube2Center      = params.get<parameters::CUBE_2_POSITION>();
   const T      cube1EdgeLength  = params.get<parameters::CUBE_1_EDGE_LENGTH>();
@@ -317,12 +316,12 @@ int main(int argc, char* argv[])
     using T = MyCase::value_t;
     myCaseParameters.set<RESOLUTION>(30);
     myCaseParameters.set<LATTICE_CHAR_VELOCITY>(0.01);
-    myCaseParameters.set<MAX_PHYS_T>(0.5);
+    myCaseParameters.set<PHYS_MAX_T>(0.5);
     myCaseParameters.set<PHYS_VTK_ITER_T>(0.02);
     myCaseParameters.set<VTK_ENABLED>(true);
     myCaseParameters.set<DOMAIN_EXTENT>({0.01, 0.01, 0.05});
     myCaseParameters.set<PHYS_DENSITY>(1000);
-    myCaseParameters.set<PHYS_VISCOSITY>(1.e-5);
+    myCaseParameters.set<PHYS_KINEMATIC_VISCOSITY>(1.e-5);
     myCaseParameters.set<CUBE_DENSITY>(2500);
     myCaseParameters.set<CUBE_1_EDGE_LENGTH>(0.0025);
     myCaseParameters.set<CUBE_2_EDGE_LENGTH>(0.0025);
@@ -332,14 +331,14 @@ int main(int argc, char* argv[])
     myCaseParameters.set<CUBE_2_VELOCITY>({0., 0., 0.});
     myCaseParameters.set<PHYS_CHAR_LENGTH>(myCaseParameters.get<DOMAIN_EXTENT>()[0]);
     myCaseParameters.set<PHYS_CHAR_VELOCITY>(0.15);
-    myCaseParameters.set<EXTERNAL_ACCELERATION>([](MyCase::ParametersD& p) -> Vector<T,3>{
+    myCaseParameters.set<EXTERNAL_ACCELERATION>([] (MyCase::ParametersD& p) -> Vector<T,3> {
       return {.0,.0, -T(9.81) * (T(1) - p.get<PHYS_DENSITY>() / p.get<CUBE_DENSITY>())};
     });
-    myCaseParameters.set<CUBE_1_POSITION>([](MyCase::ParametersD& p) -> Vector<T,3>{
+    myCaseParameters.set<CUBE_1_POSITION>([] (MyCase::ParametersD& p) -> Vector<T,3> {
       return {p.get<DOMAIN_EXTENT>()[0] * (T).5, p.get<DOMAIN_EXTENT>()[1] * (T).5,
               p.get<DOMAIN_EXTENT>()[2] * (T).9};
     });
-    myCaseParameters.set<CUBE_2_POSITION>([](MyCase::ParametersD& p) -> Vector<T,3>{
+    myCaseParameters.set<CUBE_2_POSITION>([] (MyCase::ParametersD& p) -> Vector<T,3> {
       return {p.get<DOMAIN_EXTENT>()[0] * (T).5, p.get<DOMAIN_EXTENT>()[1] * (T).51,
               p.get<DOMAIN_EXTENT>()[2] * (T).7};
     });

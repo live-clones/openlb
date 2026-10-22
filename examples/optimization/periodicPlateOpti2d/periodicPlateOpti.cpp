@@ -44,7 +44,7 @@ int main(int argc, char* argv[])
     myCaseParameters.set<PHYS_CHAR_LENGTH>(1.0);
     myCaseParameters.set<DOMAIN_EXTENT>({1.0, 1.0});
     myCaseParameters.set<ORIGIN>({0.0, 0.0});
-    myCaseParameters.set<MAX_PHYS_T>(10);
+    myCaseParameters.set<PHYS_MAX_T>(10);
     myCaseParameters.set<IT_LOG_PSEUDO_TIME>(1000);
     myCaseParameters.set<IT_VTK_PSEUDO_TIME>(1000);
     myCaseParameters.set<CONV_ITER>(10);

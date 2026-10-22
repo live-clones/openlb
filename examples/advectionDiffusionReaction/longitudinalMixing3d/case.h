@@ -41,13 +41,8 @@ using MyCase = Case<
 
 namespace olb::parameters {
 
-  struct RUNS : public descriptors::FIELD_BASE<1> {};
-  struct OUTPUT_INTERVAL : public descriptors::FIELD_BASE<1> {};
   struct ERROR_TIME : public descriptors::FIELD_BASE<1> {};
   struct C_EQ : public descriptors::FIELD_BASE<1> {};
-  struct L2_ERROR : public descriptors::FIELD_BASE<1> {};
-  struct L1_ERROR : public descriptors::FIELD_BASE<1> {};
-  struct LINF_ERROR : public descriptors::FIELD_BASE<1> {};
 
 }
 
@@ -305,7 +300,7 @@ void getResults(MyCase& myCase, const std::size_t iT,
   const auto& converter = ADlattice.getUnitConverter();
   auto& parameters = myCase.getParameters();
 
-  const T statIter = parameters.get<parameters::OUTPUT_INTERVAL>();
+  const T statIter = parameters.get<parameters::INTERVAL_OUTPUT>();
   const T errorTime = parameters.get<parameters::ERROR_TIME>();
 
   OstreamManager clout(std::cout, "getResults");
@@ -359,8 +354,8 @@ void simulate(MyCase& myCase)
 
   const T N = converter.getResolution();
   const T Ceq = parameters.get<parameters::C_EQ>();
-  const T maxPhysT = parameters.get<parameters::MAX_PHYS_T>();
-  const T runs = parameters.get<parameters::RUNS>();
+  const T maxPhysT = parameters.get<parameters::PHYS_MAX_T>();
+  const T runs = parameters.get<parameters::NUMBER_OF_RUNS>();
 
   OstreamManager clout(std::cout, "simulate");
   clout << "Executing the simulation with N=" << std::to_string((std::size_t)N) << std::endl;

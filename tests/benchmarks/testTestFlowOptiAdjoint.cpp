@@ -121,7 +121,7 @@ TEST(TestFlowOptiAdjointContinuous, TestVelocityObjective)
     myCaseParameters.set<PHYS_CHAR_VELOCITY>(1.0);
     myCaseParameters.set<PHYS_CHAR_VISCOSITY>(0.1);
     myCaseParameters.set<PHYS_CHAR_DENSITY>(1.0);
-    myCaseParameters.set<MAX_PHYS_T>(6.0);
+    myCaseParameters.set<PHYS_MAX_T>(6.0);
     myCaseParameters.set<RESOLUTION>(11);
     myCaseParameters.set<LATTICE_RELAXATION_TIME>(0.8);
     myCaseParameters.set<ADJOINT_TYPE>(AdjointType::continuous);
@@ -143,7 +143,7 @@ TEST(TestFlowOptiAdjointDiscrete, TestVelocityObjective)
     myCaseParameters.set<PHYS_CHAR_VELOCITY>(1.0);
     myCaseParameters.set<PHYS_CHAR_VISCOSITY>(0.1);
     myCaseParameters.set<PHYS_CHAR_DENSITY>(1.0);
-    myCaseParameters.set<MAX_PHYS_T>(6.0);
+    myCaseParameters.set<PHYS_MAX_T>(6.0);
     myCaseParameters.set<RESOLUTION>(11);
     myCaseParameters.set<LATTICE_RELAXATION_TIME>(0.8);
     myCaseParameters.set<ADJOINT_TYPE>(AdjointType::discrete);

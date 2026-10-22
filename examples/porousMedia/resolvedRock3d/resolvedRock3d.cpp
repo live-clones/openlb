@@ -46,7 +46,6 @@ using namespace olb::names;
 namespace olb::parameters {
 
 struct CONVERGENCE_CHECK_T  : public descriptors::FIELD_BASE<1> { };
-struct PRESSURE_DROP        : public descriptors::FIELD_BASE<1> { };
 struct SCALING_FACTOR       : public descriptors::FIELD_BASE<1> { };
 struct TIME_SCALING_FACTOR  : public descriptors::FIELD_BASE<1> { };
 
@@ -246,7 +245,7 @@ void getResults(MyCase& myCase,
   auto& geometry    = myCase.getGeometry();
   auto& converter   = lattice.getUnitConverter();
   auto& parameters  = myCase.getParameters();
-  const T maxPhysT            = parameters.get<parameters::MAX_PHYS_T>();
+  const T maxPhysT            = parameters.get<parameters::PHYS_MAX_T>();
   const T lx                  = parameters.get<parameters::DOMAIN_EXTENT>()[0];
   const T kinematicViscosity  = parameters.get<parameters::PHYS_CHAR_VISCOSITY>();
   const T fluidDensity        = parameters.get<parameters::PHYS_CHAR_DENSITY>();
@@ -332,13 +331,13 @@ void simulate( MyCase& myCase ) {
   // Assumption. Likely needs an update after some experience is gained
   const T maxPhysT = timeScalingFactor * lx / charPhysVelocityEstimation;
 
-  parameters.set<parameters::MAX_PHYS_T             >( maxPhysT );
+  parameters.set<parameters::PHYS_MAX_T             >( maxPhysT );
   parameters.set<parameters::PHYS_START_T           >( maxPhysT * 0.2 );
   parameters.set<parameters::PHYS_STAT_ITER_T       >( maxPhysT * .01 );
   parameters.set<parameters::PHYS_VTK_ITER_T        >( maxPhysT * .05 );
   parameters.set<parameters::CONVERGENCE_CHECK_T    >( maxPhysT / 100. );
 
-  const T   iTmax               = converter.getLatticeTime(parameters.get<parameters::MAX_PHYS_T>());
+  const T   iTmax               = converter.getLatticeTime(parameters.get<parameters::PHYS_MAX_T>());
   const int iTmaxStart          = converter.getLatticeTime(parameters.get<parameters::PHYS_START_T>());
   const int interval            = converter.getLatticeTime(parameters.get<parameters::CONVERGENCE_CHECK_T>());
   util::ValueTracer<T> converge(interval, epsilon);

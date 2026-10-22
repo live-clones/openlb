@@ -34,8 +34,6 @@ static Gnuplot<T> gplot(
 
 namespace olb::parameters {
 
-struct START_RESOLUTION : public descriptors::TYPED_FIELD_BASE<int,1> { };
-struct END_RESOLUTION : public descriptors::TYPED_FIELD_BASE<int,1> { };
 
 }
 
@@ -46,35 +44,35 @@ int main(int argc, char* argv[]) {
   MyCase::ParametersD myCaseParameters;
   {
     using namespace olb::parameters;
-    myCaseParameters.set<START_RESOLUTION>(20);
-    myCaseParameters.set<END_RESOLUTION>(80);
+    myCaseParameters.set<RESOLUTION_START>(20);
+    myCaseParameters.set<RESOLUTION_END>(80);
     myCaseParameters.set<POISSON_RELAXATION_TIME>(0.9);
     myCaseParameters.set<IONS_RELAXATION_TIME>(0.9);
     myCaseParameters.set<PHYS_CHAR_VELOCITY>(0.001);
-    myCaseParameters.set<MAX_PHYS_T>(10);
+    myCaseParameters.set<PHYS_MAX_T>(10);
     myCaseParameters.set<RESIDUUM>(1.e-9);
     myCaseParameters.set<DIFFUSION>(1.e-9);
     myCaseParameters.set<VALENCE>(1);
     myCaseParameters.set<parameters::TEMPERATURE>(298.15);
-    myCaseParameters.set<DIELECTRIC_CONST>(6.95e-10);
+    myCaseParameters.set<DIELECTRIC_CONSTANT>(6.95e-10);
     myCaseParameters.set<C_0>(0.01);
     myCaseParameters.set<PSI_BC>(-0.02);
-    myCaseParameters.set<DEBYE>([](MyCase::ParametersD& p) {
-      return util::debyeLength<T>(p.get<DIELECTRIC_CONST>(),
+    myCaseParameters.set<DEBYE>([] (MyCase::ParametersD& p) {
+      return util::debyeLength<T>(p.get<DIELECTRIC_CONSTANT>(),
                                   p.get<VALENCE>(),
                                   p.get<parameters::TEMPERATURE>(),
                                   p.get<C_0>());
     });
-    myCaseParameters.set<DOMAIN_EXTENT>([](MyCase::ParametersD& p) {
+    myCaseParameters.set<DOMAIN_EXTENT>([] (MyCase::ParametersD& p) {
       return Vector<T,3>(13./4.*p.get<DEBYE>(), 13.*p.get<DEBYE>(),0.);
     });
-    myCaseParameters.set<CB_CATION>([](MyCase::ParametersD& p) {
+    myCaseParameters.set<CB_CATION>([] (MyCase::ParametersD& p) {
       return p.get<C_0>()*util::exp(
              -physConstants::elementaryCharge<T>()*p.get<VALENCE>()
              *p.get<PSI_BC>()/physConstants::boltzmannConstant<T>()
              /p.get<parameters::TEMPERATURE>());
     });
-    myCaseParameters.set<CB_ANION>([](MyCase::ParametersD& p) {
+    myCaseParameters.set<CB_ANION>([] (MyCase::ParametersD& p) {
       return p.get<C_0>()*util::exp(
              physConstants::elementaryCharge<T>()*p.get<VALENCE>()
              *p.get<PSI_BC>()/physConstants::boltzmannConstant<T>()
@@ -83,16 +81,16 @@ int main(int argc, char* argv[]) {
     myCaseParameters.set<ERROR_NORMS_PSI>({0.,0.,0.});
     myCaseParameters.set<ERROR_NORMS_CATION>({0.,0.,0.});
     myCaseParameters.set<ERROR_NORMS_ANION>({0.,0.,0.});
-    myCaseParameters.set<HAS_CONVERGED>(false);
+    myCaseParameters.set<CONVERGED>(false);
     myCaseParameters.set<POISSON_LOOP>(true);
     myCaseParameters.set<POISSON_LOOP_PER_TOTAL_TIME_STEP>(5);
-    myCaseParameters.set<parameters::INTERVAL>(0.001);
+    myCaseParameters.set<parameters::INTERVAL_OUTPUT>(0.001);
   }
 
   gplot.setLabel("Resolution test", "average Error");
 
-  for(int simuN =  myCaseParameters.get<parameters::START_RESOLUTION>();
-      simuN <=  myCaseParameters.get<parameters::END_RESOLUTION>();
+  for(int simuN =  myCaseParameters.get<parameters::RESOLUTION_START>();
+      simuN <=  myCaseParameters.get<parameters::RESOLUTION_END>();
       simuN *= 2) {
     myCaseParameters.set<parameters::RESOLUTION>(simuN);
 

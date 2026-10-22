@@ -106,7 +106,7 @@ void prepareLattice(MyCase& myCase) {
   using NSDESCRIPTOR  = MyCase::descriptor_t_of<NavierStokes>;
   using TDESCRIPTOR   = MyCase::descriptor_t_of<Temperature>;
 
-  const T Tcold = params.get<parameters::PHYS_CHAR_LOW_TEMPERATURE>();
+  const T Tcold = params.get<parameters::T_COLD>();
 
   NSlattice.setUnitConverter(params);
   ADlattice.setUnitConverter(params);
@@ -156,8 +156,8 @@ void setInitialValues(MyCase& myCase) {
   auto& NSlattice = myCase.getLattice(NavierStokes{});
   auto& ADlattice = myCase.getLattice(Temperature{});
 
-  const T Tcold     = params.get<parameters::PHYS_CHAR_LOW_TEMPERATURE>();
-  const T Thot      = params.get<parameters::PHYS_CHAR_HIGH_TEMPERATURE>();
+  const T Tcold     = params.get<parameters::T_COLD>();
+  const T Thot      = params.get<parameters::T_HOT>();
   const T Tperturb  = params.get<parameters::T_PERTURB>();
 
   auto indicator = geometry.getMaterialIndicator({1,2,3,4});
@@ -235,7 +235,7 @@ void simulate(MyCase& myCase) {
   auto& parameters = myCase.getParameters();
 
   const std::size_t iTmax = myCase.getLattice(NavierStokes{}).getUnitConverter().getLatticeTime(
-    parameters.get<parameters::MAX_PHYS_T>());
+    parameters.get<parameters::PHYS_MAX_T>());
 
   for (std::size_t iT=0; iT < iTmax; ++iT) {
     /// === Step 8.1: Update the Boundary Values and Fields at Times ===
@@ -265,16 +265,16 @@ int main(int argc, char* argv[]) {
     myCaseParameters.set<RESOLUTION               >(10);
     myCaseParameters.set<RAYLEIGH                 >(1e4);
     myCaseParameters.set<PRANDTL                  >(0.71);
-    myCaseParameters.set<MAX_PHYS_T               >(1000);
+    myCaseParameters.set<PHYS_MAX_T               >(1000);
     myCaseParameters.set<PHYS_CHAR_LENGTH         >(0.1);
     myCaseParameters.set<PHYS_CHAR_VISCOSITY      >(1e-5);
-    myCaseParameters.set<PHYS_CHAR_DENSITY        >(1.);
+    myCaseParameters.set<PHYS_DENSITY             >(1.);
     myCaseParameters.set<PHYS_THERMAL_CONDUCTIVITY>(0.03);
     myCaseParameters.set<LATTICE_CHAR_VELOCITY    >(0.1);
-    myCaseParameters.set<PHYS_CHAR_HIGH_TEMPERATURE>(274.15);
-    myCaseParameters.set<PHYS_CHAR_LOW_TEMPERATURE>(273.15);
+    myCaseParameters.set<T_HOT                    >(274.15);
+    myCaseParameters.set<T_COLD                   >(273.15);
     myCaseParameters.set<T_PERTURB                >(
-      1. / 5. * myCaseParameters.get<PHYS_CHAR_LOW_TEMPERATURE>() + 4./5. * myCaseParameters.get<PHYS_CHAR_HIGH_TEMPERATURE>()
+      1. / 5. * myCaseParameters.get<T_COLD>() + 4./5. * myCaseParameters.get<T_HOT>()
     );
     myCaseParameters.set<PHYS_DELTA_X             >(
       myCaseParameters.get<PHYS_CHAR_LENGTH>() / myCaseParameters.get<RESOLUTION>()
@@ -287,11 +287,11 @@ int main(int argc, char* argv[]) {
     );
     myCaseParameters.set<PHYS_HEAT_CAPACITY       >(
       myCaseParameters.get<PRANDTL>() * myCaseParameters.get<PHYS_THERMAL_CONDUCTIVITY>() /
-      (myCaseParameters.get<PHYS_CHAR_VISCOSITY>() * myCaseParameters.get<PHYS_CHAR_DENSITY>())
+      (myCaseParameters.get<PHYS_CHAR_VISCOSITY>() * myCaseParameters.get<PHYS_DENSITY>())
     );
     myCaseParameters.set<PHYS_THERMAL_EXPANSION   >(
       myCaseParameters.get<RAYLEIGH>() * util::pow(myCaseParameters.get<PHYS_CHAR_VISCOSITY>(), 2) /
-      (myCaseParameters.get<PRANDTL>() * 9.81 * (myCaseParameters.get<PHYS_CHAR_HIGH_TEMPERATURE>() - myCaseParameters.get<PHYS_CHAR_LOW_TEMPERATURE>()) * util::pow(myCaseParameters.get<PHYS_CHAR_LENGTH>(), 3))
+      (myCaseParameters.get<PRANDTL>() * 9.81 * (myCaseParameters.get<T_HOT>() - myCaseParameters.get<T_COLD>()) * util::pow(myCaseParameters.get<PHYS_CHAR_LENGTH>(), 3))
     );
     myCaseParameters.set<PHYS_VTK_ITER_T          >(10.0);
     myCaseParameters["reporter"]["statistics"].set<PHYS_ITER_T>(10.0);

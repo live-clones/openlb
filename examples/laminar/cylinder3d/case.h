@@ -41,10 +41,7 @@ using MyCase = Case<
 namespace olb::parameters {
 
 struct RADIUS_CYLINDER            : public descriptors::FIELD_BASE<1> { };
-struct RAMP_UP_UPDATE             : public descriptors::FIELD_BASE<1> { };
 struct RAMP_UP_END_FRACTION       : public descriptors::FIELD_BASE<1> { };
-
-struct DRAG : public descriptors::FIELD_BASE<1> { };
 
 }
 
@@ -194,12 +191,12 @@ void setTemporalValues(MyCase& myCase,
   auto& lattice    = myCase.getLattice(NavierStokes{});
   auto& geometry   = myCase.getGeometry();
 
-  const T maxPhysT   = parameters.get<parameters::MAX_PHYS_T>();
+  const T maxPhysT   = parameters.get<parameters::PHYS_MAX_T>();
   const T physDeltaX = 2.*parameters.get<parameters::RADIUS_CYLINDER>()/parameters.get<parameters::RESOLUTION>();
 
   // No of time steps for smooth start-up
   std::size_t iTmaxStart = lattice.getUnitConverter().getLatticeTime(maxPhysT*parameters.get<parameters::RAMP_UP_END_FRACTION>());
-  std::size_t iTupdate   = lattice.getUnitConverter().getLatticeTime(parameters.get<parameters::RAMP_UP_UPDATE>());
+  std::size_t iTupdate   = lattice.getUnitConverter().getLatticeTime(parameters.get<parameters::RAMP_UP_T>());
 
   if (iT%iTupdate == 0 && iT <= iTmaxStart) {
     T frac{};
@@ -244,7 +241,7 @@ void getResults(MyCase& myCase,
 
   const std::size_t vtkIter  = converter.getLatticeTime(parameters.get<parameters::PHYS_VTK_ITER_T>());
   const std::size_t statIter = converter.getLatticeTime(parameters.get<parameters::PHYS_STAT_ITER_T>());
-  const T maxPhysT           = parameters.get<parameters::MAX_PHYS_T>();
+  const T maxPhysT           = parameters.get<parameters::PHYS_MAX_T>();
 
   if (parameters.get<parameters::VTK_ENABLED>()) {
     SuperVTMwriter3D<T> vtmWriter("cylinder3d");
@@ -324,7 +321,7 @@ void getResults(MyCase& myCase,
     drag(dragA, input1);
     clout << "; drag=" << dragA[0] << "; lift=" << dragA[1] << std::endl;
 
-    myCase.getParameters().set<parameters::DRAG>(dragA[0]);
+    myCase.getParameters().set<parameters::COEFFICIENT_OF_DRAG>(dragA[0]);
 
     //int input[4] = {};
     //SuperMax3D<T> yPlusMaxF(yPlus, geometry, 1);
@@ -349,7 +346,7 @@ void simulate(MyCase& myCase){
   OstreamManager clout(std::cout, "simulate");
   using T = MyCase::value_t;
   auto& parameters        = myCase.getParameters();
-  const T physMaxT        = parameters.get<parameters::MAX_PHYS_T>();
+  const T physMaxT        = parameters.get<parameters::PHYS_MAX_T>();
   const std::size_t iTmax = myCase.getLattice(NavierStokes{}).getUnitConverter().getLatticeTime(physMaxT);
 
   clout << "starting simulation..." << std::endl;

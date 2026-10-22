@@ -227,7 +227,7 @@ void getResults(CASE& myCase, util::Timer<typename CASE::value_t>& timer, std::s
   auto& converter  = lattice.getUnitConverter();
   auto& parameters = myCase.getParameters();
 
-  const std::size_t iTMax     = converter.getLatticeTime(parameters.template get<parameters::MAX_PHYS_T>());
+  const std::size_t iTMax     = converter.getLatticeTime(parameters.template get<parameters::PHYS_MAX_T>());
   const std::size_t iTlog     = parameters.template get<parameters::IT_LOG_PSEUDO_TIME>();
   const std::size_t convIter  = parameters.template get<parameters::CONV_ITER>();
   const bool        converged = parameters.template get<parameters::CONVERGED>();
@@ -381,7 +381,7 @@ void simulate(CASE& myCase)
   auto& lattice    = myCase.getLattice(names::NavierCauchy {});
   auto& parameters = myCase.getParameters();
 
-  const T           physMaxT = parameters.template get<parameters::MAX_PHYS_T>();
+  const T           physMaxT = parameters.template get<parameters::PHYS_MAX_T>();
   const std::size_t convIt   = parameters.template get<parameters::CONV_ITER>();
   const std::size_t iTmax    = lattice.getUnitConverter().getLatticeTime(physMaxT);
 

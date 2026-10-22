@@ -7,7 +7,7 @@ EXEC_CMD=${EXEC_CMD:-mpirun}
 EXE_NAME=$(basename "$PWD")
 
 for N in 30 40 50 60 80 100 120; do
-    $EXEC_CMD ./$EXE_NAME -- --RESOLUTION $N --VTK_ENABLED "0" --MAX_PHYS_T "0.4"
+    $EXEC_CMD ./$EXE_NAME -- --RESOLUTION $N --VTK_ENABLED "0" --PHYS_MAX_T "0.4"
 done
 
 python3 - << 'EOF'

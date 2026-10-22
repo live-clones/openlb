@@ -392,7 +392,7 @@ int main( int argc, char *argv[] ) {
     myCaseParameters.set<KAPPA1           >(0.0075);      // For surface tensions       [lattice units]
     myCaseParameters.set<KAPPA2           >(0.005);       // For surface tensions       [lattice units]
     myCaseParameters.set<parameters::GAMMA>(1.);          // For mobility of interfaces [lattice units]
-    myCaseParameters.set<parameters::RADIUS>([](MyCase::ParametersD& p) {
+    myCaseParameters.set<parameters::RADIUS>([] (MyCase::ParametersD& p) {
       return p.get<DOMAIN_EXTENT>()[0] * 0.25;
     });
   }

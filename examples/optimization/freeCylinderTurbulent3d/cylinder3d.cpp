@@ -83,7 +83,6 @@ struct DOMAIN_EXTENT_Z                    : public descriptors::FIELD_BASE<1> { 
 struct CENTER_CYLINDER_X                  : public descriptors::FIELD_BASE<1> { };
 struct CENTER_CYLINDER_Y                  : public descriptors::FIELD_BASE<1> { };
 struct AVERAGING_START_FRACTION           : public descriptors::FIELD_BASE<1> { };
-struct RAMP_UP_UPDATE                     : public descriptors::FIELD_BASE<1> { };
 struct RAMP_UP_END_FRACTION               : public descriptors::FIELD_BASE<1> { };
 struct ADJOINT_RAMP_UP_UPDATE             : public descriptors::FIELD_BASE<1> { };
 struct ADJOINT_RAMP_UP_END_FRACTION       : public descriptors::FIELD_BASE<1> { };
@@ -293,13 +292,13 @@ void setTemporalValues(CASE& myCase,
   auto& geometry   = myCase.getGeometry();
   auto& converter  = lattice.getUnitConverter();
 
-  const T maxPhysT   = parameters.template get<parameters::MAX_PHYS_T>();
+  const T maxPhysT   = parameters.template get<parameters::PHYS_MAX_T>();
 
   if (myCase.hasName(Controlled{})) {
     std::size_t iTmaxStart = converter.getLatticeTime(
       maxPhysT*parameters.template get<parameters::RAMP_UP_END_FRACTION>());
     std::size_t iTupdate   = converter.getLatticeTime(
-      parameters.template get<parameters::RAMP_UP_UPDATE>());
+      parameters.template get<parameters::RAMP_UP_T>());
     if (iT % iTupdate == 0 && iT <= iTmaxStart) {
       using Coupling_t = SuperLatticeCoupling<SingleLatticeO<operators::SmoothConstInflowO>,
                                               meta::map<names::Lattice1,
@@ -342,7 +341,7 @@ void getResults(CASE& myCase,
 
   const UnitConverter<T,DESCRIPTOR>& converter = lattice.getUnitConverter();
   const std::size_t statIter = converter.getLatticeTime(parameters.template get<parameters::PHYS_STAT_ITER_T>());
-  const std::size_t iTstartAvg = converter.getLatticeTime(parameters.template get<parameters::MAX_PHYS_T>() *
+  const std::size_t iTstartAvg = converter.getLatticeTime(parameters.template get<parameters::PHYS_MAX_T>() *
                                                           parameters.template get<parameters::AVERAGING_START_FRACTION>());
   if (iT == iTstartAvg) {
     lattice.setProcessingContext(ProcessingContext::Evaluation);
@@ -486,9 +485,9 @@ void simulate(CASE& myCase, auto& objectiveParameters){
   using T = typename CASE::value_t;
   auto& parameters = myCase.getParameters();
   auto& converter = myCase.getLattice(NavierStokes{}).getUnitConverter();
-  const T physMaxT = parameters.template get<parameters::MAX_PHYS_T>();
+  const T physMaxT = parameters.template get<parameters::PHYS_MAX_T>();
   const std::size_t iTmax = converter.getLatticeTime(physMaxT);
-  const std::size_t iTstartAvg = converter.getLatticeTime(parameters.template get<parameters::MAX_PHYS_T>() *
+  const std::size_t iTstartAvg = converter.getLatticeTime(parameters.template get<parameters::PHYS_MAX_T>() *
                                                           parameters.template get<parameters::AVERAGING_START_FRACTION>());
 
   clout << "starting simulation..." << std::endl;
@@ -788,7 +787,7 @@ int main(int argc, char* argv[])
     using namespace olb::parameters;
     myCaseParameters.set<RESOLUTION>(21);
     myCaseParameters.set<REYNOLDS >(3900.);
-    myCaseParameters.set<MAX_PHYS_T>(800.);
+    myCaseParameters.set<PHYS_MAX_T>(800.);
     myCaseParameters.set<DOMAIN_EXTENT_X>(4.0);
     myCaseParameters.set<DOMAIN_EXTENT_Y>(1.01);
     myCaseParameters.set<DOMAIN_EXTENT_Z>(.51);
@@ -803,7 +802,7 @@ int main(int argc, char* argv[])
     myCaseParameters.set<ADJOINT_PHYS_VTK_ITER_T>(100.);
     myCaseParameters.set<PHYS_STAT_ITER_T>(1.5);
     myCaseParameters.set<AVERAGING_START_FRACTION>(0.1);
-    myCaseParameters.set<RAMP_UP_UPDATE>(0.01);
+    myCaseParameters.set<RAMP_UP_T>(0.01);
     myCaseParameters.set<RAMP_UP_END_FRACTION>(0.075);
     myCaseParameters.set<ADJOINT_RAMP_UP_UPDATE>(0.01);
     myCaseParameters.set<ADJOINT_RAMP_UP_END_FRACTION>(0.8);

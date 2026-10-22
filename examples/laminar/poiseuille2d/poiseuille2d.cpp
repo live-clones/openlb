@@ -59,7 +59,7 @@ int main( int argc, char* argv[] )
     myCaseParameters.set<PHYS_CHAR_VELOCITY>(1.0);
     myCaseParameters.set<REYNOLDS>(10);
     myCaseParameters.set<LATTICE_RELAXATION_TIME>(0.8);
-    myCaseParameters.set<MAX_PHYS_T>(30.);
+    myCaseParameters.set<PHYS_MAX_T>(30.);
     myCaseParameters.set<PHYS_CHAR_DENSITY>(1.0);
     myCaseParameters.set<TUNER_PARAM>(0.5);
 
@@ -73,12 +73,12 @@ int main( int argc, char* argv[] )
     myCaseParameters.set<GNUPLOT_ENABLED>(true);
     myCaseParameters.set<COMPUTE_ERROR>(true);
 
-    myCaseParameters.set<PHYS_VTK_ITER_T>([](MyCase::ParametersD& p) {
-      return p.get<MAX_PHYS_T>()/20.;
+    myCaseParameters.set<PHYS_VTK_ITER_T>([] (MyCase::ParametersD& p) {
+      return p.get<PHYS_MAX_T>()/20.;
     });
 
-    myCaseParameters.set<PHYS_STAT_ITER_T>([](MyCase::ParametersD& p) {
-      return p.get<MAX_PHYS_T>()/20.;
+    myCaseParameters.set<PHYS_STAT_ITER_T>([] (MyCase::ParametersD& p) {
+      return p.get<PHYS_MAX_T>()/20.;
     });
 
   }

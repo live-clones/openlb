@@ -354,7 +354,7 @@ void simulate(MyCase& myCase){
   auto& converter = lattice.getUnitConverter();
   auto& parameters = myCase.getParameters();
 
-  T physTime = parameters.get<parameters::MAX_PHYS_T>();
+  T physTime = parameters.get<parameters::PHYS_MAX_T>();
 
   // Main Loop with Timer
   std::cout << "starting simulation..." << std::endl;
@@ -384,7 +384,7 @@ int main(int argc, char **argv)
     myCaseParameters.set<PHYS_CHAR_VELOCITY>(0.1);
     myCaseParameters.set<PHYS_CHAR_VISCOSITY>(1./6.);
     myCaseParameters.set<PHYS_CHAR_DENSITY>(1e0);
-    myCaseParameters.set<MAX_PHYS_T>(500.);
+    myCaseParameters.set<PHYS_MAX_T>(500.);
     myCaseParameters.set<DOMAIN_EXTENT>({512., 50., 50.});
     myCaseParameters.set<GRAVITY>({0., 0., 0.});
     myCaseParameters.set<LATTICE_RELAXATION_TIME>(.6);

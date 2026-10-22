@@ -125,7 +125,7 @@ void prepareLattice(MyCase& myCase)
   const T physCharDensity = parameters.get<parameters::PHYS_CHAR_DENSITY>();
   const bool bouzidiOn = parameters.get<parameters::BOUZIDI_ENABLED>();
 
-  myCase.getLattice(NavierStokes{}).setUnitConverter<UnitConverter<T,DESCRIPTOR>>(
+  myCase.getLattice(NavierStokes{}).setUnitConverter(
     physDeltaX,        // physDeltaX: spacing between two lattice cells in [m]
     physDeltaT,        // physDeltaT: time step in [s]
     physLength,        // charPhysLength: reference length of simulation geometry in [m]
@@ -136,7 +136,7 @@ void prepareLattice(MyCase& myCase)
   lattice.getUnitConverter().print();
   lattice.getUnitConverter().write("aorta3d");
 
-  util::Timer<T> timer1( lattice.getUnitConverter().getLatticeTime(parameters.get<parameters::MAX_PHYS_T>()), geometry.getStatistics().getNvoxel() );
+  util::Timer<T> timer1( lattice.getUnitConverter().getLatticeTime(parameters.get<parameters::PHYS_MAX_T>()), geometry.getStatistics().getNvoxel() );
   timer1.start();
 
   auto stlI = myCase.getMesh().getIndicator(parameters.get<parameters::STL_PATH>());
@@ -331,7 +331,7 @@ void simulate(MyCase& myCase) {
   auto& parameters = myCase.getParameters();
   auto& geometry = myCase.getGeometry();
 
-  const T maxPhysT = parameters.get<parameters::MAX_PHYS_T>();
+  const T maxPhysT = parameters.get<parameters::PHYS_MAX_T>();
 
   OstreamManager clout(std::cout, "simulate");
 
@@ -380,9 +380,9 @@ int main( int argc, char* argv[] )
     myCaseParameters.set<PHYS_CHAR_VELOCITY >(0.45);
     myCaseParameters.set<PHYS_CHAR_VISCOSITY>(0.003/1055.);
     myCaseParameters.set<PHYS_CHAR_DENSITY  >(1055);
-    myCaseParameters.set<MAX_PHYS_T         >(2.); // max. simulation time in s, SI unit
+    myCaseParameters.set<PHYS_MAX_T         >(2.); // max. simulation time in s, SI unit
     myCaseParameters.set<BOUZIDI_ENABLED    >(true);
-    myCaseParameters.set<PHYS_DELTA_X>([](MyCase::ParametersD& p) {
+    myCaseParameters.set<PHYS_DELTA_X>([] (MyCase::ParametersD& p) {
       return p.get<parameters::PHYS_CHAR_LENGTH>()
            / p.get<parameters::RESOLUTION>();
     });

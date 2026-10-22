@@ -206,7 +206,7 @@ std::vector<std::vector<MyCase::value_t>> getDNSValues(MyCase& myCase)
 
   //Brachet, Marc E., et al. "Small-scale structure of the Taylor–Green vortex." Journal of Fluid Mechanics 130 (1983): 411-452; Figure 7
   const T Re = parameters.get<parameters::REYNOLDS>();
-  const T maxPhysT = parameters.get<parameters::MAX_PHYS_T>();
+  const T maxPhysT = parameters.get<parameters::PHYS_MAX_T>();
   const T vtkSave = maxPhysT / 40.;
   if (util::abs(Re - 800.0) < std::numeric_limits<T>::epsilon() && maxPhysT <= 10.0 + std::numeric_limits<T>::epsilon()) {
     file_name= "Re800_Brachet.inp";
@@ -277,7 +277,7 @@ void getResults(MyCase& myCase,
   auto& geometry = myCase.getGeometry();
   auto& converter = lattice.getUnitConverter();
 
-  const T maxPhysT = parameters.get<parameters::MAX_PHYS_T>();
+  const T maxPhysT = parameters.get<parameters::PHYS_MAX_T>();
   const std::size_t iTlog = converter.getLatticeTime(maxPhysT/40.);
   const std::size_t iTvtk = converter.getLatticeTime(maxPhysT/40.);
 
@@ -346,7 +346,7 @@ using BulkDynamics = KBCdynamics<T, DESCRIPTOR>;
 using BulkDynamics = SmagorinskyBGKdynamics<T,DESCRIPTOR>;
 #endif
 
-  const T maxPhysT = parameters.get<parameters::MAX_PHYS_T>();
+  const T maxPhysT = parameters.get<parameters::PHYS_MAX_T>();
   const T smagoConst = parameters.get<parameters::SMAGORINSKY>();
   const std::size_t iTvtk = converter.getLatticeTime(maxPhysT/40.);
   T omega = lattice.getUnitConverter().getLatticeRelaxationFrequency();
@@ -434,7 +434,7 @@ void simulate(MyCase& myCase) {
   auto& lattice = myCase.getLattice(NavierStokes{});
   auto& parameters = myCase.getParameters();
 
-  const T physMaxT = parameters.get<parameters::MAX_PHYS_T>();
+  const T physMaxT = parameters.get<parameters::PHYS_MAX_T>();
 
   const std::size_t iTmax = myCase.getLattice(NavierStokes{}).getUnitConverter().getLatticeTime(physMaxT);
   util::Timer<T> timer(iTmax, myCase.getGeometry().getStatistics().getNvoxel());
@@ -479,7 +479,7 @@ int main(int argc, char* argv[])
   {
     using namespace olb::parameters;
     myCaseParameters.set<RESOLUTION >(                                                   64);
-    myCaseParameters.set<MAX_PHYS_T >(                                                   10);
+    myCaseParameters.set<PHYS_MAX_T >(                                                   10);
     myCaseParameters.set<VOLUME     >(util::pow(2.*std::numbers::pi_v<MyCase::value_t>, 3.));
     myCaseParameters.set<REYNOLDS   >(                                                  800);
     myCaseParameters.set<SMAGORINSKY>(                                                  0.1);

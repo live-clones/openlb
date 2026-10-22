@@ -55,7 +55,7 @@ int main(int argc, char* argv[])
     using namespace olb::parameters;
     myCaseParameters.set<RESOLUTION>(10);
     myCaseParameters.set<REYNOLDS >(20.);
-    myCaseParameters.set<MAX_PHYS_T>(16.);
+    myCaseParameters.set<PHYS_MAX_T>(16.);
     myCaseParameters.set<DOMAIN_EXTENT>({2.2, .41});
     myCaseParameters.set<PHYS_CHAR_VELOCITY>(0.2);
     myCaseParameters.set<LATTICE_RELAXATION_TIME>(0.56);
@@ -72,7 +72,7 @@ int main(int argc, char* argv[])
     myCaseParameters.set<CENTER_CYLINDER>({0.2, 0.2});
     myCaseParameters.set<PHYS_VTK_ITER_T>(0.3);
     myCaseParameters.set<PHYS_STAT_ITER_T>(0.1);
-    myCaseParameters.set<RAMP_UP_UPDATE>(0.01);
+    myCaseParameters.set<RAMP_UP_T>(0.01);
     myCaseParameters.set<RAMP_UP_END_FRACTION>(0.4);
   }
 

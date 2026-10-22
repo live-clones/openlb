@@ -409,7 +409,7 @@ void simulate(MyCase& myCase){
   const bool bcPeriodic = parameters.get<parameters::PERIODIC_BC>();
 
   const std::size_t iTmax = converter.getLatticeTime(
-    parameters.get<parameters::MAX_PHYS_T>());
+    parameters.get<parameters::PHYS_MAX_T>());
 
   clout << "Starting simulation.. " << std::endl;
   util::Timer<T> timer(iTmax, myCase.getGeometry().getStatistics().getNvoxel());
@@ -490,7 +490,7 @@ int main( int argc, char* argv[] )
     myCaseParameters.set<REYNOLDS>(config["dynamics"]["Re"].get<T>());
     myCaseParameters.set<LATTICE_RELAXATION_TIME>(config["dynamics"]["tau"].get<T>());
     myCaseParameters.set<POWER_LAW_EXPONENT>(config["dynamics"]["n"].get<T>());
-    myCaseParameters.set<MAX_PHYS_T>(config["time"]["Tmax"].get<T>());
+    myCaseParameters.set<PHYS_MAX_T>(config["time"]["Tmax"].get<T>());
     myCaseParameters.set<PHYS_CHAR_DENSITY>(1.0);
     myCaseParameters.set<NU_MIN>(2.9686e-3);
     myCaseParameters.set<NU_MAX>(3.1667);

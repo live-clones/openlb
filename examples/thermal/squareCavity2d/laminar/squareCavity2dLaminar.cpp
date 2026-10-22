@@ -50,7 +50,7 @@ void compareToStudy(MyCase& myCase)
 
   ReferenceData<T> ref{};
 
-  auto simValues  = parameters.get<parameters::SIM_VALUES>();
+  auto simValues  = parameters.get<parameters::OUTPUT_VALUE_WRAPPER>();
 
   if (ref.hasRayleigh(Ra) && singleton::mpi().isMainProcessor()) {
     T xVelComp      = ref.getUx_max(Ra);
@@ -96,11 +96,11 @@ int main(int argc, char* argv[])
   MyCase::ParametersD myCaseParameters;
   {
     using namespace olb::parameters;
-    myCaseParameters.set<MAX_PHYS_T                 >(1e4);
+    myCaseParameters.set<PHYS_MAX_T                 >(1e4);
     myCaseParameters.set<RESOLUTION                 >(64);
     myCaseParameters.set<GRAVITATIONAL_ACC          >(9.81);
     myCaseParameters.set<PHYS_CHAR_VELOCITY         >(1);
-    myCaseParameters.set<ORIGIN                     >({0., 0.});
+    myCaseParameters.set<DOMAIN_ORIGIN              >({0., 0.});
     myCaseParameters.set<LATTICE_RELAXATION_TIME    >(0.65);
     myCaseParameters.set<CONVERGENCE_PRECISION      >(1e-4);
     myCaseParameters.set<PHYS_THERMAL_EXPANSION     >(3.41e-3);

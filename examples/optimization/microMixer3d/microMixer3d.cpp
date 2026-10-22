@@ -55,9 +55,6 @@ using MyOptiCase = OptiCaseFDQ<Controlled, MyCase>;
 
 namespace olb::parameters {
 
-struct DIFFUSION : public descriptors::FIELD_BASE<1> { };
-struct LATTICE_U : public descriptors::FIELD_BASE<1> { };
-
 // control variables
 struct PHYS_PERIOD  : public descriptors::FIELD_BASE<1> { };
 struct AMPLITUDE_PHYS_PRESSURE : public descriptors::FIELD_BASE<1> { };
@@ -121,7 +118,7 @@ void prepareLattice(MyCase& myCase) {
 
   sLattice.setUnitConverter<UnitConverterFromResolutionAndLatticeVelocity<T,D3Q19<>>>(
     (int)   params.get<parameters::RESOLUTION>(),        //resolution
-    ( T )   params.get<parameters::LATTICE_U>(),         //charLatticeVelocity
+    ( T )   params.get<parameters::LATTICE_CHAR_VELOCITY>(),         //charLatticeVelocity
     ( T )   params.get<parameters::PHYS_CHAR_LENGTH>(),  //charPhysLength
     ( T )   params.get<parameters::PHYS_CHAR_VELOCITY>(),  //charPhysVelocity
     ( T )   params.get<parameters::PHYS_CHAR_VISCOSITY>(), //physViscosity
@@ -129,7 +126,7 @@ void prepareLattice(MyCase& myCase) {
   );
   sLatticeAD.setUnitConverter<UnitConverterFromResolutionAndLatticeVelocity<T,D3Q7<VELOCITY>>>(
     (int)   params.get<parameters::RESOLUTION>(),        //resolution
-    ( T )   params.get<parameters::LATTICE_U>(),         //charLatticeVelocity
+    ( T )   params.get<parameters::LATTICE_CHAR_VELOCITY>(),         //charLatticeVelocity
     ( T )   params.get<parameters::PHYS_CHAR_LENGTH>(),  //charPhysLength
     ( T )   params.get<parameters::PHYS_CHAR_VELOCITY>(),  //charPhysVelocity
     ( T )   params.get<parameters::PHYS_CHAR_VISCOSITY>(), //physViscosity
@@ -290,7 +287,7 @@ void getResults(MyCase& myCase,
 
   const T time = converter.getPhysTime(iT);
   const T dt = converter.getPhysDeltaT();
-  const T physMaxTime = params.get<parameters::MAX_PHYS_T>();
+  const T physMaxTime = params.get<parameters::PHYS_MAX_T>();
   const T physPeriod = params.get<parameters::PHYS_PERIOD>();
 
   if (iT == 0) {
@@ -330,7 +327,7 @@ void simulate(MyCase& myCase,
   auto& params = myCase.getParameters();
 
   const std::size_t iTmax = myCase.getLattice(NavierStokes{}).getUnitConverter().getLatticeTime(
-    params.get<parameters::MAX_PHYS_T>());
+    params.get<parameters::PHYS_MAX_T>());
   util::Timer<T> timer(iTmax, myCase.getGeometry().getStatistics().getNvoxel());
   timer.start();
 
@@ -417,11 +414,11 @@ int main(int argc, char* argv[])
   MyCase::ParametersD myCaseParameters;
   {
     using namespace olb::parameters;
-    myCaseParameters.set<LATTICE_U          >(0.1);
+    myCaseParameters.set<LATTICE_CHAR_VELOCITY          >(0.1);
     myCaseParameters.set<PHYS_CHAR_VELOCITY >(0.0332);
     myCaseParameters.set<PHYS_CHAR_VISCOSITY>(1.e-6);
     myCaseParameters.set<PHYS_CHAR_LENGTH   >(0.00133);
-    myCaseParameters.set<MAX_PHYS_T         >(5.);   // time for fluid simulation
+    myCaseParameters.set<PHYS_MAX_T         >(5.);   // time for fluid simulation
     myCaseParameters.set<PHYS_START_T       >(0.6);  // time to start fluid pulsation
     myCaseParameters.set<PHYS_START_PERIOD  >(0.4);  // time to start fluid pulsation
     myCaseParameters.set<PHYS_CHAR_DENSITY  >(1000);

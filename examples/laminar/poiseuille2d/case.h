@@ -405,7 +405,7 @@ void getResults(MyCase& myCase,
   auto& geometry   = myCase.getGeometry();
 
   const UnitConverter<T,DESCRIPTOR>& converter = lattice.getUnitConverter();
-  const T maxPhysT        = parameters.get<parameters::MAX_PHYS_T>();
+  const T maxPhysT        = parameters.get<parameters::PHYS_MAX_T>();
   const T physLengthX     = parameters.get<parameters::DOMAIN_EXTENT>()[0];
   const T physLengthY     = parameters.get<parameters::DOMAIN_EXTENT>()[1];
   const T physDeltaX      = parameters.get<parameters::DOMAIN_EXTENT>()[1] / parameters.get<parameters::RESOLUTION>();
@@ -579,7 +579,7 @@ void simulate(MyCase& myCase){
   using T = MyCase::value_t;
   auto& parameters = myCase.getParameters();
 
-  const T physMaxT = parameters.get<parameters::MAX_PHYS_T>();
+  const T physMaxT = parameters.get<parameters::PHYS_MAX_T>();
   const std::size_t iTmax = myCase.getLattice(NavierStokes{}).getUnitConverter().getLatticeTime(physMaxT);
 
   clout << "starting simulation..." << std::endl;

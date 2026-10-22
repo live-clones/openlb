@@ -36,9 +36,6 @@ using namespace olb::opti;
 namespace olb::parameters {
 
 struct HEIGHT            : public descriptors::FIELD_BASE<1> { };
-struct BULK_VELOCITY     : public descriptors::FIELD_BASE<1> { };
-struct RESIDUUM          : public descriptors::FIELD_BASE<1> { };
-struct DIFFUSIVITY       : public descriptors::FIELD_BASE<1> { };
 
 struct REACTION_CONSTANT : public descriptors::FIELD_BASE<1> { };
 struct STOICHIOMETRY     : public descriptors::FIELD_BASE<3> { };
@@ -152,8 +149,8 @@ void prepareLattice(CASE& myCase){
     (T)   parameters.template get<parameters::PHYS_DELTA_X>(),                                                                               // physDeltaX
     (T)   util::pow(parameters.template get<parameters::HEIGHT>() / parameters.template get<parameters::RESOLUTION>(), 2),                            // physDeltaY
     (T)   parameters.template get<parameters::HEIGHT>(),                                                                                     // charPhysLength: reference length of simulation geometry
-    (T)   parameters.template get<parameters::PECLET>() * parameters.template get<parameters::DIFFUSIVITY>() / parameters.template get<parameters::HEIGHT>(),  // charPhysVelocity: maximal/highest expected velocity during simulation in __m / s__
-    (T)   parameters.template get<parameters::DIFFUSIVITY>(),                                                                                // physDiffusiviy
+    (T)   parameters.template get<parameters::PECLET>() * parameters.template get<parameters::PHYS_DIFFUSIVITY>() / parameters.template get<parameters::HEIGHT>(),  // charPhysVelocity: maximal/highest expected velocity during simulation in __m / s__
+    (T)   parameters.template get<parameters::PHYS_DIFFUSIVITY>(),                                                                                // physDiffusiviy
     (T)   parameters.template get<parameters::PHYS_CHAR_DENSITY>()                                                                           // physDensity: physical density in __kg / m^3__
   );
   ALattice.getUnitConverter().print();
@@ -281,8 +278,8 @@ void getResults(CASE& myCase, TIMER& timer, CONVERGE& converge, std::size_t iT)
   vtmWriter.addFunctor(productionC);
   vtmWriter.addFunctor(velocity);
 
-  const std::size_t vtkIter = converter.getLatticeTime(parameters.template get<parameters::MAX_PHYS_T>() / 100);
-  const std::size_t statIter = converter.getLatticeTime(parameters.template get<parameters::MAX_PHYS_T>() / 100);
+  const std::size_t vtkIter = converter.getLatticeTime(parameters.template get<parameters::PHYS_MAX_T>() / 100);
+  const std::size_t statIter = converter.getLatticeTime(parameters.template get<parameters::PHYS_MAX_T>() / 100);
 
   if (iT == 0) {
     // write the geometry
@@ -320,14 +317,14 @@ void simulate(CASE& myCase){
   auto& converter = ALattice.getUnitConverter();
   auto& superGeometry = myCase.getGeometry();
 
-  util::Timer<T> timer(converter.getLatticeTime(parameters.template get<parameters::MAX_PHYS_T>()), superGeometry.getStatistics().getNvoxel());
+  util::Timer<T> timer(converter.getLatticeTime(parameters.template get<parameters::PHYS_MAX_T>()), superGeometry.getStatistics().getNvoxel());
 
   // Convergence check
   util::ValueTracer<T> converge(converter.getLatticeTime(parameters.template get<parameters::INTERVAL_CONVERGENCE_CHECK>()), parameters.template get<parameters::RESIDUUM>());
   timer.start();
 
   const std::size_t reactionUpdateT = converter.getLatticeTime(parameters.template get<parameters::REACTION_UPDATE_T>());
-  for (std::size_t iT = 0; iT < converter.getLatticeTime(parameters.template get<parameters::MAX_PHYS_T>()); ++iT) {
+  for (std::size_t iT = 0; iT < converter.getLatticeTime(parameters.template get<parameters::PHYS_MAX_T>()); ++iT) {
 
     // Reaction coupling A + B -> C
     if (iT%reactionUpdateT == 0) {
@@ -416,9 +413,9 @@ int main(int argc, char* argv[]) {
     myCaseParameters.set<BULK_VELOCITY           >(     0.05);
     myCaseParameters.set<PHYS_CHAR_DENSITY       >(      1.0);
     myCaseParameters.set<PECLET                  >(  108.005);
-    myCaseParameters.set<MAX_PHYS_T              >( 100000.0);
+    myCaseParameters.set<PHYS_MAX_T              >( 100000.0);
     myCaseParameters.set<RESIDUUM                >(    1e-10);
-    myCaseParameters.set<DIFFUSIVITY             >(  0.07407);
+    myCaseParameters.set<PHYS_DIFFUSIVITY        >(  0.07407);
     myCaseParameters.set<PHYS_DELTA_X>([](MyCase::ParametersD& p) {
       return p.get<HEIGHT>()/p.get<RESOLUTION>();
     });
@@ -426,7 +423,7 @@ int main(int argc, char* argv[]) {
       return Vector{p.get<RESOLUTION>()*p.get<PHYS_DELTA_X>()*10, p.get<PHYS_DELTA_X>(), p.get<HEIGHT>()};
     });
     myCaseParameters.set<INTERVAL_CONVERGENCE_CHECK>([](MyCase::ParametersD& p) {
-      return p.get<MAX_PHYS_T>()*0.001;
+      return p.get<PHYS_MAX_T>()*0.001;
     });
     myCaseParameters.set<REACTION_CONSTANT    >(      1.1e-6);
     myCaseParameters.set<STOICHIOMETRY        >({-1.,-1.,1.});

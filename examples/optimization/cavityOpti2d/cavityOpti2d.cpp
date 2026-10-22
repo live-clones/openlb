@@ -192,7 +192,7 @@ void getResults(MyCase& myCase,
   auto& lattice = myCase.getLattice(NavierStokes{});
   auto& converter = lattice.getUnitConverter();
 
-  const T physMaxT = parameters.get<parameters::MAX_PHYS_T>();
+  const T physMaxT = parameters.get<parameters::PHYS_MAX_T>();
   const std::size_t iTlog = converter.getLatticeTime(physMaxT/20.);
   const std::size_t iTvtk = converter.getLatticeTime(physMaxT/100.);
 
@@ -226,7 +226,7 @@ void simulate(MyCase& myCase)
 {
   using T = MyCase::value_t;
   auto& parameters = myCase.getParameters();
-  const T physMaxT = parameters.get<parameters::MAX_PHYS_T>();
+  const T physMaxT = parameters.get<parameters::PHYS_MAX_T>();
 
   const std::size_t iTmax = myCase.getLattice(NavierStokes{}).getUnitConverter().getLatticeTime(physMaxT);
   util::Timer<T> timer(iTmax, myCase.getGeometry().getStatistics().getNvoxel());
@@ -334,7 +334,7 @@ int main(int argc, char* argv[])
     myCaseParameters.set<PHYS_CHAR_VISCOSITY>(     0.002);
     myCaseParameters.set<PHYS_CHAR_DENSITY  >(       1.0);
     myCaseParameters.set<DOMAIN_EXTENT      >({1.0, 1.0});
-    myCaseParameters.set<MAX_PHYS_T         >(       30.);
+    myCaseParameters.set<PHYS_MAX_T         >(       30.);
   }
 
   OptimizerParametersD<MyCase::value_t> optiParameters;

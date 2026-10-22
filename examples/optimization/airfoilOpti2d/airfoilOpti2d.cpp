@@ -293,7 +293,7 @@ void simulate(MyCase& myCase)
   parameters.set<parameters::AVERAGE_CL>(0.);
   parameters.set<parameters::AVERAGE_COUNT>(0.);
 
-  const T physMaxT = parameters.get<parameters::MAX_PHYS_T>();
+  const T physMaxT = parameters.get<parameters::PHYS_MAX_T>();
 
   const std::size_t iTmax = myCase.getLattice(NavierStokes{}).getUnitConverter().getLatticeTime(physMaxT);
   util::Timer<T> timer(iTmax, myCase.getGeometry().getStatistics().getNvoxel());
@@ -426,12 +426,12 @@ int main(int argc, char* argv[])
     using namespace olb::parameters;
     myCaseParameters.set<RESOLUTION                  >(        60); // 120
     myCaseParameters.set<REYNOLDS                    >(      1000);
-    myCaseParameters.set<MAX_PHYS_T                  >(      200.);
+    myCaseParameters.set<PHYS_MAX_T                  >(      200.);
     myCaseParameters.set<PHYS_START_PERIOD           >([](MyCase::ParametersD& p){
-      return p.get<MAX_PHYS_T>() * 0.4;
+      return p.get<PHYS_MAX_T>() * 0.4;
     });
     myCaseParameters.set<PHYS_START_AVERAGE_T        >([](MyCase::ParametersD& p){
-      return p.get<MAX_PHYS_T>() * 0.5;
+      return p.get<PHYS_MAX_T>() * 0.5;
     });
     myCaseParameters.set<PHYS_STAT_ITER_T            >(       0.5);
     myCaseParameters.set<PHYS_BOUNDARY_VALUE_UPDATE_T>(         5);
