@@ -418,10 +418,11 @@ int main(int argc, char* argv[]) {
   MyCase::ParametersD myCaseParameters;
   {
     using namespace olb::parameters;
+    using T = MyCase::value_t;
     myCaseParameters.set<RESOLUTION >(40);
     myCaseParameters.set<DOMAIN_L>(0.02);
     myCaseParameters.set<DOMAIN_EXTENT>([](MyCase::ParametersD& p) {
-      return Vector { p.get<DOMAIN_L>(), p.get<DOMAIN_L>()*6.0 };
+      return Vector { p.get<DOMAIN_L>(), p.get<DOMAIN_L>()*T{6.0} };
     });
     myCaseParameters.set<T_P        >(2.45);
     myCaseParameters.set<U_AMP      >(0.11);
