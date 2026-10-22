@@ -8,22 +8,22 @@ pagetitle: "OpenLB User Guide"
       <div class="logo-slide-track">
         <!-- 1st set -->
         <img src="pictures/airplane.jpg" alt="picture 1">
-        <img src="pictures/city.png" alt="picture 2">
+        <img src="pictures/city.jpg" alt="picture 2">
         <img src="pictures/shot.jpg" alt="picture 3">
         <img src="pictures/staticMixer3d.jpg" alt="picture 4">
-        <img src="pictures/windPark.png" alt="picture 5">
+        <img src="pictures/windPark.jpg" alt="picture 5">
         <!-- 2nd set -->
         <img src="pictures/airplane.jpg" alt="picture 1">
-        <img src="pictures/city.png" alt="picture 2">
+        <img src="pictures/city.jpg" alt="picture 2">
         <img src="pictures/shot.jpg" alt="picture 3">
         <img src="pictures/staticMixer3d.jpg" alt="picture 4">
         <img src="pictures/windPark.png" alt="picture 5">
         <!-- 3nd set -->
         <img src="pictures/airplane.jpg" alt="picture 1">
-        <img src="pictures/city.png" alt="picture 2">
+        <img src="pictures/city.jpg" alt="picture 2">
         <img src="pictures/shot.jpg" alt="picture 3">
         <img src="pictures/staticMixer3d.jpg" alt="picture 4">
-        <img src="pictures/windPark.png" alt="picture 5">
+        <img src="pictures/windPark.jpg" alt="picture 5">
       </div>
     </div>
 ```
