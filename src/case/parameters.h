@@ -28,16 +28,12 @@
 #include "core/meta.h"
 #include "core/parameters.h"
 
-#define OLB_INFO(docString) static constexpr std::string getInfo(){return std::string(docString);}
-
 namespace olb {
 
 namespace parameters {
 
 // Characteristic numbers
-struct REYNOLDS     : public descriptors::FIELD_BASE<1> {
-  OLB_INFO("Reynolds number - Ratio between viscous and intertial forces");
-};
+struct REYNOLDS     : public descriptors::FIELD_BASE<1> { };
 struct RAYLEIGH     : public descriptors::FIELD_BASE<1> { };
 struct PRANDTL      : public descriptors::FIELD_BASE<1> { };
 struct TAYLOR       : public descriptors::FIELD_BASE<1> { };
