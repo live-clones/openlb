@@ -48,4 +48,4 @@ sLattice.defineU( superGeometry, 3, poiseuilleU );
 
 The simulation results in a flow around the valve with the velocity field visualized in the following @fig-pipeWithValve.
     
-![Middle slice of the pipe with rotated valve.](/examples/forBeginners/fig/pipeWithValve.png){width="100%" #fig-pipeWithValve .lightbox}
+![Middle slice of the pipe with rotated valve.](/examples/forBeginners/pipeWithValve3d/doc/fig/pipeWithValve.png){width="100%" #fig-pipeWithValve .lightbox}

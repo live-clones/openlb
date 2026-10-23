@@ -155,9 +155,11 @@ def read_features(examples):
 
 
 def split_path(example):
-    """laminar/cavity2d -> ("", "cavity2d"); keeps intermediate directories."""
+    """laminar/cavity2d/cavity2d -> ("", "cavity2d"); keeps intermediate
+    directories. Every page sits in a directory of its own, named after the
+    example, which is left out."""
     parts = example.split("/")
-    prefix = "/".join(parts[1:-1])
+    prefix = "/".join(parts[1:-2])
     return (prefix + "/" if prefix else ""), parts[-1]
 
 

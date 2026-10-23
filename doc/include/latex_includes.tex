@@ -26,7 +26,6 @@
 \theoremstyle{plain}
 \newtheorem{theorem}{Theorem}
 \usepackage{booktabs}
-\usepackage{bm}
 
 
 \usepackage{geometry}
@@ -210,16 +209,13 @@
 
 \newcommand{\lb}{$\left<\right.$}
 \newcommand{\rb}{$\left.\right>$}
-\newcommand{\bigO}[1]{\mathbb{O}(#1)}
-\newcommand{\field}[1]{\mathbb{#1}}
-\newcommand{\NN}{\field{N}}
-\newcommand{\RR}{\field{R}}
-\newcommand{\Rplus}{\RR^+}
-\newcommand{\EOC}{\text{EOC}}
-\newcommand{\Err}{\text{Err}}
+%% Math macros shared with the website live in macros.tex.
 \newcommand{\class}[1]{\sloppy\lstinline[language=myc++]{#1}}
 \newcommand{\struct}[1]{\sloppy\lstinline[language=myc++]{#1}}
-\renewcommand{\boldsymbol}{\bm}
+%% bm cannot embolden the math characters of unicode-math (loaded above), so
+%% \bm{\Pi} stops XeLaTeX with "Improper alphabetic constant". Use the bold
+%% italic alphabet of unicode-math instead.
+\renewcommand{\boldsymbol}[1]{\symbfit{#1}}
 
 \let\OldTexttt\texttt % make \texttt sloppy to respect page margins
 \renewcommand{\texttt}[1]{\sloppy{\footnotesize\OldTexttt{#1}}}

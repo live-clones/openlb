@@ -11,9 +11,9 @@ The example employs adjoint Lattice Boltzmann methods for gradient computation. 
 
 ::: {#fig-td-opti layout-ncol=2}
 
-![Identified object, surrounding velocity field and streamlines.](/examples/optimization/fig/td_flow.png){#fig-td-flow}
+![Identified object, surrounding velocity field and streamlines.](/examples/optimization/domainId3d/doc/fig/td_flow.png){#fig-td-flow}
 
-![Relative decrease of the objective functional and its derivative w.r.t. the design variables.](/examples/optimization/fig/td_trend.png){#fig-td-trend}
+![Relative decrease of the objective functional and its derivative w.r.t. the design variables.](/examples/optimization/domainId3d/doc/fig/td_trend.png){#fig-td-trend}
 
 Results of domain identification after 97 optimization steps. The objective hardly changes after ca. 30 optimization steps.
 

@@ -9,7 +9,7 @@ Thereby, two vessels with a temperature difference are connected by a pipe, whos
 This gradient leads to the acceleration of the gas particles that collide with the pipe wall.
 Besides, the Knudsen slip effect plays a role, which, together with thermal creep, establishes a circulating flow in the pipe.
 
-![Streamlines in the Knudsen pump.](/examples/microfluidics/fig/knudsenPump.png){#fig-knudsenPump width="70%"}
+![Streamlines in the Knudsen pump.](/examples/microfluidics/knudsenPump3d/doc/fig/knudsenPump.png){#fig-knudsenPump width="70%"}
 
 The thermal creep effect can be mathematically described as a wall velocity
 
@@ -25,4 +25,4 @@ $$
 
 The nitrogen by $Kn=0.05$ in the given Knudsen pump by 4 K temperature difference leads to the pressure development shown in @fig-knudsenPumpPlot.
 
-![Pressure difference in the Knudsen pump. Numerical and analytical results.](/examples/microfluidics/fig/knudsenPumpPlot.png){#fig-knudsenPumpPlot width="60%"}
+![Pressure difference in the Knudsen pump. Numerical and analytical results.](/examples/microfluidics/knudsenPump3d/doc/fig/knudsenPumpPlot.png){#fig-knudsenPumpPlot width="60%"}

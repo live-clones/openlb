@@ -4,6 +4,7 @@
  *  Copyright (C) 2007, 2012 Jonas Latt, Mathias J. Krause,
  *  Vojtech Cvrcek, Peter Weisbrod,
  *  2025 Fedor Bukreev
+ *  2026 Johannes Grafen
  *  E-mail contact: info@openlb.net
  *  The most recent release of OpenLB can be downloaded at
  *  <http://www.openlb.net/>
@@ -88,6 +89,7 @@ namespace olb::parameters {
   struct COMPUTE_ERROR : public descriptors::TYPED_FIELD_BASE<bool,1> { };
   struct FLOW_TYPE     : public descriptors::TYPED_FIELD_BASE<FlowType, 1> { };
   struct BOUNDARY_TYPE : public descriptors::TYPED_FIELD_BASE<BoundaryType, 1> { };
+  struct EOC           : public descriptors::TYPED_FIELD_BASE<bool,1> { };
 
 };
 
@@ -277,7 +279,7 @@ void setTemporalValues(MyCase& myCase,
 { }
 
 // Compute error norms
-void errorNorms(MyCase& myCase)
+std::vector<MyCase::value_t> errorNorms(MyCase& myCase)
 {
   OstreamManager clout( std::cout,"error" );
   using T = MyCase::value_t;
@@ -295,6 +297,7 @@ void errorNorms(MyCase& myCase)
 
   int tmp[]= { };
   T result[2]= { };
+  std::vector<T> absErrors;
 
   bool bounceBack = false;
   if (parameters.get<parameters::BOUNDARY_TYPE>() == BoundaryType::bounceBack){
@@ -316,6 +319,7 @@ void errorNorms(MyCase& myCase)
 
   SuperAbsoluteErrorL1Norm2D<T> absVelocityErrorNormL1(u, uSol, indicatorF);
   absVelocityErrorNormL1(result, tmp);
+  absErrors.push_back(result[0]);
   clout << "velocity-L1-error(abs)=" << result[0];
   SuperRelativeErrorL1Norm2D<T> relVelocityErrorNormL1(u, uSol, indicatorF);
   relVelocityErrorNormL1(result, tmp);
@@ -323,6 +327,7 @@ void errorNorms(MyCase& myCase)
 
   SuperAbsoluteErrorL2Norm2D<T> absVelocityErrorNormL2(u, uSol, indicatorF);
   absVelocityErrorNormL2(result, tmp);
+  absErrors.push_back(result[0]);
   clout << "velocity-L2-error(abs)=" << result[0];
   SuperRelativeErrorL2Norm2D<T> relVelocityErrorNormL2(u, uSol, indicatorF);
   relVelocityErrorNormL2(result, tmp);
@@ -330,6 +335,7 @@ void errorNorms(MyCase& myCase)
 
   SuperAbsoluteErrorLinfNorm2D<T> absVelocityErrorNormLinf(u, uSol, indicatorF);
   absVelocityErrorNormLinf(result, tmp);
+  absErrors.push_back(result[0]);
   clout << "velocity-Linf-error(abs)=" << result[0];
   SuperRelativeErrorLinfNorm2D<T> relVelocityErrorNormLinf(u, uSol, indicatorF);
   relVelocityErrorNormLinf(result, tmp);
@@ -341,6 +347,7 @@ void errorNorms(MyCase& myCase)
 
   SuperAbsoluteErrorL1Norm2D<T> absStrainRateErrorNormL1(s, sSol, indicatorF);
   absStrainRateErrorNormL1(result, tmp);
+  absErrors.push_back(result[0]);
   clout << "strainRate-L1-error(abs)=" << result[0];
   SuperRelativeErrorL1Norm2D<T> relStrainRateErrorNormL1(s, sSol, indicatorF);
   relStrainRateErrorNormL1(result, tmp);
@@ -348,6 +355,7 @@ void errorNorms(MyCase& myCase)
 
   SuperAbsoluteErrorL2Norm2D<T> absStrainRateErrorNormL2(s, sSol, indicatorF);
   absStrainRateErrorNormL2(result, tmp);
+  absErrors.push_back(result[0]);
   clout << "strainRate-L2-error(abs)=" << result[0];
   SuperRelativeErrorL2Norm2D<T> relStrainRateErrorNormL2(s, sSol, indicatorF);
   relStrainRateErrorNormL2(result, tmp);
@@ -355,6 +363,7 @@ void errorNorms(MyCase& myCase)
 
   SuperAbsoluteErrorLinfNorm2D<T> absStrainRateErrorNormLinf(s, sSol, indicatorF);
   absStrainRateErrorNormLinf(result, tmp);
+  absErrors.push_back(result[0]);
   clout << "strainRate-Linf-error(abs)=" << result[0];
   SuperRelativeErrorLinfNorm2D<T> relStrainRateErrorNormLinf(s, sSol, indicatorF);
   relStrainRateErrorNormLinf(result, tmp);
@@ -371,6 +380,7 @@ void errorNorms(MyCase& myCase)
 
     SuperAbsoluteErrorL1Norm2D<T> absPressureErrorNormL1(pressure, pressureSol, indicatorF);
     absPressureErrorNormL1(result, tmp);
+    absErrors.push_back(result[0]);
     clout << "pressure-L1-error(abs)=" << result[0];
     SuperRelativeErrorL1Norm2D<T> relPressureErrorNormL1(pressure, pressureSol, indicatorF);
     relPressureErrorNormL1(result, tmp);
@@ -378,6 +388,7 @@ void errorNorms(MyCase& myCase)
 
     SuperAbsoluteErrorL2Norm2D<T> absPressureErrorNormL2(pressure, pressureSol, indicatorF);
     absPressureErrorNormL2(result, tmp);
+    absErrors.push_back(result[0]);
     clout << "pressure-L2-error(abs)=" << result[0];
     SuperRelativeErrorL2Norm2D<T> relPressureErrorNormL2(pressure, pressureSol, indicatorF);
     relPressureErrorNormL2(result, tmp);
@@ -385,11 +396,13 @@ void errorNorms(MyCase& myCase)
 
     SuperAbsoluteErrorLinfNorm2D<T> absPressureErrorNormLinf(pressure, pressureSol, indicatorF);
     absPressureErrorNormLinf(result, tmp);
+    absErrors.push_back(result[0]);
     clout << "pressure-Linf-error(abs)=" << result[0];
     SuperRelativeErrorLinfNorm2D<T> relPressureErrorNormLinf(pressure, pressureSol, indicatorF);
     relPressureErrorNormLinf(result, tmp);
     clout << "; pressure-Linf-error(rel)=" << result[0] << std::endl;
   }
+  return absErrors;
 }
 
 // Output to console and files
@@ -412,16 +425,8 @@ void getResults(MyCase& myCase,
   const bool hasConverged = parameters.get<parameters::CONVERGED>();
   const bool computeError = parameters.get<parameters::COMPUTE_ERROR>();
 
-  // variables for eoc analysis
-  T velocityL1AbsError = 0;
-  T velocityL2AbsError = 0;
-  T strainRateL1AbsError = 0;
-  T strainRateL2AbsError = 0;
-  T pressureL1AbsError = 0;
-  T pressureL2AbsError = 0;
-  T velocityLinfAbsError = 0;
-  T pressureLinfAbsError = 0;
-  T strainRateLinfAbsError = 0;
+  // absolute errors of the last evaluation, plotted over the resolution
+  static std::vector<T> absErrors;
 
   const bool lastTimeStep = (hasConverged || (iT + 1 == converter.getLatticeTime(maxPhysT)));
   bool noslipBoundary = true;
@@ -508,69 +513,57 @@ void getResults(MyCase& myCase,
     // Error norms
     if (noslipBoundary) {
       if ((computeError || lastTimeStep)){
-        errorNorms(myCase);
+        absErrors = errorNorms(myCase);
       }
     }
   }
 
   static Gnuplot<T> gplot("centerVelocity");
+  static Gnuplot<T> gplotError("error", false, "set terminal png size 900,850",
+                               Gnuplot<T>::LOGLOG, Gnuplot<T>::LINREG);
   // Gnuplot output
-  if ((noslipBoundary) && (lastTimeStep)) {
+  if ((noslipBoundary) && (lastTimeStep) && parameters.get<parameters::GNUPLOT_ENABLED>()
+      && parameters.get<parameters::EOC>()) {
     lattice.setProcessingContext(ProcessingContext::Evaluation);
-    if (parameters.get<parameters::GNUPLOT_ENABLED>()) {
-      if (parameters.get<parameters::FLOW_TYPE>() == FlowType::nonForced){
-        gplot.setData (
-        T(converter.getResolution()),
-        { velocityL1AbsError, velocityL2AbsError, velocityLinfAbsError,
-          strainRateL1AbsError, strainRateL2AbsError, strainRateLinfAbsError,
-          pressureL1AbsError, pressureL2AbsError, pressureLinfAbsError },
-        { "velocity L1 abs Error","velocity L2 abs Error",
-          "velocity Linf abs error","strain rate L1 abs error",
-          "strain rate L2 abs error", "strain rate Linf abs error",
-          "pressure L1 abs error", "pressure L2 abs error",
-          "pressure Linf abs error" },
-        "top right",
-        { 'p','p','p','p','p','p','p','p','p' } );
-      } else {
-        // same as above, but without pressure computation
-        gplot.setData (
-          T(converter.getResolution()),
-          { velocityL1AbsError, velocityL2AbsError, velocityLinfAbsError,
-            strainRateL1AbsError, strainRateL2AbsError, strainRateLinfAbsError },
-          { "velocity L1 abs Error","velocity L2 abs Error",
-            "velocity Linf abs error","strain rate L1 abs error",
-            "strain rate L2 abs error", "strain rate Linf abs error"},
-          "top right",
-          { 'p','p','p','p','p', 'p' } );
-      }
+    std::vector<std::string> errorNames {
+      "velocity L1 abs error", "velocity L2 abs error", "velocity Linf abs error",
+      "strain rate L1 abs error", "strain rate L2 abs error", "strain rate Linf abs error",
+      "pressure L1 abs error", "pressure L2 abs error", "pressure Linf abs error" };
+    errorNames.resize(absErrors.size());
+    gplotError.setLabel("resolution N", "absolute error");
+    gplotError.setData(T(converter.getResolution()), absErrors, errorNames, "below offset 0,-1",
+                       std::vector<char>(absErrors.size(), 'p'));
+    gplotError.writePNG(-1, -1, "error");
+  }
+
+  if ((noslipBoundary) && (lastTimeStep) && parameters.get<parameters::GNUPLOT_ENABLED>()
+      && !parameters.get<parameters::EOC>()) {
+    lattice.setProcessingContext(ProcessingContext::Evaluation);
+    // plot velocity magnitude over line through the center of the simulation domain
+    const T maxVelocity = converter.getPhysVelocity( converter.getCharLatticeVelocity() );
+    T Ly = physLengthY / physDeltaX;
+    bool bounceBack = false;
+    if (parameters.get<parameters::BOUNDARY_TYPE>() == BoundaryType::bounceBack){
+      bounceBack = true;
     }
-    else {  // if !eoc
-      // plot velocity magnitude over line through the center of the simulation domain
-      const T maxVelocity = converter.getPhysVelocity( converter.getCharLatticeVelocity() );
-      T Ly = physLengthY / physDeltaX;
-      bool bounceBack = false;
-      if (parameters.get<parameters::BOUNDARY_TYPE>() == BoundaryType::bounceBack){
-        bounceBack = true;
-      }
-      const T radius = (bounceBack) ?
-        T(0.5) * (Ly - physDeltaX) : T(0.5) * physLengthY;
-      std::vector<T> axisPoint{physLengthX/T(2), physLengthY/T(2)};
-      std::vector<T> axisDirection{1, 0};
-      Poiseuille2D<T> uSol(axisPoint, axisDirection, maxVelocity, radius);
-      SuperLatticePhysVelocity2D<T, DESCRIPTOR> velocity(lattice, converter);
-      AnalyticalFfromSuperF2D<T> intpolateVelocity(velocity, true);
-      T point[2] { };
-      point[0] = physLengthX/2.;
-      T analytical[2] { };
-      T numerical[2] { };
-      for (int iY=0; iY<=Ly; ++iY) {
-        point[1] = (T)iY/Ly;
-        uSol(analytical, point);
-        intpolateVelocity(numerical, point);
-        gplot.setData(iY*physDeltaX, {analytical[0], numerical[0]}, {"analytical","numerical"});
-      }
-      gplot.writePNG();
+    const T radius = (bounceBack) ?
+      T(0.5) * (Ly - physDeltaX) : T(0.5) * physLengthY;
+    std::vector<T> axisPoint{physLengthX/T(2), physLengthY/T(2)};
+    std::vector<T> axisDirection{1, 0};
+    Poiseuille2D<T> uSol(axisPoint, axisDirection, maxVelocity, radius);
+    SuperLatticePhysVelocity2D<T, DESCRIPTOR> velocity(lattice, converter);
+    AnalyticalFfromSuperF2D<T> intpolateVelocity(velocity, true);
+    T point[2] { };
+    point[0] = physLengthX/2.;
+    T analytical[2] { };
+    T numerical[2] { };
+    for (int iY=0; iY<=Ly; ++iY) {
+      point[1] = (T)iY/Ly;
+      uSol(analytical, point);
+      intpolateVelocity(numerical, point);
+      gplot.setData(iY*physDeltaX, {analytical[0], numerical[0]}, {"analytical","numerical"});
     }
+    gplot.writePNG(-1, -1, "centerVelocity");
   }
 }
 
@@ -610,4 +603,25 @@ void simulate(MyCase& myCase){
 
   timer.stop();
   timer.printSummary();
+}
+
+void run(MyCase::ParametersD& myCaseParameters)
+{
+  /// === Step 3: Create Mesh ===
+  Mesh mesh = createMesh(myCaseParameters);
+
+  /// === Step 4: Create Case ===
+  MyCase myCase(myCaseParameters, mesh);
+
+  /// === Step 5: Prepare Geometry ===
+  prepareGeometry(myCase);
+
+  /// === Step 6: Prepare Lattice ===
+  prepareLattice(myCase);
+
+  /// === Step 7: Set Initial Conditions ===
+  setInitialValues(myCase);
+
+  /// === Step 8: Simulate ===
+  simulate(myCase);
 }

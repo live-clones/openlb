@@ -10,7 +10,7 @@ title: List of Contributors
 \setkomafont{descriptionlabel}{\sffamily\bfseries\large}
 ```
 
-Armani Arfaoui
+Amani Arfaoui
 
 :   **core**: performance improvements for D3Q19 BGK collision operator
 
@@ -26,21 +26,57 @@ Lukas Baron
 
 :   **utilities**: (parallel) console output, time and performance measurement, **dynamics**: porous media model, **functors**: concept, div. functors implementation
 
+Akash Bhardwaj
+
+:   **general**: code development
+
 Tim Bingert
 
 :   **multi-phase-multi-component**: MCMP Shan-Chen models and equation of state UnitConverter, **examples**: air-water equilibrium examples, **organization**: testing
+
+Simon Bock
+
+:   **examples**: refactoring of laminar and advectionDiffusionReaction examples
+
+Oliver Boolakee
+
+:   **general**: code development
 
 Fedor Bukreev
 
 :   **reaction**: adsorption and reaction models, **examples**: adsorption examples, **organization**: testing
 
+Daniel Castroviejo
+
+:   **general**: code development
+
+A. Claro Barreto
+
+:   **general**: code development
+
+Michael Crocoll
+
+:   **boundaries**: Bouzidi boundary condition
+
 Vojtech Cvrcek
 
 :   **dynamics**: power law, **examples**: power law, updates, **functors**: 2D adaptation
 
+Luiz Czelusniak
+
+:   **general**: code development
+
 Davide Dapelo
 
 :   **core**: power-law unit converter, **dynamics**: Guo-Zhao porous, contributions on power-law, contributions on HLBM, **examples**: reactionFiniteDifferences2d, advectionDiffusion3d, advectionDiffusionPipe3d, **functors**: contributions on indicator and smooth indicator
+
+Marcio Dorn
+
+:   **general**: code development
+
+Leonardo Dorneles
+
+:   **core**: HIP GPU platform support
 
 Tim Dornieden
 
@@ -62,6 +98,18 @@ Max Gaedtke
 
 :   **core**: unit converter, **dynamics**: thermal, **examples**: thermal
 
+Christoph Gaul
+
+:   **examples**: refactoring of particles, multiComponent and porousMedia examples
+
+Johannes Grafen
+
+:   **examples**: refactoring of laminar, advectionDiffusionReaction, turbulence and uncertaintyQuantification examples, **documentation**: user guide, example documentation
+
+Michael Grinschewski
+
+:   **examples**: turbulence/airfoiled, **functors**: IndicatorAirfoil2D, getSurfaceVector, **documentation**: UserGuide
+
 Simon Großmann
 
 :   **example**: poiseuille2dEOC, **io**: csv and gnuplot interface, **postprocessing**: eoc analysis
@@ -70,7 +118,7 @@ Nicolas Hafen
 
 :   **dynamics**: moving porous media (HLBM), **examples**: surface resolved particle simulations, bifurcation3d, **particles**: core framework, surface resolved particles, coupling, dynamics, creator-functions, particle framework refactoring, sub-grid scale refactoring, particle decomposition, **documentation**: user guide
 
-Marc Haussmann
+Marc Haußmann
 
 :   **dynamics**: turbulence modelling, **examples**: tgv3d, **io**: gnuplot heatmap
 
@@ -126,6 +174,14 @@ Louis Kronberg
 
 :   **core**: ade unit converter, **dynamics**: KBC, entropic LB, Cumulant, **examples**: advectionDiffusion1d, advectionDiffusion2d, bstep2d
 
+Timm Krüger
+
+:   **general**: code development
+
+Arsh Kumbhat
+
+:   **examples**: refactoring of laminar examples (cylinder2d, cylinder3d, powerLaw2d)
+
 Eliane Kummer
 
 :   **documentation**: user guide
@@ -133,6 +189,10 @@ Eliane Kummer
 Adrian Kummerländer
 
 :   **core**: SIMD CPU support, CUDA GPU support, population and field data structure, propagation pattern, vector hierarchy, cell interface, field data interface, meta descriptors, automatic code generation, **dynamics**: new dynamics concept, dynamics tuple, momenta concept, **communication**: block propagation, communication layer, **functors**: lp-norm, flux, reduction, lattice indicator, error norms, refinement quality criterion, composition, **boundaries**: new post processor concept, water-tightness testing and post-processor priority, **documentation**: metadata, user guide, release organization, **general**: CI maintenance, Nix environment, Core development, Operator-style model refactoring
+
+Halim Kusumaatmaja
+
+:   **general**: code development
 
 Jonas Latt
 
@@ -170,6 +230,10 @@ Patrick Nathen
 
 :   **dynamics**: turbulence modeling (advanced subgrid-scale models), **examples**: nozzle3d
 
+Andreas Nettekoven
+
+:   **examples**: refactoring of radiativeTransport, thermal and multiComponent examples
+
 Johannes Nguyen
 
 :   **examples**: four roll mill, binary shear flow
@@ -178,13 +242,57 @@ Aleksandra Pachalieva
 
 :   **dynamics**: thermal (MRT model), **examples**: thermal (MRT model)
 
+Tim Pertzel
+
+:   **general**: code development
+
+Gagan Deep Prakash
+
+:   **examples**: refactoring of freeSurface and forBeginners examples (fallingDrop3d, cylinder2d)
+
+František Prinz
+
+:   **functors**: particle drag and lift force models (Schiller-Naumann, Haider-Levenspiel, Tran-Cong, Stokes spheroid, spheroid lift), **examples**: bifurcation3d eulerLagrange
+
+Alice Raeli
+
+:   **examples**: gasStorage2d
+
+Florian Raichle
+
+:   **reaction**: adsorption models and isotherms, **core**: adsorption unit converter, **examples**: adsorption3d, microMixer3d
+
+Michael Rennick
+
+:   **general**: code development
+
+Tikhon Riazantsev
+
+:   **examples**: refactoring of multiComponent and turbulence examples
+
+Jesse Ross-Jones
+
+:   **general**: code development
+
 Martin Sadric
 
 :   **particles**: core framework, creator-functions, **documentation**: user guide
 
+Liam Sauterleute
+
+:   **dynamics**: k-epsilon RANS model, **examples**: refactoring of tgv3d, venturi3d, fourRollMill2d, binaryShearFlow2d, youngLaplace2d, youngLaplace3d
+
 Maximilian Schecher
 
 :   **postProcessor**: free surface, **example**: free surface, **general**: Adaptation of non-particle examples to the operator-style / GPU support
+
+Andreas Schneider
+
+:   **general**: code development
+
+Alexander Schulz
+
+:   **general**: code development
 
 Yuji Shimojima
 
@@ -194,6 +302,14 @@ Stephan Simonis
 
 :   **core**: ade unit converter, **examples**: advectionDiffusion1d, advectionDiffusion2d, advectionDiffusion3d, advectionDiffusionPipe3d, binaryShearFlow2d, fourRollMill2d, tgv3d, nozzle3d, uncertaintyQuantification, **documentation**: user guide, **dynamics**: MRT, KBC, Cumulant, entropic LB, free energy model, uncertainty quantification, stochastic Galerkin LBM, stochastic collocation LBM, Monte Carlo methods, **external**: features
 
+Pascal Sitter
+
+:   **examples**: web/cylinder2d
+
+Philipp Spelten
+
+:   **examples**: gaussPulse3d, refactoring of laminar, porousMedia and pdeSolverEoc examples, **dynamics**: absorbing layer dynamics
+
 Lukas Springmann
 
 :   **particles**: user-guide, unit tests
@@ -201,6 +317,14 @@ Lukas Springmann
 Bernd Stahl
 
 :   **communication**: 3D extension to MultiBlock structure for MPI parallelization (< release 0.9), **core**: parallel version of (scalar or tensor-valued) data fields (< release 0.9), **io**: VTK output of data (< release 0.9)
+
+Nando Suntoyo
+
+:   **dynamics**: advection-diffusion, power-law, non-Newtonian and porous BGK dynamics, **boundaries**: advection-diffusion boundaries, Robin boundary post processor
+
+Alexandre Tacques
+
+:   **general**: code development
 
 Dennis Teutscher
 
@@ -213,6 +337,10 @@ Robin Trunk
 Peter Weisbrod
 
 :   **dynamics**: parallel multi phase/component, **examples**: structure and showcases, phaseSeparationXd
+
+M. Wu
+
+:   **general**: code development
 
 Gilles Zahnd
 

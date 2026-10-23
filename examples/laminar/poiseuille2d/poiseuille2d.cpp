@@ -42,8 +42,6 @@
 
 #include "case.h"
 
-// simulation method as former main method, runs the simulation for the parameter N
-// decided whether eoc anlysis or not
 int main( int argc, char* argv[] )
 {
   OstreamManager clout(std::cout,"simulatePoiseuille");
@@ -72,6 +70,7 @@ int main( int argc, char* argv[] )
     myCaseParameters.set<VTK_ENABLED>(true);
     myCaseParameters.set<GNUPLOT_ENABLED>(true);
     myCaseParameters.set<COMPUTE_ERROR>(true);
+    myCaseParameters.set<EOC>(false);
 
     myCaseParameters.set<PHYS_VTK_ITER_T>([] (MyCase::ParametersD& p) {
       return p.get<PHYS_MAX_T>()/20.;
@@ -83,21 +82,17 @@ int main( int argc, char* argv[] )
 
   }
 
-  /// === Step 3: Create Mesh ===
-  Mesh mesh = createMesh(myCaseParameters);
-
-  /// === Step 4: Create Case ===
-  MyCase myCase(myCaseParameters, mesh);
-
-  /// === Step 5: Prepare Geometry ===
-  prepareGeometry(myCase);
-
-  /// === Step 6: Prepare Lattice ===
-  prepareLattice(myCase);
-
-  /// === Step 7: Set Initial Conditions ===
-  setInitialValues(myCase);
-
-  /// === Step 8: Simulate ===
-  simulate(myCase);
+  if (myCaseParameters.get<parameters::EOC>()) {
+    // Convergence study: one simulation per resolution, the error plot
+    // tmp/gnuplotData/error.png collects the errors of all of them
+    myCaseParameters.set<parameters::VTK_ENABLED>(false);
+    for (int resolution : {30, 50, 70, 100}) {
+      myCaseParameters.set<parameters::RESOLUTION>(resolution);
+      myCaseParameters.set<parameters::CONVERGED>(false);
+      run(myCaseParameters);
+    }
+  }
+  else {
+    run(myCaseParameters);
+  }
 }

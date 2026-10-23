@@ -74,4 +74,4 @@ This results in a mildly turbulent flow that is used as the inflow for the simul
 A full slip boundary is used at the upper and lower bounds to eliminate friction.
 The outflow is a constant pressure boundary, similar to the `cylinder2d` and `cylinder3d` examples.
 
-![Velocity magnitude around the airfoil profile.](/examples/turbulence/fig/airfoil2d.png){#fig-airfoil2d width="70%"}
+![Velocity magnitude around the airfoil profile.](/examples/turbulence/airfoil2d/doc/fig/airfoil2d.png){#fig-airfoil2d width="70%"}

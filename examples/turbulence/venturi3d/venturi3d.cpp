@@ -147,7 +147,7 @@ void setTemporalValues(MyCase& myCase,
     startScale(&frac, &iT);
 
     // Creates and sets the Poiseuille inflow profile using functors
-    CirclePoiseuille3D<T> poiseuilleU( geometry, 3, frac*lattice.getUnitConverter().getCharLatticeVelocity(), T(), lattice.getUnitConverter().getPhysDeltaX() );
+    CirclePoiseuille3D<T> poiseuilleU( geometry, 3, frac*lattice.getUnitConverter().getCharPhysVelocity(), T(), lattice.getUnitConverter().getPhysDeltaX() );
     momenta::setVelocity(lattice, geometry.getMaterialIndicator(3), poiseuilleU);
 
     lattice.setProcessingContext<Array<momenta::FixedVelocityMomentumGeneric::VELOCITY>>(

@@ -28,4 +28,4 @@ The LBM is validated against an analytical solution that is known for the target
 The radius of the sphere is $R$ and the radiative source is placed at radius $r_\mathrm{0} = 0.1 R$ and equipped with a Dirichlet boundary.
 Similarly, the outgoing Dirichlet boundary is placed at radius $r_\mathrm{1} = R$.
 
-![Cross section of the spherical benchmark with cell size $\triangle x$. Yellow indicates the radiative source, blue the participating volume and gray the outgoing boundary.](/examples/radiativeTransport/fig/sphericalDomain_radiation.png){#fig-domain-radiation width="60%"}
+![Cross section of the spherical benchmark with cell size $\triangle x$. Yellow indicates the radiative source, blue the participating volume and gray the outgoing boundary.](/examples/radiativeTransport/sphere3d/doc/fig/sphericalDomain_radiation.png){#fig-domain-radiation width="60%"}

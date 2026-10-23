@@ -63,15 +63,15 @@ bool PhysWallShearStressOnSurface3D<T,DESCRIPTOR>::operator() (T output[], const
   _densityF(&rho, neighbor.data());
   _stressF(stress, neighbor.data());
 
-  traction[0] = stress[0]/_physFactor*rho*normal[0] +
-                stress[1]/_physFactor*rho*normal[1] +
-                stress[2]/_physFactor*rho*normal[2];
-  traction[1] = stress[1]/_physFactor*rho*normal[0] +
-                stress[3]/_physFactor*rho*normal[1] +
-                stress[4]/_physFactor*rho*normal[2];
-  traction[2] = stress[2]/_physFactor*rho*normal[0] +
-                stress[4]/_physFactor*rho*normal[1] +
-                stress[5]/_physFactor*rho*normal[2];
+  traction[0] = stress[0]*_physFactor/rho*normal[0] +
+                stress[1]*_physFactor/rho*normal[1] +
+                stress[2]*_physFactor/rho*normal[2];
+  traction[1] = stress[1]*_physFactor/rho*normal[0] +
+                stress[3]*_physFactor/rho*normal[1] +
+                stress[4]*_physFactor/rho*normal[2];
+  traction[2] = stress[2]*_physFactor/rho*normal[0] +
+                stress[4]*_physFactor/rho*normal[1] +
+                stress[5]*_physFactor/rho*normal[2];
 
   T traction_normal_SP;
   T tractionNormalComponent[3];

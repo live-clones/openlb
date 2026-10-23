@@ -30,7 +30,7 @@ combined configuration of
 `structuralmechanics/linearElasticity/quasistationary/combinedEllipse` and follows the
 OpenLB implementation of [@kaiser:25].
 
-![The elliptic plate with its boundary conditions. The outer contour carries the traction (Neumann) condition, the two inner contours the prescribed displacement (Dirichlet) condition. Reproduced from [@grafenBenchmarkCasesGradientbased2026].](/examples/optimization/fig/ellipse_domain.png){#fig-ellipse-domain width="60%"}
+![The elliptic plate with its boundary conditions. The outer contour carries the traction (Neumann) condition, the two inner contours the prescribed displacement (Dirichlet) condition. Reproduced from [@grafenBenchmarkCasesGradientbased2026].](/examples/optimization/parameterIdentificationEllipseCombo2d/doc/fig/ellipse_domain.png){#fig-ellipse-domain width="60%"}
 
 Following [@boolakee:23b] the manufactured steady-state displacement is
 

@@ -196,6 +196,8 @@ void getResults(MyCase& myCase, std::size_t iT)
   }
 
   if (iT % vtkIter == 0) {
+    lattice.setProcessingContext(ProcessingContext::Evaluation);
+
     SuperVTMwriter2D<T>                         vtmWriter("nozzle2d");
     SuperLatticePhysVelocity2D<T, DESCRIPTOR>   velocity(lattice, lattice.getUnitConverter());
     SuperLatticePhysPressure2D<T, DESCRIPTOR>   pressure(lattice, lattice.getUnitConverter());

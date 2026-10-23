@@ -196,20 +196,22 @@ void setBoundaryValues(MyCase& myCase, std::size_t iT)
 
   if ( iT%iTupdate == 0 ) {
     // Smooth start curve, sinus
-    SinusStartScale<T,std::size_t> nSinusStartScale( iTperiod, lattice.getUnitConverter().getCharLatticeVelocity() );
+    SinusStartScale<T,std::size_t> nSinusStartScale( iTperiod, lattice.getUnitConverter().getCharPhysVelocity() );
 
     // Creates and sets the Poiseuille inflow profile using functors
     std::size_t iTvec[1]= {iT};
     T maxVelocity[1]= {T()};
     nSinusStartScale( maxVelocity,iTvec );
-    CirclePoiseuille3D<T> velocity( geometry,3,maxVelocity[0], T() );
 
     if (parameters.get<parameters::BOUZIDI_ENABLED>()) {
+      // setBouzidiVelocity expects the velocity in lattice units
+      CirclePoiseuille3D<T> velocity( geometry,3,lattice.getUnitConverter().getLatticeVelocity(maxVelocity[0]), T() );
       setBouzidiVelocity(lattice, geometry, 3, velocity);
       lattice.setProcessingContext<Array<descriptors::BOUZIDI_VELOCITY>>(
         ProcessingContext::Simulation);
     }
     else {
+      CirclePoiseuille3D<T> velocity( geometry,3,maxVelocity[0], T() );
       momenta::setVelocity(lattice, geometry.getMaterialIndicator(3), velocity);
       lattice.setProcessingContext<Array<momenta::FixedVelocityMomentumGeneric::VELOCITY>>(
         ProcessingContext::Simulation);

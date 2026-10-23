@@ -6,15 +6,15 @@
 \label{excat:adsorption}
 ```
 
-::: {.olb-example label="ex:adsorption/adsorption3d"}
+::: {.olb-example label="ex:adsorption/adsorption3d/adsorption3d"}
 
-{{< include adsorption/adsorption3d.qmd >}}
+{{< include adsorption/adsorption3d/adsorption3d.qmd >}}
 
 :::
 
-::: {.olb-example label="ex:adsorption/microMixer3d"}
+::: {.olb-example label="ex:adsorption/microMixer3d/microMixer3d"}
 
-{{< include adsorption/microMixer3d.qmd >}}
+{{< include adsorption/microMixer3d/microMixer3d.qmd >}}
 
 :::
 
@@ -25,45 +25,45 @@
 \label{excat:advectionDiffusionReaction}
 ```
 
-::: {.olb-example label="ex:advectionDiffusionReaction/advectionDiffusion1d"}
+::: {.olb-example label="ex:advectionDiffusionReaction/advectionDiffusion1d/advectionDiffusion1d"}
 
-{{< include advectionDiffusionReaction/advectionDiffusion1d.qmd >}}
-
-:::
-
-::: {.olb-example label="ex:advectionDiffusionReaction/advectionDiffusion2d"}
-
-{{< include advectionDiffusionReaction/advectionDiffusion2d.qmd >}}
+{{< include advectionDiffusionReaction/advectionDiffusion1d/advectionDiffusion1d.qmd >}}
 
 :::
 
-::: {.olb-example label="ex:advectionDiffusionReaction/advectionDiffusion3d"}
+::: {.olb-example label="ex:advectionDiffusionReaction/advectionDiffusion2d/advectionDiffusion2d"}
 
-{{< include advectionDiffusionReaction/advectionDiffusion3d.qmd >}}
-
-:::
-
-::: {.olb-example label="ex:advectionDiffusionReaction/convectedPlate3d"}
-
-{{< include advectionDiffusionReaction/convectedPlate3d.qmd >}}
+{{< include advectionDiffusionReaction/advectionDiffusion2d/advectionDiffusion2d.qmd >}}
 
 :::
 
-::: {.olb-example label="ex:advectionDiffusionReaction/laminarReactiveTmixer"}
+::: {.olb-example label="ex:advectionDiffusionReaction/advectionDiffusion3d/advectionDiffusion3d"}
 
-{{< include advectionDiffusionReaction/laminarReactiveTmixer.qmd >}}
-
-:::
-
-::: {.olb-example label="ex:advectionDiffusionReaction/longitudinalMixing3d"}
-
-{{< include advectionDiffusionReaction/longitudinalMixing3d.qmd >}}
+{{< include advectionDiffusionReaction/advectionDiffusion3d/advectionDiffusion3d.qmd >}}
 
 :::
 
-::: {.olb-example label="ex:advectionDiffusionReaction/microMixer3d"}
+::: {.olb-example label="ex:advectionDiffusionReaction/convectedPlate3d/convectedPlate3d"}
 
-{{< include advectionDiffusionReaction/microMixer3d.qmd >}}
+{{< include advectionDiffusionReaction/convectedPlate3d/convectedPlate3d.qmd >}}
+
+:::
+
+::: {.olb-example label="ex:advectionDiffusionReaction/laminarReactiveTmixer/laminarReactiveTmixer"}
+
+{{< include advectionDiffusionReaction/laminarReactiveTmixer/laminarReactiveTmixer.qmd >}}
+
+:::
+
+::: {.olb-example label="ex:advectionDiffusionReaction/longitudinalMixing3d/longitudinalMixing3d"}
+
+{{< include advectionDiffusionReaction/longitudinalMixing3d/longitudinalMixing3d.qmd >}}
+
+:::
+
+::: {.olb-example label="ex:advectionDiffusionReaction/microMixer3d/microMixer3d"}
+
+{{< include advectionDiffusionReaction/microMixer3d/microMixer3d.qmd >}}
 
 :::
 
@@ -74,21 +74,21 @@
 \label{excat:electroChemistry}
 ```
 
-::: {.olb-example label="ex:electroChemistry/electroosmosis"}
+::: {.olb-example label="ex:electroChemistry/electroosmosis/electroosmosis"}
 
-{{< include electroChemistry/electroosmosis.qmd >}}
-
-:::
-
-::: {.olb-example label="ex:electroChemistry/poissonNernstPlanck"}
-
-{{< include electroChemistry/poissonNernstPlanck.qmd >}}
+{{< include electroChemistry/electroosmosis/electroosmosis.qmd >}}
 
 :::
 
-::: {.olb-example label="ex:electroChemistry/poissonNernstPlanckSphere3d"}
+::: {.olb-example label="ex:electroChemistry/poissonNernstPlanck/poissonNernstPlanck"}
 
-{{< include electroChemistry/poissonNernstPlanckSphere3d.qmd >}}
+{{< include electroChemistry/poissonNernstPlanck/poissonNernstPlanck.qmd >}}
+
+:::
+
+::: {.olb-example label="ex:electroChemistry/poissonNernstPlanckSphere3d/poissonNernstPlanckSphere3d"}
+
+{{< include electroChemistry/poissonNernstPlanckSphere3d/poissonNernstPlanckSphere3d.qmd >}}
 
 :::
 
@@ -99,39 +99,39 @@
 \label{excat:forBeginners}
 ```
 
-::: {.olb-example label="ex:forBeginners/cavity2d"}
+::: {.olb-example label="ex:forBeginners/cavity2d/cavity2d"}
 
-{{< include forBeginners/cavity2d.qmd >}}
-
-:::
-
-::: {.olb-example label="ex:forBeginners/cylinder2d"}
-
-{{< include forBeginners/cylinder2d.qmd >}}
+{{< include forBeginners/cavity2d/cavity2d.qmd >}}
 
 :::
 
-::: {.olb-example label="ex:forBeginners/minimal3d"}
+::: {.olb-example label="ex:forBeginners/cylinder2d/cylinder2d"}
 
-{{< include forBeginners/minimal3d.qmd >}}
-
-:::
-
-::: {.olb-example label="ex:forBeginners/nozzle2d"}
-
-{{< include forBeginners/nozzle2d.qmd >}}
+{{< include forBeginners/cylinder2d/cylinder2d.qmd >}}
 
 :::
 
-::: {.olb-example label="ex:forBeginners/pipeWithValve3d"}
+::: {.olb-example label="ex:forBeginners/minimal3d/minimal3d"}
 
-{{< include forBeginners/pipeWithValve3d.qmd >}}
+{{< include forBeginners/minimal3d/minimal3d.qmd >}}
 
 :::
 
-::: {.olb-example label="ex:forBeginners/rayleighBenard2d"}
+::: {.olb-example label="ex:forBeginners/nozzle2d/nozzle2d"}
 
-{{< include forBeginners/rayleighBenard2d.qmd >}}
+{{< include forBeginners/nozzle2d/nozzle2d.qmd >}}
+
+:::
+
+::: {.olb-example label="ex:forBeginners/pipeWithValve3d/pipeWithValve3d"}
+
+{{< include forBeginners/pipeWithValve3d/pipeWithValve3d.qmd >}}
+
+:::
+
+::: {.olb-example label="ex:forBeginners/rayleighBenard2d/rayleighBenard2d"}
+
+{{< include forBeginners/rayleighBenard2d/rayleighBenard2d.qmd >}}
 
 :::
 
@@ -143,45 +143,45 @@
 ```
 
 {{< include freeSurface/_intro.qmd >}}
-::: {.olb-example label="ex:freeSurface/basicRisingBubble3d"}
+::: {.olb-example label="ex:freeSurface/basicRisingBubble3d/basicRisingBubble3d"}
 
-{{< include freeSurface/basicRisingBubble3d.qmd >}}
-
-:::
-
-::: {.olb-example label="ex:freeSurface/breakingDam2d"}
-
-{{< include freeSurface/breakingDam2d.qmd >}}
+{{< include freeSurface/basicRisingBubble3d/basicRisingBubble3d.qmd >}}
 
 :::
 
-::: {.olb-example label="ex:freeSurface/breakingDam3d"}
+::: {.olb-example label="ex:freeSurface/breakingDam2d/breakingDam2d"}
 
-{{< include freeSurface/breakingDam3d.qmd >}}
-
-:::
-
-::: {.olb-example label="ex:freeSurface/deepFallingDrop2d"}
-
-{{< include freeSurface/deepFallingDrop2d.qmd >}}
+{{< include freeSurface/breakingDam2d/breakingDam2d.qmd >}}
 
 :::
 
-::: {.olb-example label="ex:freeSurface/fallingDrop2d"}
+::: {.olb-example label="ex:freeSurface/breakingDam3d/breakingDam3d"}
 
-{{< include freeSurface/fallingDrop2d.qmd >}}
-
-:::
-
-::: {.olb-example label="ex:freeSurface/fallingDrop3d"}
-
-{{< include freeSurface/fallingDrop3d.qmd >}}
+{{< include freeSurface/breakingDam3d/breakingDam3d.qmd >}}
 
 :::
 
-::: {.olb-example label="ex:freeSurface/rayleighInstability"}
+::: {.olb-example label="ex:freeSurface/deepFallingDrop2d/deepFallingDrop2d"}
 
-{{< include freeSurface/rayleighInstability.qmd >}}
+{{< include freeSurface/deepFallingDrop2d/deepFallingDrop2d.qmd >}}
+
+:::
+
+::: {.olb-example label="ex:freeSurface/fallingDrop2d/fallingDrop2d"}
+
+{{< include freeSurface/fallingDrop2d/fallingDrop2d.qmd >}}
+
+:::
+
+::: {.olb-example label="ex:freeSurface/fallingDrop3d/fallingDrop3d"}
+
+{{< include freeSurface/fallingDrop3d/fallingDrop3d.qmd >}}
+
+:::
+
+::: {.olb-example label="ex:freeSurface/rayleighInstability3d/rayleighInstability"}
+
+{{< include freeSurface/rayleighInstability3d/rayleighInstability.qmd >}}
 
 :::
 
@@ -192,27 +192,27 @@
 \label{excat:fsi}
 ```
 
-::: {.olb-example label="ex:fsi/deformableParticleInShearFlow3d"}
+::: {.olb-example label="ex:fsi/deformableParticleInShearFlow3d/deformableParticleInShearFlow3d"}
 
-{{< include fsi/deformableParticleInShearFlow3d.qmd >}}
-
-:::
-
-::: {.olb-example label="ex:fsi/rigidValve2d"}
-
-{{< include fsi/rigidValve2d.qmd >}}
+{{< include fsi/deformableParticleInShearFlow3d/deformableParticleInShearFlow3d.qmd >}}
 
 :::
 
-::: {.olb-example label="ex:fsi/rotor3d"}
+::: {.olb-example label="ex:fsi/rigidValve2d/rigidValve2d"}
 
-{{< include fsi/rotor3d.qmd >}}
+{{< include fsi/rigidValve2d/rigidValve2d.qmd >}}
 
 :::
 
-::: {.olb-example label="ex:fsi/taylorCouette3d"}
+::: {.olb-example label="ex:fsi/rotor3d/rotor3d"}
 
-{{< include fsi/taylorCouette3d.qmd >}}
+{{< include fsi/rotor3d/rotor3d.qmd >}}
+
+:::
+
+::: {.olb-example label="ex:fsi/taylorCouette3d/taylorCouette3d"}
+
+{{< include fsi/taylorCouette3d/taylorCouette3d.qmd >}}
 
 :::
 
@@ -223,15 +223,15 @@
 \label{excat:gridRefinement}
 ```
 
-::: {.olb-example label="ex:gridRefinement/cellCentered"}
+::: {.olb-example label="ex:gridRefinement/cellCentered/cellCentered"}
 
-{{< include gridRefinement/cellCentered.qmd >}}
+{{< include gridRefinement/cellCentered/cellCentered.qmd >}}
 
 :::
 
-::: {.olb-example label="ex:gridRefinement/vertexCentered"}
+::: {.olb-example label="ex:gridRefinement/vertexCentered/vertexCentered"}
 
-{{< include gridRefinement/vertexCentered.qmd >}}
+{{< include gridRefinement/vertexCentered/vertexCentered.qmd >}}
 
 :::
 
@@ -242,81 +242,81 @@
 \label{excat:laminar}
 ```
 
-::: {.olb-example label="ex:laminar/aneurysm3d"}
+::: {.olb-example label="ex:laminar/aneurysm3d/aneurysm3d"}
 
-{{< include laminar/aneurysm3d.qmd >}}
-
-:::
-
-::: {.olb-example label="ex:laminar/bstep2d"}
-
-{{< include laminar/bstep2d.qmd >}}
+{{< include laminar/aneurysm3d/aneurysm3d.qmd >}}
 
 :::
 
-::: {.olb-example label="ex:laminar/bstep3d"}
+::: {.olb-example label="ex:laminar/bstep2d/bstep2d"}
 
-{{< include laminar/bstep3d.qmd >}}
-
-:::
-
-::: {.olb-example label="ex:laminar/cavity2d"}
-
-{{< include laminar/cavity2d.qmd >}}
+{{< include laminar/bstep2d/bstep2d.qmd >}}
 
 :::
 
-::: {.olb-example label="ex:laminar/cavity2dSolver"}
+::: {.olb-example label="ex:laminar/bstep3d/bstep3d"}
 
-{{< include laminar/cavity2dSolver.qmd >}}
-
-:::
-
-::: {.olb-example label="ex:laminar/cavity3d"}
-
-{{< include laminar/cavity3d.qmd >}}
+{{< include laminar/bstep3d/bstep3d.qmd >}}
 
 :::
 
-::: {.olb-example label="ex:laminar/cavity3dBenchmark"}
+::: {.olb-example label="ex:laminar/cavity2d/cavity2d"}
 
-{{< include laminar/cavity3dBenchmark.qmd >}}
-
-:::
-
-::: {.olb-example label="ex:laminar/cylinder2d"}
-
-{{< include laminar/cylinder2d.qmd >}}
+{{< include laminar/cavity2d/cavity2d.qmd >}}
 
 :::
 
-::: {.olb-example label="ex:laminar/cylinder3d"}
+::: {.olb-example label="ex:laminar/cavity2dSolver/cavity2dSolver"}
 
-{{< include laminar/cylinder3d.qmd >}}
-
-:::
-
-::: {.olb-example label="ex:laminar/nonNewtonianPoiseuille3d"}
-
-{{< include laminar/nonNewtonianPoiseuille3d.qmd >}}
+{{< include laminar/cavity2dSolver/cavity2dSolver.qmd >}}
 
 :::
 
-::: {.olb-example label="ex:laminar/poiseuille2d"}
+::: {.olb-example label="ex:laminar/cavity3d/cavity3d"}
 
-{{< include laminar/poiseuille2d.qmd >}}
-
-:::
-
-::: {.olb-example label="ex:laminar/poiseuille3d"}
-
-{{< include laminar/poiseuille3d.qmd >}}
+{{< include laminar/cavity3d/cavity3d.qmd >}}
 
 :::
 
-::: {.olb-example label="ex:laminar/powerLaw2d"}
+::: {.olb-example label="ex:laminar/cavity3dBenchmark/cavity3dBenchmark"}
 
-{{< include laminar/powerLaw2d.qmd >}}
+{{< include laminar/cavity3dBenchmark/cavity3dBenchmark.qmd >}}
+
+:::
+
+::: {.olb-example label="ex:laminar/cylinder2d/cylinder2d"}
+
+{{< include laminar/cylinder2d/cylinder2d.qmd >}}
+
+:::
+
+::: {.olb-example label="ex:laminar/cylinder3d/cylinder3d"}
+
+{{< include laminar/cylinder3d/cylinder3d.qmd >}}
+
+:::
+
+::: {.olb-example label="ex:laminar/nonNewtonianPoiseuille3d/nonNewtonianPoiseuille3d"}
+
+{{< include laminar/nonNewtonianPoiseuille3d/nonNewtonianPoiseuille3d.qmd >}}
+
+:::
+
+::: {.olb-example label="ex:laminar/poiseuille2d/poiseuille2d"}
+
+{{< include laminar/poiseuille2d/poiseuille2d.qmd >}}
+
+:::
+
+::: {.olb-example label="ex:laminar/poiseuille3d/poiseuille3d"}
+
+{{< include laminar/poiseuille3d/poiseuille3d.qmd >}}
+
+:::
+
+::: {.olb-example label="ex:laminar/powerLaw2d/powerLaw2d"}
+
+{{< include laminar/powerLaw2d/powerLaw2d.qmd >}}
 
 :::
 
@@ -327,21 +327,21 @@
 \label{excat:microfluidics}
 ```
 
-::: {.olb-example label="ex:microfluidics/knudsenPump3d"}
+::: {.olb-example label="ex:microfluidics/knudsenPump3d/knudsenPump3d"}
 
-{{< include microfluidics/knudsenPump3d.qmd >}}
-
-:::
-
-::: {.olb-example label="ex:microfluidics/microChannel2d"}
-
-{{< include microfluidics/microChannel2d.qmd >}}
+{{< include microfluidics/knudsenPump3d/knudsenPump3d.qmd >}}
 
 :::
 
-::: {.olb-example label="ex:microfluidics/microChannel3d"}
+::: {.olb-example label="ex:microfluidics/microChannel2d/microChannel2d"}
 
-{{< include microfluidics/microChannel3d.qmd >}}
+{{< include microfluidics/microChannel2d/microChannel2d.qmd >}}
+
+:::
+
+::: {.olb-example label="ex:microfluidics/microChannel3d/microChannel3d"}
+
+{{< include microfluidics/microChannel3d/microChannel3d.qmd >}}
 
 :::
 
@@ -353,129 +353,129 @@
 ```
 
 {{< include multiComponent/_intro.qmd >}}
-::: {.olb-example label="ex:multiComponent/airBubbleCoalescence3d"}
+::: {.olb-example label="ex:multiComponent/airBubbleCoalescence3d/airBubbleCoalescence3d"}
 
-{{< include multiComponent/airBubbleCoalescence3d.qmd >}}
-
-:::
-
-::: {.olb-example label="ex:multiComponent/binaryShearFlow2d"}
-
-{{< include multiComponent/binaryShearFlow2d.qmd >}}
+{{< include multiComponent/airBubbleCoalescence3d/airBubbleCoalescence3d.qmd >}}
 
 :::
 
-::: {.olb-example label="ex:multiComponent/bubbleChannel2d"}
+::: {.olb-example label="ex:multiComponent/binaryShearFlow2d/binaryShearFlow2d"}
 
-{{< include multiComponent/bubbleChannel2d.qmd >}}
-
-:::
-
-::: {.olb-example label="ex:multiComponent/contactAngle2d"}
-
-{{< include multiComponent/contactAngle2d.qmd >}}
+{{< include multiComponent/binaryShearFlow2d/binaryShearFlow2d.qmd >}}
 
 :::
 
-::: {.olb-example label="ex:multiComponent/contactAngle3d"}
+::: {.olb-example label="ex:multiComponent/bubbleChannel2d/bubbleChannel2d"}
 
-{{< include multiComponent/contactAngle3d.qmd >}}
-
-:::
-
-::: {.olb-example label="ex:multiComponent/dropletSplashing2d"}
-
-{{< include multiComponent/dropletSplashing2d.qmd >}}
+{{< include multiComponent/bubbleChannel2d/bubbleChannel2d.qmd >}}
 
 :::
 
-::: {.olb-example label="ex:multiComponent/dropletSplashing3d"}
+::: {.olb-example label="ex:multiComponent/contactAngle2d/contactAngle2d"}
 
-{{< include multiComponent/dropletSplashing3d.qmd >}}
-
-:::
-
-::: {.olb-example label="ex:multiComponent/flatInterfaceEOC2d"}
-
-{{< include multiComponent/flatInterfaceEOC2d.qmd >}}
+{{< include multiComponent/contactAngle2d/contactAngle2d.qmd >}}
 
 :::
 
-::: {.olb-example label="ex:multiComponent/fourRollMill2d"}
+::: {.olb-example label="ex:multiComponent/contactAngle3d/contactAngle3d"}
 
-{{< include multiComponent/fourRollMill2d.qmd >}}
-
-:::
-
-::: {.olb-example label="ex:multiComponent/horizontalGasLiquidPipe3d"}
-
-{{< include multiComponent/horizontalGasLiquidPipe3d.qmd >}}
+{{< include multiComponent/contactAngle3d/contactAngle3d.qmd >}}
 
 :::
 
-::: {.olb-example label="ex:multiComponent/isothermalEvaporation2d"}
+::: {.olb-example label="ex:multiComponent/dropletSplashing2d/dropletSplashing2d"}
 
-{{< include multiComponent/isothermalEvaporation2d.qmd >}}
-
-:::
-
-::: {.olb-example label="ex:multiComponent/microFluidics2d"}
-
-{{< include multiComponent/microFluidics2d.qmd >}}
+{{< include multiComponent/dropletSplashing2d/dropletSplashing2d.qmd >}}
 
 :::
 
-::: {.olb-example label="ex:multiComponent/phaseSeparation2d"}
+::: {.olb-example label="ex:multiComponent/dropletSplashing3d/dropletSplashing3d"}
 
-{{< include multiComponent/phaseSeparation2d.qmd >}}
-
-:::
-
-::: {.olb-example label="ex:multiComponent/phaseSeparation3d"}
-
-{{< include multiComponent/phaseSeparation3d.qmd >}}
+{{< include multiComponent/dropletSplashing3d/dropletSplashing3d.qmd >}}
 
 :::
 
-::: {.olb-example label="ex:multiComponent/rayleighTaylor2d"}
+::: {.olb-example label="ex:multiComponent/flatInterfaceEOC2d/flatInterfaceEOC2d"}
 
-{{< include multiComponent/rayleighTaylor2d.qmd >}}
-
-:::
-
-::: {.olb-example label="ex:multiComponent/rayleighTaylor3d"}
-
-{{< include multiComponent/rayleighTaylor3d.qmd >}}
+{{< include multiComponent/flatInterfaceEOC2d/flatInterfaceEOC2d.qmd >}}
 
 :::
 
-::: {.olb-example label="ex:multiComponent/risingBubble2d"}
+::: {.olb-example label="ex:multiComponent/fourRollMill2d/fourRollMill2d"}
 
-{{< include multiComponent/risingBubble2d.qmd >}}
-
-:::
-
-::: {.olb-example label="ex:multiComponent/verticalGasLiquidPipe2d"}
-
-{{< include multiComponent/verticalGasLiquidPipe2d.qmd >}}
+{{< include multiComponent/fourRollMill2d/fourRollMill2d.qmd >}}
 
 :::
 
-::: {.olb-example label="ex:multiComponent/waterAirFlatInterface2d"}
+::: {.olb-example label="ex:multiComponent/horizontalGasLiquidPipe3d/horizontalGasLiquidPipe3d"}
 
-{{< include multiComponent/waterAirFlatInterface2d.qmd >}}
-
-:::
-
-::: {.olb-example label="ex:multiComponent/youngLaplace2d"}
-
-{{< include multiComponent/youngLaplace2d.qmd >}}
+{{< include multiComponent/horizontalGasLiquidPipe3d/horizontalGasLiquidPipe3d.qmd >}}
 
 :::
 
-::: {.olb-example label="ex:multiComponent/youngLaplace3d"}
+::: {.olb-example label="ex:multiComponent/isothermalEvaporation2d/isothermalEvaporation2d"}
 
-{{< include multiComponent/youngLaplace3d.qmd >}}
+{{< include multiComponent/isothermalEvaporation2d/isothermalEvaporation2d.qmd >}}
+
+:::
+
+::: {.olb-example label="ex:multiComponent/microFluidics2d/microFluidics2d"}
+
+{{< include multiComponent/microFluidics2d/microFluidics2d.qmd >}}
+
+:::
+
+::: {.olb-example label="ex:multiComponent/phaseSeparation2d/phaseSeparation2d"}
+
+{{< include multiComponent/phaseSeparation2d/phaseSeparation2d.qmd >}}
+
+:::
+
+::: {.olb-example label="ex:multiComponent/phaseSeparation3d/phaseSeparation3d"}
+
+{{< include multiComponent/phaseSeparation3d/phaseSeparation3d.qmd >}}
+
+:::
+
+::: {.olb-example label="ex:multiComponent/rayleighTaylor2d/rayleighTaylor2d"}
+
+{{< include multiComponent/rayleighTaylor2d/rayleighTaylor2d.qmd >}}
+
+:::
+
+::: {.olb-example label="ex:multiComponent/rayleighTaylor3d/rayleighTaylor3d"}
+
+{{< include multiComponent/rayleighTaylor3d/rayleighTaylor3d.qmd >}}
+
+:::
+
+::: {.olb-example label="ex:multiComponent/risingBubble2d/risingBubble2d"}
+
+{{< include multiComponent/risingBubble2d/risingBubble2d.qmd >}}
+
+:::
+
+::: {.olb-example label="ex:multiComponent/verticalGasLiquidPipe2d/verticalGasLiquidPipe2d"}
+
+{{< include multiComponent/verticalGasLiquidPipe2d/verticalGasLiquidPipe2d.qmd >}}
+
+:::
+
+::: {.olb-example label="ex:multiComponent/waterAirFlatInterface2d/waterAirFlatInterface2d"}
+
+{{< include multiComponent/waterAirFlatInterface2d/waterAirFlatInterface2d.qmd >}}
+
+:::
+
+::: {.olb-example label="ex:multiComponent/youngLaplace2d/youngLaplace2d"}
+
+{{< include multiComponent/youngLaplace2d/youngLaplace2d.qmd >}}
+
+:::
+
+::: {.olb-example label="ex:multiComponent/youngLaplace3d/youngLaplace3d"}
+
+{{< include multiComponent/youngLaplace3d/youngLaplace3d.qmd >}}
 
 :::
 
@@ -486,15 +486,15 @@
 \label{excat:noise}
 ```
 
-::: {.olb-example label="ex:noise/gausspulse3d"}
+::: {.olb-example label="ex:noise/gausspulse3d/gausspulse3d"}
 
-{{< include noise/gausspulse3d.qmd >}}
+{{< include noise/gausspulse3d/gausspulse3d.qmd >}}
 
 :::
 
-::: {.olb-example label="ex:noise/refinedGausspulse3d"}
+::: {.olb-example label="ex:noise/refinedGausspulse3d/refinedGausspulse3d"}
 
-{{< include noise/refinedGausspulse3d.qmd >}}
+{{< include noise/refinedGausspulse3d/refinedGausspulse3d.qmd >}}
 
 :::
 
@@ -505,147 +505,147 @@
 \label{excat:optimization}
 ```
 
-::: {.olb-example label="ex:optimization/adsorptionBatchId3d"}
+::: {.olb-example label="ex:optimization/adsorptionBatchId3d/adsorptionBatchId3d"}
 
-{{< include optimization/adsorptionBatchId3d.qmd >}}
-
-:::
-
-::: {.olb-example label="ex:optimization/airfoilOpti2d"}
-
-{{< include optimization/airfoilOpti2d.qmd >}}
+{{< include optimization/adsorptionBatchId3d/adsorptionBatchId3d.qmd >}}
 
 :::
 
-::: {.olb-example label="ex:optimization/cavityOpti2d"}
+::: {.olb-example label="ex:optimization/airfoilOpti2d/airfoilOpti2d"}
 
-{{< include optimization/cavityOpti2d.qmd >}}
-
-:::
-
-::: {.olb-example label="ex:optimization/domainId3d"}
-
-{{< include optimization/domainId3d.qmd >}}
+{{< include optimization/airfoilOpti2d/airfoilOpti2d.qmd >}}
 
 :::
 
-::: {.olb-example label="ex:optimization/ellipsoidShape3d"}
+::: {.olb-example label="ex:optimization/cavityOpti2d/cavityOpti2d"}
 
-{{< include optimization/ellipsoidShape3d.qmd >}}
-
-:::
-
-::: {.olb-example label="ex:optimization/ellipsoidTopology2d"}
-
-{{< include optimization/ellipsoidTopology2d.qmd >}}
+{{< include optimization/cavityOpti2d/cavityOpti2d.qmd >}}
 
 :::
 
-::: {.olb-example label="ex:optimization/foamId3d"}
+::: {.olb-example label="ex:optimization/domainId3d/domainId3d"}
 
-{{< include optimization/foamId3d.qmd >}}
-
-:::
-
-::: {.olb-example label="ex:optimization/freeCylinder2d"}
-
-{{< include optimization/freeCylinder2d.qmd >}}
+{{< include optimization/domainId3d/domainId3d.qmd >}}
 
 :::
 
-::: {.olb-example label="ex:optimization/freeCylinderTurbulent3d"}
+::: {.olb-example label="ex:optimization/ellipsoidShape3d/ellipsoidShape3d"}
 
-{{< include optimization/freeCylinderTurbulent3d.qmd >}}
-
-:::
-
-::: {.olb-example label="ex:optimization/freeCylinderUnsteady2d"}
-
-{{< include optimization/freeCylinderUnsteady2d.qmd >}}
+{{< include optimization/ellipsoidShape3d/ellipsoidShape3d.qmd >}}
 
 :::
 
-::: {.olb-example label="ex:optimization/microMixer3d"}
+::: {.olb-example label="ex:optimization/ellipsoidTopology2d/ellipsoidTopology2d"}
 
-{{< include optimization/microMixer3d.qmd >}}
-
-:::
-
-::: {.olb-example label="ex:optimization/naturalConvectionOpti2d"}
-
-{{< include optimization/naturalConvectionOpti2d.qmd >}}
+{{< include optimization/ellipsoidTopology2d/ellipsoidTopology2d.qmd >}}
 
 :::
 
-::: {.olb-example label="ex:optimization/parameterIdentificationEllipseCombo2d"}
+::: {.olb-example label="ex:optimization/foamId3d/foamId3d"}
 
-{{< include optimization/parameterIdentificationEllipseCombo2d.qmd >}}
-
-:::
-
-::: {.olb-example label="ex:optimization/parameterIdentificationPoiseuille2d"}
-
-{{< include optimization/parameterIdentificationPoiseuille2d.qmd >}}
+{{< include optimization/foamId3d/foamId3d.qmd >}}
 
 :::
 
-::: {.olb-example label="ex:optimization/periodicPlateOpti2d"}
+::: {.olb-example label="ex:optimization/freeCylinder2d/freeCylinder2d"}
 
-{{< include optimization/periodicPlateOpti2d.qmd >}}
-
-:::
-
-::: {.olb-example label="ex:optimization/periodicPlateOptiAD2d"}
-
-{{< include optimization/periodicPlateOptiAD2d.qmd >}}
+{{< include optimization/freeCylinder2d/freeCylinder2d.qmd >}}
 
 :::
 
-::: {.olb-example label="ex:optimization/periodicPlateOptiParam2d"}
+::: {.olb-example label="ex:optimization/freeCylinderTurbulent3d/freeCylinderTurbulent3d"}
 
-{{< include optimization/periodicPlateOptiParam2d.qmd >}}
-
-:::
-
-::: {.olb-example label="ex:optimization/pipeTopology2d"}
-
-{{< include optimization/pipeTopology2d.qmd >}}
+{{< include optimization/freeCylinderTurbulent3d/freeCylinderTurbulent3d.qmd >}}
 
 :::
 
-::: {.olb-example label="ex:optimization/reactionKineticsId3d"}
+::: {.olb-example label="ex:optimization/freeCylinderUnsteady2d/freeCylinderUnsteady2d"}
 
-{{< include optimization/reactionKineticsId3d.qmd >}}
-
-:::
-
-::: {.olb-example label="ex:optimization/showcaseADf"}
-
-{{< include optimization/showcaseADf.qmd >}}
+{{< include optimization/freeCylinderUnsteady2d/freeCylinderUnsteady2d.qmd >}}
 
 :::
 
-::: {.olb-example label="ex:optimization/showcaseRosenbrock"}
+::: {.olb-example label="ex:optimization/microMixer3d/microMixer3d"}
 
-{{< include optimization/showcaseRosenbrock.qmd >}}
-
-:::
-
-::: {.olb-example label="ex:optimization/testFlowOpti3d"}
-
-{{< include optimization/testFlowOpti3d.qmd >}}
+{{< include optimization/microMixer3d/microMixer3d.qmd >}}
 
 :::
 
-::: {.olb-example label="ex:optimization/testFlowOptiAD3d"}
+::: {.olb-example label="ex:optimization/naturalConvectionOpti2d/naturalConvectionOpti2d"}
 
-{{< include optimization/testFlowOptiAD3d.qmd >}}
+{{< include optimization/naturalConvectionOpti2d/naturalConvectionOpti2d.qmd >}}
 
 :::
 
-::: {.olb-example label="ex:optimization/testFlowOptiParam3d"}
+::: {.olb-example label="ex:optimization/parameterIdentificationEllipseCombo2d/parameterIdentificationEllipseCombo2d"}
 
-{{< include optimization/testFlowOptiParam3d.qmd >}}
+{{< include optimization/parameterIdentificationEllipseCombo2d/parameterIdentificationEllipseCombo2d.qmd >}}
+
+:::
+
+::: {.olb-example label="ex:optimization/parameterIdentificationPoiseuille2d/parameterIdentificationPoiseuille2d"}
+
+{{< include optimization/parameterIdentificationPoiseuille2d/parameterIdentificationPoiseuille2d.qmd >}}
+
+:::
+
+::: {.olb-example label="ex:optimization/periodicPlateOpti2d/periodicPlateOpti2d"}
+
+{{< include optimization/periodicPlateOpti2d/periodicPlateOpti2d.qmd >}}
+
+:::
+
+::: {.olb-example label="ex:optimization/periodicPlateOptiAD2d/periodicPlateOptiAD2d"}
+
+{{< include optimization/periodicPlateOptiAD2d/periodicPlateOptiAD2d.qmd >}}
+
+:::
+
+::: {.olb-example label="ex:optimization/periodicPlateOptiParam2d/periodicPlateOptiParam2d"}
+
+{{< include optimization/periodicPlateOptiParam2d/periodicPlateOptiParam2d.qmd >}}
+
+:::
+
+::: {.olb-example label="ex:optimization/pipeTopology2d/pipeTopology2d"}
+
+{{< include optimization/pipeTopology2d/pipeTopology2d.qmd >}}
+
+:::
+
+::: {.olb-example label="ex:optimization/reactionKineticsId3d/reactionKineticsId3d"}
+
+{{< include optimization/reactionKineticsId3d/reactionKineticsId3d.qmd >}}
+
+:::
+
+::: {.olb-example label="ex:optimization/showcaseADf/showcaseADf"}
+
+{{< include optimization/showcaseADf/showcaseADf.qmd >}}
+
+:::
+
+::: {.olb-example label="ex:optimization/showcaseRosenbrock/showcaseRosenbrock"}
+
+{{< include optimization/showcaseRosenbrock/showcaseRosenbrock.qmd >}}
+
+:::
+
+::: {.olb-example label="ex:optimization/testFlowOpti3d/testFlowOpti3d"}
+
+{{< include optimization/testFlowOpti3d/testFlowOpti3d.qmd >}}
+
+:::
+
+::: {.olb-example label="ex:optimization/testFlowOptiAD3d/testFlowOptiAD3d"}
+
+{{< include optimization/testFlowOptiAD3d/testFlowOptiAD3d.qmd >}}
+
+:::
+
+::: {.olb-example label="ex:optimization/testFlowOptiParam3d/testFlowOptiParam3d"}
+
+{{< include optimization/testFlowOptiParam3d/testFlowOptiParam3d.qmd >}}
 
 :::
 
@@ -656,27 +656,27 @@
 \label{excat:particles}
 ```
 
-::: {.olb-example label="ex:particles/bifurcation3d"}
+::: {.olb-example label="ex:particles/bifurcation3d/bifurcation3d"}
 
-{{< include particles/bifurcation3d.qmd >}}
-
-:::
-
-::: {.olb-example label="ex:particles/dkt2d"}
-
-{{< include particles/dkt2d.qmd >}}
+{{< include particles/bifurcation3d/bifurcation3d.qmd >}}
 
 :::
 
-::: {.olb-example label="ex:particles/hinderedSettling3d"}
+::: {.olb-example label="ex:particles/dkt2d/dkt2d"}
 
-{{< include particles/hinderedSettling3d.qmd >}}
+{{< include particles/dkt2d/dkt2d.qmd >}}
 
 :::
 
-::: {.olb-example label="ex:particles/settlingCube3d"}
+::: {.olb-example label="ex:particles/hinderedSettling3d/hinderedSettling3d"}
 
-{{< include particles/settlingCube3d.qmd >}}
+{{< include particles/hinderedSettling3d/hinderedSettling3d.qmd >}}
+
+:::
+
+::: {.olb-example label="ex:particles/settlingCube3d/settlingCube3d"}
+
+{{< include particles/settlingCube3d/settlingCube3d.qmd >}}
 
 :::
 
@@ -687,39 +687,39 @@
 \label{excat:pdeSolverEoc}
 ```
 
-::: {.olb-example label="ex:pdeSolverEoc/cylinder2dEoc"}
+::: {.olb-example label="ex:pdeSolverEoc/cylinder2dEoc/cylinder2dEoc"}
 
-{{< include pdeSolverEoc/cylinder2dEoc.qmd >}}
-
-:::
-
-::: {.olb-example label="ex:pdeSolverEoc/cylinder3dEoc"}
-
-{{< include pdeSolverEoc/cylinder3dEoc.qmd >}}
+{{< include pdeSolverEoc/cylinder2dEoc/cylinder2dEoc.qmd >}}
 
 :::
 
-::: {.olb-example label="ex:pdeSolverEoc/poiseuille2dEoc"}
+::: {.olb-example label="ex:pdeSolverEoc/cylinder3dEoc/cylinder3dEoc"}
 
-{{< include pdeSolverEoc/poiseuille2dEoc.qmd >}}
-
-:::
-
-::: {.olb-example label="ex:pdeSolverEoc/poiseuille3dEoc"}
-
-{{< include pdeSolverEoc/poiseuille3dEoc.qmd >}}
+{{< include pdeSolverEoc/cylinder3dEoc/cylinder3dEoc.qmd >}}
 
 :::
 
-::: {.olb-example label="ex:pdeSolverEoc/poisson"}
+::: {.olb-example label="ex:pdeSolverEoc/poiseuille2dEoc/poiseuille2dEoc"}
 
-{{< include pdeSolverEoc/poisson.qmd >}}
+{{< include pdeSolverEoc/poiseuille2dEoc/poiseuille2dEoc.qmd >}}
 
 :::
 
-::: {.olb-example label="ex:pdeSolverEoc/testFlow3dEoc"}
+::: {.olb-example label="ex:pdeSolverEoc/poiseuille3dEoc/poiseuille3dEoc"}
 
-{{< include pdeSolverEoc/testFlow3dEoc.qmd >}}
+{{< include pdeSolverEoc/poiseuille3dEoc/poiseuille3dEoc.qmd >}}
+
+:::
+
+::: {.olb-example label="ex:pdeSolverEoc/poisson/poisson"}
+
+{{< include pdeSolverEoc/poisson/poisson.qmd >}}
+
+:::
+
+::: {.olb-example label="ex:pdeSolverEoc/testFlow3dEoc/testFlow3dEoc"}
+
+{{< include pdeSolverEoc/testFlow3dEoc/testFlow3dEoc.qmd >}}
 
 :::
 
@@ -730,27 +730,27 @@
 \label{excat:porousMedia}
 ```
 
-::: {.olb-example label="ex:porousMedia/gasStorage2d"}
+::: {.olb-example label="ex:porousMedia/gasStorage2d/gasStorage2d"}
 
-{{< include porousMedia/gasStorage2d.qmd >}}
-
-:::
-
-::: {.olb-example label="ex:porousMedia/porousPoiseuille2d"}
-
-{{< include porousMedia/porousPoiseuille2d.qmd >}}
+{{< include porousMedia/gasStorage2d/gasStorage2d.qmd >}}
 
 :::
 
-::: {.olb-example label="ex:porousMedia/porousPoiseuille3d"}
+::: {.olb-example label="ex:porousMedia/porousPoiseuille2d/porousPoiseuille2d"}
 
-{{< include porousMedia/porousPoiseuille3d.qmd >}}
+{{< include porousMedia/porousPoiseuille2d/porousPoiseuille2d.qmd >}}
 
 :::
 
-::: {.olb-example label="ex:porousMedia/resolvedRock3d"}
+::: {.olb-example label="ex:porousMedia/porousPoiseuille3d/porousPoiseuille3d"}
 
-{{< include porousMedia/resolvedRock3d.qmd >}}
+{{< include porousMedia/porousPoiseuille3d/porousPoiseuille3d.qmd >}}
+
+:::
+
+::: {.olb-example label="ex:porousMedia/resolvedRock3d/resolvedRock3d"}
+
+{{< include porousMedia/resolvedRock3d/resolvedRock3d.qmd >}}
 
 :::
 
@@ -761,15 +761,15 @@
 \label{excat:radiativeTransport}
 ```
 
-::: {.olb-example label="ex:radiativeTransport/cube3d"}
+::: {.olb-example label="ex:radiativeTransport/cube3d/cube3d"}
 
-{{< include radiativeTransport/cube3d.qmd >}}
+{{< include radiativeTransport/cube3d/cube3d.qmd >}}
 
 :::
 
-::: {.olb-example label="ex:radiativeTransport/sphere3d"}
+::: {.olb-example label="ex:radiativeTransport/sphere3d/sphere3d"}
 
-{{< include radiativeTransport/sphere3d.qmd >}}
+{{< include radiativeTransport/sphere3d/sphere3d.qmd >}}
 
 :::
 
@@ -780,21 +780,21 @@
 \label{excat:showCase}
 ```
 
-::: {.olb-example label="ex:showCase/centrifugalPump3d"}
+::: {.olb-example label="ex:showCase/centrifugalPump3d/centrifugalPump3d"}
 
-{{< include showCase/centrifugalPump3d.qmd >}}
-
-:::
-
-::: {.olb-example label="ex:showCase/electroChemicalSaturationInPorousRock3d"}
-
-{{< include showCase/electroChemicalSaturationInPorousRock3d.qmd >}}
+{{< include showCase/centrifugalPump3d/centrifugalPump3d.qmd >}}
 
 :::
 
-::: {.olb-example label="ex:showCase/urbanDigitalTwin3d"}
+::: {.olb-example label="ex:showCase/electroChemicalSaturationInPorousRock3d/electroChemicalSaturationInPorousRock3d"}
 
-{{< include showCase/urbanDigitalTwin3d.qmd >}}
+{{< include showCase/electroChemicalSaturationInPorousRock3d/electroChemicalSaturationInPorousRock3d.qmd >}}
+
+:::
+
+::: {.olb-example label="ex:showCase/urbanDigitalTwin3d/urbanDigitalTwin3d"}
+
+{{< include showCase/urbanDigitalTwin3d/urbanDigitalTwin3d.qmd >}}
 
 :::
 
@@ -805,57 +805,57 @@
 \label{excat:structuralmechanics}
 ```
 
-::: {.olb-example label="ex:structuralmechanics/linearElasticity"}
+::: {.olb-example label="ex:structuralmechanics/linearElasticity/linearElasticity"}
 
-{{< include structuralmechanics/linearElasticity.qmd >}}
-
-:::
-
-::: {.olb-example label="ex:structuralmechanics/linearElasticity/quasistationary/combinedEllipse"}
-
-{{< include structuralmechanics/linearElasticity/quasistationary/combinedEllipse.qmd >}}
+{{< include structuralmechanics/linearElasticity/linearElasticity.qmd >}}
 
 :::
 
-::: {.olb-example label="ex:structuralmechanics/linearElasticity/quasistationary/dirichletEllipse"}
+::: {.olb-example label="ex:structuralmechanics/linearElasticity/quasistationary/combinedEllipse/combinedEllipse"}
 
-{{< include structuralmechanics/linearElasticity/quasistationary/dirichletEllipse.qmd >}}
-
-:::
-
-::: {.olb-example label="ex:structuralmechanics/linearElasticity/quasistationary/neumannEllipse"}
-
-{{< include structuralmechanics/linearElasticity/quasistationary/neumannEllipse.qmd >}}
+{{< include structuralmechanics/linearElasticity/quasistationary/combinedEllipse/combinedEllipse.qmd >}}
 
 :::
 
-::: {.olb-example label="ex:structuralmechanics/linearElasticity/quasistationary/periodicPlate"}
+::: {.olb-example label="ex:structuralmechanics/linearElasticity/quasistationary/dirichletEllipse/dirichletEllipse"}
 
-{{< include structuralmechanics/linearElasticity/quasistationary/periodicPlate.qmd >}}
-
-:::
-
-::: {.olb-example label="ex:structuralmechanics/linearElasticity/elastodynamics/vectorLBM/combinedPlate"}
-
-{{< include structuralmechanics/linearElasticity/elastodynamics/vectorLBM/combinedPlate.qmd >}}
+{{< include structuralmechanics/linearElasticity/quasistationary/dirichletEllipse/dirichletEllipse.qmd >}}
 
 :::
 
-::: {.olb-example label="ex:structuralmechanics/linearElasticity/elastodynamics/vectorLBM/dirichletPlate"}
+::: {.olb-example label="ex:structuralmechanics/linearElasticity/quasistationary/neumannEllipse/neumannEllipse"}
 
-{{< include structuralmechanics/linearElasticity/elastodynamics/vectorLBM/dirichletPlate.qmd >}}
-
-:::
-
-::: {.olb-example label="ex:structuralmechanics/linearElasticity/elastodynamics/vectorLBM/neumannPlate"}
-
-{{< include structuralmechanics/linearElasticity/elastodynamics/vectorLBM/neumannPlate.qmd >}}
+{{< include structuralmechanics/linearElasticity/quasistationary/neumannEllipse/neumannEllipse.qmd >}}
 
 :::
 
-::: {.olb-example label="ex:structuralmechanics/linearElasticity/elastodynamics/vectorLBM/periodicPlate"}
+::: {.olb-example label="ex:structuralmechanics/linearElasticity/quasistationary/periodicPlate/periodicPlate"}
 
-{{< include structuralmechanics/linearElasticity/elastodynamics/vectorLBM/periodicPlate.qmd >}}
+{{< include structuralmechanics/linearElasticity/quasistationary/periodicPlate/periodicPlate.qmd >}}
+
+:::
+
+::: {.olb-example label="ex:structuralmechanics/linearElasticity/elastodynamics/vectorLBM/combinedPlate/combinedPlate"}
+
+{{< include structuralmechanics/linearElasticity/elastodynamics/vectorLBM/combinedPlate/combinedPlate.qmd >}}
+
+:::
+
+::: {.olb-example label="ex:structuralmechanics/linearElasticity/elastodynamics/vectorLBM/dirichletPlate/dirichletPlate"}
+
+{{< include structuralmechanics/linearElasticity/elastodynamics/vectorLBM/dirichletPlate/dirichletPlate.qmd >}}
+
+:::
+
+::: {.olb-example label="ex:structuralmechanics/linearElasticity/elastodynamics/vectorLBM/neumannPlate/neumannPlate"}
+
+{{< include structuralmechanics/linearElasticity/elastodynamics/vectorLBM/neumannPlate/neumannPlate.qmd >}}
+
+:::
+
+::: {.olb-example label="ex:structuralmechanics/linearElasticity/elastodynamics/vectorLBM/periodicPlate/periodicPlate"}
+
+{{< include structuralmechanics/linearElasticity/elastodynamics/vectorLBM/periodicPlate/periodicPlate.qmd >}}
 
 :::
 
@@ -866,51 +866,51 @@
 \label{excat:thermal}
 ```
 
-::: {.olb-example label="ex:thermal/galliumMelting2d"}
+::: {.olb-example label="ex:thermal/galliumMelting2d/galliumMelting2d"}
 
-{{< include thermal/galliumMelting2d.qmd >}}
-
-:::
-
-::: {.olb-example label="ex:thermal/porousPlate2d"}
-
-{{< include thermal/porousPlate2d.qmd >}}
+{{< include thermal/galliumMelting2d/galliumMelting2d.qmd >}}
 
 :::
 
-::: {.olb-example label="ex:thermal/porousPlate3d"}
+::: {.olb-example label="ex:thermal/porousPlate2d/porousPlate2d"}
 
-{{< include thermal/porousPlate3d.qmd >}}
-
-:::
-
-::: {.olb-example label="ex:thermal/rayleighBenard2d"}
-
-{{< include thermal/rayleighBenard2d.qmd >}}
+{{< include thermal/porousPlate2d/porousPlate2d.qmd >}}
 
 :::
 
-::: {.olb-example label="ex:thermal/rayleighBenard3d"}
+::: {.olb-example label="ex:thermal/porousPlate3d/porousPlate3d"}
 
-{{< include thermal/rayleighBenard3d.qmd >}}
-
-:::
-
-::: {.olb-example label="ex:thermal/squareCavity2d"}
-
-{{< include thermal/squareCavity2d.qmd >}}
+{{< include thermal/porousPlate3d/porousPlate3d.qmd >}}
 
 :::
 
-::: {.olb-example label="ex:thermal/squareCavity3d"}
+::: {.olb-example label="ex:thermal/rayleighBenard2d/rayleighBenard2d"}
 
-{{< include thermal/squareCavity3d.qmd >}}
+{{< include thermal/rayleighBenard2d/rayleighBenard2d.qmd >}}
 
 :::
 
-::: {.olb-example label="ex:thermal/stefanMelting2d"}
+::: {.olb-example label="ex:thermal/rayleighBenard3d/rayleighBenard3d"}
 
-{{< include thermal/stefanMelting2d.qmd >}}
+{{< include thermal/rayleighBenard3d/rayleighBenard3d.qmd >}}
+
+:::
+
+::: {.olb-example label="ex:thermal/squareCavity2d/squareCavity2d"}
+
+{{< include thermal/squareCavity2d/squareCavity2d.qmd >}}
+
+:::
+
+::: {.olb-example label="ex:thermal/squareCavity3d/squareCavity3d"}
+
+{{< include thermal/squareCavity3d/squareCavity3d.qmd >}}
+
+:::
+
+::: {.olb-example label="ex:thermal/stefanMelting2d/stefanMelting2d"}
+
+{{< include thermal/stefanMelting2d/stefanMelting2d.qmd >}}
 
 :::
 
@@ -921,51 +921,51 @@
 \label{excat:turbulence}
 ```
 
-::: {.olb-example label="ex:turbulence/airfoil2d"}
+::: {.olb-example label="ex:turbulence/airfoil2d/airfoil2d"}
 
-{{< include turbulence/airfoil2d.qmd >}}
-
-:::
-
-::: {.olb-example label="ex:turbulence/aorta3d"}
-
-{{< include turbulence/aorta3d.qmd >}}
+{{< include turbulence/airfoil2d/airfoil2d.qmd >}}
 
 :::
 
-::: {.olb-example label="ex:turbulence/channel3d"}
+::: {.olb-example label="ex:turbulence/aorta3d/aorta3d"}
 
-{{< include turbulence/channel3d.qmd >}}
-
-:::
-
-::: {.olb-example label="ex:turbulence/heterogeneousNozzle3d"}
-
-{{< include turbulence/heterogeneousNozzle3d.qmd >}}
+{{< include turbulence/aorta3d/aorta3d.qmd >}}
 
 :::
 
-::: {.olb-example label="ex:turbulence/nozzle3d"}
+::: {.olb-example label="ex:turbulence/channel3d/channel3d"}
 
-{{< include turbulence/nozzle3d.qmd >}}
-
-:::
-
-::: {.olb-example label="ex:turbulence/tgv3d"}
-
-{{< include turbulence/tgv3d.qmd >}}
+{{< include turbulence/channel3d/channel3d.qmd >}}
 
 :::
 
-::: {.olb-example label="ex:turbulence/tgv3dBenchmark"}
+::: {.olb-example label="ex:turbulence/heterogeneousNozzle3d/heterogeneousNozzle3d"}
 
-{{< include turbulence/tgv3dBenchmark.qmd >}}
+{{< include turbulence/heterogeneousNozzle3d/heterogeneousNozzle3d.qmd >}}
 
 :::
 
-::: {.olb-example label="ex:turbulence/venturi3d"}
+::: {.olb-example label="ex:turbulence/nozzle3d/nozzle3d"}
 
-{{< include turbulence/venturi3d.qmd >}}
+{{< include turbulence/nozzle3d/nozzle3d.qmd >}}
+
+:::
+
+::: {.olb-example label="ex:turbulence/tgv3d/tgv3d"}
+
+{{< include turbulence/tgv3d/tgv3d.qmd >}}
+
+:::
+
+::: {.olb-example label="ex:turbulence/tgv3dBenchmark/tgv3dBenchmark"}
+
+{{< include turbulence/tgv3dBenchmark/tgv3dBenchmark.qmd >}}
+
+:::
+
+::: {.olb-example label="ex:turbulence/venturi3d/venturi3d"}
+
+{{< include turbulence/venturi3d/venturi3d.qmd >}}
 
 :::
 
@@ -976,33 +976,33 @@
 \label{excat:uncertaintyQuantification}
 ```
 
-::: {.olb-example label="ex:uncertaintyQuantification/cavity2d"}
+::: {.olb-example label="ex:uncertaintyQuantification/cavity2d/cavity2d"}
 
-{{< include uncertaintyQuantification/cavity2d.qmd >}}
-
-:::
-
-::: {.olb-example label="ex:uncertaintyQuantification/cavity3d"}
-
-{{< include uncertaintyQuantification/cavity3d.qmd >}}
+{{< include uncertaintyQuantification/cavity2d/cavity2d.qmd >}}
 
 :::
 
-::: {.olb-example label="ex:uncertaintyQuantification/cylinder2d"}
+::: {.olb-example label="ex:uncertaintyQuantification/cavity3d/cavity3d"}
 
-{{< include uncertaintyQuantification/cylinder2d.qmd >}}
-
-:::
-
-::: {.olb-example label="ex:uncertaintyQuantification/cylinder3d"}
-
-{{< include uncertaintyQuantification/cylinder3d.qmd >}}
+{{< include uncertaintyQuantification/cavity3d/cavity3d.qmd >}}
 
 :::
 
-::: {.olb-example label="ex:uncertaintyQuantification/tgv2d"}
+::: {.olb-example label="ex:uncertaintyQuantification/cylinder2d/cylinder2d"}
 
-{{< include uncertaintyQuantification/tgv2d.qmd >}}
+{{< include uncertaintyQuantification/cylinder2d/cylinder2d.qmd >}}
+
+:::
+
+::: {.olb-example label="ex:uncertaintyQuantification/cylinder3d/cylinder3d"}
+
+{{< include uncertaintyQuantification/cylinder3d/cylinder3d.qmd >}}
+
+:::
+
+::: {.olb-example label="ex:uncertaintyQuantification/tgv2d/tgv2d"}
+
+{{< include uncertaintyQuantification/tgv2d/tgv2d.qmd >}}
 
 :::
 
@@ -1013,9 +1013,9 @@
 \label{excat:web}
 ```
 
-::: {.olb-example label="ex:web/cylinder2d"}
+::: {.olb-example label="ex:web/cylinder2d/cylinder2d"}
 
-{{< include web/cylinder2d.qmd >}}
+{{< include web/cylinder2d/cylinder2d.qmd >}}
 
 :::
 

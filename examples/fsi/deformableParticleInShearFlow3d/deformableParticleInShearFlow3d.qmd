@@ -13,9 +13,9 @@ Note that this example is not executable with parallelization yet.
 
 ::: {#fig-shearFlow3d layout-ncol=2}
 
-![X-component velocity distribution with the submerged membrane where the area deviation on the solid mesh is visualized together with streamlines.](/examples/fsi/fig/shearFlow3d.png){#fig-shearFlow3d-left}
+![X-component velocity distribution with the submerged membrane where the area deviation on the solid mesh is visualized together with streamlines.](/examples/fsi/deformableParticleInShearFlow3d/doc/fig/shearFlow3d.png){#fig-shearFlow3d-left}
 
-![Temporal development of the scaled deformation coefficient over the normalized time. At the time $\kappa t = 120$, the analytical solution is given and is compared with the result for two consecutive grid resolutions.](/examples/fsi/fig/shearFlowPlot.png){#fig-shearFlow3d-right}
+![Temporal development of the scaled deformation coefficient over the normalized time. At the time $\kappa t = 120$, the analytical solution is given and is compared with the result for two consecutive grid resolutions.](/examples/fsi/deformableParticleInShearFlow3d/doc/fig/shearFlowPlot.png){#fig-shearFlow3d-right}
 
 Validation of the coupled FEM-IBM-LBM solver for a deformable particle in shear flow.
 

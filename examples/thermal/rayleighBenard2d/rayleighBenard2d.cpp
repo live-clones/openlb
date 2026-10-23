@@ -68,9 +68,10 @@ void prepareGeometry(MyCase& myCase) {
   extend[0] = params.get<parameters::DOMAIN_EXTENT>()[0];
   extend[1] = physDeltaX;
   std::vector<T> origin( 2, T(0) );
+  origin[1] = -physDeltaX/2.;
   IndicatorCuboid2D<T> bottom(extend, origin);
 
-  origin[1] = params.get<parameters::DOMAIN_EXTENT>()[1]-physDeltaX;
+  origin[1] = params.get<parameters::DOMAIN_EXTENT>()[1]-physDeltaX/2.;
   IndicatorCuboid2D<T> top(extend, origin);
 
   origin[0] = params.get<parameters::DOMAIN_EXTENT>()[0]/2.;

@@ -65,4 +65,4 @@ T forceCoeff = eField * Faraday * valence/density * converterNSE.getConversionFa
 
 The convergence order in the system remains the same as above and is shown in @fig-electroosmosis-convergence.
 
-![EOC study for electroosmosis simulations (`electroosmosis`).](/examples/electroChemistry/fig/electroosmosis_convergence.png){#fig-electroosmosis-convergence width="60%"}
+![EOC study for electroosmosis simulations (`electroosmosis`).](/examples/electroChemistry/electroosmosis/doc/fig/electroosmosis_convergence.png){#fig-electroosmosis-convergence width="60%"}
