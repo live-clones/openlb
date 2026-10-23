@@ -540,19 +540,19 @@ int main( int argc, char* argv[] )
   MyCase::ParametersD myCaseParameters;
   {
     using namespace olb::parameters;
-    myCaseParameters.set<CONVERGENCE_PRECISION >(     1e-5 );
-    myCaseParameters.set<DOMAIN_EXTENT              >( {2., 1., 1.} );  // length x diameter^2
-    myCaseParameters.set<RESOLUTION                 >(       21 );
-    myCaseParameters.set<REYNOLDS                   >(       1. );
-    myCaseParameters.set<PERMEABILITY               >(     1e-2 );
-    myCaseParameters.set<POROSITY_TYPE              >( PorosityType::SPAID_PHELAN );
-    myCaseParameters.set<PHYS_MAX_T                 >(       20 );
-    myCaseParameters.set<CONVERGENCE_CHECK_T        >( 0.0125*myCaseParameters.get<PHYS_MAX_T>() );
-    myCaseParameters.set<PHYS_CHAR_VELOCITY         >(       1. );
-    myCaseParameters.set<PHYS_CHAR_DENSITY          >(       1. );
-    myCaseParameters.set<LATTICE_RELAXATION_TIME    >(       .8 );
-    myCaseParameters.set<CONVERGED                  >(    false );
-    myCaseParameters.set<EPSILON                    >(       1. );  // Porosity (Spaid and Phelan can only handle epsilon=1)
+    myCaseParameters.set<CONVERGENCE_PRECISION  >(     1e-5 );
+    myCaseParameters.set<DOMAIN_EXTENT          >( {2., 1., 1.} );  // length x diameter^2
+    myCaseParameters.set<RESOLUTION             >(       21 );
+    myCaseParameters.set<REYNOLDS               >(       1. );
+    myCaseParameters.set<PERMEABILITY           >(     1e-2 );
+    myCaseParameters.set<POROSITY_TYPE          >( PorosityType::SPAID_PHELAN );
+    myCaseParameters.set<PHYS_MAX_T             >(       20 );
+    myCaseParameters.set<CONVERGENCE_CHECK_T    >( 0.0125*myCaseParameters.get<PHYS_MAX_T>() );
+    myCaseParameters.set<PHYS_CHAR_VELOCITY     >(       1. );
+    myCaseParameters.set<PHYS_CHAR_DENSITY      >(       1. );
+    myCaseParameters.set<LATTICE_RELAXATION_TIME>(       .8 );
+    myCaseParameters.set<CONVERGED              >(    false );
+    myCaseParameters.set<EPSILON                >(       1. );  // Porosity (Spaid and Phelan can only handle epsilon=1)
     OLB_ASSERT( myCaseParameters.get<RESOLUTION>()    >= 1, "Fluid domain is too small" );
     OLB_ASSERT( myCaseParameters.get<PERMEABILITY>()  >= 0, "Permeability must be non-negative" );
   }

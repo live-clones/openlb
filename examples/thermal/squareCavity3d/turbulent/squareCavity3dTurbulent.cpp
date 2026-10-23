@@ -111,8 +111,8 @@ int main(int argc, char* argv[])
     myCaseParameters.set<PRANDTL                    >(0.71);
     myCaseParameters.set<PRANDTL_TURB               >(0.87);
 
-    myCaseParameters.set<T_HOT                      >(285.15);
-    myCaseParameters.set<T_COLD                     >(275.15);
+    myCaseParameters.set<T_HOT >(285.15);
+    myCaseParameters.set<T_COLD>(275.15);
     myCaseParameters.set<T_MEAN>(
         (myCaseParameters.get<T_HOT>() + myCaseParameters.get<T_COLD>()) / 2.0
     );

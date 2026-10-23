@@ -327,7 +327,7 @@ int main(int argc, char* argv[]) {
     myCaseParameters.set<HENRY_ISOTHERM_CONSTANT       >(      45.);
     myCaseParameters.set<SURFACE_DIFFUSION_COEFFICIENT >(    5e-11);
     myCaseParameters.set<FILM_MASS_TRANSFER_COEFFICIENT>(       0.);
-    myCaseParameters.set<PHYS_DELTA_X>([](MyCase::ParametersD& p) {
+    myCaseParameters.set<PHYS_DELTA_X                  >([](MyCase::ParametersD& p) {
       return p.get<BATCH_REACTOR_LENGTH>() /
              p.get<RESOLUTION>();
     });

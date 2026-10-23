@@ -346,32 +346,32 @@ int main(int argc, char* argv[])
    MyCase::ParametersD myCaseParameters;
   {
     using namespace olb::parameters;
-    myCaseParameters.set<EPS                         >(0.5);
-    myCaseParameters.set<PHYS_MAX_T                  >(6.);
-    myCaseParameters.set<DOMAIN_EXTENT               >({0.02, 0.08});
-    myCaseParameters.set<CENTER_1                    >({0.01, 0.068});
-    myCaseParameters.set<CENTER_2                    >({0.00999, 0.072});
-    myCaseParameters.set<PART_RHO                    >(1010.);
-    myCaseParameters.set<PART_RADIUS                 >(0.001);
-    myCaseParameters.set<CONTACT_BOX_RESOLUTION_PER_DIRECTION >(8);
-    myCaseParameters.set<PARTICLE_CONTACT_MATERIAL   >(0);
-    myCaseParameters.set<WALL_CONTACT_MATERIAL       >(0);
-    myCaseParameters.set<YOUNGS_MODULUS              >(1e6);
-    myCaseParameters.set<PART_POISSON_RATIO          >(0.3);
-    myCaseParameters.set<COEFFICIENT_OF_RESTITUTION  >(0.9);
-    myCaseParameters.set<COEFFICIENT_STATIC_FRICTION >(0.6);
-    myCaseParameters.set<COEFFICIENT_KINETIC_FRICTION>(0.3);
-    myCaseParameters.set<PHYS_CHAR_DENSITY           >(1000);
-    myCaseParameters.set<PHYS_CHAR_VELOCITY          >(0.2);
-    myCaseParameters.set<PHYS_CHAR_LENGTH            >(0.002);
-    myCaseParameters.set<PHYS_CHAR_VISCOSITY          >(1E-6);
-    myCaseParameters.set<PHYS_DELTA_X                >(0.0001);
-    myCaseParameters.set<PHYS_DELTA_T                >(5.e-4);
-    myCaseParameters.set<PHYS_VTK_ITER_T             >(0.125);
-    myCaseParameters.set<VTK_ENABLED                 >(true);
-    myCaseParameters.set<GNUPLOT_ENABLED             >(true);
-    myCaseParameters.set<GRAVITATIONAL_ACC           >(-9.81);
-    myCaseParameters.set<GRAVITY>([](MyCase::ParametersD& p) {
+    myCaseParameters.set<EPS                                 >(0.5);
+    myCaseParameters.set<PHYS_MAX_T                          >(6.);
+    myCaseParameters.set<DOMAIN_EXTENT                       >({0.02, 0.08});
+    myCaseParameters.set<CENTER_1                            >({0.01, 0.068});
+    myCaseParameters.set<CENTER_2                            >({0.00999, 0.072});
+    myCaseParameters.set<PART_RHO                            >(1010.);
+    myCaseParameters.set<PART_RADIUS                         >(0.001);
+    myCaseParameters.set<CONTACT_BOX_RESOLUTION_PER_DIRECTION>(8);
+    myCaseParameters.set<PARTICLE_CONTACT_MATERIAL           >(0);
+    myCaseParameters.set<WALL_CONTACT_MATERIAL               >(0);
+    myCaseParameters.set<YOUNGS_MODULUS                      >(1e6);
+    myCaseParameters.set<PART_POISSON_RATIO                  >(0.3);
+    myCaseParameters.set<COEFFICIENT_OF_RESTITUTION          >(0.9);
+    myCaseParameters.set<COEFFICIENT_STATIC_FRICTION         >(0.6);
+    myCaseParameters.set<COEFFICIENT_KINETIC_FRICTION        >(0.3);
+    myCaseParameters.set<PHYS_CHAR_DENSITY                   >(1000);
+    myCaseParameters.set<PHYS_CHAR_VELOCITY                  >(0.2);
+    myCaseParameters.set<PHYS_CHAR_LENGTH                    >(0.002);
+    myCaseParameters.set<PHYS_CHAR_VISCOSITY                 >(1E-6);
+    myCaseParameters.set<PHYS_DELTA_X                        >(0.0001);
+    myCaseParameters.set<PHYS_DELTA_T                        >(5.e-4);
+    myCaseParameters.set<PHYS_VTK_ITER_T                     >(0.125);
+    myCaseParameters.set<VTK_ENABLED                         >(true);
+    myCaseParameters.set<GNUPLOT_ENABLED                     >(true);
+    myCaseParameters.set<GRAVITATIONAL_ACC                   >(-9.81);
+    myCaseParameters.set<GRAVITY                             >([](MyCase::ParametersD& p) {
       return Vector<double, 2>{0., p.get<GRAVITATIONAL_ACC>()*
        (1.-p.get<PHYS_CHAR_DENSITY>() / p.get<PART_RHO>())};
     });

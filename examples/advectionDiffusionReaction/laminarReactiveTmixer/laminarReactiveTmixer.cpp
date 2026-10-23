@@ -585,8 +585,8 @@ int main(int argc, char* argv[]) {
     using namespace olb::parameters;
     myCaseParameters.set<DOMAIN_EXTENT        >({1600e-6,800e-6,100e-6});
     myCaseParameters.set<RESOLUTION           >(40);
-    myCaseParameters.set<PHYS_MAX_T        >(25*(1600e-6 + 800e-6/2)/1.4);
-    myCaseParameters.set<PHYS_MAX_T_AD     >(0.01);
+    myCaseParameters.set<PHYS_MAX_T           >(25*(1600e-6 + 800e-6/2)/1.4);
+    myCaseParameters.set<PHYS_MAX_T_AD        >(0.01);
     myCaseParameters.set<PHYS_CHAR_VELOCITY   >(1.4);
     myCaseParameters.set<PHYS_MAX_VELOCITY    >(1.4*2.1);
     myCaseParameters.set<LATTICE_CHAR_VELOCITY>(0.05);
@@ -594,10 +594,10 @@ int main(int argc, char* argv[]) {
     myCaseParameters.set<PHYS_CHAR_VISCOSITY  >(1.002e-6);
     myCaseParameters.set<LX_INLET             >(100.e-6);
     myCaseParameters.set<LY_OUTLET            >(200.e-6);
-    myCaseParameters.set<DIFFUSION_COMPONENTS            >({1.6e-9,2.e-10,2.e-10});
+    myCaseParameters.set<DIFFUSION_COMPONENTS >({1.6e-9,2.e-10,2.e-10});
     myCaseParameters.set<CONCENTRATION        >({1., 1.e-8,1.e-8,0.001,1.e-8,1.e-8});
     myCaseParameters.set<PLOT_OVER_LINE       >(true);
-    myCaseParameters.set<PHYS_START_T           >(0.02*25*(1600e-6 + 800e-6/2)/1.4);
+    myCaseParameters.set<PHYS_START_T         >(0.02*25*(1600e-6 + 800e-6/2)/1.4);
   }
 
   /// === Step 3: Create Mesh ===

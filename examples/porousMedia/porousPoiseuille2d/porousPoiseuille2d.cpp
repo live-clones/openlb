@@ -519,17 +519,17 @@ int main( int argc, char* argv[] )
   MyCase::ParametersD myCaseParameters;
   {
     using namespace olb::parameters;
-    myCaseParameters.set<CONVERGENCE_CHECK_T        >(      .25 );
-    myCaseParameters.set<RESIDUUM >(     1e-5 );
-    myCaseParameters.set<DOMAIN_EXTENT              >( {2., 1.} );
-    myCaseParameters.set<RESOLUTION                 >(       50 );
-    myCaseParameters.set<REYNOLDS                   >(       1. );
-    myCaseParameters.set<PERMEABILITY               >(     1e-2 );
-    myCaseParameters.set<BOUNDARY_TYPE              >( BoundaryType::interpolated );
-    myCaseParameters.set<POROSITY_TYPE              >( PorosityType::GUO_ZHAO );
-    myCaseParameters.set<PHYS_MAX_T                 >(       20 );
-    myCaseParameters.set<CONVERGED                  >(    false );
-    myCaseParameters.set<EPSILON                    >(       1. );  // Porosity (Spaid and Phelan can only handle epsilon=1)
+    myCaseParameters.set<CONVERGENCE_CHECK_T>(      .25 );
+    myCaseParameters.set<RESIDUUM           >(     1e-5 );
+    myCaseParameters.set<DOMAIN_EXTENT      >( {2., 1.} );
+    myCaseParameters.set<RESOLUTION         >(       50 );
+    myCaseParameters.set<REYNOLDS           >(       1. );
+    myCaseParameters.set<PERMEABILITY       >(     1e-2 );
+    myCaseParameters.set<BOUNDARY_TYPE      >( BoundaryType::interpolated );
+    myCaseParameters.set<POROSITY_TYPE      >( PorosityType::GUO_ZHAO );
+    myCaseParameters.set<PHYS_MAX_T         >(       20 );
+    myCaseParameters.set<CONVERGED          >(    false );
+    myCaseParameters.set<EPSILON            >(       1. );  // Porosity (Spaid and Phelan can only handle epsilon=1)
     OLB_ASSERT( myCaseParameters.get<RESOLUTION>()    >= 1, "Fluid domain is too small" );
     OLB_ASSERT( myCaseParameters.get<PERMEABILITY>()  >= 0, "Permeability must be non-negative" );
   }

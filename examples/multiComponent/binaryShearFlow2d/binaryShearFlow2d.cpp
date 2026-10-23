@@ -667,7 +667,7 @@ int main( int argc, char *argv[] )
     myCaseParameters.set<CONVERGENCE_PRECISION  >(1e-5);  // residuum for the convergence check
     myCaseParameters.set<H1                     >(0.);    // Contact angle 90 degrees   [lattice units]
     myCaseParameters.set<H2                     >(0.);    // Contact angle 90 degrees   [lattice units]
-    myCaseParameters.set<CONVERGENCE_PRECISION>(0.0015);  // deformation residuum criterion
+    myCaseParameters.set<CONVERGENCE_PRECISION  >(0.0015);  // deformation residuum criterion
     myCaseParameters.set<parameters::SHEAR_RATE>([] (MyCase::ParametersD& p) {
       return p.get<CONT_VISC>() * p.get<DROPLET_REYNOLDS>() / util::pow(p.get<parameters::RADIUS>(), 2);
     }); // [pu] physical shear rate [1/s]

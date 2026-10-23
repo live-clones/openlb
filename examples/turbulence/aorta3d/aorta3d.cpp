@@ -384,7 +384,7 @@ int main( int argc, char* argv[] )
     myCaseParameters.set<PHYS_CHAR_DENSITY  >(1055);
     myCaseParameters.set<PHYS_MAX_T         >(2.); // max. simulation time in s, SI unit
     myCaseParameters.set<BOUZIDI_ENABLED    >(true);
-    myCaseParameters.set<PHYS_DELTA_X>([] (MyCase::ParametersD& p) {
+    myCaseParameters.set<PHYS_DELTA_X       >([] (MyCase::ParametersD& p) {
       return p.get<parameters::PHYS_CHAR_LENGTH>()
            / p.get<parameters::RESOLUTION>();
     });

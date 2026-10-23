@@ -495,24 +495,24 @@ int main( int argc, char *argv[] )
     myCaseParameters.set<LATTICE_MAX_T          >(250000);   // max iterations [lattice units]
     myCaseParameters.set<LATTICE_VTK_ITER_T     >(1000);     // vtk iterations [lattice units]
     myCaseParameters.set<LATTICE_STAT_ITER_T    >(1000);     // statistics iterations [lattice units]
-    myCaseParameters.set<PHYS_CHAR_LENGTH>(1e-6);        // charPhysLength [physical units]
-    myCaseParameters.set<NU_VAPOR        >(1.532e-5);    // physViscosity N2+O2 lattice [physical units]
-    myCaseParameters.set<NU_LIQUID       >(1e-6);        // physViscosity H2O lattice [physical units]
-    myCaseParameters.set<GRAVITY         >({0.,0.});     // gravitational acceleration [physical units]
-    myCaseParameters.set<A0_LATTICE      >(3./245.);     // tune for stability/accuracy [lattice units]
+    myCaseParameters.set<PHYS_CHAR_LENGTH       >(1e-6);        // charPhysLength [physical units]
+    myCaseParameters.set<NU_VAPOR               >(1.532e-5);    // physViscosity N2+O2 lattice [physical units]
+    myCaseParameters.set<NU_LIQUID              >(1e-6);        // physViscosity H2O lattice [physical units]
+    myCaseParameters.set<GRAVITY                >({0.,0.});     // gravitational acceleration [physical units]
+    myCaseParameters.set<A0_LATTICE             >(3./245.);     // tune for stability/accuracy [lattice units]
     myCaseParameters.set<parameters::EPSILON>(2.2355);   // tune for chemical potential equilibrium in phases []
-    myCaseParameters.set<SURFACE_TENSION >(0.07);        // For unit conversion [physical units], not crucial for phase composition
+    myCaseParameters.set<SURFACE_TENSION      >(0.07);        // For unit conversion [physical units], not crucial for phase composition
     myCaseParameters.set<PHYS_CHAR_PRESSURE   >(1.013e5);// For Vapor-Liquid-Equilibrium [physical units]
     myCaseParameters.set<PHYS_CHAR_TEMPERATURE>(298.15); // For Vapor-Liquid-Equilibrium [physical units]
     //H2O, N2, O2
     myCaseParameters.set<FEED >({0.99, 0.0079, 0.0021});  // feed composition for Vapor-Liquid-Equilibrium as molar fraction
     myCaseParameters.set<parameters::A>({0.5995808, 0.1480650, 0.1506765});
     myCaseParameters.set<parameters::B>({1.8955853e-5, 2.4010114e-5, 1.9893672e-5});
-    myCaseParameters.set<M    >({0.01802, 0.02801, 0.03200});
-    myCaseParameters.set<T_C  >({647.3, 126.2, 155.0});
-    myCaseParameters.set<P_C  >({22089000, 3400000, 5040000});
+    myCaseParameters.set<M                  >({0.01802, 0.02801, 0.03200});
+    myCaseParameters.set<T_C                >({647.3, 126.2, 155.0});
+    myCaseParameters.set<P_C                >({22089000, 3400000, 5040000});
     myCaseParameters.set<OMEGA_PER_COMPONENT>({0.34, 0.0377, 0.025});
-    myCaseParameters.set<DEVI >({0.867805648, 0.432399567, 0.41302780});
+    myCaseParameters.set<DEVI               >({0.867805648, 0.432399567, 0.41302780});
     //H2OH2O, H2ON2, H2OO2, N2H2O, N2N2, N2O2, O2H2O, O2N2, O2O2
     myCaseParameters.set<ALPHA>(
       {0., 0.199222317, 0.193233601, 0.199222317, 0., 0., 0.193233601, 0., 0.});

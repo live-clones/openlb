@@ -53,15 +53,15 @@ int main(int argc, char* argv[])
   MyCase::ParametersD myCaseParameters;
   {
     using namespace olb::parameters;
-    myCaseParameters.set<RESOLUTION>(10);
-    myCaseParameters.set<REYNOLDS >(20.);
-    myCaseParameters.set<PHYS_MAX_T>(16.);
-    myCaseParameters.set<DOMAIN_EXTENT>({2.2, .41});
-    myCaseParameters.set<PHYS_CHAR_VELOCITY>(0.2);
+    myCaseParameters.set<RESOLUTION             >(10);
+    myCaseParameters.set<REYNOLDS               >(20.);
+    myCaseParameters.set<PHYS_MAX_T             >(16.);
+    myCaseParameters.set<DOMAIN_EXTENT          >({2.2, .41});
+    myCaseParameters.set<PHYS_CHAR_VELOCITY     >(0.2);
     myCaseParameters.set<LATTICE_RELAXATION_TIME>(0.56);
-    myCaseParameters.set<PHYS_CHAR_DENSITY>(1.0);
-    myCaseParameters.set<RADIUS_CYLINDER>(0.05);
-    myCaseParameters.set<PHYS_CHAR_LENGTH>([](MyCase::ParametersD& p){
+    myCaseParameters.set<PHYS_CHAR_DENSITY      >(1.0);
+    myCaseParameters.set<RADIUS_CYLINDER        >(0.05);
+    myCaseParameters.set<PHYS_CHAR_LENGTH       >([](MyCase::ParametersD& p){
       return 2 * p.get<RADIUS_CYLINDER>();
     });
     myCaseParameters.set<PHYS_CHAR_VISCOSITY>([](MyCase::ParametersD& p){

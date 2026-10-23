@@ -528,22 +528,22 @@ int main(int argc, char* argv[])
   MyCase::ParametersD myCaseParameters;
   {
     using namespace olb::parameters;
-    myCaseParameters.set<RESOLUTION     >(1000);               // resolution inlet [lattice units]
-    myCaseParameters.set<VTI_INPUT      >("gasStorage2d.vti"); // vti file name
-    myCaseParameters.set<ARRAY_NAME     >("Tiff Scalars");     // data array name
+    myCaseParameters.set<RESOLUTION                >(1000);               // resolution inlet [lattice units]
+    myCaseParameters.set<VTI_INPUT                 >("gasStorage2d.vti"); // vti file name
+    myCaseParameters.set<ARRAY_NAME                >("Tiff Scalars");     // data array name
     myCaseParameters.set<LATTICE_RELAXATION_TIME   >(0.52);    // tau liquid [lattice units]
     myCaseParameters.set<LATTICE_RELAXATION_TIME_PF>(0.8);     // tau mobility [lattice units]
-    myCaseParameters.set<INLET_LENGTH_F  >(0.1);     // length of inlet region; % of total length []
-    myCaseParameters.set<OUTLET_LENGTH_F >(0.1);     // length of outlet region; % of total length []
-    myCaseParameters.set<PRESSURE_DROP  >(50000.);  // pressure drop [physical units]
-    myCaseParameters.set<RHO_LIQUID     >(992.);    // liquid density [physical units]
-    myCaseParameters.set<RHO_VAPOR      >(7.1);     // gas density [physical units]
-    myCaseParameters.set<NU_LIQUID      >(5.5e-7);  // liquid kinematic viscosity [physical units]
-    myCaseParameters.set<NU_VAPOR       >(1.34e-6); // gas kinematic viscosity [physical units]
-    myCaseParameters.set<SURFACE_TENSION>(0.072);   // surface tension [physical units]
-    myCaseParameters.set<C_RHO          >(500.);    // conversion factor density [physical units]
+    myCaseParameters.set<INLET_LENGTH_F            >(0.1);     // length of inlet region; % of total length []
+    myCaseParameters.set<OUTLET_LENGTH_F           >(0.1);     // length of outlet region; % of total length []
+    myCaseParameters.set<PRESSURE_DROP             >(50000.);  // pressure drop [physical units]
+    myCaseParameters.set<RHO_LIQUID                >(992.);    // liquid density [physical units]
+    myCaseParameters.set<RHO_VAPOR                 >(7.1);     // gas density [physical units]
+    myCaseParameters.set<NU_LIQUID                 >(5.5e-7);  // liquid kinematic viscosity [physical units]
+    myCaseParameters.set<NU_VAPOR                  >(1.34e-6); // gas kinematic viscosity [physical units]
+    myCaseParameters.set<SURFACE_TENSION           >(0.072);   // surface tension [physical units]
+    myCaseParameters.set<C_RHO                     >(500.);    // conversion factor density [physical units]
     myCaseParameters.set<parameters::THETA>(M_PI*40./180.); // contact angle [radians]
-    myCaseParameters.set<PHYS_MAX_T     >(0.012);   // max simulation time [physical units]
+    myCaseParameters.set<PHYS_MAX_T      >(0.012);   // max simulation time [physical units]
     myCaseParameters.set<PHYS_VTK_ITER_T >(0.012/4000.);   // write simulation output [physical units]
     myCaseParameters.set<PHYS_STAT_ITER_T>(0.012/4000.);   // simulation statistics time [physical units]
     myCaseParameters.set<parameters::INTERFACE_WIDTH>(6.); // resolution inlet [lattice units]

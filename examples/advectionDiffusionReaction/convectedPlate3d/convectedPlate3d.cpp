@@ -314,14 +314,14 @@ int main(int argc, char* argv[]) {
   MyCase::ParametersD myCaseParameters;
   {
     using namespace olb::parameters;
-    myCaseParameters.set<RESOLUTION                 >(       40);
-    myCaseParameters.set<HEIGHT                     >(      160);
-    myCaseParameters.set<BULK_VELOCITY              >(     0.05);
-    myCaseParameters.set<PHYS_CHAR_DENSITY          >(      1.0);
-    myCaseParameters.set<PECLET                     >(  108.005);
-    myCaseParameters.set<PHYS_MAX_T                 >( 100000.0);
-    myCaseParameters.set<RESIDUUM                   >(    1e-10);
-    myCaseParameters.set<PHYS_DIFFUSIVITY                >(  0.07407);
+    myCaseParameters.set<RESOLUTION       >(       40);
+    myCaseParameters.set<HEIGHT           >(      160);
+    myCaseParameters.set<BULK_VELOCITY    >(     0.05);
+    myCaseParameters.set<PHYS_CHAR_DENSITY>(      1.0);
+    myCaseParameters.set<PECLET           >(  108.005);
+    myCaseParameters.set<PHYS_MAX_T       >( 100000.0);
+    myCaseParameters.set<RESIDUUM         >(    1e-10);
+    myCaseParameters.set<PHYS_DIFFUSIVITY >(  0.07407);
 
     myCaseParameters.set<PHYS_DELTA_X>([] (MyCase::ParametersD& p) {
       return p.get<HEIGHT>()/p.get<RESOLUTION>();

@@ -419,16 +419,16 @@ int main(int argc, char* argv[])
   MyCase::ParametersD myCaseParameters;
   {
     using namespace olb::parameters;
-    myCaseParameters.set<RESOLUTION        >(200);      // Nx [lattice units]
-    myCaseParameters.set<LATTICE_RELAXATION_TIME   >(0.6);    // relaxation time [lattice units]
+    myCaseParameters.set<RESOLUTION             >(200);      // Nx [lattice units]
+    myCaseParameters.set<LATTICE_RELAXATION_TIME>(0.6);    // relaxation time [lattice units]
     myCaseParameters.set<parameters::RADIUS>(2.5e-6);     // radius of liquid phase [m]
     myCaseParameters.set<U_DROPLET         >(10.);       // droplet velocity [m.s-1]
   // Properties of R134 vapor and liquid
   // at saturation condition 30 degree Celsius
-    myCaseParameters.set<NU_VAPOR     >(3.39e-7);  // vapor kinematic viscosity [m2.s-1]
-    myCaseParameters.set<NU_LIQUID    >(1.58e-7);  // liquid kinematic viscosity [m2.s-1]
-    myCaseParameters.set<RHO_VAPOR    >(37.5);     // vapor density [kg.m-3]
-    myCaseParameters.set<RHO_LIQUID   >(1187);     // liquid density [kg.m-3]
+    myCaseParameters.set<NU_VAPOR       >(3.39e-7);  // vapor kinematic viscosity [m2.s-1]
+    myCaseParameters.set<NU_LIQUID      >(1.58e-7);  // liquid kinematic viscosity [m2.s-1]
+    myCaseParameters.set<RHO_VAPOR      >(37.5);     // vapor density [kg.m-3]
+    myCaseParameters.set<RHO_LIQUID     >(1187);     // liquid density [kg.m-3]
     myCaseParameters.set<SURFACE_TENSION>(7.58e-3);// surface tension for water-air [N.m-1]
   // Lattice parameters
     myCaseParameters.set<parameters::INTERFACE_WIDTH>(1.);// interface thickness in grid nodes; physThickness = delta_x * thickness

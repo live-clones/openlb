@@ -66,17 +66,17 @@ int main( int argc, char *argv[] )
   MyCase::ParametersD myCaseParameters;
   {
     using namespace olb::parameters;
-    myCaseParameters.set<DOMAIN_EXTENT     >({2e-6, 100e-6}); // domain size [physical units]
-    myCaseParameters.set<RESOLUTION        >(Ny);             // resolution y [lattice units]
+    myCaseParameters.set<DOMAIN_EXTENT          >({2e-6, 100e-6}); // domain size [physical units]
+    myCaseParameters.set<RESOLUTION             >(Ny);             // resolution y [lattice units]
     myCaseParameters.set<LATTICE_RELAXATION_TIME>(0.8);       // tau liquid [lattice units]
-    myCaseParameters.set<RELAXATION_TIME_PF>(0.8);            // tau mobility [lattice units]
-    myCaseParameters.set<REYNOLDS          >(0.);             // Reynolds number []
-    myCaseParameters.set<RHO_VAPOR         >(1.);             // physDensity gas/vapor [physical units]
-    myCaseParameters.set<RHO_LIQUID        >(1000.);          // physDensity liquid [physical units]
-    myCaseParameters.set<NU_VAPOR          >(9e-7);           // physViscosity gas/vapor [physical units]
-    myCaseParameters.set<NU_LIQUID         >(9e-6);           // physViscosity liquid [physical units]
-    myCaseParameters.set<PHYS_CHAR_PRESSURE>(1e5);            // physPressure [physical units]
-    myCaseParameters.set<SURFACE_TENSION   >(sigma);          // surface tension [lattice units]
+    myCaseParameters.set<RELAXATION_TIME_PF     >(0.8);            // tau mobility [lattice units]
+    myCaseParameters.set<REYNOLDS               >(0.);             // Reynolds number []
+    myCaseParameters.set<RHO_VAPOR              >(1.);             // physDensity gas/vapor [physical units]
+    myCaseParameters.set<RHO_LIQUID             >(1000.);          // physDensity liquid [physical units]
+    myCaseParameters.set<NU_VAPOR               >(9e-7);           // physViscosity gas/vapor [physical units]
+    myCaseParameters.set<NU_LIQUID              >(9e-6);           // physViscosity liquid [physical units]
+    myCaseParameters.set<PHYS_CHAR_PRESSURE     >(1e5);            // physPressure [physical units]
+    myCaseParameters.set<SURFACE_TENSION        >(sigma);          // surface tension [lattice units]
     myCaseParameters.set<parameters::INTERFACE_WIDTH>(w);     // interface width [lattice units]
     myCaseParameters.set<C_RHO             >(1000.);          // conversion factor density [physical units]
   }

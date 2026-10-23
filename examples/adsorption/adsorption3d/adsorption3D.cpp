@@ -389,19 +389,19 @@ int main(int argc, char* argv[]) {
   MyCase::ParametersD myCaseParameters;
   {
     using namespace olb::parameters;
-    myCaseParameters.set<RESOLUTION   >(21);       // resolution of the hydraulic diameter // 20
-    myCaseParameters.set<REYNOLDS     >(17);
-    myCaseParameters.set<SCHMIDT      >(1.5);
+    myCaseParameters.set<RESOLUTION             >(21);       // resolution of the hydraulic diameter // 20
+    myCaseParameters.set<REYNOLDS               >(17);
+    myCaseParameters.set<SCHMIDT                >(1.5);
     myCaseParameters.set<LATTICE_RELAXATION_TIME>(0.6952380952380952);
-    myCaseParameters.set<PARTICLE_RADIUS       >(1.5e-04);
-    myCaseParameters.set<PARTICLE_DENSITY      >(0.940);
-    myCaseParameters.set<DOMAIN_EXTENT   >({0.1,0.1,0.1});
-    myCaseParameters.set<ISO_CONST_A  >(45);
-    myCaseParameters.set<ISO_CONST_B  >(0.5);
-    myCaseParameters.set<K_F  >(5.37E-5);
-    myCaseParameters.set<C_0  >(1);
-    myCaseParameters.set<D_S  >(5.e-11);
-    myCaseParameters.set<PHYS_CHAR_VISCOSITY>(0.00011764705882352942);
+    myCaseParameters.set<PARTICLE_RADIUS        >(1.5e-04);
+    myCaseParameters.set<PARTICLE_DENSITY       >(0.940);
+    myCaseParameters.set<DOMAIN_EXTENT          >({0.1,0.1,0.1});
+    myCaseParameters.set<ISO_CONST_A            >(45);
+    myCaseParameters.set<ISO_CONST_B            >(0.5);
+    myCaseParameters.set<K_F                    >(5.37E-5);
+    myCaseParameters.set<C_0                    >(1);
+    myCaseParameters.set<D_S                    >(5.e-11);
+    myCaseParameters.set<PHYS_CHAR_VISCOSITY    >(0.00011764705882352942);
     myCaseParameters.set<parameters::PHYS_DENSITY_COMPONENTS  >({1,1,0});
     myCaseParameters.set<PHYS_MAX_T   >(15);    // time for fluid simulation
   }

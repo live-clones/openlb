@@ -679,10 +679,10 @@ int main( int argc, char *argv[] )
     myCaseParameters.set<PHYS_VTK_ITER_T        >(1.);
     myCaseParameters["reporter"]["statistics"].set<PHYS_ITER_T>(1.);
     myCaseParameters["timer"     ].set<PHYS_TIMER_ITER_T>(1.);
-    myCaseParameters.set<PHYS_INTERVAL_T          >(1.);        // interval for the convergence check in s
-    myCaseParameters.set<CONVERGENCE_PRECISION  >(7e-5);      // residuum for the convergence check
-    myCaseParameters.set<H1                     >(0.);        // Contact angle 90 degrees   [lattice units]
-    myCaseParameters.set<H2                     >(0.);        // Contact angle 90 degrees   [lattice units]
+    myCaseParameters.set<PHYS_INTERVAL_T      >(1.);        // interval for the convergence check in s
+    myCaseParameters.set<CONVERGENCE_PRECISION>(7e-5);      // residuum for the convergence check
+    myCaseParameters.set<H1                   >(0.);        // Contact angle 90 degrees   [lattice units]
+    myCaseParameters.set<H2                   >(0.);        // Contact angle 90 degrees   [lattice units]
     myCaseParameters.set<CONVERGENCE_PRECISION>(0.001);  // deformation residuum criterion
     myCaseParameters.set<parameters::STRAIN_RATE>([] (MyCase::ParametersD& p) {
       return p.get<CONT_VISC>() * p.get<DROPLET_REYNOLDS>() * 0.35 / util::pow(p.get<parameters::RADIUS>(), 2);

@@ -366,15 +366,15 @@ int main( int argc, char *argv[] )
     myCaseParameters.set<DOMAIN_EXTENT   >([](MyCase::ParametersD& p){
       return Vector<T,2> {4 * p.get<PHYS_CHAR_LENGTH>(), 8 * p.get<PHYS_CHAR_LENGTH>()};
     });
-    myCaseParameters.set<C_RHO           >(100.);           // conversion factor density [physical units]
+    myCaseParameters.set<C_RHO                     >(100.);           // conversion factor density [physical units]
     myCaseParameters.set<PF_LATTICE_RELAXATION_TIME>(0.8 ); // lattice relaxation time for interface mobility [lattice units]
-    myCaseParameters.set<NU_LIQUID       >(1e-6);           // physViscosity liquid [physical units]
-    myCaseParameters.set<RHO_VAPOR       >(1);              // physDensity gas/vapor [physical units]
-    myCaseParameters.set<RHO_LIQUID      >(1000);          // physDensity liquid [physical units]
-    myCaseParameters.set<REYNOLDS        >(35);             // Reynolds number of rising bubble
-    myCaseParameters.set<BOND            >(100);            // Bond number of rising bubble
-    myCaseParameters.set<RISING_VELOCITY >(0.02);           // Bubble rising velocity [lattice units]
-    myCaseParameters.set<G_CONST         >([](MyCase::ParametersD& p) {
+    myCaseParameters.set<NU_LIQUID                 >(1e-6);           // physViscosity liquid [physical units]
+    myCaseParameters.set<RHO_VAPOR                 >(1);              // physDensity gas/vapor [physical units]
+    myCaseParameters.set<RHO_LIQUID                >(1000);          // physDensity liquid [physical units]
+    myCaseParameters.set<REYNOLDS                  >(35);             // Reynolds number of rising bubble
+    myCaseParameters.set<BOND                      >(100);            // Bond number of rising bubble
+    myCaseParameters.set<RISING_VELOCITY           >(0.02);           // Bubble rising velocity [lattice units]
+    myCaseParameters.set<G_CONST                   >([](MyCase::ParametersD& p) {
       return p.get<RISING_VELOCITY>() * p.get<RISING_VELOCITY>() / p.get<RESOLUTION>();
     });                                                     // gravity [lattice units]
     myCaseParameters.set<LATTICE_RELAXATION_TIME>([] (MyCase::ParametersD& p) {

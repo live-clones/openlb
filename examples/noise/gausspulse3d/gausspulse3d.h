@@ -557,8 +557,8 @@ void setGetParameters( MyCase::ParametersD& myCaseParameters, int& argc, char** 
 
   using namespace olb::parameters;
   // DOMAIN
-  myCaseParameters.set<LATTICE_CHAR_VELOCITY >(  defaultMa );
-  myCaseParameters.set<CORE_EXTENT        >( {defaultL,defaultL,defaultL} );
+  myCaseParameters.set<LATTICE_CHAR_VELOCITY>(  defaultMa );
+  myCaseParameters.set<CORE_EXTENT          >( {defaultL,defaultL,defaultL} );
   // PULSE
   myCaseParameters.set<PULSE_AMPLITUDE    >( defaultAmp );
   myCaseParameters.set<PULSE_PHYS_VELOCITY>( {1.,0.,0.} );
@@ -573,17 +573,17 @@ void setGetParameters( MyCase::ParametersD& myCaseParameters, int& argc, char** 
   myCaseParameters.set<DO_GRAPHICAL_OUTPUT>(      false );
   myCaseParameters.set<DO_L2_PLOT         >(       true );
   myCaseParameters.set<WAIT_DEBUG         >(      false );
-  myCaseParameters.set<LATTICE_VTK_ITER_T>(         25 );
-  myCaseParameters.set<LATTICE_STAT_ITER_T             >(         25 );
-  myCaseParameters.set<INTERVAL_TABLE           >(          5 );
-  myCaseParameters.set<LATTICE_MAX_T             >(        150 );
+  myCaseParameters.set<LATTICE_VTK_ITER_T >(         25 );
+  myCaseParameters.set<LATTICE_STAT_ITER_T>(         25 );
+  myCaseParameters.set<INTERVAL_TABLE     >(          5 );
+  myCaseParameters.set<LATTICE_MAX_T      >(        150 );
   // STANDARD PARAMETERS
   myCaseParameters.set<PHYS_MAX_T         >(         .5 );
   myCaseParameters.set<PHYS_CHAR_VELOCITY >(        1.0 );
   myCaseParameters.set<PHYS_CHAR_VISCOSITY>(      0.001 );
   myCaseParameters.set<PHYS_CHAR_DENSITY  >(        1.0 );
   myCaseParameters.set<RESOLUTION         >( defaultRes );
-  myCaseParameters.set<PHYS_DELTA_T>([](MyCase::ParametersD& p) {
+  myCaseParameters.set<PHYS_DELTA_T       >([](MyCase::ParametersD& p) {
     return p.get<LATTICE_CHAR_VELOCITY>() / p.get<PHYS_CHAR_VELOCITY>() * p.get<PHYS_DELTA_X>();
   } );
   myCaseParameters.set<PHYS_CHAR_LENGTH>([](MyCase::ParametersD& p) {

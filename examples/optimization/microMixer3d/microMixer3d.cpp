@@ -414,16 +414,16 @@ int main(int argc, char* argv[])
   MyCase::ParametersD myCaseParameters;
   {
     using namespace olb::parameters;
-    myCaseParameters.set<LATTICE_CHAR_VELOCITY          >(0.1);
-    myCaseParameters.set<PHYS_CHAR_VELOCITY >(0.0332);
-    myCaseParameters.set<PHYS_CHAR_VISCOSITY>(1.e-6);
-    myCaseParameters.set<PHYS_CHAR_LENGTH   >(0.00133);
-    myCaseParameters.set<PHYS_MAX_T         >(5.);   // time for fluid simulation
-    myCaseParameters.set<PHYS_START_T       >(0.6);  // time to start fluid pulsation
-    myCaseParameters.set<PHYS_START_PERIOD  >(0.4);  // time to start fluid pulsation
-    myCaseParameters.set<PHYS_CHAR_DENSITY  >(1000);
-    myCaseParameters.set<DIFFUSION          >(1.e-7);  // 1.e-9
-    myCaseParameters.set<RESOLUTION         >(7);    // resolution of the hydraulic diameter  // 36
+    myCaseParameters.set<LATTICE_CHAR_VELOCITY>(0.1);
+    myCaseParameters.set<PHYS_CHAR_VELOCITY   >(0.0332);
+    myCaseParameters.set<PHYS_CHAR_VISCOSITY  >(1.e-6);
+    myCaseParameters.set<PHYS_CHAR_LENGTH     >(0.00133);
+    myCaseParameters.set<PHYS_MAX_T           >(5.);   // time for fluid simulation
+    myCaseParameters.set<PHYS_START_T         >(0.6);  // time to start fluid pulsation
+    myCaseParameters.set<PHYS_START_PERIOD    >(0.4);  // time to start fluid pulsation
+    myCaseParameters.set<PHYS_CHAR_DENSITY    >(1000);
+    myCaseParameters.set<DIFFUSION            >(1.e-7);  // 1.e-9
+    myCaseParameters.set<RESOLUTION           >(7);    // resolution of the hydraulic diameter  // 36
     myCaseParameters.set<parameters::DX>([](MyCase::ParametersD& p){
       return p.get<PHYS_CHAR_LENGTH>()
            / p.get<RESOLUTION>();

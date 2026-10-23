@@ -442,21 +442,21 @@ int main( int argc, char *argv[] )
   MyCase::ParametersD myCaseParameters;
   {
     using namespace olb::parameters;
-    myCaseParameters.set<DOMAIN_EXTENT     >({64e-5, 16e-5}); // domain size [physical units]
-    myCaseParameters.set<RESOLUTION        >(40);             // resolution y [lattice units]
-    myCaseParameters.set<PHYS_CHAR_LENGTH  >(4e-5);           // characteristic length (bubble radius) [phys units]
+    myCaseParameters.set<DOMAIN_EXTENT          >({64e-5, 16e-5}); // domain size [physical units]
+    myCaseParameters.set<RESOLUTION             >(40);             // resolution y [lattice units]
+    myCaseParameters.set<PHYS_CHAR_LENGTH       >(4e-5);           // characteristic length (bubble radius) [phys units]
     myCaseParameters.set<LATTICE_RELAXATION_TIME>(0.53);      // tau liquid [lattice units]
-    myCaseParameters.set<AC_RELAXATION_TIME>(0.8);            // tau mobility [lattice units]
-    myCaseParameters.set<REYNOLDS          >(100.);           // Reynolds number []
-    myCaseParameters.set<RHO_VAPOR         >(1.2);            // physDensity gas/vapor [physical units]
-    myCaseParameters.set<RHO_LIQUID        >(1000.);          // physDensity liquid [physical units]
-    myCaseParameters.set<NU_VAPOR          >(117e-7);         // physViscosity gas/vapor [physical units]
-    myCaseParameters.set<NU_LIQUID         >(9e-7);           // physViscosity liquid [physical units]
-    myCaseParameters.set<SURFACE_TENSION   >(0.072);          // surface tension [physical units]
+    myCaseParameters.set<AC_RELAXATION_TIME     >(0.8);            // tau mobility [lattice units]
+    myCaseParameters.set<REYNOLDS               >(100.);           // Reynolds number []
+    myCaseParameters.set<RHO_VAPOR              >(1.2);            // physDensity gas/vapor [physical units]
+    myCaseParameters.set<RHO_LIQUID             >(1000.);          // physDensity liquid [physical units]
+    myCaseParameters.set<NU_VAPOR               >(117e-7);         // physViscosity gas/vapor [physical units]
+    myCaseParameters.set<NU_LIQUID              >(9e-7);           // physViscosity liquid [physical units]
+    myCaseParameters.set<SURFACE_TENSION        >(0.072);          // surface tension [physical units]
     myCaseParameters.set<parameters::THETA >(M_PI*40./180.);  // contact angle (<90 is wetting) [radians]
     myCaseParameters.set<parameters::INTERFACE_WIDTH>(6.);    // interface width [lattice units]
-    myCaseParameters.set<C_RHO             >(100.);           // conversion factor density [physical units]
-    myCaseParameters.set<LATTICE_VTK_ITER_T>(2000.);
+    myCaseParameters.set<C_RHO              >(100.);           // conversion factor density [physical units]
+    myCaseParameters.set<LATTICE_VTK_ITER_T >(2000.);
     myCaseParameters.set<LATTICE_STAT_ITER_T>(2000.);
   }
   {

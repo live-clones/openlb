@@ -638,20 +638,20 @@ void simulate(MyCase& myCase) {
 
 void setDefaultParameters(MyCase::ParametersD& params) {
   using namespace olb::parameters;
-  params.set<FLOW_TYPE              >(FlowType::NON_FORCED);
-  params.set<BOUNDARY_TYPE          >(BoundaryType::INTERPOLATED);
-  params.set<RESOLUTION             >(           21 );
-  params.set<PHYS_CHAR_VELOCITY     >(           1. );
-  params.set<PHYS_CHAR_DENSITY      >(           1. );
-  params.set<PHYS_MAX_T             >(          20. );  // max. simulation time in s, SI unit
-  params.set<LENGTH                 >(           2. );  // length of the pie
-  params.set<DIAMETER               >(           1. );  // diameter of the pipe
-  params.set<REYNOLDS               >(          10. );
-  params.set<LATTICE_RELAXATION_TIME>(          0.8 );
-  params.set<RESIDUUM               >(         1e-5 );
-  params.set<PARTIAL_SLIP_TUNER     >(           0. );  // for partialSlip only: 0->bounceBack, 1->freeSlip
-  params.set<EOC                    >(        false );
-  params.set<OVERLAP                >(            3 );
+  params.set<FLOW_TYPE               >(FlowType::NON_FORCED);
+  params.set<BOUNDARY_TYPE           >(BoundaryType::INTERPOLATED);
+  params.set<RESOLUTION              >(           21 );
+  params.set<PHYS_CHAR_VELOCITY      >(           1. );
+  params.set<PHYS_CHAR_DENSITY       >(           1. );
+  params.set<PHYS_MAX_T              >(          20. );  // max. simulation time in s, SI unit
+  params.set<LENGTH                  >(           2. );  // length of the pie
+  params.set<DIAMETER                >(           1. );  // diameter of the pipe
+  params.set<REYNOLDS                >(          10. );
+  params.set<LATTICE_RELAXATION_TIME >(          0.8 );
+  params.set<RESIDUUM                >(         1e-5 );
+  params.set<PARTIAL_SLIP_TUNER      >(           0. );  // for partialSlip only: 0->bounceBack, 1->freeSlip
+  params.set<EOC                     >(        false );
+  params.set<OVERLAP                 >(            3 );
   params.set<PHYS_CONVERGENCE_CHECK_T>([] (MyCase::ParametersD& p) {  // interval for the convergence check in s
     return p.get<PHYS_MAX_T>()*0.0125;
   });
