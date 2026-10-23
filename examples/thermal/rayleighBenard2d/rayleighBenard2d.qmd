@@ -106,7 +106,7 @@ Coupling of the fluid and the temperature lattice in `prepareLattice()`.
 | `PHYS_CHAR_LOW_TEMPERATURE` | $T_\text{cold}$ | $273.15\,\mathrm{K}$ | temperature of the top plate and initial temperature |
 | `T_PERTURB` | | $273.95\,\mathrm{K}$ | initial temperature of the perturbation cell |
 | `LATTICE_CHAR_VELOCITY` | | $0.1$ | lattice velocity of $U$, sets $\Delta t$ |
-| `MAX_PHYS_T` | $T$ | $1000\,\mathrm{s}$ | simulated time |
+| `PHYS_MAX_T` | $T$ | $1000\,\mathrm{s}$ | simulated time |
 | `PHYS_VTK_ITER_T` | | $10\,\mathrm{s}$ | interval of the VTK output |
 | `reporter` `PHYS_ITER_T` | | $10\,\mathrm{s}$ | interval of the console statistics and the timer |
 
@@ -128,7 +128,7 @@ At $t = 1000\,\mathrm{s}$, the end of the default simulation, the rolls are full
 
 ![$t = 993\,\mathrm{s}$](/examples/thermal/rayleighBenard2d/doc/fig/temperature/temperature_iT0011781.png)
 
-![$t = 9994\,\mathrm{s}$, run with `--MAX_PHYS_T 10000`](/examples/thermal/rayleighBenard2d/doc/fig/temperature/long_temperature_iT0118600.png)
+![$t = 9994\,\mathrm{s}$, run with `--PHYS_MAX_T 10000`](/examples/thermal/rayleighBenard2d/doc/fig/temperature/long_temperature_iT0118600.png)
 
 Temperature of `rayleighBenard2d` with streamlines, visualized in ParaView. The colour range is fixed to $[T_\text{cold}, T_\text{hot}]$.
 :::

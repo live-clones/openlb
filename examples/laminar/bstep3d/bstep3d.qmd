@@ -67,7 +67,7 @@ The parameters are given in @tbl-bstep3d-params.
 | `PHYS_CHAR_LENGTH` | | $1\,\mathrm{m}$ | characteristic length |
 | `PHYS_DELTA_X` | $\Delta x$ | $1\,\mathrm{m} / N = 0.05\,\mathrm{m}$ | lattice spacing |
 | `PHYS_DELTA_T` | $\Delta t$ | $\Delta x / 25 = 0.002\,\mathrm{s}$ | time step size |
-| `MAX_PHYS_T` | $T$ | $40\,\mathrm{s}$ | simulated time, $20\,000$ time steps |
+| `PHYS_MAX_T` | $T$ | $40\,\mathrm{s}$ | simulated time, $20\,000$ time steps |
 | `PHYS_CHAR_VELOCITY` | $U$ | $1\,\mathrm{m/s}$ | mean velocity of the fully developed inflow |
 | `PHYS_CHAR_VISCOSITY` | $\nu$ | $0.01\,\mathrm{m^2/s}$ | kinematic viscosity |
 | `PHYS_CHAR_DENSITY` | $\rho$ | $1\,\mathrm{kg/m^3}$ | density |

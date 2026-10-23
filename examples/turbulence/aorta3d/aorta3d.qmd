@@ -87,7 +87,7 @@ Case definition for the `aorta3d` example.
 | `PHYS_CHAR_VELOCITY` | $U$ | $0.45\,\mathrm{m/s}$ | peak velocity of the inflow profile |
 | `PHYS_CHAR_VISCOSITY` | $\nu$ | $0.003 / 1055\,\mathrm{m^2/s}$ | kinematic viscosity of blood |
 | `PHYS_CHAR_DENSITY` | $\rho$ | $1055\,\mathrm{kg/m^3}$ | density of blood |
-| `MAX_PHYS_T` | $T$ | $2\,\mathrm{s}$ | simulated time, two periods of the inflow |
+| `PHYS_MAX_T` | $T$ | $2\,\mathrm{s}$ | simulated time, two periods of the inflow |
 | `BOUZIDI_ENABLED` | | `true` | Bouzidi boundary at the wall and the inlet, otherwise `BounceBack` and `InterpolatedVelocity` |
 | `PHYS_DELTA_X` | $\Delta x$ | $L / N$ | lattice spacing, derived from the resolution |
 

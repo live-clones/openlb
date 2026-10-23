@@ -125,7 +125,7 @@ examples. A caption after the table, starting with a colon, carries the label:
 |---|---|---|---|
 | `RESOLUTION` | int | `40` | number of nodes per characteristic length |
 | `REYNOLDS` | double | `100` | Reynolds number |
-| `MAX_PHYS_T` | double | `16` | simulated physical time in seconds |
+| `PHYS_MAX_T` | double | `16` | simulated physical time in seconds |
 | `VTK_ENABLED` | bool | `true` | write the flow fields to VTK |
 
 : Default parameters of `example`. {#tbl-parameters-example}

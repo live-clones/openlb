@@ -77,7 +77,7 @@ The Reynolds number that the converter reports with respect to the characteristi
 | `DECOMPOSITION_MULTIPLIER` | | $4$ | multiplier for the number of cuboids of the decomposition |
 | `RESOLUTION` | $N$ | $120$ | cells per $0.05\,\mathrm{m}$ |
 | `REYNOLDS` | | $708$ | sets the viscosity as $0.2\,\mathrm{m/s} \cdot 0.05\,\mathrm{m} / 708$ |
-| `MAX_PHYS_T` | $T$ | $16\,\mathrm{s}$ | simulated time |
+| `PHYS_MAX_T` | $T$ | $16\,\mathrm{s}$ | simulated time |
 | `CFL` | | $0.02$ | lattice velocity, which sets the time step size |
 | `PHYS_DELTA_X` | $\Delta x$ | $0.05\,\mathrm{m} / N$ | lattice spacing, derived from the resolution |
 

@@ -72,7 +72,7 @@ The parameters are given in @tbl-cylinder3d-params.
 |---|---|---|---|
 | `RESOLUTION` | $N$ | $10$ | cells per cylinder diameter $D$ |
 | `REYNOLDS` | $Re$ | $20$ | Reynolds number $U D / \nu$, which sets $\nu = 10^{-3}\,\mathrm{m^2/s}$ |
-| `MAX_PHYS_T` | $T$ | $16\,\mathrm{s}$ | simulated time, $16\,000$ time steps |
+| `PHYS_MAX_T` | $T$ | $16\,\mathrm{s}$ | simulated time, $16\,000$ time steps |
 | `PHYS_CHAR_VELOCITY` | $U$ | $0.2\,\mathrm{m/s}$ | mean velocity of the fully developed inflow |
 | `LATTICE_RELAXATION_TIME` | $\tau$ | $0.53$ | lattice relaxation time |
 | `PHYS_CHAR_DENSITY` | $\rho$ | $1\,\mathrm{kg/m^3}$ | density |

@@ -89,7 +89,7 @@ Case definition, dynamics and coupling of the `risingBubble2d` example.
 | `PF_LATTICE_RELAXATION_TIME` | | $0.8$ | relaxation time of the phase field, sets the mobility |
 | `INTERFACE_WIDTH` | $W$ | $5$ | interface width in cells |
 | `THETA` | $\theta$ | $90^\circ$ | contact angle at the walls |
-| `MAX_PHYS_T` | $T$ | $1.2\,\mathrm{ms}$ | simulated time |
+| `PHYS_MAX_T` | $T$ | $1.2\,\mathrm{ms}$ | simulated time |
 | `PHYS_VTK_ITER_T` | | $T / 30$ | interval of the VTK output |
 | `PHYS_STAT_ITER_T` | | $T / 30$ | interval of the console statistics |
 

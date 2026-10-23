@@ -66,7 +66,7 @@ The parameters are given in @tbl-bstep2d-params.
 | `PHYS_CHAR_DENSITY` | $\rho$ | $1\,\mathrm{kg/m^3}$ | density |
 | `DOMAIN_EXTENT` | $L \times H$ | $0.7\,\mathrm{m} \times 10.1\,\mathrm{mm}$ | length and height of the channel |
 | `PHYS_CHAR_LENGTH` | $2h$ | $10.4\,\mathrm{mm}$ | characteristic length, derived as $2 (H - S)$ |
-| `MAX_PHYS_T` | $T$ | $2\,\mathrm{s}$ | simulated time |
+| `PHYS_MAX_T` | $T$ | $2\,\mathrm{s}$ | simulated time |
 
 : Parameters of `bstep2d`, as set in `main()`. {#tbl-bstep2d-params}
 

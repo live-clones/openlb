@@ -78,7 +78,7 @@ The parameters are given in @tbl-poiseuille3d-params.
 | `RESOLUTION` | $N$ | $21$ | cells per pipe diameter $D$ |
 | `PHYS_CHAR_VELOCITY` | $u_\text{max}$ | $1\,\mathrm{m/s}$ | maximum velocity of the Poiseuille profile |
 | `PHYS_CHAR_DENSITY` | $\rho$ | $1\,\mathrm{kg/m^3}$ | density |
-| `MAX_PHYS_T` | $T$ | $20\,\mathrm{s}$ | upper limit of the simulated time |
+| `PHYS_MAX_T` | $T$ | $20\,\mathrm{s}$ | upper limit of the simulated time |
 | `LENGTH` | $L$ | $2\,\mathrm{m}$ | length of the pipe |
 | `DIAMETER` | $D$ | $1\,\mathrm{m}$ | diameter of the pipe |
 | `REYNOLDS` | $Re$ | $10$ | Reynolds number $u_\text{max} D / \nu$ |

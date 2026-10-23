@@ -86,7 +86,7 @@ The parameters are set in `main()` and given in @tbl-nozzle2d-params.
 | `LATTICE_CHAR_VELOCITY` | | $0.05$ | lattice velocity of $U$, sets $\Delta t$ |
 | `PHYS_CHAR_VISCOSITY` | $\nu$ | $10^{-5}\,\mathrm{m^2/s}$ | kinematic viscosity |
 | `PHYS_CHAR_DENSITY` | $\rho$ | $1\,\mathrm{kg/m^3}$ | density |
-| `MAX_PHYS_T` | $T$ | $500\,\mathrm{s}$ | simulated time |
+| `PHYS_MAX_T` | $T$ | $500\,\mathrm{s}$ | simulated time |
 | `DOMAIN_EXTENT` | | $6\,\mathrm{m} \times 2\,\mathrm{m}$ | length and height of the box |
 | `INLET_HEIGHT` | $h$ | $0.2\,\mathrm{m}$ | height of the inlet slot |
 | `START_FACTOR` | | $0.1$ | fraction of $T$ for the ramp-up of the inflow |

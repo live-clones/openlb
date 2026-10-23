@@ -58,7 +58,7 @@ The unit converter `UnitConverterFromResolutionAndRelaxationTime` derives the ti
 | `PHYS_CHAR_VELOCITY` | $u_\text{lid}$ | $1\,\mathrm{m/s}$ | velocity of the lid |
 | `PHYS_CHAR_VISCOSITY` | $\nu$ | $10^{-3}\,\mathrm{m^2/s}$ | kinematic viscosity |
 | `PHYS_CHAR_DENSITY` | $\rho$ | $1\,\mathrm{kg/m^3}$ | density |
-| `MAX_PHYS_T` | $T$ | $100\,\mathrm{s}$ | upper limit of the simulated time, $30\,000$ time steps |
+| `PHYS_MAX_T` | $T$ | $100\,\mathrm{s}$ | upper limit of the simulated time, $30\,000$ time steps |
 | `TIME_INTERVAL` | | $1\,\mathrm{s}$ | time window of the convergence check |
 | `RESIDUUM` | | $10^{-3}$ | bound for the relative standard deviation of the average energy |
 | `PHYS_DELTA_X` | $\Delta x$ | $L / N$ | lattice spacing, derived from the resolution |

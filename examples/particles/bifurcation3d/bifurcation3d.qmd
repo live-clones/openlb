@@ -61,7 +61,7 @@ The fluid is solved with the BGK operator (`BGKdynamics`) on the D3Q19 velocity 
 | `OUTLET_CENTER0`, `OUTLET_NORMAL0`, `OUTLET_RADIUS0` | | $(-0.0236, 0, -0.0214)\,\mathrm{m}$, $(0.505, -0.042, 0.862)$, $0.00793\,\mathrm{m}$ | circle of outlet 0 |
 | `OUTLET_CENTER1`, `OUTLET_NORMAL1`, `OUTLET_RADIUS1` | | $(0.0234, 0, -0.0212)\,\mathrm{m}$, $(-0.483, -0.010, 0.875)$, $0.00787\,\mathrm{m}$ | circle of outlet 1 |
 | `IT_PERIOD` | | $0.1419\,\mathrm{s}$ (Euler--Euler), $0.2\,\mathrm{s}$ (Euler--Lagrange) | interval of the boundary updates and the output; Euler--Lagrange uses half of it |
-| `MAX_PHYS_T` | $T_f$ | $10\,\mathrm{s}$ | simulated time (Euler--Euler) |
+| `PHYS_MAX_T` | $T_f$ | $10\,\mathrm{s}$ | simulated time (Euler--Euler) |
 | `DIFFUSION` | | $10^{-6}\,\mathrm{m^2/s}$ | diffusion coefficient of the particle concentration (Euler--Euler) |
 | `FLUID_MAX_PHYS_T` | $T_f$ | $5\,\mathrm{s}$ ($1\,\mathrm{s}$ for `nonSphericals`) | simulated time of the fluid (Euler--Lagrange) |
 | `PARTICLE_MAX_PHYS_T` | | $20\,\mathrm{s}$ | maximum simulated time of the particles (Euler--Lagrange) |

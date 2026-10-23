@@ -74,7 +74,7 @@ The unit converter is built from them and derives the time step size from the re
 |---|---|---|---|
 | `RESOLUTION` | $N$ | $10$ | cells per cylinder diameter $D$ |
 | `REYNOLDS` | $Re$ | $20$ | Reynolds number $U D / \nu$ |
-| `MAX_PHYS_T` | $T$ | $16\,\mathrm{s}$ | simulated time, $8\,000$ time steps |
+| `PHYS_MAX_T` | $T$ | $16\,\mathrm{s}$ | simulated time, $8\,000$ time steps |
 | `DOMAIN_EXTENT` | $L \times H$ | $2.2\,\mathrm{m} \times 0.41\,\mathrm{m}$ | length and height of the channel |
 | `PHYS_CHAR_VELOCITY` | $U$ | $0.2\,\mathrm{m/s}$ | mean velocity of the fully developed inflow |
 | `LATTICE_RELAXATION_TIME` | $\tau$ | $0.56$ | lattice relaxation time |

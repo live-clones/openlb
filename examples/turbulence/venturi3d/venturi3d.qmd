@@ -102,9 +102,9 @@ The parameters are given in @tbl-venturi3d-params.
 | `CharPhysVelocity` | | $2\,\mathrm{m/s}$ | characteristic velocity |
 | `PhysViscosity` | $\nu$ | $10^{-3}\,\mathrm{m^2/s}$ | kinematic viscosity |
 | `PhysDensity` | $\rho$ | $1\,\mathrm{kg/m^3}$ | density |
-| `MAX_PHYS_T` | $T$ | $200\,\mathrm{s}$ | simulated time, $20\,000$ time steps |
+| `PHYS_MAX_T` | $T$ | $200\,\mathrm{s}$ | simulated time, $20\,000$ time steps |
 
-: Parameters of `venturi3d`. `MAX_PHYS_T` is set in `main()`, all others in the section `Application` of `venturi3d.xml`. {#tbl-venturi3d-params}
+: Parameters of `venturi3d`. `PHYS_MAX_T` is set in `main()`, all others in the section `Application` of `venturi3d.xml`. {#tbl-venturi3d-params}
 
 #### Validation
 

@@ -76,7 +76,7 @@ The unit converter `UnitConverterFromResolutionAndRelaxationTime` derives the ti
 | `PHYS_CHAR_VELOCITY` | $u_\text{max}$ | $1\,\mathrm{m/s}$ | maximum velocity of the Poiseuille profile |
 | `REYNOLDS` | $Re$ | $10$ | Reynolds number $u_\text{max} H / \nu$, which sets $\nu = 0.1\,\mathrm{m^2/s}$ |
 | `LATTICE_RELAXATION_TIME` | $\tau$ | $0.8$ | lattice relaxation time |
-| `MAX_PHYS_T` | $T$ | $30\,\mathrm{s}$ | upper limit of the simulated time, $75\,000$ time steps |
+| `PHYS_MAX_T` | $T$ | $30\,\mathrm{s}$ | upper limit of the simulated time, $75\,000$ time steps |
 | `PHYS_CHAR_DENSITY` | $\rho$ | $1\,\mathrm{kg/m^3}$ | density |
 | `TUNER_PARAM` | | $0.5$ | blending of the partial slip boundary, from $0$ (no-slip) to $1$ (free slip) |
 | `FLOW_TYPE` | | `nonForced` | inlet and outlet (`nonForced`) or periodic with body force (`forced`) |

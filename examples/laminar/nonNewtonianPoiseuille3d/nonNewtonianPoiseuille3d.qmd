@@ -77,7 +77,7 @@ The parameters are given in @tbl-nonNewtonianPoiseuille3d-params.
 | `DOMAIN_EXTENT` | $L \times D \times D$ | $3 \times 1 \times 1\,\mathrm{mm}$ | size of the pipe |
 | `LATTICE_RELAXATION_TIME` | $\tau$ | $0.64265$ | lattice relaxation time |
 | `PHYS_CHAR_DENSITY` | $\rho$ | $1060\,\mathrm{kg/m^3}$ | density |
-| `MAX_PHYS_T` | $T$ | $0.3\,\mathrm{s}$ | simulated time |
+| `PHYS_MAX_T` | $T$ | $0.3\,\mathrm{s}$ | simulated time |
 | `REYNOLDS` | $Re$ | $100$ | Reynolds number of the Newtonian flow, which sets $G$ |
 | `DYNAMIC_VISCOSITY` | $\mu_0$ | $4.0755 \cdot 10^{-3}\,\mathrm{Pa\,s}$ | viscosity of the Newtonian model |
 | `PRESSURE_DROP` | $G$ | $16 \mu_0^2 Re / (\rho D^3)$ | pressure gradient |
