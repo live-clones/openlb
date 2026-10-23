@@ -430,8 +430,8 @@ void setPlotData( MyCase& myCase,
 
   const size_t iTout  = parameters.get<parameters::INTERVAL_TABLE>();
   const size_t  iTlog       = std::min(
-    parameters.get<parameters::INTERVAL_VTK>(),
-    parameters.get<parameters::INTERVAL_STAT>());
+    parameters.get<parameters::LATTICE_VTK_ITER_T>(),
+    parameters.get<parameters::LATTICE_STAT_ITER_T>());
   const Vector extent = parameters.get<parameters::CORE_EXTENT>();
   const Vector origin = -0.5*extent;
 
@@ -458,7 +458,7 @@ void getGraphicalResults( MyCase& myCase,
   const T           amplitude   = parameters.get<parameters::PULSE_AMPLITUDE>();
   const std::string suffix      = parameters.get<parameters::OUTDIR_SUFFIX>();
   const std::string name        = "gausspulse3d" + suffix;
-  const size_t      iTgraph     = parameters.get<parameters::INTERVAL_VTK>();
+  const size_t      iTgraph     = parameters.get<parameters::LATTICE_VTK_ITER_T>();
 
   SuperVTMwriter3D<T> vtmWriter(name);
   if (iT == 0) {
@@ -517,7 +517,7 @@ void simulate(MyCase& myCase) {
   size_t        iTmaxT      = converter.getLatticeTime(parameters.get<parameters::PHYS_MAX_T>());
   size_t        iTmax       = parameters.get<parameters::LATTICE_MAX_T>()+1;
   iTmax = ( iTmax > 0 ) ? std::min(iTmax, iTmaxT) : iTmaxT;
-  const size_t  iTlog       = std::min(parameters.get<parameters::INTERVAL_VTK>(), parameters.get<parameters::INTERVAL_STAT>());
+  const size_t  iTlog       = std::min(parameters.get<parameters::LATTICE_VTK_ITER_T>(), parameters.get<parameters::LATTICE_STAT_ITER_T>());
 
   // === Initialize pressure L2 norm plot
   const Vector extent = parameters.get<parameters::CORE_EXTENT>();
@@ -573,8 +573,8 @@ void setGetParameters( MyCase::ParametersD& myCaseParameters, int& argc, char** 
   myCaseParameters.set<DO_GRAPHICAL_OUTPUT>(      false );
   myCaseParameters.set<DO_L2_PLOT         >(       true );
   myCaseParameters.set<WAIT_DEBUG         >(      false );
-  myCaseParameters.set<INTERVAL_VTK>(         25 );
-  myCaseParameters.set<INTERVAL_STAT             >(         25 );
+  myCaseParameters.set<LATTICE_VTK_ITER_T>(         25 );
+  myCaseParameters.set<LATTICE_STAT_ITER_T             >(         25 );
   myCaseParameters.set<INTERVAL_TABLE           >(          5 );
   myCaseParameters.set<LATTICE_MAX_T             >(        150 );
   // STANDARD PARAMETERS

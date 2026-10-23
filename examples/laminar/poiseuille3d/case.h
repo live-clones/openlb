@@ -606,7 +606,7 @@ void simulate(MyCase& myCase) {
   auto& converter   = lattice.getUnitConverter();
 
   const size_t  iTmax   = converter.getLatticeTime( parameters.get<parameters::PHYS_MAX_T>() );
-  const size_t  iTcheck = converter.getLatticeTime( parameters.get<parameters::INTERVAL_CONVERGENCE_CHECK>() );
+  const size_t  iTcheck = converter.getLatticeTime( parameters.get<parameters::PHYS_CONVERGENCE_CHECK_T>() );
   const T       epsilon = parameters.get<parameters::RESIDUUM>();
 
   clout << "starting simulation..." << std::endl;
@@ -652,7 +652,7 @@ void setDefaultParameters(MyCase::ParametersD& params) {
   params.set<PARTIAL_SLIP_TUNER     >(           0. );  // for partialSlip only: 0->bounceBack, 1->freeSlip
   params.set<EOC                    >(        false );
   params.set<OVERLAP                >(            3 );
-  params.set<INTERVAL_CONVERGENCE_CHECK>([] (MyCase::ParametersD& p) {  // interval for the convergence check in s
+  params.set<PHYS_CONVERGENCE_CHECK_T>([] (MyCase::ParametersD& p) {  // interval for the convergence check in s
     return p.get<PHYS_MAX_T>()*0.0125;
   });
   params.set<PHYS_STAT_ITER_T>([] (MyCase::ParametersD& p) {  // interval for the statistics output in s

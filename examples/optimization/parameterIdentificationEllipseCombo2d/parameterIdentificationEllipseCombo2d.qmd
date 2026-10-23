@@ -148,7 +148,7 @@ belongs to a study while the command line varies the rest.
 | `FIXED_TIME_STEP 1` | pin $\Delta t$ to the value belonging to the target modulus instead of letting it follow the control |
 | `PHYS_MAX_T 90` | with $\Delta x = 1.5/N_x$, a fixed budget of $40 N_x^2$ steps |
 | `CONVERGENCE_PRECISION 0` | disables the steady-state stopping rule, so every resolution runs the same budget |
-| `IT_LOG_PSEUDO_TIME 100000000` | silences the per-step log |
+| `LATTICE_LOG_ITER_T 100000000` | silences the per-step log |
 
 Disabling the stopping rule is what makes the study measure the discretization
 error alone. With a tolerance active the run stops at a point that depends on the
@@ -221,8 +221,8 @@ loads as well as the answer.
 | Parameter | Type | Default | Meaning |
 |---|---|---|---|
 | `OPTI_VTK_ENABLED` | bool | `true` | write VTK fields during the optimization; note the name differs from the `VTK_ENABLED` of the periodic cases |
-| `IT_VTK_PSEUDO_TIME` | int | `1000` | pseudo-time steps between VTK writes |
-| `IT_LOG_PSEUDO_TIME` | int | `100` | pseudo-time steps between console log lines; a very large value silences the log |
+| `LATTICE_VTK_ITER_T` | int | `1000` | pseudo-time steps between VTK writes |
+| `LATTICE_LOG_ITER_T` | int | `100` | pseudo-time steps between console log lines; a very large value silences the log |
 
 ##### Optimizer
 

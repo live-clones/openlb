@@ -36,8 +36,8 @@ void simulateRefined( MyCase& myCase ) {
   using DESCRIPTOR = MyCase::descriptor_t;
   auto&         parameters    = myCase.getParameters();
   auto&         converterL0   = myCase.getLattice(names::NavierStokes{}).getUnitConverter();
-  const size_t  iTgraph       = parameters.get<parameters::INTERVAL_VTK>();
-  const size_t  iTlog         = std::min(iTgraph, (std::size_t) parameters.get<parameters::INTERVAL_STAT>());
+  const size_t  iTgraph       = parameters.get<parameters::LATTICE_VTK_ITER_T>();
+  const size_t  iTlog         = std::min(iTgraph, (std::size_t) parameters.get<parameters::LATTICE_STAT_ITER_T>());
   const bool    doGraphicalOutput = parameters.get<parameters::DO_GRAPHICAL_OUTPUT>();
   const bool    doL2Plot      = parameters.get<parameters::DO_L2_PLOT>();
   const Vector  extentDomain  = parameters.get<parameters::DOMAIN_EXTENT>();
@@ -218,7 +218,7 @@ int main(int argc, char* argv[])
   // === Step 2b: Set coarse-specific parameters ===
   myCaseParameters.set<parameters::FAR_FIELD_TYPE>( COARSE );
   myCaseParameters.set<parameters::RESOLUTION>( int(myCaseParameters.get<parameters::RESOLUTION>() / 2. ) );
-  myCaseParameters.set<parameters::INTERVAL_VTK>( int(myCaseParameters.get<parameters::INTERVAL_VTK>() / 2. ) + 1 );
+  myCaseParameters.set<parameters::LATTICE_VTK_ITER_T>( int(myCaseParameters.get<parameters::LATTICE_VTK_ITER_T>() / 2. ) + 1 );
   myCaseParameters.set<parameters::LATTICE_MAX_T>( myCaseParameters.get<parameters::LATTICE_MAX_T>() / 2 );
 
   // === Step 2b: set output directory depending on input values ===

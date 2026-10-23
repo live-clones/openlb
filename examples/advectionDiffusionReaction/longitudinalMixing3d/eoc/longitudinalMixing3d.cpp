@@ -47,7 +47,7 @@ int main(int argc, char *argv[]) {
     using namespace olb::parameters;
     myCaseParameters.set<RESOLUTION>(32);
     myCaseParameters.set<ERROR_TIME>(1.);
-    myCaseParameters.set<INTERVAL_OUTPUT>(0.04);
+    myCaseParameters.set<PHYS_STAT_ITER_T>(0.04);
     myCaseParameters.set<PECLET>(1.);
     myCaseParameters.set<PHYS_DIFFUSIVITY>(0.01);
     myCaseParameters.set<PHYS_CHAR_LENGTH>(1.);
@@ -59,7 +59,7 @@ int main(int argc, char *argv[]) {
   }
 
   const MyCase::value_t N0 = myCaseParameters.get<parameters::RESOLUTION>();
-  const MyCase::value_t statIter0 = myCaseParameters.get<parameters::INTERVAL_OUTPUT>();
+  const MyCase::value_t statIter0 = myCaseParameters.get<parameters::PHYS_STAT_ITER_T>();
 
   std::vector<MyCase::value_t> L1Errors((unsigned) myCaseParameters.get<parameters::NUMBER_OF_RUNS>());
   std::vector<MyCase::value_t> L2Errors((unsigned) myCaseParameters.get<parameters::NUMBER_OF_RUNS>());
@@ -68,7 +68,7 @@ int main(int argc, char *argv[]) {
   for ( std::size_t i = 0; i < myCaseParameters.get<parameters::NUMBER_OF_RUNS>(); ++i) {
     //Adjust Resolution and output interval
     myCaseParameters.set<parameters::RESOLUTION>(util::pow(2,i) * N0);
-    myCaseParameters.set<parameters::INTERVAL_OUTPUT>(util::pow(4,i) * statIter0);
+    myCaseParameters.set<parameters::PHYS_STAT_ITER_T>(util::pow(4,i) * statIter0);
 
     Mesh mesh = createMesh(myCaseParameters);
 

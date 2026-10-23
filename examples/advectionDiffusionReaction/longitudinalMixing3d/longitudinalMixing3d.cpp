@@ -47,7 +47,7 @@ int main(int argc, char *argv[]) {
     using namespace olb::parameters;
     myCaseParameters.set<RESOLUTION>(32);
     myCaseParameters.set<ERROR_TIME>(1.);
-    myCaseParameters.set<INTERVAL_OUTPUT>(0.04);
+    myCaseParameters.set<PHYS_STAT_ITER_T>(0.04);
     myCaseParameters.set<PECLET>(1.);
     myCaseParameters.set<PHYS_DIFFUSIVITY>(0.01);
     myCaseParameters.set<PHYS_CHAR_LENGTH>(1.);

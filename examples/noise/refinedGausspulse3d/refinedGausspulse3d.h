@@ -115,7 +115,7 @@ void getFineGraphicalResults( MyCase& myCase,
   auto&             converter   = lattice.getUnitConverter();
   auto&             parameters  = myCase.getParameters();
   const T           amplitude   = parameters.get<parameters::PULSE_AMPLITUDE>();
-  const size_t      iTgraph     = parameters.get<parameters::INTERVAL_VTK>();
+  const size_t      iTgraph     = parameters.get<parameters::LATTICE_VTK_ITER_T>();
   const std::string suffix      = parameters.get<parameters::OUTDIR_SUFFIX>();
   const std::string name        = "gausspulse3d" + suffix + "_core";
 

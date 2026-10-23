@@ -95,16 +95,13 @@ struct ANGLE : public descriptors::FIELD_BASE<1> { };
 //BC/IC/Constraint Flow
 struct BULK_VELOCITY     : public descriptors::FIELD_BASE<1> { };
 struct PHYS_MAX_VELOCITY : public descriptors::FIELD_BASE<1> { };
-struct ANGULAR_VELOCITY  : public descriptors::FIELD_BASE<1> { };
 struct PRESSURE          : public descriptors::FIELD_BASE<1> { };
-struct REFERNCE_PRESSURE : public descriptors::FIELD_BASE<1> { };
 struct AVERAGE_PRESSURE  : public descriptors::FIELD_BASE<1> { };
 struct PRESSURE_DROP     : public descriptors::FIELD_BASE<1> { };
 struct SHEAR_RATE        : public descriptors::FIELD_BASE<1> { };
 struct STRAIN_RATE       : public descriptors::FIELD_BASE<1> { };
 
 struct COEFFICIENT_OF_DRAG : public descriptors::FIELD_BASE<1> { };
-struct COEFFICIENT_OF_LIFT : public descriptors::FIELD_BASE<1> { };
 
 //BC/IC/Constraints Heat
 struct TEMPERATURE : public descriptors::FIELD_BASE<1> { };
@@ -168,10 +165,6 @@ struct PHYS_ABSORPTION : public descriptors::FIELD_BASE<1> {};
 struct PHYS_SCATTERING : public descriptors::FIELD_BASE<1> {};
 struct REFRACTIVE_RELATIVE : public descriptors::FIELD_BASE<1> {};
 
-// Solids pseudo-time
-struct IT_LOG_PSEUDO_TIME : public descriptors::TYPED_FIELD_BASE<int,1> { };
-struct IT_VTK_PSEUDO_TIME : public descriptors::TYPED_FIELD_BASE<int,1> { };
-
 struct VTK_ENABLED     : public descriptors::TYPED_FIELD_BASE<bool,1> { };
 struct GNUPLOT_ENABLED : public descriptors::TYPED_FIELD_BASE<bool,1> { };
 
@@ -190,29 +183,16 @@ struct PHYS_START_PERIOD : public descriptors::FIELD_BASE<1> { };
 struct PHYS_TIMER_ITER_T : public descriptors::FIELD_BASE<1>{};
 struct PHYS_ITER_T : public descriptors::FIELD_BASE<1>{};
 
-struct LATTICE_START_T : public descriptors::FIELD_BASE<1> { };
-struct LATTICE_UPDATE_T : public descriptors::FIELD_BASE<1> { };
 struct LATTICE_INTERVAL_T : public descriptors::FIELD_BASE<1> { };
 struct LATTICE_MAX_T : public descriptors::TYPED_FIELD_BASE<int, 1> { };
 struct LATTICE_STAT_ITER_T    : public descriptors::TYPED_FIELD_BASE<int,1> { };
 struct LATTICE_VTK_ITER_T     : public descriptors::TYPED_FIELD_BASE<int,1> { };
-struct LATTICE_TIMER_ITER_T : public descriptors::TYPED_FIELD_BASE<int,1> {};
+struct LATTICE_LOG_ITER_T     : public descriptors::TYPED_FIELD_BASE<int,1> { };
 struct LATTICE_ITER_T : public descriptors::TYPED_FIELD_BASE<int,1>{};
 
-// Deprecated aliases, replaced by PHYS_MAX_T / LATTICE_MAX_T
-//struct MAX_PHYS_T : public descriptors::FIELD_BASE<1> { };
-//struct MAX_LATTICE_T : public descriptors::TYPED_FIELD_BASE<std::size_t,1> { };
-
 struct RAMP_UP_T : public descriptors::FIELD_BASE<1> { };
-struct RAMP_UP_STEP : public descriptors::FIELD_BASE<1> { };
 
 struct STL_SIZE : public descriptors::FIELD_BASE<1> { };
-struct TIME_OUTPUT_START : public descriptors::FIELD_BASE<1> { };
-struct INTERVAL_OUTPUT : public descriptors::FIELD_BASE<1> { };
-struct INTERVAL_ERROR : public descriptors::FIELD_BASE<1> { };
-struct INTERVAL_VTK : public descriptors::FIELD_BASE<1> { };
-struct INTERVAL_STAT : public descriptors::FIELD_BASE<1> { };
-struct PHYS_TIME_AVERAGE_START : public descriptors::FIELD_BASE<1> { };
 struct OUTPUT_DIRECTORY : public descriptors::TYPED_FIELD_BASE<std::string, 1> { };
 
 // Meta/EOC
@@ -221,8 +201,7 @@ struct CONVERGENCE_PRECISION : public descriptors::FIELD_BASE<1> { };
 struct EPSILON : public descriptors::FIELD_BASE<1> { };
 struct RESIDUUM : public descriptors::FIELD_BASE<1> { };
 struct CONV_ITER : public descriptors::FIELD_BASE<1> { };
-struct NUM_CONV_VALUES : public descriptors::FIELD_BASE<1> { };
-struct INTERVAL_CONVERGENCE_CHECK : public descriptors::FIELD_BASE<1> { };
+struct PHYS_CONVERGENCE_CHECK_T : public descriptors::FIELD_BASE<1> { };
 struct NUMBER_OF_RUNS : public descriptors::TYPED_FIELD_BASE<int, 1> { };
 struct RESOLUTION_START : public descriptors::TYPED_FIELD_BASE<int, 1> { };
 struct RESOLUTION_END : public descriptors::TYPED_FIELD_BASE<int, 1> { };
@@ -238,13 +217,11 @@ struct ERROR : public descriptors::FIELD_BASE<1> { };
 // Gravity
 struct GRAVITY : public descriptors::FIELD_BASE<0,1> { };
 struct GRAVITATIONAL_ACC  : public descriptors::FIELD_BASE<1> { };
-struct GRAVITATIONAL_CONST : public descriptors::FIELD_BASE<1> { };
 struct INITIAL_FALLING_SPEED : public descriptors::FIELD_BASE<0,1> { };
 
 // Turbulence Parameters
 struct TURBULENCE_INTENSITY    : public descriptors::FIELD_BASE<1> { };
 struct TURBULENCE_N_SEEDS      : public descriptors::FIELD_BASE<1> { };
-struct TURBULENCE_N_TIME       : public descriptors::FIELD_BASE<1> { };
 struct TURBULENCE_SIGMA        : public descriptors::FIELD_BASE<1> { };
 
 //Radiative Transport
@@ -275,9 +252,6 @@ struct PHYS_MAX_T_AD : public descriptors::FIELD_BASE<1> { };
 // Optimization
 struct INITIAL_CONTROL_SCALAR : public descriptors::FIELD_BASE<1> { };
 struct REGULARIZATION_FACTOR : public descriptors::FIELD_BASE<1> { };
-struct MAX_OPTI_ITER : public descriptors::FIELD_BASE<1> { };
-struct MAX_STEP_CONTROL_ITER : public descriptors::FIELD_BASE<1> { };
-struct OPTI_CONVERGENCE_TOLERANCE : public descriptors::FIELD_BASE<1> { };
 struct TARGET_VOLUME : public descriptors::FIELD_BASE<1> { };
 struct FDQ_STENCIL_WIDTH : public descriptors::FIELD_BASE<1> {
   template <typename T, typename DESCRIPTOR>
@@ -311,7 +285,6 @@ struct LATTICE_TIME : public descriptors::TYPED_FIELD_BASE<std::size_t,1> {
     return value >= 0;
   }
 };
-struct LATTICE_TIME_T : public descriptors::FIELD_BASE<1> { };
 struct LATTICE_REFERENCE_VELOCITY : public descriptors::FIELD_BASE<1> { };
 struct LATTICE_REFERENCE_PRESSURE : public descriptors::FIELD_BASE<1> { };
 struct SMAGORINSKY_CONSTANT          : public descriptors::FIELD_BASE<1> { };

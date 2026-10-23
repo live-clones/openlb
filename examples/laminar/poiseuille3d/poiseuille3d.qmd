@@ -86,7 +86,7 @@ The parameters are given in @tbl-poiseuille3d-params.
 | `RESIDUUM` | | $10^{-5}$ | bound for the relative standard deviation of the average energy |
 | `PARTIAL_SLIP_TUNER` | | $0$ | blending of the partial slip boundary, from $0$ (no-slip) to $1$ (free slip) |
 | `EOC` | | `false` | run a convergence study over several resolutions |
-| `INTERVAL_CONVERGENCE_CHECK` | | $0.0125\,T = 0.25\,\mathrm{s}$ | time window of the convergence check |
+| `PHYS_CONVERGENCE_CHECK_T` | | $0.0125\,T = 0.25\,\mathrm{s}$ | time window of the convergence check |
 | `PHYS_STAT_ITER_T` | | $T/20 = 1\,\mathrm{s}$ | interval of the console statistics and the error norms |
 | `PHYS_VTK_ITER_T` | | $T/20 = 1\,\mathrm{s}$ | interval of the VTK output |
 | `PHYS_DELTA_X` | $\Delta x$ | $D / N$ | lattice spacing, derived from the resolution |

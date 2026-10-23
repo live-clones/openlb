@@ -48,7 +48,7 @@ int main(int argc, char *argv[]) {
     using namespace olb::parameters;
     myCaseParameters.set<NUMBER_OF_RUNS>(4);
     myCaseParameters.set<RESOLUTION>(21);
-    myCaseParameters.set<INTERVAL_OUTPUT>(20);
+    myCaseParameters.set<LATTICE_STAT_ITER_T>(20);
     myCaseParameters.set<PHYS_CHAR_LENGTH>(2.);
     myCaseParameters.set<PHYS_CHAR_DENSITY>(1.);
     myCaseParameters.set<PHYS_CHAR_VELOCITY>(2.5);
@@ -60,7 +60,7 @@ int main(int argc, char *argv[]) {
   }
 
   const MyCase::value_t N0 = myCaseParameters.get<parameters::RESOLUTION>();
-  const MyCase::value_t statIter0 = myCaseParameters.get<parameters::INTERVAL_OUTPUT>();
+  const MyCase::value_t statIter0 = myCaseParameters.get<parameters::LATTICE_STAT_ITER_T>();
   const MyCase::value_t physVel0 = myCaseParameters.get<parameters::PHYS_CHAR_VELOCITY>();
   const MyCase::value_t physLength0 = myCaseParameters.get<parameters::PHYS_CHAR_LENGTH>();
   const std::size_t peclet(myCaseParameters.get<parameters::PECLET>());
@@ -76,7 +76,7 @@ int main(int argc, char *argv[]) {
 
     //Adjust Resolution and output interval
     myCaseParameters.set<parameters::RESOLUTION>(util::pow(2,i) * N0);
-    myCaseParameters.set<parameters::INTERVAL_OUTPUT>(util::pow(4,i) * statIter0);
+    myCaseParameters.set<parameters::LATTICE_STAT_ITER_T>(util::pow(4,i) * statIter0);
 
     clout << "<------- Simulate with -------> " << std::endl;
     clout << "Resolution: " << util::pow(2,i)*N0 << std::endl;

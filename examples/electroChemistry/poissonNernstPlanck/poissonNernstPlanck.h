@@ -419,7 +419,7 @@ void getResults(MyCase& myCase,
   const T C0 = parameters.get<parameters::C_0>();
   const T Debye = parameters.get<parameters::DEBYE>();
   const T temperature = parameters.get<parameters::TEMPERATURE>();
-  const T outputInterval = parameters.get<parameters::INTERVAL_OUTPUT>();
+  const T outputInterval = parameters.get<parameters::PHYS_STAT_ITER_T>();
 
   const int vtkIter  = latticeCation.getUnitConverter().getLatticeTime( outputInterval );
   const int statIter = latticeCation.getUnitConverter().getLatticeTime( outputInterval );

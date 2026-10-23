@@ -259,8 +259,8 @@ void getResults(MyCase& myCase,
   const auto& converter       = lattice.getUnitConverter();
   auto& parameters            = myCase.getParameters();
 
-  const std::size_t iTlog     = parameters.get<parameters::IT_LOG_PSEUDO_TIME                 >();
-  const std::size_t iTvtk     = parameters.get<parameters::IT_VTK_PSEUDO_TIME                 >();
+  const std::size_t iTlog     = parameters.get<parameters::LATTICE_LOG_ITER_T                 >();
+  const std::size_t iTvtk     = parameters.get<parameters::LATTICE_VTK_ITER_T                 >();
   const std::size_t iTMax     = converter.getLatticeTime(parameters.get<parameters::PHYS_MAX_T>());
   const std::size_t convIter  = parameters.get<parameters::CONV_ITER                          >();
   const bool        converged = parameters.get<parameters::CONVERGED                          >();
@@ -488,8 +488,8 @@ int main(int argc, char* argv[]) {
     myCaseParameters.set<POISSON_RATIO            >(     0.7        );
     myCaseParameters.set<DAMPING_FACTOR           >(     1.0        );
     myCaseParameters.set<PHYS_MAX_T               >(  1000          );
-    myCaseParameters.set<IT_LOG_PSEUDO_TIME       >(  1000          );
-    myCaseParameters.set<IT_VTK_PSEUDO_TIME       >( 10000          );
+    myCaseParameters.set<LATTICE_LOG_ITER_T       >(  1000          );
+    myCaseParameters.set<LATTICE_VTK_ITER_T       >( 10000          );
     myCaseParameters.set<CONVERGENCE_PRECISION    >(    1e-7        );
     myCaseParameters.set<CONV_ITER                >(    10          );
     myCaseParameters.set<CONV_VALUE               >(     1          );

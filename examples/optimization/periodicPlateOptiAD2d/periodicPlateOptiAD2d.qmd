@@ -154,8 +154,8 @@ second solve.
 | Parameter | Type | Default | Meaning |
 |---|---|---|---|
 | `VTK_ENABLED` | bool | `true` | write the displacement, stress and control fields to VTK |
-| `IT_VTK_PSEUDO_TIME` | int | `1000` | pseudo-time steps between VTK writes |
-| `IT_LOG_PSEUDO_TIME` | int | `1000` | pseudo-time steps between console log lines; a very large value silences the log |
+| `LATTICE_VTK_ITER_T` | int | `1000` | pseudo-time steps between VTK writes |
+| `LATTICE_LOG_ITER_T` | int | `1000` | pseudo-time steps between console log lines; a very large value silences the log |
 
 ##### Optimizer
 

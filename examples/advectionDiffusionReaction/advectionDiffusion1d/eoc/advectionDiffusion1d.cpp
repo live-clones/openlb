@@ -52,7 +52,7 @@ int main(int argc, char *argv[])
     using namespace olb::parameters;
     myCaseParameters.set<NUMBER_OF_RUNS>(3);
     myCaseParameters.set<RESOLUTION>(50);
-    myCaseParameters.set<INTERVAL_OUTPUT>(50);
+    myCaseParameters.set<LATTICE_STAT_ITER_T>(50);
     myCaseParameters.set<PHYS_CHAR_LENGTH>(2.);
     myCaseParameters.set<PHYS_CHAR_DENSITY>(1.);
     myCaseParameters.set<PHYS_DIFFUSIVITY>(1.5);
@@ -61,7 +61,7 @@ int main(int argc, char *argv[])
   }
 
   const MyCase::value_t N0 = myCaseParameters.get<parameters::RESOLUTION>();
-  const MyCase::value_t statIter0 = myCaseParameters.get<parameters::INTERVAL_OUTPUT>();
+  const MyCase::value_t statIter0 = myCaseParameters.get<parameters::LATTICE_STAT_ITER_T>();
 
   CSV<MyCase::value_t> csvWriter("averageSimL2RelErr");
 
@@ -69,7 +69,7 @@ int main(int argc, char *argv[])
 
     //Adjust Resolution and output interval
     myCaseParameters.set<parameters::RESOLUTION>(util::pow(2,i) * N0);
-    myCaseParameters.set<parameters::INTERVAL_OUTPUT>(util::pow(4,i) * statIter0);
+    myCaseParameters.set<parameters::LATTICE_STAT_ITER_T>(util::pow(4,i) * statIter0);
 
 
     Mesh mesh = createMesh(myCaseParameters);

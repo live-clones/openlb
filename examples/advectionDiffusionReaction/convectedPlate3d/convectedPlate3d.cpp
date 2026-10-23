@@ -282,7 +282,7 @@ void simulate(MyCase& myCase){
   util::Timer<T> timer(adLattice.getUnitConverter().getLatticeTime(parameters.get<parameters::PHYS_MAX_T>()), superGeometry.getStatistics().getNvoxel());
 
   // Convergence check
-  util::ValueTracer<T> converge(adLattice.getUnitConverter().getLatticeTime(parameters.get<parameters::INTERVAL_CONVERGENCE_CHECK>()), parameters.get<parameters::RESIDUUM>());
+  util::ValueTracer<T> converge(adLattice.getUnitConverter().getLatticeTime(parameters.get<parameters::PHYS_CONVERGENCE_CHECK_T>()), parameters.get<parameters::RESIDUUM>());
   timer.start();
   T relError{};
 
@@ -329,7 +329,7 @@ int main(int argc, char* argv[]) {
     myCaseParameters.set<DOMAIN_EXTENT>([] (MyCase::ParametersD& p) {
       return Vector{p.get<RESOLUTION>()*p.get<PHYS_DELTA_X>()*10, p.get<PHYS_DELTA_X>(), p.get<HEIGHT>()};
     });
-    myCaseParameters.set<INTERVAL_CONVERGENCE_CHECK>([] (MyCase::ParametersD& p) {
+    myCaseParameters.set<PHYS_CONVERGENCE_CHECK_T>([] (MyCase::ParametersD& p) {
       return p.get<PHYS_MAX_T>()*0.001;
     });
 

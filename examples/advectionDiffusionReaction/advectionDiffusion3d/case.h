@@ -390,7 +390,7 @@ void simulate(MyCase& myCase)
   const auto& converter = lattice.getUnitConverter();
   const std::size_t runs = parameters.get<parameters::NUMBER_OF_RUNS>();
   const std::size_t N = parameters.get<parameters::RESOLUTION>();
-  const std::size_t statIter = parameters.get<parameters::INTERVAL_OUTPUT>();
+  const std::size_t statIter = parameters.get<parameters::LATTICE_STAT_ITER_T>();
   const T peclet = parameters.get<parameters::PECLET>();
   const T physTmax = parameters.get<parameters::PHYS_MAX_T>();
   const T pulseDiffBound = parameters.get<parameters::PULSE_DIFF_BOUND>();

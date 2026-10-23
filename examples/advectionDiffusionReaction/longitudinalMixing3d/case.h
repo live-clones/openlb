@@ -300,7 +300,7 @@ void getResults(MyCase& myCase, const std::size_t iT,
   const auto& converter = ADlattice.getUnitConverter();
   auto& parameters = myCase.getParameters();
 
-  const T statIter = parameters.get<parameters::INTERVAL_OUTPUT>();
+  const T statIter = parameters.get<parameters::PHYS_STAT_ITER_T>();
   const T errorTime = parameters.get<parameters::ERROR_TIME>();
 
   OstreamManager clout(std::cout, "getResults");

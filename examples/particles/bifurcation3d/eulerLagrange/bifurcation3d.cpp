@@ -483,7 +483,7 @@ void simulate( MyCase& myCase )
   fluidTimer.start();
 
   std::size_t iT         = 0;
-  std::size_t iTperiod   = converter.getLatticeTime(0.5 * parameters.get<parameters::INTERVAL_OUTPUT>());
+  std::size_t iTperiod   = converter.getLatticeTime(0.5 * parameters.get<parameters::PHYS_STAT_ITER_T>());
   std::size_t iTmaxStart = converter.getLatticeTime(0.8 * parameters.get<parameters::FLUID_MAX_PHYS_T>());
 
 
@@ -563,7 +563,7 @@ int main(int argc, char* argv[])
     using namespace olb::parameters;
     myCaseParameters.set<REYNOLDS>(50);
     myCaseParameters.set<RESOLUTION>(19);
-    myCaseParameters.set<INTERVAL_OUTPUT>(0.2); // time interval for writeout and updating boundary values in s
+    myCaseParameters.set<PHYS_STAT_ITER_T>(0.2); // time interval for writeout and updating boundary values in s
     myCaseParameters.set<PART_RADIUS>(1.5e-4);
     myCaseParameters.set<PART_RHO>(998.2);
     myCaseParameters.set<FLUID_MAX_PHYS_T>(5);     // max. simulation time in s

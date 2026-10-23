@@ -71,7 +71,7 @@ int main(int argc, char* argv[]) {
     myCaseParameters.set<CONVERGED>(false);
     myCaseParameters.set<POISSON_LOOP>(true);
     myCaseParameters.set<POISSON_LOOP_PER_TOTAL_TIME_STEP>(5);
-    myCaseParameters.set<parameters::INTERVAL_OUTPUT>(0.001);
+    myCaseParameters.set<parameters::PHYS_STAT_ITER_T>(0.001);
   }
 
   /// === Step 3: Create Mesh ===

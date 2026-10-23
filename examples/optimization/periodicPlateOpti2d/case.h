@@ -250,7 +250,7 @@ void getResults(MyCase& myCase, util::Timer<typename MyCase::value_t>& timer, st
   auto& parameters = myCase.getParameters();
 
   const std::size_t iTMax     = converter.getLatticeTime(parameters.template get<parameters::PHYS_MAX_T>());
-  const std::size_t iTlog     = parameters.template get<parameters::IT_LOG_PSEUDO_TIME>();
+  const std::size_t iTlog     = parameters.template get<parameters::LATTICE_LOG_ITER_T>();
   const std::size_t convIter  = parameters.template get<parameters::CONV_ITER>();
   const bool        converged = parameters.template get<parameters::CONVERGED>();
 

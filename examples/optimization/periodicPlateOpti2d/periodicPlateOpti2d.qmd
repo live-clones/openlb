@@ -89,7 +89,7 @@ belongs to a study while the command line varies the rest.
 | `FORWARD_ONLY 1` | solve the primal problem once at the reference force and write the error CSVs instead of optimizing |
 | `PHYS_MAX_T 30` | with $\Delta t = \Delta x^2$, a fixed budget of $30 N_x^2$ steps |
 | `CONVERGENCE_PRECISION 0` | disables the steady-state stopping rule, so every resolution runs the same budget |
-| `IT_LOG_PSEUDO_TIME 100000000` | silences the per-step log |
+| `LATTICE_LOG_ITER_T 100000000` | silences the per-step log |
 | `VTK_ENABLED 0` | no field output |
 
 `gradient_comparison.xml` switches to the node-wise gradient validation:
@@ -171,8 +171,8 @@ informed start.
 | Parameter | Type | Default | Meaning |
 |---|---|---|---|
 | `VTK_ENABLED` | bool | `true` | write the displacement, stress and control fields to VTK |
-| `IT_VTK_PSEUDO_TIME` | int | `1000` | pseudo-time steps between VTK writes |
-| `IT_LOG_PSEUDO_TIME` | int | `1000` | pseudo-time steps between console log lines; a very large value silences the log |
+| `LATTICE_VTK_ITER_T` | int | `1000` | pseudo-time steps between VTK writes |
+| `LATTICE_LOG_ITER_T` | int | `1000` | pseudo-time steps between console log lines; a very large value silences the log |
 
 ##### Gradient comparison group
 

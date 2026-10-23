@@ -288,7 +288,7 @@ void simulate(MyCase& myCase)
   auto& parameters = myCase.getParameters();
   const auto& converter = lattice.getUnitConverter();
 
-  const T statIter = parameters.get<parameters::INTERVAL_OUTPUT>();
+  const T statIter = parameters.get<parameters::LATTICE_STAT_ITER_T>();
   const std::size_t N = std::size_t(parameters.get<parameters::RESOLUTION>());
 
   OstreamManager clout(std::cout,"simulate");
